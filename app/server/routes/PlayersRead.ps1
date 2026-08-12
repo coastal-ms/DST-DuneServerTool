@@ -57,6 +57,22 @@ Register-DuneRoute -Method GET -Path '/api/gameplay/players/journey' -Handler {
     }
 }
 
+# GET /api/gameplay/players/cosmetics-owned?account_id=<id>
+Register-DuneRoute -Method GET -Path '/api/gameplay/players/cosmetics-owned' -Handler {
+    param($req, $res, $routeParams, $body)
+    try {
+        $aid = 0L
+        [void][Int64]::TryParse((Get-DuneQ $req 'account_id'), [ref]$aid)
+        if ($aid -le 0) { Write-DuneError -Response $res -Status 400 -Message 'account_id is required.'; return }
+        Invoke-DunePlayerReadRoute -Response $res -Request $req `
+            -LiveBlock { param($ip) Get-DunePlayerOwnedCosmeticsLive -Ip $ip -AccountId $aid } `
+            -DemoBlock { @{ ok = $true; account_id = $aid; owned = @(); total = 0 } } `
+            -PayloadKey 'owned'
+    } catch {
+        Write-DuneError -Response $res -Status 500 -Message "Cosmetic ownership failed: $($_.Exception.Message)"
+    }
+}
+
 # GET /api/gameplay/players/export?account_id=<id>  — returns JSON envelope
 #   { export_json: "<character JSON>", account_id, funcom_id }
 Register-DuneRoute -Method GET -Path '/api/gameplay/players/export' -Handler {

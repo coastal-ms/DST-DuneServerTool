@@ -2,6 +2,10 @@
 import { api, withOnlinePlayerGuard } from './client'
 import type {
   GameConfigSchemaResponse,
+  GameConfigExperimentalCategoriesResponse,
+  GameConfigExperimentalCategoryResponse,
+  GameConfigExperimentalSearchResponse,
+  GameConfigField,
   GameConfigResponse,
   GameConfigSaveResponse,
   GameConfigBackupResponse,
@@ -26,6 +30,36 @@ const fq = (force: boolean) => (force ? '?force=true' : '')
 
 export function getGameConfigSchema() {
   return api<GameConfigSchemaResponse>('/api/gameconfig/schema')
+}
+
+export function getGameConfigExperimentalCategories() {
+  return api<GameConfigExperimentalCategoriesResponse>('/api/gameconfig/experimental/categories')
+}
+
+function isGameConfigField(value: unknown): value is GameConfigField {
+  return typeof value === 'object'
+    && value !== null
+    && 'key' in value
+    && typeof value.key === 'string'
+}
+
+function normalizeGameConfigFields(value: unknown): GameConfigField[] {
+  if (Array.isArray(value)) return value.filter(isGameConfigField)
+  return isGameConfigField(value) ? [value] : []
+}
+
+export async function getGameConfigExperimentalCategory(category: string) {
+  const response = await api<GameConfigExperimentalCategoryResponse>(
+    `/api/gameconfig/experimental/category?name=${encodeURIComponent(category)}`,
+  )
+  return { ...response, fields: normalizeGameConfigFields(response.fields) }
+}
+
+export async function searchGameConfigExperimental(query: string) {
+  const response = await api<GameConfigExperimentalSearchResponse>(
+    `/api/gameconfig/experimental/search?q=${encodeURIComponent(query)}`,
+  )
+  return { ...response, fields: normalizeGameConfigFields(response.fields) }
 }
 
 export function getGameConfig() {

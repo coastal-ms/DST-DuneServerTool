@@ -44,7 +44,8 @@ export function StorageTab() {
     let out = containers
     if (q) out = out.filter(c =>
       c.name.toLowerCase().includes(q) || c.owner_name.toLowerCase().includes(q) ||
-      c.class.toLowerCase().includes(q) || c.item_names.some(n => n.toLowerCase().includes(q)))
+      c.class.toLowerCase().includes(q) || c.raw_class.toLowerCase().includes(q) ||
+      c.map.toLowerCase().includes(q) || c.item_names.some(n => n.toLowerCase().includes(q)))
     const mul = dir === 'asc' ? 1 : -1
     return [...out].sort((a, b) => {
       const av = a[sort], bv = b[sort]

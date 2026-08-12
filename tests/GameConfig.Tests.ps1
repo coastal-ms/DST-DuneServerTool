@@ -245,11 +245,78 @@ Describe 'Fuel burning startup override' -Tag 'GameConfig' {
             Should -BeLike '*dw.FuelBurningMultiplier 6*'
     }
 
-    It 'still rejects a value that is neither numeric nor boolean' {
+    It 'accepts safe string-valued console variables' {
+        Mock Get-V6Battlegroup {
+            [pscustomobject]@{
+                Name = 'bg'; Ns = 'dune'
+                Bg = [pscustomobject]@{
+                    spec = [pscustomobject]@{
+                        serverGroup = [pscustomobject]@{
+                            template = [pscustomobject]@{
+                                spec = [pscustomobject]@{ sets = @() }
+                            }
+                        }
+                    }
+                    status = [pscustomobject]@{ servers = @() }
+                }
+            }
+        }
         { Set-V6ConsoleVariableOverrides -Ip '192.0.2.1' `
-            -Names @('dw.FuelBurningMultiplier') `
-            -Values @{ 'dw.FuelBurningMultiplier' = 'banana' } } |
-            Should -Throw '*finite number or true/false*'
+            -Names @('Bgd.ServerRuleset') `
+            -Values @{ 'Bgd.ServerRuleset' = 'custom-rules' } } |
+            Should -Not -Throw
+    }
+
+    It 'rejects string values that cannot be encoded in ExecCmds' {
+        { Set-V6ConsoleVariableOverrides -Ip '192.0.2.1' `
+            -Names @('Bgd.ServerRuleset') `
+            -Values @{ 'Bgd.ServerRuleset' = 'unsafe,value' } } |
+            Should -Throw '*cannot be encoded in ExecCmds*'
+    }
+
+    It 'processes configured and stale managed CVars without scanning blank catalog names' {
+        Mock Get-V6Battlegroup {
+            [pscustomobject]@{
+                Name = 'bg'; Ns = 'dune'
+                Bg = [pscustomobject]@{
+                    spec = [pscustomobject]@{
+                        serverGroup = [pscustomobject]@{
+                            template = [pscustomobject]@{
+                                spec = [pscustomobject]@{ sets = @(
+                                    [pscustomobject]@{
+                                        map = 'Survival_1'
+                                        partitions = @(1)
+                                        podSpecs = @(
+                                            [pscustomobject]@{
+                                                index = 1
+                                                arguments = @('-execcmds="Old.Advanced 1,Bgd.ServerDisplayName ''Hagga''"')
+                                            }
+                                        )
+                                    }
+                                ) }
+                            }
+                        }
+                    }
+                    status = [pscustomobject]@{ servers = @() }
+                }
+            }
+        }
+        $script:optimizedPatches = $null
+        Mock _Invoke-V6BgJsonPatch {
+            param($Ip, $Info, $Patches)
+            $script:optimizedPatches = $Patches
+            @{ Success = $true; Raw = ''; Error = $null }
+        }
+
+        $result = Set-V6ConsoleVariableOverrides -Ip '192.0.2.1' `
+            -Names @('New.Advanced') `
+            -Values @{ 'New.Advanced' = '2' } `
+            -ManagedNames @{ 'New.Advanced' = $true; 'Old.Advanced' = $true; 'Never.Configured' = $true }
+
+        $result.Success | Should -BeTrue
+        @($result.Values.Keys | Sort-Object) | Should -Be @('New.Advanced', 'Old.Advanced')
+        $arguments = @($script:optimizedPatches[0].value[0].arguments)
+        $arguments | Should -Contain '-execcmds="Bgd.ServerDisplayName ''Hagga'',New.Advanced 2"'
     }
 
     It 'merges fuel and a per-sietch name into one ExecCmds argument' {
@@ -646,8 +713,6 @@ Describe 'DuneGameConfigSchema: experimental binary CVars' -Tag 'GameConfig' {
             'dw.VehicleAbandonedDecayAllowed'
             'dw.VehicleAbandonedDecayTimeMultiplier'
             'Vehicle.DisassemblySpeedMultiplier'
-            'Vehicle.RecoveryChassisDurabilityReductionFraction'
-            'Vehicle.RecoveryCurrencyBaseCost'
             'Vehicle.RecoveryTimeLimit'
             'Vehicle.MaxActiveVehicles'
             'Vehicle.MaxVehicles'
@@ -677,7 +742,6 @@ Describe 'DuneGameConfigSchema: experimental binary CVars' -Tag 'GameConfig' {
             # Second decode pass (build 2051294-0-shipping), UTF-16 aware.
             'NPC.EnableNpcAttackLimits'
             'dw.PlaceableShelterThresholdOverride'
-            'Deathstill.ConversionTimeOverride'
             'Dac.DisablePvpDamage'
             'dw.EnableShelterSystem'
             'dw.BaseBackupMaxNumberOfBackups'
@@ -732,6 +796,9 @@ Describe 'DuneGameConfigSchema: experimental binary CVars' -Tag 'GameConfig' {
             'Journey.EnableSimplifiedChallengeCompletion'
             'Progression.IgnorePrereqs'
             'Progression.ShowAllPerks'
+            'dw.ReturningPlayer.GiveAward.Enabled'
+            'dw.ReturningPlayer.DaysBeforeEligibleForReward'
+            'dw.ReturningPlayer.GiveAward.TierOverride'
             'NPC.EnableFacingTargetCheck'
             'NPC.FacingTargetAngleStartThreshold'
             'NPC.FacingTargetAngleStopThreshold'
@@ -776,8 +843,8 @@ Describe 'DuneGameConfigSchema: experimental binary CVars' -Tag 'GameConfig' {
         $experimental = @($script:DuneGameConfigSchema | Where-Object Category -eq 'Experimental')
         $experimental2 = @($script:DuneGameConfigSchema | Where-Object Category -eq 'Experimental 2')
 
-        $experimental.Count | Should -Be 57
-        $experimental2.Count | Should -Be 68
+        $experimental.Count | Should -Be 54
+        $experimental2.Count | Should -Be 71
         @($experimental.Key | Sort-Object) | Should -Be @($script:ExperimentalKeys | Sort-Object)
         @($experimental2.Key | Sort-Object) | Should -Be @($script:Experimental2Keys | Sort-Object)
         foreach ($key in @($script:ExperimentalKeys) + @($script:Experimental2Keys)) {
@@ -787,11 +854,19 @@ Describe 'DuneGameConfigSchema: experimental binary CVars' -Tag 'GameConfig' {
             $fields[$key].Category | Should -BeLike 'Experimental*'
             @($script:DuneStartupConsoleVariableKeys) | Should -Contain $key
         }
-        # Both lists are applied identically; the split is presentation only.
-        # 125 still on the Experimental pages + the 9 promoted controls + the 12
-        # pre-existing console variables in real categories, all of which keep
-        # startup injection via Startup=$true.
-        @($script:DuneStartupConsoleVariableKeys).Count | Should -Be 146
+        @($script:DuneGameConfigSchema | Where-Object Category -eq 'Experimental Lab').Count | Should -Be 0
+        (Test-DuneStartupConsoleVariableKey -Key 'm_TaskGoalAmount') | Should -BeFalse
+        $script:DuneAdvancedCvarCatalogCache | Should -BeNullOrEmpty
+        @($script:DuneStartupConsoleVariableKeys).Count | Should -Be 149
+
+        $lab = @(Get-DuneAdvancedCvarCatalog)
+        $lab.Count | Should -BeGreaterThan 4900
+        ($lab | Where-Object key -eq 'ak.soundengine.executeActionOnEvent').group |
+            Should -Be 'Audio - engine/internal'
+        ($lab | Where-Object key -eq 'au.adpcm.DisableSeeking').group |
+            Should -Be 'Audio - engine/internal'
+        ($lab | Where-Object key -eq 'Ai.Dune.EnableBudgetingSystem').group |
+            Should -Be 'AI - engine/internal'
     }
 
     It 'groups every experimental control for the Experimental page' {
@@ -804,7 +879,21 @@ Describe 'DuneGameConfigSchema: experimental binary CVars' -Tag 'GameConfig' {
         foreach ($f in $fields) {
             $f.group | Should -Not -BeNullOrEmpty
             $f.status | Should -BeIn @('Confirmed', 'Unconfirmed')
+            $f.source | Should -BeIn @('Dune', 'Engine')
+            $f.risk | Should -BeIn @('experimental', 'diagnostic', 'high', 'critical')
         }
+        $categories = @(Get-DuneAdvancedCvarCategoriesApi)
+        ($categories | Measure-Object count -Sum).Sum | Should -BeGreaterThan 4900
+        @(Get-DuneAdvancedCvarCategoryApi -Category 'Dune gameplay').Count | Should -BeGreaterThan 500
+        $fullCatalog = @(Get-DuneAdvancedCvarCatalog)
+        @(Get-DuneAdvancedCvarCategoryApi -Category 'All').Count | Should -Be $fullCatalog.Count
+        $searchResults = @(Search-DuneAdvancedCvarCatalogApi -Query 'EXECUTEACTIONONEVENT')
+        @($searchResults.key) | Should -Contain 'ak.soundengine.executeActionOnEvent'
+        @($searchResults.group | Select-Object -Unique).Count | Should -BeGreaterThan 0
+        @(Search-DuneAdvancedCvarCatalogApi -Query '  ').Count | Should -Be 0
+        $singleResult = [object[]]@(Search-DuneAdvancedCvarCatalogApi -Query 'fuel')
+        $singleResult.Count | Should -Be 1
+        (@{ fields = $singleResult } | ConvertTo-Json -Compress) | Should -Match '"fields":\['
         # Namespace rules must win over keyword ones: a sandworm control that
         # mentions vehicles is a sandworm control.
         (Get-DuneExperimentalGroup -Key 'Sandworm.SandwormCheckIfBreachLocationIsFreeOfVehicles') | Should -Be 'Sandworm'
@@ -813,6 +902,17 @@ Describe 'DuneGameConfigSchema: experimental binary CVars' -Tag 'GameConfig' {
         (Get-DuneExperimentalGroup -Key 'dw.FuelsBurningDuration') | Should -Be 'Fuel & Power'
         (Get-DuneExperimentalGroup -Key 'Bgd.ServerPlayerHardCap') | Should -Be 'Server & Session'
         (Get-DuneExperimentalGroup -Key 'Totally.MadeUpKey') | Should -Be 'Uncategorized'
+    }
+
+    It 'loads the advanced catalog as individual fields under Windows PowerShell 5.1' -Skip:($env:OS -ne 'Windows_NT') {
+        $gameConfigPath = (Resolve-Path (Join-Path $PSScriptRoot '..\app\server\lib\GameConfig.ps1')).Path.Replace("'", "''")
+        $command = ". '$gameConfigPath'; " +
+            '$lab = @(Get-DuneAdvancedCvarCatalog); ' +
+            'Write-Output $lab.Count; Write-Output ([string]$lab[0].Key).Length'
+        $result = @(& powershell.exe -NoProfile -ExecutionPolicy Bypass -Command $command)
+
+        [int]$result[0] | Should -BeGreaterThan 4900
+        [int]$result[1] | Should -BeLessThan 256
     }
 
     It 'promotes field-confirmed controls out of Experimental without losing startup injection' {
@@ -825,12 +925,15 @@ Describe 'DuneGameConfigSchema: experimental binary CVars' -Tag 'GameConfig' {
         $promoted = @(
             'Dune.DisableShieldOnShooting'
             'Dune.GiveDoubleDifficultyLoot'
+            'Deathstill.ConversionTimeOverride'
             'dw.FuelBurningMultiplier'
             'dw.FuelsBurningDuration'
             'dw.LandsraadMissionRewardMultiplierFactionXP'
             'dw.LandsraadMissionRewardMultiplierHouseCredit'
             'dw.LandsraadMissionRewardMultiplierSpecializationXP'
             'Loot.ShouldAlwaysRegeneratePerPlayerLoot'
+            'Vehicle.RecoveryChassisDurabilityReductionFraction'
+            'Vehicle.RecoveryCurrencyBaseCost'
             'Vehicle.MaxVehiclesPerPlayer'
         )
         foreach ($key in $promoted) {
@@ -944,11 +1047,8 @@ Describe 'DuneGameConfigSchema: experimental binary CVars' -Tag 'GameConfig' {
         }
     }
 
-    It 'excludes controls that crash clients, inject faults, or guard data integrity' {
-        # Recovered from the binary but deliberately not exposed: the dehydration
-        # zones crash clients (DUNE-76437), the igw Auth* switches exist to crash
-        # or disconnect servers on purpose, and the duplicate-item switches guard
-        # against item duplication.
+    It 'surfaces dangerous controls with critical risk metadata' {
+        $catalog = @(Get-DuneAdvancedCvarCatalog)
         foreach ($key in @(
             'Hazard.DehydrationZonesEnabled'
             'dw.igw.EnableAuthConfirmGainingCrash'
@@ -959,7 +1059,9 @@ Describe 'DuneGameConfigSchema: experimental binary CVars' -Tag 'GameConfig' {
             'SecurityZones.ForceEnablePvp'
             'dw.EnableDeveloperMode'
         )) {
-            @($script:DuneGameConfigSchema.Key) | Should -Not -Contain $key
+            $field = @($catalog | Where-Object key -eq $key)
+            $field.Count | Should -Be 1
+            $field[0].risk | Should -Be 'critical'
         }
     }
 
@@ -996,33 +1098,19 @@ Describe 'DuneGameConfigSchema: experimental binary CVars' -Tag 'GameConfig' {
         }
     }
 
-    It 'scrubs the retired returning-player rewards out of an engine managed block' {
-        # A Funcom dev confirmed these are not enabled for self-hosted servers -
-        # the award packs come from Funcom's backend, so a self-host has nothing
-        # to grant from. They are gone from the schema, and existing users have
-        # them sitting in UserEngine.ini from earlier versions.
-        #
-        # This is the case the game-file-only pre-pass in Save-DuneGameConfig
-        # does NOT cover: these are engine [ConsoleVariables] keys, so the only
-        # thing that removes them is the section-agnostic scrub inside
-        # ConvertTo-DuneIniManaged. Assert that path directly, because listing an
-        # engine key in the deprecated array while only the game file was cleaned
-        # would look correct and silently do nothing.
-        $retired = @(
+    It 'keeps legacy returning-player popup controls available so old injections can be disabled' {
+        $legacy = @(
             'dw.ReturningPlayer.GiveAward.Enabled'
             'dw.ReturningPlayer.DaysBeforeEligibleForReward'
             'dw.ReturningPlayer.GiveAward.TierOverride'
         )
-        foreach ($key in $retired) {
-            @($script:DuneGameConfigSchema.Key) | Should -Not -Contain $key
-            @($script:DuneGameConfigDeprecatedManagedKeys) | Should -Contain $key
-            @($script:DuneStartupConsoleVariableKeys) | Should -Not -Contain $key
+        foreach ($key in $legacy) {
+            @($script:DuneGameConfigSchema.Key) | Should -Contain $key
+            @($script:DuneGameConfigDeprecatedManagedKeys) | Should -Not -Contain $key
+            @($script:DuneStartupConsoleVariableKeys) | Should -Contain $key
         }
 
         $raw = @"
-[/Script/DuneSandbox.SomeUserSection]
-dw.ReturningPlayer.GiveAward.Enabled=1
-
 ; ===== Dune Server Tool (DST) managed section BEGIN =====
 [ConsoleVariables]
 dw.FuelBurningMultiplier=6
@@ -1031,15 +1119,15 @@ dw.ReturningPlayer.DaysBeforeEligibleForReward=1
 dw.ReturningPlayer.GiveAward.TierOverride=2
 ; ===== Dune Server Tool (DST) managed section END =====
 "@
-        $out = ConvertTo-DuneIniManaged -Raw $raw -Updates @() -QuotedKeys @{}
+        $updates = @(
+            @{ section = $script:DuneGcSecConsole; key = 'dw.ReturningPlayer.GiveAward.Enabled'; value = '0'; quoted = $false }
+        )
+        $out = ConvertTo-DuneIniManaged -Raw $raw -Updates $updates -QuotedKeys @{}
 
-        # Gone from the DST-owned block...
-        $out | Should -Not -Match 'DaysBeforeEligibleForReward'
-        $out | Should -Not -Match 'GiveAward\.TierOverride'
-        # ...and a setting that still works is untouched.
+        $out | Should -Match 'dw\.ReturningPlayer\.GiveAward\.Enabled=0'
+        $out | Should -Match 'dw\.ReturningPlayer\.DaysBeforeEligibleForReward=1'
+        $out | Should -Match 'dw\.ReturningPlayer\.GiveAward\.TierOverride=2'
         $out | Should -Match 'dw\.FuelBurningMultiplier=6'
-        # The user's own section is never touched, even for a dead key.
-        $out | Should -Match '(?m)^\[/Script/DuneSandbox\.SomeUserSection\]'
         @([regex]::Matches($out, 'ReturningPlayer\.GiveAward\.Enabled')).Count | Should -Be 1
     }
 
@@ -1099,6 +1187,7 @@ $script:DstManagedEnd
         )) {
             $fields[$key].Type | Should -Be 'bool01'
         }
+
         foreach ($key in @(
             'dw.LandsraadMissionRewardMultiplierFactionXP',
             'dw.LandsraadMissionRewardMultiplierHouseCredit',
@@ -1133,6 +1222,38 @@ $script:DstManagedEnd
         }
     }
 
+    It 'validates advanced CVar values before they can poison the restart payload' {
+        Test-DuneStartupConsoleVariableValue -Value 'custom-rules' | Should -BeTrue
+        Test-DuneStartupConsoleVariableValue -Value 'true' | Should -BeTrue
+        Test-DuneStartupConsoleVariableValue -Value 'unsafe,value' | Should -BeFalse
+        Test-DuneStartupConsoleVariableValue -Value 'unsafe"value' | Should -BeFalse
+    }
+
+    It 'rebuilds restart injection from configured managed CVars only' {
+        Mock Get-DuneGameConfig {
+            @{
+                engine = @{
+                    effectiveByKey = @{
+                        'ak.soundengine.executeActionOnEvent' = '1'
+                        'dw.FuelBurningMultiplier' = '6'
+                        'User.HandEditedSetting' = '9'
+                    }
+                }
+            }
+        }
+        $script:optimizedSyncValues = $null
+        Mock Set-DuneStartupConsoleVariableOverrides {
+            param($Ip, $Values)
+            $script:optimizedSyncValues = $Values
+            @{ Success = $true }
+        }
+
+        Sync-DuneStartupConsoleVariableOverrides -Ip '192.0.2.1' | Out-Null
+
+        @($script:optimizedSyncValues.Keys | Sort-Object) |
+            Should -Be @('ak.soundengine.executeActionOnEvent', 'dw.FuelBurningMultiplier')
+    }
+
     It 'keeps experimental CVars out of local client changes' {
         # Experimental controls are unproven console variables; nothing shows the
         # client reads them, and the server applies them through the startup
@@ -1160,7 +1281,25 @@ $script:DstManagedEnd
         $notice.paths.engine | Should -Match 'Engine\.ini$'
     }
 
-    It 'places the Experimental lists last in the curated schema API, in order' {
+    It 'marks Landsraad client notices as struct-member updates' {
+        $notice = Get-DuneGameConfigClientApplyNotice -Updates @(
+            @{ file='game'; section=$script:DuneGcSecLandsraad; key='m_LandsraadContractsPerVotingBlock'; value='12' }
+        )
+
+        @($notice.items).Count | Should -Be 1
+        @($notice.items)[0].structKey | Should -Be 'Data'
+    }
+
+    It 'exposes the field-confirmed Landsraad abandon cooldown' {
+        $field = @($script:DuneGameConfigSchema | Where-Object { $_.Key -eq 'm_LandsraadContractsAbandonCooldownSeconds' })
+
+        $field.Count | Should -Be 1
+        $field[0].StructKey | Should -Be 'Data'
+        $field[0].Default | Should -Be '3600'
+        $field[0].ClientApply | Should -BeTrue
+    }
+
+    It 'places the curated Experimental catalogs last in the schema API, in order' {
         $cats = @((Get-DuneGameConfigSchemaApi) | ForEach-Object { $_.category })
         $cats[-2] | Should -Be 'Experimental'
         $cats[-1] | Should -Be 'Experimental 2'
@@ -1268,6 +1407,30 @@ Describe 'DuneGameConfigSchema: CraftingSettings fields' -Tag 'GameConfig' {
         $cats | Should -Contain 'Crafting'
         ([array]::IndexOf($cats, 'Crafting')) | Should -BeGreaterThan ([array]::IndexOf($cats, 'Resources & Economy'))
         ([array]::IndexOf($cats, 'Crafting')) | Should -BeLessThan ([array]::IndexOf($cats, 'Building'))
+    }
+
+    It 'exposes the distributed research reveal switch as an experimental game setting' {
+        $field = @($script:DuneGameConfigSchema | Where-Object Key -eq 'm_bRevealItemOnDistributedToCharacter')
+
+        $field.Count | Should -Be 1
+        $field[0].Section | Should -Be '/Script/DuneSandbox.TechKnowledgeSettings'
+        $field[0].File | Should -Be 'game'
+        $field[0].Type | Should -Be 'bool'
+        $field[0].Default | Should -Be 'False'
+        $field[0].ClientApply | Should -BeTrue
+        $field[0].Category | Should -Be 'Crafting'
+        $field[0].Label | Should -Match 'Experimental'
+        $field[0].Help | Should -Match '(?i)cannot reconstruct missing schematic research-cost metadata'
+    }
+
+    It 'persists the distributed research reveal switch in TechKnowledgeSettings' {
+        $section = '/Script/DuneSandbox.TechKnowledgeSettings'
+        $out = ConvertTo-DuneIniManaged -Raw '' -Updates @(
+            @{ section=$section; key='m_bRevealItemOnDistributedToCharacter'; value='True' }
+        ) -QuotedKeys @{}
+
+        (Get-HeaderCount -Raw $out -Name $section) | Should -Be 1
+        (Get-EffectiveValue -Raw $out -Section $section -Key 'm_bRevealItemOnDistributedToCharacter') | Should -Be 'True'
     }
 
     It 'returns repair and recycler weights in the client-apply notice after server save' {

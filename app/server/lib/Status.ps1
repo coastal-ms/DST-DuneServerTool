@@ -156,7 +156,7 @@ function Get-DuneBattlegroupSnapshotCached {
 }
 
 function Get-DuneBattlegroupSnapshot {
-    param([switch]$Force)
+    param([switch]$Force, $VmStatus)
 
     if (-not $Force.IsPresent) {
         $cached = Get-DuneBattlegroupSnapshotCached
@@ -169,7 +169,7 @@ function Get-DuneBattlegroupSnapshot {
             if ($cached -ne $null) { return $cached }
         }
 
-        $snapshot = Get-DuneBattlegroupSnapshotFresh
+        $snapshot = Get-DuneBattlegroupSnapshotFresh -VmStatus $VmStatus
         Set-DuneBattlegroupSnapshotCacheEntry -Snapshot $snapshot
         return $snapshot
     }
@@ -187,7 +187,8 @@ function Get-DuneBattlegroupSnapshot {
 }
 
 function Get-DuneBattlegroupSnapshotFresh {
-    $vm = Get-DuneVmStatus
+    param($VmStatus)
+    $vm = if ($null -ne $VmStatus) { $VmStatus } else { Get-DuneVmStatus }
     $result = @{ available = $false; vm = $vm; output = ''; reason = '' }
 
     if (-not $vm.exists)  { $result.reason = "VM '$script:DuneVmName' does not exist."; return $result }
@@ -299,6 +300,7 @@ function Get-DuneBattlegroupSnapshotFresh {
         if ($bgJsonInfo) {
             $result.info = $bgJsonInfo.info
             if ($bgJsonInfo.name -and -not $result.name) { $result.name = $bgJsonInfo.name }
+            if ($bgJsonInfo.title) { $result.title = $bgJsonInfo.title }
             # Funcom's `battlegroup status` script awk-parses a positional row,
             # so a multi-word / comma'd server TITLE shifts the Status cell (and
             # every column after it) in the raw-output pane. The Info panel is
@@ -431,6 +433,16 @@ function ConvertFrom-DuneBgJsonStatus {
     }
     $name = ''
     if ($item.PSObject.Properties['metadata'] -and $item.metadata -and $item.metadata.name) { $name = [string]$item.metadata.name }
+    $title = ''
+    if ($item.PSObject.Properties['spec'] -and $item.spec -and $item.spec.PSObject.Properties['title']) {
+        $title = [string]$item.spec.title
+    }
+    if ([string]::IsNullOrWhiteSpace($title) -and
+        $item.PSObject.Properties['metadata'] -and $item.metadata -and
+        $item.metadata.PSObject.Properties['annotations'] -and $item.metadata.annotations -and
+        $item.metadata.annotations.PSObject.Properties['igw.funcom.com/battlegroup-title']) {
+        $title = [string]$item.metadata.annotations.'igw.funcom.com/battlegroup-title'
+    }
     return @{
         info = @{
             status   = if ($status.phase) { [string]$status.phase } else { '' }
@@ -439,7 +451,8 @@ function ConvertFrom-DuneBgJsonStatus {
             director = if ($dirPhase) { [string]$dirPhase } else { '' }
             uptime   = [string]$uptime
         }
-        name = $name
+        name  = $name
+        title = $title.Trim()
     }
 }
 

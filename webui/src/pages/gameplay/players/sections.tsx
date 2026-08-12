@@ -12,21 +12,21 @@ import { Icon } from '../../../components/Icon'
 import { ItemPicker } from '../../../components/ItemPicker'
 import { TagPicker } from '../../../components/TagPicker'
 import {
-  awardCharXp, awardIntel, setSpecLevel, cheatScript, cleanPlayerInventory,
+  applySpecLevel, awardCharXp, awardIntel, setSpecLevel, cheatScript, cleanPlayerInventory,
   applyProgressionPreset, getProgressionPresets,
   progressionUnlock, progressionReverse,
   deleteAccount, deleteInventoryItem, deleteTutorials,
   fillWater, getPlayerEvents, getPlayerSpecs,
   getPlayerStats, getPlayerTags, giveFactionRep, giveItem,
   giveScrip, giveSolari, grantAllKeystones, grantLive, grantMaxSpec,
-  kickPlayer, refuelVehicle, renamePlayer, repairGear, repairInventoryItem,
+  kickPlayer, maxAugmentAttributes, refuelVehicle, renamePlayer, repairGear, repairInventoryItem,
   getPlayerVehicles,
   setItemDurability, setItemStack, setItemWater,
   resetAllKeystones, resetAllSpecs, resetJourney, resetProgressionLive, resetSpec,
   restoreDestroyed,
   setFactionTier, setSkillPoints,
-  setStarterClass, teleportToPlayer, teleportToLocation, setRespawn, getTeleportDestinations, getPlayers, updatePlayerTags, wipeCodex, wipeJourney, resetFaction, snapshotBuilds, getFreshStartSnapshots, restoreBuilds, grantAllSkills,
-  chatWhisper, isValidTemplateId, getItemCatalog, getCosmeticsCatalog, type CosmeticEntry,
+  setStarterClass, teleportToPlayer, teleportToLocation, setRespawn, getTeleportDestinations, getPlayers, updatePlayerTags, wipeCodex, resetFaction, snapshotBuilds, getFreshStartSnapshots, restoreBuilds, grantAllSkills,
+  chatWhisper, isValidTemplateId, getItemCatalog, getCosmeticsCatalog, getPlayerOwnedCosmetics, filterCosmeticsCatalog, type CosmeticEntry,
   parseTcnoPackageText,
   giveItems, getItemPackages, saveItemPackage, deleteItemPackage,
   getLandsraadOverview, getLandsraadPlayerContributions, setLandsraadContribution,
@@ -127,9 +127,9 @@ export function StatsSection({ player, demo, refreshKey }: SectionProps) {
 
 // ---------------------------------------------------------------------------
 // Specs — 5 tracks + keystone counter. Header buttons grant/reset all
-// keystones; per-row controls: editable Level field (set exact level) +
-// grant max / reset one track. Level is the game-authoritative value (the
-// game keeps level and recomputes xp from it on login); xp is shown read-only.
+// keystones; per-row controls: editable Level field (set exact level), apply
+// every reward available through that level, grant max, and reset one track.
+// Level is game-authoritative; XP is shown read-only.
 // ---------------------------------------------------------------------------
 export function SpecsSection({ player, canWrite, demo, refreshKey, flash, onChanged }: SectionProps) {
   const [tracks, setTracks] = useState<SpecTrackFull[]>([])
@@ -221,6 +221,11 @@ export function SpecsSection({ player, canWrite, demo, refreshKey, flash, onChan
                     void run(() => setSpecLevel(player.controller_id, name, level), 'Set level')
                   }
                 }}
+                onApplyLevel={(level) => {
+                  if (window.confirm(`Set ${name} to level ${level} and apply every ${name} specialization reward available through that level for ${player.name}?\n\nThe player must be fully offline because skill-point rewards update character state. Existing rewards are preserved. Rewards above level ${level} are not removed. The change appears in-game after a full re-login.`)) {
+                    void run(() => applySpecLevel(player.controller_id, name, level), 'Apply level')
+                  }
+                }}
               />
             )
           })}
@@ -232,9 +237,10 @@ export function SpecsSection({ player, canWrite, demo, refreshKey, flash, onChan
 
 const SPEC_TRACK_ORDER = ['Combat', 'Crafting', 'Exploration', 'Gathering', 'Sabotage']
 
-function SpecRow({ name, track, canWrite, busy, onGrantMax, onReset, onSetLevel }: {
+function SpecRow({ name, track, canWrite, busy, onGrantMax, onReset, onSetLevel, onApplyLevel }: {
   name: string; track: SpecTrackFull | undefined; canWrite: boolean; busy: boolean
-  onGrantMax: () => void; onReset: () => void; onSetLevel: (level: number) => void
+  onGrantMax: () => void; onReset: () => void
+  onSetLevel: (level: number) => void; onApplyLevel: (level: number) => void
 }) {
   const xp = track?.xp ?? 0
   const level = Math.round(track?.level ?? 0)
@@ -281,6 +287,9 @@ function SpecRow({ name, track, canWrite, busy, onGrantMax, onReset, onSetLevel 
               />
               <button className="btn-secondary" disabled={busy || !changed} title={`Set level to typed value (0–${levelMax})`} onClick={() => onSetLevel(parsed)}>
                 <Icon name="Check" size={13} /> Set
+              </button>
+              <button className="btn-secondary" disabled={busy || !valid} title={`Set level and apply ${name} rewards available through that level`} onClick={() => onApplyLevel(parsed)}>
+                <Icon name="Sparkles" size={13} /> Apply level
               </button>
               <button className="btn-secondary" disabled={busy} title="Grant max level for this track" onClick={onGrantMax}>
                 <Icon name="ChevronsUp" size={13} /> Max
@@ -650,26 +659,21 @@ const ACTIONS: ActionDef[] = [
     confirm: p => `Reset ALL progression for ${p.name}? Cannot be undone.\n\n` +
       `This single confirmation is required so the action can't run on an accidental click.`,
     run: p => resetProgressionLive({ actor_id: p.id }) },
-  { id: 'reset-journey', group: 'Progression', label: 'Reset Journey', icon: 'Map',
-    rowNote: 'Single confirmation required',
-    confirm: p => `Reset ${p.name}'s journey/quest progress? They'll restart the current journey step. This cannot be undone.\n\n` +
-      `This single confirmation is required so the action can't run on an accidental click.`,
-    run: p => resetJourney(p.account_id) },
-  { id: 'wipe-journey', group: 'Progression', label: 'Wipe Journey (restart)', icon: 'RefreshCw',
+  { id: 'reset-journey', group: 'Progression', label: 'Reset Journey', icon: 'RefreshCw', offlineOnly: true,
     doubleConfirm: true,
-    rowNote: 'Double confirmation required',
-    confirm: p => `WIPE ${p.name}'s entire journey and restart it from the beginning? All journey/quest progress is lost. This cannot be undone.\n\n` +
-      `This is the FIRST of two confirmations. If you continue, the next step asks you to type an acknowledgement before the journey is wiped.`,
+    rowNote: 'Restart post-tutorial story at Find the Fremen. Preserves faction/research/loadout; resets chosen starter tree and refunds points. Offline.',
+    confirm: p => `RESET ${p.name}'s post-tutorial journey and restart at Find the Fremen? Journey/contract tags, rows, and contract items will be cleared. The NPE remains completed because veteran bases, skills, and items cannot reliably replay one-time tutorial events. Faction state, research, and active loadout are preserved. Only the chosen starter-class skill tree is reset, with its points refunded. This cannot be undone.\n\n` +
+      `This is the FIRST of two confirmations. If you continue, the next step asks you to type an acknowledgement before the journey is reset.`,
     run: p => {
       const typed = window.prompt(
-        `SECOND confirmation — WIPE ${p.name}'s journey.\n` +
+        `SECOND confirmation — RESET ${p.name}'s entire journey.\n` +
         `This cannot be undone.\n\n` +
         `Type  i acknowledge  to proceed:`
       ) || ''
       if (typed.trim().toLowerCase() !== 'i acknowledge') {
-        throw new Error('Did not type "i acknowledge" — wipe aborted.')
+        throw new Error('Did not type "i acknowledge" — reset aborted.')
       }
-      return wipeJourney(p.account_id)
+      return resetJourney(p.account_id)
     } },
   { id: 'reset-faction', group: 'Progression', label: 'Reset Faction', icon: 'Swords', custom: 'reset-faction', offlineOnly: true,
     rowNote: 'Wipe faction rep + tags + ClimbTheRanks nodes. Optional Deep also clears codex. Offline.',
@@ -704,10 +708,14 @@ const ACTIONS: ActionDef[] = [
     rowNote: 'Hand a saved item package to this player — build & reuse your own bundles. Works online or offline',
     run: () => Promise.resolve({ message: '' }) },
   { id: 'grant-cosmetic', group: 'Items', label: 'Grant Cosmetic / Building Set', icon: 'Shirt', custom: 'grant-cosmetic',
-    rowNote: 'Unlock appearance variants, swatches, vehicle skins & building sets — works online or offline',
+    rowNote: 'Private-server unlock only; does not grant account ownership or availability elsewhere.',
     run: () => Promise.resolve({ message: '' }) },
   { id: 'repair-gear', group: 'Items', label: 'Repair All Items', icon: 'Wrench',
     run: p => repairGear(p.id) },
+  { id: 'max-augment-attributes', group: 'Items', label: 'Max Augment Attributes', icon: 'Sparkles',
+    rowNote: 'Sets every non-zero attribute roll on this player’s augments to maximum. Relog required.',
+    confirm: p => `Max every non-zero attribute roll on ${p.name}'s augments?\n\nThis is intentionally overpowered and changes every augment owned by this player. The player must relog before the changes appear in-game.`,
+    run: p => maxAugmentAttributes(p.id) },
   { id: 'restore-destroyed', group: 'Items', label: 'Restore Destroyed Items', icon: 'Heart',
     confirm: p => `Restore destroyed gear on ${p.name}? Re-seeds CurrentDurability for items at 0/NULL.`,
     run: p => restoreDestroyed(p.id) },
@@ -1063,11 +1071,16 @@ function ActionRow({ def, player, busy, stats, open, danger, onToggle, runAction
                 return { message: `Gave package "${pkgName}" — ${n} item${n === 1 ? '' : 's'} to ${player.name}.` }
               })} />
           ) : def.custom === 'grant-cosmetic' ? (
-            <GrantCosmeticForm busy={busy} playerName={player.name}
-              onGrant={(tpl, label) => runAction(def, async () => {
-                const r = await giveItem(player.id, tpl, 1, 0, true)
-                return { message: r.message || `Granted "${label}" to ${player.name}.` }
-              })} />
+            <GrantCosmeticForm busy={busy} playerName={player.name} accountId={player.account_id}
+              onGrant={async (tpl, label) => {
+                let succeeded = false
+                await runAction(def, async () => {
+                  const r = await giveItem(player.id, tpl, 1, 0, true)
+                  succeeded = true
+                  return { message: r.message || `Granted "${label}" to ${player.name}.` }
+                })
+                return succeeded
+              }} />
           ) : def.custom === 'refuel-vehicle' ? (
             <RefuelVehicleForm busy={busy} controllerId={player.controller_id} playerName={player.name}
               onSubmit={vid => runAction(def, () => refuelVehicle(vid))} />
@@ -1331,15 +1344,19 @@ function GrantRewardForm({ busy, submitLabel, onSubmit }: {
 // swatches, vehicle skins) and delivers the chosen template via the normal
 // give-item path so the player unlocks the appearance. Loads the catalog on
 // mount; filters by name/template; groups results by type.
-function GrantCosmeticForm({ busy, playerName, onGrant }: {
+function GrantCosmeticForm({ busy, playerName, accountId, onGrant }: {
   busy: boolean
   playerName: string
-  onGrant: (template: string, label: string) => void
+  accountId: number
+  onGrant: (template: string, label: string) => Promise<boolean>
 }) {
   const [catalog, setCatalog] = useState<CosmeticEntry[] | null>(null)
   const [err, setErr] = useState<string | null>(null)
   const [filter, setFilter] = useState('')
   const [sel, setSel] = useState('')
+  const [owned, setOwned] = useState<Set<string> | null>(null)
+  const [showOwned, setShowOwned] = useState(false)
+  const [ownershipWarning, setOwnershipWarning] = useState('')
   useEffect(() => {
     let alive = true
     getCosmeticsCatalog()
@@ -1347,11 +1364,32 @@ function GrantCosmeticForm({ busy, playerName, onGrant }: {
       .catch(e => { if (alive) setErr(e instanceof Error ? e.message : String(e)) })
     return () => { alive = false }
   }, [])
+  useEffect(() => {
+    let alive = true
+    setOwned(null)
+    setOwnershipWarning('')
+    getPlayerOwnedCosmetics(accountId)
+      .then(r => {
+        if (!alive) return
+        setOwned(new Set((r.owned || []).map(id => id.toLowerCase())))
+        if (r.liveError) setOwnershipWarning(`Ownership unavailable: ${r.liveError}. Showing the full catalog.`)
+      })
+      .catch(e => {
+        if (!alive) return
+        setOwned(new Set())
+        setOwnershipWarning(`Ownership unavailable: ${e instanceof Error ? e.message : String(e)}. Showing the full catalog.`)
+      })
+    return () => { alive = false }
+  }, [accountId])
   const matches = useMemo(() => {
-    const q = filter.trim().toLowerCase()
     const list = catalog || []
-    return q ? list.filter(e => e.name.toLowerCase().includes(q) || e.template.toLowerCase().includes(q)) : list
-  }, [catalog, filter])
+    const available = showOwned || !owned ? list : list.filter(e => !owned.has(e.template.toLowerCase()))
+    return filterCosmeticsCatalog(available, filter)
+  }, [catalog, filter, owned, showOwned])
+  const ownedCatalogCount = useMemo(
+    () => (catalog && owned ? catalog.filter(e => owned.has(e.template.toLowerCase())).length : 0),
+    [catalog, owned],
+  )
   const groups = useMemo(() => {
     const m = new Map<string, CosmeticEntry[]>()
     for (const e of matches) { const a = m.get(e.group); if (a) a.push(e); else m.set(e.group, [e]) }
@@ -1361,12 +1399,30 @@ function GrantCosmeticForm({ busy, playerName, onGrant }: {
   const selectCls = 'w-full px-3 py-2 rounded-lg bg-surface-2 border border-border text-text text-sm focus:outline-none focus:ring-2 focus:ring-ibad focus:border-ibad/50'
 
   if (err) return <ErrorBox msg={err} />
-  if (!catalog) return <div className="text-sm text-text-dim flex items-center gap-2"><Icon name="Loader2" size={13} className="animate-spin" /> Loading catalog…</div>
+  if (!catalog || !owned) return <div className="text-sm text-text-dim flex items-center gap-2"><Icon name="Loader2" size={13} className="animate-spin" /> Loading catalog and player ownership…</div>
 
   return (
     <div className="space-y-3">
       <p className="text-[11px] text-text-dim">Delivers the unlock item to {playerName}'s inventory (online: instant; offline: next login). The unlock applies when acquired in-game.</p>
-      <input type="text" value={filter} disabled={busy} placeholder="Filter cosmetics & building sets by name or id…"
+      <div className="rounded-lg bg-warning/10 border border-warning/40 p-3 text-warning text-xs leading-relaxed">
+        <p>Some entries may be account-entitlement content. Granting one here only unlocks it for this character on this private server; it does not grant account ownership or make it available on official or other servers.</p>
+        <p className="mt-2">
+          Developer, test, placeholder, and Polar entries are experimental. Some have no working unlock action or are missing from retail game assets, so they may remain ordinary inventory items and do nothing. Some developer unlock items appear to register only when added to the inventory while the player is offline, then processed on next login. PowerTester is a Funcom account permission that private servers cannot grant; enabling <span className="font-mono">dw.PlayerProgressionUnlockEnabled</span> does not provide it.
+        </p>
+      </div>
+      {ownershipWarning && <div className="text-xs text-warning">{ownershipWarning}</div>}
+      <label className="flex items-center justify-between gap-3 text-xs text-text-dim">
+        <span className="flex items-center gap-2">
+          <input type="checkbox" checked={showOwned} disabled={busy}
+            onChange={e => {
+              setShowOwned(e.target.checked)
+              if (!e.target.checked && sel && owned.has(sel.toLowerCase())) setSel('')
+            }} />
+          Show already owned
+        </span>
+        <span>{ownedCatalogCount} server-detected owned / {catalog.length - ownedCatalogCount} available</span>
+      </label>
+      <input type="text" value={filter} disabled={busy} placeholder="Contains search: name, id, or group…"
         onChange={e => setFilter(e.target.value)} className={selectCls} />
       <select value={sel} disabled={busy} className={selectCls} onChange={e => setSel(e.target.value)} size={1}>
         <option value="">Select a cosmetic or building set… ({matches.length})</option>
@@ -1378,7 +1434,17 @@ function GrantCosmeticForm({ busy, playerName, onGrant }: {
       </select>
       {chosen && <p className="text-[11px] font-mono text-text-dim truncate">{chosen.template}</p>}
       <button className="btn-primary w-full" disabled={busy || !sel}
-        onClick={() => chosen && onGrant(chosen.template, chosen.name)}>
+        onClick={async () => {
+          if (!chosen) return
+          if (await onGrant(chosen.template, chosen.name)) {
+            setOwned(current => {
+              const next = new Set(current)
+              next.add(chosen.template.toLowerCase())
+              return next
+            })
+            setSel('')
+          }
+        }}>
         {busy ? <Icon name="Loader2" size={13} className="animate-spin" /> : <Icon name="Shirt" size={13} />} Grant
       </button>
     </div>
@@ -3149,6 +3215,7 @@ export function JourneySection({ player, canWrite, demo, refreshKey, flash, onCh
   const [err, setErr] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
   const [filter, setFilter] = useState<JourneyFilter>('all')
+  const isOnline = (player.online_status || '').toLowerCase() === 'online'
   const [search, setSearch] = useState('')
   const [page, setPage] = useState(0)
   const [tick, setTick] = useState(0)
@@ -3203,21 +3270,21 @@ export function JourneySection({ player, canWrite, demo, refreshKey, flash, onCh
     }
   }
 
-  const wipeAll = () => {
+  const resetAll = () => {
     if (!window.confirm(
-      `WIPE ${player.name}'s entire journey and restart it from the beginning? All journey/quest progress is lost. This cannot be undone.\n\n` +
-      `This is the FIRST of two confirmations. If you continue, the next step asks you to type an acknowledgement before the journey is wiped.`
+      `RESET ${player.name}'s post-tutorial journey and restart at Find the Fremen? Journey/contract tags, rows, and contract items will be cleared. The NPE remains completed because veteran bases, skills, and items cannot reliably replay one-time tutorial events. Faction state, research, and active loadout are preserved. Only the chosen starter-class skill tree is reset, with its points refunded. This cannot be undone.\n\n` +
+      `This is the FIRST of two confirmations. If you continue, the next step asks you to type an acknowledgement before the journey is reset.`
     )) return
     const typed = window.prompt(
-      `SECOND confirmation — WIPE ${player.name}'s journey.\n` +
+      `SECOND confirmation — RESET ${player.name}'s entire journey.\n` +
       `This cannot be undone.\n\n` +
       `Type  i acknowledge  to proceed:`
     ) || ''
     if (typed.trim().toLowerCase() !== 'i acknowledge') {
-      flash('Did not type "i acknowledge" — wipe aborted.', 'err')
+      flash('Did not type "i acknowledge" — reset aborted.', 'err')
       return
     }
-    void run(() => wipeJourney(player.account_id))
+    void run(() => resetJourney(player.account_id))
   }
 
   if (loading) return <Loading label="Loading journey…" />
@@ -3249,9 +3316,9 @@ export function JourneySection({ player, canWrite, demo, refreshKey, flash, onCh
             className="w-full px-3 py-1.5 rounded-lg bg-surface-2 border border-border text-text text-sm focus:outline-none focus:ring-2 focus:ring-ibad focus:border-ibad/50" />
         </div>
         {canWrite && (
-          <button type="button" className="btn-secondary shrink-0 text-xs text-error" disabled={busy} onClick={wipeAll}
-            title="Delete every journey node for this account">
-            <Icon name="RefreshCw" size={12} /> Wipe All
+          <button type="button" className="btn-secondary shrink-0 text-xs text-error" disabled={busy || isOnline} onClick={resetAll}
+            title={isOnline ? 'Player must be offline' : 'Reset post-NPE story and chosen starter tree; preserve faction, research, and loadout'}>
+            <Icon name="RefreshCw" size={12} /> Reset All
           </button>
         )}
       </div>

@@ -163,7 +163,7 @@ public static extern bool IsIconic(System.IntPtr hWnd);
 }
 
 # Version (one of the 5 sync'd constants; see persistent-notes.md)
-$script:DuneToolVersion = '13.5.1'
+$script:DuneToolVersion = '13.6.4'
 
 # ---------- Restart-on-detach handoff -----------------------------------------
 # When a prior "Web Portal" detach left the server running headless, the
@@ -606,20 +606,6 @@ if (Get-Command Initialize-DuneMobileBridge -ErrorAction SilentlyContinue) {
     try { Initialize-DuneMobileBridge -ServerDir $serverDir } catch {}
 }
 
-# Funcom's director ReplicaSet can leave terminal Evicted/Unknown pod objects
-# forever after VM power cycles. Remove only terminal -bgd- history; current
-# Running/Pending director pods are never touched.
-if (Get-Command Remove-DuneTerminalDirectorPods -ErrorAction SilentlyContinue) {
-    try {
-        $directorPrune = Remove-DuneTerminalDirectorPods
-        if ($directorPrune.ok -and $directorPrune.count -gt 0) {
-            Write-DuneLog "pod maintenance: $($directorPrune.message)"
-        }
-    } catch {
-        Write-DuneLog "pod maintenance: terminal director cleanup failed: $($_.Exception.Message)" 'WARN'
-    }
-}
-
 # ---------- Token --------------------------------------------------------------
 
 $script:LaunchToken = [Guid]::NewGuid().ToString('N')
@@ -802,15 +788,10 @@ if ((-not $script:DuneHeadlessMode) -and $openInAppWindow -and $script:DuneShell
         Write-DuneLog "Opening portal in app window: $script:DuneShellExe (console mode: $script:DuneConsoleMode)"
         try {
             # Capture the app-window process so the lifecycle watcher can stop the
-            # server when it closes. DuneShell is single-instance: if one somehow
-            # already exists, the process we spawn focuses it and exits at once, so
-            # adopt the real long-lived window process in that case.
+            # server when it closes. Do not wait here: DuneShell already polls
+            # last-url.txt, and the lifecycle watcher follows any surviving
+            # single-instance window if this launch exits as a focus proxy.
             $script:DuneAppProc = Start-Process -FilePath $script:DuneShellExe -PassThru
-            Start-Sleep -Milliseconds 700
-            if ($script:DuneAppProc -and $script:DuneAppProc.HasExited) {
-                $script:DuneAppProc = Get-Process -Name DuneShell -ErrorAction SilentlyContinue |
-                                      Sort-Object StartTime -Descending | Select-Object -First 1
-            }
         } catch {
             Write-DuneLog "App window failed to launch ($($_.Exception.Message)); falling back to browser" 'WARN'
             $script:DuneShellExe = $null

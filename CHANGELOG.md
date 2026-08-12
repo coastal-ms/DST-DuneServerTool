@@ -13,11 +13,113 @@ here cover everything those tags shipped.
 
 ## [Unreleased]
 
-## [13.5.1] - 2026-08-07
+## [13.6.4] - 2026-08-12
+
+### Added
+
+- Scheduled daily restarts can optionally apply an available Funcom self-hosted
+  server update instead of running a normal restart. VM cron owns the daily
+  maintenance so it runs while DST is closed; DST repairs the automation when
+  it starts. The option is off by default, and update checks still run when it
+  is disabled.
+
+## [13.6.3] - 2026-08-12
+
+### Fixed
+
+- Apply level now adds standard, major, and super specialization skill-point
+  rewards to the character's hidden bonus and total point ledgers. It preserves
+  the visible unspent balance when prior live edits created an overallocated
+  character, and running Apply level again does not add duplicate points.
+- Character XP edits now use Funcom's persisted `TotalSkillPoints` field instead
+  of the absent legacy `TotalSkillPointsEarned` name.
+
+## [13.6.2] - 2026-08-11
+
+### Added
+
+- Confirmed vehicle-recovery durability loss and base currency cost controls now
+  appear under Game Config → Vehicles.
 
 ### Changed
 
-- **Renamed Wick Maps to DD Seed Maps.**
+- Database backup and restore surfaces warn administrators to move characters
+  out of Deep Desert and log them out before capturing a restorable snapshot.
+- DD Seed Maps uses the farm seed while Deep Desert is stopped, then switches
+  to the map's reported running seed once Deep Desert starts.
+
+### Fixed
+
+- Reset Journey now performs a complete offline quest restart, removing all
+  post-NPE journey/contract rows, tags, contract items, and tracked state while
+  preserving faction, research, and active loadout. NPE remains completed so a
+  veteran character restarts at Find the Fremen instead of stalling on one-time
+  tutorial events. Only the chosen starter-class skill tree is reset, with its
+  exact spent points refunded.
+- Reset Faction now also removes singular `DialogueFlags.Faction.*` tags so
+  faction progression fully clears before a player starts over.
+
+## [13.6.1] - 2026-08-10
+
+### Changed
+
+- Experimental Lab restores the opt-in **All** category and searches the full
+  settings catalog regardless of the selected category, while still opening on
+  a smaller category so the complete catalog is not loaded at page startup.
+
+### Fixed
+
+- Experimental Lab search results remain a collection when only one setting
+  matches, preventing the page from crashing on searches such as `fuel`.
+
+## [13.6.0] - 2026-08-10
+
+### Added
+
+- **Specialization levels can apply their available rewards per track.** Gameplay Admin → Players → Specs keeps **Set** as the level/XP-only path for players who want to choose rewards themselves, while the new **Apply level** action grants every reward available through the selected level in that specialization without touching other tracks or removing existing rewards.
+
+### Changed
+
+- Improved cold-start and Server Health load time by moving VM maintenance off
+  the startup path, removing an app-window delay, reducing API warmup work, and
+  eliminating duplicate initial status requests.
+
+## [13.5.4] - 2026-08-10
+
+### Added
+
+- **Settings now shows the Dune Server Tool install folder.** The host-only card can copy the path or open it in Explorer for antivirus exclusions, file verification, and troubleshooting.
+- **Experimental is now Experimental Lab.** It exposes the complete recovered Dune and Unreal Engine CVar inventory plus every remaining live DefaultGame.ini / DefaultEngine.ini setting that DST does not already surface. Search, source/risk filters, modified-only mode, category-cached 25-item pagination, risk badges, safe string-valued CVar startup injection, and array/struct editing keep the expanded catalog usable without loading the full catalog at DST startup. Restart injection processes only configured and stale managed CVars rather than scanning every blank catalog entry per partition.
+
+### Fixed
+
+- **Public IP Apply no longer has to capture a co-hosted VPN or relay endpoint.** The Public IP / DDNS card now keeps the existing same-PC public-IP loopback route enabled by default, but provides an explicit opt-out for WireGuard, VPN, and VPS relay hosts. Applying with the option off removes only the matching public-IP `/32` route through the Dune VM and leaves unrelated Windows routes unchanged.
+- **Saved manual relay addresses remain authoritative across restarts and connection repairs.** Public IP Apply now pins both K3s startup inputs to the applied address, overriding a stale `settings.conf` external IP immediately before K3s starts, and the P34 diagnostic no longer replaces a deliberate manual VPN or VPS relay address with the host's detected WAN IP.
+- **Landsraad client settings are shared as a complete valid `Data=(...)` struct.** Player config, post-save guidance, and mismatch repair no longer omit Landsraad values or emit ineffective standalone member lines. Diagnostic bundles now include sanitized local client INI snapshots when available so server/client drift is visible.
+- **Landsraad contract abandon cooldown is configurable.** The field-confirmed timer is available in Game Config and supports values as low as five seconds.
+
+## [13.5.3] - 2026-08-08
+
+### Added
+
+- **Give Item and Cosmetics now expose the complete developer template catalog.** Internal items, blueprints, and schematics are searchable and fully browsable by category in Give Item, while developer appearance and building unlocks remain grouped under Cosmetics. Cosmetics hides character unlocks already persisted by the game by canonicalizing the complete owned-ID set against the complete catalog, accounting for grant wrappers, armor slots, word-order changes, abbreviations, spelling differences, and internal dye IDs instead of maintaining guessed one-off aliases. Learned building sets are included in the same ownership result. Search uses contains matching across names, template IDs, and groups, so searches such as `vehicle` return every Vehicle Skins entry rather than relying on native select prefix matching. A warning explains that developer, test, placeholder, and Polar entries may lack working unlock actions or retail assets, that some developer unlock items appear to require offline inventory delivery before being processed on next login, and that private servers cannot grant Funcom's PowerTester account permission. Gameplay Admin storage now detects real storage inventories instead of filtering by class names, exposing the developer container without misclassifying cosmetic storage-themed placeables.
+- **Game Config can experimentally reveal directly distributed research items.** Crafting now exposes Funcom's `m_bRevealItemOnDistributedToCharacter` switch for testing admin-granted developer blueprints and schematics. The control warns that visibility does not repair schematics whose injected item data lacks research-cost metadata.
+- **Deathstill Conversion Time is promoted to Game Config.** Field testing confirmed the override works, so it now appears under Survival instead of Experimental while retaining restart-time startup injection.
+- **Legacy returning-player popup controls are available again.** Servers that enabled the game popup through an older DST release can now disable it under Experimental → Progression & Contracts; the native DST Welcome back card links operators to that cleanup control.
+
+## [13.5.2] - 2026-08-07
+
+### Added
+
+- **Player inventories can now maximize augmentation attributes.** The new Max Augment Attributes action updates every augmentation owned by the selected player to the confirmed maximum roll while preserving structural zero values and leaving every other player's inventory untouched.
+
+### Fixed
+
+- **Wipe Journey (restart) now performs a complete story reset.** With the player offline, DST removes journey rows, journey, contract, and faction quest tags, contract items, and the tracked-contract pointer in one transaction, then verifies no progress remains before reporting success.
+
+## [13.5.1] - 2026-08-07
+
+### Changed
 
 - **The Pods page now keeps stale director history out of the way.** Completed and failed director pods are hidden by default, can still be shown when needed, and can be removed with the new Clean history action. DST also clears this terminal history automatically at backend startup and during Start All. Restart counts are now labelled "Lifetime restarts" so old restarts are not mistaken for a current fault.
 

@@ -507,6 +507,54 @@ RETURNING i.id::text AS item_id;
     }
 }
 
+# Max every non-zero roll on augment items owned by one player. Zero entries
+# are structural placeholders and must remain zero. The roll ceiling comes from
+# the confirmed in-game script; scoping through inventories.actor_id prevents
+# another player's augments or world inventories from being changed.
+function Invoke-DunePlayerMaxAugmentAttributes {
+    param([string]$Ip, [long]$PawnId)
+    if ($PawnId -le 0) { return @{ ok = $false; error = 'pawn_id is required.' } }
+
+    $sql = @"
+UPDATE dune.items i
+SET stats = jsonb_set(
+    i.stats,
+    '{FAugmentItemStats,1,StatRolls}',
+    (
+        SELECT jsonb_agg(
+            CASE
+                WHEN jsonb_typeof(roll.value) <> 'number' OR roll.value::numeric = 0 THEN roll.value
+                ELSE to_jsonb(1.003398::numeric)
+            END
+            ORDER BY roll.ordinality
+        )
+        FROM jsonb_array_elements(
+            i.stats #> '{FAugmentItemStats,1,StatRolls}'
+        ) WITH ORDINALITY AS roll(value, ordinality)
+    ),
+    false
+)
+FROM dune.inventories inv
+WHERE inv.id = i.inventory_id
+  AND inv.actor_id = $PawnId::bigint
+  AND i.template_id ILIKE '%Augment%'
+  AND jsonb_typeof(i.stats #> '{FAugmentItemStats,1,StatRolls}') = 'array'
+  AND jsonb_array_length(i.stats #> '{FAugmentItemStats,1,StatRolls}') > 0;
+"@
+    $r = Invoke-DuneSqlQuery -Ip $Ip -Sql $sql -ReadOnly $false -MaxRows 1 -TimeoutSec 60
+    if (-not $r.ok) { return @{ ok = $false; error = "max augment attributes: $($r.error)" } }
+
+    $updated = Get-DuneSqlAffected $r
+    if ($updated -eq 0) {
+        return @{ ok = $true; message = 'No augments with attribute rolls found for this player.'; updated = 0 }
+    }
+    return @{
+        ok = $true
+        message = "Maximized attributes on $updated augment(s). The player must relog before changes appear in-game."
+        updated = $updated
+    }
+}
+
 # Restore destroyed gear — OFFLINE only. Targets ONLY items that already have an
 # FItemStackAndDurabilityStats block and whose CurrentDurability is 0 or NULL
 # (Chopper's "completely dead" case the standard Repair didn't obviously cover).
@@ -1099,6 +1147,7 @@ function Invoke-DunePlayerResetFaction {
     $likes = [System.Collections.Generic.List[string]]::new()
     [void]$likes.Add("tag LIKE 'Faction.%'")
     [void]$likes.Add("tag LIKE 'FactionStoryline%'")
+    [void]$likes.Add("tag LIKE 'DialogueFlags.Faction.%'")
     [void]$likes.Add("tag LIKE 'DialogueFlags.Factions.%'")
     [void]$likes.Add("tag LIKE 'Contract.Faction.%'")
     [void]$likes.Add("tag = 'Journey.LandsraadContractsUnlocked'")
@@ -1372,47 +1421,148 @@ WHERE character_id IN (SELECT id FROM dune.player_state WHERE account_id = $Acco
 function Invoke-DunePlayerResetJourneyNodes {
     param([string]$Ip, [long]$AccountId)
     if ($AccountId -le 0) { return @{ ok = $false; error = 'account_id is required.' } }
-
-    $upd = @"
-UPDATE dune.journey_story_node
-SET complete_condition_state = 'false'::jsonb,
-    has_pending_reward       = false
-WHERE character_id IN (SELECT id FROM dune.player_state WHERE account_id = $AccountId::bigint);
+    # Reset post-tutorial story state, but keep the New Player Experience marked
+    # complete. Veteran characters retain bases, skills, recipes, and equipment;
+    # replaying the tutorial against that retained state repeatedly stalls on
+    # one-time objectives (learn/equip a skill, place shelter pieces, etc.).
+    $pawnId = Get-DunePlayerPawnFromAccount -Ip $Ip -AccountId $AccountId
+    if ($pawnId -le 0) { return @{ ok = $false; error = "no pawn for account $AccountId." } }
+    $starterSql = @"
+SELECT fe.components->'FLevelComponent'->1->'StarterSkillTreeTag'->>'TagName' AS starter_tag
+FROM dune.fgl_entities fe
+JOIN dune.actor_fgl_entities afe ON afe.entity_id=fe.entity_id
+WHERE afe.actor_id=$pawnId::bigint AND afe.slot_name='DuneCharacter'
+LIMIT 1;
 "@
-    $r = Invoke-DuneSqlQuery -Ip $Ip -Sql $upd -ReadOnly $false -MaxRows 1 -TimeoutSec 60
-    if (-not $r.ok) { return @{ ok = $false; error = "reset journey nodes: $($r.error)" } }
-    $updated = Get-DuneSqlAffected $r
-
-    $allTags = Get-DuneAllJourneyTags
-    $extra = ''
-    if ($allTags.Count -gt 0) {
-        $arr = ConvertTo-DunePgTextArray $allTags
-        $rt = "SELECT dune.update_player_tags($AccountId::bigint, ARRAY[]::text[], $arr);"
-        $rr = Invoke-DuneSqlQuery -Ip $Ip -Sql $rt -ReadOnly $false -MaxRows 1 -TimeoutSec 60
-        if (-not $rr.ok) { return @{ ok = $false; error = "remove all journey tags: $($rr.error)" } }
-        $extra = ", removed $($allTags.Count) journey tag(s)"
+    $starterResult = Invoke-DuneSqlQuery -Ip $Ip -Sql $starterSql -ReadOnly $true -MaxRows 1 -TimeoutSec 10
+    if (-not $starterResult.ok) { return @{ ok = $false; error = "read starter skill tree: $($starterResult.error)" } }
+    $starterRows = @(ConvertTo-DuneRowMaps -Result $starterResult)
+    if ($starterRows.Count -ne 1) { return @{ ok = $false; error = 'starter skill tree query returned no result.' } }
+    $starterTag = [string]$starterRows[0]['starter_tag']
+    if ($starterTag -notmatch '^Skills\.Key\.(.+)1$') {
+        return @{ ok = $false; error = "unsupported starter skill tree tag '$starterTag'." }
     }
-    return @{ ok = $true; message = "Reset journey for account $AccountId - reset $updated node(s)$extra"; nodes = $updated; tags_removed = $allTags.Count }
+    $starterJob = [string]$Matches[1]
+
+    $wipe = Invoke-DunePlayerWipeJourneyNodes -Ip $Ip -AccountId $AccountId
+    if (-not $wipe.ok) { return $wipe }
+
+    $stillOffline = Test-DunePlayerOfflineByAccount -Ip $Ip -AccountId $AccountId
+    if (-not $stillOffline.ok) {
+        return @{ ok = $false; error = "Journey was wiped, but starter-tree reset stopped because the player logged in: $($stillOffline.reason)" }
+    }
+    $skillReset = Invoke-DunePlayerResetJobSkills -Ip $Ip -AccountId $AccountId -Job $starterJob
+    if (-not $skillReset.ok) { return @{ ok = $false; error = "Journey wiped, but $starterJob skill reset failed: $($skillReset.error)" } }
+
+    $charSql = "SELECT id::text AS character_id FROM dune.player_state WHERE account_id=$AccountId::bigint LIMIT 1;"
+    $cr = Invoke-DuneSqlQuery -Ip $Ip -Sql $charSql -ReadOnly $true -MaxRows 1 -TimeoutSec 10
+    if (-not $cr.ok) { return @{ ok = $false; error = "Journey wiped, but character lookup failed: $($cr.error)" } }
+    $charRows = @(ConvertTo-DuneRowMaps -Result $cr)
+    if ($charRows.Count -ne 1) { return @{ ok = $false; error = 'Journey wiped, but character lookup returned no result.' } }
+    $characterId = [int64](ConvertTo-DuneInt $charRows[0]['character_id'])
+    if ($characterId -le 0) { return @{ ok = $false; error = 'Journey wiped, but character id was invalid.' } }
+
+    $stillOffline = Test-DunePlayerOfflineByAccount -Ip $Ip -AccountId $AccountId
+    if (-not $stillOffline.ok) {
+        return @{ ok = $false; error = "Journey and starter tree were reset, but NPE restoration stopped because the player logged in: $($stillOffline.reason)" }
+    }
+    $npe = Invoke-DunePlayerMarkNpeCompleted -Ip $Ip -CharacterId $characterId
+    if (-not $npe.ok) { return @{ ok = $false; error = "Journey wiped, but NPE completion failed: $($npe.error)" } }
+    return @{
+        ok = $true
+        message = "Reset post-NPE journey and contract state while preserving faction, research, and active loadout. Reset the chosen $starterJob skill tree and refunded $($skillReset.refunded_points) point(s). NPE remains completed; Find the Fremen can restart on next login."
+        journey_rows = 0
+        story_tags = 0
+        contract_items = 0
+        npe_marked = $true
+        npe_nodes = [int]$npe.nodes_touched
+        starter_job_reset = $starterJob
+        refunded_skill_points = [int]$skillReset.refunded_points
+    }
 }
 
 function Invoke-DunePlayerWipeJourneyNodes {
     param([string]$Ip, [long]$AccountId)
     if ($AccountId -le 0) { return @{ ok = $false; error = 'account_id is required.' } }
 
-    $sql = "SELECT dune.delete_all_journey_story_nodes($AccountId::bigint);"
-    $r = Invoke-DuneSqlQuery -Ip $Ip -Sql $sql -ReadOnly $false -MaxRows 1 -TimeoutSec 60
-    if (-not $r.ok) { return @{ ok = $false; error = "delete_all_journey_story_nodes: $($r.error)" } }
+    $off = Test-DunePlayerOfflineByAccount -Ip $Ip -AccountId $AccountId
+    if (-not $off.ok) { return @{ ok = $false; error = "Player must be offline to wipe journey progress. $($off.reason)" } }
+    $pawnID = Get-DunePlayerPawnFromAccount -Ip $Ip -AccountId $AccountId
+    if ($pawnID -le 0) { return @{ ok = $false; error = "no pawn for account $AccountId." } }
 
-    $allTags = Get-DuneAllJourneyTags
-    $extra = ''
-    if ($allTags.Count -gt 0) {
-        $arr = ConvertTo-DunePgTextArray $allTags
-        $rt = "SELECT dune.update_player_tags($AccountId::bigint, ARRAY[]::text[], $arr);"
-        $rr = Invoke-DuneSqlQuery -Ip $Ip -Sql $rt -ReadOnly $false -MaxRows 1 -TimeoutSec 60
-        if (-not $rr.ok) { return @{ ok = $false; error = "remove all journey tags: $($rr.error)" } }
-        $extra = ", removed $($allTags.Count) journey tag(s)"
+    # This is a full story restart, not merely a journey-row delete. Contract
+    # progress also lives in player tags and ContractItem inventory rows; leaving
+    # either behind caused a wiped character to retain completed/active quests.
+    $sql = @"
+BEGIN;
+SELECT dune.delete_all_journey_story_nodes($AccountId::bigint);
+DELETE FROM dune.player_tags
+WHERE character_id IN (SELECT id FROM dune.player_state WHERE account_id=$AccountId::bigint)
+  AND (
+      tag LIKE 'Journey.%'
+      OR tag LIKE 'JourneySets.%'
+      OR tag LIKE 'Contract.%'
+      OR tag LIKE 'BigMoments.%'
+      OR tag LIKE 'DialogueFlags.Contracts.%'
+      OR tag LIKE 'NPE.%'
+  );
+DELETE FROM dune.items i
+USING dune.inventories inv
+WHERE inv.id=i.inventory_id
+  AND inv.actor_id=$pawnID::bigint
+  AND inv.inventory_type=29
+  AND i.template_id='ContractItem';
+UPDATE dune.actors
+SET properties=jsonb_set(
+    properties,
+    '{ContractsCoordinatorComponent,m_TrackedContractItemUid}',
+    to_jsonb('!!itm#0'::text),
+    true
+)
+WHERE id=$pawnID::bigint
+  AND properties ? 'ContractsCoordinatorComponent';
+COMMIT;
+"@
+    $r = Invoke-DuneSqlQuery -Ip $Ip -Sql $sql -ReadOnly $false -MaxRows 1 -TimeoutSec 120
+    if (-not $r.ok) { return @{ ok = $false; error = "wipe journey restart: $($r.error)" } }
+
+    $verifySql = @"
+SELECT
+  (SELECT COUNT(*) FROM dune.journey_story_node
+   WHERE character_id IN (SELECT id FROM dune.player_state WHERE account_id=$AccountId::bigint)) AS journey_rows,
+  (SELECT COUNT(*) FROM dune.player_tags
+   WHERE character_id IN (SELECT id FROM dune.player_state WHERE account_id=$AccountId::bigint)
+     AND (
+         tag LIKE 'Journey.%'
+         OR tag LIKE 'JourneySets.%'
+         OR tag LIKE 'Contract.%'
+         OR tag LIKE 'BigMoments.%'
+         OR tag LIKE 'DialogueFlags.Contracts.%'
+         OR tag LIKE 'NPE.%'
+     )) AS story_tags,
+  (SELECT COUNT(*) FROM dune.items i JOIN dune.inventories inv ON inv.id=i.inventory_id
+   WHERE inv.actor_id=$pawnID::bigint AND inv.inventory_type=29 AND i.template_id='ContractItem') AS contract_items;
+"@
+    $vr = Invoke-DuneSqlQuery -Ip $Ip -Sql $verifySql -ReadOnly $true -MaxRows 1 -TimeoutSec 30
+    if (-not $vr.ok) { return @{ ok = $false; error = "wipe journey verification: $($vr.error)" } }
+    $rows = @(ConvertTo-DuneRowMaps -Result $vr)
+    if ($rows.Count -ne 1) { return @{ ok = $false; error = 'wipe journey verification returned no result.' } }
+    $journeyRows = [int64](ConvertTo-DuneInt $rows[0]['journey_rows'])
+    $storyTags = [int64](ConvertTo-DuneInt $rows[0]['story_tags'])
+    $contractItems = [int64](ConvertTo-DuneInt $rows[0]['contract_items'])
+    if ($journeyRows -ne 0 -or $storyTags -ne 0 -or $contractItems -ne 0) {
+        return @{
+            ok = $false
+            error = "Journey wipe incomplete: $journeyRows journey row(s), $storyTags story tag(s), and $contractItems contract item(s) remain."
+        }
     }
-    return @{ ok = $true; message = "Wiped all journey nodes for account $AccountId$extra"; tags_removed = $allTags.Count }
+    return @{
+        ok = $true
+        message = 'Wiped journey, NPE/journey/dialogue-contract tags, and contract items. Faction state, skills, research, and active loadout were preserved.'
+        journey_rows = 0
+        story_tags = 0
+        contract_items = 0
+    }
 }
 
 # Clear a dangling "tracked contract" pointer on the player's pawn. An Arrakeen
@@ -2164,22 +2314,47 @@ function Invoke-DunePlayerResetJobSkills {
     $keysArr = ConvertTo-DunePgTextArray $keys
 
     $sql = @"
-UPDATE dune.fgl_entities fe
-SET components = jsonb_set(
-    fe.components,
-    ARRAY['FLevelComponent','1','ModuleData'],
-    (fe.components->'FLevelComponent'->1->'ModuleData') - $keysArr)
-WHERE fe.entity_id = (
-    SELECT entity_id FROM dune.actor_fgl_entities
-    WHERE actor_id = $pawnID::bigint AND slot_name = 'DuneCharacter'
-);
+WITH target AS (
+    SELECT fe.entity_id,
+           COALESCE((
+               SELECT SUM(COALESCE((entry.value->>'SkillPointsSpent')::int, 0))
+               FROM jsonb_each(COALESCE(fe.components->'FLevelComponent'->1->'ModuleData', '{}'::jsonb)) entry
+               WHERE entry.key = ANY($keysArr)
+           ), 0)::int AS refund
+    FROM dune.fgl_entities fe
+    JOIN dune.actor_fgl_entities afe ON afe.entity_id=fe.entity_id
+    WHERE afe.actor_id=$pawnID::bigint AND afe.slot_name='DuneCharacter'
+),
+updated AS (
+    UPDATE dune.fgl_entities fe
+    SET components = jsonb_set(
+        jsonb_set(
+            fe.components,
+            ARRAY['FLevelComponent','1','ModuleData'],
+            COALESCE(fe.components->'FLevelComponent'->1->'ModuleData', '{}'::jsonb) - $keysArr),
+        ARRAY['FLevelComponent','1','UnspentSkillPoints'],
+        to_jsonb(
+            COALESCE((fe.components->'FLevelComponent'->1->>'UnspentSkillPoints')::int, 0)
+            + target.refund
+        ),
+        true)
+    FROM target
+    WHERE fe.entity_id=target.entity_id
+    RETURNING target.refund
+)
+SELECT refund FROM updated;
 "@
     $r = Invoke-DuneSqlQuery -Ip $Ip -Sql $sql -ReadOnly $false -MaxRows 1 -TimeoutSec 30
     if (-not $r.ok) { return @{ ok = $false; error = "reset $Job tree: $($r.error)" } }
-    if ((Get-DuneSqlAffected $r) -eq 0) {
-        return @{ ok = $true; message = "Reset $Job skill tree - no ModuleData on pawn" }
+    $rows = @(ConvertTo-DuneRowMaps -Result $r)
+    if ($rows.Count -ne 1) { return @{ ok = $false; error = "reset $Job tree returned no refund result." } }
+    $refund = [int](ConvertTo-DuneInt $rows[0]['refund'])
+    return @{
+        ok = $true
+        message = "Reset $Job skill tree - removed $($modules.Count) module slot(s) and refunded $refund point(s)"
+        modules = $modules.Count
+        refunded_points = $refund
     }
-    return @{ ok = $true; message = "Reset $Job skill tree - scanned $($modules.Count) module slot(s)" }
 }
 
 # Unlock a skill-trainer quest line: completes every DA_CT_Trainer_<Job>* contract

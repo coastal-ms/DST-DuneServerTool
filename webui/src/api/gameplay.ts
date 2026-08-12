@@ -598,6 +598,12 @@ export function setSpecLevel(controllerId: number, trackType: string, level: num
   })
 }
 
+export function applySpecLevel(controllerId: number, trackType: string, level: number) {
+  return api<WriteResult>('/api/gameplay/players/apply-spec-level', {
+    method: 'POST', body: JSON.stringify({ controller_id: controllerId, track_type: trackType, level }),
+  })
+}
+
 export function deleteInventoryItem(itemId: number) {
   return api<WriteResult>('/api/gameplay/players/delete-item', {
     method: 'POST', body: JSON.stringify({ item_id: itemId }),
@@ -1192,6 +1198,21 @@ export interface CosmeticEntry { template: string; name: string; group: string }
 interface CosmeticsResponse { templates?: CosmeticEntry[]; total?: number }
 let _cosmeticsCache: CosmeticEntry[] | null = null
 let _cosmeticsPromise: Promise<CosmeticEntry[]> | null = null
+
+export function filterCosmeticsCatalog(catalog: CosmeticEntry[], query: string): CosmeticEntry[] {
+  const q = query.trim().toLowerCase()
+  if (!q) return catalog
+  const normalizedQuery = q.replace(/[_-]+/g, ' ').replace(/\s+/g, ' ').trim()
+  return catalog.filter(entry => {
+    const fields = [entry.name, entry.template, entry.group]
+    return fields.some(field => {
+      const lower = field.toLowerCase()
+      const normalized = lower.replace(/[_-]+/g, ' ').replace(/\s+/g, ' ').trim()
+      return lower.includes(q) || (normalizedQuery.length > 0 && normalized.includes(normalizedQuery))
+    })
+  })
+}
+
 export function getCosmeticsCatalog(): Promise<CosmeticEntry[]> {
   if (_cosmeticsCache) return Promise.resolve(_cosmeticsCache)
   if (_cosmeticsPromise) return _cosmeticsPromise
@@ -1205,6 +1226,18 @@ export function getCosmeticsCatalog(): Promise<CosmeticEntry[]> {
     throw e
   })
   return _cosmeticsPromise
+}
+
+export interface OwnedCosmeticsResponse {
+  account_id: number
+  owned: string[]
+  total: number
+  source: DataSource
+  liveError?: string
+}
+
+export function getPlayerOwnedCosmetics(accountId: number) {
+  return api<OwnedCosmeticsResponse>(`/api/gameplay/players/cosmetics-owned${qs({ account_id: accountId })}`)
 }
 
 // ===========================================================================
@@ -1283,7 +1316,7 @@ export function catalogCategories(catalog: CatalogItem[]): string[] {
 }
 
 /**
- * Case-insensitive substring filter over name OR template_id. Returns up to
+ * Case-insensitive substring filter over name, template_id, or category. Returns up to
  * `limit` matches sorted by best-match (template_id prefix > name prefix >
  * substring), then alphabetically.
  *
@@ -1294,6 +1327,7 @@ export function catalogCategories(catalog: CatalogItem[]): string[] {
  */
 export function filterCatalog(catalog: CatalogItem[], query: string, limit = 20, category = ''): CatalogItem[] {
   const q = query.trim().toLowerCase()
+  const normalizedQuery = q.replace(/[_-]+/g, ' ').replace(/\s+/g, ' ').trim()
   const cat = category.trim()
   const inCat = cat ? catalog.filter(it => (it.category || '').trim() === cat) : catalog
   if (!q) {
@@ -1304,11 +1338,13 @@ export function filterCatalog(catalog: CatalogItem[], query: string, limit = 20,
   for (const it of inCat) {
     const tid = it.template_id.toLowerCase()
     const nm  = it.name.toLowerCase()
+    const normalizedCategory = (it.category || '').toLowerCase().replace(/[_-]+/g, ' ').replace(/\s+/g, ' ').trim()
     let rank = -1
     if (tid === q || nm === q)                 rank = 0
     else if (tid.startsWith(q))                rank = 1
     else if (nm.startsWith(q))                 rank = 2
     else if (tid.includes(q) || nm.includes(q)) rank = 3
+    else if (normalizedQuery && normalizedCategory.includes(normalizedQuery)) rank = 4
     if (rank >= 0) out.push({ item: it, rank })
   }
   out.sort((a, b) => a.rank - b.rank || a.item.name.localeCompare(b.item.name))
@@ -1740,6 +1776,12 @@ export function deleteItemPackage(id: string) {
 
 export function repairGear(pawnId: number) {
   return api<WriteResult>('/api/gameplay/players/repair-gear', {
+    method: 'POST', body: JSON.stringify({ pawn_id: pawnId }),
+  })
+}
+
+export function maxAugmentAttributes(pawnId: number) {
+  return api<WriteResult>('/api/gameplay/players/max-augment-attributes', {
     method: 'POST', body: JSON.stringify({ pawn_id: pawnId }),
   })
 }

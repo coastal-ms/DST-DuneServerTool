@@ -14,9 +14,9 @@ Describe 'Terminal director pod lifecycle' {
         }
     }
 
-    It 'automatically cleans history during backend and Start All startup' {
-        $backend = Get-Content (Join-Path $PSScriptRoot '..\app\DuneServer.ps1') -Raw
-        $backend | Should -Match 'Remove-DuneTerminalDirectorPods'
+    It 'automatically cleans history during background scheduler and Start All startup' {
+        $scheduler = Get-Content (Join-Path $PSScriptRoot '..\app\server\lib\RestartSchedule.ps1') -Raw
+        $scheduler | Should -Match 'Remove-DuneTerminalDirectorPods'
         $script:cli | Should -Match 'Remove-DuneTerminalDirectorPodHistory'
     }
 

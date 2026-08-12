@@ -177,6 +177,21 @@ function Invoke-DunePlayerRename {
     return @{ ok = $true; message = "Renamed character to '$Name'." }
 }
 
+# Convert an absolute specialization level into the level/XP pair persisted by
+# Funcom. The game keeps level authoritative and recomputes exact XP on login.
+function Get-DuneSpecLevelWriteValues {
+    param([int]$Level)
+    $cap    = $script:DuneSpecXpMax
+    $lvlMax = $script:DuneSpecLevelMax
+
+    $newLevel = [int][Math]::Max(0, [Math]::Min([long]$Level, [long]$lvlMax))
+    $estXp = [int][Math]::Round((3.107 * $newLevel * $newLevel) + (131.1 * $newLevel))
+    $newXp = [int][Math]::Max(0, [Math]::Min([long]$estXp, [long]$cap))
+    if ($newLevel -ge $lvlMax) { $newXp = $cap }
+
+    return @{ level = $newLevel; xp = $newXp }
+}
+
 # Set specialization LEVEL (set-spec-level): write an ABSOLUTE level for one track,
 # clamped 0..100. Keyed by controller id (specialization_tracks.player_id =
 # controller id).
@@ -201,16 +216,11 @@ function Invoke-DunePlayerRename {
 function Invoke-DunePlayerSetSpecLevel {
     param([string]$Ip, [long]$ControllerId, [string]$TrackType, [int]$Level)
     $safeTrack = ConvertTo-DuneSqlString $TrackType
-    $cap    = $script:DuneSpecXpMax      # 44182
     $lvlMax = $script:DuneSpecLevelMax   # 100.0
 
-    $newLevel = [int][Math]::Max(0, [Math]::Min([long]$Level, [long]$lvlMax))
-
-    # xp_amount placeholder from the observed game curve: xp ~= 3.107*L^2 + 131.1*L.
-    # Clamped 0..cap; the game recomputes the exact value from the level on login.
-    $estXp = [int][Math]::Round((3.107 * $newLevel * $newLevel) + (131.1 * $newLevel))
-    $newXp = [int][Math]::Max(0, [Math]::Min([long]$estXp, [long]$cap))
-    if ($newLevel -ge $lvlMax) { $newXp = $cap }
+    $values = Get-DuneSpecLevelWriteValues -Level $Level
+    $newLevel = [int]$values.level
+    $newXp = [int]$values.xp
 
     $newLevelSql = Format-DuneFloatForSql ([double]$newLevel)
     $sql = "SELECT dune.set_specialization_xp_and_level($ControllerId::bigint, '$safeTrack'::dune.specializationtracktype, $newXp::integer, $newLevelSql::real);"
@@ -218,6 +228,136 @@ function Invoke-DunePlayerSetSpecLevel {
     if (-not $res.ok) { return @{ ok = $false; error = $res.error } }
 
     return @{ ok = $true; message = "Set '$TrackType' to level $newLevel / $([int]$lvlMax). Offline edit - appears in-game after a full re-login." }
+}
+
+function Get-DuneSpecSkillPointBonus {
+    param([string]$RewardName)
+    if ($RewardName -match '_SkillPoint_Super$') { return 5 }
+    if ($RewardName -match '_SkillPoint_Major$') { return 3 }
+    if ($RewardName -match '_SkillPoint$') { return 1 }
+    return 0
+}
+
+# Set one specialization level and purchase every reward in that track whose
+# unlock level is at or below the target. Existing rewards are preserved, so
+# applying a lower level never removes rewards already earned or granted.
+function Invoke-DunePlayerApplySpecLevel {
+    param([string]$Ip, [long]$ControllerId, [string]$TrackType, [int]$Level)
+    $offline = Test-DunePlayerOfflineByController -Ip $Ip -ControllerId $ControllerId
+    if (-not $offline.ok) { return @{ ok = $false; error = $offline.reason } }
+
+    $safeTrack = ConvertTo-DuneSqlString $TrackType
+    $values = Get-DuneSpecLevelWriteValues -Level $Level
+    $newLevel = [int]$values.level
+    $newXp = [int]$values.xp
+    $newLevelSql = Format-DuneFloatForSql ([double]$newLevel)
+
+    $catalog = Get-DuneKeystoneCatalog
+    $ids = @(
+        $catalog.GetEnumerator() |
+            Where-Object {
+                ([string]$_.Value.track).Equals($TrackType, [System.StringComparison]::OrdinalIgnoreCase) -and
+                ([int]$_.Value.level -le $newLevel)
+            } |
+            ForEach-Object { [int]$_.Key } |
+            Sort-Object
+    )
+    $skillPointBonusCases = @(
+        $catalog.GetEnumerator() |
+            Sort-Object { [int]$_.Key } |
+            ForEach-Object {
+                $bonus = Get-DuneSpecSkillPointBonus -RewardName ([string]$_.Value.name)
+                if ($bonus -gt 0) { "WHEN $([int]$_.Key) THEN $bonus" }
+            }
+    )
+
+    $sql = [System.Text.StringBuilder]::new()
+    [void]$sql.AppendLine('BEGIN;')
+    [void]$sql.AppendLine("SELECT dune.set_specialization_xp_and_level($ControllerId::bigint, '$safeTrack'::dune.specializationtracktype, $newXp::integer, $newLevelSql::real);")
+    if ($ids.Count -gt 0) {
+        $idList = $ids -join ','
+        [void]$sql.AppendLine(@"
+INSERT INTO dune.purchased_specialization_keystones (player_id, keystone_id)
+SELECT $ControllerId::bigint, id
+FROM unnest(ARRAY[$idList]::smallint[]) AS id
+ON CONFLICT DO NOTHING;
+"@)
+    }
+    if ($skillPointBonusCases.Count -gt 0) {
+        $bonusCaseSql = $skillPointBonusCases -join ' '
+        [void]$sql.AppendLine(@"
+WITH specialization_bonus AS (
+    SELECT COALESCE(SUM(CASE psk.keystone_id $bonusCaseSql ELSE 0 END), 0)::int AS amount
+    FROM dune.purchased_specialization_keystones psk
+    WHERE psk.player_id = $ControllerId::bigint
+),
+character_bonus AS (
+    SELECT COALESCE(COUNT(*) FILTER (
+        WHERE purchased.id::int = ANY(ARRAY[7,14,21]::int[])
+    ), 0)::int AS amount
+    FROM dune.player_state ps
+    JOIN dune.actors a ON a.id = ps.player_pawn_id
+    LEFT JOIN LATERAL jsonb_array_elements_text(
+        COALESCE(a.properties->'KeystonePlayerComponent'->'m_PurchasedKeystoneIDs', '[]'::jsonb)
+    ) AS purchased(id) ON true
+    WHERE ps.player_controller_id = $ControllerId::bigint
+),
+expected_bonus AS (
+    SELECT specialization_bonus.amount + character_bonus.amount AS amount
+    FROM specialization_bonus, character_bonus
+),
+target_state AS (
+    SELECT fe.entity_id,
+           COALESCE((fe.components #>> '{FLevelComponent,1,KeystoneBonusSkillPoints}')::int, 0) AS current_bonus,
+           COALESCE((fe.components #>> '{FLevelComponent,1,TotalSkillPoints}')::int, 0) AS current_total,
+           COALESCE((fe.components #>> '{FLevelComponent,1,UnspentSkillPoints}')::int, 0) AS current_unspent,
+           COALESCE((
+               SELECT SUM(COALESCE((entry.value->>'SkillPointsSpent')::int, 0))
+               FROM jsonb_each(COALESCE(
+                   fe.components->'FLevelComponent'->1->'ModuleData',
+                   '{}'::jsonb
+               )) entry
+           ), 0)::int AS module_spent
+    FROM dune.player_state ps
+    JOIN dune.actor_fgl_entities afe
+      ON afe.actor_id = ps.player_pawn_id AND afe.slot_name = 'DuneCharacter'
+    JOIN dune.fgl_entities fe ON fe.entity_id = afe.entity_id
+    WHERE ps.player_controller_id = $ControllerId::bigint
+    LIMIT 1
+)
+UPDATE dune.fgl_entities fe
+SET components = jsonb_set(
+    jsonb_set(
+        jsonb_set(
+            fe.components,
+            ARRAY['FLevelComponent','1','KeystoneBonusSkillPoints'],
+            to_jsonb(expected.amount), true),
+        ARRAY['FLevelComponent','1','TotalSkillPoints'],
+        to_jsonb(target.current_total + expected.amount - target.current_bonus), true),
+    ARRAY['FLevelComponent','1','UnspentSkillPoints'],
+    to_jsonb(
+        CASE
+            WHEN target.module_spent + target.current_unspent > target.current_total
+                THEN target.current_unspent
+            ELSE target.current_unspent + expected.amount - target.current_bonus
+        END
+    ), true)
+FROM target_state target, expected_bonus expected
+WHERE fe.entity_id = target.entity_id
+  AND expected.amount > target.current_bonus;
+"@)
+    }
+    [void]$sql.AppendLine('COMMIT;')
+
+    $res = Invoke-DuneSqlQuery -Ip $Ip -Sql $sql.ToString() -ReadOnly $false -MaxRows 1 -TimeoutSec 30
+    if (-not $res.ok) { return @{ ok = $false; error = $res.error } }
+    return @{
+        ok = $true
+        message = "Set '$TrackType' to level $newLevel and applied $($ids.Count) available specialization reward(s). Existing rewards were preserved. Full re-login required."
+        rewards_applied = $ids.Count
+        skill_points_reconciled = $true
+        level = $newLevel
+    }
 }
 
 # Delete item (delete-item): dune.delete_item(id).

@@ -68,6 +68,12 @@ Describe 'Get-DuneCosmeticsCatalog includes the full building-set universe' -Tag
         @($script:cat.templates | Where-Object { $_.group -eq 'Armor & Suit Sets' }).Count | Should -BeGreaterThan 0
         @($script:cat.templates | Where-Object { $_.group -eq 'Swatches (Dyes)' }).Count   | Should -BeGreaterThan 0
     }
+    It 'includes developer cosmetics and building unlocks' {
+        $script:cat.templates.template | Should -Contain 'D_Choam_HeavyArmor_Swatch'
+        $script:cat.templates.template | Should -Contain 'D_TestMeshVariant'
+        $script:cat.templates.template | Should -Contain 'D_AdvFabricationSet_Patent'
+        $script:cat.templates.template | Should -Contain 'D_StartingSet'
+    }
     It 'every building-set entry has a template, a name, and a Building Sets group' {
         foreach ($e in ($script:cat.templates | Where-Object { $_.group -like 'Building Sets*' })) {
             $e.template | Should -Not -BeNullOrEmpty

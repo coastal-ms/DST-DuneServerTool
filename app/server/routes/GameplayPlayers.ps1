@@ -195,6 +195,22 @@ Register-DuneRoute -Method POST -Path '/api/gameplay/players/set-spec-level' -Ha
     }
 }
 
+# POST /api/gameplay/players/apply-spec-level  { controller_id, track_type, level }
+Register-DuneRoute -Method POST -Path '/api/gameplay/players/apply-spec-level' -Handler {
+    param($req, $res, $routeParams, $body)
+    try {
+        $cid = Get-DuneBodyInt -Body $body -Name 'controller_id'
+        $track = [string](Get-DuneBodyValue -Body $body -Name 'track_type')
+        $level = Get-DuneBodyInt -Body $body -Name 'level'
+        if ($null -eq $cid -or $cid -le 0) { Write-DuneError -Response $res -Status 400 -Message 'controller_id is required.'; return }
+        if (-not $track) { Write-DuneError -Response $res -Status 400 -Message 'track_type is required.'; return }
+        if ($null -eq $level) { Write-DuneError -Response $res -Status 400 -Message 'level must be an integer.'; return }
+        Invoke-DunePlayerWriteRoute -Response $res -Action { param($ip) Invoke-DunePlayerApplySpecLevel -Ip $ip -ControllerId $cid -TrackType $track -Level ([int]$level) }
+    } catch {
+        Write-DuneError -Response $res -Status 500 -Message "Apply spec level failed: $($_.Exception.Message)"
+    }
+}
+
 # POST /api/gameplay/players/delete-item  { item_id }
 Register-DuneRoute -Method POST -Path '/api/gameplay/players/delete-item' -Handler {
     param($req, $res, $routeParams, $body)

@@ -60,6 +60,7 @@ $script:DuneGcSecRespawn   = '/Script/DuneSandbox.RespawnSettings'
 $script:DuneGcSecEncounters = '/Script/DuneSandbox.EncountersSubsystem'
 $script:DuneGcSecContracts = '/Script/DuneSandbox.ContractsSubsystem'
 $script:DuneGcSecCrafting  = '/Script/DuneSandbox.CraftingSettings'
+$script:DuneGcSecTechKnowledge = '/Script/DuneSandbox.TechKnowledgeSettings'
 
 # Funcom stores ALL Landsraad settings as scalar members inside ONE nested struct
 # value: [/Script/DuneSandbox.LandsraadSettings] Data=(m_TaskGoalAmount=5000.0,...).
@@ -92,7 +93,7 @@ $script:DuneGameConfigCategoryOrder = @(
     'Server Identity','Network','Survival','Hydration','Loot & Death',
     'Resources & Economy','Crafting','Building','BaseBackUp','Inventory','Guilds & Economy',
     'Storm Cycle','Landsraad','PvP & Security','Spice','Taxation','Encounters','Sandworm','Vehicles',
-    'Experimental','Experimental 2'
+    'Experimental','Experimental 2','Experimental Lab'
 )
 
 # Keys DST USED to expose but later removed once they were shown not to work.
@@ -113,15 +114,6 @@ $script:DuneGameConfigDeprecatedManagedKeys = @(
     'm_GlobalHarvestAmountMultiplier'
     'm_GlobalHarvestHealthMultiplier'
 
-    # Returning-player reward packs. Removed 2026-08-04 on a FUNCOM DEV's
-    # confirmation that these are not enabled for self-hosted servers: the award
-    # packs are granted by Funcom's own backend, not locally, so a self-host has
-    # nothing to grant from. Corroborated here - the game database carries no
-    # award/reward/entitlement table for them at all. Do not re-expose these
-    # without new evidence that a self-host can source the packs locally.
-    'dw.ReturningPlayer.GiveAward.Enabled'
-    'dw.ReturningPlayer.DaysBeforeEligibleForReward'
-    'dw.ReturningPlayer.GiveAward.TierOverride'
 )
 
 $script:DuneGameConfigSchema = @(
@@ -165,6 +157,7 @@ $script:DuneGameConfigSchema = @(
     # --- Crafting ---
     @{ Section=$script:DuneGcSecCrafting; Key='m_RepairCostWeight'; File='game'; Type='float'; Min=0; Default='1.0'; Label='Repair Cost Weight'; Help='Scales repair costs. Also needs client-side apply.'; ClientApply=$true; Category='Crafting' }
     @{ Section=$script:DuneGcSecCrafting; Key='m_RecyclerOutputWeight'; File='game'; Type='float'; Min=0; Default='1.0'; Label='Recycler Output Weight'; Help='Scales recycler output. Also needs client-side apply.'; ClientApply=$true; Category='Crafting' }
+    @{ Section=$script:DuneGcSecTechKnowledge; Key='m_bRevealItemOnDistributedToCharacter'; File='game'; Type='bool'; Default='False'; Label='Reveal Distributed Research Items (Experimental)'; Help='When enabled, asks the game to reveal research items distributed directly to a character, including admin-granted developer blueprints and schematics. Unconfirmed: this may make hidden entries visible, but it cannot reconstruct missing schematic research-cost metadata. Restart the battlegroup, then grant a fresh copy for testing. Also needs client-side apply.'; ClientApply=$true; Category='Crafting' }
 
     # --- Building ---
     @{ Section=$script:DuneGcSecBuilding; Key='m_MaxNumLandclaimSegments'; File='game'; Type='int'; Min=1; Default='6'; Label='Max Landclaim Segments'; Help='Maximum territory claim segments. Also needs client-side apply.'; ClientApply=$true; Category='Building' }
@@ -214,6 +207,7 @@ $script:DuneGameConfigSchema = @(
     @{ Section=$script:DuneGcSecLandsraad; StructKey=$script:DuneGcLandsraadStructKey; Key='m_VotingPeriodStartBeforeCoriolisCycleInSec'; File='game'; Type='float'; Min=0; Unit='sec'; Default='118800.0'; Label='Voting Starts Before Cycle'; Help='How many seconds before the Coriolis cycle voting opens.'; ClientApply=$true; Category='Landsraad' }
     @{ Section=$script:DuneGcSecLandsraad; StructKey=$script:DuneGcLandsraadStructKey; Key='m_LandsraadContractsMaxActiveAmount'; File='game'; Type='int'; Min=0; Default='3'; Label='Max Active Contracts'; Help='Maximum simultaneously-active Landsraad contracts per player.'; ClientApply=$true; Category='Landsraad' }
     @{ Section=$script:DuneGcSecLandsraad; StructKey=$script:DuneGcLandsraadStructKey; Key='m_LandsraadContractsPerVotingBlock'; File='game'; Type='int'; Min=0; Default='3'; Label='Contracts per Voting Block'; Help='Number of contracts offered per voting block.'; ClientApply=$true; Category='Landsraad' }
+    @{ Section=$script:DuneGcSecLandsraad; StructKey=$script:DuneGcLandsraadStructKey; Key='m_LandsraadContractsAbandonCooldownSeconds'; File='game'; Type='int'; Min=0; Unit='sec'; Default='3600'; Label='Contract Abandon Cooldown'; Help='How long a player must wait after abandoning a Landsraad contract. Field-confirmed at 5 seconds.'; ClientApply=$true; Category='Landsraad' }
     @{ Section=$script:DuneGcSecLandsraad; StructKey=$script:DuneGcLandsraadStructKey; Key='m_LandsraadContractsDailyBonusPerDay'; File='game'; Type='int'; Min=0; Default='5'; Label='Daily Contract Bonus'; Help='Bonus contracts granted per day.'; ClientApply=$true; Category='Landsraad' }
     @{ Section=$script:DuneGcSecLandsraad; StructKey=$script:DuneGcLandsraadStructKey; Key='m_LandsraadContractsDailyBonusMax'; File='game'; Type='int'; Min=0; Default='35'; Label='Daily Contract Bonus Max'; Help='Maximum accumulated daily contract bonus.'; ClientApply=$true; Category='Landsraad' }
     @{ Section=$script:DuneGcSecLandsraad; StructKey=$script:DuneGcLandsraadStructKey; Key='m_LandsraadTaskDailyRevealFrequency'; File='game'; Type='float'; Min=0; Default='25.0'; Label='Task Daily Reveal Frequency'; Help='How often new House tasks are revealed each day.'; ClientApply=$true; Category='Landsraad' }
@@ -276,8 +270,8 @@ $script:DuneGameConfigSchema = @(
     @{ Section=$script:DuneGcSecConsole; Key='dw.VehicleAbandonedDecayAllowed'; File='engine'; Type='bool01'; Label='Abandoned Vehicle Decay'; Help='Allows abandoned vehicles to decay over time. 0 disables decay. Compiled default was not recovered.'; Category='Experimental' }
     @{ Section=$script:DuneGcSecConsole; Key='dw.VehicleAbandonedDecayTimeMultiplier'; File='engine'; Type='float'; Default='1.0'; Label='Abandoned Vehicle Decay Speed'; Help='Scales abandoned-vehicle decay speed. Values above 1 should decay faster; 1 is shipping behavior.'; Category='Experimental' }
     @{ Section=$script:DuneGcSecConsole; Key='Vehicle.DisassemblySpeedMultiplier'; File='engine'; Type='float'; Default='1.0'; Label='Vehicle Disassembly Speed'; Help='Scales vehicle disassembly speed. Not yet field-verified.'; Category='Experimental' }
-    @{ Section=$script:DuneGcSecConsole; Key='Vehicle.RecoveryChassisDurabilityReductionFraction'; File='engine'; Type='float'; Default='0.150000006'; Label='Recovery Chassis Durability Reduction'; Help='Reduces maximum decayed chassis durability during recovery. Units are unclear; test as a fraction such as 0.15, not 15.'; Category='Experimental' }
-    @{ Section=$script:DuneGcSecConsole; Key='Vehicle.RecoveryCurrencyBaseCost'; File='engine'; Type='int'; Min=0; Default='2500'; Label='Vehicle Recovery Base Cost'; Help='Base currency cost to recover a vehicle before vehicle-specific multipliers.'; Category='Experimental' }
+    @{ Section=$script:DuneGcSecConsole; Key='Vehicle.RecoveryChassisDurabilityReductionFraction'; File='engine'; Type='float'; Default='0.150000006'; Label='Recovery Chassis Durability Reduction'; Help='Fraction of maximum chassis durability lost during recovery. Set 0 for no durability loss; use 0.15 for 15 percent.'; Status='Confirmed'; Startup=$true; Category='Vehicles' }
+    @{ Section=$script:DuneGcSecConsole; Key='Vehicle.RecoveryCurrencyBaseCost'; File='engine'; Type='int'; Min=0; Default='2500'; Label='Vehicle Recovery Base Cost'; Help='Base currency cost to recover a vehicle before vehicle-specific multipliers.'; Status='Confirmed'; Startup=$true; Category='Vehicles' }
     @{ Section=$script:DuneGcSecConsole; Key='Vehicle.RecoveryTimeLimit'; File='engine'; Type='int'; Min=0; Unit='sec'; Label='Vehicle Recovery Time Limit'; Help='Seconds a destroyed vehicle remains available for recovery. Compiled default was not recovered.'; Category='Experimental' }
     @{ Section=$script:DuneGcSecConsole; Key='Vehicle.MaxActiveVehicles'; File='engine'; Type='int'; Min=-1; Default='-1'; Label='Maximum Active Vehicles'; Help='Rejects attempts to enter vehicle seats after this active-vehicle limit. -1 = unlimited. Applied through INI and Hagga startup command for local testing.'; Category='Experimental' }
     @{ Section=$script:DuneGcSecConsole; Key='Vehicle.MaxVehicles'; File='engine'; Type='int'; Min=-1; Default='-1'; Label='Maximum Vehicles'; Help='Rejects vehicle assembly or recovery after this total-vehicle limit. -1 = unlimited. Applied through INI and Hagga startup command for local testing.'; Category='Experimental' }
@@ -326,7 +320,7 @@ $script:DuneGameConfigSchema = @(
     @{ Section=$script:DuneGcSecConsole; Key='dw.PlaceableShelterThresholdOverride'; File='engine'; Type='float'; Min=-1; Max=1; Default='-1'; Label='Placeable Shelter Threshold Override'; Help='Funcom: "The threshold value override for the placeable shelter, from 0 to 1. Negative value means it is disabled". Counterpart to Building Shelter Threshold Override.'; Category='Experimental' }
 
     # Survival and server ruleset.
-    @{ Section=$script:DuneGcSecConsole; Key='Deathstill.ConversionTimeOverride'; File='engine'; Type='float'; Min=0; Unit='sec'; Label='Deathstill Conversion Time'; Help='Funcom: "Override Time for deathstill" - how long a deathstill takes to process a body, in seconds. Community-reported as working; not verified by us. Compiled default was not recovered.'; Category='Experimental' }
+    @{ Section=$script:DuneGcSecConsole; Key='Deathstill.ConversionTimeOverride'; File='engine'; Type='float'; Min=0; Unit='sec'; Label='Deathstill Conversion Time'; Help='Overrides how long a deathstill takes to process a body, in seconds. Field-confirmed; restart the battlegroup to apply it. Compiled default was not recovered.'; Status='Confirmed'; Startup=$true; Category='Survival' }
     @{ Section=$script:DuneGcSecConsole; Key='Dac.DisablePvpDamage'; File='engine'; Type='bool01'; Label='Disable PvP Damage'; Help='Funcom: "If true, pvp damage will be disabled. Pve/Evp damage will always work regardless". Server-wide, unlike the per-partition Deep Desert PvP setting. Compiled default was not recovered.'; Category='Experimental' }
     @{ Section=$script:DuneGcSecConsole; Key='dw.EnableShelterSystem'; File='engine'; Type='bool01'; Label='Shelter System'; Help='Funcom: "Enable and disable the shelter system". Disabling it removes sandstorm shelter requirements entirely; expect wide-reaching effects. Compiled default was not recovered.'; Category='Experimental' }
 
@@ -409,6 +403,9 @@ $script:DuneGameConfigSchema = @(
     @{ Section=$script:DuneGcSecConsole; Key='Journey.EnableSimplifiedChallengeCompletion'; File='engine'; Type='bool01'; Label='Simplified Challenge Completion'; Help='Funcom: "Enable this to complete challenge when interacting with altar. Otherwise, complete on returning from challenge room after succefully completing it. (0) Disabled (default); (1) Enabled".'; Category='Experimental 2' }
     @{ Section=$script:DuneGcSecConsole; Key='Progression.IgnorePrereqs'; File='engine'; Type='bool01'; Label='Ignore Training Module Prerequisites'; Help='Funcom: "If true, Training Modules can be equipped even if pre-reqs aren''t met".'; Category='Experimental 2' }
     @{ Section=$script:DuneGcSecConsole; Key='Progression.ShowAllPerks'; File='engine'; Type='bool01'; Label='Show All Perks'; Help='Funcom: "If true, all Perks defined in data will be shown in the player''s Perks menu". May reveal perks that are defined in data but not finished.'; Category='Experimental 2' }
+    @{ Section=$script:DuneGcSecConsole; Key='dw.ReturningPlayer.GiveAward.Enabled'; File='engine'; Type='bool01'; Label='Legacy Returning Player Popup'; Help='Controls the game''s built-in returning-player popup. Set Disabled, save, then Apply INIs & restart to stop a popup left enabled by an older DST release. Built-in reward delivery may depend on Funcom services; use Gameplay Admin > Overview > Welcome back for DST-managed packages.'; Category='Experimental 2' }
+    @{ Section=$script:DuneGcSecConsole; Key='dw.ReturningPlayer.DaysBeforeEligibleForReward'; File='engine'; Type='int'; Min=0; Unit='days'; Label='Legacy Days Away Before Popup'; Help='Funcom: "How many days a player must be logged out before being eligible for a returning player reward". Applies only while Legacy Returning Player Popup is enabled.'; Category='Experimental 2' }
+    @{ Section=$script:DuneGcSecConsole; Key='dw.ReturningPlayer.GiveAward.TierOverride'; File='engine'; Type='int'; Min=-1; Default='-1'; Label='Legacy Returning Player Reward Tier'; Help='Funcom: "Override the tier used when granting reward packs. If set to -1 (default) the character''s tier is used". Built-in reward delivery may depend on Funcom services.'; Category='Experimental 2' }
     @{ Section=$script:DuneGcSecConsole; Key='NPC.EnableFacingTargetCheck'; File='engine'; Type='bool01'; Label='NPCs Must Face Target To Fire'; Help='Funcom: "If set to 1, NPCs will check if facing their target before firing their weapon".'; Category='Experimental 2' }
     @{ Section=$script:DuneGcSecConsole; Key='NPC.FacingTargetAngleStartThreshold'; File='engine'; Type='float'; Min=0; Label='NPC Facing Angle To Start Firing'; Help='Funcom: "Set yaw angle threshold to prevent NPCs from start shooting their weapon if they aren''t facing their target". Only applies while NPCs Must Face Target To Fire is on.'; Category='Experimental 2' }
     @{ Section=$script:DuneGcSecConsole; Key='NPC.FacingTargetAngleStopThreshold'; File='engine'; Type='float'; Min=0; Label='NPC Facing Angle To Stop Firing'; Help='Funcom: "Set yaw angle threshold to stop NPCs shooting their weapon if they aren''t facing their target". Only applies while NPCs Must Face Target To Fire is on.'; Category='Experimental 2' }
@@ -481,6 +478,118 @@ $script:DuneGameConfigSchema = @(
     @{ Section=$script:DuneGcSecSandworm; Key='m_GiantWormMinimumPlayersOnSpiceField'; File='game'; Type='int'; Min=0; Unit='players'; Default='4'; Label='Giant Worm Min Players on Field'; Help='Minimum number of players on a spice field to trigger a giant sandworm spawn. Also needs client-side apply.'; ClientApply=$true; Category='Sandworm' }
 )
 
+# Experimental Lab catalog is intentionally lazy. Normal DST startup and Game
+# Config schema requests must not parse or serialize 5,000+ recovered controls.
+# The first Lab category request loads the catalog once; later category requests
+# reuse the process cache.
+$script:DuneAdvancedCvarCatalogPath = Join-Path $PSScriptRoot '..\..\data\advanced-cvars.json'
+$script:DuneAdvancedCvarCatalogCache = $null
+$script:DuneAdvancedCvarKeyMapCache = $null
+
+function Initialize-DuneAdvancedCvarCatalog {
+    if ($null -ne $script:DuneAdvancedCvarCatalogCache) { return }
+
+    if (-not (Test-Path -LiteralPath $script:DuneAdvancedCvarCatalogPath)) {
+        throw "Advanced CVar catalog not found: $script:DuneAdvancedCvarCatalogPath"
+    }
+
+    $advancedAliasesAlreadySurfaced = @(
+        'Dune.PlayerDeathLootEnabled'
+        'Sandworm.SandwormHibernationActive'
+    )
+    $existingCvars = @{}
+    foreach ($field in $script:DuneGameConfigSchema) {
+        if ($field.Section -eq $script:DuneGcSecConsole) {
+            $existingCvars["$($field.Key)"] = $true
+        }
+    }
+
+    # Windows PowerShell 5.1 emits a top-level JSON array as one pipeline object.
+    # Direct assignment preserves its enumerable shape; @(... | ConvertFrom-Json)
+    # would nest it and concatenate every property into one enormous field.
+    $catalog = Get-Content -LiteralPath $script:DuneAdvancedCvarCatalogPath -Raw -ErrorAction Stop |
+        ConvertFrom-Json -ErrorAction Stop
+    $fields = New-Object 'System.Collections.Generic.List[object]'
+    $keyMap = @{}
+    foreach ($entry in $catalog) {
+        $key = "$($entry.key)".Trim()
+        if (-not $key -or $existingCvars.ContainsKey($key) -or $advancedAliasesAlreadySurfaced -contains $key) { continue }
+        $fields.Add(@{
+            section    = $script:DuneGcSecConsole
+            key        = $key
+            file       = 'engine'
+            type       = 'string'
+            default    = ''
+            label      = if ($entry.label) { [string]$entry.label } else { $key }
+            help       = [string]$entry.help
+            group      = [string]$entry.group
+            status     = [string]$entry.status
+            source     = [string]$entry.source
+            scope      = [string]$entry.scope
+            risk       = [string]$entry.risk
+            consoleVar = $true
+        })
+        $keyMap[$key] = $true
+        $existingCvars[$key] = $true
+    }
+    $script:DuneAdvancedCvarCatalogCache = $fields.ToArray()
+    $script:DuneAdvancedCvarKeyMapCache = $keyMap
+}
+
+function Get-DuneAdvancedCvarCatalog {
+    Initialize-DuneAdvancedCvarCatalog
+    return $script:DuneAdvancedCvarCatalogCache
+}
+
+function Get-DuneAdvancedCvarKeyMap {
+    Initialize-DuneAdvancedCvarCatalog
+    return $script:DuneAdvancedCvarKeyMapCache
+}
+
+function Test-DuneAdvancedCvarKey {
+    param([string]$Key)
+    if (-not $Key) { return $false }
+    return (Get-DuneAdvancedCvarKeyMap).ContainsKey($Key)
+}
+
+function Get-DuneAdvancedCvarCategoriesApi {
+    $groups = @{}
+    foreach ($field in @(Get-DuneAdvancedCvarCatalog)) {
+        $group = if ($field.group) { [string]$field.group } else { 'Uncategorized' }
+        if (-not $groups.ContainsKey($group)) { $groups[$group] = 0 }
+        $groups[$group]++
+    }
+    return @($groups.Keys | Sort-Object | ForEach-Object {
+        @{ category = $_; count = [int]$groups[$_] }
+    })
+}
+
+function Get-DuneAdvancedCvarCategoryApi {
+    param([Parameter(Mandatory)][string]$Category)
+    if ($Category -eq 'All') {
+        return @(Get-DuneAdvancedCvarCatalog | Sort-Object key)
+    }
+    return @(
+        Get-DuneAdvancedCvarCatalog |
+            Where-Object { "$($_.group)" -eq $Category } |
+            Sort-Object key
+    )
+}
+
+function Search-DuneAdvancedCvarCatalogApi {
+    param([Parameter(Mandatory)][string]$Query)
+    $needle = $Query.Trim()
+    if (-not $needle) { return @() }
+    return @(
+        Get-DuneAdvancedCvarCatalog |
+            Where-Object {
+                $haystack = @($_.key, $_.label, $_.help, $_.group) -join "`n"
+                $haystack.IndexOf($needle, [System.StringComparison]::OrdinalIgnoreCase) -ge 0
+            } |
+            Sort-Object key
+    )
+}
+
 # Console variables are applied to the SERVER by the Hagga startup command, not
 # by any INI - field-proven 2026-08-02, in both directions: the injection alone
 # applied a value with both INIs blank, and both INIs set with the injection
@@ -550,8 +659,23 @@ foreach ($field in $script:DuneGameConfigSchema) {
 $script:DuneStartupConsoleVariableKeys = @(
     $script:DuneGameConfigSchema |
         Where-Object { $_.File -eq 'engine' -and ($_.Category -like 'Experimental*' -or $_.Startup -eq $true) } |
-        ForEach-Object { $_.Key }
+        ForEach-Object { $_.Key } |
+        Sort-Object -Unique
 )
+
+function Get-DuneManagedStartupConsoleVariableKeyMap {
+    $managed = @{}
+    foreach ($key in $script:DuneStartupConsoleVariableKeys) { $managed[$key] = $true }
+    foreach ($key in (Get-DuneAdvancedCvarKeyMap).Keys) { $managed[$key] = $true }
+    return $managed
+}
+
+function Test-DuneStartupConsoleVariableKey {
+    param([string]$Key)
+    if ($script:DuneStartupConsoleVariableKeys -contains $Key) { return $true }
+    if ($script:DuneGameConfigSchema.Key -contains $Key) { return $false }
+    return (Test-DuneAdvancedCvarKey -Key $Key)
+}
 
 # Experimental controls live on their own page, grouped by what they affect
 # rather than by which decode pass found them. Namespace rules come first
@@ -683,7 +807,14 @@ function Get-DuneGameConfigClientApplyNotice {
         $k = "$($u.key)"
         if ($byKey.ContainsKey($k)) {
             $f = $byKey[$k]
-            $items.Add(@{ key = $k; label = $f.Label; section = $f.Section; file = $f.File; value = "$($u.value)" })
+            $items.Add(@{
+                key       = $k
+                label     = $f.Label
+                section   = $f.Section
+                file      = $f.File
+                value     = "$($u.value)"
+                structKey = $(if ($f.ContainsKey('StructKey')) { "$($f.StructKey)" } else { '' })
+            })
         }
     }
     return @{
@@ -1611,8 +1742,9 @@ function Set-DuneStartupConsoleVariableOverrides {
         throw 'Battlegroup helper unavailable (K8s.ps1 not loaded).'
     }
     $result = Set-V6ConsoleVariableOverrides -Ip $Ip `
-        -Names $script:DuneStartupConsoleVariableKeys `
-        -Values $Values
+        -Names @($Values.Keys | Sort-Object) `
+        -Values $Values `
+        -ManagedNames (Get-DuneManagedStartupConsoleVariableKeyMap)
     if (-not $result.Success) {
         $why = if ($result.Error) { $result.Error } else { $result.Raw }
         throw "Startup CVar override failed: $why"
@@ -1624,7 +1756,9 @@ function Sync-DuneStartupConsoleVariableOverrides {
     param([Parameter(Mandatory)][string]$Ip)
     $config = Get-DuneGameConfig -Ip $Ip
     $values = @{}
-    foreach ($key in $script:DuneStartupConsoleVariableKeys) {
+    $managed = Get-DuneManagedStartupConsoleVariableKeyMap
+    foreach ($key in @($config.engine.effectiveByKey.Keys)) {
+        if (-not $managed.ContainsKey($key)) { continue }
         if ($config.engine.effectiveByKey.ContainsKey($key)) {
             $candidate = "$($config.engine.effectiveByKey[$key])".Trim()
             if (-not (Test-DuneGameConfigValueIsDefault -Key $key -Value $candidate)) {
@@ -1767,6 +1901,13 @@ function Test-DuneGameConfigValueIsDefault {
         if ($sa -and $sb) { return ($na -eq $nb) }
     }
     return ($a.ToLowerInvariant() -eq $b.ToLowerInvariant())
+}
+
+function Test-DuneStartupConsoleVariableValue {
+    param([AllowEmptyString()][string]$Value)
+    $raw = "$Value".Trim()
+    if (-not $raw) { return $true }
+    return ($raw.Length -le 512 -and $raw -notmatch '[,\x00-\x1F\x7F"]')
 }
 
 # Build a lookup: key -> @{ section; structKey; default } for every struct-member
@@ -2563,8 +2704,11 @@ function Get-DuneGameConfigSchemaApi {
         # Experimental controls are shown on their own page, grouped by what they
         # affect. Everything else keeps its Game Config category as the grouping.
         if ($cat -like 'Experimental*') {
-            $field.group = (Get-DuneExperimentalGroup -Key "$($f.Key)")
+            $field.group = if ($f.ContainsKey('Group') -and $f.Group) { [string]$f.Group } else { (Get-DuneExperimentalGroup -Key "$($f.Key)") }
             $field.status = if ($f.ContainsKey('Status')) { [string]$f.Status } else { 'Unconfirmed' }
+            $field.source = if ($f.ContainsKey('Source')) { [string]$f.Source } else { 'Dune' }
+            $field.scope = if ($f.ContainsKey('Scope')) { [string]$f.Scope } elseif ($f.ContainsKey('ClientApply') -and $f.ClientApply) { 'Server + client' } else { 'Server' }
+            $field.risk = if ($f.ContainsKey('Risk')) { [string]$f.Risk } else { 'experimental' }
         }
         $byCat[$cat].Add($field)
     }

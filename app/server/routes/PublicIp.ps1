@@ -66,6 +66,7 @@ Register-DuneRoute -Method POST -Path '/api/public-ip/apply' -Handler {
     if (-not $body) { Write-DuneError -Response $res -Status 400 -Message 'Missing JSON body.'; return }
     $mode = [string](Get-DunePublicIpBodyValue -Body $body -Name 'mode' -Default '')
     $confirmed = [bool](Get-DunePublicIpBodyValue -Body $body -Name 'confirmed' -Default $false)
+    $hostRouteEnabled = [bool](Get-DunePublicIpBodyValue -Body $body -Name 'hostRouteEnabled' -Default $true)
     if (-not $confirmed) { Write-DuneError -Response $res -Status 400 -Message 'Confirmation is required before applying a public IP change.'; return }
 
     $target = ''
@@ -81,6 +82,7 @@ Register-DuneRoute -Method POST -Path '/api/public-ip/apply' -Handler {
         $v = Assert-DuneManualPublicIp -PublicIp $resolvedIp -AllowUnchanged
         if (-not $v.ok) { Write-DuneError -Response $res -Status ([int]$v.status) -Message $v.message; return }
         $target = $resolvedIp
+        [void](Set-DunePublicIpHostRouteEnabled -Enabled $hostRouteEnabled)
         $launch = Start-DunePublicIpApplyAsync -PublicIp $target -Mode 'ddns' -Hostname $r.hostname
     }
     elseif ($mode -eq 'manual') {
@@ -88,6 +90,7 @@ Register-DuneRoute -Method POST -Path '/api/public-ip/apply' -Handler {
         $v = Assert-DuneManualPublicIp -PublicIp $publicIp -AllowUnchanged
         if (-not $v.ok) { Write-DuneError -Response $res -Status ([int]$v.status) -Message $v.message; return }
         $target = $v.publicIp
+        [void](Set-DunePublicIpHostRouteEnabled -Enabled $hostRouteEnabled)
         $launch = Start-DunePublicIpApplyAsync -PublicIp $target -Mode 'manual'
     }
     else {
@@ -159,4 +162,3 @@ Register-DuneRoute -Method POST -Path '/api/public-ip/datacenter-id' -Handler {
         Write-DuneError -Response $res -Status 502 -Message "Reconcile failed: $($_.Exception.Message)"
     }
 }
-

@@ -115,6 +115,128 @@ Describe 'settings.conf renderer' {
     }
 }
 
+Describe 'Public IP Windows host route setting' {
+    It 'defaults to enabled and persists an explicit opt-out' {
+        Mock Read-DuneConfigRaw { [ordered]@{ PublicIpHostRouteEnabled = '' } }
+        Get-DunePublicIpHostRouteEnabled | Should -BeTrue
+
+        Mock Save-DuneConfig { param([hashtable]$Config) $script:savedHostRouteConfig = $Config }
+        Mock Read-DuneConfigRaw { [ordered]@{ PublicIpHostRouteEnabled = 'false' } }
+        Set-DunePublicIpHostRouteEnabled -Enabled $false | Should -BeFalse
+        $script:savedHostRouteConfig.PublicIpHostRouteEnabled | Should -Be 'false'
+    }
+
+    It 'removes only the exact public-IP route through the Dune VM interface' {
+        Mock Test-DuneAdminElevated { $true }
+        Mock Find-NetRoute { [pscustomobject]@{ InterfaceIndex = 42 } }
+        $exact = [pscustomobject]@{ DestinationPrefix = '203.0.113.10/32'; NextHop = '192.168.1.20'; InterfaceIndex = 42 }
+        $otherHop = [pscustomobject]@{ DestinationPrefix = '203.0.113.10/32'; NextHop = '192.168.1.1'; InterfaceIndex = 42 }
+        $otherInterface = [pscustomobject]@{ DestinationPrefix = '203.0.113.10/32'; NextHop = '192.168.1.20'; InterfaceIndex = 7 }
+        Mock Get-NetRoute { @($exact, $otherHop, $otherInterface) }
+        Mock Remove-NetRoute {}
+
+        $message = Remove-DunePublicIpHostRoute -PublicIp '203.0.113.10' -VmIp '192.168.1.20'
+
+        $message | Should -Match '^Removed route'
+        Should -Invoke Remove-NetRoute -Times 1 -Exactly -ParameterFilter {
+            $DestinationPrefix -eq '203.0.113.10/32' -and
+            $NextHop -eq '192.168.1.20' -and
+            $InterfaceIndex -eq 42
+        }
+    }
+
+    It 'leaves unrelated routes unchanged when no exact VM route exists' {
+        Mock Test-DuneAdminElevated { $true }
+        Mock Find-NetRoute { [pscustomobject]@{ InterfaceIndex = 42 } }
+        Mock Get-NetRoute {
+            [pscustomobject]@{ DestinationPrefix = '203.0.113.10/32'; NextHop = '192.168.1.1'; InterfaceIndex = 42 }
+        }
+        Mock Remove-NetRoute {}
+
+        $message = Remove-DunePublicIpHostRoute -PublicIp '203.0.113.10' -VmIp '192.168.1.20'
+
+        $message | Should -Match 'unrelated routes were left unchanged'
+        Should -Invoke Remove-NetRoute -Times 0 -Exactly
+    }
+}
+
+Describe 'Public IP diagnostic target selection' {
+    It 'keeps a saved manual relay IP authoritative over detected WAN addresses' {
+        $target = Resolve-DunePublicIpDiagnosticTarget -Config @{
+            PublicIpMode = 'manual'
+            ManualPublicIp = '8.8.8.8'
+            LastAppliedPublicIp = '8.8.8.8'
+        } -VmDetectedIp '1.1.1.1' -HostDetectedIp '1.1.1.1'
+
+        $target.ip | Should -Be '8.8.8.8'
+        $target.source | Should -Be 'manual'
+    }
+
+    It 'uses detected WAN IP for non-manual configurations' {
+        $target = Resolve-DunePublicIpDiagnosticTarget -Config @{
+            PublicIpMode = 'ddns'
+            LastAppliedPublicIp = '8.8.8.8'
+        } -VmDetectedIp '1.1.1.1'
+
+        $target.ip | Should -Be '1.1.1.1'
+        $target.source | Should -Be 'vm'
+    }
+
+    It 'pins both K3s startup IP inputs to the applied public IP' {
+        $source = Get-Content -LiteralPath (Join-Path $PSScriptRoot '..\app\server\lib\PublicIp.ps1') -Raw
+        $source | Should -Match 'target="dynamic_ip=\$NEW_IP"'
+        $source | Should -Match 'external_ip=\$dynamic_ip # DST_MANAGED_EXTERNAL_IP'
+        $source | Should -Match '(?s)/# DST_MANAGED_EXTERNAL_IP\$/ \{ next \}.*?external_ip=\$dynamic_ip # DST_MANAGED_EXTERNAL_IP.*?exec_done=1'
+        $source | Should -Not -Match "target='dynamic_ip=\$\(/sbin/ip addr show eth0"
+    }
+
+    It 'overrides a stale settings.conf external IP immediately before K3s starts' {
+        $awk = Get-Command awk -CommandType Application -ErrorAction SilentlyContinue | Select-Object -First 1
+        if (-not $awk) {
+            $gitAwk = Join-Path $env:ProgramFiles 'Git\usr\bin\awk.exe'
+            if (Test-Path -LiteralPath $gitAwk) { $awk = Get-Item -LiteralPath $gitAwk }
+        }
+        if (-not $awk) {
+            Set-ItResult -Skipped -Because 'awk is unavailable on this test host'
+            return
+        }
+
+        $source = Get-Content -LiteralPath (Join-Path $PSScriptRoot '..\app\server\lib\PublicIp.ps1') -Raw
+        $match = [regex]::Match(
+            $source,
+            "(?s)# DST_K3S_RUNNER_AWK_BEGIN\s+awk -v target=`"\`$target`" '(?<program>.*?)'\s+`"\`$runner`" > /tmp/dst-runner\s+# DST_K3S_RUNNER_AWK_END"
+        )
+        $match.Success | Should -BeTrue
+
+        $programPath = Join-Path $TestDrive 'pin-runner.awk'
+        $runnerPath = Join-Path $TestDrive 'k3s-custom-runner.sh'
+        Set-Content -LiteralPath $programPath -Value $match.Groups['program'].Value -NoNewline
+        @'
+#!/bin/sh
+{ read -r bg_name; read -r image; read -r internal_ip; read -r external_ip; } < /home/dune/.dune/settings.conf
+dynamic_ip=203.0.113.9
+if [[ "$internal_ip" == "$external_ip" ]]; then
+  external_ip=$dynamic_ip
+fi
+exec /usr/local/bin/k3s server --node-external-ip=${external_ip} --advertise-address=${dynamic_ip}
+'@ | Set-Content -LiteralPath $runnerPath -NoNewline
+
+        $awkPath = if ($awk.Source) { $awk.Source } else { $awk.FullName }
+        $result = & $awkPath -v 'target=dynamic_ip=198.51.100.44' -f $programPath $runnerPath
+        $LASTEXITCODE | Should -Be 0
+        $result | Should -Contain 'dynamic_ip=198.51.100.44'
+        $result | Should -Contain 'external_ip=$dynamic_ip # DST_MANAGED_EXTERNAL_IP'
+        [array]::IndexOf([string[]]$result, 'external_ip=$dynamic_ip # DST_MANAGED_EXTERNAL_IP') |
+            Should -BeLessThan ([array]::IndexOf([string[]]$result, 'exec /usr/local/bin/k3s server --node-external-ip=${external_ip} --advertise-address=${dynamic_ip}'))
+        @($result | Where-Object { $_ -eq 'external_ip=$dynamic_ip # DST_MANAGED_EXTERNAL_IP' }).Count | Should -Be 1
+
+        $result | Set-Content -LiteralPath $runnerPath
+        $secondResult = & $awkPath -v 'target=dynamic_ip=198.51.100.44' -f $programPath $runnerPath
+        $LASTEXITCODE | Should -Be 0
+        @($secondResult | Where-Object { $_ -eq 'external_ip=$dynamic_ip # DST_MANAGED_EXTERNAL_IP' }).Count | Should -Be 1
+    }
+}
+
 Describe 'Public IP apply state file' {
     BeforeAll {
         $script:tmpState = Join-Path ([System.IO.Path]::GetTempPath()) ("dst-apply-state-{0}.json" -f ([guid]::NewGuid()))
