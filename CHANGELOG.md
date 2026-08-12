@@ -22,6 +22,8 @@ here cover everything those tags shipped.
 
 - Database backup and restore surfaces warn administrators to move characters
   out of Deep Desert and log them out before capturing a restorable snapshot.
+- DD Seed Maps uses the farm seed while Deep Desert is stopped, then switches
+  to the map's reported running seed once Deep Desert starts.
 
 ## [13.6.1] - 2026-08-10
 
