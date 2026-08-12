@@ -226,14 +226,31 @@ Describe 'Invoke-DunePlayerMaxAugmentAttributes' -Tag 'Pure' {
 Describe 'Invoke-DunePlayerWipeJourneyNodes' -Tag 'Pure' {
     BeforeEach {
         $script:capturedSql = New-Object System.Collections.Generic.List[string]
+        $script:DuneTagsData = @{
+            jobAllModules = @{
+                Swordmaster = @(
+                    'Skills.Ability.BattleCry'
+                    'Skills.Ability.DeflectionSlow'
+                    'Skills.Ability.Whirlwind'
+                )
+            }
+        }
+        $script:DuneProgressionNodesCatalog = @{
+            starterAbilityByJob = @{ Swordmaster = 'Skills.Ability.DeflectionSlow' }
+        }
+        $script:DuneGrantAllSkillsLevelValue = 7
+        $script:journeyResetModuleData = '{"(TagName=\"Skills.Ability.BattleCry\")":{"SkillPointsSpent":9},"(TagName=\"Skills.Ability.DeflectionSlow\")":{"SkillPointsSpent":1},"(TagName=\"Skills.Ability.Whirlwind\")":{"SkillPointsSpent":9}}'
         function global:Test-DunePlayerOfflineByAccount { return @{ ok = $true; reason = $null } }
         function global:Get-DunePlayerPawnFromAccount { return 3946L }
+        function global:_Load-DuneTagsData {}
         function global:ConvertTo-DuneRowMaps {
             param($Result)
+            if ($Result.maps) { return @($Result.maps) }
             return @(@{
                 journey_rows = $Result.rows[0][0]
                 story_tags = $Result.rows[0][1]
                 contract_items = $Result.rows[0][2]
+                reset_skill_mismatch = $Result.rows[0][3]
             })
         }
         function global:ConvertTo-DuneInt { param($Value) return [int64]$Value }
@@ -241,10 +258,19 @@ Describe 'Invoke-DunePlayerWipeJourneyNodes' -Tag 'Pure' {
             param($Ip, $Sql, $ReadOnly, $MaxRows, $TimeoutSec)
             $script:capturedSql.Add($Sql)
             if ($ReadOnly) {
+                if ($Sql -match 'StarterSkillTreeTag') {
+                    return @{
+                        ok = $true
+                        maps = @(@{
+                            starter_tag = 'Skills.Key.Swordmaster1'
+                            module_data = $script:journeyResetModuleData
+                        })
+                    }
+                }
                 return @{
                     ok = $true
-                    columns = @('journey_rows', 'story_tags', 'contract_items')
-                    rows = ,@('0', '0', '0')
+                    columns = @('journey_rows', 'story_tags', 'contract_items', 'reset_skill_mismatch')
+                    rows = ,@('0', '0', '0', '0')
                 }
             }
             return @{ ok = $true; message = 'COMMIT' }
@@ -254,6 +280,7 @@ Describe 'Invoke-DunePlayerWipeJourneyNodes' -Tag 'Pure' {
     AfterEach {
         Remove-Item function:global:Test-DunePlayerOfflineByAccount -ErrorAction SilentlyContinue
         Remove-Item function:global:Get-DunePlayerPawnFromAccount -ErrorAction SilentlyContinue
+        Remove-Item function:global:_Load-DuneTagsData -ErrorAction SilentlyContinue
         Remove-Item function:global:ConvertTo-DuneRowMaps -ErrorAction SilentlyContinue
         Remove-Item function:global:ConvertTo-DuneInt -ErrorAction SilentlyContinue
         Remove-Item function:global:Invoke-DuneSqlQuery -ErrorAction SilentlyContinue
@@ -271,7 +298,7 @@ Describe 'Invoke-DunePlayerWipeJourneyNodes' -Tag 'Pure' {
 
     It 'wipes journey rows, story tags, contract items, and tracked contract state' {
         $r = Invoke-DunePlayerWipeJourneyNodes -Ip '1.2.3.4' -AccountId 605
-        $mutation = $script:capturedSql[0]
+        $mutation = $script:capturedSql[1]
 
         $r.ok | Should -BeTrue -Because ([string]$r.error)
         $mutation | Should -Match 'delete_all_journey_story_nodes\(605::bigint\)'
@@ -288,11 +315,16 @@ Describe 'Invoke-DunePlayerWipeJourneyNodes' -Tag 'Pure' {
         $mutation | Should -Match 'inv\.actor_id=3946::bigint'
         $mutation | Should -Match "i\.template_id='ContractItem'"
         $mutation | Should -Match 'm_TrackedContractItemUid'
+        $mutation | Should -Match 'Skills\.Ability\.BattleCry'
+        $mutation | Should -Match 'to_jsonb\(7::int\)'
+        $mutation | Should -Match '\+ 2::int'
+        $r.reset_skill | Should -Be 'Skills.Ability.BattleCry'
+        $r.refunded_skill_points | Should -Be 2
     }
 
     It 'uses the complete wipe path for Reset Journey' {
         $r = Invoke-DunePlayerResetJourneyNodes -Ip '1.2.3.4' -AccountId 605
-        $mutation = $script:capturedSql[0]
+        $mutation = $script:capturedSql[1]
 
         $r.ok | Should -BeTrue -Because ([string]$r.error)
         $mutation | Should -Match 'delete_all_journey_story_nodes\(605::bigint\)'
@@ -306,14 +338,35 @@ Describe 'Invoke-DunePlayerWipeJourneyNodes' -Tag 'Pure' {
         $mutation | Should -Match 'm_TrackedContractItemUid'
     }
 
+    It 'preserves skills when the starter tree already has value-seven headroom' {
+        $script:journeyResetModuleData = '{"(TagName=\"Skills.Ability.BattleCry\")":{"SkillPointsSpent":7},"(TagName=\"Skills.Ability.DeflectionSlow\")":{"SkillPointsSpent":1},"(TagName=\"Skills.Ability.Whirlwind\")":{"SkillPointsSpent":9}}'
+
+        $r = Invoke-DunePlayerResetJourneyNodes -Ip '1.2.3.4' -AccountId 605
+        $mutation = $script:capturedSql[1]
+
+        $r.ok | Should -BeTrue -Because ([string]$r.error)
+        $mutation | Should -Not -Match 'to_jsonb\(7::int\)'
+        $r.reset_skill | Should -BeNullOrEmpty
+        $r.refunded_skill_points | Should -Be 0
+    }
+
     It 'fails when post-wipe verification finds residue' {
         function global:Invoke-DuneSqlQuery {
             param($Ip, $Sql, $ReadOnly, $MaxRows, $TimeoutSec)
             if ($ReadOnly) {
+                if ($Sql -match 'StarterSkillTreeTag') {
+                    return @{
+                        ok = $true
+                        maps = @(@{
+                            starter_tag = 'Skills.Key.Swordmaster1'
+                            module_data = $script:journeyResetModuleData
+                        })
+                    }
+                }
                 return @{
                     ok = $true
-                    columns = @('journey_rows', 'story_tags', 'contract_items')
-                    rows = ,@('1', '2', '3')
+                    columns = @('journey_rows', 'story_tags', 'contract_items', 'reset_skill_mismatch')
+                    rows = ,@('1', '2', '3', '1')
                 }
             }
             return @{ ok = $true; message = 'COMMIT' }
@@ -322,7 +375,7 @@ Describe 'Invoke-DunePlayerWipeJourneyNodes' -Tag 'Pure' {
         $r = Invoke-DunePlayerWipeJourneyNodes -Ip '1.2.3.4' -AccountId 605
 
         $r.ok | Should -BeFalse
-        $r.error | Should -Match 'wipe incomplete'
+        $r.error | Should -Match 'reset incomplete'
     }
 }
 
