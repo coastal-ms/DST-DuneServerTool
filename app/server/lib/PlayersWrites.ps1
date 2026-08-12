@@ -1147,6 +1147,7 @@ function Invoke-DunePlayerResetFaction {
     $likes = [System.Collections.Generic.List[string]]::new()
     [void]$likes.Add("tag LIKE 'Faction.%'")
     [void]$likes.Add("tag LIKE 'FactionStoryline%'")
+    [void]$likes.Add("tag LIKE 'DialogueFlags.Faction.%'")
     [void]$likes.Add("tag LIKE 'DialogueFlags.Factions.%'")
     [void]$likes.Add("tag LIKE 'Contract.Faction.%'")
     [void]$likes.Add("tag = 'Journey.LandsraadContractsUnlocked'")
@@ -1420,27 +1421,11 @@ WHERE character_id IN (SELECT id FROM dune.player_state WHERE account_id = $Acco
 function Invoke-DunePlayerResetJourneyNodes {
     param([string]$Ip, [long]$AccountId)
     if ($AccountId -le 0) { return @{ ok = $false; error = 'account_id is required.' } }
-
-    $upd = @"
-UPDATE dune.journey_story_node
-SET complete_condition_state = 'false'::jsonb,
-    has_pending_reward       = false
-WHERE character_id IN (SELECT id FROM dune.player_state WHERE account_id = $AccountId::bigint);
-"@
-    $r = Invoke-DuneSqlQuery -Ip $Ip -Sql $upd -ReadOnly $false -MaxRows 1 -TimeoutSec 60
-    if (-not $r.ok) { return @{ ok = $false; error = "reset journey nodes: $($r.error)" } }
-    $updated = Get-DuneSqlAffected $r
-
-    $allTags = Get-DuneAllJourneyTags
-    $extra = ''
-    if ($allTags.Count -gt 0) {
-        $arr = ConvertTo-DunePgTextArray $allTags
-        $rt = "SELECT dune.update_player_tags($AccountId::bigint, ARRAY[]::text[], $arr);"
-        $rr = Invoke-DuneSqlQuery -Ip $Ip -Sql $rt -ReadOnly $false -MaxRows 1 -TimeoutSec 60
-        if (-not $rr.ok) { return @{ ok = $false; error = "remove all journey tags: $($rr.error)" } }
-        $extra = ", removed $($allTags.Count) journey tag(s)"
-    }
-    return @{ ok = $true; message = "Reset journey for account $AccountId - reset $updated node(s)$extra"; nodes = $updated; tags_removed = $allTags.Count }
+    # The old reset only flipped completion flags and removed catalogued journey
+    # tags. Contract/faction tags, revealed quest state, ContractItem rows, and
+    # the tracked-contract pointer survived, leaving characters unable to restart
+    # Fremen/faction quest lines. Reset Journey now means a complete clean restart.
+    return Invoke-DunePlayerWipeJourneyNodes -Ip $Ip -AccountId $AccountId
 }
 
 function Invoke-DunePlayerWipeJourneyNodes {
@@ -1462,12 +1447,11 @@ DELETE FROM dune.player_tags
 WHERE character_id IN (SELECT id FROM dune.player_state WHERE account_id=$AccountId::bigint)
   AND (
       tag LIKE 'Journey.%'
+      OR tag LIKE 'JourneySets.%'
       OR tag LIKE 'Contract.%'
       OR tag LIKE 'BigMoments.%'
       OR tag LIKE 'DialogueFlags.Contracts.%'
-      OR tag LIKE 'DialogueFlags.Factions.%'
-      OR tag LIKE 'Faction.%'
-      OR tag LIKE 'FactionStoryline%'
+      OR tag LIKE 'NPE.%'
   );
 DELETE FROM dune.items i
 USING dune.inventories inv
@@ -1497,12 +1481,11 @@ SELECT
    WHERE character_id IN (SELECT id FROM dune.player_state WHERE account_id=$AccountId::bigint)
      AND (
          tag LIKE 'Journey.%'
+         OR tag LIKE 'JourneySets.%'
          OR tag LIKE 'Contract.%'
          OR tag LIKE 'BigMoments.%'
          OR tag LIKE 'DialogueFlags.Contracts.%'
-         OR tag LIKE 'DialogueFlags.Factions.%'
-         OR tag LIKE 'Faction.%'
-         OR tag LIKE 'FactionStoryline%'
+         OR tag LIKE 'NPE.%'
      )) AS story_tags,
   (SELECT COUNT(*) FROM dune.items i JOIN dune.inventories inv ON inv.id=i.inventory_id
    WHERE inv.actor_id=$pawnID::bigint AND inv.inventory_type=29 AND i.template_id='ContractItem') AS contract_items;
@@ -1522,7 +1505,7 @@ SELECT
     }
     return @{
         ok = $true
-        message = 'Wiped journey, journey/contract/faction story tags, and contract items. The player can log back in and restart from the beginning.'
+        message = 'Reset journey, NPE/journey/dialogue-contract tags, and contract items. Faction state was preserved. The player can log back in and restart from the beginning.'
         journey_rows = 0
         story_tags = 0
         contract_items = 0
