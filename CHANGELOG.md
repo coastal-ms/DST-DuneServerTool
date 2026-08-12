@@ -21,9 +21,9 @@ here cover everything those tags shipped.
 - Reset Journey now reads both current and legacy starter-class tag shapes and
   stops before wiping when the tag is missing. Set Starter Class now requires
   the player offline, recreates a missing tag object, and verifies the write.
-- Landsraad timing controls now use Funcom's current voting-period, term-cycle,
-  and suspended-period members. Existing saved voting-duration intent migrates
-  to the active field, and obsolete timing members are removed.
+- Landsraad timing now exposes Funcom's current voting-period, term-cycle, and
+  suspended-period members while retaining legacy members visibly for existing
+  servers and rollback. DST does not copy or delete legacy values automatically.
 
 ## [13.6.2] - 2026-08-11
 
