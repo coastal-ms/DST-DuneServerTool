@@ -25,6 +25,14 @@ here cover everything those tags shipped.
 - DD Seed Maps uses the farm seed while Deep Desert is stopped, then switches
   to the map's reported running seed once Deep Desert starts.
 
+### Fixed
+
+- Reset Journey now performs a complete offline quest restart, removing all
+  journey rows, NPE/journey-set/dialogue-contract tags, contract items, and
+  tracked contract state while preserving faction state.
+- Reset Faction now also removes singular `DialogueFlags.Faction.*` tags so
+  faction progression fully clears before a player starts over.
+
 ## [13.6.1] - 2026-08-10
 
 ### Changed

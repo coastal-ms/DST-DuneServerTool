@@ -276,14 +276,33 @@ Describe 'Invoke-DunePlayerWipeJourneyNodes' -Tag 'Pure' {
         $r.ok | Should -BeTrue -Because ([string]$r.error)
         $mutation | Should -Match 'delete_all_journey_story_nodes\(605::bigint\)'
         $mutation | Should -Match "tag LIKE 'Journey\.%'"
+        $mutation | Should -Match "tag LIKE 'JourneySets\.%'"
         $mutation | Should -Match "tag LIKE 'Contract\.%'"
         $mutation | Should -Match "tag LIKE 'BigMoments\.%'"
         $mutation | Should -Match "tag LIKE 'DialogueFlags\.Contracts\.%'"
-        $mutation | Should -Match "tag LIKE 'DialogueFlags\.Factions\.%'"
-        $mutation | Should -Match "tag LIKE 'Faction\.%'"
-        $mutation | Should -Match "tag LIKE 'FactionStoryline%'"
+        $mutation | Should -Match "tag LIKE 'NPE\.%'"
+        $mutation | Should -Not -Match "tag LIKE 'Faction\.%'"
+        $mutation | Should -Not -Match "tag LIKE 'FactionStoryline%'"
+        $mutation | Should -Not -Match "tag LIKE 'DialogueFlags\.Faction\.%'"
+        $mutation | Should -Not -Match "tag LIKE 'DialogueFlags\.Factions\.%'"
         $mutation | Should -Match 'inv\.actor_id=3946::bigint'
         $mutation | Should -Match "i\.template_id='ContractItem'"
+        $mutation | Should -Match 'm_TrackedContractItemUid'
+    }
+
+    It 'uses the complete wipe path for Reset Journey' {
+        $r = Invoke-DunePlayerResetJourneyNodes -Ip '1.2.3.4' -AccountId 605
+        $mutation = $script:capturedSql[0]
+
+        $r.ok | Should -BeTrue -Because ([string]$r.error)
+        $mutation | Should -Match 'delete_all_journey_story_nodes\(605::bigint\)'
+        $mutation | Should -Match "tag LIKE 'Journey\.%'"
+        $mutation | Should -Match "tag LIKE 'JourneySets\.%'"
+        $mutation | Should -Match "tag LIKE 'Contract\.%'"
+        $mutation | Should -Match "tag LIKE 'DialogueFlags\.Contracts\.%'"
+        $mutation | Should -Match "tag LIKE 'NPE\.%'"
+        $mutation | Should -Not -Match "tag LIKE 'Faction\.%'"
+        $mutation | Should -Match "inventory_type=29"
         $mutation | Should -Match 'm_TrackedContractItemUid'
     }
 
@@ -304,6 +323,17 @@ Describe 'Invoke-DunePlayerWipeJourneyNodes' -Tag 'Pure' {
 
         $r.ok | Should -BeFalse
         $r.error | Should -Match 'wipe incomplete'
+    }
+}
+
+Describe 'Invoke-DunePlayerResetFaction tag coverage' -Tag 'Pure' {
+    It 'removes both singular and plural faction dialogue tag namespaces' {
+        $body = (Get-Command Invoke-DunePlayerResetFaction).ScriptBlock.ToString()
+
+        $body | Should -Match "tag LIKE 'DialogueFlags\.Faction\.%'"
+        $body | Should -Match "tag LIKE 'DialogueFlags\.Factions\.%'"
+        $body | Should -Match "tag LIKE 'Faction\.%'"
+        $body | Should -Match "tag LIKE 'FactionStoryline%'"
     }
 }
 
