@@ -32,7 +32,8 @@ here cover everything those tags shipped.
   tracked contract state while preserving faction state. If the starter tree
   has no learnable ability left, one multi-level ability is returned to the
   proven Enable All Skills headroom and its points are refunded so the NPE can
-  advance.
+  advance. Ability slot 1 is preserved while slots 2-3 are cleared so the
+  restarted equip-second-ability objective can fire.
 - Reset Faction now also removes singular `DialogueFlags.Faction.*` tags so
   faction progression fully clears before a player starts over.
 
