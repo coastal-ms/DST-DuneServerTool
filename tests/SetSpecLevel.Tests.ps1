@@ -16,6 +16,7 @@ BeforeAll {
     $script:lastWriteSql  = $null
     $script:lastSelectSql = $null
     $script:writeCount    = 0
+    $script:playerOffline = $true
 
     function global:Invoke-DuneSqlQuery {
         param([string] $Ip, [string] $Sql, [bool] $ReadOnly, [int] $MaxRows, [int] $TimeoutSec)
@@ -39,11 +40,15 @@ BeforeAll {
     }
     function global:Get-DuneKeystoneCatalog {
         return @{
-            1 = @{ track = 'Combat'; level = 1; name = 'Combat one'; cost = 2 }
-            2 = @{ track = 'Combat'; level = 63; name = 'Combat high'; cost = 20 }
+            1 = @{ track = 'Combat'; level = 1; name = 'DA_CombatKeystone_SkillPoint_Major'; cost = 2 }
+            2 = @{ track = 'Combat'; level = 63; name = 'DA_CombatKeystone_SkillPoint'; cost = 20 }
             3 = @{ track = 'Crafting'; level = 20; name = 'Crafting'; cost = 5 }
             4 = @{ track = 'Combat'; level = 50; name = 'Combat fifty'; cost = 15 }
         }
+    }
+    function global:Test-DunePlayerOfflineByController {
+        if ($script:playerOffline) { return @{ ok = $true; reason = $null } }
+        return @{ ok = $false; reason = 'player is online' }
     }
 
     Import-DstLib 'GameplayPlayers.ps1'
@@ -54,6 +59,7 @@ AfterAll {
     Remove-Item function:global:ConvertTo-DuneRowMaps -ErrorAction SilentlyContinue
     Remove-Item function:global:ConvertTo-DuneInt     -ErrorAction SilentlyContinue
     Remove-Item function:global:Get-DuneKeystoneCatalog -ErrorAction SilentlyContinue
+    Remove-Item function:global:Test-DunePlayerOfflineByController -ErrorAction SilentlyContinue
 }
 
 Describe 'Invoke-DunePlayerApplySpecLevel (apply specialization rewards)' -Tag 'Players' {
@@ -61,6 +67,7 @@ Describe 'Invoke-DunePlayerApplySpecLevel (apply specialization rewards)' -Tag '
         $script:lastWriteSql  = $null
         $script:lastSelectSql = $null
         $script:writeCount    = 0
+        $script:playerOffline = $true
     }
 
     It 'sets the selected level and grants only rewards in that track through that level' {
@@ -70,8 +77,39 @@ Describe 'Invoke-DunePlayerApplySpecLevel (apply specialization rewards)' -Tag '
         $script:lastWriteSql | Should -Match 'set_specialization_xp_and_level'
         $script:lastWriteSql | Should -Match '62::real'
         $script:lastWriteSql | Should -Match 'ARRAY\[1,4\]::smallint\[\]'
-        $script:lastWriteSql | Should -Not -Match 'ARRAY\[[^\]]*2'
-        $script:lastWriteSql | Should -Not -Match 'ARRAY\[[^\]]*3'
+        $script:lastWriteSql | Should -Not -Match 'FROM unnest\(ARRAY\[[^\]]*2'
+        $script:lastWriteSql | Should -Not -Match 'FROM unnest\(ARRAY\[[^\]]*3'
+    }
+
+    It 'maps standard, major, and super skill-point rewards' {
+        (Get-DuneSpecSkillPointBonus -RewardName 'DA_CombatKeystone_SkillPoint') | Should -Be 1
+        (Get-DuneSpecSkillPointBonus -RewardName 'DA_CombatKeystone_SkillPoint_Major') | Should -Be 3
+        (Get-DuneSpecSkillPointBonus -RewardName 'DA_CombatKeystone_SkillPoint_Super') | Should -Be 5
+        (Get-DuneSpecSkillPointBonus -RewardName 'DA_CombatKeystone_MaxHealth') | Should -Be 0
+    }
+
+    It 'matches the shipped Combat track total of 54 skill points' {
+        $path = Join-Path (Get-DstRepoRoot) 'app\data\dune-keystones.json'
+        $json = Get-Content -LiteralPath $path -Raw | ConvertFrom-Json
+        $total = 0
+        foreach ($entry in $json.PSObject.Properties.Value) {
+            if ($entry.track -eq 'Combat') {
+                $total += Get-DuneSpecSkillPointBonus -RewardName ([string]$entry.name)
+            }
+        }
+
+        $total | Should -Be 54
+    }
+
+    It 'reconciles specialization skill-point rewards into the character pool' {
+        $null = Invoke-DunePlayerApplySpecLevel -Ip '1.2.3.4' -ControllerId 555 -TrackType 'Combat' -Level 62
+
+        $script:lastWriteSql | Should -Match 'WHEN 1 THEN 3'
+        $script:lastWriteSql | Should -Match 'WHEN 2 THEN 1'
+        $script:lastWriteSql | Should -Match 'KeystoneBonusSkillPoints'
+        $script:lastWriteSql | Should -Match 'TotalSkillPoints'
+        $script:lastWriteSql | Should -Match 'UnspentSkillPoints'
+        $script:lastWriteSql | Should -Match 'expected\.amount > target\.current_bonus'
     }
 
     It 'preserves existing and above-level rewards' {
@@ -85,7 +123,17 @@ Describe 'Invoke-DunePlayerApplySpecLevel (apply specialization rewards)' -Tag '
         $r.ok | Should -BeTrue
         $r.rewards_applied | Should -Be 0
         $script:lastWriteSql | Should -Match '0::real'
-        $script:lastWriteSql | Should -Not -Match 'purchased_specialization_keystones'
+        $script:lastWriteSql | Should -Not -Match 'INSERT INTO dune\.purchased_specialization_keystones'
+    }
+
+    It 'rejects Apply level while the player is online' {
+        $script:playerOffline = $false
+
+        $r = Invoke-DunePlayerApplySpecLevel -Ip '1.2.3.4' -ControllerId 555 -TrackType 'Combat' -Level 2
+
+        $r.ok | Should -BeFalse
+        $r.error | Should -Be 'player is online'
+        $script:writeCount | Should -Be 0
     }
 }
 
