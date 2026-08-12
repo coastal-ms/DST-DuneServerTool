@@ -867,6 +867,26 @@ Describe 'DuneGameConfigSchema: experimental binary CVars' -Tag 'GameConfig' {
             Should -Be 'Audio - engine/internal'
         ($lab | Where-Object key -eq 'Ai.Dune.EnableBudgetingSystem').group |
             Should -Be 'AI - engine/internal'
+        foreach ($key in @(
+            'Bgd.BgdRetryCount',
+            'Bgd.CVarTravelBgdRetrySecondsGap',
+            'Bgd.CVarTravelBgdServerStatsTicker'
+        )) {
+            $field = @($lab | Where-Object key -eq $key)
+            $field.Count | Should -Be 1
+            $field[0].group | Should -Be 'Server & Session'
+            $field[0].source | Should -Be 'Dune'
+            $field[0].scope | Should -Be 'Server'
+        }
+        foreach ($key in @(
+            'Travel.BgdRetryCount',
+            'Travel.CVarTravelBgdRetrySecondsGap',
+            'Travel.CVarTravelBgdServerStatsTicker'
+        )) {
+            @($lab | Where-Object key -eq $key).Count | Should -Be 0
+            (Test-DuneStartupConsoleVariableKey -Key $key) | Should -BeFalse
+            (Get-DuneManagedStartupConsoleVariableKeyMap).ContainsKey($key) | Should -BeTrue
+        }
     }
 
     It 'groups every experimental control for the Experimental page' {
@@ -1235,7 +1255,9 @@ $script:DstManagedEnd
                 engine = @{
                     effectiveByKey = @{
                         'ak.soundengine.executeActionOnEvent' = '1'
+                        'Bgd.BgdRetryCount' = '4'
                         'dw.FuelBurningMultiplier' = '6'
+                        'Travel.BgdRetryCount' = '9'
                         'User.HandEditedSetting' = '9'
                     }
                 }
@@ -1251,7 +1273,8 @@ $script:DstManagedEnd
         Sync-DuneStartupConsoleVariableOverrides -Ip '192.0.2.1' | Out-Null
 
         @($script:optimizedSyncValues.Keys | Sort-Object) |
-            Should -Be @('ak.soundengine.executeActionOnEvent', 'dw.FuelBurningMultiplier')
+            Should -Be @('ak.soundengine.executeActionOnEvent', 'Bgd.BgdRetryCount', 'dw.FuelBurningMultiplier')
+        $script:optimizedSyncValues.ContainsKey('Travel.BgdRetryCount') | Should -BeFalse
     }
 
     It 'keeps experimental CVars out of local client changes' {

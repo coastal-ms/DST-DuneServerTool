@@ -23,6 +23,16 @@ here cover everything those tags shipped.
   it starts. The option is off by default, and update checks still run when it
   is disabled.
 
+### Changed
+
+- Experimental Lab now uses the current `Bgd.*` names for three travel retry
+  controls renamed by Funcom.
+
+### Fixed
+
+- Restart injection removes stale commands that used the retired `Travel.*`
+  names without deleting their saved `UserEngine.ini` values.
+
 ## [13.6.3] - 2026-08-12
 
 ### Fixed
