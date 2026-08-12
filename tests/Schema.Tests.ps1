@@ -71,10 +71,11 @@ Describe 'Schema: FLevelComponent is an array' -Tag 'Schema' {
         $content | Should -Not -Match "'FLevelComponent'->>"
         $content | Should -Match "'FLevelComponent'->1->>"
     }
-    It 'PlayersAdmin.ps1 reads the real SP fields (UnspentSkillPoints, TotalSkillPointsEarned)' {
+    It 'PlayersAdmin.ps1 reads the real SP fields (UnspentSkillPoints, TotalSkillPoints)' {
         $content = Get-LibContent 'PlayersAdmin.ps1'
         $content | Should -Match 'UnspentSkillPoints'
-        $content | Should -Match 'TotalSkillPointsEarned'
+        $content | Should -Match 'TotalSkillPoints'
+        $content | Should -Not -Match 'TotalSkillPointsEarned'
         # SkillPointsSpent does NOT exist in the game's component; we derive it.
         $content | Should -Not -Match "->>'SkillPointsSpent'"
     }
