@@ -16,6 +16,7 @@ Register-DuneRoute -Method GET -Path '/api/restart-schedule' -Handler {
             enabled              = [bool]$state.enabled
             time                 = [string]$state.time
             broadcastLeadMinutes = [int]$state.broadcastLeadMinutes
+            applyFuncomUpdates    = [bool]$state.applyFuncomUpdates
             discordEnabled       = [bool]$state.discordEnabled
             discordNotifyOnline  = [bool]$state.discordNotifyOnline
             discordNotifyOffline = [bool]$state.discordNotifyOffline
@@ -40,6 +41,7 @@ Register-DuneRoute -Method PUT -Path '/api/restart-schedule' -Handler {
     $enabled = $false
     $time = $null
     $lead = 10
+    $applyFuncomUpdates = $false
     $discordEnabled = $false
     $discordNotifyOnline = $false
     $discordNotifyOffline = $false
@@ -53,6 +55,7 @@ Register-DuneRoute -Method PUT -Path '/api/restart-schedule' -Handler {
         if ($body.ContainsKey('enabled'))              { $enabled = [bool]$body.enabled }
         if ($body.ContainsKey('time'))                 { $time = [string]$body.time }
         if ($body.ContainsKey('broadcastLeadMinutes')) { try { $lead = [int]$body.broadcastLeadMinutes } catch { $lead = -1 } }
+        if ($body.ContainsKey('applyFuncomUpdates'))    { $applyFuncomUpdates = [bool]$body.applyFuncomUpdates }
         if ($body.ContainsKey('discordEnabled'))       { $discordEnabled = [bool]$body.discordEnabled }
         if ($body.ContainsKey('discordNotifyOnline'))  { $discordNotifyOnline = [bool]$body.discordNotifyOnline }
         if ($body.ContainsKey('discordNotifyOffline')) { $discordNotifyOffline = [bool]$body.discordNotifyOffline }
@@ -64,6 +67,7 @@ Register-DuneRoute -Method PUT -Path '/api/restart-schedule' -Handler {
         if ($null -ne $body.enabled)              { $enabled = [bool]$body.enabled }
         if ($body.time)                           { $time = [string]$body.time }
         if ($null -ne $body.broadcastLeadMinutes) { try { $lead = [int]$body.broadcastLeadMinutes } catch { $lead = -1 } }
+        if ($null -ne $body.applyFuncomUpdates)    { $applyFuncomUpdates = [bool]$body.applyFuncomUpdates }
         if ($null -ne $body.discordEnabled)       { $discordEnabled = [bool]$body.discordEnabled }
         if ($null -ne $body.discordNotifyOnline)  { $discordNotifyOnline = [bool]$body.discordNotifyOnline }
         if ($null -ne $body.discordNotifyOffline) { $discordNotifyOffline = [bool]$body.discordNotifyOffline }
@@ -77,7 +81,7 @@ Register-DuneRoute -Method PUT -Path '/api/restart-schedule' -Handler {
         return
     }
     try {
-        $r = Set-DuneRestartSchedule -Enabled $enabled -Time $time -BroadcastLeadMinutes $lead `
+        $r = Set-DuneRestartSchedule -Enabled $enabled -Time $time -BroadcastLeadMinutes $lead -ApplyFuncomUpdates $applyFuncomUpdates `
             -DiscordEnabled $discordEnabled -DiscordNotifyOnline $discordNotifyOnline -DiscordNotifyOffline $discordNotifyOffline -DiscordNotifyRestarting $discordNotifyRestarting -DiscordNotifyUpdate $discordNotifyUpdate -DiscordWebhookUrl $discordWebhookUrl -DiscordMentionId $discordMentionId
         if (-not $r.ok) {
             Write-DuneError -Response $res -Status ([int]$r.status) -Message $r.message
@@ -88,6 +92,7 @@ Register-DuneRoute -Method PUT -Path '/api/restart-schedule' -Handler {
             enabled              = [bool]$state.enabled
             time                 = [string]$state.time
             broadcastLeadMinutes = [int]$state.broadcastLeadMinutes
+            applyFuncomUpdates    = [bool]$state.applyFuncomUpdates
             discordEnabled       = [bool]$state.discordEnabled
             discordNotifyOnline  = [bool]$state.discordNotifyOnline
             discordNotifyOffline = [bool]$state.discordNotifyOffline
@@ -189,4 +194,3 @@ Register-DuneRoute -Method POST -Path '/api/restart-schedule/check-update' -Hand
         Write-DuneError -Response $res -Status 502 -Message "Update check failed: $($_.Exception.Message)"
     }
 }
-

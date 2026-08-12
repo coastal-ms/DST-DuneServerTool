@@ -13,6 +13,12 @@ here cover everything those tags shipped.
 
 ## [Unreleased]
 
+### Added
+
+- Scheduled daily restarts can optionally apply an available Funcom self-hosted
+  server update instead of running a normal restart. The option is off by
+  default; update checks still run when it is disabled.
+
 ## [13.6.3] - 2026-08-12
 
 ### Fixed

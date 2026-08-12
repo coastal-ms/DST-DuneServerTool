@@ -47,6 +47,7 @@ export function ScheduledRestarts() {
   const [enabled, setEnabled] = useState(false)
   const [time, setTime] = useState('04:00')
   const [lead, setLead] = useState(10)
+  const [applyFuncomUpdates, setApplyFuncomUpdates] = useState(false)
   const [discordEnabled, setDiscordEnabled] = useState(false)
   const [discordNotifyOnline, setDiscordNotifyOnline] = useState(false)
   const [discordNotifyOffline, setDiscordNotifyOffline] = useState(false)
@@ -73,6 +74,7 @@ export function ScheduledRestarts() {
       setEnabled(s.enabled)
       setTime(s.time || '04:00')
       setLead(typeof s.broadcastLeadMinutes === 'number' ? s.broadcastLeadMinutes : 10)
+      setApplyFuncomUpdates(s.applyFuncomUpdates)
       setDiscordEnabled(s.discordEnabled)
       setDiscordNotifyOnline(s.discordNotifyOnline)
       setDiscordNotifyOffline(s.discordNotifyOffline)
@@ -106,8 +108,9 @@ export function ScheduledRestarts() {
     try {
       const body: {
         enabled: boolean; time: string; broadcastLeadMinutes: number
+        applyFuncomUpdates: boolean
         discordEnabled: boolean; discordNotifyOnline: boolean; discordNotifyOffline: boolean; discordNotifyRestarting: boolean; discordNotifyUpdate: boolean; discordWebhookUrl?: string; discordMentionId?: string
-      } = { enabled, time, broadcastLeadMinutes: lead, discordEnabled, discordNotifyOnline, discordNotifyOffline, discordNotifyRestarting, discordNotifyUpdate, discordMentionId: mention.trim() }
+      } = { enabled, time, broadcastLeadMinutes: lead, applyFuncomUpdates, discordEnabled, discordNotifyOnline, discordNotifyOffline, discordNotifyRestarting, discordNotifyUpdate, discordMentionId: mention.trim() }
       if (clearWebhook) body.discordWebhookUrl = ''
       else if (webhookInput.trim() !== '') body.discordWebhookUrl = webhookInput.trim()
       const s = await saveRestartSchedule(body)
@@ -127,7 +130,7 @@ export function ScheduledRestarts() {
     } finally {
       setSaving(false)
     }
-  }, [enabled, time, lead, discordEnabled, discordNotifyOnline, discordNotifyOffline, discordNotifyRestarting, discordNotifyUpdate, webhookInput, clearWebhook, mention])
+  }, [enabled, time, lead, applyFuncomUpdates, discordEnabled, discordNotifyOnline, discordNotifyOffline, discordNotifyRestarting, discordNotifyUpdate, webhookInput, clearWebhook, mention])
 
   const runCheck = useCallback(async () => {
     setChecking(true)
@@ -157,7 +160,7 @@ export function ScheduledRestarts() {
   }, [])
 
   const discordDirty = !!sched && (sched.discordEnabled !== discordEnabled || sched.discordNotifyOnline !== discordNotifyOnline || sched.discordNotifyOffline !== discordNotifyOffline || sched.discordNotifyRestarting !== discordNotifyRestarting || sched.discordNotifyUpdate !== discordNotifyUpdate || webhookInput.trim() !== '' || clearWebhook || (sched.discordMentionId || '') !== mention.trim())
-  const dirty = !!sched && (sched.enabled !== enabled || sched.time !== time || sched.broadcastLeadMinutes !== lead || discordDirty)
+  const dirty = !!sched && (sched.enabled !== enabled || sched.time !== time || sched.broadcastLeadMinutes !== lead || sched.applyFuncomUpdates !== applyFuncomUpdates || discordDirty)
   const anyDiscordEvent = discordEnabled || discordNotifyOnline || discordNotifyOffline || discordNotifyRestarting || discordNotifyUpdate
   const canSave = dirty && webhookInputValid && mentionValid && !(anyDiscordEvent && !effectiveWebhookSet)
 
@@ -215,6 +218,25 @@ export function ScheduledRestarts() {
                 className="h-4 w-4 accent-accent"
               />
               <span className="text-sm font-medium">Enable daily restart</span>
+            </label>
+
+            <label className="flex items-start gap-3 cursor-pointer select-none">
+              <input
+                type="checkbox"
+                checked={applyFuncomUpdates}
+                onChange={e => setApplyFuncomUpdates(e.target.checked)}
+                className="h-4 w-4 accent-accent mt-0.5"
+              />
+              <div>
+                <span className="text-sm font-medium block leading-none">Apply available Funcom server updates</span>
+                <span className="text-[11px] text-text-dim mt-1 block">
+                  Off by default. Every scheduled restart checks for a Funcom self-hosted server update.
+                  When enabled, DST applies an available update instead of running a normal restart.
+                  Unattended updates can take 5–20 minutes and disconnect players. A Funcom update may rename
+                  or remove an INI setting or CVar, so a saved DST setting can stop working until it is reviewed
+                  or DST is updated for the new Funcom build.
+                </span>
+              </div>
             </label>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">

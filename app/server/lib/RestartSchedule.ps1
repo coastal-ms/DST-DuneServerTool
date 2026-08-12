@@ -60,6 +60,7 @@ function Get-DuneRestartScheduleDefault {
         enabled              = $false
         time                 = '04:00'
         broadcastLeadMinutes = 10
+        applyFuncomUpdates    = $false
         discordEnabled       = $false
         discordNotifyOnline  = $false
         discordNotifyOffline = $false
@@ -101,6 +102,7 @@ function Get-DuneRestartSchedule {
     }
     # Normalize types.
     $state.enabled              = [bool]$state.enabled
+    $state.applyFuncomUpdates    = [bool]$state.applyFuncomUpdates
     $state.updateAvailable      = [bool]$state.updateAvailable
     $state.discordEnabled       = [bool]$state.discordEnabled
     $state.discordNotifyOnline  = [bool]$state.discordNotifyOnline
@@ -163,6 +165,7 @@ function Set-DuneRestartSchedule {
         [bool]$Enabled,
         [string]$Time,
         [int]$BroadcastLeadMinutes,
+        [bool]$ApplyFuncomUpdates,
         [bool]$DiscordEnabled,
         [bool]$DiscordNotifyOnline,
         [bool]$DiscordNotifyOffline,
@@ -204,6 +207,7 @@ function Set-DuneRestartSchedule {
     $state.enabled              = $Enabled
     $state.time                 = $Time
     $state.broadcastLeadMinutes = $BroadcastLeadMinutes
+    $state.applyFuncomUpdates    = $ApplyFuncomUpdates
     $state.discordEnabled       = $DiscordEnabled
     $state.discordNotifyOnline  = $DiscordNotifyOnline
     $state.discordNotifyOffline = $DiscordNotifyOffline
@@ -213,7 +217,7 @@ function Set-DuneRestartSchedule {
     $state.discordMentionId     = $effectiveMention
     Save-DuneRestartSchedule -State $state
     if (Get-Command Write-DuneLog -ErrorAction SilentlyContinue) {
-        Write-DuneLog "restart schedule saved: enabled=$Enabled time=$Time lead=$BroadcastLeadMinutes discord=$DiscordEnabled discordUrlSet=$([bool]$effectiveUrl) discordMention=$([bool]$effectiveMention)"
+        Write-DuneLog "restart schedule saved: enabled=$Enabled time=$Time lead=$BroadcastLeadMinutes applyFuncomUpdates=$ApplyFuncomUpdates discord=$DiscordEnabled discordUrlSet=$([bool]$effectiveUrl) discordMention=$([bool]$effectiveMention)"
     }
     return @{ ok = $true; schedule = $state }
 }
@@ -569,6 +573,74 @@ function Invoke-DuneScheduledRestart {
     }
 }
 
+function Invoke-DuneScheduledFuncomUpdate {
+    $ctx = Get-DuneBackupContext
+    if (-not $ctx.ok) {
+        return @{ ok = $false; status = $ctx.status; message = $ctx.message; action = 'update' }
+    }
+    $appId = $script:DuneServerSteamAppIdFallback
+    $script = @"
+set -eu
+if [ -d /home/dune/.dune/download/steamapps/downloading/$appId ] || [ -d /home/dune/.dune/download/steamapps/temp ]; then
+  echo '[dst] Cleaning SteamCMD orphan workdir before scheduled update...'
+  rm -rf /home/dune/.dune/download/steamapps/downloading/$appId /home/dune/.dune/download/steamapps/temp
+fi
+touch $script:DuneRestartMarkerPath 2>/dev/null
+/home/dune/.dune/bin/battlegroup update
+"@
+    try {
+        $r = Invoke-DuneBackupShell -Ip $ctx.ip -Script $script -TimeoutSec 2100
+    } catch {
+        return @{ ok = $false; status = 502; message = "Scheduled Funcom update failed: $($_.Exception.Message)"; action = 'update' }
+    }
+    $rc = if ($r) { [int]$r.rc } else { -1 }
+    $ok = ($rc -eq 0)
+    return @{
+        ok      = $ok
+        rc      = $rc
+        action  = 'update'
+        message = if ($ok) { 'Scheduled Funcom server update completed.' } else { "Scheduled Funcom update exited $rc." }
+        out     = if ($r) { [string]$r.out } else { '' }
+    }
+}
+
+function Invoke-DuneScheduledMaintenance {
+    param([bool]$ApplyFuncomUpdates)
+
+    $check = $null
+    try {
+        $check = Get-DuneFuncomServerUpdateStatus -Persist
+    } catch {
+        $check = @{ ok = $false; available = $false; message = "Update check failed: $($_.Exception.Message)" }
+    }
+
+    if ($ApplyFuncomUpdates -and $check.ok -and $check.available) {
+        if (Get-Command Write-DuneLog -ErrorAction SilentlyContinue) {
+            Write-DuneLog "scheduled maintenance applying Funcom update (installed=$($check.installedBuild) latest=$($check.latestBuild))"
+        }
+        $updated = Invoke-DuneScheduledFuncomUpdate
+        if ($updated.ok) {
+            try { [void](Get-DuneFuncomServerUpdateStatus -Persist) } catch {}
+        }
+        $updated['updateCheck'] = $check
+        return $updated
+    }
+
+    if (Get-Command Write-DuneLog -ErrorAction SilentlyContinue) {
+        if (-not $check.ok) {
+            Write-DuneLog "scheduled maintenance update check unconfirmed: $($check.message); continuing with normal restart" 'WARN'
+        } elseif ($check.available) {
+            Write-DuneLog 'scheduled maintenance found Funcom update; auto-apply is off, continuing with normal restart'
+        } else {
+            Write-DuneLog 'scheduled maintenance found no Funcom update; continuing with normal restart'
+        }
+    }
+    $restarted = Invoke-DuneScheduledRestart
+    $restarted['action'] = 'restart'
+    $restarted['updateCheck'] = $check
+    return $restarted
+}
+
 # One scheduler iteration. Safe to call every ~30s. Sends the pre-restart
 # broadcast and fires the restart at most once per local day, each within a
 # bounded window so a late DST launch doesn't trigger a stale restart hours
@@ -674,21 +746,10 @@ function Invoke-DuneRestartScheduleTick {
             if (Get-Command Write-DuneLog -ErrorAction SilentlyContinue) {
                 Write-DuneLog "scheduled restart firing (time=$($state.time))"
             }
-            # Kick off the Funcom server-update check up-front, on its own
-            # runspace, so it runs *concurrently* with the restart instead of
-            # adding latency after it. It persists the dashboard badge flag when
-            # it finishes. Falls back to an inline check if the async runspace
-            # can't be started (e.g. server dir unknown).
-            $serverDir = Get-Variable -Name DuneSchedulerServerDir -Scope Global -ValueOnly -ErrorAction SilentlyContinue
-            $asyncCheck = $false
-            if ($serverDir) {
-                try { $asyncCheck = Start-DuneFuncomUpdateCheckAsync -ServerDir $serverDir } catch { $asyncCheck = $false }
-            }
-
-            $r = Invoke-DuneScheduledRestart
+            $r = Invoke-DuneScheduledMaintenance -ApplyFuncomUpdates ([bool]$state.applyFuncomUpdates)
             $state = Get-DuneRestartSchedule
             $state.lastRestartDate = $today
-            $state.lastResult = if ($r.ok) { "ok @ $today $($state.time)" } else { "error: $($r.message)" }
+            $state.lastResult = if ($r.ok) { "$($r.action) ok @ $today $($state.time)" } else { "$($r.action) error: $($r.message)" }
             Save-DuneRestartSchedule -State $state
             if (Get-Command Write-DuneLog -ErrorAction SilentlyContinue) {
                 Write-DuneLog "scheduled restart result: $($state.lastResult)"
@@ -716,13 +777,6 @@ function Invoke-DuneRestartScheduleTick {
                 }
             }
 
-            if (-not $asyncCheck) {
-                try { [void](Get-DuneFuncomServerUpdateStatus -Persist) } catch {
-                    if (Get-Command Write-DuneLog -ErrorAction SilentlyContinue) {
-                        Write-DuneLog "post-restart update check error: $($_.Exception.Message)" 'WARN'
-                    }
-                }
-            }
         } elseif ($now -gt $restartWindowEnd) {
             # Missed the restart window entirely; skip today so we don't restart
             # at an unexpected hour.
