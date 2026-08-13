@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react'
 import { Icon } from '../../../components/Icon'
-import { fillBaseWater, type Player } from '../../../api/gameplay'
+import { fillBaseWater, getBaseWaterSummary, type Player } from '../../../api/gameplay'
 
 type Flash = (msg: string, kind?: 'ok' | 'err') => void
 
@@ -21,22 +21,42 @@ export function BaseWaterAdmin({
       .sort((a, b) => (a.name || '').localeCompare(b.name || '')),
     [players],
   )
+  const allPlayers = controllerId === 'all'
   const selected = options.find(p => String(p.controller_id) === controllerId)
 
   const run = async () => {
-    if (!selected) return
-    const name = selected.name || `controller ${selected.controller_id}`
-    const confirmed = window.confirm(
-      `Fill every small, medium, and large cistern on ${name}'s owned bases?\n\n` +
-      'DST will create a database backup, stop the battlegroup, disconnect every online player, ' +
-      'fill only this player\'s owned cisterns, then start the battlegroup again. ' +
-      'Blood-water extractors and windtraps are not changed.\n\nThis can take several minutes.',
-    )
-    if (!confirmed) return
-
     setBusy(true)
     try {
-      const result = await fillBaseWater(selected.controller_id)
+      if (!allPlayers && !selected) return
+      const summary = await getBaseWaterSummary(selected?.controller_id, allPlayers)
+      if (summary.total <= 0) {
+        flash('No supported cisterns were found for this scope.', 'err')
+        return
+      }
+
+      const counts = `${summary.total} cisterns across ${summary.owners} owner${summary.owners === 1 ? '' : 's'} ` +
+        `(${summary.small} small, ${summary.medium} medium, ${summary.large} large)`
+      if (allPlayers) {
+        const typed = window.prompt(
+          `Fill ALL player-owned base cisterns?\n\nAffected: ${counts}.\n\n` +
+          'DST will create a database backup, stop the battlegroup, disconnect every online player, ' +
+          'fill every supported cistern attached to a rank-1-owned totem, then start the battlegroup again. ' +
+          'Orphaned/unowned structures, blood-water extractors, and windtraps are not changed.\n\n' +
+          'Type FILL ALL to continue.',
+        )
+        if (typed !== 'FILL ALL') return
+      } else {
+        const name = selected!.name || `controller ${selected!.controller_id}`
+        const confirmed = window.confirm(
+          `Fill every small, medium, and large cistern on ${name}'s owned bases?\n\nAffected: ${counts}.\n\n` +
+          'DST will create a database backup, stop the battlegroup, disconnect every online player, ' +
+          'fill only this player\'s owned cisterns, then start the battlegroup again. ' +
+          'Blood-water extractors and windtraps are not changed.\n\nThis can take several minutes.',
+        )
+        if (!confirmed) return
+      }
+
+      const result = await fillBaseWater(selected?.controller_id, allPlayers)
       flash(result.message)
     } catch (e) {
       flash(e instanceof Error ? e.message : String(e), 'err')
@@ -52,8 +72,9 @@ export function BaseWaterAdmin({
       </div>
 
       <p className="text-xs text-text-dim">
-        Fill every supported cistern on one player's owned bases. Small, medium, and large
-        cisterns are set to their exact capacities; windtraps and blood-water extractors are excluded.
+        Fill every supported cistern on one player's owned bases, or deliberately fill every
+        player-owned base in one restart. Small, medium, and large cisterns are set to their exact
+        capacities; orphaned structures, windtraps, and blood-water extractors are excluded.
       </p>
 
       <div className="rounded-lg border border-warning/40 bg-warning/10 p-3 text-xs space-y-1.5">
@@ -63,7 +84,7 @@ export function BaseWaterAdmin({
         <p className="text-text-dim">
           Cistern state is cached by the map servers. DST must back up the database, stop the entire
           battlegroup, apply the fill while every map is offline, then start it again. All connected
-          players will be disconnected, even though only the selected player's cisterns are changed.
+          players will be disconnected. Only the selected scope's cisterns are changed.
         </p>
       </div>
 
@@ -77,6 +98,7 @@ export function BaseWaterAdmin({
           className="w-full px-3 py-2 rounded-lg bg-surface-2 border border-border text-text text-sm"
         >
           <option value="">Select a player...</option>
+          <option value="all">All players - every owned base</option>
           {options.map(p => (
             <option key={p.controller_id} value={String(p.controller_id)}>
               {p.name || `Player ${p.id}`} - controller {p.controller_id}
@@ -88,11 +110,15 @@ export function BaseWaterAdmin({
       <button
         type="button"
         className="btn-primary"
-        disabled={busy || !canWrite || !selected}
+        disabled={busy || !canWrite || (!selected && !allPlayers)}
         onClick={() => { void run() }}
       >
         <Icon name={busy ? 'Loader2' : 'Droplets'} size={13} className={busy ? 'animate-spin' : ''} />
-        {busy ? 'Backing up, filling, and restarting...' : 'Fill selected player\'s base cisterns'}
+        {busy
+          ? 'Reading scope, backing up, filling, and restarting...'
+          : allPlayers
+            ? 'Fill all player-owned base cisterns'
+            : 'Fill selected player\'s base cisterns'}
       </button>
     </div>
   )
