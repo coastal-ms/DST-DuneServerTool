@@ -408,6 +408,7 @@ Describe 'Invoke-DunePlayerResetJourneyNodes orchestration' -Tag 'Pure' {
 Describe 'Invoke-DunePlayerSetStarterClass persistence' -Tag 'Pure' {
     BeforeEach {
         $script:starterClassUpdateSql = ''
+        $script:starterClassVerifySql = ''
         $script:DuneTagsData = @{ jobSkillBlocks = @{ Swordmaster = @('Skills.Key.Swordmaster1') } }
         $script:DuneProgressionNodesCatalog = @{
             starterAbilityByJob = @{ Swordmaster = 'Skills.Ability.BattleCry' }
@@ -421,10 +422,15 @@ Describe 'Invoke-DunePlayerSetStarterClass persistence' -Tag 'Pure' {
             param($Ip, $Sql, $ReadOnly, $MaxRows, $TimeoutSec)
             if ($Sql -match 'WITH updated AS') {
                 $script:starterClassUpdateSql = $Sql
+                return @{ ok = $true; maps = @(@{ updated = '1' }) }
+            }
+            if ($Sql -match 'END AS starter_tag') {
+                $script:starterClassVerifySql = $Sql
                 return @{ ok = $true; maps = @(@{ starter_tag = 'Skills.Key.Swordmaster1' }) }
             }
             return @{ ok = $true; maps = @(@{ old_tag = '' }) }
         }
+        function global:ConvertTo-DuneInt { param($Value) return [int64]$Value }
     }
 
     AfterEach {
@@ -435,17 +441,39 @@ Describe 'Invoke-DunePlayerSetStarterClass persistence' -Tag 'Pure' {
         Remove-Item function:global:Test-DunePlayerOfflineByAccount -ErrorAction SilentlyContinue
         Remove-Item function:global:Get-DunePlayerPawnFromAccount -ErrorAction SilentlyContinue
         Remove-Item function:global:ConvertTo-DuneRowMaps -ErrorAction SilentlyContinue
+        Remove-Item function:global:ConvertTo-DuneInt -ErrorAction SilentlyContinue
         Remove-Item function:global:Invoke-DuneSqlQuery -ErrorAction SilentlyContinue
     }
 
-    It 'recreates a missing starter tag object and verifies the persisted value' {
+    It 'recreates missing ModuleData and verifies the persisted starter tag in a separate read' {
         $r = Invoke-DunePlayerSetStarterClass -Ip '1.2.3.4' -AccountId 605 -Job 'Swordmaster'
 
         $r.ok | Should -BeTrue -Because ([string]$r.error)
         $script:starterClassUpdateSql | Should -Match "ARRAY\['FLevelComponent','1','StarterSkillTreeTag'\]"
         $script:starterClassUpdateSql | Should -Not -Match "ARRAY\['FLevelComponent','1','StarterSkillTreeTag','TagName'\]"
+        $script:starterClassUpdateSql | Should -Match "COALESCE\(fe\.components->'FLevelComponent'->1->'ModuleData', '\{\}'::jsonb\)"
         $script:starterClassUpdateSql | Should -Match "jsonb_build_object\('TagName', 'Skills\.Key\.Swordmaster1'"
-        $script:starterClassUpdateSql | Should -Match 'RETURNING components'
+        $script:starterClassUpdateSql | Should -Match "jsonb_typeof\(fe\.components->'FLevelComponent'->1\) = 'object'"
+        $script:starterClassUpdateSql | Should -Match 'SELECT COUNT\(\*\)::int AS updated FROM updated'
+        $script:starterClassVerifySql | Should -Match 'END AS starter_tag'
+        $script:starterClassVerifySql | Should -Match 'LIMIT 1'
+    }
+
+    It 'fails safely when the character has no writable FLevelComponent' {
+        function global:Invoke-DuneSqlQuery {
+            param($Ip, $Sql, $ReadOnly, $MaxRows, $TimeoutSec)
+            if ($Sql -match 'WITH updated AS') {
+                $script:starterClassUpdateSql = $Sql
+                return @{ ok = $true; maps = @(@{ updated = '0' }) }
+            }
+            return @{ ok = $true; maps = @(@{ old_tag = '' }) }
+        }
+
+        $r = Invoke-DunePlayerSetStarterClass -Ip '1.2.3.4' -AccountId 605 -Job 'Swordmaster'
+
+        $r.ok | Should -BeFalse
+        $r.error | Should -Match 'no writable FLevelComponent'
+        $script:starterClassVerifySql | Should -BeNullOrEmpty
     }
 
     It 'refuses to change the starter class while the player is online' {

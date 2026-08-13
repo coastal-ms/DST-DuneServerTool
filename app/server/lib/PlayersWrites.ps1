@@ -2759,9 +2759,11 @@ SET components = jsonb_set(
             jsonb_set(
                 fe.components,
                 ARRAY['FLevelComponent','1','ModuleData'],
-                (fe.components->'FLevelComponent'->1->'ModuleData') - $removeArr),
+                COALESCE(fe.components->'FLevelComponent'->1->'ModuleData', '{}'::jsonb) - $removeArr,
+                true),
             ARRAY['FLevelComponent','1','StarterSkillTreeTag'],
-            jsonb_build_object('TagName', '$safeNewTag'::text)),
+            jsonb_build_object('TagName', '$safeNewTag'::text),
+            true),
         ARRAY['FLevelComponent','1','ModuleData','$safeNewKey'],
         '{"SkillPointsSpent": 1}'::jsonb,
         true),
@@ -2772,19 +2774,33 @@ WHERE fe.entity_id = (
     SELECT entity_id FROM dune.actor_fgl_entities
     WHERE actor_id = $pawnID::bigint AND slot_name = 'DuneCharacter'
 )
-RETURNING components
+AND fe.components IS NOT NULL
+AND jsonb_typeof(fe.components->'FLevelComponent'->1) = 'object'
+RETURNING 1
 )
-SELECT CASE jsonb_typeof(components->'FLevelComponent'->1->'StarterSkillTreeTag')
-           WHEN 'object' THEN components->'FLevelComponent'->1->'StarterSkillTreeTag'->>'TagName'
-           WHEN 'string' THEN components->'FLevelComponent'->1->>'StarterSkillTreeTag'
-       END AS starter_tag
-FROM updated;
+SELECT COUNT(*)::int AS updated FROM updated;
 "@
     $r = Invoke-DuneSqlQuery -Ip $Ip -Sql $sql -ReadOnly $false -MaxRows 1 -TimeoutSec 30
     if (-not $r.ok) { return @{ ok = $false; error = "set starter tag: $($r.error)" } }
     $updatedRows = @(ConvertTo-DuneRowMaps -Result $r)
-    if ($updatedRows.Count -ne 1) { return @{ ok = $false; error = 'set starter tag updated no matching character.' } }
-    $persistedTag = [string]$updatedRows[0]['starter_tag']
+    if ($updatedRows.Count -ne 1 -or [int](ConvertTo-DuneInt $updatedRows[0]['updated']) -ne 1) {
+        return @{ ok = $false; error = 'set starter tag found no writable FLevelComponent for the character.' }
+    }
+
+    $verifySql = @"
+SELECT CASE jsonb_typeof(fe.components->'FLevelComponent'->1->'StarterSkillTreeTag')
+           WHEN 'object' THEN fe.components->'FLevelComponent'->1->'StarterSkillTreeTag'->>'TagName'
+           WHEN 'string' THEN fe.components->'FLevelComponent'->1->>'StarterSkillTreeTag'
+       END AS starter_tag
+FROM dune.fgl_entities fe
+JOIN dune.actor_fgl_entities afe ON afe.entity_id = fe.entity_id
+WHERE afe.actor_id = $pawnID::bigint AND afe.slot_name = 'DuneCharacter'
+LIMIT 1;
+"@
+    $vr = Invoke-DuneSqlQuery -Ip $Ip -Sql $verifySql -ReadOnly $true -MaxRows 1 -TimeoutSec 10
+    if (-not $vr.ok) { return @{ ok = $false; error = "verify starter tag: $($vr.error)" } }
+    $verifiedRows = @(ConvertTo-DuneRowMaps -Result $vr)
+    $persistedTag = if ($verifiedRows.Count -eq 1) { [string]$verifiedRows[0]['starter_tag'] } else { '' }
     if ($persistedTag -ne $newStarterTag) {
         return @{ ok = $false; error = "set starter tag verification failed: expected '$newStarterTag', found '$persistedTag'." }
     }
