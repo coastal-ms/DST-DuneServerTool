@@ -13,6 +13,19 @@ here cover everything those tags shipped.
 
 ## [Unreleased]
 
+## [13.6.5] - 2026-08-12
+
+### Fixed
+
+- Scheduled restart checkboxes keep the same visible size beside short and long
+  labels.
+- Reset Journey recognizes legacy starter-class tags and stops safely before
+  wiping when the tag is missing.
+- Reset Journey preserves the selected class starter root and starter ability
+  while refunding purchased skill progression.
+- Set Starter Class safely recreates and verifies missing starter-class data
+  while the player is offline.
+
 ## [13.6.4] - 2026-08-12
 
 ### Added
