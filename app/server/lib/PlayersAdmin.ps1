@@ -344,25 +344,31 @@ function Invoke-DunePlayerGiveScrip {
 # is therefore backup -> stop BG -> write -> verify -> start BG. This was
 # field-proven against the in-game cistern UI.
 #
-# Scope is one selected player's rank-1-owned totems. Match the three exact
-# cistern classes because blood-water extractors and windtraps also carry an
-# FWaterStorageComponent but must not be filled by this action.
+# Scope is either one selected player's rank-1-owned totems or every rank-1
+# owner. Match the three exact cistern classes because blood-water extractors
+# and windtraps also carry an FWaterStorageComponent but must not be filled.
 
 $script:DuneBaseWaterFillRunning = $false
 
 function New-DunePlayerBaseCisternCteSql {
-    param([long]$ControllerId)
-    if ($ControllerId -le 0) { throw 'controller_id is required.' }
+    param([long]$ControllerId, [switch]$AllPlayers)
+    if (-not $AllPlayers -and $ControllerId -le 0) { throw 'controller_id is required.' }
+    $ownerWhere = if ($AllPlayers) {
+        'rank = 1'
+    } else {
+        "player_id = $ControllerId::bigint`n    AND rank = 1"
+    }
 
     return @"
 WITH player_totems AS (
-  SELECT permission_actor_id AS totem_id
+  SELECT player_id AS controller_id,
+         permission_actor_id AS totem_id
   FROM dune.permission_actor_rank
-  WHERE player_id = $ControllerId::bigint
-    AND rank = 1
+  WHERE $ownerWhere
 ),
 player_cisterns AS (
-  SELECT DISTINCT
+  SELECT DISTINCT ON (afe.entity_id)
+         pt.controller_id,
          a.id AS actor_id,
          a.class,
          afe.entity_id,
@@ -391,16 +397,18 @@ player_cisterns AS (
     '/Game/Dune/Systems/Building/Pieces/BP_MediumWaterCistern.BP_MediumWaterCistern_C',
     '/Game/Dune/Systems/Building/Pieces/BP_LargeWaterCistern.BP_LargeWaterCistern_C'
   )
+  ORDER BY afe.entity_id, pt.controller_id
 )
 "@
 }
 
 function Get-DunePlayerBaseCisternSummary {
-    param([string]$Ip, [long]$ControllerId)
-    if ($ControllerId -le 0) { return @{ ok = $false; error = 'controller_id is required.' } }
+    param([string]$Ip, [long]$ControllerId, [switch]$AllPlayers)
+    if (-not $AllPlayers -and $ControllerId -le 0) { return @{ ok = $false; error = 'controller_id is required.' } }
 
-    $sql = (New-DunePlayerBaseCisternCteSql -ControllerId $ControllerId) + @"
+    $sql = (New-DunePlayerBaseCisternCteSql -ControllerId $ControllerId -AllPlayers:$AllPlayers) + @"
 SELECT COUNT(*)::text AS total,
+       COUNT(DISTINCT controller_id)::text AS owner_n,
        COUNT(*) FILTER (WHERE class = '/Game/Dune/Systems/Building/Pieces/BP_WaterCistern.BP_WaterCistern_C')::text AS small_n,
        COUNT(*) FILTER (WHERE class = '/Game/Dune/Systems/Building/Pieces/BP_MediumWaterCistern.BP_MediumWaterCistern_C')::text AS medium_n,
        COUNT(*) FILTER (WHERE class = '/Game/Dune/Systems/Building/Pieces/BP_LargeWaterCistern.BP_LargeWaterCistern_C')::text AS large_n,
@@ -416,6 +424,8 @@ FROM player_cisterns;
     return @{
         ok           = $true
         controllerId = $ControllerId
+        allPlayers   = [bool]$AllPlayers
+        owners       = [int](ConvertTo-DuneInt $row['owner_n'])
         total        = [int](ConvertTo-DuneInt $row['total'])
         small        = [int](ConvertTo-DuneInt $row['small_n'])
         medium       = [int](ConvertTo-DuneInt $row['medium_n'])
@@ -426,10 +436,10 @@ FROM player_cisterns;
 }
 
 function Set-DunePlayerBaseCisternsFull {
-    param([string]$Ip, [long]$ControllerId)
-    if ($ControllerId -le 0) { return @{ ok = $false; error = 'controller_id is required.' } }
+    param([string]$Ip, [long]$ControllerId, [switch]$AllPlayers)
+    if (-not $AllPlayers -and $ControllerId -le 0) { return @{ ok = $false; error = 'controller_id is required.' } }
 
-    $sql = (New-DunePlayerBaseCisternCteSql -ControllerId $ControllerId) + @"
+    $sql = (New-DunePlayerBaseCisternCteSql -ControllerId $ControllerId -AllPlayers:$AllPlayers) + @"
 , updated AS (
   UPDATE dune.fgl_entities fe
   SET components = jsonb_set(
@@ -440,10 +450,11 @@ function Set-DunePlayerBaseCisternsFull {
   )
   FROM player_cisterns pc
   WHERE fe.entity_id = pc.entity_id
-  RETURNING pc.actor_id, pc.class, pc.capacity,
+  RETURNING pc.controller_id, pc.actor_id, pc.class, pc.capacity,
             (fe.components #>> '{FWaterStorageComponent,1,m_WaterStored}')::int AS water
 )
 SELECT COUNT(*)::text AS total,
+       COUNT(DISTINCT controller_id)::text AS owner_n,
        COUNT(*) FILTER (WHERE class = '/Game/Dune/Systems/Building/Pieces/BP_WaterCistern.BP_WaterCistern_C')::text AS small_n,
        COUNT(*) FILTER (WHERE class = '/Game/Dune/Systems/Building/Pieces/BP_MediumWaterCistern.BP_MediumWaterCistern_C')::text AS medium_n,
        COUNT(*) FILTER (WHERE class = '/Game/Dune/Systems/Building/Pieces/BP_LargeWaterCistern.BP_LargeWaterCistern_C')::text AS large_n,
@@ -462,6 +473,7 @@ FROM updated;
     }
     return @{
         ok       = $true
+        owners   = [int](ConvertTo-DuneInt $row['owner_n'])
         total    = $total
         small    = [int](ConvertTo-DuneInt $row['small_n'])
         medium   = [int](ConvertTo-DuneInt $row['medium_n'])
@@ -499,12 +511,13 @@ function Invoke-DuneBaseWaterBgCommand {
 }
 
 function Invoke-DuneFillPlayerBaseWaterCore {
-    param([string]$Ip, [long]$ControllerId)
+    param([string]$Ip, [long]$ControllerId, [switch]$AllPlayers)
 
-    $before = Get-DunePlayerBaseCisternSummary -Ip $Ip -ControllerId $ControllerId
+    $before = Get-DunePlayerBaseCisternSummary -Ip $Ip -ControllerId $ControllerId -AllPlayers:$AllPlayers
     if (-not $before.ok) { return $before }
     if ($before.total -le 0) {
-        return @{ ok = $false; error = "No supported cisterns were found on player $ControllerId's owned bases." }
+        $scope = if ($AllPlayers) { 'any player-owned bases' } else { "player $ControllerId's owned bases" }
+        return @{ ok = $false; error = "No supported cisterns were found on $scope." }
     }
 
     $backup = Invoke-DuneBaseWaterBgCommand -Ip $Ip -Command 'backup'
@@ -532,11 +545,11 @@ function Invoke-DuneFillPlayerBaseWaterCore {
     $operationError = ''
     $start = $null
     try {
-        $fill = Set-DunePlayerBaseCisternsFull -Ip $Ip -ControllerId $ControllerId
+        $fill = Set-DunePlayerBaseCisternsFull -Ip $Ip -ControllerId $ControllerId -AllPlayers:$AllPlayers
         if (-not $fill.ok) {
             $operationError = $fill.error
         } else {
-            $verify = Get-DunePlayerBaseCisternSummary -Ip $Ip -ControllerId $ControllerId
+            $verify = Get-DunePlayerBaseCisternSummary -Ip $Ip -ControllerId $ControllerId -AllPlayers:$AllPlayers
             if (-not $verify.ok) {
                 $operationError = $verify.error
             } elseif ($verify.total -ne $fill.total -or $verify.full -ne $verify.total) {
@@ -569,24 +582,30 @@ function Invoke-DuneFillPlayerBaseWaterCore {
     return @{
         ok         = $true
         controller = $ControllerId
+        allPlayers = [bool]$AllPlayers
+        owners     = $fill.owners
         total      = $fill.total
         small      = $fill.small
         medium     = $fill.medium
         large      = $fill.large
         backupPath = $backup.backupPath
-        message    = "Filled $($fill.total) owned base cistern(s) ($($fill.small) small, $($fill.medium) medium, $($fill.large) large). Safety backup completed; battlegroup start launched."
+        message    = if ($AllPlayers) {
+            "Filled $($fill.total) base cistern(s) across $($fill.owners) owner(s) ($($fill.small) small, $($fill.medium) medium, $($fill.large) large). Safety backup completed; battlegroup start launched."
+        } else {
+            "Filled $($fill.total) owned base cistern(s) ($($fill.small) small, $($fill.medium) medium, $($fill.large) large). Safety backup completed; battlegroup start launched."
+        }
     }
 }
 
 function Invoke-DuneFillPlayerBaseWater {
-    param([string]$Ip, [long]$ControllerId)
-    if ($ControllerId -le 0) { return @{ ok = $false; error = 'controller_id is required.' } }
+    param([string]$Ip, [long]$ControllerId, [switch]$AllPlayers)
+    if (-not $AllPlayers -and $ControllerId -le 0) { return @{ ok = $false; error = 'controller_id is required.' } }
     if ($script:DuneBaseWaterFillRunning) {
         return @{ ok = $false; error = 'Another Fill Base Water operation is already running.' }
     }
     $script:DuneBaseWaterFillRunning = $true
     try {
-        return Invoke-DuneFillPlayerBaseWaterCore -Ip $Ip -ControllerId $ControllerId
+        return Invoke-DuneFillPlayerBaseWaterCore -Ip $Ip -ControllerId $ControllerId -AllPlayers:$AllPlayers
     } finally {
         $script:DuneBaseWaterFillRunning = $false
     }
