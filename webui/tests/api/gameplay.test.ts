@@ -92,6 +92,12 @@ describe('Phase A — currency / progression writes', () => {
 })
 
 describe('Phase C/D/E/F — items, vehicles, teleport, progression, jobs', () => {
+  it('fillBaseWater targets one player controller', async () => {
+    await gp.fillBaseWater(42)
+    expect(last().url).toBe('/api/gameplay/players/fill-base-water')
+    expect(last().body).toEqual({ controller_id: 42 })
+  })
+
   it('giveItems forwards the items array and overflow flag', async () => {
     const items = [
       { template: 'sword', qty: 1, quality: 5 },
