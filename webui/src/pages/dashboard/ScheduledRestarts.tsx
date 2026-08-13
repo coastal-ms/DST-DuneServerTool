@@ -215,7 +215,7 @@ export function ScheduledRestarts() {
                 type="checkbox"
                 checked={enabled}
                 onChange={e => setEnabled(e.target.checked)}
-                className="h-4 w-4 accent-accent"
+                className="h-4 w-4 shrink-0 accent-accent"
               />
               <span className="text-sm font-medium">Enable daily restart</span>
             </label>
@@ -225,7 +225,7 @@ export function ScheduledRestarts() {
                 type="checkbox"
                 checked={applyFuncomUpdates}
                 onChange={e => setApplyFuncomUpdates(e.target.checked)}
-                className="h-4 w-4 accent-accent mt-0.5"
+                className="h-4 w-4 shrink-0 accent-accent mt-0.5"
               />
               <div>
                 <span className="text-sm font-medium block leading-none">Apply available Funcom server updates</span>
