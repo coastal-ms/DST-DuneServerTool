@@ -7,6 +7,7 @@ BeforeAll {
     Import-DstLib 'GameplayPlayers.ps1'
     Import-DstLib 'PlayersWrites.ps1'
     $script:realRowMaps = (Get-Command ConvertTo-DuneRowMaps).ScriptBlock
+    $script:realDuneInt = (Get-Command ConvertTo-DuneInt).ScriptBlock
 }
 
 Describe 'ConvertTo-DuneSqlString' -Tag 'Pure' {
@@ -417,20 +418,20 @@ Describe 'Invoke-DunePlayerSetStarterClass persistence' -Tag 'Pure' {
         function global:_Load-DuneProgressionNodesCatalog {}
         function global:Test-DunePlayerOfflineByAccount { return @{ ok = $true; reason = $null } }
         function global:Get-DunePlayerPawnFromAccount { return 3946L }
-        function global:ConvertTo-DuneRowMaps { param($Result) return @($Result.maps) }
+        Set-Item function:global:ConvertTo-DuneRowMaps $script:realRowMaps
+        Set-Item function:global:ConvertTo-DuneInt $script:realDuneInt
         function global:Invoke-DuneSqlQuery {
             param($Ip, $Sql, $ReadOnly, $MaxRows, $TimeoutSec)
             if ($Sql -match 'WITH updated AS') {
                 $script:starterClassUpdateSql = $Sql
-                return @{ ok = $true; maps = @(@{ updated = '1' }) }
+                return @{ ok = $true; columns = @('updated'); rows = @(,@('1')) }
             }
             if ($Sql -match 'END AS starter_tag') {
                 $script:starterClassVerifySql = $Sql
-                return @{ ok = $true; maps = @(@{ starter_tag = 'Skills.Key.Swordmaster1' }) }
+                return @{ ok = $true; columns = @('starter_tag'); rows = @(,@('Skills.Key.Swordmaster1')) }
             }
-            return @{ ok = $true; maps = @(@{ old_tag = '' }) }
+            return @{ ok = $true; columns = @('old_tag'); rows = @(,@('')) }
         }
-        function global:ConvertTo-DuneInt { param($Value) return [int64]$Value }
     }
 
     AfterEach {
@@ -440,12 +441,10 @@ Describe 'Invoke-DunePlayerSetStarterClass persistence' -Tag 'Pure' {
         Remove-Item function:global:_Load-DuneProgressionNodesCatalog -ErrorAction SilentlyContinue
         Remove-Item function:global:Test-DunePlayerOfflineByAccount -ErrorAction SilentlyContinue
         Remove-Item function:global:Get-DunePlayerPawnFromAccount -ErrorAction SilentlyContinue
-        Remove-Item function:global:ConvertTo-DuneRowMaps -ErrorAction SilentlyContinue
-        Remove-Item function:global:ConvertTo-DuneInt -ErrorAction SilentlyContinue
         Remove-Item function:global:Invoke-DuneSqlQuery -ErrorAction SilentlyContinue
     }
 
-    It 'recreates missing ModuleData and verifies the persisted starter tag in a separate read' {
+    It 'handles the real row-map array shape while recreating and verifying the starter tag' {
         $r = Invoke-DunePlayerSetStarterClass -Ip '1.2.3.4' -AccountId 605 -Job 'Swordmaster'
 
         $r.ok | Should -BeTrue -Because ([string]$r.error)
@@ -464,9 +463,9 @@ Describe 'Invoke-DunePlayerSetStarterClass persistence' -Tag 'Pure' {
             param($Ip, $Sql, $ReadOnly, $MaxRows, $TimeoutSec)
             if ($Sql -match 'WITH updated AS') {
                 $script:starterClassUpdateSql = $Sql
-                return @{ ok = $true; maps = @(@{ updated = '0' }) }
+                return @{ ok = $true; columns = @('updated'); rows = @(,@('0')) }
             }
-            return @{ ok = $true; maps = @(@{ old_tag = '' }) }
+            return @{ ok = $true; columns = @('old_tag'); rows = @(,@('')) }
         }
 
         $r = Invoke-DunePlayerSetStarterClass -Ip '1.2.3.4' -AccountId 605 -Job 'Swordmaster'

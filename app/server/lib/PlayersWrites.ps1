@@ -2725,7 +2725,7 @@ LIMIT 1;
     $or = Invoke-DuneSqlQuery -Ip $Ip -Sql $oldSql -ReadOnly $true -MaxRows 1 -TimeoutSec 10
     $oldTag = ''
     if ($or.ok) {
-        $omaps = @(ConvertTo-DuneRowMaps -Result $or)
+        $omaps = ConvertTo-DuneRowMaps -Result $or
         if ($omaps.Count -ge 1) { $oldTag = [string]$omaps[0]['old_tag'] }
     }
 
@@ -2782,7 +2782,7 @@ SELECT COUNT(*)::int AS updated FROM updated;
 "@
     $r = Invoke-DuneSqlQuery -Ip $Ip -Sql $sql -ReadOnly $false -MaxRows 1 -TimeoutSec 30
     if (-not $r.ok) { return @{ ok = $false; error = "set starter tag: $($r.error)" } }
-    $updatedRows = @(ConvertTo-DuneRowMaps -Result $r)
+    $updatedRows = ConvertTo-DuneRowMaps -Result $r
     if ($updatedRows.Count -ne 1 -or [int](ConvertTo-DuneInt $updatedRows[0]['updated']) -ne 1) {
         return @{ ok = $false; error = 'set starter tag found no writable FLevelComponent for the character.' }
     }
@@ -2799,7 +2799,7 @@ LIMIT 1;
 "@
     $vr = Invoke-DuneSqlQuery -Ip $Ip -Sql $verifySql -ReadOnly $true -MaxRows 1 -TimeoutSec 10
     if (-not $vr.ok) { return @{ ok = $false; error = "verify starter tag: $($vr.error)" } }
-    $verifiedRows = @(ConvertTo-DuneRowMaps -Result $vr)
+    $verifiedRows = ConvertTo-DuneRowMaps -Result $vr
     $persistedTag = if ($verifiedRows.Count -eq 1) { [string]$verifiedRows[0]['starter_tag'] } else { '' }
     if ($persistedTag -ne $newStarterTag) {
         return @{ ok = $false; error = "set starter tag verification failed: expected '$newStarterTag', found '$persistedTag'." }
