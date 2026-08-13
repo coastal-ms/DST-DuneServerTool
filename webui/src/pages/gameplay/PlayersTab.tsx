@@ -14,6 +14,7 @@ import {
   SECTIONS, SECTION_COMPONENTS, type SectionId,
 } from './players/sections'
 import { CoriolisAdmin } from './players/coriolis'
+import { BaseWaterAdmin } from './players/base-water'
 
 type OnlineFilter = '' | 'online' | 'offline'
 
@@ -327,6 +328,13 @@ export function PlayersTab() {
               <ServerOverview summary={displaySummary} />
               <div className="mt-3">
                 <CoriolisAdmin flash={(msg, kind = 'ok') => setFlash({ msg, kind })} />
+              </div>
+              <div className="mt-3">
+                <BaseWaterAdmin
+                  players={visiblePlayers}
+                  canWrite={source === 'live'}
+                  flash={(msg, kind = 'ok') => setFlash({ msg, kind })}
+                />
               </div>
             </>
           )}

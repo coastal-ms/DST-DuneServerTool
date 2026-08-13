@@ -1508,6 +1508,23 @@ export function fillWater(pawnId: number): Promise<FillWaterResponse> {
   })
 }
 
+export interface FillBaseWaterResponse extends WriteResult {
+  result?: {
+    controller?: number
+    total?: number
+    small?: number
+    medium?: number
+    large?: number
+    backupPath?: string
+  }
+}
+
+export function fillBaseWater(controllerId: number): Promise<FillBaseWaterResponse> {
+  return api<FillBaseWaterResponse>('/api/gameplay/players/fill-base-water', {
+    method: 'POST', body: JSON.stringify({ controller_id: controllerId }),
+  })
+}
+
 export interface CoriolisMap       { map: string; seed: number }
 export interface CoriolisPartition { partition_id: number; map: string; seed: number }
 
