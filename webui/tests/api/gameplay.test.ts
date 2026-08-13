@@ -98,6 +98,15 @@ describe('Phase C/D/E/F — items, vehicles, teleport, progression, jobs', () =>
     expect(last().body).toEqual({ controller_id: 42 })
   })
 
+  it('base-water summary and fill support explicit all-player scope', async () => {
+    await gp.getBaseWaterSummary(undefined, true)
+    expect(last().url).toBe('/api/gameplay/players/base-water-summary?all_players=1')
+
+    await gp.fillBaseWater(undefined, true)
+    expect(last().url).toBe('/api/gameplay/players/fill-base-water')
+    expect(last().body).toEqual({ all_players: true })
+  })
+
   it('giveItems forwards the items array and overflow flag', async () => {
     const items = [
       { template: 'sword', qty: 1, quality: 5 },

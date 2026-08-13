@@ -1511,6 +1511,8 @@ export function fillWater(pawnId: number): Promise<FillWaterResponse> {
 export interface FillBaseWaterResponse extends WriteResult {
   result?: {
     controller?: number
+    allPlayers?: boolean
+    owners?: number
     total?: number
     small?: number
     medium?: number
@@ -1519,9 +1521,31 @@ export interface FillBaseWaterResponse extends WriteResult {
   }
 }
 
-export function fillBaseWater(controllerId: number): Promise<FillBaseWaterResponse> {
+export interface BaseWaterSummary {
+  ok: boolean
+  controllerId: number
+  allPlayers: boolean
+  owners: number
+  total: number
+  small: number
+  medium: number
+  large: number
+  full: number
+  missingWater: number
+}
+
+export function getBaseWaterSummary(controllerId?: number, allPlayers = false): Promise<BaseWaterSummary> {
+  return api<BaseWaterSummary>(`/api/gameplay/players/base-water-summary${qs({
+    controller_id: allPlayers ? undefined : controllerId,
+    all_players: allPlayers ? 1 : undefined,
+  })}`)
+}
+
+export function fillBaseWater(controllerId?: number, allPlayers = false): Promise<FillBaseWaterResponse> {
   return api<FillBaseWaterResponse>('/api/gameplay/players/fill-base-water', {
-    method: 'POST', body: JSON.stringify({ controller_id: controllerId }),
+    method: 'POST', body: JSON.stringify(allPlayers
+      ? { all_players: true }
+      : { controller_id: controllerId }),
   })
 }
 
