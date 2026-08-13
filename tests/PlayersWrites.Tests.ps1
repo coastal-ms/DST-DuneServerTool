@@ -308,11 +308,18 @@ Describe 'Invoke-DunePlayerWipeJourneyNodes' -Tag 'Pure' {
 Describe 'Invoke-DunePlayerResetJourneyNodes orchestration' -Tag 'Pure' {
     BeforeEach {
         $script:resetJob = ''
+        $script:preservedModules = @()
+        $script:restoredStarterJob = ''
         $script:wipeCalls = 0
         $script:originalWipeJourney = (Get-Command Invoke-DunePlayerWipeJourneyNodes).ScriptBlock
         $script:originalResetJob = (Get-Command Invoke-DunePlayerResetJobSkills).ScriptBlock
         $script:originalMarkNpe = (Get-Command Invoke-DunePlayerMarkNpeCompleted).ScriptBlock
+        $script:originalSetStarter = (Get-Command Invoke-DunePlayerSetStarterClass).ScriptBlock
+        $script:DuneProgressionNodesCatalog = @{
+            starterAbilityByJob = @{ Swordmaster = 'Skills.Ability.BattleCry' }
+        }
         Set-Item function:global:ConvertTo-DuneRowMaps $script:realRowMaps
+        function global:_Load-DuneProgressionNodesCatalog {}
         function global:Test-DunePlayerOfflineByAccount { return @{ ok = $true; reason = $null } }
         function global:Get-DunePlayerPawnFromAccount { return 3946L }
         function global:Invoke-DuneSqlQuery {
@@ -327,9 +334,15 @@ Describe 'Invoke-DunePlayerResetJourneyNodes orchestration' -Tag 'Pure' {
             return @{ ok = $true }
         }
         function global:Invoke-DunePlayerResetJobSkills {
-            param($Ip, $AccountId, $Job)
+            param($Ip, $AccountId, $Job, $PreserveModules)
             $script:resetJob = $Job
-            return @{ ok = $true; refunded_points = 186 }
+            $script:preservedModules = @($PreserveModules)
+            return @{ ok = $true; refunded_points = 184 }
+        }
+        function global:Invoke-DunePlayerSetStarterClass {
+            param($Ip, $AccountId, $Job)
+            $script:restoredStarterJob = $Job
+            return @{ ok = $true }
         }
         function global:Invoke-DunePlayerMarkNpeCompleted { return @{ ok = $true; nodes_touched = 153 } }
     }
@@ -338,6 +351,9 @@ Describe 'Invoke-DunePlayerResetJourneyNodes orchestration' -Tag 'Pure' {
         Set-Item function:global:Invoke-DunePlayerWipeJourneyNodes $script:originalWipeJourney
         Set-Item function:global:Invoke-DunePlayerResetJobSkills $script:originalResetJob
         Set-Item function:global:Invoke-DunePlayerMarkNpeCompleted $script:originalMarkNpe
+        Set-Item function:global:Invoke-DunePlayerSetStarterClass $script:originalSetStarter
+        $script:DuneProgressionNodesCatalog = $null
+        Remove-Item function:global:_Load-DuneProgressionNodesCatalog -ErrorAction SilentlyContinue
         Remove-Item function:global:Test-DunePlayerOfflineByAccount -ErrorAction SilentlyContinue
         Remove-Item function:global:Get-DunePlayerPawnFromAccount -ErrorAction SilentlyContinue
         Set-Item function:global:ConvertTo-DuneRowMaps $script:realRowMaps
@@ -349,8 +365,12 @@ Describe 'Invoke-DunePlayerResetJourneyNodes orchestration' -Tag 'Pure' {
 
         $r.ok | Should -BeTrue -Because ([string]$r.error)
         $script:resetJob | Should -Be 'Swordmaster'
+        $script:preservedModules | Should -Contain 'Skills.Key.Swordmaster1'
+        $script:preservedModules | Should -Contain 'Skills.Ability.BattleCry'
+        $script:restoredStarterJob | Should -Be 'Swordmaster'
         $r.starter_job_reset | Should -Be 'Swordmaster'
-        $r.refunded_skill_points | Should -Be 186
+        $r.starter_modules_restored | Should -BeTrue
+        $r.refunded_skill_points | Should -Be 184
         $r.npe_marked | Should -BeTrue
         $r.npe_nodes | Should -Be 153
         $r.message | Should -Match 'Find the Fremen'
@@ -472,6 +492,25 @@ Describe 'Invoke-DunePlayerResetJobSkills refund' -Tag 'Pure' {
         $script:resetJobSql | Should -Match 'SkillPointsSpent'
         $script:resetJobSql | Should -Match 'UnspentSkillPoints'
         $r.refunded_points | Should -Be 16
+    }
+
+    It 'preserves requested starter modules while resetting purchased progression' {
+        $script:DuneTagsData.jobAllModules.Swordmaster = @(
+            'Skills.Ability.BattleCry',
+            'Skills.Key.Swordmaster1',
+            'Skills.Passive.SwordmasterTest'
+        )
+
+        $r = Invoke-DunePlayerResetJobSkills `
+            -Ip '1.2.3.4' `
+            -AccountId 605 `
+            -Job 'Swordmaster' `
+            -PreserveModules @('Skills.Ability.BattleCry', 'Skills.Key.Swordmaster1')
+
+        $r.ok | Should -BeTrue -Because ([string]$r.error)
+        $script:resetJobSql | Should -Match 'Skills\.Passive\.SwordmasterTest'
+        $script:resetJobSql | Should -Not -Match 'Skills\.Ability\.BattleCry'
+        $script:resetJobSql | Should -Not -Match 'Skills\.Key\.Swordmaster1'
     }
 }
 

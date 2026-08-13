@@ -1449,6 +1449,11 @@ LIMIT 1;
         return @{ ok = $false; error = "unsupported starter skill tree tag '$starterTag'." }
     }
     $starterJob = [string]$Matches[1]
+    _Load-DuneProgressionNodesCatalog
+    if (-not $script:DuneProgressionNodesCatalog.starterAbilityByJob.ContainsKey($starterJob)) {
+        return @{ ok = $false; error = "no starter ability mapping for '$starterJob'." }
+    }
+    $starterAbility = [string]$script:DuneProgressionNodesCatalog.starterAbilityByJob[$starterJob]
 
     $wipe = Invoke-DunePlayerWipeJourneyNodes -Ip $Ip -AccountId $AccountId
     if (-not $wipe.ok) { return $wipe }
@@ -1457,8 +1462,16 @@ LIMIT 1;
     if (-not $stillOffline.ok) {
         return @{ ok = $false; error = "Journey was wiped, but starter-tree reset stopped because the player logged in: $($stillOffline.reason)" }
     }
-    $skillReset = Invoke-DunePlayerResetJobSkills -Ip $Ip -AccountId $AccountId -Job $starterJob
+    $skillReset = Invoke-DunePlayerResetJobSkills `
+        -Ip $Ip `
+        -AccountId $AccountId `
+        -Job $starterJob `
+        -PreserveModules @($starterTag, $starterAbility)
     if (-not $skillReset.ok) { return @{ ok = $false; error = "Journey wiped, but $starterJob skill reset failed: $($skillReset.error)" } }
+    $starterRestore = Invoke-DunePlayerSetStarterClass -Ip $Ip -AccountId $AccountId -Job $starterJob
+    if (-not $starterRestore.ok) {
+        return @{ ok = $false; error = "Journey and $starterJob skills were reset, but starter modules could not be restored: $($starterRestore.error)" }
+    }
 
     $charSql = "SELECT id::text AS character_id FROM dune.player_state WHERE account_id=$AccountId::bigint LIMIT 1;"
     $cr = Invoke-DuneSqlQuery -Ip $Ip -Sql $charSql -ReadOnly $true -MaxRows 1 -TimeoutSec 10
@@ -1483,6 +1496,7 @@ LIMIT 1;
         npe_marked = $true
         npe_nodes = [int]$npe.nodes_touched
         starter_job_reset = $starterJob
+        starter_modules_restored = $true
         refunded_skill_points = [int]$skillReset.refunded_points
     }
 }
@@ -2303,7 +2317,12 @@ function Invoke-DunePlayerGrantJobSkills {
 }
 
 function Invoke-DunePlayerResetJobSkills {
-    param([string]$Ip, [long]$AccountId, [string]$Job)
+    param(
+        [string]$Ip,
+        [long]$AccountId,
+        [string]$Job,
+        [string[]]$PreserveModules = @()
+    )
     if ($AccountId -le 0) { return @{ ok = $false; error = 'account_id is required.' } }
     if (-not $Job) { return @{ ok = $false; error = 'job is required.' } }
     _Load-DuneTagsData
@@ -2311,7 +2330,21 @@ function Invoke-DunePlayerResetJobSkills {
         return @{ ok = $false; error = "unknown job '$Job' (check dune-tags.json job_all_modules)." }
     }
     $modules = @($script:DuneTagsData.jobAllModules[$Job] | ForEach-Object { [string]$_ })
-    if ($modules.Count -eq 0) { return @{ ok = $false; error = "job '$Job' has no modules listed." } }
+    if ($PreserveModules.Count -gt 0) {
+        $preserved = @{}
+        foreach ($module in $PreserveModules) {
+            if ($module) { $preserved[[string]$module] = $true }
+        }
+        $modules = @($modules | Where-Object { -not $preserved.ContainsKey($_) })
+    }
+    if ($modules.Count -eq 0) {
+        return @{
+            ok = $true
+            message = "Reset $Job skill tree - no purchased modules to remove"
+            modules = 0
+            refunded_points = 0
+        }
+    }
 
     $pawnID = Get-DunePlayerPawnFromAccount -Ip $Ip -AccountId $AccountId
     if ($pawnID -le 0) { return @{ ok = $false; error = "no pawn for account $AccountId." } }
