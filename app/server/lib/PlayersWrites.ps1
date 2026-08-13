@@ -1439,7 +1439,7 @@ LIMIT 1;
 "@
     $starterResult = Invoke-DuneSqlQuery -Ip $Ip -Sql $starterSql -ReadOnly $true -MaxRows 1 -TimeoutSec 10
     if (-not $starterResult.ok) { return @{ ok = $false; error = "read starter skill tree: $($starterResult.error)" } }
-    $starterRows = @(ConvertTo-DuneRowMaps -Result $starterResult)
+    $starterRows = ConvertTo-DuneRowMaps -Result $starterResult
     if ($starterRows.Count -ne 1) { return @{ ok = $false; error = 'starter skill tree query returned no result.' } }
     $starterTag = [string]$starterRows[0]['starter_tag']
     if (-not $starterTag) {
@@ -1463,7 +1463,7 @@ LIMIT 1;
     $charSql = "SELECT id::text AS character_id FROM dune.player_state WHERE account_id=$AccountId::bigint LIMIT 1;"
     $cr = Invoke-DuneSqlQuery -Ip $Ip -Sql $charSql -ReadOnly $true -MaxRows 1 -TimeoutSec 10
     if (-not $cr.ok) { return @{ ok = $false; error = "Journey wiped, but character lookup failed: $($cr.error)" } }
-    $charRows = @(ConvertTo-DuneRowMaps -Result $cr)
+    $charRows = ConvertTo-DuneRowMaps -Result $cr
     if ($charRows.Count -ne 1) { return @{ ok = $false; error = 'Journey wiped, but character lookup returned no result.' } }
     $characterId = [int64](ConvertTo-DuneInt $charRows[0]['character_id'])
     if ($characterId -le 0) { return @{ ok = $false; error = 'Journey wiped, but character id was invalid.' } }
@@ -1551,7 +1551,7 @@ SELECT
 "@
     $vr = Invoke-DuneSqlQuery -Ip $Ip -Sql $verifySql -ReadOnly $true -MaxRows 1 -TimeoutSec 30
     if (-not $vr.ok) { return @{ ok = $false; error = "wipe journey verification: $($vr.error)" } }
-    $rows = @(ConvertTo-DuneRowMaps -Result $vr)
+    $rows = ConvertTo-DuneRowMaps -Result $vr
     if ($rows.Count -ne 1) { return @{ ok = $false; error = 'wipe journey verification returned no result.' } }
     $journeyRows = [int64](ConvertTo-DuneInt $rows[0]['journey_rows'])
     $storyTags = [int64](ConvertTo-DuneInt $rows[0]['story_tags'])
@@ -2352,7 +2352,7 @@ SELECT refund FROM updated;
 "@
     $r = Invoke-DuneSqlQuery -Ip $Ip -Sql $sql -ReadOnly $false -MaxRows 1 -TimeoutSec 30
     if (-not $r.ok) { return @{ ok = $false; error = "reset $Job tree: $($r.error)" } }
-    $rows = @(ConvertTo-DuneRowMaps -Result $r)
+    $rows = ConvertTo-DuneRowMaps -Result $r
     if ($rows.Count -ne 1) { return @{ ok = $false; error = "reset $Job tree returned no refund result." } }
     $refund = [int](ConvertTo-DuneInt $rows[0]['refund'])
     return @{

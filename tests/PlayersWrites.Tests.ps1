@@ -3,8 +3,10 @@
 
 BeforeAll {
     . (Join-Path $PSScriptRoot '_TestHelpers.ps1')
+    Import-DstLib 'Gameplay.ps1'
     Import-DstLib 'GameplayPlayers.ps1'
     Import-DstLib 'PlayersWrites.ps1'
+    $script:realRowMaps = (Get-Command ConvertTo-DuneRowMaps).ScriptBlock
 }
 
 Describe 'ConvertTo-DuneSqlString' -Tag 'Pure' {
@@ -226,16 +228,9 @@ Describe 'Invoke-DunePlayerMaxAugmentAttributes' -Tag 'Pure' {
 Describe 'Invoke-DunePlayerWipeJourneyNodes' -Tag 'Pure' {
     BeforeEach {
         $script:capturedSql = New-Object System.Collections.Generic.List[string]
+        Set-Item function:global:ConvertTo-DuneRowMaps $script:realRowMaps
         function global:Test-DunePlayerOfflineByAccount { return @{ ok = $true; reason = $null } }
         function global:Get-DunePlayerPawnFromAccount { return 3946L }
-        function global:ConvertTo-DuneRowMaps {
-            param($Result)
-            return @(@{
-                journey_rows = $Result.rows[0][0]
-                story_tags = $Result.rows[0][1]
-                contract_items = $Result.rows[0][2]
-            })
-        }
         function global:ConvertTo-DuneInt { param($Value) return [int64]$Value }
         function global:Invoke-DuneSqlQuery {
             param($Ip, $Sql, $ReadOnly, $MaxRows, $TimeoutSec)
@@ -254,7 +249,7 @@ Describe 'Invoke-DunePlayerWipeJourneyNodes' -Tag 'Pure' {
     AfterEach {
         Remove-Item function:global:Test-DunePlayerOfflineByAccount -ErrorAction SilentlyContinue
         Remove-Item function:global:Get-DunePlayerPawnFromAccount -ErrorAction SilentlyContinue
-        Remove-Item function:global:ConvertTo-DuneRowMaps -ErrorAction SilentlyContinue
+        Set-Item function:global:ConvertTo-DuneRowMaps $script:realRowMaps
         Remove-Item function:global:ConvertTo-DuneInt -ErrorAction SilentlyContinue
         Remove-Item function:global:Invoke-DuneSqlQuery -ErrorAction SilentlyContinue
     }
@@ -317,11 +312,15 @@ Describe 'Invoke-DunePlayerResetJourneyNodes orchestration' -Tag 'Pure' {
         $script:originalWipeJourney = (Get-Command Invoke-DunePlayerWipeJourneyNodes).ScriptBlock
         $script:originalResetJob = (Get-Command Invoke-DunePlayerResetJobSkills).ScriptBlock
         $script:originalMarkNpe = (Get-Command Invoke-DunePlayerMarkNpeCompleted).ScriptBlock
+        Set-Item function:global:ConvertTo-DuneRowMaps $script:realRowMaps
         function global:Test-DunePlayerOfflineByAccount { return @{ ok = $true; reason = $null } }
         function global:Get-DunePlayerPawnFromAccount { return 3946L }
-        function global:ConvertTo-DuneRowMaps { param($Result) return @($Result.maps) }
         function global:Invoke-DuneSqlQuery {
-            return @{ ok = $true; maps = @(@{ starter_tag = 'Skills.Key.Swordmaster1'; character_id = '8' }) }
+            return @{
+                ok = $true
+                columns = @('starter_tag', 'character_id')
+                rows = ,@('Skills.Key.Swordmaster1', '8')
+            }
         }
         function global:Invoke-DunePlayerWipeJourneyNodes {
             $script:wipeCalls++
@@ -341,7 +340,7 @@ Describe 'Invoke-DunePlayerResetJourneyNodes orchestration' -Tag 'Pure' {
         Set-Item function:global:Invoke-DunePlayerMarkNpeCompleted $script:originalMarkNpe
         Remove-Item function:global:Test-DunePlayerOfflineByAccount -ErrorAction SilentlyContinue
         Remove-Item function:global:Get-DunePlayerPawnFromAccount -ErrorAction SilentlyContinue
-        Remove-Item function:global:ConvertTo-DuneRowMaps -ErrorAction SilentlyContinue
+        Set-Item function:global:ConvertTo-DuneRowMaps $script:realRowMaps
         Remove-Item function:global:Invoke-DuneSqlQuery -ErrorAction SilentlyContinue
     }
 
@@ -360,7 +359,11 @@ Describe 'Invoke-DunePlayerResetJourneyNodes orchestration' -Tag 'Pure' {
 
     It 'stops before the wipe and directs missing starter tags to Set Starter Class' {
         function global:Invoke-DuneSqlQuery {
-            return @{ ok = $true; maps = @(@{ starter_tag = ''; character_id = '8' }) }
+            return @{
+                ok = $true
+                columns = @('starter_tag', 'character_id')
+                rows = ,@('', '8')
+            }
         }
 
         $r = Invoke-DunePlayerResetJourneyNodes -Ip '1.2.3.4' -AccountId 605
@@ -440,21 +443,21 @@ Describe 'Invoke-DunePlayerResetJobSkills refund' -Tag 'Pure' {
     BeforeEach {
         $script:DuneTagsData = @{ jobAllModules = @{ Swordmaster = @('Skills.Ability.BattleCry', 'Skills.Key.Swordmaster1') } }
         $script:resetJobSql = ''
+        Set-Item function:global:ConvertTo-DuneRowMaps $script:realRowMaps
         function global:_Load-DuneTagsData {}
         function global:Get-DunePlayerPawnFromAccount { return 3946L }
-        function global:ConvertTo-DuneRowMaps { param($Result) return @($Result.maps) }
         function global:ConvertTo-DuneInt { param($Value) return [int64]$Value }
         function global:Invoke-DuneSqlQuery {
             param($Ip, $Sql)
             $script:resetJobSql = $Sql
-            return @{ ok = $true; maps = @(@{ refund = '16' }) }
+            return @{ ok = $true; columns = @('refund'); rows = ,@('16') }
         }
     }
 
     AfterEach {
         Remove-Item function:global:_Load-DuneTagsData -ErrorAction SilentlyContinue
         Remove-Item function:global:Get-DunePlayerPawnFromAccount -ErrorAction SilentlyContinue
-        Remove-Item function:global:ConvertTo-DuneRowMaps -ErrorAction SilentlyContinue
+        Set-Item function:global:ConvertTo-DuneRowMaps $script:realRowMaps
         Remove-Item function:global:ConvertTo-DuneInt -ErrorAction SilentlyContinue
         Remove-Item function:global:Invoke-DuneSqlQuery -ErrorAction SilentlyContinue
     }
