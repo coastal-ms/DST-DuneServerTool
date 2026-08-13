@@ -13,6 +13,15 @@ here cover everything those tags shipped.
 
 ## [Unreleased]
 
+## [13.6.5] - 2026-08-12
+
+### Fixed
+
+- Reset Journey recognizes legacy starter-class tags and stops safely before
+  wiping when the tag is missing.
+- Set Starter Class recreates and verifies a missing starter-class tag while
+  the player is offline.
+
 ## [13.6.4] - 2026-08-12
 
 ### Added

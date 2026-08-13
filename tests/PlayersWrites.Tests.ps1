@@ -313,6 +313,7 @@ Describe 'Invoke-DunePlayerWipeJourneyNodes' -Tag 'Pure' {
 Describe 'Invoke-DunePlayerResetJourneyNodes orchestration' -Tag 'Pure' {
     BeforeEach {
         $script:resetJob = ''
+        $script:wipeCalls = 0
         $script:originalWipeJourney = (Get-Command Invoke-DunePlayerWipeJourneyNodes).ScriptBlock
         $script:originalResetJob = (Get-Command Invoke-DunePlayerResetJobSkills).ScriptBlock
         $script:originalMarkNpe = (Get-Command Invoke-DunePlayerMarkNpeCompleted).ScriptBlock
@@ -322,7 +323,10 @@ Describe 'Invoke-DunePlayerResetJourneyNodes orchestration' -Tag 'Pure' {
         function global:Invoke-DuneSqlQuery {
             return @{ ok = $true; maps = @(@{ starter_tag = 'Skills.Key.Swordmaster1'; character_id = '8' }) }
         }
-        function global:Invoke-DunePlayerWipeJourneyNodes { return @{ ok = $true } }
+        function global:Invoke-DunePlayerWipeJourneyNodes {
+            $script:wipeCalls++
+            return @{ ok = $true }
+        }
         function global:Invoke-DunePlayerResetJobSkills {
             param($Ip, $AccountId, $Job)
             $script:resetJob = $Job
@@ -351,6 +355,20 @@ Describe 'Invoke-DunePlayerResetJourneyNodes orchestration' -Tag 'Pure' {
         $r.npe_marked | Should -BeTrue
         $r.npe_nodes | Should -Be 153
         $r.message | Should -Match 'Find the Fremen'
+        $script:wipeCalls | Should -Be 1
+    }
+
+    It 'stops before the wipe and directs missing starter tags to Set Starter Class' {
+        function global:Invoke-DuneSqlQuery {
+            return @{ ok = $true; maps = @(@{ starter_tag = ''; character_id = '8' }) }
+        }
+
+        $r = Invoke-DunePlayerResetJourneyNodes -Ip '1.2.3.4' -AccountId 605
+
+        $r.ok | Should -BeFalse
+        $r.error | Should -Match 'starter skill tree tag is missing'
+        $r.error | Should -Match 'Set Starter Class'
+        $script:wipeCalls | Should -Be 0
     }
 
     It 'stops after the wipe if the player logs in before starter-tree reset' {
@@ -361,6 +379,60 @@ Describe 'Invoke-DunePlayerResetJourneyNodes orchestration' -Tag 'Pure' {
         $r.ok | Should -BeFalse
         $r.error | Should -Match 'starter-tree reset stopped'
         $script:resetJob | Should -BeNullOrEmpty
+    }
+}
+
+Describe 'Invoke-DunePlayerSetStarterClass persistence' -Tag 'Pure' {
+    BeforeEach {
+        $script:starterClassUpdateSql = ''
+        $script:DuneTagsData = @{ jobSkillBlocks = @{ Swordmaster = @('Skills.Key.Swordmaster1') } }
+        $script:DuneProgressionNodesCatalog = @{
+            starterAbilityByJob = @{ Swordmaster = 'Skills.Ability.BattleCry' }
+        }
+        function global:_Load-DuneTagsData {}
+        function global:_Load-DuneProgressionNodesCatalog {}
+        function global:Test-DunePlayerOfflineByAccount { return @{ ok = $true; reason = $null } }
+        function global:Get-DunePlayerPawnFromAccount { return 3946L }
+        function global:ConvertTo-DuneRowMaps { param($Result) return @($Result.maps) }
+        function global:Invoke-DuneSqlQuery {
+            param($Ip, $Sql, $ReadOnly, $MaxRows, $TimeoutSec)
+            if ($Sql -match 'WITH updated AS') {
+                $script:starterClassUpdateSql = $Sql
+                return @{ ok = $true; maps = @(@{ starter_tag = 'Skills.Key.Swordmaster1' }) }
+            }
+            return @{ ok = $true; maps = @(@{ old_tag = '' }) }
+        }
+    }
+
+    AfterEach {
+        $script:DuneTagsData = $null
+        $script:DuneProgressionNodesCatalog = $null
+        Remove-Item function:global:_Load-DuneTagsData -ErrorAction SilentlyContinue
+        Remove-Item function:global:_Load-DuneProgressionNodesCatalog -ErrorAction SilentlyContinue
+        Remove-Item function:global:Test-DunePlayerOfflineByAccount -ErrorAction SilentlyContinue
+        Remove-Item function:global:Get-DunePlayerPawnFromAccount -ErrorAction SilentlyContinue
+        Remove-Item function:global:ConvertTo-DuneRowMaps -ErrorAction SilentlyContinue
+        Remove-Item function:global:Invoke-DuneSqlQuery -ErrorAction SilentlyContinue
+    }
+
+    It 'recreates a missing starter tag object and verifies the persisted value' {
+        $r = Invoke-DunePlayerSetStarterClass -Ip '1.2.3.4' -AccountId 605 -Job 'Swordmaster'
+
+        $r.ok | Should -BeTrue -Because ([string]$r.error)
+        $script:starterClassUpdateSql | Should -Match "ARRAY\['FLevelComponent','1','StarterSkillTreeTag'\]"
+        $script:starterClassUpdateSql | Should -Not -Match "ARRAY\['FLevelComponent','1','StarterSkillTreeTag','TagName'\]"
+        $script:starterClassUpdateSql | Should -Match "jsonb_build_object\('TagName', 'Skills\.Key\.Swordmaster1'"
+        $script:starterClassUpdateSql | Should -Match 'RETURNING components'
+    }
+
+    It 'refuses to change the starter class while the player is online' {
+        Mock Test-DunePlayerOfflineByAccount { return @{ ok = $false; reason = 'player is Online' } }
+
+        $r = Invoke-DunePlayerSetStarterClass -Ip '1.2.3.4' -AccountId 605 -Job 'Swordmaster'
+
+        $r.ok | Should -BeFalse
+        $r.error | Should -Match 'must be offline'
+        $script:starterClassUpdateSql | Should -BeNullOrEmpty
     }
 }
 

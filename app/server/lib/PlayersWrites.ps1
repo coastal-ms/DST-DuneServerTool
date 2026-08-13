@@ -1428,7 +1428,10 @@ function Invoke-DunePlayerResetJourneyNodes {
     $pawnId = Get-DunePlayerPawnFromAccount -Ip $Ip -AccountId $AccountId
     if ($pawnId -le 0) { return @{ ok = $false; error = "no pawn for account $AccountId." } }
     $starterSql = @"
-SELECT fe.components->'FLevelComponent'->1->'StarterSkillTreeTag'->>'TagName' AS starter_tag
+SELECT CASE jsonb_typeof(fe.components->'FLevelComponent'->1->'StarterSkillTreeTag')
+           WHEN 'object' THEN fe.components->'FLevelComponent'->1->'StarterSkillTreeTag'->>'TagName'
+           WHEN 'string' THEN fe.components->'FLevelComponent'->1->>'StarterSkillTreeTag'
+       END AS starter_tag
 FROM dune.fgl_entities fe
 JOIN dune.actor_fgl_entities afe ON afe.entity_id=fe.entity_id
 WHERE afe.actor_id=$pawnId::bigint AND afe.slot_name='DuneCharacter'
@@ -1439,6 +1442,9 @@ LIMIT 1;
     $starterRows = @(ConvertTo-DuneRowMaps -Result $starterResult)
     if ($starterRows.Count -ne 1) { return @{ ok = $false; error = 'starter skill tree query returned no result.' } }
     $starterTag = [string]$starterRows[0]['starter_tag']
+    if (-not $starterTag) {
+        return @{ ok = $false; error = 'starter skill tree tag is missing. Use Set Starter Class while the player is offline, then retry Reset Journey.' }
+    }
     if ($starterTag -notmatch '^Skills\.Key\.(.+)1$') {
         return @{ ok = $false; error = "unsupported starter skill tree tag '$starterTag'." }
     }
@@ -2658,6 +2664,8 @@ function Invoke-DunePlayerSetStarterClass {
     param([string]$Ip, [long]$AccountId, [string]$Job)
     if ($AccountId -le 0) { return @{ ok = $false; error = 'account_id is required.' } }
     if (-not $Job) { return @{ ok = $false; error = 'job is required.' } }
+    $off = Test-DunePlayerOfflineByAccount -Ip $Ip -AccountId $AccountId
+    if (-not $off.ok) { return @{ ok = $false; error = "Player must be offline to set starter class. $($off.reason)" } }
     _Load-DuneTagsData
     _Load-DuneProgressionNodesCatalog
     if (-not $script:DuneTagsData.jobSkillBlocks.ContainsKey($Job)) {
@@ -2672,7 +2680,10 @@ function Invoke-DunePlayerSetStarterClass {
     if ($pawnID -le 0) { return @{ ok = $false; error = "no pawn for account $AccountId." } }
 
     $oldSql = @"
-SELECT fe.components->'FLevelComponent'->1->'StarterSkillTreeTag'->>'TagName' AS old_tag
+SELECT CASE jsonb_typeof(fe.components->'FLevelComponent'->1->'StarterSkillTreeTag')
+           WHEN 'object' THEN fe.components->'FLevelComponent'->1->'StarterSkillTreeTag'->>'TagName'
+           WHEN 'string' THEN fe.components->'FLevelComponent'->1->>'StarterSkillTreeTag'
+       END AS old_tag
 FROM dune.fgl_entities fe
 JOIN dune.actor_fgl_entities afe ON afe.entity_id = fe.entity_id
 WHERE afe.actor_id = $pawnID::bigint AND afe.slot_name = 'DuneCharacter'
@@ -2681,7 +2692,7 @@ LIMIT 1;
     $or = Invoke-DuneSqlQuery -Ip $Ip -Sql $oldSql -ReadOnly $true -MaxRows 1 -TimeoutSec 10
     $oldTag = ''
     if ($or.ok) {
-        $omaps = ConvertTo-DuneRowMaps -Result $or
+        $omaps = @(ConvertTo-DuneRowMaps -Result $or)
         if ($omaps.Count -ge 1) { $oldTag = [string]$omaps[0]['old_tag'] }
     }
 
@@ -2707,6 +2718,7 @@ LIMIT 1;
     $safeAbKey = ConvertTo-DuneSqlString $newAbilityKey
 
     $sql = @"
+WITH updated AS (
 UPDATE dune.fgl_entities fe
 SET components = jsonb_set(
     jsonb_set(
@@ -2715,8 +2727,8 @@ SET components = jsonb_set(
                 fe.components,
                 ARRAY['FLevelComponent','1','ModuleData'],
                 (fe.components->'FLevelComponent'->1->'ModuleData') - $removeArr),
-            ARRAY['FLevelComponent','1','StarterSkillTreeTag','TagName'],
-            to_jsonb('$safeNewTag'::text)),
+            ARRAY['FLevelComponent','1','StarterSkillTreeTag'],
+            jsonb_build_object('TagName', '$safeNewTag'::text)),
         ARRAY['FLevelComponent','1','ModuleData','$safeNewKey'],
         '{"SkillPointsSpent": 1}'::jsonb,
         true),
@@ -2726,10 +2738,23 @@ SET components = jsonb_set(
 WHERE fe.entity_id = (
     SELECT entity_id FROM dune.actor_fgl_entities
     WHERE actor_id = $pawnID::bigint AND slot_name = 'DuneCharacter'
-);
+)
+RETURNING components
+)
+SELECT CASE jsonb_typeof(components->'FLevelComponent'->1->'StarterSkillTreeTag')
+           WHEN 'object' THEN components->'FLevelComponent'->1->'StarterSkillTreeTag'->>'TagName'
+           WHEN 'string' THEN components->'FLevelComponent'->1->>'StarterSkillTreeTag'
+       END AS starter_tag
+FROM updated;
 "@
     $r = Invoke-DuneSqlQuery -Ip $Ip -Sql $sql -ReadOnly $false -MaxRows 1 -TimeoutSec 30
     if (-not $r.ok) { return @{ ok = $false; error = "set starter tag: $($r.error)" } }
+    $updatedRows = @(ConvertTo-DuneRowMaps -Result $r)
+    if ($updatedRows.Count -ne 1) { return @{ ok = $false; error = 'set starter tag updated no matching character.' } }
+    $persistedTag = [string]$updatedRows[0]['starter_tag']
+    if ($persistedTag -ne $newStarterTag) {
+        return @{ ok = $false; error = "set starter tag verification failed: expected '$newStarterTag', found '$persistedTag'." }
+    }
     $msg = "Starter class set to $Job ($newStarterTag + $newAbility active)"
     if ($keysToRemove.Count -gt 0) { $msg += ", cleared previous starter ($($keysToRemove.Count) module(s))" }
     return @{ ok = $true; message = $msg }
