@@ -364,6 +364,11 @@ browser and keeps the server running in the background.
   ![Players → Landsraad](docs/img/gameplay-landsraad.png)
 - **Per-item water editor** on Players → Inventory for water containers
   (literjons / canteens).
+- **Fill Base Water** on Players → Server Overview fills every small, medium,
+  and large cistern across one selected player's owned bases. It creates a
+  safety backup, stops the battlegroup, fills and verifies the cisterns, then
+  starts the battlegroup again; windtraps and blood-water extractors are
+  intentionally excluded.
 - **Per-field "Default" button** on every Game Config setting — resetting
   *removes* the key from the INI instead of writing the default, keeping files
   clean. The "apply to my client" flow shows an **Add / Update / Remove** badge

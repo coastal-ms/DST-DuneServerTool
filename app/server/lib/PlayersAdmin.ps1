@@ -337,22 +337,260 @@ function Invoke-DunePlayerGiveScrip {
     }
 }
 
-# ----- Base water removed -------------------------------------------------
+# ----- Base water ---------------------------------------------------------
 #
-# Fill Base Water was investigated for v12.1.2 and removed before release.
-# The map pod loads cistern water into RAM on cistern spawn and writes back
-# to dune.fgl_entities.components on its periodic save tick, which means
-# any DB UPDATE we make to FWaterStorageComponent.m_WaterStored gets
-# overwritten before a player ever sees it. We verified end-to-end against
-# the live VM: drained four cisterns to 250-331, ran the DB UPDATE to
-# 100000, restarted the deepdesert pod, and the pod wrote the old in-RAM
-# values straight back to the DB on shutdown. The legacy RMQ
-# UpdateAllWaterFillables ServerCommand only refills carried fillables
-# (Decker's original complaint), so there is no working path today.
+# Cisterns are map-owned world entities. A write made while a map pod is live
+# gets overwritten when that pod next saves or shuts down. The durable sequence
+# is therefore backup -> stop BG -> write -> verify -> start BG. This was
+# field-proven against the in-game cistern UI.
 #
-# Leaving the placeable->totem->permission_actor_rank chain notes here for
-# the next attempt: if a future game build exposes a per-cistern RPC, the
-# scope query is permission_actor_rank.player_id=<controller> AND rank=1.
+# Scope is one selected player's rank-1-owned totems. Match the three exact
+# cistern classes because blood-water extractors and windtraps also carry an
+# FWaterStorageComponent but must not be filled by this action.
+
+$script:DuneBaseWaterFillRunning = $false
+
+function New-DunePlayerBaseCisternCteSql {
+    param([long]$ControllerId)
+    if ($ControllerId -le 0) { throw 'controller_id is required.' }
+
+    return @"
+WITH player_totems AS (
+  SELECT permission_actor_id AS totem_id
+  FROM dune.permission_actor_rank
+  WHERE player_id = $ControllerId::bigint
+    AND rank = 1
+),
+player_cisterns AS (
+  SELECT DISTINCT
+         a.id AS actor_id,
+         a.class,
+         afe.entity_id,
+         CASE a.class
+           WHEN '/Game/Dune/Systems/Building/Pieces/BP_WaterCistern.BP_WaterCistern_C' THEN 5000
+           WHEN '/Game/Dune/Systems/Building/Pieces/BP_MediumWaterCistern.BP_MediumWaterCistern_C' THEN 25000
+           WHEN '/Game/Dune/Systems/Building/Pieces/BP_LargeWaterCistern.BP_LargeWaterCistern_C' THEN 100000
+         END AS capacity,
+         COALESCE((fe.components #>> '{FWaterStorageComponent,1,m_WaterStored}')::int, 0) AS current_water
+  FROM player_totems pt
+  JOIN dune.actor_fgl_entities totem_fgl
+    ON totem_fgl.actor_id = pt.totem_id
+   AND totem_fgl.slot_name = 'Actor'
+  JOIN dune.placeables p
+    ON p.owner_entity_id = totem_fgl.entity_id
+  JOIN dune.actors a
+    ON a.id = p.id
+  JOIN dune.actor_fgl_entities afe
+    ON afe.actor_id = a.id
+   AND afe.slot_name = 'Actor'
+  JOIN dune.fgl_entities fe
+    ON fe.entity_id = afe.entity_id
+   AND fe.components ? 'FWaterStorageComponent'
+  WHERE a.class IN (
+    '/Game/Dune/Systems/Building/Pieces/BP_WaterCistern.BP_WaterCistern_C',
+    '/Game/Dune/Systems/Building/Pieces/BP_MediumWaterCistern.BP_MediumWaterCistern_C',
+    '/Game/Dune/Systems/Building/Pieces/BP_LargeWaterCistern.BP_LargeWaterCistern_C'
+  )
+)
+"@
+}
+
+function Get-DunePlayerBaseCisternSummary {
+    param([string]$Ip, [long]$ControllerId)
+    if ($ControllerId -le 0) { return @{ ok = $false; error = 'controller_id is required.' } }
+
+    $sql = (New-DunePlayerBaseCisternCteSql -ControllerId $ControllerId) + @"
+SELECT COUNT(*)::text AS total,
+       COUNT(*) FILTER (WHERE class = '/Game/Dune/Systems/Building/Pieces/BP_WaterCistern.BP_WaterCistern_C')::text AS small_n,
+       COUNT(*) FILTER (WHERE class = '/Game/Dune/Systems/Building/Pieces/BP_MediumWaterCistern.BP_MediumWaterCistern_C')::text AS medium_n,
+       COUNT(*) FILTER (WHERE class = '/Game/Dune/Systems/Building/Pieces/BP_LargeWaterCistern.BP_LargeWaterCistern_C')::text AS large_n,
+       COUNT(*) FILTER (WHERE current_water >= capacity)::text AS full_n,
+       COALESCE(SUM(GREATEST(capacity - current_water, 0)), 0)::text AS missing_water
+FROM player_cisterns;
+"@
+    $r = Invoke-DuneSqlQuery -Ip $Ip -Sql $sql -ReadOnly $true -MaxRows 1 -TimeoutSec 30
+    if (-not $r.ok) { return @{ ok = $false; error = "Base cistern read failed: $($r.error)" } }
+    $rows = ConvertTo-DuneRowMaps -Result $r
+    if ($rows.Count -lt 1) { return @{ ok = $false; error = 'Base cistern read returned no summary row.' } }
+    $row = $rows[0]
+    return @{
+        ok           = $true
+        controllerId = $ControllerId
+        total        = [int](ConvertTo-DuneInt $row['total'])
+        small        = [int](ConvertTo-DuneInt $row['small_n'])
+        medium       = [int](ConvertTo-DuneInt $row['medium_n'])
+        large        = [int](ConvertTo-DuneInt $row['large_n'])
+        full         = [int](ConvertTo-DuneInt $row['full_n'])
+        missingWater = [int64](ConvertTo-DuneInt $row['missing_water'])
+    }
+}
+
+function Set-DunePlayerBaseCisternsFull {
+    param([string]$Ip, [long]$ControllerId)
+    if ($ControllerId -le 0) { return @{ ok = $false; error = 'controller_id is required.' } }
+
+    $sql = (New-DunePlayerBaseCisternCteSql -ControllerId $ControllerId) + @"
+, updated AS (
+  UPDATE dune.fgl_entities fe
+  SET components = jsonb_set(
+    fe.components,
+    '{FWaterStorageComponent,1,m_WaterStored}',
+    to_jsonb(pc.capacity),
+    false
+  )
+  FROM player_cisterns pc
+  WHERE fe.entity_id = pc.entity_id
+  RETURNING pc.actor_id, pc.class, pc.capacity,
+            (fe.components #>> '{FWaterStorageComponent,1,m_WaterStored}')::int AS water
+)
+SELECT COUNT(*)::text AS total,
+       COUNT(*) FILTER (WHERE class = '/Game/Dune/Systems/Building/Pieces/BP_WaterCistern.BP_WaterCistern_C')::text AS small_n,
+       COUNT(*) FILTER (WHERE class = '/Game/Dune/Systems/Building/Pieces/BP_MediumWaterCistern.BP_MediumWaterCistern_C')::text AS medium_n,
+       COUNT(*) FILTER (WHERE class = '/Game/Dune/Systems/Building/Pieces/BP_LargeWaterCistern.BP_LargeWaterCistern_C')::text AS large_n,
+       COUNT(*) FILTER (WHERE water = capacity)::text AS verified_n
+FROM updated;
+"@
+    $r = Invoke-DuneSqlQuery -Ip $Ip -Sql $sql -ReadOnly $false -MaxRows 1 -TimeoutSec 45
+    if (-not $r.ok) { return @{ ok = $false; error = "Base cistern write failed: $($r.error)" } }
+    $rows = ConvertTo-DuneRowMaps -Result $r
+    if ($rows.Count -lt 1) { return @{ ok = $false; error = 'Base cistern write returned no summary row.' } }
+    $row = $rows[0]
+    $total = [int](ConvertTo-DuneInt $row['total'])
+    $verified = [int](ConvertTo-DuneInt $row['verified_n'])
+    if ($total -ne $verified) {
+        return @{ ok = $false; error = "Base cistern verification failed: $verified of $total rows reached capacity." }
+    }
+    return @{
+        ok       = $true
+        total    = $total
+        small    = [int](ConvertTo-DuneInt $row['small_n'])
+        medium   = [int](ConvertTo-DuneInt $row['medium_n'])
+        large    = [int](ConvertTo-DuneInt $row['large_n'])
+        verified = $verified
+    }
+}
+
+function Invoke-DuneBaseWaterBgCommand {
+    param(
+        [string]$Ip,
+        [Parameter(Mandatory)][ValidateSet('backup','stop','start')][string]$Command
+    )
+    if (-not (Get-Command Invoke-DuneBackupShell -ErrorAction SilentlyContinue)) {
+        return @{ ok = $false; error = 'Battlegroup shell helper is unavailable.' }
+    }
+    $timeout = if ($Command -eq 'backup') { 700 } elseif ($Command -eq 'stop') { 180 } else { 120 }
+    try {
+        $r = Invoke-DuneBackupShell -Ip $Ip -Script "/home/dune/.dune/bin/battlegroup $Command" -TimeoutSec $timeout
+    } catch {
+        return @{ ok = $false; error = "Battlegroup $Command failed: $($_.Exception.Message)" }
+    }
+    if ($null -eq $r -or [int]$r.rc -ne 0) {
+        $rc = if ($null -eq $r) { -1 } else { [int]$r.rc }
+        $out = if ($null -eq $r) { '' } else { ([string]$r.out).Trim() }
+        return @{ ok = $false; error = "Battlegroup $Command exited $rc. $out".Trim() }
+    }
+    $out = ([string]$r.out).Trim()
+    $backupPath = ''
+    if ($Command -eq 'backup') {
+        $m = [regex]::Match($out, 'Backup file \(on this host\):\s*(\S+)')
+        if ($m.Success) { $backupPath = $m.Groups[1].Value }
+    }
+    return @{ ok = $true; command = $Command; output = $out; backupPath = $backupPath }
+}
+
+function Invoke-DuneFillPlayerBaseWaterCore {
+    param([string]$Ip, [long]$ControllerId)
+
+    $before = Get-DunePlayerBaseCisternSummary -Ip $Ip -ControllerId $ControllerId
+    if (-not $before.ok) { return $before }
+    if ($before.total -le 0) {
+        return @{ ok = $false; error = "No supported cisterns were found on player $ControllerId's owned bases." }
+    }
+
+    $backup = Invoke-DuneBaseWaterBgCommand -Ip $Ip -Command 'backup'
+    if (-not $backup.ok) {
+        return @{ ok = $false; error = "No changes made because the safety backup failed. $($backup.error)" }
+    }
+
+    $stop = Invoke-DuneBaseWaterBgCommand -Ip $Ip -Command 'stop'
+    if (-not $stop.ok) {
+        $recoveryStart = Invoke-DuneBaseWaterBgCommand -Ip $Ip -Command 'start'
+        $recoveryMessage = if ($recoveryStart.ok) {
+            'A recovery start command was launched.'
+        } else {
+            "$($recoveryStart.error) Start the battlegroup manually."
+        }
+        return @{
+            ok         = $false
+            error      = "No cisterns changed because the battlegroup did not stop cleanly. $($stop.error) $recoveryMessage"
+            backupPath = $backup.backupPath
+        }
+    }
+
+    $fill = $null
+    $verify = $null
+    $operationError = ''
+    $start = $null
+    try {
+        $fill = Set-DunePlayerBaseCisternsFull -Ip $Ip -ControllerId $ControllerId
+        if (-not $fill.ok) {
+            $operationError = $fill.error
+        } else {
+            $verify = Get-DunePlayerBaseCisternSummary -Ip $Ip -ControllerId $ControllerId
+            if (-not $verify.ok) {
+                $operationError = $verify.error
+            } elseif ($verify.total -ne $fill.total -or $verify.full -ne $verify.total) {
+                $operationError = "Post-write verification failed: $($verify.full) of $($verify.total) cisterns are full."
+            }
+        }
+    } catch {
+        $operationError = "Base cistern operation failed: $($_.Exception.Message)"
+    } finally {
+        $start = Invoke-DuneBaseWaterBgCommand -Ip $Ip -Command 'start'
+    }
+
+    if (-not $start.ok) {
+        $prefix = if ($operationError) { "$operationError " } else { "Cisterns were filled, but " }
+        return @{
+            ok         = $false
+            error      = "$prefix$($start.error) Start the battlegroup manually."
+            backupPath = $backup.backupPath
+            fill       = $fill
+        }
+    }
+    if ($operationError) {
+        return @{
+            ok         = $false
+            error      = "$operationError The battlegroup start command was launched."
+            backupPath = $backup.backupPath
+        }
+    }
+
+    return @{
+        ok         = $true
+        controller = $ControllerId
+        total      = $fill.total
+        small      = $fill.small
+        medium     = $fill.medium
+        large      = $fill.large
+        backupPath = $backup.backupPath
+        message    = "Filled $($fill.total) owned base cistern(s) ($($fill.small) small, $($fill.medium) medium, $($fill.large) large). Safety backup completed; battlegroup start launched."
+    }
+}
+
+function Invoke-DuneFillPlayerBaseWater {
+    param([string]$Ip, [long]$ControllerId)
+    if ($ControllerId -le 0) { return @{ ok = $false; error = 'controller_id is required.' } }
+    if ($script:DuneBaseWaterFillRunning) {
+        return @{ ok = $false; error = 'Another Fill Base Water operation is already running.' }
+    }
+    $script:DuneBaseWaterFillRunning = $true
+    try {
+        return Invoke-DuneFillPlayerBaseWaterCore -Ip $Ip -ControllerId $ControllerId
+    } finally {
+        $script:DuneBaseWaterFillRunning = $false
+    }
+}
 
 
 

@@ -546,10 +546,23 @@ Register-DuneRoute -Method POST -Path '/api/gameplay/players/fill-water' -Handle
     }
 }
 
-# v12.1.2: Fill Base Water removed - cistern water is owned by the live pod
-# and overwrites DB writes. Stub kept to return 410 Gone for any cached UI
-# references; safe to delete once UIs roll. This feature will not be offered.
-Register-DuneRoute -Method POST -Path '/api/gameplay/players/fill-base-water-removed-in-v12.1.2' -Handler {
+# Fill every supported cistern on one player's rank-1-owned bases. The backend
+# creates a safety backup, stops the battlegroup so map RAM cannot overwrite the
+# DB write, fills exact small/medium/large cistern classes, verifies, then starts
+# the battlegroup again.
+Register-DuneRoute -Method POST -Path '/api/gameplay/players/fill-base-water' -Handler {
     param($req, $res, $routeParams, $body)
-    Write-DuneError -Response $res -Status 410 -Message 'Fill Base Water was removed in v12.1.2 - cistern water is owned by the live pod and overwrites DB writes. See CHANGELOG for details.'
+    try {
+        $controller = Get-DuneBodyInt -Body $body -Name 'controller_id'
+        if ($null -eq $controller -or $controller -le 0) {
+            Write-DuneError -Response $res -Status 400 -Message 'controller_id is required.'
+            return
+        }
+        Invoke-DunePlayerWriteRoute -Response $res -Action {
+            param($ip)
+            Invoke-DuneFillPlayerBaseWater -Ip $ip -ControllerId ([long]$controller)
+        }
+    } catch {
+        Write-DuneError -Response $res -Status 500 -Message "Fill base water failed: $($_.Exception.Message)"
+    }
 }

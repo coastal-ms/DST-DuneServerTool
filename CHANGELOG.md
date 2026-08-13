@@ -13,6 +13,14 @@ here cover everything those tags shipped.
 
 ## [Unreleased]
 
+### Added
+
+- Players → Server Overview can fill every small, medium, and large cistern
+  across one selected player's owned bases. DST creates a safety backup, stops
+  the battlegroup so live map state cannot overwrite the database, fills and
+  verifies the exact cistern classes, then starts the battlegroup again.
+  Windtraps and blood-water extractors are excluded.
+
 ## [13.6.5] - 2026-08-12
 
 ### Fixed
