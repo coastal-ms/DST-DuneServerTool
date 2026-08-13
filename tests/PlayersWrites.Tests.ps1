@@ -3,8 +3,11 @@
 
 BeforeAll {
     . (Join-Path $PSScriptRoot '_TestHelpers.ps1')
+    Import-DstLib 'Gameplay.ps1'
     Import-DstLib 'GameplayPlayers.ps1'
     Import-DstLib 'PlayersWrites.ps1'
+    $script:realRowMaps = (Get-Command ConvertTo-DuneRowMaps).ScriptBlock
+    $script:realDuneInt = (Get-Command ConvertTo-DuneInt).ScriptBlock
 }
 
 Describe 'ConvertTo-DuneSqlString' -Tag 'Pure' {
@@ -226,16 +229,9 @@ Describe 'Invoke-DunePlayerMaxAugmentAttributes' -Tag 'Pure' {
 Describe 'Invoke-DunePlayerWipeJourneyNodes' -Tag 'Pure' {
     BeforeEach {
         $script:capturedSql = New-Object System.Collections.Generic.List[string]
+        Set-Item function:global:ConvertTo-DuneRowMaps $script:realRowMaps
         function global:Test-DunePlayerOfflineByAccount { return @{ ok = $true; reason = $null } }
         function global:Get-DunePlayerPawnFromAccount { return 3946L }
-        function global:ConvertTo-DuneRowMaps {
-            param($Result)
-            return @(@{
-                journey_rows = $Result.rows[0][0]
-                story_tags = $Result.rows[0][1]
-                contract_items = $Result.rows[0][2]
-            })
-        }
         function global:ConvertTo-DuneInt { param($Value) return [int64]$Value }
         function global:Invoke-DuneSqlQuery {
             param($Ip, $Sql, $ReadOnly, $MaxRows, $TimeoutSec)
@@ -254,7 +250,7 @@ Describe 'Invoke-DunePlayerWipeJourneyNodes' -Tag 'Pure' {
     AfterEach {
         Remove-Item function:global:Test-DunePlayerOfflineByAccount -ErrorAction SilentlyContinue
         Remove-Item function:global:Get-DunePlayerPawnFromAccount -ErrorAction SilentlyContinue
-        Remove-Item function:global:ConvertTo-DuneRowMaps -ErrorAction SilentlyContinue
+        Set-Item function:global:ConvertTo-DuneRowMaps $script:realRowMaps
         Remove-Item function:global:ConvertTo-DuneInt -ErrorAction SilentlyContinue
         Remove-Item function:global:Invoke-DuneSqlQuery -ErrorAction SilentlyContinue
     }
@@ -313,20 +309,41 @@ Describe 'Invoke-DunePlayerWipeJourneyNodes' -Tag 'Pure' {
 Describe 'Invoke-DunePlayerResetJourneyNodes orchestration' -Tag 'Pure' {
     BeforeEach {
         $script:resetJob = ''
+        $script:preservedModules = @()
+        $script:restoredStarterJob = ''
+        $script:wipeCalls = 0
         $script:originalWipeJourney = (Get-Command Invoke-DunePlayerWipeJourneyNodes).ScriptBlock
         $script:originalResetJob = (Get-Command Invoke-DunePlayerResetJobSkills).ScriptBlock
         $script:originalMarkNpe = (Get-Command Invoke-DunePlayerMarkNpeCompleted).ScriptBlock
+        $script:originalSetStarter = (Get-Command Invoke-DunePlayerSetStarterClass).ScriptBlock
+        $script:DuneProgressionNodesCatalog = @{
+            starterAbilityByJob = @{ Swordmaster = 'Skills.Ability.BattleCry' }
+        }
+        Set-Item function:global:ConvertTo-DuneRowMaps $script:realRowMaps
+        function global:_Load-DuneProgressionNodesCatalog {}
         function global:Test-DunePlayerOfflineByAccount { return @{ ok = $true; reason = $null } }
         function global:Get-DunePlayerPawnFromAccount { return 3946L }
-        function global:ConvertTo-DuneRowMaps { param($Result) return @($Result.maps) }
         function global:Invoke-DuneSqlQuery {
-            return @{ ok = $true; maps = @(@{ starter_tag = 'Skills.Key.Swordmaster1'; character_id = '8' }) }
+            return @{
+                ok = $true
+                columns = @('starter_tag', 'character_id')
+                rows = ,@('Skills.Key.Swordmaster1', '8')
+            }
         }
-        function global:Invoke-DunePlayerWipeJourneyNodes { return @{ ok = $true } }
+        function global:Invoke-DunePlayerWipeJourneyNodes {
+            $script:wipeCalls++
+            return @{ ok = $true }
+        }
         function global:Invoke-DunePlayerResetJobSkills {
-            param($Ip, $AccountId, $Job)
+            param($Ip, $AccountId, $Job, $PreserveModules)
             $script:resetJob = $Job
-            return @{ ok = $true; refunded_points = 186 }
+            $script:preservedModules = @($PreserveModules)
+            return @{ ok = $true; refunded_points = 184 }
+        }
+        function global:Invoke-DunePlayerSetStarterClass {
+            param($Ip, $AccountId, $Job)
+            $script:restoredStarterJob = $Job
+            return @{ ok = $true }
         }
         function global:Invoke-DunePlayerMarkNpeCompleted { return @{ ok = $true; nodes_touched = 153 } }
     }
@@ -335,9 +352,12 @@ Describe 'Invoke-DunePlayerResetJourneyNodes orchestration' -Tag 'Pure' {
         Set-Item function:global:Invoke-DunePlayerWipeJourneyNodes $script:originalWipeJourney
         Set-Item function:global:Invoke-DunePlayerResetJobSkills $script:originalResetJob
         Set-Item function:global:Invoke-DunePlayerMarkNpeCompleted $script:originalMarkNpe
+        Set-Item function:global:Invoke-DunePlayerSetStarterClass $script:originalSetStarter
+        $script:DuneProgressionNodesCatalog = $null
+        Remove-Item function:global:_Load-DuneProgressionNodesCatalog -ErrorAction SilentlyContinue
         Remove-Item function:global:Test-DunePlayerOfflineByAccount -ErrorAction SilentlyContinue
         Remove-Item function:global:Get-DunePlayerPawnFromAccount -ErrorAction SilentlyContinue
-        Remove-Item function:global:ConvertTo-DuneRowMaps -ErrorAction SilentlyContinue
+        Set-Item function:global:ConvertTo-DuneRowMaps $script:realRowMaps
         Remove-Item function:global:Invoke-DuneSqlQuery -ErrorAction SilentlyContinue
     }
 
@@ -346,11 +366,33 @@ Describe 'Invoke-DunePlayerResetJourneyNodes orchestration' -Tag 'Pure' {
 
         $r.ok | Should -BeTrue -Because ([string]$r.error)
         $script:resetJob | Should -Be 'Swordmaster'
+        $script:preservedModules | Should -Contain 'Skills.Key.Swordmaster1'
+        $script:preservedModules | Should -Contain 'Skills.Ability.BattleCry'
+        $script:restoredStarterJob | Should -Be 'Swordmaster'
         $r.starter_job_reset | Should -Be 'Swordmaster'
-        $r.refunded_skill_points | Should -Be 186
+        $r.starter_modules_restored | Should -BeTrue
+        $r.refunded_skill_points | Should -Be 184
         $r.npe_marked | Should -BeTrue
         $r.npe_nodes | Should -Be 153
         $r.message | Should -Match 'Find the Fremen'
+        $script:wipeCalls | Should -Be 1
+    }
+
+    It 'stops before the wipe and directs missing starter tags to Set Starter Class' {
+        function global:Invoke-DuneSqlQuery {
+            return @{
+                ok = $true
+                columns = @('starter_tag', 'character_id')
+                rows = ,@('', '8')
+            }
+        }
+
+        $r = Invoke-DunePlayerResetJourneyNodes -Ip '1.2.3.4' -AccountId 605
+
+        $r.ok | Should -BeFalse
+        $r.error | Should -Match 'starter skill tree tag is missing'
+        $r.error | Should -Match 'Set Starter Class'
+        $script:wipeCalls | Should -Be 0
     }
 
     It 'stops after the wipe if the player logs in before starter-tree reset' {
@@ -364,25 +406,105 @@ Describe 'Invoke-DunePlayerResetJourneyNodes orchestration' -Tag 'Pure' {
     }
 }
 
+Describe 'Invoke-DunePlayerSetStarterClass persistence' -Tag 'Pure' {
+    BeforeEach {
+        $script:starterClassUpdateSql = ''
+        $script:starterClassVerifySql = ''
+        $script:DuneTagsData = @{ jobSkillBlocks = @{ Swordmaster = @('Skills.Key.Swordmaster1') } }
+        $script:DuneProgressionNodesCatalog = @{
+            starterAbilityByJob = @{ Swordmaster = 'Skills.Ability.BattleCry' }
+        }
+        function global:_Load-DuneTagsData {}
+        function global:_Load-DuneProgressionNodesCatalog {}
+        function global:Test-DunePlayerOfflineByAccount { return @{ ok = $true; reason = $null } }
+        function global:Get-DunePlayerPawnFromAccount { return 3946L }
+        Set-Item function:global:ConvertTo-DuneRowMaps $script:realRowMaps
+        Set-Item function:global:ConvertTo-DuneInt $script:realDuneInt
+        function global:Invoke-DuneSqlQuery {
+            param($Ip, $Sql, $ReadOnly, $MaxRows, $TimeoutSec)
+            if ($Sql -match 'WITH updated AS') {
+                $script:starterClassUpdateSql = $Sql
+                return @{ ok = $true; columns = @('updated'); rows = @(,@('1')) }
+            }
+            if ($Sql -match 'END AS starter_tag') {
+                $script:starterClassVerifySql = $Sql
+                return @{ ok = $true; columns = @('starter_tag'); rows = @(,@('Skills.Key.Swordmaster1')) }
+            }
+            return @{ ok = $true; columns = @('old_tag'); rows = @(,@('')) }
+        }
+    }
+
+    AfterEach {
+        $script:DuneTagsData = $null
+        $script:DuneProgressionNodesCatalog = $null
+        Remove-Item function:global:_Load-DuneTagsData -ErrorAction SilentlyContinue
+        Remove-Item function:global:_Load-DuneProgressionNodesCatalog -ErrorAction SilentlyContinue
+        Remove-Item function:global:Test-DunePlayerOfflineByAccount -ErrorAction SilentlyContinue
+        Remove-Item function:global:Get-DunePlayerPawnFromAccount -ErrorAction SilentlyContinue
+        Remove-Item function:global:Invoke-DuneSqlQuery -ErrorAction SilentlyContinue
+    }
+
+    It 'handles the real row-map array shape while recreating and verifying the starter tag' {
+        $r = Invoke-DunePlayerSetStarterClass -Ip '1.2.3.4' -AccountId 605 -Job 'Swordmaster'
+
+        $r.ok | Should -BeTrue -Because ([string]$r.error)
+        $script:starterClassUpdateSql | Should -Match "ARRAY\['FLevelComponent','1','StarterSkillTreeTag'\]"
+        $script:starterClassUpdateSql | Should -Not -Match "ARRAY\['FLevelComponent','1','StarterSkillTreeTag','TagName'\]"
+        $script:starterClassUpdateSql | Should -Match "COALESCE\(fe\.components->'FLevelComponent'->1->'ModuleData', '\{\}'::jsonb\)"
+        $script:starterClassUpdateSql | Should -Match "jsonb_build_object\('TagName', 'Skills\.Key\.Swordmaster1'"
+        $script:starterClassUpdateSql | Should -Match "jsonb_typeof\(fe\.components->'FLevelComponent'->1\) = 'object'"
+        $script:starterClassUpdateSql | Should -Match 'SELECT COUNT\(\*\)::int AS updated FROM updated'
+        $script:starterClassVerifySql | Should -Match 'END AS starter_tag'
+        $script:starterClassVerifySql | Should -Match 'LIMIT 1'
+    }
+
+    It 'fails safely when the character has no writable FLevelComponent' {
+        function global:Invoke-DuneSqlQuery {
+            param($Ip, $Sql, $ReadOnly, $MaxRows, $TimeoutSec)
+            if ($Sql -match 'WITH updated AS') {
+                $script:starterClassUpdateSql = $Sql
+                return @{ ok = $true; columns = @('updated'); rows = @(,@('0')) }
+            }
+            return @{ ok = $true; columns = @('old_tag'); rows = @(,@('')) }
+        }
+
+        $r = Invoke-DunePlayerSetStarterClass -Ip '1.2.3.4' -AccountId 605 -Job 'Swordmaster'
+
+        $r.ok | Should -BeFalse
+        $r.error | Should -Match 'no writable FLevelComponent'
+        $script:starterClassVerifySql | Should -BeNullOrEmpty
+    }
+
+    It 'refuses to change the starter class while the player is online' {
+        Mock Test-DunePlayerOfflineByAccount { return @{ ok = $false; reason = 'player is Online' } }
+
+        $r = Invoke-DunePlayerSetStarterClass -Ip '1.2.3.4' -AccountId 605 -Job 'Swordmaster'
+
+        $r.ok | Should -BeFalse
+        $r.error | Should -Match 'must be offline'
+        $script:starterClassUpdateSql | Should -BeNullOrEmpty
+    }
+}
+
 Describe 'Invoke-DunePlayerResetJobSkills refund' -Tag 'Pure' {
     BeforeEach {
         $script:DuneTagsData = @{ jobAllModules = @{ Swordmaster = @('Skills.Ability.BattleCry', 'Skills.Key.Swordmaster1') } }
         $script:resetJobSql = ''
+        Set-Item function:global:ConvertTo-DuneRowMaps $script:realRowMaps
         function global:_Load-DuneTagsData {}
         function global:Get-DunePlayerPawnFromAccount { return 3946L }
-        function global:ConvertTo-DuneRowMaps { param($Result) return @($Result.maps) }
         function global:ConvertTo-DuneInt { param($Value) return [int64]$Value }
         function global:Invoke-DuneSqlQuery {
             param($Ip, $Sql)
             $script:resetJobSql = $Sql
-            return @{ ok = $true; maps = @(@{ refund = '16' }) }
+            return @{ ok = $true; columns = @('refund'); rows = ,@('16') }
         }
     }
 
     AfterEach {
         Remove-Item function:global:_Load-DuneTagsData -ErrorAction SilentlyContinue
         Remove-Item function:global:Get-DunePlayerPawnFromAccount -ErrorAction SilentlyContinue
-        Remove-Item function:global:ConvertTo-DuneRowMaps -ErrorAction SilentlyContinue
+        Set-Item function:global:ConvertTo-DuneRowMaps $script:realRowMaps
         Remove-Item function:global:ConvertTo-DuneInt -ErrorAction SilentlyContinue
         Remove-Item function:global:Invoke-DuneSqlQuery -ErrorAction SilentlyContinue
     }
@@ -397,6 +519,25 @@ Describe 'Invoke-DunePlayerResetJobSkills refund' -Tag 'Pure' {
         $script:resetJobSql | Should -Match 'SkillPointsSpent'
         $script:resetJobSql | Should -Match 'UnspentSkillPoints'
         $r.refunded_points | Should -Be 16
+    }
+
+    It 'preserves requested starter modules while resetting purchased progression' {
+        $script:DuneTagsData.jobAllModules.Swordmaster = @(
+            'Skills.Ability.BattleCry',
+            'Skills.Key.Swordmaster1',
+            'Skills.Passive.SwordmasterTest'
+        )
+
+        $r = Invoke-DunePlayerResetJobSkills `
+            -Ip '1.2.3.4' `
+            -AccountId 605 `
+            -Job 'Swordmaster' `
+            -PreserveModules @('Skills.Ability.BattleCry', 'Skills.Key.Swordmaster1')
+
+        $r.ok | Should -BeTrue -Because ([string]$r.error)
+        $script:resetJobSql | Should -Match 'Skills\.Passive\.SwordmasterTest'
+        $script:resetJobSql | Should -Not -Match 'Skills\.Ability\.BattleCry'
+        $script:resetJobSql | Should -Not -Match 'Skills\.Key\.Swordmaster1'
     }
 }
 
