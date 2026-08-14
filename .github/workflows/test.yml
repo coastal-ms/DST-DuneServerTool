@@ -115,3 +115,29 @@ jobs:
       - name: Run Vitest
         working-directory: webui
         run: npm test
+
+  solo-helper:
+    name: Solo database helper
+    runs-on: windows-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup .NET 10 SDK
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: Audit, build, and self-test
+        shell: pwsh
+        run: |
+          $project = 'app\tools\DuneSoloDb\DuneSoloDb.csproj'
+          dotnet restore $project
+          if ($LASTEXITCODE -ne 0) { throw 'DuneSoloDb restore failed.' }
+          $audit = dotnet list $project package --include-transitive --vulnerable | Out-String
+          Write-Host $audit
+          if ($audit -match 'has the following vulnerable packages') {
+            throw 'DuneSoloDb dependency audit found a vulnerable package.'
+          }
+          dotnet run --project $project -c Release -- --command self-test
+          if ($LASTEXITCODE -ne 0) { throw 'DuneSoloDb self-test failed.' }

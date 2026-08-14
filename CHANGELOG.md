@@ -22,6 +22,29 @@ here cover everything those tags shipped.
   overwrite the database, fills and verifies the exact cistern classes, then
   starts the battlegroup again. Orphaned structures, windtraps, and blood-water
   extractors are excluded.
+- Solo Mode adds a host-local PTC preview workspace that operates independently
+  of Self-Hosted VM setup. It auto-detects or connects a local Solo save,
+  validates Funcom's wrapped SQLite database, reads all 48 native Solo settings,
+  presents only applicable controls, and creates retained validated backups with
+  guarded atomic restore. Difficulty stays game-controlled and PVP is hidden.
+  Game writes require Dune: Awakening to be fully closed and are never exposed
+  through Remote Access. Field-confirmed PTC actions include catalogued item
+  grants, canonical vehicle kits, backpack or selected Developer Storage
+  delivery, exact Solari/Scrip balances, and filling supported carried water
+  containers to their verified capacity. Profile-scoped backups can be deleted explicitly. The verified
+  progression adapter can max all five specializations with all 205 rewards,
+  complete the exact 59-node Find-the-Fremen chain with 14 tags, five Fremkit
+  recipes, Prescience and the third ability slot, and enable 144 approved skills
+  while preserving Voice Ignore and unknown PTC keys. The page includes
+  first-use instructions: launch Solo once,
+  enter the world to create the save, exit fully before writes, and verify
+  in-game after applying settings or restoring.
+
+### Changed
+
+- Vehicle Durability Damage moved back to Experimental after field testing found
+  that 0 does not disable ordinary use wear or permanent durability loss from
+  welding/repair-station repairs. Its exact damage scope remains unconfirmed.
 
 ## [13.6.5] - 2026-08-12
 

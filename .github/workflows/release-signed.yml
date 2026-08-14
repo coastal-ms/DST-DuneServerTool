@@ -96,7 +96,7 @@ jobs:
             echo "::warning::SignPath is not configured (SIGNPATH_API_TOKEN secret / SIGNPATH_ORGANIZATION_ID var missing). Producing an UNSIGNED build. Set the SignPath secret + vars after Foundation approval to enable signing."
           fi
 
-      # ── Phase A: build the raw artifacts (webui + DuneServer.exe + DuneShell.exe),
+      # ── Phase A: build the raw artifacts (webui + DuneServer.exe + DuneShell.exe + DuneSoloDb.exe),
       #    stopping before the installer so the inner exes can be signed first. ──
       - name: Build raw artifacts (phase A)
         shell: pwsh
@@ -150,11 +150,33 @@ jobs:
           wait-for-completion: true
           output-artifact-directory: app/desktop/DuneShell/bin/Release/net10.0-windows/win-x64/publish
 
+      - name: Upload DuneSoloDb.exe (unsigned) for signing
+        if: steps.cfg.outputs.sign == 'true'
+        id: up_solo
+        uses: actions/upload-artifact@v4
+        with:
+          name: unsigned-dunesolodb-exe
+          path: app/tools/DuneSoloDb/bin/Release/net10.0-windows/win-x64/publish/DuneSoloDb.exe
+          if-no-files-found: error
+
+      - name: Sign DuneSoloDb.exe
+        if: steps.cfg.outputs.sign == 'true'
+        uses: SignPath/github-action-submit-signing-request@v1
+        with:
+          api-token: ${{ secrets.SIGNPATH_API_TOKEN }}
+          organization-id: ${{ vars.SIGNPATH_ORGANIZATION_ID }}
+          project-slug: ${{ vars.SIGNPATH_PROJECT_SLUG }}
+          signing-policy-slug: ${{ vars.SIGNPATH_SIGNING_POLICY_SLUG }}
+          artifact-configuration-slug: ${{ vars.SIGNPATH_ARTIFACT_CONFIG_EXE }}
+          github-artifact-id: ${{ steps.up_solo.outputs.artifact-id }}
+          wait-for-completion: true
+          output-artifact-directory: app/tools/DuneSoloDb/bin/Release/net10.0-windows/win-x64/publish
+
       # ── Phase B: package the (now-signed) exes into the installer via ISCC. ──
       - name: Build installer (phase B)
         shell: pwsh
         run: |
-          $biArgs = @('-SkipWebBuild','-SkipExeBuild','-SkipShellBuild')
+          $biArgs = @('-SkipWebBuild','-SkipExeBuild','-SkipShellBuild','-SkipSoloBuild')
           if ('${{ inputs.skip_version_check }}' -eq 'true') { $biArgs += '-SkipVersionCheck' }
           & '${{ github.workspace }}\app\installer\Build-Installer.ps1' @biArgs
 

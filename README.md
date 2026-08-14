@@ -46,6 +46,16 @@ browser and keeps the server running in the background.
   long Dashboard, Game Config, Database, and Settings pages stay focused.
 - **Active Spice distinguishes live map instances** and hides stale historical
   rows unless battlegroup state cannot be read.
+- **Solo Mode preview** adds a separate host-local workspace for the current PTC
+  Solo save. It auto-detects or connects the local data folder, validates the
+  wrapped SQLite database, reads Funcom's 48 native Solo settings and edits only
+  applicable controls while the game is closed, and creates retained validated backups with guarded atomic
+  restore. It does not require Self-Hosted VM setup and is never exposed through
+  Remote Access. The `solo-1` test surface enables field-confirmed PTC item and
+  vehicle-kit grants, backpack or Developer Storage delivery, exact Solari/Scrip
+  balances, carried water-container filling, backup deletion, max specializations with
+  all rewards, complete Find the Fremen rewards, and Enable All Skills. Retail
+  support will use a separate adapter after its paths and schema are verified.
 
 ### New in v12.20
 
@@ -588,7 +598,7 @@ attribution violates the license — please don't.
 ## The portal — a page tour
 
 The window is split into a **left nav rail** (grouped under Server Health,
-PowerShell, Game Data, Database, and System) and a **page surface** on the
+PowerShell, Game Data, Solo Mode, Database, and System) and a **page surface** on the
 right. The persistent **header status bar** at the top shows live VM /
 battlegroup / port status, a **Refresh** button, and a prominent red **Shut
 down** button that gracefully stops the local `DuneServer.exe` portal process.
@@ -731,6 +741,30 @@ completes the port:
 When the battlegroup is offline the page falls back to a realistic **demo
 dataset** (clearly badged) so the tools are explorable out of the box and flip
 to live data automatically once the battlegroup is running.
+
+### Solo Mode
+
+The host-local **Solo Mode** preview is independent of VM, Kubernetes,
+PostgreSQL, RabbitMQ, and Self-Hosted setup. Select the Dune Solo `Saved`
+folder—or let DST find the current PTC save—and it validates wrapper version,
+SQLite integrity, foreign keys, schema fingerprint, and the single-character
+invariant. Read-only inspection is safe while the game runs. Settings, item,
+currency, fillable, and restore writes require every Dune process to be closed,
+retain the previous file, replace atomically, and verify the result. Inventory
+provides real Give Item and canonical Vehicle Kit controls with backpack or
+Developer Storage destination selection. Character provides exact Solari/Scrip
+balances and verified carried water-container filling. Progression can max all five
+specialization tracks with all 205 rewards, complete the verified 59-node Find
+the Fremen chain with Fremkit recipes/Prescience/third-slot rewards, and enable
+144 approved skills while preserving Voice Ignore and unknown PTC-only keys.
+Backups can be deleted individually with explicit confirmation.
+
+Before first use, launch the supported game build once, create or load Solo
+Mode, enter the world, wait for the character to finish loading, then quit
+fully to the desktop. This creates the real save and settings paths DST needs.
+After applying settings or restoring, launch Solo again and verify the result
+before removing any retained backup. Creating a validated save backup is
+live-read safe, although exiting first is preferred for a clean milestone.
 
 ### 🗄️ Database
 

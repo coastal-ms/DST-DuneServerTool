@@ -14,3 +14,10 @@ export function isLocalViewer(): boolean {
   const host = window.location.hostname
   return host === '127.0.0.1' || host === 'localhost' || host === '::1' || host === ''
 }
+
+export function isWindowsViewer(): boolean {
+  if (typeof navigator === 'undefined') return true
+  const details = navigator as Navigator & { userAgentData?: { platform?: string } }
+  const platform = details.userAgentData?.platform || navigator.platform || navigator.userAgent
+  return /windows|win32|win64/i.test(platform)
+}
