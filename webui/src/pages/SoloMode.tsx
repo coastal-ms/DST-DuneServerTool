@@ -788,6 +788,8 @@ export function SoloMode() {
               <dt className="text-text-muted">Platform</dt><dd>{status?.platform || runtime?.platform || 'Unknown'}</dd>
               <dt className="text-text-muted">Helper</dt><dd>{(runtime?.helperAvailable ?? status?.helperAvailable) ? 'Available' : 'Missing'}</dd>
               <dt className="text-text-muted">Profiles found</dt><dd>{discoveredProfiles.length}</dd>
+              <dt className="text-text-muted">Map seed</dt>
+              <dd className="font-mono">{inspection?.mapSeed ?? 'Unavailable'}</dd>
               <dt className="text-text-muted">Process state</dt>
               <dd>{runtime?.processes.length ? runtime.processes.map(process => `${process.name} (${process.pid})`).join(', ') : 'No Dune process detected'}</dd>
             </dl>

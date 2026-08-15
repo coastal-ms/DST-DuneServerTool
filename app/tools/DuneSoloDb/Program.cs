@@ -796,6 +796,13 @@ internal static partial class Program
                     );
                     INSERT INTO player_state (id, name, player_pawn_id, player_controller_id)
                     VALUES (1, 'Solo', 10, 11);
+                    CREATE TABLE coriolis_cycle (
+                        onerow_id INTEGER PRIMARY KEY,
+                        start_date_seconds REAL NOT NULL,
+                        end_date_seconds REAL NOT NULL,
+                        cycle_index INTEGER NOT NULL
+                    );
+                    INSERT INTO coriolis_cycle VALUES (1, 0, 1, 14);
                     CREATE TABLE actors (
                         id INTEGER PRIMARY KEY,
                         class TEXT,
@@ -954,6 +961,11 @@ internal static partial class Program
             WrapSqlite(sqlitePath, source);
             var inspection = InspectPath(source);
             EnsureWritableInspection(inspection);
+            if (inspection.MapSeed != 2)
+            {
+                throw new InvalidOperationException(
+                    $"Map seed expected 2 from cycle index 14, found {inspection.MapSeed}.");
+            }
 
             var backup = Path.Combine(root, "backups", "game-test.db");
             Backup(source, backup);
@@ -1210,6 +1222,7 @@ internal static partial class Program
                     "wrapper-v1-roundtrip",
                     "sqlite-integrity-and-foreign-keys",
                     "exactly-one-character",
+                    "map-seed-from-coriolis-cycle",
                     "retained-backup",
                     "atomic-restore-with-safety-backup",
                     "unsupported-wrapper-rejected",
@@ -1430,6 +1443,23 @@ internal static partial class Program
             ? ReadSupportedFillables(connection, waterCapacities)
             : Array.Empty<FillableItem>();
         var progression = ReadProgressionSummary(connection);
+        long? mapSeed = null;
+        var hasSingleCoriolisCycle = ScalarLong(
+            connection,
+            """
+            SELECT COUNT(*)
+            FROM sqlite_master
+            WHERE type = 'table'
+              AND name = 'coriolis_cycle';
+            """) == 1
+            && ScalarLong(connection, "SELECT COUNT(*) FROM coriolis_cycle;") == 1;
+        if (hasSingleCoriolisCycle)
+        {
+            var cycleIndex = ScalarLong(
+                connection,
+                "SELECT cycle_index FROM coriolis_cycle LIMIT 1;");
+            mapSeed = ((cycleIndex % 12) + 12) % 12;
+        }
 
         using var schemaCommand = connection.CreateCommand();
         schemaCommand.CommandText = """
@@ -1466,6 +1496,7 @@ internal static partial class Program
             CharacterCount: characterCount,
             SchemaFingerprint: Convert.ToHexString(
                 SHA256.HashData(Encoding.UTF8.GetBytes(schema.ToString()))).ToLowerInvariant(),
+            MapSeed: mapSeed,
             Inventories: inventories,
             Currencies: currencies,
             Fillables: fillables,
@@ -1879,6 +1910,7 @@ internal static partial class Program
         long TableCount,
         long CharacterCount,
         string SchemaFingerprint,
+        long? MapSeed,
         InventoryDestination[] Inventories,
         CurrencyBalances Currencies,
         FillableItem[] Fillables,

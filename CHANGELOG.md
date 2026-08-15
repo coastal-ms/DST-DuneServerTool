@@ -38,7 +38,8 @@ here cover everything those tags shipped.
   while preserving Voice Ignore and unknown PTC keys. The page includes
   first-use instructions: launch Solo once,
   enter the world to create the save, exit fully before writes, and verify
-  in-game after applying settings or restoring.
+  in-game after applying settings or restoring. Solo Overview reports the
+  detected 0-11 map seed from the current Coriolis cycle.
 
 ### Changed
 
