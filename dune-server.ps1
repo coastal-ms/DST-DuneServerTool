@@ -439,6 +439,11 @@ $sshUser       = 'dune'
 $vmHostMode    = if ($cfg.ContainsKey('VmHostMode') -and "$($cfg['VmHostMode'])".Trim() -match '^(?i:lan)$') { 'lan' } else { 'local' }
 $hvComputer    = if ($cfg.ContainsKey('HyperVHostIp')) { "$($cfg['HyperVHostIp'])".Trim() } else { '' }
 if ($vmHostMode -ne 'lan') { $hvComputer = '' }
+$script:DuneCliVmHostIdentity = if ($vmHostMode -eq 'lan' -and $hvComputer) {
+    "lan:$($hvComputer.ToLowerInvariant())"
+} else {
+    "local:$($env:COMPUTERNAME.ToLowerInvariant())"
+}
 
 # HyperVLanCredential.ps1 is self-contained (only needs advapi32 P/Invoke, no
 # dependency on this script's own $cfg/$configFile handling), so it's safe to
@@ -679,6 +684,42 @@ function Invoke-WithLiveCounter {
 }
 
 # --- Detect VM state ---
+$script:DuneCliKvpRecoveryAttempted = @{}
+
+function Test-DuneCliVmIp {
+    param([string]$Ip)
+    if (-not $Ip -or $Ip -notmatch '^\d+\.\d+\.\d+\.\d+$') { return $false }
+    try {
+        $probe = Invoke-DuneCliSshPayload -Ip $Ip `
+            -RemoteCommand 'printf DUNE_VM_IP_OK' -TimeoutSec 6
+        return ($probe.Exit -eq 0 -and $probe.Stdout.Trim() -eq 'DUNE_VM_IP_OK')
+    } catch {
+        return $false
+    }
+}
+
+function Resolve-DuneCliVmIp {
+    $ip = (Get-VMNetworkAdapter -VMName $vmName @hvSplat).IPAddresses |
+          Where-Object { $_ -match '^\d+\.\d+\.\d+\.\d+$' } |
+          Select-Object -First 1
+    if ($ip) { return [string]$ip }
+
+    $fallback = if ($cfg.ContainsKey('LastKnownVmIp')) {
+        "$($cfg['LastKnownVmIp'])".Trim()
+    } else { '' }
+    $fallbackHost = if ($cfg.ContainsKey('LastKnownVmHost')) {
+        "$($cfg['LastKnownVmHost'])".Trim()
+    } else { '' }
+    if ($fallbackHost -ne $script:DuneCliVmHostIdentity) { return $null }
+    if (-not (Test-DuneCliVmIp -Ip $fallback)) { return $null }
+
+    if (-not $script:DuneCliKvpRecoveryAttempted.ContainsKey($fallback)) {
+        $script:DuneCliKvpRecoveryAttempted[$fallback] = $true
+        Invoke-DuneHyperVGuestRecoveryInstall -Ip $fallback -Phase 'kvp-recovery' -ForceKvp
+    }
+    return $fallback
+}
+
 function Get-VmInfo {
     $vm = Get-VM -Name $vmName @hvSplat -ErrorAction SilentlyContinue
     $exists  = [bool]$vm
@@ -686,9 +727,7 @@ function Get-VmInfo {
     $running = $exists -and $vm.State -eq 'Running'
     $ip      = $null
     if ($running) {
-        $ip = (Get-VMNetworkAdapter -VMName $vmName @hvSplat).IPAddresses |
-              Where-Object { $_ -match '^\d+\.\d+\.\d+\.\d+$' } |
-              Select-Object -First 1
+        $ip = Resolve-DuneCliVmIp
     }
     return @{ Exists = $exists; State = $state; Running = $running; Ip = $ip }
 }
@@ -1254,6 +1293,112 @@ function Get-DuneDnatWatchScriptPath {
     return $null
 }
 
+function Get-DuneHyperVGuestRecoveryScriptPath {
+    $candidates = @(
+        (Join-Path $scriptDir 'resources\remote-scripts\dune-hyperv-guest-recovery-install.sh')
+        (Join-Path $scriptDir 'app\resources\remote-scripts\dune-hyperv-guest-recovery-install.sh')
+    )
+    foreach ($p in $candidates) {
+        if (Test-Path -LiteralPath $p) { return $p }
+    }
+    return $null
+}
+
+function Invoke-DuneCliSshPayload {
+    param(
+        [Parameter(Mandatory)][string]$Ip,
+        [Parameter(Mandatory)][string]$RemoteCommand,
+        [string]$StdinData = '',
+        [int]$TimeoutSec = 40
+    )
+    $psi = [Diagnostics.ProcessStartInfo]::new()
+    $psi.FileName = 'ssh'
+    $psi.RedirectStandardInput = [bool]$StdinData
+    $psi.RedirectStandardOutput = $true
+    $psi.RedirectStandardError = $true
+    $psi.UseShellExecute = $false
+    $psi.CreateNoWindow = $true
+    $args = @(
+        '-o','BatchMode=yes',
+        '-o','StrictHostKeyChecking=no',
+        '-o','LogLevel=QUIET',
+        '-o','ConnectTimeout=8',
+        '-o','ServerAliveInterval=5',
+        '-o','ServerAliveCountMax=2',
+        '-i',$sshKey,
+        "$sshUser@$Ip",
+        $RemoteCommand
+    )
+    if (-not $StdinData) { $args = @('-n') + $args }
+    $psi.Arguments = (@($args) | ForEach-Object {
+        if ($_ -match '[\s"]') { '"' + ($_ -replace '"','\"') + '"' } else { $_ }
+    }) -join ' '
+    $proc = [Diagnostics.Process]::new()
+    $proc.StartInfo = $psi
+    try {
+        [void]$proc.Start()
+        $stdoutTask = $proc.StandardOutput.ReadToEndAsync()
+        $stderrTask = $proc.StandardError.ReadToEndAsync()
+        if ($StdinData) {
+            $proc.StandardInput.Write($StdinData)
+            $proc.StandardInput.Close()
+        }
+        if (-not $proc.WaitForExit($TimeoutSec * 1000)) {
+            try { $proc.Kill() } catch {}
+            try { [void]$proc.WaitForExit(2000) } catch {}
+            return @{ Exit = -1; Stdout = ''; Stderr = "ssh timed out after ${TimeoutSec}s" }
+        }
+        [void]$proc.WaitForExit()
+        try { [void]$stdoutTask.Wait(5000) } catch {}
+        try { [void]$stderrTask.Wait(5000) } catch {}
+        $stdout = ''
+        $stderr = ''
+        try { $stdout = $stdoutTask.Result } catch {}
+        try { $stderr = $stderrTask.Result } catch {}
+        return @{
+            Exit = $proc.ExitCode
+            Stdout = $stdout
+            Stderr = $stderr
+        }
+    } finally {
+        $proc.Dispose()
+    }
+}
+
+function Invoke-DuneHyperVGuestRecoveryInstall {
+    param(
+        [Parameter(Mandatory)][string]$Ip,
+        [string]$Phase = 'pre-start',
+        [switch]$ForceKvp
+    )
+    $local = Get-DuneHyperVGuestRecoveryScriptPath
+    if (-not $local) {
+        Write-Host "  [$Phase] Skipped Hyper-V guest recovery (bundled script not found)." -ForegroundColor DarkYellow
+        return
+    }
+    try {
+        $raw = [IO.File]::ReadAllText($local)
+        $lf = $raw -replace "`r`n", "`n" -replace "`r", "`n"
+        $b64 = [Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes($lf))
+        $remoteCommand = if ($ForceKvp.IsPresent) {
+            'base64 -d | sudo -n env DUNE_HYPERV_FORCE_KVP_RESTART=1 sh'
+        } else {
+            'base64 -d | sudo -n sh'
+        }
+        $run = Invoke-DuneCliSshPayload -Ip $Ip -RemoteCommand $remoteCommand `
+            -StdinData $b64 -TimeoutSec 40
+        $runOut = (@($run.Stdout, $run.Stderr) | Where-Object { $_ }) -join "`n"
+        if ($run.Exit -eq 0 -and
+            $runOut -match 'DUNE_HYPERV_GUEST_RECOVERY_(OK|NOT_APPLICABLE)') {
+            Write-Host "  [$Phase] Hyper-V guest memory hot-add + KVP recovery reconciled." -ForegroundColor DarkGray
+        } else {
+            Write-Host "  [$Phase] Hyper-V guest recovery reported a problem (non-fatal): $runOut" -ForegroundColor DarkYellow
+        }
+    } catch {
+        Write-Host "  [$Phase] Hyper-V guest recovery failed (non-fatal): $($_.Exception.Message)" -ForegroundColor DarkYellow
+    }
+}
+
 function Invoke-DuneDnatWatchdogInstall {
     # Best-effort: stage the bundled DNAT self-heal watchdog installer to /tmp on
     # the VM (base64 over an ssh exec channel — no scp/sftp dependency), run it
@@ -1652,8 +1797,7 @@ while ($true) {
             $dots = ($dots % 3) + 1
             Write-Host -NoNewline "`rWaiting for VM to acquire an IP address$('.' * $dots)   "
             Start-Sleep -Seconds 1; $elapsed += 1
-            $ip = (Get-VMNetworkAdapter -VMName $vmName @hvSplat).IPAddresses |
-                  Where-Object { $_ -match '^\d+\.\d+\.\d+\.\d+$' } | Select-Object -First 1
+            $ip = Resolve-DuneCliVmIp
         }
         Write-Host ""
         if (-not $ip) { Write-Warning "Could not determine VM IP after $timeout seconds." }
@@ -1724,8 +1868,7 @@ while ($true) {
                 $dots = ($dots % 3) + 1
                 Write-Host -NoNewline ("`r  Waiting for IP$('.' * $dots)   ")
                 Start-Sleep -Seconds 1; $elapsed += 1
-                $newIp = (Get-VMNetworkAdapter -VMName $vmName @hvSplat).IPAddresses |
-                          Where-Object { $_ -match '^\d+\.\d+\.\d+\.\d+$' } | Select-Object -First 1
+                $newIp = Resolve-DuneCliVmIp
             }
             Write-Host ""
             if (-not $newIp) { Write-Warning "VM did not acquire IP within $(Format-Duration $timeout). Aborting."; continue }
@@ -1896,6 +2039,7 @@ while ($true) {
 
         # Refresh monitoring before issuing battlegroup start; reconciliation is
         # continuous and does not depend on a later readiness/green transition.
+        Invoke-DuneHyperVGuestRecoveryInstall -Ip $ip -Phase 'pre-startup'
         Invoke-DuneDnatWatchdogInstall -Ip $ip -Phase 'pre-startup'
 
         # ---- Step 3: battlegroup start ----
@@ -2067,8 +2211,7 @@ while ($true) {
             $dots = ($dots % 3) + 1
             Write-Host -NoNewline ("`r  Waiting for IP$('.' * $dots)   ")
             Start-Sleep -Seconds 1; $elapsed += 1
-            $newIp = (Get-VMNetworkAdapter -VMName $vmName @hvSplat).IPAddresses |
-                      Where-Object { $_ -match '^\d+\.\d+\.\d+\.\d+$' } | Select-Object -First 1
+            $newIp = Resolve-DuneCliVmIp
         }
         Write-Host ""
         if (-not $newIp) { Write-Warning "VM did not acquire IP within $(Format-Duration $timeout). Aborting."; continue }
@@ -2217,6 +2360,7 @@ while ($true) {
 
         # The VM reboot restarted OpenRC already; refresh the service definition
         # before battlegroup start so first-listener DNAT is readiness-independent.
+        Invoke-DuneHyperVGuestRecoveryInstall -Ip $ip -Phase 'pre-reboot-start'
         Invoke-DuneDnatWatchdogInstall -Ip $ip -Phase 'pre-reboot-start'
 
         # ---- Step 3: start battlegroup ----
@@ -2735,6 +2879,7 @@ fi
 
     if ($cmdName -eq 'start' -or $cmdName -eq 'restart') {
         # Refresh monitoring before issuing start/restart, not after readiness.
+        Invoke-DuneHyperVGuestRecoveryInstall -Ip $ip -Phase "pre-$cmdName"
         Invoke-DuneDnatWatchdogInstall -Ip $ip -Phase "pre-$cmdName"
     }
 

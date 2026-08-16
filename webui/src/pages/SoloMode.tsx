@@ -13,6 +13,7 @@ import {
   completeSoloFindTheFremen,
   enableSoloAllSkills,
   grantSoloItems,
+  maxSoloAugmentAttributes,
   restoreSoloBackup,
   saveSoloSettings,
   setSoloCurrencies,
@@ -555,6 +556,41 @@ export function SoloMode() {
         kind: 'ok',
         text: `${label} filled and verified. Previous save retained at ${result.safetyBackup}`,
       })
+      await Promise.all([statusState.refresh(), runtimeState.refresh(), backupsState.refresh()])
+    } catch (error) {
+      setNotice({ kind: 'err', text: error instanceof Error ? error.message : String(error) })
+    } finally {
+      setBusy(null)
+    }
+  }
+
+  const maxAugmentAttributes = async () => {
+    if (!selectionMatchesActive) {
+      setNotice({ kind: 'err', text: 'Connect and validate the selected Solo profile before changing augments.' })
+      return
+    }
+    if (gameRunning) {
+      setNotice({ kind: 'err', text: 'Close Dune: Awakening completely before changing Solo augments.' })
+      return
+    }
+    if (!window.confirm(
+      'Max every non-zero attribute roll on the Solo character’s carried augments?\n\n'
+      + 'This action preserves zero and non-numeric entries, excludes Developer Storage, '
+      + 'retains the current game.db, and verifies the write before replacing the save. Relog required.',
+    )) return
+    setBusy('max-augments')
+    setNotice(null)
+    try {
+      const result = await maxSoloAugmentAttributes(statusState.data?.profileToken ?? '')
+      setNotice(result.updated > 0
+        ? {
+            kind: 'ok',
+            text: `Maximized attributes on ${result.updated} carried augment(s). Previous save retained at ${result.safetyBackup}`,
+          }
+        : {
+            kind: 'warn',
+            text: 'No carried augments with attribute rolls were found. Developer Storage is intentionally excluded.',
+          })
       await Promise.all([statusState.refresh(), runtimeState.refresh(), backupsState.refresh()])
     } catch (error) {
       setNotice({ kind: 'err', text: error instanceof Error ? error.message : String(error) })
@@ -1147,10 +1183,29 @@ export function SoloMode() {
                 Give vehicle kit
               </button>
             </div>
+
+            <div className="card p-5 xl:col-span-2">
+              <h3 className="font-semibold mb-1">Max Augment Attributes</h3>
+              <p className="text-xs text-text-muted">
+                Matches DST’s Self-Hosted action: sets every non-zero numeric roll on carried augments to
+                the confirmed maximum while preserving zero and non-numeric entries. Developer Storage is excluded.
+              </p>
+              <div className="rounded border border-warning/30 bg-warning/5 p-3 mt-4 text-xs text-text-muted">
+                Field-confirmed in PTC. Close the game fully; DST retains the current save before writing. Relog after the action.
+              </div>
+              <button
+                className={`btn-primary w-full mt-4 justify-center ${SOLO_DISABLED_PRIMARY_CLASS}`}
+                disabled={!canMutateActiveProfile || gameRunning}
+                onClick={() => void maxAugmentAttributes()}
+              >
+                <Icon name={busy === 'max-augments' ? 'LoaderCircle' : 'Sparkles'} size={14} className={busy === 'max-augments' ? 'animate-spin' : ''} />
+                Max carried augment attributes
+              </button>
+            </div>
           </div>
 
           <div className="rounded border border-border bg-surface-2/40 px-4 py-3 text-xs text-text-muted">
-            Saved multi-item packages are not enabled yet. They will use this same backup-safe transaction path before joining the `solo-1` test build.
+            Saved multi-item packages are not enabled yet. They will use this same backup-safe transaction path before joining a future Solo preview build.
           </div>
         </div>
       )}

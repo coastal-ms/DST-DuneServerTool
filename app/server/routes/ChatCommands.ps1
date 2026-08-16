@@ -38,14 +38,71 @@ Register-DuneRoute -Method GET -Path '/api/gameplay/chat-commands' -Handler {
             channels   = @($state.channels)
             commands   = $commands
             packages   = $packages
+            teleports  = @(Read-DuneChatTeleports)
             pollSeconds = [int](Get-DuneChatCommandPollSeconds -State $state)
             pollChoices = @($script:DuneChatPollChoices)
             ready      = [bool]$ready.ready
             readyMessage = [string]$ready.message
             lastSeenAt = [string]$state.lastSeenAt
         }
+
     } catch {
         Write-DuneError -Response $res -Status 500 -Message "Chat command settings load failed: $($_.Exception.Message)"
+    }
+}
+
+Register-DuneRoute -Method POST -Path '/api/gameplay/chat-commands/teleports' -Handler {
+    param($req, $res, $routeParams, $body)
+    try {
+        if (-not ($body -is [hashtable])) {
+            Write-DuneError -Response $res -Status 400 -Message 'Body must be a JSON object.'
+            return
+        }
+        # Keep this name distinct from Invoke-WithDuneLock's own $Name parameter.
+        # PowerShell scriptblocks use dynamic scope, so reusing $name here caused
+        # every bookmark to be saved as the lock name instead of the admin's name.
+        $bookmarkName = [string]$body['name']
+        $pawnId = 0L
+        if (-not [int64]::TryParse([string]$body['pawn_id'], [ref]$pawnId)) {
+            Write-DuneError -Response $res -Status 400 -Message 'pawn_id is required.'
+            return
+        }
+        $ctx = Get-DuneDbContext
+        if (-not $ctx.ok) {
+            Write-DuneError -Response $res -Status 503 -Message $ctx.message
+            return
+        }
+        $result = Invoke-WithDuneLock -Name 'chat-teleport-bookmarks' -Script {
+            Save-DuneChatTeleportFromPawn -Ip $ctx.ip -Name $bookmarkName -PawnId $pawnId
+        }
+        if (-not $result.ok) {
+            Write-DuneError -Response $res -Status ([int]$result.status) -Message $result.error
+            return
+        }
+        Write-DuneJson -Response $res -Body $result
+    } catch {
+        Write-DuneError -Response $res -Status 500 -Message "Teleport bookmark save failed: $($_.Exception.Message)"
+    }
+}
+
+Register-DuneRoute -Method DELETE -Path '/api/gameplay/chat-commands/teleports' -Handler {
+    param($req, $res, $routeParams, $body)
+    try {
+        if (-not ($body -is [hashtable])) {
+            Write-DuneError -Response $res -Status 400 -Message 'Body must be a JSON object.'
+            return
+        }
+        $bookmarkName = [string]$body['name']
+        $result = Invoke-WithDuneLock -Name 'chat-teleport-bookmarks' -Script {
+            Remove-DuneChatTeleport -Name $bookmarkName
+        }
+        if (-not $result.ok) {
+            Write-DuneError -Response $res -Status ([int]$result.status) -Message $result.error
+            return
+        }
+        Write-DuneJson -Response $res -Body $result
+    } catch {
+        Write-DuneError -Response $res -Status 500 -Message "Teleport bookmark delete failed: $($_.Exception.Message)"
     }
 }
 
