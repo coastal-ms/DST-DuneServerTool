@@ -245,7 +245,7 @@ $script:DuneGameConfigSchema = @(
     @{ Section=$script:DuneGcSecContracts; Key='m_bIsEnabled'; File='game'; Type='bool'; Default='True'; Label='Contracts Enabled'; Help='Master toggle for the contracts subsystem. Also needs client-side apply.'; ClientApply=$true; Category='Encounters' }
 
     # --- Vehicles (engine cvars) ---
-    @{ Section=$script:DuneGcSecConsole; Key='dw.VehicleDurabilityDamageMultiplier'; File='engine'; Type='float'; Min=0; Max=10; Default='1.0'; Label='Vehicle Durability Damage'; Help='Durability damage multiplier for vehicles. 0 = off.'; Startup=$true; Category='Vehicles' }
+    @{ Section=$script:DuneGcSecConsole; Key='dw.VehicleDurabilityDamageMultiplier'; File='engine'; Type='float'; Min=0; Max=10; Default='1.0'; Label='Vehicle Durability Damage'; Help='Funcom: "Vehicle Durability Damage multiplier." Field testing found that 0 does not disable ordinary use wear or welding/repair-station permanent durability loss; exact damage scope remains unconfirmed.'; Startup=$true; Category='Experimental' }
 
     # --- Experimental binary-discovered engine cvars ---
     # These registered controls and their compiled help/defaults were decoded

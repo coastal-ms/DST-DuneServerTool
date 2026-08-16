@@ -36,6 +36,8 @@ tmp/
 # Desktop app build artifacts (built locally before each release)
 app/build/output/
 app/installer/output/
+app/tools/**/bin/
+app/tools/**/obj/
 
 # Pre-redaction screenshot originals — contain real PII, never commit
 docs/img/_originals/

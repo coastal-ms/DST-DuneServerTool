@@ -72,6 +72,10 @@ Source: "..\build\output\DuneServer.exe"; DestDir: "{app}"; Flags: ignoreversion
 ; enabled (the default). Lives beside DuneServer.exe so the launcher finds it.
 Source: "..\desktop\DuneShell\bin\Release\net10.0-windows\win-x64\publish\DuneShell.exe"; DestDir: "{app}"; Flags: ignoreversion
 
+; Host-local Solo Mode helper: validates Funcom's wrapped SQLite save format,
+; creates retained backups, and performs verified atomic restores.
+Source: "..\tools\DuneSoloDb\bin\Release\net10.0-windows\win-x64\publish\DuneSoloDb.exe"; DestDir: "{app}\tools\solo"; Flags: ignoreversion
+
 ; The business logic script (called via dune-server.ps1 -Cmd for the
 ; "spawn elevated console window" pattern used by the Commands page).
 Source: "..\..\dune-server.ps1"; DestDir: "{app}"; Flags: ignoreversion
