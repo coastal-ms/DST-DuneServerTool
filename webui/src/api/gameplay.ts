@@ -2215,6 +2215,13 @@ export function saveChatCommands(patch: {
 
 export function armChatTeleport(name: string, pawnId: number) {
   return api<{ ok: boolean; pending: ChatCommandsState['pendingTeleportCapture'] }>(
+    '/api/gameplay/chat-commands/teleports/capture',
+    { method: 'POST', body: JSON.stringify({ name, pawn_id: pawnId }) },
+  )
+}
+
+export function saveChatTeleport(name: string, pawnId: number) {
+  return api<{ ok: boolean; replaced: boolean; teleports: ChatCommandsState['teleports'] }>(
     '/api/gameplay/chat-commands/teleports',
     { method: 'POST', body: JSON.stringify({ name, pawn_id: pawnId }) },
   )

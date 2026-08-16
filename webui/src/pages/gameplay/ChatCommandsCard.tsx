@@ -8,6 +8,7 @@ import {
   getChatCommands,
   getPlayers,
   saveChatCommands,
+  saveChatTeleport,
 } from '../../api/gameplay'
 import { getSpicefields, saveSpicefield } from '../../api/gameconfig'
 import type { ChatCommandsState, SpicefieldType } from '../../api/types'
@@ -161,6 +162,7 @@ export function ChatCommandsCard() {
   const [deletingTeleport, setDeletingTeleport] = useState<string | null>(null)
   const [showTeleports, setShowTeleports] = useState(true)
   const [expandedTeleport, setExpandedTeleport] = useState<string | null>(null)
+  const [copiedCapture, setCopiedCapture] = useState(false)
 
   const load = useCallback(async () => {
     setLoading(true); setErr(null)
@@ -238,6 +240,25 @@ export function ChatCommandsCard() {
     }
   }
 
+  async function saveTeleportDirect() {
+    const name = captureName.trim()
+    if (!name || capturePawn <= 0) {
+      setErr('Choose an online player and enter a destination name.')
+      return
+    }
+    setSaving(true); setErr(null); setOk(null)
+    try {
+      const res = await saveChatTeleport(name, capturePawn)
+      setState(prev => (prev ? { ...prev, teleports: res.teleports ?? [] } : prev))
+      setCaptureName('')
+      setOk(res.replaced ? `Updated "${name}".` : `Saved "${name}".`)
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : String(e))
+    } finally {
+      setSaving(false)
+    }
+  }
+
   async function cancelTeleportCapture(token: string) {
     setSaving(true); setErr(null); setOk(null)
     try {
@@ -249,6 +270,16 @@ export function ChatCommandsCard() {
     } finally {
       setSaving(false)
     }
+  }
+
+  function copyCaptureCommand(token: string) {
+    const command = `!tp save ${token}`
+    void navigator.clipboard?.writeText(command).then(() => {
+      setCopiedCapture(true)
+      setTimeout(() => setCopiedCapture(false), 1500)
+    }).catch(() => {
+      setErr(`Could not copy automatically. Type: ${command}`)
+    })
   }
 
   async function removeTeleport(name: string) {
@@ -395,12 +426,13 @@ export function ChatCommandsCard() {
               {verb === 'tp' && (
                 <div className="mt-3 rounded border border-border bg-surface/50 p-3">
                   <div className="text-[11px] text-text-muted">
-                    Shared destinations are stored only on this DST PC. Arm a name and
-                    player here, then that player types <code>!tp save</code> while standing
-                    at the destination. This captures the live game-chat position instead
-                    of a potentially stale database transform. Teleports remain limited to
-                    the same map, partition and dimension. Replies and <code>!tp list</code>{' '}
-                    are public server broadcasts.
+                    Shared destinations are stored only on this DST PC. Use
+                    <strong> Save location</strong> for normal areas. If that location returns
+                    to a map opening point (observed in Hagga South), use
+                    <strong> Arm live capture</strong>; the selected player then types the
+                    one-time command at the destination. Teleports remain limited to the
+                    same map, partition and dimension. Replies and <code>!tp list</code> are
+                    public server broadcasts.
                   </div>
                   <div className="mt-3 grid gap-2 md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto]">
                     <select
@@ -422,20 +454,31 @@ export function ChatCommandsCard() {
                       maxLength={40}
                       disabled={saving || loading}
                       onChange={e => setCaptureName(e.target.value)}
-                      onKeyDown={e => { if (e.key === 'Enter') void armTeleportCapture() }}
+                      onKeyDown={e => { if (e.key === 'Enter') void saveTeleportDirect() }}
                       placeholder="Destination name"
                       className="px-2 py-1.5 rounded bg-surface border border-border text-text text-xs"
                     />
-                    <button
-                      type="button"
-                      className="btn-secondary"
-                      disabled={saving || loading || !canArmTeleport || capturePawn <= 0 || !captureName.trim()}
-                      onClick={() => void armTeleportCapture()}
-                    >
-                      <Icon name={saving ? 'Loader2' : 'MapPin'} size={13}
-                            className={saving ? 'animate-spin' : ''} />
-                      Arm capture
-                    </button>
+                    <div className="flex flex-wrap gap-2">
+                      <button
+                        type="button"
+                        className="btn-secondary"
+                        disabled={saving || loading || capturePawn <= 0 || !captureName.trim()}
+                        onClick={() => void saveTeleportDirect()}
+                      >
+                        <Icon name={saving ? 'Loader2' : 'MapPin'} size={13}
+                              className={saving ? 'animate-spin' : ''} />
+                        Save location
+                      </button>
+                      <button
+                        type="button"
+                        className="btn-secondary"
+                        disabled={saving || loading || !canArmTeleport || capturePawn <= 0 || !captureName.trim()}
+                        onClick={() => void armTeleportCapture()}
+                      >
+                        <Icon name="Radio" size={13} />
+                        Arm live capture
+                      </button>
+                    </div>
                   </div>
                   {pendingCapture && (
                     <div className="mt-3 rounded border border-warning/40 bg-warning/10 p-2 text-[11px]">
@@ -447,7 +490,14 @@ export function ChatCommandsCard() {
                         </span>
                         <button
                           type="button"
-                          className="ml-auto text-text-dim hover:text-danger"
+                          className="ml-auto text-text-dim hover:text-text"
+                          onClick={() => copyCaptureCommand(pendingCapture.token)}
+                        >
+                          {copiedCapture ? 'Copied' : 'Copy command'}
+                        </button>
+                        <button
+                          type="button"
+                          className="text-text-dim hover:text-danger"
                           disabled={saving || loading}
                           onClick={() => void cancelTeleportCapture(pendingCapture.token)}
                         >
@@ -463,7 +513,7 @@ export function ChatCommandsCard() {
                   )}
                   {!canArmTeleport && (
                     <div className="mt-2 text-[11px] text-warning">
-                      Turn on chat listening and <code>!tp</code> before arming a capture.
+                      Turn on chat listening and <code>!tp</code> before using live capture.
                     </div>
                   )}
                   {teleports.length === 0 ? (

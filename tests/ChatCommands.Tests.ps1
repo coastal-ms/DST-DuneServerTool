@@ -48,6 +48,15 @@ Describe 'ConvertFrom-DuneChatMessage' {
         [math]::Round($m.location.z, 2) | Should -Be 22060.14
     }
 
+    It 'does not coerce or throw on a malformed origin coordinate' {
+        $bad = $script:RealEnvelope.Replace(
+            '\"X\":-44405.412464',
+            '\"X\":\"not-a-coordinate\"')
+        $m = ConvertFrom-DuneChatMessage -Text $bad
+        $m | Should -Not -BeNullOrEmpty
+        $m.location.x | Should -Be 'not-a-coordinate'
+    }
+
     It 'finds the envelope even when wrapped in a larger term dump' {
         # basic_get hands back an Erlang term, so the envelope arrives embedded
         # in surrounding noise rather than as a clean JSON document.
@@ -415,6 +424,33 @@ Describe 'teleport bookmarks' {
         (Read-DuneChatTeleportCapture).name | Should -Be 'Base Camp'
     }
 
+    It 'still saves a normal online actor transform directly' {
+        Mock Invoke-DuneSqlQuery {
+            @{
+                ok = $true
+                columns = @('player_name', 'status', 'map', 'partition', 'dimension', 'x', 'y', 'z')
+                rows = ,@('Coastal', 'Online', 'HaggaBasin', '1', '0', '100.5', '200.25', '300')
+            }
+        }
+        $result = Save-DuneChatTeleportFromPawn -Ip 'vm' -Name 'CHome' -PawnId 42
+        $result.ok | Should -BeTrue
+        $result.bookmark.name | Should -Be 'CHome'
+        $result.bookmark.x | Should -Be 100.5
+        @(Read-DuneChatTeleports).Count | Should -Be 1
+    }
+
+    It 'rejects missing or non-finite direct coordinates' {
+        Mock Invoke-DuneSqlQuery {
+            @{
+                ok = $true
+                columns = @('player_name', 'status', 'map', 'partition', 'dimension', 'x', 'y', 'z')
+                rows = ,@('Coastal', 'Online', 'HaggaBasin', '1', '0', $null, 'NaN', 'Infinity')
+            }
+        }
+        (Save-DuneChatTeleportFromPawn -Ip 'vm' -Name 'Bad' -PawnId 42).ok | Should -BeFalse
+        @(Read-DuneChatTeleports).Count | Should -Be 0
+    }
+
     It 'refuses to capture an offline player' {
         Mock Invoke-DuneSqlQuery {
             @{
@@ -473,6 +509,24 @@ Describe 'teleport bookmarks' {
             -FuncomId 'Coastal#1' -CommandArgs @('save', 'OLD999') -Message $message
         $r.ok | Should -BeFalse
         $r.reply | Should -BeLike '*!tp save ABC123*'
+        @(Read-DuneChatTeleports).Count | Should -Be 0
+    }
+
+    It 'rejects incomplete or non-finite live coordinates' {
+        $now = [datetime]::UtcNow
+        Save-DuneChatTeleportCapture -Capture @{
+            name = 'South Camp'; key = 'south camp'; pawnId = 42
+            funcomId = 'Coastal#1'; playerName = 'Coastal'; token = 'ABC123'
+            map = 'HaggaBasin'; partition = 1; dimension = 0
+            armedAt = $now.ToString('o'); expiresAt = $now.AddMinutes(2).ToString('o')
+        }
+        $missing = Complete-DuneChatTeleportCapture -Ip 'vm' -FuncomId 'Coastal#1' `
+            -Token 'ABC123' -Location @{ x = $null; y = 2; z = 3 }
+        $missing.ok | Should -BeFalse
+
+        $nonFinite = Complete-DuneChatTeleportCapture -Ip 'vm' -FuncomId 'Coastal#1' `
+            -Token 'ABC123' -Location @{ x = [double]::NaN; y = 2; z = 3 }
+        $nonFinite.ok | Should -BeFalse
         @(Read-DuneChatTeleports).Count | Should -Be 0
     }
 

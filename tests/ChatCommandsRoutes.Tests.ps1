@@ -19,11 +19,12 @@ Describe 'Chat command route registration' {
                 'DELETE /api/gameplay/chat-commands/teleports/capture'
                 'GET /api/gameplay/chat-commands'
                 'POST /api/gameplay/chat-commands/teleports'
+                'POST /api/gameplay/chat-commands/teleports/capture'
                 'PUT /api/gameplay/chat-commands'
             )
     }
 
-    It 'passes the requested bookmark name into the armed capture' {
+    It 'passes the requested bookmark name into direct save' {
         $routes = @(& {
             function Register-DuneRoute {
                 param($Method, $Path, $Handler)
@@ -33,6 +34,36 @@ Describe 'Chat command route registration' {
         })
         $post = $routes | Where-Object {
             $_.method -eq 'POST' -and $_.path -eq '/api/gameplay/chat-commands/teleports'
+        } | Select-Object -First 1
+
+        $script:CapturedBookmarkName = ''
+        function Get-DuneDbContext { @{ ok = $true; ip = 'vm' } }
+        function Invoke-DuneChatTeleportFileLock {
+            param([scriptblock]$Script)
+            & $Script
+        }
+        function Save-DuneChatTeleportFromPawn {
+            param($Ip, [string]$Name, $PawnId)
+            $script:CapturedBookmarkName = $Name
+            @{ ok = $true; status = 200; teleports = @() }
+        }
+        function Write-DuneJson { param($Response, $Body) }
+        function Write-DuneError { param($Response, $Status, $Message); throw $Message }
+
+        & $post.handler $null $null $null @{ name = 'CHome'; pawn_id = 42 }
+        $script:CapturedBookmarkName | Should -Be 'CHome'
+    }
+
+    It 'passes the requested name into an armed live capture' {
+        $routes = @(& {
+            function Register-DuneRoute {
+                param($Method, $Path, $Handler)
+                [pscustomobject]@{ method = $Method; path = $Path; handler = $Handler }
+            }
+            . $script:RouteFile
+        })
+        $post = $routes | Where-Object {
+            $_.method -eq 'POST' -and $_.path -eq '/api/gameplay/chat-commands/teleports/capture'
         } | Select-Object -First 1
 
         $script:CapturedBookmarkName = ''
@@ -52,7 +83,7 @@ Describe 'Chat command route registration' {
         function Write-DuneJson { param($Response, $Body) }
         function Write-DuneError { param($Response, $Status, $Message); throw $Message }
 
-        & $post.handler $null $null $null @{ name = 'CHome'; pawn_id = 42 }
-        $script:CapturedBookmarkName | Should -Be 'CHome'
+        & $post.handler $null $null $null @{ name = 'Hagga South'; pawn_id = 42 }
+        $script:CapturedBookmarkName | Should -Be 'Hagga South'
     }
 }

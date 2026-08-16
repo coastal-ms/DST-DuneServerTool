@@ -480,6 +480,13 @@ Spice Melange:
   describe('in-game teleport bookmark API', () => {
     it('arms the selected online player location capture', async () => {
       await gp.armChatTeleport('Base Camp', 42)
+      expect(last().url).toBe('/api/gameplay/chat-commands/teleports/capture')
+      expect(last().method).toBe('POST')
+      expect(last().body).toEqual({ name: 'Base Camp', pawn_id: 42 })
+    })
+
+    it('saves the selected player database location directly', async () => {
+      await gp.saveChatTeleport('Base Camp', 42)
       expect(last().url).toBe('/api/gameplay/chat-commands/teleports')
       expect(last().method).toBe('POST')
       expect(last().body).toEqual({ name: 'Base Camp', pawn_id: 42 })

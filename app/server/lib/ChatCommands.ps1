@@ -322,11 +322,78 @@ function Set-DuneChatTeleportBookmark {
     return @{ ok = $true; bookmark = $Bookmark; replaced = $replaced; teleports = @($next) }
 }
 
+function Save-DuneChatTeleportFromPawn {
+    param([string]$Ip, [string]$Name, [long]$PawnId)
+    $nameValue = ConvertTo-DuneChatTeleportName -Name $Name
+    if (-not $nameValue) {
+        return @{ ok = $false; status = 400; error = "Name must be 1-$($script:DuneChatTeleportNameMax) characters, use letters/numbers/spaces/_/-/', and cannot start with 'list' or 'save'." }
+    }
+    if ($PawnId -le 0) { return @{ ok = $false; status = 400; error = 'pawn_id is required.' } }
+
+    $sql = @"
+SELECT COALESCE(ps.character_name, '') AS player_name,
+       COALESCE(ps.online_status::text, 'Offline') AS status,
+       COALESCE(a.map, '') AS map,
+       COALESCE(a.partition_id, 0)::text AS partition,
+       COALESCE(a.dimension_index, 0)::text AS dimension,
+       (a.transform).location.x AS x,
+       (a.transform).location.y AS y,
+       (a.transform).location.z AS z
+FROM dune.player_state ps
+JOIN dune.actors a ON a.id = ps.player_pawn_id
+WHERE ps.player_pawn_id = $PawnId::bigint
+LIMIT 1;
+"@
+    $res = Invoke-DuneSqlQuery -Ip $Ip -Sql $sql -ReadOnly $true -MaxRows 1 -TimeoutSec 10
+    if (-not $res.ok) { return @{ ok = $false; status = 500; error = "capture player location: $($res.error)" } }
+    $rows = ConvertTo-DuneRowMaps -Result $res
+    if ($rows.Count -eq 0) { return @{ ok = $false; status = 404; error = "Player pawn $PawnId was not found." } }
+    $row = $rows[0]
+    if ([string]$row['status'] -match '^(?i:offline)$') {
+        return @{ ok = $false; status = 409; error = 'The selected player must be online and standing at the destination.' }
+    }
+
+    $map = ([string]$row['map']).Trim()
+    $partition = [int64](ConvertTo-DuneInt $row['partition'])
+    $dimension = [int](ConvertTo-DuneInt $row['dimension'])
+    if (-not $map -or $partition -le 0) {
+        return @{ ok = $false; status = 409; error = 'The selected player has no current map/partition to capture.' }
+    }
+    if ($null -eq $row['x'] -or $null -eq $row['y'] -or $null -eq $row['z']) {
+        return @{ ok = $false; status = 409; error = 'The selected player has no current coordinates to capture.' }
+    }
+    try {
+        $x = [Convert]::ToDouble($row['x'], [cultureinfo]::InvariantCulture)
+        $y = [Convert]::ToDouble($row['y'], [cultureinfo]::InvariantCulture)
+        $z = [Convert]::ToDouble($row['z'], [cultureinfo]::InvariantCulture)
+    } catch {
+        return @{ ok = $false; status = 409; error = 'The selected player has no current coordinates to capture.' }
+    }
+    if ([double]::IsNaN($x) -or [double]::IsInfinity($x) -or
+        [double]::IsNaN($y) -or [double]::IsInfinity($y) -or
+        [double]::IsNaN($z) -or [double]::IsInfinity($z)) {
+        return @{ ok = $false; status = 409; error = 'The selected player has invalid coordinates to capture.' }
+    }
+    $bookmark = [ordered]@{
+        name = $nameValue
+        key = $nameValue.ToLowerInvariant()
+        map = $map
+        partition = $partition
+        dimension = $dimension
+        x = $x
+        y = $y
+        z = $z
+        capturedFrom = [string]$row['player_name']
+        capturedAt = ([datetime]::UtcNow).ToString('o')
+    }
+    return Set-DuneChatTeleportBookmark -Bookmark $bookmark
+}
+
 function Set-DuneChatTeleportCaptureForPawn {
     param([string]$Ip, [string]$Name, [long]$PawnId)
     $nameValue = ConvertTo-DuneChatTeleportName -Name $Name
     if (-not $nameValue) {
-        return @{ ok = $false; status = 400; error = "Name must be 1-$($script:DuneChatTeleportNameMax) characters, use letters/numbers/spaces/_/-/', and cannot be 'list'." }
+        return @{ ok = $false; status = 400; error = "Name must be 1-$($script:DuneChatTeleportNameMax) characters, use letters/numbers/spaces/_/-/', and cannot start with 'list' or 'save'." }
     }
     if ($PawnId -le 0) { return @{ ok = $false; status = 400; error = 'pawn_id is required.' } }
 
@@ -400,12 +467,22 @@ function Complete-DuneChatTeleportCapture {
     if (-not $Location) {
         return @{ ok = $false; status = 409; error = 'The game chat message did not include a live location.' }
     }
+    if (-not $Location.ContainsKey('x') -or -not $Location.ContainsKey('y') -or
+        -not $Location.ContainsKey('z') -or
+        $null -eq $Location.x -or $null -eq $Location.y -or $null -eq $Location.z) {
+        return @{ ok = $false; status = 409; error = 'The game chat message did not include complete live coordinates.' }
+    }
     try {
         $x = [Convert]::ToDouble($Location.x, [cultureinfo]::InvariantCulture)
         $y = [Convert]::ToDouble($Location.y, [cultureinfo]::InvariantCulture)
         $z = [Convert]::ToDouble($Location.z, [cultureinfo]::InvariantCulture)
     } catch {
         return @{ ok = $false; status = 409; error = 'The game chat message contained invalid live coordinates.' }
+    }
+    if ([double]::IsNaN($x) -or [double]::IsInfinity($x) -or
+        [double]::IsNaN($y) -or [double]::IsInfinity($y) -or
+        [double]::IsNaN($z) -or [double]::IsInfinity($z)) {
+        return @{ ok = $false; status = 409; error = 'The game chat message contained non-finite live coordinates.' }
     }
     $current = Get-DuneChatPlayerLocation -Ip $Ip -FuncomId $FuncomId
     if (-not $current.ok -or [string]$current.status -match '^(?i:offline)$') {
@@ -620,7 +697,9 @@ function ConvertFrom-DuneChatMessage {
         text      = $body
         timestamp = [string]$inner.m_Timestamp
         location  = if ($inner.m_OriginLocation) {
-            @{ x = [double]$inner.m_OriginLocation.X; y = [double]$inner.m_OriginLocation.Y; z = [double]$inner.m_OriginLocation.Z }
+            # Preserve raw values here. Capture completion owns validation so a
+            # missing/malformed field cannot become 0 or throw out of the parser.
+            @{ x = $inner.m_OriginLocation.X; y = $inner.m_OriginLocation.Y; z = $inner.m_OriginLocation.Z }
         } else { $null }
     }
 }

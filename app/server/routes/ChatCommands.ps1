@@ -70,9 +70,40 @@ Register-DuneRoute -Method POST -Path '/api/gameplay/chat-commands/teleports' -H
             Write-DuneError -Response $res -Status 503 -Message $ctx.message
             return
         }
+        $result = Invoke-DuneChatTeleportFileLock -Script {
+            Save-DuneChatTeleportFromPawn -Ip $ctx.ip -Name $bookmarkName -PawnId $pawnId
+        }
+        if (-not $result.ok) {
+            Write-DuneError -Response $res -Status ([int]$result.status) -Message $result.error
+            return
+        }
+        Write-DuneJson -Response $res -Body $result
+    } catch {
+        Write-DuneError -Response $res -Status 500 -Message "Teleport bookmark save failed: $($_.Exception.Message)"
+    }
+}
+
+Register-DuneRoute -Method POST -Path '/api/gameplay/chat-commands/teleports/capture' -Handler {
+    param($req, $res, $routeParams, $body)
+    try {
+        if (-not ($body -is [hashtable])) {
+            Write-DuneError -Response $res -Status 400 -Message 'Body must be a JSON object.'
+            return
+        }
+        $bookmarkName = [string]$body['name']
+        $pawnId = 0L
+        if (-not [int64]::TryParse([string]$body['pawn_id'], [ref]$pawnId)) {
+            Write-DuneError -Response $res -Status 400 -Message 'pawn_id is required.'
+            return
+        }
         $state = Read-DuneChatCommandsState
         if (-not $state.enabled -or -not $state.commands['tp'].enabled) {
-            Write-DuneError -Response $res -Status 409 -Message 'Turn on in-game command listening and !tp before arming a capture.'
+            Write-DuneError -Response $res -Status 409 -Message 'Turn on in-game command listening and !tp before arming a live capture.'
+            return
+        }
+        $ctx = Get-DuneDbContext
+        if (-not $ctx.ok) {
+            Write-DuneError -Response $res -Status 503 -Message $ctx.message
             return
         }
         $result = Invoke-DuneChatTeleportFileLock -Script {
@@ -84,7 +115,7 @@ Register-DuneRoute -Method POST -Path '/api/gameplay/chat-commands/teleports' -H
         }
         Write-DuneJson -Response $res -Body $result
     } catch {
-        Write-DuneError -Response $res -Status 500 -Message "Teleport bookmark save failed: $($_.Exception.Message)"
+        Write-DuneError -Response $res -Status 500 -Message "Live teleport capture arm failed: $($_.Exception.Message)"
     }
 }
 
