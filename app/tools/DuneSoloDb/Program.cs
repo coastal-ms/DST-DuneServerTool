@@ -3,6 +3,7 @@ using System.IO.Compression;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
+using System.Text.Json.Nodes;
 using Microsoft.Data.Sqlite;
 
 namespace DuneSoloDb;
@@ -64,6 +65,9 @@ internal static partial class Program
                     Require(options, "safety-backup"),
                     ParseItemId(RequireValue(options, "item-id")),
                     Require(options, "adapter")),
+                "max-augment-attributes" => MaxAugmentAttributes(
+                    Require(options, "input"),
+                    Require(options, "safety-backup")),
                 "max-specializations" => MaxSpecializations(
                     Require(options, "input"),
                     Require(options, "safety-backup"),
@@ -960,6 +964,30 @@ internal static partial class Program
                         0,
                         NULL
                     );
+                    INSERT INTO items VALUES (
+                        103,
+                        1,
+                        1,
+                        3,
+                        'TestAugment_Player',
+                        0,
+                        0,
+                        '{"FAugmentItemStats":[[],{"StatRolls":[0,0.25,"keep",1.003398]}]}',
+                        0,
+                        NULL
+                    );
+                    INSERT INTO items VALUES (
+                        104,
+                        2,
+                        1,
+                        0,
+                        'TestAugment_Storage',
+                        0,
+                        0,
+                        '{"FAugmentItemStats":[[],{"StatRolls":[0.5]}]}',
+                        0,
+                        NULL
+                    );
                     CREATE TABLE parent (id INTEGER PRIMARY KEY);
                     CREATE TABLE child (
                         id INTEGER PRIMARY KEY,
@@ -1007,6 +1035,49 @@ internal static partial class Program
             if (!rejected)
             {
                 throw new InvalidOperationException("Unsupported wrapper was not rejected.");
+            }
+
+            var augmentSafety = Path.Combine(root, "safety", "before-augment.db");
+            MaxAugmentAttributes(target, augmentSafety);
+            if (!File.Exists(augmentSafety))
+            {
+                throw new InvalidOperationException("Augment write did not retain a safety backup.");
+            }
+            var augmentSqlite = Path.Combine(root, "augment.sqlite");
+            File.WriteAllBytes(augmentSqlite, Unwrap(ReadStable(target)).SqliteBytes);
+            using (var connection = new SqliteConnection(new SqliteConnectionStringBuilder
+                   {
+                       DataSource = augmentSqlite,
+                       Mode = SqliteOpenMode.ReadOnly,
+                       Pooling = false
+                   }.ToString()))
+            {
+                connection.Open();
+                var playerStats = ScalarString(
+                    connection,
+                    "SELECT stats FROM items WHERE id = 103;");
+                var storageStats = ScalarString(
+                    connection,
+                    "SELECT stats FROM items WHERE id = 104;");
+                var playerRolls = GetAugmentRolls(JsonNode.Parse(playerStats));
+                var storageRolls = GetAugmentRolls(JsonNode.Parse(storageStats));
+                if (playerRolls is null
+                    || storageRolls is null
+                    || playerRolls.Count != 4
+                    || storageRolls.Count != 1
+                    || !TryReadJsonDecimal(playerRolls[0], out var playerZero)
+                    || playerZero != 0m
+                    || !TryReadJsonDecimal(playerRolls[1], out var playerChanged)
+                    || playerChanged != DuneAugmentMaxRoll
+                    || playerRolls[2]?.GetValue<string>() != "keep"
+                    || !TryReadJsonDecimal(playerRolls[3], out var playerMax)
+                    || playerMax != DuneAugmentMaxRoll
+                    || !TryReadJsonDecimal(storageRolls[0], out var storageValue)
+                    || storageValue != 0.5m)
+                {
+                    throw new InvalidOperationException(
+                        "Augment max did not preserve zero/non-numeric rolls or player inventory scope.");
+                }
             }
 
             var planPath = Path.Combine(root, "grant-plan.json");
@@ -1279,6 +1350,7 @@ internal static partial class Program
                     "retained-backup",
                     "atomic-restore-with-safety-backup",
                     "unsupported-wrapper-rejected",
+                    "offline-augment-max-with-safety-backup",
                     "offline-item-grant-with-capacity-and-safety-backup",
                     "offline-currency-write-with-safety-backup",
                     "offline-water-container-fills-with-safety-backups",

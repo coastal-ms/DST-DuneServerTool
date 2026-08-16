@@ -240,6 +240,28 @@ Describe 'Solo Mode write gates and settings backups' {
         }
     }
 
+    It 'builds a backup-safe augment update while the game is closed' {
+        $layout = New-TestSoloLayout
+        Save-DuneSoloState -DataRoot $layout.root -DbPath $layout.db | Out-Null
+        Mock Get-DuneSoloGameProcesses { @() }
+        Mock Invoke-DuneSoloHelper {
+            @{
+                ok = $true
+                updated = 2
+                safetyBackup = 'test'
+            }
+        }
+        $result = Invoke-DuneSoloMaxAugmentAttributes -Confirm 'MAX SOLO AUGMENT ATTRIBUTES'
+
+        $result.ok | Should -BeTrue
+        $result.updated | Should -Be 2
+        Assert-MockCalled Invoke-DuneSoloHelper -Times 1 -ParameterFilter {
+            $Command -eq 'max-augment-attributes' -and
+            $Arguments.input -eq $layout.db -and
+            $Arguments['safety-backup'] -like '*pre-augment*'
+        }
+    }
+
     It 'builds each PTC progression command with a retained backup' {
         $layout = New-TestSoloLayout
         Save-DuneSoloState -DataRoot $layout.root -DbPath $layout.db | Out-Null
@@ -285,6 +307,7 @@ Describe 'Solo Mode route security metadata' {
 
         foreach ($expected in @(
             '/api/solo/items/grant',
+            '/api/solo/items/augments/max',
             '/api/solo/currencies',
             '/api/solo/fillables/water',
             '/api/solo/progression/specializations/max',

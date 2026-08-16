@@ -22,6 +22,11 @@ here cover everything those tags shipped.
   overwrite the database, fills and verifies the exact cistern classes, then
   starts the battlegroup again. Orphaned structures, windtraps, and blood-water
   extractors are excluded.
+- In-game commands add admin-managed shared teleport destinations. An admin can
+  capture and name an online player's current location in DST; players can use
+  `!tp list` and `!tp <name>` to teleport themselves while on the same map,
+  partition and dimension. Destinations stay local to that DST installation,
+  the command is off by default, and each player has a configurable cooldown.
 - Solo Mode adds a host-local PTC preview workspace that operates independently
   of Self-Hosted VM setup. It auto-detects or connects a local Solo save,
   validates Funcom's wrapped SQLite database, reads all 48 native Solo settings,
@@ -41,10 +46,19 @@ here cover everything those tags shipped.
   in-game after applying settings or restoring. Solo Overview reports the
   detected 0-11 map seed from the current Coriolis cycle. Item grants apply
   verified fallback stack limits for picker-only ammo and consumables whose
-  shared catalog entries lack item metadata.
+  shared catalog entries lack item metadata. Solo Inventory can also max every
+  non-zero numeric attribute roll on carried augments while preserving zero
+  and non-numeric entries; the action retains a recovery backup and excludes
+  Developer Storage. Field testing confirmed the maxed rolls appear in game
+  after login.
 
 ### Changed
 
+- Hyper-V Dynamic Memory guests now persist automatic hot-added-memory onlining
+  and recover a stale KVP integration daemon. DST remembers a verified guest IP
+  and uses it only when SSH confirms that Hyper-V's IP signal is temporarily
+  blank, preventing a healthy battlegroup from appearing Unknown after a
+  guest-side OOM.
 - Vehicle Durability Damage moved back to Experimental after field testing found
   that 0 does not disable ordinary use wear or permanent durability loss from
   welding/repair-station repairs. Its exact damage scope remains unconfirmed.

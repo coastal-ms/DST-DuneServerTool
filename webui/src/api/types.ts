@@ -467,6 +467,19 @@ export type ChatCommandSetting = {
   maxQty?: number
 }
 
+export type ChatTeleportBookmark = {
+  name: string
+  key: string
+  map: string
+  partition: number
+  dimension: number
+  x: number
+  y: number
+  z: number
+  capturedFrom: string
+  capturedAt: string
+}
+
 export type ChatCommandsState = {
   ok: boolean
   enabled: boolean
@@ -474,6 +487,7 @@ export type ChatCommandsState = {
   channels: string[]
   commands: Record<string, ChatCommandSetting>
   packages?: string[]      // kit names available to !kit, from the package store
+  teleports?: ChatTeleportBookmark[]
   pollSeconds?: number
   pollChoices?: number[]
   ready?: boolean

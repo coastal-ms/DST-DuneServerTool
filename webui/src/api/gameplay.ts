@@ -2212,6 +2212,20 @@ export function saveChatCommands(patch: {
     body: JSON.stringify(patch),
   })
 }
+
+export function saveChatTeleport(name: string, pawnId: number) {
+  return api<{ ok: boolean; replaced: boolean; teleports: ChatCommandsState['teleports'] }>(
+    '/api/gameplay/chat-commands/teleports',
+    { method: 'POST', body: JSON.stringify({ name, pawn_id: pawnId }) },
+  )
+}
+
+export function deleteChatTeleport(name: string) {
+  return api<{ ok: boolean; removed: string; teleports: ChatCommandsState['teleports'] }>(
+    '/api/gameplay/chat-commands/teleports',
+    { method: 'DELETE', body: JSON.stringify({ name }) },
+  )
+}
 // ---------------------------------------------------------------------------
 // Welcome Back package
 // ---------------------------------------------------------------------------

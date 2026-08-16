@@ -102,7 +102,7 @@ body:
         - Web portal — Game Config — client-side INI (Game.ini / Engine.ini opt-in / preview / Open in Notepad / client-apply reminder / Player config hand-out list)
         - Web portal — Game Config — Landsraad (contract choices / daily bonus cap / active contracts / abandon cooldown / client Data struct)
         - Web portal — Gameplay Admin — Overview
-        - Web portal — Gameplay Admin — Overview — In-game commands (!kit / !item / !vehicle / !water / !small / !medium / !large — listening, per-command toggles + cooldowns, !item quantity cap, chat channels, reply heading)
+        - Web portal — Gameplay Admin — Overview — In-game commands (!kit / !item / !vehicle / !water / !tp / !small / !medium / !large — shared teleport destinations, listening, per-command toggles + cooldowns, !item quantity cap, chat channels, reply heading)
         - Web portal — Gameplay Admin — Overview — Welcome back (returning-player package / days away / announce)
         - Web portal — Gameplay Admin — Market / Market Bot
         - Web portal — Gameplay Admin — Players
