@@ -83,13 +83,47 @@ function Get-DuneVmStatus {
         # as a React child`). See dst-vm-ip-object-render-bug on Infinate Scaled
         # host, 2026-07-05.
         $ip = if ($null -ne $ip) { [string]$ip } else { '' }
+        $ipSource = if ($ip) { 'hyperv' } else { 'none' }
+        if ($ip -and
+            (Get-Command Set-DuneLastKnownVmIp -ErrorAction SilentlyContinue) -and
+            (Get-Command Get-DuneLastKnownVmIp -ErrorAction SilentlyContinue) -and
+            (Get-Command Test-DuneKnownVmIp -ErrorAction SilentlyContinue)) {
+            try {
+                if ((Get-DuneLastKnownVmIp) -ne $ip -and
+                    (Test-DuneKnownVmIp -Ip $ip)) {
+                    [void](Set-DuneLastKnownVmIp -Ip $ip)
+                }
+            } catch {}
+        } elseif ($vm.State -eq 'Running' -and
+                  (Get-Command Get-DuneLastKnownVmIp -ErrorAction SilentlyContinue) -and
+                  (Get-Command Test-DuneKnownVmIp -ErrorAction SilentlyContinue)) {
+            $fallbackIp = ''
+            try { $fallbackIp = Get-DuneLastKnownVmIp } catch {}
+            if ($fallbackIp) {
+                try {
+                    if (Test-DuneKnownVmIp -Ip $fallbackIp) {
+                        $ip = $fallbackIp
+                        $ipSource = 'last-known'
+                    }
+                } catch {}
+            }
+        }
+        $guestRecovery = $null
+        if ($ip -and (Get-Command Invoke-DuneHyperVGuestRecovery -ErrorAction SilentlyContinue)) {
+            try {
+                $guestRecovery = Invoke-DuneHyperVGuestRecovery -Ip $ip `
+                    -ForceKvp:($ipSource -eq 'last-known')
+            } catch {}
+        }
         return @{
             exists  = $true
             name    = $script:DuneVmName
             state   = $vm.State.ToString()
             running = ($vm.State -eq 'Running')
             ip      = $ip
+            ipSource = $ipSource
             uptime  = if ($vm.Uptime) { [int]$vm.Uptime.TotalSeconds } else { 0 }
+            guestRecovery = $guestRecovery
         }
     } catch {
         return @{

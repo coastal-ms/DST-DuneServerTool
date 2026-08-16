@@ -49,6 +49,11 @@ here cover everything those tags shipped.
 
 ### Changed
 
+- Hyper-V Dynamic Memory guests now persist automatic hot-added-memory onlining
+  and recover a stale KVP integration daemon. DST remembers a verified guest IP
+  and uses it only when SSH confirms that Hyper-V's IP signal is temporarily
+  blank, preventing a healthy battlegroup from appearing Unknown after a
+  guest-side OOM.
 - Vehicle Durability Damage moved back to Experimental after field testing found
   that 0 does not disable ordinary use wear or permanent durability loss from
   welding/repair-station repairs. Its exact damage scope remains unconfirmed.

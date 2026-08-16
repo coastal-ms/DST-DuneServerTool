@@ -33,6 +33,8 @@ $script:DuneConfigKeys = @(
     'LocalBackupMirrorFolder',
     'VmHostMode',
     'HyperVHostIp',
+    'LastKnownVmIp',
+    'LastKnownVmHost',
     'DdBaseBackupGuard'
 )
 
@@ -245,9 +247,23 @@ function Save-DuneConfig {
     param([hashtable]$Config)
     $path = Get-DuneConfigPath
     $existing = Read-DuneConfigRaw
+    $hostChanged = $false
+    foreach ($hostKey in @('VmHostMode', 'HyperVHostIp')) {
+        if ($Config.ContainsKey($hostKey) -and
+            -not [string]::Equals(
+                "$($existing[$hostKey])".Trim(),
+                "$($Config[$hostKey])".Trim(),
+                [StringComparison]::OrdinalIgnoreCase)) {
+            $hostChanged = $true
+        }
+    }
     foreach ($k in $Config.Keys) {
         if ($script:DuneConfigKeys -notcontains $k) { continue }
         $existing[$k] = "$($Config[$k])"
+    }
+    if ($hostChanged) {
+        $existing['LastKnownVmIp'] = ''
+        $existing['LastKnownVmHost'] = ''
     }
     $lines = [System.Collections.Generic.List[string]]::new()
     $lines.Add('# Dune Server configuration')
