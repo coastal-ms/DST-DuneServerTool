@@ -50,8 +50,10 @@ $script:DuneChatDrainMax     = 25
 
 $script:DuneChatStateFile = $null
 $script:DuneChatTeleportsFile = $null
+$script:DuneChatTeleportCaptureFile = $null
 $script:DuneChatTeleportMax = 20
 $script:DuneChatTeleportNameMax = 40
+$script:DuneChatTeleportCaptureTtlSeconds = 120
 
 function Get-DuneChatCommandsStatePath {
     if ($script:DuneChatStateFile) { return $script:DuneChatStateFile }
@@ -71,12 +73,33 @@ function Get-DuneChatTeleportsPath {
     return (Join-Path $dir 'teleport-bookmarks.json')
 }
 
+function Get-DuneChatTeleportCapturePath {
+    if ($script:DuneChatTeleportCaptureFile) { return $script:DuneChatTeleportCaptureFile }
+    return (Join-Path (Split-Path -Parent (Get-DuneChatTeleportsPath)) 'teleport-capture.json')
+}
+
+function Invoke-DuneChatTeleportFileLock {
+    param([Parameter(Mandatory)][scriptblock]$Script, [int]$TimeoutSeconds = 10)
+    $mutex = [Threading.Mutex]::new($false, 'Local\DuneServerTool.ChatTeleportBookmarks')
+    $acquired = $false
+    try {
+        try { $acquired = $mutex.WaitOne($TimeoutSeconds * 1000) }
+        catch [Threading.AbandonedMutexException] { $acquired = $true }
+        if (-not $acquired) { throw 'Teleport bookmarks are busy. Try again.' }
+        return (& $Script)
+    } finally {
+        if ($acquired) { try { $mutex.ReleaseMutex() } catch {} }
+        $mutex.Dispose()
+    }
+}
+
 function ConvertTo-DuneChatTeleportName {
     param([string]$Name)
     $value = ([string]$Name).Trim() -replace '\s+', ' '
     if (-not $value -or $value.Length -gt $script:DuneChatTeleportNameMax) { return '' }
     if ($value -notmatch "^[A-Za-z0-9][A-Za-z0-9 _'-]*$") { return '' }
-    if ($value -ieq 'list' -or $value -ieq 'chat-teleport-bookmarks') { return '' }
+    if ($value -ieq 'chat-teleport-bookmarks' -or
+        $value -match '^(?i:(?:list|save))(?:\s|$)') { return '' }
     return $value
 }
 
@@ -99,12 +122,44 @@ function Read-DuneChatTeleports {
 
     $items = @()
     $keys = @{}
+    $reservedKeys = @{}
+    foreach ($entry in @($parsed)) {
+        $rawName = ([string]$entry.name).Trim()
+        if ($rawName -ieq 'chat-teleport-bookmarks' -or
+            $rawName -match '^(?i:(?:list|save))(?:\s|$)') { continue }
+        $reservedName = ConvertTo-DuneChatTeleportName -Name $rawName
+        if (-not $reservedName) { throw 'Teleport bookmarks contain an invalid or reserved name.' }
+        $reservedKey = $reservedName.ToLowerInvariant()
+        if ($reservedKeys.ContainsKey($reservedKey)) {
+            throw "Teleport bookmarks contain duplicate name '$reservedName'."
+        }
+        $reservedKeys[$reservedKey] = $true
+    }
     foreach ($entry in @($parsed)) {
         # Preview 4's first field build accidentally saved the named-lock value
         # instead of the requested bookmark name. Ignore that exact internal
         # sentinel so the next real save replaces the broken one cleanly.
         if ([string]$entry.name -ieq 'chat-teleport-bookmarks') { continue }
-        $name = ConvertTo-DuneChatTeleportName -Name ([string]$entry.name)
+        $rawName = ([string]$entry.name).Trim()
+        $legacyCommandName = $rawName -match '^(?i:(?:list|save))(?:\s|$)'
+        if ($legacyCommandName) {
+            $base = "legacy-$rawName"
+            if ($base.Length -gt $script:DuneChatTeleportNameMax) {
+                $base = $base.Substring(0, $script:DuneChatTeleportNameMax).Trim()
+            }
+            $name = ConvertTo-DuneChatTeleportName -Name $base
+            $suffix = 2
+            while ($name -and (
+                    $reservedKeys.ContainsKey($name.ToLowerInvariant()) -or
+                    $keys.ContainsKey($name.ToLowerInvariant()))) {
+                $tail = "-$suffix"
+                $stemLength = $script:DuneChatTeleportNameMax - $tail.Length
+                $name = ConvertTo-DuneChatTeleportName -Name ($base.Substring(0, [math]::Min($base.Length, $stemLength)).Trim() + $tail)
+                $suffix++
+            }
+        } else {
+            $name = ConvertTo-DuneChatTeleportName -Name $rawName
+        }
         if (-not $name) { throw 'Teleport bookmarks contain an invalid or reserved name.' }
         $key = $name.ToLowerInvariant()
         if ($keys.ContainsKey($key)) { throw "Teleport bookmarks contain duplicate name '$name'." }
@@ -169,7 +224,105 @@ function Save-DuneChatTeleports {
     }
 }
 
-function Save-DuneChatTeleportFromPawn {
+function Read-DuneChatTeleportCapture {
+    param([switch]$IncludeConsumed)
+    $path = Get-DuneChatTeleportCapturePath
+    if (-not (Test-Path -LiteralPath $path)) { return $null }
+    try {
+        $entry = Get-Content -LiteralPath $path -Raw -ErrorAction Stop |
+            ConvertFrom-Json -ErrorAction Stop
+    } catch {
+        throw "Could not read pending teleport capture: $($_.Exception.Message)"
+    }
+    $expires = [datetime]::MinValue
+    if (-not [datetime]::TryParse(
+            [string]$entry.expiresAt, [cultureinfo]::InvariantCulture,
+            [Globalization.DateTimeStyles]::RoundtripKind, [ref]$expires)) {
+        throw 'Pending teleport capture has an invalid expiry.'
+    }
+    if ($expires.ToUniversalTime() -le [datetime]::UtcNow) { return $null }
+    $consumedAt = [string]$entry.consumedAt
+    if ($consumedAt -and -not $IncludeConsumed) { return $null }
+    return [ordered]@{
+        name = [string]$entry.name
+        key = [string]$entry.key
+        pawnId = [int64]$entry.pawnId
+        funcomId = [string]$entry.funcomId
+        playerName = [string]$entry.playerName
+        token = [string]$entry.token
+        map = [string]$entry.map
+        partition = [int64]$entry.partition
+        dimension = [int]$entry.dimension
+        armedAt = [string]$entry.armedAt
+        expiresAt = [string]$entry.expiresAt
+        consumedAt = $consumedAt
+    }
+}
+
+function Save-DuneChatTeleportCapture {
+    param([System.Collections.IDictionary]$Capture)
+    $path = Get-DuneChatTeleportCapturePath
+    $temp = "$path.$([guid]::NewGuid().ToString('N')).tmp"
+    try {
+        $json = ConvertTo-Json -InputObject $Capture -Depth 4
+        [IO.File]::WriteAllText($temp, $json, (New-Object Text.UTF8Encoding($false)))
+        Move-Item -LiteralPath $temp -Destination $path -Force
+    } catch {
+        throw "Could not save pending teleport capture: $($_.Exception.Message)"
+    } finally {
+        Remove-Item -LiteralPath $temp -Force -ErrorAction SilentlyContinue
+    }
+}
+
+function Remove-DuneChatTeleportCapture {
+    $path = Get-DuneChatTeleportCapturePath
+    if (-not (Test-Path -LiteralPath $path)) { return }
+    Remove-Item -LiteralPath $path -Force -ErrorAction Stop
+    if (Test-Path -LiteralPath $path) {
+        throw 'Pending teleport capture could not be removed.'
+    }
+}
+
+function Cancel-DuneChatTeleportCapture {
+    param([string]$Token)
+    if ([string]::IsNullOrWhiteSpace($Token)) {
+        return @{ ok = $false; status = 400; error = 'Capture token is required.' }
+    }
+    $pending = Read-DuneChatTeleportCapture -IncludeConsumed
+    if (-not $pending) {
+        return @{ ok = $false; status = 404; error = 'No pending teleport capture exists.' }
+    }
+    if ([string]$pending.token -ine $Token.Trim()) {
+        return @{ ok = $false; status = 409; error = 'A newer teleport capture replaced the one shown. Refresh DST before cancelling.' }
+    }
+    Remove-DuneChatTeleportCapture
+    return @{ ok = $true }
+}
+
+function Set-DuneChatTeleportBookmark {
+    param([hashtable]$Bookmark)
+    $current = @(Read-DuneChatTeleports)
+    $next = @()
+    $replaced = $false
+    foreach ($item in $current) {
+        if ([string]$item.key -eq [string]$Bookmark.key) {
+            $next += $Bookmark
+            $replaced = $true
+        } else {
+            $next += $item
+        }
+    }
+    if (-not $replaced) {
+        if ($next.Count -ge $script:DuneChatTeleportMax) {
+            return @{ ok = $false; status = 409; error = "Teleport bookmark limit reached ($($script:DuneChatTeleportMax))." }
+        }
+        $next += $Bookmark
+    }
+    [void](Save-DuneChatTeleports -Bookmarks $next)
+    return @{ ok = $true; bookmark = $Bookmark; replaced = $replaced; teleports = @($next) }
+}
+
+function Set-DuneChatTeleportCaptureForPawn {
     param([string]$Ip, [string]$Name, [long]$PawnId)
     $nameValue = ConvertTo-DuneChatTeleportName -Name $Name
     if (-not $nameValue) {
@@ -180,14 +333,13 @@ function Save-DuneChatTeleportFromPawn {
     $sql = @"
 SELECT COALESCE(ps.character_name, '') AS player_name,
        COALESCE(ps.online_status::text, 'Offline') AS status,
+       COALESCE(account.funcom_id, '') AS funcom_id,
        COALESCE(a.map, '') AS map,
        COALESCE(a.partition_id, 0)::text AS partition,
-       COALESCE(a.dimension_index, 0)::text AS dimension,
-       (a.transform).location.x AS x,
-       (a.transform).location.y AS y,
-       (a.transform).location.z AS z
+       COALESCE(a.dimension_index, 0)::text AS dimension
 FROM dune.player_state ps
 JOIN dune.actors a ON a.id = ps.player_pawn_id
+JOIN dune.accounts account ON account.id = ps.account_id
 WHERE ps.player_pawn_id = $PawnId::bigint
 LIMIT 1;
 "@
@@ -201,52 +353,93 @@ LIMIT 1;
         return @{ ok = $false; status = 409; error = 'The selected player must be online and standing at the destination.' }
     }
 
+    $funcomId = ([string]$row['funcom_id']).Trim()
+    if (-not $funcomId) {
+        return @{ ok = $false; status = 409; error = 'The selected player has no chat identity to arm.' }
+    }
     $map = ([string]$row['map']).Trim()
     $partition = [int64](ConvertTo-DuneInt $row['partition'])
     $dimension = [int](ConvertTo-DuneInt $row['dimension'])
     if (-not $map -or $partition -le 0) {
-        return @{ ok = $false; status = 409; error = 'The selected player has no current map/partition to capture.' }
+        return @{ ok = $false; status = 409; error = 'The selected player current map/partition is unavailable.' }
     }
-    try {
-        $x = [Convert]::ToDouble($row['x'], [cultureinfo]::InvariantCulture)
-        $y = [Convert]::ToDouble($row['y'], [cultureinfo]::InvariantCulture)
-        $z = [Convert]::ToDouble($row['z'], [cultureinfo]::InvariantCulture)
-    } catch {
-        return @{ ok = $false; status = 409; error = 'The selected player has no current coordinates to capture.' }
-    }
-
-    $bookmark = [ordered]@{
+    $now = [datetime]::UtcNow
+    $token = [guid]::NewGuid().ToString('N').Substring(0, 6).ToUpperInvariant()
+    $capture = [ordered]@{
         name = $nameValue
         key = $nameValue.ToLowerInvariant()
+        pawnId = $PawnId
+        funcomId = $funcomId
+        playerName = [string]$row['player_name']
+        token = $token
         map = $map
         partition = $partition
         dimension = $dimension
+        armedAt = $now.ToString('o')
+        expiresAt = $now.AddSeconds($script:DuneChatTeleportCaptureTtlSeconds).ToString('o')
+    }
+    Save-DuneChatTeleportCapture -Capture $capture
+    return @{ ok = $true; pending = $capture }
+}
+
+function Complete-DuneChatTeleportCapture {
+    param([string]$Ip, [string]$FuncomId, [string]$Token, [hashtable]$Location)
+    $pending = Read-DuneChatTeleportCapture -IncludeConsumed
+    if (-not $pending) {
+        return @{ ok = $false; status = 404; error = 'No admin-armed teleport capture is waiting. Arm one in DST first.' }
+    }
+    if ($pending.consumedAt) {
+        return @{ ok = $false; status = 409; error = 'That capture code was already consumed. Arm a new capture in DST.' }
+    }
+    if ([string]$pending.funcomId -ine [string]$FuncomId) {
+        return @{ ok = $false; status = 403; error = "The pending capture is waiting for $($pending.playerName), not this player." }
+    }
+    if (-not $Token -or [string]$pending.token -ine $Token.Trim()) {
+        return @{ ok = $false; status = 403; error = "Use the exact capture command shown in DST: !tp save $($pending.token)" }
+    }
+    if (-not $Location) {
+        return @{ ok = $false; status = 409; error = 'The game chat message did not include a live location.' }
+    }
+    try {
+        $x = [Convert]::ToDouble($Location.x, [cultureinfo]::InvariantCulture)
+        $y = [Convert]::ToDouble($Location.y, [cultureinfo]::InvariantCulture)
+        $z = [Convert]::ToDouble($Location.z, [cultureinfo]::InvariantCulture)
+    } catch {
+        return @{ ok = $false; status = 409; error = 'The game chat message contained invalid live coordinates.' }
+    }
+    $current = Get-DuneChatPlayerLocation -Ip $Ip -FuncomId $FuncomId
+    if (-not $current.ok -or [string]$current.status -match '^(?i:offline)$') {
+        return @{ ok = $false; status = 409; error = 'Could not resolve the player current map for capture.' }
+    }
+    if (-not $current.map -or [int64]$current.partition -le 0) {
+        return @{ ok = $false; status = 409; error = 'The player current map/partition is unavailable.' }
+    }
+    if ([string]$current.map -ine [string]$pending.map -or
+        [int64]$current.partition -ne [int64]$pending.partition -or
+        [int]$current.dimension -ne [int]$pending.dimension) {
+        return @{ ok = $false; status = 409; error = 'The player changed map, partition, or dimension after capture was armed. Arm it again at the destination.' }
+    }
+
+    $bookmark = [ordered]@{
+        name = [string]$pending.name
+        key = [string]$pending.key
+        map = [string]$pending.map
+        partition = [int64]$pending.partition
+        dimension = [int]$pending.dimension
         x = $x
         y = $y
         z = $z
-        capturedFrom = [string]$row['player_name']
+        capturedFrom = [string]$pending.playerName
         capturedAt = ([datetime]::UtcNow).ToString('o')
     }
-
-    $current = @(Read-DuneChatTeleports)
-    $next = @()
-    $replaced = $false
-    foreach ($item in $current) {
-        if ([string]$item.key -eq [string]$bookmark.key) {
-            $next += $bookmark
-            $replaced = $true
-        } else {
-            $next += $item
-        }
+    $pending.consumedAt = ([datetime]::UtcNow).ToString('o')
+    Save-DuneChatTeleportCapture -Capture $pending
+    $result = Set-DuneChatTeleportBookmark -Bookmark $bookmark
+    if ($result.ok) {
+        try { Remove-DuneChatTeleportCapture }
+        catch { $result['cleanupWarning'] = $_.Exception.Message }
     }
-    if (-not $replaced) {
-        if ($next.Count -ge $script:DuneChatTeleportMax) {
-            return @{ ok = $false; status = 409; error = "Teleport bookmark limit reached ($($script:DuneChatTeleportMax))." }
-        }
-        $next += $bookmark
-    }
-    [void](Save-DuneChatTeleports -Bookmarks $next)
-    return @{ ok = $true; bookmark = $bookmark; replaced = $replaced; teleports = @($next) }
+    return $result
 }
 
 function Remove-DuneChatTeleport {
@@ -529,7 +722,9 @@ function Resolve-DuneChatCommandAction {
     }
 
     $key = Get-DuneChatCooldownKey -FromId $Message.fromId -Verb $cmd.verb
-    if ($cmd.verb -eq 'tp' -and ((@($cmd.args) -join ' ').Trim() -ieq 'list')) {
+    $tpAction = if (@($cmd.args).Count -gt 0) { [string]$cmd.args[0] } else { '' }
+    $isListAction = ($tpAction -eq 'list' -and @($cmd.args).Count -eq 1)
+    if ($cmd.verb -eq 'tp' -and ($isListAction -or $tpAction -eq 'save')) {
         return @{ action = 'run'; verb = $cmd.verb; args = @($cmd.args); key = $key; from = $Message.fromId }
     }
     $cool = Test-DuneChatCooldown -Cooldowns $State.cooldowns -Key $key `
@@ -1060,8 +1255,23 @@ function Invoke-DuneChatCommandItem {
 }
 
 function Invoke-DuneChatCommandTeleport {
-    param([string]$Ip, [string]$FuncomId, [string[]]$CommandArgs)
+    param([string]$Ip, [string]$FuncomId, [string[]]$CommandArgs, [hashtable]$Message)
     $wanted = (@($CommandArgs) -join ' ').Trim()
+    $argv = @($CommandArgs)
+    if ($argv.Count -gt 0 -and [string]$argv[0] -ieq 'save') {
+        $token = if ($argv.Count -gt 1) { (@($argv[1..($argv.Count - 1)]) -join ' ').Trim() } else { '' }
+        try {
+            $result = Invoke-DuneChatTeleportFileLock -Script {
+                Complete-DuneChatTeleportCapture -Ip $Ip -FuncomId $FuncomId -Token $token -Location $Message.location
+            }
+        } catch {
+            return @{ ok = $false; applyCooldown = $false; reply = 'Could not save the armed teleport destination - check DST.' }
+        }
+        if (-not $result.ok) {
+            return @{ ok = $false; applyCooldown = $false; reply = [string]$result.error }
+        }
+        return @{ ok = $true; applyCooldown = $false; reply = "Saved $($result.bookmark.name) at your live location." }
+    }
     $bookmarks = @()
     try { $bookmarks = @(Read-DuneChatTeleports) } catch {
         return @{ ok = $false; reply = 'Teleport destinations are unavailable - check DST.' }
@@ -1116,12 +1326,12 @@ function Invoke-DuneChatCommandTeleport {
 }
 
 function Invoke-DuneChatCommandExecutor {
-    param([string]$Ip, [hashtable]$State, [string]$Verb, [string]$FuncomId, [string[]]$CommandArgs)
+    param([string]$Ip, [hashtable]$State, [string]$Verb, [string]$FuncomId, [string[]]$CommandArgs, [hashtable]$Message)
     switch ("$Verb".ToLowerInvariant()) {
         'kit'     { return Invoke-DuneChatCommandKit -Ip $Ip -State $State -FuncomId $FuncomId -CommandArgs @($CommandArgs) }
         'item'    { return Invoke-DuneChatCommandItem -Ip $Ip -State $State -FuncomId $FuncomId -CommandArgs @($CommandArgs) }
         'water'   { return Invoke-DuneChatCommandWater -Ip $Ip -FuncomId $FuncomId }
-        'tp'      { return Invoke-DuneChatCommandTeleport -Ip $Ip -FuncomId $FuncomId -CommandArgs @($CommandArgs) }
+        'tp'      { return Invoke-DuneChatCommandTeleport -Ip $Ip -FuncomId $FuncomId -CommandArgs @($CommandArgs) -Message $Message }
         'vehicle' { return Invoke-DuneChatCommandVehicle -Ip $Ip -FuncomId $FuncomId -CommandArgs @($CommandArgs) }
         'small'   { return Invoke-DuneChatCommandSpiceField -Ip $Ip -Size 'Small' }
         'medium'  { return Invoke-DuneChatCommandSpiceField -Ip $Ip -Size 'Medium' }
@@ -1174,7 +1384,7 @@ function Invoke-DuneChatCommandTick {
                 }
                 'run' {
                     $res = Invoke-DuneChatCommandExecutor -Ip $ip -State $state -Verb $act.verb `
-                              -FuncomId $msg.fromId -CommandArgs @($act.args)
+                              -FuncomId $msg.fromId -CommandArgs @($act.args) -Message $msg
                     if ($res.reply) {
                         [void](Send-DuneChatReply -Ip $ip -State $state -ToFuncomId $msg.fromId -Message $res.reply)
                     }

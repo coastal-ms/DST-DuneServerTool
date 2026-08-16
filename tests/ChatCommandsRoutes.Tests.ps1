@@ -16,13 +16,14 @@ Describe 'Chat command route registration' {
         @($routes | ForEach-Object { "$($_.method) $($_.path)" } | Sort-Object) |
             Should -Be @(
                 'DELETE /api/gameplay/chat-commands/teleports'
+                'DELETE /api/gameplay/chat-commands/teleports/capture'
                 'GET /api/gameplay/chat-commands'
                 'POST /api/gameplay/chat-commands/teleports'
                 'PUT /api/gameplay/chat-commands'
             )
     }
 
-    It 'passes the requested bookmark name through the named lock' {
+    It 'passes the requested bookmark name into the armed capture' {
         $routes = @(& {
             function Register-DuneRoute {
                 param($Method, $Path, $Handler)
@@ -36,14 +37,17 @@ Describe 'Chat command route registration' {
 
         $script:CapturedBookmarkName = ''
         function Get-DuneDbContext { @{ ok = $true; ip = 'vm' } }
-        function Invoke-WithDuneLock {
-            param([string]$Name, [scriptblock]$Script)
+        function Read-DuneChatCommandsState {
+            @{ enabled = $true; commands = @{ tp = @{ enabled = $true } } }
+        }
+        function Invoke-DuneChatTeleportFileLock {
+            param([scriptblock]$Script)
             & $Script
         }
-        function Save-DuneChatTeleportFromPawn {
+        function Set-DuneChatTeleportCaptureForPawn {
             param($Ip, [string]$Name, $PawnId)
             $script:CapturedBookmarkName = $Name
-            @{ ok = $true; status = 200; teleports = @() }
+            @{ ok = $true; status = 200; pending = @{ name = $Name; token = 'ABC123' } }
         }
         function Write-DuneJson { param($Response, $Body) }
         function Write-DuneError { param($Response, $Status, $Message); throw $Message }

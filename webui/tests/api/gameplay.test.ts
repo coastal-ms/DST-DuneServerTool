@@ -478,11 +478,18 @@ Spice Melange:
   })
 
   describe('in-game teleport bookmark API', () => {
-    it('captures the selected online player location', async () => {
-      await gp.saveChatTeleport('Base Camp', 42)
+    it('arms the selected online player location capture', async () => {
+      await gp.armChatTeleport('Base Camp', 42)
       expect(last().url).toBe('/api/gameplay/chat-commands/teleports')
       expect(last().method).toBe('POST')
       expect(last().body).toEqual({ name: 'Base Camp', pawn_id: 42 })
+    })
+
+    it('cancels a pending location capture', async () => {
+      await gp.cancelChatTeleportCapture('ABC123')
+      expect(last().url).toBe('/api/gameplay/chat-commands/teleports/capture')
+      expect(last().method).toBe('DELETE')
+      expect(last().body).toEqual({ token: 'ABC123' })
     })
 
     it('deletes a bookmark by name', async () => {

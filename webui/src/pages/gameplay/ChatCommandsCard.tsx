@@ -2,11 +2,12 @@ import { useCallback, useEffect, useState } from 'react'
 import { Icon } from '../../components/Icon'
 import { CollapsibleCard } from '../../components/CollapsibleCard'
 import {
+  armChatTeleport,
+  cancelChatTeleportCapture,
   deleteChatTeleport,
   getChatCommands,
   getPlayers,
   saveChatCommands,
-  saveChatTeleport,
 } from '../../api/gameplay'
 import { getSpicefields, saveSpicefield } from '../../api/gameconfig'
 import type { ChatCommandsState, SpicefieldType } from '../../api/types'
@@ -218,7 +219,7 @@ export function ChatCommandsCard() {
     })
   }
 
-  async function captureTeleport() {
+  async function armTeleportCapture() {
     const name = captureName.trim()
     if (!name || capturePawn <= 0) {
       setErr('Choose an online player and enter a destination name.')
@@ -226,10 +227,23 @@ export function ChatCommandsCard() {
     }
     setSaving(true); setErr(null); setOk(null)
     try {
-      const res = await saveChatTeleport(name, capturePawn)
-      setState(prev => (prev ? { ...prev, teleports: res.teleports ?? [] } : prev))
+      const res = await armChatTeleport(name, capturePawn)
+      setState(prev => (prev ? { ...prev, pendingTeleportCapture: res.pending ?? null } : prev))
       setCaptureName('')
-      setOk(res.replaced ? `Updated "${name}".` : `Saved "${name}".`)
+      setOk(`Capture armed for "${name}". The selected player must type !tp save in game.`)
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : String(e))
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  async function cancelTeleportCapture(token: string) {
+    setSaving(true); setErr(null); setOk(null)
+    try {
+      await cancelChatTeleportCapture(token)
+      setState(prev => (prev ? { ...prev, pendingTeleportCapture: null } : prev))
+      setOk('Pending teleport capture cancelled.')
     } catch (e) {
       setErr(e instanceof Error ? e.message : String(e))
     } finally {
@@ -261,6 +275,8 @@ export function ChatCommandsCard() {
   const packages = state?.packages ?? []
   const kitOn = commands['kit']?.enabled === true
   const teleports = state?.teleports ?? []
+  const pendingCapture = state?.pendingTeleportCapture ?? null
+  const canArmTeleport = enabled && commands['tp']?.enabled === true
 
   return (
     <CollapsibleCard
@@ -379,8 +395,10 @@ export function ChatCommandsCard() {
               {verb === 'tp' && (
                 <div className="mt-3 rounded border border-border bg-surface/50 p-3">
                   <div className="text-[11px] text-text-muted">
-                    Shared destinations are stored only on this DST PC. Capture an online
-                    player standing at the destination. Players can teleport only while on
+                    Shared destinations are stored only on this DST PC. Arm a name and
+                    player here, then that player types <code>!tp save</code> while standing
+                    at the destination. This captures the live game-chat position instead
+                    of a potentially stale database transform. Teleports remain limited to
                     the same map, partition and dimension. Replies and <code>!tp list</code>{' '}
                     are public server broadcasts.
                   </div>
@@ -404,21 +422,50 @@ export function ChatCommandsCard() {
                       maxLength={40}
                       disabled={saving || loading}
                       onChange={e => setCaptureName(e.target.value)}
-                      onKeyDown={e => { if (e.key === 'Enter') void captureTeleport() }}
+                      onKeyDown={e => { if (e.key === 'Enter') void armTeleportCapture() }}
                       placeholder="Destination name"
                       className="px-2 py-1.5 rounded bg-surface border border-border text-text text-xs"
                     />
                     <button
                       type="button"
                       className="btn-secondary"
-                      disabled={saving || loading || capturePawn <= 0 || !captureName.trim()}
-                      onClick={() => void captureTeleport()}
+                      disabled={saving || loading || !canArmTeleport || capturePawn <= 0 || !captureName.trim()}
+                      onClick={() => void armTeleportCapture()}
                     >
                       <Icon name={saving ? 'Loader2' : 'MapPin'} size={13}
                             className={saving ? 'animate-spin' : ''} />
-                      Save location
+                      Arm capture
                     </button>
                   </div>
+                  {pendingCapture && (
+                    <div className="mt-3 rounded border border-warning/40 bg-warning/10 p-2 text-[11px]">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className="text-warning">
+                          Waiting for {pendingCapture.playerName} to type{' '}
+                          <code>!tp save {pendingCapture.token}</code>{' '}
+                          for <strong>{pendingCapture.name}</strong>.
+                        </span>
+                        <button
+                          type="button"
+                          className="ml-auto text-text-dim hover:text-danger"
+                          disabled={saving || loading}
+                          onClick={() => void cancelTeleportCapture(pendingCapture.token)}
+                        >
+                          Cancel capture
+                        </button>
+                      </div>
+                      <div className="mt-1 text-text-dim">
+                        Armed on {pendingCapture.map}, partition {pendingCapture.partition}.
+                        Expires {new Date(pendingCapture.expiresAt).toLocaleTimeString()}.
+                        Click Refresh after the player receives the saved confirmation.
+                      </div>
+                    </div>
+                  )}
+                  {!canArmTeleport && (
+                    <div className="mt-2 text-[11px] text-warning">
+                      Turn on chat listening and <code>!tp</code> before arming a capture.
+                    </div>
+                  )}
                   {teleports.length === 0 ? (
                     <div className="mt-3 text-[11px] text-text-dim">
                       No destinations saved. <code>!tp list</code> will report an empty list.

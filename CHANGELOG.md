@@ -23,7 +23,9 @@ here cover everything those tags shipped.
   starts the battlegroup again. Orphaned structures, windtraps, and blood-water
   extractors are excluded.
 - In-game commands add admin-managed shared teleport destinations. An admin can
-  capture and name an online player's current location in DST; players can use
+  arm a name/player capture in DST, then that player types the one-time
+  `!tp save <code>` command at the
+  destination so DST records the exact live chat position; players can use
   `!tp list` and `!tp <name>` to teleport themselves while on the same map,
   partition and dimension. Destinations stay local to that DST installation,
   the command is off by default, and each player has a configurable cooldown.
