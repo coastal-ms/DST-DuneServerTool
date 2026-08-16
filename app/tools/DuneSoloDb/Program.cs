@@ -14,6 +14,20 @@ internal static partial class Program
         PropertyNamingPolicy = JsonNamingPolicy.CamelCase
     };
 
+    // These picker-only templates have names but no item rules in the shared
+    // catalog. Keep the verified fallback limits aligned with PlayersRmq.ps1.
+    private static readonly IReadOnlyDictionary<string, int> KnownStackLimits =
+        new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["Ammo"] = 500,
+            ["HeavyAmmo"] = 500,
+            ["InfantryRocketAmmo"] = 500,
+            ["Napalm"] = 500,
+            ["RocketAmmo"] = 500,
+            ["SolarisCoin"] = int.MaxValue,
+            ["AntiRadiationPill"] = 20
+        };
+
     public static int Main(string[] args)
     {
         try
@@ -998,11 +1012,26 @@ internal static partial class Program
             var planPath = Path.Combine(root, "grant-plan.json");
             File.WriteAllText(
                 planPath,
-                """{"destination":"inventory:2","items":[{"templateId":"TestResource","quantity":12,"quality":0}]}""");
+                """
+                {"destination":"inventory:2","items":[
+                  {"templateId":"TestResource","quantity":12,"quality":0},
+                  {"templateId":"HeavyAmmo","quantity":501,"quality":0},
+                  {"templateId":"AntiRadiationPill","quantity":21,"quality":0}
+                ]}
+                """);
             var catalogPath = Path.Combine(root, "catalog.json");
             File.WriteAllText(
                 catalogPath,
-                """{"names":{"TestResource":"Test Resource"},"items":{"TestResource":{"stack_max":10,"volume":1.0}}}""");
+                """
+                {
+                  "names":{
+                    "TestResource":"Test Resource",
+                    "HeavyAmmo":"Heavy Darts",
+                    "AntiRadiationPill":"Iodine Pill"
+                  },
+                  "items":{"TestResource":{"stack_max":10,"volume":1.0}}
+                }
+                """);
             var grantSafety = Path.Combine(root, "safety", "before-grant.db");
             GrantItems(target, grantSafety, planPath, catalogPath);
             if (!File.Exists(grantSafety))
@@ -1026,6 +1055,30 @@ internal static partial class Program
                 {
                     throw new InvalidOperationException(
                         $"Item grant expected quantity 12, found {quantity}.");
+                }
+                var heavyQuantity = ScalarLong(
+                    connection,
+                    "SELECT COALESCE(SUM(stack_size), 0) FROM items WHERE template_id = 'HeavyAmmo';");
+                var heavyRows = ScalarLong(
+                    connection,
+                    "SELECT COUNT(*) FROM items WHERE template_id = 'HeavyAmmo';");
+                var heavyMax = ScalarLong(
+                    connection,
+                    "SELECT COALESCE(MAX(stack_size), 0) FROM items WHERE template_id = 'HeavyAmmo';");
+                var pillQuantity = ScalarLong(
+                    connection,
+                    "SELECT COALESCE(SUM(stack_size), 0) FROM items WHERE template_id = 'AntiRadiationPill';");
+                var pillRows = ScalarLong(
+                    connection,
+                    "SELECT COUNT(*) FROM items WHERE template_id = 'AntiRadiationPill';");
+                var pillMax = ScalarLong(
+                    connection,
+                    "SELECT COALESCE(MAX(stack_size), 0) FROM items WHERE template_id = 'AntiRadiationPill';");
+                if (heavyQuantity != 501 || heavyRows != 2 || heavyMax != 500
+                    || pillQuantity != 21 || pillRows != 2 || pillMax != 20)
+                {
+                    throw new InvalidOperationException(
+                        "Picker-only stack-limit fallbacks were not applied correctly.");
                 }
             }
 
@@ -1637,6 +1690,16 @@ internal static partial class Program
                     && volumeElement.ValueKind == JsonValueKind.Number;
                 var volume = hasVolume ? volumeElement.GetDouble() : 0;
                 result[property.Name] = new CatalogRule(stackMax, volume, hasVolume);
+            }
+        }
+        foreach (var (templateId, stackMax) in KnownStackLimits)
+        {
+            if (result.TryGetValue(templateId, out var rule))
+            {
+                result[templateId] = rule with
+                {
+                    StackMax = Math.Max(rule.StackMax, stackMax)
+                };
             }
         }
         foreach (var templateId in new[]
