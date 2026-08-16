@@ -575,7 +575,7 @@ export function SoloMode() {
     }
     if (!window.confirm(
       'Max every non-zero attribute roll on the Solo character’s carried augments?\n\n'
-      + 'This test-only action preserves zero and non-numeric entries, excludes Developer Storage, '
+      + 'This action preserves zero and non-numeric entries, excludes Developer Storage, '
       + 'retains the current game.db, and verifies the write before replacing the save. Relog required.',
     )) return
     setBusy('max-augments')
@@ -1187,11 +1187,11 @@ export function SoloMode() {
             <div className="card p-5 xl:col-span-2">
               <h3 className="font-semibold mb-1">Max Augment Attributes</h3>
               <p className="text-xs text-text-muted">
-                Test candidate matching DST’s Self-Hosted action: sets every non-zero numeric roll on carried augments to
+                Matches DST’s Self-Hosted action: sets every non-zero numeric roll on carried augments to
                 the confirmed maximum while preserving zero and non-numeric entries. Developer Storage is excluded.
               </p>
               <div className="rounded border border-warning/30 bg-warning/5 p-3 mt-4 text-xs text-text-muted">
-                PTC behavior is unconfirmed. Close the game fully; DST retains the current save before writing. Relog after the action.
+                Field-confirmed in PTC. Close the game fully; DST retains the current save before writing. Relog after the action.
               </div>
               <button
                 className={`btn-primary w-full mt-4 justify-center ${SOLO_DISABLED_PRIMARY_CLASS}`}

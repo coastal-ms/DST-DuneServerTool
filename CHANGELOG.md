@@ -44,7 +44,8 @@ here cover everything those tags shipped.
   shared catalog entries lack item metadata. Solo Inventory can also max every
   non-zero numeric attribute roll on carried augments while preserving zero
   and non-numeric entries; the action retains a recovery backup and excludes
-  Developer Storage.
+  Developer Storage. Field testing confirmed the maxed rolls appear in game
+  after login.
 
 ### Changed
 
