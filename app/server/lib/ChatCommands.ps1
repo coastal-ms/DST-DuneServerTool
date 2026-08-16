@@ -1067,7 +1067,7 @@ function Invoke-DuneChatCommandTeleport {
     }
     if ($wanted -ieq 'list') {
         if ($bookmarks.Count -eq 0) {
-            return @{ ok = $true; applyCooldown = $false; reply = 'No teleport destinations are saved.' }
+            return @{ ok = $true; applyCooldown = $false; reply = 'No teleport destinations are saved on the DST instance handling chat.' }
         }
         $names = @($bookmarks | Sort-Object name | ForEach-Object { [string]$_.name })
         return @{
@@ -1083,7 +1083,11 @@ function Invoke-DuneChatCommandTeleport {
         $bookmark = $bookmarks | Where-Object { [string]$_.key -eq $key } | Select-Object -First 1
     }
     if (-not $bookmark) {
-        return @{ ok = $false; reply = "Unknown teleport destination '$wanted'. Use !tp list." }
+        if ($bookmarks.Count -eq 0) {
+            return @{ ok = $false; reply = 'No teleport destinations are saved on the DST instance handling chat.' }
+        }
+        $available = @($bookmarks | Sort-Object name | ForEach-Object { [string]$_.name })
+        return @{ ok = $false; reply = "Unknown teleport destination '$wanted'. Available: $($available -join ', ')." }
     }
 
     $current = Get-DuneChatPlayerLocation -Ip $Ip -FuncomId $FuncomId
@@ -1195,4 +1199,3 @@ function Invoke-DuneChatCommandTick {
         return @{ ok = $false; acted = $false; message = $_.Exception.Message }
     }
 }
-

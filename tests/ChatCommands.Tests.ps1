@@ -387,6 +387,15 @@ Describe 'teleport bookmarks' {
         $r.reply | Should -BeLike '*Base*'
     }
 
+    It 'names the available destinations when a teleport name is unknown' {
+        Save-DuneChatTeleports -Bookmarks @(
+            [ordered]@{ name = 'Base'; key = 'base'; map = 'HaggaBasin'; partition = 1; dimension = 0; x = 1; y = 2; z = 3; capturedFrom = 'Coastal'; capturedAt = '2026-08-16T00:00:00Z' }
+        ) | Should -BeTrue
+        $r = Invoke-DuneChatCommandExecutor -Ip 'vm' -State (New-DstChatState) -Verb 'tp' -FuncomId 'A#1' -CommandArgs @('CHome')
+        $r.ok | Should -BeFalse
+        $r.reply | Should -BeLike "*Available: Base*"
+    }
+
     It 'teleports only within the current map, partition and dimension' {
         Save-DuneChatTeleports -Bookmarks @(
             [ordered]@{ name = 'Base'; key = 'base'; map = 'HaggaBasin'; partition = 1; dimension = 0; x = 1; y = 2; z = 3; capturedFrom = 'Coastal'; capturedAt = '2026-08-16T00:00:00Z' }

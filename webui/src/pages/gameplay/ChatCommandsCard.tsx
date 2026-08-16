@@ -158,6 +158,8 @@ export function ChatCommandsCard() {
   const [capturePawn, setCapturePawn] = useState<number>(0)
   const [captureName, setCaptureName] = useState('')
   const [deletingTeleport, setDeletingTeleport] = useState<string | null>(null)
+  const [showTeleports, setShowTeleports] = useState(true)
+  const [expandedTeleport, setExpandedTeleport] = useState<string | null>(null)
 
   const load = useCallback(async () => {
     setLoading(true); setErr(null)
@@ -422,31 +424,71 @@ export function ChatCommandsCard() {
                       No destinations saved. <code>!tp list</code> will report an empty list.
                     </div>
                   ) : (
-                    <div className="mt-3 space-y-1">
-                      {teleports.map(destination => (
-                        <div key={destination.key}
-                             className="flex flex-wrap items-center gap-2 text-[11px]">
-                          <code className="text-text min-w-32">{destination.name}</code>
-                          <span className="text-text-muted">
-                            {destination.map} / partition {destination.partition}
-                          </span>
-                          <span className="text-text-dim font-mono">
-                            {Math.round(destination.x)}, {Math.round(destination.y)}, {Math.round(destination.z)}
-                          </span>
-                          <button
-                            type="button"
-                            disabled={saving || loading}
-                            onClick={() => void removeTeleport(destination.name)}
-                            className={`ml-auto text-[11px] ${
-                              deletingTeleport === destination.name
-                                ? 'text-danger'
-                                : 'text-text-dim hover:text-danger'
-                            }`}
-                          >
-                            {deletingTeleport === destination.name ? 'Confirm delete' : 'Delete'}
-                          </button>
-                        </div>
-                      ))}
+                    <div className="mt-3">
+                      <button
+                        type="button"
+                        className="flex w-full items-center justify-between text-left text-[11px] text-text-muted"
+                        onClick={() => setShowTeleports(value => !value)}
+                      >
+                        <span>Saved destinations ({teleports.length})</span>
+                        <span>{showTeleports ? 'Hide list' : 'Show list'}</span>
+                      </button>
+                      {showTeleports && <div className="mt-2 space-y-1">
+                        {teleports.map(destination => {
+                          const open = expandedTeleport === destination.key
+                          return (
+                            <div key={destination.key} className="rounded border border-border/70 bg-surface-2/50">
+                              <button
+                                type="button"
+                                className="flex w-full items-center gap-2 px-2 py-1.5 text-left text-[11px]"
+                                onClick={() => setExpandedTeleport(open ? null : destination.key)}
+                              >
+                                <Icon name={open ? 'ChevronDown' : 'ChevronRight'} size={12}
+                                      className="text-text-dim" />
+                                <code className="text-text min-w-32">{destination.name}</code>
+                                <span className="text-text-muted">{destination.map}</span>
+                                <span className="ml-auto text-text-dim">
+                                  {open ? 'Close details' : 'Open details'}
+                                </span>
+                              </button>
+                              {open && (
+                                <div className="border-t border-border/70 px-2 py-2 text-[11px]">
+                                  <div className="grid gap-1 sm:grid-cols-2">
+                                    <span className="text-text-muted">
+                                      Partition {destination.partition}, dimension {destination.dimension}
+                                    </span>
+                                    <span className="text-text-dim font-mono sm:text-right">
+                                      {destination.x.toFixed(2)}, {destination.y.toFixed(2)}, {destination.z.toFixed(2)}
+                                    </span>
+                                    <span className="text-text-dim">
+                                      Captured from {destination.capturedFrom || 'unknown player'}
+                                    </span>
+                                    <span className="text-text-dim sm:text-right">
+                                      {destination.capturedAt
+                                        ? new Date(destination.capturedAt).toLocaleString()
+                                        : 'Capture time unavailable'}
+                                    </span>
+                                  </div>
+                                  <div className="mt-2 flex justify-end">
+                                    <button
+                                      type="button"
+                                      disabled={saving || loading}
+                                      onClick={() => void removeTeleport(destination.name)}
+                                      className={`text-[11px] ${
+                                        deletingTeleport === destination.name
+                                          ? 'text-danger'
+                                          : 'text-text-dim hover:text-danger'
+                                      }`}
+                                    >
+                                      {deletingTeleport === destination.name ? 'Confirm delete' : 'Delete destination'}
+                                    </button>
+                                  </div>
+                                </div>
+                              )}
+                            </div>
+                          )
+                        })}
+                      </div>}
                     </div>
                   )}
                 </div>
