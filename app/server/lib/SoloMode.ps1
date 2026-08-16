@@ -272,7 +272,7 @@ function Assert-DuneSoloGameClosed {
 
 function Invoke-DuneSoloHelper {
     param(
-        [Parameter(Mandatory)][ValidateSet('inspect','backup','restore','grant-items','set-currencies','fill-water','max-specializations','complete-fremen','enable-skills')][string]$Command,
+        [Parameter(Mandatory)][ValidateSet('inspect','backup','restore','grant-items','set-currencies','fill-water','max-augment-attributes','max-specializations','complete-fremen','enable-skills')][string]$Command,
         [Parameter(Mandatory)][hashtable]$Arguments
     )
 
@@ -480,6 +480,29 @@ function Invoke-DuneSoloGiveItems {
         }
     } finally {
         Remove-Item -LiteralPath $planPath -Force -ErrorAction SilentlyContinue
+    }
+}
+
+function Invoke-DuneSoloMaxAugmentAttributes {
+    param([Parameter(Mandatory)][string]$Confirm)
+
+    Assert-DuneSoloSupportedPlatform
+    if ($Confirm -ne 'MAX SOLO AUGMENT ATTRIBUTES') {
+        throw 'Confirm the offline augment update before continuing.'
+    }
+    Assert-DuneSoloGameClosed
+    $profile = Get-DuneSoloProfile
+    if (-not $profile.dbPath -or -not (Test-Path -LiteralPath $profile.dbPath -PathType Leaf)) {
+        throw 'Connect a valid Solo save before maximizing augment attributes.'
+    }
+    $profileBackupRoot = Get-DuneSoloProfileBackupRoot -DbPath $profile.dbPath
+    $safetyDir = Join-Path $profileBackupRoot 'pre-augment'
+    New-Item -ItemType Directory -Path $safetyDir -Force | Out-Null
+    $stamp = (Get-Date).ToUniversalTime().ToString('yyyyMMdd-HHmmssfff')
+    $safety = Join-Path $safetyDir "game-before-augment-max-$stamp.db"
+    return Invoke-DuneSoloHelper -Command 'max-augment-attributes' -Arguments @{
+        input = $profile.dbPath
+        'safety-backup' = $safety
     }
 }
 

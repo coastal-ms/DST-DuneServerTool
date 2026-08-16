@@ -41,7 +41,10 @@ here cover everything those tags shipped.
   in-game after applying settings or restoring. Solo Overview reports the
   detected 0-11 map seed from the current Coriolis cycle. Item grants apply
   verified fallback stack limits for picker-only ammo and consumables whose
-  shared catalog entries lack item metadata.
+  shared catalog entries lack item metadata. Solo Inventory can also max every
+  non-zero numeric attribute roll on carried augments while preserving zero
+  and non-numeric entries; the action retains a recovery backup and excludes
+  Developer Storage.
 
 ### Changed
 

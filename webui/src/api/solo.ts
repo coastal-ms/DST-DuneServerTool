@@ -283,6 +283,21 @@ export function fillSoloWaterContainer(
   })
 }
 
+export function maxSoloAugmentAttributes(expectedProfileToken: string): Promise<{
+  ok: boolean
+  updated: number
+  safetyBackup: string
+  inspection: SoloInspection
+}> {
+  return api('/api/solo/items/augments/max', {
+    method: 'POST',
+    body: JSON.stringify({
+      expectedProfileToken,
+      confirm: 'MAX SOLO AUGMENT ATTRIBUTES',
+    }),
+  })
+}
+
 interface SoloProgressionResult {
   ok: boolean
   action: string
