@@ -757,7 +757,8 @@ balances and verified carried water-container filling. Progression can max all f
 specialization tracks with all 205 rewards, complete the verified 59-node Find
 the Fremen chain with Fremkit recipes/Prescience/third-slot rewards, and enable
 144 approved skills while preserving Voice Ignore and unknown PTC-only keys.
-Backups can be deleted individually with explicit confirmation.
+Overview shows the detected 0-11 map seed. Backups can be deleted individually
+with explicit confirmation.
 
 Before first use, launch the supported game build once, create or load Solo
 Mode, enter the world, wait for the character to finish loading, then quit
