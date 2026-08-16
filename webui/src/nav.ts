@@ -1,4 +1,4 @@
-export type NavGroup = 'overview' | 'terminal' | 'data' | 'database' | 'system'
+export type NavGroup = 'overview' | 'terminal' | 'data' | 'solo' | 'database' | 'system'
 
 export type NavItem = {
   to: string
@@ -14,6 +14,7 @@ export type NavItem = {
   // MUST also enforce loopback-only on the server — the client filter is
   // just a UX hide, not a security boundary.
   localOnly?: boolean
+  windowsOnly?: boolean
 }
 
 export const NAV_ITEMS: NavItem[] = [
@@ -32,19 +33,21 @@ export const NAV_ITEMS: NavItem[] = [
     group: 'data',
     badge: 'Experimental',
   },
-  { to: '/database',    label: 'Database',     icon: 'Database',        group: 'database' },
+  { to: '/solo',        label: 'Solo Mode',      icon: 'Orbit',           group: 'solo', localOnly: true, windowsOnly: true, badge: 'Preview' },
+  { to: '/database',    label: 'Database',       icon: 'Database',        group: 'database' },
   { to: '/sietches',    label: 'Sietches',     icon: 'Network',         group: 'database' },
   { to: '/map-spinup',  label: 'Map SpinUp',   icon: 'Globe',           group: 'database' },
   { to: '/settings',    label: 'Settings',     icon: 'Settings',        group: 'system' },
   { to: '/setup',       label: 'Setup Wizard', icon: 'Wand2',           group: 'system' },
 ]
 
-export const GROUP_ORDER: readonly NavGroup[] = ['overview', 'terminal', 'data', 'database', 'system'] as const
+export const GROUP_ORDER: readonly NavGroup[] = ['overview', 'terminal', 'data', 'solo', 'database', 'system'] as const
 
 export const GROUP_LABELS: Record<NavGroup, string> = {
   overview: 'Server Health',
   terminal: 'PowerShell',
   data:     'Game Data',
+  solo:     'Solo Mode',
   database: 'Database',
   system:   'System',
 }
@@ -54,6 +57,7 @@ export const GROUP_ICONS: Record<NavGroup, string> = {
   overview: 'LayoutDashboard',
   terminal: 'SquareTerminal',
   data:     'Gamepad2',
+  solo:     'Orbit',
   database: 'Database',
   system:   'Settings',
 }

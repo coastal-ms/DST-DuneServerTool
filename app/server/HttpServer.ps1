@@ -72,7 +72,11 @@ function Register-DuneRoute {
         # Inline routes run ON the listener thread instead of the handler pool.
         # Reserve this for fast handlers that mutate MAIN-runspace lifecycle state
         # (e.g. the listener / app-detach flag) which a worker runspace can't touch.
-        [switch]$Inline
+        [switch]$Inline,
+        # Host-filesystem and host-execution surfaces must not be reachable through
+        # LAN, mobile bridge, or tunnel requests, even when a proxy connects from
+        # loopback. Enforcement happens before dispatch to the handler pool.
+        [switch]$LocalOnly
     )
     $pattern = '^' + ([regex]::Escape($Path) -replace '\\\{([^/}]+)}', '(?<$1>[^/]+)') + '$'
     $script:DuneRoutes.Add([pscustomobject]@{
@@ -81,7 +85,33 @@ function Register-DuneRoute {
         Regex   = [regex]$pattern
         Handler = $Handler
         Inline  = [bool]$Inline
+        LocalOnly = [bool]$LocalOnly
     }) | Out-Null
+}
+
+function Test-DuneLocalOnlyRequest {
+    param($Request)
+
+    $remote = $null
+    try { $remote = $Request.RemoteEndPoint.Address } catch {}
+    $isLoopback = $false
+    if ($remote) {
+        try { $isLoopback = [System.Net.IPAddress]::IsLoopback($remote) } catch { $isLoopback = $false }
+    }
+    if (-not $isLoopback) { return $false }
+
+    foreach ($header in @(
+        'Cf-Access-Authenticated-User-Email',
+        'Cf-Ray',
+        'Cf-Connecting-Ip',
+        'X-Forwarded-For',
+        'X-Forwarded-Proto'
+    )) {
+        try {
+            if ($Request.Headers[$header]) { return $false }
+        } catch {}
+    }
+    return $true
 }
 
 function Register-DuneWebSocket {
@@ -856,6 +886,10 @@ function Invoke-DuneContext {
                 if ($r.Method -ne $method) { continue }
                 $m = $r.Regex.Match($rawPath)
                 if ($m.Success) {
+                    if ($r.LocalOnly) {
+                        Write-DuneError -Response $res -Status 403 -Message 'This API is available only from the host machine.'
+                        return
+                    }
                     $routeParams = @{}
                     foreach ($g in $r.Regex.GetGroupNames()) {
                         if ($g -notmatch '^\d+$') { $routeParams[$g] = $m.Groups[$g].Value }
@@ -922,6 +956,10 @@ function Invoke-DuneContext {
             if ($r.Method -ne $method) { continue }
             $m = $r.Regex.Match($rawPath)
             if ($m.Success) {
+                if ($r.LocalOnly -and -not (Test-DuneLocalOnlyRequest -Request $req)) {
+                    Write-DuneError -Response $res -Status 403 -Message 'This API is available only from the host machine.'
+                    return
+                }
                 $routeParams = @{}
                 foreach ($g in $r.Regex.GetGroupNames()) {
                     if ($g -notmatch '^\d+$') { $routeParams[$g] = $m.Groups[$g].Value }

@@ -11,6 +11,7 @@
 param(
     [switch] $SkipServer,
     [switch] $SkipWebUI,
+    [switch] $SkipSoloHelper,
     [switch] $CI
 )
 
@@ -25,6 +26,14 @@ if (-not $SkipServer) {
     if ($CI) { $pesterArgs += '-CI' }
     & pwsh -NoProfile -ExecutionPolicy Bypass -File (Join-Path $repoRoot 'tests\Run-Tests.ps1') @pesterArgs
     if ($LASTEXITCODE -ne 0) { $failures += "Pester (exit $LASTEXITCODE)" }
+}
+
+if (-not $SkipSoloHelper) {
+    Write-Host ""
+    Write-Host "=== Running Solo database helper self-test ===" -ForegroundColor Cyan
+    $soloProject = Join-Path $repoRoot 'app\tools\DuneSoloDb\DuneSoloDb.csproj'
+    & dotnet run --project $soloProject -c Release -- --command self-test
+    if ($LASTEXITCODE -ne 0) { $failures += "DuneSoloDb self-test (exit $LASTEXITCODE)" }
 }
 
 if (-not $SkipWebUI) {

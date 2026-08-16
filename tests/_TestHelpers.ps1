@@ -52,7 +52,7 @@ function Import-DstRoute {
 # Stub the HTTP-server registration shims so route files can load in tests.
 function Register-DstStubs {
     if (-not (Get-Command Register-DuneRoute -ErrorAction SilentlyContinue)) {
-        function global:Register-DuneRoute { param($Method, $Path, $Handler, [switch] $Inline) }
+        function global:Register-DuneRoute { param($Method, $Path, $Handler, [switch] $Inline, [switch] $LocalOnly) }
     }
     if (-not (Get-Command Register-DuneWebSocket -ErrorAction SilentlyContinue)) {
         function global:Register-DuneWebSocket { param($Path, $Handler, [switch] $LocalOnly) }

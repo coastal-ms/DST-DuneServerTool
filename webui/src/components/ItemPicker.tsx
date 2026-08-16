@@ -132,6 +132,7 @@ export function ItemPicker({ value, onChange, displayValue, label, placeholder, 
       <div ref={rowRef} className="flex gap-2 mb-2">
         <select
           aria-label="Filter by category"
+          style={{ colorScheme: 'dark' }}
           disabled={disabled}
           value={category}
           onFocus={ensureCatalog}

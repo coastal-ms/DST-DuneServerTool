@@ -147,7 +147,7 @@ function Invoke-DunePathPicker {
 # POST /api/browse-path
 # Body: { mode: 'folder'|'file', current?: string, title?: string, filter?: string }
 # Returns: { ok: true, cancelled: bool, path: string }
-Register-DuneRoute -Method POST -Path '/api/browse-path' -Handler {
+Register-DuneRoute -Method POST -Path '/api/browse-path' -LocalOnly -Handler {
     param($req, $res, $routeParams, $body)
     try {
         $mode    = 'folder'
