@@ -477,6 +477,22 @@ Spice Melange:
     ])
   })
 
+  describe('in-game teleport bookmark API', () => {
+    it('captures the selected online player location', async () => {
+      await gp.saveChatTeleport('Base Camp', 42)
+      expect(last().url).toBe('/api/gameplay/chat-commands/teleports')
+      expect(last().method).toBe('POST')
+      expect(last().body).toEqual({ name: 'Base Camp', pawn_id: 42 })
+    })
+
+    it('deletes a bookmark by name', async () => {
+      await gp.deleteChatTeleport('Base Camp')
+      expect(last().url).toBe('/api/gameplay/chat-commands/teleports')
+      expect(last().method).toBe('DELETE')
+      expect(last().body).toEqual({ name: 'Base Camp' })
+    })
+  })
+
   it('reports unknown names without creating partial hidden failures', () => {
     const parsed = gp.parseTcnoPackageText('Mystery Goo:\n5', catalog)
 

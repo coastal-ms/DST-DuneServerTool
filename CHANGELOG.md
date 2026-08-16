@@ -22,6 +22,11 @@ here cover everything those tags shipped.
   overwrite the database, fills and verifies the exact cistern classes, then
   starts the battlegroup again. Orphaned structures, windtraps, and blood-water
   extractors are excluded.
+- In-game commands add admin-managed shared teleport destinations. An admin can
+  capture and name an online player's current location in DST; players can use
+  `!tp list` and `!tp <name>` to teleport themselves while on the same map,
+  partition and dimension. Destinations stay local to that DST installation,
+  the command is off by default, and each player has a configurable cooldown.
 - Solo Mode adds a host-local PTC preview workspace that operates independently
   of Self-Hosted VM setup. It auto-detects or connects a local Solo save,
   validates Funcom's wrapped SQLite database, reads all 48 native Solo settings,

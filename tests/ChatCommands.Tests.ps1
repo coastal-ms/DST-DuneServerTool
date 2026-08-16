@@ -1,5 +1,6 @@
 BeforeAll {
     . (Join-Path $PSScriptRoot '_TestHelpers.ps1')
+    Import-DstLib 'Gameplay.ps1'
     Import-DstLib 'ChatCommands.ps1'
 
     # A REAL captured payload. Coastal typed "!large" in proximity chat on
@@ -18,6 +19,7 @@ BeforeAll {
                 kit     = @{ enabled = $KitOn; cooldownSeconds = $KitCooldown }
                 item    = @{ enabled = $true;  cooldownSeconds = 3600; maxQty = 1000 }
                 water   = @{ enabled = $true;  cooldownSeconds = 300 }
+                tp      = @{ enabled = $true;  cooldownSeconds = 60 }
                 vehicle = @{ enabled = $true;  cooldownSeconds = 604800 }
                 small   = @{ enabled = $true;  cooldownSeconds = 900 }
                 medium  = @{ enabled = $true;  cooldownSeconds = 900 }
@@ -186,6 +188,16 @@ Describe 'Resolve-DuneChatCommandAction' {
         $r.reply | Should -BeLike '*cooldown*'
     }
 
+    It 'allows !tp list during a teleport cooldown' {
+        $st = New-DstChatState
+        $st.cooldowns[(Get-DuneChatCooldownKey -FromId 'A#1' -Verb 'tp')] =
+            ([datetime]::UtcNow).ToString('o')
+        $m = @{ type = 'TextChat'; channel = 'Proximity'; fromId = 'A#1'; text = '!tp list' }
+        $r = Resolve-DuneChatCommandAction -Message $m -State $st
+        $r.action | Should -Be 'run'
+        $r.verb | Should -Be 'tp'
+    }
+
     It 'never runs on a non-TextChat envelope' {
         $st = New-DstChatState
         $m = @{ type = 'SystemMessage'; channel = 'Proximity'; fromId = 'A#1'; text = '!large' }
@@ -241,7 +253,7 @@ Describe 'defaults' {
         # Resolve-DuneChatCommandAction rejects anything not in `commands`.
         $d = New-DuneChatCommandsDefault
         @($d.commands.Keys | Sort-Object) |
-            Should -Be @('item', 'kit', 'large', 'medium', 'small', 'vehicle', 'water')
+            Should -Be @('item', 'kit', 'large', 'medium', 'small', 'tp', 'vehicle', 'water')
     }
 
     It 'caps how much !item can hand out, and only !item carries a cap' {
@@ -250,7 +262,7 @@ Describe 'defaults' {
         # in any quantity".
         $d = New-DuneChatCommandsDefault
         $d.commands['item'].maxQty | Should -BeGreaterThan 0
-        foreach ($k in @('kit', 'water', 'vehicle', 'small', 'medium', 'large')) {
+        foreach ($k in @('kit', 'water', 'tp', 'vehicle', 'small', 'medium', 'large')) {
             $d.commands[$k].ContainsKey('maxQty') | Should -BeFalse
         }
     }
@@ -305,6 +317,101 @@ Describe 'self-only commands' {
         $m = @{ type = 'TextChat'; channel = 'Proximity'; fromId = 'A#1'; text = '!item Plastanium Ingot 10' }
         $act = Resolve-DuneChatCommandAction -Message $m -State $st
         (@($act.args) -join ' ') | Should -Be 'Plastanium Ingot 10'
+    }
+}
+
+Describe 'teleport bookmarks' {
+    BeforeAll {
+        if (-not (Get-Command Invoke-DuneSqlQuery -ErrorAction SilentlyContinue)) {
+            function global:Invoke-DuneSqlQuery { param($Ip, $Sql, $ReadOnly, $MaxRows, $TimeoutSec) }
+        }
+        if (-not (Get-Command Invoke-DuneRmqTeleportToExact -ErrorAction SilentlyContinue)) {
+            function global:Invoke-DuneRmqTeleportToExact { param($FlsId, $X, $Y, $Z) }
+        }
+    }
+
+    BeforeEach {
+        $script:DuneChatTeleportsFile = Join-Path $TestDrive 'teleport-bookmarks.json'
+    }
+
+    AfterEach {
+        $script:DuneChatTeleportsFile = $null
+    }
+
+    It 'accepts friendly names while rejecting reserved or unsafe names' {
+        ConvertTo-DuneChatTeleportName -Name '  Base   Camp  ' | Should -Be 'Base Camp'
+        ConvertTo-DuneChatTeleportName -Name 'list' | Should -BeNullOrEmpty
+        ConvertTo-DuneChatTeleportName -Name '../outside' | Should -BeNullOrEmpty
+    }
+
+    It 'captures an online player location and replaces a matching name' {
+        Mock Invoke-DuneSqlQuery {
+            @{
+                ok = $true
+                columns = @('player_name', 'status', 'map', 'partition', 'dimension', 'x', 'y', 'z')
+                rows = ,@('Coastal', 'Online', 'HaggaBasin', '1', '0', '100.5', '200.25', '300')
+            }
+        }
+
+        $first = Save-DuneChatTeleportFromPawn -Ip 'vm' -Name 'Base Camp' -PawnId 42
+        $first.ok | Should -BeTrue
+        $first.replaced | Should -BeFalse
+        @(Read-DuneChatTeleports).Count | Should -Be 1
+
+        $second = Save-DuneChatTeleportFromPawn -Ip 'vm' -Name 'base camp' -PawnId 42
+        $second.ok | Should -BeTrue
+        $second.replaced | Should -BeTrue
+        @(Read-DuneChatTeleports).Count | Should -Be 1
+    }
+
+    It 'refuses to capture an offline player' {
+        Mock Invoke-DuneSqlQuery {
+            @{
+                ok = $true
+                columns = @('player_name', 'status', 'map', 'partition', 'dimension', 'x', 'y', 'z')
+                rows = ,@('Coastal', 'Offline', 'HaggaBasin', '1', '0', 1, 2, 3)
+            }
+        }
+        $r = Save-DuneChatTeleportFromPawn -Ip 'vm' -Name 'Base' -PawnId 42
+        $r.ok | Should -BeFalse
+        $r.error | Should -BeLike '*must be online*'
+    }
+
+    It 'lists destinations without consuming the teleport cooldown' {
+        Save-DuneChatTeleports -Bookmarks @(
+            [ordered]@{ name = 'Base'; key = 'base'; map = 'HaggaBasin'; partition = 1; dimension = 0; x = 1; y = 2; z = 3; capturedFrom = 'Coastal'; capturedAt = '2026-08-16T00:00:00Z' }
+        ) | Should -BeTrue
+        $r = Invoke-DuneChatCommandExecutor -Ip 'vm' -State (New-DstChatState) -Verb 'tp' -FuncomId 'A#1' -CommandArgs @('list')
+        $r.ok | Should -BeTrue
+        $r.applyCooldown | Should -BeFalse
+        $r.reply | Should -BeLike '*Base*'
+    }
+
+    It 'teleports only within the current map, partition and dimension' {
+        Save-DuneChatTeleports -Bookmarks @(
+            [ordered]@{ name = 'Base'; key = 'base'; map = 'HaggaBasin'; partition = 1; dimension = 0; x = 1; y = 2; z = 3; capturedFrom = 'Coastal'; capturedAt = '2026-08-16T00:00:00Z' }
+        ) | Should -BeTrue
+        Mock Get-DuneChatPlayerLocation { @{ ok = $true; status = 'Online'; map = 'HaggaBasin'; partition = 1; dimension = 0 } }
+        Mock Resolve-DuneChatFlsId { @{ ok = $true; flsId = 'FLS1' } }
+        Mock Invoke-DuneRmqTeleportToExact { @{ ok = $true } }
+
+        $r = Invoke-DuneChatCommandExecutor -Ip 'vm' -State (New-DstChatState) -Verb 'tp' -FuncomId 'A#1' -CommandArgs @('Base')
+        $r.ok | Should -BeTrue
+        $r.reply | Should -Be 'Teleported to Base.'
+        Should -Invoke Invoke-DuneRmqTeleportToExact -Times 1 -Exactly
+    }
+
+    It 'blocks a destination on another map before sending RMQ' {
+        Save-DuneChatTeleports -Bookmarks @(
+            [ordered]@{ name = 'Base'; key = 'base'; map = 'HaggaBasin'; partition = 1; dimension = 0; x = 1; y = 2; z = 3; capturedFrom = 'Coastal'; capturedAt = '2026-08-16T00:00:00Z' }
+        ) | Should -BeTrue
+        Mock Get-DuneChatPlayerLocation { @{ ok = $true; status = 'Online'; map = 'DeepDesert'; partition = 8; dimension = 0 } }
+        Mock Invoke-DuneRmqTeleportToExact { @{ ok = $true } }
+
+        $r = Invoke-DuneChatCommandExecutor -Ip 'vm' -State (New-DstChatState) -Verb 'tp' -FuncomId 'A#1' -CommandArgs @('Base')
+        $r.ok | Should -BeFalse
+        $r.reply | Should -BeLike '*Travel to that map first*'
+        Should -Invoke Invoke-DuneRmqTeleportToExact -Times 0 -Exactly
     }
 }
 
