@@ -14,6 +14,20 @@ internal static partial class Program
         PropertyNamingPolicy = JsonNamingPolicy.CamelCase
     };
 
+    // These picker-only templates have names but no item rules in the shared
+    // catalog. Keep the verified fallback limits aligned with PlayersRmq.ps1.
+    private static readonly IReadOnlyDictionary<string, int> KnownStackLimits =
+        new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["Ammo"] = 500,
+            ["HeavyAmmo"] = 500,
+            ["InfantryRocketAmmo"] = 500,
+            ["Napalm"] = 500,
+            ["RocketAmmo"] = 500,
+            ["SolarisCoin"] = int.MaxValue,
+            ["AntiRadiationPill"] = 20
+        };
+
     public static int Main(string[] args)
     {
         try
@@ -796,6 +810,13 @@ internal static partial class Program
                     );
                     INSERT INTO player_state (id, name, player_pawn_id, player_controller_id)
                     VALUES (1, 'Solo', 10, 11);
+                    CREATE TABLE coriolis_cycle (
+                        onerow_id INTEGER PRIMARY KEY,
+                        start_date_seconds REAL NOT NULL,
+                        end_date_seconds REAL NOT NULL,
+                        cycle_index INTEGER NOT NULL
+                    );
+                    INSERT INTO coriolis_cycle VALUES (1, 0, 1, 14);
                     CREATE TABLE actors (
                         id INTEGER PRIMARY KEY,
                         class TEXT,
@@ -954,6 +975,11 @@ internal static partial class Program
             WrapSqlite(sqlitePath, source);
             var inspection = InspectPath(source);
             EnsureWritableInspection(inspection);
+            if (inspection.MapSeed != 2)
+            {
+                throw new InvalidOperationException(
+                    $"Map seed expected 2 from cycle index 14, found {inspection.MapSeed}.");
+            }
 
             var backup = Path.Combine(root, "backups", "game-test.db");
             Backup(source, backup);
@@ -986,11 +1012,26 @@ internal static partial class Program
             var planPath = Path.Combine(root, "grant-plan.json");
             File.WriteAllText(
                 planPath,
-                """{"destination":"inventory:2","items":[{"templateId":"TestResource","quantity":12,"quality":0}]}""");
+                """
+                {"destination":"inventory:2","items":[
+                  {"templateId":"TestResource","quantity":12,"quality":0},
+                  {"templateId":"HeavyAmmo","quantity":501,"quality":0},
+                  {"templateId":"AntiRadiationPill","quantity":21,"quality":0}
+                ]}
+                """);
             var catalogPath = Path.Combine(root, "catalog.json");
             File.WriteAllText(
                 catalogPath,
-                """{"names":{"TestResource":"Test Resource"},"items":{"TestResource":{"stack_max":10,"volume":1.0}}}""");
+                """
+                {
+                  "names":{
+                    "TestResource":"Test Resource",
+                    "HeavyAmmo":"Heavy Darts",
+                    "AntiRadiationPill":"Iodine Pill"
+                  },
+                  "items":{"TestResource":{"stack_max":10,"volume":1.0}}
+                }
+                """);
             var grantSafety = Path.Combine(root, "safety", "before-grant.db");
             GrantItems(target, grantSafety, planPath, catalogPath);
             if (!File.Exists(grantSafety))
@@ -1014,6 +1055,30 @@ internal static partial class Program
                 {
                     throw new InvalidOperationException(
                         $"Item grant expected quantity 12, found {quantity}.");
+                }
+                var heavyQuantity = ScalarLong(
+                    connection,
+                    "SELECT COALESCE(SUM(stack_size), 0) FROM items WHERE template_id = 'HeavyAmmo';");
+                var heavyRows = ScalarLong(
+                    connection,
+                    "SELECT COUNT(*) FROM items WHERE template_id = 'HeavyAmmo';");
+                var heavyMax = ScalarLong(
+                    connection,
+                    "SELECT COALESCE(MAX(stack_size), 0) FROM items WHERE template_id = 'HeavyAmmo';");
+                var pillQuantity = ScalarLong(
+                    connection,
+                    "SELECT COALESCE(SUM(stack_size), 0) FROM items WHERE template_id = 'AntiRadiationPill';");
+                var pillRows = ScalarLong(
+                    connection,
+                    "SELECT COUNT(*) FROM items WHERE template_id = 'AntiRadiationPill';");
+                var pillMax = ScalarLong(
+                    connection,
+                    "SELECT COALESCE(MAX(stack_size), 0) FROM items WHERE template_id = 'AntiRadiationPill';");
+                if (heavyQuantity != 501 || heavyRows != 2 || heavyMax != 500
+                    || pillQuantity != 21 || pillRows != 2 || pillMax != 20)
+                {
+                    throw new InvalidOperationException(
+                        "Picker-only stack-limit fallbacks were not applied correctly.");
                 }
             }
 
@@ -1210,6 +1275,7 @@ internal static partial class Program
                     "wrapper-v1-roundtrip",
                     "sqlite-integrity-and-foreign-keys",
                     "exactly-one-character",
+                    "map-seed-from-coriolis-cycle",
                     "retained-backup",
                     "atomic-restore-with-safety-backup",
                     "unsupported-wrapper-rejected",
@@ -1430,6 +1496,23 @@ internal static partial class Program
             ? ReadSupportedFillables(connection, waterCapacities)
             : Array.Empty<FillableItem>();
         var progression = ReadProgressionSummary(connection);
+        long? mapSeed = null;
+        var hasSingleCoriolisCycle = ScalarLong(
+            connection,
+            """
+            SELECT COUNT(*)
+            FROM sqlite_master
+            WHERE type = 'table'
+              AND name = 'coriolis_cycle';
+            """) == 1
+            && ScalarLong(connection, "SELECT COUNT(*) FROM coriolis_cycle;") == 1;
+        if (hasSingleCoriolisCycle)
+        {
+            var cycleIndex = ScalarLong(
+                connection,
+                "SELECT cycle_index FROM coriolis_cycle LIMIT 1;");
+            mapSeed = ((cycleIndex % 12) + 12) % 12;
+        }
 
         using var schemaCommand = connection.CreateCommand();
         schemaCommand.CommandText = """
@@ -1466,6 +1549,7 @@ internal static partial class Program
             CharacterCount: characterCount,
             SchemaFingerprint: Convert.ToHexString(
                 SHA256.HashData(Encoding.UTF8.GetBytes(schema.ToString()))).ToLowerInvariant(),
+            MapSeed: mapSeed,
             Inventories: inventories,
             Currencies: currencies,
             Fillables: fillables,
@@ -1606,6 +1690,16 @@ internal static partial class Program
                     && volumeElement.ValueKind == JsonValueKind.Number;
                 var volume = hasVolume ? volumeElement.GetDouble() : 0;
                 result[property.Name] = new CatalogRule(stackMax, volume, hasVolume);
+            }
+        }
+        foreach (var (templateId, stackMax) in KnownStackLimits)
+        {
+            if (result.TryGetValue(templateId, out var rule))
+            {
+                result[templateId] = rule with
+                {
+                    StackMax = Math.Max(rule.StackMax, stackMax)
+                };
             }
         }
         foreach (var templateId in new[]
@@ -1879,6 +1973,7 @@ internal static partial class Program
         long TableCount,
         long CharacterCount,
         string SchemaFingerprint,
+        long? MapSeed,
         InventoryDestination[] Inventories,
         CurrencyBalances Currencies,
         FillableItem[] Fillables,

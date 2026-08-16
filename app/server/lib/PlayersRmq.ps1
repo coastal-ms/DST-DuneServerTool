@@ -33,6 +33,7 @@ function Resolve-DuneItemVolume {
 # have no catalogued stack_max even though the game stacks them.
 $script:DuneKnownStackableItemLimits = @{
     Ammo              = 500
+    AntiRadiationPill = 20
     HeavyAmmo         = 500
     InfantryRocketAmmo = 500
     Napalm            = 500

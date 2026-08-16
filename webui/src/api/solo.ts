@@ -26,6 +26,7 @@ export interface SoloInspection {
   tableCount: number
   characterCount: number
   schemaFingerprint: string
+  mapSeed: number | null
   inventories: SoloInventoryDestination[]
   currencies: {
     solari: number

@@ -25,6 +25,10 @@ Describe 'Resolve-DuneStackMax' -Tag 'Pure' {
         Resolve-DuneStackMax -Ip '1.2.3.4' -Template 'Ammo' -Quality 0 | Should -Be 500
     }
 
+    It 'treats Iodine Pills as one stack per 20 items' {
+        Resolve-DuneStackMax -Ip '1.2.3.4' -Template 'AntiRadiationPill' -Quality 0 | Should -Be 20
+    }
+
     It 'keeps catalog-only launchers non-stackable' {
         Resolve-DuneStackMax -Ip '1.2.3.4' -Template 'RocketLauncher_2' -Quality 0 | Should -Be 1
     }
