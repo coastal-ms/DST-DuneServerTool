@@ -39,6 +39,7 @@ Register-DuneRoute -Method GET -Path '/api/gameplay/chat-commands' -Handler {
             commands   = $commands
             packages   = $packages
             teleports  = @(Read-DuneChatTeleports)
+            pendingTeleportCapture = (Read-DuneChatTeleportCapture)
             pollSeconds = [int](Get-DuneChatCommandPollSeconds -State $state)
             pollChoices = @($script:DuneChatPollChoices)
             ready      = [bool]$ready.ready
@@ -58,9 +59,6 @@ Register-DuneRoute -Method POST -Path '/api/gameplay/chat-commands/teleports' -H
             Write-DuneError -Response $res -Status 400 -Message 'Body must be a JSON object.'
             return
         }
-        # Keep this name distinct from Invoke-WithDuneLock's own $Name parameter.
-        # PowerShell scriptblocks use dynamic scope, so reusing $name here caused
-        # every bookmark to be saved as the lock name instead of the admin's name.
         $bookmarkName = [string]$body['name']
         $pawnId = 0L
         if (-not [int64]::TryParse([string]$body['pawn_id'], [ref]$pawnId)) {
@@ -72,7 +70,7 @@ Register-DuneRoute -Method POST -Path '/api/gameplay/chat-commands/teleports' -H
             Write-DuneError -Response $res -Status 503 -Message $ctx.message
             return
         }
-        $result = Invoke-WithDuneLock -Name 'chat-teleport-bookmarks' -Script {
+        $result = Invoke-DuneChatTeleportFileLock -Script {
             Save-DuneChatTeleportFromPawn -Ip $ctx.ip -Name $bookmarkName -PawnId $pawnId
         }
         if (-not $result.ok) {
@@ -85,6 +83,42 @@ Register-DuneRoute -Method POST -Path '/api/gameplay/chat-commands/teleports' -H
     }
 }
 
+Register-DuneRoute -Method POST -Path '/api/gameplay/chat-commands/teleports/capture' -Handler {
+    param($req, $res, $routeParams, $body)
+    try {
+        if (-not ($body -is [hashtable])) {
+            Write-DuneError -Response $res -Status 400 -Message 'Body must be a JSON object.'
+            return
+        }
+        $bookmarkName = [string]$body['name']
+        $pawnId = 0L
+        if (-not [int64]::TryParse([string]$body['pawn_id'], [ref]$pawnId)) {
+            Write-DuneError -Response $res -Status 400 -Message 'pawn_id is required.'
+            return
+        }
+        $state = Read-DuneChatCommandsState
+        if (-not $state.enabled -or -not $state.commands['tp'].enabled) {
+            Write-DuneError -Response $res -Status 409 -Message 'Turn on in-game command listening and !tp before arming a live capture.'
+            return
+        }
+        $ctx = Get-DuneDbContext
+        if (-not $ctx.ok) {
+            Write-DuneError -Response $res -Status 503 -Message $ctx.message
+            return
+        }
+        $result = Invoke-DuneChatTeleportFileLock -Script {
+            Set-DuneChatTeleportCaptureForPawn -Ip $ctx.ip -Name $bookmarkName -PawnId $pawnId
+        }
+        if (-not $result.ok) {
+            Write-DuneError -Response $res -Status ([int]$result.status) -Message $result.error
+            return
+        }
+        Write-DuneJson -Response $res -Body $result
+    } catch {
+        Write-DuneError -Response $res -Status 500 -Message "Live teleport capture arm failed: $($_.Exception.Message)"
+    }
+}
+
 Register-DuneRoute -Method DELETE -Path '/api/gameplay/chat-commands/teleports' -Handler {
     param($req, $res, $routeParams, $body)
     try {
@@ -93,7 +127,7 @@ Register-DuneRoute -Method DELETE -Path '/api/gameplay/chat-commands/teleports' 
             return
         }
         $bookmarkName = [string]$body['name']
-        $result = Invoke-WithDuneLock -Name 'chat-teleport-bookmarks' -Script {
+        $result = Invoke-DuneChatTeleportFileLock -Script {
             Remove-DuneChatTeleport -Name $bookmarkName
         }
         if (-not $result.ok) {
@@ -103,6 +137,27 @@ Register-DuneRoute -Method DELETE -Path '/api/gameplay/chat-commands/teleports' 
         Write-DuneJson -Response $res -Body $result
     } catch {
         Write-DuneError -Response $res -Status 500 -Message "Teleport bookmark delete failed: $($_.Exception.Message)"
+    }
+}
+
+Register-DuneRoute -Method DELETE -Path '/api/gameplay/chat-commands/teleports/capture' -Handler {
+    param($req, $res, $routeParams, $body)
+    try {
+        if (-not ($body -is [hashtable])) {
+            Write-DuneError -Response $res -Status 400 -Message 'Body must be a JSON object.'
+            return
+        }
+        $captureToken = [string]$body['token']
+        $result = Invoke-DuneChatTeleportFileLock -Script {
+            Cancel-DuneChatTeleportCapture -Token $captureToken
+        }
+        if (-not $result.ok) {
+            Write-DuneError -Response $res -Status ([int]$result.status) -Message $result.error
+            return
+        }
+        Write-DuneJson -Response $res -Body $result
+    } catch {
+        Write-DuneError -Response $res -Status 500 -Message "Pending teleport capture cancel failed: $($_.Exception.Message)"
     }
 }
 

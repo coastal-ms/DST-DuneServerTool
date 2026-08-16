@@ -480,6 +480,20 @@ export type ChatTeleportBookmark = {
   capturedAt: string
 }
 
+export type PendingChatTeleportCapture = {
+  name: string
+  key: string
+  pawnId: number
+  funcomId: string
+  playerName: string
+  token: string
+  map: string
+  partition: number
+  dimension: number
+  armedAt: string
+  expiresAt: string
+}
+
 export type ChatCommandsState = {
   ok: boolean
   enabled: boolean
@@ -488,6 +502,7 @@ export type ChatCommandsState = {
   commands: Record<string, ChatCommandSetting>
   packages?: string[]      // kit names available to !kit, from the package store
   teleports?: ChatTeleportBookmark[]
+  pendingTeleportCapture?: PendingChatTeleportCapture | null
   pollSeconds?: number
   pollChoices?: number[]
   ready?: boolean
