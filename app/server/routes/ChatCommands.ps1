@@ -58,7 +58,10 @@ Register-DuneRoute -Method POST -Path '/api/gameplay/chat-commands/teleports' -H
             Write-DuneError -Response $res -Status 400 -Message 'Body must be a JSON object.'
             return
         }
-        $name = [string]$body['name']
+        # Keep this name distinct from Invoke-WithDuneLock's own $Name parameter.
+        # PowerShell scriptblocks use dynamic scope, so reusing $name here caused
+        # every bookmark to be saved as the lock name instead of the admin's name.
+        $bookmarkName = [string]$body['name']
         $pawnId = 0L
         if (-not [int64]::TryParse([string]$body['pawn_id'], [ref]$pawnId)) {
             Write-DuneError -Response $res -Status 400 -Message 'pawn_id is required.'
@@ -70,7 +73,7 @@ Register-DuneRoute -Method POST -Path '/api/gameplay/chat-commands/teleports' -H
             return
         }
         $result = Invoke-WithDuneLock -Name 'chat-teleport-bookmarks' -Script {
-            Save-DuneChatTeleportFromPawn -Ip $ctx.ip -Name $name -PawnId $pawnId
+            Save-DuneChatTeleportFromPawn -Ip $ctx.ip -Name $bookmarkName -PawnId $pawnId
         }
         if (-not $result.ok) {
             Write-DuneError -Response $res -Status ([int]$result.status) -Message $result.error
@@ -89,9 +92,9 @@ Register-DuneRoute -Method DELETE -Path '/api/gameplay/chat-commands/teleports' 
             Write-DuneError -Response $res -Status 400 -Message 'Body must be a JSON object.'
             return
         }
-        $name = [string]$body['name']
+        $bookmarkName = [string]$body['name']
         $result = Invoke-WithDuneLock -Name 'chat-teleport-bookmarks' -Script {
-            Remove-DuneChatTeleport -Name $name
+            Remove-DuneChatTeleport -Name $bookmarkName
         }
         if (-not $result.ok) {
             Write-DuneError -Response $res -Status ([int]$result.status) -Message $result.error

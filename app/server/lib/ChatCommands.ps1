@@ -76,7 +76,7 @@ function ConvertTo-DuneChatTeleportName {
     $value = ([string]$Name).Trim() -replace '\s+', ' '
     if (-not $value -or $value.Length -gt $script:DuneChatTeleportNameMax) { return '' }
     if ($value -notmatch "^[A-Za-z0-9][A-Za-z0-9 _'-]*$") { return '' }
-    if ($value -ieq 'list') { return '' }
+    if ($value -ieq 'list' -or $value -ieq 'chat-teleport-bookmarks') { return '' }
     return $value
 }
 
@@ -100,6 +100,10 @@ function Read-DuneChatTeleports {
     $items = @()
     $keys = @{}
     foreach ($entry in @($parsed)) {
+        # Preview 4's first field build accidentally saved the named-lock value
+        # instead of the requested bookmark name. Ignore that exact internal
+        # sentinel so the next real save replaces the broken one cleanly.
+        if ([string]$entry.name -ieq 'chat-teleport-bookmarks') { continue }
         $name = ConvertTo-DuneChatTeleportName -Name ([string]$entry.name)
         if (-not $name) { throw 'Teleport bookmarks contain an invalid or reserved name.' }
         $key = $name.ToLowerInvariant()

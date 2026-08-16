@@ -341,7 +341,16 @@ Describe 'teleport bookmarks' {
     It 'accepts friendly names while rejecting reserved or unsafe names' {
         ConvertTo-DuneChatTeleportName -Name '  Base   Camp  ' | Should -Be 'Base Camp'
         ConvertTo-DuneChatTeleportName -Name 'list' | Should -BeNullOrEmpty
+        ConvertTo-DuneChatTeleportName -Name 'chat-teleport-bookmarks' | Should -BeNullOrEmpty
         ConvertTo-DuneChatTeleportName -Name '../outside' | Should -BeNullOrEmpty
+    }
+
+    It 'filters the legacy lock-name bookmark from the first field build' {
+        [IO.File]::WriteAllText(
+            $script:DuneChatTeleportsFile,
+            '[{"name":"chat-teleport-bookmarks","key":"chat-teleport-bookmarks","map":"HaggaBasin","partition":1,"dimension":0,"x":1,"y":2,"z":3}]',
+            (New-Object Text.UTF8Encoding($false)))
+        @(Read-DuneChatTeleports).Count | Should -Be 0
     }
 
     It 'captures an online player location and replaces a matching name' {
