@@ -369,7 +369,7 @@ body:
       placeholder: |
         Dashboard message: "SSH key is passphrase-protected, so background checks can't use it…"
         Setup "SSH key authorized on VM": "The VM rejected this key…"
-        SSH Key path (Settings): C:\Users\me\.ssh\dune_key
+        SSH Key path (Settings): C:\Users\<user>\.ssh\dune_key
       render: shell
     validations:
       required: false
