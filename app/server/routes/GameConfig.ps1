@@ -215,7 +215,7 @@ Register-DuneRoute -Method PUT -Path '/api/gameconfig' -Handler {
     }
 
     try {
-        Save-DuneGameConfig -Ip $ctx.ip -Updates $structured.ToArray()
+        Save-DuneGameConfigLocked -Ip $ctx.ip -Updates $structured.ToArray()
         # Console variables are staged, never applied here. The values live in
         # UserEngine.ini; the matching startup commands are rebuilt from that file
         # at the start of every battlegroup restart. Patching pod specs on save
@@ -540,7 +540,8 @@ Register-DuneRoute -Method PUT -Path '/api/gameconfig/client/apply' -Handler {
         # it when a Landsraad-style struct member is actually being applied, and
         # tolerate failure so non-struct client edits still apply offline.
         $defaultsRaw = ''
-        if (Test-DuneUpdatesHaveStructMember -Updates $updates.ToArray()) {
+        if ((Test-DuneUpdatesHaveStructMember -Updates $updates.ToArray()) -or
+            (Test-DuneUpdatesHaveSpicefieldMember -Updates $updates.ToArray())) {
             try {
                 $ctx = Get-DuneGameConfigContext
                 if ($ctx.ok) { $defaultsRaw = "$((Get-DuneGameConfigDefaults -Ip $ctx.ip).game)" }

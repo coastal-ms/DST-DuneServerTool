@@ -223,6 +223,14 @@ $script:DuneGameConfigSchema = @(
     @{ Section=$script:DuneGcSecSpiceAddict; Key='m_bIsSpiceAddictionEnabled'; File='game'; Type='bool'; Default='True'; Label='Spice Addiction Enabled'; Help='Whether players develop spice addiction over time. Also needs client-side apply.'; ClientApply=$true; Category='Spice' }
     @{ Section=$script:DuneGcSecSpiceAddict; Key='m_bIsSpiceVisionEnabled'; File='game'; Type='bool'; Default='True'; Label='Spice Vision Enabled'; Help='Whether spice vision effects are active. Also needs client-side apply.'; ClientApply=$true; Category='Spice' }
 
+    # --- Deep Desert startup caps (members of SpiceHarvestingSystem m_PerMapSystemSettings) ---
+    @{ Section=$script:DuneGcSecSpice; Key='DST.SpiceStartup.DeepDesert.Small.Max'; File='game'; Type='int'; Min=0; Default='60'; Label='Deep Desert Small Fields at Startup'; Help='Caps both active and primed Small fields after Apply INIs & restart. Guidance: 60 is Funcom''s normal high cap. This is a ceiling, not a forced count; if the current layout provides fewer fields, only those fields can appear.'; SpiceMap='DeepDesert_1'; SpiceFieldType='Small'; SpiceLimit='Both'; ClientStructKey='m_PerMapSystemSettings'; ClientApply=$true; Category='Spice' }
+    @{ Section=$script:DuneGcSecSpice; Key='DST.SpiceStartup.DeepDesert.Medium.Max'; File='game'; Type='int'; Min=0; Default='12'; Label='Deep Desert Medium Fields at Startup'; Help='Caps both active and primed Medium fields after Apply INIs & restart. Guidance: 12 is Funcom''s normal high cap. This is a ceiling, not a forced count; if the current layout provides fewer fields, only those fields can appear.'; SpiceMap='DeepDesert_1'; SpiceFieldType='Medium'; SpiceLimit='Both'; ClientStructKey='m_PerMapSystemSettings'; ClientApply=$true; Category='Spice' }
+    @{ Section=$script:DuneGcSecSpice; Key='DST.SpiceStartup.DeepDesert.Large.Max'; File='game'; Type='int'; Min=0; Default='1'; Label='Deep Desert Large Fields at Startup'; Help='Caps both active and primed Large fields after Apply INIs & restart. Guidance: use up to 6 to cover the largest known layouts. This is a ceiling, not a forced count: a max of 6 with only 4 fields in the seed still produces at most 4.'; SpiceMap='DeepDesert_1'; SpiceFieldType='Large'; SpiceLimit='Both'; ClientStructKey='m_PerMapSystemSettings'; ClientApply=$true; Category='Spice' }
+    @{ Section=$script:DuneGcSecSpice; Key='DST.SpiceStartup.Hagga.Small.Max'; File='game'; Type='int'; Min=0; Default='5'; Label='Hagga Small Fields at Startup'; Help='Caps both active and primed Small fields after Apply INIs & restart. Guidance: 5 is Funcom''s normal active cap. This is a ceiling; it does not create fields beyond what Hagga can place.'; SpiceMap='Survival_1'; SpiceFieldType='Small'; SpiceLimit='Both'; ClientStructKey='m_PerMapSystemSettings'; ClientApply=$true; Category='Spice' }
+    @{ Section=$script:DuneGcSecSpice; Key='DST.SpiceStartup.Hagga.Medium.Max'; File='game'; Type='int'; Min=0; Default='5'; Label='Hagga Medium Fields at Startup'; Help='Caps both active and primed Medium fields after Apply INIs & restart. Guidance: 5 is Funcom''s normal active cap. This is a ceiling; it does not create fields beyond what Hagga can place.'; SpiceMap='Survival_1'; SpiceFieldType='Medium'; SpiceLimit='Both'; ClientStructKey='m_PerMapSystemSettings'; ClientApply=$true; Category='Spice' }
+    @{ Section=$script:DuneGcSecSpice; Key='DST.SpiceStartup.Hagga.Large.Max'; File='game'; Type='int'; Min=0; Default='3'; Label='Hagga Large Fields at Startup'; Help='Caps both active and primed Large fields after Apply INIs & restart. Guidance: 3 is Funcom''s normal active cap. This is a ceiling; it does not create fields beyond what Hagga can place.'; SpiceMap='Survival_1'; SpiceFieldType='Large'; SpiceLimit='Both'; ClientStructKey='m_PerMapSystemSettings'; ClientApply=$true; Category='Spice' }
+
     # --- Taxation ---
     @{ Section=$script:DuneGcSecTaxation; Key='m_bTaxationEnabled'; File='game'; Type='bool'; Default='False'; Label='Taxation Enabled'; Help='Whether the taxation system is active. Also needs client-side apply.'; ClientApply=$true; Category='Taxation' }
     @{ Section=$script:DuneGcSecTaxation; Key='m_TaxationCycleLengthSeconds'; File='game'; Type='int'; Min=0; Unit='sec'; Default='1209600'; Label='Taxation Cycle'; Help='Seconds between taxation collection cycles. Also needs client-side apply.'; ClientApply=$true; Category='Taxation' }
@@ -826,7 +834,11 @@ function Get-DuneGameConfigClientApplyNotice {
                 section   = $f.Section
                 file      = $f.File
                 value     = "$($u.value)"
-                structKey = $(if ($f.ContainsKey('StructKey')) { "$($f.StructKey)" } else { '' })
+                structKey = $(if ($f.ContainsKey('StructKey')) {
+                    "$($f.StructKey)"
+                } elseif ($f.ContainsKey('ClientStructKey')) {
+                    "$($f.ClientStructKey)"
+                } else { '' })
             })
         }
     }
@@ -1095,7 +1107,9 @@ function Save-DuneGameConfigClient {
             }
         }
 
-        $folded = Convert-DuneStructUpdates -Raw $existing -Updates $fileUpdates.ToArray() -DefaultsRaw $(if ($file -eq 'game') { $DefaultsRaw } else { '' })
+        $defaultsForFile = if ($file -eq 'game') { $DefaultsRaw } else { '' }
+        $folded = Convert-DuneSpicefieldUpdates -Raw $existing -Updates $fileUpdates.ToArray() -DefaultsRaw $defaultsForFile
+        $folded = Convert-DuneStructUpdates -Raw $existing -Updates $folded -DefaultsRaw $defaultsForFile
         $new = ConvertTo-DuneIniManaged -Raw $existing -Updates $folded -QuotedKeys $quoted
         $new = $new -replace "`r?`n", "`r`n"
         $plans.Add(@{ file = $file; path = $path; created = $created; raw = $new; applied = $fileUpdates.Count })
@@ -1644,7 +1658,177 @@ function Get-DuneIniEffectiveByKey {
             }
         }
     }
+    $spiceMaps = Get-DuneIniSectionScalarValue -Raw $Raw -Section $script:DuneGcSecSpice -Key 'm_PerMapSystemSettings'
+    $spiceFallback = Get-DuneIniSectionScalarValue -Raw $Raw -Section $script:DuneGcSecSpice -Key 'm_DefaultSystemSettings'
+    foreach ($field in @($script:DuneGameConfigSchema | Where-Object { $_.ContainsKey('SpiceMap') })) {
+        $state = Get-DuneSpicefieldLimitsFromBlob -Blob $spiceMaps `
+            -MapId "$($field.SpiceMap)" -FieldType "$($field.SpiceFieldType)"
+        if (-not $state.found) {
+            $state = Get-DuneSpicefieldDefaultLimitsFromBlob -Blob $spiceFallback `
+                -FieldType "$($field.SpiceFieldType)"
+        }
+        if ($state.found) {
+            $eff[$field.Key] = if ("$($field.SpiceLimit)" -in @('Active', 'Both')) {
+                "$($state.maxActive)"
+            } else {
+                "$($state.maxPrimed)"
+            }
+        }
+    }
     return $eff
+}
+
+# Return the last scalar value for one exact section/key pair.
+function Get-DuneIniSectionScalarValue {
+    param([string]$Raw, [string]$Section, [string]$Key)
+    $value = ''
+    $doc = ConvertFrom-DuneIniDoc -Raw $Raw
+    foreach ($s in $doc.sections) {
+        if ("$($s.name)" -ne $Section) { continue }
+        foreach ($line in $s.body) {
+            $info = Get-DuneIniLineKey $line
+            if ($info -and -not $info.isArray -and "$($info.key)" -eq $Key) {
+                $value = (Get-DuneIniLineValue $line).Trim()
+            }
+        }
+    }
+    return $value
+}
+
+# Find the balanced parenthesized range beginning at OpenIndex. Quotes are
+# skipped so parentheses inside UE string values cannot terminate the range.
+function Find-DuneBalancedParenthesisRange {
+    param([string]$Text, [int]$OpenIndex)
+    if ([string]::IsNullOrEmpty($Text) -or $OpenIndex -lt 0 -or
+        $OpenIndex -ge $Text.Length -or $Text[$OpenIndex] -ne '(') {
+        return $null
+    }
+    $depth = 0
+    $quoted = $false
+    for ($i = $OpenIndex; $i -lt $Text.Length; $i++) {
+        $ch = $Text[$i]
+        if ($ch -eq '"' -and ($i -eq 0 -or $Text[$i - 1] -ne '\')) {
+            $quoted = -not $quoted
+            continue
+        }
+        if ($quoted) { continue }
+        if ($ch -eq '(') { $depth++ }
+        elseif ($ch -eq ')') {
+            $depth--
+            if ($depth -eq 0) {
+                return @{ start = $OpenIndex; end = $i; length = ($i - $OpenIndex + 1) }
+            }
+            if ($depth -lt 0) { return $null }
+        }
+    }
+    return $null
+}
+
+function Find-DuneSpicefieldMapRange {
+    param([string]$Blob, [string]$MapId)
+    if ([string]::IsNullOrWhiteSpace($Blob) -or [string]::IsNullOrWhiteSpace($MapId)) { return $null }
+    $rx = [regex]('\(\s*"' + [regex]::Escape($MapId) + '"\s*,\s*\(')
+    $match = $rx.Match($Blob)
+    if (-not $match.Success) { return $null }
+    return Find-DuneBalancedParenthesisRange -Text $Blob -OpenIndex $match.Index
+}
+
+function Find-DuneSpicefieldSizeRange {
+    param([string]$MapBlob, [string]$FieldType)
+    if ([string]::IsNullOrWhiteSpace($MapBlob) -or [string]::IsNullOrWhiteSpace($FieldType)) { return $null }
+    $rx = [regex]('\(\s*\(\s*Name\s*=\s*"' + [regex]::Escape($FieldType) + '"\s*\)\s*,\s*\(')
+    $match = $rx.Match($MapBlob)
+    if (-not $match.Success) { return $null }
+    return Find-DuneBalancedParenthesisRange -Text $MapBlob -OpenIndex $match.Index
+}
+
+function Get-DuneSpicefieldLimitsFromBlob {
+    param([string]$Blob, [string]$MapId, [string]$FieldType)
+    $mapRange = Find-DuneSpicefieldMapRange -Blob $Blob -MapId $MapId
+    if (-not $mapRange) { return @{ found = $false } }
+    $mapBlob = $Blob.Substring($mapRange.start, $mapRange.length)
+    $sizeRange = Find-DuneSpicefieldSizeRange -MapBlob $mapBlob -FieldType $FieldType
+    if (-not $sizeRange) { return @{ found = $false; mapFound = $true } }
+    $sizeBlob = $mapBlob.Substring($sizeRange.start, $sizeRange.length)
+    $primed = [regex]::Match($sizeBlob, '(?:^|[(,])\s*MaxGloballyPrimed\s*=\s*(\d+)')
+    $active = [regex]::Match($sizeBlob, '(?:^|[(,])\s*MaxGloballyActive\s*=\s*(\d+)')
+    if (-not $primed.Success -or -not $active.Success) {
+        return @{ found = $false; mapFound = $true; malformed = $true }
+    }
+    return @{
+        found     = $true
+        mapFound  = $true
+        maxPrimed = [int]$primed.Groups[1].Value
+        maxActive = [int]$active.Groups[1].Value
+    }
+}
+
+function Get-DuneSpicefieldDefaultLimitsFromBlob {
+    param([string]$Blob, [string]$FieldType)
+    if ([string]::IsNullOrWhiteSpace($Blob)) { return @{ found = $false } }
+    $sizeRange = Find-DuneSpicefieldSizeRange -MapBlob $Blob -FieldType $FieldType
+    if (-not $sizeRange) { return @{ found = $false } }
+    $sizeBlob = $Blob.Substring($sizeRange.start, $sizeRange.length)
+    $primed = [regex]::Match($sizeBlob, '(?:^|[(,])\s*MaxGloballyPrimed\s*=\s*(\d+)')
+    $active = [regex]::Match($sizeBlob, '(?:^|[(,])\s*MaxGloballyActive\s*=\s*(\d+)')
+    if (-not $primed.Success -or -not $active.Success) { return @{ found = $false; malformed = $true } }
+    return @{
+        found     = $true
+        maxPrimed = [int]$primed.Groups[1].Value
+        maxActive = [int]$active.Groups[1].Value
+    }
+}
+
+function Set-DuneSpicefieldLimitsInBlob {
+    param(
+        [string]$Blob,
+        [string]$MapId,
+        [string]$FieldType,
+        [int]$MaxActive,
+        [int]$MaxPrimed,
+        [string]$DefaultsBlob = ''
+    )
+    if ($MaxActive -lt 0 -or $MaxPrimed -lt 0) { throw 'Spicefield startup limits must be zero or greater.' }
+    $mapRange = Find-DuneSpicefieldMapRange -Blob $Blob -MapId $MapId
+    if (-not $mapRange -and -not [string]::IsNullOrWhiteSpace($DefaultsBlob)) {
+        $defaultRange = Find-DuneSpicefieldMapRange -Blob $DefaultsBlob -MapId $MapId
+        $outerOpen = $Blob.IndexOf('(')
+        $outerRange = Find-DuneBalancedParenthesisRange -Text $Blob -OpenIndex $outerOpen
+        if ($defaultRange -and $outerRange) {
+            $defaultMap = $DefaultsBlob.Substring($defaultRange.start, $defaultRange.length)
+            $inner = $Blob.Substring($outerRange.start + 1, $outerRange.length - 2).Trim()
+            $separator = if ($inner) { ',' } else { '' }
+            $Blob = $Blob.Substring(0, $outerRange.end) + $separator + $defaultMap +
+                $Blob.Substring($outerRange.end)
+            $mapRange = Find-DuneSpicefieldMapRange -Blob $Blob -MapId $MapId
+        }
+    }
+    if (-not $mapRange) { throw "Spicefield startup map '$MapId' is absent from m_PerMapSystemSettings and live defaults." }
+    $mapBlob = $Blob.Substring($mapRange.start, $mapRange.length)
+    $sizeRange = Find-DuneSpicefieldSizeRange -MapBlob $mapBlob -FieldType $FieldType
+    if ($sizeRange) {
+        $sizeBlob = $mapBlob.Substring($sizeRange.start, $sizeRange.length)
+        $primedRx = [regex]'(?<key>(?:^|[(,])\s*MaxGloballyPrimed\s*=\s*)\d+'
+        $activeRx = [regex]'(?<key>(?:^|[(,])\s*MaxGloballyActive\s*=\s*)\d+'
+        if ($primedRx.Matches($sizeBlob).Count -ne 1 -or $activeRx.Matches($sizeBlob).Count -ne 1) {
+            throw "Spicefield startup entry '$MapId/$FieldType' is malformed."
+        }
+        $patchedSize = $primedRx.Replace($sizeBlob, { param($m) $m.Groups['key'].Value + $MaxPrimed }, 1)
+        $patchedSize = $activeRx.Replace($patchedSize, { param($m) $m.Groups['key'].Value + $MaxActive }, 1)
+        $patchedMap = $mapBlob.Substring(0, $sizeRange.start) + $patchedSize +
+            $mapBlob.Substring($sizeRange.end + 1)
+    } else {
+        $settingsMatch = [regex]::Match($mapBlob, 'm_SpiceFieldTypeSettings\s*=\s*\(')
+        if (-not $settingsMatch.Success) { throw "Spicefield settings list for '$MapId' is malformed." }
+        $settingsOpen = $mapBlob.IndexOf('(', $settingsMatch.Index)
+        $settingsRange = Find-DuneBalancedParenthesisRange -Text $mapBlob -OpenIndex $settingsOpen
+        if (-not $settingsRange) { throw "Spicefield settings list for '$MapId' is unbalanced." }
+        $entry = ',((Name="' + $FieldType + '"), (MaxGloballyPrimed=' + $MaxPrimed +
+            ',MaxGloballyActive=' + $MaxActive + '))'
+        $patchedMap = $mapBlob.Substring(0, $settingsRange.end) + $entry +
+            $mapBlob.Substring($settingsRange.end)
+    }
+    return $Blob.Substring(0, $mapRange.start) + $patchedMap + $Blob.Substring($mapRange.end + 1)
 }
 
 # Distinct (section, structKey) pairs that the schema declares as struct parents.
@@ -1937,6 +2121,20 @@ function Get-DuneSchemaStructFieldMap {
     return $map
 }
 
+function Get-DuneSchemaSpicefieldFieldMap {
+    $map = @{}
+    foreach ($field in $script:DuneGameConfigSchema) {
+        if (-not $field.ContainsKey('SpiceMap')) { continue }
+        $map[$field.Key] = @{
+            mapId     = "$($field.SpiceMap)"
+            fieldType = "$($field.SpiceFieldType)"
+            limit     = "$($field.SpiceLimit)"
+            default   = [int]$field.Default
+        }
+    }
+    return $map
+}
+
 # True if any of $Updates targets a struct-member schema field (e.g. a
 # LandsraadSettings Data member). Callers use this to decide whether the
 # (relatively expensive) DefaultGame.ini read is worth doing before saving.
@@ -1946,6 +2144,16 @@ function Test-DuneUpdatesHaveStructMember {
     $structMap = Get-DuneSchemaStructFieldMap
     if ($structMap.Count -eq 0) { return $false }
     foreach ($u in $Updates) { if ($structMap.ContainsKey("$($u.key)")) { return $true } }
+    return $false
+}
+
+function Test-DuneUpdatesHaveSpicefieldMember {
+    param([object[]]$Updates)
+    if (-not $Updates) { return $false }
+    $spiceMap = Get-DuneSchemaSpicefieldFieldMap
+    foreach ($update in $Updates) {
+        if ($spiceMap.ContainsKey("$($update.key)")) { return $true }
+    }
     return $false
 }
 
@@ -2043,6 +2251,85 @@ function Convert-DuneStructUpdates {
     return $flat.ToArray()
 }
 
+function Convert-DuneSpicefieldUpdates {
+    param([string]$Raw, [object[]]$Updates, [string]$DefaultsRaw)
+    $fieldMap = Get-DuneSchemaSpicefieldFieldMap
+    if ($fieldMap.Count -eq 0) { return $Updates }
+    $spiceUpdates = @($Updates | Where-Object { $fieldMap.ContainsKey("$($_.key)") })
+    if ($spiceUpdates.Count -eq 0) { return $Updates }
+
+    $doc = ConvertFrom-DuneIniDoc -Raw $Raw
+    $defaultsDoc = if ([string]::IsNullOrWhiteSpace($DefaultsRaw)) { $null } else {
+        ConvertFrom-DuneIniDoc -Raw $DefaultsRaw
+    }
+    $blob = Get-DuneStructBlobFromDoc -Doc $doc -Section $script:DuneGcSecSpice `
+        -StructKey 'm_PerMapSystemSettings'
+    $defaultBlob = if ($defaultsDoc) {
+        Get-DuneStructBlobFromDoc -Doc $defaultsDoc -Section $script:DuneGcSecSpice `
+            -StructKey 'm_PerMapSystemSettings'
+    } else { $null }
+    if ($null -eq $blob) { $blob = $defaultBlob }
+    if ([string]::IsNullOrWhiteSpace($blob)) {
+        throw 'Funcom m_PerMapSystemSettings is unavailable; refusing to create a partial override.'
+    }
+    $existingFallback = Get-DuneStructBlobFromDoc -Doc $doc -Section $script:DuneGcSecSpice `
+        -StructKey 'm_DefaultSystemSettings'
+    $fallback = $existingFallback
+    if ($null -eq $fallback -and $defaultsDoc) {
+        $fallback = Get-DuneStructBlobFromDoc -Doc $defaultsDoc -Section $script:DuneGcSecSpice `
+            -StructKey 'm_DefaultSystemSettings'
+    }
+
+    $flat = New-Object 'System.Collections.Generic.List[object]'
+    foreach ($update in $Updates) {
+        $key = "$($update.key)"
+        if (-not $fieldMap.ContainsKey($key)) {
+            $flat.Add($update)
+            continue
+        }
+        $field = $fieldMap[$key]
+        $state = Get-DuneSpicefieldLimitsFromBlob -Blob $blob -MapId $field.mapId `
+            -FieldType $field.fieldType
+        if (-not $state.found) {
+            $state = Get-DuneSpicefieldDefaultLimitsFromBlob -Blob $fallback `
+                -FieldType $field.fieldType
+        }
+        $pairFields = @($script:DuneGameConfigSchema | Where-Object {
+            $_.ContainsKey('SpiceMap') -and "$($_.SpiceMap)" -eq $field.mapId -and
+            "$($_.SpiceFieldType)" -eq $field.fieldType
+        })
+        $active = if ($state.found) { [int]$state.maxActive } else {
+            [int](($pairFields | Where-Object { "$($_.SpiceLimit)" -eq 'Active' } | Select-Object -First 1).Default)
+        }
+        $primed = if ($state.found) { [int]$state.maxPrimed } else {
+            [int](($pairFields | Where-Object { "$($_.SpiceLimit)" -eq 'Primed' } | Select-Object -First 1).Default)
+        }
+        $value = if ($update['remove']) { [int]$field.default } else {
+            $parsed = 0
+            if (-not [int]::TryParse("$($update.value)", [ref]$parsed) -or $parsed -lt 0) {
+                throw "$key must be a whole number zero or greater."
+            }
+            $parsed
+        }
+        if ($field.limit -in @('Active', 'Both')) { $active = $value }
+        if ($field.limit -in @('Primed', 'Both')) { $primed = $value }
+        $blob = Set-DuneSpicefieldLimitsInBlob -Blob $blob -MapId $field.mapId `
+            -FieldType $field.fieldType -MaxActive $active -MaxPrimed $primed `
+            -DefaultsBlob $defaultBlob
+    }
+    $flat.Add(@{
+        file='game'; section=$script:DuneGcSecSpice; key='m_PerMapSystemSettings'
+        value=$blob; remove=$false
+    })
+    if ($null -eq $existingFallback -and $null -ne $fallback) {
+        $flat.Add(@{
+            file='game'; section=$script:DuneGcSecSpice; key='m_DefaultSystemSettings'
+            value=$fallback; remove=$false
+        })
+    }
+    return $flat.ToArray()
+}
+
 # Save structured updates. $Updates = array of @{ file; section; key; value }.
 # Does NOT auto-backup — backups are manual (Backup settings button) to avoid
 # cluttering the server PVC with a .dstbak per save.
@@ -2063,7 +2350,8 @@ function Save-DuneGameConfig {
     # (otherwise the override wipes the ~35 nested LandsraadSettings members). A
     # defaults-read failure (e.g. no running pod) falls back to prior behaviour.
     $defaults = $null
-    if (Test-DuneUpdatesHaveStructMember -Updates $Updates) {
+    if ((Test-DuneUpdatesHaveStructMember -Updates $Updates) -or
+        (Test-DuneUpdatesHaveSpicefieldMember -Updates $Updates)) {
         try { $defaults = Get-DuneGameConfigDefaults -Ip $Ip } catch { $defaults = $null }
     }
 
@@ -2075,11 +2363,19 @@ function Save-DuneGameConfig {
         # Fold any struct-member updates (e.g. LandsraadSettings Data members) into
         # a single parent-key update against the file's current blob (seeding from
         # defaults when the file has no prior struct).
-        $fileUpdates = Convert-DuneStructUpdates -Raw $raw -Updates $byFile[$f].ToArray() -DefaultsRaw $defRaw
+        $fileUpdates = Convert-DuneSpicefieldUpdates -Raw $raw -Updates $byFile[$f].ToArray() -DefaultsRaw $defRaw
+        $fileUpdates = Convert-DuneStructUpdates -Raw $raw -Updates $fileUpdates -DefaultsRaw $defRaw
         $new  = ConvertTo-DuneIniManaged -Raw $raw -Updates $fileUpdates -QuotedKeys $quoted
         $b64 = [Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes($new))
         Invoke-V6Ssh -Ip $Ip -Cmd "base64 -d | sudo tee '$path' > /dev/null" -StdinData $b64 -TimeoutSec 30 | Out-Null
     }
+}
+
+function Save-DuneGameConfigLocked {
+    param([string]$Ip, [object[]]$Updates)
+    Invoke-WithDuneLock -Name 'gameconfig-ini' -Script {
+        Save-DuneGameConfig -Ip $Ip -Updates $Updates
+    } | Out-Null
 }
 
 # =============================================================================
@@ -2203,7 +2499,7 @@ function Set-DuneDeepDesertPvp {
         # Preserve selected partitions that are currently spun down and hidden.
         $desired = @($requested + @($current.inactiveSelectedPartitionIds) | Sort-Object -Unique)
     }
-    Save-DuneGameConfig -Ip $ctx.ip -Updates (New-DuneDeepDesertPvpUpdates -PartitionIds $desired)
+    Save-DuneGameConfigLocked -Ip $ctx.ip -Updates (New-DuneDeepDesertPvpUpdates -PartitionIds $desired)
     $restart = Restart-DuneMapPods -Key 'deepdesert'
     $state = Get-DuneDeepDesertPvp
     $state.ok = $true
@@ -2357,20 +2653,17 @@ function Get-DuneLandclaimTimer {
 # configured client folder exists. Returns per-target outcomes.
 function Set-DuneLandclaimTimer {
     param([string]$Ip, [bool]$Enabled, [string]$Seconds)
-    $quoted = Get-DuneGameConfigQuotedKeys
     $result = @{ ok = $true; server = @{}; client = @{} }
 
     # --- server 'game' file (UserGame.ini) ---
     $paths = Resolve-DuneGameConfigPaths -Ip $Ip
-    $raw   = (Invoke-V6Ssh -Ip $Ip -Cmd "sudo cat '$($paths.game)' 2>/dev/null") -join "`n"
     $ups   = Build-DuneLandclaimUpdates -Enabled $Enabled -Seconds $Seconds -File 'game'
-    $new   = ConvertTo-DuneIniManaged -Raw $raw -Updates $ups -QuotedKeys $quoted
-    $b64   = [Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes($new))
-    Invoke-V6Ssh -Ip $Ip -Cmd "base64 -d | sudo tee '$($paths.game)' > /dev/null" -StdinData $b64 -TimeoutSec 30 | Out-Null
+    Save-DuneGameConfigLocked -Ip $Ip -Updates $ups
     $result.server = @{ ok = $true; path = $paths.game; applied = $true }
 
     # --- local client Game.ini (best-effort) ---
     try {
+        $quoted = Get-DuneGameConfigQuotedKeys
         $dirResolved = Resolve-DuneGameConfigClientDir
         if (Test-Path -LiteralPath $dirResolved) {
             $path     = Get-DuneGameConfigClientFilePath
@@ -2708,6 +3001,7 @@ function Get-DuneGameConfigSchemaApi {
         if ($f.ContainsKey('Wide'))        { $field.wide        = [bool]$f.Wide }
         if ($f.ContainsKey('Quoted'))      { $field.quoted      = [bool]$f.Quoted }
         if ($f.ContainsKey('StructKey'))   { $field.structKey   = [string]$f.StructKey }
+        elseif ($f.ContainsKey('ClientStructKey')) { $field.structKey = [string]$f.ClientStructKey }
         if ($f.ContainsKey('Options')) {
             $field.options = @($f.Options | ForEach-Object { @{ value = $_.V; label = $_.L } })
         }

@@ -275,9 +275,10 @@ export function SpicefieldsCard({ vmRunning }: Props) {
       <div className="mb-3 px-3 py-2 rounded border border-info/40 bg-info/10 text-info text-xs flex items-start gap-2">
         <Icon name="Info" size={13} className="mt-0.5 shrink-0" />
         <span>
-          These Spice adjustments take effect immediately and do not persist across BG
-          restarts. They are based on the last BG start of the SpiceField settings in the
-          ini files below.
+          These live adjustments take effect immediately and do not persist across
+          battlegroup restarts. Use the <strong>Spice Field Startup</strong> settings in
+          the Spice category, then <strong>Apply INIs &amp; restart</strong>, to change
+          the defaults loaded at startup.
         </span>
       </div>
 
