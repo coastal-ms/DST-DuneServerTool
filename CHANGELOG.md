@@ -75,6 +75,9 @@ here cover everything those tags shipped.
 
 ### Fixed
 
+- Server Health now reminds Hyper-V Dynamic Memory users with a stuck
+  Pending/Starting map to check Startup/Minimum RAM and perform a full VM
+  shutdown/start when a normal restart retains old guest capacity.
 - Scheduled restart checkboxes keep the same visible size beside short and long
   labels.
 - Reset Journey recognizes legacy starter-class tags and stops safely before
