@@ -4709,7 +4709,7 @@ _Consolidated entry covering every release in the v10.x series (36 patches). Tag
 - **Apostrophe-in-username crash in the updater relauncher.** Paths embedded
   into the generated `DuneRelaunch-*.ps1` are now escaped (`'` → `''`)
   before being interpolated into single-quoted PowerShell literals, so usernames
-  like `C:\Users\O'Brien\AppData\...` no longer break the relauncher with a
+  like `C:\Users\<user-with-apostrophe>\AppData\...` no longer break the relauncher with a
   parse error on the first sleep.
 
 ### v10.2.6 - 2026-06-04

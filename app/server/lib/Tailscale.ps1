@@ -9,8 +9,7 @@ function Get-DuneTailscalePath {
     foreach ($cand in @(
         (Join-Path $PSScriptRoot '..\..\tailscale\tailscale.exe'),   # installed: {app}\tailscale\tailscale.exe
         (Join-Path $PSScriptRoot '..\..\tailscale.exe'),             # installed: {app}\tailscale.exe
-        'C:\Program Files\Tailscale\tailscale.exe',
-        'X:\GH Projects\TailScale\tailscale.exe'                       # dev box
+        'C:\Program Files\Tailscale\tailscale.exe'
     )) {
         try { if ($cand -and (Test-Path -LiteralPath $cand)) { return (Resolve-Path -LiteralPath $cand).Path } } catch {}
     }

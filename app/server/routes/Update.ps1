@@ -569,7 +569,7 @@ Register-DuneRoute -Method POST -Path '/api/update/install' -Handler {
         $installArgs     = '/SP- /NORESTART'
         $logPath         = Join-Path $tmpDir ("relaunch-$safeTag.log")
         # Defensive escapes: %TEMP% / install path can contain an apostrophe
-        # (e.g. C:\Users\O'Brien\AppData\...) which would break the single-
+        # (e.g. C:\Users\<user-with-apostrophe>\AppData\...) which would break the single-
         # quoted literals embedded in the relauncher heredoc below.
         # PowerShell escapes ' as '' inside single-quoted strings.
         $destEsc         = $dest         -replace "'", "''"
