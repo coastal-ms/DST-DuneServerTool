@@ -1111,9 +1111,10 @@ function Show-DuneVmMemoryPressureWarning {
     # Run the read-only VM health probe over SSH and print red warnings for
     # anything the operator has to act on: a stuck DatabaseOperation holding the
     # server down, DiskPressure / a filling root volume, a missing game-UDP
-    # bridge, per-map memory limits crushed by Funcom's experimental swap
-    # preset, and genuine memory pressure (OOM-killed operators, evicted
-    # Postgres, or a tiny MemAvailable with Swap: 0).
+    # bridge, a Pending map rejected by the scheduler for Insufficient memory,
+    # per-map limits crushed by Funcom's experimental swap preset, and genuine
+    # runtime pressure (OOM-killed operators, evicted Postgres, or tiny
+    # MemAvailable with Swap: 0).
     #
     # 2026-07-26: elevated restart counts NO LONGER declare memory pressure on
     # their own. Funcom's operators restart in lockstep by design (exit 255 /
@@ -1158,7 +1159,7 @@ function Show-DuneVmMemoryPressureWarning {
         $finding = ConvertFrom-DuneMemPressureProbe -Raw (($out | Out-String)) -PublicIpConfigured $publicIpConfigured
         if (-not $finding.ok) { return }
 
-        if ($finding.pressure) {
+        if ($finding.pressure -or $finding.capacityBlocked) {
             Write-Host ""
             Write-Host "  WARNING: $($finding.headline)" -ForegroundColor Red
             foreach ($w in @($finding.warnings)) {
