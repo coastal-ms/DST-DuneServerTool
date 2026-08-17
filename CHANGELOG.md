@@ -57,11 +57,11 @@ here cover everything those tags shipped.
 
 ### Changed
 
-- Game Config → Spice adds simple Deep Desert and Hagga startup caps for Small,
-  Medium, and Large spice fields. Each cap writes both active and primed limits
-  through the normal server/client INI save path while preserving Funcom's
-  complete per-map settings structure; **Apply INIs & restart** adopts the new
-  defaults.
+- Game Config → Spice adds simple startup caps for Deep Desert Small, Medium,
+  and Large fields plus Hagga Small fields. Each cap writes both active and
+  primed limits through the normal server/client INI save path while preserving
+  Funcom's complete per-map settings structure; **Apply INIs & restart** adopts
+  the new defaults.
 - Hyper-V Dynamic Memory guests now persist automatic hot-added-memory onlining
   and recover a stale KVP integration daemon. DST remembers a verified guest IP
   and uses it only when SSH confirms that Hyper-V's IP signal is temporarily

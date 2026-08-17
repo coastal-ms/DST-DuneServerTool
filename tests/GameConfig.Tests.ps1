@@ -2012,16 +2012,16 @@ Describe 'GameConfig: spicefield startup defaults' -Tag 'GameConfig' {
             'm_DefaultSystemSettings=(m_SpiceFieldTypeSettings=(((Name="Small"), (MaxGloballyPrimed=6,MaxGloballyActive=3)),((Name="Medium"), (MaxGloballyPrimed=10,MaxGloballyActive=5)),((Name="Large"), (MaxGloballyPrimed=5,MaxGloballyActive=3))))' + "`n"
     }
 
-    It 'exposes six client-and-server startup caps in the normal Spice card' {
+    It 'exposes Deep Desert sizes and Hagga Small in the normal Spice card' {
         $fields = @($script:DuneGameConfigSchema | Where-Object { $_.ContainsKey('SpiceMap') })
 
-        $fields.Count | Should -Be 6
+        $fields.Count | Should -Be 4
         $fields.Key | Should -Contain 'DST.SpiceStartup.DeepDesert.Small.Max'
         $fields.Key | Should -Contain 'DST.SpiceStartup.DeepDesert.Medium.Max'
         $fields.Key | Should -Contain 'DST.SpiceStartup.DeepDesert.Large.Max'
         $fields.Key | Should -Contain 'DST.SpiceStartup.Hagga.Small.Max'
-        $fields.Key | Should -Contain 'DST.SpiceStartup.Hagga.Medium.Max'
-        $fields.Key | Should -Contain 'DST.SpiceStartup.Hagga.Large.Max'
+        $fields.Key | Should -Not -Contain 'DST.SpiceStartup.Hagga.Medium.Max'
+        $fields.Key | Should -Not -Contain 'DST.SpiceStartup.Hagga.Large.Max'
         @($fields | Where-Object { -not $_.ClientApply }).Count | Should -Be 0
         @($fields | Where-Object { $_.Category -ne 'Spice' }).Count | Should -Be 0
         @($fields | Where-Object { $_.SpiceLimit -ne 'Both' }).Count | Should -Be 0
@@ -2032,8 +2032,6 @@ Describe 'GameConfig: spicefield startup defaults' -Tag 'GameConfig' {
         ($fields | Where-Object Key -eq 'DST.SpiceStartup.DeepDesert.Medium.Max').Default | Should -Be '12'
         ($fields | Where-Object Key -eq 'DST.SpiceStartup.DeepDesert.Large.Max').Default | Should -Be '1'
         ($fields | Where-Object Key -eq 'DST.SpiceStartup.Hagga.Small.Max').Default | Should -Be '5'
-        ($fields | Where-Object Key -eq 'DST.SpiceStartup.Hagga.Medium.Max').Default | Should -Be '5'
-        ($fields | Where-Object Key -eq 'DST.SpiceStartup.Hagga.Large.Max').Default | Should -Be '3'
     }
 
     It 'surfaces the active cap from the complete existing override' {
@@ -2043,8 +2041,6 @@ Describe 'GameConfig: spicefield startup defaults' -Tag 'GameConfig' {
         $values['DST.SpiceStartup.DeepDesert.Medium.Max'] | Should -Be '12'
         $values['DST.SpiceStartup.DeepDesert.Large.Max'] | Should -Be '6'
         $values['DST.SpiceStartup.Hagga.Small.Max'] | Should -Be '10'
-        $values['DST.SpiceStartup.Hagga.Medium.Max'] | Should -Be '10'
-        $values['DST.SpiceStartup.Hagga.Large.Max'] | Should -Be '6'
     }
 
     It 'shares the complete parent struct instead of invalid pseudo keys' {
@@ -2054,18 +2050,6 @@ Describe 'GameConfig: spicefield startup defaults' -Tag 'GameConfig' {
 
         @($notice.items).Count | Should -Be 1
         $notice.items[0].structKey | Should -Be 'm_PerMapSystemSettings'
-    }
-
-    It 'materializes Hagga fallback sizes into the complete client-share parent' {
-        $effective = Get-DuneIniEffective -Raw $script:SpiceUserRaw
-        $shared = $effective["$script:SpiceSection||m_PerMapSystemSettings"]
-        $medium = Get-DuneSpicefieldLimitsFromBlob -Blob $shared -MapId 'Survival_1' -FieldType 'Medium'
-        $large = Get-DuneSpicefieldLimitsFromBlob -Blob $shared -MapId 'Survival_1' -FieldType 'Large'
-
-        $medium.maxActive | Should -Be 10
-        $medium.maxPrimed | Should -Be 2
-        $large.maxActive | Should -Be 6
-        $large.maxPrimed | Should -Be 2
     }
 
     It 'loads live defaults before applying spice startup fields to a fresh client file' {
@@ -2142,23 +2126,6 @@ Describe 'GameConfig: spicefield startup defaults' -Tag 'GameConfig' {
                     @{ file='game'; section=$script:SpiceSection; key='DST.SpiceStartup.DeepDesert.Large.Max'; value='1'; remove=$true }
                 )
         } | Should -Throw '*malformed*'
-    }
-
-    It 'resets an inserted Hagga size by removing its override and restoring fallback behavior' {
-        $customFold = @(Convert-DuneSpicefieldUpdates -Raw $script:SpiceUserRaw -DefaultsRaw $script:SpiceDefaultsRaw -Updates @(
-            @{ file='game'; section=$script:SpiceSection; key='DST.SpiceStartup.Hagga.Medium.Max'; value='7'; remove=$false }
-        ))
-        $customRaw = ConvertTo-DuneIniManaged -Raw $script:SpiceUserRaw -Updates $customFold -QuotedKeys @{}
-        (Get-DuneIniEffectiveByKey -Raw $customRaw)['DST.SpiceStartup.Hagga.Medium.Max'] | Should -Be '7'
-
-        $resetFold = @(Convert-DuneSpicefieldUpdates -Raw $customRaw -DefaultsRaw $script:SpiceDefaultsRaw -Updates @(
-            @{ file='game'; section=$script:SpiceSection; key='DST.SpiceStartup.Hagga.Medium.Max'; value='5'; remove=$true }
-        ))
-        $resetRaw = ConvertTo-DuneIniManaged -Raw $customRaw -Updates $resetFold -QuotedKeys @{}
-        $resetBlob = Get-DuneIniSectionScalarValue -Raw $resetRaw -Section $script:SpiceSection -Key 'm_PerMapSystemSettings'
-
-        (Get-DuneSpicefieldLimitsFromBlob -Blob $resetBlob -MapId 'Survival_1' -FieldType 'Medium').found | Should -BeFalse
-        (Get-DuneIniEffectiveByKey -Raw $resetRaw)['DST.SpiceStartup.Hagga.Medium.Max'] | Should -Be '10'
     }
 
     It 'fails closed for malformed targets' {
