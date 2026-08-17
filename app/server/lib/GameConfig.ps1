@@ -228,8 +228,6 @@ $script:DuneGameConfigSchema = @(
     @{ Section=$script:DuneGcSecSpice; Key='DST.SpiceStartup.DeepDesert.Medium.Max'; File='game'; Type='int'; Min=0; Default='12'; Label='Deep Desert Medium Fields at Startup'; Help='Caps both active and primed Medium fields after Apply INIs & restart. Guidance: 12 is Funcom''s normal high cap. This is a ceiling, not a forced count; if the current layout provides fewer fields, only those fields can appear.'; SpiceMap='DeepDesert_1'; SpiceFieldType='Medium'; SpiceLimit='Both'; ClientStructKey='m_PerMapSystemSettings'; ClientApply=$true; Category='Spice' }
     @{ Section=$script:DuneGcSecSpice; Key='DST.SpiceStartup.DeepDesert.Large.Max'; File='game'; Type='int'; Min=0; Default='1'; Label='Deep Desert Large Fields at Startup'; Help='Caps both active and primed Large fields after Apply INIs & restart. Guidance: use up to 6 to cover the largest known layouts. This is a ceiling, not a forced count: a max of 6 with only 4 fields in the seed still produces at most 4.'; SpiceMap='DeepDesert_1'; SpiceFieldType='Large'; SpiceLimit='Both'; ClientStructKey='m_PerMapSystemSettings'; ClientApply=$true; Category='Spice' }
     @{ Section=$script:DuneGcSecSpice; Key='DST.SpiceStartup.Hagga.Small.Max'; File='game'; Type='int'; Min=0; Default='5'; Label='Hagga Small Fields at Startup'; Help='Caps both active and primed Small fields after Apply INIs & restart. Guidance: 5 is Funcom''s normal active cap. This is a ceiling; it does not create fields beyond what Hagga can place.'; SpiceMap='Survival_1'; SpiceFieldType='Small'; SpiceLimit='Both'; ClientStructKey='m_PerMapSystemSettings'; ClientApply=$true; Category='Spice' }
-    @{ Section=$script:DuneGcSecSpice; Key='DST.SpiceStartup.Hagga.Medium.Max'; File='game'; Type='int'; Min=0; Default='5'; Label='Hagga Medium Fields at Startup'; Help='Caps both active and primed Medium fields after Apply INIs & restart. Guidance: 5 is Funcom''s normal active cap. This is a ceiling; it does not create fields beyond what Hagga can place.'; SpiceMap='Survival_1'; SpiceFieldType='Medium'; SpiceLimit='Both'; ClientStructKey='m_PerMapSystemSettings'; ClientApply=$true; Category='Spice' }
-    @{ Section=$script:DuneGcSecSpice; Key='DST.SpiceStartup.Hagga.Large.Max'; File='game'; Type='int'; Min=0; Default='3'; Label='Hagga Large Fields at Startup'; Help='Caps both active and primed Large fields after Apply INIs & restart. Guidance: 3 is Funcom''s normal active cap. This is a ceiling; it does not create fields beyond what Hagga can place.'; SpiceMap='Survival_1'; SpiceFieldType='Large'; SpiceLimit='Both'; ClientStructKey='m_PerMapSystemSettings'; ClientApply=$true; Category='Spice' }
 
     # --- Taxation ---
     @{ Section=$script:DuneGcSecTaxation; Key='m_bTaxationEnabled'; File='game'; Type='bool'; Default='False'; Label='Taxation Enabled'; Help='Whether the taxation system is active. Also needs client-side apply.'; ClientApply=$true; Category='Taxation' }
@@ -1623,12 +1621,6 @@ function Get-DuneIniEffective {
             }
         }
     }
-    $mapsKey = "$script:DuneGcSecSpice||m_PerMapSystemSettings"
-    $fallbackKey = "$script:DuneGcSecSpice||m_DefaultSystemSettings"
-    if ($eff.ContainsKey($mapsKey) -and $eff.ContainsKey($fallbackKey)) {
-        $eff[$mapsKey] = Complete-DuneSpicefieldBlobForClientShare `
-            -Blob $eff[$mapsKey] -FallbackBlob $eff[$fallbackKey]
-    }
     return $eff
 }
 
@@ -1835,51 +1827,6 @@ function Set-DuneSpicefieldLimitsInBlob {
             $mapBlob.Substring($settingsRange.end)
     }
     return $Blob.Substring(0, $mapRange.start) + $patchedMap + $Blob.Substring($mapRange.end + 1)
-}
-
-function Remove-DuneSpicefieldSizeFromBlob {
-    param([string]$Blob, [string]$MapId, [string]$FieldType)
-    $mapRange = Find-DuneSpicefieldMapRange -Blob $Blob -MapId $MapId
-    if (-not $mapRange) { return $Blob }
-    $mapBlob = $Blob.Substring($mapRange.start, $mapRange.length)
-    $sizeRange = Find-DuneSpicefieldSizeRange -MapBlob $mapBlob -FieldType $FieldType
-    if (-not $sizeRange) { return $Blob }
-
-    $removeStart = $sizeRange.start
-    $left = $removeStart - 1
-    while ($left -ge 0 -and [char]::IsWhiteSpace($mapBlob[$left])) { $left-- }
-    if ($left -ge 0 -and $mapBlob[$left] -eq ',') {
-        $removeStart = $left
-    }
-    $removeEnd = $sizeRange.end
-    if ($removeStart -eq $sizeRange.start) {
-        $right = $removeEnd + 1
-        while ($right -lt $mapBlob.Length -and [char]::IsWhiteSpace($mapBlob[$right])) { $right++ }
-        if ($right -lt $mapBlob.Length -and $mapBlob[$right] -eq ',') { $removeEnd = $right }
-    }
-    $patchedMap = $mapBlob.Remove($removeStart, $removeEnd - $removeStart + 1)
-    return $Blob.Substring(0, $mapRange.start) + $patchedMap + $Blob.Substring($mapRange.end + 1)
-}
-
-function Complete-DuneSpicefieldBlobForClientShare {
-    param([string]$Blob, [string]$FallbackBlob)
-    $seen = @{}
-    foreach ($field in @($script:DuneGameConfigSchema | Where-Object { $_.ContainsKey('SpiceMap') })) {
-        $id = "$($field.SpiceMap)|$($field.SpiceFieldType)"
-        if ($seen.ContainsKey($id)) { continue }
-        $seen[$id] = $true
-        $state = Get-DuneSpicefieldLimitsFromBlob -Blob $Blob `
-            -MapId "$($field.SpiceMap)" -FieldType "$($field.SpiceFieldType)"
-        if ($state.found) { continue }
-        $fallback = Get-DuneSpicefieldDefaultLimitsFromBlob -Blob $FallbackBlob `
-            -FieldType "$($field.SpiceFieldType)"
-        $mapRange = Find-DuneSpicefieldMapRange -Blob $Blob -MapId "$($field.SpiceMap)"
-        if (-not $fallback.found -or -not $mapRange) { continue }
-        $Blob = Set-DuneSpicefieldLimitsInBlob -Blob $Blob -MapId "$($field.SpiceMap)" `
-            -FieldType "$($field.SpiceFieldType)" -MaxActive ([int]$fallback.maxActive) `
-            -MaxPrimed ([int]$fallback.maxPrimed)
-    }
-    return $Blob
 }
 
 # Distinct (section, structKey) pairs that the schema declares as struct parents.
@@ -2355,9 +2302,7 @@ function Convert-DuneSpicefieldUpdates {
                 throw "Funcom spicefield default '$($field.mapId)/$($field.fieldType)' is malformed; refusing an inexact reset."
             }
             if (-not $defaultState.found) {
-                $blob = Remove-DuneSpicefieldSizeFromBlob -Blob $blob `
-                    -MapId $field.mapId -FieldType $field.fieldType
-                continue
+                throw "Funcom spicefield default '$($field.mapId)/$($field.fieldType)' is absent; refusing an inexact reset."
             }
             $active = [int]$defaultState.maxActive
             $primed = [int]$defaultState.maxPrimed
