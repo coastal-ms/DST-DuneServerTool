@@ -45,20 +45,24 @@ online_memory() {
     done
 }
 
+kvp_running() {
+    "$PGREP" -f "(^|/)$KVP_PROCESS([[:space:]]|$)" >/dev/null 2>&1
+}
+
 ensure_kvp() {
     if [ "$FORCE_KVP_RESTART" = 1 ] ||
-       ! "$PGREP" -x "$KVP_PROCESS" >/dev/null 2>&1; then
+       ! kvp_running; then
         "$RC_SERVICE" "$KVP_SERVICE" restart >/dev/null 2>&1 ||
             fail "failed to restart $KVP_SERVICE"
     fi
     wait_count=0
-    while ! "$PGREP" -x "$KVP_PROCESS" >/dev/null 2>&1; do
+    while ! kvp_running; do
         wait_count=$((wait_count + 1))
         [ "$wait_count" -lt 6 ] ||
             fail "$KVP_PROCESS is still absent after service restart"
         sleep 1
     done
-    "$PGREP" -x "$KVP_PROCESS" >/dev/null 2>&1 ||
+    kvp_running ||
         fail "$KVP_PROCESS is still absent after service restart"
 }
 
@@ -82,7 +86,7 @@ if [ -w "$MEMORY_ROOT/auto_online_blocks" ]; then
     done
 fi
 
-if ! pgrep -x hv_kvp_daemon >/dev/null 2>&1; then
+if ! pgrep -f '(^|/)hv_kvp_daemon([[:space:]]|$)' >/dev/null 2>&1; then
     rc-service hv_kvp_daemon restart >/dev/null 2>&1 || true
 fi
 HOOKEOF
