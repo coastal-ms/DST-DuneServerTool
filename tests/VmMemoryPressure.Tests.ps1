@@ -19,6 +19,26 @@ Describe 'Format-DuneMemKiB' -Tag 'Pure' {
     }
 }
 
+Describe 'VM memory probe script' -Tag 'Pure' {
+    It 'captures pending map scheduler reasons and remains POSIX-shell valid' {
+        $path = Join-Path (Get-DstRepoRoot) 'app\resources\remote-scripts\dune-mem-pressure-probe.sh'
+        $source = Get-Content $path -Raw
+        $source | Should -Match 'pending_map='
+        $source | Should -Match 'Insufficient memory|PodScheduled'
+
+        $bash = Get-Command bash -ErrorAction SilentlyContinue
+        if (-not $bash) { Set-ItResult -Skipped -Because 'bash is unavailable'; return }
+        & $bash.Source -n $path
+        $LASTEXITCODE | Should -Be 0
+    }
+
+    It 'serializes scheduler-capacity fields through the dashboard API route' {
+        $route = Get-Content (Join-Path (Get-DstRepoRoot) 'app\server\routes\Diagnostics.ps1') -Raw
+        $route | Should -Match 'capacityBlocked\s*=\s*\[bool\]\$f\.capacityBlocked'
+        $route | Should -Match 'pendingMaps\s*=\s*@\(\$f\.pendingMaps\)'
+    }
+}
+
 Describe 'ConvertFrom-DuneMemPressureProbe' -Tag 'Pure' {
 
     # Mirrors Pat's case (2026-07-07): 23.5 GiB VM, 69 MiB available, Swap: 0,
@@ -80,6 +100,42 @@ probe_done=1
         $r.pressure           | Should -BeFalse
         $r.severity           | Should -Be 'none'
         @($r.warnings).Count  | Should -Be 0
+    }
+
+    It 'detects a map pod blocked by scheduler capacity even with ample MemAvailable' {
+        $blocked = @'
+mem_total_k=15309209
+mem_avail_k=11324620
+swap_total_k=0
+node_cond=MemoryPressure=False
+node_cond=Ready=True
+maplim=Survival_1~LIM:16Gi
+pending_map=sh-abc-def-sg-survival-1-pod-1~REQ:16Gi~LIM:16Gi~RSN:Unschedulable~MSG:0/1 nodes are available: 1 Insufficient memory.
+probe_done=1
+'@
+        $r = ConvertFrom-DuneMemPressureProbe -Raw $blocked
+
+        $r.pressure | Should -BeFalse
+        $r.capacityBlocked | Should -BeTrue
+        $r.severity | Should -Be 'critical'
+        $r.headline | Should -Match 'Hagga cannot start'
+        $r.pendingMaps[0].map | Should -Be 'Survival_1'
+        $r.pendingMaps[0].request | Should -Be '16Gi'
+        (@($r.warnings) -join ' ') | Should -Match 'full.*shut down.*start'
+        (@($r.faults | Where-Object { $_.id -like 'map-capacity-*' })).Count | Should -Be 1
+    }
+
+    It 'does not infer a capacity fault from a Pending pod without the scheduler verdict' {
+        $pending = @'
+mem_total_k=15309209
+mem_avail_k=11324620
+pending_map=sh-abc-def-sg-survival-1-pod-1~REQ:16Gi~LIM:16Gi~RSN:~MSG:
+probe_done=1
+'@
+        $r = ConvertFrom-DuneMemPressureProbe -Raw $pending
+
+        $r.capacityBlocked | Should -BeFalse
+        @($r.faults | Where-Object { $_.id -like 'map-capacity-*' }).Count | Should -Be 0
     }
 
     It 'does NOT flag low available when swap provides a cushion' {
