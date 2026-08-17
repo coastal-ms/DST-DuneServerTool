@@ -26,11 +26,10 @@ jobs:
   scan:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout PR head with full history
+      - name: Checkout PR merge result with full history
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
-          ref: ${{ github.event.pull_request.head.sha }}
 
       - name: Build banned pattern
         id: build
