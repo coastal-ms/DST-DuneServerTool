@@ -70,6 +70,9 @@ here cover everything those tags shipped.
 - Vehicle Durability Damage moved back to Experimental after field testing found
   that 0 does not disable ordinary use wear or permanent durability loss from
   welding/repair-station repairs. Its exact damage scope remains unconfirmed.
+- Shared `!tp` destinations now use the game's safe-surface teleport path instead
+  of forcing exact stored coordinates. Backed-up field testing confirmed safe
+  long-distance and elevated-location arrivals.
 
 ## [13.6.5] - 2026-08-12
 

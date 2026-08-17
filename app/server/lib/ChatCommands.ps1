@@ -1398,7 +1398,9 @@ function Invoke-DuneChatCommandTeleport {
 
     $fls = Resolve-DuneChatFlsId -Ip $Ip -FuncomId $FuncomId
     if (-not $fls.ok) { return @{ ok = $false; reply = 'Could not resolve your player id for teleport.' } }
-    $res = Invoke-DuneRmqTeleportToExact -FlsId $fls.flsId `
+    # Let the game resolve a safe landing surface. TeleportToExact can force a
+    # distant stored Z before destination terrain finishes streaming.
+    $res = Invoke-DuneRmqTeleportTo -FlsId $fls.flsId `
         -X ([double]$bookmark.x) -Y ([double]$bookmark.y) -Z ([double]$bookmark.z)
     if (-not $res.ok) { return @{ ok = $false; reply = "Teleport to '$($bookmark.name)' failed." } }
     return @{ ok = $true; reply = "Teleported to $($bookmark.name)." }
