@@ -24,18 +24,9 @@ export function buildDiagnosticBundle() {
 export interface VmMemoryPressure {
   ok: boolean
   pressure: boolean
-  capacityBlocked: boolean
   severity: 'none' | 'warn' | 'critical'
   headline: string
   warnings: string[]
-  pendingMaps: {
-    name: string
-    map: string
-    request: string
-    limit: string
-    reason: string
-    message: string
-  }[]
   message?: string
   maxRestarts?: number
   oomKills?: number

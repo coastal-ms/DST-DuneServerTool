@@ -1,10 +1,15 @@
-// VmMemoryPressureBanner — Server Health banner for runtime pressure and the
-// separate scheduler-capacity fault where a map pod cannot fit on the VM node.
+// VmMemoryPressureBanner — red Server Health banner that fires when the VM is
+// low on memory: Funcom operators OOM-killed (exit 137 / high restart counts),
+// Postgres evicted, or a tiny MemAvailable with Swap: 0. This is the root cause
+// of the "battlegroup restarted outside its schedule" / "ping surge under load"
+// class of report (murm, Hagga per-map sizing, Pat 2026-07-07), and until now
+// could only be found by exporting logs and hand-reading them.
 //
 // Backed by GET /api/diagnostics/vm-memory, which is read-only and cached 60s
 // server-side, so polling here is cheap. OPT-IN: hidden by default, shown only
-// Runtime pressure remains opt-in. Scheduler Insufficient-memory is a concrete
-// broken state, so it is polled/shown regardless of that preference.
+// when the operator enables it under Settings → Dashboard warnings. When off we
+// don't even poll the probe. Renders nothing unless enabled AND the probe
+// succeeded AND detected pressure.
 import { useCallback, useEffect, useState } from 'react'
 import { Icon } from '../../components/Icon'
 import { getVmMemoryPressure, type VmMemoryPressure } from '../../api/diagnostics'
@@ -18,7 +23,8 @@ export function VmMemoryPressureBanner({ vmRunning }: Props) {
   const [finding, setFinding] = useState<VmMemoryPressure | null>(null)
   const [show, setShow] = useVmMemPressureEnabled()
 
-  const active = vmRunning
+  // Only active when the operator opted in AND the VM is running.
+  const active = show && vmRunning
 
   const load = useCallback(async () => {
     if (!active) return
@@ -39,11 +45,9 @@ export function VmMemoryPressureBanner({ vmRunning }: Props) {
     return () => window.clearInterval(id)
   }, [active, load])
 
-  if (!active || !finding || !finding.ok) return null
-  const capacityBlocked = finding.capacityBlocked === true
-  if (!capacityBlocked && (!show || !finding.pressure)) return null
+  if (!active || !finding || !finding.ok || !finding.pressure) return null
 
-  const critical = capacityBlocked || finding.severity === 'critical'
+  const critical = finding.severity === 'critical'
   const tone = critical
     ? 'border-danger/50 bg-danger/10 text-danger'
     : 'border-warning/50 bg-warning/10 text-warning'
@@ -64,17 +68,15 @@ export function VmMemoryPressureBanner({ vmRunning }: Props) {
             </ul>
           )}
         </div>
-        {!capacityBlocked && (
-          <button
-            type="button"
-            onClick={() => setShow(false)}
-            className="shrink-0 -mt-0.5 -mr-1 p-1 rounded hover:bg-current/10 text-current/70 hover:text-current transition-colors"
-            title="Hide this warning. Turn it back on under Settings → Dashboard warnings."
-            aria-label="Hide VM memory-pressure warning"
-          >
-            <Icon name="X" size={16} />
-          </button>
-        )}
+        <button
+          type="button"
+          onClick={() => setShow(false)}
+          className="shrink-0 -mt-0.5 -mr-1 p-1 rounded hover:bg-current/10 text-current/70 hover:text-current transition-colors"
+          title="Hide this warning. Turn it back on under Settings → Dashboard warnings."
+          aria-label="Hide VM memory-pressure warning"
+        >
+          <Icon name="X" size={16} />
+        </button>
       </div>
     </section>
   )

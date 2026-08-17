@@ -199,9 +199,8 @@ function ConvertFrom-DuneImageSize {
 # ConvertFrom-DuneMemPressureProbe : parse the probe's stdout into a structured
 # finding. PURE - no SSH, no I/O - so the wiring is unit-testable from a fixture.
 #
-# Returns @{ ok; mem; operators; db; node; disk; bg; dbOps; mapLimits;
-#            pendingMaps; images; dnat; signals; pressure; capacityBlocked;
-#            severity; headline; warnings; raw }.
+# Returns @{ ok; mem; operators; db; node; disk; bg; dbOps; mapLimits; images;
+#            dnat; signals; pressure; severity; headline; warnings; raw }.
 #
 # NOTE: this returns OBSERVATIONS, not verdicts. Everything except the memory
 # signals is reported as-is for the operator to read and act on (or not) - see
@@ -229,14 +228,12 @@ function ConvertFrom-DuneMemPressureProbe {
         bg        = @{ name=''; databasePhase='' }
         dbOps     = @{ total=0; open=0; stuck=@(); active=@(); failed=@(); activeCount=0; failedCount=0; known=$false }
         mapLimits = @{ entries=@(); known=$false }
-        pendingMaps = @()
         images    = @{ entries=@(); builds=@(); buildCount=0; totalBytes=0; known=$false }
         dnat      = @{ udpRules=$null; ports=@(); missing=$false }
         faults    = @()
         gamePodsRunning = $null
-        signals   = @{ oomKills=0; highRestartPods=0; maxRestarts=0; lowMemory=$false; churnPods=0; memoryCorroborated=$false; schedulerMemoryBlocks=0 }
+        signals   = @{ oomKills=0; highRestartPods=0; maxRestarts=0; lowMemory=$false; churnPods=0; memoryCorroborated=$false }
         pressure  = $false
-        capacityBlocked = $false
         severity  = 'none'
         headline  = ''
         warnings  = @()
@@ -256,7 +253,6 @@ function ConvertFrom-DuneMemPressureProbe {
     $dbRecords = New-Object System.Collections.Generic.List[string]
     $dbOpRecords = New-Object System.Collections.Generic.List[string]
     $mapLimRecords = New-Object System.Collections.Generic.List[string]
-    $pendingMapRecords = New-Object System.Collections.Generic.List[string]
     $imgRecords = New-Object System.Collections.Generic.List[string]
     foreach ($line in $lines) {
         if ($line -eq '__FREE_H_BEGIN__') { $inFreeH = $true;  continue }
@@ -293,7 +289,6 @@ function ConvertFrom-DuneMemPressureProbe {
             'dbop_total'         { [int]$tmpi = 0; if ([int]::TryParse($v, [ref]$tmpi)) { $result.dbOps.total = $tmpi; $result.dbOps.known = $true } }
             'dbop_open'          { [int]$tmpi = 0; if ([int]::TryParse($v, [ref]$tmpi)) { $result.dbOps.open  = $tmpi; $result.dbOps.known = $true } }
             'maplim'             { $mapLimRecords.Add($v); $result.mapLimits.known = $true }
-            'pending_map'        { $pendingMapRecords.Add($v) }
             'img'                { $imgRecords.Add($v); $result.images.known = $true }
             'dnat_udp_rules'     { [int]$tmpi = 0; if ([int]::TryParse($v, [ref]$tmpi)) { $result.dnat.udpRules = $tmpi } }
             'dnat_udp_ports'     { $result.dnat.ports = @($v -split '\s+' | Where-Object { $_ -match '^\d+$' }) }
@@ -360,12 +355,6 @@ function ConvertFrom-DuneMemPressureProbe {
 
     # --- per-map memory limits --------------------------------------------
     $result.mapLimits.entries = @(foreach ($r in $mapLimRecords) { _ConvertFrom-DuneMapLimitRecord -Record $r })
-    $result.pendingMaps = @(foreach ($r in $pendingMapRecords) { _ConvertFrom-DunePendingMapRecord -Record $r })
-    $memoryBlockedMaps = @($result.pendingMaps | Where-Object {
-        $_.reason -eq 'Unschedulable' -and $_.message -match '(?i)\bInsufficient memory\b'
-    })
-    $result.signals.schedulerMemoryBlocks = $memoryBlockedMaps.Count
-    $result.capacityBlocked = ($memoryBlockedMaps.Count -gt 0)
 
     # --- retained container images ----------------------------------------
     $builds = New-Object System.Collections.Generic.List[string]
@@ -459,16 +448,6 @@ function ConvertFrom-DuneMemPressureProbe {
             $warn.Add("Fix: raise the VM's RAM in Hyper-V, or lower per-map memory limits (Hagga/Deep Desert). See vm-memory-pressure.txt in the diagnostics bundle.")
         }
     }
-    if ($result.capacityBlocked) {
-        $blocked = $memoryBlockedMaps[0]
-        $request = if ($blocked.request) { $blocked.request } elseif ($blocked.limit) { $blocked.limit } else { '?' }
-        $mapLabel = if ($blocked.map -eq 'Survival_1') { 'Hagga' } elseif ($blocked.map -eq 'DeepDesert_1') { 'Deep Desert' } else { $blocked.map }
-        $result.severity = 'critical'
-        $result.headline = "$mapLabel cannot start - Kubernetes reports Insufficient memory"
-        $warn.Add(("{0} is Pending and requests {1}; the VM guest reports {2} total. This is scheduler capacity, not low MemAvailable pressure." -f `
-            $blocked.map, $request, (Format-DuneMemKiB $result.mem.totalK)))
-        $warn.Add('Fix: check Hyper-V Dynamic Memory startup/minimum. If those settings were already raised, fully shut down and start the VM so the guest and kubelet register the new capacity; a normal restart may retain the old boot capacity.')
-    }
 
     $result.warnings = @($warn)
     $result.faults   = @(_Get-DuneVmFaults -Finding $result)
@@ -539,55 +518,7 @@ function _Get-DuneVmFaults {
         })
     }
 
-    # 4) Kubernetes explicitly refuses a game-map pod for Insufficient memory.
-    # This differs from runtime MemoryPressure: plenty of RAM can be free while
-    # the pod request exceeds node capacity registered from a low-memory boot.
-    $blocked = @($Finding.pendingMaps | Where-Object {
-        $_.reason -eq 'Unschedulable' -and $_.message -match '(?i)\bInsufficient memory\b'
-    })
-    foreach ($pod in $blocked) {
-        $request = if ($pod.request) { $pod.request } elseif ($pod.limit) { $pod.limit } else { '?' }
-        $mapLabel = if ($pod.map -eq 'Survival_1') { 'Hagga' } elseif ($pod.map -eq 'DeepDesert_1') { 'Deep Desert' } else { $pod.map }
-        $out.Add(@{
-            id       = "map-capacity-$($pod.name)"
-            headline = "$mapLabel cannot start because Kubernetes reports Insufficient memory"
-            detail   = ("The pod requests {0}, while the VM guest reports {1} total. MemAvailable can still look healthy because the scheduler checks registered node capacity before the container starts." -f `
-                        $request, (Format-DuneMemKiB $Finding.mem.totalK))
-            action   = 'Check Hyper-V Dynamic Memory startup/minimum. If already raised, fully shut down and start the VM so the guest and kubelet register the new capacity; then start the battlegroup. Do not lower the map limit.'
-        })
-    }
-
     return $out.ToArray()
-}
-
-# Parse ONE pending game-map pod record:
-# <pod>~REQ:<request>~LIM:<limit>~RSN:<reason>~MSG:<scheduler message>
-function _ConvertFrom-DunePendingMapRecord {
-    param([string]$Record)
-    $entry = @{ name=''; map=''; request=''; limit=''; reason=''; message='' }
-    if ([string]::IsNullOrWhiteSpace($Record)) { return $entry }
-    $parts = $Record -split '~'
-    $entry.name = $parts[0].Trim()
-    if ($entry.name -match '-sg-(.+?)-pod-\d+$') {
-        switch ($Matches[1]) {
-            'survival-1'   { $entry.map = 'Survival_1' }
-            'deepdesert-1' { $entry.map = 'DeepDesert_1' }
-            default        { $entry.map = ($Matches[1] -replace '-', '_') }
-        }
-    }
-    foreach ($segment in ($parts | Select-Object -Skip 1)) {
-        $colon = $segment.IndexOf(':')
-        if ($colon -lt 1) { continue }
-        $tag = $segment.Substring(0, $colon)
-        $value = $segment.Substring($colon + 1).Trim()
-        switch ($tag) {
-            'REQ' { $entry.request = $value }
-            'LIM' { $entry.limit = $value }
-            'RSN' { $entry.reason = $value }
-            'MSG' { $entry.message = $value }
-        }
-    }
-    return $entry
 }
 
 # Parse ONE DatabaseOperation record: <name>~PH:<phase>~CT:<creationTimestamp>

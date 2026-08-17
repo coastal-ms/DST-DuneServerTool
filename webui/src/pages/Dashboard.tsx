@@ -110,8 +110,7 @@ export function Dashboard() {
   const bg = BG_STYLES[bgState]
   const bgInfo = status?.bg?.info ?? null
   const gameServers = status?.bg?.gameServers ?? []
-  const survivalServer = findSurvivalServer(gameServers)
-  const survivalPhase = survivalServer?.phase?.trim() || ''
+  const survivalPhase = findSurvivalServer(gameServers)?.phase?.trim() || ''
   const ports = status?.ports
   const portResults = Array.isArray(ports?.results) ? ports.results : []
   const tcp = portResults.filter(r => r.protocol === 'TCP')
