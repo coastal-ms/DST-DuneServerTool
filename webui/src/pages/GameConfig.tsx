@@ -229,37 +229,30 @@ function isExperimentalCategory(category: string): boolean {
 
 const EXPERIMENTAL_PAGE_SIZE = 25
 
-// Build file-aware client blocks for a category's customised scalar fields.
-function buildCategoryClientBlocks(
+// Build file-aware client blocks for a category's customised fields. Struct-backed
+// controls emit their complete parent line once, never pseudo member keys.
+export function buildCategoryClientBlocks(
   cat: GameConfigCategory,
   cfg: GameConfigResponse | null,
 ): { entries: ClientShareEntry[]; count: number; hasClientFields: boolean } {
-  const clientFields = (cat.fields ?? []).filter(f => f && f.key && f.clientApply && !f.structKey)
+  const clientFields = (cat.fields ?? []).filter(f => f && f.key && f.clientApply)
   const hasClientFields = clientFields.length > 0
-  const byFile = new Map<'game' | 'engine', Map<string, string[]>>()
+  const items: ClientShareValue[] = []
   let count = 0
   for (const f of clientFields) {
     if (!isCustomized(cfg, f)) continue
     const v = liveValue(cfg, f)
     if (v === '') continue
-    const bySection = byFile.get(f.file) ?? new Map<string, string[]>()
-    const arr = bySection.get(f.section) ?? []
-    arr.push(`${f.key}=${v}`)
-    bySection.set(f.section, arr)
-    byFile.set(f.file, bySection)
+    items.push({
+      file: f.file,
+      section: f.section,
+      key: f.key,
+      value: v,
+      structKey: f.structKey,
+    })
     count++
   }
-  const entries: ClientShareEntry[] = []
-  for (const [file, bySection] of byFile) {
-    const parts: string[] = []
-    for (const [section, lines] of bySection) parts.push(`[${section}]`, ...lines, '')
-    entries.push({
-      file,
-      path: CLIENT_INI_PATHS[file],
-      block: parts.join('\r\n').replace(/\s+$/, '') + '\r\n',
-    })
-  }
-  return { entries, count, hasClientFields }
+  return { entries: buildClientShareEntries(items, cfg), count, hasClientFields }
 }
 
 // The value an input should hold: the live override when present, otherwise the default.
