@@ -558,9 +558,22 @@ function Set-V6ConsoleVariableOverrides {
         $partitionIds = @(@($set.partitions) | Where-Object { $null -ne $_ -and "$_" -ne '' } | ForEach-Object { [int]$_ })
         $liveIds = @()
         if ($liveByMap.ContainsKey("$($set.map)")) { $liveIds = @($liveByMap["$($set.map)"]) }
-        $allIds = @(@($byIndex.Keys) + $partitionIds + $liveIds | Sort-Object -Unique)
+        $isDedicated = ($set.PSObject.Properties['dedicatedScaling'] -and [bool]$set.dedicatedScaling)
+        # Non-dedicated sets have an authoritative partitions list, so carrying
+        # old podSpec indexes forward leaves duplicate dead templates behind.
+        # Dedicated sets keep dormant podSpecs because their partitions list is
+        # intentionally empty while stopped; live status only supplies an index
+        # while that map is running.
+        $allIds = if ($isDedicated) {
+            @(@($byIndex.Keys) + $liveIds | Sort-Object -Unique)
+        } else {
+            @($partitionIds + $liveIds | Sort-Object -Unique)
+        }
         $podSpecs = @()
-        $changed = $false
+        $existingIds = @($byIndex.Keys | Sort-Object -Unique)
+        $changed = @(
+            Compare-Object -ReferenceObject $existingIds -DifferenceObject @($allIds)
+        ).Count -gt 0
         foreach ($id in $allIds) {
             $podSpec = if ($byIndex.ContainsKey([int]$id)) {
                 _Copy-V6PodSpec -PodSpec $byIndex[[int]$id]

@@ -23,6 +23,10 @@ here cover everything those tags shipped.
 
 ### Fixed
 
+- Removed unsupported native returning-player reward controls again and scrubbed
+  their startup injections, preventing the empty built-in welcome popup on
+  self-hosted servers. Stale startup templates for removed Hagga partitions are
+  also pruned instead of carrying duplicate configuration forward.
 - Inventory stack, durability and water editors now stay open until their save
   actually succeeds. Previously they closed immediately, so a failed write
   discarded the entered values and the error appeared without context.
@@ -52,6 +56,10 @@ here cover everything those tags shipped.
 
 ### Fixed
 
+- Removed unsupported native returning-player reward controls again and scrubbed
+  their startup injections, preventing the empty built-in welcome popup on
+  self-hosted servers. Stale startup templates for removed Hagga partitions are
+  also pruned instead of carrying duplicate configuration forward.
 - Corrected the DD Seed Maps cave locations for seed 2 to match the current
   live map: I1, H2, H5, G5 (two caves), and E9.
 
@@ -95,6 +103,10 @@ here cover everything those tags shipped.
 
 ### Fixed
 
+- Removed unsupported native returning-player reward controls again and scrubbed
+  their startup injections, preventing the empty built-in welcome popup on
+  self-hosted servers. Stale startup templates for removed Hagga partitions are
+  also pruned instead of carrying duplicate configuration forward.
 - Fresh Solo backpacks can receive the Sandbike, Buggy, Treadwheel, and Light
   Ornithopter kits again. Missing Welding Torch and Treadwheel Hull metadata no
   longer injects a false 1000-volume charge that rejected those kits even when
@@ -177,6 +189,10 @@ here cover everything those tags shipped.
 
 ### Fixed
 
+- Removed unsupported native returning-player reward controls again and scrubbed
+  their startup injections, preventing the empty built-in welcome popup on
+  self-hosted servers. Stale startup templates for removed Hagga partitions are
+  also pruned instead of carrying duplicate configuration forward.
 - Server Health now reminds Hyper-V Dynamic Memory users with a stuck
   Pending/Starting map to check Startup/Minimum RAM and perform a full VM
   shutdown/start when a normal restart retains old guest capacity.
@@ -209,6 +225,10 @@ here cover everything those tags shipped.
 
 ### Fixed
 
+- Removed unsupported native returning-player reward controls again and scrubbed
+  their startup injections, preventing the empty built-in welcome popup on
+  self-hosted servers. Stale startup templates for removed Hagga partitions are
+  also pruned instead of carrying duplicate configuration forward.
 - Apply level now adds standard, major, and super specialization skill-point
   rewards to the character's hidden bonus and total point ledgers. It preserves
   the visible unspent balance when prior live edits created an overallocated
@@ -232,6 +252,10 @@ here cover everything those tags shipped.
 
 ### Fixed
 
+- Removed unsupported native returning-player reward controls again and scrubbed
+  their startup injections, preventing the empty built-in welcome popup on
+  self-hosted servers. Stale startup templates for removed Hagga partitions are
+  also pruned instead of carrying duplicate configuration forward.
 - Reset Journey now performs a complete offline quest restart, removing all
   post-NPE journey/contract rows, tags, contract items, and tracked state while
   preserving faction, research, and active loadout. NPE remains completed so a
@@ -251,6 +275,10 @@ here cover everything those tags shipped.
 
 ### Fixed
 
+- Removed unsupported native returning-player reward controls again and scrubbed
+  their startup injections, preventing the empty built-in welcome popup on
+  self-hosted servers. Stale startup templates for removed Hagga partitions are
+  also pruned instead of carrying duplicate configuration forward.
 - Experimental Lab search results remain a collection when only one setting
   matches, preventing the page from crashing on searches such as `fuel`.
 
@@ -275,6 +303,10 @@ here cover everything those tags shipped.
 
 ### Fixed
 
+- Removed unsupported native returning-player reward controls again and scrubbed
+  their startup injections, preventing the empty built-in welcome popup on
+  self-hosted servers. Stale startup templates for removed Hagga partitions are
+  also pruned instead of carrying duplicate configuration forward.
 - **Public IP Apply no longer has to capture a co-hosted VPN or relay endpoint.** The Public IP / DDNS card now keeps the existing same-PC public-IP loopback route enabled by default, but provides an explicit opt-out for WireGuard, VPN, and VPS relay hosts. Applying with the option off removes only the matching public-IP `/32` route through the Dune VM and leaves unrelated Windows routes unchanged.
 - **Saved manual relay addresses remain authoritative across restarts and connection repairs.** Public IP Apply now pins both K3s startup inputs to the applied address, overriding a stale `settings.conf` external IP immediately before K3s starts, and the P34 diagnostic no longer replaces a deliberate manual VPN or VPS relay address with the host's detected WAN IP.
 - **Landsraad client settings are shared as a complete valid `Data=(...)` struct.** Player config, post-save guidance, and mismatch repair no longer omit Landsraad values or emit ineffective standalone member lines. Diagnostic bundles now include sanitized local client INI snapshots when available so server/client drift is visible.
@@ -297,6 +329,10 @@ here cover everything those tags shipped.
 
 ### Fixed
 
+- Removed unsupported native returning-player reward controls again and scrubbed
+  their startup injections, preventing the empty built-in welcome popup on
+  self-hosted servers. Stale startup templates for removed Hagga partitions are
+  also pruned instead of carrying duplicate configuration forward.
 - **Wipe Journey (restart) now performs a complete story reset.** With the player offline, DST removes journey rows, journey, contract, and faction quest tags, contract items, and the tracked-contract pointer in one transaction, then verifies no progress remains before reporting success.
 
 ## [13.5.1] - 2026-08-07
@@ -307,6 +343,10 @@ here cover everything those tags shipped.
 
 ### Fixed
 
+- Removed unsupported native returning-player reward controls again and scrubbed
+  their startup injections, preventing the empty built-in welcome popup on
+  self-hosted servers. Stale startup templates for removed Hagga partitions are
+  also pruned instead of carrying duplicate configuration forward.
 - **Stop All no longer waits forever on old pod records.** Completed and failed director pods are no longer counted as active shutdown work.
 
 - **Start All now recovers game maps whose database sessions broke across a VM reboot.** Restarted-in-place Overmap and Survival pods are replaced after DST powers on the VM, and startup waits for the Funcom battlegroup to report each map genuinely ready instead of trusting Kubernetes' process-level Ready probe alone.
@@ -329,6 +369,10 @@ here cover everything those tags shipped.
 
 ### Fixed
 
+- Removed unsupported native returning-player reward controls again and scrubbed
+  their startup injections, preventing the empty built-in welcome popup on
+  self-hosted servers. Stale startup templates for removed Hagga partitions are
+  also pruned instead of carrying duplicate configuration forward.
 - **The Base Backup Tool can now be given to players.** It was missing from DST's item list, so it could not be handed out through Give Item, added to a package, or asked for with `!item` — even though it is a real item players carry. Its cosmetic emotes and swatches are still absent from that list on purpose: those are granted through Grant Cosmetic rather than as inventory items.
 
 ## [13.4.0] - 2026-08-04
@@ -345,6 +389,10 @@ here cover everything those tags shipped.
 
 ### Fixed
 
+- Removed unsupported native returning-player reward controls again and scrubbed
+  their startup injections, preventing the empty built-in welcome popup on
+  self-hosted servers. Stale startup templates for removed Hagga partitions are
+  also pruned instead of carrying duplicate configuration forward.
 - **Spice fields for maps that are no longer running are now marked, instead of sitting alongside live ones.** The game database keeps a row for every map instance that has ever existed, so a Deep Desert spun up for testing months ago still appears in the Spicefields card with no way to tell it apart from a running map. Those groups now sort to the bottom and carry a "not running" label. They are still shown rather than hidden, because a map being temporarily down is not the same as it being gone.
 
 ### Removed
@@ -365,6 +413,10 @@ here cover everything those tags shipped.
 
 ### Fixed
 
+- Removed unsupported native returning-player reward controls again and scrubbed
+  their startup injections, preventing the empty built-in welcome popup on
+  self-hosted servers. Stale startup templates for removed Hagga partitions are
+  also pruned instead of carrying duplicate configuration forward.
 - **Console variables now apply in the Deep Desert.** Settings such as fuel burn rate, mining multipliers and sandworm behaviour were only ever sent to Hagga Basin's server, so the Deep Desert ran at the game's stock defaults. It went unnoticed because DST used to copy every console variable into your own client config and that copy covered the gap; once that was narrowed to proven settings in 13.2.4, the Deep Desert quietly reverted to defaults. Both maps now receive them.
 
 ## [13.2.4] - 2026-08-03
@@ -377,12 +429,20 @@ here cover everything those tags shipped.
 
 ### Fixed
 
+- Removed unsupported native returning-player reward controls again and scrubbed
+  their startup injections, preventing the empty built-in welcome popup on
+  self-hosted servers. Stale startup templates for removed Hagga partitions are
+  also pruned instead of carrying duplicate configuration forward.
 - **Console variables could stop applying entirely if any of them was set to true or false.** Settings that take a true/false value (the two sandworm collision and danger-zone controls) were run through a number check when the server startup command was rebuilt. That check failed on the word `false`, and the failure was hidden, so the rebuild produced no startup command at all and **every** console-variable setting silently stopped taking effect. Pressing Apply INIs & Restart reported success and changed nothing. Booleans now pass through correctly, and if the rebuild ever does fail the message says so instead of claiming success. Introduced in v13.2.2.
 
 ## [13.2.2] - 2026-08-02
 
 ### Fixed
 
+- Removed unsupported native returning-player reward controls again and scrubbed
+  their startup injections, preventing the empty built-in welcome popup on
+  self-hosted servers. Stale startup templates for removed Hagga partitions are
+  also pruned instead of carrying duplicate configuration forward.
 - **Twelve server settings were being saved but never applied.** Console-variable settings that shipped before the startup-injection mechanism existed were written to the server's `UserEngine.ini` and nowhere else, so a battlegroup restart never picked them up — affecting Sun Exposure, the two mining multipliers and the PvP resource multiplier, both sandstorm toggles, all five sandworm controls, and Vehicle Durability Damage. They now travel with the server startup command like every other console variable, and a test enforces it so a future setting cannot be added without it.
 
 ## [13.2.1] - 2026-08-02
@@ -396,6 +456,10 @@ here cover everything those tags shipped.
 
 ### Fixed
 
+- Removed unsupported native returning-player reward controls again and scrubbed
+  their startup injections, preventing the empty built-in welcome popup on
+  self-hosted servers. Stale startup templates for removed Hagga partitions are
+  also pruned instead of carrying duplicate configuration forward.
 - Promoting a setting out of Experimental no longer removes it from the server startup command, which would have stopped the promoted setting working.
 
 ## [13.2.0] - 2026-08-01
@@ -413,6 +477,10 @@ here cover everything those tags shipped.
 
 ### Fixed
 
+- Removed unsupported native returning-player reward controls again and scrubbed
+  their startup injections, preventing the empty built-in welcome popup on
+  self-hosted servers. Stale startup templates for removed Hagga partitions are
+  also pruned instead of carrying duplicate configuration forward.
 - **NPC Attack Limit Override can now actually take effect.** It depends on a separate switch that was never exposed, so on its own it had nothing to act on. That switch is now available next to it.
 - **Restarting no longer rewrites the battlegroup for servers that use none of these settings.** A restart rebuilds the server startup values from the config file; if the battlegroup carried any other override, such as per-sietch server names, it was rewritten even when nothing had changed.
 
@@ -443,6 +511,10 @@ here cover everything those tags shipped.
 
 ### Fixed
 
+- Removed unsupported native returning-player reward controls again and scrubbed
+  their startup injections, preventing the empty built-in welcome popup on
+  self-hosted servers. Stale startup templates for removed Hagga partitions are
+  also pruned instead of carrying duplicate configuration forward.
 - **Vehicle limits can now take effect on the local client.** Field testing confirmed `Vehicle.MaxVehiclesPerPlayer` remained capped at 10 when applied only on the server, but changed to 20 when mirrored into the client Engine.ini. DST now supports that required client-side path while retaining the server startup override.
 - **Engine.ini opt-in now persists correctly.** The first test build saved the permission but read it back through an incompatible ordered-map lookup, leaving the checkbox disabled despite a success message. Backend state, checkbox state, and confirmation messages now agree.
 
@@ -450,6 +522,10 @@ here cover everything those tags shipped.
 
 ### Fixed
 
+- Removed unsupported native returning-player reward controls again and scrubbed
+  their startup injections, preventing the empty built-in welcome popup on
+  self-hosted servers. Stale startup templates for removed Hagga partitions are
+  also pruned instead of carrying duplicate configuration forward.
 - **Fuel Burning Duration now applies through both config and server startup.** Field testing found that `dw.FuelBurningMultiplier` worked when supplied through both `UserEngine.ini` and `-ExecCmds`, while DST's prior INI-only control had no effect. DST now merges the value into each Hagga server's startup argument, preserving per-sietch names and other pod overrides. Resetting to `1` removes the startup override. Restarting the battlegroup applies the new duration to existing generator fuel too.
 
 ## [13.0.3] - 2026-07-31
@@ -479,6 +555,10 @@ here cover everything those tags shipped.
 
 ### Fixed
 
+- Removed unsupported native returning-player reward controls again and scrubbed
+  their startup injections, preventing the empty built-in welcome popup on
+  self-hosted servers. Stale startup templates for removed Hagga partitions are
+  also pruned instead of carrying duplicate configuration forward.
 - **Client apply no longer reports keys it did not remove.** Every deprecated key was queued for removal on every save, whether or not the file contained it, and the result counted the queue. Saving a single setting could report "removed 18 keys" against a file that held none of them. The cleanup now reads the file first and only removes keys actually present, so the count reflects what changed.
 
 ## [13.0.0] - 2026-07-30
@@ -494,6 +574,10 @@ here cover everything those tags shipped.
 
 ### Fixed
 
+- Removed unsupported native returning-player reward controls again and scrubbed
+  their startup injections, preventing the empty built-in welcome popup on
+  self-hosted servers. Stale startup templates for removed Hagga partitions are
+  also pruned instead of carrying duplicate configuration forward.
 - **VM info now separates active database work from failed operation history.** Failed records are no longer described as unfinished work, backup retention is clearly distinguished from operation records, and an explicit cleanup action removes only records whose current phase is exactly `Failed` while preserving active, successful, and unknown states.
 
 ## [12.21.2] - 2026-07-27
@@ -527,6 +611,10 @@ All repository Trivy scans, npm audits, CI checks, builds, and 627 automated tes
 
 ### Fixed
 
+- Removed unsupported native returning-player reward controls again and scrubbed
+  their startup injections, preventing the empty built-in welcome popup on
+  self-hosted servers. Stale startup templates for removed Hagga partitions are
+  also pruned instead of carrying duplicate configuration forward.
 - **The "Restore Backup" heading was unreadable.** It was coloured from the same accent as its icon, which left dark amber text on the dark card — legible on the green "Take Backup" card and effectively invisible on the destructive one. Both maintenance headings now use the same readable colour; Restore keeps its amber icon and primary button, so the destructive action still reads as destructive.
 - **The "possible VM memory pressure" warning no longer fires on healthy servers.** It was triggered by container restart counts alone, and Funcom's operators restart in lockstep by design (exit 255), so it was close to permanently on — including during a real outage with **94% of RAM free**, where it advised raising RAM that could not have helped. Elevated restarts now only count when corroborated by an actual memory signal (low available memory, an OOM kill, or the node's own MemoryPressure condition), ordinary operator churn is identified as such, and the "raise the VM's RAM" advice is suppressed when memory is plentiful.
 - Maggie Malone (@magiemalone) added to the Thanks for the Coffee supporter credits.
@@ -541,12 +629,20 @@ All repository Trivy scans, npm audits, CI checks, builds, and 627 automated tes
 
 ### Fixed
 
+- Removed unsupported native returning-player reward controls again and scrubbed
+  their startup injections, preventing the empty built-in welcome popup on
+  self-hosted servers. Stale startup templates for removed Hagga partitions are
+  also pruned instead of carrying duplicate configuration forward.
 - **SSH key fallback (LAN mode) now handles directory-as-key-path and uses base64 for pubkey authorization.** The v12.20.2 fallback had two issues: if the configured SSH key path pointed to the `DuneAwakeningServer` directory instead of the `sshKey` file inside it, `Remove-Item` prompted for confirmation to delete children; and the pubkey was passed via shell single-quotes which can break on key content characters. The path now auto-appends `sshKey` when it resolves to a directory, and the authorization uses base64 encoding (matching the proven `Initialize-DuneLanGuest` bootstrap path) to avoid shell-quoting issues.
 
 ## [12.20.2] - 2026-07-24
 
 ### Fixed
 
+- Removed unsupported native returning-player reward controls again and scrubbed
+  their startup injections, preventing the empty built-in welcome popup on
+  self-hosted servers. Stale startup templates for removed Hagga partitions are
+  also pruned instead of carrying duplicate configuration forward.
 - **"Generate & authorize new key" (SSH) no longer crashes in Hyper-V over LAN mode.** The rotate-ssh-key command unconditionally dot-sourced Funcom's `vm-utilities.ps1` from the local Steam install path — which doesn't exist on a gaming PC managing a remote host. DST now detects the missing script and falls back to its own `ssh-keygen` + interactive password-based authorization, matching the bootstrap path used during initial LAN setup. The "Change VM password" command gets the same guard, falling back to `chpasswd` over SSH with the existing key.
 
 ## [12.20.1] - 2026-07-23
@@ -562,6 +658,10 @@ All repository Trivy scans, npm audits, CI checks, builds, and 627 automated tes
 
 ### Fixed
 
+- Removed unsupported native returning-player reward controls again and scrubbed
+  their startup injections, preventing the empty built-in welcome popup on
+  self-hosted servers. Stale startup templates for removed Hagga partitions are
+  also pruned instead of carrying duplicate configuration forward.
 - **Boot recovery now recognizes core-map (Overmap / Hagga) pods stuck in game phase `PreShutdown`, not just `Stopping`.** The boot-only stuck-pod force-clear pass previously skipped a whole serverset whenever Kubernetes reported `readyReplicas >= replicas`, and separately skipped any pod Kubernetes reported `Ready` before ever checking its game phase — so a pod that Kubernetes considered "Ready" but whose game phase was actually `PreShutdown` was left untouched. Field-observed: a pre-crash core-map pod (roughly 15 hours old) remained stuck in `PreShutdown` through a boot recovery pass and a subsequent 90-second stop timeout, with the boot log showing no core-map action taken; a manual restart eventually recreated it. The boot pass now inspects every eligible serverset's pods directly and force-clears any whose game phase is `Stopping` **or** `PreShutdown` (or that carries a `deletionTimestamp`), regardless of Kubernetes-reported readiness — still boot-only, still leaves cleanly-stopped and genuinely healthy/starting pods untouched. The on-demand/warm-map partition recovery path now recognizes `PreShutdown` alongside `Stopping` too, for consistency. (The specific Kubernetes-Ready-plus-PreShutdown combination was confirmed via code inspection and a mocked reproduction, not captured live.)
 
 ## [12.20.0] - 2026-07-23
@@ -576,6 +676,10 @@ All repository Trivy scans, npm audits, CI checks, builds, and 627 automated tes
 
 ### Fixed
 
+- Removed unsupported native returning-player reward controls again and scrubbed
+  their startup injections, preventing the empty built-in welcome popup on
+  self-hosted servers. Stale startup templates for removed Hagga partitions are
+  also pruned instead of carrying duplicate configuration forward.
 - **Hyper-V over LAN now works in a workgroup where the host has its own separate administrator account.** Every ongoing Hyper-V call (VM status, start/stop, RAM readout) previously ran under DST's own Windows identity via `-ComputerName` alone, which is routinely NOT an account with rights on a separate host — confirmed by field testing, where the Setup Wizard's Hyper-V host step failed to query Hyper-V under DST's identity while the install step's one-off credential prompt succeeded against the very same host. Credential collection now happens on the Hyper-V host step itself, before its first connection test, and that saved credential is attached to every remote Hyper-V call site (status, start/stop, RAM, sietch RAM readout, the CLI menu's VM commands) instead of silently falling back to the current identity.
 - **Hyper-V over LAN: guest IP discovery (and therefore SSH/battlegroup status) now actually uses the LAN credential.** VM status discovery fetched the VM object with the LAN credential correctly, but then piped that object into `Get-VMNetworkAdapter` to read its IP — and that cmdlet's piped `-VM` parameter set carries no `-ComputerName`/`-Credential`/`-CimSession` at all, silently dropping the credential. Field-confirmed: the VM was running and its IP was visible in Hyper-V Manager, but DST's own discovery came back empty, leaving ServerHealth stuck on "Unknown battlegroup" / "no VM found" and SSH unable to proceed (it never had an IP to dial). Guest IP discovery now re-applies the same `-ComputerName`/`-Credential` explicitly via `-VMName` instead of piping, matching the pattern the CLI menu's VM commands already used correctly.
 
@@ -652,6 +756,10 @@ All repository Trivy scans, npm audits, CI checks, builds, and 627 automated tes
 
 ### Fixed
 
+- Removed unsupported native returning-player reward controls again and scrubbed
+  their startup injections, preventing the empty built-in welcome popup on
+  self-hosted servers. Stale startup templates for removed Hagga partitions are
+  also pruned instead of carrying duplicate configuration forward.
 - **Multi-sietch shards now actually start.** Each additional Hagga world partition is created with a **unique `dimension`** — the earlier approach reused dimension `0`, which left the second shard stuck in "Startup" and never joinable. DST now assigns dimensions `0, 1, 2 …` the way Funcom's own battlegroup editor does, and the Sietches count reflects the number of shards (not server sets).
 
 ## [12.19.2] - 2026-07-17
@@ -668,6 +776,10 @@ All repository Trivy scans, npm audits, CI checks, builds, and 627 automated tes
 
 ### Fixed
 
+- Removed unsupported native returning-player reward controls again and scrubbed
+  their startup injections, preventing the empty built-in welcome popup on
+  self-hosted servers. Stale startup templates for removed Hagga partitions are
+  also pruned instead of carrying duplicate configuration forward.
 - **Landsraad contributions now grant guild voting power.** Setting a player's House contribution from Gameplay → Landsraad now drives the game's own contribution pipeline instead of writing the totals directly. Previously the leaderboard updated but the affected guild's **Voting Power stayed 0** — the map server was never told to recalculate it — so a guild that clearly led a House still couldn't place a decree vote. Contributions now **cascade to the contributing player's guild** (the way retail works), fire the server's `guild_vote_changed` refresh so voting power updates live, and attribute to the guild's real faction (fixing an earlier case where points could be stamped to the wrong faction). Players not in a faction-aligned guild fall back to a direct write, since they have no guild voting power regardless.
 
 ## [12.18.18] - 2026-07-13
@@ -686,6 +798,10 @@ All repository Trivy scans, npm audits, CI checks, builds, and 627 automated tes
 
 ### Fixed
 
+- Removed unsupported native returning-player reward controls again and scrubbed
+  their startup injections, preventing the empty built-in welcome popup on
+  self-hosted servers. Stale startup templates for removed Hagga partitions are
+  also pruned instead of carrying duplicate configuration forward.
 - **Core maps now auto-recover faster after a hard VM crash / power loss.** When the host is hard-reset while the battlegroup was still running, a core map (Overmap, Survival_1/Hagga) could come back up but sit unavailable for a while — players saw it stuck in a "preshutdown" state. The cause is the server operator draining the stale pre-crash server pod through its full 120s grace window before recreating a fresh one. The VM-side self-heal now includes a **boot-only stuck-server force-clear** pass: for any map that should be up (serverset replicas ≥ 1) whose backing pod is demonstrably stuck — terminating, or in the draining `Stopping` phase — it force-deletes that pod so the operator recreates it immediately, skipping the drain. It runs at boot only (no players are online), never during live play, so it can't interrupt a legitimate scheduled-restart drain. Ready pods and normally-starting pods are left untouched, and cleanly shut-down maps (replicas = 0) are never restarted. This complements the existing on-demand-map partition self-heal (which is unchanged and still only touches on-demand map partitions).
 
 ## [12.18.15] - 2026-07-11
@@ -703,12 +819,20 @@ All repository Trivy scans, npm audits, CI checks, builds, and 627 automated tes
 
 ### Fixed
 
+- Removed unsupported native returning-player reward controls again and scrubbed
+  their startup injections, preventing the empty built-in welcome popup on
+  self-hosted servers. Stale startup templates for removed Hagga partitions are
+  also pruned instead of carrying duplicate configuration forward.
 - **Local backup mirror actually runs on schedule now.** In v12.18.10-v12.18.12 the auto-copy only ticked while the **Database** page was open in the DST window — the 30-second poll lived in the React component's `useEffect`, so navigating away or minimizing to tray stopped it. A backup that landed on the VM at 00:00 sat there until the next time the user opened the Database page (e.g., copied at 00:11 when the user checked). DST now runs the mirror sync inside the same background scheduler runspace that fires scheduled restarts, gated to every ~10 minutes so a hourly backup shows up in the mirror folder within one tick without pinging the VM every 30 seconds. The mirror runs whether or not any page is open, as long as DST is running — same "only while DST is running" caveat as scheduled restarts. The Database page's in-page poll stays as a fast catch-up when the page is opened, and the **Sync now** button still forces an immediate tick.
 
 ## [12.18.12] - 2026-07-10
 
 ### Fixed
 
+- Removed unsupported native returning-player reward controls again and scrubbed
+  their startup injections, preventing the empty built-in welcome popup on
+  self-hosted servers. Stale startup templates for removed Hagga partitions are
+  also pruned instead of carrying duplicate configuration forward.
 - **Local backup mirror (v12.18.10) actually copies files now.** Every mirror tick was silently failing: it enumerated the VM's backups correctly but every `scp` pull died with `bash: line 1: /usr/lib/ssh/sftp-server: No such file or directory` (rc=255). Since OpenSSH 9.0 the Windows `scp` client defaults to the SFTP subsystem for transfers, and the DST VM is Alpine minimal with no `sftp-server` and no `scp` binary at all. Adding `-O` (legacy SCP protocol) doesn't help either — there is nothing on the VM to receive it. DST no longer uses `scp`; all VM ↔ PC file transfers now stream over the existing `ssh` connection via `sudo cat` (VM → PC) or `sudo tee` (PC → VM), which uses the same key and toolset every other DST ↔ VM interaction already depends on. Same fix repairs the **Download** button on each backup row and the **Upload** button on the Database page, both of which were broken by the identical bug.
 - **Local backup mirror surfaces per-file copy failures.** The sidecar state only recorded top-level errors ("VM listing failed", "folder not writable"), so a run where every per-file copy failed reported `copied 0 file(s)` with no error banner — which is exactly how the scp bug above hid for a full release cycle. When any file fails, the mirror card now shows `Last error: N file(s) failed to copy - first: <first error>`.
 
@@ -716,6 +840,10 @@ All repository Trivy scans, npm audits, CI checks, builds, and 627 automated tes
 
 ### Fixed
 
+- Removed unsupported native returning-player reward controls again and scrubbed
+  their startup injections, preventing the empty built-in welcome popup on
+  self-hosted servers. Stale startup templates for removed Hagga partitions are
+  also pruned instead of carrying duplicate configuration forward.
 - **Landsraad Task Goal Amount now applies to the running term.** Previously, changing **Game Config → Landsraad → Task Goal Amount** only wrote `m_TaskGoalAmount` to `ServerSettings.ini`, which Funcom's own code reads once at term creation — so the currently-running term kept its original 70,000/house goal until it rolled over, and every House in the Player → Landsraad admin still showed `0/70,000`. DST now also writes the new goal into `dune.landsraad_tasks.goal_amount` for every House row in the current term, so the change takes effect immediately. The save toast reports how many House rows were updated. If there's no active term (or the DB is unreachable), the INI still saves and DST notes that the goal will apply to the next term.
 
 ## [12.18.10] - 2026-07-10
@@ -728,6 +856,10 @@ All repository Trivy scans, npm audits, CI checks, builds, and 627 automated tes
 
 ### Fixed
 
+- Removed unsupported native returning-player reward controls again and scrubbed
+  their startup injections, preventing the empty built-in welcome popup on
+  self-hosted servers. Stale startup templates for removed Hagga partitions are
+  also pruned instead of carrying duplicate configuration forward.
 - **Give Faction Rep and Set Faction Tier no longer refuse when the character is already in the target faction.** Both actions were checking whether the character was aligned to _any_ faction, and errored out (`"already a member of X. Use Reset Faction first..."`) even when the target faction _was_ that same faction — making it impossible to bump or set a Harkonnen player's Harkonnen rep without first Reset-ing them and re-recruiting through the ceremony. The guard now fires only when the character is aligned to the _other_ faction (where a reset is genuinely required to avoid stacking two memberships). Same-faction calls take a minimal rep-only path: **Give Faction Rep** reads the current rep, adds the Delta, and writes it back (allowing negative Deltas to drop rep, clamped to 0..cap); **Set Faction Tier** writes the tier-threshold rep directly. Both dual-write the `player_faction_reputation` table and the pawn's `FactionPlayerComponent`, matching how Reset Faction / Progression Unlock persist rep. Changes take effect on the character's next login.
 
 ### Changed
@@ -742,12 +874,20 @@ All repository Trivy scans, npm audits, CI checks, builds, and 627 automated tes
 
 ### Fixed
 
+- Removed unsupported native returning-player reward controls again and scrubbed
+  their startup injections, preventing the empty built-in welcome popup on
+  self-hosted servers. Stale startup templates for removed Hagga partitions are
+  also pruned instead of carrying duplicate configuration forward.
 - **Public IP / DDNS Apply no longer fails at the "Update VM network, settings.conf, K3s, NAT" step when the battlegroup is stopped.** The NAT sub-step queried the current `mq-game` service endpoint to install the RabbitMQ DNAT rule (`public:31982/tcp -> mq-game pod:5672`). When the battlegroup is stopped (or the MQ pod isn't Ready yet), `kubectl get endpoints` returns the literal string `<none>`, which was passed through the non-empty check and fed straight to `iptables` — producing `iptables v1.8.11 (nf_tables): Bad IP address "<none>"` and failing the whole Apply. The immediate rule install now skips gracefully in that case (logging a defer message) and the per-minute `dune-dnat-watch` cron installs the rule as soon as the MQ pod becomes Ready. The `/etc/local.d/dune-iptables.start` boot script that DST writes as part of the same step got the same `<none>` guard on its RabbitMQ DNAT install. No behaviour change on a running battlegroup — this only fixes the crash path when Apply is run while the BG is stopped.
 
 ## [12.18.7] - 2026-07-09
 
 ### Fixed
 
+- Removed unsupported native returning-player reward controls again and scrubbed
+  their startup injections, preventing the empty built-in welcome popup on
+  self-hosted servers. Stale startup templates for removed Hagga partitions are
+  also pruned instead of carrying duplicate configuration forward.
 - **Scheduled backups now appear in the Database page history (and get pruned by retention).** DST's scheduled backups run `battlegroup backup "dst-scheduled-<utc-ts>"`, and Funcom writes that name verbatim — with **no `.backup` extension**. The history listing, the retention prune, and the download/delete validators all matched only a trailing `.backup`, so every scheduled backup was silently skipped: only the manual/Funcom-default `*.backup` snapshots showed, and the scheduled files were never aged out. All of those paths now also recognize the extension-less `dst-scheduled-<ts>` shape (existing scheduled backups appear immediately after updating — no rename needed; `.yaml` sidecars stay excluded). The Save-As default when downloading a scheduled backup now adds `.backup`. *Re-save your backup schedule once after updating so the widened retention prune takes effect on the VM crontab.*
 
 ### Added
@@ -762,6 +902,10 @@ All repository Trivy scans, npm audits, CI checks, builds, and 627 automated tes
 
 ### Fixed
 
+- Removed unsupported native returning-player reward controls again and scrubbed
+  their startup injections, preventing the empty built-in welcome popup on
+  self-hosted servers. Stale startup templates for removed Hagga partitions are
+  also pruned instead of carrying duplicate configuration forward.
 - **Backup delete errors no longer show a doubled "Delete failed:" prefix.** A failed backup delete could surface as `Delete failed: Delete failed: …` because both the server and the web UI added the label. The server now returns just the reason and the UI adds the single "Delete failed:" prefix.
 - **A transient SSH hiccup during a multi-file backup delete or dump-pod prune no longer reports a false failure.** If the SSH connection to the VM dropped mid-command (e.g. a brief collision with the background health check), the action could report `SSH to VM failed (no exit code returned)` even though a second click worked immediately. DST now automatically retries the command once before surfacing that error, so the momentary drop recovers on its own.
 - **Deleting many backup files at once no longer fails on "select all".** A large multi-file delete used to fail (`SSH to VM failed (no exit code returned)`) while smaller batches went through, because the whole delete script was passed as one over-long SSH command-line argument that the VM rejected once the batch grew. DST now streams the script to the VM over stdin (so there's no length ceiling) and drops a redundant per-file privilege escalation, so a delete of any size completes in a single pass — including on memory-pressured VMs where the old approach could also time out.
@@ -770,6 +914,10 @@ All repository Trivy scans, npm audits, CI checks, builds, and 627 automated tes
 
 ### Fixed
 
+- Removed unsupported native returning-player reward controls again and scrubbed
+  their startup injections, preventing the empty built-in welcome popup on
+  self-hosted servers. Stale startup templates for removed Hagga partitions are
+  also pruned instead of carrying duplicate configuration forward.
 - **Backup delete and dump-pod Prune no longer report a false failure ("Argument types do not match").** On the Database page, deleting a backup file or clicking **Prune** would flash a red error — `Delete failed: Argument types do not match` / `Prune failed: …` — even though the file (or pods) had in fact been removed, which is why the item vanished on the next refresh but the error still appeared. The cause was a PowerShell quirk on the server: wrapping an internal result list with the array operator `@(…)` throws `Argument types do not match` for that particular collection type, and the throw happened *after* the delete/prune had already run on the VM — so the action succeeded but the response came back as an error. Both `Remove-DuneBackupFiles` and `Remove-DuneBackupDumpPods` now normalize their result lists safely, so a successful delete/prune reports success and a real failure reports the real reason. Added a regression test covering every return path.
 
 ### Changed
@@ -780,6 +928,10 @@ All repository Trivy scans, npm audits, CI checks, builds, and 627 automated tes
 
 ### Fixed
 
+- Removed unsupported native returning-player reward controls again and scrubbed
+  their startup injections, preventing the empty built-in welcome popup on
+  self-hosted servers. Stale startup templates for removed Hagga partitions are
+  also pruned instead of carrying duplicate configuration forward.
 - **The backup dump-pod cleanup now also clears Evicted/Failed dump pods.** DST already auto-prunes the `*-dump-*` pods Funcom's database-backup jobs leave behind (Database page → Backup schedule "keep last N pods", plus the manual **Prune** button), but it only removed **Succeeded** ones — so dump pods that were **Evicted** (e.g. OOM-killed during a VM memory-pressure event) were left behind, piled up in the Pods view, and survived every battlegroup/VM restart (they live in the k3s datastore, not as live processes, so a reboot just reloads them). Both the post-backup cron pruner and the manual Prune button now treat **all terminal dump pods** (Succeeded/Completed + Failed/Evicted) as prune candidates under the same keep-last / keep-days retention. In-progress dumps (Running/Pending) are still never touched.
 
 ## [12.18.3] - 2026-07-09
@@ -790,6 +942,10 @@ All repository Trivy scans, npm audits, CI checks, builds, and 627 automated tes
 
 ### Fixed
 
+- Removed unsupported native returning-player reward controls again and scrubbed
+  their startup injections, preventing the empty built-in welcome popup on
+  self-hosted servers. Stale startup templates for removed Hagga partitions are
+  also pruned instead of carrying duplicate configuration forward.
 - **The Players → Tags panel no longer hides tags for heavily-tagged characters.** For a character with a large number of tags (200+), the Tags panel silently dropped whole alphabetically-later tag groups — most visibly the entire `Journey.*` group, which would "disappear on refresh" even though every tag was still present in the database. The cause was a read cap: the tag list was fetched with a 200-row limit and ordered alphabetically, so anything past ~row 200 (Contract.* alone can be 150+ rows) was truncated before it ever reached the UI. The cap is now high enough to return a mature character's full tag set, so all groups (Journey, and anything after it) show up correctly. This was a display-only bug — no tags were lost from the database, and the trigger-firing delta Save added in 12.18.2 already protected the hidden tags from being deleted.
 
 - **Public IP → Apply no longer reports a false FAILED on the final "Verify external IP + RabbitMQ port" step.** That step ran immediately after "Propagate IP to battlegroup + restart", but the restart brings the `mq-game` pod (which serves RabbitMQ on the DNAT'd port 31982) back cold — its endpoint isn't ready for ~30–90s. The verify did a **single** TCP probe with no retry, so it fired during that boot gap and printed `TCP <ip>:31982 not reachable yet` / FAILED, which then lingered in the UI and directly contradicted the header **31982 TCP** status pill that goes green moments later. The verify now **polls the port with backoff** (up to ~90s, exiting early on the first success) so the normal post-restart `mq-game` boot completes before any verdict — a port that comes up on attempt 2–3 now yields `done`, not FAILED. And if the external probe still doesn't succeed but every internal signal is healthy (node ExternalIP == target, the eth0 alias is up, and the battlegroup reached Healthy), the step is **downgraded from FAILED to a warning** noting that a TCP probe from the host itself can false-negative on routers without NAT loopback (hairpin) and to confirm 31982 from an outside network. Observed live 2026-07-07: verify printed FAILED while node ExternalIP, eth0 alias, DNAT `-d`, and port 31982 were all correct ~1 min later.
@@ -804,6 +960,10 @@ All repository Trivy scans, npm audits, CI checks, builds, and 627 automated tes
 
 ### Fixed
 
+- Removed unsupported native returning-player reward controls again and scrubbed
+  their startup injections, preventing the empty built-in welcome popup on
+  self-hosted servers. Stale startup templates for removed Hagga partitions are
+  also pruned instead of carrying duplicate configuration forward.
 - **The tag editor's "Add" button now works for custom tags not in the built-in catalog.** When you typed a tag the catalog didn't recognise, the picker said *"No known tags match … Press Add to use it anyway"* — but "Add" was just static text with nothing to click, so the only way to actually add a custom tag was to press Enter (undiscoverable). The picker now shows a real, clickable **Add "&lt;your tag&gt;"** row whenever your text matches no catalog entry, so off-catalog tags (e.g. a one-off `Cosmetic.*` marker) can be added the same way as catalogued ones.
 
 - **The mobile/remote "Friend Helper" bridge no longer flashes a console window on the desktop every couple of minutes.** The bridge's background service is kept alive by a self-healing supervisor loop plus an at-sign-in task trigger, but the installer *also* registered a **2-minute keepalive** trigger as a backstop in case the supervisor process itself was killed. In an interactive Windows session, each keepalive fire relaunched the hidden `wscript -> pwsh` helper, and even the window-hidden shim briefly allocates a console host that could momentarily flash on screen. That keepalive trigger has been removed: the supervisor still relaunches the bridge daemon within a few seconds if it crashes, and the at-sign-in trigger re-establishes the supervisor after every reboot / re-login, so the bridge stays just as reliable — without the periodic flash. Existing installs pick up the fix on their next update; the live scheduled task can also be corrected in place.
@@ -812,6 +972,10 @@ All repository Trivy scans, npm audits, CI checks, builds, and 627 automated tes
 
 ### Fixed
 
+- Removed unsupported native returning-player reward controls again and scrubbed
+  their startup injections, preventing the empty built-in welcome popup on
+  self-hosted servers. Stale startup templates for removed Hagga partitions are
+  also pruned instead of carrying duplicate configuration forward.
 - **On-demand map partition self-heal no longer has a spin-up race.** The autonomous partition healer runs a conservative `*/15` cron pass that clears a drifted `igwsss.spec.partitions` pin so Deep Desert / Arrakeen / Harko Village can launch after an unclean host crash + VM reboot. It previously cycled **any** pinned on-demand map with no pod immediately — which left a ~1–3 second window during a manual spin-up (partition pinned and `replicas=1`, but k3s hasn't scheduled the pod yet) where a cron tick landing in that window could reset the in-progress spin-up. The cron pass now applies a **spin-up guard**: a pinned-but-pod-less map is recorded on first sighting and only cycled if it is *still* pod-less on a later tick. A legitimate spin-up gets its pod within seconds and clears the marker long before the next tick, so it is never disturbed. Unchanged: live sessions (Ready pods) are always skipped, demonstrably dead pods (`Terminating` / `CrashLoopBackOff` / image error) are still healed immediately, and the boot-time hook + the manual **Fix Partitions** button remain aggressive by design. A new `install-only` mode also lets DST refresh the on-VM automation without running the heal, so the update can be applied to a live server without touching any map.
 
 ## [12.18.0] - 2026-07-07
@@ -832,6 +996,10 @@ All repository Trivy scans, npm audits, CI checks, builds, and 627 automated tes
 
 ### Fixed
 
+- Removed unsupported native returning-player reward controls again and scrubbed
+  their startup injections, preventing the empty built-in welcome popup on
+  self-hosted servers. Stale startup templates for removed Hagga partitions are
+  also pruned instead of carrying duplicate configuration forward.
 - **Settings → SSH key → "Remove passphrase" no longer fails with `ssh-keygen.exe : Too many arguments`.** The button shells out to `ssh-keygen -p` to strip the passphrase, passing the new (empty) passphrase as `-N ''`. Under Windows PowerShell 5.1 — the runtime `DuneServer.exe` uses — a bare empty-string argument is *dropped* when invoking a native exe, so `ssh-keygen` saw `-N -f <keyPath>`, swallowed `-f` as the new passphrase, and choked on the leftover path — the passphrase was never removed. The empty argument is now spelled `-N '""'` (single-quoted double-quotes), which survives PS 5.1's native-argument handling and reaches OpenSSH's `ssh-keygen` as a literal empty passphrase. The same latent bug was fixed in `Test-DuneSshKeyEncrypted` (`ssh-keygen -y -P ''` → `-P '""'`): on PS 5.1 it was silently returning "undetermined" for **every** key, so the Remove-passphrase idempotency guard never fired and the "SSH key is passphrase-protected" hint in status/health failures never showed. Verified end-to-end on Windows PowerShell 5.1: an encrypted throwaway key is stripped, its public half is byte-for-byte unchanged (so it stays authorized on the VM), and detection is correct before and after. Reproduced live on 2026-07-07. The rotate/generate path (`Update-SshKey`) lives in the installed `vm-utilities.ps1`, outside this repo, and already uses a non-empty passphrase — no in-repo empty-arg call remained after these two.
 - **Remote players no longer P34 ("Connection Request Timed Out") on a self-host server whose game binds only the public IP — the game-UDP DNAT bridge now persists.** On a home-hosted VM the router forwards a remote player's game UDP (7777-7810) to the VM's **LAN IP**, but the Funcom game pods run `hostNetwork` and bind those ports to the **public IP only** — so nothing listens on the LAN IP and the kernel answers `ICMP udp port unreachable`, timing the client out with P34, even though the server is visible and RabbitMQ login (31982/tcp) works. The fix is an iptables DNAT "bridge" that rewrites `<VM-LAN-IP>:7777-7810/udp → <public IP>` (the local `eth0` alias where the pod listens). DST added this transiently during a Public IP apply but it did **not** persist — a reboot, a battlegroup re-NAT, or the next apply dropped it, sending remote players back to P34. It is now reconciled in all three durable paths: the **Public IP apply**, the boot script `/etc/local.d/dune-iptables.start`, and the every-minute **DNAT self-heal watchdog** (`dune-dnat-watch.sh`), alongside the existing RabbitMQ rule. Validated live by `tcpdump` on 2026-07-07 (before: repeating `→ <lan-ip>:7778 UDP` / `ICMP udp port unreachable`; after adding the bridge: sustained bidirectional game UDP and the player connected).
   - **The bridge is bind-detected, so it cannot reintroduce the same-LAN / self-host black-hole removed in v12.16.9.** It is installed **only** when the game is detected binding the public IP and **not** the LAN IP or a wildcard (`0.0.0.0`); it is actively **removed** when the game binds the LAN IP/wildcard (there a `→ public` rewrite would black-hole remote *and* same-LAN joins); and it is **left untouched** when the bind is indeterminate (pods not up yet) — never tearing down a working rule on a guess. Detection is IPv4-only so a dual-stack IPv6 (`::`) socket can't masquerade as a LAN bind and suppress a needed bridge. The reconcilers use the authoritative addresses (node `ExternalIP` for public, node `InternalIP` for the LAN `-d` match) and are idempotent (check-then-insert). *The live packet-capture validation covers the remote-player fix on Coastal's box (public-only bind); the persistence, watchdog, boot-path, and LAN-safety bind-detection are new and warrant review.*
@@ -841,12 +1009,20 @@ All repository Trivy scans, npm audits, CI checks, builds, and 627 automated tes
 
 ### Fixed
 
+- Removed unsupported native returning-player reward controls again and scrubbed
+  their startup injections, preventing the empty built-in welcome popup on
+  self-hosted servers. Stale startup templates for removed Hagga partitions are
+  also pruned instead of carrying duplicate configuration forward.
 - **Battlegroup Info "raw output" pane no longer shows a drifted Status column for multi-word / comma'd server names.** Funcom's `battlegroup status` script builds its Battlegroup Info table by awk-parsing a positional `kubectl get battlegroups --no-headers` row, so a server TITLE containing spaces or a comma (e.g. `Dune, my Arrakis`) shifts the Status cell — and every column after it — by one field per extra word, printing the second word of the name where the status belongs. The Info *panel* has read from the Battlegroup CRD JSON since v12.16.1 and was already correct; the raw-output pane still showed Funcom's drifted row verbatim. DST now rewrites just that one data row in the raw text from the same JSON-canonical values (Status / Database / Gateway / Director / Uptime) and tags it `(DST-corrected)`. Conservative: it only fires when the text row actually disagrees with the CRD (a correctly-columned single-word name is left untouched), and it no-ops when the CRD JSON is unavailable so the pane never renders worse than before. Reported by gd.py in `#hosting-help`.
 
 ## [12.16.12] - 2026-07-05
 
 ### Fixed
 
+- Removed unsupported native returning-player reward controls again and scrubbed
+  their startup injections, preventing the empty built-in welcome popup on
+  self-hosted servers. Stale startup templates for removed Hagga partitions are
+  also pruned instead of carrying duplicate configuration forward.
 - **VM header no longer shows `[object Object]`, and the Public IP card no longer crashes on VMs with multiple network adapters.** `Get-DuneVmStatus` now coerces the discovered VM IP to a string before returning it. Previously, on VMs where `Get-VMNetworkAdapter` yields multiple adapters, the pipeline chain could return a wrapping PSObject that JSON-serialized as `{}`; the webui then rendered `VM · [object Object]` in the header, and the *Settings → Public IP / DDNS* card threw React error #31 (`Objects are not valid as a React child`) and displayed "Public IP couldn't be displayed". Also added defensive `typeof === 'string'` guards on both surfaces so a future backend regression can't crash the app.
 
 ## [12.16.11] - 2026-07-05
@@ -861,6 +1037,10 @@ All repository Trivy scans, npm audits, CI checks, builds, and 627 automated tes
 
 ### Fixed
 
+- Removed unsupported native returning-player reward controls again and scrubbed
+  their startup injections, preventing the empty built-in welcome popup on
+  self-hosted servers. Stale startup templates for removed Hagga partitions are
+  also pruned instead of carrying duplicate configuration forward.
 - **Player action descriptions now show.** Each action under *Players → Progression / Items / etc.* has a short description (`rowNote`), but it was never rendered — so expanding an action (e.g. **Enable All Skills**) showed only the button with no explanation. The description now appears at the top of the expanded action.
 - **Public IP Apply no longer wedges the UI on the "Propagate IP to battlegroup + restart" step, and no longer leaves utilities on the old IP.** Two related fixes:
   - **Reordered the propagate shell script** so the safe, fast CR patches (`utilities-ip` → HOST_DATACENTER_IP_ADDRESS on director/serverGateway/textRouter, `settings-integrity`, `refresh-status-pods`, `audit-ip-surfaces`) all run *before* the `change-ip` step. Previously if `change-ip` hung the SSH (the BG restart cycles pods and grand-child processes can hold ssh's stdout pipe open, blocking `Invoke-V6Ssh`'s async stdout drain past its timeout), the utility patches never fired and the UI got stuck — while director/serverGateway/textRouter kept advertising the OLD `HOST_DATACENTER_IP_ADDRESS`. Now the utility reconcile is durable regardless of what happens after.
@@ -875,6 +1055,10 @@ All repository Trivy scans, npm audits, CI checks, builds, and 627 automated tes
 
 ### Fixed
 
+- Removed unsupported native returning-player reward controls again and scrubbed
+  their startup injections, preventing the empty built-in welcome popup on
+  self-hosted servers. Stale startup templates for removed Hagga partitions are
+  also pruned instead of carrying duplicate configuration forward.
 - **Reboot / Stop All no longer looks like it failed to stop the battlegroup.** Funcom's own `battlegroup stop` script waits for the battlegroup to report the "Stopped" phase by positionally parsing its status output, and mis-reads the phase when the server title contains spaces (e.g. "Dune Reapers - DST") — so it prints a cosmetic `WARNING: battlegroup … did not report Stopped within 90s` even though the stop succeeded. DST already verifies the real stop via its own pod-termination check; it now prints a short note after that confirmation explaining the Funcom warning is cosmetic when the server title has spaces. (Same root cause as the v12.16.1 Dashboard Battlegroup Info fix, but inside Funcom's script, which DST calls and does not modify.)
 
 ## [12.16.9] - 2026-07-05
@@ -885,6 +1069,10 @@ All repository Trivy scans, npm audits, CI checks, builds, and 627 automated tes
 
 ### Fixed
 
+- Removed unsupported native returning-player reward controls again and scrubbed
+  their startup injections, preventing the empty built-in welcome popup on
+  self-hosted servers. Stale startup templates for removed Hagga partitions are
+  also pruned instead of carrying duplicate configuration forward.
 - **DNAT self-heal watchdog no longer breaks self-hosted / same-LAN joins.** The watchdog installed on every battlegroup Start/Restart added a game-port rule (`VM_IP:7777-7810/udp -> public IP`) that never matched real internet players (their traffic arrives on the public IP) and could hairpin a same-network admin's own join out to the WAN IP and black-hole it — leaving the client stuck on "Transporting to sietch" / "in queue" even though the battlegroup was fully Healthy. Because the watchdog re-applied it every minute, a plain `battlegroup restart` couldn't clear it; only a pre-DST VM snapshot did. The rule is **removed**, and the installer now **actively deletes any copy a prior version left on the VM** on the next Start/Restart, so updating DST fixes an affected server without a reboot or snapshot rollback. The watchdog also now **validates that it resolved real IPv4 addresses before touching any rule** — a momentarily-empty `mq-game` endpoint previously slipped through as the literal string `<none>`, which deleted the working RabbitMQ rule and failed to reinstall it; it now leaves a working rule intact in that case.
 - **Fresh Start restore now reliably targets the recreated character, and verifies the result.** The restore step resolved the live character **by name**, which could land on a stale/duplicate row (or silently no-op) so purchases and cosmetics didn't actually appear in-game even though the tool reported success. It now resolves the live pawn by the snapshot's **account id** (stable across the in-game delete + recreate; falls back to name for older snapshots), and after the write it **reads back the actual cosmetics / building-set / piece counts** and reports them — warning explicitly if cosmetics were expected but didn't land, instead of the old blind "+ cosmetics" success message.
 - **Fresh Start snapshot now captures all building sets/pieces (previously only 1).** Under Windows PowerShell 5.1 (the runtime the backend compiles to), the snapshot's JSON parse collapsed a multi-element building-set/piece array into a single wrapper object, so a character with hundreds of unlocks was snapshotted as "1 building set, 1 piece" and Restore then re-granted **0** sets/pieces. The arrays are now parsed into flat string lists, so the full set/piece list is captured and restored. Restore and the snapshot list also defensively unwrap any snapshot saved in the old malformed shape. Restore also now streams its (much larger) write over SSH stdin so the full set/piece/cosmetic payload no longer trips the Windows command-line length limit ("The filename or extension is too long"). (Cosmetics were never affected — they're stored as a raw string.)
@@ -905,6 +1093,10 @@ All repository Trivy scans, npm audits, CI checks, builds, and 627 automated tes
 
 ### Fixed
 
+- Removed unsupported native returning-player reward controls again and scrubbed
+  their startup injections, preventing the empty built-in welcome popup on
+  self-hosted servers. Stale startup templates for removed Hagga partitions are
+  also pruned instead of carrying duplicate configuration forward.
 - **Duplicate / ghost players in the Gameplay Admin roster** after a character delete + recreate. The list is now driven from the `dune.player_state` view (Active-only) instead of `dune.actors`, so each account shows exactly one active character.
 
 ## [12.16.7] - 2026-07-04
@@ -918,6 +1110,10 @@ All repository Trivy scans, npm audits, CI checks, builds, and 627 automated tes
 
 ### Fixed
 
+- Removed unsupported native returning-player reward controls again and scrubbed
+  their startup injections, preventing the empty built-in welcome popup on
+  self-hosted servers. Stale startup templates for removed Hagga partitions are
+  also pruned instead of carrying duplicate configuration forward.
 - **Reset Faction now actually resets faction state.** It was only clearing a small subset of what "reset faction" implies — leaving hundreds of faction-related tags and 80+ revealed ClimbTheRanks journey nodes on the character. Concretely, it now also (a) sets `reveal_condition_state = false` on all `DA_FQ_ClimbTheRanks%` journey nodes (previously only `complete_condition_state` was cleared, so the STORY tab still rendered every previously-revealed chapter as an active quest card — this was the root cause of a multi-day stuck "Hunting Skorda" contract card observed live), and (b) deletes six additional tag families that are all faction storyline state: `Contract.Tracking.FactionStory.*` (rank grid + milestones), `Contract.Tracking.Completed.FactionStoryline.*`, `Contract.Tracking.Completed.MaasKharet*`, `Contract.Target.Dialogue.FactionRank*`, `Contract.Target.Location/Lore.MaasKharet*`, and `DialogueFlags.Factions.*` / `DialogueFlags.IntroductionDone.ThufirHawat`+`PiterDeVries`+`MaasKharet`. Verified live against a stuck faction storyline. Faction scope (`atreides` / `harkonnen` / `both`) is preserved — single-faction reset is conservative and only wipes obvious per-faction tags; `both` wipes the shared markers as well. Success toast now reports counts (tags removed, journey nodes reset, lore cleared).
 
 ### Added
@@ -928,6 +1124,10 @@ All repository Trivy scans, npm audits, CI checks, builds, and 627 automated tes
 
 ### Fixed
 
+- Removed unsupported native returning-player reward controls again and scrubbed
+  their startup injections, preventing the empty built-in welcome popup on
+  self-hosted servers. Stale startup templates for removed Hagga partitions are
+  also pruned instead of carrying duplicate configuration forward.
 - **Fresh Start over-restored faction-earned building sets.** The restore path unioned the ENTIRE `learned_building_sets` + `new_buildable_pieces` snapshot back onto the fresh character, which included faction-earned sets (Atre_*/Hark_*/Fremen_*/AtreidesSet/HarkonnenSet) and base/advanced tech patents — unlocks a Rank-0 fresh character shouldn't yet have. Restore now filters to purchased-only (`^(MTX_|Choam)`) so faction sets and tech-tree unlocks re-populate naturally as the character re-progresses. Snapshots taken with earlier versions still work — the filter runs at restore time. UI + CHANGELOG labels also updated from "builds" to "purchases" to accurately describe the scope.
 
 ## [12.16.4] - 2026-07-04
@@ -940,6 +1140,10 @@ All repository Trivy scans, npm audits, CI checks, builds, and 627 automated tes
 
 ### Fixed
 
+- Removed unsupported native returning-player reward controls again and scrubbed
+  their startup injections, preventing the empty built-in welcome popup on
+  self-hosted servers. Stale startup templates for removed Hagga partitions are
+  also pruned instead of carrying duplicate configuration forward.
 - **Backup Schedule → retention prune now actually deletes old backups.** Two stacked bugs meant the scheduled prune has never removed a single file since the feature shipped, so `keep-last = 6` was effectively `keep-last = infinity`. **(1)** The prune glob was one directory level too shallow — `battlegroup backup` writes to `/funcom/artifacts/database-dumps/<sh-hash-name>/<file>.backup`, but DST globbed `/funcom/artifacts/database-dumps/*.backup*`, which matched zero files. Fixed by descending one level (`/*/`). **(2)** Each backup produces two files on disk (`.backup` + `.backup.yaml` sidecar), and the old pattern `*.backup*` matched both, so `keep-last = N` really kept N/2 real backups. Now we count only `.backup` files and delete the `.yaml` sidecar alongside each pruned entry. Manually named snapshots (e.g. `pre-patch-1_4_10_1.backup`) are still preserved by the `-YYYYMMDD-HHMMSS` shape gate.
 
 > ⚠️ **Existing installs must click *Save* once on the Backup Schedule card after upgrading** to rewrite the crontab with the fixed prune line. Upgrading the tool alone does not touch the on-disk cron block — it was written by the previous version and stays as-is until the schedule is saved again.
@@ -948,12 +1152,20 @@ All repository Trivy scans, npm audits, CI checks, builds, and 627 automated tes
 
 ### Fixed
 
+- Removed unsupported native returning-player reward controls again and scrubbed
+  their startup injections, preventing the empty built-in welcome popup on
+  self-hosted servers. Stale startup templates for removed Hagga partitions are
+  also pruned instead of carrying duplicate configuration forward.
 - **Gameplay Admin → Players → Set Starter Class** no longer fails with a red `account_id is required` toast. The frontend was posting `{pawn_id, class_id}` (using the character/pawn id) while the backend expected `{account_id, job}` — a straight contract mismatch. Corrected the `setStarterClass` API call to send `account_id` + `job` and to use `player.account_id` at the call site, matching the pattern of every other write in this section (rename, update tags, delete tutorials, etc.). Backend contract unchanged.
 
 ## [12.16.1] - 2026-07-03
 
 ### Fixed
 
+- Removed unsupported native returning-player reward controls again and scrubbed
+  their startup injections, preventing the empty built-in welcome popup on
+  self-hosted servers. Stale startup templates for removed Hagga partitions are
+  also pruned instead of carrying duplicate configuration forward.
 - **Dashboard → Battlegroup info** now reads its five fields (Status / Database / Gateway / Director / Uptime) directly from the Battlegroup CRD JSON via `kubectl`, so a server title that contains spaces (e.g. `Reapers - DST`) no longer shifts every column. Root cause: Funcom's `battlegroup status` script parses `kubectl get battlegroups --no-headers` with positional `awk` tokens, so a multi-word TITLE was making the panel show garbage like *Database: 2, Gateway: Ready, Director: 2/2, Uptime: Healthy*. The raw-output pane (HIDE RAW OUTPUT toggle) still shows Funcom's script output unchanged for debugging.
 
 ## [12.16.0] - 2026-07-03
@@ -980,6 +1192,10 @@ All repository Trivy scans, npm audits, CI checks, builds, and 627 automated tes
 
 ### Fixed
 
+- Removed unsupported native returning-player reward controls again and scrubbed
+  their startup injections, preventing the empty built-in welcome popup on
+  self-hosted servers. Stale startup templates for removed Hagga partitions are
+  also pruned instead of carrying duplicate configuration forward.
 - **Battlegroup won't start after a Funcom self-host update or a Public IP change — DST now auto-heals.** After a `battlegroup start`, `battlegroup restart`, an FLS token rotation, a scheduled daily restart, a Public IP Apply, or a Funcom self-host update, the DatabaseDeployment could get stuck on `Pending` forever with the battlegroup showing `SERVERGROUP=Starting`/`DATABASE=Pending`. Root cause is Funcom's DB operator: the `db-dbdepl-util` migration pod is a bare pod with `restartPolicy=Never`, so if it OOMs or races Postgres (tries to psql before WAL recovery finishes and gets Connection refused), nothing restarts it and the operator holds the deployment on Pending forever. The manual recovery is `kubectl delete pod <util>` — the operator then recreates it and the second attempt connects fine. DST now runs a lightweight background probe every 30 seconds that detects this exact wedge signature (DB not Ready + util pod terminated non-zero) and deletes the stuck util pod, letting the operator recreate it — no user intervention. Cool-down debounce prevents delete ping-pong. Two real-world incidents behind this: 2026-07-01 (util OOMKilled with swap disabled) and 2026-07-03 (Funcom operator drop `2019354` → `2025705-0-shipping` where the util raced Postgres recovery by ~3 seconds and exited 53). Same fix transitively hardens the v12.14.8 Public IP Apply flow, whose `refresh-status-pods` step deliberately force-deletes the DB pod and could previously leave a fresh util pod in the same race.
 
 ## [12.15.0] - 2026-07-01
@@ -992,6 +1208,10 @@ All repository Trivy scans, npm audits, CI checks, builds, and 627 automated tes
 
 ### Fixed
 
+- Removed unsupported native returning-player reward controls again and scrubbed
+  their startup injections, preventing the empty built-in welcome popup on
+  self-hosted servers. Stale startup templates for removed Hagga partitions are
+  also pruned instead of carrying duplicate configuration forward.
 - **Market Bot no longer overpays sellers 10× on purchase.** When Duke's Market Bot bought a player's sell order, it paid out (and debited its own balance) at 10× the listed price — e.g. an item listed for 83,000 Solari paid the seller 830,000. The game's exchange stores `item_price` 1:1 with the listed Solari and "Take Solari" credits it unscaled, but the payout path multiplied by 10 (a compensation added in an earlier release that a later Funcom patch made incorrect). Duke now pays the exact listed price, matching a normal player-to-player sale.
 - **Stuck faction contract cards now clear from the Arrakeen Contract tab.** A faction-storyline contract (e.g. the Atreides *Skorda's Last Stand: Report to Thufir Hawat*, or *The Last Beacon*) could stay stuck in the Settlement Contract tab after an establish-membership / faction one-click, even once its tags and journey were completed. The card is a `ContractItem` inventory row, and the *active* one is whatever the pawn's `ContractsCoordinatorComponent.m_TrackedContractItemUid` points at — neither of which tag/journey completion touched. The **Complete Contract** action (Players → Progression) now dismisses the contract item and clears the dangling tracked-contract pointer, so the card drops and Thufir Hawat's dialogue ungates. Also adds the missing `Contract.Tracking.Completed.FactionStoryline.FindSkorda` moment tag and removes the stale `Contract.Tracking.FactionStory.ShowSkorda` reveal flag so the player's tag state matches a natural turn-in.
 - **Reset Faction now fully wipes faction membership.** In addition to zeroing reputation (table + `FactionPlayerComponent`), clearing alignment, removing faction tags, and resetting the Climb-the-Ranks journey, Reset Faction (Players → Progression) now also deletes lingering `Fac_Atre_*` / `Fac_Hark_*` contract items from the character and clears the tracked-contract pointer — so leftover faction contract cards no longer remain in the Arrakeen Contract tab after a wipe. Non-faction contracts (Survival, Trainer, Landsraad) are left untouched.
@@ -1006,6 +1226,10 @@ All repository Trivy scans, npm audits, CI checks, builds, and 627 automated tes
 
 ### Fixed
 
+- Removed unsupported native returning-player reward controls again and scrubbed
+  their startup injections, preventing the empty built-in welcome popup on
+  self-hosted servers. Stale startup templates for removed Hagga partitions are
+  also pruned instead of carrying duplicate configuration forward.
 - **Public IP Apply now force-refreshes the utility-pod status fields.** `status.database.address`, `status.database.pgHeroAddress`, `status.utilities.*.address`, and `status.utilities.messageQueues.statuses.*.amqpAddress` / `.managementAddress` only populate at pod-**object** creation, not on container restart. The pre-existing `step utilities-ip` patched `HOST_DATACENTER_IP_ADDRESS` env vars, which the operator picked up as a container restart — that was never enough to refresh status. New `step refresh-status-pods` force-deletes `db-dbdepl`, `db-util-*`, `fb-deploy`, `mq-admin`, and `mq-game` pods so the StatefulSet / Deployment controllers recreate them and the operator repopulates status with the current public IP. Discovered when an ISP IP change left `status.database.address` stuck at the pre-change IP forever until the pods were manually kicked.
 - **`LastAppliedPublicIp` now persists even when the final TCP verify transiently fails.** Previously `Save-DuneConfig` ran after the verify step, so a transient TCP 31982 external-reachability failure (common right after an ISP IP change while router forwards are still catching up) skipped the save and left DST's UI showing the pre-change "last applied" value until the user ran Apply a second time. Now saved as soon as the CR mutate + servers-ready wait complete, independent of verify.
 
@@ -1029,6 +1253,10 @@ All repository Trivy scans, npm audits, CI checks, builds, and 627 automated tes
 
 ### Fixed
 
+- Removed unsupported native returning-player reward controls again and scrubbed
+  their startup injections, preventing the empty built-in welcome popup on
+  self-hosted servers. Stale startup templates for removed Hagga partitions are
+  also pruned instead of carrying duplicate configuration forward.
 - **Mobile companion app: Players Online count now matches Player Admin in the desktop app.** The mobile filter was strict-case (`=== 'Online'`) while the desktop helper is case-insensitive substring (`s.toLowerCase().includes('online')`); both surfaces hit the same `/api/gameplay/players` endpoint, so any incidental casing variation made the mobile show "Players Online (0)" while the desktop correctly listed the connected player. Mobile now mirrors the desktop helper verbatim. Reported in `#android-testing`.
 
 ## [12.14.5] - 2026-06-29
@@ -1039,6 +1267,10 @@ All repository Trivy scans, npm audits, CI checks, builds, and 627 automated tes
 
 ### Fixed
 
+- Removed unsupported native returning-player reward controls again and scrubbed
+  their startup injections, preventing the empty built-in welcome popup on
+  self-hosted servers. Stale startup templates for removed Hagga partitions are
+  also pruned instead of carrying duplicate configuration forward.
 - **Gameplay Admin → Players no longer resets your place after every grant/add.** Granting an item, building set, cosmetic, currency, tag, etc. used to trigger a full list/summary/section reload that collapsed the open form and bounced you out of your spot. Now a successful action just shows the green confirmation and keeps the form open so you can grant several in a row; the actual refresh is deferred and only runs when you collapse the action, switch player/section, or hit a Refresh button. Your selected player and scroll position are preserved. (Per-item Repair/Delete still re-read the inventory immediately, since they change the list you're looking at.)
 - **Grant Cosmetic / Building Set row title no longer pushed out of view.** The action's description was long enough to starve the (truncating) title to zero width; shortened it so the title renders.
 
@@ -1052,12 +1284,20 @@ All repository Trivy scans, npm audits, CI checks, builds, and 627 automated tes
 
 ### Fixed
 
+- Removed unsupported native returning-player reward controls again and scrubbed
+  their startup injections, preventing the empty built-in welcome popup on
+  self-hosted servers. Stale startup templates for removed Hagga partitions are
+  also pruned instead of carrying duplicate configuration forward.
 - **Set Faction Tier / Give Faction Rep now actually establish faction membership for unaligned players.** On a character that hadn't joined a faction, these actions only wrote a reputation row the game ignores — the `FactionPlayerComponent` patch silently no-op'd (no array entry to update) and nothing joined the faction or ran recruitment, so in-game the trader stayed locked, standing read 0, and the recruiter kept offering the initial quest. For an **offline, unaligned** character they now establish full membership in one transaction: join the faction, complete the `DA_FQ_ClimbTheRanks` recruitment journey nodes, apply the faction/dialogue/contract tags, create the `FactionPlayerComponent` entry, and set the tier/reputation. An **already-aligned** character is blocked with a clear prompt to use **Reset Faction** first, then re-run. (Builds on the 12.14.2 Reset-Faction component fix.)
 
 ## [12.14.2] - 2026-06-29
 
 ### Fixed
 
+- Removed unsupported native returning-player reward controls again and scrubbed
+  their startup injections, preventing the empty built-in welcome popup on
+  self-hosted servers. Stale startup templates for removed Hagga partitions are
+  also pruned instead of carrying duplicate configuration forward.
 - **Reset Faction now clears the in-game reputation too.** Faction reputation is stored in two places — the `player_faction_reputation` table *and* the pawn's `FactionPlayerComponent` (which the game reads at runtime). Reset Faction was only zeroing the table, so a maxed reputation reappeared on login. It now zeroes both for Atreides and Harkonnen (matching Give Faction Rep / Progression Unlock).
 
 ## [12.14.1] - 2026-06-29
@@ -1069,6 +1309,10 @@ All repository Trivy scans, npm audits, CI checks, builds, and 627 automated tes
 
 ### Fixed
 
+- Removed unsupported native returning-player reward controls again and scrubbed
+  their startup injections, preventing the empty built-in welcome popup on
+  self-hosted servers. Stale startup templates for removed Hagga partitions are
+  also pruned instead of carrying duplicate configuration forward.
 - **Treadwheel Hull is now giveable**, and the **Treadwheel vehicle kit is populated.** The Treadwheel Hull modules (Mk1–Mk6) were missing from the Give Item catalog, and the Give Vehicle Kit entry for the Treadwheel had no parts. The kit now grants all nine modules at Mk6 (Swift Engine + Steady Boost uniques, plus standard Chassis, Generator, Hull, Inventory, Tread, Passenger, Scanner).
 
 ## [12.14.0] - 2026-06-28
@@ -1095,6 +1339,10 @@ All repository Trivy scans, npm audits, CI checks, builds, and 627 automated tes
 
 ### Fixed
 
+- Removed unsupported native returning-player reward controls again and scrubbed
+  their startup injections, preventing the empty built-in welcome popup on
+  self-hosted servers. Stale startup templates for removed Hagga partitions are
+  also pruned instead of carrying duplicate configuration forward.
 - **Renaming the server works again.** Game Config → Server name rejected a valid
   name with "A non-empty name is required" because the route read the request body
   with a PSObject-only accessor that returned null for hashtable-parsed bodies. It
@@ -1104,6 +1352,10 @@ All repository Trivy scans, npm audits, CI checks, builds, and 627 automated tes
 
 ### Fixed
 
+- Removed unsupported native returning-player reward controls again and scrubbed
+  their startup injections, preventing the empty built-in welcome popup on
+  self-hosted servers. Stale startup templates for removed Hagga partitions are
+  also pruned instead of carrying duplicate configuration forward.
 - **Auto-clear of on-demand map partitions at battlegroup start works again.** The
   launcher's post-restart hook looked for a bundled script named
   `dune-clear-partitions.start`, which no longer exists (it was consolidated into
@@ -1117,6 +1369,10 @@ All repository Trivy scans, npm audits, CI checks, builds, and 627 automated tes
 
 ### Fixed
 
+- Removed unsupported native returning-player reward controls again and scrubbed
+  their startup injections, preventing the empty built-in welcome popup on
+  self-hosted servers. Stale startup templates for removed Hagga partitions are
+  also pruned instead of carrying duplicate configuration forward.
 - **Public-IP apply now recovers a network's real gateway instead of guessing.**
   Building on the wrong-subnet-gateway fix in 12.13.13, when the live default
   route and current `/etc/network/interfaces` don't yield a gateway on the VM's
@@ -1142,6 +1398,10 @@ All repository Trivy scans, npm audits, CI checks, builds, and 627 automated tes
 
 ### Fixed
 
+- Removed unsupported native returning-player reward controls again and scrubbed
+  their startup injections, preventing the empty built-in welcome popup on
+  self-hosted servers. Stale startup templates for removed Hagga partitions are
+  also pruned instead of carrying duplicate configuration forward.
 - **Re-applying the same (unchanged) public IP now works.** Settings → Public IP /
   DDNS → Apply was a dead end when the target IP matched the last-applied one: the
   apply pipeline's internal "Validate target IP" step rejected the unchanged IP
@@ -1173,6 +1433,10 @@ All repository Trivy scans, npm audits, CI checks, builds, and 627 automated tes
 
 ### Fixed
 
+- Removed unsupported native returning-player reward controls again and scrubbed
+  their startup injections, preventing the empty built-in welcome popup on
+  self-hosted servers. Stale startup templates for removed Hagga partitions are
+  also pruned instead of carrying duplicate configuration forward.
 - **On-demand / warm (spin-up) maps now self-heal a stuck partition pin on their
   own — even with DST closed.** After an unclean host crash + VM reboot, a warm
   map (DeepDesert / Arrakeen / Harko Village kept warm via spin-up) could come
@@ -1196,6 +1460,10 @@ All repository Trivy scans, npm audits, CI checks, builds, and 627 automated tes
 
 ### Fixed
 
+- Removed unsupported native returning-player reward controls again and scrubbed
+  their startup injections, preventing the empty built-in welcome popup on
+  self-hosted servers. Stale startup templates for removed Hagga partitions are
+  also pruned instead of carrying duplicate configuration forward.
 - **Apply Quick Preset / Complete "Find the Fremen (Trials of Aql)" now unlocks the
   3rd active-ability slot offline.** Completing the questline through the tool set the
   journey nodes, the `Journey.RewardsUnblocked` tag, and the Fremkit recipes, but the
@@ -1211,6 +1479,10 @@ All repository Trivy scans, npm audits, CI checks, builds, and 627 automated tes
 
 ### Fixed
 
+- Removed unsupported native returning-player reward controls again and scrubbed
+  their startup injections, preventing the empty built-in welcome popup on
+  self-hosted servers. Stale startup templates for removed Hagga partitions are
+  also pruned instead of carrying duplicate configuration forward.
 - **Scheduled restart now auto-clears on-demand map partitions.** Previously the
   daily restart left stale partition pins, so DeepDesert/Arrakeen/HarkoVillage
   wouldn't launch on demand until you manually clicked "Fix partitions." The
@@ -1221,6 +1493,10 @@ All repository Trivy scans, npm audits, CI checks, builds, and 627 automated tes
 
 ### Fixed
 
+- Removed unsupported native returning-player reward controls again and scrubbed
+  their startup injections, preventing the empty built-in welcome popup on
+  self-hosted servers. Stale startup templates for removed Hagga partitions are
+  also pruned instead of carrying duplicate configuration forward.
 - **Apply Quick Preset silently failed to grant recipes when the pawn had no
   TechKnowledge path.** `Invoke-DuneGrantRecipe` guarded on the JSONB path
   existing (`IS NOT NULL`) and returned a "no TechKnowledge" error, but
@@ -1250,6 +1526,10 @@ All repository Trivy scans, npm audits, CI checks, builds, and 627 automated tes
 
 ### Fixed
 
+- Removed unsupported native returning-player reward controls again and scrubbed
+  their startup injections, preventing the empty built-in welcome popup on
+  self-hosted servers. Stale startup templates for removed Hagga partitions are
+  also pruned instead of carrying duplicate configuration forward.
 - **The Journey panel showed "No journey nodes recorded for this player yet"
   even for fully-progressed characters.** The v12.13.5 journey fix updated the
   journey *write* paths for Funcom's 1.4.10.0 `account_id`→`character_id` rekey
@@ -1263,6 +1543,10 @@ All repository Trivy scans, npm audits, CI checks, builds, and 627 automated tes
 
 ### Fixed
 
+- Removed unsupported native returning-player reward controls again and scrubbed
+  their startup injections, preventing the empty built-in welcome popup on
+  self-hosted servers. Stale startup templates for removed Hagga partitions are
+  also pruned instead of carrying duplicate configuration forward.
 - **Player Tags panel, the player vehicle list, and Set Respawn broke after the
   Funcom 1.4.10.0 patch.** That patch rekeyed several per-player tables from
   `account_id` to `character_id`. The Tags panel reported "the live game database
@@ -1291,6 +1575,10 @@ All repository Trivy scans, npm audits, CI checks, builds, and 627 automated tes
 
 ### Fixed
 
+- Removed unsupported native returning-player reward controls again and scrubbed
+  their startup injections, preventing the empty built-in welcome popup on
+  self-hosted servers. Stale startup templates for removed Hagga partitions are
+  also pruned instead of carrying duplicate configuration forward.
 - **Gameplay Admin journey writes (Apply Preset, Complete/Reset/Wipe Journey,
   faction progression) failed after the Funcom 1.4.10.0 patch.** That patch
   rekeyed the `dune.journey_story_node` table from `account_id` to
@@ -1305,6 +1593,10 @@ All repository Trivy scans, npm audits, CI checks, builds, and 627 automated tes
 
 ### Fixed
 
+- Removed unsupported native returning-player reward controls again and scrubbed
+  their startup injections, preventing the empty built-in welcome popup on
+  self-hosted servers. Stale startup templates for removed Hagga partitions are
+  also pruned instead of carrying duplicate configuration forward.
 - **P34 connection check no longer dead-ends when the VM can't reach an IP
   service.** The check read the server's public IP by calling a single endpoint
   (`api.ipify.org`) from inside the VM. The VMs are BusyBox with no `curl`, so it
@@ -1321,6 +1613,10 @@ All repository Trivy scans, npm audits, CI checks, builds, and 627 automated tes
 
 ### Fixed
 
+- Removed unsupported native returning-player reward controls again and scrubbed
+  their startup injections, preventing the empty built-in welcome popup on
+  self-hosted servers. Stale startup templates for removed Hagga partitions are
+  also pruned instead of carrying duplicate configuration forward.
 - **Game Servers table mangled long map names (e.g. dungeon/story maps).** On
   Server Health, an on-demand map with a long technical name like
   `CB_Dungeon_Hephaestus` rendered as garbled, column-shifted text
@@ -1374,6 +1670,10 @@ All repository Trivy scans, npm audits, CI checks, builds, and 627 automated tes
 
 ### Fixed
 
+- Removed unsupported native returning-player reward controls again and scrubbed
+  their startup injections, preventing the empty built-in welcome popup on
+  self-hosted servers. Stale startup templates for removed Hagga partitions are
+  also pruned instead of carrying duplicate configuration forward.
 - **Harmless `namespaces "f" not found` noise during Start/Reboot.** An
   early-boot `kubectl get pods` race could emit a partial line right after the
   VM IP comes up; the DB-wait step treated that fragment as the namespace and
@@ -1397,6 +1697,10 @@ All repository Trivy scans, npm audits, CI checks, builds, and 627 automated tes
 
 ### Fixed
 
+- Removed unsupported native returning-player reward controls again and scrubbed
+  their startup injections, preventing the empty built-in welcome popup on
+  self-hosted servers. Stale startup templates for removed Hagga partitions are
+  also pruned instead of carrying duplicate configuration forward.
 - **Port-status payload always serializes as an array.** With UDP hidden, the
   port list can contain a single (TCP) entry; a PowerShell single-element-array
   unwrap turned it into an object, which crashed the web UI on load
@@ -1446,6 +1750,10 @@ All repository Trivy scans, npm audits, CI checks, builds, and 627 automated tes
 
 ### Fixed
 
+- Removed unsupported native returning-player reward controls again and scrubbed
+  their startup injections, preventing the empty built-in welcome popup on
+  self-hosted servers. Stale startup templates for removed Hagga partitions are
+  also pruned instead of carrying duplicate configuration forward.
 - **Settings update list could show an older release at the top.** GitHub's
   releases API doesn't reliably return newest-first (a recently-edited older
   release can resurface), which left a stale build at the top of the pre-release
@@ -1480,6 +1788,10 @@ hardening into one release, and confirms compatibility with the latest game patc
 
 ### Fixed
 
+- Removed unsupported native returning-player reward controls again and scrubbed
+  their startup injections, preventing the empty built-in welcome popup on
+  self-hosted servers. Stale startup templates for removed Hagga partitions are
+  also pruned instead of carrying duplicate configuration forward.
 - **Console windows (server `update`, Funcom `battlegroup.bat`, `edit`) appear when the "Keep serving while DST is closed" service is active.** That service runs the backend in Windows **Session 0**, where a normal `Start-Process` opened the console on the invisible Session 0 desktop — so clicking update / edit / Open battlegroup.bat looked like it did nothing (no window, no UAC). DST now detects Session 0 and relays these elevated launches into the signed-in user's interactive session via a one-shot Interactive/Highest scheduled task. Interactive (non-service) launches are unchanged. (Also released as 12.11.2.)
 - **`stop-vm` (CLI escape hatch) escalates to a hard power-off and no longer errors on an already-off VM.** It previously ran a bare `Stop-VM -Force` with no error handling: on an already-off VM it threw, and when the guest didn't honor the Hyper-V graceful shutdown it wrote an error — either way the in-app window flashed shut. It now reuses the same graceful→hard-`TurnOff` escalation as Stop All.
 - **Teleport To Player coordinate lookup.** It read a player's position from a `location` column that no longer exists on the current game build (coordinates moved into the `transform` composite), so the teleport silently failed; it now reads `transform.location`.
@@ -1488,6 +1800,10 @@ hardening into one release, and confirms compatibility with the latest game patc
 
 ### Fixed
 
+- Removed unsupported native returning-player reward controls again and scrubbed
+  their startup injections, preventing the empty built-in welcome popup on
+  self-hosted servers. Stale startup templates for removed Hagga partitions are
+  also pruned instead of carrying duplicate configuration forward.
 - **Console windows now appear when the "Keep serving while DST is closed" service is active** — the backend runs in Windows Session 0, where launches opened on the invisible Session 0 desktop. DST now relays them into the interactive session. Regression introduced with service mode in 12.11.0. (Superseded by 12.12.0.)
 
 ## [12.11.0] - 2026-06-23
@@ -1521,6 +1837,10 @@ First public/stable release of the Server State Webhook reliability work
 
 ### Fixed
 
+- Removed unsupported native returning-player reward controls again and scrubbed
+  their startup injections, preventing the empty built-in welcome popup on
+  self-hosted servers. Stale startup templates for removed Hagga partitions are
+  also pruned instead of carrying duplicate configuration forward.
 - **Server State Discord notifications (Online / Offline / Restarting / Update) now fire reliably**, driven by whether Hagga Basin (Survival_1) is actually joinable rather than a coarse "running" check that a normal restart never tripped. Online posts when Hagga Basin is joinable; Restarting posts once when it drops out of Ready; Offline posts only after the server has been down for more than ~a minute (a quick restart won't post a false offline); Update posts when the scheduled-restart update check finds a new Funcom build.
 - **The Online / Offline / Restarting / Update toggles now persist when you save the schedule** — they were reverting to off on save, which also stopped the notifications from firing.
 - **"Send test message" now sends a sample of each enabled notification**, not just the restart message, so you can preview exactly what each event looks like.
@@ -1531,6 +1851,10 @@ First public/stable release of the Server State Webhook reliability work
 
 ### Fixed
 
+- Removed unsupported native returning-player reward controls again and scrubbed
+  their startup injections, preventing the empty built-in welcome popup on
+  self-hosted servers. Stale startup templates for removed Hagga partitions are
+  also pruned instead of carrying duplicate configuration forward.
 - **Server State Discord notifications now fire reliably.** Online / Offline /
   Restarting are now driven by whether **Hagga Basin (Survival_1) is actually
   joinable**, instead of a coarse "running" state change that a normal restart
@@ -1550,6 +1874,10 @@ First public/stable release of the Server State Webhook reliability work
 
 ### Fixed
 
+- Removed unsupported native returning-player reward controls again and scrubbed
+  their startup injections, preventing the empty built-in welcome popup on
+  self-hosted servers. Stale startup templates for removed Hagga partitions are
+  also pruned instead of carrying duplicate configuration forward.
 - **"Send test message" now tests each enabled notification, not just the
   restart message.** Previously the test always sent the scheduled-restart
   embed, so enabling Online / Offline / Restarting / Update-available and
@@ -1568,6 +1896,10 @@ First public/stable release of the Server State Webhook reliability work
 
 ### Fixed
 
+- Removed unsupported native returning-player reward controls again and scrubbed
+  their startup injections, preventing the empty built-in welcome popup on
+  self-hosted servers. Stale startup templates for removed Hagga partitions are
+  also pruned instead of carrying duplicate configuration forward.
 - **The Settings page no longer goes fully blank if one card hits an error.**
   Each Settings card (Updates, Appearance, Remote Access, Public IP) is now
   isolated so an unexpected render error in one — for example a stored setting
@@ -1637,6 +1969,10 @@ First public/stable release of the Server State Webhook reliability work
 
 ### Fixed
 
+- Removed unsupported native returning-player reward controls again and scrubbed
+  their startup injections, preventing the empty built-in welcome popup on
+  self-hosted servers. Stale startup templates for removed Hagga partitions are
+  also pruned instead of carrying duplicate configuration forward.
 - **Saving the restart schedule no longer wipes a stored Discord webhook.**
   Changing any restart setting (e.g. the time) while leaving the Discord
   section untouched failed with "Enable Discord notifications requires a
@@ -1676,6 +2012,10 @@ First public/stable release of the Server State Webhook reliability work
 
 ### Fixed
 
+- Removed unsupported native returning-player reward controls again and scrubbed
+  their startup injections, preventing the empty built-in welcome popup on
+  self-hosted servers. Stale startup templates for removed Hagga partitions are
+  also pruned instead of carrying duplicate configuration forward.
 - **Detached browser portal now recovers automatically after a restart or
   update.** When you hand the portal off to a real browser (Web Portal → open in
   browser) and the tool then restarts or self-updates, the per-launch auth token
@@ -1721,6 +2061,10 @@ First public/stable release of the Server State Webhook reliability work
 
 ### Fixed
 
+- Removed unsupported native returning-player reward controls again and scrubbed
+  their startup injections, preventing the empty built-in welcome popup on
+  self-hosted servers. Stale startup templates for removed Hagga partitions are
+  also pruned instead of carrying duplicate configuration forward.
 - **Server name no longer flickers between the real name and "Unknown".** The
   name shown in the top status bar and on the Game Config page is served by a
   pool of request handlers, each of which kept its own in-memory cache; whichever
@@ -1755,6 +2099,10 @@ First public/stable release of the Server State Webhook reliability work
 
 ### Fixed
 
+- Removed unsupported native returning-player reward controls again and scrubbed
+  their startup injections, preventing the empty built-in welcome popup on
+  self-hosted servers. Stale startup templates for removed Hagga partitions are
+  also pruned instead of carrying duplicate configuration forward.
 - **Specs edits showed the wrong value in-game / after re-login (#319).** Setting
   a specialization track's XP applied a value that didn't match what was typed
   once the character re-logged (e.g. typing 20,000 showed 11,947). Root cause:
@@ -1819,6 +2167,10 @@ First public/stable release of the Server State Webhook reliability work
 
 ### Fixed
 
+- Removed unsupported native returning-player reward controls again and scrubbed
+  their startup injections, preventing the empty built-in welcome popup on
+  self-hosted servers. Stale startup templates for removed Hagga partitions are
+  also pruned instead of carrying duplicate configuration forward.
 - **Public IP / DDNS: "did not resolve to a usable public IPv4 address" on the
   first attempt.** Right after a network or public-IP change, the first DDNS
   lookup could hit a brief empty answer that Windows then negative-cached,
@@ -1869,6 +2221,10 @@ First public/stable release of the Server State Webhook reliability work
 
 ### Fixed
 
+- Removed unsupported native returning-player reward controls again and scrubbed
+  their startup injections, preventing the empty built-in welcome popup on
+  self-hosted servers. Stale startup templates for removed Hagga partitions are
+  also pruned instead of carrying duplicate configuration forward.
 - **Public IP / DDNS apply no longer freezes the whole app.** The `/api` handler
   runspace pool (added so a slow request can't block the UI) was silently failing
   to initialize in the shipped build, so DST ran single-threaded and the
@@ -1908,6 +2264,10 @@ First public/stable release of the Server State Webhook reliability work
 
 ### Fixed
 
+- Removed unsupported native returning-player reward controls again and scrubbed
+  their startup injections, preventing the empty built-in welcome popup on
+  self-hosted servers. Stale startup templates for removed Hagga partitions are
+  also pruned instead of carrying duplicate configuration forward.
 - **Web Portal no longer strands you on a "page is unavailable" error (issue
   #280).** Clicking **Web Portal** used to close the app window immediately, so
   if your browser couldn't reach `127.0.0.1` (antivirus, VPN or proxy blocking
@@ -1945,6 +2305,10 @@ First public/stable release of the Server State Webhook reliability work
 
 ### Fixed
 
+- Removed unsupported native returning-player reward controls again and scrubbed
+  their startup injections, preventing the empty built-in welcome popup on
+  self-hosted servers. Stale startup templates for removed Hagga partitions are
+  also pruned instead of carrying duplicate configuration forward.
 - **Blueprint import no longer fails on large blueprints.** Importing a
   blueprint with many pieces could fail with `Blueprint import failed:
   Exception calling "Start" with "0" argument(s): "The filename or extension is
@@ -1987,6 +2351,10 @@ First public/stable release of the Server State Webhook reliability work
 
 ### Fixed
 
+- Removed unsupported native returning-player reward controls again and scrubbed
+  their startup injections, preventing the empty built-in welcome popup on
+  self-hosted servers. Stale startup templates for removed Hagga partitions are
+  also pruned instead of carrying duplicate configuration forward.
 - **Market Bot: schematics priced at a flat ~vendor amount (T6 stuck ~20k),
   ignoring tier/rarity multipliers.** In sane-pricing mode every non-stackable
   listing was clamped to a 2× live-NPC-vendor-price ceiling. Because the game
@@ -2018,6 +2386,10 @@ First public/stable release of the Server State Webhook reliability work
 
 ### Fixed
 
+- Removed unsupported native returning-player reward controls again and scrubbed
+  their startup injections, preventing the empty built-in welcome popup on
+  self-hosted servers. Stale startup templates for removed Hagga partitions are
+  also pruned instead of carrying duplicate configuration forward.
 - **Market Bot underpaid sellers 10× on buy.** When Duke bought a player's sell
   listing, the seller payment order (and Duke's balance debit) used the raw
   stored `item_price` instead of the player-facing Solari value (`item_price ×
@@ -2029,6 +2401,10 @@ First public/stable release of the Server State Webhook reliability work
 
 ### Fixed
 
+- Removed unsupported native returning-player reward controls again and scrubbed
+  their startup injections, preventing the empty built-in welcome popup on
+  self-hosted servers. Stale startup templates for removed Hagga partitions are
+  also pruned instead of carrying duplicate configuration forward.
 - **Player Tags search now lets you actually add a tag.** Each suggestion is an
   explicit clickable "+ Add" row. Matches are grouped by their shared breadcrumb
   prefix (so a set like `Contract.Tracking.Completed.SeronVarlin.Contract1..6`
@@ -2066,6 +2442,10 @@ First public/stable release of the Server State Webhook reliability work
 
 ### Fixed
 
+- Removed unsupported native returning-player reward controls again and scrubbed
+  their startup injections, preventing the empty built-in welcome popup on
+  self-hosted servers. Stale startup templates for removed Hagga partitions are
+  also pruned instead of carrying duplicate configuration forward.
 - **Solari is selectable in inventory item pickers.** Added the `SolarisCoin`
   inventory template to the shared item catalog and expanded picker browsing so
   the Resources category can scroll far enough to reach it. Solari quantity gives
@@ -2082,6 +2462,10 @@ First public/stable release of the Server State Webhook reliability work
 
 ### Fixed
 
+- Removed unsupported native returning-player reward controls again and scrubbed
+  their startup injections, preventing the empty built-in welcome popup on
+  self-hosted servers. Stale startup templates for removed Hagga partitions are
+  also pruned instead of carrying duplicate configuration forward.
 - **Give Item capacity check now treats ammo as stackable.** Light Darts and
   other picker-only ammo templates are missing `stack_max` in the gameplay item
   metadata, so DST fell back to one slot per item and falsely rejected valid
@@ -2121,6 +2505,10 @@ First public/stable release of the Server State Webhook reliability work
 
 ### Fixed
 
+- Removed unsupported native returning-player reward controls again and scrubbed
+  their startup injections, preventing the empty built-in welcome popup on
+  self-hosted servers. Stale startup templates for removed Hagga partitions are
+  also pruned instead of carrying duplicate configuration forward.
 - Corrected two webui gameplay API read calls to pass ids as query parameters
   (`account_id`, `player_id`, `actor_id`, `controller_id`) so they match the
   backend handlers, fixing the previously failing API tests.
@@ -2138,6 +2526,10 @@ First public/stable release of the Server State Webhook reliability work
 
 ### Fixed
 
+- Removed unsupported native returning-player reward controls again and scrubbed
+  their startup injections, preventing the empty built-in welcome popup on
+  self-hosted servers. Stale startup templates for removed Hagga partitions are
+  also pruned instead of carrying duplicate configuration forward.
 - **Unlock Main Quest** now applies `Journey.RewardsUnblocked` tag when unlocking
   the Fremen questline (DA_MQ_FindTheFremen). This tag is normally set by game
   code during cutscenes and may be required to unlock the 3rd ability slot,
@@ -2158,6 +2550,10 @@ First public/stable release of the Server State Webhook reliability work
 
 ### Fixed
 
+- Removed unsupported native returning-player reward controls again and scrubbed
+  their startup injections, preventing the empty built-in welcome popup on
+  self-hosted servers. Stale startup templates for removed Hagga partitions are
+  also pruned instead of carrying duplicate configuration forward.
 - **Landsraad bulk threshold edit wrote all zeros.** The compound `UPDATE; SELECT`
   SQL returned only the UPDATE's empty column set through the proxy; now uses two
   separate queries so the response shows the actual new thresholds.
@@ -2172,6 +2568,10 @@ First public/stable release of the Server State Webhook reliability work
 
 ### Fixed
 
+- Removed unsupported native returning-player reward controls again and scrubbed
+  their startup injections, preventing the empty built-in welcome popup on
+  self-hosted servers. Stale startup templates for removed Hagga partitions are
+  also pruned instead of carrying duplicate configuration forward.
 - **Grant / Dismiss Returning-Player Award failed with `column a.account does
   not exist`.** Both actions (Gameplay Admin → Players) wrote the
   `returningPlayerAward` flag into a JSONB column named `account` on
@@ -2326,6 +2726,10 @@ First public/stable release of the Server State Webhook reliability work
 
 ### Fixed
 
+- Removed unsupported native returning-player reward controls again and scrubbed
+  their startup injections, preventing the empty built-in welcome popup on
+  self-hosted servers. Stale startup templates for removed Hagga partitions are
+  also pruned instead of carrying duplicate configuration forward.
 - **Market search box now actually filters.** The market items search was a
   no-op: a case-insensitive variable-name collision in `Select-DuneMarketItems`
   (`$search` aliased the `$Search` parameter and blanked it) meant the typed term
@@ -2373,6 +2777,10 @@ First public/stable release of the Server State Webhook reliability work
 
 ### Fixed
 
+- Removed unsupported native returning-player reward controls again and scrubbed
+  their startup injections, preventing the empty built-in welcome popup on
+  self-hosted servers. Stale startup templates for removed Hagga partitions are
+  also pruned instead of carrying duplicate configuration forward.
 - **Returning-Player Award / character export: `trailing junk after numeric
   literal` error.** Grant / Dismiss Returning-Player Award, Delete Account, and
   character export resolved a player's Funcom `"user"` id (a hex string such as
@@ -2384,6 +2792,10 @@ First public/stable release of the Server State Webhook reliability work
 
 ### Fixed
 
+- Removed unsupported native returning-player reward controls again and scrubbed
+  their startup injections, preventing the empty built-in welcome popup on
+  self-hosted servers. Stale startup templates for removed Hagga partitions are
+  also pruned instead of carrying duplicate configuration forward.
 - **Cheat Scripts: "script_name is required." error.** The Players → Live →
   Cheat Scripts form posted the script under the body key `script`, but the
   `/api/gameplay/players/cheat-script` route reads `script_name`, so every
@@ -2463,6 +2875,10 @@ First public/stable release of the Server State Webhook reliability work
 
 ### Fixed
 
+- Removed unsupported native returning-player reward controls again and scrubbed
+  their startup injections, preventing the empty built-in welcome popup on
+  self-hosted servers. Stale startup templates for removed Hagga partitions are
+  also pruned instead of carrying duplicate configuration forward.
 - **Give Vehicle Kit now delivers the correct parts and quantities.** The kit
   contents were corrected so each vehicle assembles properly: Sandbike Tread ×3;
   Buggy Tread ×4 plus the Focused Buggy Cutteray Mk6; Sandcrawler drops the base
@@ -2547,6 +2963,10 @@ First public/stable release of the Server State Webhook reliability work
 
 ### Fixed
 
+- Removed unsupported native returning-player reward controls again and scrubbed
+  their startup injections, preventing the empty built-in welcome popup on
+  self-hosted servers. Stale startup templates for removed Hagga partitions are
+  also pruned instead of carrying duplicate configuration forward.
 - **Landsraad settings now correctly apply client-side.** The client `Game.ini`
   carries the same `[/Script/DuneSandbox.LandsraadSettings] Data=(...)` struct, so
   these settings need to be mirrored on the client. They are now flagged
@@ -2613,6 +3033,10 @@ First public/stable release of the Server State Webhook reliability work
 
 ### Fixed
 
+- Removed unsupported native returning-player reward controls again and scrubbed
+  their startup injections, preventing the empty built-in welcome popup on
+  self-hosted servers. Stale startup templates for removed Hagga partitions are
+  also pruned instead of carrying duplicate configuration forward.
 - **Game Config now reads and writes INI settings in a section-consistent way.**
   Two related bugs are fixed: (1) on load, a setting whose value lived in a
   section other than the one DST's schema declares showed as the Funcom
@@ -2647,6 +3071,10 @@ Border and hover state follow the same token. Also bumped the label to
 
 ### Fixed
 
+- Removed unsupported native returning-player reward controls again and scrubbed
+  their startup injections, preventing the empty built-in welcome popup on
+  self-hosted servers. Stale startup templates for removed Hagga partitions are
+  also pruned instead of carrying duplicate configuration forward.
 - **Buy Me a Coffee sidebar link is now readable on every theme**, not
   just dark ones. Now uses `text-warning` / `border-warning/50` instead
   of a fixed light-amber color.
@@ -2708,6 +3136,10 @@ cache on the VM.
 
 ### Fixed
 
+- Removed unsupported native returning-player reward controls again and scrubbed
+  their startup injections, preventing the empty built-in welcome popup on
+  self-hosted servers. Stale startup templates for removed Hagga partitions are
+  also pruned instead of carrying duplicate configuration forward.
 - **Live-only actions (kick, whisper, cheat-script, set-skill-points,
   clean-inventory, etc.) now work during the logout grace window.** They were
   gated on `online_status === 'Online'`, which disabled them the moment a
@@ -2787,6 +3219,10 @@ cache on the VM.
 
 ### Fixed
 
+- Removed unsupported native returning-player reward controls again and scrubbed
+  their startup injections, preventing the empty built-in welcome popup on
+  self-hosted servers. Stale startup templates for removed Hagga partitions are
+  also pruned instead of carrying duplicate configuration forward.
 - **Restored the 10 `m_Global*Multiplier` Game Config options that were pulled
   in v12.0.14.** XP, Damage to NPCs, Damage to Players, Health, Fame,
   Progression Speed, Harvest Amount, Harvest Health, Building Damage, and
@@ -2845,6 +3281,10 @@ cache on the VM.
 
 ### Fixed
 
+- Removed unsupported native returning-player reward controls again and scrubbed
+  their startup injections, preventing the empty built-in welcome popup on
+  self-hosted servers. Stale startup templates for removed Hagga partitions are
+  also pruned instead of carrying duplicate configuration forward.
 - **Repair Items no longer leaves equipment below its factory-spec cap**
   ([#209](https://github.com/coastal-ms/DST-DuneServerTool/issues/209)).
   The per-item / Repair All / Restore Destroyed paths now compute the target
@@ -2894,6 +3334,10 @@ cache on the VM.
 
 ### Fixed
 
+- Removed unsupported native returning-player reward controls again and scrubbed
+  their startup injections, preventing the empty built-in welcome popup on
+  self-hosted servers. Stale startup templates for removed Hagga partitions are
+  also pruned instead of carrying duplicate configuration forward.
 - **Console window no longer flashes during dashboard polling.** The
   battlegroup-status probe (`Get-DuneBattlegroupSnapshot`) and the setup
   preflight SSH-key check both used to shell out via `& ssh ... 2>$errFile`,
@@ -2934,6 +3378,10 @@ cache on the VM.
 
 ### Fixed
 
+- Removed unsupported native returning-player reward controls again and scrubbed
+  their startup injections, preventing the empty built-in welcome popup on
+  self-hosted servers. Stale startup templates for removed Hagga partitions are
+  also pruned instead of carrying duplicate configuration forward.
 - **Market Bot** — Duke now lists every stackable resource in consistent full
   stacks. The bot let the live NPC-vendor snapshot's per-item `max_stack`
   (often `1` for raw resources) override the catalog stack size, so some
@@ -2951,6 +3399,10 @@ cache on the VM.
 
 ### Fixed
 
+- Removed unsupported native returning-player reward controls again and scrubbed
+  their startup injections, preventing the empty built-in welcome popup on
+  self-hosted servers. Stale startup templates for removed Hagga partitions are
+  also pruned instead of carrying duplicate configuration forward.
 - **Add Item search list now scrolls to the last result.** The picker's results
   popup was absolutely positioned inside an `overflow-hidden` card, so its lower
   rows (and scrollbar) were clipped behind the next section and unreachable —
@@ -3028,6 +3480,10 @@ cache on the VM.
 
 ### Fixed
 
+- Removed unsupported native returning-player reward controls again and scrubbed
+  their startup injections, preventing the empty built-in welcome popup on
+  self-hosted servers. Stale startup templates for removed Hagga partitions are
+  also pruned instead of carrying duplicate configuration forward.
 - **Give Package / bulk give-items now works on online players, not just
   offline ones.** The bulk give path always wrote directly to the inventory
   tables in SQL. An online player keeps their inventory in memory, so those
@@ -3110,6 +3566,10 @@ cache on the VM.
 
 ### Fixed
 
+- Removed unsupported native returning-player reward controls again and scrubbed
+  their startup injections, preventing the empty built-in welcome popup on
+  self-hosted servers. Stale startup templates for removed Hagga partitions are
+  also pruned instead of carrying duplicate configuration forward.
 - **"Fix my client config" now actually clears the mismatch when the same key
   appears twice in your client `Game.ini`.** Some client files carry a setting
   more than once in the same section (e.g. `PlayerInventoryStartingSize=100`
@@ -3124,6 +3584,10 @@ cache on the VM.
 
 ### Fixed
 
+- Removed unsupported native returning-player reward controls again and scrubbed
+  their startup injections, preventing the empty built-in welcome popup on
+  self-hosted servers. Stale startup templates for removed Hagga partitions are
+  also pruned instead of carrying duplicate configuration forward.
 - **Native folder/file picker no longer opens behind the DST window.** DST's UI
   is hosted in a separate process (the WebView2 app window), so when you clicked
   a "Browse…" button the picker was created by the backend process and Windows'
@@ -3166,6 +3630,10 @@ cache on the VM.
 
 ### Fixed
 
+- Removed unsupported native returning-player reward controls again and scrubbed
+  their startup injections, preventing the empty built-in welcome popup on
+  self-hosted servers. Stale startup templates for removed Hagga partitions are
+  also pruned instead of carrying duplicate configuration forward.
 - **Gameplay Admin "Give Intel" now lands in-game.** Intel
   (`TechKnowledgePlayerComponent.m_TechKnowledgePoints`) lives on the player's
   **pawn** actor — the same actor that holds the backpack — but the offline grant
@@ -3335,6 +3803,10 @@ cache on the VM.
 
 ### Fixed
 
+- Removed unsupported native returning-player reward controls again and scrubbed
+  their startup injections, preventing the empty built-in welcome popup on
+  self-hosted servers. Stale startup templates for removed Hagga partitions are
+  also pruned instead of carrying duplicate configuration forward.
 - **Specialization XP now loads correctly on the Players → Specs tab.** Every
   track previously showed **Lv 0/100 · 0 XP** even for maxed characters. The
   Specs view was reading specialization tracks by the pawn/actor id, but the
@@ -3366,6 +3838,10 @@ cache on the VM.
 
 ### Fixed
 
+- Removed unsupported native returning-player reward controls again and scrubbed
+  their startup injections, preventing the empty built-in welcome popup on
+  self-hosted servers. Stale startup templates for removed Hagga partitions are
+  also pruned instead of carrying duplicate configuration forward.
 - **Blueprints now show the right owner instead of only one player.** The
   Blueprints list resolved a blueprint's owner through the copy-device item's
   inventory → actor → account. But most blueprints' copy-device items sit inside
@@ -3394,6 +3870,10 @@ cache on the VM.
 
 ### Fixed
 
+- Removed unsupported native returning-player reward controls again and scrubbed
+  their startup injections, preventing the empty built-in welcome popup on
+  self-hosted servers. Stale startup templates for removed Hagga partitions are
+  also pruned instead of carrying duplicate configuration forward.
 - **Restore Destroyed no longer adds durability to items that have none.** The
   action used to graft a fresh `FItemStackAndDurabilityStats` block (with the
   catalog max, often 100) onto any in-scope item missing one — so resources,
@@ -3410,6 +3890,10 @@ catalog value (often 100) instead of their real maximum.
 
 ### Fixed
 
+- Removed unsupported native returning-player reward controls again and scrubbed
+  their startup injections, preventing the empty built-in welcome popup on
+  self-hosted servers. Stale startup templates for removed Hagga partitions are
+  also pruned instead of carrying duplicate configuration forward.
 - **Repair now restores items to their true maximum durability.** Repair All
   Items, the per-item repair (wrench), and Restore Destroyed Items all derived
   the target durability from the item catalog (falling back to `100`). But a
@@ -3433,6 +3917,10 @@ Follow-up to v12.0.5: applies the same `acquisition_time` fix to the two other
 
 ### Fixed
 
+- Removed unsupported native returning-player reward controls again and scrubbed
+  their startup injections, preventing the empty built-in welcome popup on
+  self-hosted servers. Stale startup templates for removed Hagga partitions are
+  also pruned instead of carrying duplicate configuration forward.
 - **Offline player "Give Item" now persists across login.**
   `Invoke-DunePlayerGiveItem` (the SQL path used for offline players, and for
   online players given a custom quality) inserted new backpack items with
@@ -3462,6 +3950,10 @@ a battlegroup restart.
 
 ### Fixed
 
+- Removed unsupported native returning-player reward controls again and scrubbed
+  their startup injections, preventing the empty built-in welcome popup on
+  self-hosted servers. Stale startup templates for removed Hagga partitions are
+  also pruned instead of carrying duplicate configuration forward.
 - **Storage "Add Items" now persists to the game.** `Invoke-DuneStorageGiveItem`
   was inserting `dune.items` rows with `acquisition_time = 0` (the column
   default). The game treats a 1970-epoch item as fully decayed and drops it
@@ -3514,6 +4006,10 @@ display-name-vs-template-id confusion users hit when searching the catalog.
 
 ### Fixed
 
+- Removed unsupported native returning-player reward controls again and scrubbed
+  their startup injections, preventing the empty built-in welcome popup on
+  self-hosted servers. Stale startup templates for removed Hagga partitions are
+  also pruned instead of carrying duplicate configuration forward.
 - **Give Item delivered but invisible until relog** (issue
   [#144](https://github.com/coastal-ms/DST-DuneServerTool/issues/144)). The
   `/give-item` route was SQL-only, so items handed to online players landed in
@@ -3557,6 +4053,10 @@ and fixes the actual render exception they captured.
 
 ### Fixed
 
+- Removed unsupported native returning-player reward controls again and scrubbed
+  their startup injections, preventing the empty built-in welcome popup on
+  self-hosted servers. Stale startup templates for removed Hagga partitions are
+  also pruned instead of carrying duplicate configuration forward.
 - **Game Config render crash.** The page would render then immediately hit
   `TypeError: managedSections.includes is not a function`, which the v12.0.1
   error boundary caught (no more blank page) but still left users on a red
@@ -3583,6 +4083,10 @@ the diagnostics gap that made it untriageable in the wild.
 
 ### Fixed
 
+- Removed unsupported native returning-player reward controls again and scrubbed
+  their startup injections, preventing the empty built-in welcome popup on
+  self-hosted servers. Stale startup templates for removed Hagga partitions are
+  also pruned instead of carrying duplicate configuration forward.
 - **Game Config blank-screen recovery.** Wrapped every route in a React error
   boundary so a single render exception can no longer white-out the entire
   WebView. Crashes now show an in-place error with Retry / Reload buttons
@@ -5603,6 +6107,10 @@ Displayed in-app as **X (0.1)**. Bug-fix release.
 
 #### Fixed
 
+- Removed unsupported native returning-player reward controls again and scrubbed
+  their startup injections, preventing the empty built-in welcome popup on
+  self-hosted servers. Stale startup templates for removed Hagga partitions are
+  also pruned instead of carrying duplicate configuration forward.
 - **Gameplay Admin reinstall/setup no longer deletes the `~/.Gameplay Admin` config
   folder without asking.** The stale-folder preflight used `window.confirm()`,
   which is fired after an `await` (the folder-existence check). Browsers expire
@@ -5757,6 +6265,10 @@ Thanks again to **Techtonic** for catching this the moment 6.2.3 unblocked his b
 
 #### Fixed
 
+- Removed unsupported native returning-player reward controls again and scrubbed
+  their startup injections, preventing the empty built-in welcome popup on
+  self-hosted servers. Stale startup templates for removed Hagga partitions are
+  also pruned instead of carrying duplicate configuration forward.
 - **Pricing-patch rebuild failed with "You cannot call a method on a null-valued
   expression" right after `go build` started** (`fatal: not a git repository`).
   The installer rebuild flow overlays an upstream **source tarball**, which has no
@@ -5776,6 +6288,10 @@ led to the root-cause fix below.
 
 #### Fixed
 
+- Removed unsupported native returning-player reward controls again and scrubbed
+  their startup injections, preventing the empty built-in welcome popup on
+  self-hosted servers. Stale startup templates for removed Hagga partitions are
+  also pruned instead of carrying duplicate configuration forward.
 - **Pricing-patch rebuild failed with "Patch does not apply cleanly" / "Patch is
   stale relative to current source."** The bundled `0001-sane-pricing-100k-cap.patch`
   had been silently rewritten with **CRLF** line endings (cross-tree/OneDrive sync).
@@ -5812,6 +6328,10 @@ first-boot bring-up and surfacing both of these issues.
 
 #### Fixed
 
+- Removed unsupported native returning-player reward controls again and scrubbed
+  their startup injections, preventing the empty built-in welcome popup on
+  self-hosted servers. Stale startup templates for removed Hagga partitions are
+  also pruned instead of carrying duplicate configuration forward.
 - **Startup could hang indefinitely on "Waiting for DB pod(s) Ready…" when SSH
   key auth wasn't working.** The DB / operator readiness phases run their `ssh`
   calls inside a background runspace (so the live counter can tick). If the key
@@ -5839,6 +6359,10 @@ updater actually close the old window.
 
 #### Fixed
 
+- Removed unsupported native returning-player reward controls again and scrubbed
+  their startup injections, preventing the empty built-in welcome popup on
+  self-hosted servers. Stale startup templates for removed Hagga partitions are
+  also pruned instead of carrying duplicate configuration forward.
 - **`build-patched.ps1` failed with `The term 'git' is not recognized…` when the
   sane-pricing patch was applied from Settings.** The patch builder is launched by
   a background wrapper spawned from `DuneServer.exe` (a ps2exe binary), whose
@@ -5905,6 +6429,10 @@ Fix: **Setup Wizard Step 3 (initial-setup) opened a console that "ran one thing 
 
 #### Fixed
 
+- Removed unsupported native returning-player reward controls again and scrubbed
+  their startup injections, preventing the empty built-in welcome popup on
+  self-hosted servers. Stale startup templates for removed Hagga partitions are
+  also pruned instead of carrying duplicate configuration forward.
 - **Setup Wizard Step 3 / `initial-setup` console closing instantly:** the tool
   dot-sourced Funcom's `initial-setup.ps1` directly into `dune-server.ps1`, so the
   script inherited the tool's own `$scriptDir` (its install dir, e.g.
@@ -5943,6 +6471,10 @@ Feature: **Gameplay Admin market bot "d12 gamble buy" pricing mode**, plus Setti
 
 #### Fixed
 
+- Removed unsupported native returning-player reward controls again and scrubbed
+  their startup injections, preventing the empty built-in welcome popup on
+  self-hosted servers. Stale startup templates for removed Hagga partitions are
+  also pruned instead of carrying duplicate configuration forward.
 - **Native path picker:** fixed an "Argument type cannot be System.Void" error
   in the new browse route by using `$null = $ps.AddArgument(...)` instead of a
   `[void]…| Out-Null` call chain.
@@ -5953,6 +6485,10 @@ Patch: **Gameplay Admin install now auto-copies your SSH key into the Gameplay A
 
 #### Fixed
 
+- Removed unsupported native returning-player reward controls again and scrubbed
+  their startup injections, preventing the empty built-in welcome popup on
+  self-hosted servers. Stale startup templates for removed Hagga partitions are
+  also pruned instead of carrying duplicate configuration forward.
 - **Gameplay Admin install / setup wizard:** every call to `POST /api/Gameplay Admin/install`
   and `POST /api/Gameplay Admin/setup` now copies the user's SSH private key (and
   `.pub` if present) into the Gameplay Admin install folder as `sshKey` /
@@ -7238,6 +7774,10 @@ are consolidated into this single 6.0.0 entry.
 
 #### Fixed
 
+- Removed unsupported native returning-player reward controls again and scrubbed
+  their startup injections, preventing the empty built-in welcome popup on
+  self-hosted servers. Stale startup templates for removed Hagga partitions are
+  also pruned instead of carrying duplicate configuration forward.
 - **Monitoring File Browser + Director URLs** disappearing when the
   header row was resized (cards used `DockPanel.LastChildFill=True` and
   the URL `Border` was the fill child → squeezed to 0 height). Both
@@ -7359,6 +7899,10 @@ are folded in here under their respective sections.
 
 #### Fixed
 
+- Removed unsupported native returning-player reward controls again and scrubbed
+  their startup injections, preventing the empty built-in welcome popup on
+  self-hosted servers. Stale startup templates for removed Hagga partitions are
+  also pruned instead of carrying duplicate configuration forward.
 - **PTY data + exit handlers actually fire.** PowerShell scriptblocks
   bound to events that are raised from a non-runspace background thread
   (Pty.Net's reader thread) are silently dropped. Replaced with a tiny
@@ -7554,6 +8098,10 @@ this single 4.0.0 entry.
 
 #### Fixed
 
+- Removed unsupported native returning-player reward controls again and scrubbed
+  their startup injections, preventing the empty built-in welcome popup on
+  self-hosted servers. Stale startup templates for removed Hagga partitions are
+  also pruned instead of carrying duplicate configuration forward.
 - **Battlegroup status header never populated** in the v4.0.0 ship —
   background `Start-Job` calling `Get-VM` from a ps2exe binary lost its
   elevation token. Refactored `Refresh-StatusHeader` to call `Get-VM`
@@ -7689,6 +8237,10 @@ at the time. Also folds in the v3.0.1 / v3.1.2 patches.
 
 #### Fixed
 
+- Removed unsupported native returning-player reward controls again and scrubbed
+  their startup injections, preventing the empty built-in welcome popup on
+  self-hosted servers. Stale startup templates for removed Hagga partitions are
+  also pruned instead of carrying duplicate configuration forward.
 - **Web UI showed "Error fetching status" and rendered no command
   buttons.** Pode route scriptblocks run in isolated runspaces and
   can't see `$script:`-scoped variables defined at file scope.
