@@ -89,14 +89,23 @@ function survivalHeartbeat(servers: BgGameServer[], loading: boolean): {
 function HeartbeatSensor({ servers, loading }: { servers: BgGameServer[]; loading: boolean }) {
   const hb = survivalHeartbeat(servers, loading)
   return (
-    <div className="mt-auto pt-2 border-t border-border/30 flex items-center gap-2"
-         title="Login readiness — driven by the Survival_1 map's ready/phase. If it isn't Ready you can't log in. Refreshes every 10s.">      <Icon
-        name="HeartPulse"
-        size={30}
-        className={`${hb.cls} ${hb.beating ? 'animate-heartbeat' : ''}`}
-      />
-      <span className="text-[13px] uppercase tracking-wider text-text-dim">Game Ready State</span>
-      <span className={`text-[15px] font-medium ml-auto ${hb.cls}`}>{hb.label}</span>
+    <div className="mt-auto pt-2 border-t border-border/30">
+      <div className="flex items-center gap-2"
+           title="Login readiness — driven by the Survival_1 map's ready/phase. If it isn't Ready you can't log in. Refreshes every 10s.">
+        <Icon
+          name="HeartPulse"
+          size={30}
+          className={`${hb.cls} ${hb.beating ? 'animate-heartbeat' : ''}`}
+        />
+        <span className="text-[13px] uppercase tracking-wider text-text-dim">Game Ready State</span>
+        <span className={`text-[15px] font-medium ml-auto ${hb.cls}`}>{hb.label}</span>
+      </div>
+      {hb.label !== 'Ready' && hb.label !== 'No signal' && (
+        <p className="mt-2 text-xs text-text-dim">
+          Map stuck Pending/Starting with Hyper-V Dynamic Memory? Check VM Startup/Minimum RAM.
+          If already raised, fully shut down and start the VM; Restart can retain old guest/kubelet capacity.
+        </p>
+      )}
     </div>
   )
 }
@@ -110,8 +119,7 @@ export function Dashboard() {
   const bg = BG_STYLES[bgState]
   const bgInfo = status?.bg?.info ?? null
   const gameServers = status?.bg?.gameServers ?? []
-  const survivalServer = findSurvivalServer(gameServers)
-  const survivalPhase = survivalServer?.phase?.trim() || ''
+  const survivalPhase = findSurvivalServer(gameServers)?.phase?.trim() || ''
   const ports = status?.ports
   const portResults = Array.isArray(ports?.results) ? ports.results : []
   const tcp = portResults.filter(r => r.protocol === 'TCP')

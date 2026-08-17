@@ -9,7 +9,6 @@
 #     not Ready
 #   * Kubernetes' own DiskPressure node condition
 #   * a public IP configured, game pods running, and zero game UDP rules
-#   * Kubernetes reports a Pending game-map pod Unschedulable for Insufficient memory
 #
 # Everything else the probe reads - disk usage, retained build images, per-map
 # memory limits - is information with no verdict attached. The most important
@@ -116,7 +115,7 @@ probe_done=1
         ($r.mapLimits.entries | Where-Object { $_.map -eq 'Survival_1' }).reference | Should -Be '12Gi'
     }
 
-    # ---- system-declared fault signatures ---------------------------------
+    # ---- the three fault signatures ---------------------------------------
     It 'reports a database operation only when the battlegroup also says DATABASE is not Ready' {
         $r = ConvertFrom-DuneMemPressureProbe -Raw $outageFixture
         $f = @($r.faults | Where-Object { $_.id -eq 'db-operation-stuck' })

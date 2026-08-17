@@ -40,7 +40,6 @@
 #   dbop_total=<n>   dbop_open=<n>
 #   dbop=<name>~PH:<phase>~CT:<creationTimestamp>   (one per NON-Succeeded op)
 #   maplim=<map>~LIM:<memoryLimit>          (one per map in the BG spec)
-#   pending_map=<pod>~REQ:<request>~LIM:<limit>~RSN:<reason>~MSG:<scheduler message>
 #   img=<repo>~TAG:<tag>~SIZE:<human>       (one per retained seabass image)
 #   dnat_udp_rules=<n>   dnat_udp_ports=<space-separated ports>
 #   probe_done=1
@@ -179,20 +178,6 @@ if [ -n "$DBNS" ]; then
     while IFS= read -r lim; do
       [ -n "$lim" ] || continue
       echo "maplim=$lim"
-    done
-
-  # Pending game-map pods with the scheduler's own verdict. This catches the
-  # Dynamic Memory boot-capacity case where MemAvailable looks healthy but the
-  # node cannot admit a 16 GiB Hagga pod because kubelet registered less total
-  # capacity at boot.
-  PENDING_JPATH='{range .items[?(@.status.phase=="Pending")]}{.metadata.name}{"~REQ:"}{.spec.containers[0].resources.requests.memory}{"~LIM:"}{.spec.containers[0].resources.limits.memory}{"~RSN:"}{range .status.conditions[?(@.type=="PodScheduled")]}{.reason}{end}{"~MSG:"}{range .status.conditions[?(@.type=="PodScheduled")]}{.message}{end}{"\n"}{end}'
-  "$KUBECTL" -n "$DBNS" get pods -o jsonpath="$PENDING_JPATH" 2>/dev/null |
-    while IFS= read -r pending; do
-      [ -n "$pending" ] || continue
-      name=${pending%%~*}
-      case "$name" in
-        *-sg-*-pod-*) echo "pending_map=$pending" ;;
-      esac
     done
 fi
 

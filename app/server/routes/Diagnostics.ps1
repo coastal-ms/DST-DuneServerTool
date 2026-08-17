@@ -603,16 +603,13 @@ done
             $memLines = [System.Collections.Generic.List[string]]::new()
             $memLines.Add('# VM memory-pressure probe')
             $memLines.Add("# Generated $(Get-Date -Format 'o')")
-            $memLines.Add('# Detects runtime memory pressure and game-map pods blocked by scheduler capacity.')
+            $memLines.Add('# Detects OOMKilled/exit-137 Funcom operators + Postgres and low MemAvailable with Swap:0.')
             $memLines.Add('')
             if (-not $memFinding.ok) {
                 $memLines.Add("Probe unavailable: $($memFinding.message)")
                 $warnings.Add("VM memory-pressure probe skipped: $($memFinding.message)")
             } else {
-                if ($memFinding.capacityBlocked) {
-                    $memLines.Add("RESULT: MAP START BLOCKED BY VM CAPACITY (severity: $($memFinding.severity))")
-                    $memLines.Add(">> $($memFinding.headline)")
-                } elseif ($memFinding.pressure) {
+                if ($memFinding.pressure) {
                     $memLines.Add("RESULT: MEMORY PRESSURE DETECTED (severity: $($memFinding.severity))")
                     $memLines.Add(">> $($memFinding.headline)")
                 } else {
@@ -662,16 +659,6 @@ done
                     $memLines.Add('difference here is information, not a fault):')
                     foreach ($e in @($memFinding.mapLimits.entries)) {
                         $memLines.Add(("  {0,-40} {1,-8} reference {2}" -f $e.map, $e.limit, $(if ($e.reference) { $e.reference } else { '(not in snapshot)' })))
-                    }
-                    $memLines.Add('')
-                }
-                if (@($memFinding.pendingMaps).Count -gt 0) {
-                    $memLines.Add('Pending game-map pods:')
-                    foreach ($pod in @($memFinding.pendingMaps)) {
-                        $memLines.Add(("  {0} map={1} request={2} limit={3} reason={4}" -f `
-                            $pod.name, $pod.map, $(if ($pod.request) { $pod.request } else { '?' }),
-                            $(if ($pod.limit) { $pod.limit } else { '?' }), $pod.reason))
-                        if ($pod.message) { $memLines.Add("    scheduler: $($pod.message)") }
                     }
                     $memLines.Add('')
                 }
@@ -920,18 +907,13 @@ Register-DuneRoute -Method GET -Path '/api/diagnostics/vm-memory' -Handler {
     param($req, $res, $routeParams, $body)
     try {
         if (-not (Get-Command Get-DuneVmMemoryPressure -ErrorAction SilentlyContinue)) {
-            Write-DuneJson -Response $res -Body @{
-                ok=$false; pressure=$false; capacityBlocked=$false
-                pendingMaps=@(); message='memory-pressure helper not loaded'
-            }
+            Write-DuneJson -Response $res -Body @{ ok=$false; pressure=$false; message='memory-pressure helper not loaded' }
             return
         }
         $f = Get-DuneVmMemoryPressure
         $body = @{
             ok       = [bool]$f.ok
             pressure = [bool]$f.pressure
-            capacityBlocked = [bool]$f.capacityBlocked
-            pendingMaps = @($f.pendingMaps)
             severity = [string]($f.severity)
             headline = [string]($f.headline)
             warnings = @($f.warnings)
