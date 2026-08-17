@@ -1623,6 +1623,12 @@ function Get-DuneIniEffective {
             }
         }
     }
+    $mapsKey = "$script:DuneGcSecSpice||m_PerMapSystemSettings"
+    $fallbackKey = "$script:DuneGcSecSpice||m_DefaultSystemSettings"
+    if ($eff.ContainsKey($mapsKey) -and $eff.ContainsKey($fallbackKey)) {
+        $eff[$mapsKey] = Complete-DuneSpicefieldBlobForClientShare `
+            -Blob $eff[$mapsKey] -FallbackBlob $eff[$fallbackKey]
+    }
     return $eff
 }
 
@@ -1829,6 +1835,51 @@ function Set-DuneSpicefieldLimitsInBlob {
             $mapBlob.Substring($settingsRange.end)
     }
     return $Blob.Substring(0, $mapRange.start) + $patchedMap + $Blob.Substring($mapRange.end + 1)
+}
+
+function Remove-DuneSpicefieldSizeFromBlob {
+    param([string]$Blob, [string]$MapId, [string]$FieldType)
+    $mapRange = Find-DuneSpicefieldMapRange -Blob $Blob -MapId $MapId
+    if (-not $mapRange) { return $Blob }
+    $mapBlob = $Blob.Substring($mapRange.start, $mapRange.length)
+    $sizeRange = Find-DuneSpicefieldSizeRange -MapBlob $mapBlob -FieldType $FieldType
+    if (-not $sizeRange) { return $Blob }
+
+    $removeStart = $sizeRange.start
+    $left = $removeStart - 1
+    while ($left -ge 0 -and [char]::IsWhiteSpace($mapBlob[$left])) { $left-- }
+    if ($left -ge 0 -and $mapBlob[$left] -eq ',') {
+        $removeStart = $left
+    }
+    $removeEnd = $sizeRange.end
+    if ($removeStart -eq $sizeRange.start) {
+        $right = $removeEnd + 1
+        while ($right -lt $mapBlob.Length -and [char]::IsWhiteSpace($mapBlob[$right])) { $right++ }
+        if ($right -lt $mapBlob.Length -and $mapBlob[$right] -eq ',') { $removeEnd = $right }
+    }
+    $patchedMap = $mapBlob.Remove($removeStart, $removeEnd - $removeStart + 1)
+    return $Blob.Substring(0, $mapRange.start) + $patchedMap + $Blob.Substring($mapRange.end + 1)
+}
+
+function Complete-DuneSpicefieldBlobForClientShare {
+    param([string]$Blob, [string]$FallbackBlob)
+    $seen = @{}
+    foreach ($field in @($script:DuneGameConfigSchema | Where-Object { $_.ContainsKey('SpiceMap') })) {
+        $id = "$($field.SpiceMap)|$($field.SpiceFieldType)"
+        if ($seen.ContainsKey($id)) { continue }
+        $seen[$id] = $true
+        $state = Get-DuneSpicefieldLimitsFromBlob -Blob $Blob `
+            -MapId "$($field.SpiceMap)" -FieldType "$($field.SpiceFieldType)"
+        if ($state.found) { continue }
+        $fallback = Get-DuneSpicefieldDefaultLimitsFromBlob -Blob $FallbackBlob `
+            -FieldType "$($field.SpiceFieldType)"
+        $mapRange = Find-DuneSpicefieldMapRange -Blob $Blob -MapId "$($field.SpiceMap)"
+        if (-not $fallback.found -or -not $mapRange) { continue }
+        $Blob = Set-DuneSpicefieldLimitsInBlob -Blob $Blob -MapId "$($field.SpiceMap)" `
+            -FieldType "$($field.SpiceFieldType)" -MaxActive ([int]$fallback.maxActive) `
+            -MaxPrimed ([int]$fallback.maxPrimed)
+    }
+    return $Blob
 }
 
 # Distinct (section, structKey) pairs that the schema declares as struct parents.
@@ -2294,25 +2345,32 @@ function Convert-DuneSpicefieldUpdates {
             $state = Get-DuneSpicefieldDefaultLimitsFromBlob -Blob $fallback `
                 -FieldType $field.fieldType
         }
-        $pairFields = @($script:DuneGameConfigSchema | Where-Object {
-            $_.ContainsKey('SpiceMap') -and "$($_.SpiceMap)" -eq $field.mapId -and
-            "$($_.SpiceFieldType)" -eq $field.fieldType
-        })
-        $active = if ($state.found) { [int]$state.maxActive } else {
-            [int](($pairFields | Where-Object { "$($_.SpiceLimit)" -eq 'Active' } | Select-Object -First 1).Default)
-        }
-        $primed = if ($state.found) { [int]$state.maxPrimed } else {
-            [int](($pairFields | Where-Object { "$($_.SpiceLimit)" -eq 'Primed' } | Select-Object -First 1).Default)
-        }
-        $value = if ($update['remove']) { [int]$field.default } else {
+        if ($update['remove']) {
+            if ([string]::IsNullOrWhiteSpace($defaultBlob)) {
+                throw 'Funcom spicefield defaults are unavailable; refusing an inexact reset.'
+            }
+            $defaultState = Get-DuneSpicefieldLimitsFromBlob -Blob $defaultBlob `
+                -MapId $field.mapId -FieldType $field.fieldType
+            if ($defaultState.malformed) {
+                throw "Funcom spicefield default '$($field.mapId)/$($field.fieldType)' is malformed; refusing an inexact reset."
+            }
+            if (-not $defaultState.found) {
+                $blob = Remove-DuneSpicefieldSizeFromBlob -Blob $blob `
+                    -MapId $field.mapId -FieldType $field.fieldType
+                continue
+            }
+            $active = [int]$defaultState.maxActive
+            $primed = [int]$defaultState.maxPrimed
+        } else {
             $parsed = 0
             if (-not [int]::TryParse("$($update.value)", [ref]$parsed) -or $parsed -lt 0) {
                 throw "$key must be a whole number zero or greater."
             }
-            $parsed
+            $active = if ($state.found) { [int]$state.maxActive } else { [int]$field.default }
+            $primed = if ($state.found) { [int]$state.maxPrimed } else { [int]$field.default }
+            if ($field.limit -in @('Active', 'Both')) { $active = $parsed }
+            if ($field.limit -in @('Primed', 'Both')) { $primed = $parsed }
         }
-        if ($field.limit -in @('Active', 'Both')) { $active = $value }
-        if ($field.limit -in @('Primed', 'Both')) { $primed = $value }
         $blob = Set-DuneSpicefieldLimitsInBlob -Blob $blob -MapId $field.mapId `
             -FieldType $field.fieldType -MaxActive $active -MaxPrimed $primed `
             -DefaultsBlob $defaultBlob
