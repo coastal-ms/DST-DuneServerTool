@@ -47,7 +47,10 @@ function Initialize-DuneGameplayItemData {
         return
     }
     try {
-        $json = Get-Content -LiteralPath $path -Raw | ConvertFrom-Json
+        # gameplay-item-data.json is UTF-8 without a BOM. Windows PowerShell 5.1
+        # otherwise decodes it through the active ANSI code page and turns names
+        # such as Smuggler's curly apostrophe into mojibake.
+        $json = [IO.File]::ReadAllText($path, [Text.Encoding]::UTF8) | ConvertFrom-Json
         if ($json.items) {
             foreach ($p in $json.items.PSObject.Properties) {
                 $v = $p.Value

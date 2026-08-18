@@ -29,6 +29,8 @@ here cover everything those tags shipped.
   Ornithopter kits again. Missing Welding Torch and Treadwheel Hull metadata no
   longer injects a false 1000-volume charge that rejected those kits even when
   their known parts fit the stock 175-volume backpack.
+- Item and cosmetic catalog names now decode BOM-less UTF-8 explicitly, fixing
+  mojibake in names containing typographic apostrophes and other non-ASCII text.
 
 ## [13.7.0] - 2026-08-17
 
