@@ -628,7 +628,7 @@ function Read-DuneChatCommandsState {
 # node every time (~1.5 core-seconds, measured 2026-08-04 on an 8-core VM). So
 # the sustained cost is roughly 1.5 / interval cores, for as long as the feature
 # is enabled, whether or not anyone is chatting.
-$script:DuneChatPollChoices = @(3, 5, 10, 15, 30)
+$script:DuneChatPollChoices = @(1, 3, 5, 10, 15, 30)
 $script:DuneChatPollDefault = 3
 
 # What the scheduler actually sleeps between drains. Clamped here rather than
@@ -942,6 +942,31 @@ function Resolve-DuneChatFlsId {
     }
 }
 
+function Resolve-DuneChatCharacterName {
+    param([string]$Ip, [string]$FuncomId)
+    if ([string]::IsNullOrWhiteSpace($FuncomId)) { return @{ ok = $false; message = 'no funcom id' } }
+    $safe = $FuncomId -replace "'", "''"
+    $sql = @"
+SELECT COALESCE(ps.character_name, '') AS character_name
+FROM dune.accounts account
+JOIN dune.player_state ps ON ps.account_id = account.id
+WHERE account.funcom_id = '$safe'
+ORDER BY ps.last_avatar_activity DESC NULLS LAST
+LIMIT 1;
+"@
+    try {
+        $res = Invoke-DuneSqlQuery -Ip $Ip -Sql $sql -ReadOnly $true -MaxRows 1 -TimeoutSec 10
+        if (-not $res.ok) { return @{ ok = $false; message = [string]$res.error } }
+        $rows = ConvertTo-DuneRowMaps -Result $res
+        if ($rows.Count -eq 0) { return @{ ok = $false; message = "no active character for $FuncomId" } }
+        $name = ([string]$rows[0]['character_name']).Trim()
+        if (-not $name) { return @{ ok = $false; message = "empty character name for $FuncomId" } }
+        return @{ ok = $true; characterName = $name }
+    } catch {
+        return @{ ok = $false; message = $_.Exception.Message }
+    }
+}
+
 function Get-DuneChatPlayerLocation {
     param([string]$Ip, [string]$FuncomId)
     if ([string]::IsNullOrWhiteSpace($FuncomId)) {
@@ -1000,9 +1025,11 @@ function Send-DuneChatReply {
     if (-not (Get-Command Send-V6GenericBroadcast -ErrorAction SilentlyContinue)) {
         return @{ ok = $false; message = 'Broadcast helper unavailable (Broadcast.ps1 not loaded).' }
     }
-    # Name the player so a broadcast reply is obviously aimed at whoever typed
-    # the command, since everyone can see it.
-    $who = ($ToFuncomId -split '#')[0]
+    # Name the character so broadcasts match the identity players see in-game.
+    # Fall back to the Funcom display id only when the active character cannot
+    # be resolved; a reply is still better than silently dropping the result.
+    $identity = Resolve-DuneChatCharacterName -Ip $Ip -FuncomId $ToFuncomId
+    $who = if ($identity.ok) { [string]$identity.characterName } else { ($ToFuncomId -split '#')[0] }
     $body = if ($who) { "$who - $Message" } else { $Message }
     $title = if ($State -and $State.replyTitle) { [string]$State.replyTitle } else { 'Server' }
     try {
@@ -1398,7 +1425,9 @@ function Invoke-DuneChatCommandTeleport {
 
     $fls = Resolve-DuneChatFlsId -Ip $Ip -FuncomId $FuncomId
     if (-not $fls.ok) { return @{ ok = $false; reply = 'Could not resolve your player id for teleport.' } }
-    $res = Invoke-DuneRmqTeleportToExact -FlsId $fls.flsId `
+    # Let the game resolve a safe landing surface. TeleportToExact can force a
+    # distant stored Z before destination terrain finishes streaming.
+    $res = Invoke-DuneRmqTeleportTo -FlsId $fls.flsId `
         -X ([double]$bookmark.x) -Y ([double]$bookmark.y) -Z ([double]$bookmark.z)
     if (-not $res.ok) { return @{ ok = $false; reply = "Teleport to '$($bookmark.name)' failed." } }
     return @{ ok = $true; reply = "Teleported to $($bookmark.name)." }
