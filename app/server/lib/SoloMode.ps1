@@ -833,10 +833,22 @@ function Set-DuneSoloSettings {
     }
 }
 
-function Get-DuneSoloPtcEnginePath {
+function Get-DuneSoloPtcEnginePaths {
     param([Parameter(Mandatory)][hashtable]$Profile)
     Assert-DuneSoloPtcAdapter -Profile $Profile
-    return (Join-Path ([string]$Profile.dataRoot) 'Config\Windows\Engine.ini')
+    return @(
+        (Join-Path ([string]$Profile.dataRoot) 'Config\Windows\Engine.ini')
+        (Join-Path ([string]$Profile.dataRoot) 'Config\WindowsClient\Engine.ini')
+    )
+}
+
+function Invoke-DuneSoloFileReplace {
+    param(
+        [Parameter(Mandatory)][string]$Source,
+        [Parameter(Mandatory)][string]$Destination,
+        [Parameter(Mandatory)][string]$Backup
+    )
+    [IO.File]::Replace($Source, $Destination, $Backup, $true)
 }
 
 function Read-DuneSoloConsoleSettings {
@@ -857,7 +869,10 @@ function Read-DuneSoloConsoleSettings {
             entries = @()
         }
     }
-    if (-not $Path) { $Path = Get-DuneSoloPtcEnginePath -Profile $profile }
+    $paths = @(Get-DuneSoloPtcEnginePaths -Profile $profile)
+    # WindowsClient is the player-visible authority for these controls. Writes
+    # mirror both observed PTC files, while reads display the local-client value.
+    if (-not $Path) { $Path = $paths[-1] }
 
     $values = @{}
     if (Test-Path -LiteralPath $Path -PathType Leaf) {
@@ -892,6 +907,7 @@ function Read-DuneSoloConsoleSettings {
         supported = $true
         adapter = $channel
         path = $Path
+        paths = $paths
         exists = (Test-Path -LiteralPath $Path -PathType Leaf)
         section = $script:DuneSoloConsoleSection
         entries = @($entries)
@@ -901,7 +917,9 @@ function Read-DuneSoloConsoleSettings {
 function Set-DuneSoloConsoleSettings {
     param(
         [Parameter(Mandatory)][hashtable]$Settings,
-        [Parameter(Mandatory)][string]$Confirm
+        [Parameter(Mandatory)][string]$Confirm,
+        [string]$Path = '',
+        [switch]$SingleFile
     )
 
     Assert-DuneSoloSupportedPlatform
@@ -911,7 +929,7 @@ function Set-DuneSoloConsoleSettings {
     Assert-DuneSoloGameClosed
     $profile = Get-DuneSoloProfile
     if (-not $profile.dbPath) { throw 'Connect a Solo save before applying PTC console settings.' }
-    $path = Get-DuneSoloPtcEnginePath -Profile $profile
+    $paths = @(Get-DuneSoloPtcEnginePaths -Profile $profile)
 
     $schema = @{}
     foreach ($field in $script:DuneSoloConsoleSettings) { $schema[[string]$field.key] = $field }
@@ -934,6 +952,53 @@ function Set-DuneSoloConsoleSettings {
         $normalized[$key] = $value
     }
     if ($normalized.Count -eq 0) { throw 'No PTC Solo console settings were provided.' }
+
+    if (-not $SingleFile) {
+        $completed = New-Object System.Collections.Generic.List[object]
+        try {
+            foreach ($targetPath in $paths) {
+                $write = Set-DuneSoloConsoleSettings -Settings $normalized `
+                    -Confirm $Confirm -Path $targetPath -SingleFile
+                [void]$completed.Add($write)
+            }
+        } catch {
+            $writeError = $_
+            $rollbackErrors = New-Object System.Collections.Generic.List[string]
+            for ($index = $completed.Count - 1; $index -ge 0; $index--) {
+                $write = $completed[$index]
+                try {
+                    if ($write.targetExisted -and $write.backupPath) {
+                        $rollbackTemp = "$($write.path).$([guid]::NewGuid().ToString('N')).rollback"
+                        $failedCopy = "$($write.path).$([guid]::NewGuid().ToString('N')).failed"
+                        try {
+                            Copy-Item -LiteralPath $write.backupPath -Destination $rollbackTemp -ErrorAction Stop
+                            Invoke-DuneSoloFileReplace -Source $rollbackTemp `
+                                -Destination $write.path -Backup $failedCopy
+                        } finally {
+                            Remove-Item -LiteralPath $rollbackTemp, $failedCopy -Force -ErrorAction SilentlyContinue
+                        }
+                    } elseif (Test-Path -LiteralPath $write.path -PathType Leaf) {
+                        Remove-Item -LiteralPath $write.path -Force -ErrorAction Stop
+                    }
+                } catch {
+                    [void]$rollbackErrors.Add("$($write.path): $($_.Exception.Message)")
+                }
+            }
+            if ($rollbackErrors.Count -gt 0) {
+                throw "PTC Solo Engine.ini write failed ($($writeError.Exception.Message)); rollback failed: $($rollbackErrors -join '; ')"
+            }
+            throw $writeError
+        }
+        return @{
+            ok = $true
+            settings = Read-DuneSoloConsoleSettings
+            paths = $paths
+            backupPaths = @($completed | ForEach-Object { [string]$_.backupPath } | Where-Object { $_ })
+            backupPath = [string](@($completed | ForEach-Object { $_.backupPath } | Where-Object { $_ } | Select-Object -First 1)[0])
+        }
+    }
+    if (-not $Path) { throw 'PTC Solo Engine.ini target path is required.' }
+    $path = [IO.Path]::GetFullPath($Path)
 
     $dir = Split-Path -Parent $path
     if (-not (Test-Path -LiteralPath $dir)) {
@@ -988,7 +1053,8 @@ function Set-DuneSoloConsoleSettings {
     $backupRoot = Join-Path (Get-DuneSoloBackupRoot) 'settings'
     New-Item -ItemType Directory -Path $backupRoot -Force | Out-Null
     $stamp = (Get-Date).ToUniversalTime().ToString('yyyyMMdd-HHmmssfff')
-    $backupPath = Join-Path $backupRoot "Engine-$stamp.ini"
+    $targetFolder = [IO.Path]::GetFileName((Split-Path -Parent $path))
+    $backupPath = Join-Path $backupRoot "Engine-$targetFolder-$stamp-$([guid]::NewGuid().ToString('N')).ini"
     if (Test-Path -LiteralPath $path -PathType Leaf) {
         Copy-Item -LiteralPath $path -Destination $backupPath -ErrorAction Stop
     }
@@ -1005,7 +1071,7 @@ function Set-DuneSoloConsoleSettings {
         }
         [IO.File]::WriteAllLines($temp, $result.ToArray(), (New-Object Text.UTF8Encoding($hasBom)))
         if ($targetExisted) {
-            [IO.File]::Replace($temp, $path, $replaceBackup, $true)
+            Invoke-DuneSoloFileReplace -Source $temp -Destination $path -Backup $replaceBackup
             $replaced = $true
         } else {
             Move-Item -LiteralPath $temp -Destination $path -ErrorAction Stop
@@ -1037,6 +1103,8 @@ function Set-DuneSoloConsoleSettings {
         return @{
             ok = $true
             settings = $verified
+            path = $path
+            targetExisted = $targetExisted
             backupPath = if (Test-Path -LiteralPath $backupPath) { $backupPath } else { '' }
         }
     } catch {
@@ -1044,7 +1112,8 @@ function Set-DuneSoloConsoleSettings {
         if ($targetExisted -and $replaced -and (Test-Path -LiteralPath $replaceBackup -PathType Leaf)) {
             $failedCopy = Join-Path $dir ".Engine.$([guid]::NewGuid().ToString('N')).failed"
             try {
-                [IO.File]::Replace($replaceBackup, $path, $failedCopy, $true)
+                Invoke-DuneSoloFileReplace -Source $replaceBackup `
+                    -Destination $path -Backup $failedCopy
                 Remove-Item -LiteralPath $failedCopy -Force -ErrorAction SilentlyContinue
             } catch {
                 throw "PTC Solo Engine.ini write failed ($($writeError.Exception.Message)); rollback also failed. Recovery file retained at $replaceBackup"

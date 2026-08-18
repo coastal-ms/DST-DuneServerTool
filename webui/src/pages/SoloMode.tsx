@@ -3,6 +3,7 @@ import { Icon } from '../components/Icon'
 import { PageHeader } from '../components/PageHeader'
 import { CollapsibleCard } from '../components/CollapsibleCard'
 import { ItemPicker } from '../components/ItemPicker'
+import { GivePackageForm } from './gameplay/players/sections'
 import { useApi } from '../hooks/useApi'
 import {
   connectSolo,
@@ -34,6 +35,7 @@ import {
   getVehicleKitCatalog,
   type CatalogItem,
   type CosmeticEntry,
+  type GiveItemEntry,
   type VehicleKitCatalog,
 } from '../api/gameplay'
 import { pickLocalFolder } from '../util/pathPicker'
@@ -216,6 +218,16 @@ export function buildSoloCosmeticGrant(
     destination: getSoloCosmeticBackpackDestination(inventories),
     items: [{ templateId, quantity: 1, quality: 0 }],
   }
+}
+
+export function buildSoloPackageGrant(
+  items: GiveItemEntry[],
+): Array<{ templateId: string; quantity: number; quality: number }> {
+  return items.map(item => ({
+    templateId: item.template,
+    quantity: item.qty,
+    quality: item.quality ?? 0,
+  }))
 }
 
 export function SoloCosmeticGrantCard({
@@ -1499,8 +1511,23 @@ export function SoloMode() {
             </div>
           </div>
 
-          <div className="rounded border border-border bg-surface-2/40 px-4 py-3 text-xs text-text-muted">
-            Saved multi-item packages are not enabled yet. They will use this same backup-safe transaction path before joining a future Solo preview build.
+          <div className="card p-5">
+            <h3 className="font-semibold mb-1">Give Package</h3>
+            <p className="text-xs text-text-muted mb-4">
+              Create, import, edit, delete, and grant the same saved packages used elsewhere in DST. Package management does not require Self-Hosted setup.
+            </p>
+            <GivePackageForm
+              busy={busy !== null}
+              giveDisabled={!canMutateActiveProfile || gameRunning}
+              targetLabel="selected Solo inventory"
+              showOverflow={false}
+              onGive={(items, packageName) => {
+                void giveSoloItems(
+                  buildSoloPackageGrant(items),
+                  `${packageName} package`,
+                )
+              }}
+            />
           </div>
         </div>
       )}

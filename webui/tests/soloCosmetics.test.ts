@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   buildSoloCosmeticGrant,
+  buildSoloPackageGrant,
   getPreferredSoloInventoryDestination,
   getSoloCosmeticBackpackDestination,
   groupSoloCosmetics,
@@ -66,5 +67,15 @@ describe('Solo cosmetic grants', () => {
       items: [{ templateId: 'ScoutSetVariant', quantity: 1, quality: 0 }],
     })
     expect(getPreferredSoloInventoryDestination([...inventories])).toBe('inventory:1')
+  })
+
+  it('maps canonical DST package rows into the Solo grant payload', () => {
+    expect(buildSoloPackageGrant([
+      { template: 'CopperBar', qty: 20, quality: 0 },
+      { template: 'RepairTool5', qty: 1, quality: 5 },
+    ])).toEqual([
+      { templateId: 'CopperBar', quantity: 20, quality: 0 },
+      { templateId: 'RepairTool5', quantity: 1, quality: 5 },
+    ])
   })
 })

@@ -164,6 +164,9 @@ Describe 'Solo Mode write gates and settings backups' {
     It 'reads and atomically writes allowlisted PTC Engine.ini settings' {
         $layout = New-TestSoloLayout
         $engine = Join-Path $layout.config 'Engine.ini'
+        $clientConfig = Join-Path $layout.root 'Config\WindowsClient'
+        New-Item -ItemType Directory -Path $clientConfig -Force | Out-Null
+        $clientEngine = Join-Path $clientConfig 'Engine.ini'
         @(
             '[Other.Section]'
             'KeepMe=Yes'
@@ -172,6 +175,12 @@ Describe 'Solo Mode write gates and settings backups' {
             'Hydration.SunExposureEnabled=1'
             'Unknown.FutureKey=KeepMe'
         ) | Set-Content -LiteralPath $engine -Encoding utf8
+        @(
+            '[ConsoleVariables]'
+            'Dune.DisableShieldOnShooting=1'
+            'Dune.DisableShieldOnShooting=1'
+            'Client.FutureKey=KeepMe'
+        ) | Set-Content -LiteralPath $clientEngine -Encoding utf8
         Save-DuneSoloState -DataRoot $layout.root -DbPath $layout.db | Out-Null
         Mock Get-DuneSoloGameProcesses { @() }
 
@@ -188,13 +197,25 @@ Describe 'Solo Mode write gates and settings backups' {
 
         $result.ok | Should -BeTrue
         (Test-Path -LiteralPath $result.backupPath) | Should -BeTrue
+        @($result.backupPaths).Count | Should -Be 2
+        @($result.backupPaths | Select-Object -Unique).Count | Should -Be 2
+        (Get-Content -LiteralPath ($result.backupPaths | Where-Object { $_ -like '*Engine-Windows-*' }) -Raw) |
+            Should -Match 'Unknown\.FutureKey=KeepMe'
+        (Get-Content -LiteralPath ($result.backupPaths | Where-Object { $_ -like '*Engine-WindowsClient-*' }) -Raw) |
+            Should -Match 'Client\.FutureKey=KeepMe'
         $written = Get-Content -LiteralPath $engine -Raw
+        $clientWritten = Get-Content -LiteralPath $clientEngine -Raw
         $written | Should -Match '(?m)^KeepMe=Yes\r?$'
         $written | Should -Match '(?m)^Unknown\.FutureKey=KeepMe\r?$'
         @([regex]::Matches($written, '(?m)^Hydration\.SunExposureEnabled=0\r?$')).Count |
             Should -Be 1
         $written | Should -Match '(?m)^Vehicle\.MaxVehiclesPerPlayer=20\r?$'
         $written | Should -Match '(?m)^Dune\.DisableShieldOnShooting=0\r?$'
+        $clientWritten | Should -Match '(?m)^Client\.FutureKey=KeepMe\r?$'
+        $clientWritten | Should -Match '(?m)^Hydration\.SunExposureEnabled=0\r?$'
+        $clientWritten | Should -Match '(?m)^Vehicle\.MaxVehiclesPerPlayer=20\r?$'
+        @([regex]::Matches($clientWritten, '(?m)^Dune\.DisableShieldOnShooting=0\r?$')).Count |
+            Should -Be 1
     }
 
     It 'blocks PTC Engine.ini writes while the game is running' {
@@ -235,6 +256,35 @@ Describe 'Solo Mode write gates and settings backups' {
             } -Confirm 'APPLY SOLO CONSOLE SETTINGS'
         } | Should -Throw '*verification failed*'
         (Get-Content -LiteralPath $engine -Raw).Trim() | Should -Be $original.Trim()
+    }
+
+    It 'rolls back the host Engine.ini when the client-file commit fails' {
+        $layout = New-TestSoloLayout
+        $engine = Join-Path $layout.config 'Engine.ini'
+        $clientConfig = Join-Path $layout.root 'Config\WindowsClient'
+        New-Item -ItemType Directory -Path $clientConfig -Force | Out-Null
+        $clientEngine = Join-Path $clientConfig 'Engine.ini'
+        $hostOriginal = "[ConsoleVariables]`nHydration.SunExposureEnabled=1"
+        $clientOriginal = "[ConsoleVariables]`nHydration.SunExposureEnabled=1"
+        [IO.File]::WriteAllText($engine, $hostOriginal)
+        [IO.File]::WriteAllText($clientEngine, $clientOriginal)
+        Save-DuneSoloState -DataRoot $layout.root -DbPath $layout.db | Out-Null
+        Mock Get-DuneSoloGameProcesses { @() }
+        Mock Invoke-DuneSoloFileReplace {
+            param($Source, $Destination, $Backup)
+            if ($Destination -like '*WindowsClient\Engine.ini' -and $Source -like '*.tmp') {
+                throw 'simulated client commit failure'
+            }
+            [IO.File]::Replace($Source, $Destination, $Backup, $true)
+        }
+
+        {
+            Set-DuneSoloConsoleSettings -Settings @{
+                'Hydration.SunExposureEnabled' = '0'
+            } -Confirm 'APPLY SOLO CONSOLE SETTINGS'
+        } | Should -Throw '*simulated client commit failure*'
+        (Get-Content -LiteralPath $engine -Raw).Trim() | Should -Be $hostOriginal.Trim()
+        (Get-Content -LiteralPath $clientEngine -Raw).Trim() | Should -Be $clientOriginal.Trim()
     }
 
     It 'rejects unsupported or out-of-range PTC console settings' {

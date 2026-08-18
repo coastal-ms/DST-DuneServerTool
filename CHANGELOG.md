@@ -26,6 +26,9 @@ here cover everything those tags shipped.
   Shield Drops While Shooting in the observed `FLS_beta`
   `Config\Windows\Engine.ini`. Writes are allowlisted, game-closed,
   backup-first, atomic, and verified; no retail path is assumed.
+- Solo Mode exposes the canonical DST package store directly, so Solo-only
+  users can create, import, edit, delete, and grant reusable item packages
+  without configuring Self-Hosted or relying on demo player data.
 
 ### Fixed
 
