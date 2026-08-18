@@ -93,6 +93,44 @@ Register-DuneRoute -Method PUT -Path '/api/solo/settings' -LocalOnly -Handler {
     }
 }
 
+Register-DuneRoute -Method GET -Path '/api/solo/console-settings' -LocalOnly -Handler {
+    param($req, $res, $routeParams, $body)
+    try {
+        Write-DuneJson -Response $res -Body (Read-DuneSoloConsoleSettings)
+    } catch {
+        Write-DuneError -Response $res -Status 500 -Message $_.Exception.Message
+    }
+}
+
+Register-DuneRoute -Method PUT -Path '/api/solo/console-settings' -LocalOnly -Handler {
+    param($req, $res, $routeParams, $body)
+    try {
+        $rawSettings = Get-DuneSoloBodyField -Body $body -Name 'settings'
+        $confirm = [string](Get-DuneSoloBodyField -Body $body -Name 'confirm' -Default '')
+        $expectedProfileToken = [string](Get-DuneSoloBodyField -Body $body -Name 'expectedProfileToken' -Default '')
+        if (-not $rawSettings) {
+            Write-DuneError -Response $res -Status 400 -Message 'Missing PTC Solo console settings.'
+            return
+        }
+        $settings = @{}
+        if ($rawSettings -is [hashtable]) {
+            foreach ($key in $rawSettings.Keys) { $settings[[string]$key] = [string]$rawSettings[$key] }
+        } else {
+            foreach ($property in $rawSettings.PSObject.Properties) {
+                $settings[$property.Name] = [string]$property.Value
+            }
+        }
+        $result = Invoke-WithDuneLock -Name 'solo-profile-data' -Script {
+            Assert-DuneSoloExpectedProfile -ExpectedProfileToken $expectedProfileToken
+            Set-DuneSoloConsoleSettings -Settings $settings -Confirm $confirm
+        }
+        Write-DuneJson -Response $res -Body $result
+    } catch {
+        $status = if ($_.Exception.Message -like '*still running*') { 409 } else { 400 }
+        Write-DuneError -Response $res -Status $status -Message $_.Exception.Message
+    }
+}
+
 Register-DuneRoute -Method GET -Path '/api/solo/backups' -LocalOnly -Handler {
     param($req, $res, $routeParams, $body)
     try {

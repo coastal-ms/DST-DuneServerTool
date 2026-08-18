@@ -124,6 +124,26 @@ export interface SoloSettingsResponse {
   entries: SoloSetting[]
 }
 
+export interface SoloConsoleSetting extends SoloSetting {
+  type: 'bool01' | 'int'
+  default: string
+  min: number | null
+  max: number | null
+  label: string
+  help: string
+  status: 'Confirmed' | 'Unconfirmed'
+}
+
+export interface SoloConsoleSettingsResponse {
+  ok: boolean
+  supported: boolean
+  adapter: string
+  path: string
+  exists: boolean
+  section: string
+  entries: SoloConsoleSetting[]
+}
+
 export interface SoloBackup {
   name: string
   relativePath: string
@@ -172,6 +192,24 @@ export function saveSoloSettings(settings: Record<string, string>, expectedProfi
   return api('/api/solo/settings', {
     method: 'PUT',
     body: JSON.stringify({ settings, expectedProfileToken, confirm: 'APPLY SOLO SETTINGS' }),
+  })
+}
+
+export function saveSoloConsoleSettings(
+  settings: Record<string, string>,
+  expectedProfileToken: string,
+): Promise<{
+  ok: boolean
+  settings: SoloConsoleSettingsResponse
+  backupPath: string
+}> {
+  return api('/api/solo/console-settings', {
+    method: 'PUT',
+    body: JSON.stringify({
+      settings,
+      expectedProfileToken,
+      confirm: 'APPLY SOLO CONSOLE SETTINGS',
+    }),
   })
 }
 

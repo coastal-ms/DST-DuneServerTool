@@ -22,6 +22,9 @@ here cover everything those tags shipped.
 - Solo item delivery now selects the character backpack by default instead of
   preferring Developer Storage; users can still choose another supported
   destination.
+- PTC Solo Settings can manage Sun Exposure and Maximum Vehicles Per Player in
+  the observed `FLS_beta` `Config\Windows\Engine.ini`. Writes are allowlisted,
+  game-closed, backup-first, atomic, and verified; no retail path is assumed.
 
 ### Fixed
 

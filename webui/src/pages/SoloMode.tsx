@@ -15,11 +15,13 @@ import {
   grantSoloItems,
   maxSoloAugmentAttributes,
   restoreSoloBackup,
+  saveSoloConsoleSettings,
   saveSoloSettings,
   setSoloCurrencies,
   maxSoloSpecializations,
   type SoloBackup,
   type SoloBackupsResponse,
+  type SoloConsoleSettingsResponse,
   type SoloInventoryDestination,
   type SoloProfile,
   type SoloRuntime,
@@ -313,11 +315,16 @@ export function SoloMode() {
   const runtimeState = useApi<SoloRuntime>('/api/solo/runtime', { intervalMs: 3000 })
   const connected = statusState.data?.connected === true
   const settingsState = useApi<SoloSettingsResponse>('/api/solo/settings', { enabled: connected })
+  const consoleSettingsState = useApi<SoloConsoleSettingsResponse>(
+    '/api/solo/console-settings',
+    { enabled: connected },
+  )
   const backupsState = useApi<SoloBackupsResponse>('/api/solo/backups', { enabled: connected })
   const [dataRoot, setDataRoot] = useState('')
   const [selectedDb, setSelectedDb] = useState('')
   const [discoveredProfiles, setDiscoveredProfiles] = useState<SoloProfile[]>([])
   const [draft, setDraft] = useState<Record<string, string>>({})
+  const [consoleDraft, setConsoleDraft] = useState<Record<string, string>>({})
   const [busy, setBusy] = useState<string | null>(null)
   const [notice, setNotice] = useState<{ kind: 'ok' | 'warn' | 'err'; text: string } | null>(null)
   const [itemTemplate, setItemTemplate] = useState('')
@@ -343,6 +350,13 @@ export function SoloMode() {
     if (!settingsState.data) return
     setDraft(Object.fromEntries(settingsState.data.entries.map(entry => [entry.key, entry.value])))
   }, [settingsState.data])
+
+  useEffect(() => {
+    if (!consoleSettingsState.data) return
+    setConsoleDraft(Object.fromEntries(
+      consoleSettingsState.data.entries.map(entry => [entry.key, entry.value]),
+    ))
+  }, [consoleSettingsState.data])
 
   useEffect(() => {
     const inventories = statusState.data?.inspection?.inventories ?? []
@@ -382,6 +396,14 @@ export function SoloMode() {
     }
     return changed
   }, [draft, settingsState.data])
+  const changedConsoleSettings = useMemo(() => {
+    const changed: Record<string, string> = {}
+    for (const entry of consoleSettingsState.data?.entries ?? []) {
+      const next = consoleDraft[entry.key] ?? ''
+      if (next !== entry.value) changed[entry.key] = next
+    }
+    return changed
+  }, [consoleDraft, consoleSettingsState.data])
 
   const scanPath = async (path: string) => {
     const discovery = await discoverSolo(path)
@@ -433,6 +455,7 @@ export function SoloMode() {
       await statusState.refresh()
       await runtimeState.refresh()
       await settingsState.refresh()
+      await consoleSettingsState.refresh()
       await backupsState.refresh()
     } catch (error) {
       setNotice({ kind: 'err', text: error instanceof Error ? error.message : String(error) })
@@ -452,6 +475,7 @@ export function SoloMode() {
       setNotice({ kind: 'err', text: 'Connect and validate the selected Solo profile before applying settings.' })
       return
     }
+
     if (gameRunning) {
       setNotice({ kind: 'err', text: 'Close Dune: Awakening completely before applying Solo settings.' })
       return
@@ -473,6 +497,40 @@ export function SoloMode() {
       await settingsState.refresh()
       await statusState.refresh()
       await runtimeState.refresh()
+    } catch (error) {
+      setNotice({ kind: 'err', text: error instanceof Error ? error.message : String(error) })
+    } finally {
+      setBusy(null)
+    }
+  }
+
+  const saveConsoleSettings = async () => {
+    if (!selectionMatchesActive) {
+      setNotice({ kind: 'err', text: 'Connect and validate the selected PTC Solo profile before applying Engine.ini settings.' })
+      return
+    }
+    if (gameRunning) {
+      setNotice({ kind: 'err', text: 'Close Dune: Awakening completely before applying PTC Engine.ini settings.' })
+      return
+    }
+    if (Object.keys(changedConsoleSettings).length === 0) return
+    if (!window.confirm(
+      `Apply ${Object.keys(changedConsoleSettings).length} PTC Solo Engine.ini setting(s)?\n\n`
+      + 'PTC must be fully closed. DST will retain Engine.ini, write only the two allowlisted ConsoleVariables, and verify the result.',
+    )) return
+
+    setBusy('console-settings')
+    setNotice(null)
+    try {
+      const result = await saveSoloConsoleSettings(
+        changedConsoleSettings,
+        statusState.data?.profileToken ?? '',
+      )
+      setNotice({
+        kind: 'ok',
+        text: `PTC Solo Engine.ini settings applied and verified. Previous file retained at ${result.backupPath}`,
+      })
+      await Promise.all([consoleSettingsState.refresh(), runtimeState.refresh()])
     } catch (error) {
       setNotice({ kind: 'err', text: error instanceof Error ? error.message : String(error) })
     } finally {
@@ -998,6 +1056,79 @@ export function SoloMode() {
             <div className="card p-5 text-sm text-text-muted">Loading Solo settings...</div>
           ) : (
             <>
+              <CollapsibleCard id="solo-settings-ptc-engine" title="PTC Engine settings" icon="Gauge">
+                {!consoleSettingsState.data ? (
+                  <div className="text-sm text-text-muted">Loading PTC Engine.ini settings...</div>
+                ) : !consoleSettingsState.data.supported ? (
+                  <div className="rounded border border-warning/30 bg-warning/5 p-3 text-sm text-text-muted">
+                    These controls are available only for the verified PTC <span className="font-mono">FLS_beta</span> profile. Retail folder structure is not assumed.
+                  </div>
+                ) : (
+                  <div className="space-y-4">
+                    <div className="rounded border border-warning/30 bg-warning/5 p-3 text-xs text-text-muted">
+                      Writes only <span className="font-mono">Config\Windows\Engine.ini</span> under the connected PTC Solo root. Sun Exposure uses the observed PTC key but still needs Solo field confirmation.
+                    </div>
+                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
+                      {consoleSettingsState.data.entries.map(entry => (
+                        <label key={entry.key} className="block rounded border border-border bg-surface-2/40 p-3">
+                          <span className="flex items-center justify-between gap-2 text-xs text-text-muted">
+                            <span>{entry.label}</span>
+                            <span className={entry.status === 'Confirmed' ? 'text-success' : 'text-warning'}>
+                              {entry.status}
+                            </span>
+                          </span>
+                          {entry.type === 'bool01' ? (
+                            <select
+                              className={`${SOLO_INPUT_CLASS} mt-2`}
+                              style={{ colorScheme: 'dark' }}
+                              value={consoleDraft[entry.key] ?? entry.value}
+                              onChange={event => setConsoleDraft(current => ({
+                                ...current,
+                                [entry.key]: event.target.value,
+                              }))}
+                              disabled={!canMutateActiveProfile || gameRunning}
+                            >
+                              <option value="1">Enabled</option>
+                              <option value="0">Disabled</option>
+                            </select>
+                          ) : (
+                            <input
+                              type="number"
+                              min={entry.min ?? undefined}
+                              max={entry.max ?? undefined}
+                              className={`${SOLO_INPUT_CLASS} mt-2 font-mono`}
+                              value={consoleDraft[entry.key] ?? entry.value}
+                              onChange={event => setConsoleDraft(current => ({
+                                ...current,
+                                [entry.key]: event.target.value,
+                              }))}
+                              disabled={!canMutateActiveProfile || gameRunning}
+                            />
+                          )}
+                          <span className="block text-[11px] text-text-dim mt-2">{entry.help}</span>
+                          <span className="block text-[10px] font-mono text-text-dim mt-1">{entry.key}</span>
+                        </label>
+                      ))}
+                    </div>
+                    <button
+                      className={`btn-primary w-full justify-center ${SOLO_DISABLED_PRIMARY_CLASS}`}
+                      onClick={() => void saveConsoleSettings()}
+                      disabled={
+                        !canMutateActiveProfile
+                        || gameRunning
+                        || Object.keys(changedConsoleSettings).length === 0
+                      }
+                    >
+                      <Icon
+                        name={busy === 'console-settings' ? 'LoaderCircle' : 'Save'}
+                        size={14}
+                        className={busy === 'console-settings' ? 'animate-spin' : ''}
+                      />
+                      Apply PTC Engine settings
+                    </button>
+                  </div>
+                )}
+              </CollapsibleCard>
               {SETTING_GROUPS.map(group => (
                 <CollapsibleCard key={group.title} id={`solo-settings-${group.title.toLowerCase().replaceAll(' ', '-')}`} title={group.title} icon="SlidersHorizontal">
                   <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">

@@ -22,8 +22,9 @@ function global:Reset-TestSoloState {
 }
 
 function global:New-TestSoloLayout {
+    param([string]$Channel = 'FLS_beta')
     $root = Join-Path $env:LOCALAPPDATA 'DuneSandbox\Saved'
-    $profile = Join-Path $root 'Cloud\PlayerClientStorage\FLS_beta\123456789'
+    $profile = Join-Path $root "Cloud\PlayerClientStorage\$Channel\123456789"
     $config = Join-Path $root 'Config\Windows'
     New-Item -ItemType Directory -Path $profile, $config -Force | Out-Null
     $db = Join-Path $profile 'game.db'
@@ -158,6 +159,81 @@ Describe 'Solo Mode write gates and settings backups' {
         { Set-DuneSoloSettings -Settings @{ GatheringAmount = '2.500000' } -Confirm 'APPLY SOLO SETTINGS' } |
             Should -Throw '*verification failed*'
         (Get-Content -LiteralPath $ini -Raw).Trim() | Should -Be $original.Trim()
+    }
+
+    It 'reads and atomically writes allowlisted PTC Engine.ini settings' {
+        $layout = New-TestSoloLayout
+        $engine = Join-Path $layout.config 'Engine.ini'
+        @(
+            '[Other.Section]'
+            'KeepMe=Yes'
+            '[ConsoleVariables]'
+            'Hydration.SunExposureEnabled=1'
+            'Hydration.SunExposureEnabled=1'
+            'Unknown.FutureKey=KeepMe'
+        ) | Set-Content -LiteralPath $engine -Encoding utf8
+        Save-DuneSoloState -DataRoot $layout.root -DbPath $layout.db | Out-Null
+        Mock Get-DuneSoloGameProcesses { @() }
+
+        $before = Read-DuneSoloConsoleSettings
+        $before.supported | Should -BeTrue
+        ($before.entries | Where-Object key -eq 'Hydration.SunExposureEnabled').value |
+            Should -Be '1'
+
+        $result = Set-DuneSoloConsoleSettings -Settings @{
+            'Hydration.SunExposureEnabled' = '0'
+            'Vehicle.MaxVehiclesPerPlayer' = '20'
+        } -Confirm 'APPLY SOLO CONSOLE SETTINGS'
+
+        $result.ok | Should -BeTrue
+        (Test-Path -LiteralPath $result.backupPath) | Should -BeTrue
+        $written = Get-Content -LiteralPath $engine -Raw
+        $written | Should -Match '(?m)^KeepMe=Yes\r?$'
+        $written | Should -Match '(?m)^Unknown\.FutureKey=KeepMe\r?$'
+        @([regex]::Matches($written, '(?m)^Hydration\.SunExposureEnabled=0\r?$')).Count |
+            Should -Be 1
+        $written | Should -Match '(?m)^Vehicle\.MaxVehiclesPerPlayer=20\r?$'
+    }
+
+    It 'blocks PTC Engine.ini writes while the game is running' {
+        $layout = New-TestSoloLayout
+        Save-DuneSoloState -DataRoot $layout.root -DbPath $layout.db | Out-Null
+        Mock Get-DuneSoloGameProcesses { @([pscustomobject]@{ name = 'DuneSandbox'; pid = 42 }) }
+
+        {
+            Set-DuneSoloConsoleSettings -Settings @{
+                'Hydration.SunExposureEnabled' = '0'
+            } -Confirm 'APPLY SOLO CONSOLE SETTINGS'
+        } | Should -Throw '*still running*'
+    }
+
+    It 'rejects unsupported or out-of-range PTC console settings' {
+        $layout = New-TestSoloLayout
+        Save-DuneSoloState -DataRoot $layout.root -DbPath $layout.db | Out-Null
+        Mock Get-DuneSoloGameProcesses { @() }
+
+        {
+            Set-DuneSoloConsoleSettings -Settings @{ 'Unknown.Key' = '1' } `
+                -Confirm 'APPLY SOLO CONSOLE SETTINGS'
+        } | Should -Throw '*Unsupported PTC Solo console setting*'
+        {
+            Set-DuneSoloConsoleSettings -Settings @{
+                'Vehicle.MaxVehiclesPerPlayer' = '1001'
+            } -Confirm 'APPLY SOLO CONSOLE SETTINGS'
+        } | Should -Throw '*between 0 and 1000*'
+    }
+
+    It 'does not guess a retail Engine.ini folder' {
+        $layout = New-TestSoloLayout -Channel 'FLS_live'
+        Save-DuneSoloState -DataRoot $layout.root -DbPath $layout.db | Out-Null
+        Mock Get-DuneSoloGameProcesses { @() }
+
+        (Read-DuneSoloConsoleSettings).supported | Should -BeFalse
+        {
+            Set-DuneSoloConsoleSettings -Settings @{
+                'Hydration.SunExposureEnabled' = '0'
+            } -Confirm 'APPLY SOLO CONSOLE SETTINGS'
+        } | Should -Throw '*verified PTC FLS_beta adapter*'
     }
 
     It 'requires the exact item-grant confirmation phrase' {

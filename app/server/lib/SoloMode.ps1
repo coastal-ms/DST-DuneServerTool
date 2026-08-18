@@ -49,6 +49,27 @@ $script:DuneSoloSettingKeys = @(
     'LandsraadFactionStandingMultiplier',
     'bLandsraadDisableDecreeRerollLimit'
 )
+$script:DuneSoloConsoleSection = 'ConsoleVariables'
+$script:DuneSoloConsoleSettings = @(
+    [ordered]@{
+        key = 'Hydration.SunExposureEnabled'
+        type = 'bool01'
+        default = '1'
+        label = 'Sun Exposure Enabled'
+        help = 'PTC Solo candidate. 0 disables sun-exposure water drain; effect still needs Solo field confirmation.'
+        status = 'Unconfirmed'
+    },
+    [ordered]@{
+        key = 'Vehicle.MaxVehiclesPerPlayer'
+        type = 'int'
+        min = 0
+        max = 1000
+        default = '10'
+        label = 'Maximum Vehicles Per Player'
+        help = 'Client-driven vehicle cap. 0 means unlimited.'
+        status = 'Confirmed'
+    }
+)
 
 function Test-DuneSoloSupportedPlatform {
     $isWindowsVariable = Get-Variable -Name IsWindows -ErrorAction SilentlyContinue
@@ -801,6 +822,208 @@ function Set-DuneSoloSettings {
         throw
     } finally {
         Remove-Item -LiteralPath $temp -Force -ErrorAction SilentlyContinue
+    }
+}
+
+function Get-DuneSoloPtcEnginePath {
+    param([Parameter(Mandatory)][hashtable]$Profile)
+    Assert-DuneSoloPtcAdapter -Profile $Profile
+    return (Join-Path ([string]$Profile.dataRoot) 'Config\Windows\Engine.ini')
+}
+
+function Read-DuneSoloConsoleSettings {
+    param([string]$Path = '')
+
+    Assert-DuneSoloSupportedPlatform
+    $profile = Get-DuneSoloProfile
+    $profileDir = if ($profile.dbPath) { Split-Path -Parent ([string]$profile.dbPath) } else { '' }
+    $channel = if ($profileDir) { [IO.Path]::GetFileName((Split-Path -Parent $profileDir)) } else { '' }
+    if ($channel -ne 'FLS_beta') {
+        return @{
+            ok = $true
+            supported = $false
+            adapter = $channel
+            path = ''
+            exists = $false
+            section = $script:DuneSoloConsoleSection
+            entries = @()
+        }
+    }
+    if (-not $Path) { $Path = Get-DuneSoloPtcEnginePath -Profile $profile }
+
+    $values = @{}
+    if (Test-Path -LiteralPath $Path -PathType Leaf) {
+        $inside = $false
+        foreach ($line in [IO.File]::ReadAllLines($Path)) {
+            if ($line -match '^\s*\[(.+)\]\s*$') {
+                $inside = ($Matches[1] -eq $script:DuneSoloConsoleSection)
+                continue
+            }
+            if ($inside -and $line -match '^\s*([^;#][^=]*?)\s*=(.*)$') {
+                $values[$Matches[1].Trim()] = $Matches[2].Trim()
+            }
+        }
+    }
+    $entries = foreach ($field in $script:DuneSoloConsoleSettings) {
+        $key = [string]$field.key
+        [pscustomobject]@{
+            key = $key
+            value = if ($values.ContainsKey($key)) { [string]$values[$key] } else { [string]$field.default }
+            present = $values.ContainsKey($key)
+            type = [string]$field.type
+            default = [string]$field.default
+            min = if ($field.Contains('min')) { [int]$field.min } else { $null }
+            max = if ($field.Contains('max')) { [int]$field.max } else { $null }
+            label = [string]$field.label
+            help = [string]$field.help
+            status = [string]$field.status
+        }
+    }
+    return @{
+        ok = $true
+        supported = $true
+        adapter = $channel
+        path = $Path
+        exists = (Test-Path -LiteralPath $Path -PathType Leaf)
+        section = $script:DuneSoloConsoleSection
+        entries = @($entries)
+    }
+}
+
+function Set-DuneSoloConsoleSettings {
+    param(
+        [Parameter(Mandatory)][hashtable]$Settings,
+        [Parameter(Mandatory)][string]$Confirm
+    )
+
+    Assert-DuneSoloSupportedPlatform
+    if ($Confirm -ne 'APPLY SOLO CONSOLE SETTINGS') {
+        throw 'Confirm the PTC Solo Engine.ini write before continuing.'
+    }
+    Assert-DuneSoloGameClosed
+    $profile = Get-DuneSoloProfile
+    if (-not $profile.dbPath) { throw 'Connect a Solo save before applying PTC console settings.' }
+    $path = Get-DuneSoloPtcEnginePath -Profile $profile
+
+    $schema = @{}
+    foreach ($field in $script:DuneSoloConsoleSettings) { $schema[[string]$field.key] = $field }
+    $normalized = @{}
+    foreach ($rawKey in $Settings.Keys) {
+        $key = [string]$rawKey
+        if (-not $schema.ContainsKey($key)) { throw "Unsupported PTC Solo console setting: $key" }
+        $value = ([string]$Settings[$rawKey]).Trim()
+        $field = $schema[$key]
+        if ($field.type -eq 'bool01') {
+            if ($value -notin @('0', '1')) { throw "$key must be 0 or 1." }
+        } elseif ($field.type -eq 'int') {
+            $number = 0
+            if (-not [int]::TryParse($value, [ref]$number) -or
+                $number -lt [int]$field.min -or $number -gt [int]$field.max) {
+                throw "$key must be between $($field.min) and $($field.max)."
+            }
+            $value = [string]$number
+        }
+        $normalized[$key] = $value
+    }
+    if ($normalized.Count -eq 0) { throw 'No PTC Solo console settings were provided.' }
+
+    $dir = Split-Path -Parent $path
+    if (-not (Test-Path -LiteralPath $dir)) {
+        New-Item -ItemType Directory -Path $dir -Force | Out-Null
+    }
+    $lines = if (Test-Path -LiteralPath $path -PathType Leaf) { [IO.File]::ReadAllLines($path) } else { @() }
+    $result = New-Object System.Collections.Generic.List[string]
+    $inside = $false
+    $foundSection = $false
+    $written = @{}
+    foreach ($line in $lines) {
+        if ($line -match '^\s*\[(.+)\]\s*$') {
+            if ($inside) {
+                foreach ($key in $normalized.Keys) {
+                    if (-not $written.ContainsKey($key)) {
+                        $result.Add("$key=$($normalized[$key])")
+                        $written[$key] = $true
+                    }
+                }
+            }
+            $inside = ($Matches[1] -eq $script:DuneSoloConsoleSection)
+            if ($inside) { $foundSection = $true }
+            $result.Add($line)
+            continue
+        }
+        if ($inside -and $line -match '^\s*([^;#][^=]*?)\s*=') {
+            $key = $Matches[1].Trim()
+            if ($normalized.ContainsKey($key)) {
+                if (-not $written.ContainsKey($key)) {
+                    $result.Add("$key=$($normalized[$key])")
+                    $written[$key] = $true
+                }
+                continue
+            }
+        }
+        $result.Add($line)
+    }
+    if ($inside) {
+        foreach ($key in $normalized.Keys) {
+            if (-not $written.ContainsKey($key)) {
+                $result.Add("$key=$($normalized[$key])")
+                $written[$key] = $true
+            }
+        }
+    }
+    if (-not $foundSection) {
+        if ($result.Count -gt 0 -and $result[$result.Count - 1] -ne '') { $result.Add('') }
+        $result.Add("[$script:DuneSoloConsoleSection]")
+        foreach ($key in $normalized.Keys) { $result.Add("$key=$($normalized[$key])") }
+    }
+
+    $backupRoot = Join-Path (Get-DuneSoloBackupRoot) 'settings'
+    New-Item -ItemType Directory -Path $backupRoot -Force | Out-Null
+    $stamp = (Get-Date).ToUniversalTime().ToString('yyyyMMdd-HHmmssfff')
+    $backupPath = Join-Path $backupRoot "Engine-$stamp.ini"
+    if (Test-Path -LiteralPath $path -PathType Leaf) {
+        Copy-Item -LiteralPath $path -Destination $backupPath -ErrorAction Stop
+    }
+
+    $temp = Join-Path $dir ".Engine.$([guid]::NewGuid().ToString('N')).tmp"
+    $replaceBackup = Join-Path $dir ".Engine.$([guid]::NewGuid().ToString('N')).previous"
+    $targetExisted = Test-Path -LiteralPath $path -PathType Leaf
+    $replaced = $false
+    try {
+        $hasBom = $false
+        if ($targetExisted) {
+            $bytes = [IO.File]::ReadAllBytes($path)
+            $hasBom = ($bytes.Length -ge 3 -and $bytes[0] -eq 0xEF -and $bytes[1] -eq 0xBB -and $bytes[2] -eq 0xBF)
+        }
+        [IO.File]::WriteAllLines($temp, $result.ToArray(), (New-Object Text.UTF8Encoding($hasBom)))
+        if ($targetExisted) {
+            [IO.File]::Replace($temp, $path, $replaceBackup, $true)
+            $replaced = $true
+        } else {
+            Move-Item -LiteralPath $temp -Destination $path
+        }
+        $verified = Read-DuneSoloConsoleSettings -Path $path
+        foreach ($entry in $verified.entries) {
+            if ($normalized.ContainsKey($entry.key) -and
+                [string]$normalized[$entry.key] -ne [string]$entry.value) {
+                throw "PTC Solo console setting verification failed for $($entry.key)."
+            }
+        }
+        Remove-Item -LiteralPath $replaceBackup -Force -ErrorAction SilentlyContinue
+        return @{
+            ok = $true
+            settings = $verified
+            backupPath = if (Test-Path -LiteralPath $backupPath) { $backupPath } else { '' }
+        }
+    } catch {
+        if ($targetExisted -and $replaced -and (Test-Path -LiteralPath $replaceBackup -PathType Leaf)) {
+            [IO.File]::Replace($replaceBackup, $path, $null, $true)
+        } elseif (-not $targetExisted -and (Test-Path -LiteralPath $path -PathType Leaf)) {
+            Remove-Item -LiteralPath $path -Force
+        }
+        throw
+    } finally {
+        Remove-Item -LiteralPath $temp, $replaceBackup -Force -ErrorAction SilentlyContinue
     }
 }
 
