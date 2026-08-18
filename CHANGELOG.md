@@ -13,8 +13,6 @@ here cover everything those tags shipped.
 
 ## [Unreleased]
 
-## [13.9.0] - 2026-08-18
-
 ### Added
 
 - Self-Hosted Database now includes a reversible **World Restart** workflow.

@@ -78,7 +78,7 @@ body:
     attributes:
       label: Tool version
       description: Shown in the bottom-left of the web portal sidebar (status bar) and in the CLI menu header. Auto-filled when launched from **Help → Create GitHub Issue** in the top menu bar, or from the CLI `report-issue` command.
-      placeholder: "v13.9.0"
+      placeholder: "v13.8.0"
     validations:
       required: true
 
