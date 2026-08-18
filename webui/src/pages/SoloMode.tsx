@@ -1057,7 +1057,18 @@ export function SoloMode() {
           ) : (
             <>
               <CollapsibleCard id="solo-settings-ptc-engine" title="PTC Engine settings" icon="Gauge">
-                {!consoleSettingsState.data ? (
+                {consoleSettingsState.error ? (
+                  <div className="rounded border border-danger/30 bg-danger/5 p-3 text-sm text-danger">
+                    <div>Could not load PTC Engine.ini settings: {consoleSettingsState.error}</div>
+                    <button
+                      className="btn-secondary mt-3"
+                      onClick={() => void consoleSettingsState.refresh()}
+                      disabled={consoleSettingsState.loading}
+                    >
+                      Retry
+                    </button>
+                  </div>
+                ) : !consoleSettingsState.data ? (
                   <div className="text-sm text-text-muted">Loading PTC Engine.ini settings...</div>
                 ) : !consoleSettingsState.data.supported ? (
                   <div className="rounded border border-warning/30 bg-warning/5 p-3 text-sm text-text-muted">

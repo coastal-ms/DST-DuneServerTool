@@ -1000,13 +1000,29 @@ function Set-DuneSoloConsoleSettings {
             [IO.File]::Replace($temp, $path, $replaceBackup, $true)
             $replaced = $true
         } else {
-            Move-Item -LiteralPath $temp -Destination $path
+            Move-Item -LiteralPath $temp -Destination $path -ErrorAction Stop
         }
         $verified = Read-DuneSoloConsoleSettings -Path $path
-        foreach ($entry in $verified.entries) {
-            if ($normalized.ContainsKey($entry.key) -and
-                [string]$normalized[$entry.key] -ne [string]$entry.value) {
-                throw "PTC Solo console setting verification failed for $($entry.key)."
+        foreach ($key in $normalized.Keys) {
+            $entry = @($verified.entries | Where-Object key -eq $key)
+            if ($entry.Count -ne 1 -or -not $entry[0].present -or
+                [string]$normalized[$key] -ne [string]$entry[0].value) {
+                throw "PTC Solo console setting verification failed for $key."
+            }
+            $occurrences = 0
+            $verifyInside = $false
+            foreach ($line in [IO.File]::ReadAllLines($path)) {
+                if ($line -match '^\s*\[(.+)\]\s*$') {
+                    $verifyInside = ($Matches[1] -eq $script:DuneSoloConsoleSection)
+                    continue
+                }
+                if ($verifyInside -and
+                    $line -match ('^\s*' + [regex]::Escape($key) + '\s*=')) {
+                    $occurrences++
+                }
+            }
+            if ($occurrences -ne 1) {
+                throw "PTC Solo console setting verification found $occurrences copies of $key."
             }
         }
         Remove-Item -LiteralPath $replaceBackup -Force -ErrorAction SilentlyContinue
@@ -1016,14 +1032,26 @@ function Set-DuneSoloConsoleSettings {
             backupPath = if (Test-Path -LiteralPath $backupPath) { $backupPath } else { '' }
         }
     } catch {
+        $writeError = $_
         if ($targetExisted -and $replaced -and (Test-Path -LiteralPath $replaceBackup -PathType Leaf)) {
-            [IO.File]::Replace($replaceBackup, $path, $null, $true)
+            $failedCopy = Join-Path $dir ".Engine.$([guid]::NewGuid().ToString('N')).failed"
+            try {
+                [IO.File]::Replace($replaceBackup, $path, $failedCopy, $true)
+                Remove-Item -LiteralPath $failedCopy -Force -ErrorAction SilentlyContinue
+            } catch {
+                throw "PTC Solo Engine.ini write failed ($($writeError.Exception.Message)); rollback also failed. Recovery file retained at $replaceBackup"
+            }
         } elseif (-not $targetExisted -and (Test-Path -LiteralPath $path -PathType Leaf)) {
-            Remove-Item -LiteralPath $path -Force
+            try {
+                Remove-Item -LiteralPath $path -Force -ErrorAction Stop
+            } catch {
+                throw "PTC Solo Engine.ini write failed ($($writeError.Exception.Message)); the newly created file could not be removed."
+            }
         }
-        throw
+        throw $writeError
     } finally {
-        Remove-Item -LiteralPath $temp, $replaceBackup -Force -ErrorAction SilentlyContinue
+        # A failed rollback must retain replaceBackup for manual recovery.
+        Remove-Item -LiteralPath $temp -Force -ErrorAction SilentlyContinue
     }
 }
 

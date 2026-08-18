@@ -207,6 +207,34 @@ Describe 'Solo Mode write gates and settings backups' {
         } | Should -Throw '*still running*'
     }
 
+    It 'restores Engine.ini when verification reports a missing default-valued key' {
+        $layout = New-TestSoloLayout
+        $engine = Join-Path $layout.config 'Engine.ini'
+        $original = @(
+            '[ConsoleVariables]'
+            'Unknown.FutureKey=KeepMe'
+        ) -join [Environment]::NewLine
+        [IO.File]::WriteAllText($engine, $original)
+        Save-DuneSoloState -DataRoot $layout.root -DbPath $layout.db | Out-Null
+        Mock Get-DuneSoloGameProcesses { @() }
+        Mock Read-DuneSoloConsoleSettings {
+            @{
+                entries = @([pscustomobject]@{
+                    key = 'Hydration.SunExposureEnabled'
+                    value = '1'
+                    present = $false
+                })
+            }
+        }
+
+        {
+            Set-DuneSoloConsoleSettings -Settings @{
+                'Hydration.SunExposureEnabled' = '1'
+            } -Confirm 'APPLY SOLO CONSOLE SETTINGS'
+        } | Should -Throw '*verification failed*'
+        (Get-Content -LiteralPath $engine -Raw).Trim() | Should -Be $original.Trim()
+    }
+
     It 'rejects unsupported or out-of-range PTC console settings' {
         $layout = New-TestSoloLayout
         Save-DuneSoloState -DataRoot $layout.root -DbPath $layout.db | Out-Null
