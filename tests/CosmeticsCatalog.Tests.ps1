@@ -68,6 +68,12 @@ Describe 'Get-DuneCosmeticsCatalog includes the full building-set universe' -Tag
         @($script:cat.templates | Where-Object { $_.group -eq 'Armor & Suit Sets' }).Count | Should -BeGreaterThan 0
         @($script:cat.templates | Where-Object { $_.group -eq 'Swatches (Dyes)' }).Count   | Should -BeGreaterThan 0
     }
+    It 'decodes UTF-8 cosmetic names without mojibake under Windows PowerShell' {
+        $boots = $script:cat.templates |
+            Where-Object template -eq 'MTX_B1C3_Smug_LightArmor_SetVariant_Boots'
+        $boots.name | Should -Be ("Smuggler{0}s Agile Assault Boots" -f [char]0x2019)
+        $boots.name | Should -Not -Match ([char]0x00E2)
+    }
     It 'includes developer cosmetics and building unlocks' {
         $script:cat.templates.template | Should -Contain 'D_Choam_HeavyArmor_Swatch'
         $script:cat.templates.template | Should -Contain 'D_TestMeshVariant'

@@ -48,6 +48,13 @@ Describe 'Developer template catalog coverage' -Tag 'Catalog' {
         $script:items.meta.total | Should -Be $script:items.items.Count
     }
 
+    It 'decodes UTF-8 Give Item names without mojibake under Windows PowerShell' {
+        $boots = $script:items.items |
+            Where-Object templateId -eq 'MTX_Stillsuit_Smuggler_Boots'
+        $boots.name | Should -Be ("Smuggler{0}s Stillsuit Boots" -f [char]0x2019)
+        $boots.name | Should -Not -Match ([char]0x00E2)
+    }
+
     It 'gives every entry a searchable display name' {
         @($script:items.items | Where-Object { -not $_.name }).Count | Should -Be 0
     }

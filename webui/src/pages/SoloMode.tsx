@@ -3,11 +3,13 @@ import { Icon } from '../components/Icon'
 import { PageHeader } from '../components/PageHeader'
 import { CollapsibleCard } from '../components/CollapsibleCard'
 import { ItemPicker } from '../components/ItemPicker'
+import { GivePackageForm } from './gameplay/players/sections'
 import { useApi } from '../hooks/useApi'
 import {
   connectSolo,
   createSoloBackup,
   deleteSoloBackup,
+  deleteSoloBackups,
   discoverSolo,
   fillSoloWaterContainer,
   completeSoloFindTheFremen,
@@ -15,19 +17,26 @@ import {
   grantSoloItems,
   maxSoloAugmentAttributes,
   restoreSoloBackup,
+  saveSoloConsoleSettings,
   saveSoloSettings,
   setSoloCurrencies,
   maxSoloSpecializations,
   type SoloBackup,
   type SoloBackupsResponse,
+  type SoloConsoleSettingsResponse,
+  type SoloInventoryDestination,
   type SoloProfile,
   type SoloRuntime,
   type SoloSettingsResponse,
   type SoloStatus,
 } from '../api/solo'
 import {
+  filterCosmeticsCatalog,
+  getCosmeticsCatalog,
   getVehicleKitCatalog,
   type CatalogItem,
+  type CosmeticEntry,
+  type GiveItemEntry,
   type VehicleKitCatalog,
 } from '../api/gameplay'
 import { pickLocalFolder } from '../util/pathPicker'
@@ -169,18 +178,168 @@ function StatusPill({ ok, children }: { ok: boolean; children: React.ReactNode }
   )
 }
 
+export const SOLO_COSMETIC_ENTITLEMENT_WARNING =
+  'Grants apply only to this Solo save. They do not create Funcom account ownership or unlock content on official servers.'
+
+export function groupSoloCosmetics(
+  catalog: CosmeticEntry[],
+  query: string,
+): Array<[string, CosmeticEntry[]]> {
+  const groups = new Map<string, CosmeticEntry[]>()
+  for (const entry of filterCosmeticsCatalog(catalog, query)) {
+    const current = groups.get(entry.group)
+    if (current) current.push(entry)
+    else groups.set(entry.group, [entry])
+  }
+  return Array.from(groups.entries()).sort(([left], [right]) => left.localeCompare(right))
+}
+
+export function getSoloCosmeticBackpackDestination(
+  inventories: SoloInventoryDestination[],
+): string {
+  return inventories.find(inventory => inventory.kind === 'backpack')?.key ?? ''
+}
+
+export function getPreferredSoloInventoryDestination(
+  inventories: SoloInventoryDestination[],
+): string {
+  return inventories.find(inventory => inventory.kind === 'backpack')?.key
+    ?? inventories[0]?.key
+    ?? ''
+}
+
+export function buildSoloCosmeticGrant(
+  templateId: string,
+  inventories: SoloInventoryDestination[],
+): {
+  destination: string
+  items: Array<{ templateId: string; quantity: number; quality: number }>
+} {
+  return {
+    destination: getSoloCosmeticBackpackDestination(inventories),
+    items: [{ templateId, quantity: 1, quality: 0 }],
+  }
+}
+
+export function buildSoloPackageGrant(
+  items: GiveItemEntry[],
+): Array<{ templateId: string; quantity: number; quality: number }> {
+  return items.map(item => ({
+    templateId: item.template,
+    quantity: item.qty,
+    quality: item.quality ?? 0,
+  }))
+}
+
+export function SoloCosmeticGrantCard({
+  busy,
+  disabled,
+  loadCatalog = getCosmeticsCatalog,
+  onGrant,
+}: {
+  busy: boolean
+  disabled: boolean
+  loadCatalog?: () => Promise<CosmeticEntry[]>
+  onGrant: (templateId: string, label: string) => Promise<void>
+}) {
+  const [catalog, setCatalog] = useState<CosmeticEntry[] | null>(null)
+  const [catalogError, setCatalogError] = useState('')
+  const [query, setQuery] = useState('')
+  const [selected, setSelected] = useState('')
+
+  useEffect(() => {
+    let active = true
+    loadCatalog()
+      .then(entries => {
+        if (active) setCatalog(entries)
+      })
+      .catch(error => {
+        if (active) setCatalogError(error instanceof Error ? error.message : String(error))
+      })
+    return () => { active = false }
+  }, [loadCatalog])
+
+  const groups = useMemo(() => groupSoloCosmetics(catalog ?? [], query), [catalog, query])
+  const matches = useMemo(() => groups.flatMap(([, entries]) => entries), [groups])
+  const chosen = matches.find(entry => entry.template === selected)
+  const controlsDisabled = disabled || busy
+
+  return (
+    <div className="card p-5 xl:col-span-2">
+      <h3 className="font-semibold mb-1">Grant Cosmetic / Building Set</h3>
+      <p className="text-xs text-text-muted mb-4">
+        Delivers one unlock item to the Solo backpack for processing on next login.
+      </p>
+      <div className="rounded border border-warning/30 bg-warning/5 p-3 mb-4 text-xs text-text-muted">
+        {SOLO_COSMETIC_ENTITLEMENT_WARNING} Some developer or entitlement entries may remain ordinary inventory items and do nothing. Owned-state detection is not available for Solo yet, so the full catalog is shown and duplicate grants are possible.
+      </div>
+      {catalogError ? (
+        <div className="text-xs text-danger">Cosmetics catalog failed to load: {catalogError}</div>
+      ) : !catalog ? (
+        <div className="text-xs text-text-dim flex items-center gap-2">
+          <Icon name="LoaderCircle" size={13} className="animate-spin" /> Loading cosmetics catalog...
+        </div>
+      ) : (
+        <>
+          <input
+            type="text"
+            value={query}
+            disabled={controlsDisabled}
+            placeholder="Search name, template id, or group"
+            onChange={event => setQuery(event.target.value)}
+            className={SOLO_INPUT_CLASS}
+          />
+          <select
+            value={selected}
+            disabled={controlsDisabled}
+            onChange={event => setSelected(event.target.value)}
+            className={`${SOLO_INPUT_CLASS} mt-3`}
+            style={{ colorScheme: 'dark' }}
+          >
+            <option value="">Choose a cosmetic or building set... ({matches.length})</option>
+            {groups.map(([group, entries]) => (
+              <optgroup key={group} label={`${group} (${entries.length})`}>
+                {entries.map(entry => (
+                  <option key={entry.template} value={entry.template}>{entry.name}</option>
+                ))}
+              </optgroup>
+            ))}
+          </select>
+          {chosen && <p className="text-[11px] font-mono text-text-dim truncate mt-2">{chosen.template}</p>}
+          <button
+            className={`btn-primary w-full mt-4 justify-center ${SOLO_DISABLED_PRIMARY_CLASS}`}
+            disabled={controlsDisabled || !chosen}
+            onClick={() => {
+              if (chosen) void onGrant(chosen.template, chosen.name)
+            }}
+          >
+            <Icon name={busy ? 'LoaderCircle' : 'Shirt'} size={14} className={busy ? 'animate-spin' : ''} />
+            Grant unlock
+          </button>
+        </>
+      )}
+    </div>
+  )
+}
+
 export function SoloMode() {
   const [tab, setTab] = useState<Tab>('overview')
   const statusState = useApi<SoloStatus>('/api/solo/status')
   const runtimeState = useApi<SoloRuntime>('/api/solo/runtime', { intervalMs: 3000 })
   const connected = statusState.data?.connected === true
   const settingsState = useApi<SoloSettingsResponse>('/api/solo/settings', { enabled: connected })
+  const consoleSettingsState = useApi<SoloConsoleSettingsResponse>(
+    '/api/solo/console-settings',
+    { enabled: connected },
+  )
   const backupsState = useApi<SoloBackupsResponse>('/api/solo/backups', { enabled: connected })
   const [dataRoot, setDataRoot] = useState('')
   const [selectedDb, setSelectedDb] = useState('')
   const [discoveredProfiles, setDiscoveredProfiles] = useState<SoloProfile[]>([])
   const [draft, setDraft] = useState<Record<string, string>>({})
+  const [consoleDraft, setConsoleDraft] = useState<Record<string, string>>({})
   const [busy, setBusy] = useState<string | null>(null)
+  const [selectedBackupPaths, setSelectedBackupPaths] = useState<Set<string>>(new Set())
   const [notice, setNotice] = useState<{ kind: 'ok' | 'warn' | 'err'; text: string } | null>(null)
   const [itemTemplate, setItemTemplate] = useState('')
   const [itemDisplay, setItemDisplay] = useState<string | undefined>()
@@ -207,17 +366,33 @@ export function SoloMode() {
   }, [settingsState.data])
 
   useEffect(() => {
+    const currentPaths = new Set(
+      (backupsState.data?.backups ?? []).map(backup => backup.relativePath),
+    )
+    setSelectedBackupPaths(current => new Set(
+      [...current].filter(path => currentPaths.has(path)),
+    ))
+  }, [backupsState.data?.backups])
+
+  useEffect(() => {
+    setSelectedBackupPaths(new Set())
+  }, [statusState.data?.profileToken])
+
+  useEffect(() => {
+    if (!consoleSettingsState.data) return
+    setConsoleDraft(Object.fromEntries(
+      consoleSettingsState.data.entries.map(entry => [entry.key, entry.value]),
+    ))
+  }, [consoleSettingsState.data])
+
+  useEffect(() => {
     const inventories = statusState.data?.inspection?.inventories ?? []
     if (inventories.length === 0) {
       setInventoryDestination('')
       return
     }
     if (!inventories.some(inventory => inventory.key === inventoryDestination)) {
-      const preferred = inventories
-        .filter(inventory => inventory.kind === 'developer-storage')
-        .sort((left, right) => left.itemRows - right.itemRows)[0]
-        ?? inventories[0]
-      setInventoryDestination(preferred?.key ?? '')
+      setInventoryDestination(getPreferredSoloInventoryDestination(inventories))
     }
   }, [statusState.data?.inspection?.inventories, inventoryDestination])
 
@@ -248,6 +423,14 @@ export function SoloMode() {
     }
     return changed
   }, [draft, settingsState.data])
+  const changedConsoleSettings = useMemo(() => {
+    const changed: Record<string, string> = {}
+    for (const entry of consoleSettingsState.data?.entries ?? []) {
+      const next = consoleDraft[entry.key] ?? ''
+      if (next !== entry.value) changed[entry.key] = next
+    }
+    return changed
+  }, [consoleDraft, consoleSettingsState.data])
 
   const scanPath = async (path: string) => {
     const discovery = await discoverSolo(path)
@@ -299,6 +482,7 @@ export function SoloMode() {
       await statusState.refresh()
       await runtimeState.refresh()
       await settingsState.refresh()
+      await consoleSettingsState.refresh()
       await backupsState.refresh()
     } catch (error) {
       setNotice({ kind: 'err', text: error instanceof Error ? error.message : String(error) })
@@ -318,6 +502,7 @@ export function SoloMode() {
       setNotice({ kind: 'err', text: 'Connect and validate the selected Solo profile before applying settings.' })
       return
     }
+
     if (gameRunning) {
       setNotice({ kind: 'err', text: 'Close Dune: Awakening completely before applying Solo settings.' })
       return
@@ -339,6 +524,42 @@ export function SoloMode() {
       await settingsState.refresh()
       await statusState.refresh()
       await runtimeState.refresh()
+    } catch (error) {
+      setNotice({ kind: 'err', text: error instanceof Error ? error.message : String(error) })
+    } finally {
+      setBusy(null)
+    }
+  }
+
+  const saveConsoleSettings = async () => {
+    if (!selectionMatchesActive) {
+      setNotice({ kind: 'err', text: 'Connect and validate the selected PTC Solo profile before applying Engine.ini settings.' })
+      return
+    }
+    if (gameRunning) {
+      setNotice({ kind: 'err', text: 'Close Dune: Awakening completely before applying PTC Engine.ini settings.' })
+      return
+    }
+    if (Object.keys(changedConsoleSettings).length === 0) return
+    if (!window.confirm(
+      `Apply ${Object.keys(changedConsoleSettings).length} PTC Solo Engine.ini setting(s)?\n\n`
+      + 'PTC must be fully closed. DST will retain both observed Engine.ini files, write only the three allowlisted ConsoleVariables, and verify both results.',
+    )) return
+
+    setBusy('console-settings')
+    setNotice(null)
+    try {
+      const result = await saveSoloConsoleSettings(
+        changedConsoleSettings,
+        statusState.data?.profileToken ?? '',
+      )
+      setNotice({
+        kind: 'ok',
+        text: result.backupPaths.length > 0
+          ? `PTC Solo Engine.ini settings applied and verified in both observed files. Previous files retained at ${result.backupPaths.join('; ')}`
+          : 'PTC Solo Engine.ini settings created and verified in both observed files.',
+      })
+      await Promise.all([consoleSettingsState.refresh(), runtimeState.refresh()])
     } catch (error) {
       setNotice({ kind: 'err', text: error instanceof Error ? error.message : String(error) })
     } finally {
@@ -417,9 +638,44 @@ export function SoloMode() {
     }
   }
 
+  const deleteSelectedBackups = async () => {
+    if (!selectionMatchesActive) {
+      setNotice({ kind: 'err', text: 'Connect and validate the selected Solo profile before deleting backups.' })
+      return
+    }
+    const selected = (backupsState.data?.backups ?? [])
+      .filter(backup => selectedBackupPaths.has(backup.relativePath))
+    if (selected.length === 0) return
+    const preview = selected.slice(0, 5).map(backup => `- ${backup.name}`).join('\n')
+    const more = selected.length > 5 ? `\n- ...and ${selected.length - 5} more` : ''
+    if (!window.confirm(
+      `Permanently delete ${selected.length} selected Solo backup(s)?\n\n`
+      + `${preview}${more}\n\n`
+      + 'This does not change the live Solo save and cannot be undone.',
+    )) return
+
+    setBusy('delete-selected')
+    setNotice(null)
+    try {
+      const result = await deleteSoloBackups(
+        selected.map(backup => backup.relativePath),
+        statusState.data?.profileToken ?? '',
+      )
+      setSelectedBackupPaths(new Set())
+      setNotice({ kind: 'ok', text: `Deleted ${result.deletedCount} Solo backup(s).` })
+    } catch (error) {
+      setNotice({ kind: 'err', text: error instanceof Error ? error.message : String(error) })
+    } finally {
+      await backupsState.refresh()
+      setBusy(null)
+    }
+  }
+
   const giveSoloItems = async (
     items: Array<{ templateId: string; quantity: number; quality: number }>,
     label: string,
+    destination = inventoryDestination,
+    targetLabel = 'selected Solo inventory',
   ) => {
     if (!selectionMatchesActive) {
       setNotice({ kind: 'err', text: 'Connect and validate the selected Solo profile before giving items.' })
@@ -429,12 +685,12 @@ export function SoloMode() {
       setNotice({ kind: 'err', text: 'Close Dune: Awakening completely before giving Solo items.' })
       return
     }
-    if (!inventoryDestination) {
-      setNotice({ kind: 'err', text: 'Choose a backpack or Developer Storage destination.' })
+    if (!destination) {
+      setNotice({ kind: 'err', text: 'Choose a backpack or built storage destination.' })
       return
     }
     if (!window.confirm(
-      `Give ${label} to the selected Solo inventory?\n\n`
+      `Give ${label} to the ${targetLabel}?\n\n`
       + 'Dune: Awakening must be fully closed. DST will retain the current game.db, '
       + 'apply the item grant transactionally, run integrity and foreign-key checks, '
       + 'replace the save atomically, and verify the result.',
@@ -444,7 +700,7 @@ export function SoloMode() {
     setNotice(null)
     try {
       const result = await grantSoloItems(
-        inventoryDestination,
+        destination,
         items,
         statusState.data?.profileToken ?? '',
       )
@@ -483,7 +739,6 @@ export function SoloMode() {
       setNotice({ kind: 'err', text: 'Choose a vehicle kit with deliverable parts.' })
       return
     }
-
     const templates = [...kit.kit, ...kit.unique, vehicleKits!.fuelTemplate, vehicleKits!.torchTemplate]
     const uniqueTemplates = [...new Set(templates)]
     await giveSoloItems(
@@ -863,6 +1118,93 @@ export function SoloMode() {
             <div className="card p-5 text-sm text-text-muted">Loading Solo settings...</div>
           ) : (
             <>
+              <CollapsibleCard id="solo-settings-ptc-engine" title="PTC Engine settings" icon="Gauge">
+                {consoleSettingsState.error ? (
+                  <div className="rounded border border-danger/30 bg-danger/5 p-3 text-sm text-danger">
+                    <div>Could not load PTC Engine.ini settings: {consoleSettingsState.error}</div>
+                    <button
+                      className="btn-secondary mt-3"
+                      onClick={() => void consoleSettingsState.refresh()}
+                      disabled={consoleSettingsState.loading}
+                    >
+                      Retry
+                    </button>
+                  </div>
+                ) : !consoleSettingsState.data ? (
+                  <div className="text-sm text-text-muted">Loading PTC Engine.ini settings...</div>
+                ) : !consoleSettingsState.data.supported ? (
+                  <div className="rounded border border-warning/30 bg-warning/5 p-3 text-sm text-text-muted">
+                    These controls are available only for the verified PTC <span className="font-mono">FLS_beta</span> profile. Retail folder structure is not assumed.
+                  </div>
+                ) : (
+                  <div className="space-y-4">
+                    <div className="rounded border border-warning/30 bg-warning/5 p-3 text-xs text-text-muted">
+                      Writes only <span className="font-mono">Config\Windows\Engine.ini</span> and{' '}
+                      <span className="font-mono">Config\WindowsClient\Engine.ini</span> under the
+                      connected PTC Solo root. Sun Exposure, Maximum Vehicles Per Player and Shield
+                      Drops While Shooting are field-confirmed in PTC Solo.
+                    </div>
+                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
+                      {consoleSettingsState.data.entries.map(entry => (
+                        <label key={entry.key} className="block rounded border border-border bg-surface-2/40 p-3">
+                          <span className="flex items-center justify-between gap-2 text-xs text-text-muted">
+                            <span>{entry.label}</span>
+                            <span className={entry.status === 'Confirmed' ? 'text-success' : 'text-warning'}>
+                              {entry.status}
+                            </span>
+                          </span>
+                          {entry.type === 'bool01' ? (
+                            <select
+                              className={`${SOLO_INPUT_CLASS} mt-2`}
+                              style={{ colorScheme: 'dark' }}
+                              value={consoleDraft[entry.key] ?? entry.value}
+                              onChange={event => setConsoleDraft(current => ({
+                                ...current,
+                                [entry.key]: event.target.value,
+                              }))}
+                              disabled={!canMutateActiveProfile || gameRunning}
+                            >
+                              <option value="1">Enabled</option>
+                              <option value="0">Disabled</option>
+                            </select>
+                          ) : (
+                            <input
+                              type="number"
+                              min={entry.min ?? undefined}
+                              max={entry.max ?? undefined}
+                              className={`${SOLO_INPUT_CLASS} mt-2 font-mono`}
+                              value={consoleDraft[entry.key] ?? entry.value}
+                              onChange={event => setConsoleDraft(current => ({
+                                ...current,
+                                [entry.key]: event.target.value,
+                              }))}
+                              disabled={!canMutateActiveProfile || gameRunning}
+                            />
+                          )}
+                          <span className="block text-[11px] text-text-dim mt-2">{entry.help}</span>
+                          <span className="block text-[10px] font-mono text-text-dim mt-1">{entry.key}</span>
+                        </label>
+                      ))}
+                    </div>
+                    <button
+                      className={`btn-primary w-full justify-center ${SOLO_DISABLED_PRIMARY_CLASS}`}
+                      onClick={() => void saveConsoleSettings()}
+                      disabled={
+                        !canMutateActiveProfile
+                        || gameRunning
+                        || Object.keys(changedConsoleSettings).length === 0
+                      }
+                    >
+                      <Icon
+                        name={busy === 'console-settings' ? 'LoaderCircle' : 'Save'}
+                        size={14}
+                        className={busy === 'console-settings' ? 'animate-spin' : ''}
+                      />
+                      Apply PTC Engine settings
+                    </button>
+                  </div>
+                )}
+              </CollapsibleCard>
               {SETTING_GROUPS.map(group => (
                 <CollapsibleCard key={group.title} id={`solo-settings-${group.title.toLowerCase().replaceAll(' ', '-')}`} title={group.title} icon="SlidersHorizontal">
                   <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
@@ -912,24 +1254,69 @@ export function SoloMode() {
                 Backups validate the wrapper, SQLite integrity, foreign keys, and one-character invariant. Restore always preserves the current save first.
               </p>
             </div>
-            <button className={`btn-primary shrink-0 ${SOLO_DISABLED_PRIMARY_CLASS}`} onClick={() => void createBackup()} disabled={!canMutateActiveProfile}>
-              <Icon name={busy === 'backup' ? 'LoaderCircle' : 'Archive'} size={14} className={busy === 'backup' ? 'animate-spin' : ''} />
-              Create backup
-            </button>
+            <div className="flex items-center gap-2 shrink-0">
+              <button
+                className="btn-secondary"
+                disabled={!canMutateActiveProfile || selectedBackupPaths.size === 0}
+                onClick={() => void deleteSelectedBackups()}
+              >
+                <Icon name={busy === 'delete-selected' ? 'LoaderCircle' : 'Trash2'} size={14} className={busy === 'delete-selected' ? 'animate-spin' : ''} />
+                Delete selected ({selectedBackupPaths.size})
+              </button>
+              <button className={`btn-primary ${SOLO_DISABLED_PRIMARY_CLASS}`} onClick={() => void createBackup()} disabled={!canMutateActiveProfile}>
+                <Icon name={busy === 'backup' ? 'LoaderCircle' : 'Archive'} size={14} className={busy === 'backup' ? 'animate-spin' : ''} />
+                Create backup
+              </button>
+            </div>
           </div>
           <div className="text-xs text-text-dim font-mono break-all mb-4">{backupsState.data?.root ?? status?.backupRoot}</div>
           {(backupsState.data?.backups.length ?? 0) === 0 ? (
             <p className="text-sm text-text-muted">No Solo backups created by DST yet.</p>
           ) : (
-            <div className="divide-y divide-border">
+            <div>
+              <div className="flex items-center gap-3 pb-3 border-b border-border text-xs text-text-muted">
+                <button
+                  className="btn-secondary py-1 px-2"
+                  disabled={!canMutateActiveProfile}
+                  onClick={() => setSelectedBackupPaths(new Set(
+                    backupsState.data!.backups.map(backup => backup.relativePath),
+                  ))}
+                >
+                  Select all
+                </button>
+                <button
+                  className="btn-secondary py-1 px-2"
+                  disabled={!canMutateActiveProfile || selectedBackupPaths.size === 0}
+                  onClick={() => setSelectedBackupPaths(new Set())}
+                >
+                  Clear
+                </button>
+                <span>{selectedBackupPaths.size} selected</span>
+              </div>
+              <div className="divide-y divide-border">
               {backupsState.data!.backups.map(backup => (
                 <div key={backup.relativePath} className="py-3 flex items-center justify-between gap-4">
-                  <div className="min-w-0">
+                  <div className="min-w-0 flex items-start gap-3">
+                    <input
+                      type="checkbox"
+                      className="mt-1 accent-ibad"
+                      aria-label={`Select ${backup.name}`}
+                      checked={selectedBackupPaths.has(backup.relativePath)}
+                      disabled={!canMutateActiveProfile}
+                      onChange={event => setSelectedBackupPaths(current => {
+                        const next = new Set(current)
+                        if (event.target.checked) next.add(backup.relativePath)
+                        else next.delete(backup.relativePath)
+                        return next
+                      })}
+                    />
+                    <div className="min-w-0">
                     <div className="font-medium text-sm truncate">{backup.name}</div>
                     <div className="text-xs text-text-muted">
                       {formatBytes(backup.bytes)} - {new Date(backup.modifiedAt).toLocaleString()}
                     </div>
                     <div className="text-[11px] text-text-dim font-mono truncate">{backup.relativePath}</div>
+                    </div>
                   </div>
                   <div className="flex items-center gap-2 shrink-0">
                     <button
@@ -951,6 +1338,7 @@ export function SoloMode() {
                   </div>
                 </div>
               ))}
+              </div>
             </div>
           )}
         </div>
@@ -1053,7 +1441,7 @@ export function SoloMode() {
       )}
       {tab === 'inventory' && (
         <div className="space-y-4">
-          <div className="card p-5">
+          <div className="card p-5 sticky top-0 z-20 bg-surface/95 backdrop-blur-sm shadow-lg">
             <div className="flex items-start justify-between gap-4 mb-4">
               <div>
                 <h2 className="font-semibold flex items-center gap-2">
@@ -1080,6 +1468,7 @@ export function SoloMode() {
                   style={{ colorScheme: 'dark' }}
                   value={inventoryDestination}
                   onChange={event => setInventoryDestination(event.target.value)}
+                  onWheel={event => event.currentTarget.blur()}
                   disabled={busy !== null}
                 >
                   {inspection!.inventories.map(inventory => (
@@ -1172,7 +1561,7 @@ export function SoloMode() {
                 </select>
               </label>
               <div className="rounded border border-border bg-surface-2/50 p-3 mt-4 text-xs text-text-muted">
-                Kit contents come from DST's versioned vehicle catalog. Large kits should go to Developer Storage rather than the backpack.
+                Kit contents come from DST's versioned vehicle catalog. Each non-stackable part needs a free slot; DST checks current contents before writing. If the package is not delivered, check the selected destination's free slots and volume.
               </div>
               <button
                 className={`btn-primary w-full mt-4 justify-center ${SOLO_DISABLED_PRIMARY_CLASS}`}
@@ -1183,6 +1572,24 @@ export function SoloMode() {
                 Give vehicle kit
               </button>
             </div>
+
+            <SoloCosmeticGrantCard
+              busy={busy === 'give-items'}
+              disabled={
+                !canMutateActiveProfile
+                || gameRunning
+                || !inspection?.inventories.some(inventory => inventory.kind === 'backpack')
+              }
+              onGrant={async (templateId, label) => {
+                const grant = buildSoloCosmeticGrant(templateId, inspection?.inventories ?? [])
+                await giveSoloItems(
+                  grant.items,
+                  label,
+                  grant.destination,
+                  'Solo backpack',
+                )
+              }}
+            />
 
             <div className="card p-5 xl:col-span-2">
               <h3 className="font-semibold mb-1">Max Augment Attributes</h3>
@@ -1204,8 +1611,23 @@ export function SoloMode() {
             </div>
           </div>
 
-          <div className="rounded border border-border bg-surface-2/40 px-4 py-3 text-xs text-text-muted">
-            Saved multi-item packages are not enabled yet. They will use this same backup-safe transaction path before joining a future Solo preview build.
+          <div className="card p-5">
+            <h3 className="font-semibold mb-1">Give Package</h3>
+            <p className="text-xs text-text-muted mb-4">
+              Create, import, edit, delete, and grant the same saved packages used elsewhere in DST. Package management does not require Self-Hosted setup.
+            </p>
+            <GivePackageForm
+              busy={busy !== null}
+              giveDisabled={!canMutateActiveProfile || gameRunning}
+              targetLabel="selected Solo inventory"
+              showOverflow={false}
+              onGive={(items, packageName) => {
+                void giveSoloItems(
+                  buildSoloPackageGrant(items),
+                  `${packageName} package`,
+                )
+              }}
+            />
           </div>
         </div>
       )}
