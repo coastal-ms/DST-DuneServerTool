@@ -45,7 +45,7 @@ const SPICE_VERBS = new Set(['small', 'medium', 'large'])
 // 15.41% at a 3s poll, so ~1.5 core-seconds per check. Shown in the picker so
 // the trade is made with the numbers visible rather than blind.
 const POLL_COST: Record<number, string> = {
-  3: '0.50', 5: '0.30', 10: '0.15', 15: '0.10', 30: '0.05',
+  1: '1.50', 3: '0.50', 5: '0.30', 10: '0.15', 15: '0.10', 30: '0.05',
 }
 
 // The cap a spice command works within is not part of this feature - it is the
@@ -655,13 +655,16 @@ export function ChatCommandsCard() {
           onChange={e => {
             const n = Number(e.target.value)
             setState(prev => (prev ? { ...prev, pollSeconds: n } : prev))
-            void patch({ pollSeconds: n }, `Now checking every ${n} seconds.`)
+            void patch(
+              { pollSeconds: n },
+              n === 1 ? 'Real-time monitoring enabled.' : `Now checking every ${n} seconds.`,
+            )
           }}
           className="px-2 py-1 rounded bg-surface border border-border text-text text-xs"
         >
-          {(state?.pollChoices ?? [3, 5, 10, 15, 30]).map(n => (
+          {(state?.pollChoices ?? [1, 3, 5, 10, 15, 30]).map(n => (
             <option key={n} value={n}>
-              {n} seconds — about {POLL_COST[n] ?? (1.5 / n).toFixed(2)} of a processor core
+              {n === 1 ? 'Real-time (1 second)' : `${n} seconds`} — about {POLL_COST[n] ?? (1.5 / n).toFixed(2)} of a processor core
             </option>
           ))}
         </select>

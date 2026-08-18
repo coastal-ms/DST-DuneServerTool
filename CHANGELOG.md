@@ -75,6 +75,9 @@ here cover everything those tags shipped.
   long-distance and elevated-location arrivals.
 - Chat-command broadcasts now address players by character name consistently
   instead of using the Funcom account-name portion for replies such as `!tp`.
+- Chat commands now offer an opt-in **Real-time (1 second)** monitoring interval
+  with its measured CPU cost shown; the lower-cost 3-second interval remains the
+  default.
 
 ## [13.6.5] - 2026-08-12
 

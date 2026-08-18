@@ -628,7 +628,7 @@ function Read-DuneChatCommandsState {
 # node every time (~1.5 core-seconds, measured 2026-08-04 on an 8-core VM). So
 # the sustained cost is roughly 1.5 / interval cores, for as long as the feature
 # is enabled, whether or not anyone is chatting.
-$script:DuneChatPollChoices = @(3, 5, 10, 15, 30)
+$script:DuneChatPollChoices = @(1, 3, 5, 10, 15, 30)
 $script:DuneChatPollDefault = 3
 
 # What the scheduler actually sleeps between drains. Clamped here rather than
