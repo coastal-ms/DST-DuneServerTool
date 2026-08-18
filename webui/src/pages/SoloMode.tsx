@@ -543,7 +543,7 @@ export function SoloMode() {
     if (Object.keys(changedConsoleSettings).length === 0) return
     if (!window.confirm(
       `Apply ${Object.keys(changedConsoleSettings).length} PTC Solo Engine.ini setting(s)?\n\n`
-      + 'PTC must be fully closed. DST will retain Engine.ini, write only the two allowlisted ConsoleVariables, and verify the result.',
+      + 'PTC must be fully closed. DST will retain both observed Engine.ini files, write only the three allowlisted ConsoleVariables, and verify both results.',
     )) return
 
     setBusy('console-settings')
@@ -555,7 +555,9 @@ export function SoloMode() {
       )
       setNotice({
         kind: 'ok',
-        text: `PTC Solo Engine.ini settings applied and verified. Previous file retained at ${result.backupPath}`,
+        text: result.backupPaths.length > 0
+          ? `PTC Solo Engine.ini settings applied and verified in both observed files. Previous files retained at ${result.backupPaths.join('; ')}`
+          : 'PTC Solo Engine.ini settings created and verified in both observed files.',
       })
       await Promise.all([consoleSettingsState.refresh(), runtimeState.refresh()])
     } catch (error) {
@@ -1137,7 +1139,10 @@ export function SoloMode() {
                 ) : (
                   <div className="space-y-4">
                     <div className="rounded border border-warning/30 bg-warning/5 p-3 text-xs text-text-muted">
-                      Writes only <span className="font-mono">Config\Windows\Engine.ini</span> under the connected PTC Solo root. Sun Exposure uses the observed PTC key but still needs Solo field confirmation.
+                      Writes only <span className="font-mono">Config\Windows\Engine.ini</span> and{' '}
+                      <span className="font-mono">Config\WindowsClient\Engine.ini</span> under the
+                      connected PTC Solo root. Sun Exposure, Maximum Vehicles Per Player and Shield
+                      Drops While Shooting are field-confirmed in PTC Solo.
                     </div>
                     <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
                       {consoleSettingsState.data.entries.map(entry => (

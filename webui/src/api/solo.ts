@@ -202,6 +202,8 @@ export function saveSoloConsoleSettings(
   ok: boolean
   settings: SoloConsoleSettingsResponse
   backupPath: string
+  backupPaths: string[]
+  paths: string[]
 }> {
   return api('/api/solo/console-settings', {
     method: 'PUT',

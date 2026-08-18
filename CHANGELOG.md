@@ -13,6 +13,8 @@ here cover everything those tags shipped.
 
 ## [Unreleased]
 
+## [13.8.0] - 2026-08-18
+
 ### Added
 
 - Solo Mode can grant cosmetics and building sets through the existing
@@ -23,10 +25,11 @@ here cover everything those tags shipped.
   preferring Developer Storage; users can still choose another supported
   destination.
 - PTC Solo Settings can manage Sun Exposure, Maximum Vehicles Per Player, and
-  Shield Drops While Shooting in the observed `FLS_beta`
-  `Config\Windows\Engine.ini`. Writes are allowlisted, game-closed,
-  backup-first, atomic, and verified; all three controls are field-confirmed in
-  PTC Solo, and no retail path is assumed.
+  Shield Drops While Shooting in both observed `FLS_beta` Engine files:
+  `Config\Windows\Engine.ini` and `Config\WindowsClient\Engine.ini`. Writes are
+  allowlisted, game-closed, backup-first, atomic, and verified across both
+  files; all three controls are field-confirmed in PTC Solo, and no retail path
+  is assumed.
 - Solo Mode exposes the canonical DST package store directly, so Solo-only
   users can create, import, edit, delete, and grant reusable item packages
   without configuring Self-Hosted or relying on demo player data.
@@ -40,6 +43,13 @@ here cover everything those tags shipped.
 - Solo Backups supports selecting multiple retained backups and deleting them
   with one confirmation. DST validates the complete selection before staging
   any file and rolls staged files back if a later move fails.
+
+### Changed
+
+- Shared teleport guidance now explains the five-second direct-save settle time,
+  live-capture fallback after rapid travel, vehicle driver-seat limitation, and
+  why DST avoids speculative watchdogs around Funcom's undocumented developer
+  teleport command.
 
 ### Fixed
 
@@ -7711,7 +7721,8 @@ at the time. Also folds in the v3.0.1 / v3.1.2 patches.
   (`ssh`, `Gameplay Admin`, `setup-guide`, `report-issue`). _(originally
   3.1.2)_
 
-[Unreleased]: https://github.com/coastal-ms/DST-DuneServerTool/compare/v13.7.0...HEAD
+[Unreleased]: https://github.com/coastal-ms/DST-DuneServerTool/compare/v13.8.0...HEAD
+[13.8.0]: https://github.com/coastal-ms/DST-DuneServerTool/compare/v13.7.0...v13.8.0
 [13.7.0]: https://github.com/coastal-ms/DST-DuneServerTool/compare/v13.6.5...v13.7.0
 [13.0.2]: https://github.com/coastal-ms/DST-DuneServerTool/compare/v13.0.1...v13.0.2
 [13.0.1]: https://github.com/coastal-ms/DST-DuneServerTool/compare/v13.0.0...v13.0.1

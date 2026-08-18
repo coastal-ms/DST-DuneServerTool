@@ -76,7 +76,7 @@ body:
     attributes:
       label: Tool version
       description: Shown in the bottom-left of the web portal sidebar (status bar) and in the CLI menu header. Auto-filled when launched from **Help → Create GitHub Issue** in the top menu bar, or from the CLI `report-issue` command.
-      placeholder: "v13.7.0"
+      placeholder: "v13.8.0"
     validations:
       required: true
 
@@ -123,10 +123,10 @@ body:
         - Web portal — DD Seed Maps (Deep Desert per-seed POI maps)
         - Web portal — DD Seed Maps — wrong or missing POI / layout data for a seed
         - Web portal — Solo Mode — connection / wrapper or schema validation / process lock
-        - Web portal — Solo Mode — native settings (load / apply / retained INI backup)
-        - Web portal — Solo Mode — Give Item / Vehicle Kit / backpack or Developer Storage delivery
+        - Web portal — Solo Mode — native and Engine settings (load / apply / retained INI backup)
+        - Web portal — Solo Mode — Give Item / Vehicle Kit / Package / Cosmetics / backpack or built-storage delivery
         - Web portal — Solo Mode — Solari / Landsraad Scrip / Hajra Literjon fill
-        - Web portal — Solo Mode — save backup / restore / delete / safety backup
+        - Web portal — Solo Mode — save backup / restore / single or multi-select delete / safety backup
         - Web portal — Solo Mode — Progression — max specializations / Find the Fremen / Enable All Skills
         - Web portal — Database (Backup / Restore / Cross-VM or cross-BG migration / SQL Editor)
         - Web portal — Database (Backup Schedule / crontab)
@@ -158,8 +158,8 @@ body:
     id: menu_option
     attributes:
       label: Specific page / button / command
-      description: Which button, tab, menu letter/number, or `-Cmd <name>` triggered the bug? For in-game commands, include the exact `!command`, chat channel, monitoring interval, cooldown, whether any broadcast appeared, and whether it used the character name. For scheduled Funcom updates, include the scheduled time, whether Apply available Funcom server updates was enabled, installed/latest build IDs, and the last schedule result. For Specs > Apply level, include the track, before/after level, and before/after unspent skill points. For Reset Journey, include whether the post-NPE story restarted at Find the Fremen, which starter-class tree was reset, and how many skill points were refunded. For an Experimental Lab control, include its exact CVar or INI key, source/risk badge, file and section, and whether local Engine.ini management was enabled. For Solo Mode, include the adapter, wrapper/schema status, whether the game was fully closed, and the exact connection/settings/backup/restore step. For a database migration, name the failing step.
-      placeholder: "e.g. Solo Mode > Connect and validate, Solo Mode > Settings > Apply Solo settings, Solo Mode > Backups > Create backup / Restore, Server Health > Scheduled restarts > Save schedule, Settings > Public IP / DDNS > Apply public IP, Game Config > bottom bar > Apply INIs & restart, Gameplay Admin > Players > Specs > Apply level, DD Seed Maps > seed selector, Database > backup file > Restore, Help > Create GitHub Issue, or CLI -Cmd startup"
+      description: Which button, tab, menu letter/number, or `-Cmd <name>` triggered the bug? For in-game commands, include the exact `!command`, chat channel, monitoring interval, cooldown, whether any broadcast appeared, and whether it used the character name. For shared teleport destinations, include direct Save location vs Arm live capture, whether the player paused about five seconds, and whether they teleported on foot or from a vehicle seat. For scheduled Funcom updates, include the scheduled time, whether Apply available Funcom server updates was enabled, installed/latest build IDs, and the last schedule result. For Specs > Apply level, include the track, before/after level, and before/after unspent skill points. For Reset Journey, include whether the post-NPE story restarted at Find the Fremen, which starter-class tree was reset, and how many skill points were refunded. For an Experimental Lab control, include its exact CVar or INI key, source/risk badge, file and section, and whether local Engine.ini management was enabled. For Solo Mode, include the adapter, wrapper/schema status, whether the game was fully closed, and the exact connection/settings/inventory/package/cosmetic/backup/restore step. For a database migration, name the failing step.
+      placeholder: "e.g. Solo Mode > Inventory > Give Package, Solo Mode > Backups > Delete selected, Gameplay Admin > Overview > In-game commands > Save location, Server Health > Scheduled restarts > Save schedule, Settings > Public IP / DDNS > Apply public IP, Game Config > bottom bar > Apply INIs & restart, Gameplay Admin > Players > Specs > Apply level, DD Seed Maps > seed selector, Database > backup file > Restore, Help > Create GitHub Issue, or CLI -Cmd startup"
     validations:
       required: true
 
@@ -257,7 +257,7 @@ body:
   - type: textarea
     id: solo_diag
     attributes:
-      label: Solo Mode — local save, settings, backup, or restore details
+      label: Solo Mode — local save, settings, inventory, package, cosmetic, backup, or restore details
       description: |
         Only fill this in for the host-local **Solo Mode** page. Attach a fresh
         diagnostics ZIP; it includes `solo-mode.txt` with adapter, wrapper,
@@ -267,15 +267,18 @@ body:
 
         - PTC or retail/custom folder.
         - Exact step: Connect and validate, Apply Solo settings, Create backup,
-          Restore/Delete backup, Give Item, Give Vehicle Kit, Set currency
+          Restore/Delete one backup, Delete selected backups, Give Item, Give
+          Vehicle Kit, Give Package, Grant Cosmetic / Building Set, Set currency
           balances, Fill Hajra Literjon, Max specializations, Complete Find the
           Fremen, or Enable All Skills.
         - Whether Dune: Awakening was fully closed for a write.
         - The exact message DST showed.
         - For settings/currencies/fillables, the key or item and before/after value.
-        - For item grants, the item/template, quantity, quality, and selected
-          backpack or Developer Storage.
+        - For item/package/cosmetic grants, the selection, quantity/quality when
+          applicable, and selected backpack or built-storage destination.
         - For restore, whether the pre-restore safety backup was reported.
+        - For multi-delete, the selected backup count and exact deleted/retained
+          result. Do not paste backup paths.
 
         Do not paste your Steam/account folder name or full local save path.
         Leave blank if the bug is not about Solo Mode.
