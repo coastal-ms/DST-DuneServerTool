@@ -29,6 +29,9 @@ here cover everything those tags shipped.
 - Solo Mode exposes the canonical DST package store directly, so Solo-only
   users can create, import, edit, delete, and grant reusable item packages
   without configuring Self-Hosted or relying on demo player data.
+- Solo inventory destinations include normal built storage boxes as well as
+  Developer Storage. Unfinished hologram containers are excluded using the
+  persisted `placeables.is_hologram` flag and rejected again at write time.
 
 ### Fixed
 

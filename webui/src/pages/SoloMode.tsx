@@ -636,7 +636,7 @@ export function SoloMode() {
       return
     }
     if (!destination) {
-      setNotice({ kind: 'err', text: 'Choose a backpack or Developer Storage destination.' })
+      setNotice({ kind: 'err', text: 'Choose a backpack or built storage destination.' })
       return
     }
     if (!window.confirm(

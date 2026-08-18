@@ -67,7 +67,7 @@ export interface SoloInventoryDestination {
   id: number
   key: string
   label: string
-  kind: 'backpack' | 'developer-storage'
+  kind: 'backpack' | 'developer-storage' | 'storage'
   itemRows: number
   maxItemCount: number
   maxItemVolume: number

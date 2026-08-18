@@ -4,6 +4,7 @@ using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Nodes;
+using System.Text.RegularExpressions;
 using Microsoft.Data.Sqlite;
 
 namespace DuneSoloDb;
@@ -850,6 +851,25 @@ internal static partial class Program
                         '/Game/Dune/Environment/Props/Interactables/BP_Developer_StorageContainer.BP_Developer_StorageContainer_C',
                         jsonb('{}')
                     );
+                    INSERT INTO actors (id, class, properties) VALUES (
+                        21,
+                        '/Game/Dune/Environment/Props/Interactables/BP_Developer_StorageContainer.BP_Developer_StorageContainer_C',
+                        jsonb('{}')
+                    );
+                    INSERT INTO actors (id, class, properties) VALUES (
+                        22,
+                        '/Game/Dune/Systems/Building/Pieces/BP_StorageContainer.BP_StorageContainer_C',
+                        jsonb('{}')
+                    );
+                    CREATE TABLE placeables (
+                        id INTEGER PRIMARY KEY,
+                        owner_entity_id INTEGER,
+                        building_type TEXT,
+                        is_hologram INTEGER NOT NULL DEFAULT 0
+                    );
+                    INSERT INTO placeables VALUES (20, 1, 'Developer_StorageContainer_Placeable', 0);
+                    INSERT INTO placeables VALUES (21, 1, 'Developer_StorageContainer_Placeable', 1);
+                    INSERT INTO placeables VALUES (22, 1, 'StorageContainer_Placeable', 0);
                     CREATE TABLE fgl_entities (
                         entity_id INTEGER PRIMARY KEY,
                         components BLOB
@@ -914,6 +934,8 @@ internal static partial class Program
                     );
                     INSERT INTO inventories VALUES (1, 10, 0, 60, 175);
                     INSERT INTO inventories VALUES (2, 20, 4, 1000, 50000);
+                    INSERT INTO inventories VALUES (3, 21, 4, 15, 750);
+                    INSERT INTO inventories VALUES (4, 22, 4, 15, 750);
                     CREATE TABLE items (
                         id INTEGER PRIMARY KEY,
                         inventory_id INTEGER REFERENCES inventories(id),
@@ -1021,6 +1043,17 @@ internal static partial class Program
             {
                 throw new InvalidOperationException(
                     $"Map seed expected 2 from cycle index 14, found {inspection.MapSeed}.");
+            }
+            var starterStorage = inspection.Inventories.SingleOrDefault(
+                value => value.Key == "inventory:4");
+            if (inspection.Inventories.Any(value => value.Key == "inventory:3")
+                || inspection.Inventories.Count(value => value.Kind == "developer-storage") != 1
+                || starterStorage is null
+                || starterStorage.Kind != "storage"
+                || starterStorage.Label != "Storage Container #1")
+            {
+                throw new InvalidOperationException(
+                    "Built/hologram storage destination filtering is incorrect.");
             }
 
             var backup = Path.Combine(root, "backups", "game-test.db");
@@ -1132,6 +1165,43 @@ internal static partial class Program
                 throw new InvalidOperationException(
                     "Vehicle-kit volume fallbacks were not applied correctly.");
             }
+            File.WriteAllText(
+                planPath,
+                """
+                {"destination":"inventory:3","items":[
+                  {"templateId":"TestResource","quantity":1,"quality":0}
+                ]}
+                """);
+            var beforeHologramGrant = File.ReadAllBytes(target);
+            var hologramRejected = false;
+            try
+            {
+                GrantItems(
+                    target,
+                    Path.Combine(root, "safety", "before-hologram-grant.db"),
+                    planPath,
+                    catalogPath);
+            }
+            catch (InvalidDataException ex)
+                when (ex.Message.Contains("no longer exists", StringComparison.OrdinalIgnoreCase))
+            {
+                hologramRejected = true;
+            }
+            if (!hologramRejected
+                || !File.ReadAllBytes(target).SequenceEqual(beforeHologramGrant))
+            {
+                throw new InvalidOperationException(
+                    "Hologram Developer Storage grant did not fail closed.");
+            }
+            File.WriteAllText(
+                planPath,
+                """
+                {"destination":"inventory:2","items":[
+                  {"templateId":"TestResource","quantity":12,"quality":0},
+                  {"templateId":"HeavyAmmo","quantity":501,"quality":0},
+                  {"templateId":"AntiRadiationPill","quantity":21,"quality":0}
+                ]}
+                """);
             var grantSafety = Path.Combine(root, "safety", "before-grant.db");
             GrantItems(target, grantSafety, planPath, catalogPath);
             if (!File.Exists(grantSafety))
@@ -1740,25 +1810,42 @@ internal static partial class Program
 
         using var storage = connection.CreateCommand();
         storage.CommandText = """
-            SELECT inv.id, inv.max_item_count, inv.max_item_volume, COUNT(items.id)
+            SELECT inv.id,
+                   inv.max_item_count,
+                   inv.max_item_volume,
+                   COUNT(items.id),
+                   placeables.building_type
             FROM inventories AS inv
             JOIN actors ON actors.id = inv.actor_id
+            JOIN placeables ON placeables.id = actors.id
             LEFT JOIN items ON items.inventory_id = inv.id
             WHERE inv.inventory_type = 4
-              AND actors.class LIKE '%BP_Developer_StorageContainer%'
+              AND placeables.is_hologram = 0
+              AND placeables.owner_entity_id IS NOT NULL
+              AND placeables.owner_entity_id != 0
             GROUP BY inv.id
             ORDER BY inv.id;
             """;
         using (var reader = storage.ExecuteReader())
         {
-            var index = 1;
+            var labelCounts = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
             while (reader.Read())
             {
+                var baseLabel = FormatSoloStorageLabel(
+                    reader.IsDBNull(4) ? string.Empty : reader.GetString(4));
+                labelCounts.TryGetValue(baseLabel, out var priorCount);
+                var index = priorCount + 1;
+                labelCounts[baseLabel] = index;
                 results.Add(new InventoryDestination(
                     Id: reader.GetInt64(0),
                     Key: $"inventory:{reader.GetInt64(0)}",
-                    Label: $"Developer Storage #{index++}",
-                    Kind: "developer-storage",
+                    Label: $"{baseLabel} #{index}",
+                    Kind: string.Equals(
+                        baseLabel,
+                        "Developer Storage",
+                        StringComparison.OrdinalIgnoreCase)
+                        ? "developer-storage"
+                        : "storage",
                     ItemRows: reader.GetInt64(3),
                     MaxItemCount: reader.IsDBNull(1) ? 0 : reader.GetInt64(1),
                     MaxItemVolume: reader.IsDBNull(2) ? 0 : reader.GetDouble(2),
@@ -1773,6 +1860,22 @@ internal static partial class Program
                 UsedVolume = GetUsedVolume(connection, result.Id, volumeRules)
             })
             .ToArray();
+    }
+
+    private static string FormatSoloStorageLabel(string buildingType)
+    {
+        var value = buildingType.Trim();
+        if (value.EndsWith("_Placeable", StringComparison.OrdinalIgnoreCase))
+        {
+            value = value[..^"_Placeable".Length];
+        }
+        if (value.Contains("Developer_StorageContainer", StringComparison.OrdinalIgnoreCase))
+        {
+            return "Developer Storage";
+        }
+        value = value.Replace('_', ' ');
+        value = Regex.Replace(value, "([a-z0-9])([A-Z])", "$1 $2").Trim();
+        return string.IsNullOrWhiteSpace(value) ? "Storage" : value;
     }
 
     private static GrantPlan ReadGrantPlan(string path)
@@ -1870,7 +1973,7 @@ internal static partial class Program
                 StringComparison.OrdinalIgnoreCase));
         return destination
             ?? throw new InvalidDataException(
-                "The selected backpack or Developer Storage no longer exists.");
+                "The selected backpack or built storage inventory no longer exists.");
     }
 
     private static HashSet<int> ReadUsedPositions(
