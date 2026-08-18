@@ -25,7 +25,8 @@ here cover everything those tags shipped.
 - PTC Solo Settings can manage Sun Exposure, Maximum Vehicles Per Player, and
   Shield Drops While Shooting in the observed `FLS_beta`
   `Config\Windows\Engine.ini`. Writes are allowlisted, game-closed,
-  backup-first, atomic, and verified; no retail path is assumed.
+  backup-first, atomic, and verified; all three controls are field-confirmed in
+  PTC Solo, and no retail path is assumed.
 - Solo Mode exposes the canonical DST package store directly, so Solo-only
   users can create, import, edit, delete, and grant reusable item packages
   without configuring Self-Hosted or relying on demo player data.

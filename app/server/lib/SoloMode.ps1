@@ -56,8 +56,8 @@ $script:DuneSoloConsoleSettings = @(
         type = 'bool01'
         default = '1'
         label = 'Sun Exposure Enabled'
-        help = 'PTC Solo candidate. 0 disables sun-exposure water drain; effect still needs Solo field confirmation.'
-        status = 'Unconfirmed'
+        help = 'PTC Solo field-confirmed. Disabled prevents sun exposure and its water drain.'
+        status = 'Confirmed'
     },
     [ordered]@{
         key = 'Vehicle.MaxVehiclesPerPlayer'
