@@ -11320,16 +11320,6 @@
     "status": "Unconfirmed"
   },
   {
-    "key": "dw.BaseBackupMaxNumberOfBackups",
-    "label": "dw.BaseBackupMaxNumberOfBackups",
-    "help": "The max number of base backups a player can store",
-    "group": "Dune gameplay",
-    "risk": "experimental",
-    "source": "Dune",
-    "scope": "Unknown",
-    "status": "Unconfirmed"
-  },
-  {
     "key": "dw.BaseBackupShouldDetectNpcs",
     "label": "dw.BaseBackupShouldDetectNpcs",
     "help": "Should the base backup tool detect NPCs inside the landclaim area.",
