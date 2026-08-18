@@ -1257,6 +1257,11 @@ function Remove-DuneSoloBackup {
     }
 }
 
+function Remove-DuneSoloBackupFile {
+    param([Parameter(Mandatory)][string]$Path)
+    Remove-Item -LiteralPath $Path -Force -ErrorAction Stop
+}
+
 function Remove-DuneSoloBackups {
     param(
         [Parameter(Mandatory)][string[]]$RelativePaths,
@@ -1307,8 +1312,13 @@ function Remove-DuneSoloBackups {
         })
     }
 
-    $stageRoot = Join-Path $root ".delete-staging\$([guid]::NewGuid().ToString('N'))"
+    $stageParent = Join-Path $root '.delete-staging'
+    if (Test-Path -LiteralPath $stageParent) {
+        Assert-DuneSoloNoReparsePath -Path $stageParent
+    }
+    $stageRoot = Join-Path $stageParent ([guid]::NewGuid().ToString('N'))
     New-Item -ItemType Directory -Path $stageRoot -Force -ErrorAction Stop | Out-Null
+    Assert-DuneSoloNoReparsePath -Path $stageRoot
     $moved = New-Object System.Collections.Generic.List[object]
     try {
         for ($index = 0; $index -lt $targets.Count; $index++) {
@@ -1338,10 +1348,23 @@ function Remove-DuneSoloBackups {
         throw $moveError
     }
 
-    try {
-        Remove-Item -LiteralPath $stageRoot -Recurse -Force -ErrorAction Stop
-    } catch {
-        throw "Selected backups were removed from the active list but staging cleanup failed. Recovery directory retained: $stageRoot"
+    $deleted = New-Object System.Collections.Generic.List[string]
+    $retained = New-Object System.Collections.Generic.List[string]
+    foreach ($target in $targets) {
+        try {
+            Remove-DuneSoloBackupFile -Path $target.staged
+            [void]$deleted.Add([string]$target.relativePath)
+        } catch {
+            [void]$retained.Add([string]$target.relativePath)
+        }
+    }
+    if ($retained.Count -gt 0) {
+        throw "Solo backup deletion was partial. Permanently deleted: $($deleted -join ', '). Retained for recovery: $($retained -join ', '). Recovery directory: $stageRoot"
+    }
+    Remove-Item -LiteralPath $stageRoot -Force -ErrorAction SilentlyContinue
+    if ((Test-Path -LiteralPath $stageParent -PathType Container) -and
+        @(Get-ChildItem -LiteralPath $stageParent -Force -ErrorAction SilentlyContinue).Count -eq 0) {
+        Remove-Item -LiteralPath $stageParent -Force -ErrorAction SilentlyContinue
     }
     foreach ($target in $targets) {
         if (Test-Path -LiteralPath $target.original) {
@@ -1350,8 +1373,8 @@ function Remove-DuneSoloBackups {
     }
     return @{
         ok = $true
-        deleted = @($targets | ForEach-Object { [string]$_.relativePath })
-        deletedCount = $targets.Count
+        deleted = @($deleted)
+        deletedCount = $deleted.Count
     }
 }
 

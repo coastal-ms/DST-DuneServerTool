@@ -375,6 +375,10 @@ export function SoloMode() {
   }, [backupsState.data?.backups])
 
   useEffect(() => {
+    setSelectedBackupPaths(new Set())
+  }, [statusState.data?.profileToken])
+
+  useEffect(() => {
     if (!consoleSettingsState.data) return
     setConsoleDraft(Object.fromEntries(
       consoleSettingsState.data.entries.map(entry => [entry.key, entry.value]),
@@ -657,10 +661,10 @@ export function SoloMode() {
       )
       setSelectedBackupPaths(new Set())
       setNotice({ kind: 'ok', text: `Deleted ${result.deletedCount} Solo backup(s).` })
-      await backupsState.refresh()
     } catch (error) {
       setNotice({ kind: 'err', text: error instanceof Error ? error.message : String(error) })
     } finally {
+      await backupsState.refresh()
       setBusy(null)
     }
   }

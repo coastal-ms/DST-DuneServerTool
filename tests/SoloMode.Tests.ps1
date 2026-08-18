@@ -611,6 +611,51 @@ Describe 'Solo Mode backup profile isolation' {
         (Test-Path -LiteralPath $second) | Should -BeTrue
     }
 
+    It 'rejects a reparse point on the deletion staging directory' {
+        $layout = New-TestSoloLayout
+        Save-DuneSoloState -DataRoot $layout.root -DbPath $layout.db | Out-Null
+        $activeRoot = Get-DuneSoloProfileBackupRoot -DbPath $layout.db
+        $stageParent = Join-Path $activeRoot '.delete-staging'
+        $junctionTarget = Join-Path $script:SoloTestRoot 'staging-junction-target'
+        New-Item -ItemType Directory -Path $junctionTarget -Force | Out-Null
+        New-Item -ItemType Junction -Path $stageParent -Target $junctionTarget | Out-Null
+        $target = Join-Path $activeRoot 'keep.db'
+        [IO.File]::WriteAllBytes($target, [byte[]](1))
+
+        {
+            Remove-DuneSoloBackups -RelativePaths @('keep.db') `
+                -Confirm 'DELETE SOLO BACKUPS'
+        } | Should -Throw '*reparse point*'
+        (Test-Path -LiteralPath $target) | Should -BeTrue
+    }
+
+    It 'reports exact deleted and retained files when final cleanup is partial' {
+        $layout = New-TestSoloLayout
+        Save-DuneSoloState -DataRoot $layout.root -DbPath $layout.db | Out-Null
+        $activeRoot = Get-DuneSoloProfileBackupRoot -DbPath $layout.db
+        New-Item -ItemType Directory -Path $activeRoot -Force | Out-Null
+        $first = Join-Path $activeRoot 'first.db'
+        $second = Join-Path $activeRoot 'second.db'
+        [IO.File]::WriteAllBytes($first, [byte[]](1))
+        [IO.File]::WriteAllBytes($second, [byte[]](2))
+        Mock Remove-DuneSoloBackupFile {
+            param($Path)
+            if ($Path -like '*001-second.db') {
+                throw 'simulated final delete failure'
+            }
+            Remove-Item -LiteralPath $Path -Force -ErrorAction Stop
+        }
+
+        {
+            Remove-DuneSoloBackups -RelativePaths @('first.db', 'second.db') `
+                -Confirm 'DELETE SOLO BACKUPS'
+        } | Should -Throw '*Permanently deleted: first.db*Retained for recovery: second.db*'
+        (Test-Path -LiteralPath $first) | Should -BeFalse
+        (Test-Path -LiteralPath $second) | Should -BeFalse
+        @(Get-ChildItem -LiteralPath (Join-Path $activeRoot '.delete-staging') `
+            -Filter '*second.db' -File -Recurse).Count | Should -Be 1
+    }
+
     It 'rejects backup deletion traversal and non-db files' {
         $layout = New-TestSoloLayout
         Save-DuneSoloState -DataRoot $layout.root -DbPath $layout.db | Out-Null
