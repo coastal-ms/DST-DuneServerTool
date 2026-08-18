@@ -68,6 +68,14 @@ $script:DuneSoloConsoleSettings = @(
         label = 'Maximum Vehicles Per Player'
         help = 'Client-driven vehicle cap. 0 means unlimited.'
         status = 'Confirmed'
+    },
+    [ordered]@{
+        key = 'Dune.DisableShieldOnShooting'
+        type = 'bool01'
+        default = '1'
+        label = 'Shield Drops While Shooting'
+        help = 'PTC Solo field-confirmed. Disabled keeps the player shield raised while firing.'
+        status = 'Confirmed'
     }
 )
 

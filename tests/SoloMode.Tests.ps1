@@ -183,6 +183,7 @@ Describe 'Solo Mode write gates and settings backups' {
         $result = Set-DuneSoloConsoleSettings -Settings @{
             'Hydration.SunExposureEnabled' = '0'
             'Vehicle.MaxVehiclesPerPlayer' = '20'
+            'Dune.DisableShieldOnShooting' = '0'
         } -Confirm 'APPLY SOLO CONSOLE SETTINGS'
 
         $result.ok | Should -BeTrue
@@ -193,6 +194,7 @@ Describe 'Solo Mode write gates and settings backups' {
         @([regex]::Matches($written, '(?m)^Hydration\.SunExposureEnabled=0\r?$')).Count |
             Should -Be 1
         $written | Should -Match '(?m)^Vehicle\.MaxVehiclesPerPlayer=20\r?$'
+        $written | Should -Match '(?m)^Dune\.DisableShieldOnShooting=0\r?$'
     }
 
     It 'blocks PTC Engine.ini writes while the game is running' {
