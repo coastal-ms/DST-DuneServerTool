@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
+  buildSoloCosmeticGrant,
   getSoloCosmeticBackpackDestination,
   groupSoloCosmetics,
   SOLO_COSMETIC_ENTITLEMENT_WARNING,
@@ -35,7 +36,7 @@ describe('Solo cosmetic grants', () => {
   })
 
   it('forces unlock delivery to the backpack instead of Developer Storage', () => {
-    expect(getSoloCosmeticBackpackDestination([
+    const inventories = [
       {
         id: 2,
         key: 'inventory:2',
@@ -56,6 +57,12 @@ describe('Solo cosmetic grants', () => {
         maxItemVolume: 1000,
         usedVolume: 100,
       },
-    ])).toBe('inventory:1')
+    ] as const
+
+    expect(getSoloCosmeticBackpackDestination([...inventories])).toBe('inventory:1')
+    expect(buildSoloCosmeticGrant('ScoutSetVariant', [...inventories])).toEqual({
+      destination: 'inventory:1',
+      items: [{ templateId: 'ScoutSetVariant', quantity: 1, quality: 0 }],
+    })
   })
 })

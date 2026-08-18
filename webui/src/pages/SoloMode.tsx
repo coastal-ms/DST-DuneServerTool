@@ -195,13 +195,28 @@ export function getSoloCosmeticBackpackDestination(
   return inventories.find(inventory => inventory.kind === 'backpack')?.key ?? ''
 }
 
-function SoloCosmeticGrantCard({
+export function buildSoloCosmeticGrant(
+  templateId: string,
+  inventories: SoloInventoryDestination[],
+): {
+  destination: string
+  items: Array<{ templateId: string; quantity: number; quality: number }>
+} {
+  return {
+    destination: getSoloCosmeticBackpackDestination(inventories),
+    items: [{ templateId, quantity: 1, quality: 0 }],
+  }
+}
+
+export function SoloCosmeticGrantCard({
   busy,
   disabled,
+  loadCatalog = getCosmeticsCatalog,
   onGrant,
 }: {
   busy: boolean
   disabled: boolean
+  loadCatalog?: () => Promise<CosmeticEntry[]>
   onGrant: (templateId: string, label: string) => Promise<void>
 }) {
   const [catalog, setCatalog] = useState<CosmeticEntry[] | null>(null)
@@ -211,7 +226,7 @@ function SoloCosmeticGrantCard({
 
   useEffect(() => {
     let active = true
-    getCosmeticsCatalog()
+    loadCatalog()
       .then(entries => {
         if (active) setCatalog(entries)
       })
@@ -219,11 +234,11 @@ function SoloCosmeticGrantCard({
         if (active) setCatalogError(error instanceof Error ? error.message : String(error))
       })
     return () => { active = false }
-  }, [])
+  }, [loadCatalog])
 
   const groups = useMemo(() => groupSoloCosmetics(catalog ?? [], query), [catalog, query])
   const matches = useMemo(() => groups.flatMap(([, entries]) => entries), [groups])
-  const chosen = catalog?.find(entry => entry.template === selected)
+  const chosen = matches.find(entry => entry.template === selected)
   const controlsDisabled = disabled || busy
 
   return (
@@ -1309,11 +1324,11 @@ export function SoloMode() {
                 || !inspection?.inventories.some(inventory => inventory.kind === 'backpack')
               }
               onGrant={async (templateId, label) => {
-                const backpack = getSoloCosmeticBackpackDestination(inspection?.inventories ?? [])
+                const grant = buildSoloCosmeticGrant(templateId, inspection?.inventories ?? [])
                 await giveSoloItems(
-                  [{ templateId, quantity: 1, quality: 0 }],
+                  grant.items,
                   label,
-                  backpack,
+                  grant.destination,
                   'Solo backpack',
                 )
               }}
