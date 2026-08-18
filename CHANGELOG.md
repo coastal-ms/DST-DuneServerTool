@@ -37,6 +37,9 @@ here cover everything those tags shipped.
 - Solo Inventory keeps the selected delivery destination visible in a sticky
   card while scrolling, and blurs the selector on mouse-wheel input to prevent
   accidental destination changes.
+- Solo Backups supports selecting multiple retained backups and deleting them
+  with one confirmation. DST validates the complete selection before staging
+  any file and rolls staged files back if a later move fails.
 
 ### Fixed
 

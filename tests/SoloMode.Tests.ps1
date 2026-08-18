@@ -551,6 +551,66 @@ Describe 'Solo Mode backup profile isolation' {
         Assert-MockCalled Get-DuneSoloGameProcesses -Times 0
     }
 
+    It 'deletes multiple selected backups after validating the complete set' {
+        $layout = New-TestSoloLayout
+        Save-DuneSoloState -DataRoot $layout.root -DbPath $layout.db | Out-Null
+        $activeRoot = Get-DuneSoloProfileBackupRoot -DbPath $layout.db
+        New-Item -ItemType Directory -Path $activeRoot -Force | Out-Null
+        foreach ($name in @('first.db', 'second.db', 'keep.db')) {
+            [IO.File]::WriteAllBytes((Join-Path $activeRoot $name), [byte[]](1))
+        }
+
+        $result = Remove-DuneSoloBackups -RelativePaths @('first.db', 'second.db') `
+            -Confirm 'DELETE SOLO BACKUPS'
+
+        $result.deletedCount | Should -Be 2
+        @($result.deleted | Sort-Object) | Should -Be @('first.db', 'second.db')
+        (Test-Path -LiteralPath (Join-Path $activeRoot 'first.db')) | Should -BeFalse
+        (Test-Path -LiteralPath (Join-Path $activeRoot 'second.db')) | Should -BeFalse
+        (Test-Path -LiteralPath (Join-Path $activeRoot 'keep.db')) | Should -BeTrue
+    }
+
+    It 'validates every selected backup before deleting any' {
+        $layout = New-TestSoloLayout
+        Save-DuneSoloState -DataRoot $layout.root -DbPath $layout.db | Out-Null
+        $activeRoot = Get-DuneSoloProfileBackupRoot -DbPath $layout.db
+        New-Item -ItemType Directory -Path $activeRoot -Force | Out-Null
+        $valid = Join-Path $activeRoot 'valid.db'
+        [IO.File]::WriteAllBytes($valid, [byte[]](1))
+
+        {
+            Remove-DuneSoloBackups -RelativePaths @('valid.db', '..\foreign.db') `
+                -Confirm 'DELETE SOLO BACKUPS'
+        } | Should -Throw '*outside the connected Solo profile backup directory*'
+        (Test-Path -LiteralPath $valid) | Should -BeTrue
+    }
+
+    It 'rolls staged backups back when a later staging move fails' {
+        $layout = New-TestSoloLayout
+        Save-DuneSoloState -DataRoot $layout.root -DbPath $layout.db | Out-Null
+        $activeRoot = Get-DuneSoloProfileBackupRoot -DbPath $layout.db
+        New-Item -ItemType Directory -Path $activeRoot -Force | Out-Null
+        $first = Join-Path $activeRoot 'first.db'
+        $second = Join-Path $activeRoot 'second.db'
+        [IO.File]::WriteAllBytes($first, [byte[]](1))
+        [IO.File]::WriteAllBytes($second, [byte[]](2))
+        $script:moveCount = 0
+        Mock Move-Item {
+            param($LiteralPath, $Destination, $ErrorAction)
+            $script:moveCount++
+            if ($script:moveCount -eq 2) { throw 'simulated staging failure' }
+            Microsoft.PowerShell.Management\Move-Item -LiteralPath $LiteralPath `
+                -Destination $Destination -ErrorAction $ErrorAction
+        }
+
+        {
+            Remove-DuneSoloBackups -RelativePaths @('first.db', 'second.db') `
+                -Confirm 'DELETE SOLO BACKUPS'
+        } | Should -Throw '*simulated staging failure*'
+        (Test-Path -LiteralPath $first) | Should -BeTrue
+        (Test-Path -LiteralPath $second) | Should -BeTrue
+    }
+
     It 'rejects backup deletion traversal and non-db files' {
         $layout = New-TestSoloLayout
         Save-DuneSoloState -DataRoot $layout.root -DbPath $layout.db | Out-Null

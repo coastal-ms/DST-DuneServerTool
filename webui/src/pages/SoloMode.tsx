@@ -9,6 +9,7 @@ import {
   connectSolo,
   createSoloBackup,
   deleteSoloBackup,
+  deleteSoloBackups,
   discoverSolo,
   fillSoloWaterContainer,
   completeSoloFindTheFremen,
@@ -338,6 +339,7 @@ export function SoloMode() {
   const [draft, setDraft] = useState<Record<string, string>>({})
   const [consoleDraft, setConsoleDraft] = useState<Record<string, string>>({})
   const [busy, setBusy] = useState<string | null>(null)
+  const [selectedBackupPaths, setSelectedBackupPaths] = useState<Set<string>>(new Set())
   const [notice, setNotice] = useState<{ kind: 'ok' | 'warn' | 'err'; text: string } | null>(null)
   const [itemTemplate, setItemTemplate] = useState('')
   const [itemDisplay, setItemDisplay] = useState<string | undefined>()
@@ -362,6 +364,15 @@ export function SoloMode() {
     if (!settingsState.data) return
     setDraft(Object.fromEntries(settingsState.data.entries.map(entry => [entry.key, entry.value])))
   }, [settingsState.data])
+
+  useEffect(() => {
+    const currentPaths = new Set(
+      (backupsState.data?.backups ?? []).map(backup => backup.relativePath),
+    )
+    setSelectedBackupPaths(current => new Set(
+      [...current].filter(path => currentPaths.has(path)),
+    ))
+  }, [backupsState.data?.backups])
 
   useEffect(() => {
     if (!consoleSettingsState.data) return
@@ -613,6 +624,39 @@ export function SoloMode() {
         statusState.data?.profileToken ?? '',
       )
       setNotice({ kind: 'ok', text: `Deleted Solo backup ${backup.name}.` })
+      await backupsState.refresh()
+    } catch (error) {
+      setNotice({ kind: 'err', text: error instanceof Error ? error.message : String(error) })
+    } finally {
+      setBusy(null)
+    }
+  }
+
+  const deleteSelectedBackups = async () => {
+    if (!selectionMatchesActive) {
+      setNotice({ kind: 'err', text: 'Connect and validate the selected Solo profile before deleting backups.' })
+      return
+    }
+    const selected = (backupsState.data?.backups ?? [])
+      .filter(backup => selectedBackupPaths.has(backup.relativePath))
+    if (selected.length === 0) return
+    const preview = selected.slice(0, 5).map(backup => `- ${backup.name}`).join('\n')
+    const more = selected.length > 5 ? `\n- ...and ${selected.length - 5} more` : ''
+    if (!window.confirm(
+      `Permanently delete ${selected.length} selected Solo backup(s)?\n\n`
+      + `${preview}${more}\n\n`
+      + 'This does not change the live Solo save and cannot be undone.',
+    )) return
+
+    setBusy('delete-selected')
+    setNotice(null)
+    try {
+      const result = await deleteSoloBackups(
+        selected.map(backup => backup.relativePath),
+        statusState.data?.profileToken ?? '',
+      )
+      setSelectedBackupPaths(new Set())
+      setNotice({ kind: 'ok', text: `Deleted ${result.deletedCount} Solo backup(s).` })
       await backupsState.refresh()
     } catch (error) {
       setNotice({ kind: 'err', text: error instanceof Error ? error.message : String(error) })
@@ -1201,24 +1245,69 @@ export function SoloMode() {
                 Backups validate the wrapper, SQLite integrity, foreign keys, and one-character invariant. Restore always preserves the current save first.
               </p>
             </div>
-            <button className={`btn-primary shrink-0 ${SOLO_DISABLED_PRIMARY_CLASS}`} onClick={() => void createBackup()} disabled={!canMutateActiveProfile}>
-              <Icon name={busy === 'backup' ? 'LoaderCircle' : 'Archive'} size={14} className={busy === 'backup' ? 'animate-spin' : ''} />
-              Create backup
-            </button>
+            <div className="flex items-center gap-2 shrink-0">
+              <button
+                className="btn-secondary"
+                disabled={!canMutateActiveProfile || selectedBackupPaths.size === 0}
+                onClick={() => void deleteSelectedBackups()}
+              >
+                <Icon name={busy === 'delete-selected' ? 'LoaderCircle' : 'Trash2'} size={14} className={busy === 'delete-selected' ? 'animate-spin' : ''} />
+                Delete selected ({selectedBackupPaths.size})
+              </button>
+              <button className={`btn-primary ${SOLO_DISABLED_PRIMARY_CLASS}`} onClick={() => void createBackup()} disabled={!canMutateActiveProfile}>
+                <Icon name={busy === 'backup' ? 'LoaderCircle' : 'Archive'} size={14} className={busy === 'backup' ? 'animate-spin' : ''} />
+                Create backup
+              </button>
+            </div>
           </div>
           <div className="text-xs text-text-dim font-mono break-all mb-4">{backupsState.data?.root ?? status?.backupRoot}</div>
           {(backupsState.data?.backups.length ?? 0) === 0 ? (
             <p className="text-sm text-text-muted">No Solo backups created by DST yet.</p>
           ) : (
-            <div className="divide-y divide-border">
+            <div>
+              <div className="flex items-center gap-3 pb-3 border-b border-border text-xs text-text-muted">
+                <button
+                  className="btn-secondary py-1 px-2"
+                  disabled={!canMutateActiveProfile}
+                  onClick={() => setSelectedBackupPaths(new Set(
+                    backupsState.data!.backups.map(backup => backup.relativePath),
+                  ))}
+                >
+                  Select all
+                </button>
+                <button
+                  className="btn-secondary py-1 px-2"
+                  disabled={!canMutateActiveProfile || selectedBackupPaths.size === 0}
+                  onClick={() => setSelectedBackupPaths(new Set())}
+                >
+                  Clear
+                </button>
+                <span>{selectedBackupPaths.size} selected</span>
+              </div>
+              <div className="divide-y divide-border">
               {backupsState.data!.backups.map(backup => (
                 <div key={backup.relativePath} className="py-3 flex items-center justify-between gap-4">
-                  <div className="min-w-0">
+                  <div className="min-w-0 flex items-start gap-3">
+                    <input
+                      type="checkbox"
+                      className="mt-1 accent-ibad"
+                      aria-label={`Select ${backup.name}`}
+                      checked={selectedBackupPaths.has(backup.relativePath)}
+                      disabled={!canMutateActiveProfile}
+                      onChange={event => setSelectedBackupPaths(current => {
+                        const next = new Set(current)
+                        if (event.target.checked) next.add(backup.relativePath)
+                        else next.delete(backup.relativePath)
+                        return next
+                      })}
+                    />
+                    <div className="min-w-0">
                     <div className="font-medium text-sm truncate">{backup.name}</div>
                     <div className="text-xs text-text-muted">
                       {formatBytes(backup.bytes)} - {new Date(backup.modifiedAt).toLocaleString()}
                     </div>
                     <div className="text-[11px] text-text-dim font-mono truncate">{backup.relativePath}</div>
+                    </div>
                   </div>
                   <div className="flex items-center gap-2 shrink-0">
                     <button
@@ -1240,6 +1329,7 @@ export function SoloMode() {
                   </div>
                 </div>
               ))}
+              </div>
             </div>
           )}
         </div>

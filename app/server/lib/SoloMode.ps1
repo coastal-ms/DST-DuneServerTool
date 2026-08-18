@@ -1196,6 +1196,7 @@ function Get-DuneSoloBackups {
     return @(Get-ChildItem -LiteralPath $root -Filter '*.db' -File -Recurse -ErrorAction SilentlyContinue |
         Where-Object {
             try {
+                if ($_.FullName -like '*\.delete-staging\*') { return $false }
                 Assert-DuneSoloNoReparsePath -Path $_.FullName
                 $true
             } catch { $false }
@@ -1244,37 +1245,113 @@ function Remove-DuneSoloBackup {
         [Parameter(Mandatory)][string]$Confirm
     )
 
-    Assert-DuneSoloSupportedPlatform
     if ($Confirm -ne 'DELETE SOLO BACKUP') {
         throw 'Confirm the Solo backup deletion before continuing.'
     }
-    if (-not $RelativePath.Trim() -or [IO.Path]::IsPathRooted($RelativePath)) {
-        throw 'Choose a valid Solo backup.'
+    $result = Remove-DuneSoloBackups -RelativePaths @($RelativePath) `
+        -Confirm 'DELETE SOLO BACKUPS'
+    return @{
+        ok = $true
+        deleted = $RelativePath
+        deletedCount = $result.deletedCount
     }
-    if ([IO.Path]::GetExtension($RelativePath) -ne '.db') {
-        throw 'Only Solo .db backup files can be deleted.'
+}
+
+function Remove-DuneSoloBackups {
+    param(
+        [Parameter(Mandatory)][string[]]$RelativePaths,
+        [Parameter(Mandatory)][string]$Confirm
+    )
+
+    Assert-DuneSoloSupportedPlatform
+    if ($Confirm -ne 'DELETE SOLO BACKUPS') {
+        throw 'Confirm the selected Solo backup deletions before continuing.'
+    }
+    $requested = @($RelativePaths |
+        ForEach-Object { ([string]$_).Trim() } |
+        Where-Object { $_ } |
+        Select-Object -Unique)
+    if ($requested.Count -lt 1 -or $requested.Count -gt 100) {
+        throw 'Select between 1 and 100 Solo backups to delete.'
     }
     $profile = Get-DuneSoloProfile
     if (-not $profile.dbPath) { throw 'Connect a Solo profile before deleting backups.' }
     $root = Get-DuneSoloProfileBackupRoot -DbPath $profile.dbPath
-    $target = [IO.Path]::GetFullPath((Join-Path $root $RelativePath))
-    if (-not (Test-DuneSoloPathWithinRoot -Path $target -Root $root)) {
-        throw 'Backup path is outside the connected Solo profile backup directory.'
+    $listed = @{}
+    foreach ($entry in @(Get-DuneSoloBackups)) {
+        $listed[[string]$entry.relativePath] = $entry
     }
-    $entry = @(Get-DuneSoloBackups | Where-Object {
-        ([string]$_.relativePath).Equals($RelativePath, [StringComparison]::OrdinalIgnoreCase)
-    })
-    if ($entry.Count -ne 1 -or -not (Test-Path -LiteralPath $target -PathType Leaf)) {
-        throw 'Solo backup was not found in the connected profile backup list.'
+    $targets = New-Object System.Collections.Generic.List[object]
+    foreach ($relativePath in $requested) {
+        if ([IO.Path]::IsPathRooted($relativePath)) {
+            throw 'Choose valid relative Solo backup paths.'
+        }
+        if ([IO.Path]::GetExtension($relativePath) -ne '.db') {
+            throw 'Only Solo .db backup files can be deleted.'
+        }
+        $target = [IO.Path]::GetFullPath((Join-Path $root $relativePath))
+        if (-not (Test-DuneSoloPathWithinRoot -Path $target -Root $root)) {
+            throw 'Backup path is outside the connected Solo profile backup directory.'
+        }
+        $entry = @($listed.Keys | Where-Object {
+            $_.Equals($relativePath, [StringComparison]::OrdinalIgnoreCase)
+        })
+        if ($entry.Count -ne 1 -or -not (Test-Path -LiteralPath $target -PathType Leaf)) {
+            throw "Solo backup was not found in the connected profile backup list: $relativePath"
+        }
+        Assert-DuneSoloNoReparsePath -Path $target
+        [void]$targets.Add([pscustomobject]@{
+            relativePath = $relativePath
+            original = $target
+            staged = ''
+        })
     }
-    Assert-DuneSoloNoReparsePath -Path $target
-    Remove-Item -LiteralPath $target -Force -ErrorAction Stop
-    if (Test-Path -LiteralPath $target) {
-        throw 'Solo backup deletion could not be verified.'
+
+    $stageRoot = Join-Path $root ".delete-staging\$([guid]::NewGuid().ToString('N'))"
+    New-Item -ItemType Directory -Path $stageRoot -Force -ErrorAction Stop | Out-Null
+    $moved = New-Object System.Collections.Generic.List[object]
+    try {
+        for ($index = 0; $index -lt $targets.Count; $index++) {
+            $target = $targets[$index]
+            $staged = Join-Path $stageRoot ('{0:D3}-{1}' -f $index, [IO.Path]::GetFileName($target.original))
+            Move-Item -LiteralPath $target.original -Destination $staged -ErrorAction Stop
+            $target.staged = $staged
+            [void]$moved.Add($target)
+        }
+    } catch {
+        $moveError = $_
+        $rollbackErrors = New-Object System.Collections.Generic.List[string]
+        for ($index = $moved.Count - 1; $index -ge 0; $index--) {
+            $target = $moved[$index]
+            try {
+                if (Test-Path -LiteralPath $target.staged -PathType Leaf) {
+                    Move-Item -LiteralPath $target.staged -Destination $target.original -ErrorAction Stop
+                }
+            } catch {
+                [void]$rollbackErrors.Add("$($target.relativePath): $($_.Exception.Message)")
+            }
+        }
+        if ($rollbackErrors.Count -gt 0) {
+            throw "Solo backup staging failed ($($moveError.Exception.Message)); rollback failed: $($rollbackErrors -join '; '). Recovery directory: $stageRoot"
+        }
+        Remove-Item -LiteralPath $stageRoot -Recurse -Force -ErrorAction SilentlyContinue
+        throw $moveError
+    }
+
+    try {
+        Remove-Item -LiteralPath $stageRoot -Recurse -Force -ErrorAction Stop
+    } catch {
+        throw "Selected backups were removed from the active list but staging cleanup failed. Recovery directory retained: $stageRoot"
+    }
+    foreach ($target in $targets) {
+        if (Test-Path -LiteralPath $target.original) {
+            throw "Solo backup deletion could not be verified: $($target.relativePath)"
+        }
     }
     return @{
         ok = $true
-        deleted = $RelativePath
+        deleted = @($targets | ForEach-Object { [string]$_.relativePath })
+        deletedCount = $targets.Count
     }
 }
 

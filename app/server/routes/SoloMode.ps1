@@ -158,11 +158,17 @@ Register-DuneRoute -Method DELETE -Path '/api/solo/backups' -LocalOnly -Handler 
     param($req, $res, $routeParams, $body)
     try {
         $relativePath = [string](Get-DuneSoloBodyField -Body $body -Name 'relativePath' -Default '')
+        $rawRelativePaths = Get-DuneSoloBodyField -Body $body -Name 'relativePaths'
         $confirm = [string](Get-DuneSoloBodyField -Body $body -Name 'confirm' -Default '')
         $expectedProfileToken = [string](Get-DuneSoloBodyField -Body $body -Name 'expectedProfileToken' -Default '')
         $result = Invoke-WithDuneLock -Name 'solo-profile-data' -Script {
             Assert-DuneSoloExpectedProfile -ExpectedProfileToken $expectedProfileToken
-            Remove-DuneSoloBackup -RelativePath $relativePath -Confirm $confirm
+            if ($null -ne $rawRelativePaths) {
+                $relativePaths = @($rawRelativePaths | ForEach-Object { [string]$_ })
+                Remove-DuneSoloBackups -RelativePaths $relativePaths -Confirm $confirm
+            } else {
+                Remove-DuneSoloBackup -RelativePath $relativePath -Confirm $confirm
+            }
         }
         Write-DuneJson -Response $res -Body $result
     } catch {

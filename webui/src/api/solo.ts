@@ -238,6 +238,20 @@ export function deleteSoloBackup(
   })
 }
 
+export function deleteSoloBackups(
+  relativePaths: string[],
+  expectedProfileToken: string,
+): Promise<{ ok: boolean; deleted: string[]; deletedCount: number }> {
+  return api('/api/solo/backups', {
+    method: 'DELETE',
+    body: JSON.stringify({
+      relativePaths,
+      expectedProfileToken,
+      confirm: 'DELETE SOLO BACKUPS',
+    }),
+  })
+}
+
 export function restoreSoloBackup(relativePath: string, expectedProfileToken: string): Promise<{
   ok: boolean
   path: string
