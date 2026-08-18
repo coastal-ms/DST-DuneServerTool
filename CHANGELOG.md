@@ -13,6 +13,8 @@ here cover everything those tags shipped.
 
 ## [Unreleased]
 
+## [13.7.0] - 2026-08-17
+
 ### Added
 
 - Players → Server Overview can fill every small, medium, and large cistern
@@ -78,6 +80,9 @@ here cover everything those tags shipped.
 - Chat commands now offer an opt-in **Real-time (1 second)** monitoring interval
   with its measured CPU cost shown; the lower-cost 3-second interval remains the
   default.
+- Max Base Backups Per Player was removed from Experimental after field testing
+  confirmed the shipped game ignores `dw.BaseBackupMaxNumberOfBackups` with the
+  value applied to both server and client; players remained capped at three.
 
 ## [13.6.5] - 2026-08-12
 
@@ -7669,7 +7674,8 @@ at the time. Also folds in the v3.0.1 / v3.1.2 patches.
   (`ssh`, `Gameplay Admin`, `setup-guide`, `report-issue`). _(originally
   3.1.2)_
 
-[Unreleased]: https://github.com/coastal-ms/DST-DuneServerTool/compare/v13.0.2...HEAD
+[Unreleased]: https://github.com/coastal-ms/DST-DuneServerTool/compare/v13.7.0...HEAD
+[13.7.0]: https://github.com/coastal-ms/DST-DuneServerTool/compare/v13.6.5...v13.7.0
 [13.0.2]: https://github.com/coastal-ms/DST-DuneServerTool/compare/v13.0.1...v13.0.2
 [13.0.1]: https://github.com/coastal-ms/DST-DuneServerTool/compare/v13.0.0...v13.0.1
 [13.0.0]: https://github.com/coastal-ms/DST-DuneServerTool/compare/v12.16.6...v13.0.0

@@ -745,7 +745,6 @@ Describe 'DuneGameConfigSchema: experimental binary CVars' -Tag 'GameConfig' {
             'dw.PlaceableShelterThresholdOverride'
             'Dac.DisablePvpDamage'
             'dw.EnableShelterSystem'
-            'dw.BaseBackupMaxNumberOfBackups'
             'dw.bBaseBackupToolBackupEnabled'
             'dw.bBaseBackupToolPlacementEnabled'
             'dw.bBaseBackupToolRecycleEnabled'
@@ -844,7 +843,7 @@ Describe 'DuneGameConfigSchema: experimental binary CVars' -Tag 'GameConfig' {
         $experimental = @($script:DuneGameConfigSchema | Where-Object Category -eq 'Experimental')
         $experimental2 = @($script:DuneGameConfigSchema | Where-Object Category -eq 'Experimental 2')
 
-        $experimental.Count | Should -Be 55
+        $experimental.Count | Should -Be 54
         $experimental2.Count | Should -Be 71
         @($experimental.Key | Sort-Object) | Should -Be @($script:ExperimentalKeys | Sort-Object)
         @($experimental2.Key | Sort-Object) | Should -Be @($script:Experimental2Keys | Sort-Object)
@@ -858,10 +857,11 @@ Describe 'DuneGameConfigSchema: experimental binary CVars' -Tag 'GameConfig' {
         @($script:DuneGameConfigSchema | Where-Object Category -eq 'Experimental Lab').Count | Should -Be 0
         (Test-DuneStartupConsoleVariableKey -Key 'm_TaskGoalAmount') | Should -BeFalse
         $script:DuneAdvancedCvarCatalogCache | Should -BeNullOrEmpty
-        @($script:DuneStartupConsoleVariableKeys).Count | Should -Be 149
+        @($script:DuneStartupConsoleVariableKeys).Count | Should -Be 148
 
         $lab = @(Get-DuneAdvancedCvarCatalog)
         $lab.Count | Should -BeGreaterThan 4900
+        $lab.key | Should -Not -Contain 'dw.BaseBackupMaxNumberOfBackups'
         ($lab | Where-Object key -eq 'ak.soundengine.executeActionOnEvent').group |
             Should -Be 'Audio - engine/internal'
         ($lab | Where-Object key -eq 'au.adpcm.DisableSeeking').group |
@@ -896,7 +896,7 @@ Describe 'DuneGameConfigSchema: experimental binary CVars' -Tag 'GameConfig' {
         # Uncategorized rather than being forced into a neighbouring group.
         $api = @(Get-DuneGameConfigSchemaApi)
         $fields = @($api | Where-Object { $_.category -like 'Experimental*' } | ForEach-Object { $_.fields })
-        $fields.Count | Should -Be 126
+        $fields.Count | Should -Be 125
         foreach ($f in $fields) {
             $f.group | Should -Not -BeNullOrEmpty
             $f.status | Should -BeIn @('Confirmed', 'Unconfirmed')
