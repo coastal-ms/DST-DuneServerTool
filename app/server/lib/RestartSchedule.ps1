@@ -558,6 +558,10 @@ function Set-DuneRestartGuardMarker {
 # backup-guard marker in the same call so a backup cron firing at the same
 # moment skips itself. Returns @{ ok; message; rc }.
 function Invoke-DuneScheduledRestart {
+    if ((Get-Command Test-DuneWorldRestartMaintenanceActive -ErrorAction SilentlyContinue) -and
+        (Test-DuneWorldRestartMaintenanceActive)) {
+        return @{ ok = $false; status = 423; message = 'World Restart maintenance is active.' }
+    }
     $ctx = Get-DuneBackupContext
     if (-not $ctx.ok) {
         return @{ ok = $false; status = $ctx.status; message = $ctx.message }
@@ -595,6 +599,10 @@ if ! mkdir "`$LOCK" 2>/dev/null; then
 fi
 trap 'rmdir "`$LOCK" 2>/dev/null || true' EXIT INT TERM
 exec >>"`$LOG" 2>&1
+if [ -f /var/lib/dune-server/dst-world-restart-recovery-required ] || find /tmp/dst-world-restart-active -mmin -120 2>/dev/null | grep -q .; then
+  echo "=== `$(date -u +%Y-%m-%dT%H:%M:%SZ) scheduled maintenance skipped: World Restart active ==="
+  exit 0
+fi
 echo "=== `$(date -u +%Y-%m-%dT%H:%M:%SZ) scheduled maintenance ==="
 MANIFEST=`$(ls /home/dune/.dune/download/steamapps/appmanifest_*.acf 2>/dev/null | head -1 || true)
 INSTALLED=""
@@ -737,6 +745,10 @@ fi
 # bounded window so a late DST launch doesn't trigger a stale restart hours
 # after the scheduled time.
 function Invoke-DuneRestartScheduleTick {
+    if ((Get-Command Test-DuneWorldRestartMaintenanceActive -ErrorAction SilentlyContinue) -and
+        (Test-DuneWorldRestartMaintenanceActive)) {
+        return
+    }
     $state = Get-DuneRestartSchedule
     if (-not $state.enabled) { return }
 

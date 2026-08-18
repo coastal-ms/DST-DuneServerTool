@@ -149,7 +149,7 @@ function New-DuneBackupCmd {
     # couldn't tell which server a file came from (Coastal, 2026-07-18). The
     # listing/prune/delete matchers still recognize the legacy `dst-scheduled-*`
     # shape so pre-existing scheduled files aren't orphaned.
-    return "if find /tmp/dst-restart-active -mmin -30 2>/dev/null | grep -q .; then echo `"`$(date) dst: backup skipped - BG restart window active`" >> /var/log/dune-backup.log; else /home/dune/.dune/bin/battlegroup backup >> /var/log/dune-backup.log 2>&1; $tail; fi"
+    return "if [ -f /var/lib/dune-server/dst-world-restart-recovery-required ] || find /tmp/dst-restart-active -mmin -30 2>/dev/null | grep -q .; then echo `"`$(date) dst: backup skipped - BG restart or recovery window active`" >> /var/log/dune-backup.log; else /home/dune/.dune/bin/battlegroup backup >> /var/log/dune-backup.log 2>&1; $tail; fi"
 }
 $script:DuneBackupBeginMarker = '# DST-BACKUP BEGIN'
 $script:DuneBackupEndMarker   = '# DST-BACKUP END'

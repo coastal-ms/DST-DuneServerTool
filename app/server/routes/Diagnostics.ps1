@@ -459,6 +459,22 @@ function New-DstDiagnosticBundle {
         $warnings.Add("Restart-schedule state read failed: $($_.Exception.Message)")
     }
 
+    # 6c-1) World Restart state ---------------------------------------------
+    # Captures step-level progress, rollback availability, and durable recovery
+    # lock state for the destructive same-battlegroup restart workflow.
+    try {
+        $worldRestartState = Join-Path $env:APPDATA 'DuneServer\world-restart-state.json'
+        if (Test-Path -LiteralPath $worldRestartState) {
+            $wrRaw = Get-Content -LiteralPath $worldRestartState -Raw -ErrorAction Stop
+            $wrRaw = Invoke-DstRedaction -Text $wrRaw @redactArgs
+            $out = Join-Path $stageDir 'world-restart-state.json'
+            Set-Content -LiteralPath $out -Value $wrRaw -Encoding UTF8
+            $included.Add(@{ name = 'world-restart-state.json'; bytes = (Get-Item -LiteralPath $out).Length })
+        }
+    } catch {
+        $warnings.Add("World Restart state read failed: $($_.Exception.Message)")
+    }
+
     # 6c-2) FLS token rotation state (403002 recovery) ----------------------
     # The rotate-state file records the last token-rotation attempt's steps and
     # outcome. It never stores the token itself, but redact as a safety net.

@@ -42,4 +42,16 @@ Describe 'HTTP local-only request enforcement' {
         $route = $script:DuneRoutes[$before]
         $route.LocalOnly | Should -BeTrue
     }
+
+    It 'blocks inline and pooled API writes during World Restart maintenance' {
+        function global:Test-DuneWorldRestartMaintenanceActive { $true }
+        try {
+            Test-DuneWorldRestartWriteBlocked -Method POST -Path '/api/shutdown' | Should -BeTrue
+            Test-DuneWorldRestartWriteBlocked -Method POST -Path '/api/commands/run/restart' | Should -BeTrue
+            Test-DuneWorldRestartWriteBlocked -Method POST -Path '/api/db/world-restart/rollback' | Should -BeFalse
+            Test-DuneWorldRestartWriteBlocked -Method GET -Path '/api/status' | Should -BeFalse
+        } finally {
+            Remove-Item function:global:Test-DuneWorldRestartMaintenanceActive -ErrorAction SilentlyContinue
+        }
+    }
 }

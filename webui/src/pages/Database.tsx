@@ -5,6 +5,7 @@ import { CollapsibleCard } from '../components/CollapsibleCard'
 import { useStatus } from '../hooks/useStatus'
 import { VmInfoCard } from './database/VmInfoCard'
 import { api } from '../api/client'
+import { isLocalViewer } from '../util/viewer'
 import {
   getDbInfo,
   runSql,
@@ -20,7 +21,11 @@ import {
   setBackupMirror,
   openBackupMirrorFolder,
   syncBackupMirror,
+  getWorldRestartStatus,
+  startWorldRestart,
+  rollbackWorldRestart,
   type BackupMirrorState,
+  type WorldRestartStatus,
 } from '../api/database'
 import type {
   DbInfo,
@@ -99,6 +104,7 @@ export function Database() {
   const { status, forceRefresh } = useStatus()
   const vmRunning = status?.vm?.running === true
   const bgState = status?.bg?.state ?? 'unknown'
+  const localViewer = isLocalViewer()
 
   // ---------- Backup / Restore (delegates to /api/commands/run) ------------
   // Availability is derived from the LIVE status poll (vmRunning + bgState),
@@ -208,6 +214,81 @@ export function Database() {
   }, [vmRunning])
 
   useEffect(() => { void loadDbInfo() }, [loadDbInfo])
+
+  // ---------- Reversible same-battlegroup World Restart -------------------
+  const [worldRestart, setWorldRestart] = useState<WorldRestartStatus | null>(null)
+  const [worldRestartStarting, setWorldRestartStarting] = useState(false)
+
+  const loadWorldRestart = useCallback(async () => {
+    if (!localViewer) {
+      setWorldRestart(null)
+      return
+    }
+    try { setWorldRestart(await getWorldRestartStatus()) } catch {}
+  }, [localViewer])
+
+  useEffect(() => { void loadWorldRestart() }, [loadWorldRestart])
+  useEffect(() => {
+    if (!worldRestart?.running && worldRestart?.phase !== 'starting') return
+    const timer = window.setInterval(() => { void loadWorldRestart() }, 2000)
+    return () => window.clearInterval(timer)
+  }, [worldRestart?.running, worldRestart?.phase, loadWorldRestart])
+
+  async function runWorldRestart() {
+    const typed = window.prompt(
+      'WORLD RESTART\n\n' +
+      'This creates and verifies a full rollback backup, stops the battlegroup, replaces only its gameplay database storage, ' +
+      'then starts the SAME battlegroup with its existing name, token, packages, INIs, ports, and DST settings.\n\n' +
+      'BEFORE CONTINUING: every player must return from Deep Desert and log out. Keep everyone offline until DST reports ' +
+      'completion. Do not begin near a scheduled server restart or update.\n\n' +
+      'All world-side character records, bases, inventories, storage, progression, and market state will start fresh. ' +
+      'Funcom may recreate the same account-linked character identity when that player reconnects; use normal in-game ' +
+      'character deletion only after deciding to keep the fresh world. Account-linked creator choices may persist until ' +
+      'that deletion. Non-Funcom-granted cosmetics are wiped and must be reacquired with Grant Cosmetic. ' +
+      'If any post-reset step fails, DST automatically imports the pre-reset backup.\n\n' +
+      'Type RESTART WORLD to continue:',
+    )
+    if (typed == null) return
+    if (typed !== 'RESTART WORLD') {
+      showToast('err', 'World Restart cancelled - confirmation text did not match.')
+      return
+    }
+    setWorldRestartStarting(true)
+    try {
+      await startWorldRestart(typed)
+      await loadWorldRestart()
+      window.setTimeout(() => { void loadWorldRestart() }, 1000)
+      showToast('ok', 'World Restart started. Keep DST open while progress is shown below.')
+    } catch (e) {
+      showToast('err', `World Restart failed to start: ${e instanceof Error ? e.message : String(e)}`)
+    } finally {
+      setWorldRestartStarting(false)
+    }
+  }
+
+  async function runWorldRollback() {
+    const typed = window.prompt(
+      'ROLL BACK WORLD\n\nThis restores the exact verified backup created immediately before the last World Restart.\n\n' +
+      'Every player must log out before rollback. Keep everyone offline until DST reports completion.\n\n' +
+      'Type ROLL BACK WORLD to continue:',
+    )
+    if (typed == null) return
+    if (typed !== 'ROLL BACK WORLD') {
+      showToast('err', 'Rollback cancelled - confirmation text did not match.')
+      return
+    }
+    setWorldRestartStarting(true)
+    try {
+      await rollbackWorldRestart(typed)
+      await loadWorldRestart()
+      window.setTimeout(() => { void loadWorldRestart() }, 1000)
+      showToast('ok', 'World rollback started.')
+    } catch (e) {
+      showToast('err', `Rollback failed to start: ${e instanceof Error ? e.message : String(e)}`)
+    } finally {
+      setWorldRestartStarting(false)
+    }
+  }
 
   // ---------- SQL editor ----------------------------------------------------
   const [sql, setSql] = useState<string>(DEFAULT_SQL)
@@ -370,6 +451,84 @@ export function Database() {
           onClick={() => void runMaint('import')}
         />
       </div>
+
+      <CollapsibleCard
+        id="database.worldRestart"
+        icon="RotateCcw"
+        iconClassName="text-danger shrink-0"
+        title="World Restart"
+        titleClassName="text-base font-semibold tracking-tight text-danger"
+        className="mb-6 border border-danger/40"
+        headerClassName="px-5 pt-5 pb-2"
+        bodyClassName="px-5 pb-5"
+      >
+        <p className="text-sm text-text-muted mb-3">
+          Start this same battlegroup as a fresh world. Preserves its battlegroup identity, VM, token, packages,
+          ports, INIs, and DST settings. Removes all world-side gameplay data: character records, bases, inventories,
+          storage, progression, and market data. Funcom may recreate an account-linked character identity on first login.
+          Account-linked creator choices may persist until normal in-game character deletion. Non-Funcom-granted cosmetics
+          are wiped and must be reacquired with Gameplay Admin&apos;s Grant Cosmetic action.
+        </p>
+        <div className="rounded border border-warning/30 bg-warning/5 px-3 py-2 text-xs text-text-muted mb-4">
+          Before starting, have every player return from Deep Desert and log out. Keep everyone offline until completion,
+          and do not run this near scheduled server maintenance.{' '}
+          DST first creates and verifies a dedicated rollback backup. Database resources are regenerated only
+          after that check passes. Any failure after storage replacement triggers automatic import of that exact backup.
+          If a player wants a new name or appearance, use normal in-game character deletion only after accepting the
+          fresh world; account-linked deletion may not be reversible through the database backup.
+        </div>
+        <div className="flex flex-wrap gap-2">
+          <button
+            type="button"
+            onClick={() => void runWorldRestart()}
+            disabled={!localViewer || !vmRunning || worldRestartStarting || worldRestart?.running === true}
+            className="btn-primary"
+            title={!localViewer ? 'World Restart is available only from the host machine.' : undefined}
+          >
+            <Icon name={worldRestartStarting || worldRestart?.running ? 'Loader2' : 'RotateCcw'} size={14}
+              className={worldRestartStarting || worldRestart?.running ? 'animate-spin' : ''} />
+            {worldRestart?.running ? 'World Restart running...' : 'Restart World'}
+          </button>
+          {worldRestart?.rollbackAvailable && !worldRestart.running && (
+            <button
+              type="button"
+              onClick={() => void runWorldRollback()}
+              disabled={!localViewer || worldRestartStarting}
+              className="btn-secondary"
+              title={!localViewer ? 'World rollback is available only from the host machine.' : undefined}
+            >
+              <Icon name="History" size={14} />
+              Roll back last restart
+            </button>
+          )}
+        </div>
+        {!localViewer && (
+          <div className="mt-3 text-xs text-warning">
+            World Restart and rollback are disabled remotely. Open DST on the server host to use them.
+          </div>
+        )}
+        {worldRestart && worldRestart.phase !== 'idle' && (
+          <div className="mt-4 space-y-2">
+            {worldRestart.steps?.map(step => (
+              <div key={step.id} className="flex items-start gap-2 text-xs">
+                <Icon
+                  name={step.status === 'done' ? 'CheckCircle2' : step.status === 'failed' ? 'AlertCircle' : step.status === 'running' ? 'Loader2' : 'Circle'}
+                  size={13}
+                  className={`mt-0.5 shrink-0 ${step.status === 'running' ? 'animate-spin text-accent' : step.status === 'done' ? 'text-success' : step.status === 'failed' ? 'text-danger' : 'text-text-dim'}`}
+                />
+                <div>
+                  <span className="font-medium text-text">{step.label}</span>
+                  {step.detail && <span className="text-text-dim"> - {step.detail}</span>}
+                </div>
+              </div>
+            ))}
+            {worldRestart.error && <div className="text-xs text-danger whitespace-pre-wrap">{worldRestart.error}</div>}
+            {worldRestart.backupPath && (
+              <div className="text-xs text-text-dim break-all">Rollback backup: <code>{worldRestart.backupPath}</code></div>
+            )}
+          </div>
+        )}
+      </CollapsibleCard>
 
       <CollapsibleCard
         id="database.migration"

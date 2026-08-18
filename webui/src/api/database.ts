@@ -154,3 +154,40 @@ export function syncBackupMirror() {
     body: JSON.stringify({}),
   })
 }
+
+export type WorldRestartStep = {
+  id: string
+  label: string
+  status: 'pending' | 'running' | 'done' | 'failed' | 'warning'
+  detail?: string
+}
+
+export type WorldRestartStatus = {
+  phase: string
+  running: boolean
+  operation?: 'restart' | 'rollback'
+  world?: string
+  backupPath?: string
+  rollbackAvailable: boolean
+  automaticRollback?: boolean
+  error?: string
+  steps: WorldRestartStep[]
+}
+
+export function getWorldRestartStatus() {
+  return api<WorldRestartStatus>('/api/db/world-restart/status')
+}
+
+export function startWorldRestart(confirm: string) {
+  return api<{ ok: boolean; running: boolean; operation: string }>('/api/db/world-restart', {
+    method: 'POST',
+    body: JSON.stringify({ confirm }),
+  })
+}
+
+export function rollbackWorldRestart(confirm: string) {
+  return api<{ ok: boolean; running: boolean; operation: string }>('/api/db/world-restart/rollback', {
+    method: 'POST',
+    body: JSON.stringify({ confirm }),
+  })
+}

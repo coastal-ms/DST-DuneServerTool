@@ -65,6 +65,13 @@ function Get-DuneCommandAvailability {
         default   { $true }
     }
     $reason = ''
+    $maintenanceSafe = @(
+        'logs-export', 'operator-logs-export', 'open-file-browser', 'open-director',
+        'shell-vm', 'shell-pod', 'ssh', 'setup-guide'
+    )
+    if ([bool]$State.worldRestartActive -and $Command.Name -notin $maintenanceSafe) {
+        return @{ available = $false; reason = 'World Restart maintenance is active' }
+    }
     if (-not $available) {
         $reason = switch ($Command.Requires) {
             'exists'  { "VM '$script:DuneVmName' not found" }
@@ -107,6 +114,10 @@ function Get-DuneCurrentState {
         vmExists  = [bool]$vm.exists
         vmRunning = [bool]$vm.running
         bgState   = $bgState
+        worldRestartActive = [bool](
+            (Get-Command Test-DuneWorldRestartMaintenanceActive -ErrorAction SilentlyContinue) -and
+            (Test-DuneWorldRestartMaintenanceActive)
+        )
         vm        = $vm
     }
 }
