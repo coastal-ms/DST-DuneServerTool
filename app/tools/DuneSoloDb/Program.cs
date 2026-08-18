@@ -4,7 +4,6 @@ using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Nodes;
-using System.Text.RegularExpressions;
 using Microsoft.Data.Sqlite;
 
 namespace DuneSoloDb;
@@ -42,6 +41,16 @@ internal static partial class Program
             ["TreadwheelHull_6"] = 15d,
             ["SandcrawlerSpiceContainer_Unique_Capacity_6"] = 1000d,
             ["SandcrawlerSpiceHeader_6"] = 1000d
+        };
+
+    private static readonly IReadOnlyDictionary<string, string> SoloStorageLabels =
+        new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["BasicContainer_Placeable"] = "Chest",
+            ["SpiceSilo_Placeable"] = "Small Storage Container",
+            ["StorageContainer_Placeable"] = "Storage Container",
+            ["MediumStorageContainer_Placeable"] = "Medium Storage Container",
+            ["Developer_StorageContainer_Placeable"] = "Developer Storage"
         };
 
     public static int Main(string[] args)
@@ -861,6 +870,10 @@ internal static partial class Program
                         '/Game/Dune/Systems/Building/Pieces/BP_StorageContainer.BP_StorageContainer_C',
                         jsonb('{}')
                     );
+                    INSERT INTO actors (id, class, properties) VALUES
+                        (23, 'BasicContainer', jsonb('{}')),
+                        (24, 'BP_SpiceSiloContainer', jsonb('{}')),
+                        (25, 'MediumStorageContainer', jsonb('{}'));
                     CREATE TABLE placeables (
                         id INTEGER PRIMARY KEY,
                         owner_entity_id INTEGER,
@@ -870,6 +883,9 @@ internal static partial class Program
                     INSERT INTO placeables VALUES (20, 1, 'Developer_StorageContainer_Placeable', 0);
                     INSERT INTO placeables VALUES (21, 1, 'Developer_StorageContainer_Placeable', 1);
                     INSERT INTO placeables VALUES (22, 1, 'StorageContainer_Placeable', 0);
+                    INSERT INTO placeables VALUES (23, 1, 'BasicContainer_Placeable', 0);
+                    INSERT INTO placeables VALUES (24, 1, 'SpiceSilo_Placeable', 0);
+                    INSERT INTO placeables VALUES (25, 1, 'MediumStorageContainer_Placeable', 0);
                     CREATE TABLE fgl_entities (
                         entity_id INTEGER PRIMARY KEY,
                         components BLOB
@@ -936,6 +952,9 @@ internal static partial class Program
                     INSERT INTO inventories VALUES (2, 20, 4, 1000, 50000);
                     INSERT INTO inventories VALUES (3, 21, 4, 15, 750);
                     INSERT INTO inventories VALUES (4, 22, 4, 15, 750);
+                    INSERT INTO inventories VALUES (5, 23, 4, 10, 250);
+                    INSERT INTO inventories VALUES (6, 24, 4, 10, 250);
+                    INSERT INTO inventories VALUES (7, 25, 4, 25, 1250);
                     CREATE TABLE items (
                         id INTEGER PRIMARY KEY,
                         inventory_id INTEGER REFERENCES inventories(id),
@@ -1044,13 +1063,18 @@ internal static partial class Program
                 throw new InvalidOperationException(
                     $"Map seed expected 2 from cycle index 14, found {inspection.MapSeed}.");
             }
-            var starterStorage = inspection.Inventories.SingleOrDefault(
-                value => value.Key == "inventory:4");
+            var expectedStorageLabels = new[]
+            {
+                "Chest #1",
+                "Small Storage Container #1",
+                "Storage Container #1",
+                "Medium Storage Container #1",
+                "Developer Storage #1"
+            };
             if (inspection.Inventories.Any(value => value.Key == "inventory:3")
                 || inspection.Inventories.Count(value => value.Kind == "developer-storage") != 1
-                || starterStorage is null
-                || starterStorage.Kind != "storage"
-                || starterStorage.Label != "Storage Container #1")
+                || expectedStorageLabels.Any(label =>
+                    inspection.Inventories.All(value => value.Label != label)))
             {
                 throw new InvalidOperationException(
                     "Built/hologram storage destination filtering is incorrect.");
@@ -1831,8 +1855,11 @@ internal static partial class Program
             var labelCounts = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
             while (reader.Read())
             {
-                var baseLabel = FormatSoloStorageLabel(
-                    reader.IsDBNull(4) ? string.Empty : reader.GetString(4));
+                var buildingType = reader.IsDBNull(4) ? string.Empty : reader.GetString(4);
+                if (!SoloStorageLabels.TryGetValue(buildingType, out var baseLabel))
+                {
+                    continue;
+                }
                 labelCounts.TryGetValue(baseLabel, out var priorCount);
                 var index = priorCount + 1;
                 labelCounts[baseLabel] = index;
@@ -1860,22 +1887,6 @@ internal static partial class Program
                 UsedVolume = GetUsedVolume(connection, result.Id, volumeRules)
             })
             .ToArray();
-    }
-
-    private static string FormatSoloStorageLabel(string buildingType)
-    {
-        var value = buildingType.Trim();
-        if (value.EndsWith("_Placeable", StringComparison.OrdinalIgnoreCase))
-        {
-            value = value[..^"_Placeable".Length];
-        }
-        if (value.Contains("Developer_StorageContainer", StringComparison.OrdinalIgnoreCase))
-        {
-            return "Developer Storage";
-        }
-        value = value.Replace('_', ' ');
-        value = Regex.Replace(value, "([a-z0-9])([A-Z])", "$1 $2").Trim();
-        return string.IsNullOrWhiteSpace(value) ? "Storage" : value;
     }
 
     private static GrantPlan ReadGrantPlan(string path)
