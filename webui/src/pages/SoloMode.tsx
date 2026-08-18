@@ -619,7 +619,6 @@ export function SoloMode() {
       setNotice({ kind: 'err', text: 'Choose a vehicle kit with deliverable parts.' })
       return
     }
-
     const templates = [...kit.kit, ...kit.unique, vehicleKits!.fuelTemplate, vehicleKits!.torchTemplate]
     const uniqueTemplates = [...new Set(templates)]
     await giveSoloItems(
@@ -1308,7 +1307,7 @@ export function SoloMode() {
                 </select>
               </label>
               <div className="rounded border border-border bg-surface-2/50 p-3 mt-4 text-xs text-text-muted">
-                Kit contents come from DST's versioned vehicle catalog. Large kits should go to Developer Storage rather than the backpack.
+                Kit contents come from DST's versioned vehicle catalog. Each non-stackable part needs a free slot; DST checks current contents before writing. If the package is not delivered, check the selected destination's free slots and volume.
               </div>
               <button
                 className={`btn-primary w-full mt-4 justify-center ${SOLO_DISABLED_PRIMARY_CLASS}`}

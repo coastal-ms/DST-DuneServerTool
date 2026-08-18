@@ -23,6 +23,13 @@ here cover everything those tags shipped.
   preferring Developer Storage; users can still choose another supported
   destination.
 
+### Fixed
+
+- Fresh Solo backpacks can receive the Sandbike, Buggy, Treadwheel, and Light
+  Ornithopter kits again. Missing Welding Torch and Treadwheel Hull metadata no
+  longer injects a false 1000-volume charge that rejected those kits even when
+  their known parts fit the stock 175-volume backpack.
+
 ## [13.7.0] - 2026-08-17
 
 ### Added

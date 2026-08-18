@@ -29,6 +29,20 @@ internal static partial class Program
             ["AntiRadiationPill"] = 20
         };
 
+    // These templates are missing volume metadata from the extracted gameplay
+    // catalog. The torch and Treadwheel hull use adjacent-item values so the
+    // four vehicle kits known to fit the stock 175-volume backpack remain
+    // grantable. The two unverified Sandcrawler modules stay deliberately
+    // oversized so an uncertain large kit fails closed.
+    private static readonly IReadOnlyDictionary<string, double> KnownVolumeFallbacks =
+        new Dictionary<string, double>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["RepairTool5"] = 10d,
+            ["TreadwheelHull_6"] = 15d,
+            ["SandcrawlerSpiceContainer_Unique_Capacity_6"] = 1000d,
+            ["SandcrawlerSpiceHeader_6"] = 1000d
+        };
+
     public static int Main(string[] args)
     {
         try
@@ -898,7 +912,7 @@ internal static partial class Program
                         max_item_count INTEGER,
                         max_item_volume REAL
                     );
-                    INSERT INTO inventories VALUES (1, 10, 0, 60, 1000);
+                    INSERT INTO inventories VALUES (1, 10, 0, 60, 175);
                     INSERT INTO inventories VALUES (2, 20, 4, 1000, 50000);
                     CREATE TABLE items (
                         id INTEGER PRIMARY KEY,
@@ -1098,11 +1112,26 @@ internal static partial class Program
                   "names":{
                     "TestResource":"Test Resource",
                     "HeavyAmmo":"Heavy Darts",
-                    "AntiRadiationPill":"Iodine Pill"
+                    "AntiRadiationPill":"Iodine Pill",
+                    "BuggyKnownParts":"Buggy known parts",
+                    "RepairTool5":"Welding Torch Mk5",
+                    "TreadwheelHull_6":"Treadwheel Hull Mk6",
+                    "SandcrawlerSpiceHeader_6":"Sandcrawler Vacuum Mk6"
                   },
-                  "items":{"TestResource":{"stack_max":10,"volume":1.0}}
+                  "items":{
+                    "TestResource":{"stack_max":10,"volume":1.0},
+                    "BuggyKnownParts":{"stack_max":1,"volume":110.0}
+                  }
                 }
                 """);
+            var catalog = ReadCatalog(catalogPath);
+            if (catalog["RepairTool5"].Volume != 10d
+                || catalog["TreadwheelHull_6"].Volume != 15d
+                || catalog["SandcrawlerSpiceHeader_6"].Volume != 1000d)
+            {
+                throw new InvalidOperationException(
+                    "Vehicle-kit volume fallbacks were not applied correctly.");
+            }
             var grantSafety = Path.Combine(root, "safety", "before-grant.db");
             GrantItems(target, grantSafety, planPath, catalogPath);
             if (!File.Exists(grantSafety))
@@ -1151,6 +1180,51 @@ internal static partial class Program
                     throw new InvalidOperationException(
                         "Picker-only stack-limit fallbacks were not applied correctly.");
                 }
+            }
+
+            File.WriteAllText(
+                planPath,
+                """
+                {"destination":"inventory:1","items":[
+                  {"templateId":"BuggyKnownParts","quantity":1,"quality":0},
+                  {"templateId":"RepairTool5","quantity":1,"quality":0}
+                ]}
+                """);
+            var buggySafety = Path.Combine(root, "safety", "before-buggy-grant.db");
+            GrantItems(target, buggySafety, planPath, catalogPath);
+            if (!File.Exists(buggySafety))
+            {
+                throw new InvalidOperationException(
+                    "Stock-volume Buggy grant did not retain a safety backup.");
+            }
+
+            var beforeOversizedGrant = File.ReadAllBytes(target);
+            File.WriteAllText(
+                planPath,
+                """
+                {"destination":"inventory:1","items":[
+                  {"templateId":"SandcrawlerSpiceHeader_6","quantity":1,"quality":0}
+                ]}
+                """);
+            var oversizedRejected = false;
+            try
+            {
+                GrantItems(
+                    target,
+                    Path.Combine(root, "safety", "before-oversized-grant.db"),
+                    planPath,
+                    catalogPath);
+            }
+            catch (InvalidDataException ex)
+                when (ex.Message.Contains("volume capacity", StringComparison.OrdinalIgnoreCase))
+            {
+                oversizedRejected = true;
+            }
+            if (!oversizedRejected
+                || !File.ReadAllBytes(target).SequenceEqual(beforeOversizedGrant))
+            {
+                throw new InvalidOperationException(
+                    "Oversized unknown vehicle part did not fail closed.");
             }
 
             var currencySafety = Path.Combine(root, "safety", "before-currency.db");
@@ -1352,6 +1426,7 @@ internal static partial class Program
                     "unsupported-wrapper-rejected",
                     "offline-augment-max-with-safety-backup",
                     "offline-item-grant-with-capacity-and-safety-backup",
+                    "vehicle-kit-volume-fallbacks-preserve-stock-backpack-grants",
                     "offline-currency-write-with-safety-backup",
                     "offline-water-container-fills-with-safety-backups",
                     "offline-specialization-max-with-rewards",
@@ -1774,20 +1849,11 @@ internal static partial class Program
                 };
             }
         }
-        foreach (var templateId in new[]
-                 {
-                     "RepairTool5",
-                     "SandcrawlerSpiceContainer_Unique_Capacity_6",
-                     "SandcrawlerSpiceHeader_6",
-                     "TreadwheelHull_6"
-                 })
+        foreach (var (templateId, volume) in KnownVolumeFallbacks)
         {
             if (result.ContainsKey(templateId))
             {
-                // These four catalog gaps are part of vehicle-kit payloads already
-                // field-proven in PTC. 1000 volume each is intentionally far above
-                // their observed package footprint, so capacity checks fail safely.
-                result[templateId] = new CatalogRule(1, 1000d, true);
+                result[templateId] = new CatalogRule(1, volume, true);
             }
         }
         return result;
