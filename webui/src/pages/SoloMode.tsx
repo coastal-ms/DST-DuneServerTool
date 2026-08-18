@@ -1342,7 +1342,7 @@ export function SoloMode() {
       )}
       {tab === 'inventory' && (
         <div className="space-y-4">
-          <div className="card p-5">
+          <div className="card p-5 sticky top-0 z-20 bg-surface/95 backdrop-blur-sm shadow-lg">
             <div className="flex items-start justify-between gap-4 mb-4">
               <div>
                 <h2 className="font-semibold flex items-center gap-2">
@@ -1369,6 +1369,7 @@ export function SoloMode() {
                   style={{ colorScheme: 'dark' }}
                   value={inventoryDestination}
                   onChange={event => setInventoryDestination(event.target.value)}
+                  onWheel={event => event.currentTarget.blur()}
                   disabled={busy !== null}
                 >
                   {inspection!.inventories.map(inventory => (

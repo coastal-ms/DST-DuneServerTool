@@ -32,6 +32,9 @@ here cover everything those tags shipped.
 - Solo inventory destinations include normal built storage boxes as well as
   Developer Storage. Unfinished hologram containers are excluded using the
   persisted `placeables.is_hologram` flag and rejected again at write time.
+- Solo Inventory keeps the selected delivery destination visible in a sticky
+  card while scrolling, and blurs the selector on mouse-wheel input to prevent
+  accidental destination changes.
 
 ### Fixed
 
