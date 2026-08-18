@@ -19,6 +19,9 @@ here cover everything those tags shipped.
   backup-safe offline item transaction. Unlock items are delivered to the Solo
   backpack for processing on next login; grants remain local to that save and
   do not create Funcom account entitlements.
+- Solo item delivery now selects the character backpack by default instead of
+  preferring Developer Storage; users can still choose another supported
+  destination.
 
 ## [13.7.0] - 2026-08-17
 

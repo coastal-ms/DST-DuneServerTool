@@ -195,6 +195,14 @@ export function getSoloCosmeticBackpackDestination(
   return inventories.find(inventory => inventory.kind === 'backpack')?.key ?? ''
 }
 
+export function getPreferredSoloInventoryDestination(
+  inventories: SoloInventoryDestination[],
+): string {
+  return inventories.find(inventory => inventory.kind === 'backpack')?.key
+    ?? inventories[0]?.key
+    ?? ''
+}
+
 export function buildSoloCosmeticGrant(
   templateId: string,
   inventories: SoloInventoryDestination[],
@@ -343,11 +351,7 @@ export function SoloMode() {
       return
     }
     if (!inventories.some(inventory => inventory.key === inventoryDestination)) {
-      const preferred = inventories
-        .filter(inventory => inventory.kind === 'developer-storage')
-        .sort((left, right) => left.itemRows - right.itemRows)[0]
-        ?? inventories[0]
-      setInventoryDestination(preferred?.key ?? '')
+      setInventoryDestination(getPreferredSoloInventoryDestination(inventories))
     }
   }, [statusState.data?.inspection?.inventories, inventoryDestination])
 

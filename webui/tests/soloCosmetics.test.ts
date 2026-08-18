@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   buildSoloCosmeticGrant,
+  getPreferredSoloInventoryDestination,
   getSoloCosmeticBackpackDestination,
   groupSoloCosmetics,
   SOLO_COSMETIC_ENTITLEMENT_WARNING,
@@ -64,5 +65,6 @@ describe('Solo cosmetic grants', () => {
       destination: 'inventory:1',
       items: [{ templateId: 'ScoutSetVariant', quantity: 1, quality: 0 }],
     })
+    expect(getPreferredSoloInventoryDestination([...inventories])).toBe('inventory:1')
   })
 })
