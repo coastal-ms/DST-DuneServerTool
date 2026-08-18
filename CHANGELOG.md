@@ -13,6 +13,13 @@ here cover everything those tags shipped.
 
 ## [Unreleased]
 
+### Added
+
+- Solo Mode can grant cosmetics and building sets through the existing
+  backup-safe offline item transaction. Unlock items are delivered to the Solo
+  backpack for processing on next login; grants remain local to that save and
+  do not create Funcom account entitlements.
+
 ## [13.7.0] - 2026-08-17
 
 ### Added

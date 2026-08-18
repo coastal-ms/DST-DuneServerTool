@@ -20,14 +20,18 @@ import {
   maxSoloSpecializations,
   type SoloBackup,
   type SoloBackupsResponse,
+  type SoloInventoryDestination,
   type SoloProfile,
   type SoloRuntime,
   type SoloSettingsResponse,
   type SoloStatus,
 } from '../api/solo'
 import {
+  filterCosmeticsCatalog,
+  getCosmeticsCatalog,
   getVehicleKitCatalog,
   type CatalogItem,
+  type CosmeticEntry,
   type VehicleKitCatalog,
 } from '../api/gameplay'
 import { pickLocalFolder } from '../util/pathPicker'
@@ -166,6 +170,117 @@ function StatusPill({ ok, children }: { ok: boolean; children: React.ReactNode }
       <span className={`w-1.5 h-1.5 rounded-full ${ok ? 'bg-success' : 'bg-warning'}`} />
       {children}
     </span>
+  )
+}
+
+export const SOLO_COSMETIC_ENTITLEMENT_WARNING =
+  'Grants apply only to this Solo save. They do not create Funcom account ownership or unlock content on official servers.'
+
+export function groupSoloCosmetics(
+  catalog: CosmeticEntry[],
+  query: string,
+): Array<[string, CosmeticEntry[]]> {
+  const groups = new Map<string, CosmeticEntry[]>()
+  for (const entry of filterCosmeticsCatalog(catalog, query)) {
+    const current = groups.get(entry.group)
+    if (current) current.push(entry)
+    else groups.set(entry.group, [entry])
+  }
+  return Array.from(groups.entries()).sort(([left], [right]) => left.localeCompare(right))
+}
+
+export function getSoloCosmeticBackpackDestination(
+  inventories: SoloInventoryDestination[],
+): string {
+  return inventories.find(inventory => inventory.kind === 'backpack')?.key ?? ''
+}
+
+function SoloCosmeticGrantCard({
+  busy,
+  disabled,
+  onGrant,
+}: {
+  busy: boolean
+  disabled: boolean
+  onGrant: (templateId: string, label: string) => Promise<void>
+}) {
+  const [catalog, setCatalog] = useState<CosmeticEntry[] | null>(null)
+  const [catalogError, setCatalogError] = useState('')
+  const [query, setQuery] = useState('')
+  const [selected, setSelected] = useState('')
+
+  useEffect(() => {
+    let active = true
+    getCosmeticsCatalog()
+      .then(entries => {
+        if (active) setCatalog(entries)
+      })
+      .catch(error => {
+        if (active) setCatalogError(error instanceof Error ? error.message : String(error))
+      })
+    return () => { active = false }
+  }, [])
+
+  const groups = useMemo(() => groupSoloCosmetics(catalog ?? [], query), [catalog, query])
+  const matches = useMemo(() => groups.flatMap(([, entries]) => entries), [groups])
+  const chosen = catalog?.find(entry => entry.template === selected)
+  const controlsDisabled = disabled || busy
+
+  return (
+    <div className="card p-5 xl:col-span-2">
+      <h3 className="font-semibold mb-1">Grant Cosmetic / Building Set</h3>
+      <p className="text-xs text-text-muted mb-4">
+        Delivers one unlock item to the Solo backpack for processing on next login.
+      </p>
+      <div className="rounded border border-warning/30 bg-warning/5 p-3 mb-4 text-xs text-text-muted">
+        {SOLO_COSMETIC_ENTITLEMENT_WARNING} Some developer or entitlement entries may remain ordinary inventory items and do nothing. Owned-state detection is not available for Solo yet, so the full catalog is shown and duplicate grants are possible.
+      </div>
+      {catalogError ? (
+        <div className="text-xs text-danger">Cosmetics catalog failed to load: {catalogError}</div>
+      ) : !catalog ? (
+        <div className="text-xs text-text-dim flex items-center gap-2">
+          <Icon name="LoaderCircle" size={13} className="animate-spin" /> Loading cosmetics catalog...
+        </div>
+      ) : (
+        <>
+          <input
+            type="text"
+            value={query}
+            disabled={controlsDisabled}
+            placeholder="Search name, template id, or group"
+            onChange={event => setQuery(event.target.value)}
+            className={SOLO_INPUT_CLASS}
+          />
+          <select
+            value={selected}
+            disabled={controlsDisabled}
+            onChange={event => setSelected(event.target.value)}
+            className={`${SOLO_INPUT_CLASS} mt-3`}
+            style={{ colorScheme: 'dark' }}
+          >
+            <option value="">Choose a cosmetic or building set... ({matches.length})</option>
+            {groups.map(([group, entries]) => (
+              <optgroup key={group} label={`${group} (${entries.length})`}>
+                {entries.map(entry => (
+                  <option key={entry.template} value={entry.template}>{entry.name}</option>
+                ))}
+              </optgroup>
+            ))}
+          </select>
+          {chosen && <p className="text-[11px] font-mono text-text-dim truncate mt-2">{chosen.template}</p>}
+          <button
+            className={`btn-primary w-full mt-4 justify-center ${SOLO_DISABLED_PRIMARY_CLASS}`}
+            disabled={controlsDisabled || !chosen}
+            onClick={() => {
+              if (chosen) void onGrant(chosen.template, chosen.name)
+            }}
+          >
+            <Icon name={busy ? 'LoaderCircle' : 'Shirt'} size={14} className={busy ? 'animate-spin' : ''} />
+            Grant unlock
+          </button>
+        </>
+      )}
+    </div>
   )
 }
 
@@ -420,6 +535,8 @@ export function SoloMode() {
   const giveSoloItems = async (
     items: Array<{ templateId: string; quantity: number; quality: number }>,
     label: string,
+    destination = inventoryDestination,
+    targetLabel = 'selected Solo inventory',
   ) => {
     if (!selectionMatchesActive) {
       setNotice({ kind: 'err', text: 'Connect and validate the selected Solo profile before giving items.' })
@@ -429,12 +546,12 @@ export function SoloMode() {
       setNotice({ kind: 'err', text: 'Close Dune: Awakening completely before giving Solo items.' })
       return
     }
-    if (!inventoryDestination) {
+    if (!destination) {
       setNotice({ kind: 'err', text: 'Choose a backpack or Developer Storage destination.' })
       return
     }
     if (!window.confirm(
-      `Give ${label} to the selected Solo inventory?\n\n`
+      `Give ${label} to the ${targetLabel}?\n\n`
       + 'Dune: Awakening must be fully closed. DST will retain the current game.db, '
       + 'apply the item grant transactionally, run integrity and foreign-key checks, '
       + 'replace the save atomically, and verify the result.',
@@ -444,7 +561,7 @@ export function SoloMode() {
     setNotice(null)
     try {
       const result = await grantSoloItems(
-        inventoryDestination,
+        destination,
         items,
         statusState.data?.profileToken ?? '',
       )
@@ -1183,6 +1300,24 @@ export function SoloMode() {
                 Give vehicle kit
               </button>
             </div>
+
+            <SoloCosmeticGrantCard
+              busy={busy === 'give-items'}
+              disabled={
+                !canMutateActiveProfile
+                || gameRunning
+                || !inspection?.inventories.some(inventory => inventory.kind === 'backpack')
+              }
+              onGrant={async (templateId, label) => {
+                const backpack = getSoloCosmeticBackpackDestination(inspection?.inventories ?? [])
+                await giveSoloItems(
+                  [{ templateId, quantity: 1, quality: 0 }],
+                  label,
+                  backpack,
+                  'Solo backpack',
+                )
+              }}
+            />
 
             <div className="card p-5 xl:col-span-2">
               <h3 className="font-semibold mb-1">Max Augment Attributes</h3>
