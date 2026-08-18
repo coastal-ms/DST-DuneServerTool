@@ -303,6 +303,50 @@ Describe 'defaults' {
     }
 }
 
+Describe 'chat command broadcasts' {
+    BeforeAll {
+        if (-not (Get-Command Invoke-DuneSqlQuery -ErrorAction SilentlyContinue)) {
+            function global:Invoke-DuneSqlQuery { param($Ip, $Sql, $ReadOnly, $MaxRows, $TimeoutSec) }
+        }
+        if (-not (Get-Command Send-V6GenericBroadcast -ErrorAction SilentlyContinue)) {
+            function global:Send-V6GenericBroadcast { param($Title, $Body, $DurationSec) }
+        }
+    }
+
+    It 'addresses every command reply by active character name' {
+        Mock Invoke-DuneSqlQuery {
+            @{
+                ok = $true
+                columns = @('character_name')
+                rows = ,@('Riftwalker')
+            }
+        }
+        Mock Send-V6GenericBroadcast { @{ ok = $true } }
+
+        $result = Send-DuneChatReply -Ip 'vm' -State (New-DstChatState) `
+            -ToFuncomId 'AccountName#1234' -Message 'Teleported to Riftwatch.'
+
+        $result.ok | Should -BeTrue
+        Should -Invoke Send-V6GenericBroadcast -Times 1 -Exactly -ParameterFilter {
+            $Title -eq 'Server' -and
+            $Body -eq 'Riftwalker - Teleported to Riftwatch.' -and
+            $DurationSec -eq 12
+        }
+    }
+
+    It 'falls back to account display name when character lookup fails' {
+        Mock Invoke-DuneSqlQuery { @{ ok = $false; error = 'offline' } }
+        Mock Send-V6GenericBroadcast { @{ ok = $true } }
+
+        [void](Send-DuneChatReply -Ip 'vm' -State (New-DstChatState) `
+            -ToFuncomId 'AccountName#1234' -Message 'Try again.')
+
+        Should -Invoke Send-V6GenericBroadcast -Times 1 -Exactly -ParameterFilter {
+            $Body -eq 'AccountName - Try again.'
+        }
+    }
+}
+
 Describe 'self-only commands' {
     # !kit, !item, !vehicle and !water resolve the target from the chat message's
     # sender and take no player argument, so a player can never aim them at

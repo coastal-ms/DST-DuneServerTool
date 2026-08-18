@@ -73,6 +73,8 @@ here cover everything those tags shipped.
 - Shared `!tp` destinations now use the game's safe-surface teleport path instead
   of forcing exact stored coordinates. Backed-up field testing confirmed safe
   long-distance and elevated-location arrivals.
+- Chat-command broadcasts now address players by character name consistently
+  instead of using the Funcom account-name portion for replies such as `!tp`.
 
 ## [13.6.5] - 2026-08-12
 
