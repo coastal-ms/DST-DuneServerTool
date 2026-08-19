@@ -129,18 +129,19 @@ function Invoke-DuneWorldRestartAdmission {
     param(
         [Parameter(Mandatory)][string]$Method,
         [Parameter(Mandatory)][string]$Path,
-        [Parameter(Mandatory)][scriptblock]$Script
+        [Parameter(Mandatory)][scriptblock]$Action
     )
     if ($Method -in @('GET', 'HEAD') -or
         $Path -in @('/api/db/world-restart', '/api/db/world-restart/rollback') -or
         -not (Get-Command Invoke-WithDuneLock -ErrorAction SilentlyContinue)) {
-        return (& $Script)
+        return (& $Action)
     }
+    $admittedAction = $Action
     return Invoke-WithDuneLock -Name 'world-restart-admission' -TimeoutSec 300 -Script {
         if (Test-DuneWorldRestartWriteBlocked -Method $Method -Path $Path) {
             return @{ blocked=$true }
         }
-        return @{ blocked=$false; value=(& $Script) }
+        return @{ blocked=$false; value=(& $admittedAction) }
     }
 }
 
@@ -435,7 +436,7 @@ function Invoke-DuneApiHandlerAsync {
 
             $h = [scriptblock]::Create($handlerText)
             $invoke = { & $h $req $res $routeParams $body }
-            $admitted = Invoke-DuneWorldRestartAdmission -Method $method -Path $path -Script $invoke
+            $admitted = Invoke-DuneWorldRestartAdmission -Method $method -Path $path -Action $invoke
             if ($admitted -is [System.Collections.IDictionary] -and $admitted.blocked) {
                 Write-DuneError -Response $res -Status 423 -Message 'World Restart maintenance is active. Wait for completion or use its rollback control.'
             }
@@ -959,7 +960,7 @@ function Invoke-DuneContext {
                         }
                     }
                     $invoke = { & $r.Handler $req $res $routeParams $body }
-                    $admitted = Invoke-DuneWorldRestartAdmission -Method $method -Path $rawPath -Script $invoke
+                    $admitted = Invoke-DuneWorldRestartAdmission -Method $method -Path $rawPath -Action $invoke
                     if ($admitted -is [System.Collections.IDictionary] -and $admitted.blocked) {
                         Write-DuneError -Response $res -Status 423 -Message 'World Restart maintenance is active. Wait for completion or use its rollback control.'
                     }
@@ -1041,7 +1042,7 @@ function Invoke-DuneContext {
                     }
                 }
                 $invoke = { & $r.Handler $req $res $routeParams $body }
-                $admitted = Invoke-DuneWorldRestartAdmission -Method $method -Path $rawPath -Script $invoke
+                $admitted = Invoke-DuneWorldRestartAdmission -Method $method -Path $rawPath -Action $invoke
                 if ($admitted -is [System.Collections.IDictionary] -and $admitted.blocked) {
                     Write-DuneError -Response $res -Status 423 -Message 'World Restart maintenance is active. Wait for completion or use its rollback control.'
                 }

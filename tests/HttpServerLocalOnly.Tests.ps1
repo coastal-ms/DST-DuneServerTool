@@ -54,4 +54,21 @@ Describe 'HTTP local-only request enforcement' {
             Remove-Item function:global:Test-DuneWorldRestartMaintenanceActive -ErrorAction SilentlyContinue
         }
     }
+
+    It 'admits a normal mutating handler exactly once without recursive lock calls' {
+        function global:Test-DuneWorldRestartMaintenanceActive { $false }
+        $script:admissionCalls = 0
+        try {
+            $result = Invoke-DuneWorldRestartAdmission -Method POST -Path '/api/test-write' -Action {
+                $script:admissionCalls++
+                return 'completed'
+            }
+
+            $script:admissionCalls | Should -Be 1
+            $result.blocked | Should -BeFalse
+            $result.value | Should -Be 'completed'
+        } finally {
+            Remove-Item function:global:Test-DuneWorldRestartMaintenanceActive -ErrorAction SilentlyContinue
+        }
+    }
 }
