@@ -118,7 +118,7 @@ function Test-DuneLocalOnlyRequest {
 function Test-DuneWorldRestartWriteBlocked {
     param([string]$Method, [string]$Path)
     if ($Method -in @('GET', 'HEAD')) { return $false }
-    if ($Path -eq '/api/db/world-restart/rollback') { return $false }
+    if ($Path -in @('/api/db/world-restart/rollback', '/api/db/world-restart/research-rollback')) { return $false }
     return [bool](
         (Get-Command Test-DuneWorldRestartMaintenanceActive -ErrorAction SilentlyContinue) -and
         (Test-DuneWorldRestartMaintenanceActive)
@@ -132,7 +132,12 @@ function Invoke-DuneWorldRestartAdmission {
         [Parameter(Mandatory)][scriptblock]$Action
     )
     if ($Method -in @('GET', 'HEAD') -or
-        $Path -in @('/api/db/world-restart', '/api/db/world-restart/rollback') -or
+        $Path -in @(
+            '/api/db/world-restart',
+            '/api/db/world-restart/rollback',
+            '/api/db/world-restart/research-recover',
+            '/api/db/world-restart/research-rollback'
+        ) -or
         -not (Get-Command Invoke-WithDuneLock -ErrorAction SilentlyContinue)) {
         return (& $Action)
     }
@@ -427,7 +432,7 @@ function Invoke-DuneApiHandlerAsync {
             $method = [string]$req.HttpMethod
             $path = [string]$req.Url.AbsolutePath
             if ($method -notin @('GET', 'HEAD') -and
-                $path -ne '/api/db/world-restart/rollback' -and
+                $path -notin @('/api/db/world-restart/rollback', '/api/db/world-restart/research-rollback') -and
                 (Get-Command Test-DuneWorldRestartMaintenanceActive -ErrorAction SilentlyContinue) -and
                 (Test-DuneWorldRestartMaintenanceActive)) {
                 Write-DuneError -Response $res -Status 423 -Message 'World Restart maintenance is active. Wait for completion or use its rollback control.'

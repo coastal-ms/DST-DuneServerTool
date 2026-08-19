@@ -7,9 +7,25 @@
 
 $script:DuneWorldRestartConfirm = 'RESTART WORLD'
 $script:DuneWorldRollbackConfirm = 'ROLL BACK WORLD'
+$script:DuneWorldRestartResearchRollbackConfirm = 'ROLL BACK RESEARCH RECOVERY'
 $script:DuneWorldRestartLockName = 'world-restart-admission'
 $script:DuneWorldRestartMarkerPath = '/tmp/dst-world-restart-active'
 $script:DuneWorldRestartRecoveryMarkerPath = '/var/lib/dune-server/dst-world-restart-recovery-required'
+$script:DuneWorldRestartResearchBundleGroups = @{
+    'RCP_T2_Vehicle(Ground)_SandBikeBodyHull_Recipe' = 'DA_GRP_SandbikePack'
+    'RCP_T2_Vehicle(Ground)_SandBikeChassis_Recipe' = 'DA_GRP_SandbikePack'
+    'RCP_T2_SandbikeEngine_Recipe' = 'DA_GRP_SandbikePack'
+    'RCP_T2_Vehicle(Ground)_SandBikeTreads_Recipe' = 'DA_GRP_SandbikePack'
+    'RCP_PowerUnitVeryLightRecipe' = 'DA_GRP_SandbikePack'
+    'RCP_RepairToolRecipe' = 'DA_GRP_SandbikePack'
+    'RCP_WeldingMaterialRecipe' = 'DA_GRP_SandbikePack'
+    'RCP_T2_Vehicle(Ground)_SandBikeInventoryModule_Recipe' = 'DA_GRP_SandbikePack'
+    'RCP_ScavengerRags_Boots_Recipe' = 'DA_GRP_ScavengerRagsArmor'
+    'RCP_ScavengerRags_Bottom_Recipe' = 'DA_GRP_ScavengerRagsArmor'
+    'RCP_ScavengerRags_Gloves_Recipe' = 'DA_GRP_ScavengerRagsArmor'
+    'RCP_ScavengerRags_Helmet_Recipe' = 'DA_GRP_ScavengerRagsArmor'
+    'RCP_ScavengerRags_Top_Recipe' = 'DA_GRP_ScavengerRagsArmor'
+}
 
 function Get-DuneWorldRestartStatePath {
     Join-Path $env:APPDATA 'DuneServer\world-restart-state.json'
@@ -191,6 +207,503 @@ WHERE eps.online_status::text <> 'Offline'
     return $count
 }
 
+function ConvertTo-DuneWorldRestartSqlString {
+    param([AllowEmptyString()][string]$Value)
+    return ([string]$Value).Replace("'", "''")
+}
+
+function Assert-DuneWorldRestartCsvOutput {
+    param(
+        [AllowEmptyString()][string]$Output,
+        [Parameter(Mandatory)][string]$ExpectedHeader,
+        [Parameter(Mandatory)][string]$Operation
+    )
+    if (Test-DunePsqlError -Output $Output) {
+        throw "$Operation failed: $(Get-DunePsqlErrorMessage -Output $Output)"
+    }
+    $firstLine = @(([string]$Output -split "\r?\n") | Where-Object { $_ -ne '' } | Select-Object -First 1)
+    if ($firstLine.Count -ne 1 -or [string]$firstLine[0] -cne $ExpectedHeader) {
+        throw "$Operation returned an unexpected result shape."
+    }
+}
+
+function Get-DuneWorldRestartResearchSnapshot {
+    param([Parameter(Mandatory)][string]$Ip)
+    $sql = @'
+WITH characters AS (
+    SELECT ps.character_name, ps.account_id, ac.funcom_id, ps.player_pawn_id, a.properties
+    FROM dune.player_state ps
+    JOIN dune.actors a ON a.id = ps.player_pawn_id
+    JOIN dune.accounts ac ON ac.id = ps.account_id
+    WHERE COALESCE(ac.funcom_id, '') <> ''
+),
+purchased AS (
+    SELECT c.character_name, c.account_id, c.funcom_id, c.properties,
+           e->>'ItemKey' AS item_key,
+           substring(e->>'ItemKey' FROM 5) AS base_recipe_id
+    FROM characters c
+    CROSS JOIN LATERAL jsonb_array_elements(
+        COALESCE(c.properties #> '{TechKnowledgePlayerComponent,m_TechKnowledge,m_TechKnowledgeData}', '[]'::jsonb)
+    ) e
+    WHERE left(e->>'ItemKey', 4) = 'RCP_'
+      AND e->>'UnlockedState' = 'Purchased'
+)
+SELECT p.character_name,
+       p.account_id::text AS account_id,
+       p.funcom_id,
+       p.item_key,
+       p.base_recipe_id
+FROM purchased p
+WHERE EXISTS (
+    SELECT 1
+    FROM jsonb_array_elements(
+        COALESCE(p.properties #> '{CraftingRecipesLibraryActorComponent,m_KnownItemRecipes}', '[]'::jsonb)
+    ) known
+    WHERE known->'BaseRecipeId'->>'Name' = p.base_recipe_id
+)
+ORDER BY p.character_name, p.item_key;
+'@
+    $raw = Invoke-DuneSqlRaw -Ip $Ip -Sql $sql -Csv -TimeoutSec 60
+    Assert-DuneWorldRestartCsvOutput -Output $raw `
+        -ExpectedHeader 'character_name,account_id,funcom_id,item_key,base_recipe_id' `
+        -Operation 'Pre-restart research integrity snapshot'
+    $rows = @($raw | ConvertFrom-Csv)
+    $characters = @()
+    foreach ($group in @($rows | Group-Object { "$($_.funcom_id)`0$($_.character_name)" })) {
+        $first = $group.Group | Select-Object -First 1
+        $pairs = @($group.Group | ForEach-Object {
+            $itemKey = [string]$_.item_key
+            [pscustomobject]@{
+                itemKey = $itemKey
+                baseRecipeId = [string]$_.base_recipe_id
+                groupKey = if ($script:DuneWorldRestartResearchBundleGroups.ContainsKey($itemKey)) {
+                    [string]$script:DuneWorldRestartResearchBundleGroups[$itemKey]
+                } else {
+                    ''
+                }
+            }
+        })
+        $characters += [pscustomobject]@{
+            characterName = [string]$first.character_name
+            accountId = [long]$first.account_id
+            funcomId = [string]$first.funcom_id
+            pairs = $pairs
+        }
+    }
+    return [pscustomobject]@{
+        capturedAt = (Get-Date).ToUniversalTime().ToString('o')
+        characters = @($characters)
+        pairCount = @($rows).Count
+    }
+}
+
+function Get-DuneWorldRestartResearchAudit {
+    $state = Read-DuneWorldRestartState
+    $snapshotProperty = $state.PSObject.Properties['researchSnapshot']
+    if (-not $snapshotProperty -or -not $state.researchSnapshot) {
+        return [pscustomobject]@{
+            available = $false
+            message = 'No pre-restart research integrity snapshot is available for this World Restart.'
+            capturedCharacters = 0
+            rehydratedCharacters = 0
+            pendingCharacters = @()
+            mismatches = @()
+        }
+    }
+
+    $ctx = Get-DuneWorldRestartContext
+    if (-not $ctx.ok) { throw $ctx.message }
+    if ($state.world -and [string]$state.world -ne [string]$ctx.world) {
+        throw 'Saved research integrity data belongs to a different battlegroup.'
+    }
+
+    $sql = @'
+WITH characters AS (
+    SELECT ps.character_name, ps.account_id, ac.funcom_id, ps.player_pawn_id, a.properties
+    FROM dune.player_state ps
+    JOIN dune.actors a ON a.id = ps.player_pawn_id
+    JOIN dune.accounts ac ON ac.id = ps.account_id
+    WHERE COALESCE(ac.funcom_id, '') <> ''
+)
+SELECT c.character_name,
+       c.account_id::text AS account_id,
+       c.funcom_id,
+       '' AS item_key,
+       '' AS unlocked_state,
+       '' AS base_recipe_id,
+       '' AS runtime_present
+FROM characters c
+UNION ALL
+SELECT c.character_name,
+       c.account_id::text AS account_id,
+       c.funcom_id,
+       e->>'ItemKey' AS item_key,
+       COALESCE(e->>'UnlockedState', '') AS unlocked_state,
+       substring(e->>'ItemKey' FROM 5) AS base_recipe_id,
+       CASE WHEN EXISTS (
+           SELECT 1
+           FROM jsonb_array_elements(
+               COALESCE(c.properties #> '{CraftingRecipesLibraryActorComponent,m_KnownItemRecipes}', '[]'::jsonb)
+           ) known
+           WHERE known->'BaseRecipeId'->>'Name' = substring(e->>'ItemKey' FROM 5)
+       ) THEN 'true' ELSE 'false' END AS runtime_present
+FROM characters c
+CROSS JOIN LATERAL jsonb_array_elements(
+    COALESCE(c.properties #> '{TechKnowledgePlayerComponent,m_TechKnowledge,m_TechKnowledgeData}', '[]'::jsonb)
+) e
+WHERE left(e->>'ItemKey', 4) = 'RCP_'
+ORDER BY character_name, item_key;
+'@
+    $raw = Invoke-DuneSqlRaw -Ip $ctx.ip -Sql $sql -Csv -TimeoutSec 60
+    Assert-DuneWorldRestartCsvOutput -Output $raw `
+        -ExpectedHeader 'character_name,account_id,funcom_id,item_key,unlocked_state,base_recipe_id,runtime_present' `
+        -Operation 'Post-restart research integrity audit'
+    $rows = @($raw | ConvertFrom-Csv)
+    $currentCharacters = @($rows | Where-Object { -not $_.item_key } | ForEach-Object {
+        [pscustomobject]@{
+            characterName = [string]$_.character_name
+            accountId = [long]$_.account_id
+            funcomId = [string]$_.funcom_id
+        }
+    })
+    $mismatches = @()
+    $pending = @()
+    $rehydratedCount = 0
+
+    foreach ($captured in @($state.researchSnapshot.characters)) {
+        $current = $currentCharacters | Where-Object {
+            [string]$_.funcomId -ceq [string]$captured.funcomId -and
+            [string]$_.characterName -ceq [string]$captured.characterName
+        } | Select-Object -First 1
+        if (-not $current) {
+            $pending += [string]$captured.characterName
+            continue
+        }
+        $rehydratedCount++
+        $currentRows = @($rows | Where-Object {
+            $_.item_key -and
+            [string]$_.funcom_id -ceq [string]$current.funcomId -and
+            [string]$_.character_name -ceq [string]$current.characterName
+        })
+        foreach ($pair in @($captured.pairs)) {
+            $row = $currentRows | Where-Object { [string]$_.item_key -ceq [string]$pair.itemKey } | Select-Object -First 1
+            if ($row -and [string]$row.unlocked_state -ceq 'Purchased' -and [string]$row.runtime_present -ceq 'false') {
+                $mismatches += [pscustomobject]@{
+                    characterName = [string]$current.characterName
+                    accountId = [long]$current.accountId
+                    funcomId = [string]$current.funcomId
+                    itemKey = [string]$pair.itemKey
+                    baseRecipeId = [string]$pair.baseRecipeId
+                    groupKey = [string]$pair.groupKey
+                }
+            }
+        }
+    }
+
+    return [pscustomobject]@{
+        available = $true
+        message = if ($mismatches.Count -gt 0) {
+            "$($mismatches.Count) purchased research item(s) are missing their pre-restart runtime recipe."
+        } elseif ($pending.Count -gt 0) {
+            'No mismatches found among characters that have reconnected; some pre-restart characters have not returned yet.'
+        } else {
+            'All rehydrated characters match their captured pre-restart research/runtime pairs.'
+        }
+        capturedCharacters = @($state.researchSnapshot.characters).Count
+        rehydratedCharacters = $rehydratedCount
+        pendingCharacters = @($pending)
+        mismatches = @($mismatches)
+    }
+}
+
+function Invoke-DuneWorldRestartResearchRecovery {
+    param(
+        [Parameter(Mandatory)][string]$CharacterName,
+        [Parameter(Mandatory)][string]$FuncomId,
+        [Parameter(Mandatory)][string[]]$ItemKeys
+    )
+    $requested = @($ItemKeys | Where-Object { $_ } | Select-Object -Unique)
+    if ($requested.Count -eq 0) { throw 'At least one research item is required.' }
+    if (Test-DuneWorldRestartMaintenanceActive) {
+        throw 'Another World Restart maintenance or recovery operation is already active.'
+    }
+
+    $audit = Get-DuneWorldRestartResearchAudit
+    if (-not $audit.available) { throw $audit.message }
+    $allowed = @($audit.mismatches | Where-Object {
+        [string]$_.funcomId -ceq $FuncomId -and
+        [string]$_.characterName -ceq $CharacterName
+    })
+    $allowedKeys = @($allowed | ForEach-Object { [string]$_.itemKey })
+    foreach ($itemKey in $requested) {
+        if ($allowedKeys -cnotcontains $itemKey) {
+            throw "Research item '$itemKey' is not a current captured World Restart mismatch for $CharacterName."
+        }
+    }
+    $groupKeys = @($allowed | Where-Object {
+        $requested -ccontains [string]$_.itemKey -and [string]$_.groupKey
+    } | ForEach-Object { [string]$_.groupKey } | Select-Object -Unique)
+    $mutationKeys = @($requested + $groupKeys | Select-Object -Unique)
+
+    $ctx = Get-DuneWorldRestartContext
+    if (-not $ctx.ok) { throw $ctx.message }
+    $safeName = ConvertTo-DuneWorldRestartSqlString $CharacterName
+    $safeFuncomId = ConvertTo-DuneWorldRestartSqlString $FuncomId
+    $playerSql = @"
+SELECT ps.player_pawn_id::text AS pawn_id, ps.online_status::text AS online_status
+FROM dune.player_state ps
+JOIN dune.accounts ac ON ac.id = ps.account_id
+WHERE ac.funcom_id = '$safeFuncomId'
+  AND ps.character_name = '$safeName'
+LIMIT 1;
+"@
+    $playerRaw = Invoke-DuneSqlRaw -Ip $ctx.ip -Sql $playerSql -Csv -TimeoutSec 30
+    Assert-DuneWorldRestartCsvOutput -Output $playerRaw `
+        -ExpectedHeader 'pawn_id,online_status' `
+        -Operation 'Research recovery player lookup'
+    $playerRows = @($playerRaw | ConvertFrom-Csv)
+    if ($playerRows.Count -ne 1) { throw "Could not resolve character '$CharacterName'." }
+    if ([string]$playerRows[0].online_status -cne 'Offline') {
+        throw "$CharacterName is still online. Have the player log out before research recovery."
+    }
+    $pawnId = [long]$playerRows[0].pawn_id
+    $onlineCount = Get-DuneWorldRestartOnlinePlayerCount -Ip $ctx.ip
+    if ($onlineCount -ne 0) {
+        throw "$onlineCount player(s) are still online. Have everyone log out before research recovery."
+    }
+
+    $guard = Invoke-DuneBackupShell -Ip $ctx.ip -Script "mkdir -p /var/lib/dune-server; touch $script:DuneWorldRestartMarkerPath $script:DuneWorldRestartRecoveryMarkerPath" -TimeoutSec 30
+    if ($guard.rc -ne 0) {
+        throw 'Could not establish the research recovery maintenance guard.'
+    }
+    $guardSet = $true
+    $mutationStarted = $false
+    $safeToReleaseMaintenance = $false
+
+    try {
+    $backupStem = 'dst-world-restart-research-recovery-' + (Get-Date).ToUniversalTime().ToString('yyyyMMdd-HHmmss')
+    $backupScript = @"
+set -e
+/home/dune/.dune/bin/battlegroup backup '$backupStem'
+FILE=`$(find '$script:DuneBackupDumpDir/$($ctx.world)' -maxdepth 1 -type f \( -name '$backupStem' -o -name '$backupStem.backup' \) -size +1024c | head -1)
+[ -n "`$FILE" ] || { echo '__WR_ERROR:Research recovery backup was not created or is too small.'; exit 80; }
+echo "__WR_RESEARCH_BACKUP:`$FILE|`$(wc -c < "`$FILE")"
+"@
+    $backup = Invoke-DuneBackupShell -Ip $ctx.ip -Script $backupScript -TimeoutSec 900
+    $backupMatch = [regex]::Match([string]$backup.out, '__WR_RESEARCH_BACKUP:([^|]+)\|(\d+)')
+    if ($backup.rc -ne 0 -or -not $backupMatch.Success) {
+        throw "Research recovery backup verification failed. $($backup.out.Trim())"
+    }
+
+    $state = Read-DuneWorldRestartState
+    $state | Add-Member -NotePropertyName researchRecoveryBackupPath -NotePropertyValue $backupMatch.Groups[1].Value -Force
+    $state | Add-Member -NotePropertyName researchRecoveryBackupSizeBytes -NotePropertyValue ([long]$backupMatch.Groups[2].Value) -Force
+    $state | Add-Member -NotePropertyName researchRecoveryCharacter -NotePropertyValue $CharacterName -Force
+    $state | Add-Member -NotePropertyName researchRecoveryItems -NotePropertyValue @($mutationKeys) -Force
+    $state | Add-Member -NotePropertyName recoveryRequired -NotePropertyValue $true -Force
+    $state | Add-Member -NotePropertyName researchRecoveryRequired -NotePropertyValue $true -Force
+    $state | Add-Member -NotePropertyName researchRecoveryRunning -NotePropertyValue $true -Force
+    Save-DuneWorldRestartState -State $state
+
+    $onlineCount = Get-DuneWorldRestartOnlinePlayerCount -Ip $ctx.ip
+    if ($onlineCount -ne 0) {
+        throw "$onlineCount player(s) reconnected during the recovery backup. No research data was changed."
+    }
+
+    $sqlKeys = @($mutationKeys | ForEach-Object { "'" + (ConvertTo-DuneWorldRestartSqlString $_) + "'" }) -join ','
+    $baseRecipeIds = @($allowed | Where-Object { $requested -ccontains [string]$_.itemKey } | ForEach-Object {
+        "'" + (ConvertTo-DuneWorldRestartSqlString ([string]$_.baseRecipeId)) + "'"
+    }) -join ','
+    $itemCount = $mutationKeys.Count
+    $mutationSql = @"
+BEGIN;
+DO `$research`$ BEGIN
+  IF EXISTS (
+      SELECT 1
+      FROM dune.player_state ps
+      JOIN dune.accounts ac ON ac.id = ps.account_id
+      WHERE ac.funcom_id = '$safeFuncomId'
+        AND ps.character_name = '$safeName'
+        AND ps.online_status::text <> 'Offline'
+  ) THEN
+    RAISE EXCEPTION 'Player reconnected before research recovery.';
+  END IF;
+  IF (
+      SELECT COUNT(*)
+      FROM dune.actors a
+      CROSS JOIN LATERAL jsonb_array_elements(
+          a.properties #> '{TechKnowledgePlayerComponent,m_TechKnowledge,m_TechKnowledgeData}'
+      ) e
+      WHERE a.id = $pawnId::bigint
+        AND e->>'ItemKey' IN ($sqlKeys)
+        AND e->>'UnlockedState' = 'Purchased'
+  ) <> $itemCount THEN
+    RAISE EXCEPTION 'Research mismatch state changed before recovery.';
+  END IF;
+  IF EXISTS (
+      SELECT 1
+      FROM dune.actors a
+      CROSS JOIN LATERAL jsonb_array_elements(
+          COALESCE(a.properties #> '{CraftingRecipesLibraryActorComponent,m_KnownItemRecipes}', '[]'::jsonb)
+      ) known
+      WHERE a.id = $pawnId::bigint
+        AND known->'BaseRecipeId'->>'Name' IN ($baseRecipeIds)
+  ) THEN
+    RAISE EXCEPTION 'A runtime recipe returned before recovery.';
+  END IF;
+END `$research`$;
+WITH rewritten AS (
+  SELECT jsonb_agg(
+      CASE WHEN e->>'ItemKey' IN ($sqlKeys)
+           THEN jsonb_set(e, '{UnlockedState}', '"NotPurchased"'::jsonb, true)
+           ELSE e END
+      ORDER BY ord
+  ) AS data
+  FROM dune.actors a
+  CROSS JOIN LATERAL jsonb_array_elements(
+      a.properties #> '{TechKnowledgePlayerComponent,m_TechKnowledge,m_TechKnowledgeData}'
+  ) WITH ORDINALITY t(e, ord)
+  WHERE a.id = $pawnId::bigint
+)
+UPDATE dune.actors a
+SET properties = jsonb_set(
+    a.properties,
+    '{TechKnowledgePlayerComponent,m_TechKnowledge,m_TechKnowledgeData}',
+    rewritten.data,
+    true
+)
+FROM rewritten
+WHERE a.id = $pawnId::bigint;
+COMMIT;
+"@
+    $verifySql = @"
+SELECT e->>'ItemKey' AS item_key, e->>'UnlockedState' AS unlocked_state
+FROM dune.actors a
+CROSS JOIN LATERAL jsonb_array_elements(
+    a.properties #> '{TechKnowledgePlayerComponent,m_TechKnowledge,m_TechKnowledgeData}'
+) e
+WHERE a.id = $pawnId::bigint
+  AND e->>'ItemKey' IN ($sqlKeys)
+ORDER BY item_key;
+"@
+    $stopped = $false
+    try {
+        $stop = Invoke-DuneBackupShell -Ip $ctx.ip -Script '/home/dune/.dune/bin/battlegroup stop' -TimeoutSec 600
+        if ($stop.rc -ne 0) { throw "Battlegroup stop failed before research recovery: $($stop.out.Trim())" }
+        $stopped = $true
+
+        $mutationState = Read-DuneWorldRestartState
+        $mutationState | Add-Member -NotePropertyName recoveryRequired -NotePropertyValue $true -Force
+        $mutationState | Add-Member -NotePropertyName researchRecoveryRequired -NotePropertyValue $true -Force
+        $mutationState | Add-Member -NotePropertyName researchRecoveryRunning -NotePropertyValue $true -Force
+        Save-DuneWorldRestartState -State $mutationState
+        $mutationStarted = $true
+        $mutationRaw = Invoke-DuneSqlRaw -Ip $ctx.ip -Sql $mutationSql -TimeoutSec 60
+        if (Test-DunePsqlError -Output $mutationRaw) {
+            throw "Research recovery SQL failed: $(Get-DunePsqlErrorMessage -Output $mutationRaw)"
+        }
+        $verifyRaw = Invoke-DuneSqlRaw -Ip $ctx.ip -Sql $verifySql -Csv -TimeoutSec 30
+        Assert-DuneWorldRestartCsvOutput -Output $verifyRaw `
+            -ExpectedHeader 'item_key,unlocked_state' `
+            -Operation 'Research recovery verification'
+        $verifyRows = @($verifyRaw | ConvertFrom-Csv)
+        if ($verifyRows.Count -ne $itemCount -or @($verifyRows | Where-Object { $_.unlocked_state -cne 'NotPurchased' }).Count -ne 0) {
+            throw 'Research recovery write did not verify exactly. Restore the recorded recovery backup before continuing.'
+        }
+    } finally {
+        if ($stopped) {
+            $startScript = @"
+set -e
+/home/dune/.dune/bin/battlegroup start
+for i in `$(seq 1 120); do
+  PHASE=`$(sudo kubectl get battlegroup '$($ctx.world)' -n '$($ctx.namespace)' -o jsonpath='{.status.phase}' 2>/dev/null || true)
+  [ "`$PHASE" = 'Healthy' ] && { echo '__WR_RESEARCH_HEALTH:Healthy'; exit 0; }
+  sleep 5
+done
+exit 81
+"@
+            $start = Invoke-DuneBackupShell -Ip $ctx.ip -Script $startScript -TimeoutSec 900
+            if ($start.rc -ne 0 -or [string]$start.out -notmatch '__WR_RESEARCH_HEALTH:Healthy') {
+                throw 'Battlegroup did not return to Healthy after research recovery. The verified recovery backup is recorded.'
+            }
+        }
+    }
+    $safeToReleaseMaintenance = $true
+
+    return [pscustomobject]@{
+        ok = $true
+        characterName = $CharacterName
+        funcomId = $FuncomId
+        itemKeys = @($mutationKeys)
+        backupPath = $backupMatch.Groups[1].Value
+        backupSizeBytes = [long]$backupMatch.Groups[2].Value
+        message = "Reset $itemCount purchased research item(s), including captured parent bundles, for $CharacterName. Repurchase the bundle(s) normally in game to rebuild runtime recipes."
+    }
+    } finally {
+        if ($guardSet -and ($safeToReleaseMaintenance -or -not $mutationStarted)) {
+            $clear = Invoke-DuneBackupShell -Ip $ctx.ip -Script "rm -f $script:DuneWorldRestartMarkerPath $script:DuneWorldRestartRecoveryMarkerPath" -TimeoutSec 30
+            if ($clear.rc -ne 0) {
+                throw 'Research recovery finished safely, but its maintenance guard could not be cleared.'
+            }
+            $clearState = Read-DuneWorldRestartState
+            $clearState | Add-Member -NotePropertyName recoveryRequired -NotePropertyValue $false -Force
+            $clearState | Add-Member -NotePropertyName researchRecoveryRunning -NotePropertyValue $false -Force
+            $clearState | Add-Member -NotePropertyName researchRecoveryRequired -NotePropertyValue $false -Force
+            Save-DuneWorldRestartState -State $clearState
+        } elseif ($guardSet) {
+            $failedState = Read-DuneWorldRestartState
+            $failedState | Add-Member -NotePropertyName recoveryRequired -NotePropertyValue $true -Force
+            $failedState | Add-Member -NotePropertyName researchRecoveryRunning -NotePropertyValue $false -Force
+            $failedState | Add-Member -NotePropertyName researchRecoveryRequired -NotePropertyValue $true -Force
+            Save-DuneWorldRestartState -State $failedState
+        }
+    }
+}
+
+function Invoke-DuneWorldRestartResearchRollback {
+    $state = Read-DuneWorldRestartState
+    if (-not $state.PSObject.Properties['researchRecoveryRequired'] -or -not [bool]$state.researchRecoveryRequired) {
+        throw 'No unresolved research recovery rollback is required.'
+    }
+    if (-not $state.researchRecoveryBackupPath) {
+        throw 'The research recovery backup path is missing.'
+    }
+    $ctx = Get-DuneWorldRollbackContext
+    if (-not $ctx.ok) { throw $ctx.message }
+    if ([string]$state.world -ne [string]$ctx.world) {
+        throw "The recorded research recovery belongs to world '$($state.world)', not current world '$($ctx.world)'."
+    }
+    $onlineCount = 0
+    try {
+        $onlineCount = Get-DuneWorldRestartOnlinePlayerCount -Ip $ctx.ip
+    } catch {
+        if ([string]$ctx.battlegroupPhase -ne 'Stopped') {
+            throw 'Could not verify players are offline because the database is unavailable and the battlegroup is not stopped.'
+        }
+    }
+    if ($onlineCount -ne 0) {
+        throw "$onlineCount player(s) are still online. Have everyone log out before rolling back research recovery."
+    }
+
+    $guard = Invoke-DuneBackupShell -Ip $ctx.ip -Script "mkdir -p /var/lib/dune-server; touch $script:DuneWorldRestartMarkerPath $script:DuneWorldRestartRecoveryMarkerPath" -TimeoutSec 30
+    if ($guard.rc -ne 0) { throw 'Could not establish the research rollback recovery guard.' }
+    Invoke-DuneWorldRestartRollbackInternal -Ip $ctx.ip -BackupPath ([string]$state.researchRecoveryBackupPath) -ExpectedWorld $ctx.world
+
+    $clear = Invoke-DuneBackupShell -Ip $ctx.ip -Script "rm -f $script:DuneWorldRestartMarkerPath $script:DuneWorldRestartRecoveryMarkerPath" -TimeoutSec 30
+    if ($clear.rc -ne 0) {
+        throw 'Research recovery backup was restored, but its maintenance guard could not be cleared.'
+    }
+    $state | Add-Member -NotePropertyName researchRecoveryRequired -NotePropertyValue $false -Force
+    $state | Add-Member -NotePropertyName researchRecoveryRunning -NotePropertyValue $false -Force
+    $state | Add-Member -NotePropertyName recoveryRequired -NotePropertyValue $false -Force
+    Save-DuneWorldRestartState -State $state
+    return [pscustomobject]@{
+        ok = $true
+        backupPath = [string]$state.researchRecoveryBackupPath
+        message = 'Restored the verified research recovery backup and returned the battlegroup to Healthy.'
+    }
+}
+
 function Invoke-DuneWorldRestartRollbackInternal {
     param(
         [Parameter(Mandatory)][string]$Ip,
@@ -251,6 +764,7 @@ function Invoke-DuneWorldRestart {
     $identity = Get-DuneWorldRestartProcessIdentity
     $steps = @(
         [pscustomobject]@{ id='preflight'; label='Validate resources and players offline'; status='running'; detail='' }
+        [pscustomobject]@{ id='research'; label='Capture research/runtime integrity'; status='pending'; detail='' }
         [pscustomobject]@{ id='backup'; label='Create and verify rollback backup'; status='pending'; detail='' }
         [pscustomobject]@{ id='stop'; label='Stop battlegroup'; status='pending'; detail='' }
         [pscustomobject]@{ id='reset'; label='Regenerate database storage'; status='pending'; detail='' }
@@ -284,6 +798,10 @@ function Invoke-DuneWorldRestart {
             throw "$onlineCount player(s) are still online. Have everyone return from Deep Desert, log out, and retry."
         }
         Set-DuneWorldRestartStep -State $state -Id 'preflight' -Status done -Detail "World $($ctx.world); database resources matched and all players are offline."
+
+        Set-DuneWorldRestartStep -State $state -Id 'research' -Status running -Detail 'Capturing purchased research items that have working runtime recipes.'
+        $state.researchSnapshot = Get-DuneWorldRestartResearchSnapshot -Ip $ctx.ip
+        Set-DuneWorldRestartStep -State $state -Id 'research' -Status done -Detail "Captured $($state.researchSnapshot.pairCount) working research/runtime pair(s) across $(@($state.researchSnapshot.characters).Count) character(s)."
 
         Set-DuneWorldRestartStep -State $state -Id 'backup' -Status running -Detail 'Running Funcom logical backup.'
         $backupStem = 'dst-pre-world-restart-' + (Get-Date).ToUniversalTime().ToString('yyyyMMdd-HHmmss')
@@ -465,6 +983,9 @@ exit 50
 
 function Invoke-DuneWorldRollback {
     $state = Read-DuneWorldRestartState
+    if ($state.PSObject.Properties['researchRecoveryRequired'] -and [bool]$state.researchRecoveryRequired) {
+        throw 'Research recovery is unresolved. Use Roll back research recovery; do not restore the pre-World-Restart backup.'
+    }
     if (-not $state.backupPath) { throw 'No world-restart rollback backup is recorded.' }
     $ctx = Get-DuneWorldRollbackContext
     if (-not $ctx.ok) { throw $ctx.message }
@@ -507,6 +1028,9 @@ function Start-DuneWorldRestartWorker {
     $claimLaunch = {
         $current = Get-DuneWorldRestartStatus
         if ([bool]$current.running) { return @{ ok=$false; running=$true; error='A world restart operation is already running.' } }
+        if ($Operation -eq 'restart' -and $current.PSObject.Properties['recoveryRequired'] -and [bool]$current.recoveryRequired) {
+            return @{ ok=$false; running=$false; error='A World Restart recovery operation is unresolved.' }
+        }
         $identity = Get-DuneWorldRestartProcessIdentity
         Save-DuneWorldRestartState -State @{
             phase='starting'; running=$true; operation=$Operation; steps=@()
@@ -519,12 +1043,14 @@ function Start-DuneWorldRestartWorker {
         }
         return @{ ok=$true }
     }
+    $claimCompleted = $false
     try {
         $claimed = if (Get-Command Invoke-WithDuneLock -ErrorAction SilentlyContinue) {
             Invoke-WithDuneLock -Name $script:DuneWorldRestartLockName -TimeoutSec 5 -Script $claimLaunch
         } else {
             & $claimLaunch
         }
+        $claimCompleted = $true
         if (-not $claimed.ok) { return $claimed }
 
         $rs = [runspacefactory]::CreateRunspace()
@@ -554,17 +1080,13 @@ function Start-DuneWorldRestartWorker {
         $script:DuneWorldRestartRunspace.handle = $ps.BeginInvoke()
         return @{ ok=$true; running=$true; operation=$Operation }
     } catch {
-        $identity = Get-DuneWorldRestartProcessIdentity
-        $failedState = Read-DuneWorldRestartState
-        Save-DuneWorldRestartState -State @{
-            phase='error'; running=$false; operation=$Operation; steps=@()
-            rollbackAvailable=if ($Operation -eq 'rollback') { [bool]$failedState.rollbackAvailable } else { $false }
-            recoveryRequired=if ($Operation -eq 'rollback' -and $failedState.PSObject.Properties['recoveryRequired']) { [bool]$failedState.recoveryRequired } else { $false }
-            backupPath=if ($Operation -eq 'rollback') { $failedState.backupPath } else { $null }
-            world=if ($Operation -eq 'rollback') { $failedState.world } else { $null }
-            error="Could not start world restart worker: $($_.Exception.Message)"
-            ownerPid=$identity.pid; ownerStartedTicks=$identity.startedTicks
-            updated=(Get-Date).ToUniversalTime().ToString('o'); finished=(Get-Date).ToUniversalTime().ToString('o')
+        if ($claimCompleted) {
+            $failedState = Read-DuneWorldRestartState
+            $failedState | Add-Member -NotePropertyName phase -NotePropertyValue 'error' -Force
+            $failedState | Add-Member -NotePropertyName running -NotePropertyValue $false -Force
+            $failedState | Add-Member -NotePropertyName error -NotePropertyValue "Could not start world restart worker: $($_.Exception.Message)" -Force
+            $failedState | Add-Member -NotePropertyName finished -NotePropertyValue (Get-Date).ToUniversalTime().ToString('o') -Force
+            Save-DuneWorldRestartState -State $failedState
         }
         return @{ ok=$false; running=$false; error="Could not start world restart worker: $($_.Exception.Message)" }
     }

@@ -169,9 +169,41 @@ export type WorldRestartStatus = {
   world?: string
   backupPath?: string
   rollbackAvailable: boolean
+  recoveryRequired?: boolean
+  researchRecoveryRequired?: boolean
+  researchRecoveryRunning?: boolean
+  researchRecoveryBackupPath?: string
   automaticRollback?: boolean
   error?: string
   steps: WorldRestartStep[]
+}
+
+export type WorldRestartResearchMismatch = {
+  characterName: string
+  accountId: number
+  funcomId: string
+  itemKey: string
+  baseRecipeId: string
+  groupKey: string
+}
+
+export type WorldRestartResearchAudit = {
+  available: boolean
+  message: string
+  capturedCharacters: number
+  rehydratedCharacters: number
+  pendingCharacters: string[]
+  mismatches: WorldRestartResearchMismatch[]
+}
+
+export type WorldRestartResearchRecovery = {
+  ok: boolean
+  characterName: string
+  funcomId: string
+  itemKeys: string[]
+  backupPath: string
+  backupSizeBytes: number
+  message: string
 }
 
 export function getWorldRestartStatus() {
@@ -190,4 +222,30 @@ export function rollbackWorldRestart(confirm: string) {
     method: 'POST',
     body: JSON.stringify({ confirm }),
   })
+}
+
+export function getWorldRestartResearchAudit() {
+  return api<WorldRestartResearchAudit>('/api/db/world-restart/research-audit')
+}
+
+export function recoverWorldRestartResearch(opts: {
+  characterName: string
+  funcomId: string
+  itemKeys: string[]
+  confirm: string
+}) {
+  return api<WorldRestartResearchRecovery>('/api/db/world-restart/research-recover', {
+    method: 'POST',
+    body: JSON.stringify(opts),
+  })
+}
+
+export function rollbackWorldRestartResearch(confirm: string) {
+  return api<{ ok: boolean; backupPath: string; message: string }>(
+    '/api/db/world-restart/research-rollback',
+    {
+      method: 'POST',
+      body: JSON.stringify({ confirm }),
+    },
+  )
 }

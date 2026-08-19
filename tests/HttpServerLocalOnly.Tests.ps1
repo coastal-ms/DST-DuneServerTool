@@ -49,6 +49,7 @@ Describe 'HTTP local-only request enforcement' {
             Test-DuneWorldRestartWriteBlocked -Method POST -Path '/api/shutdown' | Should -BeTrue
             Test-DuneWorldRestartWriteBlocked -Method POST -Path '/api/commands/run/restart' | Should -BeTrue
             Test-DuneWorldRestartWriteBlocked -Method POST -Path '/api/db/world-restart/rollback' | Should -BeFalse
+            Test-DuneWorldRestartWriteBlocked -Method POST -Path '/api/db/world-restart/research-rollback' | Should -BeFalse
             Test-DuneWorldRestartWriteBlocked -Method GET -Path '/api/status' | Should -BeFalse
         } finally {
             Remove-Item function:global:Test-DuneWorldRestartMaintenanceActive -ErrorAction SilentlyContinue
@@ -70,5 +71,39 @@ Describe 'HTTP local-only request enforcement' {
         } finally {
             Remove-Item function:global:Test-DuneWorldRestartMaintenanceActive -ErrorAction SilentlyContinue
         }
+    }
+
+    It 'lets research recovery own the World Restart admission lock' {
+        function global:Test-DuneWorldRestartMaintenanceActive { $true }
+        try {
+            $result = Invoke-DuneWorldRestartAdmission -Method POST -Path '/api/db/world-restart/research-recover' -Action {
+                return 'handler-owned-lock'
+            }
+
+            $result | Should -Be 'handler-owned-lock'
+        } finally {
+            Remove-Item function:global:Test-DuneWorldRestartMaintenanceActive -ErrorAction SilentlyContinue
+        }
+    }
+
+    It 'lets research rollback own the World Restart admission lock' {
+        function global:Test-DuneWorldRestartMaintenanceActive { $true }
+        try {
+            $result = Invoke-DuneWorldRestartAdmission -Method POST -Path '/api/db/world-restart/research-rollback' -Action {
+                return 'research-rollback-handler-owned-lock'
+            }
+
+            $result | Should -Be 'research-rollback-handler-owned-lock'
+        } finally {
+            Remove-Item function:global:Test-DuneWorldRestartMaintenanceActive -ErrorAction SilentlyContinue
+        }
+    }
+
+    It 'keeps research rollback reachable through pooled API workers' {
+        $source = Get-Content (Join-Path (Get-DstRepoRoot) 'app\server\HttpServer.ps1') -Raw
+
+        $source | Should -Match ([regex]::Escape(
+            "`$path -notin @('/api/db/world-restart/rollback', '/api/db/world-restart/research-rollback')"
+        ))
     }
 }

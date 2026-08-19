@@ -38,6 +38,16 @@ here cover everything those tags shipped.
   and scheduled backups remain paused until verified recovery clears the marker.
   Mutating API work is serialized with restart admission, so already-started
   writes finish before backup and no new write can race storage replacement.
+  Before storage replacement, DST also captures purchased research items whose
+  runtime crafting recipes are working. After account-linked characters return,
+  a local-only integrity audit detects research that reappeared as Purchased
+  without rebuilding its runtime recipe. Recovery verifies a new full-world
+  backup, stops the battlegroup, resets only proven mismatches for that stable
+  Funcom identity plus their captured parent research bundles, and returns the
+  battlegroup to Healthy so the player can repurchase normally and trigger
+  Funcom's required runtime cascade. An unresolved recovery has its own guarded
+  rollback to the fresh recovery backup; DST blocks the older pre-World-Restart
+  rollback so it cannot erase the accepted fresh world by mistake.
 
 ## [13.8.0] - 2026-08-18
 
