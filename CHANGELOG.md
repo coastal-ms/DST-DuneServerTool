@@ -13,6 +13,13 @@ here cover everything those tags shipped.
 
 ## [Unreleased]
 
+## [13.8.1] - 2026-08-18
+
+### Fixed
+
+- Corrected the DD Seed Maps cave locations for seed 2 to match the current
+  live map: I1, H2, H5, G5 (two caves), and E9.
+
 ## [13.8.0] - 2026-08-18
 
 ### Added
