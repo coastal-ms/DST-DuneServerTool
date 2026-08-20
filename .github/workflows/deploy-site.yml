@@ -42,6 +42,9 @@ permissions:
 
 jobs:
   build:
+    # Stable publication refreshes the site. Silent test-channel mirrors are
+    # prereleases and must not launch a redundant Pages deployment.
+    if: github.event_name != 'release' || !github.event.release.prerelease
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
