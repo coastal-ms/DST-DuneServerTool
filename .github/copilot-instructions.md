@@ -26,11 +26,23 @@ Apply this in **every session**, unless the maintainer explicitly asks otherwise
   `todos` table (and `todo_deps` for ordering) when that helps you keep track,
   but write the implementation yourself. There is no planner/builder split and
   no separate "executor" role — do not narrate one.
-- Keep the parent session responsible for implementation, user communication,
-  and approval gates. Use a child or sub-agent only for bounded independent work
-  that genuinely benefits from separate context. It inherits the active model,
-  reports results and questions to the parent, and never asks the maintainer
-  directly.
+- **Child sessions and sub-agents are allowed for bounded independent work or
+  separate context.** The parent session remains the sole
+  user-facing coordinator and owns approval gates. Every child reports results,
+  progress, blockers, and questions to the parent instead of asking the
+  maintainer directly. Automatically started children follow the same rule.
+  Children inherit the parent session's active model; never select a different
+  model. Do not recreate a planner/builder split.
+- **Discord monitoring belongs to the active parent, never a child responder.**
+  Attach the parent to the persistent local gateway ears-only, batch/deduplicate
+  startup catch-up, and get one maintainer decision before live autonomy.
+  Event delivery is ID-only, ACKed, and wakes the same parent through one
+  detached wait. Fetch actual context before ACK; rearm only after pending is
+  clear. Live conversation scope is harmless banter plus useful Dune-related
+  conversation, including open questions that do not mention Duke.
+  Coastal alone has full local control; elevated Hawk may request bounded,
+  backup-safe local Dune-server work only. Gateway autonomy never performs
+  destructive work. Normal wait renewal does not re-gate.
 
 ## Repository layout
 

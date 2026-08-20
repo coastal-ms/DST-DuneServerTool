@@ -13,23 +13,23 @@ const funcomVersion = "1.4.10.4";
 
 const features = [
   {
-    title: "Server Health at a glance",
-    body: "Battlegroup + VM status, live TCP port checks, per-pod game-server health, live spice-field counts, and Map SpinUp loading diagnostics with clear failure reasons when a map will not come up.",
+    title: "Operate Self-Hosted without living in a shell",
+    body: "Health, maps, INIs, PostgreSQL, backups, players, bases, Landsraad, and the Exchange stay in one Windows app with guarded actions and clear recovery paths.",
   },
   {
-    title: "Gameplay Admin, expanded",
-    body: "The Gameplay Admin portal now covers Landsraad Houses editing, stack-quantity editing for storage and inventory, market-bot pricing modes (formula, market-follow, and over-market buy guard), and the built-in cheat-script controls.",
+    title: "Manage a local Solo save safely",
+    body: "Solo Mode validates one local save and keeps backup-first tools for settings, inventory, currencies, cosmetics, packages, vehicle kits, augments, and proven progression.",
   },
   {
-    title: "Setup, config & database",
-    body: "A three-path Setup Wizard, grouped server INI editors, optional local client Game.ini and Engine.ini management, and Postgres-backed backup + SQL workflows — all guarded by DST-managed writes, explicit opt-ins, and safe defaults.",
+    title: "See the Deep Desert before it shifts",
+    body: "DD Seed Maps puts all 12 Coriolis layouts inside DST with POI filters, confidence notes, seed selection, and running-map seed detection.",
   },
 ];
 ---
 
 <Base
   title="DST — Dune Server Tool"
-  description="A Windows portal for your self-hosted Dune: Awakening dedicated server. Open source, Apache 2.0."
+  description="A Windows operations app for Dune: Awakening Self-Hosted servers and local Solo saves. Open source, Apache 2.0."
 >
   <section class="mx-auto max-w-6xl px-6 pt-20 pb-12">
     <div class="grid lg:grid-cols-[1.1fr_1fr] gap-12 items-center">
@@ -48,14 +48,14 @@ const features = [
         <h1
           class="text-5xl sm:text-6xl font-semibold tracking-tight leading-[1.05]"
         >
-          Run your Dune: Awakening server
+          Run Dune your way,
           <span class="text-dune-accent">without the YAML.</span>
         </h1>
         <p class="mt-6 text-lg text-dune-muted leading-relaxed max-w-xl">
-          DST is a single-window Windows app that hosts a local web portal
-          for your self-hosted Dune: Awakening dedicated server. Same
-          battlegroup, SSH, and Hyper-V automation under the hood — without
-          ever opening a raw shell or hand-editing YAML.
+          DST is a single-window Windows app for Dune: Awakening Self-Hosted
+          servers and local Solo saves. It puts Hyper-V, K3s, PostgreSQL,
+          configuration, backups, gameplay administration, and save tools
+          behind deliberate controls instead of terminal archaeology.
         </p>
         <div class="mt-8 flex flex-wrap items-start gap-4">
           <DownloadButton />
@@ -74,31 +74,11 @@ const features = [
     </div>
   </section>
 
-  <section class="mx-auto max-w-6xl px-6 pb-4">
-    <div
-      class="rounded-xl border border-emerald-500/40 bg-emerald-500/10 px-6 py-5 sm:px-8 sm:flex sm:items-center sm:gap-5"
-    >
-      <div class="flex items-center gap-3 shrink-0">
-        <span class="text-2xl" aria-hidden="true">✅</span>
-        <span class="text-base font-semibold text-emerald-200">
-          Compatible with Dune: Awakening {funcomVersion}
-        </span>
-      </div>
-      <p class="mt-2 sm:mt-0 text-sm text-dune-muted leading-relaxed">
-        The current release ({versionLabel}) is verified against Funcom's
-        latest update — both the game <strong class="text-dune-text">client</strong>
-        and the <strong class="text-dune-text">self-hosted server</strong>
-        software — confirmed live on the 1.4.10.4 build (July 31, 2026).
-        No update to DST is required.
-      </p>
-    </div>
-  </section>
-
   <section class="mx-auto max-w-6xl px-6 py-16">
     <div class="grid sm:grid-cols-3 gap-6">
       {
         features.map((f) => (
-          <div class="rounded-lg border border-dune-border bg-dune-surface p-6">
+          <div class="border-t border-dune-border pt-5">
             <h3 class="text-lg font-semibold text-dune-text mb-2">{f.title}</h3>
             <p class="text-sm text-dune-muted leading-relaxed">{f.body}</p>
           </div>
@@ -115,20 +95,18 @@ const features = [
         What's in the box
       </h2>
       <div class="grid sm:grid-cols-2 gap-x-12 gap-y-3 text-dune-muted">
-        <div>✓ Server health dashboard + map-spin-up diagnostics</div>
-        <div>✓ Live spice-field controls + restart actions</div>
-        <div>✓ Game config with Experimental gameplay controls and client INI support</div>
-        <div>✓ Embedded PowerShell terminal</div>
-        <div>✓ Monaco SQL editor over Postgres + backup scheduling</div>
-        <div>✓ Three-path Setup Wizard including Hyper-V over LAN for a remote/headless host</div>
-        <div>✓ Remote portal support for phone-friendly monitoring</div>
-        <div>✓ Built-in auto-updater</div>
-        <div>✓ Optional auto-start at Windows sign-in</div>
-        <div>✓ Six built-in themes + custom color picker</div>
-        <div>✓ Full Gameplay Admin (54 player-management endpoints, Landsraad Houses, stack edits, market-bot pricing modes)</div>
-        <div>✓ Build-your-own Give Package item bundles</div>
-        <div>✓ One-click Give Vehicle Kit (Mk6 parts + fuel + tool)</div>
-        <div>✓ Native Duke market bot with formula, market-follow, and over-market buy guard</div>
+        <div>✓ VM, battlegroup, pod, port, memory, and spice health</div>
+        <div>✓ Curated Game Config plus isolated Experimental Lab</div>
+        <div>✓ Local-client Game.ini and opt-in Engine.ini management</div>
+        <div>✓ Gameplay Admin for players, bases, storage, blueprints, and Landsraad</div>
+        <div>✓ Duke Market Bot with formula and market-follow pricing</div>
+        <div>✓ Packages, vehicle kits, cosmetics, progression, and base-water tools</div>
+        <div>✓ Interactive DD Seed Maps for all 12 Coriolis layouts</div>
+        <div>✓ Solo Mode with validated, backup-first offline mutations</div>
+        <div>✓ PostgreSQL backup, restore, SQL, migration, and cleanup workflows</div>
+        <div>✓ Three-path setup, including Hyper-V over LAN</div>
+        <div>✓ Constrained remote portal and mobile pairing</div>
+        <div>✓ Scheduled restarts, updater, startup, and background service options</div>
       </div>
       <div class="mt-8 flex flex-wrap gap-4">
         <a

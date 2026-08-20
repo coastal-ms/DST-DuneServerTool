@@ -97,6 +97,121 @@ const SOLO_DISABLED_PRIMARY_CLASS = 'disabled:bg-surface-2 disabled:text-text-di
 export const SOLO_READ_ONLY_SETTINGS = new Set(['DifficultyLevel'])
 export const SOLO_HIDDEN_SETTINGS = new Set(['PVPMode'])
 
+type SoloSettingOption = { value: string; label: string }
+export type SoloSettingControl =
+  | { type: 'boolean' }
+  | { type: 'number'; step: 'any' | 1 }
+  | { type: 'select'; options: SoloSettingOption[] }
+  | { type: 'text' }
+
+const SOLO_BOOLEAN_SETTINGS = new Set([
+  'bEnableItemMaxDurabilityLoss',
+  'bAllowDynamicBuildingDamage',
+  'bAllowSandstorms',
+  'bAllowSandworms',
+  'bIsBuildingRestrictionsEnabled',
+  'bBuildingInfiniteStability',
+  'bLandsraadDisableDecreeRerollLimit',
+])
+
+const SOLO_INTEGER_SETTINGS = new Set([
+  'FiefdomLimit',
+  'MaxLandclaimSegments',
+])
+
+const SOLO_SELECT_SETTINGS: Record<string, SoloSettingOption[]> = {
+  DropEquipmentOnDeath: [
+    { value: 'Default', label: 'Default' },
+    { value: 'None', label: 'None' },
+    { value: 'Backpack', label: 'Backpack only' },
+    { value: 'All', label: 'All equipment' },
+  ],
+  SandwormConsequences: [
+    { value: 'Default', label: 'Default' },
+    { value: 'None', label: 'None' },
+    { value: 'Backpack', label: 'Backpack only' },
+    { value: 'All', label: 'All equipment' },
+  ],
+  PlayerDeathLootRule: [
+    { value: 'DependsOnSecurityZone', label: 'Depends on security zone' },
+    { value: 'NeverAllowOtherPlayers', label: 'Never allow other players' },
+    { value: 'AlwaysAllowOtherPlayers', label: 'Always allow other players' },
+  ],
+}
+
+export function getSoloSettingControl(key: string): SoloSettingControl {
+  if (SOLO_BOOLEAN_SETTINGS.has(key)) return { type: 'boolean' }
+  const options = SOLO_SELECT_SETTINGS[key]
+  if (options) return { type: 'select', options }
+  if (SOLO_READ_ONLY_SETTINGS.has(key) || SOLO_HIDDEN_SETTINGS.has(key)) return { type: 'text' }
+  return { type: 'number', step: SOLO_INTEGER_SETTINGS.has(key) ? 1 : 'any' }
+}
+
+export function validateSoloSettingChanges(settings: Record<string, string>): string | null {
+  for (const [key, rawValue] of Object.entries(settings)) {
+    const value = rawValue.trim()
+    const control = getSoloSettingControl(key)
+    if (control.type === 'boolean' && value !== 'True' && value !== 'False') {
+      return `${key} must be enabled or disabled.`
+    }
+    if (control.type === 'select' && !control.options.some(option => option.value === value)) {
+      return `${key} has an unsupported option.`
+    }
+    if (control.type === 'number') {
+      const valid = control.step === 1
+        ? /^-?\d+$/.test(value)
+        : /^-?(?:\d+(?:\.\d*)?|\.\d+)$/.test(value)
+      if (!valid) return `${key} must be ${control.step === 1 ? 'a whole number' : 'a number'}.`
+    }
+  }
+  return null
+}
+
+function SoloBooleanControl({
+  value,
+  on,
+  off,
+  disabled,
+  label,
+  onChange,
+}: {
+  value: string
+  on: string
+  off: string
+  disabled: boolean
+  label: string
+  onChange: (value: string) => void
+}) {
+  const selected = value.toLowerCase()
+  const buttonClass = 'flex-1 px-3 py-2 rounded-lg border text-sm font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed'
+  return (
+    <div className="mt-2 flex items-center gap-2" role="group" aria-label={label}>
+      <button
+        type="button"
+        className={`${buttonClass} ${selected === off.toLowerCase()
+          ? 'border-danger/40 bg-danger/20 text-danger'
+          : 'border-border bg-surface-2 text-text-muted'}`}
+        aria-pressed={selected === off.toLowerCase()}
+        disabled={disabled}
+        onClick={() => onChange(off)}
+      >
+        Disabled
+      </button>
+      <button
+        type="button"
+        className={`${buttonClass} ${selected === on.toLowerCase()
+          ? 'border-success/40 bg-success/20 text-success'
+          : 'border-border bg-surface-2 text-text-muted'}`}
+        aria-pressed={selected === on.toLowerCase()}
+        disabled={disabled}
+        onClick={() => onChange(on)}
+      >
+        Enabled
+      </button>
+    </div>
+  )
+}
+
 const SETTING_GROUPS: Array<{ title: string; keys: string[] }> = [
   {
     title: 'World and economy',
@@ -505,6 +620,11 @@ export function SoloMode() {
 
     if (gameRunning) {
       setNotice({ kind: 'err', text: 'Close Dune: Awakening completely before applying Solo settings.' })
+      return
+    }
+    const validationError = validateSoloSettingChanges(changedSettings)
+    if (validationError) {
+      setNotice({ kind: 'err', text: validationError })
       return
     }
     if (!window.confirm(
@@ -1146,7 +1266,7 @@ export function SoloMode() {
                     </div>
                     <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
                       {consoleSettingsState.data.entries.map(entry => (
-                        <label key={entry.key} className="block rounded border border-border bg-surface-2/40 p-3">
+                        <div key={entry.key} className="block rounded border border-border bg-surface-2/40 p-3">
                           <span className="flex items-center justify-between gap-2 text-xs text-text-muted">
                             <span>{entry.label}</span>
                             <span className={entry.status === 'Confirmed' ? 'text-success' : 'text-warning'}>
@@ -1154,19 +1274,17 @@ export function SoloMode() {
                             </span>
                           </span>
                           {entry.type === 'bool01' ? (
-                            <select
-                              className={`${SOLO_INPUT_CLASS} mt-2`}
-                              style={{ colorScheme: 'dark' }}
+                            <SoloBooleanControl
                               value={consoleDraft[entry.key] ?? entry.value}
-                              onChange={event => setConsoleDraft(current => ({
-                                ...current,
-                                [entry.key]: event.target.value,
-                              }))}
+                              on="1"
+                              off="0"
                               disabled={!canMutateActiveProfile || gameRunning}
-                            >
-                              <option value="1">Enabled</option>
-                              <option value="0">Disabled</option>
-                            </select>
+                              label={entry.label}
+                              onChange={value => setConsoleDraft(current => ({
+                                ...current,
+                                [entry.key]: value,
+                              }))}
+                            />
                           ) : (
                             <input
                               type="number"
@@ -1183,7 +1301,7 @@ export function SoloMode() {
                           )}
                           <span className="block text-[11px] text-text-dim mt-2">{entry.help}</span>
                           <span className="block text-[10px] font-mono text-text-dim mt-1">{entry.key}</span>
-                        </label>
+                        </div>
                       ))}
                     </div>
                     <button
@@ -1208,20 +1326,57 @@ export function SoloMode() {
               {SETTING_GROUPS.map(group => (
                 <CollapsibleCard key={group.title} id={`solo-settings-${group.title.toLowerCase().replaceAll(' ', '-')}`} title={group.title} icon="SlidersHorizontal">
                   <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
-                    {group.keys.map(key => (
-                      <label key={key} className="block">
-                        <span className="text-xs text-text-muted">
-                          {key}{SOLO_READ_ONLY_SETTINGS.has(key) ? ' (set in game)' : ''}
-                        </span>
-                        <input
-                          className={`${SOLO_INPUT_CLASS} mt-1 font-mono text-xs`}
-                          value={draft[key] ?? ''}
-                          onChange={event => setDraft(current => ({ ...current, [key]: event.target.value }))}
-                          placeholder={settingsByKey.get(key)?.present ? '' : 'Not currently written'}
-                          disabled={SOLO_READ_ONLY_SETTINGS.has(key)}
-                        />
-                      </label>
-                    ))}
+                    {group.keys.map(key => {
+                      const value = draft[key] ?? ''
+                      const control = getSoloSettingControl(key)
+                      const disabled = SOLO_READ_ONLY_SETTINGS.has(key)
+                      const inputId = `solo-setting-${key}`
+                      const update = (next: string) => setDraft(current => ({ ...current, [key]: next }))
+                      return (
+                        <div key={key} className="block">
+                          <label htmlFor={control.type === 'boolean' ? undefined : inputId} className="text-xs text-text-muted">
+                            {key}{disabled ? ' (set in game)' : ''}
+                          </label>
+                          {control.type === 'boolean' ? (
+                            <SoloBooleanControl
+                              value={value}
+                              on="True"
+                              off="False"
+                              disabled={disabled}
+                              label={key}
+                              onChange={update}
+                            />
+                          ) : control.type === 'select' ? (
+                            <select
+                              id={inputId}
+                              className={`${SOLO_INPUT_CLASS} mt-1 text-xs`}
+                              style={{ colorScheme: 'dark' }}
+                              value={value}
+                              onChange={event => update(event.target.value)}
+                              disabled={disabled}
+                            >
+                              {!control.options.some(option => option.value === value) && (
+                                <option value={value}>{value || 'Not currently written'}</option>
+                              )}
+                              {control.options.map(option => (
+                                <option key={option.value} value={option.value}>{option.label}</option>
+                              ))}
+                            </select>
+                          ) : (
+                            <input
+                              id={inputId}
+                              type={control.type === 'number' ? 'number' : 'text'}
+                              step={control.type === 'number' ? control.step : undefined}
+                              className={`${SOLO_INPUT_CLASS} mt-1 font-mono text-xs`}
+                              value={value}
+                              onChange={event => update(event.target.value)}
+                              placeholder={settingsByKey.get(key)?.present ? '' : 'Not currently written'}
+                              disabled={disabled}
+                            />
+                          )}
+                        </div>
+                      )
+                    })}
                   </div>
                 </CollapsibleCard>
               ))}

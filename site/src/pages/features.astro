@@ -10,61 +10,43 @@ const sections = [
     id: "health",
     title: "Server Health",
     img: "server-health.png",
-    body: "Default landing page. Combined battlegroup + VM state, live TCP port verdicts, per-pod game-server status, active spice-field counts pulled live from Postgres, and Map SpinUp loading diagnostics with restart actions and clear failure reasons when a map will not come up. A read-only probe also surfaces a VM low-on-memory banner when a home-hosted VM starts OOM-killing Funcom's operator pods, so the 'node is out of RAM' signature is caught without a log export.",
-  },
-  {
-    id: "commands",
-    title: "Commands",
-    img: "commands.png",
-    body: "Quick-action cards grouped by VM, Battlegroup, and Tools. Each card knows whether it runs in-app or in a popup, self-disables with a hint when it doesn't apply, and is drag-reorderable — the layout persists across launches.",
+    body: "See the VM, battlegroup, database, gateway, director, game pods, public ports, active spice fields, scheduled restarts, and memory-pressure warnings in one place. Health cards distinguish normal reconciliation from actual faults, while raw output and log exports remain close when you need evidence.",
   },
   {
     id: "gameconfig",
     title: "Game Config",
     img: "game-config.png",
-    body: "Grouped editor for UserGame.ini and UserEngine.ini with every setting labelled and typed. It reads the live server INIs, writes changes into backed-up DST-managed blocks, and covers Landsraad / Coriolis seeds, per-setting defaults, restore points, and isolated Experimental gameplay controls. Changed game-file settings can also be applied to the local Dune client: Game.ini support is always available, while Engine.ini management is disabled by default and requires an explicit opt-in for client-evaluated settings such as vehicle limits. File-aware previews and warnings explain multiplayer compatibility, block Engine.ini writes while the game is running, and remove only DST-managed values when the opt-in is turned off.",
+    body: "Edit UserGame.ini and UserEngine.ini through typed controls instead of hand-editing files. DST reads live values, shows Funcom defaults, creates restore points, writes isolated managed blocks, and can mirror opted-in settings to the local client. Proven controls stay in Game Config; recovered, unconfirmed controls live separately in Experimental Lab.",
   },
   {
     id: "gameplay",
     title: "Gameplay Admin",
     img: "gameplay-admin.png",
-    body: "The Gameplay Admin portal is a full in-tree port with 54 player-management endpoints and a bucketed Actions panel. It covers a Landsraad Houses tab for editing house reward milestones, inline stack-quantity editing in Storage and player inventory, Grant Cosmetics with the full skin-variant catalog (vehicle and weapon skins, not just sandbikes), an Update Tags box with catalog typeahead that fires the game's server-side unlock triggers, and Duke's market-bot pricing modes — formula, market-follow, and over-market buy guard — plus the built-in Cheat Scripts and Landsraad contribution controls. Save actions are guarded by a real online-player check so they don't false-warn on stale ghost rows after a restart.",
+    body: "Manage players, bases, storage, blueprints, Landsraad Houses, the Exchange, and Duke's Market Bot from one console. Player actions cover currencies, items, packages, vehicle kits, cosmetics, progression, identity, teleports, water, augments, and guarded destructive work. Database writes use explicit offline or live-state checks rather than optimistic guesses.",
   },
   {
-    id: "give-package",
-    title: "Give Package",
-    img: "give-package.png",
-    body: "Build and reuse your own item packages. Create named bundles of any items (each with a quantity and tier Mk1–Mk6), then hand a whole package to any player in one click from their Inventory section. Packages are created, edited, and deleted right from the form and saved server-side (item-packages.json), so they persist across restarts and are shared between the desktop app and the remote portal. Delivery uses the normal give-items path, so it works online or offline as long as there's inventory space.",
+    id: "solo",
+    title: "Solo Mode",
+    img: "solo-mode.png",
+    body: "Manage one local Dune Solo save without a VM or Self-Hosted installation. DST validates the wrapped SQLite save, keeps retained backups, and exposes typed settings plus inventory, currency, water, cosmetics, packages, vehicle kits, augments, and proven progression actions. Mutations require the game to be closed and are backup-first, atomic, and verified.",
   },
   {
-    id: "give-vehicle-kit",
-    title: "Give Vehicle Kit",
-    img: "give-vehicle-kit.png",
-    body: "Hand a player a whole vehicle without a live RMQ spawn. Pick one of the six CHOAM vehicles with craftable part items (Sandbike, Buggy, Sandcrawler, and Light/Medium/Transport Ornithopters) and DST delivers its full Mk6 part set — chassis, engine, PSU, hull, locomotion, boost — plus a Large Vehicle Fuel Cell and a Welding Torch Mk5, along with each vehicle's named top-tier modules (Mohandis engine, Night Rider boost, ornithopter storage). v12.2.1 corrected the kit contents and added per-part quantities so every vehicle actually assembles: Sandbike Tread ×3, Buggy Tread ×4 plus the Focused Buggy Cutteray Mk6, Sandcrawler's Dampened Treads ×2, and the named Albatross ×4 / Hummingbird ×6 / Roc ×8 ornithopter wing modules (the Carrier also gets Tail Hull ×2 and Side Hull ×2). A new **Allow overflow (drop to ground)** toggle lets a give through even when the player's backpack is full — the game drops whatever doesn't fit next to them. The form previews the exact parts before you hand them over, and it works online or offline as long as there's inventory space.",
-  },
-  {
-    id: "cheat-scripts",
-    title: "Cheat Scripts (Players → Live)",
-    img: "gameplay-cheat-scripts.png",
-    body: "One-click buttons fire the named server cheat scripts for an online player: Playtest Setup, Award Player XP, Unlock All Skills / Abilities, and Leave Me Alone, plus a freeform box for any other script name. Developer performance harnesses (Start / Stop Hitch Test) sit on a separate Dev / Perf Scripts row. Both carry a disclaimer that the scripts originate from the Playtest server and may have no effect on a retail server.",
-  },
-  {
-    id: "landsraad",
-    title: "Players → Landsraad",
-    img: "gameplay-landsraad.png",
-    body: "Set any player's contribution to any Great House to an arbitrary amount, term by term. As of v12.19.1 the contribution routes through the game's own pipeline, so it cascades to the player's guild and refreshes the guild's Voting Power live — attributing to the guild's real faction, exactly like retail (an admin edit finally moves Voting Power, not just the leaderboard). On the Game Config side, Landsraad edits seed and preserve Funcom's full nested settings struct: v12.2.1 fixed a bug where editing a single Landsraad value could strip the board layouts, messages, and contract settings the game needs, heals stripped struct boxes written by older builds, and warns when your client's copy of the block is incomplete.",
+    id: "maps",
+    title: "DD Seed Maps",
+    img: "dd-seed-maps.png",
+    body: "Explore all 12 Deep Desert Coriolis layouts without leaving DST. Each seed has a labeled grid, POI counts, confidence notes, and filters for caves, wrecks, testing stations, large spice fields, taxis, Titanium, and Stravidium. DST also distinguishes the next farm seed from the seed currently running in Deep Desert.",
   },
   {
     id: "database",
     title: "Database",
     img: "database.png",
-    body: "Take and restore battlegroup Postgres backups without remembering pod names. Schedule recurring cron-based backups straight from the UI with optional pruning of older dumps. A Monaco-powered SQL editor with read-only-by-default toggle and Ctrl+Enter to run.",
+    body: "Back up, restore, import, mirror, inspect, and query the battlegroup PostgreSQL database without tracking pod names. Scheduled backups live on the VM, SQL starts read-only, and restore guidance calls out Deep Desert safety. The guarded World Restart workflow can preserve the battlegroup while rebuilding its world database from scratch.",
   },
   {
     id: "settings",
     title: "Settings",
     img: "settings.png",
-    body: "The Settings page reflects the same choices the Setup Wizard makes, plus the newer remote-access and appearance controls. It covers the three-path installer experience (existing server, fresh install, or Hyper-V over LAN), Steam path and SSH-key selection, Windows username, port-check provider, themes, remote-access policy, and auto-updater preferences. The Hyper-V over LAN card lets you point DST at a Dune VM on a separate Hyper-V host over your network — enter the host's IP and an administrator credential, test the connection, then toggle routing; the credential is saved in Windows Credential Manager and reused automatically. The Public IP / DDNS card applies your public IP across the battlegroup and installs a persistent game-UDP DNAT bridge so remote players don't hit P34 on a server whose game pods bind the public IP only.",
+    body: "Keep installation, updates, appearance, warnings, Remote Access, Hyper-V over LAN, Public IP/DDNS, browser ping, and mobile pairing in one place. Host credentials stay in Windows Credential Manager, remote surfaces are deliberately constrained, and the install path is visible for antivirus exclusions and troubleshooting.",
   },
 ];
 ---
@@ -75,8 +57,8 @@ const sections = [
 >
   <PageHeader
     eyebrow="Tour"
-    title="Every page, one tour"
-    intro="DST is a left-nav portal grouped under Server Health, PowerShell, Game Data, Database, and System. Here's what each page does."
+    title="Seven surfaces that do the work"
+    intro="A current tour of DST's core Self-Hosted and Solo workflows, captured from the live app with documentation-safe demo identities."
   />
 
   <section class="mx-auto max-w-6xl px-6 pb-20 space-y-20">

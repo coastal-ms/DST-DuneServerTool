@@ -137,6 +137,21 @@ Describe 'Solo Mode write gates and settings backups' {
             Should -Throw '*Unsupported Solo setting*'
     }
 
+    It 'validates integer, boolean, select, and game-controlled settings' {
+        $layout = New-TestSoloLayout
+        Save-DuneSoloState -DataRoot $layout.root -DbPath $layout.db | Out-Null
+        Mock Get-DuneSoloGameProcesses { @() }
+
+        { Set-DuneSoloSettings -Settings @{ FiefdomLimit = '1.5' } -Confirm 'APPLY SOLO SETTINGS' } |
+            Should -Throw '*must be a whole number*'
+        { Set-DuneSoloSettings -Settings @{ bAllowSandstorms = 'yes' } -Confirm 'APPLY SOLO SETTINGS' } |
+            Should -Throw '*must be True or False*'
+        { Set-DuneSoloSettings -Settings @{ PlayerDeathLootRule = 'EveryoneMaybe' } -Confirm 'APPLY SOLO SETTINGS' } |
+            Should -Throw '*unsupported option*'
+        { Set-DuneSoloSettings -Settings @{ DifficultyLevel = 'Custom' } -Confirm 'APPLY SOLO SETTINGS' } |
+            Should -Throw '*controlled by the game*'
+    }
+
     It 'restores the prior INI when post-write verification fails' {
         $layout = New-TestSoloLayout
         $ini = Join-Path $layout.config 'ServerCustomSettings.ini'

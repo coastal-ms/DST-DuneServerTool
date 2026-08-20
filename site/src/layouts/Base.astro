@@ -58,11 +58,11 @@ const ogImg = new URL(ogImage ?? `${base}og.png`, Astro.site).toString();
       >
         <a
           href={base}
-          class="font-mono text-sm tracking-wide text-dune-accent hover:text-dune-accent-soft transition-colors"
+          class="shrink-0 whitespace-nowrap font-mono text-sm tracking-wide text-dune-accent hover:text-dune-accent-soft transition-colors"
         >
           DST — Dune Server Tool
         </a>
-        <nav class="flex items-center gap-5 text-sm">
+        <nav class="min-w-0 flex-1 flex items-center justify-start sm:justify-end gap-4 text-sm overflow-x-auto whitespace-nowrap py-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
           {
             nav.map((item) => {
               const href = item.href ? `${base}${item.href}` : base;

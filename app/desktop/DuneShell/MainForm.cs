@@ -51,10 +51,14 @@ internal sealed class MainForm : Form
 
         Resize += OnResizeToTray;
 
-        FormClosing += (_, _) =>
+        FormClosing += (_, e) =>
         {
             SaveWindowState();
-            StopCompanionProcesses();
+            if (!StopCompanionProcesses())
+            {
+                e.Cancel = true;
+                return;
+            }
             DisposeTrayIcon();
         };
 
@@ -1034,6 +1038,39 @@ internal sealed class MainForm : Form
         }
     }
 
+    private static bool IsWorldRestartActive()
+    {
+        try
+        {
+            string stateFile = Path.Combine(
+                Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
+                "DuneServer", "world-restart-state.json");
+            if (!File.Exists(stateFile)) return false;
+
+            using var doc = System.Text.Json.JsonDocument.Parse(File.ReadAllText(stateFile));
+            var root = doc.RootElement;
+            bool running = root.TryGetProperty("running", out var runningElement) &&
+                           runningElement.ValueKind == System.Text.Json.JsonValueKind.True;
+            bool recoveryRequired = root.TryGetProperty("recoveryRequired", out var recoveryElement) &&
+                                    recoveryElement.ValueKind == System.Text.Json.JsonValueKind.True;
+            return running || recoveryRequired;
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
+    private static void ShowWorldRestartActiveWarning()
+    {
+        MessageBox.Show(
+            "DST cannot close while World Restart maintenance or recovery is active. " +
+            "Wait for completion or use the rollback control.",
+            "World Restart active",
+            MessageBoxButtons.OK,
+            MessageBoxIcon.Warning);
+    }
+
     /// <summary>
     /// When the portal window closes, also stop the helper process the user
     /// thinks of as "DST": the elevated PowerShell backend (DuneServer.exe).
@@ -1052,9 +1089,9 @@ internal sealed class MainForm : Form
     /// in that mode the shell wasn't started by the backend launcher and we
     /// must not assume there's a paired DuneServer process to stop.
     /// </summary>
-    private void StopCompanionProcesses()
+    private bool StopCompanionProcesses()
     {
-        if (!_useWaitFile) return;
+        if (!_useWaitFile) return true;
 
         // Keep-alive opt-out: when the backend wrote keep-alive.flag, the
         // user has registered DST autostart (or launched --headless), and
@@ -1070,13 +1107,21 @@ internal sealed class MainForm : Form
             string keepAliveFlag = Path.Combine(
                 Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
                 "DuneServer", "keep-alive.flag");
-            if (File.Exists(keepAliveFlag)) return;
+            if (File.Exists(keepAliveFlag)) return true;
         }
         catch { /* defensive -- fall through to the normal teardown */ }
+
+        if (IsWorldRestartActive())
+        {
+            ShowWorldRestartActiveWarning();
+            return false;
+        }
 
         // 1) Graceful backend shutdown via the same loopback URL + token the
         //    WebView is using. Send synchronously with a tight timeout so we
         //    don't drag out window close past ~750ms in the worst case.
+        bool shutdownSucceeded = false;
+        bool shutdownBlocked = false;
         try
         {
             string? url = _targetUrl;
@@ -1098,11 +1143,22 @@ internal sealed class MainForm : Form
                 using var http = new HttpClient { Timeout = TimeSpan.FromMilliseconds(750) };
                 var shutdownUri = new Uri(u, "/api/shutdown" + u.Query);
                 var content = new StringContent("{}", Encoding.UTF8, "application/json");
-                try { _ = http.PostAsync(shutdownUri, content).GetAwaiter().GetResult(); }
+                try
+                {
+                    using var response = http.PostAsync(shutdownUri, content).GetAwaiter().GetResult();
+                    shutdownSucceeded = response.IsSuccessStatusCode;
+                    shutdownBlocked = (int)response.StatusCode == 423;
+                }
                 catch { /* expected when listener tears down before responding */ }
             }
         }
         catch { /* best-effort */ }
+
+        if (shutdownBlocked || (!shutdownSucceeded && IsWorldRestartActive()))
+        {
+            ShowWorldRestartActiveWarning();
+            return false;
+        }
 
         // 2) Sweep up any remaining DuneServer.exe. If /api/shutdown succeeded
         //    above the process is already gone (or has HasExited=true) and
@@ -1131,5 +1187,6 @@ internal sealed class MainForm : Form
             }
         }
         catch { /* defensive */ }
+        return true;
     }
 }

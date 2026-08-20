@@ -49,6 +49,22 @@ $script:DuneSoloSettingKeys = @(
     'LandsraadFactionStandingMultiplier',
     'bLandsraadDisableDecreeRerollLimit'
 )
+$script:DuneSoloReadOnlySettingKeys = @('DifficultyLevel', 'PVPMode')
+$script:DuneSoloBooleanSettingKeys = @(
+    'bEnableItemMaxDurabilityLoss',
+    'bAllowDynamicBuildingDamage',
+    'bAllowSandstorms',
+    'bAllowSandworms',
+    'bIsBuildingRestrictionsEnabled',
+    'bBuildingInfiniteStability',
+    'bLandsraadDisableDecreeRerollLimit'
+)
+$script:DuneSoloIntegerSettingKeys = @('FiefdomLimit', 'MaxLandclaimSegments')
+$script:DuneSoloSelectSettingOptions = @{
+    DropEquipmentOnDeath = @('Default', 'None', 'Backpack', 'All')
+    SandwormConsequences = @('Default', 'None', 'Backpack', 'All')
+    PlayerDeathLootRule = @('DependsOnSecurityZone', 'NeverAllowOtherPlayers', 'AlwaysAllowOtherPlayers')
+}
 $script:DuneSoloConsoleSection = 'ConsoleVariables'
 $script:DuneSoloConsoleSettings = @(
     [ordered]@{
@@ -722,7 +738,26 @@ function Set-DuneSoloSettings {
         if ($value.Length -gt 128 -or $value -match '[\r\n\x00-\x08\x0B\x0C\x0E-\x1F]') {
             throw "Invalid value for Solo setting $name."
         }
-        $normalized[$name] = $value.Trim()
+        $trimmed = $value.Trim()
+        if ($script:DuneSoloReadOnlySettingKeys -contains $name) {
+            throw "Solo setting $name is controlled by the game and cannot be written by DST."
+        }
+        if ($script:DuneSoloBooleanSettingKeys -contains $name) {
+            if ($trimmed -cnotin @('True', 'False')) {
+                throw "Solo setting $name must be True or False."
+            }
+        } elseif ($script:DuneSoloSelectSettingOptions.ContainsKey($name)) {
+            if ($trimmed -cnotin @($script:DuneSoloSelectSettingOptions[$name])) {
+                throw "Solo setting $name has an unsupported option."
+            }
+        } elseif ($script:DuneSoloIntegerSettingKeys -contains $name) {
+            if ($trimmed -notmatch '^-?\d+$') {
+                throw "Solo setting $name must be a whole number."
+            }
+        } elseif ($trimmed -notmatch '^-?(?:\d+(?:\.\d*)?|\.\d+)$') {
+            throw "Solo setting $name must be a number."
+        }
+        $normalized[$name] = $trimmed
     }
     if ($normalized.Count -eq 0) { throw 'No Solo settings were provided.' }
 
