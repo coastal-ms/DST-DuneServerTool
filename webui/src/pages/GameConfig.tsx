@@ -4,6 +4,7 @@ import { Icon } from '../components/Icon'
 import { CollapsibleCard, useCardCollapse } from '../components/CollapsibleCard'
 import { Link } from '../router'
 import { IniShareModal } from '../components/IniShareModal'
+import { ViewportNotice } from '../components/ViewportNotice'
 import { useStatus } from '../hooks/useStatus'
 import { api } from '../api/client'
 import { ServerNameCard } from './gameconfig/ServerNameCard'
@@ -1231,12 +1232,12 @@ export function GameConfig({ mode = 'standard' }: { mode?: 'standard' | 'experim
 
       }
       setSavedMsg(msg)
-      window.setTimeout(() => setSavedMsg(null), 8000)
       // Some settings (e.g. landclaim limits, building restrictions) are read by
       // BOTH server and client — remind the admin to mirror them on each client.
       const ca = out.clientApply
       setClientApply(ca && ca.items && ca.items.length > 0 ? ca : null)
     } catch (err) {
+      setSavedMsg(null)
       setSaveError(err instanceof Error ? err.message : String(err))
     } finally {
       setSaving(false)
@@ -1256,9 +1257,9 @@ export function GameConfig({ mode = 'standard' }: { mode?: 'standard' | 'experim
     try {
       const out = await reloadGameConfigPods()
       setSavedMsg(out.message)
-      window.setTimeout(() => setSavedMsg(null), 12000)
       await forceRefresh()
     } catch (err) {
+      setSavedMsg(null)
       setSaveError(err instanceof Error ? err.message : String(err))
     } finally {
       setReloadingPods(false)
@@ -1618,16 +1619,11 @@ export function GameConfig({ mode = 'standard' }: { mode?: 'standard' | 'experim
           </button>
         </div>
       )}
-      {saveError && (
-        <div className="card p-3 mb-4 border-danger/40 bg-danger/10 text-danger text-sm flex items-center gap-2">
-          <Icon name="AlertCircle" size={14} /> {saveError}
-        </div>
-      )}
-      {savedMsg && (
-        <div className="card p-3 mb-4 border-success/40 bg-success/10 text-success text-sm flex items-center gap-2">
-          <Icon name="CheckCircle2" size={14} /> {savedMsg}
-        </div>
-      )}
+      {saveError ? (
+        <ViewportNotice kind="err" text={saveError} onDismiss={() => setSaveError(null)} />
+      ) : savedMsg ? (
+        <ViewportNotice kind="ok" text={savedMsg} onDismiss={() => setSavedMsg(null)} />
+      ) : null}
       {mismatchMsg && (
         <div className="card p-3 mb-4 border-success/40 bg-success/10 text-success text-sm flex items-center gap-2">
           <Icon name="CheckCircle2" size={14} /> {mismatchMsg}

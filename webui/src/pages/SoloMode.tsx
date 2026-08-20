@@ -3,6 +3,7 @@ import { Icon } from '../components/Icon'
 import { PageHeader } from '../components/PageHeader'
 import { CollapsibleCard } from '../components/CollapsibleCard'
 import { ItemPicker } from '../components/ItemPicker'
+import { ViewportNotice } from '../components/ViewportNotice'
 import { GivePackageForm } from './gameplay/players/sections'
 import { useApi } from '../hooks/useApi'
 import {
@@ -1042,16 +1043,11 @@ export function SoloMode() {
       </div>
 
       {notice && (
-        <div role="alert" className={`card p-3 mb-4 text-sm flex items-start gap-2 ${
-          notice.kind === 'ok'
-            ? 'border-success/40 text-success'
-            : notice.kind === 'warn'
-              ? 'border-warning/40 text-warning'
-              : 'border-danger/40 text-danger'
-        }`}>
-          <Icon name={notice.kind === 'ok' ? 'CheckCircle2' : notice.kind === 'warn' ? 'ShieldAlert' : 'AlertCircle'} size={15} className="mt-0.5 shrink-0" />
-          <span className="whitespace-pre-wrap break-words">{notice.text}</span>
-        </div>
+        <ViewportNotice
+          kind={notice.kind}
+          text={notice.text}
+          onDismiss={() => setNotice(null)}
+        />
       )}
 
       {connected && !selectionMatchesActive && (
