@@ -16,11 +16,18 @@ on:
       - "CHANGELOG.md"
       - "docs/img/**"
       - ".github/workflows/deploy-site.yml"
-  # NOTE: we intentionally do NOT trigger on `release: published`. The
-  # `release: v10.2.X ...` merge commit to main always touches CHANGELOG.md
-  # and re-deploys the site, and the github-pages environment only allows
-  # one concurrent deploy — so a release-event run that fires while the
-  # CHANGELOG-push run is in flight just gets rejected and spams CI email.
+  # The site reads the latest release at BUILD time. A release merge lands on
+  # main (touching CHANGELOG.md) before `gh release create` runs, so the push
+  # deploy alone always publishes the previous version and the site stays stale
+  # until someone dispatches a manual run — this bit v13.3.0 and v13.8.0.
+  #
+  # This trigger was previously removed because the release run collided with
+  # the in-flight CHANGELOG push run and the github-pages environment rejected
+  # the second deploy. The concurrency block below now cancels the in-flight run
+  # instead, so the later release-triggered deploy wins and publishes the new
+  # version.
+  release:
+    types: [published]
   workflow_dispatch:
 
 # Allow only one deploy at a time; cancel in-progress runs on new pushes.
