@@ -26,10 +26,11 @@ Apply this in **every session**, unless the maintainer explicitly asks otherwise
   `todos` table (and `todo_deps` for ordering) when that helps you keep track,
   but write the implementation yourself. There is no planner/builder split and
   no separate "executor" role — do not narrate one.
-- **Never spawn child sessions, worktrees, or sub-agents on your own
-  initiative.** The maintainer will ask when he wants one. When he does, it
-  inherits the current session's active model; never select a different model
-  for it.
+- Keep the parent session responsible for implementation, user communication,
+  and approval gates. Use a child or sub-agent only for bounded independent work
+  that genuinely benefits from separate context. It inherits the active model,
+  reports results and questions to the parent, and never asks the maintainer
+  directly.
 
 ## Repository layout
 
