@@ -629,7 +629,7 @@
    "seed": 2,
    "confidence": "CONFIRMED",
    "reliability": "high",
-   "note": "Large spice set matches the reference table exactly.",
+   "note": "Live web map confirmed seed 2 and corrected caves to H2, H5, G5 x2, I1, and E9 on 2026-08-18.",
    "capturedUtc": "20250923015322",
    "image": "dd_seed_02.png",
    "imageSha256Short": null,
@@ -641,7 +641,7 @@
     "I5",
     "I9"
    ],
-   "poiCount": 41,
+   "poiCount": 43,
    "legend": [
     {
      "type": "wreck",
@@ -654,14 +654,14 @@
      "count": 10
     },
     {
-     "type": "large-spice-field",
-     "label": "Large Spice Field",
+     "type": "cave",
+     "label": "Cave",
      "count": 6
     },
     {
-     "type": "cave",
-     "label": "Cave",
-     "count": 4
+     "type": "large-spice-field",
+     "label": "Large Spice Field",
+     "count": 6
     },
     {
      "type": "taxi-service",
@@ -711,6 +711,18 @@
      "type": "large-spice-field"
     },
     {
+     "sector": "H2",
+     "subx": 3,
+     "suby": 2,
+     "type": "cave"
+    },
+    {
+     "sector": "H5",
+     "subx": 3,
+     "suby": 2,
+     "type": "cave"
+    },
+    {
      "sector": "H8",
      "subx": 3,
      "suby": 1,
@@ -729,13 +741,13 @@
      "type": "titanium"
     },
     {
-     "sector": "G6",
+     "sector": "G5",
      "subx": 3,
      "suby": 1,
      "type": "cave"
     },
     {
-     "sector": "G6",
+     "sector": "G5",
      "subx": 3,
      "suby": 2,
      "type": "cave"
