@@ -453,7 +453,10 @@ Register-DuneRoute -Method POST -Path '/api/update/install' -Handler {
             }
             return
         }
-        $rel = Get-DuneSelectedRelease
+        # Mirror releases are replaced atomically during stable publication.
+        # Never install from the one-hour release-list cache: it may still point
+        # at the deleted prior mirror even after a forced check sees the new tag.
+        $rel = Get-DuneSelectedRelease -Force
         if (-not $rel -or -not $rel.assetUrl) {
             Write-DuneError -Response $res -Status 503 -Message 'No installer asset available on the selected release.'
             return
