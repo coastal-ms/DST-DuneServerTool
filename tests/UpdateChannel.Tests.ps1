@@ -77,6 +77,16 @@ Describe 'Get-DuneSelectedRelease channel resolution' {
         function global:Get-DuneUpdatePreReleaseTag { '' }
     }
 
+    Describe 'Update install route cache safety' {
+        It 'force-refreshes the selected release before downloading' {
+            $routePath = Join-Path (Split-Path $PSScriptRoot -Parent) 'app\server\routes\Update.ps1'
+            $source = Get-Content -LiteralPath $routePath -Raw
+            $installRoute = $source.Substring($source.IndexOf('# POST /api/update/install'))
+
+            $installRoute | Should -Match '\$rel\s*=\s*Get-DuneSelectedRelease\s+-Force'
+        }
+    }
+
     It 'stable channel returns the stable latest, not a prerelease' {
         function global:Get-DuneUpdateChannel { 'stable' }
         $r = Get-DuneSelectedRelease

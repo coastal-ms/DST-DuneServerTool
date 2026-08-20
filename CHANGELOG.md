@@ -13,6 +13,12 @@ here cover everything those tags shipped.
 
 ## [Unreleased]
 
+### Fixed
+
+- The in-app updater now refreshes the selected GitHub release immediately
+  before downloading, preventing a stale test-channel mirror cache from
+  requesting an installer URL that was just retired during publication.
+
 ## [13.8.3] - 2026-08-20
 
 ### Added
