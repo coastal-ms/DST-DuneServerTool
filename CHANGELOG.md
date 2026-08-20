@@ -13,6 +13,8 @@ here cover everything those tags shipped.
 
 ## [Unreleased]
 
+## [13.8.3] - 2026-08-20
+
 ### Added
 
 - Game Config → Landsraad now exposes the current Landsraad timing controls:
@@ -33,6 +35,10 @@ here cover everything those tags shipped.
 - The in-app update check now re-runs when the window regains focus, throttled
   to once every five minutes, so a machine that was asleep or left in the
   background no longer shows a stale result until the next hourly poll. (#349)
+- Solo Mode and Self-Hosted Game Config save results now appear in a
+  viewport-fixed notification, so confirmation remains visible at any scroll
+  position. Successful notices clear after six seconds; warnings and errors
+  remain until dismissed.
 
 ## [13.8.2] - 2026-08-20
 
