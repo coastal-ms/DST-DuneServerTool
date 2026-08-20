@@ -29,6 +29,30 @@ internal static partial class Program
             ["AntiRadiationPill"] = 20
         };
 
+    // These templates are missing volume metadata from the extracted gameplay
+    // catalog. The torch and Treadwheel hull use adjacent-item values so the
+    // four vehicle kits known to fit the stock 175-volume backpack remain
+    // grantable. The two unverified Sandcrawler modules stay deliberately
+    // oversized so an uncertain large kit fails closed.
+    private static readonly IReadOnlyDictionary<string, double> KnownVolumeFallbacks =
+        new Dictionary<string, double>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["RepairTool5"] = 10d,
+            ["TreadwheelHull_6"] = 15d,
+            ["SandcrawlerSpiceContainer_Unique_Capacity_6"] = 1000d,
+            ["SandcrawlerSpiceHeader_6"] = 1000d
+        };
+
+    private static readonly IReadOnlyDictionary<string, string> SoloStorageLabels =
+        new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["BasicContainer_Placeable"] = "Chest",
+            ["SpiceSilo_Placeable"] = "Small Storage Container",
+            ["StorageContainer_Placeable"] = "Storage Container",
+            ["MediumStorageContainer_Placeable"] = "Medium Storage Container",
+            ["Developer_StorageContainer_Placeable"] = "Developer Storage"
+        };
+
     public static int Main(string[] args)
     {
         try
@@ -836,6 +860,32 @@ internal static partial class Program
                         '/Game/Dune/Environment/Props/Interactables/BP_Developer_StorageContainer.BP_Developer_StorageContainer_C',
                         jsonb('{}')
                     );
+                    INSERT INTO actors (id, class, properties) VALUES (
+                        21,
+                        '/Game/Dune/Environment/Props/Interactables/BP_Developer_StorageContainer.BP_Developer_StorageContainer_C',
+                        jsonb('{}')
+                    );
+                    INSERT INTO actors (id, class, properties) VALUES (
+                        22,
+                        '/Game/Dune/Systems/Building/Pieces/BP_StorageContainer.BP_StorageContainer_C',
+                        jsonb('{}')
+                    );
+                    INSERT INTO actors (id, class, properties) VALUES
+                        (23, 'BasicContainer', jsonb('{}')),
+                        (24, 'BP_SpiceSiloContainer', jsonb('{}')),
+                        (25, 'MediumStorageContainer', jsonb('{}'));
+                    CREATE TABLE placeables (
+                        id INTEGER PRIMARY KEY,
+                        owner_entity_id INTEGER,
+                        building_type TEXT,
+                        is_hologram INTEGER NOT NULL DEFAULT 0
+                    );
+                    INSERT INTO placeables VALUES (20, 1, 'Developer_StorageContainer_Placeable', 0);
+                    INSERT INTO placeables VALUES (21, 1, 'Developer_StorageContainer_Placeable', 1);
+                    INSERT INTO placeables VALUES (22, 1, 'StorageContainer_Placeable', 0);
+                    INSERT INTO placeables VALUES (23, 1, 'BasicContainer_Placeable', 0);
+                    INSERT INTO placeables VALUES (24, 1, 'SpiceSilo_Placeable', 0);
+                    INSERT INTO placeables VALUES (25, 1, 'MediumStorageContainer_Placeable', 0);
                     CREATE TABLE fgl_entities (
                         entity_id INTEGER PRIMARY KEY,
                         components BLOB
@@ -898,8 +948,13 @@ internal static partial class Program
                         max_item_count INTEGER,
                         max_item_volume REAL
                     );
-                    INSERT INTO inventories VALUES (1, 10, 0, 60, 1000);
+                    INSERT INTO inventories VALUES (1, 10, 0, 60, 175);
                     INSERT INTO inventories VALUES (2, 20, 4, 1000, 50000);
+                    INSERT INTO inventories VALUES (3, 21, 4, 15, 750);
+                    INSERT INTO inventories VALUES (4, 22, 4, 15, 750);
+                    INSERT INTO inventories VALUES (5, 23, 4, 10, 250);
+                    INSERT INTO inventories VALUES (6, 24, 4, 10, 250);
+                    INSERT INTO inventories VALUES (7, 25, 4, 25, 1250);
                     CREATE TABLE items (
                         id INTEGER PRIMARY KEY,
                         inventory_id INTEGER REFERENCES inventories(id),
@@ -1008,6 +1063,22 @@ internal static partial class Program
                 throw new InvalidOperationException(
                     $"Map seed expected 2 from cycle index 14, found {inspection.MapSeed}.");
             }
+            var expectedStorageLabels = new[]
+            {
+                "Chest #1",
+                "Small Storage Container #1",
+                "Storage Container #1",
+                "Medium Storage Container #1",
+                "Developer Storage #1"
+            };
+            if (inspection.Inventories.Any(value => value.Key == "inventory:3")
+                || inspection.Inventories.Count(value => value.Kind == "developer-storage") != 1
+                || expectedStorageLabels.Any(label =>
+                    inspection.Inventories.All(value => value.Label != label)))
+            {
+                throw new InvalidOperationException(
+                    "Built/hologram storage destination filtering is incorrect.");
+            }
 
             var backup = Path.Combine(root, "backups", "game-test.db");
             Backup(source, backup);
@@ -1098,10 +1169,62 @@ internal static partial class Program
                   "names":{
                     "TestResource":"Test Resource",
                     "HeavyAmmo":"Heavy Darts",
-                    "AntiRadiationPill":"Iodine Pill"
+                    "AntiRadiationPill":"Iodine Pill",
+                    "BuggyKnownParts":"Buggy known parts",
+                    "RepairTool5":"Welding Torch Mk5",
+                    "TreadwheelHull_6":"Treadwheel Hull Mk6",
+                    "SandcrawlerSpiceHeader_6":"Sandcrawler Vacuum Mk6"
                   },
-                  "items":{"TestResource":{"stack_max":10,"volume":1.0}}
+                  "items":{
+                    "TestResource":{"stack_max":10,"volume":1.0},
+                    "BuggyKnownParts":{"stack_max":1,"volume":110.0}
+                  }
                 }
+                """);
+            var catalog = ReadCatalog(catalogPath);
+            if (catalog["RepairTool5"].Volume != 10d
+                || catalog["TreadwheelHull_6"].Volume != 15d
+                || catalog["SandcrawlerSpiceHeader_6"].Volume != 1000d)
+            {
+                throw new InvalidOperationException(
+                    "Vehicle-kit volume fallbacks were not applied correctly.");
+            }
+            File.WriteAllText(
+                planPath,
+                """
+                {"destination":"inventory:3","items":[
+                  {"templateId":"TestResource","quantity":1,"quality":0}
+                ]}
+                """);
+            var beforeHologramGrant = File.ReadAllBytes(target);
+            var hologramRejected = false;
+            try
+            {
+                GrantItems(
+                    target,
+                    Path.Combine(root, "safety", "before-hologram-grant.db"),
+                    planPath,
+                    catalogPath);
+            }
+            catch (InvalidDataException ex)
+                when (ex.Message.Contains("no longer exists", StringComparison.OrdinalIgnoreCase))
+            {
+                hologramRejected = true;
+            }
+            if (!hologramRejected
+                || !File.ReadAllBytes(target).SequenceEqual(beforeHologramGrant))
+            {
+                throw new InvalidOperationException(
+                    "Hologram Developer Storage grant did not fail closed.");
+            }
+            File.WriteAllText(
+                planPath,
+                """
+                {"destination":"inventory:2","items":[
+                  {"templateId":"TestResource","quantity":12,"quality":0},
+                  {"templateId":"HeavyAmmo","quantity":501,"quality":0},
+                  {"templateId":"AntiRadiationPill","quantity":21,"quality":0}
+                ]}
                 """);
             var grantSafety = Path.Combine(root, "safety", "before-grant.db");
             GrantItems(target, grantSafety, planPath, catalogPath);
@@ -1151,6 +1274,51 @@ internal static partial class Program
                     throw new InvalidOperationException(
                         "Picker-only stack-limit fallbacks were not applied correctly.");
                 }
+            }
+
+            File.WriteAllText(
+                planPath,
+                """
+                {"destination":"inventory:1","items":[
+                  {"templateId":"BuggyKnownParts","quantity":1,"quality":0},
+                  {"templateId":"RepairTool5","quantity":1,"quality":0}
+                ]}
+                """);
+            var buggySafety = Path.Combine(root, "safety", "before-buggy-grant.db");
+            GrantItems(target, buggySafety, planPath, catalogPath);
+            if (!File.Exists(buggySafety))
+            {
+                throw new InvalidOperationException(
+                    "Stock-volume Buggy grant did not retain a safety backup.");
+            }
+
+            var beforeOversizedGrant = File.ReadAllBytes(target);
+            File.WriteAllText(
+                planPath,
+                """
+                {"destination":"inventory:1","items":[
+                  {"templateId":"SandcrawlerSpiceHeader_6","quantity":1,"quality":0}
+                ]}
+                """);
+            var oversizedRejected = false;
+            try
+            {
+                GrantItems(
+                    target,
+                    Path.Combine(root, "safety", "before-oversized-grant.db"),
+                    planPath,
+                    catalogPath);
+            }
+            catch (InvalidDataException ex)
+                when (ex.Message.Contains("volume capacity", StringComparison.OrdinalIgnoreCase))
+            {
+                oversizedRejected = true;
+            }
+            if (!oversizedRejected
+                || !File.ReadAllBytes(target).SequenceEqual(beforeOversizedGrant))
+            {
+                throw new InvalidOperationException(
+                    "Oversized unknown vehicle part did not fail closed.");
             }
 
             var currencySafety = Path.Combine(root, "safety", "before-currency.db");
@@ -1352,6 +1520,7 @@ internal static partial class Program
                     "unsupported-wrapper-rejected",
                     "offline-augment-max-with-safety-backup",
                     "offline-item-grant-with-capacity-and-safety-backup",
+                    "vehicle-kit-volume-fallbacks-preserve-stock-backpack-grants",
                     "offline-currency-write-with-safety-backup",
                     "offline-water-container-fills-with-safety-backups",
                     "offline-specialization-max-with-rewards",
@@ -1665,25 +1834,45 @@ internal static partial class Program
 
         using var storage = connection.CreateCommand();
         storage.CommandText = """
-            SELECT inv.id, inv.max_item_count, inv.max_item_volume, COUNT(items.id)
+            SELECT inv.id,
+                   inv.max_item_count,
+                   inv.max_item_volume,
+                   COUNT(items.id),
+                   placeables.building_type
             FROM inventories AS inv
             JOIN actors ON actors.id = inv.actor_id
+            JOIN placeables ON placeables.id = actors.id
             LEFT JOIN items ON items.inventory_id = inv.id
             WHERE inv.inventory_type = 4
-              AND actors.class LIKE '%BP_Developer_StorageContainer%'
+              AND placeables.is_hologram = 0
+              AND placeables.owner_entity_id IS NOT NULL
+              AND placeables.owner_entity_id != 0
             GROUP BY inv.id
             ORDER BY inv.id;
             """;
         using (var reader = storage.ExecuteReader())
         {
-            var index = 1;
+            var labelCounts = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
             while (reader.Read())
             {
+                var buildingType = reader.IsDBNull(4) ? string.Empty : reader.GetString(4);
+                if (!SoloStorageLabels.TryGetValue(buildingType, out var baseLabel))
+                {
+                    continue;
+                }
+                labelCounts.TryGetValue(baseLabel, out var priorCount);
+                var index = priorCount + 1;
+                labelCounts[baseLabel] = index;
                 results.Add(new InventoryDestination(
                     Id: reader.GetInt64(0),
                     Key: $"inventory:{reader.GetInt64(0)}",
-                    Label: $"Developer Storage #{index++}",
-                    Kind: "developer-storage",
+                    Label: $"{baseLabel} #{index}",
+                    Kind: string.Equals(
+                        baseLabel,
+                        "Developer Storage",
+                        StringComparison.OrdinalIgnoreCase)
+                        ? "developer-storage"
+                        : "storage",
                     ItemRows: reader.GetInt64(3),
                     MaxItemCount: reader.IsDBNull(1) ? 0 : reader.GetInt64(1),
                     MaxItemVolume: reader.IsDBNull(2) ? 0 : reader.GetDouble(2),
@@ -1774,20 +1963,11 @@ internal static partial class Program
                 };
             }
         }
-        foreach (var templateId in new[]
-                 {
-                     "RepairTool5",
-                     "SandcrawlerSpiceContainer_Unique_Capacity_6",
-                     "SandcrawlerSpiceHeader_6",
-                     "TreadwheelHull_6"
-                 })
+        foreach (var (templateId, volume) in KnownVolumeFallbacks)
         {
             if (result.ContainsKey(templateId))
             {
-                // These four catalog gaps are part of vehicle-kit payloads already
-                // field-proven in PTC. 1000 volume each is intentionally far above
-                // their observed package footprint, so capacity checks fail safely.
-                result[templateId] = new CatalogRule(1, 1000d, true);
+                result[templateId] = new CatalogRule(1, volume, true);
             }
         }
         return result;
@@ -1804,7 +1984,7 @@ internal static partial class Program
                 StringComparison.OrdinalIgnoreCase));
         return destination
             ?? throw new InvalidDataException(
-                "The selected backpack or Developer Storage no longer exists.");
+                "The selected backpack or built storage inventory no longer exists.");
     }
 
     private static HashSet<int> ReadUsedPositions(

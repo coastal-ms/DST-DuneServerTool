@@ -745,7 +745,6 @@ Describe 'DuneGameConfigSchema: experimental binary CVars' -Tag 'GameConfig' {
             'dw.PlaceableShelterThresholdOverride'
             'Dac.DisablePvpDamage'
             'dw.EnableShelterSystem'
-            'dw.BaseBackupMaxNumberOfBackups'
             'dw.bBaseBackupToolBackupEnabled'
             'dw.bBaseBackupToolPlacementEnabled'
             'dw.bBaseBackupToolRecycleEnabled'
@@ -844,7 +843,7 @@ Describe 'DuneGameConfigSchema: experimental binary CVars' -Tag 'GameConfig' {
         $experimental = @($script:DuneGameConfigSchema | Where-Object Category -eq 'Experimental')
         $experimental2 = @($script:DuneGameConfigSchema | Where-Object Category -eq 'Experimental 2')
 
-        $experimental.Count | Should -Be 55
+        $experimental.Count | Should -Be 54
         $experimental2.Count | Should -Be 71
         @($experimental.Key | Sort-Object) | Should -Be @($script:ExperimentalKeys | Sort-Object)
         @($experimental2.Key | Sort-Object) | Should -Be @($script:Experimental2Keys | Sort-Object)
@@ -858,10 +857,11 @@ Describe 'DuneGameConfigSchema: experimental binary CVars' -Tag 'GameConfig' {
         @($script:DuneGameConfigSchema | Where-Object Category -eq 'Experimental Lab').Count | Should -Be 0
         (Test-DuneStartupConsoleVariableKey -Key 'm_TaskGoalAmount') | Should -BeFalse
         $script:DuneAdvancedCvarCatalogCache | Should -BeNullOrEmpty
-        @($script:DuneStartupConsoleVariableKeys).Count | Should -Be 149
+        @($script:DuneStartupConsoleVariableKeys).Count | Should -Be 148
 
         $lab = @(Get-DuneAdvancedCvarCatalog)
         $lab.Count | Should -BeGreaterThan 4900
+        $lab.key | Should -Not -Contain 'dw.BaseBackupMaxNumberOfBackups'
         ($lab | Where-Object key -eq 'ak.soundengine.executeActionOnEvent').group |
             Should -Be 'Audio - engine/internal'
         ($lab | Where-Object key -eq 'au.adpcm.DisableSeeking').group |
@@ -896,7 +896,7 @@ Describe 'DuneGameConfigSchema: experimental binary CVars' -Tag 'GameConfig' {
         # Uncategorized rather than being forced into a neighbouring group.
         $api = @(Get-DuneGameConfigSchemaApi)
         $fields = @($api | Where-Object { $_.category -like 'Experimental*' } | ForEach-Object { $_.fields })
-        $fields.Count | Should -Be 126
+        $fields.Count | Should -Be 125
         foreach ($f in $fields) {
             $f.group | Should -Not -BeNullOrEmpty
             $f.status | Should -BeIn @('Confirmed', 'Unconfirmed')
@@ -1664,6 +1664,26 @@ Describe 'GameConfig: local client Game.ini and Engine.ini' -Tag 'GameConfig' {
         @($result.items | ForEach-Object file | Sort-Object -Unique) | Should -Be @('engine','game')
     }
 
+    It 'writes the complete spice startup struct through the normal client Game.ini path' {
+        $dir = Join-Path (Get-PSDrive TestDrive).Root 'spice-client'
+        [void](New-Item -ItemType Directory -Path $dir)
+        $defaultsRaw = "[$script:DuneGcSecSpice]`n" +
+            'm_PerMapSystemSettings=(("Editor_Default", (m_SpiceFieldTypeSettings=(((Name="Large"), (MaxGloballyPrimed=3,MaxGloballyActive=3))))),("DeepDesert_1", (m_SpiceFieldTypeSettings=(((Name="Small"), (MaxGloballyPrimed=60,MaxGloballyActive=60)),((Name="Medium"), (MaxGloballyPrimed=12,MaxGloballyActive=12)),((Name="Large"), (MaxGloballyPrimed=1,MaxGloballyActive=1))))),("Survival_1", (m_SpiceFieldTypeSettings=(((Name="Small"), (MaxGloballyPrimed=5,MaxGloballyActive=5))))))' + "`n" +
+            'm_DefaultSystemSettings=(m_SpiceFieldTypeSettings=(((Name="Large"), (MaxGloballyPrimed=5,MaxGloballyActive=3))))' + "`n"
+
+        Save-DuneGameConfigClient -Dir $dir -DefaultsRaw $defaultsRaw -Updates @(
+            @{ key='DST.SpiceStartup.DeepDesert.Large.Max'; value='6' }
+        ) | Out-Null
+
+        $raw = [IO.File]::ReadAllText((Join-Path $dir 'Game.ini'))
+        $blob = Get-DuneIniSectionScalarValue -Raw $raw -Section $script:DuneGcSecSpice -Key 'm_PerMapSystemSettings'
+        $state = Get-DuneSpicefieldLimitsFromBlob -Blob $blob -MapId 'DeepDesert_1' -FieldType 'Large'
+        $state.maxActive | Should -Be 6
+        $state.maxPrimed | Should -Be 6
+        (Get-DuneSpicefieldLimitsFromBlob -Blob $blob -MapId 'Survival_1' -FieldType 'Small').maxActive | Should -Be 5
+        $raw | Should -Match 'm_DefaultSystemSettings='
+    }
+
     It 'removes an Engine.ini key when reset to its default' {
         $dir = (Get-PSDrive TestDrive).Root
         [IO.File]::WriteAllText((Join-Path $dir 'Engine.ini'), @"
@@ -1978,6 +1998,140 @@ Describe 'GameConfig: UE struct-member engine (LandsraadSettings Data blob)' -Ta
         # still a single well-formed Data=(...) blob
         $out | Should -Match '^Data=\('
         $out | Should -Match '\)$'
+    }
+}
+
+Describe 'GameConfig: spicefield startup defaults' -Tag 'GameConfig' {
+    BeforeAll {
+        $script:SpiceSection = '/Script/DuneSandbox.SpiceHarvestingSystem'
+        $script:SpiceOverride = 'm_PerMapSystemSettings=(("Editor_Default", (m_SpiceFieldTypeSettings=(((Name="Small"), (MaxGloballyPrimed=3,MaxGloballyActive=5)),((Name="Medium"), (MaxGloballyPrimed=2,MaxGloballyActive=22)),((Name="Large"), (MaxGloballyPrimed=2,MaxGloballyActive=6))))),("DeepDesert_1", (m_SpiceFieldTypeSettings=(((Name="Small"), (MaxGloballyPrimed=10,MaxGloballyActive=60)),((Name="Medium"), (MaxGloballyPrimed=12,MaxGloballyActive=12)),((Name="Large"), (MaxGloballyPrimed=2,MaxGloballyActive=6))))),("Survival_1", (m_SpiceFieldTypeSettings=(((Name="Small"), (MaxGloballyPrimed=3,MaxGloballyActive=10))))))'
+        $script:SpiceFallback = 'm_DefaultSystemSettings=(m_SpiceFieldTypeSettings=(((Name="Small"), (MaxGloballyPrimed=3,MaxGloballyActive=20)),((Name="Medium"), (MaxGloballyPrimed=2,MaxGloballyActive=10)),((Name="Large"), (MaxGloballyPrimed=2,MaxGloballyActive=6))))'
+        $script:SpiceUserRaw = "[$script:SpiceSection]`n$script:SpiceOverride`n$script:SpiceFallback`n"
+        $script:SpiceDefaultsRaw = "[$script:SpiceSection]`n" +
+            'm_PerMapSystemSettings=(("DeepDesert_1", (m_SpiceFieldTypeSettings=(((Name="Small"), (MaxGloballyPrimed=60,MaxGloballyActive=60)),((Name="Medium"), (MaxGloballyPrimed=12,MaxGloballyActive=12)),((Name="Large"), (MaxGloballyPrimed=1,MaxGloballyActive=1))))),("Survival_1", (m_SpiceFieldTypeSettings=(((Name="Small"), (MaxGloballyPrimed=5,MaxGloballyActive=5))))))' + "`n" +
+            'm_DefaultSystemSettings=(m_SpiceFieldTypeSettings=(((Name="Small"), (MaxGloballyPrimed=6,MaxGloballyActive=3)),((Name="Medium"), (MaxGloballyPrimed=10,MaxGloballyActive=5)),((Name="Large"), (MaxGloballyPrimed=5,MaxGloballyActive=3))))' + "`n"
+    }
+
+    It 'exposes Deep Desert sizes and Hagga Small in the normal Spice card' {
+        $fields = @($script:DuneGameConfigSchema | Where-Object { $_.ContainsKey('SpiceMap') })
+
+        $fields.Count | Should -Be 4
+        $fields.Key | Should -Contain 'DST.SpiceStartup.DeepDesert.Small.Max'
+        $fields.Key | Should -Contain 'DST.SpiceStartup.DeepDesert.Medium.Max'
+        $fields.Key | Should -Contain 'DST.SpiceStartup.DeepDesert.Large.Max'
+        $fields.Key | Should -Contain 'DST.SpiceStartup.Hagga.Small.Max'
+        $fields.Key | Should -Not -Contain 'DST.SpiceStartup.Hagga.Medium.Max'
+        $fields.Key | Should -Not -Contain 'DST.SpiceStartup.Hagga.Large.Max'
+        @($fields | Where-Object { -not $_.ClientApply }).Count | Should -Be 0
+        @($fields | Where-Object { $_.Category -ne 'Spice' }).Count | Should -Be 0
+        @($fields | Where-Object { $_.SpiceLimit -ne 'Both' }).Count | Should -Be 0
+        @($fields | Where-Object { $_.ClientStructKey -ne 'm_PerMapSystemSettings' }).Count | Should -Be 0
+        ($fields | Where-Object Key -eq 'DST.SpiceStartup.DeepDesert.Large.Max').Help |
+            Should -Match 'ceiling.*max of 6.*only 4'
+        ($fields | Where-Object Key -eq 'DST.SpiceStartup.DeepDesert.Small.Max').Default | Should -Be '60'
+        ($fields | Where-Object Key -eq 'DST.SpiceStartup.DeepDesert.Medium.Max').Default | Should -Be '12'
+        ($fields | Where-Object Key -eq 'DST.SpiceStartup.DeepDesert.Large.Max').Default | Should -Be '1'
+        ($fields | Where-Object Key -eq 'DST.SpiceStartup.Hagga.Small.Max').Default | Should -Be '5'
+    }
+
+    It 'surfaces the active cap from the complete existing override' {
+        $values = Get-DuneIniEffectiveByKey -Raw $script:SpiceUserRaw
+
+        $values['DST.SpiceStartup.DeepDesert.Small.Max'] | Should -Be '60'
+        $values['DST.SpiceStartup.DeepDesert.Medium.Max'] | Should -Be '12'
+        $values['DST.SpiceStartup.DeepDesert.Large.Max'] | Should -Be '6'
+        $values['DST.SpiceStartup.Hagga.Small.Max'] | Should -Be '10'
+    }
+
+    It 'shares the complete parent struct instead of invalid pseudo keys' {
+        $notice = Get-DuneGameConfigClientApplyNotice -Updates @(
+            @{ key='DST.SpiceStartup.DeepDesert.Large.Max'; value='6' }
+        )
+
+        @($notice.items).Count | Should -Be 1
+        $notice.items[0].structKey | Should -Be 'm_PerMapSystemSettings'
+    }
+
+    It 'loads live defaults before applying spice startup fields to a fresh client file' {
+        $route = Get-Content (Join-Path (Get-DstRepoRoot) 'app\server\routes\GameConfig.ps1') -Raw
+        $route | Should -Match 'Test-DuneUpdatesHaveStructMember[\s\S]+?-or[\s\S]+?Test-DuneUpdatesHaveSpicefieldMember'
+    }
+
+    It 'patches only the selected map and size' {
+        $blob = Get-DuneIniLineValue $script:SpiceOverride
+        $patched = Set-DuneSpicefieldLimitsInBlob -Blob $blob -MapId 'DeepDesert_1' `
+            -FieldType 'Large' -MaxPrimed 4 -MaxActive 9
+
+        (Get-DuneSpicefieldLimitsFromBlob -Blob $patched -MapId 'DeepDesert_1' -FieldType 'Large').maxActive | Should -Be 9
+        (Get-DuneSpicefieldLimitsFromBlob -Blob $patched -MapId 'DeepDesert_1' -FieldType 'Large').maxPrimed | Should -Be 4
+        (Get-DuneSpicefieldLimitsFromBlob -Blob $patched -MapId 'Editor_Default' -FieldType 'Large').maxActive | Should -Be 6
+        (Get-DuneSpicefieldLimitsFromBlob -Blob $patched -MapId 'DeepDesert_1' -FieldType 'Medium').maxActive | Should -Be 12
+        $patched.Replace('MaxGloballyPrimed=4,MaxGloballyActive=9', 'MaxGloballyPrimed=2,MaxGloballyActive=6') | Should -Be $blob
+    }
+
+    It 'folds one simple max field into both required subnode members and writes the complete struct' {
+        $folded = @(Convert-DuneSpicefieldUpdates -Raw $script:SpiceUserRaw -DefaultsRaw $script:SpiceDefaultsRaw -Updates @(
+            @{ file='game'; section=$script:SpiceSection; key='DST.SpiceStartup.DeepDesert.Large.Max'; value='4'; remove=$false }
+        ))
+        $folded.Count | Should -Be 1
+        $folded[0].key | Should -Be 'm_PerMapSystemSettings'
+        $state = Get-DuneSpicefieldLimitsFromBlob -Blob $folded[0].value -MapId 'DeepDesert_1' -FieldType 'Large'
+        $state.maxActive | Should -Be 4
+        $state.maxPrimed | Should -Be 4
+        (Get-DuneSpicefieldLimitsFromBlob -Blob $folded[0].value -MapId 'Editor_Default' -FieldType 'Large').maxActive | Should -Be 6
+        (Get-DuneSpicefieldLimitsFromBlob -Blob $folded[0].value -MapId 'Survival_1' -FieldType 'Small').maxActive | Should -Be 10
+
+        $out = ConvertTo-DuneIniManaged -Raw $script:SpiceUserRaw -Updates $folded -QuotedKeys @{}
+        ([regex]::Matches($out, '(?m)^m_PerMapSystemSettings=')).Count | Should -Be 1
+        $out | Should -Match 'm_DefaultSystemSettings='
+    }
+
+    It 'seeds the complete Funcom struct when the client or server file has no override' {
+        $folded = @(Convert-DuneSpicefieldUpdates -Raw '' -DefaultsRaw $script:SpiceDefaultsRaw -Updates @(
+            @{ file='game'; section=$script:SpiceSection; key='DST.SpiceStartup.DeepDesert.Large.Max'; value='6'; remove=$false }
+        ))
+        $state = Get-DuneSpicefieldLimitsFromBlob -Blob $folded[0].value -MapId 'DeepDesert_1' -FieldType 'Large'
+
+        $state.maxActive | Should -Be 6
+        $state.maxPrimed | Should -Be 6
+        (Get-DuneSpicefieldLimitsFromBlob -Blob $folded[0].value -MapId 'Survival_1' -FieldType 'Small').maxActive | Should -Be 5
+    }
+
+    It 'resets a Funcom per-map size to its exact active and primed defaults' {
+        $folded = @(Convert-DuneSpicefieldUpdates -Raw $script:SpiceUserRaw -DefaultsRaw $script:SpiceDefaultsRaw -Updates @(
+            @{ file='game'; section=$script:SpiceSection; key='DST.SpiceStartup.DeepDesert.Large.Max'; value='1'; remove=$true }
+        ))
+        $state = Get-DuneSpicefieldLimitsFromBlob -Blob $folded[0].value -MapId 'DeepDesert_1' -FieldType 'Large'
+
+        $state.maxActive | Should -Be 1
+        $state.maxPrimed | Should -Be 1
+    }
+
+    It 'refuses an inexact reset when Funcom defaults are unavailable' {
+        {
+            Convert-DuneSpicefieldUpdates -Raw $script:SpiceUserRaw -DefaultsRaw '' -Updates @(
+                @{ file='game'; section=$script:SpiceSection; key='DST.SpiceStartup.DeepDesert.Large.Max'; value='1'; remove=$true }
+            )
+        } | Should -Throw '*defaults are unavailable*'
+    }
+
+    It 'refuses an inexact reset when the Funcom default subnode is malformed' {
+        $malformedDefaults = $script:SpiceDefaultsRaw.Replace(
+            'MaxGloballyPrimed=1,MaxGloballyActive=1',
+            'MaxGloballyPrimed=1'
+        )
+        {
+            Convert-DuneSpicefieldUpdates -Raw $script:SpiceUserRaw `
+                -DefaultsRaw $malformedDefaults -Updates @(
+                    @{ file='game'; section=$script:SpiceSection; key='DST.SpiceStartup.DeepDesert.Large.Max'; value='1'; remove=$true }
+                )
+        } | Should -Throw '*malformed*'
+    }
+
+    It 'fails closed for malformed targets' {
+        { Set-DuneSpicefieldLimitsInBlob -Blob '(("DeepDesert_1", (broken)))' `
+                -MapId 'DeepDesert_1' -FieldType 'Large' -MaxPrimed 2 -MaxActive 3 } |
+            Should -Throw '*malformed*'
     }
 }
 

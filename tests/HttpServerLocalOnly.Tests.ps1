@@ -42,4 +42,68 @@ Describe 'HTTP local-only request enforcement' {
         $route = $script:DuneRoutes[$before]
         $route.LocalOnly | Should -BeTrue
     }
+
+    It 'blocks inline and pooled API writes during World Restart maintenance' {
+        function global:Test-DuneWorldRestartMaintenanceActive { $true }
+        try {
+            Test-DuneWorldRestartWriteBlocked -Method POST -Path '/api/shutdown' | Should -BeTrue
+            Test-DuneWorldRestartWriteBlocked -Method POST -Path '/api/commands/run/restart' | Should -BeTrue
+            Test-DuneWorldRestartWriteBlocked -Method POST -Path '/api/db/world-restart/rollback' | Should -BeFalse
+            Test-DuneWorldRestartWriteBlocked -Method POST -Path '/api/db/world-restart/research-rollback' | Should -BeFalse
+            Test-DuneWorldRestartWriteBlocked -Method GET -Path '/api/status' | Should -BeFalse
+        } finally {
+            Remove-Item function:global:Test-DuneWorldRestartMaintenanceActive -ErrorAction SilentlyContinue
+        }
+    }
+
+    It 'admits a normal mutating handler exactly once without recursive lock calls' {
+        function global:Test-DuneWorldRestartMaintenanceActive { $false }
+        $script:admissionCalls = 0
+        try {
+            $result = Invoke-DuneWorldRestartAdmission -Method POST -Path '/api/test-write' -Action {
+                $script:admissionCalls++
+                return 'completed'
+            }
+
+            $script:admissionCalls | Should -Be 1
+            $result.blocked | Should -BeFalse
+            $result.value | Should -Be 'completed'
+        } finally {
+            Remove-Item function:global:Test-DuneWorldRestartMaintenanceActive -ErrorAction SilentlyContinue
+        }
+    }
+
+    It 'lets research recovery own the World Restart admission lock' {
+        function global:Test-DuneWorldRestartMaintenanceActive { $true }
+        try {
+            $result = Invoke-DuneWorldRestartAdmission -Method POST -Path '/api/db/world-restart/research-recover' -Action {
+                return 'handler-owned-lock'
+            }
+
+            $result | Should -Be 'handler-owned-lock'
+        } finally {
+            Remove-Item function:global:Test-DuneWorldRestartMaintenanceActive -ErrorAction SilentlyContinue
+        }
+    }
+
+    It 'lets research rollback own the World Restart admission lock' {
+        function global:Test-DuneWorldRestartMaintenanceActive { $true }
+        try {
+            $result = Invoke-DuneWorldRestartAdmission -Method POST -Path '/api/db/world-restart/research-rollback' -Action {
+                return 'research-rollback-handler-owned-lock'
+            }
+
+            $result | Should -Be 'research-rollback-handler-owned-lock'
+        } finally {
+            Remove-Item function:global:Test-DuneWorldRestartMaintenanceActive -ErrorAction SilentlyContinue
+        }
+    }
+
+    It 'keeps research rollback reachable through pooled API workers' {
+        $source = Get-Content (Join-Path (Get-DstRepoRoot) 'app\server\HttpServer.ps1') -Raw
+
+        $source | Should -Match ([regex]::Escape(
+            "`$path -notin @('/api/db/world-restart/rollback', '/api/db/world-restart/research-rollback')"
+        ))
+    }
 }

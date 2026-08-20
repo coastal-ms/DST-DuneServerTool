@@ -67,7 +67,7 @@ export interface SoloInventoryDestination {
   id: number
   key: string
   label: string
-  kind: 'backpack' | 'developer-storage'
+  kind: 'backpack' | 'developer-storage' | 'storage'
   itemRows: number
   maxItemCount: number
   maxItemVolume: number
@@ -124,6 +124,26 @@ export interface SoloSettingsResponse {
   entries: SoloSetting[]
 }
 
+export interface SoloConsoleSetting extends SoloSetting {
+  type: 'bool01' | 'int'
+  default: string
+  min: number | null
+  max: number | null
+  label: string
+  help: string
+  status: 'Confirmed' | 'Unconfirmed'
+}
+
+export interface SoloConsoleSettingsResponse {
+  ok: boolean
+  supported: boolean
+  adapter: string
+  path: string
+  exists: boolean
+  section: string
+  entries: SoloConsoleSetting[]
+}
+
 export interface SoloBackup {
   name: string
   relativePath: string
@@ -175,6 +195,26 @@ export function saveSoloSettings(settings: Record<string, string>, expectedProfi
   })
 }
 
+export function saveSoloConsoleSettings(
+  settings: Record<string, string>,
+  expectedProfileToken: string,
+): Promise<{
+  ok: boolean
+  settings: SoloConsoleSettingsResponse
+  backupPath: string
+  backupPaths: string[]
+  paths: string[]
+}> {
+  return api('/api/solo/console-settings', {
+    method: 'PUT',
+    body: JSON.stringify({
+      settings,
+      expectedProfileToken,
+      confirm: 'APPLY SOLO CONSOLE SETTINGS',
+    }),
+  })
+}
+
 export function getSoloBackups(): Promise<SoloBackupsResponse> {
   return api<SoloBackupsResponse>('/api/solo/backups')
 }
@@ -196,6 +236,20 @@ export function deleteSoloBackup(
       relativePath,
       expectedProfileToken,
       confirm: 'DELETE SOLO BACKUP',
+    }),
+  })
+}
+
+export function deleteSoloBackups(
+  relativePaths: string[],
+  expectedProfileToken: string,
+): Promise<{ ok: boolean; deleted: string[]; deletedCount: number }> {
+  return api('/api/solo/backups', {
+    method: 'DELETE',
+    body: JSON.stringify({
+      relativePaths,
+      expectedProfileToken,
+      confirm: 'DELETE SOLO BACKUPS',
     }),
   })
 }

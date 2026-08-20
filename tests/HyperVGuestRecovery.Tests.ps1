@@ -146,6 +146,15 @@ Describe 'Hyper-V guest recovery backend' -Tag 'Pure' {
 }
 
 Describe 'Hyper-V guest recovery POSIX installer' {
+    It 'uses command-line KVP detection because Alpine pgrep exact-name misses the daemon' {
+        $source = Get-Content `
+            (Join-Path (Get-DstRepoRoot) 'app\resources\remote-scripts\dune-hyperv-guest-recovery-install.sh') -Raw
+
+        $source | Should -Match 'pgrep -f'
+        $source | Should -Not -Match 'pgrep -x'
+        $source | Should -Match '\(\^\|/\).*hv_kvp_daemon.*\(\[\[:space:\]\]\|\$\)'
+    }
+
     It 'onlines blocks, restarts stale KVP, and installs the boot hook' {
         $bash = Get-Command bash -ErrorAction SilentlyContinue
         if (-not $bash) { Set-ItResult -Skipped -Because 'bash is unavailable'; return }

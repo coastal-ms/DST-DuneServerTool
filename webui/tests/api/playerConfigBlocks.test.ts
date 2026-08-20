@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { buildAllClientBlocks, buildClientShareEntries } from '../../src/pages/GameConfig'
+import { buildAllClientBlocks, buildCategoryClientBlocks, buildClientShareEntries } from '../../src/pages/GameConfig'
 import type { GameConfigCategory, GameConfigResponse } from '../../src/api/types'
 
 // The "Player config" button promises one thing: exactly the lines a player must
@@ -158,5 +158,30 @@ describe('buildAllClientBlocks', () => {
 
     expect(out[0].block).toContain(`Data=${data}`)
     expect(out[0].block).not.toMatch(/^m_LandsraadContractsPerVotingBlock=/m)
+  })
+
+  it('shows Give players this for struct-backed Spice card settings', () => {
+    const section = '/Script/DuneSandbox.SpiceHarvestingSystem'
+    const struct = '(("DeepDesert_1", (m_SpiceFieldTypeSettings=(((Name="Large"), (MaxGloballyPrimed=6,MaxGloballyActive=6))))))'
+    const spice = {
+      category: 'Spice',
+      fields: [
+        {
+          section, key: 'DST.SpiceStartup.DeepDesert.Large.Max',
+          structKey: 'm_PerMapSystemSettings', file: 'game', type: 'int',
+          label: 'Deep Desert Large Fields at Startup', default: '1', clientApply: true,
+        },
+      ],
+    } as unknown as GameConfigCategory
+    const out = buildCategoryClientBlocks(spice, cfg({
+      [`${section}||m_PerMapSystemSettings`]: struct,
+      [`${section}||DST.SpiceStartup.DeepDesert.Large.Max`]: '6',
+    }, {}))
+
+    expect(out.hasClientFields).toBe(true)
+    expect(out.count).toBe(1)
+    expect(out.entries).toHaveLength(1)
+    expect(out.entries[0].block).toContain(`m_PerMapSystemSettings=${struct}`)
+    expect(out.entries[0].block).not.toContain('DST.SpiceStartup')
   })
 })

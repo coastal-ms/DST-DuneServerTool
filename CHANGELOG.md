@@ -13,6 +13,80 @@ here cover everything those tags shipped.
 
 ## [Unreleased]
 
+## [13.8.2] - 2026-08-20
+
+### Added
+
+- Self-Hosted Database now includes a reversible **World Restart** workflow.
+  It starts the same battlegroup as a fresh world while preserving server
+  configuration. Every player must be offline; DST creates a verified rollback
+  backup, blocks conflicting work, and restores that backup if restart fails. The
+  fresh world removes characters, bases, inventories, progression, and market
+  data. A local audit can repair purchased research that returns without its
+  runtime crafting recipe.
+
+### Changed
+
+- Solo Mode settings now use enabled/disabled buttons for toggles, verified
+  dropdown choices for equipment-loss and corpse-looting rules, and numeric
+  inputs for integer and multiplier values.
+
+## [13.8.1] - 2026-08-18
+
+### Fixed
+
+- Corrected the DD Seed Maps cave locations for seed 2 to match the current
+  live map: I1, H2, H5, G5 (two caves), and E9.
+
+## [13.8.0] - 2026-08-18
+
+### Added
+
+- Solo Mode can grant cosmetics and building sets through the existing
+  backup-safe offline item transaction. Unlock items are delivered to the Solo
+  backpack for processing on next login; grants remain local to that save and
+  do not create Funcom account entitlements.
+- Solo item delivery now selects the character backpack by default instead of
+  preferring Developer Storage; users can still choose another supported
+  destination.
+- PTC Solo Settings can manage Sun Exposure, Maximum Vehicles Per Player, and
+  Shield Drops While Shooting in both observed `FLS_beta` Engine files:
+  `Config\Windows\Engine.ini` and `Config\WindowsClient\Engine.ini`. Writes are
+  allowlisted, game-closed, backup-first, atomic, and verified across both
+  files; all three controls are field-confirmed in PTC Solo, and no retail path
+  is assumed.
+- Solo Mode exposes the canonical DST package store directly, so Solo-only
+  users can create, import, edit, delete, and grant reusable item packages
+  without configuring Self-Hosted or relying on demo player data.
+- Solo inventory destinations include built Chest, Small Storage Container,
+  Storage Container, Medium Storage Container, and Developer Storage
+  placeables. Unfinished hologram containers are excluded using the persisted
+  `placeables.is_hologram` flag and rejected again at write time.
+- Solo Inventory keeps the selected delivery destination visible in a sticky
+  card while scrolling, and blurs the selector on mouse-wheel input to prevent
+  accidental destination changes.
+- Solo Backups supports selecting multiple retained backups and deleting them
+  with one confirmation. DST validates the complete selection before staging
+  any file and rolls staged files back if a later move fails.
+
+### Changed
+
+- Shared teleport guidance now explains the five-second direct-save settle time,
+  live-capture fallback after rapid travel, vehicle driver-seat limitation, and
+  why DST avoids speculative watchdogs around Funcom's undocumented developer
+  teleport command.
+
+### Fixed
+
+- Fresh Solo backpacks can receive the Sandbike, Buggy, Treadwheel, and Light
+  Ornithopter kits again. Missing Welding Torch and Treadwheel Hull metadata no
+  longer injects a false 1000-volume charge that rejected those kits even when
+  their known parts fit the stock 175-volume backpack.
+- Item and cosmetic catalog names now decode BOM-less UTF-8 explicitly, fixing
+  mojibake in names containing typographic apostrophes and other non-ASCII text.
+
+## [13.7.0] - 2026-08-17
+
 ### Added
 
 - Players → Server Overview can fill every small, medium, and large cistern
@@ -57,6 +131,11 @@ here cover everything those tags shipped.
 
 ### Changed
 
+- Game Config → Spice adds simple startup caps for Deep Desert Small, Medium,
+  and Large fields plus Hagga Small fields. Each cap writes both active and
+  primed limits through the normal server/client INI save path while preserving
+  Funcom's complete per-map settings structure; **Apply INIs & restart** adopts
+  the new defaults.
 - Hyper-V Dynamic Memory guests now persist automatic hot-added-memory onlining
   and recover a stale KVP integration daemon. DST remembers a verified guest IP
   and uses it only when SSH confirms that Hyper-V's IP signal is temporarily
@@ -65,11 +144,25 @@ here cover everything those tags shipped.
 - Vehicle Durability Damage moved back to Experimental after field testing found
   that 0 does not disable ordinary use wear or permanent durability loss from
   welding/repair-station repairs. Its exact damage scope remains unconfirmed.
+- Shared `!tp` destinations now use the game's safe-surface teleport path instead
+  of forcing exact stored coordinates. Backed-up field testing confirmed safe
+  long-distance and elevated-location arrivals.
+- Chat-command broadcasts now address players by character name consistently
+  instead of using the Funcom account-name portion for replies such as `!tp`.
+- Chat commands now offer an opt-in **Real-time (1 second)** monitoring interval
+  with its measured CPU cost shown; the lower-cost 3-second interval remains the
+  default.
+- Max Base Backups Per Player was removed from Experimental after field testing
+  confirmed the shipped game ignores `dw.BaseBackupMaxNumberOfBackups` with the
+  value applied to both server and client; players remained capped at three.
 
 ## [13.6.5] - 2026-08-12
 
 ### Fixed
 
+- Server Health now reminds Hyper-V Dynamic Memory users with a stuck
+  Pending/Starting map to check Startup/Minimum RAM and perform a full VM
+  shutdown/start when a normal restart retains old guest capacity.
 - Scheduled restart checkboxes keep the same visible size beside short and long
   labels.
 - Reset Journey recognizes legacy starter-class tags and stops safely before
@@ -7653,7 +7746,9 @@ at the time. Also folds in the v3.0.1 / v3.1.2 patches.
   (`ssh`, `Gameplay Admin`, `setup-guide`, `report-issue`). _(originally
   3.1.2)_
 
-[Unreleased]: https://github.com/coastal-ms/DST-DuneServerTool/compare/v13.0.2...HEAD
+[Unreleased]: https://github.com/coastal-ms/DST-DuneServerTool/compare/v13.8.0...HEAD
+[13.8.0]: https://github.com/coastal-ms/DST-DuneServerTool/compare/v13.7.0...v13.8.0
+[13.7.0]: https://github.com/coastal-ms/DST-DuneServerTool/compare/v13.6.5...v13.7.0
 [13.0.2]: https://github.com/coastal-ms/DST-DuneServerTool/compare/v13.0.1...v13.0.2
 [13.0.1]: https://github.com/coastal-ms/DST-DuneServerTool/compare/v13.0.0...v13.0.1
 [13.0.0]: https://github.com/coastal-ms/DST-DuneServerTool/compare/v12.16.6...v13.0.0

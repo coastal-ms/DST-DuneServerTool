@@ -154,3 +154,98 @@ export function syncBackupMirror() {
     body: JSON.stringify({}),
   })
 }
+
+export type WorldRestartStep = {
+  id: string
+  label: string
+  status: 'pending' | 'running' | 'done' | 'failed' | 'warning'
+  detail?: string
+}
+
+export type WorldRestartStatus = {
+  phase: string
+  running: boolean
+  operation?: 'restart' | 'rollback'
+  world?: string
+  backupPath?: string
+  rollbackAvailable: boolean
+  recoveryRequired?: boolean
+  researchRecoveryRequired?: boolean
+  researchRecoveryRunning?: boolean
+  researchRecoveryBackupPath?: string
+  automaticRollback?: boolean
+  error?: string
+  steps: WorldRestartStep[]
+}
+
+export type WorldRestartResearchMismatch = {
+  characterName: string
+  accountId: number
+  funcomId: string
+  itemKey: string
+  baseRecipeId: string
+  groupKey: string
+}
+
+export type WorldRestartResearchAudit = {
+  available: boolean
+  message: string
+  capturedCharacters: number
+  rehydratedCharacters: number
+  pendingCharacters: string[]
+  mismatches: WorldRestartResearchMismatch[]
+}
+
+export type WorldRestartResearchRecovery = {
+  ok: boolean
+  characterName: string
+  funcomId: string
+  itemKeys: string[]
+  backupPath: string
+  backupSizeBytes: number
+  message: string
+}
+
+export function getWorldRestartStatus() {
+  return api<WorldRestartStatus>('/api/db/world-restart/status')
+}
+
+export function startWorldRestart(confirm: string) {
+  return api<{ ok: boolean; running: boolean; operation: string }>('/api/db/world-restart', {
+    method: 'POST',
+    body: JSON.stringify({ confirm }),
+  })
+}
+
+export function rollbackWorldRestart(confirm: string) {
+  return api<{ ok: boolean; running: boolean; operation: string }>('/api/db/world-restart/rollback', {
+    method: 'POST',
+    body: JSON.stringify({ confirm }),
+  })
+}
+
+export function getWorldRestartResearchAudit() {
+  return api<WorldRestartResearchAudit>('/api/db/world-restart/research-audit')
+}
+
+export function recoverWorldRestartResearch(opts: {
+  characterName: string
+  funcomId: string
+  itemKeys: string[]
+  confirm: string
+}) {
+  return api<WorldRestartResearchRecovery>('/api/db/world-restart/research-recover', {
+    method: 'POST',
+    body: JSON.stringify(opts),
+  })
+}
+
+export function rollbackWorldRestartResearch(confirm: string) {
+  return api<{ ok: boolean; backupPath: string; message: string }>(
+    '/api/db/world-restart/research-rollback',
+    {
+      method: 'POST',
+      body: JSON.stringify({ confirm }),
+    },
+  )
+}

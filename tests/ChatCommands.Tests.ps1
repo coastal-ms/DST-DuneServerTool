@@ -295,11 +295,56 @@ Describe 'defaults' {
         # This value sets a permanent CPU load on someone's game server, so it is
         # clamped in the reader rather than trusted from the state file.
         (New-DuneChatCommandsDefault).pollSeconds | Should -Be 3
+        $script:DuneChatPollChoices | Should -Contain 1
         Get-DuneChatCommandPollSeconds -State @{ pollSeconds = 10 }    | Should -Be 10
         Get-DuneChatCommandPollSeconds -State @{ pollSeconds = 0 }     | Should -Be 3
         Get-DuneChatCommandPollSeconds -State @{ pollSeconds = -5 }    | Should -Be 1
         Get-DuneChatCommandPollSeconds -State @{ pollSeconds = 99999 } | Should -Be 60
         Get-DuneChatCommandPollSeconds -State @{ pollSeconds = 'fast' } | Should -Be 3
+    }
+}
+
+Describe 'chat command broadcasts' {
+    BeforeAll {
+        if (-not (Get-Command Invoke-DuneSqlQuery -ErrorAction SilentlyContinue)) {
+            function global:Invoke-DuneSqlQuery { param($Ip, $Sql, $ReadOnly, $MaxRows, $TimeoutSec) }
+        }
+        if (-not (Get-Command Send-V6GenericBroadcast -ErrorAction SilentlyContinue)) {
+            function global:Send-V6GenericBroadcast { param($Title, $Body, $DurationSec) }
+        }
+    }
+
+    It 'addresses every command reply by active character name' {
+        Mock Invoke-DuneSqlQuery {
+            @{
+                ok = $true
+                columns = @('character_name')
+                rows = ,@('Riftwalker')
+            }
+        }
+        Mock Send-V6GenericBroadcast { @{ ok = $true } }
+
+        $result = Send-DuneChatReply -Ip 'vm' -State (New-DstChatState) `
+            -ToFuncomId 'AccountName#1234' -Message 'Teleported to Riftwatch.'
+
+        $result.ok | Should -BeTrue
+        Should -Invoke Send-V6GenericBroadcast -Times 1 -Exactly -ParameterFilter {
+            $Title -eq 'Server' -and
+            $Body -eq 'Riftwalker - Teleported to Riftwatch.' -and
+            $DurationSec -eq 12
+        }
+    }
+
+    It 'falls back to account display name when character lookup fails' {
+        Mock Invoke-DuneSqlQuery { @{ ok = $false; error = 'offline' } }
+        Mock Send-V6GenericBroadcast { @{ ok = $true } }
+
+        [void](Send-DuneChatReply -Ip 'vm' -State (New-DstChatState) `
+            -ToFuncomId 'AccountName#1234' -Message 'Try again.')
+
+        Should -Invoke Send-V6GenericBroadcast -Times 1 -Exactly -ParameterFilter {
+            $Body -eq 'AccountName - Try again.'
+        }
     }
 }
 
@@ -349,6 +394,9 @@ Describe 'teleport bookmarks' {
     BeforeAll {
         if (-not (Get-Command Invoke-DuneSqlQuery -ErrorAction SilentlyContinue)) {
             function global:Invoke-DuneSqlQuery { param($Ip, $Sql, $ReadOnly, $MaxRows, $TimeoutSec) }
+        }
+        if (-not (Get-Command Invoke-DuneRmqTeleportTo -ErrorAction SilentlyContinue)) {
+            function global:Invoke-DuneRmqTeleportTo { param($FlsId, $X, $Y, $Z) }
         }
         if (-not (Get-Command Invoke-DuneRmqTeleportToExact -ErrorAction SilentlyContinue)) {
             function global:Invoke-DuneRmqTeleportToExact { param($FlsId, $X, $Y, $Z) }
@@ -608,18 +656,22 @@ Describe 'teleport bookmarks' {
         $r.reply | Should -BeLike "*Available: Base*"
     }
 
-    It 'teleports only within the current map, partition and dimension' {
+    It 'uses the non-exact teleport path within the current map, partition and dimension' {
         Save-DuneChatTeleports -Bookmarks @(
             [ordered]@{ name = 'Base'; key = 'base'; map = 'HaggaBasin'; partition = 1; dimension = 0; x = 1; y = 2; z = 3; capturedFrom = 'Coastal'; capturedAt = '2026-08-16T00:00:00Z' }
         ) | Should -BeTrue
         Mock Get-DuneChatPlayerLocation { @{ ok = $true; status = 'Online'; map = 'HaggaBasin'; partition = 1; dimension = 0 } }
         Mock Resolve-DuneChatFlsId { @{ ok = $true; flsId = 'FLS1' } }
+        Mock Invoke-DuneRmqTeleportTo { @{ ok = $true } }
         Mock Invoke-DuneRmqTeleportToExact { @{ ok = $true } }
 
         $r = Invoke-DuneChatCommandExecutor -Ip 'vm' -State (New-DstChatState) -Verb 'tp' -FuncomId 'A#1' -CommandArgs @('Base')
         $r.ok | Should -BeTrue
         $r.reply | Should -Be 'Teleported to Base.'
-        Should -Invoke Invoke-DuneRmqTeleportToExact -Times 1 -Exactly
+        Should -Invoke Invoke-DuneRmqTeleportTo -Times 1 -Exactly -ParameterFilter {
+            $FlsId -eq 'FLS1' -and $X -eq 1 -and $Y -eq 2 -and $Z -eq 3
+        }
+        Should -Invoke Invoke-DuneRmqTeleportToExact -Times 0 -Exactly
     }
 
     It 'blocks a destination on another map before sending RMQ' {
@@ -627,11 +679,13 @@ Describe 'teleport bookmarks' {
             [ordered]@{ name = 'Base'; key = 'base'; map = 'HaggaBasin'; partition = 1; dimension = 0; x = 1; y = 2; z = 3; capturedFrom = 'Coastal'; capturedAt = '2026-08-16T00:00:00Z' }
         ) | Should -BeTrue
         Mock Get-DuneChatPlayerLocation { @{ ok = $true; status = 'Online'; map = 'DeepDesert'; partition = 8; dimension = 0 } }
+        Mock Invoke-DuneRmqTeleportTo { @{ ok = $true } }
         Mock Invoke-DuneRmqTeleportToExact { @{ ok = $true } }
 
         $r = Invoke-DuneChatCommandExecutor -Ip 'vm' -State (New-DstChatState) -Verb 'tp' -FuncomId 'A#1' -CommandArgs @('Base')
         $r.ok | Should -BeFalse
         $r.reply | Should -BeLike '*Travel to that map first*'
+        Should -Invoke Invoke-DuneRmqTeleportTo -Times 0 -Exactly
         Should -Invoke Invoke-DuneRmqTeleportToExact -Times 0 -Exactly
     }
 }

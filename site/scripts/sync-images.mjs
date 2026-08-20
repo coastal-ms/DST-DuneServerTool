@@ -2,7 +2,7 @@
 // so they can be served as static assets at /screenshots/*.png.
 // Runs before `dev` and `build` via npm hooks.
 
-import { readdir, mkdir, copyFile, stat } from "node:fs/promises";
+import { readdir, mkdir, copyFile, stat, unlink } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -18,6 +18,12 @@ async function main() {
     return;
   }
   await mkdir(DEST, { recursive: true });
+  const existing = await readdir(DEST, { withFileTypes: true });
+  for (const entry of existing) {
+    if (entry.isFile() && /\.(png|jpe?g|webp|gif|svg)$/i.test(entry.name)) {
+      await unlink(join(DEST, entry.name));
+    }
+  }
   const entries = await readdir(SRC, { withFileTypes: true });
   let copied = 0;
   for (const e of entries) {

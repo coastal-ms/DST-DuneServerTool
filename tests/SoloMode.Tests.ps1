@@ -22,8 +22,9 @@ function global:Reset-TestSoloState {
 }
 
 function global:New-TestSoloLayout {
+    param([string]$Channel = 'FLS_beta')
     $root = Join-Path $env:LOCALAPPDATA 'DuneSandbox\Saved'
-    $profile = Join-Path $root 'Cloud\PlayerClientStorage\FLS_beta\123456789'
+    $profile = Join-Path $root "Cloud\PlayerClientStorage\$Channel\123456789"
     $config = Join-Path $root 'Config\Windows'
     New-Item -ItemType Directory -Path $profile, $config -Force | Out-Null
     $db = Join-Path $profile 'game.db'
@@ -136,6 +137,21 @@ Describe 'Solo Mode write gates and settings backups' {
             Should -Throw '*Unsupported Solo setting*'
     }
 
+    It 'validates integer, boolean, select, and game-controlled settings' {
+        $layout = New-TestSoloLayout
+        Save-DuneSoloState -DataRoot $layout.root -DbPath $layout.db | Out-Null
+        Mock Get-DuneSoloGameProcesses { @() }
+
+        { Set-DuneSoloSettings -Settings @{ FiefdomLimit = '1.5' } -Confirm 'APPLY SOLO SETTINGS' } |
+            Should -Throw '*must be a whole number*'
+        { Set-DuneSoloSettings -Settings @{ bAllowSandstorms = 'yes' } -Confirm 'APPLY SOLO SETTINGS' } |
+            Should -Throw '*must be True or False*'
+        { Set-DuneSoloSettings -Settings @{ PlayerDeathLootRule = 'EveryoneMaybe' } -Confirm 'APPLY SOLO SETTINGS' } |
+            Should -Throw '*unsupported option*'
+        { Set-DuneSoloSettings -Settings @{ DifficultyLevel = 'Custom' } -Confirm 'APPLY SOLO SETTINGS' } |
+            Should -Throw '*controlled by the game*'
+    }
+
     It 'restores the prior INI when post-write verification fails' {
         $layout = New-TestSoloLayout
         $ini = Join-Path $layout.config 'ServerCustomSettings.ini'
@@ -158,6 +174,161 @@ Describe 'Solo Mode write gates and settings backups' {
         { Set-DuneSoloSettings -Settings @{ GatheringAmount = '2.500000' } -Confirm 'APPLY SOLO SETTINGS' } |
             Should -Throw '*verification failed*'
         (Get-Content -LiteralPath $ini -Raw).Trim() | Should -Be $original.Trim()
+    }
+
+    It 'reads and atomically writes allowlisted PTC Engine.ini settings' {
+        $layout = New-TestSoloLayout
+        $engine = Join-Path $layout.config 'Engine.ini'
+        $clientConfig = Join-Path $layout.root 'Config\WindowsClient'
+        New-Item -ItemType Directory -Path $clientConfig -Force | Out-Null
+        $clientEngine = Join-Path $clientConfig 'Engine.ini'
+        @(
+            '[Other.Section]'
+            'KeepMe=Yes'
+            '[ConsoleVariables]'
+            'Hydration.SunExposureEnabled=1'
+            'Hydration.SunExposureEnabled=1'
+            'Unknown.FutureKey=KeepMe'
+        ) | Set-Content -LiteralPath $engine -Encoding utf8
+        @(
+            '[ConsoleVariables]'
+            'Dune.DisableShieldOnShooting=1'
+            'Dune.DisableShieldOnShooting=1'
+            'Client.FutureKey=KeepMe'
+        ) | Set-Content -LiteralPath $clientEngine -Encoding utf8
+        Save-DuneSoloState -DataRoot $layout.root -DbPath $layout.db | Out-Null
+        Mock Get-DuneSoloGameProcesses { @() }
+
+        $before = Read-DuneSoloConsoleSettings
+        $before.supported | Should -BeTrue
+        ($before.entries | Where-Object key -eq 'Hydration.SunExposureEnabled').value |
+            Should -Be '1'
+
+        $result = Set-DuneSoloConsoleSettings -Settings @{
+            'Hydration.SunExposureEnabled' = '0'
+            'Vehicle.MaxVehiclesPerPlayer' = '20'
+            'Dune.DisableShieldOnShooting' = '0'
+        } -Confirm 'APPLY SOLO CONSOLE SETTINGS'
+
+        $result.ok | Should -BeTrue
+        (Test-Path -LiteralPath $result.backupPath) | Should -BeTrue
+        @($result.backupPaths).Count | Should -Be 2
+        @($result.backupPaths | Select-Object -Unique).Count | Should -Be 2
+        (Get-Content -LiteralPath ($result.backupPaths | Where-Object { $_ -like '*Engine-Windows-*' }) -Raw) |
+            Should -Match 'Unknown\.FutureKey=KeepMe'
+        (Get-Content -LiteralPath ($result.backupPaths | Where-Object { $_ -like '*Engine-WindowsClient-*' }) -Raw) |
+            Should -Match 'Client\.FutureKey=KeepMe'
+        $written = Get-Content -LiteralPath $engine -Raw
+        $clientWritten = Get-Content -LiteralPath $clientEngine -Raw
+        $written | Should -Match '(?m)^KeepMe=Yes\r?$'
+        $written | Should -Match '(?m)^Unknown\.FutureKey=KeepMe\r?$'
+        @([regex]::Matches($written, '(?m)^Hydration\.SunExposureEnabled=0\r?$')).Count |
+            Should -Be 1
+        $written | Should -Match '(?m)^Vehicle\.MaxVehiclesPerPlayer=20\r?$'
+        $written | Should -Match '(?m)^Dune\.DisableShieldOnShooting=0\r?$'
+        $clientWritten | Should -Match '(?m)^Client\.FutureKey=KeepMe\r?$'
+        $clientWritten | Should -Match '(?m)^Hydration\.SunExposureEnabled=0\r?$'
+        $clientWritten | Should -Match '(?m)^Vehicle\.MaxVehiclesPerPlayer=20\r?$'
+        @([regex]::Matches($clientWritten, '(?m)^Dune\.DisableShieldOnShooting=0\r?$')).Count |
+            Should -Be 1
+    }
+
+    It 'blocks PTC Engine.ini writes while the game is running' {
+        $layout = New-TestSoloLayout
+        Save-DuneSoloState -DataRoot $layout.root -DbPath $layout.db | Out-Null
+        Mock Get-DuneSoloGameProcesses { @([pscustomobject]@{ name = 'DuneSandbox'; pid = 42 }) }
+
+        {
+            Set-DuneSoloConsoleSettings -Settings @{
+                'Hydration.SunExposureEnabled' = '0'
+            } -Confirm 'APPLY SOLO CONSOLE SETTINGS'
+        } | Should -Throw '*still running*'
+    }
+
+    It 'restores Engine.ini when verification reports a missing default-valued key' {
+        $layout = New-TestSoloLayout
+        $engine = Join-Path $layout.config 'Engine.ini'
+        $original = @(
+            '[ConsoleVariables]'
+            'Unknown.FutureKey=KeepMe'
+        ) -join [Environment]::NewLine
+        [IO.File]::WriteAllText($engine, $original)
+        Save-DuneSoloState -DataRoot $layout.root -DbPath $layout.db | Out-Null
+        Mock Get-DuneSoloGameProcesses { @() }
+        Mock Read-DuneSoloConsoleSettings {
+            @{
+                entries = @([pscustomobject]@{
+                    key = 'Hydration.SunExposureEnabled'
+                    value = '1'
+                    present = $false
+                })
+            }
+        }
+
+        {
+            Set-DuneSoloConsoleSettings -Settings @{
+                'Hydration.SunExposureEnabled' = '1'
+            } -Confirm 'APPLY SOLO CONSOLE SETTINGS'
+        } | Should -Throw '*verification failed*'
+        (Get-Content -LiteralPath $engine -Raw).Trim() | Should -Be $original.Trim()
+    }
+
+    It 'rolls back the host Engine.ini when the client-file commit fails' {
+        $layout = New-TestSoloLayout
+        $engine = Join-Path $layout.config 'Engine.ini'
+        $clientConfig = Join-Path $layout.root 'Config\WindowsClient'
+        New-Item -ItemType Directory -Path $clientConfig -Force | Out-Null
+        $clientEngine = Join-Path $clientConfig 'Engine.ini'
+        $hostOriginal = "[ConsoleVariables]`nHydration.SunExposureEnabled=1"
+        $clientOriginal = "[ConsoleVariables]`nHydration.SunExposureEnabled=1"
+        [IO.File]::WriteAllText($engine, $hostOriginal)
+        [IO.File]::WriteAllText($clientEngine, $clientOriginal)
+        Save-DuneSoloState -DataRoot $layout.root -DbPath $layout.db | Out-Null
+        Mock Get-DuneSoloGameProcesses { @() }
+        Mock Invoke-DuneSoloFileReplace {
+            param($Source, $Destination, $Backup)
+            if ($Destination -like '*WindowsClient\Engine.ini' -and $Source -like '*.tmp') {
+                throw 'simulated client commit failure'
+            }
+            [IO.File]::Replace($Source, $Destination, $Backup, $true)
+        }
+
+        {
+            Set-DuneSoloConsoleSettings -Settings @{
+                'Hydration.SunExposureEnabled' = '0'
+            } -Confirm 'APPLY SOLO CONSOLE SETTINGS'
+        } | Should -Throw '*simulated client commit failure*'
+        (Get-Content -LiteralPath $engine -Raw).Trim() | Should -Be $hostOriginal.Trim()
+        (Get-Content -LiteralPath $clientEngine -Raw).Trim() | Should -Be $clientOriginal.Trim()
+    }
+
+    It 'rejects unsupported or out-of-range PTC console settings' {
+        $layout = New-TestSoloLayout
+        Save-DuneSoloState -DataRoot $layout.root -DbPath $layout.db | Out-Null
+        Mock Get-DuneSoloGameProcesses { @() }
+
+        {
+            Set-DuneSoloConsoleSettings -Settings @{ 'Unknown.Key' = '1' } `
+                -Confirm 'APPLY SOLO CONSOLE SETTINGS'
+        } | Should -Throw '*Unsupported PTC Solo console setting*'
+        {
+            Set-DuneSoloConsoleSettings -Settings @{
+                'Vehicle.MaxVehiclesPerPlayer' = '1001'
+            } -Confirm 'APPLY SOLO CONSOLE SETTINGS'
+        } | Should -Throw '*between 0 and 1000*'
+    }
+
+    It 'does not guess a retail Engine.ini folder' {
+        $layout = New-TestSoloLayout -Channel 'FLS_live'
+        Save-DuneSoloState -DataRoot $layout.root -DbPath $layout.db | Out-Null
+        Mock Get-DuneSoloGameProcesses { @() }
+
+        (Read-DuneSoloConsoleSettings).supported | Should -BeFalse
+        {
+            Set-DuneSoloConsoleSettings -Settings @{
+                'Hydration.SunExposureEnabled' = '0'
+            } -Confirm 'APPLY SOLO CONSOLE SETTINGS'
+        } | Should -Throw '*verified PTC FLS_beta adapter*'
     }
 
     It 'requires the exact item-grant confirmation phrase' {
@@ -393,6 +564,111 @@ Describe 'Solo Mode backup profile isolation' {
         (Test-Path -LiteralPath $first) | Should -BeFalse
         (Test-Path -LiteralPath $second) | Should -BeTrue
         Assert-MockCalled Get-DuneSoloGameProcesses -Times 0
+    }
+
+    It 'deletes multiple selected backups after validating the complete set' {
+        $layout = New-TestSoloLayout
+        Save-DuneSoloState -DataRoot $layout.root -DbPath $layout.db | Out-Null
+        $activeRoot = Get-DuneSoloProfileBackupRoot -DbPath $layout.db
+        New-Item -ItemType Directory -Path $activeRoot -Force | Out-Null
+        foreach ($name in @('first.db', 'second.db', 'keep.db')) {
+            [IO.File]::WriteAllBytes((Join-Path $activeRoot $name), [byte[]](1))
+        }
+
+        $result = Remove-DuneSoloBackups -RelativePaths @('first.db', 'second.db') `
+            -Confirm 'DELETE SOLO BACKUPS'
+
+        $result.deletedCount | Should -Be 2
+        @($result.deleted | Sort-Object) | Should -Be @('first.db', 'second.db')
+        (Test-Path -LiteralPath (Join-Path $activeRoot 'first.db')) | Should -BeFalse
+        (Test-Path -LiteralPath (Join-Path $activeRoot 'second.db')) | Should -BeFalse
+        (Test-Path -LiteralPath (Join-Path $activeRoot 'keep.db')) | Should -BeTrue
+    }
+
+    It 'validates every selected backup before deleting any' {
+        $layout = New-TestSoloLayout
+        Save-DuneSoloState -DataRoot $layout.root -DbPath $layout.db | Out-Null
+        $activeRoot = Get-DuneSoloProfileBackupRoot -DbPath $layout.db
+        New-Item -ItemType Directory -Path $activeRoot -Force | Out-Null
+        $valid = Join-Path $activeRoot 'valid.db'
+        [IO.File]::WriteAllBytes($valid, [byte[]](1))
+
+        {
+            Remove-DuneSoloBackups -RelativePaths @('valid.db', '..\foreign.db') `
+                -Confirm 'DELETE SOLO BACKUPS'
+        } | Should -Throw '*outside the connected Solo profile backup directory*'
+        (Test-Path -LiteralPath $valid) | Should -BeTrue
+    }
+
+    It 'rolls staged backups back when a later staging move fails' {
+        $layout = New-TestSoloLayout
+        Save-DuneSoloState -DataRoot $layout.root -DbPath $layout.db | Out-Null
+        $activeRoot = Get-DuneSoloProfileBackupRoot -DbPath $layout.db
+        New-Item -ItemType Directory -Path $activeRoot -Force | Out-Null
+        $first = Join-Path $activeRoot 'first.db'
+        $second = Join-Path $activeRoot 'second.db'
+        [IO.File]::WriteAllBytes($first, [byte[]](1))
+        [IO.File]::WriteAllBytes($second, [byte[]](2))
+        $script:moveCount = 0
+        Mock Move-Item {
+            param($LiteralPath, $Destination, $ErrorAction)
+            $script:moveCount++
+            if ($script:moveCount -eq 2) { throw 'simulated staging failure' }
+            Microsoft.PowerShell.Management\Move-Item -LiteralPath $LiteralPath `
+                -Destination $Destination -ErrorAction $ErrorAction
+        }
+
+        {
+            Remove-DuneSoloBackups -RelativePaths @('first.db', 'second.db') `
+                -Confirm 'DELETE SOLO BACKUPS'
+        } | Should -Throw '*simulated staging failure*'
+        (Test-Path -LiteralPath $first) | Should -BeTrue
+        (Test-Path -LiteralPath $second) | Should -BeTrue
+    }
+
+    It 'rejects a reparse point on the deletion staging directory' {
+        $layout = New-TestSoloLayout
+        Save-DuneSoloState -DataRoot $layout.root -DbPath $layout.db | Out-Null
+        $activeRoot = Get-DuneSoloProfileBackupRoot -DbPath $layout.db
+        $stageParent = Join-Path $activeRoot '.delete-staging'
+        $junctionTarget = Join-Path $script:SoloTestRoot 'staging-junction-target'
+        New-Item -ItemType Directory -Path $junctionTarget -Force | Out-Null
+        New-Item -ItemType Junction -Path $stageParent -Target $junctionTarget | Out-Null
+        $target = Join-Path $activeRoot 'keep.db'
+        [IO.File]::WriteAllBytes($target, [byte[]](1))
+
+        {
+            Remove-DuneSoloBackups -RelativePaths @('keep.db') `
+                -Confirm 'DELETE SOLO BACKUPS'
+        } | Should -Throw '*reparse point*'
+        (Test-Path -LiteralPath $target) | Should -BeTrue
+    }
+
+    It 'reports exact deleted and retained files when final cleanup is partial' {
+        $layout = New-TestSoloLayout
+        Save-DuneSoloState -DataRoot $layout.root -DbPath $layout.db | Out-Null
+        $activeRoot = Get-DuneSoloProfileBackupRoot -DbPath $layout.db
+        New-Item -ItemType Directory -Path $activeRoot -Force | Out-Null
+        $first = Join-Path $activeRoot 'first.db'
+        $second = Join-Path $activeRoot 'second.db'
+        [IO.File]::WriteAllBytes($first, [byte[]](1))
+        [IO.File]::WriteAllBytes($second, [byte[]](2))
+        Mock Remove-DuneSoloBackupFile {
+            param($Path)
+            if ($Path -like '*001-second.db') {
+                throw 'simulated final delete failure'
+            }
+            Remove-Item -LiteralPath $Path -Force -ErrorAction Stop
+        }
+
+        {
+            Remove-DuneSoloBackups -RelativePaths @('first.db', 'second.db') `
+                -Confirm 'DELETE SOLO BACKUPS'
+        } | Should -Throw '*Permanently deleted: first.db*Retained for recovery: second.db*'
+        (Test-Path -LiteralPath $first) | Should -BeFalse
+        (Test-Path -LiteralPath $second) | Should -BeFalse
+        @(Get-ChildItem -LiteralPath (Join-Path $activeRoot '.delete-staging') `
+            -Filter '*second.db' -File -Recurse).Count | Should -Be 1
     }
 
     It 'rejects backup deletion traversal and non-db files' {

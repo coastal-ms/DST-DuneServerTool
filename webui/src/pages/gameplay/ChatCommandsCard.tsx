@@ -45,7 +45,7 @@ const SPICE_VERBS = new Set(['small', 'medium', 'large'])
 // 15.41% at a 3s poll, so ~1.5 core-seconds per check. Shown in the picker so
 // the trade is made with the numbers visible rather than blind.
 const POLL_COST: Record<number, string> = {
-  3: '0.50', 5: '0.30', 10: '0.15', 15: '0.10', 30: '0.05',
+  1: '1.50', 3: '0.50', 5: '0.30', 10: '0.15', 15: '0.10', 30: '0.05',
 }
 
 // The cap a spice command works within is not part of this feature - it is the
@@ -427,12 +427,21 @@ export function ChatCommandsCard() {
                 <div className="mt-3 rounded border border-border bg-surface/50 p-3">
                   <div className="text-[11px] text-text-muted">
                     Shared destinations are stored only on this DST PC. Use
-                    <strong> Save location</strong> for normal areas. If that location returns
+                    <strong> Save location</strong> after standing still at the destination for
+                    about five seconds. If rapid travel leaves that location stale or returns
                     to a map opening point (observed in Hagga South), use
                     <strong> Arm live capture</strong>; the selected player then types the
                     one-time command at the destination. Teleports remain limited to the
                     same map, partition and dimension. Replies and <code>!tp list</code> are
                     public server broadcasts.
+                  </div>
+                  <div className="mt-2 text-[11px] text-warning">
+                    This uses Funcom&apos;s internal developer teleport command, not a normal
+                    player-travel system. Safe-surface replay is field-proven, but long-term
+                    engine behavior is not documented, so DST intentionally avoids speculative
+                    watchdogs around it. If vehicle arrival matters, save while mounted and
+                    teleport from the driver position; passenger, gunner and cutteray seats
+                    have failed back to the origin in testing.
                   </div>
                   <div className="mt-3 grid gap-2 md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto]">
                     <select
@@ -655,13 +664,16 @@ export function ChatCommandsCard() {
           onChange={e => {
             const n = Number(e.target.value)
             setState(prev => (prev ? { ...prev, pollSeconds: n } : prev))
-            void patch({ pollSeconds: n }, `Now checking every ${n} seconds.`)
+            void patch(
+              { pollSeconds: n },
+              n === 1 ? 'Real-time monitoring enabled.' : `Now checking every ${n} seconds.`,
+            )
           }}
           className="px-2 py-1 rounded bg-surface border border-border text-text text-xs"
         >
-          {(state?.pollChoices ?? [3, 5, 10, 15, 30]).map(n => (
+          {(state?.pollChoices ?? [1, 3, 5, 10, 15, 30]).map(n => (
             <option key={n} value={n}>
-              {n} seconds — about {POLL_COST[n] ?? (1.5 / n).toFixed(2)} of a processor core
+              {n === 1 ? 'Real-time (1 second)' : `${n} seconds`} — about {POLL_COST[n] ?? (1.5 / n).toFixed(2)} of a processor core
             </option>
           ))}
         </select>
