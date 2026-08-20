@@ -13,6 +13,14 @@ here cover everything those tags shipped.
 
 ## [Unreleased]
 
+### Added
+
+- Game Config → Landsraad now exposes the current Landsraad timing controls:
+  Voting Period Duration, Landsraad Cycle Duration and Suspended Period
+  Duration. The two older voting fields are retained and relabelled as legacy
+  so existing server values stay visible and editable; DST never copies or
+  deletes either set automatically.
+
 ## [13.8.2] - 2026-08-20
 
 ### Added
