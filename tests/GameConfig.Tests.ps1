@@ -1999,6 +1999,7 @@ Describe 'GameConfig: UE struct-member engine (LandsraadSettings Data blob)' -Ta
         $out | Should -Match '^Data=\('
         $out | Should -Match '\)$'
     }
+
 }
 
 Describe 'GameConfig: spicefield startup defaults' -Tag 'GameConfig' {
@@ -2175,6 +2176,18 @@ Describe 'GameConfig: Landsraad struct fields integrate with read + save' -Tag '
         @($folded | Where-Object { $_.key -eq 'm_WaterConsumptionRate' }).Count | Should -Be 1
     }
 
+    It 'exposes current Funcom Landsraad timing members without hiding legacy values' {
+        $landsraadKeys = @($script:DuneGameConfigSchema |
+            Where-Object { $_.Category -eq 'Landsraad' } |
+            ForEach-Object { $_.Key })
+
+        $landsraadKeys | Should -Contain 'm_LandsraadVotingPeriodDurationInSec'
+        $landsraadKeys | Should -Contain 'm_LandsraadCycleDurationInSeconds'
+        $landsraadKeys | Should -Contain 'm_LandsraadSuspendedPeriodDurationInSeconds'
+        $landsraadKeys | Should -Contain 'm_VotingPeriodDurationInSec'
+        $landsraadKeys | Should -Contain 'm_VotingPeriodStartBeforeCoriolisCycleInSec'
+    }
+
     It 'seeds the full default struct when the file has no prior LandsraadSettings section' {
         # Fresh UserGame.ini: no LandsraadSettings section at all.
         $freshRaw = "[/Script/DuneSandbox.DuneGameMode]`nm_WaterConsumptionRate=1.0`n"
@@ -2212,13 +2225,13 @@ Describe 'GameConfig: Landsraad struct fields integrate with read + save' -Tag '
         $folded[0].value | Should -Not -Match 'm_ExtraDefaultOnly'
     }
 
-    It 'heals a legacy STUB box in place, restoring dropped default members and keeping customizations' {
+    It 'heals a legacy STUB box while preserving legacy and current members independently' {
         # An older DST build wrote a stripped 5-member stub into the live file.
         $stubRaw = "[/Script/DuneSandbox.LandsraadSettings]`n" +
-            'Data=(m_LandsraadTaskProgressUpdateFrequency=15.0,m_LandsraadTaskDailyRevealFrequency=25.0,m_VotingPeriodStartBeforeCoriolisCycleInSec=118800.0,m_VotingPeriodDurationInSec=118500.0,m_TaskGoalAmount=9999.0)' + "`n"
+            'Data=(m_LandsraadTaskProgressUpdateFrequency=15.0,m_LandsraadTaskDailyRevealFrequency=25.0,m_VotingPeriodStartBeforeCoriolisCycleInSec=118800.0,m_VotingPeriodDurationInSec=43210,m_TaskGoalAmount=9999.0)' + "`n"
         # Full default box ships many more members the stub dropped.
         $defaultsRaw = "[/Script/DuneSandbox.LandsraadSettings]`n" +
-            'Data=(m_NumberOfDecreesToNominate=5,m_TaskGoalAmount=26000,m_LandsraadTaskProgressUpdateFrequency=10.0,m_LandsraadTaskDailyRevealFrequency=20.0,m_VotingPeriodStartBeforeCoriolisCycleInSec=100000.0,m_VotingPeriodDurationInSec=100000.0,m_ControlPointsPerCycle=10,m_TermStartedMessage=(Name="LandsraadTermStarted"),m_BoardLayouts=((Houses=2)),m_ContributionCurve=(Keys=((Time=0.0,Value=1.0))))' + "`n"
+            'Data=(m_NumberOfDecreesToNominate=5,m_TaskGoalAmount=26000,m_LandsraadTaskProgressUpdateFrequency=10.0,m_LandsraadTaskDailyRevealFrequency=20.0,m_LandsraadVotingPeriodDurationInSec=118500,m_LandsraadCycleDurationInSeconds=604800,m_LandsraadSuspendedPeriodDurationInSeconds=300,m_ControlPointsPerCycle=10,m_TermStartedMessage=(Name="LandsraadTermStarted"),m_BoardLayouts=((Houses=2)),m_ContributionCurve=(Keys=((Time=0.0,Value=1.0))))' + "`n"
         $updates = @(
             @{ file='game'; section='/Script/DuneSandbox.LandsraadSettings'; key='m_TaskGoalAmount'; value='12000' }
         )
@@ -2235,7 +2248,9 @@ Describe 'GameConfig: Landsraad struct fields integrate with read + save' -Tag '
         $folded[0].value | Should -Match 'm_ControlPointsPerCycle=10'
         # the stub's OWN customized values are preserved (not reset to defaults)
         $folded[0].value | Should -Match 'm_LandsraadTaskProgressUpdateFrequency=15\.0'
-        $folded[0].value | Should -Match 'm_VotingPeriodDurationInSec=118500\.0'
+        $folded[0].value | Should -Match 'm_LandsraadVotingPeriodDurationInSec=118500'
+        $folded[0].value | Should -Match 'm_VotingPeriodDurationInSec=43210'
+        $folded[0].value | Should -Match 'm_VotingPeriodStartBeforeCoriolisCycleInSec=118800\.0'
     }
 }
 
