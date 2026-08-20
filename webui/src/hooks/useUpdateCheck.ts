@@ -3,6 +3,7 @@ import type { UpdateCheck } from '../api/update'
 import { checkForUpdate } from '../api/update'
 
 const POLL_MS = 60 * 60 * 1000 // 1 hour
+const FOCUS_RECHECK_MS = 5 * 60 * 1000 // don't re-check on focus more than this often
 
 export interface UpdateState {
   data: UpdateCheck | null
@@ -18,8 +19,11 @@ export interface UpdateState {
 // Previously each call kept its own isolated useState, so a forced "Check now"
 // on the Settings page updated only that component's copy while the global
 // UpdateBanner kept its own stale result and stayed hidden until a full page
-// reload or the next 6-hour poll. With a shared store, any update found by any
+// reload or the next background poll. With a shared store, any update found by any
 // consumer (or pushed via publishUpdateCheck) surfaces in the banner instantly.
+// The background poll runs hourly, with an additional throttled re-check when
+// the window regains focus so a machine that was asleep or backgrounded doesn't
+// sit on a stale result.
 // ---------------------------------------------------------------------------
 
 interface Snapshot {
@@ -34,6 +38,7 @@ let inflight = false
 let started = false
 let pollId: number | null = null
 let mountCount = 0
+let lastCheckedAt = 0
 
 function emit() {
   for (const l of listeners) l()
@@ -50,6 +55,7 @@ async function run(force = false): Promise<void> {
   setState({ loading: true, error: null })
   try {
     const res = await checkForUpdate({ force })
+    lastCheckedAt = Date.now()
     setState({ data: res })
   } catch (e) {
     setState({ error: e instanceof Error ? e.message : String(e) })
@@ -57,6 +63,16 @@ async function run(force = false): Promise<void> {
     inflight = false
     setState({ loading: false })
   }
+}
+
+// The hourly poll only fires while the window is open and awake; a machine that
+// was asleep, or a window left in the background, can otherwise show a stale
+// result for up to an hour after a release. Re-check when the user comes back,
+// throttled so tabbing in and out doesn't spam the endpoint.
+function onWake(): void {
+  if (document.visibilityState === 'hidden') return
+  if (Date.now() - lastCheckedAt < FOCUS_RECHECK_MS) return
+  void run(false)
 }
 
 // Lets other components (e.g. the Settings update card, which runs its own
@@ -73,12 +89,16 @@ function subscribe(cb: () => void): () => void {
     started = true
     void run(false)
     pollId = window.setInterval(() => { void run(false) }, POLL_MS)
+    window.addEventListener('focus', onWake)
+    document.addEventListener('visibilitychange', onWake)
   }
   return () => {
     listeners.delete(cb)
     mountCount -= 1
     if (mountCount <= 0 && pollId !== null) {
       window.clearInterval(pollId)
+      window.removeEventListener('focus', onWake)
+      document.removeEventListener('visibilitychange', onWake)
       pollId = null
       started = false
       mountCount = 0

@@ -2478,15 +2478,19 @@ export function InventorySection({ player, canWrite, demo, refreshKey, flash, on
     }
   }, [detail])
 
-  const run = async (fn: () => Promise<{ message: string }>, label: string) => {
+  // Returns true only when the write succeeded, so inline editors can stay open
+  // (with their entered values intact) when a save fails.
+  const run = async (fn: () => Promise<{ message: string }>, label: string): Promise<boolean> => {
     setBusy(true)
     try {
       const r = await fn()
       flash(r.message || `${label} done.`, 'ok')
       setTick(t => t + 1)
       onChanged()
+      return true
     } catch (e) {
       flash(e instanceof Error ? e.message : String(e), 'err')
+      return false
     } finally {
       setBusy(false)
     }
@@ -2515,7 +2519,7 @@ export function InventorySection({ player, canWrite, demo, refreshKey, flash, on
 
 function ItemList({ title, icon, items, canWrite, busy, run, collapsed, extra, isOnline }: {
   title: string; icon: string; items: InventoryItem[]; canWrite: boolean; busy: boolean
-  run: (fn: () => Promise<{ message: string }>, label: string) => void | Promise<void>
+  run: (fn: () => Promise<{ message: string }>, label: string) => Promise<boolean>
   collapsed?: boolean
   extra?: React.ReactNode
   isOnline: boolean
@@ -2627,7 +2631,7 @@ function ItemList({ title, icon, items, canWrite, busy, run, collapsed, extra, i
 function StackEditor({ item, busy, run, isOnline, onClose }: {
   item: InventoryItem
   busy: boolean
-  run: (fn: () => Promise<{ message: string }>, label: string) => void | Promise<void>
+  run: (fn: () => Promise<{ message: string }>, label: string) => Promise<boolean>
   isOnline: boolean
   onClose: () => void
 }) {
@@ -2664,8 +2668,7 @@ function StackEditor({ item, busy, run, isOnline, onClose }: {
           disabled={busy || !valid}
           onClick={() => {
             if (!valid) return
-            void run(() => setItemStack(item.id, n), 'Save')
-            onClose()
+            void (async () => { if (await run(() => setItemStack(item.id, n), 'Save')) onClose() })()
           }}
         >
           <Icon name="Save" size={12} /> Save
@@ -2683,7 +2686,7 @@ function StackEditor({ item, busy, run, isOnline, onClose }: {
 function DurabilityEditor({ item, busy, run, isOnline, onClose }: {
   item: InventoryItem
   busy: boolean
-  run: (fn: () => Promise<{ message: string }>, label: string) => void | Promise<void>
+  run: (fn: () => Promise<{ message: string }>, label: string) => Promise<boolean>
   isOnline: boolean
   onClose: () => void
 }) {
@@ -2767,8 +2770,9 @@ function DurabilityEditor({ item, busy, run, isOnline, onClose }: {
           disabled={busy || !valid}
           onClick={() => {
             if (!valid) return
-            void run(() => setItemDurability(item.id, mN!, cN!, dN!), 'Save')
-            onClose()
+            void (async () => {
+              if (await run(() => setItemDurability(item.id, mN!, cN!, dN!), 'Save')) onClose()
+            })()
           }}
         >
           <Icon name="Save" size={12} /> Save
@@ -2788,7 +2792,7 @@ function DurabilityEditor({ item, busy, run, isOnline, onClose }: {
 function WaterEditor({ item, busy, run, onClose }: {
   item: InventoryItem
   busy: boolean
-  run: (fn: () => Promise<{ message: string }>, label: string) => void | Promise<void>
+  run: (fn: () => Promise<{ message: string }>, label: string) => Promise<boolean>
   onClose: () => void
 }) {
   const amt0 = parseFloat(item.water_amount)
@@ -2835,8 +2839,7 @@ function WaterEditor({ item, busy, run, onClose }: {
             disabled={busy || !valid}
             onClick={() => {
               if (!valid) return
-              void run(() => setItemWater(item.id, n), 'Save')
-              onClose()
+              void (async () => { if (await run(() => setItemWater(item.id, n), 'Save')) onClose() })()
             }}
           >
             <Icon name="Save" size={12} /> Save water

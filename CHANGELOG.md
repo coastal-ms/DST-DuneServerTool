@@ -21,6 +21,15 @@ here cover everything those tags shipped.
   so existing server values stay visible and editable; DST never copies or
   deletes either set automatically.
 
+### Fixed
+
+- Inventory stack, durability and water editors now stay open until their save
+  actually succeeds. Previously they closed immediately, so a failed write
+  discarded the entered values and the error appeared without context.
+- The in-app update check now re-runs when the window regains focus, throttled
+  to once every five minutes, so a machine that was asleep or left in the
+  background no longer shows a stale result until the next hourly poll. (#349)
+
 ## [13.8.2] - 2026-08-20
 
 ### Added
