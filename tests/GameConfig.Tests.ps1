@@ -319,6 +319,80 @@ Describe 'Fuel burning startup override' -Tag 'GameConfig' {
         $arguments | Should -Contain '-execcmds="Bgd.ServerDisplayName ''Hagga'',New.Advanced 2"'
     }
 
+    It 'prunes podSpecs for inactive non-dedicated partitions' {
+        Mock Get-V6Battlegroup {
+            [pscustomobject]@{
+                Name = 'bg'; Ns = 'dune'
+                Bg = [pscustomobject]@{
+                    spec = [pscustomobject]@{ serverGroup = [pscustomobject]@{
+                        template = [pscustomobject]@{ spec = [pscustomobject]@{ sets = @(
+                            [pscustomobject]@{
+                                map = 'Survival_1'
+                                dedicatedScaling = $false
+                                partitions = @(1)
+                                podSpecs = @(
+                                    [pscustomobject]@{ index = 0; arguments = @('-execcmds="dw.FuelBurningMultiplier 6"') }
+                                    [pscustomobject]@{ index = 1; arguments = @('-execcmds="dw.FuelBurningMultiplier 6"') }
+                                )
+                            }
+                        ) } }
+                    } }
+                    status = [pscustomobject]@{ servers = @(
+                        [pscustomobject]@{ partitionMap = 'Survival_1'; partitionIndex = 1 }
+                    ) }
+                }
+            }
+        }
+        $script:stalePodSpecPatches = $null
+        Mock _Invoke-V6BgJsonPatch {
+            param($Ip, $Info, $Patches)
+            $script:stalePodSpecPatches = $Patches
+            @{ Success = $true; Raw = ''; Error = $null }
+        }
+
+        $result = Set-V6ConsoleVariableOverrides -Ip '192.0.2.1' `
+            -Names @('dw.FuelBurningMultiplier') `
+            -Values @{ 'dw.FuelBurningMultiplier' = '6' } `
+            -ManagedNames @{ 'dw.FuelBurningMultiplier' = $true }
+
+        $result.Success | Should -BeTrue
+        @($script:stalePodSpecPatches[0].value).Count | Should -Be 1
+        $script:stalePodSpecPatches[0].value[0].index | Should -Be 1
+    }
+
+    It 'preserves dormant podSpecs for dedicated maps' {
+        Mock Get-V6Battlegroup {
+            [pscustomobject]@{
+                Name = 'bg'; Ns = 'dune'
+                Bg = [pscustomobject]@{
+                    spec = [pscustomobject]@{ serverGroup = [pscustomobject]@{
+                        template = [pscustomobject]@{ spec = [pscustomobject]@{ sets = @(
+                            [pscustomobject]@{
+                                map = 'DeepDesert_1'
+                                dedicatedScaling = $true
+                                partitions = $null
+                                podSpecs = @(
+                                    [pscustomobject]@{ index = 8; arguments = @('-execcmds="dw.FuelBurningMultiplier 6"') }
+                                )
+                            }
+                        ) } }
+                    } }
+                    status = [pscustomobject]@{ servers = @() }
+                }
+            }
+        }
+        Mock _Invoke-V6BgJsonPatch { throw 'Dormant dedicated podSpec must not be removed.' }
+
+        $result = Set-V6ConsoleVariableOverrides -Ip '192.0.2.1' `
+            -Names @('dw.FuelBurningMultiplier') `
+            -Values @{ 'dw.FuelBurningMultiplier' = '6' } `
+            -ManagedNames @{ 'dw.FuelBurningMultiplier' = $true }
+
+        $result.Success | Should -BeTrue
+        $result.NoChange | Should -BeTrue
+        Should -Invoke _Invoke-V6BgJsonPatch -Times 0
+    }
+
     It 'merges fuel and a per-sietch name into one ExecCmds argument' {
         $arguments = @(_Set-V6ExecCommand `
             -Arguments @('-log', '-execcmds="Bgd.ServerDisplayName ''Hagga, Prime''"') `
@@ -796,9 +870,6 @@ Describe 'DuneGameConfigSchema: experimental binary CVars' -Tag 'GameConfig' {
             'Journey.EnableSimplifiedChallengeCompletion'
             'Progression.IgnorePrereqs'
             'Progression.ShowAllPerks'
-            'dw.ReturningPlayer.GiveAward.Enabled'
-            'dw.ReturningPlayer.DaysBeforeEligibleForReward'
-            'dw.ReturningPlayer.GiveAward.TierOverride'
             'NPC.EnableFacingTargetCheck'
             'NPC.FacingTargetAngleStartThreshold'
             'NPC.FacingTargetAngleStopThreshold'
@@ -844,7 +915,7 @@ Describe 'DuneGameConfigSchema: experimental binary CVars' -Tag 'GameConfig' {
         $experimental2 = @($script:DuneGameConfigSchema | Where-Object Category -eq 'Experimental 2')
 
         $experimental.Count | Should -Be 54
-        $experimental2.Count | Should -Be 71
+        $experimental2.Count | Should -Be 68
         @($experimental.Key | Sort-Object) | Should -Be @($script:ExperimentalKeys | Sort-Object)
         @($experimental2.Key | Sort-Object) | Should -Be @($script:Experimental2Keys | Sort-Object)
         foreach ($key in @($script:ExperimentalKeys) + @($script:Experimental2Keys)) {
@@ -857,7 +928,7 @@ Describe 'DuneGameConfigSchema: experimental binary CVars' -Tag 'GameConfig' {
         @($script:DuneGameConfigSchema | Where-Object Category -eq 'Experimental Lab').Count | Should -Be 0
         (Test-DuneStartupConsoleVariableKey -Key 'm_TaskGoalAmount') | Should -BeFalse
         $script:DuneAdvancedCvarCatalogCache | Should -BeNullOrEmpty
-        @($script:DuneStartupConsoleVariableKeys).Count | Should -Be 148
+        @($script:DuneStartupConsoleVariableKeys).Count | Should -Be 145
 
         $lab = @(Get-DuneAdvancedCvarCatalog)
         $lab.Count | Should -BeGreaterThan 4900
@@ -896,7 +967,7 @@ Describe 'DuneGameConfigSchema: experimental binary CVars' -Tag 'GameConfig' {
         # Uncategorized rather than being forced into a neighbouring group.
         $api = @(Get-DuneGameConfigSchemaApi)
         $fields = @($api | Where-Object { $_.category -like 'Experimental*' } | ForEach-Object { $_.fields })
-        $fields.Count | Should -Be 125
+        $fields.Count | Should -Be 122
         foreach ($f in $fields) {
             $f.group | Should -Not -BeNullOrEmpty
             $f.status | Should -BeIn @('Confirmed', 'Unconfirmed')
@@ -1119,16 +1190,17 @@ Describe 'DuneGameConfigSchema: experimental binary CVars' -Tag 'GameConfig' {
         }
     }
 
-    It 'keeps legacy returning-player popup controls available so old injections can be disabled' {
-        $legacy = @(
+    It 'scrubs retired returning-player controls from INI and startup injection' {
+        $retired = @(
             'dw.ReturningPlayer.GiveAward.Enabled'
             'dw.ReturningPlayer.DaysBeforeEligibleForReward'
             'dw.ReturningPlayer.GiveAward.TierOverride'
         )
-        foreach ($key in $legacy) {
-            @($script:DuneGameConfigSchema.Key) | Should -Contain $key
-            @($script:DuneGameConfigDeprecatedManagedKeys) | Should -Not -Contain $key
-            @($script:DuneStartupConsoleVariableKeys) | Should -Contain $key
+        foreach ($key in $retired) {
+            @($script:DuneGameConfigSchema.Key) | Should -Not -Contain $key
+            @($script:DuneGameConfigDeprecatedManagedKeys) | Should -Contain $key
+            @($script:DuneStartupConsoleVariableKeys) | Should -Not -Contain $key
+            (Get-DuneManagedStartupConsoleVariableKeyMap).ContainsKey($key) | Should -BeTrue
         }
 
         $raw = @"
@@ -1140,16 +1212,10 @@ dw.ReturningPlayer.DaysBeforeEligibleForReward=1
 dw.ReturningPlayer.GiveAward.TierOverride=2
 ; ===== Dune Server Tool (DST) managed section END =====
 "@
-        $updates = @(
-            @{ section = $script:DuneGcSecConsole; key = 'dw.ReturningPlayer.GiveAward.Enabled'; value = '0'; quoted = $false }
-        )
-        $out = ConvertTo-DuneIniManaged -Raw $raw -Updates $updates -QuotedKeys @{}
+        $out = ConvertTo-DuneIniManaged -Raw $raw -Updates @() -QuotedKeys @{}
 
-        $out | Should -Match 'dw\.ReturningPlayer\.GiveAward\.Enabled=0'
-        $out | Should -Match 'dw\.ReturningPlayer\.DaysBeforeEligibleForReward=1'
-        $out | Should -Match 'dw\.ReturningPlayer\.GiveAward\.TierOverride=2'
+        $out | Should -Not -Match 'dw\.ReturningPlayer'
         $out | Should -Match 'dw\.FuelBurningMultiplier=6'
-        @([regex]::Matches($out, 'ReturningPlayer\.GiveAward\.Enabled')).Count | Should -Be 1
     }
 
     It 'keeps restored vehicle controls in the managed INI block on the next save' {

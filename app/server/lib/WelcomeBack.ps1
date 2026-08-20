@@ -349,12 +349,57 @@ function Send-DuneWelcomeBackAnnounce {
 # -----------------------------------------------------------------------------
 $script:DuneWelcomeBackLastRun = [datetime]::MinValue
 $script:DuneWelcomeBackIntervalMin = 5
+$script:DuneNativeWelcomeBackCleanupLastRun = [datetime]::MinValue
+
+function Invoke-DuneNativeWelcomeBackCleanup {
+    param([string]$Ip)
+    $sql = @'
+UPDATE dune.encrypted_player_state
+SET last_returning_player_awarded_time = now(),
+    last_returning_player_event_time = NULL
+WHERE online_status::text = 'Offline'
+  AND last_returning_player_event_time IS NOT NULL
+RETURNING account_id::text;
+'@
+    $r = Invoke-DuneSqlQuery -Ip $Ip -Sql $sql -ReadOnly $false -MaxRows 5000 -TimeoutSec 20
+    if (-not $r.ok) { return @{ ok = $false; cleaned = 0; error = $r.error } }
+    return @{ ok = $true; cleaned = [int]$r.rowCount }
+}
+
+function Invoke-DuneNativeWelcomeBackCleanupTick {
+    param([switch]$Force)
+    if (-not $Force) {
+        $since = ([datetime]::UtcNow - $script:DuneNativeWelcomeBackCleanupLastRun).TotalMinutes
+        if ($since -lt $script:DuneWelcomeBackIntervalMin) {
+            return @{ ok = $true; cleaned = 0; message = 'throttled' }
+        }
+    }
+    $script:DuneNativeWelcomeBackCleanupLastRun = [datetime]::UtcNow
+    if (-not (Get-Command Get-DuneDbContext -ErrorAction SilentlyContinue)) {
+        return @{ ok = $false; cleaned = 0; error = 'db context helper unavailable' }
+    }
+    $ctx = Get-DuneDbContext
+    if (-not $ctx.ok) { return @{ ok = $false; cleaned = 0; error = $ctx.message } }
+    return Invoke-DuneNativeWelcomeBackCleanup -Ip $ctx.ip
+}
 
 function Invoke-DuneWelcomeBackTick {
     param([switch]$Force)
     try {
+        # Funcom's native returning-player service cannot deliver award packs to
+        # self-hosted servers. Failed claims leave an event latched and show the
+        # empty popup again on every login. Mark only offline pending characters
+        # handled; online state remains untouched and the update is idempotent.
+        $nativeCleanup = Invoke-DuneNativeWelcomeBackCleanupTick -Force:$Force
+        if (-not $nativeCleanup.ok -and (Get-Command Write-DuneLog -ErrorAction SilentlyContinue)) {
+            try { Write-DuneLog "native welcome-back cleanup failed: $($nativeCleanup.error)" 'WARN' } catch {}
+        }
+
         $state = Read-DuneWelcomeBackState
-        if (-not $state.enabled) { return @{ ok = $true; acted = $false; message = 'disabled' } }
+        if (-not $state.enabled) {
+            return @{ ok = $true; acted = ([int]$nativeCleanup.cleaned -gt 0)
+                      cleanedNative = [int]$nativeCleanup.cleaned; message = 'disabled' }
+        }
 
         if (-not $Force) {
             $since = ([datetime]::UtcNow - $script:DuneWelcomeBackLastRun).TotalMinutes

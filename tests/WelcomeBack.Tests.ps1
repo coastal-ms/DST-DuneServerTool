@@ -10,9 +10,64 @@ BeforeAll {
     $here = Split-Path -Parent $PSCommandPath
     . (Join-Path $here '..\app\server\lib\WelcomeBack.ps1')
 
+    if (-not (Get-Command Invoke-DuneSqlQuery -ErrorAction SilentlyContinue)) {
+        function global:Invoke-DuneSqlQuery { param($Ip, $Sql, $ReadOnly, $MaxRows, $TimeoutSec) }
+    }
+    if (-not (Get-Command Get-DuneDbContext -ErrorAction SilentlyContinue)) {
+        function global:Get-DuneDbContext {}
+    }
+
     function New-Player {
         param([string]$Id, [string]$Name, [string]$Login, [int64]$Pawn = 100)
         return @{ account_id = $Id; name = $Name; pawn_id = $Pawn; last_login = $Login }
+    }
+
+    Describe 'Native welcome-back cleanup' {
+        BeforeEach {
+            $script:DuneNativeWelcomeBackCleanupLastRun = [datetime]::MinValue
+        }
+
+        It 'marks only offline pending native events handled' {
+            Mock Invoke-DuneSqlQuery {
+                param($Ip, $Sql, $ReadOnly, $MaxRows, $TimeoutSec)
+                $Sql | Should -Match "online_status::text = 'Offline'"
+                $Sql | Should -Match 'last_returning_player_event_time IS NOT NULL'
+                $Sql | Should -Match 'last_returning_player_awarded_time = now\(\)'
+                $Sql | Should -Match 'last_returning_player_event_time = NULL'
+                @{ ok = $true; rowCount = 2 }
+            }
+
+            $result = Invoke-DuneNativeWelcomeBackCleanup -Ip '192.0.2.1'
+
+            $result.ok | Should -BeTrue
+            $result.cleaned | Should -Be 2
+            Should -Invoke Invoke-DuneSqlQuery -Times 1 -Exactly
+        }
+
+        It 'runs even when DST package grants are disabled' {
+            Mock Get-DuneDbContext { @{ ok = $true; ip = '192.0.2.1' } }
+            Mock Invoke-DuneNativeWelcomeBackCleanup { @{ ok = $true; cleaned = 1 } }
+            Mock Read-DuneWelcomeBackState { New-DuneWelcomeBackDefault }
+
+            $result = Invoke-DuneWelcomeBackTick -Force
+
+            $result.ok | Should -BeTrue
+            $result.cleanedNative | Should -Be 1
+            $result.acted | Should -BeTrue
+            Should -Invoke Invoke-DuneNativeWelcomeBackCleanup -Times 1 -Exactly
+        }
+
+        It 'does not repeat the database pass inside the throttle window' {
+            Mock Get-DuneDbContext { @{ ok = $true; ip = '192.0.2.1' } }
+            Mock Invoke-DuneNativeWelcomeBackCleanup { @{ ok = $true; cleaned = 0 } }
+
+            $first = Invoke-DuneNativeWelcomeBackCleanupTick
+            $second = Invoke-DuneNativeWelcomeBackCleanupTick
+
+            $first.ok | Should -BeTrue
+            $second.message | Should -Be 'throttled'
+            Should -Invoke Invoke-DuneNativeWelcomeBackCleanup -Times 1 -Exactly
+        }
     }
     # Ledger entries are what a previous pass wrote.
     function New-Ledger {
