@@ -1,8 +1,7 @@
 instructions: |-
-  read instructions to catch up
-  review the discord integrations
-  review recent releases to catch up
-  always popup a clickable box when requesting a response from the user
+  Load the repository instructions before acting.
+  For DST work, use the canonical sync routine to load current status.
+  Ask one question at a time in normal chat with numbered choices so Coastal can reply with the number only.
 automation:
   auto_issue_session: true
   remote_control: true
