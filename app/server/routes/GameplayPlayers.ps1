@@ -546,10 +546,44 @@ Register-DuneRoute -Method POST -Path '/api/gameplay/players/fill-water' -Handle
     }
 }
 
-# v12.1.2: Fill Base Water removed - cistern water is owned by the live pod
-# and overwrites DB writes. Stub kept to return 410 Gone for any cached UI
-# references; safe to delete once UIs roll. This feature will not be offered.
-Register-DuneRoute -Method POST -Path '/api/gameplay/players/fill-base-water-removed-in-v12.1.2' -Handler {
+# Preview the exact owner/cistern count before the disruptive fill.
+Register-DuneRoute -Method GET -Path '/api/gameplay/players/base-water-summary' -Handler {
     param($req, $res, $routeParams, $body)
-    Write-DuneError -Response $res -Status 410 -Message 'Fill Base Water was removed in v12.1.2 - cistern water is owned by the live pod and overwrites DB writes. See CHANGELOG for details.'
+    try {
+        $allPlayers = ((Get-DuneQ $req 'all_players') -eq '1')
+        $controller = 0L
+        [void][Int64]::TryParse((Get-DuneQ $req 'controller_id'), [ref]$controller)
+        if (-not $allPlayers -and $controller -le 0) {
+            Write-DuneError -Response $res -Status 400 -Message 'controller_id is required unless all_players=1.'
+            return
+        }
+        $ctx = Get-DuneDbContext
+        if (-not $ctx.ok) { Write-DuneError -Response $res -Status 503 -Message $ctx.message; return }
+        $result = Get-DunePlayerBaseCisternSummary -Ip $ctx.ip -ControllerId $controller -AllPlayers:$allPlayers
+        if (-not $result.ok) { Write-DuneError -Response $res -Status 503 -Message $result.error; return }
+        Write-DuneJson -Response $res -Body $result
+    } catch {
+        Write-DuneError -Response $res -Status 500 -Message "Base water summary failed: $($_.Exception.Message)"
+    }
+}
+
+# Fill exact supported cistern classes for one rank-1 owner or every rank-1
+# owner. The backend creates a safety backup, stops the battlegroup so map RAM
+# cannot overwrite the DB write, verifies, then starts the battlegroup again.
+Register-DuneRoute -Method POST -Path '/api/gameplay/players/fill-base-water' -Handler {
+    param($req, $res, $routeParams, $body)
+    try {
+        $controller = Get-DuneBodyInt -Body $body -Name 'controller_id'
+        $allPlayers = [bool](Get-DuneBodyValue -Body $body -Name 'all_players')
+        if (-not $allPlayers -and ($null -eq $controller -or $controller -le 0)) {
+            Write-DuneError -Response $res -Status 400 -Message 'controller_id is required unless all_players is true.'
+            return
+        }
+        Invoke-DunePlayerWriteRoute -Response $res -Action {
+            param($ip)
+            Invoke-DuneFillPlayerBaseWater -Ip $ip -ControllerId ([long]$controller) -AllPlayers:$allPlayers
+        }
+    } catch {
+        Write-DuneError -Response $res -Status 500 -Message "Fill base water failed: $($_.Exception.Message)"
+    }
 }

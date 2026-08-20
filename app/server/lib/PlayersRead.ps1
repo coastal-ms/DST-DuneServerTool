@@ -796,7 +796,10 @@ FROM (
 WHERE md IS NOT NULL
 UNION ALL
 SELECT 'starter'::text AS kind,
-       fe.components->'FLevelComponent'->1->'StarterSkillTreeTag'->>'TagName' AS val
+       CASE jsonb_typeof(fe.components->'FLevelComponent'->1->'StarterSkillTreeTag')
+           WHEN 'object' THEN fe.components->'FLevelComponent'->1->'StarterSkillTreeTag'->>'TagName'
+           WHEN 'string' THEN fe.components->'FLevelComponent'->1->>'StarterSkillTreeTag'
+       END AS val
 FROM dune.fgl_entities fe
 JOIN dune.actor_fgl_entities afe ON afe.entity_id = fe.entity_id
 WHERE afe.actor_id = $pawnID::bigint AND afe.slot_name = 'DuneCharacter';

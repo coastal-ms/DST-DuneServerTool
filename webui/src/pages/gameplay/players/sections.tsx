@@ -222,7 +222,7 @@ export function SpecsSection({ player, canWrite, demo, refreshKey, flash, onChan
                   }
                 }}
                 onApplyLevel={(level) => {
-                  if (window.confirm(`Set ${name} to level ${level} and apply every ${name} specialization reward available through that level for ${player.name}?\n\nExisting rewards are preserved. Rewards above level ${level} are not removed. The change appears in-game after a full re-login.`)) {
+                  if (window.confirm(`Set ${name} to level ${level} and apply every ${name} specialization reward available through that level for ${player.name}?\n\nThe player must be fully offline because skill-point rewards update character state. Existing rewards are preserved. Rewards above level ${level} are not removed. The change appears in-game after a full re-login.`)) {
                     void run(() => applySpecLevel(player.controller_id, name, level), 'Apply level')
                   }
                 }}
@@ -1533,8 +1533,9 @@ function OverflowToggle({ checked, disabled, onChange }: {
 // form owns two modes — a give/list view and an inline create/edit editor.
 interface PkgDraftRow { template: string; name: string; qty: string; quality: string }
 
-export function GivePackageForm({ busy, playerName, targetLabel, showOverflow = true, onGive }: {
+export function GivePackageForm({ busy, giveDisabled = false, playerName, targetLabel, showOverflow = true, onGive }: {
   busy: boolean
+  giveDisabled?: boolean
   playerName?: string
   targetLabel?: string
   showOverflow?: boolean
@@ -1779,7 +1780,7 @@ export function GivePackageForm({ busy, playerName, targetLabel, showOverflow = 
       {err && <div className="text-xs text-error">{err}</div>}
       {showOverflow && selected && <OverflowToggle checked={overflow} disabled={busy || saving} onChange={setOverflow} />}
       {selected && (
-        <button className="btn-primary w-full" disabled={busy || saving}
+        <button className="btn-primary w-full" disabled={busy || saving || giveDisabled}
           onClick={() => onGive(selected.items, selected.name, overflow)}>
           {busy ? <Icon name="Loader2" size={13} className="animate-spin" /> : <Icon name="Check" size={13} />} Give to {giveLabel}
         </button>

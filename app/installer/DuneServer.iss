@@ -16,7 +16,7 @@
 ;                 -> NOT touched by install or uninstall (preserves user config)
 
 #define MyAppName        "Dune Server Tool"
-#define MyAppVersion "13.6.2"
+#define MyAppVersion "13.8.2"
 #define MyAppPublisher   "Dune Awakening Self-Hosted Tool"
 #define MyAppURL         "https://github.com/coastal-ms/DST-DuneServerTool"
 #define MyAppExeName     "DuneServer.exe"
@@ -71,6 +71,10 @@ Source: "..\build\output\DuneServer.exe"; DestDir: "{app}"; Flags: ignoreversion
 ; DuneServer.exe launches this instead of a browser tab when OpenInAppWindow is
 ; enabled (the default). Lives beside DuneServer.exe so the launcher finds it.
 Source: "..\desktop\DuneShell\bin\Release\net10.0-windows\win-x64\publish\DuneShell.exe"; DestDir: "{app}"; Flags: ignoreversion
+
+; Host-local Solo Mode helper: validates Funcom's wrapped SQLite save format,
+; creates retained backups, and performs verified atomic restores.
+Source: "..\tools\DuneSoloDb\bin\Release\net10.0-windows\win-x64\publish\DuneSoloDb.exe"; DestDir: "{app}\tools\solo"; Flags: ignoreversion
 
 ; The business logic script (called via dune-server.ps1 -Cmd for the
 ; "spawn elevated console window" pattern used by the Commands page).

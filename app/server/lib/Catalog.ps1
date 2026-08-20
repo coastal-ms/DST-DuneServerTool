@@ -31,7 +31,9 @@ function Load-DuneItemCatalog {
         return
     }
     try {
-        $json = Get-Content -LiteralPath $path -Raw | ConvertFrom-Json
+        # item-catalog.json is UTF-8 without a BOM. Windows PowerShell 5.1
+        # otherwise decodes typographic punctuation through the ANSI code page.
+        $json = [IO.File]::ReadAllText($path, [Text.Encoding]::UTF8) | ConvertFrom-Json
         $list = [System.Collections.Generic.List[object]]::new()
         $cats = @{}
         foreach ($prop in $json.items.PSObject.Properties) {
@@ -85,7 +87,7 @@ function Load-DuneVehicleKitCatalog {
     }
     if (-not $path) { $script:DuneVehicleKitCatalog = $empty; return }
     try {
-        $json = Get-Content -LiteralPath $path -Raw | ConvertFrom-Json
+        $json = [IO.File]::ReadAllText($path, [Text.Encoding]::UTF8) | ConvertFrom-Json
         $vehicles = @()
         foreach ($v in @($json.vehicles)) {
             $qty = [ordered]@{}

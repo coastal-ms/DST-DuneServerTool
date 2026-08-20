@@ -1508,6 +1508,47 @@ export function fillWater(pawnId: number): Promise<FillWaterResponse> {
   })
 }
 
+export interface FillBaseWaterResponse extends WriteResult {
+  result?: {
+    controller?: number
+    allPlayers?: boolean
+    owners?: number
+    total?: number
+    small?: number
+    medium?: number
+    large?: number
+    backupPath?: string
+  }
+}
+
+export interface BaseWaterSummary {
+  ok: boolean
+  controllerId: number
+  allPlayers: boolean
+  owners: number
+  total: number
+  small: number
+  medium: number
+  large: number
+  full: number
+  missingWater: number
+}
+
+export function getBaseWaterSummary(controllerId?: number, allPlayers = false): Promise<BaseWaterSummary> {
+  return api<BaseWaterSummary>(`/api/gameplay/players/base-water-summary${qs({
+    controller_id: allPlayers ? undefined : controllerId,
+    all_players: allPlayers ? 1 : undefined,
+  })}`)
+}
+
+export function fillBaseWater(controllerId?: number, allPlayers = false): Promise<FillBaseWaterResponse> {
+  return api<FillBaseWaterResponse>('/api/gameplay/players/fill-base-water', {
+    method: 'POST', body: JSON.stringify(allPlayers
+      ? { all_players: true }
+      : { controller_id: controllerId }),
+  })
+}
+
 export interface CoriolisMap       { map: string; seed: number }
 export interface CoriolisPartition { partition_id: number; map: string; seed: number }
 
@@ -2170,6 +2211,34 @@ export function saveChatCommands(patch: {
     method: 'PUT',
     body: JSON.stringify(patch),
   })
+}
+
+export function armChatTeleport(name: string, pawnId: number) {
+  return api<{ ok: boolean; pending: ChatCommandsState['pendingTeleportCapture'] }>(
+    '/api/gameplay/chat-commands/teleports/capture',
+    { method: 'POST', body: JSON.stringify({ name, pawn_id: pawnId }) },
+  )
+}
+
+export function saveChatTeleport(name: string, pawnId: number) {
+  return api<{ ok: boolean; replaced: boolean; teleports: ChatCommandsState['teleports'] }>(
+    '/api/gameplay/chat-commands/teleports',
+    { method: 'POST', body: JSON.stringify({ name, pawn_id: pawnId }) },
+  )
+}
+
+export function cancelChatTeleportCapture(token: string) {
+  return api<{ ok: boolean }>('/api/gameplay/chat-commands/teleports/capture', {
+    method: 'DELETE',
+    body: JSON.stringify({ token }),
+  })
+}
+
+export function deleteChatTeleport(name: string) {
+  return api<{ ok: boolean; removed: string; teleports: ChatCommandsState['teleports'] }>(
+    '/api/gameplay/chat-commands/teleports',
+    { method: 'DELETE', body: JSON.stringify({ name }) },
+  )
 }
 // ---------------------------------------------------------------------------
 // Welcome Back package

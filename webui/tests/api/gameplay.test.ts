@@ -92,6 +92,21 @@ describe('Phase A — currency / progression writes', () => {
 })
 
 describe('Phase C/D/E/F — items, vehicles, teleport, progression, jobs', () => {
+  it('fillBaseWater targets one player controller', async () => {
+    await gp.fillBaseWater(42)
+    expect(last().url).toBe('/api/gameplay/players/fill-base-water')
+    expect(last().body).toEqual({ controller_id: 42 })
+  })
+
+  it('base-water summary and fill support explicit all-player scope', async () => {
+    await gp.getBaseWaterSummary(undefined, true)
+    expect(last().url).toBe('/api/gameplay/players/base-water-summary?all_players=1')
+
+    await gp.fillBaseWater(undefined, true)
+    expect(last().url).toBe('/api/gameplay/players/fill-base-water')
+    expect(last().body).toEqual({ all_players: true })
+  })
+
   it('giveItems forwards the items array and overflow flag', async () => {
     const items = [
       { template: 'sword', qty: 1, quality: 5 },
@@ -460,6 +475,36 @@ Spice Melange:
       { template: 'Silicone', name: 'Silicone Block', qty: 104, quality: 0 },
       { template: 'MelangeSpice', name: 'Spice Melange', qty: 39, quality: 0 },
     ])
+  })
+
+  describe('in-game teleport bookmark API', () => {
+    it('arms the selected online player location capture', async () => {
+      await gp.armChatTeleport('Base Camp', 42)
+      expect(last().url).toBe('/api/gameplay/chat-commands/teleports/capture')
+      expect(last().method).toBe('POST')
+      expect(last().body).toEqual({ name: 'Base Camp', pawn_id: 42 })
+    })
+
+    it('saves the selected player database location directly', async () => {
+      await gp.saveChatTeleport('Base Camp', 42)
+      expect(last().url).toBe('/api/gameplay/chat-commands/teleports')
+      expect(last().method).toBe('POST')
+      expect(last().body).toEqual({ name: 'Base Camp', pawn_id: 42 })
+    })
+
+    it('cancels a pending location capture', async () => {
+      await gp.cancelChatTeleportCapture('ABC123')
+      expect(last().url).toBe('/api/gameplay/chat-commands/teleports/capture')
+      expect(last().method).toBe('DELETE')
+      expect(last().body).toEqual({ token: 'ABC123' })
+    })
+
+    it('deletes a bookmark by name', async () => {
+      await gp.deleteChatTeleport('Base Camp')
+      expect(last().url).toBe('/api/gameplay/chat-commands/teleports')
+      expect(last().method).toBe('DELETE')
+      expect(last().body).toEqual({ name: 'Base Camp' })
+    })
   })
 
   it('reports unknown names without creating partial hidden failures', () => {

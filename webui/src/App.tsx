@@ -14,9 +14,10 @@ import { SetupWizard } from './pages/SetupWizard'
 import { Settings } from './pages/Settings'
 import { TerminalPage } from './pages/Terminal'
 import { Broadcasts } from './pages/Broadcasts'
+import { SoloMode } from './pages/SoloMode'
 import { PageStub } from './pages/PageStub'
 import { StatusProvider } from './hooks/useStatus'
-import { isLocalViewer } from './util/viewer'
+import { isLocalViewer, isWindowsViewer } from './util/viewer'
 import { api } from './api/client'
 import { ReconnectOverlay } from './components/ReconnectOverlay'
 import { PageErrorBoundary } from './components/PageErrorBoundary'
@@ -38,6 +39,7 @@ export default function App() {
   // them. The backend /ws/terminal route enforces this too — this is just the
   // UX half so the page doesn't render an empty failing terminal.
   const showTerminal = isLocalViewer()
+  const showSolo = showTerminal && isWindowsViewer()
 
   // Issue #280: when the portal is loaded in a real browser (not the app's
   // own WebView2 window), tell the server the browser reached it. The app
@@ -69,6 +71,12 @@ export default function App() {
           <Route path="/experimental" element={<Boundary name="Experimental Lab"><GameConfig mode="experimental" /></Boundary>} />
           <Route path="/gameplay"   element={<Boundary name="Gameplay Admin"><GameplayEnvironment /></Boundary>} />
           <Route path="/broadcasts" element={<Boundary name="Broadcasts"><Broadcasts /></Boundary>} />
+          <Route
+            path="/solo"
+            element={showSolo
+              ? <Boundary name="Solo Mode"><SoloMode /></Boundary>
+              : <Navigate to="/" replace />}
+          />
           <Route path="/database"   element={<Boundary name="Database"><Database /></Boundary>} />
           <Route path="/sietches"   element={<Boundary name="Sietches"><Sietches /></Boundary>} />
           <Route path="/dd-map"     element={<Boundary name="DD Seed Maps"><WickMaps /></Boundary>} />

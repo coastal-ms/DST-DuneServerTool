@@ -7,7 +7,7 @@ import { buildDiagnosticBundle, type DiagnosticBundle } from '../api/diagnostics
 import { getAutostartState, setAutostartEnabled, type AutostartState } from '../api/autostart'
 import { getServiceModeState, setServiceModeEnabled, type ServiceModeState } from '../api/serviceMode'
 import { getConsoleState, setConsoleVisible, type ConsoleState } from '../api/console'
-import { isLocalViewer } from '../util/viewer'
+import { isLocalViewer, isWindowsViewer } from '../util/viewer'
 
 type MenuKey = NavGroup | 'help' | 'coffee'
 
@@ -228,6 +228,7 @@ export function MenuBar({ sidebarCollapsed, onToggleSidebar }: Props) {
         const items = NAV_ITEMS
           .filter(i => i.group === g)
           .filter(i => !i.localOnly || isLocalViewer())
+          .filter(i => !i.windowsOnly || isWindowsViewer())
         if (items.length === 0) return null
         // Single-item group (e.g. Server Health, which has only one page):
         // a dropdown with one entry is pure friction. Render the group

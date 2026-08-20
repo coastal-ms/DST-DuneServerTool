@@ -102,6 +102,32 @@ function Invoke-DstRedaction {
     return $out
 }
 
+# Export only operational state. The durable file also contains rollback paths
+# and research identities that must never enter a public diagnostics bundle.
+function ConvertTo-DstWorldRestartDiagnosticState {
+    param([Parameter(Mandatory)]$State)
+    $steps = @($State.steps | ForEach-Object {
+        [ordered]@{
+            id = [string]$_.id
+            status = [string]$_.status
+        }
+    })
+    return [ordered]@{
+        phase = [string]$State.phase
+        running = [bool]$State.running
+        operation = [string]$State.operation
+        started = [string]$State.started
+        finished = [string]$State.finished
+        rollbackAvailable = [bool]$State.rollbackAvailable
+        recoveryRequired = [bool]$State.recoveryRequired
+        researchRecoveryRequired = [bool]$State.researchRecoveryRequired
+        researchRecoveryRunning = [bool]$State.researchRecoveryRunning
+        automaticRollback = [bool]$State.automaticRollback
+        hasError = -not [string]::IsNullOrWhiteSpace([string]$State.error)
+        steps = $steps
+    }
+}
+
 # Returns the section-header names that appear more than once in an INI body,
 # formatted "Name xN". Pure (no SSH/IO) so it's unit-testable. Duplicate
 # headers are the root cause of the "DST override silently ignored" class of
@@ -366,6 +392,71 @@ function New-DstDiagnosticBundle {
         $warnings.Add('Local client config helpers not loaded — client INI snapshot skipped.')
     }
 
+    # 6b3) Host-local Solo Mode health ---------------------------------------
+    # Never include the configured data root, Steam/account folder, save path,
+    # or backup paths. The schema and health facts are enough to distinguish an
+    # unsupported wrapper/schema from a process-lock or integrity failure.
+    if (Get-Command Get-DuneSoloStatus -ErrorAction SilentlyContinue) {
+        try {
+            $solo = Get-DuneSoloStatus
+            $soloLines = [System.Collections.Generic.List[string]]::new()
+            $soloLines.Add("Supported          : $([bool]$solo.supported)")
+            $soloLines.Add("Platform           : $([string]$solo.platform)")
+            $soloLines.Add("Connected          : $([bool]$solo.connected)")
+            $soloLines.Add("Adapter            : $([string]$solo.adapter)")
+            $soloLines.Add("Game running       : $([bool]$solo.gameRunning)")
+            $soloLines.Add("Detected processes : $(@($solo.processes).Count)")
+            $soloLines.Add("Helper available   : $([bool]$solo.helperAvailable)")
+            if ($solo.inspection) {
+                $soloLines.Add("Wrapper version    : $($solo.inspection.wrapperVersion)")
+                $soloLines.Add("SQLite bytes       : $($solo.inspection.actualSqliteBytes)")
+                $soloLines.Add("Tables             : $($solo.inspection.tableCount)")
+                $soloLines.Add("Characters         : $($solo.inspection.characterCount)")
+                $soloLines.Add("Integrity          : $($solo.inspection.integrity)")
+                $soloLines.Add("Foreign-key issues : $($solo.inspection.foreignKeyViolations)")
+                $soloLines.Add("Schema fingerprint : $($solo.inspection.schemaFingerprint)")
+                $soloLines.Add("Item destinations   : $(@($solo.inspection.inventories).Count)")
+                $soloLines.Add("Confirmed fillables : $(@($solo.inspection.fillables).Count)")
+                if ($solo.inspection.currencies) {
+                    $soloLines.Add("Solari balance      : $($solo.inspection.currencies.solari)")
+                    $soloLines.Add("Scrip balance       : $($solo.inspection.currencies.scrip)")
+                }
+                if ($solo.inspection.progression) {
+                    $soloLines.Add("Spec tracks         : $(@($solo.inspection.progression.specializations).Count)")
+                    $soloLines.Add("Spec rewards        : $($solo.inspection.progression.purchasedRewards)")
+                    $soloLines.Add("Fremen nodes        : $($solo.inspection.progression.fremenNodesComplete)/$($solo.inspection.progression.fremenNodesTotal)")
+                    $soloLines.Add("Skills at value 7   : $($solo.inspection.progression.skillsAtSeven)")
+                    $soloLines.Add("Skill points        : total=$($solo.inspection.progression.totalSkillPoints), unspent=$($solo.inspection.progression.unspentSkillPoints), bonus=$($solo.inspection.progression.keystoneBonusSkillPoints)")
+                    $soloLines.Add("Intel               : $($solo.inspection.progression.intel)")
+                }
+            } elseif ($solo.inspectionError) {
+                $soloLines.Add('Inspection error   : present (path and account identifiers omitted)')
+            }
+            if ($solo.connected) {
+                try {
+                    $soloSettings = Read-DuneSoloSettings
+                    $soloLines.Add("Settings file      : $(if ($soloSettings.exists) { 'present' } else { 'missing' })")
+                    $soloLines.Add("Settings present   : $(@($soloSettings.entries | Where-Object present).Count)/$(@($soloSettings.entries).Count)")
+                } catch {
+                    $soloLines.Add('Settings inspection: failed (details omitted)')
+                }
+                try {
+                    $soloLines.Add("Profile backups    : $(@(Get-DuneSoloBackups).Count)")
+                } catch {
+                    $soloLines.Add('Backup inspection  : failed (details omitted)')
+                }
+            }
+            $out = Join-Path $stageDir 'solo-mode.txt'
+            $soloText = Invoke-DstRedaction -Text ($soloLines -join "`r`n") @redactArgs
+            Set-Content -LiteralPath $out -Value $soloText -Encoding UTF8
+            $included.Add(@{ name = 'solo-mode.txt'; bytes = (Get-Item -LiteralPath $out).Length })
+        } catch {
+            $warnings.Add('Solo Mode health snapshot failed; path-bearing details were omitted.')
+        }
+    } else {
+        $warnings.Add('Solo Mode helpers not loaded — Solo health snapshot skipped.')
+    }
+
     # 6c) Scheduled-restart state -------------------------------------------
     # Helps diagnose "my restart didn't fire" / stale Funcom-update badge bugs.
     # The discordWebhookUrl is a secret (grants posting to the user's channel),
@@ -392,6 +483,25 @@ function New-DstDiagnosticBundle {
         }
     } catch {
         $warnings.Add("Restart-schedule state read failed: $($_.Exception.Message)")
+    }
+
+    # 6c-1) World Restart state ---------------------------------------------
+    # Captures step-level progress, rollback availability, and durable recovery
+    # lock state for the destructive same-battlegroup restart workflow.
+    try {
+        $worldRestartState = Join-Path $env:APPDATA 'DuneServer\world-restart-state.json'
+        if (Test-Path -LiteralPath $worldRestartState) {
+            $wrState = Get-Content -LiteralPath $worldRestartState -Raw -ErrorAction Stop |
+                ConvertFrom-Json -ErrorAction Stop
+            $wrRaw = ConvertTo-DstWorldRestartDiagnosticState -State $wrState |
+                ConvertTo-Json -Depth 6
+            $wrRaw = Invoke-DstRedaction -Text $wrRaw @redactArgs
+            $out = Join-Path $stageDir 'world-restart-state.json'
+            Set-Content -LiteralPath $out -Value $wrRaw -Encoding UTF8
+            $included.Add(@{ name = 'world-restart-state.json'; bytes = (Get-Item -LiteralPath $out).Length })
+        }
+    } catch {
+        $warnings.Add("World Restart state read failed: $($_.Exception.Message)")
     }
 
     # 6c-2) FLS token rotation state (403002 recovery) ----------------------

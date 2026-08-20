@@ -12,12 +12,14 @@ param(
     [switch]$SkipExeBuild,
     [switch]$SkipWebBuild,
     [switch]$SkipShellBuild,
+    [switch]$SkipSoloBuild,
     [switch]$SkipVersionCheck,
-    # Build the raw artifacts (webui + DuneServer.exe + DuneShell.exe) but STOP
+    # Build the raw artifacts (webui + DuneServer.exe + DuneShell.exe +
+    # DuneSoloDb.exe) but STOP
     # before compiling the Inno Setup installer. Used by the signed-release CI
     # (release-signed.yml) as "phase A": it builds the inner exes, hands them to
     # SignPath to Authenticode-sign them IN PLACE, then re-invokes this script
-    # with -SkipExeBuild -SkipShellBuild -SkipWebBuild ("phase B") so ISCC bundles
+    # with -SkipExeBuild -SkipShellBuild -SkipSoloBuild -SkipWebBuild ("phase B") so ISCC bundles
     # the now-signed exes into the installer.
     [switch]$SkipInstaller,
     [switch]$Open
@@ -33,6 +35,8 @@ $iss        = Join-Path $appRoot 'installer\DuneServer.iss'
 $exePath    = Join-Path $appRoot 'build\output\DuneServer.exe'
 $outDir     = Join-Path $appRoot 'installer\output'
 $installer  = Join-Path $outDir 'DuneServerSetup.exe'
+$soloProj   = Join-Path $appRoot 'tools\DuneSoloDb\DuneSoloDb.csproj'
+$soloExe    = Join-Path $appRoot 'tools\DuneSoloDb\bin\Release\net10.0-windows\win-x64\publish\DuneSoloDb.exe'
 
 # ---------------------------------------------------------------------------
 # Pre-flight: version-stamp sync check.
@@ -226,7 +230,29 @@ if (-not (Test-Path $shellExe)) {
     throw "DuneShell.exe not found at $shellExe - run 'dotnet publish' for DuneShell (or omit -SkipShellBuild)"
 }
 
-# -SkipInstaller: raw artifacts are built (webui + DuneServer.exe + DuneShell.exe);
+# Build the wrapped-SQLite helper used by the host-local Solo Mode workspace.
+if (-not $SkipSoloBuild) {
+    if (-not (Test-Path $soloProj)) { throw "DuneSoloDb.csproj not found at $soloProj" }
+    $dotnet = Get-Command dotnet -ErrorAction SilentlyContinue
+    if (-not $dotnet) { throw "dotnet SDK not found in PATH. Install .NET 10 SDK to build DuneSoloDb." }
+    $audit = (& $dotnet.Source list $soloProj package --include-transitive --vulnerable | Out-String)
+    Write-Host $audit
+    if ($audit -match 'has the following vulnerable packages') {
+        throw 'DuneSoloDb dependency audit found a vulnerable package.'
+    }
+    Write-Host "Publishing DuneSoloDb.exe (Solo Mode database helper)..." -ForegroundColor Cyan
+    & $dotnet.Source publish $soloProj -c Release -r win-x64 -p:PublishSingleFile=true --self-contained true --nologo
+    if ($LASTEXITCODE -ne 0) { throw "dotnet publish failed for DuneSoloDb (exit $LASTEXITCODE)" }
+    Write-Host "Running DuneSoloDb self-test..." -ForegroundColor Cyan
+    & $soloExe --command self-test
+    if ($LASTEXITCODE -ne 0) { throw "DuneSoloDb self-test failed (exit $LASTEXITCODE)" }
+    Write-Host ""
+}
+if (-not (Test-Path $soloExe)) {
+    throw "DuneSoloDb.exe not found at $soloExe - run 'dotnet publish' for DuneSoloDb (or omit -SkipSoloBuild)"
+}
+
+# -SkipInstaller: raw artifacts are built (webui + DuneServer.exe + DuneShell.exe + DuneSoloDb.exe);
 # stop here without compiling the installer. The signed-release CI signs the two
 # inner exes at this point, then re-runs with the -Skip*Build flags to package them.
 if ($SkipInstaller) {
@@ -234,6 +260,7 @@ if ($SkipInstaller) {
     Write-Host "  Raw artifacts built; skipping installer compile (-SkipInstaller)." -ForegroundColor Yellow
     Write-Host "    DuneServer.exe : $exePath" -ForegroundColor DarkGray
     Write-Host "    DuneShell.exe  : $shellExe" -ForegroundColor DarkGray
+    Write-Host "    DuneSoloDb.exe : $soloExe" -ForegroundColor DarkGray
     return
 }
 

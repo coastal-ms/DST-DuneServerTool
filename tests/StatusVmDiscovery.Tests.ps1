@@ -12,6 +12,8 @@
 
 BeforeAll {
     . (Join-Path $PSScriptRoot '_TestHelpers.ps1')
+    Import-DstLib 'Config.ps1'
+    Import-DstLib 'HyperVGuestRecovery.ps1'
     Import-DstLib 'Status.ps1'
 }
 
@@ -27,6 +29,10 @@ Describe 'Get-DuneVmStatus LAN credential propagation to guest-IP discovery' {
         Mock -CommandName Get-VMNetworkAdapter -MockWith {
             [pscustomobject]@{ IPAddresses = @('10.10.10.42') }
         }
+        Mock -CommandName Set-DuneLastKnownVmIp -MockWith { $true }
+        Mock -CommandName Get-DuneLastKnownVmIp -MockWith { '' }
+        Mock -CommandName Test-DuneKnownVmIp -MockWith { $true }
+        Mock -CommandName Invoke-DuneHyperVGuestRecovery -MockWith { @{ ok = $true } }
     }
 
     It 'passes ComputerName + Credential to Get-VM' {
@@ -48,6 +54,36 @@ Describe 'Get-DuneVmStatus LAN credential propagation to guest-IP discovery' {
         $r.exists | Should -BeTrue
         $r.running | Should -BeTrue
         $r.ip | Should -Be '10.10.10.42'
+        $r.ipSource | Should -Be 'hyperv'
+        Should -Invoke Set-DuneLastKnownVmIp -ParameterFilter { $Ip -eq '10.10.10.42' }
+        Should -Invoke Test-DuneKnownVmIp -ParameterFilter { $Ip -eq '10.10.10.42' }
+        Should -Invoke Invoke-DuneHyperVGuestRecovery -ParameterFilter { $Ip -eq '10.10.10.42' }
+    }
+
+    It 'uses a reachable last-known guest IP when Hyper-V KVP is blank' {
+        Mock Get-VMNetworkAdapter { [pscustomobject]@{ IPAddresses = @() } }
+        Mock Get-DuneLastKnownVmIp { '10.10.10.42' }
+        Mock Test-DuneKnownVmIp { $true }
+
+        $r = Get-DuneVmStatus
+
+        $r.ip | Should -Be '10.10.10.42'
+        $r.ipSource | Should -Be 'last-known'
+        Should -Invoke Invoke-DuneHyperVGuestRecovery -ParameterFilter {
+            $Ip -eq '10.10.10.42' -and $ForceKvp
+        }
+    }
+
+    It 'rejects an unreachable last-known guest IP' {
+        Mock Get-VMNetworkAdapter { [pscustomobject]@{ IPAddresses = @() } }
+        Mock Get-DuneLastKnownVmIp { '10.10.10.99' }
+        Mock Test-DuneKnownVmIp { $false }
+
+        $r = Get-DuneVmStatus
+
+        $r.ip | Should -Be ''
+        $r.ipSource | Should -Be 'none'
+        Should -Invoke Invoke-DuneHyperVGuestRecovery -Times 0
     }
 }
 
@@ -60,6 +96,10 @@ Describe 'Get-DuneVmStatus local mode (unchanged, credential-free)' {
         Mock -CommandName Get-VMNetworkAdapter -MockWith {
             [pscustomobject]@{ IPAddresses = @('192.168.100.7') }
         }
+        Mock -CommandName Set-DuneLastKnownVmIp -MockWith { $true }
+        Mock -CommandName Get-DuneLastKnownVmIp -MockWith { '' }
+        Mock -CommandName Test-DuneKnownVmIp -MockWith { $false }
+        Mock -CommandName Invoke-DuneHyperVGuestRecovery -MockWith { @{ ok = $true } }
     }
 
     It 'calls Get-VM and Get-VMNetworkAdapter with no ComputerName/Credential' {

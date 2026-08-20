@@ -62,6 +62,31 @@ Describe 'Invoke-DstRedaction' -Tag 'Pure' {
     }
 }
 
+Describe 'ConvertTo-DstWorldRestartDiagnosticState' -Tag 'Pure' {
+    It 'exports operational state without player identities or paths' {
+        $state = [pscustomobject]@{
+            phase='error'; running=$false; operation='restart'
+            started='2026-08-20T00:00:00Z'; finished='2026-08-20T00:10:00Z'
+            rollbackAvailable=$true; recoveryRequired=$true
+            researchRecoveryRequired=$true; researchRecoveryRunning=$false
+            automaticRollback=$false; error='Character Coastal failed at C:\secret'
+            backupPath='/private/world.backup'
+            researchSnapshot=[pscustomobject]@{
+                characters=@([pscustomobject]@{ characterName='Coastal'; funcomId='Coastal#1'; accountId=42 })
+            }
+            steps=@([pscustomobject]@{ id='verify'; status='failed'; detail='Verification failed.' })
+        }
+
+        $json = ConvertTo-DstWorldRestartDiagnosticState -State $state |
+            ConvertTo-Json -Depth 6
+
+        $json | Should -Match '"phase": "error"'
+        $json | Should -Match '"hasError": true'
+        $json | Should -Match '"id": "verify"'
+        $json | Should -Not -Match 'Verification failed|Coastal|funcomId|accountId|backupPath|world\.backup|C:\\secret'
+    }
+}
+
 Describe 'Diagnostics route registration' -Tag 'Pure' {
     It 'registers failed database operation cleanup at script scope' {
         $routeFile = Join-Path (Get-DstRepoRoot) 'app\server\routes\Diagnostics.ps1'

@@ -11320,16 +11320,6 @@
     "status": "Unconfirmed"
   },
   {
-    "key": "dw.BaseBackupMaxNumberOfBackups",
-    "label": "dw.BaseBackupMaxNumberOfBackups",
-    "help": "The max number of base backups a player can store",
-    "group": "Dune gameplay",
-    "risk": "experimental",
-    "source": "Dune",
-    "scope": "Unknown",
-    "status": "Unconfirmed"
-  },
-  {
     "key": "dw.BaseBackupShouldDetectNpcs",
     "label": "dw.BaseBackupShouldDetectNpcs",
     "help": "Should the base backup tool detect NPCs inside the landclaim area.",
@@ -47350,33 +47340,33 @@
     "status": "Unconfirmed"
   },
   {
-    "key": "Travel.BgdRetryCount",
-    "label": "Travel.BgdRetryCount",
+    "key": "Bgd.BgdRetryCount",
+    "label": "Bgd.BgdRetryCount",
     "help": "Num of times we'll try to request the travel to the Bgd.",
-    "group": "Other engine",
+    "group": "Server & Session",
     "risk": "experimental",
-    "source": "Engine",
-    "scope": "Unknown",
+    "source": "Dune",
+    "scope": "Server",
     "status": "Unconfirmed"
   },
   {
-    "key": "Travel.CVarTravelBgdRetrySecondsGap",
-    "label": "Travel.CVarTravelBgdRetrySecondsGap",
+    "key": "Bgd.CVarTravelBgdRetrySecondsGap",
+    "label": "Bgd.CVarTravelBgdRetrySecondsGap",
     "help": "Time in seconds between Bgd Travel Requests retries. Will wait this time until it checks for retry for the first time.",
-    "group": "Other engine",
+    "group": "Server & Session",
     "risk": "experimental",
-    "source": "Engine",
-    "scope": "Unknown",
+    "source": "Dune",
+    "scope": "Server",
     "status": "Unconfirmed"
   },
   {
-    "key": "Travel.CVarTravelBgdServerStatsTicker",
-    "label": "Travel.CVarTravelBgdServerStatsTicker",
+    "key": "Bgd.CVarTravelBgdServerStatsTicker",
+    "label": "Bgd.CVarTravelBgdServerStatsTicker",
     "help": "Time in seconds between Bgd Travel server stats.",
-    "group": "Other engine",
+    "group": "Server & Session",
     "risk": "high",
-    "source": "Engine",
-    "scope": "Unknown",
+    "source": "Dune",
+    "scope": "Server",
     "status": "Unconfirmed"
   },
   {

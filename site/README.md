@@ -1,6 +1,6 @@
 # DST Site
 
-Marketing + docs site for the Dune Server Tool. Built with **Astro 5 + React-free islands + Tailwind v4**, designed to deploy as a static site to GitHub Pages (or anywhere that serves a folder of HTML).
+Marketing + docs site for the Dune Server Tool. Built with **Astro 7 + React-free islands + Tailwind v4**, designed to deploy as a static site to GitHub Pages (or anywhere that serves a folder of HTML).
 
 This site lives inside the main `DST-DuneServerTool` repo so that:
 
@@ -9,7 +9,7 @@ This site lives inside the main `DST-DuneServerTool` repo so that:
 
 ## Local dev
 
-Requires **Node 20 or 22** (Astro 5 requirement).
+Requires **Node 20.19+, 22.13+, or 23.5+**.
 
 ```powershell
 cd site
@@ -42,11 +42,15 @@ npm run preview
 
 | Route         | Source                                | Notes                                              |
 | ------------- | ------------------------------------- | -------------------------------------------------- |
-| `/`           | `src/pages/index.astro`               | Hero + 3 feature cards + capability checklist.     |
-| `/features`   | `src/pages/features.astro`            | Page-by-page tour using `docs/img/` screenshots.   |
-| `/install`    | `src/pages/install.astro`             | Quick install + requirements + path table.         |
+| `/`           | `src/pages/index.astro`               | Product overview, download, and capability summary. |
+| `/features`   | `src/pages/features.astro`            | Seven-surface tour using current app screenshots.  |
+| `/market`     | `src/pages/market.astro`              | Player/admin guide to Exchange and Duke Market Bot. |
+| `/install`    | `src/pages/install.astro`             | Install paths, requirements, and local file paths. |
+| `/testing`    | `src/pages/testing.astro`             | Live list of active named test releases.           |
+| `/remote`     | `src/pages/remote.astro`              | Remote portal security and setup guide.            |
 | `/changelog`  | `src/pages/changelog.astro`           | Renders `../CHANGELOG.md` at build time.           |
-| `/about`      | `src/pages/about.astro`               | Author bio, stack summary, soft consulting note.   |
+| `/community`  | `src/pages/community.astro`           | Discord support and community overview.            |
+| `/about`      | `src/pages/about.astro`               | Project history, author, and technical stack.      |
 | `/404`        | `src/pages/404.astro`                 | GitHub Pages serves it on missing routes.          |
 
 ## SEO

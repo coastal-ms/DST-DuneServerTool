@@ -10,7 +10,7 @@ body:
 
         This issue tracker is for **bugs in this tool's code** — the desktop
         app (Server Health, Commands, PowerShell, Game Config, Gameplay Admin,
-        DD Seed Maps, Database, Sietches, Map SpinUp, Settings, Setup
+        DD Seed Maps, Solo Mode, Database, Sietches, Map SpinUp, Settings, Setup
         Wizard), the PowerShell script (`dune-server.ps1`), the `.bat`
         launcher, and the installer (`DuneServerSetup.exe`).
 
@@ -23,7 +23,9 @@ body:
         > the ZIP is written. The bundle includes a redacted **UserGame.ini /
         > UserEngine.ini snapshot** and, when available, sanitized local client
         > **Game.ini / Engine.ini snapshots** (with an automatic duplicate-section-header
-        > check) and a **`vm-memory-pressure.txt`** VM-health probe (Funcom
+        > check), a sanitized **Solo Mode health snapshot** (adapter, schema,
+        > and process-lock facts; never save paths), and a
+        > **`vm-memory-pressure.txt`** VM-health probe (Funcom
         > operator / Postgres restart counts + OOMKilled/exit-137 state, `free -h`,
         > **root-disk usage and node conditions**, **unfinished database
         > operations and the battlegroup's DATABASE phase**, **per-map memory
@@ -32,6 +34,8 @@ body:
         > reachable. `game-pods.txt` now includes every pod (dump/backup pods
         > are no longer hidden) plus database-operation state, and
         > `game-server-logs.txt` also carries the database pods' logs. The
+        > bundle also includes `world-restart-state.json` when available,
+        > recording restart/rollback steps and recovery-lock state. The
         > `manifest.txt` lists what's inside, leads with any health finding, and
         > records any sanitization warnings.
 
@@ -42,7 +46,7 @@ body:
           fails, or any other preflight check is wrong.
         - **Game Config**, **Database** (backup / restore / SQL editor /
           backup schedule), **Map SpinUp**, **Settings Public IP / DDNS**,
-          **Characters**, a button, page, the top menu bar, or the embedded
+          **Gameplay Admin**, **Solo Mode**, a button, page, the top menu bar, or the embedded
           PowerShell pane misbehaves.
 
         > 💡 The tool explains *why* it can't reach the VM. If you see one of
@@ -76,7 +80,7 @@ body:
     attributes:
       label: Tool version
       description: Shown in the bottom-left of the web portal sidebar (status bar) and in the CLI menu header. Auto-filled when launched from **Help → Create GitHub Issue** in the top menu bar, or from the CLI `report-issue` command.
-      placeholder: "v13.6.2"
+      placeholder: "v13.8.2"
     validations:
       required: true
 
@@ -102,7 +106,7 @@ body:
         - Web portal — Game Config — client-side INI (Game.ini / Engine.ini opt-in / preview / Open in Notepad / client-apply reminder / Player config hand-out list)
         - Web portal — Game Config — Landsraad (contract choices / daily bonus cap / active contracts / abandon cooldown / client Data struct)
         - Web portal — Gameplay Admin — Overview
-        - Web portal — Gameplay Admin — Overview — In-game commands (!kit / !item / !vehicle / !water / !small / !medium / !large — listening, per-command toggles + cooldowns, !item quantity cap, chat channels, reply heading)
+        - Web portal — Gameplay Admin — Overview — In-game commands (!kit / !item / !vehicle / !water / !tp / !small / !medium / !large — shared teleport destinations, polling / Real-time monitoring, per-command toggles + cooldowns, character-name broadcasts, !item quantity cap, chat channels, reply heading)
         - Web portal — Gameplay Admin — Overview — Welcome back (returning-player package / days away / announce)
         - Web portal — Gameplay Admin — Market / Market Bot
         - Web portal — Gameplay Admin — Players
@@ -121,8 +125,15 @@ body:
         - Web portal — Gameplay Admin — Storage
         - Web portal — Gameplay Admin — Blueprints (incl. Blueprint Designer link)
         - Web portal — DD Seed Maps (Deep Desert per-seed POI maps)
-        - Web portal — DD Seed Maps — wrong or missing POI / layout data for a seed
+        - Web portal — DD Seed Maps — wrong or missing POI / cave sector / layout data for a seed
+        - Web portal — Solo Mode — connection / wrapper or schema validation / process lock
+        - Web portal — Solo Mode — native and Engine settings (load / apply / retained INI backup)
+        - Web portal — Solo Mode — Give Item / Vehicle Kit / Package / Cosmetics / backpack or built-storage delivery
+        - Web portal — Solo Mode — Solari / Landsraad Scrip / Hajra Literjon fill
+        - Web portal — Solo Mode — save backup / restore / single or multi-select delete / safety backup
+        - Web portal — Solo Mode — Progression — max specializations / Find the Fremen / Enable All Skills
         - Web portal — Database (Backup / Restore / Cross-VM or cross-BG migration / SQL Editor)
+        - Web portal — Database — World Restart / Roll back last restart
         - Web portal — Database (Backup Schedule / crontab)
         - Web portal — Sietches (Additional Survival_1 shards)
         - Web portal — Map SpinUp (incl. Restart Hagga / Restart Deep Desert)
@@ -152,8 +163,8 @@ body:
     id: menu_option
     attributes:
       label: Specific page / button / command
-      description: Which button, tab, menu letter/number, or `-Cmd <name>` triggered the bug? For Reset Journey, include whether the post-NPE story restarted at Find the Fremen, which starter-class tree was reset, and how many skill points were refunded. For an Experimental Lab control, include its exact CVar or INI key, source/risk badge, file and section, and whether local Engine.ini management was enabled (for example, Experimental Lab > `net.IpNetDriverUseReceiveThread` > Save, source/risk filter, or Remaining default INI settings). For a database migration, name the failing step (Import backup, Restore Backup, first Reboot All, Apply public IP, or second Reboot All).
-      placeholder: "e.g. Server Health 'Restart battlegroup' button, Server Health > initial load / refresh, Server Health > Scheduled restarts > Save schedule, Server Health > Scheduled restarts > Send test message (Discord), Server Health > Scheduled restarts > Check for server update, Pods > select pod > events, Pods > select pod > events (backup/restore pod labeled 'Completed' when it should read as a failure), Settings > Dune Server Tool updates > Test channel toggle, Settings > Dune Server Tool updates > pre-release dropdown, Settings > Public IP / DDNS > Save hostname, Settings > Public IP / DDNS > Resolve hostname, Settings > Public IP / DDNS > same-PC public-IP loopback route toggle, Settings > Public IP / DDNS > Apply public IP, Settings > Server Browser Ping > Apply (datacenter id fix), Settings > Public IP / DDNS > Connection check (P34) > Run check, Settings > Database connection > Test connection, Settings > Database port (empty Players/Bases/Storage), Settings > SSH key > Remove passphrase, Settings > SSH key > Generate new, Settings > Server authorization token > Apply new token & restart (403002 recovery), Sidebar > Web Portal > Open in browser ('page is unavailable'), Game Config > Server name > Rename & restart, Game Config > Deep Desert PvP > Refresh / Apply & restart, Game Config > BaseBackUp > Allowed Maps (base backup tool not offered in the Deep Desert), Game Config > BaseBackUp > Cooldown Between Backups, Game Config > BaseBackUp > 'Keep stored base backups through the Deep Desert reset' (stored base recyclable only after a reset), Game Config > Spicefields > Save, Game Config > Landsraad > Save, Game Config > Crafting > Repair Cost Weight, Game Config > All Default Settings > Ctrl+C section header, Game Config > client INI 'Fix my client config', Game Config > bottom bar > Apply INIs & restart, Experimental > bottom bar > Apply INIs & restart, Experimental > Player config, Game Config > setting labelled CVar (saved but no effect until restart), Gameplay Admin > Market Bot > toggle, Gameplay Admin > Market Bot > Reset to defaults, Gameplay Admin > Market Bot > Pricing rules > Market-follow pricing toggle, Gameplay Admin > Market Bot > Pricing rules > Market markup %, Gameplay Admin > Market Bot > Buy side > Over-market guard, Gameplay Admin > Players > Give Item (Allow overflow), Gameplay Admin > Players > Give Package > Import tcno.co list, Gameplay Admin > Players > Give Package (Allow overflow), Gameplay Admin > Players > Give Vehicle Kit > Sandbike (Allow overflow), Gameplay Admin > Players > Inventory > Max Augment Attributes, Gameplay Admin > Players > inventory item > Repair, Gameplay Admin > Players > inventory item > Stack quantity, Gameplay Admin > Storage > container item > Stack quantity, Gameplay Admin > Bases > Release claim > confirm (backup ack), Gameplay Admin > Players > Cheat Scripts > Award Player XP, Gameplay Admin > Players > Specs > Set Level (per-track slider), Gameplay Admin > Players > Specs > Apply level (grant rewards through selected level), Gameplay Admin > Players > Specs > Max / Reset (per track), Gameplay Admin > Players > Journey > Complete node, Gameplay Admin > Players > Progression > Progression Unlock > Apply Unlock (Atreides Ch3 Start), Gameplay Admin > Players > Progression > Complete Contract > search 'Skorda' > Complete Contract, Gameplay Admin > Players > Tags > search/add tag, Gameplay Admin > Players > Grant Cosmetic / Building Set > ownership filter / Show already owned / grant variant, swatch, skin, or building set (Observer/murals/decor), Gameplay Admin > Players > Reset Faction > confirm wipe, Gameplay Admin > Players > Actions > Unlock Trainers > Swordmaster, Gameplay Admin > Players > Actions > Unlock Main Quest > A New Beginning, Gameplay Admin > Players > Progression > Apply Quick Preset > Complete: Find the Fremen (3rd ability slot + prescience), Gameplay Admin > Players > Landsraad > set House Ecaz, Gameplay Admin > Players > Actions > Punishment > Ban, Gameplay Admin > Players > Hide GM toggle, Settings > Mobile App > Generate QR Code, Settings > Mobile App > Repair Mobile Bridge, Settings > Hyper-V over LAN > Test, Settings > Hyper-V over LAN > Route all VM commands to this LAN host toggle, Settings > Hyper-V over LAN > Remove credential, Setup Wizard > Hyper-V over LAN > Test connection, Setup Wizard > Hyper-V over LAN > Install the VM on the host > Check host, Setup Wizard > Hyper-V over LAN > Install the VM on the host > Install, Setup Wizard > Hyper-V over LAN > Connect > Generate & authorize new key, Gameplay Admin > Players (blank names / 0 pieces), Help > Keep serving while DST is closed, Database > Backup Schedule presets > Hourly, Database > backup file > Delete (single / select-all), Database > Completed backup & restore pods > Prune, Database > VM info card > Clean failed operations, Database > VM info card > Clean old build images, Map SpinUp > DeepDesert_1 (all configured partitions), Map SpinUp > Survival_2, Map SpinUp > Arrakeen loading counter, Map SpinUp > Restart Hagga, DD Seed Maps > seed selector, DD Seed Maps > legend type filter, DD Seed Maps > wrong POI or missing large spice field for a seed, DD Seed Maps > page opened on the wrong seed for my server, Help > Create GitHub Issue, Desktop app shell > startup (pinned/standalone shortcut) > self-start DuneServer.exe when saved URL is stale, Database > VM info card, card roll-up chevron (a section card will not fold or reopen, or forgets its folded state), Settings > Hyper-V over LAN > Test (blank password / HOST\\username hint), CLI option 'e. reboot', or -Cmd startup"
+      description: Which button, tab, menu letter/number, or `-Cmd <name>` triggered the bug? For in-game commands, include the exact `!command`, chat channel, monitoring interval, cooldown, whether any broadcast appeared, and whether it used the character name. For shared teleport destinations, include direct Save location vs Arm live capture, whether the player paused about five seconds, and whether they teleported on foot or from a vehicle seat. For scheduled Funcom updates, include the scheduled time, whether Apply available Funcom server updates was enabled, installed/latest build IDs, and the last schedule result. For World Restart, include the failed progress step, whether rollback ran automatically, whether every player was offline, and whether the Roll back last restart button remains available. For Specs > Apply level, include the track, before/after level, and before/after unspent skill points. For Reset Journey, include whether the post-NPE story restarted at Find the Fremen, which starter-class tree was reset, and how many skill points were refunded. For DD Seed Maps, include the selected seed, POI type, displayed sector(s), and a current reference screenshot or link when possible. For an Experimental Lab control, include its exact CVar or INI key, source/risk badge, file and section, and whether local Engine.ini management was enabled. For Solo Mode, include the adapter, wrapper/schema status, whether the game was fully closed, and the exact connection/settings/inventory/package/cosmetic/backup/restore step. For a database migration, name the failing step.
+      placeholder: "e.g. Database > World Restart > Wait for fresh database, DD Seed Maps > seed 2 > Cave sectors, Solo Mode > Inventory > Give Package, Solo Mode > Backups > Delete selected, Gameplay Admin > Overview > In-game commands > Save location, Server Health > Scheduled restarts > Save schedule, Settings > Public IP / DDNS > Apply public IP, Game Config > bottom bar > Apply INIs & restart, Gameplay Admin > Players > Specs > Apply level, Database > backup file > Restore, Help > Create GitHub Issue, or CLI -Cmd startup"
     validations:
       required: true
 
@@ -249,6 +260,44 @@ body:
       required: false
 
   - type: textarea
+    id: solo_diag
+    attributes:
+      label: Solo Mode — local save, settings, inventory, package, cosmetic, backup, or restore details
+      description: |
+        Only fill this in for the host-local **Solo Mode** page. Attach a fresh
+        diagnostics ZIP; it includes `solo-mode.txt` with adapter, wrapper,
+        schema fingerprint, integrity/FK result, character count, settings
+        count, process-lock state, and backup count—without save paths or account
+        folder names. Also tell us:
+
+        - PTC or retail/custom folder.
+        - Exact step: Connect and validate, Apply Solo settings, Create backup,
+          Restore/Delete one backup, Delete selected backups, Give Item, Give
+          Vehicle Kit, Give Package, Grant Cosmetic / Building Set, Set currency
+          balances, Fill Hajra Literjon, Max specializations, Complete Find the
+          Fremen, or Enable All Skills.
+        - Whether Dune: Awakening was fully closed for a write.
+        - The exact message DST showed.
+        - For settings/currencies/fillables, the key or item and before/after value.
+        - For item/package/cosmetic grants, the selection, quantity/quality when
+          applicable, and selected backpack or built-storage destination.
+        - For restore, whether the pre-restore safety backup was reported.
+        - For multi-delete, the selected backup count and exact deleted/retained
+          result. Do not paste backup paths.
+
+        Do not paste your Steam/account folder name or full local save path.
+        Leave blank if the bug is not about Solo Mode.
+      placeholder: |
+        Channel: PTC
+        Step: Solo Mode > Settings > Apply Solo settings
+        Game fully closed: yes
+        Setting: GatheringAmount 1.0 -> 2.0
+        Message: "..."
+      render: shell
+    validations:
+      required: false
+
+  - type: textarea
     id: cheatscripts_diag
     attributes:
       label: Cheat Scripts / Dev-Perf Scripts — script had no effect (Players → Live)
@@ -328,7 +377,7 @@ body:
       placeholder: |
         Dashboard message: "SSH key is passphrase-protected, so background checks can't use it…"
         Setup "SSH key authorized on VM": "The VM rejected this key…"
-        SSH Key path (Settings): C:\Users\me\.ssh\dune_key
+        SSH Key path (Settings): C:\Users\<user>\.ssh\dune_key
       render: shell
     validations:
       required: false
