@@ -120,6 +120,28 @@ async function replacePiiWithDemoData(page) {
   const page = await context.newPage()
   const portal = new URL(baseUrl)
 
+  // Gameplay Admin is captured from the backend's deterministic demo dataset,
+  // never from live player/guild/account rows.
+  await context.route('**/api/gameplay/**', async route => {
+    if (route.request().method() !== 'GET') return route.continue()
+    const url = new URL(route.request().url())
+    if (![
+      '/api/gameplay/players',
+      '/api/gameplay/players/summary',
+      '/api/gameplay/coriolis/seeds',
+    ].includes(url.pathname)) return route.continue()
+    url.searchParams.set('demo', '1')
+    if (url.pathname === '/api/gameplay/players/summary') {
+      const response = await route.fetch({ url: url.toString() })
+      const payload = await response.json()
+      return route.fulfill({
+        response,
+        json: { ...(payload.summary ?? {}), source: 'demo' },
+      })
+    }
+    await route.continue({ url: url.toString() })
+  })
+
   const initialUrl = `${portal.origin}/${portal.search}`
   await page.goto(initialUrl, { waitUntil: 'networkidle', timeout: 30000 })
   await page.waitForSelector('nav, aside', { timeout: 10000 })

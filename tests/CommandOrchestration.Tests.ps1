@@ -27,6 +27,17 @@ Describe 'One-shot command orchestration' -Tag 'Commands' {
 
             $availability.available | Should -BeTrue
         }
+
+        It 'blocks shells and browser admin surfaces during maintenance' {
+            foreach ($name in @('open-file-browser', 'open-director', 'shell-vm', 'shell-pod', 'ssh')) {
+                $command = Get-DuneCommandByName -Name $name
+                $availability = Get-DuneCommandAvailability -Command $command -State @{
+                    vmExists=$true; vmRunning=$true; bgState='running'; worldRestartActive=$true
+                }
+                $availability.available | Should -BeFalse
+                $availability.reason | Should -Match 'World Restart'
+            }
+        }
     }
 
     It 'exits one-shot start and restart commands before Director-port discovery' {

@@ -102,6 +102,32 @@ function Invoke-DstRedaction {
     return $out
 }
 
+# Export only operational state. The durable file also contains rollback paths
+# and research identities that must never enter a public diagnostics bundle.
+function ConvertTo-DstWorldRestartDiagnosticState {
+    param([Parameter(Mandatory)]$State)
+    $steps = @($State.steps | ForEach-Object {
+        [ordered]@{
+            id = [string]$_.id
+            status = [string]$_.status
+        }
+    })
+    return [ordered]@{
+        phase = [string]$State.phase
+        running = [bool]$State.running
+        operation = [string]$State.operation
+        started = [string]$State.started
+        finished = [string]$State.finished
+        rollbackAvailable = [bool]$State.rollbackAvailable
+        recoveryRequired = [bool]$State.recoveryRequired
+        researchRecoveryRequired = [bool]$State.researchRecoveryRequired
+        researchRecoveryRunning = [bool]$State.researchRecoveryRunning
+        automaticRollback = [bool]$State.automaticRollback
+        hasError = -not [string]::IsNullOrWhiteSpace([string]$State.error)
+        steps = $steps
+    }
+}
+
 # Returns the section-header names that appear more than once in an INI body,
 # formatted "Name xN". Pure (no SSH/IO) so it's unit-testable. Duplicate
 # headers are the root cause of the "DST override silently ignored" class of
@@ -465,7 +491,10 @@ function New-DstDiagnosticBundle {
     try {
         $worldRestartState = Join-Path $env:APPDATA 'DuneServer\world-restart-state.json'
         if (Test-Path -LiteralPath $worldRestartState) {
-            $wrRaw = Get-Content -LiteralPath $worldRestartState -Raw -ErrorAction Stop
+            $wrState = Get-Content -LiteralPath $worldRestartState -Raw -ErrorAction Stop |
+                ConvertFrom-Json -ErrorAction Stop
+            $wrRaw = ConvertTo-DstWorldRestartDiagnosticState -State $wrState |
+                ConvertTo-Json -Depth 6
             $wrRaw = Invoke-DstRedaction -Text $wrRaw @redactArgs
             $out = Join-Path $stageDir 'world-restart-state.json'
             Set-Content -LiteralPath $out -Value $wrRaw -Encoding UTF8

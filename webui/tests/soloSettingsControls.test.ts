@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { getSoloSettingControl } from '../src/pages/SoloMode'
+import { getSoloSettingControl, validateSoloSettingChanges } from '../src/pages/SoloMode'
 
 describe('Solo Mode setting controls', () => {
   it('uses buttons for boolean settings', () => {
@@ -34,5 +34,18 @@ describe('Solo Mode setting controls', () => {
 
   it('keeps game-controlled fields as text', () => {
     expect(getSoloSettingControl('DifficultyLevel')).toEqual({ type: 'text' })
+  })
+
+  it('rejects decimal values for integer settings', () => {
+    expect(validateSoloSettingChanges({ FiefdomLimit: '1.5' }))
+      .toBe('FiefdomLimit must be a whole number.')
+    expect(validateSoloSettingChanges({ MaxLandclaimSegments: '6' })).toBeNull()
+  })
+
+  it('rejects invalid booleans and enum values', () => {
+    expect(validateSoloSettingChanges({ bAllowSandstorms: 'yes' }))
+      .toBe('bAllowSandstorms must be enabled or disabled.')
+    expect(validateSoloSettingChanges({ PlayerDeathLootRule: 'EveryoneMaybe' }))
+      .toBe('PlayerDeathLootRule has an unsupported option.')
   })
 })

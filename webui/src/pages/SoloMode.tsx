@@ -147,6 +147,26 @@ export function getSoloSettingControl(key: string): SoloSettingControl {
   return { type: 'number', step: SOLO_INTEGER_SETTINGS.has(key) ? 1 : 'any' }
 }
 
+export function validateSoloSettingChanges(settings: Record<string, string>): string | null {
+  for (const [key, rawValue] of Object.entries(settings)) {
+    const value = rawValue.trim()
+    const control = getSoloSettingControl(key)
+    if (control.type === 'boolean' && value !== 'True' && value !== 'False') {
+      return `${key} must be enabled or disabled.`
+    }
+    if (control.type === 'select' && !control.options.some(option => option.value === value)) {
+      return `${key} has an unsupported option.`
+    }
+    if (control.type === 'number') {
+      const valid = control.step === 1
+        ? /^-?\d+$/.test(value)
+        : /^-?(?:\d+(?:\.\d*)?|\.\d+)$/.test(value)
+      if (!valid) return `${key} must be ${control.step === 1 ? 'a whole number' : 'a number'}.`
+    }
+  }
+  return null
+}
+
 function SoloBooleanControl({
   value,
   on,
@@ -600,6 +620,11 @@ export function SoloMode() {
 
     if (gameRunning) {
       setNotice({ kind: 'err', text: 'Close Dune: Awakening completely before applying Solo settings.' })
+      return
+    }
+    const validationError = validateSoloSettingChanges(changedSettings)
+    if (validationError) {
+      setNotice({ kind: 'err', text: validationError })
       return
     }
     if (!window.confirm(

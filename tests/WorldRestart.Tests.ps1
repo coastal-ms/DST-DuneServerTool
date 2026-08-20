@@ -301,6 +301,33 @@ Describe 'World Restart safety workflow' -Tag 'Pure' {
         Should -Invoke Invoke-DuneBackupShell -ParameterFilter { $Script -match 'battlegroup import' } -Times 1
     }
 
+    It 'keeps recovery locked when rollback marker cleanup fails' {
+        $script:savedCleanupStates = [System.Collections.Generic.List[object]]::new()
+        Mock Read-DuneWorldRestartState {
+            [pscustomobject]@{
+                backupPath='/funcom/artifacts/database-dumps/sh-abc-xyz/dst-pre-world-restart-20260101-000000'
+                world='sh-abc-xyz'; recoveryRequired=$true; phase='error'
+                running=$false; rollbackAvailable=$true
+            }
+        }
+        Mock Save-DuneWorldRestartState {
+            param($State)
+            $script:savedCleanupStates.Add(($State | ConvertTo-Json -Depth 6 | ConvertFrom-Json)) | Out-Null
+        }
+        Mock Invoke-DuneSqlRaw { "online_count`n0" }
+        Mock Invoke-DuneBackupShell {
+            param($Ip, $Script)
+            if ($Script -match 'battlegroup import') { return @{ rc=0; out='__WR_ROLLBACK_HEALTH:Healthy' } }
+            if ($Script -match '^rm -f') { return @{ rc=70; out='cleanup failed' } }
+            return @{ rc=0; out='guard created' }
+        }
+
+        { Invoke-DuneWorldRollback } | Should -Throw '*maintenance markers could not be cleared*'
+
+        $script:savedCleanupStates[-1].recoveryRequired | Should -BeTrue
+        $script:savedCleanupStates[-1].phase | Should -Be 'error'
+    }
+
     It 'refuses the pre-World-Restart rollback while research recovery is unresolved' {
         Mock Read-DuneWorldRestartState {
             [pscustomobject]@{
@@ -490,7 +517,7 @@ Beta,2,Traveler#1,RCP_T1_MeleeKindjal0_Recipe,T1_MeleeKindjal0_Recipe
         Mock Invoke-DuneSqlRaw {
             param($Ip, $Sql)
             if ($Sql -match 'SELECT ps\.player_pawn_id') {
-                return "pawn_id,online_status`n42,Offline"
+                return "pawn_id`n42"
             }
             if ($Sql -match '^BEGIN;') {
                 $script:researchEvents.Add('mutation') | Out-Null
@@ -514,6 +541,7 @@ Beta,2,Traveler#1,RCP_T1_MeleeKindjal0_Recipe,T1_MeleeKindjal0_Recipe
             $Sql -match 'DO \$research\$ BEGIN' -and
             $Sql -match "ac\.funcom_id = 'Coastal#1'" -and
             $Sql -match "ps\.online_status::text <> 'Offline'" -and
+            $Sql -match "dune\.active_server_ids" -and
             $Sql -match "CraftingRecipesLibraryActorComponent"
         } -Times 1
     }
@@ -560,7 +588,7 @@ Beta,2,Traveler#1,RCP_T1_MeleeKindjal0_Recipe,T1_MeleeKindjal0_Recipe
         Mock Invoke-DuneSqlRaw {
             param($Ip, $Sql)
             if ($Sql -match 'SELECT ps\.player_pawn_id') {
-                return "pawn_id,online_status`n42,Offline"
+                return "pawn_id`n42"
             }
             if ($Sql -match '^BEGIN;') { throw 'simulated mutation failure' }
             throw "Unexpected SQL: $Sql"
@@ -571,6 +599,9 @@ Beta,2,Traveler#1,RCP_T1_MeleeKindjal0_Recipe,T1_MeleeKindjal0_Recipe
         } | Should -Throw '*simulated mutation failure*'
 
         $script:savedRecoveryStates.Count | Should -BeGreaterThan 0
+        @($script:savedRecoveryStates | Where-Object {
+            $_.phase -eq 'research-recovery-backup' -and $_.researchRecoveryRunning -and $_.recoveryRequired
+        }).Count | Should -BeGreaterThan 0
         $script:savedRecoveryStates[-1].researchRecoveryBackupPath |
             Should -Be '/funcom/artifacts/database-dumps/sh-abc-xyz/dst-world-restart-research-recovery-20260101-000000'
         $script:savedRecoveryStates[-1].recoveryRequired | Should -BeTrue
@@ -605,7 +636,7 @@ Beta,2,Traveler#1,RCP_T1_MeleeKindjal0_Recipe,T1_MeleeKindjal0_Recipe
             [pscustomobject]@{ world='sh-abc-xyz'; recoveryRequired=$false }
         }
         Mock Invoke-DuneSqlRaw {
-            "pawn_id,online_status`n42,Offline"
+            "pawn_id`n42"
         }
         Mock Get-DuneWorldRestartOnlinePlayerCount { 1 }
         Mock Invoke-DuneBackupShell { throw 'backup must not run' }

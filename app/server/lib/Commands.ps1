@@ -66,8 +66,7 @@ function Get-DuneCommandAvailability {
     }
     $reason = ''
     $maintenanceSafe = @(
-        'logs-export', 'operator-logs-export', 'open-file-browser', 'open-director',
-        'shell-vm', 'shell-pod', 'ssh', 'setup-guide'
+        'logs-export', 'operator-logs-export', 'setup-guide'
     )
     if ([bool]$State.worldRestartActive -and $Command.Name -notin $maintenanceSafe) {
         return @{ available = $false; reason = 'World Restart maintenance is active' }

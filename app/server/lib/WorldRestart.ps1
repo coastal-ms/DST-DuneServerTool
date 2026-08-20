@@ -450,7 +450,7 @@ function Invoke-DuneWorldRestartResearchRecovery {
     $safeName = ConvertTo-DuneWorldRestartSqlString $CharacterName
     $safeFuncomId = ConvertTo-DuneWorldRestartSqlString $FuncomId
     $playerSql = @"
-SELECT ps.player_pawn_id::text AS pawn_id, ps.online_status::text AS online_status
+SELECT ps.player_pawn_id::text AS pawn_id
 FROM dune.player_state ps
 JOIN dune.accounts ac ON ac.id = ps.account_id
 WHERE ac.funcom_id = '$safeFuncomId'
@@ -459,13 +459,10 @@ LIMIT 1;
 "@
     $playerRaw = Invoke-DuneSqlRaw -Ip $ctx.ip -Sql $playerSql -Csv -TimeoutSec 30
     Assert-DuneWorldRestartCsvOutput -Output $playerRaw `
-        -ExpectedHeader 'pawn_id,online_status' `
+        -ExpectedHeader 'pawn_id' `
         -Operation 'Research recovery player lookup'
     $playerRows = @($playerRaw | ConvertFrom-Csv)
     if ($playerRows.Count -ne 1) { throw "Could not resolve character '$CharacterName'." }
-    if ([string]$playerRows[0].online_status -cne 'Offline') {
-        throw "$CharacterName is still online. Have the player log out before research recovery."
-    }
     $pawnId = [long]$playerRows[0].pawn_id
     $onlineCount = Get-DuneWorldRestartOnlinePlayerCount -Ip $ctx.ip
     if ($onlineCount -ne 0) {
@@ -479,8 +476,17 @@ LIMIT 1;
     $guardSet = $true
     $mutationStarted = $false
     $safeToReleaseMaintenance = $false
+    $priorPhase = ''
 
     try {
+    $activeState = Read-DuneWorldRestartState
+    $priorPhase = [string]$activeState.phase
+    $activeState | Add-Member -NotePropertyName phase -NotePropertyValue 'research-recovery-backup' -Force
+    $activeState | Add-Member -NotePropertyName recoveryRequired -NotePropertyValue $true -Force
+    $activeState | Add-Member -NotePropertyName researchRecoveryRequired -NotePropertyValue $false -Force
+    $activeState | Add-Member -NotePropertyName researchRecoveryRunning -NotePropertyValue $true -Force
+    Save-DuneWorldRestartState -State $activeState
+
     $backupStem = 'dst-world-restart-research-recovery-' + (Get-Date).ToUniversalTime().ToString('yyyyMMdd-HHmmss')
     $backupScript = @"
 set -e
@@ -525,6 +531,11 @@ DO `$research`$ BEGIN
       WHERE ac.funcom_id = '$safeFuncomId'
         AND ps.character_name = '$safeName'
         AND ps.online_status::text <> 'Offline'
+        AND (
+          to_regclass('dune.active_server_ids') IS NULL
+          OR (ps.server_id IS NOT NULL
+              AND ps.server_id IN (SELECT * FROM dune.active_server_ids))
+        )
   ) THEN
     RAISE EXCEPTION 'Player reconnected before research recovery.';
   END IF;
@@ -643,9 +654,16 @@ exit 81
         if ($guardSet -and ($safeToReleaseMaintenance -or -not $mutationStarted)) {
             $clear = Invoke-DuneBackupShell -Ip $ctx.ip -Script "rm -f $script:DuneWorldRestartMarkerPath $script:DuneWorldRestartRecoveryMarkerPath" -TimeoutSec 30
             if ($clear.rc -ne 0) {
+                $cleanupFailure = Read-DuneWorldRestartState
+                $cleanupFailure | Add-Member -NotePropertyName phase -NotePropertyValue 'error' -Force
+                $cleanupFailure | Add-Member -NotePropertyName recoveryRequired -NotePropertyValue $true -Force
+                $cleanupFailure | Add-Member -NotePropertyName researchRecoveryRunning -NotePropertyValue $false -Force
+                $cleanupFailure | Add-Member -NotePropertyName error -NotePropertyValue 'Research recovery finished safely, but its maintenance guard could not be cleared.' -Force
+                Save-DuneWorldRestartState -State $cleanupFailure
                 throw 'Research recovery finished safely, but its maintenance guard could not be cleared.'
             }
             $clearState = Read-DuneWorldRestartState
+            $clearState | Add-Member -NotePropertyName phase -NotePropertyValue $(if ($safeToReleaseMaintenance) { 'done' } elseif ($priorPhase) { $priorPhase } else { 'done' }) -Force
             $clearState | Add-Member -NotePropertyName recoveryRequired -NotePropertyValue $false -Force
             $clearState | Add-Member -NotePropertyName researchRecoveryRunning -NotePropertyValue $false -Force
             $clearState | Add-Member -NotePropertyName researchRecoveryRequired -NotePropertyValue $false -Force
@@ -944,7 +962,7 @@ exit 50
         if ($playerCount -ne 0) { throw "Fresh database verification found $playerCount player rows; expected 0." }
         Set-DuneWorldRestartStep -State $state -Id 'verify' -Status done -Detail 'Database connected with zero player records before anyone reconnects.'
 
-        $state.phase = 'done'; $state.running = $false; $state.recoveryRequired = $false
+        $state.phase = 'done'; $state.running = $false
         $state.finished = (Get-Date).ToUniversalTime().ToString('o')
         $safeToReleaseMaintenance = $true
         Save-DuneWorldRestartState -State $state
@@ -958,7 +976,6 @@ exit 50
                 Save-DuneWorldRestartState -State $state
                 Invoke-DuneWorldRestartRollbackInternal -Ip $ctx.ip -BackupPath $state.backupPath -ExpectedWorld $ctx.world
                 $state.rollbackAvailable = $false
-                $state.recoveryRequired = $false
                 $safeToReleaseMaintenance = $true
                 $errorText += ' Automatic rollback completed using the pre-restart backup.'
             } catch {
@@ -967,16 +984,21 @@ exit 50
         }
         $state.phase = 'error'; $state.running = $false; $state.error = $errorText
         if (-not $wiped) {
-            $state.recoveryRequired = $false
             $safeToReleaseMaintenance = $true
         }
         $state.finished = (Get-Date).ToUniversalTime().ToString('o')
         Save-DuneWorldRestartState -State $state
     } finally {
         if ($maintenanceMarkerSet -and $safeToReleaseMaintenance -and $ctx -and $ctx.ip) {
-            try {
-                [void](Invoke-DuneBackupShell -Ip $ctx.ip -Script "rm -f $script:DuneWorldRestartMarkerPath $script:DuneWorldRestartRecoveryMarkerPath" -TimeoutSec 30)
-            } catch {}
+            $clear = Invoke-DuneBackupShell -Ip $ctx.ip -Script "rm -f $script:DuneWorldRestartMarkerPath $script:DuneWorldRestartRecoveryMarkerPath" -TimeoutSec 30
+            if ($clear.rc -eq 0) {
+                $state.recoveryRequired = $false
+            } else {
+                $state.phase = 'error'
+                $state.recoveryRequired = $true
+                $state.error = (([string]$state.error).Trim() + ' World Restart finished, but its maintenance markers could not be cleared.').Trim()
+            }
+            Save-DuneWorldRestartState -State $state
         }
     }
 }
@@ -1010,13 +1032,17 @@ function Invoke-DuneWorldRollback {
         throw 'Could not establish the World Rollback recovery guard.'
     }
     Invoke-DuneWorldRestartRollbackInternal -Ip $ctx.ip -BackupPath ([string]$state.backupPath) -ExpectedWorld $ctx.world
+    $clear = Invoke-DuneBackupShell -Ip $ctx.ip -Script "rm -f $script:DuneWorldRestartMarkerPath $script:DuneWorldRestartRecoveryMarkerPath" -TimeoutSec 30
+    if ($clear.rc -ne 0) {
+        $state.phase = 'error'; $state.running = $false; $state.recoveryRequired = $true
+        $state | Add-Member -NotePropertyName error -NotePropertyValue 'World rollback completed, but its maintenance markers could not be cleared.' -Force
+        Save-DuneWorldRestartState -State $state
+        throw $state.error
+    }
     $state.phase = 'rolled-back'; $state.running = $false; $state.rollbackAvailable = $false
     $state.recoveryRequired = $false
     $state.finished = (Get-Date).ToUniversalTime().ToString('o')
     Save-DuneWorldRestartState -State $state
-    try {
-        [void](Invoke-DuneBackupShell -Ip $ctx.ip -Script "rm -f $script:DuneWorldRestartMarkerPath $script:DuneWorldRestartRecoveryMarkerPath" -TimeoutSec 30)
-    } catch {}
 }
 
 function Start-DuneWorldRestartWorker {

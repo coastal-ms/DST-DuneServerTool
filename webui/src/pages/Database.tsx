@@ -236,10 +236,12 @@ export function Database() {
 
   useEffect(() => { void loadWorldRestart() }, [loadWorldRestart])
   useEffect(() => {
-    if (!worldRestart?.running && worldRestart?.phase !== 'starting') return
+    if (!worldRestart?.running
+      && !worldRestart?.researchRecoveryRunning
+      && worldRestart?.phase !== 'starting') return
     const timer = window.setInterval(() => { void loadWorldRestart() }, 2000)
     return () => window.clearInterval(timer)
-  }, [worldRestart?.running, worldRestart?.phase, loadWorldRestart])
+  }, [worldRestart?.running, worldRestart?.researchRecoveryRunning, worldRestart?.phase, loadWorldRestart])
 
   const loadResearchAudit = useCallback(async () => {
     if (!localViewer) {
