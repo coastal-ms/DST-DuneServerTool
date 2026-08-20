@@ -20,7 +20,7 @@ here cover everything those tags shipped.
 - Self-Hosted Database now includes a reversible **World Restart** workflow.
   It starts the same battlegroup as a fresh world while preserving server
   configuration. Every player must be offline; DST creates a verified rollback
-  backup, blocks conflicting work, and automatically restores failures. The
+  backup, blocks conflicting work, and restores that backup if restart fails. The
   fresh world removes characters, bases, inventories, progression, and market
   data. A local audit can repair purchased research that returns without its
   runtime crafting recipe.
