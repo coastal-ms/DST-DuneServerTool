@@ -18,47 +18,18 @@ here cover everything those tags shipped.
 ### Added
 
 - Self-Hosted Database now includes a reversible **World Restart** workflow.
-  DST creates and verifies a dedicated rollback backup, preserves the existing
-  battlegroup identity and configuration, regenerates only PostgreSQL storage,
-  waits for database migrations and battlegroup health, and verifies the fresh
-  world has no player rows before anyone reconnects. Funcom can recreate the
-  same account-linked character identity at first login, so a new name or
-  appearance—or persisted creator choice—still uses normal in-game character
-  deletion after accepting the fresh world. Non-Funcom-granted cosmetics are
-  wiped and must be reacquired through Grant Cosmetic. Any failure after storage mutation automatically imports the
-  exact pre-restart backup; the same snapshot remains available for manual
-  rollback after a successful restart. Restart and rollback now require every
-  player to be offline, and World Restart marks its maintenance window so
-  scheduled backups skip rather than overlap it. Rollback keeps that guard
-  refreshed and is not considered complete until the restored battlegroup
-  returns to Healthy. While restart or recovery is active, DST blocks other API
-  writes, unsafe Commands actions, and scheduled maintenance; unresolved
-  post-storage failures remain locked to the dedicated rollback path with a
-  durable, reboot-safe VM marker. Manual rollback needs only the preserved battlegroup,
-  backup, and database operator—not an already-healthy database. DST and its
-  desktop shell also refuse shutdown while maintenance or recovery is active,
-  and scheduled backups remain paused until verified recovery clears the marker.
-  Mutating API work is serialized with restart admission, so already-started
-  writes finish before backup and no new write can race storage replacement.
-  Before storage replacement, DST also captures purchased research items whose
-  runtime crafting recipes are working. After account-linked characters return,
-  a local-only integrity audit detects research that reappeared as Purchased
-  without rebuilding its runtime recipe. Recovery verifies a new full-world
-  backup, stops the battlegroup, resets only proven mismatches for that stable
-  Funcom identity plus their captured parent research bundles, and returns the
-  battlegroup to Healthy so the player can repurchase normally and trigger
-  Funcom's required runtime cascade. An unresolved recovery has its own guarded
-  rollback to the fresh recovery backup; DST blocks the older pre-World-Restart
-  rollback so it cannot erase the accepted fresh world by mistake.
+  It starts the same battlegroup as a fresh world while preserving server
+  configuration. Every player must be offline; DST creates a verified rollback
+  backup, blocks conflicting work, and automatically restores failures. The
+  fresh world removes characters, bases, inventories, progression, and market
+  data. A local audit can repair purchased research that returns without its
+  runtime crafting recipe.
 
 ### Changed
 
 - Solo Mode settings now use enabled/disabled buttons for toggles, verified
   dropdown choices for equipment-loss and corpse-looting rules, and numeric
   inputs for integer and multiplier values.
-- Repository and project website documentation now use a concise current-product
-  overview and seven refreshed, PII-safe screenshots covering Server Health,
-  Game Config, Gameplay Admin, Solo Mode, DD Seed Maps, Database, and Settings.
 
 ## [13.8.1] - 2026-08-18
 
