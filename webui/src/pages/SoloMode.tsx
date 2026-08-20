@@ -96,7 +96,16 @@ export const SOLO_ACTION_RULES = [
 const SOLO_INPUT_CLASS = 'w-full px-3 py-2 rounded-lg bg-surface-2 border border-border text-text text-sm focus:outline-none focus:ring-2 focus:ring-ibad focus:border-ibad/50 disabled:opacity-50 disabled:cursor-not-allowed'
 const SOLO_DISABLED_PRIMARY_CLASS = 'disabled:bg-surface-2 disabled:text-text-dim disabled:border disabled:border-border disabled:opacity-100'
 export const SOLO_READ_ONLY_SETTINGS = new Set(['DifficultyLevel'])
-export const SOLO_HIDDEN_SETTINGS = new Set(['PVPMode'])
+export const SOLO_HIDDEN_SETTINGS = new Set([
+  'PVPMode',
+  'PlayerDamageToPlayer',
+  'PlayerDamageToVehicle',
+  'PVPDamageStructures',
+])
+
+export function isSoloSettingVisible(key: string): boolean {
+  return !SOLO_HIDDEN_SETTINGS.has(key)
+}
 
 type SoloSettingOption = { value: string; label: string }
 export type SoloSettingControl =
@@ -1322,7 +1331,7 @@ export function SoloMode() {
               {SETTING_GROUPS.map(group => (
                 <CollapsibleCard key={group.title} id={`solo-settings-${group.title.toLowerCase().replaceAll(' ', '-')}`} title={group.title} icon="SlidersHorizontal">
                   <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
-                    {group.keys.map(key => {
+                    {group.keys.filter(isSoloSettingVisible).map(key => {
                       const value = draft[key] ?? ''
                       const control = getSoloSettingControl(key)
                       const disabled = SOLO_READ_ONLY_SETTINGS.has(key)
