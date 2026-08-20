@@ -1,6 +1,7 @@
 version: 2
 
-# Dependency update automation. Weekly cadence to keep PR volume low; minor +
+# Dependency update automation. Monthly cadence so bumps batch into release
+# cycles instead of trickling in continuously; minor +
 # patch bumps are grouped into a single PR per ecosystem/directory so routine
 # updates don't fan out into dozens of separate PRs. Major bumps stay
 # individual so they can be reviewed on their own.
@@ -9,8 +10,7 @@ updates:
   - package-ecosystem: npm
     directory: /webui
     schedule:
-      interval: weekly
-      day: monday
+      interval: monthly
     open-pull-requests-limit: 5
     groups:
       webui-minor-patch:
@@ -28,8 +28,7 @@ updates:
   - package-ecosystem: npm
     directory: /site
     schedule:
-      interval: weekly
-      day: monday
+      interval: monthly
     open-pull-requests-limit: 5
     groups:
       site-minor-patch:
@@ -39,8 +38,7 @@ updates:
   - package-ecosystem: npm
     directory: /mobile
     schedule:
-      interval: weekly
-      day: monday
+      interval: monthly
     open-pull-requests-limit: 5
     groups:
       mobile-minor-patch:
@@ -50,8 +48,7 @@ updates:
   - package-ecosystem: nuget
     directory: /app/desktop/DuneShell
     schedule:
-      interval: weekly
-      day: monday
+      interval: monthly
     open-pull-requests-limit: 5
     groups:
       duneshell-minor-patch:
@@ -61,8 +58,7 @@ updates:
   - package-ecosystem: nuget
     directory: /helper/friend
     schedule:
-      interval: weekly
-      day: monday
+      interval: monthly
     open-pull-requests-limit: 5
     groups:
       friend-helper-minor-patch:
@@ -72,8 +68,7 @@ updates:
   - package-ecosystem: github-actions
     directory: /
     schedule:
-      interval: weekly
-      day: monday
+      interval: monthly
     open-pull-requests-limit: 5
     groups:
       actions-minor-patch:
