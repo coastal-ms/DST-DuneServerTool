@@ -13,6 +13,8 @@ here cover everything those tags shipped.
 
 ## [Unreleased]
 
+## [13.8.2] - 2026-08-20
+
 ### Added
 
 - Self-Hosted Database now includes a reversible **World Restart** workflow.
@@ -48,6 +50,15 @@ here cover everything those tags shipped.
   Funcom's required runtime cascade. An unresolved recovery has its own guarded
   rollback to the fresh recovery backup; DST blocks the older pre-World-Restart
   rollback so it cannot erase the accepted fresh world by mistake.
+
+### Changed
+
+- Solo Mode settings now use enabled/disabled buttons for toggles, verified
+  dropdown choices for equipment-loss and corpse-looting rules, and numeric
+  inputs for integer and multiplier values.
+- Repository and project website documentation now use a concise current-product
+  overview and seven refreshed, PII-safe screenshots covering Server Health,
+  Game Config, Gameplay Admin, Solo Mode, DD Seed Maps, Database, and Settings.
 
 ## [13.8.0] - 2026-08-18
 

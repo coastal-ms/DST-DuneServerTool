@@ -23,7 +23,9 @@ body:
         > the ZIP is written. The bundle includes a redacted **UserGame.ini /
         > UserEngine.ini snapshot** and, when available, sanitized local client
         > **Game.ini / Engine.ini snapshots** (with an automatic duplicate-section-header
-        > check) and a **`vm-memory-pressure.txt`** VM-health probe (Funcom
+        > check), a sanitized **Solo Mode health snapshot** (adapter, schema,
+        > and process-lock facts; never save paths), and a
+        > **`vm-memory-pressure.txt`** VM-health probe (Funcom
         > operator / Postgres restart counts + OOMKilled/exit-137 state, `free -h`,
         > **root-disk usage and node conditions**, **unfinished database
         > operations and the battlegroup's DATABASE phase**, **per-map memory
@@ -44,7 +46,7 @@ body:
           fails, or any other preflight check is wrong.
         - **Game Config**, **Database** (backup / restore / SQL editor /
           backup schedule), **Map SpinUp**, **Settings Public IP / DDNS**,
-          **Characters**, a button, page, the top menu bar, or the embedded
+          **Gameplay Admin**, **Solo Mode**, a button, page, the top menu bar, or the embedded
           PowerShell pane misbehaves.
 
         > 💡 The tool explains *why* it can't reach the VM. If you see one of
@@ -78,7 +80,7 @@ body:
     attributes:
       label: Tool version
       description: Shown in the bottom-left of the web portal sidebar (status bar) and in the CLI menu header. Auto-filled when launched from **Help → Create GitHub Issue** in the top menu bar, or from the CLI `report-issue` command.
-      placeholder: "v13.8.0"
+      placeholder: "v13.8.2"
     validations:
       required: true
 

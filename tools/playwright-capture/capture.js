@@ -1,14 +1,13 @@
-// Captures the v6 Dune Server portal pages as PNG screenshots with PII
-// masked at the DOM level (more robust than pixel-coord black rectangles).
+// Capture the seven screenshots used by the README and Astro feature tour.
+// Live server data is preserved, but identifying values are replaced in the DOM
+// with deterministic documentation-only examples before each screenshot.
 //
 // Usage:
 //   node capture.js [--url <full-url-with-token>] [--out <dir>]
-// Defaults: reads %LOCALAPPDATA%\DuneServer\last-url.txt for the URL,
-//           writes to ../../docs/img/v6-*.png
 //
-// Viewport: 1600 x 1000 — fits in a normal browser window without horizontal
-// scroll and matches the README's display aspect. Pages that overflow get
-// captured as fullPage so the full content is visible.
+// Defaults:
+//   URL:    %LOCALAPPDATA%\DuneServer\last-url.txt
+//   Output: ../../docs/img
 
 const { chromium } = require('playwright')
 const fs = require('fs')
@@ -16,8 +15,8 @@ const path = require('path')
 const os = require('os')
 
 function arg(name, fallback) {
-  const i = process.argv.indexOf(name)
-  return i >= 0 ? process.argv[i + 1] : fallback
+  const index = process.argv.indexOf(name)
+  return index >= 0 ? process.argv[index + 1] : fallback
 }
 
 const lastUrlPath = path.join(os.homedir(), 'AppData', 'Local', 'DuneServer', 'last-url.txt')
@@ -27,193 +26,130 @@ if (!baseUrl) {
   console.error('No portal URL. Pass --url <url> or ensure last-url.txt exists.')
   process.exit(2)
 }
+
 const outDir = path.resolve(arg('--out', path.join(__dirname, '..', '..', 'docs', 'img')))
 fs.mkdirSync(outDir, { recursive: true })
 
-// SPA routes — hash fragment because the portal uses HashRouter
 const pages = [
-  { route: '/',           file: 'v6-server-health.png', label: 'Server Health', wait: 2500, fullPage: true },
-  { route: '/commands',   file: 'v6-commands.png',      label: 'Commands',      wait: 1200, fullPage: true },
-  { route: '/terminal',   file: 'v6-terminal.png',      label: 'PowerShell',    wait: 1500 },
-  { route: '/characters', file: 'v6-characters.png',    label: 'Characters',    wait: 5000, fullPage: true },
-  { route: '/gameconfig', file: 'v6-gameconfig.png',    label: 'Game Config',   wait: 3000, fullPage: true },
-  { route: '/database',   file: 'v6-database.png',      label: 'Database',      wait: 2000, fullPage: true },
-  { route: '/sietches',   file: 'v6-sietches.png',      label: 'Sietches',      wait: 1500, fullPage: true },
-  { route: '/dd-map',     file: 'v6-dd-map.png',        label: 'DD Map',        wait: 2000, fullPage: true },
-  { route: '/settings',   file: 'v6-settings.png',      label: 'Settings',      wait: 2000, fullPage: true },
-  { route: '/setup',      file: 'v6-setup-wizard.png',  label: 'Setup Wizard',  wait: 1500, fullPage: true },
+  { route: '/', file: 'server-health.png', label: 'Server Health', wait: 3500 },
+  { route: '/gameconfig', file: 'game-config.png', label: 'Game Config', wait: 3000 },
+  { route: '/gameplay', file: 'gameplay-admin.png', label: 'Gameplay Admin', wait: 3000, tab: 'Players' },
+  { route: '/solo', file: 'solo-mode.png', label: 'Solo Mode', wait: 2500, tab: 'Settings', focus: 'PTC Engine settings' },
+  { route: '/wick-maps', file: 'dd-seed-maps.png', label: 'DD Seed Maps', wait: 2500 },
+  { route: '/database', file: 'database.png', label: 'Database', wait: 2500, focus: 'Backups' },
+  { route: '/settings', file: 'settings.png', label: 'Settings', wait: 2500, focus: 'Remote Access' },
 ]
 
-// CSS injected into every page to mask PII at the DOM layer.
-// Matches anything that looks like an IP address, a battlegroup ID, an SSH
-// hostname, or a character name. The masks are solid black bars that overlay
-// the underlying text (we keep layout intact by using `text-shadow` to
-// flatten + `color: transparent` + a `::after` pseudo with same width).
-const piiScrubCss = `
-  /* Generic PII text helpers — applied via JS by data attribute */
-  [data-pii="ip"], [data-pii="bgid"], [data-pii="hostname"], [data-pii="charname"], [data-pii="username"] {
-    color: transparent !important;
-    background: #000 !important;
-    border-radius: 2px;
+async function clickExact(page, label) {
+  const control = page.getByRole('button', { name: label, exact: true }).first()
+  if (await control.count()) {
+    await control.click()
+    await page.waitForTimeout(900)
+    return true
   }
-  /* Character-rail name rows in Characters page */
-  .char-row-name, .character-list-item span {
-    /* fallback for any class-based names */
-  }
-`
+  return false
+}
 
-// JS injected into every page after navigation. Walks visible text nodes and
-// masks anything matching PII patterns (IPv4, BG hashes like
-// sh-<32hex>-<6alphanum>, hostnames containing dune-awakening, etc.).
-const piiScrubJs = `
-(() => {
-  const IP_RX = /\\b(?:(?:25[0-5]|2[0-4]\\d|1?\\d?\\d)\\.){3}(?:25[0-5]|2[0-4]\\d|1?\\d?\\d)\\b/g
-  const BG_RX = /\\bsh-[0-9a-f]{16,}-[0-9a-z]{4,}\\b/gi
-  const HOST_RX = /\\bdune-awakening\\b/gi
-  const NAMESPACE_RX = /\\bfuncom-seabass-sh-[0-9a-f]{16,}-[0-9a-z]{4,}\\b/gi
+async function focusText(page, text) {
+  const target = page.getByText(text, { exact: false }).first()
+  if (!await target.count()) return
+  await target.evaluate(element => {
+    element.scrollIntoView({ block: 'start', behavior: 'instant' })
+    const scroller = element.closest('main') ?? document.scrollingElement
+    if (scroller) scroller.scrollTop = Math.max(0, scroller.scrollTop - 120)
+  })
+  await page.waitForTimeout(500)
+}
 
-  // Real names + identifiers we want scrubbed wherever they appear (case-insensitive).
-  // Add to this list if a new PII string surfaces in a screenshot.
-  const NAME_REPLACEMENTS = [
-    [/\\bCoastal\\b/g, '<user>'],
-    [/\\bHawk-i5\\b/gi, '<character>'],
-    [/\\ballcoast\\b/gi, '<discord>'],
-  ]
+async function replacePiiWithDemoData(page) {
+  await page.evaluate(() => {
+    const replacements = [
+      [/C:\\Users\\[^\\<>"' ]+/gi, 'C:\\Users\\ServerAdmin'],
+      [/\bfuncom-seabass-sh-[0-9a-z-]+\b/gi, 'funcom-seabass-sh-demo-sietch-01'],
+      [/\bsh-[0-9a-f]{12,}-[0-9a-z]{4,}\b/gi, 'sh-demo-sietch-01'],
+      [/\b(?:\d{1,3}\.){3}\d{1,3}\b/g, '203.0.113.42'],
+      [/\b7656119\d{10}\b/g, '76561190000000001'],
+      [/\bReapersDST\b/gi, 'Arrakis Sietch'],
+      [/\bcoastal-ms\b/gi, 'desert-admin'],
+      [/\bHawk(?:[-_]i5)?\b/gi, 'SpiceRunner'],
+      [/\bCoastal\b/g, 'Sietch Keeper'],
+      [/\ballcoast\b/gi, 'desert-admin'],
+      [/\b[\w.+-]+@[\w.-]+\.[A-Za-z]{2,}\b/g, 'admin@example.invalid'],
+      [/\bdune-awakening\b/gi, 'dune-server-vm'],
+    ]
 
-  function mask(s) {
-    let out = s
-      .replace(NAMESPACE_RX, 'funcom-seabass-<bg-id>')
-      .replace(BG_RX, 'sh-<bg-id>')
-      .replace(IP_RX, '<ip>')
-      .replace(HOST_RX, '<host>')
-    for (const [rx, rep] of NAME_REPLACEMENTS) out = out.replace(rx, rep)
-    return out
-  }
-
-  function walk(node) {
-    if (node.nodeType === Node.TEXT_NODE) {
-      const original = node.nodeValue
-      const masked = mask(original)
-      if (masked !== original) node.nodeValue = masked
-      return
+    const replace = value => {
+      let next = value
+      for (const [pattern, demo] of replacements) next = next.replace(pattern, demo)
+      return next
     }
-    if (node.nodeType !== Node.ELEMENT_NODE) return
-    if (node.tagName === 'SCRIPT' || node.tagName === 'STYLE') return
-    // Mask input/textarea VALUES (the input.value property, not just the attribute)
-    if (node.tagName === 'INPUT' || node.tagName === 'TEXTAREA') {
-      if (node.value) {
-        const m = mask(node.value)
-        if (m !== node.value) {
-          // Set via property assignment so the browser actually shows the new text
-          const proto = Object.getPrototypeOf(node)
-          const setter = Object.getOwnPropertyDescriptor(proto, 'value').set
-          setter.call(node, m)
-          // Fire input event so React state syncs (in case any controlled-input logic re-renders)
-          node.dispatchEvent(new Event('input', { bubbles: true }))
-        }
+
+    const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT)
+    let node
+    while ((node = walker.nextNode())) {
+      const next = replace(node.nodeValue ?? '')
+      if (next !== node.nodeValue) node.nodeValue = next
+    }
+
+    for (const element of document.querySelectorAll('input, textarea')) {
+      const next = replace(element.value)
+      if (next !== element.value) {
+        const prototype = Object.getPrototypeOf(element)
+        const descriptor = Object.getOwnPropertyDescriptor(prototype, 'value')
+        descriptor?.set?.call(element, next)
       }
-      return
     }
-    for (const c of Array.from(node.childNodes)) walk(c)
-  }
-  walk(document.body)
 
-  // Also mask the Windows-user path: C:\\Users\\<name>\\...
-  document.body.innerHTML = document.body.innerHTML.replace(/C:\\\\Users\\\\[^\\\\<>"' ]+/g, 'C:\\\\Users\\\\<user>')
-})()
-`
+    for (const element of document.querySelectorAll('[title], [aria-label]')) {
+      for (const attribute of ['title', 'aria-label']) {
+        const value = element.getAttribute(attribute)
+        if (value) element.setAttribute(attribute, replace(value))
+      }
+    }
+  })
+}
 
 ;(async () => {
   const browser = await chromium.launch({ headless: true })
-  const ctx = await browser.newContext({
+  const context = await browser.newContext({
     viewport: { width: 1600, height: 1000 },
-    deviceScaleFactor: 1.5,  // crisper screenshots
+    deviceScaleFactor: 1.25,
+    colorScheme: 'dark',
+    reducedMotion: 'reduce',
   })
-  const page = await ctx.newPage()
+  const page = await context.newPage()
+  const portal = new URL(baseUrl)
 
-  const u = new URL(baseUrl)
-  // Initial load: hit the root with the token. The token sets a session cookie
-  // so subsequent navigations within the same context don't need it.
-  const initialUrl = `${u.origin}/${u.search}`
-  console.log('Initial load:', initialUrl)
-  await page.goto(initialUrl, { waitUntil: 'networkidle', timeout: 15000 })
-  try {
-    await page.waitForSelector('nav, [class*="sidebar"], [class*="Sidebar"]', { timeout: 8000 })
-  } catch {
-    console.warn('  app shell selector not found, proceeding with timed wait')
-    await page.waitForTimeout(2000)
-  }
+  const initialUrl = `${portal.origin}/${portal.search}`
+  await page.goto(initialUrl, { waitUntil: 'networkidle', timeout: 30000 })
+  await page.waitForSelector('nav, aside', { timeout: 10000 })
 
-  for (const p of pages) {
-    console.log(`\n→ ${p.label}  (${p.route})`)
-    // BrowserRouter: navigate to the real path. Append token as belt-and-suspenders
-    // in case the session cookie isn't set yet (first navigation after token use).
-    const target = `${u.origin}${p.route}${u.search}`
-    await page.goto(target, { waitUntil: 'networkidle', timeout: 15000 }).catch(e => console.warn(`  goto: ${e.message}`))
-    await page.waitForTimeout(p.wait)
+  for (const capture of pages) {
+    console.log(`Capturing ${capture.label} (${capture.route})`)
+    const target = `${portal.origin}${capture.route}${portal.search}`
+    await page.goto(target, { waitUntil: 'networkidle', timeout: 30000 })
+    await page.waitForTimeout(capture.wait)
 
-    // Per-page hooks: expand collapsed cards, auto-select first row, etc.
-    if (p.route === '/settings') {
-      // Expand both collapsible update cards. Re-query buttons between clicks because
-      // React re-renders after each toggle and detaches the previous DOM nodes.
-      for (const label of ['Dune Server updates']) {
-        const clicked = await page.evaluate((needle) => {
-          const buttons = Array.from(document.querySelectorAll('button, [role="button"]'))
-          for (const b of buttons) {
-            const txt = (b.textContent || '').trim()
-            if (txt.includes(needle)) {
-              // Only expand if currently collapsed (chevron rotation or aria-expanded)
-              const expanded = b.getAttribute('aria-expanded')
-              if (expanded === 'true') return false
-              try { b.click() } catch {}
-              return true
-            }
-          }
-          return false
-        }, label)
-        if (clicked) await page.waitForTimeout(600)
-      }
-      await page.waitForTimeout(600)
-    }
-    if (p.route === '/characters') {
-      // Auto-select the first character row so the editor surface is visible.
-      // Rows aren't <button> — they're clickable <div>s in the rail. Match any
-      // element whose text matches the "name + id NNN" pattern of a row.
-      const clicked = await page.evaluate(() => {
-        const all = Array.from(document.querySelectorAll('*'))
-        // Find rows that are minimal text containers with both a name line and "id NNN"
-        const candidates = all.filter(el => {
-          if (el.children.length > 3) return false
-          const t = (el.textContent || '').trim()
-          return /\bid\s+\d+\b/.test(t) && t.length < 80
-        })
-        // Sort by depth (deeper = more specific = the row itself, not its container)
-        candidates.sort((a, b) => {
-          let da = 0, db = 0
-          for (let n = a; n; n = n.parentElement) da++
-          for (let n = b; n; n = n.parentElement) db++
-          return db - da
-        })
-        if (candidates.length === 0) return false
-        try { candidates[0].click() } catch { return false }
-        return true
-      })
-      if (clicked) {
-        await page.waitForTimeout(4500)  // wait for character data fetch
-      }
-    }
+    if (capture.tab) await clickExact(page, capture.tab)
+    if (capture.focus) await focusText(page, capture.focus)
 
-    // Inject scrubber + CSS AFTER the route renders and after per-page hooks
-    await page.addStyleTag({ content: piiScrubCss })
-    await page.evaluate(piiScrubJs)
-    await page.waitForTimeout(400)
+    await replacePiiWithDemoData(page)
+    await page.waitForTimeout(300)
 
-    const out = path.join(outDir, p.file)
-    await page.screenshot({ path: out, fullPage: !!p.fullPage })
-    const stat = fs.statSync(out)
-    console.log(`  ✓ ${p.file}  (${(stat.size / 1024).toFixed(0)} KB)`)
+    const output = path.join(outDir, capture.file)
+    await page.screenshot({
+      path: output,
+      fullPage: false,
+      animations: 'disabled',
+      caret: 'hide',
+    })
+    const size = fs.statSync(output).size
+    console.log(`  ${capture.file} (${Math.round(size / 1024)} KB)`)
   }
 
   await browser.close()
-  console.log('\nDone. Output:', outDir)
-})().catch(e => { console.error(e); process.exit(1) })
+  console.log(`Done. Output: ${outDir}`)
+})().catch(error => {
+  console.error(error)
+  process.exit(1)
+})
