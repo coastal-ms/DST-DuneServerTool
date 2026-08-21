@@ -132,7 +132,7 @@ Describe 'Get-DuneSelectedRelease channel resolution' {
 Describe 'Get-DuneUpdateInstalledPrerelease (running-build marker)' {
     BeforeEach {
         $script:DuneToolVersion = '14.0.0'
-        function global:Get-DuneBuildMetadata { @{ commit='abcdef123456'; prerelease=$false; present=$true } }
+        function global:Get-DuneBuildMetadata { @{ commit='abcdef123456'; prerelease=$false; tag='v14.0.0'; present=$true } }
     }
     It 'is false when the marker key is absent (normal stable install)' {
         function global:Read-DuneConfigRaw { @{ UpdateChannel = 'stable' } }
@@ -140,6 +140,7 @@ Describe 'Get-DuneUpdateInstalledPrerelease (running-build marker)' {
     }
     It 'is true only after a pre-release build was installed' {
         function global:Read-DuneConfigRaw { @{ UpdateInstalledPrerelease = 'true'; UpdateInstalledTag = 'v14.0.0-test6' } }
+        function global:Get-DuneBuildMetadata { @{ commit='abcdef123456'; prerelease=$true; tag='v14.0.0-test6'; present=$true } }
         Get-DuneUpdateInstalledPrerelease | Should -BeTrue
     }
     It 'is false when a later stable install wrote false' {
@@ -153,6 +154,7 @@ Describe 'Get-DuneUpdateInstalledPrerelease (running-build marker)' {
     }
     It 'returns the exact installed tag only when its core matches the runtime' {
         function global:Read-DuneConfigRaw { @{ UpdateInstalledPrerelease='true'; UpdateInstalledTag='v14.0.0-test6' } }
+        function global:Get-DuneBuildMetadata { @{ commit='abcdef123456'; prerelease=$true; tag='v14.0.0-test6'; present=$true } }
         $info = Get-DuneUpdateRunningBuildInfo
         $info.installedTag | Should -Be 'v14.0.0-test6'
         $info.runningIsPrerelease | Should -BeTrue
@@ -160,17 +162,37 @@ Describe 'Get-DuneUpdateInstalledPrerelease (running-build marker)' {
     It 'ignores a stale installed tag and marker when its core differs' {
         function global:Read-DuneConfigRaw { @{ UpdateInstalledPrerelease='true'; UpdateInstalledTag='v13.9.0-test2' } }
         $info = Get-DuneUpdateRunningBuildInfo
-        $info.installedTag | Should -Be ''
+        $info.installedTag | Should -Be 'v14.0.0'
         $info.runningIsPrerelease | Should -BeFalse
         $info.buildCommit | Should -Be 'abcdef123456'
     }
     It 'uses explicit artifact metadata for a manual test candidate with no tag' {
         function global:Read-DuneConfigRaw { @{} }
-        function global:Get-DuneBuildMetadata { @{ commit='1234567890ab'; prerelease=$true; present=$true } }
+        function global:Get-DuneBuildMetadata { @{ commit='1234567890ab'; prerelease=$true; tag=''; present=$true } }
         $info = Get-DuneUpdateRunningBuildInfo
         $info.installedTag | Should -Be ''
         $info.runningIsPrerelease | Should -BeTrue
         $info.buildCommit | Should -Be '1234567890ab'
+    }
+    It 'uses new immutable metadata only after an installer succeeds' {
+        function global:Read-DuneConfigRaw { @{ UpdateInstalledPrerelease='true'; UpdateInstalledTag='v14.0.0-test7' } }
+        function global:Get-DuneBuildMetadata { @{ commit='oldold1'; prerelease=$false; tag='v14.0.0'; present=$true } }
+        $cancelled = Get-DuneUpdateRunningBuildInfo
+        $cancelled.runningIsPrerelease | Should -BeFalse
+        $cancelled.installedTag | Should -Be 'v14.0.0'
+
+        function global:Get-DuneBuildMetadata { @{ commit='abcdef7'; prerelease=$true; tag='v14.0.0-test7'; present=$true } }
+        $succeeded = Get-DuneUpdateRunningBuildInfo
+        $succeeded.runningIsPrerelease | Should -BeTrue
+        $succeeded.installedTag | Should -Be 'v14.0.0-test7'
+    }
+    It 'does not write candidate identity before the installer exits successfully' {
+        $routePath = Join-Path (Split-Path $PSScriptRoot -Parent) 'app\server\routes\Update.ps1'
+        $installRoute = (Get-Content -LiteralPath $routePath -Raw).Substring(
+            (Get-Content -LiteralPath $routePath -Raw).IndexOf('# POST /api/update/install')
+        )
+        $installRoute | Should -Not -Match 'UpdateInstalledTag\s*='
+        $installRoute | Should -Not -Match 'UpdateInstalledPrerelease\s*='
     }
 }
 

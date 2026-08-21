@@ -205,11 +205,42 @@ function Write-DunePortalAudit {
     } catch {}
 }
 
+function Get-DunePortalVerifiedProxyIdentity {
+    param($Request)
+    try {
+        $assertion = [string]$Request.Headers['Cf-Access-Jwt-Assertion']
+        if ($assertion -and
+            (Get-Command Get-DuneRemoteAcl -ErrorAction SilentlyContinue) -and
+            (Get-Command Test-DuneCloudflareAccessJwt -ErrorAction SilentlyContinue)) {
+            $identity = Test-DuneCloudflareAccessJwt -Request $Request -Acl (Get-DuneRemoteAcl)
+            if ($identity.ok -and $identity.email) {
+                return ([string]$identity.email).Trim().ToLowerInvariant()
+            }
+        }
+    } catch {}
+    return ''
+}
+
 function Get-DunePortalClientKey {
     param($Request)
     $address = 'unknown'
     try { $address = [string]$Request.RemoteEndPoint.Address } catch {}
-    return (Get-DunePortalSha256 -Value $address)
+    $isLoopback = $false
+    try { $isLoopback = [Net.IPAddress]::IsLoopback([Net.IPAddress]::Parse($address)) } catch {}
+    if (-not $isLoopback) {
+        return (Get-DunePortalSha256 -Value "socket:$address")
+    }
+
+    # A loopback socket is shared by Funnel, cloudflared, and the local bridge.
+    # Arbitrary forwarding headers are not identities. Only a Cloudflare Access
+    # JWT that passes the existing signature/issuer/audience validation can split
+    # this proxy bucket into logical clients. Funnel/bridge traffic deliberately
+    # has no client bucket; account lockout and the PBKDF2 cost still apply.
+    $verifiedIdentity = Get-DunePortalVerifiedProxyIdentity -Request $Request
+    if ($verifiedIdentity) {
+        return (Get-DunePortalSha256 -Value "cloudflare:$verifiedIdentity")
+    }
+    return ''
 }
 
 function Get-DunePortalAccountByUsername {
@@ -313,6 +344,7 @@ function Register-DunePortalLoginFailure {
         if ($seconds -gt 0) { $Account.lockoutUntil = $now.AddSeconds($seconds).ToString('o') }
         $Account.updatedAt = $now.ToString('o')
     }
+    if (-not $ClientKey) { return }
     $client = @($Store.clientFailures | Where-Object { $_.key -eq $ClientKey } | Select-Object -First 1)[0]
     if (-not $client) {
         $client = @{ key = $ClientKey; count = 0; windowStart = $now.ToString('o'); lockoutUntil = '' }
@@ -356,15 +388,16 @@ function Revoke-DunePortalSessions {
         Save-DunePortalSessionStore $store
     }
 
-    function Revoke-DunePortalSessionToken {
-        param([string]$Token)
-        if (-not $Token) { return }
-        Invoke-DunePortalAuthLock {
-            $hash = Get-DunePortalSha256 $Token
-            $store = Get-DunePortalSessionStore
-            $store.sessions = @($store.sessions | Where-Object { $_.tokenHash -ne $hash })
-            Save-DunePortalSessionStore $store
-        }
+}
+
+function Revoke-DunePortalSessionToken {
+    param([string]$Token)
+    if (-not $Token) { return }
+    Invoke-DunePortalAuthLock {
+        $hash = Get-DunePortalSha256 $Token
+        $store = Get-DunePortalSessionStore
+        $store.sessions = @($store.sessions | Where-Object { $_.tokenHash -ne $hash })
+        Save-DunePortalSessionStore $store
     }
 }
 
@@ -436,7 +469,9 @@ function Invoke-DunePortalLogin {
     return Invoke-DunePortalAuthLock {
         $store = Get-DunePortalAccountStore
         $account = Get-DunePortalAccountByUsername $store $Username
-        $client = @($store.clientFailures | Where-Object { $_.key -eq $clientKey } | Select-Object -First 1)[0]
+        $client = if ($clientKey) {
+            @($store.clientFailures | Where-Object { $_.key -eq $clientKey } | Select-Object -First 1)[0]
+        } else { $null }
         $clientLocked = if ($client) { Test-DunePortalIsoFuture $client.lockoutUntil } else { $false }
         $accountLocked = if ($account) { Test-DunePortalIsoFuture $account.lockoutUntil } else { $false }
         $locked = ($clientLocked -or $accountLocked)

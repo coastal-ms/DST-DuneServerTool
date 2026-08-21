@@ -31,6 +31,7 @@ export function PortalAccountsManager() {
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
   const [message, setMessage] = useState('')
+  const [nativeRetirementAcknowledged, setNativeRetirementAcknowledged] = useState(false)
 
   const load = async () => {
     const next = await getPortalAccounts()
@@ -74,7 +75,7 @@ export function PortalAccountsManager() {
   })
 
   const toggleMode = (enabled: boolean) => run(async () => {
-    await setPortalAccountMode(enabled)
+    await setPortalAccountMode(enabled, enabled && nativeRetirementAcknowledged)
     setMessage(enabled
       ? 'Account login enabled. Browser Portal links are now token-free and require sign-in.'
       : 'Account login disabled. Existing magic-link behavior is restored.')
@@ -156,6 +157,21 @@ export function PortalAccountsManager() {
       <div className="bg-surface-2/60 border border-border rounded-lg p-3 space-y-3">
         <div className="font-medium text-sm">Safe enablement check</div>
         <p className="text-xs text-text-dim">Verify an enabled owner's current one-time password from this host before enabling. This prevents a bad account setup from stranding the host.</p>
+        {!state?.accountLoginEnabled && (
+          <label className="flex items-start gap-2 rounded-lg border border-warning/40 bg-warning/10 p-3 text-xs text-text-muted">
+            <input
+              type="checkbox"
+              checked={nativeRetirementAcknowledged}
+              onChange={e => setNativeRetirementAcknowledged(e.target.checked)}
+              className="mt-0.5"
+            />
+            <span>
+              I understand that paired native mobile apps stop working while account login is enabled.
+              The current app sends only the browser-spoofable X-Dune-Token header, so it cannot be safely exempted.
+              Disable account login locally to restore native-app and legacy magic-link access.
+            </span>
+          </label>
+        )}
         <div className="grid gap-2 sm:grid-cols-2">
           <input aria-label="Owner username to verify" value={verifyUsername} onChange={e => setVerifyUsername(e.target.value)} className="px-3 py-2 rounded-lg bg-surface-2 border border-border" placeholder="Owner username" />
           <input aria-label="Owner password to verify" type="password" value={verifyPassword} onChange={e => setVerifyPassword(e.target.value)} className="px-3 py-2 rounded-lg bg-surface-2 border border-border" placeholder="Owner password" />
@@ -164,7 +180,7 @@ export function PortalAccountsManager() {
           <button className="btn-secondary" disabled={busy || !verifyUsername || !verifyPassword} onClick={() => void verify()}>Verify owner login</button>
           {state?.accountLoginEnabled
             ? <button className="btn-danger" disabled={busy} onClick={() => void toggleMode(false)}>Disable account login</button>
-            : <button className="btn-primary" disabled={busy} onClick={() => void toggleMode(true)}>Enable account login</button>}
+            : <button className="btn-primary" disabled={busy || !nativeRetirementAcknowledged} onClick={() => void toggleMode(true)}>Enable account login</button>}
         </div>
       </div>
     </section>

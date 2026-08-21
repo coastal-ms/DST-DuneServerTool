@@ -45,6 +45,32 @@ describe('PortalAccountsManager', () => {
     })
     render(<PortalAccountsManager />)
     expect(await screen.findByText('Safe enablement check')).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: 'Enable account login' })).toBeInTheDocument()
+    expect(screen.getByText(/paired native mobile apps stop working/i)).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Enable account login' })).toBeDisabled()
+  })
+
+  it('sends explicit native retirement acknowledgement when enabling', async () => {
+    const requests: Array<{ path: string; init?: RequestInit }> = []
+    vi.spyOn(globalThis, 'fetch').mockImplementation((input, init) => {
+      const path = String(input)
+      requests.push({ path, init })
+      if (path === '/api/gameplay/players') return jsonResponse({ players: [] })
+      return jsonResponse({
+        accountLoginEnabled: path === '/api/remote-access/portal-account-mode',
+        nativeAppsBlockedInAccountMode: true,
+        accounts: [],
+        roles: ['owner', 'admin'],
+      })
+    })
+    const user = userEvent.setup()
+    render(<PortalAccountsManager />)
+    const acknowledgement = await screen.findByRole('checkbox')
+    await user.click(acknowledgement)
+    await user.click(screen.getByRole('button', { name: 'Enable account login' }))
+    const request = requests.find(r => r.path === '/api/remote-access/portal-account-mode')
+    expect(JSON.parse(String(request?.init?.body))).toEqual({
+      enabled: true,
+      acknowledgeNativeAppRetirement: true,
+    })
   })
 })

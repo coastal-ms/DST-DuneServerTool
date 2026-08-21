@@ -561,22 +561,6 @@ Register-DuneRoute -Method POST -Path '/api/update/install' -Handler {
             return
         }
 
-        # Record the truth source for the app-wide "running a test build"
-        # indicator at the moment we commit to launching this install: was the
-        # build we're about to install a GitHub pre-release? The new build reads
-        # this from config on startup. We deliberately key the indicator off
-        # what was actually INSTALLED, not the UpdateChannel preference, so that
-        # merely toggling the channel (which only affects the next install)
-        # never lights the indicator. A later stable install writes 'false'.
-        try {
-            Invoke-WithDuneLock -Name 'config' -Script {
-                Save-DuneConfig @{
-                    UpdateInstalledPrerelease = if ([bool]$rel.isPrerelease) { 'true' } else { 'false' }
-                    UpdateInstalledTag        = [string]$rel.tag
-                }
-            } | Out-Null
-        } catch {}
-
         # Respond to the client FIRST so the browser sees confirmation
         # before we tear ourselves down. The relauncher below kills this
         # very process about 3 seconds later.

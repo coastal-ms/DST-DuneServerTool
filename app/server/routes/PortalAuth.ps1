@@ -82,6 +82,7 @@ Register-DuneRoute -Method GET -Path '/api/remote-access/portal-accounts' -Local
     $store = Get-DunePortalAccountStore
     Write-DuneJson -Response $res -Body @{
         accountLoginEnabled = [bool]$store.accountLoginEnabled
+        nativeAppsBlockedInAccountMode = $true
         accounts = @($store.accounts | ForEach-Object { Get-DunePortalPublicAccount $_ })
         roles = @('owner','admin')
     }
@@ -214,11 +215,15 @@ Register-DuneRoute -Method POST -Path '/api/remote-access/portal-accounts/verify
 Register-DuneRoute -Method PUT -Path '/api/remote-access/portal-account-mode' -LocalOnly -Handler {
     param($req, $res, $routeParams, $body)
     $enabled = [bool](Get-DunePortalBodyValue $body 'enabled')
+    $nativeRetirementAcknowledged = ((Get-DunePortalBodyValue $body 'acknowledgeNativeAppRetirement') -eq $true)
     try {
         $state = Invoke-DunePortalAuthLock {
             $store = Get-DunePortalAccountStore
             if ($enabled -and -not (Test-DunePortalEnablePreconditions $store)) {
                 throw 'Create an enabled owner and verify its password locally before enabling account login.'
+            }
+            if ($enabled -and -not $nativeRetirementAcknowledged) {
+                throw 'Acknowledge that paired native apps stop working while account login is enabled.'
             }
             $store.accountLoginEnabled = $enabled
             Save-DunePortalAccountStore $store

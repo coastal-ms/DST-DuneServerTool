@@ -7,6 +7,7 @@ BeforeAll {
     . (Join-Path (Get-DstRepoRoot) 'app\server\lib\RemoteIdentity.ps1')
     . (Join-Path (Get-DstRepoRoot) 'app\server\lib\PortalAuth.ps1')
     . (Join-Path (Get-DstRepoRoot) 'app\server\lib\RemoteAccess.ps1')
+    . (Join-Path (Get-DstRepoRoot) 'app\server\HttpServer.ps1')
     function New-PortalTestRequest {
         param([string]$Cookie = '', [string]$Address = '127.0.0.1', [string]$Origin = 'https://portal.example.test')
         $cookies = @{}
@@ -126,6 +127,28 @@ Describe 'Portal sessions and login defense' {
         $created.account.id | Should -Not -BeNullOrEmpty
     }
 
+    It 'does not let spoofed proxy headers create a global loopback lockout bucket' {
+        $created = New-DunePortalAccount -Username 'proxy-owner' -Role owner
+        1..5 | ForEach-Object {
+            $request = New-PortalTestRequest
+            $request.Headers['X-Forwarded-For'] = "198.51.100.$_"
+            $request.Headers['Cf-Connecting-Ip'] = "203.0.113.$_"
+            (Invoke-DunePortalLogin -Username 'missing-user' -Password 'incorrect password' -Request $request).ok | Should -BeFalse
+        }
+        (Get-DunePortalAccountStore).clientFailures.Count | Should -Be 0
+        (Invoke-DunePortalLogin -Username 'proxy-owner' -Password $created.oneTimePassword -Request (New-PortalTestRequest)).ok |
+            Should -BeTrue
+    }
+
+    It 'uses only cryptographically verified Cloudflare identities behind loopback' {
+        Mock Get-DunePortalVerifiedProxyIdentity { [string]$Request.Headers['X-Test-Verified-Email'] }
+        $first = New-PortalTestRequest
+        $first.Headers['X-Test-Verified-Email'] = 'one@example.test'
+        $second = New-PortalTestRequest
+        $second.Headers['X-Test-Verified-Email'] = 'two@example.test'
+        Get-DunePortalClientKey $first | Should -Not -Be (Get-DunePortalClientKey $second)
+    }
+
     It 'requires a matching HTTPS origin for session-authenticated writes' {
         Test-DunePortalRequestOrigin (New-PortalTestRequest) | Should -BeTrue
         Test-DunePortalRequestOrigin (New-PortalTestRequest -Origin 'https://evil.example') | Should -BeFalse
@@ -157,6 +180,18 @@ Describe 'Portal auth route enforcement' {
         $source | Should -Match '\$rt -and -not \$accountMode'
         $source | Should -Match 'dune_key=; Path=/; Max-Age=0'
         $source | Should -Match 'elseif \(-not \(Test-DuneToken'
+    }
+
+    It 'keeps the legacy token usable outside account mode but cannot spoof a native exemption inside it' {
+        $script:DuneToken = 'launch-token'
+        $script:DuneRemoteToken = 'paired-native-token'
+        $request = [pscustomobject]@{
+            Headers = @{ 'X-Dune-Token'='paired-native-token'; 'User-Agent'='DuneServerMobile/retirement' }
+            QueryString = @{}
+            RemoteEndPoint = [pscustomobject]@{ Address=[Net.IPAddress]::Parse('192.0.2.44') }
+        }
+        Test-DuneToken $request | Should -BeTrue
+        Test-DuneAccountModeLaunchAccess $request | Should -BeFalse
     }
 
     It 'caps portal authentication bodies before parsing' {

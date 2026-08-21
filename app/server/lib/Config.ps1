@@ -167,21 +167,25 @@ function Get-DuneUpdateRunningBuildInfo {
         $markerIsPrerelease = ($marker -match '^(?i:true|1|yes)$')
         $storedTag = if ($raw.Contains('UpdateInstalledTag')) { ([string]$raw['UpdateInstalledTag']).Trim() } else { '' }
         $currentCore = Get-DuneVersionCore ([string]$script:DuneToolVersion)
-        $tagMatches = ($storedTag -and $currentCore -and (Get-DuneVersionCore $storedTag) -eq $currentCore)
         $metadata = if (Get-Command Get-DuneBuildMetadata -ErrorAction SilentlyContinue) {
             Get-DuneBuildMetadata
         } else {
-            @{ commit = ''; prerelease = $false; present = $false }
+            @{ commit = ''; prerelease = $false; tag = ''; present = $false }
         }
+        $metadataTag = ([string]$metadata.tag).Trim()
+        $metadataTagMatches = ($metadataTag -and $currentCore -and (Get-DuneVersionCore $metadataTag) -eq $currentCore)
+        $legacyTagMatches = ($storedTag -and $currentCore -and (Get-DuneVersionCore $storedTag) -eq $currentCore)
         return @{
-            runningIsPrerelease = if ($tagMatches) {
-                $markerIsPrerelease
-            } elseif ([bool]$metadata.present) {
+            runningIsPrerelease = if ([bool]$metadata.present) {
                 [bool]$metadata.prerelease
             } else {
                 $markerIsPrerelease
             }
-            installedTag = if ($tagMatches) { $storedTag } else { '' }
+            installedTag = if ([bool]$metadata.present) {
+                if ($metadataTagMatches) { $metadataTag } else { '' }
+            } elseif ($legacyTagMatches) {
+                $storedTag
+            } else { '' }
             buildCommit = [string]$metadata.commit
         }
     } catch {}

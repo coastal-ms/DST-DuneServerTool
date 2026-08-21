@@ -30,6 +30,7 @@ export interface PortalManagedAccount {
 
 export interface PortalAccountsState {
   accountLoginEnabled: boolean
+  nativeAppsBlockedInAccountMode: boolean
   accounts: PortalManagedAccount[]
   roles: Array<'owner' | 'admin'>
 }
@@ -68,8 +69,11 @@ export function verifyPortalOwner(username: string, password: string): Promise<{
   return api('/api/remote-access/portal-accounts/verify-owner', { method: 'POST', body: JSON.stringify({ username, password }) })
 }
 
-export function setPortalAccountMode(enabled: boolean): Promise<{ accountLoginEnabled: boolean }> {
-  return api('/api/remote-access/portal-account-mode', { method: 'PUT', body: JSON.stringify({ enabled }) })
+export function setPortalAccountMode(enabled: boolean, acknowledgeNativeAppRetirement = false): Promise<{ accountLoginEnabled: boolean }> {
+  return api('/api/remote-access/portal-account-mode', {
+    method: 'PUT',
+    body: JSON.stringify({ enabled, acknowledgeNativeAppRetirement }),
+  })
 }
 
 export interface CloudflaredStatus {

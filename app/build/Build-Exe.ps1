@@ -35,6 +35,7 @@
 param(
     [string]$Version = '14.0.0',
     [string]$BuildCommit = '',
+    [string]$BuildTag = '',
     [switch]$Prerelease,
     [switch]$Quiet
 )
@@ -46,7 +47,7 @@ $src       = Join-Path $appRoot 'DuneServer.ps1'
 $icon      = Join-Path $appRoot 'assets\icon.ico'
 $outDir    = Join-Path $appRoot 'build\output'
 $outExe    = Join-Path $outDir 'DuneServer.exe'
-$metadata  = Join-Path $appRoot 'server\build-metadata.json'
+$compileSrc = Join-Path $outDir 'DuneServer.generated.ps1'
 
 if (-not (Test-Path $src))  { throw "Source not found: $src" }
 if (-not (Test-Path $icon)) { throw "Icon not found: $icon" }
@@ -60,8 +61,23 @@ $BuildCommit = $BuildCommit.Trim().ToLowerInvariant()
 if ($BuildCommit -and $BuildCommit -notmatch '^[0-9a-f]{7,40}$') {
     throw 'BuildCommit must be a 7-40 character hexadecimal Git commit id.'
 }
-([ordered]@{ commit=$BuildCommit; prerelease=[bool]$Prerelease } | ConvertTo-Json) |
-    Set-Content -LiteralPath $metadata -Encoding UTF8 -Force
+$BuildTag = $BuildTag.Trim()
+if ($BuildTag -and $BuildTag -notmatch '^v?\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$') {
+    throw 'BuildTag must be a release tag such as v14.0.0 or v14.0.0-test6.'
+}
+$sourceText = Get-Content -LiteralPath $src -Raw
+$embedded = [ordered]@{
+    '^\$script:DuneBuildMetadataPresent\s*=\s*\$false\s*$' = '$script:DuneBuildMetadataPresent = $true'
+    "^\`$script:DuneBuildCommit\s*=\s*''\s*$" = "`$script:DuneBuildCommit = '$BuildCommit'"
+    '^\$script:DuneBuildPrerelease\s*=\s*\$false\s*$' = if ($Prerelease) { '$script:DuneBuildPrerelease = $true' } else { '$script:DuneBuildPrerelease = $false' }
+    "^\`$script:DuneBuildTag\s*=\s*''\s*$" = "`$script:DuneBuildTag = '$BuildTag'"
+}
+foreach ($entry in $embedded.GetEnumerator()) {
+    $matches = [regex]::Matches($sourceText, $entry.Key, [Text.RegularExpressions.RegexOptions]::Multiline)
+    if ($matches.Count -ne 1) { throw "Build metadata placeholder mismatch for pattern: $($entry.Key)" }
+    $sourceText = [regex]::Replace($sourceText, $entry.Key, [string]$entry.Value, [Text.RegularExpressions.RegexOptions]::Multiline)
+}
+[IO.File]::WriteAllText($compileSrc, $sourceText, [Text.UTF8Encoding]::new($true))
 
 # Ensure ps2exe is available
 if (-not (Get-Module -ListAvailable ps2exe)) {
@@ -72,7 +88,7 @@ Import-Module ps2exe -Force
 
 $verNum = "$Version.0"  # ps2exe wants 4-part version
 
-Write-Host "Compiling DuneServer.exe (v$Version; prerelease=$([bool]$Prerelease); commit=$BuildCommit)..." -ForegroundColor Cyan
+Write-Host "Compiling DuneServer.exe (v$Version; prerelease=$([bool]$Prerelease); tag=$BuildTag; commit=$BuildCommit)..." -ForegroundColor Cyan
 
 # Critical flags (v6.1.7):
 #   -noConsole=$false : console-subsystem EXE so child kubectl/ssh/etc. inherit
@@ -84,7 +100,7 @@ Write-Host "Compiling DuneServer.exe (v$Version; prerelease=$([bool]$Prerelease)
 # the single-instance mutex check so subsequent shortcut clicks just open the
 # browser to the existing portal URL without prompting for UAC again.
 $ps2exeArgs = @{
-    InputFile      = $src
+    InputFile      = $compileSrc
     OutputFile     = $outExe
     IconFile       = $icon
     Title          = 'Dune Server'

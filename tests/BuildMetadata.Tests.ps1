@@ -5,26 +5,34 @@ BeforeAll {
 
 Describe 'Build artifact metadata' {
     BeforeEach {
-        $script:DuneServerDir = $TestDrive
-        Remove-Item -LiteralPath (Join-Path $TestDrive 'build-metadata.json') -Force -ErrorAction SilentlyContinue
+        $script:DuneBuildMetadataPresent = $false
+        $script:DuneBuildCommit = ''
+        $script:DuneBuildPrerelease = $false
+        $script:DuneBuildTag = ''
     }
 
     It 'reads a valid explicit prerelease artifact identity' {
-        '{"commit":"ABCDEF123456","prerelease":true}' |
-            Set-Content -LiteralPath (Join-Path $TestDrive 'build-metadata.json') -Encoding UTF8
+        $script:DuneBuildMetadataPresent = $true
+        $script:DuneBuildCommit = 'ABCDEF123456'
+        $script:DuneBuildPrerelease = $true
+        $script:DuneBuildTag = 'v14.0.0-test6'
         $metadata = Get-DuneBuildMetadata
         $metadata.present | Should -BeTrue
         $metadata.prerelease | Should -BeTrue
         $metadata.commit | Should -Be 'abcdef123456'
+        $metadata.tag | Should -Be 'v14.0.0-test6'
     }
 
-    It 'fails safely when metadata is missing or malformed' {
+    It 'fails safely when metadata is absent and sanitizes malformed fields' {
         (Get-DuneBuildMetadata).present | Should -BeFalse
-        '{broken' | Set-Content -LiteralPath (Join-Path $TestDrive 'build-metadata.json') -Encoding UTF8
+        $script:DuneBuildMetadataPresent = $true
+        $script:DuneBuildCommit = 'not-a-commit'
+        $script:DuneBuildTag = 'not a tag'
         $metadata = Get-DuneBuildMetadata
-        $metadata.present | Should -BeFalse
+        $metadata.present | Should -BeTrue
         $metadata.prerelease | Should -BeFalse
         $metadata.commit | Should -Be ''
+        $metadata.tag | Should -Be ''
     }
 
     It 'keeps build flavor explicit and stable by default across the pipeline' {
@@ -35,6 +43,9 @@ Describe 'Build artifact metadata' {
         $installer | Should -Match '\[switch\]\$Prerelease'
         $exe | Should -Match '\[switch\]\$Prerelease'
         $installer | Should -Match '-Prerelease:\$Prerelease'
+        $installer | Should -Match '\[string\]\$BuildTag'
+        $exe | Should -Match 'DuneServer\.generated\.ps1'
+        $exe | Should -Match 'DuneBuildMetadataPresent = \$true'
         $workflow | Should -Match 'prerelease_build'
         $workflow | Should -Not -Match 'github\.ref.*Prerelease'
     }
