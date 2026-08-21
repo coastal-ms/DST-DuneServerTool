@@ -138,4 +138,36 @@ describe('PortalAccountsManager progressive setup', () => {
     expect(screen.getByLabelText('Role')).toBeInTheDocument()
     expect(screen.getAllByText(/Owner and Admin currently have the same portal capabilities/i).length).toBeGreaterThan(0)
   })
+
+  it('uses any verified enabled Owner and does not regress setup when another Owner is reset', async () => {
+    const verifiedOwner = {
+      ...owner,
+      id: 'verified-owner-id',
+      username: 'VerifiedOwner',
+      locallyVerified: true,
+    }
+    const state = {
+      accountLoginEnabled: false,
+      accounts: [owner, verifiedOwner],
+      roles: ['owner', 'admin'],
+    }
+    vi.spyOn(globalThis, 'fetch').mockImplementation((input, init) => {
+      const path = String(input)
+      if (path === '/api/gameplay/players') return jsonResponse({ players: [] })
+      if (path.endsWith('/reset-password') && init?.method === 'POST') {
+        return jsonResponse({ ok: true, oneTimePassword: 'reset-password-value' })
+      }
+      return jsonResponse(state)
+    })
+    const user = userEvent.setup()
+    render(<PortalAccountsManager />)
+
+    expect(await screen.findByText('Step 4 — Enable account login')).toBeInTheDocument()
+    expect(screen.getByText(/verified locally on this host: VerifiedOwner/i)).toBeInTheDocument()
+    await user.click(screen.getByText('Account management'))
+    await user.click(screen.getAllByRole('button', { name: 'Reset password' })[0])
+    expect(await screen.findByText('reset-password-value')).toBeInTheDocument()
+    expect(screen.getByText('Step 4 — Enable account login')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Enable account login' })).toBeInTheDocument()
+  })
 })

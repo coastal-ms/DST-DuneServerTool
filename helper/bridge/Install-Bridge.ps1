@@ -36,8 +36,26 @@ Set-StrictMode -Version Latest
 $script:ExpectedBridgeVersion = '2.0.0'
 $script:ExpectedBridgeProtocol = '2'
 
-function Get-DuneBridgeRuntimeProcessIds {
-    param([string[]]$ScriptPaths)
+function ConvertFrom-DuneWindowsCommandLine {
+    param([string]$CommandLine)
+    if ([string]::IsNullOrWhiteSpace($CommandLine)) { return @() }
+    if (([regex]::Matches($CommandLine, '"').Count % 2) -ne 0) { return @() }
+    $tokens = @()
+    foreach ($match in [regex]::Matches($CommandLine, '(?:"([^"]*)"|(\S+))')) {
+        $tokens += if ($match.Groups[1].Success) { $match.Groups[1].Value } else { $match.Groups[2].Value }
+    }
+    return $tokens
+}
+
+function Test-DuneBridgePowerShellInvocationTarget {
+    param(
+        [string]$CommandLine,
+        [string[]]$ScriptPaths,
+        [int]$ProcessId
+    )
+    if ($ProcessId -eq $PID) { return $false }
+    $arguments = @(ConvertFrom-DuneWindowsCommandLine $CommandLine)
+    if ($arguments.Count -lt 2) { return $false }
     $resolvedPaths = @($ScriptPaths | ForEach-Object {
         if ($_ -and (Test-Path -LiteralPath $_)) {
             [IO.Path]::GetFullPath((Resolve-Path -LiteralPath $_).Path)
@@ -45,16 +63,39 @@ function Get-DuneBridgeRuntimeProcessIds {
             [IO.Path]::GetFullPath($_)
         }
     })
-    if ($resolvedPaths.Count -eq 0) { return @() }
+    $isTarget = {
+        param([string]$Candidate)
+        try {
+            $fullPath = [IO.Path]::GetFullPath($Candidate)
+            return @($resolvedPaths | Where-Object { $_ -ieq $fullPath }).Count -gt 0
+        } catch { return $false }
+    }
+
+    # Legacy direct form: pwsh.exe "...\DstHelperBridge.ps1" ...
+    if (& $isTarget $arguments[1]) { return $true }
+
+    $fileIndexes = @()
+    for ($i = 1; $i -lt $arguments.Count; $i++) {
+        if ($arguments[$i] -ieq '-File') { $fileIndexes += $i }
+        if ($arguments[$i] -in @('-Command', '-EncodedCommand', '-c', '-e')) { return $false }
+    }
+    if ($fileIndexes.Count -ne 1) { return $false }
+    $fileIndex = $fileIndexes[0]
+    if ($fileIndex + 1 -ge $arguments.Count) { return $false }
+    return (& $isTarget $arguments[$fileIndex + 1])
+}
+
+function Get-DuneBridgeRuntimeProcessIds {
+    param([string[]]$ScriptPaths)
+    if (@($ScriptPaths | Where-Object { $_ }).Count -eq 0) { return @() }
 
     $matches = foreach ($process in @(Get-CimInstance Win32_Process -ErrorAction SilentlyContinue)) {
         if ($process.Name -notin @('pwsh.exe', 'powershell.exe') -or -not $process.CommandLine) { continue }
-        foreach ($path in $resolvedPaths) {
-            $pattern = '(?i)(?:^|[\s"''])' + [regex]::Escape($path) + '(?:[\s"'']|$)'
-            if ([regex]::IsMatch([string]$process.CommandLine, $pattern)) {
-                [int]$process.ProcessId
-                break
-            }
+        if (Test-DuneBridgePowerShellInvocationTarget `
+            -CommandLine ([string]$process.CommandLine) `
+            -ScriptPaths $ScriptPaths `
+            -ProcessId ([int]$process.ProcessId)) {
+            [int]$process.ProcessId
         }
     }
     return @($matches | Sort-Object -Unique)

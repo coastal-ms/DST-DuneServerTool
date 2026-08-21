@@ -107,10 +107,40 @@ Describe 'Versioned bridge runtime repair' {
                 [pscustomobject]@{ Name='pwsh.exe'; ProcessId=41; CommandLine="pwsh -File `"$supervisor`"" },
                 [pscustomobject]@{ Name='powershell.exe'; ProcessId=42; CommandLine="powershell -File `"$daemon`"" },
                 [pscustomobject]@{ Name='pwsh.exe'; ProcessId=43; CommandLine="pwsh -File `"$daemon.bad`"" },
-                [pscustomobject]@{ Name='other.exe'; ProcessId=44; CommandLine="other `"$daemon`"" }
+                [pscustomobject]@{ Name='other.exe'; ProcessId=44; CommandLine="other `"$daemon`"" },
+                [pscustomobject]@{ Name='pwsh.exe'; ProcessId=45; CommandLine="pwsh -Command `"Get-Content '$daemon'`"" },
+                [pscustomobject]@{ Name='pwsh.exe'; ProcessId=$PID; CommandLine="pwsh -File `"$daemon`"" }
             )
         }
         @(Get-DuneBridgeRuntimeProcessIds -ScriptPaths @($supervisor, $daemon)) | Should -Be @(41, 42)
+    }
+
+    It 'accepts only real quoted, unquoted, or known direct script invocation targets' {
+        $daemon = 'C:\DuneBridge\DstHelperBridge.ps1'
+        Test-DuneBridgePowerShellInvocationTarget `
+            -CommandLine 'pwsh.exe -NoProfile -File "C:\DuneBridge\DstHelperBridge.ps1" -Port 47900' `
+            -ScriptPaths $daemon -ProcessId 101 | Should -BeTrue
+        Test-DuneBridgePowerShellInvocationTarget `
+            -CommandLine 'powershell.exe -File C:\DuneBridge\DstHelperBridge.ps1 -Port 47900' `
+            -ScriptPaths $daemon -ProcessId 102 | Should -BeTrue
+        Test-DuneBridgePowerShellInvocationTarget `
+            -CommandLine 'pwsh.exe "C:\DuneBridge\DstHelperBridge.ps1" -Port 47900' `
+            -ScriptPaths $daemon -ProcessId 103 | Should -BeTrue
+
+        @(
+            'pwsh.exe -Command "Get-Content ''C:\DuneBridge\DstHelperBridge.ps1''"',
+            'pwsh.exe -Command "Test-Path ''C:\DuneBridge\DstHelperBridge.ps1''"',
+            'pwsh.exe -File C:\DuneBridge\DstHelperBridge.ps1.bad',
+            'pwsh.exe -File "C:\DuneBridge\DstHelperBridge.ps1',
+            'pwsh.exe -File',
+            'pwsh.exe -File C:\other.ps1 C:\DuneBridge\DstHelperBridge.ps1'
+        ) | ForEach-Object {
+            Test-DuneBridgePowerShellInvocationTarget -CommandLine $_ -ScriptPaths $daemon -ProcessId 104 |
+                Should -BeFalse
+        }
+        Test-DuneBridgePowerShellInvocationTarget `
+            -CommandLine 'pwsh.exe -File C:\DuneBridge\DstHelperBridge.ps1' `
+            -ScriptPaths $daemon -ProcessId $PID | Should -BeFalse
     }
 
     It 'stops every exact stale supervisor or daemon PID without name or wildcard termination' {

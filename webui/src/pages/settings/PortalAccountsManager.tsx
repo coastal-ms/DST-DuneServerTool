@@ -38,9 +38,13 @@ export function PortalAccountsManager() {
   const load = async () => {
     const next = await getPortalAccounts()
     setState(next)
-    if (!verifyUsername) {
-      const owner = next.accounts.find(a => a.role === 'owner' && a.enabled)
-      if (owner) setVerifyUsername(owner.username)
+    const owners = next.accounts.filter(account => account.role === 'owner' && account.enabled)
+    const preferredOwner = owners.find(account => account.locallyVerified) ?? owners[0]
+    if (preferredOwner) {
+      setVerifyUsername(current => {
+        const currentOwner = owners.find(account => account.username === current)
+        return currentOwner?.locallyVerified ? current : preferredOwner.username
+      })
     }
   }
 
@@ -100,9 +104,11 @@ export function PortalAccountsManager() {
       : 'Account login disabled. Existing magic-link behavior is restored.')
   })
 
-  const enabledOwner = state?.accounts.find(account => account.role === 'owner' && account.enabled)
-  const ownerVerified = !!enabledOwner?.locallyVerified
-  const setupStep = !enabledOwner ? 1 : oneTimePassword ? 2 : !ownerVerified ? 3 : 4
+  const enabledOwners = state?.accounts.filter(account => account.role === 'owner' && account.enabled) ?? []
+  const verifiedOwner = enabledOwners.find(account => account.locallyVerified)
+  const selectedOwner = verifiedOwner ?? enabledOwners[0]
+  const ownerVerified = !!verifiedOwner
+  const setupStep = !selectedOwner ? 1 : ownerVerified ? 4 : oneTimePassword ? 2 : 3
   const modeEnabled = !!state?.accountLoginEnabled
 
   const createForm = (firstOwner: boolean) => (
@@ -236,8 +242,8 @@ export function PortalAccountsManager() {
               </div>
               <div className="flex flex-wrap gap-2">
                 <button className="btn-primary" disabled={busy || !verifyUsername || !verifyPassword} onClick={() => void verify()}>Verify Owner password locally</button>
-                {enabledOwner && <button className="btn-ghost" disabled={busy} onClick={() => void run(async () => {
-                  const result = await resetPortalAccountPassword(enabledOwner.id)
+                {selectedOwner && <button className="btn-ghost" disabled={busy} onClick={() => void run(async () => {
+                  const result = await resetPortalAccountPassword(selectedOwner.id)
                   setOneTimePassword(result.oneTimePassword)
                   setPasswordCopied(false)
                   setCopyError('')
@@ -246,11 +252,12 @@ export function PortalAccountsManager() {
             </>}
             {setupStep === 4 && <>
               <div className="font-semibold">Step 4 — Enable account login</div>
+              {passwordPanel}
               <p className="text-sm text-text-muted">
                 The Browser Portal QR and link become a stable token-free login URL. Existing magic-link browser sessions stop working.
                 You can always use local Settings to Disable account login and restore legacy links.
               </p>
-              <div className="text-sm text-success">✓ Owner password verified locally on this host.</div>
+              <div className="text-sm text-success">✓ Owner password verified locally on this host: {verifiedOwner?.username}</div>
               <label className="flex items-start gap-2 rounded-lg border border-warning/40 bg-warning/10 p-3 text-xs text-text-muted">
                 <input
                   type="checkbox"
