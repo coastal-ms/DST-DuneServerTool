@@ -34,6 +34,8 @@
 [CmdletBinding()]
 param(
     [string]$Version = '14.0.0',
+    [string]$BuildCommit = '',
+    [switch]$Prerelease,
     [switch]$Quiet
 )
 
@@ -44,10 +46,22 @@ $src       = Join-Path $appRoot 'DuneServer.ps1'
 $icon      = Join-Path $appRoot 'assets\icon.ico'
 $outDir    = Join-Path $appRoot 'build\output'
 $outExe    = Join-Path $outDir 'DuneServer.exe'
+$metadata  = Join-Path $appRoot 'server\build-metadata.json'
 
 if (-not (Test-Path $src))  { throw "Source not found: $src" }
 if (-not (Test-Path $icon)) { throw "Icon not found: $icon" }
 if (-not (Test-Path $outDir)) { New-Item -ItemType Directory -Force -Path $outDir | Out-Null }
+
+if (-not $BuildCommit) {
+    $repoRoot = Split-Path -Parent $appRoot
+    try { $BuildCommit = (& git -C $repoRoot rev-parse --short=12 HEAD 2>$null).Trim() } catch { $BuildCommit = '' }
+}
+$BuildCommit = $BuildCommit.Trim().ToLowerInvariant()
+if ($BuildCommit -and $BuildCommit -notmatch '^[0-9a-f]{7,40}$') {
+    throw 'BuildCommit must be a 7-40 character hexadecimal Git commit id.'
+}
+([ordered]@{ commit=$BuildCommit; prerelease=[bool]$Prerelease } | ConvertTo-Json) |
+    Set-Content -LiteralPath $metadata -Encoding UTF8 -Force
 
 # Ensure ps2exe is available
 if (-not (Get-Module -ListAvailable ps2exe)) {
@@ -58,7 +72,7 @@ Import-Module ps2exe -Force
 
 $verNum = "$Version.0"  # ps2exe wants 4-part version
 
-Write-Host "Compiling DuneServer.exe (v$Version)..." -ForegroundColor Cyan
+Write-Host "Compiling DuneServer.exe (v$Version; prerelease=$([bool]$Prerelease); commit=$BuildCommit)..." -ForegroundColor Cyan
 
 # Critical flags (v6.1.7):
 #   -noConsole=$false : console-subsystem EXE so child kubectl/ssh/etc. inherit

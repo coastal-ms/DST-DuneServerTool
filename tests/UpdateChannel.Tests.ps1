@@ -130,12 +130,16 @@ Describe 'Get-DuneSelectedRelease channel resolution' {
 }
 
 Describe 'Get-DuneUpdateInstalledPrerelease (running-build marker)' {
+    BeforeEach {
+        $script:DuneToolVersion = '14.0.0'
+        function global:Get-DuneBuildMetadata { @{ commit='abcdef123456'; prerelease=$false; present=$true } }
+    }
     It 'is false when the marker key is absent (normal stable install)' {
         function global:Read-DuneConfigRaw { @{ UpdateChannel = 'stable' } }
         Get-DuneUpdateInstalledPrerelease | Should -BeFalse
     }
     It 'is true only after a pre-release build was installed' {
-        function global:Read-DuneConfigRaw { @{ UpdateInstalledPrerelease = 'true' } }
+        function global:Read-DuneConfigRaw { @{ UpdateInstalledPrerelease = 'true'; UpdateInstalledTag = 'v14.0.0-test6' } }
         Get-DuneUpdateInstalledPrerelease | Should -BeTrue
     }
     It 'is false when a later stable install wrote false' {
@@ -146,6 +150,27 @@ Describe 'Get-DuneUpdateInstalledPrerelease (running-build marker)' {
         # User toggled to Test (preference set) but never installed a pre-release.
         function global:Read-DuneConfigRaw { @{ UpdateChannel = 'test' } }
         Get-DuneUpdateInstalledPrerelease | Should -BeFalse
+    }
+    It 'returns the exact installed tag only when its core matches the runtime' {
+        function global:Read-DuneConfigRaw { @{ UpdateInstalledPrerelease='true'; UpdateInstalledTag='v14.0.0-test6' } }
+        $info = Get-DuneUpdateRunningBuildInfo
+        $info.installedTag | Should -Be 'v14.0.0-test6'
+        $info.runningIsPrerelease | Should -BeTrue
+    }
+    It 'ignores a stale installed tag and marker when its core differs' {
+        function global:Read-DuneConfigRaw { @{ UpdateInstalledPrerelease='true'; UpdateInstalledTag='v13.9.0-test2' } }
+        $info = Get-DuneUpdateRunningBuildInfo
+        $info.installedTag | Should -Be ''
+        $info.runningIsPrerelease | Should -BeFalse
+        $info.buildCommit | Should -Be 'abcdef123456'
+    }
+    It 'uses explicit artifact metadata for a manual test candidate with no tag' {
+        function global:Read-DuneConfigRaw { @{} }
+        function global:Get-DuneBuildMetadata { @{ commit='1234567890ab'; prerelease=$true; present=$true } }
+        $info = Get-DuneUpdateRunningBuildInfo
+        $info.installedTag | Should -Be ''
+        $info.runningIsPrerelease | Should -BeTrue
+        $info.buildCommit | Should -Be '1234567890ab'
     }
 }
 

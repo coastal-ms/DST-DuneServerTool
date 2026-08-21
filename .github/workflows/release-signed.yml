@@ -49,6 +49,11 @@ on:
         type: boolean
         required: false
         default: false
+      prerelease_build:
+        description: 'Stamp this artifact as a TEST/pre-release build'
+        type: boolean
+        required: false
+        default: false
 
 permissions:
   contents: write   # needed to upload the asset to an existing release
@@ -103,6 +108,7 @@ jobs:
         run: |
           $biArgs = @('-SkipInstaller')
           if ('${{ inputs.skip_version_check }}' -eq 'true') { $biArgs += '-SkipVersionCheck' }
+          if ('${{ inputs.prerelease_build }}' -eq 'true') { $biArgs += '-Prerelease' }
           & '${{ github.workspace }}\app\installer\Build-Installer.ps1' @biArgs
 
       # ── Sign the two inner exes IN PLACE (only if SignPath is configured). ──
@@ -178,6 +184,7 @@ jobs:
         run: |
           $biArgs = @('-SkipWebBuild','-SkipExeBuild','-SkipShellBuild','-SkipSoloBuild')
           if ('${{ inputs.skip_version_check }}' -eq 'true') { $biArgs += '-SkipVersionCheck' }
+          if ('${{ inputs.prerelease_build }}' -eq 'true') { $biArgs += '-Prerelease' }
           & '${{ github.workspace }}\app\installer\Build-Installer.ps1' @biArgs
 
       # ── Sign the installer itself. ──

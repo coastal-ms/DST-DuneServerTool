@@ -20,6 +20,7 @@ import { ShellPreferencesCard } from './settings/ShellPreferencesCard'
 import { SectionErrorBoundary } from '../components/SectionErrorBoundary'
 import { CollapsibleCard, useCardCollapse } from '../components/CollapsibleCard'
 import { isShellHost } from '../util/shellBridge'
+import { getTestBuildIdentity } from '../util/testBuildIdentity'
 
 const FIELDS: {
   key: string
@@ -216,6 +217,7 @@ export function Settings() {
   const [updInstalling, setUpdInstalling] = useState(false)
   const [updMsg, setUpdMsg] = useState<string | null>(null)
   const [updErr, setUpdErr] = useState<string | null>(null)
+  const testBuild = getTestBuildIdentity(updCheck ?? undefined)
 
   // Collapsible-card state — both update cards start minimized.
   const { open: updExpanded, setOpen: setUpdExpanded } = useCardCollapse('settings.updates', false)
@@ -502,9 +504,9 @@ export function Settings() {
             <h2 className="text-lg font-semibold">Dune Server Tool updates</h2>
           </div>
           <div className="flex items-center gap-2">
-            {updChannel === 'test' && (
-              <span className="pill-warning text-xs flex items-center gap-1">
-                <Icon name="FlaskConical" size={11} /> Test
+            {testBuild && (
+              <span className="pill-warning text-xs flex items-center gap-1" title={testBuild.title}>
+                <Icon name="FlaskConical" size={11} /> {testBuild.label}
               </span>
             )}
             {updCheck && (
@@ -523,12 +525,11 @@ export function Settings() {
 
         {updExpanded && (
           <div className="px-6 pb-5 space-y-3">
-            {updCheck?.runningIsPrerelease && (
+            {testBuild && (
               <div className="rounded-md border border-warning/40 bg-warning/10 px-3 py-2.5 flex items-center gap-3 flex-wrap">
                 <Icon name="FlaskConical" size={15} className="text-warning shrink-0" />
                 <span className="text-sm">
-                  You're running a <span className="font-semibold text-warning">TEST build</span>
-                  {updCheck.currentVersion ? ` (${fmtToolVersion(updCheck.currentVersion)})` : ''}. Done testing? Return to the live release.
+                  You're running <span className="font-semibold text-warning">{testBuild.label}</span>. Done testing? Return to the live release.
                 </span>
                 <button
                   type="button"
@@ -543,7 +544,7 @@ export function Settings() {
             )}
             <div className="flex items-center justify-between">
               <p className="text-sm text-text-dim">
-                Checks GitHub releases for newer versions. Installs silently — Start Menu icon keeps working, your config in <span className="font-mono">%APPDATA%\DuneServer</span> is preserved.
+                Checks GitHub releases for newer versions. Settings installs launch the visible installer wizard; your config in <span className="font-mono">%APPDATA%\DuneServer</span> is preserved.
               </p>
               <button type="button" onClick={onCheckUpdate} disabled={updChecking} className="btn-secondary ml-3 shrink-0">
                 <Icon name={updChecking ? 'Loader2' : 'RefreshCw'} size={15} className={updChecking ? 'animate-spin' : ''} />

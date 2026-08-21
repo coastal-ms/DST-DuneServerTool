@@ -7,6 +7,7 @@ import { useUpdateCheck } from '../hooks/useUpdateCheck'
 import { api } from '../api/client'
 import { fmtToolVersion } from '../format'
 import { isLocalViewer, isWindowsViewer } from '../util/viewer'
+import { getTestBuildIdentity } from '../util/testBuildIdentity'
 
 // WebView2 host bridge — present only when the portal is rendered inside the
 // native DuneShell.exe app window (not in a regular browser tab). We use it to
@@ -25,7 +26,7 @@ type Props = {
 export function Sidebar({ collapsed }: Props) {
   const { data: upd } = useUpdateCheck()
   const version = upd?.currentVersion ?? ''
-  const onTestChannel = upd?.runningIsPrerelease === true
+  const testBuild = getTestBuildIdentity(upd)
   const [showPortalConfirm, setShowPortalConfirm] = useState(false)
   const [portalDetaching, setPortalDetaching] = useState(false)
   const [portalError, setPortalError] = useState<string | null>(null)
@@ -264,10 +265,10 @@ export function Sidebar({ collapsed }: Props) {
           <Icon name="Coffee" size={collapsed ? 14 : 11} />
           {!collapsed && <span>Buy Me a Coffee</span>}
         </a>
-        {collapsed && onTestChannel && (
+        {collapsed && testBuild && (
           <NavLink
             to="/settings"
-            title="Running a pre-release Test build. Click to open Settings."
+            title={`${testBuild.title}. Click to open Settings.`}
             className="w-full flex items-center justify-center h-8 rounded-md border border-warning/50 text-warning hover:bg-warning/15 hover:border-warning/70 transition-colors"
           >
             <Icon name="FlaskConical" size={14} />
@@ -277,13 +278,13 @@ export function Sidebar({ collapsed }: Props) {
           <div className="flex items-center justify-between">
             <span className="flex items-center gap-1.5">
               {version ? fmtToolVersion(version) : '—'}
-              {onTestChannel && (
+              {testBuild && (
                 <NavLink
                   to="/settings"
-                  title="Running a pre-release Test build. Click to open Settings, switch to Stable, and install the released build."
+                  title={`${testBuild.title}. Click to open Settings, switch to Stable, and install the released build.`}
                   className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] font-semibold uppercase tracking-wider border border-warning/40 bg-warning/10 text-warning hover:bg-warning/20 transition-colors"
                 >
-                  <Icon name="FlaskConical" size={9} /> Test
+                  <Icon name="FlaskConical" size={9} /> {testBuild.label}
                 </NavLink>
               )}
             </span>

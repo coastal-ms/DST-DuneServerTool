@@ -264,12 +264,15 @@ Register-DuneRoute -Method GET -Path '/api/update/check' -Handler {
         $rel     = Get-DuneSelectedRelease -Force:$force
         $current = [string]$script:DuneToolVersion
         $channel = Get-DuneUpdateChannel
-        $runningIsPrerelease = Get-DuneUpdateInstalledPrerelease
+        $buildInfo = Get-DuneUpdateRunningBuildInfo
+        $runningIsPrerelease = [bool]$buildInfo.runningIsPrerelease
         if (-not $rel -or $rel.error) {
             Write-DuneJson -Response $res -Body @{
                 available           = $false
                 channel             = $channel
                 runningIsPrerelease = $runningIsPrerelease
+                installedTag        = [string]$buildInfo.installedTag
+                buildCommit         = [string]$buildInfo.buildCommit
                 currentVersion      = $current
                 checkedAt           = (Get-Date).ToString('o')
                 error               = $rel.error
@@ -310,6 +313,8 @@ Register-DuneRoute -Method GET -Path '/api/update/check' -Handler {
             assetMissing    = ($available -and -not $hasAsset)
             channel         = $channel
             runningIsPrerelease = $runningIsPrerelease
+            installedTag    = [string]$buildInfo.installedTag
+            buildCommit     = [string]$buildInfo.buildCommit
             isPrerelease    = [bool]$rel.isPrerelease
             selectedTag     = $rel.tag
             currentVersion  = $current

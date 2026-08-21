@@ -33,6 +33,9 @@ here cover everything those tags shipped.
 - The global Update Banner now installs updates silently and relaunches DST
   automatically, while every Settings-initiated update, reinstall, and Return
   to Stable action continues to launch the visible installer wizard.
+- Test-build indicators now show the exact matching installed GitHub tag, or
+  the installer-stamped source commit for a manually installed test candidate.
+  Stale tags from a different core version are ignored.
 - The existing DST dashboard now adapts to phone and tablet browsers with
   safe-area spacing, touch-sized controls, and a mobile navigation drawer
   generated from the same pages and groups as the desktop sidebar.

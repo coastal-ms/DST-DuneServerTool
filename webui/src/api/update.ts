@@ -36,6 +36,10 @@ export interface UpdateCheck {
    * the next install) does not light it up.
    */
   runningIsPrerelease?: boolean
+  /** Exact in-app-installed tag, present only when its core matches this runtime. */
+  installedTag?: string
+  /** Source commit stamped into this installer, for manually installed test candidates. */
+  buildCommit?: string
   /** True when the resolved release is a GitHub pre-release (test channel). */
   isPrerelease?: boolean
   /** The exact tag the updater resolved to act on (stable latest or pinned pre-release). */

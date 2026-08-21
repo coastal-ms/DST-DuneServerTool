@@ -36,6 +36,7 @@ tmp/
 # Desktop app build artifacts (built locally before each release)
 app/build/output/
 app/installer/output/
+app/server/build-metadata.json
 app/tools/**/bin/
 app/tools/**/obj/
 

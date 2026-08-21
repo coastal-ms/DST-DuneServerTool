@@ -14,6 +14,10 @@ param(
     [switch]$SkipShellBuild,
     [switch]$SkipSoloBuild,
     [switch]$SkipVersionCheck,
+    # Explicit artifact identity. Normal release/local builds default stable.
+    # Test candidates must pass -Prerelease; branch names are never inferred.
+    [switch]$Prerelease,
+    [string]$BuildCommit = '',
     # Build the raw artifacts (webui + DuneServer.exe + DuneShell.exe +
     # DuneSoloDb.exe) but STOP
     # before compiling the Inno Setup installer. Used by the signed-release CI
@@ -37,6 +41,7 @@ $outDir     = Join-Path $appRoot 'installer\output'
 $installer  = Join-Path $outDir 'DuneServerSetup.exe'
 $soloProj   = Join-Path $appRoot 'tools\DuneSoloDb\DuneSoloDb.csproj'
 $soloExe    = Join-Path $appRoot 'tools\DuneSoloDb\bin\Release\net10.0-windows\win-x64\publish\DuneSoloDb.exe'
+$buildMetadataPath = Join-Path $appRoot 'server\build-metadata.json'
 
 # ---------------------------------------------------------------------------
 # Pre-flight: version-stamp sync check.
@@ -62,6 +67,7 @@ if (-not $SkipVersionCheck) {
         if (-not (Test-Path -LiteralPath $vf.Path)) {
             throw "Version-stamp file not found: $($vf.Path)"
         }
+
         $m = Select-String -Path $vf.Path -Pattern $vf.Pattern -List
         if (-not $m) {
             throw "Could not find version stamp in $($vf.Path) using pattern: $($vf.Pattern)"
@@ -85,6 +91,22 @@ if (-not $SkipVersionCheck) {
     Write-Host "  All 5 stamps match: $($distinct[0])" -ForegroundColor Green
     Write-Host ""
 }
+
+# Generate untracked per-artifact metadata without changing any of the five
+# version stamps. This file is bundled under server\ and read at runtime.
+if (-not $BuildCommit) {
+    try { $BuildCommit = (& git -C $repoRoot rev-parse --short=12 HEAD 2>$null).Trim() } catch { $BuildCommit = '' }
+}
+$BuildCommit = $BuildCommit.Trim().ToLowerInvariant()
+if ($BuildCommit -and $BuildCommit -notmatch '^[0-9a-f]{7,40}$') {
+    throw 'BuildCommit must be a 7-40 character hexadecimal Git commit id.'
+}
+([ordered]@{
+    commit = $BuildCommit
+    prerelease = [bool]$Prerelease
+} | ConvertTo-Json) | Set-Content -LiteralPath $buildMetadataPath -Encoding UTF8 -Force
+Write-Host "Build identity: prerelease=$([bool]$Prerelease), commit=$(if ($BuildCommit) { $BuildCommit } else { '(unknown)' })" -ForegroundColor Cyan
+Write-Host ''
 
 # Locate ISCC.exe
 $isccCandidates = @(
@@ -204,7 +226,7 @@ if (-not (Test-Path (Join-Path $webuiDist 'index.html'))) {
 # Build the .exe (unless skipped)
 if (-not $SkipExeBuild) {
     Write-Host "Building DuneServer.exe first..." -ForegroundColor Cyan
-    & (Join-Path $appRoot 'build\Build-Exe.ps1') -Quiet
+    & (Join-Path $appRoot 'build\Build-Exe.ps1') -Quiet -BuildCommit $BuildCommit -Prerelease:$Prerelease
     Write-Host ""
 }
 
