@@ -480,10 +480,13 @@ internal static partial class Program
         PtcAdapter adapter)
     {
         var inspection = InspectPath(input);
-        if (!adapter.SchemaFingerprints.Contains(inspection.SchemaFingerprint))
+        if (!string.Equals(
+                inspection.SchemaFingerprint,
+                adapter.SchemaFingerprint,
+                StringComparison.OrdinalIgnoreCase))
         {
             throw new InvalidDataException(
-                $"PTC progression adapter schema mismatch: expected one of {string.Join(", ", adapter.SchemaFingerprints.Order())}, found {inspection.SchemaFingerprint}.");
+                $"PTC progression adapter schema mismatch: expected {adapter.SchemaFingerprint}, found {inspection.SchemaFingerprint}.");
         }
     }
 
@@ -897,21 +900,9 @@ internal static partial class Program
         }
         var fremen = root.GetProperty("find_the_fremen");
         var skills = root.GetProperty("enable_all_skills");
-        var schemaFingerprints = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
-        {
-            root.GetProperty("schema_fingerprint").GetString() ?? ""
-        };
-        if (root.TryGetProperty("compatible_schema_fingerprints", out var compatibleFingerprints))
-        {
-            foreach (var fingerprint in compatibleFingerprints.EnumerateArray())
-            {
-                var value = fingerprint.GetString();
-                if (!string.IsNullOrWhiteSpace(value)) { schemaFingerprints.Add(value); }
-            }
-        }
         return new PtcAdapter(
             Id: root.GetProperty("id").GetString() ?? "",
-            SchemaFingerprints: schemaFingerprints,
+            SchemaFingerprint: root.GetProperty("schema_fingerprint").GetString() ?? "",
             MaxLevel: specializations.GetProperty("max_level").GetInt32(),
             MaxXp: specializations.GetProperty("max_xp").GetInt32(),
             Tracks: tracks,
@@ -964,7 +955,7 @@ internal static partial class Program
 
     private sealed record PtcAdapter(
         string Id,
-        HashSet<string> SchemaFingerprints,
+        string SchemaFingerprint,
         int MaxLevel,
         int MaxXp,
         IReadOnlyDictionary<string, int> Tracks,
