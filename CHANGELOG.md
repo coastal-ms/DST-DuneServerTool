@@ -22,6 +22,9 @@ here cover everything those tags shipped.
 - The existing Remote Access QR code now opens the same authenticated Browser
   Portal link shown by the copy action, so a normal phone or tablet camera can
   open the DST dashboard without the native mobile app.
+- The existing DST dashboard now adapts to phone and tablet browsers with
+  safe-area spacing, touch-sized controls, and a mobile navigation drawer
+  generated from the same pages and groups as the desktop sidebar.
 
 ## [13.8.4] - 2026-08-21
 
