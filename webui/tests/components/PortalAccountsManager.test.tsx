@@ -38,6 +38,32 @@ describe('PortalAccountsManager', () => {
     expect(screen.getByText(/cannot be recovered/i)).toBeInTheDocument()
   })
 
+  it('confirms when the one-time password is copied', async () => {
+    vi.spyOn(globalThis, 'fetch').mockImplementation((input, init) => {
+      const path = String(input)
+      if (path === '/api/gameplay/players') return jsonResponse({ players: [] })
+      if (path === '/api/remote-access/portal-accounts' && init?.method === 'POST') {
+        return jsonResponse({
+          account: { id: 'x', username: 'Owner', role: 'owner', enabled: true, mustChangePassword: true },
+          oneTimePassword: 'generated-password-value',
+        }, 201)
+      }
+      return jsonResponse({ accountLoginEnabled: false, accounts: [], roles: ['owner', 'admin'] })
+    })
+    const user = userEvent.setup()
+    const writeText = vi.spyOn(navigator.clipboard, 'writeText').mockResolvedValue(undefined)
+    render(<PortalAccountsManager />)
+
+    await user.type(await screen.findByLabelText('Username'), 'Owner')
+    await user.selectOptions(screen.getByLabelText('Role'), 'owner')
+    await user.click(screen.getByRole('button', { name: 'Create account' }))
+    await user.click(await screen.findByRole('button', { name: 'Copy' }))
+
+    expect(writeText).toHaveBeenCalledWith('generated-password-value')
+    expect(screen.getByRole('button', { name: 'Copied' })).toBeInTheDocument()
+    expect(screen.getByText('One-time password copied to the clipboard.')).toBeInTheDocument()
+  })
+
   it('explains the safe enablement step', async () => {
     vi.spyOn(globalThis, 'fetch').mockImplementation((input) => {
       if (String(input) === '/api/gameplay/players') return jsonResponse({ players: [] })

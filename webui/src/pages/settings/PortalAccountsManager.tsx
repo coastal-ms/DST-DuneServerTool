@@ -26,6 +26,8 @@ export function PortalAccountsManager() {
   const [characterId, setCharacterId] = useState('')
   const [explicitPassword, setExplicitPassword] = useState('')
   const [oneTimePassword, setOneTimePassword] = useState('')
+  const [passwordCopied, setPasswordCopied] = useState(false)
+  const [copyError, setCopyError] = useState('')
   const [verifyUsername, setVerifyUsername] = useState('')
   const [verifyPassword, setVerifyPassword] = useState('')
   const [busy, setBusy] = useState(false)
@@ -64,9 +66,24 @@ export function PortalAccountsManager() {
       gameCharacterLabel: player?.name ?? '',
     })
     setOneTimePassword(result.oneTimePassword)
+    setPasswordCopied(false)
+    setCopyError('')
     setUsername(''); setExplicitPassword(''); setCharacterId('')
     setMessage('Account created. Copy the one-time password now; it cannot be recovered.')
   })
+
+  const copyOneTimePassword = async () => {
+    if (!oneTimePassword) return
+    setCopyError('')
+    try {
+      await navigator.clipboard.writeText(oneTimePassword)
+      setPasswordCopied(true)
+      window.setTimeout(() => setPasswordCopied(false), 2000)
+    } catch {
+      setPasswordCopied(false)
+      setCopyError('Could not copy automatically. Select the password above and copy it manually.')
+    }
+  }
 
   const verify = () => run(async () => {
     await verifyPortalOwner(verifyUsername, verifyPassword)
@@ -96,8 +113,13 @@ export function PortalAccountsManager() {
         <div className="bg-warning/10 border border-warning/40 rounded-lg p-3">
           <div className="font-semibold text-warning text-sm">One-time password - shown once</div>
           <code className="block select-all break-all mt-2 text-base">{oneTimePassword}</code>
-          <button className="btn-secondary mt-2" onClick={() => { void navigator.clipboard.writeText(oneTimePassword) }}><Icon name="Copy" size={14} /> Copy</button>
-          <button className="btn-ghost mt-2" onClick={() => setOneTimePassword('')}>Dismiss</button>
+          <button type="button" className="btn-secondary mt-2" onClick={() => { void copyOneTimePassword() }}>
+            <Icon name={passwordCopied ? 'Check' : 'Copy'} size={14} /> {passwordCopied ? 'Copied' : 'Copy'}
+          </button>
+          <button type="button" className="btn-ghost mt-2" onClick={() => { setOneTimePassword(''); setPasswordCopied(false); setCopyError('') }}>Dismiss</button>
+          <div aria-live="polite" className={`mt-2 text-xs ${copyError ? 'text-danger' : 'text-success'}`}>
+            {copyError || (passwordCopied ? 'One-time password copied to the clipboard.' : '')}
+          </div>
         </div>
       )}
       <div className="grid gap-3 sm:grid-cols-2">
@@ -142,6 +164,8 @@ export function PortalAccountsManager() {
             <button className="btn-secondary" disabled={busy} onClick={() => void run(async () => {
               const result = await resetPortalAccountPassword(account.id)
               setOneTimePassword(result.oneTimePassword)
+              setPasswordCopied(false)
+              setCopyError('')
               setMessage('Password reset. All sessions for this account were revoked.')
             })}>Reset password</button>
             <button className="btn-ghost" disabled={busy} onClick={() => void run(async () => { await revokePortalAccountSessions(account.id); setMessage('Sessions revoked.') })}>Revoke sessions</button>
