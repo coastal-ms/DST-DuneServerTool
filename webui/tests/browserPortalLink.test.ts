@@ -11,4 +11,9 @@ describe('buildBrowserPortalLink', () => {
     expect(buildBrowserPortalLink('', 'token')).toBe('')
     expect(buildBrowserPortalLink('https://example.ts.net', '')).toBe('')
   })
+
+  it('returns the stable token-free URL when account login is enabled', () => {
+    expect(buildBrowserPortalLink('https://example.ts.net/path/', '', true))
+      .toBe('https://example.ts.net/path/')
+  })
 })

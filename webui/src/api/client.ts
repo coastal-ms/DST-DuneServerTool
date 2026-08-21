@@ -73,7 +73,7 @@ export async function api<T = unknown>(
 
   let res: Response
   try {
-    res = await fetch(`${API_BASE}${path}`, { ...init, headers })
+    res = await fetch(`${API_BASE}${path}`, { ...init, headers, credentials: 'same-origin' })
   } catch (e) {
     // Network-level failure (server restarting / listener down). Flag it so the
     // reconnect overlay can take over and recover, then surface the error.
@@ -98,9 +98,12 @@ export async function api<T = unknown>(
   return body as T
 }
 
-export function wsUrl(path: string): string {  const token = getToken()
+export function wsUrl(path: string): string {
+  const usingAccountSession = (window as unknown as { __dunePortalAccountSession?: boolean }).__dunePortalAccountSession
+  const token = usingAccountSession ? '' : getToken()
   const proto = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
   const host = window.location.host
+  if (!token) return `${proto}//${host}${path}`
   const sep = path.includes('?') ? '&' : '?'
   return `${proto}//${host}${path}${sep}t=${encodeURIComponent(token)}`
 }

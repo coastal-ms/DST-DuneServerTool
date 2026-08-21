@@ -3,6 +3,7 @@ import { Icon } from '../components/Icon'
 import { useStatus } from '../hooks/useStatus'
 import { useUpdateCheck } from '../hooks/useUpdateCheck'
 import type { BgState, VmStatus, PortStatus } from '../api/types'
+import { usePortalAuth } from '../auth/PortalAuthGate'
 
 function vmPillClass(vm: VmStatus | undefined | null): string {
   if (!vm || !vm.exists) return 'pill-muted'
@@ -48,6 +49,7 @@ export function StatusBar() {
   const bgKey = (status?.bg?.state ?? 'unknown') as BgState | 'unknown'
   const bg    = BG_STYLES[bgKey] ?? BG_STYLES.unknown
   const serverName = (status?.serverName ?? '').trim()
+  const portalAuth = usePortalAuth()
 
   return (
     <header className="h-14 shrink-0 border-b border-border bg-surface/60 backdrop-blur-md px-5 flex items-center justify-between gap-4">
@@ -69,6 +71,12 @@ export function StatusBar() {
         )}
       </div>
       <div className="flex items-center gap-2 shrink-0">
+        {portalAuth?.status.account && (
+          <button className="btn-ghost" onClick={() => void portalAuth.logout()} title="Sign out of the Browser Portal">
+            <Icon name="LogOut" size={14} />
+            <span className="hidden xl:inline">{portalAuth.status.account.username}</span>
+          </button>
+        )}
         {onTestChannel && (
           <Link
             to="/settings"

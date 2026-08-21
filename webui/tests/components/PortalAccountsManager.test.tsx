@@ -1,0 +1,50 @@
+import { afterEach, describe, expect, it, vi } from 'vitest'
+import { cleanup, render, screen } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
+import React from 'react'
+import { PortalAccountsManager } from '../../src/pages/settings/PortalAccountsManager'
+
+function jsonResponse(body: unknown, status = 200) {
+  return Promise.resolve(new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json' } }))
+}
+
+afterEach(() => {
+  cleanup()
+  vi.restoreAllMocks()
+  sessionStorage.clear()
+})
+
+describe('PortalAccountsManager', () => {
+  it('creates an owner and displays the generated password once', async () => {
+    const empty = { accountLoginEnabled: false, accounts: [], roles: ['owner', 'admin'] }
+    vi.spyOn(globalThis, 'fetch').mockImplementation((input, init) => {
+      const path = String(input)
+      if (path === '/api/gameplay/players') return jsonResponse({ players: [{ account_id: 42, name: 'Coastal' }] })
+      if (path === '/api/remote-access/portal-accounts' && init?.method === 'POST') {
+        return jsonResponse({
+          account: { id: 'x', username: 'Coastal', role: 'owner', enabled: true, mustChangePassword: true },
+          oneTimePassword: 'generated-password-value',
+        }, 201)
+      }
+      return jsonResponse(empty)
+    })
+    const user = userEvent.setup()
+    render(<PortalAccountsManager />)
+
+    await user.selectOptions(await screen.findByLabelText('Role'), 'owner')
+    await user.selectOptions(screen.getByLabelText('Linked game character (optional)'), '42')
+    await user.click(screen.getByRole('button', { name: 'Create account' }))
+    expect(await screen.findByText('generated-password-value')).toBeInTheDocument()
+    expect(screen.getByText(/cannot be recovered/i)).toBeInTheDocument()
+  })
+
+  it('explains the safe enablement step', async () => {
+    vi.spyOn(globalThis, 'fetch').mockImplementation((input) => {
+      if (String(input) === '/api/gameplay/players') return jsonResponse({ players: [] })
+      return jsonResponse({ accountLoginEnabled: false, accounts: [], roles: ['owner', 'admin'] })
+    })
+    render(<PortalAccountsManager />)
+    expect(await screen.findByText('Safe enablement check')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Enable account login' })).toBeInTheDocument()
+  })
+})

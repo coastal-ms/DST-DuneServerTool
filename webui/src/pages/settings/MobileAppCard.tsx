@@ -5,6 +5,7 @@ import { CollapsibleCard } from '../../components/CollapsibleCard'
 import { api } from '../../api/client'
 import { buildBrowserPortalLink } from '../../util/browserPortalLink'
 import { isLocalViewer } from '../../util/viewer'
+import { PortalAccountsManager } from './PortalAccountsManager'
 
 interface BridgeStatus {
   ready: boolean
@@ -28,6 +29,7 @@ interface MobilePairingData {
   remoteToken?: string
   cfAccessClientId?: string
   cfAccessClientSecret?: string
+  accountLoginEnabled?: boolean
 }
 
 export function MobileAppCard() {
@@ -89,7 +91,7 @@ export function MobileAppCard() {
   const bridgePort = data?.port ?? bridge?.port ?? 47900
   const pairUrl = data?.url ?? ''
   const stableToken = data?.remoteToken || data?.token || ''
-  const browserPortalLink = buildBrowserPortalLink(pairUrl, stableToken)
+  const browserPortalLink = buildBrowserPortalLink(pairUrl, stableToken, !!data?.accountLoginEnabled)
 
   return (
     <CollapsibleCard
@@ -163,7 +165,7 @@ export function MobileAppCard() {
 
         <p className="help-text" style={{ marginBottom: '1rem' }}>
           Set up a remote address above, then scan this code with any phone or
-          tablet camera to open the Browser Portal. No app, VPN, or account is required.
+          tablet camera to open the Browser Portal. Account login is optional and configured below.
         </p>
 
         {!data && !loading && (
@@ -199,10 +201,12 @@ export function MobileAppCard() {
                 Hide QR Code
               </button>
 
-              {localViewer && pairUrl && data.remoteToken && (
+              {localViewer && pairUrl && (data.remoteToken || data.accountLoginEnabled) && (
                 <div className="form-group" style={{ marginTop: '1.25rem' }}>
                   <label>Browser portal link (give this to a co-admin)</label>
-                  <div className="help-text">They open it in any browser — no app, no install, no typing. Anyone with this link can manage the server, so only share it with people you trust.</div>
+                  <div className="help-text">{data.accountLoginEnabled
+                    ? 'This stable address contains no credential. Portal users sign in with a local account.'
+                    : 'They open it in any browser - no app or install. Anyone with this magic link can manage the server, so only share it with people you trust.'}</div>
                   {!showLink ? (
                     <button className="btn" style={{ marginTop: '0.5rem' }} onClick={() => setShowLink(true)}>
                       <Icon name="Eye" /> Show portal link
@@ -232,7 +236,7 @@ export function MobileAppCard() {
                 </div>
               )}
 
-              {pairUrl && (
+              {pairUrl && !data.accountLoginEnabled && (
                 <div style={{ marginTop: '2rem', padding: '1rem', backgroundColor: '#f8fafc', borderRadius: '8px', border: '1px solid #e0f2fe' }}>
                   <h4 style={{ margin: '0 0 0.5rem 0', fontSize: '14px', color: '#0369a1' }}>Manual Entry Details</h4>
                   <div style={{ fontSize: '13px', fontFamily: 'monospace', color: '#334155' }}>
@@ -247,6 +251,7 @@ export function MobileAppCard() {
             </div>
           </div>
         )}
+        {localViewer && <PortalAccountsManager />}
     </CollapsibleCard>
   )
 }

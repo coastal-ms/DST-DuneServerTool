@@ -22,6 +22,14 @@ here cover everything those tags shipped.
 - The existing Remote Access QR code now opens the same authenticated Browser
   Portal link shown by the copy action, so a normal phone or tablet camera can
   open the DST dashboard without the native mobile app.
+- Browser Portal users can now opt into host-managed local owner/admin accounts
+  from Settings -> Remote Device Access. Account mode uses PBKDF2-HMAC-SHA256
+  passwords, one-time credentials, forced password changes, opaque revocable
+  Secure/HttpOnly sessions, lockouts, and token-free stable QR/link URLs while
+  preserving the legacy magic-link flow until the host safely enables it.
+- Cloudflare Access identities now require validation of the signed Access JWT
+  issuer, audience, lifetime, and signature before the existing email ACL is
+  applied; the raw Cloudflare email header is no longer trusted.
 - The existing DST dashboard now adapts to phone and tablet browsers with
   safe-area spacing, touch-sized controls, and a mobile navigation drawer
   generated from the same pages and groups as the desktop sidebar.

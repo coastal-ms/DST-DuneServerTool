@@ -280,6 +280,35 @@ export function RemoteAccessCard() {
                 </p>
               </div>
 
+              <div className="grid gap-3 sm:grid-cols-2">
+                <div>
+                  <label htmlFor="ra-team-domain" className="block text-sm font-medium mb-1">Cloudflare Access team domain</label>
+                  <input
+                    id="ra-team-domain"
+                    type="text"
+                    value={acl.cloudflareTeamDomain ?? ''}
+                    onChange={e => updateAcl({ cloudflareTeamDomain: e.target.value })}
+                    className="w-full px-3 py-2 rounded-lg bg-surface-2 border border-border text-text"
+                    placeholder="your-team.cloudflareaccess.com"
+                  />
+                </div>
+                <div>
+                  <label htmlFor="ra-audience" className="block text-sm font-medium mb-1">Access application AUD tag</label>
+                  <input
+                    id="ra-audience"
+                    type="text"
+                    value={acl.cloudflareAudience ?? ''}
+                    onChange={e => updateAcl({ cloudflareAudience: e.target.value })}
+                    className="w-full px-3 py-2 rounded-lg bg-surface-2 border border-border text-text font-mono"
+                    placeholder="Application Audience (AUD)"
+                  />
+                </div>
+                <p className="sm:col-span-2 text-xs text-text-dim">
+                  Required for the Cloudflare ACL path. DST validates the signed Access JWT issuer,
+                  audience, lifetime, and signature; the raw email header is never trusted.
+                </p>
+              </div>
+
               <div className="border-t border-border pt-4">
                 <label className="block text-sm font-medium mb-1">
                   Mobile app access for this domain (service token)

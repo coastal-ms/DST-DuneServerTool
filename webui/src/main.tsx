@@ -5,6 +5,7 @@ import './index.css'
 import App from './App.tsx'
 import RemoteApp from './pages/remote/RemoteApp'
 import { ThemeProvider } from './theme/ThemeContext'
+import { PortalAuthGate } from './auth/PortalAuthGate'
 
 // Capture install prompt as early as possible so it's not lost before the
 // React hook mounts. The hook checks window.__dunePwaPrompt on first render.
@@ -32,7 +33,7 @@ createRoot(document.getElementById('root')!).render(
   <StrictMode>
     <ThemeProvider>
       <BrowserRouter>
-        {isRemote ? <RemoteApp /> : <App />}
+        {isRemote ? <RemoteApp /> : <PortalAuthGate><App /></PortalAuthGate>}
       </BrowserRouter>
     </ThemeProvider>
   </StrictMode>,
