@@ -94,6 +94,7 @@ Register-DuneRoute -Method GET -Path '/api/mobile/pairing' -Handler {
             cfAccessClientSecret = $cfClientSecret
             pairingId            = $pairingId
             remoteToken          = $remoteToken
+            accountLoginEnabled  = [bool](Test-DunePortalAccountModeEnabled)
         }
     } catch {
         Write-DuneError -Response $res -Status 500 -Message $_.Exception.Message

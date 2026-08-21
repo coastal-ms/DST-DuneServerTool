@@ -26,8 +26,8 @@ function Invoke-DstRedaction {
     if ([string]::IsNullOrEmpty($Text)) { return $Text }
     $out = $Text
 
-    # 1) ?t=<token>  -> ?t=<redacted>   (the local-portal auth token)
-    $out = [regex]::Replace($out, '([?&;])t=[^&\s"''<>]+', '$1t=<redacted>')
+    # 1) ?t= / ?key= portal credentials -> <redacted>
+    $out = [regex]::Replace($out, '([?&;])(t|key)=[^&\s"''<>]+', '$1$2=<redacted>')
 
     # 1b) Discord webhook URL token -> <redacted> (secret: grants channel posts)
     $out = [regex]::Replace($out, '(/api/webhooks/\d+/)[A-Za-z0-9_-]+', '${1}<redacted>')
@@ -845,6 +845,17 @@ done
     $manLines.Add("Dune Server Tool diagnostic bundle")
     $manLines.Add("Generated $(Get-Date -Format 'o') by v$script:DuneToolVersion")
     $manLines.Add('')
+    try {
+        $portalAuth = Get-DunePortalDiagnosticState
+        $manLines.Add('Browser Portal account authentication (counts only):')
+        $manLines.Add("  mode enabled: $($portalAuth.accountLoginEnabled)")
+        $manLines.Add("  accounts: $($portalAuth.accountCount) total / $($portalAuth.enabledAccountCount) enabled")
+        $manLines.Add("  temporary lockouts: $($portalAuth.lockedAccountCount)")
+        $manLines.Add('')
+    } catch {
+        $manLines.Add('Browser Portal account authentication: state unavailable')
+        $manLines.Add('')
+    }
     # Lead with the memory-pressure finding so a triager sees it first - it is
     # the root cause of the "battlegroup restarted off-schedule" / "ping surge"
     # class of report and is otherwise buried in per-pod logs.
@@ -859,7 +870,7 @@ done
     $manLines.Add('  - IPv4 / IPv6 addresses (except loopback) -> <ip> / <ipv6>')
     $manLines.Add('  - C:\Users\<anyone>\... paths              -> C:\Users\<user>\...')
     $manLines.Add('  - WindowsUser / SshKey / SteamPath values    -> <user> / <ssh-key-path> / <steam-path>')
-    $manLines.Add('  - ?t=<token> query params                  -> ?t=<redacted>')
+    $manLines.Add('  - ?t= / ?key= portal credentials           -> <redacted>')
     $manLines.Add('  - Discord webhook URL token                -> /api/webhooks/<id>/<redacted>')
     $manLines.Add('  - INI key=value redaction for the keys above as a safety net')
     $manLines.Add('')

@@ -9,10 +9,9 @@
 #     Empty "owner" == remote portal disabled (fail-closed).
 #
 #   * The middleware (Test-DuneRemoteRequest) called by the listener for any
-#     /api/remote/* or /remote/* path BEFORE route matching. Reads the
-#     Cf-Access-Authenticated-User-Email header, looks the address up, and
-#     returns either an OK result with email + role or a fail result with the
-#     HTTP status to send.
+#     /api/remote/* or /remote/* path BEFORE route matching. Validates the
+#     signed Cloudflare Access JWT (issuer, audience, lifetime, signature),
+#     then applies the email ACL and returns an email + role or a denial.
 #
 #   * The audit log (%APPDATA%\DuneServer\.logs\remote-audit.log) — one line
 #     per write attempt (success or failure) and one line per auth denial,
@@ -137,7 +136,7 @@ function Clear-DuneMobileServiceToken {
 # malformed file deliberately stays untouched so a transient parse error can't
 # silently nuke the allowlist.
 function Get-DuneRemoteAcl {
-    $default = @{ owner = ''; admins = @(); hostname = '' }
+    $default = @{ owner = ''; admins = @(); hostname = ''; cloudflareTeamDomain = ''; cloudflareAudience = '' }
     $path = Get-DuneRemoteAclPath
     if (-not (Test-Path -LiteralPath $path)) { return $default }
     try {
@@ -172,7 +171,16 @@ function Get-DuneRemoteAcl {
     if ($obj.PSObject.Properties.Name -contains 'hostname' -and $obj.hostname) {
         $hostname = ([string]$obj.hostname).Trim()
     }
-    return @{ owner = $owner; admins = @($admins); hostname = $hostname }
+    $team = ''
+    if ($obj.PSObject.Properties.Name -contains 'cloudflareTeamDomain' -and $obj.cloudflareTeamDomain) {
+        $team = ([string]$obj.cloudflareTeamDomain).Trim().ToLowerInvariant()
+        $team = $team -replace '^https?://', '' -replace '/.*$', ''
+    }
+    $audience = ''
+    if ($obj.PSObject.Properties.Name -contains 'cloudflareAudience' -and $obj.cloudflareAudience) {
+        $audience = ([string]$obj.cloudflareAudience).Trim()
+    }
+    return @{ owner = $owner; admins = @($admins); hostname = $hostname; cloudflareTeamDomain = $team; cloudflareAudience = $audience }
 }
 
 # Atomic write: temp + Move-Item -Force. A SIGKILL between Set-Content and
@@ -198,8 +206,23 @@ function Save-DuneRemoteAcl {
     if ($Acl.ContainsKey('hostname') -and $Acl.hostname) {
         $hostname = ([string]$Acl.hostname).Trim()
     }
+    $team = ''
+    if ($Acl.ContainsKey('cloudflareTeamDomain') -and $Acl.cloudflareTeamDomain) {
+        $team = ([string]$Acl.cloudflareTeamDomain).Trim().ToLowerInvariant()
+        $team = $team -replace '^https?://', '' -replace '/.*$', ''
+    }
+    $audience = ''
+    if ($Acl.ContainsKey('cloudflareAudience') -and $Acl.cloudflareAudience) {
+        $audience = ([string]$Acl.cloudflareAudience).Trim()
+    }
 
-    $out = [ordered]@{ owner = $owner; admins = $admins; hostname = $hostname }
+    $out = [ordered]@{
+        owner = $owner
+        admins = $admins
+        hostname = $hostname
+        cloudflareTeamDomain = $team
+        cloudflareAudience = $audience
+    }
 
     $path = Get-DuneRemoteAclPath
     $dir  = Split-Path -Parent $path
@@ -225,6 +248,74 @@ function Get-DuneRemoteRole {
     return $null
 }
 
+function ConvertFrom-DuneBase64Url {
+    param([Parameter(Mandatory)][string]$Value)
+    $s = $Value.Replace('-', '+').Replace('_', '/')
+    while (($s.Length % 4) -ne 0) { $s += '=' }
+    return [Convert]::FromBase64String($s)
+}
+
+function Get-DuneCloudflareCertificate {
+    param([string]$TeamDomain, [string]$Kid)
+    if (-not $script:DuneCloudflareCertCache) { $script:DuneCloudflareCertCache = @{} }
+    $cacheKey = "$TeamDomain|$Kid"
+    $cached = $script:DuneCloudflareCertCache[$cacheKey]
+    if ($cached -and $cached.expires -gt (Get-Date).ToUniversalTime()) { return $cached.cert }
+
+    $uri = "https://$TeamDomain/cdn-cgi/access/certs"
+    $document = Invoke-RestMethod -Uri $uri -Method Get -TimeoutSec 10 -UseBasicParsing
+    $entry = @($document.public_certs | Where-Object { [string]$_.kid -eq $Kid } | Select-Object -First 1)[0]
+    if (-not $entry -or -not $entry.cert) { return $null }
+    $base64 = ([string]$entry.cert) -replace '-----BEGIN CERTIFICATE-----', '' -replace '-----END CERTIFICATE-----', '' -replace '\s', ''
+    $cert = New-Object System.Security.Cryptography.X509Certificates.X509Certificate2(,[Convert]::FromBase64String($base64))
+    $script:DuneCloudflareCertCache[$cacheKey] = @{ cert = $cert; expires = (Get-Date).ToUniversalTime().AddHours(6) }
+    return $cert
+}
+
+function Test-DuneCloudflareAccessJwt {
+    param([Parameter(Mandatory)]$Request, [Parameter(Mandatory)][hashtable]$Acl)
+    if (-not $Acl.cloudflareTeamDomain -or -not $Acl.cloudflareAudience) {
+        return @{ ok = $false; message = 'Cloudflare Access JWT settings are incomplete.' }
+    }
+    if ([string]$Acl.cloudflareTeamDomain -notmatch '^[a-z0-9][a-z0-9-]*\.cloudflareaccess\.com$') {
+        return @{ ok = $false; message = 'Cloudflare Access team domain is invalid.' }
+    }
+    $assertion = ''
+    try { $assertion = [string]$Request.Headers['Cf-Access-Jwt-Assertion'] } catch {}
+    if (-not $assertion) { return @{ ok = $false; message = 'Cloudflare Access assertion required.' } }
+    try {
+        $parts = $assertion.Split('.')
+        if ($parts.Count -ne 3) { throw 'JWT shape' }
+        $header = [Text.Encoding]::UTF8.GetString((ConvertFrom-DuneBase64Url $parts[0])) | ConvertFrom-Json
+        $payload = [Text.Encoding]::UTF8.GetString((ConvertFrom-DuneBase64Url $parts[1])) | ConvertFrom-Json
+        if ([string]$header.alg -ne 'RS256' -or -not $header.kid) { throw 'JWT algorithm' }
+        $expectedIssuer = "https://$($Acl.cloudflareTeamDomain)"
+        if (([string]$payload.iss).TrimEnd('/') -ne $expectedIssuer.TrimEnd('/')) { throw 'JWT issuer' }
+        $now = [DateTimeOffset]::UtcNow.ToUnixTimeSeconds()
+        if ([long]$payload.exp -le $now -or ($payload.nbf -and [long]$payload.nbf -gt ($now + 60))) { throw 'JWT lifetime' }
+        if (@($payload.aud) -notcontains [string]$Acl.cloudflareAudience) { throw 'JWT audience' }
+        $email = ([string]$payload.email).Trim().ToLowerInvariant()
+        if (-not $email) { throw 'JWT email' }
+        $cert = Get-DuneCloudflareCertificate -TeamDomain ([string]$Acl.cloudflareTeamDomain) -Kid ([string]$header.kid)
+        if (-not $cert) { throw 'JWT signing certificate' }
+        $rsa = [System.Security.Cryptography.X509Certificates.RSACertificateExtensions]::GetRSAPublicKey($cert)
+        try {
+            $data = [Text.Encoding]::ASCII.GetBytes("$($parts[0]).$($parts[1])")
+            $signature = ConvertFrom-DuneBase64Url $parts[2]
+            $valid = $rsa.VerifyData(
+                $data,
+                $signature,
+                [System.Security.Cryptography.HashAlgorithmName]::SHA256,
+                [System.Security.Cryptography.RSASignaturePadding]::Pkcs1
+            )
+        } finally { if ($rsa) { $rsa.Dispose() } }
+        if (-not $valid) { throw 'JWT signature' }
+        return @{ ok = $true; email = $email }
+    } catch {
+        return @{ ok = $false; message = 'Cloudflare Access authentication failed.' }
+    }
+}
+
 # ---------- Middleware -------------------------------------------------------
 
 # Called by the listener BEFORE route matching for any /api/remote/* or
@@ -233,7 +324,7 @@ function Get-DuneRemoteRole {
 #   @{ ok = $false; status = 401|403; message = '...' }
 #
 # Fail-closed cases (401, generic message — don't leak path validity):
-#   * No Cf-Access-Authenticated-User-Email header
+#   * No valid Cf-Access-Jwt-Assertion header
 #   * ACL missing or owner unset (remote disabled)
 #   * ACL malformed (Get-DuneRemoteAcl returns the default)
 # Forbidden case (403):
@@ -242,13 +333,6 @@ function Test-DuneRemoteRequest {
     [CmdletBinding()]
     param([Parameter(Mandatory)]$Request)
 
-    $rawEmail = $null
-    try { $rawEmail = $Request.Headers['Cf-Access-Authenticated-User-Email'] } catch {}
-    if ([string]::IsNullOrWhiteSpace($rawEmail)) {
-        return @{ ok = $false; status = 401; message = 'Authentication required.' }
-    }
-    $email = $rawEmail.Trim().ToLowerInvariant()
-
     $acl = Get-DuneRemoteAcl
     if (-not $acl.owner) {
         # Remote portal explicitly off (default for fresh installs). We deny
@@ -256,6 +340,11 @@ function Test-DuneRemoteRequest {
         # which paths are gated by which ACL.
         return @{ ok = $false; status = 401; message = 'Remote portal not enabled.' }
     }
+    $identity = Test-DuneCloudflareAccessJwt -Request $Request -Acl $acl
+    if (-not $identity.ok) {
+        return @{ ok = $false; status = 401; message = 'Authentication required.' }
+    }
+    $email = [string]$identity.email
 
     if ($email -eq $acl.owner) {
         return @{ ok = $true; email = $email; role = 'owner' }

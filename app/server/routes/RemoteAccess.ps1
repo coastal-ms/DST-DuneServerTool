@@ -12,7 +12,7 @@
 #   GET  /api/remote-access/audit-log?lines=N      -> {lines: [parsed entries...]}
 #   GET  /api/remote-access/cloudflared-status     -> {installed; path; version}
 
-Register-DuneRoute -Method GET -Path '/api/remote-access/acl' -Handler {
+Register-DuneRoute -Method GET -Path '/api/remote-access/acl' -LocalOnly -Handler {
     param($req, $res, $routeParams, $body)
     try {
         $acl = Get-DuneRemoteAcl
@@ -20,39 +20,55 @@ Register-DuneRoute -Method GET -Path '/api/remote-access/acl' -Handler {
             owner    = $acl.owner
             admins   = $acl.admins
             hostname = $acl.hostname
+            cloudflareTeamDomain = $acl.cloudflareTeamDomain
+            cloudflareAudience = $acl.cloudflareAudience
         }
     } catch {
         Write-DuneError -Response $res -Status 500 -Message $_.Exception.Message
     }
 }
 
-Register-DuneRoute -Method PUT -Path '/api/remote-access/acl' -Handler {
+Register-DuneRoute -Method PUT -Path '/api/remote-access/acl' -LocalOnly -Handler {
     param($req, $res, $routeParams, $body)
     try {
         $owner = ''
         $admins = @()
         $hostname = ''
+        $cloudflareTeamDomain = ''
+        $cloudflareAudience = ''
         if ($body -is [hashtable]) {
             if ($body.ContainsKey('owner'))    { $owner    = [string]$body['owner'] }
             if ($body.ContainsKey('admins'))   { $admins   = @($body['admins']) }
             if ($body.ContainsKey('hostname')) { $hostname = [string]$body['hostname'] }
+            if ($body.ContainsKey('cloudflareTeamDomain')) { $cloudflareTeamDomain = [string]$body['cloudflareTeamDomain'] }
+            if ($body.ContainsKey('cloudflareAudience')) { $cloudflareAudience = [string]$body['cloudflareAudience'] }
         } elseif ($null -ne $body) {
             if ($body.PSObject.Properties.Name -contains 'owner')    { $owner    = [string]$body.owner }
             if ($body.PSObject.Properties.Name -contains 'admins')   { $admins   = @($body.admins) }
             if ($body.PSObject.Properties.Name -contains 'hostname') { $hostname = [string]$body.hostname }
+            if ($body.PSObject.Properties.Name -contains 'cloudflareTeamDomain') { $cloudflareTeamDomain = [string]$body.cloudflareTeamDomain }
+            if ($body.PSObject.Properties.Name -contains 'cloudflareAudience') { $cloudflareAudience = [string]$body.cloudflareAudience }
         }
-        $saved = Save-DuneRemoteAcl -Acl @{ owner = $owner; admins = $admins; hostname = $hostname }
+        $saved = Save-DuneRemoteAcl -Acl @{
+            owner = $owner
+            admins = $admins
+            hostname = $hostname
+            cloudflareTeamDomain = $cloudflareTeamDomain
+            cloudflareAudience = $cloudflareAudience
+        }
         Write-DuneJson -Response $res -Body @{
             owner    = $saved.owner
             admins   = $saved.admins
             hostname = $saved.hostname
+            cloudflareTeamDomain = $saved.cloudflareTeamDomain
+            cloudflareAudience = $saved.cloudflareAudience
         }
     } catch {
         Write-DuneError -Response $res -Status 500 -Message "Save failed: $($_.Exception.Message)"
     }
 }
 
-Register-DuneRoute -Method GET -Path '/api/remote-access/mobile-service-token' -Handler {
+Register-DuneRoute -Method GET -Path '/api/remote-access/mobile-service-token' -LocalOnly -Handler {
     param($req, $res, $routeParams, $body)
     try {
         $st = Get-DuneMobileServiceToken
@@ -68,7 +84,7 @@ Register-DuneRoute -Method GET -Path '/api/remote-access/mobile-service-token' -
 # Save or clear the mobile Cloudflare Access service token. An empty clientId AND
 # clientSecret clears it. The secret is write-only from the UI's perspective: it
 # is accepted here but never echoed back by the GET route.
-Register-DuneRoute -Method PUT -Path '/api/remote-access/mobile-service-token' -Handler {
+Register-DuneRoute -Method PUT -Path '/api/remote-access/mobile-service-token' -LocalOnly -Handler {
     param($req, $res, $routeParams, $body)
     try {
         $clientId = ''
@@ -99,7 +115,7 @@ Register-DuneRoute -Method PUT -Path '/api/remote-access/mobile-service-token' -
     }
 }
 
-Register-DuneRoute -Method GET -Path '/api/remote-access/audit-log' -Handler {
+Register-DuneRoute -Method GET -Path '/api/remote-access/audit-log' -LocalOnly -Handler {
     param($req, $res, $routeParams, $body)
     try {
         $lines = 50
@@ -130,7 +146,7 @@ Register-DuneRoute -Method GET -Path '/api/remote-access/audit-log' -Handler {
     }
 }
 
-Register-DuneRoute -Method GET -Path '/api/remote-access/cloudflared-status' -Handler {
+Register-DuneRoute -Method GET -Path '/api/remote-access/cloudflared-status' -LocalOnly -Handler {
     param($req, $res, $routeParams, $body)
     try {
         $status = Test-DuneCloudflaredPresent

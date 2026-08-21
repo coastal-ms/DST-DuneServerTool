@@ -672,12 +672,36 @@ function Test-DuneToken {
             if (Get-Command Get-DuneRemoteToken -ErrorAction SilentlyContinue) {
                 $script:DuneRemoteToken = [string](Get-DuneRemoteToken)
             }
+
         } catch {}
     }
     if (-not [string]::IsNullOrEmpty($script:DuneRemoteToken) -and $hdr -eq $script:DuneRemoteToken) {
         return $true
     }
     return $false
+}
+
+function Test-DuneLaunchToken {
+    param($Request)
+    if ([string]::IsNullOrEmpty($script:DuneToken)) { return $true }
+    $provided = ''
+    try { $provided = [string]$Request.Headers['X-Dune-Token'] } catch {}
+    if (-not $provided) {
+        try { $provided = [string]$Request.QueryString['t'] } catch {}
+    }
+    return ($provided -eq $script:DuneToken)
+}
+
+function Test-DuneAccountModeLaunchAccess {
+    param($Request)
+    if (-not (Test-DuneLaunchToken -Request $Request)) { return $false }
+    if (Test-DuneLocalOnlyRequest -Request $Request) { return $true }
+    try {
+        $cloudflare = Test-DuneRemoteRequest -Request $Request
+        return [bool]$cloudflare.ok
+    } catch {
+        return $false
+    }
 }
 
 # ---------- Main loop ----------------------------------------------------------
@@ -845,7 +869,21 @@ function Invoke-DuneContext {
     # WebSocket upgrades — dispatched onto a runspace pool so the main loop
     # can keep accepting HTTP requests while the WS session runs.
     if ($req.IsWebSocketRequest) {
-        if (-not (Test-DuneToken -Request $req)) {
+        $wsAllowed = $false
+        $accountMode = $false
+        try { $accountMode = [bool](Test-DunePortalAccountModeEnabled) } catch {}
+        if ($accountMode) {
+            $wsAllowed = Test-DuneAccountModeLaunchAccess -Request $req
+            if (-not $wsAllowed) {
+                $sessionAuth = $null
+                try { $sessionAuth = Get-DunePortalSessionAuth -Request $req } catch {}
+                $wsAllowed = [bool]($sessionAuth -and $sessionAuth.ok -and -not $sessionAuth.mustChangePassword)
+                if ($wsAllowed -and -not (Test-DunePortalRequestOrigin -Request $req)) { $wsAllowed = $false }
+            }
+        } else {
+            $wsAllowed = Test-DuneToken -Request $req
+        }
+        if (-not $wsAllowed) {
             $res.StatusCode = 401
             $res.OutputStream.Close()
             return
@@ -1008,9 +1046,40 @@ function Invoke-DuneContext {
 
     # API routes
     if ($rawPath.StartsWith('/api/')) {
-        if (-not (Test-DuneToken -Request $req)) {
-            Write-DuneError -Response $res -Status 401 -Message 'Invalid or missing token'
+        $accountMode = $false
+        try { $accountMode = [bool](Test-DunePortalAccountModeEnabled) } catch {}
+        $publicPortalAuth = $rawPath -in @('/api/portal-auth/status', '/api/portal-auth/login')
+        $portalSessionAuth = $null
+
+        $isPortalAuthBody = $rawPath.StartsWith('/api/portal-auth/') -or $rawPath.StartsWith('/api/remote-access/portal-account')
+        if ($isPortalAuthBody -and $req.HasEntityBody -and
+            ($req.ContentLength64 -lt 0 -or $req.ContentLength64 -gt 4096)) {
+            Write-DuneError -Response $res -Status 413 -Message 'Request body too large.'
             return
+        }
+
+        if (-not $publicPortalAuth) {
+            if ($accountMode) {
+                if (-not (Test-DuneAccountModeLaunchAccess -Request $req)) {
+                    try { $portalSessionAuth = Get-DunePortalSessionAuth -Request $req } catch { $portalSessionAuth = @{ ok = $false } }
+                    if (-not $portalSessionAuth.ok) {
+                        Clear-DunePortalSessionCookie $res
+                        Write-DuneError -Response $res -Status 401 -Message 'Authentication required.'
+                        return
+                    }
+                    if ($portalSessionAuth.mustChangePassword -and $rawPath -notin @('/api/portal-auth/change-password','/api/portal-auth/logout')) {
+                        Write-DuneError -Response $res -Status 403 -Message 'Password change required.'
+                        return
+                    }
+                    if ($method -notin @('GET','HEAD') -and -not (Test-DunePortalRequestOrigin -Request $req)) {
+                        Write-DuneError -Response $res -Status 403 -Message 'Request origin rejected.'
+                        return
+                    }
+                }
+            } elseif (-not (Test-DuneToken -Request $req)) {
+                Write-DuneError -Response $res -Status 401 -Message 'Invalid or missing token'
+                return
+            }
         }
         foreach ($r in $script:DuneRoutes) {
             if ($r.Method -ne $method) { continue }
@@ -1064,6 +1133,18 @@ function Invoke-DuneContext {
         return
     }
 
+    # Once account login is enabled, retire any previously shared browser
+    # magic-link credential from the address bar before serving the SPA.
+    try {
+        if ((Test-DunePortalAccountModeEnabled) -and $req.QueryString['key']) {
+            $res.StatusCode = 302
+            $res.Headers['Location'] = $rawPath
+            $res.Headers['Cache-Control'] = 'no-store'
+            $res.OutputStream.Close()
+            return
+        }
+    } catch {}
+
     # When the full portal is reached through the Cloudflare tunnel by an
     # authenticated, allow-listed user (CF Access identity verified against the
     # remote ACL), inject the per-launch token into index.html so the portal's
@@ -1083,9 +1164,11 @@ function Invoke-DuneContext {
     # whoever has the link has access. The token rotates only on demand, not per
     # launch, so the portal keeps working across restarts.
     try {
+        $accountMode = $false
+        try { $accountMode = [bool](Test-DunePortalAccountModeEnabled) } catch {}
         $rt = ''
         if (Get-Command Get-DuneRemoteToken -ErrorAction SilentlyContinue) { $rt = [string](Get-DuneRemoteToken) }
-        if ($rt) {
+        if ($rt -and -not $accountMode) {
             $providedKey = ''
             try { $providedKey = [string]$req.QueryString['key'] } catch {}
             if (-not $providedKey) {
@@ -1096,6 +1179,8 @@ function Invoke-DuneContext {
                 $injectTokenOverride = $rt
                 try { $res.Headers['Set-Cookie'] = "dune_key=$rt; Path=/; HttpOnly; SameSite=Lax" } catch {}
             }
+        } elseif ($accountMode) {
+            try { $res.Headers['Set-Cookie'] = 'dune_key=; Path=/; Max-Age=0; Expires=Thu, 01 Jan 1970 00:00:00 GMT; Secure; HttpOnly; SameSite=Strict' } catch {}
         }
     } catch {}
 
