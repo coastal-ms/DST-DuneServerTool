@@ -34,6 +34,8 @@ internal static class Program
     [STAThread]
     private static void Main(string[] args)
     {
+        WaitForRestartParent(args);
+
         // Single-instance: if a DuneShell window is already open (e.g. the user
         // clicked the desktop shortcut again while the server — and its app
         // window — were already running), focus that window instead of opening
@@ -52,6 +54,24 @@ internal static class Program
 
         Application.Run(new MainForm(url, useWaitFile));
         GC.KeepAlive(mutex);
+    }
+
+    private static void WaitForRestartParent(string[] args)
+    {
+        string? rawPid = GetArgValue(args, "--restart-after-pid");
+        if (!int.TryParse(rawPid, out int pid) || pid <= 0 || pid == Environment.ProcessId)
+            return;
+
+        try
+        {
+            using var parent = Process.GetProcessById(pid);
+            parent.WaitForExit(15_000);
+            Thread.Sleep(500);
+        }
+        catch
+        {
+            // The previous shell already exited, so startup can continue.
+        }
     }
 
     private static void FocusExistingWindow()

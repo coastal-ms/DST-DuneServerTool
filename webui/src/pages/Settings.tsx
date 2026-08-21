@@ -16,8 +16,10 @@ import { MobileAppCard } from './settings/MobileAppCard'
 import { FlsTokenCard } from './settings/FlsTokenCard'
 import { FreshStartSnapshotsCard } from './settings/FreshStartSnapshotsCard'
 import { InstallLocationCard } from './settings/InstallLocationCard'
+import { ShellPreferencesCard } from './settings/ShellPreferencesCard'
 import { SectionErrorBoundary } from '../components/SectionErrorBoundary'
 import { CollapsibleCard, useCardCollapse } from '../components/CollapsibleCard'
+import { isShellHost } from '../util/shellBridge'
 
 const FIELDS: {
   key: string
@@ -695,6 +697,10 @@ export function Settings() {
       <SectionErrorBoundary name="Dune Server Tool installation"><InstallLocationCard /></SectionErrorBoundary>
 
       <SectionErrorBoundary name="Appearance"><AppearanceCard /></SectionErrorBoundary>
+
+      {isShellHost() && (
+        <SectionErrorBoundary name="Desktop shell"><ShellPreferencesCard /></SectionErrorBoundary>
+      )}
 
       <SectionErrorBoundary name="Dashboard warnings"><DashboardAlertsCard /></SectionErrorBoundary>
 

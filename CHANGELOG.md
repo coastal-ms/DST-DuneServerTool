@@ -13,6 +13,13 @@ here cover everything those tags shipped.
 
 ## [Unreleased]
 
+### Added
+
+- The Windows desktop shell now has host-local preferences in Settings,
+  beginning with an opt-in WebView2 software-rendering mode for graphics-driver
+  compatibility. Applying it restarts only the shell window and leaves the DST
+  backend and game server running.
+
 ## [13.8.4] - 2026-08-21
 
 ### Fixed
