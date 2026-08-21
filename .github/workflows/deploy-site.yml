@@ -32,7 +32,10 @@ on:
 
 # Allow only one deploy at a time; cancel in-progress runs on new pushes.
 concurrency:
-  group: "pages"
+  # A prerelease event skips the jobs below, but workflow concurrency is
+  # evaluated first. Keep that skipped mirror run in a separate group so it
+  # cannot cancel the stable release deployment that started moments earlier.
+  group: "pages-${{ github.event_name == 'release' && github.event.release.prerelease }}"
   cancel-in-progress: true
 
 permissions:
