@@ -19,6 +19,9 @@ here cover everything those tags shipped.
   beginning with an opt-in WebView2 software-rendering mode for graphics-driver
   compatibility. Applying it restarts only the shell window and leaves the DST
   backend and game server running.
+- The existing Remote Access QR code now opens the same authenticated Browser
+  Portal link shown by the copy action, so a normal phone or tablet camera can
+  open the DST dashboard without the native mobile app.
 
 ## [13.8.4] - 2026-08-21
 

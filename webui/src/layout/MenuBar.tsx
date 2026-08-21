@@ -222,7 +222,7 @@ export function MenuBar({ sidebarCollapsed, onToggleSidebar }: Props) {
   return (
     <div
       ref={rootRef}
-      className="h-8 shrink-0 border-b border-border bg-surface flex items-center px-1 text-[13px] select-none relative z-40"
+      className="top-menu-bar h-11 md:h-8 shrink-0 border-b border-border bg-surface flex items-center px-1 text-[13px] select-none relative z-40 overflow-x-auto"
     >
       {GROUP_ORDER.map(g => {
         const items = NAV_ITEMS
@@ -244,7 +244,7 @@ export function MenuBar({ sidebarCollapsed, onToggleSidebar }: Props) {
                 type="button"
                 onClick={() => { setOpen(null); navigate(only.to) }}
                 onMouseEnter={() => { if (open !== null) setOpen(null) }}
-                className={`px-3 h-7 rounded-md transition-colors ${
+                className={`px-3 h-11 md:h-7 rounded-md transition-colors ${
                   active
                     ? 'bg-surface-3 text-text'
                     : 'text-text-muted hover:text-text hover:bg-surface-2/80'
@@ -262,7 +262,7 @@ export function MenuBar({ sidebarCollapsed, onToggleSidebar }: Props) {
               type="button"
               onClick={() => setOpen(isOpen ? null : g)}
               onMouseEnter={() => { if (open !== null) setOpen(g) }}
-              className={`px-3 h-7 rounded-md transition-colors ${
+              className={`px-3 h-11 md:h-7 rounded-md transition-colors ${
                 isOpen
                   ? 'bg-surface-3 text-text'
                   : 'text-text-muted hover:text-text hover:bg-surface-2/80'
@@ -299,7 +299,7 @@ export function MenuBar({ sidebarCollapsed, onToggleSidebar }: Props) {
           type="button"
           onClick={() => setOpen(open === 'help' ? null : 'help')}
           onMouseEnter={() => { if (open !== null) setOpen('help') }}
-          className={`px-3 h-7 rounded-md transition-colors ${
+          className={`px-3 h-11 md:h-7 rounded-md transition-colors ${
             open === 'help'
               ? 'bg-surface-3 text-text'
               : 'text-text-muted hover:text-text hover:bg-surface-2/80'

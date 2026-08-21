@@ -178,7 +178,7 @@ export function Sidebar({ collapsed }: Props) {
 
   return (
     <aside
-      className={`${collapsed ? 'w-14' : 'w-60'} shrink-0 border-r border-border bg-surface/60 backdrop-blur-md flex flex-col transition-[width] duration-150`}
+      className={`${collapsed ? 'w-14' : 'w-60'} hidden md:flex shrink-0 border-r border-border bg-surface/60 backdrop-blur-md flex-col transition-[width] duration-150`}
     >
       <div
         className={`${

@@ -3,6 +3,7 @@ import { QRCodeSVG } from 'qrcode.react'
 import { Icon } from '../../components/Icon'
 import { CollapsibleCard } from '../../components/CollapsibleCard'
 import { api } from '../../api/client'
+import { buildBrowserPortalLink } from '../../util/browserPortalLink'
 import { isLocalViewer } from '../../util/viewer'
 
 interface BridgeStatus {
@@ -87,26 +88,14 @@ export function MobileAppCard() {
 
   const bridgePort = data?.port ?? bridge?.port ?? 47900
   const pairUrl = data?.url ?? ''
-  // A direct stable URL (Tailscale Funnel / Cloudflare custom domain) — the QR is
-  // a clean { url, token } the app uses as-is. The token is the permanent remote
-  // token (survives restarts).
   const stableToken = data?.remoteToken || data?.token || ''
-  const qrPayload = !data || !pairUrl
-    ? ''
-    : JSON.stringify({
-        url: pairUrl,
-        token: stableToken,
-        ...(data.cfAccessClientId && data.cfAccessClientSecret ? {
-          cfAccessClientId: data.cfAccessClientId,
-          cfAccessClientSecret: data.cfAccessClientSecret,
-        } : {}),
-      })
+  const browserPortalLink = buildBrowserPortalLink(pairUrl, stableToken)
 
   return (
     <CollapsibleCard
       id="settings.mobileApp"
       icon="Smartphone"
-      title="Mobile App Pairing"
+      title="Remote Device Access"
       titleClassName="card-title"
       className=""
       headerClassName="card-header"
@@ -151,12 +140,12 @@ export function MobileAppCard() {
         {bridge && (
           bridge.ready ? (
             <div className="card p-3 border-success/40 bg-success/10 text-success text-sm flex items-center gap-2" style={{ marginBottom: '1rem' }}>
-              <Icon name="CheckCircle2" size={16} /> Mobile bridge ready (local port {bridge.port}).
+              <Icon name="CheckCircle2" size={16} /> Remote access bridge ready (local port {bridge.port}).
             </div>
           ) : (
             <div className="card p-3 border-warning/40 bg-warning/10 text-sm" style={{ marginBottom: '1rem' }}>
               <div className="flex items-center gap-2 text-warning" style={{ fontWeight: 600 }}>
-                <Icon name="AlertTriangle" size={16} /> Mobile bridge not running
+                <Icon name="AlertTriangle" size={16} /> Remote access bridge not running
               </div>
               <ul style={{ margin: '0.5rem 0 0', paddingLeft: '1.25rem' }} className="text-text-muted">
                 {bridge.issues.map((it, i) => <li key={i}>{it}</li>)}
@@ -173,8 +162,8 @@ export function MobileAppCard() {
         )}
 
         <p className="help-text" style={{ marginBottom: '1rem' }}>
-          Set up a remote address above, then scan this code with the DST mobile app to connect.
-          Your friends need <strong>nothing</strong> installed on their phones — no VPN, no account.
+          Set up a remote address above, then scan this code with any phone or
+          tablet camera to open the Browser Portal. No app, VPN, or account is required.
         </p>
 
         {!data && !loading && (
@@ -188,9 +177,9 @@ export function MobileAppCard() {
 
         {data && (
           <div style={{ display: 'flex', gap: '2rem', flexWrap: 'wrap', alignItems: 'flex-start' }}>
-            {qrPayload ? (
+            {browserPortalLink ? (
               <div style={{ background: '#fff', padding: '1rem', borderRadius: '8px' }}>
-                <QRCodeSVG value={qrPayload} size={200} />
+                <QRCodeSVG value={browserPortalLink} size={200} />
               </div>
             ) : (
               <div className="text-secondary" style={{ width: 200, textAlign: 'center' }}>
@@ -201,7 +190,7 @@ export function MobileAppCard() {
             <div style={{ flex: 1, minWidth: '300px' }}>
               <div className="form-group">
                 <label>Connection Address</label>
-                <div className="help-text">The mobile app will use this address to reach your server.</div>
+                <div className="help-text">The Browser Portal uses this address to reach your server.</div>
                 <div style={{ marginTop: '0.5rem', fontSize: '13px', fontFamily: 'monospace', wordBreak: 'break-all' }}>
                   {pairUrl ? pairUrl : <span className="text-text-muted">No remote address yet — set one up above.</span>}
                 </div>
@@ -221,14 +210,13 @@ export function MobileAppCard() {
                   ) : (
                     <>
                       <div style={{ marginTop: '0.5rem', fontSize: '12px', fontFamily: 'monospace', wordBreak: 'break-all', background: 'var(--surface-2, #1e293b)', padding: '0.5rem', borderRadius: '6px' }}>
-                        {`${pairUrl.replace(/\/+$/, '')}/?key=${data.remoteToken}`}
+                        {browserPortalLink}
                       </div>
                       <div className="flex items-center gap-2" style={{ marginTop: '0.5rem' }}>
                         <button
                           className="btn-primary"
                           onClick={() => {
-                            const link = `${pairUrl.replace(/\/+$/, '')}/?key=${data.remoteToken}`
-                            void navigator.clipboard.writeText(link)
+                            void navigator.clipboard.writeText(browserPortalLink)
                             setCopied(true)
                             window.setTimeout(() => setCopied(false), 2000)
                           }}
