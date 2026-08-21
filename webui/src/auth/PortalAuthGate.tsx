@@ -57,15 +57,15 @@ function Login({ onSuccess }: { onSuccess: (status: PortalAuthStatus) => void })
 
   return (
     <AuthFrame title="Dune Server Tool" subtitle="Sign in to the Browser Portal">
-      <form onSubmit={submit} className="space-y-4">
+      <form id="portal-login-form" name="portal-login" autoComplete="on" onSubmit={submit} className="space-y-4">
         {error && <div role="alert" className="text-sm text-danger bg-danger/10 border border-danger/40 rounded-lg px-3 py-2">{error}</div>}
         <div>
           <label htmlFor="portal-username" className="block text-sm font-medium mb-1">Username</label>
-          <input id="portal-username" autoComplete="username" maxLength={64} required autoFocus value={username} onChange={e => setUsername(e.target.value)} className="w-full px-3 py-2 rounded-lg bg-surface-2 border border-border text-text" />
+          <input id="portal-username" name="username" type="text" inputMode="text" autoCapitalize="none" spellCheck={false} autoComplete="username" maxLength={64} required autoFocus value={username} onChange={e => setUsername(e.target.value)} className="w-full px-3 py-2 rounded-lg bg-surface-2 border border-border text-text" />
         </div>
         <div>
           <label htmlFor="portal-password" className="block text-sm font-medium mb-1">Password</label>
-          <input id="portal-password" type="password" autoComplete="current-password" maxLength={128} required value={password} onChange={e => setPassword(e.target.value)} className="w-full px-3 py-2 rounded-lg bg-surface-2 border border-border text-text" />
+          <input id="portal-password" name="password" type="password" autoComplete="current-password" maxLength={128} required value={password} onChange={e => setPassword(e.target.value)} className="w-full px-3 py-2 rounded-lg bg-surface-2 border border-border text-text" />
         </div>
         <button type="submit" disabled={busy} className="btn-primary w-full justify-center">
           <Icon name={busy ? 'Loader2' : 'LogIn'} className={busy ? 'animate-spin' : ''} />
@@ -77,7 +77,7 @@ function Login({ onSuccess }: { onSuccess: (status: PortalAuthStatus) => void })
   )
 }
 
-function ForcedPasswordChange({ onSuccess }: { onSuccess: () => void }) {
+function ForcedPasswordChange({ username, onSuccess }: { username: string; onSuccess: () => void }) {
   const [currentPassword, setCurrentPassword] = useState('')
   const [newPassword, setNewPassword] = useState('')
   const [confirm, setConfirm] = useState('')
@@ -102,19 +102,30 @@ function ForcedPasswordChange({ onSuccess }: { onSuccess: () => void }) {
 
   return (
     <AuthFrame title="Change your password" subtitle="Replace the one-time password before continuing">
-      <form onSubmit={submit} className="space-y-4">
+      <form id="portal-password-change-form" name="portal-password-change" autoComplete="on" onSubmit={submit} className="space-y-4">
+        <input
+          id="portal-password-change-username"
+          name="username"
+          type="text"
+          autoComplete="username"
+          value={username}
+          readOnly
+          tabIndex={-1}
+          aria-hidden="true"
+          className="sr-only"
+        />
         {error && <div role="alert" className="text-sm text-danger bg-danger/10 border border-danger/40 rounded-lg px-3 py-2">{error}</div>}
         <div>
           <label htmlFor="portal-current-password" className="block text-sm font-medium mb-1">One-time password</label>
-          <input id="portal-current-password" type="password" autoComplete="current-password" maxLength={128} required value={currentPassword} onChange={e => setCurrentPassword(e.target.value)} className="w-full px-3 py-2 rounded-lg bg-surface-2 border border-border text-text" />
+          <input id="portal-current-password" name="current-password" type="password" autoComplete="current-password" maxLength={128} required value={currentPassword} onChange={e => setCurrentPassword(e.target.value)} className="w-full px-3 py-2 rounded-lg bg-surface-2 border border-border text-text" />
         </div>
         <div>
           <label htmlFor="portal-new-password" className="block text-sm font-medium mb-1">New password</label>
-          <input id="portal-new-password" type="password" autoComplete="new-password" minLength={12} maxLength={128} required value={newPassword} onChange={e => setNewPassword(e.target.value)} className="w-full px-3 py-2 rounded-lg bg-surface-2 border border-border text-text" />
+          <input id="portal-new-password" name="new-password" type="password" autoComplete="new-password" minLength={12} maxLength={128} required value={newPassword} onChange={e => setNewPassword(e.target.value)} className="w-full px-3 py-2 rounded-lg bg-surface-2 border border-border text-text" />
         </div>
         <div>
           <label htmlFor="portal-confirm-password" className="block text-sm font-medium mb-1">Confirm new password</label>
-          <input id="portal-confirm-password" type="password" autoComplete="new-password" minLength={12} maxLength={128} required value={confirm} onChange={e => setConfirm(e.target.value)} className="w-full px-3 py-2 rounded-lg bg-surface-2 border border-border text-text" />
+          <input id="portal-confirm-password" name="confirm-new-password" type="password" autoComplete="new-password" minLength={12} maxLength={128} required value={confirm} onChange={e => setConfirm(e.target.value)} className="w-full px-3 py-2 rounded-lg bg-surface-2 border border-border text-text" />
         </div>
         <button type="submit" disabled={busy} className="btn-primary w-full justify-center">
           {busy ? 'Changing...' : 'Change password'}
@@ -156,7 +167,7 @@ export function PortalAuthGate({ children }: { children: ReactNode }) {
   if (!status.accountLoginEnabled) return <>{children}</>
   if (!status.authenticated) return <Login onSuccess={setStatus} />
   if (status.mustChangePassword) {
-    return <ForcedPasswordChange onSuccess={() => void refresh()} />
+    return <ForcedPasswordChange username={status.account?.username ?? ''} onSuccess={() => void refresh()} />
   }
   const logout = async () => {
     await logoutPortal()
