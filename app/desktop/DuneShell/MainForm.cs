@@ -153,8 +153,8 @@ internal sealed class MainForm : Form
 
         await InitDiagnosticLoggingAsync(core);
 
-        _web.Source = new Uri(url);
         _targetUrl = url;
+        _web.Source = new Uri(url);
     }
 
     // ----- Diagnostic logging -------------------------------------------------
@@ -421,65 +421,21 @@ internal sealed class MainForm : Form
     /// </summary>
     private void OnWebMessageReceived(object? sender, CoreWebView2WebMessageReceivedEventArgs e)
     {
-        if (TryReadWebMessage(e, out var typedMessage) &&
-            typedMessage.TryGetProperty("channel", out var channel) &&
-            string.Equals(channel.GetString(), "dune-shell", StringComparison.Ordinal) &&
-            typedMessage.TryGetProperty("type", out var messageType))
+        if (!IsTrustedPortalSource(e.Source) ||
+            !TryReadWebMessage(e, out var message))
+            return;
+
+        string? channel = GetStringProperty(message, "channel");
+        string? messageType = GetStringProperty(message, "type");
+        if (string.Equals(channel, "dune-shell", StringComparison.Ordinal) &&
+            !string.IsNullOrWhiteSpace(messageType))
         {
-            HandleShellMessage(typedMessage, messageType.GetString());
+            HandleShellMessage(message, messageType);
             return;
         }
 
-        string? action = null;
-        string? url = null;
-        try
-        {
-            // The portal sends a JS object via postMessage(obj). For non-string
-            // payloads WebView2 exposes the serialized JSON on WebMessageAsJson;
-            // TryGetWebMessageAsString() throws InvalidOperationException for
-            // object payloads (it only succeeds when JS posts a raw string).
-            string? json = e.WebMessageAsJson;
-            if (string.IsNullOrWhiteSpace(json))
-            {
-                // Fallback: a caller that posts a JSON *string* (e.g.
-                // postMessage(JSON.stringify(obj))) — read the inner string and
-                // re-parse it. Wrapped in try/catch so a plain-text payload
-                // doesn't blow up the handler.
-                try { json = e.TryGetWebMessageAsString(); } catch { return; }
-                if (string.IsNullOrWhiteSpace(json)) return;
-            }
-            using var doc = System.Text.Json.JsonDocument.Parse(json);
-            var root = doc.RootElement;
-
-            // Unwrap one layer of string-encoded JSON if the caller stringified
-            // before posting. WebMessageAsJson returns "\"{\\\"action\\\"...}\""
-            // in that case, which parses to a JSON string, not an object.
-            if (root.ValueKind == System.Text.Json.JsonValueKind.String)
-            {
-                string inner = root.GetString() ?? string.Empty;
-                if (string.IsNullOrWhiteSpace(inner)) return;
-                using var inner_doc = System.Text.Json.JsonDocument.Parse(inner);
-                var inner_root = inner_doc.RootElement;
-                if (inner_root.ValueKind != System.Text.Json.JsonValueKind.Object) return;
-                if (inner_root.TryGetProperty("action", out var ia)) action = ia.GetString();
-                if (inner_root.TryGetProperty("url",    out var iu)) url    = iu.GetString();
-            }
-            else if (root.ValueKind == System.Text.Json.JsonValueKind.Object)
-            {
-                if (root.TryGetProperty("action", out var a)) action = a.GetString();
-                if (root.TryGetProperty("url",    out var u)) url    = u.GetString();
-            }
-            else
-            {
-                return;
-            }
-        }
-        catch
-        {
-            // Malformed payload — ignore. The portal is the only sender so
-            // this would mean a code bug rather than user input.
-            return;
-        }
+        string? action = GetStringProperty(message, "action");
+        string? url = GetStringProperty(message, "url");
 
         if (string.Equals(action, "open-and-close", StringComparison.OrdinalIgnoreCase))
         {
@@ -505,43 +461,15 @@ internal sealed class MainForm : Form
         else if (string.Equals(action, "pick-save-file", StringComparison.OrdinalIgnoreCase))
         {
             // Show a native Save As dialog and return the chosen path to the frontend.
-            string? id = null;
-            string? defaultName = null;
-            try
-            {
-                string? json = e.WebMessageAsJson;
-                if (!string.IsNullOrWhiteSpace(json))
-                {
-                    using var doc2 = System.Text.Json.JsonDocument.Parse(json);
-                    var r2 = doc2.RootElement.ValueKind == System.Text.Json.JsonValueKind.String
-                        ? System.Text.Json.JsonDocument.Parse(doc2.RootElement.GetString()!).RootElement
-                        : doc2.RootElement;
-                    if (r2.TryGetProperty("id", out var idProp)) id = idProp.GetString();
-                    if (r2.TryGetProperty("defaultName", out var dnProp)) defaultName = dnProp.GetString();
-                }
-            }
-            catch { /* best-effort parse */ }
+            string? id = GetStringProperty(message, "id");
+            string? defaultName = GetStringProperty(message, "defaultName");
             BeginInvoke(new Action(() => ShowSaveDialog(id, defaultName)));
         }
         else if (string.Equals(action, "pick-open-file", StringComparison.OrdinalIgnoreCase))
         {
             // Show a native Open File dialog and return the chosen path to the frontend.
-            string? id = null;
-            string? filter = null;
-            try
-            {
-                string? json = e.WebMessageAsJson;
-                if (!string.IsNullOrWhiteSpace(json))
-                {
-                    using var doc2 = System.Text.Json.JsonDocument.Parse(json);
-                    var r2 = doc2.RootElement.ValueKind == System.Text.Json.JsonValueKind.String
-                        ? System.Text.Json.JsonDocument.Parse(doc2.RootElement.GetString()!).RootElement
-                        : doc2.RootElement;
-                    if (r2.TryGetProperty("id", out var idProp)) id = idProp.GetString();
-                    if (r2.TryGetProperty("filter", out var fProp)) filter = fProp.GetString();
-                }
-            }
-            catch { /* best-effort parse */ }
+            string? id = GetStringProperty(message, "id");
+            string? filter = GetStringProperty(message, "filter");
             BeginInvoke(new Action(() => ShowOpenDialog(id, filter)));
         }
         else if (string.Equals(action, "pick-folder", StringComparison.OrdinalIgnoreCase))
@@ -549,26 +477,33 @@ internal sealed class MainForm : Form
             // Show a native Folder Browser dialog and return the chosen path to
             // the frontend. Used by the "Local Backup Mirror" card on the
             // Database page.
-            string? id = null;
-            string? initialPath = null;
-            string? description = null;
-            try
-            {
-                string? json = e.WebMessageAsJson;
-                if (!string.IsNullOrWhiteSpace(json))
-                {
-                    using var doc2 = System.Text.Json.JsonDocument.Parse(json);
-                    var r2 = doc2.RootElement.ValueKind == System.Text.Json.JsonValueKind.String
-                        ? System.Text.Json.JsonDocument.Parse(doc2.RootElement.GetString()!).RootElement
-                        : doc2.RootElement;
-                    if (r2.TryGetProperty("id", out var idProp)) id = idProp.GetString();
-                    if (r2.TryGetProperty("initialPath", out var ipProp)) initialPath = ipProp.GetString();
-                    if (r2.TryGetProperty("description", out var dProp)) description = dProp.GetString();
-                }
-            }
-            catch { /* best-effort parse */ }
+            string? id = GetStringProperty(message, "id");
+            string? initialPath = GetStringProperty(message, "initialPath");
+            string? description = GetStringProperty(message, "description");
             BeginInvoke(new Action(() => ShowFolderDialog(id, initialPath, description)));
         }
+    }
+
+    private bool IsTrustedPortalSource(string? source)
+    {
+        if (!Uri.TryCreate(source, UriKind.Absolute, out var sourceUri) ||
+            !Uri.TryCreate(_targetUrl, UriKind.Absolute, out var targetUri))
+            return false;
+
+        return string.Equals(sourceUri.Scheme, targetUri.Scheme, StringComparison.OrdinalIgnoreCase) &&
+               string.Equals(sourceUri.IdnHost, targetUri.IdnHost, StringComparison.OrdinalIgnoreCase) &&
+               sourceUri.Port == targetUri.Port;
+    }
+
+    private static string? GetStringProperty(
+        System.Text.Json.JsonElement message,
+        string propertyName)
+    {
+        return message.ValueKind == System.Text.Json.JsonValueKind.Object &&
+               message.TryGetProperty(propertyName, out var property) &&
+               property.ValueKind == System.Text.Json.JsonValueKind.String
+            ? property.GetString()
+            : null;
     }
 
     private static bool TryReadWebMessage(
@@ -610,9 +545,7 @@ internal sealed class MainForm : Form
 
     private void HandleShellMessage(System.Text.Json.JsonElement message, string? messageType)
     {
-        string? requestId = message.TryGetProperty("requestId", out var id)
-            ? id.GetString()
-            : null;
+        string? requestId = GetStringProperty(message, "requestId");
         if (string.IsNullOrWhiteSpace(requestId)) return;
 
         if (string.Equals(messageType, "preferences.get", StringComparison.Ordinal))
