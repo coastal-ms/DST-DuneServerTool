@@ -22,6 +22,10 @@ here cover everything those tags shipped.
   and PvP structure-damage fields that Funcom omits from its Solo Custom
   Settings interface. The underlying keys remain untouched for future
   reevaluation.
+- Solo progression actions now accept the fresh-character schema created by the
+  current PTC build. The additional fingerprint differs only in unrelated actor
+  spawner and map-marker definitions; all progression mutations remain
+  exact-schema gated and backup-first.
 
 ## [13.8.3] - 2026-08-20
 

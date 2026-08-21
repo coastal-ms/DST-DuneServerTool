@@ -1434,6 +1434,18 @@ internal static partial class Program
                     "Progression self-test did not reach verified target state.");
             }
 
+            var compatibleAdapterPath = Path.Combine(root, "compatible-adapter.json");
+            File.WriteAllText(
+                compatibleAdapterPath,
+                File.ReadAllText(adapterPath).Replace(
+                    $"\"schema_fingerprint\":\"{selfTestFingerprint}\"",
+                    $"\"schema_fingerprint\":\"{new string('1', 64)}\",\"compatible_schema_fingerprints\":[\"{selfTestFingerprint}\"]"));
+            EnableAllSkills(
+                target,
+                Path.Combine(root, "safety", "before-compatible-schema.db"),
+                compatibleAdapterPath,
+                skillsPath);
+
             var badAdapterPath = Path.Combine(root, "bad-adapter.json");
             File.WriteAllText(
                 badAdapterPath,
@@ -1526,6 +1538,7 @@ internal static partial class Program
                     "offline-specialization-max-with-rewards",
                     "offline-find-the-fremen-completion",
                     "offline-enable-all-skills-preserves-unknowns",
+                    "progression-compatible-schema-accepted",
                     "progression-schema-mismatch-fails-closed",
                     "invalid-restore-leaves-target-unchanged"
                 }
