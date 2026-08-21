@@ -45,7 +45,7 @@ export const GROUP_ORDER: readonly NavGroup[] = ['overview', 'terminal', 'data',
 
 export const GROUP_LABELS: Record<NavGroup, string> = {
   overview: 'Server Health',
-  terminal: 'PowerShell',
+  terminal: 'Commands',
   data:     'Game Data',
   solo:     'Solo Mode',
   database: 'Database',
