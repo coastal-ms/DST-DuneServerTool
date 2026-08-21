@@ -70,6 +70,17 @@ export interface UpdateInstallResult {
   fromVersion?: string
   toVersion?: string
   note?: string
+  mode?: UpdateInstallMode
+  source?: UpdateInstallSource
+}
+
+export type UpdateInstallMode = 'silent' | 'interactive'
+export type UpdateInstallSource = 'banner' | 'settings'
+
+export interface UpdateInstallOptions {
+  mode: UpdateInstallMode
+  source: UpdateInstallSource
+  reinstall?: boolean
 }
 
 export function checkForUpdate(opts: { force?: boolean } = {}) {
@@ -77,9 +88,12 @@ export function checkForUpdate(opts: { force?: boolean } = {}) {
   return api<UpdateCheck>(`/api/update/check${qs}`)
 }
 
-export function installUpdate(opts: { reinstall?: boolean } = {}) {
+export function installUpdate(opts: UpdateInstallOptions) {
   const qs = opts.reinstall ? '?reinstall=1' : ''
-  return api<UpdateInstallResult>(`/api/update/install${qs}`, { method: 'POST', body: '{}' })
+  return api<UpdateInstallResult>(`/api/update/install${qs}`, {
+    method: 'POST',
+    body: JSON.stringify({ mode: opts.mode, source: opts.source }),
+  })
 }
 
 /**

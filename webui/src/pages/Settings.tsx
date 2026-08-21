@@ -308,9 +308,9 @@ export function Settings() {
     setUpdErr(null)
     setUpdMsg(null)
     try {
-      const r = await installUpdate({ reinstall: true })
+      const r = await installUpdate({ mode: 'interactive', source: 'settings', reinstall: true })
       if (r.launched) {
-        setUpdMsg(`Installer launched — reinstalling ${fmtToolVersion(r.toVersion)}. The portal will go offline briefly, then the app will relaunch.`)
+        setUpdMsg(`Installer wizard launched — reinstall ${fmtToolVersion(r.toVersion)} using the visible setup steps. The portal will go offline briefly, then the app will relaunch.`)
       } else {
         setUpdErr(r.reason ?? 'Installer did not launch.')
       }
@@ -326,9 +326,9 @@ export function Settings() {
     setUpdErr(null)
     setUpdMsg(null)
     try {
-      const r = await installUpdate()
+      const r = await installUpdate({ mode: 'interactive', source: 'settings' })
       if (r.launched) {
-        setUpdMsg(`Installer launched — upgrading to ${fmtToolVersion(r.toVersion)}. The portal will go offline briefly, then the new version will relaunch.`)
+        setUpdMsg(`Installer wizard launched — upgrade to ${fmtToolVersion(r.toVersion)} using the visible setup steps. The portal will go offline briefly, then the new version will relaunch.`)
       } else {
         setUpdErr(r.reason ?? 'Installer did not launch.')
       }
@@ -362,9 +362,9 @@ export function Settings() {
         setUpdErr(res.error ?? 'The live release is not installable right now.')
         return
       }
-      const r = await installUpdate()
+      const r = await installUpdate({ mode: 'interactive', source: 'settings' })
       if (r.launched) {
-        setUpdMsg(`Installer launched — returning to the live release ${fmtToolVersion(r.toVersion)}. The portal will go offline briefly, then relaunch.`)
+        setUpdMsg(`Installer wizard launched — return to the live release ${fmtToolVersion(r.toVersion)} using the visible setup steps. The portal will go offline briefly, then relaunch.`)
       } else {
         setUpdErr(r.reason ?? 'Installer did not launch.')
       }

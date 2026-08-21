@@ -2,7 +2,8 @@
 #
 # Polls the public GitHub Releases API for the latest tag, compares against
 # the running $script:DuneToolVersion, and (on user click) downloads the
-# installer asset and runs it silently. The installer's PrepareToInstall
+# installer asset and runs it silently for Update Banner requests or
+# interactively for Settings requests. The installer's PrepareToInstall
 # hook silently uninstalls the prior version before laying down the new
 # files, so the Start Menu shortcut keeps working and %APPDATA%\DuneServer
 # is preserved.
@@ -431,7 +432,37 @@ Register-DuneRoute -Method POST -Path '/api/update/migration-notice/ack' -Handle
     }
 }
 
-# POST /api/update/install — download installer asset and run it interactively
+function Resolve-DuneUpdateInstallRequest {
+    param($Request, $Body)
+
+    $queryMode = ''
+    $querySource = ''
+    try {
+        $queryMode = ([string]$Request.QueryString['mode']).Trim().ToLowerInvariant()
+        $querySource = ([string]$Request.QueryString['source']).Trim().ToLowerInvariant()
+    } catch {}
+    $bodyMode = ''
+    $bodySource = ''
+    if ($Body -is [hashtable]) {
+        if ($Body.ContainsKey('mode')) { $bodyMode = ([string]$Body.mode).Trim().ToLowerInvariant() }
+        if ($Body.ContainsKey('source')) { $bodySource = ([string]$Body.source).Trim().ToLowerInvariant() }
+    } elseif ($Body) {
+        if ($Body.PSObject.Properties.Name -contains 'mode') { $bodyMode = ([string]$Body.mode).Trim().ToLowerInvariant() }
+        if ($Body.PSObject.Properties.Name -contains 'source') { $bodySource = ([string]$Body.source).Trim().ToLowerInvariant() }
+    }
+
+    if ($queryMode -and $bodyMode -and $queryMode -ne $bodyMode) { throw 'Conflicting update install mode values.' }
+    if ($querySource -and $bodySource -and $querySource -ne $bodySource) { throw 'Conflicting update install source values.' }
+    $mode = if ($queryMode) { $queryMode } elseif ($bodyMode) { $bodyMode } else { 'interactive' }
+    $source = if ($querySource) { $querySource } elseif ($bodySource) { $bodySource } else { 'legacy' }
+    if ($mode -notin @('interactive', 'silent')) { throw 'Invalid update install mode.' }
+    if ($source -notin @('legacy', 'banner', 'settings')) { throw 'Invalid update install source.' }
+    if ($mode -eq 'silent' -and $source -ne 'banner') { throw 'Silent update installs are allowed only from the update banner.' }
+    return @{ mode = $mode; source = $source }
+}
+
+# POST /api/update/install - download the selected installer and launch it in
+# the explicitly requested mode. Older clients omit mode and remain interactive.
 Register-DuneRoute -Method POST -Path '/api/update/install' -Handler {
     param($req, $res, $routeParams, $body)
     # Serialize installs: never let two update flows download + relaunch at once.
@@ -442,6 +473,14 @@ Register-DuneRoute -Method POST -Path '/api/update/install' -Handler {
     }
     try {
       try {
+        try {
+            $installRequest = Resolve-DuneUpdateInstallRequest -Request $req -Body $body
+        } catch {
+            Write-DuneError -Response $res -Status 400 -Message $_.Exception.Message
+            return
+        }
+        $installMode = [string]$installRequest.mode
+        $installSource = [string]$installRequest.source
         # Gate: a user upgrading across the companion-tool decoupling must read and
         # acknowledge the one-time notice before any further update can run.
         $notice = Get-DuneDecoupleNotice
@@ -536,12 +575,19 @@ Register-DuneRoute -Method POST -Path '/api/update/install' -Handler {
         # Respond to the client FIRST so the browser sees confirmation
         # before we tear ourselves down. The relauncher below kills this
         # very process about 3 seconds later.
+        $installNote = if ($installMode -eq 'silent') {
+            'Automatic update started. DST will close, install silently, and relaunch automatically.'
+        } else {
+            'Installer wizard launched. Complete the visible setup steps; DST relaunches when installation finishes.'
+        }
         Write-DuneJson -Response $res -Body @{
             launched        = $true
             installerPath   = $dest
             fromVersion     = $script:DuneToolVersion
             toVersion       = ($rel.tag -replace '^v','')
-            note            = 'Updater launched. The Dune Server app and console will close, then the installer wizard opens for you to click through. The updated app opens automatically when the install finishes.'
+            mode            = $installMode
+            source          = $installSource
+            note            = $installNote
         }
 
         # Build a relauncher script that:
@@ -553,23 +599,22 @@ Register-DuneRoute -Method POST -Path '/api/update/install' -Handler {
         #      the relauncher (a child of DuneServer.exe). Killing the
         #      specific PID with Stop-Process leaves the relauncher orphaned
         #      but alive.
-        #   3. Launches the installer INTERACTIVELY (the Inno wizard is shown
-        #      so the user clicks through it every time - no silent/background
-        #      install). The installer's [Run] postinstall entry (DuneServer.iss,
-        #      shown because the install is not silent) relaunches DuneServer.exe
-        #      via the "Launch Dune Server" finish-page action, which brings up
-        #      DuneShell.exe. The user sees the full wizard plus the new window.
+        #   3. Launches Inno in the explicitly requested mode. Silent banner
+        #      installs use the installer's silent-only [Run] entry to relaunch
+        #      DST; Settings installs show the wizard and its finish-page action.
         #   4. WaitForExit on the installer PID, then on non-zero exit /
         #      timeout shows a topmost WinForms MessageBox so the user has
         #      a real signal when something fails (the hidden powershell
         #      host has no other UI to surface errors).
         $parentPid       = $PID
-        # Interactive install: show the Inno wizard every time (no /VERYSILENT).
-        # /SP- skips the redundant "This will install..." start prompt; the
-        # Welcome/Ready/Progress/Finish pages and the "Launch Dune Server"
-        # finish action are all shown so the user clicks through and sees the app
-        # relaunch. /NORESTART blocks any auto-reboot request.
-        $installArgs     = '/SP- /NORESTART'
+        # Arguments are selected only from these constants after strict mode/source
+        # validation above. No request value is ever interpolated into a command.
+        $installArgs = if ($installMode -eq 'silent') {
+            '/SP- /VERYSILENT /SUPPRESSMSGBOXES /NORESTART'
+        } else {
+            '/SP- /NORESTART'
+        }
+        $installModeLabel = if ($installMode -eq 'silent') { 'silently' } else { 'interactively' }
         $logPath         = Join-Path $tmpDir ("relaunch-$safeTag.log")
         # Defensive escapes: %TEMP% / install path can contain an apostrophe
         # (e.g. C:\Users\<user-with-apostrophe>\AppData\...) which would break the single-
@@ -577,6 +622,7 @@ Register-DuneRoute -Method POST -Path '/api/update/install' -Handler {
         # PowerShell escapes ' as '' inside single-quoted strings.
         $destEsc         = $dest         -replace "'", "''"
         $installArgsEsc  = $installArgs  -replace "'", "''"
+        $installModeEsc  = $installModeLabel -replace "'", "''"
         $logPathEsc      = $logPath      -replace "'", "''"
         $relaunchScript = @"
 `$ErrorActionPreference = 'Continue'
@@ -643,12 +689,12 @@ public static extern bool AllowSetForegroundWindow(int dwProcessId);
     # chain can take focus.
     try { [DuneUpd.Win]::AllowSetForegroundWindow(-1) | Out-Null } catch {}
 
-    Write-Host "[`$(Get-Date -Format o)] Launching installer interactively: $destEsc"
+    Write-Host "[`$(Get-Date -Format o)] Launching installer $installModeEsc`: $destEsc"
     `$proc = Start-Process -FilePath '$destEsc' -ArgumentList '$installArgsEsc' -PassThru
 
-    # Wait up to 30 minutes for the interactive install to finish (the user
-    # paces the wizard, so this is a generous safety net rather than a tight
-    # bound). Inno runs the install + the [Run] postinstall "Launch Dune Server"
+    # Wait up to 30 minutes for install to finish. This is generous for the
+    # interactive wizard and a safety bound for silent mode. Inno runs the
+    # applicable [Run] postinstall "Launch Dune Server"
     # action, then exits. We were spawned from an already-elevated DuneServer.exe,
     # so Inno runs in-place rather than re-elevating -- WaitForExit on the
     # spawned PID is meaningful end-to-end. Inno returns exit code 0 on success
@@ -689,9 +735,8 @@ public static extern bool AllowSetForegroundWindow(int dwProcessId);
 
         # Spawn the relauncher in a HIDDEN window. The relauncher itself is
         # invisible (the grace sleep + app kill chain), but it then launches the
-        # installer INTERACTIVELY so the user sees and clicks through the Inno
-        # wizard, and the post-install "Launch Dune Server" action brings the
-        # new app window up. On failure the relauncher shows a topmost MessageBox.
+        # installer in the validated mode. Both modes relaunch through their
+        # corresponding Inno [Run] entry. Failures still surface in a topmost box.
         Start-Process -FilePath 'powershell.exe' `
             -ArgumentList @('-NoProfile','-ExecutionPolicy','Bypass','-File',$scriptPath) `
             -WindowStyle Hidden | Out-Null

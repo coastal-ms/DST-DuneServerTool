@@ -24,6 +24,10 @@ BeforeAll {
             publishedAt='2026-06-21'; releaseNotes=''; assetName='DuneServerSetup.exe'
             assetUrl='https://x/final.exe'; assetSize=100
         }
+        function global:New-InstallRequest {
+            param([hashtable]$Query = @{})
+            return [pscustomobject]@{ QueryString = $Query }
+        }
     }
 }
 
@@ -142,6 +146,49 @@ Describe 'Get-DuneUpdateInstalledPrerelease (running-build marker)' {
         # User toggled to Test (preference set) but never installed a pre-release.
         function global:Read-DuneConfigRaw { @{ UpdateChannel = 'test' } }
         Get-DuneUpdateInstalledPrerelease | Should -BeFalse
+    }
+}
+
+Describe 'Update install initiation mode' {
+    It 'defaults older clients and direct calls to interactive legacy mode' {
+        $resolved = Resolve-DuneUpdateInstallRequest -Request (New-InstallRequest) -Body @{}
+        $resolved.mode | Should -Be 'interactive'
+        $resolved.source | Should -Be 'legacy'
+    }
+
+    It 'accepts silent mode only when explicitly sourced from the banner' {
+        $resolved = Resolve-DuneUpdateInstallRequest -Request (New-InstallRequest) -Body @{ mode='silent'; source='banner' }
+        $resolved.mode | Should -Be 'silent'
+        $resolved.source | Should -Be 'banner'
+        { Resolve-DuneUpdateInstallRequest -Request (New-InstallRequest) -Body @{ mode='silent'; source='settings' } } |
+            Should -Throw '*only from the update banner*'
+    }
+
+    It 'keeps Settings and reinstall requests interactive' {
+        $resolved = Resolve-DuneUpdateInstallRequest -Request (New-InstallRequest) -Body @{ mode='interactive'; source='settings' }
+        $resolved.mode | Should -Be 'interactive'
+        $resolved.source | Should -Be 'settings'
+        $request = New-InstallRequest -Query @{ reinstall='1' }
+        (Resolve-DuneUpdateInstallRequest -Request $request -Body @{ mode='interactive'; source='settings' }).mode |
+            Should -Be 'interactive'
+    }
+
+    It 'rejects malformed, conflicting, and command-shaped mode values' {
+        { Resolve-DuneUpdateInstallRequest -Request (New-InstallRequest) -Body @{ mode='silent /SUPPRESSMSGBOXES & calc'; source='banner' } } |
+            Should -Throw '*Invalid update install mode*'
+        { Resolve-DuneUpdateInstallRequest -Request (New-InstallRequest -Query @{ mode='silent'; source='banner' }) -Body @{ mode='interactive'; source='banner' } } |
+            Should -Throw '*Conflicting update install mode*'
+        { Resolve-DuneUpdateInstallRequest -Request (New-InstallRequest) -Body @{ mode='interactive'; source='settings;calc' } } |
+            Should -Throw '*Invalid update install source*'
+    }
+
+    It 'selects installer arguments only from validated constant modes' {
+        $routePath = Join-Path (Split-Path $PSScriptRoot -Parent) 'app\server\routes\Update.ps1'
+        $source = Get-Content -LiteralPath $routePath -Raw
+        $source | Should -Match ([regex]::Escape("'/SP- /VERYSILENT /SUPPRESSMSGBOXES /NORESTART'"))
+        $source | Should -Match ([regex]::Escape("'/SP- /NORESTART'"))
+        $source | Should -Match "\`$installMode -eq 'silent'"
+        $source | Should -Not -Match 'ArgumentList\s+\$installRequest'
     }
 }
 

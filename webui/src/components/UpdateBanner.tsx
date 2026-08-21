@@ -17,7 +17,7 @@ function markDismissed(version: string) {
 // Full-screen takeover shown after the updater launches. We don't try to
 // close or redirect anything by script (browser tabs can't be closed by JS,
 // and there's nothing clever to do about the leftover console windows). We
-// just tell the user plainly: the installer is running, a fresh window opens
+// just tell the user plainly: the automatic update is running, a fresh window opens
 // automatically when it finishes, and they can close all the old browser and
 // console windows themselves. We poll the server and flip to a definitive
 // "done — close everything" state the moment it stops responding.
@@ -81,9 +81,9 @@ function UpdatingPage({ toVersion }: { toVersion?: string }) {
         ) : (
           <>
             <p className="mt-5 text-sm leading-relaxed text-slate-300">
-              The installer wizard is opening — <strong className="text-white">click through
-              it</strong> (approve the Windows prompt if asked). When it finishes, the updated tool
-              opens automatically in a new window.
+              DST is updating automatically. It will close, install in the background,
+              and <strong className="text-white">open the updated tool automatically</strong>.
+              Approve the Windows prompt if one appears.
             </p>
             <div className="mt-4 rounded-lg border border-amber-400/30 bg-amber-400/10 px-4 py-3 text-left">
               <p className="text-sm font-semibold text-amber-100">Once the new window opens:</p>
@@ -138,7 +138,7 @@ export function UpdateBanner() {
     // intentionally takes the server down, and <UpdatingPage> owns that UX.
     ;(window as unknown as { __duneUpdating?: boolean }).__duneUpdating = true
     try {
-      const res = await installUpdate()
+      const res = await installUpdate({ mode: 'silent', source: 'banner' })
       if (res.launched) {
         setLaunchedVersion(res.toVersion)
         setLaunched(true)

@@ -30,6 +30,9 @@ here cover everything those tags shipped.
 - Cloudflare Access identities now require validation of the signed Access JWT
   issuer, audience, lifetime, and signature before the existing email ACL is
   applied; the raw Cloudflare email header is no longer trusted.
+- The global Update Banner now installs updates silently and relaunches DST
+  automatically, while every Settings-initiated update, reinstall, and Return
+  to Stable action continues to launch the visible installer wizard.
 - The existing DST dashboard now adapts to phone and tablet browsers with
   safe-area spacing, touch-sized controls, and a mobile navigation drawer
   generated from the same pages and groups as the desktop sidebar.
