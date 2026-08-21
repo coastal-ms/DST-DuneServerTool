@@ -3,6 +3,8 @@
 $script:DunePortalAuthIterations = 310000
 $script:DunePortalSessionHours = 12
 $script:DunePortalIdleMinutes = 30
+$script:DunePortalRememberDays = 30
+$script:DunePortalRememberIdleDays = 7
 $script:DunePortalCookieName = 'dune_portal_session'
 
 function Get-DunePortalAuthDirectory {
@@ -360,16 +362,21 @@ function Register-DunePortalLoginFailure {
 }
 
 function New-DunePortalSession {
-    param([Parameter(Mandatory)][string]$AccountId)
+    param([Parameter(Mandatory)][string]$AccountId, [bool]$RememberMe = $false)
     $token = New-DuneRandomToken -Bytes 32
     $now = (Get-Date).ToUniversalTime()
+    $absoluteSeconds = if ($RememberMe) { $script:DunePortalRememberDays * 86400 } else { $script:DunePortalSessionHours * 3600 }
+    $idleSeconds = if ($RememberMe) { $script:DunePortalRememberIdleDays * 86400 } else { $script:DunePortalIdleMinutes * 60 }
     $session = @{
         tokenHash = Get-DunePortalSha256 $token
         accountId = $AccountId
+        persistent = $RememberMe
+        absoluteSeconds = $absoluteSeconds
+        idleSeconds = $idleSeconds
         createdAt = $now.ToString('o')
-        expiresAt = $now.AddHours($script:DunePortalSessionHours).ToString('o')
+        expiresAt = $now.AddSeconds($absoluteSeconds).ToString('o')
         lastSeenAt = $now.ToString('o')
-        idleExpiresAt = $now.AddMinutes($script:DunePortalIdleMinutes).ToString('o')
+        idleExpiresAt = $now.AddSeconds($idleSeconds).ToString('o')
     }
     $store = Get-DunePortalSessionStore
     $store.sessions = @($store.sessions | Where-Object {
@@ -411,9 +418,10 @@ function Get-DunePortalCookieToken {
 }
 
 function Set-DunePortalSessionCookie {
-    param($Response, [string]$Token)
-    $maxAge = $script:DunePortalSessionHours * 3600
-    $Response.Headers['Set-Cookie'] = "$($script:DunePortalCookieName)=$Token; Path=/; Max-Age=$maxAge; Secure; HttpOnly; SameSite=Strict"
+    param($Response, [string]$Token, [bool]$RememberMe = $false)
+    $cookie = "$($script:DunePortalCookieName)=$Token; Path=/"
+    if ($RememberMe) { $cookie += "; Max-Age=$($script:DunePortalRememberDays * 86400)" }
+    $Response.Headers['Set-Cookie'] = "$cookie; Secure; HttpOnly; SameSite=Strict"
 }
 
 function Clear-DunePortalSessionCookie {
@@ -444,10 +452,19 @@ function Get-DunePortalSessionAuth {
             Save-DunePortalSessionStore $sessions
             return @{ ok = $false }
         }
+        $idleSeconds = if ([int64]$match.idleSeconds -gt 0) { [int64]$match.idleSeconds } else { $script:DunePortalIdleMinutes * 60 }
+        $nextIdle = $now.AddSeconds($idleSeconds)
+        $absoluteExpiry = [datetimeoffset]::Parse([string]$match.expiresAt).UtcDateTime
+        if ($nextIdle -gt $absoluteExpiry) { $nextIdle = $absoluteExpiry }
         $match.lastSeenAt = $now.ToString('o')
-        $match.idleExpiresAt = $now.AddMinutes($script:DunePortalIdleMinutes).ToString('o')
+        $match.idleExpiresAt = $nextIdle.ToString('o')
         Save-DunePortalSessionStore $sessions
-        return @{ ok = $true; account = $account; mustChangePassword = [bool]$account.mustChangePassword }
+        return @{
+            ok = $true
+            account = $account
+            mustChangePassword = [bool]$account.mustChangePassword
+            rememberMe = [bool]$match.persistent
+        }
     }
 }
 
@@ -464,7 +481,7 @@ function Test-DunePortalRequestOrigin {
 }
 
 function Invoke-DunePortalLogin {
-    param([string]$Username, [string]$Password, $Request)
+    param([string]$Username, [string]$Password, $Request, [bool]$RememberMe = $false)
     $clientKey = Get-DunePortalClientKey $Request
     return Invoke-DunePortalAuthLock {
         $store = Get-DunePortalAccountStore
@@ -498,14 +515,14 @@ function Invoke-DunePortalLogin {
         $account.lastLoginAt = (Get-Date).ToUniversalTime().ToString('o')
         if ($client) { $client.count = 0; $client.lockoutUntil = '' }
         Save-DunePortalAccountStore $store
-        $issued = New-DunePortalSession -AccountId ([string]$account.id)
+        $issued = New-DunePortalSession -AccountId ([string]$account.id) -RememberMe:$RememberMe
         Write-DunePortalAudit -Event 'login' -Result 'success' -ClientKey $clientKey
-        return @{ ok = $true; account = $account; token = $issued.token }
+        return @{ ok = $true; account = $account; token = $issued.token; rememberMe = $RememberMe }
     }
 }
 
 function Set-DunePortalPassword {
-    param([string]$AccountId, [string]$CurrentPassword, [string]$NewPassword)
+    param([string]$AccountId, [string]$CurrentPassword, [string]$NewPassword, [bool]$RememberMe = $false)
     if ($CurrentPassword.Length -gt 128) { throw 'Current password is incorrect.' }
     if (-not (Test-DunePortalPasswordPolicy $NewPassword)) { throw 'Password must be 12 to 128 characters.' }
     return Invoke-DunePortalAuthLock {
@@ -518,7 +535,7 @@ function Set-DunePortalPassword {
         $account.updatedAt = $account.passwordChangedAt
         Save-DunePortalAccountStore $store
         Revoke-DunePortalSessions -AccountId $AccountId
-        return (New-DunePortalSession -AccountId $AccountId)
+        return (New-DunePortalSession -AccountId $AccountId -RememberMe:$RememberMe)
     }
 }
 

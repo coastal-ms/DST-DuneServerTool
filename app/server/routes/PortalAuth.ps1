@@ -29,17 +29,23 @@ Register-DuneRoute -Method POST -Path '/api/portal-auth/login' -Handler {
     }
     $username = [string](Get-DunePortalBodyValue $body 'username')
     $password = [string](Get-DunePortalBodyValue $body 'password')
+    $rememberValue = Get-DunePortalBodyValue $body 'rememberMe'
+    if ($null -ne $rememberValue -and $rememberValue -isnot [bool]) {
+        Write-DuneError -Response $res -Status 400 -Message 'Invalid request.'
+        return
+    }
+    $rememberMe = if ($null -eq $rememberValue) { $false } else { [bool]$rememberValue }
     if ($username.Length -gt 64 -or $password.Length -gt 128) {
         Write-DuneError -Response $res -Status 400 -Message 'Invalid request.'
         return
     }
-    $result = Invoke-DunePortalLogin -Username $username -Password $password -Request $req
+    $result = Invoke-DunePortalLogin -Username $username -Password $password -Request $req -RememberMe:$rememberMe
     if (-not $result.ok) {
         Write-DuneError -Response $res -Status 401 -Message 'Invalid username or password.'
         return
     }
     Revoke-DunePortalSessionToken -Token (Get-DunePortalCookieToken $req)
-    Set-DunePortalSessionCookie -Response $res -Token $result.token
+    Set-DunePortalSessionCookie -Response $res -Token $result.token -RememberMe:$rememberMe
     Write-DuneJson -Response $res -Body @{
         ok = $true
         accountLoginEnabled = $true
@@ -69,8 +75,9 @@ Register-DuneRoute -Method POST -Path '/api/portal-auth/change-password' -Inline
         $issued = Set-DunePortalPassword `
             -AccountId ([string]$auth.account.id) `
             -CurrentPassword ([string](Get-DunePortalBodyValue $body 'currentPassword')) `
-            -NewPassword ([string](Get-DunePortalBodyValue $body 'newPassword'))
-        Set-DunePortalSessionCookie -Response $res -Token $issued.token
+            -NewPassword ([string](Get-DunePortalBodyValue $body 'newPassword')) `
+            -RememberMe:([bool]$auth.rememberMe)
+        Set-DunePortalSessionCookie -Response $res -Token $issued.token -RememberMe:([bool]$auth.rememberMe)
         Write-DuneJson -Response $res -Body @{ ok = $true; mustChangePassword = $false }
     } catch {
         Write-DuneError -Response $res -Status 400 -Message $_.Exception.Message
@@ -138,6 +145,7 @@ Register-DuneRoute -Method PUT -Path '/api/remote-access/portal-accounts/{id}' -
             if (-not $account.enabled) { Revoke-DunePortalSessions -AccountId ([string]$account.id) }
             return $account
         }
+        if (-not $updated.enabled) { Clear-DunePortalSessionCookie $res }
         Write-DuneJson -Response $res -Body @{ account = Get-DunePortalPublicAccount $updated }
     } catch {
         Write-DuneError -Response $res -Status 400 -Message $_.Exception.Message
@@ -161,6 +169,7 @@ Register-DuneRoute -Method DELETE -Path '/api/remote-access/portal-accounts/{id}
             Save-DunePortalAccountStore $store
             Revoke-DunePortalSessions -AccountId ([string]$account.id)
         }
+        Clear-DunePortalSessionCookie $res
         Write-DuneJson -Response $res -Body @{ ok = $true }
     } catch {
         Write-DuneError -Response $res -Status 400 -Message $_.Exception.Message
@@ -181,12 +190,14 @@ Register-DuneRoute -Method POST -Path '/api/remote-access/portal-accounts/{id}/r
 Register-DuneRoute -Method POST -Path '/api/remote-access/portal-accounts/{id}/revoke-sessions' -LocalOnly -Handler {
     param($req, $res, $routeParams, $body)
     Revoke-DunePortalSessions -AccountId ([string]$routeParams.id)
+    Clear-DunePortalSessionCookie $res
     Write-DuneJson -Response $res -Body @{ ok = $true }
 }
 
 Register-DuneRoute -Method POST -Path '/api/remote-access/portal-accounts/revoke-all-sessions' -LocalOnly -Handler {
     param($req, $res, $routeParams, $body)
     Revoke-DunePortalSessions
+    Clear-DunePortalSessionCookie $res
     Write-DuneJson -Response $res -Body @{ ok = $true }
 }
 
@@ -230,6 +241,7 @@ Register-DuneRoute -Method PUT -Path '/api/remote-access/portal-account-mode' -L
             if (-not $enabled) { Revoke-DunePortalSessions }
             return $store
         }
+        if (-not $state.accountLoginEnabled) { Clear-DunePortalSessionCookie $res }
         Write-DuneJson -Response $res -Body @{ accountLoginEnabled = [bool]$state.accountLoginEnabled }
     } catch {
         Write-DuneError -Response $res -Status 400 -Message $_.Exception.Message

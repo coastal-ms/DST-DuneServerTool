@@ -35,6 +35,7 @@ BeforeAll {
         if ($Method -eq 'POST' -and $Path -eq '/api/portal-auth/login') { return $script:PortalLoginRoute.Handler }
         if ($Method -eq 'POST' -and $Path -eq '/api/portal-auth/logout') { return $script:PortalLogoutRoute.Handler }
         if ($Method -eq 'PUT' -and $Path -eq '/api/remote-access/portal-account-mode') { return $script:PortalModeRoute.Handler }
+        return @($script:DuneRoutes | Where-Object { $_.Method -eq $Method -and $_.Path -eq $Path })[0].Handler
     }
 }
 
@@ -129,6 +130,7 @@ Describe 'Registered portal login/logout production handlers' {
         $loginResponse.StatusCode | Should -Be 200
         $setCookie = [string]$loginResponse.Headers['Set-Cookie']
         $setCookie | Should -Match '^dune_portal_session=([^;]+);'
+        $setCookie | Should -Not -Match 'Max-Age|Expires='
         $token = [regex]::Match($setCookie, '^dune_portal_session=([^;]+);').Groups[1].Value
         (Get-DunePortalSessionAuth (New-RouteRequest -Cookie $token)).ok | Should -BeTrue
 
@@ -139,6 +141,104 @@ Describe 'Registered portal login/logout production handlers' {
         $logoutResponse.StatusCode | Should -Be 200
         $logoutResponse.Headers['Set-Cookie'] | Should -Match 'Max-Age=0'
         (Get-DunePortalSessionAuth (New-RouteRequest -Cookie $token)).ok | Should -BeFalse
+    }
+
+    It 'strictly validates rememberMe and issues an exactly bounded persistent cookie' {
+        $created = New-DunePortalAccount -Username 'remember-route-owner' -Role owner
+        $store = Get-DunePortalAccountStore
+        $store.accountLoginEnabled = $true
+        Save-DunePortalAccountStore $store
+        $handler = Get-RegisteredHandler POST '/api/portal-auth/login'
+
+        $badResponse = New-RouteResponse
+        & $handler (New-RouteRequest) $badResponse @{} @{
+            username='remember-route-owner'
+            password=$created.oneTimePassword
+            rememberMe='true'
+        }
+        $badResponse.StatusCode | Should -Be 400
+        (Get-DunePortalSessionStore).sessions.Count | Should -Be 0
+
+        $response = New-RouteResponse
+        & $handler (New-RouteRequest) $response @{} @{
+            username='remember-route-owner'
+            password=$created.oneTimePassword
+            rememberMe=$true
+        }
+        $response.StatusCode | Should -Be 200
+        $response.Headers['Set-Cookie'] | Should -Match 'Max-Age=2592000'
+        $session = @((Get-DunePortalSessionStore).sessions)[0]
+        $session.persistent | Should -BeTrue
+        $session.absoluteSeconds | Should -Be 2592000
+        $session.idleSeconds | Should -Be 604800
+
+        $firstToken = [regex]::Match(
+            [string]$response.Headers['Set-Cookie'],
+            '^dune_portal_session=([^;]+);'
+        ).Groups[1].Value
+        $rotatedResponse = New-RouteResponse
+        & $handler (New-RouteRequest -Cookie $firstToken) $rotatedResponse @{} @{
+            username='remember-route-owner'
+            password=$created.oneTimePassword
+            rememberMe=$true
+        }
+        (Get-DunePortalSessionAuth (New-RouteRequest -Cookie $firstToken)).ok | Should -BeFalse
+        $secondToken = [regex]::Match(
+            [string]$rotatedResponse.Headers['Set-Cookie'],
+            '^dune_portal_session=([^;]+);'
+        ).Groups[1].Value
+
+        $changeResponse = New-RouteResponse
+        & (Get-RegisteredHandler POST '/api/portal-auth/change-password') `
+            (New-RouteRequest -Cookie $secondToken) $changeResponse @{} @{
+                currentPassword=$created.oneTimePassword
+                newPassword='replacement password for remembered login'
+            }
+        $changeResponse.StatusCode | Should -Be 200
+        $changeResponse.Headers['Set-Cookie'] | Should -Match 'Max-Age=2592000'
+        (Get-DunePortalSessionAuth (New-RouteRequest -Cookie $secondToken)).ok | Should -BeFalse
+        @((Get-DunePortalSessionStore).sessions)[0].persistent | Should -BeTrue
+    }
+
+    It 'immediately revokes remembered sessions and clears cookies on every admin revoke path' {
+        $cases = @(
+            @{ method='POST'; path='/api/remote-access/portal-accounts/{id}/reset-password'; body=@{} },
+            @{ method='POST'; path='/api/remote-access/portal-accounts/{id}/revoke-sessions'; body=@{} },
+            @{ method='PUT'; path='/api/remote-access/portal-accounts/{id}'; body=@{ enabled=$false } },
+            @{ method='DELETE'; path='/api/remote-access/portal-accounts/{id}'; body=@{} }
+        )
+        $index = 0
+        foreach ($case in $cases) {
+            $index++
+            $created = New-DunePortalAccount -Username "revoke-case-$index" -Role admin
+            $issued = New-DunePortalSession -AccountId $created.account.id -RememberMe:$true
+            $response = New-RouteResponse
+            & (Get-RegisteredHandler $case.method $case.path) (New-RouteRequest -Cookie $issued.token) `
+                $response @{ id=$created.account.id } $case.body
+            $response.StatusCode | Should -Be 200
+            $response.Headers['Set-Cookie'] | Should -Match 'Max-Age=0'
+            @((Get-DunePortalSessionStore).sessions | Where-Object { $_.accountId -eq $created.account.id }).Count |
+                Should -Be 0
+        }
+
+        $created = New-DunePortalAccount -Username 'revoke-all-case' -Role admin
+        $issued = New-DunePortalSession -AccountId $created.account.id -RememberMe:$true
+        $response = New-RouteResponse
+        & (Get-RegisteredHandler POST '/api/remote-access/portal-accounts/revoke-all-sessions') `
+            (New-RouteRequest -Cookie $issued.token) $response @{} @{}
+        $response.Headers['Set-Cookie'] | Should -Match 'Max-Age=0'
+        (Get-DunePortalSessionStore).sessions.Count | Should -Be 0
+
+        $created = New-DunePortalAccount -Username 'mode-disable-case' -Role admin
+        $issued = New-DunePortalSession -AccountId $created.account.id -RememberMe:$true
+        $store = Get-DunePortalAccountStore
+        $store.accountLoginEnabled = $true
+        Save-DunePortalAccountStore $store
+        $response = New-RouteResponse
+        & (Get-RegisteredHandler PUT '/api/remote-access/portal-account-mode') `
+            (New-RouteRequest -Cookie $issued.token) $response @{} @{ enabled=$false }
+        $response.Headers['Set-Cookie'] | Should -Match 'Max-Age=0'
+        (Get-DunePortalSessionStore).sessions.Count | Should -Be 0
     }
 
     It 'registers login on the bounded worker path instead of the listener thread' {

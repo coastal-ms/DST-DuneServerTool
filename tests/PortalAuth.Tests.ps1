@@ -100,6 +100,52 @@ Describe 'Portal sessions and login defense' {
         (Get-DunePortalSessionAuth (New-PortalTestRequest -Cookie $session.token)).ok | Should -BeFalse
     }
 
+    It 'uses short server limits and a session cookie by default' {
+        $created = New-DunePortalAccount -Username 'short-session-owner' -Role owner
+        $before = (Get-Date).ToUniversalTime()
+        $issued = New-DunePortalSession -AccountId $created.account.id
+        $entry = $issued.session
+        $entry.persistent | Should -BeFalse
+        $entry.absoluteSeconds | Should -Be 43200
+        $entry.idleSeconds | Should -Be 1800
+        ([datetime]$entry.expiresAt - $before).TotalHours | Should -BeLessOrEqual 12.01
+        ([datetime]$entry.idleExpiresAt - $before).TotalMinutes | Should -BeLessOrEqual 30.1
+
+        $response = [pscustomobject]@{ Headers = @{} }
+        Set-DunePortalSessionCookie -Response $response -Token $issued.token
+        $response.Headers['Set-Cookie'] | Should -Not -Match 'Max-Age|Expires='
+    }
+
+    It 'matches remembered cookie persistence to 30-day absolute and 7-day idle server limits' {
+        $created = New-DunePortalAccount -Username 'remembered-owner' -Role owner
+        $before = (Get-Date).ToUniversalTime()
+        $issued = New-DunePortalSession -AccountId $created.account.id -RememberMe:$true
+        $entry = $issued.session
+        $entry.persistent | Should -BeTrue
+        $entry.absoluteSeconds | Should -Be 2592000
+        $entry.idleSeconds | Should -Be 604800
+        ([datetime]$entry.expiresAt - $before).TotalDays | Should -BeLessOrEqual 30.01
+        ([datetime]$entry.idleExpiresAt - $before).TotalDays | Should -BeLessOrEqual 7.01
+
+        $response = [pscustomobject]@{ Headers = @{} }
+        Set-DunePortalSessionCookie -Response $response -Token $issued.token -RememberMe:$true
+        $response.Headers['Set-Cookie'] | Should -Match 'Max-Age=2592000'
+        $response.Headers['Set-Cookie'] | Should -Match 'Secure; HttpOnly; SameSite=Strict'
+    }
+
+    It 'preserves remembered state while rotating a forced-change session' {
+        $created = New-DunePortalAccount -Username 'remember-change-owner' -Role owner
+        $old = New-DunePortalSession -AccountId $created.account.id -RememberMe:$true
+        $auth = Get-DunePortalSessionAuth (New-PortalTestRequest -Cookie $old.token)
+        $auth.rememberMe | Should -BeTrue
+        $new = Set-DunePortalPassword -AccountId $created.account.id `
+            -CurrentPassword $created.oneTimePassword -NewPassword 'a replacement password' `
+            -RememberMe:$auth.rememberMe
+        $new.session.persistent | Should -BeTrue
+        (Get-DunePortalSessionAuth (New-PortalTestRequest -Cookie $old.token)).ok | Should -BeFalse
+        (Get-DunePortalSessionAuth (New-PortalTestRequest -Cookie $new.token)).ok | Should -BeTrue
+    }
+
     It 'revokes sessions and rejects disabled accounts' {
         $created = New-DunePortalAccount -Username 'disabled-owner' -Role owner
         $first = New-DunePortalSession -AccountId $created.account.id

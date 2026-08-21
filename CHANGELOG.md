@@ -13,6 +13,8 @@ here cover everything those tags shipped.
 
 ## [Unreleased]
 
+- Added an optional **Remember me on this device** portal login that keeps trusted personal devices signed in for up to 30 days, with a seven-day idle limit and immediate server-side revocation.
+
 ### Added
 
 - The Windows desktop shell now has host-local preferences in Settings,

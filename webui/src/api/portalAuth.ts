@@ -21,10 +21,10 @@ export function getPortalAuthStatus(): Promise<PortalAuthStatus> {
   return api('/api/portal-auth/status')
 }
 
-export function loginPortal(username: string, password: string): Promise<PortalAuthStatus> {
+export function loginPortal(username: string, password: string, rememberMe = false): Promise<PortalAuthStatus> {
   return api('/api/portal-auth/login', {
     method: 'POST',
-    body: JSON.stringify({ username, password }),
+    body: JSON.stringify({ username, password, rememberMe }),
   })
 }
 

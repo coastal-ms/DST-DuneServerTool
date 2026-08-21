@@ -45,12 +45,21 @@ describe('PortalAuthGate', () => {
     const passwordInput = screen.getByLabelText('Password')
     expect(passwordInput).toHaveAttribute('name', 'password')
     expect(passwordInput).toHaveAttribute('autocomplete', 'current-password')
+    const rememberMe = screen.getByRole('checkbox', { name: /Remember me on this device/i })
+    expect(rememberMe).not.toBeChecked()
+    expect(screen.getByText(/trusted personal device/i)).toBeInTheDocument()
     await user.type(screen.getByLabelText('Username'), 'hawk')
     await user.type(screen.getByLabelText('Password'), 'one time password')
+    await user.click(rememberMe)
     await user.click(screen.getByRole('button', { name: 'Sign in' }))
 
     expect(await screen.findByText('Existing dashboard')).toBeInTheDocument()
     expect(fetchMock.mock.calls[1][0]).toBe('/api/portal-auth/login')
+    expect(JSON.parse((fetchMock.mock.calls[1][1] as RequestInit).body as string)).toEqual({
+      username: 'hawk',
+      password: 'one time password',
+      rememberMe: true,
+    })
   })
 
   it('forces a password change and surfaces validation errors', async () => {

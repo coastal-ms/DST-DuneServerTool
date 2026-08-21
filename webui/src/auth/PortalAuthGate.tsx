@@ -39,6 +39,7 @@ function AuthFrame({ title, subtitle, children }: { title: string; subtitle: str
 function Login({ onSuccess }: { onSuccess: (status: PortalAuthStatus) => void }) {
   const [username, setUsername] = useState('')
   const [password, setPassword] = useState('')
+  const [rememberMe, setRememberMe] = useState(false)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
 
@@ -47,7 +48,7 @@ function Login({ onSuccess }: { onSuccess: (status: PortalAuthStatus) => void })
     setBusy(true)
     setError('')
     try {
-      onSuccess(await loginPortal(username, password))
+      onSuccess(await loginPortal(username, password, rememberMe))
     } catch {
       setError('Invalid username or password.')
     } finally {
@@ -67,6 +68,20 @@ function Login({ onSuccess }: { onSuccess: (status: PortalAuthStatus) => void })
           <label htmlFor="portal-password" className="block text-sm font-medium mb-1">Password</label>
           <input id="portal-password" name="password" type="password" autoComplete="current-password" maxLength={128} required value={password} onChange={e => setPassword(e.target.value)} className="w-full px-3 py-2 rounded-lg bg-surface-2 border border-border text-text" />
         </div>
+        <label htmlFor="portal-remember-me" className="flex items-start gap-2 text-sm text-text-muted">
+          <input
+            id="portal-remember-me"
+            name="rememberMe"
+            type="checkbox"
+            checked={rememberMe}
+            onChange={e => setRememberMe(e.target.checked)}
+            className="mt-0.5"
+          />
+          <span>
+            <span className="block font-medium text-text">Remember me on this device</span>
+            <span className="block text-xs text-text-dim">Use only on a trusted personal device. You stay signed in for up to 30 days.</span>
+          </span>
+        </label>
         <button type="submit" disabled={busy} className="btn-primary w-full justify-center">
           <Icon name={busy ? 'Loader2' : 'LogIn'} className={busy ? 'animate-spin' : ''} />
           {busy ? 'Signing in...' : 'Sign in'}
