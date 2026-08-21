@@ -120,42 +120,4 @@
 }
 @media (prefers-reduced-motion: reduce) {
   .animate-heartbeat { animation: none; }
-  *, *::before, *::after {
-    scroll-behavior: auto !important;
-    transition-duration: 0.01ms !important;
-    animation-duration: 0.01ms !important;
-    animation-iteration-count: 1 !important;
-  }
-}
-
-.app-main-content {
-  padding-bottom: max(1rem, env(safe-area-inset-bottom));
-}
-
-.top-menu-bar {
-  padding-left: max(0.25rem, env(safe-area-inset-left));
-  padding-right: max(0.25rem, env(safe-area-inset-right));
-  scrollbar-width: thin;
-}
-
-@media (max-width: 767px) {
-  .app-main-scroll {
-    overscroll-behavior-y: contain;
-  }
-
-  .card {
-    border-radius: 0.75rem;
-  }
-}
-
-@media (pointer: coarse) {
-  button,
-  a.btn,
-  .btn,
-  .btn-primary,
-  .btn-secondary,
-  .btn-ghost,
-  .btn-danger {
-    min-height: 44px;
-  }
 }

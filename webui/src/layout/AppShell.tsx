@@ -38,8 +38,8 @@ export function AppShell({ children }: { children: ReactNode }) {
         <div className="flex-1 flex flex-col min-w-0">
           <UpdateBanner />
           <StatusBar />
-          <main className="app-main-scroll flex-1 overflow-y-auto">
-            <div className="app-main-content max-w-7xl mx-auto px-3 py-4 sm:px-4 md:px-6 md:py-6">
+          <main className="flex-1 overflow-y-auto overscroll-y-contain">
+            <div className="max-w-7xl mx-auto px-3 pt-4 pb-[max(1rem,env(safe-area-inset-bottom))] sm:px-4 md:px-6 md:py-6">
               {children}
             </div>
           </main>
