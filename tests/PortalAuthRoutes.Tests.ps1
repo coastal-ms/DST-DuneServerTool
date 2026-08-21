@@ -48,6 +48,71 @@ Describe 'Registered portal login/logout production handlers' {
         Remove-Item -LiteralPath $script:PortalRouteTestRoot -Recurse -Force -ErrorAction SilentlyContinue
     }
 
+    Describe 'Portal login worker permit completion' {
+        BeforeEach {
+            Stop-DuneHttpServer
+            $workerDir = Join-Path $TestDrive 'worker-server'
+            New-Item -ItemType Directory -Path $workerDir -Force | Out-Null
+            Copy-Item (Join-Path (Get-DstRepoRoot) 'app\server\HttpServer.ps1') (Join-Path $workerDir 'HttpServer.ps1')
+            $script:DuneToolVersion = '14.0.0'
+            Initialize-DuneApiPool -ServerDir $workerDir
+        }
+
+        AfterEach {
+            Stop-DuneHttpServer
+        }
+
+        It 'returns both permits after more than two sequential successful and failed logins' {
+            $waitForCompletion = {
+                $deadline = (Get-Date).AddSeconds(10)
+                do {
+                    Clear-DuneApiCompleted
+                    if (-not $script:DuneApiInFlight -or $script:DuneApiInFlight.Count -eq 0) { return }
+                    Start-Sleep -Milliseconds 20
+                } while ((Get-Date) -lt $deadline)
+                throw 'Worker did not complete before timeout.'
+            }
+            $newRequest = {
+                [pscustomobject]@{
+                    Url=[uri]'https://portal.example.test/api/portal-auth/login'
+                    HttpMethod='POST'
+                    HasEntityBody=$false
+                }
+            }
+
+            1..5 | ForEach-Object {
+                Invoke-DuneApiHandlerAsync -Handler { param($req, $res) $res.StatusCode = 200 } `
+                    -Request (& $newRequest) -Response (New-RouteResponse) -RouteParams @{}
+                & $waitForCompletion
+                $script:DunePortalLoginGate.CurrentCount | Should -Be 2
+                $script:DuneApiGate.CurrentCount | Should -Be $script:DuneApiMax
+            }
+
+            Invoke-DuneApiHandlerAsync -Handler { throw 'expected worker failure' } `
+                -Request (& $newRequest) -Response (New-RouteResponse) -RouteParams @{}
+            & $waitForCompletion
+            $script:DunePortalLoginGate.CurrentCount | Should -Be 2
+            $script:DuneApiGate.CurrentCount | Should -Be $script:DuneApiMax
+        }
+
+        It 'uses only the centralized idempotent completion helper for release objects' {
+            $source = Get-Content (Join-Path (Get-DstRepoRoot) 'app\server\HttpServer.ps1') -Raw
+            $workerStart = $source.IndexOf('param($handlerText, $req, $res')
+            $workerEnd = $source.IndexOf('}).AddArgument', $workerStart)
+            $workerFinally = $source.Substring($workerStart, $workerEnd - $workerStart)
+            $workerFinally | Should -Match 'Complete-DuneApiRelease -Release \$release'
+            $workerFinally | Should -Not -Match '\$release\.Done\s*='
+            $release = [pscustomobject]@{
+                Gate=[Threading.SemaphoreSlim]::new(0, 1)
+                LoginGate=[Threading.SemaphoreSlim]::new(0, 1)
+                Done=$false
+            }
+            { Complete-DuneApiRelease -Release $release; Complete-DuneApiRelease -Release $release } | Should -Not -Throw
+            $release.Gate.CurrentCount | Should -Be 1
+            $release.LoginGate.CurrentCount | Should -Be 1
+        }
+    }
+
     It 'issues a session cookie on login and revokes and clears it on logout' {
         $created = New-DunePortalAccount -Username 'route-owner' -Role owner
         $store = Get-DunePortalAccountStore

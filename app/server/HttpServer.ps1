@@ -496,11 +496,10 @@ function Invoke-DuneApiHandlerAsync {
                 }
             } catch {}
             try { $res.Close() } catch {}
-            # Release the gate permit (idempotent with the main-loop sweep).
-            try {
-                [System.Threading.Monitor]::Enter($release)
-                if (-not $release.Done) { $release.Done = $true; if ($release.Gate) { [void]$release.Gate.Release() } }
-            } catch {} finally { try { [System.Threading.Monitor]::Exit($release) } catch {} }
+            # Centralized, monitor-guarded release covers both the general API
+            # permit and the login-specific permit exactly once. The main-loop
+            # completion sweep calls the same helper defensively.
+            Complete-DuneApiRelease -Release $release
         }
     }).AddArgument($Handler.ToString()).AddArgument($Request).AddArgument($Response).AddArgument($RouteParams).AddArgument($script:DuneApiCtx).AddArgument($release)
 
