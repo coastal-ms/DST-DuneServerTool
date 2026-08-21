@@ -21,7 +21,7 @@ Register-DuneRoute -Method GET -Path '/api/portal-auth/status' -Inline -Handler 
     }
 }
 
-Register-DuneRoute -Method POST -Path '/api/portal-auth/login' -Inline -Handler {
+Register-DuneRoute -Method POST -Path '/api/portal-auth/login' -Handler {
     param($req, $res, $routeParams, $body)
     if (-not (Test-DunePortalAccountModeEnabled)) {
         Write-DuneError -Response $res -Status 404 -Message 'Not found.'

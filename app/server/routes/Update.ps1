@@ -102,6 +102,7 @@ function Get-DuneLatestRelease {
             assetName    = if ($asset) { [string]$asset.name } else { $null }
             assetUrl     = if ($asset) { [string]$asset.browser_download_url } else { $null }
             assetSize    = if ($asset) { [int64]$asset.size } else { 0 }
+            assetDigest  = if ($asset) { [string]$asset.digest } else { $null }
         }
         return $script:DuneUpdateCache
     } catch {
@@ -143,6 +144,7 @@ function Get-DuneReleases {
             assetName    = if ($asset) { [string]$asset.name } else { $null }
             assetUrl     = if ($asset) { [string]$asset.browser_download_url } else { $null }
             assetSize    = if ($asset) { [int64]$asset.size } else { 0 }
+            assetDigest  = if ($asset) { [string]$asset.digest } else { $null }
         }
     }
     # GitHub's /releases endpoint does not reliably return newest-first (a
@@ -209,6 +211,7 @@ function Get-DuneSelectedRelease {
         assetName    = $chosen.assetName
         assetUrl     = $chosen.assetUrl
         assetSize    = $chosen.assetSize
+        assetDigest  = $chosen.assetDigest
         channel      = 'test'
         isPrerelease = $true
     }
@@ -244,10 +247,99 @@ function Get-DuneInstallDecision {
         $installable = $HasAsset -and ($available -or $RunningIsPrerelease)
         $blocked     = ($Diff -le 0) -and (-not $RunningIsPrerelease)
     }
+
     [pscustomobject]@{
         available   = $available
         installable = $installable
         blocked     = $blocked
+    }
+}
+
+function Get-DuneRunningUpdateComparisonVersion {
+    param([string]$Channel, [string]$CoreVersion, $BuildInfo)
+    if ($Channel -eq 'test' -and [bool]$BuildInfo.runningIsPrerelease -and [string]$BuildInfo.installedTag) {
+        return [string]$BuildInfo.installedTag
+    }
+    return $CoreVersion
+}
+
+function Get-DuneUpdateExpectedSha256 {
+    param([string]$Digest)
+    if ($Digest -notmatch '^(?i:sha256):([0-9a-fA-F]{64})$') {
+        throw 'The release installer is missing a valid GitHub SHA-256 digest.'
+    }
+    return $Matches[1].ToUpperInvariant()
+}
+
+function Get-DuneProtectedUpdateDirectory {
+    $root = Join-Path $env:ProgramData 'DuneServer\Updates'
+    $inherit = [Security.AccessControl.InheritanceFlags]'ContainerInherit, ObjectInherit'
+    $propagation = [Security.AccessControl.PropagationFlags]::None
+    $allow = [Security.AccessControl.AccessControlType]::Allow
+    $admins = [Security.Principal.SecurityIdentifier]::new('S-1-5-32-544')
+    $system = [Security.Principal.SecurityIdentifier]::new('S-1-5-18')
+    $acl = [Security.AccessControl.DirectorySecurity]::new()
+    $acl.SetAccessRuleProtection($true, $false)
+    $acl.SetOwner($admins)
+    $acl.AddAccessRule([Security.AccessControl.FileSystemAccessRule]::new($admins, 'FullControl', $inherit, $propagation, $allow))
+    $acl.AddAccessRule([Security.AccessControl.FileSystemAccessRule]::new($system, 'FullControl', $inherit, $propagation, $allow))
+
+    if (Test-Path -LiteralPath $root) {
+        $item = Get-Item -LiteralPath $root -Force
+        if (($item.Attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0) {
+            throw 'The protected update directory cannot be a reparse point.'
+        }
+    } else {
+        [void][IO.Directory]::CreateDirectory($root, $acl)
+    }
+    Set-Acl -LiteralPath $root -AclObject $acl
+    $unexpected = @(Get-Acl -LiteralPath $root).Access | Where-Object {
+        $_.AccessControlType -eq $allow -and
+        $_.IdentityReference.Translate([Security.Principal.SecurityIdentifier]).Value -notin @($admins.Value, $system.Value)
+    }
+    if ($unexpected) { throw 'The update directory ACL contains an unexpected write principal.' }
+    return $root
+}
+
+function Remove-DuneOldUpdateFiles {
+    param([Parameter(Mandatory)][string]$Directory, [string]$Keep = '', [int]$Retain = 12)
+    $files = @(Get-ChildItem -LiteralPath $Directory -File -Force -ErrorAction SilentlyContinue |
+        Where-Object {
+            $_.Name -match '^(?:DuneServerSetup|DuneRelaunch|relaunch)-[A-Za-z0-9._-]+-[0-9a-f]{32}\.(?:exe|ps1|log)$'
+        } |
+        Sort-Object LastWriteTimeUtc -Descending)
+    $retained = 0
+    foreach ($file in $files) {
+        if ($Keep -and $file.FullName -eq $Keep) { continue }
+        $retained++
+        if ($retained -gt $Retain) {
+            Remove-Item -LiteralPath $file.FullName -Force -ErrorAction SilentlyContinue
+        }
+    }
+}
+
+function Save-DuneVerifiedUpdateAsset {
+    param(
+        [Parameter(Mandatory)]$Release,
+        [string]$Directory = ''
+    )
+    $expected = Get-DuneUpdateExpectedSha256 ([string]$Release.assetDigest)
+    if (-not $Directory) { $Directory = Get-DuneProtectedUpdateDirectory }
+    if (-not (Test-Path -LiteralPath $Directory -PathType Container)) { throw 'Update directory is unavailable.' }
+    $safeTag = ([string]$Release.tag -replace '[^A-Za-z0-9._-]','_')
+    $dest = Join-Path $Directory ("DuneServerSetup-{0}-{1}.exe" -f $safeTag, [guid]::NewGuid().ToString('N'))
+    try {
+        [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
+        $headers = @{ 'User-Agent' = $script:DuneUpdateUA }
+        Invoke-WebRequest -Uri $Release.assetUrl -Headers $headers -OutFile $dest -TimeoutSec 300 -UseBasicParsing
+        if (-not (Test-Path -LiteralPath $dest -PathType Leaf)) { throw 'Downloaded installer was not created.' }
+        $actual = (Get-FileHash -LiteralPath $dest -Algorithm SHA256).Hash.ToUpperInvariant()
+        if ($actual -ne $expected) { throw 'Downloaded installer SHA-256 does not match the GitHub release digest.' }
+        Remove-DuneOldUpdateFiles -Directory $Directory -Keep $dest
+        return $dest
+    } catch {
+        Remove-Item -LiteralPath $dest -Force -ErrorAction SilentlyContinue
+        throw
     }
 }
 
@@ -279,7 +371,8 @@ Register-DuneRoute -Method GET -Path '/api/update/check' -Handler {
             }
             return
         }
-        $diff      = Compare-DuneSemver -A $rel.tag -B $current
+        $comparisonVersion = Get-DuneRunningUpdateComparisonVersion -Channel $channel -CoreVersion $current -BuildInfo $buildInfo
+        $diff      = Compare-DuneSemver -A $rel.tag -B $comparisonVersion
         # `available` means a newer release exists (independent of whether an
         # installer asset is attached). `installable` is the stricter flag:
         # the in-app auto-updater can actually run it.
@@ -514,8 +607,10 @@ Register-DuneRoute -Method POST -Path '/api/update/install' -Handler {
         # install or rollback to an earlier -testN build is allowed so a tester
         # can move between candidate builds at will.
         $channel = Get-DuneUpdateChannel
-        $runningIsPrerelease = Get-DuneUpdateInstalledPrerelease
-        $diff = Compare-DuneSemver -A $rel.tag -B ([string]$script:DuneToolVersion)
+        $buildInfo = Get-DuneUpdateRunningBuildInfo
+        $runningIsPrerelease = [bool]$buildInfo.runningIsPrerelease
+        $comparisonVersion = Get-DuneRunningUpdateComparisonVersion -Channel $channel -CoreVersion ([string]$script:DuneToolVersion) -BuildInfo $buildInfo
+        $diff = Compare-DuneSemver -A $rel.tag -B $comparisonVersion
         $hasAsset = -not [string]::IsNullOrEmpty($rel.assetUrl)
         # Explicit reinstall: the user asked to re-download and re-run the
         # current version's installer (Settings "Reinstall" button) even though
@@ -539,25 +634,12 @@ Register-DuneRoute -Method POST -Path '/api/update/install' -Handler {
             return
         }
 
-        $tmpDir = Join-Path $env:TEMP 'DuneServerUpdate'
-        if (-not (Test-Path -LiteralPath $tmpDir)) { New-Item -ItemType Directory -Path $tmpDir -Force | Out-Null }
         $safeTag = ($rel.tag -replace '[^A-Za-z0-9._-]','_')
-        $dest    = Join-Path $tmpDir ("DuneServerSetup-$safeTag.exe")
-
-        # Download to disk. Skip re-download if size already matches.
-        $need = $true
-        if (Test-Path -LiteralPath $dest) {
-            $existing = (Get-Item -LiteralPath $dest).Length
-            if ($rel.assetSize -gt 0 -and $existing -eq $rel.assetSize) { $need = $false }
-        }
-        if ($need) {
-            [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
-            $headers = @{ 'User-Agent' = $script:DuneUpdateUA }
-            Invoke-WebRequest -Uri $rel.assetUrl -Headers $headers -OutFile $dest -TimeoutSec 300 -UseBasicParsing
-        }
-
-        if (-not (Test-Path -LiteralPath $dest)) {
-            Write-DuneError -Response $res -Status 500 -Message "Download failed: $dest not present after fetch."
+        try {
+            $updateDir = Get-DuneProtectedUpdateDirectory
+            $dest = Save-DuneVerifiedUpdateAsset -Release $rel -Directory $updateDir
+        } catch {
+            Write-DuneError -Response $res -Status 502 -Message $_.Exception.Message
             return
         }
 
@@ -604,7 +686,8 @@ Register-DuneRoute -Method POST -Path '/api/update/install' -Handler {
             '/SP- /NORESTART'
         }
         $installModeLabel = if ($installMode -eq 'silent') { 'silently' } else { 'interactively' }
-        $logPath         = Join-Path $tmpDir ("relaunch-$safeTag.log")
+        $launchId        = [guid]::NewGuid().ToString('N')
+        $logPath         = Join-Path $updateDir ("relaunch-$safeTag-$launchId.log")
         # Defensive escapes: %TEMP% / install path can contain an apostrophe
         # (e.g. C:\Users\<user-with-apostrophe>\AppData\...) which would break the single-
         # quoted literals embedded in the relauncher heredoc below.
@@ -719,7 +802,7 @@ public static extern bool AllowSetForegroundWindow(int dwProcessId);
     Stop-Transcript | Out-Null
 }
 "@
-        $scriptPath = Join-Path $tmpDir ("DuneRelaunch-$safeTag.ps1")
+        $scriptPath = Join-Path $updateDir ("DuneRelaunch-$safeTag-$launchId.ps1")
         Set-Content -LiteralPath $scriptPath -Value $relaunchScript -Encoding UTF8
 
         # Spawn the relauncher in a HIDDEN window. The relauncher itself is

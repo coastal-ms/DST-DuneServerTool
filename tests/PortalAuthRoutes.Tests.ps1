@@ -7,6 +7,9 @@ BeforeAll {
     . (Join-Path (Get-DstRepoRoot) 'app\server\lib\PortalAuth.ps1')
     . (Join-Path (Get-DstRepoRoot) 'app\server\HttpServer.ps1')
     . (Join-Path (Get-DstRepoRoot) 'app\server\routes\PortalAuth.ps1')
+    $script:PortalLoginRoute = @($script:DuneRoutes | Where-Object { $_.Method -eq 'POST' -and $_.Path -eq '/api/portal-auth/login' })[0]
+    $script:PortalLogoutRoute = @($script:DuneRoutes | Where-Object { $_.Method -eq 'POST' -and $_.Path -eq '/api/portal-auth/logout' })[0]
+    $script:PortalModeRoute = @($script:DuneRoutes | Where-Object { $_.Method -eq 'PUT' -and $_.Path -eq '/api/remote-access/portal-account-mode' })[0]
 
     function New-RouteRequest {
         param([string]$Cookie = '')
@@ -29,7 +32,9 @@ BeforeAll {
     }
     function Get-RegisteredHandler {
         param([string]$Method, [string]$Path)
-        @($script:DuneRoutes | Where-Object { $_.Method -eq $Method -and $_.Path -eq $Path })[0].Handler
+        if ($Method -eq 'POST' -and $Path -eq '/api/portal-auth/login') { return $script:PortalLoginRoute.Handler }
+        if ($Method -eq 'POST' -and $Path -eq '/api/portal-auth/logout') { return $script:PortalLogoutRoute.Handler }
+        if ($Method -eq 'PUT' -and $Path -eq '/api/remote-access/portal-account-mode') { return $script:PortalModeRoute.Handler }
     }
 }
 
@@ -69,6 +74,23 @@ Describe 'Registered portal login/logout production handlers' {
         $logoutResponse.StatusCode | Should -Be 200
         $logoutResponse.Headers['Set-Cookie'] | Should -Match 'Max-Age=0'
         (Get-DunePortalSessionAuth (New-RouteRequest -Cookie $token)).ok | Should -BeFalse
+    }
+
+    It 'registers login on the bounded worker path instead of the listener thread' {
+        $script:PortalLoginRoute.Inline | Should -BeFalse
+    }
+
+    It 'reserves only two worker admissions for anonymous login traffic' {
+        $script:DunePortalLoginGate = [Threading.SemaphoreSlim]::new(0, 2)
+        $script:DuneApiGate = [Threading.SemaphoreSlim]::new(1, 1)
+        $response = New-RouteResponse
+        $request = [pscustomobject]@{
+            Url=[uri]'https://portal.example.test/api/portal-auth/login'
+            HttpMethod='POST'
+        }
+        Invoke-DuneApiHandlerAsync -Handler {} -Request $request -Response $response -RouteParams @{}
+        $response.StatusCode | Should -Be 429
+        $script:DuneApiGate.CurrentCount | Should -Be 1
     }
 
     It 'requires explicit native-app retirement acknowledgement before enabling mode' {

@@ -1,0 +1,185 @@
+BeforeAll {
+    . "$PSScriptRoot\_TestHelpers.ps1"
+    Import-DstLib 'Config.ps1'
+    . (Join-Path (Get-DstRepoRoot) 'app\server\HttpServer.ps1')
+    Import-DstRoute 'Update.ps1'
+    $script:UpdateInstallHandler = @($script:DuneRoutes | Where-Object { $_.Method -eq 'POST' -and $_.Path -eq '/api/update/install' })[0].Handler
+    $script:UpdateCheckHandler = @($script:DuneRoutes | Where-Object { $_.Method -eq 'GET' -and $_.Path -eq '/api/update/check' })[0].Handler
+
+    function global:Get-TestSha256Digest {
+        param([byte[]]$Bytes)
+        $sha = [Security.Cryptography.SHA256]::Create()
+        try { 'sha256:' + (($sha.ComputeHash($Bytes) | ForEach-Object { $_.ToString('x2') }) -join '') }
+        finally { $sha.Dispose() }
+    }
+    function global:New-UpdateSecurityResponse {
+        [pscustomobject]@{
+            StatusCode=0; ContentType=''; ContentLength64=0L; Headers=@{}
+            OutputStream=[IO.MemoryStream]::new()
+        }
+        function global:Read-UpdateSecurityResponse {
+            param($Response)
+            [Text.Encoding]::UTF8.GetString($Response.OutputStream.ToArray()) | ConvertFrom-Json
+        }
+    }
+}
+
+Describe 'Protected updater download seam' {
+    BeforeEach {
+        Get-ChildItem -LiteralPath $TestDrive -Force -ErrorAction SilentlyContinue |
+            Remove-Item -Recurse -Force -ErrorAction SilentlyContinue
+        $script:Payload = [Text.Encoding]::UTF8.GetBytes('verified installer payload')
+        $script:DownloadCalls = 0
+        Mock Invoke-WebRequest {
+            $script:DownloadCalls++
+            [IO.File]::WriteAllBytes($OutFile, $script:Payload)
+        }
+    }
+
+    It 'always downloads to a fresh random path and ignores a same-size predictable preseed' {
+        $preseed = Join-Path $TestDrive 'DuneServerSetup-v14.0.0-test6.exe'
+        [IO.File]::WriteAllBytes($preseed, [byte[]](1..$script:Payload.Length))
+        $release = [pscustomobject]@{
+            tag='v14.0.0-test6'; assetUrl='https://example.test/installer'
+            assetDigest=(Get-TestSha256Digest $script:Payload)
+        }
+
+        $first = Save-DuneVerifiedUpdateAsset -Release $release -Directory $TestDrive
+        $second = Save-DuneVerifiedUpdateAsset -Release $release -Directory $TestDrive
+        $first | Should -Not -Be $second
+        (Split-Path $first -Leaf) | Should -Match '^DuneServerSetup-v14\.0\.0-test6-[0-9a-f]{32}\.exe$'
+        $script:DownloadCalls | Should -Be 2
+        [IO.File]::ReadAllBytes($preseed)[0] | Should -Be 1
+    }
+
+    It 'captures GitHub asset digest from the production release response' {
+        $script:ExpectedDigest = 'sha256:' + ('a' * 64)
+        Mock Invoke-RestMethod {
+            [pscustomobject]@{
+                tag_name='v14.0.0-test7'; name='test7'; html_url='u'; published_at='2026-08-21'
+                body=''; assets=@([pscustomobject]@{
+                    name='DuneServerSetup.exe'; browser_download_url='https://example.test/installer'
+                    size=10; digest=$script:ExpectedDigest
+                })
+            }
+        }
+        $script:DuneUpdateCache = $null
+        (Get-DuneLatestRelease -Force).assetDigest | Should -Be $script:ExpectedDigest
+    }
+
+    It 'accepts only an exact SHA-256 digest match' {
+        $release = [pscustomobject]@{
+            tag='v14.0.0-test6'; assetUrl='https://example.test/installer'
+            assetDigest=(Get-TestSha256Digest $script:Payload)
+        }
+        Test-Path (Save-DuneVerifiedUpdateAsset -Release $release -Directory $TestDrive) | Should -BeTrue
+    }
+
+    It 'deletes and rejects a digest mismatch' {
+        $release = [pscustomobject]@{
+            tag='v14.0.0-test6'; assetUrl='https://example.test/installer'
+            assetDigest=('sha256:' + ('0' * 64))
+        }
+        { Save-DuneVerifiedUpdateAsset -Release $release -Directory $TestDrive } | Should -Throw '*does not match*'
+        @(Get-ChildItem $TestDrive -Filter '*.exe').Count | Should -Be 0
+    }
+
+    It 'fails closed before download when the digest is missing or malformed' {
+        foreach ($digest in @('', 'sha256:nope', ('md5:' + ('0' * 32)))) {
+            $release = [pscustomobject]@{ tag='v14.0.0-test6'; assetUrl='https://example.test/installer'; assetDigest=$digest }
+            { Save-DuneVerifiedUpdateAsset -Release $release -Directory $TestDrive } | Should -Throw '*valid GitHub SHA-256*'
+        }
+        $script:DownloadCalls | Should -Be 0
+    }
+
+    It 'does not launch when production-route verification fails' {
+        Mock Get-DuneLock { [Threading.SemaphoreSlim]::new(1, 1) }
+        Mock Get-DuneDecoupleNotice { @{ Needed=$false } }
+        Mock Get-DuneSelectedRelease {
+            [pscustomobject]@{
+                tag='v14.0.1'; assetUrl='https://example.test/installer'; assetSize=10
+                assetDigest=''; isPrerelease=$false
+            }
+        }
+        Mock Get-DuneUpdateChannel { 'stable' }
+        Mock Get-DuneUpdateRunningBuildInfo { @{ runningIsPrerelease=$false; installedTag=''; buildCommit='' } }
+        Mock Get-DuneProtectedUpdateDirectory { $TestDrive }
+        Mock Start-Process {}
+        $script:DuneToolVersion = '14.0.0'
+        $request = [pscustomobject]@{ QueryString=@{} }
+        $response = New-UpdateSecurityResponse
+        & $script:UpdateInstallHandler $request $response @{} @{ mode='interactive'; source='settings' }
+        $response.StatusCode | Should -Be 502
+        Assert-MockCalled Start-Process -Times 0 -Exactly
+    }
+
+    It 'uses an Administrators and SYSTEM-only protected production directory' {
+        $source = Get-Content (Join-Path (Get-DstRepoRoot) 'app\server\routes\Update.ps1') -Raw
+        $source | Should -Match "ProgramData.*DuneServer\\Updates"
+        $source | Should -Match "SetAccessRuleProtection\(\`$true, \`$false\)"
+        $source | Should -Match 'S-1-5-32-544'
+        $source | Should -Match 'S-1-5-18'
+        $source | Should -Match 'ReparsePoint'
+    }
+}
+
+Describe 'Exact installed test tag comparison' {
+    It 'treats test6 as current, test7 as newer, and test5 as an intentional rollback' {
+        $build = @{ runningIsPrerelease=$true; installedTag='v14.0.0-test6' }
+        $running = Get-DuneRunningUpdateComparisonVersion -Channel test -CoreVersion '14.0.0' -BuildInfo $build
+        $running | Should -Be 'v14.0.0-test6'
+
+        $same = Compare-DuneSemver -A 'v14.0.0-test6' -B $running
+        $newer = Compare-DuneSemver -A 'v14.0.0-test7' -B $running
+        $rollback = Compare-DuneSemver -A 'v14.0.0-test5' -B $running
+        (Get-DuneInstallDecision -Diff $same -Channel test -HasAsset $true -RunningIsPrerelease $true).blocked | Should -BeTrue
+        (Get-DuneInstallDecision -Diff $newer -Channel test -HasAsset $true -RunningIsPrerelease $true).available | Should -BeTrue
+        (Get-DuneInstallDecision -Diff $rollback -Channel test -HasAsset $true -RunningIsPrerelease $true).installable | Should -BeTrue
+    }
+
+    It 'leaves stable comparison on the core version' {
+        $build = @{ runningIsPrerelease=$true; installedTag='v14.0.0-test6' }
+        Get-DuneRunningUpdateComparisonVersion -Channel stable -CoreVersion '14.0.0' -BuildInfo $build |
+            Should -Be '14.0.0'
+    }
+
+    It 'drives the production check route and global banner from test6 to newest test7' {
+        Mock Get-DuneUpdateChannel { 'test' }
+        Mock Get-DuneUpdateRunningBuildInfo {
+            @{ runningIsPrerelease=$true; installedTag='v14.0.0-test6'; buildCommit='abcdef123456' }
+        }
+        Mock Get-DuneSelectedRelease {
+            [pscustomobject]@{
+                tag='v14.0.0-test7'; name='test7'; htmlUrl='u'; releaseNotes=''
+                assetName='DuneServerSetup.exe'; assetUrl='https://example.test/installer'
+                assetSize=10; assetDigest=('sha256:' + ('a' * 64)); isPrerelease=$true
+            }
+        }
+        $script:DuneToolVersion = '14.0.0'
+        $response = New-UpdateSecurityResponse
+        & $script:UpdateCheckHandler ([pscustomobject]@{ QueryString=@{} }) $response @{} $null
+        $body = Read-UpdateSecurityResponse $response
+        $body.available | Should -BeTrue
+        $body.installable | Should -BeTrue
+    }
+
+    It 'reports the exact installed test6 tag as up to date' {
+        Mock Get-DuneUpdateChannel { 'test' }
+        Mock Get-DuneUpdateRunningBuildInfo {
+            @{ runningIsPrerelease=$true; installedTag='v14.0.0-test6'; buildCommit='abcdef123456' }
+        }
+        Mock Get-DuneSelectedRelease {
+            [pscustomobject]@{
+                tag='v14.0.0-test6'; name='test6'; htmlUrl='u'; releaseNotes=''
+                assetName='DuneServerSetup.exe'; assetUrl='https://example.test/installer'
+                assetSize=10; assetDigest=('sha256:' + ('a' * 64)); isPrerelease=$true
+            }
+        }
+        $script:DuneToolVersion = '14.0.0'
+        $response = New-UpdateSecurityResponse
+        & $script:UpdateCheckHandler ([pscustomobject]@{ QueryString=@{} }) $response @{} $null
+        $body = Read-UpdateSecurityResponse $response
+        $body.available | Should -BeFalse
+        $body.installable | Should -BeFalse
+    }
+}

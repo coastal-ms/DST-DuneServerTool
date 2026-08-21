@@ -127,6 +127,17 @@ Describe 'Portal sessions and login defense' {
         $created.account.id | Should -Not -BeNullOrEmpty
     }
 
+    It 'rejects an already locked request before invoking PBKDF2' {
+        $created = New-DunePortalAccount -Username 'locked-owner' -Role owner
+        $store = Get-DunePortalAccountStore
+        $store.accounts[0].lockoutUntil = (Get-Date).ToUniversalTime().AddMinutes(5).ToString('o')
+        Save-DunePortalAccountStore $store
+        Mock Test-DunePortalPassword { throw 'PBKDF2 must not run for locked traffic' }
+        $result = Invoke-DunePortalLogin -Username 'locked-owner' -Password $created.oneTimePassword -Request (New-PortalTestRequest)
+        $result.ok | Should -BeFalse
+        Assert-MockCalled Test-DunePortalPassword -Times 0 -Exactly
+    }
+
     It 'does not let spoofed proxy headers create a global loopback lockout bucket' {
         $created = New-DunePortalAccount -Username 'proxy-owner' -Role owner
         1..5 | ForEach-Object {

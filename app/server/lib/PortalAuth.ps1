@@ -475,6 +475,10 @@ function Invoke-DunePortalLogin {
         $clientLocked = if ($client) { Test-DunePortalIsoFuture $client.lockoutUntil } else { $false }
         $accountLocked = if ($account) { Test-DunePortalIsoFuture $account.lockoutUntil } else { $false }
         $locked = ($clientLocked -or $accountLocked)
+        if ($locked) {
+            Write-DunePortalAudit -Event 'login' -Result 'denied' -ClientKey $clientKey
+            return @{ ok = $false; status = 401; message = 'Invalid username or password.' }
+        }
 
         $metadata = if ($account) { $account.password } else {
             @{
@@ -483,7 +487,7 @@ function Invoke-DunePortalLogin {
             }
         }
         $passwordOk = Test-DunePortalPassword $Password $metadata
-        if ($locked -or -not $account -or -not [bool]$account.enabled -or -not $passwordOk) {
+        if (-not $account -or -not [bool]$account.enabled -or -not $passwordOk) {
             Register-DunePortalLoginFailure -Store $store -Account $account -ClientKey $clientKey
             Save-DunePortalAccountStore $store
             Write-DunePortalAudit -Event 'login' -Result 'denied' -ClientKey $clientKey

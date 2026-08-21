@@ -18,6 +18,7 @@ $script:DuneWsPool      = $null   # RunspacePool — WS handlers run here so the
 # single-threaded listener and freeze the whole UI. ----------------------------
 $script:DuneApiPool      = $null   # RunspacePool for /api handlers
 $script:DuneApiGate      = $null   # SemaphoreSlim bounding in-flight handlers (saturation -> 503)
+$script:DunePortalLoginGate = $null # tighter admission for expensive PBKDF2 login handlers
 $script:DuneApiInFlight  = $null   # synchronized list of {Ps;Handle;Release} for cleanup
 $script:DuneApiLockTable = $null   # shared synchronized name -> SemaphoreSlim registry (named locks)
 $script:DuneApiCtx       = $null   # immutable server-context injected into every worker
@@ -274,6 +275,7 @@ function Initialize-DuneApiPool {
 
     # Shared cross-runspace coordination objects (created ONCE).
     $script:DuneApiGate      = [System.Threading.SemaphoreSlim]::new($script:DuneApiMax, $script:DuneApiMax)
+    $script:DunePortalLoginGate = [System.Threading.SemaphoreSlim]::new(2, 2)
     $script:DuneApiInFlight  = [System.Collections.ArrayList]::Synchronized([System.Collections.ArrayList]::new())
     if (-not $script:DuneApiLockTable) {
         $script:DuneApiLockTable = [System.Collections.Hashtable]::Synchronized(@{})
@@ -343,6 +345,7 @@ function Complete-DuneApiRelease {
         [System.Threading.Monitor]::Enter($Release)
         if (-not $Release.Done) {
             $Release.Done = $true
+            if ($Release.LoginGate) { [void]$Release.LoginGate.Release() }
             if ($Release.Gate) { [void]$Release.Gate.Release() }
         }
     } catch {
@@ -364,10 +367,22 @@ function Invoke-DuneApiHandlerAsync {
         [Parameter(Mandatory)][hashtable]$RouteParams
     )
 
+    $loginGate = $null
+    $requestPath = ''
+    try { $requestPath = [string]$Request.Url.AbsolutePath } catch {}
+    if ($requestPath -eq '/api/portal-auth/login') {
+        $loginGate = $script:DunePortalLoginGate
+        if (-not $loginGate -or -not $loginGate.Wait(0)) {
+            try { Write-DuneError -Response $Response -Status 429 -Message 'Too many login attempts. Try again shortly.' } catch {}
+            return
+        }
+    }
+
     # Saturation guard: never queue behind a full pool. If every permit is held
     # (e.g. many hung SSH calls during a VM outage) answer 503 immediately so the
     # UI gets a fast, honest error instead of an unbounded wait.
     if (-not $script:DuneApiGate.Wait(0)) {
+        if ($loginGate) { [void]$loginGate.Release() }
         try { Write-DuneError -Response $Response -Status 503 -Message 'Server busy: handler pool saturated. Try again shortly.' } catch {}
         # Remote portal audit (issue #74): saturation on a remote write
         # never reaches the worker's finally block, so log here.
@@ -383,7 +398,7 @@ function Invoke-DuneApiHandlerAsync {
         return
     }
 
-    $release = [pscustomobject]@{ Gate = $script:DuneApiGate; Done = $false }
+    $release = [pscustomobject]@{ Gate = $script:DuneApiGate; LoginGate = $loginGate; Done = $false }
 
     $ps = [powershell]::Create()
     $ps.RunspacePool = $script:DuneApiPool
@@ -1102,6 +1117,10 @@ function Invoke-DuneContext {
                 # can't block the accept loop. The worker reads the body itself.
                 if ($script:DuneApiPoolEnabled -and -not $r.Inline) {
                     Invoke-DuneApiHandlerAsync -Handler $r.Handler -Request $req -Response $res -RouteParams $routeParams
+                    return
+                }
+                if ($rawPath -eq '/api/portal-auth/login' -and -not $script:DuneApiPoolEnabled) {
+                    Write-DuneError -Response $res -Status 503 -Message 'Login service is temporarily unavailable.'
                     return
                 }
 
