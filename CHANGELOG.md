@@ -26,6 +26,12 @@ here cover everything those tags shipped.
   Solo Mode and Self-Hosted Gameplay Admin. Keeping Bindu Sprint learnable
   allows the Attitude of the Knife quest's learn-a-skill step to complete;
   field testing confirmed its connected nodes can remain enabled.
+- Solo progression actions now accept the fresh-character schema created by the
+  current PTC build. The additional fingerprint differs only in unrelated actor
+  spawner and map-marker definitions; all progression mutations remain
+  exact-schema gated and backup-first. After character deletion, fully restart
+  PTC before creating the replacement character so its local database is
+  released and initialized cleanly.
 
 ## [13.8.3] - 2026-08-20
 
