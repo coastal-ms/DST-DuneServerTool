@@ -252,7 +252,7 @@ export function MenuBar({ sidebarCollapsed, onToggleSidebar }: Props) {
   return (
     <div
       ref={rootRef}
-      className="h-11 md:h-8 shrink-0 border-b border-border bg-surface flex items-center pl-[max(0.25rem,env(safe-area-inset-left))] pr-[max(0.25rem,env(safe-area-inset-right))] text-[13px] select-none relative z-40 overflow-x-auto"
+      className="h-11 md:h-8 shrink-0 border-b border-border bg-surface flex items-center pl-[max(0.25rem,env(safe-area-inset-left))] pr-[max(0.25rem,env(safe-area-inset-right))] text-[13px] select-none relative z-40 overflow-hidden md:overflow-visible"
     >
       <button
         ref={mobileMenuButtonRef}
