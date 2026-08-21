@@ -1968,13 +1968,15 @@ function Invoke-DunePlayerMarkNpeCompleted {
 $script:DuneGrantAllSkillsLevelValue = 7
 $script:DuneGrantAllSkillsPointBuffer = 20
 $script:DuneGrantAllSkillsIntelFloor = 100
-# Ability tags Enable All Skills must NOT grant. "Ignore" — the Bene Gesserit
-# Voice ability that forces a target to act as if you are completely invisible —
-# is stored internally as Skills.Ability.VoiceStop (its in-game display name is
-# "Ignore"; identified by Coastal against the live skill tree). Per Coastal: keep
-# every other grant identical, just never grant this one. Exact-match against the
-# catalog key string so nothing else is affected.
-$script:DuneGrantAllSkillsExcludeKeys = @('(TagName="Skills.Ability.VoiceStop")')
+# Ability tags Enable All Skills must NOT grant:
+# - VoiceStop is the in-game Voice ability "Ignore".
+# - Hypersprint is Bindu Sprint, deliberately left learnable so the
+#   "Attitude of the Knife" quest can complete its learn-a-skill step.
+# Exact-match the catalog key strings; existing progress is never lowered.
+$script:DuneGrantAllSkillsExcludeKeys = @(
+    '(TagName="Skills.Ability.VoiceStop")'
+    '(TagName="Skills.Ability.Hypersprint")'
+)
 function Invoke-DunePlayerGrantAllSkills {
     param([string]$Ip, [long]$AccountId)
     if ($AccountId -le 0) { return @{ ok = $false; error = 'account_id is required.' } }

@@ -892,7 +892,7 @@ internal static partial class Program
                     );
                     INSERT INTO fgl_entities (entity_id, components) VALUES (
                         1000,
-                        jsonb('{"FLevelComponent":[0,{"ModuleData":{"(TagName=\"Skills.Ability.VoiceStop\")":{"SkillPointsSpent":0},"(TagName=\"Skills.Attribute.Explorer6\")":{"SkillPointsSpent":2}},"TotalSkillPoints":2,"UnspentSkillPoints":0,"KeystoneBonusSkillPoints":0}],"FSpiceAddictionComponent":[0,{"SystemStatus":"AddictionDisabled","SpiceVisionEnabledStatus":"Disabled"}]}')
+                        jsonb('{"FLevelComponent":[0,{"ModuleData":{"(TagName=\"Skills.Ability.VoiceStop\")":{"SkillPointsSpent":0},"(TagName=\"Skills.Ability.Hypersprint\")":{"SkillPointsSpent":0},"(TagName=\"Skills.Attribute.Explorer6\")":{"SkillPointsSpent":2}},"TotalSkillPoints":2,"UnspentSkillPoints":0,"KeystoneBonusSkillPoints":0}],"FSpiceAddictionComponent":[0,{"SystemStatus":"AddictionDisabled","SpiceVisionEnabledStatus":"Disabled"}]}')
                     );
                     CREATE TABLE actor_fgl_entities (
                         actor_id INTEGER NOT NULL,
@@ -1360,7 +1360,10 @@ internal static partial class Program
                     "level_value":7,
                     "point_buffer":20,
                     "intel_floor":100,
-                    "exclude":["(TagName=\"Skills.Ability.VoiceStop\")"]
+                    "exclude":[
+                      "(TagName=\"Skills.Ability.VoiceStop\")",
+                      "(TagName=\"Skills.Ability.Hypersprint\")"
+                    ]
                   }
                 }
                 """.Replace("__SCHEMA_FINGERPRINT__", selfTestFingerprint));
@@ -1400,9 +1403,10 @@ internal static partial class Program
                 skillsPath,
                 """
                 {
-                  "count":3,
+                  "count":4,
                   "keys":[
                     "(TagName=\"Skills.Ability.VoiceStop\")",
+                    "(TagName=\"Skills.Ability.Hypersprint\")",
                     "(TagName=\"Skills.Ability.TestOne\")",
                     "(TagName=\"Skills.Attribute.TestTwo\")"
                   ]

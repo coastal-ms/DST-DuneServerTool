@@ -59,6 +59,14 @@ Describe 'Get-DuneSqlAffected' -Tag 'Pure' {
     It 'returns 0 for $null' {
         Get-DuneSqlAffected $null | Should -Be 0
     }
+
+    Describe 'Enable All Skills exclusions' -Tag 'Pure' {
+        It 'leaves Bindu Sprint and Voice Ignore learnable' {
+            $script:DuneGrantAllSkillsExcludeKeys | Should -Contain '(TagName="Skills.Ability.Hypersprint")'
+            $script:DuneGrantAllSkillsExcludeKeys | Should -Contain '(TagName="Skills.Ability.VoiceStop")'
+            $script:DuneGrantAllSkillsExcludeKeys.Count | Should -Be 2
+        }
+    }
     It "returns 0 when result.ok is false" {
         Get-DuneSqlAffected @{ ok = $false; message = 'UPDATE 5' } | Should -Be 0
     }

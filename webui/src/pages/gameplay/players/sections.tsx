@@ -682,8 +682,8 @@ const ACTIONS: ActionDef[] = [
     rowNote: 'Snapshot cosmetics, delete + recreate character in-game (same name), then restore. Offline to restore.',
     run: () => Promise.resolve({ message: '' }) },
   { id: 'grant-all-skills', group: 'Progression', label: 'Enable All Skills', icon: 'Sparkles', offlineOnly: true,
-    rowNote: 'Only do this AFTER applying "Unlock Trainers" above. Do NOT use this if you plan to level some skill trainer trees yourself. Enables every skill (multi-level left below max) + a ~20 skill-point buffer + 100 Intel. Offline.',
-    confirm: p => `Enable all skills for ${p.name}?\n\nOnly do this AFTER applying "Unlock Trainers". Do NOT use this if you plan to level some skill trainer trees yourself.\n\nUnlocks all 145 skills but leaves multi-level skills BELOW max on purpose so the tutorial step "Learn a new Ability from the Skills menu" stays completable (maxing everything soft-locks it). Also grants a small (~20) spendable skill-point buffer and tops Intel to 100 so nothing gates. Existing progress preserved. Player must be offline.`,
+    rowNote: 'Only do this AFTER applying "Unlock Trainers" above. Enables approved skills at 7 while leaving Bindu Sprint and Voice Ignore learnable, plus at least 20 skill points and 100 Intel. Offline.',
+    confirm: p => `Enable approved skills for ${p.name}?\n\nOnly do this AFTER applying "Unlock Trainers".\n\nRaises every approved skill to 7 except Bindu Sprint and Voice Ignore. Bindu Sprint stays learnable so "Attitude of the Knife" can complete normally; existing progress is never lowered. Also preserves at least 20 spendable skill points and raises Intel to 100. Player must be offline.`,
     run: p => grantAllSkills(p.account_id) },
   // Grant All Tech Recipes — DISABLED pending rework. The DB write marks every
   // recipe UnlockedState="Purchased", but in-game the items stay unclaimed/0-cost
