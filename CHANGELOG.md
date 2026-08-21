@@ -22,6 +22,10 @@ here cover everything those tags shipped.
   and PvP structure-damage fields that Funcom omits from its Solo Custom
   Settings interface. The underlying keys remain untouched for future
   reevaluation.
+- Enable All Skills now leaves Bindu Sprint and Voice Ignore untouched in both
+  Solo Mode and Self-Hosted Gameplay Admin. Keeping Bindu Sprint learnable
+  allows the Attitude of the Knife quest's learn-a-skill step to complete;
+  field testing confirmed its connected nodes can remain enabled.
 
 ## [13.8.3] - 2026-08-20
 

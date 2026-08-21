@@ -1829,7 +1829,7 @@ export function SoloMode() {
             <ProgressionActionCard
               icon="Sparkles"
               title="Enable all skills"
-              description="Raise 144 approved skills to value 7, skip Voice Ignore, preserve unknown PTC keys, keep 20 unspent points, and raise Intel to 100."
+              description="Raise 143 approved skills to value 7, leave Bindu Sprint and Voice Ignore learnable, preserve unknown PTC keys, keep at least 20 unspent points, and raise Intel to 100."
               status={`${inspection?.progression.skillsAtSeven ?? 0}/144 enabled · ${inspection?.progression.unspentSkillPoints ?? 0} unspent · ${inspection?.progression.intel ?? 0} Intel`}
               busy={busy === 'progression:skills'}
               disabled={!canMutateActiveProfile || gameRunning}

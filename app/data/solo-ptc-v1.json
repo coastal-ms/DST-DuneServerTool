@@ -124,7 +124,8 @@
     "point_buffer": 20,
     "intel_floor": 100,
     "exclude": [
-      "(TagName=\"Skills.Ability.VoiceStop\")"
+      "(TagName=\"Skills.Ability.VoiceStop\")",
+      "(TagName=\"Skills.Ability.Hypersprint\")"
     ]
   }
 }
