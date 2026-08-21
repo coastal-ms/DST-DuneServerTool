@@ -156,6 +156,7 @@ Describe 'Registered portal login/logout production handlers' {
             password=$created.oneTimePassword
             rememberMe='true'
         }
+
         $badResponse.StatusCode | Should -Be 400
         (Get-DunePortalSessionStore).sessions.Count | Should -Be 0
 
@@ -198,6 +199,39 @@ Describe 'Registered portal login/logout production handlers' {
         $changeResponse.Headers['Set-Cookie'] | Should -Match 'Max-Age=2592000'
         (Get-DunePortalSessionAuth (New-RouteRequest -Cookie $secondToken)).ok | Should -BeFalse
         @((Get-DunePortalSessionStore).sessions)[0].persistent | Should -BeTrue
+    }
+
+    It 'completes Tailscale bridge login and forced password change with the public Origin' {
+        $created = New-DunePortalAccount -Username 'tailscale-flow-owner' -Role owner
+        $store = Get-DunePortalAccountStore
+        $store.accountLoginEnabled = $true
+        Save-DunePortalAccountStore $store
+        $loginResponse = New-RouteResponse
+        & (Get-RegisteredHandler POST '/api/portal-auth/login') `
+            (New-RouteRequest) $loginResponse @{} @{
+                username='tailscale-flow-owner'
+                password=$created.oneTimePassword
+                rememberMe=$false
+            }
+        $token = [regex]::Match(
+            [string]$loginResponse.Headers['Set-Cookie'],
+            '^dune_portal_session=([^;]+);'
+        ).Groups[1].Value
+        $request = New-RouteRequest -Cookie $token
+        $request.Headers['Host'] = '127.0.0.1:8080'
+        $request.Headers['Origin'] = 'https://dst-host.tailnet.ts.net'
+        $request.Headers['X-Dune-Bridge-Protocol'] = '2'
+        $request.Headers['X-Dune-Original-Authority'] = 'dst-host.tailnet.ts.net'
+        $request.Headers['X-Dune-Bridge-Proof'] = Get-DunePortalBridgeOriginSecret
+        Test-DunePortalRequestOrigin $request | Should -BeTrue
+
+        $response = New-RouteResponse
+        & (Get-RegisteredHandler POST '/api/portal-auth/change-password') $request $response @{} @{
+            currentPassword=$created.oneTimePassword
+            newPassword='new password after tailscale login'
+        }
+        $response.StatusCode | Should -Be 200
+        $response.Headers['Set-Cookie'] | Should -Not -Match 'Max-Age=2592000'
     }
 
     It 'immediately revokes remembered sessions and clears cookies on every admin revoke path' {

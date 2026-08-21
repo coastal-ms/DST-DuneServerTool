@@ -109,7 +109,10 @@ function ForcedPasswordChange({ username, onSuccess }: { username: string; onSuc
       await changePortalPassword(currentPassword, newPassword)
       onSuccess()
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Password change failed.')
+      const message = e instanceof Error ? e.message : 'Password change failed.'
+      setError(/origin/i.test(message)
+        ? 'Security check failed. Reopen the current Browser Portal QR or stable link, then try again.'
+        : message)
     } finally {
       setBusy(false)
     }

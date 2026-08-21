@@ -8,95 +8,134 @@ function jsonResponse(body: unknown, status = 200) {
   return Promise.resolve(new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json' } }))
 }
 
+const owner = {
+  id: 'owner-id',
+  username: 'Coastal',
+  role: 'owner' as const,
+  enabled: true,
+  mustChangePassword: true,
+  locallyVerified: false,
+  gameCharacterId: '42',
+  gameCharacterLabel: 'Coastal',
+  createdAt: '',
+  lastLoginAt: '',
+}
+
 afterEach(() => {
   cleanup()
   vi.restoreAllMocks()
   sessionStorage.clear()
 })
 
-describe('PortalAccountsManager', () => {
-  it('creates an owner and displays the generated password once', async () => {
-    const empty = { accountLoginEnabled: false, accounts: [], roles: ['owner', 'admin'] }
+describe('PortalAccountsManager progressive setup', () => {
+  it('creates the first Owner without a distracting role choice and advances to the shown-once password', async () => {
+    let state = { accountLoginEnabled: false, accounts: [] as typeof owner[], roles: ['owner', 'admin'] }
     vi.spyOn(globalThis, 'fetch').mockImplementation((input, init) => {
       const path = String(input)
       if (path === '/api/gameplay/players') return jsonResponse({ players: [{ account_id: 42, name: 'Coastal' }] })
       if (path === '/api/remote-access/portal-accounts' && init?.method === 'POST') {
-        return jsonResponse({
-          account: { id: 'x', username: 'Coastal', role: 'owner', enabled: true, mustChangePassword: true },
-          oneTimePassword: 'generated-password-value',
-        }, 201)
+        state = { ...state, accounts: [owner] }
+        return jsonResponse({ account: owner, oneTimePassword: 'generated-password-value' }, 201)
       }
-      return jsonResponse(empty)
+      return jsonResponse(state)
     })
     const user = userEvent.setup()
     render(<PortalAccountsManager />)
 
-    await user.selectOptions(await screen.findByLabelText('Role'), 'owner')
+    expect(await screen.findByText('Step 1 — Create the first Owner')).toBeInTheDocument()
+    expect(screen.queryByLabelText('Role')).not.toBeInTheDocument()
     await user.selectOptions(screen.getByLabelText('Linked game character (optional)'), '42')
-    await user.click(screen.getByRole('button', { name: 'Create account' }))
-    expect(await screen.findByText('generated-password-value')).toBeInTheDocument()
-    expect(screen.getByText(/cannot be recovered/i)).toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: 'Create first Owner' }))
+    expect(await screen.findByText('Step 2 — Store the one-time password')).toBeInTheDocument()
+    expect(screen.getByText('generated-password-value')).toBeInTheDocument()
+    expect(screen.getByText(/cannot recover/i)).toBeInTheDocument()
   })
 
-  it('confirms when the one-time password is copied', async () => {
+  it('confirms OTP copy and advances only when the host says it is stored', async () => {
+    let state = { accountLoginEnabled: false, accounts: [] as typeof owner[], roles: ['owner', 'admin'] }
     vi.spyOn(globalThis, 'fetch').mockImplementation((input, init) => {
       const path = String(input)
       if (path === '/api/gameplay/players') return jsonResponse({ players: [] })
       if (path === '/api/remote-access/portal-accounts' && init?.method === 'POST') {
-        return jsonResponse({
-          account: { id: 'x', username: 'Owner', role: 'owner', enabled: true, mustChangePassword: true },
-          oneTimePassword: 'generated-password-value',
-        }, 201)
+        state = { ...state, accounts: [owner] }
+        return jsonResponse({ account: owner, oneTimePassword: 'generated-password-value' }, 201)
       }
-      return jsonResponse({ accountLoginEnabled: false, accounts: [], roles: ['owner', 'admin'] })
+      return jsonResponse(state)
+    })
+    const writeText = vi.spyOn(navigator.clipboard, 'writeText').mockResolvedValue(undefined)
+    const user = userEvent.setup()
+    render(<PortalAccountsManager />)
+    await user.type(await screen.findByLabelText('Username'), 'Coastal')
+    await user.click(screen.getByRole('button', { name: 'Create first Owner' }))
+    await user.click(await screen.findByRole('button', { name: 'Copy one-time password' }))
+    expect(writeText).toHaveBeenCalledWith('generated-password-value')
+    expect(screen.getByText('One-time password copied to the clipboard.')).toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: 'I stored it — continue' }))
+    expect(await screen.findByText('Step 3 — Verify the Owner locally')).toBeInTheDocument()
+  })
+
+  it('prefills the Owner and clearly verifies the one-time password only on this host', async () => {
+    let state = { accountLoginEnabled: false, accounts: [owner], roles: ['owner', 'admin'] }
+    vi.spyOn(globalThis, 'fetch').mockImplementation((input, init) => {
+      const path = String(input)
+      if (path === '/api/gameplay/players') return jsonResponse({ players: [] })
+      if (path === '/api/remote-access/portal-accounts/verify-owner' && init?.method === 'POST') {
+        state = { ...state, accounts: [{ ...owner, locallyVerified: true }] }
+        return jsonResponse({ ok: true })
+      }
+      return jsonResponse(state)
     })
     const user = userEvent.setup()
-    const writeText = vi.spyOn(navigator.clipboard, 'writeText').mockResolvedValue(undefined)
     render(<PortalAccountsManager />)
-
-    await user.type(await screen.findByLabelText('Username'), 'Owner')
-    await user.selectOptions(screen.getByLabelText('Role'), 'owner')
-    await user.click(screen.getByRole('button', { name: 'Create account' }))
-    await user.click(await screen.findByRole('button', { name: 'Copy' }))
-
-    expect(writeText).toHaveBeenCalledWith('generated-password-value')
-    expect(screen.getByRole('button', { name: 'Copied' })).toBeInTheDocument()
-    expect(screen.getByText('One-time password copied to the clipboard.')).toBeInTheDocument()
+    expect(await screen.findByText('Step 3 — Verify the Owner locally')).toBeInTheDocument()
+    expect(screen.getByLabelText('Owner username to verify')).toHaveValue('Coastal')
+    expect(screen.getByText(/does not claim that remote access is working/i)).toBeInTheDocument()
+    await user.type(screen.getByLabelText('Paste the one-time password'), 'generated-password-value')
+    await user.click(screen.getByRole('button', { name: 'Verify Owner password locally' }))
+    expect(await screen.findByText('Step 4 — Enable account login')).toBeInTheDocument()
+    expect(screen.getAllByText(/verified locally on this host/i).length).toBeGreaterThan(0)
   })
 
-  it('explains the safe enablement step', async () => {
-    vi.spyOn(globalThis, 'fetch').mockImplementation((input) => {
-      if (String(input) === '/api/gameplay/players') return jsonResponse({ players: [] })
-      return jsonResponse({ accountLoginEnabled: false, accounts: [], roles: ['owner', 'admin'] })
-    })
-    render(<PortalAccountsManager />)
-    expect(await screen.findByText('Safe enablement check')).toBeInTheDocument()
-    expect(screen.getByText(/paired native mobile apps stop working/i)).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: 'Enable account login' })).toBeDisabled()
-  })
-
-  it('sends explicit native retirement acknowledgement when enabling', async () => {
+  it('explains the migration and sends the explicit native-app acknowledgement', async () => {
     const requests: Array<{ path: string; init?: RequestInit }> = []
+    let state = { accountLoginEnabled: false, accounts: [{ ...owner, locallyVerified: true }], roles: ['owner', 'admin'] }
     vi.spyOn(globalThis, 'fetch').mockImplementation((input, init) => {
       const path = String(input)
       requests.push({ path, init })
       if (path === '/api/gameplay/players') return jsonResponse({ players: [] })
-      return jsonResponse({
-        accountLoginEnabled: path === '/api/remote-access/portal-account-mode',
-        nativeAppsBlockedInAccountMode: true,
-        accounts: [],
-        roles: ['owner', 'admin'],
-      })
+      if (path === '/api/remote-access/portal-account-mode') {
+        state = { ...state, accountLoginEnabled: true }
+        return jsonResponse({ accountLoginEnabled: true })
+      }
+      return jsonResponse(state)
     })
     const user = userEvent.setup()
     render(<PortalAccountsManager />)
-    const acknowledgement = await screen.findByRole('checkbox')
-    await user.click(acknowledgement)
-    await user.click(screen.getByRole('button', { name: 'Enable account login' }))
+    expect(await screen.findByText(/QR and link become a stable token-free login URL/i)).toBeInTheDocument()
+    expect(screen.getByText(/Disable account login and restore legacy links/i)).toBeInTheDocument()
+    const enable = screen.getByRole('button', { name: 'Enable account login' })
+    expect(enable).toBeDisabled()
+    await user.click(screen.getByRole('checkbox'))
+    await user.click(enable)
     const request = requests.find(r => r.path === '/api/remote-access/portal-account-mode')
     expect(JSON.parse(String(request?.init?.body))).toEqual({
       enabled: true,
       acknowledgeNativeAppRetirement: true,
     })
+  })
+
+  it('puts emergency Disable first and keeps additional account management after enablement', async () => {
+    const state = { accountLoginEnabled: true, accounts: [{ ...owner, locallyVerified: true }], roles: ['owner', 'admin'] }
+    vi.spyOn(globalThis, 'fetch').mockImplementation((input) => {
+      if (String(input) === '/api/gameplay/players') return jsonResponse({ players: [] })
+      return jsonResponse(state)
+    })
+    render(<PortalAccountsManager />)
+    expect(await screen.findByText('Account login Enabled')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Emergency: Disable account login' })).toBeInTheDocument()
+    expect(screen.getByText(/stable token-free URL/i)).toBeInTheDocument()
+    expect(screen.getByText('Create another account')).toBeInTheDocument()
+    expect(screen.getByLabelText('Role')).toBeInTheDocument()
+    expect(screen.getAllByText(/Owner and Admin currently have the same portal capabilities/i).length).toBeGreaterThan(0)
   })
 })

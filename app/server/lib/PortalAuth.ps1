@@ -6,6 +6,10 @@ $script:DunePortalIdleMinutes = 30
 $script:DunePortalRememberDays = 30
 $script:DunePortalRememberIdleDays = 7
 $script:DunePortalCookieName = 'dune_portal_session'
+$script:DuneBridgeProtocolVersion = '2'
+$script:DuneBridgeMarkerHeader = 'X-Dune-Bridge-Protocol'
+$script:DuneBridgeAuthorityHeader = 'X-Dune-Original-Authority'
+$script:DuneBridgeProofHeader = 'X-Dune-Bridge-Proof'
 
 function Get-DunePortalAuthDirectory {
     $dir = Join-Path $env:APPDATA 'DuneServer\portal-auth'
@@ -468,6 +472,70 @@ function Get-DunePortalSessionAuth {
     }
 }
 
+function ConvertTo-DunePortalAuthority {
+    param([string]$Authority)
+    if ([string]::IsNullOrWhiteSpace($Authority) -or $Authority.Length -gt 255) { return $null }
+    try {
+        $uri = [uri]("https://$Authority/")
+        if (-not $uri.Host -or $uri.UserInfo -or $uri.AbsolutePath -ne '/' -or $uri.Query -or $uri.Fragment) { return $null }
+        return @{ host = $uri.IdnHost.ToLowerInvariant(); port = [int]$uri.Port }
+    } catch { return $null }
+}
+
+function Get-DunePortalBridgeOriginSecret {
+    $directory = Join-Path $env:APPDATA 'DuneServer'
+    $path = Join-Path $directory 'bridge-origin.key'
+    if (-not (Test-Path -LiteralPath $directory)) {
+        New-Item -ItemType Directory -Path $directory -Force | Out-Null
+    }
+    if (-not (Test-Path -LiteralPath $path)) {
+        $bytes = New-Object byte[] 32
+        $rng = [Security.Cryptography.RandomNumberGenerator]::Create()
+        try { $rng.GetBytes($bytes) } finally { $rng.Dispose() }
+        $secret = [Convert]::ToBase64String($bytes)
+        try {
+            $stream = [IO.File]::Open($path, [IO.FileMode]::CreateNew, [IO.FileAccess]::Write, [IO.FileShare]::None)
+            try {
+                $data = [Text.Encoding]::ASCII.GetBytes($secret)
+                $stream.Write($data, 0, $data.Length)
+            } finally { $stream.Dispose() }
+        } catch [IO.IOException] {}
+    }
+    foreach ($attempt in 1..10) {
+        try {
+            $value = (Get-Content -LiteralPath $path -Raw -Encoding ASCII -ErrorAction Stop).Trim()
+            if ([Convert]::FromBase64String($value).Length -eq 32) { return $value }
+        } catch {}
+        Start-Sleep -Milliseconds 20
+    }
+    throw 'Bridge origin secret is unavailable.'
+}
+
+function Get-DunePortalTrustedRequestAuthority {
+    param($Request)
+    $authority = ''
+    try { $authority = [string]$Request.Headers['Host'] } catch {}
+
+    $isLoopback = $false
+    try { $isLoopback = [Net.IPAddress]::IsLoopback($Request.RemoteEndPoint.Address) } catch {}
+    if ($isLoopback) {
+        $marker = ''
+        try { $marker = [string]$Request.Headers[$script:DuneBridgeMarkerHeader] } catch {}
+        if ($marker -eq $script:DuneBridgeProtocolVersion) {
+            $proof = ''
+            try { $proof = [string]$Request.Headers[$script:DuneBridgeProofHeader] } catch {}
+            $expectedProof = Get-DunePortalBridgeOriginSecret
+            if (-not $proof -or -not (Test-DunePortalFixedTimeEqual `
+                ([Text.Encoding]::UTF8.GetBytes($proof)) `
+                ([Text.Encoding]::UTF8.GetBytes($expectedProof)))) {
+                return $null
+            }
+            try { $authority = [string]$Request.Headers[$script:DuneBridgeAuthorityHeader] } catch { return $null }
+        }
+    }
+    return (ConvertTo-DunePortalAuthority $authority)
+}
+
 function Test-DunePortalRequestOrigin {
     param($Request)
     $origin = ''
@@ -475,8 +543,13 @@ function Test-DunePortalRequestOrigin {
     if (-not $origin) { return $false }
     try {
         $originUri = [uri]$origin
-        $requestHost = [string]$Request.Headers['Host']
-        return ($originUri.Authority -eq $requestHost -and $originUri.Scheme -eq 'https')
+        if ($originUri.Scheme -ne 'https' -or -not $originUri.Host -or $originUri.UserInfo -or
+            $originUri.AbsolutePath -ne '/' -or $originUri.Query -or $originUri.Fragment) {
+            return $false
+        }
+        $trusted = Get-DunePortalTrustedRequestAuthority $Request
+        if (-not $trusted) { return $false }
+        return ($originUri.IdnHost.ToLowerInvariant() -ceq $trusted.host -and [int]$originUri.Port -eq $trusted.port)
     } catch { return $false }
 }
 

@@ -100,4 +100,22 @@ describe('PortalAuthGate', () => {
     await waitFor(() => expect(screen.getByText('Existing dashboard')).toBeInTheDocument())
     expect(screen.queryByLabelText('Username')).not.toBeInTheDocument()
   })
+
+  it('gives actionable recovery if a forced-change origin check is rejected', async () => {
+    vi.spyOn(globalThis, 'fetch')
+      .mockImplementationOnce(() => jsonResponse({
+        accountLoginEnabled: true,
+        authenticated: true,
+        mustChangePassword: true,
+        account: { id: 'a', username: 'owner', role: 'owner', enabled: true },
+      }))
+      .mockImplementationOnce(() => jsonResponse({ error: 'Request origin rejected.' }, 403))
+    const user = userEvent.setup()
+    render(<PortalAuthGate><div>Existing dashboard</div></PortalAuthGate>)
+    await user.type(await screen.findByLabelText('One-time password'), 'temporary password')
+    await user.type(screen.getByLabelText('New password'), 'long new password')
+    await user.type(screen.getByLabelText('Confirm new password'), 'long new password')
+    await user.click(screen.getByRole('button', { name: 'Change password' }))
+    expect(await screen.findByRole('alert')).toHaveTextContent(/Reopen the current Browser Portal QR or stable link/i)
+  })
 })
