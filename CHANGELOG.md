@@ -25,6 +25,9 @@ here cover everything those tags shipped.
 - The existing DST dashboard now adapts to phone and tablet browsers with
   safe-area spacing, touch-sized controls, and a mobile navigation drawer
   generated from the same pages and groups as the desktop sidebar.
+- Remote navigation now labels the command group consistently while keeping
+  PowerShell and the ad-hoc Database SQL editor host-local and unavailable
+  through Remote Access.
 
 ## [13.8.4] - 2026-08-21
 

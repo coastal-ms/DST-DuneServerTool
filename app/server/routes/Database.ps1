@@ -86,7 +86,7 @@ Register-DuneRoute -Method POST -Path '/api/db/test-connection' -Handler {
 # Returns: { ok, columns, rows, rowCount, truncated, message, durationMs, readOnly, maxRows }
 #          or { ok:false, error, raw, durationMs, readOnly }
 # -----------------------------------------------------------------------------
-Register-DuneRoute -Method POST -Path '/api/db/query' -Handler {
+Register-DuneRoute -Method POST -Path '/api/db/query' -LocalOnly -Handler {
     param($req, $res, $routeParams, $body)
     $ctx = Get-DuneDbContext
     if (-not $ctx.ok) {

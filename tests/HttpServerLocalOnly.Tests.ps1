@@ -43,6 +43,11 @@ Describe 'HTTP local-only request enforcement' {
         $route.LocalOnly | Should -BeTrue
     }
 
+    It 'keeps ad-hoc database SQL host-local' {
+        $routes = Get-Content (Join-Path (Get-DstRepoRoot) 'app\server\routes\Database.ps1') -Raw
+        $routes | Should -Match "Register-DuneRoute -Method POST -Path '/api/db/query' -LocalOnly"
+    }
+
     It 'blocks inline and pooled API writes during World Restart maintenance' {
         function global:Test-DuneWorldRestartMaintenanceActive { $true }
         try {
