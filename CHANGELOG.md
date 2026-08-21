@@ -13,6 +13,8 @@ here cover everything those tags shipped.
 
 ## [Unreleased]
 
+## [13.8.4] - 2026-08-20
+
 ### Fixed
 
 - The in-app updater now refreshes the selected GitHub release immediately
