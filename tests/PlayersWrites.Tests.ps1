@@ -612,6 +612,73 @@ Describe 'Get-DuneRecipesForJourneyNodeSubtree' -Tag 'Pure' {
     }
 }
 
+Describe 'Invoke-DunePlayerApplyProgressionPreset NPE safety' -Tag 'Pure' {
+    BeforeEach {
+        $script:testProgressionPreset = $null
+        function global:Get-DuneProgressionPresetCatalog {
+            return @($script:testProgressionPreset)
+        }
+        Mock Invoke-DuneSqlQuery {
+            return @{
+                ok = $true
+                columns = @('character_id')
+                rows = @(@('987'))
+            }
+        }
+        Mock Invoke-DunePlayerMarkNpeCompleted {
+            return @{ ok = $true; nodes_touched = 136 }
+        }
+        Mock Invoke-DunePlayerCompleteJourneyNode {
+            return @{ ok = $true; recipes = 5 }
+        }
+    }
+
+    AfterEach {
+        Remove-Item function:global:Get-DuneProgressionPresetCatalog -ErrorAction SilentlyContinue
+    }
+
+    It 'uses the complete NPE transaction for Skip NPE instead of the partial root completion' {
+        $script:testProgressionPreset = @{
+            id = 'skip_npe'
+            name = 'Skip NPE'
+            nodes = @('DA_MQ_NPEAutocompleted')
+        }
+
+        $result = Invoke-DunePlayerApplyProgressionPreset `
+            -Ip '1.2.3.4' `
+            -AccountId 123 `
+            -PresetId 'skip_npe'
+
+        $result.ok | Should -BeTrue
+        $result.npe_nodes | Should -Be 136
+        $result.completed | Should -Be 1
+        Should -Invoke Invoke-DunePlayerMarkNpeCompleted -Times 1 -Exactly
+        Should -Invoke Invoke-DunePlayerCompleteJourneyNode -Times 0 -Exactly
+    }
+
+    It 'uses complete NPE state and only completes Find the Fremen generically for Act 1' {
+        $script:testProgressionPreset = @{
+            id = 'act1_complete'
+            name = 'Complete Act 1'
+            nodes = @('DA_MQ_ANewBeginning', 'DA_MQ_FindTheFremen')
+        }
+
+        $result = Invoke-DunePlayerApplyProgressionPreset `
+            -Ip '1.2.3.4' `
+            -AccountId 123 `
+            -PresetId 'act1_complete'
+
+        $result.ok | Should -BeTrue
+        $result.npe_nodes | Should -Be 136
+        $result.completed | Should -Be 2
+        $result.recipes | Should -Be 5
+        Should -Invoke Invoke-DunePlayerMarkNpeCompleted -Times 1 -Exactly
+        Should -Invoke Invoke-DunePlayerCompleteJourneyNode -Times 1 -Exactly -ParameterFilter {
+            $NodeId -eq 'DA_MQ_FindTheFremen'
+        }
+    }
+}
+
 Describe 'Get-DuneTeleportDestinations' -Tag 'Pure' {
     It 'includes the main maps' {
         $ids = (Get-DuneTeleportDestinations).id
