@@ -40,6 +40,7 @@ Describe 'Build artifact metadata' {
         $repo = Split-Path $PSScriptRoot -Parent
         $installer = Get-Content -LiteralPath (Join-Path $repo 'app\installer\Build-Installer.ps1') -Raw
         $exe = Get-Content -LiteralPath (Join-Path $repo 'app\build\Build-Exe.ps1') -Raw
+        $helpers = Get-Content -LiteralPath (Join-Path $repo 'app\build\BuildHelpers.ps1') -Raw
         $workflow = Get-Content -LiteralPath (Join-Path $repo '.github\workflows\release-signed.yml') -Raw
         $installer | Should -Match '\[switch\]\$Prerelease'
         $exe | Should -Match '\[switch\]\$Prerelease'
@@ -48,7 +49,7 @@ Describe 'Build artifact metadata' {
         $installer | Should -Match 'Another installer build is already running'
         $installer | Should -Match 'Existing release tag .* resolves to'
         $installer | Should -Match 'rebuilt only from a clean checkout'
-        $installer | Should -Match 'refs/tags/\$BuildTag\^\{commit\}'
+        $helpers | Should -Match 'refs/tags/\$BuildTag\^\{commit\}'
         $installer | Should -Match '\[string\]\$BuildTag'
         $exe | Should -Match 'DuneServer\.\$buildId\.generated\.ps1'
         $exe | Should -Match 'rev-parse HEAD'
@@ -73,6 +74,13 @@ Describe 'Build artifact metadata' {
         [IO.File]::ReadAllText($installed) | Should -Be 'installed-build'
         [IO.File]::ReadAllText($destination) | Should -Be 'new-build'
         Test-Path -LiteralPath $temporary | Should -BeFalse
+    }
+
+    It 'returns an empty string when a new build tag does not exist yet' {
+        $repo = Split-Path $PSScriptRoot -Parent
+        Get-DuneExistingTagCommit `
+            -RepoRoot $repo `
+            -BuildTag 'v999.999.999-test-new-tag-regression' | Should -Be ''
     }
 
     It 'injects immutable build identity into API worker runspaces' {

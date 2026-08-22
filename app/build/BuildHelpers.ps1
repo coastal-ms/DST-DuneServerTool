@@ -40,3 +40,20 @@ function Publish-DuneBuildArtifact {
         }
     }
 }
+
+function Get-DuneExistingTagCommit {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)][string]$RepoRoot,
+        [Parameter(Mandatory)][string]$BuildTag
+    )
+
+    $output = & git -C $RepoRoot rev-parse --verify --quiet "refs/tags/$BuildTag^{commit}" 2>$null
+    $exitCode = $LASTEXITCODE
+    if ($exitCode -ne 0) { return '' }
+    $commit = "$output".Trim().ToLowerInvariant()
+    if ($commit -notmatch '^[0-9a-f]{40}$') {
+        throw "Existing release tag $BuildTag returned an invalid commit id."
+    }
+    return $commit
+}

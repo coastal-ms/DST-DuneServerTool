@@ -42,7 +42,9 @@ $outDir     = Join-Path $appRoot 'installer\output'
 $installer  = Join-Path $outDir 'DuneServerSetup.exe'
 $soloProj   = Join-Path $appRoot 'tools\DuneSoloDb\DuneSoloDb.csproj'
 $soloExe    = Join-Path $appRoot 'tools\DuneSoloDb\bin\Release\net10.0-windows\win-x64\publish\DuneSoloDb.exe'
+$buildHelpers = Join-Path $appRoot 'build\BuildHelpers.ps1'
 
+$null = . $buildHelpers
 $repoKey = [Convert]::ToHexString(
     [Security.Cryptography.SHA256]::HashData(
         [Text.Encoding]::UTF8.GetBytes($repoRoot.ToLowerInvariant()))).Substring(0, 16)
@@ -120,8 +122,8 @@ if ($BuildTag -and $BuildTag -notmatch '^v?\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$') 
     throw 'BuildTag must be a release tag such as v14.0.0 or v14.0.0-test6.'
 }
 if ($BuildTag) {
-    $tagCommit = ([string](& git -C $repoRoot rev-parse --verify --quiet "refs/tags/$BuildTag^{commit}" 2>$null)).Trim()
-    if ($LASTEXITCODE -eq 0 -and $tagCommit) {
+    $tagCommit = Get-DuneExistingTagCommit -RepoRoot $repoRoot -BuildTag $BuildTag
+    if ($tagCommit) {
         $headCommit = (& git -C $repoRoot rev-parse HEAD 2>$null).Trim().ToLowerInvariant()
         $tagCommit = $tagCommit.ToLowerInvariant()
         if ($headCommit -ne $tagCommit) {
