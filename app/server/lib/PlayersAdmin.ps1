@@ -893,12 +893,11 @@ function Invoke-DunePlayerAwardIntel {
 #      (Keeps the row so the pod doesn't crash on missing FKs; the view
 #      dune.player_state filters WHERE character_state = 'Active' so this
 #      hides the character from every game query that uses the view.)
-#   2. DELETE every permission_actor_rank row where player_id is one of the
-#      old character's controllers AND rank = 1. This strips ownership on
-#      the character's solo-owned vehicles/bases/fiefs (they become abandoned
-#      and claimable by anyone). Co-owner rows (rank >= 2) that the character
-#      held on OTHER players' stuff are LEFT INTACT - Hawk keeps his own
-#      grants on Coastal's shared stuff, etc.
+#   2. DELETE every permission held by an old character actor anywhere, plus
+#      every remaining rank on objects where that character held rank 1. Leaving
+#      a co-owner behind makes an owned object look ownerless while blocking
+#      Claim Ownership; leaving the deleted actor's rank 2/3 rows elsewhere
+#      preserves permissions for an actor that no longer exists.
 # The game does NOT delete physical totems, actors, buildings, encrypted_
 # accounts, or any per-player state tables. Those persist. This matches
 # behavior verified live against a fresh backup restore + real delete.
@@ -911,17 +910,34 @@ DECLARE
     v_account_id bigint := $AccountId;
     v_wiped int := 0;
 BEGIN
-    -- Step 1: strip owner grants (rank = 1) held by any actor belonging to
-    -- the account's ACTIVE character(s). Vehicles/bases the character solely
-    -- owned become abandoned and claimable. Co-owner rows survive.
-    WITH deleted AS (
+    -- Step 1: identify every current or historical actor on the account and
+    -- each object they own. Including already-Deleted rows repairs permission
+    -- residue left by older Full Delete runs.
+    WITH deleted_character_actors AS (
+        SELECT DISTINCT actor_id
+        FROM dune.encrypted_player_state eps
+        CROSS JOIN LATERAL unnest(ARRAY[
+            eps.player_controller_id,
+            eps.player_pawn_id,
+            eps.player_state_id
+        ]) AS deleted_actor(actor_id)
+        WHERE eps.account_id = v_account_id
+    ),
+    owned_permission_actors AS (
+        SELECT DISTINCT par.permission_actor_id
+        FROM dune.permission_actor_rank par
+        JOIN deleted_character_actors deleted_actor
+          ON deleted_actor.actor_id = par.player_id
+        WHERE par.rank = 1
+    ),
+    deleted AS (
         DELETE FROM dune.permission_actor_rank par
-        USING dune.actors a, dune.encrypted_player_state eps
-        WHERE a.id = par.player_id
-          AND eps.account_id = v_account_id
-          AND eps.character_state = 'Active'::dune.characterstate
-          AND a.id IN (eps.player_controller_id, eps.player_pawn_id, eps.player_state_id)
-          AND par.rank = 1
+        WHERE par.player_id IN (
+                  SELECT actor_id FROM deleted_character_actors
+              )
+           OR par.permission_actor_id IN (
+                  SELECT permission_actor_id FROM owned_permission_actors
+              )
         RETURNING 1
     )
     SELECT COUNT(*) INTO v_wiped FROM deleted;
@@ -940,6 +956,6 @@ END
     if (-not $r.ok) { return @{ ok = $false; error = $r.error } }
     return @{
         ok = $true
-        message = "Deleted account $AccountId's character - matches the game's own delete+purge: character marked Deleted, owner rank rows on their solo-owned vehicles/bases stripped (now claimable). Co-owner grants on other players' stuff left intact. Physical bases/totems/actors persist in the world."
+        message = "Deleted account $AccountId's character: active character marked Deleted, every permission held by all current/historical account actors removed, and every remaining rank cleared from objects they owned. Former vehicles/bases/fiefs are fully claimable; physical objects persist in the world."
     }
 }
