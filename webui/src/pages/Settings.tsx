@@ -300,11 +300,9 @@ export function Settings() {
     }
   }
 
-  // Reinstall the current version: re-download and re-run the installer for the
-  // build that's already running (stable channel, up to date). Uses the same
-  // interactive installer flow; the backend reinstall flag bypasses the
-  // up-to-date gate. Useful for repairing a broken install or re-applying the
-  // current release.
+  // Reinstall the selected release: re-download and re-run its installer even
+  // when it matches the running stable/test tag. This is the supported recovery
+  // path for a damaged install or an explicitly repaired same-tag test build.
   async function onReinstall() {
     setUpdInstalling(true)
     setUpdErr(null)
@@ -661,16 +659,22 @@ export function Settings() {
                     {updCheck.channel === 'test'
                       ? "You're on this test build."
                       : "You're on the latest version."}
-                    {updCheck.channel !== 'test' && !!updCheck.assetName && (
+                    {!!updCheck.assetName && (
                       <button
                         type="button"
                         onClick={onReinstall}
                         disabled={updInstalling}
                         className="btn-secondary"
-                        title="Re-download and re-run the installer for the current version"
+                        title={updCheck.channel === 'test'
+                          ? 'Re-download and reinstall the selected test build'
+                          : 'Re-download and reinstall the current live release'}
                       >
                         <Icon name={updInstalling ? 'Loader2' : 'RefreshCw'} size={14} className={updInstalling ? 'animate-spin' : ''} />
-                        {updInstalling ? 'Reinstalling…' : 'Reinstall'}
+                        {updInstalling
+                          ? 'Reinstalling…'
+                          : updCheck.channel === 'test'
+                            ? 'Reinstall test build'
+                            : 'Reinstall'}
                       </button>
                     )}
                   </span>

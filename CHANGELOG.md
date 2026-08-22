@@ -40,6 +40,10 @@ here cover everything those tags shipped.
   binary instead of stale persisted updater state. In-app updates now retain
   bounded Inno/relauncher diagnostics and verify the installed executable's
   exact release tag and commit before reporting success.
+- Test-channel Settings now exposes **Reinstall test build**, allowing an
+  operator to re-download and interactively reinstall the selected same-tag
+  test build for an explicitly repaired asset or local-install recovery without
+  detouring through Stable.
 
 ### Added
 
