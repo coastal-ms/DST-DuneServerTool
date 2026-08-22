@@ -130,6 +130,7 @@ body:
         - Web portal — Solo Mode — connection / wrapper or schema validation / process lock
         - Web portal — Solo Mode — native and Engine settings (load / apply / retained INI backup)
         - Web portal — Solo Mode — Give Item / Vehicle Kit / Package / Cosmetics / backpack or built-storage delivery
+        - Web portal — Solo Mode — Import Base Blueprint / portable blueprint JSON
         - Web portal — Solo Mode — Solari / Landsraad Scrip / Hajra Literjon fill
         - Web portal — Solo Mode — save backup / restore / single or multi-select delete / safety backup
         - Web portal — Solo Mode — Progression — max specializations / Find the Fremen / Enable All Skills
@@ -165,7 +166,7 @@ body:
     id: menu_option
     attributes:
       label: Specific page / button / command
-      description: Which button, tab, menu letter/number, or `-Cmd <name>` triggered the bug? For Browser Portal authentication, include login vs forced change vs local Settings administration, whether account mode was enabled, transport (Funnel or Cloudflare), and HTTP status only—never include usernames, passwords, cookies, tokens, account IDs, hashes, or salts. For in-game commands, include the exact `!command`, chat channel, monitoring interval, cooldown, whether any broadcast appeared, and whether it used the character name. For shared teleport destinations, include direct Save location vs Arm live capture, whether the player paused about five seconds, and whether they teleported on foot or from a vehicle seat. For scheduled Funcom updates, include the scheduled time, whether Apply available Funcom server updates was enabled, installed/latest build IDs, and the last schedule result. For World Restart, include the failed progress step, whether rollback ran automatically, whether every player was offline, and whether the Roll back last restart button remains available. For Specs > Apply level, include the track, before/after level, and before/after unspent skill points. For Reset Journey, include whether the post-NPE story restarted at Find the Fremen, which starter-class tree was reset, and how many skill points were refunded. For DD Seed Maps, include the selected seed, POI type, displayed sector(s), and a current reference screenshot or link when possible. For an Experimental Lab control, include its exact CVar or INI key, source/risk badge, file and section, and whether local Engine.ini management was enabled. For Solo Mode, include the adapter, wrapper/schema status, whether the game was fully closed, the exact action, and—after deleting/recreating a character—whether PTC was fully restarted before creation. For Enable All Skills, state whether Bindu Sprint remained learnable. For a database migration, name the failing step.
+      description: Which button, tab, menu letter/number, or `-Cmd <name>` triggered the bug? For Browser Portal authentication, include login vs forced change vs local Settings administration, whether account mode was enabled, transport (Funnel or Cloudflare), and HTTP status only—never include usernames, passwords, cookies, tokens, account IDs, hashes, or salts. For in-game commands, include the exact `!command`, chat channel, monitoring interval, cooldown, whether any broadcast appeared, and whether it used the character name. For shared teleport destinations, include direct Save location vs Arm live capture, whether the player paused about five seconds, and whether they teleported on foot or from a vehicle seat. For scheduled Funcom updates, include the scheduled time, whether Apply available Funcom server updates was enabled, installed/latest build IDs, and the last schedule result. For World Restart, include the failed progress step, whether rollback ran automatically, whether every player was offline, and whether the Roll back last restart button remains available. For Specs > Apply level, include the track, before/after level, and before/after unspent skill points. For Reset Journey, include whether the post-NPE story restarted at Find the Fremen, which starter-class tree was reset, and how many skill points were refunded. For DD Seed Maps, include the selected seed, POI type, displayed sector(s), and a current reference screenshot or link when possible. For an Experimental Lab control, include its exact CVar or INI key, source/risk badge, file and section, and whether local Engine.ini management was enabled. For Solo Mode, include the adapter, wrapper/schema status, whether the game was fully closed, and the exact action. For Import Base Blueprint, include whether the JSON came from a saved blueprint or placed-base export plus the displayed piece/placeable/pentashield counts—never paste the blueprint file or a backup path unless requested privately. After deleting/recreating a character, state whether PTC was fully restarted before creation. For Enable All Skills, state whether Bindu Sprint remained learnable. For a database migration, name the failing step.
       placeholder: "e.g. Browser Portal > Sign in, Settings > Remote Device Access > Verify owner login, Settings > Desktop shell > Save and restart shell, Database > World Restart > Wait for fresh database, or Gameplay Admin > Players > Specs > Apply level"
     validations:
       required: true
@@ -264,7 +265,7 @@ body:
   - type: textarea
     id: solo_diag
     attributes:
-      label: Solo Mode — local save, settings, inventory, package, cosmetic, backup, or restore details
+      label: Solo Mode — local save, blueprint, settings, inventory, package, cosmetic, backup, or restore details
       description: |
         Only fill this in for the host-local **Solo Mode** page. Attach a fresh
         diagnostics ZIP; it includes `solo-mode.txt` with adapter, wrapper,
@@ -275,14 +276,16 @@ body:
         - PTC or retail/custom folder.
         - Exact step: Connect and validate, Apply Solo settings, Create backup,
           Restore/Delete one backup, Delete selected backups, Give Item, Give
-          Vehicle Kit, Give Package, Grant Cosmetic / Building Set, Set currency
-          balances, Fill Hajra Literjon, Max specializations, Complete Find the
-          Fremen, or Enable All Skills.
+          Vehicle Kit, Give Package, Grant Cosmetic / Building Set, Import Base
+          Blueprint, Set currency balances, Fill Hajra Literjon, Max
+          specializations, Complete Find the Fremen, or Enable All Skills.
         - Whether Dune: Awakening was fully closed for a write.
         - The exact message DST showed.
         - For settings/currencies/fillables, the key or item and before/after value.
         - For item/package/cosmetic grants, the selection, quantity/quality when
           applicable, and selected backpack or built-storage destination.
+        - For blueprint import, saved-blueprint vs placed-base export and the
+          displayed piece/placeable/pentashield counts.
         - For restore, whether the pre-restore safety backup was reported.
         - For multi-delete, the selected backup count and exact deleted/retained
           result. Do not paste backup paths.
