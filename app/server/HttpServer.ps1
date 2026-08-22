@@ -347,6 +347,10 @@ function Initialize-DuneApiPool {
         Listener      = $script:DuneListener
         DistRoot      = $script:DuneDistRoot
         ToolVersion   = $script:DuneToolVersion
+        BuildMetadataPresent = [bool]$script:DuneBuildMetadataPresent
+        BuildCommit   = [string]$script:DuneBuildCommit
+        BuildPrerelease = [bool]$script:DuneBuildPrerelease
+        BuildTag      = [string]$script:DuneBuildTag
         PwshExe       = $script:PwshExe
         MainScript    = $script:MainScript
         AppDir        = $script:AppDir
@@ -472,6 +476,10 @@ function Invoke-DuneApiHandlerAsync {
                 ,@('DuneListener',     $ctx.Listener)
                 ,@('DuneDistRoot',     $ctx.DistRoot)
                 ,@('DuneToolVersion',  $ctx.ToolVersion)
+                ,@('DuneBuildMetadataPresent', $ctx.BuildMetadataPresent)
+                ,@('DuneBuildCommit',  $ctx.BuildCommit)
+                ,@('DuneBuildPrerelease', $ctx.BuildPrerelease)
+                ,@('DuneBuildTag',     $ctx.BuildTag)
                 ,@('PwshExe',          $ctx.PwshExe)
                 ,@('MainScript',       $ctx.MainScript)
                 ,@('AppDir',           $ctx.AppDir)

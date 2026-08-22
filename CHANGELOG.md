@@ -33,6 +33,13 @@ here cover everything those tags shipped.
 - Fixed Browser Portal password changes through the Tailscale bridge by forwarding an authenticated, bridge-owned public authority for exact HTTPS Origin checks, and added versioned bridge runtime repair.
 - Reworked first-time Browser Portal account setup into a guided Owner, one-time-password, local verification, and enablement flow with a clear emergency Disable path.
 - Added an optional **Remember me on this device** portal login that keeps trusted personal devices signed in for up to 30 days, with a seven-day idle limit and immediate server-side revocation.
+- Local DuneServer builds now publish through atomic file replacement, preventing
+  an accidental NTFS hardlink from overwriting the installed application during
+  a dev build. API worker runspaces also receive the executable's immutable
+  tag/commit metadata, so the displayed test identity reflects the running
+  binary instead of stale persisted updater state. In-app updates now retain
+  bounded Inno/relauncher diagnostics and verify the installed executable's
+  exact release tag and commit before reporting success.
 
 ### Added
 

@@ -1,6 +1,7 @@
 BeforeAll {
     . (Join-Path $PSScriptRoot '_TestHelpers.ps1')
     Import-DstLib 'BuildMetadata.ps1'
+    . (Join-Path (Split-Path $PSScriptRoot -Parent) 'app\build\BuildHelpers.ps1')
 }
 
 Describe 'Build artifact metadata' {
@@ -43,10 +44,44 @@ Describe 'Build artifact metadata' {
         $installer | Should -Match '\[switch\]\$Prerelease'
         $exe | Should -Match '\[switch\]\$Prerelease'
         $installer | Should -Match '-Prerelease:\$Prerelease'
+        $installer | Should -Match 'DST-BuildInstaller-'
+        $installer | Should -Match 'Another installer build is already running'
+        $installer | Should -Match 'Existing release tag .* resolves to'
+        $installer | Should -Match 'rebuilt only from a clean checkout'
+        $installer | Should -Match 'refs/tags/\$BuildTag\^\{commit\}'
         $installer | Should -Match '\[string\]\$BuildTag'
-        $exe | Should -Match 'DuneServer\.generated\.ps1'
+        $exe | Should -Match 'DuneServer\.\$buildId\.generated\.ps1'
+        $exe | Should -Match 'rev-parse HEAD'
+        $exe | Should -Not -Match 'rev-parse --short'
         $exe | Should -Match 'DuneBuildMetadataPresent = \$true'
         $workflow | Should -Match 'prerelease_build'
+        $workflow | Should -Match 'inputs\.attach_to_release_tag.*github\.ref'
+        $workflow | Should -Match 'fetch-depth:\s*0'
         $workflow | Should -Not -Match 'github\.ref.*Prerelease'
+    }
+
+    It 'publishes through replacement so an installed hardlink is not overwritten' {
+        $installed = Join-Path $TestDrive 'installed.exe'
+        $destination = Join-Path $TestDrive 'output.exe'
+        $temporary = Join-Path $TestDrive 'compiled.tmp.exe'
+        [IO.File]::WriteAllText($installed, 'installed-build')
+        New-Item -ItemType HardLink -Path $destination -Target $installed | Out-Null
+        [IO.File]::WriteAllText($temporary, 'new-build')
+
+        Publish-DuneBuildArtifact -TemporaryPath $temporary -DestinationPath $destination
+
+        [IO.File]::ReadAllText($installed) | Should -Be 'installed-build'
+        [IO.File]::ReadAllText($destination) | Should -Be 'new-build'
+        Test-Path -LiteralPath $temporary | Should -BeFalse
+    }
+
+    It 'injects immutable build identity into API worker runspaces' {
+        $repo = Split-Path $PSScriptRoot -Parent
+        $http = Get-Content -LiteralPath (Join-Path $repo 'app\server\HttpServer.ps1') -Raw
+        $http | Should -Match 'BuildMetadataPresent\s*=\s*\[bool\]\$script:DuneBuildMetadataPresent'
+        $http | Should -Match "@\('DuneBuildMetadataPresent',\s*\`$ctx\.BuildMetadataPresent\)"
+        $http | Should -Match "@\('DuneBuildCommit',\s*\`$ctx\.BuildCommit\)"
+        $http | Should -Match "@\('DuneBuildPrerelease',\s*\`$ctx\.BuildPrerelease\)"
+        $http | Should -Match "@\('DuneBuildTag',\s*\`$ctx\.BuildTag\)"
     }
 }

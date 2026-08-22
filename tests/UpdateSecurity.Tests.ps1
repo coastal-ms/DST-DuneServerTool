@@ -57,6 +57,7 @@ Describe 'Protected updater download seam' {
         Mock Invoke-RestMethod {
             [pscustomobject]@{
                 tag_name='v14.0.0-test7'; name='test7'; html_url='u'; published_at='2026-08-21'
+                target_commitish='abcdef1234567890'
                 body=''; assets=@([pscustomobject]@{
                     name='DuneServerSetup.exe'; browser_download_url='https://example.test/installer'
                     size=10; digest=$script:ExpectedDigest
@@ -64,7 +65,9 @@ Describe 'Protected updater download seam' {
             }
         }
         $script:DuneUpdateCache = $null
-        (Get-DuneLatestRelease -Force).assetDigest | Should -Be $script:ExpectedDigest
+        $release = Get-DuneLatestRelease -Force
+        $release.assetDigest | Should -Be $script:ExpectedDigest
+        $release.targetCommit | Should -Be 'abcdef1234567890'
     }
 
     It 'accepts only an exact SHA-256 digest match' {
@@ -92,6 +95,39 @@ Describe 'Protected updater download seam' {
         $script:DownloadCalls | Should -Be 0
     }
 
+    It 'resolves lightweight and annotated release tags to immutable commits' {
+        $commitSha = 'a' * 40
+        Mock Invoke-RestMethod {
+            if ($Uri -match '/git/ref/tags/') {
+                return [pscustomobject]@{
+                    object = [pscustomobject]@{ type='tag'; sha=('b' * 40) }
+                }
+            }
+            return [pscustomobject]@{
+                object = [pscustomobject]@{ type='commit'; sha=$commitSha }
+            }
+        }
+        Get-DuneReleaseCommitSha -Tag 'v14.0.0-test10' | Should -Be $commitSha
+        Assert-MockCalled Invoke-RestMethod -Times 2
+    }
+
+    It 'prunes bounded installer, relaunch, Inno, and result evidence' {
+        foreach ($prefix in 'DuneServerSetup','DuneRelaunch','relaunch','inno','update-result') {
+            $extension = switch ($prefix) {
+                'DuneServerSetup' { 'exe' }
+                'DuneRelaunch' { 'ps1' }
+                'update-result' { 'json' }
+                default { 'log' }
+            }
+            1..3 | ForEach-Object {
+                $path = Join-Path $TestDrive "$prefix-v14.0.0-test10-$('{0:x32}' -f $_).$extension"
+                [IO.File]::WriteAllText($path, 'evidence')
+            }
+        }
+        Remove-DuneOldUpdateFiles -Directory $TestDrive -Retain 2
+        @(Get-ChildItem $TestDrive -File).Count | Should -Be 2
+    }
+
     It 'does not launch when production-route verification fails' {
         Mock Get-DuneLock { [Threading.SemaphoreSlim]::new(1, 1) }
         Mock Get-DuneDecoupleNotice { @{ Needed=$false } }
@@ -104,6 +140,7 @@ Describe 'Protected updater download seam' {
         Mock Get-DuneUpdateChannel { 'stable' }
         Mock Get-DuneUpdateRunningBuildInfo { @{ runningIsPrerelease=$false; installedTag=''; buildCommit='' } }
         Mock Get-DuneProtectedUpdateDirectory { $TestDrive }
+        Mock Get-DuneReleaseCommitSha { 'abcdef1234567890abcdef1234567890abcdef12' }
         Mock Start-Process {}
         $script:DuneToolVersion = '14.0.0'
         $request = [pscustomobject]@{ QueryString=@{} }
@@ -121,9 +158,85 @@ Describe 'Protected updater download seam' {
         $source | Should -Match 'S-1-5-18'
         $source | Should -Match 'ReparsePoint'
     }
+
+    It 'logs Inno setup and verifies installed tag and commit after exit zero' {
+        $source = Get-Content (Join-Path (Get-DstRepoRoot) 'app\server\routes\Update.ps1') -Raw
+        $source | Should -Match '/LOG='
+        $source | Should -Match 'Get-DuneInstalledBuildIdentity'
+        $source | Should -Match 'DuneServer\(\?:\\\.\[0-9a-f\]\{32\}\)\?\\\.generated\\\.ps1'
+        $source | Should -Match 'Installed identity mismatch'
+        $source | Should -Match 'update-result-\$safeTag-\$launchId\.json'
+        $source | Should -Match 'targetCommit'
+        $source | Should -Match 'Resolve-DuneInstalledExecutablePath'
+        $source | Should -Match '\{B3F8A2C1-7E5D-4F9A-8B2C-1D6E3A4F5C7D\}_is1'
+        $source | Should -Match 'Get-DuneReleaseCommitSha'
+    }
+
+    It 'generates a PowerShell 5.1-parseable relaunch verifier' {
+        Mock Get-DuneLock { [Threading.SemaphoreSlim]::new(1, 1) }
+        Mock Get-DuneDecoupleNotice { @{ Needed=$false } }
+        Mock Get-DuneSelectedRelease {
+            [pscustomobject]@{
+                tag='v14.0.0-test7'; assetUrl='https://example.test/installer'
+                assetSize=10; assetDigest=('sha256:' + ('a' * 64))
+                isPrerelease=$true
+                targetCommit='abcdef1234567890abcdef1234567890abcdef12'
+            }
+        }
+        Mock Get-DuneUpdateChannel { 'test' }
+        Mock Get-DuneUpdateRunningBuildInfo {
+            @{ runningIsPrerelease=$true; installedTag='v14.0.0-test6'; buildCommit='abcdef6' }
+        }
+        Mock Get-DuneProtectedUpdateDirectory { $TestDrive }
+        Mock Get-DuneReleaseCommitSha { 'abcdef1234567890abcdef1234567890abcdef12' }
+        Mock Save-DuneVerifiedUpdateAsset {
+            $path = Join-Path $TestDrive 'verified-installer.exe'
+            [IO.File]::WriteAllText($path, 'installer')
+            return $path
+        }
+        Mock Start-Process {}
+        $script:DuneToolVersion = '14.0.0'
+        $script:AppDir = 'C:\Program Files\Dune Server'
+        $request = [pscustomobject]@{ QueryString=@{} }
+        $response = New-UpdateSecurityResponse
+
+        & $script:UpdateInstallHandler $request $response @{} @{
+            mode='silent'
+            source='banner'
+        }
+
+        $response.StatusCode | Should -Be 200
+        $scriptPath = @(Get-ChildItem $TestDrive -Filter 'DuneRelaunch-*.ps1') |
+            Select-Object -ExpandProperty FullName -First 1
+        $scriptPath | Should -Not -BeNullOrEmpty
+        $tokens = $null
+        $errors = $null
+        [void][Management.Automation.Language.Parser]::ParseFile(
+            $scriptPath,
+            [ref]$tokens,
+            [ref]$errors
+        )
+        $errors | Should -BeNullOrEmpty
+        $generated = Get-Content -LiteralPath $scriptPath -Raw
+        $generated | Should -Match 'abcdef1234567890abcdef1234567890abcdef12'
+        $generated | Should -Match 'Resolve-DuneInstalledExecutablePath'
+    }
 }
 
 Describe 'Exact installed test tag comparison' {
+    It 'accepts full and short forms of the same commit only' {
+        Test-DuneUpdateCommitIdentity `
+            -Expected 'abcdef1234567890abcdef1234567890abcdef12' `
+            -Actual 'abcdef123456' | Should -BeTrue
+        Test-DuneUpdateCommitIdentity `
+            -Expected 'abcdef123456' `
+            -Actual 'abcdef1234567890abcdef1234567890abcdef12' | Should -BeTrue
+        Test-DuneUpdateCommitIdentity `
+            -Expected 'abcdef1234567890abcdef1234567890abcdef12' `
+            -Actual '1234567890ab' | Should -BeFalse
+        Test-DuneUpdateCommitIdentity -Expected '' -Actual '' | Should -BeTrue
+    }
+
     It 'treats test6 as current, test7 as newer, and test5 as an intentional rollback' {
         $build = @{ runningIsPrerelease=$true; installedTag='v14.0.0-test6' }
         $running = Get-DuneRunningUpdateComparisonVersion -Channel test -CoreVersion '14.0.0' -BuildInfo $build

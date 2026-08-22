@@ -98,6 +98,7 @@ function Get-DuneLatestRelease {
             name         = [string]$rel.name
             htmlUrl      = [string]$rel.html_url
             publishedAt  = [string]$rel.published_at
+            targetCommit = [string]$rel.target_commitish
             releaseNotes = [string]$rel.body
             assetName    = if ($asset) { [string]$asset.name } else { $null }
             assetUrl     = if ($asset) { [string]$asset.browser_download_url } else { $null }
@@ -138,6 +139,7 @@ function Get-DuneReleases {
             name         = [string]$rel.name
             htmlUrl      = [string]$rel.html_url
             publishedAt  = [string]$rel.published_at
+            targetCommit = [string]$rel.target_commitish
             releaseNotes = [string]$rel.body
             isPrerelease = [bool]$rel.prerelease
             isDraft      = [bool]$rel.draft
@@ -207,6 +209,7 @@ function Get-DuneSelectedRelease {
         name         = $chosen.name
         htmlUrl      = $chosen.htmlUrl
         publishedAt  = $chosen.publishedAt
+        targetCommit = $chosen.targetCommit
         releaseNotes = $chosen.releaseNotes
         assetName    = $chosen.assetName
         assetUrl     = $chosen.assetUrl
@@ -263,6 +266,50 @@ function Get-DuneRunningUpdateComparisonVersion {
     return $CoreVersion
 }
 
+function Test-DuneUpdateCommitIdentity {
+    param([string]$Expected, [string]$Actual)
+    $expectedValue = $Expected.Trim().ToLowerInvariant()
+    $actualValue = $Actual.Trim().ToLowerInvariant()
+    if (-not $expectedValue) { return $true }
+    if ($expectedValue -notmatch '^[0-9a-f]{7,40}$' -or
+        $actualValue -notmatch '^[0-9a-f]{7,40}$') {
+        return $false
+    }
+    return $expectedValue.StartsWith($actualValue, [StringComparison]::Ordinal) -or
+        $actualValue.StartsWith($expectedValue, [StringComparison]::Ordinal)
+}
+
+function Get-DuneReleaseCommitSha {
+    param([Parameter(Mandatory)][string]$Tag)
+    $tagValue = $Tag.Trim()
+    if ($tagValue -notmatch '^v?\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$') {
+        throw 'Release tag is invalid.'
+    }
+    [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
+    $headers = @{
+        'User-Agent' = $script:DuneUpdateUA
+        'Accept' = 'application/vnd.github+json'
+    }
+    $encoded = [uri]::EscapeDataString($tagValue)
+    $refUri = "https://api.github.com/repos/$($script:DuneUpdateRepo)/git/ref/tags/$encoded"
+    $ref = Invoke-RestMethod -Uri $refUri -Headers $headers -TimeoutSec 15 -ErrorAction Stop
+    $type = [string]$ref.object.type
+    $sha = ([string]$ref.object.sha).Trim().ToLowerInvariant()
+    for ($depth = 0; $depth -lt 5 -and $type -eq 'tag'; $depth++) {
+        if ($sha -notmatch '^[0-9a-f]{40}$') {
+            throw 'Annotated release tag returned an invalid object id.'
+        }
+        $tagObjectUri = "https://api.github.com/repos/$($script:DuneUpdateRepo)/git/tags/$sha"
+        $tagObject = Invoke-RestMethod -Uri $tagObjectUri -Headers $headers -TimeoutSec 15 -ErrorAction Stop
+        $type = [string]$tagObject.object.type
+        $sha = ([string]$tagObject.object.sha).Trim().ToLowerInvariant()
+    }
+    if ($type -ne 'commit' -or $sha -notmatch '^[0-9a-f]{40}$') {
+        throw 'Release tag does not resolve to an immutable Git commit.'
+    }
+    return $sha
+}
+
 function Get-DuneUpdateExpectedSha256 {
     param([string]$Digest)
     if ($Digest -notmatch '^(?i:sha256):([0-9a-fA-F]{64})$') {
@@ -305,7 +352,7 @@ function Remove-DuneOldUpdateFiles {
     param([Parameter(Mandatory)][string]$Directory, [string]$Keep = '', [int]$Retain = 12)
     $files = @(Get-ChildItem -LiteralPath $Directory -File -Force -ErrorAction SilentlyContinue |
         Where-Object {
-            $_.Name -match '^(?:DuneServerSetup|DuneRelaunch|relaunch)-[A-Za-z0-9._-]+-[0-9a-f]{32}\.(?:exe|ps1|log)$'
+            $_.Name -match '^(?:DuneServerSetup|DuneRelaunch|relaunch|inno|update-result)-[A-Za-z0-9._-]+-[0-9a-f]{32}\.(?:exe|ps1|log|json)$'
         } |
         Sort-Object LastWriteTimeUtc -Descending)
     $retained = 0
@@ -638,6 +685,7 @@ Register-DuneRoute -Method POST -Path '/api/update/install' -Handler {
         try {
             $updateDir = Get-DuneProtectedUpdateDirectory
             $dest = Save-DuneVerifiedUpdateAsset -Release $rel -Directory $updateDir
+            $resolvedReleaseCommit = Get-DuneReleaseCommitSha -Tag ([string]$rel.tag)
         } catch {
             Write-DuneError -Response $res -Status 502 -Message $_.Exception.Message
             return
@@ -677,17 +725,23 @@ Register-DuneRoute -Method POST -Path '/api/update/install' -Handler {
         #      timeout shows a topmost WinForms MessageBox so the user has
         #      a real signal when something fails (the hidden powershell
         #      host has no other UI to surface errors).
-        $parentPid       = $PID
+        $parentPid = $PID
+        $launchId = [guid]::NewGuid().ToString('N')
+        $logPath = Join-Path $updateDir ("relaunch-$safeTag-$launchId.log")
+        $innoLogPath = Join-Path $updateDir ("inno-$safeTag-$launchId.log")
+        $resultPath = Join-Path $updateDir ("update-result-$safeTag-$launchId.json")
+        $installedExe = Join-Path $script:AppDir 'DuneServer.exe'
+        $expectedTag = [string]$rel.tag
+        $expectedCommit = [string]$resolvedReleaseCommit
         # Arguments are selected only from these constants after strict mode/source
-        # validation above. No request value is ever interpolated into a command.
-        $installArgs = if ($installMode -eq 'silent') {
+        # validation above. No request value is ever interpolated as executable code.
+        $installArgsBase = if ($installMode -eq 'silent') {
             '/SP- /VERYSILENT /SUPPRESSMSGBOXES /NORESTART'
         } else {
             '/SP- /NORESTART'
         }
+        $installArgs = "$installArgsBase /LOG=`"$innoLogPath`""
         $installModeLabel = if ($installMode -eq 'silent') { 'silently' } else { 'interactively' }
-        $launchId        = [guid]::NewGuid().ToString('N')
-        $logPath         = Join-Path $updateDir ("relaunch-$safeTag-$launchId.log")
         # Defensive escapes: %TEMP% / install path can contain an apostrophe
         # (e.g. C:\Users\<user-with-apostrophe>\AppData\...) which would break the single-
         # quoted literals embedded in the relauncher heredoc below.
@@ -696,9 +750,21 @@ Register-DuneRoute -Method POST -Path '/api/update/install' -Handler {
         $installArgsEsc  = $installArgs  -replace "'", "''"
         $installModeEsc  = $installModeLabel -replace "'", "''"
         $logPathEsc      = $logPath      -replace "'", "''"
+        $innoLogPathEsc  = $innoLogPath  -replace "'", "''"
+        $resultPathEsc   = $resultPath   -replace "'", "''"
+        $installedExeEsc = $installedExe -replace "'", "''"
+        $expectedTagEsc  = $expectedTag  -replace "'", "''"
+        $expectedCommitEsc = $expectedCommit -replace "'", "''"
+        $commitIdentityFunction = @"
+function Test-DuneUpdateCommitIdentity {
+$(${function:Test-DuneUpdateCommitIdentity}.ToString())
+}
+"@
         $relaunchScript = @"
 `$ErrorActionPreference = 'Continue'
 Start-Transcript -Path '$logPathEsc' -Append | Out-Null
+
+$commitIdentityFunction
 
 function Show-DuneUpdateFailure {
     param([string]`$Title, [string]`$Message)
@@ -721,6 +787,76 @@ function Show-DuneUpdateFailure {
             [System.Windows.Forms.MessageBoxButtons]::OK,
             [System.Windows.Forms.MessageBoxIcon]::Error) | Out-Null
         try { `$owner.Close(); `$owner.Dispose() } catch {}
+    } catch {}
+}
+
+function Get-DuneInstalledBuildIdentity {
+    param([Parameter(Mandatory)][string]`$Path)
+    if (-not (Test-Path -LiteralPath `$Path -PathType Leaf)) {
+        throw "Installed executable was not found: `$Path"
+    }
+    `$assembly = [Reflection.Assembly]::LoadFile(`$Path)
+    `$resourceNames = @(`$assembly.GetManifestResourceNames() | Where-Object {
+        `$_ -match '^DuneServer(?:\.[0-9a-f]{32})?\.generated\.ps1$'
+    })
+    if (`$resourceNames.Count -ne 1) {
+        throw "Installed executable has `$(`$resourceNames.Count) recognized embedded script resources."
+    }
+    `$stream = `$assembly.GetManifestResourceStream(`$resourceNames[0])
+    if (-not `$stream) { throw 'Installed executable has no embedded script resource.' }
+    `$reader = [IO.StreamReader]::new(`$stream, [Text.Encoding]::UTF8, `$true)
+    try { `$text = `$reader.ReadToEnd() } finally { `$reader.Dispose(); `$stream.Dispose() }
+    `$present = [regex]::IsMatch(`$text, '(?m)^\`$script:DuneBuildMetadataPresent\s*=\s*\`$true\s*$')
+    `$tagMatch = [regex]::Match(`$text, "(?m)^\`$script:DuneBuildTag\s*=\s*'([^']*)'\s*`$")
+    `$commitMatch = [regex]::Match(`$text, "(?m)^\`$script:DuneBuildCommit\s*=\s*'([^']*)'\s*`$")
+    return [pscustomobject]@{
+        present = `$present
+        tag = if (`$tagMatch.Success) { `$tagMatch.Groups[1].Value } else { '' }
+        commit = if (`$commitMatch.Success) { `$commitMatch.Groups[1].Value.ToLowerInvariant() } else { '' }
+    }
+}
+
+function Resolve-DuneInstalledExecutablePath {
+    `$keyName = '{B3F8A2C1-7E5D-4F9A-8B2C-1D6E3A4F5C7D}_is1'
+    foreach (`$root in @(
+        'HKLM:\Software\Microsoft\Windows\CurrentVersion\Uninstall',
+        'HKLM:\Software\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall'
+    )) {
+        try {
+            `$entry = Get-ItemProperty -LiteralPath (Join-Path `$root `$keyName) -ErrorAction Stop
+            `$location = ([string]`$entry.InstallLocation).Trim()
+            if (-not `$location) { continue }
+            `$candidate = Join-Path `$location 'DuneServer.exe'
+            if (Test-Path -LiteralPath `$candidate -PathType Leaf) {
+                return [IO.Path]::GetFullPath(`$candidate)
+            }
+        } catch {}
+    }
+    throw 'The installed Dune Server Tool directory could not be resolved from the uninstall registry.'
+}
+
+function Save-DuneUpdateResult {
+    param(
+        [bool]`$Success,
+        [string]`$Message,
+        [int]`$InstallerExitCode = -1,
+        `$Identity = `$null
+    )
+    try {
+        `$payload = [ordered]@{
+            success = `$Success
+            message = `$Message
+            expectedTag = '$expectedTagEsc'
+            expectedCommit = '$expectedCommitEsc'
+            actualTag = if (`$Identity) { [string]`$Identity.tag } else { '' }
+            actualCommit = if (`$Identity) { [string]`$Identity.commit } else { '' }
+            installerExitCode = `$InstallerExitCode
+            checkedAt = (Get-Date).ToUniversalTime().ToString('o')
+            relaunchLog = '$logPathEsc'
+            installerLog = '$innoLogPathEsc'
+        }
+        `$json = `$payload | ConvertTo-Json -Depth 4
+        [IO.File]::WriteAllText('$resultPathEsc', `$json, [Text.UTF8Encoding]::new(`$false))
     } catch {}
 }
 
@@ -775,27 +911,48 @@ public static extern bool AllowSetForegroundWindow(int dwProcessId);
     if (-not `$proc.WaitForExit(1800000)) {
         Write-Host "[`$(Get-Date -Format o)] Installer still open after 30 minutes"
         try { Stop-Process -Id `$proc.Id -Force -ErrorAction SilentlyContinue } catch {}
+        Save-DuneUpdateResult -Success `$false -Message 'Installer timed out.'
         Show-DuneUpdateFailure -Title 'Dune Server Update Timed Out' -Message (
             "The installer was still open after 30 minutes, so it was closed. The Dune Server app has been shut down.``r``n``r``n" +
-            "Log file:``r``n  $logPathEsc``r``n``r``n" +
+            "Relaunch log:``r``n  $logPathEsc``r``n``r``nInstaller log:``r``n  $innoLogPathEsc``r``n``r``n" +
             "You can reinstall manually by running:``r``n  $destEsc")
     } elseif (`$proc.ExitCode -ne 0) {
         `$code = `$proc.ExitCode
         Write-Host "[`$(Get-Date -Format o)] Installer exited with code `$code"
+        Save-DuneUpdateResult -Success `$false -Message "Installer exited with code `$code." -InstallerExitCode `$code
         Show-DuneUpdateFailure -Title 'Dune Server Update Failed' -Message (
             "The installer exited with code `$code. The Dune Server app has been closed.``r``n``r``n" +
-            "Log file:``r``n  $logPathEsc``r``n``r``n" +
+            "Relaunch log:``r``n  $logPathEsc``r``n``r``nInstaller log:``r``n  $innoLogPathEsc``r``n``r``n" +
             "You can reinstall manually by running:``r``n  $destEsc")
     } else {
-        Write-Host "[`$(Get-Date -Format o)] Install completed (exit 0)"
+        try {
+            `$actualInstalledExe = Resolve-DuneInstalledExecutablePath
+            `$identity = Get-DuneInstalledBuildIdentity -Path `$actualInstalledExe
+            `$tagOk = `$identity.present -and (`$identity.tag -eq '$expectedTagEsc')
+            `$commitOk = Test-DuneUpdateCommitIdentity -Expected '$expectedCommitEsc' -Actual `$identity.commit
+            if (-not `$tagOk -or -not `$commitOk) {
+                throw "Installed identity mismatch. Expected tag '$expectedTagEsc' commit '$expectedCommitEsc'; found tag '`$(`$identity.tag)' commit '`$(`$identity.commit)'."
+            }
+            Write-Host "[`$(Get-Date -Format o)] Installed identity verified: tag=`$(`$identity.tag) commit=`$(`$identity.commit)"
+            Save-DuneUpdateResult -Success `$true -Message 'Installed identity verified.' -InstallerExitCode 0 -Identity `$identity
+        } catch {
+            `$verifyMessage = `$_.Exception.Message
+            Write-Host "[`$(Get-Date -Format o)] Post-install verification failed: `$verifyMessage"
+            Save-DuneUpdateResult -Success `$false -Message `$verifyMessage -InstallerExitCode 0 -Identity `$identity
+            Show-DuneUpdateFailure -Title 'Dune Server Update Not Verified' -Message (
+                "The installer returned success, but DST could not verify the installed build:``r``n  `$verifyMessage``r``n``r``n" +
+                "Relaunch log:``r``n  $logPathEsc``r``n``r``nInstaller log:``r``n  $innoLogPathEsc``r``n``r``n" +
+                "You can reinstall manually by running:``r``n  $destEsc")
+        }
     }
 } catch {
     `$errMsg = `$_.Exception.Message
     Write-Host "[`$(Get-Date -Format o)] Relauncher error: `$errMsg"
+    Save-DuneUpdateResult -Success `$false -Message `$errMsg
     try {
         Show-DuneUpdateFailure -Title 'Dune Server Update Error' -Message (
             "The updater hit an unexpected error:``r``n  `$errMsg``r``n``r``n" +
-            "Log file:``r``n  $logPathEsc``r``n``r``n" +
+            "Relaunch log:``r``n  $logPathEsc``r``n``r``nInstaller log:``r``n  $innoLogPathEsc``r``n``r``n" +
             "You can reinstall manually by running:``r``n  $destEsc")
     } catch {}
 } finally {

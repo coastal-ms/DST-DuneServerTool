@@ -43,6 +43,21 @@ $installer  = Join-Path $outDir 'DuneServerSetup.exe'
 $soloProj   = Join-Path $appRoot 'tools\DuneSoloDb\DuneSoloDb.csproj'
 $soloExe    = Join-Path $appRoot 'tools\DuneSoloDb\bin\Release\net10.0-windows\win-x64\publish\DuneSoloDb.exe'
 
+$repoKey = [Convert]::ToHexString(
+    [Security.Cryptography.SHA256]::HashData(
+        [Text.Encoding]::UTF8.GetBytes($repoRoot.ToLowerInvariant()))).Substring(0, 16)
+$buildMutex = [Threading.Mutex]::new($false, "DST-BuildInstaller-$repoKey")
+$buildMutexOwned = $false
+try {
+    try {
+        $buildMutexOwned = $buildMutex.WaitOne(0)
+    } catch [Threading.AbandonedMutexException] {
+        $buildMutexOwned = $true
+    }
+    if (-not $buildMutexOwned) {
+        throw 'Another installer build is already running for this checkout.'
+    }
+
 # ---------------------------------------------------------------------------
 # Pre-flight: version-stamp sync check.
 #
@@ -94,7 +109,7 @@ if (-not $SkipVersionCheck) {
 
 # Resolve immutable artifact metadata without changing any version stamp.
 if (-not $BuildCommit) {
-    try { $BuildCommit = (& git -C $repoRoot rev-parse --short=12 HEAD 2>$null).Trim() } catch { $BuildCommit = '' }
+    try { $BuildCommit = (& git -C $repoRoot rev-parse HEAD 2>$null).Trim() } catch { $BuildCommit = '' }
 }
 $BuildCommit = $BuildCommit.Trim().ToLowerInvariant()
 if ($BuildCommit -and $BuildCommit -notmatch '^[0-9a-f]{7,40}$') {
@@ -103,6 +118,27 @@ if ($BuildCommit -and $BuildCommit -notmatch '^[0-9a-f]{7,40}$') {
 $BuildTag = $BuildTag.Trim()
 if ($BuildTag -and $BuildTag -notmatch '^v?\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$') {
     throw 'BuildTag must be a release tag such as v14.0.0 or v14.0.0-test6.'
+}
+if ($BuildTag) {
+    $tagCommit = ([string](& git -C $repoRoot rev-parse --verify --quiet "refs/tags/$BuildTag^{commit}" 2>$null)).Trim()
+    if ($LASTEXITCODE -eq 0 -and $tagCommit) {
+        $headCommit = (& git -C $repoRoot rev-parse HEAD 2>$null).Trim().ToLowerInvariant()
+        $tagCommit = $tagCommit.ToLowerInvariant()
+        if ($headCommit -ne $tagCommit) {
+            throw "Existing release tag $BuildTag resolves to $tagCommit, but checkout HEAD is $headCommit. Check out the exact tag before rebuilding its installer."
+        }
+        if ($BuildCommit -and $BuildCommit -ne $tagCommit) {
+            throw "BuildCommit $BuildCommit does not match existing release tag $BuildTag at $tagCommit."
+        }
+        $dirty = @(& git -C $repoRoot status --porcelain --untracked-files=all)
+        if ($LASTEXITCODE -ne 0) {
+            throw 'Could not verify checkout cleanliness for tagged rebuild.'
+        }
+        if ($dirty.Count -gt 0) {
+            throw "Existing release tag $BuildTag can be rebuilt only from a clean checkout."
+        }
+        $BuildCommit = $tagCommit
+    }
 }
 Write-Host "Build identity: prerelease=$([bool]$Prerelease), tag=$(if ($BuildTag) { $BuildTag } else { '(manual)' }), commit=$(if ($BuildCommit) { $BuildCommit } else { '(unknown)' })" -ForegroundColor Cyan
 Write-Host ''
@@ -309,4 +345,10 @@ Write-Host "  [x] dune-server.ps1: #Requires -RunAsAdministrator"               
 
 if ($Open) {
     Start-Process explorer.exe "/select,`"$installer`""
+}
+} finally {
+    if ($buildMutexOwned) {
+        try { $buildMutex.ReleaseMutex() } catch {}
+    }
+    $buildMutex.Dispose()
 }

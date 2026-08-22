@@ -69,6 +69,13 @@ function Invoke-DstRedaction {
         $out = $out.Replace($secret, '<redacted>')
     }
 
+    # 1h) Windows PowerShell transcript identity headers. Updater relaunch logs
+    # include domain\user and machine names before ordinary path redaction runs.
+    $out = [regex]::Replace(
+        $out,
+        '(?im)^(Username|RunAs User|Machine):\s*.*$',
+        '${1}: <redacted>')
+
     # 2) IPv4 addresses (but leave 127.0.0.1 / 0.0.0.0 / 255.255.255.255 alone —
     #    those carry no identifying info and matter for log readability).
     $out = [regex]::Replace($out, '\b(?!(?:127\.0\.0\.1|0\.0\.0\.0|255\.255\.255\.255)\b)(?:\d{1,3}\.){3}\d{1,3}\b', '<ip>')
@@ -314,6 +321,35 @@ function New-DstDiagnosticBundle {
     }
     if (-not $foundCliLogs) {
         $warnings.Add('No dune-server-*.log CLI transcripts found.')
+    }
+
+    # 6a) In-app updater evidence (best-effort, protected ProgramData) ----------
+    # Keep only text/JSON evidence, never downloaded installers or generated
+    # relaunch scripts. These logs decide false-success cases where Inno returned
+    # exit 0 but the installed executable identity did not advance.
+    $updateRoot = Join-Path $env:ProgramData 'DuneServer\Updates'
+    if (Test-Path -LiteralPath $updateRoot -PathType Container) {
+        try {
+            $updateLogs = @(Get-ChildItem -LiteralPath $updateRoot -File -Force -ErrorAction Stop |
+                Where-Object {
+                    $_.Name -match '^(?:relaunch|inno)-[A-Za-z0-9._-]+-[0-9a-f]{32}\.log$' -or
+                    $_.Name -match '^update-result-[A-Za-z0-9._-]+-[0-9a-f]{32}\.json$'
+                } |
+                Sort-Object LastWriteTimeUtc -Descending |
+                Select-Object -First 12)
+            foreach ($updateLog in $updateLogs) {
+                $tail = Read-DstLogTail -Path $updateLog.FullName -MaxBytes 102400
+                if ($null -eq $tail) { continue }
+                $header = "# $($updateLog.Name) (tail, sanitized; source size: $($updateLog.Length) bytes)`r`n`r`n"
+                $san = $header + (Invoke-DstRedaction -Text $tail @redactArgs)
+                $outName = "updater-$($updateLog.Name)"
+                $out = Join-Path $stageDir $outName
+                Set-Content -LiteralPath $out -Value $san -Encoding UTF8
+                $included.Add(@{ name = $outName; bytes = (Get-Item -LiteralPath $out).Length })
+            }
+        } catch {
+            $warnings.Add("Updater logs could not be collected: $($_.Exception.Message)")
+        }
     }
 
     # 6b) Live game-config INI snapshot (best-effort over SSH) ----------------
@@ -895,6 +931,9 @@ done
     $manLines.Add('the actual join-rejection reason for "P34 / can''t connect" reports where the')
     $manLines.Add('server is visible but players time out. Dump/backup pods are excluded. All IPs')
     $manLines.Add('are sanitized; absent when the VM is unreachable (see Warnings).')
+    $manLines.Add('')
+    $manLines.Add('updater-*.log/json captures recent in-app update launch, Inno setup, and exact')
+    $manLines.Add('post-install tag/commit verification without including downloaded installers.')
     $manLines.Add('')
     $manLines.Add('Files included:')
     foreach ($f in $included) {
