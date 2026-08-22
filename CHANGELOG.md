@@ -57,6 +57,11 @@ here cover everything those tags shipped.
   violations while a smaller control blueprint worked. The backend now rejects
   the action before any save change; the implementation remains dormant for
   revalidation against the observed Retail Solo adapter when Retail Solo ships.
+- Self-Hosted **Skip NPE**, **A New Beginning**, and **All of Act 1** quick
+  presets now use the exact verified 136-node NPE completion transaction.
+  Previously, partial root completion could grant Karpov 38 research at zero
+  Intel while leaving Wreck of the Alcyon active and unable to observe the
+  research event.
 
 ### Added
 

@@ -2,20 +2,20 @@
   {
     "id": "skip_npe",
     "name": "Skip NPE (New Player Experience)",
-    "node_count": 4,
+    "node_count": 136,
     "nodes": [
       "DA_MQ_NPEAutocompleted"
     ],
-    "description": "Marks the tutorial/NPE as complete. Useful for experienced players who don't need the intro."
+    "description": "Applies the exact verified 136-node Skip Tutorial state, fully completing A New Beginning without leaving research-gated objectives active."
   },
   {
     "id": "a_new_beginning",
     "name": "Complete: A New Beginning",
-    "node_count": 132,
+    "node_count": 136,
     "nodes": [
       "DA_MQ_ANewBeginning"
     ],
-    "description": "Main story intro - crafting Stillsuit, harvesting resources, fabricator research. Unlocks early game."
+    "description": "Applies the exact verified NPE completion state for the full main-story intro, including every research-gated objective."
   },
   {
     "id": "find_the_fremen",
@@ -29,12 +29,12 @@
   {
     "id": "act1_complete",
     "name": "Complete: All of Act 1",
-    "node_count": 178,
+    "node_count": 182,
     "nodes": [
       "DA_MQ_ANewBeginning",
       "DA_MQ_FindTheFremen"
     ],
-    "description": "A New Beginning + Find the Fremen combined. Player starts ready for Act 2."
+    "description": "Exact 136-node NPE completion + Find the Fremen. Player starts ready for Act 2 without partial tutorial research state."
   },
   {
     "id": "vermillius_intro",

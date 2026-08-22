@@ -1297,8 +1297,42 @@ function Invoke-DunePlayerApplyProgressionPreset {
 
     $completed = 0
     $totalRecipes = 0
+    $npeNodes = 0
     $errs = @()
+
+    # The old quick presets completed only one root row. On a fresh character,
+    # the game then granted early research such as Karpov 38 at zero Intel while
+    # leaving its live Wreck of the Alcyon objective unresolved. Use the exact
+    # captured 136-node Skip Tutorial state for every preset that contains an NPE
+    # root, matching Reset Journey and Fresh Start.
+    $npeRoots = @('DA_MQ_NPEAutocompleted', 'DA_MQ_ANewBeginning')
+    $usesNpeCompletion = @($preset.nodes | Where-Object { $_ -in $npeRoots }).Count -gt 0
+    if ($usesNpeCompletion) {
+        $charSql = "SELECT id::text AS character_id FROM dune.player_state WHERE account_id=$AccountId::bigint LIMIT 1;"
+        $charResult = Invoke-DuneSqlQuery -Ip $Ip -Sql $charSql -ReadOnly $true -MaxRows 1 -TimeoutSec 10
+        if (-not $charResult.ok) {
+            return @{ ok = $false; error = "NPE character lookup failed: $($charResult.error)" }
+        }
+        $charRows = ConvertTo-DuneRowMaps -Result $charResult
+        if ($charRows.Count -ne 1) {
+            return @{ ok = $false; error = 'NPE character lookup returned no result.' }
+        }
+        $characterId = [int64](ConvertTo-DuneInt $charRows[0]['character_id'])
+        if ($characterId -le 0) {
+            return @{ ok = $false; error = 'NPE character lookup returned an invalid id.' }
+        }
+        $npe = Invoke-DunePlayerMarkNpeCompleted -Ip $Ip -CharacterId $characterId
+        if (-not $npe.ok) {
+            return @{ ok = $false; error = "NPE completion failed: $($npe.error)" }
+        }
+        $npeNodes = [int]$npe.nodes_touched
+    }
+
     foreach ($node in $preset.nodes) {
+        if ($node -in $npeRoots) {
+            $completed++
+            continue
+        }
         $r = Invoke-DunePlayerCompleteJourneyNode -Ip $Ip -AccountId $AccountId -NodeId $node -SkipMsg
         if ($r.ok) { $completed++; $totalRecipes += [int]$r.recipes }
         else { $errs += "$node : $($r.error)" }
@@ -1306,8 +1340,16 @@ function Invoke-DunePlayerApplyProgressionPreset {
     $total = @($preset.nodes).Count
     $ok = $errs.Count -eq 0
     $msg = "Applied preset '$PresetId' ($($preset.name)): completed $completed/$total journey node(s), granted $totalRecipes recipe(s)."
+    if ($npeNodes -gt 0) { $msg += " Applied the complete $npeNodes-node NPE skip state." }
     if ($errs.Count -gt 0) { $msg += " Failures: $($errs -join '; ')" }
-    return @{ ok = $ok; message = $msg; completed = $completed; total = $total; recipes = $totalRecipes }
+    return @{
+        ok = $ok
+        message = $msg
+        completed = $completed
+        total = $total
+        recipes = $totalRecipes
+        npe_nodes = $npeNodes
+    }
 }
 
 function Invoke-DunePlayerCompleteJourneyNode {
