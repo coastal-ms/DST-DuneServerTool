@@ -19,10 +19,10 @@ export function AppShell({ children }: { children: ReactNode }) {
 
   if (immersive) {
     return (
-      <div className="h-full flex flex-col overflow-hidden">
+      <div className="h-full w-full max-w-full flex flex-col overflow-hidden">
         <DecoupleNoticeModal />
         <MenuBar sidebarCollapsed={collapsed} onToggleSidebar={toggle} />
-        <main className="flex-1 min-h-0 overflow-hidden">
+        <main className="flex-1 min-h-0 min-w-0 max-w-full overflow-hidden">
           {children}
         </main>
       </div>
@@ -30,7 +30,7 @@ export function AppShell({ children }: { children: ReactNode }) {
   }
 
   return (
-    <div className="h-full flex flex-col overflow-hidden">
+    <div className="h-full w-full max-w-full flex flex-col overflow-hidden">
       <DecoupleNoticeModal />
       <MenuBar sidebarCollapsed={collapsed} onToggleSidebar={toggle} />
       <div className="flex-1 flex overflow-hidden min-h-0">
@@ -38,8 +38,8 @@ export function AppShell({ children }: { children: ReactNode }) {
         <div className="flex-1 flex flex-col min-w-0">
           <UpdateBanner />
           <StatusBar />
-          <main className="flex-1 overflow-y-auto overscroll-y-contain">
-            <div className="max-w-7xl mx-auto px-3 pt-4 pb-[max(1rem,env(safe-area-inset-bottom))] sm:px-4 md:px-6 md:py-6">
+          <main className="flex-1 min-w-0 max-w-full overflow-x-hidden overflow-y-auto overscroll-y-contain">
+            <div className="w-full min-w-0 max-w-7xl mx-auto px-3 pt-4 pb-[max(1rem,env(safe-area-inset-bottom))] sm:px-4 md:px-6 md:py-6">
               {children}
             </div>
           </main>

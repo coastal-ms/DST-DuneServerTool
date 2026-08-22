@@ -9,6 +9,7 @@ import { getAutostartState, setAutostartEnabled, type AutostartState } from '../
 import { getServiceModeState, setServiceModeEnabled, type ServiceModeState } from '../api/serviceMode'
 import { getConsoleState, setConsoleVisible, type ConsoleState } from '../api/console'
 import { isLocalViewer, isWindowsViewer } from '../util/viewer'
+import { isHorizontalSwipe, type TouchPoint } from '../util/mobileNavigationGesture'
 
 type MenuKey = NavGroup | 'help' | 'coffee'
 
@@ -31,6 +32,7 @@ export function MenuBar({ sidebarCollapsed, onToggleSidebar }: Props) {
   const [mobileNavOpen, setMobileNavOpen] = useState(false)
   const rootRef = useRef<HTMLDivElement | null>(null)
   const mobileMenuButtonRef = useRef<HTMLButtonElement | null>(null)
+  const mobileSwipeStartRef = useRef<TouchPoint | null>(null)
 
   // Autostart state. Only fetched on local viewers — the backend rejects
   // non-loopback callers anyway and there's nothing the remote viewer could
@@ -239,6 +241,21 @@ export function MenuBar({ sidebarCollapsed, onToggleSidebar }: Props) {
     return location.pathname === to || location.pathname.startsWith(`${to}/`)
   }
 
+  const rememberSwipeStart = (event: React.TouchEvent) => {
+    const touch = event.touches[0]
+    if (touch) mobileSwipeStartRef.current = { x: touch.clientX, y: touch.clientY }
+  }
+
+  const finishSwipe = (event: React.TouchEvent, direction: 'left' | 'right') => {
+    const start = mobileSwipeStartRef.current
+    const touch = event.changedTouches[0]
+    mobileSwipeStartRef.current = null
+    if (!start || !touch) return
+    if (!isHorizontalSwipe(start, { x: touch.clientX, y: touch.clientY }, direction)) return
+    setMobileNavOpen(direction === 'right')
+    if (direction === 'left') mobileMenuButtonRef.current?.focus()
+  }
+
   const mobileGroups = GROUP_ORDER.map(group => ({
     key: group,
     label: GROUP_LABELS[group],
@@ -252,7 +269,12 @@ export function MenuBar({ sidebarCollapsed, onToggleSidebar }: Props) {
   return (
     <div
       ref={rootRef}
-      className="h-11 md:h-8 shrink-0 border-b border-border bg-surface flex items-center pl-[max(0.25rem,env(safe-area-inset-left))] pr-[max(0.25rem,env(safe-area-inset-right))] text-[13px] select-none relative z-40 overflow-hidden md:overflow-visible"
+      onTouchStart={rememberSwipeStart}
+      onTouchEnd={(event) => {
+        if (!mobileNavOpen) finishSwipe(event, 'right')
+      }}
+      onTouchCancel={() => { mobileSwipeStartRef.current = null }}
+      className="h-[calc(2.75rem+env(safe-area-inset-top))] pt-[env(safe-area-inset-top)] md:h-8 md:pt-0 shrink-0 border-b border-border bg-surface flex items-center pl-[max(0.25rem,env(safe-area-inset-left))] pr-[max(0.25rem,env(safe-area-inset-right))] text-[13px] select-none relative z-40 overflow-hidden md:overflow-visible"
     >
       <button
         ref={mobileMenuButtonRef}
@@ -264,6 +286,7 @@ export function MenuBar({ sidebarCollapsed, onToggleSidebar }: Props) {
       >
         <Icon name="Menu" size={20} />
         <span className="font-medium">Menu</span>
+        <Icon name="ChevronRight" size={14} className="text-text-dim" />
       </button>
       <div className="md:hidden ml-auto min-w-0 px-3 font-medium text-text truncate">
         {currentPage}
@@ -618,9 +641,12 @@ export function MenuBar({ sidebarCollapsed, onToggleSidebar }: Props) {
             role="dialog"
             aria-modal="true"
             aria-label="DST navigation"
-            className="absolute inset-y-0 left-0 w-[min(88vw,22rem)] bg-surface border-r border-border shadow-2xl flex flex-col pl-[env(safe-area-inset-left)]"
+            onTouchStart={rememberSwipeStart}
+            onTouchEnd={(event) => finishSwipe(event, 'left')}
+            onTouchCancel={() => { mobileSwipeStartRef.current = null }}
+            className="absolute inset-y-0 left-0 w-[min(88vw,22rem)] max-w-full bg-surface border-r border-border shadow-2xl flex flex-col pl-[env(safe-area-inset-left)] touch-pan-y"
           >
-            <div className="h-14 px-4 border-b border-border flex items-center gap-3">
+            <div className="min-h-[calc(3.5rem+env(safe-area-inset-top))] pt-[env(safe-area-inset-top)] px-4 border-b border-border flex items-center gap-3">
               <img src="/logo.png" alt="" className="w-8 h-8 rounded-full object-contain" />
               <div className="min-w-0">
                 <div className="font-semibold text-text">Dune Server Tool</div>

@@ -457,7 +457,7 @@ Register-DuneRoute -Method POST -Path '/api/gameconfig/backups/delete' -Handler 
 # PUT  /api/gameconfig/client/apply— upsert ClientApply keys into their local file.
 #                                     { updates: [ { key, value }, ... ], dir? }
 # -----------------------------------------------------------------------------
-Register-DuneRoute -Method GET -Path '/api/gameconfig/client' -Handler {
+Register-DuneRoute -Method GET -Path '/api/gameconfig/client' -LocalOnly -Handler {
     param($req, $res, $routeParams, $body)
     try {
         Write-DuneJson -Response $res -Body (Get-DuneGameConfigClient)
@@ -466,7 +466,7 @@ Register-DuneRoute -Method GET -Path '/api/gameconfig/client' -Handler {
     }
 }
 
-Register-DuneRoute -Method PUT -Path '/api/gameconfig/client/dir' -Handler {
+Register-DuneRoute -Method PUT -Path '/api/gameconfig/client/dir' -LocalOnly -Handler {
     param($req, $res, $routeParams, $body)
     $dir = ''
     if ($body -is [hashtable] -and $body.Contains('dir')) { $dir = "$($body['dir'])".Trim() }
@@ -487,7 +487,7 @@ Register-DuneRoute -Method PUT -Path '/api/gameconfig/client/dir' -Handler {
     }
 }
 
-Register-DuneRoute -Method PUT -Path '/api/gameconfig/client/engine' -Handler {
+Register-DuneRoute -Method PUT -Path '/api/gameconfig/client/engine' -LocalOnly -Handler {
     param($req, $res, $routeParams, $body)
     if (-not ($body -is [hashtable]) -or -not $body.ContainsKey('enabled')) {
         Write-DuneError -Response $res -Status 400 -Message 'Missing enabled.'
@@ -515,7 +515,7 @@ Register-DuneRoute -Method PUT -Path '/api/gameconfig/client/engine' -Handler {
     }
 }
 
-Register-DuneRoute -Method PUT -Path '/api/gameconfig/client/apply' -Handler {
+Register-DuneRoute -Method PUT -Path '/api/gameconfig/client/apply' -LocalOnly -Handler {
     param($req, $res, $routeParams, $body)
     if (-not $body -or -not ($body -is [hashtable])) {
         Write-DuneError -Response $res -Status 400 -Message 'Missing JSON body.'
@@ -569,7 +569,7 @@ Register-DuneRoute -Method PUT -Path '/api/gameconfig/client/apply' -Handler {
 # POST /api/gameconfig/client/open — open local Game.ini or Engine.ini in Notepad
 # on this PC (DST runs locally). Body (optional): { dir, file }
 # -----------------------------------------------------------------------------
-Register-DuneRoute -Method POST -Path '/api/gameconfig/client/open' -Handler {
+Register-DuneRoute -Method POST -Path '/api/gameconfig/client/open' -LocalOnly -Handler {
     param($req, $res, $routeParams, $body)
     $dir = ''
     $file = 'game'
