@@ -122,6 +122,13 @@ if ($BuildTag -and $BuildTag -notmatch '^v?\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$') 
     throw 'BuildTag must be a release tag such as v14.0.0 or v14.0.0-test6.'
 }
 if ($BuildTag) {
+    $dirty = @(& git -C $repoRoot status --porcelain --untracked-files=all)
+    if ($LASTEXITCODE -ne 0) {
+        throw 'Could not verify checkout cleanliness for tagged build.'
+    }
+    if ($dirty.Count -gt 0) {
+        throw "Tagged build $BuildTag requires a clean checkout."
+    }
     $tagCommit = Get-DuneExistingTagCommit -RepoRoot $repoRoot -BuildTag $BuildTag
     if ($tagCommit) {
         $headCommit = (& git -C $repoRoot rev-parse HEAD 2>$null).Trim().ToLowerInvariant()
@@ -131,13 +138,6 @@ if ($BuildTag) {
         }
         if ($BuildCommit -and $BuildCommit -ne $tagCommit) {
             throw "BuildCommit $BuildCommit does not match existing release tag $BuildTag at $tagCommit."
-        }
-        $dirty = @(& git -C $repoRoot status --porcelain --untracked-files=all)
-        if ($LASTEXITCODE -ne 0) {
-            throw 'Could not verify checkout cleanliness for tagged rebuild.'
-        }
-        if ($dirty.Count -gt 0) {
-            throw "Existing release tag $BuildTag can be rebuilt only from a clean checkout."
         }
         $BuildCommit = $tagCommit
     }

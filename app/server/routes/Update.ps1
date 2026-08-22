@@ -228,6 +228,8 @@ function Get-DuneSelectedRelease {
 #   Channel             = 'stable' | 'test'
 #   HasAsset            = selected release carries DuneServerSetup.exe
 #   RunningIsPrerelease = the build currently running was installed from a pre-release
+#   IdentityMismatch    = selected tag matches, but the running artifact is not
+#                         the exact published commit (or is an untagged dev build)
 #
 # Test channel: install whenever the selected pre-release differs from the
 # running build (forward, sideways, or rollback between -testN candidates).
@@ -240,15 +242,16 @@ function Get-DuneInstallDecision {
         [int]$Diff = 0,
         [string]$Channel = 'stable',
         [bool]$HasAsset = $false,
-        [bool]$RunningIsPrerelease = $false
+        [bool]$RunningIsPrerelease = $false,
+        [bool]$IdentityMismatch = $false
     )
-    $available = ($Diff -gt 0)
+    $available = ($Diff -gt 0) -or $IdentityMismatch
     if ($Channel -eq 'test') {
-        $installable = $HasAsset -and ($Diff -ne 0)
-        $blocked     = ($Diff -eq 0)
+        $installable = $HasAsset -and (($Diff -ne 0) -or $IdentityMismatch)
+        $blocked     = ($Diff -eq 0) -and (-not $IdentityMismatch)
     } else {
         $installable = $HasAsset -and ($available -or $RunningIsPrerelease)
-        $blocked     = ($Diff -le 0) -and (-not $RunningIsPrerelease)
+        $blocked     = (-not $available) -and (-not $RunningIsPrerelease)
     }
 
     [pscustomobject]@{
@@ -308,6 +311,50 @@ function Get-DuneReleaseCommitSha {
         throw 'Release tag does not resolve to an immutable Git commit.'
     }
     return $sha
+}
+
+function Get-DuneReleaseExpectedCommit {
+    param([Parameter(Mandatory)]$Release)
+    $target = ([string]$Release.targetCommit).Trim().ToLowerInvariant()
+    if ($target -match '^[0-9a-f]{40}$') { return $target }
+    return Get-DuneReleaseCommitSha -Tag ([string]$Release.tag)
+}
+
+function Get-DuneSelectedReleaseIdentity {
+    param(
+        [Parameter(Mandatory)]$Release,
+        [Parameter(Mandatory)]$BuildInfo
+    )
+    $runningIsPrerelease = [bool]$BuildInfo.runningIsPrerelease
+    $installedTag = ([string]$BuildInfo.installedTag).Trim()
+    $selectedTag = ([string]$Release.tag).Trim()
+    if (-not $runningIsPrerelease) {
+        return [pscustomobject]@{
+            checked = $false
+            mismatch = $false
+            expectedCommit = ''
+            actualCommit = [string]$BuildInfo.buildCommit
+        }
+    }
+    if ($installedTag -and $installedTag -ne $selectedTag) {
+        return [pscustomobject]@{
+            checked = $false
+            mismatch = $false
+            expectedCommit = ''
+            actualCommit = [string]$BuildInfo.buildCommit
+        }
+    }
+
+    $expectedCommit = Get-DuneReleaseExpectedCommit -Release $Release
+    $actualCommit = ([string]$BuildInfo.buildCommit).Trim().ToLowerInvariant()
+    $mismatch = (-not $installedTag) -or
+        (-not (Test-DuneUpdateCommitIdentity -Expected $expectedCommit -Actual $actualCommit))
+    return [pscustomobject]@{
+        checked = $true
+        mismatch = $mismatch
+        expectedCommit = $expectedCommit
+        actualCommit = $actualCommit
+    }
 }
 
 function Get-DuneUpdateExpectedSha256 {
@@ -420,6 +467,7 @@ Register-DuneRoute -Method GET -Path '/api/update/check' -Handler {
         }
         $comparisonVersion = Get-DuneRunningUpdateComparisonVersion -Channel $channel -CoreVersion $current -BuildInfo $buildInfo
         $diff      = Compare-DuneSemver -A $rel.tag -B $comparisonVersion
+        $identity = Get-DuneSelectedReleaseIdentity -Release $rel -BuildInfo $buildInfo
         # `available` means a newer release exists (independent of whether an
         # installer asset is attached). `installable` is the stricter flag:
         # the in-app auto-updater can actually run it.
@@ -444,7 +492,7 @@ Register-DuneRoute -Method GET -Path '/api/update/check' -Handler {
         # to clear the TEST BUILD indicator). Without this a Test build is a
         # dead-end: the live release is never "newer", so the button stays off.
         $hasAsset     = -not [string]::IsNullOrEmpty($rel.assetUrl)
-        $decision     = Get-DuneInstallDecision -Diff $diff -Channel $channel -HasAsset $hasAsset -RunningIsPrerelease $runningIsPrerelease
+        $decision     = Get-DuneInstallDecision -Diff $diff -Channel $channel -HasAsset $hasAsset -RunningIsPrerelease $runningIsPrerelease -IdentityMismatch ([bool]$identity.mismatch)
         $available    = $decision.available
         $installable  = $decision.installable
         Write-DuneJson -Response $res -Body @{
@@ -455,6 +503,9 @@ Register-DuneRoute -Method GET -Path '/api/update/check' -Handler {
             runningIsPrerelease = $runningIsPrerelease
             installedTag    = [string]$buildInfo.installedTag
             buildCommit     = [string]$buildInfo.buildCommit
+            identityChecked = [bool]$identity.checked
+            identityMismatch = [bool]$identity.mismatch
+            releaseCommit   = [string]$identity.expectedCommit
             isPrerelease    = [bool]$rel.isPrerelease
             selectedTag     = $rel.tag
             currentVersion  = $current
@@ -658,6 +709,7 @@ Register-DuneRoute -Method POST -Path '/api/update/install' -Handler {
         $runningIsPrerelease = [bool]$buildInfo.runningIsPrerelease
         $comparisonVersion = Get-DuneRunningUpdateComparisonVersion -Channel $channel -CoreVersion ([string]$script:DuneToolVersion) -BuildInfo $buildInfo
         $diff = Compare-DuneSemver -A $rel.tag -B $comparisonVersion
+        $identity = Get-DuneSelectedReleaseIdentity -Release $rel -BuildInfo $buildInfo
         $hasAsset = -not [string]::IsNullOrEmpty($rel.assetUrl)
         # Explicit reinstall: the user asked to re-download and re-run the
         # current version's installer (Settings "Reinstall" button) even though
@@ -666,7 +718,7 @@ Register-DuneRoute -Method POST -Path '/api/update/install' -Handler {
         if ($req.QueryString['reinstall']) {
             $reinstall = ($req.QueryString['reinstall'] -eq '1' -or $req.QueryString['reinstall'] -eq 'true')
         }
-        $blocked = (Get-DuneInstallDecision -Diff $diff -Channel $channel -HasAsset $hasAsset -RunningIsPrerelease $runningIsPrerelease).blocked
+        $blocked = (Get-DuneInstallDecision -Diff $diff -Channel $channel -HasAsset $hasAsset -RunningIsPrerelease $runningIsPrerelease -IdentityMismatch ([bool]$identity.mismatch)).blocked
         if ($reinstall -and -not $hasAsset) {
             Write-DuneError -Response $res -Status 503 -Message 'No installer asset available to reinstall.'
             return
@@ -685,7 +737,11 @@ Register-DuneRoute -Method POST -Path '/api/update/install' -Handler {
         try {
             $updateDir = Get-DuneProtectedUpdateDirectory
             $dest = Save-DuneVerifiedUpdateAsset -Release $rel -Directory $updateDir
-            $resolvedReleaseCommit = Get-DuneReleaseCommitSha -Tag ([string]$rel.tag)
+            $resolvedReleaseCommit = if ([string]$identity.expectedCommit) {
+                [string]$identity.expectedCommit
+            } else {
+                Get-DuneReleaseExpectedCommit -Release $rel
+            }
         } catch {
             Write-DuneError -Response $res -Status 502 -Message $_.Exception.Message
             return

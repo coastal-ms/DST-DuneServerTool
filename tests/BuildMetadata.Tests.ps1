@@ -48,7 +48,7 @@ Describe 'Build artifact metadata' {
         $installer | Should -Match 'DST-BuildInstaller-'
         $installer | Should -Match 'Another installer build is already running'
         $installer | Should -Match 'Existing release tag .* resolves to'
-        $installer | Should -Match 'rebuilt only from a clean checkout'
+        $installer | Should -Match 'Tagged build .* requires a clean checkout'
         $helpers | Should -Match 'refs/tags/\$BuildTag\^\{commit\}'
         $installer | Should -Match '\[string\]\$BuildTag'
         $exe | Should -Match 'DuneServer\.\$buildId\.generated\.ps1'

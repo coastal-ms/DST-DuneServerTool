@@ -289,5 +289,12 @@ Describe 'Get-DuneInstallDecision (install/blocked gate)' {
             $d.installable | Should -BeFalse
             $d.blocked     | Should -BeTrue
         }
+        It 'installs the published artifact when the tag matches but commit differs' {
+            $d = Get-DuneInstallDecision -Diff 0 -Channel 'test' -HasAsset $true `
+                -RunningIsPrerelease $true -IdentityMismatch $true
+            $d.available   | Should -BeTrue
+            $d.installable | Should -BeTrue
+            $d.blocked     | Should -BeFalse
+        }
     }
 }

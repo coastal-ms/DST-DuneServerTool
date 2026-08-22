@@ -256,6 +256,36 @@ Describe 'Exact installed test tag comparison' {
             Should -Be '14.0.0'
     }
 
+    It 'marks untagged and same-tag mismatched dev builds for published install' {
+        $release = [pscustomobject]@{
+            tag='v14.0.0-test10'
+            targetCommit='abcdef1234567890abcdef1234567890abcdef12'
+        }
+        $untagged = Get-DuneSelectedReleaseIdentity -Release $release -BuildInfo @{
+            runningIsPrerelease=$true
+            installedTag=''
+            buildCommit='abcdef1234567890abcdef1234567890abcdef12'
+        }
+        $untagged.checked | Should -BeTrue
+        $untagged.mismatch | Should -BeTrue
+
+        $mismatched = Get-DuneSelectedReleaseIdentity -Release $release -BuildInfo @{
+            runningIsPrerelease=$true
+            installedTag='v14.0.0-test10'
+            buildCommit='1111111111111111111111111111111111111111'
+        }
+        $mismatched.checked | Should -BeTrue
+        $mismatched.mismatch | Should -BeTrue
+
+        $published = Get-DuneSelectedReleaseIdentity -Release $release -BuildInfo @{
+            runningIsPrerelease=$true
+            installedTag='v14.0.0-test10'
+            buildCommit='abcdef1234567890abcdef1234567890abcdef12'
+        }
+        $published.checked | Should -BeTrue
+        $published.mismatch | Should -BeFalse
+    }
+
     It 'drives the production check route and global banner from test6 to newest test7' {
         Mock Get-DuneUpdateChannel { 'test' }
         Mock Get-DuneUpdateRunningBuildInfo {
@@ -286,6 +316,7 @@ Describe 'Exact installed test tag comparison' {
                 tag='v14.0.0-test6'; name='test6'; htmlUrl='u'; releaseNotes=''
                 assetName='DuneServerSetup.exe'; assetUrl='https://example.test/installer'
                 assetSize=10; assetDigest=('sha256:' + ('a' * 64)); isPrerelease=$true
+                targetCommit='abcdef1234567890abcdef1234567890abcdef12'
             }
         }
         $script:DuneToolVersion = '14.0.0'
@@ -294,5 +325,33 @@ Describe 'Exact installed test tag comparison' {
         $body = Read-UpdateSecurityResponse $response
         $body.available | Should -BeFalse
         $body.installable | Should -BeFalse
+        $body.identityMismatch | Should -BeFalse
+    }
+
+    It 'reports a same-tag different-commit dev build as updateable' {
+        Mock Get-DuneUpdateChannel { 'test' }
+        Mock Get-DuneUpdateRunningBuildInfo {
+            @{
+                runningIsPrerelease=$true
+                installedTag='v14.0.0-test10'
+                buildCommit='1111111111111111111111111111111111111111'
+            }
+        }
+        Mock Get-DuneSelectedRelease {
+            [pscustomobject]@{
+                tag='v14.0.0-test10'; name='test10'; htmlUrl='u'; releaseNotes=''
+                assetName='DuneServerSetup.exe'; assetUrl='https://example.test/installer'
+                assetSize=10; assetDigest=('sha256:' + ('a' * 64)); isPrerelease=$true
+                targetCommit='abcdef1234567890abcdef1234567890abcdef12'
+            }
+        }
+        $script:DuneToolVersion = '14.0.0'
+        $response = New-UpdateSecurityResponse
+        & $script:UpdateCheckHandler ([pscustomobject]@{ QueryString=@{} }) $response @{} $null
+        $body = Read-UpdateSecurityResponse $response
+        $body.available | Should -BeTrue
+        $body.installable | Should -BeTrue
+        $body.identityMismatch | Should -BeTrue
+        $body.releaseCommit | Should -Be 'abcdef1234567890abcdef1234567890abcdef12'
     }
 }

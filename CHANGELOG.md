@@ -44,6 +44,10 @@ here cover everything those tags shipped.
   operator to re-download and interactively reinstall the selected same-tag
   test build for an explicitly repaired asset or local-install recovery without
   detouring through Stable.
+- Test update checks now compare the running artifact's embedded commit with the
+  selected public release, not just its TEST tag. Untagged or mismatched dev
+  builds continue showing the published-build notification until the exact
+  public artifact is installed.
 
 ### Added
 

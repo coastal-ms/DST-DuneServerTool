@@ -118,7 +118,10 @@ export function UpdateBanner() {
   if (launched) return <UpdatingPage toVersion={launchedVersion} />
 
   if (!data || !data.available || !data.latestVersion) return null
-  if (dismissed || isDismissed(data.latestVersion)) return null
+  const dismissalId = data.identityMismatch
+    ? `${data.latestVersion}:${data.releaseCommit || 'published'}`
+    : data.latestVersion
+  if (dismissed || isDismissed(dismissalId)) return null
 
   // If a newer release exists but its installer .exe is missing (project
   // rule violation: every release must upload DuneServerSetup.exe), we
@@ -155,7 +158,7 @@ export function UpdateBanner() {
   }
 
   const onDismiss = () => {
-    if (data.latestVersion) markDismissed(data.latestVersion)
+    markDismissed(dismissalId)
     setDismissed(true)
   }
 
@@ -168,9 +171,15 @@ export function UpdateBanner() {
     <div className="shrink-0 border-b border-amber-400/30 bg-amber-400/10 px-5 py-2 text-sm text-amber-100 flex items-center gap-3">
       <Icon name="Download" size={16} className="text-amber-300 shrink-0" />
       <div className="flex-1 min-w-0">
-        <strong className="font-semibold">Update available:</strong>{' '}
+        <strong className="font-semibold">
+          {data.identityMismatch ? 'Published build available:' : 'Update available:'}
+        </strong>{' '}
         <span className="text-amber-50">{fmtToolVersion(data.latestVersion)}</span>
-        <span className="text-amber-200/70"> (you're on {fmtToolVersion(data.currentVersion)})</span>
+        <span className="text-amber-200/70">
+          {data.identityMismatch
+            ? ' (this local/dev build uses a different commit)'
+            : ` (you're on ${fmtToolVersion(data.currentVersion)})`}
+        </span>
         {data.releaseUrl && (
           <>
             {' · '}
@@ -196,7 +205,11 @@ export function UpdateBanner() {
             onClick={() => { void onInstall() }}
             disabled={installing}
           >
-            {installing ? 'Installing…' : 'Update now'}
+            {installing
+              ? 'Installing…'
+              : data.identityMismatch
+                ? 'Install published build'
+                : 'Update now'}
           </button>
         ) : (
           <a
