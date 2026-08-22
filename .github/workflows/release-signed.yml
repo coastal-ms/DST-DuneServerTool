@@ -111,10 +111,10 @@ jobs:
         env:
           BUILD_TAG: ${{ inputs.attach_to_release_tag }}
         run: |
-          $biArgs = @('-SkipInstaller')
-          if ('${{ inputs.skip_version_check }}' -eq 'true') { $biArgs += '-SkipVersionCheck' }
-          if ('${{ inputs.prerelease_build }}' -eq 'true') { $biArgs += '-Prerelease' }
-          if ($env:BUILD_TAG) { $biArgs += @('-BuildTag',$env:BUILD_TAG) }
+          $biArgs = @{ SkipInstaller = $true }
+          if ('${{ inputs.skip_version_check }}' -eq 'true') { $biArgs.SkipVersionCheck = $true }
+          if ('${{ inputs.prerelease_build }}' -eq 'true') { $biArgs.Prerelease = $true }
+          if ($env:BUILD_TAG) { $biArgs.BuildTag = $env:BUILD_TAG }
           & '${{ github.workspace }}\app\installer\Build-Installer.ps1' @biArgs
 
       # ── Sign the two inner exes IN PLACE (only if SignPath is configured). ──
@@ -190,10 +190,15 @@ jobs:
         env:
           BUILD_TAG: ${{ inputs.attach_to_release_tag }}
         run: |
-          $biArgs = @('-SkipWebBuild','-SkipExeBuild','-SkipShellBuild','-SkipSoloBuild')
-          if ('${{ inputs.skip_version_check }}' -eq 'true') { $biArgs += '-SkipVersionCheck' }
-          if ('${{ inputs.prerelease_build }}' -eq 'true') { $biArgs += '-Prerelease' }
-          if ($env:BUILD_TAG) { $biArgs += @('-BuildTag',$env:BUILD_TAG) }
+          $biArgs = @{
+            SkipWebBuild = $true
+            SkipExeBuild = $true
+            SkipShellBuild = $true
+            SkipSoloBuild = $true
+          }
+          if ('${{ inputs.skip_version_check }}' -eq 'true') { $biArgs.SkipVersionCheck = $true }
+          if ('${{ inputs.prerelease_build }}' -eq 'true') { $biArgs.Prerelease = $true }
+          if ($env:BUILD_TAG) { $biArgs.BuildTag = $env:BUILD_TAG }
           & '${{ github.workspace }}\app\installer\Build-Installer.ps1' @biArgs
 
       # ── Sign the installer itself. ──
