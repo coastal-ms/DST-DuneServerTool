@@ -538,6 +538,10 @@ function Import-DuneSoloBlueprint {
     if ($Confirm -ne 'IMPORT SOLO BLUEPRINT') {
         throw 'Confirm the offline blueprint import before continuing.'
     }
+    throw 'Portable blueprint import is disabled for PTC Solo after confirmed save-loading and placement-preview crashes from incompatible cross-build class names. It will be reevaluated when Retail Solo is available.'
+
+    # Retained for a future Retail Solo adapter after its exact folder, schema,
+    # and building/placeable compatibility catalog are observed.
     Assert-DuneSoloGameClosed
     if ($null -eq $Blueprint) {
         throw 'Choose a portable blueprint file to import.'

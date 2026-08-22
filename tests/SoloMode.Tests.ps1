@@ -374,44 +374,25 @@ Describe 'Solo Mode write gates and settings backups' {
         } | Should -Throw '*Confirm the offline blueprint import*'
     }
 
-    It 'builds a backup-safe portable blueprint import while the game is closed' {
-        $layout = New-TestSoloLayout
-        Save-DuneSoloState -DataRoot $layout.root -DbPath $layout.db | Out-Null
-        Mock Get-DuneSoloGameProcesses { @() }
-        $script:CapturedSoloBlueprint = $null
+    It 'rejects portable blueprint import before any PTC save access' {
+        Mock Assert-DuneSoloGameClosed {
+            throw 'The disabled import reached the process gate.'
+        }
         Mock Invoke-DuneSoloHelper {
-            $script:CapturedSoloBlueprint = Get-Content -LiteralPath $Arguments.blueprint -Raw |
-                ConvertFrom-Json
-            @{
-                ok = $true
-                safetyBackup = 'test'
-                blueprintId = 1
-            }
+            throw 'The disabled import reached the save helper.'
         }
-        $result = Import-DuneSoloBlueprint -Blueprint @{
-            name = 'Test'
-            instances = @(@{
-                instance_id = 1
-                building_type = 'Atreides_Outpost_Foundation'
-                x = 0
-                y = 0
-                z = 0
-                rotation = 0
-                provides_stability = $true
-            })
-            placeables = @()
-            pentashields = @()
-        } -Confirm 'IMPORT SOLO BLUEPRINT'
 
-        $result.ok | Should -BeTrue
-        $script:CapturedSoloBlueprint.name | Should -Be 'Test'
-        @($script:CapturedSoloBlueprint.instances).Count | Should -Be 1
-        Assert-MockCalled Invoke-DuneSoloHelper -Times 1 -ParameterFilter {
-            $Command -eq 'import-blueprint' -and
-            $Arguments.input -eq $layout.db -and
-            $Arguments['safety-backup'] -like '*pre-blueprint*' -and
-            $Arguments.blueprint -like '*.json'
-        }
+        {
+            Import-DuneSoloBlueprint -Blueprint @{
+                name = 'Test'
+                instances = @()
+                placeables = @()
+                pentashields = @()
+            } -Confirm 'IMPORT SOLO BLUEPRINT'
+        } | Should -Throw '*disabled for PTC Solo*'
+
+        Assert-MockCalled Assert-DuneSoloGameClosed -Times 0
+        Assert-MockCalled Invoke-DuneSoloHelper -Times 0
     }
 
     It 'builds a backup-safe currency write while the game is closed' {

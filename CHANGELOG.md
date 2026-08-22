@@ -52,16 +52,18 @@ here cover everything those tags shipped.
   literally instead of allowing PowerShell to interpolate the `$script:`
   variable names, and multi-digit `testN` tags sort numerically (`test10` after
   `test9`) so the Update Banner appears at digit boundaries.
+- Portable blueprint import is disabled for PTC Solo after a Self-Hosted/retail
+  Deep Desert base caused confirmed save-loading and placement-preview access
+  violations while a smaller control blueprint worked. The backend now rejects
+  the action before any save change; the implementation remains dormant for
+  revalidation against the observed Retail Solo adapter when Retail Solo ships.
 
 ### Added
 
-- Solo Mode can import portable blueprint JSON exported from Self-Hosted saved
-  blueprints or placed bases directly into the Solo backpack. Imports require
-  the game fully closed, retain the current save, validate the active profile
-  and backpack capacity, write transactionally, and verify the wrapped SQLite
-  database before atomic replacement. Placed-base exports now include stable
-  placeable IDs, while the importer also normalizes older zero-based
-  pentashield references.
+- Retained the portable blueprint importer for revalidation when Retail Solo is
+  available. It accepts JSON exported from Self-Hosted saved blueprints or
+  placed bases, preserves the transactional backup/verification path, and
+  normalizes older zero-based pentashield references, but PTC cannot invoke it.
 - The Windows desktop shell now has host-local preferences in Settings,
   beginning with an opt-in WebView2 software-rendering mode for graphics-driver
   compatibility. Applying it restarts only the shell window and leaves the DST

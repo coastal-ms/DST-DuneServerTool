@@ -45,6 +45,8 @@ import {
 import { pickLocalFolder } from '../util/pathPicker'
 
 type Tab = 'overview' | 'settings' | 'backups' | 'character' | 'inventory' | 'progression'
+export const SOLO_BLUEPRINT_IMPORT_DISABLED = true
+export const SOLO_BLUEPRINT_IMPORT_NOTICE = 'Disabled for PTC after confirmed save-loading and placement-preview crashes from Self-Hosted/retail building class names that do not resolve safely in PTC. DST rejects the backend action before any save change. This will be reevaluated against the observed Retail Solo adapter when Retail Solo is available.'
 
 const TABS: Array<{ id: Tab; label: string; icon: string }> = [
   { id: 'overview', label: 'Overview', icon: 'LayoutGrid' },
@@ -1819,8 +1821,8 @@ export function SoloMode() {
                 <Icon name="ScrollText" size={15} /> Import Base Blueprint
               </h3>
               <p className="text-xs text-text-muted mb-4">
-                Import the same portable JSON produced by Self-Hosted Gameplay Admin from a saved blueprint or placed base.
-                The result is added to the Solo backpack as a Solido Replicator.
+                The import implementation is retained for Retail Solo, but it is
+                disabled in PTC.
               </p>
               <label className="block text-[11px] uppercase tracking-wider text-text-dim mb-1">
                 Blueprint file (.json)
@@ -1829,7 +1831,7 @@ export function SoloMode() {
                 key={blueprintInputKey}
                 type="file"
                 accept="application/json,.json"
-                disabled={!canMutateActiveProfile || gameRunning}
+                disabled={SOLO_BLUEPRINT_IMPORT_DISABLED || !canMutateActiveProfile || gameRunning}
                 onChange={event => { void chooseBlueprintFile(event.target.files?.[0]) }}
                 className="w-full text-sm text-text-muted file:mr-3 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:bg-surface-2 file:text-text file:text-sm mb-1 disabled:opacity-50"
               />
@@ -1847,16 +1849,16 @@ export function SoloMode() {
                   {blueprintError}
                 </div>
               )}
-              <div className="rounded border border-warning/30 bg-warning/5 p-3 mt-4 text-xs text-text-muted">
-                Field-proven in PTC. Close the game fully before importing; DST creates a retained backup and verifies the complete wrapped save before replacement.
+              <div className="rounded border border-danger/30 bg-danger/5 p-3 mt-4 text-xs text-text-muted">
+                {SOLO_BLUEPRINT_IMPORT_NOTICE}
               </div>
               <button
                 className={`btn-primary w-full mt-4 justify-center ${SOLO_DISABLED_PRIMARY_CLASS}`}
-                disabled={!canMutateActiveProfile || gameRunning || !blueprint}
+                disabled={SOLO_BLUEPRINT_IMPORT_DISABLED || !canMutateActiveProfile || gameRunning || !blueprint}
                 onClick={() => void importBlueprint()}
               >
                 <Icon name={busy === 'import-blueprint' ? 'LoaderCircle' : 'Upload'} size={14} className={busy === 'import-blueprint' ? 'animate-spin' : ''} />
-                Import blueprint to backpack
+                Unavailable in PTC
               </button>
             </div>
 
