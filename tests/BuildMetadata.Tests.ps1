@@ -59,6 +59,10 @@ Describe 'Build artifact metadata' {
         $workflow | Should -Match 'inputs\.attach_to_release_tag.*github\.ref'
         $workflow | Should -Match 'fetch-depth:\s*0'
         $workflow | Should -Not -Match 'github\.ref.*Prerelease'
+        $workflow | Should -Match '\$biArgs\s*=\s*@\{'
+        $workflow | Should -Match '\$biArgs\.BuildTag\s*='
+        $workflow | Should -Not -Match '\$biArgs\s*=\s*@\('
+        $workflow | Should -Not -Match '\$biArgs\s*\+='
     }
 
     It 'publishes through replacement so an installed hardlink is not overwritten' {
