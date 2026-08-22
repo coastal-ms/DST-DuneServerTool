@@ -220,6 +220,14 @@ Describe 'Update install initiation mode' {
             Should -Be 'interactive'
     }
 
+    It 'relays interactive installers into the signed-in desktop for Service Mode' {
+        $routePath = Join-Path (Split-Path $PSScriptRoot -Parent) 'app\server\routes\Update.ps1'
+        $source = Get-Content -LiteralPath $routePath -Raw
+        $source | Should -Match "\`$installMode -eq 'interactive'"
+        $source | Should -Match "Start-DuneVisibleElevated -FilePath 'powershell.exe'"
+        $source | Should -Match "Start-Process -FilePath 'powershell.exe'[\s\S]+?-WindowStyle Hidden"
+    }
+
     It 'rejects malformed, conflicting, and command-shaped mode values' {
         { Resolve-DuneUpdateInstallRequest -Request (New-InstallRequest) -Body @{ mode='silent /SUPPRESSMSGBOXES & calc'; source='banner' } } |
             Should -Throw '*Invalid update install mode*'

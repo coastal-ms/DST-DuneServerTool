@@ -805,13 +805,21 @@ public static extern bool AllowSetForegroundWindow(int dwProcessId);
         $scriptPath = Join-Path $updateDir ("DuneRelaunch-$safeTag-$launchId.ps1")
         Set-Content -LiteralPath $scriptPath -Value $relaunchScript -Encoding UTF8
 
-        # Spawn the relauncher in a HIDDEN window. The relauncher itself is
-        # invisible (the grace sleep + app kill chain), but it then launches the
-        # installer in the validated mode. Both modes relaunch through their
-        # corresponding Inno [Run] entry. Failures still surface in a topmost box.
-        Start-Process -FilePath 'powershell.exe' `
-            -ArgumentList @('-NoProfile','-ExecutionPolicy','Bypass','-File',$scriptPath) `
-            -WindowStyle Hidden | Out-Null
+        # Interactive updates must enter the signed-in desktop even when the
+        # backend runs in Session 0 (Service Mode). Silent legacy requests keep
+        # the hidden relauncher. Both paths execute the same validated script.
+        $relaunchArgs = @('-NoProfile','-ExecutionPolicy','Bypass','-File',$scriptPath)
+        if ($installMode -eq 'interactive') {
+            if (-not (Get-Command Start-DuneVisibleElevated -ErrorAction SilentlyContinue)) {
+                throw 'The visible installer launcher is unavailable.'
+            }
+            $visibleLaunch = Start-DuneVisibleElevated -FilePath 'powershell.exe' -ArgumentList $relaunchArgs
+            if (-not $visibleLaunch.ok) { throw 'Could not launch the installer on the signed-in desktop.' }
+        } else {
+            Start-Process -FilePath 'powershell.exe' `
+                -ArgumentList $relaunchArgs `
+                -WindowStyle Hidden | Out-Null
+        }
     } catch {
         Write-DuneError -Response $res -Status 500 -Message $_.Exception.Message
       }
