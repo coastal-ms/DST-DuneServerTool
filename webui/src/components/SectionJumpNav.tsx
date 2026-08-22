@@ -45,6 +45,17 @@ export function SectionJumpNav({ containerRef }: { containerRef: RefObject<HTMLE
 
   if (sections.length < 2) return null
 
+  const registeredElements = () =>
+    Array.from(containerRef.current?.querySelectorAll<HTMLElement>('[data-section-nav-id]') ?? [])
+
+  const collapseSections = (exceptId = '') => {
+    for (const section of registeredElements()) {
+      if (section.dataset.sectionNavId === exceptId) continue
+      const toggle = section.querySelector<HTMLButtonElement>('button[data-section-nav-toggle]')
+      if (toggle?.getAttribute('aria-expanded') === 'true') toggle.click()
+    }
+  }
+
   const jumpTo = (id: string) => {
     setSelected(id)
     const container = containerRef.current
@@ -52,6 +63,7 @@ export function SectionJumpNav({ containerRef }: { containerRef: RefObject<HTMLE
       .find(element => element.dataset.sectionNavId === id)
     if (!target) return
 
+    collapseSections(id)
     const sectionToggle = target.querySelector<HTMLButtonElement>('button[data-section-nav-toggle]')
     if (sectionToggle?.getAttribute('aria-expanded') === 'false') sectionToggle.click()
     const focusTarget: HTMLElement = sectionToggle ?? target
@@ -78,6 +90,15 @@ export function SectionJumpNav({ containerRef }: { containerRef: RefObject<HTMLE
             <option key={section.id} value={section.id}>{section.label}</option>
           ))}
         </select>
+        <button
+          type="button"
+          aria-label="Collapse all sections"
+          title="Collapse all sections"
+          onClick={() => collapseSections()}
+          className="btn-secondary shrink-0 px-2 py-1.5"
+        >
+          <Icon name="ChevronsUp" size={15} />
+        </button>
       </label>
     </div>
   )

@@ -51,11 +51,15 @@ describe('SectionJumpNav', () => {
 
     await user.selectOptions(select, 'test.beta')
     expect(await screen.findByText('Beta body')).toBeInTheDocument()
+    expect(screen.queryByText('Alpha body')).not.toBeInTheDocument()
     expect(select).toHaveValue('test.beta')
     await waitFor(() => expect(scrollIntoView).toHaveBeenCalled())
     expect(screen.getByRole('button', { name: /Beta/ })).toHaveFocus()
 
     await user.selectOptions(select, 'test.alpha')
     expect(nestedClick).not.toHaveBeenCalled()
+
+    await user.click(screen.getByRole('button', { name: 'Collapse all sections' }))
+    expect(screen.queryByText('Alpha body')).not.toBeInTheDocument()
   })
 })

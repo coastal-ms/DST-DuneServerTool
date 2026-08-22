@@ -27,7 +27,8 @@ here cover everything those tags shipped.
   portal lifecycle controls are now host-only.
 - Added a shared sticky **Jump to section** selector on pages with multiple
   collapsible cards. It defaults to the first section, opens collapsed cards,
-  and scrolls directly to the selected section without hiding other content.
+  rolls other cards closed, and scrolls directly to the selected section. A
+  single control collapses every registered card.
   Server Health remains a single always-visible overview without the selector.
 - Fixed Browser Portal password changes through the Tailscale bridge by forwarding an authenticated, bridge-owned public authority for exact HTTPS Origin checks, and added versioned bridge runtime repair.
 - Reworked first-time Browser Portal account setup into a guided Owner, one-time-password, local verification, and enablement flow with a clear emergency Disable path.
