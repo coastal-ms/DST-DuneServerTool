@@ -50,6 +50,12 @@ Describe 'Compare-DuneSemver (prerelease-aware)' {
     It 'distinguishes distinct -testN tags (never equal)' {
         Compare-DuneSemver -A '12.9.6-test2' -B '12.9.6-test1' | Should -Not -Be 0
     }
+    It 'orders multi-digit test tags numerically instead of lexically' {
+        Compare-DuneSemver -A '14.0.0-test10' -B '14.0.0-test8' |
+            Should -BeGreaterThan 0
+        Compare-DuneSemver -A '14.0.0-test20' -B '14.0.0-test19' |
+            Should -BeGreaterThan 0
+    }
     It 'rolls a tester onto the final release when core matches' {
         # current = a -testN build of 12.9.6; final 12.9.6 must read as newer.
         Compare-DuneSemver -A '12.9.6' -B '12.9.6-test1' | Should -BeGreaterThan 0

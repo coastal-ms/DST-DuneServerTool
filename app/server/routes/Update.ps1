@@ -65,6 +65,17 @@ function Compare-DuneSemver {
         elseif ($aNum)        { return -1 }   # numeric identifier ranks below alphanumeric
         elseif ($bNum)        { return 1 }
         else {
+            $aTest = [regex]::Match($ai, '^(?i:test)(\d+)$')
+            $bTest = [regex]::Match($bi, '^(?i:test)(\d+)$')
+            if ($aTest.Success -and $bTest.Success) {
+                $aTestNumber = 0L
+                $bTestNumber = 0L
+                if ([long]::TryParse($aTest.Groups[1].Value, [ref]$aTestNumber) -and
+                    [long]::TryParse($bTest.Groups[1].Value, [ref]$bTestNumber) -and
+                    $aTestNumber -ne $bTestNumber) {
+                    return [Math]::Sign($aTestNumber - $bTestNumber)
+                }
+            }
             $cmp = [string]::CompareOrdinal($ai, $bi)
             if ($cmp -ne 0) { return $cmp }
         }
@@ -280,6 +291,30 @@ function Test-DuneUpdateCommitIdentity {
     }
     return $expectedValue.StartsWith($actualValue, [StringComparison]::Ordinal) -or
         $actualValue.StartsWith($expectedValue, [StringComparison]::Ordinal)
+}
+
+function Get-DuneEmbeddedBuildIdentityFromText {
+    param([Parameter(Mandatory)][string]$Text)
+
+    $present = [regex]::IsMatch(
+        $Text,
+        '(?m)^\$script:DuneBuildMetadataPresent\s*=\s*\$true\s*$'
+    )
+    $tagMatch = [regex]::Match(
+        $Text,
+        '(?m)^\$script:DuneBuildTag\s*=\s*''([^'']*)''\s*$'
+    )
+    $commitMatch = [regex]::Match(
+        $Text,
+        '(?m)^\$script:DuneBuildCommit\s*=\s*''([^'']*)''\s*$'
+    )
+    return [pscustomobject]@{
+        present = $present
+        tag = if ($tagMatch.Success) { $tagMatch.Groups[1].Value } else { '' }
+        commit = if ($commitMatch.Success) {
+            $commitMatch.Groups[1].Value.ToLowerInvariant()
+        } else { '' }
+    }
 }
 
 function Get-DuneReleaseCommitSha {
@@ -816,11 +851,17 @@ function Test-DuneUpdateCommitIdentity {
 $(${function:Test-DuneUpdateCommitIdentity}.ToString())
 }
 "@
+        $embeddedIdentityFunction = @"
+function Get-DuneEmbeddedBuildIdentityFromText {
+$(${function:Get-DuneEmbeddedBuildIdentityFromText}.ToString())
+}
+"@
         $relaunchScript = @"
 `$ErrorActionPreference = 'Continue'
 Start-Transcript -Path '$logPathEsc' -Append | Out-Null
 
 $commitIdentityFunction
+$embeddedIdentityFunction
 
 function Show-DuneUpdateFailure {
     param([string]`$Title, [string]`$Message)
@@ -862,14 +903,7 @@ function Get-DuneInstalledBuildIdentity {
     if (-not `$stream) { throw 'Installed executable has no embedded script resource.' }
     `$reader = [IO.StreamReader]::new(`$stream, [Text.Encoding]::UTF8, `$true)
     try { `$text = `$reader.ReadToEnd() } finally { `$reader.Dispose(); `$stream.Dispose() }
-    `$present = [regex]::IsMatch(`$text, '(?m)^\`$script:DuneBuildMetadataPresent\s*=\s*\`$true\s*$')
-    `$tagMatch = [regex]::Match(`$text, "(?m)^\`$script:DuneBuildTag\s*=\s*'([^']*)'\s*`$")
-    `$commitMatch = [regex]::Match(`$text, "(?m)^\`$script:DuneBuildCommit\s*=\s*'([^']*)'\s*`$")
-    return [pscustomobject]@{
-        present = `$present
-        tag = if (`$tagMatch.Success) { `$tagMatch.Groups[1].Value } else { '' }
-        commit = if (`$commitMatch.Success) { `$commitMatch.Groups[1].Value.ToLowerInvariant() } else { '' }
-    }
+    return Get-DuneEmbeddedBuildIdentityFromText -Text `$text
 }
 
 function Resolve-DuneInstalledExecutablePath {

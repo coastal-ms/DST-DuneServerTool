@@ -48,6 +48,10 @@ here cover everything those tags shipped.
   selected public release, not just its TEST tag. Untagged or mismatched dev
   builds continue showing the published-build notification until the exact
   public artifact is installed.
+- Post-install verification now parses embedded tag/commit declarations
+  literally instead of allowing PowerShell to interpolate the `$script:`
+  variable names, and multi-digit `testN` tags sort numerically (`test10` after
+  `test9`) so the Update Banner appears at digit boundaries.
 
 ### Added
 

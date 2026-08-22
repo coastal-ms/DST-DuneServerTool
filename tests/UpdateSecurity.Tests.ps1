@@ -172,6 +172,19 @@ Describe 'Protected updater download seam' {
         $source | Should -Match 'Get-DuneReleaseCommitSha'
     }
 
+    It 'parses literal embedded build metadata without interpolating script variables' {
+        $text = @'
+$script:DuneBuildMetadataPresent = $true
+$script:DuneBuildCommit = '1BA87F64F62BD4F405C89E9289A0057018CB5A28'
+$script:DuneBuildPrerelease = $true
+$script:DuneBuildTag = 'v14.0.0-test10'
+'@
+        $identity = Get-DuneEmbeddedBuildIdentityFromText -Text $text
+        $identity.present | Should -BeTrue
+        $identity.tag | Should -Be 'v14.0.0-test10'
+        $identity.commit | Should -Be '1ba87f64f62bd4f405c89e9289a0057018cb5a28'
+    }
+
     It 'generates a PowerShell 5.1-parseable relaunch verifier' {
         Mock Get-DuneLock { [Threading.SemaphoreSlim]::new(1, 1) }
         Mock Get-DuneDecoupleNotice { @{ Needed=$false } }
@@ -220,6 +233,8 @@ Describe 'Protected updater download seam' {
         $generated = Get-Content -LiteralPath $scriptPath -Raw
         $generated | Should -Match 'abcdef1234567890abcdef1234567890abcdef12'
         $generated | Should -Match 'Resolve-DuneInstalledExecutablePath'
+        $generated | Should -Match 'Get-DuneEmbeddedBuildIdentityFromText'
+        $generated | Should -Not -Match '\[regex\]::Match\(\$text, "\(\?m\)\^\\\$script'
     }
 }
 
