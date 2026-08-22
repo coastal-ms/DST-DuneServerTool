@@ -44,7 +44,7 @@ export function AppShell({ children }: { children: ReactNode }) {
           <StatusBar />
           <main ref={mainRef} className="flex-1 min-w-0 max-w-full overflow-x-hidden overflow-y-auto overscroll-y-contain">
             <div className="w-full min-w-0 max-w-7xl mx-auto px-3 pt-4 pb-[max(1rem,env(safe-area-inset-bottom))] sm:px-4 md:px-6 md:py-6">
-              <SectionJumpNav containerRef={mainRef} />
+              {pathname !== '/' && <SectionJumpNav containerRef={mainRef} />}
               {children}
             </div>
           </main>

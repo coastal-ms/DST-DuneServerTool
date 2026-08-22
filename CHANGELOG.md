@@ -28,6 +28,7 @@ here cover everything those tags shipped.
 - Added a shared sticky **Jump to section** selector on pages with multiple
   collapsible cards. It defaults to the first section, opens collapsed cards,
   and scrolls directly to the selected section without hiding other content.
+  Server Health remains a single always-visible overview without the selector.
 - Fixed Browser Portal password changes through the Tailscale bridge by forwarding an authenticated, bridge-owned public authority for exact HTTPS Origin checks, and added versioned bridge runtime repair.
 - Reworked first-time Browser Portal account setup into a guided Owner, one-time-password, local verification, and enablement flow with a clear emergency Disable path.
 - Added an optional **Remember me on this device** portal login that keeps trusted personal devices signed in for up to 30 days, with a seven-day idle limit and immediate server-side revocation.
