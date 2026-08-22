@@ -46,6 +46,7 @@ import { SpicefieldsCard } from './gameconfig/SpicefieldsCard'
 import { LandclaimTimerCard } from './gameconfig/LandclaimTimerCard'
 import { DeepDesertPvpCard } from './gameconfig/DeepDesertPvpCard'
 import { BaseBackupGuardPanel } from './gameconfig/BaseBackupGuardPanel'
+import { isLocalViewer } from '../util/viewer'
 
 type LoadState = 'idle' | 'loading' | 'ready' | 'error' | 'unavailable'
 
@@ -362,6 +363,7 @@ function groupExperimental(cats: GameConfigCategory[]): GameConfigCategory[] {
 
 export function GameConfig({ mode = 'standard' }: { mode?: 'standard' | 'experimental' } = {}) {
   const experimentalPage = mode === 'experimental'
+  const localViewer = isLocalViewer()
   const { status, forceRefresh } = useStatus()
   const vmRunning = status?.vm?.running === true
 
@@ -636,6 +638,7 @@ export function GameConfig({ mode = 'standard' }: { mode?: 'standard' | 'experim
   }, [clientMismatches, clientInfo])
 
   const refreshClient = useCallback(async () => {
+    if (!localViewer) return null
     try {
       const info = await getGameConfigClient()
       setClientInfo(info)
@@ -645,7 +648,7 @@ export function GameConfig({ mode = 'standard' }: { mode?: 'standard' | 'experim
       setClientErr(e instanceof Error ? e.message : String(e))
       return null
     }
-  }, [])
+  }, [localViewer])
 
   useEffect(() => {
     void refreshClient()
@@ -1472,129 +1475,133 @@ export function GameConfig({ mode = 'standard' }: { mode?: 'standard' | 'experim
         </div>
       )}
 
-      {/* Local client config (this PC) */}
-      <CollapsibleCard
-        id="gameconfig.clientConfig"
-        icon="MonitorSmartphone"
-        iconClassName="text-accent-bright shrink-0"
-        title="Your client config (this PC)"
-        titleClassName="text-sm font-semibold text-text"
-        className="mb-4 border-border"
-        headerClassName="px-4 pt-4 pb-2"
-        bodyClassName="px-4 pb-4"
-        headerRight={
-          <>
-            <button
-              type="button"
-              onClick={() => void onOpenInEditor('game')}
-              disabled={clientBusy}
-              className="btn-secondary"
-              title="Open local client Game.ini in Notepad"
-            >
-              <Icon name="ExternalLink" size={14} /> Game.ini
-            </button>
-            <button
-              type="button"
-              onClick={() => void onOpenInEditor('engine')}
-              disabled={clientBusy}
-              className="btn-secondary"
-              title="Open local client Engine.ini in Notepad"
-            >
-              <Icon name="ExternalLink" size={14} /> Engine.ini
-            </button>
-            <button
-              type="button"
-              onClick={() => void onViewClient('game')}
-              className="btn-secondary"
-              title="View local client Game.ini"
-            >
-              <Icon name="FileSearch" size={14} /> View Game
-            </button>
-            <button
-              type="button"
-              onClick={() => void onViewClient('engine')}
-              className="btn-secondary"
-              title="View local client Engine.ini"
-            >
-              <Icon name="FileSearch" size={14} /> View Engine
-            </button>
-          </>
-        }
-      >
-        <p className="text-xs text-text-muted mb-3">
-          DST can mirror game settings into <span className="font-mono">Game.ini</span>. Managing{' '}
-          <span className="font-mono">Engine.ini</span> is a separate opt-in because client console-variable overrides
-          can materially change gameplay.
-        </p>
-        <label className="mb-3 flex items-start gap-3 rounded-lg border border-warning/30 bg-warning/5 p-3 cursor-pointer select-none">
-          <input
-            type="checkbox"
-            checked={clientInfo?.engineEnabled === true}
-            onChange={e => void onToggleClientEngine(e.target.checked)}
-            disabled={clientBusy || !clientInfo || (!clientInfo.dirExists && !clientInfo.engineEnabled)}
-            className="h-4 w-4 mt-0.5 accent-warning shrink-0"
-          />
-          <span>
-            <span className="block text-sm font-medium text-text">Allow DST to manage my client Engine.ini</span>
-            <span className="block text-xs text-text-muted mt-0.5">
-              Off by default. While off, DST bypasses Engine.ini mismatch checks, prompts, and writes. Turning this off
-              removes DST-managed Engine.ini values. Close Dune: Awakening before changing this option.
-            </span>
-            <span className="block text-xs text-warning mt-1">
-              Multiplayer warning: every player may need compatible Engine.ini values. Use the same value as the server,
-              or an equal/higher local value for client-enforced limits. One player&apos;s local edit does not update anyone else.
-            </span>
-          </span>
-        </label>
-        <div className="flex items-center gap-2">
-          <input
-            type="text"
-            value={clientDirInput}
-            onChange={e => setClientDirInput(e.target.value)}
-            spellCheck={false}
-            placeholder={clientInfo?.default ?? '%LOCALAPPDATA%\\DuneSandbox\\Saved\\Config\\WindowsClient'}
-            className="flex-1 min-w-0 px-3 py-2 rounded-lg bg-surface-2 border border-border text-text text-sm font-mono placeholder:text-text-dim focus:outline-none focus:ring-2 focus:ring-ibad focus:border-ibad/50"
-          />
-          <button type="button" onClick={() => void onBrowseClientDir()} disabled={clientBusy} className="btn-secondary shrink-0">
-            <Icon name={clientBusy ? 'Loader2' : 'FolderOpen'} size={14} className={clientBusy ? 'animate-spin' : ''} /> Browse
-          </button>
-          <button
-            type="button"
-            onClick={() => void onSaveClientDir()}
-            disabled={clientBusy || !clientDirInput.trim() || clientDirInput.trim() === (clientInfo?.dir ?? '')}
-            className="btn-primary shrink-0"
+      {localViewer && (
+        <>
+          {/* Local client config (this PC) */}
+          <CollapsibleCard
+            id="gameconfig.clientConfig"
+            icon="MonitorSmartphone"
+            iconClassName="text-accent-bright shrink-0"
+            title="Your client config (this PC)"
+            titleClassName="text-sm font-semibold text-text"
+            className="mb-4 border-border"
+            headerClassName="px-4 pt-4 pb-2"
+            bodyClassName="px-4 pb-4"
+            headerRight={
+              <>
+                <button
+                  type="button"
+                  onClick={() => void onOpenInEditor('game')}
+                  disabled={clientBusy}
+                  className="btn-secondary"
+                  title="Open local client Game.ini in Notepad"
+                >
+                  <Icon name="ExternalLink" size={14} /> Game.ini
+                </button>
+                <button
+                  type="button"
+                  onClick={() => void onOpenInEditor('engine')}
+                  disabled={clientBusy}
+                  className="btn-secondary"
+                  title="Open local client Engine.ini in Notepad"
+                >
+                  <Icon name="ExternalLink" size={14} /> Engine.ini
+                </button>
+                <button
+                  type="button"
+                  onClick={() => void onViewClient('game')}
+                  className="btn-secondary"
+                  title="View local client Game.ini"
+                >
+                  <Icon name="FileSearch" size={14} /> View Game
+                </button>
+                <button
+                  type="button"
+                  onClick={() => void onViewClient('engine')}
+                  className="btn-secondary"
+                  title="View local client Engine.ini"
+                >
+                  <Icon name="FileSearch" size={14} /> View Engine
+                </button>
+              </>
+            }
           >
-            <Icon name="Save" size={14} /> Save
-          </button>
-        </div>
-        {clientInfo && (
-          <div className="text-[11px] text-text-dim mt-2 font-mono break-all space-y-0.5">
-            {(['game', 'engine'] as const).map(file => {
-              const bundle = clientBundleFor(clientInfo, file)
-              return (
-                <div key={file}>
-                  {bundle.path}{' '}
-                  {file === 'engine' && !clientInfo.engineEnabled && <span className="text-text-dim">• management disabled </span>}
-                  {bundle.exists
-                    ? <span className="text-success">• found</span>
-                    : clientInfo.dirExists
-                      ? <span className="text-warning">• not present yet (will be created on apply)</span>
-                      : <span className="text-danger">• folder not found</span>}
-                </div>
-              )
-            })}
-          </div>
-        )}
-      </CollapsibleCard>
-      {clientMsg && (
-        <div className="card p-3 mb-4 border-success/40 bg-success/10 text-success text-sm flex items-center gap-2">
-          <Icon name="CheckCircle2" size={14} /> {clientMsg}
-        </div>
-      )}
-      {clientErr && (
-        <div className="card p-3 mb-4 border-danger/40 bg-danger/10 text-danger text-sm flex items-center gap-2">
-          <Icon name="AlertCircle" size={14} /> {clientErr}
-        </div>
+            <p className="text-xs text-text-muted mb-3">
+              DST can mirror game settings into <span className="font-mono">Game.ini</span>. Managing{' '}
+              <span className="font-mono">Engine.ini</span> is a separate opt-in because client console-variable overrides
+              can materially change gameplay.
+            </p>
+            <label className="mb-3 flex items-start gap-3 rounded-lg border border-warning/30 bg-warning/5 p-3 cursor-pointer select-none">
+              <input
+                type="checkbox"
+                checked={clientInfo?.engineEnabled === true}
+                onChange={e => void onToggleClientEngine(e.target.checked)}
+                disabled={clientBusy || !clientInfo || (!clientInfo.dirExists && !clientInfo.engineEnabled)}
+                className="h-4 w-4 mt-0.5 accent-warning shrink-0"
+              />
+              <span>
+                <span className="block text-sm font-medium text-text">Allow DST to manage my client Engine.ini</span>
+                <span className="block text-xs text-text-muted mt-0.5">
+                  Off by default. While off, DST bypasses Engine.ini mismatch checks, prompts, and writes. Turning this off
+                  removes DST-managed Engine.ini values. Close Dune: Awakening before changing this option.
+                </span>
+                <span className="block text-xs text-warning mt-1">
+                  Multiplayer warning: every player may need compatible Engine.ini values. Use the same value as the server,
+                  or an equal/higher local value for client-enforced limits. One player&apos;s local edit does not update anyone else.
+                </span>
+              </span>
+            </label>
+            <div className="flex items-center gap-2">
+              <input
+                type="text"
+                value={clientDirInput}
+                onChange={e => setClientDirInput(e.target.value)}
+                spellCheck={false}
+                placeholder={clientInfo?.default ?? '%LOCALAPPDATA%\\DuneSandbox\\Saved\\Config\\WindowsClient'}
+                className="flex-1 min-w-0 px-3 py-2 rounded-lg bg-surface-2 border border-border text-text text-sm font-mono placeholder:text-text-dim focus:outline-none focus:ring-2 focus:ring-ibad focus:border-ibad/50"
+              />
+              <button type="button" onClick={() => void onBrowseClientDir()} disabled={clientBusy} className="btn-secondary shrink-0">
+                <Icon name={clientBusy ? 'Loader2' : 'FolderOpen'} size={14} className={clientBusy ? 'animate-spin' : ''} /> Browse
+              </button>
+              <button
+                type="button"
+                onClick={() => void onSaveClientDir()}
+                disabled={clientBusy || !clientDirInput.trim() || clientDirInput.trim() === (clientInfo?.dir ?? '')}
+                className="btn-primary shrink-0"
+              >
+                <Icon name="Save" size={14} /> Save
+              </button>
+            </div>
+            {clientInfo && (
+              <div className="text-[11px] text-text-dim mt-2 font-mono break-all space-y-0.5">
+                {(['game', 'engine'] as const).map(file => {
+                  const bundle = clientBundleFor(clientInfo, file)
+                  return (
+                    <div key={file}>
+                      {bundle.path}{' '}
+                      {file === 'engine' && !clientInfo.engineEnabled && <span className="text-text-dim">• management disabled </span>}
+                      {bundle.exists
+                        ? <span className="text-success">• found</span>
+                        : clientInfo.dirExists
+                          ? <span className="text-warning">• not present yet (will be created on apply)</span>
+                          : <span className="text-danger">• folder not found</span>}
+                    </div>
+                  )
+                })}
+              </div>
+            )}
+          </CollapsibleCard>
+          {clientMsg && (
+            <div className="card p-3 mb-4 border-success/40 bg-success/10 text-success text-sm flex items-center gap-2">
+              <Icon name="CheckCircle2" size={14} /> {clientMsg}
+            </div>
+          )}
+          {clientErr && (
+            <div className="card p-3 mb-4 border-danger/40 bg-danger/10 text-danger text-sm flex items-center gap-2">
+              <Icon name="AlertCircle" size={14} /> {clientErr}
+            </div>
+          )}
+        </>
       )}
 
       {/* Status / error banners */}
@@ -1839,24 +1846,28 @@ export function GameConfig({ mode = 'standard' }: { mode?: 'standard' | 'experim
                 </div>
 
                 <div className="flex items-center gap-2 mt-3">
-                  <button
-                    type="button"
-                    onClick={() => void onApplyToClient()}
-                    disabled={applying}
-                    className="btn-primary"
-                    title="Write these settings into the matching client INI files on this PC"
-                  >
-                    <Icon name={applying ? 'Loader2' : 'MonitorCog'} size={14} className={applying ? 'animate-spin' : ''} />
-                    {applying ? 'Applying…' : 'Apply to my client'}
-                  </button>
+                  {localViewer && (
+                    <button
+                      type="button"
+                      onClick={() => void onApplyToClient()}
+                      disabled={applying}
+                      className="btn-primary"
+                      title="Write these settings into the matching client INI files on this PC"
+                    >
+                      <Icon name={applying ? 'Loader2' : 'MonitorCog'} size={14} className={applying ? 'animate-spin' : ''} />
+                      {applying ? 'Applying…' : 'Apply to my client'}
+                    </button>
+                  )}
                   <button type="button" onClick={() => setClientApply(null)} className="btn-ghost text-xs">
                     I&apos;ll do it manually
                   </button>
                 </div>
-                <p className="text-[11px] text-text-dim mt-2">
-                  “Apply to my client” only changes DST-managed blocks in this machine&apos;s Game.ini / Engine.ini.
-                  Other players still apply manually. Close the game before Engine.ini writes.
-                </p>
+                {localViewer && (
+                  <p className="text-[11px] text-text-dim mt-2">
+                    “Apply to my client” only changes DST-managed blocks in this machine&apos;s Game.ini / Engine.ini.
+                    Other players still apply manually. Close the game before Engine.ini writes.
+                  </p>
+                )}
               </div>
               <button
                 type="button"
@@ -2334,13 +2345,18 @@ function CategoryCard({
   const expanded = forceOpen || userOpen
 
   return (
-    <div className={'card p-5 ' + (experimental ? 'border-warning/40' : '')}>
+    <div
+      className={'card p-5 ' + (experimental ? 'border-warning/40' : '')}
+      data-section-nav-id={`gameconfig.category.${category}`}
+      data-section-nav-label={category}
+    >
       <div className={(expanded ? 'mb-4 ' : '') + 'flex items-center justify-between gap-2'}>
         <button
           type="button"
           className="flex items-center gap-2 text-left min-w-0"
           onClick={toggle}
           aria-expanded={expanded}
+          data-section-nav-toggle
         >
           <Icon
             name={expanded ? 'ChevronDown' : 'ChevronRight'}
@@ -2804,10 +2820,12 @@ function DefaultsCatalogBrowser({
   }
 
   return (
-    <div className="card p-5">
+    <div className="card p-5" data-section-nav-id="gameconfig.defaultsCatalog" data-section-nav-label="Remaining default INI settings">
       <button
         type="button"
         onClick={() => setOpen(o => !o)}
+        aria-expanded={open}
+        data-section-nav-toggle
         className="w-full flex items-center justify-between text-sm font-semibold uppercase tracking-wider text-accent-bright"
       >
         <span className="flex items-center gap-2">
@@ -3204,10 +3222,12 @@ function AdvancedIniBrowser({ cfg }: { cfg: GameConfigResponse }) {
   const bundle = file === 'game' ? cfg.game : cfg.engine
 
   return (
-    <div className="card p-5">
+    <div className="card p-5" data-section-nav-id="gameconfig.advancedIni" data-section-nav-label="Advanced INI contents">
       <button
         type="button"
         onClick={() => setOpen(o => !o)}
+        aria-expanded={open}
+        data-section-nav-toggle
         className="w-full flex items-center justify-between text-sm font-semibold uppercase tracking-wider text-accent-bright"
       >
         <span className="flex items-center gap-2">

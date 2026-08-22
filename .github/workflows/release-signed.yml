@@ -49,6 +49,11 @@ on:
         type: boolean
         required: false
         default: false
+      prerelease_build:
+        description: 'Stamp this artifact as a TEST/pre-release build'
+        type: boolean
+        required: false
+        default: false
 
 permissions:
   contents: write   # needed to upload the asset to an existing release
@@ -59,6 +64,9 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.attach_to_release_tag != '' && inputs.attach_to_release_tag || github.ref }}
+          fetch-depth: 0
 
       - name: Setup Node
         uses: actions/setup-node@v4
@@ -100,9 +108,13 @@ jobs:
       #    stopping before the installer so the inner exes can be signed first. ──
       - name: Build raw artifacts (phase A)
         shell: pwsh
+        env:
+          BUILD_TAG: ${{ inputs.attach_to_release_tag }}
         run: |
           $biArgs = @('-SkipInstaller')
           if ('${{ inputs.skip_version_check }}' -eq 'true') { $biArgs += '-SkipVersionCheck' }
+          if ('${{ inputs.prerelease_build }}' -eq 'true') { $biArgs += '-Prerelease' }
+          if ($env:BUILD_TAG) { $biArgs += @('-BuildTag',$env:BUILD_TAG) }
           & '${{ github.workspace }}\app\installer\Build-Installer.ps1' @biArgs
 
       # ── Sign the two inner exes IN PLACE (only if SignPath is configured). ──
@@ -175,9 +187,13 @@ jobs:
       # ── Phase B: package the (now-signed) exes into the installer via ISCC. ──
       - name: Build installer (phase B)
         shell: pwsh
+        env:
+          BUILD_TAG: ${{ inputs.attach_to_release_tag }}
         run: |
           $biArgs = @('-SkipWebBuild','-SkipExeBuild','-SkipShellBuild','-SkipSoloBuild')
           if ('${{ inputs.skip_version_check }}' -eq 'true') { $biArgs += '-SkipVersionCheck' }
+          if ('${{ inputs.prerelease_build }}' -eq 'true') { $biArgs += '-Prerelease' }
+          if ($env:BUILD_TAG) { $biArgs += @('-BuildTag',$env:BUILD_TAG) }
           & '${{ github.workspace }}\app\installer\Build-Installer.ps1' @biArgs
 
       # ── Sign the installer itself. ──

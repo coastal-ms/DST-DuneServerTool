@@ -2,11 +2,13 @@ import { NavLink } from '../router'
 import { useState, useRef } from 'react'
 import { createPortal } from 'react-dom'
 import { Icon } from '../components/Icon'
-import { NAV_ITEMS, GROUP_LABELS, GROUP_ORDER } from '../nav'
+import { NAV_ITEMS, GROUP_ORDER, getVisibleGroupLabel } from '../nav'
 import { useUpdateCheck } from '../hooks/useUpdateCheck'
 import { api } from '../api/client'
 import { fmtToolVersion } from '../format'
 import { isLocalViewer, isWindowsViewer } from '../util/viewer'
+import { getTestBuildIdentity } from '../util/testBuildIdentity'
+import { usePortalAccess } from '../auth/portalAccess'
 
 // WebView2 host bridge — present only when the portal is rendered inside the
 // native DuneShell.exe app window (not in a regular browser tab). We use it to
@@ -23,9 +25,10 @@ type Props = {
 }
 
 export function Sidebar({ collapsed }: Props) {
+  const { canAccessOwnerSurfaces } = usePortalAccess()
   const { data: upd } = useUpdateCheck()
   const version = upd?.currentVersion ?? ''
-  const onTestChannel = upd?.runningIsPrerelease === true
+  const testBuild = getTestBuildIdentity(upd)
   const [showPortalConfirm, setShowPortalConfirm] = useState(false)
   const [portalDetaching, setPortalDetaching] = useState(false)
   const [portalError, setPortalError] = useState<string | null>(null)
@@ -133,12 +136,15 @@ export function Sidebar({ collapsed }: Props) {
 
   const groups = GROUP_ORDER.map(g => ({
     key: g,
-    label: GROUP_LABELS[g],
     items: NAV_ITEMS
       .filter(i => i.group === g)
       .filter(i => !i.localOnly || isLocalViewer())
+      .filter(i => !i.ownerOnly || canAccessOwnerSurfaces)
       .filter(i => !i.windowsOnly || isWindowsViewer()),
-  })).filter(g => g.items.length > 0)
+  })).filter(g => g.items.length > 0).map(g => ({
+    ...g,
+    label: getVisibleGroupLabel(g.key, g.items),
+  }))
 
   // Shared row renderer for a single nav item, in either layout mode.
   const renderItem = (item: typeof NAV_ITEMS[number]) => {
@@ -178,7 +184,7 @@ export function Sidebar({ collapsed }: Props) {
 
   return (
     <aside
-      className={`${collapsed ? 'w-14' : 'w-60'} shrink-0 border-r border-border bg-surface/60 backdrop-blur-md flex flex-col transition-[width] duration-150`}
+      className={`${collapsed ? 'w-14' : 'w-60'} hidden md:flex shrink-0 border-r border-border bg-surface/60 backdrop-blur-md flex-col transition-[width] duration-150 motion-reduce:transition-none`}
     >
       <div
         className={`${
@@ -264,10 +270,10 @@ export function Sidebar({ collapsed }: Props) {
           <Icon name="Coffee" size={collapsed ? 14 : 11} />
           {!collapsed && <span>Buy Me a Coffee</span>}
         </a>
-        {collapsed && onTestChannel && (
+        {collapsed && testBuild && (
           <NavLink
             to="/settings"
-            title="Running a pre-release Test build. Click to open Settings."
+            title={`${testBuild.title}. Click to open Settings.`}
             className="w-full flex items-center justify-center h-8 rounded-md border border-warning/50 text-warning hover:bg-warning/15 hover:border-warning/70 transition-colors"
           >
             <Icon name="FlaskConical" size={14} />
@@ -277,13 +283,13 @@ export function Sidebar({ collapsed }: Props) {
           <div className="flex items-center justify-between">
             <span className="flex items-center gap-1.5">
               {version ? fmtToolVersion(version) : '—'}
-              {onTestChannel && (
+              {testBuild && (
                 <NavLink
                   to="/settings"
-                  title="Running a pre-release Test build. Click to open Settings, switch to Stable, and install the released build."
+                  title={`${testBuild.title}. Click to open Settings, switch to Stable, and install the released build.`}
                   className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] font-semibold uppercase tracking-wider border border-warning/40 bg-warning/10 text-warning hover:bg-warning/20 transition-colors"
                 >
-                  <Icon name="FlaskConical" size={9} /> Test
+                  <Icon name="FlaskConical" size={9} /> {testBuild.compactLabel}
                 </NavLink>
               )}
             </span>

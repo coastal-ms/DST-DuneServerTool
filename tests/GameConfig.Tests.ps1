@@ -2124,6 +2124,20 @@ Describe 'GameConfig: spicefield startup defaults' -Tag 'GameConfig' {
         $route | Should -Match 'Test-DuneUpdatesHaveStructMember[\s\S]+?-or[\s\S]+?Test-DuneUpdatesHaveSpicefieldMember'
     }
 
+    It 'keeps every host client-config route local-only' {
+        $route = Get-Content (Join-Path (Get-DstRepoRoot) 'app\server\routes\GameConfig.ps1') -Raw
+        foreach ($path in @(
+            '/api/gameconfig/client',
+            '/api/gameconfig/client/dir',
+            '/api/gameconfig/client/engine',
+            '/api/gameconfig/client/apply',
+            '/api/gameconfig/client/open'
+        )) {
+            $escaped = [regex]::Escape($path)
+            $route | Should -Match "Register-DuneRoute[^\r\n]+-Path '$escaped' -LocalOnly -Handler"
+        }
+    }
+
     It 'patches only the selected map and size' {
         $blob = Get-DuneIniLineValue $script:SpiceOverride
         $patched = Set-DuneSpicefieldLimitsInBlob -Blob $blob -MapId 'DeepDesert_1' `

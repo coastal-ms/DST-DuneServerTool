@@ -153,13 +153,47 @@ function Get-DuneUpdatePreReleaseTag {
 # light the indicator; only actually installing a pre-release build does. A
 # subsequent stable install writes 'false' and clears it. Absent/blank => false
 # (a normal stable install never wrote it).
-function Get-DuneUpdateInstalledPrerelease {
+function Get-DuneVersionCore {
+    param([string]$Value)
+    $m = [regex]::Match($Value.Trim(), '^v?(\d+\.\d+\.\d+)(?:-|$)', 'IgnoreCase')
+    if (-not $m.Success) { return '' }
+    return $m.Groups[1].Value
+}
+
+function Get-DuneUpdateRunningBuildInfo {
     try {
         $raw = Read-DuneConfigRaw
-        $v = if ($raw.Contains('UpdateInstalledPrerelease')) { [string]$raw['UpdateInstalledPrerelease'] } else { '' }
-        return ($v -match '^(?i:true|1|yes)$')
+        $marker = if ($raw.Contains('UpdateInstalledPrerelease')) { [string]$raw['UpdateInstalledPrerelease'] } else { '' }
+        $markerIsPrerelease = ($marker -match '^(?i:true|1|yes)$')
+        $storedTag = if ($raw.Contains('UpdateInstalledTag')) { ([string]$raw['UpdateInstalledTag']).Trim() } else { '' }
+        $currentCore = Get-DuneVersionCore ([string]$script:DuneToolVersion)
+        $metadata = if (Get-Command Get-DuneBuildMetadata -ErrorAction SilentlyContinue) {
+            Get-DuneBuildMetadata
+        } else {
+            @{ commit = ''; prerelease = $false; tag = ''; present = $false }
+        }
+        $metadataTag = ([string]$metadata.tag).Trim()
+        $metadataTagMatches = ($metadataTag -and $currentCore -and (Get-DuneVersionCore $metadataTag) -eq $currentCore)
+        $legacyTagMatches = ($storedTag -and $currentCore -and (Get-DuneVersionCore $storedTag) -eq $currentCore)
+        return @{
+            runningIsPrerelease = if ([bool]$metadata.present) {
+                [bool]$metadata.prerelease
+            } else {
+                $markerIsPrerelease
+            }
+            installedTag = if ([bool]$metadata.present) {
+                if ($metadataTagMatches) { $metadataTag } else { '' }
+            } elseif ($legacyTagMatches) {
+                $storedTag
+            } else { '' }
+            buildCommit = [string]$metadata.commit
+        }
     } catch {}
-    return $false
+    return @{ runningIsPrerelease = $false; installedTag = ''; buildCommit = '' }
+}
+
+function Get-DuneUpdateInstalledPrerelease {
+    return [bool](Get-DuneUpdateRunningBuildInfo).runningIsPrerelease
 }
 
 # Local backup mirror — resolved settings for the "copy each new backup to a

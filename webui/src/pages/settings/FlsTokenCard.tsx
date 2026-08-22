@@ -127,10 +127,12 @@ export function FlsTokenCard() {
   const canRotate = ack && token.trim().length > 0 && !running
 
   return (
-    <div className="card mb-4">
+    <div className="card mb-4" data-section-nav-id="settings.flsToken" data-section-nav-label="Server authorization token">
       <button
         type="button"
         onClick={() => setOpen(o => !o)}
+        aria-expanded={open}
+        data-section-nav-toggle
         className="w-full flex items-center justify-between gap-3 p-6 text-left"
       >
         <div className="flex items-center gap-2 min-w-0">

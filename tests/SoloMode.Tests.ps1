@@ -363,6 +363,38 @@ Describe 'Solo Mode write gates and settings backups' {
         }
     }
 
+    It 'requires the exact blueprint-import confirmation phrase' {
+        {
+            Import-DuneSoloBlueprint -Blueprint @{
+                name = 'Test'
+                instances = @(@{ building_type = 'Wall'; x = 0; y = 0; z = 0; rotation = 0 })
+                placeables = @()
+                pentashields = @()
+            } -Confirm 'yes'
+        } | Should -Throw '*Confirm the offline blueprint import*'
+    }
+
+    It 'rejects portable blueprint import before any PTC save access' {
+        Mock Assert-DuneSoloGameClosed {
+            throw 'The disabled import reached the process gate.'
+        }
+        Mock Invoke-DuneSoloHelper {
+            throw 'The disabled import reached the save helper.'
+        }
+
+        {
+            Import-DuneSoloBlueprint -Blueprint @{
+                name = 'Test'
+                instances = @()
+                placeables = @()
+                pentashields = @()
+            } -Confirm 'IMPORT SOLO BLUEPRINT'
+        } | Should -Throw '*disabled for PTC Solo*'
+
+        Assert-MockCalled Assert-DuneSoloGameClosed -Times 0
+        Assert-MockCalled Invoke-DuneSoloHelper -Times 0
+    }
+
     It 'builds a backup-safe currency write while the game is closed' {
         $layout = New-TestSoloLayout
         Save-DuneSoloState -DataRoot $layout.root -DbPath $layout.db | Out-Null
@@ -478,6 +510,7 @@ Describe 'Solo Mode route security metadata' {
 
         foreach ($expected in @(
             '/api/solo/items/grant',
+            '/api/solo/blueprints/import',
             '/api/solo/items/augments/max',
             '/api/solo/currencies',
             '/api/solo/fillables/water',

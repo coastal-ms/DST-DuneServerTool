@@ -1,13 +1,16 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
 import { useNavigate, useLocation } from '../router'
 import { Icon } from '../components/Icon'
-import { NAV_ITEMS, GROUP_LABELS, GROUP_ORDER, type NavGroup } from '../nav'
+import { NAV_ITEMS, GROUP_ORDER, getVisibleGroupLabel, type NavGroup } from '../nav'
 import { useUpdateCheck } from '../hooks/useUpdateCheck'
 import { buildDiagnosticBundle, type DiagnosticBundle } from '../api/diagnostics'
 import { getAutostartState, setAutostartEnabled, type AutostartState } from '../api/autostart'
 import { getServiceModeState, setServiceModeEnabled, type ServiceModeState } from '../api/serviceMode'
 import { getConsoleState, setConsoleVisible, type ConsoleState } from '../api/console'
 import { isLocalViewer, isWindowsViewer } from '../util/viewer'
+import { isHorizontalSwipe, type TouchPoint } from '../util/mobileNavigationGesture'
+import { usePortalAccess } from '../auth/portalAccess'
 
 type MenuKey = NavGroup | 'help' | 'coffee'
 
@@ -22,12 +25,16 @@ type Props = {
 // System for cross-cutting commands like "Create GitHub Issue" and the
 // sidebar collapse toggle.
 export function MenuBar({ sidebarCollapsed, onToggleSidebar }: Props) {
+  const { canAccessOwnerSurfaces } = usePortalAccess()
   const navigate = useNavigate()
   const location = useLocation()
   const { data: upd } = useUpdateCheck()
   const version = upd?.currentVersion ?? ''
   const [open, setOpen] = useState<MenuKey | null>(null)
+  const [mobileNavOpen, setMobileNavOpen] = useState(false)
   const rootRef = useRef<HTMLDivElement | null>(null)
+  const mobileMenuButtonRef = useRef<HTMLButtonElement | null>(null)
+  const mobileSwipeStartRef = useRef<TouchPoint | null>(null)
 
   // Autostart state. Only fetched on local viewers — the backend rejects
   // non-loopback callers anyway and there's nothing the remote viewer could
@@ -187,6 +194,23 @@ export function MenuBar({ sidebarCollapsed, onToggleSidebar }: Props) {
     }
   }, [open])
 
+  useEffect(() => {
+    if (!mobileNavOpen) return
+    const previousOverflow = document.body.style.overflow
+    document.body.style.overflow = 'hidden'
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        setMobileNavOpen(false)
+        mobileMenuButtonRef.current?.focus()
+      }
+    }
+    document.addEventListener('keydown', onKey)
+    return () => {
+      document.body.style.overflow = previousOverflow
+      document.removeEventListener('keydown', onKey)
+    }
+  }, [mobileNavOpen])
+
   const issueHref = `https://github.com/coastal-ms/DST-DuneServerTool/issues/new?template=bug_report.yml${
     version ? `&tool_version=v${encodeURIComponent(version)}` : ''
   }`
@@ -201,6 +225,7 @@ export function MenuBar({ sidebarCollapsed, onToggleSidebar }: Props) {
   const onReportIssue = () => {
     setOpen(null)
     window.open(issueHref, '_blank', 'noopener,noreferrer')
+    if (!canAccessOwnerSurfaces) return
     setDiag({ status: 'building' })
     buildDiagnosticBundle()
       .then((result) => setDiag({ status: 'done', result }))
@@ -219,17 +244,69 @@ export function MenuBar({ sidebarCollapsed, onToggleSidebar }: Props) {
     return location.pathname === to || location.pathname.startsWith(`${to}/`)
   }
 
+  const rememberSwipeStart = (event: React.TouchEvent) => {
+    const touch = event.touches[0]
+    if (touch) mobileSwipeStartRef.current = { x: touch.clientX, y: touch.clientY }
+  }
+
+  const finishSwipe = (event: React.TouchEvent, direction: 'left' | 'right') => {
+    const start = mobileSwipeStartRef.current
+    const touch = event.changedTouches[0]
+    mobileSwipeStartRef.current = null
+    if (!start || !touch) return
+    if (!isHorizontalSwipe(start, { x: touch.clientX, y: touch.clientY }, direction)) return
+    setMobileNavOpen(direction === 'right')
+    if (direction === 'left') mobileMenuButtonRef.current?.focus()
+  }
+
+  const mobileGroups = GROUP_ORDER.map(group => ({
+    key: group,
+    items: NAV_ITEMS
+      .filter(item => item.group === group)
+      .filter(item => !item.localOnly || isLocalViewer())
+      .filter(item => !item.ownerOnly || canAccessOwnerSurfaces)
+      .filter(item => !item.windowsOnly || isWindowsViewer()),
+  })).filter(group => group.items.length > 0).map(group => ({
+    ...group,
+    label: getVisibleGroupLabel(group.key, group.items),
+  }))
+  const currentPage = NAV_ITEMS.find(item => isActive(item.to))?.label ?? 'Dune Server Tool'
+
   return (
     <div
       ref={rootRef}
-      className="h-8 shrink-0 border-b border-border bg-surface flex items-center px-1 text-[13px] select-none relative z-40"
+      onTouchStart={rememberSwipeStart}
+      onTouchEnd={(event) => {
+        if (!mobileNavOpen) finishSwipe(event, 'right')
+      }}
+      onTouchCancel={() => { mobileSwipeStartRef.current = null }}
+      className="h-[calc(2.75rem+env(safe-area-inset-top))] pt-[env(safe-area-inset-top)] md:h-8 md:pt-0 shrink-0 border-b border-border bg-surface flex items-center pl-[max(0.25rem,env(safe-area-inset-left))] pr-[max(0.25rem,env(safe-area-inset-right))] text-[13px] select-none relative z-40 overflow-hidden md:overflow-visible"
     >
+      <button
+        ref={mobileMenuButtonRef}
+        type="button"
+        onClick={() => setMobileNavOpen(true)}
+        aria-expanded={mobileNavOpen}
+        aria-controls="mobile-navigation"
+        className="md:hidden h-11 px-3 inline-flex items-center gap-2 text-text-muted hover:text-text active:bg-surface-2 focus:outline-none focus-visible:ring-2 focus-visible:ring-ibad rounded-md"
+      >
+        <Icon name="Menu" size={20} />
+        <span className="font-medium">Menu</span>
+        <Icon name="ChevronRight" size={14} className="text-text-dim" />
+      </button>
+      <div className="md:hidden ml-auto min-w-0 px-3 font-medium text-text truncate">
+        {currentPage}
+      </div>
+
+      <div className="hidden md:contents">
       {GROUP_ORDER.map(g => {
         const items = NAV_ITEMS
           .filter(i => i.group === g)
           .filter(i => !i.localOnly || isLocalViewer())
+          .filter(i => !i.ownerOnly || canAccessOwnerSurfaces)
           .filter(i => !i.windowsOnly || isWindowsViewer())
         if (items.length === 0) return null
+        const groupLabel = getVisibleGroupLabel(g, items)
         // Single-item group (e.g. Server Health, which has only one page):
         // a dropdown with one entry is pure friction. Render the group
         // button as a direct link to that page instead. The button label
@@ -244,13 +321,13 @@ export function MenuBar({ sidebarCollapsed, onToggleSidebar }: Props) {
                 type="button"
                 onClick={() => { setOpen(null); navigate(only.to) }}
                 onMouseEnter={() => { if (open !== null) setOpen(null) }}
-                className={`px-3 h-7 rounded-md transition-colors ${
+                className={`px-3 h-11 md:h-7 rounded-md transition-colors ${
                   active
                     ? 'bg-surface-3 text-text'
                     : 'text-text-muted hover:text-text hover:bg-surface-2/80'
                 }`}
               >
-                {GROUP_LABELS[g]}
+                {groupLabel}
               </button>
             </div>
           )
@@ -262,13 +339,13 @@ export function MenuBar({ sidebarCollapsed, onToggleSidebar }: Props) {
               type="button"
               onClick={() => setOpen(isOpen ? null : g)}
               onMouseEnter={() => { if (open !== null) setOpen(g) }}
-              className={`px-3 h-7 rounded-md transition-colors ${
+              className={`px-3 h-11 md:h-7 rounded-md transition-colors ${
                 isOpen
                   ? 'bg-surface-3 text-text'
                   : 'text-text-muted hover:text-text hover:bg-surface-2/80'
               }`}
             >
-              {GROUP_LABELS[g]}
+              {groupLabel}
             </button>
             {isOpen && (
               <div className="absolute left-0 top-full mt-1 min-w-[200px] bg-surface border border-border rounded-xl p-1 shadow-xl shadow-black/40 z-50">
@@ -299,7 +376,7 @@ export function MenuBar({ sidebarCollapsed, onToggleSidebar }: Props) {
           type="button"
           onClick={() => setOpen(open === 'help' ? null : 'help')}
           onMouseEnter={() => { if (open !== null) setOpen('help') }}
-          className={`px-3 h-7 rounded-md transition-colors ${
+          className={`px-3 h-11 md:h-7 rounded-md transition-colors ${
             open === 'help'
               ? 'bg-surface-3 text-text'
               : 'text-text-muted hover:text-text hover:bg-surface-2/80'
@@ -334,9 +411,13 @@ export function MenuBar({ sidebarCollapsed, onToggleSidebar }: Props) {
             >
               <Icon name="Github" size={14} className="mt-0.5" />
               <span className="flex-1">
-                <span className="block">Create GitHub Issue + Save Logs</span>
+                <span className="block">
+                  {canAccessOwnerSurfaces ? 'Create GitHub Issue + Save Logs' : 'Create GitHub Issue'}
+                </span>
                 <span className="block text-[11px] text-text-dim">
-                  Opens the issue form &amp; drops a redacted ZIP on your Desktop
+                  {canAccessOwnerSurfaces
+                    ? 'Opens the issue form & drops a redacted ZIP on your Desktop'
+                    : 'Opens the issue form without writing files on the host'}
                 </span>
               </span>
               <Icon name="ExternalLink" size={11} className="text-text-dim mt-1" />
@@ -554,6 +635,86 @@ export function MenuBar({ sidebarCollapsed, onToggleSidebar }: Props) {
         <span>Website</span>
         <Icon name="ExternalLink" size={11} className="text-text-dim" />
       </a>
+      </div>
+
+      {mobileNavOpen && createPortal(
+        <div className="fixed inset-0 z-[80] md:hidden">
+          <button
+            type="button"
+            aria-label="Close navigation"
+            className="absolute inset-0 bg-black/65"
+            onClick={() => {
+              setMobileNavOpen(false)
+              mobileMenuButtonRef.current?.focus()
+            }}
+          />
+          <aside
+            id="mobile-navigation"
+            role="dialog"
+            aria-modal="true"
+            aria-label="DST navigation"
+            onTouchStart={rememberSwipeStart}
+            onTouchEnd={(event) => finishSwipe(event, 'left')}
+            onTouchCancel={() => { mobileSwipeStartRef.current = null }}
+            className="absolute inset-y-0 left-0 w-[min(88vw,22rem)] max-w-full bg-surface border-r border-border shadow-2xl flex flex-col pl-[env(safe-area-inset-left)] touch-pan-y"
+          >
+            <div className="min-h-[calc(3.5rem+env(safe-area-inset-top))] pt-[env(safe-area-inset-top)] px-4 border-b border-border flex items-center gap-3">
+              <img src="/logo.png" alt="" className="w-8 h-8 rounded-full object-contain" />
+              <div className="min-w-0">
+                <div className="font-semibold text-text">Dune Server Tool</div>
+                <div className="text-xs text-text-dim">Management Portal</div>
+              </div>
+              <button
+                type="button"
+                aria-label="Close navigation"
+                onClick={() => {
+                  setMobileNavOpen(false)
+                  mobileMenuButtonRef.current?.focus()
+                }}
+                className="ml-auto w-11 h-11 inline-flex items-center justify-center rounded-lg text-text-muted hover:text-text hover:bg-surface-2 focus:outline-none focus-visible:ring-2 focus-visible:ring-ibad"
+              >
+                <Icon name="X" size={20} />
+              </button>
+            </div>
+            <nav className="flex-1 overflow-y-auto px-3 py-3 pb-[max(1rem,env(safe-area-inset-bottom))]">
+              {mobileGroups.map(group => (
+                <section key={group.key} className="mb-4">
+                  <h2 className="px-3 mb-1 text-[11px] font-semibold uppercase tracking-widest text-text-dim">
+                    {group.label}
+                  </h2>
+                  <ul className="space-y-1">
+                    {group.items.map(item => (
+                      <li key={item.to}>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            navigate(item.to)
+                            setMobileNavOpen(false)
+                          }}
+                          className={`w-full min-h-11 px-3 py-2.5 rounded-lg flex items-center gap-3 text-left focus:outline-none focus-visible:ring-2 focus-visible:ring-ibad ${
+                            isActive(item.to)
+                              ? 'bg-accent/15 text-accent-bright border border-accent/30'
+                              : 'text-text-muted hover:text-text hover:bg-surface-2 border border-transparent'
+                          }`}
+                        >
+                          <Icon name={item.icon} size={18} />
+                          <span className="flex-1 font-medium">{item.label}</span>
+                          {item.badge && (
+                            <span className="text-[9px] font-semibold uppercase tracking-wider px-1.5 py-0.5 rounded bg-sky-400/15 text-sky-400 border border-sky-400/40">
+                              {item.badge}
+                            </span>
+                          )}
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                </section>
+              ))}
+            </nav>
+          </aside>
+        </div>,
+        document.body,
+      )}
 
       {/* Autostart toggle — confirmation modal. Lives at the menubar root
           rather than inside the dropdown so it stays visible after the menu

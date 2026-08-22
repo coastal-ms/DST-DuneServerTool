@@ -17,7 +17,7 @@ function markDismissed(version: string) {
 // Full-screen takeover shown after the updater launches. We don't try to
 // close or redirect anything by script (browser tabs can't be closed by JS,
 // and there's nothing clever to do about the leftover console windows). We
-// just tell the user plainly: the installer is running, a fresh window opens
+// just tell the user plainly: the automatic update is running, a fresh window opens
 // automatically when it finishes, and they can close all the old browser and
 // console windows themselves. We poll the server and flip to a definitive
 // "done — close everything" state the moment it stops responding.
@@ -81,9 +81,9 @@ function UpdatingPage({ toVersion }: { toVersion?: string }) {
         ) : (
           <>
             <p className="mt-5 text-sm leading-relaxed text-slate-300">
-              The installer wizard is opening — <strong className="text-white">click through
-              it</strong> (approve the Windows prompt if asked). When it finishes, the updated tool
-              opens automatically in a new window.
+              DST is updating automatically. It will close, install in the background,
+              and <strong className="text-white">open the updated tool automatically</strong>.
+              Approve the Windows prompt if one appears.
             </p>
             <div className="mt-4 rounded-lg border border-amber-400/30 bg-amber-400/10 px-4 py-3 text-left">
               <p className="text-sm font-semibold text-amber-100">Once the new window opens:</p>
@@ -118,7 +118,10 @@ export function UpdateBanner() {
   if (launched) return <UpdatingPage toVersion={launchedVersion} />
 
   if (!data || !data.available || !data.latestVersion) return null
-  if (dismissed || isDismissed(data.latestVersion)) return null
+  const dismissalId = data.identityMismatch
+    ? `${data.latestVersion}:${data.releaseCommit || 'published'}`
+    : data.latestVersion
+  if (dismissed || isDismissed(dismissalId)) return null
 
   // If a newer release exists but its installer .exe is missing (project
   // rule violation: every release must upload DuneServerSetup.exe), we
@@ -138,7 +141,7 @@ export function UpdateBanner() {
     // intentionally takes the server down, and <UpdatingPage> owns that UX.
     ;(window as unknown as { __duneUpdating?: boolean }).__duneUpdating = true
     try {
-      const res = await installUpdate()
+      const res = await installUpdate({ mode: 'silent', source: 'banner' })
       if (res.launched) {
         setLaunchedVersion(res.toVersion)
         setLaunched(true)
@@ -155,7 +158,7 @@ export function UpdateBanner() {
   }
 
   const onDismiss = () => {
-    if (data.latestVersion) markDismissed(data.latestVersion)
+    markDismissed(dismissalId)
     setDismissed(true)
   }
 
@@ -168,9 +171,15 @@ export function UpdateBanner() {
     <div className="shrink-0 border-b border-amber-400/30 bg-amber-400/10 px-5 py-2 text-sm text-amber-100 flex items-center gap-3">
       <Icon name="Download" size={16} className="text-amber-300 shrink-0" />
       <div className="flex-1 min-w-0">
-        <strong className="font-semibold">Update available:</strong>{' '}
+        <strong className="font-semibold">
+          {data.identityMismatch ? 'Published build available:' : 'Update available:'}
+        </strong>{' '}
         <span className="text-amber-50">{fmtToolVersion(data.latestVersion)}</span>
-        <span className="text-amber-200/70"> (you're on {fmtToolVersion(data.currentVersion)})</span>
+        <span className="text-amber-200/70">
+          {data.identityMismatch
+            ? ' (this local/dev build uses a different commit)'
+            : ` (you're on ${fmtToolVersion(data.currentVersion)})`}
+        </span>
         {data.releaseUrl && (
           <>
             {' · '}
@@ -196,7 +205,11 @@ export function UpdateBanner() {
             onClick={() => { void onInstall() }}
             disabled={installing}
           >
-            {installing ? 'Installing…' : 'Update now'}
+            {installing
+              ? 'Installing…'
+              : data.identityMismatch
+                ? 'Install published build'
+                : 'Update now'}
           </button>
         ) : (
           <a

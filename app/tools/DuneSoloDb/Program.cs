@@ -79,6 +79,10 @@ internal static partial class Program
                     Require(options, "safety-backup"),
                     Require(options, "plan"),
                     Require(options, "catalog")),
+                "import-blueprint" => ImportBlueprint(
+                    Require(options, "input"),
+                    Require(options, "safety-backup"),
+                    Require(options, "blueprint")),
                 "set-currencies" => SetCurrencies(
                     Require(options, "input"),
                     Require(options, "safety-backup"),
@@ -967,6 +971,49 @@ internal static partial class Program
                         quality_level INTEGER NOT NULL DEFAULT 0,
                         volume_override REAL
                     );
+                    CREATE TABLE building_blueprints (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        item_id INTEGER REFERENCES items(id) ON DELETE CASCADE,
+                        player_id INTEGER REFERENCES actors(id) ON DELETE CASCADE,
+                        building_blueprint_map TEXT
+                    );
+                    CREATE TABLE building_blueprint_instances (
+                        building_blueprint_id INTEGER NOT NULL
+                            REFERENCES building_blueprints(id) ON DELETE CASCADE,
+                        instance_id INTEGER NOT NULL,
+                        building_type TEXT NOT NULL,
+                        transform_x REAL,
+                        transform_y REAL,
+                        transform_z REAL,
+                        transform_yaw REAL,
+                        provides_stability INTEGER,
+                        health REAL,
+                        hologram INTEGER,
+                        PRIMARY KEY (building_blueprint_id, instance_id)
+                    );
+                    CREATE TABLE building_blueprint_placeables (
+                        building_blueprint_id INTEGER NOT NULL
+                            REFERENCES building_blueprints(id) ON DELETE CASCADE,
+                        placeable_id INTEGER NOT NULL,
+                        building_type TEXT NOT NULL,
+                        transform_x REAL,
+                        transform_y REAL,
+                        transform_z REAL,
+                        transform_yaw REAL,
+                        transform_pitch REAL,
+                        transform_roll REAL,
+                        hologram INTEGER,
+                        PRIMARY KEY (building_blueprint_id, placeable_id)
+                    );
+                    CREATE TABLE building_blueprint_pentashields (
+                        building_blueprint_id INTEGER NOT NULL
+                            REFERENCES building_blueprints(id) ON DELETE CASCADE,
+                        placeable_id INTEGER NOT NULL,
+                        scale_x INTEGER,
+                        scale_y INTEGER,
+                        scale_z INTEGER,
+                        PRIMARY KEY (building_blueprint_id, placeable_id)
+                    );
                     CREATE TABLE player_virtual_currency_balances (
                         player_controller_id INTEGER NOT NULL,
                         currency_id INTEGER NOT NULL,
@@ -1321,6 +1368,218 @@ internal static partial class Program
                     "Oversized unknown vehicle part did not fail closed.");
             }
 
+            var blueprintPath = Path.Combine(root, "portable-blueprint.json");
+            File.WriteAllText(
+                blueprintPath,
+                """
+                {
+                  "name":"Self Test Base",
+                  "instances":[
+                    {
+                      "instance_id":1,
+                      "building_type":"Atreides_Outpost_Foundation",
+                      "x":0,
+                      "y":0,
+                      "z":0,
+                      "rotation":0,
+                      "provides_stability":true
+                    },
+                    {
+                      "instance_id":2,
+                      "building_type":"Atreides_Outpost_Wall",
+                      "x":512,
+                      "y":0,
+                      "z":0,
+                      "rotation":90
+                    }
+                  ],
+                  "placeables":[
+                    {
+                      "building_type":"Choam_PentashieldSurfaceHorizontal_Placeable",
+                      "x":0,
+                      "y":0,
+                      "z":256,
+                      "ry":45
+                    }
+                  ],
+                  "pentashields":[
+                    {
+                      "placeable_id":0,
+                      "scale":[10,20,30]
+                    }
+                  ]
+                }
+                """);
+            var blueprintSafety = Path.Combine(
+                root,
+                "safety",
+                "before-blueprint.db");
+            ImportBlueprint(target, blueprintSafety, blueprintPath);
+            if (!File.Exists(blueprintSafety))
+            {
+                throw new InvalidOperationException(
+                    "Blueprint import did not retain a safety backup.");
+            }
+            var blueprintSqlite = Path.Combine(root, "blueprint-result.sqlite");
+            File.WriteAllBytes(
+                blueprintSqlite,
+                Unwrap(ReadStable(target)).SqliteBytes);
+            using (var connection = new SqliteConnection(new SqliteConnectionStringBuilder
+                   {
+                       DataSource = blueprintSqlite,
+                       Mode = SqliteOpenMode.ReadOnly,
+                       Pooling = false
+                   }.ToString()))
+            {
+                connection.Open();
+                var blueprintId = ScalarLong(
+                    connection,
+                    "SELECT id FROM building_blueprints ORDER BY id DESC LIMIT 1;");
+                var blueprintItem = ScalarLong(
+                    connection,
+                    """
+                    SELECT item_id
+                    FROM building_blueprints
+                    WHERE id=$id;
+                    """,
+                    ("$id", blueprintId));
+                var template = ScalarString(
+                    connection,
+                    "SELECT template_id FROM items WHERE id=$id;",
+                    ("$id", blueprintItem));
+                var stats = ScalarString(
+                    connection,
+                    "SELECT stats FROM items WHERE id=$id;",
+                    ("$id", blueprintItem));
+                var instanceCount = ScalarLong(
+                    connection,
+                    """
+                    SELECT COUNT(*)
+                    FROM building_blueprint_instances
+                    WHERE building_blueprint_id=$id;
+                    """,
+                    ("$id", blueprintId));
+                var placeableCount = ScalarLong(
+                    connection,
+                    """
+                    SELECT COUNT(*)
+                    FROM building_blueprint_placeables
+                    WHERE building_blueprint_id=$id;
+                    """,
+                    ("$id", blueprintId));
+                var pentashieldCount = ScalarLong(
+                    connection,
+                    """
+                    SELECT COUNT(*)
+                    FROM building_blueprint_pentashields
+                    WHERE building_blueprint_id=$id;
+                    """,
+                    ("$id", blueprintId));
+                var missingRotationDefaults = ScalarLong(
+                    connection,
+                    """
+                    SELECT COUNT(*)
+                    FROM building_blueprint_placeables
+                    WHERE building_blueprint_id=$id
+                      AND transform_yaw=0
+                      AND transform_pitch=45
+                      AND transform_roll=0;
+                    """,
+                    ("$id", blueprintId));
+                if (template != "BuildingBlueprint_CopyDevice"
+                    || !stats.Contains(
+                        $"!!bbp#{blueprintId}",
+                        StringComparison.Ordinal)
+                    || !stats.Contains(
+                        "Self Test Base",
+                        StringComparison.Ordinal)
+                    || instanceCount != 2
+                    || placeableCount != 1
+                    || pentashieldCount != 1
+                    || missingRotationDefaults != 1)
+                {
+                    throw new InvalidOperationException(
+                        "Portable blueprint import verification failed.");
+                }
+            }
+
+            var invalidBlueprintPath = Path.Combine(
+                root,
+                "invalid-portable-blueprint.json");
+            File.WriteAllText(
+                invalidBlueprintPath,
+                """
+                {
+                  "name":"Duplicate",
+                  "instances":[
+                    {"instance_id":1,"building_type":"Wall","x":0,"y":0,"z":0,"rotation":0},
+                    {"instance_id":1,"building_type":"Wall","x":0,"y":0,"z":0,"rotation":0}
+                  ],
+                  "placeables":[],
+                  "pentashields":[]
+                }
+                """);
+            var beforeInvalidBlueprint = File.ReadAllBytes(target);
+            var invalidBlueprintRejected = false;
+            try
+            {
+                ImportBlueprint(
+                    target,
+                    Path.Combine(root, "safety", "invalid-blueprint.db"),
+                    invalidBlueprintPath);
+            }
+            catch (InvalidDataException ex)
+                when (ex.Message.Contains(
+                    "duplicate instance ids",
+                    StringComparison.OrdinalIgnoreCase))
+            {
+                invalidBlueprintRejected = true;
+            }
+            if (!invalidBlueprintRejected
+                || !File.ReadAllBytes(target).SequenceEqual(beforeInvalidBlueprint))
+            {
+                throw new InvalidOperationException(
+                    "Invalid blueprint did not fail closed.");
+            }
+
+            var missingTransformBlueprintPath = Path.Combine(
+                root,
+                "missing-transform-blueprint.json");
+            File.WriteAllText(
+                missingTransformBlueprintPath,
+                """
+                {
+                  "name":"Truncated",
+                  "instances":[
+                    {"instance_id":1,"building_type":"Wall","y":0,"z":0,"rotation":0}
+                  ],
+                  "placeables":[],
+                  "pentashields":[]
+                }
+                """);
+            var beforeMissingTransform = File.ReadAllBytes(target);
+            var missingTransformRejected = false;
+            try
+            {
+                ImportBlueprint(
+                    target,
+                    Path.Combine(root, "safety", "missing-transform-blueprint.db"),
+                    missingTransformBlueprintPath);
+            }
+            catch (InvalidDataException ex)
+                when (ex.Message.Contains(
+                    "instances[0].x is required",
+                    StringComparison.OrdinalIgnoreCase))
+            {
+                missingTransformRejected = true;
+            }
+            if (!missingTransformRejected
+                || !File.ReadAllBytes(target).SequenceEqual(beforeMissingTransform))
+            {
+                throw new InvalidOperationException(
+                    "Truncated blueprint did not fail closed.");
+            }
+
             var currencySafety = Path.Combine(root, "safety", "before-currency.db");
             SetCurrencies(target, currencySafety, 1_000_000, 250_000);
             if (!File.Exists(currencySafety))
@@ -1537,6 +1796,9 @@ internal static partial class Program
                     "offline-augment-max-with-safety-backup",
                     "offline-item-grant-with-capacity-and-safety-backup",
                     "vehicle-kit-volume-fallbacks-preserve-stock-backpack-grants",
+                    "offline-portable-blueprint-import-with-safety-backup",
+                    "invalid-blueprint-leaves-target-unchanged",
+                    "truncated-blueprint-leaves-target-unchanged",
                     "offline-currency-write-with-safety-backup",
                     "offline-water-container-fills-with-safety-backups",
                     "offline-specialization-max-with-rewards",
@@ -2156,10 +2418,17 @@ internal static partial class Program
         return command.ExecuteNonQuery();
     }
 
-    private static string ScalarString(SqliteConnection connection, string sql)
+    private static string ScalarString(
+        SqliteConnection connection,
+        string sql,
+        params (string Name, object Value)[] parameters)
     {
         using var command = connection.CreateCommand();
         command.CommandText = sql;
+        foreach (var parameter in parameters)
+        {
+            command.Parameters.AddWithValue(parameter.Name, parameter.Value);
+        }
         return Convert.ToString(command.ExecuteScalar()) ?? string.Empty;
     }
 

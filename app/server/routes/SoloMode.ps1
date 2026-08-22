@@ -217,6 +217,27 @@ Register-DuneRoute -Method POST -Path '/api/solo/items/grant' -LocalOnly -Handle
     }
 }
 
+Register-DuneRoute -Method POST -Path '/api/solo/blueprints/import' -LocalOnly -Handler {
+    param($req, $res, $routeParams, $body)
+    try {
+        $blueprint = Get-DuneSoloBodyField -Body $body -Name 'blueprint'
+        $confirm = [string](Get-DuneSoloBodyField -Body $body -Name 'confirm' -Default '')
+        $expectedProfileToken = [string](Get-DuneSoloBodyField -Body $body -Name 'expectedProfileToken' -Default '')
+        if ($null -eq $blueprint) {
+            Write-DuneError -Response $res -Status 400 -Message 'Choose a portable blueprint file to import.'
+            return
+        }
+        $result = Invoke-WithDuneLock -Name 'solo-profile-data' -Script {
+            Assert-DuneSoloExpectedProfile -ExpectedProfileToken $expectedProfileToken
+            Import-DuneSoloBlueprint -Blueprint $blueprint -Confirm $confirm
+        }
+        Write-DuneJson -Response $res -Body $result
+    } catch {
+        $status = if ($_.Exception.Message -like '*still running*' -or $_.Exception.Message -like '*changed in another window*') { 409 } else { 400 }
+        Write-DuneError -Response $res -Status $status -Message $_.Exception.Message
+    }
+}
+
 Register-DuneRoute -Method PUT -Path '/api/solo/currencies' -LocalOnly -Handler {
     param($req, $res, $routeParams, $body)
     try {

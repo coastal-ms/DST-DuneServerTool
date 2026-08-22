@@ -36,13 +36,20 @@ export function GameplayEnvironment() {
       />
 
       {/* Sub-tab nav */}
-      <div className="flex items-center gap-1 mb-5 border-b border-border">
+      <div
+        role="tablist"
+        aria-label="Gameplay Admin sections"
+        className="flex items-center gap-1 mb-5 border-b border-border overflow-x-auto overscroll-x-contain scroll-smooth touch-pan-x [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+      >
         {TABS.map(t => {
           const active = tab === t.id
           return (
             <button key={t.id}
+              type="button"
+              role="tab"
+              aria-selected={active}
               onClick={() => setTab(t.id)}
-              className={`flex items-center gap-2 px-4 py-2.5 text-sm font-medium border-b-2 -mb-px transition-colors ${
+              className={`shrink-0 min-h-11 flex items-center gap-2 px-4 py-2.5 text-sm font-medium whitespace-nowrap border-b-2 -mb-px transition-colors ${
                 active
                   ? 'border-accent text-accent-bright'
                   : 'border-transparent text-text-muted hover:text-text'

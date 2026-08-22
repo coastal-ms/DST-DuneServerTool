@@ -3,6 +3,9 @@ import { Icon } from '../components/Icon'
 import { useStatus } from '../hooks/useStatus'
 import { useUpdateCheck } from '../hooks/useUpdateCheck'
 import type { BgState, VmStatus, PortStatus } from '../api/types'
+import { usePortalAuth } from '../auth/PortalAuthGate'
+import { getTestBuildIdentity } from '../util/testBuildIdentity'
+import { usePortalAccess } from '../auth/portalAccess'
 
 function vmPillClass(vm: VmStatus | undefined | null): string {
   if (!vm || !vm.exists) return 'pill-muted'
@@ -40,14 +43,16 @@ const BG_STYLES: Record<BgState | 'unknown', { cls: string; label: string }> = {
 }
 
 export function StatusBar() {
+  const { canAccessOwnerSurfaces } = usePortalAccess()
   const { status, loading, forceRefresh } = useStatus()
   const { data: upd } = useUpdateCheck()
-  const onTestChannel = upd?.runningIsPrerelease === true
+  const testBuild = getTestBuildIdentity(upd)
   const vm    = status?.vm ?? null
   const ports = status?.ports ?? null
   const bgKey = (status?.bg?.state ?? 'unknown') as BgState | 'unknown'
   const bg    = BG_STYLES[bgKey] ?? BG_STYLES.unknown
   const serverName = (status?.serverName ?? '').trim()
+  const portalAuth = usePortalAuth()
 
   return (
     <header className="h-14 shrink-0 border-b border-border bg-surface/60 backdrop-blur-md px-5 flex items-center justify-between gap-4">
@@ -69,13 +74,19 @@ export function StatusBar() {
         )}
       </div>
       <div className="flex items-center gap-2 shrink-0">
-        {onTestChannel && (
+        {portalAuth?.status.account && (
+          <button className="btn-ghost" onClick={() => void portalAuth.logout()} title="Sign out of the Browser Portal">
+            <Icon name="LogOut" size={14} />
+            <span className="hidden xl:inline">{portalAuth.status.account.username}</span>
+          </button>
+        )}
+        {testBuild && canAccessOwnerSurfaces && (
           <Link
             to="/settings"
             className="pill-warning hover:bg-warning/20 transition-colors"
-            title="This install is running a pre-release TEST build (installed from the Test channel for verification before it goes live). Click to open Settings, switch to Stable, and install the released build."
+            title={`${testBuild.title}. Click to open Settings, switch to Stable, and install the released build.`}
           >
-            <Icon name="FlaskConical" size={11} /> TEST BUILD
+            <Icon name="FlaskConical" size={11} /> {testBuild.label}
           </Link>
         )}
         {ports?.showUdp && (

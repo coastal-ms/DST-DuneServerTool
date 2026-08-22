@@ -337,20 +337,22 @@ export function Dashboard() {
           ) : gameServers.length === 0 ? (
             <p className="text-sm text-text-dim italic">No game servers reported.</p>
           ) : (
-            <table className="w-full text-sm leading-snug">
-              <thead className="text-[10px] uppercase tracking-wider text-text-dim">
-                <tr>
-                  <th className="text-left pb-1">Map</th>
-                  <th className="text-left pb-1">Phase</th>
-                  <th className="text-left pb-1">Ready</th>
-                  <th className="text-left pb-1">Players</th>
-                  <th className="text-left pb-1">Age</th>
-                </tr>
-              </thead>
-              <tbody>
-                {gameServers.map((s, i) => <GameServerRow key={`${s.sietchName || s.map}-${i}`} s={s} />)}
-              </tbody>
-            </table>
+            <div className="overflow-x-auto" tabIndex={0} aria-label="Game server status table">
+              <table className="w-full min-w-[540px] text-sm leading-snug">
+                <thead className="text-[10px] uppercase tracking-wider text-text-dim">
+                  <tr>
+                    <th className="text-left pb-1">Map</th>
+                    <th className="text-left pb-1">Phase</th>
+                    <th className="text-left pb-1">Ready</th>
+                    <th className="text-left pb-1">Players</th>
+                    <th className="text-left pb-1">Age</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {gameServers.map((s, i) => <GameServerRow key={`${s.sietchName || s.map}-${i}`} s={s} />)}
+                </tbody>
+              </table>
+            </div>
           )}
           <HeartbeatSensor servers={gameServers} loading={loading} />
         </CollapsibleCard>

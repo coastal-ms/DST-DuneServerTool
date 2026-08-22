@@ -36,6 +36,14 @@ export interface UpdateCheck {
    * the next install) does not light it up.
    */
   runningIsPrerelease?: boolean
+  /** Exact in-app-installed tag, present only when its core matches this runtime. */
+  installedTag?: string
+  /** Source commit stamped into this installer, for manually installed test candidates. */
+  buildCommit?: string
+  /** True when the selected tag matches but this artifact is not the published commit. */
+  identityMismatch?: boolean
+  /** Immutable commit resolved from the selected public release tag. */
+  releaseCommit?: string
   /** True when the resolved release is a GitHub pre-release (test channel). */
   isPrerelease?: boolean
   /** The exact tag the updater resolved to act on (stable latest or pinned pre-release). */
@@ -70,6 +78,17 @@ export interface UpdateInstallResult {
   fromVersion?: string
   toVersion?: string
   note?: string
+  mode?: UpdateInstallMode
+  source?: UpdateInstallSource
+}
+
+export type UpdateInstallMode = 'silent' | 'interactive'
+export type UpdateInstallSource = 'banner' | 'settings'
+
+export interface UpdateInstallOptions {
+  mode: UpdateInstallMode
+  source: UpdateInstallSource
+  reinstall?: boolean
 }
 
 export function checkForUpdate(opts: { force?: boolean } = {}) {
@@ -77,9 +96,12 @@ export function checkForUpdate(opts: { force?: boolean } = {}) {
   return api<UpdateCheck>(`/api/update/check${qs}`)
 }
 
-export function installUpdate(opts: { reinstall?: boolean } = {}) {
+export function installUpdate(opts: UpdateInstallOptions) {
   const qs = opts.reinstall ? '?reinstall=1' : ''
-  return api<UpdateInstallResult>(`/api/update/install${qs}`, { method: 'POST', body: '{}' })
+  return api<UpdateInstallResult>(`/api/update/install${qs}`, {
+    method: 'POST',
+    body: JSON.stringify({ mode: opts.mode, source: opts.source }),
+  })
 }
 
 /**

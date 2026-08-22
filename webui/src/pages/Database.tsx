@@ -800,8 +800,10 @@ export function Database() {
         )}
       </CollapsibleCard>
 
-      {/* SQL editor card */}
-      <div className="card overflow-hidden mb-4">
+      {localViewer && (
+      <>
+        {/* SQL editor card */}
+        <div className="card overflow-hidden mb-4">
         <div className="px-4 py-3 border-b border-border flex items-center justify-between gap-3">
           <div className="flex items-center gap-2 text-sm">
             <Icon name="Terminal" size={14} className="text-accent-bright" />
@@ -876,10 +878,12 @@ export function Database() {
             setSql(v + (v.endsWith('\n') || v === '' ? '' : '\n') + `SELECT * FROM ${insertion} LIMIT 100;`)
           }} />
         </div>
-      </div>
+        </div>
 
-      {/* Results panel */}
-      <ResultsPanel result={result} onExportCsv={downloadCsv} />
+        {/* Results panel */}
+        <ResultsPanel result={result} onExportCsv={downloadCsv} />
+      </>
+      )}
     </>
   )
 }

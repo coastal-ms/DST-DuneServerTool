@@ -119,6 +119,33 @@ describe('Solo Mode API contracts', () => {
     })
   })
 
+  it('imports portable blueprints with profile token and offline confirmation', async () => {
+    const blueprint = {
+      name: 'Compact Base',
+      instances: [{
+        instance_id: 1,
+        building_type: 'Atreides_Outpost_Foundation',
+        x: 0,
+        y: 0,
+        z: 0,
+        rotation: 0,
+        provides_stability: true,
+      }],
+      placeables: [],
+      pentashields: [],
+    }
+    await solo.importSoloBlueprint(blueprint, 'profile-token')
+    expect(last()).toEqual({
+      url: '/api/solo/blueprints/import',
+      method: 'POST',
+      body: {
+        blueprint,
+        expectedProfileToken: 'profile-token',
+        confirm: 'IMPORT SOLO BLUEPRINT',
+      },
+    })
+  })
+
   it('sets exact currency balances with profile and offline confirmation', async () => {
     await solo.setSoloCurrencies(1_000_000, 250_000, 'profile-token')
     expect(last()).toEqual({

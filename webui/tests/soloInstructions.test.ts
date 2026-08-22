@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import {
   SOLO_ACTION_RULES,
+  SOLO_BLUEPRINT_IMPORT_DISABLED,
+  SOLO_BLUEPRINT_IMPORT_NOTICE,
   SOLO_FIRST_USE_STEPS,
   SOLO_HIDDEN_SETTINGS,
   SOLO_READ_ONLY_SETTINGS,
@@ -29,5 +31,12 @@ describe('Solo Mode user instructions', () => {
 
   it('hides the irrelevant PVP setting', () => {
     expect(SOLO_HIDDEN_SETTINGS.has('PVPMode')).toBe(true)
+  })
+
+  it('disables portable blueprint imports throughout the PTC preview', () => {
+    expect(SOLO_BLUEPRINT_IMPORT_DISABLED).toBe(true)
+    expect(SOLO_BLUEPRINT_IMPORT_NOTICE).toContain('save-loading and placement-preview crashes')
+    expect(SOLO_BLUEPRINT_IMPORT_NOTICE).toContain('before any save change')
+    expect(SOLO_BLUEPRINT_IMPORT_NOTICE).toContain('Retail Solo')
   })
 })

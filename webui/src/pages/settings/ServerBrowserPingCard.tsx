@@ -157,10 +157,12 @@ export function ServerBrowserPingCard() {
   const currentMatches = status?.datacenterIdIsRecommended
 
   return (
-    <div className="card mb-4">
+    <div className="card mb-4" data-section-nav-id="settings.serverBrowserPing" data-section-nav-label="Server browser Ping">
       <button
         type="button"
         onClick={() => setOpen(o => !o)}
+        aria-expanded={open}
+        data-section-nav-toggle
         className="w-full flex items-center justify-between gap-3 p-6 text-left"
       >
         <div className="flex items-center gap-2 min-w-0">

@@ -109,7 +109,7 @@ Describe 'Apply INIs is available as a command' {
 
     It 'is allowed for remote callers, like the other restart commands' {
         $script:routeText | Should -Match "remoteAllowedCommands = @\([^)]*'apply-inis'"
-        $ui = Get-Content (Join-Path $PSScriptRoot '..\webui\src\pages\Commands.tsx') -Raw
+        $ui = Get-Content (Join-Path $PSScriptRoot '..\webui\src\auth\commandAccess.ts') -Raw
         $ui | Should -Match "REMOTE_ALLOWED = new Set\(\[[^\]]*'apply-inis'"
     }
 

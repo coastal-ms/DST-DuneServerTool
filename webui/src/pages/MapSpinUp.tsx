@@ -21,6 +21,8 @@ import { Icon } from '../components/Icon'
 import { ApiError } from '../api/client'
 import { getMapSpinUp, setMapSpinUp, type SpinUpMap } from '../api/mapSpinUp'
 import { fixOnDemandPartitions, getMapState, restartMapPods, type MapState } from '../api/maps'
+import { SpicefieldsCard } from './gameconfig/SpicefieldsCard'
+import { useStatus } from '../hooks/useStatus'
 
 // Map SpinUp section names → on-demand map keys that expose a live, schedulable
 // pod state via GET /api/maps/{key}. Only these three report whether a pod is
@@ -98,6 +100,8 @@ function reconcileOrder(saved: string[] | null, maps: SpinUpMap[]): string[] {
 }
 
 export function MapSpinUp() {
+  const { status } = useStatus()
+  const vmRunning = status?.vm?.running === true
   const [maps, setMaps] = useState<SpinUpMap[] | null>(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -317,7 +321,7 @@ export function MapSpinUp() {
           <>
             {isCustomOrder && (
               <button
-                className="btn-secondary"
+                className="btn-secondary flex-1 justify-center sm:flex-none"
                 onClick={resetOrder}
                 disabled={loading || busy !== null || fixBusy}
                 title="Restore the default card order (Deep Desert, Arrakeen, Harko Village first)."
@@ -326,7 +330,7 @@ export function MapSpinUp() {
               </button>
             )}
             <button
-              className="btn-secondary"
+              className="btn-secondary flex-1 justify-center sm:flex-none"
               onClick={() => { void onFixPartitions() }}
               disabled={loading || busy !== null || fixBusy}
               title="Clear stuck igwsss.spec.partitions pins on Deep Desert / Arrakeen / Harko Village. Safe — only touches those 3 maps, skips any with a running pod, and never touches Overmap or Survival_1."
@@ -334,16 +338,16 @@ export function MapSpinUp() {
               <Icon name={fixBusy ? 'Loader2' : 'Wrench'} size={15} className={fixBusy ? 'animate-spin' : ''} />
               {fixBusy ? 'Fixing…' : 'Fix partitions'}
             </button>
-            <button className="btn-secondary" onClick={() => { void refresh() }} disabled={loading || busy !== null || fixBusy}>
+            <button className="btn-secondary flex-1 justify-center sm:flex-none" onClick={() => { void refresh() }} disabled={loading || busy !== null || fixBusy}>
               <Icon name="RefreshCw" size={15} className={loading ? 'animate-spin' : ''} /> Refresh
             </button>
           </>
         }
       />
 
-      <div className="mb-4 flex flex-wrap items-center justify-center gap-3">
+      <div className="mb-4 grid grid-cols-1 min-[360px]:grid-cols-2 gap-2 sm:flex sm:flex-wrap sm:items-center sm:justify-center sm:gap-3">
         <button
-          className="btn-secondary"
+          className="btn-secondary w-full justify-center sm:w-auto"
           onClick={() => { void onRestartPods('survival', 'Hagga (Survival_1)') }}
           disabled={loading || busy !== null || fixBusy || restartBusy !== null}
           title="Delete and recreate the Survival_1 (Hagga overworld) pod(s). Disconnects anyone on the main world; the operator brings them back in ~60-120s."
@@ -352,7 +356,7 @@ export function MapSpinUp() {
           {restartBusy === 'survival' ? 'Restarting…' : 'Restart Hagga'}
         </button>
         <button
-          className="btn-secondary"
+          className="btn-secondary w-full justify-center sm:w-auto"
           onClick={() => { void onRestartPods('deepdesert', 'Deep Desert') }}
           disabled={loading || busy !== null || fixBusy || restartBusy !== null}
           title="Delete and recreate the DeepDesert_1 pod(s). Disconnects anyone in Deep Desert; the operator brings them back in ~60-120s."
@@ -362,7 +366,7 @@ export function MapSpinUp() {
         </button>
       </div>
 
-      <div className="mb-4 rounded-lg border border-warning/60 bg-warning/15 px-4 py-3 flex items-start gap-3">
+      <div className="mb-4 rounded-lg border border-warning/60 bg-warning/15 px-3 py-3 sm:px-4 flex items-start gap-3">
         <Icon name="AlertTriangle" size={20} className="shrink-0 mt-0.5 text-warning" />
         <div className="text-sm text-warning">
           <div className="font-bold uppercase tracking-wide mb-1">RAM requirement</div>
@@ -376,6 +380,10 @@ export function MapSpinUp() {
             simply lets you start the spawn process ahead of time, before you arrive, if desired.
           </span>
         </div>
+      </div>
+
+      <div className="mb-4">
+        <SpicefieldsCard vmRunning={vmRunning} />
       </div>
 
       {error && (

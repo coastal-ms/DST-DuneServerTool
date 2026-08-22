@@ -36,12 +36,19 @@
 }
 
 @layer base {
+  [data-section-nav-id] {
+    scroll-margin-top: 4rem;
+  }
   html, body, #root {
     height: 100%;
     min-height: 100%;
+    width: 100%;
+    max-width: 100%;
+    overflow-x: hidden;
   }
   body {
     @apply bg-base text-text font-sans antialiased;
+    overscroll-behavior-x: none;
     /* Glow tints follow the active theme automatically — color-mix bakes a
      * 12%/5% wash of the current accent and highlight tokens. */
     background-image:

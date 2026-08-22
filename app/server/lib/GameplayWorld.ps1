@@ -838,8 +838,9 @@ WHERE p.owner_entity_id = $ownerEntityId::bigint
             $rot = ConvertFrom-DuneVecText ([string]$r['rotation'])
             if ($loc.Count -lt 3 -or $rot.Count -lt 4) { continue }
             $e = ConvertTo-DuneEuler -Qx $rot[0] -Qy $rot[1] -Qz $rot[2] -Qw $rot[3]
-            $nextId = $placeables.Count
+            $nextId = $placeables.Count + 1
             $placeables += [ordered]@{
+                placeable_id  = $nextId
                 building_type = $bt
                 x             = ($loc[0] - $cx)
                 y             = ($loc[1] - $cy)

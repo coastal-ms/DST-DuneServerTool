@@ -20,6 +20,9 @@ internal sealed class MainForm : Form
     private bool _firstLoadDone;
     private string? _targetUrl;
     private int _navRetries;
+    private ShellPreferences? _shellPreferences;
+    private bool _softwareRenderingActive;
+    private bool _restartShellOnly;
     private const int MaxNavRetries = 20;
 
     // ----- Minimize-to-tray state --------------------------------------------
@@ -54,7 +57,7 @@ internal sealed class MainForm : Form
         FormClosing += (_, e) =>
         {
             SaveWindowState();
-            if (!StopCompanionProcesses())
+            if (!_restartShellOnly && !StopCompanionProcesses())
             {
                 e.Cancel = true;
                 return;
@@ -89,6 +92,20 @@ internal sealed class MainForm : Form
 
     private async Task InitializeAsync()
     {
+        try
+        {
+            _shellPreferences = ShellPreferencesStore.Load();
+            _softwareRenderingActive = _shellPreferences.SoftwareRendering;
+        }
+        catch (Exception ex)
+        {
+            _status.Text =
+                "Shell settings could not be loaded.\r\n\r\n" +
+                ShellPreferencesStore.SettingsPath + "\r\n\r\n" +
+                ex.Message;
+            return;
+        }
+
         string? url = await ResolveUrlAsync();
         if (string.IsNullOrWhiteSpace(url))
         {
@@ -104,7 +121,10 @@ internal sealed class MainForm : Form
                 "DuneServer", "WebView2");
             Directory.CreateDirectory(userData);
 
-            var env = await CoreWebView2Environment.CreateAsync(null, userData);
+            var options = _softwareRenderingActive
+                ? new CoreWebView2EnvironmentOptions("--disable-gpu")
+                : null;
+            var env = await CoreWebView2Environment.CreateAsync(null, userData, options);
             await _web.EnsureCoreWebView2Async(env);
         }
         catch (Exception ex)
@@ -133,8 +153,8 @@ internal sealed class MainForm : Form
 
         await InitDiagnosticLoggingAsync(core);
 
-        _web.Source = new Uri(url);
         _targetUrl = url;
+        _web.Source = new Uri(url);
     }
 
     // ----- Diagnostic logging -------------------------------------------------
@@ -401,56 +421,21 @@ internal sealed class MainForm : Form
     /// </summary>
     private void OnWebMessageReceived(object? sender, CoreWebView2WebMessageReceivedEventArgs e)
     {
-        string? action = null;
-        string? url = null;
-        try
-        {
-            // The portal sends a JS object via postMessage(obj). For non-string
-            // payloads WebView2 exposes the serialized JSON on WebMessageAsJson;
-            // TryGetWebMessageAsString() throws InvalidOperationException for
-            // object payloads (it only succeeds when JS posts a raw string).
-            string? json = e.WebMessageAsJson;
-            if (string.IsNullOrWhiteSpace(json))
-            {
-                // Fallback: a caller that posts a JSON *string* (e.g.
-                // postMessage(JSON.stringify(obj))) — read the inner string and
-                // re-parse it. Wrapped in try/catch so a plain-text payload
-                // doesn't blow up the handler.
-                try { json = e.TryGetWebMessageAsString(); } catch { return; }
-                if (string.IsNullOrWhiteSpace(json)) return;
-            }
-            using var doc = System.Text.Json.JsonDocument.Parse(json);
-            var root = doc.RootElement;
+        if (!IsTrustedPortalSource(e.Source) ||
+            !TryReadWebMessage(e, out var message))
+            return;
 
-            // Unwrap one layer of string-encoded JSON if the caller stringified
-            // before posting. WebMessageAsJson returns "\"{\\\"action\\\"...}\""
-            // in that case, which parses to a JSON string, not an object.
-            if (root.ValueKind == System.Text.Json.JsonValueKind.String)
-            {
-                string inner = root.GetString() ?? string.Empty;
-                if (string.IsNullOrWhiteSpace(inner)) return;
-                using var inner_doc = System.Text.Json.JsonDocument.Parse(inner);
-                var inner_root = inner_doc.RootElement;
-                if (inner_root.ValueKind != System.Text.Json.JsonValueKind.Object) return;
-                if (inner_root.TryGetProperty("action", out var ia)) action = ia.GetString();
-                if (inner_root.TryGetProperty("url",    out var iu)) url    = iu.GetString();
-            }
-            else if (root.ValueKind == System.Text.Json.JsonValueKind.Object)
-            {
-                if (root.TryGetProperty("action", out var a)) action = a.GetString();
-                if (root.TryGetProperty("url",    out var u)) url    = u.GetString();
-            }
-            else
-            {
-                return;
-            }
-        }
-        catch
+        string? channel = GetStringProperty(message, "channel");
+        string? messageType = GetStringProperty(message, "type");
+        if (string.Equals(channel, "dune-shell", StringComparison.Ordinal) &&
+            !string.IsNullOrWhiteSpace(messageType))
         {
-            // Malformed payload — ignore. The portal is the only sender so
-            // this would mean a code bug rather than user input.
+            HandleShellMessage(message, messageType);
             return;
         }
+
+        string? action = GetStringProperty(message, "action");
+        string? url = GetStringProperty(message, "url");
 
         if (string.Equals(action, "open-and-close", StringComparison.OrdinalIgnoreCase))
         {
@@ -476,43 +461,15 @@ internal sealed class MainForm : Form
         else if (string.Equals(action, "pick-save-file", StringComparison.OrdinalIgnoreCase))
         {
             // Show a native Save As dialog and return the chosen path to the frontend.
-            string? id = null;
-            string? defaultName = null;
-            try
-            {
-                string? json = e.WebMessageAsJson;
-                if (!string.IsNullOrWhiteSpace(json))
-                {
-                    using var doc2 = System.Text.Json.JsonDocument.Parse(json);
-                    var r2 = doc2.RootElement.ValueKind == System.Text.Json.JsonValueKind.String
-                        ? System.Text.Json.JsonDocument.Parse(doc2.RootElement.GetString()!).RootElement
-                        : doc2.RootElement;
-                    if (r2.TryGetProperty("id", out var idProp)) id = idProp.GetString();
-                    if (r2.TryGetProperty("defaultName", out var dnProp)) defaultName = dnProp.GetString();
-                }
-            }
-            catch { /* best-effort parse */ }
+            string? id = GetStringProperty(message, "id");
+            string? defaultName = GetStringProperty(message, "defaultName");
             BeginInvoke(new Action(() => ShowSaveDialog(id, defaultName)));
         }
         else if (string.Equals(action, "pick-open-file", StringComparison.OrdinalIgnoreCase))
         {
             // Show a native Open File dialog and return the chosen path to the frontend.
-            string? id = null;
-            string? filter = null;
-            try
-            {
-                string? json = e.WebMessageAsJson;
-                if (!string.IsNullOrWhiteSpace(json))
-                {
-                    using var doc2 = System.Text.Json.JsonDocument.Parse(json);
-                    var r2 = doc2.RootElement.ValueKind == System.Text.Json.JsonValueKind.String
-                        ? System.Text.Json.JsonDocument.Parse(doc2.RootElement.GetString()!).RootElement
-                        : doc2.RootElement;
-                    if (r2.TryGetProperty("id", out var idProp)) id = idProp.GetString();
-                    if (r2.TryGetProperty("filter", out var fProp)) filter = fProp.GetString();
-                }
-            }
-            catch { /* best-effort parse */ }
+            string? id = GetStringProperty(message, "id");
+            string? filter = GetStringProperty(message, "filter");
             BeginInvoke(new Action(() => ShowOpenDialog(id, filter)));
         }
         else if (string.Equals(action, "pick-folder", StringComparison.OrdinalIgnoreCase))
@@ -520,25 +477,184 @@ internal sealed class MainForm : Form
             // Show a native Folder Browser dialog and return the chosen path to
             // the frontend. Used by the "Local Backup Mirror" card on the
             // Database page.
-            string? id = null;
-            string? initialPath = null;
-            string? description = null;
+            string? id = GetStringProperty(message, "id");
+            string? initialPath = GetStringProperty(message, "initialPath");
+            string? description = GetStringProperty(message, "description");
+            BeginInvoke(new Action(() => ShowFolderDialog(id, initialPath, description)));
+        }
+    }
+
+    private bool IsTrustedPortalSource(string? source)
+    {
+        if (!Uri.TryCreate(source, UriKind.Absolute, out var sourceUri) ||
+            !Uri.TryCreate(_targetUrl, UriKind.Absolute, out var targetUri))
+            return false;
+
+        return string.Equals(sourceUri.Scheme, targetUri.Scheme, StringComparison.OrdinalIgnoreCase) &&
+               string.Equals(sourceUri.IdnHost, targetUri.IdnHost, StringComparison.OrdinalIgnoreCase) &&
+               sourceUri.Port == targetUri.Port;
+    }
+
+    private static string? GetStringProperty(
+        System.Text.Json.JsonElement message,
+        string propertyName)
+    {
+        return message.ValueKind == System.Text.Json.JsonValueKind.Object &&
+               message.TryGetProperty(propertyName, out var property) &&
+               property.ValueKind == System.Text.Json.JsonValueKind.String
+            ? property.GetString()
+            : null;
+    }
+
+    private static bool TryReadWebMessage(
+        CoreWebView2WebMessageReceivedEventArgs e,
+        out System.Text.Json.JsonElement message)
+    {
+        message = default;
+        try
+        {
+            string? json = e.WebMessageAsJson;
+            if (string.IsNullOrWhiteSpace(json))
+            {
+                try { json = e.TryGetWebMessageAsString(); } catch { return false; }
+            }
+            if (string.IsNullOrWhiteSpace(json)) return false;
+
+            using var doc = System.Text.Json.JsonDocument.Parse(json);
+            var root = doc.RootElement;
+            if (root.ValueKind == System.Text.Json.JsonValueKind.String)
+            {
+                string? inner = root.GetString();
+                if (string.IsNullOrWhiteSpace(inner)) return false;
+                using var innerDoc = System.Text.Json.JsonDocument.Parse(inner);
+                if (innerDoc.RootElement.ValueKind != System.Text.Json.JsonValueKind.Object)
+                    return false;
+                message = innerDoc.RootElement.Clone();
+                return true;
+            }
+
+            if (root.ValueKind != System.Text.Json.JsonValueKind.Object) return false;
+            message = root.Clone();
+            return true;
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
+    private void HandleShellMessage(System.Text.Json.JsonElement message, string? messageType)
+    {
+        string? requestId = GetStringProperty(message, "requestId");
+        if (string.IsNullOrWhiteSpace(requestId)) return;
+
+        if (string.Equals(messageType, "preferences.get", StringComparison.Ordinal))
+        {
+            PostPreferencesResult(requestId, true);
+            return;
+        }
+
+        if (string.Equals(messageType, "preferences.set", StringComparison.Ordinal))
+        {
             try
             {
-                string? json = e.WebMessageAsJson;
-                if (!string.IsNullOrWhiteSpace(json))
+                if (!message.TryGetProperty("changes", out var changes) ||
+                    changes.ValueKind != System.Text.Json.JsonValueKind.Object)
+                    throw new InvalidDataException("The preferences update is missing its changes object.");
+
+                var next = new ShellPreferences
                 {
-                    using var doc2 = System.Text.Json.JsonDocument.Parse(json);
-                    var r2 = doc2.RootElement.ValueKind == System.Text.Json.JsonValueKind.String
-                        ? System.Text.Json.JsonDocument.Parse(doc2.RootElement.GetString()!).RootElement
-                        : doc2.RootElement;
-                    if (r2.TryGetProperty("id", out var idProp)) id = idProp.GetString();
-                    if (r2.TryGetProperty("initialPath", out var ipProp)) initialPath = ipProp.GetString();
-                    if (r2.TryGetProperty("description", out var dProp)) description = dProp.GetString();
+                    SoftwareRendering = _shellPreferences?.SoftwareRendering ?? false,
+                };
+                if (changes.TryGetProperty("softwareRendering", out var softwareRendering))
+                {
+                    if (softwareRendering.ValueKind is not
+                        (System.Text.Json.JsonValueKind.True or System.Text.Json.JsonValueKind.False))
+                        throw new InvalidDataException("softwareRendering must be true or false.");
+                    next.SoftwareRendering = softwareRendering.GetBoolean();
                 }
+
+                ShellPreferencesStore.Save(next);
+                _shellPreferences = next;
+                PostPreferencesResult(requestId, true);
             }
-            catch { /* best-effort parse */ }
-            BeginInvoke(new Action(() => ShowFolderDialog(id, initialPath, description)));
+            catch (Exception ex)
+            {
+                PostPreferencesResult(requestId, false, ex.Message);
+            }
+            return;
+        }
+
+        if (string.Equals(messageType, "shell.restart", StringComparison.Ordinal))
+        {
+            PostShellResponse(requestId, "shell.restart.result", true);
+            BeginInvoke(new Action(RestartShell));
+        }
+    }
+
+    private void PostPreferencesResult(string requestId, bool ok, string? error = null)
+    {
+        var preferences = _shellPreferences ?? new ShellPreferences();
+        var payload = new System.Text.Json.Nodes.JsonObject
+        {
+            ["channel"] = "dune-shell",
+            ["type"] = "preferences.result",
+            ["requestId"] = requestId,
+            ["ok"] = ok,
+            ["error"] = error,
+            ["preferences"] = new System.Text.Json.Nodes.JsonObject
+            {
+                ["softwareRendering"] = preferences.SoftwareRendering,
+            },
+            ["active"] = new System.Text.Json.Nodes.JsonObject
+            {
+                ["softwareRendering"] = _softwareRenderingActive,
+            },
+            ["restartRequired"] = preferences.SoftwareRendering != _softwareRenderingActive,
+        };
+        _web.CoreWebView2?.PostWebMessageAsJson(payload.ToJsonString());
+    }
+
+    private void PostShellResponse(string requestId, string type, bool ok, string? error = null)
+    {
+        var payload = new System.Text.Json.Nodes.JsonObject
+        {
+            ["channel"] = "dune-shell",
+            ["type"] = type,
+            ["requestId"] = requestId,
+            ["ok"] = ok,
+            ["error"] = error,
+        };
+        _web.CoreWebView2?.PostWebMessageAsJson(payload.ToJsonString());
+    }
+
+    private void RestartShell()
+    {
+        try
+        {
+            string executable = Environment.ProcessPath
+                ?? throw new InvalidOperationException("Could not locate the shell executable.");
+            var startInfo = new ProcessStartInfo
+            {
+                FileName = executable,
+                UseShellExecute = true,
+            };
+            startInfo.ArgumentList.Add("--restart-after-pid");
+            startInfo.ArgumentList.Add(Environment.ProcessId.ToString());
+            _ = Process.Start(startInfo)
+                ?? throw new InvalidOperationException("Windows did not start the replacement shell.");
+
+            _restartShellOnly = true;
+            Close();
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show(
+                "The shell preference was saved, but the shell could not restart.\r\n\r\n" +
+                ex.Message + "\r\n\r\nClose and reopen Dune Server Tool to apply it.",
+                "Shell restart failed",
+                MessageBoxButtons.OK,
+                MessageBoxIcon.Error);
         }
     }
 

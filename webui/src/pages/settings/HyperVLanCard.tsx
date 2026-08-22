@@ -137,10 +137,12 @@ export function HyperVLanCard() {
   const tIcon = test == null ? 'Info' : test.ok ? 'CheckCircle2' : 'AlertTriangle'
 
   return (
-    <div className="card mb-4">
+    <div className="card mb-4" data-section-nav-id="settings.hyperVLan" data-section-nav-label="Hyper-V over LAN">
       <button
         type="button"
         onClick={() => setOpen(o => !o)}
+        aria-expanded={open}
+        data-section-nav-toggle
         className="w-full flex items-center justify-between gap-3 p-6 text-left"
       >
         <div className="flex items-center gap-2 min-w-0">

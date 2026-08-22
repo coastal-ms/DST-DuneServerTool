@@ -57,6 +57,15 @@ Describe 'Invoke-DstRedaction' -Tag 'Pure' {
         $out | Should -Be 'hello <user> world'
     }
 
+    It 'redacts PowerShell transcript user and machine identity headers' {
+        $raw = "Username: DOMAIN\Alice`nRunAs User: DOMAIN\Alice`nMachine: DESKTOP-SECRET (Windows)"
+        $out = Invoke-DstRedaction -Text $raw -WindowsUser 'Alice'
+        $out | Should -Match 'Username: <redacted>'
+        $out | Should -Match 'RunAs User: <redacted>'
+        $out | Should -Match 'Machine: <redacted>'
+        $out | Should -Not -Match 'DOMAIN|DESKTOP-SECRET|Alice'
+    }
+
     It 'is a no-op on empty input' {
         Invoke-DstRedaction -Text '' | Should -Be ''
     }
@@ -88,6 +97,14 @@ Describe 'ConvertTo-DstWorldRestartDiagnosticState' -Tag 'Pure' {
 }
 
 Describe 'Diagnostics route registration' -Tag 'Pure' {
+    It 'collects only updater text evidence through the redaction path' {
+        $routeFile = Join-Path (Get-DstRepoRoot) 'app\server\routes\Diagnostics.ps1'
+        $source = Get-Content -LiteralPath $routeFile -Raw
+        $source | Should -Match 'update-result-\[A-Za-z0-9\._-\]'
+        $source | Should -Match 'Invoke-DstRedaction -Text \$tail'
+        $source | Should -Not -Match "Get-ChildItem.+DuneServerSetup.+included"
+    }
+
     It 'registers failed database operation cleanup at script scope' {
         $routeFile = Join-Path (Get-DstRepoRoot) 'app\server\routes\Diagnostics.ps1'
         $tokens = $null

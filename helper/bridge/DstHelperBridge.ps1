@@ -46,7 +46,8 @@ param(
     # needs no admin / URL ACL and is reached remotely only via the local
     # cloudflared quick tunnel. Set to 'http://+:<port>/' only for legacy setups
     # that front the bridge with their own firewall-scoped exposure.
-    [string]$Prefix
+    [string]$Prefix,
+    [switch]$NoStart
 )
 
 $ErrorActionPreference = 'Stop'
@@ -59,6 +60,9 @@ $script:HopByHop = @(
     'te', 'trailers', 'transfer-encoding', 'upgrade',
     'host', 'content-length'
 )
+$script:BridgeVersion = '2.0.0'
+$script:BridgeProtocolVersion = '2'
+$script:BridgeInternalHeaders = @('x-dune-bridge-protocol', 'x-dune-original-authority', 'x-dune-bridge-proof')
 
 # Shared HttpClient — keep-alive + connection pooling to localhost.
 $script:HttpClient = [System.Net.Http.HttpClient]::new()
@@ -120,6 +124,51 @@ function Send-JsonResponse {
     $Response.OutputStream.Close()
 }
 
+function Get-DuneBridgeOriginSecret {
+    $directory = Join-Path $env:APPDATA 'DuneServer'
+    $path = Join-Path $directory 'bridge-origin.key'
+    if (-not (Test-Path -LiteralPath $directory)) {
+        New-Item -ItemType Directory -Path $directory -Force | Out-Null
+    }
+    if (-not (Test-Path -LiteralPath $path)) {
+        $bytes = [byte[]]::new(32)
+        [Security.Cryptography.RandomNumberGenerator]::Fill($bytes)
+        $secret = [Convert]::ToBase64String($bytes)
+        try {
+            $stream = [IO.File]::Open($path, [IO.FileMode]::CreateNew, [IO.FileAccess]::Write, [IO.FileShare]::None)
+            try {
+                $data = [Text.Encoding]::ASCII.GetBytes($secret)
+                $stream.Write($data, 0, $data.Length)
+            } finally { $stream.Dispose() }
+        } catch [IO.IOException] {}
+    }
+    foreach ($attempt in 1..10) {
+        try {
+            $value = (Get-Content -LiteralPath $path -Raw -Encoding ascii -ErrorAction Stop).Trim()
+            if ([Convert]::FromBase64String($value).Length -eq 32) { return $value }
+        } catch {}
+        Start-Sleep -Milliseconds 20
+    }
+    throw 'Bridge origin secret is unavailable.'
+}
+
+function Set-DuneBridgeForwardingHeaders {
+    param($InboundRequest, [System.Net.Http.HttpRequestMessage]$OutboundRequest)
+    foreach ($name in $InboundRequest.Headers.AllKeys) {
+        $normalizedName = $name.ToLowerInvariant()
+        if ($script:HopByHop -contains $normalizedName -or $script:BridgeInternalHeaders -contains $normalizedName) { continue }
+        $values = $InboundRequest.Headers.GetValues($name)
+        if (-not $OutboundRequest.Headers.TryAddWithoutValidation($name, $values)) {
+            if ($OutboundRequest.Content) {
+                [void]$OutboundRequest.Content.Headers.TryAddWithoutValidation($name, $values)
+            }
+        }
+    }
+    [void]$OutboundRequest.Headers.TryAddWithoutValidation('X-Dune-Bridge-Protocol', $script:BridgeProtocolVersion)
+    [void]$OutboundRequest.Headers.TryAddWithoutValidation('X-Dune-Original-Authority', [string]$InboundRequest.UserHostName)
+    [void]$OutboundRequest.Headers.TryAddWithoutValidation('X-Dune-Bridge-Proof', (Get-DuneBridgeOriginSecret))
+}
+
 function Invoke-Proxy {
     param(
         [System.Net.HttpListenerContext]$Context,
@@ -149,17 +198,7 @@ function Invoke-Proxy {
         $httpReq.Content = $content
     }
 
-    # Copy headers (skipping hop-by-hop + host/content-length).
-    foreach ($name in $req.Headers.AllKeys) {
-        if ($script:HopByHop -contains $name.ToLowerInvariant()) { continue }
-        $values = $req.Headers.GetValues($name)
-        # Try request headers first, fall back to content headers.
-        if (-not $httpReq.Headers.TryAddWithoutValidation($name, $values)) {
-            if ($httpReq.Content) {
-                [void]$httpReq.Content.Headers.TryAddWithoutValidation($name, $values)
-            }
-        }
-    }
+    Set-DuneBridgeForwardingHeaders -InboundRequest $req -OutboundRequest $httpReq
 
     # Send and stream the response back.
     $httpRes = $script:HttpClient.SendAsync(
@@ -373,11 +412,20 @@ function Invoke-Request {
         }
 
         if ($path -eq '/_dst/health') {
+            $backendHealthy = $true
+            $backendError = ''
             try {
                 $null = Get-CurrentDst
-                Send-JsonResponse -Response $res -StatusCode 200 -Body @{ ok = $true }
             } catch {
-                Send-JsonResponse -Response $res -StatusCode 503 -Body @{ ok = $false; error = $_.Exception.Message }
+                $backendHealthy = $false
+                $backendError = $_.Exception.Message
+            }
+            Send-JsonResponse -Response $res -StatusCode 200 -Body @{
+                ok = $true
+                bridgeVersion = $script:BridgeVersion
+                protocolVersion = $script:BridgeProtocolVersion
+                backendHealthy = $backendHealthy
+                backendError = $backendError
             }
             return
         }
@@ -450,6 +498,7 @@ function Start-Bridge {
 # binding; its supervisor simply retries on its next loop. We must NOT call
 # `exit` here — the supervisor invokes this script with `&` in its own process,
 # so `exit` would kill the supervisor too; `return` cleanly ends only this script.
+if ($NoStart) { return }
 $mutexName = "Global\DstHelperBridge_$Port"
 $createdNew = $false
 $bridgeMutex = $null

@@ -165,10 +165,11 @@ export function RemoteAccessCard() {
   }
 
   return (
-    <div className="card mb-4">
+    <div className="card mb-4" data-section-nav-id="settings.remoteAccess" data-section-nav-label="Remote Access">
       <button
         type="button"
         onClick={() => setExpanded(v => !v)}
+        data-section-nav-toggle
         className="w-full flex items-center justify-between px-6 py-4 text-left hover:bg-surface-2/40 rounded-lg transition-colors"
         aria-expanded={expanded}
       >
@@ -277,6 +278,35 @@ export function RemoteAccessCard() {
                 <p className="text-xs text-text-dim mt-1">
                   The hostname you mapped in Cloudflare. Stored for documentation —
                   DST doesn&apos;t configure cloudflared itself.
+                </p>
+              </div>
+
+              <div className="grid gap-3 sm:grid-cols-2">
+                <div>
+                  <label htmlFor="ra-team-domain" className="block text-sm font-medium mb-1">Cloudflare Access team domain</label>
+                  <input
+                    id="ra-team-domain"
+                    type="text"
+                    value={acl.cloudflareTeamDomain ?? ''}
+                    onChange={e => updateAcl({ cloudflareTeamDomain: e.target.value })}
+                    className="w-full px-3 py-2 rounded-lg bg-surface-2 border border-border text-text"
+                    placeholder="your-team.cloudflareaccess.com"
+                  />
+                </div>
+                <div>
+                  <label htmlFor="ra-audience" className="block text-sm font-medium mb-1">Access application AUD tag</label>
+                  <input
+                    id="ra-audience"
+                    type="text"
+                    value={acl.cloudflareAudience ?? ''}
+                    onChange={e => updateAcl({ cloudflareAudience: e.target.value })}
+                    className="w-full px-3 py-2 rounded-lg bg-surface-2 border border-border text-text font-mono"
+                    placeholder="Application Audience (AUD)"
+                  />
+                </div>
+                <p className="sm:col-span-2 text-xs text-text-dim">
+                  Required for the Cloudflare ACL path. DST validates the signed Access JWT issuer,
+                  audience, lifetime, and signature; the raw email header is never trusted.
                 </p>
               </div>
 

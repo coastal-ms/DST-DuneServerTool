@@ -27,11 +27,103 @@
 [CmdletBinding()]
 param(
     [int]$Port = 47900,
-    [string]$TaskName = 'DST Friend Helper Bridge'
+    [string]$TaskName = 'DST Friend Helper Bridge',
+    [switch]$NoInstall
 )
 
 $ErrorActionPreference = 'Stop'
 Set-StrictMode -Version Latest
+$script:ExpectedBridgeVersion = '2.0.0'
+$script:ExpectedBridgeProtocol = '2'
+
+function ConvertFrom-DuneWindowsCommandLine {
+    param([string]$CommandLine)
+    if ([string]::IsNullOrWhiteSpace($CommandLine)) { return @() }
+    if (([regex]::Matches($CommandLine, '"').Count % 2) -ne 0) { return @() }
+    $tokens = @()
+    foreach ($match in [regex]::Matches($CommandLine, '(?:"([^"]*)"|(\S+))')) {
+        $tokens += if ($match.Groups[1].Success) { $match.Groups[1].Value } else { $match.Groups[2].Value }
+    }
+    return $tokens
+}
+
+function Test-DuneBridgePowerShellInvocationTarget {
+    param(
+        [string]$CommandLine,
+        [string[]]$ScriptPaths,
+        [int]$ProcessId
+    )
+    if ($ProcessId -eq $PID) { return $false }
+    $arguments = @(ConvertFrom-DuneWindowsCommandLine $CommandLine)
+    if ($arguments.Count -lt 2) { return $false }
+    $resolvedPaths = @($ScriptPaths | ForEach-Object {
+        if ($_ -and (Test-Path -LiteralPath $_)) {
+            [IO.Path]::GetFullPath((Resolve-Path -LiteralPath $_).Path)
+        } elseif ($_) {
+            [IO.Path]::GetFullPath($_)
+        }
+    })
+    $isTarget = {
+        param([string]$Candidate)
+        try {
+            $fullPath = [IO.Path]::GetFullPath($Candidate)
+            return @($resolvedPaths | Where-Object { $_ -ieq $fullPath }).Count -gt 0
+        } catch { return $false }
+    }
+
+    # Legacy direct form: pwsh.exe "...\DstHelperBridge.ps1" ...
+    if (& $isTarget $arguments[1]) { return $true }
+
+    $fileIndexes = @()
+    for ($i = 1; $i -lt $arguments.Count; $i++) {
+        if ($arguments[$i] -ieq '-File') { $fileIndexes += $i }
+        if ($arguments[$i] -in @('-Command', '-EncodedCommand', '-c', '-e')) { return $false }
+    }
+    if ($fileIndexes.Count -ne 1) { return $false }
+    $fileIndex = $fileIndexes[0]
+    if ($fileIndex + 1 -ge $arguments.Count) { return $false }
+    return (& $isTarget $arguments[$fileIndex + 1])
+}
+
+function Get-DuneBridgeRuntimeProcessIds {
+    param([string[]]$ScriptPaths)
+    if (@($ScriptPaths | Where-Object { $_ }).Count -eq 0) { return @() }
+
+    $matches = foreach ($process in @(Get-CimInstance Win32_Process -ErrorAction SilentlyContinue)) {
+        if ($process.Name -notin @('pwsh.exe', 'powershell.exe') -or -not $process.CommandLine) { continue }
+        if (Test-DuneBridgePowerShellInvocationTarget `
+            -CommandLine ([string]$process.CommandLine) `
+            -ScriptPaths $ScriptPaths `
+            -ProcessId ([int]$process.ProcessId)) {
+            [int]$process.ProcessId
+        }
+    }
+    return @($matches | Sort-Object -Unique)
+}
+
+function Stop-DuneBridgeRuntime {
+    param([string[]]$ScriptPaths)
+    foreach ($processId in @(Get-DuneBridgeRuntimeProcessIds -ScriptPaths $ScriptPaths)) {
+        Stop-Process -Id $processId -Force -ErrorAction SilentlyContinue
+    }
+}
+
+function Assert-DuneBridgeHealth {
+    param([int]$Port, [int]$TimeoutSeconds = 20)
+    $deadline = (Get-Date).AddSeconds($TimeoutSeconds)
+    do {
+        try {
+            $health = Invoke-RestMethod -Uri "http://127.0.0.1:$Port/_dst/health" -TimeoutSec 2
+            if ($health.ok -eq $true -and
+                [string]$health.bridgeVersion -eq $script:ExpectedBridgeVersion -and
+                [string]$health.protocolVersion -eq $script:ExpectedBridgeProtocol) {
+                return $health
+            }
+        } catch {}
+        Start-Sleep -Milliseconds 500
+    } while ((Get-Date) -lt $deadline)
+    throw "Bridge did not report expected health identity (version $script:ExpectedBridgeVersion, protocol $script:ExpectedBridgeProtocol)."
+}
 
 function Ensure-ScheduledTask {
     param(
@@ -129,6 +221,14 @@ $bridgeScript = Join-Path $PSScriptRoot 'DstHelperBridge.ps1'
 if (-not (Test-Path -LiteralPath $bridgeScript)) {
     throw "DstHelperBridge.ps1 not found next to installer at $bridgeScript"
 }
+if ($NoInstall) { return }
+
+$dataDir = Join-Path $env:LOCALAPPDATA 'DuneServer'
+$supervisorScript = Join-Path $dataDir 'bridge-supervisor.ps1'
+if (Get-ScheduledTask -TaskName $TaskName -ErrorAction SilentlyContinue) {
+    Stop-ScheduledTask -TaskName $TaskName -ErrorAction SilentlyContinue
+}
+Stop-DuneBridgeRuntime -ScriptPaths @($supervisorScript, $bridgeScript)
 
 # Best-effort cleanup of the legacy all-interfaces exposure from older
 # (Tailscale-era) installs: the firewall rule and URL ACL are no longer used now
@@ -149,9 +249,11 @@ Write-Host "  Script:        $bridgeScript"
 Write-Host ""
 Write-Host "Starting the task now..."
 Start-ScheduledTask -TaskName $TaskName
-Start-Sleep -Seconds 2
+Start-Sleep -Milliseconds 500
 $state = (Get-ScheduledTask -TaskName $TaskName).State
 Write-Host "  Task state:    $state"
+$health = Assert-DuneBridgeHealth -Port $Port
+Write-Host "  Bridge:        $($health.bridgeVersion) (protocol $($health.protocolVersion))"
 Write-Host ""
 Write-Host "Verify with:"
 Write-Host "  curl http://127.0.0.1:$Port/_dst/health"

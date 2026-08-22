@@ -14,6 +14,11 @@ param(
     [switch]$SkipShellBuild,
     [switch]$SkipSoloBuild,
     [switch]$SkipVersionCheck,
+    # Explicit artifact identity. Normal release/local builds default stable.
+    # Test candidates must pass -Prerelease; branch names are never inferred.
+    [switch]$Prerelease,
+    [string]$BuildCommit = '',
+    [string]$BuildTag = '',
     # Build the raw artifacts (webui + DuneServer.exe + DuneShell.exe +
     # DuneSoloDb.exe) but STOP
     # before compiling the Inno Setup installer. Used by the signed-release CI
@@ -37,6 +42,23 @@ $outDir     = Join-Path $appRoot 'installer\output'
 $installer  = Join-Path $outDir 'DuneServerSetup.exe'
 $soloProj   = Join-Path $appRoot 'tools\DuneSoloDb\DuneSoloDb.csproj'
 $soloExe    = Join-Path $appRoot 'tools\DuneSoloDb\bin\Release\net10.0-windows\win-x64\publish\DuneSoloDb.exe'
+$buildHelpers = Join-Path $appRoot 'build\BuildHelpers.ps1'
+
+$null = . $buildHelpers
+$repoKey = [Convert]::ToHexString(
+    [Security.Cryptography.SHA256]::HashData(
+        [Text.Encoding]::UTF8.GetBytes($repoRoot.ToLowerInvariant()))).Substring(0, 16)
+$buildMutex = [Threading.Mutex]::new($false, "DST-BuildInstaller-$repoKey")
+$buildMutexOwned = $false
+try {
+    try {
+        $buildMutexOwned = $buildMutex.WaitOne(0)
+    } catch [Threading.AbandonedMutexException] {
+        $buildMutexOwned = $true
+    }
+    if (-not $buildMutexOwned) {
+        throw 'Another installer build is already running for this checkout.'
+    }
 
 # ---------------------------------------------------------------------------
 # Pre-flight: version-stamp sync check.
@@ -62,6 +84,7 @@ if (-not $SkipVersionCheck) {
         if (-not (Test-Path -LiteralPath $vf.Path)) {
             throw "Version-stamp file not found: $($vf.Path)"
         }
+
         $m = Select-String -Path $vf.Path -Pattern $vf.Pattern -List
         if (-not $m) {
             throw "Could not find version stamp in $($vf.Path) using pattern: $($vf.Pattern)"
@@ -85,6 +108,42 @@ if (-not $SkipVersionCheck) {
     Write-Host "  All 5 stamps match: $($distinct[0])" -ForegroundColor Green
     Write-Host ""
 }
+
+# Resolve immutable artifact metadata without changing any version stamp.
+if (-not $BuildCommit) {
+    try { $BuildCommit = (& git -C $repoRoot rev-parse HEAD 2>$null).Trim() } catch { $BuildCommit = '' }
+}
+$BuildCommit = $BuildCommit.Trim().ToLowerInvariant()
+if ($BuildCommit -and $BuildCommit -notmatch '^[0-9a-f]{7,40}$') {
+    throw 'BuildCommit must be a 7-40 character hexadecimal Git commit id.'
+}
+$BuildTag = $BuildTag.Trim()
+if ($BuildTag -and $BuildTag -notmatch '^v?\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$') {
+    throw 'BuildTag must be a release tag such as v14.0.0 or v14.0.0-test6.'
+}
+if ($BuildTag) {
+    $dirty = @(& git -C $repoRoot status --porcelain --untracked-files=all)
+    if ($LASTEXITCODE -ne 0) {
+        throw 'Could not verify checkout cleanliness for tagged build.'
+    }
+    if ($dirty.Count -gt 0) {
+        throw "Tagged build $BuildTag requires a clean checkout."
+    }
+    $tagCommit = Get-DuneExistingTagCommit -RepoRoot $repoRoot -BuildTag $BuildTag
+    if ($tagCommit) {
+        $headCommit = (& git -C $repoRoot rev-parse HEAD 2>$null).Trim().ToLowerInvariant()
+        $tagCommit = $tagCommit.ToLowerInvariant()
+        if ($headCommit -ne $tagCommit) {
+            throw "Existing release tag $BuildTag resolves to $tagCommit, but checkout HEAD is $headCommit. Check out the exact tag before rebuilding its installer."
+        }
+        if ($BuildCommit -and $BuildCommit -ne $tagCommit) {
+            throw "BuildCommit $BuildCommit does not match existing release tag $BuildTag at $tagCommit."
+        }
+        $BuildCommit = $tagCommit
+    }
+}
+Write-Host "Build identity: prerelease=$([bool]$Prerelease), tag=$(if ($BuildTag) { $BuildTag } else { '(manual)' }), commit=$(if ($BuildCommit) { $BuildCommit } else { '(unknown)' })" -ForegroundColor Cyan
+Write-Host ''
 
 # Locate ISCC.exe
 $isccCandidates = @(
@@ -204,7 +263,7 @@ if (-not (Test-Path (Join-Path $webuiDist 'index.html'))) {
 # Build the .exe (unless skipped)
 if (-not $SkipExeBuild) {
     Write-Host "Building DuneServer.exe first..." -ForegroundColor Cyan
-    & (Join-Path $appRoot 'build\Build-Exe.ps1') -Quiet
+    & (Join-Path $appRoot 'build\Build-Exe.ps1') -Quiet -BuildCommit $BuildCommit -BuildTag $BuildTag -Prerelease:$Prerelease
     Write-Host ""
 }
 
@@ -288,4 +347,10 @@ Write-Host "  [x] dune-server.ps1: #Requires -RunAsAdministrator"               
 
 if ($Open) {
     Start-Process explorer.exe "/select,`"$installer`""
+}
+} finally {
+    if ($buildMutexOwned) {
+        try { $buildMutex.ReleaseMutex() } catch {}
+    }
+    $buildMutex.Dispose()
 }

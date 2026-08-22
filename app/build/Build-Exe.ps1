@@ -1,4 +1,4 @@
-# Build-Exe.ps1 - Compiles app/DuneServer.ps1 into DuneServer.exe via ps2exe.
+﻿# Build-Exe.ps1 - Compiles app/DuneServer.ps1 into DuneServer.exe via ps2exe.
 #
 # Output: app/build/output/DuneServer.exe
 #
@@ -33,7 +33,10 @@
 
 [CmdletBinding()]
 param(
-    [string]$Version = '13.8.4',
+    [string]$Version = '14.0.0',
+    [string]$BuildCommit = '',
+    [string]$BuildTag = '',
+    [switch]$Prerelease,
     [switch]$Quiet
 )
 
@@ -44,10 +47,42 @@ $src       = Join-Path $appRoot 'DuneServer.ps1'
 $icon      = Join-Path $appRoot 'assets\icon.ico'
 $outDir    = Join-Path $appRoot 'build\output'
 $outExe    = Join-Path $outDir 'DuneServer.exe'
+$buildId   = [guid]::NewGuid().ToString('N')
+$tempExe   = Join-Path $outDir "DuneServer.$buildId.tmp.exe"
+$compileSrc = Join-Path $outDir "DuneServer.$buildId.generated.ps1"
+$buildHelpers = Join-Path $PSScriptRoot 'BuildHelpers.ps1'
 
 if (-not (Test-Path $src))  { throw "Source not found: $src" }
 if (-not (Test-Path $icon)) { throw "Icon not found: $icon" }
+if (-not (Test-Path $buildHelpers)) { throw "Build helpers not found: $buildHelpers" }
 if (-not (Test-Path $outDir)) { New-Item -ItemType Directory -Force -Path $outDir | Out-Null }
+. $buildHelpers
+
+if (-not $BuildCommit) {
+    $repoRoot = Split-Path -Parent $appRoot
+    try { $BuildCommit = (& git -C $repoRoot rev-parse HEAD 2>$null).Trim() } catch { $BuildCommit = '' }
+}
+$BuildCommit = $BuildCommit.Trim().ToLowerInvariant()
+if ($BuildCommit -and $BuildCommit -notmatch '^[0-9a-f]{7,40}$') {
+    throw 'BuildCommit must be a 7-40 character hexadecimal Git commit id.'
+}
+$BuildTag = $BuildTag.Trim()
+if ($BuildTag -and $BuildTag -notmatch '^v?\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$') {
+    throw 'BuildTag must be a release tag such as v14.0.0 or v14.0.0-test6.'
+}
+$sourceText = Get-Content -LiteralPath $src -Raw
+$embedded = [ordered]@{
+    '^\$script:DuneBuildMetadataPresent\s*=\s*\$false\s*$' = '$script:DuneBuildMetadataPresent = $true'
+    "^\`$script:DuneBuildCommit\s*=\s*''\s*$" = "`$script:DuneBuildCommit = '$BuildCommit'"
+    '^\$script:DuneBuildPrerelease\s*=\s*\$false\s*$' = if ($Prerelease) { '$script:DuneBuildPrerelease = $true' } else { '$script:DuneBuildPrerelease = $false' }
+    "^\`$script:DuneBuildTag\s*=\s*''\s*$" = "`$script:DuneBuildTag = '$BuildTag'"
+}
+foreach ($entry in $embedded.GetEnumerator()) {
+    $matches = [regex]::Matches($sourceText, $entry.Key, [Text.RegularExpressions.RegexOptions]::Multiline)
+    if ($matches.Count -ne 1) { throw "Build metadata placeholder mismatch for pattern: $($entry.Key)" }
+    $sourceText = [regex]::Replace($sourceText, $entry.Key, [string]$entry.Value, [Text.RegularExpressions.RegexOptions]::Multiline)
+}
+[IO.File]::WriteAllText($compileSrc, $sourceText, [Text.UTF8Encoding]::new($true))
 
 # Ensure ps2exe is available
 if (-not (Get-Module -ListAvailable ps2exe)) {
@@ -58,7 +93,7 @@ Import-Module ps2exe -Force
 
 $verNum = "$Version.0"  # ps2exe wants 4-part version
 
-Write-Host "Compiling DuneServer.exe (v$Version)..." -ForegroundColor Cyan
+Write-Host "Compiling DuneServer.exe (v$Version; prerelease=$([bool]$Prerelease); tag=$BuildTag; commit=$BuildCommit)..." -ForegroundColor Cyan
 
 # Critical flags (v6.1.7):
 #   -noConsole=$false : console-subsystem EXE so child kubectl/ssh/etc. inherit
@@ -70,8 +105,8 @@ Write-Host "Compiling DuneServer.exe (v$Version)..." -ForegroundColor Cyan
 # the single-instance mutex check so subsequent shortcut clicks just open the
 # browser to the existing portal URL without prompting for UAC again.
 $ps2exeArgs = @{
-    InputFile      = $src
-    OutputFile     = $outExe
+    InputFile      = $compileSrc
+    OutputFile     = $tempExe
     IconFile       = $icon
     Title          = 'Dune Server'
     Description    = 'Dune Awakening server management - web portal'
@@ -83,10 +118,12 @@ $ps2exeArgs = @{
     STA            = $true
 }
 
-Invoke-ps2exe @ps2exeArgs
-
-if (-not (Test-Path $outExe)) {
-    throw "Compilation failed - output not produced: $outExe"
+try {
+    Invoke-ps2exe @ps2exeArgs
+    Publish-DuneBuildArtifact -TemporaryPath $tempExe -DestinationPath $outExe
+} finally {
+    Remove-Item -LiteralPath $tempExe -Force -ErrorAction SilentlyContinue
+    Remove-Item -LiteralPath $compileSrc -Force -ErrorAction SilentlyContinue
 }
 
 $size = [Math]::Round(((Get-Item $outExe).Length / 1KB), 1)

@@ -58,10 +58,11 @@ export function AppearanceCard() {
   }
 
   return (
-    <div className="card mb-4">
+    <div className="card mb-4" data-section-nav-id="settings.appearance" data-section-nav-label="Appearance">
       <button
         type="button"
         onClick={() => setExpanded(v => !v)}
+        data-section-nav-toggle
         className="w-full flex items-center justify-between px-6 py-4 text-left hover:bg-surface-2/40 rounded-lg transition-colors"
         aria-expanded={expanded}
       >

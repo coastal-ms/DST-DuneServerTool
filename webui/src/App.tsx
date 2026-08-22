@@ -21,6 +21,7 @@ import { isLocalViewer, isWindowsViewer } from './util/viewer'
 import { api } from './api/client'
 import { ReconnectOverlay } from './components/ReconnectOverlay'
 import { PageErrorBoundary } from './components/PageErrorBoundary'
+import { usePortalAccess } from './auth/portalAccess'
 
 // Wrap every route subtree in an error boundary so an unhandled render
 // exception on one page can't white-out the entire app. The boundary
@@ -32,6 +33,7 @@ function Boundary({ name, children }: { name: string; children: React.ReactNode 
 }
 
 export default function App() {
+  const { canAccessOwnerSurfaces, canAccessSetup } = usePortalAccess()
   // The free-form PowerShell page can run arbitrary commands on the host
   // as the DuneServer service user. It's safe locally (you're already on
   // the host with admin) but a foot-gun for remote viewers (a friend on the
@@ -67,8 +69,8 @@ export default function App() {
               ? <Boundary name="Terminal"><TerminalPage /></Boundary>
               : <Navigate to="/" replace />}
           />
-          <Route path="/gameconfig" element={<Boundary name="Game Config"><GameConfig /></Boundary>} />
-          <Route path="/experimental" element={<Boundary name="Experimental Lab"><GameConfig mode="experimental" /></Boundary>} />
+          <Route path="/gameconfig" element={canAccessOwnerSurfaces ? <Boundary name="Game Config"><GameConfig /></Boundary> : <Navigate to="/" replace />} />
+          <Route path="/experimental" element={canAccessOwnerSurfaces ? <Boundary name="Experimental Lab"><GameConfig mode="experimental" /></Boundary> : <Navigate to="/" replace />} />
           <Route path="/gameplay"   element={<Boundary name="Gameplay Admin"><GameplayEnvironment /></Boundary>} />
           <Route path="/broadcasts" element={<Boundary name="Broadcasts"><Broadcasts /></Boundary>} />
           <Route
@@ -77,13 +79,13 @@ export default function App() {
               ? <Boundary name="Solo Mode"><SoloMode /></Boundary>
               : <Navigate to="/" replace />}
           />
-          <Route path="/database"   element={<Boundary name="Database"><Database /></Boundary>} />
-          <Route path="/sietches"   element={<Boundary name="Sietches"><Sietches /></Boundary>} />
+          <Route path="/database"   element={canAccessOwnerSurfaces ? <Boundary name="Database"><Database /></Boundary> : <Navigate to="/" replace />} />
+          <Route path="/sietches"   element={canAccessOwnerSurfaces ? <Boundary name="Sietches"><Sietches /></Boundary> : <Navigate to="/" replace />} />
           <Route path="/dd-map"     element={<Boundary name="DD Seed Maps"><WickMaps /></Boundary>} />
           <Route path="/wick-maps"  element={<Boundary name="DD Seed Maps"><WickMaps /></Boundary>} />
           <Route path="/map-spinup" element={<Boundary name="Map SpinUp"><MapSpinUp /></Boundary>} />
-          <Route path="/settings"   element={<Boundary name="Settings"><Settings /></Boundary>} />
-          <Route path="/setup"      element={<Boundary name="Setup Wizard"><SetupWizard /></Boundary>} />
+          <Route path="/settings"   element={canAccessOwnerSurfaces ? <Boundary name="Settings"><Settings /></Boundary> : <Navigate to="/" replace />} />
+          <Route path="/setup"      element={canAccessSetup ? <Boundary name="Setup Wizard"><SetupWizard /></Boundary> : <Navigate to="/" replace />} />
           {/* /monitoring merged into Dashboard in v6.1 — redirect old path */}
           <Route path="/monitoring" element={<Boundary name="Dashboard"><Dashboard /></Boundary>} />
           <Route path="*"           element={<PageStub title="Not Found"   icon="HelpCircle"      description="No page at that path." phase="—" />} />
