@@ -50,24 +50,41 @@ function UpdatingPage({ toVersion }: { toVersion?: string }) {
     <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-slate-950 p-6">
       <div className="max-w-md w-full text-center">
         <div className="mx-auto mb-5 flex h-14 w-14 items-center justify-center rounded-full bg-amber-400/15">
-          <Icon name="Download" size={28} className="text-amber-300" />
+          <Icon name={offline ? 'CircleCheck' : 'Download'} size={28} className="text-amber-300" />
         </div>
         <h1 className="text-xl font-semibold text-amber-100">
-          {offline ? 'Installing update…' : 'Updating Dune Server Tool…'}
+          {offline ? 'Update installed' : 'Updating Dune Server Tool…'}
         </h1>
         {toVersion && (
           <p className="mt-1 text-sm text-amber-200/70">
-            {`Installing ${fmtToolVersion(toVersion)}`}
+            {offline ? `Now running ${fmtToolVersion(toVersion)}` : `Installing ${fmtToolVersion(toVersion)}`}
           </p>
         )}
 
-        <>
-          <p className="mt-5 text-sm leading-relaxed text-slate-300">
-            {offline
-              ? <>The backend is offline while installation completes. This does <strong className="text-white">not</strong> by itself confirm success.</>
-              : <>DST will close, install in the background, and <strong className="text-white">open the updated tool automatically</strong>.</>}
-          </p>
-          {!offline && (
+        {offline ? (
+          <>
+            <p className="mt-5 text-sm leading-relaxed text-slate-300">
+              A <strong className="text-white">new Dune Server Tool window has opened</strong> with the
+              updated tool. The old version is shut down.
+            </p>
+            <div className="mt-4 rounded-lg border border-amber-400/30 bg-amber-400/10 px-4 py-3 text-left">
+              <p className="text-sm font-semibold text-amber-100">You can now close:</p>
+              <ul className="mt-1 list-disc pl-5 text-sm text-slate-300 space-y-0.5">
+                <li><strong className="text-white">every Dune Server Tool browser tab/window</strong> (including this one)</li>
+                <li>any leftover <strong className="text-white">Dune Server Tool console (black) windows</strong></li>
+              </ul>
+              <p className="mt-2 text-xs text-amber-200/70">
+                They're all from the old version — closing them won't affect the new window.
+              </p>
+            </div>
+          </>
+        ) : (
+          <>
+            <p className="mt-5 text-sm leading-relaxed text-slate-300">
+              DST is updating automatically. It will close, install in the background,
+              and <strong className="text-white">open the updated tool automatically</strong>.
+              Approve the Windows prompt if one appears.
+            </p>
             <div className="mt-4 rounded-lg border border-amber-400/30 bg-amber-400/10 px-4 py-3 text-left">
               <p className="text-sm font-semibold text-amber-100">Once the new window opens:</p>
               <p className="mt-1 text-sm text-slate-300">
@@ -76,13 +93,13 @@ function UpdatingPage({ toVersion }: { toVersion?: string }) {
                 old version.
               </p>
             </div>
-          )}
             <div className="mt-6 flex items-center justify-center gap-2 text-amber-300/80">
               <span className="h-2 w-2 animate-pulse rounded-full bg-amber-400" />
               <span className="h-2 w-2 animate-pulse rounded-full bg-amber-400 [animation-delay:150ms]" />
               <span className="h-2 w-2 animate-pulse rounded-full bg-amber-400 [animation-delay:300ms]" />
             </div>
-        </>
+          </>
+        )}
       </div>
     </div>
   )
@@ -93,7 +110,6 @@ export function UpdateBanner() {
   const [installing, setInstalling] = useState(false)
   const [launched, setLaunched] = useState(false)
   const [launchedVersion, setLaunchedVersion] = useState<string | undefined>(undefined)
-  const [installMsg, setInstallMsg] = useState<string | null>(null)
   const [installErr, setInstallErr] = useState<string | null>(null)
   const [dismissed, setDismissed] = useState(false)
 
@@ -118,17 +134,14 @@ export function UpdateBanner() {
   const onInstall = async () => {
     setInstalling(true)
     setInstallErr(null)
-    setInstallMsg(null)
+    // Signal the reconnect overlay to stand down for this tab: the updater
+    // intentionally takes the server down, and <UpdatingPage> owns that UX.
+    ;(window as unknown as { __duneUpdating?: boolean }).__duneUpdating = true
     try {
-      const res = await installUpdate({ mode: 'interactive', source: 'banner' })
+      const res = await installUpdate({ mode: 'silent', source: 'banner' })
       if (res.launched) {
-        if (res.mode === 'silent') {
-          ;(window as unknown as { __duneUpdating?: boolean }).__duneUpdating = true
-          setLaunchedVersion(res.toVersion)
-          setLaunched(true)
-        } else {
-          setInstallMsg('Installer launched. Complete the visible wizard on the host PC.')
-        }
+        setLaunchedVersion(res.toVersion)
+        setLaunched(true)
       } else {
         setInstallErr(res.reason ?? 'Installer did not launch.')
         ;(window as unknown as { __duneUpdating?: boolean }).__duneUpdating = false
@@ -173,9 +186,6 @@ export function UpdateBanner() {
         )}
         {installErr && (
           <div className="mt-1 text-red-300 text-xs">{installErr}</div>
-        )}
-        {installMsg && (
-          <div className="mt-1 text-emerald-300 text-xs">{installMsg}</div>
         )}
       </div>
       <div className="flex items-center gap-2 shrink-0">

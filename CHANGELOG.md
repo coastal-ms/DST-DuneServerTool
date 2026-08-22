@@ -51,9 +51,9 @@ here cover everything those tags shipped.
 - Cloudflare Access identities now require validation of the signed Access JWT
   issuer, audience, lifetime, and signature before the existing email ACL is
   applied; the raw Cloudflare email header is no longer trusted.
-- The global Update Banner now launches the visible installer wizard, matching
-  Settings updates. This restores the reliable manual test-to-test upgrade path
-  instead of depending on hidden uninstall/relaunch behavior.
+- The global Update Banner now installs updates silently and relaunches DST
+  automatically, while every Settings-initiated update, reinstall, and Return
+  to Stable action continues to launch the visible installer wizard.
 - Test-build indicators now show the exact matching installed GitHub tag, or
   the installer-stamped source commit for a manually installed test candidate.
   Stale tags from a different core version are ignored.
