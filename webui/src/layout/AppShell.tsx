@@ -6,6 +6,7 @@ import { StatusBar } from './StatusBar'
 import { UpdateBanner } from '../components/UpdateBanner'
 import { DecoupleNoticeModal } from '../components/DecoupleNoticeModal'
 import { useSidebarCollapsed } from '../hooks/useSidebarCollapsed'
+import { usePortalAccess } from '../auth/portalAccess'
 
 // Routes that should render full-bleed below the menu bar — no sidebar, no
 // status bar, no update banner, no max-width / padding. Keep the top menu bar
@@ -13,6 +14,7 @@ import { useSidebarCollapsed } from '../hooks/useSidebarCollapsed'
 const IMMERSIVE_ROUTES = new Set<string>([])
 
 export function AppShell({ children }: { children: ReactNode }) {
+  const { canAccessOwnerSurfaces } = usePortalAccess()
   const { collapsed, toggle } = useSidebarCollapsed()
   const { pathname } = useLocation()
   const immersive = IMMERSIVE_ROUTES.has(pathname)
@@ -36,7 +38,7 @@ export function AppShell({ children }: { children: ReactNode }) {
       <div className="flex-1 flex overflow-hidden min-h-0">
         <Sidebar collapsed={collapsed} />
         <div className="flex-1 flex flex-col min-w-0">
-          <UpdateBanner />
+          {canAccessOwnerSurfaces && <UpdateBanner />}
           <StatusBar />
           <main className="flex-1 min-w-0 max-w-full overflow-x-hidden overflow-y-auto overscroll-y-contain">
             <div className="w-full min-w-0 max-w-7xl mx-auto px-3 pt-4 pb-[max(1rem,env(safe-area-inset-bottom))] sm:px-4 md:px-6 md:py-6">

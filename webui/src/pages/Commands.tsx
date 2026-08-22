@@ -27,11 +27,8 @@ import { useApi } from '../hooks/useApi'
 import { api } from '../api/client'
 import { isLocalViewer } from '../util/viewer'
 import type { Command, CommandsResponse } from '../api/types'
-
-// Commands that remote (Cloudflare-tunnel) viewers are allowed to see and run.
-// Everything else is hidden remotely and refused server-side. Keep in sync with
-// $remoteAllowedCommands in app/server/routes/Commands.ps1.
-const REMOTE_ALLOWED = new Set(['startup', 'start', 'restart', 'start-vm', 'reboot', 'apply-inis'])
+import { usePortalAuth } from '../auth/PortalAuthGate'
+import { canAccessCommand } from '../auth/commandAccess'
 
 type LaunchResult = {
   ok: boolean
@@ -265,6 +262,8 @@ function SectionTitle({
 // ---------- Page -----------------------------------------------------------
 
 export function Commands() {
+  const portalAuth = usePortalAuth()
+  const portalRole = portalAuth?.status.account?.role ?? null
   const { forceRefresh } = useStatus()
   const cmdsState = useApi<CommandsResponse>('/api/commands', { intervalMs: 30_000 })
 
@@ -342,12 +341,18 @@ export function Commands() {
   // commands (REMOTE_ALLOWED); the server enforces the same list on run.
   const grouped = useMemo(() => {
     const local = isLocalViewer()
-    return effective.sections.map(arr =>
+    const sections = effective.sections.map(arr =>
       arr.map(n => commandsByName.get(n))
         .filter((c): c is Command => Boolean(c))
-        .filter(c => local || REMOTE_ALLOWED.has(c.name))
+        .filter(c => canAccessCommand(c.name, local, portalRole))
     ) as [Command[], Command[], Command[]]
-  }, [effective.sections, commandsByName])
+    const ownerUpdate = commandsByName.get('update')
+    const updatePlaced = sections.some(section => section.some(command => command.name === 'update'))
+    if (!local && portalRole === 'owner' && ownerUpdate && !updatePlaced) {
+      sections[1] = [...sections[1], ownerUpdate]
+    }
+    return sections
+  }, [effective.sections, commandsByName, portalRole])
 
   // ---- Persistence -------------------------------------------------------
 

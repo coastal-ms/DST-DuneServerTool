@@ -26,7 +26,7 @@
 # Next launch of DuneServer.exe detects no surviving DuneShell.exe and treats
 # it as a kill+restart request (see DuneServer.ps1 second-instance branch).
 
-Register-DuneRoute -Method POST -Path '/api/portal/open-in-browser' -Inline -Handler {
+Register-DuneRoute -Method POST -Path '/api/portal/open-in-browser' -Inline -LocalOnly -Handler {
     param($req, $res, $routeParams, $body)
 
     if (Get-Command Set-DuneAppDetached -ErrorAction SilentlyContinue) {
@@ -73,7 +73,7 @@ Register-DuneRoute -Method POST -Path '/api/portal/open-in-browser' -Inline -Han
 # POST /api/portal/checkin — the freshly-opened external browser tab calls this
 # on load to prove it reached the local server. The app window polls
 # /api/portal/checkin-status and closes itself once this fires (issue #280).
-Register-DuneRoute -Method POST -Path '/api/portal/checkin' -Inline -Handler {
+Register-DuneRoute -Method POST -Path '/api/portal/checkin' -Inline -LocalOnly -Handler {
     param($req, $res, $routeParams, $body)
     if (Get-Command Set-DunePortalBrowserCheckin -ErrorAction SilentlyContinue) {
         Set-DunePortalBrowserCheckin
@@ -83,7 +83,7 @@ Register-DuneRoute -Method POST -Path '/api/portal/checkin' -Inline -Handler {
 
 # GET /api/portal/checkin-status — polled by the app window after it hands the
 # portal off to the browser. Returns checkedIn=true once the browser has loaded.
-Register-DuneRoute -Method GET -Path '/api/portal/checkin-status' -Inline -Handler {
+Register-DuneRoute -Method GET -Path '/api/portal/checkin-status' -Inline -LocalOnly -Handler {
     param($req, $res, $routeParams, $body)
     $checkedIn = $false
     if (Get-Command Test-DunePortalBrowserCheckin -ErrorAction SilentlyContinue) {
@@ -95,7 +95,7 @@ Register-DuneRoute -Method GET -Path '/api/portal/checkin-status' -Inline -Handl
 # POST /api/portal/reattach — the user cancelled the browser hand-off (the
 # browser couldn't reach the server). Clear the detach flag so closing the app
 # window tears the server down normally again, and drop any check-in marker.
-Register-DuneRoute -Method POST -Path '/api/portal/reattach' -Inline -Handler {
+Register-DuneRoute -Method POST -Path '/api/portal/reattach' -Inline -LocalOnly -Handler {
     param($req, $res, $routeParams, $body)
     if (Get-Command Clear-DuneAppDetached -ErrorAction SilentlyContinue) {
         Clear-DuneAppDetached

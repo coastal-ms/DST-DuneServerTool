@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { useNavigate, useLocation } from '../router'
 import { Icon } from '../components/Icon'
-import { NAV_ITEMS, GROUP_LABELS, GROUP_ORDER, type NavGroup } from '../nav'
+import { NAV_ITEMS, GROUP_ORDER, getVisibleGroupLabel, type NavGroup } from '../nav'
 import { useUpdateCheck } from '../hooks/useUpdateCheck'
 import { buildDiagnosticBundle, type DiagnosticBundle } from '../api/diagnostics'
 import { getAutostartState, setAutostartEnabled, type AutostartState } from '../api/autostart'
@@ -10,6 +10,7 @@ import { getServiceModeState, setServiceModeEnabled, type ServiceModeState } fro
 import { getConsoleState, setConsoleVisible, type ConsoleState } from '../api/console'
 import { isLocalViewer, isWindowsViewer } from '../util/viewer'
 import { isHorizontalSwipe, type TouchPoint } from '../util/mobileNavigationGesture'
+import { usePortalAccess } from '../auth/portalAccess'
 
 type MenuKey = NavGroup | 'help' | 'coffee'
 
@@ -24,6 +25,7 @@ type Props = {
 // System for cross-cutting commands like "Create GitHub Issue" and the
 // sidebar collapse toggle.
 export function MenuBar({ sidebarCollapsed, onToggleSidebar }: Props) {
+  const { canAccessOwnerSurfaces } = usePortalAccess()
   const navigate = useNavigate()
   const location = useLocation()
   const { data: upd } = useUpdateCheck()
@@ -223,6 +225,7 @@ export function MenuBar({ sidebarCollapsed, onToggleSidebar }: Props) {
   const onReportIssue = () => {
     setOpen(null)
     window.open(issueHref, '_blank', 'noopener,noreferrer')
+    if (!canAccessOwnerSurfaces) return
     setDiag({ status: 'building' })
     buildDiagnosticBundle()
       .then((result) => setDiag({ status: 'done', result }))
@@ -258,12 +261,15 @@ export function MenuBar({ sidebarCollapsed, onToggleSidebar }: Props) {
 
   const mobileGroups = GROUP_ORDER.map(group => ({
     key: group,
-    label: GROUP_LABELS[group],
     items: NAV_ITEMS
       .filter(item => item.group === group)
       .filter(item => !item.localOnly || isLocalViewer())
+      .filter(item => !item.ownerOnly || canAccessOwnerSurfaces)
       .filter(item => !item.windowsOnly || isWindowsViewer()),
-  })).filter(group => group.items.length > 0)
+  })).filter(group => group.items.length > 0).map(group => ({
+    ...group,
+    label: getVisibleGroupLabel(group.key, group.items),
+  }))
   const currentPage = NAV_ITEMS.find(item => isActive(item.to))?.label ?? 'Dune Server Tool'
 
   return (
@@ -297,8 +303,10 @@ export function MenuBar({ sidebarCollapsed, onToggleSidebar }: Props) {
         const items = NAV_ITEMS
           .filter(i => i.group === g)
           .filter(i => !i.localOnly || isLocalViewer())
+          .filter(i => !i.ownerOnly || canAccessOwnerSurfaces)
           .filter(i => !i.windowsOnly || isWindowsViewer())
         if (items.length === 0) return null
+        const groupLabel = getVisibleGroupLabel(g, items)
         // Single-item group (e.g. Server Health, which has only one page):
         // a dropdown with one entry is pure friction. Render the group
         // button as a direct link to that page instead. The button label
@@ -319,7 +327,7 @@ export function MenuBar({ sidebarCollapsed, onToggleSidebar }: Props) {
                     : 'text-text-muted hover:text-text hover:bg-surface-2/80'
                 }`}
               >
-                {GROUP_LABELS[g]}
+                {groupLabel}
               </button>
             </div>
           )
@@ -337,7 +345,7 @@ export function MenuBar({ sidebarCollapsed, onToggleSidebar }: Props) {
                   : 'text-text-muted hover:text-text hover:bg-surface-2/80'
               }`}
             >
-              {GROUP_LABELS[g]}
+              {groupLabel}
             </button>
             {isOpen && (
               <div className="absolute left-0 top-full mt-1 min-w-[200px] bg-surface border border-border rounded-xl p-1 shadow-xl shadow-black/40 z-50">
@@ -403,9 +411,13 @@ export function MenuBar({ sidebarCollapsed, onToggleSidebar }: Props) {
             >
               <Icon name="Github" size={14} className="mt-0.5" />
               <span className="flex-1">
-                <span className="block">Create GitHub Issue + Save Logs</span>
+                <span className="block">
+                  {canAccessOwnerSurfaces ? 'Create GitHub Issue + Save Logs' : 'Create GitHub Issue'}
+                </span>
                 <span className="block text-[11px] text-text-dim">
-                  Opens the issue form &amp; drops a redacted ZIP on your Desktop
+                  {canAccessOwnerSurfaces
+                    ? 'Opens the issue form & drops a redacted ZIP on your Desktop'
+                    : 'Opens the issue form without writing files on the host'}
                 </span>
               </span>
               <Icon name="ExternalLink" size={11} className="text-text-dim mt-1" />

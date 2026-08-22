@@ -14,7 +14,7 @@ function Test-DuneAutostartLoopbackRequest {
 }
 
 # GET /api/autostart — current state.
-Register-DuneRoute -Method GET -Path '/api/autostart' -Handler {
+Register-DuneRoute -Method GET -Path '/api/autostart' -LocalOnly -Handler {
     param($req, $res, $routeParams, $body)
     try {
         if (-not (Test-DuneAutostartLoopbackRequest $req)) {
@@ -29,7 +29,7 @@ Register-DuneRoute -Method GET -Path '/api/autostart' -Handler {
 }
 
 # POST /api/autostart  body: { enabled: bool }
-Register-DuneRoute -Method POST -Path '/api/autostart' -Handler {
+Register-DuneRoute -Method POST -Path '/api/autostart' -LocalOnly -Handler {
     param($req, $res, $routeParams, $body)
     try {
         if (-not (Test-DuneAutostartLoopbackRequest $req)) {

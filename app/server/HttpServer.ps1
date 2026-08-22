@@ -116,6 +116,62 @@ function Test-DuneLocalOnlyRequest {
     return $true
 }
 
+function Test-DunePortalOwnerOnlyPath {
+    param([string]$Path, [string]$Method = 'GET')
+
+    if ($Path -eq '/api/gameconfig/spicefields' -or $Path.StartsWith('/api/gameconfig/spicefields/')) {
+        return $false
+    }
+
+    foreach ($prefix in @(
+        '/api/gameconfig',
+        '/api/db',
+        '/api/sietches',
+        '/api/config',
+        '/api/remote-access',
+        '/api/public-ip',
+        '/api/system',
+        '/api/mobile',
+        '/api/fls-token',
+        '/api/autostart',
+        '/api/service-mode',
+        '/api/console',
+        '/api/restart-schedule',
+        '/api/dune-admin-cache'
+    )) {
+        if ($Path -eq $prefix -or $Path.StartsWith("$prefix/")) { return $true }
+    }
+
+    return $Path -in @(
+        '/api/server/name',
+        '/api/maps/fix-partitions',
+        '/api/diagnostics/bundle',
+        '/api/diagnostics/cleanup-old-images',
+        '/api/diagnostics/cleanup-failed-database-operations',
+        '/api/gameplay/players/fresh-start/snapshots-path',
+        '/api/commands/layout',
+        '/api/commands/layout/reset',
+        '/api/update/migration-notice',
+        '/api/update/prereleases',
+        '/api/update/install',
+        '/api/update/migration-notice/ack'
+    )
+}
+
+function Test-DunePortalOwnerAccess {
+    param(
+        [bool]$AccountMode,
+        [bool]$IsLocalRequest,
+        $PortalSessionAuth
+    )
+    if (-not $AccountMode -or $IsLocalRequest) { return $true }
+    return (
+        $PortalSessionAuth -and
+        [bool]$PortalSessionAuth.ok -and
+        [string]$PortalSessionAuth.account.role -eq 'owner'
+    )
+}
+
 function Test-DuneWorldRestartWriteBlocked {
     param([string]$Method, [string]$Path)
     if ($Method -in @('GET', 'HEAD')) { return $false }
@@ -962,6 +1018,12 @@ function Invoke-DuneContext {
     $isRemoteApi = $rawPath.StartsWith('/api/remote/')
     $isRemoteSpa = $rawPath.StartsWith('/remote/') -or $rawPath -eq '/remote'
     if ($isRemoteApi -or $isRemoteSpa) {
+        $legacyRemoteDisabled = $false
+        try { $legacyRemoteDisabled = [bool](Test-DunePortalAccountModeEnabled) } catch {}
+        if ($legacyRemoteDisabled) {
+            Write-DuneError -Response $res -Status 404 -Message 'Not found.'
+            return
+        }
         $auth = $null
         try { $auth = Test-DuneRemoteRequest -Request $req } catch {
             $auth = @{ ok = $false; status = 500; message = "Auth middleware error: $($_.Exception.Message)" }
@@ -1074,26 +1136,33 @@ function Invoke-DuneContext {
 
         if (-not $publicPortalAuth) {
             if ($accountMode) {
-                if (-not (Test-DuneAccountModeLaunchAccess -Request $req)) {
-                    try { $portalSessionAuth = Get-DunePortalSessionAuth -Request $req } catch { $portalSessionAuth = @{ ok = $false } }
-                    if (-not $portalSessionAuth.ok) {
-                        Clear-DunePortalSessionCookie $res
-                        Write-DuneError -Response $res -Status 401 -Message 'Authentication required.'
-                        return
-                    }
-                    if ($portalSessionAuth.mustChangePassword -and $rawPath -notin @('/api/portal-auth/change-password','/api/portal-auth/logout')) {
-                        Write-DuneError -Response $res -Status 403 -Message 'Password change required.'
-                        return
-                    }
-                    if ($method -notin @('GET','HEAD') -and -not (Test-DunePortalRequestOrigin -Request $req)) {
-                        Write-DuneError -Response $res -Status 403 -Message 'Request origin rejected.'
-                        return
-                    }
+                $launchAccess = Test-DuneAccountModeLaunchAccess -Request $req
+                try { $portalSessionAuth = Get-DunePortalSessionAuth -Request $req } catch { $portalSessionAuth = @{ ok = $false } }
+                if (-not $launchAccess -and -not $portalSessionAuth.ok) {
+                    Clear-DunePortalSessionCookie $res
+                    Write-DuneError -Response $res -Status 401 -Message 'Authentication required.'
+                    return
+                }
+                if ($portalSessionAuth.ok -and $portalSessionAuth.mustChangePassword -and $rawPath -notin @('/api/portal-auth/change-password','/api/portal-auth/logout')) {
+                    Write-DuneError -Response $res -Status 403 -Message 'Password change required.'
+                    return
+                }
+                if ($portalSessionAuth.ok -and $method -notin @('GET','HEAD') -and -not (Test-DunePortalRequestOrigin -Request $req)) {
+                    Write-DuneError -Response $res -Status 403 -Message 'Request origin rejected.'
+                    return
                 }
             } elseif (-not (Test-DuneToken -Request $req)) {
                 Write-DuneError -Response $res -Status 401 -Message 'Invalid or missing token'
                 return
             }
+        }
+        if ((Test-DunePortalOwnerOnlyPath -Path $rawPath -Method $method) -and
+            -not (Test-DunePortalOwnerAccess `
+                -AccountMode $accountMode `
+                -IsLocalRequest (Test-DuneLocalOnlyRequest -Request $req) `
+                -PortalSessionAuth $portalSessionAuth)) {
+            Write-DuneError -Response $res -Status 403 -Message 'Owner access required.'
+            return
         }
         foreach ($r in $script:DuneRoutes) {
             if ($r.Method -ne $method) { continue }
@@ -1106,6 +1175,9 @@ function Invoke-DuneContext {
                 $routeParams = @{}
                 foreach ($g in $r.Regex.GetGroupNames()) {
                     if ($g -notmatch '^\d+$') { $routeParams[$g] = $m.Groups[$g].Value }
+                }
+                if ($portalSessionAuth -and $portalSessionAuth.ok) {
+                    $routeParams['portalAccountRole'] = [string]$portalSessionAuth.account.role
                 }
                 if (Test-DuneWorldRestartWriteBlocked -Method $method -Path $rawPath) {
                     Write-DuneError -Response $res -Status 423 -Message 'World Restart maintenance is active. Wait for completion or use its rollback control.'

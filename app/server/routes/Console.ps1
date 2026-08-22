@@ -97,7 +97,7 @@ function Set-DuneConsoleVisible {
 }
 
 # GET /api/console — current state.
-Register-DuneRoute -Method GET -Path '/api/console' -Handler {
+Register-DuneRoute -Method GET -Path '/api/console' -LocalOnly -Handler {
     param($req, $res, $routeParams, $body)
     try {
         if (-not (Test-DuneConsoleLoopbackRequest $req)) {
@@ -111,7 +111,7 @@ Register-DuneRoute -Method GET -Path '/api/console' -Handler {
 }
 
 # POST /api/console  body: { visible: bool }
-Register-DuneRoute -Method POST -Path '/api/console' -Handler {
+Register-DuneRoute -Method POST -Path '/api/console' -LocalOnly -Handler {
     param($req, $res, $routeParams, $body)
     try {
         if (-not (Test-DuneConsoleLoopbackRequest $req)) {

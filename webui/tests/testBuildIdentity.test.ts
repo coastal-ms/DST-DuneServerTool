@@ -15,7 +15,10 @@ describe('test build identity', () => {
       runningIsPrerelease: true,
       installedTag: 'v14.0.0-test6',
       buildCommit: 'abcdef123456',
-    })?.label).toBe('TEST · v14.0.0-test6')
+    })).toMatchObject({
+      label: 'TEST · v14.0.0-test6',
+      compactLabel: 'TEST 6',
+    })
   })
 
   it('uses the stamped commit for a manual test candidate', () => {
@@ -24,7 +27,10 @@ describe('test build identity', () => {
       runningIsPrerelease: true,
       installedTag: '',
       buildCommit: 'abcdef1234567890',
-    })?.label).toBe('TEST · v14.0.0 · abcdef123456')
+    })).toMatchObject({
+      label: 'TEST · v14.0.0 · abcdef123456',
+      compactLabel: 'TEST BUILD',
+    })
   })
 
   it('does not show a test identity for a stable build', () => {

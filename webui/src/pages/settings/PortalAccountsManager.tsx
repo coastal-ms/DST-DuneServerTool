@@ -167,30 +167,53 @@ export function PortalAccountsManager() {
   )
 
   const accountList = (
-    <div className="space-y-2">
+    <div className="grid gap-3 lg:grid-cols-2 2xl:grid-cols-3">
       {state?.accounts.map(account => (
-        <div key={account.id} className="bg-surface-2 border border-border rounded-lg p-3 flex flex-wrap items-center gap-2">
-          <div className="min-w-40 flex-1">
-            <div className="font-medium">{account.username} <span className="pill-muted ml-1">{account.role}</span></div>
-            <div className="text-xs text-text-dim">
-              {account.gameCharacterLabel ? `Linked: ${account.gameCharacterLabel}` : 'No character link'}
-              {account.mustChangePassword ? ' — password change required' : ''}
-              {account.locallyVerified ? ' — owner password verified locally' : ''}
+        <div key={account.id} className="bg-surface-2 border border-border rounded-lg p-3 flex flex-col gap-3 min-w-0">
+          <div className="flex items-start gap-2 min-w-0">
+            <div className="min-w-0 flex-1">
+              <div className="font-medium truncate" title={account.username}>{account.username}</div>
+              <div className="text-xs text-text-dim break-words">
+                {account.gameCharacterLabel ? `Linked: ${account.gameCharacterLabel}` : 'No character link'}
+                {account.mustChangePassword ? ' — password change required' : ''}
+                {account.locallyVerified ? ' — owner password verified locally' : ''}
+              </div>
             </div>
+            <label className="text-xs text-text-dim">
+              <span className="sr-only">Role for {account.username}</span>
+              <select
+                aria-label={`Role for ${account.username}`}
+                value={account.role}
+                disabled={busy}
+                onChange={event => {
+                  const nextRole = event.target.value as 'owner' | 'admin'
+                  void run(async () => {
+                    await updatePortalAccount(account.id, { role: nextRole })
+                    setMessage(`${account.username} is now ${nextRole === 'owner' ? 'an Owner' : 'an Admin'}. Their login and password are unchanged.`)
+                  })
+                }}
+                className="min-h-9 rounded-lg bg-surface border border-border px-2 text-sm text-text"
+              >
+                <option value="admin">Admin</option>
+                <option value="owner">Owner</option>
+              </select>
+            </label>
           </div>
-          <button className="btn-secondary" disabled={busy} onClick={() => void run(async () => {
-            const result = await resetPortalAccountPassword(account.id)
-            setOneTimePassword(result.oneTimePassword)
-            setVerifyUsername(account.username)
-            setPasswordCopied(false)
-            setCopyError('')
-            setMessage('Password reset. All sessions for this account were revoked.')
-          })}>Reset password</button>
-          <button className="btn-ghost" disabled={busy} onClick={() => void run(async () => { await revokePortalAccountSessions(account.id); setMessage('Sessions revoked.') })}>Revoke sessions</button>
-          <button className="btn-ghost" disabled={busy} onClick={() => void run(async () => { await updatePortalAccount(account.id, { enabled: !account.enabled }) })}>{account.enabled ? 'Disable' : 'Enable'}</button>
-          <button className="btn-danger" disabled={busy} onClick={() => {
-            if (window.confirm(`Delete portal account "${account.username}"?`)) void run(async () => { await deletePortalAccount(account.id) })
-          }}>Delete</button>
+          <div className="mt-auto grid grid-cols-2 gap-2">
+            <button className="btn-secondary justify-center px-2 py-1.5 text-xs" disabled={busy} onClick={() => void run(async () => {
+              const result = await resetPortalAccountPassword(account.id)
+              setOneTimePassword(result.oneTimePassword)
+              setVerifyUsername(account.username)
+              setPasswordCopied(false)
+              setCopyError('')
+              setMessage('Password reset. All sessions for this account were revoked.')
+            })}>Reset password</button>
+            <button className="btn-ghost justify-center px-2 py-1.5 text-xs" disabled={busy} onClick={() => void run(async () => { await revokePortalAccountSessions(account.id); setMessage('Sessions revoked.') })}>Revoke sessions</button>
+            <button className="btn-ghost justify-center px-2 py-1.5 text-xs" disabled={busy} onClick={() => void run(async () => { await updatePortalAccount(account.id, { enabled: !account.enabled }) })}>{account.enabled ? 'Disable' : 'Enable'}</button>
+            <button className="btn-danger justify-center px-2 py-1.5 text-xs" disabled={busy} onClick={() => {
+              if (window.confirm(`Delete portal account "${account.username}"?`)) void run(async () => { await deletePortalAccount(account.id) })
+            }}>Delete</button>
+          </div>
         </div>
       ))}
     </div>
@@ -201,8 +224,9 @@ export function PortalAccountsManager() {
       <div>
         <h3 id="portal-accounts-title" className="font-semibold flex items-center gap-2"><Icon name="Users" size={16} /> Browser Portal accounts</h3>
         <p className="text-xs text-text-dim mt-1">
-          Optional local sign-in for the existing full portal. Owner and admin currently have the same portal capabilities;
-          a read-only role is not offered because the existing API does not safely enforce it route by route.
+          Optional local sign-in for the existing full portal. Owners have full trusted remote access except host-only
+          safeguards. Admins can operate the server and manage players, but cannot access host configuration, files,
+          credentials, Database, Sietches, Experimental, or Settings.
         </p>
       </div>
       {error && <div role="alert" className="text-sm text-danger bg-danger/10 border border-danger/40 rounded-lg px-3 py-2">{error}</div>}

@@ -17,6 +17,14 @@ here cover everything those tags shipped.
   plus left-swipe close gestures to the mobile Browser Portal navigation.
 - Made Gameplay Admin tabs touch-scrollable on phones and hid the host-only
   client configuration card from remote Browser Portal viewers.
+- Split Browser Portal account authority: Owners retain full trusted remote
+  access except existing host-only safeguards, while Admins cannot access Game
+  Config, Experimental, Database, Sietches, Settings, host paths, credentials,
+  or SSH-key controls. Owners can promote or demote an existing login without
+  recreating it. Admins retain guarded live Spice Field controls under Map
+  Management, and Owners can run the Funcom server Update command remotely.
+  Account management uses a denser responsive card grid. Setup Wizard and local
+  portal lifecycle controls are now host-only.
 - Fixed Browser Portal password changes through the Tailscale bridge by forwarding an authenticated, bridge-owned public authority for exact HTTPS Origin checks, and added versioned bridge runtime repair.
 - Reworked first-time Browser Portal account setup into a guided Owner, one-time-password, local verification, and enablement flow with a clear emergency Disable path.
 - Added an optional **Remember me on this device** portal login that keeps trusted personal devices signed in for up to 30 days, with a seven-day idle limit and immediate server-side revocation.

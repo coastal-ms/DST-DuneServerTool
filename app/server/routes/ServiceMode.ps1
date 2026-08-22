@@ -21,7 +21,7 @@ function Test-DuneServiceLoopbackRequest {
 }
 
 # GET /api/service-mode - current state (no secrets).
-Register-DuneRoute -Method GET -Path '/api/service-mode' -Handler {
+Register-DuneRoute -Method GET -Path '/api/service-mode' -LocalOnly -Handler {
     param($req, $res, $routeParams, $body)
     try {
         if (-not (Test-DuneServiceLoopbackRequest $req)) {
@@ -37,7 +37,7 @@ Register-DuneRoute -Method GET -Path '/api/service-mode' -Handler {
 # POST /api/service-mode  body: { enabled: bool, password?: string }
 # - enabled=true  requires password (the current user's Windows password).
 # - enabled=false removes the task; no password needed.
-Register-DuneRoute -Method POST -Path '/api/service-mode' -Handler {
+Register-DuneRoute -Method POST -Path '/api/service-mode' -LocalOnly -Handler {
     param($req, $res, $routeParams, $body)
     try {
         if (-not (Test-DuneServiceLoopbackRequest $req)) {

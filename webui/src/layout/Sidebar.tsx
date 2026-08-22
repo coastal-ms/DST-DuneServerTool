@@ -2,12 +2,13 @@ import { NavLink } from '../router'
 import { useState, useRef } from 'react'
 import { createPortal } from 'react-dom'
 import { Icon } from '../components/Icon'
-import { NAV_ITEMS, GROUP_LABELS, GROUP_ORDER } from '../nav'
+import { NAV_ITEMS, GROUP_ORDER, getVisibleGroupLabel } from '../nav'
 import { useUpdateCheck } from '../hooks/useUpdateCheck'
 import { api } from '../api/client'
 import { fmtToolVersion } from '../format'
 import { isLocalViewer, isWindowsViewer } from '../util/viewer'
 import { getTestBuildIdentity } from '../util/testBuildIdentity'
+import { usePortalAccess } from '../auth/portalAccess'
 
 // WebView2 host bridge — present only when the portal is rendered inside the
 // native DuneShell.exe app window (not in a regular browser tab). We use it to
@@ -24,6 +25,7 @@ type Props = {
 }
 
 export function Sidebar({ collapsed }: Props) {
+  const { canAccessOwnerSurfaces } = usePortalAccess()
   const { data: upd } = useUpdateCheck()
   const version = upd?.currentVersion ?? ''
   const testBuild = getTestBuildIdentity(upd)
@@ -134,12 +136,15 @@ export function Sidebar({ collapsed }: Props) {
 
   const groups = GROUP_ORDER.map(g => ({
     key: g,
-    label: GROUP_LABELS[g],
     items: NAV_ITEMS
       .filter(i => i.group === g)
       .filter(i => !i.localOnly || isLocalViewer())
+      .filter(i => !i.ownerOnly || canAccessOwnerSurfaces)
       .filter(i => !i.windowsOnly || isWindowsViewer()),
-  })).filter(g => g.items.length > 0)
+  })).filter(g => g.items.length > 0).map(g => ({
+    ...g,
+    label: getVisibleGroupLabel(g.key, g.items),
+  }))
 
   // Shared row renderer for a single nav item, in either layout mode.
   const renderItem = (item: typeof NAV_ITEMS[number]) => {
@@ -284,7 +289,7 @@ export function Sidebar({ collapsed }: Props) {
                   title={`${testBuild.title}. Click to open Settings, switch to Stable, and install the released build.`}
                   className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] font-semibold uppercase tracking-wider border border-warning/40 bg-warning/10 text-warning hover:bg-warning/20 transition-colors"
                 >
-                  <Icon name="FlaskConical" size={9} /> {testBuild.label}
+                  <Icon name="FlaskConical" size={9} /> {testBuild.compactLabel}
                 </NavLink>
               )}
             </span>

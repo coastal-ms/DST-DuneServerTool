@@ -7,7 +7,7 @@ describe('test build identity surfaces', () => {
     it(`${file} uses the shared exact identity`, () => {
       const source = readFileSync(resolve(__dirname, `../src/${file}`), 'utf8')
       expect(source).toContain('getTestBuildIdentity')
-      expect(source).toContain('testBuild.label')
+      expect(source).toContain(file === 'layout/Sidebar.tsx' ? 'testBuild.compactLabel' : 'testBuild.label')
       expect(source).toContain('testBuild.title')
     })
   }

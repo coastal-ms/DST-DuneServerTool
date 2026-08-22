@@ -5,6 +5,7 @@ import { useUpdateCheck } from '../hooks/useUpdateCheck'
 import type { BgState, VmStatus, PortStatus } from '../api/types'
 import { usePortalAuth } from '../auth/PortalAuthGate'
 import { getTestBuildIdentity } from '../util/testBuildIdentity'
+import { usePortalAccess } from '../auth/portalAccess'
 
 function vmPillClass(vm: VmStatus | undefined | null): string {
   if (!vm || !vm.exists) return 'pill-muted'
@@ -42,6 +43,7 @@ const BG_STYLES: Record<BgState | 'unknown', { cls: string; label: string }> = {
 }
 
 export function StatusBar() {
+  const { canAccessOwnerSurfaces } = usePortalAccess()
   const { status, loading, forceRefresh } = useStatus()
   const { data: upd } = useUpdateCheck()
   const testBuild = getTestBuildIdentity(upd)
@@ -78,7 +80,7 @@ export function StatusBar() {
             <span className="hidden xl:inline">{portalAuth.status.account.username}</span>
           </button>
         )}
-        {testBuild && (
+        {testBuild && canAccessOwnerSurfaces && (
           <Link
             to="/settings"
             className="pill-warning hover:bg-warning/20 transition-colors"

@@ -2,7 +2,7 @@
 # The actual install step (Step 3) dispatches `initial-setup` via the existing
 # /api/commands/run/{name} route.
 
-Register-DuneRoute -Method GET -Path '/api/setup/preflight' -Handler {
+Register-DuneRoute -Method GET -Path '/api/setup/preflight' -LocalOnly -Handler {
     param($req, $res, $routeParams, $body)
     try {
         $mode = (Get-DuneQ $req 'mode')
@@ -14,7 +14,7 @@ Register-DuneRoute -Method GET -Path '/api/setup/preflight' -Handler {
 }
 
 # Read the current Hyper-V-over-LAN settings (host location mode + LAN host IP).
-Register-DuneRoute -Method GET -Path '/api/setup/hyperv-lan' -Handler {
+Register-DuneRoute -Method GET -Path '/api/setup/hyperv-lan' -LocalOnly -Handler {
     param($req, $res, $routeParams, $body)
     try {
         Write-DuneJson -Response $res -Body @{
@@ -34,7 +34,7 @@ Register-DuneRoute -Method GET -Path '/api/setup/hyperv-lan' -Handler {
 # every ongoing Hyper-V call (Get-DuneHyperVSplat) requires that credential, so
 # enabling LAN mode without one would just defer today's "no such fallback"
 # failure to the next VM status check instead of catching it here.
-Register-DuneRoute -Method POST -Path '/api/setup/hyperv-lan' -Handler {
+Register-DuneRoute -Method POST -Path '/api/setup/hyperv-lan' -LocalOnly -Handler {
     param($req, $res, $routeParams, $body)
     try {
         if (-not $body) { Write-DuneError -Response $res -Status 400 -Message 'Missing JSON body.'; return }
@@ -64,7 +64,7 @@ Register-DuneRoute -Method POST -Path '/api/setup/hyperv-lan' -Handler {
 # Connect step's "Test" button, before the user has saved anything). Otherwise
 # the saved credential for that host is used, so re-testing an already-
 # configured host never re-prompts for credentials.
-Register-DuneRoute -Method POST -Path '/api/setup/hyperv-lan/test' -Handler {
+Register-DuneRoute -Method POST -Path '/api/setup/hyperv-lan/test' -LocalOnly -Handler {
     param($req, $res, $routeParams, $body)
     try {
         $hostIp = if ($body) { ([string]$body['hostIp']).Trim() } else { '' }
@@ -81,7 +81,7 @@ Register-DuneRoute -Method POST -Path '/api/setup/hyperv-lan/test' -Handler {
 # was saved for, and whether it matches the given (or currently configured)
 # host IP. Never returns the password. Lets the UI show "using saved
 # credential for <user>" instead of re-prompting when one already exists.
-Register-DuneRoute -Method GET -Path '/api/setup/hyperv-lan/credential' -Handler {
+Register-DuneRoute -Method GET -Path '/api/setup/hyperv-lan/credential' -LocalOnly -Handler {
     param($req, $res, $routeParams, $body)
     try {
         $hostIp = (Get-DuneQ $req 'hostIp')
@@ -98,7 +98,7 @@ Register-DuneRoute -Method GET -Path '/api/setup/hyperv-lan/credential' -Handler
 # log, or any API response. Callers should test the credential first (POST
 # /hyperv-lan/test with user+password); this endpoint does not itself verify
 # connectivity, so the wizard/Settings UI is expected to call test then save.
-Register-DuneRoute -Method POST -Path '/api/setup/hyperv-lan/credential' -Handler {
+Register-DuneRoute -Method POST -Path '/api/setup/hyperv-lan/credential' -LocalOnly -Handler {
     param($req, $res, $routeParams, $body)
     try {
         if (-not $body) { Write-DuneError -Response $res -Status 400 -Message 'Missing JSON body.'; return }
@@ -120,7 +120,7 @@ Register-DuneRoute -Method POST -Path '/api/setup/hyperv-lan/credential' -Handle
 
 # Explicitly remove the saved credential (Settings/wizard "Remove credential"
 # action). Disabling LAN mode alone never does this - only this endpoint does.
-Register-DuneRoute -Method DELETE -Path '/api/setup/hyperv-lan/credential' -Handler {
+Register-DuneRoute -Method DELETE -Path '/api/setup/hyperv-lan/credential' -LocalOnly -Handler {
     param($req, $res, $routeParams, $body)
     try {
         $r = Remove-DuneHyperVLanCredential
@@ -137,7 +137,7 @@ Register-DuneRoute -Method DELETE -Path '/api/setup/hyperv-lan/credential' -Hand
 # for hostIp (set in the Hyper-V host step) - so this step doesn't re-prompt
 # when one is already configured. An explicit user/password here is used only
 # for this call and is never persisted by this route.
-Register-DuneRoute -Method POST -Path '/api/setup/hyperv-lan/host-resources' -Handler {
+Register-DuneRoute -Method POST -Path '/api/setup/hyperv-lan/host-resources' -LocalOnly -Handler {
     param($req, $res, $routeParams, $body)
     try {
         if (-not $body) { Write-DuneError -Response $res -Status 400 -Message 'Missing JSON body.'; return }
@@ -155,7 +155,7 @@ Register-DuneRoute -Method POST -Path '/api/setup/hyperv-lan/host-resources' -Ha
 # status endpoint. User/password fall back to the saved Hyper-V LAN credential
 # for hostIp when omitted (same as host-resources above); when explicitly
 # provided they're passed to the worker in-memory only.
-Register-DuneRoute -Method POST -Path '/api/setup/hyperv-lan/install' -Handler {
+Register-DuneRoute -Method POST -Path '/api/setup/hyperv-lan/install' -LocalOnly -Handler {
     param($req, $res, $routeParams, $body)
     try {
         if (-not $body) { Write-DuneError -Response $res -Status 400 -Message 'Missing JSON body.'; return }
@@ -178,7 +178,7 @@ Register-DuneRoute -Method POST -Path '/api/setup/hyperv-lan/install' -Handler {
 }
 
 # Poll remote-install progress (phase, per-step status, guest IP, error).
-Register-DuneRoute -Method GET -Path '/api/setup/hyperv-lan/install/status' -Handler {
+Register-DuneRoute -Method GET -Path '/api/setup/hyperv-lan/install/status' -LocalOnly -Handler {
     param($req, $res, $routeParams, $body)
     try {
         Write-DuneJson -Response $res -Body (Get-DuneHyperVLanInstallStatus)
@@ -187,7 +187,7 @@ Register-DuneRoute -Method GET -Path '/api/setup/hyperv-lan/install/status' -Han
     }
 }
 
-Register-DuneRoute -Method GET -Path '/api/setup/config' -Handler {
+Register-DuneRoute -Method GET -Path '/api/setup/config' -LocalOnly -Handler {
     param($req, $res, $routeParams, $body)
     try {
         Write-DuneJson -Response $res -Body (Get-DuneSetupConfigSummary)

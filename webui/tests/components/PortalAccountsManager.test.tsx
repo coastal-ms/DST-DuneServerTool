@@ -136,7 +136,46 @@ describe('PortalAccountsManager progressive setup', () => {
     expect(screen.getByText(/stable token-free URL/i)).toBeInTheDocument()
     expect(screen.getByText('Create another account')).toBeInTheDocument()
     expect(screen.getByLabelText('Role')).toBeInTheDocument()
-    expect(screen.getAllByText(/Owner and Admin currently have the same portal capabilities/i).length).toBeGreaterThan(0)
+    expect(screen.getAllByText(/Owners have full trusted remote access/i).length).toBeGreaterThan(0)
+  })
+
+  it('promotes an existing Admin to Owner without replacing the login', async () => {
+    const admin = {
+      ...owner,
+      id: 'admin-id',
+      username: 'Hawk',
+      role: 'admin' as const,
+      locallyVerified: false,
+    }
+    let state = {
+      accountLoginEnabled: true,
+      accounts: [{ ...owner, locallyVerified: true }, admin],
+      roles: ['owner', 'admin'],
+    }
+    const requests: Array<{ path: string; init?: RequestInit }> = []
+    vi.spyOn(globalThis, 'fetch').mockImplementation((input, init) => {
+      const path = String(input)
+      requests.push({ path, init })
+      if (path === '/api/gameplay/players') return jsonResponse({ players: [] })
+      if (path === '/api/remote-access/portal-accounts/admin-id' && init?.method === 'PUT') {
+        state = {
+          ...state,
+          accounts: state.accounts.map(account => account.id === 'admin-id'
+            ? { ...account, role: 'owner' as const }
+            : account),
+        }
+        return jsonResponse({ account: state.accounts[1] })
+      }
+      return jsonResponse(state)
+    })
+    const user = userEvent.setup()
+    render(<PortalAccountsManager />)
+
+    await user.selectOptions(await screen.findByLabelText('Role for Hawk'), 'owner')
+    const request = requests.find(entry => entry.path === '/api/remote-access/portal-accounts/admin-id')
+    expect(JSON.parse(String(request?.init?.body))).toEqual({ role: 'owner' })
+    expect(await screen.findByText(/Hawk is now an Owner. Their login and password are unchanged./i)).toBeInTheDocument()
+    expect(screen.getByLabelText('Role for Hawk')).toHaveValue('owner')
   })
 
   it('uses any verified enabled Owner and does not regress setup when another Owner is reset', async () => {
