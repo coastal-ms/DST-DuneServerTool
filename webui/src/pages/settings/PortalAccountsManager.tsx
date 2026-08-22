@@ -208,8 +208,8 @@ export function PortalAccountsManager() {
               setCopyError('')
               setMessage('Password reset. All sessions for this account were revoked.')
             })}>Reset password</button>
-            <button className="btn-ghost justify-center px-2 py-1.5 text-xs" disabled={busy} onClick={() => void run(async () => { await revokePortalAccountSessions(account.id); setMessage('Sessions revoked.') })}>Revoke sessions</button>
-            <button className="btn-ghost justify-center px-2 py-1.5 text-xs" disabled={busy} onClick={() => void run(async () => { await updatePortalAccount(account.id, { enabled: !account.enabled }) })}>{account.enabled ? 'Disable' : 'Enable'}</button>
+            <button className="btn-secondary justify-center px-2 py-1.5 text-xs" disabled={busy} onClick={() => void run(async () => { await revokePortalAccountSessions(account.id); setMessage('Sessions revoked.') })}>Revoke sessions</button>
+            <button className="btn-secondary justify-center px-2 py-1.5 text-xs" disabled={busy} onClick={() => void run(async () => { await updatePortalAccount(account.id, { enabled: !account.enabled }) })}>{account.enabled ? 'Disable' : 'Enable'}</button>
             <button className="btn-danger justify-center px-2 py-1.5 text-xs" disabled={busy} onClick={() => {
               if (window.confirm(`Delete portal account "${account.username}"?`)) void run(async () => { await deletePortalAccount(account.id) })
             }}>Delete</button>
