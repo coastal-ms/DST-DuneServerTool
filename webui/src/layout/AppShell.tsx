@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react'
+import { useRef, type ReactNode } from 'react'
 import { useLocation } from '../router'
 import { MenuBar } from './MenuBar'
 import { Sidebar } from './Sidebar'
@@ -7,6 +7,7 @@ import { UpdateBanner } from '../components/UpdateBanner'
 import { DecoupleNoticeModal } from '../components/DecoupleNoticeModal'
 import { useSidebarCollapsed } from '../hooks/useSidebarCollapsed'
 import { usePortalAccess } from '../auth/portalAccess'
+import { SectionJumpNav } from '../components/SectionJumpNav'
 
 // Routes that should render full-bleed below the menu bar — no sidebar, no
 // status bar, no update banner, no max-width / padding. Keep the top menu bar
@@ -14,6 +15,7 @@ import { usePortalAccess } from '../auth/portalAccess'
 const IMMERSIVE_ROUTES = new Set<string>([])
 
 export function AppShell({ children }: { children: ReactNode }) {
+  const mainRef = useRef<HTMLElement | null>(null)
   const { canAccessOwnerSurfaces } = usePortalAccess()
   const { collapsed, toggle } = useSidebarCollapsed()
   const { pathname } = useLocation()
@@ -40,8 +42,9 @@ export function AppShell({ children }: { children: ReactNode }) {
         <div className="flex-1 flex flex-col min-w-0">
           {canAccessOwnerSurfaces && <UpdateBanner />}
           <StatusBar />
-          <main className="flex-1 min-w-0 max-w-full overflow-x-hidden overflow-y-auto overscroll-y-contain">
+          <main ref={mainRef} className="flex-1 min-w-0 max-w-full overflow-x-hidden overflow-y-auto overscroll-y-contain">
             <div className="w-full min-w-0 max-w-7xl mx-auto px-3 pt-4 pb-[max(1rem,env(safe-area-inset-bottom))] sm:px-4 md:px-6 md:py-6">
+              <SectionJumpNav containerRef={mainRef} />
               {children}
             </div>
           </main>

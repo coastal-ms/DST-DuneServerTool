@@ -36,6 +36,9 @@
 }
 
 @layer base {
+  [data-section-nav-id] {
+    scroll-margin-top: 4rem;
+  }
   html, body, #root {
     height: 100%;
     min-height: 100%;

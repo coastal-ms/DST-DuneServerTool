@@ -25,6 +25,9 @@ here cover everything those tags shipped.
   Management, and Owners can run the Funcom server Update command remotely.
   Account management uses a denser responsive card grid. Setup Wizard and local
   portal lifecycle controls are now host-only.
+- Added a shared sticky **Jump to section** selector on pages with multiple
+  collapsible cards. It defaults to the first section, opens collapsed cards,
+  and scrolls directly to the selected section without hiding other content.
 - Fixed Browser Portal password changes through the Tailscale bridge by forwarding an authenticated, bridge-owned public authority for exact HTTPS Origin checks, and added versioned bridge runtime repair.
 - Reworked first-time Browser Portal account setup into a guided Owner, one-time-password, local verification, and enablement flow with a clear emergency Disable path.
 - Added an optional **Remember me on this device** portal login that keeps trusted personal devices signed in for up to 30 days, with a seven-day idle limit and immediate server-side revocation.

@@ -38,6 +38,8 @@ type Props = {
   /** Stable id used for the localStorage key. */
   id: string
   title: ReactNode
+  /** Plain label used by the page-level Jump to section selector. */
+  navigationLabel?: string
   /** Lucide icon name shown next to the title. */
   icon?: string
   iconClassName?: string
@@ -60,6 +62,7 @@ type Props = {
 export function CollapsibleCard({
   id,
   title,
+  navigationLabel,
   icon,
   iconClassName,
   subtitle,
@@ -73,14 +76,23 @@ export function CollapsibleCard({
   children,
 }: Props) {
   const { open, toggle } = useCardCollapse(id, defaultOpen)
+  const sectionLabel = navigationLabel ??
+    (typeof title === 'string'
+      ? title
+      : id.split('.').pop()?.replace(/([a-z])([A-Z])/g, '$1 $2') ?? 'Section')
 
   return (
-    <div className={`card ${className ?? 'mb-4'}`}>
+    <div
+      className={`card ${className ?? 'mb-4'}`}
+      data-section-nav-id={id}
+      data-section-nav-label={sectionLabel}
+    >
       <div className={`flex items-center gap-3 ${headerClassName ?? 'px-5 py-4'}`}>
         <button
           type="button"
           onClick={toggle}
           aria-expanded={open}
+          data-section-nav-toggle
           className="flex-1 min-w-0 flex items-center justify-between gap-3 text-left"
         >
           <span className="flex items-center gap-2 min-w-0">

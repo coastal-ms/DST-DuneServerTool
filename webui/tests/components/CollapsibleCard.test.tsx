@@ -23,6 +23,7 @@ describe('CollapsibleCard', () => {
     )
     expect(screen.getByText('body content')).toBeInTheDocument()
     expect(screen.getByRole('button', { name: /alpha/i })).toHaveAttribute('aria-expanded', 'true')
+    expect(screen.getByText('body content').closest('[data-section-nav-id]')).toHaveAttribute('data-section-nav-label', 'Alpha')
   })
 
   it('rolls up on click and persists the choice', async () => {

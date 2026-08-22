@@ -491,10 +491,11 @@ export function Settings() {
 
       {/* --- Update check card (top, collapsible) ------------------------ */}
       <SectionErrorBoundary name="Dune Server Tool updates">
-      <div className="card mb-4">
+      <div className="card mb-4" data-section-nav-id="settings.updates" data-section-nav-label="Dune Server Tool updates">
         <button
           type="button"
           onClick={() => setUpdExpanded(v => !v)}
+          data-section-nav-toggle
           className="w-full flex items-center justify-between px-6 py-4 text-left hover:bg-surface-2/40 rounded-lg transition-colors"
           aria-expanded={updExpanded}
         >
@@ -771,7 +772,12 @@ export function Settings() {
            ever matched Funcom's own backup/restore operation manifests, never
            dune-admin's real client-side cache. Backend route + lib retained. --- */}
 
-      <form onSubmit={onSubmit} className="card p-6 space-y-5">
+      <form
+        onSubmit={onSubmit}
+        className="card p-6 space-y-5"
+        data-section-nav-id="settings.configuration"
+        data-section-nav-label="Tool configuration"
+      >
         {FIELDS.filter(f => !f.showWhen || f.showWhen(values)).map(f => (
           <div key={f.key}>
             <label className="block text-sm font-medium mb-1.5">

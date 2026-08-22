@@ -2345,13 +2345,18 @@ function CategoryCard({
   const expanded = forceOpen || userOpen
 
   return (
-    <div className={'card p-5 ' + (experimental ? 'border-warning/40' : '')}>
+    <div
+      className={'card p-5 ' + (experimental ? 'border-warning/40' : '')}
+      data-section-nav-id={`gameconfig.category.${category}`}
+      data-section-nav-label={category}
+    >
       <div className={(expanded ? 'mb-4 ' : '') + 'flex items-center justify-between gap-2'}>
         <button
           type="button"
           className="flex items-center gap-2 text-left min-w-0"
           onClick={toggle}
           aria-expanded={expanded}
+          data-section-nav-toggle
         >
           <Icon
             name={expanded ? 'ChevronDown' : 'ChevronRight'}
@@ -2815,10 +2820,12 @@ function DefaultsCatalogBrowser({
   }
 
   return (
-    <div className="card p-5">
+    <div className="card p-5" data-section-nav-id="gameconfig.defaultsCatalog" data-section-nav-label="Remaining default INI settings">
       <button
         type="button"
         onClick={() => setOpen(o => !o)}
+        aria-expanded={open}
+        data-section-nav-toggle
         className="w-full flex items-center justify-between text-sm font-semibold uppercase tracking-wider text-accent-bright"
       >
         <span className="flex items-center gap-2">
@@ -3215,10 +3222,12 @@ function AdvancedIniBrowser({ cfg }: { cfg: GameConfigResponse }) {
   const bundle = file === 'game' ? cfg.game : cfg.engine
 
   return (
-    <div className="card p-5">
+    <div className="card p-5" data-section-nav-id="gameconfig.advancedIni" data-section-nav-label="Advanced INI contents">
       <button
         type="button"
         onClick={() => setOpen(o => !o)}
+        aria-expanded={open}
+        data-section-nav-toggle
         className="w-full flex items-center justify-between text-sm font-semibold uppercase tracking-wider text-accent-bright"
       >
         <span className="flex items-center gap-2">

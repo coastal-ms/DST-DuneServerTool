@@ -121,10 +121,12 @@ export function VmInfoCard() {
   }, [info?.database?.failedCount, load])
 
   return (
-    <div className="card mb-6">
+    <div className="card mb-6" data-section-nav-id="database.vmInfo" data-section-nav-label="VM info">
       <button
         type="button"
         onClick={() => setOpen(o => !o)}
+        aria-expanded={open}
+        data-section-nav-toggle
         className="w-full flex items-center justify-between gap-3 p-5 text-left"
       >
         <div className="flex items-center gap-2 min-w-0">
