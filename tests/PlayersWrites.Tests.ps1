@@ -615,6 +615,8 @@ Describe 'Get-DuneRecipesForJourneyNodeSubtree' -Tag 'Pure' {
 Describe 'Invoke-DunePlayerApplyProgressionPreset NPE safety' -Tag 'Pure' {
     BeforeEach {
         $script:testProgressionPreset = $null
+        Set-Item function:global:ConvertTo-DuneRowMaps $script:realRowMaps
+        Set-Item function:global:ConvertTo-DuneInt $script:realDuneInt
         function global:Get-DuneProgressionPresetCatalog {
             return @($script:testProgressionPreset)
         }
