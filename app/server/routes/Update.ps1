@@ -643,22 +643,10 @@ Register-DuneRoute -Method POST -Path '/api/update/install' -Handler {
             return
         }
 
-        # Respond to the client FIRST so the browser sees confirmation
-        # before we tear ourselves down. The relauncher below kills this
-        # very process about 3 seconds later.
         $installNote = if ($installMode -eq 'silent') {
             'Automatic update started. DST will close, install silently, and relaunch automatically.'
         } else {
             'Installer wizard launched. Complete the visible setup steps; DST relaunches when installation finishes.'
-        }
-        Write-DuneJson -Response $res -Body @{
-            launched        = $true
-            installerPath   = $dest
-            fromVersion     = $script:DuneToolVersion
-            toVersion       = ($rel.tag -replace '^v','')
-            mode            = $installMode
-            source          = $installSource
-            note            = $installNote
         }
 
         # Build a relauncher script that:
@@ -819,6 +807,19 @@ public static extern bool AllowSetForegroundWindow(int dwProcessId);
             Start-Process -FilePath 'powershell.exe' `
                 -ArgumentList $relaunchArgs `
                 -WindowStyle Hidden | Out-Null
+        }
+
+        # Report success only after the relauncher has actually been created and
+        # started. Its one-second grace period below keeps this response alive
+        # long enough to flush before it stops the backend.
+        Write-DuneJson -Response $res -Body @{
+            launched        = $true
+            installerPath   = $dest
+            fromVersion     = $script:DuneToolVersion
+            toVersion       = ($rel.tag -replace '^v','')
+            mode            = $installMode
+            source          = $installSource
+            note            = $installNote
         }
     } catch {
         Write-DuneError -Response $res -Status 500 -Message $_.Exception.Message

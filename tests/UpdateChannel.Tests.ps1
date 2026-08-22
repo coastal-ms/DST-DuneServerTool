@@ -226,6 +226,8 @@ Describe 'Update install initiation mode' {
         $source | Should -Match "\`$installMode -eq 'interactive'"
         $source | Should -Match "Start-DuneVisibleElevated -FilePath 'powershell.exe'"
         $source | Should -Match "Start-Process -FilePath 'powershell.exe'[\s\S]+?-WindowStyle Hidden"
+        $source.IndexOf('installerPath   = $dest') |
+            Should -BeGreaterThan $source.IndexOf("Start-DuneVisibleElevated -FilePath 'powershell.exe'")
     }
 
     It 'rejects malformed, conflicting, and command-shaped mode values' {
