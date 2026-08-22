@@ -52,4 +52,9 @@ Describe 'One-shot command orchestration' -Tag 'Commands' {
         $script:entry | Should -Match 'Interactive menu only: resolve Director port'
         $script:entry | Should -Match 'sudo kubectl get svc -A'
     }
+
+    It 'does not hold Reboot All on a fixed post-reboot operator settle' {
+        $script:entry | Should -Match "Invoke-OnDemandPartitionClear -Ip \`$ip -DelaySec 0 -Phase 'post-reboot' -Fast"
+        $script:entry | Should -Not -Match "Invoke-OnDemandPartitionClear -Ip \`$ip -DelaySec 45 -Phase 'post-reboot'"
+    }
 }

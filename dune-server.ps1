@@ -2384,12 +2384,11 @@ while ($true) {
         if ($estTotal) { Write-Host "  $estTotal" -ForegroundColor DarkGray }
         Write-Host "Pods may take another 1-2 min to all reach Healthy. Check with 'status'." -ForegroundColor DarkGray
 
-        # Auto-clear on-demand partitions so DD/Arrakeen/Harko spawn on demand
-        # post-reboot. 45s settling delay because (unlike startup) we did not
-        # already wait on overmap/survival Ready — the server-operator may
-        # still be reconciling on-demand ServerSets.
+        # Probe once immediately after reboot, matching the normal start/restart
+        # paths. The conservative heal leaves actively starting maps alone; the
+        # VM boot hook and 15-minute cron pass cover slower operator drift.
         if ($bgStartExit -eq 0) {
-            Invoke-OnDemandPartitionClear -Ip $ip -DelaySec 45 -Phase 'post-reboot'
+            Invoke-OnDemandPartitionClear -Ip $ip -DelaySec 0 -Phase 'post-reboot' -Fast
             Invoke-DuneBackupDumpPodPrune -Ip $ip -Phase 'post-reboot'
         } else {
             Write-Host "  Skipped on-demand partition auto-clear because battlegroup start exited $bgStartExit." -ForegroundColor DarkYellow
