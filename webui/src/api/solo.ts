@@ -1,4 +1,5 @@
 import { api } from './client'
+import type { BlueprintFile } from './gameplay'
 
 export interface SoloProcess {
   name: string
@@ -290,6 +291,30 @@ export function grantSoloItems(
       items,
       expectedProfileToken,
       confirm: 'GIVE SOLO ITEMS',
+    }),
+  })
+}
+
+export function importSoloBlueprint(
+  blueprint: BlueprintFile,
+  expectedProfileToken: string,
+): Promise<{
+  ok: boolean
+  blueprintId: number
+  itemId: number
+  name: string
+  instances: number
+  placeables: number
+  pentashields: number
+  safetyBackup: string
+  inspection: SoloInspection
+}> {
+  return api('/api/solo/blueprints/import', {
+    method: 'POST',
+    body: JSON.stringify({
+      blueprint,
+      expectedProfileToken,
+      confirm: 'IMPORT SOLO BLUEPRINT',
     }),
   })
 }

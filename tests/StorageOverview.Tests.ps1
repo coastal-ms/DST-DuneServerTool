@@ -45,4 +45,48 @@ Describe 'Storage overview container coverage' -Tag 'Pure' {
             Remove-Item Function:\global:ConvertTo-DuneRowMaps -ErrorAction SilentlyContinue
         }
     }
+
+    Describe 'Placed-base portable blueprint ids' -Tag 'Pure' {
+        It 'emits matching one-based placeable and pentashield ids' {
+            function global:Invoke-DuneSqlQuery {
+                param($Ip, $Sql)
+                if ($Sql -match 'FROM dune\.building_instances') {
+                    return @{
+                        ok = $true
+                        rows = @(@{
+                            building_type = 'Atreides_Outpost_Foundation'
+                            transform = '0,0,0,0,0,0,1'
+                            owner_entity_id = 42
+                        })
+                    }
+                }
+                return @{
+                    ok = $true
+                    rows = @(@{
+                        building_type = 'Choam_PentashieldSurfaceHorizontal_Placeable'
+                        location = '(0,0,256)'
+                        rotation = '(0,0,0,1)'
+                        properties = '{"Choam_PentashieldSurfaceHorizontal_C":{"m_Scale":[10,20,30]}}'
+                    })
+                }
+            }
+            function global:ConvertTo-DuneRowMaps {
+                param($Result)
+                return @($Result.rows)
+            }
+
+            try {
+                $result = Get-DuneBaseExportLive -Ip '1.2.3.4' -BaseId 123
+
+                $result.ok | Should -BeTrue
+                @($result.blueprint.placeables).Count | Should -Be 1
+                @($result.blueprint.pentashields).Count | Should -Be 1
+                $result.blueprint.placeables[0].placeable_id | Should -Be 1
+                $result.blueprint.pentashields[0].placeable_id | Should -Be 1
+            } finally {
+                Remove-Item Function:\global:Invoke-DuneSqlQuery -ErrorAction SilentlyContinue
+                Remove-Item Function:\global:ConvertTo-DuneRowMaps -ErrorAction SilentlyContinue
+            }
+        }
+    }
 }

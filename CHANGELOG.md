@@ -36,6 +36,13 @@ here cover everything those tags shipped.
 
 ### Added
 
+- Solo Mode can import portable blueprint JSON exported from Self-Hosted saved
+  blueprints or placed bases directly into the Solo backpack. Imports require
+  the game fully closed, retain the current save, validate the active profile
+  and backpack capacity, write transactionally, and verify the wrapped SQLite
+  database before atomic replacement. Placed-base exports now include stable
+  placeable IDs, while the importer also normalizes older zero-based
+  pentashield references.
 - The Windows desktop shell now has host-local preferences in Settings,
   beginning with an opt-in WebView2 software-rendering mode for graphics-driver
   compatibility. Applying it restarts only the shell window and leaves the DST

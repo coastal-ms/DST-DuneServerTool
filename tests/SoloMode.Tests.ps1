@@ -363,6 +363,57 @@ Describe 'Solo Mode write gates and settings backups' {
         }
     }
 
+    It 'requires the exact blueprint-import confirmation phrase' {
+        {
+            Import-DuneSoloBlueprint -Blueprint @{
+                name = 'Test'
+                instances = @(@{ building_type = 'Wall'; x = 0; y = 0; z = 0; rotation = 0 })
+                placeables = @()
+                pentashields = @()
+            } -Confirm 'yes'
+        } | Should -Throw '*Confirm the offline blueprint import*'
+    }
+
+    It 'builds a backup-safe portable blueprint import while the game is closed' {
+        $layout = New-TestSoloLayout
+        Save-DuneSoloState -DataRoot $layout.root -DbPath $layout.db | Out-Null
+        Mock Get-DuneSoloGameProcesses { @() }
+        $script:CapturedSoloBlueprint = $null
+        Mock Invoke-DuneSoloHelper {
+            $script:CapturedSoloBlueprint = Get-Content -LiteralPath $Arguments.blueprint -Raw |
+                ConvertFrom-Json
+            @{
+                ok = $true
+                safetyBackup = 'test'
+                blueprintId = 1
+            }
+        }
+        $result = Import-DuneSoloBlueprint -Blueprint @{
+            name = 'Test'
+            instances = @(@{
+                instance_id = 1
+                building_type = 'Atreides_Outpost_Foundation'
+                x = 0
+                y = 0
+                z = 0
+                rotation = 0
+                provides_stability = $true
+            })
+            placeables = @()
+            pentashields = @()
+        } -Confirm 'IMPORT SOLO BLUEPRINT'
+
+        $result.ok | Should -BeTrue
+        $script:CapturedSoloBlueprint.name | Should -Be 'Test'
+        @($script:CapturedSoloBlueprint.instances).Count | Should -Be 1
+        Assert-MockCalled Invoke-DuneSoloHelper -Times 1 -ParameterFilter {
+            $Command -eq 'import-blueprint' -and
+            $Arguments.input -eq $layout.db -and
+            $Arguments['safety-backup'] -like '*pre-blueprint*' -and
+            $Arguments.blueprint -like '*.json'
+        }
+    }
+
     It 'builds a backup-safe currency write while the game is closed' {
         $layout = New-TestSoloLayout
         Save-DuneSoloState -DataRoot $layout.root -DbPath $layout.db | Out-Null
@@ -478,6 +529,7 @@ Describe 'Solo Mode route security metadata' {
 
         foreach ($expected in @(
             '/api/solo/items/grant',
+            '/api/solo/blueprints/import',
             '/api/solo/items/augments/max',
             '/api/solo/currencies',
             '/api/solo/fillables/water',

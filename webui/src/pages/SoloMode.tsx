@@ -16,6 +16,7 @@ import {
   completeSoloFindTheFremen,
   enableSoloAllSkills,
   grantSoloItems,
+  importSoloBlueprint,
   maxSoloAugmentAttributes,
   restoreSoloBackup,
   saveSoloConsoleSettings,
@@ -35,6 +36,7 @@ import {
   filterCosmeticsCatalog,
   getCosmeticsCatalog,
   getVehicleKitCatalog,
+  type BlueprintFile,
   type CatalogItem,
   type CosmeticEntry,
   type GiveItemEntry,
@@ -473,6 +475,10 @@ export function SoloMode() {
   const [inventoryDestination, setInventoryDestination] = useState('')
   const [vehicleKits, setVehicleKits] = useState<VehicleKitCatalog | null>(null)
   const [vehicleKitId, setVehicleKitId] = useState('')
+  const [blueprint, setBlueprint] = useState<BlueprintFile | null>(null)
+  const [blueprintFileName, setBlueprintFileName] = useState('')
+  const [blueprintError, setBlueprintError] = useState<string | null>(null)
+  const [blueprintInputKey, setBlueprintInputKey] = useState(0)
   const [solariDraft, setSolariDraft] = useState(0)
   const [scripDraft, setScripDraft] = useState(0)
   const initializedFromStatus = useRef(false)
@@ -879,6 +885,81 @@ export function SoloMode() {
       })),
       `${kit.label} vehicle kit`,
     )
+  }
+
+  const chooseBlueprintFile = async (file?: File) => {
+    setBlueprint(null)
+    setBlueprintFileName('')
+    setBlueprintError(null)
+    if (!file) return
+    if (file.size > 20 * 1024 * 1024) {
+      setBlueprintError('Blueprint files must be 20 MB or smaller.')
+      return
+    }
+    try {
+      const parsed = JSON.parse(await file.text()) as Partial<BlueprintFile>
+      const instances = Array.isArray(parsed.instances) ? parsed.instances : null
+      const placeables = Array.isArray(parsed.placeables) ? parsed.placeables : null
+      const pentashields = Array.isArray(parsed.pentashields) ? parsed.pentashields : []
+      if (!instances || !placeables || instances.length + placeables.length === 0) {
+        throw new Error('Not a portable DST blueprint file.')
+      }
+      setBlueprint({
+        name: typeof parsed.name === 'string' ? parsed.name : '',
+        instances,
+        placeables,
+        pentashields,
+      })
+      setBlueprintFileName(file.name)
+    } catch (error) {
+      setBlueprintError(error instanceof Error ? error.message : String(error))
+    }
+  }
+
+  const importBlueprint = async () => {
+    if (!selectionMatchesActive) {
+      setNotice({ kind: 'err', text: 'Connect and validate the selected Solo profile before importing a blueprint.' })
+      return
+    }
+    if (gameRunning) {
+      setNotice({ kind: 'err', text: 'Close Dune: Awakening completely before importing a Solo blueprint.' })
+      return
+    }
+    if (!blueprint) {
+      setBlueprintError('Choose a portable DST blueprint file.')
+      return
+    }
+    const label = blueprint.name || blueprintFileName || 'Unnamed blueprint'
+    if (!window.confirm(
+      `Import ${label} into the Solo backpack?\n\n`
+      + `This blueprint contains ${blueprint.instances.length} pieces, ${blueprint.placeables.length} placeables, `
+      + `and ${blueprint.pentashields.length} pentashields.\n\n`
+      + 'Dune: Awakening must be fully closed. DST will retain the current game.db, '
+      + 'write the blueprint transactionally, run integrity and foreign-key checks, '
+      + 'replace the save atomically, and verify the result.',
+    )) return
+
+    setBusy('import-blueprint')
+    setNotice(null)
+    try {
+      const result = await importSoloBlueprint(
+        blueprint,
+        statusState.data?.profileToken ?? '',
+      )
+      setNotice({
+        kind: 'ok',
+        text: `${result.name || label} imported into the Solo backpack and verified. Previous save retained at ${result.safetyBackup}`,
+      })
+      setBlueprint(null)
+      setBlueprintFileName('')
+      setBlueprintError(null)
+      setBlueprintInputKey(key => key + 1)
+      await Promise.all([statusState.refresh(), runtimeState.refresh(), backupsState.refresh()])
+    } catch (error) {
+      setNotice({ kind: 'err', text: error instanceof Error ? error.message : String(error) })
+    } finally {
+      setBusy(null)
+    }
   }
 
   const saveCurrencies = async () => {
@@ -1730,6 +1811,52 @@ export function SoloMode() {
               >
                 <Icon name={busy === 'give-items' ? 'LoaderCircle' : 'Truck'} size={14} className={busy === 'give-items' ? 'animate-spin' : ''} />
                 Give vehicle kit
+              </button>
+            </div>
+
+            <div className="card p-5 xl:col-span-2">
+              <h3 className="font-semibold mb-1 flex items-center gap-2">
+                <Icon name="ScrollText" size={15} /> Import Base Blueprint
+              </h3>
+              <p className="text-xs text-text-muted mb-4">
+                Import the same portable JSON produced by Self-Hosted Gameplay Admin from a saved blueprint or placed base.
+                The result is added to the Solo backpack as a Solido Replicator.
+              </p>
+              <label className="block text-[11px] uppercase tracking-wider text-text-dim mb-1">
+                Blueprint file (.json)
+              </label>
+              <input
+                key={blueprintInputKey}
+                type="file"
+                accept="application/json,.json"
+                disabled={!canMutateActiveProfile || gameRunning}
+                onChange={event => { void chooseBlueprintFile(event.target.files?.[0]) }}
+                className="w-full text-sm text-text-muted file:mr-3 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:bg-surface-2 file:text-text file:text-sm mb-1 disabled:opacity-50"
+              />
+              {blueprint && (
+                <div className="rounded border border-success/30 bg-success/5 p-3 mt-3 text-xs text-text-muted">
+                  <div className="font-medium text-text">{blueprint.name || 'Unnamed blueprint'}</div>
+                  <div>{blueprintFileName}</div>
+                  <div className="mt-1">
+                    {blueprint.instances.length} pieces · {blueprint.placeables.length} placeables · {blueprint.pentashields.length} pentashields
+                  </div>
+                </div>
+              )}
+              {blueprintError && (
+                <div className="rounded border border-danger/30 bg-danger/5 p-3 mt-3 text-xs text-danger">
+                  {blueprintError}
+                </div>
+              )}
+              <div className="rounded border border-warning/30 bg-warning/5 p-3 mt-4 text-xs text-text-muted">
+                Field-proven in PTC. Close the game fully before importing; DST creates a retained backup and verifies the complete wrapped save before replacement.
+              </div>
+              <button
+                className={`btn-primary w-full mt-4 justify-center ${SOLO_DISABLED_PRIMARY_CLASS}`}
+                disabled={!canMutateActiveProfile || gameRunning || !blueprint}
+                onClick={() => void importBlueprint()}
+              >
+                <Icon name={busy === 'import-blueprint' ? 'LoaderCircle' : 'Upload'} size={14} className={busy === 'import-blueprint' ? 'animate-spin' : ''} />
+                Import blueprint to backpack
               </button>
             </div>
 

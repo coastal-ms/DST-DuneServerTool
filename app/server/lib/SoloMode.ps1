@@ -317,7 +317,7 @@ function Assert-DuneSoloGameClosed {
 
 function Invoke-DuneSoloHelper {
     param(
-        [Parameter(Mandatory)][ValidateSet('inspect','backup','restore','grant-items','set-currencies','fill-water','max-augment-attributes','max-specializations','complete-fremen','enable-skills')][string]$Command,
+        [Parameter(Mandatory)][ValidateSet('inspect','backup','restore','grant-items','import-blueprint','set-currencies','fill-water','max-augment-attributes','max-specializations','complete-fremen','enable-skills')][string]$Command,
         [Parameter(Mandatory)][hashtable]$Arguments
     )
 
@@ -525,6 +525,44 @@ function Invoke-DuneSoloGiveItems {
         }
     } finally {
         Remove-Item -LiteralPath $planPath -Force -ErrorAction SilentlyContinue
+    }
+}
+
+function Import-DuneSoloBlueprint {
+    param(
+        [Parameter(Mandatory)]$Blueprint,
+        [Parameter(Mandatory)][string]$Confirm
+    )
+
+    Assert-DuneSoloSupportedPlatform
+    if ($Confirm -ne 'IMPORT SOLO BLUEPRINT') {
+        throw 'Confirm the offline blueprint import before continuing.'
+    }
+    Assert-DuneSoloGameClosed
+    if ($null -eq $Blueprint) {
+        throw 'Choose a portable blueprint file to import.'
+    }
+
+    $profile = Get-DuneSoloProfile
+    if (-not $profile.dbPath -or -not (Test-Path -LiteralPath $profile.dbPath -PathType Leaf)) {
+        throw 'Connect a valid Solo save before importing a blueprint.'
+    }
+    $profileBackupRoot = Get-DuneSoloProfileBackupRoot -DbPath $profile.dbPath
+    $safetyDir = Join-Path $profileBackupRoot 'pre-blueprint'
+    New-Item -ItemType Directory -Path $safetyDir -Force | Out-Null
+    $stamp = (Get-Date).ToUniversalTime().ToString('yyyyMMdd-HHmmssfff')
+    $safety = Join-Path $safetyDir "game-before-blueprint-import-$stamp.db"
+    $blueprintPath = Join-Path $env:TEMP "dune-solo-blueprint-$([guid]::NewGuid().ToString('N')).json"
+    try {
+        $json = $Blueprint | ConvertTo-Json -Depth 12 -Compress
+        [IO.File]::WriteAllText($blueprintPath, $json, (New-Object Text.UTF8Encoding($false)))
+        return Invoke-DuneSoloHelper -Command 'import-blueprint' -Arguments @{
+            input = $profile.dbPath
+            'safety-backup' = $safety
+            blueprint = $blueprintPath
+        }
+    } finally {
+        Remove-Item -LiteralPath $blueprintPath -Force -ErrorAction SilentlyContinue
     }
 }
 
