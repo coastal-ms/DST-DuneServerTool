@@ -15,102 +15,45 @@ here cover everything those tags shipped.
 
 ## [14.0.0] - 2026-08-22
 
-- Fixed iPhone portrait pages drifting horizontally, and added right-swipe open
-  plus left-swipe close gestures to the mobile Browser Portal navigation.
-- Made Gameplay Admin tabs touch-scrollable on phones and hid the host-only
-  client configuration card from remote Browser Portal viewers.
-- Split Browser Portal account authority: Owners retain full trusted remote
-  access except existing host-only safeguards, while Admins cannot access Game
-  Config, Experimental, Database, Sietches, Settings, host paths, credentials,
-  or SSH-key controls. Owners can promote or demote an existing login without
-  recreating it. Admins retain guarded live Spice Field controls under Map
-  Management, and Owners can run the Funcom server Update command remotely.
-  Account management uses a denser responsive card grid. Setup Wizard and local
-  portal lifecycle controls are now host-only.
-- Added a shared sticky **Jump to section** selector on pages with multiple
-  collapsible cards. It defaults to the first section, opens collapsed cards,
-  rolls other cards closed, and scrolls directly to the selected section. A
-  single control collapses every registered card.
-  Server Health remains a single always-visible overview without the selector.
-- Fixed Browser Portal password changes through the Tailscale bridge by forwarding an authenticated, bridge-owned public authority for exact HTTPS Origin checks, and added versioned bridge runtime repair.
-- Reworked first-time Browser Portal account setup into a guided Owner, one-time-password, local verification, and enablement flow with a clear emergency Disable path.
-- Added an optional **Remember me on this device** portal login that keeps trusted personal devices signed in for up to 30 days, with a seven-day idle limit and immediate server-side revocation.
-- Local DuneServer builds now publish through atomic file replacement, preventing
-  an accidental NTFS hardlink from overwriting the installed application during
-  a dev build. API worker runspaces also receive the executable's immutable
-  tag/commit metadata, so the displayed test identity reflects the running
-  binary instead of stale persisted updater state. In-app updates now retain
-  bounded Inno/relauncher diagnostics and verify the installed executable's
-  exact release tag and commit before reporting success.
-- Test-channel Settings now exposes **Reinstall test build**, allowing an
-  operator to re-download and interactively reinstall the selected same-tag
-  test build for an explicitly repaired asset or local-install recovery without
-  detouring through Stable.
-- Test update checks now compare the running artifact's embedded commit with the
-  selected public release, not just its TEST tag. Untagged or mismatched dev
-  builds continue showing the published-build notification until the exact
-  public artifact is installed.
-- Post-install verification now parses embedded tag/commit declarations
-  literally instead of allowing PowerShell to interpolate the `$script:`
-  variable names, and multi-digit `testN` tags sort numerically (`test10` after
-  `test9`) so the Update Banner appears at digit boundaries.
-- Portable blueprint import is disabled for PTC Solo after a Self-Hosted/retail
-  Deep Desert base caused confirmed save-loading and placement-preview access
-  violations while a smaller control blueprint worked. The backend now rejects
-  the action before any save change; the implementation remains dormant for
-  revalidation against the observed Retail Solo adapter when Retail Solo ships.
-- Self-Hosted **Skip NPE**, **A New Beginning**, and **All of Act 1** quick
-  presets now use the exact verified 136-node NPE completion transaction.
-  Previously, partial root completion could grant Karpov 38 research at zero
-  Intel while leaving Wreck of the Alcyon active and unable to observe the
-  research event.
-- **Full Delete** now removes every permission held by the deleted character's
-  current or historical actors and every remaining owner/co-owner/associate
-  from objects those characters owned. Previously, legacy actors and retained
-  co-owners could make abandoned bases appear ownerless while still blocking
-  **Claim Ownership**.
-- **Reboot All** no longer waits a fixed 45 seconds before its post-reboot
-  on-demand-map repair. It now runs the same immediate conservative probe used
-  by normal start/restart flows; the VM boot hook and scheduled heal retain
-  coverage for slower Funcom operator reconciliation.
-
 ### Added
 
-- Retained the portable blueprint importer for revalidation when Retail Solo is
-  available. It accepts JSON exported from Self-Hosted saved blueprints or
-  placed bases, preserves the transactional backup/verification path, and
-  normalizes older zero-based pentashield references, but PTC cannot invoke it.
-- The Windows desktop shell now has host-local preferences in Settings,
-  beginning with an opt-in WebView2 software-rendering mode for graphics-driver
-  compatibility. Applying it restarts only the shell window and leaves the DST
-  backend and game server running.
-- The existing Remote Access QR code now opens the same authenticated Browser
-  Portal link shown by the copy action, so a normal phone or tablet camera can
-  open the DST dashboard without the native mobile app.
-- Browser Portal users can now opt into host-managed local owner/admin accounts
-  from Settings -> Remote Device Access. Account mode uses PBKDF2-HMAC-SHA256
-  passwords, one-time credentials, forced password changes, opaque revocable
-  Secure/HttpOnly sessions, lockouts, and token-free stable QR/link URLs while
-  preserving the legacy magic-link flow until the host safely enables it.
-- The responsive full Browser Portal replaces the separate iOS and Android apps
-  for v14. Account mode retires existing native-app pairings because their
-  browser-spoofable token header cannot be safely exempted; disabling account
-  mode locally restores the legacy native-app and magic-link path.
-- Cloudflare Access identities now require validation of the signed Access JWT
-  issuer, audience, lifetime, and signature before the existing email ACL is
-  applied; the raw Cloudflare email header is no longer trusted.
-- The global Update Banner now installs updates silently and relaunches DST
-  automatically, while every Settings-initiated update, reinstall, and Return
-  to Stable action continues to launch the visible installer wizard.
-- Test-build indicators now show the exact matching installed GitHub tag, or
-  the installer-stamped source commit for a manually installed test candidate.
-  Stale tags from a different core version are ignored.
-- The existing DST dashboard now adapts to phone and tablet browsers with
-  safe-area spacing, touch-sized controls, and a mobile navigation drawer
-  generated from the same pages and groups as the desktop sidebar.
-- Remote navigation now labels the command group consistently while keeping
-  PowerShell and the ad-hoc Database SQL editor host-local and unavailable
-  through Remote Access.
+- A responsive full Browser Portal for phones, tablets, and PCs, with swipe
+  navigation, touch-friendly gameplay tabs, stable QR links, and Home Screen
+  installation through the browser.
+- Optional host-managed Owner and Admin accounts with one-time passwords,
+  forced password changes, Remember Me, revocable sessions, lockouts, and
+  backend-enforced role boundaries.
+- Host-local desktop preferences, beginning with opt-in WebView2 software
+  rendering and a shell-only restart.
+- Sticky section navigation and Collapse all controls on multi-card pages.
+
+### Changed
+
+- The Browser Portal replaces the separate iOS and Android apps. Owners retain
+  trusted remote administration except host-only safeguards; Admins retain
+  operational server, gameplay, Broadcasts, Commands, and Map Management access
+  without Game Config, Experimental, Database, Sietches, or Settings.
+- Updates now verify the installed executable's exact release tag and commit,
+  retain bounded installer/relauncher diagnostics, recognize mismatched dev
+  builds, sort multi-digit test tags correctly, and support same-tag test
+  reinstall recovery.
+- PTC Solo portable blueprint import is disabled before save access after
+  cross-build blueprints caused confirmed game crashes. The backup-first
+  importer remains dormant for Retail Solo validation.
+
+### Fixed
+
+- Self-Hosted **Skip NPE**, **A New Beginning**, and **All of Act 1** now use
+  the complete verified 136-node NPE state, preventing partial progression and
+  research locks.
+- **Full Delete** now removes stale permissions held by current and historical
+  character actors so abandoned bases, vehicles, and fiefs can become claimable.
+- **Reboot All** no longer adds a fixed 45-second delay before its conservative
+  post-reboot partition check.
+- Local builds use atomic artifact replacement, preventing an NTFS hardlink from
+  overwriting the installed backend during development.
+- Browser Portal password changes now preserve the authenticated public
+  authority through the Tailscale bridge for exact HTTPS Origin validation.
 
 ## [13.8.4] - 2026-08-21
 
