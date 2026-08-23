@@ -1636,7 +1636,7 @@ internal static partial class Program
                     "spice_status":"FullyEnabled"
                   },
                   "complete_npe":{
-                    "tag":"NPE.HasCompletedNPE",
+                    "tag":"NPE.SelfTestCompletedNPE",
                     "node_count":2,
                     "nodes":["DA_MQ_ANewBeginning","DA_MQ_NPEAutocompleted"]
                   },

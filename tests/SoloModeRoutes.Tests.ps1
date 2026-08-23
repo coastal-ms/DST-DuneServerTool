@@ -24,4 +24,56 @@ Describe 'Solo Mode route registration' {
         $consoleRoutes.method | Should -Be @('GET', 'PUT')
         @($consoleRoutes | Where-Object { -not $_.localOnly }).Count | Should -Be 0
     }
+
+    It 'rejects fractional <field> before invoking the setter' -TestCases @(
+        @{ field = 'skillPoints'; message = 'Skill points must be a whole number.' }
+        @{ field = 'intel'; message = 'Intel points must be a whole number.' }
+    ) {
+        param($field, $message)
+        $result = & {
+            param($field)
+            function Register-DuneRoute {
+                param($Method, $Path, [switch]$LocalOnly, $Handler)
+                [pscustomobject]@{
+                    method = $Method
+                    path = $Path
+                    handler = $Handler
+                }
+            }
+            $routes = @(. $script:RouteFile)
+            $route = $routes | Where-Object {
+                $_.method -eq 'PUT' -and $_.path -eq '/api/solo/progression/points'
+            } | Select-Object -First 1
+
+            $script:setProgressionPointsCalled = $false
+            $script:soloRouteError = $null
+            function Set-DuneSoloProgressionPoints { $script:setProgressionPointsCalled = $true }
+            function Invoke-WithDuneLock { param($Name, $Script); & $Script }
+            function Assert-DuneSoloExpectedProfile {}
+            function Write-DuneJson {}
+            function Write-DuneError {
+                param($Response, $Status, $Message)
+                $script:soloRouteError = [pscustomobject]@{ status = $Status; message = $Message }
+            }
+
+            $body = @{
+                skillPoints = 1.5
+                intel = 2
+                confirm = 'SET SOLO PROGRESSION POINTS'
+            }
+            if ($field -eq 'intel') {
+                $body.skillPoints = 1
+                $body.intel = 2.5
+            }
+            & $route.handler $null $null $null $body
+            [pscustomobject]@{
+                setterCalled = $script:setProgressionPointsCalled
+                error = $script:soloRouteError
+            }
+        } $field
+
+        $result.setterCalled | Should -BeFalse
+        $result.error.status | Should -Be 400
+        $result.error.message | Should -Be $message
+    }
 }

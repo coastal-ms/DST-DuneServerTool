@@ -785,6 +785,7 @@ internal static partial class Program
             var npeComplete = npeCatalog is null
                 ? completedNpeNodes.Length
                 : completedNpeNodes.Count(npeCatalog.Contains);
+            var npeTag = adapter?.NpeTag ?? "NPE.HasCompletedNPE";
             var npeTagPresent = TableExists(connection, "player_tags")
                 && ScalarLong(
                     connection,
@@ -792,8 +793,9 @@ internal static partial class Program
                     SELECT COUNT(*)
                     FROM player_tags
                     WHERE character_id = (SELECT id FROM player_state LIMIT 1)
-                      AND tag = 'NPE.HasCompletedNPE';
-                    """) == 1;
+                      AND tag = $tag;
+                    """,
+                    ("$tag", npeTag)) == 1;
 
             var identity = ReadIdentity(connection);
             var components = ReadFglComponents(connection, identity.EntityId);
