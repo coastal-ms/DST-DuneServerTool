@@ -1172,13 +1172,14 @@ function Show-DuneVmMemoryPressureWarning {
 }
 
 function Invoke-DuneRemotePartitionScript {
-    # Stages the bundled dune-clear-partitions.start to /tmp on the VM via an
-    # ssh exec + base64 stream (no scp/sftp dependency), runs it once with sudo,
-    # removes the staged copy. No persistent install, no boot script, no cron.
+    # Stages the bundled partition-heal installer via base64/SSH, refreshes its
+    # VM-side heal + boot hook + cron, runs one explicit safety mode, then removes
+    # the staged copy.
     # Returns @{ ok; rc; output }. Best-effort - never throws.
     param(
         [Parameter(Mandatory)][string]$Ip,
-        [int]$WaitAttempts = 60
+        [int]$WaitAttempts = 60,
+        [ValidateSet('boot', 'cron', 'manual')][string]$Mode = 'cron'
     )
     $local = Get-DuneRemotePartitionScriptPath
     if (-not $local) {
@@ -1207,7 +1208,7 @@ function Invoke-DuneRemotePartitionScript {
     }
     $output = & ssh -o BatchMode=yes -o StrictHostKeyChecking=no -o LogLevel=QUIET `
                     -i "$sshKey" "$sshUser@$Ip" `
-                    "sudo -n DUNE_CLEAR_ATTEMPTS=$WaitAttempts sh $remoteTmp; rc=`$?; rm -f $remoteTmp; exit `$rc" 2>&1
+                    "sudo -n DUNE_CLEAR_ATTEMPTS=$WaitAttempts sh $remoteTmp $Mode; rc=`$?; rm -f $remoteTmp; exit `$rc" 2>&1
     $rc = $LASTEXITCODE
     return @{ ok = ($rc -eq 0); rc = $rc; output = @($output) }
 }
@@ -1226,6 +1227,7 @@ function Invoke-OnDemandPartitionClear {
         [Parameter(Mandatory)][string]$Ip,
         [int]$DelaySec = 30,
         [string]$Phase = 'post-start',
+        [ValidateSet('boot', 'cron', 'manual')][string]$Mode = 'cron',
         [switch]$Fast
     )
     Write-Host ""
@@ -1259,7 +1261,7 @@ function Invoke-OnDemandPartitionClear {
     }
 
     $waitAttempts = if ($Fast) { 1 } else { 60 }
-    $result = Invoke-DuneRemotePartitionScript -Ip $Ip -WaitAttempts $waitAttempts
+    $result = Invoke-DuneRemotePartitionScript -Ip $Ip -WaitAttempts $waitAttempts -Mode $Mode
     $runOut = $result.output
     $runRc  = $result.rc
 
@@ -2108,7 +2110,7 @@ while ($true) {
         # the next player without manual intervention. Skipped if `bg start`
         # itself failed (no point waiting on operator that never reconciled).
         if ($bgStartExit -eq 0) {
-            Invoke-OnDemandPartitionClear -Ip $ip -DelaySec 0 -Phase 'post-startup' -Fast
+            Invoke-OnDemandPartitionClear -Ip $ip -DelaySec 0 -Phase 'post-startup' -Mode cron -Fast
             Invoke-DuneBackupDumpPodPrune -Ip $ip -Phase 'post-startup'
         } else {
             Write-Host "  Skipped on-demand partition auto-clear because battlegroup start exited $bgStartExit." -ForegroundColor DarkYellow
@@ -2384,12 +2386,11 @@ while ($true) {
         if ($estTotal) { Write-Host "  $estTotal" -ForegroundColor DarkGray }
         Write-Host "Pods may take another 1-2 min to all reach Healthy. Check with 'status'." -ForegroundColor DarkGray
 
-        # Auto-clear on-demand partitions so DD/Arrakeen/Harko spawn on demand
-        # post-reboot. 45s settling delay because (unlike startup) we did not
-        # already wait on overmap/survival Ready — the server-operator may
-        # still be reconciling on-demand ServerSets.
+        # Probe once immediately after reboot, matching the normal start/restart
+        # paths. The conservative heal leaves actively starting maps alone; the
+        # VM boot hook and 15-minute cron pass cover slower operator drift.
         if ($bgStartExit -eq 0) {
-            Invoke-OnDemandPartitionClear -Ip $ip -DelaySec 45 -Phase 'post-reboot'
+            Invoke-OnDemandPartitionClear -Ip $ip -DelaySec 0 -Phase 'post-reboot' -Mode cron -Fast
             Invoke-DuneBackupDumpPodPrune -Ip $ip -Phase 'post-reboot'
         } else {
             Write-Host "  Skipped on-demand partition auto-clear because battlegroup start exited $bgStartExit." -ForegroundColor DarkYellow
@@ -2849,7 +2850,7 @@ while ($true) {
         # if missing, then runs the partition-clear script with no settling
         # delay (operator has already had whatever time it needed by the time
         # the user invokes this).
-        Invoke-OnDemandPartitionClear -Ip $ip -DelaySec 0 -Phase 'fix-on-demand-maps'
+        Invoke-OnDemandPartitionClear -Ip $ip -DelaySec 0 -Phase 'fix-on-demand-maps' -Mode manual
         continue
     }
 
@@ -2898,7 +2899,7 @@ fi
         # Run in fast mode: no fixed settle delay and only one remote wait pass.
         # The persistent VM watchdog / manual Fix Partitions command covers
         # slower post-reconcile drift without making every start feel hung.
-        Invoke-OnDemandPartitionClear -Ip $ip -DelaySec 0 -Phase "post-$cmdName" -Fast
+        Invoke-OnDemandPartitionClear -Ip $ip -DelaySec 0 -Phase "post-$cmdName" -Mode cron -Fast
     }
 
     # One-shot web/CLI commands are complete once the battlegroup command and

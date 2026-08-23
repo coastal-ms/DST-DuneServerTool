@@ -52,4 +52,17 @@ Describe 'One-shot command orchestration' -Tag 'Commands' {
         $script:entry | Should -Match 'Interactive menu only: resolve Director port'
         $script:entry | Should -Match 'sudo kubectl get svc -A'
     }
+
+    It 'does not hold Reboot All on a fixed post-reboot operator settle' {
+        $script:entry | Should -Match "Invoke-OnDemandPartitionClear -Ip \`$ip -DelaySec 0 -Phase 'post-reboot' -Mode cron -Fast"
+        $script:entry | Should -Not -Match "Invoke-OnDemandPartitionClear -Ip \`$ip -DelaySec 45 -Phase 'post-reboot'"
+    }
+
+    It 'passes explicit conservative and manual partition-heal modes' {
+        $script:entry | Should -Match 'Invoke-DuneRemotePartitionScript -Ip \$Ip -WaitAttempts \$waitAttempts -Mode \$Mode'
+        $script:entry | Should -Match 'sh \$remoteTmp \$Mode'
+        $script:entry | Should -Match "-Phase 'post-startup' -Mode cron -Fast"
+        $script:entry | Should -Match '-Phase "post-\$cmdName" -Mode cron -Fast'
+        $script:entry | Should -Match "-Phase 'fix-on-demand-maps' -Mode manual"
+    }
 }
