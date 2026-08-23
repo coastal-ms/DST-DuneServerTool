@@ -6,5 +6,5 @@ instructions: |-
 include a numbered option to
 keep reading new messages before deciding. Omit it when nothing is live.
 automation:
-  auto_issue_session: true
+  auto_issue_session: false
   remote_control: true
