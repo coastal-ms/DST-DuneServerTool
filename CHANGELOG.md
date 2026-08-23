@@ -22,6 +22,8 @@ here cover everything those tags shipped.
   140-node PTC catalog, including its four Base Backup Tool objectives.
 - Solo Mode can read and set exact unspent skill-point and Intel balances while
   preserving learned skills.
+- Solo inventory destinations now display their custom in-game container names,
+  with the existing numbered type labels retained when no custom name is set.
 
 ## [14.0.1] - 2026-08-22
 

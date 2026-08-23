@@ -900,6 +900,17 @@ internal static partial class Program
                     INSERT INTO placeables VALUES (23, 1, 'BasicContainer_Placeable', 0);
                     INSERT INTO placeables VALUES (24, 1, 'SpiceSilo_Placeable', 0);
                     INSERT INTO placeables VALUES (25, 1, 'MediumStorageContainer_Placeable', 0);
+                    CREATE TABLE permission_actor (
+                        actor_id INTEGER NOT NULL,
+                        actor_name TEXT NOT NULL,
+                        actor_type INTEGER NOT NULL,
+                        access_level INTEGER NOT NULL,
+                        is_child INTEGER NOT NULL,
+                        edited_by_player_id INTEGER NOT NULL
+                    );
+                    INSERT INTO permission_actor VALUES
+                        (20, '##Developer_StorageContainer_Placeable', 1, 3, 1, 0),
+                        (22, 'Crafting', 1, 3, 1, 1);
                     CREATE TABLE fgl_entities (
                         entity_id INTEGER PRIMARY KEY,
                         components BLOB
@@ -1126,7 +1137,7 @@ internal static partial class Program
             {
                 "Chest #1",
                 "Small Storage Container #1",
-                "Storage Container #1",
+                "Crafting",
                 "Medium Storage Container #1",
                 "Developer Storage #1"
             };
@@ -1825,6 +1836,7 @@ internal static partial class Program
                     "sqlite-integrity-and-foreign-keys",
                     "exactly-one-character",
                     "map-seed-from-coriolis-cycle",
+                    "custom-storage-labels-with-generic-fallback",
                     "retained-backup",
                     "atomic-restore-with-safety-backup",
                     "unsupported-wrapper-rejected",
@@ -2152,22 +2164,36 @@ internal static partial class Program
             }
         }
 
+        var permissionName = TableExists(connection, "permission_actor")
+            ? """
+              COALESCE(MAX(CASE
+                  WHEN permission_actor.actor_name NOT LIKE '##%'
+                   AND LOWER(TRIM(permission_actor.actor_name)) <> 'none'
+                  THEN TRIM(permission_actor.actor_name)
+              END), '')
+              """
+            : "''";
+        var permissionJoin = TableExists(connection, "permission_actor")
+            ? "LEFT JOIN permission_actor ON permission_actor.actor_id = placeables.id"
+            : "";
         using var storage = connection.CreateCommand();
-        storage.CommandText = """
+        storage.CommandText = $"""
             SELECT inv.id,
                    inv.max_item_count,
                    inv.max_item_volume,
-                   COUNT(items.id),
-                   placeables.building_type
+                   COUNT(DISTINCT items.id),
+                   placeables.building_type,
+                   {permissionName} AS custom_name
             FROM inventories AS inv
             JOIN actors ON actors.id = inv.actor_id
             JOIN placeables ON placeables.id = actors.id
+            {permissionJoin}
             LEFT JOIN items ON items.inventory_id = inv.id
             WHERE inv.inventory_type = 4
               AND placeables.is_hologram = 0
               AND placeables.owner_entity_id IS NOT NULL
               AND placeables.owner_entity_id != 0
-            GROUP BY inv.id
+            GROUP BY inv.id, placeables.building_type
             ORDER BY inv.id;
             """;
         using (var reader = storage.ExecuteReader())
@@ -2183,10 +2209,13 @@ internal static partial class Program
                 labelCounts.TryGetValue(baseLabel, out var priorCount);
                 var index = priorCount + 1;
                 labelCounts[baseLabel] = index;
+                var customName = reader.IsDBNull(5) ? string.Empty : reader.GetString(5);
                 results.Add(new InventoryDestination(
                     Id: reader.GetInt64(0),
                     Key: $"inventory:{reader.GetInt64(0)}",
-                    Label: $"{baseLabel} #{index}",
+                    Label: string.IsNullOrWhiteSpace(customName)
+                        ? $"{baseLabel} #{index}"
+                        : customName,
                     Kind: string.Equals(
                         baseLabel,
                         "Developer Storage",
