@@ -105,11 +105,21 @@ internal static partial class Program
                     Require(options, "input"),
                     Require(options, "safety-backup"),
                     Require(options, "adapter")),
+                "complete-npe" => CompleteNpe(
+                    Require(options, "input"),
+                    Require(options, "safety-backup"),
+                    Require(options, "adapter")),
                 "enable-skills" => EnableAllSkills(
                     Require(options, "input"),
                     Require(options, "safety-backup"),
                     Require(options, "adapter"),
                     Require(options, "skills")),
+                "set-progression-points" => SetProgressionPoints(
+                    Require(options, "input"),
+                    Require(options, "safety-backup"),
+                    Require(options, "adapter"),
+                    ParseBalance(RequireValue(options, "skill-points"), "Skill points"),
+                    ParseBalance(RequireValue(options, "intel"), "Intel points")),
                 "self-test" => SelfTest(),
                 _ => throw new ArgumentException($"Unknown command: {command}")
             };
@@ -939,7 +949,9 @@ internal static partial class Program
                         fail_condition_state
                     ) VALUES
                         (1, 'DA_MQ_FindTheFremen', jsonb('false'), jsonb('false'), 1, jsonb('{}'), 1, jsonb('{}')),
-                        (1, 'DA_MQ_FindTheFremen.FirstTest', jsonb('false'), jsonb('false'), 1, jsonb('{}'), 1, jsonb('{}'));
+                        (1, 'DA_MQ_FindTheFremen.FirstTest', jsonb('false'), jsonb('false'), 1, jsonb('{}'), 1, jsonb('{}')),
+                        (1, 'DA_MQ_ANewBeginning', jsonb('false'), jsonb('false'), 1, jsonb('{}'), 0, jsonb('{}')),
+                        (1, 'DA_MQ_NPEAutocompleted', jsonb('false'), jsonb('false'), 1, jsonb('{}'), 0, jsonb('{}'));
                     CREATE TABLE player_tags (
                         character_id INTEGER NOT NULL,
                         tag TEXT NOT NULL,
@@ -1612,6 +1624,11 @@ internal static partial class Program
                     "recipes":["RCP_TestFremkitRecipe"],
                     "spice_status":"FullyEnabled"
                   },
+                  "complete_npe":{
+                    "tag":"NPE.HasCompletedNPE",
+                    "node_count":2,
+                    "nodes":["DA_MQ_ANewBeginning","DA_MQ_NPEAutocompleted"]
+                  },
                   "water_fillable_capacities":{
                     "highcapacityliterjon_06":3000
                   },
@@ -1626,6 +1643,12 @@ internal static partial class Program
                   }
                 }
                 """.Replace("__SCHEMA_FINGERPRINT__", selfTestFingerprint));
+            var beforeNpe = InspectPath(target, adapterPath: adapterPath).Progression;
+            if (beforeNpe.NpeNodesTotal != 2 || beforeNpe.NpeNodesComplete != 0)
+            {
+                throw new InvalidOperationException(
+                    "NPE inspection did not use the exact adapter catalog.");
+            }
             var fillSafety = Path.Combine(root, "safety", "before-fill.db");
             FillWaterContainer(target, fillSafety, 100, adapterPath);
             var fillInspection = InspectPath(target, adapterPath: adapterPath);
@@ -1680,18 +1703,30 @@ internal static partial class Program
                 target,
                 Path.Combine(root, "safety", "before-fremen.db"),
                 adapterPath);
+            CompleteNpe(
+                target,
+                Path.Combine(root, "safety", "before-npe.db"),
+                adapterPath);
             EnableAllSkills(
                 target,
                 Path.Combine(root, "safety", "before-skills.db"),
                 adapterPath,
                 skillsPath);
-            var progressionInspection = InspectPath(target);
+            SetProgressionPoints(
+                target,
+                Path.Combine(root, "safety", "before-points.db"),
+                adapterPath,
+                321,
+                654);
+            var progressionInspection = InspectPath(target, adapterPath: adapterPath);
             if (progressionInspection.Progression.Specializations.Length != 5
                 || progressionInspection.Progression.PurchasedRewards != 2
                 || progressionInspection.Progression.FremenNodesComplete != 2
+                || progressionInspection.Progression.NpeNodesComplete != 2
+                || !progressionInspection.Progression.NpeTagPresent
                 || progressionInspection.Progression.SkillsAtSeven != 2
-                || progressionInspection.Progression.UnspentSkillPoints < 20
-                || progressionInspection.Progression.Intel < 100)
+                || progressionInspection.Progression.UnspentSkillPoints != 321
+                || progressionInspection.Progression.Intel != 654)
             {
                 throw new InvalidOperationException(
                     "Progression self-test did not reach verified target state.");
@@ -1803,7 +1838,9 @@ internal static partial class Program
                     "offline-water-container-fills-with-safety-backups",
                     "offline-specialization-max-with-rewards",
                     "offline-find-the-fremen-completion",
+                    "offline-ptc-npe-completion",
                     "offline-enable-all-skills-preserves-unknowns",
+                    "offline-exact-progression-points",
                     "progression-compatible-schema-accepted",
                     "progression-schema-mismatch-fails-closed",
                     "invalid-restore-leaves-target-unchanged"
@@ -1849,14 +1886,15 @@ internal static partial class Program
         var catalog = catalogPath is null
             ? null
             : ReadCatalog(catalogPath);
-        var waterCapacities = adapterPath is null
+        var adapter = adapterPath is null
             ? null
-            : ReadPtcAdapter(adapterPath).WaterCapacities;
+            : ReadPtcAdapter(adapterPath);
         return InspectBytes(
             ReadStable(input),
             input,
             catalog,
-            waterCapacities);
+            adapter?.WaterCapacities,
+            adapter);
     }
 
     private static byte[] ReadStable(string path)
@@ -1899,7 +1937,8 @@ internal static partial class Program
         byte[] wrapped,
         string sourcePath,
         IReadOnlyDictionary<string, CatalogRule>? catalog = null,
-        IReadOnlyDictionary<string, int>? waterCapacities = null)
+        IReadOnlyDictionary<string, int>? waterCapacities = null,
+        PtcAdapter? adapter = null)
     {
         var database = Unwrap(wrapped);
         var sqliteBytes = database.SqliteBytes;
@@ -1917,7 +1956,8 @@ internal static partial class Program
                 wrapperVersion,
                 declaredLength,
                 catalog,
-                waterCapacities);
+                waterCapacities,
+                adapter);
         }
         finally
         {
@@ -1971,7 +2011,8 @@ internal static partial class Program
         uint wrapperVersion,
         uint declaredLength,
         IReadOnlyDictionary<string, CatalogRule>? catalog,
-        IReadOnlyDictionary<string, int>? waterCapacities)
+        IReadOnlyDictionary<string, int>? waterCapacities,
+        PtcAdapter? adapter)
     {
         var connectionString = new SqliteConnectionStringBuilder
         {
@@ -2015,7 +2056,7 @@ internal static partial class Program
         var fillables = hasPlayerState && characterCount == 1
             ? ReadSupportedFillables(connection, waterCapacities)
             : Array.Empty<FillableItem>();
-        var progression = ReadProgressionSummary(connection);
+        var progression = ReadProgressionSummary(connection, adapter);
         long? mapSeed = null;
         var hasSingleCoriolisCycle = ScalarLong(
             connection,

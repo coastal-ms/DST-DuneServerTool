@@ -173,7 +173,7 @@ describe('Solo Mode API contracts', () => {
     })
   })
 
-  it('sends the three verified progression actions with exact confirmations', async () => {
+  it('sends the verified progression actions with exact confirmations', async () => {
     await solo.maxSoloSpecializations('profile-token')
     expect(last()).toEqual({
       url: '/api/solo/progression/specializations/max',
@@ -194,6 +194,16 @@ describe('Solo Mode API contracts', () => {
       },
     })
 
+    await solo.completeSoloNpe('profile-token')
+    expect(last()).toEqual({
+      url: '/api/solo/progression/npe/complete',
+      method: 'POST',
+      body: {
+        expectedProfileToken: 'profile-token',
+        confirm: 'COMPLETE SOLO NPE',
+      },
+    })
+
     await solo.enableSoloAllSkills('profile-token')
     expect(last()).toEqual({
       url: '/api/solo/progression/skills/enable-all',
@@ -201,6 +211,18 @@ describe('Solo Mode API contracts', () => {
       body: {
         expectedProfileToken: 'profile-token',
         confirm: 'ENABLE SOLO SKILLS',
+      },
+    })
+
+    await solo.setSoloProgressionPoints(321, 654, 'profile-token')
+    expect(last()).toEqual({
+      url: '/api/solo/progression/points',
+      method: 'PUT',
+      body: {
+        skillPoints: 321,
+        intel: 654,
+        expectedProfileToken: 'profile-token',
+        confirm: 'SET SOLO PROGRESSION POINTS',
       },
     })
   })

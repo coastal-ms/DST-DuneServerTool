@@ -461,6 +461,7 @@ function New-DstDiagnosticBundle {
                     $soloLines.Add("Spec tracks         : $(@($solo.inspection.progression.specializations).Count)")
                     $soloLines.Add("Spec rewards        : $($solo.inspection.progression.purchasedRewards)")
                     $soloLines.Add("Fremen nodes        : $($solo.inspection.progression.fremenNodesComplete)/$($solo.inspection.progression.fremenNodesTotal)")
+                    $soloLines.Add("NPE nodes           : $($solo.inspection.progression.npeNodesComplete)/$($solo.inspection.progression.npeNodesTotal), tag=$($solo.inspection.progression.npeTagPresent)")
                     $soloLines.Add("Skills at value 7   : $($solo.inspection.progression.skillsAtSeven)")
                     $soloLines.Add("Skill points        : total=$($solo.inspection.progression.totalSkillPoints), unspent=$($solo.inspection.progression.unspentSkillPoints), bonus=$($solo.inspection.progression.keystoneBonusSkillPoints)")
                     $soloLines.Add("Intel               : $($solo.inspection.progression.intel)")

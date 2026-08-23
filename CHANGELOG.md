@@ -13,6 +13,16 @@ here cover everything those tags shipped.
 
 ## [Unreleased]
 
+## [14.0.2] - 2026-08-23
+
+### Added
+
+- Solo Mode progression now combines **Complete Find the Fremen** and the
+  PTC-specific **Complete NPE** in one selector. Complete NPE applies the exact
+  140-node PTC catalog, including its four Base Backup Tool objectives.
+- Solo Mode can read and set exact unspent skill-point and Intel balances while
+  preserving learned skills.
+
 ## [14.0.1] - 2026-08-22
 
 ### Changed

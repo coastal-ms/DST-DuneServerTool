@@ -46,6 +46,9 @@ export interface SoloProgressionSummary {
   purchasedRewards: number
   fremenNodesTotal: number
   fremenNodesComplete: number
+  npeNodesTotal: number
+  npeNodesComplete: number
+  npeTagPresent: boolean
   spiceSystemStatus: string
   spiceVisionStatus: string
   skillsAtSeven: number
@@ -405,12 +408,38 @@ export function completeSoloFindTheFremen(expectedProfileToken: string): Promise
   })
 }
 
+export function completeSoloNpe(expectedProfileToken: string): Promise<SoloProgressionResult> {
+  return api('/api/solo/progression/npe/complete', {
+    method: 'POST',
+    body: JSON.stringify({
+      expectedProfileToken,
+      confirm: 'COMPLETE SOLO NPE',
+    }),
+  })
+}
+
 export function enableSoloAllSkills(expectedProfileToken: string): Promise<SoloProgressionResult> {
   return api('/api/solo/progression/skills/enable-all', {
     method: 'POST',
     body: JSON.stringify({
       expectedProfileToken,
       confirm: 'ENABLE SOLO SKILLS',
+    }),
+  })
+}
+
+export function setSoloProgressionPoints(
+  skillPoints: number,
+  intel: number,
+  expectedProfileToken: string,
+): Promise<SoloProgressionResult> {
+  return api('/api/solo/progression/points', {
+    method: 'PUT',
+    body: JSON.stringify({
+      skillPoints,
+      intel,
+      expectedProfileToken,
+      confirm: 'SET SOLO PROGRESSION POINTS',
     }),
   })
 }

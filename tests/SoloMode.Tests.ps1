@@ -476,16 +476,27 @@ Describe 'Solo Mode write gates and settings backups' {
             -Confirm 'MAX SOLO SPECIALIZATIONS' -ExpectedConfirm 'MAX SOLO SPECIALIZATIONS'
         $fremen = Invoke-DuneSoloProgressionAction -Action 'complete-fremen' `
             -Confirm 'COMPLETE FIND THE FREMEN' -ExpectedConfirm 'COMPLETE FIND THE FREMEN'
+        $npe = Invoke-DuneSoloProgressionAction -Action 'complete-npe' `
+            -Confirm 'COMPLETE SOLO NPE' -ExpectedConfirm 'COMPLETE SOLO NPE'
         $skills = Invoke-DuneSoloProgressionAction -Action 'enable-skills' `
             -Confirm 'ENABLE SOLO SKILLS' -ExpectedConfirm 'ENABLE SOLO SKILLS'
+        $points = Set-DuneSoloProgressionPoints -SkillPoints 321 -Intel 654 `
+            -Confirm 'SET SOLO PROGRESSION POINTS'
 
         $spec.ok | Should -BeTrue
         $fremen.ok | Should -BeTrue
+        $npe.ok | Should -BeTrue
         $skills.ok | Should -BeTrue
-        Assert-MockCalled Invoke-DuneSoloHelper -Times 3 -ParameterFilter {
+        $points.ok | Should -BeTrue
+        Assert-MockCalled Invoke-DuneSoloHelper -Times 5 -ParameterFilter {
             $Arguments.input -eq $layout.db -and
             $Arguments['safety-backup'] -like '*pre-progression*' -and
             $Arguments.adapter -like '*solo-ptc-v1.json'
+        }
+        Assert-MockCalled Invoke-DuneSoloHelper -Times 1 -ParameterFilter {
+            $Command -eq 'set-progression-points' -and
+            $Arguments['skill-points'] -eq 321 -and
+            $Arguments.intel -eq 654
         }
     }
 }
@@ -516,10 +527,34 @@ Describe 'Solo Mode route security metadata' {
             '/api/solo/fillables/water',
             '/api/solo/progression/specializations/max',
             '/api/solo/progression/find-the-fremen',
-            '/api/solo/progression/skills/enable-all'
+            '/api/solo/progression/npe/complete',
+            '/api/solo/progression/skills/enable-all',
+            '/api/solo/progression/points'
         )) {
             $script:CapturedSoloRoutes | Should -Contain $expected
         }
+    }
+}
+
+Describe 'Solo Mode PTC progression catalogs' {
+    It 'keeps the 140-node PTC NPE catalog separate from the 136-node shared catalog' {
+        $root = Get-DstRepoRoot
+        $shared = Get-Content (Join-Path $root 'app\data\dune-npe-completion-nodes.json') -Raw | ConvertFrom-Json
+        $ptc = Get-Content (Join-Path $root 'app\data\solo-ptc-v1.json') -Raw | ConvertFrom-Json
+        $ptcNodes = @($ptc.complete_npe.nodes)
+        $sharedNodes = @($shared.nodes)
+        $extras = @($ptcNodes | Where-Object { $_ -notin $sharedNodes })
+
+        $sharedNodes.Count | Should -Be 136
+        $ptc.complete_npe.node_count | Should -Be 140
+        $ptcNodes.Count | Should -Be 140
+        @($ptcNodes | Sort-Object -Unique).Count | Should -Be 140
+        $extras | Should -Be @(
+            'DA_MQ_ANewBeginning.Dangerous Mission No 2.BaseBackupTool'
+            'DA_MQ_ANewBeginning.Dangerous Mission No 2.BaseBackupTool.CraftBaseBackupTool'
+            'DA_MQ_ANewBeginning.Dangerous Mission No 2.BaseBackupTool.ResearchBaseBackupTool'
+            'DA_MQ_ANewBeginning.Dangerous Mission No 2.Build a Sandbike.BackupBase'
+        )
     }
 }
 
