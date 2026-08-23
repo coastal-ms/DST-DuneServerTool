@@ -13,6 +13,8 @@ here cover everything those tags shipped.
 
 ## [Unreleased]
 
+## [14.0.0] - 2026-08-22
+
 - Fixed iPhone portrait pages drifting horizontally, and added right-swipe open
   plus left-swipe close gestures to the mobile Browser Portal navigation.
 - Made Gameplay Admin tabs touch-scrollable on phones and hid the host-only
@@ -90,6 +92,10 @@ here cover everything those tags shipped.
   passwords, one-time credentials, forced password changes, opaque revocable
   Secure/HttpOnly sessions, lockouts, and token-free stable QR/link URLs while
   preserving the legacy magic-link flow until the host safely enables it.
+- The responsive full Browser Portal replaces the separate iOS and Android apps
+  for v14. Account mode retires existing native-app pairings because their
+  browser-spoofable token header cannot be safely exempted; disabling account
+  mode locally restores the legacy native-app and magic-link path.
 - Cloudflare Access identities now require validation of the signed Access JWT
   issuer, audience, lifetime, and signature before the existing email ACL is
   applied; the raw Cloudflare email header is no longer trusted.

@@ -39,8 +39,8 @@ export function RemoteAccessCard() {
   const [ownerBuffer, setOwnerBuffer] = useState('')   // remembered owner while toggled off
   const [enabled, setEnabled] = useState(false)        // UI on/off, decoupled from owner so you can enable THEN type the owner
 
-  // Mobile Cloudflare Access service token (lets the phone app reach the custom
-  // domain past Access without an interactive login). The secret is write-only:
+  // Legacy native-app Cloudflare Access service token. Browser Portal account
+  // mode uses normal interactive sign-in instead. The secret is write-only:
   // the server never echoes it back, so the input stays blank unless re-entered.
   const [svc, setSvc] = useState<MobileServiceTokenStatus | null>(null)
   const [svcClientId, setSvcClientId] = useState('')
@@ -211,16 +211,16 @@ export function RemoteAccessCard() {
                 <Icon name="Info" size={14} className="mt-0.5 flex-none" />
                 <span>
                   <strong>Advanced / optional — most hosts don&apos;t need this.</strong> For the
-                  mobile app and remote portal, the recommended path is <strong>Tailscale Funnel</strong>
-                  (set up from the <strong>Mobile App</strong> card) — no domain, no Cloudflare account.
+                  Browser Portal, the recommended path is <strong>Tailscale Funnel</strong>
+                  (set up from <strong>Remote Device Access</strong>) — no domain or Cloudflare account.
                   This card is only for bringing your <strong>own Cloudflare domain</strong> for a
                   permanent, email-gated hostname.
                 </span>
               </div>
               <p className="text-sm text-text-muted">
-                Lets you and 1–3 trusted admins reach a mobile-friendly subset of DST
-                (Dashboard + Maps) from outside the LAN via a Cloudflare Tunnel +
-                Access policy. See the{' '}
+                Provides an optional custom-domain transport for the responsive
+                Browser Portal through a Cloudflare Tunnel + Access policy.
+                Browser Portal account roles remain enforced by DST. See the{' '}
                 <a
                   href="https://coastal-ms.github.io/DST-DuneServerTool/remote"
                   target="_blank"
@@ -312,15 +312,14 @@ export function RemoteAccessCard() {
 
               <div className="border-t border-border pt-4">
                 <label className="block text-sm font-medium mb-1">
-                  Mobile app access for this domain (service token)
+                  Legacy native-app access for this domain (service token)
                   <span className="ml-2 pill-muted text-xs">advanced / optional</span>
                 </label>
                 <p className="text-xs text-text-dim mb-2">
-                  Only needed if you want the <strong>phone app</strong> to reach your
-                  custom domain (which is behind Cloudflare Access). Create a Service
-                  Token in Cloudflare Zero Trust, add a <em>Service Auth</em> policy to
-                  this app, and paste the Client ID + Secret here. Most hosts don&apos;t
-                  need this — the default zero-setup pairing already works.
+                  Account-mode Browser Portal users sign in normally and do not
+                  need this. Keep it only for a legacy paired native app reaching a
+                  custom domain behind Cloudflare Access. Create a Service Token in
+                  Cloudflare Zero Trust and add a <em>Service Auth</em> policy.
                   {svc?.configured && <span className="text-success"> Currently configured.</span>}
                 </p>
                 <input

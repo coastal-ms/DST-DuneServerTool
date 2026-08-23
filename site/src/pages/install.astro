@@ -106,9 +106,10 @@ const base = import.meta.env.BASE_URL;
           class="underline decoration-dotted hover:text-dune-text"
           >Remote portal</a
         >
-        — phone-friendly view of status + map spin-up/down. Recommended
-        setup is a free Tailscale Funnel (no domain); a bring-your-own
-        Cloudflare domain is supported as an advanced option.
+        — the responsive full Browser Portal on a phone, tablet, or PC, with
+        optional Owner/Admin accounts. Recommended setup is a free Tailscale
+        Funnel (no domain); a bring-your-own Cloudflare domain is supported as
+        an advanced option.
       </li>
     </ul>
 
@@ -172,7 +173,7 @@ const base = import.meta.env.BASE_URL;
     <p class="text-dune-muted leading-relaxed mb-4">
       Off by default. Open <strong class="text-dune-text">Help → Keep serving
       while DST is closed</strong> to install a background service so the
-      portal, phone apps, scheduled restarts, and Discord notifications keep
+      Browser Portal, scheduled restarts, and Discord notifications keep
       running while the DST window is closed — including while your PC is
       locked — and load at sign-in. You must stay signed in to Windows; a full
       sign-out stops remote access. Host-only (remote viewers can't enable it),
@@ -204,11 +205,13 @@ const base = import.meta.env.BASE_URL;
     <div class="mt-12 rounded-xl border border-dune-border bg-dune-surface p-6">
       <h2 class="text-2xl font-semibold mb-3">Remote access</h2>
       <p class="text-dune-muted leading-relaxed">
-        Remote Access is optional and constrained to the dashboard and map
-        controls. The recommended path is a Tailscale Funnel; a Cloudflare
-        custom domain is available for advanced setups. Use the dedicated
-        guide for the current security model, pairing flow, and revocation
-        steps instead of exposing DST's local port directly.
+        Remote access is optional. v14 uses the same responsive Browser Portal
+        as the desktop app, with host-created Owner/Admin accounts and
+        role-enforced navigation and APIs. The recommended path is a Tailscale
+        Funnel; a Cloudflare custom domain remains available for advanced
+        setups. Use the dedicated guide for account setup, role boundaries,
+        transport security, and revocation instead of exposing DST's local port
+        directly.
       </p>
       <a
         href={`${base}remote`}

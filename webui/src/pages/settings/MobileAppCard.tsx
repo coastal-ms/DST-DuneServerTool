@@ -105,7 +105,7 @@ export function MobileAppCard() {
     >
 
         {/* Secure remote access via Tailscale Funnel — the recommended, no-domain
-            path for the mobile app + browser portal. (A Cloudflare custom domain
+            path for the Browser Portal. (A Cloudflare custom domain
             is the advanced alternative, configured under Settings → Remote Access;
             pairing uses it automatically if set, so it isn't shown here.) */}
         <div className="card p-3" style={{ marginBottom: '1rem' }}>
@@ -125,7 +125,8 @@ export function MobileAppCard() {
               </div>
               <div style={{ marginTop: '0.5rem', fontSize: '13px', fontFamily: 'monospace', wordBreak: 'break-all' }}>{data.url}</div>
               <div className="help-text" style={{ marginTop: '0.5rem' }}>
-                You only scan <strong>once</strong>. The app saves a permanent pairing code and reconnects every time — no re-scanning after a restart.
+                The address remains stable across DST restarts. Scan the current QR
+                whenever you need to open or save the Browser Portal on a device.
               </div>
             </div>
           ) : (
@@ -153,7 +154,7 @@ export function MobileAppCard() {
                 {bridge.issues.map((it, i) => <li key={i}>{it}</li>)}
               </ul>
               <button className="btn-primary" style={{ marginTop: '0.75rem' }} disabled={repairing} onClick={() => void repairBridge()}>
-                {repairing ? <><Icon name="Loader2" className="animate-spin" /> Repairing…</> : <><Icon name="Wrench" /> Repair Mobile Bridge</>}
+                {repairing ? <><Icon name="Loader2" className="animate-spin" /> Repairing…</> : <><Icon name="Wrench" /> Repair remote bridge</>}
               </button>
               {repairError && <div className="text-danger text-sm" style={{ marginTop: '0.5rem' }}>{repairError}</div>}
               <button className="btn" style={{ marginTop: '0.5rem' }} disabled={bridgeLoading || repairing} onClick={() => void loadBridge()}>

@@ -1,7 +1,9 @@
 # DST - Dune Server Tool
 
-> Windows operations app for **Dune: Awakening** Self-Hosted servers and local
-> Solo saves. Built by Coastal (Discord `@allcoast`).
+> By Coastal (discord @allcoast)
+
+Windows operations app for **Dune: Awakening** Self-Hosted servers and local
+Solo saves.
 
 [![Lint PowerShell](https://github.com/coastal-ms/DST-DuneServerTool/actions/workflows/lint.yml/badge.svg)](https://github.com/coastal-ms/DST-DuneServerTool/actions/workflows/lint.yml)
 [![License: Apache 2.0](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](LICENSE)
@@ -12,7 +14,7 @@
 [Changelog](CHANGELOG.md) ·
 [Discord](https://discord.gg/tj2x7cywSC)**
 
-Current stable release: **v13.8.2**
+Current stable release: **v14.0.0**
 
 Confirmed compatible with Dune: Awakening **1.4.10.4**.
 
@@ -30,7 +32,8 @@ guarded controls in one native Windows app.
 - Administer players, bases, storage, blueprints, Landsraad, and the Exchange.
 - Run Duke's native Market Bot with formula or market-follow pricing.
 - Manage one local VM or a separate Hyper-V host over LAN.
-- Use a constrained remote dashboard and mobile pairing flow.
+- Use the responsive full Browser Portal from a phone, tablet, or PC with
+  optional host-managed Owner and Admin accounts.
 
 ### Solo Mode
 
@@ -105,14 +108,17 @@ guarded World Restart testing.
 
 ![Settings](docs/img/settings.png)
 
-Updates, installation, themes, warnings, Remote Access, Hyper-V over LAN,
-Public IP/DDNS, browser ping, mobile pairing, and host-local preferences.
+Updates, installation, themes, warnings, Remote Device Access, Browser Portal
+accounts, Hyper-V over LAN, Public IP/DDNS, browser ping, and host-local
+preferences.
 </details>
 
 ## Safety model
 
 - Local admin portal binds to loopback with a per-launch token.
-- PowerShell and Solo Mode are host-local and unavailable through Remote Access.
+- PowerShell, Solo Mode, Setup, host paths, credentials, and SSH controls remain
+  host-local. Remote Admins also cannot access Game Config, Experimental,
+  Database, Sietches, or Settings.
 - Destructive actions require explicit confirmation and use narrow write scopes.
 - Database and save mutations use backups, verification, and recovery paths.
 - Player state determines whether an action requires the player online or offline.

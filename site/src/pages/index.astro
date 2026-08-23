@@ -21,6 +21,10 @@ const features = [
     body: "Solo Mode validates one local save and keeps backup-first tools for settings, inventory, currencies, cosmetics, packages, vehicle kits, augments, and proven progression.",
   },
   {
+    title: "Carry the full portal with you",
+    body: "The responsive Browser Portal works from a phone, tablet, or PC. Hosts can create revocable Owner and Admin accounts without placing credentials in the shared link.",
+  },
+  {
     title: "See the Deep Desert before it shifts",
     body: "DD Seed Maps puts all 12 Coriolis layouts inside DST with POI filters, confidence notes, seed selection, and running-map seed detection.",
   },
@@ -75,7 +79,7 @@ const features = [
   </section>
 
   <section class="mx-auto max-w-6xl px-6 py-16">
-    <div class="grid sm:grid-cols-3 gap-6">
+    <div class="grid sm:grid-cols-2 lg:grid-cols-4 gap-6">
       {
         features.map((f) => (
           <div class="border-t border-dune-border pt-5">
@@ -105,7 +109,7 @@ const features = [
         <div>✓ Solo Mode with validated, backup-first offline mutations</div>
         <div>✓ PostgreSQL backup, restore, SQL, migration, and cleanup workflows</div>
         <div>✓ Three-path setup, including Hyper-V over LAN</div>
-        <div>✓ Constrained remote portal and mobile pairing</div>
+        <div>✓ Responsive Browser Portal with Owner/Admin accounts</div>
         <div>✓ Scheduled restarts, updater, startup, and background service options</div>
       </div>
       <div class="mt-8 flex flex-wrap gap-4">
