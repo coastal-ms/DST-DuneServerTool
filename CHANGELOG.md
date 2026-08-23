@@ -33,6 +33,12 @@ here cover everything those tags shipped.
   trusted remote administration except host-only safeguards; Admins retain
   operational server, gameplay, Broadcasts, Commands, and Map Management access
   without Game Config, Experimental, Database, Sietches, or Settings.
+- Cloudflare Access authentication now validates the signed JWT issuer,
+  audience, lifetime, and signature before applying the email ACL; the raw
+  email header is no longer trusted.
+- Global Update Banner actions now install silently and relaunch DST
+  automatically, while Settings updates, reinstalls, and Return to Stable
+  continue to show the installer wizard.
 - Updates now verify the installed executable's exact release tag and commit,
   retain bounded installer/relauncher diagnostics, recognize mismatched dev
   builds, sort multi-digit test tags correctly, and support same-tag test
