@@ -107,9 +107,9 @@ const base = import.meta.env.BASE_URL;
           >Remote portal</a
         >
         — the responsive full Browser Portal on a phone, tablet, or PC, with
-        optional Owner/Admin accounts. Recommended setup is a free Tailscale
-        Funnel (no domain); a bring-your-own Cloudflare domain is supported as
-        an advanced option.
+        optional Owner/Admin accounts. New setups use a free Tailscale Funnel
+        with no domain. Existing Cloudflare custom-domain configurations remain
+        supported during deprecation but are planned for removal.
       </li>
     </ul>
 
@@ -207,11 +207,11 @@ const base = import.meta.env.BASE_URL;
       <p class="text-dune-muted leading-relaxed">
         Remote access is optional. v14 uses the same responsive Browser Portal
         as the desktop app, with host-created Owner/Admin accounts and
-        role-enforced navigation and APIs. The recommended path is a Tailscale
-        Funnel; a Cloudflare custom domain remains available for advanced
-        setups. Use the dedicated guide for account setup, role boundaries,
-        transport security, and revocation instead of exposing DST's local port
-        directly.
+        role-enforced navigation and APIs. New setups use Tailscale Funnel.
+        Existing Cloudflare custom domains should migrate before that legacy
+        path is removed. Use the dedicated guide for account setup, migration,
+        role boundaries, transport security, and revocation instead of exposing
+        DST's local port directly.
       </p>
       <a
         href={`${base}remote`}

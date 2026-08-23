@@ -148,7 +148,7 @@ body:
         - Web portal — Settings — Server Browser Ping (datacenter id / IP fix — in-game server browser shows Ping 0 / empty bars)
         - Web portal — Settings — Database connection (Database port / Test connection — empty Players/Bases/Storage)
         - Web portal — Settings (Dune Server Tool self-updater — incl. Stable/Test channel toggle + pre-release picker)
-        - Web portal — Settings — Remote Device Access / Browser Portal accounts / QR / Tailscale Funnel / Cloudflare domain
+        - Web portal — Settings — Remote Device Access / Browser Portal accounts / QR / Tailscale Funnel / legacy Cloudflare domain
         - Web portal — Settings — Hyper-V over LAN (host IP / credential / Test / Route toggle / Remove credential)
         - Web portal — Settings — Server authorization token / 403002 recovery (regenerate + apply self-hosting token)
         - Web portal — Setup Wizard / first-run
@@ -449,12 +449,12 @@ body:
         Browser Portal remote access defaults to a **Tailscale Funnel**: DST is
         reached at a stable `https://<name>.ts.net` address that proxies to a
         local loopback **bridge** (127.0.0.1:47900), which forwards into DST.
-        (Bringing your **own Cloudflare domain** is an optional advanced path,
-        set up under **Settings → Remote Access**.) If pairing or remote access
-        fails, note:
+        Existing **Cloudflare custom-domain** configurations remain supported
+        during deprecation, but new setups use Tailscale Funnel. If pairing or
+        remote access fails, note:
 
         - What **Settings → Remote Device Access** shows: the remote-address badge
-          ("Tailscale Funnel" / "custom domain"), "No remote address yet", or
+          ("Tailscale Funnel" / "legacy custom domain"), "No remote address yet", or
           "Remote access bridge not running".
         - Whether the phone/tablet/PC can open the URL after scanning the QR.
         - Whether the affected account is Owner or Admin and which expected page
@@ -462,9 +462,9 @@ body:
         - Whether Browser Portal account login is enabled, and whether the QR/link
           is the stable token-free URL or legacy `?key=` magic link. Never paste
           the key, password, cookie, account ID, hash, or salt.
-        - For Cloudflare Access, whether the team domain and application AUD are
-          configured. DST requires a valid signed Access JWT and does not trust
-          the raw email header.
+        - For a legacy Cloudflare setup, whether the team domain and application
+          AUD are configured. DST requires a valid signed Access JWT and does
+          not trust the raw email header.
         - On the host, the bridge health probe:
 
         ```

@@ -34,6 +34,8 @@ guarded controls in one native Windows app.
 - Manage one local VM or a separate Hyper-V host over LAN.
 - Use the responsive full Browser Portal from a phone, tablet, or PC with
   optional host-managed Owner and Admin accounts.
+- Use Tailscale Funnel for new remote setups. Existing Cloudflare custom-domain
+  configurations remain supported during deprecation but are planned for removal.
 
 ### Solo Mode
 

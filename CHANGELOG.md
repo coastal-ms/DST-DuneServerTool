@@ -13,6 +13,13 @@ here cover everything those tags shipped.
 
 ## [Unreleased]
 
+### Deprecated
+
+- Cloudflare named-tunnel/Access setup is now a legacy compatibility path and is
+  planned for removal. Existing configurations remain editable and operational
+  during deprecation; new remote-access setups are directed to Tailscale Funnel
+  plus Browser Portal Owner/Admin accounts.
+
 ## [14.0.0] - 2026-08-22
 
 ### Added

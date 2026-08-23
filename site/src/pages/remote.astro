@@ -22,7 +22,7 @@ import PageHeader from "../components/PageHeader.astro";
         <li><a class="text-dune-text hover:underline" href="#funnel">Set up a Tailscale Funnel</a></li>
         <li><a class="text-dune-text hover:underline" href="#accounts">Create Browser Portal accounts</a></li>
         <li><a class="text-dune-text hover:underline" href="#device">Open and save the portal on a device</a></li>
-        <li><a class="text-dune-text hover:underline" href="#cloudflare">Optional Cloudflare custom domain</a></li>
+        <li><a class="text-dune-text hover:underline" href="#cloudflare">Migrate an existing Cloudflare domain</a></li>
         <li><a class="text-dune-text hover:underline" href="#trouble">Troubleshooting</a></li>
         <li><a class="text-dune-text hover:underline" href="#revoke">Disable or revoke access</a></li>
       </ol>
@@ -159,21 +159,22 @@ import PageHeader from "../components/PageHeader.astro";
     </div>
 
     <div id="cloudflare">
-      <h2 class="text-2xl font-semibold mb-4">6 · Optional: Cloudflare custom domain</h2>
+      <h2 class="text-2xl font-semibold mb-4">6 · Migrate an existing Cloudflare domain <span class="text-dune-muted text-base font-normal">— deprecated</span></h2>
       <p class="text-dune-muted leading-relaxed mb-3">
-        Tailscale Funnel is the simplest path. Hosts who want a custom hostname
-        can instead point a Cloudflare named tunnel at
-        <span class="font-mono">http://127.0.0.1:47900</span> and configure the
-        signed Access JWT issuer and audience in DST. Account-mode users still
-        sign in through the Browser Portal; no Cloudflare service token is
-        required for them.
+        Cloudflare named-tunnel/Access support remains operational for existing
+        users during deprecation, but it is planned for removal and should not be
+        used for new setups. Keep it running until the replacement Funnel path is
+        proven from an outside device.
       </p>
-      <p class="text-dune-muted text-sm leading-relaxed">
-        Cloudflare's documentation remains the source of truth for
-        <a class="underline text-dune-text" href="https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/" rel="noopener" target="_blank">named tunnels</a>
-        and
-        <a class="underline text-dune-text" href="https://developers.cloudflare.com/cloudflare-one/policies/access/" rel="noopener" target="_blank">Access policies</a>.
-      </p>
+      <ol class="list-decimal list-inside space-y-2 text-dune-muted leading-relaxed text-sm">
+        <li>Run <span class="font-mono">tailscale funnel --bg http://127.0.0.1:47900</span> in PowerShell.</li>
+        <li>Confirm the <span class="font-mono">.ts.net</span> URL appears in Remote Device Access.</li>
+        <li>Under Browser Portal accounts, create and locally verify an Owner.</li>
+        <li>Acknowledge native-app retirement, then enable account login.</li>
+        <li>Create any Browser Portal Admin account needed for role-boundary testing.</li>
+        <li>Test Owner sign-in and Admin restricted navigation from outside the LAN.</li>
+        <li>Disable the legacy Cloudflare portal in Settings, then stop the Cloudflare tunnel.</li>
+      </ol>
     </div>
 
     <div id="trouble">
@@ -217,7 +218,7 @@ import PageHeader from "../components/PageHeader.astro";
         <li><strong class="text-dune-text">One device:</strong> sign out, or revoke that account's sessions from local Settings.</li>
         <li><strong class="text-dune-text">One account:</strong> disable, reset, demote, or delete it from Browser Portal account management.</li>
         <li><strong class="text-dune-text">All account sessions:</strong> use the local emergency Disable action. This restores legacy magic-link behavior.</li>
-        <li><strong class="text-dune-text">Public endpoint:</strong> turn off Funnel or stop the Cloudflare tunnel.</li>
+        <li><strong class="text-dune-text">Public endpoint:</strong> turn off Funnel. Existing Cloudflare users should stop that tunnel only after migration succeeds.</li>
         <li><strong class="text-dune-text">Background access:</strong> disable <strong>Help → Keep serving while DST is closed</strong>.</li>
       </ul>
     </div>
