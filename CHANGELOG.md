@@ -13,6 +13,16 @@ here cover everything those tags shipped.
 
 ## [Unreleased]
 
+## [14.0.1] - 2026-08-22
+
+### Changed
+
+- The local embedded PowerShell terminal now opens from a dedicated
+  **Open PowerShell** action on the Commands page instead of occupying a
+  permanent desktop-sidebar entry. Remote Browser Portal viewers still cannot
+  see or access the terminal.
+- Framework modification.
+
 ### Deprecated
 
 - Cloudflare named-tunnel/Access setup is now a legacy compatibility path and is

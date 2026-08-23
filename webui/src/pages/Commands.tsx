@@ -29,6 +29,8 @@ import { isLocalViewer } from '../util/viewer'
 import type { Command, CommandsResponse } from '../api/types'
 import { usePortalAuth } from '../auth/PortalAuthGate'
 import { canAccessCommand } from '../auth/commandAccess'
+import { useNavigate } from '../router'
+import { getVisibleCommandPageLinks, type CommandPageLink } from '../util/commandPageLinks'
 
 type LaunchResult = {
   ok: boolean
@@ -114,6 +116,37 @@ function CommandButtonInner({
         )}
       </button>
     </>
+  )
+}
+
+function CommandPageLinkButton({
+  link,
+  onOpen,
+}: {
+  link: CommandPageLink
+  onOpen: () => void
+}) {
+  return (
+    <div className={COMMAND_BUTTON_CLASS}>
+      <div className="shrink-0 -ml-1 flex items-center justify-center w-6 text-accent">
+        <Icon name={link.icon} size={15} />
+      </div>
+      <button
+        type="button"
+        onClick={onOpen}
+        title={link.description}
+        className="flex-1 text-left"
+      >
+        <div className="flex items-center justify-between gap-2">
+          <span className="font-medium text-sm text-text">{link.label}</span>
+          <span className="pill-info shrink-0">
+            <Icon name="Monitor" size={10} />
+            Local
+          </span>
+        </div>
+        <p className="mt-1.5 text-xs text-text-muted">{link.description}</p>
+      </button>
+    </div>
   )
 }
 
@@ -262,6 +295,7 @@ function SectionTitle({
 // ---------- Page -----------------------------------------------------------
 
 export function Commands() {
+  const navigate = useNavigate()
   const portalAuth = usePortalAuth()
   const portalRole = portalAuth?.status.account?.role ?? null
   const { forceRefresh } = useStatus()
@@ -491,6 +525,7 @@ export function Commands() {
   // commands render (see `grouped`), and layout editing — drag/reorder, rename,
   // reset — is disabled so a remote user can't rearrange the host's layout.
   const readOnly = !isLocalViewer()
+  const pageLinks = getVisibleCommandPageLinks(!readOnly)
 
   return (
     <>
@@ -554,6 +589,8 @@ export function Commands() {
         <section className="space-y-5">
           {SECTION_INDICES.map(idx => {
             const items = grouped[idx]
+            const links = idx === 2 ? pageLinks : []
+            const actionCount = items.length + links.length
             return (
               <div key={idx} className="card p-5">
                 <div className="flex items-center justify-between gap-3 mb-4">
@@ -564,14 +601,14 @@ export function Commands() {
                     disabled={savingLayout || readOnly}
                   />
                   <span className="text-xs text-text-dim shrink-0">
-                    {items.length} {items.length === 1 ? 'command' : 'commands'}
+                    {actionCount} {actionCount === 1 ? 'action' : 'actions'}
                   </span>
                 </div>
                 <SortableContext
                   items={items.map(c => c.name)}
                   strategy={rectSortingStrategy}
                 >
-                  <SectionDropZone sectionIdx={idx} count={items.length} isOver={overSection === idx}>
+                  <SectionDropZone sectionIdx={idx} count={actionCount} isOver={overSection === idx}>
                     {items.map(c => (
                       <SortableCommandButton
                         key={c.name}
@@ -579,6 +616,13 @@ export function Commands() {
                         sectionIdx={idx}
                         onRun={runCommand}
                         busy={running.has(c.name)}
+                      />
+                    ))}
+                    {links.map(link => (
+                      <CommandPageLinkButton
+                        key={link.to}
+                        link={link}
+                        onOpen={() => navigate(link.to)}
                       />
                     ))}
                   </SectionDropZone>
