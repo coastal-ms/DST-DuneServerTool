@@ -81,7 +81,7 @@ body:
     attributes:
       label: Tool version
       description: Shown in the bottom-left of the web portal sidebar (status bar) and in the CLI menu header. Auto-filled when launched from **Help → Create GitHub Issue** in the top menu bar, or from the CLI `report-issue` command.
-      placeholder: "v14.0.0-test13"
+      placeholder: "v14.0.0"
     validations:
       required: true
 
@@ -148,7 +148,7 @@ body:
         - Web portal — Settings — Server Browser Ping (datacenter id / IP fix — in-game server browser shows Ping 0 / empty bars)
         - Web portal — Settings — Database connection (Database port / Test connection — empty Players/Bases/Storage)
         - Web portal — Settings (Dune Server Tool self-updater — incl. Stable/Test channel toggle + pre-release picker)
-        - Web portal — Settings — Mobile App / remote access (Tailscale Funnel pairing, or optional Cloudflare custom domain)
+        - Web portal — Settings — Remote Device Access / Browser Portal accounts / QR / Tailscale Funnel / Cloudflare domain
         - Web portal — Settings — Hyper-V over LAN (host IP / credential / Test / Route toggle / Remove credential)
         - Web portal — Settings — Server authorization token / 403002 recovery (regenerate + apply self-hosting token)
         - Web portal — Setup Wizard / first-run
@@ -444,19 +444,21 @@ body:
   - type: textarea
     id: remote_access_diag
     attributes:
-      label: Mobile App / remote access (only if your bug is about pairing or remote access)
+      label: Browser Portal / remote access (only if your bug is about sign-in, accounts, QR, or transport)
       description: |
-        Mobile and remote access default to a **Tailscale Funnel**: DST is
+        Browser Portal remote access defaults to a **Tailscale Funnel**: DST is
         reached at a stable `https://<name>.ts.net` address that proxies to a
         local loopback **bridge** (127.0.0.1:47900), which forwards into DST.
         (Bringing your **own Cloudflare domain** is an optional advanced path,
         set up under **Settings → Remote Access**.) If pairing or remote access
         fails, note:
 
-        - What **Settings → Mobile App** shows: the remote-address badge
+        - What **Settings → Remote Device Access** shows: the remote-address badge
           ("Tailscale Funnel" / "custom domain"), "No remote address yet", or
-          "Mobile bridge not running".
-        - Whether the phone shows "Cannot reach server" after scanning the QR.
+          "Remote access bridge not running".
+        - Whether the phone/tablet/PC can open the URL after scanning the QR.
+        - Whether the affected account is Owner or Admin and which expected page
+          is present or missing. Never include its username.
         - Whether Browser Portal account login is enabled, and whether the QR/link
           is the stable token-free URL or legacy `?key=` magic link. Never paste
           the key, password, cookie, account ID, hash, or salt.
@@ -469,10 +471,11 @@ body:
         curl http://127.0.0.1:47900/_dst/health
         ```
 
-        Leave blank if your bug isn't about mobile/remote access.
+        Leave blank if your bug isn't about Browser Portal / remote access.
       placeholder: |
-        Settings > Mobile App shows: Tailscale Funnel https://<name>.ts.net
-        Phone shows: "Cannot reach server"
+        Settings > Remote Device Access shows: Tailscale Funnel https://<name>.ts.net
+        Account role: Admin; Gameplay Admin appears, Settings is hidden
+        Device shows: "Unable to reach Dune Server Tool"
         curl http://127.0.0.1:47900/_dst/health: {"ok":true}
       render: shell
     validations:
