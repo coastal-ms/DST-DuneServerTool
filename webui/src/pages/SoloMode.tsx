@@ -14,6 +14,7 @@ import {
   discoverSolo,
   fillSoloWaterContainer,
   completeSoloFindTheFremen,
+  completeSoloNpe,
   enableSoloAllSkills,
   grantSoloItems,
   importSoloBlueprint,
@@ -22,6 +23,7 @@ import {
   saveSoloConsoleSettings,
   saveSoloSettings,
   setSoloCurrencies,
+  setSoloProgressionPoints,
   maxSoloSpecializations,
   type SoloBackup,
   type SoloBackupsResponse,
@@ -483,6 +485,9 @@ export function SoloMode() {
   const [blueprintInputKey, setBlueprintInputKey] = useState(0)
   const [solariDraft, setSolariDraft] = useState(0)
   const [scripDraft, setScripDraft] = useState(0)
+  const [skillPointsDraft, setSkillPointsDraft] = useState(0)
+  const [intelDraft, setIntelDraft] = useState(0)
+  const [journeyAction, setJourneyAction] = useState<'fremen' | 'npe'>('fremen')
   const initializedFromStatus = useRef(false)
 
   useEffect(() => {
@@ -535,6 +540,13 @@ export function SoloMode() {
     setSolariDraft(currencies.solari)
     setScripDraft(currencies.scrip)
   }, [statusState.data?.inspection?.currencies])
+
+  useEffect(() => {
+    const progression = statusState.data?.inspection?.progression
+    if (!progression) return
+    setSkillPointsDraft(progression.unspentSkillPoints)
+    setIntelDraft(progression.intel)
+  }, [statusState.data?.inspection?.progression])
 
   useEffect(() => {
     if (!connected || vehicleKits) return
@@ -1091,6 +1103,41 @@ export function SoloMode() {
       setNotice({
         kind: 'ok',
         text: `${label} completed and verified. Previous save retained at ${result.safetyBackup}`,
+      })
+      await Promise.all([statusState.refresh(), runtimeState.refresh(), backupsState.refresh()])
+    } catch (error) {
+      setNotice({ kind: 'err', text: error instanceof Error ? error.message : String(error) })
+    } finally {
+      setBusy(null)
+    }
+  }
+
+  const saveProgressionPoints = async () => {
+    if (!selectionMatchesActive) {
+      setNotice({ kind: 'err', text: 'Connect and validate the selected Solo profile before setting progression points.' })
+      return
+    }
+    if (gameRunning) {
+      setNotice({ kind: 'err', text: 'Close Dune: Awakening completely before setting Solo progression points.' })
+      return
+    }
+    const skillPoints = Math.max(0, Math.min(2_000_000_000, Math.trunc(skillPointsDraft || 0)))
+    const intel = Math.max(0, Math.min(2_000_000_000, Math.trunc(intelDraft || 0)))
+    if (!window.confirm(
+      `Set the Solo character to ${skillPoints.toLocaleString()} unspent skill points and ${intel.toLocaleString()} Intel?\n\n`
+      + 'DST will retain the current game.db, preserve all learned skills, write the exact requested balances, and verify them before replacing the save.',
+    )) return
+    setBusy('progression:points')
+    setNotice(null)
+    try {
+      const result = await setSoloProgressionPoints(
+        skillPoints,
+        intel,
+        statusState.data?.profileToken ?? '',
+      )
+      setNotice({
+        kind: 'ok',
+        text: `Progression points set and verified. Previous save retained at ${result.safetyBackup}`,
       })
       await Promise.all([statusState.refresh(), runtimeState.refresh(), backupsState.refresh()])
     } catch (error) {
@@ -1928,7 +1975,7 @@ export function SoloMode() {
               PTC adapter only. Close the game fully before every action. Each action creates its own retained pre-progression backup.
             </span>
           </div>
-          <div className="grid grid-cols-1 xl:grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
             <ProgressionActionCard
               icon="Medal"
               title="Max specializations"
@@ -1942,24 +1989,56 @@ export function SoloMode() {
                 maxSoloSpecializations,
               )}
             />
-            <ProgressionActionCard
-              icon="Route"
-              title="Complete Find the Fremen"
-              description="Complete all 59 verified nodes, add 14 reward tags and five Fremkit recipes, then enable Prescience and the third ability slot."
-              status={`${inspection?.progression.fremenNodesComplete ?? 0}/${inspection?.progression.fremenNodesTotal ?? 0} nodes · Prescience ${inspection?.progression.spiceSystemStatus === 'FullyEnabled' ? 'enabled' : 'locked'}`}
-              busy={busy === 'progression:fremen'}
-              disabled={!canMutateActiveProfile || gameRunning}
-              onRun={() => void runProgressionAction(
-                'fremen',
-                'Complete Find the Fremen',
-                completeSoloFindTheFremen,
-              )}
-            />
+            <div className="card p-5 flex flex-col">
+              <div className="w-9 h-9 rounded-lg bg-accent/10 border border-accent/25 flex items-center justify-center text-accent-bright mb-3">
+                <Icon name="Route" size={17} />
+              </div>
+              <h2 className="font-semibold">Journey completion</h2>
+              <p className="text-sm text-text-muted mt-1">
+                Choose one independently verified PTC progression path. Each selection keeps its own retained backup.
+              </p>
+              <label className="mt-4">
+                <span className="text-xs text-text-muted">Progression path</span>
+                <select
+                  className={`${SOLO_INPUT_CLASS} mt-1`}
+                  value={journeyAction}
+                  onChange={event => setJourneyAction(event.target.value === 'npe' ? 'npe' : 'fremen')}
+                  disabled={!canMutateActiveProfile || gameRunning}
+                >
+                  <option value="fremen">Complete Find the Fremen</option>
+                  <option value="npe">Complete NPE</option>
+                </select>
+              </label>
+              <p className="text-xs text-text-muted mt-3 flex-1">
+                {journeyAction === 'npe'
+                  ? 'Complete the exact 140-node PTC tutorial catalog and apply the NPE completion tag, including the four PTC-only Base Backup Tool objectives.'
+                  : 'Complete all 59 verified nodes, add 14 reward tags and five Fremkit recipes, then enable Prescience and the third ability slot.'}
+              </p>
+              <div className="rounded border border-border bg-surface-2/50 px-3 py-2 text-xs text-text-muted mt-4">
+                {journeyAction === 'npe'
+                  ? `${inspection?.progression.npeNodesComplete ?? 0}/${inspection?.progression.npeNodesTotal ?? 0} nodes · completion tag ${inspection?.progression.npeTagPresent ? 'present' : 'missing'}`
+                  : `${inspection?.progression.fremenNodesComplete ?? 0}/${inspection?.progression.fremenNodesTotal ?? 0} nodes · Prescience ${inspection?.progression.spiceSystemStatus === 'FullyEnabled' ? 'enabled' : 'locked'}`}
+              </div>
+              <button
+                className={`btn-primary w-full justify-center mt-4 ${SOLO_DISABLED_PRIMARY_CLASS}`}
+                disabled={!canMutateActiveProfile || gameRunning}
+                onClick={() => void runProgressionAction(
+                  journeyAction,
+                  journeyAction === 'npe' ? 'Complete Solo NPE' : 'Complete Find the Fremen',
+                  journeyAction === 'npe' ? completeSoloNpe : completeSoloFindTheFremen,
+                )}
+              >
+                <Icon name={busy === `progression:${journeyAction}` ? 'LoaderCircle' : 'Play'} size={14} className={busy === `progression:${journeyAction}` ? 'animate-spin' : ''} />
+                {busy === `progression:${journeyAction}`
+                  ? 'Applying...'
+                  : journeyAction === 'npe' ? 'Complete NPE' : 'Complete Find the Fremen'}
+              </button>
+            </div>
             <ProgressionActionCard
               icon="Sparkles"
               title="Enable all skills"
               description="Raise 143 approved skills to value 7, leave Bindu Sprint and Voice Ignore learnable, preserve unknown PTC keys, keep at least 20 unspent points, and raise Intel to 100."
-              status={`${inspection?.progression.skillsAtSeven ?? 0}/144 enabled · ${inspection?.progression.unspentSkillPoints ?? 0} unspent · ${inspection?.progression.intel ?? 0} Intel`}
+              status={`${inspection?.progression.skillsAtSeven ?? 0}/143 enabled · ${inspection?.progression.unspentSkillPoints ?? 0} unspent · ${inspection?.progression.intel ?? 0} Intel`}
               busy={busy === 'progression:skills'}
               disabled={!canMutateActiveProfile || gameRunning}
               onRun={() => void runProgressionAction(
@@ -1968,6 +2047,61 @@ export function SoloMode() {
                 enableSoloAllSkills,
               )}
             />
+            <div className="card p-5 flex flex-col">
+              <div className="w-9 h-9 rounded-lg bg-accent/10 border border-accent/25 flex items-center justify-center text-accent-bright mb-3">
+                <Icon name="Gauge" size={17} />
+              </div>
+              <h2 className="font-semibold">Progression points</h2>
+              <p className="text-sm text-text-muted mt-1">
+                Read the current balances and set exact unspent skill-point and Intel amounts without changing learned skills.
+              </p>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-4">
+                <label>
+                  <span className="text-xs text-text-muted">Unspent skill points</span>
+                  <input
+                    type="number"
+                    min={0}
+                    max={2_000_000_000}
+                    step={1}
+                    className={`${SOLO_INPUT_CLASS} mt-1`}
+                    value={skillPointsDraft}
+                    onChange={event => setSkillPointsDraft(Number(event.target.value))}
+                    disabled={!canMutateActiveProfile || gameRunning}
+                  />
+                </label>
+                <label>
+                  <span className="text-xs text-text-muted">Intel points</span>
+                  <input
+                    type="number"
+                    min={0}
+                    max={2_000_000_000}
+                    step={1}
+                    className={`${SOLO_INPUT_CLASS} mt-1`}
+                    value={intelDraft}
+                    onChange={event => setIntelDraft(Number(event.target.value))}
+                    disabled={!canMutateActiveProfile || gameRunning}
+                  />
+                </label>
+              </div>
+              <div className="rounded border border-border bg-surface-2/50 px-3 py-2 text-xs text-text-muted mt-4">
+                Current: {(inspection?.progression.unspentSkillPoints ?? 0).toLocaleString()} unspent · {(inspection?.progression.intel ?? 0).toLocaleString()} Intel
+              </div>
+              <button
+                className={`btn-primary w-full justify-center mt-4 ${SOLO_DISABLED_PRIMARY_CLASS}`}
+                disabled={
+                  !canMutateActiveProfile
+                  || gameRunning
+                  || (
+                    skillPointsDraft === (inspection?.progression.unspentSkillPoints ?? 0)
+                    && intelDraft === (inspection?.progression.intel ?? 0)
+                  )
+                }
+                onClick={() => void saveProgressionPoints()}
+              >
+                <Icon name={busy === 'progression:points' ? 'LoaderCircle' : 'Save'} size={14} className={busy === 'progression:points' ? 'animate-spin' : ''} />
+                {busy === 'progression:points' ? 'Saving...' : 'Set progression points'}
+              </button>
+            </div>
           </div>
         </div>
       )}

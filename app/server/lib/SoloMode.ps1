@@ -317,7 +317,7 @@ function Assert-DuneSoloGameClosed {
 
 function Invoke-DuneSoloHelper {
     param(
-        [Parameter(Mandatory)][ValidateSet('inspect','backup','restore','grant-items','import-blueprint','set-currencies','fill-water','max-augment-attributes','max-specializations','complete-fremen','enable-skills')][string]$Command,
+        [Parameter(Mandatory)][ValidateSet('inspect','backup','restore','grant-items','import-blueprint','set-currencies','fill-water','max-augment-attributes','max-specializations','complete-fremen','complete-npe','enable-skills','set-progression-points')][string]$Command,
         [Parameter(Mandatory)][hashtable]$Arguments
     )
 
@@ -358,7 +358,7 @@ function Assert-DuneSoloPtcAdapter {
 
 function Invoke-DuneSoloProgressionAction {
     param(
-        [Parameter(Mandatory)][ValidateSet('max-specializations','complete-fremen','enable-skills')][string]$Action,
+        [Parameter(Mandatory)][ValidateSet('max-specializations','complete-fremen','complete-npe','enable-skills')][string]$Action,
         [Parameter(Mandatory)][string]$Confirm,
         [Parameter(Mandatory)][string]$ExpectedConfirm
     )
@@ -388,6 +388,42 @@ function Invoke-DuneSoloProgressionAction {
         $arguments['skills'] = Get-DuneSoloDataFilePath -Name 'dune-skills-catalog.json'
     }
     return Invoke-DuneSoloHelper -Command $Action -Arguments $arguments
+}
+
+function Set-DuneSoloProgressionPoints {
+    param(
+        [Parameter(Mandatory)][long]$SkillPoints,
+        [Parameter(Mandatory)][long]$Intel,
+        [Parameter(Mandatory)][string]$Confirm
+    )
+
+    Assert-DuneSoloSupportedPlatform
+    if ($Confirm -ne 'SET SOLO PROGRESSION POINTS') {
+        throw 'Confirm the offline Solo progression-point change before continuing.'
+    }
+    if ($SkillPoints -lt 0 -or $SkillPoints -gt 2000000000) {
+        throw 'Skill points must be between 0 and 2000000000.'
+    }
+    if ($Intel -lt 0 -or $Intel -gt 2000000000) {
+        throw 'Intel points must be between 0 and 2000000000.'
+    }
+    Assert-DuneSoloGameClosed
+    $profile = Get-DuneSoloProfile
+    if (-not $profile.dbPath -or -not (Test-Path -LiteralPath $profile.dbPath -PathType Leaf)) {
+        throw 'Connect a valid Solo save before changing progression points.'
+    }
+    Assert-DuneSoloPtcAdapter -Profile $profile
+    $safetyDir = Join-Path (Get-DuneSoloProfileBackupRoot -DbPath $profile.dbPath) 'pre-progression'
+    New-Item -ItemType Directory -Path $safetyDir -Force | Out-Null
+    $stamp = (Get-Date).ToUniversalTime().ToString('yyyyMMdd-HHmmssfff')
+    $safety = Join-Path $safetyDir "game-before-set-progression-points-$stamp.db"
+    return Invoke-DuneSoloHelper -Command 'set-progression-points' -Arguments @{
+        input = $profile.dbPath
+        'safety-backup' = $safety
+        adapter = Get-DuneSoloDataFilePath -Name 'solo-ptc-v1.json'
+        'skill-points' = $SkillPoints
+        intel = $Intel
+    }
 }
 
 function Fill-DuneSoloWaterContainer {

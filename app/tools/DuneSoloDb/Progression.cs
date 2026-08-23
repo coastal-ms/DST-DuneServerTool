@@ -427,6 +427,216 @@ internal static partial class Program
             });
     }
 
+    private static object CompleteNpe(
+        string input,
+        string safetyBackup,
+        string adapterPath)
+    {
+        var adapter = ReadPtcAdapter(adapterPath);
+        AssertProgressionSchema(input, adapter);
+        return RunProgressionMutation(
+            input,
+            safetyBackup,
+            "complete-npe",
+            sqlitePath =>
+            {
+                using var connection = OpenWritable(sqlitePath);
+                var identity = ReadIdentity(connection);
+                var observedNodes = ReadStrings(
+                    connection,
+                    """
+                    SELECT story_node_id
+                    FROM journey_story_node
+                    WHERE character_id = $character
+                      AND (
+                          story_node_id = 'DA_MQ_ANewBeginning'
+                          OR story_node_id LIKE 'DA_MQ_ANewBeginning.%'
+                          OR story_node_id = 'DA_MQ_NPEAutocompleted'
+                          OR story_node_id LIKE 'DA_MQ_NPEAutocompleted.%'
+                      )
+                    ORDER BY story_node_id;
+                    """,
+                    ("$character", identity.CharacterId));
+                var catalog = adapter.NpeNodes.ToHashSet(StringComparer.Ordinal);
+                var unknown = observedNodes
+                    .Where(node => !catalog.Contains(node))
+                    .ToArray();
+                if (unknown.Length > 0)
+                {
+                    throw new InvalidDataException(
+                        $"PTC NPE adapter mismatch: found {unknown.Length} unknown journey node(s), beginning with {unknown[0]}.");
+                }
+
+                BeginImmediate(connection);
+                try
+                {
+                    foreach (var node in adapter.NpeNodes)
+                    {
+                        ExecuteNonQuery(
+                            connection,
+                            """
+                            INSERT INTO journey_story_node (
+                                character_id,
+                                story_node_id,
+                                complete_condition_state,
+                                reveal_condition_state,
+                                has_pending_reward,
+                                metadata_state,
+                                reset_group,
+                                fail_condition_state
+                            )
+                            VALUES (
+                                $character,
+                                $node,
+                                jsonb('true'),
+                                jsonb('true'),
+                                0,
+                                jsonb('{}'),
+                                0,
+                                jsonb('{}')
+                            )
+                            ON CONFLICT(character_id, story_node_id)
+                            DO UPDATE SET complete_condition_state = jsonb('true'),
+                                          reveal_condition_state = jsonb('true'),
+                                          has_pending_reward = 0;
+                            """,
+                            ("$character", identity.CharacterId),
+                            ("$node", node));
+                    }
+                    ExecuteNonQuery(
+                        connection,
+                        """
+                        INSERT INTO player_tags (character_id, tag)
+                        VALUES ($character, $tag)
+                        ON CONFLICT(character_id, tag) DO NOTHING;
+                        """,
+                        ("$character", identity.CharacterId),
+                        ("$tag", adapter.NpeTag));
+
+                    var completed = ScalarLong(
+                        connection,
+                        """
+                        SELECT COUNT(*)
+                        FROM journey_story_node
+                        WHERE character_id = $character
+                          AND (
+                              story_node_id = 'DA_MQ_ANewBeginning'
+                              OR story_node_id LIKE 'DA_MQ_ANewBeginning.%'
+                              OR story_node_id = 'DA_MQ_NPEAutocompleted'
+                              OR story_node_id LIKE 'DA_MQ_NPEAutocompleted.%'
+                          )
+                          AND json(complete_condition_state) = 'true'
+                          AND json(reveal_condition_state) = 'true'
+                          AND has_pending_reward = 0;
+                        """,
+                        ("$character", identity.CharacterId));
+                    var tagCount = ScalarLong(
+                        connection,
+                        """
+                        SELECT COUNT(*)
+                        FROM player_tags
+                        WHERE character_id = $character AND tag = $tag;
+                        """,
+                        ("$character", identity.CharacterId),
+                        ("$tag", adapter.NpeTag));
+                    if (completed != adapter.NpeNodes.Count || tagCount != 1)
+                    {
+                        throw new InvalidDataException(
+                            $"Complete-NPE semantic verification failed (nodes={completed}/{adapter.NpeNodes.Count}, tag={tagCount}).");
+                    }
+                    ValidateDatabase(connection);
+                    Commit(connection);
+                    return new
+                    {
+                        nodes = completed,
+                        tag = adapter.NpeTag
+                    };
+                }
+                catch
+                {
+                    Rollback(connection);
+                    throw;
+                }
+            });
+    }
+
+    private static object SetProgressionPoints(
+        string input,
+        string safetyBackup,
+        string adapterPath,
+        long skillPoints,
+        long intel)
+    {
+        var adapter = ReadPtcAdapter(adapterPath);
+        AssertProgressionSchema(input, adapter);
+        return RunProgressionMutation(
+            input,
+            safetyBackup,
+            "set-progression-points",
+            sqlitePath =>
+            {
+                using var connection = OpenWritable(sqlitePath);
+                var identity = ReadIdentity(connection);
+                BeginImmediate(connection);
+                try
+                {
+                    var components = ReadFglComponents(connection, identity.EntityId);
+                    var level = RequireComponentObject(components, "FLevelComponent");
+                    var moduleData = level["ModuleData"] as JsonObject ?? new JsonObject();
+                    level["ModuleData"] = moduleData;
+                    var moduleBefore = moduleData.ToJsonString();
+                    var spent = SumSkillSpend(moduleData);
+                    var total = (long)spent + skillPoints;
+                    if (total > 2_000_000_000)
+                    {
+                        throw new ArgumentException(
+                            "Skill points plus currently spent points must not exceed 2000000000.");
+                    }
+                    level["UnspentSkillPoints"] = (int)skillPoints;
+                    level["TotalSkillPoints"] = (int)total;
+                    WriteFglComponents(connection, identity.EntityId, components);
+
+                    var properties = ReadActorProperties(connection, identity.PawnId);
+                    var tech = EnsureObject(properties, "TechKnowledgePlayerComponent");
+                    tech["m_TechKnowledgePoints"] = (int)intel;
+                    WriteActorProperties(connection, identity.PawnId, properties);
+
+                    var verifyComponents = ReadFglComponents(connection, identity.EntityId);
+                    var verifyLevel = RequireComponentObject(
+                        verifyComponents,
+                        "FLevelComponent");
+                    var verifyModule = verifyLevel["ModuleData"] as JsonObject
+                        ?? throw new InvalidDataException("ModuleData missing after point write.");
+                    var verifyProperties = ReadActorProperties(connection, identity.PawnId);
+                    var verifyIntel = GetInt(
+                        verifyProperties["TechKnowledgePlayerComponent"] as JsonObject,
+                        "m_TechKnowledgePoints");
+                    if (verifyModule.ToJsonString() != moduleBefore
+                        || GetInt(verifyLevel, "UnspentSkillPoints") != skillPoints
+                        || GetInt(verifyLevel, "TotalSkillPoints") != total
+                        || verifyIntel != intel)
+                    {
+                        throw new InvalidDataException(
+                            "Progression-point semantic verification failed.");
+                    }
+                    ValidateDatabase(connection);
+                    Commit(connection);
+                    return new
+                    {
+                        skillPoints,
+                        totalSkillPoints = total,
+                        spentSkillPoints = spent,
+                        intel
+                    };
+                }
+                catch
+                {
+                    Rollback(connection);
+                    throw;
+                }
+            });
+    }
+
     private static object RunProgressionMutation(
         string input,
         string safetyBackup,
@@ -488,7 +698,8 @@ internal static partial class Program
     }
 
     private static ProgressionSummary ReadProgressionSummary(
-        SqliteConnection connection)
+        SqliteConnection connection,
+        PtcAdapter? adapter = null)
     {
         try
         {
@@ -552,6 +763,39 @@ internal static partial class Program
                       AND json(reveal_condition_state) = 'true';
                     """)
                 : 0;
+            var completedNpeNodes = TableExists(connection, "journey_story_node")
+                ? ReadStrings(
+                    connection,
+                    """
+                    SELECT story_node_id
+                    FROM journey_story_node
+                    WHERE character_id = (SELECT id FROM player_state LIMIT 1)
+                      AND (
+                          story_node_id = 'DA_MQ_ANewBeginning'
+                          OR story_node_id LIKE 'DA_MQ_ANewBeginning.%'
+                          OR story_node_id = 'DA_MQ_NPEAutocompleted'
+                          OR story_node_id LIKE 'DA_MQ_NPEAutocompleted.%'
+                      )
+                      AND json(complete_condition_state) = 'true'
+                      AND json(reveal_condition_state) = 'true';
+                    """)
+                : Array.Empty<string>();
+            var npeCatalog = adapter?.NpeNodes.ToHashSet(StringComparer.Ordinal);
+            var npeTotal = npeCatalog?.Count ?? completedNpeNodes.Length;
+            var npeComplete = npeCatalog is null
+                ? completedNpeNodes.Length
+                : completedNpeNodes.Count(npeCatalog.Contains);
+            var npeTag = adapter?.NpeTag ?? "NPE.HasCompletedNPE";
+            var npeTagPresent = TableExists(connection, "player_tags")
+                && ScalarLong(
+                    connection,
+                    """
+                    SELECT COUNT(*)
+                    FROM player_tags
+                    WHERE character_id = (SELECT id FROM player_state LIMIT 1)
+                      AND tag = $tag;
+                    """,
+                    ("$tag", npeTag)) == 1;
 
             var identity = ReadIdentity(connection);
             var components = ReadFglComponents(connection, identity.EntityId);
@@ -572,6 +816,9 @@ internal static partial class Program
                 PurchasedRewards: rewards,
                 FremenNodesTotal: fremenTotal,
                 FremenNodesComplete: fremenComplete,
+                NpeNodesTotal: npeTotal,
+                NpeNodesComplete: npeComplete,
+                NpeTagPresent: npeTagPresent,
                 SpiceSystemStatus: spice["SystemStatus"]?.GetValue<string>() ?? "",
                 SpiceVisionStatus: spice["SpiceVisionEnabledStatus"]?.GetValue<string>() ?? "",
                 SkillsAtSeven: enabledAtSeven,
@@ -896,7 +1143,20 @@ internal static partial class Program
             tracks[property.Name] = property.Value.GetInt32();
         }
         var fremen = root.GetProperty("find_the_fremen");
+        var npe = root.GetProperty("complete_npe");
         var skills = root.GetProperty("enable_all_skills");
+        var npeNodes = npe.GetProperty("nodes")
+            .EnumerateArray()
+            .Select(value => value.GetString() ?? "")
+            .Where(value => value.Length > 0)
+            .ToArray();
+        var declaredNpeNodes = npe.GetProperty("node_count").GetInt32();
+        if (npeNodes.Length != declaredNpeNodes
+            || npeNodes.Distinct(StringComparer.Ordinal).Count() != npeNodes.Length)
+        {
+            throw new InvalidDataException(
+                $"PTC NPE catalog expected {declaredNpeNodes} unique nodes, found {npeNodes.Length}.");
+        }
         var schemaFingerprints = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
         {
             root.GetProperty("schema_fingerprint").GetString() ?? ""
@@ -922,6 +1182,8 @@ internal static partial class Program
             FremenRecipes: fremen.GetProperty("recipes")
                 .EnumerateArray().Select(value => value.GetString() ?? "").ToArray(),
             SpiceStatus: fremen.GetProperty("spice_status").GetString() ?? "",
+            NpeNodes: npeNodes,
+            NpeTag: npe.GetProperty("tag").GetString() ?? "",
             WaterCapacities: root.GetProperty("water_fillable_capacities")
                 .EnumerateObject()
                 .ToDictionary(
@@ -972,6 +1234,8 @@ internal static partial class Program
         IReadOnlyList<string> FremenTags,
         IReadOnlyList<string> FremenRecipes,
         string SpiceStatus,
+        IReadOnlyList<string> NpeNodes,
+        string NpeTag,
         IReadOnlyDictionary<string, int> WaterCapacities,
         int SkillLevel,
         int SkillBuffer,
@@ -999,6 +1263,9 @@ internal static partial class Program
         long PurchasedRewards,
         long FremenNodesTotal,
         long FremenNodesComplete,
+        long NpeNodesTotal,
+        long NpeNodesComplete,
+        bool NpeTagPresent,
         string SpiceSystemStatus,
         string SpiceVisionStatus,
         int SkillsAtSeven,
@@ -1013,6 +1280,9 @@ internal static partial class Program
             0,
             0,
             0,
+            0,
+            0,
+            false,
             "",
             "",
             0,

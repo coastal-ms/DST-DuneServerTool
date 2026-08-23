@@ -105,11 +105,21 @@ internal static partial class Program
                     Require(options, "input"),
                     Require(options, "safety-backup"),
                     Require(options, "adapter")),
+                "complete-npe" => CompleteNpe(
+                    Require(options, "input"),
+                    Require(options, "safety-backup"),
+                    Require(options, "adapter")),
                 "enable-skills" => EnableAllSkills(
                     Require(options, "input"),
                     Require(options, "safety-backup"),
                     Require(options, "adapter"),
                     Require(options, "skills")),
+                "set-progression-points" => SetProgressionPoints(
+                    Require(options, "input"),
+                    Require(options, "safety-backup"),
+                    Require(options, "adapter"),
+                    ParseBalance(RequireValue(options, "skill-points"), "Skill points"),
+                    ParseBalance(RequireValue(options, "intel"), "Intel points")),
                 "self-test" => SelfTest(),
                 _ => throw new ArgumentException($"Unknown command: {command}")
             };
@@ -890,6 +900,17 @@ internal static partial class Program
                     INSERT INTO placeables VALUES (23, 1, 'BasicContainer_Placeable', 0);
                     INSERT INTO placeables VALUES (24, 1, 'SpiceSilo_Placeable', 0);
                     INSERT INTO placeables VALUES (25, 1, 'MediumStorageContainer_Placeable', 0);
+                    CREATE TABLE permission_actor (
+                        actor_id INTEGER NOT NULL,
+                        actor_name TEXT NOT NULL,
+                        actor_type INTEGER NOT NULL,
+                        access_level INTEGER NOT NULL,
+                        is_child INTEGER NOT NULL,
+                        edited_by_player_id INTEGER NOT NULL
+                    );
+                    INSERT INTO permission_actor VALUES
+                        (20, '##Developer_StorageContainer_Placeable', 1, 3, 1, 0),
+                        (22, 'Crafting', 1, 3, 1, 1);
                     CREATE TABLE fgl_entities (
                         entity_id INTEGER PRIMARY KEY,
                         components BLOB
@@ -939,7 +960,9 @@ internal static partial class Program
                         fail_condition_state
                     ) VALUES
                         (1, 'DA_MQ_FindTheFremen', jsonb('false'), jsonb('false'), 1, jsonb('{}'), 1, jsonb('{}')),
-                        (1, 'DA_MQ_FindTheFremen.FirstTest', jsonb('false'), jsonb('false'), 1, jsonb('{}'), 1, jsonb('{}'));
+                        (1, 'DA_MQ_FindTheFremen.FirstTest', jsonb('false'), jsonb('false'), 1, jsonb('{}'), 1, jsonb('{}')),
+                        (1, 'DA_MQ_ANewBeginning', jsonb('false'), jsonb('false'), 1, jsonb('{}'), 0, jsonb('{}')),
+                        (1, 'DA_MQ_NPEAutocompleted', jsonb('false'), jsonb('false'), 1, jsonb('{}'), 0, jsonb('{}'));
                     CREATE TABLE player_tags (
                         character_id INTEGER NOT NULL,
                         tag TEXT NOT NULL,
@@ -1114,7 +1137,7 @@ internal static partial class Program
             {
                 "Chest #1",
                 "Small Storage Container #1",
-                "Storage Container #1",
+                "Crafting",
                 "Medium Storage Container #1",
                 "Developer Storage #1"
             };
@@ -1612,6 +1635,11 @@ internal static partial class Program
                     "recipes":["RCP_TestFremkitRecipe"],
                     "spice_status":"FullyEnabled"
                   },
+                  "complete_npe":{
+                    "tag":"NPE.SelfTestCompletedNPE",
+                    "node_count":2,
+                    "nodes":["DA_MQ_ANewBeginning","DA_MQ_NPEAutocompleted"]
+                  },
                   "water_fillable_capacities":{
                     "highcapacityliterjon_06":3000
                   },
@@ -1626,6 +1654,12 @@ internal static partial class Program
                   }
                 }
                 """.Replace("__SCHEMA_FINGERPRINT__", selfTestFingerprint));
+            var beforeNpe = InspectPath(target, adapterPath: adapterPath).Progression;
+            if (beforeNpe.NpeNodesTotal != 2 || beforeNpe.NpeNodesComplete != 0)
+            {
+                throw new InvalidOperationException(
+                    "NPE inspection did not use the exact adapter catalog.");
+            }
             var fillSafety = Path.Combine(root, "safety", "before-fill.db");
             FillWaterContainer(target, fillSafety, 100, adapterPath);
             var fillInspection = InspectPath(target, adapterPath: adapterPath);
@@ -1680,18 +1714,30 @@ internal static partial class Program
                 target,
                 Path.Combine(root, "safety", "before-fremen.db"),
                 adapterPath);
+            CompleteNpe(
+                target,
+                Path.Combine(root, "safety", "before-npe.db"),
+                adapterPath);
             EnableAllSkills(
                 target,
                 Path.Combine(root, "safety", "before-skills.db"),
                 adapterPath,
                 skillsPath);
-            var progressionInspection = InspectPath(target);
+            SetProgressionPoints(
+                target,
+                Path.Combine(root, "safety", "before-points.db"),
+                adapterPath,
+                321,
+                654);
+            var progressionInspection = InspectPath(target, adapterPath: adapterPath);
             if (progressionInspection.Progression.Specializations.Length != 5
                 || progressionInspection.Progression.PurchasedRewards != 2
                 || progressionInspection.Progression.FremenNodesComplete != 2
+                || progressionInspection.Progression.NpeNodesComplete != 2
+                || !progressionInspection.Progression.NpeTagPresent
                 || progressionInspection.Progression.SkillsAtSeven != 2
-                || progressionInspection.Progression.UnspentSkillPoints < 20
-                || progressionInspection.Progression.Intel < 100)
+                || progressionInspection.Progression.UnspentSkillPoints != 321
+                || progressionInspection.Progression.Intel != 654)
             {
                 throw new InvalidOperationException(
                     "Progression self-test did not reach verified target state.");
@@ -1790,6 +1836,7 @@ internal static partial class Program
                     "sqlite-integrity-and-foreign-keys",
                     "exactly-one-character",
                     "map-seed-from-coriolis-cycle",
+                    "custom-storage-labels-with-generic-fallback",
                     "retained-backup",
                     "atomic-restore-with-safety-backup",
                     "unsupported-wrapper-rejected",
@@ -1803,7 +1850,9 @@ internal static partial class Program
                     "offline-water-container-fills-with-safety-backups",
                     "offline-specialization-max-with-rewards",
                     "offline-find-the-fremen-completion",
+                    "offline-ptc-npe-completion",
                     "offline-enable-all-skills-preserves-unknowns",
+                    "offline-exact-progression-points",
                     "progression-compatible-schema-accepted",
                     "progression-schema-mismatch-fails-closed",
                     "invalid-restore-leaves-target-unchanged"
@@ -1849,14 +1898,15 @@ internal static partial class Program
         var catalog = catalogPath is null
             ? null
             : ReadCatalog(catalogPath);
-        var waterCapacities = adapterPath is null
+        var adapter = adapterPath is null
             ? null
-            : ReadPtcAdapter(adapterPath).WaterCapacities;
+            : ReadPtcAdapter(adapterPath);
         return InspectBytes(
             ReadStable(input),
             input,
             catalog,
-            waterCapacities);
+            adapter?.WaterCapacities,
+            adapter);
     }
 
     private static byte[] ReadStable(string path)
@@ -1899,7 +1949,8 @@ internal static partial class Program
         byte[] wrapped,
         string sourcePath,
         IReadOnlyDictionary<string, CatalogRule>? catalog = null,
-        IReadOnlyDictionary<string, int>? waterCapacities = null)
+        IReadOnlyDictionary<string, int>? waterCapacities = null,
+        PtcAdapter? adapter = null)
     {
         var database = Unwrap(wrapped);
         var sqliteBytes = database.SqliteBytes;
@@ -1917,7 +1968,8 @@ internal static partial class Program
                 wrapperVersion,
                 declaredLength,
                 catalog,
-                waterCapacities);
+                waterCapacities,
+                adapter);
         }
         finally
         {
@@ -1971,7 +2023,8 @@ internal static partial class Program
         uint wrapperVersion,
         uint declaredLength,
         IReadOnlyDictionary<string, CatalogRule>? catalog,
-        IReadOnlyDictionary<string, int>? waterCapacities)
+        IReadOnlyDictionary<string, int>? waterCapacities,
+        PtcAdapter? adapter)
     {
         var connectionString = new SqliteConnectionStringBuilder
         {
@@ -2015,7 +2068,7 @@ internal static partial class Program
         var fillables = hasPlayerState && characterCount == 1
             ? ReadSupportedFillables(connection, waterCapacities)
             : Array.Empty<FillableItem>();
-        var progression = ReadProgressionSummary(connection);
+        var progression = ReadProgressionSummary(connection, adapter);
         long? mapSeed = null;
         var hasSingleCoriolisCycle = ScalarLong(
             connection,
@@ -2111,22 +2164,36 @@ internal static partial class Program
             }
         }
 
+        var permissionName = TableExists(connection, "permission_actor")
+            ? """
+              COALESCE(MAX(CASE
+                  WHEN permission_actor.actor_name NOT LIKE '##%'
+                   AND LOWER(TRIM(permission_actor.actor_name)) <> 'none'
+                  THEN TRIM(permission_actor.actor_name)
+              END), '')
+              """
+            : "''";
+        var permissionJoin = TableExists(connection, "permission_actor")
+            ? "LEFT JOIN permission_actor ON permission_actor.actor_id = placeables.id"
+            : "";
         using var storage = connection.CreateCommand();
-        storage.CommandText = """
+        storage.CommandText = $"""
             SELECT inv.id,
                    inv.max_item_count,
                    inv.max_item_volume,
-                   COUNT(items.id),
-                   placeables.building_type
+                   COUNT(DISTINCT items.id),
+                   placeables.building_type,
+                   {permissionName} AS custom_name
             FROM inventories AS inv
             JOIN actors ON actors.id = inv.actor_id
             JOIN placeables ON placeables.id = actors.id
+            {permissionJoin}
             LEFT JOIN items ON items.inventory_id = inv.id
             WHERE inv.inventory_type = 4
               AND placeables.is_hologram = 0
               AND placeables.owner_entity_id IS NOT NULL
               AND placeables.owner_entity_id != 0
-            GROUP BY inv.id
+            GROUP BY inv.id, placeables.building_type
             ORDER BY inv.id;
             """;
         using (var reader = storage.ExecuteReader())
@@ -2142,10 +2209,13 @@ internal static partial class Program
                 labelCounts.TryGetValue(baseLabel, out var priorCount);
                 var index = priorCount + 1;
                 labelCounts[baseLabel] = index;
+                var customName = reader.IsDBNull(5) ? string.Empty : reader.GetString(5);
                 results.Add(new InventoryDestination(
                     Id: reader.GetInt64(0),
                     Key: $"inventory:{reader.GetInt64(0)}",
-                    Label: $"{baseLabel} #{index}",
+                    Label: string.IsNullOrWhiteSpace(customName)
+                        ? $"{baseLabel} #{index}"
+                        : customName,
                     Kind: string.Equals(
                         baseLabel,
                         "Developer Storage",

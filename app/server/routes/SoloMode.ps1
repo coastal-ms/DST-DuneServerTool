@@ -323,6 +323,23 @@ Register-DuneRoute -Method POST -Path '/api/solo/progression/find-the-fremen' -L
     }
 }
 
+Register-DuneRoute -Method POST -Path '/api/solo/progression/npe/complete' -LocalOnly -Handler {
+    param($req, $res, $routeParams, $body)
+    try {
+        $confirm = [string](Get-DuneSoloBodyField -Body $body -Name 'confirm' -Default '')
+        $expectedProfileToken = [string](Get-DuneSoloBodyField -Body $body -Name 'expectedProfileToken' -Default '')
+        $result = Invoke-WithDuneLock -Name 'solo-profile-data' -Script {
+            Assert-DuneSoloExpectedProfile -ExpectedProfileToken $expectedProfileToken
+            Invoke-DuneSoloProgressionAction -Action 'complete-npe' `
+                -Confirm $confirm -ExpectedConfirm 'COMPLETE SOLO NPE'
+        }
+        Write-DuneJson -Response $res -Body $result
+    } catch {
+        $status = if ($_.Exception.Message -like '*still running*' -or $_.Exception.Message -like '*changed in another window*') { 409 } else { 400 }
+        Write-DuneError -Response $res -Status $status -Message $_.Exception.Message
+    }
+}
+
 Register-DuneRoute -Method POST -Path '/api/solo/progression/skills/enable-all' -LocalOnly -Handler {
     param($req, $res, $routeParams, $body)
     try {
@@ -332,6 +349,46 @@ Register-DuneRoute -Method POST -Path '/api/solo/progression/skills/enable-all' 
             Assert-DuneSoloExpectedProfile -ExpectedProfileToken $expectedProfileToken
             Invoke-DuneSoloProgressionAction -Action 'enable-skills' `
                 -Confirm $confirm -ExpectedConfirm 'ENABLE SOLO SKILLS'
+        }
+        Write-DuneJson -Response $res -Body $result
+    } catch {
+        $status = if ($_.Exception.Message -like '*still running*' -or $_.Exception.Message -like '*changed in another window*') { 409 } else { 400 }
+        Write-DuneError -Response $res -Status $status -Message $_.Exception.Message
+    }
+}
+
+Register-DuneRoute -Method PUT -Path '/api/solo/progression/points' -LocalOnly -Handler {
+    param($req, $res, $routeParams, $body)
+    try {
+        $skillPoints = 0L
+        $rawSkillPoints = Get-DuneSoloBodyField -Body $body -Name 'skillPoints' -Default -1
+        $skillPointsText = [Convert]::ToString($rawSkillPoints, [Globalization.CultureInfo]::InvariantCulture)
+        if (-not [long]::TryParse(
+                $skillPointsText,
+                [Globalization.NumberStyles]::Integer,
+                [Globalization.CultureInfo]::InvariantCulture,
+                [ref]$skillPoints
+            )) {
+            throw 'Skill points must be a whole number.'
+        }
+
+        $intel = 0L
+        $rawIntel = Get-DuneSoloBodyField -Body $body -Name 'intel' -Default -1
+        $intelText = [Convert]::ToString($rawIntel, [Globalization.CultureInfo]::InvariantCulture)
+        if (-not [long]::TryParse(
+                $intelText,
+                [Globalization.NumberStyles]::Integer,
+                [Globalization.CultureInfo]::InvariantCulture,
+                [ref]$intel
+            )) {
+            throw 'Intel points must be a whole number.'
+        }
+
+        $confirm = [string](Get-DuneSoloBodyField -Body $body -Name 'confirm' -Default '')
+        $expectedProfileToken = [string](Get-DuneSoloBodyField -Body $body -Name 'expectedProfileToken' -Default '')
+        $result = Invoke-WithDuneLock -Name 'solo-profile-data' -Script {
+            Assert-DuneSoloExpectedProfile -ExpectedProfileToken $expectedProfileToken
+            Set-DuneSoloProgressionPoints -SkillPoints $skillPoints -Intel $intel -Confirm $confirm
         }
         Write-DuneJson -Response $res -Body $result
     } catch {
