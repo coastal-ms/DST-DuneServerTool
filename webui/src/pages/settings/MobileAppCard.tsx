@@ -104,16 +104,15 @@ export function MobileAppCard() {
       bodyClassName="card-body"
     >
 
-        {/* Secure remote access via Tailscale Funnel — the recommended, no-domain
-            path for the Browser Portal. (A Cloudflare custom domain
-            is the advanced alternative, configured under Settings → Remote Access;
-            pairing uses it automatically if set, so it isn't shown here.) */}
+        {/* Secure remote access via Tailscale Funnel — the supported path for new
+            Browser Portal setups. Existing Cloudflare custom-domain URLs remain
+            readable during their deprecation window. */}
         <div className="card p-3" style={{ marginBottom: '1rem' }}>
           <div className="flex items-center gap-2" style={{ fontWeight: 600 }}>
             <Icon name="Globe" size={16} /> Secure remote access
             {data && (
               data.url
-                ? <span className="badge safe" style={{ marginLeft: 'auto' }}>{data.source === 'funnel' ? 'Tailscale Funnel' : 'custom domain'}</span>
+                ? <span className="badge safe" style={{ marginLeft: 'auto' }}>{data.source === 'funnel' ? 'Tailscale Funnel' : 'legacy custom domain'}</span>
                 : <span className="badge" style={{ marginLeft: 'auto' }}>not set up</span>
             )}
           </div>
@@ -128,12 +127,19 @@ export function MobileAppCard() {
                 The address remains stable across DST restarts. Scan the current QR
                 whenever you need to open or save the Browser Portal on a device.
               </div>
+              {data.source !== 'funnel' && (
+                <div className="card p-2 border-warning/40 bg-warning/10 text-warning text-sm" style={{ marginTop: '0.75rem' }}>
+                  This Cloudflare custom-domain path is deprecated. Keep it running
+                  while you migrate to Tailscale Funnel, then test the Funnel URL
+                  before disabling Cloudflare.
+                </div>
+              )}
             </div>
           ) : (
             <div className="help-text" style={{ marginTop: '0.75rem' }}>
               No remote address yet. Install <a href="https://tailscale.com/download" target="_blank" rel="noreferrer">Tailscale</a> on this PC, then enable a Funnel on the bridge port for a free, no-domain public HTTPS address:
               <div style={{ marginTop: '0.5rem', fontSize: '12px', fontFamily: 'monospace', background: 'var(--surface-2, #1e293b)', padding: '0.5rem', borderRadius: '6px', wordBreak: 'break-all' }}>tailscale funnel --bg http://127.0.0.1:{bridgePort}</div>
-              <div style={{ marginTop: '0.5rem' }}>The address appears here automatically once the Funnel is active. (Prefer your own domain? Set up Cloudflare under <strong>Settings → Remote Access</strong> instead.)</div>
+              <div style={{ marginTop: '0.5rem' }}>The address appears here automatically once the Funnel is active.</div>
             </div>
           )}
         </div>
@@ -186,7 +192,7 @@ export function MobileAppCard() {
               </div>
             ) : (
               <div className="text-secondary" style={{ width: 200, textAlign: 'center' }}>
-                Set up a Tailscale Funnel or a Cloudflare domain (Remote Access) to generate a QR code.
+                Set up a Tailscale Funnel to generate a QR code.
               </div>
             )}
 

@@ -6,6 +6,10 @@ on **his** PC to get into the host's full DST desktop portal running on
 DST surface — **zero changes to `app/`, `webui/`, `site/`, or
 `dune-server.ps1`.**
 
+> Legacy scaffold: new remote-access setups should use DST's responsive Browser
+> Portal with Tailscale Funnel and host-managed Owner/Admin accounts. This helper
+> remains documented only for existing friend-helper deployments.
+
 ## Components
 
 ```
@@ -67,12 +71,10 @@ current DuneToken — which is rotated on every DST launch.
 
 ## Why this design
 
-- **Tailscale, not Cloudflare Tunnel.** The existing `/remote/*` SPA
-  already uses CF Tunnel + Access for a mobile-friendly subset. This
-  scaffold targets a *different* use case: a single trusted friend who
-  wants the **full** desktop portal (Database, Terminal, Setup Wizard,
-  everything the host sees). Tailscale gives identity-based access without
-  per-domain edge config, and friends don't need to set up an IdP.
+- **Tailscale, not Cloudflare Tunnel.** This scaffold predates Browser Portal
+  accounts and remains only for existing deployments. New trusted-user access
+  uses the full responsive Browser Portal, Tailscale Funnel, and Owner/Admin
+  roles without per-domain edge configuration.
 - **No DST code changes.** The bridge is a pure reverse proxy that reads
   the existing `last-url.txt` (DST already writes this for the desktop
   shell). DST stays on the **released** v11.0.3 surface — no risk of

@@ -165,7 +165,7 @@ export function RemoteAccessCard() {
   }
 
   return (
-    <div className="card mb-4" data-section-nav-id="settings.remoteAccess" data-section-nav-label="Remote Access">
+    <div className="card mb-4" data-section-nav-id="settings.remoteAccess" data-section-nav-label="Legacy Cloudflare">
       <button
         type="button"
         onClick={() => setExpanded(v => !v)}
@@ -176,12 +176,11 @@ export function RemoteAccessCard() {
         <div className="flex items-center gap-3">
           <Icon name={expanded ? 'ChevronDown' : 'ChevronRight'} size={16} className="text-text-dim" />
           <Icon name="Shield" size={18} className="text-text-muted" />
-          <h2 className="text-lg font-semibold">Remote Access</h2>
+          <h2 className="text-lg font-semibold">Legacy Cloudflare custom domain</h2>
         </div>
         <div className="flex items-center gap-2">
-          {enabled
-            ? <span className="pill-success text-xs">enabled</span>
-            : <span className="pill-muted text-xs">advanced / optional</span>}
+          <span className="pill-warning text-xs">deprecated</span>
+          {enabled && <span className="pill-success text-xs">enabled</span>}
           {cf?.installed
             ? <span className="pill-info text-xs">cloudflared {cf.version || 'detected'}</span>
             : enabled
@@ -210,17 +209,17 @@ export function RemoteAccessCard() {
               <div className="text-xs text-text-muted bg-surface-2/60 border border-border rounded-lg px-3 py-2 flex items-start gap-2">
                 <Icon name="Info" size={14} className="mt-0.5 flex-none" />
                 <span>
-                  <strong>Advanced / optional — most hosts don&apos;t need this.</strong> For the
-                  Browser Portal, the recommended path is <strong>Tailscale Funnel</strong>
-                  (set up from <strong>Remote Device Access</strong>) — no domain or Cloudflare account.
-                  This card is only for bringing your <strong>own Cloudflare domain</strong> for a
-                  permanent, email-gated hostname.
+                  <strong>Deprecated — existing configurations only.</strong> Cloudflare
+                  named-tunnel/Access support is planned for removal. Existing
+                  configurations remain editable and operational during migration,
+                  but new setups should use <strong>Tailscale Funnel</strong> plus
+                  Browser Portal accounts under <strong>Remote Device Access</strong>.
                 </span>
               </div>
               <p className="text-sm text-text-muted">
-                Provides an optional custom-domain transport for the responsive
-                Browser Portal through a Cloudflare Tunnel + Access policy.
-                Browser Portal account roles remain enforced by DST. See the{' '}
+                This legacy card maintains the Cloudflare tunnel identity and email
+                ACL used by existing deployments. These fields do not create Browser
+                Portal accounts. See the{' '}
                 <a
                   href="https://coastal-ms.github.io/DST-DuneServerTool/remote"
                   target="_blank"
@@ -229,8 +228,22 @@ export function RemoteAccessCard() {
                 >
                   setup guide
                 </a>
-                {' '}for cloudflared install + tunnel + Access policy steps.
+                {' '}for the supported Funnel setup and migration sequence.
               </p>
+
+              <div className="rounded-lg border border-warning/40 bg-warning/10 p-3 text-sm text-text-muted">
+                <div className="font-semibold text-warning mb-2">Migrate before Cloudflare removal</div>
+                <ol className="list-decimal pl-5 space-y-1">
+                  <li>Enable Tailscale Funnel from Remote Device Access.</li>
+                  <li>Create and locally verify a Browser Portal Owner account.</li>
+                  <li>Test the stable Funnel URL from an outside device.</li>
+                  <li>Create any Admin accounts and verify their restricted navigation.</li>
+                  <li>Only then disable this legacy portal and stop the Cloudflare tunnel.</li>
+                </ol>
+                <p className="mt-2 text-xs text-text-dim">
+                  Keep Cloudflare enabled until the replacement Funnel path is proven.
+                </p>
+              </div>
 
               <label className="flex items-center gap-3 cursor-pointer">
                 <input
@@ -240,7 +253,7 @@ export function RemoteAccessCard() {
                   className="h-4 w-4"
                 />
                 <span className="text-sm">
-                  <strong>Enable remote portal</strong>
+                  <strong>Enable legacy Cloudflare portal</strong>
                   <span className="block text-xs text-text-dim">
                     Clears the owner field on disable — every /remote/* request is
                     refused until re-enabled.
@@ -356,7 +369,7 @@ export function RemoteAccessCard() {
               </div>
 
               <div>
-                <label className="block text-sm font-medium mb-2">Admin allow-list</label>
+                <label className="block text-sm font-medium mb-2">Legacy Cloudflare email allow-list</label>
                 {acl.admins.length === 0 && (
                   <p className="text-xs text-text-dim mb-2">No admins yet — only the owner can sign in.</p>
                 )}
@@ -395,7 +408,7 @@ export function RemoteAccessCard() {
               <div className="flex items-center gap-3 pt-2 border-t border-border">
                 <button type="button" onClick={() => { void onSave() }} disabled={saving} className="btn-primary">
                   <Icon name={saving ? 'Loader2' : 'Save'} size={14} className={saving ? 'animate-spin' : ''} />
-                  {saving ? 'Saving…' : 'Save changes'}
+                  {saving ? 'Saving…' : 'Save legacy settings'}
                 </button>
                 {savedMsg && <span className="text-sm text-success">{savedMsg}</span>}
                 <div className="ml-auto">
