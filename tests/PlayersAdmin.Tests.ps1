@@ -196,3 +196,44 @@ Describe 'Invoke-DunePlayerAwardCharXp offline actor targeting' -Tag 'PlayersAdm
         $script:writeCount | Should -Be 0
     }
 }
+
+Describe 'Invoke-DunePlayerDeleteAccount ownership cleanup' -Tag 'PlayersAdmin' {
+    BeforeEach {
+        $script:lastWriteSql = $null
+        $script:writeCount = 0
+    }
+
+    It 'deletes every permission rank from objects owned by the deleted character' {
+        $result = Invoke-DunePlayerDeleteAccount -Ip 'x' -AccountId 1
+
+        $result.ok | Should -BeTrue
+        $script:lastWriteSql | Should -Match 'WITH deleted_character_actors AS'
+        $script:lastWriteSql | Should -Match 'owned_permission_actors AS'
+        $script:lastWriteSql | Should -Match 'par\.rank = 1'
+        $script:lastWriteSql | Should -Match 'DELETE FROM dune\.permission_actor_rank par'
+        $script:lastWriteSql | Should -Match 'par\.permission_actor_id IN'
+        $script:lastWriteSql | Should -Match 'SELECT permission_actor_id FROM owned_permission_actors'
+    }
+
+    It 'also strips the deleted actors co-owner and associate rows elsewhere' {
+        Invoke-DunePlayerDeleteAccount -Ip 'x' -AccountId 1 | Out-Null
+
+        $script:lastWriteSql | Should -Match 'par\.player_id IN'
+        $script:lastWriteSql | Should -Match 'SELECT actor_id FROM deleted_character_actors'
+    }
+
+    It 'includes historical deleted actors while remaining scoped to the selected account' {
+        Invoke-DunePlayerDeleteAccount -Ip 'x' -AccountId 55 | Out-Null
+
+        $discovery = [regex]::Match(
+            $script:lastWriteSql,
+            '(?s)WITH deleted_character_actors AS \((.*?)\),\s*owned_permission_actors AS'
+        ).Groups[1].Value
+        $discovery | Should -Match 'eps\.account_id = v_account_id'
+        $discovery | Should -Not -Match 'character_state'
+        $discovery | Should -Match 'eps\.player_controller_id'
+        $discovery | Should -Match 'eps\.player_pawn_id'
+        $discovery | Should -Match 'eps\.player_state_id'
+        $script:lastWriteSql | Should -Match "SET character_state = 'Deleted'::dune\.characterstate"
+    }
+}
