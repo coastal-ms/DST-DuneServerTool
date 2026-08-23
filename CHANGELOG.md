@@ -21,8 +21,7 @@ here cover everything those tags shipped.
   **Open PowerShell** action on the Commands page instead of occupying a
   permanent desktop-sidebar entry. Remote Browser Portal viewers still cannot
   see or access the terminal.
-- The **Buy Me a Coffee** support link is visible again in both expanded and
-  collapsed desktop sidebars.
+- Framework modification.
 
 ### Deprecated
 
