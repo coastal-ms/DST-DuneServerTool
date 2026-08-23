@@ -14,6 +14,9 @@ export type NavItem = {
   // MUST also enforce loopback-only on the server — the client filter is
   // just a UX hide, not a security boundary.
   localOnly?: boolean
+  // Hide this item from the desktop sidebar while retaining it in other
+  // navigation surfaces such as the classic top menu.
+  sidebarHidden?: boolean
   // Owner-only items stay available on the host and to remote Owner accounts,
   // but are hidden from delegated remote Admin accounts. The API must enforce
   // the same boundary; this is only the navigation half.
@@ -25,7 +28,7 @@ export const NAV_ITEMS: NavItem[] = [
   { to: '/',            label: 'Server Health', icon: 'LayoutDashboard', group: 'overview' },
   { to: '/pods',        label: 'Pods',          icon: 'Boxes',           group: 'overview' },
   { to: '/commands',    label: 'Commands',     icon: 'Zap',             group: 'terminal' },
-  { to: '/terminal',    label: 'PowerShell',   icon: 'SquareTerminal',  group: 'terminal', localOnly: true },
+  { to: '/terminal',    label: 'PowerShell',   icon: 'SquareTerminal',  group: 'terminal', localOnly: true, sidebarHidden: true },
   { to: '/gameconfig',  label: 'Game Config',  icon: 'Sliders',         group: 'data', ownerOnly: true },
   { to: '/experimental', label: 'Experimental Lab', icon: 'FlaskConical',   group: 'data', ownerOnly: true },
   { to: '/gameplay',    label: 'Gameplay Admin', icon: 'Gamepad2',        group: 'data' },

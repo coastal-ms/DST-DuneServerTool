@@ -14,7 +14,7 @@ Solo saves.
 [Changelog](CHANGELOG.md) ·
 [Discord](https://discord.gg/tj2x7cywSC)**
 
-Current stable release: **v14.0.0**
+Current stable release: **v14.0.1**
 
 Confirmed compatible with Dune: Awakening **1.4.10.4**.
 
