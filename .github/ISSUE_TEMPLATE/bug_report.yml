@@ -454,7 +454,7 @@ body:
         remote access fails, note:
 
         - What **Settings → Remote Device Access** shows: the remote-address badge
-          ("Tailscale Funnel" / "custom domain"), "No remote address yet", or
+          ("Tailscale Funnel" / "legacy custom domain"), "No remote address yet", or
           "Remote access bridge not running".
         - Whether the phone/tablet/PC can open the URL after scanning the QR.
         - Whether the affected account is Owner or Admin and which expected page

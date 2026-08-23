@@ -167,10 +167,12 @@ import PageHeader from "../components/PageHeader.astro";
         proven from an outside device.
       </p>
       <ol class="list-decimal list-inside space-y-2 text-dune-muted leading-relaxed text-sm">
-        <li>Enable Tailscale Funnel on <span class="font-mono">127.0.0.1:47900</span>.</li>
+        <li>Run <span class="font-mono">tailscale funnel --bg http://127.0.0.1:47900</span> in PowerShell.</li>
         <li>Confirm the <span class="font-mono">.ts.net</span> URL appears in Remote Device Access.</li>
-        <li>Create and locally verify a Browser Portal Owner account.</li>
-        <li>Test sign-in and the expected Owner/Admin page boundaries from outside the LAN.</li>
+        <li>Under Browser Portal accounts, create and locally verify an Owner.</li>
+        <li>Acknowledge native-app retirement, then enable account login.</li>
+        <li>Create any Browser Portal Admin account needed for role-boundary testing.</li>
+        <li>Test Owner sign-in and Admin restricted navigation from outside the LAN.</li>
         <li>Disable the legacy Cloudflare portal in Settings, then stop the Cloudflare tunnel.</li>
       </ol>
     </div>

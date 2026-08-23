@@ -234,10 +234,14 @@ export function RemoteAccessCard() {
               <div className="rounded-lg border border-warning/40 bg-warning/10 p-3 text-sm text-text-muted">
                 <div className="font-semibold text-warning mb-2">Migrate before Cloudflare removal</div>
                 <ol className="list-decimal pl-5 space-y-1">
-                  <li>Enable Tailscale Funnel from Remote Device Access.</li>
-                  <li>Create and locally verify a Browser Portal Owner account.</li>
-                  <li>Test the stable Funnel URL from an outside device.</li>
-                  <li>Create any Admin accounts and verify their restricted navigation.</li>
+                  <li>
+                    Run <code className="break-all font-mono text-xs">tailscale funnel --bg http://127.0.0.1:47900</code> in
+                    PowerShell, then confirm the Funnel URL in Remote Device Access.
+                  </li>
+                  <li>Under Remote Device Access → Browser Portal accounts, create and locally verify an Owner.</li>
+                  <li>Acknowledge native-app retirement, then enable account login.</li>
+                  <li>Create any Browser Portal Admin accounts needed for role-boundary testing.</li>
+                  <li>Test Owner sign-in and Admin restricted navigation from an outside device.</li>
                   <li>Only then disable this legacy portal and stop the Cloudflare tunnel.</li>
                 </ol>
                 <p className="mt-2 text-xs text-text-dim">
