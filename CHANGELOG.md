@@ -62,6 +62,11 @@ here cover everything those tags shipped.
   Previously, partial root completion could grant Karpov 38 research at zero
   Intel while leaving Wreck of the Alcyon active and unable to observe the
   research event.
+- **Full Delete** now removes every permission held by the deleted character's
+  current or historical actors and every remaining owner/co-owner/associate
+  from objects those characters owned. Previously, legacy actors and retained
+  co-owners could make abandoned bases appear ownerless while still blocking
+  **Claim Ownership**.
 - **Reboot All** no longer waits a fixed 45 seconds before its post-reboot
   on-demand-map repair. It now runs the same immediate conservative probe used
   by normal start/restart flows; the VM boot hook and scheduled heal retain
