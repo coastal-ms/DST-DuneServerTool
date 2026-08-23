@@ -887,20 +887,15 @@ function Invoke-DunePlayerAwardIntel {
 
 # ----- Delete Account (DESTRUCTIVE) --------------------------------------
 # ----- Delete Account (matches Funcom's in-game delete + purge) -------------
-# After live-comparing against a real Funcom character-delete-and-purge
-# (2026-07-04), we know the game itself only does two things at purge time:
-#   1. UPDATE the old encrypted_player_state row's character_state = 'Deleted'.
-#      (Keeps the row so the pod doesn't crash on missing FKs; the view
-#      dune.player_state filters WHERE character_state = 'Active' so this
-#      hides the character from every game query that uses the view.)
-#   2. DELETE every permission held by an old character actor anywhere, plus
-#      every remaining rank on objects where that character held rank 1. Leaving
-#      a co-owner behind makes an owned object look ownerless while blocking
-#      Claim Ownership; leaving the deleted actor's rank 2/3 rows elsewhere
-#      preserves permissions for an actor that no longer exists.
-# The game does NOT delete physical totems, actors, buildings, encrypted_
-# accounts, or any per-player state tables. Those persist. This matches
-# behavior verified live against a fresh backup restore + real delete.
+# Live comparison with Funcom's character purge (2026-07-04) established its
+# base behavior: mark encrypted_player_state Deleted and remove the active
+# character's rank-1 ownership rows while preserving physical objects.
+#
+# DST Full Delete adds stricter permission cleanup. It removes every permission
+# held by current/historical actors on the account, plus every remaining rank on
+# objects where those actors held rank 1. This prevents deleted co-owner actors
+# and ownerless objects with retained co-owners from blocking Claim Ownership.
+# Physical totems, actors, buildings, accounts, and per-player state persist.
 function Invoke-DunePlayerDeleteAccount {
     param([string]$Ip, [long]$AccountId)
     if ($AccountId -le 0) { return @{ ok = $false; error = 'account_id is required.' } }
