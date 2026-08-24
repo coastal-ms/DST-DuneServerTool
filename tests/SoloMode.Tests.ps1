@@ -549,6 +549,7 @@ Describe 'Solo Mode PTC progression catalogs' {
         $ptc.complete_npe.node_count | Should -Be 140
         $ptcNodes.Count | Should -Be 140
         @($ptcNodes | Sort-Object -Unique).Count | Should -Be 140
+        @($ptc.compatible_schema_fingerprints) | Should -Contain '421d15955599ea223b3a72d1b418eb94befe333b7be9c20babd40ddf60274130'
         $extras | Should -Be @(
             'DA_MQ_ANewBeginning.Dangerous Mission No 2.BaseBackupTool'
             'DA_MQ_ANewBeginning.Dangerous Mission No 2.BaseBackupTool.CraftBaseBackupTool'
