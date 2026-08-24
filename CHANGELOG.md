@@ -13,6 +13,13 @@ here cover everything those tags shipped.
 
 ## [Unreleased]
 
+## [14.0.3] - 2026-08-24
+
+### Fixed
+
+- Solo Mode now recognizes the August 24 PTC save schema, which adds the
+  game-owned sandstorm schedule table without changing DST-managed data.
+
 ## [14.0.2] - 2026-08-23
 
 ### Added
