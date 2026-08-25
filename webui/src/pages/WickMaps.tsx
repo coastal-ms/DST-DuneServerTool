@@ -19,6 +19,14 @@ import { Icon } from '../components/Icon'
 import { getCoriolisSeeds } from '../api/gameplay'
 import { getMapState } from '../api/maps'
 import { selectWickMapSeed, type WickMapSeedSource } from '../wickMapSeed'
+import {
+  getResourceLikelihoodSeed,
+  RESOURCE_LIKELIHOOD_STYLES,
+  RESOURCE_TIER_OPACITY,
+  sectorsForTier,
+  type ResourceLikelihoodTier,
+  type ResourceLikelihoodType,
+} from '../ddSeedResourceLikelihood'
 import data from '../data/wickmaps.json'
 
 type Poi = { sector: string; subx: number; suby: number; type: string }
@@ -79,12 +87,19 @@ const RELIABILITY: Record<SeedEntry['reliability'], { label: string; cls: string
   low: { label: 'Low confidence', cls: 'text-warning border-warning/50', icon: 'AlertTriangle' },
 }
 
+const RESOURCE_TIERS: Array<{ tier: ResourceLikelihoodTier; label: string }> = [
+  { tier: 'high', label: 'High' },
+  { tier: 'medium', label: 'Medium' },
+  { tier: 'low', label: 'Low' },
+]
+
 export function WickMaps() {
   const [seed, setSeed] = useState<number>(PAYLOAD.availableSeeds[0] ?? 0)
   const [currentSeed, setCurrentSeed] = useState<number | null>(null)
   const [seedSource, setSeedSource] = useState<WickMapSeedSource | null>(null)
   const [liveErr, setLiveErr] = useState<string | null>(null)
   const [hidden, setHidden] = useState<Set<string>>(new Set())
+  const [resourceType, setResourceType] = useState<ResourceLikelihoodType | null>('iron')
   const [hover, setHover] = useState<{ x: number; y: number; text: string } | null>(null)
 
   // A stopped Deep Desert has no current running-map output: its friendly row
@@ -151,6 +166,11 @@ export function WickMaps() {
     () => entry.pois.filter(p => !hidden.has(p.type)),
     [entry, hidden],
   )
+  const resourceSeed = getResourceLikelihoodSeed(entry.seed)
+  const activeResource = resourceSeed?.resources.find(resource => resource.type === resourceType)
+  const resourceStyle = activeResource
+    ? RESOURCE_LIKELIHOOD_STYLES[activeResource.type]
+    : null
 
   const labelFor = (t: string) =>
     entry.legend.find(l => l.type === t)?.label ?? t
@@ -194,7 +214,9 @@ export function WickMaps() {
                 width: 'min(100%, calc(100dvh - 19rem))',
               }}
               role="img"
-              aria-label={`Deep Desert point-of-interest map for world seed ${entry.seed}`}
+              aria-label={`Deep Desert point-of-interest map for world seed ${entry.seed}${
+                activeResource ? ` with approximate ${activeResource.label} likelihood` : ''
+              }`}
               onMouseLeave={() => setHover(null)}
             >
               <defs>
@@ -232,6 +254,32 @@ export function WickMaps() {
                 <rect x={PAD} y={PAD} width={GRID} height={GRID} filter="url(#wm-mottle)" />
                 <rect x={PAD} y={PAD} width={GRID} height={GRID} filter="url(#wm-grain)" />
               </g>
+
+              {/* Approximate resource likelihood sits below the exact POI layer. */}
+              {activeResource && resourceStyle && (
+                <g clipPath="url(#wm-field)" pointerEvents="none" aria-hidden="true">
+                  {activeResource.sectors.map(resource => {
+                    const row = resource.sector[0]
+                    const col = Number(resource.sector.slice(1))
+                    const ri = ROWS.indexOf(row)
+                    if (ri < 0 || !col) return null
+                    return (
+                      <rect
+                        key={`${activeResource.type}-${resource.sector}`}
+                        x={PAD + (col - 1) * CELL + 2}
+                        y={PAD + ri * CELL + 2}
+                        width={CELL - 4}
+                        height={CELL - 4}
+                        fill={resourceStyle.fill}
+                        fillOpacity={RESOURCE_TIER_OPACITY[resource.tier]}
+                        stroke={resourceStyle.stroke}
+                        strokeOpacity={0.72}
+                        strokeWidth={2}
+                      />
+                    )
+                  })}
+                </g>
+              )}
 
               {/* grid lines */}
               {Array.from({ length: 10 }, (_, i) => (
@@ -384,6 +432,78 @@ export function WickMaps() {
                 <span>Reading the current seed…</span>
               )}
             </div>
+          </div>
+
+          {/* Resource likelihood test layer */}
+          <div className="card p-4">
+            <div className="flex items-center justify-between gap-3 mb-2">
+              <div className="text-xs font-semibold uppercase tracking-widest text-accent">
+                Resource likelihood
+              </div>
+              <span className="text-[10px] font-semibold uppercase tracking-wider text-warning border border-warning/40 rounded-full px-2 py-0.5">
+                Test 1
+              </span>
+            </div>
+            {resourceSeed ? (
+              <>
+                <p className="text-xs text-text-dim leading-relaxed mb-3">
+                  Approximate sector probability derived from the dedicated-server heatmap fields.
+                  Select one resource at a time to keep the POIs readable.
+                </p>
+                <div className="grid grid-cols-3 gap-1.5" role="group" aria-label="Resource likelihood layer">
+                  <button
+                    type="button"
+                    onClick={() => setResourceType(null)}
+                    aria-pressed={resourceType === null}
+                    className={`min-h-9 rounded-lg border text-xs font-semibold transition-colors ${
+                      resourceType === null
+                        ? 'border-ibad bg-ibad/15 text-text'
+                        : 'border-border bg-surface-2 text-text-dim hover:text-text hover:border-border-strong'
+                    }`}
+                  >
+                    Off
+                  </button>
+                  {resourceSeed.resources.map(resource => (
+                    <button
+                      key={resource.type}
+                      type="button"
+                      onClick={() => setResourceType(resource.type)}
+                      aria-pressed={resourceType === resource.type}
+                      className={`min-h-9 rounded-lg border text-xs font-semibold transition-colors ${
+                        resourceType === resource.type
+                          ? 'border-ibad bg-ibad/15 text-text'
+                          : 'border-border bg-surface-2 text-text-dim hover:text-text hover:border-border-strong'
+                      }`}
+                    >
+                      {resource.label}
+                    </button>
+                  ))}
+                </div>
+                {activeResource && (
+                  <div className="mt-3 pt-3 border-t border-border/60 flex flex-col gap-1.5">
+                    {RESOURCE_TIERS.map(({ tier, label }) => {
+                      const sectors = sectorsForTier(activeResource, tier)
+                      return (
+                        <div key={tier} className="flex items-start justify-between gap-3 text-xs">
+                          <span className="text-text-dim">{label}</span>
+                          <span className="font-mono text-text text-right">
+                            {sectors.join(', ') || 'None'}
+                          </span>
+                        </div>
+                      )
+                    })}
+                  </div>
+                )}
+                <p className="mt-3 text-[11px] text-warning leading-relaxed">
+                  Experimental preview: likelihood is not a confirmed node location. Erythrite has
+                  no non-empty surface heatmap in the current server assets.
+                </p>
+              </>
+            ) : (
+              <p className="text-xs text-text-dim leading-relaxed">
+                The resource-likelihood feedback test is available only for world seed 3.
+              </p>
+            )}
           </div>
 
           {/* Legend / filter */}
