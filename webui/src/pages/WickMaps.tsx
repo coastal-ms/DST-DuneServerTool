@@ -29,7 +29,7 @@ import {
 } from '../ddSeedResourceLikelihood'
 import data from '../data/wickmaps.json'
 
-type Poi = { sector: string; subx: number; suby: number; type: string }
+type Poi = { sector: string; subx: number; suby: number; type: string; name?: string }
 type LegendEntry = { type: string; label: string; count: number }
 type SeedEntry = {
   seed: number
@@ -176,6 +176,12 @@ export function WickMaps() {
     entry.legend.find(l => l.type === t)?.label ?? t
 
   const rel = RELIABILITY[entry.reliability] ?? RELIABILITY.medium
+  const tooltipWidth = hover
+    ? Math.min(420, Math.max(184, hover.text.length * 7.2))
+    : 184
+  const tooltipX = hover
+    ? Math.min(Math.max(hover.x - tooltipWidth / 2, 4), SIZE - tooltipWidth - 4)
+    : 4
 
   return (
     <div className="flex flex-col gap-4">
@@ -332,7 +338,11 @@ export function WickMaps() {
                     height={s}
                     style={{ cursor: 'help' }}
                     onMouseEnter={() =>
-                      setHover({ x: cx, y: cy, text: `${labelFor(p.type)} — ${p.sector}` })
+                      setHover({
+                        x: cx,
+                        y: cy,
+                        text: p.name || `${labelFor(p.type)} — ${p.sector}`,
+                      })
                     }
                     onMouseLeave={() => setHover(null)}
                   />
@@ -342,16 +352,16 @@ export function WickMaps() {
               {hover && (
                 <g pointerEvents="none">
                   <rect
-                    x={Math.min(Math.max(hover.x - 92, 4), SIZE - 188)}
+                    x={tooltipX}
                     y={Math.max(hover.y - 42, 4)}
-                    width={184}
+                    width={tooltipWidth}
                     height={28}
                     rx={6}
                     fill="#1d130a"
                     opacity={0.94}
                   />
                   <text
-                    x={Math.min(Math.max(hover.x - 92, 4), SIZE - 188) + 92}
+                    x={tooltipX + tooltipWidth / 2}
                     y={Math.max(hover.y - 42, 4) + 19}
                     fill="#f4e9d4"
                     fontSize={14}
