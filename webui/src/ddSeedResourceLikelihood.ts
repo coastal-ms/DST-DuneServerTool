@@ -1,7 +1,8 @@
 import data from './data/ddSeedResourceLikelihood.json'
 
 export type ResourceLikelihoodTier = 'low' | 'medium' | 'high'
-export type ResourceLikelihoodType = 'iron' | 'carbon'
+export type ResourceLikelihoodType = 'iron' | 'carbon' | 'erythrite'
+export type ResourceLikelihoodSource = 'heatmap' | 'cave'
 
 export type ResourceLikelihoodSector = {
   sector: string
@@ -12,7 +13,9 @@ export type ResourceLikelihoodSector = {
 export type ResourceLikelihoodEntry = {
   type: ResourceLikelihoodType
   label: string
-  variantCount: number
+  source: ResourceLikelihoodSource
+  variantCount?: number
+  evidenceCount?: number
   sectors: ResourceLikelihoodSector[]
 }
 
@@ -38,6 +41,7 @@ export const RESOURCE_LIKELIHOOD_STYLES: Record<
 > = {
   iron: { fill: '#38a6d6', stroke: '#b9ebff' },
   carbon: { fill: '#465968', stroke: '#c7dce8' },
+  erythrite: { fill: '#d65248', stroke: '#ffd0c9' },
 }
 
 export const RESOURCE_TIER_OPACITY: Record<ResourceLikelihoodTier, number> = {

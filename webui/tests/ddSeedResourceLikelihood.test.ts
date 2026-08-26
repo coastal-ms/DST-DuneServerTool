@@ -1,3 +1,5 @@
+import { readFileSync } from 'node:fs'
+import { resolve } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import {
   getResourceLikelihoodSeed,
@@ -9,7 +11,7 @@ describe('DD Seed Map resource likelihood test data', () => {
   it('is isolated to the seed 3 feedback build', () => {
     expect(getResourceLikelihoodSeed(2)).toBeUndefined()
     expect(getResourceLikelihoodSeed(3)?.resources.map(resource => resource.type))
-      .toEqual(['iron', 'carbon'])
+      .toEqual(['iron', 'carbon', 'erythrite'])
     expect(getResourceLikelihoodSeed(4)).toBeUndefined()
   })
 
@@ -18,7 +20,11 @@ describe('DD Seed Map resource likelihood test data', () => {
     expect(seed).toBeDefined()
 
     for (const resource of seed!.resources) {
-      expect(resource.variantCount).toBe(17)
+      if (resource.source === 'heatmap') {
+        expect(resource.variantCount).toBe(17)
+      } else {
+        expect(resource.evidenceCount).toBe(2)
+      }
       expect(new Set(resource.sectors.map(sector => sector.sector)).size)
         .toBe(resource.sectors.length)
 
@@ -39,5 +45,19 @@ describe('DD Seed Map resource likelihood test data', () => {
   it('sorts tier summaries in map order', () => {
     const iron = getResourceLikelihoodSeed(3)!.resources[0]
     expect(sectorsForTier(iron, 'high')).toEqual(['H3', 'H4', 'G6', 'F6', 'C4'])
+  })
+
+  it('includes the repeated seed 3 Erythrite cave evidence', () => {
+    const erythrite = getResourceLikelihoodSeed(3)!.resources
+      .find(resource => resource.type === 'erythrite')
+    expect(erythrite?.source).toBe('cave')
+    expect(erythrite?.sectors.map(sector => sector.sector)).toEqual(['E9', 'B3'])
+  })
+
+  it('keeps the resource layer off until the tester selects one', () => {
+    const source = readFileSync(resolve(__dirname, '../src/pages/WickMaps.tsx'), 'utf8')
+    expect(source).toContain(
+      'useState<ResourceLikelihoodType | null>(null)',
+    )
   })
 })

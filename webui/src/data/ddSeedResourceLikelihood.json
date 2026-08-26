@@ -11,6 +11,7 @@
         {
           "type": "iron",
           "label": "Iron",
+          "source": "heatmap",
           "variantCount": 17,
           "sectors": [
             { "sector": "I8", "score": 18, "tier": "low" },
@@ -39,6 +40,7 @@
         {
           "type": "carbon",
           "label": "Carbon",
+          "source": "heatmap",
           "variantCount": 17,
           "sectors": [
             { "sector": "I8", "score": 65, "tier": "medium" },
@@ -64,6 +66,16 @@
             { "sector": "C8", "score": 20, "tier": "low" },
             { "sector": "B2", "score": 17, "tier": "low" },
             { "sector": "B6", "score": 68, "tier": "medium" }
+          ]
+        },
+        {
+          "type": "erythrite",
+          "label": "Erythrite",
+          "source": "cave",
+          "evidenceCount": 2,
+          "sectors": [
+            { "sector": "E9", "score": 100, "tier": "high" },
+            { "sector": "B3", "score": 100, "tier": "high" }
           ]
         }
       ]

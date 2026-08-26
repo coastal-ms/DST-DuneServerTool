@@ -99,7 +99,7 @@ export function WickMaps() {
   const [seedSource, setSeedSource] = useState<WickMapSeedSource | null>(null)
   const [liveErr, setLiveErr] = useState<string | null>(null)
   const [hidden, setHidden] = useState<Set<string>>(new Set())
-  const [resourceType, setResourceType] = useState<ResourceLikelihoodType | null>('iron')
+  const [resourceType, setResourceType] = useState<ResourceLikelihoodType | null>(null)
   const [hover, setHover] = useState<{ x: number; y: number; text: string } | null>(null)
 
   // A stopped Deep Desert has no current running-map output: its friendly row
@@ -215,7 +215,11 @@ export function WickMaps() {
               }}
               role="img"
               aria-label={`Deep Desert point-of-interest map for world seed ${entry.seed}${
-                activeResource ? ` with approximate ${activeResource.label} likelihood` : ''
+                activeResource
+                  ? activeResource.source === 'cave'
+                    ? ` with ${activeResource.label} cave sectors`
+                    : ` with approximate ${activeResource.label} likelihood`
+                  : ''
               }`}
               onMouseLeave={() => setHover(null)}
             >
@@ -447,10 +451,10 @@ export function WickMaps() {
             {resourceSeed ? (
               <>
                 <p className="text-xs text-text-dim leading-relaxed mb-3">
-                  Approximate sector probability derived from the dedicated-server heatmap fields.
-                  Select one resource at a time to keep the POIs readable.
+                  Iron and Carbon use dedicated-server probability fields. Erythrite uses repeated
+                  cave sectors from archived seed data. Select one resource at a time.
                 </p>
-                <div className="grid grid-cols-3 gap-1.5" role="group" aria-label="Resource likelihood layer">
+                <div className="grid grid-cols-2 gap-1.5" role="group" aria-label="Resource likelihood layer">
                   <button
                     type="button"
                     onClick={() => setResourceType(null)}
@@ -481,23 +485,38 @@ export function WickMaps() {
                 </div>
                 {activeResource && (
                   <div className="mt-3 pt-3 border-t border-border/60 flex flex-col gap-1.5">
-                    {RESOURCE_TIERS.map(({ tier, label }) => {
-                      const sectors = sectorsForTier(activeResource, tier)
-                      return (
-                        <div key={tier} className="flex items-start justify-between gap-3 text-xs">
-                          <span className="text-text-dim">{label}</span>
-                          <span className="font-mono text-text text-right">
-                            {sectors.join(', ') || 'None'}
-                          </span>
-                        </div>
-                      )
-                    })}
+                    {activeResource.source === 'cave' ? (
+                      <div className="flex items-start justify-between gap-3 text-xs">
+                        <span className="text-text-dim">Cave sectors</span>
+                        <span className="font-mono text-text text-right">
+                          {activeResource.sectors.map(sector => sector.sector).join(', ')}
+                        </span>
+                      </div>
+                    ) : (
+                      RESOURCE_TIERS.map(({ tier, label }) => {
+                        const sectors = sectorsForTier(activeResource, tier)
+                        return (
+                          <div key={tier} className="flex items-start justify-between gap-3 text-xs">
+                            <span className="text-text-dim">{label}</span>
+                            <span className="font-mono text-text text-right">
+                              {sectors.join(', ') || 'None'}
+                            </span>
+                          </div>
+                        )
+                      })
+                    )}
                   </div>
                 )}
-                <p className="mt-3 text-[11px] text-warning leading-relaxed">
-                  Experimental preview: likelihood is not a confirmed node location. Erythrite has
-                  no non-empty surface heatmap in the current server assets.
-                </p>
+                {activeResource?.source === 'cave' ? (
+                  <p className="mt-3 text-[11px] text-warning leading-relaxed">
+                    Two archived captures with the seed 3 spice signature identify these Erythrite
+                    caves. Report any mismatch against the current map.
+                  </p>
+                ) : (
+                  <p className="mt-3 text-[11px] text-warning leading-relaxed">
+                    Experimental preview: likelihood is not a confirmed node location.
+                  </p>
+                )}
               </>
             ) : (
               <p className="text-xs text-text-dim leading-relaxed">
