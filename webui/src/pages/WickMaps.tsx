@@ -19,9 +19,17 @@ import { Icon } from '../components/Icon'
 import { getCoriolisSeeds } from '../api/gameplay'
 import { getMapState } from '../api/maps'
 import { selectWickMapSeed, type WickMapSeedSource } from '../wickMapSeed'
+import {
+  getResourceLikelihoodSeed,
+  RESOURCE_LIKELIHOOD_STYLES,
+  RESOURCE_TIER_OPACITY,
+  sectorsForTier,
+  type ResourceLikelihoodTier,
+  type ResourceLikelihoodType,
+} from '../ddSeedResourceLikelihood'
 import data from '../data/wickmaps.json'
 
-type Poi = { sector: string; subx: number; suby: number; type: string }
+type Poi = { sector: string; subx: number; suby: number; type: string; name?: string }
 type LegendEntry = { type: string; label: string; count: number }
 type SeedEntry = {
   seed: number
@@ -79,12 +87,19 @@ const RELIABILITY: Record<SeedEntry['reliability'], { label: string; cls: string
   low: { label: 'Low confidence', cls: 'text-warning border-warning/50', icon: 'AlertTriangle' },
 }
 
+const RESOURCE_TIERS: Array<{ tier: ResourceLikelihoodTier; label: string }> = [
+  { tier: 'high', label: 'High' },
+  { tier: 'medium', label: 'Medium' },
+  { tier: 'low', label: 'Low' },
+]
+
 export function WickMaps() {
   const [seed, setSeed] = useState<number>(PAYLOAD.availableSeeds[0] ?? 0)
   const [currentSeed, setCurrentSeed] = useState<number | null>(null)
   const [seedSource, setSeedSource] = useState<WickMapSeedSource | null>(null)
   const [liveErr, setLiveErr] = useState<string | null>(null)
   const [hidden, setHidden] = useState<Set<string>>(new Set())
+  const [resourceType, setResourceType] = useState<ResourceLikelihoodType | null>(null)
   const [hover, setHover] = useState<{ x: number; y: number; text: string } | null>(null)
 
   // A stopped Deep Desert has no current running-map output: its friendly row
@@ -151,11 +166,22 @@ export function WickMaps() {
     () => entry.pois.filter(p => !hidden.has(p.type)),
     [entry, hidden],
   )
+  const resourceSeed = getResourceLikelihoodSeed(entry.seed)
+  const activeResource = resourceSeed?.resources.find(resource => resource.type === resourceType)
+  const resourceStyle = activeResource
+    ? RESOURCE_LIKELIHOOD_STYLES[activeResource.type]
+    : null
 
   const labelFor = (t: string) =>
     entry.legend.find(l => l.type === t)?.label ?? t
 
   const rel = RELIABILITY[entry.reliability] ?? RELIABILITY.medium
+  const tooltipWidth = hover
+    ? Math.min(420, Math.max(184, hover.text.length * 7.2))
+    : 184
+  const tooltipX = hover
+    ? Math.min(Math.max(hover.x - tooltipWidth / 2, 4), SIZE - tooltipWidth - 4)
+    : 4
 
   return (
     <div className="flex flex-col gap-4">
@@ -194,7 +220,13 @@ export function WickMaps() {
                 width: 'min(100%, calc(100dvh - 19rem))',
               }}
               role="img"
-              aria-label={`Deep Desert point-of-interest map for world seed ${entry.seed}`}
+              aria-label={`Deep Desert point-of-interest map for world seed ${entry.seed}${
+                activeResource
+                  ? activeResource.source === 'cave'
+                    ? ` with ${activeResource.label} cave sectors`
+                    : ` with approximate ${activeResource.label} likelihood`
+                  : ''
+              }`}
               onMouseLeave={() => setHover(null)}
             >
               <defs>
@@ -232,6 +264,32 @@ export function WickMaps() {
                 <rect x={PAD} y={PAD} width={GRID} height={GRID} filter="url(#wm-mottle)" />
                 <rect x={PAD} y={PAD} width={GRID} height={GRID} filter="url(#wm-grain)" />
               </g>
+
+              {/* Approximate resource likelihood sits below the exact POI layer. */}
+              {activeResource && resourceStyle && (
+                <g clipPath="url(#wm-field)" pointerEvents="none" aria-hidden="true">
+                  {activeResource.sectors.map(resource => {
+                    const row = resource.sector[0]
+                    const col = Number(resource.sector.slice(1))
+                    const ri = ROWS.indexOf(row)
+                    if (ri < 0 || !col) return null
+                    return (
+                      <rect
+                        key={`${activeResource.type}-${resource.sector}`}
+                        x={PAD + (col - 1) * CELL + 2}
+                        y={PAD + ri * CELL + 2}
+                        width={CELL - 4}
+                        height={CELL - 4}
+                        fill={resourceStyle.fill}
+                        fillOpacity={RESOURCE_TIER_OPACITY[resource.tier]}
+                        stroke={resourceStyle.stroke}
+                        strokeOpacity={0.72}
+                        strokeWidth={2}
+                      />
+                    )
+                  })}
+                </g>
+              )}
 
               {/* grid lines */}
               {Array.from({ length: 10 }, (_, i) => (
@@ -280,7 +338,11 @@ export function WickMaps() {
                     height={s}
                     style={{ cursor: 'help' }}
                     onMouseEnter={() =>
-                      setHover({ x: cx, y: cy, text: `${labelFor(p.type)} — ${p.sector}` })
+                      setHover({
+                        x: cx,
+                        y: cy,
+                        text: p.name || `${labelFor(p.type)} — ${p.sector}`,
+                      })
                     }
                     onMouseLeave={() => setHover(null)}
                   />
@@ -290,16 +352,16 @@ export function WickMaps() {
               {hover && (
                 <g pointerEvents="none">
                   <rect
-                    x={Math.min(Math.max(hover.x - 92, 4), SIZE - 188)}
+                    x={tooltipX}
                     y={Math.max(hover.y - 42, 4)}
-                    width={184}
+                    width={tooltipWidth}
                     height={28}
                     rx={6}
                     fill="#1d130a"
                     opacity={0.94}
                   />
                   <text
-                    x={Math.min(Math.max(hover.x - 92, 4), SIZE - 188) + 92}
+                    x={tooltipX + tooltipWidth / 2}
                     y={Math.max(hover.y - 42, 4) + 19}
                     fill="#f4e9d4"
                     fontSize={14}
@@ -384,6 +446,93 @@ export function WickMaps() {
                 <span>Reading the current seed…</span>
               )}
             </div>
+          </div>
+
+          {/* Resource likelihood test layer */}
+          <div className="card p-4">
+            <div className="flex items-center justify-between gap-3 mb-2">
+              <div className="text-xs font-semibold uppercase tracking-widest text-accent">
+                Resource likelihood
+              </div>
+              <span className="text-[10px] font-semibold uppercase tracking-wider text-warning border border-warning/40 rounded-full px-2 py-0.5">
+                Test 1
+              </span>
+            </div>
+            {resourceSeed ? (
+              <>
+                <p className="text-xs text-text-dim leading-relaxed mb-3">
+                  Iron and Carbon use dedicated-server probability fields. Erythrite uses repeated
+                  cave sectors from archived seed data. Select one resource at a time.
+                </p>
+                <div className="grid grid-cols-2 gap-1.5" role="group" aria-label="Resource likelihood layer">
+                  <button
+                    type="button"
+                    onClick={() => setResourceType(null)}
+                    aria-pressed={resourceType === null}
+                    className={`min-h-9 rounded-lg border text-xs font-semibold transition-colors ${
+                      resourceType === null
+                        ? 'border-ibad bg-ibad/15 text-text'
+                        : 'border-border bg-surface-2 text-text-dim hover:text-text hover:border-border-strong'
+                    }`}
+                  >
+                    Off
+                  </button>
+                  {resourceSeed.resources.map(resource => (
+                    <button
+                      key={resource.type}
+                      type="button"
+                      onClick={() => setResourceType(resource.type)}
+                      aria-pressed={resourceType === resource.type}
+                      className={`min-h-9 rounded-lg border text-xs font-semibold transition-colors ${
+                        resourceType === resource.type
+                          ? 'border-ibad bg-ibad/15 text-text'
+                          : 'border-border bg-surface-2 text-text-dim hover:text-text hover:border-border-strong'
+                      }`}
+                    >
+                      {resource.label}
+                    </button>
+                  ))}
+                </div>
+                {activeResource && (
+                  <div className="mt-3 pt-3 border-t border-border/60 flex flex-col gap-1.5">
+                    {activeResource.source === 'cave' ? (
+                      <div className="flex items-start justify-between gap-3 text-xs">
+                        <span className="text-text-dim">Cave sectors</span>
+                        <span className="font-mono text-text text-right">
+                          {activeResource.sectors.map(sector => sector.sector).join(', ')}
+                        </span>
+                      </div>
+                    ) : (
+                      RESOURCE_TIERS.map(({ tier, label }) => {
+                        const sectors = sectorsForTier(activeResource, tier)
+                        return (
+                          <div key={tier} className="flex items-start justify-between gap-3 text-xs">
+                            <span className="text-text-dim">{label}</span>
+                            <span className="font-mono text-text text-right">
+                              {sectors.join(', ') || 'None'}
+                            </span>
+                          </div>
+                        )
+                      })
+                    )}
+                  </div>
+                )}
+                {activeResource?.source === 'cave' ? (
+                  <p className="mt-3 text-[11px] text-warning leading-relaxed">
+                    Two archived captures with the seed 3 spice signature identify these Erythrite
+                    caves. Report any mismatch against the current map.
+                  </p>
+                ) : (
+                  <p className="mt-3 text-[11px] text-warning leading-relaxed">
+                    Experimental preview: likelihood is not a confirmed node location.
+                  </p>
+                )}
+              </>
+            ) : (
+              <p className="text-xs text-text-dim leading-relaxed">
+                The resource-likelihood feedback test is available only for world seed 3.
+              </p>
+            )}
           </div>
 
           {/* Legend / filter */}

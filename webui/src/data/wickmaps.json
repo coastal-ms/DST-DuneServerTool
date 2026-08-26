@@ -61,7 +61,8 @@
      "sector": "I5",
      "subx": 3,
      "suby": 3,
-     "type": "testing-station"
+     "type": "testing-station",
+     "name": "Testing Station (I5) - The Living Quarters"
     },
     {
      "sector": "I8",
@@ -91,7 +92,8 @@
      "sector": "G3",
      "subx": 1,
      "suby": 1,
-     "type": "testing-station"
+     "type": "testing-station",
+     "name": "Testing Station (G3) - The Forgotten Cells"
     },
     {
      "sector": "F1",
@@ -127,7 +129,8 @@
      "sector": "D1",
      "subx": 3,
      "suby": 2,
-     "type": "testing-station"
+     "type": "testing-station",
+     "name": "Testing Station (D1) - The Agave Farm"
     },
     {
      "sector": "D6",
@@ -139,7 +142,8 @@
      "sector": "D7",
      "subx": 4,
      "suby": 0,
-     "type": "testing-station"
+     "type": "testing-station",
+     "name": "Testing Station (D7) - The Yellow Bunker"
     },
     {
      "sector": "C8",
@@ -169,7 +173,8 @@
      "sector": "A2",
      "subx": 2,
      "suby": 1,
-     "type": "testing-station"
+     "type": "testing-station",
+     "name": "Imperial Testing Station 37 (A2)"
     },
     {
      "sector": "A2",
@@ -187,7 +192,8 @@
      "sector": "A3",
      "subx": 2,
      "suby": 2,
-     "type": "testing-station"
+     "type": "testing-station",
+     "name": "Imperial Testing Station 185 (A3)"
     },
     {
      "sector": "A3",
@@ -199,7 +205,8 @@
      "sector": "A4",
      "subx": 4,
      "suby": 1,
-     "type": "testing-station"
+     "type": "testing-station",
+     "name": "Imperial Testing Station 148 (A4)(A3)"
     },
     {
      "sector": "A4",
@@ -223,7 +230,8 @@
      "sector": "A5",
      "subx": 3,
      "suby": 2,
-     "type": "testing-station"
+     "type": "testing-station",
+     "name": "Imperial Testing Station 93 (A5)"
     },
     {
      "sector": "A7",
@@ -241,7 +249,8 @@
      "sector": "A8",
      "subx": 3,
      "suby": 0,
-     "type": "testing-station"
+     "type": "testing-station",
+     "name": "Imperial Testing Station 186 (A8)"
     },
     {
      "sector": "A9",
@@ -253,7 +262,8 @@
      "sector": "A9",
      "subx": 1,
      "suby": 2,
-     "type": "testing-station"
+     "type": "testing-station",
+     "name": "Imperial Testing Station 217 (A9)"
     },
     {
      "sector": "A9",
@@ -393,7 +403,8 @@
      "sector": "H2",
      "subx": 2,
      "suby": 1,
-     "type": "testing-station"
+     "type": "testing-station",
+     "name": "PVP Testing Station (H2) - Cactus Chaos"
     },
     {
      "sector": "H2",
@@ -453,7 +464,8 @@
      "sector": "F9",
      "subx": 1,
      "suby": 3,
-     "type": "testing-station"
+     "type": "testing-station",
+     "name": "PVP Testing Station (F9) - Spice Sanctum"
     },
     {
      "sector": "F9",
@@ -465,7 +477,8 @@
      "sector": "D2",
      "subx": 2,
      "suby": 1,
-     "type": "testing-station"
+     "type": "testing-station",
+     "name": "PVE Testing Station (D2) - The Hidden Garden"
     },
     {
      "sector": "D4",
@@ -531,7 +544,8 @@
      "sector": "A2",
      "subx": 2,
      "suby": 1,
-     "type": "testing-station"
+     "type": "testing-station",
+     "name": "Imperial Testing Station 37 (A2)"
     },
     {
      "sector": "A2",
@@ -549,7 +563,8 @@
      "sector": "A3",
      "subx": 2,
      "suby": 2,
-     "type": "testing-station"
+     "type": "testing-station",
+     "name": "Imperial Testing Station 185 (A3)"
     },
     {
      "sector": "A3",
@@ -561,7 +576,8 @@
      "sector": "A4",
      "subx": 4,
      "suby": 1,
-     "type": "testing-station"
+     "type": "testing-station",
+     "name": "Imperial Testing Station 148 (A4)"
     },
     {
      "sector": "A4",
@@ -585,7 +601,8 @@
      "sector": "A5",
      "subx": 3,
      "suby": 2,
-     "type": "testing-station"
+     "type": "testing-station",
+     "name": "Imperial Testing Station 93 (A5)"
     },
     {
      "sector": "A7",
@@ -603,7 +620,8 @@
      "sector": "A8",
      "subx": 3,
      "suby": 0,
-     "type": "testing-station"
+     "type": "testing-station",
+     "name": "Imperial Testing Station 186 (A8)"
     },
     {
      "sector": "A9",
@@ -615,7 +633,8 @@
      "sector": "A9",
      "subx": 1,
      "suby": 2,
-     "type": "testing-station"
+     "type": "testing-station",
+     "name": "Imperial Testing Station 217 (A9)"
     },
     {
      "sector": "A9",
@@ -780,13 +799,15 @@
      "sector": "F4",
      "subx": 4,
      "suby": 3,
-     "type": "testing-station"
+     "type": "testing-station",
+     "name": "Testing Station (F4) - The Museum"
     },
     {
      "sector": "F7",
      "subx": 4,
      "suby": 2,
-     "type": "testing-station"
+     "type": "testing-station",
+     "name": "Testing Station (F7) - The Water Plant"
     },
     {
      "sector": "E5",
@@ -804,13 +825,15 @@
      "sector": "D1",
      "subx": 3,
      "suby": 1,
-     "type": "testing-station"
+     "type": "testing-station",
+     "name": "Testing Station (D1) - The Furnace"
     },
     {
      "sector": "D6",
      "subx": 1,
      "suby": 1,
-     "type": "testing-station"
+     "type": "testing-station",
+     "name": "Testing Station (D6) - The Control Room"
     },
     {
      "sector": "C3",
@@ -846,7 +869,8 @@
      "sector": "A2",
      "subx": 2,
      "suby": 1,
-     "type": "testing-station"
+     "type": "testing-station",
+     "name": "Imperial Testing Station 37 (A2)"
     },
     {
      "sector": "A2",
@@ -864,7 +888,8 @@
      "sector": "A3",
      "subx": 2,
      "suby": 2,
-     "type": "testing-station"
+     "type": "testing-station",
+     "name": "Imperial Testing Station 185 (A3)"
     },
     {
      "sector": "A3",
@@ -876,7 +901,8 @@
      "sector": "A4",
      "subx": 4,
      "suby": 1,
-     "type": "testing-station"
+     "type": "testing-station",
+     "name": "Imperial Testing Station 148 (A4)"
     },
     {
      "sector": "A4",
@@ -900,7 +926,8 @@
      "sector": "A5",
      "subx": 3,
      "suby": 2,
-     "type": "testing-station"
+     "type": "testing-station",
+     "name": "Imperial Testing Station 93 (A5)"
     },
     {
      "sector": "A7",
@@ -918,7 +945,8 @@
      "sector": "A8",
      "subx": 3,
      "suby": 0,
-     "type": "testing-station"
+     "type": "testing-station",
+     "name": "Imperial Testing Station 186 (A8)"
     },
     {
      "sector": "A9",
@@ -930,7 +958,8 @@
      "sector": "A9",
      "subx": 1,
      "suby": 2,
-     "type": "testing-station"
+     "type": "testing-station",
+     "name": "Imperial Testing Station 217 (A9)"
     },
     {
      "sector": "A9",
@@ -1022,7 +1051,8 @@
      "sector": "H6",
      "subx": 2,
      "suby": 1,
-     "type": "testing-station"
+     "type": "testing-station",
+     "name": "PVP Testing Station (H6) - The Agave Farm"
     },
     {
      "sector": "H7",
@@ -1046,7 +1076,8 @@
      "sector": "G3",
      "subx": 1,
      "suby": 0,
-     "type": "testing-station"
+     "type": "testing-station",
+     "name": "PVP Testing Station (G3) - The Living Quarters"
     },
     {
      "sector": "G3",
@@ -1106,7 +1137,8 @@
      "sector": "F8",
      "subx": 3,
      "suby": 2,
-     "type": "testing-station"
+     "type": "testing-station",
+     "name": "PVP Testing Station (F8) - Mannequin Manor"
     },
     {
      "sector": "F8",
@@ -1136,7 +1168,8 @@
      "sector": "D3",
      "subx": 2,
      "suby": 1,
-     "type": "testing-station"
+     "type": "testing-station",
+     "name": "PVE Testing Station (D3) - The Yellow Bunker"
     },
     {
      "sector": "D6",
@@ -1148,7 +1181,8 @@
      "sector": "D7",
      "subx": 4,
      "suby": 1,
-     "type": "testing-station"
+     "type": "testing-station",
+     "name": "PVE Testing Station (D7) - The Hidden Garden"
     },
     {
      "sector": "C2",
@@ -1226,7 +1260,8 @@
      "sector": "A2",
      "subx": 2,
      "suby": 1,
-     "type": "testing-station"
+     "type": "testing-station",
+     "name": "Imperial Testing Station 37 (A2)"
     },
     {
      "sector": "A2",
@@ -1244,7 +1279,8 @@
      "sector": "A3",
      "subx": 2,
      "suby": 2,
-     "type": "testing-station"
+     "type": "testing-station",
+     "name": "Imperial Testing Station 185 (A3)"
     },
     {
      "sector": "A3",
@@ -1256,7 +1292,8 @@
      "sector": "A4",
      "subx": 4,
      "suby": 1,
-     "type": "testing-station"
+     "type": "testing-station",
+     "name": "Imperial Testing Station 148 (A4)"
     },
     {
      "sector": "A4",
@@ -1280,7 +1317,8 @@
      "sector": "A5",
      "subx": 3,
      "suby": 2,
-     "type": "testing-station"
+     "type": "testing-station",
+     "name": "Imperial Testing Station 93 (A5)"
     },
     {
      "sector": "A7",
@@ -1298,7 +1336,8 @@
      "sector": "A8",
      "subx": 3,
      "suby": 0,
-     "type": "testing-station"
+     "type": "testing-station",
+     "name": "Imperial Testing Station 186 (A8)"
     },
     {
      "sector": "A9",
@@ -1310,7 +1349,8 @@
      "sector": "A9",
      "subx": 1,
      "suby": 2,
-     "type": "testing-station"
+     "type": "testing-station",
+     "name": "Imperial Testing Station 217 (A9)"
     },
     {
      "sector": "A9",
@@ -1498,7 +1538,8 @@
      "sector": "F6",
      "subx": 1,
      "suby": 2,
-     "type": "testing-station"
+     "type": "testing-station",
+     "name": "PVP Testing Station (F6) - Spice Sanctum"
     },
     {
      "sector": "F7",
@@ -1522,7 +1563,8 @@
      "sector": "D4",
      "subx": 4,
      "suby": 0,
-     "type": "testing-station"
+     "type": "testing-station",
+     "name": "PVE Testing Station (D4) - Cactus Chaos"
     },
     {
      "sector": "D7",
@@ -1594,7 +1636,8 @@
      "sector": "A2",
      "subx": 2,
      "suby": 1,
-     "type": "testing-station"
+     "type": "testing-station",
+     "name": "Imperial Testing Station 37 (A2)"
     },
     {
      "sector": "A2",
@@ -1612,7 +1655,8 @@
      "sector": "A3",
      "subx": 2,
      "suby": 2,
-     "type": "testing-station"
+     "type": "testing-station",
+     "name": "Imperial Testing Station 185 (A3)"
     },
     {
      "sector": "A3",
@@ -1624,7 +1668,8 @@
      "sector": "A4",
      "subx": 4,
      "suby": 1,
-     "type": "testing-station"
+     "type": "testing-station",
+     "name": "Imperial Testing Station 148 (A4)"
     },
     {
      "sector": "A4",
@@ -1648,7 +1693,8 @@
      "sector": "A5",
      "subx": 3,
      "suby": 2,
-     "type": "testing-station"
+     "type": "testing-station",
+     "name": "Imperial Testing Station 93 (A5)"
     },
     {
      "sector": "A7",
@@ -1666,7 +1712,8 @@
      "sector": "A8",
      "subx": 3,
      "suby": 0,
-     "type": "testing-station"
+     "type": "testing-station",
+     "name": "Imperial Testing Station 186 (A8)"
     },
     {
      "sector": "A9",
@@ -1678,7 +1725,8 @@
      "sector": "A9",
      "subx": 1,
      "suby": 2,
-     "type": "testing-station"
+     "type": "testing-station",
+     "name": "Imperial Testing Station 217 (A9)"
     },
     {
      "sector": "A9",
@@ -1818,13 +1866,15 @@
      "sector": "G3",
      "subx": 1,
      "suby": 1,
-     "type": "testing-station"
+     "type": "testing-station",
+     "name": "PVP Testing Station (G3) - The Furnace"
     },
     {
      "sector": "G4",
      "subx": 3,
      "suby": 0,
-     "type": "testing-station"
+     "type": "testing-station",
+     "name": "PVP Testing Station (G4) - The Museum"
     },
     {
      "sector": "G6",
@@ -1866,7 +1916,8 @@
      "sector": "F6",
      "subx": 1,
      "suby": 3,
-     "type": "testing-station"
+     "type": "testing-station",
+     "name": "PVP Testing Station (F6) - The Water Plant"
     },
     {
      "sector": "F7",
@@ -1908,7 +1959,8 @@
      "sector": "D3",
      "subx": 1,
      "suby": 1,
-     "type": "testing-station"
+     "type": "testing-station",
+     "name": "PVE Testing Station (D3) - Circular Control Room"
     },
     {
      "sector": "D5",
@@ -2010,7 +2062,8 @@
      "sector": "A2",
      "subx": 2,
      "suby": 1,
-     "type": "testing-station"
+     "type": "testing-station",
+     "name": "Imperial Testing Station 37 (A2)"
     },
     {
      "sector": "A2",
@@ -2028,7 +2081,8 @@
      "sector": "A3",
      "subx": 2,
      "suby": 2,
-     "type": "testing-station"
+     "type": "testing-station",
+     "name": "Imperial Testing Station 185 (A3)"
     },
     {
      "sector": "A3",
@@ -2040,7 +2094,8 @@
      "sector": "A4",
      "subx": 4,
      "suby": 1,
-     "type": "testing-station"
+     "type": "testing-station",
+     "name": "Imperial Testing Station 148 (A4)"
     },
     {
      "sector": "A4",
@@ -2064,7 +2119,8 @@
      "sector": "A5",
      "subx": 3,
      "suby": 2,
-     "type": "testing-station"
+     "type": "testing-station",
+     "name": "Imperial Testing Station 93 (A5)"
     },
     {
      "sector": "A7",
@@ -2082,7 +2138,8 @@
      "sector": "A8",
      "subx": 3,
      "suby": 0,
-     "type": "testing-station"
+     "type": "testing-station",
+     "name": "Imperial Testing Station 186 (A8)"
     },
     {
      "sector": "A9",
@@ -2094,7 +2151,8 @@
      "sector": "A9",
      "subx": 1,
      "suby": 2,
-     "type": "testing-station"
+     "type": "testing-station",
+     "name": "Imperial Testing Station 217 (A9)"
     },
     {
      "sector": "A9",
@@ -2202,7 +2260,8 @@
      "sector": "G3",
      "subx": 2,
      "suby": 0,
-     "type": "testing-station"
+     "type": "testing-station",
+     "name": "Testing Station (G3) - The Forgotten Cells"
     },
     {
      "sector": "G4",
@@ -2220,7 +2279,8 @@
      "sector": "G6",
      "subx": 1,
      "suby": 0,
-     "type": "testing-station"
+     "type": "testing-station",
+     "name": "Testing Station (G6) - The Living Quarters"
     },
     {
      "sector": "G6",
@@ -2316,7 +2376,8 @@
      "sector": "C7",
      "subx": 4,
      "suby": 2,
-     "type": "testing-station"
+     "type": "testing-station",
+     "name": "Testing Station (C7) - Mannequin Manor"
     },
     {
      "sector": "C8",
@@ -2346,7 +2407,8 @@
      "sector": "A2",
      "subx": 2,
      "suby": 1,
-     "type": "testing-station"
+     "type": "testing-station",
+     "name": "Imperial Testing Station 37 (A2)"
     },
     {
      "sector": "A2",
@@ -2364,7 +2426,8 @@
      "sector": "A3",
      "subx": 2,
      "suby": 2,
-     "type": "testing-station"
+     "type": "testing-station",
+     "name": "Imperial Testing Station 185 (A3)"
     },
     {
      "sector": "A3",
@@ -2376,7 +2439,8 @@
      "sector": "A4",
      "subx": 4,
      "suby": 1,
-     "type": "testing-station"
+     "type": "testing-station",
+     "name": "Imperial Testing Station 148 (A4)"
     },
     {
      "sector": "A4",
@@ -2400,7 +2464,8 @@
      "sector": "A5",
      "subx": 3,
      "suby": 2,
-     "type": "testing-station"
+     "type": "testing-station",
+     "name": "Imperial Testing Station 93 (A5)"
     },
     {
      "sector": "A7",
@@ -2418,7 +2483,8 @@
      "sector": "A8",
      "subx": 3,
      "suby": 0,
-     "type": "testing-station"
+     "type": "testing-station",
+     "name": "Imperial Testing Station 186 (A8)"
     },
     {
      "sector": "A9",
@@ -2430,7 +2496,8 @@
      "sector": "A9",
      "subx": 1,
      "suby": 2,
-     "type": "testing-station"
+     "type": "testing-station",
+     "name": "Imperial Testing Station 217 (A9)"
     },
     {
      "sector": "A9",
@@ -2744,7 +2811,8 @@
      "sector": "H2",
      "subx": 3,
      "suby": 2,
-     "type": "testing-station"
+     "type": "testing-station",
+     "name": "Testing Station (H2) - The Museum"
     },
     {
      "sector": "H5",
@@ -2774,7 +2842,8 @@
      "sector": "H8",
      "subx": 3,
      "suby": 2,
-     "type": "testing-station"
+     "type": "testing-station",
+     "name": "Testing Station (H8) - Circular Control Room"
     },
     {
      "sector": "G2",
@@ -2852,7 +2921,8 @@
      "sector": "E6",
      "subx": 1,
      "suby": 2,
-     "type": "testing-station"
+     "type": "testing-station",
+     "name": "Testing Station (E6) - Spice Silo"
     },
     {
      "sector": "E7",
@@ -2864,13 +2934,15 @@
      "sector": "E8",
      "subx": 3,
      "suby": 2,
-     "type": "testing-station"
+     "type": "testing-station",
+     "name": "Testing Station (E8) - Mannequin Manor"
     },
     {
      "sector": "D3",
      "subx": 1,
      "suby": 0,
-     "type": "testing-station"
+     "type": "testing-station",
+     "name": "Testing Station (D3) - The Water Plant"
     },
     {
      "sector": "D5",
@@ -2978,7 +3050,8 @@
      "sector": "A2",
      "subx": 2,
      "suby": 1,
-     "type": "testing-station"
+     "type": "testing-station",
+     "name": "Imperial Testing Station 37 (A2)"
     },
     {
      "sector": "A2",
@@ -2996,7 +3069,8 @@
      "sector": "A3",
      "subx": 2,
      "suby": 2,
-     "type": "testing-station"
+     "type": "testing-station",
+     "name": "Imperial Testing Station 185 (A3)"
     },
     {
      "sector": "A3",
@@ -3008,7 +3082,8 @@
      "sector": "A4",
      "subx": 4,
      "suby": 1,
-     "type": "testing-station"
+     "type": "testing-station",
+     "name": "Imperial Testing Station 148 (A4)"
     },
     {
      "sector": "A4",
@@ -3032,7 +3107,8 @@
      "sector": "A5",
      "subx": 3,
      "suby": 2,
-     "type": "testing-station"
+     "type": "testing-station",
+     "name": "Imperial Testing Station 93 (A5)"
     },
     {
      "sector": "A7",
@@ -3050,7 +3126,8 @@
      "sector": "A8",
      "subx": 3,
      "suby": 0,
-     "type": "testing-station"
+     "type": "testing-station",
+     "name": "Imperial Testing Station 186 (A8)"
     },
     {
      "sector": "A9",
@@ -3062,7 +3139,8 @@
      "sector": "A9",
      "subx": 1,
      "suby": 2,
-     "type": "testing-station"
+     "type": "testing-station",
+     "name": "Imperial Testing Station 217 (A9)"
     },
     {
      "sector": "A9",
@@ -3136,7 +3214,8 @@
      "sector": "I2",
      "subx": 3,
      "suby": 3,
-     "type": "testing-station"
+     "type": "testing-station",
+     "name": "PVP Testing Station (I2) - The Forgotten Cells"
     },
     {
      "sector": "I5",
@@ -3178,7 +3257,8 @@
      "sector": "G4",
      "subx": 3,
      "suby": 0,
-     "type": "testing-station"
+     "type": "testing-station",
+     "name": "PVP Testing Station (G4) - The Living Quarters"
     },
     {
      "sector": "G5",
@@ -3196,7 +3276,8 @@
      "sector": "G8",
      "subx": 2,
      "suby": 0,
-     "type": "testing-station"
+     "type": "testing-station",
+     "name": "PVP Testing Station (G8) - The Agave Farm"
     },
     {
      "sector": "F1",
@@ -3244,19 +3325,22 @@
      "sector": "D1",
      "subx": 4,
      "suby": 0,
-     "type": "testing-station"
+     "type": "testing-station",
+     "name": "PVE Testing Station (D1) - The Yellow Bunker"
     },
     {
      "sector": "D4",
      "subx": 3,
      "suby": 0,
-     "type": "testing-station"
+     "type": "testing-station",
+     "name": "PVE Testing Station (D4) - The Hidden Garden"
     },
     {
      "sector": "D7",
      "subx": 4,
      "suby": 0,
-     "type": "testing-station"
+     "type": "testing-station",
+     "name": "PVE Testing Station (D7) - Cactus Chaos"
     },
     {
      "sector": "C2",
@@ -3304,7 +3388,8 @@
      "sector": "A2",
      "subx": 2,
      "suby": 1,
-     "type": "testing-station"
+     "type": "testing-station",
+     "name": "Imperial Testing Station 37 (A2)"
     },
     {
      "sector": "A2",
@@ -3322,7 +3407,8 @@
      "sector": "A3",
      "subx": 2,
      "suby": 2,
-     "type": "testing-station"
+     "type": "testing-station",
+     "name": "Imperial Testing Station 185 (A3)"
     },
     {
      "sector": "A3",
@@ -3334,7 +3420,8 @@
      "sector": "A4",
      "subx": 4,
      "suby": 1,
-     "type": "testing-station"
+     "type": "testing-station",
+     "name": "Imperial Testing Station 148 (A4)"
     },
     {
      "sector": "A4",
@@ -3358,7 +3445,8 @@
      "sector": "A5",
      "subx": 3,
      "suby": 2,
-     "type": "testing-station"
+     "type": "testing-station",
+     "name": "Imperial Testing Station 93 (A5)"
     },
     {
      "sector": "A7",
@@ -3376,7 +3464,8 @@
      "sector": "A8",
      "subx": 3,
      "suby": 0,
-     "type": "testing-station"
+     "type": "testing-station",
+     "name": "Imperial Testing Station 186 (A8)"
     },
     {
      "sector": "A9",
@@ -3388,7 +3477,8 @@
      "sector": "A9",
      "subx": 1,
      "suby": 2,
-     "type": "testing-station"
+     "type": "testing-station",
+     "name": "Imperial Testing Station 217 (A9)"
     },
     {
      "sector": "A9",
@@ -3527,13 +3617,15 @@
      "sector": "G3",
      "subx": 1,
      "suby": 1,
-     "type": "testing-station"
+     "type": "testing-station",
+     "name": "PVP Testing Station (G3) - The Furnace"
     },
     {
      "sector": "G4",
      "subx": 3,
      "suby": 0,
-     "type": "testing-station"
+     "type": "testing-station",
+     "name": "PVP Testing Station (G4) - The Museum"
     },
     {
      "sector": "G6",
@@ -3569,7 +3661,8 @@
      "sector": "F6",
      "subx": 1,
      "suby": 3,
-     "type": "testing-station"
+     "type": "testing-station",
+     "name": "PVP Testing Station (F6) - The Water Plant"
     },
     {
      "sector": "F7",
@@ -3611,7 +3704,8 @@
      "sector": "D3",
      "subx": 1,
      "suby": 1,
-     "type": "testing-station"
+     "type": "testing-station",
+     "name": "PVE Testing Station (D3) - Circular Control Room"
     },
     {
      "sector": "D5",
@@ -3713,7 +3807,8 @@
      "sector": "A2",
      "subx": 2,
      "suby": 1,
-     "type": "testing-station"
+     "type": "testing-station",
+     "name": "Imperial Testing Station 37 (A2)"
     },
     {
      "sector": "A2",
@@ -3731,7 +3826,8 @@
      "sector": "A3",
      "subx": 2,
      "suby": 2,
-     "type": "testing-station"
+     "type": "testing-station",
+     "name": "Imperial Testing Station 185 (A3)"
     },
     {
      "sector": "A3",
@@ -3743,7 +3839,8 @@
      "sector": "A4",
      "subx": 4,
      "suby": 1,
-     "type": "testing-station"
+     "type": "testing-station",
+     "name": "Imperial Testing Station 148 (A4)"
     },
     {
      "sector": "A4",
@@ -3767,7 +3864,8 @@
      "sector": "A5",
      "subx": 3,
      "suby": 2,
-     "type": "testing-station"
+     "type": "testing-station",
+     "name": "Imperial Testing Station 93 (A5)"
     },
     {
      "sector": "A7",
@@ -3785,7 +3883,8 @@
      "sector": "A8",
      "subx": 3,
      "suby": 0,
-     "type": "testing-station"
+     "type": "testing-station",
+     "name": "Imperial Testing Station 186 (A8)"
     },
     {
      "sector": "A9",
@@ -3797,7 +3896,8 @@
      "sector": "A9",
      "subx": 1,
      "suby": 2,
-     "type": "testing-station"
+     "type": "testing-station",
+     "name": "Imperial Testing Station 217 (A9)"
     },
     {
      "sector": "A9",
@@ -3866,7 +3966,8 @@
      "sector": "I1",
      "subx": 4,
      "suby": 3,
-     "type": "testing-station"
+     "type": "testing-station",
+     "name": "PVP Testing Station (I1) - The Forgotten Cells"
     },
     {
      "sector": "I2",
@@ -3902,7 +4003,8 @@
      "sector": "H8",
      "subx": 2,
      "suby": 2,
-     "type": "testing-station"
+     "type": "testing-station",
+     "name": "PVP Testing Station (H8) - The Water Plant"
     },
     {
      "sector": "H9",
@@ -3956,7 +4058,8 @@
      "sector": "F4",
      "subx": 3,
      "suby": 3,
-     "type": "testing-station"
+     "type": "testing-station",
+     "name": "PVP Testing Station (F4) - The Spice Silo"
     },
     {
      "sector": "F5",
@@ -3986,7 +4089,8 @@
      "sector": "E8",
      "subx": 2,
      "suby": 2,
-     "type": "testing-station"
+     "type": "testing-station",
+     "name": "PVE Testing Station (E8) - Mannequin Manor"
     },
     {
      "sector": "D6",
@@ -4046,7 +4150,8 @@
      "sector": "A2",
      "subx": 2,
      "suby": 1,
-     "type": "testing-station"
+     "type": "testing-station",
+     "name": "Imperial Testing Station 37 (A2)"
     },
     {
      "sector": "A2",
@@ -4064,7 +4169,8 @@
      "sector": "A3",
      "subx": 2,
      "suby": 2,
-     "type": "testing-station"
+     "type": "testing-station",
+     "name": "Imperial Testing Station 185 (A3)"
     },
     {
      "sector": "A3",
@@ -4076,7 +4182,8 @@
      "sector": "A4",
      "subx": 4,
      "suby": 1,
-     "type": "testing-station"
+     "type": "testing-station",
+     "name": "Imperial Testing Station 148 (A4)"
     },
     {
      "sector": "A4",
@@ -4100,7 +4207,8 @@
      "sector": "A5",
      "subx": 3,
      "suby": 2,
-     "type": "testing-station"
+     "type": "testing-station",
+     "name": "Imperial Testing Station 93 (A5)"
     },
     {
      "sector": "A7",
@@ -4118,7 +4226,8 @@
      "sector": "A8",
      "subx": 3,
      "suby": 0,
-     "type": "testing-station"
+     "type": "testing-station",
+     "name": "Imperial Testing Station 186 (A8)"
     },
     {
      "sector": "A9",
@@ -4130,7 +4239,8 @@
      "sector": "A9",
      "subx": 1,
      "suby": 2,
-     "type": "testing-station"
+     "type": "testing-station",
+     "name": "Imperial Testing Station 217 (A9)"
     },
     {
      "sector": "A9",
