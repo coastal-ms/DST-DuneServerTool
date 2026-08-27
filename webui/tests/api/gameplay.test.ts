@@ -248,17 +248,27 @@ describe('Phase G+H — RMQ live commands (PlayerTarget shape)', () => {
   })
 
   it('spawnVehicle copies fls_id/actor_id + optional location', async () => {
-    await gp.spawnVehicle({ target: { fls_id: 'F-x' }, className: 'tpl.ornithopter' })
+    await gp.spawnVehicle({
+      target: { fls_id: 'F-x' },
+      vehicleId: 'OrnithopterLight',
+      actorClass: 'tpl.ornithopter',
+    })
     expect(last().url).toBe('/api/gameplay/vehicles/spawn')
-    expect(last().body).toEqual({ class_name: 'tpl.ornithopter', fls_id: 'F-x' })
+    expect(last().body).toEqual({
+      vehicle_id: 'OrnithopterLight',
+      actor_class: 'tpl.ornithopter',
+      fls_id: 'F-x',
+    })
 
     await gp.spawnVehicle({
       target: { actor_id: 1 },
-      className: 'tpl.sandbike',
+      vehicleId: 'Sandbike',
+      actorClass: 'tpl.sandbike',
       location: { x: 1, y: 2, z: 3 },
     })
     expect(last().body).toEqual({
-      class_name: 'tpl.sandbike',
+      vehicle_id: 'Sandbike',
+      actor_class: 'tpl.sandbike',
       actor_id: 1,
       x: 1, y: 2, z: 3,
     })

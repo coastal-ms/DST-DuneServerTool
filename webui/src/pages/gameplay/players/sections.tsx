@@ -991,10 +991,11 @@ function ActionRow({ def, player, busy, stats, open, danger, onToggle, runAction
               onSubmit={msg => runAction(def, () => chatWhisper(String(player.id), msg))} />
           ) : def.custom === 'funcom-spawn-vehicle' ? (
             <FuncomSpawnVehicleForm busy={busy}
-              onSubmit={(className, templateName, persistent) => runAction(def, () =>
+              onSubmit={(vehicle, templateName, persistent) => runAction(def, () =>
                 spawnVehicle({
                   target: { actor_id: player.id },
-                  className,
+                  vehicleId: vehicle.id,
+                  actorClass: vehicle.className,
                   templateName: templateName || undefined,
                   persistent,
                 }))} />
@@ -1819,7 +1820,7 @@ export function GivePackageForm({ busy, giveDisabled = false, playerName, target
 // Sends Funcom's live SpawnVehicleAt command for field testing. Unlike vehicle
 // kits, this includes vehicles with no inventory-form parts, such as the Tank.
 function FuncomSpawnVehicleForm({ busy, onSubmit }: {
-  busy: boolean; onSubmit: (className: string, templateName: string, persistent: boolean) => void
+  busy: boolean; onSubmit: (vehicle: VehicleTemplate, templateName: string, persistent: boolean) => void
 }) {
   const [catalog, setCatalog] = useState<VehicleKitCatalog | null>(null)
   const [catErr, setCatErr] = useState(false)
@@ -1872,7 +1873,7 @@ function FuncomSpawnVehicleForm({ busy, onSubmit }: {
         Experimental Funcom command. A successful API response only means the command was sent; verify the vehicle in game.
       </div>
       <button className="btn-primary w-full" disabled={busy}
-        onClick={() => onSubmit(veh.className, tpl, persistent)}>
+        onClick={() => onSubmit(veh, tpl, persistent)}>
         {busy ? <Icon name="Loader2" size={13} className="animate-spin" /> : <Icon name="CarFront" size={13} />} Send Funcom Spawn Command
       </button>
     </div>

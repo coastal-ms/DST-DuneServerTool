@@ -122,14 +122,16 @@ Register-DuneRoute -Method POST -Path '/api/gameplay/players/grant-live' -Handle
     } catch { Write-DuneError -Response $res -Status 500 -Message "Grant live failed: $($_.Exception.Message)" }
 }
 
-# POST /api/gameplay/vehicles/spawn  { fls_id?, actor_id?, class_name, x?, y?, z?, rotation?, template_name?, persistent?, faction? }
+# POST /api/gameplay/vehicles/spawn  { fls_id?, actor_id?, vehicle_id, actor_class, x?, y?, z?, rotation?, template_name?, persistent?, faction? }
 Register-DuneRoute -Method POST -Path '/api/gameplay/vehicles/spawn' -Handler {
     param($req, $res, $routeParams, $body)
     try {
         $fls = _DuneRmqFlsId $body; $aid = _DuneRmqActor $body
         if (-not (_DuneRmqRequireTarget -Response $res -FlsId $fls -ActorId $aid)) { return }
-        $cls = [string](Get-DuneBodyValue -Body $body -Name 'class_name')
-        if ([string]::IsNullOrWhiteSpace($cls)) { Write-DuneError -Response $res -Status 400 -Message 'class_name is required.'; return }
+        $vehicleId = [string](Get-DuneBodyValue -Body $body -Name 'vehicle_id')
+        if ([string]::IsNullOrWhiteSpace($vehicleId)) { Write-DuneError -Response $res -Status 400 -Message 'vehicle_id is required.'; return }
+        $actorClass = [string](Get-DuneBodyValue -Body $body -Name 'actor_class')
+        if ([string]::IsNullOrWhiteSpace($actorClass)) { Write-DuneError -Response $res -Status 400 -Message 'actor_class is required.'; return }
         $xv = Get-DuneBodyValue -Body $body -Name 'x'; $x = if ($null -ne $xv) { try { [double]$xv } catch { 0.0 } } else { 0.0 }
         $yv = Get-DuneBodyValue -Body $body -Name 'y'; $y = if ($null -ne $yv) { try { [double]$yv } catch { 0.0 } } else { 0.0 }
         $zv = Get-DuneBodyValue -Body $body -Name 'z'; $z = if ($null -ne $zv) { try { [double]$zv } catch { 0.0 } } else { 0.0 }
@@ -138,7 +140,7 @@ Register-DuneRoute -Method POST -Path '/api/gameplay/vehicles/spawn' -Handler {
         $persRaw = Get-DuneBodyValue -Body $body -Name 'persistent'
         $pers = $false; if ($null -ne $persRaw) { $pers = [bool]$persRaw }
         $fac = [string](Get-DuneBodyValue -Body $body -Name 'faction')
-        Invoke-DunePlayerWriteRoute -Response $res -Action { param($ip) Invoke-DuneVehicleSpawnLive -Ip $ip -FlsId $fls -ActorId $aid -ClassName $cls -X $x -Y $y -Z $z -Rotation $rot -TemplateName $tname -Persistent $pers -Faction $fac }
+        Invoke-DunePlayerWriteRoute -Response $res -Action { param($ip) Invoke-DuneVehicleSpawnLive -Ip $ip -FlsId $fls -ActorId $aid -VehicleId $vehicleId -ActorClass $actorClass -X $x -Y $y -Z $z -Rotation $rot -TemplateName $tname -Persistent $pers -Faction $fac }
     } catch { Write-DuneError -Response $res -Status 500 -Message "Spawn vehicle failed: $($_.Exception.Message)" }
 }
 
