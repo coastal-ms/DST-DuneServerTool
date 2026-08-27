@@ -32,6 +32,8 @@ here cover everything those tags shipped.
 - Added an Experimental twilight field-test harness with bounded candidate
   values, mandatory live-config backups, exact write verification, and one-click
   restoration of the normal day/night cycle.
+- Added an Experimental Funcom vehicle spawn action that uses the shipped RMQ
+  contract and verifies the spawned vehicle persists before reporting success.
 
 ### Changed
 

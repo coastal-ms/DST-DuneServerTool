@@ -341,17 +341,11 @@ function Invoke-DuneVehicleSpawnLive {
     # Spawn at the target's pawn when no explicit coords were supplied. The UI
     # passes the player's pawn/actor id; read its live location from dune.actors
     # so the vehicle drops on the player rather than at map origin (0,0,0).
-    # NOTE: this query intentionally uses the legacy `location->>'X'` shape. On
-    # the current game build dune.actors has no `location` column (coords moved to
-    # the `transform` composite), so this lookup fails, coords stay 0,0,0, and the
-    # vehicle is delivered to the player's INVENTORY via RMQ - the desired
-    # behavior. Do NOT "fix" this to (transform).location.x: that would resolve a
-    # world coordinate and spawn the vehicle in the world instead of inventory.
     if ($X -eq 0.0 -and $Y -eq 0.0 -and $Z -eq 0.0 -and $ActorId -gt 0) {
         $locSql = @"
-SELECT (location->>'X')::float8 AS x,
-       (location->>'Y')::float8 AS y,
-       (location->>'Z')::float8 AS z
+SELECT (transform).location.x::float8 AS x,
+       (transform).location.y::float8 AS y,
+       (transform).location.z::float8 AS z
 FROM dune.actors WHERE id = $ActorId::bigint;
 "@
         $lr = Invoke-DuneSqlQuery -Ip $Ip -Sql $locSql -ReadOnly $true -MaxRows 1 -TimeoutSec 10

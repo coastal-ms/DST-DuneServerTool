@@ -58,3 +58,53 @@ Describe 'Resolve-DuneStackMax' -Tag 'Pure' {
         $r.free_slots | Should -Be 111
     }
 }
+
+Describe 'Invoke-DuneVehicleSpawnLive' -Tag 'Pure' {
+    BeforeEach {
+        $script:spawnArgs = $null
+        $script:spawnSql = $null
+
+        function global:Resolve-DuneFlsIdOrError {
+            return @{ ok = $true; fls_id = 'fls-test' }
+        }
+        function global:Invoke-DuneSqlQuery {
+            param($Ip, $Sql, $ReadOnly, $MaxRows, $TimeoutSec)
+            $script:spawnSql = $Sql
+            return @{
+                ok = $true
+                columns = @('x', 'y', 'z')
+                rows = @(, @('10.5', '20.25', '30.75'))
+            }
+        }
+        function global:Invoke-DuneRmqSpawnVehicleAt {
+            param($FlsId, $ClassName, $X, $Y, $Z, $Rotation, $TemplateName, $Persistent, $Faction)
+            $script:spawnArgs = @{
+                FlsId = $FlsId; ClassName = $ClassName
+                X = $X; Y = $Y; Z = $Z
+                TemplateName = $TemplateName; Persistent = $Persistent
+            }
+            return @{ ok = $true }
+        }
+    }
+
+    AfterEach {
+        Remove-Item function:global:Resolve-DuneFlsIdOrError -ErrorAction SilentlyContinue
+        Remove-Item function:global:Invoke-DuneSqlQuery -ErrorAction SilentlyContinue
+        Remove-Item function:global:Invoke-DuneRmqSpawnVehicleAt -ErrorAction SilentlyContinue
+    }
+
+    It 'resolves the current transform and sends the vehicle to that location' {
+        $r = Invoke-DuneVehicleSpawnLive -Ip '1.2.3.4' -ActorId 42 `
+            -ClassName '/Game/Test/BP_Tank.BP_Tank_C' `
+            -TemplateName 'T6_CombatFire' -Persistent $true
+
+        $r.ok | Should -BeTrue
+        $script:spawnSql | Should -Match '\(transform\)\.location\.x'
+        $script:spawnArgs.FlsId | Should -Be 'fls-test'
+        $script:spawnArgs.X | Should -Be 10.5
+        $script:spawnArgs.Y | Should -Be 20.25
+        $script:spawnArgs.Z | Should -Be 30.75
+        $script:spawnArgs.TemplateName | Should -Be 'T6_CombatFire'
+        $script:spawnArgs.Persistent | Should -BeTrue
+    }
+}
