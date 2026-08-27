@@ -329,7 +329,8 @@ function Invoke-DuneVehicleSpawnLive {
         [string] $Ip,
         [string] $FlsId,
         [long]   $ActorId = 0,
-        [Parameter(Mandatory)] [string] $ClassName,
+        [Parameter(Mandatory)] [string] $VehicleId,
+        [Parameter(Mandatory)] [string] $ActorClass,
         [double] $X = 0.0, [double] $Y = 0.0, [double] $Z = 0.0,
         [double] $Rotation = 0.0,
         [string] $TemplateName,
@@ -338,26 +339,127 @@ function Invoke-DuneVehicleSpawnLive {
     )
     $r = Resolve-DuneFlsIdOrError -Ip $Ip -FlsId $FlsId -ActorId $ActorId
     if (-not $r.ok) { return @{ ok = $false; error = $r.error } }
-    # Spawn at the target's pawn when no explicit coords were supplied. The UI
-    # passes the player's pawn/actor id; read its live location from dune.actors
-    # so the vehicle drops on the player rather than at map origin (0,0,0).
+    $controllerId = 0L
+
+    # Funcom's command expects an open spawn point rather than the pawn's exact
+    # coordinates. Resolve the live transform and place the vehicle 10 meters in
+    # front of the player using the pawn's horizontal forward vector.
     if ($X -eq 0.0 -and $Y -eq 0.0 -and $Z -eq 0.0 -and $ActorId -gt 0) {
         $locSql = @"
-SELECT (transform).location.x::float8 AS x,
-       (transform).location.y::float8 AS y,
-       (transform).location.z::float8 AS z
-FROM dune.actors WHERE id = $ActorId::bigint;
+SELECT ps.player_controller_id::bigint AS controller_id,
+       ((a.transform).location).x::float8 AS x,
+       ((a.transform).location).y::float8 AS y,
+       ((a.transform).location).z::float8 AS z,
+       ((a.transform).rotation).x::float8 AS qx,
+       ((a.transform).rotation).y::float8 AS qy,
+       ((a.transform).rotation).z::float8 AS qz,
+       ((a.transform).rotation).w::float8 AS qw
+FROM dune.player_state ps
+JOIN dune.actors a ON a.id = ps.player_pawn_id
+WHERE ps.player_pawn_id = $ActorId::bigint
+  AND ps.online_status::text = 'Online'
+LIMIT 1;
 "@
         $lr = Invoke-DuneSqlQuery -Ip $Ip -Sql $locSql -ReadOnly $true -MaxRows 1 -TimeoutSec 10
-        if ($lr.ok) {
-            $lmaps = ConvertTo-DuneRowMaps -Result $lr
-            if ($lmaps.Count -gt 0 -and $null -ne $lmaps[0]['x']) {
-                $X = [double]$lmaps[0]['x']; $Y = [double]$lmaps[0]['y']; $Z = [double]$lmaps[0]['z']
+        if (-not $lr.ok) { return @{ ok = $false; error = $lr.error } }
+        $lmaps = ConvertTo-DuneRowMaps -Result $lr
+        if ($lmaps.Count -eq 0) {
+            return @{ ok = $false; error = 'The player must be online with a live pawn location before spawning a vehicle.' }
+        }
+        $loc = $lmaps[0]
+        $controllerId = [long]$loc['controller_id']
+        $baseX = [double]$loc['x']; $baseY = [double]$loc['y']; $Z = [double]$loc['z']
+        $qx = [double]$loc['qx']; $qy = [double]$loc['qy']; $qz = [double]$loc['qz']; $qw = [double]$loc['qw']
+        $forwardX = 1.0 - (2.0 * (($qy * $qy) + ($qz * $qz)))
+        $forwardY = 2.0 * (($qx * $qy) + ($qw * $qz))
+        $forwardLength = [Math]::Sqrt(($forwardX * $forwardX) + ($forwardY * $forwardY))
+        if ($forwardLength -lt 0.000001) {
+            $yaw = [Math]::Atan2(
+                2.0 * (($qw * $qz) + ($qx * $qy)),
+                1.0 - (2.0 * (($qy * $qy) + ($qz * $qz)))
+            )
+            $forwardX = [Math]::Cos($yaw)
+            $forwardY = [Math]::Sin($yaw)
+        } else {
+            $forwardX /= $forwardLength
+            $forwardY /= $forwardLength
+            $yaw = [Math]::Atan2($forwardY, $forwardX)
+        }
+        $X = $baseX + ($forwardX * 1000.0)
+        $Y = $baseY + ($forwardY * 1000.0)
+        $Rotation = $yaw * 180.0 / [Math]::PI
+    }
+
+    $maxSql = 'SELECT COALESCE(MAX(id), 0)::bigint AS max_id FROM dune.vehicles;'
+    $maxResult = Invoke-DuneSqlQuery -Ip $Ip -Sql $maxSql -ReadOnly $true -MaxRows 1 -TimeoutSec 10
+    if (-not $maxResult.ok) { return @{ ok = $false; error = $maxResult.error } }
+    $maxRows = ConvertTo-DuneRowMaps -Result $maxResult
+    $beforeVehicleId = if ($maxRows.Count -gt 0) { [long]$maxRows[0]['max_id'] } else { 0L }
+
+    # Funcom expects the short vehicle id (for example "Tank"), not the Unreal
+    # actor-class path used to identify the resulting database row.
+    $res = Invoke-DuneRmqSpawnVehicleAt -FlsId $r.fls_id -ClassName $VehicleId -X $X -Y $Y -Z $Z -Rotation $Rotation -TemplateName $TemplateName -Persistent $Persistent -Faction $Faction
+    if (-not $res.ok) { return $res }
+
+    $safeActorClass = $ActorClass -replace "'", "''"
+    $permissionRepaired = $false
+    if ($controllerId -gt 0) {
+        for ($attempt = 0; $attempt -lt 10; $attempt++) {
+            Start-Sleep -Seconds 1
+            $repairSql = @"
+WITH candidate AS (
+    SELECT a.id
+    FROM dune.vehicles v
+    JOIN dune.actors a ON a.id = v.id
+    WHERE v.id > $beforeVehicleId::bigint
+      AND a.class = '$safeActorClass'
+      AND a.transform IS NOT NULL
+      AND ABS(((a.transform).location).x::float8 - ($X)::float8) <= 5000
+      AND ABS(((a.transform).location).y::float8 - ($Y)::float8) <= 5000
+      AND ABS(((a.transform).location).z::float8 - ($Z)::float8) <= 5000
+    ORDER BY
+      POWER(((a.transform).location).x::float8 - ($X)::float8, 2) +
+      POWER(((a.transform).location).y::float8 - ($Y)::float8, 2) +
+      POWER(((a.transform).location).z::float8 - ($Z)::float8, 2),
+      a.id DESC
+    LIMIT 1
+),
+permission_row AS (
+    INSERT INTO dune.permission_actor(actor_id, actor_name, actor_type, access_level, is_child)
+    SELECT c.id, '##' || REGEXP_REPLACE(SPLIT_PART(SPLIT_PART(a.class, '.', 2), '_C', 1), '^BP_', ''), 2, 3, false
+    FROM candidate c
+    JOIN dune.actors a ON a.id = c.id
+    ON CONFLICT (actor_id) DO NOTHING
+    RETURNING actor_id
+)
+INSERT INTO dune.permission_actor_rank(permission_actor_id, player_id, rank)
+SELECT c.id, $controllerId::bigint, 1
+FROM candidate c
+WHERE NOT EXISTS (
+    SELECT 1
+    FROM dune.permission_actor_rank existing
+    WHERE existing.permission_actor_id = c.id
+      AND existing.player_id = $controllerId::bigint
+)
+RETURNING permission_actor_id;
+"@
+            $repair = Invoke-DuneSqlQuery -Ip $Ip -Sql $repairSql -ReadOnly $false -MaxRows 1 -TimeoutSec 15
+            if ($repair.ok) {
+                $repairRows = ConvertTo-DuneRowMaps -Result $repair
+                if ($repairRows.Count -gt 0) {
+                    $permissionRepaired = $true
+                    break
+                }
             }
         }
     }
-    $res = Invoke-DuneRmqSpawnVehicleAt -FlsId $r.fls_id -ClassName $ClassName -X $X -Y $Y -Z $Z -Rotation $Rotation -TemplateName $TemplateName -Persistent $Persistent -Faction $Faction
-    if ($res.ok) { $res.message = "Spawn $ClassName command sent for $($r.fls_id)." }
+
+    $res.permission_repaired = $permissionRepaired
+    $res.message = if ($permissionRepaired) {
+        "Spawned $VehicleId for $($r.fls_id) and granted rank-1 vehicle permission."
+    } else {
+        "Sent the $VehicleId spawn command, but no new matching vehicle was found for permission repair."
+    }
     return $res
 }
 

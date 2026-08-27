@@ -2145,14 +2145,18 @@ export function grantLive(controllerId: number, template: string, amount: number
 
 export interface SpawnVehicleInput {
   target: PlayerTarget
-  className: string
+  vehicleId: string
+  actorClass: string
   templateName?: string
   persistent?: boolean
   faction?: string
   location?: { x: number; y: number; z: number }
 }
 export function spawnVehicle(input: SpawnVehicleInput) {
-  const body: Record<string, unknown> = { class_name: input.className }
+  const body: Record<string, unknown> = {
+    vehicle_id: input.vehicleId,
+    actor_class: input.actorClass,
+  }
   if (input.target.fls_id)      body.fls_id        = input.target.fls_id
   if (input.target.actor_id)    body.actor_id      = input.target.actor_id
   if (input.templateName)       body.template_name = input.templateName
