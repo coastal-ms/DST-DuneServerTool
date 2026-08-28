@@ -64,6 +64,7 @@ Describe 'Invoke-DuneVehicleSpawnLive' -Tag 'Pure' {
         $script:spawnArgs = $null
         $script:spawnSql = @()
         $script:spawnQueryCount = 0
+        $script:spawnSurvives = $true
 
         function global:Resolve-DuneFlsIdOrError {
             return @{ ok = $true; fls_id = 'fls-test' }
@@ -87,11 +88,18 @@ Describe 'Invoke-DuneVehicleSpawnLive' -Tag 'Pure' {
                         rows = @(, @('8000'))
                     }
                 }
-                default {
+                3 {
                     return @{
                         ok = $true
                         columns = @('permission_actor_id')
                         rows = @(, @('8001'))
+                    }
+                }
+                default {
+                    return @{
+                        ok = $true
+                        columns = @('vehicle_id')
+                        rows = if ($script:spawnSurvives) { @(, @('8001')) } else { @() }
                     }
                 }
             }
@@ -117,7 +125,7 @@ Describe 'Invoke-DuneVehicleSpawnLive' -Tag 'Pure' {
     It 'resolves the current transform and sends the vehicle to that location' {
         $r = Invoke-DuneVehicleSpawnLive -Ip '1.2.3.4' -ActorId 42 `
             -VehicleId 'Tank' -ActorClass '/Game/Test/BP_Tank.BP_Tank_C' `
-            -TemplateName 'T6_CombatFire' -Persistent $true
+            -TemplateName 'T6_CombatFire' -Persistent $true -VerificationDelaySeconds 0
 
         $r.ok | Should -BeTrue
         $script:spawnSql[0] | Should -Match '\(a\.transform\)\.location'
@@ -131,5 +139,29 @@ Describe 'Invoke-DuneVehicleSpawnLive' -Tag 'Pure' {
         $script:spawnArgs.Persistent | Should -BeTrue
         $script:spawnSql[2] | Should -Match 'permission_actor_rank'
         $r.permission_repaired | Should -BeTrue
+        $r.vehicle_survived | Should -BeTrue
+    }
+
+    It 'fails when Funcom removes the vehicle after accepting the command' {
+        $script:spawnSurvives = $false
+
+        $r = Invoke-DuneVehicleSpawnLive -Ip '1.2.3.4' -ActorId 42 `
+            -VehicleId 'Tank' -ActorClass '/Game/Test/BP_Tank.BP_Tank_C' `
+            -TemplateName 'T6_CombatFire' -Persistent $true -VerificationDelaySeconds 0
+
+        $r.ok | Should -BeFalse
+        $r.permission_repaired | Should -BeTrue
+        $r.vehicle_survived | Should -BeFalse
+        $r.error | Should -Match 'did not survive'
+    }
+
+    It 'rejects transient spawns because they cannot receive durable ownership' {
+        $r = Invoke-DuneVehicleSpawnLive -Ip '1.2.3.4' -ActorId 42 `
+            -VehicleId 'TreadWheel' -ActorClass '/Game/Test/BP_TreadWheel.BP_TreadWheel_C' `
+            -TemplateName 'T6_Boost' -Persistent $false -VerificationDelaySeconds 0
+
+        $r.ok | Should -BeFalse
+        $r.error | Should -Match 'Persistent must be enabled'
+        $script:spawnArgs | Should -BeNullOrEmpty
     }
 }

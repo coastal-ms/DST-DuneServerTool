@@ -731,7 +731,7 @@ const ACTIONS: ActionDef[] = [
     confirm: p => `Give vehicle parts to ${p.name}'s inventory? They'll need to assemble at a Vehicle Assembly. Works online or offline.`,
     run: () => Promise.resolve({ message: '' }) },
   { id: 'funcom-spawn-vehicle', group: 'Vehicle', label: 'Funcom Spawn Vehicle', icon: 'CarFront', custom: 'funcom-spawn-vehicle', liveOnly: true, experimental: true,
-    rowNote: 'Sends Funcom’s live SpawnVehicleAt command at the selected player. Unconfirmed; create a fresh backup before testing.',
+    rowNote: 'Sends Funcom’s persistent SpawnVehicleAt command and assigns owner permission. Unconfirmed; create a fresh backup before testing.',
     confirm: p => `Send Funcom's unconfirmed live vehicle-spawn command at ${p.name}?\n\nThe player must be online and a fresh backup must exist before testing.`,
     run: () => Promise.resolve({ message: '' }) },
   { id: 'refuel-vehicle', group: 'Vehicle', label: 'Refuel Vehicle', icon: 'Fuel', custom: 'refuel-vehicle',
@@ -1826,7 +1826,6 @@ function FuncomSpawnVehicleForm({ busy, onSubmit }: {
   const [catErr, setCatErr] = useState(false)
   const [vid, setVid] = useState('')
   const [tpl, setTpl] = useState('')
-  const [persistent, setPersistent] = useState(false)
   const selectCls = 'w-full px-3 py-2 rounded-lg bg-surface-2 border border-border text-text text-sm focus:outline-none focus:ring-2 focus:ring-ibad focus:border-ibad/50'
 
   useEffect(() => {
@@ -1864,16 +1863,14 @@ function FuncomSpawnVehicleForm({ busy, onSubmit }: {
           {veh.templates.map(t => <option key={t} value={t}>{t}</option>)}
         </select>
       </div>
-      <label className="flex items-center gap-2 text-sm text-text-muted">
-        <input type="checkbox" checked={persistent} disabled={busy}
-          onChange={e => setPersistent(e.target.checked)} />
-        Persistent (request survival across server restarts)
-      </label>
+      <div className="text-xs text-text-muted">
+        Persistent is always enabled so DST can assign owner permission and verify the vehicle survives.
+      </div>
       <div className="rounded-lg border border-warning/40 bg-warning/10 px-3 py-2 text-xs text-text-muted">
         Experimental Funcom command. A successful API response only means the command was sent; verify the vehicle in game.
       </div>
       <button className="btn-primary w-full" disabled={busy}
-        onClick={() => onSubmit(veh, tpl, persistent)}>
+        onClick={() => onSubmit(veh, tpl, true)}>
         {busy ? <Icon name="Loader2" size={13} className="animate-spin" /> : <Icon name="CarFront" size={13} />} Send Funcom Spawn Command
       </button>
     </div>
