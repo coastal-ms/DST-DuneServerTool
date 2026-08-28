@@ -111,7 +111,7 @@ internal static class PrivilegeDrop
                 hStdOutput = standardOutput,
                 hStdError = standardError
             };
-            if (!CreateProcessWithTokenW(
+            var created = CreateProcessWithTokenW(
                     token,
                     LogonWithProfile,
                     executable,
@@ -120,12 +120,31 @@ internal static class PrivilegeDrop
                     IntPtr.Zero,
                     Environment.CurrentDirectory,
                     ref startup,
-                    out var processInformation))
+                    out var processInformation);
+            var tokenLaunchError = created ? 0 : Marshal.GetLastWin32Error();
+            if (!created)
+            {
+                var mutableCommandLine = new StringBuilder(commandLine);
+                created = CreateProcessAsUserW(
+                    token,
+                    executable,
+                    mutableCommandLine,
+                    IntPtr.Zero,
+                    IntPtr.Zero,
+                    true,
+                    CreateNoWindow | CreateSuspended,
+                    IntPtr.Zero,
+                    Environment.CurrentDirectory,
+                    ref startup,
+                    out processInformation);
+            }
+            if (!created)
             {
                 var error = Marshal.GetLastWin32Error();
                 throw new Win32Exception(
                     error,
-                    $"The elevated cache helper could not relaunch with the unelevated user token (Windows error {error}).");
+                    $"The elevated cache helper could not relaunch with the unelevated user token " +
+                    $"(CreateProcessWithTokenW error {tokenLaunchError}; CreateProcessAsUserW error {error}).");
             }
             try
             {
@@ -581,6 +600,20 @@ internal static class PrivilegeDrop
         uint logonFlags,
         string? applicationName,
         string commandLine,
+        uint creationFlags,
+        IntPtr environment,
+        string currentDirectory,
+        ref StartupInfo startupInfo,
+        out ProcessInformation processInformation);
+
+    [DllImport("advapi32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
+    private static extern bool CreateProcessAsUserW(
+        IntPtr token,
+        string? applicationName,
+        StringBuilder commandLine,
+        IntPtr processAttributes,
+        IntPtr threadAttributes,
+        bool inheritHandles,
         uint creationFlags,
         IntPtr environment,
         string currentDirectory,
