@@ -91,6 +91,8 @@ internal static class PrivilegeDrop
     {
         var executable = Environment.ProcessPath
             ?? throw new InvalidOperationException("The helper executable path is unavailable.");
+        var workingDirectory = Path.GetDirectoryName(executable)
+            ?? throw new InvalidOperationException("The helper executable directory is unavailable.");
         var token = GetUnelevatedPrimaryToken();
         var standardInput = IntPtr.Zero;
         var standardOutput = IntPtr.Zero;
@@ -118,7 +120,7 @@ internal static class PrivilegeDrop
                     commandLine,
                     CreateNoWindow | CreateSuspended,
                     IntPtr.Zero,
-                    Environment.CurrentDirectory,
+                    workingDirectory,
                     ref startup,
                     out var processInformation);
             var tokenLaunchError = created ? 0 : Marshal.GetLastWin32Error();
@@ -134,7 +136,7 @@ internal static class PrivilegeDrop
                     true,
                     CreateNoWindow | CreateSuspended,
                     IntPtr.Zero,
-                    Environment.CurrentDirectory,
+                    workingDirectory,
                     ref startup,
                     out processInformation);
             }

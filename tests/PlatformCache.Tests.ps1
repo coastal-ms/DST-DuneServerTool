@@ -117,6 +117,7 @@ Describe 'DunePlatformStore production helper' {
         $privilegeDrop | Should -Match 'CreateRestrictedToken\([\s\S]+DisableMaxPrivilege \| LuaToken'
         $privilegeDrop | Should -Match 'CreateProcessWithTokenW'
         $privilegeDrop | Should -Match 'CreateProcessAsUserW\([\s\S]+true,\s+CreateNoWindow'
+        $privilegeDrop | Should -Match 'Path\.GetDirectoryName\(executable\)[\s\S]+workingDirectory'
         $privilegeDrop | Should -Match 'DuplicateHandle\([\s\S]+inheritHandle'
         $privilegeDrop | Should -Match 'SelfTestInheritableStandardHandles'
         $privilegeDrop | Should -Match 'CreateKillOnCloseJob'
