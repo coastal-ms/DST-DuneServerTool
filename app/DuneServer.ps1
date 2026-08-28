@@ -845,6 +845,9 @@ try {
     Write-DuneLog "HTTP server failed: $($_.Exception.Message)" 'ERROR'
     Show-DuneMessage "Dune Server failed to start: $($_.Exception.Message)" 'Dune Server' 'Error'
 } finally {
+    if (Get-Command Stop-DuneMapsPlatformRefresh -ErrorAction SilentlyContinue) {
+        try { [void](Stop-DuneMapsPlatformRefresh) } catch {}
+    }
     if (Get-Command Stop-DuneConsoleLifecycle -ErrorAction SilentlyContinue) {
         try { Stop-DuneConsoleLifecycle } catch {}
     }

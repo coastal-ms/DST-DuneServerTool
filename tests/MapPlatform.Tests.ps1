@@ -184,6 +184,41 @@ Describe 'Maps platform cache generation' -Tag 'MapPlatform' {
         $script:DuneMapsActiveSpiceStaleAfterSec | Should -Be 60
     }
 
+    It 'repeats refreshes until cancellation and survives a failed attempt' {
+        $cancellation = [Threading.CancellationTokenSource]::new()
+        $state = [Collections.Hashtable]::Synchronized(@{ attempts = 0; successes = 0 })
+        try {
+            $attempts = Invoke-DuneMapsPlatformRefreshLoop `
+                -CancellationToken $cancellation.Token `
+                -InitialDelaySec 0 `
+                -NextDelay { 0.01 } `
+                -Refresh ({
+                    $state.attempts++
+                    if ($state.attempts -eq 1) { throw 'transient fixture failure' }
+                    $state.successes++
+                    $cancellation.Cancel()
+                }.GetNewClosure())
+
+            $attempts | Should -Be 2
+            $state.attempts | Should -Be 2
+            $state.successes | Should -Be 1
+        } finally {
+            $cancellation.Dispose()
+        }
+    }
+
+    It 'does not schedule before the active source backoff window' {
+        $table = Get-DunePlatformCoordinationTable
+        $table["platform-backoff:$script:DuneMapsActiveSpiceSourceKey"] = [pscustomobject]@{
+            nextAttemptAt = [DateTime]::UtcNow.AddSeconds(90)
+        }
+        try {
+            (Get-DuneMapsScheduledRefreshDelaySec -Sample 0) | Should -BeGreaterThan 85
+        } finally {
+            [void]$table.Remove("platform-backoff:$script:DuneMapsActiveSpiceSourceKey")
+        }
+    }
+
     It 'drops non-Deep-Desert rows rather than relabeling them' {
         $source = New-MapPlatformActiveResult
         $source.fields += [ordered]@{
@@ -304,7 +339,7 @@ Describe 'Maps v1 cached API contracts' -Tag 'MapPlatform' {
         [Text.Encoding]::UTF8.GetByteCount($json) | Should -BeLessThan (256KB)
     }
 
-    It 'hydrates persisted state before scheduling the one-shot startup refresh' {
+    It 'hydrates persisted state before scheduling the recurring startup refresh' {
         $entrypoint = Get-Content (Join-Path (Get-DstRepoRoot) 'app\DuneServer.ps1') -Raw
         $hydrate = $entrypoint.IndexOf('Initialize-DunePlatformCache')
         $refresh = $entrypoint.IndexOf('Start-DuneMapsPlatformStartupRefresh')
@@ -313,8 +348,34 @@ Describe 'Maps v1 cached API contracts' -Tag 'MapPlatform' {
         $hydrate | Should -BeGreaterOrEqual 0
         $refresh | Should -BeGreaterThan $hydrate
         $routes | Should -BeGreaterThan $refresh
-        (Get-Command Start-DuneMapsPlatformStartupRefresh).Definition | Should -Match 'MapsOneShotRunner'
+        (Get-Command Start-DuneMapsPlatformStartupRefresh).Definition | Should -Match 'MapsRefreshRunner'
+        (Get-Command Start-DuneMapsPlatformStartupRefresh).Definition | Should -Match 'CancellationTokenSource'
+        (Get-Command Start-DuneMapsPlatformStartupRefresh).Definition | Should -Match 'DuneLog\.ps1'
+        (Get-Command Start-DuneMapsPlatformStartupRefresh).Definition | Should -Match 'Set-DuneLogPath'
+        (Get-Command Start-DuneMapsPlatformStartupRefresh).Definition | Should -Match 'DuneMapsRefreshCompletion'
         (Get-Command Start-DuneMapsPlatformStartupRefresh).Definition | Should -Not -Match 'BeginInvoke'
+        (Get-Command Stop-DuneMapsPlatformRefresh).Definition | Should -Match 'BeginStop'
+        (Get-Command Stop-DuneMapsPlatformRefresh).Definition | Should -Not -Match '\.Stop\('
+        $entrypoint | Should -Match 'Stop-DuneMapsPlatformRefresh'
+        $entrypoint.IndexOf('Stop-DuneMapsPlatformRefresh') |
+            Should -BeLessThan $entrypoint.LastIndexOf('Stop-DuneHttpServer')
+    }
+
+    It 'cancels, awaits, and disposes a completed refresh scheduler' {
+        $cancellation = [Threading.CancellationTokenSource]::new()
+        $token = $cancellation.Token
+        $completion = [Threading.ManualResetEventSlim]::new($true)
+        $script:DuneMapsRefreshCancellation = $cancellation
+        $script:DuneMapsRefreshCompletion = $completion
+        $script:DuneMapsRefreshPowerShell = $null
+        $script:DuneMapsStartupRefreshStarted = $true
+
+        (Stop-DuneMapsPlatformRefresh -WaitMs 10) | Should -BeTrue
+
+        $token.IsCancellationRequested | Should -BeTrue
+        $script:DuneMapsStartupRefreshStarted | Should -BeFalse
+        $script:DuneMapsRefreshCancellation | Should -BeNullOrEmpty
+        $script:DuneMapsRefreshCompletion | Should -BeNullOrEmpty
     }
 
     It 'registers only additive read-only v1 map routes' {

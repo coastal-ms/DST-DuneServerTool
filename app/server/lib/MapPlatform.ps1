@@ -8,6 +8,9 @@ $script:DuneMapsActiveSpiceStaleAfterSec = 60
 $script:DuneMapsRefreshCadenceSec = 15
 $script:DuneMapsRefreshJitterPercent = 10
 $script:DuneMapsStartupRefreshStarted = $false
+$script:DuneMapsRefreshCancellation = $null
+$script:DuneMapsRefreshPowerShell = $null
+$script:DuneMapsRefreshCompletion = $null
 
 function Get-DuneMapPlatformValue {
     param($InputObject, [Parameter(Mandatory)][string]$Name)
@@ -23,6 +26,55 @@ function Get-DuneMapsRefreshDelaySec {
     $bounded = [Math]::Min(1.0, [Math]::Max(0.0, $Sample))
     $spread = $script:DuneMapsRefreshJitterPercent / 100.0
     return $script:DuneMapsRefreshCadenceSec * ((1.0 - $spread) + (2.0 * $spread * $bounded))
+}
+
+function Get-DuneMapsScheduledRefreshDelaySec {
+    param([double]$Sample = (Get-Random -Minimum 0.0 -Maximum 1.0))
+
+    $delay = Get-DuneMapsRefreshDelaySec -Sample $Sample
+    $table = Get-DunePlatformCoordinationTable
+    $backoff = $table["platform-backoff:$script:DuneMapsActiveSpiceSourceKey"]
+    if ($backoff -and $backoff.nextAttemptAt -gt [DateTime]::UtcNow) {
+        $remaining = ($backoff.nextAttemptAt - [DateTime]::UtcNow).TotalSeconds
+        $delay = [Math]::Max($delay, $remaining)
+    }
+    return $delay
+}
+
+function Invoke-DuneMapsPlatformRefreshLoop {
+    param(
+        [Parameter(Mandatory)][Threading.CancellationToken]$CancellationToken,
+        [double]$InitialDelaySec = (Get-DuneMapsRefreshDelaySec),
+        [scriptblock]$Refresh,
+        [scriptblock]$NextDelay
+    )
+
+    if (-not $Refresh) { $Refresh = { Invoke-DuneMapsPlatformRefresh } }
+    if (-not $NextDelay) { $NextDelay = { Get-DuneMapsScheduledRefreshDelaySec } }
+    if ($InitialDelaySec -gt 0 -and $CancellationToken.WaitHandle.WaitOne(
+        [int][Math]::Ceiling($InitialDelaySec * 1000)
+    )) {
+        return 0
+    }
+
+    $attempts = 0
+    while (-not $CancellationToken.IsCancellationRequested) {
+        try {
+            $null = & $Refresh
+        } catch {
+            if (-not $CancellationToken.IsCancellationRequested -and
+                (Get-Command Write-DuneLog -ErrorAction SilentlyContinue)) {
+                Write-DuneLog "Maps platform refresh failed: $($_.Exception.Message)" 'WARN'
+            }
+        }
+        $attempts++
+        if ($CancellationToken.IsCancellationRequested) { break }
+        $delaySec = [Math]::Max(0.01, [double](& $NextDelay))
+        if ($CancellationToken.WaitHandle.WaitOne([int][Math]::Ceiling($delaySec * 1000))) {
+            break
+        }
+    }
+    return $attempts
 }
 
 function Get-DuneMapsPayloadSha256 {
@@ -314,8 +366,9 @@ function Start-DuneMapsPlatformStartupRefresh {
 
     $sharedSnapshot = Get-DunePlatformSnapshotState
     $sharedLocks = Get-DunePlatformCoordinationTable
+    $cancellation = [Threading.CancellationTokenSource]::new()
     try {
-        if (-not ('DuneServer.MapsOneShotRunner' -as [type])) {
+        if (-not ('DuneServer.MapsRefreshRunner' -as [type])) {
             Add-Type -TypeDefinition @'
 using System;
 using System.Management.Automation;
@@ -324,11 +377,12 @@ using System.Threading;
 
 namespace DuneServer
 {
-    public static class MapsOneShotRunner
+    public static class MapsRefreshRunner
     {
-        public static void Queue(PowerShell powershell, Runspace runspace)
+        public static ManualResetEventSlim Queue(PowerShell powershell, Runspace runspace)
         {
-            ThreadPool.QueueUserWorkItem(_ =>
+            var completed = new ManualResetEventSlim(false);
+            if (!ThreadPool.QueueUserWorkItem(_ =>
             {
                 try
                 {
@@ -338,8 +392,14 @@ namespace DuneServer
                 {
                     powershell.Dispose();
                     runspace.Dispose();
+                    completed.Set();
                 }
-            });
+            }))
+            {
+                completed.Dispose();
+                throw new InvalidOperationException("Could not queue the Maps refresh worker.");
+            }
+            return completed;
         }
     }
 }
@@ -352,9 +412,14 @@ namespace DuneServer
         $powershell = [powershell]::Create()
         $powershell.Runspace = $runspace
         [void]$powershell.AddScript({
-            param($ServerDir, $AppDir, $SnapshotState, $LockTable, $DelaySec)
+            param($ServerDir, $AppDir, $SnapshotState, $LockTable, $DelaySec, $CancellationToken, $LogPath)
             try {
                 $script:AppDir = $AppDir
+                $duneLog = Join-Path $ServerDir 'lib\DuneLog.ps1'
+                if (Test-Path -LiteralPath $duneLog) {
+                    . $duneLog
+                    if ($LogPath) { Set-DuneLogPath -Path $LogPath }
+                }
                 $bootstrap = Join-Path $ServerDir 'lib\Bootstrap.ps1'
                 if (Test-Path -LiteralPath $bootstrap) { . $bootstrap }
                 $http = Join-Path $ServerDir 'HttpServer.ps1'
@@ -365,24 +430,55 @@ namespace DuneServer
                     ForEach-Object { . $_.FullName }
                 $script:DunePlatformSnapshotState = $SnapshotState
                 $script:DuneApiLockTable = $LockTable
-                if ($DelaySec -gt 0) {
-                    Start-Sleep -Milliseconds ([int][Math]::Ceiling($DelaySec * 1000))
-                }
-                $null = Invoke-DuneMapsPlatformRefresh
+                $null = Invoke-DuneMapsPlatformRefreshLoop `
+                    -CancellationToken $CancellationToken `
+                    -InitialDelaySec $DelaySec
             } catch {
-                if (Get-Command Write-DuneLog -ErrorAction SilentlyContinue) {
-                    Write-DuneLog "Maps platform startup refresh failed: $($_.Exception.Message)" 'WARN'
+                if (-not $CancellationToken.IsCancellationRequested -and
+                    (Get-Command Write-DuneLog -ErrorAction SilentlyContinue)) {
+                    Write-DuneLog "Maps platform refresh scheduler stopped: $($_.Exception.Message)" 'WARN'
                 }
             }
-        }).AddArgument($ServerDir).AddArgument($AppDir).AddArgument($sharedSnapshot).AddArgument($sharedLocks).AddArgument($DelaySec)
-        [DuneServer.MapsOneShotRunner]::Queue($powershell, $runspace)
+        }).AddArgument($ServerDir).AddArgument($AppDir).AddArgument($sharedSnapshot).AddArgument($sharedLocks).AddArgument($DelaySec).AddArgument($cancellation.Token).AddArgument($script:DuneLogPath)
+        $completion = [DuneServer.MapsRefreshRunner]::Queue($powershell, $runspace)
+        $script:DuneMapsRefreshCancellation = $cancellation
+        $script:DuneMapsRefreshPowerShell = $powershell
+        $script:DuneMapsRefreshCompletion = $completion
         $script:DuneMapsStartupRefreshStarted = $true
         return $true
     } catch {
+        try { $cancellation.Cancel() } catch {}
+        try { $cancellation.Dispose() } catch {}
         if ($powershell) { try { $powershell.Dispose() } catch {} }
         if ($runspace) { try { $runspace.Dispose() } catch {} }
         throw
     }
+}
+
+function Stop-DuneMapsPlatformRefresh {
+    param([ValidateRange(1,30000)][int]$WaitMs = 5000)
+
+    $cancellation = $script:DuneMapsRefreshCancellation
+    if (-not $cancellation) { return $false }
+    try { $cancellation.Cancel() } catch {}
+    $completion = $script:DuneMapsRefreshCompletion
+    $powershell = $script:DuneMapsRefreshPowerShell
+    if ($completion -and -not $completion.Wait([Math]::Min(1000, $WaitMs))) {
+        try { $null = $powershell.BeginStop($null, $null) } catch {}
+        if (-not $completion.Wait($WaitMs)) {
+            if (Get-Command Write-DuneLog -ErrorAction SilentlyContinue) {
+                Write-DuneLog 'Maps platform refresh did not stop within the shutdown timeout.' 'WARN'
+            }
+            return $false
+        }
+    }
+    $script:DuneMapsRefreshCancellation = $null
+    $script:DuneMapsRefreshPowerShell = $null
+    $script:DuneMapsRefreshCompletion = $null
+    $script:DuneMapsStartupRefreshStarted = $false
+    try { if ($completion) { $completion.Dispose() } } catch {}
+    try { $cancellation.Dispose() } catch {}
+    return $true
 }
 
 function New-DuneMapsCacheFreshness {
