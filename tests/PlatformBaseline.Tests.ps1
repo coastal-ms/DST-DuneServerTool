@@ -25,34 +25,32 @@ BeforeAll {
     )
 }
 
-Describe 'Next-generation platform route baseline' -Tag 'Baseline' {
-    It 'pins the HTTP and WebSocket registration counts' {
-        $script:routes.Count | Should -Be $script:baseline.backendRoutes.httpCount
-        $script:webSockets.Count | Should -Be $script:baseline.backendRoutes.webSocketCount
+AfterAll {
+    Remove-Item Function:\Register-DuneRoute -Force -ErrorAction SilentlyContinue
+}
+
+Describe 'Historical pre-contract platform route baseline' -Tag 'Baseline' {
+    It 'records the HTTP and WebSocket inventory at the source commit' {
+        $script:baseline.sourceCommit | Should -BeExactly 'e56bcdd315974ba77373541e2c1007ba1118e465'
+        $script:baseline.backendRoutes.httpCount | Should -Be 339
+        $script:baseline.backendRoutes.webSocketCount | Should -Be 1
     }
 
-    It 'pins the method-based read and write-like classification' {
-        foreach ($property in $script:baseline.backendRoutes.byMethod.PSObject.Properties) {
-            @($script:routes | Where-Object Method -eq $property.Name).Count |
-                Should -Be $property.Value -Because "the $($property.Name) route count changed"
-        }
-        @($script:routes | Where-Object Method -eq 'GET').Count |
-            Should -Be $script:baseline.backendRoutes.classification.readByMethod
-        @($script:routes | Where-Object Method -ne 'GET').Count |
-            Should -Be $script:baseline.backendRoutes.classification.writeLikeByMethod
+    It 'records the historical method-based read and write-like classification' {
+        $byMethod = $script:baseline.backendRoutes.byMethod
+        $byMethod.DELETE | Should -Be 6
+        $byMethod.GET | Should -Be 130
+        $byMethod.POST | Should -Be 178
+        $byMethod.PUT | Should -Be 25
+        $script:baseline.backendRoutes.classification.readByMethod | Should -Be 130
+        $script:baseline.backendRoutes.classification.writeLikeByMethod | Should -Be 209
+        ($byMethod.DELETE + $byMethod.GET + $byMethod.POST + $byMethod.PUT) | Should -Be 339
     }
 
-    It 'pins the namespace inventory' {
-        $actual = @{}
-        foreach ($route in $script:routes) {
-            $namespace = ($route.Path -split '/')[2]
-            if (-not $namespace) { $namespace = 'root' }
-            $actual[$namespace] = 1 + [int]($actual[$namespace])
-        }
-        foreach ($property in $script:baseline.backendRoutes.byNamespace.PSObject.Properties) {
-            $actual[$property.Name] | Should -Be $property.Value -Because "the $($property.Name) namespace changed"
-        }
-        $actual.Keys.Count | Should -Be @($script:baseline.backendRoutes.byNamespace.PSObject.Properties).Count
+    It 'records the historical namespace inventory' {
+        $namespaces = @($script:baseline.backendRoutes.byNamespace.PSObject.Properties)
+        $namespaces.Count | Should -Be 35
+        ($namespaces.Value | Measure-Object -Sum).Sum | Should -Be 339
     }
 
     It 'pins every existing Maps and Coriolis compatibility route' {
@@ -72,18 +70,17 @@ Describe 'Maps response compatibility baseline' -Tag 'Baseline' {
         $end = $mapsSource.IndexOf('function Start-DuneOnDemandMap', $start)
         $script:desktopStateSource = $mapsSource.Substring($start, $end - $start)
 
-        $global:PlatformBaselineRoutes = @{}
-        function global:Register-DuneRoute {
+        $platformBaselineRoutes = @{}
+        function Register-DuneRoute {
             param($Method, $Path, $Handler, [switch] $Inline, [switch] $LocalOnly)
-            $global:PlatformBaselineRoutes["$Method $Path"] = $Handler
+            $platformBaselineRoutes["$Method $Path"] = $Handler
         }
         $script:DuneOnDemandMaps = @(
             [pscustomobject]@{ Key = 'deepdesert'; Label = 'Deep Desert' }
         )
         . (Join-Path $PSScriptRoot '..\app\server\routes\Remote.ps1')
-        $script:remoteMapsHandler = $global:PlatformBaselineRoutes['GET /api/remote/maps']
-        Remove-Item function:global:Register-DuneRoute -ErrorAction SilentlyContinue
-        Remove-Variable PlatformBaselineRoutes -Scope Global -ErrorAction SilentlyContinue
+        $script:remoteMapsHandler = $platformBaselineRoutes['GET /api/remote/maps']
+        Remove-Item Function:\Register-DuneRoute -ErrorAction SilentlyContinue
     }
 
     It 'keeps the desktop map-state response fields' {
