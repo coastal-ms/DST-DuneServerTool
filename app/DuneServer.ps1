@@ -590,6 +590,15 @@ if (Test-Path $libDir) {
     Get-ChildItem -Path $libDir -Filter '*.ps1' | ForEach-Object { . $_.FullName }
 }
 
+# Hydrate the last persisted Maps read model before any HTTP route can observe it.
+# Source refresh is scheduled separately and never runs on the response path.
+if (Get-Command Initialize-DunePlatformCache -ErrorAction SilentlyContinue) {
+    $platformCacheStartup = Initialize-DunePlatformCache
+    if (-not $platformCacheStartup.ok) {
+        Write-DuneLog "Platform cache unavailable at startup: $($platformCacheStartup.message)" 'WARN'
+    }
+}
+
 # Auto-load all route files
 $routesDir = Join-Path $serverDir 'routes'
 if (Test-Path $routesDir) {

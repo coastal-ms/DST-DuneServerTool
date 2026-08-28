@@ -82,6 +82,15 @@ jobs:
           if (-not $ok) { throw "Pester 5+ could not be made available." }
           Write-Host "Pester $($ok[0].Version) ready."
 
+      - name: Setup .NET 10 SDK
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: Build platform cache helper for Pester
+        shell: pwsh
+        run: dotnet build app\tools\DunePlatformStore\DunePlatformStore.csproj -c Release --nologo
+
       - name: Run Pester suite
         shell: pwsh
         run: pwsh -NoProfile -ExecutionPolicy Bypass -File tests/Run-Tests.ps1 -CI

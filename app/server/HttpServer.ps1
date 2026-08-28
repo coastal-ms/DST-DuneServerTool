@@ -428,6 +428,7 @@ function Initialize-DuneApiPool {
         IsCompiledExe = $script:DuneIsCompiledExe
         LockTable     = $script:DuneApiLockTable
         CursorSecret  = $cursorSecret
+        PlatformSnapshotState = $script:DunePlatformSnapshotState
     }
 
     $iss = [System.Management.Automation.Runspaces.InitialSessionState]::CreateDefault()
@@ -558,6 +559,7 @@ function Invoke-DuneApiHandlerAsync {
                 ,@('DuneIsCompiledExe',$ctx.IsCompiledExe)
                 ,@('DuneApiLockTable', $ctx.LockTable)
                 ,@('DuneApiCursorSecret', $ctx.CursorSecret)
+                ,@('DunePlatformSnapshotState', $ctx.PlatformSnapshotState)
             )) {
                 Set-Variable -Name $pair[0] -Value $pair[1] -Scope Global -ErrorAction SilentlyContinue
                 Set-Variable -Name $pair[0] -Value $pair[1] -Scope Script -ErrorAction SilentlyContinue
