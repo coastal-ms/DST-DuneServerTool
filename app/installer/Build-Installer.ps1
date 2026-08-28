@@ -13,6 +13,7 @@ param(
     [switch]$SkipWebBuild,
     [switch]$SkipShellBuild,
     [switch]$SkipSoloBuild,
+    [switch]$SkipPlatformBuild,
     [switch]$SkipVersionCheck,
     # Explicit artifact identity. Normal release/local builds default stable.
     # Test candidates must pass -Prerelease; branch names are never inferred.
@@ -20,11 +21,12 @@ param(
     [string]$BuildCommit = '',
     [string]$BuildTag = '',
     # Build the raw artifacts (webui + DuneServer.exe + DuneShell.exe +
-    # DuneSoloDb.exe) but STOP
+    # DuneSoloDb.exe + DunePlatformStore.exe) but STOP
     # before compiling the Inno Setup installer. Used by the signed-release CI
     # (release-signed.yml) as "phase A": it builds the inner exes, hands them to
     # SignPath to Authenticode-sign them IN PLACE, then re-invokes this script
-    # with -SkipExeBuild -SkipShellBuild -SkipSoloBuild -SkipWebBuild ("phase B") so ISCC bundles
+    # with -SkipExeBuild -SkipShellBuild -SkipSoloBuild -SkipPlatformBuild
+    # -SkipWebBuild ("phase B") so ISCC bundles
     # the now-signed exes into the installer.
     [switch]$SkipInstaller,
     [switch]$Open
@@ -42,6 +44,8 @@ $outDir     = Join-Path $appRoot 'installer\output'
 $installer  = Join-Path $outDir 'DuneServerSetup.exe'
 $soloProj   = Join-Path $appRoot 'tools\DuneSoloDb\DuneSoloDb.csproj'
 $soloExe    = Join-Path $appRoot 'tools\DuneSoloDb\bin\Release\net10.0-windows\win-x64\publish\DuneSoloDb.exe'
+$platformProj = Join-Path $appRoot 'tools\DunePlatformStore\DunePlatformStore.csproj'
+$platformExe = Join-Path $appRoot 'tools\DunePlatformStore\bin\Release\net10.0-windows\win-x64\publish\DunePlatformStore.exe'
 $buildHelpers = Join-Path $appRoot 'build\BuildHelpers.ps1'
 
 $null = . $buildHelpers
@@ -311,8 +315,31 @@ if (-not (Test-Path $soloExe)) {
     throw "DuneSoloDb.exe not found at $soloExe - run 'dotnet publish' for DuneSoloDb (or omit -SkipSoloBuild)"
 }
 
-# -SkipInstaller: raw artifacts are built (webui + DuneServer.exe + DuneShell.exe + DuneSoloDb.exe);
-# stop here without compiling the installer. The signed-release CI signs the two
+# Build the bounded one-shot SQLite helper used by the Maps derived cache.
+if (-not $SkipPlatformBuild) {
+    if (-not (Test-Path $platformProj)) { throw "DunePlatformStore.csproj not found at $platformProj" }
+    $dotnet = Get-Command dotnet -ErrorAction SilentlyContinue
+    if (-not $dotnet) { throw "dotnet SDK not found in PATH. Install .NET 10 SDK to build DunePlatformStore." }
+    $audit = (& $dotnet.Source list $platformProj package --include-transitive --vulnerable | Out-String)
+    Write-Host $audit
+    if ($audit -match 'has the following vulnerable packages') {
+        throw 'DunePlatformStore dependency audit found a vulnerable package.'
+    }
+    Write-Host "Publishing DunePlatformStore.exe (Maps derived cache helper)..." -ForegroundColor Cyan
+    & $dotnet.Source publish $platformProj -c Release -r win-x64 -p:PublishSingleFile=true --self-contained true --nologo
+    if ($LASTEXITCODE -ne 0) { throw "dotnet publish failed for DunePlatformStore (exit $LASTEXITCODE)" }
+    Write-Host "Running DunePlatformStore self-test..." -ForegroundColor Cyan
+    & $platformExe --command self-test
+    if ($LASTEXITCODE -ne 0) { throw "DunePlatformStore self-test failed (exit $LASTEXITCODE)" }
+    Write-Host ""
+}
+if (-not (Test-Path $platformExe)) {
+    throw "DunePlatformStore.exe not found at $platformExe - run 'dotnet publish' for DunePlatformStore (or omit -SkipPlatformBuild)"
+}
+
+# -SkipInstaller: raw artifacts are built (webui + DuneServer.exe + DuneShell.exe +
+# DuneSoloDb.exe + DunePlatformStore.exe);
+# stop here without compiling the installer. The signed-release CI signs the
 # inner exes at this point, then re-runs with the -Skip*Build flags to package them.
 if ($SkipInstaller) {
     Write-Host ""
@@ -320,6 +347,7 @@ if ($SkipInstaller) {
     Write-Host "    DuneServer.exe : $exePath" -ForegroundColor DarkGray
     Write-Host "    DuneShell.exe  : $shellExe" -ForegroundColor DarkGray
     Write-Host "    DuneSoloDb.exe : $soloExe" -ForegroundColor DarkGray
+    Write-Host "    DunePlatformStore.exe : $platformExe" -ForegroundColor DarkGray
     return
 }
 

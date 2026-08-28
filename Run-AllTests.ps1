@@ -12,12 +12,21 @@ param(
     [switch] $SkipServer,
     [switch] $SkipWebUI,
     [switch] $SkipSoloHelper,
+    [switch] $SkipPlatformCacheHelper,
     [switch] $CI
 )
 
 $ErrorActionPreference = 'Stop'
 $repoRoot = $PSScriptRoot
 $failures = @()
+
+if (-not $SkipPlatformCacheHelper) {
+    Write-Host ""
+    Write-Host "=== Running platform cache helper self-test ===" -ForegroundColor Cyan
+    $platformProject = Join-Path $repoRoot 'app\tools\DunePlatformStore\DunePlatformStore.csproj'
+    & dotnet run --project $platformProject -c Release -- --command self-test
+    if ($LASTEXITCODE -ne 0) { $failures += "DunePlatformStore self-test (exit $LASTEXITCODE)" }
+}
 
 if (-not $SkipServer) {
     Write-Host ""

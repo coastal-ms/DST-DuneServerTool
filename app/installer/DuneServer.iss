@@ -16,7 +16,7 @@
 ;                 -> NOT touched by install or uninstall (preserves user config)
 
 #define MyAppName        "Dune Server Tool"
-#define MyAppVersion "14.0.3"
+#define MyAppVersion "15.0.0"
 #define MyAppPublisher   "Dune Awakening Self-Hosted Tool"
 #define MyAppURL         "https://github.com/coastal-ms/DST-DuneServerTool"
 #define MyAppExeName     "DuneServer.exe"
@@ -75,6 +75,10 @@ Source: "..\desktop\DuneShell\bin\Release\net10.0-windows\win-x64\publish\DuneSh
 ; Host-local Solo Mode helper: validates Funcom's wrapped SQLite save format,
 ; creates retained backups, and performs verified atomic restores.
 Source: "..\tools\DuneSoloDb\bin\Release\net10.0-windows\win-x64\publish\DuneSoloDb.exe"; DestDir: "{app}\tools\solo"; Flags: ignoreversion
+
+; Bounded one-shot Maps derived-cache helper. It owns typed SQLite operations
+; and exits after every startup hydration, generation replace, or health task.
+Source: "..\tools\DunePlatformStore\bin\Release\net10.0-windows\win-x64\publish\DunePlatformStore.exe"; DestDir: "{app}\tools\platform"; Flags: ignoreversion
 
 ; The business logic script (called via dune-server.ps1 -Cmd for the
 ; "spawn elevated console window" pattern used by the Commands page).

@@ -1,5 +1,43 @@
 ﻿# Routes for on-demand map control (currently DeepDesert).
 
+# Versioned Maps read-model routes are cache-only. Source reads happen in the
+# bounded startup refresh and never on an HTTP response path.
+Register-DuneRoute -Method GET -Path '/api/v1/maps/catalog' -Handler {
+    param($req, $res, $routeParams, $body)
+    try {
+        $requestId = if ($routeParams.requestId) { [string]$routeParams.requestId } else { New-DuneRequestId }
+        Write-DuneJson -Response $res -Body (Get-DuneMapsCatalogResponse -RequestId $requestId)
+    } catch {
+        Write-DuneError -Response $res -Status 500 -Message $_.Exception.Message
+    }
+}
+
+Register-DuneRoute -Method GET -Path '/api/v1/maps/deep-desert' -Handler {
+    param($req, $res, $routeParams, $body)
+    try {
+        $requestId = if ($routeParams.requestId) { [string]$routeParams.requestId } else { New-DuneRequestId }
+        Write-DuneJson -Response $res -Body (Get-DuneDeepDesertMapResponse -RequestId $requestId)
+    } catch {
+        Write-DuneError -Response $res -Status 500 -Message $_.Exception.Message
+    }
+}
+
+Register-DuneRoute -Method GET -Path '/api/v1/maps/deep-desert/layers/{layer}' -Handler {
+    param($req, $res, $routeParams, $body)
+    try {
+        $layer = [string]$routeParams.layer
+        if ($layer -notin @('active-spice','public-poi')) {
+            Write-DuneError -Response $res -Status 404 -Message "Unknown Deep Desert layer '$layer'."
+            return
+        }
+        $requestId = if ($routeParams.requestId) { [string]$routeParams.requestId } else { New-DuneRequestId }
+        Write-DuneJson -Response $res -Body (
+            Get-DuneDeepDesertLayerResponse -RequestId $requestId -LayerId $layer)
+    } catch {
+        Write-DuneError -Response $res -Status 500 -Message $_.Exception.Message
+    }
+}
+
 # Static route — clears drifted partitions so on-demand maps launch again.
 # Registered separately from /api/maps/{key} (it's a POST so there's no
 # collision with the GET param route).

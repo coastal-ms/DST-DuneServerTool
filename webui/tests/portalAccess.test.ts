@@ -37,9 +37,9 @@ describe('Browser Portal role access', () => {
     expect(NAV_ITEMS.find(item => item.to === '/setup')?.localOnly).toBe(true)
   })
 
-  it('labels the Admin-only Map SpinUp group without implying Database access', () => {
-    const mapSpinUp = NAV_ITEMS.filter(item => item.to === '/map-spinup')
-    expect(getVisibleGroupLabel('database', mapSpinUp)).toBe('Map Management')
+  it('labels server and gameplay domains explicitly', () => {
+    expect(getVisibleGroupLabel('overview')).toBe('Server Management')
+    expect(getVisibleGroupLabel('workspaces')).toBe('Gameplay Administration')
   })
 
   it('adds Funcom server Update only for authenticated remote Owners', () => {

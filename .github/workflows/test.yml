@@ -45,7 +45,10 @@ jobs:
           $ErrorActionPreference = 'Continue'
 
           $have = Get-Module -ListAvailable -Name Pester |
-              Where-Object { $_.Version -ge [version]'5.0.0' }
+              Where-Object {
+                  $_.Version -ge [version]'5.0.0' -and
+                  $_.ModuleBase -notlike "$env:USERPROFILE\*"
+              }
           if ($have) {
               Write-Host "Pester $($have[0].Version) already available."
               return
@@ -55,7 +58,7 @@ jobs:
           if (Get-Command Install-PSResource -ErrorAction SilentlyContinue) {
               for ($i = 1; $i -le 3 -and -not $installed; $i++) {
                   try {
-                      Install-PSResource -Name Pester -Version '[5.5.0,)' -Scope CurrentUser `
+                      Install-PSResource -Name Pester -Version '[5.5.0,)' -Scope AllUsers `
                           -TrustRepository -ErrorAction Stop
                       $installed = $true
                   } catch {
@@ -71,20 +74,84 @@ jobs:
                       Register-PSRepository -Default -ErrorAction Stop
                   }
                   Set-PSRepository -Name PSGallery -InstallationPolicy Trusted -ErrorAction SilentlyContinue
-                  Install-Module Pester -MinimumVersion 5.5.0 -Scope CurrentUser -Force -SkipPublisherCheck -ErrorAction Stop
+                  Install-Module Pester -MinimumVersion 5.5.0 -Scope AllUsers -Force -SkipPublisherCheck -ErrorAction Stop
               } catch {
                   Write-Host "::warning::Install-Module fallback failed: $($_.Exception.Message)"
               }
           }
 
           $ok = Get-Module -ListAvailable -Name Pester |
-              Where-Object { $_.Version -ge [version]'5.0.0' }
+              Where-Object {
+                  $_.Version -ge [version]'5.0.0' -and
+                  $_.ModuleBase -notlike "$env:USERPROFILE\*"
+              }
           if (-not $ok) { throw "Pester 5+ could not be made available." }
           Write-Host "Pester $($ok[0].Version) ready."
 
+      - name: Setup .NET 10 SDK
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: Build platform cache helper for Pester
+        shell: pwsh
+        run: |
+          dotnet build app\tools\DunePlatformStore\DunePlatformStore.csproj -c Release --nologo
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+          # Hosted runners grant the checkout to Administrators rather than the
+          # user SID. Mirror the install's Users-readable executable ACL so the
+          # helper's restricted same-user token can load its build output.
+          $output = 'app\tools\DunePlatformStore\bin\Release'
+          & icacls.exe $output /grant:r "${env:USERNAME}:(OI)(CI)RX" /T /Q
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
       - name: Run Pester suite
         shell: pwsh
-        run: pwsh -NoProfile -ExecutionPolicy Bypass -File tests/Run-Tests.ps1 -CI
+        run: |
+          $user = 'dst-pester'
+          $passwordText = "$([guid]::NewGuid().ToString('N'))aA1!"
+          $password = ConvertTo-SecureString $passwordText -AsPlainText -Force
+          New-LocalUser -Name $user -Password $password -PasswordNeverExpires | Out-Null
+
+          $profile = Join-Path $env:SystemDrive "Users\$user"
+          $localAppData = Join-Path $profile 'AppData\Local'
+          $temp = Join-Path $localAppData 'Temp'
+          New-Item -ItemType Directory -Path $temp -Force | Out-Null
+          & icacls.exe $profile /grant:r "${user}:(OI)(CI)F" /T /Q
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          & icacls.exe $env:GITHUB_WORKSPACE /grant:r "${user}:(OI)(CI)M" /T /Q
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+          $start = [Diagnostics.ProcessStartInfo]::new()
+          $start.FileName = (Get-Command pwsh).Source
+          $start.ArgumentList.Add('-NoProfile')
+          $start.ArgumentList.Add('-ExecutionPolicy')
+          $start.ArgumentList.Add('Bypass')
+          $start.ArgumentList.Add('-File')
+          $start.ArgumentList.Add('tests\Run-Tests.ps1')
+          $start.ArgumentList.Add('-CI')
+          $start.WorkingDirectory = $env:GITHUB_WORKSPACE
+          $start.UseShellExecute = $false
+          $start.RedirectStandardOutput = $true
+          $start.RedirectStandardError = $true
+          $start.LoadUserProfile = $true
+          $start.Domain = $env:COMPUTERNAME
+          $start.UserName = $user
+          $start.Password = $password
+          $start.Environment['USERPROFILE'] = $profile
+          $start.Environment['LOCALAPPDATA'] = $localAppData
+          $start.Environment['APPDATA'] = Join-Path $profile 'AppData\Roaming'
+          $start.Environment['TEMP'] = $temp
+          $start.Environment['TMP'] = $temp
+
+          $process = [Diagnostics.Process]::Start($start)
+          $stdout = $process.StandardOutput.ReadToEndAsync()
+          $stderr = $process.StandardError.ReadToEndAsync()
+          $process.WaitForExit()
+          Write-Host $stdout.Result
+          if ($stderr.Result) { Write-Host $stderr.Result }
+          exit $process.ExitCode
 
       - name: Upload test results
         if: always()

@@ -79,6 +79,8 @@ function Register-DuneRoute {
         # loopback. Enforcement happens before dispatch to the handler pool.
         [switch]$LocalOnly
     )
+    $sourceFile = ''
+    try { $sourceFile = Split-Path -Leaf $MyInvocation.ScriptName } catch {}
     $pattern = '^' + ([regex]::Escape($Path) -replace '\\\{([^/}]+)}', '(?<$1>[^/]+)') + '$'
     $script:DuneRoutes.Add([pscustomobject]@{
         Method  = $Method
@@ -87,6 +89,8 @@ function Register-DuneRoute {
         Handler = $Handler
         Inline  = [bool]$Inline
         LocalOnly = [bool]$LocalOnly
+        SourceFile = $sourceFile
+        Classification = $null
     }) | Out-Null
 }
 
@@ -158,6 +162,28 @@ function Test-DunePortalOwnerOnlyPath {
     )
 }
 
+function Test-DunePortalOwnerOrAdminPath {
+    param([string]$Path, [string]$Method = 'GET')
+    return (
+        $Method -eq 'GET' -and
+        ($Path -eq '/api/v1/maps' -or $Path.StartsWith('/api/v1/maps/'))
+    )
+}
+
+function Test-DunePortalOwnerOrAdminAccess {
+    param(
+        [bool]$AccountMode,
+        [bool]$IsLocalRequest,
+        $PortalSessionAuth
+    )
+    if (-not $AccountMode -or $IsLocalRequest) { return $true }
+    return (
+        $PortalSessionAuth -and
+        [bool]$PortalSessionAuth.ok -and
+        [string]$PortalSessionAuth.account.role -in @('owner','admin')
+    )
+}
+
 function Test-DunePortalOwnerAccess {
     param(
         [bool]$AccountMode,
@@ -218,13 +244,74 @@ function Register-DuneWebSocket {
         # free-form Terminal is the canonical case.
         [switch]$LocalOnly
     )
+    $sourceFile = ''
+    try { $sourceFile = Split-Path -Leaf $MyInvocation.ScriptName } catch {}
     $pattern = '^' + ([regex]::Escape($Path) -replace '\\\{([^/}]+)}', '(?<$1>[^/]+)') + '$'
     $script:DuneWsRoutes.Add([pscustomobject]@{
         Path      = $Path
         Regex     = [regex]$pattern
         Handler   = $Handler
         LocalOnly = [bool]$LocalOnly
+        SourceFile = $sourceFile
+        Classification = $null
     }) | Out-Null
+}
+
+function New-DuneDispatchPrincipal {
+    param(
+        [Parameter(Mandatory)]$Request,
+        [bool]$IsLocalRequest,
+        [bool]$AccountMode,
+        [bool]$LaunchAccess,
+        $PortalSessionAuth,
+        $LegacyRemoteAuth,
+        [string]$Authentication = ''
+    )
+    if (Get-Command New-DuneRequestPrincipal -ErrorAction SilentlyContinue) {
+        return New-DuneRequestPrincipal `
+            -Request $Request `
+            -IsLocalRequest $IsLocalRequest `
+            -AccountMode $AccountMode `
+            -LaunchAccess $LaunchAccess `
+            -PortalSessionAuth $PortalSessionAuth `
+            -LegacyRemoteAuth $LegacyRemoteAuth `
+            -Authentication $Authentication
+    }
+    return [ordered]@{
+        schemaVersion = 1
+        type = if ($IsLocalRequest) { 'local-host' } else { 'legacy-token' }
+        id = if ($IsLocalRequest) { 'local-host' } else { 'legacy-token' }
+        role = if ($IsLocalRequest) { 'local-host' } else { 'owner' }
+        account = $null
+        session = $null
+        linkedCharacter = $null
+        scopes = @()
+        transport = [ordered]@{ kind = if ($IsLocalRequest) { 'loopback' } else { 'direct-remote' } }
+        context = [ordered]@{ isLocal = $IsLocalRequest; isRemote = -not $IsLocalRequest }
+        authentication = $Authentication
+    }
+}
+
+function Add-DuneRouteContractContext {
+    param(
+        [Parameter(Mandatory)]$Route,
+        [Parameter(Mandatory)][hashtable]$RouteParams,
+        [Parameter(Mandatory)]$Principal,
+        [Parameter(Mandatory)][string]$RequestId
+    )
+    $RouteParams['requestPrincipal'] = $Principal
+    $RouteParams['requestId'] = $RequestId
+    if (Get-Command Get-DuneRouteClassification -ErrorAction SilentlyContinue) {
+        $classification = Get-DuneRouteClassification $Route
+        $RouteParams['routeClassification'] = $classification
+        $RouteParams['routeCapabilityId'] = [string]$classification.capabilityId
+    }
+}
+
+function Test-DuneDispatchPrincipalAccess {
+    param([Parameter(Mandatory)]$Route, [Parameter(Mandatory)]$Principal)
+    if (-not (Get-Command Test-DuneRoutePrincipalAccess -ErrorAction SilentlyContinue)) { return $true }
+    return [bool](Test-DuneRoutePrincipalAccess -Route $Route -Principal $Principal)
 }
 
 # Initialize the WebSocket handler runspace pool. WS sessions can be
@@ -336,6 +423,10 @@ function Initialize-DuneApiPool {
     if (-not $script:DuneApiLockTable) {
         $script:DuneApiLockTable = [System.Collections.Hashtable]::Synchronized(@{})
     }
+    $cursorSecret = $null
+    if (Get-Command Get-DuneApiCursorSecret -ErrorAction SilentlyContinue) {
+        $cursorSecret = Get-DuneApiCursorSecret
+    }
 
     # Immutable snapshot of the main-runspace $script: vars that route handlers
     # read but that are set by DuneServer.ps1's bootstrap / Start-DuneHttpServer
@@ -358,6 +449,8 @@ function Initialize-DuneApiPool {
         LogPath       = $script:DuneLogPath
         IsCompiledExe = $script:DuneIsCompiledExe
         LockTable     = $script:DuneApiLockTable
+        CursorSecret  = $cursorSecret
+        PlatformSnapshotState = $script:DunePlatformSnapshotState
     }
 
     $iss = [System.Management.Automation.Runspaces.InitialSessionState]::CreateDefault()
@@ -487,6 +580,8 @@ function Invoke-DuneApiHandlerAsync {
                 ,@('DuneLogPath',      $ctx.LogPath)
                 ,@('DuneIsCompiledExe',$ctx.IsCompiledExe)
                 ,@('DuneApiLockTable', $ctx.LockTable)
+                ,@('DuneApiCursorSecret', $ctx.CursorSecret)
+                ,@('DunePlatformSnapshotState', $ctx.PlatformSnapshotState)
             )) {
                 Set-Variable -Name $pair[0] -Value $pair[1] -Scope Global -ErrorAction SilentlyContinue
                 Set-Variable -Name $pair[0] -Value $pair[1] -Scope Script -ErrorAction SilentlyContinue
@@ -943,17 +1038,23 @@ function Invoke-DuneContext {
     $res = $Ctx.Response
     $rawPath = $req.Url.AbsolutePath
     $method  = $req.HttpMethod
+    $requestId = if (Get-Command New-DuneRequestId -ErrorAction SilentlyContinue) {
+        New-DuneRequestId
+    } else {
+        [guid]::NewGuid().ToString('N')
+    }
+    try { $res.Headers['X-Dune-Request-Id'] = $requestId } catch {}
 
     # WebSocket upgrades — dispatched onto a runspace pool so the main loop
     # can keep accepting HTTP requests while the WS session runs.
     if ($req.IsWebSocketRequest) {
         $wsAllowed = $false
         $accountMode = $false
+        $sessionAuth = $null
         try { $accountMode = [bool](Test-DunePortalAccountModeEnabled) } catch {}
         if ($accountMode) {
             $wsAllowed = Test-DuneAccountModeLaunchAccess -Request $req
             if (-not $wsAllowed) {
-                $sessionAuth = $null
                 try { $sessionAuth = Get-DunePortalSessionAuth -Request $req } catch {}
                 $wsAllowed = [bool]($sessionAuth -and $sessionAuth.ok -and -not $sessionAuth.mustChangePassword)
                 if ($wsAllowed -and -not (Test-DunePortalRequestOrigin -Request $req)) { $wsAllowed = $false }
@@ -999,6 +1100,21 @@ function Invoke-DuneContext {
                 foreach ($g in $r.Regex.GetGroupNames()) {
                     if ($g -notmatch '^\d+$') { $routeParams[$g] = $m.Groups[$g].Value }
                 }
+                $isLocalRequest = Test-DuneLocalOnlyRequest -Request $req
+                $wsAuthentication = if ($accountMode) { 'portal-session-or-launch-token' } else { 'token' }
+                $wsPrincipal = New-DuneDispatchPrincipal `
+                    -Request $req `
+                    -IsLocalRequest $isLocalRequest `
+                    -AccountMode $accountMode `
+                    -LaunchAccess $wsAllowed `
+                    -PortalSessionAuth $sessionAuth `
+                    -Authentication $wsAuthentication
+                if (-not (Test-DuneDispatchPrincipalAccess -Route $r -Principal $wsPrincipal)) {
+                    $res.StatusCode = 403
+                    $res.OutputStream.Close()
+                    return
+                }
+                Add-DuneRouteContractContext -Route $r -RouteParams $routeParams -Principal $wsPrincipal -RequestId $requestId
                 try {
                     $wsTask = $Ctx.AcceptWebSocketAsync([NullString]::Value)
                     $wsCtx  = $wsTask.GetAwaiter().GetResult()
@@ -1064,12 +1180,23 @@ function Invoke-DuneContext {
                         Write-DuneError -Response $res -Status 403 -Message 'This API is available only from the host machine.'
                         return
                     }
+                    $remotePrincipal = New-DuneDispatchPrincipal `
+                        -Request $req `
+                        -IsLocalRequest $false `
+                        -AccountMode $false `
+                        -LegacyRemoteAuth $auth `
+                        -Authentication 'cloudflare-access-token'
+                    if (-not (Test-DuneDispatchPrincipalAccess -Route $r -Principal $remotePrincipal)) {
+                        Write-DuneError -Response $res -Status 403 -Message 'Capability access denied.'
+                        return
+                    }
                     $routeParams = @{}
                     foreach ($g in $r.Regex.GetGroupNames()) {
                         if ($g -notmatch '^\d+$') { $routeParams[$g] = $m.Groups[$g].Value }
                     }
                     $routeParams['remoteEmail'] = $auth.email
                     $routeParams['remoteRole']  = $auth.role
+                    Add-DuneRouteContractContext -Route $r -RouteParams $routeParams -Principal $remotePrincipal -RequestId $requestId
                     if (Test-DuneWorldRestartWriteBlocked -Method $method -Path $rawPath) {
                         Write-DuneError -Response $res -Status 423 -Message 'World Restart maintenance is active. Wait for completion or use its rollback control.'
                         return
@@ -1134,6 +1261,8 @@ function Invoke-DuneContext {
         try { $accountMode = [bool](Test-DunePortalAccountModeEnabled) } catch {}
         $publicPortalAuth = $rawPath -in @('/api/portal-auth/status', '/api/portal-auth/login')
         $portalSessionAuth = $null
+        $launchAccess = $false
+        $isLocalRequest = Test-DuneLocalOnlyRequest -Request $req
 
         $isPortalAuthBody = $rawPath.StartsWith('/api/portal-auth/') -or $rawPath.StartsWith('/api/remote-access/portal-account')
         if ($isPortalAuthBody -and $req.HasEntityBody -and
@@ -1167,17 +1296,45 @@ function Invoke-DuneContext {
         if ((Test-DunePortalOwnerOnlyPath -Path $rawPath -Method $method) -and
             -not (Test-DunePortalOwnerAccess `
                 -AccountMode $accountMode `
-                -IsLocalRequest (Test-DuneLocalOnlyRequest -Request $req) `
+                -IsLocalRequest $isLocalRequest `
                 -PortalSessionAuth $portalSessionAuth)) {
             Write-DuneError -Response $res -Status 403 -Message 'Owner access required.'
+            return
+        }
+        if ((Test-DunePortalOwnerOrAdminPath -Path $rawPath -Method $method) -and
+            -not (Test-DunePortalOwnerOrAdminAccess `
+                -AccountMode $accountMode `
+                -IsLocalRequest $isLocalRequest `
+                -PortalSessionAuth $portalSessionAuth)) {
+            Write-DuneError -Response $res -Status 403 -Message 'Owner or Admin access required.'
             return
         }
         foreach ($r in $script:DuneRoutes) {
             if ($r.Method -ne $method) { continue }
             $m = $r.Regex.Match($rawPath)
             if ($m.Success) {
-                if ($r.LocalOnly -and -not (Test-DuneLocalOnlyRequest -Request $req)) {
+                if ($r.LocalOnly -and -not $isLocalRequest) {
                     Write-DuneError -Response $res -Status 403 -Message 'This API is available only from the host machine.'
+                    return
+                }
+                $authentication = if ($publicPortalAuth) {
+                    'none'
+                } elseif ($portalSessionAuth -and $portalSessionAuth.ok) {
+                    'portal-session'
+                } elseif ($accountMode) {
+                    'launch-token'
+                } else {
+                    'token'
+                }
+                $principal = New-DuneDispatchPrincipal `
+                    -Request $req `
+                    -IsLocalRequest $isLocalRequest `
+                    -AccountMode $accountMode `
+                    -LaunchAccess $launchAccess `
+                    -PortalSessionAuth $portalSessionAuth `
+                    -Authentication $authentication
+                if (-not (Test-DuneDispatchPrincipalAccess -Route $r -Principal $principal)) {
+                    Write-DuneError -Response $res -Status 403 -Message 'Capability access denied.'
                     return
                 }
                 $routeParams = @{}
@@ -1187,6 +1344,7 @@ function Invoke-DuneContext {
                 if ($portalSessionAuth -and $portalSessionAuth.ok) {
                     $routeParams['portalAccountRole'] = [string]$portalSessionAuth.account.role
                 }
+                Add-DuneRouteContractContext -Route $r -RouteParams $routeParams -Principal $principal -RequestId $requestId
                 if (Test-DuneWorldRestartWriteBlocked -Method $method -Path $rawPath) {
                     Write-DuneError -Response $res -Status 423 -Message 'World Restart maintenance is active. Wait for completion or use its rollback control.'
                     return

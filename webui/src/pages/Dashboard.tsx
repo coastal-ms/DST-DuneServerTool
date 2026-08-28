@@ -49,14 +49,91 @@ function findSurvivalServer(servers: BgGameServer[]): BgGameServer | undefined {
 function GameServerRow({ s }: { s: BgGameServer }) {
   return (
     <tr className="border-t border-border/30">
-      <td className="py-1 pr-3 font-medium" title={s.sietchName ? `${s.sietchName} · ${mapLabel(s.map)}` : s.map}>
+      <td className="break-words py-1 pr-3 font-medium" title={s.sietchName ? `${s.sietchName} · ${mapLabel(s.map)}` : s.map}>
         {s.sietchName || mapLabel(s.map)}
       </td>
-      <td className={`py-1 pr-3 ${healthClass(s.phase)}`}>{s.phase || '—'}</td>
-      <td className={`py-1 pr-3 ${healthClass(s.ready)}`}>{s.ready || '—'}</td>
-      <td className="py-1 pr-3 font-mono">{s.players || '0'}</td>
-      <td className="py-1 font-mono text-text-dim">{s.age || '—'}</td>
+      <td className={`break-words py-1 pr-3 ${healthClass(s.phase)}`}>{s.phase || '—'}</td>
+      <td className={`break-words py-1 pr-3 ${healthClass(s.ready)}`}>{s.ready || '—'}</td>
+      <td className="py-1 pr-3 font-mono tabular-nums">{s.players || '0'}</td>
+      <td className="py-1 font-mono tabular-nums text-text-dim">{s.age || '—'}</td>
     </tr>
+  )
+}
+
+function GameServerMobileRow({ s }: { s: BgGameServer }) {
+  const name = s.sietchName || mapLabel(s.map)
+  return (
+    <li className="border-t border-border/30 py-3 first:border-t-0 first:pt-1 last:pb-1">
+      <div className="flex min-w-0 items-start justify-between gap-3">
+        <div className="min-w-0">
+          <p className="break-words text-sm font-semibold text-text">{name}</p>
+          {s.sietchName && (
+            <p className="mt-0.5 break-words text-xs text-text-dim">{mapLabel(s.map)}</p>
+          )}
+        </div>
+        <span className={`shrink-0 text-xs font-medium ${healthClass(s.phase)}`}>
+          <span className="sr-only">Phase: </span>
+          {s.phase || '—'}
+        </span>
+      </div>
+      <dl className="mt-2 grid grid-cols-3 gap-3 text-xs">
+        <div className="min-w-0">
+          <dt className="text-text-dim">Ready</dt>
+          <dd className={`mt-0.5 break-words font-medium ${healthClass(s.ready)}`}>{s.ready || '—'}</dd>
+        </div>
+        <div className="min-w-0">
+          <dt className="text-text-dim">Players</dt>
+          <dd className="mt-0.5 font-mono tabular-nums text-text">{s.players || '0'}</dd>
+        </div>
+        <div className="min-w-0">
+          <dt className="text-text-dim">Age</dt>
+          <dd className="mt-0.5 font-mono tabular-nums text-text-muted">{s.age || '—'}</dd>
+        </div>
+      </dl>
+    </li>
+  )
+}
+
+export function GameServerList({ servers }: { servers: BgGameServer[] }) {
+  return (
+    <>
+      <ul className="md:hidden" data-game-server-layout="stacked">
+        {servers.map((server, index) => (
+          <GameServerMobileRow
+            key={`${server.sietchName || server.map}-${index}`}
+            s={server}
+          />
+        ))}
+      </ul>
+      <div className="hidden min-w-0 md:block" data-game-server-layout="table">
+        <table className="w-full table-fixed text-sm leading-snug">
+          <colgroup>
+            <col className="w-[30%]" />
+            <col className="w-[20%]" />
+            <col className="w-[18%]" />
+            <col className="w-[16%]" />
+            <col className="w-[16%]" />
+          </colgroup>
+          <thead className="text-[10px] uppercase tracking-wider text-text-dim">
+            <tr>
+              <th className="pb-1 text-left">Map</th>
+              <th className="pb-1 text-left">Phase</th>
+              <th className="pb-1 text-left">Ready</th>
+              <th className="pb-1 text-left">Players</th>
+              <th className="pb-1 text-left">Age</th>
+            </tr>
+          </thead>
+          <tbody>
+            {servers.map((server, index) => (
+              <GameServerRow
+                key={`${server.sietchName || server.map}-${index}`}
+                s={server}
+              />
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </>
   )
 }
 
@@ -337,22 +414,7 @@ export function Dashboard() {
           ) : gameServers.length === 0 ? (
             <p className="text-sm text-text-dim italic">No game servers reported.</p>
           ) : (
-            <div className="overflow-x-auto" tabIndex={0} aria-label="Game server status table">
-              <table className="w-full min-w-[540px] text-sm leading-snug">
-                <thead className="text-[10px] uppercase tracking-wider text-text-dim">
-                  <tr>
-                    <th className="text-left pb-1">Map</th>
-                    <th className="text-left pb-1">Phase</th>
-                    <th className="text-left pb-1">Ready</th>
-                    <th className="text-left pb-1">Players</th>
-                    <th className="text-left pb-1">Age</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {gameServers.map((s, i) => <GameServerRow key={`${s.sietchName || s.map}-${i}`} s={s} />)}
-                </tbody>
-              </table>
-            </div>
+            <GameServerList servers={gameServers} />
           )}
           <HeartbeatSensor servers={gameServers} loading={loading} />
         </CollapsibleCard>

@@ -42,7 +42,7 @@ export function AppShell({ children }: { children: ReactNode }) {
         <div className="flex-1 flex flex-col min-w-0">
           {canAccessOwnerSurfaces && <UpdateBanner />}
           <StatusBar />
-          <main ref={mainRef} className="flex-1 min-w-0 max-w-full overflow-x-hidden overflow-y-auto overscroll-y-contain">
+          <main ref={mainRef} data-app-scroll-container className="flex-1 min-w-0 max-w-full overflow-x-hidden overflow-y-auto overscroll-y-contain">
             <div className="w-full min-w-0 max-w-7xl mx-auto px-3 pt-4 pb-[max(1rem,env(safe-area-inset-bottom))] sm:px-4 md:px-6 md:py-6">
               {pathname !== '/' && <SectionJumpNav containerRef={mainRef} />}
               {children}

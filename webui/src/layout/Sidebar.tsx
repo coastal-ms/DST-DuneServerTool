@@ -1,8 +1,8 @@
-import { NavLink } from '../router'
+import { Link, NavLink, useLocation } from '../router'
 import { useState, useRef } from 'react'
 import { createPortal } from 'react-dom'
 import { Icon } from '../components/Icon'
-import { NAV_ITEMS, GROUP_ORDER, getVisibleGroupLabel } from '../nav'
+import { GROUP_ORDER, getVisibleGroupLabel, getVisibleNavItems, isNavItemActive } from '../nav'
 import { useUpdateCheck } from '../hooks/useUpdateCheck'
 import { api } from '../api/client'
 import { fmtToolVersion } from '../format'
@@ -25,6 +25,7 @@ type Props = {
 }
 
 export function Sidebar({ collapsed }: Props) {
+  const { pathname } = useLocation()
   const { canAccessOwnerSurfaces } = usePortalAccess()
   const { data: upd } = useUpdateCheck()
   const version = upd?.currentVersion ?? ''
@@ -134,34 +135,36 @@ export function Sidebar({ collapsed }: Props) {
     } catch { /* clipboard blocked — the URL is shown in the box to copy manually */ }
   }
 
+  const visibleItems = getVisibleNavItems({
+    local: isLocalViewer(),
+    windows: isWindowsViewer(),
+    canAccessOwnerSurfaces,
+    includeSidebarHidden: false,
+  })
   const groups = GROUP_ORDER.map(g => ({
     key: g,
-    items: NAV_ITEMS
-      .filter(i => i.group === g)
-      .filter(i => !i.sidebarHidden)
-      .filter(i => !i.localOnly || isLocalViewer())
-      .filter(i => !i.ownerOnly || canAccessOwnerSurfaces)
-      .filter(i => !i.windowsOnly || isWindowsViewer()),
+    items: visibleItems.filter(i => i.group === g),
   })).filter(g => g.items.length > 0).map(g => ({
     ...g,
-    label: getVisibleGroupLabel(g.key, g.items),
+    label: getVisibleGroupLabel(g.key),
   }))
 
   // Shared row renderer for a single nav item, in either layout mode.
-  const renderItem = (item: typeof NAV_ITEMS[number]) => {
+  const renderItem = (item: (typeof visibleItems)[number]) => {
+    const isActive = isNavItemActive(item, pathname)
     return (
-      <NavLink
+      <Link
         to={item.to}
-        end={item.to === '/'}
+        aria-current={isActive ? 'page' : undefined}
         title={collapsed ? item.label : undefined}
-        className={({ isActive }) =>
+        className={
           collapsed
             ? `w-full flex items-center justify-center h-9 rounded-lg transition-all border ${
                 isActive
                   ? 'bg-accent/15 text-accent-bright border-accent/30 shadow-inner'
                   : 'text-text-muted hover:text-text hover:bg-surface-2/60 border-transparent'
               }`
-            : `flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm transition-all border ${
+            : `flex min-h-9 items-center gap-2.5 px-3 py-1.5 rounded-lg text-sm transition-all border ${
                 isActive
                   ? 'bg-accent/15 text-accent-bright border-accent/30 shadow-inner'
                   : 'text-text-muted hover:text-text hover:bg-surface-2/60 border-transparent'
@@ -179,7 +182,7 @@ export function Sidebar({ collapsed }: Props) {
             )}
           </span>
         )}
-      </NavLink>
+      </Link>
     )
   }
 
@@ -214,8 +217,8 @@ export function Sidebar({ collapsed }: Props) {
 
       <nav
         className={`flex-1 overflow-y-auto ${
-          collapsed ? 'px-1.5 py-2' : 'px-2 py-2'
-        } ${collapsed ? '' : 'space-y-3'}`}
+          collapsed ? 'px-1.5 py-2' : 'px-2 py-1.5'
+        } ${collapsed ? '' : 'space-y-2'}`}
       >
         {groups.map((g, idx) => (
           <div key={g.key}>

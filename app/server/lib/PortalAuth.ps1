@@ -466,6 +466,7 @@ function Get-DunePortalSessionAuth {
         return @{
             ok = $true
             account = $account
+            sessionId = Get-DunePortalSha256 ([string]$match.tokenHash)
             mustChangePassword = [bool]$account.mustChangePassword
             rememberMe = [bool]$match.persistent
         }

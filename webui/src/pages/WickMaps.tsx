@@ -79,7 +79,7 @@ const RELIABILITY: Record<SeedEntry['reliability'], { label: string; cls: string
   low: { label: 'Low confidence', cls: 'text-warning border-warning/50', icon: 'AlertTriangle' },
 }
 
-export function WickMaps() {
+export function WickMaps({ embedded = false }: { embedded?: boolean }) {
   const [seed, setSeed] = useState<number>(PAYLOAD.availableSeeds[0] ?? 0)
   const [currentSeed, setCurrentSeed] = useState<number | null>(null)
   const [seedSource, setSeedSource] = useState<WickMapSeedSource | null>(null)
@@ -159,11 +159,13 @@ export function WickMaps() {
 
   return (
     <div className="flex flex-col gap-4">
-      <PageHeader
-        title="DD Seed Maps"
-        icon="Map"
-        description="Deep Desert point-of-interest layouts for each of the 12 Coriolis world seeds."
-      />
+      {!embedded && (
+        <PageHeader
+          title="DD Seed Maps"
+          icon="Map"
+          description="Deep Desert point-of-interest layouts for each of the 12 Coriolis world seeds."
+        />
+      )}
 
       <div className="grid grid-cols-1 xl:grid-cols-[minmax(0,1fr)_340px] gap-4 items-start">
         {/* ---------------------------------------------------------------- */}
@@ -279,10 +281,26 @@ export function WickMaps() {
                     width={s}
                     height={s}
                     style={{ cursor: 'help' }}
+                    role="button"
+                    tabIndex={0}
+                    aria-label={`${labelFor(p.type)} — ${p.sector}`}
                     onMouseEnter={() =>
                       setHover({ x: cx, y: cy, text: `${labelFor(p.type)} — ${p.sector}` })
                     }
                     onMouseLeave={() => setHover(null)}
+                    onFocus={() =>
+                      setHover({ x: cx, y: cy, text: `${labelFor(p.type)} — ${p.sector}` })
+                    }
+                    onBlur={() => setHover(null)}
+                    onClick={() =>
+                      setHover({ x: cx, y: cy, text: `${labelFor(p.type)} — ${p.sector}` })
+                    }
+                    onKeyDown={event => {
+                      if (event.key === 'Enter' || event.key === ' ') {
+                        event.preventDefault()
+                        setHover({ x: cx, y: cy, text: `${labelFor(p.type)} — ${p.sector}` })
+                      }
+                    }}
                   />
                 )
               })}
@@ -334,7 +352,7 @@ export function WickMaps() {
                     key={s}
                     onClick={() => setSeed(s)}
                     title={isCurrent ? currentTitle : `Seed ${s}`}
-                    className={`relative py-2 rounded-lg text-sm font-mono border transition-colors ${
+                    className={`relative min-h-11 py-2 rounded-lg text-sm font-mono border transition-colors ${
                       active
                         ? 'bg-ibad/20 border-ibad text-text'
                         : 'bg-surface-2 border-border text-text-dim hover:text-text hover:border-border-strong'
@@ -409,7 +427,7 @@ export function WickMaps() {
                     key={l.type}
                     onClick={() => toggleType(l.type)}
                     title={off ? `Show ${l.label}` : `Hide ${l.label}`}
-                    className={`flex items-center gap-2.5 px-2 py-1.5 rounded-lg text-sm transition-colors ${
+                    className={`flex min-h-11 items-center gap-2.5 px-2 py-1.5 rounded-lg text-sm transition-colors ${
                       off
                         ? 'opacity-40 hover:opacity-70'
                         : 'hover:bg-surface-2'

@@ -13,6 +13,41 @@ here cover everything those tags shipped.
 
 ## [Unreleased]
 
+### Added
+
+- Added the next-generation workspace foundation for the v15 test line, with a
+  server-first primary navigation rail and one Gameplay Admin gateway containing
+  Overview, Map, Players, Bases, Vehicles, and Economy destinations.
+- Added backend-owned capability, principal, route-lifecycle, response-envelope,
+  cursor, and candidate contracts for future platform work.
+- Added a bounded one-shot SQLite cache helper for derived Maps data, including
+  immutable shared snapshots, recurring background refresh, retention limits,
+  integrity and corruption checks, and explicit Windows-only capability gating.
+- Added an experimental, read-only Maps live-state slice that serves cached
+  Deep Desert active-spice observations, freshness/source health, and honest
+  unresolved-coordinate history without plotting guessed locations. Public POIs
+  remain visibly unavailable until the production schema can prove privacy and
+  ownership exclusions. The implementation is independent and copies no
+  external assets or map data.
+
+### Changed
+
+- Reorganized the web portal into lazy-loaded server-management and gameplay
+  workspaces while preserving legacy URL, query-string, and hash navigation.
+- Adapted Server Health's Game Servers card into compact stacked pod summaries
+  on narrow screens while retaining the full desktop table and Game Ready State.
+- Prepared build and diagnostic metadata for the `v15.0.0-test1` test line.
+
+### Fixed
+
+- Fixed installed Windows builds failing to create the first cached Maps
+  generation when the elevated helper could not duplicate the UAC linked token;
+  the helper now falls back to the same user's unelevated shell token with
+  least-privilege token rights and preserves all SID/elevation checks.
+- Fixed the Maps refresh scheduler failing every cycle while capturing an empty
+  optional runtime parameter, so successful source reads now reach cache
+  replacement and API publication.
+
 ## [14.0.3] - 2026-08-24
 
 ### Fixed

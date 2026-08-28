@@ -104,7 +104,8 @@ jobs:
             echo "::warning::SignPath is not configured (SIGNPATH_API_TOKEN secret / SIGNPATH_ORGANIZATION_ID var missing). Producing an UNSIGNED build. Set the SignPath secret + vars after Foundation approval to enable signing."
           fi
 
-      # ── Phase A: build the raw artifacts (webui + DuneServer.exe + DuneShell.exe + DuneSoloDb.exe),
+      # ── Phase A: build the raw artifacts (webui + DuneServer.exe + DuneShell.exe +
+      #    DuneSoloDb.exe + DunePlatformStore.exe),
       #    stopping before the installer so the inner exes can be signed first. ──
       - name: Build raw artifacts (phase A)
         shell: pwsh
@@ -117,7 +118,7 @@ jobs:
           if ($env:BUILD_TAG) { $biArgs.BuildTag = $env:BUILD_TAG }
           & '${{ github.workspace }}\app\installer\Build-Installer.ps1' @biArgs
 
-      # ── Sign the two inner exes IN PLACE (only if SignPath is configured). ──
+      # ── Sign the inner exes IN PLACE (only if SignPath is configured). ──
       - name: Upload DuneServer.exe (unsigned) for signing
         if: steps.cfg.outputs.sign == 'true'
         id: up_server
@@ -184,6 +185,28 @@ jobs:
           wait-for-completion: true
           output-artifact-directory: app/tools/DuneSoloDb/bin/Release/net10.0-windows/win-x64/publish
 
+      - name: Upload DunePlatformStore.exe (unsigned) for signing
+        if: steps.cfg.outputs.sign == 'true'
+        id: up_platform_store
+        uses: actions/upload-artifact@v4
+        with:
+          name: unsigned-duneplatformstore-exe
+          path: app/tools/DunePlatformStore/bin/Release/net10.0-windows/win-x64/publish/DunePlatformStore.exe
+          if-no-files-found: error
+
+      - name: Sign DunePlatformStore.exe
+        if: steps.cfg.outputs.sign == 'true'
+        uses: SignPath/github-action-submit-signing-request@v1
+        with:
+          api-token: ${{ secrets.SIGNPATH_API_TOKEN }}
+          organization-id: ${{ vars.SIGNPATH_ORGANIZATION_ID }}
+          project-slug: ${{ vars.SIGNPATH_PROJECT_SLUG }}
+          signing-policy-slug: ${{ vars.SIGNPATH_SIGNING_POLICY_SLUG }}
+          artifact-configuration-slug: ${{ vars.SIGNPATH_ARTIFACT_CONFIG_EXE }}
+          github-artifact-id: ${{ steps.up_platform_store.outputs.artifact-id }}
+          wait-for-completion: true
+          output-artifact-directory: app/tools/DunePlatformStore/bin/Release/net10.0-windows/win-x64/publish
+
       # ── Phase B: package the (now-signed) exes into the installer via ISCC. ──
       - name: Build installer (phase B)
         shell: pwsh
@@ -195,6 +218,7 @@ jobs:
             SkipExeBuild = $true
             SkipShellBuild = $true
             SkipSoloBuild = $true
+            SkipPlatformBuild = $true
           }
           if ('${{ inputs.skip_version_check }}' -eq 'true') { $biArgs.SkipVersionCheck = $true }
           if ('${{ inputs.prerelease_build }}' -eq 'true') { $biArgs.Prerelease = $true }

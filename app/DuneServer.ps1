@@ -163,7 +163,7 @@ public static extern bool IsIconic(System.IntPtr hWnd);
 }
 
 # Version (one of the 5 sync'd constants; see persistent-notes.md)
-$script:DuneToolVersion = '14.0.3'
+$script:DuneToolVersion = '15.0.0'
 # Artifact identity defaults for source/dev runs. Build-Exe.ps1 replaces these
 # four declarations only in its generated compilation input, so the resulting
 # executable carries immutable identity without changing tracked version stamps.
@@ -590,6 +590,22 @@ if (Test-Path $libDir) {
     Get-ChildItem -Path $libDir -Filter '*.ps1' | ForEach-Object { . $_.FullName }
 }
 
+# Hydrate the last persisted Maps read model before any HTTP route can observe it.
+# Source refresh is scheduled separately and never runs on the response path.
+if (Get-Command Initialize-DunePlatformCache -ErrorAction SilentlyContinue) {
+    $platformCacheStartup = Initialize-DunePlatformCache
+    if (-not $platformCacheStartup.ok) {
+        Write-DuneLog "Platform cache unavailable at startup: $($platformCacheStartup.message)" 'WARN'
+    }
+    if (Get-Command Start-DuneMapsPlatformStartupRefresh -ErrorAction SilentlyContinue) {
+        try {
+            [void](Start-DuneMapsPlatformStartupRefresh -ServerDir $serverDir -AppDir $script:AppDir)
+        } catch {
+            Write-DuneLog "Maps platform startup refresh could not be scheduled: $($_.Exception.Message)" 'WARN'
+        }
+    }
+}
+
 # Auto-load all route files
 $routesDir = Join-Path $serverDir 'routes'
 if (Test-Path $routesDir) {
@@ -829,6 +845,9 @@ try {
     Write-DuneLog "HTTP server failed: $($_.Exception.Message)" 'ERROR'
     Show-DuneMessage "Dune Server failed to start: $($_.Exception.Message)" 'Dune Server' 'Error'
 } finally {
+    if (Get-Command Stop-DuneMapsPlatformRefresh -ErrorAction SilentlyContinue) {
+        try { [void](Stop-DuneMapsPlatformRefresh) } catch {}
+    }
     if (Get-Command Stop-DuneConsoleLifecycle -ErrorAction SilentlyContinue) {
         try { Stop-DuneConsoleLifecycle } catch {}
     }

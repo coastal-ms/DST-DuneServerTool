@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { useNavigate, useLocation } from '../router'
 import { Icon } from '../components/Icon'
-import { NAV_ITEMS, GROUP_ORDER, getVisibleGroupLabel, type NavGroup } from '../nav'
+import { NAV_ITEMS, GROUP_ORDER, getVisibleGroupLabel, getVisibleNavItems, isNavItemActive, type NavGroup } from '../nav'
 import { useUpdateCheck } from '../hooks/useUpdateCheck'
 import { buildDiagnosticBundle, type DiagnosticBundle } from '../api/diagnostics'
 import { getAutostartState, setAutostartEnabled, type AutostartState } from '../api/autostart'
@@ -240,8 +240,8 @@ export function MenuBar({ sidebarCollapsed, onToggleSidebar }: Props) {
   }
 
   const isActive = (to: string) => {
-    if (to === '/') return location.pathname === '/'
-    return location.pathname === to || location.pathname.startsWith(`${to}/`)
+    const item = NAV_ITEMS.find(candidate => candidate.to === to)
+    return item ? isNavItemActive(item, location.pathname) : false
   }
 
   const rememberSwipeStart = (event: React.TouchEvent) => {
@@ -259,16 +259,17 @@ export function MenuBar({ sidebarCollapsed, onToggleSidebar }: Props) {
     if (direction === 'left') mobileMenuButtonRef.current?.focus()
   }
 
+  const visibleItems = getVisibleNavItems({
+    local: isLocalViewer(),
+    windows: isWindowsViewer(),
+    canAccessOwnerSurfaces,
+  })
   const mobileGroups = GROUP_ORDER.map(group => ({
     key: group,
-    items: NAV_ITEMS
-      .filter(item => item.group === group)
-      .filter(item => !item.localOnly || isLocalViewer())
-      .filter(item => !item.ownerOnly || canAccessOwnerSurfaces)
-      .filter(item => !item.windowsOnly || isWindowsViewer()),
+    items: visibleItems.filter(item => item.group === group),
   })).filter(group => group.items.length > 0).map(group => ({
     ...group,
-    label: getVisibleGroupLabel(group.key, group.items),
+    label: getVisibleGroupLabel(group.key),
   }))
   const currentPage = NAV_ITEMS.find(item => isActive(item.to))?.label ?? 'Dune Server Tool'
 
@@ -300,13 +301,9 @@ export function MenuBar({ sidebarCollapsed, onToggleSidebar }: Props) {
 
       <div className="hidden md:contents">
       {GROUP_ORDER.map(g => {
-        const items = NAV_ITEMS
-          .filter(i => i.group === g)
-          .filter(i => !i.localOnly || isLocalViewer())
-          .filter(i => !i.ownerOnly || canAccessOwnerSurfaces)
-          .filter(i => !i.windowsOnly || isWindowsViewer())
+        const items = visibleItems.filter(i => i.group === g)
         if (items.length === 0) return null
-        const groupLabel = getVisibleGroupLabel(g, items)
+        const groupLabel = getVisibleGroupLabel(g)
         // Single-item group (e.g. Server Health, which has only one page):
         // a dropdown with one entry is pure friction. Render the group
         // button as a direct link to that page instead. The button label

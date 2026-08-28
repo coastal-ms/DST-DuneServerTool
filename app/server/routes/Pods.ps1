@@ -20,6 +20,22 @@ Register-DuneRoute -Method GET -Path '/api/pods' -Handler {
     }
 }
 
+Register-DuneRoute -Method POST -Path '/api/pods/prune-terminal-director' -Handler {
+    param($req, $res, $routeParams, $body)
+    try {
+        $r = Invoke-WithDuneLock -Name 'prune-terminal-director-pods' -Script {
+            Remove-DuneTerminalDirectorPods
+        }
+        if (-not $r.ok) {
+            Write-DuneError -Response $res -Status $(if ($r.status) { [int]$r.status } else { 502 }) -Message $r.message
+            return
+        }
+        Write-DuneJson -Response $res -Body $r
+    } catch {
+        Write-DuneError -Response $res -Status 502 -Message "Director pod cleanup failed: $($_.Exception.Message)"
+    }
+}
+
 Register-DuneRoute -Method GET -Path '/api/pods/events' -Handler {
     param($req, $res, $routeParams, $body)
     $ns = ''
@@ -30,21 +46,6 @@ Register-DuneRoute -Method GET -Path '/api/pods/events' -Handler {
             if ($req.QueryString['name'])      { $name = [string]$req.QueryString['name'] }
         }
 
-        Register-DuneRoute -Method POST -Path '/api/pods/prune-terminal-director' -Handler {
-            param($req, $res, $routeParams, $body)
-            try {
-                $r = Invoke-WithDuneLock -Name 'prune-terminal-director-pods' -Script {
-                    Remove-DuneTerminalDirectorPods
-                }
-                if (-not $r.ok) {
-                    Write-DuneError -Response $res -Status $(if ($r.status) { [int]$r.status } else { 502 }) -Message $r.message
-                    return
-                }
-                Write-DuneJson -Response $res -Body $r
-            } catch {
-                Write-DuneError -Response $res -Status 502 -Message "Director pod cleanup failed: $($_.Exception.Message)"
-            }
-        }
     } catch {}
     if ([string]::IsNullOrWhiteSpace($ns) -or [string]::IsNullOrWhiteSpace($name)) {
         Write-DuneError -Response $res -Status 400 -Message 'Both "namespace" and "name" query parameters are required.'
