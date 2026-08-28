@@ -7,6 +7,7 @@ import { DetailPanel } from '../src/components/platform/DetailPanel'
 import { WorkspaceLayout } from '../src/components/platform/WorkspaceLayout'
 import { getWorkspace } from '../src/platform/workspaces'
 import { BrowserRouter } from '../src/router'
+import { GameplayAdminShell } from '../src/components/platform/GameplayAdminShell'
 
 afterEach(() => cleanup())
 
@@ -87,5 +88,28 @@ describe('workspace presentation primitives', () => {
     expect(closeSpy).toHaveBeenCalledOnce()
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
     expect(trigger).toHaveFocus()
+  })
+
+  it('uses one horizontal, touch-sized Gameplay Admin navigator without a nested rail', async () => {
+    const user = userEvent.setup()
+    const { container } = render(
+      <BrowserRouter>
+        <GameplayAdminShell activeSection="players">
+          <div>Player workspace content</div>
+        </GameplayAdminShell>
+      </BrowserRouter>,
+    )
+
+    const navigation = screen.getByRole('navigation', { name: 'Gameplay Admin sections' })
+    expect(navigation).toHaveClass('overflow-x-auto', 'max-w-full')
+    expect(navigation.firstElementChild).toHaveClass('min-w-max')
+    expect(container.querySelector('aside')).toBeNull()
+    expect(screen.getByRole('link', { name: 'Players' })).toHaveAttribute('aria-current', 'page')
+    expect(screen.getByRole('link', { name: 'Map' })).toHaveAttribute('href', '/map')
+    expect(screen.getByRole('link', { name: 'Economy' })).toHaveAttribute('href', '/economy')
+    expect(screen.getAllByRole('link').filter(link => link.hasAttribute('aria-current'))).toHaveLength(1)
+    for (const link of screen.getAllByRole('link')) expect(link).toHaveClass('min-h-11')
+    await user.tab()
+    expect(screen.getByRole('link', { name: 'Overview' })).toHaveFocus()
   })
 })

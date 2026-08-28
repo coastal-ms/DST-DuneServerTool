@@ -38,4 +38,13 @@ describe('sidebar hotfix links', () => {
     const support = screen.getByTitle('Support development — Buy Me a Coffee')
     expect(support).toHaveClass('flex')
   })
+
+  it('shows one active Gameplay Admin gateway for direct gameplay workspace URLs', () => {
+    window.history.replaceState(null, '', '/map?view=atlas')
+    renderSidebar(false)
+
+    expect(screen.queryByRole('link', { name: 'Map' })).not.toBeInTheDocument()
+    expect(screen.getByRole('link', { name: 'Gameplay Admin' })).toHaveAttribute('aria-current', 'page')
+    expect(screen.getAllByRole('link').filter(link => link.hasAttribute('aria-current'))).toHaveLength(1)
+  })
 })

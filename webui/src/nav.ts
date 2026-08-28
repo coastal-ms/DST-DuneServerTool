@@ -1,4 +1,4 @@
-import { WORKSPACE_MANIFEST } from './platform/workspaces'
+import { GAMEPLAY_PATHS } from './platform/gameplay'
 
 export type NavGroup = 'workspaces' | 'overview' | 'terminal' | 'data' | 'solo' | 'database' | 'system'
 
@@ -26,60 +26,41 @@ export type NavItem = {
   windowsOnly?: boolean
   workspaceId?: string
   legacy?: boolean
+  activePaths?: readonly string[]
 }
 
-export const WORKSPACE_NAV_ITEMS: readonly NavItem[] = WORKSPACE_MANIFEST.map(workspace => ({
-  to: workspace.path,
-  label: workspace.label,
-  icon: workspace.icon,
-  group: 'workspaces',
-  ownerOnly: workspace.visibility === 'owner',
-  workspaceId: workspace.id,
-}))
-
 export const LEGACY_NAV_ITEMS: readonly NavItem[] = [
-  { to: '/',            label: 'Server Health', icon: 'LayoutDashboard', group: 'overview', legacy: true },
+  { to: '/',            label: 'Server Overview', icon: 'LayoutDashboard', group: 'overview', workspaceId: 'home' },
   { to: '/pods',        label: 'Pods',          icon: 'Boxes',           group: 'overview', legacy: true },
+  { to: '/operations',  label: 'Operations',    icon: 'Activity',        group: 'overview', workspaceId: 'operations' },
   { to: '/commands',    label: 'Commands',     icon: 'Zap',             group: 'terminal', legacy: true },
   { to: '/terminal',    label: 'PowerShell',   icon: 'SquareTerminal',  group: 'terminal', localOnly: true, sidebarHidden: true, legacy: true },
-  { to: '/gameconfig',  label: 'Game Config',  icon: 'Sliders',         group: 'data', ownerOnly: true, legacy: true },
-  { to: '/experimental', label: 'Experimental Lab', icon: 'FlaskConical', group: 'data', ownerOnly: true, legacy: true },
-  { to: '/gameplay',    label: 'Gameplay Admin', icon: 'Gamepad2',       group: 'data', legacy: true },
-  { to: '/broadcasts',  label: 'Broadcasts',   icon: 'Megaphone',       group: 'data', legacy: true },
-  {
-    to: '/dd-map',
-    label: 'DD Seed Maps',
-    icon: 'Map',
-    group: 'data',
-    badge: 'Experimental',
-    legacy: true,
-  },
+  { to: '/gameconfig',  label: 'Game Config',  icon: 'Sliders',         group: 'terminal', ownerOnly: true, legacy: true },
+  { to: '/experimental', label: 'Experimental Lab', icon: 'FlaskConical', group: 'terminal', ownerOnly: true, legacy: true },
+  { to: '/broadcasts',  label: 'Broadcasts',   icon: 'Megaphone',       group: 'terminal', legacy: true },
+  { to: '/gameplay',    label: 'Gameplay Admin', icon: 'Gamepad2',       group: 'workspaces', activePaths: GAMEPLAY_PATHS },
   { to: '/solo',        label: 'Solo Mode',      icon: 'Orbit',           group: 'solo', localOnly: true, windowsOnly: true, badge: 'Preview', legacy: true },
   { to: '/database',    label: 'Database',       icon: 'Database',        group: 'database', ownerOnly: true, legacy: true },
   { to: '/sietches',    label: 'Sietches',     icon: 'Network',         group: 'database', ownerOnly: true, legacy: true },
-  { to: '/map-spinup',  label: 'Map SpinUp',   icon: 'Globe',           group: 'database', legacy: true },
-  { to: '/settings',    label: 'Settings',     icon: 'Settings',        group: 'system', ownerOnly: true, legacy: true },
-  { to: '/setup',       label: 'Setup Wizard', icon: 'Wand2',           group: 'system', localOnly: true, legacy: true },
+  { to: '/settings',    label: 'Settings',     icon: 'Settings',        group: 'system', ownerOnly: true, workspaceId: 'settings' },
+  { to: '/setup',       label: 'Setup Wizard', icon: 'Wand2',           group: 'system', localOnly: true, sidebarHidden: true, legacy: true },
 ]
 
-export const NAV_ITEMS: readonly NavItem[] = [...WORKSPACE_NAV_ITEMS, ...LEGACY_NAV_ITEMS]
+export const NAV_ITEMS: readonly NavItem[] = LEGACY_NAV_ITEMS
 
-export const GROUP_ORDER: readonly NavGroup[] = ['workspaces', 'overview', 'terminal', 'data', 'solo', 'database', 'system'] as const
+export const GROUP_ORDER: readonly NavGroup[] = ['overview', 'terminal', 'workspaces', 'solo', 'database', 'system'] as const
 
 export const GROUP_LABELS: Record<NavGroup, string> = {
-  workspaces: 'Workspaces',
-  overview: 'Server Health',
-  terminal: 'Commands',
-  data:     'Game Data',
+  workspaces: 'Gameplay Administration',
+  overview: 'Server Management',
+  terminal: 'Server Controls',
+  data:     'Server Configuration',
   solo:     'Solo Mode',
-  database: 'Database',
+  database: 'Server Data',
   system:   'System',
 }
 
-export function getVisibleGroupLabel(group: NavGroup, items: readonly NavItem[]) {
-  if (group === 'database' && items.length === 1 && items[0].to === '/map-spinup') {
-    return 'Map Management'
-  }
+export function getVisibleGroupLabel(group: NavGroup) {
   return GROUP_LABELS[group]
 }
 
@@ -110,4 +91,13 @@ export function getVisibleNavItems({
     .filter(item => !item.localOnly || local)
     .filter(item => !item.ownerOnly || canAccessOwnerSurfaces)
     .filter(item => !item.windowsOnly || windows)
+}
+
+export function isNavItemActive(item: NavItem, pathname: string) {
+  const paths = item.activePaths ?? [item.to]
+  return paths.some(path => (
+    path === '/'
+      ? pathname === '/'
+      : pathname === path || pathname.startsWith(`${path}/`)
+  ))
 }

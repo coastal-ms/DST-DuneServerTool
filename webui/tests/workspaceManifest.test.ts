@@ -9,6 +9,7 @@ import {
   shouldRedirectLegacyRemoteMap,
 } from '../src/platform/routes'
 import { getVisibleNavItems } from '../src/nav'
+import { GAMEPLAY_DESTINATIONS, GAMEPLAY_PATHS, resolveGameplaySection } from '../src/platform/gameplay'
 
 const EXPECTED_WORKSPACES = [
   'home',
@@ -30,6 +31,7 @@ describe('workspace manifest', () => {
       expect(workspace.load).toBeTypeOf('function')
       expect(workspace.purpose.length).toBeGreaterThan(10)
       expect(workspace.responsivePattern.length).toBeGreaterThan(10)
+      expect(['server-management', 'gameplay-admin']).toContain(workspace.domain)
     }
   })
 
@@ -56,9 +58,10 @@ describe('workspace manifest', () => {
       windows: false,
       canAccessOwnerSurfaces: false,
     }).map(item => item.to)
-    expect(adminPaths).toContain('/map')
-    expect(adminPaths).toContain('/players')
+    expect(adminPaths).toContain('/gameplay')
     expect(adminPaths).toContain('/operations')
+    expect(adminPaths).not.toContain('/map')
+    expect(adminPaths).not.toContain('/players')
     expect(adminPaths).not.toContain('/settings')
     expect(adminPaths).not.toContain('/database')
     expect(adminPaths).not.toContain('/terminal')
@@ -73,6 +76,32 @@ describe('workspace manifest', () => {
     expect(localPaths).toContain('/database')
     expect(localPaths).toContain('/terminal')
     expect(localPaths).toContain('/solo')
+  })
+
+  it('keeps the primary rail server-first with one Gameplay Admin gateway', () => {
+    const localItems = getVisibleNavItems({
+      local: true,
+      windows: true,
+      canAccessOwnerSurfaces: true,
+      includeSidebarHidden: false,
+    })
+    expect(localItems[0].label).toBe('Server Overview')
+    expect(localItems.filter(item => item.label === 'Gameplay Admin')).toHaveLength(1)
+    expect(localItems.some(item => ['Map', 'Players', 'Bases', 'Vehicles', 'Economy'].includes(item.label))).toBe(false)
+    expect(new Set(localItems.map(item => item.to)).size).toBe(localItems.length)
+    expect(localItems.length).toBeLessThanOrEqual(12)
+  })
+
+  it('defines one compact Gameplay Admin destination set and singular route state', () => {
+    expect(GAMEPLAY_DESTINATIONS.map(item => item.label)).toEqual([
+      'Overview', 'Map', 'Players', 'Bases', 'Vehicles', 'Economy',
+    ])
+    expect(GAMEPLAY_PATHS).toEqual([
+      '/gameplay', '/map', '/players', '/bases', '/vehicles', '/economy',
+    ])
+    expect(resolveGameplaySection('/players')).toBe('players')
+    expect(resolveGameplaySection('/gameplay', 'view=storage')).toBe('players')
+    expect(resolveGameplaySection('/gameplay', 'view=marketbot')).toBe('economy')
   })
 })
 

@@ -1,5 +1,6 @@
 import {
   useCallback,
+  useSyncExternalStore,
   type AnchorHTMLAttributes,
   type ReactNode,
 } from 'react'
@@ -103,4 +104,21 @@ export function useLocation() {
 
 export function useSearch() {
   return useWouterSearch()
+}
+
+function subscribeToHash(onStoreChange: () => void) {
+  window.addEventListener('hashchange', onStoreChange)
+  window.addEventListener('popstate', onStoreChange)
+  return () => {
+    window.removeEventListener('hashchange', onStoreChange)
+    window.removeEventListener('popstate', onStoreChange)
+  }
+}
+
+export function useHash() {
+  return useSyncExternalStore(
+    subscribeToHash,
+    () => window.location.hash,
+    () => '',
+  )
 }

@@ -11,6 +11,8 @@ import { DataState } from './components/platform/DataState'
 import { usePortalAccess } from './auth/portalAccess'
 import { WORKSPACE_MANIFEST } from './platform/workspaces'
 import { COMPATIBILITY_REDIRECTS, LEGACY_ROUTE_MANIFEST, type RouteAccess } from './platform/routes'
+import { GameplayAdminShell } from './components/platform/GameplayAdminShell'
+import type { GameplaySectionId } from './platform/gameplay'
 
 const WORKSPACE_ROUTES = WORKSPACE_MANIFEST.map(workspace => ({
   ...workspace,
@@ -70,14 +72,24 @@ export default function App() {
               element={<Navigate to={route.to} replace preserveLocation />}
             />
           ))}
-          {WORKSPACE_ROUTES.map(({ id, path, label, visibility, Component }) => (
+          {WORKSPACE_ROUTES.map(({ id, path, label, visibility, domain, Component }) => (
             <Route
               key={id}
               path={path}
               element={
                 visibility === 'owner' && !canAccessOwnerSurfaces
                   ? <Navigate to="/" replace />
-                  : <LazyPage name={label}><Component /></LazyPage>
+                  : (
+                      <LazyPage name={label}>
+                        {domain === 'gameplay-admin'
+                          ? (
+                              <GameplayAdminShell activeSection={id as GameplaySectionId}>
+                                <Component />
+                              </GameplayAdminShell>
+                            )
+                          : <Component />}
+                      </LazyPage>
+                    )
               }
             />
           ))}
