@@ -10,7 +10,6 @@ internal static class PrivilegeDrop
     private const uint TokenAssignPrimary = 0x0001;
     private const uint TokenDuplicate = 0x0002;
     private const uint TokenQuery = 0x0008;
-    private const uint MaximumAllowed = 0x02000000;
     private const uint ProcessQueryLimitedInformation = 0x1000;
     private const uint StartfUseStdHandles = 0x00000100;
     private const uint CreateNoWindow = 0x08000000;
@@ -127,7 +126,16 @@ internal static class PrivilegeDrop
             {
                 try
                 {
-                    return DuplicatePrimaryToken(linked.LinkedToken);
+                    try
+                    {
+                        return DuplicatePrimaryToken(linked.LinkedToken);
+                    }
+                    catch (Win32Exception)
+                    {
+                        // Some UAC linked-token handles expose query access but
+                        // cannot be duplicated. Fall back to the same user's
+                        // unelevated interactive shell token below.
+                    }
                 }
                 finally
                 {
@@ -158,7 +166,7 @@ internal static class PrivilegeDrop
         {
             if (!OpenProcessToken(
                     shellProcess,
-                    TokenAssignPrimary | TokenDuplicate | TokenQuery,
+                    TokenDuplicate | TokenQuery,
                     out var shellToken))
             {
                 throw new Win32Exception(
@@ -184,7 +192,7 @@ internal static class PrivilegeDrop
     {
         if (!DuplicateTokenEx(
                 token,
-                MaximumAllowed,
+                TokenAssignPrimary | TokenDuplicate | TokenQuery,
                 IntPtr.Zero,
                 SecurityImpersonationLevel.SecurityImpersonation,
                 TokenType.TokenPrimary,

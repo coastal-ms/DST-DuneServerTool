@@ -350,7 +350,8 @@ function Invoke-DuneMapsPlatformRefresh {
     return Invoke-DunePlatformAggregateRefresh `
         -AggregateKey 'maps.current' `
         -TimeoutSec $TimeoutSec `
-        -Build ({ param($policy) $generation }.GetNewClosure())
+        -Build { param($policy, $state) $state } `
+        -BuildState $generation
 }
 
 function Start-DuneMapsPlatformStartupRefresh {

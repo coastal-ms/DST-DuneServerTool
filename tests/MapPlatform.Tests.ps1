@@ -207,6 +207,24 @@ Describe 'Maps platform cache generation' -Tag 'MapPlatform' {
         }
     }
 
+    It 'refreshes with the optional runtime omitted without capturing parameter attributes' {
+        Mock Invoke-DunePlatformAggregateRefresh {
+            param($AggregateKey, $Build, $BuildState, $TimeoutSec)
+            [pscustomobject]@{
+                ok = $true
+                aggregateKey = $AggregateKey
+                generation = (& $Build (Get-DunePlatformRefreshPolicy) $BuildState).generation
+            }
+        }
+
+        $result = Invoke-DuneMapsPlatformRefresh
+
+        $result.ok | Should -BeTrue
+        $result.aggregateKey | Should -Be 'maps.current'
+        $result.generation | Should -Match '^maps-'
+        (Get-Command Invoke-DuneMapsPlatformRefresh).Definition | Should -Not -Match 'GetNewClosure'
+    }
+
     It 'does not schedule before the active source backoff window' {
         $table = Get-DunePlatformCoordinationTable
         $table["platform-backoff:$script:DuneMapsActiveSpiceSourceKey"] = [pscustomobject]@{

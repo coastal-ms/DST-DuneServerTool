@@ -562,11 +562,12 @@ function Invoke-DunePlatformAggregateRefresh {
     param(
         [Parameter(Mandatory)][ValidatePattern('^[A-Za-z0-9][A-Za-z0-9._:/-]{0,127}$')][string]$AggregateKey,
         [Parameter(Mandatory)][scriptblock]$Build,
+        $BuildState,
         [int]$TimeoutSec = 30
     )
 
     Invoke-DunePlatformSingleFlight -Key "aggregate:$AggregateKey" -TimeoutSec $TimeoutSec -Script {
-        $generation = & $Build (Get-DunePlatformRefreshPolicy)
+        $generation = & $Build (Get-DunePlatformRefreshPolicy) $BuildState
         Invoke-DunePlatformGenerationReplace -Generation $generation -TimeoutSec $TimeoutSec
     }
 }

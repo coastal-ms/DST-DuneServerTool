@@ -102,8 +102,13 @@ Describe 'DunePlatformStore production helper' {
 
     It 'fixes the production database path and drops elevation before parsing commands' {
         $program = Get-Content (Join-Path (Get-DstRepoRoot) 'app\tools\DunePlatformStore\Program.cs') -Raw
+        $privilegeDrop = Get-Content (Join-Path (Get-DstRepoRoot) 'app\tools\DunePlatformStore\PrivilegeDrop.cs') -Raw
         $program.IndexOf('PrivilegeDrop.EnsureUnelevated(args)') |
             Should -BeLessThan $program.IndexOf('ParseArgs(args)')
+        $privilegeDrop | Should -Match 'catch \(Win32Exception\)[\s\S]+same user''s[\s\S]+GetShellWindow'
+        $privilegeDrop | Should -Match 'OpenProcessToken\(\s*shellProcess,\s*TokenDuplicate \| TokenQuery'
+        $privilegeDrop | Should -Match 'DuplicateTokenEx\(\s*token,\s*TokenAssignPrimary \| TokenDuplicate \| TokenQuery'
+        $privilegeDrop | Should -Not -Match 'MaximumAllowed'
 
         $prior = $env:DST_PLATFORM_SELF_TEST
         Remove-Item Env:DST_PLATFORM_SELF_TEST -ErrorAction SilentlyContinue
