@@ -335,10 +335,14 @@ function Invoke-DuneVehicleSpawnLive {
         [double] $Rotation = 0.0,
         [string] $TemplateName,
         [bool]   $Persistent = $false,
-        [string] $Faction
+        [string] $Faction,
+        [int]    $VerificationDelaySeconds = 2
     )
     $r = Resolve-DuneFlsIdOrError -Ip $Ip -FlsId $FlsId -ActorId $ActorId
     if (-not $r.ok) { return @{ ok = $false; error = $r.error } }
+    if (-not $Persistent) {
+        return @{ ok = $false; error = 'Persistent must be enabled so DST can assign and verify vehicle ownership.' }
+    }
     $controllerId = 0L
 
     # Funcom's command expects an open spawn point rather than the pawn's exact
@@ -454,12 +458,38 @@ RETURNING permission_actor_id;
         }
     }
 
-    $res.permission_repaired = $permissionRepaired
-    $res.message = if ($permissionRepaired) {
-        "Spawned $VehicleId for $($r.fls_id) and granted rank-1 vehicle permission."
-    } else {
-        "Sent the $VehicleId spawn command, but no new matching vehicle was found for permission repair."
+    if ($VerificationDelaySeconds -gt 0) {
+        Start-Sleep -Seconds $VerificationDelaySeconds
     }
+    $survivalSql = @"
+SELECT a.id::bigint AS vehicle_id
+FROM dune.vehicles v
+JOIN dune.actors a ON a.id = v.id
+WHERE v.id > $beforeVehicleId::bigint
+  AND a.class = '$safeActorClass'
+  AND a.transform IS NOT NULL
+  AND EXISTS (
+      SELECT 1
+      FROM dune.permission_actor_rank par
+      WHERE par.permission_actor_id = a.id
+        AND par.player_id = $controllerId::bigint
+        AND par.rank = 1
+  )
+ORDER BY a.id DESC
+LIMIT 1;
+"@
+    $survival = Invoke-DuneSqlQuery -Ip $Ip -Sql $survivalSql -ReadOnly $true -MaxRows 1 -TimeoutSec 10
+    $survivalRows = if ($survival.ok) { ConvertTo-DuneRowMaps -Result $survival } else { @() }
+    $vehicleSurvived = $survivalRows.Count -gt 0
+
+    $res['permission_repaired'] = $permissionRepaired
+    $res['vehicle_survived'] = $vehicleSurvived
+    if (-not $vehicleSurvived) {
+        $res['ok'] = $false
+        $res['error'] = "Funcom accepted the $VehicleId command, but the vehicle did not survive with a valid actor and owner permission."
+        return $res
+    }
+    $res['message'] = "Spawned $VehicleId for $($r.fls_id) and verified rank-1 owner permission."
     return $res
 }
 
