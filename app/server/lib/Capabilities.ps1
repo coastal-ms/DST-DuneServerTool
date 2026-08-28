@@ -295,11 +295,19 @@ function Test-DuneRoutePrincipalAccess {
 }
 
 function Get-DuneCapabilitiesForPrincipal {
-    param([Parameter(Mandatory)]$Principal)
+    param(
+        [Parameter(Mandatory)]$Principal,
+        [ValidateSet('windows','linux','macos','unknown')]
+        [string]$RuntimePlatform
+    )
     $principalName = Get-DuneCapabilityPrincipalName $Principal
     if (-not $principalName) { return @() }
     return @((Get-DuneCapabilityRegistry).capabilities | Where-Object {
         [string]$_.rolloutState -ne 'unavailable' -and
+        (
+            [string]$_.id -ne 'map.live-cache' -or
+            (Test-DunePlatformLiveCacheSupported -RuntimePlatform $RuntimePlatform)
+        ) -and
         $principalName -in @($_.allowedPrincipals)
     } | ForEach-Object {
         [ordered]@{

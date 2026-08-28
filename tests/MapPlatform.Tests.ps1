@@ -1,6 +1,7 @@
 BeforeAll {
     . "$PSScriptRoot\_TestHelpers.ps1"
     Import-DstLib 'ApiContract.ps1'
+    Import-DstLib 'PlatformRuntime.ps1'
     Import-DstLib 'PlatformCache.ps1'
     Import-DstLib 'MapPlatform.ps1'
 
@@ -216,7 +217,7 @@ Describe 'Maps v1 cached API contracts' -Tag 'MapPlatform' {
         $poi = @($response.data.layers | Where-Object layerId -eq 'public-poi')[0]
 
         $response.schemaVersion | Should -Be 1
-        $response.capabilities | Should -Contain 'map.view'
+        $response.capabilities | Should -Contain 'map.live-cache'
         $active.source | Should -Be 'cache'
         $active.count | Should -Be 1
         $active.data.summary.activeCount | Should -Be 1
@@ -326,6 +327,31 @@ Describe 'Maps v1 cached API contracts' -Tag 'MapPlatform' {
             $source | Should -Match "Register-DuneRoute -Method GET -Path '$([regex]::Escape($path))'"
         }
         $source | Should -Not -Match "Register-DuneRoute -Method POST -Path '/api/v1/maps"
+    }
+
+    It 'keeps cached live Maps explicitly unavailable on Linux' {
+        $catalog = Get-DuneMapsCatalogResponse -RequestId 'linux-catalog' -RuntimePlatform linux
+        $map = Get-DuneDeepDesertMapResponse -RequestId 'linux-map' -RuntimePlatform linux
+        $layer = Get-DuneDeepDesertLayerResponse `
+            -RequestId 'linux-layer' `
+            -LayerId active-spice `
+            -RuntimePlatform linux
+
+        $catalog.source | Should -Be 'unavailable'
+        $catalog.capabilities | Should -BeNullOrEmpty
+        $catalog.data.health.cache.lastErrorCode | Should -Be 'live-cache-unsupported'
+        $map.source | Should -Be 'unavailable'
+        $map.capabilities | Should -BeNullOrEmpty
+        @($map.data.layers | Where-Object source -ne 'unavailable').Count | Should -Be 0
+        @($map.data.layers | Where-Object { $_.freshness.state -eq 'fresh' }).Count | Should -Be 0
+        $map.data.layers[0].error.code | Should -Be 'live-cache-unsupported'
+        $layer.source | Should -Be 'unavailable'
+        $layer.data.error.code | Should -Be 'live-cache-unsupported'
+        (Invoke-DuneMapsPlatformRefresh -RuntimePlatform linux).reasonCode |
+            Should -Be 'live-cache-unsupported'
+        (Start-DuneMapsPlatformStartupRefresh `
+            -ServerDir (Join-Path (Get-DstRepoRoot) 'app\server') `
+            -RuntimePlatform linux) | Should -BeFalse
     }
 
     It 'replaces a stale persisted snapshot with a fresh source generation through the helper' {

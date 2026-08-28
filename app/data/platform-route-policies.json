@@ -77,9 +77,9 @@
     "http DELETE /api/setup/hyperv-lan/credential": "reversible-write"
   },
   "routeCapabilityOverrides": {
-    "http GET /api/v1/maps/catalog": "map.view",
-    "http GET /api/v1/maps/deep-desert": "map.view",
-    "http GET /api/v1/maps/deep-desert/layers/{layer}": "map.view",
+    "http GET /api/v1/maps/catalog": "map.live-cache",
+    "http GET /api/v1/maps/deep-desert": "map.live-cache",
+    "http GET /api/v1/maps/deep-desert/layers/{layer}": "map.live-cache",
     "http GET /api/update/check": "operation.update.read",
     "http POST /api/db/backup-delete": "operation.data-protection.destructive",
     "http POST /api/commands/run/{name}": "operation.commands.execute",

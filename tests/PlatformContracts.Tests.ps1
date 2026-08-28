@@ -3,6 +3,7 @@ BeforeAll {
     . (Join-Path (Get-DstRepoRoot) 'app\server\HttpServer.ps1')
     Import-DstLib 'ApiContract.ps1'
     Import-DstLib 'RequestPrincipal.ps1'
+    Import-DstLib 'PlatformRuntime.ps1'
     Import-DstLib 'Capabilities.ps1'
 
     function Get-PlatformRouteRecords {
@@ -123,6 +124,17 @@ Describe 'Platform capability registry' {
         }
         @(Get-DuneCapabilitiesForPrincipal @{ type = 'linked-player'; role = 'player' }).Count | Should -Be 0
     }
+
+    It 'advertises static Maps but not the Windows cache capability on Linux' {
+        $principal = @{ type = 'local-host'; role = 'local-host' }
+        $windows = @(Get-DuneCapabilitiesForPrincipal $principal -RuntimePlatform windows)
+        $linux = @(Get-DuneCapabilitiesForPrincipal $principal -RuntimePlatform linux)
+
+        $windows.id | Should -Contain 'map.view'
+        $windows.id | Should -Contain 'map.live-cache'
+        $linux.id | Should -Contain 'map.view'
+        $linux.id | Should -Not -Contain 'map.live-cache'
+    }
 }
 
 Describe 'Complete route classification' {
@@ -229,12 +241,14 @@ Describe 'Complete route classification' {
         })
         $mapReadRoutes.Count | Should -Be 3
         @($mapReadRoutes | Where-Object {
-            $_.Classification.capabilityId -ne 'map.view' -or
+            $_.Classification.capabilityId -ne 'map.live-cache' -or
             $_.Classification.lifecycle -ne 'read' -or
             $_.Classification.currentAccess -ne 'owner-admin'
         }).Count | Should -Be 0
         $mapView = @((Get-DuneCapabilityRegistry).capabilities | Where-Object id -eq 'map.view')[0]
+        $mapLiveCache = @((Get-DuneCapabilityRegistry).capabilities | Where-Object id -eq 'map.live-cache')[0]
         @($mapView.allowedPrincipals | Sort-Object) | Should -Be @('admin','local-host','owner')
+        @($mapLiveCache.allowedPrincipals | Sort-Object) | Should -Be @('admin','local-host','owner')
         $mapRoute = $mapReadRoutes[0]
         (Test-DuneRoutePrincipalAccess -Route $mapRoute -Principal @{
             type = 'portal-account'; role = 'member'
@@ -645,5 +659,19 @@ Describe 'Platform contract packaging' {
         $linux = Get-Content (Join-Path $repo 'packaging\linux\build-deb.sh') -Raw
         $installer | Should -Match 'Source:\s*"\.\.\\data\\\*"'
         $linux | Should -Match 'cp -r "\$REPO_ROOT/app/data"\s+"\$INSTALL_PREFIX/app/"'
+    }
+
+    It 'does not advertise or package the Windows-only live cache helper on Linux' {
+        $repo = Get-DstRepoRoot
+        $entrypoint = Get-Content (Join-Path $repo 'app\DuneServer-Linux.ps1') -Raw
+        $packaging = Get-Content (Join-Path $repo 'packaging\linux\build-deb.sh') -Raw
+        $project = Get-Content (Join-Path $repo 'app\tools\DunePlatformStore\DunePlatformStore.csproj') -Raw
+
+        $entrypoint | Should -Match "\`$script:DunePlatformRuntime\s*=\s*'linux'"
+        $entrypoint | Should -Not -Match 'Initialize-DunePlatformCache'
+        $entrypoint | Should -Not -Match 'Start-DuneMapsPlatformStartupRefresh'
+        $packaging | Should -Not -Match 'DunePlatformStore'
+        $project | Should -Match '<TargetFramework>net10\.0-windows</TargetFramework>'
+        (Test-DunePlatformLiveCacheSupported -RuntimePlatform linux) | Should -BeFalse
     }
 }

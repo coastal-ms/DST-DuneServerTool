@@ -172,6 +172,7 @@ if (-not $script:MainScript) {
 $script:DuneToolVersion = '12.0.24'
 
 # ---------- Load server + routes ----------------------------------------------
+$script:DunePlatformRuntime = 'linux'
 $duneLogFile = Join-Path $serverDir 'lib/DuneLog.ps1'
 if (Test-Path -LiteralPath $duneLogFile) { . $duneLogFile }
 

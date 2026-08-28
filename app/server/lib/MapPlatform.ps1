@@ -270,7 +270,18 @@ function New-DuneMapsPlatformGeneration {
 }
 
 function Invoke-DuneMapsPlatformRefresh {
-    param([int]$TimeoutSec = 30)
+    param(
+        [int]$TimeoutSec = 30,
+        [ValidateSet('windows','linux','macos','unknown')]
+        [string]$RuntimePlatform
+    )
+    if (-not (Test-DunePlatformLiveCacheSupported -RuntimePlatform $RuntimePlatform)) {
+        return [pscustomobject]@{
+            ok = $false
+            status = 'unavailable'
+            reasonCode = 'live-cache-unsupported'
+        }
+    }
     $prior = Get-DunePlatformSnapshot
     $context = if (Get-Command Get-DuneDbContext -ErrorAction SilentlyContinue) {
         Get-DuneDbContext
@@ -294,8 +305,11 @@ function Start-DuneMapsPlatformStartupRefresh {
     param(
         [Parameter(Mandatory)][string]$ServerDir,
         [string]$AppDir = $script:AppDir,
-        [double]$DelaySec = (Get-DuneMapsRefreshDelaySec)
+        [double]$DelaySec = (Get-DuneMapsRefreshDelaySec),
+        [ValidateSet('windows','linux','macos','unknown')]
+        [string]$RuntimePlatform
     )
+    if (-not (Test-DunePlatformLiveCacheSupported -RuntimePlatform $RuntimePlatform)) { return $false }
     if ($script:DuneMapsStartupRefreshStarted) { return $false }
 
     $sharedSnapshot = Get-DunePlatformSnapshotState
@@ -412,6 +426,57 @@ function Get-DuneMapsCacheHealth {
     }
 }
 
+function Get-DuneMapsUnsupportedCacheHealth {
+    return [ordered]@{
+        cache = [ordered]@{
+            available = $false
+            revision = 0L
+            generation = ''
+            hydratedAt = $null
+            publishedAt = $null
+            lastErrorCode = 'live-cache-unsupported'
+        }
+        sources = @()
+    }
+}
+
+function New-DuneMapsUnsupportedLayerEnvelope {
+    param(
+        [Parameter(Mandatory)]
+        [ValidateSet('active-spice','public-poi')]
+        [string]$LayerId
+    )
+
+    $data = if ($LayerId -eq 'active-spice') {
+        [ordered]@{
+            summary = [ordered]@{
+                activeCount = 0
+                state = 'none-active'
+                tier = $null
+                spatialStatus = 'unresolved'
+                historyStatus = 'unavailable'
+            }
+            items = @()
+            history = @()
+        }
+    } else {
+        @()
+    }
+    return New-DuneApiLayerEnvelope `
+        -LayerId $LayerId `
+        -Source 'unavailable' `
+        -Freshness (New-DuneApiFreshness `
+            -State 'unavailable' `
+            -LastErrorCode 'live-cache-unsupported') `
+        -Count 0 `
+        -Page (New-DuneApiPage -Limit 0) `
+        -Error ([ordered]@{
+            code = 'live-cache-unsupported'
+            message = 'Cached live Maps is unavailable on this host platform.'
+        }) `
+        -Data $data
+}
+
 function New-DuneMapsActiveSpiceLayerEnvelope {
     param($State)
     $snapshot = $State.snapshot
@@ -496,7 +561,25 @@ function New-DuneMapsPublicPoiLayerEnvelope {
 }
 
 function Get-DuneMapsCatalogResponse {
-    param([Parameter(Mandatory)][string]$RequestId)
+    param(
+        [Parameter(Mandatory)][string]$RequestId,
+        [ValidateSet('windows','linux','macos','unknown')]
+        [string]$RuntimePlatform
+    )
+    if (-not (Test-DunePlatformLiveCacheSupported -RuntimePlatform $RuntimePlatform)) {
+        return New-DuneApiV1Envelope `
+            -RequestId $RequestId `
+            -Source 'unavailable' `
+            -Freshness (New-DuneApiFreshness `
+                -State 'unavailable' `
+                -LastErrorCode 'live-cache-unsupported') `
+            -Capabilities @() `
+            -Data ([ordered]@{
+                maps = @()
+                health = Get-DuneMapsUnsupportedCacheHealth
+            }) `
+            -Page (New-DuneApiPage -Limit 500)
+    }
     $state = Get-DunePlatformSnapshot
     $maps = @(Get-DuneMapsSnapshotItems -Snapshot $state.snapshot -Name 'maps')
     $activeLayer = New-DuneMapsActiveSpiceLayerEnvelope -State $state
@@ -504,7 +587,7 @@ function Get-DuneMapsCatalogResponse {
         -RequestId $RequestId `
         -Source $(if ($state.available) { 'cache' } else { 'unavailable' }) `
         -Freshness $activeLayer.freshness `
-        -Capabilities @('map.view') `
+        -Capabilities @('map.live-cache') `
         -Data ([ordered]@{
             maps = $maps
             health = Get-DuneMapsCacheHealth -State $state
@@ -513,7 +596,29 @@ function Get-DuneMapsCatalogResponse {
 }
 
 function Get-DuneDeepDesertMapResponse {
-    param([Parameter(Mandatory)][string]$RequestId)
+    param(
+        [Parameter(Mandatory)][string]$RequestId,
+        [ValidateSet('windows','linux','macos','unknown')]
+        [string]$RuntimePlatform
+    )
+    if (-not (Test-DunePlatformLiveCacheSupported -RuntimePlatform $RuntimePlatform)) {
+        return New-DuneApiAggregateEnvelope `
+            -RequestId $RequestId `
+            -Capabilities @() `
+            -Layers @(
+                (New-DuneMapsUnsupportedLayerEnvelope -LayerId 'active-spice'),
+                (New-DuneMapsUnsupportedLayerEnvelope -LayerId 'public-poi')
+            ) `
+            -Data ([ordered]@{
+                map = [ordered]@{
+                    farmId = $script:DuneMapsFarmId
+                    mapId = $script:DuneMapsDeepDesertId
+                    partitionId = $script:DuneMapsCurrentPartitionId
+                    label = 'Deep Desert'
+                }
+                health = Get-DuneMapsUnsupportedCacheHealth
+            })
+    }
     $state = Get-DunePlatformSnapshot
     $layers = @(
         New-DuneMapsActiveSpiceLayerEnvelope -State $state
@@ -521,7 +626,7 @@ function Get-DuneDeepDesertMapResponse {
     )
     return New-DuneApiAggregateEnvelope `
         -RequestId $RequestId `
-        -Capabilities @('map.view') `
+        -Capabilities @('map.live-cache') `
         -Layers $layers `
         -Data ([ordered]@{
             map = [ordered]@{
@@ -537,8 +642,20 @@ function Get-DuneDeepDesertMapResponse {
 function Get-DuneDeepDesertLayerResponse {
     param(
         [Parameter(Mandatory)][string]$RequestId,
-        [Parameter(Mandatory)][ValidateSet('active-spice','public-poi')][string]$LayerId
+        [Parameter(Mandatory)][ValidateSet('active-spice','public-poi')][string]$LayerId,
+        [ValidateSet('windows','linux','macos','unknown')]
+        [string]$RuntimePlatform
     )
+    if (-not (Test-DunePlatformLiveCacheSupported -RuntimePlatform $RuntimePlatform)) {
+        $unsupportedLayer = New-DuneMapsUnsupportedLayerEnvelope -LayerId $LayerId
+        return New-DuneApiV1Envelope `
+            -RequestId $RequestId `
+            -Source 'unavailable' `
+            -Freshness $unsupportedLayer.freshness `
+            -Capabilities @() `
+            -Data $unsupportedLayer `
+            -Page $unsupportedLayer.page
+    }
     $state = Get-DunePlatformSnapshot
     $layer = if ($LayerId -eq 'active-spice') {
         New-DuneMapsActiveSpiceLayerEnvelope -State $state
@@ -549,7 +666,7 @@ function Get-DuneDeepDesertLayerResponse {
         -RequestId $RequestId `
         -Source ([string]$layer.source) `
         -Freshness $layer.freshness `
-        -Capabilities @('map.view') `
+        -Capabilities @('map.live-cache') `
         -Data $layer `
         -Page $layer.page
 }
