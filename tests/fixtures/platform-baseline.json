@@ -1,0 +1,312 @@
+{
+  "schemaVersion": 1,
+  "recordedAtUtc": "2026-08-28T08:00:00Z",
+  "sourceCommit": "e56bcdd315974ba77373541e2c1007ba1118e465",
+  "budgets": {
+    "initialEntryJsMaxGrowthPercent": 10,
+    "mapAnd3dMustRemainRouteLazy": true
+  },
+  "recordedMeasurements": {
+    "enforced": false,
+    "webuiBuild": {
+      "runsMs": [13166, 10287, 10120],
+      "medianMs": 10287,
+      "initialEntryJsBytes": 2225116,
+      "initialEntryJsGzipBytes": 556247,
+      "initialCssBytes": 92924,
+      "initialCssGzipBytes": 14687,
+      "javascriptAssetCount": 1,
+      "routeChunkCount": 0
+    },
+    "backendStartup": {
+      "kind": "isolated-lib-http-route-dot-source",
+      "runsMs": [1909, 1550, 1546, 1957, 1584],
+      "medianMs": 1584,
+      "limitation": "Does not start the listener or installed service; doing so could conflict with live DST."
+    },
+    "databaseSourceCost": {
+      "liveProbeCompleted": false,
+      "limitation": "The localhost API returned 401 and Hyper-V discovery was denied. No credentials, elevation, or live query was used.",
+      "sshProcessLaunchRunsMs": [31.4, 23.8, 25.2, 24.8, 22.4, 21.7, 23.0, 21.6, 21.8, 18.8],
+      "sshProcessLaunchMedianMs": 23.0,
+      "coldCallStages": [
+        "one ssh process for database pod discovery",
+        "one ssh process containing kubectl exec and psql for the query"
+      ],
+      "warmCallStages": [
+        "one ssh process containing kubectl exec and psql for the query"
+      ],
+      "databasePodCacheSeconds": 120,
+      "backendHandlerConcurrency": 16,
+      "recommendedBackgroundReadConcurrency": 2,
+      "recommendedHardLiveDbConcurrency": 4
+    },
+    "browserSmoke": {
+      "networkMode": "read-only API fixtures",
+      "horizontalOverflowAssertion": "Math.max(document.documentElement.scrollWidth, document.body.scrollWidth) <= window.innerWidth",
+      "readFixtures": {
+        "portalAuthStatus": {
+          "accountLoginEnabled": false,
+          "authenticated": true,
+          "mustChangePassword": false,
+          "account": null
+        },
+        "status": {
+          "vm": {"exists": true, "running": true, "state": "Running"},
+          "bg": {"available": true, "state": "running"},
+          "version": "baseline"
+        },
+        "coriolisSeeds": {
+          "source": "live",
+          "farm_seed": 0,
+          "maps": [{"map": "DeepDesert_1", "seed": 0}]
+        },
+        "mapState": {
+          "ok": true,
+          "key": "deepdesert",
+          "label": "Deep Desert",
+          "present": true,
+          "setCount": 1,
+          "totalReplicas": 1,
+          "hasDisabledPart": false,
+          "missingPartitionBinding": false,
+          "stuckDedicatedScaling": false,
+          "running": true,
+          "activeInstances": 1,
+          "readyInstances": 1,
+          "targetInstances": 1,
+          "playersOnline": 0,
+          "playerIds": [],
+          "playersError": null,
+          "sets": []
+        }
+      },
+      "viewports": [
+        {
+          "width": 320,
+          "height": 568,
+          "documentScrollWidth": 320,
+          "bodyScrollWidth": 320,
+          "horizontalOverflow": false,
+          "mapWidth": 253,
+          "seedButtonCount": 12,
+          "seedButtonMinHeight": 38
+        },
+        {
+          "width": 390,
+          "height": 844,
+          "documentScrollWidth": 390,
+          "bodyScrollWidth": 390,
+          "horizontalOverflow": false,
+          "mapWidth": 323,
+          "seedButtonCount": 12,
+          "seedButtonMinHeight": 38
+        }
+      ],
+      "limitation": "The repository has no browser automation dependency. These measurements used the existing browser harness with API calls fulfilled from fixtures."
+    }
+  },
+  "backendRoutes": {
+    "httpCount": 339,
+    "webSocketCount": 1,
+    "classification": {
+      "readByMethod": 130,
+      "writeLikeByMethod": 209
+    },
+    "byMethod": {
+      "DELETE": 6,
+      "GET": 130,
+      "POST": 178,
+      "PUT": 25
+    },
+    "byNamespace": {
+      "autostart": 2,
+      "broadcasts": 2,
+      "browse-path": 1,
+      "catalog": 4,
+      "commands": 4,
+      "config": 5,
+      "console": 2,
+      "db": 21,
+      "diagnostics": 5,
+      "dune-admin-cache": 2,
+      "fls-token": 3,
+      "gameconfig": 25,
+      "gameplay": 154,
+      "links": 1,
+      "map-spinup": 2,
+      "maps": 5,
+      "mobile": 3,
+      "ping": 1,
+      "pods": 3,
+      "portal": 4,
+      "portal-auth": 4,
+      "public-ip": 9,
+      "remote": 6,
+      "remote-access": 15,
+      "restart-schedule": 4,
+      "server": 1,
+      "service-mode": 2,
+      "setup": 11,
+      "shutdown": 1,
+      "sietches": 2,
+      "solo": 22,
+      "status": 2,
+      "system": 5,
+      "update": 5,
+      "version": 1
+    },
+    "mapCompatibilityRoutes": [
+      {"method": "GET", "path": "/api/gameplay/coriolis/seeds", "class": "read"},
+      {"method": "POST", "path": "/api/gameplay/coriolis/set-farm-seed", "class": "write"},
+      {"method": "POST", "path": "/api/gameplay/coriolis/set-map-seed", "class": "write"},
+      {"method": "POST", "path": "/api/gameplay/coriolis/set-partition-seed", "class": "write"},
+      {"method": "GET", "path": "/api/map-spinup", "class": "read"},
+      {"method": "POST", "path": "/api/map-spinup/{map}", "class": "write"},
+      {"method": "POST", "path": "/api/maps/fix-partitions", "class": "write"},
+      {"method": "POST", "path": "/api/maps/restart-pods", "class": "write"},
+      {"method": "GET", "path": "/api/maps/{key}", "class": "read"},
+      {"method": "POST", "path": "/api/maps/{key}/start", "class": "write"},
+      {"method": "POST", "path": "/api/maps/{key}/stop", "class": "write"},
+      {"method": "GET", "path": "/api/remote/maps", "class": "read"},
+      {"method": "POST", "path": "/api/remote/maps/fix-partitions", "class": "write"},
+      {"method": "POST", "path": "/api/remote/maps/spin-down/{key}", "class": "write"},
+      {"method": "POST", "path": "/api/remote/maps/spin-up/{key}", "class": "write"}
+    ],
+    "mapResponseRequiredKeys": {
+      "desktopState": [
+        "ok", "key", "label", "present", "setCount", "totalReplicas",
+        "hasDisabledPart", "missingPartitionBinding", "stuckDedicatedScaling",
+        "running", "activeInstances", "readyInstances", "targetInstances",
+        "playersOnline", "playerIds", "playersError", "sets"
+      ],
+      "remoteEnvelope": ["maps", "ts", "role", "email"],
+      "remoteMap": [
+        "key", "label", "ok", "running", "present", "totalReplicas",
+        "playersOnline", "hasDisabledPart", "missingPartitionBinding",
+        "stuckDedicatedScaling", "error"
+      ]
+    }
+  },
+  "deepDesertStaticMaps": {
+    "schemaVersion": 2,
+    "availableSeeds": [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11],
+    "defaultHiddenTypes": [],
+    "attribution": {
+      "primaryName": "Wick",
+      "primaryHandle": "@.arturiuss",
+      "seedZeroName": "DrkShrk",
+      "seedZeroHandle": "@drkshrk"
+    },
+    "seeds": [
+      {
+        "seed": 0,
+        "poiCount": 40,
+        "largeSpiceSectors": ["F1", "F5", "H5", "I8"],
+        "confidence": "CONFIRMED",
+        "reliability": "high",
+        "legend": [["wreck", "Wreck", 14], ["testing-station", "Testing Station", 10], ["cave", "Cave", 5], ["large-spice-field", "Large Spice Field", 4], ["taxi-service", "Taxi", 3], ["stravidium", "Stravidium", 3], ["titanium", "Titanium", 1]],
+        "markersSha256": "b96ea5dd122430351104af04617dbacbc77fc9707d397d010757100b096cbf65"
+      },
+      {
+        "seed": 1,
+        "poiCount": 45,
+        "largeSpiceSectors": ["F1", "G5", "I1", "I3", "I8"],
+        "confidence": "CONFIRMED",
+        "reliability": "high",
+        "legend": [["cave", "Cave", 13], ["wreck", "Wreck", 13], ["testing-station", "Testing Station", 9], ["large-spice-field", "Large Spice Field", 5], ["taxi-service", "Taxi", 3], ["stravidium", "Stravidium", 1], ["titanium", "Titanium", 1]],
+        "markersSha256": "58fcb70b8fe803049f004976d7b8a453287dbae99bc744c9befcc08c59a714cc"
+      },
+      {
+        "seed": 2,
+        "poiCount": 43,
+        "largeSpiceSectors": ["F4", "G1", "G8", "I2", "I5", "I9"],
+        "confidence": "CONFIRMED",
+        "reliability": "high",
+        "legend": [["wreck", "Wreck", 14], ["testing-station", "Testing Station", 10], ["cave", "Cave", 6], ["large-spice-field", "Large Spice Field", 6], ["taxi-service", "Taxi", 3], ["titanium", "Titanium", 2], ["stravidium", "Stravidium", 2]],
+        "markersSha256": "a8b7b2faad30302ae0d5ced4c2bfcdfe36dd327f230111e6907cb0f2caf149f4"
+      },
+      {
+        "seed": 3,
+        "poiCount": 54,
+        "largeSpiceSectors": ["F3", "F9", "G4", "H2", "H8"],
+        "confidence": "CONFIRMED",
+        "reliability": "medium",
+        "legend": [["cave", "Cave", 18], ["wreck", "Wreck", 13], ["testing-station", "Testing Station", 11], ["large-spice-field", "Large Spice Field", 5], ["taxi-service", "Taxi", 3], ["titanium", "Titanium", 2], ["stravidium", "Stravidium", 2]],
+        "markersSha256": "700d9575df516cffd301282d6bee811db9f74464646b33e5777f9b40a719df8d"
+      },
+      {
+        "seed": 4,
+        "poiCount": 52,
+        "largeSpiceSectors": ["F1", "F9", "H5", "I3", "I9"],
+        "confidence": "CONFIRMED",
+        "reliability": "high",
+        "legend": [["cave", "Cave", 17], ["wreck", "Wreck", 15], ["testing-station", "Testing Station", 8], ["large-spice-field", "Large Spice Field", 5], ["taxi-service", "Taxi", 3], ["titanium", "Titanium", 2], ["stravidium", "Stravidium", 2]],
+        "markersSha256": "29ec25029ee09288b69e7be4bae63e84dfff5ae022d5aba18abb3ad0172c941c"
+      },
+      {
+        "seed": 5,
+        "poiCount": 60,
+        "largeSpiceSectors": ["F5", "F7", "I2", "I5", "I9"],
+        "confidence": "CONFIRMED",
+        "reliability": "medium",
+        "legend": [["cave", "Cave", 25], ["wreck", "Wreck", 13], ["testing-station", "Testing Station", 10], ["large-spice-field", "Large Spice Field", 5], ["taxi-service", "Taxi", 3], ["titanium", "Titanium", 2], ["stravidium", "Stravidium", 2]],
+        "markersSha256": "14b47144ab433323df8ab19e8b320f28be7c7a1e21beb33977c8f7de349358d9"
+      },
+      {
+        "seed": 6,
+        "poiCount": 47,
+        "largeSpiceSectors": ["H2", "H8", "I5"],
+        "confidence": "CONFIRMED",
+        "reliability": "high",
+        "legend": [["cave", "Cave", 15], ["wreck", "Wreck", 13], ["testing-station", "Testing Station", 9], ["large-spice-field", "Large Spice Field", 3], ["titanium", "Titanium", 3], ["taxi-service", "Taxi", 3], ["stravidium", "Stravidium", 1]],
+        "markersSha256": "ac16b58e612306374db37e6f9b1a533585ba1af63ee1b5f39ddeb1bd319671af"
+      },
+      {
+        "seed": 7,
+        "poiCount": 30,
+        "largeSpiceSectors": ["E5", "H2", "H8"],
+        "confidence": "LOW(incomplete transcription)",
+        "reliability": "low",
+        "legend": [["wreck", "Wreck", 10], ["testing-station", "Testing Station", 10], ["large-spice-field", "Large Spice Field", 3], ["cave", "Cave", 3], ["titanium", "Titanium", 2], ["stravidium", "Stravidium", 2]],
+        "markersSha256": "973f7ecfb74e7c7a9996c8af6939a4fcd22a14fc21727ad5aeea70517c06a016"
+      },
+      {
+        "seed": 8,
+        "poiCount": 58,
+        "largeSpiceSectors": ["F1", "F4", "F8", "I7"],
+        "confidence": "CONFIRMED",
+        "reliability": "high",
+        "legend": [["cave", "Cave", 23], ["wreck", "Wreck", 13], ["testing-station", "Testing Station", 11], ["large-spice-field", "Large Spice Field", 4], ["taxi-service", "Taxi", 3], ["stravidium", "Stravidium", 2], ["titanium", "Titanium", 2]],
+        "markersSha256": "1016725ad0610b18c45a90bc5dce9358937d6c26e5105d78e7a5e1028126d985"
+      },
+      {
+        "seed": 9,
+        "poiCount": 45,
+        "largeSpiceSectors": ["F1", "F6", "F8", "I1", "I9"],
+        "confidence": "CONFIRMED",
+        "reliability": "medium",
+        "legend": [["wreck", "Wreck", 13], ["testing-station", "Testing Station", 12], ["cave", "Cave", 8], ["large-spice-field", "Large Spice Field", 5], ["titanium", "Titanium", 3], ["taxi-service", "Taxi", 3], ["stravidium", "Stravidium", 1]],
+        "markersSha256": "de3a057bd29aef0db3a4c4564db6f866153a6e6f9e8f33f2e357b8fadd1f88f2"
+      },
+      {
+        "seed": 10,
+        "poiCount": 59,
+        "largeSpiceSectors": ["F7", "I2", "I5", "I9"],
+        "confidence": "LOW(2 of 6 shared)",
+        "reliability": "low",
+        "legend": [["cave", "Cave", 25], ["wreck", "Wreck", 13], ["testing-station", "Testing Station", 10], ["large-spice-field", "Large Spice Field", 4], ["taxi-service", "Taxi", 3], ["titanium", "Titanium", 2], ["stravidium", "Stravidium", 2]],
+        "markersSha256": "b7278f8bd9ddd499c773baf6551bbfe6cc5595e7f33c1c67a5d397bf0e7e2d1a"
+      },
+      {
+        "seed": 11,
+        "poiCount": 46,
+        "largeSpiceSectors": ["F1", "F5", "H9", "I2", "I4", "I7"],
+        "confidence": "CONFIRMED",
+        "reliability": "high",
+        "legend": [["wreck", "Wreck", 14], ["testing-station", "Testing Station", 10], ["cave", "Cave", 9], ["large-spice-field", "Large Spice Field", 6], ["taxi-service", "Taxi", 3], ["titanium", "Titanium", 2], ["stravidium", "Stravidium", 2]],
+        "markersSha256": "af77c18e0a3dd64da16c1e97babf1b6350ca472d31cf2c13c5daee17a585a782"
+      }
+    ]
+  }
+}
