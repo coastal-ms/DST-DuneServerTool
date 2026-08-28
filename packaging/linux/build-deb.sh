@@ -68,6 +68,7 @@ mkdir -p "$INSTALL_PREFIX/app" \
 cp -r "$REPO_ROOT/app/server"   "$INSTALL_PREFIX/app/"
 cp -r "$REPO_ROOT/app/lib"      "$INSTALL_PREFIX/app/" 2>/dev/null || true
 cp -r "$REPO_ROOT/app/assets"   "$INSTALL_PREFIX/app/" 2>/dev/null || true
+cp -r "$REPO_ROOT/app/data"     "$INSTALL_PREFIX/app/"
 cp    "$REPO_ROOT/app/DuneServer-Linux.ps1" "$INSTALL_PREFIX/app/"
 cp    "$REPO_ROOT/dune-server.ps1"          "$INSTALL_PREFIX/"
 
