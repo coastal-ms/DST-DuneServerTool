@@ -114,16 +114,20 @@ internal static partial class PlatformStore
             };
         }
 
+        var sources = ReadSourceHealth(connection);
         var maps = ReadMaps(connection, generation);
         var layers = ReadLayers(connection, generation);
         var activeSpice = ReadActiveSpice(connection, generation);
+        var activeSpiceHistory = ReadActiveSpiceHistory(connection);
         var publicPois = ReadPublicPois(connection, generation);
         var snapshot = new MapSnapshot(
             generation,
             DateTimeOffset.UtcNow,
+            sources,
             maps,
             layers,
             activeSpice,
+            activeSpiceHistory,
             publicPois);
         stopwatch.Stop();
         return new
@@ -711,6 +715,26 @@ internal static partial class PlatformStore
         return values.AsReadOnly();
     }
 
+    private static IReadOnlyList<ActiveSpiceInput> ReadActiveSpiceHistory(SqliteConnection connection)
+    {
+        using var command = connection.CreateCommand();
+        command.CommandText =
+            """
+            SELECT farm_id, map_id, partition_id, field_id, state, coordinate_space,
+                   projected_x, projected_y, source_fingerprint, observed_at_utc, observed_at_utc
+            FROM active_spice_history
+            ORDER BY observed_at_utc DESC, farm_id, map_id, partition_id, field_id
+            LIMIT 1000;
+            """;
+        using var reader = command.ExecuteReader();
+        var values = new List<ActiveSpiceInput>();
+        while (reader.Read())
+        {
+            values.Add(ReadActiveSpice(reader));
+        }
+        return values.AsReadOnly();
+    }
+
     private static IReadOnlyList<PublicPoiInput> ReadPublicPois(SqliteConnection connection, string generation)
     {
         using var command = connection.CreateCommand();
@@ -955,7 +979,8 @@ internal static partial class PlatformStore
         using var command = connection.CreateCommand();
         command.CommandText =
             """
-            SELECT source_key, last_success_utc, expires_at_utc, last_error_code
+            SELECT source_key, schema_fingerprint, last_attempt_utc, last_success_utc,
+                   expires_at_utc, last_error_code
             FROM source_state
             ORDER BY source_key
             LIMIT 32;
@@ -967,9 +992,11 @@ internal static partial class PlatformStore
             values.Add(new
             {
                 sourceKey = reader.GetString(0),
-                lastSuccessAt = reader.IsDBNull(1) ? null : reader.GetString(1),
-                expiresAt = reader.IsDBNull(2) ? null : reader.GetString(2),
-                lastErrorCode = reader.IsDBNull(3) ? null : reader.GetString(3)
+                schemaFingerprint = reader.GetString(1),
+                lastAttemptAt = reader.IsDBNull(2) ? null : reader.GetString(2),
+                lastSuccessAt = reader.IsDBNull(3) ? null : reader.GetString(3),
+                expiresAt = reader.IsDBNull(4) ? null : reader.GetString(4),
+                lastErrorCode = reader.IsDBNull(5) ? null : reader.GetString(5)
             });
         }
         return values.AsReadOnly();

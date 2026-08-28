@@ -496,6 +496,21 @@ function Invoke-DunePlatformSourceRead {
             $result = Invoke-DunePlatformGateChain -Names $gates -TimeoutSec $TimeoutSec -Script {
                 & $Read $policy
             }
+            if ($result -and $result.PSObject.Properties['ok'] -and -not [bool]$result.ok) {
+                $message = if ($result.PSObject.Properties['error'] -and $result.error) {
+                    [string]$result.error
+                } elseif ($result.PSObject.Properties['reasonCode'] -and $result.reasonCode) {
+                    "Platform source '$SourceKey' reported $($result.reasonCode)."
+                } else {
+                    "Platform source '$SourceKey' reported an unsuccessful result."
+                }
+                $exception = [InvalidOperationException]::new($message)
+                if ($result.PSObject.Properties['reasonCode'] -and $result.reasonCode) {
+                    $exception.Data['errorCode'] = [string]$result.reasonCode
+                }
+                $exception.Data['sourceResult'] = $result
+                throw $exception
+            }
             $json = $result | ConvertTo-Json -Depth 12 -Compress
             if ([Text.Encoding]::UTF8.GetByteCount($json) -gt $script:DunePlatformMaxRequestBytes) {
                 throw "Platform source '$SourceKey' exceeded the 5 MiB payload budget."

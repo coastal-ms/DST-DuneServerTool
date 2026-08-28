@@ -13,6 +13,15 @@ here cover everything those tags shipped.
 
 ## [Unreleased]
 
+### Added
+
+- Added an experimental, read-only Maps live-state slice that serves cached
+  Deep Desert active-spice observations, freshness/source health, and honest
+  unresolved-coordinate history without plotting guessed locations. Public POIs
+  remain visibly unavailable until the production schema can prove privacy and
+  ownership exclusions. The implementation is independent and copies no
+  external assets or map data.
+
 ## [14.0.3] - 2026-08-24
 
 ### Fixed

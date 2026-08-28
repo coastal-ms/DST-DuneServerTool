@@ -83,7 +83,9 @@ internal sealed record PublicPoiInput
 internal sealed record MapSnapshot(
     string Generation,
     DateTimeOffset HydratedAt,
+    IReadOnlyList<object> Sources,
     IReadOnlyList<MapCatalogInput> Maps,
     IReadOnlyList<LayerSnapshotInput> Layers,
     IReadOnlyList<ActiveSpiceInput> ActiveSpice,
+    IReadOnlyList<ActiveSpiceInput> ActiveSpiceHistory,
     IReadOnlyList<PublicPoiInput> PublicPois);

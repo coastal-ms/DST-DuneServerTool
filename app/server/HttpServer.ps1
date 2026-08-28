@@ -162,6 +162,28 @@ function Test-DunePortalOwnerOnlyPath {
     )
 }
 
+function Test-DunePortalOwnerOrAdminPath {
+    param([string]$Path, [string]$Method = 'GET')
+    return (
+        $Method -eq 'GET' -and
+        ($Path -eq '/api/v1/maps' -or $Path.StartsWith('/api/v1/maps/'))
+    )
+}
+
+function Test-DunePortalOwnerOrAdminAccess {
+    param(
+        [bool]$AccountMode,
+        [bool]$IsLocalRequest,
+        $PortalSessionAuth
+    )
+    if (-not $AccountMode -or $IsLocalRequest) { return $true }
+    return (
+        $PortalSessionAuth -and
+        [bool]$PortalSessionAuth.ok -and
+        [string]$PortalSessionAuth.account.role -in @('owner','admin')
+    )
+}
+
 function Test-DunePortalOwnerAccess {
     param(
         [bool]$AccountMode,
@@ -1277,6 +1299,14 @@ function Invoke-DuneContext {
                 -IsLocalRequest $isLocalRequest `
                 -PortalSessionAuth $portalSessionAuth)) {
             Write-DuneError -Response $res -Status 403 -Message 'Owner access required.'
+            return
+        }
+        if ((Test-DunePortalOwnerOrAdminPath -Path $rawPath -Method $method) -and
+            -not (Test-DunePortalOwnerOrAdminAccess `
+                -AccountMode $accountMode `
+                -IsLocalRequest $isLocalRequest `
+                -PortalSessionAuth $portalSessionAuth)) {
+            Write-DuneError -Response $res -Status 403 -Message 'Owner or Admin access required.'
             return
         }
         foreach ($r in $script:DuneRoutes) {

@@ -158,7 +158,7 @@ Describe 'Complete route classification' {
     It 'classifies the exact registered HTTP and WebSocket inventory' {
         $records = @(Get-PlatformRouteRecords)
         $manifest = Get-DuneRoutePolicyManifest
-        $records.Count | Should -Be 342
+        $records.Count | Should -Be 345
         $sources = @($records.SourceFile | Sort-Object -Unique)
         @($manifest.groups.source | Sort-Object) | Should -Be $sources
 
@@ -224,6 +224,24 @@ Describe 'Complete route classification' {
         }
         @($script:DuneRoutes | Where-Object Path -eq '/api/server/name').Classification.capabilityId |
             Should -Be 'settings.game-server'
+        $mapReadRoutes = @($script:DuneRoutes | Where-Object {
+            $_.Path -like '/api/v1/maps/*'
+        })
+        $mapReadRoutes.Count | Should -Be 3
+        @($mapReadRoutes | Where-Object {
+            $_.Classification.capabilityId -ne 'map.view' -or
+            $_.Classification.lifecycle -ne 'read' -or
+            $_.Classification.currentAccess -ne 'owner-admin'
+        }).Count | Should -Be 0
+        $mapView = @((Get-DuneCapabilityRegistry).capabilities | Where-Object id -eq 'map.view')[0]
+        @($mapView.allowedPrincipals | Sort-Object) | Should -Be @('admin','local-host','owner')
+        $mapRoute = $mapReadRoutes[0]
+        (Test-DuneRoutePrincipalAccess -Route $mapRoute -Principal @{
+            type = 'portal-account'; role = 'member'
+        }) | Should -BeFalse
+        (Test-DuneRoutePrincipalAccess -Route $mapRoute -Principal @{
+            type = 'portal-account'; role = 'admin'
+        }) | Should -BeTrue
         @($script:DuneRoutes | Where-Object Path -eq '/api/diagnostics/cleanup-old-images').Classification.capabilityId |
             Should -Be 'operation.diagnostics.manage'
         @($script:DuneRoutes | Where-Object Path -eq '/api/status').Classification.capabilityId |
@@ -266,7 +284,7 @@ $result = @{
         $LASTEXITCODE | Should -Be 0 -Because ($output -join [Environment]::NewLine)
         $resultLine = @($output | Where-Object { [string]$_ -like 'ROUTE_RESULT:*' })[-1]
         $result = ([string]$resultLine).Substring('ROUTE_RESULT:'.Length) | ConvertFrom-Json
-        $result.total | Should -Be 342
+        $result.total | Should -Be 345
         $result.unclassified | Should -Be 0
         $result.incompatible | Should -Be 0
         $result.podsCleanup | Should -Be 1

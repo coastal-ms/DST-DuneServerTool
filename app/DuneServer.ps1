@@ -597,6 +597,13 @@ if (Get-Command Initialize-DunePlatformCache -ErrorAction SilentlyContinue) {
     if (-not $platformCacheStartup.ok) {
         Write-DuneLog "Platform cache unavailable at startup: $($platformCacheStartup.message)" 'WARN'
     }
+    if (Get-Command Start-DuneMapsPlatformStartupRefresh -ErrorAction SilentlyContinue) {
+        try {
+            [void](Start-DuneMapsPlatformStartupRefresh -ServerDir $serverDir -AppDir $script:AppDir)
+        } catch {
+            Write-DuneLog "Maps platform startup refresh could not be scheduled: $($_.Exception.Message)" 'WARN'
+        }
+    }
 }
 
 # Auto-load all route files

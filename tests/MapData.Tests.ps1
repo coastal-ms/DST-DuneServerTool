@@ -200,6 +200,7 @@ Describe 'Active spice live projection' -Tag 'MapData' {
         $result.historyStatus | Should -Be 'current-observation-only'
         $result.source.schemaFingerprint | Should -Match '^[a-f0-9]{64}$'
         $script:capturedSpiceSql | Should -Match 'WHERE field_kind_id = 1'
+        $script:capturedSpiceSql | Should -Match "map LIKE .*map_prefix"
         $result.partialReasons.GetType().FullName | Should -Be 'System.String[]'
         $result.partialReasons.Count | Should -Be 0
         ($result | ConvertTo-Json -Compress -Depth 8) | Should -Match '"partialReasons":\[\]'

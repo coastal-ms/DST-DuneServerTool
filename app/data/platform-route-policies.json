@@ -77,6 +77,9 @@
     "http DELETE /api/setup/hyperv-lan/credential": "reversible-write"
   },
   "routeCapabilityOverrides": {
+    "http GET /api/v1/maps/catalog": "map.view",
+    "http GET /api/v1/maps/deep-desert": "map.view",
+    "http GET /api/v1/maps/deep-desert/layers/{layer}": "map.view",
     "http GET /api/update/check": "operation.update.read",
     "http POST /api/db/backup-delete": "operation.data-protection.destructive",
     "http POST /api/commands/run/{name}": "operation.commands.execute",
@@ -146,7 +149,7 @@
     { "source": "ItemPackages.ps1", "capabilityId": "player.inventory", "routeCount": 3, "sha256": "ed3aac4a943d300002f7aecacb8ecf04619917ee7aa549cde0068e1853e01cf9" },
     { "source": "Landsraad.ps1", "capabilityId": "economy.governance", "routeCount": 9, "sha256": "e78c0dfe1b1f969d781db180f8c73eb3439de9779dd62fde7a8879925ac762f0" },
     { "source": "Links.ps1", "capabilityId": "platform.status", "routeCount": 1, "sha256": "175305c4d511463c37a3c0c2484bf7178044f72d42fe444c2eec1733ef876a47" },
-    { "source": "Maps.ps1", "capabilityId": "map.lifecycle", "routeCount": 5, "sha256": "fbe90c0123b285dd75e097917ea63c04e46b8ec51fd03de3f9af905cee0ec331" },
+    { "source": "Maps.ps1", "capabilityId": "map.lifecycle", "routeCount": 8, "sha256": "897b8f4a378e627b64b58c3f55ac050ecfb629403e8cb67422577569affa7857" },
     { "source": "MapSpinUp.ps1", "capabilityId": "map.lifecycle", "routeCount": 2, "sha256": "41b35791908a50343f2a6e68fe363b893f33333a5e6ce5bc075ec588cba3766d" },
     { "source": "Mobile.ps1", "capabilityId": "settings.connectivity", "routeCount": 3, "sha256": "f9e3019b17cbe0dd5863b8bf074f6f396a443cfaf740f3abee64ef8c19cfc40d" },
     { "source": "Ping.ps1", "capabilityId": "platform.status", "routeCount": 2, "sha256": "67c579421a0597e78028350f74d09ff13ed82d75c113231ed1d9e0cfdda5c73b" },

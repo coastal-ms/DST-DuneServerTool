@@ -165,6 +165,7 @@ function Test-DuneRouteCapabilityCompatibility {
     $requiredPrincipals = switch ([string]$Classification.currentAccess) {
         'local-only' { @('local-host') }
         'owner' { @('local-host','owner') }
+        'owner-admin' { @('local-host','owner','admin') }
         'authenticated' { @('local-host','owner','admin') }
         default { @() }
     }
@@ -180,6 +181,10 @@ function Get-DuneRouteCurrentAccess {
     $path = [string]$Route.Path
     if ($path -in @('/api/portal-auth/status','/api/portal-auth/login')) { return 'public' }
     if ($Route.PSObject.Properties.Name -contains 'Method' -and
+        (Test-DunePortalOwnerOrAdminPath -Path $path -Method ([string]$Route.Method))) {
+        return 'owner-admin'
+    }
+    if ($Route.PSObject.Properties.Name -contains 'Method' -and
         (Test-DunePortalOwnerOnlyPath -Path $path -Method ([string]$Route.Method))) {
         return 'owner'
     }
@@ -192,6 +197,7 @@ function Get-DuneAllowedPrincipalTypesForAccess {
         'public' { return @('anonymous','local-host','portal-account','legacy-token','legacy-remote','launch-token') }
         'local-only' { return @('local-host') }
         'owner' { return @('local-host','portal-account','legacy-token') }
+        'owner-admin' { return @('local-host','portal-account','legacy-token') }
         default { return @('local-host','portal-account','legacy-token','legacy-remote','launch-token') }
     }
 }
@@ -266,6 +272,12 @@ function Get-DuneCapabilityPrincipalName {
 function Test-DuneRoutePrincipalAccess {
     param([Parameter(Mandatory)]$Route, [Parameter(Mandatory)]$Principal)
     $type = [string]$Principal.type
+    if ($type -eq 'portal-account') {
+        $classification = Get-DuneRouteClassification $Route
+        if ([string]$classification.currentAccess -eq 'owner-admin') {
+            return ([string]$Principal.role -in @('owner','admin'))
+        }
+    }
     if ($type -in @('local-host','portal-account','legacy-token','legacy-remote','launch-token')) {
         return $true
     }

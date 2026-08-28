@@ -320,7 +320,8 @@ function Get-DuneActiveSpiceLive {
     param(
         [Parameter(Mandatory)][string]$Ip,
         [int]$Limit = $script:DuneMapDataSpiceMaxRows,
-        $Capability
+        $Capability,
+        [ValidateRange(1,120)][int]$TimeoutSec = 20
     )
 
     $Limit = [Math]::Max(1, [Math]::Min($Limit, $script:DuneMapDataSpiceMaxRows))
@@ -361,6 +362,7 @@ active_fields AS (
     FROM dune.resourcefield_state
     WHERE field_kind_id = 1
       AND value_remaining > 0
+      AND map LIKE ((SELECT map_prefix FROM _dst_parameters) || '%')
     ORDER BY map, dimension_index, field_id
     LIMIT ((SELECT row_limit FROM _dst_parameters) + 1)
 )
@@ -371,10 +373,10 @@ ORDER BY map, dimension_index, field_id;
     $result = Invoke-DuneMapDataQuery `
         -Ip $Ip `
         -Sql $sql `
-        -Parameters @{ row_limit = $Limit } `
-        -ParameterTypes @{ row_limit = 'integer' } `
+        -Parameters @{ row_limit = $Limit; map_prefix = 'DeepDesert' } `
+        -ParameterTypes @{ row_limit = 'integer'; map_prefix = 'text' } `
         -MaxRows ($Limit + 1) `
-        -TimeoutSec 20
+        -TimeoutSec $TimeoutSec
     $validation = Test-DuneMapDataQueryResult -Result $result -ExpectedColumns @(
         'field_id', 'map', 'dimension_index', 'spawn_time', 'value_remaining',
         'field_kind_id', 'x', 'y', 'z', 'coordinate_system', 'source_count'
