@@ -77,6 +77,7 @@ Describe 'DunePlatformStore production helper' {
         $result.publicPoiScale | Should -Be 2000
         $result.processConcurrency | Should -BeTrue
         $result.oneShotExit | Should -BeTrue
+        $result.inheritableStandardHandles | Should -BeTrue
         $result.interruptedWriteRecovery | Should -BeTrue
         $result.interruptedMigrationRecovery | Should -BeTrue
         $result.idempotentGenerationReplace | Should -BeTrue
@@ -108,6 +109,8 @@ Describe 'DunePlatformStore production helper' {
         $privilegeDrop | Should -Match 'catch \(Win32Exception\)[\s\S]+same user''s[\s\S]+GetShellWindow'
         $privilegeDrop | Should -Match 'OpenProcessToken\(\s*shellProcess,\s*TokenDuplicate \| TokenQuery'
         $privilegeDrop | Should -Match 'DuplicateTokenEx\(\s*token,\s*TokenAssignPrimary \| TokenDuplicate \| TokenQuery'
+        $privilegeDrop | Should -Match 'DuplicateHandle\([\s\S]+inheritHandle'
+        $privilegeDrop | Should -Match 'SelfTestInheritableStandardHandles'
         $privilegeDrop | Should -Not -Match 'MaximumAllowed'
 
         $prior = $env:DST_PLATFORM_SELF_TEST

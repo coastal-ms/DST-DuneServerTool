@@ -368,6 +368,9 @@ internal static partial class PlatformStore
         try
         {
             Require(!PrivilegeDrop.IsElevated(), "The cache helper self-test retained an elevated token.");
+            Require(
+                PrivilegeDrop.SelfTestInheritableStandardHandles(),
+                "The cache helper could not create inheritable standard handles.");
             var database = Path.Combine(root, "platform-cache-v1.sqlite");
             CreateTestFixture(database, 100_000, 2_000);
             var hydrateJson = System.Text.Json.JsonSerializer.Serialize(
@@ -419,6 +422,7 @@ internal static partial class PlatformStore
                 idempotentGenerationReplace = true,
                 offsetTimestampPruning = true,
                 pathRaceResistance = true,
+                inheritableStandardHandles = true,
                 runningElevated = PrivilegeDrop.IsElevated(),
                 migrationBackup = true,
                 newerSchemaFailure = true,

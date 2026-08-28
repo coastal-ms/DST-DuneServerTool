@@ -14,6 +14,8 @@ internal static class PrivilegeDrop
     private const uint StartfUseStdHandles = 0x00000100;
     private const uint CreateNoWindow = 0x08000000;
     private const uint LogonWithProfile = 0x00000001;
+    private const uint DuplicateSameAccess = 0x00000002;
+    private const uint HandleFlagInherit = 0x00000001;
     private const uint Infinite = 0xffffffff;
     private const int StdInputHandle = -10;
     private const int StdOutputHandle = -11;
@@ -32,44 +34,60 @@ internal static class PrivilegeDrop
             var executable = Environment.ProcessPath
                 ?? throw new InvalidOperationException("The helper executable path is unavailable.");
             var commandLine = BuildCommandLine(executable, args);
-            var startup = new StartupInfo
-            {
-                cb = (uint)Marshal.SizeOf<StartupInfo>(),
-                dwFlags = StartfUseStdHandles,
-                hStdInput = GetStdHandle(StdInputHandle),
-                hStdOutput = GetStdHandle(StdOutputHandle),
-                hStdError = GetStdHandle(StdErrorHandle)
-            };
-            if (!CreateProcessWithTokenW(
-                    token,
-                    LogonWithProfile,
-                    executable,
-                    commandLine,
-                    CreateNoWindow,
-                    IntPtr.Zero,
-                    Environment.CurrentDirectory,
-                    ref startup,
-                    out var processInformation))
-            {
-                throw new Win32Exception(
-                    Marshal.GetLastWin32Error(),
-                    "The elevated cache helper could not relaunch with the unelevated user token.");
-            }
+            var standardInput = IntPtr.Zero;
+            var standardOutput = IntPtr.Zero;
+            var standardError = IntPtr.Zero;
             try
             {
-                WaitForSingleObject(processInformation.hProcess, Infinite);
-                if (!GetExitCodeProcess(processInformation.hProcess, out var exitCode))
+                standardInput = DuplicateInheritableStandardHandle(StdInputHandle);
+                standardOutput = DuplicateInheritableStandardHandle(StdOutputHandle);
+                standardError = DuplicateInheritableStandardHandle(StdErrorHandle);
+                var startup = new StartupInfo
                 {
+                    cb = (uint)Marshal.SizeOf<StartupInfo>(),
+                    dwFlags = StartfUseStdHandles,
+                    hStdInput = standardInput,
+                    hStdOutput = standardOutput,
+                    hStdError = standardError
+                };
+                if (!CreateProcessWithTokenW(
+                        token,
+                        LogonWithProfile,
+                        executable,
+                        commandLine,
+                        CreateNoWindow,
+                        IntPtr.Zero,
+                        Environment.CurrentDirectory,
+                        ref startup,
+                        out var processInformation))
+                {
+                    var error = Marshal.GetLastWin32Error();
                     throw new Win32Exception(
-                        Marshal.GetLastWin32Error(),
-                        "The unelevated cache helper exit code is unavailable.");
+                        error,
+                        $"The elevated cache helper could not relaunch with the unelevated user token (Windows error {error}).");
                 }
-                return unchecked((int)exitCode);
+                try
+                {
+                    WaitForSingleObject(processInformation.hProcess, Infinite);
+                    if (!GetExitCodeProcess(processInformation.hProcess, out var exitCode))
+                    {
+                        throw new Win32Exception(
+                            Marshal.GetLastWin32Error(),
+                            "The unelevated cache helper exit code is unavailable.");
+                    }
+                    return unchecked((int)exitCode);
+                }
+                finally
+                {
+                    CloseHandle(processInformation.hThread);
+                    CloseHandle(processInformation.hProcess);
+                }
             }
             finally
             {
-                CloseHandle(processInformation.hThread);
-                CloseHandle(processInformation.hProcess);
+                if (standardInput != IntPtr.Zero) CloseHandle(standardInput);
+                if (standardOutput != IntPtr.Zero) CloseHandle(standardOutput);
+                if (standardError != IntPtr.Zero) CloseHandle(standardError);
             }
         }
         finally
@@ -84,6 +102,7 @@ internal static class PrivilegeDrop
         {
             return false;
         }
+
         if (!OpenProcessToken(GetCurrentProcess(), TokenQuery, out var token))
         {
             throw new Win32Exception(Marshal.GetLastWin32Error(), "The process token could not be opened.");
@@ -107,6 +126,27 @@ internal static class PrivilegeDrop
         {
             CloseHandle(token);
         }
+    }
+
+    internal static bool SelfTestInheritableStandardHandles()
+    {
+        foreach (var standardHandle in new[] { StdInputHandle, StdOutputHandle, StdErrorHandle })
+        {
+            var duplicate = DuplicateInheritableStandardHandle(standardHandle);
+            try
+            {
+                if (!GetHandleInformation(duplicate, out var flags) ||
+                    (flags & HandleFlagInherit) == 0)
+                {
+                    return false;
+                }
+            }
+            finally
+            {
+                CloseHandle(duplicate);
+            }
+        }
+        return true;
     }
 
     private static IntPtr GetUnelevatedPrimaryToken()
@@ -224,6 +264,32 @@ internal static class PrivilegeDrop
             throw;
         }
         return primary;
+    }
+
+    private static IntPtr DuplicateInheritableStandardHandle(int standardHandle)
+    {
+        var source = GetStdHandle(standardHandle);
+        if (source == IntPtr.Zero || source == new IntPtr(-1))
+        {
+            throw new Win32Exception(
+                Marshal.GetLastWin32Error(),
+                "A cache helper standard handle is unavailable.");
+        }
+        var process = GetCurrentProcess();
+        if (!DuplicateHandle(
+                process,
+                source,
+                process,
+                out var duplicate,
+                0,
+                true,
+                DuplicateSameAccess))
+        {
+            throw new Win32Exception(
+                Marshal.GetLastWin32Error(),
+                "A cache helper standard handle could not be made inheritable.");
+        }
+        return duplicate;
     }
 
     private static bool IsTokenElevated(IntPtr token)
@@ -392,6 +458,19 @@ internal static class PrivilegeDrop
 
     [DllImport("kernel32.dll")]
     private static extern IntPtr GetStdHandle(int standardHandle);
+
+    [DllImport("kernel32.dll", SetLastError = true)]
+    private static extern bool DuplicateHandle(
+        IntPtr sourceProcessHandle,
+        IntPtr sourceHandle,
+        IntPtr targetProcessHandle,
+        out IntPtr targetHandle,
+        uint desiredAccess,
+        bool inheritHandle,
+        uint options);
+
+    [DllImport("kernel32.dll", SetLastError = true)]
+    private static extern bool GetHandleInformation(IntPtr handle, out uint flags);
 
     [DllImport("kernel32.dll", SetLastError = true)]
     private static extern uint WaitForSingleObject(IntPtr handle, uint milliseconds);

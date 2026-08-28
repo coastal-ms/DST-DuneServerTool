@@ -205,11 +205,19 @@ function Invoke-DunePlatformHelper {
             $remainingMs = [Math]::Max(
                 0,
                 [int][Math]::Ceiling(($callerDeadline - [DateTime]::UtcNow).TotalMilliseconds))
-            if (-not $writeTask.Wait($remainingMs)) {
+            $writeCompleted = $false
+            $writeError = $null
+            try {
+                $writeCompleted = $writeTask.Wait($remainingMs)
+            } catch {
+                $writeCompleted = $true
+                $writeError = $_.Exception
+            }
+            if (-not $writeCompleted) {
                 try { $process.Kill() } catch {}
                 throw "Platform cache helper timed out while receiving its request after ${TimeoutSec}s."
             }
-            $writeTask.GetAwaiter().GetResult()
+            if (-not $writeError) { $writeTask.GetAwaiter().GetResult() }
         }
         $process.StandardInput.Close()
         $remainingMs = [Math]::Max(
@@ -236,6 +244,10 @@ function Invoke-DunePlatformHelper {
             $exception = [InvalidOperationException]::new($message)
             if ($result -and $result.errorCode) { $exception.Data['errorCode'] = [string]$result.errorCode }
             throw $exception
+        }
+        if ($writeError) {
+            throw [InvalidOperationException]::new(
+                "Platform cache helper closed its input before receiving the request: $($writeError.GetBaseException().Message)")
         }
         if (-not $result -or -not $result.ok) {
             throw 'Platform cache helper returned an invalid result.'
