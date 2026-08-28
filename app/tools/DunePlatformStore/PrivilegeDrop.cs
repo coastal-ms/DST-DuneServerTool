@@ -123,6 +123,20 @@ internal static class PrivilegeDrop
                     workingDirectory,
                     ref startup,
                     out var processInformation);
+            var profileLaunchError = created ? 0 : Marshal.GetLastWin32Error();
+            if (!created)
+            {
+                created = CreateProcessWithTokenW(
+                    token,
+                    0,
+                    executable,
+                    commandLine,
+                    CreateNoWindow | CreateSuspended,
+                    IntPtr.Zero,
+                    workingDirectory,
+                    ref startup,
+                    out processInformation);
+            }
             var tokenLaunchError = created ? 0 : Marshal.GetLastWin32Error();
             if (!created)
             {
@@ -146,7 +160,8 @@ internal static class PrivilegeDrop
                 throw new Win32Exception(
                     error,
                     $"The elevated cache helper could not relaunch with the unelevated user token " +
-                    $"(CreateProcessWithTokenW error {tokenLaunchError}; CreateProcessAsUserW error {error}).");
+                    $"(profile error {profileLaunchError}; token error {tokenLaunchError}; " +
+                    $"CreateProcessAsUserW error {error}).");
             }
             try
             {
