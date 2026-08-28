@@ -10,6 +10,7 @@ import {
   Router as WouterRouter,
   Switch,
   useLocation as useWouterLocation,
+  useSearch as useWouterSearch,
 } from 'wouter'
 
 type LinkProps = Omit<AnchorHTMLAttributes<HTMLAnchorElement>, 'href'> & {
@@ -40,8 +41,35 @@ export function Route({ path, element }: RouteProps) {
     : <WouterRoute path={path}>{element}</WouterRoute>
 }
 
-export function Navigate({ to, replace = false }: { to: string; replace?: boolean }) {
-  return <Redirect to={to} replace={replace} />
+export function mergeNavigationLocation(
+  to: string,
+  currentSearch: string,
+  currentHash: string,
+) {
+  const target = new URL(to, 'https://dst.local')
+  const merged = new URLSearchParams(currentSearch)
+  const targetKeys = new Set(target.searchParams.keys())
+  for (const key of targetKeys) {
+    merged.delete(key)
+    for (const value of target.searchParams.getAll(key)) merged.append(key, value)
+  }
+  const search = merged.toString()
+  return `${target.pathname}${search ? `?${search}` : ''}${target.hash || currentHash}`
+}
+
+export function Navigate({
+  to,
+  replace = false,
+  preserveLocation = false,
+}: {
+  to: string
+  replace?: boolean
+  preserveLocation?: boolean
+}) {
+  const destination = preserveLocation
+    ? mergeNavigationLocation(to, window.location.search, window.location.hash)
+    : to
+  return <Redirect to={destination} replace={replace} />
 }
 
 export function Link({ to, ...props }: LinkProps) {
@@ -71,4 +99,8 @@ export function useNavigate() {
 export function useLocation() {
   const [pathname] = useWouterLocation()
   return { pathname }
+}
+
+export function useSearch() {
+  return useWouterSearch()
 }

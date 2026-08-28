@@ -55,17 +55,17 @@ export function StatusBar() {
   const portalAuth = usePortalAuth()
 
   return (
-    <header className="h-14 shrink-0 border-b border-border bg-surface/60 backdrop-blur-md px-5 flex items-center justify-between gap-4">
-      <div className="flex items-center gap-2 text-sm text-text-muted shrink-0">
+    <header className="h-14 shrink-0 border-b border-border bg-surface/60 backdrop-blur-md px-3 sm:px-5 flex items-center justify-between gap-2 sm:gap-4 overflow-hidden">
+      <div className="hidden lg:flex items-center gap-2 text-sm text-text-muted shrink-0">
         <Icon name="Server" size={16} className="text-text-dim" />
         <span>Dune Self Host Server Tool</span>
       </div>
-      <div className="flex-1 flex items-center justify-center min-w-0">
+      <div className="flex-1 flex items-center justify-start lg:justify-center min-w-0">
         {serverName && (
           <div className="flex items-center gap-2 min-w-0">
             <Icon name="Server" size={20} className="text-accent shrink-0" />
             <span
-              className="text-[22px] leading-none font-semibold tracking-tight text-text truncate"
+              className="text-base sm:text-[22px] leading-none font-semibold tracking-tight text-text truncate"
               title={`Server: ${serverName}`}
             >
               {serverName}
@@ -73,7 +73,7 @@ export function StatusBar() {
           </div>
         )}
       </div>
-      <div className="flex items-center gap-2 shrink-0">
+      <div className="flex items-center gap-1 sm:gap-2 shrink-0">
         {portalAuth?.status.account && (
           <button className="btn-ghost" onClick={() => void portalAuth.logout()} title="Sign out of the Browser Portal">
             <Icon name="LogOut" size={14} />
@@ -86,25 +86,28 @@ export function StatusBar() {
             className="pill-warning hover:bg-warning/20 transition-colors"
             title={`${testBuild.title}. Click to open Settings, switch to Stable, and install the released build.`}
           >
-            <Icon name="FlaskConical" size={11} /> {testBuild.label}
+            <Icon name="FlaskConical" size={11} />
+            <span className="hidden sm:inline">{testBuild.label}</span>
+            <span className="sr-only sm:hidden">{testBuild.title}</span>
           </Link>
         )}
         {ports?.showUdp && (
-          <span className={portPillClass(ports, 7777, 'UDP')} title="Game server ports (forward on your router/firewall). Shown because you enabled a custom UDP port check.">
+          <span className={`${portPillClass(ports, 7777, 'UDP')} hidden md:inline-flex`} title="Game server ports (forward on your router/firewall). Shown because you enabled a custom UDP port check.">
             <Icon name="Plug" size={11} /> 7777–7810 UDP
           </span>
         )}
-        <span className={portPillClass(ports, 31982, 'TCP')} title="RabbitMQ port (forward on your router/firewall)">
+        <span className={`${portPillClass(ports, 31982, 'TCP')} hidden md:inline-flex`} title="RabbitMQ port (forward on your router/firewall)">
           <Icon name="Plug" size={11} /> 31982 TCP
         </span>
-        <span className={vmPillClass(vm)}>
+        <span className={`${vmPillClass(vm)} hidden sm:inline-flex`}>
           <Icon name="HardDrive" size={11} /> VM · {vmPillText(vm)}
         </span>
         <span className={bg.cls}>
-          <Icon name="Activity" size={11} /> BG · {bg.label}
+          <Icon name="Activity" size={11} />
+          <span className="hidden min-[360px]:inline">BG · </span>{bg.label}
         </span>
         <button
-          className="btn-ghost ml-2"
+          className="btn-ghost h-11 w-11 justify-center p-0"
           onClick={() => { void forceRefresh() }}
           title="Refresh status"
           disabled={loading}

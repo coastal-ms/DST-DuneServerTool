@@ -99,7 +99,7 @@ function reconcileOrder(saved: string[] | null, maps: SpinUpMap[]): string[] {
   return [...kept, ...added]
 }
 
-export function MapSpinUp() {
+export function MapSpinUp({ embedded = false }: { embedded?: boolean }) {
   const { status } = useStatus()
   const vmRunning = status?.vm?.running === true
   const [maps, setMaps] = useState<SpinUpMap[] | null>(null)
@@ -311,43 +311,54 @@ export function MapSpinUp() {
     return order.length !== def.length || order.some((k, i) => k !== def[i])
   }, [maps, order])
 
+  const lifecycleActions = (
+    <>
+      {isCustomOrder && (
+        <button
+          className="btn-secondary min-h-11 flex-1 justify-center sm:flex-none"
+          onClick={resetOrder}
+          disabled={loading || busy !== null || fixBusy}
+          title="Restore the default card order (Deep Desert, Arrakeen, Harko Village first)."
+        >
+          <Icon name="RotateCcw" size={14} /> Reset order
+        </button>
+      )}
+      <button
+        className="btn-secondary min-h-11 flex-1 justify-center sm:flex-none"
+        onClick={() => { void onFixPartitions() }}
+        disabled={loading || busy !== null || fixBusy}
+        title="Clear stuck igwsss.spec.partitions pins on Deep Desert / Arrakeen / Harko Village. Safe — only touches those 3 maps, skips any with a running pod, and never touches Overmap or Survival_1."
+      >
+        <Icon name={fixBusy ? 'Loader2' : 'Wrench'} size={15} className={fixBusy ? 'animate-spin' : ''} />
+        {fixBusy ? 'Fixing…' : 'Fix partitions'}
+      </button>
+      <button className="btn-secondary min-h-11 flex-1 justify-center sm:flex-none" onClick={() => { void refresh() }} disabled={loading || busy !== null || fixBusy}>
+        <Icon name="RefreshCw" size={15} className={loading ? 'animate-spin' : ''} /> Refresh
+      </button>
+    </>
+  )
+
   return (
     <>
-      <PageHeader
-        title="Map SpinUp"
-        icon="Power"
-        description="Keep map servers warm. Deep Desert starts every configured partition; other maps keep one warm. Hot-swappable — no restart needed. Drag cards to reorder."
-        actions={
-          <>
-            {isCustomOrder && (
-              <button
-                className="btn-secondary flex-1 justify-center sm:flex-none"
-                onClick={resetOrder}
-                disabled={loading || busy !== null || fixBusy}
-                title="Restore the default card order (Deep Desert, Arrakeen, Harko Village first)."
-              >
-                <Icon name="RotateCcw" size={14} /> Reset order
-              </button>
-            )}
-            <button
-              className="btn-secondary flex-1 justify-center sm:flex-none"
-              onClick={() => { void onFixPartitions() }}
-              disabled={loading || busy !== null || fixBusy}
-              title="Clear stuck igwsss.spec.partitions pins on Deep Desert / Arrakeen / Harko Village. Safe — only touches those 3 maps, skips any with a running pod, and never touches Overmap or Survival_1."
-            >
-              <Icon name={fixBusy ? 'Loader2' : 'Wrench'} size={15} className={fixBusy ? 'animate-spin' : ''} />
-              {fixBusy ? 'Fixing…' : 'Fix partitions'}
-            </button>
-            <button className="btn-secondary flex-1 justify-center sm:flex-none" onClick={() => { void refresh() }} disabled={loading || busy !== null || fixBusy}>
-              <Icon name="RefreshCw" size={15} className={loading ? 'animate-spin' : ''} /> Refresh
-            </button>
-          </>
-        }
-      />
+      {embedded ? (
+        <div
+          aria-label="Map lifecycle actions"
+          className="mb-4 grid grid-cols-2 gap-2 min-[460px]:flex min-[460px]:flex-wrap min-[460px]:justify-end"
+        >
+          {lifecycleActions}
+        </div>
+      ) : (
+        <PageHeader
+          title="Map SpinUp"
+          icon="Power"
+          description="Keep map servers warm. Deep Desert starts every configured partition; other maps keep one warm. Hot-swappable — no restart needed. Drag cards to reorder."
+          actions={lifecycleActions}
+        />
+      )}
 
       <div className="mb-4 grid grid-cols-1 min-[360px]:grid-cols-2 gap-2 sm:flex sm:flex-wrap sm:items-center sm:justify-center sm:gap-3">
         <button
-          className="btn-secondary w-full justify-center sm:w-auto"
+          className="btn-secondary min-h-11 w-full justify-center sm:w-auto"
           onClick={() => { void onRestartPods('survival', 'Hagga (Survival_1)') }}
           disabled={loading || busy !== null || fixBusy || restartBusy !== null}
           title="Delete and recreate the Survival_1 (Hagga overworld) pod(s). Disconnects anyone on the main world; the operator brings them back in ~60-120s."
@@ -356,7 +367,7 @@ export function MapSpinUp() {
           {restartBusy === 'survival' ? 'Restarting…' : 'Restart Hagga'}
         </button>
         <button
-          className="btn-secondary w-full justify-center sm:w-auto"
+          className="btn-secondary min-h-11 w-full justify-center sm:w-auto"
           onClick={() => { void onRestartPods('deepdesert', 'Deep Desert') }}
           disabled={loading || busy !== null || fixBusy || restartBusy !== null}
           title="Delete and recreate the DeepDesert_1 pod(s). Disconnects anyone in Deep Desert; the operator brings them back in ~60-120s."
@@ -494,7 +505,7 @@ function SortableMapCard({ map: m, busy, onToggle, elapsed, loadError, onDismiss
       <div className="flex items-center gap-3">
         <button
           type="button"
-          className="shrink-0 -ml-1 p-1 text-text-dim hover:text-text cursor-grab active:cursor-grabbing touch-none"
+          className="shrink-0 -ml-1 min-h-11 min-w-11 inline-flex items-center justify-center text-text-dim hover:text-text cursor-grab active:cursor-grabbing touch-none"
           title="Drag to reorder"
           {...attributes}
           {...listeners}

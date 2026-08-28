@@ -1,53 +1,56 @@
+import { lazy, Suspense, useEffect, type ReactNode } from 'react'
 import { Routes, Route, Navigate } from './router'
-import { useEffect } from 'react'
 import { AppShell } from './layout/AppShell'
-import { Dashboard } from './pages/Dashboard'
-import { Pods } from './pages/Pods'
-import { Commands } from './pages/Commands'
-import { GameConfig } from './pages/GameConfig'
-import { GameplayEnvironment } from './pages/GameplayEnvironment'
-import { Database } from './pages/Database'
-import { Sietches } from './pages/Sietches'
-import { WickMaps } from './pages/WickMaps'
-import { MapSpinUp } from './pages/MapSpinUp'
-import { SetupWizard } from './pages/SetupWizard'
-import { Settings } from './pages/Settings'
-import { TerminalPage } from './pages/Terminal'
-import { Broadcasts } from './pages/Broadcasts'
-import { SoloMode } from './pages/SoloMode'
 import { PageStub } from './pages/PageStub'
 import { StatusProvider } from './hooks/useStatus'
 import { isLocalViewer, isWindowsViewer } from './util/viewer'
 import { api } from './api/client'
 import { ReconnectOverlay } from './components/ReconnectOverlay'
 import { PageErrorBoundary } from './components/PageErrorBoundary'
+import { DataState } from './components/platform/DataState'
 import { usePortalAccess } from './auth/portalAccess'
+import { WORKSPACE_MANIFEST } from './platform/workspaces'
+import { COMPATIBILITY_REDIRECTS, LEGACY_ROUTE_MANIFEST, type RouteAccess } from './platform/routes'
 
-// Wrap every route subtree in an error boundary so an unhandled render
-// exception on one page can't white-out the entire app. The boundary
-// renders an inline error card with the JS stack trace and logs the
-// failure through console.error so it lands in webview2-debug.log for
-// the diagnostics ZIP (added in v12.0.1).
-function Boundary({ name, children }: { name: string; children: React.ReactNode }) {
+const WORKSPACE_ROUTES = WORKSPACE_MANIFEST.map(workspace => ({
+  ...workspace,
+  Component: lazy(workspace.load),
+}))
+
+const LEGACY_ROUTES = LEGACY_ROUTE_MANIFEST.map(route => ({
+  ...route,
+  Component: lazy(route.load),
+}))
+
+function Boundary({ name, children }: { name: string; children: ReactNode }) {
   return <PageErrorBoundary pageName={name}>{children}</PageErrorBoundary>
+}
+
+function LazyPage({ name, children }: { name: string; children: ReactNode }) {
+  return (
+    <Boundary name={name}>
+      <Suspense fallback={<DataState state="loading" title={`Loading ${name}…`} />}>
+        {children}
+      </Suspense>
+    </Boundary>
+  )
+}
+
+function canAccessRoute(
+  access: RouteAccess,
+  canAccessOwnerSurfaces: boolean,
+  canAccessSetup: boolean,
+) {
+  if (access === 'owner') return canAccessOwnerSurfaces
+  if (access === 'local') return isLocalViewer()
+  if (access === 'local-windows') return isLocalViewer() && isWindowsViewer()
+  if (access === 'setup') return canAccessSetup
+  return true
 }
 
 export default function App() {
   const { canAccessOwnerSurfaces, canAccessSetup } = usePortalAccess()
-  // The free-form PowerShell page can run arbitrary commands on the host
-  // as the DuneServer service user. It's safe locally (you're already on
-  // the host with admin) but a foot-gun for remote viewers (a friend on the
-  // Cloudflare remote portal), so we redirect /terminal to Server Health for
-  // them. The backend /ws/terminal route enforces this too — this is just the
-  // UX half so the page doesn't render an empty failing terminal.
-  const showTerminal = isLocalViewer()
-  const showSolo = showTerminal && isWindowsViewer()
 
-  // Issue #280: when the portal is loaded in a real browser (not the app's
-  // own WebView2 window), tell the server the browser reached it. The app
-  // window that handed the portal off polls for this and only then closes
-  // itself — so a browser blocked from 127.0.0.1 leaves the app window usable
-  // instead of stranding the user on a "page unavailable" error.
   useEffect(() => {
     const inShell = !!(window as unknown as { chrome?: { webview?: unknown } }).chrome?.webview
     if (!inShell && isLocalViewer()) {
@@ -60,35 +63,39 @@ export default function App() {
       <ReconnectOverlay />
       <AppShell>
         <Routes>
-          <Route path="/"           element={<Boundary name="Dashboard"><Dashboard /></Boundary>} />
-          <Route path="/pods"        element={<Boundary name="Pods"><Pods /></Boundary>} />
-          <Route path="/commands"   element={<Boundary name="Commands"><Commands /></Boundary>} />
+          {COMPATIBILITY_REDIRECTS.map(route => (
+            <Route
+              key={route.from}
+              path={route.from}
+              element={<Navigate to={route.to} replace preserveLocation />}
+            />
+          ))}
+          {WORKSPACE_ROUTES.map(({ id, path, label, visibility, Component }) => (
+            <Route
+              key={id}
+              path={path}
+              element={
+                visibility === 'owner' && !canAccessOwnerSurfaces
+                  ? <Navigate to="/" replace />
+                  : <LazyPage name={label}><Component /></LazyPage>
+              }
+            />
+          ))}
+          {LEGACY_ROUTES.map(({ path, label, access, Component }) => (
+            <Route
+              key={path}
+              path={path}
+              element={
+                canAccessRoute(access, canAccessOwnerSurfaces, canAccessSetup)
+                  ? <LazyPage name={label}><Component /></LazyPage>
+                  : <Navigate to="/" replace />
+              }
+            />
+          ))}
           <Route
-            path="/terminal"
-            element={showTerminal
-              ? <Boundary name="Terminal"><TerminalPage /></Boundary>
-              : <Navigate to="/" replace />}
+            path="*"
+            element={<PageStub title="Not Found" icon="HelpCircle" description="No page at that path." phase="—" />}
           />
-          <Route path="/gameconfig" element={canAccessOwnerSurfaces ? <Boundary name="Game Config"><GameConfig /></Boundary> : <Navigate to="/" replace />} />
-          <Route path="/experimental" element={canAccessOwnerSurfaces ? <Boundary name="Experimental Lab"><GameConfig mode="experimental" /></Boundary> : <Navigate to="/" replace />} />
-          <Route path="/gameplay"   element={<Boundary name="Gameplay Admin"><GameplayEnvironment /></Boundary>} />
-          <Route path="/broadcasts" element={<Boundary name="Broadcasts"><Broadcasts /></Boundary>} />
-          <Route
-            path="/solo"
-            element={showSolo
-              ? <Boundary name="Solo Mode"><SoloMode /></Boundary>
-              : <Navigate to="/" replace />}
-          />
-          <Route path="/database"   element={canAccessOwnerSurfaces ? <Boundary name="Database"><Database /></Boundary> : <Navigate to="/" replace />} />
-          <Route path="/sietches"   element={canAccessOwnerSurfaces ? <Boundary name="Sietches"><Sietches /></Boundary> : <Navigate to="/" replace />} />
-          <Route path="/dd-map"     element={<Boundary name="DD Seed Maps"><WickMaps /></Boundary>} />
-          <Route path="/wick-maps"  element={<Boundary name="DD Seed Maps"><WickMaps /></Boundary>} />
-          <Route path="/map-spinup" element={<Boundary name="Map SpinUp"><MapSpinUp /></Boundary>} />
-          <Route path="/settings"   element={canAccessOwnerSurfaces ? <Boundary name="Settings"><Settings /></Boundary> : <Navigate to="/" replace />} />
-          <Route path="/setup"      element={canAccessSetup ? <Boundary name="Setup Wizard"><SetupWizard /></Boundary> : <Navigate to="/" replace />} />
-          {/* /monitoring merged into Dashboard in v6.1 — redirect old path */}
-          <Route path="/monitoring" element={<Boundary name="Dashboard"><Dashboard /></Boundary>} />
-          <Route path="*"           element={<PageStub title="Not Found"   icon="HelpCircle"      description="No page at that path." phase="—" />} />
         </Routes>
       </AppShell>
     </StatusProvider>

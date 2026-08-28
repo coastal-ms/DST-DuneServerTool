@@ -1,0 +1,7 @@
+{
+  "schemaVersion": 1,
+  "baselineCommit": "e56bcdd315974ba77373541e2c1007ba1118e465",
+  "baselineInitialJavaScriptBytes": 2225116,
+  "maximumGrowthPercent": 10,
+  "maximumInitialJavaScriptBytes": 2447627
+}

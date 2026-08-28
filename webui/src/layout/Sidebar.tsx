@@ -2,7 +2,7 @@ import { NavLink } from '../router'
 import { useState, useRef } from 'react'
 import { createPortal } from 'react-dom'
 import { Icon } from '../components/Icon'
-import { NAV_ITEMS, GROUP_ORDER, getVisibleGroupLabel } from '../nav'
+import { GROUP_ORDER, getVisibleGroupLabel, getVisibleNavItems } from '../nav'
 import { useUpdateCheck } from '../hooks/useUpdateCheck'
 import { api } from '../api/client'
 import { fmtToolVersion } from '../format'
@@ -134,21 +134,22 @@ export function Sidebar({ collapsed }: Props) {
     } catch { /* clipboard blocked — the URL is shown in the box to copy manually */ }
   }
 
+  const visibleItems = getVisibleNavItems({
+    local: isLocalViewer(),
+    windows: isWindowsViewer(),
+    canAccessOwnerSurfaces,
+    includeSidebarHidden: false,
+  })
   const groups = GROUP_ORDER.map(g => ({
     key: g,
-    items: NAV_ITEMS
-      .filter(i => i.group === g)
-      .filter(i => !i.sidebarHidden)
-      .filter(i => !i.localOnly || isLocalViewer())
-      .filter(i => !i.ownerOnly || canAccessOwnerSurfaces)
-      .filter(i => !i.windowsOnly || isWindowsViewer()),
+    items: visibleItems.filter(i => i.group === g),
   })).filter(g => g.items.length > 0).map(g => ({
     ...g,
     label: getVisibleGroupLabel(g.key, g.items),
   }))
 
   // Shared row renderer for a single nav item, in either layout mode.
-  const renderItem = (item: typeof NAV_ITEMS[number]) => {
+  const renderItem = (item: (typeof visibleItems)[number]) => {
     return (
       <NavLink
         to={item.to}
