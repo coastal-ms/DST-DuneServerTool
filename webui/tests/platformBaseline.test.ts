@@ -53,10 +53,11 @@ describe('next-generation platform baseline', () => {
     )
   })
 
-  it('records the current eager entry bundle separately from its relative growth budget', () => {
-    const appSource = readSource('App.tsx')
-    expect(appSource).not.toMatch(/\blazy\s*\(/)
+  it('records the pre-shell eager bundle separately from future budgets', () => {
+    expect(baseline.sourceCommit).toBe('e56bcdd315974ba77373541e2c1007ba1118e465')
     expect(baseline.recordedMeasurements.enforced).toBe(false)
+    expect(baseline.recordedMeasurements.webuiBuild.initialEntryJsBytes).toBe(2225116)
+    expect(baseline.recordedMeasurements.webuiBuild.initialEntryJsGzipBytes).toBe(556247)
     expect(baseline.recordedMeasurements.webuiBuild.javascriptAssetCount).toBe(1)
     expect(baseline.recordedMeasurements.webuiBuild.routeChunkCount).toBe(0)
     expect(baseline.budgets.initialEntryJsMaxGrowthPercent).toBe(10)
