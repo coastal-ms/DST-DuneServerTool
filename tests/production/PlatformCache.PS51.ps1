@@ -7,6 +7,7 @@ $ErrorActionPreference = 'Stop'
 $env:LOCALAPPDATA = $LocalAppData
 . (Join-Path $RepoRoot 'app\server\lib\ApiContract.ps1')
 . (Join-Path $RepoRoot 'app\server\lib\PlatformCache.ps1')
+. (Join-Path $RepoRoot 'app\server\lib\PlatformRuntime.ps1')
 . (Join-Path $RepoRoot 'app\server\lib\MapPlatform.ps1')
 $result = Initialize-DunePlatformCache
 if (-not $result.ok) { throw $result.message }
