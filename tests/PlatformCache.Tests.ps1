@@ -361,6 +361,117 @@ Describe 'Platform cache snapshot and refresh coordination' {
         (Get-DunePlatformSnapshot).snapshot['layers'][0]['freshnessState'] | Should -Be 'stale'
     }
 
+    It 'prunes every successful production replacement with the accepted bounds' {
+        $script:helperCommands = [Collections.Generic.List[object]]::new()
+        Mock Invoke-DunePlatformHelper {
+            param($Command, $RequestJson, $Options, $TimeoutSec)
+            $script:helperCommands.Add([pscustomobject]@{
+                command = $Command
+                options = $Options
+            })
+            if ($Command -eq 'replace-generation') {
+                return [pscustomobject]@{
+                    ok = $true
+                    generation = 'production-refresh'
+                    counts = @{}
+                    replaceMs = 1
+                }
+            }
+            if ($Command -eq 'prune') {
+                return [pscustomobject]@{ ok = $true; historyRows = 100000; snapshotRows = 40 }
+            }
+            return [pscustomobject]@{
+                ok = $true
+                available = $true
+                snapshot = [pscustomobject]@{ generation = 'production-refresh'; layers = @() }
+            }
+        }
+
+        $result = Invoke-DunePlatformGenerationReplace -Generation @{
+            generation = 'production-refresh'
+        }
+
+        $result.ok | Should -BeTrue
+        @($script:helperCommands.command) | Should -Be @('replace-generation', 'prune', 'hydrate')
+        $pruneOptions = @($script:helperCommands | Where-Object command -eq 'prune')[0].options
+        $pruneOptions['history-days'] | Should -Be 90
+        $pruneOptions['history-rows'] | Should -Be 100000
+        $pruneOptions['snapshot-generations'] | Should -Be 20
+        $pruneOptions['max-bytes'] | Should -Be (250MB)
+    }
+
+    It 'publishes the successful generation and exposes a prune failure in cache health' {
+        Mock Invoke-DunePlatformHelper {
+            param($Command)
+            if ($Command -eq 'replace-generation') {
+                return [pscustomobject]@{
+                    ok = $true
+                    generation = 'fresh-after-prune-error'
+                    counts = @{ activeSpiceHistory = 1 }
+                    replaceMs = 1
+                }
+            }
+            if ($Command -eq 'prune') {
+                throw 'simulated prune failure'
+            }
+            return [pscustomobject]@{
+                ok = $true
+                available = $true
+                snapshot = [pscustomobject]@{
+                    generation = 'fresh-after-prune-error'
+                    layers = @([pscustomobject]@{
+                        layerId = 'active-spice'
+                        freshnessState = 'fresh'
+                        rowCount = 1
+                    })
+                    activeSpice = @([pscustomobject]@{ fieldId = '101' })
+                }
+            }
+        }
+
+        $result = Invoke-DunePlatformGenerationReplace -Generation @{
+            generation = 'fresh-after-prune-error'
+        }
+        $state = Get-DunePlatformSnapshot
+
+        $result.ok | Should -BeTrue
+        $result.pruneErrorCode | Should -Be 'cache-prune-failed'
+        $state.available | Should -BeTrue
+        $state.snapshot['generation'] | Should -Be 'fresh-after-prune-error'
+        $state.snapshot['layers'][0]['freshnessState'] | Should -Be 'fresh'
+        $state.lastErrorCode | Should -Be 'cache-prune-failed'
+    }
+
+    It 'bounds persisted history and old generations on the production replace path' {
+        $database = Get-DunePlatformCachePath
+        & $script:PlatformHelper --command create-test-fixture --database $database --history-rows 100000 --poi-rows 1 | Out-Null
+        $snapshot = (Invoke-DunePlatformHelper -Command hydrate).snapshot
+        $generation = [ordered]@{
+            generation = ''
+            sources = @($snapshot.sources)
+            maps = @($snapshot.maps)
+            layers = @($snapshot.layers)
+            activeSpiceCurrent = @($snapshot.activeSpice)
+            activeSpiceHistory = @()
+            publicPois = @($snapshot.publicPois)
+        }
+        foreach ($index in 1..21) {
+            $generation.generation = "unpruned-$index"
+            $null = Invoke-DunePlatformHelper `
+                -Command replace-generation `
+                -RequestJson ($generation | ConvertTo-Json -Depth 12 -Compress)
+        }
+        $generation.generation = 'production-pruned'
+        $generation.activeSpiceHistory = @($snapshot.activeSpiceHistory | Select-Object -First 1)
+
+        $result = Invoke-DunePlatformGenerationReplace -Generation $generation
+        $integrity = Invoke-DunePlatformHelper -Command integrity
+
+        $result.prune.historyRows | Should -BeLessOrEqual 100000
+        $integrity.counts.activeSpiceHistory | Should -BeLessOrEqual 100000
+        $integrity.counts.layerSnapshots | Should -BeLessOrEqual (20 * @($snapshot.layers).Count)
+    }
+
     It 'enforces the global permit counts and bounded source policy' {
         (Get-DunePlatformGate -Name ssh).CurrentCount | Should -Be 4
         (Get-DunePlatformGate -Name database).CurrentCount | Should -Be 3

@@ -2,6 +2,10 @@ $script:DunePlatformMaxRequestBytes = 5MB
 $script:DunePlatformMaxResponseBytes = 8MB
 $script:DunePlatformQueryTimeoutSec = 15
 $script:DunePlatformMaxRows = 10000
+$script:DunePlatformHistoryRetentionDays = 90
+$script:DunePlatformHistoryRetentionRows = 100000
+$script:DunePlatformSnapshotRetentionGenerations = 20
+$script:DunePlatformCacheMaxBytes = 250MB
 $script:DunePlatformSnapshotState = $null
 
 function Get-DunePlatformCachePath {
@@ -288,17 +292,41 @@ function Invoke-DunePlatformGenerationReplace {
     $json = $Generation | ConvertTo-Json -Depth 12 -Compress
     Invoke-DunePlatformGate -Name writer -TimeoutSec $TimeoutSec -Script {
         $result = Invoke-DunePlatformHelper -Command replace-generation -RequestJson $json -TimeoutSec $TimeoutSec
+        $prune = $null
+        $pruneErrorCode = $null
+        try {
+            $prune = Invoke-DunePlatformHelper `
+                -Command prune `
+                -Options @{
+                    'history-days'        = $script:DunePlatformHistoryRetentionDays
+                    'history-rows'        = $script:DunePlatformHistoryRetentionRows
+                    'snapshot-generations' = $script:DunePlatformSnapshotRetentionGenerations
+                    'max-bytes'           = $script:DunePlatformCacheMaxBytes
+                } `
+                -TimeoutSec $TimeoutSec
+        } catch {
+            $pruneErrorCode = if ($_.Exception.Data['errorCode']) {
+                [string]$_.Exception.Data['errorCode']
+            } else {
+                'cache-prune-failed'
+            }
+            if (Get-Command Write-DuneLog -ErrorAction SilentlyContinue) {
+                Write-DuneLog "Platform cache prune failed after generation '$($result.generation)': $($_.Exception.Message)" 'WARN'
+            }
+        }
         $hydrated = Invoke-DunePlatformHelper -Command hydrate -TimeoutSec $TimeoutSec
         if (-not $hydrated.available -or -not $hydrated.snapshot) {
             throw 'The replaced platform cache generation could not be hydrated.'
         }
-        $state = Set-DunePlatformSnapshot -Snapshot $hydrated.snapshot
+        $state = Set-DunePlatformSnapshot -Snapshot $hydrated.snapshot -LastErrorCode $pruneErrorCode
         return [pscustomobject]@{
             ok = $true
             generation = [string]$result.generation
             counts = $result.counts
             replaceMs = [double]$result.replaceMs
             snapshotRevision = [long]$state.revision
+            prune = $prune
+            pruneErrorCode = $pruneErrorCode
         }
     }
 }
