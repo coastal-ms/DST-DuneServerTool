@@ -480,7 +480,7 @@ Describe 'Versioned response and cursor contracts' {
         { Read-DuneOpaqueCursor -Cursor $tampered @arguments } | Should -Throw '*Invalid cursor*'
     }
 
-    It 'supports an omitted query and a cursor secret shared with worker runspaces' {
+    It 'shares the cursor secret and immutable cache snapshot state with worker runspaces' {
         $secret = [byte[]](33..64)
         $principal = @{ type = 'local-host'; id = 'local-host'; role = 'local-host' }
         $cursor = New-DuneOpaqueCursor `
@@ -501,16 +501,30 @@ Describe 'Versioned response and cursor contracts' {
         $serverSource = Get-Content (Join-Path (Get-DstRepoRoot) 'app\server\HttpServer.ps1') -Raw
         $serverSource | Should -Match 'CursorSecret\s*=\s*\$cursorSecret'
         $serverSource | Should -Match "@\('DuneApiCursorSecret',\s*\`$ctx\.CursorSecret\)"
+        $serverSource | Should -Match 'PlatformSnapshotState\s*=\s*\$script:DunePlatformSnapshotState'
+        $serverSource | Should -Match "@\('DunePlatformSnapshotState',\s*\`$ctx\.PlatformSnapshotState\)"
 
         $workerDir = Join-Path $TestDrive 'cursor-worker'
         New-Item -ItemType Directory -Path $workerDir -Force | Out-Null
         Copy-Item (Join-Path (Get-DstRepoRoot) 'app\server\HttpServer.ps1') (Join-Path $workerDir 'HttpServer.ps1')
+        $snapshotData = [Collections.Generic.Dictionary[string,object]]::new()
+        $snapshotData.Add('generation', 'integration-test')
+        $expectedSnapshotState = [Collections.Hashtable]::Synchronized(@{
+            revision = 1L
+            available = $true
+            snapshot = [Collections.ObjectModel.ReadOnlyDictionary[string,object]]::new($snapshotData)
+        })
+        $script:DunePlatformSnapshotState = $expectedSnapshotState
         Stop-DuneHttpServer
         try {
             Initialize-DuneApiPool -ServerDir $workerDir
             $script:DuneApiCtx.CursorSecret | Should -Not -BeNullOrEmpty
             @($script:DuneApiCtx.CursorSecret).Count | Should -Be 32
             $script:DuneApiCtx.CursorSecret | Should -Be $script:DuneApiCursorSecret
+            [object]::ReferenceEquals(
+                $script:DuneApiCtx.PlatformSnapshotState,
+                $expectedSnapshotState
+            ) | Should -BeTrue
         } finally {
             Stop-DuneHttpServer
         }
