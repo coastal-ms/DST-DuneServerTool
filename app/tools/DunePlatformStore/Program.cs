@@ -17,25 +17,16 @@ internal static class Program
     {
         try
         {
-            var parentLaunched = PrivilegeDrop.TryConsumeShellParentLaunch(ref args);
-            if (parentLaunched && PrivilegeDrop.IsElevated())
+            var unelevatedExitCode = PrivilegeDrop.EnsureUnelevated(args);
+            if (unelevatedExitCode.HasValue)
             {
-                throw new UnauthorizedAccessException("The shell-parented cache helper is still elevated.");
-            }
-            if (!parentLaunched)
-            {
-                var unelevatedExitCode = PrivilegeDrop.EnsureUnelevated(args);
-                if (unelevatedExitCode.HasValue)
-                {
-                    return unelevatedExitCode.Value;
-                }
+                return unelevatedExitCode.Value;
             }
             var options = ParseArgs(args);
             var command = RequireValue(options, "command").ToLowerInvariant();
             if (command is not ("migrate" or "hydrate" or "replace-generation" or "integrity" or
                 "prune" or "self-test" or "create-test-fixture" or "self-test-crash-write" or
-                "self-test-crash-migration" or "self-test-delayed-replace" or
-                "self-test-parent-probe" or "self-test-parent-sleep-probe"))
+                "self-test-crash-migration" or "self-test-delayed-replace"))
             {
                 throw new ArgumentException($"Unknown command '{command}'.");
             }
@@ -79,21 +70,6 @@ internal static class Program
                     return PlatformStore.ReplaceGeneration(
                         GetDatabasePath(options),
                         ReadRequest<ReplaceGenerationRequest>());
-                }),
-                "self-test-parent-probe" => RunSelfTestOnly(() => new
-                {
-                    ok = true,
-                    elevated = PrivilegeDrop.IsElevated(),
-                    userSid = System.Security.Principal.WindowsIdentity.GetCurrent().User?.Value,
-                    nonce = ReadRequest<Dictionary<string, string>>()["nonce"]
-                }),
-                "self-test-parent-sleep-probe" => RunSelfTestOnly(() =>
-                {
-                    File.WriteAllText(
-                        RequireValue(options, "probe-file"),
-                        Environment.ProcessId.ToString(CultureInfo.InvariantCulture));
-                    Thread.Sleep(30_000);
-                    return new { ok = true };
                 }),
                 _ => throw new ArgumentException($"Unknown command '{command}'.")
             };
@@ -147,8 +123,7 @@ internal static class Program
             "migrate" or "hydrate" or "replace-generation" or "integrity" =>
                 common.Concat(["database"]),
             "prune" => common.Concat(["database", "history-days", "history-rows", "snapshot-generations", "max-bytes"]),
-            "self-test" or "self-test-parent-probe" => common,
-            "self-test-parent-sleep-probe" => common.Concat(["probe-file"]),
+            "self-test" => common,
             "create-test-fixture" => common.Concat(["database", "history-rows", "poi-rows"]),
             "self-test-crash-write" or "self-test-crash-migration" => common.Concat(["database"]),
             "self-test-delayed-replace" => common.Concat(["database", "delay-ms"]),

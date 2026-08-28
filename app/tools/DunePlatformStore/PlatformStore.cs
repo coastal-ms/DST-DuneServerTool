@@ -371,11 +371,6 @@ internal static partial class PlatformStore
             Require(
                 PrivilegeDrop.SelfTestInheritableStandardHandles(),
                 "The cache helper could not create inheritable standard handles.");
-            var shellParentAvailable = PrivilegeDrop.HasInteractiveShell();
-            var shellParentTested = !shellParentAvailable || PrivilegeDrop.SelfTestShellParentLaunch();
-            Require(shellParentTested, "The Explorer parent-process launch self-test failed.");
-            var killOnParentExit = !shellParentAvailable || PrivilegeDrop.SelfTestShellParentKillOnExit();
-            Require(killOnParentExit, "The shell-parented child survived its wrapper process.");
             var database = Path.Combine(root, "platform-cache-v1.sqlite");
             CreateTestFixture(database, 100_000, 2_000);
             var hydrateJson = System.Text.Json.JsonSerializer.Serialize(
@@ -428,9 +423,6 @@ internal static partial class PlatformStore
                 offsetTimestampPruning = true,
                 pathRaceResistance = true,
                 inheritableStandardHandles = true,
-                shellParentAvailable,
-                shellParentTested,
-                killOnParentExit,
                 runningElevated = PrivilegeDrop.IsElevated(),
                 migrationBackup = true,
                 newerSchemaFailure = true,

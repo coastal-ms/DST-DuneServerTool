@@ -78,10 +78,6 @@ Describe 'DunePlatformStore production helper' {
         $result.processConcurrency | Should -BeTrue
         $result.oneShotExit | Should -BeTrue
         $result.inheritableStandardHandles | Should -BeTrue
-        if ($result.shellParentAvailable) {
-            $result.shellParentTested | Should -BeTrue
-        }
-        $result.killOnParentExit | Should -BeTrue
         $result.interruptedWriteRecovery | Should -BeTrue
         $result.interruptedMigrationRecovery | Should -BeTrue
         $result.idempotentGenerationReplace | Should -BeTrue
@@ -115,14 +111,16 @@ Describe 'DunePlatformStore production helper' {
         $ensureStart = $privilegeDrop.IndexOf('internal static int? EnsureUnelevated')
         $ensureEnd = $privilegeDrop.IndexOf('internal static bool IsElevated', $ensureStart)
         $ensureSource = $privilegeDrop.Substring($ensureStart, $ensureEnd - $ensureStart)
-        $ensureSource | Should -Match 'RelaunchWithShellParent'
-        $ensureSource | Should -Not -Match 'CreateProcessWithTokenW'
+        $ensureSource | Should -Match 'RelaunchWithUnelevatedToken'
+        $privilegeDrop | Should -Match 'OpenProcessToken\(\s*shellProcess,\s*TokenDuplicate \| TokenQuery'
+        $privilegeDrop | Should -Match 'DuplicateTokenEx\(\s*token,\s*TokenAssignPrimary \| TokenDuplicate \| TokenQuery'
+        $privilegeDrop | Should -Match 'CreateProcessWithTokenW'
         $privilegeDrop | Should -Match 'DuplicateHandle\([\s\S]+inheritHandle'
         $privilegeDrop | Should -Match 'SelfTestInheritableStandardHandles'
-        $privilegeDrop | Should -Match 'ProcThreadAttributeParentProcess'
-        $privilegeDrop | Should -Match 'CreateProcessW'
-        $privilegeDrop | Should -Match 'SelfTestShellParentLaunch'
-        $privilegeDrop | Should -Match 'CloseRemoteHandle\(shellProcess,\s*standardInput\)[\s\S]+standardInput\s*=\s*IntPtr\.Zero'
+        $privilegeDrop | Should -Match 'CreateKillOnCloseJob'
+        $privilegeDrop | Should -Match 'AssignProcessToJobObject'
+        $privilegeDrop | Should -Not -Match 'ProcThreadAttributeParentProcess'
+        $privilegeDrop | Should -Not -Match 'CreateProcessW\('
 
         $prior = $env:DST_PLATFORM_SELF_TEST
         Remove-Item Env:DST_PLATFORM_SELF_TEST -ErrorAction SilentlyContinue
