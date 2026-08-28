@@ -114,6 +114,7 @@ Describe 'DunePlatformStore production helper' {
         $ensureSource | Should -Match 'RelaunchWithUnelevatedToken'
         $privilegeDrop | Should -Match 'OpenProcessToken\(\s*shellProcess,\s*TokenDuplicate \| TokenQuery'
         $privilegeDrop | Should -Match 'DuplicateTokenEx\(\s*token,\s*TokenAssignPrimary \| TokenDuplicate \| TokenQuery'
+        $privilegeDrop | Should -Match 'CreateRestrictedToken\([\s\S]+DisableMaxPrivilege \| LuaToken'
         $privilegeDrop | Should -Match 'CreateProcessWithTokenW'
         $privilegeDrop | Should -Match 'DuplicateHandle\([\s\S]+inheritHandle'
         $privilegeDrop | Should -Match 'SelfTestInheritableStandardHandles'

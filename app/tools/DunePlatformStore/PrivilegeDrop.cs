@@ -10,6 +10,8 @@ internal static class PrivilegeDrop
     private const uint TokenAssignPrimary = 0x0001;
     private const uint TokenDuplicate = 0x0002;
     private const uint TokenQuery = 0x0008;
+    private const uint DisableMaxPrivilege = 0x00000001;
+    private const uint LuaToken = 0x00000004;
     private const uint ProcessQueryLimitedInformation = 0x1000;
     private const uint StartfUseStdHandles = 0x00000100;
     private const uint CreateNoWindow = 0x08000000;
@@ -199,7 +201,7 @@ internal static class PrivilegeDrop
 
     private static IntPtr GetUnelevatedPrimaryToken()
     {
-        if (!OpenProcessToken(GetCurrentProcess(), TokenQuery, out var currentToken))
+        if (!OpenProcessToken(GetCurrentProcess(), TokenDuplicate | TokenQuery, out var currentToken))
         {
             throw new Win32Exception(Marshal.GetLastWin32Error(), "The process token could not be opened.");
         }
@@ -218,11 +220,11 @@ internal static class PrivilegeDrop
                     {
                         return DuplicatePrimaryToken(linked.LinkedToken);
                     }
-                    catch (Win32Exception)
+                    catch (Exception ex) when (ex is Win32Exception or UnauthorizedAccessException)
                     {
                         // Some UAC linked-token handles expose query access but
                         // cannot be duplicated. Fall back to the same user's
-                        // unelevated interactive shell token below.
+                        // unelevated interactive shell or a restricted LUA token.
                     }
                 }
                 finally
@@ -230,50 +232,79 @@ internal static class PrivilegeDrop
                     CloseHandle(linked.LinkedToken);
                 }
             }
+            var shellWindow = GetShellWindow();
+            if (shellWindow != IntPtr.Zero)
+            {
+                GetWindowThreadProcessId(shellWindow, out var shellProcessId);
+                var shellProcess = OpenProcess(ProcessQueryLimitedInformation, false, shellProcessId);
+                if (shellProcess != IntPtr.Zero)
+                {
+                    try
+                    {
+                        if (OpenProcessToken(
+                                shellProcess,
+                                TokenDuplicate | TokenQuery,
+                                out var shellToken))
+                        {
+                            try
+                            {
+                                try
+                                {
+                                    return DuplicatePrimaryToken(shellToken);
+                                }
+                                catch (UnauthorizedAccessException)
+                                {
+                                    // The shell can itself be elevated when UAC is
+                                    // disabled. Restrict the caller token instead.
+                                }
+                            }
+                            finally
+                            {
+                                CloseHandle(shellToken);
+                            }
+                        }
+                    }
+                    finally
+                    {
+                        CloseHandle(shellProcess);
+                    }
+                }
+            }
+            return CreateRestrictedPrimaryToken(currentToken);
         }
         finally
         {
             CloseHandle(currentToken);
         }
+    }
 
-        var shellWindow = GetShellWindow();
-        if (shellWindow == IntPtr.Zero)
-        {
-            throw new UnauthorizedAccessException(
-                "No unelevated linked or interactive shell token is available; cache access is disabled.");
-        }
-        GetWindowThreadProcessId(shellWindow, out var shellProcessId);
-        var shellProcess = OpenProcess(ProcessQueryLimitedInformation, false, shellProcessId);
-        if (shellProcess == IntPtr.Zero)
+    private static IntPtr CreateRestrictedPrimaryToken(IntPtr token)
+    {
+        if (!CreateRestrictedToken(
+                token,
+                DisableMaxPrivilege | LuaToken,
+                0,
+                IntPtr.Zero,
+                0,
+                IntPtr.Zero,
+                0,
+                IntPtr.Zero,
+                out var restricted))
         {
             throw new Win32Exception(
                 Marshal.GetLastWin32Error(),
-                "The interactive shell process could not be opened.");
+                "An unelevated restricted cache token could not be created.");
         }
         try
         {
-            if (!OpenProcessToken(
-                    shellProcess,
-                    TokenDuplicate | TokenQuery,
-                    out var shellToken))
-            {
-                throw new Win32Exception(
-                    Marshal.GetLastWin32Error(),
-                    "The interactive shell token could not be opened.");
-            }
-            try
-            {
-                return DuplicatePrimaryToken(shellToken);
-            }
-            finally
-            {
-                CloseHandle(shellToken);
-            }
+            ValidatePrimaryToken(restricted);
         }
-        finally
+        catch
         {
-            CloseHandle(shellProcess);
+            CloseHandle(restricted);
+            throw;
         }
+        return restricted;
     }
 
     private static IntPtr DuplicatePrimaryToken(IntPtr token)
@@ -292,19 +323,7 @@ internal static class PrivilegeDrop
         }
         try
         {
-            using var currentIdentity = System.Security.Principal.WindowsIdentity.GetCurrent();
-            using var candidateIdentity = new System.Security.Principal.WindowsIdentity(primary);
-            if (currentIdentity.User is null || candidateIdentity.User is null ||
-                !currentIdentity.User.Equals(candidateIdentity.User))
-            {
-                throw new UnauthorizedAccessException(
-                    "The unelevated cache token does not belong to the current Windows user.");
-            }
-            if (IsTokenElevated(primary))
-            {
-                throw new UnauthorizedAccessException(
-                    "The replacement cache token is still elevated.");
-            }
+            ValidatePrimaryToken(primary);
         }
         catch
         {
@@ -312,6 +331,23 @@ internal static class PrivilegeDrop
             throw;
         }
         return primary;
+    }
+
+    private static void ValidatePrimaryToken(IntPtr token)
+    {
+        using var currentIdentity = System.Security.Principal.WindowsIdentity.GetCurrent();
+        using var candidateIdentity = new System.Security.Principal.WindowsIdentity(token);
+        if (currentIdentity.User is null || candidateIdentity.User is null ||
+            !currentIdentity.User.Equals(candidateIdentity.User))
+        {
+            throw new UnauthorizedAccessException(
+                "The unelevated cache token does not belong to the current Windows user.");
+        }
+        if (IsTokenElevated(token))
+        {
+            throw new UnauthorizedAccessException(
+                "The replacement cache token is still elevated.");
+        }
     }
 
     private static IntPtr DuplicateInheritableStandardHandle(int standardHandle)
@@ -525,6 +561,18 @@ internal static class PrivilegeDrop
         IntPtr tokenAttributes,
         SecurityImpersonationLevel impersonationLevel,
         TokenType tokenType,
+        out IntPtr newToken);
+
+    [DllImport("advapi32.dll", SetLastError = true)]
+    private static extern bool CreateRestrictedToken(
+        IntPtr existingToken,
+        uint flags,
+        uint disableSidCount,
+        IntPtr sidsToDisable,
+        uint deletePrivilegeCount,
+        IntPtr privilegesToDelete,
+        uint restrictedSidCount,
+        IntPtr sidsToRestrict,
         out IntPtr newToken);
 
     [DllImport("advapi32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
