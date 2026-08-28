@@ -90,6 +90,29 @@ describe('workspace presentation primitives', () => {
     expect(trigger).toHaveFocus()
   })
 
+  it('keeps panel focus stable across onClose rerenders and invokes the latest callback', () => {
+    const firstClose = vi.fn()
+    const latestClose = vi.fn()
+    const view = render(
+      <DetailPanel open title="Vehicle detail" onClose={firstClose}>
+        <button>Secondary action</button>
+      </DetailPanel>,
+    )
+    const secondary = screen.getByRole('button', { name: 'Secondary action' })
+    secondary.focus()
+
+    view.rerender(
+      <DetailPanel open title="Vehicle detail" onClose={latestClose}>
+        <button>Secondary action</button>
+      </DetailPanel>,
+    )
+
+    expect(secondary).toHaveFocus()
+    fireEvent.keyDown(document, { key: 'Escape' })
+    expect(latestClose).toHaveBeenCalledOnce()
+    expect(firstClose).not.toHaveBeenCalled()
+  })
+
   it('uses one horizontal, touch-sized Gameplay Admin navigator without a nested rail', async () => {
     const user = userEvent.setup()
     const { container } = render(

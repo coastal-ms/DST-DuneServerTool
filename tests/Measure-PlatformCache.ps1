@@ -64,12 +64,17 @@ function Invoke-MeasuredHelper {
 function Get-Distribution {
     param([double[]]$Samples)
     $sorted = @($Samples | Sort-Object)
-    $medianIndex = [Math]::Floor(($sorted.Count - 1) * 0.5)
+    $middle = [Math]::Floor($sorted.Count / 2)
+    $median = if ($sorted.Count % 2 -eq 0) {
+        ($sorted[$middle - 1] + $sorted[$middle]) / 2
+    } else {
+        $sorted[$middle]
+    }
     $p95Index = [Math]::Ceiling($sorted.Count * 0.95) - 1
     [ordered]@{
         n = $sorted.Count
         min = [Math]::Round($sorted[0], 2)
-        median = [Math]::Round($sorted[$medianIndex], 2)
+        median = [Math]::Round($median, 2)
         p95 = [Math]::Round($sorted[$p95Index], 2)
         max = [Math]::Round($sorted[-1], 2)
     }

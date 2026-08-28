@@ -1,21 +1,25 @@
 import React from 'react'
 import { cleanup, render, screen, waitFor } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { BrowserRouter } from '../src/router'
 import MapWorkspace from '../src/pages/workspaces/MapWorkspace'
 
 const capabilityState = vi.hoisted(() => ({
   loading: false,
+  dataPresent: true,
+  error: null as string | null,
   ids: new Set<string>(),
+  refresh: vi.fn(),
 }))
 const liveRender = vi.hoisted(() => vi.fn())
 
 vi.mock('../src/hooks/usePlatformCapabilities', () => ({
   usePlatformCapabilities: () => ({
-    data: null,
+    data: capabilityState.dataPresent ? { data: { capabilities: [] } } : null,
     loading: capabilityState.loading,
-    error: null,
-    refresh: vi.fn(),
+    error: capabilityState.error,
+    refresh: capabilityState.refresh,
     hasCapability: (id: string) => capabilityState.ids.has(id),
   }),
 }))
@@ -35,7 +39,10 @@ vi.mock('../src/pages/workspaces/MapLiveState', () => ({
 afterEach(() => {
   cleanup()
   capabilityState.loading = false
+  capabilityState.dataPresent = true
+  capabilityState.error = null
   capabilityState.ids.clear()
+  capabilityState.refresh.mockClear()
   liveRender.mockClear()
   window.history.replaceState(null, '', '/')
 })
@@ -67,6 +74,7 @@ describe('Map workspace capability gating', () => {
 
   it('does not mount Live State while capability discovery is pending', async () => {
     capabilityState.loading = true
+    capabilityState.dataPresent = false
     window.history.replaceState(null, '', '/map?view=live')
 
     render(<BrowserRouter><MapWorkspace /></BrowserRouter>)
@@ -74,5 +82,23 @@ describe('Map workspace capability gating', () => {
     expect(screen.getByText('Checking live map availability…')).toBeInTheDocument()
     expect(screen.queryByRole('link', { name: 'Live state' })).not.toBeInTheDocument()
     await waitFor(() => expect(liveRender).not.toHaveBeenCalled())
+  })
+
+  it('keeps an errored Live State request in place and offers retry without polling', async () => {
+    const user = userEvent.setup()
+    capabilityState.dataPresent = false
+    capabilityState.error = 'Capability request failed.'
+    window.history.replaceState(null, '', '/map?view=live&source=bookmark#field-detail')
+
+    render(<BrowserRouter><MapWorkspace /></BrowserRouter>)
+
+    expect(screen.getByText('Could not check live map availability')).toBeInTheDocument()
+    expect(screen.getByText('Capability request failed.')).toBeInTheDocument()
+    expect(window.location.pathname).toBe('/map')
+    expect(window.location.search).toBe('?view=live&source=bookmark')
+    expect(window.location.hash).toBe('#field-detail')
+    expect(liveRender).not.toHaveBeenCalled()
+    await user.click(screen.getByRole('button', { name: 'Retry capability check' }))
+    expect(capabilityState.refresh).toHaveBeenCalledOnce()
   })
 })

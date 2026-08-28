@@ -11,7 +11,11 @@ $repo = Split-Path $PSScriptRoot -Parent
 function Get-Median {
     param([double[]] $Values)
     $sorted = @($Values | Sort-Object)
-    return $sorted[[math]::Floor($sorted.Count / 2)]
+    $middle = [math]::Floor($sorted.Count / 2)
+    if ($sorted.Count % 2 -eq 0) {
+        return ($sorted[$middle - 1] + $sorted[$middle]) / 2
+    }
+    return $sorted[$middle]
 }
 
 $routeDir = Join-Path $repo 'app\server\routes'
