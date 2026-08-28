@@ -89,7 +89,16 @@ jobs:
 
       - name: Build platform cache helper for Pester
         shell: pwsh
-        run: dotnet build app\tools\DunePlatformStore\DunePlatformStore.csproj -c Release --nologo
+        run: |
+          dotnet build app\tools\DunePlatformStore\DunePlatformStore.csproj -c Release --nologo
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+          # Hosted runners grant the checkout to Administrators rather than the
+          # user SID. Mirror the install's Users-readable executable ACL so the
+          # helper's restricted same-user token can load its build output.
+          $output = 'app\tools\DunePlatformStore\bin\Release'
+          & icacls.exe $output /grant:r "${env:USERNAME}:(OI)(CI)RX" /T /Q
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
       - name: Run Pester suite
         shell: pwsh
