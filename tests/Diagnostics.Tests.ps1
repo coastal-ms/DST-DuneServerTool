@@ -79,6 +79,31 @@ Describe 'Invoke-DstRedaction' -Tag 'Pure' {
     }
 }
 
+Describe 'Read-DstLogText' -Tag 'Pure' {
+    It 'preserves a complete WebView2-sized log larger than the old 200 KB limit' {
+        $path = Join-Path $TestDrive 'webview2-debug.log'
+        $start = '[shell] startup failure'
+        $end = '[console.error] latest failure'
+        $padding = 'x' * 225000
+        [IO.File]::WriteAllText($path, "$start`n$padding`n$end", [Text.UTF8Encoding]::new($false))
+
+        $content = Read-DstLogText -Path $path
+
+        $content | Should -Match ([regex]::Escape($start))
+        $content | Should -Match ([regex]::Escape($end))
+        ([Text.Encoding]::UTF8.GetByteCount($content)) | Should -BeGreaterThan 204800
+    }
+
+    It 'retains bounded tail reads for other diagnostic logs' {
+        $path = Join-Path $TestDrive 'cli.log'
+        [IO.File]::WriteAllText($path, ('a' * 1024) + 'END', [Text.UTF8Encoding]::new($false))
+
+        $content = Read-DstLogTail -Path $path -MaxBytes 128
+
+        $content | Should -Be (('a' * 125) + 'END')
+    }
+}
+
 Describe 'ConvertTo-DstWorldRestartDiagnosticState' -Tag 'Pure' {
     It 'exports operational state without player identities or paths' {
         $state = [pscustomobject]@{
@@ -111,6 +136,15 @@ Describe 'Diagnostics route registration' -Tag 'Pure' {
         $source | Should -Match 'update-result-\[A-Za-z0-9\._-\]'
         $source | Should -Match 'Invoke-DstRedaction -Text \$tail'
         $source | Should -Not -Match "Get-ChildItem.+DuneServerSetup.+included"
+    }
+
+    It 'includes the complete bounded WebView2 debug log' {
+        $routeFile = Join-Path (Get-DstRepoRoot) 'app\server\routes\Diagnostics.ps1'
+        $source = Get-Content -LiteralPath $routeFile -Raw
+
+        $source | Should -Match 'Read-DstLogText -Path \$wv2'
+        $source | Should -Match 'webview2-debug\.log \(complete, sanitized'
+        $source | Should -Not -Match 'webview2-debug\.log was truncated'
     }
 
     It 'registers failed database operation cleanup at script scope' {

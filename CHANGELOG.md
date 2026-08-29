@@ -42,6 +42,9 @@ here cover everything those tags shipped.
 
 ### Changed
 
+- Diagnostics packages now include the complete redacted WebView2 debug log
+  instead of only its last 200 KB. The desktop shell already bounds the source
+  file at 2 MB, so startup failures remain available without unbounded bundles.
 - Reorganized the web portal into lazy-loaded server-management and gameplay
   workspaces while preserving legacy URL, query-string, and hash navigation.
 - Adapted Server Health's Game Servers card into compact stacked pod summaries

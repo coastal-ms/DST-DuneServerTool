@@ -186,11 +186,14 @@ function Get-DstWebView2Version {
     return '(not installed / not detected)'
 }
 
-# Read a file that may be open for append (logs). Returns the LAST $MaxBytes
-# of content, or $null on failure. Uses FileShare.ReadWrite so a writer that
-# holds the file open doesn't block us.
-function Read-DstLogTail {
-    param([string]$Path, [int]$MaxBytes = 204800)
+# Read a file that may be open for append. Returns the complete file unless
+# TailBytes requests a bounded tail. Uses FileShare.ReadWrite so a writer that
+# holds the file open does not block diagnostics collection.
+function Read-DstLogText {
+    param(
+        [string]$Path,
+        [Nullable[int]]$TailBytes = $null
+    )
     if (-not (Test-Path -LiteralPath $Path)) { return $null }
     try {
         $fs = [System.IO.File]::Open($Path, [System.IO.FileMode]::Open,
@@ -198,8 +201,8 @@ function Read-DstLogTail {
                                             [System.IO.FileShare]::ReadWrite)
         try {
             $len = $fs.Length
-            if ($len -gt $MaxBytes) {
-                [void]$fs.Seek($len - $MaxBytes, [System.IO.SeekOrigin]::Begin)
+            if ($null -ne $TailBytes -and $TailBytes -gt 0 -and $len -gt $TailBytes) {
+                [void]$fs.Seek($len - $TailBytes, [System.IO.SeekOrigin]::Begin)
             }
             $reader = New-Object System.IO.StreamReader($fs, [System.Text.Encoding]::UTF8, $true)
             try { return $reader.ReadToEnd() } finally { $reader.Dispose() }
@@ -207,6 +210,11 @@ function Read-DstLogTail {
     } catch {
         return $null
     }
+}
+
+function Read-DstLogTail {
+    param([string]$Path, [int]$MaxBytes = 204800)
+    return Read-DstLogText -Path $Path -TailBytes $MaxBytes
 }
 
 # Builds the diagnostic bundle. Returns a hashtable with the same shape the
@@ -277,18 +285,19 @@ function New-DstDiagnosticBundle {
         $warnings.Add("dune-server.config not found at $cfgPath.")
     }
 
-    # 5) WebView2 debug log (tail, sanitized) --------------------------------
+    # 5) WebView2 debug log (complete, sanitized) ----------------------------
+    # The desktop shell rotates this source at 2 MB, so preserving the complete
+    # log is bounded and retains startup failures that a tail would discard.
     $wv2 = Join-Path $env:APPDATA 'DuneServer\webview2-debug.log'
-    $wv2Tail = Read-DstLogTail -Path $wv2 -MaxBytes 204800
-    if ($null -ne $wv2Tail) {
+    $wv2Log = Read-DstLogText -Path $wv2
+    if ($null -ne $wv2Log) {
         try {
             $wv2Bytes  = (Get-Item -LiteralPath $wv2 -ErrorAction Stop).Length
-            $header    = "# webview2-debug.log (tail, sanitized; source size: $wv2Bytes bytes)`r`n# Path: $wv2`r`n`r`n"
-            $san       = $header + (Invoke-DstRedaction -Text $wv2Tail @redactArgs)
+            $header    = "# webview2-debug.log (complete, sanitized; source size: $wv2Bytes bytes)`r`n# Path: $wv2`r`n`r`n"
+            $san       = $header + (Invoke-DstRedaction -Text $wv2Log @redactArgs)
             $out       = Join-Path $stageDir 'webview2-debug.log'
             Set-Content -LiteralPath $out -Value $san -Encoding UTF8
             $included.Add(@{ name = 'webview2-debug.log'; bytes = (Get-Item -LiteralPath $out).Length })
-            if ($wv2Bytes -gt 204800) { $warnings.Add('webview2-debug.log was truncated to the last 200 KB.') }
         } catch {
             $warnings.Add("Failed to copy webview2-debug.log: $($_.Exception.Message)")
         }
