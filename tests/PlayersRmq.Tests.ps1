@@ -164,4 +164,11 @@ Describe 'Invoke-DuneVehicleSpawnLive' -Tag 'Pure' {
         $r.error | Should -Match 'Persistent must be enabled'
         $script:spawnArgs | Should -BeNullOrEmpty
     }
+
+    It 'keeps the UI success claim aligned with persistence verification' {
+        $ui = Get-Content (Join-Path (Get-DstRepoRoot) 'webui\src\pages\gameplay\players\sections.tsx') -Raw
+        $ui | Should -Match 'Success is reported only after DST verifies the vehicle row'
+        $ui | Should -Match 'rank-1 owner permission survived'
+        $ui | Should -Not -Match 'successful API response only means the command was sent'
+    }
 }

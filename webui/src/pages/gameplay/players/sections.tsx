@@ -1867,7 +1867,8 @@ function FuncomSpawnVehicleForm({ busy, onSubmit }: {
         Persistent is always enabled so DST can assign owner permission and verify the vehicle survives.
       </div>
       <div className="rounded-lg border border-warning/40 bg-warning/10 px-3 py-2 text-xs text-text-muted">
-        Experimental Funcom command. A successful API response only means the command was sent; verify the vehicle in game.
+        Experimental Funcom command. Success is reported only after DST verifies the vehicle row,
+        transform, and rank-1 owner permission survived the post-spawn check. Confirm handling in game.
       </div>
       <button className="btn-primary w-full" disabled={busy}
         onClick={() => onSubmit(veh, tpl, true)}>
