@@ -14,22 +14,10 @@ window.addEventListener('beforeinstallprompt', (e) => {
   ;(window as unknown as { __dunePwaPrompt?: Event }).__dunePwaPrompt = e
 })
 
-// Cache only the local static app shell. Live API and remote-portal traffic
-// remains network-only and authoritative.
+// Register the no-op service worker — Chromium requires one for installability.
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
-    navigator.serviceWorker.register('/sw.js').then(async (registration) => {
-      if (new URLSearchParams(window.location.search).get('shell-cache') === '1') return
-      await navigator.serviceWorker.ready
-      const assetUrls = Array.from(document.querySelectorAll<HTMLScriptElement | HTMLLinkElement>(
-        'script[src], link[rel="stylesheet"][href], link[rel~="icon"][href]',
-      )).map(element => element instanceof HTMLScriptElement ? element.src : element.href)
-      registration.active?.postMessage({
-        type: 'SEED_APP_SHELL',
-        documentUrl: window.location.href,
-        assetUrls,
-      })
-    }).catch(() => { /* cached startup is optional */ })
+    navigator.serviceWorker.register('/sw.js').catch(() => { /* ignore */ })
   })
 }
 

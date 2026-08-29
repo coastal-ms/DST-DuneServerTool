@@ -156,8 +156,6 @@ function ForcedPasswordChange({ username, onSuccess }: { username: string; onSuc
 export function PortalAuthGate({ children }: { children: ReactNode }) {
   const [status, setStatus] = useState<PortalAuthStatus | null>(null)
   const [error, setError] = useState('')
-  const [cachedStartupTimedOut, setCachedStartupTimedOut] = useState(false)
-  const cachedShellStartup = new URLSearchParams(window.location.search).get('shell-cache') === '1'
 
   const refresh = async () => {
     try {
@@ -170,11 +168,6 @@ export function PortalAuthGate({ children }: { children: ReactNode }) {
 
   useEffect(() => { void refresh() }, [])
   useEffect(() => {
-    if (!cachedShellStartup) return
-    const timeout = window.setTimeout(() => setCachedStartupTimedOut(true), 20_000)
-    return () => window.clearTimeout(timeout)
-  }, [cachedShellStartup])
-  useEffect(() => {
     const accountSession = !!(status?.accountLoginEnabled && status.authenticated && status.account)
     ;(window as unknown as { __dunePortalAccountSession?: boolean }).__dunePortalAccountSession = accountSession
     if (accountSession) sessionStorage.removeItem('dune.token')
@@ -184,11 +177,7 @@ export function PortalAuthGate({ children }: { children: ReactNode }) {
   }, [status])
 
   if (error) {
-    if (cachedShellStartup && !cachedStartupTimedOut) return <>{children}</>
-    const message = cachedShellStartup
-      ? 'Dune Server Tool did not respond within 20 seconds. Try again; if this continues, reopen DST and use Help → Create GitHub Issue + Save Logs.'
-      : error
-    return <AuthFrame title="Connection unavailable" subtitle={message}><button className="btn-primary" onClick={() => void refresh()}>Try again</button></AuthFrame>
+    return <AuthFrame title="Connection unavailable" subtitle={error}><button className="btn-primary" onClick={() => void refresh()}>Try again</button></AuthFrame>
   }
   if (!status) {
     return <div className="min-h-full flex items-center justify-center text-text-muted"><Icon name="Loader2" className="animate-spin mr-2" /> Checking access...</div>

@@ -24,15 +24,10 @@ here cover everything those tags shipped.
 
 ### Changed
 
-- Cached the local frontend and last recent Server Health snapshot, launched
-  the desktop shell before backend bootstrap, and warmed WebView2 in parallel.
-  Repeat launches can show the cached shell and prior Server Health state while
-  the backend starts;
-  API actions remain live-only and reconnect to the new backend automatically
-  without exposing transient stale-connection error pages. A real connection
-  warning is deliberately held until 20 seconds and then directs users to the
-  diagnostic bundle. After an update or service restoration, the startup screen
-  sets the expected backend load time at 10–15 seconds.
+- Reused the last recent Server Health snapshot during update restarts, launched
+  the desktop shell before backend bootstrap, and warmed WebView2 in parallel so
+  the prior health state is ready as soon as the frontend loads while live
+  probes refresh.
 
 ### Fixed
 
