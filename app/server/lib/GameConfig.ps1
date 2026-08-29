@@ -62,6 +62,38 @@ $script:DuneGcSecContracts = '/Script/DuneSandbox.ContractsSubsystem'
 $script:DuneGcSecCrafting  = '/Script/DuneSandbox.CraftingSettings'
 $script:DuneGcSecTechKnowledge = '/Script/DuneSandbox.TechKnowledgeSettings'
 
+function Test-DuneGameConfigRawTargetBlocked {
+    param(
+        [string]$File,
+        [string]$Section,
+        [string]$Key
+    )
+    $canonicalKey = ([string]$Key).Trim() -replace '^[+-]+', ''
+    return (
+        ([string]$File).Trim() -ieq 'game' -and
+        ([string]$Section).Trim() -ieq $script:DuneGcSecTimeOfDay -and
+        $canonicalKey -ieq 'm_StartTime'
+    )
+}
+
+function Test-DuneGameConfigRawTextSafe {
+    param([AllowEmptyString()][string]$Value)
+    return $null -ne $Value -and $Value.IndexOf([char]0) -lt 0 -and $Value -notmatch '[\r\n]'
+}
+
+function Test-DuneGameConfigArrayLineMatchesKey {
+    param(
+        [string]$Line,
+        [string]$Key
+    )
+    if (-not $Key -or -not $Line -or
+        -not (Test-DuneGameConfigRawTextSafe -Value $Key) -or
+        -not (Test-DuneGameConfigRawTextSafe -Value $Line)) {
+        return $false
+    }
+    return ([string]$Line).Trim() -match "^[+-]$([regex]::Escape($Key))="
+}
+
 # Funcom stores ALL Landsraad settings as scalar members inside ONE nested struct
 # value: [/Script/DuneSandbox.LandsraadSettings] Data=(m_TaskGoalAmount=5000.0,...).
 # Schema fields tagged StructKey='Data' are read from / written to that struct via
@@ -200,7 +232,7 @@ $script:DuneGameConfigSchema = @(
     @{ Section=$script:DuneGcSecConsole; Key='Sandstorm.Treasure.Enabled'; File='engine'; Type='bool01'; Default='1'; Label='Sandstorm Treasure Spawns'; Help='Spawn treasure during sandstorms.'; Startup=$true; Category='Storm Cycle' }
     @{ Section=$script:DuneGcSecStorm; Key='m_bCoriolisDoesDamage'; File='game'; Type='bool'; Default='False'; Label='Coriolis Storm Does Damage'; Help='Whether being caught in a Coriolis storm damages players. Also needs client-side apply.'; ClientApply=$true; Category='Storm Cycle' }
     @{ Section=$script:DuneGcSecStorm; Key='m_bSandStormDebrisEnabled'; File='game'; Type='bool'; Default='True'; Label='Sandstorm Debris'; Help='Whether sandstorms spawn flying debris. Also needs client-side apply.'; ClientApply=$true; Category='Storm Cycle' }
-    @{ Section=$script:DuneGcSecTimeOfDay; Key='m_bTimeOfDayEnabled'; File='game'; Type='bool'; Default='True'; Label='Time of Day Cycle'; Help='Whether the day/night cycle advances. Also needs client-side apply.'; ClientApply=$true; Category='Storm Cycle' }
+    @{ Section=$script:DuneGcSecTimeOfDay; Key='m_bTimeOfDayEnabled'; File='game'; Type='bool'; Default='True'; Label='Time of Day Cycle'; Help='Whether the day/night cycle advances. This switch does not select a phase, and DST has not proven that disabling it freezes only visuals while simulation timers continue. Also needs client-side apply.'; ClientApply=$true; Category='Storm Cycle' }
 
     # --- Landsraad (scalar members of [LandsraadSettings] Data=(...)) ---
     @{ Section=$script:DuneGcSecLandsraad; StructKey=$script:DuneGcLandsraadStructKey; Key='m_TaskGoalAmount'; File='game'; Type='float'; Min=0; Default='70000'; Label='Task Goal Amount'; Help='Contribution target for each House task before it completes. Funcom default is 70000. DST also applies the new goal to the currently-running term''s live House rows (dune.landsraad_tasks.goal_amount) so the change takes effect immediately.'; ClientApply=$true; Category='Landsraad' }

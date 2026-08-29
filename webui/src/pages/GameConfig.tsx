@@ -8,6 +8,7 @@ import { ViewportNotice } from '../components/ViewportNotice'
 import { useStatus } from '../hooks/useStatus'
 import { api } from '../api/client'
 import { ServerNameCard } from './gameconfig/ServerNameCard'
+import { TwilightLockEvidenceCard } from './gameconfig/TwilightLockEvidenceCard'
 import {
   getGameConfigSchema,
   getGameConfigExperimentalCategories,
@@ -47,6 +48,10 @@ import { LandclaimTimerCard } from './gameconfig/LandclaimTimerCard'
 import { DeepDesertPvpCard } from './gameconfig/DeepDesertPvpCard'
 import { BaseBackupGuardPanel } from './gameconfig/BaseBackupGuardPanel'
 import { isLocalViewer } from '../util/viewer'
+
+export const EXPERIMENTAL_BLOCKED_DEFAULT_TARGETS = new Set([
+  'game||/script/dunesandbox.timeofdaysettings||m_starttime',
+])
 
 type LoadState = 'idle' | 'loading' | 'ready' | 'error' | 'unavailable'
 
@@ -972,7 +977,7 @@ export function GameConfig({ mode = 'standard' }: { mode?: 'standard' | 'experim
   }, [schemaWithLoadedExperimental])
 
   const surfacedIniTargets = useMemo(() => {
-    const keys = new Set<string>()
+    const keys = new Set<string>(EXPERIMENTAL_BLOCKED_DEFAULT_TARGETS)
     for (const category of schemaWithLoadedExperimental) {
       for (const field of category.fields ?? []) {
         if (!field?.key) continue
@@ -1194,7 +1199,7 @@ export function GameConfig({ mode = 'standard' }: { mode?: 'standard' | 'experim
       const ok = window.confirm(
         `Save ${count} Experimental setting${count === 1 ? '' : 's'}?\n\n`
         + (experimentalPage
-            ? 'These are written to the server UserEngine.ini. Nothing on the server changes until you restart the battlegroup — use “Apply INIs & restart” in the bar at the bottom of this page. Saving on its own does not disconnect anyone.\n\n'
+            ? 'These are written to the server UserGame.ini or UserEngine.ini as labeled. Nothing on the server changes until you restart the battlegroup — use “Apply INIs & restart” in the bar at the bottom of this page. Saving on its own does not disconnect anyone.\n\n'
             : 'These are written to the server UserEngine.ini. Nothing on the server changes until you restart the battlegroup — use “Apply INIs & restart”. Saving on its own does not disconnect anyone.\n\n')
         + 'Only controls explicitly marked Client are known to read a local Engine.ini value. '
         + 'Unknown-scope Lab controls stay server-side so field tests are not contaminated by an unnecessary client override.\n\n'
@@ -1218,7 +1223,7 @@ export function GameConfig({ mode = 'standard' }: { mode?: 'standard' | 'experim
       let msg = `Saved ${n} change${n === 1 ? '' : 's'} into the DST-managed block. Tip: use “Backup settings” to snapshot before big changes — DST no longer auto-backs-up on every save.`
       if (experimentalStartupDirtyKeys.length > 0) {
         msg += experimentalPage
-          ? ' Saved to the server INI only — use “Apply INIs & restart” in the bar at the bottom of this page to put these into effect.'
+          ? ' Saved to the labeled server INI only — use “Apply INIs & restart” in the bar at the bottom of this page to put these into effect.'
           : ' Saved to the server INI only — restart the battlegroup with “Apply INIs & restart” to put these into effect.'
       }
       // If m_TaskGoalAmount was in this save, DST also rewrote the current
@@ -1458,7 +1463,8 @@ export function GameConfig({ mode = 'standard' }: { mode?: 'standard' | 'experim
         <div className="card p-3 mb-4 border-border bg-surface-2/40 text-xs text-text-muted flex items-start gap-2">
           <Icon name="Info" size={14} className="mt-0.5 shrink-0 text-accent-bright" />
           <div>
-            These are written to the server&apos;s <span className="font-mono text-text">UserEngine.ini</span> when you save.
+            These are written to the labeled server <span className="font-mono text-text">UserGame.ini</span> or{' '}
+            <span className="font-mono text-text">UserEngine.ini</span> when you save.
             Nothing changes on a running server until the battlegroup restarts — use{' '}
             <strong className="text-text">Apply INIs &amp; restart</strong> in the bar at the bottom of this page, or the same command
             on the Commands page.
@@ -1473,6 +1479,10 @@ export function GameConfig({ mode = 'standard' }: { mode?: 'standard' | 'experim
             any existing managed block. The original file is backed up on the server before every write.
           </div>
         </div>
+      )}
+
+      {experimentalPage && (
+        <TwilightLockEvidenceCard />
       )}
 
       {localViewer && (

@@ -1477,6 +1477,76 @@ Describe 'DuneGameConfigSchema: forced Coriolis world seed' -Tag 'GameConfig' {
     }
 }
 
+Describe 'DuneGameConfigSchema: experimental twilight evidence gate' -Tag 'GameConfig' {
+    It 'does not expose the unverified startup-hour candidate' {
+        $timeFields = @($script:DuneGameConfigSchema | Where-Object {
+            $_.Section -eq '/Script/DuneSandbox.TimeOfDaySettings'
+        })
+        $start = @($timeFields | Where-Object Key -eq 'm_StartTime')
+        $cycle = @($timeFields | Where-Object Key -eq 'm_bTimeOfDayEnabled')
+
+        $start.Count | Should -Be 0
+        $cycle.Count | Should -Be 1
+        $cycle[0].Help | Should -Match '(?i)does not select a phase'
+        $cycle[0].Help | Should -Match '(?i)has not proven'
+    }
+
+    It 'keeps the schema free of invented phase and visual-lock writes' {
+        $keys = @($script:DuneGameConfigSchema | ForEach-Object Key)
+        $keys | Should -Not -Contain 'm_StartTime'
+        ($keys -join "`n") | Should -Not -Match '(?i)twilight|sunangle|settimeofday'
+    }
+
+    It 'blocks the evidence-only startup-hour target from the raw update API' {
+        (Test-DuneGameConfigRawTargetBlocked `
+            -File game `
+            -Section '/Script/DuneSandbox.TimeOfDaySettings' `
+            -Key m_StartTime) | Should -BeTrue
+        (Test-DuneGameConfigRawTargetBlocked `
+            -File ' game ' `
+            -Section ' /Script/DuneSandbox.TimeOfDaySettings ' `
+            -Key 'm_StartTime ') | Should -BeTrue
+        (Test-DuneGameConfigRawTargetBlocked `
+            -File game `
+            -Section '/Script/DuneSandbox.TimeOfDaySettings' `
+            -Key '+m_StartTime') | Should -BeTrue
+        (Test-DuneGameConfigRawTargetBlocked `
+            -File game `
+            -Section '/Script/DuneSandbox.TimeOfDaySettings' `
+            -Key m_bTimeOfDayEnabled) | Should -BeFalse
+
+        $route = Get-Content (Join-Path (Get-DstRepoRoot) 'app\server\routes\GameConfig.ps1') -Raw
+        $route | Should -Match 'Test-DuneGameConfigRawTargetBlocked'
+        $route | Should -Match 'evidence-only and cannot be written by DST'
+    }
+
+    It 'rejects raw array lines that do not match their submitted key' {
+        (Test-DuneGameConfigArrayLineMatchesKey `
+            -Line '+AllowedMap=DeepDesert_1' `
+            -Key AllowedMap) | Should -BeTrue
+        (Test-DuneGameConfigArrayLineMatchesKey `
+            -Line '-AllowedMap=DeepDesert_1' `
+            -Key AllowedMap) | Should -BeTrue
+        (Test-DuneGameConfigArrayLineMatchesKey `
+            -Line 'm_StartTime=18' `
+            -Key AllowedMap) | Should -BeFalse
+        (Test-DuneGameConfigArrayLineMatchesKey `
+            -Line '+m_StartTime=18' `
+            -Key AllowedMap) | Should -BeFalse
+        (Test-DuneGameConfigArrayLineMatchesKey `
+            -Line "+AllowedMap=x`nm_StartTime=18" `
+            -Key AllowedMap) | Should -BeFalse
+        (Test-DuneGameConfigRawTextSafe -Value "m_StartTime`n") | Should -BeFalse
+        (Test-DuneGameConfigRawTextSafe -Value "18`r`nInjected=True") | Should -BeFalse
+
+        $route = Get-Content (Join-Path (Get-DstRepoRoot) 'app\server\routes\GameConfig.ps1') -Raw
+        $route | Should -Match 'Test-DuneGameConfigArrayLineMatchesKey'
+        $route | Should -Match 'Every arrayLines entry must be a'
+        $route | Should -Match 'Raw scalar INI values must be one physical line'
+        $route | Should -Match 'must not include Unreal \+ or - operator prefixes'
+    }
+}
+
 Describe 'DuneGameConfigSchema: CraftingSettings fields' -Tag 'GameConfig' {
     It 'exposes repair and recycler weights as server-and-client game settings' {
         $fields = @{}
