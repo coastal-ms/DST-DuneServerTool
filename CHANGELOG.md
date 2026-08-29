@@ -42,6 +42,9 @@ here cover everything those tags shipped.
 
 ### Changed
 
+- Reused the last recent Server Health snapshot during update restarts, launched
+  the desktop shell before backend bootstrap, and warmed WebView2 in parallel so
+  the app shows immediately and repaints while live health probes refresh.
 - Diagnostics packages now include the complete redacted WebView2 debug log
   instead of only its last 200 KB. The desktop shell already bounds the source
   file at 2 MB, so startup failures remain available without unbounded bundles.
