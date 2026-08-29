@@ -13,8 +13,6 @@ here cover everything those tags shipped.
 
 ## [Unreleased]
 
-## [15.0.0] - 2026-08-29
-
 ### Added
 
 - Added the next-generation workspace foundation for the v15 test line, with a
@@ -48,7 +46,7 @@ here cover everything those tags shipped.
   workspaces while preserving legacy URL, query-string, and hash navigation.
 - Adapted Server Health's Game Servers card into compact stacked pod summaries
   on narrow screens while retaining the full desktop table and Game Ready State.
-- Prepared build and diagnostic metadata for the `v15.0.0` release.
+- Prepared build and diagnostic metadata for the `v15.0.0-test1` test line.
 - Replaced the in-app GitHub issue launcher with an owner-only diagnostics
   package action for sharing redacted support evidence in Discord.
 - Restored Map SpinUp and map restart controls as a direct Server Controls
@@ -8483,8 +8481,7 @@ at the time. Also folds in the v3.0.1 / v3.1.2 patches.
   (`ssh`, `Gameplay Admin`, `setup-guide`, `report-issue`). _(originally
   3.1.2)_
 
-[Unreleased]: https://github.com/coastal-ms/DST-DuneServerTool/compare/v15.0.0...HEAD
-[15.0.0]: https://github.com/coastal-ms/DST-DuneServerTool/compare/v14.0.3...v15.0.0
+[Unreleased]: https://github.com/coastal-ms/DST-DuneServerTool/compare/v13.8.0...HEAD
 [13.8.0]: https://github.com/coastal-ms/DST-DuneServerTool/compare/v13.7.0...v13.8.0
 [13.7.0]: https://github.com/coastal-ms/DST-DuneServerTool/compare/v13.6.5...v13.7.0
 [13.0.2]: https://github.com/coastal-ms/DST-DuneServerTool/compare/v13.0.1...v13.0.2
