@@ -16,6 +16,7 @@ import {
   completeSoloFindTheFremen,
   completeSoloNpe,
   enableSoloAllSkills,
+  exportSoloBlueprint,
   grantSoloItems,
   importSoloBlueprint,
   maxSoloAugmentAttributes,
@@ -27,6 +28,8 @@ import {
   maxSoloSpecializations,
   type SoloBackup,
   type SoloBackupsResponse,
+  type SoloBlueprintSummary,
+  type SoloBlueprintsResponse,
   type SoloConsoleSettingsResponse,
   type SoloInventoryDestination,
   type SoloProfile,
@@ -36,6 +39,7 @@ import {
 } from '../api/solo'
 import {
   filterCosmeticsCatalog,
+  downloadBlueprintFile,
   getCosmeticsCatalog,
   getVehicleKitCatalog,
   type BlueprintFile,
@@ -76,6 +80,11 @@ export const SOLO_ACTION_RULES = [
     title: 'Create save backup',
     state: 'Game may be open',
     detail: 'DST takes a stable shared copy and validates it. For a clean milestone backup, exiting the game first is still preferred.',
+  },
+  {
+    title: 'Export saved blueprint',
+    state: 'Game may be open',
+    detail: 'DST reads a stable shared snapshot and downloads portable JSON without changing the Solo save.',
   },
   {
     title: 'Apply Solo settings',
@@ -464,6 +473,7 @@ export function SoloMode() {
     { enabled: connected },
   )
   const backupsState = useApi<SoloBackupsResponse>('/api/solo/backups', { enabled: connected })
+  const blueprintsState = useApi<SoloBlueprintsResponse>('/api/solo/blueprints', { enabled: connected })
   const [dataRoot, setDataRoot] = useState('')
   const [selectedDb, setSelectedDb] = useState('')
   const [discoveredProfiles, setDiscoveredProfiles] = useState<SoloProfile[]>([])
@@ -629,6 +639,7 @@ export function SoloMode() {
       await settingsState.refresh()
       await consoleSettingsState.refresh()
       await backupsState.refresh()
+      await blueprintsState.refresh()
     } catch (error) {
       setNotice({ kind: 'err', text: error instanceof Error ? error.message : String(error) })
     } finally {
@@ -899,6 +910,27 @@ export function SoloMode() {
       })),
       `${kit.label} vehicle kit`,
     )
+  }
+
+  const exportBlueprint = async (savedBlueprint: SoloBlueprintSummary) => {
+    if (!selectionMatchesActive) {
+      setNotice({ kind: 'err', text: 'Connect and validate the selected Solo profile before exporting a blueprint.' })
+      return
+    }
+    setBusy(`export-blueprint:${savedBlueprint.id}`)
+    setNotice(null)
+    try {
+      const result = await exportSoloBlueprint(
+        savedBlueprint.id,
+        statusState.data?.profileToken ?? '',
+      )
+      downloadBlueprintFile(result.blueprint, result.filename)
+      setNotice({ kind: 'ok', text: `Exported ${result.filename}. The Solo save was not changed.` })
+    } catch (error) {
+      setNotice({ kind: 'err', text: error instanceof Error ? error.message : String(error) })
+    } finally {
+      setBusy(null)
+    }
   }
 
   const chooseBlueprintFile = async (file?: File) => {
@@ -1861,6 +1893,57 @@ export function SoloMode() {
                 <Icon name={busy === 'give-items' ? 'LoaderCircle' : 'Truck'} size={14} className={busy === 'give-items' ? 'animate-spin' : ''} />
                 Give vehicle kit
               </button>
+            </div>
+
+            <div className="card p-5 xl:col-span-2">
+              <h3 className="font-semibold mb-1 flex items-center gap-2">
+                <Icon name="Download" size={15} /> Export Base Blueprint
+              </h3>
+              <p className="text-xs text-text-muted mb-4">
+                Downloads a portable JSON copy of a base blueprint saved in this PTC Solo profile. Export is read-only and works while the game is open.
+              </p>
+              {blueprintsState.loading && (
+                <div className="flex items-center gap-2 text-xs text-text-muted">
+                  <Icon name="LoaderCircle" size={14} className="animate-spin" />
+                  Reading saved blueprints...
+                </div>
+              )}
+              {blueprintsState.error && (
+                <div className="rounded border border-danger/30 bg-danger/5 p-3 text-xs text-danger">
+                  {blueprintsState.error}
+                </div>
+              )}
+              {!blueprintsState.loading && !blueprintsState.error && (blueprintsState.data?.blueprints.length ?? 0) === 0 && (
+                <div className="rounded border border-border bg-surface-2/50 p-3 text-xs text-text-muted">
+                  No saved base blueprints were found in this Solo profile.
+                </div>
+              )}
+              <div className="space-y-2">
+                {(blueprintsState.data?.blueprints ?? []).map(savedBlueprint => {
+                  const exporting = busy === `export-blueprint:${savedBlueprint.id}`
+                  return (
+                    <div
+                      key={savedBlueprint.id}
+                      className="flex flex-col sm:flex-row sm:items-center gap-3 rounded border border-border bg-surface-2/50 p-3"
+                    >
+                      <div className="min-w-0 flex-1">
+                        <div className="font-medium text-sm text-text truncate">{savedBlueprint.name}</div>
+                        <div className="text-xs text-text-muted mt-1">
+                          {savedBlueprint.instances} pieces · {savedBlueprint.placeables} placeables · {savedBlueprint.pentashields} pentashields
+                        </div>
+                      </div>
+                      <button
+                        className="btn-primary justify-center shrink-0"
+                        disabled={!selectionMatchesActive || busy !== null}
+                        onClick={() => void exportBlueprint(savedBlueprint)}
+                      >
+                        <Icon name={exporting ? 'LoaderCircle' : 'Download'} size={14} className={exporting ? 'animate-spin' : ''} />
+                        Export JSON
+                      </button>
+                    </div>
+                  )
+                })}
+              </div>
             </div>
 
             <div className="card p-5 xl:col-span-2">

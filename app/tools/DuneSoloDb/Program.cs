@@ -79,6 +79,10 @@ internal static partial class Program
                     Require(options, "safety-backup"),
                     Require(options, "plan"),
                     Require(options, "catalog")),
+                "list-blueprints" => ListBlueprints(Require(options, "input")),
+                "export-blueprint" => ExportBlueprint(
+                    Require(options, "input"),
+                    ParseItemId(RequireValue(options, "blueprint-id"))),
                 "import-blueprint" => ImportBlueprint(
                     Require(options, "input"),
                     Require(options, "safety-backup"),
@@ -1526,6 +1530,38 @@ internal static partial class Program
                 }
             }
 
+            var beforeBlueprintExport = File.ReadAllBytes(target);
+            var listedBlueprints = JsonSerializer.SerializeToElement(
+                ListBlueprints(target),
+                JsonOptions);
+            var exportedBlueprint = JsonSerializer.SerializeToElement(
+                ExportBlueprint(target, 1),
+                JsonOptions);
+            var listed = listedBlueprints
+                .GetProperty("blueprints");
+            var portable = exportedBlueprint
+                .GetProperty("blueprint");
+            var firstInstance = portable.GetProperty("instances")[0];
+            var firstPlaceable = portable.GetProperty("placeables")[0];
+            var firstPentashield = portable.GetProperty("pentashields")[0];
+            if (listed.GetArrayLength() != 1
+                || listed[0].GetProperty("name").GetString() != "Self Test Base"
+                || portable.GetProperty("instances").GetArrayLength() != 2
+                || portable.GetProperty("placeables").GetArrayLength() != 1
+                || portable.GetProperty("pentashields").GetArrayLength() != 1
+                || firstInstance.GetProperty("building_type").GetString()
+                    != "Atreides_Outpost_Foundation"
+                || firstInstance.GetProperty("instance_id").GetInt64() != 1
+                || !firstInstance.GetProperty("provides_stability").GetBoolean()
+                || firstPlaceable.GetProperty("placeable_id").GetInt64() != 1
+                || firstPlaceable.GetProperty("ry").GetSingle() != 45f
+                || firstPentashield.GetProperty("placeable_id").GetInt64() != 1
+                || !File.ReadAllBytes(target).SequenceEqual(beforeBlueprintExport))
+            {
+                throw new InvalidOperationException(
+                    "Portable blueprint read-only export verification failed.");
+            }
+
             var invalidBlueprintPath = Path.Combine(
                 root,
                 "invalid-portable-blueprint.json");
@@ -1844,6 +1880,7 @@ internal static partial class Program
                     "offline-item-grant-with-capacity-and-safety-backup",
                     "vehicle-kit-volume-fallbacks-preserve-stock-backpack-grants",
                     "offline-portable-blueprint-import-with-safety-backup",
+                    "portable-blueprint-read-only-export",
                     "invalid-blueprint-leaves-target-unchanged",
                     "truncated-blueprint-leaves-target-unchanged",
                     "offline-currency-write-with-safety-backup",

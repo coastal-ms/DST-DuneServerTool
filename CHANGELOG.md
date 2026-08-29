@@ -13,6 +13,15 @@ here cover everything those tags shipped.
 
 ## [Unreleased]
 
+## [14.0.4] - 2026-08-29
+
+### Added
+
+- PTC Solo Mode can export saved base blueprints as portable DST JSON files.
+  Export uses a stable read-only save snapshot, validates the wrapped SQLite
+  database, and works while the game is open. PTC blueprint import remains
+  disabled and is still rejected before save access.
+
 ## [14.0.3] - 2026-08-24
 
 ### Fixed

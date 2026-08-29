@@ -162,6 +162,28 @@ export interface SoloBackupsResponse {
   root: string
 }
 
+export interface SoloBlueprintSummary {
+  id: number
+  itemId: number | null
+  name: string
+  instances: number
+  placeables: number
+  pentashields: number
+}
+
+export interface SoloBlueprintsResponse {
+  ok: boolean
+  blueprints: SoloBlueprintSummary[]
+}
+
+export interface SoloBlueprintExportResponse {
+  ok: boolean
+  blueprintId: number
+  itemId: number | null
+  filename: string
+  blueprint: BlueprintFile
+}
+
 export function getSoloStatus(): Promise<SoloStatus> {
   return api<SoloStatus>('/api/solo/status')
 }
@@ -295,6 +317,16 @@ export function grantSoloItems(
       expectedProfileToken,
       confirm: 'GIVE SOLO ITEMS',
     }),
+  })
+}
+
+export function exportSoloBlueprint(
+  blueprintId: number,
+  expectedProfileToken: string,
+): Promise<SoloBlueprintExportResponse> {
+  return api('/api/solo/blueprints/export', {
+    method: 'POST',
+    body: JSON.stringify({ blueprintId, expectedProfileToken }),
   })
 }
 

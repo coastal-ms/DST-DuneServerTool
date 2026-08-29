@@ -217,6 +217,31 @@ Register-DuneRoute -Method POST -Path '/api/solo/items/grant' -LocalOnly -Handle
     }
 }
 
+Register-DuneRoute -Method GET -Path '/api/solo/blueprints' -LocalOnly -Handler {
+    param($req, $res, $routeParams, $body)
+    try {
+        Write-DuneJson -Response $res -Body (Get-DuneSoloBlueprints)
+    } catch {
+        Write-DuneError -Response $res -Status 400 -Message $_.Exception.Message
+    }
+}
+
+Register-DuneRoute -Method POST -Path '/api/solo/blueprints/export' -LocalOnly -Handler {
+    param($req, $res, $routeParams, $body)
+    try {
+        $blueprintId = [long](Get-DuneSoloBodyField -Body $body -Name 'blueprintId' -Default 0)
+        $expectedProfileToken = [string](Get-DuneSoloBodyField -Body $body -Name 'expectedProfileToken' -Default '')
+        $result = Invoke-WithDuneLock -Name 'solo-profile-data' -Script {
+            Assert-DuneSoloExpectedProfile -ExpectedProfileToken $expectedProfileToken
+            Export-DuneSoloBlueprint -BlueprintId $blueprintId
+        }
+        Write-DuneJson -Response $res -Body $result
+    } catch {
+        $status = if ($_.Exception.Message -like '*changed in another window*') { 409 } else { 400 }
+        Write-DuneError -Response $res -Status $status -Message $_.Exception.Message
+    }
+}
+
 Register-DuneRoute -Method POST -Path '/api/solo/blueprints/import' -LocalOnly -Handler {
     param($req, $res, $routeParams, $body)
     try {
