@@ -38,8 +38,9 @@ here cover everything those tags shipped.
   the backend running without leaving the frontend resident. Opening a retained
   tray icon now restores the window before showing it instead of immediately
   returning to a minimized taskbar entry.
-- Closed WebView2's Downloads flyout automatically after a Solo blueprint JSON
-  export finishes instead of leaving it covering the portal.
+- Closed WebView2's Downloads flyout ten seconds after a Solo blueprint JSON
+  export finishes, leaving time to open its folder before it stops covering the
+  portal.
 
 ## [14.0.3] - 2026-08-24
 

@@ -421,10 +421,12 @@ internal sealed class MainForm : Form
     {
         CoreWebView2DownloadOperation operation = e.DownloadOperation;
 
-        void CloseWhenFinished(object? _, object __)
+        async void CloseWhenFinished(object? _, object __)
         {
             if (operation.State == CoreWebView2DownloadState.InProgress) return;
             operation.StateChanged -= CloseWhenFinished;
+            if (operation.State == CoreWebView2DownloadState.Completed)
+                await Task.Delay(TimeSpan.FromSeconds(10));
             try
             {
                 BeginInvoke(new Action(() =>
