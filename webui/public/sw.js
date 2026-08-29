@@ -1,6 +1,6 @@
 // Keep the local frontend available while the PowerShell backend starts.
 // API, WebSocket, remote-portal, and update traffic always stays network-only.
-const CACHE_NAME = 'dst-local-app-shell-v1'
+const CACHE_NAME = 'dst-local-app-shell-v2'
 const APP_SHELL_KEY = '/'
 
 self.addEventListener('install', (event) => {
@@ -8,7 +8,36 @@ self.addEventListener('install', (event) => {
 })
 
 self.addEventListener('activate', (event) => {
-  event.waitUntil(self.clients.claim())
+  event.waitUntil((async () => {
+    const names = await caches.keys()
+    await Promise.all(names
+      .filter(name => name.startsWith('dst-local-app-shell-') && name !== CACHE_NAME)
+      .map(name => caches.delete(name)))
+    await self.clients.claim()
+  })())
+})
+
+self.addEventListener('message', (event) => {
+  if (event.data?.type !== 'SEED_APP_SHELL') return
+
+  event.waitUntil((async () => {
+    const documentUrl = new URL(event.data.documentUrl)
+    if (documentUrl.origin !== self.location.origin) return
+
+    const cache = await caches.open(CACHE_NAME)
+    const documentResponse = await fetch(documentUrl.href)
+    if (documentResponse.ok) {
+      await cache.put(APP_SHELL_KEY, documentResponse.clone())
+    }
+
+    const assetUrls = Array.isArray(event.data.assetUrls) ? event.data.assetUrls : []
+    await Promise.all(assetUrls.map(async (value) => {
+      const assetUrl = new URL(value)
+      if (assetUrl.origin !== self.location.origin) return
+      const response = await fetch(assetUrl.href)
+      if (response.ok) await cache.put(assetUrl.href, response.clone())
+    }))
+  })())
 })
 
 self.addEventListener('fetch', (event) => {

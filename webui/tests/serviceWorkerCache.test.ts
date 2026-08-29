@@ -20,11 +20,14 @@ function loadWorker(cachedResponse?: Response) {
   const match = vi.fn(async () => cachedResponse)
   const put = vi.fn(async () => undefined)
   const fetch = vi.fn(async () => new Response('network', { status: 200 }))
+  const deleteCache = vi.fn(async () => true)
   const context = {
     URL,
     fetch,
     caches: {
       open: vi.fn(async () => ({ match, put })),
+      keys: vi.fn(async () => ['dst-local-app-shell-v1', 'dst-local-app-shell-v2']),
+      delete: deleteCache,
     },
     self: {
       location: { origin: 'http://127.0.0.1:47823' },
@@ -38,7 +41,7 @@ function loadWorker(cachedResponse?: Response) {
 
   const source = readFileSync(resolve(__dirname, '../public/sw.js'), 'utf8')
   runInNewContext(source, context)
-  return { fetch, handlers, match, put }
+  return { deleteCache, fetch, handlers, match, put }
 }
 
 function runFetch(handler: FetchHandler, request: WorkerRequest) {
@@ -51,6 +54,32 @@ function runFetch(handler: FetchHandler, request: WorkerRequest) {
 }
 
 describe('local app-shell service worker', () => {
+  it('seeds the successful document and its static assets', async () => {
+    const worker = loadWorker()
+    const handler = worker.handlers.get('message') as unknown as (event: {
+      data: unknown
+      waitUntil: (work: Promise<void>) => void
+    }) => void
+    let work: Promise<void> | undefined
+
+    handler({
+      data: {
+        type: 'SEED_APP_SHELL',
+        documentUrl: 'http://127.0.0.1:47823/?t=fresh',
+        assetUrls: ['http://127.0.0.1:47823/assets/app.js'],
+      },
+      waitUntil: value => { work = value },
+    })
+    await work
+
+    expect(worker.fetch).toHaveBeenCalledTimes(2)
+    expect(worker.put).toHaveBeenCalledWith('/', expect.any(Response))
+    expect(worker.put).toHaveBeenCalledWith(
+      'http://127.0.0.1:47823/assets/app.js',
+      expect.any(Response),
+    )
+  })
+
   it('serves the cached frontend immediately for shell startup', async () => {
     const worker = loadWorker(new Response('cached-shell', { status: 200 }))
     const response = runFetch(worker.handlers.get('fetch') as unknown as FetchHandler, {

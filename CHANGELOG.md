@@ -29,7 +29,8 @@ here cover everything those tags shipped.
   Repeat launches can show the cached shell and prior Server Health state while
   the backend starts;
   API actions remain live-only and reconnect to the new backend automatically
-  without exposing transient stale-connection error pages.
+  without exposing transient stale-connection error pages. A real connection
+  warning appears after 20 seconds and directs users to the diagnostic bundle.
 
 ### Fixed
 

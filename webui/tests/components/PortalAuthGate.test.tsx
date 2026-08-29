@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { cleanup, render, screen, waitFor } from '@testing-library/react'
+import { act, cleanup, render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import React from 'react'
 import { PortalAuthGate } from '../../src/auth/PortalAuthGate'
@@ -103,13 +103,20 @@ describe('PortalAuthGate', () => {
   })
 
   it('shows cached portal content instead of a transient connection error during shell startup', async () => {
+    vi.useFakeTimers()
     window.history.replaceState({}, '', '/?t=stale&shell-cache=1')
     vi.spyOn(globalThis, 'fetch').mockRejectedValueOnce(new TypeError('Failed to fetch'))
 
     render(<PortalAuthGate><div>Cached dashboard</div></PortalAuthGate>)
+    await act(async () => { await Promise.resolve() })
 
-    expect(await screen.findByText('Cached dashboard')).toBeInTheDocument()
+    expect(screen.getByText('Cached dashboard')).toBeInTheDocument()
     expect(screen.queryByRole('heading', { name: 'Connection unavailable' })).not.toBeInTheDocument()
+
+    act(() => vi.advanceTimersByTime(20_000))
+    expect(screen.getByRole('heading', { name: 'Connection unavailable' })).toBeInTheDocument()
+    expect(screen.getByText(/Create GitHub Issue \+ Save Logs/)).toBeInTheDocument()
+    vi.useRealTimers()
   })
 
   it('gives actionable recovery if a forced-change origin check is rejected', async () => {

@@ -831,7 +831,7 @@ internal sealed class MainForm : Form
     private static readonly HttpClient _probeHttp = new() { Timeout = TimeSpan.FromMilliseconds(800) };
     private static string CachedShellUrlFile => Path.Combine(
         Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-        "DuneServer", "shell-last-url.txt");
+        "DuneServer", "shell-last-url-v2.txt");
 
     private static string? TryReadCachedShellUrl()
     {
