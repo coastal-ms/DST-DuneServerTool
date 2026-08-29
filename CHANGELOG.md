@@ -54,6 +54,8 @@ here cover everything those tags shipped.
 - Fixed the Maps refresh scheduler failing every cycle while capturing an empty
   optional runtime parameter, so successful source reads now reach cache
   replacement and API publication.
+- Fixed diagnostics packages leaving the game login password visible inside
+  server-state log messages; JSON `loginPassword` values are now redacted.
 
 ## [14.0.3] - 2026-08-24
 
