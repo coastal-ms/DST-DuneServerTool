@@ -1545,6 +1545,83 @@ Describe 'DuneGameConfigSchema: experimental twilight evidence gate' -Tag 'GameC
         $route | Should -Match 'Raw scalar INI values must be one physical line'
         $route | Should -Match 'must not include Unreal \+ or - operator prefixes'
     }
+
+    It 'offers only finite bounded candidate values' {
+        $experiment = Get-DuneTwilightLockExperiment
+        @($experiment.candidates.value) | Should -Be @('17.0', '18.0', '19.0')
+        $experiment.evidenceStatus | Should -Be 'candidate-only'
+        $experiment.clientApply.available | Should -BeFalse
+        $experiment.restartRequired | Should -BeTrue
+        $experiment.minimumObservationMinutes | Should -Be 30
+        foreach ($valid in @('17.0', '18.0', '19.0')) {
+            (Test-DuneTwilightCandidateHour -Value $valid) | Should -BeTrue
+        }
+        foreach ($invalid in @('', '16.9', '20', 'NaN', 'Infinity', "18`nInjected=True")) {
+            (Test-DuneTwilightCandidateHour -Value $invalid) | Should -BeFalse
+        }
+    }
+
+    It 'backs up before staging the exact server-only candidate pair' {
+        Mock Backup-DuneGameConfig {
+            @{ files = @(@{ file='game'; ok=$true; backup='/fixture/UserGame.ini.dstbak' }) }
+        }
+        Mock Save-DuneGameConfigLocked {}
+
+        $result = Invoke-DuneTwilightLockStage -Ip '192.0.2.1' -Candidate '18.0'
+
+        $result.ok | Should -BeTrue
+        $result.candidate | Should -Be '18.0'
+        $result.clientApplied | Should -BeFalse
+        Assert-MockCalled Backup-DuneGameConfig -Times 1
+        Assert-MockCalled Save-DuneGameConfigLocked -Times 1 -ParameterFilter {
+            @($Updates).Count -eq 2 -and
+            @($Updates | Where-Object { $_.key -eq 'm_StartTime' -and $_.value -eq '18.0' -and -not $_.remove }).Count -eq 1 -and
+            @($Updates | Where-Object { $_.key -eq 'm_bTimeOfDayEnabled' -and $_.value -eq 'False' -and -not $_.remove }).Count -eq 1
+        }
+    }
+
+    It 'fails closed when the pre-stage backup cannot be verified' {
+        Mock Backup-DuneGameConfig {
+            @{ files = @(@{ file='game'; ok=$false; backup=$null }) }
+        }
+        Mock Save-DuneGameConfigLocked {}
+
+        { Invoke-DuneTwilightLockStage -Ip '192.0.2.1' -Candidate '18.0' } |
+            Should -Throw '*backup could not be verified*'
+        Assert-MockCalled Save-DuneGameConfigLocked -Times 0
+    }
+
+    It 'backs up then removes both managed overrides on restore' {
+        Mock Backup-DuneGameConfig {
+            @{ files = @(@{ file='game'; ok=$true; backup='/fixture/UserGame.ini.dstbak' }) }
+        }
+        Mock Save-DuneGameConfigLocked {}
+
+        $result = Invoke-DuneTwilightLockRestore -Ip '192.0.2.1'
+
+        $result.restored | Should -BeTrue
+        $result.clientApplied | Should -BeFalse
+        Assert-MockCalled Backup-DuneGameConfig -Times 1
+        Assert-MockCalled Save-DuneGameConfigLocked -Times 1 -ParameterFilter {
+            @($Updates).Count -eq 2 -and
+            @($Updates | Where-Object { $_.key -eq 'm_StartTime' -and $_.remove }).Count -eq 1 -and
+            @($Updates | Where-Object { $_.key -eq 'm_bTimeOfDayEnabled' -and $_.remove }).Count -eq 1
+        }
+    }
+
+    It 'registers dedicated guarded stage and restore routes' {
+        $route = Get-Content (Join-Path (Get-DstRepoRoot) 'app\server\routes\GameConfig.ps1') -Raw
+        foreach ($path in @(
+            '/api/gameconfig/experimental/twilight-lock',
+            '/api/gameconfig/experimental/twilight-lock/stage',
+            '/api/gameconfig/experimental/twilight-lock/restore'
+        )) {
+            $route | Should -Match ([regex]::Escape($path))
+        }
+        $route | Should -Match 'Invoke-DuneTwilightLockStage'
+        $route | Should -Match 'Invoke-DuneTwilightLockRestore'
+        $route | Should -Match 'Test-DunePlayerGuard'
+    }
 }
 
 Describe 'DuneGameConfigSchema: CraftingSettings fields' -Tag 'GameConfig' {

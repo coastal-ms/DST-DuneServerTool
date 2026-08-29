@@ -94,6 +94,118 @@ function Test-DuneGameConfigArrayLineMatchesKey {
     return ([string]$Line).Trim() -match "^[+-]$([regex]::Escape($Key))="
 }
 
+$script:DuneTwilightCandidateHours = @('17.0', '18.0', '19.0')
+
+function Get-DuneTwilightLockExperiment {
+    return [ordered]@{
+        available = $true
+        evidenceStatus = 'candidate-only'
+        candidates = @($script:DuneTwilightCandidateHours | ForEach-Object {
+            [ordered]@{
+                value = $_
+                label = "Candidate $_"
+            }
+        })
+        clientApply = [ordered]@{
+            available = $false
+            reason = 'm_StartTime client behavior is unverified, so DST will not write a client override.'
+        }
+        restartRequired = $true
+        minimumObservationMinutes = 30
+    }
+}
+
+function Test-DuneTwilightCandidateHour {
+    param($Value)
+    $text = "$Value".Trim()
+    if (-not (Test-DuneGameConfigRawTextSafe -Value $text)) { return $false }
+    $number = 0.0
+    if (-not [double]::TryParse(
+        $text,
+        [Globalization.NumberStyles]::Float,
+        [Globalization.CultureInfo]::InvariantCulture,
+        [ref]$number
+    )) {
+        return $false
+    }
+    if ([double]::IsNaN($number) -or [double]::IsInfinity($number)) { return $false }
+    return $text -in $script:DuneTwilightCandidateHours
+}
+
+function Invoke-DuneTwilightLockStage {
+    param(
+        [Parameter(Mandatory)][string]$Ip,
+        [Parameter(Mandatory)]$Candidate
+    )
+    $candidateText = "$Candidate".Trim()
+    if (-not (Test-DuneTwilightCandidateHour -Value $candidateText)) {
+        throw "Candidate must be one of: $($script:DuneTwilightCandidateHours -join ', ')."
+    }
+    $backup = Backup-DuneGameConfig -Ip $Ip
+    $gameBackup = @($backup.files | Where-Object file -eq 'game' | Select-Object -First 1)
+    if ($gameBackup.Count -ne 1 -or -not $gameBackup[0].ok) {
+        throw 'Twilight experiment was not staged because the server Game.ini backup could not be verified.'
+    }
+    Save-DuneGameConfigLocked -Ip $Ip -Updates @(
+        @{
+            file = 'game'
+            section = $script:DuneGcSecTimeOfDay
+            key = 'm_StartTime'
+            value = $candidateText
+            remove = $false
+        },
+        @{
+            file = 'game'
+            section = $script:DuneGcSecTimeOfDay
+            key = 'm_bTimeOfDayEnabled'
+            value = 'False'
+            remove = $false
+        }
+    )
+    return [ordered]@{
+        ok = $true
+        staged = $true
+        candidate = $candidateText
+        backup = $gameBackup[0].backup
+        restartRequired = $true
+        clientApplied = $false
+        message = 'Candidate staged on the server. Apply INIs & restart to begin the field experiment.'
+    }
+}
+
+function Invoke-DuneTwilightLockRestore {
+    param([Parameter(Mandatory)][string]$Ip)
+    $backup = Backup-DuneGameConfig -Ip $Ip
+    $gameBackup = @($backup.files | Where-Object file -eq 'game' | Select-Object -First 1)
+    if ($gameBackup.Count -ne 1 -or -not $gameBackup[0].ok) {
+        throw 'Normal cycle was not restored because the server Game.ini backup could not be verified.'
+    }
+    Save-DuneGameConfigLocked -Ip $Ip -Updates @(
+        @{
+            file = 'game'
+            section = $script:DuneGcSecTimeOfDay
+            key = 'm_StartTime'
+            value = ''
+            remove = $true
+        },
+        @{
+            file = 'game'
+            section = $script:DuneGcSecTimeOfDay
+            key = 'm_bTimeOfDayEnabled'
+            value = ''
+            remove = $true
+        }
+    )
+    return [ordered]@{
+        ok = $true
+        restored = $true
+        backup = $gameBackup[0].backup
+        restartRequired = $true
+        clientApplied = $false
+        message = 'DST-managed twilight overrides removed. Apply INIs & restart to restore the shipped normal cycle.'
+    }
+}
+
 # Funcom stores ALL Landsraad settings as scalar members inside ONE nested struct
 # value: [/Script/DuneSandbox.LandsraadSettings] Data=(m_TaskGoalAmount=5000.0,...).
 # Schema fields tagged StructKey='Data' are read from / written to that struct via

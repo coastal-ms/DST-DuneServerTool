@@ -1482,7 +1482,7 @@ export function GameConfig({ mode = 'standard' }: { mode?: 'standard' | 'experim
       )}
 
       {experimentalPage && (
-        <TwilightLockEvidenceCard />
+        <TwilightLockEvidenceCard vmRunning={vmRunning} />
       )}
 
       {localViewer && (

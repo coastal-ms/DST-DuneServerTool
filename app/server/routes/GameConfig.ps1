@@ -47,12 +47,49 @@ Register-DuneRoute -Method GET -Path '/api/gameconfig/experimental/search' -Hand
         if ($query) {
             $fields = [object[]]@(Search-DuneAdvancedCvarCatalogApi -Query $query)
         }
+
         Write-DuneJson -Response $res -Body @{
             query  = $query
             fields = $fields
         }
     } catch {
         Write-DuneError -Response $res -Status 500 -Message "Experimental Lab search failed: $($_.Exception.Message)"
+    }
+}
+
+Register-DuneRoute -Method GET -Path '/api/gameconfig/experimental/twilight-lock' -Handler {
+    param($req, $res, $routeParams, $body)
+    Write-DuneJson -Response $res -Body (Get-DuneTwilightLockExperiment)
+}
+
+Register-DuneRoute -Method POST -Path '/api/gameconfig/experimental/twilight-lock/stage' -Handler {
+    param($req, $res, $routeParams, $body)
+    $ctx = Get-DuneGameConfigContext
+    if (-not $ctx.ok) {
+        Write-DuneError -Response $res -Status $ctx.status -Message $ctx.message
+        return
+    }
+    if (-not (Test-DunePlayerGuard -Req $req -Res $res -Ip $ctx.ip)) { return }
+    try {
+        Write-DuneJson -Response $res -Body (
+            Invoke-DuneTwilightLockStage -Ip $ctx.ip -Candidate $body.candidate)
+    } catch {
+        Write-DuneError -Response $res -Status 400 -Message $_.Exception.Message
+    }
+}
+
+Register-DuneRoute -Method POST -Path '/api/gameconfig/experimental/twilight-lock/restore' -Handler {
+    param($req, $res, $routeParams, $body)
+    $ctx = Get-DuneGameConfigContext
+    if (-not $ctx.ok) {
+        Write-DuneError -Response $res -Status $ctx.status -Message $ctx.message
+        return
+    }
+    if (-not (Test-DunePlayerGuard -Req $req -Res $res -Ip $ctx.ip)) { return }
+    try {
+        Write-DuneJson -Response $res -Body (Invoke-DuneTwilightLockRestore -Ip $ctx.ip)
+    } catch {
+        Write-DuneError -Response $res -Status 400 -Message $_.Exception.Message
     }
 }
 

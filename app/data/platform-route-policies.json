@@ -142,7 +142,7 @@
     { "source": "Diagnostics.ps1", "capabilityId": "operation.telemetry", "routeCount": 5, "sha256": "e590c47d747f8b1d05b5b362ad69ce2ae7f5d22fca5ba9089950b6fdc9b657d1" },
     { "source": "DuneAdminCache.ps1", "capabilityId": "platform.status", "routeCount": 2, "sha256": "b1f6e2c598167428954ab14e7176a7947a83a3990e2fffd4ccba80f3ece8adc2" },
     { "source": "FlsToken.ps1", "capabilityId": "settings.connectivity", "routeCount": 3, "sha256": "5dbda64c9121b306d6d6f3487aef4e6f630a73beba73d0067baa14373237f2bb" },
-    { "source": "GameConfig.ps1", "capabilityId": "settings.game-server", "routeCount": 23, "sha256": "e9eb9f09b4204b7104cbefe0dff0c253fcf88b493e7e5aa59bb3594296c052c1" },
+    { "source": "GameConfig.ps1", "capabilityId": "settings.game-server", "routeCount": 26, "sha256": "ce7843e99e8c51e02040f913a32d0b5f10357b13826196caec709b04542ba03d" },
     { "source": "Gameplay.ps1", "capabilityId": "economy.market", "routeCount": 22, "sha256": "757d3fd58fe70e88c5ccc91b9549e8f9a121b9137c1a2c16cd574c271c46e258" },
     { "source": "GameplayPlayers.ps1", "capabilityId": "player.manage", "routeCount": 26, "sha256": "1d7fda21440dd10c281e68d37189b3a2fa1995b0e4a2630e71b4705805818cef" },
     { "source": "GameplayWorld.ps1", "capabilityId": "base.manage", "routeCount": 12, "sha256": "52bfaeee6658d490bedae03914b525e3272d89ece1dc957d3514dc8ee9a84c30" },

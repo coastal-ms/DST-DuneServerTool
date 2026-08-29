@@ -62,6 +62,48 @@ export async function searchGameConfigExperimental(query: string) {
   return { ...response, fields: normalizeGameConfigFields(response.fields) }
 }
 
+export interface TwilightLockExperiment {
+  available: boolean
+  evidenceStatus: 'candidate-only'
+  candidates: Array<{ value: string; label: string }>
+  clientApply: { available: false; reason: string }
+  restartRequired: true
+  minimumObservationMinutes: number
+}
+
+export interface TwilightLockActionResult {
+  ok: boolean
+  staged?: boolean
+  restored?: boolean
+  candidate?: string
+  backup: string
+  restartRequired: true
+  clientApplied: false
+  message: string
+}
+
+export function getTwilightLockExperiment() {
+  return api<TwilightLockExperiment>('/api/gameconfig/experimental/twilight-lock')
+}
+
+export function stageTwilightLockCandidate(candidate: string) {
+  return withOnlinePlayerGuard(force =>
+    api<TwilightLockActionResult>(
+      `/api/gameconfig/experimental/twilight-lock/stage${fq(force)}`,
+      { method: 'POST', body: JSON.stringify({ candidate }) },
+    ),
+  )
+}
+
+export function restoreTwilightLockCycle() {
+  return withOnlinePlayerGuard(force =>
+    api<TwilightLockActionResult>(
+      `/api/gameconfig/experimental/twilight-lock/restore${fq(force)}`,
+      { method: 'POST' },
+    ),
+  )
+}
+
 export function getGameConfig() {
   return api<GameConfigResponse>('/api/gameconfig')
 }
