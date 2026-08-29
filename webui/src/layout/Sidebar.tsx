@@ -1,4 +1,4 @@
-import { Link, NavLink, useLocation } from '../router'
+import { Link, NavLink, useLocation, useSearch } from '../router'
 import { useState, useRef } from 'react'
 import { createPortal } from 'react-dom'
 import { Icon } from '../components/Icon'
@@ -26,6 +26,7 @@ type Props = {
 
 export function Sidebar({ collapsed }: Props) {
   const { pathname } = useLocation()
+  const search = useSearch()
   const { canAccessOwnerSurfaces } = usePortalAccess()
   const { data: upd } = useUpdateCheck()
   const version = upd?.currentVersion ?? ''
@@ -151,7 +152,7 @@ export function Sidebar({ collapsed }: Props) {
 
   // Shared row renderer for a single nav item, in either layout mode.
   const renderItem = (item: (typeof visibleItems)[number]) => {
-    const isActive = isNavItemActive(item, pathname)
+    const isActive = isNavItemActive(item, pathname, search)
     return (
       <Link
         to={item.to}

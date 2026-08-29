@@ -10,6 +10,7 @@ vi.mock('../../src/api/client', () => ({
     body?: unknown
   },
   api: vi.fn(),
+  withOnlinePlayerGuard: <T,>(fn: (force: boolean) => Promise<T>) => fn(false),
 }))
 
 beforeEach(() => {

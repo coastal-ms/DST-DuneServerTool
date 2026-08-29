@@ -29,6 +29,16 @@ here cover everything those tags shipped.
   remain visibly unavailable until the production schema can prove privacy and
   ownership exclusions. The implementation is independent and copies no
   external assets or map data.
+- Added a dedicated, field-verified Time of Day section under Game Config,
+  with Sunset, Twilight, Dark Night, Full Night, and peak Dew Harvest phases,
+  mandatory live-config backups, exact write verification, and one-click
+  restoration of the normal day/night cycle.
+- Added an Experimental Funcom vehicle spawn action that uses the shipped RMQ
+  contract and verifies the spawned vehicle persists before reporting success.
+- Added a live vehicle fleet and protected removal queue. DST creates a labeled
+  database backup, stops the battlegroup, transactionally removes queued vehicles
+  and their dependent ownership/storage records, verifies each deletion, and
+  restarts the battlegroup; queued removals can be cancelled before processing.
 
 ### Changed
 
@@ -37,6 +47,13 @@ here cover everything those tags shipped.
 - Adapted Server Health's Game Servers card into compact stacked pod summaries
   on narrow screens while retaining the full desktop table and Game Ready State.
 - Prepared build and diagnostic metadata for the `v15.0.0-test1` test line.
+- Replaced the in-app GitHub issue launcher with an owner-only diagnostics
+  package action for sharing redacted support evidence in Discord.
+- Restored Map SpinUp and map restart controls as a direct Server Controls
+  destination in the left rail while retaining the consolidated Map workspace.
+- Added a fail-closed online-player warning before every manual action that can
+  stop or restart game services or the VM, with connected player details and an
+  explicit operator override when disconnection is intentional.
 
 ### Fixed
 
@@ -47,6 +64,8 @@ here cover everything those tags shipped.
 - Fixed the Maps refresh scheduler failing every cycle while capturing an empty
   optional runtime parameter, so successful source reads now reach cache
   replacement and API publication.
+- Fixed diagnostics packages leaving the game login password visible inside
+  server-state log messages; JSON `loginPassword` values are now redacted.
 
 ## [14.0.3] - 2026-08-24
 

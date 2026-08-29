@@ -176,11 +176,11 @@ majority of cases we've seen.
 
 ## Still stuck? Send logs
 
-In DST: **Help → Create GitHub Issue** (it also saves a diagnostics bundle), or
-grab the diagnostics zip and attach it. The game‑server logs and pod status let
-us read exactly what your server is reporting to Funcom — which beats guessing.
-Capture the bundle **while the battlegroup is running**, or it can't collect the
-live logs.
+In the DST Desktop app, choose **Help → Create Diagnostics Package**, then
+attach the redacted ZIP in your DST Discord support thread. The game‑server logs
+and pod status let us read exactly what your server is reporting to Funcom —
+which beats guessing. Create the package **while the battlegroup is running**,
+or it can't collect the live logs.
 
 ---
 

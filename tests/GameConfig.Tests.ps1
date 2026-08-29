@@ -1477,6 +1477,277 @@ Describe 'DuneGameConfigSchema: forced Coriolis world seed' -Tag 'GameConfig' {
     }
 }
 
+Describe 'DuneGameConfigSchema: experimental twilight evidence gate' -Tag 'GameConfig' {
+    BeforeAll {
+        function Invoke-V6Ssh { throw 'Unexpected unmocked twilight SSH call.' }
+    }
+
+    BeforeEach {
+        $script:TwilightLivePaths = @{
+            source = 'live'
+            game = '/var/lib/rancher/k3s/storage/pvc-test/Saved/UserSettings/UserGame.ini'
+            engine = '/var/lib/rancher/k3s/storage/pvc-test/Saved/UserSettings/UserEngine.ini'
+        }
+        Mock Resolve-DuneGameConfigPaths { $script:TwilightLivePaths }
+    }
+
+    It 'exposes the verified Time of Day surface without making the raw phase writable' {
+        $timeFields = @($script:DuneGameConfigSchema | Where-Object {
+            $_.Section -eq '/Script/DuneSandbox.TimeOfDaySettings'
+        })
+        $start = @($timeFields | Where-Object Key -eq 'm_StartTime')
+        $cycle = @($timeFields | Where-Object Key -eq 'm_bTimeOfDayEnabled')
+
+        $start.Count | Should -Be 0
+        $cycle.Count | Should -Be 1
+        $cycle[0].Category | Should -Be 'Time of Day'
+        $cycle[0].Help | Should -Match '(?i)field-verified phase controls'
+        $cycle[0].Help | Should -Match '(?i)simulation-safety testing is still in progress'
+    }
+
+    It 'keeps the schema free of invented phase and visual-lock writes' {
+        $keys = @($script:DuneGameConfigSchema | ForEach-Object Key)
+        $keys | Should -Not -Contain 'm_StartTime'
+        ($keys -join "`n") | Should -Not -Match '(?i)twilight|sunangle|settimeofday'
+    }
+
+    It 'blocks the evidence-only startup-hour target from the raw update API' {
+        (Test-DuneGameConfigRawTargetBlocked `
+            -File game `
+            -Section '/Script/DuneSandbox.TimeOfDaySettings' `
+            -Key m_StartTime) | Should -BeTrue
+        (Test-DuneGameConfigRawTargetBlocked `
+            -File ' game ' `
+            -Section ' /Script/DuneSandbox.TimeOfDaySettings ' `
+            -Key 'm_StartTime ') | Should -BeTrue
+        (Test-DuneGameConfigRawTargetBlocked `
+            -File game `
+            -Section '/Script/DuneSandbox.TimeOfDaySettings' `
+            -Key '+m_StartTime') | Should -BeTrue
+        (Test-DuneGameConfigRawTargetBlocked `
+            -File game `
+            -Section '/Script/DuneSandbox.TimeOfDaySettings' `
+            -Key m_bTimeOfDayEnabled) | Should -BeFalse
+
+        $route = Get-Content (Join-Path (Get-DstRepoRoot) 'app\server\routes\GameConfig.ps1') -Raw
+        $route | Should -Match 'Test-DuneGameConfigRawTargetBlocked'
+        $route | Should -Match 'evidence-only and cannot be written by DST'
+    }
+
+    It 'rejects raw array lines that do not match their submitted key' {
+        (Test-DuneGameConfigArrayLineMatchesKey `
+            -Line '+AllowedMap=DeepDesert_1' `
+            -Key AllowedMap) | Should -BeTrue
+        (Test-DuneGameConfigArrayLineMatchesKey `
+            -Line '-AllowedMap=DeepDesert_1' `
+            -Key AllowedMap) | Should -BeTrue
+        (Test-DuneGameConfigArrayLineMatchesKey `
+            -Line 'm_StartTime=18' `
+            -Key AllowedMap) | Should -BeFalse
+        (Test-DuneGameConfigArrayLineMatchesKey `
+            -Line '+m_StartTime=18' `
+            -Key AllowedMap) | Should -BeFalse
+        (Test-DuneGameConfigArrayLineMatchesKey `
+            -Line "+AllowedMap=x`nm_StartTime=18" `
+            -Key AllowedMap) | Should -BeFalse
+        (Test-DuneGameConfigRawTextSafe -Value "m_StartTime`n") | Should -BeFalse
+        (Test-DuneGameConfigRawTextSafe -Value "18`r`nInjected=True") | Should -BeFalse
+
+        $route = Get-Content (Join-Path (Get-DstRepoRoot) 'app\server\routes\GameConfig.ps1') -Raw
+        $route | Should -Match 'Test-DuneGameConfigArrayLineMatchesKey'
+        $route | Should -Match 'Every arrayLines entry must be a'
+        $route | Should -Match 'Raw scalar INI values must be one physical line'
+        $route | Should -Match 'must not include Unreal \+ or - operator prefixes'
+    }
+
+    It 'offers only finite bounded candidate values' {
+        $experiment = Get-DuneTwilightLockExperiment
+        @($experiment.candidates.value) | Should -Be @('18.0', '19.0', '20.0', '21.0', '4.0')
+        @($experiment.candidates.label) | Should -Be @(
+            'Sunset - 18:00',
+            'Twilight - 19:00',
+            'Dark night - 20:00',
+            'Full night - 21:00',
+            'Dew harvest - 04:00'
+        )
+        $experiment.evidenceStatus | Should -Be 'visual-phases-verified'
+        $experiment.clientApply.available | Should -BeFalse
+        $experiment.restartRequired | Should -BeTrue
+        $experiment.minimumObservationMinutes | Should -Be 30
+        foreach ($valid in @('18.0', '19.0', '20.0', '21.0', '4.0')) {
+            (Test-DuneTwilightCandidateHour -Value $valid) | Should -BeTrue
+        }
+        foreach ($invalid in @('', '17.0', '20', '22.0', 'NaN', 'Infinity', "18`nInjected=True")) {
+            (Test-DuneTwilightCandidateHour -Value $invalid) | Should -BeFalse
+        }
+    }
+
+    It 'writes an active candidate when the source contains only a commented value' {
+        $raw = @'
+[/Script/DuneSandbox.TimeOfDaySettings]
+;m_StartTime=18.0
+'@
+        $updates = @(
+            @{ file='game'; section=$script:DuneGcSecTimeOfDay; key='m_StartTime'; value='18.0'; remove=$false },
+            @{ file='game'; section=$script:DuneGcSecTimeOfDay; key='m_bTimeOfDayEnabled'; value='False'; remove=$false }
+        )
+
+        $written = ConvertTo-DuneIniManaged -Raw $raw -Updates $updates -QuotedKeys @{}
+        @($written -split "`n" | Where-Object { $_ -eq 'm_StartTime=18.0' }).Count | Should -Be 1
+        { Assert-DuneTwilightStageReadback -Raw @'
+[/Script/DuneSandbox.TimeOfDaySettings]
+;m_StartTime=18.0
+m_bTimeOfDayEnabled=False
+'@ -Candidate '18.0' } | Should -Throw '*write verification failed*'
+    }
+
+    It 'backs up before staging the exact server-only candidate pair' {
+        Mock Backup-DuneGameConfig {
+            @{ files = @(@{ file='game'; ok=$true; backup='/fixture/UserGame.ini.dstbak' }) }
+        }
+        Mock Save-DuneGameConfigLocked {}
+        Mock Invoke-V6Ssh {
+            @(
+                '[/Script/DuneSandbox.TimeOfDaySettings]',
+                'm_StartTime=18.0',
+                'm_bTimeOfDayEnabled=False'
+            )
+        }
+
+        $result = Invoke-DuneTwilightLockStage -Ip '192.0.2.1' -Candidate '18.0'
+
+        $result.ok | Should -BeTrue
+        $result.candidate | Should -Be '18.0'
+        $result.clientApplied | Should -BeFalse
+        Assert-MockCalled Backup-DuneGameConfig -Times 1 -ParameterFilter {
+            $ResolvedPaths.source -eq 'live' -and
+            $ResolvedPaths.game -eq $script:TwilightLivePaths.game
+        }
+        Assert-MockCalled Save-DuneGameConfigLocked -Times 1 -ParameterFilter {
+            $ResolvedPaths.game -eq $script:TwilightLivePaths.game -and
+            @($Updates).Count -eq 2 -and
+            @($Updates | Where-Object { $_.key -eq 'm_StartTime' -and $_.value -eq '18.0' -and -not $_.remove }).Count -eq 1 -and
+            @($Updates | Where-Object { $_.key -eq 'm_bTimeOfDayEnabled' -and $_.value -eq 'False' -and -not $_.remove }).Count -eq 1
+        }
+        Assert-MockCalled Invoke-V6Ssh -Times 1
+    }
+
+    It 'refuses setup templates before backup or mutation' {
+        Mock Resolve-DuneGameConfigPaths {
+            @{
+                source = 'template'
+                game = '/home/dune/.dune/download/scripts/setup/config/UserGame.ini'
+                engine = '/home/dune/.dune/download/scripts/setup/config/UserEngine.ini'
+            }
+        }
+        Mock Backup-DuneGameConfig {}
+        Mock Save-DuneGameConfigLocked {}
+
+        { Invoke-DuneTwilightLockStage -Ip '192.0.2.1' -Candidate '18.0' } |
+            Should -Throw '*requires a live battlegroup UserGame.ini*'
+        { Invoke-DuneTwilightLockRestore -Ip '192.0.2.1' } |
+            Should -Throw '*requires a live battlegroup UserGame.ini*'
+        Assert-MockCalled Backup-DuneGameConfig -Times 0
+        Assert-MockCalled Save-DuneGameConfigLocked -Times 0
+    }
+
+    It 'fails closed when the pre-stage backup cannot be verified' {
+        Mock Backup-DuneGameConfig {
+            @{ files = @(@{ file='game'; ok=$false; backup=$null }) }
+        }
+        Mock Save-DuneGameConfigLocked {}
+
+        { Invoke-DuneTwilightLockStage -Ip '192.0.2.1' -Candidate '18.0' } |
+            Should -Throw '*backup could not be verified*'
+        Assert-MockCalled Save-DuneGameConfigLocked -Times 0
+    }
+
+    It 'fails stage when the exact live readback does not match the requested values' {
+        Mock Backup-DuneGameConfig {
+            @{ files = @(@{ file='game'; ok=$true; backup='/fixture/UserGame.ini.dstbak' }) }
+        }
+        Mock Save-DuneGameConfigLocked {}
+        Mock Invoke-V6Ssh {
+            @(
+                '[/Script/DuneSandbox.TimeOfDaySettings]',
+                'm_StartTime=17.0',
+                'm_bTimeOfDayEnabled=True'
+            )
+        }
+
+        { Invoke-DuneTwilightLockStage -Ip '192.0.2.1' -Candidate '18.0' } |
+            Should -Throw '*write verification failed*'
+    }
+
+    It 'fails stage when SSH exposes a write/readback failure as output' {
+        Mock Backup-DuneGameConfig {
+            @{ files = @(@{ file='game'; ok=$true; backup='/fixture/UserGame.ini.dstbak' }) }
+        }
+        Mock Save-DuneGameConfigLocked {}
+        Mock Invoke-V6Ssh { 'ERROR: remote write failed' }
+
+        { Invoke-DuneTwilightLockStage -Ip '192.0.2.1' -Candidate '18.0' } |
+            Should -Throw '*could not verify the live UserGame.ini*'
+    }
+
+    It 'backs up then removes both managed overrides on restore' {
+        Mock Backup-DuneGameConfig {
+            @{ files = @(@{ file='game'; ok=$true; backup='/fixture/UserGame.ini.dstbak' }) }
+        }
+        Mock Save-DuneGameConfigLocked {}
+        Mock Invoke-V6Ssh {
+            @(
+                '[/Script/DuneSandbox.DuneGameMode]',
+                'm_WaterConsumptionRate=1.0'
+            )
+        }
+
+        $result = Invoke-DuneTwilightLockRestore -Ip '192.0.2.1'
+
+        $result.restored | Should -BeTrue
+        $result.clientApplied | Should -BeFalse
+        Assert-MockCalled Backup-DuneGameConfig -Times 1 -ParameterFilter {
+            $ResolvedPaths.game -eq $script:TwilightLivePaths.game
+        }
+        Assert-MockCalled Save-DuneGameConfigLocked -Times 1 -ParameterFilter {
+            $ResolvedPaths.game -eq $script:TwilightLivePaths.game -and
+            @($Updates).Count -eq 2 -and
+            @($Updates | Where-Object { $_.key -eq 'm_StartTime' -and $_.remove }).Count -eq 1 -and
+            @($Updates | Where-Object { $_.key -eq 'm_bTimeOfDayEnabled' -and $_.remove }).Count -eq 1
+        }
+    }
+
+    It 'fails restore while either exact live override remains' {
+        Mock Backup-DuneGameConfig {
+            @{ files = @(@{ file='game'; ok=$true; backup='/fixture/UserGame.ini.dstbak' }) }
+        }
+        Mock Save-DuneGameConfigLocked {}
+        Mock Invoke-V6Ssh {
+            @(
+                '[/Script/DuneSandbox.TimeOfDaySettings]',
+                'm_bTimeOfDayEnabled=False'
+            )
+        }
+
+        { Invoke-DuneTwilightLockRestore -Ip '192.0.2.1' } |
+            Should -Throw '*restore verification failed*'
+    }
+
+    It 'registers dedicated guarded stage and restore routes' {
+        $route = Get-Content (Join-Path (Get-DstRepoRoot) 'app\server\routes\GameConfig.ps1') -Raw
+        foreach ($path in @(
+            '/api/gameconfig/time-of-day',
+            '/api/gameconfig/time-of-day/stage',
+            '/api/gameconfig/time-of-day/restore'
+        )) {
+            $route | Should -Match ([regex]::Escape($path))
+        }
+        $route | Should -Match 'Invoke-DuneTwilightLockStage'
+        $route | Should -Match 'Invoke-DuneTwilightLockRestore'
+        $route | Should -Match 'Test-DunePlayerGuard'
+    }
+}
+
 Describe 'DuneGameConfigSchema: CraftingSettings fields' -Tag 'GameConfig' {
     It 'exposes repair and recycler weights as server-and-client game settings' {
         $fields = @{}

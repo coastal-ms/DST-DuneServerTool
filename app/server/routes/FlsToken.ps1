@@ -67,6 +67,7 @@ Register-DuneRoute -Method POST -Path '/api/fls-token/rotate' -Handler {
             Write-DuneError -Response $res -Status 403 -Message 'Token rotation can only be managed from the host machine.'
             return
         }
+        if (-not (Test-DuneDisruptiveActionGuard -Req $req -Res $res -Action 'rotating the FLS token and restarting the battlegroup')) { return }
         $token = $null
         if ($body -is [System.Collections.IDictionary]) {
             if ($body.Contains('token')) { $token = [string]$body['token'] }

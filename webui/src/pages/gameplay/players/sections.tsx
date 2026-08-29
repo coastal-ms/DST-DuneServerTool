@@ -25,7 +25,7 @@ import {
   resetAllKeystones, resetAllSpecs, resetJourney, resetProgressionLive, resetSpec,
   restoreDestroyed,
   setFactionTier, setSkillPoints,
-  setStarterClass, teleportToPlayer, teleportToLocation, setRespawn, getTeleportDestinations, getPlayers, updatePlayerTags, wipeCodex, resetFaction, snapshotBuilds, getFreshStartSnapshots, restoreBuilds, grantAllSkills,
+  setStarterClass, spawnVehicle, teleportToPlayer, teleportToLocation, setRespawn, getTeleportDestinations, getPlayers, updatePlayerTags, wipeCodex, resetFaction, snapshotBuilds, getFreshStartSnapshots, restoreBuilds, grantAllSkills,
   chatWhisper, isValidTemplateId, getItemCatalog, getCosmeticsCatalog, getPlayerOwnedCosmetics, filterCosmeticsCatalog, type CosmeticEntry,
   parseTcnoPackageText,
   giveItems, getItemPackages, saveItemPackage, deleteItemPackage,
@@ -591,7 +591,7 @@ interface ActionDef {
   offlineOnly?: boolean   // requires player to be offline (DB write the game caches in memory)
   experimental?: boolean  // unverified — may not take effect in-game; shown with an EXPERIMENTAL badge
   fields?: ActionField[]
-  custom?: 'give-item' | 'grant-reward' | 'whisper' | 'spawn-vehicle' | 'quick-presets' | 'vehicle-kit' | 'give-package' | 'cheat-scripts' | 'dev-scripts' | 'unlock-trainers' | 'unlock-mainquest' | 'complete-contract' | 'progression-unlock' | 'refuel-vehicle' | 'starter-class' | 'teleport-player' | 'teleport-location' | 'set-respawn' | 'reset-faction' | 'grant-cosmetic' | 'fresh-start'
+  custom?: 'give-item' | 'grant-reward' | 'whisper' | 'spawn-vehicle' | 'funcom-spawn-vehicle' | 'quick-presets' | 'vehicle-kit' | 'give-package' | 'cheat-scripts' | 'dev-scripts' | 'unlock-trainers' | 'unlock-mainquest' | 'complete-contract' | 'progression-unlock' | 'refuel-vehicle' | 'starter-class' | 'teleport-player' | 'teleport-location' | 'set-respawn' | 'reset-faction' | 'grant-cosmetic' | 'fresh-start'
   balance?: 'solari' | 'scrip' | 'intel'  // show the player's current balance read-only above the form
   confirm?: (p: Player) => string  // confirm message; if returns '' no prompt
   doubleConfirm?: boolean // also requires a typed "i acknowledge" prompt inside run()
@@ -729,6 +729,10 @@ const ACTIONS: ActionDef[] = [
   { id: 'spawn-vehicle', group: 'Vehicle', label: 'Spawn Vehicle', icon: 'Car', custom: 'spawn-vehicle',
     rowNote: 'Hands unassembled Mk6 parts — assemble at a Vehicle Assembly. Works online or offline',
     confirm: p => `Give vehicle parts to ${p.name}'s inventory? They'll need to assemble at a Vehicle Assembly. Works online or offline.`,
+    run: () => Promise.resolve({ message: '' }) },
+  { id: 'funcom-spawn-vehicle', group: 'Vehicle', label: 'Funcom Spawn Vehicle', icon: 'CarFront', custom: 'funcom-spawn-vehicle', liveOnly: true, experimental: true,
+    rowNote: 'Sends Funcom’s persistent SpawnVehicleAt command and assigns owner permission. Unconfirmed; create a fresh backup before testing.',
+    confirm: p => `Send Funcom's unconfirmed live vehicle-spawn command at ${p.name}?\n\nThe player must be online and a fresh backup must exist before testing.`,
     run: () => Promise.resolve({ message: '' }) },
   { id: 'refuel-vehicle', group: 'Vehicle', label: 'Refuel Vehicle', icon: 'Fuel', custom: 'refuel-vehicle',
     run: () => Promise.resolve({ message: '' }) },
@@ -985,6 +989,16 @@ function ActionRow({ def, player, busy, stats, open, danger, onToggle, runAction
           ) : def.custom === 'whisper' ? (
             <WhisperForm busy={busy}
               onSubmit={msg => runAction(def, () => chatWhisper(String(player.id), msg))} />
+          ) : def.custom === 'funcom-spawn-vehicle' ? (
+            <FuncomSpawnVehicleForm busy={busy}
+              onSubmit={(vehicle, templateName, persistent) => runAction(def, () =>
+                spawnVehicle({
+                  target: { actor_id: player.id },
+                  vehicleId: vehicle.id,
+                  actorClass: vehicle.className,
+                  templateName: templateName || undefined,
+                  persistent,
+                }))} />
           ) : def.custom === 'spawn-vehicle' || def.custom === 'vehicle-kit' ? (
             <VehicleKitForm busy={busy}
               onSubmit={(veh, parts, overflow) => runAction(def, async () => {
@@ -1803,14 +1817,77 @@ export function GivePackageForm({ busy, giveDisabled = false, playerName, target
   )
 }
 
+// Sends Funcom's live SpawnVehicleAt command for field testing.
+function FuncomSpawnVehicleForm({ busy, onSubmit }: {
+  busy: boolean; onSubmit: (vehicle: VehicleTemplate, templateName: string, persistent: boolean) => void
+}) {
+  const [catalog, setCatalog] = useState<VehicleKitCatalog | null>(null)
+  const [catErr, setCatErr] = useState(false)
+  const [vid, setVid] = useState('')
+  const [tpl, setTpl] = useState('')
+  const selectCls = 'w-full px-3 py-2 rounded-lg bg-surface-2 border border-border text-text text-sm focus:outline-none focus:ring-2 focus:ring-ibad focus:border-ibad/50'
+
+  useEffect(() => {
+    let cancelled = false
+    getVehicleKitCatalog()
+      .then(cat => {
+        if (cancelled) return
+        setCatalog(cat)
+        const first = cat.vehicles.find(v => v.id !== 'Tank')
+        if (first) setVid(first.id)
+      })
+      .catch(() => { if (!cancelled) setCatErr(true) })
+    return () => { cancelled = true }
+  }, [])
+
+  if (catErr) return <div className="text-sm text-danger">Failed to load vehicle catalog.</div>
+  if (!catalog) return <div className="text-sm text-text-muted">Loading vehicle catalog…</div>
+
+  // Tank remains in the shared catalog for future retesting, but is intentionally
+  // hidden from the experimental spawn action until its game behavior is reliable.
+  const spawnVehicles = catalog.vehicles.filter(v => v.id !== 'Tank')
+  const veh = spawnVehicles.find(v => v.id === vid) || spawnVehicles[0]
+  if (!veh) return <div className="text-sm text-text-muted">No Funcom vehicle definitions available.</div>
+
+  return (
+    <div className="space-y-3">
+      <div>
+        <label className="block text-[11px] uppercase tracking-wider text-text-dim mb-1">Vehicle</label>
+        <select value={vid} disabled={busy} className={selectCls}
+          onChange={e => { setVid(e.target.value); setTpl('') }}>
+          {spawnVehicles.map(v => <option key={v.id} value={v.id}>{v.label}</option>)}
+        </select>
+      </div>
+      <div>
+        <label className="block text-[11px] uppercase tracking-wider text-text-dim mb-1">Funcom template</label>
+        <select value={tpl} disabled={busy} className={selectCls}
+          onChange={e => setTpl(e.target.value)}>
+          <option value="">Base (no template)</option>
+          {veh.templates.map(t => <option key={t} value={t}>{t}</option>)}
+        </select>
+      </div>
+      <div className="text-xs text-text-muted">
+        Persistent is always enabled so DST can assign owner permission and verify the vehicle survives.
+      </div>
+      <div className="rounded-lg border border-warning/40 bg-warning/10 px-3 py-2 text-xs text-text-muted">
+        Experimental Funcom command. Success is reported only after DST verifies the vehicle row,
+        transform, and rank-1 owner permission survived the post-spawn check. Confirm handling in game.
+      </div>
+      <button className="btn-primary w-full" disabled={busy}
+        onClick={() => onSubmit(veh, tpl, true)}>
+        {busy ? <Icon name="Loader2" size={13} className="animate-spin" /> : <Icon name="CarFront" size={13} />} Send Funcom Spawn Command
+      </button>
+    </div>
+  )
+}
+
 // Self-contained vehicle-parts form. Picks a vehicle that has discrete part
 // items and previews its Mk6 parts list; submitting hands every part plus a
 // Large Vehicle Fuel Cell and a Welding Torch Mk5 into the player's inventory
 // via the normal give-item path (works online or offline). Vehicles the game
 // has no part items for (Tank / Treadwheel / Container) are omitted — there is
-// no DST path to deliver those because the game has no inventory-form of their
-// chassis/modules. Shared by both the "Spawn Vehicle" and "Give Vehicle Kit"
-// actions, which call the same handler.
+// no DST kit path to deliver those because the game has no inventory-form of
+// their chassis/modules. Shared by the two existing package actions.
 function VehicleKitForm({ busy, onSubmit }: {
   busy: boolean; onSubmit: (veh: VehicleTemplate, parts: string[], allowOverflow: boolean) => void
 }) {

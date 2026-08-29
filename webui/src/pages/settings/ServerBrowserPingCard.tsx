@@ -16,7 +16,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { Icon } from '../../components/Icon'
 import { useCardCollapse } from '../../components/CollapsibleCard'
-import { api, ApiError } from '../../api/client'
+import { api, ApiError, withOnlinePlayerGuard } from '../../api/client'
 
 const RECOMMENDED_ID = 'dune-awakening'
 
@@ -137,13 +137,15 @@ export function ServerBrowserPingCard() {
     setErr(null)
     setMessage(null)
     try {
-      const r = await api<ReconcileResult>('/api/public-ip/datacenter-id', {
-        method: 'POST',
-        body: JSON.stringify({
-          datacenterId: draftDatacenterId.trim(),
-          publicIp: draftPublicIp.trim(),
+      const r = await withOnlinePlayerGuard(force =>
+        api<ReconcileResult>(`/api/public-ip/datacenter-id${force ? '?force=true' : ''}`, {
+          method: 'POST',
+          body: JSON.stringify({
+            datacenterId: draftDatacenterId.trim(),
+            publicIp: draftPublicIp.trim(),
+          }),
         }),
-      })
+      )
       setMessage(r.message)
     } catch (e) {
       setErr(`Save failed: ${e instanceof Error ? e.message : String(e)}`)

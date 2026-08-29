@@ -47,12 +47,49 @@ Register-DuneRoute -Method GET -Path '/api/gameconfig/experimental/search' -Hand
         if ($query) {
             $fields = [object[]]@(Search-DuneAdvancedCvarCatalogApi -Query $query)
         }
+
         Write-DuneJson -Response $res -Body @{
             query  = $query
             fields = $fields
         }
     } catch {
         Write-DuneError -Response $res -Status 500 -Message "Experimental Lab search failed: $($_.Exception.Message)"
+    }
+}
+
+Register-DuneRoute -Method GET -Path '/api/gameconfig/time-of-day' -Handler {
+    param($req, $res, $routeParams, $body)
+    Write-DuneJson -Response $res -Body (Get-DuneTwilightLockExperiment)
+}
+
+Register-DuneRoute -Method POST -Path '/api/gameconfig/time-of-day/stage' -Handler {
+    param($req, $res, $routeParams, $body)
+    $ctx = Get-DuneGameConfigContext
+    if (-not $ctx.ok) {
+        Write-DuneError -Response $res -Status $ctx.status -Message $ctx.message
+        return
+    }
+    if (-not (Test-DunePlayerGuard -Req $req -Res $res -Ip $ctx.ip)) { return }
+    try {
+        Write-DuneJson -Response $res -Body (
+            Invoke-DuneTwilightLockStage -Ip $ctx.ip -Candidate $body.candidate)
+    } catch {
+        Write-DuneError -Response $res -Status 400 -Message $_.Exception.Message
+    }
+}
+
+Register-DuneRoute -Method POST -Path '/api/gameconfig/time-of-day/restore' -Handler {
+    param($req, $res, $routeParams, $body)
+    $ctx = Get-DuneGameConfigContext
+    if (-not $ctx.ok) {
+        Write-DuneError -Response $res -Status $ctx.status -Message $ctx.message
+        return
+    }
+    if (-not (Test-DunePlayerGuard -Req $req -Res $res -Ip $ctx.ip)) { return }
+    try {
+        Write-DuneJson -Response $res -Body (Invoke-DuneTwilightLockRestore -Ip $ctx.ip)
+    } catch {
+        Write-DuneError -Response $res -Status 400 -Message $_.Exception.Message
     }
 }
 
@@ -151,12 +188,26 @@ Register-DuneRoute -Method PUT -Path '/api/gameconfig' -Handler {
         # Explicit array form: each item already carries file/section/key/value
         # OR file/section/key/arrayLines (for +/-key= array entries).
         foreach ($u in $updates) {
-            $sec = "$($u.section)"; $file = "$($u.file)"; $key = "$($u.key)"
+            $sec = "$($u.section)".Trim(); $file = "$($u.file)".Trim(); $key = "$($u.key)".Trim()
             if (-not $key) { continue }
+            if (-not (Test-DuneGameConfigRawTextSafe -Value $sec) -or
+                -not (Test-DuneGameConfigRawTextSafe -Value $file) -or
+                -not (Test-DuneGameConfigRawTextSafe -Value $key)) {
+                Write-DuneError -Response $res -Status 400 -Message 'Raw INI file, section, and key identifiers must be one physical line without control characters.'
+                return
+            }
+            if ($key -match '^[+-]') {
+                Write-DuneError -Response $res -Status 400 -Message 'Raw INI keys must not include Unreal + or - operator prefixes; use arrayLines for array entries.'
+                return
+            }
             if (-not $sec -or -not $file) {
                 if ($schemaMap.ContainsKey($key)) { if (-not $sec) { $sec = $schemaMap[$key].section }; if (-not $file) { $file = $schemaMap[$key].file } }
             }
             if (-not $sec -or -not $file) { continue }
+            if (Test-DuneGameConfigRawTargetBlocked -File $file -Section $sec -Key $key) {
+                Write-DuneError -Response $res -Status 400 -Message "The unverified TimeOfDaySettings m_StartTime candidate is evidence-only and cannot be written by DST."
+                return
+            }
             # Array-entry payload: rebuild the full set of +/-key= lines for
             # this section+key. Save-DuneGameConfigUpdates knows to strip every
             # +/- line for the key first and then write the supplied set. An
@@ -172,7 +223,12 @@ Register-DuneRoute -Method PUT -Path '/api/gameconfig' -Handler {
                 if ($arrLines -is [System.Collections.IEnumerable] -and -not ($arrLines -is [string])) {
                     foreach ($ln in $arrLines) {
                         $s = "$ln".Trim()
-                        if ($s) { $lines.Add($s) }
+                        if (-not $s) { continue }
+                        if (-not (Test-DuneGameConfigArrayLineMatchesKey -Line $s -Key $key)) {
+                            Write-DuneError -Response $res -Status 400 -Message "Every arrayLines entry must be a +/-$key= line matching the submitted key."
+                            return
+                        }
+                        $lines.Add($s)
                     }
                 }
                 if ($lines.Count -eq 0) {
@@ -182,8 +238,13 @@ Register-DuneRoute -Method PUT -Path '/api/gameconfig' -Handler {
                 }
                 continue
             }
-            $rm = (Test-DuneGameConfigValueIsDefault -Key $key -Value "$($u.value)")
-            $structured.Add(@{ file = $file; section = $sec; key = $key; value = "$($u.value)"; remove = $rm })
+            $rawValue = "$($u.value)"
+            if (-not (Test-DuneGameConfigRawTextSafe -Value $rawValue)) {
+                Write-DuneError -Response $res -Status 400 -Message 'Raw scalar INI values must be one physical line without control characters.'
+                return
+            }
+            $rm = (Test-DuneGameConfigValueIsDefault -Key $key -Value $rawValue)
+            $structured.Add(@{ file = $file; section = $sec; key = $key; value = $rawValue; remove = $rm })
         }
     } else {
         # Schema-keyed object form: resolve section/file from the schema.
@@ -281,7 +342,7 @@ Register-DuneRoute -Method POST -Path '/api/gameconfig/reload-pods' -Handler {
         Write-DuneError -Response $res -Status $ctx.status -Message $ctx.message
         return
     }
-    if (-not (Test-DunePlayerGuard -Req $req -Res $res -Ip $ctx.ip)) { return }
+    if (-not (Test-DuneDisruptiveActionGuard -Req $req -Res $res -Ip $ctx.ip -Action 'restarting the battlegroup to apply game configuration')) { return }
     try {
         # Invoke-DuneBattlegroupRestart rebuilds the startup console variables from
         # the current INI before restarting, so no separate sync is needed here.

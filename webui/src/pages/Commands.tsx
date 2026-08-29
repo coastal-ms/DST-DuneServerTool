@@ -24,7 +24,7 @@ import { PageHeader } from '../components/PageHeader'
 import { Icon } from '../components/Icon'
 import { useStatus } from '../hooks/useStatus'
 import { useApi } from '../hooks/useApi'
-import { api } from '../api/client'
+import { api, withOnlinePlayerGuard } from '../api/client'
 import { isLocalViewer } from '../util/viewer'
 import type { Command, CommandsResponse } from '../api/types'
 import { usePortalAuth } from '../auth/PortalAuthGate'
@@ -341,7 +341,9 @@ export function Commands() {
   async function runCommand(c: Command) {
     setRunning(s => new Set(s).add(c.name))
     try {
-      const r = await api<LaunchResult>(`/api/commands/run/${encodeURIComponent(c.name)}`, { method: 'POST' })
+      const r = await withOnlinePlayerGuard(force =>
+        api<LaunchResult>(`/api/commands/run/${encodeURIComponent(c.name)}${force ? '?force=true' : ''}`, { method: 'POST' }),
+      )
       showToast('ok', `Launched '${r.name}'${r.pid ? ` (PID ${r.pid})` : ''} in a new console window.`)
       window.setTimeout(() => { void forceRefresh(); void cmdsState.refresh() }, 1500)
     } catch (e) {

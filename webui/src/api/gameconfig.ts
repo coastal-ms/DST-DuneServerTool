@@ -62,6 +62,48 @@ export async function searchGameConfigExperimental(query: string) {
   return { ...response, fields: normalizeGameConfigFields(response.fields) }
 }
 
+export interface TimeOfDayLockConfig {
+  available: boolean
+  evidenceStatus: 'visual-phases-verified'
+  candidates: Array<{ value: string; label: string }>
+  clientApply: { available: false; reason: string }
+  restartRequired: true
+  minimumObservationMinutes: number
+}
+
+export interface TimeOfDayLockActionResult {
+  ok: boolean
+  staged?: boolean
+  restored?: boolean
+  candidate?: string
+  backup: string
+  restartRequired: true
+  clientApplied: false
+  message: string
+}
+
+export function getTimeOfDayLockConfig() {
+  return api<TimeOfDayLockConfig>('/api/gameconfig/time-of-day')
+}
+
+export function stageTimeOfDayPhase(candidate: string) {
+  return withOnlinePlayerGuard(force =>
+    api<TimeOfDayLockActionResult>(
+      `/api/gameconfig/time-of-day/stage${fq(force)}`,
+      { method: 'POST', body: JSON.stringify({ candidate }) },
+    ),
+  )
+}
+
+export function restoreTimeOfDayCycle() {
+  return withOnlinePlayerGuard(force =>
+    api<TimeOfDayLockActionResult>(
+      `/api/gameconfig/time-of-day/restore${fq(force)}`,
+      { method: 'POST' },
+    ),
+  )
+}
+
 export function getGameConfig() {
   return api<GameConfigResponse>('/api/gameconfig')
 }

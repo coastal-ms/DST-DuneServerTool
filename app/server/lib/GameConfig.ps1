@@ -62,6 +62,203 @@ $script:DuneGcSecContracts = '/Script/DuneSandbox.ContractsSubsystem'
 $script:DuneGcSecCrafting  = '/Script/DuneSandbox.CraftingSettings'
 $script:DuneGcSecTechKnowledge = '/Script/DuneSandbox.TechKnowledgeSettings'
 
+function Test-DuneGameConfigRawTargetBlocked {
+    param(
+        [string]$File,
+        [string]$Section,
+        [string]$Key
+    )
+    $canonicalKey = ([string]$Key).Trim() -replace '^[+-]+', ''
+    return (
+        ([string]$File).Trim() -ieq 'game' -and
+        ([string]$Section).Trim() -ieq $script:DuneGcSecTimeOfDay -and
+        $canonicalKey -ieq 'm_StartTime'
+    )
+}
+
+function Test-DuneGameConfigRawTextSafe {
+    param([AllowEmptyString()][string]$Value)
+    return $null -ne $Value -and $Value.IndexOf([char]0) -lt 0 -and $Value -notmatch '[\r\n]'
+}
+
+function Test-DuneGameConfigArrayLineMatchesKey {
+    param(
+        [string]$Line,
+        [string]$Key
+    )
+    if (-not $Key -or -not $Line -or
+        -not (Test-DuneGameConfigRawTextSafe -Value $Key) -or
+        -not (Test-DuneGameConfigRawTextSafe -Value $Line)) {
+        return $false
+    }
+    return ([string]$Line).Trim() -match "^[+-]$([regex]::Escape($Key))="
+}
+
+$script:DuneTwilightCandidates = @(
+    [ordered]@{ value = '18.0'; label = 'Sunset - 18:00' }
+    [ordered]@{ value = '19.0'; label = 'Twilight - 19:00' }
+    [ordered]@{ value = '20.0'; label = 'Dark night - 20:00' }
+    [ordered]@{ value = '21.0'; label = 'Full night - 21:00' }
+    [ordered]@{ value = '4.0'; label = 'Dew harvest - 04:00' }
+)
+$script:DuneTwilightCandidateHours = @($script:DuneTwilightCandidates | ForEach-Object { $_.value })
+
+function Get-DuneTwilightLockExperiment {
+    return [ordered]@{
+        available = $true
+        evidenceStatus = 'visual-phases-verified'
+        candidates = @($script:DuneTwilightCandidates)
+        clientApply = [ordered]@{
+            available = $false
+            reason = 'm_StartTime client behavior is unverified, so DST will not write a client override.'
+        }
+        restartRequired = $true
+        minimumObservationMinutes = 30
+    }
+}
+
+function Test-DuneTwilightCandidateHour {
+    param($Value)
+    $text = "$Value".Trim()
+    if (-not (Test-DuneGameConfigRawTextSafe -Value $text)) { return $false }
+    $number = 0.0
+    if (-not [double]::TryParse(
+        $text,
+        [Globalization.NumberStyles]::Float,
+        [Globalization.CultureInfo]::InvariantCulture,
+        [ref]$number
+    )) {
+        return $false
+    }
+    if ([double]::IsNaN($number) -or [double]::IsInfinity($number)) { return $false }
+    return $text -in $script:DuneTwilightCandidateHours
+}
+
+function Resolve-DuneTwilightLiveGameConfigTarget {
+    param([Parameter(Mandatory)][string]$Ip)
+    $paths = Resolve-DuneGameConfigPaths -Ip $Ip
+    $liveGamePattern = '^/var/lib/rancher/k3s/storage/[^/]+/Saved/UserSettings/UserGame\.ini$'
+    if ("$($paths.source)" -ne 'live' -or "$($paths.game)" -notmatch $liveGamePattern) {
+        throw 'Twilight experiment requires a live battlegroup UserGame.ini; setup templates are never modified.'
+    }
+    return $paths
+}
+
+function Read-DuneTwilightLiveGameConfig {
+    param(
+        [Parameter(Mandatory)][string]$Ip,
+        [Parameter(Mandatory)][string]$Path
+    )
+    $raw = ((Invoke-V6Ssh -Ip $Ip -Cmd "sudo cat '$Path' 2>/dev/null") -join "`n")
+    if ([string]::IsNullOrWhiteSpace($raw) -or $raw.TrimStart().StartsWith('ERROR:')) {
+        throw 'Twilight experiment could not verify the live UserGame.ini after writing it.'
+    }
+    return $raw
+}
+
+function Assert-DuneTwilightStageReadback {
+    param(
+        [Parameter(Mandatory)][string]$Raw,
+        [Parameter(Mandatory)][string]$Candidate
+    )
+    $effective = Get-DuneIniEffective -Raw $Raw
+    $prefix = "$script:DuneGcSecTimeOfDay||"
+    if ("$($effective["${prefix}m_StartTime"])" -ne $Candidate -or
+        "$($effective["${prefix}m_bTimeOfDayEnabled"])" -ine 'False') {
+        throw 'Twilight experiment write verification failed; the live UserGame.ini does not contain the exact staged values.'
+    }
+}
+
+function Assert-DuneTwilightRestoreReadback {
+    param([Parameter(Mandatory)][string]$Raw)
+    $effective = Get-DuneIniEffective -Raw $Raw
+    $prefix = "$script:DuneGcSecTimeOfDay||"
+    if ($effective.ContainsKey("${prefix}m_StartTime") -or
+        $effective.ContainsKey("${prefix}m_bTimeOfDayEnabled")) {
+        throw 'Normal-cycle restore verification failed; a DST-managed twilight override remains in the live UserGame.ini.'
+    }
+}
+
+function Invoke-DuneTwilightLockStage {
+    param(
+        [Parameter(Mandatory)][string]$Ip,
+        [Parameter(Mandatory)]$Candidate
+    )
+    $candidateText = "$Candidate".Trim()
+    if (-not (Test-DuneTwilightCandidateHour -Value $candidateText)) {
+        throw "Candidate must be one of: $($script:DuneTwilightCandidateHours -join ', ')."
+    }
+    $paths = Resolve-DuneTwilightLiveGameConfigTarget -Ip $Ip
+    $backup = Backup-DuneGameConfig -Ip $Ip -ResolvedPaths $paths
+    $gameBackup = @($backup.files | Where-Object file -eq 'game' | Select-Object -First 1)
+    if ($gameBackup.Count -ne 1 -or -not $gameBackup[0].ok) {
+        throw 'Twilight experiment was not staged because the server Game.ini backup could not be verified.'
+    }
+    Save-DuneGameConfigLocked -Ip $Ip -ResolvedPaths $paths -Updates @(
+        @{
+            file = 'game'
+            section = $script:DuneGcSecTimeOfDay
+            key = 'm_StartTime'
+            value = $candidateText
+            remove = $false
+        },
+        @{
+            file = 'game'
+            section = $script:DuneGcSecTimeOfDay
+            key = 'm_bTimeOfDayEnabled'
+            value = 'False'
+            remove = $false
+        }
+    )
+    $readback = Read-DuneTwilightLiveGameConfig -Ip $Ip -Path $paths.game
+    Assert-DuneTwilightStageReadback -Raw $readback -Candidate $candidateText
+    return [ordered]@{
+        ok = $true
+        staged = $true
+        candidate = $candidateText
+        backup = $gameBackup[0].backup
+        restartRequired = $true
+        clientApplied = $false
+        message = 'Candidate staged on the server. Apply INIs & restart to begin the field experiment.'
+    }
+}
+
+function Invoke-DuneTwilightLockRestore {
+    param([Parameter(Mandatory)][string]$Ip)
+    $paths = Resolve-DuneTwilightLiveGameConfigTarget -Ip $Ip
+    $backup = Backup-DuneGameConfig -Ip $Ip -ResolvedPaths $paths
+    $gameBackup = @($backup.files | Where-Object file -eq 'game' | Select-Object -First 1)
+    if ($gameBackup.Count -ne 1 -or -not $gameBackup[0].ok) {
+        throw 'Normal cycle was not restored because the server Game.ini backup could not be verified.'
+    }
+    Save-DuneGameConfigLocked -Ip $Ip -ResolvedPaths $paths -Updates @(
+        @{
+            file = 'game'
+            section = $script:DuneGcSecTimeOfDay
+            key = 'm_StartTime'
+            value = ''
+            remove = $true
+        },
+        @{
+            file = 'game'
+            section = $script:DuneGcSecTimeOfDay
+            key = 'm_bTimeOfDayEnabled'
+            value = ''
+            remove = $true
+        }
+    )
+    $readback = Read-DuneTwilightLiveGameConfig -Ip $Ip -Path $paths.game
+    Assert-DuneTwilightRestoreReadback -Raw $readback
+    return [ordered]@{
+        ok = $true
+        restored = $true
+        backup = $gameBackup[0].backup
+        restartRequired = $true
+        clientApplied = $false
+        message = 'DST-managed twilight overrides removed. Apply INIs & restart to restore the shipped normal cycle.'
+    }
+}
+
 # Funcom stores ALL Landsraad settings as scalar members inside ONE nested struct
 # value: [/Script/DuneSandbox.LandsraadSettings] Data=(m_TaskGoalAmount=5000.0,...).
 # Schema fields tagged StructKey='Data' are read from / written to that struct via
@@ -92,7 +289,7 @@ $script:DuneLandclaimDefaultRemovals = @(60,120,240,480,960,1920,3840,7680,15360
 $script:DuneGameConfigCategoryOrder = @(
     'Server Identity','Network','Survival','Hydration','Loot & Death',
     'Resources & Economy','Crafting','Building','BaseBackUp','Inventory','Guilds & Economy',
-    'Storm Cycle','Landsraad','PvP & Security','Spice','Taxation','Encounters','Sandworm','Vehicles',
+    'Storm Cycle','Time of Day','Landsraad','PvP & Security','Spice','Taxation','Encounters','Sandworm','Vehicles',
     'Experimental','Experimental 2','Experimental Lab'
 )
 
@@ -200,7 +397,7 @@ $script:DuneGameConfigSchema = @(
     @{ Section=$script:DuneGcSecConsole; Key='Sandstorm.Treasure.Enabled'; File='engine'; Type='bool01'; Default='1'; Label='Sandstorm Treasure Spawns'; Help='Spawn treasure during sandstorms.'; Startup=$true; Category='Storm Cycle' }
     @{ Section=$script:DuneGcSecStorm; Key='m_bCoriolisDoesDamage'; File='game'; Type='bool'; Default='False'; Label='Coriolis Storm Does Damage'; Help='Whether being caught in a Coriolis storm damages players. Also needs client-side apply.'; ClientApply=$true; Category='Storm Cycle' }
     @{ Section=$script:DuneGcSecStorm; Key='m_bSandStormDebrisEnabled'; File='game'; Type='bool'; Default='True'; Label='Sandstorm Debris'; Help='Whether sandstorms spawn flying debris. Also needs client-side apply.'; ClientApply=$true; Category='Storm Cycle' }
-    @{ Section=$script:DuneGcSecTimeOfDay; Key='m_bTimeOfDayEnabled'; File='game'; Type='bool'; Default='True'; Label='Time of Day Cycle'; Help='Whether the day/night cycle advances. Also needs client-side apply.'; ClientApply=$true; Category='Storm Cycle' }
+    @{ Section=$script:DuneGcSecTimeOfDay; Key='m_bTimeOfDayEnabled'; File='game'; Type='bool'; Default='True'; Label='Time of Day Cycle'; Help='Whether the day/night cycle advances. Use the field-verified phase controls below to lock Sunset, Twilight, darker night, or peak Dew Harvest time. Longer simulation-safety testing is still in progress. Also needs client-side apply.'; ClientApply=$true; Category='Time of Day' }
 
     # --- Landsraad (scalar members of [LandsraadSettings] Data=(...)) ---
     @{ Section=$script:DuneGcSecLandsraad; StructKey=$script:DuneGcLandsraadStructKey; Key='m_TaskGoalAmount'; File='game'; Type='float'; Min=0; Default='70000'; Label='Task Goal Amount'; Help='Contribution target for each House task before it completes. Funcom default is 70000. DST also applies the new goal to the currently-running term''s live House rows (dune.landsraad_tasks.goal_amount) so the change takes effect immediately.'; ClientApply=$true; Category='Landsraad' }
@@ -2346,9 +2543,13 @@ function Convert-DuneSpicefieldUpdates {
 # Does NOT auto-backup — backups are manual (Backup settings button) to avoid
 # cluttering the server PVC with a .dstbak per save.
 function Save-DuneGameConfig {
-    param([string]$Ip, [object[]]$Updates)
+    param(
+        [string]$Ip,
+        [object[]]$Updates,
+        [hashtable]$ResolvedPaths
+    )
     if (-not $Updates -or $Updates.Count -eq 0) { return }
-    $paths  = Resolve-DuneGameConfigPaths -Ip $Ip
+    $paths  = if ($ResolvedPaths) { $ResolvedPaths } else { Resolve-DuneGameConfigPaths -Ip $Ip }
     $quoted = Get-DuneGameConfigQuotedKeys
 
     $byFile = @{ game = (New-Object 'System.Collections.Generic.List[object]'); engine = (New-Object 'System.Collections.Generic.List[object]') }
@@ -2384,9 +2585,13 @@ function Save-DuneGameConfig {
 }
 
 function Save-DuneGameConfigLocked {
-    param([string]$Ip, [object[]]$Updates)
+    param(
+        [string]$Ip,
+        [object[]]$Updates,
+        [hashtable]$ResolvedPaths
+    )
     Invoke-WithDuneLock -Name 'gameconfig-ini' -Script {
-        Save-DuneGameConfig -Ip $Ip -Updates $Updates
+        Save-DuneGameConfig -Ip $Ip -Updates $Updates -ResolvedPaths $ResolvedPaths
     } | Out-Null
 }
 
@@ -2898,8 +3103,11 @@ function Get-DuneGameConfigCatalog {
 # resolved file to "<path>.dstbak-<ts>" and verifies the copy landed. Returns a
 # summary the UI can show. Only meaningful for a live BG (templates aren't backed up).
 function Backup-DuneGameConfig {
-    param([string]$Ip)
-    $paths = Resolve-DuneGameConfigPaths -Ip $Ip
+    param(
+        [string]$Ip,
+        [hashtable]$ResolvedPaths
+    )
+    $paths = if ($ResolvedPaths) { $ResolvedPaths } else { Resolve-DuneGameConfigPaths -Ip $Ip }
     $ts    = (Get-Date).ToString('yyyyMMddHHmmss')
     $files = New-Object 'System.Collections.Generic.List[object]'
     foreach ($f in @('game','engine')) {

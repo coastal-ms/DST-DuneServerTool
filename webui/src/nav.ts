@@ -27,6 +27,7 @@ export type NavItem = {
   workspaceId?: string
   legacy?: boolean
   activePaths?: readonly string[]
+  inactivePaths?: readonly string[]
 }
 
 export const LEGACY_NAV_ITEMS: readonly NavItem[] = [
@@ -34,11 +35,12 @@ export const LEGACY_NAV_ITEMS: readonly NavItem[] = [
   { to: '/pods',        label: 'Pods',          icon: 'Boxes',           group: 'overview', legacy: true },
   { to: '/operations',  label: 'Operations',    icon: 'Activity',        group: 'overview', workspaceId: 'operations' },
   { to: '/commands',    label: 'Commands',     icon: 'Zap',             group: 'terminal', legacy: true },
+  { to: '/map?view=lifecycle', label: 'Map SpinUp', icon: 'Globe',        group: 'terminal', legacy: true },
   { to: '/terminal',    label: 'PowerShell',   icon: 'SquareTerminal',  group: 'terminal', localOnly: true, sidebarHidden: true, legacy: true },
   { to: '/gameconfig',  label: 'Game Config',  icon: 'Sliders',         group: 'terminal', ownerOnly: true, legacy: true },
   { to: '/experimental', label: 'Experimental Lab', icon: 'FlaskConical', group: 'terminal', ownerOnly: true, legacy: true },
   { to: '/broadcasts',  label: 'Broadcasts',   icon: 'Megaphone',       group: 'terminal', legacy: true },
-  { to: '/gameplay',    label: 'Gameplay Admin', icon: 'Gamepad2',       group: 'workspaces', activePaths: GAMEPLAY_PATHS },
+  { to: '/gameplay',    label: 'Gameplay Admin', icon: 'Gamepad2',       group: 'workspaces', activePaths: GAMEPLAY_PATHS, inactivePaths: ['/map?view=lifecycle'] },
   { to: '/solo',        label: 'Solo Mode',      icon: 'Orbit',           group: 'solo', localOnly: true, windowsOnly: true, badge: 'Preview', legacy: true },
   { to: '/database',    label: 'Database',       icon: 'Database',        group: 'database', ownerOnly: true, legacy: true },
   { to: '/sietches',    label: 'Sietches',     icon: 'Network',         group: 'database', ownerOnly: true, legacy: true },
@@ -93,11 +95,20 @@ export function getVisibleNavItems({
     .filter(item => !item.windowsOnly || windows)
 }
 
-export function isNavItemActive(item: NavItem, pathname: string) {
+function routeMatches(route: string, pathname: string, search: string) {
+  const [routePath, routeQuery = ''] = route.split('?', 2)
+  const pathMatches = routePath === '/'
+    ? pathname === '/'
+    : pathname === routePath || pathname.startsWith(`${routePath}/`)
+  if (!pathMatches || !routeQuery) return pathMatches
+
+  const currentQuery = new URLSearchParams(search)
+  const requiredQuery = new URLSearchParams(routeQuery)
+  return Array.from(requiredQuery.entries()).every(([key, value]) => currentQuery.get(key) === value)
+}
+
+export function isNavItemActive(item: NavItem, pathname: string, search = '') {
+  if (item.inactivePaths?.some(path => routeMatches(path, pathname, search))) return false
   const paths = item.activePaths ?? [item.to]
-  return paths.some(path => (
-    path === '/'
-      ? pathname === '/'
-      : pathname === path || pathname.startsWith(`${path}/`)
-  ))
+  return paths.some(path => routeMatches(path, pathname, search))
 }

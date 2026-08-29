@@ -50,7 +50,8 @@ export class SectionErrorBoundary extends Component<Props, State> {
         </div>
         <p className="text-xs text-text-muted mb-2">
           This section hit an unexpected error and was skipped so the rest of the page keeps working.
-          If it persists, attach the logs ZIP from <strong>Help → Create GitHub Issue + Save Logs</strong>.
+          If it persists, use <strong>Help → Create Diagnostics Package</strong> and attach the ZIP in your
+          DST Discord support thread.
         </p>
         <pre className="text-[11px] font-mono whitespace-pre-wrap break-words text-text-muted bg-surface-2 border border-border rounded-lg p-2 max-h-32 overflow-auto mb-2">
           {error.message || String(error)}

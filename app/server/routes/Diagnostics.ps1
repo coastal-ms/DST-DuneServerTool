@@ -1,11 +1,11 @@
-﻿# /api/diagnostics — build a redacted ZIP of logs the user can attach to a
-# GitHub bug report. Triggered from the React "Help → Create GitHub Issue +
-# Save Logs" menu item and from the CLI `report-issue` command.
+﻿# /api/diagnostics — build a redacted ZIP of logs the owner can attach in a
+# DST Discord support thread. Triggered from React's
+# "Help → Create Diagnostics Package" action.
 #
 # Hard rules:
 #   - Everything that lands in the ZIP runs through Invoke-DstRedaction first.
 #     We never write the user's real VM IP, SSH key path, or Windows username
-#     into a file they're about to attach to a public issue.
+#     into a file they're about to share with support.
 #   - Failures on individual sources (missing log, locked file, OneDrive
 #     Desktop read-only) are recorded in manifest.txt as warnings; the ZIP
 #     still builds with whatever did succeed.
@@ -58,8 +58,9 @@ function Invoke-DstRedaction {
 
     # 1f) Generic password / secret fields in JSON ("password":"x") or
     #     key=value (PGPASSWORD=x) form, as a safety net for credentials that
-    #     never appear in a URI — e.g. the battlegroup CR's "password" field.
-    $out = [regex]::Replace($out, '(?i)("(?:password|passwd|pwd|pgpassword|dbpassword|secret)"\s*:\s*")[^"]+(")', '${1}<redacted>${2}')
+    #     never appear in a URI — e.g. the battlegroup CR's "password" field
+    #     and game-server state messages containing "loginPassword".
+    $out = [regex]::Replace($out, '(?i)("(?:password|loginpassword|passwd|pwd|pgpassword|dbpassword|secret)"\s*:\s*")[^"]+(")', '${1}<redacted>${2}')
     $out = [regex]::Replace($out, '(?im)^(\s*(?:PGPASSWORD|PASSWORD|DB_PASSWORD|DATABASE_PASSWORD)\s*=\s*).+$', '${1}<redacted>')
 
     # 1g) Global scrub of every captured connection-string password, so a copy
@@ -209,8 +210,7 @@ function Read-DstLogTail {
 }
 
 # Builds the diagnostic bundle. Returns a hashtable with the same shape the
-# /api/diagnostics/bundle handler echoes back to the React client (so the CLI
-# `report-issue` command can use the exact same code path).
+# /api/diagnostics/bundle handler echoes back to the React client.
 function New-DstDiagnosticBundle {
     [CmdletBinding()]
     param()
@@ -909,6 +909,7 @@ done
     $manLines.Add('  - WindowsUser / SshKey / SteamPath values    -> <user> / <ssh-key-path> / <steam-path>')
     $manLines.Add('  - ?t= / ?key= portal credentials           -> <redacted>')
     $manLines.Add('  - Discord webhook URL token                -> /api/webhooks/<id>/<redacted>')
+    $manLines.Add('  - JSON password / loginPassword fields      -> <redacted>')
     $manLines.Add('  - INI key=value redaction for the keys above as a safety net')
     $manLines.Add('')
     $manLines.Add('Game config snapshots (UserGame.ini / UserEngine.ini) are pulled live from')
@@ -930,7 +931,8 @@ done
     $manLines.Add('snapshot plus the recent logs of the connection-path pods (game servers, server')
     $manLines.Add('gateway, battlegroup director, text router, game message queue). These capture')
     $manLines.Add('the actual join-rejection reason for "P34 / can''t connect" reports where the')
-    $manLines.Add('server is visible but players time out. Dump/backup pods are excluded. All IPs')
+    $manLines.Add('server is visible but players time out. Dump/backup pods are included so failed')
+    $manLines.Add('database operations remain diagnosable. All IPs')
     $manLines.Add('are sanitized; absent when the VM is unreachable (see Warnings).')
     $manLines.Add('')
     $manLines.Add('updater-*.log/json captures recent in-app update launch, Inno setup, and exact')

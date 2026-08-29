@@ -66,6 +66,14 @@ Describe 'Invoke-DstRedaction' -Tag 'Pure' {
         $out | Should -Not -Match 'DOMAIN|DESKTOP-SECRET|Alice'
     }
 
+    It 'redacts game login passwords from server-state JSON' {
+        $raw = '{"serverId":"abc","loginPassword":"server-secret","displayName":"Test"}'
+        $out = Invoke-DstRedaction -Text $raw
+
+        $out | Should -Be '{"serverId":"abc","loginPassword":"<redacted>","displayName":"Test"}'
+        $out | Should -Not -Match 'server-secret'
+    }
+
     It 'is a no-op on empty input' {
         Invoke-DstRedaction -Text '' | Should -Be ''
     }

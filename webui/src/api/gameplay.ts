@@ -1,7 +1,7 @@
 // Gameplay API — native Market / Exchange + Market Bot, ported from the reference implementation.
 // All market responses carry a `source: 'live' | 'demo'` flag so the UI can
 // label whether data came from the live game DB or the bundled demo dataset.
-import { api } from './client'
+import { api, withOnlinePlayerGuard } from './client'
 import type { ChatCommandsState, WelcomeBackState } from './types'
 
 export type DataSource = 'live' | 'demo'
@@ -765,7 +765,9 @@ export function setLandsraadTermControl(factionId?: number, decreeId?: number) {
   })
 }
 export function restartLandsraadBattlegroup() {
-  return api<WriteResult>('/api/gameplay/landsraad/restart-bg', { method: 'POST' })
+  return withOnlinePlayerGuard(force =>
+    api<WriteResult>(`/api/gameplay/landsraad/restart-bg${force ? '?force=true' : ''}`, { method: 'POST' }),
+  )
 }
 
 // ---------------------------------------------------------------------------
@@ -1542,11 +1544,13 @@ export function getBaseWaterSummary(controllerId?: number, allPlayers = false): 
 }
 
 export function fillBaseWater(controllerId?: number, allPlayers = false): Promise<FillBaseWaterResponse> {
-  return api<FillBaseWaterResponse>('/api/gameplay/players/fill-base-water', {
-    method: 'POST', body: JSON.stringify(allPlayers
-      ? { all_players: true }
-      : { controller_id: controllerId }),
-  })
+  return withOnlinePlayerGuard(force =>
+    api<FillBaseWaterResponse>(`/api/gameplay/players/fill-base-water${force ? '?force=true' : ''}`, {
+      method: 'POST', body: JSON.stringify(allPlayers
+        ? { all_players: true }
+        : { controller_id: controllerId }),
+    }),
+  )
 }
 
 export interface CoriolisMap       { map: string; seed: number }
@@ -1738,6 +1742,64 @@ export interface PlayerVehicleRow {
 export function getPlayerVehicles(controllerId: number, demo?: boolean) {
   return api<{ ok: boolean; vehicles: PlayerVehicleRow[]; source: DataSource }>(
     `/api/gameplay/players/vehicles${qs({ controller_id: controllerId, demo: demo ? 1 : undefined })}`)
+}
+
+export interface VehicleFleetRow {
+  id: number
+  class: string
+  vehicle_name?: string
+  map?: string
+  actor_state?: string
+  owners?: string
+}
+
+export interface VehicleDeletionEntry extends Omit<VehicleFleetRow, 'id'> {
+  id: string
+  vehicle_id: number
+  status: 'queued' | 'deleted' | 'failed' | 'expired'
+  attempts: number
+  created_at: string
+  finished_at?: string
+  message?: string
+}
+
+export interface VehicleDeletionQueue {
+  entries: VehicleDeletionEntry[]
+  history: VehicleDeletionEntry[]
+  running: boolean
+}
+
+export function getVehicleFleet() {
+  return api<{ vehicles: VehicleFleetRow[]; total: number; source: DataSource }>('/api/gameplay/vehicles')
+}
+
+export function getVehicleDeletionQueue() {
+  return api<VehicleDeletionQueue>('/api/gameplay/vehicles/deletions')
+}
+
+export function queueVehicleDeletion(vehicleId: number, confirm: string) {
+  return api<{ ok: boolean; message: string; entry: VehicleDeletionEntry }>('/api/gameplay/vehicles/deletions', {
+    method: 'POST',
+    body: JSON.stringify({ vehicle_id: vehicleId, confirm }),
+  })
+}
+
+export function cancelVehicleDeletion(entryId: string) {
+  return api<{ ok: boolean; message: string }>(`/api/gameplay/vehicles/deletions/${encodeURIComponent(entryId)}`, {
+    method: 'DELETE',
+  })
+}
+
+export function processVehicleDeletions(confirm: string) {
+  return withOnlinePlayerGuard(force =>
+    api<{ ok: boolean; processed: number; failed: number; message: string }>(
+      `/api/gameplay/vehicles/deletions/process${force ? '?force=true' : ''}`,
+      {
+        method: 'POST',
+        body: JSON.stringify({ confirm }),
+      },
+    ),
+  )
 }
 
 export interface DungeonRunRow { dungeon_id: string; cleared: boolean; best_time_seconds?: number }
@@ -2145,14 +2207,18 @@ export function grantLive(controllerId: number, template: string, amount: number
 
 export interface SpawnVehicleInput {
   target: PlayerTarget
-  className: string
+  vehicleId: string
+  actorClass: string
   templateName?: string
   persistent?: boolean
   faction?: string
   location?: { x: number; y: number; z: number }
 }
 export function spawnVehicle(input: SpawnVehicleInput) {
-  const body: Record<string, unknown> = { class_name: input.className }
+  const body: Record<string, unknown> = {
+    vehicle_id: input.vehicleId,
+    actor_class: input.actorClass,
+  }
   if (input.target.fls_id)      body.fls_id        = input.target.fls_id
   if (input.target.actor_id)    body.actor_id      = input.target.actor_id
   if (input.templateName)       body.template_name = input.templateName

@@ -12,6 +12,7 @@ Register-DuneRoute -Method POST -Path '/api/db/world-restart' -LocalOnly -Handle
         Write-DuneError -Response $res -Status 400 -Message "Type $script:DuneWorldRestartConfirm exactly to continue."
         return
     }
+    if (-not (Test-DuneDisruptiveActionGuard -Req $req -Res $res -Action 'performing World Restart')) { return }
     $result = Start-DuneWorldRestartWorker -Operation restart -ServerDir $script:DuneServerDir
     if (-not $result.ok) {
         Write-DuneError -Response $res -Status 409 -Message $result.error
@@ -27,6 +28,7 @@ Register-DuneRoute -Method POST -Path '/api/db/world-restart/rollback' -LocalOnl
         Write-DuneError -Response $res -Status 400 -Message "Type $script:DuneWorldRollbackConfirm exactly to continue."
         return
     }
+    if (-not (Test-DuneDisruptiveActionGuard -Req $req -Res $res -Action 'rolling back World Restart')) { return }
     $state = Get-DuneWorldRestartStatus
     if ($state.PSObject.Properties['researchRecoveryRequired'] -and [bool]$state.researchRecoveryRequired) {
         Write-DuneError -Response $res -Status 409 -Message 'Research recovery is unresolved. Use Roll back research recovery instead.'
@@ -74,6 +76,7 @@ Register-DuneRoute -Method POST -Path '/api/db/world-restart/research-recover' -
             Write-DuneError -Response $res -Status 400 -Message 'characterName, funcomId, and itemKeys are required.'
             return
         }
+        if (-not (Test-DuneDisruptiveActionGuard -Req $req -Res $res -Action 'stopping the battlegroup for World Restart research recovery')) { return }
         $result = Invoke-WithDuneLock -Name $script:DuneWorldRestartLockName -TimeoutSec 5 -Script {
             Invoke-DuneWorldRestartResearchRecovery -CharacterName $characterName -FuncomId $funcomId -ItemKeys $itemKeys
         }
@@ -91,6 +94,7 @@ Register-DuneRoute -Method POST -Path '/api/db/world-restart/research-rollback' 
             Write-DuneError -Response $res -Status 400 -Message "Type $script:DuneWorldRestartResearchRollbackConfirm exactly to continue."
             return
         }
+        if (-not (Test-DuneDisruptiveActionGuard -Req $req -Res $res -Action 'stopping the battlegroup to roll back research recovery')) { return }
         $result = Invoke-WithDuneLock -Name $script:DuneWorldRestartLockName -TimeoutSec 5 -Script {
             Invoke-DuneWorldRestartResearchRollback
         }

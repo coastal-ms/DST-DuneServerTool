@@ -20,6 +20,7 @@ Register-DuneRoute -Method GET -Path '/api/sietches' -Handler {
 Register-DuneRoute -Method POST -Path '/api/sietches/config' -Handler {
     param($req, $res, $routeParams, $body)
     try {
+        if (-not (Test-DuneDisruptiveActionGuard -Req $req -Res $res -Action 'reconfiguring Sietches and restarting the battlegroup')) { return }
         # $body is a [hashtable] (see ConvertFrom-DuneRequestJson) - use ContainsKey,
         # NOT $body.PSObject.Properties[...] which reads the hashtable's own .NET
         # members (Count/Keys/...) and silently misses JSON keys like applyNames.
