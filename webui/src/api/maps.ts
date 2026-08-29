@@ -1,5 +1,5 @@
 // Maps API — on-demand control of optional map pods (e.g. Deep Desert)
-import { api } from './client'
+import { api, withOnlinePlayerGuard } from './client'
 
 export interface MapState {
   ok: boolean
@@ -194,7 +194,9 @@ export interface RestartPodsResult {
 
 // key: 'survival' (Hagga / Survival_1) | 'deepdesert' (Deep Desert)
 export function restartMapPods(key: 'survival' | 'deepdesert') {
-  return api<RestartPodsResult>('/api/maps/restart-pods', {
-    method: 'POST', body: JSON.stringify({ key }),
-  })
+  return withOnlinePlayerGuard(force =>
+    api<RestartPodsResult>(`/api/maps/restart-pods${force ? '?force=true' : ''}`, {
+      method: 'POST', body: JSON.stringify({ key }),
+    }),
+  )
 }

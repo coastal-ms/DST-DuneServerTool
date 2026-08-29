@@ -62,16 +62,16 @@ export async function searchGameConfigExperimental(query: string) {
   return { ...response, fields: normalizeGameConfigFields(response.fields) }
 }
 
-export interface TwilightLockExperiment {
+export interface TimeOfDayLockConfig {
   available: boolean
-  evidenceStatus: 'candidate-only'
+  evidenceStatus: 'visual-phases-verified'
   candidates: Array<{ value: string; label: string }>
   clientApply: { available: false; reason: string }
   restartRequired: true
   minimumObservationMinutes: number
 }
 
-export interface TwilightLockActionResult {
+export interface TimeOfDayLockActionResult {
   ok: boolean
   staged?: boolean
   restored?: boolean
@@ -82,23 +82,23 @@ export interface TwilightLockActionResult {
   message: string
 }
 
-export function getTwilightLockExperiment() {
-  return api<TwilightLockExperiment>('/api/gameconfig/experimental/twilight-lock')
+export function getTimeOfDayLockConfig() {
+  return api<TimeOfDayLockConfig>('/api/gameconfig/time-of-day')
 }
 
-export function stageTwilightLockCandidate(candidate: string) {
+export function stageTimeOfDayPhase(candidate: string) {
   return withOnlinePlayerGuard(force =>
-    api<TwilightLockActionResult>(
-      `/api/gameconfig/experimental/twilight-lock/stage${fq(force)}`,
+    api<TimeOfDayLockActionResult>(
+      `/api/gameconfig/time-of-day/stage${fq(force)}`,
       { method: 'POST', body: JSON.stringify({ candidate }) },
     ),
   )
 }
 
-export function restoreTwilightLockCycle() {
+export function restoreTimeOfDayCycle() {
   return withOnlinePlayerGuard(force =>
-    api<TwilightLockActionResult>(
-      `/api/gameconfig/experimental/twilight-lock/restore${fq(force)}`,
+    api<TimeOfDayLockActionResult>(
+      `/api/gameconfig/time-of-day/restore${fq(force)}`,
       { method: 'POST' },
     ),
   )

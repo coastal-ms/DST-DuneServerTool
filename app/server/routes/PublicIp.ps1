@@ -68,6 +68,7 @@ Register-DuneRoute -Method POST -Path '/api/public-ip/apply' -Handler {
     $confirmed = [bool](Get-DunePublicIpBodyValue -Body $body -Name 'confirmed' -Default $false)
     $hostRouteEnabled = [bool](Get-DunePublicIpBodyValue -Body $body -Name 'hostRouteEnabled' -Default $true)
     if (-not $confirmed) { Write-DuneError -Response $res -Status 400 -Message 'Confirmation is required before applying a public IP change.'; return }
+    if (-not (Test-DuneDisruptiveActionGuard -Req $req -Res $res -Action 'applying the public IP and restarting the battlegroup')) { return }
 
     $target = ''
     if ($mode -eq 'ddns') {
@@ -149,6 +150,7 @@ Register-DuneRoute -Method POST -Path '/api/public-ip/datacenter-id' -Handler {
         Write-DuneError -Response $res -Status 400 -Message 'Body must include "datacenterId".'
         return
     }
+    if (-not (Test-DuneDisruptiveActionGuard -Req $req -Res $res -Ip $vm.ip -Action 'reconciling the server-browser identity and restarting the battlegroup')) { return }
     try {
         $result = Invoke-DuneBrowserPingReconcile -Ip $vm.ip -DatacenterId $dcId -PublicIp $pubIp
         if (-not $result.ok) {

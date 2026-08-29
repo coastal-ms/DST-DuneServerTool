@@ -1,4 +1,4 @@
-import { api } from './client'
+import { api, withOnlinePlayerGuard } from './client'
 
 export type FlsWorld = {
   ok: boolean
@@ -46,8 +46,10 @@ export function getFlsRotateStatus(): Promise<FlsRotateStatus> {
 
 // Start the background rotation with the pasted self-hosting token.
 export function rotateFlsToken(token: string): Promise<FlsRotateStart> {
-  return api<FlsRotateStart>('/api/fls-token/rotate', {
-    method: 'POST',
-    body: JSON.stringify({ token }),
-  })
+  return withOnlinePlayerGuard(force =>
+    api<FlsRotateStart>(`/api/fls-token/rotate${force ? '?force=true' : ''}`, {
+      method: 'POST',
+      body: JSON.stringify({ token }),
+    }),
+  )
 }

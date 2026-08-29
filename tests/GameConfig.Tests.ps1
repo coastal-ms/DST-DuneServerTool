@@ -1491,7 +1491,7 @@ Describe 'DuneGameConfigSchema: experimental twilight evidence gate' -Tag 'GameC
         Mock Resolve-DuneGameConfigPaths { $script:TwilightLivePaths }
     }
 
-    It 'does not expose the unverified startup-hour candidate' {
+    It 'exposes the verified Time of Day surface without making the raw phase writable' {
         $timeFields = @($script:DuneGameConfigSchema | Where-Object {
             $_.Section -eq '/Script/DuneSandbox.TimeOfDaySettings'
         })
@@ -1500,8 +1500,9 @@ Describe 'DuneGameConfigSchema: experimental twilight evidence gate' -Tag 'GameC
 
         $start.Count | Should -Be 0
         $cycle.Count | Should -Be 1
-        $cycle[0].Help | Should -Match '(?i)does not select a phase'
-        $cycle[0].Help | Should -Match '(?i)has not proven'
+        $cycle[0].Category | Should -Be 'Time of Day'
+        $cycle[0].Help | Should -Match '(?i)field-verified phase controls'
+        $cycle[0].Help | Should -Match '(?i)simulation-safety testing is still in progress'
     }
 
     It 'keeps the schema free of invented phase and visual-lock writes' {
@@ -1561,17 +1562,43 @@ Describe 'DuneGameConfigSchema: experimental twilight evidence gate' -Tag 'GameC
 
     It 'offers only finite bounded candidate values' {
         $experiment = Get-DuneTwilightLockExperiment
-        @($experiment.candidates.value) | Should -Be @('17.0', '18.0', '19.0')
-        $experiment.evidenceStatus | Should -Be 'candidate-only'
+        @($experiment.candidates.value) | Should -Be @('18.0', '19.0', '20.0', '21.0', '4.0')
+        @($experiment.candidates.label) | Should -Be @(
+            'Sunset - 18:00',
+            'Twilight - 19:00',
+            'Dark night - 20:00',
+            'Full night - 21:00',
+            'Dew harvest - 04:00'
+        )
+        $experiment.evidenceStatus | Should -Be 'visual-phases-verified'
         $experiment.clientApply.available | Should -BeFalse
         $experiment.restartRequired | Should -BeTrue
         $experiment.minimumObservationMinutes | Should -Be 30
-        foreach ($valid in @('17.0', '18.0', '19.0')) {
+        foreach ($valid in @('18.0', '19.0', '20.0', '21.0', '4.0')) {
             (Test-DuneTwilightCandidateHour -Value $valid) | Should -BeTrue
         }
-        foreach ($invalid in @('', '16.9', '20', 'NaN', 'Infinity', "18`nInjected=True")) {
+        foreach ($invalid in @('', '17.0', '20', '22.0', 'NaN', 'Infinity', "18`nInjected=True")) {
             (Test-DuneTwilightCandidateHour -Value $invalid) | Should -BeFalse
         }
+    }
+
+    It 'writes an active candidate when the source contains only a commented value' {
+        $raw = @'
+[/Script/DuneSandbox.TimeOfDaySettings]
+;m_StartTime=18.0
+'@
+        $updates = @(
+            @{ file='game'; section=$script:DuneGcSecTimeOfDay; key='m_StartTime'; value='18.0'; remove=$false },
+            @{ file='game'; section=$script:DuneGcSecTimeOfDay; key='m_bTimeOfDayEnabled'; value='False'; remove=$false }
+        )
+
+        $written = ConvertTo-DuneIniManaged -Raw $raw -Updates $updates -QuotedKeys @{}
+        @($written -split "`n" | Where-Object { $_ -eq 'm_StartTime=18.0' }).Count | Should -Be 1
+        { Assert-DuneTwilightStageReadback -Raw @'
+[/Script/DuneSandbox.TimeOfDaySettings]
+;m_StartTime=18.0
+m_bTimeOfDayEnabled=False
+'@ -Candidate '18.0' } | Should -Throw '*write verification failed*'
     }
 
     It 'backs up before staging the exact server-only candidate pair' {
@@ -1709,9 +1736,9 @@ Describe 'DuneGameConfigSchema: experimental twilight evidence gate' -Tag 'GameC
     It 'registers dedicated guarded stage and restore routes' {
         $route = Get-Content (Join-Path (Get-DstRepoRoot) 'app\server\routes\GameConfig.ps1') -Raw
         foreach ($path in @(
-            '/api/gameconfig/experimental/twilight-lock',
-            '/api/gameconfig/experimental/twilight-lock/stage',
-            '/api/gameconfig/experimental/twilight-lock/restore'
+            '/api/gameconfig/time-of-day',
+            '/api/gameconfig/time-of-day/stage',
+            '/api/gameconfig/time-of-day/restore'
         )) {
             $route | Should -Match ([regex]::Escape($path))
         }

@@ -8,7 +8,7 @@ import { ViewportNotice } from '../components/ViewportNotice'
 import { useStatus } from '../hooks/useStatus'
 import { api } from '../api/client'
 import { ServerNameCard } from './gameconfig/ServerNameCard'
-import { TwilightLockEvidenceCard } from './gameconfig/TwilightLockEvidenceCard'
+import { TimeOfDayLockPanel } from './gameconfig/TwilightLockEvidenceCard'
 import {
   getGameConfigSchema,
   getGameConfigExperimentalCategories,
@@ -1481,10 +1481,6 @@ export function GameConfig({ mode = 'standard' }: { mode?: 'standard' | 'experim
         </div>
       )}
 
-      {experimentalPage && (
-        <TwilightLockEvidenceCard vmRunning={vmRunning} />
-      )}
-
       {localViewer && (
         <>
           {/* Local client config (this PC) */}
@@ -2046,6 +2042,9 @@ export function GameConfig({ mode = 'standard' }: { mode?: 'standard' | 'experim
                     means a stored base is recyclable-only after every reset. */}
                 {!experimentalPage && cat.category === 'BaseBackUp' && (
                   <BaseBackupGuardPanel vmRunning={vmRunning} />
+                )}
+                {!experimentalPage && cat.category === 'Time of Day' && (
+                  <TimeOfDayLockPanel vmRunning={vmRunning} />
                 )}
               </CategoryCard>
               )

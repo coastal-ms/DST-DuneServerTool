@@ -136,6 +136,21 @@ Register-DuneRoute -Method POST -Path '/api/commands/run/{name}' -Handler {
         return
     }
 
+    $disruptiveActions = @{
+        shutdown = 'stopping the battlegroup and powering off the VM'
+        reboot = 'rebooting the VM and battlegroup'
+        restart = 'restarting the battlegroup'
+        stop = 'stopping the battlegroup'
+        'apply-inis' = 'applying INI settings and restarting the battlegroup'
+        update = 'updating the battlegroup'
+        import = 'importing a database backup'
+        'change-vm-ip' = 'changing the VM network configuration'
+        'change-battlegroup-ip' = 'changing the battlegroup player IP'
+    }
+    if ($disruptiveActions.ContainsKey([string]$name)) {
+        if (-not (Test-DuneDisruptiveActionGuard -Req $req -Res $res -Action $disruptiveActions[[string]$name])) { return }
+    }
+
     try {
         # For commands that restart the battlegroup, force-clear any orphaned
         # *_progress.running flags. Restarting the BG wipes/cycles game state,

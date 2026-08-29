@@ -1817,8 +1817,7 @@ export function GivePackageForm({ busy, giveDisabled = false, playerName, target
   )
 }
 
-// Sends Funcom's live SpawnVehicleAt command for field testing. Unlike vehicle
-// kits, this includes vehicles with no inventory-form parts, such as the Tank.
+// Sends Funcom's live SpawnVehicleAt command for field testing.
 function FuncomSpawnVehicleForm({ busy, onSubmit }: {
   busy: boolean; onSubmit: (vehicle: VehicleTemplate, templateName: string, persistent: boolean) => void
 }) {
@@ -1834,7 +1833,8 @@ function FuncomSpawnVehicleForm({ busy, onSubmit }: {
       .then(cat => {
         if (cancelled) return
         setCatalog(cat)
-        if (cat.vehicles.length > 0) setVid(cat.vehicles[0].id)
+        const first = cat.vehicles.find(v => v.id !== 'Tank')
+        if (first) setVid(first.id)
       })
       .catch(() => { if (!cancelled) setCatErr(true) })
     return () => { cancelled = true }
@@ -1843,7 +1843,10 @@ function FuncomSpawnVehicleForm({ busy, onSubmit }: {
   if (catErr) return <div className="text-sm text-danger">Failed to load vehicle catalog.</div>
   if (!catalog) return <div className="text-sm text-text-muted">Loading vehicle catalog…</div>
 
-  const veh = catalog.vehicles.find(v => v.id === vid) || catalog.vehicles[0]
+  // Tank remains in the shared catalog for future retesting, but is intentionally
+  // hidden from the experimental spawn action until its game behavior is reliable.
+  const spawnVehicles = catalog.vehicles.filter(v => v.id !== 'Tank')
+  const veh = spawnVehicles.find(v => v.id === vid) || spawnVehicles[0]
   if (!veh) return <div className="text-sm text-text-muted">No Funcom vehicle definitions available.</div>
 
   return (
@@ -1852,7 +1855,7 @@ function FuncomSpawnVehicleForm({ busy, onSubmit }: {
         <label className="block text-[11px] uppercase tracking-wider text-text-dim mb-1">Vehicle</label>
         <select value={vid} disabled={busy} className={selectCls}
           onChange={e => { setVid(e.target.value); setTpl('') }}>
-          {catalog.vehicles.map(v => <option key={v.id} value={v.id}>{v.label}</option>)}
+          {spawnVehicles.map(v => <option key={v.id} value={v.id}>{v.label}</option>)}
         </select>
       </div>
       <div>

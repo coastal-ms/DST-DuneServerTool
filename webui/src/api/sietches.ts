@@ -1,5 +1,5 @@
 // Sietches API — configure the number of Survival_1 (Hagga) shards + per-sietch names
-import { api } from './client'
+import { api, withOnlinePlayerGuard } from './client'
 
 export interface Sietch {
   setIndex: number
@@ -47,8 +47,10 @@ export function getSietches() {
 // Bulk configure: set the number of Hagga sietches (1-6), optionally naming each,
 // then clean-restart the battlegroup.
 export function setSietchConfig(count: number, names: string[], applyNames: boolean) {
-  return api<SietchMutation>('/api/sietches/config', {
-    method: 'POST',
-    body: JSON.stringify({ count, names, applyNames }),
-  })
+  return withOnlinePlayerGuard(force =>
+    api<SietchMutation>(`/api/sietches/config${force ? '?force=true' : ''}`, {
+      method: 'POST',
+      body: JSON.stringify({ count, names, applyNames }),
+    }),
+  )
 }

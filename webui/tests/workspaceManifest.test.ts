@@ -35,6 +35,13 @@ describe('workspace manifest', () => {
     }
   })
 
+  it('describes the shipped Vehicles surface without advertising future scaffolding', () => {
+    expect(WORKSPACE_MANIFEST.find(workspace => workspace.id === 'vehicles')).toMatchObject({
+      purpose: 'Live fleet inventory and protected vehicle removal.',
+      responsivePattern: 'Responsive fleet cards with one guarded deletion queue.',
+    })
+  })
+
   it('keeps Solo separate and records every current feature disposition', () => {
     expect(WORKSPACE_MANIFEST.some(workspace => workspace.id === ('solo' as never))).toBe(false)
     expect(FEATURE_PLACEMENTS.find(item => item.currentFeature === 'Solo Mode')).toMatchObject({

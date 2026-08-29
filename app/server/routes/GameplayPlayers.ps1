@@ -573,6 +573,7 @@ Register-DuneRoute -Method GET -Path '/api/gameplay/players/base-water-summary' 
 Register-DuneRoute -Method POST -Path '/api/gameplay/players/fill-base-water' -Handler {
     param($req, $res, $routeParams, $body)
     try {
+        if (-not (Test-DuneDisruptiveActionGuard -Req $req -Res $res -Action 'stopping the battlegroup to fill base water')) { return }
         $controller = Get-DuneBodyInt -Body $body -Name 'controller_id'
         $allPlayers = [bool](Get-DuneBodyValue -Body $body -Name 'all_players')
         if (-not $allPlayers -and ($null -eq $controller -or $controller -le 0)) {

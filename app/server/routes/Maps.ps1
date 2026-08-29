@@ -66,6 +66,7 @@ Register-DuneRoute -Method POST -Path '/api/maps/restart-pods' -Handler {
             Write-DuneError -Response $res -Status 400 -Message 'key is required (survival or deepdesert).'
             return
         }
+        if (-not (Test-DuneDisruptiveActionGuard -Req $req -Res $res -Action "restarting the $key map pods")) { return }
         $result = Invoke-WithDuneLock -Name 'ondemand-maps' -Script { Restart-DuneMapPods -Key $key }
         if (-not $result.ok -and $result.status) {
             Write-DuneError -Response $res -Status $result.status -Message $result.message

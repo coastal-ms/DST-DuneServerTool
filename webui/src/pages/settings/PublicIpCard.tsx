@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { ApiError, api } from '../../api/client'
+import { ApiError, api, withOnlinePlayerGuard } from '../../api/client'
 import { Icon } from '../../components/Icon'
 import { CollapsibleCard } from '../../components/CollapsibleCard'
 
@@ -315,10 +315,12 @@ export function PublicIpCard() {
     setApplyStarted(Date.now())
     setSteps([{ id: 'client', label: 'Apply request sent', status: 'running', detail: 'Starting the public IP change on the server.' }])
     try {
-      await api<ApplyResponse>('/api/public-ip/apply', {
-        method: 'POST',
-        body: JSON.stringify(body),
-      })
+      await withOnlinePlayerGuard(force =>
+        api<ApplyResponse>(`/api/public-ip/apply${force ? '?force=true' : ''}`, {
+          method: 'POST',
+          body: JSON.stringify(body),
+        }),
+      )
       // 202 Accepted — the apply now runs in the background; poll for progress.
       startPolling()
     } catch (e) {

@@ -1,14 +1,14 @@
 import { useEffect, useState } from 'react'
 import { Icon } from '../../components/Icon'
 import {
-  getTwilightLockExperiment,
-  restoreTwilightLockCycle,
-  stageTwilightLockCandidate,
-  type TwilightLockExperiment,
+  getTimeOfDayLockConfig,
+  restoreTimeOfDayCycle,
+  stageTimeOfDayPhase,
+  type TimeOfDayLockConfig,
 } from '../../api/gameconfig'
 
-export function TwilightLockEvidenceCard({ vmRunning }: { vmRunning: boolean }) {
-  const [experiment, setExperiment] = useState<TwilightLockExperiment | null>(null)
+export function TimeOfDayLockPanel({ vmRunning }: { vmRunning: boolean }) {
+  const [config, setConfig] = useState<TimeOfDayLockConfig | null>(null)
   const [candidate, setCandidate] = useState('')
   const [busy, setBusy] = useState<'stage' | 'restore' | null>(null)
   const [message, setMessage] = useState<string | null>(null)
@@ -16,10 +16,10 @@ export function TwilightLockEvidenceCard({ vmRunning }: { vmRunning: boolean }) 
 
   useEffect(() => {
     let cancelled = false
-    void getTwilightLockExperiment()
+    void getTimeOfDayLockConfig()
       .then(result => {
         if (cancelled) return
-        setExperiment(result)
+        setConfig(result)
         setCandidate(result.candidates[0]?.value ?? '')
       })
       .catch(reason => {
@@ -40,7 +40,7 @@ export function TwilightLockEvidenceCard({ vmRunning }: { vmRunning: boolean }) 
     setError(null)
     setMessage(null)
     try {
-      const result = await stageTwilightLockCandidate(candidate)
+      const result = await stageTimeOfDayPhase(candidate)
       setMessage(`${result.message} Backup: ${result.backup}`)
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : String(reason))
@@ -59,7 +59,7 @@ export function TwilightLockEvidenceCard({ vmRunning }: { vmRunning: boolean }) 
     setError(null)
     setMessage(null)
     try {
-      const result = await restoreTwilightLockCycle()
+      const result = await restoreTimeOfDayCycle()
       setMessage(`${result.message} Backup: ${result.backup}`)
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : String(reason))
@@ -69,27 +69,27 @@ export function TwilightLockEvidenceCard({ vmRunning }: { vmRunning: boolean }) 
   }
 
   return (
-    <section className="card mb-4 p-4" aria-labelledby="twilight-lock-title">
+    <section className="mt-5 rounded-lg border border-border bg-surface p-4" aria-labelledby="time-of-day-title">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="min-w-0">
           <div className="flex items-center gap-2">
             <Icon name="Sunset" size={18} className="text-warning" />
-            <h2 id="twilight-lock-title" className="font-semibold text-text">Twilight lock field test</h2>
+            <h3 id="time-of-day-title" className="font-semibold text-text">Time of day</h3>
           </div>
           <p className="mt-1 text-sm text-text-muted">
-            Tests whether shipped settings can hold twilight lighting without stopping simulation time.
+            Holds the server at a field-verified lighting phase while longer simulation-safety testing continues.
           </p>
         </div>
-        <span className="pill border-warning/40 text-warning">Unverified candidates</span>
+        <span className="pill border-success/40 text-success">Field-verified phases</span>
       </div>
 
       <div className="mt-4 grid gap-3 lg:grid-cols-2">
         <div className="rounded-lg border border-border bg-surface-2 p-3 text-sm">
           <h3 className="font-medium text-text">What DST will stage</h3>
           <p className="mt-2 text-text-muted">
-            A server backup, one bounded <code>m_StartTime</code> candidate, and
-            <code> m_bTimeOfDayEnabled=False</code>. Values 17, 18, and 19 only bracket conventional
-            24-hour dusk; none is labeled as the correct Dune twilight phase.
+            A server backup, one bounded <code>m_StartTime</code> phase, and
+            <code> m_bTimeOfDayEnabled=False</code>. Live testing verified sunset, twilight,
+            two darker night levels, and the peak dew-harvest window.
           </p>
           <label className="mt-3 block text-xs font-medium text-text-muted" htmlFor="twilight-candidate">
             Candidate phase value
@@ -99,9 +99,9 @@ export function TwilightLockEvidenceCard({ vmRunning }: { vmRunning: boolean }) 
             className="mt-1 min-h-11 rounded-lg border border-border bg-surface px-3 text-sm text-text"
             value={candidate}
             onChange={event => setCandidate(event.target.value)}
-            disabled={!experiment || busy !== null}
+            disabled={!config || busy !== null}
           >
-            {(experiment?.candidates ?? []).map(option => (
+            {(config?.candidates ?? []).map(option => (
               <option key={option.value} value={option.value}>{option.label}</option>
             ))}
           </select>
@@ -120,7 +120,7 @@ export function TwilightLockEvidenceCard({ vmRunning }: { vmRunning: boolean }) 
 
       <div className="mt-3 rounded-lg border border-border bg-surface-2 p-3 text-sm">
         <h3 className="font-medium text-text">
-          {experiment?.minimumObservationMinutes ?? 30}-minute checklist
+          {config?.minimumObservationMinutes ?? 30}-minute checklist
         </h3>
         <ul className="mt-2 grid gap-1.5 text-text-muted sm:grid-cols-2">
           <li>Check whether lighting remains at the selected visual phase.</li>
@@ -142,7 +142,7 @@ export function TwilightLockEvidenceCard({ vmRunning }: { vmRunning: boolean }) 
         <button
           type="button"
           className="btn-primary min-h-11"
-          disabled={!vmRunning || !experiment?.available || busy !== null}
+          disabled={!vmRunning || !config?.available || busy !== null}
           onClick={() => { void stage() }}
         >
           <Icon name={busy === 'stage' ? 'Loader2' : 'Sunset'} size={14} className={busy === 'stage' ? 'animate-spin' : undefined} />

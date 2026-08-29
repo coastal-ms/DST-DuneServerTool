@@ -94,18 +94,20 @@ function Test-DuneGameConfigArrayLineMatchesKey {
     return ([string]$Line).Trim() -match "^[+-]$([regex]::Escape($Key))="
 }
 
-$script:DuneTwilightCandidateHours = @('17.0', '18.0', '19.0')
+$script:DuneTwilightCandidates = @(
+    [ordered]@{ value = '18.0'; label = 'Sunset - 18:00' }
+    [ordered]@{ value = '19.0'; label = 'Twilight - 19:00' }
+    [ordered]@{ value = '20.0'; label = 'Dark night - 20:00' }
+    [ordered]@{ value = '21.0'; label = 'Full night - 21:00' }
+    [ordered]@{ value = '4.0'; label = 'Dew harvest - 04:00' }
+)
+$script:DuneTwilightCandidateHours = @($script:DuneTwilightCandidates | ForEach-Object { $_.value })
 
 function Get-DuneTwilightLockExperiment {
     return [ordered]@{
         available = $true
-        evidenceStatus = 'candidate-only'
-        candidates = @($script:DuneTwilightCandidateHours | ForEach-Object {
-            [ordered]@{
-                value = $_
-                label = "Candidate $_"
-            }
-        })
+        evidenceStatus = 'visual-phases-verified'
+        candidates = @($script:DuneTwilightCandidates)
         clientApply = [ordered]@{
             available = $false
             reason = 'm_StartTime client behavior is unverified, so DST will not write a client override.'
@@ -287,7 +289,7 @@ $script:DuneLandclaimDefaultRemovals = @(60,120,240,480,960,1920,3840,7680,15360
 $script:DuneGameConfigCategoryOrder = @(
     'Server Identity','Network','Survival','Hydration','Loot & Death',
     'Resources & Economy','Crafting','Building','BaseBackUp','Inventory','Guilds & Economy',
-    'Storm Cycle','Landsraad','PvP & Security','Spice','Taxation','Encounters','Sandworm','Vehicles',
+    'Storm Cycle','Time of Day','Landsraad','PvP & Security','Spice','Taxation','Encounters','Sandworm','Vehicles',
     'Experimental','Experimental 2','Experimental Lab'
 )
 
@@ -395,7 +397,7 @@ $script:DuneGameConfigSchema = @(
     @{ Section=$script:DuneGcSecConsole; Key='Sandstorm.Treasure.Enabled'; File='engine'; Type='bool01'; Default='1'; Label='Sandstorm Treasure Spawns'; Help='Spawn treasure during sandstorms.'; Startup=$true; Category='Storm Cycle' }
     @{ Section=$script:DuneGcSecStorm; Key='m_bCoriolisDoesDamage'; File='game'; Type='bool'; Default='False'; Label='Coriolis Storm Does Damage'; Help='Whether being caught in a Coriolis storm damages players. Also needs client-side apply.'; ClientApply=$true; Category='Storm Cycle' }
     @{ Section=$script:DuneGcSecStorm; Key='m_bSandStormDebrisEnabled'; File='game'; Type='bool'; Default='True'; Label='Sandstorm Debris'; Help='Whether sandstorms spawn flying debris. Also needs client-side apply.'; ClientApply=$true; Category='Storm Cycle' }
-    @{ Section=$script:DuneGcSecTimeOfDay; Key='m_bTimeOfDayEnabled'; File='game'; Type='bool'; Default='True'; Label='Time of Day Cycle'; Help='Whether the day/night cycle advances. This switch does not select a phase, and DST has not proven that disabling it freezes only visuals while simulation timers continue. Also needs client-side apply.'; ClientApply=$true; Category='Storm Cycle' }
+    @{ Section=$script:DuneGcSecTimeOfDay; Key='m_bTimeOfDayEnabled'; File='game'; Type='bool'; Default='True'; Label='Time of Day Cycle'; Help='Whether the day/night cycle advances. Use the field-verified phase controls below to lock Sunset, Twilight, darker night, or peak Dew Harvest time. Longer simulation-safety testing is still in progress. Also needs client-side apply.'; ClientApply=$true; Category='Time of Day' }
 
     # --- Landsraad (scalar members of [LandsraadSettings] Data=(...)) ---
     @{ Section=$script:DuneGcSecLandsraad; StructKey=$script:DuneGcLandsraadStructKey; Key='m_TaskGoalAmount'; File='game'; Type='float'; Min=0; Default='70000'; Label='Task Goal Amount'; Help='Contribution target for each House task before it completes. Funcom default is 70000. DST also applies the new goal to the currently-running term''s live House rows (dune.landsraad_tasks.goal_amount) so the change takes effect immediately.'; ClientApply=$true; Category='Landsraad' }

@@ -35,14 +35,83 @@ function Test-DunePlayerGuard {
         playersOnline = $players.Count
         playerNames   = $names
         players       = @($players | ForEach-Object {
-                            @{
-                                id     = "$($_.id)"
-                                name   = "$($_.name)"
-                                status = "$($_.status)"
-                            }
-                        })
+            @{
+                id     = "$($_.id)"
+                name   = "$($_.name)"
+                status = "$($_.status)"
+            }
+        })
         message       = "$($players.Count) player(s) currently connected — saving while they're online can corrupt their characters."
     }
     Write-DuneJson -Response $Res -Status 409 -Body $body
+    return $false
+}
+
+function Test-DuneDisruptiveActionGuard {
+    param(
+        $Req,
+        $Res,
+        [string]$Ip,
+        [Parameter(Mandatory)][string]$Action
+    )
+
+    $force = $false
+    try {
+        $value = $Req.QueryString['force']
+        $force = ($value -in @('1','true','yes'))
+    } catch {}
+    if ($force) { return $true }
+
+    if ([string]::IsNullOrWhiteSpace($Ip)) {
+        try {
+            $ctx = Get-DuneDbContext
+            if ($ctx.ok) { $Ip = [string]$ctx.ip }
+        } catch {}
+    }
+
+    if ([string]::IsNullOrWhiteSpace($Ip)) {
+        Write-DuneJson -Response $Res -Status 409 -Body @{
+            ok            = $false
+            conflict      = 'player_status_unknown'
+            playersOnline = $null
+            playerNames   = @()
+            players       = @()
+            message       = "DST could not verify whether players are online before $Action."
+        }
+        return $false
+    }
+
+    try {
+        $players = @(Get-V6OnlinePlayersStrict -Ip $Ip)
+    } catch {
+        Write-DuneJson -Response $Res -Status 409 -Body @{
+            ok            = $false
+            conflict      = 'player_status_unknown'
+            playersOnline = $null
+            playerNames   = @()
+            players       = @()
+            message       = "DST could not verify whether players are online before $Action. $($_.Exception.Message)"
+        }
+        return $false
+    }
+    if ($players.Count -eq 0) { return $true }
+
+    $names = @($players | ForEach-Object {
+        if ($_.name -and "$($_.name)".Trim()) { "$($_.name)" } else { "id=$($_.id)" }
+    })
+    Write-DuneJson -Response $Res -Status 409 -Body @{
+        ok            = $false
+        conflict      = 'players_online'
+        playersOnline = $players.Count
+        playerNames   = $names
+        players       = @($players | ForEach-Object {
+            @{
+                id     = "$($_.id)"
+                name   = "$($_.name)"
+                status = "$($_.status)"
+            }
+        })
+        message       = "$($players.Count) player(s) currently connected. $Action will disconnect them."
+    }
     return $false
 }

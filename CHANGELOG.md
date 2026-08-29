@@ -13,6 +13,8 @@ here cover everything those tags shipped.
 
 ## [Unreleased]
 
+## [15.0.0] - 2026-08-29
+
 ### Added
 
 - Added the next-generation workspace foundation for the v15 test line, with a
@@ -29,11 +31,16 @@ here cover everything those tags shipped.
   remain visibly unavailable until the production schema can prove privacy and
   ownership exclusions. The implementation is independent and copies no
   external assets or map data.
-- Added an Experimental twilight field-test harness with bounded candidate
-  values, mandatory live-config backups, exact write verification, and one-click
+- Added a dedicated, field-verified Time of Day section under Game Config,
+  with Sunset, Twilight, Dark Night, Full Night, and peak Dew Harvest phases,
+  mandatory live-config backups, exact write verification, and one-click
   restoration of the normal day/night cycle.
 - Added an Experimental Funcom vehicle spawn action that uses the shipped RMQ
   contract and verifies the spawned vehicle persists before reporting success.
+- Added a live vehicle fleet and protected removal queue. DST creates a labeled
+  database backup, stops the battlegroup, transactionally removes queued vehicles
+  and their dependent ownership/storage records, verifies each deletion, and
+  restarts the battlegroup; queued removals can be cancelled before processing.
 
 ### Changed
 
@@ -41,11 +48,14 @@ here cover everything those tags shipped.
   workspaces while preserving legacy URL, query-string, and hash navigation.
 - Adapted Server Health's Game Servers card into compact stacked pod summaries
   on narrow screens while retaining the full desktop table and Game Ready State.
-- Prepared build and diagnostic metadata for the `v15.0.0-test1` test line.
+- Prepared build and diagnostic metadata for the `v15.0.0` release.
 - Replaced the in-app GitHub issue launcher with an owner-only diagnostics
   package action for sharing redacted support evidence in Discord.
 - Restored Map SpinUp and map restart controls as a direct Server Controls
   destination in the left rail while retaining the consolidated Map workspace.
+- Added a fail-closed online-player warning before every manual action that can
+  stop or restart game services or the VM, with connected player details and an
+  explicit operator override when disconnection is intentional.
 
 ### Fixed
 
@@ -8473,7 +8483,8 @@ at the time. Also folds in the v3.0.1 / v3.1.2 patches.
   (`ssh`, `Gameplay Admin`, `setup-guide`, `report-issue`). _(originally
   3.1.2)_
 
-[Unreleased]: https://github.com/coastal-ms/DST-DuneServerTool/compare/v13.8.0...HEAD
+[Unreleased]: https://github.com/coastal-ms/DST-DuneServerTool/compare/v15.0.0...HEAD
+[15.0.0]: https://github.com/coastal-ms/DST-DuneServerTool/compare/v14.0.3...v15.0.0
 [13.8.0]: https://github.com/coastal-ms/DST-DuneServerTool/compare/v13.7.0...v13.8.0
 [13.7.0]: https://github.com/coastal-ms/DST-DuneServerTool/compare/v13.6.5...v13.7.0
 [13.0.2]: https://github.com/coastal-ms/DST-DuneServerTool/compare/v13.0.1...v13.0.2

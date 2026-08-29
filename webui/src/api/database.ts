@@ -1,5 +1,5 @@
 // Database API — typed wrappers around /api/db/*
-import { api } from './client'
+import { api, withOnlinePlayerGuard } from './client'
 import type {
   DbInfo,
   SqlResult,
@@ -211,17 +211,21 @@ export function getWorldRestartStatus() {
 }
 
 export function startWorldRestart(confirm: string) {
-  return api<{ ok: boolean; running: boolean; operation: string }>('/api/db/world-restart', {
-    method: 'POST',
-    body: JSON.stringify({ confirm }),
-  })
+  return withOnlinePlayerGuard(force =>
+    api<{ ok: boolean; running: boolean; operation: string }>(
+      `/api/db/world-restart${force ? '?force=true' : ''}`,
+      { method: 'POST', body: JSON.stringify({ confirm }) },
+    ),
+  )
 }
 
 export function rollbackWorldRestart(confirm: string) {
-  return api<{ ok: boolean; running: boolean; operation: string }>('/api/db/world-restart/rollback', {
-    method: 'POST',
-    body: JSON.stringify({ confirm }),
-  })
+  return withOnlinePlayerGuard(force =>
+    api<{ ok: boolean; running: boolean; operation: string }>(
+      `/api/db/world-restart/rollback${force ? '?force=true' : ''}`,
+      { method: 'POST', body: JSON.stringify({ confirm }) },
+    ),
+  )
 }
 
 export function getWorldRestartResearchAudit() {
@@ -234,18 +238,19 @@ export function recoverWorldRestartResearch(opts: {
   itemKeys: string[]
   confirm: string
 }) {
-  return api<WorldRestartResearchRecovery>('/api/db/world-restart/research-recover', {
-    method: 'POST',
-    body: JSON.stringify(opts),
-  })
+  return withOnlinePlayerGuard(force =>
+    api<WorldRestartResearchRecovery>(
+      `/api/db/world-restart/research-recover${force ? '?force=true' : ''}`,
+      { method: 'POST', body: JSON.stringify(opts) },
+    ),
+  )
 }
 
 export function rollbackWorldRestartResearch(confirm: string) {
-  return api<{ ok: boolean; backupPath: string; message: string }>(
-    '/api/db/world-restart/research-rollback',
-    {
-      method: 'POST',
-      body: JSON.stringify({ confirm }),
-    },
+  return withOnlinePlayerGuard(force =>
+    api<{ ok: boolean; backupPath: string; message: string }>(
+      `/api/db/world-restart/research-rollback${force ? '?force=true' : ''}`,
+      { method: 'POST', body: JSON.stringify({ confirm }) },
+    ),
   )
 }

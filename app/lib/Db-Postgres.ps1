@@ -415,6 +415,28 @@ function Get-V6OnlinePlayers {
     return @($list)
 }
 
+# Disruptive actions must distinguish a verified empty roster from an
+# unavailable or malformed database response. The ordinary mutation guard keeps
+# its historical fail-open behavior through Get-V6OnlinePlayers.
+function Get-V6OnlinePlayersStrict {
+    param([string]$Ip)
+    $raw = Invoke-V6Psql -Ip $Ip -Sql (Get-DuneOnlinePlayersSql)
+    if ([string]::IsNullOrWhiteSpace($raw)) {
+        throw 'The online-player query returned no response.'
+    }
+    if ($raw -match '(?i)^(ERROR:|FATAL:)|\bERROR:|\bFATAL:' -or
+        (Test-DunePsqlConnError -Output $raw)) {
+        throw "The online-player query failed: $raw"
+    }
+    try {
+        $list = $raw | ConvertFrom-Json -ErrorAction Stop
+    } catch {
+        throw "The online-player query returned an invalid response: $($_.Exception.Message)"
+    }
+    if ($null -eq $list) { return @() }
+    return @($list)
+}
+
 # -----------------------------------------------------------------------------
 # Character list
 # -----------------------------------------------------------------------------

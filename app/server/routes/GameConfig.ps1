@@ -57,12 +57,12 @@ Register-DuneRoute -Method GET -Path '/api/gameconfig/experimental/search' -Hand
     }
 }
 
-Register-DuneRoute -Method GET -Path '/api/gameconfig/experimental/twilight-lock' -Handler {
+Register-DuneRoute -Method GET -Path '/api/gameconfig/time-of-day' -Handler {
     param($req, $res, $routeParams, $body)
     Write-DuneJson -Response $res -Body (Get-DuneTwilightLockExperiment)
 }
 
-Register-DuneRoute -Method POST -Path '/api/gameconfig/experimental/twilight-lock/stage' -Handler {
+Register-DuneRoute -Method POST -Path '/api/gameconfig/time-of-day/stage' -Handler {
     param($req, $res, $routeParams, $body)
     $ctx = Get-DuneGameConfigContext
     if (-not $ctx.ok) {
@@ -78,7 +78,7 @@ Register-DuneRoute -Method POST -Path '/api/gameconfig/experimental/twilight-loc
     }
 }
 
-Register-DuneRoute -Method POST -Path '/api/gameconfig/experimental/twilight-lock/restore' -Handler {
+Register-DuneRoute -Method POST -Path '/api/gameconfig/time-of-day/restore' -Handler {
     param($req, $res, $routeParams, $body)
     $ctx = Get-DuneGameConfigContext
     if (-not $ctx.ok) {
@@ -342,7 +342,7 @@ Register-DuneRoute -Method POST -Path '/api/gameconfig/reload-pods' -Handler {
         Write-DuneError -Response $res -Status $ctx.status -Message $ctx.message
         return
     }
-    if (-not (Test-DunePlayerGuard -Req $req -Res $res -Ip $ctx.ip)) { return }
+    if (-not (Test-DuneDisruptiveActionGuard -Req $req -Res $res -Ip $ctx.ip -Action 'restarting the battlegroup to apply game configuration')) { return }
     try {
         # Invoke-DuneBattlegroupRestart rebuilds the startup console variables from
         # the current INI before restarting, so no separate sync is needed here.

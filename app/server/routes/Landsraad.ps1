@@ -237,6 +237,7 @@ Register-DuneRoute -Method POST -Path '/api/gameplay/landsraad/set-term-control'
 Register-DuneRoute -Method POST -Path '/api/gameplay/landsraad/restart-bg' -Handler {
     param($req, $res, $routeParams, $body)
     try {
+        if (-not (Test-DuneDisruptiveActionGuard -Req $req -Res $res -Action 'restarting the battlegroup to apply Landsraad control')) { return }
         Invoke-DunePlayerWriteRoute -Response $res -Action { param($ip)
             Invoke-DuneLandsraadBgRestart -Ip $ip
         }

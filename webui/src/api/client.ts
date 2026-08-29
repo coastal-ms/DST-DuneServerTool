@@ -109,15 +109,13 @@ export function wsUrl(path: string): string {
 }
 
 /**
- * Server response shape when a mutating endpoint refuses to run because
- * one or more players are currently connected. The route returns HTTP 409
- * and the client is expected to confirm with the operator before retrying
- * with `?force=true`.
+ * Server response shape when a mutating endpoint needs confirmation because
+ * players are online or their status could not be verified.
  */
 export interface PlayersOnlineConflict {
   ok: false
-  conflict: 'players_online'
-  playersOnline: number
+  conflict: 'players_online' | 'player_status_unknown'
+  playersOnline: number | null
   playerNames: string[]
   players: Array<{ id: string; name: string; status: string }>
   message: string
@@ -147,14 +145,20 @@ export async function withOnlinePlayerGuard<T>(
           : `${count} player(s)`
         const ok = window.confirm(
           `${count} player${count === 1 ? '' : 's'} currently online:\n  ${list}\n\n`
-          + `Saving while players are connected can corrupt their characters `
-          + `(the game may overwrite your changes when they next save, and an actor `
-          + `loading mid-edit has caused a full inventory/recipe wipe in the past).\n\n`
-          + `Save anyway?`,
+          + `${body.message ?? 'This action may affect connected players.'}\n\n`
+          + 'Continue anyway?',
         )
         if (!ok) {
-          throw new ApiError(409, 'Save cancelled — players online.', body)
+          throw new ApiError(409, 'Action cancelled because players are online.', body)
         }
+        return await fn(true)
+      }
+      if (body && body.conflict === 'player_status_unknown') {
+        const ok = window.confirm(
+          `${body.message ?? 'DST could not verify whether players are online.'}\n\n`
+          + 'Continue without verification? Connected players may be disconnected.',
+        )
+        if (!ok) throw new ApiError(409, 'Action cancelled because player status is unknown.', body)
         return await fn(true)
       }
     }

@@ -2,7 +2,7 @@ import React from 'react'
 import { cleanup, render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { TwilightLockEvidenceCard } from '../src/pages/gameconfig/TwilightLockEvidenceCard'
+import { TimeOfDayLockPanel } from '../src/pages/gameconfig/TwilightLockEvidenceCard'
 import { EXPERIMENTAL_BLOCKED_DEFAULT_TARGETS } from '../src/pages/GameConfig'
 
 const api = vi.hoisted(() => ({
@@ -15,9 +15,9 @@ vi.mock('../src/api/gameconfig', async importOriginal => {
   const actual = await importOriginal<typeof import('../src/api/gameconfig')>()
   return {
     ...actual,
-    getTwilightLockExperiment: api.getExperiment,
-    stageTwilightLockCandidate: api.stage,
-    restoreTwilightLockCycle: api.restore,
+    getTimeOfDayLockConfig: api.getExperiment,
+    stageTimeOfDayPhase: api.stage,
+    restoreTimeOfDayCycle: api.restore,
   }
 })
 
@@ -33,11 +33,13 @@ describe('Experimental twilight lock field-test harness', () => {
     vi.spyOn(window, 'confirm').mockReturnValue(true)
     api.getExperiment.mockResolvedValue({
       available: true,
-      evidenceStatus: 'candidate-only',
+      evidenceStatus: 'visual-phases-verified',
       candidates: [
-        { value: '17.0', label: 'Candidate 17.0' },
-        { value: '18.0', label: 'Candidate 18.0' },
-        { value: '19.0', label: 'Candidate 19.0' },
+        { value: '18.0', label: 'Sunset - 18:00' },
+        { value: '19.0', label: 'Twilight - 19:00' },
+        { value: '20.0', label: 'Dark night - 20:00' },
+        { value: '21.0', label: 'Full night - 21:00' },
+        { value: '4.0', label: 'Dew harvest - 04:00' },
       ],
       clientApply: { available: false, reason: 'Unverified.' },
       restartRequired: true,
@@ -52,16 +54,18 @@ describe('Experimental twilight lock field-test harness', () => {
       clientApplied: false,
       message: 'Candidate staged.',
     })
-    render(<TwilightLockEvidenceCard vmRunning />)
+    render(<TimeOfDayLockPanel vmRunning />)
 
-    expect(await screen.findByText('Unverified candidates')).toBeInTheDocument()
-    expect(screen.getByText(/none is labeled as the correct Dune twilight phase/)).toBeInTheDocument()
+    expect(await screen.findByText('Field-verified phases')).toBeInTheDocument()
+    expect(screen.getByText(/Live testing verified sunset, twilight/)).toBeInTheDocument()
     expect(screen.getByText(/DST does not modify client INIs/)).toBeInTheDocument()
     expect(screen.getByText(/crafting timers continue/)).toBeInTheDocument()
     expect(screen.getAllByRole('option').map(option => option.getAttribute('value'))).toEqual([
-      '17.0',
       '18.0',
       '19.0',
+      '20.0',
+      '21.0',
+      '4.0',
     ])
     await user.selectOptions(screen.getByLabelText('Candidate phase value'), '18.0')
     await user.click(screen.getByRole('button', { name: 'Back up & stage candidate' }))
@@ -89,8 +93,8 @@ describe('Experimental twilight lock field-test harness', () => {
       clientApplied: false,
       message: 'Normal cycle restored.',
     })
-    render(<TwilightLockEvidenceCard vmRunning />)
-    await screen.findByText('Unverified candidates')
+    render(<TimeOfDayLockPanel vmRunning />)
+    await screen.findByText('Field-verified phases')
 
     await user.click(screen.getByRole('button', { name: 'Restore normal cycle' }))
 
@@ -107,7 +111,7 @@ describe('Experimental twilight lock field-test harness', () => {
       restartRequired: true,
       minimumObservationMinutes: 30,
     })
-    render(<TwilightLockEvidenceCard vmRunning={false} />)
+    render(<TimeOfDayLockPanel vmRunning={false} />)
     await waitFor(() => expect(screen.getByRole('button', { name: 'Back up & stage candidate' })).toBeDisabled())
     expect(screen.getByText(/Start the server VM/)).toBeInTheDocument()
     expect(EXPERIMENTAL_BLOCKED_DEFAULT_TARGETS).toContain(
