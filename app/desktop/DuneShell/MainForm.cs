@@ -905,7 +905,7 @@ internal sealed class MainForm : Form
             return null;
         }
 
-        _status.Text = "Starting the Dune Server Tool backend…";
+        _status.Text = "Loading backend after recent update or service restoration… Estimated 10–15 seconds.";
         try
         {
             Process.Start(new ProcessStartInfo
@@ -927,7 +927,7 @@ internal sealed class MainForm : Form
         // generously longer window than the initial wait above.
         for (int i = 0; i < MaxBackendStartPollAttempts; i++)
         {
-            _status.Text = $"Starting the Dune Server Tool backend… ({i + 1})";
+            _status.Text = "Loading backend after recent update or service restoration… Estimated 10–15 seconds.";
             string? candidate = await TryReadUrlFileAsync(file);
             if (candidate != null && await IsUrlReachableAsync(candidate))
                 return candidate;
