@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
-import { useNavigate, useLocation } from '../router'
+import { useNavigate, useLocation, useSearch } from '../router'
 import { Icon } from '../components/Icon'
 import { NAV_ITEMS, GROUP_ORDER, getVisibleGroupLabel, getVisibleNavItems, isNavItemActive, type NavGroup } from '../nav'
 import { buildDiagnosticBundle, type DiagnosticBundle } from '../api/diagnostics'
@@ -225,9 +225,10 @@ export function MenuBar({ sidebarCollapsed, onToggleSidebar }: Props) {
     navigate(item.to)
   }
 
+  const search = useSearch()
   const isActive = (to: string) => {
     const item = NAV_ITEMS.find(candidate => candidate.to === to)
-    return item ? isNavItemActive(item, location.pathname) : false
+    return item ? isNavItemActive(item, location.pathname, search) : false
   }
 
   const rememberSwipeStart = (event: React.TouchEvent) => {

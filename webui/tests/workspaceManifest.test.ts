@@ -8,7 +8,7 @@ import {
   resolveCompatibilityRedirect,
   shouldRedirectLegacyRemoteMap,
 } from '../src/platform/routes'
-import { getVisibleNavItems } from '../src/nav'
+import { getVisibleNavItems, isNavItemActive, NAV_ITEMS } from '../src/nav'
 import { GAMEPLAY_DESTINATIONS, GAMEPLAY_PATHS, resolveGameplaySection } from '../src/platform/gameplay'
 
 const EXPECTED_WORKSPACES = [
@@ -76,6 +76,7 @@ describe('workspace manifest', () => {
     expect(localPaths).toContain('/database')
     expect(localPaths).toContain('/terminal')
     expect(localPaths).toContain('/solo')
+    expect(localPaths).toContain('/map?view=lifecycle')
   })
 
   it('keeps the primary rail server-first with one Gameplay Admin gateway', () => {
@@ -87,9 +88,22 @@ describe('workspace manifest', () => {
     })
     expect(localItems[0].label).toBe('Server Overview')
     expect(localItems.filter(item => item.label === 'Gameplay Admin')).toHaveLength(1)
+    expect(localItems.filter(item => item.label === 'Map SpinUp')).toHaveLength(1)
     expect(localItems.some(item => ['Map', 'Players', 'Bases', 'Vehicles', 'Economy'].includes(item.label))).toBe(false)
     expect(new Set(localItems.map(item => item.to)).size).toBe(localItems.length)
-    expect(localItems.length).toBeLessThanOrEqual(12)
+    expect(localItems.length).toBeLessThanOrEqual(13)
+  })
+
+  it('highlights Map SpinUp instead of Gameplay Admin on the lifecycle view', () => {
+    const gameplay = NAV_ITEMS.find(item => item.label === 'Gameplay Admin')
+    const mapSpinUp = NAV_ITEMS.find(item => item.label === 'Map SpinUp')
+
+    expect(gameplay).toBeDefined()
+    expect(mapSpinUp).toBeDefined()
+    expect(isNavItemActive(gameplay!, '/map', 'view=lifecycle')).toBe(false)
+    expect(isNavItemActive(mapSpinUp!, '/map', 'view=lifecycle')).toBe(true)
+    expect(isNavItemActive(gameplay!, '/map', 'view=atlas')).toBe(true)
+    expect(isNavItemActive(mapSpinUp!, '/map', 'view=atlas')).toBe(false)
   })
 
   it('defines one compact Gameplay Admin destination set and singular route state', () => {

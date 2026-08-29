@@ -44,6 +44,8 @@ here cover everything those tags shipped.
 - Prepared build and diagnostic metadata for the `v15.0.0-test1` test line.
 - Replaced the in-app GitHub issue launcher with an owner-only diagnostics
   package action for sharing redacted support evidence in Discord.
+- Restored Map SpinUp and map restart controls as a direct Server Controls
+  destination in the left rail while retaining the consolidated Map workspace.
 
 ### Fixed
 
