@@ -105,17 +105,19 @@ function Test-DunePortalBrowserCheckin {
 
 # Sentinel file consumed by DuneShell's FormClosing teardown AND by the
 # app-window watcher runspace. When this file exists, neither side should
-# tear the backend down on shell close -- the user has opted into
-# "background service" semantics (autostart registered or --headless launch),
-# so the backend is expected to outlive any manually-opened DuneShell.
+# tear the backend down on shell close -- the backend is expected to outlive
+# any manually-opened DuneShell.
 #
-# Live state: rewritten on every startup AND on every autostart toggle
-# (Register-/Unregister-DuneAutostart), so closing the shell mid-run
-# always reflects the user's current intent rather than the snapshot
-# captured at process startup.
+# Live state: rewritten on startup and whenever either scheduled-task mode
+# changes, so shell close always reflects the user's current intent.
 function Get-DuneKeepAliveStateFile {
     $dir = Join-Path $env:LOCALAPPDATA 'DuneServer'
     return (Join-Path $dir 'keep-alive.flag')
+}
+
+function Get-DuneShellCloseToTrayStateFile {
+    $dir = Join-Path $env:LOCALAPPDATA 'DuneServer'
+    return (Join-Path $dir 'shell-close-to-tray.flag')
 }
 
 function Set-DuneKeepAliveFlag {
@@ -142,6 +144,26 @@ function Clear-DuneKeepAliveFlag {
     } catch { }
 }
 
+function Set-DuneShellCloseToTrayFlag {
+    try {
+        $file = Get-DuneShellCloseToTrayStateFile
+        $dir = Split-Path -Parent $file
+        if (-not (Test-Path -LiteralPath $dir)) {
+            New-Item -ItemType Directory -Path $dir -Force | Out-Null
+        }
+        Set-Content -LiteralPath $file -Value $PID -Encoding ASCII -Force
+    } catch { }
+}
+
+function Clear-DuneShellCloseToTrayFlag {
+    try {
+        $file = Get-DuneShellCloseToTrayStateFile
+        if (Test-Path -LiteralPath $file) {
+            Remove-Item -LiteralPath $file -Force -ErrorAction SilentlyContinue
+        }
+    } catch { }
+}
+
 # Recompute the effective keep-alive state from live inputs (headless mode +
 # whether the autostart task is currently registered for this user) and write
 # or remove the sentinel file accordingly. Safe to call repeatedly.
@@ -160,6 +182,10 @@ function Update-DuneKeepAliveFlag {
     } catch { $service = $false }
     $keep = [bool]$script:DuneHeadlessMode -or $autostart -or $service
     if ($keep) { Set-DuneKeepAliveFlag } else { Clear-DuneKeepAliveFlag }
+    # X retains the shell and tray only for the explicit "Run at Windows
+    # startup" mode. Service/headless mode may retain the backend, but must not
+    # leave the frontend resident after its window is closed.
+    if ($autostart) { Set-DuneShellCloseToTrayFlag } else { Clear-DuneShellCloseToTrayFlag }
     return $keep
 }
 
