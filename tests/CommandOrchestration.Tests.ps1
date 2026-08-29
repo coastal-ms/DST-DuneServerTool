@@ -65,4 +65,19 @@ Describe 'One-shot command orchestration' -Tag 'Commands' {
         $script:entry | Should -Match '-Phase "post-\$cmdName" -Mode cron -Fast'
         $script:entry | Should -Match "-Phase 'fix-on-demand-maps' -Mode manual"
     }
+
+    It 'removes the unreachable report-issue menu entry and handler' {
+        $script:entry | Should -Not -Match 'report-issue'
+        $script:entry | Should -Not -Match 'issues/new\?|bug_report\.yml|Get-EncodedParam'
+    }
+
+    It 'directs memory-pressure and P34 support to diagnostics package plus Discord' {
+        $script:entry | Should -Match 'Help > Create Diagnostics Package \(vm-memory-pressure\.txt\)'
+        $diagnosticsRoute = Get-Content (Join-Path $PSScriptRoot '..\app\server\routes\Diagnostics.ps1') -Raw
+        $diagnosticsRoute | Should -Not -Match '(?i)legacy CLI'
+        $p34 = Get-Content (Join-Path $PSScriptRoot '..\docs\troubleshooting-p34.md') -Raw
+        $p34 | Should -Match 'Help . Create Diagnostics Package'
+        $p34 | Should -Match 'DST Discord support thread'
+        $p34 | Should -Not -Match 'Create GitHub Issue'
+    }
 }

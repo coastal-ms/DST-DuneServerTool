@@ -1,6 +1,6 @@
-# /api/diagnostics — build a redacted ZIP of logs the owner can attach in a
+﻿# /api/diagnostics — build a redacted ZIP of logs the owner can attach in a
 # DST Discord support thread. Triggered from React's
-# "Help → Create Diagnostics Package" action and the legacy CLI command.
+# "Help → Create Diagnostics Package" action.
 #
 # Hard rules:
 #   - Everything that lands in the ZIP runs through Invoke-DstRedaction first.
@@ -209,7 +209,7 @@ function Read-DstLogTail {
 }
 
 # Builds the diagnostic bundle. Returns a hashtable with the same shape the
-# /api/diagnostics/bundle handler echoes back to the React client and legacy CLI.
+# /api/diagnostics/bundle handler echoes back to the React client.
 function New-DstDiagnosticBundle {
     [CmdletBinding()]
     param()

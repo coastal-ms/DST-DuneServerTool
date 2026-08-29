@@ -29,6 +29,9 @@ here cover everything those tags shipped.
   remain visibly unavailable until the production schema can prove privacy and
   ownership exclusions. The implementation is independent and copies no
   external assets or map data.
+- Added an Experimental twilight field-test harness with bounded candidate
+  values, mandatory live-config backups, exact write verification, and one-click
+  restoration of the normal day/night cycle.
 
 ### Changed
 
@@ -37,6 +40,8 @@ here cover everything those tags shipped.
 - Adapted Server Health's Game Servers card into compact stacked pod summaries
   on narrow screens while retaining the full desktop table and Game Ready State.
 - Prepared build and diagnostic metadata for the `v15.0.0-test1` test line.
+- Replaced the in-app GitHub issue launcher with an owner-only diagnostics
+  package action for sharing redacted support evidence in Discord.
 
 ### Fixed
 
