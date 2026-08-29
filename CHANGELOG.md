@@ -65,6 +65,7 @@ here cover everything those tags shipped.
 
 - Fixed autostart and always-on sessions losing their tray icon when the app
   window was closed. With Minimize to tray enabled, X now hides the shell back
+<<<<<<< HEAD
   to the tray; only **Quit (stops server)** exits the shell and backend.
 - Fixed installed Windows builds failing to create the first cached Maps
   generation when the elevated helper could not duplicate the UAC linked token;
@@ -75,6 +76,11 @@ here cover everything those tags shipped.
   replacement and API publication.
 - Fixed diagnostics packages leaving the game login password visible inside
   server-state log messages; JSON `loginPassword` values are now redacted.
+=======
+  to the tray; only **Quit (stops server)** exits the shell and backend. Opening
+  the tray icon now restores the window before showing it, instead of immediately
+  returning to a minimized taskbar entry.
+>>>>>>> a5c85016 (fix: restore shell before showing tray window)
 
 ## [14.0.3] - 2026-08-24
 
