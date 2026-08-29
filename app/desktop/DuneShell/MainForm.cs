@@ -1011,11 +1011,16 @@ internal sealed class MainForm : Form
 
     private void RestoreFromTray()
     {
-        Show();
-        ShowInTaskbar = true;
-        WindowState = _restoreState == FormWindowState.Minimized
+        FormWindowState targetState = _restoreState == FormWindowState.Minimized
             ? FormWindowState.Normal
             : _restoreState;
+
+        // Restore before showing. Showing a still-minimized form fires Resize,
+        // which would immediately hide it back to the tray.
+        WindowState = targetState;
+        ShowInTaskbar = true;
+        Show();
+        BringToFront();
         Activate();
     }
 
