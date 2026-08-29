@@ -440,7 +440,9 @@ export function MenuBar({ sidebarCollapsed, onToggleSidebar }: Props) {
                   <span className="block text-[11px] text-text-dim">
                     {autostart.enabled
                       ? 'Enabled — server keeps running when you close this window'
-                      : 'Disabled — closing this window stops the server'}
+                      : service?.enabled
+                        ? 'Disabled — closing removes DST; background service stays online'
+                        : 'Disabled — closing this window stops the server'}
                   </span>
                 </span>
                 {autostart.enabled && (
