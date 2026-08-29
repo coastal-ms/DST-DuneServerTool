@@ -36,6 +36,8 @@ here cover everything those tags shipped.
   to the tray; only **Quit (stops server)** exits the shell and backend. Opening
   the tray icon now restores the window before showing it, instead of immediately
   returning to a minimized taskbar entry.
+- Closed WebView2's Downloads flyout automatically after a Solo blueprint JSON
+  export finishes instead of leaving it covering the portal.
 
 ## [14.0.3] - 2026-08-24
 
