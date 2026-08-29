@@ -158,6 +158,7 @@ internal sealed class MainForm : Form
 
         core.NewWindowRequested += OnNewWindowRequested;
         core.NavigationCompleted += OnNavigationCompleted;
+        core.DownloadStarting += OnDownloadStarting;
         core.WebMessageReceived += OnWebMessageReceived;
         core.DocumentTitleChanged += (_, _) =>
         {
@@ -393,6 +394,34 @@ internal sealed class MainForm : Form
         _firstLoadDone = true;
         _status.Visible = false;
         _web.Visible = true;
+    }
+
+    private void OnDownloadStarting(object? sender, CoreWebView2DownloadStartingEventArgs e)
+    {
+        CoreWebView2DownloadOperation operation = e.DownloadOperation;
+
+        void CloseWhenFinished(object? _, object __)
+        {
+            if (operation.State == CoreWebView2DownloadState.InProgress) return;
+            operation.StateChanged -= CloseWhenFinished;
+            try
+            {
+                BeginInvoke(new Action(() =>
+                {
+                    CoreWebView2? core = _web.CoreWebView2;
+                    if (core?.IsDefaultDownloadDialogOpen == true)
+                        core.CloseDefaultDownloadDialog();
+                }));
+            }
+            catch
+            {
+                // The shell may already be closing; the flyout will close with it.
+            }
+        }
+
+        operation.StateChanged += CloseWhenFinished;
+        if (operation.State != CoreWebView2DownloadState.InProgress)
+            CloseWhenFinished(operation, new object());
     }
 
     private void OnNewWindowRequested(object? sender, CoreWebView2NewWindowRequestedEventArgs e)
