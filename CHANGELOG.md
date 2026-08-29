@@ -32,10 +32,11 @@ here cover everything those tags shipped.
 
 ### Fixed
 
-- Fixed autostart and always-on sessions losing their tray icon when the app
-  window was closed. With Minimize to tray enabled, X now hides the shell back
-  to the tray; only **Quit (stops server)** exits the shell and backend. Opening
-  the tray icon now restores the window before showing it, instead of immediately
+- Fixed desktop tray lifecycle. With **Run at Windows startup** enabled and
+  Minimize to tray selected, X hides the shell back to the tray; otherwise X
+  removes the frontend and tray icon. The separate always-on service may keep
+  the backend running without leaving the frontend resident. Opening a retained
+  tray icon now restores the window before showing it instead of immediately
   returning to a minimized taskbar entry.
 - Closed WebView2's Downloads flyout automatically after a Solo blueprint JSON
   export finishes instead of leaving it covering the portal.

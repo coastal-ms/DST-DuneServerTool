@@ -29,8 +29,8 @@ internal sealed class MainForm : Form
     // ----- Minimize-to-tray state --------------------------------------------
     // When enabled, minimizing the window hides it (and its taskbar button) and
     // leaves a single NotifyIcon in the system tray that reopens the portal.
-    // In backend keep-alive mode, X also hides to the tray; the tray's explicit
-    // Quit action bypasses that interception and shuts down normally.
+    // With Windows autostart enabled, X also hides to the tray; the tray's
+    // explicit Quit action bypasses that interception and shuts down normally.
     private NotifyIcon? _tray;
     private ToolStripMenuItem? _trayMinItem;
     private bool _minimizeToTray;
@@ -1151,7 +1151,7 @@ internal sealed class MainForm : Form
             && !_quitFromTray
             && !_closeRequestedByPortal
             && _minimizeToTray
-            && IsBackendKeepAliveActive();
+            && IsShellCloseToTrayActive();
     }
 
     private void CloseFromPortal()
@@ -1181,6 +1181,21 @@ internal sealed class MainForm : Form
                 Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
                 "DuneServer", "keep-alive.flag");
             return File.Exists(keepAliveFlag);
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
+    private static bool IsShellCloseToTrayActive()
+    {
+        try
+        {
+            string closeToTrayFlag = Path.Combine(
+                Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+                "DuneServer", "shell-close-to-tray.flag");
+            return File.Exists(closeToTrayFlag);
         }
         catch
         {
