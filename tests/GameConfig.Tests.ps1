@@ -1478,6 +1478,19 @@ Describe 'DuneGameConfigSchema: forced Coriolis world seed' -Tag 'GameConfig' {
 }
 
 Describe 'DuneGameConfigSchema: experimental twilight evidence gate' -Tag 'GameConfig' {
+    BeforeAll {
+        function Invoke-V6Ssh { throw 'Unexpected unmocked twilight SSH call.' }
+    }
+
+    BeforeEach {
+        $script:TwilightLivePaths = @{
+            source = 'live'
+            game = '/var/lib/rancher/k3s/storage/pvc-test/Saved/UserSettings/UserGame.ini'
+            engine = '/var/lib/rancher/k3s/storage/pvc-test/Saved/UserSettings/UserEngine.ini'
+        }
+        Mock Resolve-DuneGameConfigPaths { $script:TwilightLivePaths }
+    }
+
     It 'does not expose the unverified startup-hour candidate' {
         $timeFields = @($script:DuneGameConfigSchema | Where-Object {
             $_.Section -eq '/Script/DuneSandbox.TimeOfDaySettings'
@@ -1566,18 +1579,49 @@ Describe 'DuneGameConfigSchema: experimental twilight evidence gate' -Tag 'GameC
             @{ files = @(@{ file='game'; ok=$true; backup='/fixture/UserGame.ini.dstbak' }) }
         }
         Mock Save-DuneGameConfigLocked {}
+        Mock Invoke-V6Ssh {
+            @(
+                '[/Script/DuneSandbox.TimeOfDaySettings]',
+                'm_StartTime=18.0',
+                'm_bTimeOfDayEnabled=False'
+            )
+        }
 
         $result = Invoke-DuneTwilightLockStage -Ip '192.0.2.1' -Candidate '18.0'
 
         $result.ok | Should -BeTrue
         $result.candidate | Should -Be '18.0'
         $result.clientApplied | Should -BeFalse
-        Assert-MockCalled Backup-DuneGameConfig -Times 1
+        Assert-MockCalled Backup-DuneGameConfig -Times 1 -ParameterFilter {
+            $ResolvedPaths.source -eq 'live' -and
+            $ResolvedPaths.game -eq $script:TwilightLivePaths.game
+        }
         Assert-MockCalled Save-DuneGameConfigLocked -Times 1 -ParameterFilter {
+            $ResolvedPaths.game -eq $script:TwilightLivePaths.game -and
             @($Updates).Count -eq 2 -and
             @($Updates | Where-Object { $_.key -eq 'm_StartTime' -and $_.value -eq '18.0' -and -not $_.remove }).Count -eq 1 -and
             @($Updates | Where-Object { $_.key -eq 'm_bTimeOfDayEnabled' -and $_.value -eq 'False' -and -not $_.remove }).Count -eq 1
         }
+        Assert-MockCalled Invoke-V6Ssh -Times 1
+    }
+
+    It 'refuses setup templates before backup or mutation' {
+        Mock Resolve-DuneGameConfigPaths {
+            @{
+                source = 'template'
+                game = '/home/dune/.dune/download/scripts/setup/config/UserGame.ini'
+                engine = '/home/dune/.dune/download/scripts/setup/config/UserEngine.ini'
+            }
+        }
+        Mock Backup-DuneGameConfig {}
+        Mock Save-DuneGameConfigLocked {}
+
+        { Invoke-DuneTwilightLockStage -Ip '192.0.2.1' -Candidate '18.0' } |
+            Should -Throw '*requires a live battlegroup UserGame.ini*'
+        { Invoke-DuneTwilightLockRestore -Ip '192.0.2.1' } |
+            Should -Throw '*requires a live battlegroup UserGame.ini*'
+        Assert-MockCalled Backup-DuneGameConfig -Times 0
+        Assert-MockCalled Save-DuneGameConfigLocked -Times 0
     }
 
     It 'fails closed when the pre-stage backup cannot be verified' {
@@ -1591,22 +1635,75 @@ Describe 'DuneGameConfigSchema: experimental twilight evidence gate' -Tag 'GameC
         Assert-MockCalled Save-DuneGameConfigLocked -Times 0
     }
 
+    It 'fails stage when the exact live readback does not match the requested values' {
+        Mock Backup-DuneGameConfig {
+            @{ files = @(@{ file='game'; ok=$true; backup='/fixture/UserGame.ini.dstbak' }) }
+        }
+        Mock Save-DuneGameConfigLocked {}
+        Mock Invoke-V6Ssh {
+            @(
+                '[/Script/DuneSandbox.TimeOfDaySettings]',
+                'm_StartTime=17.0',
+                'm_bTimeOfDayEnabled=True'
+            )
+        }
+
+        { Invoke-DuneTwilightLockStage -Ip '192.0.2.1' -Candidate '18.0' } |
+            Should -Throw '*write verification failed*'
+    }
+
+    It 'fails stage when SSH exposes a write/readback failure as output' {
+        Mock Backup-DuneGameConfig {
+            @{ files = @(@{ file='game'; ok=$true; backup='/fixture/UserGame.ini.dstbak' }) }
+        }
+        Mock Save-DuneGameConfigLocked {}
+        Mock Invoke-V6Ssh { 'ERROR: remote write failed' }
+
+        { Invoke-DuneTwilightLockStage -Ip '192.0.2.1' -Candidate '18.0' } |
+            Should -Throw '*could not verify the live UserGame.ini*'
+    }
+
     It 'backs up then removes both managed overrides on restore' {
         Mock Backup-DuneGameConfig {
             @{ files = @(@{ file='game'; ok=$true; backup='/fixture/UserGame.ini.dstbak' }) }
         }
         Mock Save-DuneGameConfigLocked {}
+        Mock Invoke-V6Ssh {
+            @(
+                '[/Script/DuneSandbox.DuneGameMode]',
+                'm_WaterConsumptionRate=1.0'
+            )
+        }
 
         $result = Invoke-DuneTwilightLockRestore -Ip '192.0.2.1'
 
         $result.restored | Should -BeTrue
         $result.clientApplied | Should -BeFalse
-        Assert-MockCalled Backup-DuneGameConfig -Times 1
+        Assert-MockCalled Backup-DuneGameConfig -Times 1 -ParameterFilter {
+            $ResolvedPaths.game -eq $script:TwilightLivePaths.game
+        }
         Assert-MockCalled Save-DuneGameConfigLocked -Times 1 -ParameterFilter {
+            $ResolvedPaths.game -eq $script:TwilightLivePaths.game -and
             @($Updates).Count -eq 2 -and
             @($Updates | Where-Object { $_.key -eq 'm_StartTime' -and $_.remove }).Count -eq 1 -and
             @($Updates | Where-Object { $_.key -eq 'm_bTimeOfDayEnabled' -and $_.remove }).Count -eq 1
         }
+    }
+
+    It 'fails restore while either exact live override remains' {
+        Mock Backup-DuneGameConfig {
+            @{ files = @(@{ file='game'; ok=$true; backup='/fixture/UserGame.ini.dstbak' }) }
+        }
+        Mock Save-DuneGameConfigLocked {}
+        Mock Invoke-V6Ssh {
+            @(
+                '[/Script/DuneSandbox.TimeOfDaySettings]',
+                'm_bTimeOfDayEnabled=False'
+            )
+        }
+
+        { Invoke-DuneTwilightLockRestore -Ip '192.0.2.1' } |
+            Should -Throw '*restore verification failed*'
     }
 
     It 'registers dedicated guarded stage and restore routes' {

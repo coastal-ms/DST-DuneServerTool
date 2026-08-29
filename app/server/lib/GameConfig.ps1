@@ -132,6 +132,51 @@ function Test-DuneTwilightCandidateHour {
     return $text -in $script:DuneTwilightCandidateHours
 }
 
+function Resolve-DuneTwilightLiveGameConfigTarget {
+    param([Parameter(Mandatory)][string]$Ip)
+    $paths = Resolve-DuneGameConfigPaths -Ip $Ip
+    $liveGamePattern = '^/var/lib/rancher/k3s/storage/[^/]+/Saved/UserSettings/UserGame\.ini$'
+    if ("$($paths.source)" -ne 'live' -or "$($paths.game)" -notmatch $liveGamePattern) {
+        throw 'Twilight experiment requires a live battlegroup UserGame.ini; setup templates are never modified.'
+    }
+    return $paths
+}
+
+function Read-DuneTwilightLiveGameConfig {
+    param(
+        [Parameter(Mandatory)][string]$Ip,
+        [Parameter(Mandatory)][string]$Path
+    )
+    $raw = ((Invoke-V6Ssh -Ip $Ip -Cmd "sudo cat '$Path' 2>/dev/null") -join "`n")
+    if ([string]::IsNullOrWhiteSpace($raw) -or $raw.TrimStart().StartsWith('ERROR:')) {
+        throw 'Twilight experiment could not verify the live UserGame.ini after writing it.'
+    }
+    return $raw
+}
+
+function Assert-DuneTwilightStageReadback {
+    param(
+        [Parameter(Mandatory)][string]$Raw,
+        [Parameter(Mandatory)][string]$Candidate
+    )
+    $effective = Get-DuneIniEffective -Raw $Raw
+    $prefix = "$script:DuneGcSecTimeOfDay||"
+    if ("$($effective["${prefix}m_StartTime"])" -ne $Candidate -or
+        "$($effective["${prefix}m_bTimeOfDayEnabled"])" -ine 'False') {
+        throw 'Twilight experiment write verification failed; the live UserGame.ini does not contain the exact staged values.'
+    }
+}
+
+function Assert-DuneTwilightRestoreReadback {
+    param([Parameter(Mandatory)][string]$Raw)
+    $effective = Get-DuneIniEffective -Raw $Raw
+    $prefix = "$script:DuneGcSecTimeOfDay||"
+    if ($effective.ContainsKey("${prefix}m_StartTime") -or
+        $effective.ContainsKey("${prefix}m_bTimeOfDayEnabled")) {
+        throw 'Normal-cycle restore verification failed; a DST-managed twilight override remains in the live UserGame.ini.'
+    }
+}
+
 function Invoke-DuneTwilightLockStage {
     param(
         [Parameter(Mandatory)][string]$Ip,
@@ -141,12 +186,13 @@ function Invoke-DuneTwilightLockStage {
     if (-not (Test-DuneTwilightCandidateHour -Value $candidateText)) {
         throw "Candidate must be one of: $($script:DuneTwilightCandidateHours -join ', ')."
     }
-    $backup = Backup-DuneGameConfig -Ip $Ip
+    $paths = Resolve-DuneTwilightLiveGameConfigTarget -Ip $Ip
+    $backup = Backup-DuneGameConfig -Ip $Ip -ResolvedPaths $paths
     $gameBackup = @($backup.files | Where-Object file -eq 'game' | Select-Object -First 1)
     if ($gameBackup.Count -ne 1 -or -not $gameBackup[0].ok) {
         throw 'Twilight experiment was not staged because the server Game.ini backup could not be verified.'
     }
-    Save-DuneGameConfigLocked -Ip $Ip -Updates @(
+    Save-DuneGameConfigLocked -Ip $Ip -ResolvedPaths $paths -Updates @(
         @{
             file = 'game'
             section = $script:DuneGcSecTimeOfDay
@@ -162,6 +208,8 @@ function Invoke-DuneTwilightLockStage {
             remove = $false
         }
     )
+    $readback = Read-DuneTwilightLiveGameConfig -Ip $Ip -Path $paths.game
+    Assert-DuneTwilightStageReadback -Raw $readback -Candidate $candidateText
     return [ordered]@{
         ok = $true
         staged = $true
@@ -175,12 +223,13 @@ function Invoke-DuneTwilightLockStage {
 
 function Invoke-DuneTwilightLockRestore {
     param([Parameter(Mandatory)][string]$Ip)
-    $backup = Backup-DuneGameConfig -Ip $Ip
+    $paths = Resolve-DuneTwilightLiveGameConfigTarget -Ip $Ip
+    $backup = Backup-DuneGameConfig -Ip $Ip -ResolvedPaths $paths
     $gameBackup = @($backup.files | Where-Object file -eq 'game' | Select-Object -First 1)
     if ($gameBackup.Count -ne 1 -or -not $gameBackup[0].ok) {
         throw 'Normal cycle was not restored because the server Game.ini backup could not be verified.'
     }
-    Save-DuneGameConfigLocked -Ip $Ip -Updates @(
+    Save-DuneGameConfigLocked -Ip $Ip -ResolvedPaths $paths -Updates @(
         @{
             file = 'game'
             section = $script:DuneGcSecTimeOfDay
@@ -196,6 +245,8 @@ function Invoke-DuneTwilightLockRestore {
             remove = $true
         }
     )
+    $readback = Read-DuneTwilightLiveGameConfig -Ip $Ip -Path $paths.game
+    Assert-DuneTwilightRestoreReadback -Raw $readback
     return [ordered]@{
         ok = $true
         restored = $true
@@ -2490,9 +2541,13 @@ function Convert-DuneSpicefieldUpdates {
 # Does NOT auto-backup — backups are manual (Backup settings button) to avoid
 # cluttering the server PVC with a .dstbak per save.
 function Save-DuneGameConfig {
-    param([string]$Ip, [object[]]$Updates)
+    param(
+        [string]$Ip,
+        [object[]]$Updates,
+        [hashtable]$ResolvedPaths
+    )
     if (-not $Updates -or $Updates.Count -eq 0) { return }
-    $paths  = Resolve-DuneGameConfigPaths -Ip $Ip
+    $paths  = if ($ResolvedPaths) { $ResolvedPaths } else { Resolve-DuneGameConfigPaths -Ip $Ip }
     $quoted = Get-DuneGameConfigQuotedKeys
 
     $byFile = @{ game = (New-Object 'System.Collections.Generic.List[object]'); engine = (New-Object 'System.Collections.Generic.List[object]') }
@@ -2528,9 +2583,13 @@ function Save-DuneGameConfig {
 }
 
 function Save-DuneGameConfigLocked {
-    param([string]$Ip, [object[]]$Updates)
+    param(
+        [string]$Ip,
+        [object[]]$Updates,
+        [hashtable]$ResolvedPaths
+    )
     Invoke-WithDuneLock -Name 'gameconfig-ini' -Script {
-        Save-DuneGameConfig -Ip $Ip -Updates $Updates
+        Save-DuneGameConfig -Ip $Ip -Updates $Updates -ResolvedPaths $ResolvedPaths
     } | Out-Null
 }
 
@@ -3042,8 +3101,11 @@ function Get-DuneGameConfigCatalog {
 # resolved file to "<path>.dstbak-<ts>" and verifies the copy landed. Returns a
 # summary the UI can show. Only meaningful for a live BG (templates aren't backed up).
 function Backup-DuneGameConfig {
-    param([string]$Ip)
-    $paths = Resolve-DuneGameConfigPaths -Ip $Ip
+    param(
+        [string]$Ip,
+        [hashtable]$ResolvedPaths
+    )
+    $paths = if ($ResolvedPaths) { $ResolvedPaths } else { Resolve-DuneGameConfigPaths -Ip $Ip }
     $ts    = (Get-Date).ToString('yyyyMMddHHmmss')
     $files = New-Object 'System.Collections.Generic.List[object]'
     foreach ($f in @('game','engine')) {
