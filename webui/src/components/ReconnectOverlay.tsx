@@ -50,6 +50,7 @@ function isUpdatingHere(): boolean {
 export function ReconnectOverlay() {
   const state = useSyncExternalStore(subscribeConn, getConnState, getConnState)
   const recovering = state === 'recovering'
+  const cachedShellStartup = new URLSearchParams(window.location.search).get('shell-cache') === '1'
   const [visible, setVisible] = useState(false)
   const [giveUp, setGiveUp] = useState(false)
   const pollRef = useRef<number | null>(null)
@@ -67,7 +68,10 @@ export function ReconnectOverlay() {
 
   // While shown, probe the static index until the server answers, then reload.
   useEffect(() => {
-    if (!visible || giveUp) return
+    // DuneShell owns the fresh-token handoff during cached startup. Reloading
+    // the stale cached URL here can reach the restored backend first and expose
+    // the Browser Portal login before the shell navigates to its fresh URL.
+    if (!visible || giveUp || cachedShellStartup) return
     let cancelled = false
 
     const probe = async () => {
@@ -95,7 +99,7 @@ export function ReconnectOverlay() {
       cancelled = true
       if (pollRef.current) window.clearInterval(pollRef.current)
     }
-  }, [visible, giveUp])
+  }, [visible, giveUp, cachedShellStartup])
 
   if (!visible || isUpdatingHere()) return null
 
