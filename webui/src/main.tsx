@@ -14,7 +14,8 @@ window.addEventListener('beforeinstallprompt', (e) => {
   ;(window as unknown as { __dunePwaPrompt?: Event }).__dunePwaPrompt = e
 })
 
-// Register the no-op service worker — Chromium requires one for installability.
+// Cache only the local static app shell. Live API and remote-portal traffic
+// remains network-only and authoritative.
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
     navigator.serviceWorker.register('/sw.js').catch(() => { /* ignore */ })

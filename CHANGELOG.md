@@ -24,10 +24,11 @@ here cover everything those tags shipped.
 
 ### Changed
 
-- Reused the last recent Server Health snapshot during update restarts, launched
-  the desktop shell before backend bootstrap, and warmed WebView2 in parallel so
-  the prior health state is ready as soon as the frontend loads while live
-  probes refresh.
+- Cached the local frontend and last recent Server Health snapshot, launched
+  the desktop shell before backend bootstrap, and warmed WebView2 in parallel.
+  Repeat launches can show the cached shell and prior Server Health state while
+  the backend starts;
+  API actions remain live-only and reconnect to the new backend automatically.
 
 ### Fixed
 

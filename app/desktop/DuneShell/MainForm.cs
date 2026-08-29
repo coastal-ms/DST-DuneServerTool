@@ -18,6 +18,7 @@ internal sealed class MainForm : Form
     private readonly bool _useWaitFile;
 
     private bool _firstLoadDone;
+    private bool _authoritativeNavigationStarted;
     private string? _targetUrl;
     private int _navRetries;
     private ShellPreferences? _shellPreferences;
@@ -139,14 +140,6 @@ internal sealed class MainForm : Form
             return;
         }
 
-        string? url = await urlTask;
-        if (string.IsNullOrWhiteSpace(url))
-        {
-            _status.Text = "Could not find the Dune Server Tool URL.\r\n" +
-                           "Start the server first, then reopen this window.";
-            return;
-        }
-
         var core = _web.CoreWebView2;
         core.Settings.AreDefaultContextMenusEnabled = true;
         core.Settings.IsStatusBarEnabled = false;
@@ -168,8 +161,27 @@ internal sealed class MainForm : Form
 
         await InitDiagnosticLoggingAsync(core);
 
+        string? cachedUrl = TryReadCachedShellUrl();
+        if (!string.IsNullOrWhiteSpace(cachedUrl))
+        {
+            _targetUrl = cachedUrl;
+            core.Navigate(AddCachedShellMarker(cachedUrl));
+        }
+
+        string? url = await urlTask;
+        if (string.IsNullOrWhiteSpace(url))
+        {
+            _web.Visible = false;
+            _status.Visible = true;
+            _status.Text = "The Dune Server Tool backend did not start.\r\n" +
+                           "Reopen this window to try again.";
+            return;
+        }
+
+        TryWriteCachedShellUrl(url);
         _targetUrl = url;
-        _web.Source = new Uri(url);
+        _authoritativeNavigationStarted = true;
+        core.Navigate(url);
     }
 
     // ----- Diagnostic logging -------------------------------------------------
@@ -361,15 +373,24 @@ internal sealed class MainForm : Form
     private async void OnNavigationCompleted(object? sender, CoreWebView2NavigationCompletedEventArgs e)
     {
         if (_firstLoadDone) return;
+        if (e.WebErrorStatus == CoreWebView2WebErrorStatus.OperationCanceled) return;
 
         if (e.IsSuccess)
         {
-            _firstLoadDone = true;
-            _navRetries = 0;
+            if (_authoritativeNavigationStarted)
+            {
+                _firstLoadDone = true;
+                _navRetries = 0;
+            }
             _status.Visible = false;
             _web.Visible = true;
             return;
         }
+
+        // A failed speculative cache navigation should not retry a stale tokened
+        // URL. Keep the native startup status visible until URL discovery hands
+        // us the reachable, authoritative backend URL.
+        if (!_authoritativeNavigationStarted) return;
 
         // Navigation failed at the transport level (IsSuccess == false means the
         // request never got an HTTP response — typically CannotConnect /
@@ -793,6 +814,69 @@ internal sealed class MainForm : Form
     private const int MaxBackendStartPollAttempts = 90; // 90 * 500ms = 45s (UAC prompt + startup)
 
     private static readonly HttpClient _probeHttp = new() { Timeout = TimeSpan.FromMilliseconds(800) };
+    private static string CachedShellUrlFile => Path.Combine(
+        Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+        "DuneServer", "shell-last-url.txt");
+
+    private static string? TryReadCachedShellUrl()
+    {
+        try
+        {
+            if (!File.Exists(CachedShellUrlFile)) return null;
+            string value = File.ReadAllText(CachedShellUrlFile).Trim();
+            return IsTrustedCachedShellUrl(value) ? value : null;
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
+    private static void TryWriteCachedShellUrl(string url)
+    {
+        if (!IsTrustedCachedShellUrl(url)) return;
+        try
+        {
+            string? directory = Path.GetDirectoryName(CachedShellUrlFile);
+            if (!string.IsNullOrWhiteSpace(directory)) Directory.CreateDirectory(directory);
+            File.WriteAllText(CachedShellUrlFile, url);
+        }
+        catch
+        {
+            // Cached startup is optional; normal backend URL discovery remains authoritative.
+        }
+    }
+
+    private static bool IsTrustedCachedShellUrl(string? value)
+    {
+        return Uri.TryCreate(value, UriKind.Absolute, out var uri)
+            && string.Equals(uri.Scheme, Uri.UriSchemeHttp, StringComparison.OrdinalIgnoreCase)
+            && string.Equals(uri.Host, "127.0.0.1", StringComparison.OrdinalIgnoreCase)
+            && uri.Port >= 47823
+            && uri.Port <= 47872
+            && !string.IsNullOrWhiteSpace(GetQueryParameter(uri, "t"));
+    }
+
+    private static string AddCachedShellMarker(string url)
+    {
+        var builder = new UriBuilder(url);
+        string query = builder.Query.TrimStart('?');
+        builder.Query = string.IsNullOrWhiteSpace(query)
+            ? "shell-cache=1"
+            : query + "&shell-cache=1";
+        return builder.Uri.AbsoluteUri;
+    }
+
+    private static string? GetQueryParameter(Uri uri, string name)
+    {
+        foreach (string pair in uri.Query.TrimStart('?').Split('&', StringSplitOptions.RemoveEmptyEntries))
+        {
+            string[] parts = pair.Split('=', 2);
+            if (string.Equals(Uri.UnescapeDataString(parts[0]), name, StringComparison.OrdinalIgnoreCase))
+                return parts.Length == 2 ? Uri.UnescapeDataString(parts[1]) : string.Empty;
+        }
+        return null;
+    }
 
     private async Task<string?> ResolveUrlAsync()
     {
