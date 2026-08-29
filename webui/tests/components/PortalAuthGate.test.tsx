@@ -15,6 +15,7 @@ afterEach(() => {
   cleanup()
   vi.restoreAllMocks()
   sessionStorage.clear()
+  window.history.replaceState({}, '', '/')
 })
 
 describe('PortalAuthGate', () => {
@@ -99,6 +100,16 @@ describe('PortalAuthGate', () => {
     render(<PortalAuthGate><div>Existing dashboard</div></PortalAuthGate>)
     await waitFor(() => expect(screen.getByText('Existing dashboard')).toBeInTheDocument())
     expect(screen.queryByLabelText('Username')).not.toBeInTheDocument()
+  })
+
+  it('shows cached portal content instead of a transient connection error during shell startup', async () => {
+    window.history.replaceState({}, '', '/?t=stale&shell-cache=1')
+    vi.spyOn(globalThis, 'fetch').mockRejectedValueOnce(new TypeError('Failed to fetch'))
+
+    render(<PortalAuthGate><div>Cached dashboard</div></PortalAuthGate>)
+
+    expect(await screen.findByText('Cached dashboard')).toBeInTheDocument()
+    expect(screen.queryByRole('heading', { name: 'Connection unavailable' })).not.toBeInTheDocument()
   })
 
   it('gives actionable recovery if a forced-change origin check is rejected', async () => {

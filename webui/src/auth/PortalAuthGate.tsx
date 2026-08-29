@@ -156,6 +156,7 @@ function ForcedPasswordChange({ username, onSuccess }: { username: string; onSuc
 export function PortalAuthGate({ children }: { children: ReactNode }) {
   const [status, setStatus] = useState<PortalAuthStatus | null>(null)
   const [error, setError] = useState('')
+  const cachedShellStartup = new URLSearchParams(window.location.search).get('shell-cache') === '1'
 
   const refresh = async () => {
     try {
@@ -177,6 +178,7 @@ export function PortalAuthGate({ children }: { children: ReactNode }) {
   }, [status])
 
   if (error) {
+    if (cachedShellStartup) return <>{children}</>
     return <AuthFrame title="Connection unavailable" subtitle={error}><button className="btn-primary" onClick={() => void refresh()}>Try again</button></AuthFrame>
   }
   if (!status) {
