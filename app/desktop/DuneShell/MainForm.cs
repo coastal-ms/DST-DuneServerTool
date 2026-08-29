@@ -35,6 +35,7 @@ internal sealed class MainForm : Form
     private bool _minimizeToTray;
     private bool _trayBalloonShown;
     private bool _quitFromTray;
+    private bool _closeRequestedByPortal;
     private FormWindowState _restoreState = FormWindowState.Normal;
 
     public MainForm(string? initialUrl, bool useWaitFile)
@@ -61,12 +62,14 @@ internal sealed class MainForm : Form
             if (ShouldHideToTrayOnClose(e.CloseReason))
             {
                 e.Cancel = true;
+                ResetOneShotCloseIntent();
                 HideToTray();
                 return;
             }
             if (!_restartShellOnly && !StopCompanionProcesses(_quitFromTray))
             {
                 e.Cancel = true;
+                ResetOneShotCloseIntent();
                 return;
             }
             DisposeTrayIcon();
@@ -453,7 +456,7 @@ internal sealed class MainForm : Form
             if (!string.IsNullOrWhiteSpace(url)) OpenExternal(url);
             // Defer the actual close to the next message loop tick so the
             // WebMessageReceived handler can return cleanly first.
-            BeginInvoke(new Action(() => { try { Close(); } catch { } }));
+            BeginInvoke(CloseFromPortal);
         }
         else if (string.Equals(action, "open", StringComparison.OrdinalIgnoreCase))
         {
@@ -467,7 +470,7 @@ internal sealed class MainForm : Form
         else if (string.Equals(action, "close", StringComparison.OrdinalIgnoreCase))
         {
             // Browser confirmed it reached the server — safe to close now.
-            BeginInvoke(new Action(() => { try { Close(); } catch { } }));
+            BeginInvoke(CloseFromPortal);
         }
         else if (string.Equals(action, "pick-save-file", StringComparison.OrdinalIgnoreCase))
         {
@@ -1028,8 +1031,28 @@ internal sealed class MainForm : Form
         return closeReason == CloseReason.UserClosing
             && !_restartShellOnly
             && !_quitFromTray
+            && !_closeRequestedByPortal
             && _minimizeToTray
             && IsBackendKeepAliveActive();
+    }
+
+    private void CloseFromPortal()
+    {
+        _closeRequestedByPortal = true;
+        try
+        {
+            Close();
+        }
+        catch
+        {
+            _closeRequestedByPortal = false;
+        }
+    }
+
+    private void ResetOneShotCloseIntent()
+    {
+        _quitFromTray = false;
+        _closeRequestedByPortal = false;
     }
 
     private static bool IsBackendKeepAliveActive()
