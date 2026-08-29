@@ -60,12 +60,16 @@ here cover everything those tags shipped.
 - Added a fail-closed online-player warning before every manual action that can
   stop or restart game services or the VM, with connected player details and an
   explicit operator override when disconnection is intentional.
+- Clarified the native startup screen that backend loading after an update or
+  service restoration normally takes 10-15 seconds.
 
 ### Fixed
 
-- Fixed autostart and always-on sessions losing their tray icon when the app
-  window was closed. With Minimize to tray enabled, X now hides the shell back
-  to the tray; only **Quit (stops server)** exits the shell and backend.
+- Fixed tray lifecycle behavior so opening the tray icon restores the window
+  before showing it, X retains the shell only when Windows startup is enabled,
+  and the always-on service can keep the backend running without a tray icon.
+- Kept completed blueprint downloads available in the WebView2 Downloads
+  flyout for 10 seconds before closing it automatically.
 - Fixed installed Windows builds failing to create the first cached Maps
   generation when the elevated helper could not duplicate the UAC linked token;
   the helper now falls back to the same user's unelevated shell token with

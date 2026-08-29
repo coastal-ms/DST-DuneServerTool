@@ -737,10 +737,9 @@ $script:DuneKeepAliveAfterShellClose = [bool]$script:DuneHeadlessMode -or $scrip
 if (($script:DuneAutostartRegistered -or $script:DuneServiceModeRegistered) -and -not $script:DuneHeadlessMode) {
     Write-DuneLog "Autostart/service task registered for this user - closing the DuneShell window will leave the backend console running; click the shortcut again to re-open the viewer, or stop the backend explicitly via the tray / console window"
 }
-# Sync the on-disk keep-alive sentinel so DuneShell's FormClosing teardown
-# knows to skip its /api/shutdown + DuneServer.exe sweep
-# when keep-alive is active. Refreshed at runtime by Register-/Unregister-
-# DuneAutostart so toggling the Help menu takes effect without restart.
+# Sync the on-disk backend keep-alive and shell close-to-tray sentinels.
+# The former includes service/headless mode; the latter is autostart-only.
+# Both are refreshed when either scheduled-task mode changes.
 if (Get-Command Update-DuneKeepAliveFlag -ErrorAction SilentlyContinue) {
     try { [void](Update-DuneKeepAliveFlag) } catch {}
 }

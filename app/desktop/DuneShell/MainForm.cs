@@ -28,8 +28,8 @@ internal sealed class MainForm : Form
     // ----- Minimize-to-tray state --------------------------------------------
     // When enabled, minimizing the window hides it (and its taskbar button) and
     // leaves a single NotifyIcon in the system tray that reopens the portal.
-    // In backend keep-alive mode, X also hides to the tray; the tray's explicit
-    // Quit action bypasses that interception and shuts down normally.
+    // With Windows autostart enabled, X also hides to the tray; the tray's
+    // explicit Quit action bypasses that interception and shuts down normally.
     private NotifyIcon? _tray;
     private ToolStripMenuItem? _trayMinItem;
     private bool _minimizeToTray;
@@ -158,6 +158,7 @@ internal sealed class MainForm : Form
 
         core.NewWindowRequested += OnNewWindowRequested;
         core.NavigationCompleted += OnNavigationCompleted;
+        core.DownloadStarting += OnDownloadStarting;
         core.WebMessageReceived += OnWebMessageReceived;
         core.DocumentTitleChanged += (_, _) =>
         {
@@ -393,6 +394,36 @@ internal sealed class MainForm : Form
         _firstLoadDone = true;
         _status.Visible = false;
         _web.Visible = true;
+    }
+
+    private void OnDownloadStarting(object? sender, CoreWebView2DownloadStartingEventArgs e)
+    {
+        CoreWebView2DownloadOperation operation = e.DownloadOperation;
+
+        async void CloseWhenFinished(object? _, object __)
+        {
+            if (operation.State == CoreWebView2DownloadState.InProgress) return;
+            operation.StateChanged -= CloseWhenFinished;
+            if (operation.State == CoreWebView2DownloadState.Completed)
+                await Task.Delay(TimeSpan.FromSeconds(10));
+            try
+            {
+                BeginInvoke(new Action(() =>
+                {
+                    CoreWebView2? core = _web.CoreWebView2;
+                    if (core?.IsDefaultDownloadDialogOpen == true)
+                        core.CloseDefaultDownloadDialog();
+                }));
+            }
+            catch
+            {
+                // The shell may already be closing; the flyout will close with it.
+            }
+        }
+
+        operation.StateChanged += CloseWhenFinished;
+        if (operation.State != CoreWebView2DownloadState.InProgress)
+            CloseWhenFinished(operation, new object());
     }
 
     private void OnNewWindowRequested(object? sender, CoreWebView2NewWindowRequestedEventArgs e)
@@ -874,7 +905,7 @@ internal sealed class MainForm : Form
             return null;
         }
 
-        _status.Text = "Starting the Dune Server Tool backend…";
+        _status.Text = "Loading backend after recent update or service restoration… Estimated 10–15 seconds.";
         try
         {
             Process.Start(new ProcessStartInfo
@@ -896,7 +927,7 @@ internal sealed class MainForm : Form
         // generously longer window than the initial wait above.
         for (int i = 0; i < MaxBackendStartPollAttempts; i++)
         {
-            _status.Text = $"Starting the Dune Server Tool backend… ({i + 1})";
+            _status.Text = "Loading backend after recent update or service restoration… Estimated 10–15 seconds.";
             string? candidate = await TryReadUrlFileAsync(file);
             if (candidate != null && await IsUrlReachableAsync(candidate))
                 return candidate;
@@ -1011,11 +1042,16 @@ internal sealed class MainForm : Form
 
     private void RestoreFromTray()
     {
-        Show();
-        ShowInTaskbar = true;
-        WindowState = _restoreState == FormWindowState.Minimized
+        FormWindowState targetState = _restoreState == FormWindowState.Minimized
             ? FormWindowState.Normal
             : _restoreState;
+
+        // Restore before showing. Showing a still-minimized form fires Resize,
+        // which would immediately hide it back to the tray.
+        WindowState = targetState;
+        ShowInTaskbar = true;
+        Show();
+        BringToFront();
         Activate();
     }
 
@@ -1033,7 +1069,7 @@ internal sealed class MainForm : Form
             && !_quitFromTray
             && !_closeRequestedByPortal
             && _minimizeToTray
-            && IsBackendKeepAliveActive();
+            && IsShellCloseToTrayActive();
     }
 
     private void CloseFromPortal()
@@ -1063,6 +1099,21 @@ internal sealed class MainForm : Form
                 Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
                 "DuneServer", "keep-alive.flag");
             return File.Exists(keepAliveFlag);
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
+    private static bool IsShellCloseToTrayActive()
+    {
+        try
+        {
+            string closeToTrayFlag = Path.Combine(
+                Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+                "DuneServer", "shell-close-to-tray.flag");
+            return File.Exists(closeToTrayFlag);
         }
         catch
         {
