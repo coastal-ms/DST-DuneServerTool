@@ -28,7 +28,8 @@ here cover everything those tags shipped.
   the desktop shell before backend bootstrap, and warmed WebView2 in parallel.
   Repeat launches can show the cached shell and prior Server Health state while
   the backend starts;
-  API actions remain live-only and reconnect to the new backend automatically.
+  API actions remain live-only and reconnect to the new backend automatically
+  without exposing transient stale-connection error pages.
 
 ### Fixed
 

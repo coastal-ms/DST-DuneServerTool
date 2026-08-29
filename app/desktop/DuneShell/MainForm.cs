@@ -18,7 +18,7 @@ internal sealed class MainForm : Form
     private readonly bool _useWaitFile;
 
     private bool _firstLoadDone;
-    private bool _authoritativeNavigationStarted;
+    private ulong? _authoritativeNavigationId;
     private string? _targetUrl;
     private int _navRetries;
     private ShellPreferences? _shellPreferences;
@@ -150,6 +150,7 @@ internal sealed class MainForm : Form
         core.Settings.AreDevToolsEnabled = true;
 
         core.NewWindowRequested += OnNewWindowRequested;
+        core.NavigationStarting += OnNavigationStarting;
         core.NavigationCompleted += OnNavigationCompleted;
         core.DownloadStarting += OnDownloadStarting;
         core.WebMessageReceived += OnWebMessageReceived;
@@ -180,7 +181,6 @@ internal sealed class MainForm : Form
 
         TryWriteCachedShellUrl(url);
         _targetUrl = url;
-        _authoritativeNavigationStarted = true;
         core.Navigate(url);
     }
 
@@ -370,14 +370,24 @@ internal sealed class MainForm : Form
         catch { /* logging must never throw into the caller */ }
     }
 
+    private void OnNavigationStarting(object? sender, CoreWebView2NavigationStartingEventArgs e)
+    {
+        if (!string.IsNullOrWhiteSpace(_targetUrl)
+            && string.Equals(e.Uri, _targetUrl, StringComparison.OrdinalIgnoreCase))
+        {
+            _authoritativeNavigationId = e.NavigationId;
+        }
+    }
+
     private async void OnNavigationCompleted(object? sender, CoreWebView2NavigationCompletedEventArgs e)
     {
         if (_firstLoadDone) return;
         if (e.WebErrorStatus == CoreWebView2WebErrorStatus.OperationCanceled) return;
 
+        bool isAuthoritative = _authoritativeNavigationId == e.NavigationId;
         if (e.IsSuccess)
         {
-            if (_authoritativeNavigationStarted)
+            if (isAuthoritative)
             {
                 _firstLoadDone = true;
                 _navRetries = 0;
@@ -390,7 +400,7 @@ internal sealed class MainForm : Form
         // A failed speculative cache navigation should not retry a stale tokened
         // URL. Keep the native startup status visible until URL discovery hands
         // us the reachable, authoritative backend URL.
-        if (!_authoritativeNavigationStarted) return;
+        if (!isAuthoritative) return;
 
         // Navigation failed at the transport level (IsSuccess == false means the
         // request never got an HTTP response — typically CannotConnect /
@@ -405,7 +415,10 @@ internal sealed class MainForm : Form
             _web.Visible = false;
             _status.Text = $"Connecting to Dune Server Tool… (attempt {_navRetries})";
             await Task.Delay(600);
-            try { _web.CoreWebView2?.Navigate(_targetUrl); }
+            try
+            {
+                _web.CoreWebView2?.Navigate(_targetUrl);
+            }
             catch { /* surfaces on the next NavigationCompleted */ }
             return;
         }
