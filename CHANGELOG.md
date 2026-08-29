@@ -60,6 +60,9 @@ here cover everything those tags shipped.
 
 ### Fixed
 
+- Fixed autostart and always-on sessions losing their tray icon when the app
+  window was closed. With Minimize to tray enabled, X now hides the shell back
+  to the tray; only **Quit (stops server)** exits the shell and backend.
 - Fixed installed Windows builds failing to create the first cached Maps
   generation when the elevated helper could not duplicate the UAC linked token;
   the helper now falls back to the same user's unelevated shell token with

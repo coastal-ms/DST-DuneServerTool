@@ -64,7 +64,7 @@ internal sealed class MainForm : Form
                 HideToTray();
                 return;
             }
-            if (!_restartShellOnly && !StopCompanionProcesses())
+            if (!_restartShellOnly && !StopCompanionProcesses(_quitFromTray))
             {
                 e.Cancel = true;
                 return;
@@ -1240,7 +1240,7 @@ internal sealed class MainForm : Form
     /// in that mode the shell wasn't started by the backend launcher and we
     /// must not assume there's a paired DuneServer process to stop.
     /// </summary>
-    private bool StopCompanionProcesses()
+    private bool StopCompanionProcesses(bool ignoreKeepAlive = false)
     {
         if (!_useWaitFile) return true;
 
@@ -1253,7 +1253,7 @@ internal sealed class MainForm : Form
         // refreshed live by the backend on startup AND on every autostart
         // toggle, so this reflects current intent rather than launch-time
         // state.
-        if (IsBackendKeepAliveActive()) return true;
+        if (!ignoreKeepAlive && IsBackendKeepAliveActive()) return true;
 
         if (IsWorldRestartActive())
         {
