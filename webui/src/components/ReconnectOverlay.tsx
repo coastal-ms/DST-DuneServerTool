@@ -110,12 +110,12 @@ export function ReconnectOverlay() {
           />
         </div>
         <h1 className="text-xl font-semibold text-amber-100">
-          {giveUp ? 'Still trying to reconnect…' : 'Reconnecting to Dune Server Tool…'}
+          {giveUp ? 'Still trying to reconnect…' : 'Loading Dune Server Tool backend…'}
         </h1>
         <p className="mt-3 text-sm leading-relaxed text-slate-300">
           {giveUp
             ? 'The tool is taking a while to come back. It may still be updating or restarting.'
-            : 'The tool restarted or updated and is coming back. This page reconnects automatically.'}
+            : 'A recent update or service restoration can take 10–15 seconds. This page reconnects automatically.'}
         </p>
         {giveUp && (
           <button
