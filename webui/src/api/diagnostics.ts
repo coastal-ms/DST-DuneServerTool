@@ -1,5 +1,5 @@
-// Diagnostics API — build a redacted bundle of logs the user can drag into
-// their GitHub bug report. Triggered from the Help dropdown.
+// Diagnostics API — build a redacted log package the owner can attach in a
+// DST Discord support thread. Triggered from the Help dropdown.
 import { api } from './client'
 
 export interface DiagnosticBundle {

@@ -34,7 +34,6 @@ export class PageErrorBoundary extends Component<Props, State> {
     // Emit to the console so the WebView2 console-event listener (added in
     // v12.0.1) captures it into webview2-debug.log. This is what makes the
     // diagnostics ZIP useful for postmortem analysis.
-    // eslint-disable-next-line no-console
     console.error(`[PageErrorBoundary:${this.props.pageName}]`, error, info.componentStack)
     this.setState({ componentStack: info.componentStack ?? null })
   }
@@ -56,7 +55,8 @@ export class PageErrorBoundary extends Component<Props, State> {
           <p className="text-sm text-text mb-3">
             The page hit an unhandled error and was prevented from rendering. The full stack has been
             written to <span className="font-mono">%APPDATA%\DuneServer\webview2-debug.log</span>; please
-            attach the ZIP from <strong>Help → Create GitHub Issue + Save Logs</strong>.
+            create a ZIP from <strong>Help → Create Diagnostics Package</strong> and attach it in your
+            DST Discord support thread.
           </p>
 
           <div className="mb-3">

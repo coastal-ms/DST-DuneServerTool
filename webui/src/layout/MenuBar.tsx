@@ -3,7 +3,6 @@ import { createPortal } from 'react-dom'
 import { useNavigate, useLocation } from '../router'
 import { Icon } from '../components/Icon'
 import { NAV_ITEMS, GROUP_ORDER, getVisibleGroupLabel, getVisibleNavItems, isNavItemActive, type NavGroup } from '../nav'
-import { useUpdateCheck } from '../hooks/useUpdateCheck'
 import { buildDiagnosticBundle, type DiagnosticBundle } from '../api/diagnostics'
 import { getAutostartState, setAutostartEnabled, type AutostartState } from '../api/autostart'
 import { getServiceModeState, setServiceModeEnabled, type ServiceModeState } from '../api/serviceMode'
@@ -22,14 +21,12 @@ type Props = {
 // Classic Windows-style top menu bar. Each group from the sidebar (Server
 // Health, PowerShell, Game Data, Database, System) appears here as a dropdown
 // listing its pages, plus a "Help" dropdown immediately to the right of
-// System for cross-cutting commands like "Create GitHub Issue" and the
+// System for cross-cutting commands like "Create Diagnostics Package" and the
 // sidebar collapse toggle.
 export function MenuBar({ sidebarCollapsed, onToggleSidebar }: Props) {
   const { canAccessOwnerSurfaces } = usePortalAccess()
   const navigate = useNavigate()
   const location = useLocation()
-  const { data: upd } = useUpdateCheck()
-  const version = upd?.currentVersion ?? ''
   const [open, setOpen] = useState<MenuKey | null>(null)
   const [mobileNavOpen, setMobileNavOpen] = useState(false)
   const rootRef = useRef<HTMLDivElement | null>(null)
@@ -211,21 +208,10 @@ export function MenuBar({ sidebarCollapsed, onToggleSidebar }: Props) {
     }
   }, [mobileNavOpen])
 
-  const issueHref = `https://github.com/coastal-ms/DST-DuneServerTool/issues/new?template=bug_report.yml${
-    version ? `&tool_version=v${encodeURIComponent(version)}` : ''
-  }`
-
-  // Help → Create GitHub Issue + Save Logs. Opens the prefilled issue form
-  // synchronously inside the click handler (so the popup-blocker treats it as
-  // a user gesture), then builds the diagnostics bundle. The result is surfaced
-  // in a modal so the user always learns where the ZIP landed (Desktop, or the
-  // %APPDATA% fallback when the Desktop isn't writable — e.g. OneDrive KFM) or
-  // why it failed. We intentionally do NOT await the bundle before opening the
-  // issue — a slow zip should never make the issue tab fail to open.
-  const onReportIssue = () => {
+  // Owner-only host action. The result is surfaced so the owner always learns
+  // where the redacted ZIP landed or how to recover if package creation fails.
+  const onCreateDiagnosticsPackage = () => {
     setOpen(null)
-    window.open(issueHref, '_blank', 'noopener,noreferrer')
-    if (!canAccessOwnerSurfaces) return
     setDiag({ status: 'building' })
     buildDiagnosticBundle()
       .then((result) => setDiag({ status: 'done', result }))
@@ -400,25 +386,22 @@ export function MenuBar({ sidebarCollapsed, onToggleSidebar }: Props) {
               </span>
               <Icon name="ExternalLink" size={11} className="text-text-dim mt-1" />
             </a>
-            <button
-              type="button"
-              onClick={onReportIssue}
-              className="w-full flex items-start gap-2 px-2.5 py-1.5 rounded text-sm text-text-muted hover:text-text hover:bg-surface-2 transition-colors text-left"
-              title="Opens the prefilled GitHub bug-report form and saves a redacted log ZIP to your Desktop (Explorer will pop with the ZIP selected — drag it into the issue comment)."
-            >
-              <Icon name="Github" size={14} className="mt-0.5" />
-              <span className="flex-1">
-                <span className="block">
-                  {canAccessOwnerSurfaces ? 'Create GitHub Issue + Save Logs' : 'Create GitHub Issue'}
+            {canAccessOwnerSurfaces && (
+              <button
+                type="button"
+                onClick={onCreateDiagnosticsPackage}
+                className="w-full min-h-11 flex items-start gap-2 px-2.5 py-2 rounded text-sm text-text-muted hover:text-text hover:bg-surface-2 transition-colors text-left"
+                title="Creates a redacted diagnostics ZIP on the server host and opens it in Explorer."
+              >
+                <Icon name="FileArchive" size={14} className="mt-0.5" />
+                <span className="flex-1">
+                  <span className="block">Create Diagnostics Package</span>
+                  <span className="block text-[11px] text-text-dim">
+                    Saves a redacted ZIP and opens it in Explorer
+                  </span>
                 </span>
-                <span className="block text-[11px] text-text-dim">
-                  {canAccessOwnerSurfaces
-                    ? 'Opens the issue form & drops a redacted ZIP on your Desktop'
-                    : 'Opens the issue form without writing files on the host'}
-                </span>
-              </span>
-              <Icon name="ExternalLink" size={11} className="text-text-dim mt-1" />
-            </button>
+              </button>
+            )}
             {local && autostart && autostart.available && (
               <button
                 type="button"
@@ -843,12 +826,14 @@ export function MenuBar({ sidebarCollapsed, onToggleSidebar }: Props) {
         </div>
       )}
 
-      {/* Diagnostics bundle result — surfaced so "Report an issue" always tells
-          the user what happened instead of failing silently. */}
+      {/* Diagnostics package result — always surface the saved path or recovery. */}
       {diag && (
         <div
           className="fixed inset-0 z-[60] bg-black/60 flex items-center justify-center p-4"
           onClick={() => { if (diag.status !== 'building') setDiag(null) }}
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="diagnostics-package-title"
         >
           <div
             className="bg-surface border border-border rounded-xl shadow-2xl max-w-md w-full p-5"
@@ -858,9 +843,11 @@ export function MenuBar({ sidebarCollapsed, onToggleSidebar }: Props) {
               <div className="flex items-start gap-3">
                 <Icon name="Loader" size={20} className="text-accent-bright mt-0.5 animate-spin" />
                 <div className="flex-1">
-                  <h2 className="text-base font-semibold text-text mb-1">Building diagnostics bundle…</h2>
+                  <h2 id="diagnostics-package-title" className="text-base font-semibold text-text mb-1">
+                    Creating diagnostics package…
+                  </h2>
                   <p className="text-sm text-text-muted leading-snug">
-                    Collecting and redacting logs into a ZIP you can attach to your GitHub issue.
+                    Collecting and redacting logs into a ZIP for your DST Discord support thread.
                   </p>
                 </div>
               </div>
@@ -871,10 +858,11 @@ export function MenuBar({ sidebarCollapsed, onToggleSidebar }: Props) {
                 <div className="flex items-start gap-3 mb-3">
                   <Icon name="CheckCircle" size={20} className="text-success mt-0.5" />
                   <div className="flex-1 min-w-0">
-                    <h2 className="text-base font-semibold text-text mb-1">Diagnostics bundle saved</h2>
+                    <h2 id="diagnostics-package-title" className="text-base font-semibold text-text mb-1">
+                      Diagnostics package created
+                    </h2>
                     <p className="text-sm text-text-muted leading-snug">
-                      An Explorer window should have opened with the ZIP selected. Drag it into your
-                      GitHub issue to attach it.
+                      Explorer opened the ZIP on the server host. Attach it in your DST Discord support thread.
                     </p>
                   </div>
                 </div>
@@ -884,7 +872,7 @@ export function MenuBar({ sidebarCollapsed, onToggleSidebar }: Props) {
                   <div className="text-text-dim mt-1.5">
                     {diag.result.fileCount} file{diag.result.fileCount === 1 ? '' : 's'} ·{' '}
                     {Math.max(1, Math.round(diag.result.sizeBytes / 1024))} KB
-                    {diag.result.sanitized ? ' · redacted' : ''}
+                    {diag.result.sanitized ? ' · redacted' : ' · sanitization incomplete'}
                   </div>
                 </div>
                 {diag.result.warnings.length > 0 && (
@@ -902,10 +890,12 @@ export function MenuBar({ sidebarCollapsed, onToggleSidebar }: Props) {
                 <div className="flex items-start gap-3 mb-3">
                   <Icon name="AlertTriangle" size={20} className="text-danger mt-0.5" />
                   <div className="flex-1">
-                    <h2 className="text-base font-semibold text-text mb-1">Couldn’t build the diagnostics bundle</h2>
+                    <h2 id="diagnostics-package-title" className="text-base font-semibold text-text mb-1">
+                      Couldn’t create the diagnostics package
+                    </h2>
                     <p className="text-sm text-text-muted leading-snug">
-                      You can still file the issue — attach your logs manually from
-                      <span className="font-mono text-text"> %APPDATA%\DuneServer\.logs</span>.
+                      Open <span className="font-mono text-text">%APPDATA%\DuneServer\.logs</span> on
+                      the server host and attach the relevant logs in your DST Discord support thread.
                     </p>
                   </div>
                 </div>
@@ -916,11 +906,20 @@ export function MenuBar({ sidebarCollapsed, onToggleSidebar }: Props) {
             )}
 
             {diag.status !== 'building' && (
-              <div className="flex justify-end">
+              <div className="flex flex-wrap justify-end gap-2">
+                {diag.status === 'error' && (
+                  <button
+                    type="button"
+                    onClick={onCreateDiagnosticsPackage}
+                    className="btn-secondary min-h-11"
+                  >
+                    Try again
+                  </button>
+                )}
                 <button
                   type="button"
                   onClick={() => setDiag(null)}
-                  className="px-3 py-1.5 rounded text-sm bg-accent text-white hover:bg-accent-bright"
+                  className="btn-primary min-h-11"
                 >
                   Close
                 </button>

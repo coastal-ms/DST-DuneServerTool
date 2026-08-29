@@ -1,11 +1,11 @@
-﻿# /api/diagnostics — build a redacted ZIP of logs the user can attach to a
-# GitHub bug report. Triggered from the React "Help → Create GitHub Issue +
-# Save Logs" menu item and from the CLI `report-issue` command.
+# /api/diagnostics — build a redacted ZIP of logs the owner can attach in a
+# DST Discord support thread. Triggered from React's
+# "Help → Create Diagnostics Package" action and the legacy CLI command.
 #
 # Hard rules:
 #   - Everything that lands in the ZIP runs through Invoke-DstRedaction first.
 #     We never write the user's real VM IP, SSH key path, or Windows username
-#     into a file they're about to attach to a public issue.
+#     into a file they're about to share with support.
 #   - Failures on individual sources (missing log, locked file, OneDrive
 #     Desktop read-only) are recorded in manifest.txt as warnings; the ZIP
 #     still builds with whatever did succeed.
@@ -209,8 +209,7 @@ function Read-DstLogTail {
 }
 
 # Builds the diagnostic bundle. Returns a hashtable with the same shape the
-# /api/diagnostics/bundle handler echoes back to the React client (so the CLI
-# `report-issue` command can use the exact same code path).
+# /api/diagnostics/bundle handler echoes back to the React client and legacy CLI.
 function New-DstDiagnosticBundle {
     [CmdletBinding()]
     param()
