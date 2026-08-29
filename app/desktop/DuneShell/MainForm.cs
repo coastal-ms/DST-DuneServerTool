@@ -113,13 +113,9 @@ internal sealed class MainForm : Form
             return;
         }
 
-        string? url = await ResolveUrlAsync();
-        if (string.IsNullOrWhiteSpace(url))
-        {
-            _status.Text = "Could not find the Dune Server Tool URL.\r\n" +
-                           "Start the server first, then reopen this window.";
-            return;
-        }
+        // Warm WebView2 while the backend starts. Both cold paths take several
+        // seconds, and neither depends on the other until navigation.
+        Task<string?> urlTask = ResolveUrlAsync();
 
         try
         {
@@ -137,6 +133,14 @@ internal sealed class MainForm : Form
         catch (Exception ex)
         {
             _status.Text = "WebView2 failed to initialize.\r\n" + ex.Message;
+            return;
+        }
+
+        string? url = await urlTask;
+        if (string.IsNullOrWhiteSpace(url))
+        {
+            _status.Text = "Could not find the Dune Server Tool URL.\r\n" +
+                           "Start the server first, then reopen this window.";
             return;
         }
 
@@ -771,12 +775,13 @@ internal sealed class MainForm : Form
             "DuneServer", "last-url.txt");
 
         bool backendWasRunning = Process.GetProcessesByName("DuneServer").Length > 0;
-
-        string? candidate = await PollForReachableUrlAsync(file, MaxWaitFilePollAttempts);
-        if (candidate != null) return candidate;
+        string? candidate;
 
         if (backendWasRunning)
         {
+            candidate = await PollForReachableUrlAsync(file, MaxWaitFilePollAttempts);
+            if (candidate != null) return candidate;
+
             // A DuneServer.exe is already alive but never came up within the
             // wait window (hung listener, very slow host, etc). Don't pile a
             // second backend on top of it — hand back whatever is on disk
@@ -785,6 +790,8 @@ internal sealed class MainForm : Form
             return await TryReadUrlFileAsync(file);
         }
 
+        // A stale last-url file cannot be reachable without a backend process.
+        // Start immediately instead of spending 20 seconds probing it first.
         candidate = await TryStartBackendAsync(file);
         return candidate ?? await TryReadUrlFileAsync(file);
     }

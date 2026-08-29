@@ -22,6 +22,18 @@ here cover everything those tags shipped.
   database, and works while the game is open. PTC blueprint import remains
   disabled and is still rejected before save access.
 
+### Changed
+
+- Reused the last recent Server Health snapshot during update restarts, launched
+  the desktop shell before backend bootstrap, and warmed WebView2 in parallel so
+  the app shows immediately and repaints while live health probes refresh.
+
+### Fixed
+
+- Fixed autostart and always-on sessions losing their tray icon when the app
+  window was closed. With Minimize to tray enabled, X now hides the shell back
+  to the tray; only **Quit (stops server)** exits the shell and backend.
+
 ## [14.0.3] - 2026-08-24
 
 ### Fixed
