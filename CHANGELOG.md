@@ -30,7 +30,9 @@ here cover everything those tags shipped.
   the backend starts;
   API actions remain live-only and reconnect to the new backend automatically
   without exposing transient stale-connection error pages. A real connection
-  warning appears after 20 seconds and directs users to the diagnostic bundle.
+  warning is deliberately held until 20 seconds and then directs users to the
+  diagnostic bundle. After an update or service restoration, the startup screen
+  sets the expected backend load time at 10–15 seconds.
 
 ### Fixed
 

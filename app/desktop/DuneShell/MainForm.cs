@@ -90,7 +90,9 @@ internal sealed class MainForm : Form
         _status.TextAlign = ContentAlignment.MiddleCenter;
         _status.ForeColor = Color.Gainsboro;
         _status.Font = new Font(FontFamily.GenericSansSerif, 11f);
-        _status.Text = "Connecting to Dune Server Tool…";
+        _status.Text =
+            "Loading backend after a recent update or service restoration…\r\n" +
+            "Estimated time: 10–15 seconds.";
         Controls.Add(_status);
     }
 
