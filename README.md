@@ -43,6 +43,7 @@ guarded controls in one native Windows app.
 - Validate wrapper, SQLite integrity, foreign keys, schema, and character count.
 - Create, restore, and delete retained backups.
 - Edit typed Solo and confirmed Engine settings.
+- Export saved PTC Solo base blueprints as portable read-only JSON files.
 - Manage items, packages, vehicle kits, cosmetics, currencies, and fillables.
 - Max augments and run verified specialization, Find the Fremen, and skill actions.
 
@@ -84,7 +85,8 @@ packages, vehicle kits, cosmetics, progression, teleports, and guarded writes.
 ![Solo Mode](docs/img/solo-mode.png)
 
 Validated local-save settings, backups, character and inventory tools,
-currencies, fillables, cosmetics, packages, augments, and progression.
+read-only base blueprint export, currencies, fillables, cosmetics, packages,
+augments, and progression.
 </details>
 
 <details>

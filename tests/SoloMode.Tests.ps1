@@ -395,6 +395,42 @@ Describe 'Solo Mode write gates and settings backups' {
         Assert-MockCalled Invoke-DuneSoloHelper -Times 0
     }
 
+    It 'lists PTC blueprints through the read-only helper while the game is running' {
+        $layout = New-TestSoloLayout
+        Save-DuneSoloState -DataRoot $layout.root -DbPath $layout.db | Out-Null
+        Mock Get-DuneSoloGameProcesses { @([pscustomobject]@{ name = 'DuneSandbox'; pid = 42 }) }
+        Mock Invoke-DuneSoloHelper {
+            @{ ok = $true; blueprints = @(@{ id = 1; instances = 320 }) }
+        }
+
+        $result = Get-DuneSoloBlueprints
+
+        $result.blueprints[0].instances | Should -Be 320
+        Assert-MockCalled Invoke-DuneSoloHelper -Times 1 -ParameterFilter {
+            $Command -eq 'list-blueprints' -and
+            $Arguments.input -eq $layout.db
+        }
+    }
+
+    It 'exports a PTC blueprint read-only without requiring the game to close' {
+        $layout = New-TestSoloLayout
+        Save-DuneSoloState -DataRoot $layout.root -DbPath $layout.db | Out-Null
+        Mock Get-DuneSoloGameProcesses { @([pscustomobject]@{ name = 'DuneSandbox'; pid = 42 }) }
+        Mock Invoke-DuneSoloHelper {
+            @{ ok = $true; blueprintId = 1; filename = 'solo-blueprint-1.json' }
+        }
+
+        $result = Export-DuneSoloBlueprint -BlueprintId 1
+
+        $result.filename | Should -Be 'solo-blueprint-1.json'
+        Assert-MockCalled Invoke-DuneSoloHelper -Times 1 -ParameterFilter {
+            $Command -eq 'export-blueprint' -and
+            $Arguments.input -eq $layout.db -and
+            $Arguments['blueprint-id'] -eq 1 -and
+            -not $Arguments.ContainsKey('safety-backup')
+        }
+    }
+
     It 'builds a backup-safe currency write while the game is closed' {
         $layout = New-TestSoloLayout
         Save-DuneSoloState -DataRoot $layout.root -DbPath $layout.db | Out-Null

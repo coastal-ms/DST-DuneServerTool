@@ -28,12 +28,14 @@ internal sealed class MainForm : Form
     // ----- Minimize-to-tray state --------------------------------------------
     // When enabled, minimizing the window hides it (and its taskbar button) and
     // leaves a single NotifyIcon in the system tray that reopens the portal.
-    // Closing the window via the X still tears the backend down as before; the
-    // tray's "Quit (stops server)" is the explicit shutdown from the tray.
+    // In backend keep-alive mode, X also hides to the tray; the tray's explicit
+    // Quit action bypasses that interception and shuts down normally.
     private NotifyIcon? _tray;
     private ToolStripMenuItem? _trayMinItem;
     private bool _minimizeToTray;
     private bool _trayBalloonShown;
+    private bool _quitFromTray;
+    private bool _closeRequestedByPortal;
     private FormWindowState _restoreState = FormWindowState.Normal;
 
     public MainForm(string? initialUrl, bool useWaitFile)
@@ -57,9 +59,17 @@ internal sealed class MainForm : Form
         FormClosing += (_, e) =>
         {
             SaveWindowState();
-            if (!_restartShellOnly && !StopCompanionProcesses())
+            if (ShouldHideToTrayOnClose(e.CloseReason))
             {
                 e.Cancel = true;
+                ResetOneShotCloseIntent();
+                HideToTray();
+                return;
+            }
+            if (!_restartShellOnly && !StopCompanionProcesses(_quitFromTray))
+            {
+                e.Cancel = true;
+                ResetOneShotCloseIntent();
                 return;
             }
             DisposeTrayIcon();
@@ -106,13 +116,9 @@ internal sealed class MainForm : Form
             return;
         }
 
-        string? url = await ResolveUrlAsync();
-        if (string.IsNullOrWhiteSpace(url))
-        {
-            _status.Text = "Could not find the Dune Server Tool URL.\r\n" +
-                           "Start the server first, then reopen this window.";
-            return;
-        }
+        // Warm WebView2 while the backend starts. Both cold paths take several
+        // seconds, and neither depends on the other until navigation.
+        Task<string?> urlTask = ResolveUrlAsync();
 
         try
         {
@@ -130,6 +136,14 @@ internal sealed class MainForm : Form
         catch (Exception ex)
         {
             _status.Text = "WebView2 failed to initialize.\r\n" + ex.Message;
+            return;
+        }
+
+        string? url = await urlTask;
+        if (string.IsNullOrWhiteSpace(url))
+        {
+            _status.Text = "Could not find the Dune Server Tool URL.\r\n" +
+                           "Start the server first, then reopen this window.";
             return;
         }
 
@@ -442,7 +456,7 @@ internal sealed class MainForm : Form
             if (!string.IsNullOrWhiteSpace(url)) OpenExternal(url);
             // Defer the actual close to the next message loop tick so the
             // WebMessageReceived handler can return cleanly first.
-            BeginInvoke(new Action(() => { try { Close(); } catch { } }));
+            BeginInvoke(CloseFromPortal);
         }
         else if (string.Equals(action, "open", StringComparison.OrdinalIgnoreCase))
         {
@@ -456,7 +470,7 @@ internal sealed class MainForm : Form
         else if (string.Equals(action, "close", StringComparison.OrdinalIgnoreCase))
         {
             // Browser confirmed it reached the server — safe to close now.
-            BeginInvoke(new Action(() => { try { Close(); } catch { } }));
+            BeginInvoke(CloseFromPortal);
         }
         else if (string.Equals(action, "pick-save-file", StringComparison.OrdinalIgnoreCase))
         {
@@ -764,12 +778,13 @@ internal sealed class MainForm : Form
             "DuneServer", "last-url.txt");
 
         bool backendWasRunning = Process.GetProcessesByName("DuneServer").Length > 0;
-
-        string? candidate = await PollForReachableUrlAsync(file, MaxWaitFilePollAttempts);
-        if (candidate != null) return candidate;
+        string? candidate;
 
         if (backendWasRunning)
         {
+            candidate = await PollForReachableUrlAsync(file, MaxWaitFilePollAttempts);
+            if (candidate != null) return candidate;
+
             // A DuneServer.exe is already alive but never came up within the
             // wait window (hung listener, very slow host, etc). Don't pile a
             // second backend on top of it — hand back whatever is on disk
@@ -778,6 +793,8 @@ internal sealed class MainForm : Form
             return await TryReadUrlFileAsync(file);
         }
 
+        // A stale last-url file cannot be reachable without a backend process.
+        // Start immediately instead of spending 20 seconds probing it first.
         candidate = await TryStartBackendAsync(file);
         return candidate ?? await TryReadUrlFileAsync(file);
     }
@@ -927,7 +944,11 @@ internal sealed class MainForm : Form
                 Checked = _minimizeToTray,
             };
 
-            var quit = new ToolStripMenuItem("Quit (stops server)", null, (_, _) => Close());
+            var quit = new ToolStripMenuItem("Quit (stops server)", null, (_, _) =>
+            {
+                _quitFromTray = true;
+                Close();
+            });
 
             menu.Items.Add(open);
             menu.Items.Add(_trayMinItem);
@@ -1003,6 +1024,50 @@ internal sealed class MainForm : Form
         // CheckOnClick has already flipped the menu item before this fires.
         _minimizeToTray = _trayMinItem?.Checked ?? false;
         SaveWindowState();
+    }
+
+    private bool ShouldHideToTrayOnClose(CloseReason closeReason)
+    {
+        return closeReason == CloseReason.UserClosing
+            && !_restartShellOnly
+            && !_quitFromTray
+            && !_closeRequestedByPortal
+            && _minimizeToTray
+            && IsBackendKeepAliveActive();
+    }
+
+    private void CloseFromPortal()
+    {
+        _closeRequestedByPortal = true;
+        try
+        {
+            Close();
+        }
+        catch
+        {
+            _closeRequestedByPortal = false;
+        }
+    }
+
+    private void ResetOneShotCloseIntent()
+    {
+        _quitFromTray = false;
+        _closeRequestedByPortal = false;
+    }
+
+    private static bool IsBackendKeepAliveActive()
+    {
+        try
+        {
+            string keepAliveFlag = Path.Combine(
+                Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+                "DuneServer", "keep-alive.flag");
+            return File.Exists(keepAliveFlag);
+        }
+        catch
+        {
+            return false;
+        }
     }
 
     private void DisposeTrayIcon()
@@ -1205,7 +1270,7 @@ internal sealed class MainForm : Form
     /// in that mode the shell wasn't started by the backend launcher and we
     /// must not assume there's a paired DuneServer process to stop.
     /// </summary>
-    private bool StopCompanionProcesses()
+    private bool StopCompanionProcesses(bool ignoreKeepAlive = false)
     {
         if (!_useWaitFile) return true;
 
@@ -1218,14 +1283,7 @@ internal sealed class MainForm : Form
         // refreshed live by the backend on startup AND on every autostart
         // toggle, so this reflects current intent rather than launch-time
         // state.
-        try
-        {
-            string keepAliveFlag = Path.Combine(
-                Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-                "DuneServer", "keep-alive.flag");
-            if (File.Exists(keepAliveFlag)) return true;
-        }
-        catch { /* defensive -- fall through to the normal teardown */ }
+        if (!ignoreKeepAlive && IsBackendKeepAliveActive()) return true;
 
         if (IsWorldRestartActive())
         {

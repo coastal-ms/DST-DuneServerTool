@@ -39,4 +39,10 @@ describe('Solo Mode user instructions', () => {
     expect(SOLO_BLUEPRINT_IMPORT_NOTICE).toContain('before any save change')
     expect(SOLO_BLUEPRINT_IMPORT_NOTICE).toContain('Retail Solo')
   })
+
+  it('documents blueprint export as read-only while the game is open', () => {
+    const exportRule = SOLO_ACTION_RULES.find(rule => rule.title === 'Export saved blueprint')
+    expect(exportRule?.state).toBe('Game may be open')
+    expect(exportRule?.detail).toContain('without changing the Solo save')
+  })
 })

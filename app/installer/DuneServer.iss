@@ -16,7 +16,7 @@
 ;                 -> NOT touched by install or uninstall (preserves user config)
 
 #define MyAppName        "Dune Server Tool"
-#define MyAppVersion "14.0.3"
+#define MyAppVersion "14.0.4"
 #define MyAppPublisher   "Dune Awakening Self-Hosted Tool"
 #define MyAppURL         "https://github.com/coastal-ms/DST-DuneServerTool"
 #define MyAppExeName     "DuneServer.exe"
@@ -162,15 +162,17 @@ Filename: "powershell.exe"; Parameters: "-NoProfile -ExecutionPolicy Bypass -Com
 ; Install mobile/remote app bridge (loopback proxy + self-healing task)
 Filename: "powershell.exe"; Parameters: "-NoProfile -ExecutionPolicy Bypass -File ""{app}\helper\bridge\Install-Bridge.ps1"""; Flags: runhidden waituntilterminated
 
-; Launch immediately after install. Two entries so both interactive AND
-; silent (auto-update) installs relaunch the app:
+; Launch the shell immediately after install. It starts DuneServer.exe with
+; --reattach when needed, so the user sees startup progress while the backend
+; bootstraps instead of waiting on a blank desktop. Two entries cover both
+; interactive AND silent (auto-update) installs:
 ;   * Interactive: postinstall shows the "Launch Dune Server" checkbox on
 ;     the Finished page (skipifsilent hides it during silent install).
 ;   * Silent: a plain [Run] entry that fires only in silent mode (Check:
 ;     WizardSilent). Without this, /VERYSILENT updates would leave the app
 ;     uninstalled-but-not-restarted and the portal would go dark forever.
-Filename: "{app}\{#MyAppExeName}"; Description: "{cm:LaunchProgram,{#MyAppName}}"; Flags: nowait postinstall skipifsilent runascurrentuser runminimized
-Filename: "{app}\{#MyAppExeName}"; Flags: nowait runascurrentuser runminimized; Check: WizardSilent
+Filename: "{app}\DuneShell.exe"; Description: "{cm:LaunchProgram,{#MyAppName}}"; Flags: nowait postinstall skipifsilent runascurrentuser
+Filename: "{app}\DuneShell.exe"; Flags: nowait runascurrentuser; Check: WizardSilent
 
 [UninstallDelete]
 ; Belt-and-suspenders: clear any junk inside install dir that isn't tracked

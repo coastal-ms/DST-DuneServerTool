@@ -33,6 +33,327 @@ internal static partial class Program
             "MTX_Smug_Foundation"
         };
 
+    private static object ListBlueprints(string input)
+    {
+        return ReadBlueprintDatabase(input, connection =>
+        {
+            EnsureBlueprintTables(connection);
+            var blueprints = new List<object>();
+            using var command = connection.CreateCommand();
+            command.CommandText = """
+                SELECT
+                    blueprint.id,
+                    blueprint.item_id,
+                    item.stats,
+                    (
+                        SELECT COUNT(*)
+                        FROM building_blueprint_instances
+                        WHERE building_blueprint_id=blueprint.id
+                    ),
+                    (
+                        SELECT COUNT(*)
+                        FROM building_blueprint_placeables
+                        WHERE building_blueprint_id=blueprint.id
+                    ),
+                    (
+                        SELECT COUNT(*)
+                        FROM building_blueprint_pentashields
+                        WHERE building_blueprint_id=blueprint.id
+                    )
+                FROM building_blueprints AS blueprint
+                LEFT JOIN items AS item ON item.id=blueprint.item_id
+                ORDER BY blueprint.id;
+                """;
+            using var reader = command.ExecuteReader();
+            while (reader.Read())
+            {
+                var blueprintId = reader.GetInt64(0);
+                var instances = reader.GetInt64(3);
+                var placeables = reader.GetInt64(4);
+                var pentashields = reader.GetInt64(5);
+                EnsureBlueprintRowLimits(instances, placeables, pentashields);
+                blueprints.Add(new
+                {
+                    id = blueprintId,
+                    itemId = reader.IsDBNull(1) ? (long?)null : reader.GetInt64(1),
+                    name = ReadSavedBlueprintName(
+                        reader.IsDBNull(2) ? null : reader.GetString(2),
+                        blueprintId),
+                    instances,
+                    placeables,
+                    pentashields
+                });
+            }
+            return new { ok = true, blueprints };
+        });
+    }
+
+    private static object ExportBlueprint(string input, long blueprintId)
+    {
+        return ReadBlueprintDatabase(input, connection =>
+        {
+            EnsureBlueprintTables(connection);
+            long? itemId;
+            string name;
+            using (var command = connection.CreateCommand())
+            {
+                command.CommandText = """
+                    SELECT blueprint.item_id, item.stats
+                    FROM building_blueprints AS blueprint
+                    LEFT JOIN items AS item ON item.id=blueprint.item_id
+                    WHERE blueprint.id=$id;
+                    """;
+                command.Parameters.AddWithValue("$id", blueprintId);
+                using var reader = command.ExecuteReader();
+                if (!reader.Read())
+                {
+                    throw new InvalidDataException(
+                        $"Solo blueprint {blueprintId} was not found.");
+                }
+                itemId = reader.IsDBNull(0) ? null : reader.GetInt64(0);
+                name = ReadSavedBlueprintName(
+                    reader.IsDBNull(1) ? null : reader.GetString(1),
+                    blueprintId);
+            }
+
+            var instances = new List<object>();
+            using (var command = connection.CreateCommand())
+            {
+                command.CommandText = """
+                    SELECT
+                        instance_id,
+                        building_type,
+                        transform_x,
+                        transform_y,
+                        transform_z,
+                        transform_yaw,
+                        provides_stability
+                    FROM building_blueprint_instances
+                    WHERE building_blueprint_id=$id
+                    ORDER BY instance_id;
+                    """;
+                command.Parameters.AddWithValue("$id", blueprintId);
+                using var reader = command.ExecuteReader();
+                while (reader.Read())
+                {
+                    instances.Add(new
+                    {
+                        instance_id = reader.GetInt64(0),
+                        building_type = reader.GetString(1),
+                        x = ReadBlueprintSqliteFloat(reader, 2, "instance transform_x"),
+                        y = ReadBlueprintSqliteFloat(reader, 3, "instance transform_y"),
+                        z = ReadBlueprintSqliteFloat(reader, 4, "instance transform_z"),
+                        rotation = ReadBlueprintSqliteFloat(reader, 5, "instance transform_yaw"),
+                        provides_stability = !reader.IsDBNull(6) && reader.GetInt64(6) != 0
+                    });
+                }
+            }
+
+            var placeables = new List<object>();
+            using (var command = connection.CreateCommand())
+            {
+                command.CommandText = """
+                    SELECT
+                        placeable_id,
+                        building_type,
+                        transform_x,
+                        transform_y,
+                        transform_z,
+                        transform_yaw,
+                        transform_pitch,
+                        transform_roll
+                    FROM building_blueprint_placeables
+                    WHERE building_blueprint_id=$id
+                    ORDER BY placeable_id;
+                    """;
+                command.Parameters.AddWithValue("$id", blueprintId);
+                using var reader = command.ExecuteReader();
+                while (reader.Read())
+                {
+                    placeables.Add(new
+                    {
+                        placeable_id = reader.GetInt64(0),
+                        building_type = reader.GetString(1),
+                        x = ReadBlueprintSqliteFloat(reader, 2, "placeable transform_x"),
+                        y = ReadBlueprintSqliteFloat(reader, 3, "placeable transform_y"),
+                        z = ReadBlueprintSqliteFloat(reader, 4, "placeable transform_z"),
+                        rx = ReadBlueprintSqliteFloat(reader, 5, "placeable transform_yaw"),
+                        ry = ReadBlueprintSqliteFloat(reader, 6, "placeable transform_pitch"),
+                        rz = ReadBlueprintSqliteFloat(reader, 7, "placeable transform_roll")
+                    });
+                }
+            }
+
+            var pentashields = new List<object>();
+            using (var command = connection.CreateCommand())
+            {
+                command.CommandText = """
+                    SELECT placeable_id, scale_x, scale_y, scale_z
+                    FROM building_blueprint_pentashields
+                    WHERE building_blueprint_id=$id
+                    ORDER BY placeable_id;
+                    """;
+                command.Parameters.AddWithValue("$id", blueprintId);
+                using var reader = command.ExecuteReader();
+                while (reader.Read())
+                {
+                    if (reader.IsDBNull(1) || reader.IsDBNull(2) || reader.IsDBNull(3))
+                    {
+                        throw new InvalidDataException(
+                            "Solo blueprint contains an incomplete pentashield scale.");
+                    }
+                    pentashields.Add(new
+                    {
+                        placeable_id = reader.GetInt64(0),
+                        scale = new[]
+                        {
+                            reader.GetInt16(1),
+                            reader.GetInt16(2),
+                            reader.GetInt16(3)
+                        }
+                    });
+                }
+            }
+
+            EnsureBlueprintRowLimits(
+                instances.Count,
+                placeables.Count,
+                pentashields.Count);
+            if (instances.Count == 0 && placeables.Count == 0)
+            {
+                throw new InvalidDataException(
+                    "Solo blueprint has no instances or placeables to export.");
+            }
+            return new
+            {
+                ok = true,
+                blueprintId,
+                itemId,
+                filename = $"solo-blueprint-{blueprintId}.json",
+                blueprint = new { name, instances, placeables, pentashields }
+            };
+        });
+    }
+
+    private static object ReadBlueprintDatabase(
+        string input,
+        Func<SqliteConnection, object> read)
+    {
+        var wrapped = Unwrap(ReadStable(input));
+        var temp = Path.Combine(
+            Path.GetTempPath(),
+            $"dune-solo-blueprint-export-{Guid.NewGuid():N}.sqlite");
+        try
+        {
+            File.WriteAllBytes(temp, wrapped.SqliteBytes);
+            var connectionString = new SqliteConnectionStringBuilder
+            {
+                DataSource = temp,
+                Mode = SqliteOpenMode.ReadOnly,
+                Pooling = false
+            }.ToString();
+            using var connection = new SqliteConnection(connectionString);
+            connection.Open();
+            if (!string.Equals(
+                    ScalarString(connection, "PRAGMA integrity_check;"),
+                    "ok",
+                    StringComparison.OrdinalIgnoreCase))
+            {
+                throw new InvalidDataException(
+                    "Solo save failed SQLite integrity validation.");
+            }
+            return read(connection);
+        }
+        finally
+        {
+            TryDelete(temp);
+        }
+    }
+
+    private static void EnsureBlueprintTables(SqliteConnection connection)
+    {
+        foreach (var table in new[]
+        {
+            "items",
+            "building_blueprints",
+            "building_blueprint_instances",
+            "building_blueprint_placeables",
+            "building_blueprint_pentashields"
+        })
+        {
+            if (!TableExists(connection, table))
+            {
+                throw new InvalidDataException(
+                    $"Solo save is missing required table: {table}");
+            }
+        }
+    }
+
+    private static void EnsureBlueprintRowLimits(
+        long instances,
+        long placeables,
+        long pentashields)
+    {
+        if (instances > MaxBlueprintRowsPerTable
+            || placeables > MaxBlueprintRowsPerTable
+            || pentashields > MaxBlueprintRowsPerTable)
+        {
+            throw new InvalidDataException(
+                "Solo blueprint exceeds the supported 200000-row limit.");
+        }
+    }
+
+    private static float ReadBlueprintSqliteFloat(
+        SqliteDataReader reader,
+        int ordinal,
+        string label)
+    {
+        if (reader.IsDBNull(ordinal))
+        {
+            throw new InvalidDataException(
+                $"Solo blueprint contains a missing {label} value.");
+        }
+        var value = Convert.ToSingle(
+            reader.GetDouble(ordinal),
+            CultureInfo.InvariantCulture);
+        if (!float.IsFinite(value))
+        {
+            throw new InvalidDataException(
+                $"Solo blueprint contains an invalid {label} value.");
+        }
+        return value;
+    }
+
+    private static string ReadSavedBlueprintName(string? stats, long blueprintId)
+    {
+        if (!string.IsNullOrWhiteSpace(stats))
+        {
+            try
+            {
+                using var document = JsonDocument.Parse(stats);
+                if (document.RootElement.TryGetProperty(
+                        "FBuildingBlueprintItemStats",
+                        out var itemStats)
+                    && itemStats.ValueKind == JsonValueKind.Array
+                    && itemStats.GetArrayLength() > 1
+                    && itemStats[1].ValueKind == JsonValueKind.Object
+                    && itemStats[1].TryGetProperty(
+                        "BuildingBlueprintName",
+                        out var name)
+                    && name.ValueKind == JsonValueKind.String
+                    && !string.IsNullOrWhiteSpace(name.GetString()))
+                {
+                    return name.GetString()!.Trim();
+                }
+            }
+            catch (JsonException)
+            {
+                // The layout remains exportable even if optional item metadata is malformed.
+            }
+        }
+        return $"Solo Blueprint {blueprintId}";
+    }
+
     private static object ImportBlueprint(
         string input,
         string safetyBackup,

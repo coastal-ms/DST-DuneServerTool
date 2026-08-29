@@ -25,6 +25,26 @@ Describe 'Solo Mode route registration' {
         @($consoleRoutes | Where-Object { -not $_.localOnly }).Count | Should -Be 0
     }
 
+    It 'registers Solo blueprint list and export as local-only routes' {
+        $routes = @(& {
+            function Register-DuneRoute {
+                param($Method, $Path, [switch]$LocalOnly, $Handler)
+                [pscustomobject]@{
+                    method = $Method
+                    path = $Path
+                    localOnly = [bool]$LocalOnly
+                }
+            }
+            . $script:RouteFile
+        })
+
+        $blueprintRoutes = @($routes | Where-Object {
+            $_.path -in @('/api/solo/blueprints', '/api/solo/blueprints/export')
+        })
+        $blueprintRoutes.Count | Should -Be 2
+        @($blueprintRoutes | Where-Object { -not $_.localOnly }).Count | Should -Be 0
+    }
+
     It 'rejects fractional <field> before invoking the setter' -TestCases @(
         @{ field = 'skillPoints'; message = 'Skill points must be a whole number.' }
         @{ field = 'intel'; message = 'Intel points must be a whole number.' }
