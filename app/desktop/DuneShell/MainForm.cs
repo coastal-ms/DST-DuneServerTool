@@ -28,12 +28,13 @@ internal sealed class MainForm : Form
     // ----- Minimize-to-tray state --------------------------------------------
     // When enabled, minimizing the window hides it (and its taskbar button) and
     // leaves a single NotifyIcon in the system tray that reopens the portal.
-    // Closing the window via the X still tears the backend down as before; the
-    // tray's "Quit (stops server)" is the explicit shutdown from the tray.
+    // In backend keep-alive mode, X also hides to the tray; the tray's explicit
+    // Quit action bypasses that interception and shuts down normally.
     private NotifyIcon? _tray;
     private ToolStripMenuItem? _trayMinItem;
     private bool _minimizeToTray;
     private bool _trayBalloonShown;
+    private bool _quitFromTray;
     private FormWindowState _restoreState = FormWindowState.Normal;
 
     public MainForm(string? initialUrl, bool useWaitFile)
@@ -57,6 +58,12 @@ internal sealed class MainForm : Form
         FormClosing += (_, e) =>
         {
             SaveWindowState();
+            if (ShouldHideToTrayOnClose(e.CloseReason))
+            {
+                e.Cancel = true;
+                HideToTray();
+                return;
+            }
             if (!_restartShellOnly && !StopCompanionProcesses())
             {
                 e.Cancel = true;
@@ -927,7 +934,11 @@ internal sealed class MainForm : Form
                 Checked = _minimizeToTray,
             };
 
-            var quit = new ToolStripMenuItem("Quit (stops server)", null, (_, _) => Close());
+            var quit = new ToolStripMenuItem("Quit (stops server)", null, (_, _) =>
+            {
+                _quitFromTray = true;
+                Close();
+            });
 
             menu.Items.Add(open);
             menu.Items.Add(_trayMinItem);
@@ -1003,6 +1014,30 @@ internal sealed class MainForm : Form
         // CheckOnClick has already flipped the menu item before this fires.
         _minimizeToTray = _trayMinItem?.Checked ?? false;
         SaveWindowState();
+    }
+
+    private bool ShouldHideToTrayOnClose(CloseReason closeReason)
+    {
+        return closeReason == CloseReason.UserClosing
+            && !_restartShellOnly
+            && !_quitFromTray
+            && _minimizeToTray
+            && IsBackendKeepAliveActive();
+    }
+
+    private static bool IsBackendKeepAliveActive()
+    {
+        try
+        {
+            string keepAliveFlag = Path.Combine(
+                Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+                "DuneServer", "keep-alive.flag");
+            return File.Exists(keepAliveFlag);
+        }
+        catch
+        {
+            return false;
+        }
     }
 
     private void DisposeTrayIcon()
@@ -1218,14 +1253,7 @@ internal sealed class MainForm : Form
         // refreshed live by the backend on startup AND on every autostart
         // toggle, so this reflects current intent rather than launch-time
         // state.
-        try
-        {
-            string keepAliveFlag = Path.Combine(
-                Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-                "DuneServer", "keep-alive.flag");
-            if (File.Exists(keepAliveFlag)) return true;
-        }
-        catch { /* defensive -- fall through to the normal teardown */ }
+        if (IsBackendKeepAliveActive()) return true;
 
         if (IsWorldRestartActive())
         {
