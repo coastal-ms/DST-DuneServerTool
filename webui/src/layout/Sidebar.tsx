@@ -1,9 +1,33 @@
 import { Link, NavLink, useLocation, useSearch } from '../router'
-import { useState, useRef } from 'react'
+import { useMemo, useState, useRef } from 'react'
 import { createPortal } from 'react-dom'
+import {
+  DndContext,
+  KeyboardSensor,
+  PointerSensor,
+  closestCenter,
+  useSensor,
+  useSensors,
+  type DragEndEvent,
+} from '@dnd-kit/core'
+import {
+  SortableContext,
+  sortableKeyboardCoordinates,
+  useSortable,
+  verticalListSortingStrategy,
+} from '@dnd-kit/sortable'
+import { CSS } from '@dnd-kit/utilities'
 import { Icon } from '../components/Icon'
-import { GROUP_ORDER, getVisibleGroupLabel, getVisibleNavItems, isNavItemActive } from '../nav'
+import {
+  GROUP_ORDER,
+  getVisibleGroupLabel,
+  getVisibleNavItems,
+  isNavItemActive,
+  type NavGroup,
+  type NavItem,
+} from '../nav'
 import { useUpdateCheck } from '../hooks/useUpdateCheck'
+import { useSidebarNavigationOrder } from '../hooks/useSidebarNavigationOrder'
 import { api } from '../api/client'
 import { fmtToolVersion } from '../format'
 import { isLocalViewer, isWindowsViewer } from '../util/viewer'
@@ -22,9 +46,10 @@ function getWebView2(): WebView2Host | null {
 
 type Props = {
   collapsed: boolean
+  onExpand?: () => void
 }
 
-export function Sidebar({ collapsed }: Props) {
+export function Sidebar({ collapsed, onExpand }: Props) {
   const { pathname } = useLocation()
   const search = useSearch()
   const { canAccessOwnerSurfaces } = usePortalAccess()
@@ -34,6 +59,7 @@ export function Sidebar({ collapsed }: Props) {
   const [showPortalConfirm, setShowPortalConfirm] = useState(false)
   const [portalDetaching, setPortalDetaching] = useState(false)
   const [portalError, setPortalError] = useState<string | null>(null)
+  const [customizing, setCustomizing] = useState(false)
   // Issue #280 recovery flow: after handing the portal to the default browser
   // we keep the app window open until the browser checks in with the server.
   // 'confirm' = pre-flight dialog · 'waiting' = browser opened, polling for
@@ -136,15 +162,23 @@ export function Sidebar({ collapsed }: Props) {
     } catch { /* clipboard blocked — the URL is shown in the box to copy manually */ }
   }
 
-  const visibleItems = getVisibleNavItems({
-    local: isLocalViewer(),
-    windows: isWindowsViewer(),
+  const localViewer = isLocalViewer()
+  const windowsViewer = isWindowsViewer()
+  const visibleItems = useMemo(() => getVisibleNavItems({
+    local: localViewer,
+    windows: windowsViewer,
     canAccessOwnerSurfaces,
     includeSidebarHidden: false,
-  })
+  }), [canAccessOwnerSurfaces, localViewer, windowsViewer])
+  const {
+    orderedItems,
+    reorder,
+    reset: resetNavigationOrder,
+    isCustomized,
+  } = useSidebarNavigationOrder(visibleItems)
   const groups = GROUP_ORDER.map(g => ({
     key: g,
-    items: visibleItems.filter(i => i.group === g),
+    items: orderedItems.filter(i => i.group === g),
   })).filter(g => g.items.length > 0).map(g => ({
     ...g,
     label: getVisibleGroupLabel(g.key),
@@ -221,6 +255,31 @@ export function Sidebar({ collapsed }: Props) {
           collapsed ? 'px-1.5 py-2' : 'px-2 py-1.5'
         } ${collapsed ? '' : 'space-y-2'}`}
       >
+        {customizing && !collapsed && (
+          <div className="sticky top-0 z-10 mb-2 rounded-lg border border-accent/30 bg-surface px-3 py-2 shadow-[0_4px_14px_-8px_rgba(0,0,0,0.8)]">
+            <div className="text-xs font-semibold text-text">Customize navigation</div>
+            <p className="mt-0.5 text-[11px] leading-snug text-text-dim">
+              Drag within a section. Sections stay fixed.
+            </p>
+            <div className="mt-2 flex gap-2">
+              <button
+                type="button"
+                className="btn-secondary min-h-8 flex-1 justify-center px-2 py-1 text-[10px]"
+                onClick={resetNavigationOrder}
+                disabled={!isCustomized}
+              >
+                <Icon name="RotateCcw" size={12} /> Reset layout
+              </button>
+              <button
+                type="button"
+                className="btn-primary min-h-8 flex-1 justify-center px-2 py-1 text-[10px]"
+                onClick={() => setCustomizing(false)}
+              >
+                <Icon name="Check" size={12} /> Done
+              </button>
+            </div>
+          </div>
+        )}
         {groups.map((g, idx) => (
           <div key={g.key}>
             {/* In collapsed mode we draw a thin divider between groups instead
@@ -232,11 +291,21 @@ export function Sidebar({ collapsed }: Props) {
                   {g.label}
                 </div>
               )}
-            <ul className={collapsed ? 'space-y-1' : 'space-y-0.5'}>
-              {g.items.map(item => (
-                <li key={item.to}>{renderItem(item)}</li>
-              ))}
-            </ul>
+            {customizing && !collapsed ? (
+              <SortableSidebarGroup
+                group={g.key}
+                items={g.items}
+                pathname={pathname}
+                search={search}
+                onReorder={reorder}
+              />
+            ) : (
+              <ul className={collapsed ? 'space-y-1' : 'space-y-0.5'}>
+                {g.items.map(item => (
+                  <li key={item.to}>{renderItem(item)}</li>
+                ))}
+              </ul>
+            )}
           </div>
         ))}
       </nav>
@@ -246,6 +315,26 @@ export function Sidebar({ collapsed }: Props) {
           collapsed ? 'px-1.5 py-2' : 'px-4 py-3'
         } border-t border-border text-[10px] text-text-dim space-y-2`}
       >
+        {!customizing && (
+          <button
+            type="button"
+            onClick={() => {
+              if (collapsed) onExpand?.()
+              setCustomizing(true)
+            }}
+            aria-label="Customize navigation"
+            title={collapsed ? 'Expand and customize navigation' : 'Reorder navigation within each section'}
+            disabled={collapsed && !onExpand}
+            className={
+              collapsed
+                ? 'w-full flex items-center justify-center h-8 rounded-md border border-border text-text-dim hover:text-text hover:bg-surface-2/60 transition-colors disabled:opacity-50'
+                : 'w-full flex items-center justify-center gap-1.5 px-2 py-1.5 rounded-md border border-border text-text-muted hover:text-text hover:bg-surface-2/60 transition-colors uppercase tracking-widest'
+            }
+          >
+            <Icon name="ListRestart" size={collapsed ? 14 : 11} />
+            {!collapsed && <span>Customize navigation</span>}
+          </button>
+        )}
         {inShellWindow && (
           <button
             type="button"
@@ -406,6 +495,91 @@ export function Sidebar({ collapsed }: Props) {
         document.body,
       )}
     </aside>
+  )
+}
+
+function SortableSidebarGroup({
+  group,
+  items,
+  pathname,
+  search,
+  onReorder,
+}: {
+  group: NavGroup
+  items: NavItem[]
+  pathname: string
+  search: string
+  onReorder: (group: NavGroup, activeId: string, overId: string) => void
+}) {
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
+    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
+  )
+
+  const handleDragEnd = ({ active, over }: DragEndEvent) => {
+    if (!over || active.id === over.id) return
+    onReorder(group, String(active.id), String(over.id))
+  }
+
+  return (
+    <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
+      <SortableContext items={items.map(item => item.to)} strategy={verticalListSortingStrategy}>
+        <ul className="space-y-0.5">
+          {items.map(item => (
+            <SortableSidebarItem
+              key={item.to}
+              item={item}
+              active={isNavItemActive(item, pathname, search)}
+            />
+          ))}
+        </ul>
+      </SortableContext>
+    </DndContext>
+  )
+}
+
+function SortableSidebarItem({ item, active }: { item: NavItem; active: boolean }) {
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    transition,
+    isDragging,
+  } = useSortable({ id: item.to })
+
+  return (
+    <li
+      ref={setNodeRef}
+      style={{
+        transform: CSS.Transform.toString(transform),
+        transition,
+        opacity: isDragging ? 0.45 : undefined,
+      }}
+      className={`flex min-h-9 items-center gap-1 rounded-lg border px-1.5 py-1 text-sm ${
+        active
+          ? 'bg-accent/15 text-accent-bright border-accent/30 shadow-inner'
+          : 'bg-surface-2/30 text-text-muted border-border/70'
+      }`}
+    >
+      <button
+        type="button"
+        className="flex min-h-7 min-w-7 shrink-0 touch-none cursor-grab items-center justify-center rounded text-text-dim hover:bg-surface-2 hover:text-text focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent active:cursor-grabbing"
+        aria-label={`Reorder ${item.label}`}
+        title={`Drag to reorder ${item.label} within this section`}
+        {...attributes}
+        {...listeners}
+      >
+        <Icon name="GripVertical" size={14} />
+      </button>
+      <Icon name={item.icon} size={15} />
+      <span className="min-w-0 flex-1 truncate">{item.label}</span>
+      {item.badge && (
+        <span className="shrink-0 rounded border border-sky-400/40 bg-sky-400/15 px-1 py-0.5 text-[8px] font-semibold uppercase tracking-wider text-sky-400">
+          {item.badge}
+        </span>
+      )}
+    </li>
   )
 }
 

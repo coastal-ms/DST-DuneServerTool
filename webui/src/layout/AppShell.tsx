@@ -17,7 +17,7 @@ const IMMERSIVE_ROUTES = new Set<string>([])
 export function AppShell({ children }: { children: ReactNode }) {
   const mainRef = useRef<HTMLElement | null>(null)
   const { canAccessOwnerSurfaces } = usePortalAccess()
-  const { collapsed, toggle } = useSidebarCollapsed()
+  const { collapsed, setCollapsed, toggle } = useSidebarCollapsed()
   const { pathname } = useLocation()
   const immersive = IMMERSIVE_ROUTES.has(pathname)
 
@@ -38,7 +38,7 @@ export function AppShell({ children }: { children: ReactNode }) {
       <DecoupleNoticeModal />
       <MenuBar sidebarCollapsed={collapsed} onToggleSidebar={toggle} />
       <div className="flex-1 flex overflow-hidden min-h-0">
-        <Sidebar collapsed={collapsed} />
+        <Sidebar collapsed={collapsed} onExpand={() => setCollapsed(false)} />
         <div className="flex-1 flex flex-col min-w-0">
           {canAccessOwnerSurfaces && <UpdateBanner />}
           <StatusBar />
