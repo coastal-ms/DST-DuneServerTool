@@ -1,9 +1,8 @@
 ﻿# PlayersRmq.ps1
 # High-level handlers that publish RMQ ServerCommand messages for live
 # (online-player) operations. Ports the reference implementation handlers_rmq.go logic:
-# parameter validation, optional FLS id resolution from actor_id, lightweight
-# capacity check for give-item-live, and the static "Claim Rewards" path
-# for grant-live (which is pg_notify-based, not RMQ).
+# parameter validation, optional FLS id resolution from actor_id, and a
+# lightweight capacity check for give-item-live.
 #
 # All handlers take -Ip for DB lookups (FLS resolve, capacity check). The
 # RMQ publish step uses Get-V6BroadcastContext internally for SSH/VM.
@@ -293,35 +292,6 @@ function Invoke-DunePlayerCheatScriptLive {
     $res = Invoke-DuneRmqCheatScript -FlsId $r.fls_id -ScriptName $ScriptName
     if ($res.ok) { $res.message = "Cheat script '$ScriptName' sent for $($r.fls_id)." }
     return $res
-}
-
-# cmdGrantLive: NOT an RMQ command. Inserts into dune.landsraad_house_rewards
-# with house_name='AdminGrant'; the pg_notify trigger surfaces a Claim Rewards
-# popup to the player whether online or offline. Mirrors the reference implementation db.go.
-function Invoke-DunePlayerGrantLive {
-    param(
-        [Parameter(Mandatory)] [string] $Ip,
-        [Parameter(Mandatory)] [long]   $ControllerId,
-        [Parameter(Mandatory)] [string] $Template,
-        [Parameter(Mandatory)] [long]   $Amount
-    )
-    if ($ControllerId -le 0) { return @{ ok = $false; error = 'controller_id is required.' } }
-    if ([string]::IsNullOrWhiteSpace($Template)) { return @{ ok = $false; error = 'template is required.' } }
-    if ($Amount -le 0) { return @{ ok = $false; error = 'amount must be > 0.' } }
-    $safeTpl = ConvertTo-DuneSqlString $Template
-    $sql = @"
-DELETE FROM dune.landsraad_house_rewards
-WHERE player_id = $ControllerId::bigint AND house_name = 'AdminGrant';
-INSERT INTO dune.landsraad_house_rewards (player_id, house_name, amount, template_id, last_updated)
-VALUES ($ControllerId::bigint, 'AdminGrant', $Amount::bigint, '$safeTpl'::text, NOW());
-"@
-    $r = Invoke-DuneSqlQuery -Ip $Ip -Sql $sql -ReadOnly $false -MaxRows 1 -TimeoutSec 15
-    if (-not $r.ok) { return @{ ok = $false; error = "grant live: $($r.error)" } }
-    return @{
-        ok = $true
-        message = "Queued live grant: $Amount x $Template - player $ControllerId will see Claim Rewards."
-        path = 'pg_notify'
-    }
 }
 
 function Invoke-DuneVehicleSpawnLive {

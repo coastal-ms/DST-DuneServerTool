@@ -241,12 +241,6 @@ describe('Phase G+H — RMQ live commands (PlayerTarget shape)', () => {
     expect(last().body).toEqual({ fls_id: 'F-x', script_name: 'god' })
   })
 
-  it('grantLive uses controller_id (NOT a PlayerTarget) + template + amount', async () => {
-    await gp.grantLive(444, 'tpl.solari', 250)
-    expect(last().url).toBe('/api/gameplay/players/grant-live')
-    expect(last().body).toEqual({ controller_id: 444, template: 'tpl.solari', amount: 250 })
-  })
-
   it('spawnVehicle copies fls_id/actor_id + optional location', async () => {
     await gp.spawnVehicle({
       target: { fls_id: 'F-x' },

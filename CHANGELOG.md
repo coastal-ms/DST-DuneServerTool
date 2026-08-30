@@ -42,6 +42,10 @@ here cover everything those tags shipped.
 
 ### Changed
 
+- Removed the nonfunctional Grant Reward popup action from self-hosted Gameplay
+  Admin. Claim Rewards require Funcom FLS grants; cached clients now receive an
+  explicit unsupported response instead of a false success from a local
+  Landsraad database write. Give Item remains the supported delivery path.
 - Reused the last recent Server Health snapshot during update restarts, launched
   the desktop shell before backend bootstrap, and warmed WebView2 in parallel so
   the app shows immediately and repaints while live health probes refresh.
@@ -65,6 +69,9 @@ here cover everything those tags shipped.
 
 ### Fixed
 
+- Preserved and clamped the last usable desktop-shell bounds when hiding to and
+  restoring from the tray, preventing an invisible off-screen or tiny fallback
+  window and keeping hidden sentinel coordinates out of saved window state.
 - Fixed tray lifecycle behavior so opening the tray icon restores the window
   before showing it, X retains the shell only when Windows startup is enabled,
   and the always-on service can keep the backend running without a tray icon.
