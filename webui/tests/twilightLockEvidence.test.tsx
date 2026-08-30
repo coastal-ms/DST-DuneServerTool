@@ -41,6 +41,8 @@ describe('Time of Day lock', () => {
         { value: '21.0', label: 'Full night - 21:00' },
         { value: '4.0', label: 'Dew harvest - 04:00' },
       ],
+      currentCandidate: '4.0',
+      locked: true,
       clientApply: { available: false, reason: 'Unverified.' },
       restartRequired: true,
     })
@@ -68,6 +70,7 @@ describe('Time of Day lock', () => {
       '21.0',
       '4.0',
     ])
+    expect(screen.getByLabelText('Locked phase')).toHaveValue('4.0')
     await user.selectOptions(screen.getByLabelText('Locked phase'), '18.0')
     await user.click(screen.getByRole('button', { name: 'Back up & lock phase' }))
 
@@ -82,6 +85,8 @@ describe('Time of Day lock', () => {
       available: true,
       evidenceStatus: 'candidate-only',
       candidates: [{ value: '17.0', label: 'Candidate 17.0' }],
+      currentCandidate: null,
+      locked: false,
       clientApply: { available: false, reason: 'Unverified.' },
       restartRequired: true,
     })
@@ -107,6 +112,8 @@ describe('Time of Day lock', () => {
       available: true,
       evidenceStatus: 'candidate-only',
       candidates: [{ value: '17.0', label: 'Candidate 17.0' }],
+      currentCandidate: null,
+      locked: false,
       clientApply: { available: false, reason: 'Unverified.' },
       restartRequired: true,
     })

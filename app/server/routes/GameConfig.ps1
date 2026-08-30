@@ -59,7 +59,18 @@ Register-DuneRoute -Method GET -Path '/api/gameconfig/experimental/search' -Hand
 
 Register-DuneRoute -Method GET -Path '/api/gameconfig/time-of-day' -Handler {
     param($req, $res, $routeParams, $body)
-    Write-DuneJson -Response $res -Body (Get-DuneTimeOfDayLockConfig)
+    $ctx = Get-DuneGameConfigContext
+    if (-not $ctx.ok) {
+        Write-DuneError -Response $res -Status $ctx.status -Message $ctx.message
+        return
+    }
+    try {
+        $live = Get-DuneGameConfig -Ip $ctx.ip
+        Write-DuneJson -Response $res -Body (
+            Get-DuneTimeOfDayLockConfig -Raw "$($live.game.raw)")
+    } catch {
+        Write-DuneError -Response $res -Status 500 -Message "Time of Day readback failed: $($_.Exception.Message)"
+    }
 }
 
 Register-DuneRoute -Method POST -Path '/api/gameconfig/time-of-day/stage' -Handler {

@@ -104,10 +104,27 @@ $script:DuneTwilightCandidates = @(
 $script:DuneTwilightCandidateHours = @($script:DuneTwilightCandidates | ForEach-Object { $_.value })
 
 function Get-DuneTimeOfDayLockConfig {
+    param([string]$Raw = '')
+
+    $currentCandidate = $null
+    $locked = $false
+    if (-not [string]::IsNullOrWhiteSpace($Raw)) {
+        $effective = Get-DuneIniEffective -Raw $Raw
+        $prefix = "$script:DuneGcSecTimeOfDay||"
+        $startTime = "$($effective["${prefix}m_StartTime"])".Trim()
+        $cycleEnabled = "$($effective["${prefix}m_bTimeOfDayEnabled"])".Trim()
+        if ((Test-DuneTwilightCandidateHour -Value $startTime) -and $cycleEnabled -ieq 'False') {
+            $currentCandidate = $startTime
+            $locked = $true
+        }
+    }
+
     return [ordered]@{
         available = $true
         evidenceStatus = 'visual-phases-verified'
         candidates = @($script:DuneTwilightCandidates)
+        currentCandidate = $currentCandidate
+        locked = $locked
         clientApply = [ordered]@{
             available = $false
             reason = 'The verified server-side lock does not require a client override.'

@@ -1574,6 +1574,8 @@ Describe 'DuneGameConfigSchema: Time of Day lock' -Tag 'GameConfig' {
             'Dew harvest - 04:00'
         )
         $config.evidenceStatus | Should -Be 'visual-phases-verified'
+        $config.currentCandidate | Should -BeNullOrEmpty
+        $config.locked | Should -BeFalse
         $config.clientApply.available | Should -BeFalse
         $config.restartRequired | Should -BeTrue
         foreach ($valid in @('18.0', '19.0', '20.0', '21.0', '4.0')) {
@@ -1581,6 +1583,36 @@ Describe 'DuneGameConfigSchema: Time of Day lock' -Tag 'GameConfig' {
         }
         foreach ($invalid in @('', '17.0', '20', '22.0', 'NaN', 'Infinity', "18`nInjected=True")) {
             (Test-DuneTwilightCandidateHour -Value $invalid) | Should -BeFalse
+        }
+    }
+
+    It 'reads back the active supported lock from the live INI' {
+        $config = Get-DuneTimeOfDayLockConfig -Raw @'
+[/Script/DuneSandbox.TimeOfDaySettings]
+m_StartTime=4.0
+m_bTimeOfDayEnabled=False
+'@
+
+        $config.currentCandidate | Should -Be '4.0'
+        $config.locked | Should -BeTrue
+    }
+
+    It 'does not report unsupported or cycle-enabled values as an active lock' {
+        foreach ($raw in @(
+            @'
+[/Script/DuneSandbox.TimeOfDaySettings]
+m_StartTime=17.0
+m_bTimeOfDayEnabled=False
+'@,
+            @'
+[/Script/DuneSandbox.TimeOfDaySettings]
+m_StartTime=4.0
+m_bTimeOfDayEnabled=True
+'@
+        )) {
+            $config = Get-DuneTimeOfDayLockConfig -Raw $raw
+            $config.currentCandidate | Should -BeNullOrEmpty
+            $config.locked | Should -BeFalse
         }
     }
 

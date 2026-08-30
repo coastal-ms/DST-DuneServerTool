@@ -20,7 +20,7 @@ export function TimeOfDayLockPanel({ vmRunning }: { vmRunning: boolean }) {
       .then(result => {
         if (cancelled) return
         setConfig(result)
-        setCandidate(result.candidates[0]?.value ?? '')
+        setCandidate(result.currentCandidate ?? result.candidates[0]?.value ?? '')
       })
       .catch(reason => {
         if (!cancelled) setError(reason instanceof Error ? reason.message : String(reason))

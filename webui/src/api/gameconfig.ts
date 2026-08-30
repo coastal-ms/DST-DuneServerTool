@@ -66,6 +66,8 @@ export interface TimeOfDayLockConfig {
   available: boolean
   evidenceStatus: 'visual-phases-verified'
   candidates: Array<{ value: string; label: string }>
+  currentCandidate: string | null
+  locked: boolean
   clientApply: { available: false; reason: string }
   restartRequired: true
 }
