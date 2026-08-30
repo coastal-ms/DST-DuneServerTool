@@ -2197,14 +2197,6 @@ export function cheatScript(t: PlayerTarget, script: string) {
   })
 }
 
-// Landsraad-style grant; pops a Claim Rewards prompt for the player.
-// Works whether the player is online or offline (pg_notify trigger).
-export function grantLive(controllerId: number, template: string, amount: number) {
-  return api<WriteResult>('/api/gameplay/players/grant-live', {
-    method: 'POST', body: JSON.stringify({ controller_id: controllerId, template, amount }),
-  })
-}
-
 export interface SpawnVehicleInput {
   target: PlayerTarget
   vehicleId: string
