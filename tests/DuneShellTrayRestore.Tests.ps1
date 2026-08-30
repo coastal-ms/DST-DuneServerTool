@@ -30,6 +30,17 @@ Describe 'DuneShell tray window restoration' {
         $show | Should -BeGreaterThan $bounds
     }
 
+    It 'foregrounds the restored form on the tray click' {
+        $restore = $script:MainForm.IndexOf('private void RestoreFromTray()')
+        $show = $script:MainForm.IndexOf('Show();', $restore)
+        $foreground = $script:MainForm.IndexOf(
+            'SetForegroundWindow(Handle)',
+            $show
+        )
+
+        $foreground | Should -BeGreaterThan $show
+    }
+
     It 'does not persist hidden sentinel coordinates' {
         $save = $script:MainForm.IndexOf('private void SaveWindowState()')
         $visibleBounds = $script:MainForm.IndexOf(
