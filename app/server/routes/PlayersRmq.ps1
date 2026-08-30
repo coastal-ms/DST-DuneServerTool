@@ -107,19 +107,10 @@ Register-DuneRoute -Method POST -Path '/api/gameplay/players/cheat-script' -Hand
     } catch { Write-DuneError -Response $res -Status 500 -Message "Cheat script failed: $($_.Exception.Message)" }
 }
 
-# POST /api/gameplay/players/grant-live  { controller_id, template, amount }
-# Not RMQ - pg_notify-based Claim Rewards path. Works for both online + offline players.
+# Retain the legacy route so cached clients fail honestly without mutating the DB.
 Register-DuneRoute -Method POST -Path '/api/gameplay/players/grant-live' -Handler {
     param($req, $res, $routeParams, $body)
-    try {
-        $cid = Get-DuneBodyInt -Body $body -Name 'controller_id'
-        if ($null -eq $cid -or $cid -le 0) { Write-DuneError -Response $res -Status 400 -Message 'controller_id is required.'; return }
-        $tpl = [string](Get-DuneBodyValue -Body $body -Name 'template')
-        if ([string]::IsNullOrWhiteSpace($tpl)) { Write-DuneError -Response $res -Status 400 -Message 'template is required.'; return }
-        $amt = Get-DuneBodyInt -Body $body -Name 'amount'
-        if ($null -eq $amt -or $amt -le 0) { Write-DuneError -Response $res -Status 400 -Message 'amount must be > 0.'; return }
-        Invoke-DunePlayerWriteRoute -Response $res -Action { param($ip) Invoke-DunePlayerGrantLive -Ip $ip -ControllerId ([int64]$cid) -Template $tpl -Amount ([int64]$amt) }
-    } catch { Write-DuneError -Response $res -Status 500 -Message "Grant live failed: $($_.Exception.Message)" }
+    Write-DuneError -Response $res -Status 409 -Message 'Claim Rewards require Funcom FLS grants and are unavailable on self-hosted servers. Use Give Item instead.'
 }
 
 # POST /api/gameplay/vehicles/spawn  { fls_id?, actor_id?, class_name, x?, y?, z?, rotation?, template_name?, persistent?, faction? }
