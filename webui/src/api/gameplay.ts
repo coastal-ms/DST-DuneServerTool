@@ -2089,8 +2089,7 @@ export function wipeCodex(accountId: number) {
 }
 
 // ---------------------------------------------------------------------------
-// Phase G+H — RMQ live commands (require RabbitMQ pipeline; need ONLINE player)
-// + grant-live (pg_notify, works online or offline).
+// Phase G+H — RMQ live commands (require RabbitMQ pipeline; need ONLINE player).
 // ---------------------------------------------------------------------------
 
 export function kickPlayer(t: PlayerTarget) {
@@ -2132,14 +2131,6 @@ export function giveItemLive(t: PlayerTarget, template: string, qty: number, qua
 export function cheatScript(t: PlayerTarget, script: string) {
   return api<WriteResult>('/api/gameplay/players/cheat-script', {
     method: 'POST', body: targetBody(t, { script_name: script }),
-  })
-}
-
-// Landsraad-style grant; pops a Claim Rewards prompt for the player.
-// Works whether the player is online or offline (pg_notify trigger).
-export function grantLive(controllerId: number, template: string, amount: number) {
-  return api<WriteResult>('/api/gameplay/players/grant-live', {
-    method: 'POST', body: JSON.stringify({ controller_id: controllerId, template, amount }),
   })
 }
 

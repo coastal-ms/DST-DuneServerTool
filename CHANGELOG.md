@@ -13,6 +13,21 @@ here cover everything those tags shipped.
 
 ## [Unreleased]
 
+## [14.0.5] - 2026-08-30
+
+### Changed
+
+- Removed the unsupported Grant Reward action from self-hosted Gameplay Admin.
+  Claim Rewards require Funcom FLS grants; cached clients now receive an
+  explicit unsupported response instead of a false success from a local
+  Landsraad database write. Give Item remains the supported delivery path.
+
+### Fixed
+
+- Restoring the desktop shell from its tray icon now uses the last valid
+  pre-hide bounds, clamps the window to a visible monitor, and foregrounds it
+  with one click. Hidden WinForms sentinel coordinates are never persisted.
+
 ## [14.0.4] - 2026-08-29
 
 ### Added

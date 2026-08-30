@@ -2,6 +2,7 @@ using System.Diagnostics;
 using System.Drawing;
 using System.IO;
 using System.Net.Http;
+using System.Runtime.InteropServices;
 using System.Text;
 using System.Windows.Forms;
 using Microsoft.Web.WebView2.Core;
@@ -11,6 +12,16 @@ namespace DuneShell;
 
 internal sealed class MainForm : Form
 {
+    [DllImport("user32.dll")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static extern bool SetForegroundWindow(IntPtr hWnd);
+
+    [DllImport("user32.dll")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static extern bool ShowWindow(IntPtr hWnd, int nCmdShow);
+
+    private const int SW_RESTORE = 9;
+
     private readonly WebView2 _web = new();
     private readonly Label _status = new();
 
@@ -37,6 +48,7 @@ internal sealed class MainForm : Form
     private bool _quitFromTray;
     private bool _closeRequestedByPortal;
     private FormWindowState _restoreState = FormWindowState.Normal;
+    private Rectangle _restoreBounds;
 
     public MainForm(string? initialUrl, bool useWaitFile)
     {
@@ -1020,6 +1032,7 @@ internal sealed class MainForm : Form
 
     private void HideToTray()
     {
+        _restoreBounds = WindowState == FormWindowState.Normal ? Bounds : RestoreBounds;
         ShowInTaskbar = false;
         Hide();
 
@@ -1045,14 +1058,22 @@ internal sealed class MainForm : Form
         FormWindowState targetState = _restoreState == FormWindowState.Minimized
             ? FormWindowState.Normal
             : _restoreState;
+        Rectangle targetBounds = ClampToVisible(_restoreBounds, new Size(2000, 1300));
 
-        // Restore before showing. Showing a still-minimized form fires Resize,
-        // which would immediately hide it back to the tray.
-        WindowState = targetState;
+        // Hidden WinForms windows may retain sentinel coordinates such as
+        // -25600,-25600, so restore real bounds before making the form visible.
+        WindowState = FormWindowState.Normal;
+        Bounds = targetBounds;
         ShowInTaskbar = true;
         Show();
+        _ = ShowWindow(Handle, SW_RESTORE);
+        WindowState = FormWindowState.Normal;
+        Bounds = targetBounds;
+        if (targetState == FormWindowState.Maximized)
+            WindowState = FormWindowState.Maximized;
         BringToFront();
         Activate();
+        _ = SetForegroundWindow(Handle);
     }
 
     private void ToggleMinimizeToTray()
@@ -1173,6 +1194,7 @@ internal sealed class MainForm : Form
         }
 
         Bounds = bounds;
+        _restoreBounds = bounds;
         if (saved?.Max == true)
         {
             WindowState = FormWindowState.Maximized;
@@ -1249,7 +1271,10 @@ internal sealed class MainForm : Form
         {
             // Persist the *normal* bounds even when maximized/minimized so the
             // restored size is sensible, plus a flag to reopen maximized.
-            Rectangle b = WindowState == FormWindowState.Normal ? Bounds : RestoreBounds;
+            Rectangle b = Visible
+                ? (WindowState == FormWindowState.Normal ? Bounds : RestoreBounds)
+                : _restoreBounds;
+            b = ClampToVisible(b, new Size(2000, 1300));
             var st = new WinState
             {
                 X = b.X,
