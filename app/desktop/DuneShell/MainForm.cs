@@ -2,6 +2,7 @@ using System.Diagnostics;
 using System.Drawing;
 using System.IO;
 using System.Net.Http;
+using System.Runtime.InteropServices;
 using System.Text;
 using System.Windows.Forms;
 using Microsoft.Web.WebView2.Core;
@@ -11,6 +12,10 @@ namespace DuneShell;
 
 internal sealed class MainForm : Form
 {
+    [DllImport("user32.dll")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static extern bool SetForegroundWindow(IntPtr hWnd);
+
     private readonly WebView2 _web = new();
     private readonly Label _status = new();
 
@@ -1059,6 +1064,7 @@ internal sealed class MainForm : Form
             WindowState = FormWindowState.Maximized;
         BringToFront();
         Activate();
+        _ = SetForegroundWindow(Handle);
     }
 
     private void ToggleMinimizeToTray()
