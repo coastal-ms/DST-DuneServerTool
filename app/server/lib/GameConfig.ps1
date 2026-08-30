@@ -103,17 +103,16 @@ $script:DuneTwilightCandidates = @(
 )
 $script:DuneTwilightCandidateHours = @($script:DuneTwilightCandidates | ForEach-Object { $_.value })
 
-function Get-DuneTwilightLockExperiment {
+function Get-DuneTimeOfDayLockConfig {
     return [ordered]@{
         available = $true
         evidenceStatus = 'visual-phases-verified'
         candidates = @($script:DuneTwilightCandidates)
         clientApply = [ordered]@{
             available = $false
-            reason = 'm_StartTime client behavior is unverified, so DST will not write a client override.'
+            reason = 'The verified server-side lock does not require a client override.'
         }
         restartRequired = $true
-        minimumObservationMinutes = 30
     }
 }
 
@@ -139,7 +138,7 @@ function Resolve-DuneTwilightLiveGameConfigTarget {
     $paths = Resolve-DuneGameConfigPaths -Ip $Ip
     $liveGamePattern = '^/var/lib/rancher/k3s/storage/[^/]+/Saved/UserSettings/UserGame\.ini$'
     if ("$($paths.source)" -ne 'live' -or "$($paths.game)" -notmatch $liveGamePattern) {
-        throw 'Twilight experiment requires a live battlegroup UserGame.ini; setup templates are never modified.'
+        throw 'Time of Day lock requires a live battlegroup UserGame.ini; setup templates are never modified.'
     }
     return $paths
 }
@@ -151,7 +150,7 @@ function Read-DuneTwilightLiveGameConfig {
     )
     $raw = ((Invoke-V6Ssh -Ip $Ip -Cmd "sudo cat '$Path' 2>/dev/null") -join "`n")
     if ([string]::IsNullOrWhiteSpace($raw) -or $raw.TrimStart().StartsWith('ERROR:')) {
-        throw 'Twilight experiment could not verify the live UserGame.ini after writing it.'
+        throw 'Time of Day lock could not verify the live UserGame.ini after writing it.'
     }
     return $raw
 }
@@ -165,7 +164,7 @@ function Assert-DuneTwilightStageReadback {
     $prefix = "$script:DuneGcSecTimeOfDay||"
     if ("$($effective["${prefix}m_StartTime"])" -ne $Candidate -or
         "$($effective["${prefix}m_bTimeOfDayEnabled"])" -ine 'False') {
-        throw 'Twilight experiment write verification failed; the live UserGame.ini does not contain the exact staged values.'
+        throw 'Time of Day lock write verification failed; the live UserGame.ini does not contain the exact staged values.'
     }
 }
 
@@ -192,7 +191,7 @@ function Invoke-DuneTwilightLockStage {
     $backup = Backup-DuneGameConfig -Ip $Ip -ResolvedPaths $paths
     $gameBackup = @($backup.files | Where-Object file -eq 'game' | Select-Object -First 1)
     if ($gameBackup.Count -ne 1 -or -not $gameBackup[0].ok) {
-        throw 'Twilight experiment was not staged because the server Game.ini backup could not be verified.'
+        throw 'Time of Day lock was not staged because the server Game.ini backup could not be verified.'
     }
     Save-DuneGameConfigLocked -Ip $Ip -ResolvedPaths $paths -Updates @(
         @{
@@ -219,7 +218,7 @@ function Invoke-DuneTwilightLockStage {
         backup = $gameBackup[0].backup
         restartRequired = $true
         clientApplied = $false
-        message = 'Candidate staged on the server. Apply INIs & restart to begin the field experiment.'
+        message = 'Time of Day lock staged on the server. Apply INIs & restart to activate it.'
     }
 }
 
@@ -397,7 +396,7 @@ $script:DuneGameConfigSchema = @(
     @{ Section=$script:DuneGcSecConsole; Key='Sandstorm.Treasure.Enabled'; File='engine'; Type='bool01'; Default='1'; Label='Sandstorm Treasure Spawns'; Help='Spawn treasure during sandstorms.'; Startup=$true; Category='Storm Cycle' }
     @{ Section=$script:DuneGcSecStorm; Key='m_bCoriolisDoesDamage'; File='game'; Type='bool'; Default='False'; Label='Coriolis Storm Does Damage'; Help='Whether being caught in a Coriolis storm damages players. Also needs client-side apply.'; ClientApply=$true; Category='Storm Cycle' }
     @{ Section=$script:DuneGcSecStorm; Key='m_bSandStormDebrisEnabled'; File='game'; Type='bool'; Default='True'; Label='Sandstorm Debris'; Help='Whether sandstorms spawn flying debris. Also needs client-side apply.'; ClientApply=$true; Category='Storm Cycle' }
-    @{ Section=$script:DuneGcSecTimeOfDay; Key='m_bTimeOfDayEnabled'; File='game'; Type='bool'; Default='True'; Label='Time of Day Cycle'; Help='Whether the day/night cycle advances. Use the field-verified phase controls below to lock Sunset, Twilight, darker night, or peak Dew Harvest time. Longer simulation-safety testing is still in progress. Also needs client-side apply.'; ClientApply=$true; Category='Time of Day' }
+    @{ Section=$script:DuneGcSecTimeOfDay; Key='m_bTimeOfDayEnabled'; File='game'; Type='bool'; Default='True'; Label='Time of Day Cycle'; Help='Whether the day/night cycle advances. Use the verified phase controls below to lock Sunset, Twilight, darker night, or peak Dew Harvest time. Ordinary resources continue to respawn while frozen. The server never advances to other hours while locked, so game behavior tied to those hours will not occur until the lock changes or the normal cycle is restored. Dew is present only at the 04:00 lock, and its harvested dew replenishes after the normal daily battlegroup restart. Also needs client-side apply.'; ClientApply=$true; Category='Time of Day' }
 
     # --- Landsraad (scalar members of [LandsraadSettings] Data=(...)) ---
     @{ Section=$script:DuneGcSecLandsraad; StructKey=$script:DuneGcLandsraadStructKey; Key='m_TaskGoalAmount'; File='game'; Type='float'; Min=0; Default='70000'; Label='Task Goal Amount'; Help='Contribution target for each House task before it completes. Funcom default is 70000. DST also applies the new goal to the currently-running term''s live House rows (dune.landsraad_tasks.goal_amount) so the change takes effect immediately.'; ClientApply=$true; Category='Landsraad' }

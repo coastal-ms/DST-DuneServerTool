@@ -59,7 +59,7 @@ Register-DuneRoute -Method GET -Path '/api/gameconfig/experimental/search' -Hand
 
 Register-DuneRoute -Method GET -Path '/api/gameconfig/time-of-day' -Handler {
     param($req, $res, $routeParams, $body)
-    Write-DuneJson -Response $res -Body (Get-DuneTwilightLockExperiment)
+    Write-DuneJson -Response $res -Body (Get-DuneTimeOfDayLockConfig)
 }
 
 Register-DuneRoute -Method POST -Path '/api/gameconfig/time-of-day/stage' -Handler {
@@ -205,7 +205,7 @@ Register-DuneRoute -Method PUT -Path '/api/gameconfig' -Handler {
             }
             if (-not $sec -or -not $file) { continue }
             if (Test-DuneGameConfigRawTargetBlocked -File $file -Section $sec -Key $key) {
-                Write-DuneError -Response $res -Status 400 -Message "The unverified TimeOfDaySettings m_StartTime candidate is evidence-only and cannot be written by DST."
+                Write-DuneError -Response $res -Status 400 -Message "Use the dedicated Time of Day lock controls to write a supported m_StartTime phase."
                 return
             }
             # Array-entry payload: rebuild the full set of +/-key= lines for

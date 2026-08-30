@@ -1477,7 +1477,7 @@ Describe 'DuneGameConfigSchema: forced Coriolis world seed' -Tag 'GameConfig' {
     }
 }
 
-Describe 'DuneGameConfigSchema: experimental twilight evidence gate' -Tag 'GameConfig' {
+Describe 'DuneGameConfigSchema: Time of Day lock' -Tag 'GameConfig' {
     BeforeAll {
         function Invoke-V6Ssh { throw 'Unexpected unmocked twilight SSH call.' }
     }
@@ -1501,8 +1501,11 @@ Describe 'DuneGameConfigSchema: experimental twilight evidence gate' -Tag 'GameC
         $start.Count | Should -Be 0
         $cycle.Count | Should -Be 1
         $cycle[0].Category | Should -Be 'Time of Day'
-        $cycle[0].Help | Should -Match '(?i)field-verified phase controls'
-        $cycle[0].Help | Should -Match '(?i)simulation-safety testing is still in progress'
+        $cycle[0].Help | Should -Match '(?i)verified phase controls'
+        $cycle[0].Help | Should -Match '(?i)ordinary resources continue to respawn'
+        $cycle[0].Help | Should -Match '(?i)server never advances to other hours while locked'
+        $cycle[0].Help | Should -Match '(?i)dew is present only at the 04:00 lock'
+        $cycle[0].Help | Should -Match '(?i)harvested dew replenishes after the normal daily battlegroup restart'
     }
 
     It 'keeps the schema free of invented phase and visual-lock writes' {
@@ -1511,7 +1514,7 @@ Describe 'DuneGameConfigSchema: experimental twilight evidence gate' -Tag 'GameC
         ($keys -join "`n") | Should -Not -Match '(?i)twilight|sunangle|settimeofday'
     }
 
-    It 'blocks the evidence-only startup-hour target from the raw update API' {
+    It 'routes startup-hour changes through the bounded Time of Day lock control' {
         (Test-DuneGameConfigRawTargetBlocked `
             -File game `
             -Section '/Script/DuneSandbox.TimeOfDaySettings' `
@@ -1531,7 +1534,7 @@ Describe 'DuneGameConfigSchema: experimental twilight evidence gate' -Tag 'GameC
 
         $route = Get-Content (Join-Path (Get-DstRepoRoot) 'app\server\routes\GameConfig.ps1') -Raw
         $route | Should -Match 'Test-DuneGameConfigRawTargetBlocked'
-        $route | Should -Match 'evidence-only and cannot be written by DST'
+        $route | Should -Match 'dedicated Time of Day lock controls'
     }
 
     It 'rejects raw array lines that do not match their submitted key' {
@@ -1561,19 +1564,18 @@ Describe 'DuneGameConfigSchema: experimental twilight evidence gate' -Tag 'GameC
     }
 
     It 'offers only finite bounded candidate values' {
-        $experiment = Get-DuneTwilightLockExperiment
-        @($experiment.candidates.value) | Should -Be @('18.0', '19.0', '20.0', '21.0', '4.0')
-        @($experiment.candidates.label) | Should -Be @(
+        $config = Get-DuneTimeOfDayLockConfig
+        @($config.candidates.value) | Should -Be @('18.0', '19.0', '20.0', '21.0', '4.0')
+        @($config.candidates.label) | Should -Be @(
             'Sunset - 18:00',
             'Twilight - 19:00',
             'Dark night - 20:00',
             'Full night - 21:00',
             'Dew harvest - 04:00'
         )
-        $experiment.evidenceStatus | Should -Be 'visual-phases-verified'
-        $experiment.clientApply.available | Should -BeFalse
-        $experiment.restartRequired | Should -BeTrue
-        $experiment.minimumObservationMinutes | Should -Be 30
+        $config.evidenceStatus | Should -Be 'visual-phases-verified'
+        $config.clientApply.available | Should -BeFalse
+        $config.restartRequired | Should -BeTrue
         foreach ($valid in @('18.0', '19.0', '20.0', '21.0', '4.0')) {
             (Test-DuneTwilightCandidateHour -Value $valid) | Should -BeTrue
         }

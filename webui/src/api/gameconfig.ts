@@ -68,7 +68,6 @@ export interface TimeOfDayLockConfig {
   candidates: Array<{ value: string; label: string }>
   clientApply: { available: false; reason: string }
   restartRequired: true
-  minimumObservationMinutes: number
 }
 
 export interface TimeOfDayLockActionResult {

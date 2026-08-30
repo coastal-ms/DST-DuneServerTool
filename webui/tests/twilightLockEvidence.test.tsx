@@ -27,8 +27,8 @@ afterEach(() => {
   vi.clearAllMocks()
 })
 
-describe('Experimental twilight lock field-test harness', () => {
-  it('stages only bounded candidates after confirmation and explains the experiment', async () => {
+describe('Time of Day lock', () => {
+  it('stages only bounded phases after confirmation and explains the effects', async () => {
     const user = userEvent.setup()
     vi.spyOn(window, 'confirm').mockReturnValue(true)
     api.getExperiment.mockResolvedValue({
@@ -43,7 +43,6 @@ describe('Experimental twilight lock field-test harness', () => {
       ],
       clientApply: { available: false, reason: 'Unverified.' },
       restartRequired: true,
-      minimumObservationMinutes: 30,
     })
     api.stage.mockResolvedValue({
       ok: true,
@@ -56,10 +55,12 @@ describe('Experimental twilight lock field-test harness', () => {
     })
     render(<TimeOfDayLockPanel vmRunning />)
 
-    expect(await screen.findByText('Field-verified phases')).toBeInTheDocument()
-    expect(screen.getByText(/Live testing verified sunset, twilight/)).toBeInTheDocument()
-    expect(screen.getByText(/DST does not modify client INIs/)).toBeInTheDocument()
-    expect(screen.getByText(/crafting timers continue/)).toBeInTheDocument()
+    expect(await screen.findByText('Time of Day')).toBeInTheDocument()
+    expect(screen.getByText(/Lock the server at sunset, twilight, night/)).toBeInTheDocument()
+    expect(screen.getByText(/Ordinary resources continue to respawn/)).toBeInTheDocument()
+    expect(screen.getByText(/server never advances to other hours/)).toBeInTheDocument()
+    expect(screen.getByText(/Dew is present only at 04:00/)).toBeInTheDocument()
+    expect(screen.getByText(/harvested dew replenishes after the normal daily battlegroup restart/)).toBeInTheDocument()
     expect(screen.getAllByRole('option').map(option => option.getAttribute('value'))).toEqual([
       '18.0',
       '19.0',
@@ -67,8 +68,8 @@ describe('Experimental twilight lock field-test harness', () => {
       '21.0',
       '4.0',
     ])
-    await user.selectOptions(screen.getByLabelText('Candidate phase value'), '18.0')
-    await user.click(screen.getByRole('button', { name: 'Back up & stage candidate' }))
+    await user.selectOptions(screen.getByLabelText('Locked phase'), '18.0')
+    await user.click(screen.getByRole('button', { name: 'Back up & lock phase' }))
 
     expect(api.stage).toHaveBeenCalledWith('18.0')
     expect(await screen.findByText(/Candidate staged/)).toBeInTheDocument()
@@ -83,7 +84,6 @@ describe('Experimental twilight lock field-test harness', () => {
       candidates: [{ value: '17.0', label: 'Candidate 17.0' }],
       clientApply: { available: false, reason: 'Unverified.' },
       restartRequired: true,
-      minimumObservationMinutes: 30,
     })
     api.restore.mockResolvedValue({
       ok: true,
@@ -94,7 +94,7 @@ describe('Experimental twilight lock field-test harness', () => {
       message: 'Normal cycle restored.',
     })
     render(<TimeOfDayLockPanel vmRunning />)
-    await screen.findByText('Field-verified phases')
+    await screen.findByText('Time of Day')
 
     await user.click(screen.getByRole('button', { name: 'Restore normal cycle' }))
 
@@ -109,10 +109,9 @@ describe('Experimental twilight lock field-test harness', () => {
       candidates: [{ value: '17.0', label: 'Candidate 17.0' }],
       clientApply: { available: false, reason: 'Unverified.' },
       restartRequired: true,
-      minimumObservationMinutes: 30,
     })
     render(<TimeOfDayLockPanel vmRunning={false} />)
-    await waitFor(() => expect(screen.getByRole('button', { name: 'Back up & stage candidate' })).toBeDisabled())
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Back up & lock phase' })).toBeDisabled())
     expect(screen.getByText(/Start the server VM/)).toBeInTheDocument()
     expect(EXPERIMENTAL_BLOCKED_DEFAULT_TARGETS).toContain(
       'game||/script/dunesandbox.timeofdaysettings||m_starttime',

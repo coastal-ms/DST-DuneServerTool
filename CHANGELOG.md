@@ -32,7 +32,11 @@ here cover everything those tags shipped.
 - Added a dedicated, field-verified Time of Day section under Game Config,
   with Sunset, Twilight, Dark Night, Full Night, and peak Dew Harvest phases,
   mandatory live-config backups, exact write verification, and one-click
-  restoration of the normal day/night cycle.
+  restoration of the normal day/night cycle. Ordinary resources continue to
+  respawn while time is frozen. The server does not advance to other hours, so
+  behavior tied to those hours waits until the lock changes or the normal cycle
+  returns. Dew is present only at 04:00, and the normal daily battlegroup restart
+  replenishes harvested dew.
 - Added an Experimental Funcom vehicle spawn action that uses the shipped RMQ
   contract and verifies the spawned vehicle persists before reporting success.
 - Added a live vehicle fleet and protected removal queue. DST creates a labeled

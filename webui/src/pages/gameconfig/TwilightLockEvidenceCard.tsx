@@ -31,8 +31,8 @@ export function TimeOfDayLockPanel({ vmRunning }: { vmRunning: boolean }) {
   async function stage() {
     if (!candidate) return
     const confirmed = window.confirm(
-      `Stage candidate ${candidate}?\n\n`
-      + 'DST will first verify a server Game.ini backup, then write the candidate m_StartTime and disable the cycle. '
+      `Lock Time of Day at ${candidate}?\n\n`
+      + 'DST will first verify a server Game.ini backup, then write the selected m_StartTime and disable the cycle. '
       + 'Nothing takes effect until Apply INIs & restart. DST will not modify client files.',
     )
     if (!confirmed) return
@@ -70,33 +70,35 @@ export function TimeOfDayLockPanel({ vmRunning }: { vmRunning: boolean }) {
 
   return (
     <section className="mt-5 rounded-lg border border-border bg-surface p-4" aria-labelledby="time-of-day-title">
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div className="min-w-0">
-          <div className="flex items-center gap-2">
-            <Icon name="Sunset" size={18} className="text-warning" />
-            <h3 id="time-of-day-title" className="font-semibold text-text">Time of day</h3>
-          </div>
-          <p className="mt-1 text-sm text-text-muted">
-            Holds the server at a field-verified lighting phase while longer simulation-safety testing continues.
+      <div className="flex items-center gap-2">
+        <Icon name="Sunset" size={18} className="text-warning" />
+        <div>
+          <h3 id="time-of-day-title" className="font-semibold text-text">Time of Day</h3>
+          <p className="text-sm text-text-muted">
+            Lock the server at sunset, twilight, night, or the dew harvest window.
           </p>
         </div>
-        <span className="pill border-success/40 text-success">Field-verified phases</span>
       </div>
 
-      <div className="mt-4 grid gap-3 lg:grid-cols-2">
-        <div className="rounded-lg border border-border bg-surface-2 p-3 text-sm">
-          <h3 className="font-medium text-text">What DST will stage</h3>
-          <p className="mt-2 text-text-muted">
-            A server backup, one bounded <code>m_StartTime</code> phase, and
-            <code> m_bTimeOfDayEnabled=False</code>. Live testing verified sunset, twilight,
-            two darker night levels, and the peak dew-harvest window.
-          </p>
-          <label className="mt-3 block text-xs font-medium text-text-muted" htmlFor="twilight-candidate">
-            Candidate phase value
-          </label>
+      <p className="mt-3 text-sm text-text-muted">
+        Ordinary resources continue to respawn while the clock is frozen. The server never advances
+        to other hours, so game behavior tied to those hours will not occur until the lock changes
+        or the normal cycle is restored. Dew is present only at 04:00, and harvested dew replenishes
+        after the normal daily battlegroup restart.
+      </p>
+
+      {!vmRunning && (
+        <p className="mt-3 text-sm text-warning">Start the server VM before locking or restoring Time of Day.</p>
+      )}
+      {error && <p className="mt-3 text-sm text-danger" role="alert">{error}</p>}
+      {message && <p className="mt-3 text-sm text-success" role="status">{message}</p>}
+
+      <div className="mt-3 flex flex-wrap items-end gap-2">
+        <label className="text-xs font-medium text-text-muted" htmlFor="twilight-candidate">
+          Locked phase
           <select
             id="twilight-candidate"
-            className="mt-1 min-h-11 rounded-lg border border-border bg-surface px-3 text-sm text-text"
+            className="mt-1 block min-h-11 rounded-lg border border-border bg-surface-2 px-3 text-sm text-text"
             value={candidate}
             onChange={event => setCandidate(event.target.value)}
             disabled={!config || busy !== null}
@@ -105,40 +107,7 @@ export function TimeOfDayLockPanel({ vmRunning }: { vmRunning: boolean }) {
               <option key={option.value} value={option.value}>{option.label}</option>
             ))}
           </select>
-        </div>
-        <div className="rounded-lg border border-warning/30 bg-warning/5 p-3 text-sm">
-          <h3 className="font-medium text-warning">Client and restart behavior</h3>
-          <p className="mt-2 text-text-muted">
-            DST does not modify client INIs because client behavior for <code>m_StartTime</code> is unverified.
-            The first test is server-only. Both stage and restore require <strong>Apply INIs &amp; restart</strong>.
-          </p>
-          <p className="mt-2 text-text-muted">
-            The action does not claim simulation safety. It exists to produce the evidence needed for that decision.
-          </p>
-        </div>
-      </div>
-
-      <div className="mt-3 rounded-lg border border-border bg-surface-2 p-3 text-sm">
-        <h3 className="font-medium text-text">
-          {config?.minimumObservationMinutes ?? 30}-minute checklist
-        </h3>
-        <ul className="mt-2 grid gap-1.5 text-text-muted sm:grid-cols-2">
-          <li>Check whether lighting remains at the selected visual phase.</li>
-          <li>Check whether crafting timers continue and complete.</li>
-          <li>Check whether scheduled events continue.</li>
-          <li>Check whether patrol spawn/despawn timing continues.</li>
-          <li>Check whether server timers continue advancing.</li>
-          <li>Record whether clients needed a matching override.</li>
-        </ul>
-      </div>
-
-      {!vmRunning && (
-        <p className="mt-3 text-sm text-warning">Start the server VM before staging or restoring this experiment.</p>
-      )}
-      {error && <p className="mt-3 text-sm text-danger" role="alert">{error}</p>}
-      {message && <p className="mt-3 text-sm text-success" role="status">{message}</p>}
-
-      <div className="mt-3 flex flex-wrap gap-2">
+        </label>
         <button
           type="button"
           className="btn-primary min-h-11"
@@ -146,7 +115,7 @@ export function TimeOfDayLockPanel({ vmRunning }: { vmRunning: boolean }) {
           onClick={() => { void stage() }}
         >
           <Icon name={busy === 'stage' ? 'Loader2' : 'Sunset'} size={14} className={busy === 'stage' ? 'animate-spin' : undefined} />
-          {busy === 'stage' ? 'Staging…' : 'Back up & stage candidate'}
+          {busy === 'stage' ? 'Locking…' : 'Back up & lock phase'}
         </button>
         <button
           type="button"
