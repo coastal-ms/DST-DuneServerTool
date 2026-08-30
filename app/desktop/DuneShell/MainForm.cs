@@ -16,6 +16,12 @@ internal sealed class MainForm : Form
     [return: MarshalAs(UnmanagedType.Bool)]
     private static extern bool SetForegroundWindow(IntPtr hWnd);
 
+    [DllImport("user32.dll")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static extern bool ShowWindow(IntPtr hWnd, int nCmdShow);
+
+    private const int SW_RESTORE = 9;
+
     private readonly WebView2 _web = new();
     private readonly Label _status = new();
 
@@ -1060,6 +1066,9 @@ internal sealed class MainForm : Form
         Bounds = targetBounds;
         ShowInTaskbar = true;
         Show();
+        _ = ShowWindow(Handle, SW_RESTORE);
+        WindowState = FormWindowState.Normal;
+        Bounds = targetBounds;
         if (targetState == FormWindowState.Maximized)
             WindowState = FormWindowState.Maximized;
         BringToFront();

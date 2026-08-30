@@ -16,7 +16,7 @@ Describe 'DuneShell tray window restoration' {
         $hide | Should -BeGreaterThan $capture
     }
 
-    It 'restores clamped bounds before showing the form' {
+    It 'restores clamped bounds before and after native window restoration' {
         $restore = $script:MainForm.IndexOf('private void RestoreFromTray()')
         $normal = $script:MainForm.IndexOf(
             'WindowState = FormWindowState.Normal;',
@@ -24,10 +24,25 @@ Describe 'DuneShell tray window restoration' {
         )
         $bounds = $script:MainForm.IndexOf('Bounds = targetBounds;', $normal)
         $show = $script:MainForm.IndexOf('Show();', $bounds)
+        $nativeRestore = $script:MainForm.IndexOf(
+            'ShowWindow(Handle, SW_RESTORE)',
+            $show
+        )
+        $restoredNormal = $script:MainForm.IndexOf(
+            'WindowState = FormWindowState.Normal;',
+            $nativeRestore
+        )
+        $restoredBounds = $script:MainForm.IndexOf(
+            'Bounds = targetBounds;',
+            $restoredNormal
+        )
 
         $normal | Should -BeGreaterThan $restore
         $bounds | Should -BeGreaterThan $normal
         $show | Should -BeGreaterThan $bounds
+        $nativeRestore | Should -BeGreaterThan $show
+        $restoredNormal | Should -BeGreaterThan $nativeRestore
+        $restoredBounds | Should -BeGreaterThan $restoredNormal
     }
 
     It 'foregrounds the restored form on the tray click' {
