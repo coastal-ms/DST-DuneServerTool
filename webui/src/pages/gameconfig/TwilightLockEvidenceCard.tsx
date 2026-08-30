@@ -83,8 +83,9 @@ export function TimeOfDayLockPanel({ vmRunning }: { vmRunning: boolean }) {
       <p className="mt-3 text-sm text-text-muted">
         Ordinary resources continue to respawn while the clock is frozen. The server never advances
         to other hours, so game behavior tied to those hours will not occur until the lock changes
-        or the normal cycle is restored. Dew is present only at 04:00, and harvested dew replenishes
-        after the normal daily battlegroup restart.
+        or the normal cycle is restored. The dew preset is only for the 04:00 lock time; during the
+        normal unlocked cycle, dew remains available across its natural time span. The normal daily
+        battlegroup restart replenishes harvested dew.
       </p>
 
       {!vmRunning && (

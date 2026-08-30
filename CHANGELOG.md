@@ -35,8 +35,9 @@ here cover everything those tags shipped.
   restoration of the normal day/night cycle. Ordinary resources continue to
   respawn while time is frozen. The server does not advance to other hours, so
   behavior tied to those hours waits until the lock changes or the normal cycle
-  returns. Dew is present only at 04:00, and the normal daily battlegroup restart
-  replenishes harvested dew.
+  returns. The dew preset is only for the 04:00 lock time; during the normal
+  unlocked cycle, dew remains available across its natural time span. The normal
+  daily battlegroup restart replenishes harvested dew.
 - Added an Experimental Funcom vehicle spawn action that uses the shipped RMQ
   contract and verifies the spawned vehicle persists before reporting success.
 - Added a live vehicle fleet and protected removal queue. DST creates a labeled

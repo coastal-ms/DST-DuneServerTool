@@ -1504,8 +1504,9 @@ Describe 'DuneGameConfigSchema: Time of Day lock' -Tag 'GameConfig' {
         $cycle[0].Help | Should -Match '(?i)verified phase controls'
         $cycle[0].Help | Should -Match '(?i)ordinary resources continue to respawn'
         $cycle[0].Help | Should -Match '(?i)server never advances to other hours while locked'
-        $cycle[0].Help | Should -Match '(?i)dew is present only at the 04:00 lock'
-        $cycle[0].Help | Should -Match '(?i)harvested dew replenishes after the normal daily battlegroup restart'
+        $cycle[0].Help | Should -Match '(?i)dew preset is only for the 04:00 lock time'
+        $cycle[0].Help | Should -Match '(?i)normal unlocked cycle, dew remains available across its natural time span'
+        $cycle[0].Help | Should -Match '(?i)normal daily battlegroup restart replenishes harvested dew'
     }
 
     It 'keeps the schema free of invented phase and visual-lock writes' {

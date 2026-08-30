@@ -61,8 +61,9 @@ describe('Time of Day lock', () => {
     expect(screen.getByText(/Lock the server at sunset, twilight, night/)).toBeInTheDocument()
     expect(screen.getByText(/Ordinary resources continue to respawn/)).toBeInTheDocument()
     expect(screen.getByText(/server never advances to other hours/)).toBeInTheDocument()
-    expect(screen.getByText(/Dew is present only at 04:00/)).toBeInTheDocument()
-    expect(screen.getByText(/harvested dew replenishes after the normal daily battlegroup restart/)).toBeInTheDocument()
+    expect(screen.getByText(/dew preset is only for the 04:00 lock time/)).toBeInTheDocument()
+    expect(screen.getByText(/normal unlocked cycle, dew remains available across its natural time span/)).toBeInTheDocument()
+    expect(screen.getByText(/normal daily battlegroup restart replenishes harvested dew/)).toBeInTheDocument()
     expect(screen.getAllByRole('option').map(option => option.getAttribute('value'))).toEqual([
       '18.0',
       '19.0',
