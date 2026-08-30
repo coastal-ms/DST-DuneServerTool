@@ -13,6 +13,8 @@ here cover everything those tags shipped.
 
 ## [Unreleased]
 
+Candidate metadata prepared for v15.0.0-test6; semantic version remains 15.0.0.
+
 ### Added
 
 - Added per-device desktop sidebar customization with explicit edit mode,
