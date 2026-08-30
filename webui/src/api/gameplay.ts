@@ -2089,8 +2089,7 @@ export function wipeCodex(accountId: number) {
 }
 
 // ---------------------------------------------------------------------------
-// Phase G+H — RMQ live commands (require RabbitMQ pipeline; need ONLINE player)
-// + grant-live (pg_notify, works online or offline).
+// Phase G+H — RMQ live commands (require RabbitMQ pipeline; need ONLINE player).
 // ---------------------------------------------------------------------------
 
 export function kickPlayer(t: PlayerTarget) {
