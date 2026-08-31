@@ -1,5 +1,5 @@
 import { Link, NavLink, useLocation, useSearch } from '../router'
-import { useMemo, useState, useRef } from 'react'
+import { useEffect, useMemo, useState, useRef } from 'react'
 import { createPortal } from 'react-dom'
 import {
   DndContext,
@@ -19,15 +19,16 @@ import {
 import { CSS } from '@dnd-kit/utilities'
 import { Icon } from '../components/Icon'
 import {
-  GROUP_ORDER,
-  getVisibleGroupLabel,
   getVisibleNavItems,
   isNavItemActive,
-  type NavGroup,
+  NAV_ITEMS,
   type NavItem,
 } from '../nav'
 import { useUpdateCheck } from '../hooks/useUpdateCheck'
-import { useSidebarNavigationOrder } from '../hooks/useSidebarNavigationOrder'
+import {
+  useSidebarNavigationOrder,
+  type SidebarDividerEntry,
+} from '../hooks/useSidebarNavigationOrder'
 import { api } from '../api/client'
 import { fmtToolVersion } from '../format'
 import { isLocalViewer, isWindowsViewer } from '../util/viewer'
@@ -60,6 +61,7 @@ export function Sidebar({ collapsed, onExpand }: Props) {
   const [portalDetaching, setPortalDetaching] = useState(false)
   const [portalError, setPortalError] = useState<string | null>(null)
   const [customizing, setCustomizing] = useState(false)
+  const [editingDividerId, setEditingDividerId] = useState<string | null>(null)
   // Issue #280 recovery flow: after handing the portal to the default browser
   // we keep the app window open until the browser checks in with the server.
   // 'confirm' = pre-flight dialog · 'waiting' = browser opened, polling for
@@ -171,18 +173,33 @@ export function Sidebar({ collapsed, onExpand }: Props) {
     includeSidebarHidden: false,
   }), [canAccessOwnerSurfaces, localViewer, windowsViewer])
   const {
-    orderedItems,
+    layoutItems,
     reorder,
+    addDivider,
+    renameDivider,
+    removeDivider,
     reset: resetNavigationOrder,
     isCustomized,
-  } = useSidebarNavigationOrder(visibleItems)
-  const groups = GROUP_ORDER.map(g => ({
-    key: g,
-    items: orderedItems.filter(i => i.group === g),
-  })).filter(g => g.items.length > 0).map(g => ({
-    ...g,
-    label: getVisibleGroupLabel(g.key),
-  }))
+  } = useSidebarNavigationOrder(NAV_ITEMS, visibleItems)
+  const displayItems = customizing
+    ? layoutItems
+    : layoutItems.filter((entry, index) => {
+        if (entry.type === 'page') return true
+        for (let nextIndex = index + 1; nextIndex < layoutItems.length; nextIndex += 1) {
+          if (layoutItems[nextIndex].type === 'divider') return false
+          if (layoutItems[nextIndex].type === 'page') return true
+        }
+        return false
+      })
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
+    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
+  )
+
+  const handleDragEnd = ({ active, over }: DragEndEvent) => {
+    if (!over || active.id === over.id) return
+    reorder(String(active.id), String(over.id))
+  }
 
   // Shared row renderer for a single nav item, in either layout mode.
   const renderItem = (item: (typeof visibleItems)[number]) => {
@@ -242,10 +259,6 @@ export function Sidebar({ collapsed, onExpand }: Props) {
               <div className="text-sm font-semibold tracking-wide">Dune Server Tool</div>
             </div>
             <div className="text-[10px] text-text-dim uppercase tracking-widest">Management Portal</div>
-            <div className="text-[11px] font-bold tracking-wide mt-1 flex items-center gap-1">
-              <Icon name="ThumbsUp" size={11} className="text-emerald-400" />
-              <span className="bg-gradient-to-r from-emerald-400 via-sky-400 to-yellow-300 bg-clip-text text-transparent">Thank you Hawk_I5</span>
-            </div>
           </div>
         )}
       </div>
@@ -259,20 +272,30 @@ export function Sidebar({ collapsed, onExpand }: Props) {
           <div className="sticky top-0 z-10 mb-2 rounded-lg border border-accent/30 bg-surface px-3 py-2 shadow-[0_4px_14px_-8px_rgba(0,0,0,0.8)]">
             <div className="text-xs font-semibold text-text">Customize navigation</div>
             <p className="mt-0.5 text-[11px] leading-snug text-text-dim">
-              Drag within a section. Sections stay fixed.
+              Drag pages and section labels into any order. Changes stay in this browser.
             </p>
-            <div className="mt-2 flex gap-2">
+            <div className="mt-2 grid grid-cols-3 gap-1.5">
               <button
                 type="button"
-                className="btn-secondary min-h-8 flex-1 justify-center px-2 py-1 text-[10px]"
-                onClick={resetNavigationOrder}
-                disabled={!isCustomized}
+                className="btn-secondary min-h-9 justify-center px-2 py-1 text-[10px]"
+                onClick={() => setEditingDividerId(addDivider())}
               >
-                <Icon name="RotateCcw" size={12} /> Reset layout
+                <Icon name="Plus" size={12} /> Section
               </button>
               <button
                 type="button"
-                className="btn-primary min-h-8 flex-1 justify-center px-2 py-1 text-[10px]"
+                className="btn-secondary min-h-9 justify-center px-2 py-1 text-[10px]"
+                onClick={() => {
+                  setEditingDividerId(null)
+                  resetNavigationOrder()
+                }}
+                disabled={!isCustomized}
+              >
+                <Icon name="RotateCcw" size={12} /> Reset
+              </button>
+              <button
+                type="button"
+                className="btn-primary min-h-9 justify-center px-2 py-1 text-[10px]"
                 onClick={() => setCustomizing(false)}
               >
                 <Icon name="Check" size={12} /> Done
@@ -280,34 +303,50 @@ export function Sidebar({ collapsed, onExpand }: Props) {
             </div>
           </div>
         )}
-        {groups.map((g, idx) => (
-          <div key={g.key}>
-            {/* In collapsed mode we draw a thin divider between groups instead
-                of repeating the textual label, to keep the rail compact. */}
-            {collapsed
-              ? idx > 0 && <div className="my-2 border-t border-border/70" />
-              : (
-                <div className="px-3 mb-1 text-[10px] font-semibold uppercase tracking-widest text-text-dim">
-                  {g.label}
-                </div>
-              )}
-            {customizing && !collapsed ? (
-              <SortableSidebarGroup
-                group={g.key}
-                items={g.items}
-                pathname={pathname}
-                search={search}
-                onReorder={reorder}
-              />
-            ) : (
-              <ul className={collapsed ? 'space-y-1' : 'space-y-0.5'}>
-                {g.items.map(item => (
-                  <li key={item.to}>{renderItem(item)}</li>
+        {customizing && !collapsed ? (
+          <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
+            <SortableContext items={displayItems.map(entry => entry.id)} strategy={verticalListSortingStrategy}>
+              <ul className="space-y-0.5">
+                {displayItems.map(entry => (
+                  entry.type === 'page'
+                    ? (
+                        <SortableSidebarPage
+                          key={entry.id}
+                          item={entry.item}
+                          active={isNavItemActive(entry.item, pathname, search)}
+                        />
+                      )
+                    : (
+                        <SortableSidebarDivider
+                          key={entry.id}
+                          divider={entry}
+                          autoFocus={entry.id === editingDividerId}
+                          onRename={renameDivider}
+                          onRemove={removeDivider}
+                        />
+                      )
                 ))}
               </ul>
-            )}
-          </div>
-        ))}
+            </SortableContext>
+          </DndContext>
+        ) : (
+          <ul className={collapsed ? 'space-y-1' : 'space-y-0.5'}>
+            {displayItems.map((entry, index) => (
+              entry.type === 'page'
+                ? <li key={entry.id}>{renderItem(entry.item)}</li>
+                : (
+                    <li
+                      key={entry.id}
+                      className={collapsed
+                        ? `${index === 0 ? 'hidden' : 'my-2'} border-t border-border/70`
+                        : 'px-3 pb-1 pt-2 text-[10px] font-semibold uppercase tracking-widest text-text-dim'}
+                    >
+                      {!collapsed && entry.label}
+                    </li>
+                  )
+            ))}
+          </ul>
+        )}
       </nav>
 
       <div
@@ -323,7 +362,7 @@ export function Sidebar({ collapsed, onExpand }: Props) {
               setCustomizing(true)
             }}
             aria-label="Customize navigation"
-            title={collapsed ? 'Expand and customize navigation' : 'Reorder navigation within each section'}
+            title={collapsed ? 'Expand and customize navigation' : 'Customize pages and section labels'}
             disabled={collapsed && !onExpand}
             className={
               collapsed
@@ -350,20 +389,6 @@ export function Sidebar({ collapsed, onExpand }: Props) {
             {!collapsed && <span>Web Portal</span>}
           </button>
         )}
-        <a
-          href="https://buymeacoffee.com/coastal_dst"
-          target="_blank"
-          rel="noopener noreferrer"
-          title="Support development — Buy Me a Coffee"
-          className={
-            collapsed
-              ? 'flex w-full items-center justify-center h-8 rounded-md border border-warning/50 text-warning hover:bg-warning/15 hover:border-warning/70 transition-colors'
-              : 'flex w-full items-center justify-center gap-1.5 px-2 py-1.5 rounded-md border border-warning/50 text-warning hover:bg-warning/15 hover:border-warning/70 transition-colors uppercase tracking-widest font-semibold'
-          }
-        >
-          <Icon name="Coffee" size={collapsed ? 14 : 11} />
-          {!collapsed && <span>Buy Me a Coffee</span>}
-        </a>
         {collapsed && testBuild && (
           <NavLink
             to="/settings"
@@ -498,47 +523,7 @@ export function Sidebar({ collapsed, onExpand }: Props) {
   )
 }
 
-function SortableSidebarGroup({
-  group,
-  items,
-  pathname,
-  search,
-  onReorder,
-}: {
-  group: NavGroup
-  items: NavItem[]
-  pathname: string
-  search: string
-  onReorder: (group: NavGroup, activeId: string, overId: string) => void
-}) {
-  const sensors = useSensors(
-    useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
-    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
-  )
-
-  const handleDragEnd = ({ active, over }: DragEndEvent) => {
-    if (!over || active.id === over.id) return
-    onReorder(group, String(active.id), String(over.id))
-  }
-
-  return (
-    <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
-      <SortableContext items={items.map(item => item.to)} strategy={verticalListSortingStrategy}>
-        <ul className="space-y-0.5">
-          {items.map(item => (
-            <SortableSidebarItem
-              key={item.to}
-              item={item}
-              active={isNavItemActive(item, pathname, search)}
-            />
-          ))}
-        </ul>
-      </SortableContext>
-    </DndContext>
-  )
-}
-
-function SortableSidebarItem({ item, active }: { item: NavItem; active: boolean }) {
+function SortableSidebarPage({ item, active }: { item: NavItem; active: boolean }) {
   const {
     attributes,
     listeners,
@@ -566,7 +551,7 @@ function SortableSidebarItem({ item, active }: { item: NavItem; active: boolean 
         type="button"
         className="flex min-h-7 min-w-7 shrink-0 touch-none cursor-grab items-center justify-center rounded text-text-dim hover:bg-surface-2 hover:text-text focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent active:cursor-grabbing"
         aria-label={`Reorder ${item.label}`}
-        title={`Drag to reorder ${item.label} within this section`}
+        title={`Drag to reorder ${item.label}`}
         {...attributes}
         {...listeners}
       >
@@ -579,6 +564,100 @@ function SortableSidebarItem({ item, active }: { item: NavItem; active: boolean 
           {item.badge}
         </span>
       )}
+    </li>
+  )
+}
+
+function SortableSidebarDivider({
+  divider,
+  autoFocus,
+  onRename,
+  onRemove,
+}: {
+  divider: SidebarDividerEntry
+  autoFocus: boolean
+  onRename: (id: string, label: string) => void
+  onRemove: (id: string) => void
+}) {
+  const [label, setLabel] = useState(divider.label)
+  const inputRef = useRef<HTMLInputElement | null>(null)
+  const cancelRenameRef = useRef(false)
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    transition,
+    isDragging,
+  } = useSortable({ id: divider.id })
+
+  useEffect(() => {
+    setLabel(divider.label)
+  }, [divider.label])
+
+  useEffect(() => {
+    if (autoFocus) {
+      inputRef.current?.focus()
+      inputRef.current?.select()
+    }
+  }, [autoFocus])
+
+  const commitLabel = () => {
+    if (cancelRenameRef.current) {
+      cancelRenameRef.current = false
+      setLabel(divider.label)
+      return
+    }
+    onRename(divider.id, label)
+    if (!label.trim()) setLabel(divider.label)
+  }
+
+  return (
+    <li
+      ref={setNodeRef}
+      style={{
+        transform: CSS.Transform.toString(transform),
+        transition,
+        opacity: isDragging ? 0.45 : undefined,
+      }}
+      className="mt-2 flex min-h-11 items-center gap-1 rounded-lg border border-dashed border-border-bright bg-surface-2/45 px-1.5 py-1"
+    >
+      <button
+        type="button"
+        className="flex min-h-9 min-w-9 shrink-0 touch-none cursor-grab items-center justify-center rounded text-text-dim hover:bg-surface-3 hover:text-text focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent active:cursor-grabbing"
+        aria-label={`Reorder section ${divider.label}`}
+        title={`Drag to reorder section ${divider.label}`}
+        {...attributes}
+        {...listeners}
+      >
+        <Icon name="GripVertical" size={14} />
+      </button>
+      <input
+        ref={inputRef}
+        value={label}
+        maxLength={48}
+        aria-label={`Rename section ${divider.label}`}
+        onChange={event => setLabel(event.target.value)}
+        onBlur={commitLabel}
+        onKeyDown={event => {
+          if (event.key === 'Enter') event.currentTarget.blur()
+          if (event.key === 'Escape') {
+            cancelRenameRef.current = true
+            setLabel(divider.label)
+            event.currentTarget.blur()
+          }
+        }}
+        className="min-h-9 min-w-0 flex-1 rounded border border-transparent bg-transparent px-1.5 text-[10px] font-semibold uppercase tracking-widest text-text-muted focus:border-border-bright focus:bg-surface focus:outline-none focus:ring-2 focus:ring-ibad"
+      />
+      <button
+        type="button"
+        className="flex min-h-9 min-w-9 shrink-0 items-center justify-center rounded text-text-dim hover:bg-danger/15 hover:text-danger focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ibad"
+        aria-label={`Remove section ${divider.label}`}
+        title="Remove this section label; pages remain"
+        onClick={() => onRemove(divider.id)}
+      >
+        <Icon name="Trash2" size={13} />
+      </button>
     </li>
   )
 }

@@ -17,10 +17,13 @@ Candidate metadata prepared for v15.0.0-test6; semantic version remains 15.0.0.
 
 ### Added
 
-- Added per-device desktop sidebar customization with explicit edit mode,
-  pointer and keyboard reordering within fixed navigation sections, and reset
-  controls. Permissions remain authoritative, and newly available pages append
-  safely without restoring stale entries.
+- Added per-browser desktop sidebar customization with one unified, keyboard-
+  and pointer-sortable sequence. Pages can move across section boundaries, and
+  users can create, rename, move, remove, and reset labeled dividers. Existing
+  v1 page order migrates without weakening route permissions or losing routes
+  hidden by the current viewer context.
+- Added a dedicated Sponsors & Credits page recognizing Discord Sponsors
+  Hawk_I5 and Ed O., with a separate optional support link.
 - Added the next-generation workspace foundation for the v15 test line, with a
   server-first primary navigation rail and one Gameplay Admin gateway containing
   Overview, Map, Players, Bases, Vehicles, and Economy destinations.
@@ -65,6 +68,11 @@ Candidate metadata prepared for v15.0.0-test6; semantic version remains 15.0.0.
   file at 2 MB, so startup failures remain available without unbounded bundles.
 - Reorganized the web portal into lazy-loaded server-management and gameplay
   workspaces while preserving legacy URL, query-string, and hash navigation.
+- Clarified on every Maps Live State state that capability, freshness, and
+  cached observations are server-derived while the plotted map and marker
+  visualization remains preview scaffolding, not yet live game telemetry.
+- Replaced permanent sidebar and top-menu supporter chrome with the discoverable
+  Sponsors & Credits route.
 - Adapted Server Health's Game Servers card into compact stacked pod summaries
   on narrow screens while retaining the full desktop table and Game Ready State.
 - Prepared build and diagnostic metadata for the `v15.0.0-test1` test line.

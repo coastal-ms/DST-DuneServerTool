@@ -20,6 +20,7 @@ export const LEGACY_ROUTE_MANIFEST: readonly LazyRouteDefinition[] = [
   { path: '/solo', label: 'Solo Mode', access: 'local-windows', load: () => import('../pages/SoloMode').then(module => ({ default: module.SoloMode })) },
   { path: '/database', label: 'Database', access: 'owner', load: () => import('../pages/Database').then(module => ({ default: module.Database })) },
   { path: '/sietches', label: 'Sietches', access: 'owner', load: () => import('../pages/Sietches').then(module => ({ default: module.Sietches })) },
+  { path: '/sponsors', label: 'Sponsors & Credits', access: 'all', load: () => import('../pages/SponsorsCredits').then(module => ({ default: module.SponsorsCredits })) },
   { path: '/setup', label: 'Setup Wizard', access: 'setup', load: () => import('../pages/SetupWizard').then(module => ({ default: module.SetupWizard })) },
 ]
 
