@@ -63,8 +63,9 @@ Candidate metadata prepared for v15.0.0-test6; semantic version remains 15.0.0.
   file at 2 MB, so startup failures remain available without unbounded bundles.
 - Reorganized the web portal into lazy-loaded server-management and gameplay
   workspaces while preserving legacy URL, query-string, and hash navigation.
-- Clarified on every Maps Live State state that the current foundation displays
-  demo data rather than live game telemetry.
+- Clarified on every Maps Live State state that capability, freshness, and
+  cached observations are server-derived while the plotted map and marker
+  visualization remains preview scaffolding, not yet live game telemetry.
 - Replaced permanent sidebar and top-menu supporter chrome with the discoverable
   Sponsors & Credits route.
 - Adapted Server Health's Game Servers card into compact stacked pod summaries

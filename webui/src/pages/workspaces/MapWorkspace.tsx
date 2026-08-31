@@ -4,7 +4,7 @@ import { WorkspaceLayout, type WorkspaceTab } from '../../components/platform/Wo
 import { usePlatformCapabilities } from '../../hooks/usePlatformCapabilities'
 import { getWorkspace } from '../../platform/workspaces'
 import { Navigate, useSearch } from '../../router'
-import { LiveStateDemoDisclosure } from './LiveStateDemoDisclosure'
+import { LiveMapPreviewDisclosure } from './LiveMapPreviewDisclosure'
 
 const Atlas = lazy(() => import('../WickMaps').then(module => ({ default: module.WickMaps })))
 const LiveState = lazy(() => import('./MapLiveState').then(module => ({ default: module.MapLiveState })))
@@ -47,7 +47,7 @@ export default function MapWorkspace() {
         activeTab="atlas"
       >
         <div className="flex min-w-0 flex-col gap-4">
-          <LiveStateDemoDisclosure />
+          <LiveMapPreviewDisclosure />
           <DataState state="loading" title="Checking live map availability…" />
         </div>
       </WorkspaceLayout>
@@ -61,7 +61,7 @@ export default function MapWorkspace() {
         activeTab="atlas"
       >
         <div className="flex min-w-0 flex-col gap-4">
-          <LiveStateDemoDisclosure />
+          <LiveMapPreviewDisclosure />
           <div className="flex flex-col items-start gap-3">
             <DataState
               state="error"
@@ -98,7 +98,7 @@ export default function MapWorkspace() {
         fallback={view === 'live'
           ? (
               <div className="flex min-w-0 flex-col gap-4">
-                <LiveStateDemoDisclosure />
+                <LiveMapPreviewDisclosure />
                 <DataState state="loading" title="Loading live map state…" />
               </div>
             )

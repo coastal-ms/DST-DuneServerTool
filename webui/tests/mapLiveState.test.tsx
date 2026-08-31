@@ -137,21 +137,21 @@ function deferred<T>() {
 }
 
 describe('Maps live-state workspace', () => {
-  it('discloses demo data rather than live telemetry while loading', () => {
+  it('distinguishes server-derived state from preview visualization while loading', () => {
     getDeepDesertMapSnapshot.mockReturnValue(new Promise(() => {}))
     render(<MapLiveState />)
 
-    expect(screen.getByRole('complementary', { name: 'Live State data disclosure' }))
-      .toHaveTextContent(/demo data.*not live game telemetry/i)
+    expect(screen.getByRole('complementary', { name: 'Live Map preview disclosure' }))
+      .toHaveTextContent(/derived from your server.*not yet live game telemetry/i)
   })
 
-  it('keeps the demo-data disclosure visible when loading fails', async () => {
+  it('keeps the preview disclosure visible when loading fails', async () => {
     getDeepDesertMapSnapshot.mockRejectedValue(new Error('offline'))
     render(<MapLiveState />)
 
     expect(await screen.findByText('Cached Maps API unavailable')).toBeInTheDocument()
-    expect(screen.getByRole('complementary', { name: 'Live State data disclosure' }))
-      .toHaveTextContent(/demo data.*not live game telemetry/i)
+    expect(screen.getByRole('complementary', { name: 'Live Map preview disclosure' }))
+      .toHaveTextContent(/derived from your server.*not yet live game telemetry/i)
   })
 
   it('renders cached active fields without inventing unresolved markers', async () => {
@@ -163,8 +163,8 @@ describe('Maps live-state workspace', () => {
     expect(screen.getByText('Location unresolved — intentionally not plotted.')).toBeInTheDocument()
     expect(screen.getByText('Public POI layer unavailable')).toBeInTheDocument()
     expect(screen.queryByRole('img', { name: /active spice/i })).not.toBeInTheDocument()
-    expect(screen.getByRole('complementary', { name: 'Live State data disclosure' }))
-      .toHaveTextContent(/demo data.*not live game telemetry/i)
+    expect(screen.getByRole('complementary', { name: 'Live Map preview disclosure' }))
+      .toHaveTextContent(/derived from your server.*not yet live game telemetry/i)
   })
 
   it.each(['stale', 'partial', 'unavailable'] as const)('presents the %s source state explicitly', async state => {

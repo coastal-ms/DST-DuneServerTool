@@ -20,7 +20,7 @@ DST ships as one Windows installer containing a PowerShell HTTP backend, React p
 
 ## Capabilities and Constraints
 
-Permissions and platform capability checks remain authoritative. Browser-local preferences are intentionally scoped to each browser profile and origin. Experimental or demonstration data must be disclosed truthfully and must not be presented as live telemetry.
+Permissions and platform capability checks remain authoritative. Browser-local preferences are intentionally scoped to each browser profile and origin. Preview visualization must be distinguished from live-derived status and cache observations, and must not be presented as live telemetry.
 
 ## Brand Commitments
 

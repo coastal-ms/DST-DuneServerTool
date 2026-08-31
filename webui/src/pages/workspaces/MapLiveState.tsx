@@ -6,7 +6,7 @@ import {
 } from '../../api/maps'
 import { Icon } from '../../components/Icon'
 import { DataState, FreshnessBadge } from '../../components/platform/DataState'
-import { LiveStateDemoDisclosure } from './LiveStateDemoDisclosure'
+import { LiveMapPreviewDisclosure } from './LiveMapPreviewDisclosure'
 
 export const MAP_LIVE_POLL_MS = 15_000
 export const MAP_LIVE_POLL_JITTER = 0.1
@@ -89,7 +89,7 @@ export function MapLiveState() {
   if (!snapshot && !error) {
     return (
       <div className="flex min-w-0 flex-col gap-4">
-        <LiveStateDemoDisclosure />
+        <LiveMapPreviewDisclosure />
         <DataState state="loading" title="Loading cached Deep Desert state…" />
       </div>
     )
@@ -97,7 +97,7 @@ export function MapLiveState() {
   if (!snapshot && error) {
     return (
       <div className="flex min-w-0 flex-col gap-4">
-        <LiveStateDemoDisclosure />
+        <LiveMapPreviewDisclosure />
         <DataState state="error" title="Cached Maps API unavailable" message={error} />
       </div>
     )
@@ -105,7 +105,7 @@ export function MapLiveState() {
   if (!snapshot || !active || !activeData || !publicPoi) {
     return (
       <div className="flex min-w-0 flex-col gap-4">
-        <LiveStateDemoDisclosure />
+        <LiveMapPreviewDisclosure />
         <DataState state="unavailable" title="Live State data is unavailable" />
       </div>
     )
@@ -117,7 +117,7 @@ export function MapLiveState() {
 
   return (
     <div className="flex min-w-0 flex-col gap-4">
-      <LiveStateDemoDisclosure />
+      <LiveMapPreviewDisclosure />
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h2 className="text-base font-semibold text-text">Deep Desert live state</h2>
