@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
-import { useNavigate, useLocation, useSearch } from '../router'
+import { Link, useNavigate, useLocation, useSearch } from '../router'
 import { Icon } from '../components/Icon'
 import { NAV_ITEMS, GROUP_ORDER, getVisibleGroupLabel, getVisibleNavItems, isNavItemActive, type NavGroup } from '../nav'
 import { buildDiagnosticBundle, type DiagnosticBundle } from '../api/diagnostics'
@@ -288,7 +288,7 @@ export function MenuBar({ sidebarCollapsed, onToggleSidebar }: Props) {
 
       <div className="hidden md:contents">
       {GROUP_ORDER.map(g => {
-        const items = visibleItems.filter(i => i.group === g)
+        const items = visibleItems.filter(i => i.group === g && !i.topMenuGroupHidden)
         if (items.length === 0) return null
         const groupLabel = getVisibleGroupLabel(g)
         // Single-item group (e.g. Server Health, which has only one page):
@@ -499,6 +499,19 @@ export function MenuBar({ sidebarCollapsed, onToggleSidebar }: Props) {
           </div>
         )}
       </div>
+
+      <Link
+        to="/sponsors"
+        onMouseEnter={() => { if (open !== null) setOpen(null) }}
+        className={`mr-1 px-3 h-7 hidden xl:inline-flex items-center gap-1.5 rounded-md transition-colors ${
+          isActive('/sponsors')
+            ? 'bg-surface-3 text-text'
+            : 'text-text-muted hover:text-text hover:bg-surface-2/80'
+        }`}
+      >
+        <Icon name="Coffee" size={14} />
+        <span>Thanks for the Coffee</span>
+      </Link>
 
       {/* Community Discord + marketing site links, pushed to the far right of
           the menu bar. ml-auto on the first one consumes the remaining

@@ -259,6 +259,12 @@ export function Sidebar({ collapsed, onExpand }: Props) {
               <div className="text-sm font-semibold tracking-wide">Dune Server Tool</div>
             </div>
             <div className="text-[10px] text-text-dim uppercase tracking-widest">Management Portal</div>
+            <div className="mt-1 flex items-center gap-1 text-[11px] font-bold tracking-wide">
+              <Icon name="ThumbsUp" size={11} className="text-emerald-400" />
+              <span className="bg-gradient-to-r from-emerald-400 via-sky-400 to-yellow-300 bg-clip-text text-transparent">
+                Thank you Hawk_I5
+              </span>
+            </div>
           </div>
         )}
       </div>

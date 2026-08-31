@@ -118,6 +118,11 @@ A session worktree may not have warm `webui/node_modules` — run `npm ci` in
   `-SkipVersionCheck` for deliberate intermediate builds).
 - Roll the `## [Unreleased]` section of `CHANGELOG.md` into a dated
   `## [X.Y.Z] - YYYY-MM-DD` entry as part of the release change.
+- **Framework-only release notes.** When a change is designated a
+  `framework adjustment`, use only that phrase in `CHANGELOG.md`, GitHub release
+  notes, and other release-facing summaries. Do not identify the underlying
+  records, entities, or implementation details there; source data remains
+  authoritative.
 - **Every GitHub release MUST attach `DuneServerSetup.exe` as its sole asset.**
   Code-only releases break the in-app updater (it gates on an asset being
   present and silently reports "up to date"). After publishing, verify with

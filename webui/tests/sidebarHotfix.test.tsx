@@ -32,13 +32,15 @@ function renderSidebar(collapsed: boolean, onExpand?: () => void) {
 }
 
 describe('sidebar hotfix links', () => {
-  it('moves support into Sponsors & Credits and removes PowerShell', () => {
+  it('keeps support page-local, restores Hawk recognition, and removes PowerShell', () => {
     renderSidebar(false)
 
     expect(screen.getByRole('link', { name: 'Sponsors & Credits' })).toHaveAttribute('href', '/sponsors')
     expect(screen.queryByRole('link', { name: 'Buy Me a Coffee' })).not.toBeInTheDocument()
     expect(screen.queryByRole('link', { name: 'PowerShell' })).not.toBeInTheDocument()
-    expect(screen.queryByText('Thank you Hawk_I5')).not.toBeInTheDocument()
+    expect(screen.getAllByText('Thank you Hawk_I5')).toHaveLength(1)
+    expect(screen.queryByText('Decker (@decker177)')).not.toBeInTheDocument()
+    expect(screen.queryByText('Ed O.')).not.toBeInTheDocument()
   })
 
   it('keeps Sponsors & Credits available when the sidebar is collapsed', () => {
