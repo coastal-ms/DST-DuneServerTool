@@ -72,7 +72,7 @@ describe('Sponsors & Credits', () => {
     )
   })
 
-  it('is public and preserves the former top-menu access as one direct route link', () => {
+  it('is public and preserves one direct top-menu route without crowding intermediate widths', () => {
     expect(LEGACY_ROUTE_MANIFEST.find(route => route.path === '/sponsors')).toMatchObject({
       label: 'Sponsors & Credits',
       access: 'all',
@@ -92,6 +92,7 @@ describe('Sponsors & Credits', () => {
     )
     const coffeeCreditsLink = screen.getByRole('link', { name: 'Thanks for the Coffee' })
     expect(coffeeCreditsLink).toHaveAttribute('href', '/sponsors')
+    expect(coffeeCreditsLink).toHaveClass('hidden', 'xl:inline-flex')
     fireEvent.click(coffeeCreditsLink)
     expect(window.location.pathname).toBe('/sponsors')
   })

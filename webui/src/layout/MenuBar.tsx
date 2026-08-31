@@ -503,7 +503,7 @@ export function MenuBar({ sidebarCollapsed, onToggleSidebar }: Props) {
       <Link
         to="/sponsors"
         onMouseEnter={() => { if (open !== null) setOpen(null) }}
-        className={`mr-1 px-3 h-7 inline-flex items-center gap-1.5 rounded-md transition-colors ${
+        className={`mr-1 px-3 h-7 hidden xl:inline-flex items-center gap-1.5 rounded-md transition-colors ${
           isActive('/sponsors')
             ? 'bg-surface-3 text-text'
             : 'text-text-muted hover:text-text hover:bg-surface-2/80'
