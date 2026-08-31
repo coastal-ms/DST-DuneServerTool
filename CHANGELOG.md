@@ -13,7 +13,9 @@ here cover everything those tags shipped.
 
 ## [Unreleased]
 
-Candidate metadata prepared for v15.0.0-test6; semantic version remains 15.0.0.
+## [15.0.0-test7] - 2026-08-30
+
+Candidate metadata prepared for v15.0.0-test7; semantic version remains 15.0.0.
 
 ### Added
 

@@ -39,7 +39,10 @@ body:
         > bundle also includes `world-restart-state.json` when available,
         > recording restart/rollback steps and recovery-lock state. The
         > `manifest.txt` lists what's inside, leads with any health finding, and
-        > records any sanitization warnings.
+        > records any sanitization warnings. For Maps Live state reports,
+        > `maps-platform.txt` adds row-free cache integrity, structural
+        > fingerprints, source timing/backoff, and map/dimension evidence
+        > without cached rows, identifiers, payloads, paths, or coordinates.
 
         **✅ Do open an issue here** when the tool shows you a problem, e.g.:
         - The **Server Health** page shows the battlegroup as **Unknown** with
@@ -82,7 +85,7 @@ body:
     attributes:
       label: Tool version
       description: Shown in the bottom-left of the web portal sidebar (status bar) and in the CLI menu header.
-      placeholder: "v15.0.0-test6"
+      placeholder: "v15.0.0-test7"
     validations:
       required: true
 
