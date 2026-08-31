@@ -1,3 +1,4 @@
+$script:DuneMapsSchemaSourceKey = 'maps.schema'
 $script:DuneMapsActiveSpiceSourceKey = 'maps.active-spice'
 $script:DuneMapsPublicPoiSourceKey = 'maps.public-poi'
 $script:DuneMapsFarmId = 'local-farm'
@@ -5,6 +6,10 @@ $script:DuneMapsDeepDesertId = 'deep-desert'
 $script:DuneMapsCurrentPartitionId = 'current'
 $script:DuneMapsActiveSpiceMaxRows = 200
 $script:DuneMapsActiveSpiceStaleAfterSec = 60
+$script:DuneMapsSchemaRefreshCadenceSec = 1800
+$script:DuneMapsObservationHeartbeatSec = 900
+$script:DuneMapsHistoryDeliveryMaxRows = 250
+$script:DuneMapsSourceMapDimensionMax = 64
 $script:DuneMapsRefreshCadenceSec = 15
 $script:DuneMapsRefreshJitterPercent = 10
 $script:DuneMapsStartupRefreshStarted = $false
@@ -19,6 +24,50 @@ function Get-DuneMapPlatformValue {
     $property = $InputObject.PSObject.Properties[$Name]
     if ($property) { return $property.Value }
     return $null
+}
+
+function Set-DuneMapsSourceDetails {
+    param(
+        [Parameter(Mandatory)][string]$SourceKey,
+        [Parameter(Mandatory)]$Details
+    )
+
+    if (-not (Get-Command Set-DunePlatformSourceDetails -ErrorAction SilentlyContinue)) {
+        return $false
+    }
+    try {
+        $result = Set-DunePlatformSourceDetails -SourceKey $SourceKey -Details $Details
+        if ($result -and -not $result.ok -and
+            (Get-Command Write-DuneLog -ErrorAction SilentlyContinue)) {
+            Write-DuneLog "Maps source details were omitted for '$SourceKey' ($($result.errorCode))." 'WARN'
+        }
+        return [bool]$result.ok
+    } catch {
+        if (Get-Command Write-DuneLog -ErrorAction SilentlyContinue) {
+            Write-DuneLog "Maps source details failed for '$SourceKey': $($_.Exception.Message)" 'WARN'
+        }
+        return $false
+    }
+}
+
+function Set-DuneMapsSourceNextDue {
+    param(
+        [Parameter(Mandatory)][string]$SourceKey,
+        [Parameter(Mandatory)][datetime]$NextDueAt
+    )
+
+    if (-not (Get-Command Set-DunePlatformSourceNextDue -ErrorAction SilentlyContinue)) {
+        return $false
+    }
+    try {
+        Set-DunePlatformSourceNextDue -SourceKey $SourceKey -NextDueAt $NextDueAt
+        return $true
+    } catch {
+        if (Get-Command Write-DuneLog -ErrorAction SilentlyContinue) {
+            Write-DuneLog "Maps source schedule telemetry failed for '$SourceKey': $($_.Exception.Message)" 'WARN'
+        }
+        return $false
+    }
 }
 
 function Get-DuneMapsRefreshDelaySec {
@@ -70,6 +119,9 @@ function Invoke-DuneMapsPlatformRefreshLoop {
         $attempts++
         if ($CancellationToken.IsCancellationRequested) { break }
         $delaySec = [Math]::Max(0.01, [double](& $NextDelay))
+        [void](Set-DuneMapsSourceNextDue `
+            -SourceKey $script:DuneMapsActiveSpiceSourceKey `
+            -NextDueAt ([DateTime]::UtcNow.AddSeconds($delaySec)))
         if ($CancellationToken.WaitHandle.WaitOne([int][Math]::Ceiling($delaySec * 1000))) {
             break
         }
@@ -79,7 +131,7 @@ function Invoke-DuneMapsPlatformRefreshLoop {
 
 function Get-DuneMapsPayloadSha256 {
     param($Value)
-    $json = $Value | ConvertTo-Json -Depth 12 -Compress
+    $json = ConvertTo-Json -InputObject $Value -Depth 12 -Compress
     if (Get-Command Get-DuneSha256Hex -ErrorAction SilentlyContinue) {
         return Get-DuneSha256Hex $json
     }
@@ -104,6 +156,124 @@ function Get-DuneMapsPriorLayer {
     return @(Get-DuneMapsSnapshotItems -Snapshot $Snapshot -Name 'layers' |
         Where-Object { [string](Get-DuneMapPlatformValue $_ 'layerId') -eq $LayerId } |
         Select-Object -First 1)[0]
+}
+
+function Get-DuneMapsPriorSource {
+    param($Snapshot, [Parameter(Mandatory)][string]$SourceKey)
+    return @(Get-DuneMapsSnapshotItems -Snapshot $Snapshot -Name 'sources' |
+        Where-Object { [string](Get-DuneMapPlatformValue $_ 'sourceKey') -eq $SourceKey } |
+        Select-Object -First 1)[0]
+}
+
+function Get-DuneMapsActiveSpiceSignature {
+    param([object[]]$Rows)
+
+    $normalized = @($Rows | ForEach-Object {
+        [ordered]@{
+            farmId = [string](Get-DuneMapPlatformValue $_ 'farmId')
+            mapId = [string](Get-DuneMapPlatformValue $_ 'mapId')
+            partitionId = [string](Get-DuneMapPlatformValue $_ 'partitionId')
+            fieldId = [string](Get-DuneMapPlatformValue $_ 'fieldId')
+            state = [string](Get-DuneMapPlatformValue $_ 'state')
+            coordinateSpace = [string](Get-DuneMapPlatformValue $_ 'coordinateSpace')
+            x = Get-DuneMapPlatformValue $_ 'x'
+            y = Get-DuneMapPlatformValue $_ 'y'
+            sourceFingerprint = [string](Get-DuneMapPlatformValue $_ 'sourceFingerprint')
+        }
+    } | Sort-Object farmId, mapId, partitionId, fieldId)
+    return Get-DuneMapsPayloadSha256 $normalized
+}
+
+function Get-DuneMapsLatestHistoryObservedAt {
+    param(
+        $Snapshot,
+        [Parameter(Mandatory)][string]$SourceFingerprint
+    )
+
+    $latest = @(Get-DuneMapsSnapshotItems -Snapshot $Snapshot -Name 'activeSpiceHistory' |
+        Where-Object {
+            [string](Get-DuneMapPlatformValue $_ 'sourceFingerprint') -eq $SourceFingerprint
+        } |
+        Sort-Object {
+            try { ([datetime](Get-DuneMapPlatformValue $_ 'observedAt')).ToUniversalTime() }
+            catch { [datetime]::MinValue }
+        } -Descending |
+        Select-Object -First 1)[0]
+    if (-not $latest) { return $null }
+    try { return ([datetime](Get-DuneMapPlatformValue $latest 'observedAt')).ToUniversalTime() }
+    catch { return $null }
+}
+
+function Get-DuneMapsActiveSpiceHistoryRows {
+    param(
+        [object[]]$CurrentRows,
+        $PreviousSnapshot,
+        [Parameter(Mandatory)]$SourceResult,
+        [datetime]$Now = [DateTime]::UtcNow
+    )
+
+    if ([string]$SourceResult.status -ne 'ready' -or [bool]$SourceResult.truncated) {
+        return @()
+    }
+    if (@($CurrentRows).Count -eq 0) {
+        # Absence is not an inactive event; it may be a real empty sample.
+        return @()
+    }
+
+    $fingerprint = [string]$SourceResult.source.schemaFingerprint
+    if (-not $PreviousSnapshot -or -not $fingerprint) { return @($CurrentRows) }
+    $priorLayer = Get-DuneMapsPriorLayer -Snapshot $PreviousSnapshot -LayerId 'active-spice'
+    $priorSource = Get-DuneMapsPriorSource `
+        -Snapshot $PreviousSnapshot `
+        -SourceKey $script:DuneMapsActiveSpiceSourceKey
+    $priorComplete = (
+        $priorLayer -and
+        [string](Get-DuneMapPlatformValue $priorLayer 'freshnessState') -eq 'fresh' -and
+        -not [bool](Get-DuneMapPlatformValue $priorLayer 'truncated') -and
+        [string](Get-DuneMapPlatformValue $priorSource 'schemaFingerprint') -eq $fingerprint
+    )
+    if (-not $priorComplete) { return @($CurrentRows) }
+
+    $priorRows = @(Get-DuneMapsSnapshotItems -Snapshot $PreviousSnapshot -Name 'activeSpice')
+    if ((Get-DuneMapsActiveSpiceSignature $priorRows) -ne
+        (Get-DuneMapsActiveSpiceSignature $CurrentRows)) {
+        return @($CurrentRows)
+    }
+
+    $latest = Get-DuneMapsLatestHistoryObservedAt `
+        -Snapshot $PreviousSnapshot `
+        -SourceFingerprint $fingerprint
+    if (-not $latest -or ($Now.ToUniversalTime() - $latest).TotalSeconds -ge
+        $script:DuneMapsObservationHeartbeatSec) {
+        return @($CurrentRows)
+    }
+    return @()
+}
+
+function Get-DuneMapsRuntimeSourceHealth {
+    param($Snapshot)
+
+    return @(Get-DuneMapsSnapshotItems -Snapshot $Snapshot -Name 'sources' | ForEach-Object {
+        $sourceKey = [string](Get-DuneMapPlatformValue $_ 'sourceKey')
+        [ordered]@{
+            sourceKey = $sourceKey
+            schemaFingerprint = [string](Get-DuneMapPlatformValue $_ 'schemaFingerprint')
+            lastAttemptAt = Get-DuneMapPlatformValue $_ 'lastAttemptAt'
+            lastSuccessAt = Get-DuneMapPlatformValue $_ 'lastSuccessAt'
+            expiresAt = Get-DuneMapPlatformValue $_ 'expiresAt'
+            lastErrorCode = Get-DuneMapPlatformValue $_ 'lastErrorCode'
+            runtime = if (Get-Command Get-DunePlatformSourceTelemetry -ErrorAction SilentlyContinue) {
+                Get-DunePlatformSourceTelemetry -SourceKey $sourceKey
+            } else {
+                $null
+            }
+            details = if (Get-Command Get-DunePlatformSourceDetails -ErrorAction SilentlyContinue) {
+                Get-DunePlatformSourceDetails -SourceKey $sourceKey
+            } else {
+                $null
+            }
+        }
+    })
 }
 
 function New-DuneMapsLayerRecord {
@@ -172,65 +342,160 @@ function New-DuneMapsPlatformGeneration {
     param(
         [string]$Ip,
         $PreviousSnapshot,
-        [string]$SourceErrorCode
+        [string]$SourceErrorCode,
+        [datetime]$Now = [DateTime]::UtcNow
     )
 
-    $now = [DateTime]::UtcNow
+    $now = $Now.ToUniversalTime()
     $cachedAt = $now.ToString('o')
     $activeRows = @()
     $historyRows = @()
     $activeLayer = $null
+    $capability = $null
     $schemaFingerprint = 'unknown'
     $lastSuccessAt = $null
     $sourceError = $SourceErrorCode
+    $schemaError = $null
+    $schemaAttempted = $false
+    $activeAttempted = $false
 
     if ($Ip -and -not $sourceError) {
+        $schemaAttempted = $true
         try {
-            $sourceRead = Invoke-DunePlatformSourceRead `
-                -SourceKey $script:DuneMapsActiveSpiceSourceKey `
-                -MaxRows $script:DuneMapsActiveSpiceMaxRows `
+            $schemaRead = Invoke-DunePlatformSourceRead `
+                -SourceKey $script:DuneMapsSchemaSourceKey `
+                -MaxRows 2 `
                 -TimeoutSec 30 `
                 -Read ({
                     param($limits)
-                    $capability = Get-DuneMapDataCapabilities -Ip $Ip
-                    $active = Get-DuneActiveSpiceLive `
-                        -Ip $Ip `
-                        -Limit ([Math]::Min($script:DuneMapsActiveSpiceMaxRows, [int]$limits.maxRows)) `
-                        -Capability $capability `
-                        -TimeoutSec ([int]$limits.queryTimeoutSec)
+                    $capabilityResult = Get-DuneMapDataCapabilities -Ip $Ip
                     [pscustomobject]@{
-                        ok = [bool]$active.ok
-                        rows = @($active.fields)
-                        active = $active
-                        capability = $capability
-                        reasonCode = [string]$active.reasonCode
-                        error = [string]$active.error
+                        ok = [bool]$capabilityResult.ok
+                        rows = @(
+                            $capabilityResult.activeSpice,
+                            $capabilityResult.publicStaticPoi
+                        )
+                        capability = $capabilityResult
+                        reasonCode = [string]$capabilityResult.reasonCode
+                        error = [string]$capabilityResult.error
                     }
                 }.GetNewClosure())
-            $activeResult = $sourceRead.active
-            $activeRows = @(ConvertTo-DuneMapsActiveSpiceCacheRows -Result $activeResult)
-            $historyRows = @($activeRows)
-            $schemaFingerprint = [string]$activeResult.source.schemaFingerprint
-            $lastSuccessAt = [string]$activeResult.freshness.observedAt
-            $activeLayer = New-DuneMapsLayerRecord `
-                -LayerId 'active-spice' `
-                -SourceKey $script:DuneMapsActiveSpiceSourceKey `
-                -FreshnessState $(if ($activeResult.status -eq 'partial') { 'partial' } else { 'fresh' }) `
-                -ObservedAt $lastSuccessAt `
-                -CachedAt $cachedAt `
-                -ExpiresAt ([datetime]$lastSuccessAt).AddSeconds($script:DuneMapsActiveSpiceStaleAfterSec).ToString('o') `
-                -RowCount $activeRows.Count `
-                -Truncated ([bool]$activeResult.truncated) `
-                -Payload $activeRows
+            $capability = $schemaRead.capability
         } catch {
-            $sourceError = if ($_.Exception.Data['errorCode']) {
-                [string]$_.Exception.Data['errorCode']
-            } else {
-                'source-read-failed'
+            $schemaError = Get-DunePlatformExceptionCode $_
+            if ($schemaError -eq 'source-read-failed') { $schemaError = 'schema-probe-failed' }
+            $capability = Get-DuneMapDataCachedCapabilities -Ip $Ip -AllowExpired
+            if (-not $capability) {
+                $sourceError = $schemaError
+            }
+        }
+
+        if ($capability) {
+            $schemaFingerprint = [string]$capability.schemaFingerprint
+            $probe = $capability.source.capabilityProbe
+            [void](Set-DuneMapsSourceDetails `
+                -SourceKey $script:DuneMapsSchemaSourceKey `
+                -Details ([ordered]@{
+                    cadenceSeconds = $script:DuneMapsSchemaRefreshCadenceSec
+                    cached = [bool]$probe.cached
+                    stale = [bool]$probe.stale
+                    observedAt = [string]$probe.observedAt
+                    expiresAt = [string]$probe.expiresAt
+                    lastErrorCode = $schemaError
+                }))
+            if (-not $probe.stale -and $probe.expiresAt) {
+                [void](Set-DuneMapsSourceNextDue `
+                    -SourceKey $script:DuneMapsSchemaSourceKey `
+                    -NextDueAt ([datetime]$probe.expiresAt))
+            }
+
+            try {
+                $activeAttempted = $true
+                $sourceRead = Invoke-DunePlatformSourceRead `
+                    -SourceKey $script:DuneMapsActiveSpiceSourceKey `
+                    -MaxRows $script:DuneMapsActiveSpiceMaxRows `
+                    -TimeoutSec 30 `
+                    -Read ({
+                        param($limits)
+                        $active = Get-DuneActiveSpiceLive `
+                            -Ip $Ip `
+                            -Limit ([Math]::Min($script:DuneMapsActiveSpiceMaxRows, [int]$limits.maxRows)) `
+                            -Capability $capability `
+                            -TimeoutSec ([int]$limits.queryTimeoutSec)
+                        $schemaChanged = (
+                            -not $active.ok -and
+                            (Test-DuneMapDataSchemaSignatureError -Message ([string]$active.error))
+                        )
+                        if ($schemaChanged) {
+                            Clear-DuneMapDataCapabilityCache -Ip $Ip
+                        }
+                        [pscustomobject]@{
+                            ok = [bool]$active.ok
+                            rows = @($active.fields)
+                            active = $active
+                            capability = $capability
+                            reasonCode = if ($schemaChanged) { 'schema-changed' } else { [string]$active.reasonCode }
+                            error = [string]$active.error
+                        }
+                    }.GetNewClosure())
+                $activeResult = $sourceRead.active
+                $activeRows = @(ConvertTo-DuneMapsActiveSpiceCacheRows -Result $activeResult)
+                $historyRows = @(Get-DuneMapsActiveSpiceHistoryRows `
+                    -CurrentRows $activeRows `
+                    -PreviousSnapshot $PreviousSnapshot `
+                    -SourceResult $activeResult `
+                    -Now $now)
+                $schemaFingerprint = [string]$activeResult.source.schemaFingerprint
+                $lastSuccessAt = [string]$activeResult.freshness.observedAt
+                $mapDimensions = [Collections.Generic.List[object]]::new()
+                $seenMapDimensions = @{}
+                foreach ($field in @($activeResult.fields)) {
+                    $sourceMap = [string]$field.map
+                    $dimensionIndex = [int]$field.dimensionIndex
+                    if ($sourceMap -notmatch '^[A-Za-z0-9_.-]{1,128}$') { continue }
+                    $identity = "$sourceMap|$dimensionIndex"
+                    if ($seenMapDimensions.ContainsKey($identity)) { continue }
+                    $seenMapDimensions[$identity] = $true
+                    if ($mapDimensions.Count -lt $script:DuneMapsSourceMapDimensionMax) {
+                        $mapDimensions.Add([ordered]@{
+                            map = $sourceMap
+                            dimensionIndex = $dimensionIndex
+                        })
+                    }
+                }
+                [void](Set-DuneMapsSourceDetails `
+                    -SourceKey $script:DuneMapsActiveSpiceSourceKey `
+                    -Details ([ordered]@{
+                        cadenceSeconds = $script:DuneMapsRefreshCadenceSec
+                        identityStatus = 'source-map-dimension'
+                        partitionStatus = 'unresolved'
+                        mapDimensionCount = $seenMapDimensions.Count
+                        mapDimensionsTruncated = (
+                            $seenMapDimensions.Count -gt $script:DuneMapsSourceMapDimensionMax)
+                        mapDimensions = $mapDimensions.ToArray()
+                    }))
+                $activeLayer = New-DuneMapsLayerRecord `
+                    -LayerId 'active-spice' `
+                    -SourceKey $script:DuneMapsActiveSpiceSourceKey `
+                    -FreshnessState $(if ($activeResult.status -eq 'partial') { 'partial' } else { 'fresh' }) `
+                    -ObservedAt $lastSuccessAt `
+                    -CachedAt $cachedAt `
+                    -ExpiresAt ([datetime]$lastSuccessAt).AddSeconds($script:DuneMapsActiveSpiceStaleAfterSec).ToString('o') `
+                    -RowCount $activeRows.Count `
+                    -Truncated ([bool]$activeResult.truncated) `
+                    -Payload $activeRows
+            } catch {
+                $sourceError = Get-DunePlatformExceptionCode $_
+                if ($sourceError -eq 'schema-changed') {
+                    Reset-DunePlatformRefreshBackoff -SourceKey $script:DuneMapsSchemaSourceKey
+                }
             }
         }
     }
 
+    $priorActiveSource = Get-DuneMapsPriorSource `
+        -Snapshot $PreviousSnapshot `
+        -SourceKey $script:DuneMapsActiveSpiceSourceKey
     if (-not $activeLayer) {
         $priorRows = @(Get-DuneMapsSnapshotItems -Snapshot $PreviousSnapshot -Name 'activeSpice' |
             Where-Object {
@@ -245,6 +510,9 @@ function New-DuneMapsPlatformGeneration {
         $priorFingerprint = @($priorRows | Select-Object -First 1 | ForEach-Object {
             [string](Get-DuneMapPlatformValue $_ 'sourceFingerprint')
         })[0]
+        if (-not $priorFingerprint) {
+            $priorFingerprint = [string](Get-DuneMapPlatformValue $priorActiveSource 'schemaFingerprint')
+        }
         if ($priorFingerprint) { $schemaFingerprint = $priorFingerprint }
         if ($priorObservedAt) { $lastSuccessAt = $priorObservedAt }
         $hasPriorSuccess = (
@@ -293,23 +561,77 @@ function New-DuneMapsPlatformGeneration {
         -LastErrorCode 'privacy-proof-unavailable' `
         -Payload @()
 
+    [void](Set-DuneMapsSourceDetails `
+        -SourceKey $script:DuneMapsPublicPoiSourceKey `
+        -Details ([ordered]@{
+            enabled = $false
+            reasonCode = 'privacy-proof-unavailable'
+        }))
+    $priorSchemaSource = Get-DuneMapsPriorSource `
+        -Snapshot $PreviousSnapshot `
+        -SourceKey $script:DuneMapsSchemaSourceKey
+    $priorPublicPoiSource = Get-DuneMapsPriorSource `
+        -Snapshot $PreviousSnapshot `
+        -SourceKey $script:DuneMapsPublicPoiSourceKey
+    $schemaProbe = if ($capability -and $capability.source) {
+        $capability.source.capabilityProbe
+    } else {
+        $null
+    }
+    $schemaLastSuccessAt = if ($schemaProbe -and $schemaProbe.observedAt) {
+        [string]$schemaProbe.observedAt
+    } else {
+        Get-DuneMapPlatformValue $priorSchemaSource 'lastSuccessAt'
+    }
+    $schemaExpiresAt = if ($schemaProbe -and $schemaProbe.expiresAt) {
+        [string]$schemaProbe.expiresAt
+    } else {
+        Get-DuneMapPlatformValue $priorSchemaSource 'expiresAt'
+    }
+    $schemaRecordFingerprint = if ($schemaFingerprint -and $schemaFingerprint -ne 'unknown') {
+        $schemaFingerprint
+    } else {
+        [string](Get-DuneMapPlatformValue $priorSchemaSource 'schemaFingerprint')
+    }
+    if (-not $schemaRecordFingerprint) { $schemaRecordFingerprint = 'unknown' }
+
     return [ordered]@{
         generation = "maps-$($now.ToString('yyyyMMddHHmmssfff'))-$([guid]::NewGuid().ToString('N').Substring(0,8))"
         sources = @(
             [ordered]@{
+                sourceKey = $script:DuneMapsSchemaSourceKey
+                schemaFingerprint = $schemaRecordFingerprint
+                lastAttemptAt = if ($schemaAttempted) { $cachedAt } else {
+                    Get-DuneMapPlatformValue $priorSchemaSource 'lastAttemptAt'
+                }
+                lastSuccessAt = $schemaLastSuccessAt
+                expiresAt = $schemaExpiresAt
+                lastErrorCode = if ($schemaError) {
+                    $schemaError
+                } elseif ($capability -and $capability.ok) {
+                    $null
+                } else {
+                    Get-DuneMapPlatformValue $priorSchemaSource 'lastErrorCode'
+                }
+            },
+            [ordered]@{
                 sourceKey = $script:DuneMapsActiveSpiceSourceKey
                 schemaFingerprint = $schemaFingerprint
-                lastAttemptAt = $cachedAt
-                lastSuccessAt = if ($lastSuccessAt) { $lastSuccessAt } else { $null }
+                lastAttemptAt = if ($activeAttempted) { $cachedAt } else {
+                    Get-DuneMapPlatformValue $priorActiveSource 'lastAttemptAt'
+                }
+                lastSuccessAt = if ($lastSuccessAt) { $lastSuccessAt } else {
+                    Get-DuneMapPlatformValue $priorActiveSource 'lastSuccessAt'
+                }
                 expiresAt = Get-DuneMapPlatformValue $activeLayer 'expiresAt'
                 lastErrorCode = Get-DuneMapPlatformValue $activeLayer 'lastErrorCode'
             },
             [ordered]@{
                 sourceKey = $script:DuneMapsPublicPoiSourceKey
                 schemaFingerprint = $schemaFingerprint
-                lastAttemptAt = $cachedAt
-                lastSuccessAt = $null
-                expiresAt = $null
+                lastAttemptAt = Get-DuneMapPlatformValue $priorPublicPoiSource 'lastAttemptAt'
+                lastSuccessAt = Get-DuneMapPlatformValue $priorPublicPoiSource 'lastSuccessAt'
+                expiresAt = Get-DuneMapPlatformValue $priorPublicPoiSource 'expiresAt'
                 lastErrorCode = 'privacy-proof-unavailable'
             }
         )
@@ -603,12 +925,14 @@ function New-DuneMapsActiveSpiceLayerEnvelope {
             }
         }
     })
-    $history = @(Get-DuneMapsSnapshotItems -Snapshot $snapshot -Name 'activeSpiceHistory' |
+    $allHistory = @(Get-DuneMapsSnapshotItems -Snapshot $snapshot -Name 'activeSpiceHistory' |
         Where-Object {
             [string](Get-DuneMapPlatformValue $_ 'farmId') -eq $script:DuneMapsFarmId -and
             [string](Get-DuneMapPlatformValue $_ 'mapId') -eq $script:DuneMapsDeepDesertId -and
             [string](Get-DuneMapPlatformValue $_ 'partitionId') -eq $script:DuneMapsCurrentPartitionId
-        } | ForEach-Object {
+        })
+    $historyTruncated = $allHistory.Count -gt $script:DuneMapsHistoryDeliveryMaxRows
+    $history = @($allHistory | Select-Object -First $script:DuneMapsHistoryDeliveryMaxRows | ForEach-Object {
         [ordered]@{
             fieldId = [string](Get-DuneMapPlatformValue $_ 'fieldId')
             state = [string](Get-DuneMapPlatformValue $_ 'state')
@@ -636,6 +960,10 @@ function New-DuneMapsActiveSpiceLayerEnvelope {
                     'unresolved'
                 }
                 historyStatus = if ($history.Count -gt 0) { 'cached-observations' } else { 'unavailable' }
+                historySemantics = 'sampled-observations'
+                historyCount = $history.Count
+                historyLimit = $script:DuneMapsHistoryDeliveryMaxRows
+                historyTruncated = $historyTruncated
             }
             items = $items
             history = $history
@@ -711,6 +1039,7 @@ function Get-DuneDeepDesertMapResponse {
                     farmId = $script:DuneMapsFarmId
                     mapId = $script:DuneMapsDeepDesertId
                     partitionId = $script:DuneMapsCurrentPartitionId
+                    identityStatus = 'synthetic-current'
                     label = 'Deep Desert'
                 }
                 health = Get-DuneMapsUnsupportedCacheHealth
@@ -730,6 +1059,7 @@ function Get-DuneDeepDesertMapResponse {
                 farmId = $script:DuneMapsFarmId
                 mapId = $script:DuneMapsDeepDesertId
                 partitionId = $script:DuneMapsCurrentPartitionId
+                identityStatus = 'synthetic-current'
                 label = 'Deep Desert'
             }
             health = Get-DuneMapsCacheHealth -State $state

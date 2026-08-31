@@ -4,6 +4,100 @@
 $script:DuneMapDataSpiceMaxRows = 200
 $script:DuneMapDataPoiMaxRows = 250
 $script:DuneMapDataStaticPoiPayloadType = 'EMarkerPayloadType::StaticLocation'
+$script:DuneMapDataCapabilityCacheTtlSec = 1800
+$script:DuneMapDataCapabilityCache = $null
+
+function Get-DuneMapDataCapabilityCache {
+    if (-not $script:DuneMapDataCapabilityCache) {
+        $script:DuneMapDataCapabilityCache = [Collections.Hashtable]::Synchronized(@{})
+    }
+    return $script:DuneMapDataCapabilityCache
+}
+
+function Clear-DuneMapDataCapabilityCache {
+    param([string]$Ip)
+
+    $cache = Get-DuneMapDataCapabilityCache
+    [Threading.Monitor]::Enter($cache.SyncRoot)
+    try {
+        if ($Ip) {
+            [void]$cache.Remove($Ip.Trim().ToLowerInvariant())
+        } else {
+            $cache.Clear()
+        }
+    } finally {
+        [Threading.Monitor]::Exit($cache.SyncRoot)
+    }
+}
+
+function Copy-DuneMapDataCapabilityResult {
+    param([Parameter(Mandatory)]$Value)
+    return ($Value | ConvertTo-Json -Depth 8 -Compress | ConvertFrom-Json)
+}
+
+function Add-DuneMapDataCapabilityProbeMetadata {
+    param(
+        [Parameter(Mandatory)]$Capability,
+        [bool]$Cached,
+        [Parameter(Mandatory)][datetime]$ObservedAt,
+        [Nullable[datetime]]$ExpiresAt,
+        [Parameter(Mandatory)][int]$CadenceSeconds,
+        [bool]$Stale = $false
+    )
+
+    $copy = Copy-DuneMapDataCapabilityResult $Capability
+    if (-not $copy.PSObject.Properties['source']) {
+        $copy | Add-Member -NotePropertyName source -NotePropertyValue ([pscustomobject]@{})
+    }
+    $copy.source | Add-Member -Force -NotePropertyName capabilityProbe -NotePropertyValue ([pscustomobject]@{
+        cached         = $Cached
+        stale          = $Stale
+        cadenceSeconds = $CadenceSeconds
+        observedAt     = $ObservedAt.ToUniversalTime().ToString('o')
+        expiresAt      = if ($null -ne $ExpiresAt) {
+            ([datetime]$ExpiresAt).ToUniversalTime().ToString('o')
+        } else {
+            $null
+        }
+    })
+    return $copy
+}
+
+function Get-DuneMapDataCachedCapabilities {
+    param(
+        [Parameter(Mandatory)][string]$Ip,
+        [switch]$AllowExpired,
+        [datetime]$Now = [datetime]::UtcNow
+    )
+
+    $cache = Get-DuneMapDataCapabilityCache
+    $key = $Ip.Trim().ToLowerInvariant()
+    [Threading.Monitor]::Enter($cache.SyncRoot)
+    try {
+        $entry = $cache[$key]
+    } finally {
+        [Threading.Monitor]::Exit($cache.SyncRoot)
+    }
+    if (-not $entry) { return $null }
+    $stale = $entry.expiresAt -le $Now.ToUniversalTime()
+    if ($stale -and -not $AllowExpired) { return $null }
+    return Add-DuneMapDataCapabilityProbeMetadata `
+        -Capability $entry.result `
+        -Cached $true `
+        -ObservedAt $entry.observedAt `
+        -ExpiresAt $entry.expiresAt `
+        -CadenceSeconds ([int]$entry.cadenceSeconds) `
+        -Stale $stale
+}
+
+function Test-DuneMapDataSchemaSignatureError {
+    param([string]$Message)
+    if ([string]::IsNullOrWhiteSpace($Message)) { return $false }
+    return $Message -match (
+        '(?i)(SQLSTATE\s+(?:42703|42P01|42704|42883)|' +
+        '(?:column|relation|type|function)\s+.+\s+does not exist|' +
+        'cached plan must not change result type)')
+}
 
 function ConvertTo-DuneMapDataRowMaps {
     param($Result)
@@ -131,6 +225,9 @@ function Invoke-DuneMapDataQuery {
         [Parameter(Mandatory)][string]$Sql,
         [Parameter(Mandatory)][hashtable]$Parameters,
         [Parameter(Mandatory)][hashtable]$ParameterTypes,
+        [Parameter(Mandatory)]
+        [ValidatePattern('^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$')]
+        [string]$SourceKey,
         [int]$MaxRows,
         [int]$TimeoutSec = 20
     )
@@ -140,6 +237,7 @@ function Invoke-DuneMapDataQuery {
             -Sql $Sql `
             -Parameters $Parameters `
             -ParameterTypes $ParameterTypes
+        $effectiveSql = "/* dst-source:$SourceKey */`n$effectiveSql"
     } catch {
         return @{ ok = $false; error = "Could not bind map query parameters: $($_.Exception.Message)" }
     }
@@ -203,10 +301,11 @@ function New-DuneMapDataFreshness {
     }
 }
 
-function Get-DuneMapDataCapabilities {
+function Invoke-DuneMapDataCapabilitiesProbe {
     param([Parameter(Mandatory)][string]$Ip)
 
     $sql = @'
+/* dst-source:maps.schema */
 SELECT 'column'::text AS item_kind,
        c.table_name AS object_name,
        c.column_name AS member_name,
@@ -237,10 +336,11 @@ LIMIT 128;
     $result = Invoke-DuneSqlQuery -Ip $Ip -Sql $sql -ReadOnly $true -MaxRows 128 -TimeoutSec 15
     if (-not $result.ok) {
         return @{
-            ok     = $false
-            status = 'error'
-            error  = $result.error
-            source = @{ queryDurationMs = $result.durationMs }
+            ok         = $false
+            status     = 'error'
+            reasonCode = 'schema-probe-failed'
+            error      = $result.error
+            source     = @{ queryDurationMs = $result.durationMs }
         }
     }
 
@@ -316,6 +416,69 @@ LIMIT 128;
     }
 }
 
+function Get-DuneMapDataCapabilities {
+    param(
+        [Parameter(Mandatory)][string]$Ip,
+        [switch]$ForceRefresh,
+        [ValidateRange(1,86400)][int]$CacheTtlSec = $script:DuneMapDataCapabilityCacheTtlSec,
+        [datetime]$Now = [datetime]::UtcNow
+    )
+
+    $cache = Get-DuneMapDataCapabilityCache
+    $key = $Ip.Trim().ToLowerInvariant()
+    $nowUtc = $Now.ToUniversalTime()
+    $entry = $null
+    [Threading.Monitor]::Enter($cache.SyncRoot)
+    try {
+        if ($ForceRefresh) {
+            [void]$cache.Remove($key)
+        } else {
+            $entry = $cache[$key]
+        }
+    } finally {
+        [Threading.Monitor]::Exit($cache.SyncRoot)
+    }
+
+    if ($entry -and $entry.expiresAt -gt $nowUtc) {
+        return Add-DuneMapDataCapabilityProbeMetadata `
+            -Capability $entry.result `
+            -Cached $true `
+            -ObservedAt $entry.observedAt `
+            -ExpiresAt $entry.expiresAt `
+            -CadenceSeconds ([int]$entry.cadenceSeconds) `
+            -Stale $false
+    }
+
+    $result = Invoke-DuneMapDataCapabilitiesProbe -Ip $Ip
+    $observedAt = $nowUtc
+    $expiresAt = $null
+    # Failed probes keep any prior evidence only for the explicit stale fallback.
+    # The platform source owns retry timing through its independent backoff.
+    if ($result.ok) {
+        $expiresAt = $observedAt.AddSeconds($CacheTtlSec)
+        $stored = [pscustomobject]@{
+            observedAt = $observedAt
+            expiresAt  = $expiresAt
+            cadenceSeconds = $CacheTtlSec
+            result     = Copy-DuneMapDataCapabilityResult $result
+        }
+        [Threading.Monitor]::Enter($cache.SyncRoot)
+        try {
+            $cache[$key] = $stored
+        } finally {
+            [Threading.Monitor]::Exit($cache.SyncRoot)
+        }
+    }
+
+    return Add-DuneMapDataCapabilityProbeMetadata `
+        -Capability $result `
+        -Cached $false `
+        -ObservedAt $observedAt `
+        -ExpiresAt $expiresAt `
+        -CadenceSeconds $CacheTtlSec `
+        -Stale $false
+}
+
 function Get-DuneActiveSpiceLive {
     param(
         [Parameter(Mandatory)][string]$Ip,
@@ -375,6 +538,7 @@ ORDER BY map, dimension_index, field_id;
         -Sql $sql `
         -Parameters @{ row_limit = $Limit; map_prefix = 'DeepDesert' } `
         -ParameterTypes @{ row_limit = 'integer'; map_prefix = 'text' } `
+        -SourceKey 'maps.active-spice' `
         -MaxRows ($Limit + 1) `
         -TimeoutSec $TimeoutSec
     $validation = Test-DuneMapDataQueryResult -Result $result -ExpectedColumns @(
@@ -549,6 +713,7 @@ ORDER BY marker_hash_id;
             payload_type = 'text'
             row_limit    = 'integer'
         } `
+        -SourceKey 'maps.public-poi' `
         -MaxRows ($Limit + 1) `
         -TimeoutSec 20
     $validation = Test-DuneMapDataQueryResult -Result $result -ExpectedColumns @(

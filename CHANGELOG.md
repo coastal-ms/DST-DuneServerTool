@@ -48,6 +48,11 @@ Candidate metadata prepared for v15.0.0-test6; semantic version remains 15.0.0.
 
 ### Changed
 
+- Maps Live State now reuses successful structural schema probes for 30 minutes
+  while failures retry only under per-source backoff, reports refresh timing and
+  source map/dimension evidence in diagnostics, samples unchanged observations
+  instead of writing them every 15 seconds, bounds compatible history delivery,
+  and adds a row-free cache integrity summary to diagnostics packages.
 - Removed the nonfunctional Grant Reward popup action from self-hosted Gameplay
   Admin. Claim Rewards require Funcom FLS grants; cached clients now receive an
   explicit unsupported response instead of a false success from a local

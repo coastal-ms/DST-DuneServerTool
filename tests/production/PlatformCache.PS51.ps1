@@ -20,9 +20,22 @@ $response = Get-DuneDeepDesertMapResponse -RequestId 'ps51-probe'
 if ([int]$response.schemaVersion -ne 1 -or @($response.data.layers).Count -ne 2) {
     throw 'Windows PowerShell 5.1 could not invoke the Maps cache contract.'
 }
+$empty = New-DuneMapsPlatformGeneration -SourceErrorCode 'source-unavailable'
+if ($empty.layers[0].freshnessState -ne 'unavailable' -or
+    -not $empty.layers[0].payloadSha256) {
+    throw 'Windows PowerShell 5.1 could not hash an empty Maps layer.'
+}
+$source = Invoke-DunePlatformSourceRead -SourceKey 'maps.ps51-probe' -MaxRows 1 -Read {
+    [pscustomobject]@{ rows = @('ok') }
+}
+$telemetry = Get-DunePlatformSourceTelemetry -SourceKey 'maps.ps51-probe'
+if (@($source.rows).Count -ne 1 -or $telemetry.lastRowCount -ne 1) {
+    throw 'Windows PowerShell 5.1 could not publish Maps source telemetry.'
+}
 [pscustomobject]@{
     ok = $true
     generation = [string]$snapshot.snapshot['generation']
     revision = [long]$snapshot.revision
     mapLayers = @($response.data.layers).Count
+    sourceAttempts = [long]$telemetry.attemptCount
 } | ConvertTo-Json -Compress

@@ -79,6 +79,79 @@ AfterAll {
     Remove-Item function:global:New-MapDataSchemaResult -ErrorAction SilentlyContinue
 }
 
+Describe 'Map live-data capability cache' -Tag 'MapData' {
+    BeforeEach {
+        Clear-DuneMapDataCapabilityCache
+    }
+
+    It 'reuses one successful structural probe until its slow cadence expires' {
+        $script:mapSchemaProbeCalls = 0
+        Mock Invoke-DuneSqlQuery {
+            $script:mapSchemaProbeCalls++
+            New-MapDataSchemaResult -IncludeSpice -IncludeMarker
+        }
+        $now = [datetime]'2026-08-30T12:00:00Z'
+
+        $first = Get-DuneMapDataCapabilities -Ip '192.0.2.1' -Now $now
+        $second = Get-DuneMapDataCapabilities -Ip '192.0.2.1' -Now $now.AddMinutes(5)
+        $forced = Get-DuneMapDataCapabilities -Ip '192.0.2.1' -Now $now.AddMinutes(6) -ForceRefresh
+
+        $script:mapSchemaProbeCalls | Should -Be 2
+        $first.source.capabilityProbe.cached | Should -BeFalse
+        $second.source.capabilityProbe.cached | Should -BeTrue
+        $second.source.capabilityProbe.cadenceSeconds | Should -Be 1800
+        $second.source.capabilityProbe.observedAt | Should -Be $now.ToUniversalTime().ToString('o')
+        $forced.source.capabilityProbe.cached | Should -BeFalse
+    }
+
+    It 'does not turn a failed structural probe into a cached success shape' {
+        $script:mapSchemaProbeCalls = 0
+        Mock Invoke-DuneSqlQuery {
+            $script:mapSchemaProbeCalls++
+            @{ ok = $false; error = 'database unavailable'; durationMs = 10 }
+        }
+
+        $first = Get-DuneMapDataCapabilities -Ip '192.0.2.1'
+        $second = Get-DuneMapDataCapabilities -Ip '192.0.2.1'
+
+        $script:mapSchemaProbeCalls | Should -Be 2
+        $first.ok | Should -BeFalse
+        $first.reasonCode | Should -Be 'schema-probe-failed'
+        $second.source.capabilityProbe.cached | Should -BeFalse
+    }
+
+    It 'retains expired capability evidence only for an explicit stale fallback' {
+        Mock Invoke-DuneSqlQuery {
+            New-MapDataSchemaResult -IncludeSpice
+        }
+        $old = [datetime]'2026-08-30T12:00:00Z'
+        $null = Get-DuneMapDataCapabilities `
+            -Ip '192.0.2.1' `
+            -Now $old `
+            -CacheTtlSec 60
+
+        (Get-DuneMapDataCachedCapabilities -Ip '192.0.2.1' -Now $old.AddMinutes(2)) |
+            Should -BeNullOrEmpty
+        $stale = Get-DuneMapDataCachedCapabilities `
+            -Ip '192.0.2.1' `
+            -Now $old.AddMinutes(2) `
+            -AllowExpired
+
+        $stale.ok | Should -BeTrue
+        $stale.source.capabilityProbe.cached | Should -BeTrue
+        $stale.source.capabilityProbe.stale | Should -BeTrue
+    }
+
+    It 'recognizes only schema-signature failures as a reason to invalidate the cache' {
+        Test-DuneMapDataSchemaSignatureError 'ERROR: column world_x does not exist (SQLSTATE 42703)' |
+            Should -BeTrue
+        Test-DuneMapDataSchemaSignatureError 'ERROR: relation dune.markers does not exist' |
+            Should -BeTrue
+        Test-DuneMapDataSchemaSignatureError 'database unavailable' | Should -BeFalse
+        Test-DuneMapDataSchemaSignatureError 'permission denied' | Should -BeFalse
+    }
+}
+
 Describe 'Map live-data SQL parameters' -Tag 'MapData' {
     It 'binds values through a typed base64 JSON parameter CTE' {
         $sql = New-DuneMapDataParameterizedSql `
@@ -99,6 +172,10 @@ Describe 'Map live-data SQL parameters' -Tag 'MapData' {
 }
 
 Describe 'Map live-data schema capabilities' -Tag 'MapData' {
+    BeforeEach {
+        Clear-DuneMapDataCapabilityCache
+    }
+
     It 'supports spice and the one static-location category when privacy is explicit' {
         Mock Invoke-DuneSqlQuery {
             $fixture = New-MapDataSchemaResult -IncludeSpice -IncludeMarker -IncludePrivacyProof
@@ -165,6 +242,7 @@ Describe 'Map live-data schema capabilities' -Tag 'MapData' {
 
 Describe 'Active spice live projection' -Tag 'MapData' {
     BeforeEach {
+        Clear-DuneMapDataCapabilityCache
         $script:mapDataQuery = 0
         $script:capturedSpiceSql = ''
         Mock Invoke-DuneSqlQuery {
@@ -199,6 +277,7 @@ Describe 'Active spice live projection' -Tag 'MapData' {
         $result.observations[0].identity | Should -Be 'resourcefield_state:101'
         $result.historyStatus | Should -Be 'current-observation-only'
         $result.source.schemaFingerprint | Should -Match '^[a-f0-9]{64}$'
+        $script:capturedSpiceSql | Should -Match 'dst-source:maps\.active-spice'
         $script:capturedSpiceSql | Should -Match 'WHERE field_kind_id = 1'
         $script:capturedSpiceSql | Should -Match "map LIKE .*map_prefix"
         $result.partialReasons.GetType().FullName | Should -Be 'System.String[]'
@@ -284,6 +363,10 @@ Describe 'Active spice live projection' -Tag 'MapData' {
 }
 
 Describe 'Public static POI projection' -Tag 'MapData' {
+    BeforeEach {
+        Clear-DuneMapDataCapabilityCache
+    }
+
     It 'proves category, private, owner, and payload exclusions in SQL' {
         $script:mapDataQuery = 0
         $script:capturedPoiSql = ''
@@ -315,6 +398,7 @@ Describe 'Public static POI projection' -Tag 'MapData' {
         $result.partialReasons.Count | Should -Be 0
         ($result | ConvertTo-Json -Compress -Depth 8) | Should -Match '"partialReasons":\[\]'
         $script:capturedPoiSql | Should -Match 'is_private IS FALSE'
+        $script:capturedPoiSql | Should -Match 'dst-source:maps\.public-poi'
         $script:capturedPoiSql | Should -Match 'owner_account_id IS NULL'
         $script:capturedPoiSql | Should -Match "payload, '\{\}'::jsonb"
         $script:capturedPoiSql | Should -Not -Match [regex]::Escape('EMarkerPayloadType::StaticLocation')
