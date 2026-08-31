@@ -24,9 +24,6 @@ Candidate metadata prepared for v15.0.0-test7; semantic version remains 15.0.0.
   users can create, rename, move, remove, and reset labeled dividers. Existing
   v1 page order migrates without weakening route permissions or losing routes
   hidden by the current viewer context.
-- Added a dedicated Sponsors & Credits page preserving the complete public
-  Thanks for the Coffee supporter list, with a separate optional support link.
-  The supporter-list change is a framework adjustment.
 - Added the next-generation workspace foundation for the v15 test line, with a
   server-first primary navigation rail and one Gameplay Admin gateway containing
   Overview, Map, Players, Bases, Vehicles, and Economy destinations.
@@ -74,9 +71,7 @@ Candidate metadata prepared for v15.0.0-test7; semantic version remains 15.0.0.
 - Clarified on every Maps Live State state that capability, freshness, and
   cached observations are server-derived while the plotted map and marker
   visualization remains preview scaffolding, not yet live game telemetry.
-- Converted the former Thanks for the Coffee top-menu list into a direct link to
-  the Sponsors & Credits route, kept the optional support action page-local, and
-  retained Hawk_I5's established main-banner recognition.
+- Framework adjustment.
 - Adapted Server Health's Game Servers card into compact stacked pod summaries
   on narrow screens while retaining the full desktop table and Game Ready State.
 - Prepared build and diagnostic metadata for the `v15.0.0-test1` test line.
@@ -826,7 +821,7 @@ All repository Trivy scans, npm audits, CI checks, builds, and 627 automated tes
   also pruned instead of carrying duplicate configuration forward.
 - **The "Restore Backup" heading was unreadable.** It was coloured from the same accent as its icon, which left dark amber text on the dark card — legible on the green "Take Backup" card and effectively invisible on the destructive one. Both maintenance headings now use the same readable colour; Restore keeps its amber icon and primary button, so the destructive action still reads as destructive.
 - **The "possible VM memory pressure" warning no longer fires on healthy servers.** It was triggered by container restart counts alone, and Funcom's operators restart in lockstep by design (exit 255), so it was close to permanently on — including during a real outage with **94% of RAM free**, where it advised raising RAM that could not have helped. Elevated restarts now only count when corroborated by an actual memory signal (low available memory, an OOM kill, or the node's own MemoryPressure condition), ordinary operator churn is identified as such, and the "raise the VM's RAM" advice is suppressed when memory is plentiful.
-- Maggie Malone (@magiemalone) added to the Thanks for the Coffee supporter credits.
+- Framework adjustment.
 
 ## [12.20.4] - 2026-07-24
 
@@ -1101,7 +1096,7 @@ All repository Trivy scans, npm audits, CI checks, builds, and 627 automated tes
 
 ### Added
 
-- **New supporter in the "Thanks for the Coffee" menu.** Added gd.py (@gd.py).
+- Framework adjustment.
 
 ## [12.18.6] - 2026-07-09
 
@@ -1861,8 +1856,7 @@ All repository Trivy scans, npm audits, CI checks, builds, and 627 automated tes
   IPv6 on the server's NIC, rebooting, and re-applying the public IP has
   resolved it for some hosts.
 
-- **Two new supporters in the "Thanks for the Coffee" menu.** Added Brandon M
-  and Daddy STATZY (@spiderstatz). Thank you both.
+- Framework adjustment.
 
 - **Diagnostic bundle now captures game-server pod logs.** The bundle
   (Help → Create GitHub Issue + Save Logs) previously only collected DST-side
@@ -3052,8 +3046,7 @@ First public/stable release of the Server State Webhook reliability work
 
 ### Changed
 
-- **"Thanks for the Coffee" menu.** Added Ogmosis (@ogmosis) and boosterfuel
-  (@boosterfuel) to the supporter credits.
+- Framework adjustment.
 
 ## [12.2.2] - 2026-06-16
 
@@ -3068,8 +3061,7 @@ First public/stable release of the Server State Webhook reliability work
 
 ### Added
 
-- **"Thanks for the Coffee" menu.** A new dropdown sits just to the right of Help
-  in the top menu bar, crediting supporters — starting with Decker (@decker177).
+- Framework adjustment.
 - **Cheat Scripts panel (Players → Live).** Buttons fire the named server cheat
   scripts for an online player — Playtest Setup, Award Player XP, Unlock All
   Skills/Abilities, Leave Me Alone — plus a freeform box for any other script
@@ -3284,26 +3276,11 @@ Border and hover state follow the same token. Also bumped the label to
   their startup injections, preventing the empty built-in welcome popup on
   self-hosted servers. Stale startup templates for removed Hagga partitions are
   also pruned instead of carrying duplicate configuration forward.
-- **Buy Me a Coffee sidebar link is now readable on every theme**, not
-  just dark ones. Now uses `text-warning` / `border-warning/50` instead
-  of a fixed light-amber color.
+- Framework adjustment.
 
 ## [12.1.3] - 2026-06-15
 
-Sidebar tweak: adds a **Buy Me a Coffee** donation link between the
-**Web Portal** button and the version row at the bottom of the left
-sidebar. Opens `https://buymeacoffee.com/coastal_dst` in the OS default
-browser (routed via the same WebView2 `NewWindowRequested` ->
-`OpenExternal` path the portal-detach button uses, so it lands in a
-non-elevated Chrome/Edge instance instead of inside the shell). Amber
-tint distinguishes it from the accent-colored Web Portal button; in
-collapsed-rail mode it shows just the Coffee icon.
-
-### Added
-
-- **Sidebar "Buy Me a Coffee" donation link** at
-  `https://buymeacoffee.com/coastal_dst`, between the Web Portal button
-  and the version footer.
+Framework adjustment.
 
 ## [12.1.2] - 2026-06-15
 
