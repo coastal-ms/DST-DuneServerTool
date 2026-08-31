@@ -198,7 +198,7 @@ Describe 'Maps platform diagnostics' -Tag 'Pure' {
             fileBytes = 4096
             generationPresent = $true
             counts = [pscustomobject]@{ activeSpiceCurrent = 1 }
-            databasePath = 'C:\Users\Private\platform-cache.sqlite'
+            databasePath = 'C:\Users\example\platform-cache.sqlite'
         }
 
         $json = ConvertTo-DstMapPlatformDiagnosticState `
@@ -212,7 +212,7 @@ Describe 'Maps platform diagnostics' -Tag 'Pure' {
         $json | Should -Match 'DeepDesert'
         $json | Should -Not -Match 'private-field-id|12345|67890'
         $json | Should -Not -Match 'runtime-secret|details-secret|dimension-secret'
-        $json | Should -Not -Match 'databasePath|C:\\Users\\Private'
+        $json | Should -Not -Match 'databasePath|C:\\Users\\example'
     }
 }
 
