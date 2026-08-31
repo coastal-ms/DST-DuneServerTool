@@ -269,8 +269,10 @@ function loadSavedOrder() {
 function saveOrder(order: SidebarNavigationOrder) {
   try {
     localStorage.setItem(SIDEBAR_ORDER_STORAGE_KEY, JSON.stringify(order))
+    return true
   } catch {
     // Browser storage can be unavailable; the in-memory order still works.
+    return false
   }
 }
 
@@ -312,8 +314,9 @@ export function useSidebarNavigationOrder(
   useEffect(() => {
     if (!initial.migrated || migrationPersistedRef.current) return
     migrationPersistedRef.current = true
-    saveOrder(normalizedOrder)
-    try { localStorage.removeItem(SIDEBAR_ORDER_V1_STORAGE_KEY) } catch { /* ignore */ }
+    if (saveOrder(normalizedOrder)) {
+      try { localStorage.removeItem(SIDEBAR_ORDER_V1_STORAGE_KEY) } catch { /* ignore */ }
+    }
   }, [initial.migrated, normalizedOrder])
 
   const update = useCallback((change: (current: SidebarNavigationOrder) => SidebarNavigationOrder) => {

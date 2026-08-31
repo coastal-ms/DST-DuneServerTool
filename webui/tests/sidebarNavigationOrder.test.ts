@@ -1,4 +1,5 @@
-import { beforeEach, describe, expect, it } from 'vitest'
+import { renderHook } from '@testing-library/react'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   SIDEBAR_DIVIDER_LABEL_MAX_LENGTH,
   SIDEBAR_ORDER_STORAGE_KEY,
@@ -10,6 +11,7 @@ import {
   renameSidebarDivider,
   reorderSidebarNavigationItem,
   sanitizeSidebarDividerLabel,
+  useSidebarNavigationOrder,
 } from '../src/hooks/useSidebarNavigationOrder'
 import type { NavItem } from '../src/nav'
 
@@ -146,5 +148,27 @@ describe('sidebar navigation order v2', () => {
   it('uses distinct storage keys for v2 and migration input', () => {
     expect(SIDEBAR_ORDER_STORAGE_KEY).toBe('dst.sidebar.navigation-order.v2')
     expect(SIDEBAR_ORDER_V1_STORAGE_KEY).toBe('dst.sidebar.navigation-order.v1')
+  })
+
+  it('retains the v1 order when persisting its migration fails', () => {
+    const legacyOrder = {
+      version: 1,
+      groups: {
+        overview: ['/operations', '/'],
+        terminal: ['/commands'],
+      },
+    }
+    localStorage.setItem(SIDEBAR_ORDER_V1_STORAGE_KEY, JSON.stringify(legacyOrder))
+    const originalSetItem = Storage.prototype.setItem
+    const setItem = vi.spyOn(Storage.prototype, 'setItem')
+      .mockImplementation(function (key, value) {
+        if (key === SIDEBAR_ORDER_STORAGE_KEY) throw new DOMException('Quota exceeded', 'QuotaExceededError')
+        originalSetItem.call(this, key, value)
+      })
+
+    renderHook(() => useSidebarNavigationOrder(items, items))
+
+    expect(setItem).toHaveBeenCalledWith(SIDEBAR_ORDER_STORAGE_KEY, expect.any(String))
+    expect(localStorage.getItem(SIDEBAR_ORDER_V1_STORAGE_KEY)).toBe(JSON.stringify(legacyOrder))
   })
 })
