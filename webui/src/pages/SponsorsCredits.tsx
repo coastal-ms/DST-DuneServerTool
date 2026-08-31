@@ -40,14 +40,21 @@ export function SponsorsCredits() {
           </p>
         </div>
 
-        <ul className="mt-7 divide-y divide-border" aria-label="Project supporters">
+        <h3
+          id="duke-notes-title"
+          className="mt-7 text-base font-semibold tracking-tight text-accent-bright sm:ml-auto sm:w-80 sm:text-right"
+        >
+          Notes from Duke
+        </h3>
+
+        <ul className="mt-3 divide-y divide-border" aria-label="Project supporters">
           {SUPPORTER_CREDITS.map(credit => (
             <li
               key={credit.displayName}
               className="flex flex-col gap-1 py-4 first:pt-0 last:pb-0 sm:flex-row sm:items-center sm:justify-between sm:gap-6"
             >
               <span className="text-lg font-semibold text-text">{credit.displayName}</span>
-              <span className="text-sm leading-5 text-text-dim sm:max-w-xs sm:text-right">
+              <span className="text-sm leading-5 text-text-dim sm:w-80 sm:shrink-0 sm:text-right">
                 {credit.thanks}
               </span>
             </li>
