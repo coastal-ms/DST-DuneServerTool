@@ -54,10 +54,8 @@ describe('Sponsors & Credits', () => {
   it('uses the typed source as the complete, unique public credit list', () => {
     expect(SUPPORTER_CREDITS.map(credit => credit.displayName)).toEqual(EXPECTED_CREDIT_NAMES)
     expect(new Set(SUPPORTER_CREDITS.map(credit => credit.displayName)).size).toBe(18)
-    expect(SUPPORTER_CREDITS.filter(credit => credit.recognition === 'Project Supporter')).toHaveLength(17)
-    expect(SUPPORTER_CREDITS.filter(credit => credit.recognition === 'Discord Sponsor')).toEqual([
-      { displayName: 'Ed O.', recognition: 'Discord Sponsor' },
-    ])
+    expect(new Set(SUPPORTER_CREDITS.map(credit => credit.thanks)).size).toBe(18)
+    expect(SUPPORTER_CREDITS.every(credit => credit.thanks.startsWith('Thank') || credit.thanks.startsWith('You') || credit.thanks.startsWith('Your'))).toBe(true)
   })
 
   it('renders every public credit once with one separate support action', () => {
@@ -70,8 +68,9 @@ describe('Sponsors & Credits', () => {
       expect(within(credits).getAllByText(name, { exact: true })).toHaveLength(1)
     }
     expect(within(credits).queryByText('Hawk_I5')).not.toBeInTheDocument()
-    expect(within(credits).getAllByText('Project Supporter')).toHaveLength(17)
-    expect(within(credits).getByText('Discord Sponsor')).toBeInTheDocument()
+    for (const credit of SUPPORTER_CREDITS) {
+      expect(within(credits).getByText(credit.thanks)).toBeInTheDocument()
+    }
     expect(screen.getAllByRole('link', { name: /Buy Me a Coffee/ })).toHaveLength(1)
     expect(screen.getByRole('link', { name: /Buy Me a Coffee/ })).toHaveAttribute(
       'href',
