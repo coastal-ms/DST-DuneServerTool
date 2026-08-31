@@ -66,6 +66,8 @@ import PageHeader from "../components/PageHeader.astro";
   const stableRoot = document.querySelector<HTMLDivElement>("#stable-release");
   const releasesUrl =
     "https://api.github.com/repos/coastal-ms/DST-DuneServerTool/releases?per_page=30";
+  const latestStableUrl =
+    "https://api.github.com/repos/coastal-ms/DST-DuneServerTool/releases/latest";
 
   function link(
     label: string,
@@ -142,6 +144,35 @@ import PageHeader from "../components/PageHeader.astro";
     root.replaceChildren(box);
   }
 
+  async function loadStable(): Promise<void> {
+    if (!stableRoot) return;
+    let stable: ActiveTestRelease | null = null;
+    try {
+      const response = await fetch(latestStableUrl, {
+        headers: {
+          Accept: "application/vnd.github+json",
+        },
+      });
+      if (!response.ok) {
+        throw new Error(`GitHub returned HTTP ${response.status}`);
+      }
+      const payload = (await response.json()) as GitHubTestRelease;
+      stable = getLatestStableRelease([payload]);
+    } catch {
+      stable = null;
+    }
+
+    if (stable) {
+      stableRoot.replaceChildren(releaseCard(stable, true));
+      return;
+    }
+    const message = document.createElement("div");
+    message.className =
+      "rounded-xl border border-dune-border bg-dune-surface p-7 text-dune-muted";
+    message.textContent = "The stable release could not be loaded. Open GitHub Releases or try again shortly.";
+    stableRoot.replaceChildren(message);
+  }
+
   async function loadTests(): Promise<void> {
     if (!root) return;
     try {
@@ -154,19 +185,7 @@ import PageHeader from "../components/PageHeader.astro";
         throw new Error(`GitHub returned HTTP ${response.status}`);
       }
       const payload = (await response.json()) as GitHubTestRelease[];
-      const stable = getLatestStableRelease(payload);
       const releases = getActiveTestReleases(payload);
-      if (stableRoot) {
-        if (stable) {
-          stableRoot.replaceChildren(releaseCard(stable, true));
-        } else {
-          const message = document.createElement("div");
-          message.className =
-            "rounded-xl border border-dune-border bg-dune-surface p-7 text-dune-muted";
-          message.textContent = "The stable release could not be loaded. Open GitHub Releases or try again shortly.";
-          stableRoot.replaceChildren(message);
-        }
-      }
       if (releases.length === 0) {
         showMessage(
           "No active tests",
@@ -178,9 +197,6 @@ import PageHeader from "../components/PageHeader.astro";
       const cards = releases.map((release) => releaseCard(release, false));
       root.replaceChildren(...cards);
     } catch (error) {
-      if (stableRoot) {
-        stableRoot.replaceChildren();
-      }
       showMessage(
         "Could not load active tests",
         `${error instanceof Error ? error.message : String(error)}. Open GitHub Releases or try again shortly.`,
@@ -188,5 +204,6 @@ import PageHeader from "../components/PageHeader.astro";
     }
   }
 
+  void loadStable();
   void loadTests();
 </script>
