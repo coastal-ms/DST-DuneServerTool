@@ -67,6 +67,7 @@ describe('workspace manifest', () => {
     }).map(item => item.to)
     expect(adminPaths).toContain('/gameplay')
     expect(adminPaths).toContain('/operations')
+    expect(adminPaths).toContain('/sponsors')
     expect(adminPaths).not.toContain('/map')
     expect(adminPaths).not.toContain('/players')
     expect(adminPaths).not.toContain('/settings')
@@ -84,6 +85,7 @@ describe('workspace manifest', () => {
     expect(localPaths).toContain('/terminal')
     expect(localPaths).toContain('/solo')
     expect(localPaths).toContain('/map?view=lifecycle')
+    expect(localPaths).toContain('/sponsors')
   })
 
   it('keeps the primary rail server-first with one Gameplay Admin gateway', () => {
@@ -98,7 +100,7 @@ describe('workspace manifest', () => {
     expect(localItems.filter(item => item.label === 'Map SpinUp')).toHaveLength(1)
     expect(localItems.some(item => ['Map', 'Players', 'Bases', 'Vehicles', 'Economy'].includes(item.label))).toBe(false)
     expect(new Set(localItems.map(item => item.to)).size).toBe(localItems.length)
-    expect(localItems.length).toBeLessThanOrEqual(13)
+    expect(localItems.length).toBeLessThanOrEqual(14)
   })
 
   it('highlights Map SpinUp instead of Gameplay Admin on the lifecycle view', () => {

@@ -26,6 +26,23 @@ function freshnessLabel(state: MapFreshnessState, ageSeconds: number | null) {
   return `${state[0].toUpperCase()}${state.slice(1)} · ${ageSeconds}s old`
 }
 
+function LiveStateDemoDisclosure() {
+  return (
+    <aside
+      aria-label="Live State data disclosure"
+      className="card flex items-start gap-3 border-info/35 bg-info/10 p-4"
+    >
+      <Icon name="Info" size={17} className="mt-0.5 shrink-0 text-info" />
+      <div>
+        <h2 className="text-sm font-semibold text-text">Live State is an upcoming feature foundation</h2>
+        <p className="mt-1 text-sm leading-6 text-text-muted">
+          This view currently displays demo data for foundation and plumbing work. It is not live game telemetry.
+        </p>
+      </div>
+    </aside>
+  )
+}
+
 export function MapLiveState() {
   const [snapshot, setSnapshot] = useState<DeepDesertMapSnapshot | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -86,12 +103,29 @@ export function MapLiveState() {
   )
 
   if (!snapshot && !error) {
-    return <DataState state="loading" title="Loading cached Deep Desert state…" />
+    return (
+      <div className="flex min-w-0 flex-col gap-4">
+        <LiveStateDemoDisclosure />
+        <DataState state="loading" title="Loading cached Deep Desert state…" />
+      </div>
+    )
   }
   if (!snapshot && error) {
-    return <DataState state="error" title="Cached Maps API unavailable" message={error} />
+    return (
+      <div className="flex min-w-0 flex-col gap-4">
+        <LiveStateDemoDisclosure />
+        <DataState state="error" title="Cached Maps API unavailable" message={error} />
+      </div>
+    )
   }
-  if (!snapshot || !active || !activeData || !publicPoi) return null
+  if (!snapshot || !active || !activeData || !publicPoi) {
+    return (
+      <div className="flex min-w-0 flex-col gap-4">
+        <LiveStateDemoDisclosure />
+        <DataState state="unavailable" title="Live State data is unavailable" />
+      </div>
+    )
+  }
 
   const badgeState = refreshing ? 'refreshing' : active.freshness.state
   const summary = activeData.summary
@@ -99,6 +133,7 @@ export function MapLiveState() {
 
   return (
     <div className="flex min-w-0 flex-col gap-4">
+      <LiveStateDemoDisclosure />
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h2 className="text-base font-semibold text-text">Deep Desert live state</h2>
