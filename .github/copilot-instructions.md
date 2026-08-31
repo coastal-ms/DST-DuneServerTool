@@ -118,6 +118,11 @@ A session worktree may not have warm `webui/node_modules` — run `npm ci` in
   `-SkipVersionCheck` for deliberate intermediate builds).
 - Roll the `## [Unreleased]` section of `CHANGELOG.md` into a dated
   `## [X.Y.Z] - YYYY-MM-DD` entry as part of the release change.
+- **Supporter-credit release notes.** When a name is added to any supporter,
+  sponsor, or credits list, describe the public release-note change only as
+  `framework adjustment`. Do not identify the added person in `CHANGELOG.md`,
+  GitHub release notes, or other release-facing summaries; the credits UI/data
+  remains the source of truth for the current list.
 - **Every GitHub release MUST attach `DuneServerSetup.exe` as its sole asset.**
   Code-only releases break the in-app updater (it gates on an asset being
   present and silently reports "up to date"). After publishing, verify with

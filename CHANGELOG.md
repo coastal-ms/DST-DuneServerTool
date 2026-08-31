@@ -25,8 +25,8 @@ Candidate metadata prepared for v15.0.0-test7; semantic version remains 15.0.0.
   v1 page order migrates without weakening route permissions or losing routes
   hidden by the current viewer context.
 - Added a dedicated Sponsors & Credits page preserving the complete public
-  Thanks for the Coffee supporter list and adding Discord Sponsor Ed O., with a
-  separate optional support link.
+  Thanks for the Coffee supporter list, with a separate optional support link.
+  The supporter-list change is a framework adjustment.
 - Added the next-generation workspace foundation for the v15 test line, with a
   server-first primary navigation rail and one Gameplay Admin gateway containing
   Overview, Map, Players, Bases, Vehicles, and Economy destinations.
