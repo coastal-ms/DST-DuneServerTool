@@ -92,6 +92,20 @@ Describe 'Get-DunePreReleaseList filtering' {
         @($list).Count | Should -Be 1
         $list[0].tag | Should -Be 'v12.9.6-test1'
     }
+    It 'does not let an older stable mirror displace the previous active test' {
+        function global:Get-DuneReleases {
+            param([switch]$Force)
+            @(
+                [pscustomobject]@{ tag='v13.0.0-test3'; name='Current test'; releaseNotes=''; isPrerelease=$true; isDraft=$false; assetUrl='https://x/current.exe' }
+                [pscustomobject]@{ tag='v12.9.6-test1'; name='Stable channel mirror'; releaseNotes='same bits'; isPrerelease=$true; isDraft=$false; assetUrl='https://x/mirror.exe' }
+                [pscustomobject]@{ tag='v13.0.0-test2'; name='Previous test'; releaseNotes=''; isPrerelease=$true; isDraft=$false; assetUrl='https://x/previous.exe' }
+            )
+        }
+        $list = Get-DunePreReleaseList
+        @($list).Count | Should -Be 2
+        $list[0].tag | Should -Be 'v13.0.0-test3'
+        $list[1].tag | Should -Be 'v13.0.0-test2'
+    }
 }
 
 Describe 'Get-DuneSelectedRelease channel resolution' {

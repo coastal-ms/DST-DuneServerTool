@@ -187,7 +187,9 @@ function Get-DunePreReleaseList {
     if ($candidates.Count -gt 0 -and (Test-DuneStableMirrorRelease -Release $candidates[0])) {
         return @($candidates[0])
     }
-    return @($candidates | Select-Object -First 2)
+    return @($candidates |
+        Where-Object { -not (Test-DuneStableMirrorRelease -Release $_) } |
+        Select-Object -First 2)
 }
 
 # Resolve which release the in-app updater should act on for THIS install,
