@@ -349,8 +349,8 @@ export function Sidebar({ collapsed, onExpand }: Props) {
                     <li
                       key={entry.id}
                       className={collapsed
-                        ? `${index === 0 ? 'hidden' : 'my-2'} border-t border-accent/35`
-                        : 'mb-1 mt-2 flex items-center gap-2 px-3 text-[10px] font-semibold uppercase tracking-widest text-accent-bright/80 before:h-px before:flex-1 before:bg-accent/30 after:h-px after:flex-1 after:bg-accent/30'}
+                        ? `${index === 0 ? 'hidden' : 'my-2'} border-t border-accent/55`
+                        : 'mb-1 mt-2 flex items-center gap-2 px-3 text-[10px] font-semibold uppercase tracking-widest text-accent-bright before:h-px before:flex-1 before:bg-accent/55 after:h-px after:flex-1 after:bg-accent/55'}
                     >
                       {!collapsed && entry.label}
                     </li>
@@ -631,7 +631,7 @@ function SortableSidebarDivider({
         transition,
         opacity: isDragging ? 0.45 : undefined,
       }}
-      className="mt-2 flex min-h-11 items-center gap-1 rounded-lg border border-dashed border-accent/45 bg-accent/[0.08] px-1.5 py-1 shadow-sm shadow-black/30"
+      className="mt-2 flex min-h-11 items-center gap-1 rounded-lg border border-dashed border-accent/65 bg-accent/[0.14] px-1.5 py-1 shadow-sm shadow-black/30"
     >
       <button
         type="button"
@@ -658,7 +658,7 @@ function SortableSidebarDivider({
             event.currentTarget.blur()
           }
         }}
-        className="min-h-9 min-w-0 flex-1 rounded border border-transparent bg-transparent px-1.5 text-[10px] font-semibold uppercase tracking-widest text-accent-bright/90 focus:border-accent/60 focus:bg-surface focus:outline-none focus:ring-2 focus:ring-ibad"
+        className="min-h-9 min-w-0 flex-1 rounded border border-transparent bg-transparent px-1.5 text-[10px] font-semibold uppercase tracking-widest text-accent-bright focus:border-accent/70 focus:bg-surface focus:outline-none focus:ring-2 focus:ring-ibad"
       />
       <button
         type="button"

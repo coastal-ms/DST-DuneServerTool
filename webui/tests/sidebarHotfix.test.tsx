@@ -71,8 +71,8 @@ describe('sidebar hotfix links', () => {
     expect(screen.getByRole('button', { name: /Reorder Server Overview/ })).toBeInTheDocument()
     expect(screen.getByRole('textbox', { name: /Rename section Server Management/ })).toBeInTheDocument()
     const divider = screen.getByRole('textbox', { name: /Rename section Server Management/ })
-    expect(divider).toHaveClass('text-accent-bright/90')
-    expect(divider.parentElement).toHaveClass('border-accent/45', 'bg-accent/[0.08]')
+    expect(divider).toHaveClass('text-accent-bright')
+    expect(divider.parentElement).toHaveClass('border-accent/65', 'bg-accent/[0.14]')
     expect(screen.queryByRole('link', { name: 'Server Overview' })).not.toBeInTheDocument()
 
     fireEvent.click(screen.getByRole('button', { name: 'Done' }))
