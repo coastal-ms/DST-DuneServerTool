@@ -19,6 +19,9 @@ export type NavItem = {
   // Hide this item from the desktop sidebar while retaining it in other
   // navigation surfaces such as the classic top menu.
   sidebarHidden?: boolean
+  // Hide this item from a grouped desktop top-menu dropdown when another
+  // top-menu affordance links directly to the same route.
+  topMenuGroupHidden?: boolean
   // Owner-only items stay available on the host and to remote Owner accounts,
   // but are hidden from delegated remote Admin accounts. The API must enforce
   // the same boundary; this is only the navigation half.
@@ -45,7 +48,7 @@ export const LEGACY_NAV_ITEMS: readonly NavItem[] = [
   { to: '/database',    label: 'Database',       icon: 'Database',        group: 'database', ownerOnly: true, legacy: true },
   { to: '/sietches',    label: 'Sietches',     icon: 'Network',         group: 'database', ownerOnly: true, legacy: true },
   { to: '/settings',    label: 'Settings',     icon: 'Settings',        group: 'system', ownerOnly: true, workspaceId: 'settings' },
-  { to: '/sponsors',    label: 'Sponsors & Credits', icon: 'HeartHandshake', group: 'system', legacy: true },
+  { to: '/sponsors',    label: 'Sponsors & Credits', icon: 'HeartHandshake', group: 'system', topMenuGroupHidden: true, legacy: true },
   { to: '/setup',       label: 'Setup Wizard', icon: 'Wand2',           group: 'system', localOnly: true, sidebarHidden: true, legacy: true },
 ]
 

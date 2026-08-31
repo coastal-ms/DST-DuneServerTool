@@ -24,8 +24,9 @@ Candidate metadata prepared for v15.0.0-test7; semantic version remains 15.0.0.
   users can create, rename, move, remove, and reset labeled dividers. Existing
   v1 page order migrates without weakening route permissions or losing routes
   hidden by the current viewer context.
-- Added a dedicated Sponsors & Credits page recognizing Discord Sponsors
-  Hawk_I5 and Ed O., with a separate optional support link.
+- Added a dedicated Sponsors & Credits page preserving the complete public
+  Thanks for the Coffee supporter list and adding Discord Sponsor Ed O., with a
+  separate optional support link.
 - Added the next-generation workspace foundation for the v15 test line, with a
   server-first primary navigation rail and one Gameplay Admin gateway containing
   Overview, Map, Players, Bases, Vehicles, and Economy destinations.
@@ -73,8 +74,9 @@ Candidate metadata prepared for v15.0.0-test7; semantic version remains 15.0.0.
 - Clarified on every Maps Live State state that capability, freshness, and
   cached observations are server-derived while the plotted map and marker
   visualization remains preview scaffolding, not yet live game telemetry.
-- Replaced permanent sidebar and top-menu supporter chrome with the discoverable
-  Sponsors & Credits route.
+- Converted the former Thanks for the Coffee top-menu list into a direct link to
+  the Sponsors & Credits route, kept the optional support action page-local, and
+  retained Hawk_I5's established main-banner recognition.
 - Adapted Server Health's Game Servers card into compact stacked pod summaries
   on narrow screens while retaining the full desktop table and Game Ready State.
 - Prepared build and diagnostic metadata for the `v15.0.0-test1` test line.

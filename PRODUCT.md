@@ -20,7 +20,7 @@ DST ships as one Windows installer containing a PowerShell HTTP backend, React p
 
 ## Capabilities and Constraints
 
-Permissions and platform capability checks remain authoritative. Browser-local preferences are intentionally scoped to each browser profile and origin. Preview visualization must be distinguished from live-derived status and cache observations, and must not be presented as live telemetry.
+Permissions and platform capability checks remain authoritative. Browser-local preferences are intentionally scoped to each browser profile and origin. Preview visualization must be distinguished from live-derived status and cache observations, and must not be presented as live telemetry. Public supporter credits are centralized on the Sponsors & Credits route, with the optional Buy Me a Coffee action kept page-local; Hawk_I5's established main-banner recognition remains separate.
 
 ## Brand Commitments
 
