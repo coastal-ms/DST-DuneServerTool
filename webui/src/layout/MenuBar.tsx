@@ -10,6 +10,8 @@ import { getConsoleState, setConsoleVisible, type ConsoleState } from '../api/co
 import { isLocalViewer, isWindowsViewer } from '../util/viewer'
 import { isHorizontalSwipe, type TouchPoint } from '../util/mobileNavigationGesture'
 import { usePortalAccess } from '../auth/portalAccess'
+import { isShellHost } from '../util/shellBridge'
+import { requestPortalHandoff } from '../util/portalHandoff'
 
 type MenuKey = NavGroup | 'help'
 
@@ -375,7 +377,7 @@ export function MenuBar({ sidebarCollapsed, onToggleSidebar }: Props) {
               target="_blank"
               rel="noopener noreferrer"
               onClick={() => setOpen(null)}
-              className="w-full flex items-start gap-2 px-2.5 py-1.5 rounded text-sm text-text-muted hover:text-text hover:bg-surface-2 transition-colors text-left"
+              className="w-full flex items-start gap-2 px-2.5 py-1.5 rounded text-sm text-text hover:bg-surface-2 transition-colors text-left"
               title="Join the DST community Discord — install/setup help, hosting questions, Game Config tips, and release announcements."
             >
               <Icon name="MessagesSquare" size={14} className="mt-0.5" />
@@ -387,11 +389,44 @@ export function MenuBar({ sidebarCollapsed, onToggleSidebar }: Props) {
               </span>
               <Icon name="ExternalLink" size={11} className="text-text-dim mt-1" />
             </a>
+            <a
+              href="https://coastal-ms.github.io/DST-DuneServerTool/remote"
+              target="_blank"
+              rel="noopener noreferrer"
+              onClick={() => setOpen(null)}
+              className="w-full flex items-start gap-2 px-2.5 py-1.5 rounded text-sm text-text hover:bg-surface-2 transition-colors text-left"
+              title="Set up durable remote portal access with Tailscale Funnel."
+            >
+              <Icon name="ShieldCheck" size={14} className="mt-0.5" />
+              <span className="flex-1">
+                <span className="block">Remote Portal Setup</span>
+                <span className="block text-[11px] text-text-dim">
+                  Recommended Tailscale Funnel setup
+                </span>
+              </span>
+              <Icon name="ExternalLink" size={11} className="text-text-dim mt-1" />
+            </a>
+            {isShellHost() && (
+              <button
+                type="button"
+                onClick={() => { requestPortalHandoff(); setOpen(null) }}
+                className="w-full flex items-start gap-2 px-2.5 py-1.5 rounded text-sm text-text hover:bg-surface-2 transition-colors text-left"
+                title="Advanced local-only handoff. Remote users should use Remote Portal Setup."
+              >
+                <Icon name="ExternalLink" size={13} className="mt-0.5" />
+                <span className="flex-1">
+                  <span className="block">Open local portal in browser</span>
+                  <span className="block text-[11px] text-text-dim">
+                    Advanced local handoff
+                  </span>
+                </span>
+              </button>
+            )}
             {canAccessOwnerSurfaces && (
               <button
                 type="button"
                 onClick={onCreateDiagnosticsPackage}
-                className="w-full min-h-11 flex items-start gap-2 px-2.5 py-2 rounded text-sm text-text-muted hover:text-text hover:bg-surface-2 transition-colors text-left"
+                className="w-full min-h-11 flex items-start gap-2 px-2.5 py-2 rounded text-sm text-text hover:bg-surface-2 transition-colors text-left"
                 title="Creates a redacted diagnostics ZIP on the server host and opens it in Explorer."
               >
                 <Icon name="FileArchive" size={14} className="mt-0.5" />

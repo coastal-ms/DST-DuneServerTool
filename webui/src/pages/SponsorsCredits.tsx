@@ -11,30 +11,7 @@ export function SponsorsCredits() {
         description="Recognizing the people who help sustain Dune Server Tool."
       />
 
-      <section aria-labelledby="project-supporters-title" className="border-y border-border py-7 sm:py-9">
-        <div className="max-w-2xl">
-          <h2 id="project-supporters-title" className="text-lg font-semibold text-text">
-            Project Supporters
-          </h2>
-          <p className="mt-2 max-w-[68ch] text-sm leading-6 text-text-muted">
-            These supporters have helped sustain DST development and the time spent helping the
-            community. Thank you for standing behind the project.
-          </p>
-        </div>
-
-        <ul className="mt-7 divide-y divide-border" aria-label="Project supporters">
-          {SUPPORTER_CREDITS.map(credit => (
-            <li key={credit.displayName} className="flex items-center justify-between gap-4 py-4 first:pt-0 last:pb-0">
-              <span className="text-lg font-semibold text-text">{credit.displayName}</span>
-              <span className="shrink-0 text-xs font-medium uppercase tracking-wider text-text-dim">
-                {credit.recognition}
-              </span>
-            </li>
-          ))}
-        </ul>
-      </section>
-
-      <section aria-labelledby="support-dst-title" className="py-7 sm:py-9">
+      <section aria-labelledby="support-dst-title" className="border-y border-border py-7 sm:py-9">
         <h2 id="support-dst-title" className="text-base font-semibold text-text">Support DST</h2>
         <p className="mt-2 max-w-[68ch] text-sm leading-6 text-text-muted">
           If DST is useful to you and you would like to support its continued development,
@@ -50,6 +27,32 @@ export function SponsorsCredits() {
           Buy Me a Coffee
           <Icon name="ExternalLink" size={13} className="text-text-dim" />
         </a>
+      </section>
+
+      <section aria-labelledby="project-supporters-title" className="py-7 sm:py-9">
+        <div className="max-w-2xl">
+          <h2 id="project-supporters-title" className="text-lg font-semibold text-text">
+            Project Supporters
+          </h2>
+          <p className="mt-2 max-w-[68ch] text-sm leading-6 text-text-muted">
+            These supporters have helped sustain DST development and the time spent helping the
+            community. Thank you for standing behind the project.
+          </p>
+        </div>
+
+        <ul className="mt-7 divide-y divide-border" aria-label="Project supporters">
+          {SUPPORTER_CREDITS.map(credit => (
+            <li
+              key={credit.displayName}
+              className="flex flex-col gap-1 py-4 first:pt-0 last:pb-0 sm:flex-row sm:items-center sm:justify-between sm:gap-6"
+            >
+              <span className="text-lg font-semibold text-text">{credit.displayName}</span>
+              <span className="text-sm leading-5 text-text-dim sm:max-w-xs sm:text-right">
+                {credit.thanks}
+              </span>
+            </li>
+          ))}
+        </ul>
       </section>
     </div>
   )

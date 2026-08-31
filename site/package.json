@@ -12,7 +12,8 @@
     "build": "astro build",
     "preview": "astro preview",
     "check": "astro check",
-    "test:changelog": "node --experimental-strip-types scripts/check-changelog.mts"
+    "test:changelog": "node --experimental-strip-types scripts/check-changelog.mts",
+    "test:testing": "node --experimental-strip-types scripts/check-testing.mts"
   },
   "dependencies": {
     "@astrojs/check": "^0.9.10",

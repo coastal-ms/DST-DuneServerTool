@@ -8,14 +8,21 @@ import PageHeader from "../components/PageHeader.astro";
   description="Current DST pre-release builds, what they change, and how to test them."
 >
   <PageHeader
-    eyebrow="Pre-release"
-    title="Active test builds"
-    intro="Targeted builds awaiting real-world validation. These are experimental, may restart services, and are not the stable release."
+    eyebrow="Downloads"
+    title="Stable and test releases"
+    intro="Stable is the recommended install. Test builds are retained only for focused validation and remain secondary."
   />
 
   <section class="mx-auto max-w-5xl px-6 pb-20">
+    <div id="stable-release" class="mb-8" aria-live="polite">
+      <div class="rounded-xl border border-dune-accent/50 bg-dune-surface p-6 text-dune-muted">
+        Loading the recommended stable release from GitHub…
+      </div>
+    </div>
+
+    <h2 class="mb-3 text-xl font-semibold text-dune-text">Current test builds</h2>
     <div
-      class="mb-8 rounded-xl border border-amber-500/40 bg-amber-500/10 px-5 py-4 text-sm text-amber-200"
+      class="mb-6 rounded-xl border border-amber-500/40 bg-amber-500/10 px-5 py-4 text-sm text-amber-200"
     >
       <strong>Use test builds only when their notes match what you are testing.</strong>
       Back up first, follow the listed steps, and report results in the
@@ -50,12 +57,17 @@ import PageHeader from "../components/PageHeader.astro";
 <script>
   import {
     getActiveTestReleases,
+    getLatestStableRelease,
+    type ActiveTestRelease,
     type GitHubTestRelease,
   } from "../lib/testing";
 
   const root = document.querySelector<HTMLDivElement>("#active-tests");
+  const stableRoot = document.querySelector<HTMLDivElement>("#stable-release");
   const releasesUrl =
     "https://api.github.com/repos/coastal-ms/DST-DuneServerTool/releases?per_page=30";
+  const latestStableUrl =
+    "https://api.github.com/repos/coastal-ms/DST-DuneServerTool/releases/latest";
 
   function link(
     label: string,
@@ -73,6 +85,50 @@ import PageHeader from "../components/PageHeader.astro";
     return a;
   }
 
+  function releaseCard(
+    release: ActiveTestRelease,
+    stable: boolean,
+  ): HTMLElement {
+    const article = document.createElement("article");
+    article.className = stable
+      ? "rounded-xl border border-dune-accent/60 bg-dune-surface p-6 sm:p-8"
+      : "rounded-xl border border-dune-border bg-dune-surface p-6 sm:p-8";
+
+    const meta = document.createElement("div");
+    meta.className =
+      "font-mono text-xs uppercase tracking-wider text-dune-accent mb-2";
+    const date = release.publishedAt
+      ? new Date(release.publishedAt).toLocaleDateString()
+      : "Date unavailable";
+    meta.textContent = `${stable ? "Recommended stable" : "Test build"} · ${release.tag} · ${date}`;
+
+    const heading = document.createElement("h2");
+    heading.className = "text-2xl font-semibold text-dune-text";
+    heading.textContent = release.name;
+
+    const notes = document.createElement("pre");
+    notes.className =
+      "mt-5 whitespace-pre-wrap break-words font-sans text-sm leading-relaxed text-dune-muted";
+    notes.textContent = release.notes;
+
+    const actions = document.createElement("div");
+    actions.className = "mt-6 flex flex-wrap gap-3";
+    actions.append(
+      link(
+        stable ? "Download stable installer" : "Download test installer",
+        release.installerUrl,
+        stable,
+      ),
+      link("Open release notes", release.htmlUrl),
+    );
+    if (!stable) {
+      actions.append(link("Report test result", "https://discord.gg/tj2x7cywSC"));
+    }
+
+    article.append(meta, heading, notes, actions);
+    return article;
+  }
+
   function showMessage(title: string, body: string): void {
     if (!root) return;
     const box = document.createElement("div");
@@ -88,6 +144,35 @@ import PageHeader from "../components/PageHeader.astro";
     root.replaceChildren(box);
   }
 
+  async function loadStable(): Promise<void> {
+    if (!stableRoot) return;
+    let stable: ActiveTestRelease | null = null;
+    try {
+      const response = await fetch(latestStableUrl, {
+        headers: {
+          Accept: "application/vnd.github+json",
+        },
+      });
+      if (!response.ok) {
+        throw new Error(`GitHub returned HTTP ${response.status}`);
+      }
+      const payload = (await response.json()) as GitHubTestRelease;
+      stable = getLatestStableRelease([payload]);
+    } catch {
+      stable = null;
+    }
+
+    if (stable) {
+      stableRoot.replaceChildren(releaseCard(stable, true));
+      return;
+    }
+    const message = document.createElement("div");
+    message.className =
+      "rounded-xl border border-dune-border bg-dune-surface p-7 text-dune-muted";
+    message.textContent = "The stable release could not be loaded. Open GitHub Releases or try again shortly.";
+    stableRoot.replaceChildren(message);
+  }
+
   async function loadTests(): Promise<void> {
     if (!root) return;
     try {
@@ -99,9 +184,8 @@ import PageHeader from "../components/PageHeader.astro";
       if (!response.ok) {
         throw new Error(`GitHub returned HTTP ${response.status}`);
       }
-      const releases = getActiveTestReleases(
-        (await response.json()) as GitHubTestRelease[],
-      );
+      const payload = (await response.json()) as GitHubTestRelease[];
+      const releases = getActiveTestReleases(payload);
       if (releases.length === 0) {
         showMessage(
           "No active tests",
@@ -110,39 +194,7 @@ import PageHeader from "../components/PageHeader.astro";
         return;
       }
 
-      const cards = releases.map((release) => {
-        const article = document.createElement("article");
-        article.className =
-          "rounded-xl border border-dune-border bg-dune-surface p-6 sm:p-8";
-
-        const meta = document.createElement("div");
-        meta.className =
-          "font-mono text-xs uppercase tracking-wider text-dune-accent mb-2";
-        const date = release.publishedAt
-          ? new Date(release.publishedAt).toLocaleDateString()
-          : "Date unavailable";
-        meta.textContent = `${release.tag} · ${date}`;
-
-        const heading = document.createElement("h2");
-        heading.className = "text-2xl font-semibold text-dune-text";
-        heading.textContent = release.name;
-
-        const notes = document.createElement("pre");
-        notes.className =
-          "mt-5 whitespace-pre-wrap break-words font-sans text-sm leading-relaxed text-dune-muted";
-        notes.textContent = release.notes;
-
-        const actions = document.createElement("div");
-        actions.className = "mt-6 flex flex-wrap gap-3";
-        actions.append(
-          link("Download test installer", release.installerUrl, true),
-          link("Open release notes", release.htmlUrl),
-          link("Report test result", "https://discord.gg/tj2x7cywSC"),
-        );
-
-        article.append(meta, heading, notes, actions);
-        return article;
-      });
+      const cards = releases.map((release) => releaseCard(release, false));
       root.replaceChildren(...cards);
     } catch (error) {
       showMessage(
@@ -152,5 +204,6 @@ import PageHeader from "../components/PageHeader.astro";
     }
   }
 
+  void loadStable();
   void loadTests();
 </script>

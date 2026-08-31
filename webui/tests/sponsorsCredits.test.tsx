@@ -7,6 +7,9 @@ import { SponsorsCredits } from '../src/pages/SponsorsCredits'
 import { LEGACY_ROUTE_MANIFEST } from '../src/platform/routes'
 import { getVisibleNavItems } from '../src/nav'
 import { BrowserRouter } from '../src/router'
+import { PORTAL_HANDOFF_REQUEST_EVENT } from '../src/util/portalHandoff'
+
+const shellHost = vi.hoisted(() => vi.fn(() => true))
 
 vi.mock('../src/auth/portalAccess', () => ({
   usePortalAccess: () => ({ canAccessOwnerSurfaces: false }),
@@ -15,6 +18,10 @@ vi.mock('../src/auth/portalAccess', () => ({
 vi.mock('../src/util/viewer', () => ({
   isLocalViewer: () => false,
   isWindowsViewer: () => true,
+}))
+
+vi.mock('../src/util/shellBridge', () => ({
+  isShellHost: shellHost,
 }))
 
 const EXPECTED_CREDIT_NAMES = [
@@ -47,10 +54,8 @@ describe('Sponsors & Credits', () => {
   it('uses the typed source as the complete, unique public credit list', () => {
     expect(SUPPORTER_CREDITS.map(credit => credit.displayName)).toEqual(EXPECTED_CREDIT_NAMES)
     expect(new Set(SUPPORTER_CREDITS.map(credit => credit.displayName)).size).toBe(18)
-    expect(SUPPORTER_CREDITS.filter(credit => credit.recognition === 'Project Supporter')).toHaveLength(17)
-    expect(SUPPORTER_CREDITS.filter(credit => credit.recognition === 'Discord Sponsor')).toEqual([
-      { displayName: 'Ed O.', recognition: 'Discord Sponsor' },
-    ])
+    expect(new Set(SUPPORTER_CREDITS.map(credit => credit.thanks)).size).toBe(18)
+    expect(SUPPORTER_CREDITS.every(credit => credit.thanks.startsWith('Thank') || credit.thanks.startsWith('You') || credit.thanks.startsWith('Your'))).toBe(true)
   })
 
   it('renders every public credit once with one separate support action', () => {
@@ -63,13 +68,41 @@ describe('Sponsors & Credits', () => {
       expect(within(credits).getAllByText(name, { exact: true })).toHaveLength(1)
     }
     expect(within(credits).queryByText('Hawk_I5')).not.toBeInTheDocument()
-    expect(within(credits).getAllByText('Project Supporter')).toHaveLength(17)
-    expect(within(credits).getByText('Discord Sponsor')).toBeInTheDocument()
+    for (const credit of SUPPORTER_CREDITS) {
+      expect(within(credits).getByText(credit.thanks)).toBeInTheDocument()
+    }
     expect(screen.getAllByRole('link', { name: /Buy Me a Coffee/ })).toHaveLength(1)
     expect(screen.getByRole('link', { name: /Buy Me a Coffee/ })).toHaveAttribute(
       'href',
       'https://buymeacoffee.com/coastal_dst',
     )
+    const supportHeading = screen.getByRole('heading', { name: 'Support DST' })
+    const creditsHeading = screen.getByRole('heading', { name: 'Project Supporters' })
+    expect(supportHeading.compareDocumentPosition(creditsHeading) & Node.DOCUMENT_POSITION_FOLLOWING)
+      .toBeTruthy()
+  })
+
+  it('puts durable remote setup first and hides local portal handoff inside Help', () => {
+    const onPortalHandoff = vi.fn()
+    window.addEventListener(PORTAL_HANDOFF_REQUEST_EVENT, onPortalHandoff, { once: true })
+    render(
+      <BrowserRouter>
+        <MenuBar sidebarCollapsed={false} onToggleSidebar={vi.fn()} />
+      </BrowserRouter>,
+    )
+
+    expect(screen.queryByRole('button', { name: 'Open local portal in browser' })).not.toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: 'Help' }))
+    const remoteSetup = screen.getByRole('link', { name: /Remote Portal Setup/ })
+    expect(remoteSetup).toHaveAttribute(
+      'href',
+      'https://coastal-ms.github.io/DST-DuneServerTool/remote',
+    )
+    expect(remoteSetup).toHaveClass('text-text')
+    const localHandoff = screen.getByRole('button', { name: /Open local portal in browser/ })
+    expect(localHandoff).toHaveClass('text-text')
+    fireEvent.click(localHandoff)
+    expect(onPortalHandoff).toHaveBeenCalledTimes(1)
   })
 
   it('is public and preserves one direct top-menu route without crowding intermediate widths', () => {

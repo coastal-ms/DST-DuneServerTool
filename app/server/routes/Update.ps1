@@ -171,12 +171,25 @@ function Get-DuneReleases {
     return $script:DuneReleasesCache.releases
 }
 
-# Test-channel candidates: published pre-releases that actually carry the
-# installer asset, newest-first. These populate the Settings dropdown.
+function Test-DuneStableMirrorRelease {
+    param($Release)
+    $text = "$($Release.name)`n$($Release.releaseNotes)"
+    return ($text -match '(?i)\b(?:test|stable)(?:[-\s]+channel)?[-\s]+mirror\b')
+}
+
+# Test-channel candidates: the newest two published pre-releases that carry the
+# installer asset. A newest stable mirror stands alone so old test-cycle builds
+# do not remain selectable after the stable release ships.
 function Get-DunePreReleaseList {
     param([switch]$Force)
-    return @(Get-DuneReleases -Force:$Force |
+    $candidates = @(Get-DuneReleases -Force:$Force |
         Where-Object { $_.isPrerelease -and -not $_.isDraft -and $_.assetUrl })
+    if ($candidates.Count -gt 0 -and (Test-DuneStableMirrorRelease -Release $candidates[0])) {
+        return @($candidates[0])
+    }
+    return @($candidates |
+        Where-Object { -not (Test-DuneStableMirrorRelease -Release $_) } |
+        Select-Object -First 2)
 }
 
 # Resolve which release the in-app updater should act on for THIS install,
@@ -560,9 +573,9 @@ Register-DuneRoute -Method GET -Path '/api/update/check' -Handler {
 }
 
 # GET /api/update/prereleases[?force=1] — list test-channel candidate builds
-# (published pre-releases that carry the installer asset, newest-first) for the
-# Settings pre-release picker. `selectedTag` echoes the currently pinned tag;
-# an empty pin means "latest" (the first item).
+# (newest two published pre-releases that carry the installer asset) for the
+# Settings picker. Stable is always the primary channel; an empty pin means
+# "latest" (the first test item).
 Register-DuneRoute -Method GET -Path '/api/update/prereleases' -Handler {
     param($req, $res, $routeParams, $body)
     try {
