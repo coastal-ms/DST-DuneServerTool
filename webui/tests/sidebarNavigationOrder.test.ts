@@ -140,8 +140,9 @@ describe('sidebar navigation order v2', () => {
   })
 
   it('sanitizes control characters and bounds divider labels', () => {
-    const label = sanitizeSidebarDividerLabel(`  My\u0000  ${'x'.repeat(100)}  `)
+    const label = sanitizeSidebarDividerLabel(`  My\u0000\u0085  ${'x'.repeat(100)}  `)
     expect(label).not.toContain('\u0000')
+    expect(label).not.toContain('\u0085')
     expect(label.length).toBe(SIDEBAR_DIVIDER_LABEL_MAX_LENGTH)
   })
 

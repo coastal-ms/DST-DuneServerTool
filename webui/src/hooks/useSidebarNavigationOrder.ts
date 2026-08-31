@@ -40,7 +40,7 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 
 export function sanitizeSidebarDividerLabel(value: string) {
   return value
-    .replace(/[\u0000-\u001f\u007f]/g, '')
+    .replace(/[\u0000-\u001f\u007f-\u009f]/g, '')
     .replace(/\s+/g, ' ')
     .trim()
     .slice(0, SIDEBAR_DIVIDER_LABEL_MAX_LENGTH)
