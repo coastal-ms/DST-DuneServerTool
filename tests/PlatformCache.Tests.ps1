@@ -510,6 +510,60 @@ Describe 'Platform cache snapshot and refresh coordination' {
         $source.queryTimeoutSec | Should -Be 15
     }
 
+    It 'records bounded per-source refresh telemetry and next-due details' {
+        $source = Invoke-DunePlatformSourceRead -SourceKey 'maps.telemetry' -MaxRows 2 -Read {
+            [pscustomobject]@{ rows = @('one', 'two') }
+        }
+        $nextDue = [DateTime]::UtcNow.AddMinutes(1)
+        Set-DunePlatformSourceNextDue -SourceKey 'maps.telemetry' -NextDueAt $nextDue
+        Set-DunePlatformSourceDetails -SourceKey 'maps.telemetry' -Details @{
+            cadenceSeconds = 60
+            identityStatus = 'source-map-dimension'
+        }
+
+        $source.rows.Count | Should -Be 2
+        $telemetry = Get-DunePlatformSourceTelemetry -SourceKey 'maps.telemetry'
+        $telemetry.attemptCount | Should -Be 1
+        $telemetry.successCount | Should -Be 1
+        $telemetry.failureCount | Should -Be 0
+        $telemetry.lastRowCount | Should -Be 2
+        $telemetry.lastPayloadBytes | Should -BeGreaterThan 0
+        $telemetry.lastDurationMs | Should -BeGreaterOrEqual 0
+        ([datetime]$telemetry.nextDueAt).ToUniversalTime() |
+            Should -BeGreaterThan ([DateTime]::UtcNow)
+        (Get-DunePlatformSourceDetails -SourceKey 'maps.telemetry').cadenceSeconds | Should -Be 60
+    }
+
+    It 'records failure telemetry with the existing per-source backoff' {
+        {
+            Invoke-DunePlatformSourceRead -SourceKey 'maps.telemetry-failure' -Read {
+                throw 'simulated source failure'
+            }
+        } | Should -Throw
+
+        $telemetry = Get-DunePlatformSourceTelemetry -SourceKey 'maps.telemetry-failure'
+        $telemetry.attemptCount | Should -Be 1
+        $telemetry.successCount | Should -Be 0
+        $telemetry.failureCount | Should -Be 1
+        $telemetry.failureStreak | Should -Be 1
+        $telemetry.lastErrorCode | Should -Be 'source-read-failed'
+        ([datetime]$telemetry.nextAttemptAt).ToUniversalTime() |
+            Should -BeGreaterThan ([DateTime]::UtcNow)
+    }
+
+    It 'turns oversized diagnostics details into a bounded error record' {
+        $result = Set-DunePlatformSourceDetails `
+            -SourceKey 'maps.details-overflow' `
+            -Details @{ payload = ('x' * 20000) }
+        $details = Get-DunePlatformSourceDetails -SourceKey 'maps.details-overflow'
+
+        $result.ok | Should -BeFalse
+        $result.errorCode | Should -Be 'details-too-large'
+        $details.available | Should -BeFalse
+        $details.errorCode | Should -Be 'details-too-large'
+        ($details | ConvertTo-Json -Compress).Length | Should -BeLessThan 200
+    }
+
     It 'coalesces matching work and applies capped jittered backoff' {
         $script:calls = 0
         $first = Invoke-DunePlatformSingleFlight -Key 'aggregate:generation-1' -ResultReuseSec 30 -Script {

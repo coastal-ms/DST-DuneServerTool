@@ -129,6 +129,93 @@ Describe 'ConvertTo-DstWorldRestartDiagnosticState' -Tag 'Pure' {
     }
 }
 
+Describe 'Maps platform diagnostics' -Tag 'Pure' {
+    It 'exports cache health without cached rows, identifiers, or coordinates' {
+        $state = [pscustomobject]@{
+            available = $true
+            revision = 7
+            lastErrorCode = $null
+            snapshot = @{
+                layers = @(@{
+                    layerId = 'active-spice'
+                    sourceKey = 'maps.active-spice'
+                    observedAt = '2026-08-30T12:00:00Z'
+                    cachedAt = '2026-08-30T12:00:01Z'
+                    expiresAt = '2026-08-30T12:01:00Z'
+                    freshnessState = 'fresh'
+                    lastErrorCode = $null
+                    rowCount = 1
+                    truncated = $false
+                })
+                activeSpice = @(@{
+                    fieldId = 'private-field-id'
+                    x = 12345
+                    y = 67890
+                })
+            }
+        }
+        $health = [pscustomobject]@{
+            sources = @([pscustomobject]@{
+                sourceKey = 'maps.active-spice'
+                schemaFingerprint = ('a' * 64)
+                lastAttemptAt = '2026-08-30T12:00:00Z'
+                lastSuccessAt = '2026-08-30T12:00:00Z'
+                expiresAt = '2026-08-30T12:01:00Z'
+                lastErrorCode = $null
+                runtime = [pscustomobject]@{
+                    attemptCount = 2
+                    successCount = 2
+                    failureCount = 0
+                    failureStreak = 0
+                    lastAttemptAt = '2026-08-30T12:00:00Z'
+                    lastSuccessAt = '2026-08-30T12:00:00Z'
+                    lastDurationMs = 12
+                    lastRowCount = 1
+                    lastPayloadBytes = 400
+                    lastErrorCode = $null
+                    nextAttemptAt = $null
+                    nextDueAt = '2026-08-30T12:00:15Z'
+                    privateValue = 'runtime-secret'
+                }
+                details = [pscustomobject]@{
+                    cadenceSeconds = 15
+                    identityStatus = 'source-map-dimension'
+                    partitionStatus = 'unresolved'
+                    mapDimensions = @([pscustomobject]@{
+                        map = 'DeepDesert'
+                        dimensionIndex = 0
+                        privateValue = 'dimension-secret'
+                    })
+                    privateValue = 'details-secret'
+                }
+            })
+        }
+        $integrity = [pscustomobject]@{
+            available = $true
+            schemaVersion = 1
+            schemaChecksum = 'maps-v1'
+            quickCheck = 'ok'
+            fileBytes = 4096
+            generationPresent = $true
+            counts = [pscustomobject]@{ activeSpiceCurrent = 1 }
+            databasePath = 'C:\Users\example\platform-cache.sqlite'
+        }
+
+        $json = ConvertTo-DstMapPlatformDiagnosticState `
+            -State $state `
+            -Integrity $integrity `
+            -Health $health |
+            ConvertTo-Json -Depth 12
+
+        $json | Should -Match 'maps.active-spice'
+        $json | Should -Match 'source-map-dimension'
+        $json | Should -Match 'DeepDesert'
+        $json | Should -Not -Match 'private-field-id|12345|67890'
+        $json | Should -Not -Match 'runtime-secret|details-secret|dimension-secret'
+        $json | Should -Not -Match 'databasePath|C:\\Users\\example'
+    }
+}
+
 Describe 'Diagnostics route registration' -Tag 'Pure' {
     It 'collects only updater text evidence through the redaction path' {
         $routeFile = Join-Path (Get-DstRepoRoot) 'app\server\routes\Diagnostics.ps1'
@@ -145,6 +232,17 @@ Describe 'Diagnostics route registration' -Tag 'Pure' {
         $source | Should -Match 'Read-DstLogText -Path \$wv2'
         $source | Should -Match 'webview2-debug\.log \(complete, sanitized'
         $source | Should -Not -Match 'webview2-debug\.log was truncated'
+    }
+
+    It 'includes row-free Maps cache health through the redaction path' {
+        $routeFile = Join-Path (Get-DstRepoRoot) 'app\server\routes\Diagnostics.ps1'
+        $source = Get-Content -LiteralPath $routeFile -Raw
+
+        $source | Should -Match "maps-platform\.txt"
+        $source | Should -Match "Invoke-DunePlatformHelper -Command integrity"
+        $source | Should -Match "Get-DuneMapsRuntimeSourceHealth"
+        $source | Should -Match 'Invoke-DstRedaction -Text \$mapText'
+        $source | Should -Not -Match "snapshot\['activeSpice'\]"
     }
 
     It 'registers failed database operation cleanup at script scope' {

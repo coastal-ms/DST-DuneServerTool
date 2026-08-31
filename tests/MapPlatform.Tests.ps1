@@ -3,34 +3,44 @@ BeforeAll {
     Import-DstLib 'ApiContract.ps1'
     Import-DstLib 'PlatformRuntime.ps1'
     Import-DstLib 'PlatformCache.ps1'
+    if (-not (Get-Command Invoke-DuneSqlQuery -ErrorAction SilentlyContinue)) {
+        function global:Invoke-DuneSqlQuery {
+            throw 'MapPlatform integration test must mock Invoke-DuneSqlQuery.'
+        }
+    }
+    Import-DstLib 'MapData.ps1'
     Import-DstLib 'MapPlatform.ps1'
 
     function global:New-MapPlatformActiveResult {
         param(
             [ValidateSet('ready','partial')][string]$Status = 'ready',
             [int]$Count = 1,
-            [bool]$Truncated = $false
+            [bool]$Truncated = $false,
+            [datetime]$ObservedAt = [DateTime]::UtcNow.AddSeconds(-5)
         )
-        $observedAt = [DateTime]::UtcNow.AddSeconds(-5).ToString('o')
-        $fields = @(1..$Count | ForEach-Object {
-            [ordered]@{
-                fieldId = [string](100 + $_)
-                map = 'DeepDesert'
-                dimensionIndex = 0
-                fieldKindId = 1
-                state = 'active'
-                spawnTime = 605236.5
-                valueRemaining = 150000
-                position = [ordered]@{
-                    status = 'unresolved'
-                    coordinateSystem = $null
-                    x = $null
-                    y = $null
-                    z = $null
-                    reason = 'No independently verified coordinate columns are available.'
+        $observedAtText = $ObservedAt.ToUniversalTime().ToString('o')
+        $fields = @()
+        if ($Count -gt 0) {
+            $fields = @(1..$Count | ForEach-Object {
+                [ordered]@{
+                    fieldId = [string](100 + $_)
+                    map = 'DeepDesert'
+                    dimensionIndex = 0
+                    fieldKindId = 1
+                    state = 'active'
+                    spawnTime = 605236.5
+                    valueRemaining = 150000
+                    position = [ordered]@{
+                        status = 'unresolved'
+                        coordinateSystem = $null
+                        x = $null
+                        y = $null
+                        z = $null
+                        reason = 'No independently verified coordinate columns are available.'
+                    }
                 }
-            }
-        })
+            })
+        }
         return [ordered]@{
             ok = $true
             status = $Status
@@ -43,7 +53,7 @@ BeforeAll {
             partialReasons = @($(if ($Truncated) { 'row-limit' }))
             freshness = [ordered]@{
                 state = 'fresh'
-                observedAt = $observedAt
+                observedAt = $observedAtText
                 ageSeconds = 5
                 staleAfterSec = 60
             }
@@ -52,6 +62,46 @@ BeforeAll {
                 spatialStatus = 'unresolved'
             }
         }
+    }
+
+    function global:New-MapPlatformCapabilityResult {
+        param([datetime]$ObservedAt = [DateTime]::UtcNow.AddMinutes(-1))
+        return [ordered]@{
+            ok = $true
+            status = 'partial'
+            schemaFingerprint = ('a' * 64)
+            source = [ordered]@{
+                adapter = 'postgresql'
+                schema = 'dune'
+                capabilityProbe = [ordered]@{
+                    cached = $true
+                    cadenceSeconds = 1800
+                    observedAt = $ObservedAt.ToUniversalTime().ToString('o')
+                    expiresAt = $ObservedAt.AddMinutes(30).ToUniversalTime().ToString('o')
+                }
+            }
+            activeSpice = [ordered]@{
+                available = $true
+                spatialStatus = 'unresolved'
+            }
+            publicStaticPoi = [ordered]@{
+                available = $false
+            }
+        }
+    }
+
+    function global:New-MapPlatformSourceReadResult {
+        param(
+            [Parameter(Mandatory)][string]$SourceKey,
+            [Parameter(Mandatory)]$ActiveResult,
+            [datetime]$ObservedAt = [DateTime]::UtcNow.AddMinutes(-1)
+        )
+        if ($SourceKey -eq 'maps.schema') {
+            return [pscustomobject]@{
+                capability = New-MapPlatformCapabilityResult -ObservedAt $ObservedAt
+            }
+        }
+        return [pscustomobject]@{ active = $ActiveResult }
     }
 
     function global:ConvertTo-MapPlatformSnapshot {
@@ -71,6 +121,8 @@ BeforeAll {
 
 AfterAll {
     Remove-Item function:global:New-MapPlatformActiveResult -ErrorAction SilentlyContinue
+    Remove-Item function:global:New-MapPlatformCapabilityResult -ErrorAction SilentlyContinue
+    Remove-Item function:global:New-MapPlatformSourceReadResult -ErrorAction SilentlyContinue
     Remove-Item function:global:ConvertTo-MapPlatformSnapshot -ErrorAction SilentlyContinue
 }
 
@@ -82,7 +134,10 @@ Describe 'Maps platform cache generation' -Tag 'MapPlatform' {
 
     It 'projects the active-spice source into one coherent bounded generation' {
         Mock Invoke-DunePlatformSourceRead {
-            [pscustomobject]@{ active = New-MapPlatformActiveResult }
+            param($SourceKey)
+            New-MapPlatformSourceReadResult `
+                -SourceKey $SourceKey `
+                -ActiveResult (New-MapPlatformActiveResult)
         }
 
         $generation = New-DuneMapsPlatformGeneration -Ip '192.0.2.1'
@@ -97,15 +152,196 @@ Describe 'Maps platform cache generation' -Tag 'MapPlatform' {
         $generation.layers[0].rowCount | Should -Be 1
         $generation.layers[1].freshnessState | Should -Be 'unavailable'
         $generation.layers[1].lastErrorCode | Should -Be 'privacy-proof-unavailable'
+        @($generation.sources.sourceKey) | Should -Contain 'maps.schema'
+        (Get-DunePlatformSourceDetails -SourceKey 'maps.schema').cadenceSeconds | Should -Be 1800
+        $activeDetails = Get-DunePlatformSourceDetails -SourceKey 'maps.active-spice'
+        $activeDetails.identityStatus | Should -Be 'source-map-dimension'
+        $activeDetails.partitionStatus | Should -Be 'unresolved'
+        $activeDetails.mapDimensions[0].map | Should -Be 'DeepDesert'
+        $activeDetails.mapDimensions[0].dimensionIndex | Should -Be 0
         @($generation.publicPois).Count | Should -Be 0
         ($generation | ConvertTo-Json -Depth 12 -Compress).Length | Should -BeLessThan (5MB)
     }
 
+    It 'bounds diagnostics dimensions without discarding a valid source result' {
+        $script:wideActive = New-MapPlatformActiveResult -Count 200
+        for ($index = 0; $index -lt $script:wideActive.fields.Count; $index++) {
+            $script:wideActive.fields[$index].map = "DeepDesert_$index"
+            $script:wideActive.fields[$index].dimensionIndex = $index
+        }
+        Mock Invoke-DunePlatformSourceRead {
+            param($SourceKey)
+            New-MapPlatformSourceReadResult -SourceKey $SourceKey -ActiveResult $script:wideActive
+        }
+
+        $generation = New-DuneMapsPlatformGeneration -Ip '192.0.2.1'
+        $details = Get-DunePlatformSourceDetails -SourceKey 'maps.active-spice'
+
+        $generation.layers[0].freshnessState | Should -Be 'fresh'
+        @($generation.activeSpiceCurrent).Count | Should -Be 200
+        $details.mapDimensionCount | Should -Be 200
+        $details.mapDimensionsTruncated | Should -BeTrue
+        @($details.mapDimensions).Count | Should -Be 64
+    }
+
+    It 'keeps diagnostics telemetry failures from invalidating a live generation' {
+        Mock Invoke-DunePlatformSourceRead {
+            param($SourceKey)
+            New-MapPlatformSourceReadResult `
+                -SourceKey $SourceKey `
+                -ActiveResult (New-MapPlatformActiveResult)
+        }
+        Mock Set-DunePlatformSourceDetails { throw 'simulated details failure' }
+        Mock Set-DunePlatformSourceNextDue { throw 'simulated schedule telemetry failure' }
+
+        $generation = New-DuneMapsPlatformGeneration -Ip '192.0.2.1'
+
+        $generation.layers[0].freshnessState | Should -Be 'fresh'
+        @($generation.activeSpiceCurrent).Count | Should -Be 1
+    }
+
+    It 'runs slow schema and active sources independently without repeating the DB probe' {
+        Clear-DuneMapDataCapabilityCache
+        $script:mapPlatformSqlCalls = 0
+        Mock Invoke-DuneSqlQuery {
+            param($Sql)
+            $script:mapPlatformSqlCalls++
+            if ($Sql -match 'information_schema\.columns') {
+                $rows = @('field_id', 'map', 'dimension_index', 'spawn_time', 'value_remaining', 'field_kind_id') |
+                    ForEach-Object { ,@('column', 'resourcefield_state', $_, 'text', 'text', 'NO') }
+                return @{
+                    ok = $true
+                    columns = @('item_kind', 'object_name', 'member_name', 'data_type', 'udt_name', 'is_nullable')
+                    rows = @($rows)
+                    durationMs = 4
+                }
+            }
+            return @{
+                ok = $true
+                columns = @(
+                    'field_id', 'map', 'dimension_index', 'spawn_time',
+                    'value_remaining', 'field_kind_id', 'x', 'y', 'z',
+                    'coordinate_system', 'source_count'
+                )
+                rows = @(,@('101', 'DeepDesert', '0', '605236.5', '150000', '1', $null, $null, $null, '', '1'))
+                durationMs = 5
+                truncated = $false
+            }
+        }
+        $now = [datetime]'2026-08-30T12:00:00Z'
+
+        $first = New-DuneMapsPlatformGeneration -Ip '192.0.2.1' -Now $now
+        $table = Get-DunePlatformCoordinationTable
+        [void]$table.Remove('platform-flight:source:maps.schema')
+        [void]$table.Remove('platform-flight:source:maps.active-spice')
+        $second = New-DuneMapsPlatformGeneration `
+            -Ip '192.0.2.1' `
+            -PreviousSnapshot (ConvertTo-MapPlatformSnapshot $first) `
+            -Now $now.AddMinutes(1)
+
+        $script:mapPlatformSqlCalls | Should -Be 3
+        @($first.activeSpiceHistory).Count | Should -Be 1
+        @($second.activeSpiceHistory).Count | Should -Be 0
+        (Get-DunePlatformSourceTelemetry -SourceKey 'maps.schema').attemptCount | Should -Be 2
+        (Get-DunePlatformSourceTelemetry -SourceKey 'maps.active-spice').attemptCount | Should -Be 2
+        (Get-DunePlatformSourceDetails -SourceKey 'maps.schema').cached | Should -BeTrue
+    }
+
+    It 'invalidates the structural cache after a schema-signature query failure' {
+        Clear-DuneMapDataCapabilityCache
+        $script:mapPlatformSqlCalls = 0
+        Mock Invoke-DuneSqlQuery {
+            param($Sql)
+            $script:mapPlatformSqlCalls++
+            if ($Sql -match 'information_schema\.columns') {
+                $rows = @('field_id', 'map', 'dimension_index', 'spawn_time', 'value_remaining', 'field_kind_id') |
+                    ForEach-Object { ,@('column', 'resourcefield_state', $_, 'text', 'text', 'NO') }
+                return @{
+                    ok = $true
+                    columns = @('item_kind', 'object_name', 'member_name', 'data_type', 'udt_name', 'is_nullable')
+                    rows = @($rows)
+                    durationMs = 4
+                }
+            }
+            return @{
+                ok = $false
+                error = 'ERROR: column world_x does not exist (SQLSTATE 42703)'
+                durationMs = 5
+            }
+        }
+
+        $generation = New-DuneMapsPlatformGeneration -Ip '192.0.2.1'
+        $nextCapability = Get-DuneMapDataCapabilities -Ip '192.0.2.1'
+
+        $generation.layers[0].freshnessState | Should -Be 'unavailable'
+        $generation.layers[0].lastErrorCode | Should -Be 'schema-changed'
+        $script:mapPlatformSqlCalls | Should -Be 3
+        $nextCapability.source.capabilityProbe.cached | Should -BeFalse
+    }
+
+    It 'continues active refresh from stale capability evidence while schema backs off' {
+        Clear-DuneMapDataCapabilityCache
+        $script:schemaProbeFails = $false
+        $script:mapPlatformSchemaCalls = 0
+        $script:mapPlatformActiveCalls = 0
+        Mock Invoke-DuneSqlQuery {
+            param($Sql)
+            if ($Sql -match 'information_schema\.columns') {
+                $script:mapPlatformSchemaCalls++
+                if ($script:schemaProbeFails) {
+                    return @{ ok = $false; error = 'transient schema connection failure'; durationMs = 4 }
+                }
+                $rows = @('field_id', 'map', 'dimension_index', 'spawn_time', 'value_remaining', 'field_kind_id') |
+                    ForEach-Object { ,@('column', 'resourcefield_state', $_, 'text', 'text', 'NO') }
+                return @{
+                    ok = $true
+                    columns = @('item_kind', 'object_name', 'member_name', 'data_type', 'udt_name', 'is_nullable')
+                    rows = @($rows)
+                    durationMs = 4
+                }
+            }
+            $script:mapPlatformActiveCalls++
+            return @{
+                ok = $true
+                columns = @(
+                    'field_id', 'map', 'dimension_index', 'spawn_time',
+                    'value_remaining', 'field_kind_id', 'x', 'y', 'z',
+                    'coordinate_system', 'source_count'
+                )
+                rows = @(,@('101', 'DeepDesert', '0', '605236.5', '150000', '1', $null, $null, $null, '', '1'))
+                durationMs = 5
+                truncated = $false
+            }
+        }
+        $old = [DateTime]::UtcNow.AddHours(-1)
+        $null = Get-DuneMapDataCapabilities `
+            -Ip '192.0.2.1' `
+            -Now $old `
+            -CacheTtlSec 1
+        $script:schemaProbeFails = $true
+
+        $generation = New-DuneMapsPlatformGeneration -Ip '192.0.2.1'
+        $schemaSource = @($generation.sources | Where-Object sourceKey -eq 'maps.schema')[0]
+        $table = Get-DunePlatformCoordinationTable
+        [void]$table.Remove('platform-flight:source:maps.schema')
+        [void]$table.Remove('platform-flight:source:maps.active-spice')
+        $nextGeneration = New-DuneMapsPlatformGeneration -Ip '192.0.2.1'
+
+        $generation.layers[0].freshnessState | Should -Be 'fresh'
+        $nextGeneration.layers[0].freshnessState | Should -Be 'fresh'
+        @($generation.activeSpiceCurrent).Count | Should -Be 1
+        $schemaSource.lastErrorCode | Should -Be 'schema-probe-failed'
+        (Get-DunePlatformSourceDetails -SourceKey 'maps.schema').stale | Should -BeTrue
+        $script:mapPlatformSchemaCalls | Should -Be 2
+        $script:mapPlatformActiveCalls | Should -Be 2
+    }
+
     It 'preserves partial and truncation state instead of presenting complete success' {
         Mock Invoke-DunePlatformSourceRead {
-            [pscustomobject]@{
-                active = New-MapPlatformActiveResult -Status partial -Count 2 -Truncated $true
-            }
+            param($SourceKey)
+            New-MapPlatformSourceReadResult `
+                -SourceKey $SourceKey `
+                -ActiveResult (New-MapPlatformActiveResult -Status partial -Count 2 -Truncated $true)
         }
 
         $generation = New-DuneMapsPlatformGeneration -Ip '192.0.2.1'
@@ -113,6 +349,61 @@ Describe 'Maps platform cache generation' -Tag 'MapPlatform' {
         $generation.layers[0].freshnessState | Should -Be 'partial'
         $generation.layers[0].truncated | Should -BeTrue
         $generation.layers[0].rowCount | Should -Be 2
+        @($generation.activeSpiceHistory).Count | Should -Be 0
+    }
+
+    It 'samples unchanged complete observations only at the sparse heartbeat' {
+        $initialTime = [datetime]'2026-08-30T12:00:00Z'
+        $script:activeFixture = New-MapPlatformActiveResult -ObservedAt $initialTime
+        Mock Invoke-DunePlatformSourceRead {
+            param($SourceKey)
+            New-MapPlatformSourceReadResult `
+                -SourceKey $SourceKey `
+                -ActiveResult $script:activeFixture
+        }
+        $initial = New-DuneMapsPlatformGeneration -Ip '192.0.2.1' -Now $initialTime
+        $prior = ConvertTo-MapPlatformSnapshot $initial
+
+        $script:activeFixture = New-MapPlatformActiveResult -ObservedAt $initialTime.AddMinutes(5)
+        $unchanged = New-DuneMapsPlatformGeneration `
+            -Ip '192.0.2.1' `
+            -PreviousSnapshot $prior `
+            -Now $initialTime.AddMinutes(5)
+        $heartbeat = New-DuneMapsPlatformGeneration `
+            -Ip '192.0.2.1' `
+            -PreviousSnapshot $prior `
+            -Now $initialTime.AddMinutes(16)
+
+        @($initial.activeSpiceHistory).Count | Should -Be 1
+        @($unchanged.activeSpiceHistory).Count | Should -Be 0
+        @($heartbeat.activeSpiceHistory).Count | Should -Be 1
+    }
+
+    It 'records a changed complete sample without inventing an inactive event' {
+        $initialTime = [datetime]'2026-08-30T12:00:00Z'
+        $script:activeFixture = New-MapPlatformActiveResult -ObservedAt $initialTime
+        Mock Invoke-DunePlatformSourceRead {
+            param($SourceKey)
+            New-MapPlatformSourceReadResult `
+                -SourceKey $SourceKey `
+                -ActiveResult $script:activeFixture
+        }
+        $initial = New-DuneMapsPlatformGeneration -Ip '192.0.2.1' -Now $initialTime
+        $prior = ConvertTo-MapPlatformSnapshot $initial
+
+        $script:activeFixture = New-MapPlatformActiveResult -Count 2 -ObservedAt $initialTime.AddMinutes(1)
+        $changed = New-DuneMapsPlatformGeneration `
+            -Ip '192.0.2.1' `
+            -PreviousSnapshot $prior `
+            -Now $initialTime.AddMinutes(1)
+        $script:activeFixture = New-MapPlatformActiveResult -Count 0 -ObservedAt $initialTime.AddMinutes(2)
+        $empty = New-DuneMapsPlatformGeneration `
+            -Ip '192.0.2.1' `
+            -PreviousSnapshot $prior `
+            -Now $initialTime.AddMinutes(2)
+
+        @($changed.activeSpiceHistory).Count | Should -Be 2
+        @($empty.activeSpiceHistory).Count | Should -Be 0
     }
 
     It 'retains prior rows as stale when the database or schema is unavailable' {
@@ -154,6 +445,8 @@ Describe 'Maps platform cache generation' -Tag 'MapPlatform' {
         $generation.layers[0].freshnessState | Should -Be 'unavailable'
         $generation.layers[0].lastErrorCode | Should -Be 'source-read-failed'
         @($generation.activeSpiceCurrent).Count | Should -Be 0
+        $generation.layers[0].payloadSha256 |
+            Should -Be (Get-DuneMapsPayloadSha256 -Value @())
     }
 
     It 'retains a successful empty observation as stale after a failed refresh' {
@@ -225,14 +518,23 @@ Describe 'Maps platform cache generation' -Tag 'MapPlatform' {
         (Get-Command Invoke-DuneMapsPlatformRefresh).Definition | Should -Not -Match 'GetNewClosure'
     }
 
-    It 'does not schedule before the active source backoff window' {
+    It 'honors active backoff without letting schema backoff stall active cadence' {
         $table = Get-DunePlatformCoordinationTable
+        $table["platform-backoff:$script:DuneMapsSchemaSourceKey"] = [pscustomobject]@{
+            nextAttemptAt = [DateTime]::UtcNow.AddSeconds(90)
+        }
         $table["platform-backoff:$script:DuneMapsActiveSpiceSourceKey"] = [pscustomobject]@{
             nextAttemptAt = [DateTime]::UtcNow.AddSeconds(90)
         }
         try {
+            [void]$table.Remove("platform-backoff:$script:DuneMapsActiveSpiceSourceKey")
+            (Get-DuneMapsScheduledRefreshDelaySec -Sample 0) | Should -Be 13.5
+            $table["platform-backoff:$script:DuneMapsActiveSpiceSourceKey"] = [pscustomobject]@{
+                nextAttemptAt = [DateTime]::UtcNow.AddSeconds(90)
+            }
             (Get-DuneMapsScheduledRefreshDelaySec -Sample 0) | Should -BeGreaterThan 85
         } finally {
+            [void]$table.Remove("platform-backoff:$script:DuneMapsSchemaSourceKey")
             [void]$table.Remove("platform-backoff:$script:DuneMapsActiveSpiceSourceKey")
         }
     }
@@ -257,7 +559,10 @@ Describe 'Maps v1 cached API contracts' -Tag 'MapPlatform' {
     BeforeEach {
         $script:DunePlatformSnapshotState = $null
         Mock Invoke-DunePlatformSourceRead {
-            [pscustomobject]@{ active = New-MapPlatformActiveResult }
+            param($SourceKey)
+            New-MapPlatformSourceReadResult `
+                -SourceKey $SourceKey `
+                -ActiveResult (New-MapPlatformActiveResult)
         }
         $generation = New-DuneMapsPlatformGeneration -Ip '192.0.2.1'
         $snapshot = ConvertTo-MapPlatformSnapshot $generation
@@ -271,12 +576,18 @@ Describe 'Maps v1 cached API contracts' -Tag 'MapPlatform' {
 
         $response.schemaVersion | Should -Be 1
         $response.capabilities | Should -Contain 'map.live-cache'
+        $response.data.map.identityStatus | Should -Be 'synthetic-current'
         $active.source | Should -Be 'cache'
         $active.count | Should -Be 1
         $active.data.summary.activeCount | Should -Be 1
         $active.data.summary.spatialStatus | Should -Be 'unresolved'
+        $active.data.summary.historySemantics | Should -Be 'sampled-observations'
+        $active.data.summary.historyLimit | Should -Be 250
         $active.data.items[0].position.status | Should -Be 'unresolved'
         $active.data.items[0].position.x | Should -BeNullOrEmpty
+        @($response.data.health.sources.sourceKey) | Should -Contain 'maps.schema'
+        $response.data.health.sources[0].PSObject.Properties.Name | Should -Not -Contain 'runtime'
+        $response.data.health.sources[0].PSObject.Properties.Name | Should -Not -Contain 'details'
         $poi.source | Should -Be 'unavailable'
         $poi.error.code | Should -Be 'privacy-proof-unavailable'
     }
@@ -285,6 +596,9 @@ Describe 'Maps v1 cached API contracts' -Tag 'MapPlatform' {
         (Get-Command Get-DuneMapsCatalogResponse).Definition | Should -Not -Match 'Invoke-DunePlatformSourceRead'
         (Get-Command Get-DuneDeepDesertMapResponse).Definition | Should -Not -Match 'Invoke-DunePlatformSourceRead'
         (Get-Command Get-DuneDeepDesertLayerResponse).Definition | Should -Not -Match 'Invoke-DunePlatformHelper'
+        (Get-Command Get-DuneMapsCacheHealth).Definition | Should -Not -Match 'SourceTelemetry|SourceDetails'
+        (Get-Command New-DuneMapsActiveSpiceLayerEnvelope).Definition |
+            Should -Not -Match 'SourceTelemetry|SourceDetails'
 
         $catalog = Get-DuneMapsCatalogResponse -RequestId 'request-2'
         $layer = Get-DuneDeepDesertLayerResponse -RequestId 'request-3' -LayerId active-spice
@@ -345,9 +659,43 @@ Describe 'Maps v1 cached API contracts' -Tag 'MapPlatform' {
             Should -Be 'stale'
     }
 
+    It 'bounds compatible history delivery without changing the v1 layer shape' {
+        $snapshot = (Get-DunePlatformSnapshot).snapshot |
+            ConvertTo-Json -Depth 12 |
+            ConvertFrom-Json
+        $now = [DateTime]::UtcNow
+        $snapshot.activeSpiceHistory = @(1..300 | ForEach-Object {
+            [pscustomobject]@{
+                farmId = 'local-farm'
+                mapId = 'deep-desert'
+                partitionId = 'current'
+                fieldId = "field-$_"
+                state = 'active'
+                coordinateSpace = 'none'
+                sourceFingerprint = ('a' * 64)
+                observedAt = $now.AddSeconds(-$_).ToString('o')
+                expiresAt = $now.AddMinutes(1).ToString('o')
+            }
+        })
+        $null = Set-DunePlatformSnapshot -Snapshot $snapshot
+
+        $active = (Get-DuneDeepDesertMapResponse -RequestId 'history-bound').data.layers[0]
+
+        @($active.data.history).Count | Should -Be 250
+        $active.data.summary.historyCount | Should -Be 250
+        $active.data.summary.historyLimit | Should -Be 250
+        $active.data.summary.historyTruncated | Should -BeTrue
+        @($active.Keys | Sort-Object) | Should -Be @(
+            'count', 'data', 'error', 'freshness', 'layerId', 'page', 'source'
+        )
+    }
+
     It 'keeps the maximum active-spice API payload below the planned bound' {
         Mock Invoke-DunePlatformSourceRead {
-            [pscustomobject]@{ active = New-MapPlatformActiveResult -Count 200 }
+            param($SourceKey)
+            New-MapPlatformSourceReadResult `
+                -SourceKey $SourceKey `
+                -ActiveResult (New-MapPlatformActiveResult -Count 200)
         }
         $generation = New-DuneMapsPlatformGeneration -Ip '192.0.2.1'
         $null = Set-DunePlatformSnapshot -Snapshot (ConvertTo-MapPlatformSnapshot $generation)
@@ -448,7 +796,10 @@ Describe 'Maps v1 cached API contracts' -Tag 'MapPlatform' {
                 Should -Be 'unavailable'
 
             Mock Invoke-DunePlatformSourceRead {
-                [pscustomobject]@{ active = New-MapPlatformActiveResult }
+                param($SourceKey)
+                New-MapPlatformSourceReadResult `
+                    -SourceKey $SourceKey `
+                    -ActiveResult (New-MapPlatformActiveResult)
             }
             $fresh = New-DuneMapsPlatformGeneration `
                 -Ip '192.0.2.1' `

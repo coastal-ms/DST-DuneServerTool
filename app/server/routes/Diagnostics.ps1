@@ -217,6 +217,140 @@ function Read-DstLogTail {
     return Read-DstLogText -Path $Path -TailBytes $MaxBytes
 }
 
+function Get-DstMapDiagnosticValue {
+    param($InputObject, [Parameter(Mandatory)][string]$Name)
+    if ($null -eq $InputObject) { return $null }
+    if ($InputObject -is [Collections.IDictionary]) { return $InputObject[$Name] }
+    $property = $InputObject.PSObject.Properties[$Name]
+    if ($property) { return $property.Value }
+    return $null
+}
+
+function ConvertTo-DstMapPlatformDiagnosticState {
+    param(
+        [Parameter(Mandatory)]$State,
+        $Integrity,
+        $Health
+    )
+
+    $snapshot = $State.snapshot
+    $sources = if ($Health) { @($Health.sources) } else { @() }
+    $layers = @()
+    if ($snapshot) {
+        $layers = @(Get-DstMapDiagnosticValue $snapshot 'layers' | ForEach-Object {
+            [ordered]@{
+                layerId = [string](Get-DstMapDiagnosticValue $_ 'layerId')
+                sourceKey = [string](Get-DstMapDiagnosticValue $_ 'sourceKey')
+                observedAt = Get-DstMapDiagnosticValue $_ 'observedAt'
+                cachedAt = Get-DstMapDiagnosticValue $_ 'cachedAt'
+                expiresAt = Get-DstMapDiagnosticValue $_ 'expiresAt'
+                freshnessState = [string](Get-DstMapDiagnosticValue $_ 'freshnessState')
+                lastErrorCode = Get-DstMapDiagnosticValue $_ 'lastErrorCode'
+                rowCount = [long](Get-DstMapDiagnosticValue $_ 'rowCount')
+                truncated = [bool](Get-DstMapDiagnosticValue $_ 'truncated')
+            }
+        })
+    }
+    return [ordered]@{
+        generatedAt = [DateTime]::UtcNow.ToString('o')
+        cache = [ordered]@{
+            available = [bool]$State.available
+            revision = [long]$State.revision
+            lastErrorCode = $State.lastErrorCode
+            integrity = if ($Integrity) {
+                [ordered]@{
+                    available = [bool]$Integrity.available
+                    schemaVersion = $Integrity.schemaVersion
+                    schemaChecksum = $Integrity.schemaChecksum
+                    quickCheck = $Integrity.quickCheck
+                    fileBytes = $Integrity.fileBytes
+                    generationPresent = $Integrity.generationPresent
+                    counts = $Integrity.counts
+                    errorCode = $Integrity.errorCode
+                }
+            } else {
+                $null
+            }
+        }
+        sources = @($sources | ForEach-Object {
+            [ordered]@{
+                sourceKey = [string]$_.sourceKey
+                schemaFingerprint = [string]$_.schemaFingerprint
+                lastAttemptAt = $_.lastAttemptAt
+                lastSuccessAt = $_.lastSuccessAt
+                expiresAt = $_.expiresAt
+                lastErrorCode = $_.lastErrorCode
+                runtime = if ($_.runtime) {
+                    [ordered]@{
+                        attemptCount = $_.runtime.attemptCount
+                        successCount = $_.runtime.successCount
+                        failureCount = $_.runtime.failureCount
+                        failureStreak = $_.runtime.failureStreak
+                        lastAttemptAt = $_.runtime.lastAttemptAt
+                        lastSuccessAt = $_.runtime.lastSuccessAt
+                        lastDurationMs = $_.runtime.lastDurationMs
+                        lastRowCount = $_.runtime.lastRowCount
+                        lastPayloadBytes = $_.runtime.lastPayloadBytes
+                        lastErrorCode = $_.runtime.lastErrorCode
+                        nextAttemptAt = $_.runtime.nextAttemptAt
+                        nextDueAt = $_.runtime.nextDueAt
+                    }
+                } else {
+                    $null
+                }
+                details = if ($_.details) {
+                    [ordered]@{
+                        available = $_.details.available
+                        errorCode = $_.details.errorCode
+                        cadenceSeconds = $_.details.cadenceSeconds
+                        cached = $_.details.cached
+                        stale = $_.details.stale
+                        observedAt = $_.details.observedAt
+                        expiresAt = $_.details.expiresAt
+                        lastErrorCode = $_.details.lastErrorCode
+                        enabled = $_.details.enabled
+                        reasonCode = $_.details.reasonCode
+                        identityStatus = $_.details.identityStatus
+                        partitionStatus = $_.details.partitionStatus
+                        mapDimensionCount = $_.details.mapDimensionCount
+                        mapDimensionsTruncated = $_.details.mapDimensionsTruncated
+                        mapDimensions = @($_.details.mapDimensions | ForEach-Object {
+                            [ordered]@{
+                                map = [string]$_.map
+                                dimensionIndex = [int]$_.dimensionIndex
+                            }
+                        })
+                    }
+                } else {
+                    $null
+                }
+            }
+        })
+        layers = $layers
+    }
+}
+
+function Get-DstMapPlatformDiagnosticState {
+    $state = Get-DunePlatformSnapshot
+    $health = Get-DuneMapsCacheHealth -State $state
+    if (Get-Command Get-DuneMapsRuntimeSourceHealth -ErrorAction SilentlyContinue) {
+        $health.sources = @(Get-DuneMapsRuntimeSourceHealth -Snapshot $state.snapshot)
+    }
+    $integrity = $null
+    try {
+        $integrity = Invoke-DunePlatformHelper -Command integrity -TimeoutSec 30
+    } catch {
+        $integrity = [pscustomobject]@{
+            available = $false
+            errorCode = 'integrity-unavailable'
+        }
+    }
+    return ConvertTo-DstMapPlatformDiagnosticState `
+        -State $state `
+        -Integrity $integrity `
+        -Health $health
+}
+
 # Builds the diagnostic bundle. Returns a hashtable with the same shape the
 # /api/diagnostics/bundle handler echoes back to the React client.
 function New-DstDiagnosticBundle {
@@ -812,7 +946,27 @@ done
         $warnings.Add('VM memory-pressure helper not loaded - probe skipped.')
     }
 
-    # 6d) Gameplay Admin read-path probe ------------------------------------
+    # 6d) Maps cache health --------------------------------------------------
+    # Cache integrity, schema fingerprints, and source timing are sufficient
+    # for support. Cached rows and coordinates never enter the public bundle.
+    if ((Get-Command Get-DunePlatformSnapshot -ErrorAction SilentlyContinue) -and
+        (Get-Command Get-DuneMapsCacheHealth -ErrorAction SilentlyContinue) -and
+        (Get-Command Invoke-DunePlatformHelper -ErrorAction SilentlyContinue)) {
+        try {
+            $mapState = Get-DstMapPlatformDiagnosticState
+            $mapText = $mapState | ConvertTo-Json -Depth 10
+            $mapText = Invoke-DstRedaction -Text $mapText @redactArgs
+            $out = Join-Path $stageDir 'maps-platform.txt'
+            Set-Content -LiteralPath $out -Value $mapText -Encoding UTF8
+            $included.Add(@{ name = 'maps-platform.txt'; bytes = (Get-Item -LiteralPath $out).Length })
+        } catch {
+            $warnings.Add("Maps platform health snapshot failed: $($_.Exception.Message)")
+        }
+    } else {
+        $warnings.Add('Maps platform helpers not loaded - cache health snapshot skipped.')
+    }
+
+    # 6e) Gameplay Admin read-path probe ------------------------------------
     # The "Players/Bases show top-level rows but blank names / unaligned
     # factions / 0 pieces" class of bug (e.g. after a character transfer)
     # cannot be diagnosed from transcripts or INI snapshots - it lives in the
@@ -925,6 +1079,10 @@ done
     $manLines.Add('the VM when reachable, sanitized, and headlined with a duplicate-section check.')
     $manLines.Add('Local client Game.ini / Engine.ini snapshots are also included when present so')
     $manLines.Add('client-required settings can be compared with the server values.')
+    $manLines.Add('')
+    $manLines.Add('maps-platform.txt records only derived-cache integrity, structural fingerprints,')
+    $manLines.Add('source timing/backoff, and layer counts. It never includes cached rows, field')
+    $manLines.Add('or player identifiers, payloads, paths, or map coordinates.')
     $manLines.Add('')
     $manLines.Add('gameplay-read-probe.txt re-runs the Players/Bases list queries and records')
     $manLines.Add('COUNTS ONLY (no player names or ids) so "rows but blank detail" bugs are')

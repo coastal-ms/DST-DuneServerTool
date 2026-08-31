@@ -502,6 +502,172 @@ function Reset-DunePlatformRefreshBackoff {
     [void]$table.Remove("platform-backoff:$SourceKey")
 }
 
+function Get-DunePlatformExceptionCode {
+    param([Parameter(Mandatory)]$ErrorRecord)
+    if ($ErrorRecord.Exception.Data['errorCode']) {
+        return [string]$ErrorRecord.Exception.Data['errorCode']
+    }
+    if ($ErrorRecord.Exception.Message -match "^Platform source '.+' is backing off") {
+        return 'source-backoff'
+    }
+    return 'source-read-failed'
+}
+
+function Get-DunePlatformSourceTelemetry {
+    param([Parameter(Mandatory)][string]$SourceKey)
+
+    $table = Get-DunePlatformCoordinationTable
+    $key = "platform-source-telemetry:$SourceKey"
+    [Threading.Monitor]::Enter($table.SyncRoot)
+    try {
+        $value = $table[$key]
+        return [pscustomobject]@{
+            attemptCount     = if ($value) { [long]$value.attemptCount } else { 0L }
+            successCount     = if ($value) { [long]$value.successCount } else { 0L }
+            failureCount     = if ($value) { [long]$value.failureCount } else { 0L }
+            failureStreak    = if ($value) { [int]$value.failureStreak } else { 0 }
+            lastAttemptAt    = if ($value) { $value.lastAttemptAt } else { $null }
+            lastSuccessAt    = if ($value) { $value.lastSuccessAt } else { $null }
+            lastDurationMs   = if ($value) { $value.lastDurationMs } else { $null }
+            lastRowCount     = if ($value) { $value.lastRowCount } else { $null }
+            lastPayloadBytes = if ($value) { $value.lastPayloadBytes } else { $null }
+            lastErrorCode    = if ($value) { $value.lastErrorCode } else { $null }
+            nextAttemptAt    = if ($value) { $value.nextAttemptAt } else { $null }
+            nextDueAt        = if ($value) { $value.nextDueAt } else { $null }
+        }
+    } finally {
+        [Threading.Monitor]::Exit($table.SyncRoot)
+    }
+}
+
+function Update-DunePlatformSourceTelemetry {
+    param(
+        [Parameter(Mandatory)][string]$SourceKey,
+        [Parameter(Mandatory)][datetime]$StartedAt,
+        [Parameter(Mandatory)][double]$DurationMs,
+        [bool]$Success,
+        [Nullable[int]]$RowCount,
+        [Nullable[int]]$PayloadBytes,
+        [string]$ErrorCode,
+        $Backoff
+    )
+
+    $table = Get-DunePlatformCoordinationTable
+    $key = "platform-source-telemetry:$SourceKey"
+    [Threading.Monitor]::Enter($table.SyncRoot)
+    try {
+        $prior = $table[$key]
+        $attemptCount = if ($prior) { [long]$prior.attemptCount + 1 } else { 1L }
+        $successCount = if ($prior) { [long]$prior.successCount } else { 0L }
+        $failureCount = if ($prior) { [long]$prior.failureCount } else { 0L }
+        if ($Success) { $successCount++ } else { $failureCount++ }
+        $table[$key] = [pscustomobject]@{
+            attemptCount = $attemptCount
+            successCount = $successCount
+            failureCount = $failureCount
+            failureStreak = if ($Success) { 0 } elseif ($Backoff) { [int]$Backoff.failures } else { 1 }
+            lastAttemptAt = $StartedAt.ToUniversalTime().ToString('o')
+            lastSuccessAt = if ($Success) {
+                [DateTime]::UtcNow.ToString('o')
+            } elseif ($prior) {
+                $prior.lastSuccessAt
+            } else {
+                $null
+            }
+            lastDurationMs = [Math]::Round($DurationMs, 2)
+            lastRowCount = if ($null -ne $RowCount) { [int]$RowCount } else { $null }
+            lastPayloadBytes = if ($null -ne $PayloadBytes) { [int]$PayloadBytes } else { $null }
+            lastErrorCode = if ($Success) { $null } else { $ErrorCode }
+            nextAttemptAt = if (-not $Success -and $Backoff) {
+                $Backoff.nextAttemptAt.ToUniversalTime().ToString('o')
+            } else {
+                $null
+            }
+            nextDueAt = if ($prior) { $prior.nextDueAt } else { $null }
+        }
+    } finally {
+        [Threading.Monitor]::Exit($table.SyncRoot)
+    }
+}
+
+function Set-DunePlatformSourceNextDue {
+    param(
+        [Parameter(Mandatory)][string]$SourceKey,
+        [Nullable[datetime]]$NextDueAt
+    )
+
+    $table = Get-DunePlatformCoordinationTable
+    $key = "platform-source-telemetry:$SourceKey"
+    [Threading.Monitor]::Enter($table.SyncRoot)
+    try {
+        $current = $table[$key]
+        $table[$key] = [pscustomobject]@{
+            attemptCount = if ($current) { [long]$current.attemptCount } else { 0L }
+            successCount = if ($current) { [long]$current.successCount } else { 0L }
+            failureCount = if ($current) { [long]$current.failureCount } else { 0L }
+            failureStreak = if ($current) { [int]$current.failureStreak } else { 0 }
+            lastAttemptAt = if ($current) { $current.lastAttemptAt } else { $null }
+            lastSuccessAt = if ($current) { $current.lastSuccessAt } else { $null }
+            lastDurationMs = if ($current) { $current.lastDurationMs } else { $null }
+            lastRowCount = if ($current) { $current.lastRowCount } else { $null }
+            lastPayloadBytes = if ($current) { $current.lastPayloadBytes } else { $null }
+            lastErrorCode = if ($current) { $current.lastErrorCode } else { $null }
+            nextAttemptAt = if ($current) { $current.nextAttemptAt } else { $null }
+            nextDueAt = if ($null -ne $NextDueAt) {
+                ([datetime]$NextDueAt).ToUniversalTime().ToString('o')
+            } else {
+                $null
+            }
+        }
+    } finally {
+        [Threading.Monitor]::Exit($table.SyncRoot)
+    }
+}
+
+function Set-DunePlatformSourceDetails {
+    param(
+        [Parameter(Mandatory)][string]$SourceKey,
+        [Parameter(Mandatory)]$Details
+    )
+
+    $json = $Details | ConvertTo-Json -Depth 6 -Compress
+    $accepted = $true
+    $errorCode = $null
+    if ([Text.Encoding]::UTF8.GetByteCount($json) -gt 16KB) {
+        $accepted = $false
+        $errorCode = 'details-too-large'
+        $json = @{
+            available = $false
+            errorCode = $errorCode
+        } | ConvertTo-Json -Compress
+    }
+    $copy = $json | ConvertFrom-Json
+    $table = Get-DunePlatformCoordinationTable
+    [Threading.Monitor]::Enter($table.SyncRoot)
+    try {
+        $table["platform-source-details:$SourceKey"] = $copy
+    } finally {
+        [Threading.Monitor]::Exit($table.SyncRoot)
+    }
+    return [pscustomobject]@{
+        ok = $accepted
+        errorCode = $errorCode
+    }
+}
+
+function Get-DunePlatformSourceDetails {
+    param([Parameter(Mandatory)][string]$SourceKey)
+    $table = Get-DunePlatformCoordinationTable
+    [Threading.Monitor]::Enter($table.SyncRoot)
+    try {
+        $value = $table["platform-source-details:$SourceKey"]
+        if (-not $value) { return $null }
+        return ($value | ConvertTo-Json -Depth 6 -Compress | ConvertFrom-Json)
+    } finally {
+        [Threading.Monitor]::Exit($table.SyncRoot)
+    }
+}
+
 function Get-DunePlatformRefreshPolicy {
     [pscustomobject]@{
         queryTimeoutSec = $script:DunePlatformQueryTimeoutSec
@@ -526,6 +692,10 @@ function Invoke-DunePlatformSourceRead {
 
     Assert-DunePlatformBackoffReady -SourceKey $SourceKey
     Invoke-DunePlatformSingleFlight -Key "source:$SourceKey" -TimeoutSec $TimeoutSec -Script {
+        $startedAt = [DateTime]::UtcNow
+        $watch = [Diagnostics.Stopwatch]::StartNew()
+        $rowCount = $null
+        $payloadBytes = $null
         try {
             $gates = if ($Foreground) { @('database','ssh') } else { @('background','database','ssh') }
             $policy = [pscustomobject]@{
@@ -552,20 +722,41 @@ function Invoke-DunePlatformSourceRead {
                 throw $exception
             }
             $json = $result | ConvertTo-Json -Depth 12 -Compress
-            if ([Text.Encoding]::UTF8.GetByteCount($json) -gt $script:DunePlatformMaxRequestBytes) {
+            $payloadBytes = [Text.Encoding]::UTF8.GetByteCount($json)
+            if ($payloadBytes -gt $script:DunePlatformMaxRequestBytes) {
                 throw "Platform source '$SourceKey' exceeded the 5 MiB payload budget."
             }
             if (-not $result -or -not $result.PSObject.Properties['rows']) {
                 throw "Platform source '$SourceKey' did not return the required rows collection."
             }
-            if (@($result.rows).Count -gt $MaxRows) {
+            $rowCount = @($result.rows).Count
+            if ($rowCount -gt $MaxRows) {
                 throw "Platform source '$SourceKey' exceeded the $MaxRows row budget."
             }
             Reset-DunePlatformRefreshBackoff -SourceKey $SourceKey
+            $watch.Stop()
+            Update-DunePlatformSourceTelemetry `
+                -SourceKey $SourceKey `
+                -StartedAt $startedAt `
+                -DurationMs $watch.Elapsed.TotalMilliseconds `
+                -Success $true `
+                -RowCount $rowCount `
+                -PayloadBytes $payloadBytes
             return $result
         } catch {
-            $null = Register-DunePlatformRefreshFailure -SourceKey $SourceKey
-            throw
+            $sourceErrorRecord = $_
+            $backoff = Register-DunePlatformRefreshFailure -SourceKey $SourceKey
+            $watch.Stop()
+            Update-DunePlatformSourceTelemetry `
+                -SourceKey $SourceKey `
+                -StartedAt $startedAt `
+                -DurationMs $watch.Elapsed.TotalMilliseconds `
+                -Success $false `
+                -RowCount $rowCount `
+                -PayloadBytes $payloadBytes `
+                -ErrorCode (Get-DunePlatformExceptionCode $sourceErrorRecord) `
+                -Backoff $backoff
+            throw $sourceErrorRecord
         }
     }
 }
