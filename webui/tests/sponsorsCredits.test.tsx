@@ -93,11 +93,15 @@ describe('Sponsors & Credits', () => {
 
     expect(screen.queryByRole('button', { name: 'Open local portal in browser' })).not.toBeInTheDocument()
     fireEvent.click(screen.getByRole('button', { name: 'Help' }))
-    expect(screen.getByRole('link', { name: /Remote Portal Setup/ })).toHaveAttribute(
+    const remoteSetup = screen.getByRole('link', { name: /Remote Portal Setup/ })
+    expect(remoteSetup).toHaveAttribute(
       'href',
       'https://coastal-ms.github.io/DST-DuneServerTool/remote',
     )
-    fireEvent.click(screen.getByRole('button', { name: /Open local portal in browser/ }))
+    expect(remoteSetup).toHaveClass('text-text')
+    const localHandoff = screen.getByRole('button', { name: /Open local portal in browser/ })
+    expect(localHandoff).toHaveClass('text-text-dim')
+    fireEvent.click(localHandoff)
     expect(onPortalHandoff).toHaveBeenCalledTimes(1)
   })
 

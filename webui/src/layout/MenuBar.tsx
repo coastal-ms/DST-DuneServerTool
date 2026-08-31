@@ -377,7 +377,7 @@ export function MenuBar({ sidebarCollapsed, onToggleSidebar }: Props) {
               target="_blank"
               rel="noopener noreferrer"
               onClick={() => setOpen(null)}
-              className="w-full flex items-start gap-2 px-2.5 py-1.5 rounded text-sm text-text-muted hover:text-text hover:bg-surface-2 transition-colors text-left"
+              className="w-full flex items-start gap-2 px-2.5 py-1.5 rounded text-sm text-text hover:bg-surface-2 transition-colors text-left"
               title="Join the DST community Discord — install/setup help, hosting questions, Game Config tips, and release announcements."
             >
               <Icon name="MessagesSquare" size={14} className="mt-0.5" />
@@ -394,10 +394,10 @@ export function MenuBar({ sidebarCollapsed, onToggleSidebar }: Props) {
               target="_blank"
               rel="noopener noreferrer"
               onClick={() => setOpen(null)}
-              className="w-full flex items-start gap-2 px-2.5 py-1.5 rounded text-sm text-text-muted hover:text-text hover:bg-surface-2 transition-colors text-left"
+              className="w-full flex items-start gap-2 px-2.5 py-1.5 rounded text-sm text-text hover:bg-surface-2 transition-colors text-left"
               title="Set up durable remote portal access with Tailscale Funnel."
             >
-              <Icon name="ShieldCheck" size={14} className="mt-0.5" />
+              <Icon name="ShieldCheck" size={14} className="mt-0.5 text-accent-bright" />
               <span className="flex-1">
                 <span className="block">Remote Portal Setup</span>
                 <span className="block text-[11px] text-text-dim">
@@ -426,7 +426,7 @@ export function MenuBar({ sidebarCollapsed, onToggleSidebar }: Props) {
               <button
                 type="button"
                 onClick={onCreateDiagnosticsPackage}
-                className="w-full min-h-11 flex items-start gap-2 px-2.5 py-2 rounded text-sm text-text-muted hover:text-text hover:bg-surface-2 transition-colors text-left"
+                className="w-full min-h-11 flex items-start gap-2 px-2.5 py-2 rounded text-sm text-text hover:bg-surface-2 transition-colors text-left"
                 title="Creates a redacted diagnostics ZIP on the server host and opens it in Explorer."
               >
                 <Icon name="FileArchive" size={14} className="mt-0.5" />
