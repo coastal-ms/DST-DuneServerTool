@@ -410,13 +410,13 @@ export function MenuBar({ sidebarCollapsed, onToggleSidebar }: Props) {
               <button
                 type="button"
                 onClick={() => { requestPortalHandoff(); setOpen(null) }}
-                className="w-full flex items-start gap-2 px-2.5 py-1.5 rounded text-xs text-text-dim hover:text-text-muted hover:bg-surface-2/60 transition-colors text-left"
+                className="w-full flex items-start gap-2 px-2.5 py-1.5 rounded text-sm text-text hover:bg-surface-2 transition-colors text-left"
                 title="Advanced local-only handoff. Remote users should use Remote Portal Setup."
               >
                 <Icon name="ExternalLink" size={13} className="mt-0.5" />
                 <span className="flex-1">
                   <span className="block">Open local portal in browser</span>
-                  <span className="block text-[10px] text-text-dim">
+                  <span className="block text-[11px] text-text-dim">
                     Advanced local handoff
                   </span>
                 </span>

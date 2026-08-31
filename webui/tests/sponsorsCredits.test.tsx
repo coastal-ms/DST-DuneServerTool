@@ -100,7 +100,7 @@ describe('Sponsors & Credits', () => {
     )
     expect(remoteSetup).toHaveClass('text-text')
     const localHandoff = screen.getByRole('button', { name: /Open local portal in browser/ })
-    expect(localHandoff).toHaveClass('text-text-dim')
+    expect(localHandoff).toHaveClass('text-text')
     fireEvent.click(localHandoff)
     expect(onPortalHandoff).toHaveBeenCalledTimes(1)
   })
