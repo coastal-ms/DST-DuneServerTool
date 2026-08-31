@@ -397,7 +397,7 @@ export function MenuBar({ sidebarCollapsed, onToggleSidebar }: Props) {
               className="w-full flex items-start gap-2 px-2.5 py-1.5 rounded text-sm text-text hover:bg-surface-2 transition-colors text-left"
               title="Set up durable remote portal access with Tailscale Funnel."
             >
-              <Icon name="ShieldCheck" size={14} className="mt-0.5 text-accent-bright" />
+              <Icon name="ShieldCheck" size={14} className="mt-0.5" />
               <span className="flex-1">
                 <span className="block">Remote Portal Setup</span>
                 <span className="block text-[11px] text-text-dim">
