@@ -10,6 +10,7 @@ BeforeAll {
     function global:New-DstReleaseFixture {
         @(
             [pscustomobject]@{ tag='v12.9.5';        name='v12.9.5';        isPrerelease=$false; isDraft=$false; assetUrl='https://x/final.exe';  assetName='DuneServerSetup.exe'; assetSize=100; htmlUrl='u'; publishedAt='2026-06-21'; releaseNotes='' }
+            [pscustomobject]@{ tag='v12.9.6-test3';  name='Spec fix test3'; isPrerelease=$true;  isDraft=$false; assetUrl='https://x/t3.exe';     assetName='DuneServerSetup.exe'; assetSize=100; htmlUrl='u'; publishedAt='2026-06-21'; releaseNotes='' }
             [pscustomobject]@{ tag='v12.9.6-test2';  name='Spec fix test2'; isPrerelease=$true;  isDraft=$false; assetUrl='https://x/t2.exe';     assetName='DuneServerSetup.exe'; assetSize=100; htmlUrl='u'; publishedAt='2026-06-20'; releaseNotes='' }
             [pscustomobject]@{ tag='v12.9.6-test1';  name='Spec fix test1'; isPrerelease=$true;  isDraft=$false; assetUrl='https://x/t1.exe';     assetName='DuneServerSetup.exe'; assetSize=100; htmlUrl='u'; publishedAt='2026-06-19'; releaseNotes='' }
             [pscustomobject]@{ tag='v12.9.6-test0';  name='no asset';       isPrerelease=$true;  isDraft=$false; assetUrl=$null;                  assetName=$null;                 assetSize=0;   htmlUrl='u'; publishedAt='2026-06-18'; releaseNotes='' }
@@ -66,17 +67,30 @@ Describe 'Get-DunePreReleaseList filtering' {
     BeforeEach {
         function global:Get-DuneReleases { param([switch]$Force) New-DstReleaseFixture }
     }
-    It 'keeps only published pre-releases carrying the installer asset, newest-first' {
+    It 'keeps only the newest two published pre-releases carrying the installer asset' {
         $list = Get-DunePreReleaseList
         @($list).Count | Should -Be 2
-        $list[0].tag | Should -Be 'v12.9.6-test2'
-        $list[1].tag | Should -Be 'v12.9.6-test1'
+        $list[0].tag | Should -Be 'v12.9.6-test3'
+        $list[1].tag | Should -Be 'v12.9.6-test2'
     }
     It 'excludes finals, drafts and asset-less pre-releases' {
         $tags = (Get-DunePreReleaseList).tag
         $tags | Should -Not -Contain 'v12.9.5'
+        $tags | Should -Not -Contain 'v12.9.6-test1'
         $tags | Should -Not -Contain 'v12.9.6-test0'
         $tags | Should -Not -Contain 'v12.9.7-draft'
+    }
+    It 'shows only the test1 stable mirror when it is the newest prerelease' {
+        function global:Get-DuneReleases {
+            param([switch]$Force)
+            @(
+                [pscustomobject]@{ tag='v12.9.6-test1'; name='Stable channel mirror'; releaseNotes='same bits'; isPrerelease=$true; isDraft=$false; assetUrl='https://x/mirror.exe' }
+                [pscustomobject]@{ tag='v12.9.5-test9'; name='Old test'; releaseNotes=''; isPrerelease=$true; isDraft=$false; assetUrl='https://x/old.exe' }
+            )
+        }
+        $list = Get-DunePreReleaseList
+        @($list).Count | Should -Be 1
+        $list[0].tag | Should -Be 'v12.9.6-test1'
     }
 }
 
@@ -108,21 +122,27 @@ Describe 'Get-DuneSelectedRelease channel resolution' {
     It 'test channel with no pin selects the newest prerelease' {
         function global:Get-DuneUpdateChannel { 'test' }
         $r = Get-DuneSelectedRelease
-        $r.tag | Should -Be 'v12.9.6-test2'
+        $r.tag | Should -Be 'v12.9.6-test3'
         $r.channel | Should -Be 'test'
         $r.isPrerelease | Should -BeTrue
     }
 
     It 'test channel honors a valid pinned tag' {
         function global:Get-DuneUpdateChannel { 'test' }
-        function global:Get-DuneUpdatePreReleaseTag { 'v12.9.6-test1' }
-        (Get-DuneSelectedRelease).tag | Should -Be 'v12.9.6-test1'
+        function global:Get-DuneUpdatePreReleaseTag { 'v12.9.6-test2' }
+        (Get-DuneSelectedRelease).tag | Should -Be 'v12.9.6-test2'
     }
 
     It 'test channel falls back to newest when the pinned tag is gone' {
         function global:Get-DuneUpdateChannel { 'test' }
         function global:Get-DuneUpdatePreReleaseTag { 'v12.9.6-test99' }
-        (Get-DuneSelectedRelease).tag | Should -Be 'v12.9.6-test2'
+        (Get-DuneSelectedRelease).tag | Should -Be 'v12.9.6-test3'
+    }
+
+    It 'falls back to newest when a pin is older than the retained test history' {
+        function global:Get-DuneUpdateChannel { 'test' }
+        function global:Get-DuneUpdatePreReleaseTag { 'v12.9.6-test1' }
+        (Get-DuneSelectedRelease).tag | Should -Be 'v12.9.6-test3'
     }
 
     It 'test channel falls back to stable when no prereleases exist' {

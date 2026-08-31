@@ -23,6 +23,30 @@ export interface ActiveTestRelease {
   publishedAt: string | null;
 }
 
+function publishedAtDescending(a: ActiveTestRelease, b: ActiveTestRelease): number {
+  const at = a.publishedAt ? Date.parse(a.publishedAt) : 0;
+  const bt = b.publishedAt ? Date.parse(b.publishedAt) : 0;
+  return bt - at;
+}
+
+function mapRelease(release: GitHubTestRelease): ActiveTestRelease | null {
+  const installer = release.assets?.find(
+    (asset) => asset.name === "DuneServerSetup.exe" && asset.browser_download_url,
+  );
+  if (!installer?.browser_download_url) return null;
+
+  return {
+    tag: release.tag_name ?? "untagged-release",
+    name: release.name || release.tag_name || "DST release",
+    notes: release.body?.trim() || "No release notes were provided.",
+    htmlUrl:
+      release.html_url ??
+      "https://github.com/coastal-ms/DST-DuneServerTool/releases",
+    installerUrl: installer.browser_download_url,
+    publishedAt: release.published_at ?? null,
+  };
+}
+
 export function isStableMirror(release: GitHubTestRelease): boolean {
   const text = `${release.name ?? ""}\n${release.body ?? ""}`;
   return /\b(?:test|stable)(?:[-\s]+channel)?[-\s]+mirror\b/i.test(text);
@@ -42,24 +66,18 @@ export function getActiveTestReleases(
           Boolean(asset.browser_download_url),
       );
     })
-    .map((release) => {
-      const installer = release.assets?.find(
-        (asset) => asset.name === "DuneServerSetup.exe",
-      );
-      return {
-        tag: release.tag_name ?? "untagged-test",
-        name: release.name || release.tag_name || "DST test build",
-        notes: release.body?.trim() || "No testing notes were provided.",
-        htmlUrl:
-          release.html_url ??
-          "https://github.com/coastal-ms/DST-DuneServerTool/releases",
-        installerUrl: installer?.browser_download_url ?? "",
-        publishedAt: release.published_at ?? null,
-      };
-    })
-    .sort((a, b) => {
-      const at = a.publishedAt ? Date.parse(a.publishedAt) : 0;
-      const bt = b.publishedAt ? Date.parse(b.publishedAt) : 0;
-      return bt - at;
-    });
+    .map(mapRelease)
+    .filter((release): release is ActiveTestRelease => release !== null)
+    .sort(publishedAtDescending)
+    .slice(0, 2);
+}
+
+export function getLatestStableRelease(
+  releases: GitHubTestRelease[],
+): ActiveTestRelease | null {
+  return releases
+    .filter((release) => !release.prerelease && !release.draft)
+    .map(mapRelease)
+    .filter((release): release is ActiveTestRelease => release !== null)
+    .sort(publishedAtDescending)[0] ?? null;
 }

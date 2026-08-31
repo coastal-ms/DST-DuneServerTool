@@ -34,11 +34,10 @@ import { fmtToolVersion } from '../format'
 import { isLocalViewer, isWindowsViewer } from '../util/viewer'
 import { getTestBuildIdentity } from '../util/testBuildIdentity'
 import { usePortalAccess } from '../auth/portalAccess'
+import { PORTAL_HANDOFF_REQUEST_EVENT } from '../util/portalHandoff'
 
 // WebView2 host bridge — present only when the portal is rendered inside the
-// native DuneShell.exe app window (not in a regular browser tab). We use it to
-// hand the shell an "open URL in default browser then close yourself" message
-// when the user clicks "Web Portal" below.
+// native DuneShell.exe app window (not in a regular browser tab).
 type WebView2Host = { postMessage: (data: unknown) => void }
 function getWebView2(): WebView2Host | null {
   const w = window as unknown as { chrome?: { webview?: WebView2Host } }
@@ -71,10 +70,6 @@ export function Sidebar({ collapsed, onExpand }: Props) {
   const [portalUrl, setPortalUrl] = useState<string | null>(null)
   const [portalCopied, setPortalCopied] = useState(false)
   const portalCancelRef = useRef(false)
-
-  // "Web Portal" is meaningful only inside the native shell. In a regular
-  // browser tab the user is already in their browser, so we hide the button.
-  const inShellWindow = getWebView2() !== null
 
   const onOpenWebPortal = async () => {
     if (portalDetaching) return
@@ -163,6 +158,16 @@ export function Sidebar({ collapsed, onExpand }: Props) {
       setTimeout(() => setPortalCopied(false), 2000)
     } catch { /* clipboard blocked — the URL is shown in the box to copy manually */ }
   }
+
+  useEffect(() => {
+    const openPortalHandoff = () => {
+      setPortalError(null)
+      setPortalPhase('confirm')
+      setShowPortalConfirm(true)
+    }
+    window.addEventListener(PORTAL_HANDOFF_REQUEST_EVENT, openPortalHandoff)
+    return () => window.removeEventListener(PORTAL_HANDOFF_REQUEST_EVENT, openPortalHandoff)
+  }, [])
 
   const localViewer = isLocalViewer()
   const windowsViewer = isWindowsViewer()
@@ -344,8 +349,8 @@ export function Sidebar({ collapsed, onExpand }: Props) {
                     <li
                       key={entry.id}
                       className={collapsed
-                        ? `${index === 0 ? 'hidden' : 'my-2'} border-t border-border/70`
-                        : 'px-3 pb-1 pt-2 text-[10px] font-semibold uppercase tracking-widest text-text-dim'}
+                        ? `${index === 0 ? 'hidden' : 'my-2'} border-t border-accent/35`
+                        : 'mb-1 mt-2 flex items-center gap-2 px-3 text-[10px] font-semibold uppercase tracking-widest text-accent-bright/80 before:h-px before:flex-1 before:bg-accent/30 after:h-px after:flex-1 after:bg-accent/30'}
                     >
                       {!collapsed && entry.label}
                     </li>
@@ -380,21 +385,21 @@ export function Sidebar({ collapsed, onExpand }: Props) {
             {!collapsed && <span>Customize navigation</span>}
           </button>
         )}
-        {inShellWindow && (
-          <button
-            type="button"
-            onClick={() => { setPortalError(null); setPortalPhase('confirm'); setShowPortalConfirm(true) }}
-            title="Open the portal in your default web browser (the app window stays open until the browser connects)"
-            className={
-              collapsed
-                ? 'w-full flex items-center justify-center h-8 rounded-md border border-accent/30 text-accent-bright/90 hover:text-accent-bright hover:bg-accent/10 hover:border-accent/50 transition-colors'
-                : 'w-full flex items-center justify-center gap-1.5 px-2 py-1.5 rounded-md border border-accent/30 text-accent-bright/90 hover:text-accent-bright hover:bg-accent/10 hover:border-accent/50 transition-colors uppercase tracking-widest'
-            }
-          >
-            <Icon name="ExternalLink" size={collapsed ? 14 : 11} />
-            {!collapsed && <span>Web Portal</span>}
-          </button>
-        )}
+        <a
+          href="https://buymeacoffee.com/coastal_dst"
+          target="_blank"
+          rel="noopener noreferrer"
+          title="Support DST on Buy Me a Coffee"
+          className={
+            collapsed
+              ? 'w-full flex items-center justify-center h-8 rounded-md border border-accent/30 text-accent-bright/90 hover:text-accent-bright hover:bg-accent/10 hover:border-accent/50 transition-colors'
+              : 'w-full flex items-center justify-center gap-1.5 px-2 py-1.5 rounded-md border border-accent/30 text-accent-bright/90 hover:text-accent-bright hover:bg-accent/10 hover:border-accent/50 transition-colors uppercase tracking-widest'
+          }
+        >
+          <Icon name="Coffee" size={collapsed ? 14 : 11} />
+          {!collapsed && <span>Buy Me a Coffee</span>}
+          {!collapsed && <Icon name="ExternalLink" size={9} className="text-text-dim" />}
+        </a>
         {collapsed && testBuild && (
           <NavLink
             to="/settings"
@@ -626,11 +631,11 @@ function SortableSidebarDivider({
         transition,
         opacity: isDragging ? 0.45 : undefined,
       }}
-      className="mt-2 flex min-h-11 items-center gap-1 rounded-lg border border-dashed border-border-bright bg-surface-2/45 px-1.5 py-1"
+      className="mt-2 flex min-h-11 items-center gap-1 rounded-lg border border-dashed border-accent/45 bg-accent/[0.08] px-1.5 py-1 shadow-sm shadow-black/30"
     >
       <button
         type="button"
-        className="flex min-h-9 min-w-9 shrink-0 touch-none cursor-grab items-center justify-center rounded text-text-dim hover:bg-surface-3 hover:text-text focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent active:cursor-grabbing"
+        className="flex min-h-9 min-w-9 shrink-0 touch-none cursor-grab items-center justify-center rounded text-accent/75 hover:bg-accent/10 hover:text-accent-bright focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent active:cursor-grabbing"
         aria-label={`Reorder section ${divider.label}`}
         title={`Drag to reorder section ${divider.label}`}
         {...attributes}
@@ -653,7 +658,7 @@ function SortableSidebarDivider({
             event.currentTarget.blur()
           }
         }}
-        className="min-h-9 min-w-0 flex-1 rounded border border-transparent bg-transparent px-1.5 text-[10px] font-semibold uppercase tracking-widest text-text-muted focus:border-border-bright focus:bg-surface focus:outline-none focus:ring-2 focus:ring-ibad"
+        className="min-h-9 min-w-0 flex-1 rounded border border-transparent bg-transparent px-1.5 text-[10px] font-semibold uppercase tracking-widest text-accent-bright/90 focus:border-accent/60 focus:bg-surface focus:outline-none focus:ring-2 focus:ring-ibad"
       />
       <button
         type="button"

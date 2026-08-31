@@ -7,6 +7,9 @@ import { SponsorsCredits } from '../src/pages/SponsorsCredits'
 import { LEGACY_ROUTE_MANIFEST } from '../src/platform/routes'
 import { getVisibleNavItems } from '../src/nav'
 import { BrowserRouter } from '../src/router'
+import { PORTAL_HANDOFF_REQUEST_EVENT } from '../src/util/portalHandoff'
+
+const shellHost = vi.hoisted(() => vi.fn(() => true))
 
 vi.mock('../src/auth/portalAccess', () => ({
   usePortalAccess: () => ({ canAccessOwnerSurfaces: false }),
@@ -15,6 +18,10 @@ vi.mock('../src/auth/portalAccess', () => ({
 vi.mock('../src/util/viewer', () => ({
   isLocalViewer: () => false,
   isWindowsViewer: () => true,
+}))
+
+vi.mock('../src/util/shellBridge', () => ({
+  isShellHost: shellHost,
 }))
 
 const EXPECTED_CREDIT_NAMES = [
@@ -70,6 +77,29 @@ describe('Sponsors & Credits', () => {
       'href',
       'https://buymeacoffee.com/coastal_dst',
     )
+    const supportHeading = screen.getByRole('heading', { name: 'Support DST' })
+    const creditsHeading = screen.getByRole('heading', { name: 'Project Supporters' })
+    expect(supportHeading.compareDocumentPosition(creditsHeading) & Node.DOCUMENT_POSITION_FOLLOWING)
+      .toBeTruthy()
+  })
+
+  it('puts durable remote setup first and hides local portal handoff inside Help', () => {
+    const onPortalHandoff = vi.fn()
+    window.addEventListener(PORTAL_HANDOFF_REQUEST_EVENT, onPortalHandoff, { once: true })
+    render(
+      <BrowserRouter>
+        <MenuBar sidebarCollapsed={false} onToggleSidebar={vi.fn()} />
+      </BrowserRouter>,
+    )
+
+    expect(screen.queryByRole('button', { name: 'Open local portal in browser' })).not.toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: 'Help' }))
+    expect(screen.getByRole('link', { name: /Remote Portal Setup/ })).toHaveAttribute(
+      'href',
+      'https://coastal-ms.github.io/DST-DuneServerTool/remote',
+    )
+    fireEvent.click(screen.getByRole('button', { name: /Open local portal in browser/ }))
+    expect(onPortalHandoff).toHaveBeenCalledTimes(1)
   })
 
   it('is public and preserves one direct top-menu route without crowding intermediate widths', () => {

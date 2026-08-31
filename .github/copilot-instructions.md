@@ -123,6 +123,13 @@ A session worktree may not have warm `webui/node_modules` — run `npm ci` in
   notes, and other release-facing summaries. Do not identify the underlying
   records, entities, or implementation details there; source data remains
   authoritative.
+- **Stable/test release surfaces.** Stable is always the primary/default install.
+  During an active test cycle, app and website release selectors show the stable
+  release plus only the newest and immediately previous test builds. Outside an
+  active test cycle, publish the stable bits as the `test1` mirror so users who
+  remain on the Test channel are not stranded. GitHub Releases-page cleanup is
+  separate and manual-only: never delete releases or tags unless the maintainer
+  explicitly calls for that cleanup.
 - **Every GitHub release MUST attach `DuneServerSetup.exe` as its sole asset.**
   Code-only releases break the in-app updater (it gates on an asset being
   present and silently reports "up to date"). After publishing, verify with

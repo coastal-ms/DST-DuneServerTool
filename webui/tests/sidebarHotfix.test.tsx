@@ -8,6 +8,7 @@ import {
   SIDEBAR_ORDER_STORAGE_KEY,
   SIDEBAR_ORDER_V1_STORAGE_KEY,
 } from '../src/hooks/useSidebarNavigationOrder'
+import { PORTAL_HANDOFF_REQUEST_EVENT } from '../src/util/portalHandoff'
 
 vi.mock('../src/hooks/useUpdateCheck', () => ({
   useUpdateCheck: () => ({ data: null }),
@@ -36,7 +37,10 @@ describe('sidebar hotfix links', () => {
     renderSidebar(false)
 
     expect(screen.getByRole('link', { name: 'Sponsors & Credits' })).toHaveAttribute('href', '/sponsors')
-    expect(screen.queryByRole('link', { name: 'Buy Me a Coffee' })).not.toBeInTheDocument()
+    expect(screen.getByRole('link', { name: 'Buy Me a Coffee' })).toHaveAttribute(
+      'href',
+      'https://buymeacoffee.com/coastal_dst',
+    )
     expect(screen.queryByRole('link', { name: 'PowerShell' })).not.toBeInTheDocument()
     expect(screen.getAllByText('Thank you Hawk_I5')).toHaveLength(1)
     expect(screen.queryByText('Decker (@decker177)')).not.toBeInTheDocument()
@@ -66,10 +70,20 @@ describe('sidebar hotfix links', () => {
 
     expect(screen.getByRole('button', { name: /Reorder Server Overview/ })).toBeInTheDocument()
     expect(screen.getByRole('textbox', { name: /Rename section Server Management/ })).toBeInTheDocument()
+    const divider = screen.getByRole('textbox', { name: /Rename section Server Management/ })
+    expect(divider).toHaveClass('text-accent-bright/90')
+    expect(divider.parentElement).toHaveClass('border-accent/45', 'bg-accent/[0.08]')
     expect(screen.queryByRole('link', { name: 'Server Overview' })).not.toBeInTheDocument()
 
     fireEvent.click(screen.getByRole('button', { name: 'Done' }))
     expect(screen.getByRole('link', { name: 'Server Overview' })).toBeInTheDocument()
+  })
+
+  it('opens the local browser handoff only through the advanced Help request', () => {
+    renderSidebar(false)
+    fireEvent(window, new Event(PORTAL_HANDOFF_REQUEST_EVENT))
+
+    expect(screen.getByRole('heading', { name: 'Open in web browser' })).toBeInTheDocument()
   })
 
   it('expands the collapsed sidebar before entering edit mode', () => {

@@ -51,6 +51,11 @@ Candidate metadata prepared for v15.0.0-test7; semantic version remains 15.0.0.
 
 ### Changed
 
+- Made Stable the primary release download, bounded visible test history to the
+  newest two builds, and kept direct local-browser handoff behind Help while
+  steering remote access through the supported setup flow.
+- Increased sidebar section-label contrast and restored the footer support
+  action while moving the page-level support block above the credits list.
 - Maps Live State now reuses successful structural schema probes for 30 minutes
   while failures retry only under per-source backoff, reports refresh timing and
   source map/dimension evidence in diagnostics, samples unchanged observations

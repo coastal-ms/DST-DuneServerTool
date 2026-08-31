@@ -11,7 +11,25 @@ export function SponsorsCredits() {
         description="Recognizing the people who help sustain Dune Server Tool."
       />
 
-      <section aria-labelledby="project-supporters-title" className="border-y border-border py-7 sm:py-9">
+      <section aria-labelledby="support-dst-title" className="border-y border-border py-7 sm:py-9">
+        <h2 id="support-dst-title" className="text-base font-semibold text-text">Support DST</h2>
+        <p className="mt-2 max-w-[68ch] text-sm leading-6 text-text-muted">
+          If DST is useful to you and you would like to support its continued development,
+          you can do so through Buy Me a Coffee.
+        </p>
+        <a
+          href="https://buymeacoffee.com/coastal_dst"
+          target="_blank"
+          rel="noopener noreferrer"
+          className="btn-secondary mt-4 min-h-11"
+        >
+          <Icon name="Coffee" size={16} />
+          Buy Me a Coffee
+          <Icon name="ExternalLink" size={13} className="text-text-dim" />
+        </a>
+      </section>
+
+      <section aria-labelledby="project-supporters-title" className="py-7 sm:py-9">
         <div className="max-w-2xl">
           <h2 id="project-supporters-title" className="text-lg font-semibold text-text">
             Project Supporters
@@ -32,24 +50,6 @@ export function SponsorsCredits() {
             </li>
           ))}
         </ul>
-      </section>
-
-      <section aria-labelledby="support-dst-title" className="py-7 sm:py-9">
-        <h2 id="support-dst-title" className="text-base font-semibold text-text">Support DST</h2>
-        <p className="mt-2 max-w-[68ch] text-sm leading-6 text-text-muted">
-          If DST is useful to you and you would like to support its continued development,
-          you can do so through Buy Me a Coffee.
-        </p>
-        <a
-          href="https://buymeacoffee.com/coastal_dst"
-          target="_blank"
-          rel="noopener noreferrer"
-          className="btn-secondary mt-4 min-h-11"
-        >
-          <Icon name="Coffee" size={16} />
-          Buy Me a Coffee
-          <Icon name="ExternalLink" size={13} className="text-text-dim" />
-        </a>
       </section>
     </div>
   )
