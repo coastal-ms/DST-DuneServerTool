@@ -13,8 +13,14 @@ here cover everything those tags shipped.
 
 ## [Unreleased]
 
+Candidate metadata prepared for v15.0.0-test6; semantic version remains 15.0.0.
+
 ### Added
 
+- Added per-device desktop sidebar customization with explicit edit mode,
+  pointer and keyboard reordering within fixed navigation sections, and reset
+  controls. Permissions remain authoritative, and newly available pages append
+  safely without restoring stale entries.
 - Added the next-generation workspace foundation for the v15 test line, with a
   server-first primary navigation rail and one Gameplay Admin gateway containing
   Overview, Map, Players, Bases, Vehicles, and Economy destinations.
