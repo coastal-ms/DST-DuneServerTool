@@ -4,8 +4,9 @@ import {
   type DeepDesertMapSnapshot,
   type MapFreshnessState,
 } from '../../api/maps'
-import { DataState, FreshnessBadge } from '../../components/platform/DataState'
 import { Icon } from '../../components/Icon'
+import { DataState, FreshnessBadge } from '../../components/platform/DataState'
+import { LiveMapPreviewDisclosure } from './LiveMapPreviewDisclosure'
 
 export const MAP_LIVE_POLL_MS = 15_000
 export const MAP_LIVE_POLL_JITTER = 0.1
@@ -86,12 +87,29 @@ export function MapLiveState() {
   )
 
   if (!snapshot && !error) {
-    return <DataState state="loading" title="Loading cached Deep Desert state…" />
+    return (
+      <div className="flex min-w-0 flex-col gap-4">
+        <LiveMapPreviewDisclosure />
+        <DataState state="loading" title="Loading cached Deep Desert state…" />
+      </div>
+    )
   }
   if (!snapshot && error) {
-    return <DataState state="error" title="Cached Maps API unavailable" message={error} />
+    return (
+      <div className="flex min-w-0 flex-col gap-4">
+        <LiveMapPreviewDisclosure />
+        <DataState state="error" title="Cached Maps API unavailable" message={error} />
+      </div>
+    )
   }
-  if (!snapshot || !active || !activeData || !publicPoi) return null
+  if (!snapshot || !active || !activeData || !publicPoi) {
+    return (
+      <div className="flex min-w-0 flex-col gap-4">
+        <LiveMapPreviewDisclosure />
+        <DataState state="unavailable" title="Live State data is unavailable" />
+      </div>
+    )
+  }
 
   const badgeState = refreshing ? 'refreshing' : active.freshness.state
   const summary = activeData.summary
@@ -99,6 +117,7 @@ export function MapLiveState() {
 
   return (
     <div className="flex min-w-0 flex-col gap-4">
+      <LiveMapPreviewDisclosure />
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h2 className="text-base font-semibold text-text">Deep Desert live state</h2>

@@ -4,6 +4,7 @@ import { WorkspaceLayout, type WorkspaceTab } from '../../components/platform/Wo
 import { usePlatformCapabilities } from '../../hooks/usePlatformCapabilities'
 import { getWorkspace } from '../../platform/workspaces'
 import { Navigate, useSearch } from '../../router'
+import { LiveMapPreviewDisclosure } from './LiveMapPreviewDisclosure'
 
 const Atlas = lazy(() => import('../WickMaps').then(module => ({ default: module.WickMaps })))
 const LiveState = lazy(() => import('./MapLiveState').then(module => ({ default: module.MapLiveState })))
@@ -45,7 +46,10 @@ export default function MapWorkspace() {
         tabs={STATIC_TABS}
         activeTab="atlas"
       >
-        <DataState state="loading" title="Checking live map availability…" />
+        <div className="flex min-w-0 flex-col gap-4">
+          <LiveMapPreviewDisclosure />
+          <DataState state="loading" title="Checking live map availability…" />
+        </div>
       </WorkspaceLayout>
     )
   }
@@ -56,15 +60,18 @@ export default function MapWorkspace() {
         tabs={STATIC_TABS}
         activeTab="atlas"
       >
-        <div className="flex flex-col items-start gap-3">
-          <DataState
-            state="error"
-            title="Could not check live map availability"
-            message={error}
-          />
-          <button className="btn-secondary min-h-11" onClick={() => { void refresh() }}>
-            Retry capability check
-          </button>
+        <div className="flex min-w-0 flex-col gap-4">
+          <LiveMapPreviewDisclosure />
+          <div className="flex flex-col items-start gap-3">
+            <DataState
+              state="error"
+              title="Could not check live map availability"
+              message={error}
+            />
+            <button className="btn-secondary min-h-11" onClick={() => { void refresh() }}>
+              Retry capability check
+            </button>
+          </div>
         </div>
       </WorkspaceLayout>
     )
@@ -88,9 +95,14 @@ export default function MapWorkspace() {
       }
     >
       <Suspense
-        fallback={<DataState state="loading" title={`Loading ${
-          view === 'atlas' ? 'DD Atlas' : view === 'live' ? 'live map state' : 'map lifecycle'
-        }…`} />}
+        fallback={view === 'live'
+          ? (
+              <div className="flex min-w-0 flex-col gap-4">
+                <LiveMapPreviewDisclosure />
+                <DataState state="loading" title="Loading live map state…" />
+              </div>
+            )
+          : <DataState state="loading" title={`Loading ${view === 'atlas' ? 'DD Atlas' : 'map lifecycle'}…`} />}
       >
         {view === 'atlas'
           ? <Atlas embedded />

@@ -80,6 +80,8 @@ describe('Map workspace capability gating', () => {
     render(<BrowserRouter><MapWorkspace /></BrowserRouter>)
 
     expect(screen.getByText('Checking live map availability…')).toBeInTheDocument()
+    expect(screen.getByRole('complementary', { name: 'Live Map preview disclosure' }))
+      .toHaveTextContent(/derived from your server.*not yet live game telemetry/i)
     expect(screen.queryByRole('link', { name: 'Live state' })).not.toBeInTheDocument()
     await waitFor(() => expect(liveRender).not.toHaveBeenCalled())
   })
@@ -94,6 +96,8 @@ describe('Map workspace capability gating', () => {
 
     expect(screen.getByText('Could not check live map availability')).toBeInTheDocument()
     expect(screen.getByText('Capability request failed.')).toBeInTheDocument()
+    expect(screen.getByRole('complementary', { name: 'Live Map preview disclosure' }))
+      .toHaveTextContent(/derived from your server.*not yet live game telemetry/i)
     expect(window.location.pathname).toBe('/map')
     expect(window.location.search).toBe('?view=live&source=bookmark')
     expect(window.location.hash).toBe('#field-detail')
