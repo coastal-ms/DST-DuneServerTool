@@ -199,8 +199,9 @@ Describe 'Invoke-DunePlayerGiveItemsBulk overflow' -Tag 'Pure' {
 Describe 'Invoke-DunePlayerGrantHouseSwatches' -Tag 'Pure' {
     BeforeEach {
         $script:ownershipReads = 0
-        $script:capturedSql = ''
-        function global:Test-DunePlayerOffline { return @{ ok = $true } }
+        $script:liveTemplates = [System.Collections.Generic.List[string]]::new()
+        function global:Test-DunePlayerOffline { return @{ ok = $false; reason = 'Player is online.' } }
+        function global:Resolve-DuneFlsIdOrError { return @{ ok = $true; fls_id = 'fls-test' } }
         function global:Get-DuneHouseSwatchCatalog {
             return @(
                 @{ template = 'Ecaz_HeavyArmor_Swatch'; name = 'House Ecaz Garment Swatch'; group = 'Swatches (Dyes)' },
@@ -212,41 +213,40 @@ Describe 'Invoke-DunePlayerGrantHouseSwatches' -Tag 'Pure' {
             if ($script:ownershipReads -eq 1) {
                 return @{ ok = $true; owned = @('Ecaz_HeavyArmor_Swatch') }
             }
-            return @{ ok = $true; owned = @('Ecaz_HeavyArmor_Swatch', 'Ecaz_Placeables_Swatch') }
+            return @{ ok = $true; owned = @('Ecaz_HeavyArmor_Swatch') }
         }
-        function global:Invoke-DuneSqlQuery {
-            param($Ip, $Sql, $ReadOnly, $MaxRows, $TimeoutSec, [switch]$Bulk)
-            $script:capturedSql = $Sql
-            return @{ ok = $true; message = 'SELECT 1' }
+        function global:Invoke-DunePlayerGiveItemLive {
+            param($Ip, $ActorId, $FlsId, $Template, $Quantity, $Durability, $AllowOverflow)
+            $script:liveTemplates.Add($Template)
+            return @{ ok = $true }
         }
     }
 
     AfterEach {
         Remove-Item function:global:Test-DunePlayerOffline -ErrorAction SilentlyContinue
+        Remove-Item function:global:Resolve-DuneFlsIdOrError -ErrorAction SilentlyContinue
         Remove-Item function:global:Get-DuneHouseSwatchCatalog -ErrorAction SilentlyContinue
         Remove-Item function:global:Get-DunePlayerOwnedCosmeticsLive -ErrorAction SilentlyContinue
-        Remove-Item function:global:Invoke-DuneSqlQuery -ErrorAction SilentlyContinue
+        Remove-Item function:global:Invoke-DunePlayerGiveItemLive -ErrorAction SilentlyContinue
     }
 
-    It 'rejects an online player before writing' {
-        function global:Test-DunePlayerOffline { return @{ ok = $false; reason = 'Player must be offline.' } }
+    It 'rejects an offline player before granting' {
+        function global:Test-DunePlayerOffline { return @{ ok = $true } }
         $r = Invoke-DunePlayerGrantHouseSwatches -Ip '1.2.3.4' -PawnId 10 -AccountId 20
         $r.ok | Should -BeFalse
-        $r.error | Should -Match 'offline'
-        $script:capturedSql | Should -Be ''
+        $r.error | Should -Match 'online'
+        $script:liveTemplates.Count | Should -Be 0
     }
 
-    It 'writes all missing swatches in one SQL statement and verifies them' {
+    It 'grants only missing swatches through the live path' {
         $r = Invoke-DunePlayerGrantHouseSwatches -Ip '1.2.3.4' -PawnId 10 -AccountId 20
         $r.ok | Should -BeTrue -Because $r.error
         $r.total | Should -Be 2
         $r.already_owned | Should -Be 1
         $r.requested | Should -Be 1
-        $r.verified | Should -Be 1
-        $script:ownershipReads | Should -Be 2
-        $script:capturedSql | Should -Match 'Ecaz_Placeables_Swatch'
-        $script:capturedSql | Should -Not -Match 'Ecaz_HeavyArmor_Swatch'
-        ([regex]::Matches($script:capturedSql, 'INSERT INTO dune\.items')).Count | Should -Be 1
+        $r.granted | Should -Be 1
+        $script:ownershipReads | Should -Be 1
+        $script:liveTemplates.ToArray() | Should -Be @('Ecaz_Placeables_Swatch')
     }
 }
 

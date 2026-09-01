@@ -15,8 +15,8 @@ here cover everything those tags shipped.
 
 ### Added
 
-- Added a missing-only **All House Swatches** cosmetic preset with offline
-  gating, an exact preview count, and post-grant ownership verification.
+- Added a missing-only **All House Swatches** cosmetic preset that requires the
+  player online and applies live unlocks without creating backpack items.
 
 ## [15.0.0-test8] - 2026-08-31
 

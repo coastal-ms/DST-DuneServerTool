@@ -439,7 +439,11 @@ function Invoke-DunePlayerGrantHouseSwatches {
     if ($AccountId -le 0) { return @{ ok = $false; error = 'account_id is required.' } }
 
     $off = Test-DunePlayerOffline -Ip $Ip -PawnId $PawnId
-    if (-not $off.ok) { return @{ ok = $false; error = $off.reason } }
+    if ($off.ok) {
+        return @{ ok = $false; error = 'Player must be online so House Swatches unlock immediately instead of becoming backpack items.' }
+    }
+    $fls = Resolve-DuneFlsIdOrError -Ip $Ip -ActorId $PawnId
+    if (-not $fls.ok) { return @{ ok = $false; error = $fls.error } }
 
     $houseSwatches = @(Get-DuneHouseSwatchCatalog)
     if ($houseSwatches.Count -eq 0) {
@@ -463,102 +467,44 @@ function Invoke-DunePlayerGrantHouseSwatches {
             total = $houseSwatches.Count
             already_owned = $alreadyOwned
             requested = 0
-            verified = 0
-            unresolved = @()
+            granted = 0
+            failed = @()
         }
     }
 
-    $values = [System.Collections.Generic.List[string]]::new()
+    $failed = [System.Collections.Generic.List[string]]::new()
+    $granted = 0
     foreach ($entry in $missing) {
         $template = [string]$entry.template
-        $valid = Test-DuneValidGiveTemplate -TemplateId $template
-        if (-not $valid.ok) {
-            return @{ ok = $false; error = "invalid House Swatch '$template': $($valid.error)" }
+        if ($granted -gt 0) { Start-Sleep -Milliseconds 200 }
+        $result = Invoke-DunePlayerGiveItemLive -Ip $Ip -ActorId 0 -FlsId ([string]$fls.fls_id) `
+            -Template $template -Quantity 1 -Durability 1.0 -AllowOverflow $true
+        if ($result.ok) {
+            $granted++
+        } else {
+            $failed.Add($template)
         }
-        $safeTemplate = ConvertTo-DuneSqlString $template
-        $statsJson = ConvertTo-DuneSqlString (Get-DuneGiveItemStatsJson -TemplateId $template)
-        $values.Add("('$safeTemplate'::text, '$statsJson'::jsonb)")
     }
-    $valuesClause = $values -join ",`n        "
-    $sql = @"
-WITH inv AS (
-    SELECT id
-    FROM dune.inventories
-    WHERE actor_id = $PawnId::bigint AND inventory_type = 0
-    ORDER BY id
-    LIMIT 1
-),
-payload(template_id, stats) AS (
-    VALUES
-        $valuesClause
-),
-base AS (
-    SELECT inv.id AS inventory_id,
-           COALESCE(MAX(i.position_index), -1)::bigint + 1 AS first_position
-    FROM inv
-    LEFT JOIN dune.items i ON i.inventory_id = inv.id
-    GROUP BY inv.id
-),
-inserted AS (
-    INSERT INTO dune.items (
-        inventory_id, stack_size, position_index, template_id,
-        quality_level, acquisition_time, stats
-    )
-    SELECT base.inventory_id,
-           1::bigint,
-           base.first_position + ROW_NUMBER() OVER (ORDER BY payload.template_id) - 1,
-           payload.template_id,
-           0::bigint,
-           EXTRACT(EPOCH FROM now())::bigint,
-           payload.stats
-    FROM base
-    CROSS JOIN payload
-    WHERE NOT EXISTS (
-        SELECT 1
-        FROM dune.items existing
-        WHERE existing.inventory_id = base.inventory_id
-          AND existing.template_id = payload.template_id
-    )
-    RETURNING template_id
-)
-SELECT COALESCE(jsonb_agg(template_id ORDER BY template_id), '[]'::jsonb)::text AS inserted
-FROM inserted;
-"@
-    $write = Invoke-DuneSqlQuery -Ip $Ip -Sql $sql -ReadOnly $false -MaxRows 1 -TimeoutSec 60 -Bulk
-    if (-not $write.ok) { return @{ ok = $false; error = "grant House Swatches: $($write.error)" } }
-
-    $after = Get-DunePlayerOwnedCosmeticsLive -Ip $Ip -AccountId $AccountId
-    if (-not $after.ok) {
-        return @{ ok = $false; error = "verify House Swatch ownership: $($after.error)" }
-    }
-    $ownedAfter = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::OrdinalIgnoreCase)
-    foreach ($id in @($after.owned)) {
-        if (-not [string]::IsNullOrWhiteSpace([string]$id)) { [void]$ownedAfter.Add([string]$id) }
-    }
-    $unresolved = @($missing |
-        Where-Object { -not $ownedAfter.Contains([string]$_.template) } |
-        ForEach-Object { [string]$_.template })
-    $verified = $missing.Count - $unresolved.Count
-    if ($unresolved.Count -gt 0) {
+    if ($failed.Count -gt 0) {
         return @{
             ok = $false
-            error = "$verified/$($missing.Count) missing House Swatches verified; $($unresolved.Count) did not register."
+            error = "$granted/$($missing.Count) House Swatch live grants were accepted; $($failed.Count) failed."
             total = $houseSwatches.Count
             already_owned = $alreadyOwned
             requested = $missing.Count
-            verified = $verified
-            unresolved = $unresolved
+            granted = $granted
+            failed = $failed.ToArray()
         }
     }
 
     return @{
         ok = $true
-        message = "Granted and verified $verified missing House Swatch$(if ($verified -eq 1) { '' } else { 'es' })."
+        message = "Granted $granted missing House Swatch$(if ($granted -eq 1) { '' } else { 'es' }) live with no backpack items."
         total = $houseSwatches.Count
         already_owned = $alreadyOwned
         requested = $missing.Count
-        verified = $verified
-        unresolved = @()
+        granted = $granted
+        failed = @()
     }
 }
 

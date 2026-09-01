@@ -1095,7 +1095,7 @@ function ActionRow({ def, player, busy, stats, open, danger, onToggle, runAction
               })} />
           ) : def.custom === 'grant-cosmetic' ? (
             <GrantCosmeticForm busy={busy} playerName={player.name} accountId={player.account_id}
-              playerOnline={['online', 'loggingout'].includes((player.online_status || '').toLowerCase())}
+              playerOnline={(player.online_status || '').toLowerCase() === 'online'}
               onGrant={async (tpl, label) => {
                 let succeeded = false
                 await runAction(def, async () => {
@@ -1422,7 +1422,7 @@ function GrantCosmeticForm({ busy, playerName, accountId, playerOnline, onGrant,
           <div>
             <div className="text-sm font-medium text-text">All House Swatches</div>
             <div className="text-[11px] text-text-dim">
-              Grants only missing vendor House Swatch unlocks. Player must be fully offline.
+              Grants only missing House Swatches live, without placing unlock items in the backpack.
             </div>
           </div>
           <span className="text-[11px] text-text-dim whitespace-nowrap">
@@ -1432,12 +1432,12 @@ function GrantCosmeticForm({ busy, playerName, accountId, playerOnline, onGrant,
         <button
           type="button"
           className="btn-secondary w-full"
-          disabled={busy || playerOnline || missingHouseSwatches.length === 0}
-          title={playerOnline ? 'Player must be fully offline' : undefined}
+          disabled={busy || !playerOnline || missingHouseSwatches.length === 0}
+          title={!playerOnline ? 'Player must be online' : undefined}
           onClick={async () => {
             if (!window.confirm(
               `Grant ${missingHouseSwatches.length} missing House Swatch unlock${missingHouseSwatches.length === 1 ? '' : 's'} to ${playerName}?\n\n` +
-              'The player must remain fully offline until the grant completes.'
+              'The player must remain online until the live grants complete.'
             )) return
             if (await onGrantHouseSwatches()) {
               setOwned(current => {
@@ -1454,8 +1454,8 @@ function GrantCosmeticForm({ busy, playerName, accountId, playerOnline, onGrant,
               ? <><Icon name="Check" size={13} /> All House Swatches owned</>
               : <><Icon name="Palette" size={13} /> Grant {missingHouseSwatches.length} missing House Swatches</>}
         </button>
-        {playerOnline && (
-          <div className="text-[11px] text-warning">Player is online. Fully log out before using this preset.</div>
+        {!playerOnline && (
+          <div className="text-[11px] text-warning">Player must be online so the swatches unlock directly instead of becoming backpack items.</div>
         )}
       </div>
       <label className="flex items-center justify-between gap-3 text-xs text-text-dim">

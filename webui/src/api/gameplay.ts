@@ -1869,8 +1869,8 @@ export interface HouseSwatchGrantResult extends Record<string, unknown> {
   total: number
   already_owned: number
   requested: number
-  verified: number
-  unresolved: string[]
+  granted: number
+  failed: string[]
 }
 
 export interface HouseSwatchGrantResponse extends WriteResult {
