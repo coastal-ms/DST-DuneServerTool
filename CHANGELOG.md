@@ -19,8 +19,11 @@ Candidate metadata prepared for v15.0.0-test8; semantic version remains 15.0.0.
 
 ### Changed
 
-- Added Notes from Duke to Sponsors & Credits, pairing selected supporter
-  acknowledgements with short Atreides-themed messages.
+- Added special thank-you notes from Duke to Sponsors & Credits.
+- Applying a Crafting specialization level now leaves Pattern Upgrading for the
+  game's live purchase path, ensuring its Grade 2-5 schematic recipes are
+  created. Added an offline repair action for characters whose reward was
+  previously marked claimed without those recipes.
 
 ## [15.0.0-test7] - 2026-08-30
 

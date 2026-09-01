@@ -43,12 +43,17 @@ function Test-DunePlayerOffline {
 # (e.g. award-intel, which the UI calls with controller_id) still reject an
 # online player. A missing player_state row is treated as offline.
 function Test-DunePlayerOfflineByController {
-    param([string]$Ip, [long]$ControllerId)
+    param([string]$Ip, [long]$ControllerId, [switch]$RequireExistingPlayerState)
     $sql = "SELECT online_status::text AS status FROM dune.player_state WHERE player_controller_id = $ControllerId::bigint LIMIT 1;"
     $r = Invoke-DuneSqlQuery -Ip $Ip -Sql $sql -ReadOnly $true -MaxRows 1 -TimeoutSec 10
-    if (-not $r.ok) { return @{ ok = $true; reason = $null } }
+    if (-not $r.ok) { return @{ ok = $false; reason = "player status could not be verified - $($r.error)" } }
     $maps = ConvertTo-DuneRowMaps -Result $r
-    if ($maps.Count -eq 0) { return @{ ok = $true; reason = $null } }
+    if ($maps.Count -eq 0) {
+        if ($RequireExistingPlayerState) {
+            return @{ ok = $false; reason = 'player status could not be verified - no player state was found' }
+        }
+        return @{ ok = $true; reason = $null }
+    }
     $status = [string]$maps[0]['status']
     if ($status -eq 'LoggingOut') {
         return @{ ok = $false; reason = "player is mid-logout - the pod still owns their state in memory and will flush on logout, overwriting any DB write. Grace timer is ~30s on Hagga / Arrakeen / Harkonnen / etc., ~5 min in Deep Desert. Wait until status shows Offline, then retry." }

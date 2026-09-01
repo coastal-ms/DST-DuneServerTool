@@ -44,6 +44,7 @@ BeforeAll {
             2 = @{ track = 'Combat'; level = 63; name = 'DA_CombatKeystone_SkillPoint'; cost = 20 }
             3 = @{ track = 'Crafting'; level = 20; name = 'Crafting'; cost = 5 }
             4 = @{ track = 'Combat'; level = 50; name = 'Combat fifty'; cost = 15 }
+            82 = @{ track = 'Crafting'; level = 52; name = 'Crafting_CraftingKeystone_FragmentUpgrade52'; cost = 20 }
         }
     }
     function global:Test-DunePlayerOfflineByController {
@@ -139,6 +140,47 @@ Describe 'Invoke-DunePlayerApplySpecLevel (apply specialization rewards)' -Tag '
         $script:playerOffline = $false
 
         $r = Invoke-DunePlayerApplySpecLevel -Ip '1.2.3.4' -ControllerId 555 -TrackType 'Combat' -Level 2
+
+        $r.ok | Should -BeFalse
+        $r.error | Should -Be 'player is online'
+        $script:writeCount | Should -Be 0
+    }
+
+    It 'leaves Pattern Upgrading for the live in-game purchase path' {
+        $r = Invoke-DunePlayerApplySpecLevel -Ip '1.2.3.4' -ControllerId 555 -TrackType 'Crafting' -Level 100
+
+        $r.ok | Should -BeTrue
+        $r.rewards_applied | Should -Be 1
+        $r.pattern_upgrading_manual_purchase | Should -BeTrue
+        $r.message | Should -Match 'intentionally left unclaimed'
+        $script:lastWriteSql | Should -Match 'ARRAY\[3\]::smallint\[\]'
+        $script:lastWriteSql | Should -Not -Match 'ARRAY\[[^\]]*\b82\b'
+    }
+}
+
+Describe 'Invoke-DunePlayerPreparePatternUpgrading' -Tag 'Players' {
+    BeforeEach {
+        $script:lastWriteSql = $null
+        $script:writeCount = 0
+        $script:playerOffline = $true
+    }
+
+    It 'deletes only Pattern Upgrading for the selected controller' {
+        $r = Invoke-DunePlayerPreparePatternUpgrading -Ip '1.2.3.4' -ControllerId 555
+
+        $r.ok | Should -BeTrue
+        $r.keystone_id | Should -Be 82
+        $r.message | Should -Match 'repurchase'
+        $script:lastWriteSql | Should -Match 'DELETE FROM dune\.purchased_specialization_keystones'
+        $script:lastWriteSql | Should -Match 'player_id = 555::bigint'
+        $script:lastWriteSql | Should -Match 'keystone_id = 82::smallint'
+        $script:lastWriteSql | Should -Not -Match 'DELETE FROM dune\.specialization_tracks'
+    }
+
+    It 'rejects the repair while the player is online' {
+        $script:playerOffline = $false
+
+        $r = Invoke-DunePlayerPreparePatternUpgrading -Ip '1.2.3.4' -ControllerId 555
 
         $r.ok | Should -BeFalse
         $r.error | Should -Be 'player is online'

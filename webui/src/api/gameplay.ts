@@ -604,6 +604,12 @@ export function applySpecLevel(controllerId: number, trackType: string, level: n
   })
 }
 
+export function preparePatternUpgrading(controllerId: number) {
+  return api<WriteResult>('/api/gameplay/players/prepare-pattern-upgrading', {
+    method: 'POST', body: JSON.stringify({ controller_id: controllerId }),
+  })
+}
+
 export function deleteInventoryItem(itemId: number) {
   return api<WriteResult>('/api/gameplay/players/delete-item', {
     method: 'POST', body: JSON.stringify({ item_id: itemId }),

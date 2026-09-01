@@ -238,12 +238,14 @@ function Get-DuneSpecSkillPointBonus {
     return 0
 }
 
+$script:DunePatternUpgradingKeystoneId = 82
+
 # Set one specialization level and purchase every reward in that track whose
 # unlock level is at or below the target. Existing rewards are preserved, so
 # applying a lower level never removes rewards already earned or granted.
 function Invoke-DunePlayerApplySpecLevel {
     param([string]$Ip, [long]$ControllerId, [string]$TrackType, [int]$Level)
-    $offline = Test-DunePlayerOfflineByController -Ip $Ip -ControllerId $ControllerId
+    $offline = Test-DunePlayerOfflineByController -Ip $Ip -ControllerId $ControllerId -RequireExistingPlayerState
     if (-not $offline.ok) { return @{ ok = $false; error = $offline.reason } }
 
     $safeTrack = ConvertTo-DuneSqlString $TrackType
@@ -257,7 +259,8 @@ function Invoke-DunePlayerApplySpecLevel {
         $catalog.GetEnumerator() |
             Where-Object {
                 ([string]$_.Value.track).Equals($TrackType, [System.StringComparison]::OrdinalIgnoreCase) -and
-                ([int]$_.Value.level -le $newLevel)
+                ([int]$_.Value.level -le $newLevel) -and
+                ([int]$_.Key -ne $script:DunePatternUpgradingKeystoneId)
             } |
             ForEach-Object { [int]$_.Key } |
             Sort-Object
@@ -351,12 +354,41 @@ WHERE fe.entity_id = target.entity_id
 
     $res = Invoke-DuneSqlQuery -Ip $Ip -Sql $sql.ToString() -ReadOnly $false -MaxRows 1 -TimeoutSec 30
     if (-not $res.ok) { return @{ ok = $false; error = $res.error } }
+    $patternUpgradingManual = $TrackType.Equals('Crafting', [System.StringComparison]::OrdinalIgnoreCase) -and $newLevel -ge 52
+    $message = "Set '$TrackType' to level $newLevel and applied $($ids.Count) available specialization reward(s). Existing rewards were preserved. Full re-login required."
+    if ($patternUpgradingManual) {
+        $message += ' Pattern Upgrading was intentionally left unclaimed; purchase it in-game so its Grade 2-5 schematic recipes are created.'
+    }
     return @{
         ok = $true
-        message = "Set '$TrackType' to level $newLevel and applied $($ids.Count) available specialization reward(s). Existing rewards were preserved. Full re-login required."
+        message = $message
         rewards_applied = $ids.Count
         skill_points_reconciled = $true
+        pattern_upgrading_manual_purchase = $patternUpgradingManual
         level = $newLevel
+    }
+}
+
+# Remove only Pattern Upgrading's claimed flag so the game's live purchase path
+# can create the Grade 2-5 schematic recipes on the player's next login.
+function Invoke-DunePlayerPreparePatternUpgrading {
+    param([string]$Ip, [long]$ControllerId)
+    $offline = Test-DunePlayerOfflineByController -Ip $Ip -ControllerId $ControllerId -RequireExistingPlayerState
+    if (-not $offline.ok) { return @{ ok = $false; error = $offline.reason } }
+
+    $sql = @"
+DELETE FROM dune.purchased_specialization_keystones
+WHERE player_id = $ControllerId::bigint
+  AND keystone_id = $script:DunePatternUpgradingKeystoneId::smallint
+RETURNING keystone_id;
+"@
+    $res = Invoke-DuneSqlQuery -Ip $Ip -Sql $sql -ReadOnly $false -MaxRows 1 -TimeoutSec 30
+    if (-not $res.ok) { return @{ ok = $false; error = $res.error } }
+
+    return @{
+        ok = $true
+        message = 'Pattern Upgrading is ready to repurchase. Have the player fully log in, open Crafting specializations, and purchase Pattern Upgrading in-game to create the Grade 2-5 schematic recipes.'
+        keystone_id = $script:DunePatternUpgradingKeystoneId
     }
 }
 
