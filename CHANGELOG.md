@@ -19,8 +19,7 @@ Candidate metadata prepared for v15.0.0-test8; semantic version remains 15.0.0.
 
 ### Changed
 
-- Added Notes from Duke to Sponsors & Credits, pairing selected supporter
-  acknowledgements with short Atreides-themed messages.
+- Added special thank-you notes from Duke to Sponsors & Credits.
 
 ## [15.0.0-test7] - 2026-08-30
 
