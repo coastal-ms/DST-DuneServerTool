@@ -54,7 +54,7 @@ export function SponsorsCredits() {
           </div>
         </div>
 
-        <ul className="divide-y divide-border" aria-label="Project supporters" aria-describedby="duke-notes-title">
+        <ul className="mt-4 divide-y divide-border" aria-label="Project supporters" aria-describedby="duke-notes-title">
           {SUPPORTER_CREDITS.map(credit => (
             <li
               key={credit.displayName}
