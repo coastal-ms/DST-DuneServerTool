@@ -19,7 +19,8 @@ Candidate metadata prepared for v15.0.0-test8; semantic version remains 15.0.0.
 
 ### Changed
 
-- Added special thank-you notes from Duke to Sponsors & Credits.
+- Added special thank-you notes from Duke to Sponsors & Credits, with prominent
+  attribution separating Duke's messages from Coastal's acknowledgements.
 - Applying a Crafting specialization level now leaves Pattern Upgrading for the
   game's live purchase path, ensuring its Grade 2-5 schematic recipes are
   created. Added an offline repair action for characters whose reward was

@@ -40,23 +40,31 @@ export function SponsorsCredits() {
           </p>
         </div>
 
-        <h3
-          id="duke-notes-title"
-          className="mt-7 text-base font-semibold tracking-tight text-accent-bright sm:ml-auto sm:w-80 sm:text-right"
-        >
-          Notes from Duke
-        </h3>
+        <div className="mt-7 flex gap-3 border-y border-accent/40 bg-accent/10 px-4 py-4">
+          <div className="flex size-10 shrink-0 items-center justify-center rounded-full bg-accent text-accent-fg">
+            <Icon name="Bot" size={20} />
+          </div>
+          <div>
+            <h3 id="duke-notes-title" className="text-lg font-bold tracking-tight text-accent-bright">
+              Notes from Duke
+            </h3>
+            <p className="mt-1 max-w-[62ch] text-sm leading-5 text-text">
+              These personal thank-you notes are written by Duke, DST&apos;s AI admin—not by Coastal. 🙂
+            </p>
+          </div>
+        </div>
 
-        <ul className="mt-3 divide-y divide-border" aria-label="Project supporters">
+        <ul className="divide-y divide-border" aria-label="Project supporters" aria-describedby="duke-notes-title">
           {SUPPORTER_CREDITS.map(credit => (
             <li
               key={credit.displayName}
               className="flex flex-col gap-1 py-4 first:pt-0 last:pb-0 sm:flex-row sm:items-center sm:justify-between sm:gap-6"
             >
               <span className="text-lg font-semibold text-text">{credit.displayName}</span>
-              <span className="text-sm leading-5 text-text-dim sm:w-80 sm:shrink-0 sm:text-right">
-                {credit.thanks}
-              </span>
+              <div className="text-sm leading-5 sm:w-80 sm:shrink-0 sm:text-right">
+                <p className="text-text-dim">{credit.thanks}</p>
+                <p className="mt-1 text-xs font-semibold text-accent-bright">— Duke</p>
+              </div>
             </li>
           ))}
         </ul>
