@@ -13,6 +13,15 @@ here cover everything those tags shipped.
 
 ## [Unreleased]
 
+## [15.0.0-test8] - 2026-08-31
+
+Candidate metadata prepared for v15.0.0-test8; semantic version remains 15.0.0.
+
+### Changed
+
+- Added Notes from Duke to Sponsors & Credits, pairing selected supporter
+  acknowledgements with short Atreides-themed messages.
+
 ## [15.0.0-test7] - 2026-08-30
 
 Candidate metadata prepared for v15.0.0-test7; semantic version remains 15.0.0.

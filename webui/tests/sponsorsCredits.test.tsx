@@ -62,6 +62,7 @@ describe('Sponsors & Credits', () => {
     render(<SponsorsCredits />)
 
     expect(screen.getByRole('heading', { name: 'Sponsors & Credits' })).toBeInTheDocument()
+    const dukeNotesHeading = screen.getByRole('heading', { name: 'Notes from Duke', level: 3 })
     const credits = screen.getByRole('list', { name: 'Project supporters' })
     expect(within(credits).getAllByRole('listitem')).toHaveLength(18)
     for (const name of EXPECTED_CREDIT_NAMES) {
@@ -79,6 +80,10 @@ describe('Sponsors & Credits', () => {
     const supportHeading = screen.getByRole('heading', { name: 'Support DST' })
     const creditsHeading = screen.getByRole('heading', { name: 'Project Supporters' })
     expect(supportHeading.compareDocumentPosition(creditsHeading) & Node.DOCUMENT_POSITION_FOLLOWING)
+      .toBeTruthy()
+    expect(creditsHeading.compareDocumentPosition(dukeNotesHeading) & Node.DOCUMENT_POSITION_FOLLOWING)
+      .toBeTruthy()
+    expect(dukeNotesHeading.compareDocumentPosition(credits) & Node.DOCUMENT_POSITION_FOLLOWING)
       .toBeTruthy()
   })
 
