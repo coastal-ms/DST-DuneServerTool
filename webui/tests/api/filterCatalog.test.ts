@@ -7,6 +7,7 @@ import {
   catalogCategories,
   filterCatalog,
   filterCosmeticsCatalog,
+  getHouseSwatchCosmetics,
   type CatalogItem,
   type CosmeticEntry,
 } from '../../src/api/gameplay'
@@ -60,6 +61,9 @@ describe('filterCosmeticsCatalog', () => {
   const cosmetics: CosmeticEntry[] = [
     { template: 'Atreides_Buggy_Variant', name: 'Atreides Buggy Variant', group: 'Vehicle Skins' },
     { template: 'D_Choam_HeavyArmor_Swatch', name: 'CHOAM Heavy Armor Swatch', group: 'Swatches (Dyes)' },
+    { template: 'Ecaz_HeavyArmor_Swatch', name: 'House Ecaz Garment Swatch', group: 'Swatches (Dyes)' },
+    { template: 'Ecaz_Placeables_Swatch', name: 'House Ecaz Placeables Swatch', group: 'Swatches (Dyes)' },
+    { template: 'NotASwatch', name: 'House Example Swatch', group: 'Other Customization' },
   ]
 
   it('uses contains matching instead of prefix-only matching', () => {
@@ -69,5 +73,9 @@ describe('filterCosmeticsCatalog', () => {
 
   it('matches group names so vehicle search returns every vehicle skin', () => {
     expect(filterCosmeticsCatalog(cosmetics, 'vehicle')).toEqual([cosmetics[0]])
+  })
+
+  it('selects only vendor House Swatches in stable name order', () => {
+    expect(getHouseSwatchCosmetics(cosmetics)).toEqual([cosmetics[2], cosmetics[3]])
   })
 })

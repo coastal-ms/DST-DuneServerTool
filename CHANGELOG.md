@@ -13,6 +13,11 @@ here cover everything those tags shipped.
 
 ## [Unreleased]
 
+### Added
+
+- Added a missing-only **All House Swatches** cosmetic preset with offline
+  gating, an exact preview count, and post-grant ownership verification.
+
 ## [15.0.0-test8] - 2026-08-31
 
 Candidate metadata prepared for v15.0.0-test8; semantic version remains 15.0.0.

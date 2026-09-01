@@ -1207,6 +1207,12 @@ interface CosmeticsResponse { templates?: CosmeticEntry[]; total?: number }
 let _cosmeticsCache: CosmeticEntry[] | null = null
 let _cosmeticsPromise: Promise<CosmeticEntry[]> | null = null
 
+export function getHouseSwatchCosmetics(catalog: CosmeticEntry[]): CosmeticEntry[] {
+  return catalog
+    .filter(entry => entry.group === 'Swatches (Dyes)' && /^House .+ Swatch$/i.test(entry.name))
+    .sort((a, b) => a.name.localeCompare(b.name) || a.template.localeCompare(b.template))
+}
+
 export function filterCosmeticsCatalog(catalog: CosmeticEntry[], query: string): CosmeticEntry[] {
   const q = query.trim().toLowerCase()
   if (!q) return catalog

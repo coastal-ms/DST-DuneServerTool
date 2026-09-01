@@ -26,7 +26,7 @@ import {
   restoreDestroyed,
   setFactionTier, setSkillPoints,
   setStarterClass, spawnVehicle, teleportToPlayer, teleportToLocation, setRespawn, getTeleportDestinations, getPlayers, updatePlayerTags, wipeCodex, resetFaction, snapshotBuilds, getFreshStartSnapshots, restoreBuilds, grantAllSkills,
-  chatWhisper, isValidTemplateId, getItemCatalog, getCosmeticsCatalog, getPlayerOwnedCosmetics, filterCosmeticsCatalog, type CosmeticEntry,
+  chatWhisper, isValidTemplateId, getItemCatalog, getCosmeticsCatalog, getPlayerOwnedCosmetics, filterCosmeticsCatalog, getHouseSwatchCosmetics, type CosmeticEntry,
   parseTcnoPackageText,
   giveItems, getItemPackages, saveItemPackage, deleteItemPackage,
   getLandsraadOverview, getLandsraadPlayerContributions, setLandsraadContribution,
@@ -1095,12 +1095,40 @@ function ActionRow({ def, player, busy, stats, open, danger, onToggle, runAction
               })} />
           ) : def.custom === 'grant-cosmetic' ? (
             <GrantCosmeticForm busy={busy} playerName={player.name} accountId={player.account_id}
+              playerOnline={['online', 'loggingout'].includes((player.online_status || '').toLowerCase())}
               onGrant={async (tpl, label) => {
                 let succeeded = false
                 await runAction(def, async () => {
                   const r = await giveItem(player.id, tpl, 1, 0, true)
                   succeeded = true
                   return { message: r.message || `Granted "${label}" to ${player.name}.` }
+                })
+                return succeeded
+              }}
+              onGrantHouseSwatches={async entries => {
+                let succeeded = false
+                await runAction(def, async () => {
+                  const r = await giveItems(
+                    player.id,
+                    entries.map(entry => ({ template: entry.template, qty: 1, quality: 0 })),
+                    false,
+                  )
+                  if (!r.ok) throw new Error(r.message || 'House Swatch grant failed.')
+
+                  const verified = await getPlayerOwnedCosmetics(player.account_id)
+                  const ownedAfter = new Set((verified.owned || []).map(id => id.toLowerCase()))
+                  const unresolved = entries.filter(entry => !ownedAfter.has(entry.template.toLowerCase()))
+                  if (unresolved.length > 0) {
+                    throw new Error(
+                      `${entries.length - unresolved.length}/${entries.length} House Swatches verified; ` +
+                      `${unresolved.length} did not register.`,
+                    )
+                  }
+
+                  succeeded = true
+                  return {
+                    message: `Granted and verified ${entries.length} missing House Swatch${entries.length === 1 ? '' : 'es'} for ${player.name}.`,
+                  }
                 })
                 return succeeded
               }} />
@@ -1333,11 +1361,13 @@ function DestinationForm({ busy, submitLabel, icon, note, onSubmit }: {
 // swatches, vehicle skins) and delivers the chosen template via the normal
 // give-item path so the player unlocks the appearance. Loads the catalog on
 // mount; filters by name/template; groups results by type.
-function GrantCosmeticForm({ busy, playerName, accountId, onGrant }: {
+function GrantCosmeticForm({ busy, playerName, accountId, playerOnline, onGrant, onGrantHouseSwatches }: {
   busy: boolean
   playerName: string
   accountId: number
+  playerOnline: boolean
   onGrant: (template: string, label: string) => Promise<boolean>
+  onGrantHouseSwatches: (entries: CosmeticEntry[]) => Promise<boolean>
 }) {
   const [catalog, setCatalog] = useState<CosmeticEntry[] | null>(null)
   const [err, setErr] = useState<string | null>(null)
@@ -1379,6 +1409,11 @@ function GrantCosmeticForm({ busy, playerName, accountId, onGrant }: {
     () => (catalog && owned ? catalog.filter(e => owned.has(e.template.toLowerCase())).length : 0),
     [catalog, owned],
   )
+  const houseSwatches = useMemo(() => getHouseSwatchCosmetics(catalog || []), [catalog])
+  const missingHouseSwatches = useMemo(
+    () => houseSwatches.filter(entry => !owned?.has(entry.template.toLowerCase())),
+    [houseSwatches, owned],
+  )
   const groups = useMemo(() => {
     const m = new Map<string, CosmeticEntry[]>()
     for (const e of matches) { const a = m.get(e.group); if (a) a.push(e); else m.set(e.group, [e]) }
@@ -1400,6 +1435,47 @@ function GrantCosmeticForm({ busy, playerName, accountId, onGrant }: {
         </p>
       </div>
       {ownershipWarning && <div className="text-xs text-warning">{ownershipWarning}</div>}
+      <div className="rounded-lg border border-border bg-surface-2 p-3 space-y-2">
+        <div className="flex items-start justify-between gap-3">
+          <div>
+            <div className="text-sm font-medium text-text">All House Swatches</div>
+            <div className="text-[11px] text-text-dim">
+              Grants only missing vendor House Swatch unlocks. Player must be fully offline.
+            </div>
+          </div>
+          <span className="text-[11px] text-text-dim whitespace-nowrap">
+            {houseSwatches.length - missingHouseSwatches.length}/{houseSwatches.length} owned
+          </span>
+        </div>
+        <button
+          type="button"
+          className="btn-secondary w-full"
+          disabled={busy || playerOnline || missingHouseSwatches.length === 0}
+          title={playerOnline ? 'Player must be fully offline' : undefined}
+          onClick={async () => {
+            if (!window.confirm(
+              `Grant ${missingHouseSwatches.length} missing House Swatch unlock${missingHouseSwatches.length === 1 ? '' : 's'} to ${playerName}?\n\n` +
+              'The player must remain fully offline until the grant completes.'
+            )) return
+            if (await onGrantHouseSwatches(missingHouseSwatches)) {
+              setOwned(current => {
+                const next = new Set(current)
+                for (const entry of missingHouseSwatches) next.add(entry.template.toLowerCase())
+                return next
+              })
+            }
+          }}
+        >
+          {busy
+            ? <><Icon name="Loader2" size={13} className="animate-spin" /> Granting House Swatches...</>
+            : missingHouseSwatches.length === 0
+              ? <><Icon name="Check" size={13} /> All House Swatches owned</>
+              : <><Icon name="Palette" size={13} /> Grant {missingHouseSwatches.length} missing House Swatches</>}
+        </button>
+        {playerOnline && (
+          <div className="text-[11px] text-warning">Player is online. Fully log out before using this preset.</div>
+        )}
+      </div>
       <label className="flex items-center justify-between gap-3 text-xs text-text-dim">
         <span className="flex items-center gap-2">
           <input type="checkbox" checked={showOwned} disabled={busy}
