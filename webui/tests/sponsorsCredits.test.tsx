@@ -64,7 +64,13 @@ describe('Sponsors & Credits', () => {
     expect(screen.getByRole('heading', { name: 'Sponsors & Credits' })).toBeInTheDocument()
     const dukeNotesHeading = screen.getByRole('heading', { name: 'Notes from Duke', level: 3 })
     const credits = screen.getByRole('list', { name: 'Project supporters' })
+    expect(
+      screen.getByText(
+        "These personal thank-you notes are written by Duke, DST's AI admin—not by Coastal. 🙂",
+      ),
+    ).toBeInTheDocument()
     expect(within(credits).getAllByRole('listitem')).toHaveLength(18)
+    expect(within(credits).getAllByText('— Duke', { exact: true })).toHaveLength(SUPPORTER_CREDITS.length)
     for (const name of EXPECTED_CREDIT_NAMES) {
       expect(within(credits).getAllByText(name, { exact: true })).toHaveLength(1)
     }
