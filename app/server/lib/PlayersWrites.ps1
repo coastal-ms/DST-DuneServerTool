@@ -433,6 +433,135 @@ function Invoke-DunePlayerGiveItemsBulk {
     return @{ ok = $ok; message = $msg; results = $results.ToArray(); failures = $failures; total = $total }
 }
 
+function Invoke-DunePlayerGrantHouseSwatches {
+    param([string]$Ip, [long]$PawnId, [long]$AccountId)
+    if ($PawnId -le 0) { return @{ ok = $false; error = 'pawn_id is required.' } }
+    if ($AccountId -le 0) { return @{ ok = $false; error = 'account_id is required.' } }
+
+    $off = Test-DunePlayerOffline -Ip $Ip -PawnId $PawnId
+    if (-not $off.ok) { return @{ ok = $false; error = $off.reason } }
+
+    $houseSwatches = @(Get-DuneHouseSwatchCatalog)
+    if ($houseSwatches.Count -eq 0) {
+        return @{ ok = $false; error = 'House Swatch catalog is empty.' }
+    }
+
+    $before = Get-DunePlayerOwnedCosmeticsLive -Ip $Ip -AccountId $AccountId
+    if (-not $before.ok) {
+        return @{ ok = $false; error = "read current House Swatch ownership: $($before.error)" }
+    }
+    $ownedBefore = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::OrdinalIgnoreCase)
+    foreach ($id in @($before.owned)) {
+        if (-not [string]::IsNullOrWhiteSpace([string]$id)) { [void]$ownedBefore.Add([string]$id) }
+    }
+    $missing = @($houseSwatches | Where-Object { -not $ownedBefore.Contains([string]$_.template) })
+    $alreadyOwned = $houseSwatches.Count - $missing.Count
+    if ($missing.Count -eq 0) {
+        return @{
+            ok = $true
+            message = "All $($houseSwatches.Count) House Swatches are already owned."
+            total = $houseSwatches.Count
+            already_owned = $alreadyOwned
+            requested = 0
+            verified = 0
+            unresolved = @()
+        }
+    }
+
+    $values = [System.Collections.Generic.List[string]]::new()
+    foreach ($entry in $missing) {
+        $template = [string]$entry.template
+        $valid = Test-DuneValidGiveTemplate -TemplateId $template
+        if (-not $valid.ok) {
+            return @{ ok = $false; error = "invalid House Swatch '$template': $($valid.error)" }
+        }
+        $safeTemplate = ConvertTo-DuneSqlString $template
+        $statsJson = ConvertTo-DuneSqlString (Get-DuneGiveItemStatsJson -TemplateId $template)
+        $values.Add("('$safeTemplate'::text, '$statsJson'::jsonb)")
+    }
+    $valuesClause = $values -join ",`n        "
+    $sql = @"
+WITH inv AS (
+    SELECT id
+    FROM dune.inventories
+    WHERE actor_id = $PawnId::bigint AND inventory_type = 0
+    ORDER BY id
+    LIMIT 1
+),
+payload(template_id, stats) AS (
+    VALUES
+        $valuesClause
+),
+base AS (
+    SELECT inv.id AS inventory_id,
+           COALESCE(MAX(i.position_index), -1)::bigint + 1 AS first_position
+    FROM inv
+    LEFT JOIN dune.items i ON i.inventory_id = inv.id
+    GROUP BY inv.id
+),
+inserted AS (
+    INSERT INTO dune.items (
+        inventory_id, stack_size, position_index, template_id,
+        quality_level, acquisition_time, stats
+    )
+    SELECT base.inventory_id,
+           1::bigint,
+           base.first_position + ROW_NUMBER() OVER (ORDER BY payload.template_id) - 1,
+           payload.template_id,
+           0::bigint,
+           EXTRACT(EPOCH FROM now())::bigint,
+           payload.stats
+    FROM base
+    CROSS JOIN payload
+    WHERE NOT EXISTS (
+        SELECT 1
+        FROM dune.items existing
+        WHERE existing.inventory_id = base.inventory_id
+          AND existing.template_id = payload.template_id
+    )
+    RETURNING template_id
+)
+SELECT COALESCE(jsonb_agg(template_id ORDER BY template_id), '[]'::jsonb)::text AS inserted
+FROM inserted;
+"@
+    $write = Invoke-DuneSqlQuery -Ip $Ip -Sql $sql -ReadOnly $false -MaxRows 1 -TimeoutSec 60 -Bulk
+    if (-not $write.ok) { return @{ ok = $false; error = "grant House Swatches: $($write.error)" } }
+
+    $after = Get-DunePlayerOwnedCosmeticsLive -Ip $Ip -AccountId $AccountId
+    if (-not $after.ok) {
+        return @{ ok = $false; error = "verify House Swatch ownership: $($after.error)" }
+    }
+    $ownedAfter = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::OrdinalIgnoreCase)
+    foreach ($id in @($after.owned)) {
+        if (-not [string]::IsNullOrWhiteSpace([string]$id)) { [void]$ownedAfter.Add([string]$id) }
+    }
+    $unresolved = @($missing |
+        Where-Object { -not $ownedAfter.Contains([string]$_.template) } |
+        ForEach-Object { [string]$_.template })
+    $verified = $missing.Count - $unresolved.Count
+    if ($unresolved.Count -gt 0) {
+        return @{
+            ok = $false
+            error = "$verified/$($missing.Count) missing House Swatches verified; $($unresolved.Count) did not register."
+            total = $houseSwatches.Count
+            already_owned = $alreadyOwned
+            requested = $missing.Count
+            verified = $verified
+            unresolved = $unresolved
+        }
+    }
+
+    return @{
+        ok = $true
+        message = "Granted and verified $verified missing House Swatch$(if ($verified -eq 1) { '' } else { 'es' })."
+        total = $houseSwatches.Count
+        already_owned = $alreadyOwned
+        requested = $missing.Count
+        verified = $verified
+        unresolved = @()
+    }
+}
+
 # Repair equipped gear — OFFLINE only. Sets every durability item in the gear
 # inventory types to GREATEST(catalog.max_durability, item.MaxDurability,
 # item.CurrentDurability, item.DecayedMaxDurability), so a buggy/decayed

@@ -187,6 +187,16 @@ function Get-DuneCosmeticsCatalog {
     return @{ ok = $true; templates = $out; total = $out.Count }
 }
 
+function Get-DuneHouseSwatchCatalog {
+    $catalog = Get-DuneCosmeticsCatalog
+    return @($catalog.templates |
+        Where-Object {
+            [string]$_.group -eq 'Swatches (Dyes)' -and
+            [string]$_.name -match '^House .+ Swatch$'
+        } |
+        Sort-Object { $_.name }, { $_.template })
+}
+
 # Stats blob for a freshly-inserted give-item row. The game cannot deserialize an
 # item with empty stats ('{}') and silently drops it on zone/login load, so the
 # row exists in the DB but never materializes in-game. It also needs the SHAPE

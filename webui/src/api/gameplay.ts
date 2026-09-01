@@ -1865,6 +1865,24 @@ export function giveItems(pawnId: number, items: GiveItemEntry[], allowOverflow 
   })
 }
 
+export interface HouseSwatchGrantResult extends Record<string, unknown> {
+  total: number
+  already_owned: number
+  requested: number
+  verified: number
+  unresolved: string[]
+}
+
+export interface HouseSwatchGrantResponse extends WriteResult {
+  result?: HouseSwatchGrantResult
+}
+
+export function grantHouseSwatches(pawnId: number, accountId: number) {
+  return api<HouseSwatchGrantResponse>('/api/gameplay/players/grant-house-swatches', {
+    method: 'POST', body: JSON.stringify({ pawn_id: pawnId, account_id: accountId }),
+  })
+}
+
 // Admin-defined item packages — a saved, named bundle of items an admin can
 // hand to any player in one click (delivered via giveItems). Persisted
 // server-side (%APPDATA%\DuneServer\item-packages.json) so they survive restarts

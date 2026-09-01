@@ -27,7 +27,7 @@ import {
   setFactionTier, setSkillPoints,
   setStarterClass, spawnVehicle, teleportToPlayer, teleportToLocation, setRespawn, getTeleportDestinations, getPlayers, updatePlayerTags, wipeCodex, resetFaction, snapshotBuilds, getFreshStartSnapshots, restoreBuilds, grantAllSkills,
   chatWhisper, isValidTemplateId, getItemCatalog, getCosmeticsCatalog, getPlayerOwnedCosmetics, filterCosmeticsCatalog, getHouseSwatchCosmetics, type CosmeticEntry,
-  parseTcnoPackageText,
+  parseTcnoPackageText, grantHouseSwatches,
   giveItems, getItemPackages, saveItemPackage, deleteItemPackage,
   getLandsraadOverview, getLandsraadPlayerContributions, setLandsraadContribution,
   getPlayerJourneyNodes, completeJourneyNode, resetJourneyNode,
@@ -1105,30 +1105,12 @@ function ActionRow({ def, player, busy, stats, open, danger, onToggle, runAction
                 })
                 return succeeded
               }}
-              onGrantHouseSwatches={async entries => {
+              onGrantHouseSwatches={async () => {
                 let succeeded = false
                 await runAction(def, async () => {
-                  const r = await giveItems(
-                    player.id,
-                    entries.map(entry => ({ template: entry.template, qty: 1, quality: 0 })),
-                    false,
-                  )
-                  if (!r.ok) throw new Error(r.message || 'House Swatch grant failed.')
-
-                  const verified = await getPlayerOwnedCosmetics(player.account_id)
-                  const ownedAfter = new Set((verified.owned || []).map(id => id.toLowerCase()))
-                  const unresolved = entries.filter(entry => !ownedAfter.has(entry.template.toLowerCase()))
-                  if (unresolved.length > 0) {
-                    throw new Error(
-                      `${entries.length - unresolved.length}/${entries.length} House Swatches verified; ` +
-                      `${unresolved.length} did not register.`,
-                    )
-                  }
-
+                  const r = await grantHouseSwatches(player.id, player.account_id)
                   succeeded = true
-                  return {
-                    message: `Granted and verified ${entries.length} missing House Swatch${entries.length === 1 ? '' : 'es'} for ${player.name}.`,
-                  }
+                  return { message: r.message || `House Swatches updated for ${player.name}.` }
                 })
                 return succeeded
               }} />
@@ -1367,7 +1349,7 @@ function GrantCosmeticForm({ busy, playerName, accountId, playerOnline, onGrant,
   accountId: number
   playerOnline: boolean
   onGrant: (template: string, label: string) => Promise<boolean>
-  onGrantHouseSwatches: (entries: CosmeticEntry[]) => Promise<boolean>
+  onGrantHouseSwatches: () => Promise<boolean>
 }) {
   const [catalog, setCatalog] = useState<CosmeticEntry[] | null>(null)
   const [err, setErr] = useState<string | null>(null)
@@ -1457,7 +1439,7 @@ function GrantCosmeticForm({ busy, playerName, accountId, playerOnline, onGrant,
               `Grant ${missingHouseSwatches.length} missing House Swatch unlock${missingHouseSwatches.length === 1 ? '' : 's'} to ${playerName}?\n\n` +
               'The player must remain fully offline until the grant completes.'
             )) return
-            if (await onGrantHouseSwatches(missingHouseSwatches)) {
+            if (await onGrantHouseSwatches()) {
               setOwned(current => {
                 const next = new Set(current)
                 for (const entry of missingHouseSwatches) next.add(entry.template.toLowerCase())
