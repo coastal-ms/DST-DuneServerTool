@@ -211,6 +211,18 @@ Register-DuneRoute -Method POST -Path '/api/gameplay/players/apply-spec-level' -
     }
 }
 
+# POST /api/gameplay/players/prepare-pattern-upgrading  { controller_id }
+Register-DuneRoute -Method POST -Path '/api/gameplay/players/prepare-pattern-upgrading' -Handler {
+    param($req, $res, $routeParams, $body)
+    try {
+        $cid = Get-DuneBodyInt -Body $body -Name 'controller_id'
+        if ($null -eq $cid -or $cid -le 0) { Write-DuneError -Response $res -Status 400 -Message 'controller_id is required.'; return }
+        Invoke-DunePlayerWriteRoute -Response $res -Action { param($ip) Invoke-DunePlayerPreparePatternUpgrading -Ip $ip -ControllerId $cid }
+    } catch {
+        Write-DuneError -Response $res -Status 500 -Message "Prepare Pattern Upgrading failed: $($_.Exception.Message)"
+    }
+}
+
 # POST /api/gameplay/players/delete-item  { item_id }
 Register-DuneRoute -Method POST -Path '/api/gameplay/players/delete-item' -Handler {
     param($req, $res, $routeParams, $body)

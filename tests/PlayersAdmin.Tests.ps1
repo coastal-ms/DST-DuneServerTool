@@ -9,6 +9,7 @@ BeforeAll {
     # Drive the gate via a fake DB. $script:onlineStatus = $null => no
     # player_state row (treated offline). Capture the write SQL + count.
     $script:onlineStatus = 'Offline'
+    $script:statusQueryOk = $true
     $script:curIntel      = 0
     $script:resolvedPawn  = 200
     $script:lastWriteSql  = $null
@@ -19,6 +20,7 @@ BeforeAll {
     function global:Invoke-DuneSqlQuery {
         param([string] $Ip, [string] $Sql, [bool] $ReadOnly, [int] $MaxRows, [int] $TimeoutSec)
         if ($Sql -match 'online_status') {
+            if (-not $script:statusQueryOk) { return @{ ok = $false; error = 'database unavailable' } }
             if ($null -eq $script:onlineStatus) { return @{ ok = $true; maps = @() } }
             return @{ ok = $true; maps = @(@{ status = $script:onlineStatus }) }
         }
@@ -64,6 +66,7 @@ AfterAll {
 Describe 'Invoke-DunePlayerAwardIntel online gate' -Tag 'PlayersAdmin' {
     BeforeEach {
         $script:onlineStatus = 'Offline'
+        $script:statusQueryOk = $true
         $script:curIntel     = 0
         $script:resolvedPawn = 200
         $script:lastWriteSql = $null
@@ -149,9 +152,35 @@ Describe 'Invoke-DunePlayerAwardIntel online gate' -Tag 'PlayersAdmin' {
     }
 }
 
+Describe 'Test-DunePlayerOfflineByController' -Tag 'PlayersAdmin' {
+    BeforeEach {
+        $script:onlineStatus = 'Offline'
+        $script:statusQueryOk = $true
+    }
+
+    It 'fails closed when player status cannot be verified' {
+        $script:statusQueryOk = $false
+
+        $r = Test-DunePlayerOfflineByController -Ip 'x' -ControllerId 100
+
+        $r.ok | Should -BeFalse
+        $r.reason | Should -Match 'could not be verified'
+    }
+
+    It 'can require an existing player state row before a destructive write' {
+        $script:onlineStatus = $null
+
+        $r = Test-DunePlayerOfflineByController -Ip 'x' -ControllerId 100 -RequireExistingPlayerState
+
+        $r.ok | Should -BeFalse
+        $r.reason | Should -Match 'no player state'
+    }
+}
+
 Describe 'Invoke-DunePlayerAwardCharXp offline actor targeting' -Tag 'PlayersAdmin' {
     BeforeEach {
         $script:onlineStatus     = 'Offline'
+        $script:statusQueryOk    = $true
         $script:curIntel         = 0
         $script:resolvedPawn     = 200
         $script:lastWriteSql     = $null

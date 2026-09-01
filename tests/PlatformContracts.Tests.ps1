@@ -170,7 +170,7 @@ Describe 'Complete route classification' {
     It 'classifies the exact registered HTTP and WebSocket inventory' {
         $records = @(Get-PlatformRouteRecords)
         $manifest = Get-DuneRoutePolicyManifest
-        $records.Count | Should -Be 353
+        $records.Count | Should -Be 354
         $sources = @($records.SourceFile | Sort-Object -Unique)
         @($manifest.groups.source | Sort-Object) | Should -Be $sources
 
@@ -227,6 +227,10 @@ Describe 'Complete route classification' {
         }).Count | Should -BeGreaterThan 0
         @($script:DuneRoutes | Where-Object Path -eq '/api/gameplay/players/journey/reset').Classification.lifecycle |
             Should -Be 'destructive'
+        @($script:DuneRoutes | Where-Object Path -eq '/api/gameplay/players/prepare-pattern-upgrading').Classification.lifecycle |
+            Should -Be 'destructive'
+        @($script:DuneRoutes | Where-Object Path -eq '/api/gameplay/players/prepare-pattern-upgrading').Classification.capabilityId |
+            Should -Be 'player.manage.destructive'
         foreach ($path in @(
             '/api/gameplay/players/clean-inventory',
             '/api/gameplay/players/reset-progression'
@@ -298,7 +302,7 @@ $result = @{
         $LASTEXITCODE | Should -Be 0 -Because ($output -join [Environment]::NewLine)
         $resultLine = @($output | Where-Object { [string]$_ -like 'ROUTE_RESULT:*' })[-1]
         $result = ([string]$resultLine).Substring('ROUTE_RESULT:'.Length) | ConvertFrom-Json
-        $result.total | Should -Be 353
+        $result.total | Should -Be 354
         $result.unclassified | Should -Be 0
         $result.incompatible | Should -Be 0
         $result.podsCleanup | Should -Be 1

@@ -12,7 +12,7 @@ import { Icon } from '../../../components/Icon'
 import { ItemPicker } from '../../../components/ItemPicker'
 import { TagPicker } from '../../../components/TagPicker'
 import {
-  applySpecLevel, awardCharXp, awardIntel, setSpecLevel, cheatScript, cleanPlayerInventory,
+  applySpecLevel, awardCharXp, awardIntel, setSpecLevel, preparePatternUpgrading, cheatScript, cleanPlayerInventory,
   applyProgressionPreset, getProgressionPresets,
   progressionUnlock, progressionReverse,
   deleteAccount, deleteInventoryItem, deleteTutorials,
@@ -222,10 +222,18 @@ export function SpecsSection({ player, canWrite, demo, refreshKey, flash, onChan
                   }
                 }}
                 onApplyLevel={(level) => {
-                  if (window.confirm(`Set ${name} to level ${level} and apply every ${name} specialization reward available through that level for ${player.name}?\n\nThe player must be fully offline because skill-point rewards update character state. Existing rewards are preserved. Rewards above level ${level} are not removed. The change appears in-game after a full re-login.`)) {
+                  const patternNote = name === 'Crafting' && level >= 52
+                    ? '\n\nPattern Upgrading will be left unclaimed. The player must purchase it in-game after logging in so the Grade 2-5 schematic recipes are created.'
+                    : ''
+                  if (window.confirm(`Set ${name} to level ${level} and apply every ${name} specialization reward available through that level for ${player.name}?\n\nThe player must be fully offline because skill-point rewards update character state. Existing rewards are preserved. Rewards above level ${level} are not removed. The change appears in-game after a full re-login.${patternNote}`)) {
                     void run(() => applySpecLevel(player.controller_id, name, level), 'Apply level')
                   }
                 }}
+                onRepairPatternUpgrading={name === 'Crafting' ? () => {
+                  if (window.confirm(`Prepare Pattern Upgrading for in-game repurchase by ${player.name}?\n\nUse this only when Pattern Upgrading appears claimed but the Grade 2-5 schematic recipes are missing. The player must be fully offline. This removes only the Pattern Upgrading claim; after logging in, the player must purchase it again in Crafting specializations.`)) {
+                    void run(() => preparePatternUpgrading(player.controller_id), 'Prepare Pattern Upgrading')
+                  }
+                } : undefined}
               />
             )
           })}
@@ -237,10 +245,11 @@ export function SpecsSection({ player, canWrite, demo, refreshKey, flash, onChan
 
 const SPEC_TRACK_ORDER = ['Combat', 'Crafting', 'Exploration', 'Gathering', 'Sabotage']
 
-function SpecRow({ name, track, canWrite, busy, onGrantMax, onReset, onSetLevel, onApplyLevel }: {
+function SpecRow({ name, track, canWrite, busy, onGrantMax, onReset, onSetLevel, onApplyLevel, onRepairPatternUpgrading }: {
   name: string; track: SpecTrackFull | undefined; canWrite: boolean; busy: boolean
   onGrantMax: () => void; onReset: () => void
   onSetLevel: (level: number) => void; onApplyLevel: (level: number) => void
+  onRepairPatternUpgrading?: () => void
 }) {
   const xp = track?.xp ?? 0
   const level = Math.round(track?.level ?? 0)
@@ -291,6 +300,13 @@ function SpecRow({ name, track, canWrite, busy, onGrantMax, onReset, onSetLevel,
               <button className="btn-secondary" disabled={busy || !valid} title={`Set level and apply ${name} rewards available through that level`} onClick={() => onApplyLevel(parsed)}>
                 <Icon name="Sparkles" size={13} /> Apply level
               </button>
+              {onRepairPatternUpgrading && (
+                <button className="btn-secondary text-warning" disabled={busy}
+                  title="Remove only the Pattern Upgrading claim so it can be purchased in-game and create its recipes"
+                  onClick={onRepairPatternUpgrading}>
+                  <Icon name="Wrench" size={13} /> Repair Pattern
+                </button>
+              )}
               <button className="btn-secondary" disabled={busy} title="Grant max level for this track" onClick={onGrantMax}>
                 <Icon name="ChevronsUp" size={13} /> Max
               </button>
