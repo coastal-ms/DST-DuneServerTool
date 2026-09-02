@@ -28,6 +28,54 @@ function Get-DuneInventoryEntityTypes {
     return $types
 }
 
+function Resolve-DuneInventoryScope {
+    param(
+        [bool]$HasScopeType,
+        [string]$ScopeTypeValue,
+        [bool]$HasScopeId,
+        [string]$ScopeIdValue,
+        [string[]]$EntityTypes
+    )
+    if (-not $HasScopeType -and -not $HasScopeId) {
+        return @{ ok = $true; scopeType = ''; scopeId = 0L }
+    }
+    if (-not $HasScopeType) {
+        return @{ ok = $false; error = 'scope_type is required when scope_id is set.' }
+    }
+    if (-not $HasScopeId) {
+        return @{ ok = $false; error = 'scope_id is required when scope_type is set.' }
+    }
+
+    $scopeType = $ScopeTypeValue.Trim().ToLowerInvariant()
+    if ($scopeType -notin @('player', 'storage') -or $scopeType -notin $EntityTypes) {
+        return @{ ok = $false; error = 'scope_type must be one of the requested supported types.' }
+    }
+    $scopeId = 0L
+    if (-not [Int64]::TryParse($ScopeIdValue, [ref]$scopeId) -or $scopeId -le 0) {
+        return @{ ok = $false; error = 'scope_id must be a positive integer.' }
+    }
+    return @{ ok = $true; scopeType = $scopeType; scopeId = $scopeId }
+}
+
+function Resolve-DuneInventoryRequestedMode {
+    param([bool]$DemoRequested, [string]$CursorMode = '')
+    $mode = if ($DemoRequested) { 'demo' } else { 'live' }
+    if ($CursorMode -and $CursorMode -ne $mode) {
+        return @{ ok = $false; error = "Cursor source does not match requested $mode mode." }
+    }
+    return @{ ok = $true; mode = $mode }
+}
+
+function Test-DuneInventoryQueryParameterPresent {
+    param($Request, [string]$Name)
+    $queryString = $Request.QueryString
+    if ($null -eq $queryString) { return $false }
+    if ($queryString -is [Collections.IDictionary]) {
+        return $queryString.Contains($Name)
+    }
+    return @($queryString.AllKeys) -contains $Name
+}
+
 function Get-DuneInventoryMetadataMatches {
     param([string]$Query, [int]$Maximum = 500)
     if (-not $Query) { return @() }
@@ -298,4 +346,33 @@ function Select-DuneInventoryDemoItems {
             [string]$_.entity.map -like "*$needle*"
         )
     } | Sort-Object id | Select-Object -First $Limit)
+}
+
+function Invoke-DuneInventoryRequestedPage {
+    param(
+        [ValidateSet('live', 'demo')][string]$Mode,
+        [string]$Query,
+        [string[]]$EntityTypes,
+        [string]$ScopeType = '',
+        [long]$ScopeId = 0,
+        [long]$AfterItemId = 0,
+        [int]$Limit = 101
+    )
+    if ($Mode -eq 'demo') {
+        $items = @(Select-DuneInventoryDemoItems -Items (Get-DuneInventoryDemoItems) `
+            -Query $Query -EntityTypes $EntityTypes -ScopeType $ScopeType -ScopeId $ScopeId `
+            -AfterItemId $AfterItemId -Limit $Limit)
+        return @{ ok = $true; source = 'static'; mode = 'demo'; items = $items }
+    }
+
+    $context = Get-DuneDbContext
+    if (-not $context.ok) {
+        return @{ ok = $false; status = 503; error = "Inventory database unavailable: $([string]$context.message)" }
+    }
+    $live = Invoke-DuneInventorySearchLive -Ip $context.ip -Query $Query -EntityTypes $EntityTypes `
+        -ScopeType $ScopeType -ScopeId $ScopeId -AfterItemId $AfterItemId -Limit $Limit
+    if (-not $live.ok) {
+        return @{ ok = $false; status = 503; error = "Inventory database read failed: $([string]$live.error)" }
+    }
+    return @{ ok = $true; source = 'live'; mode = 'live'; items = @($live.items) }
 }

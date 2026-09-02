@@ -5,6 +5,16 @@ BeforeAll {
     Import-DstLib 'GameplayPlayers.ps1'
     Import-DstLib 'GameplayWorld.ps1'
     Import-DstLib 'InventoryExplorer.ps1'
+    $script:DuneInventoryDbContextResult = @{ ok = $false; message = 'database down' }
+    $script:DuneInventoryDbContextCalls = 0
+    function global:Get-DuneDbContext {
+        $script:DuneInventoryDbContextCalls += 1
+        return $script:DuneInventoryDbContextResult
+    }
+}
+
+AfterAll {
+    Remove-Item Function:\global:Get-DuneDbContext -ErrorAction SilentlyContinue
 }
 
 Describe 'Shared Inventory Explorer read model' -Tag 'Pure' {
@@ -72,6 +82,67 @@ Describe 'Shared Inventory Explorer read model' -Tag 'Pure' {
         $playerItems = @(Select-DuneInventoryDemoItems -Items $all -EntityTypes @('player') -ScopeType player -ScopeId 20001 -Limit 100)
         $playerItems.Count | Should -BeGreaterThan 0
         @($playerItems | Where-Object { $_.entity.type -ne 'player' -or $_.entity.id -ne 20001 }).Count | Should -Be 0
+    }
+
+    It 'rejects every malformed or incomplete supplied scope' {
+        $types = @('player', 'storage')
+        foreach ($case in @(
+            @{ HasType = $false; Type = ''; HasId = $true; Id = '42' },
+            @{ HasType = $true; Type = 'player'; HasId = $false; Id = '' },
+            @{ HasType = $true; Type = 'player'; HasId = $true; Id = '' },
+            @{ HasType = $true; Type = 'player'; HasId = $true; Id = 'bad' },
+            @{ HasType = $true; Type = 'player'; HasId = $true; Id = '0' },
+            @{ HasType = $true; Type = 'player'; HasId = $true; Id = '-1' }
+        )) {
+            $scope = Resolve-DuneInventoryScope `
+                -HasScopeType $case.HasType -ScopeTypeValue $case.Type `
+                -HasScopeId $case.HasId -ScopeIdValue $case.Id -EntityTypes $types
+            $scope.ok | Should -BeFalse
+        }
+
+        $unscoped = Resolve-DuneInventoryScope -HasScopeType $false -ScopeTypeValue '' `
+            -HasScopeId $false -ScopeIdValue '' -EntityTypes $types
+        $unscoped.ok | Should -BeTrue
+        $unscoped.scopeId | Should -Be 0
+    }
+
+    It 'distinguishes an absent scope parameter from a supplied invalid value' {
+        $queryString = [Collections.Specialized.NameValueCollection]::new()
+        $queryString.Add('scope_id', '')
+        $request = [pscustomobject]@{ QueryString = $queryString }
+        (Test-DuneInventoryQueryParameterPresent -Request $request -Name 'scope_id') | Should -BeTrue
+        (Test-DuneInventoryQueryParameterPresent -Request $request -Name 'scope_type') | Should -BeFalse
+    }
+
+    It 'requires cursor source to exactly match the explicitly requested mode' {
+        (Resolve-DuneInventoryRequestedMode -DemoRequested $false -CursorMode '').mode | Should -Be 'live'
+        (Resolve-DuneInventoryRequestedMode -DemoRequested $true -CursorMode '').mode | Should -Be 'demo'
+        (Resolve-DuneInventoryRequestedMode -DemoRequested $false -CursorMode 'demo').ok | Should -BeFalse
+        (Resolve-DuneInventoryRequestedMode -DemoRequested $true -CursorMode 'live').ok | Should -BeFalse
+    }
+
+    It 'fails closed when the requested live database page is unavailable' {
+        $script:DuneInventoryDbContextResult = @{ ok = $false; message = 'database down' }
+        $script:DuneInventoryDbContextCalls = 0
+
+        $result = Invoke-DuneInventoryRequestedPage -Mode live -EntityTypes @('player') -Limit 101
+
+        $result.ok | Should -BeFalse
+        $result.status | Should -Be 503
+        $result.error | Should -Match 'database down'
+        $script:DuneInventoryDbContextCalls | Should -Be 1
+    }
+
+    It 'returns demo rows only for an explicit demo request' {
+        $script:DuneInventoryDbContextCalls = 0
+
+        $result = Invoke-DuneInventoryRequestedPage -Mode demo -EntityTypes @('player') -Limit 101
+
+        $result.ok | Should -BeTrue
+        $result.mode | Should -Be 'demo'
+        $result.source | Should -Be 'static'
+        @($result.items).Count | Should -BeGreaterThan 0
+        $script:DuneInventoryDbContextCalls | Should -Be 0
     }
 
     It 'keeps the live bridge read-only and bounded' {

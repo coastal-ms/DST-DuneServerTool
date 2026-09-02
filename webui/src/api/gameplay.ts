@@ -71,7 +71,6 @@ export interface SharedInventoryResponse {
     supportedEntityTypes: InventoryEntityType[]
     unavailableEntityTypes: Array<'base' | 'vehicle'>
     items: SharedInventoryItem[]
-    liveError?: string
   }
   page: {
     limit: number

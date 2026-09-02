@@ -16,22 +16,18 @@ Register-DuneRoute -Method GET -Path '/api/v1/inventory/items' -Handler {
             return
         }
 
-        $scopeType = (Get-DuneQ $req 'scope_type').Trim().ToLowerInvariant()
-        $scopeId = 0L
-        [void][Int64]::TryParse((Get-DuneQ $req 'scope_id'), [ref]$scopeId)
-        if ($scopeType) {
-            if ($scopeType -notin @('player', 'storage') -or $scopeType -notin $entityTypes) {
-                Write-DuneError -Response $res -Status 400 -Message 'scope_type must be one of the requested supported types.'
-                return
-            }
-            if ($scopeId -le 0) {
-                Write-DuneError -Response $res -Status 400 -Message 'scope_id must be a positive integer when scope_type is set.'
-                return
-            }
-        } elseif ($scopeId -gt 0) {
-            Write-DuneError -Response $res -Status 400 -Message 'scope_type is required when scope_id is set.'
+        $scope = Resolve-DuneInventoryScope `
+            -HasScopeType (Test-DuneInventoryQueryParameterPresent -Request $req -Name 'scope_type') `
+            -ScopeTypeValue (Get-DuneQ $req 'scope_type') `
+            -HasScopeId (Test-DuneInventoryQueryParameterPresent -Request $req -Name 'scope_id') `
+            -ScopeIdValue (Get-DuneQ $req 'scope_id') `
+            -EntityTypes $entityTypes
+        if (-not $scope.ok) {
+            Write-DuneError -Response $res -Status 400 -Message ([string]$scope.error)
             return
         }
+        $scopeType = [string]$scope.scopeType
+        $scopeId = [long]$scope.scopeId
 
         $limit = Get-DuneInventoryLimit -Value (Get-DuneQ $req 'limit')
         $principal = Get-DuneRouteRequestPrincipal $routeParams
@@ -55,39 +51,20 @@ Register-DuneRoute -Method GET -Path '/api/v1/inventory/items' -Handler {
         }
 
         $demoRequested = Test-DuneDemoRequested $req
-        if ($demoRequested -and $cursorMode -eq 'live') {
-            Write-DuneError -Response $res -Status 400 -Message 'Cursor source does not match demo mode.'
+        $requestedMode = Resolve-DuneInventoryRequestedMode -DemoRequested $demoRequested -CursorMode $cursorMode
+        if (-not $requestedMode.ok) {
+            Write-DuneError -Response $res -Status 400 -Message ([string]$requestedMode.error)
             return
         }
-        $source = 'static'
-        $freshnessState = 'fresh'
-        $liveError = ''
-        $items = $null
-        if (-not $demoRequested -and $cursorMode -ne 'demo') {
-            $ctx = Get-DuneDbContext
-            if ($ctx.ok) {
-                $live = Invoke-DuneInventorySearchLive -Ip $ctx.ip -Query $query -EntityTypes $entityTypes `
-                    -ScopeType $scopeType -ScopeId $scopeId -AfterItemId $afterItemId -Limit ($limit + 1)
-                if ($live.ok) {
-                    $items = @($live.items)
-                    $source = 'live'
-                } else {
-                    $liveError = [string]$live.error
-                }
-            } else {
-                $liveError = [string]$ctx.message
-            }
+        $pageResult = Invoke-DuneInventoryRequestedPage -Mode ([string]$requestedMode.mode) `
+            -Query $query -EntityTypes $entityTypes -ScopeType $scopeType -ScopeId $scopeId `
+            -AfterItemId $afterItemId -Limit ($limit + 1)
+        if (-not $pageResult.ok) {
+            Write-DuneError -Response $res -Status ([int]$pageResult.status) -Message ([string]$pageResult.error)
+            return
         }
-        if ($null -eq $items) {
-            if ($cursorMode -eq 'live') {
-                Write-DuneError -Response $res -Status 503 -Message "Inventory page could not be read from the live database: $liveError"
-                return
-            }
-            $items = @(Select-DuneInventoryDemoItems -Items (Get-DuneInventoryDemoItems) `
-                -Query $query -EntityTypes $entityTypes -ScopeType $scopeType -ScopeId $scopeId `
-                -AfterItemId $afterItemId -Limit ($limit + 1))
-            if ($liveError) { $freshnessState = 'partial' }
-        }
+        $source = [string]$pageResult.source
+        $items = @($pageResult.items)
 
         $truncated = $items.Count -gt $limit
         $pageItems = @($items | Select-Object -First $limit)
@@ -98,23 +75,22 @@ Register-DuneRoute -Method GET -Path '/api/v1/inventory/items' -Handler {
                 -Query $query -Generation $script:DuneInventoryCursorGeneration `
                 -Position ([ordered]@{
                     itemId = [long]$pageItems[-1].id
-                    mode = if ($source -eq 'live') { 'live' } else { 'demo' }
+                    mode = [string]$requestedMode.mode
                 })
         }
         $observedAt = (Get-Date).ToUniversalTime().ToString('o')
         $capabilities = @(Get-DuneCapabilitiesForPrincipal $principal | ForEach-Object { [string]$_.id })
         $data = [ordered]@{
-            mode = if ($source -eq 'live') { 'live' } else { 'demo' }
+            mode = [string]$requestedMode.mode
             query = $query
             supportedEntityTypes = @('player', 'storage')
             unavailableEntityTypes = @('base', 'vehicle')
             items = $pageItems
         }
-        if ($liveError) { $data.liveError = $liveError }
         $envelope = New-DuneApiV1Envelope `
             -RequestId ([string]$routeParams.requestId) `
             -Source $source `
-            -Freshness (New-DuneApiFreshness -State $freshnessState -ObservedAt $observedAt -LastErrorCode $(if ($liveError) { 'inventory-live-unavailable' } else { '' })) `
+            -Freshness (New-DuneApiFreshness -State fresh -ObservedAt $observedAt) `
             -Capabilities $capabilities `
             -Data $data `
             -Page (New-DuneApiPage -Limit $limit -NextCursor $nextCursor -Truncated $truncated)

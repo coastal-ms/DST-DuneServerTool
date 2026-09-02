@@ -139,6 +139,32 @@ describe('Shared Inventory Explorer', () => {
     })))
   })
 
+  it('sends a complete valid scope and explicit demo request without broadening', async () => {
+    window.history.replaceState(
+      null,
+      '',
+      '/bases?view=inventory&scope_type=storage&scope_id=50001&demo=1',
+    )
+    inventoryApi.mockResolvedValue({
+      ...fixture,
+      source: 'static',
+      data: { ...fixture.data, mode: 'demo' },
+    })
+    render(
+      <BrowserRouter>
+        <SharedInventoryExplorer entityTypes={['storage']} />
+      </BrowserRouter>,
+    )
+
+    await waitFor(() => expect(inventoryApi).toHaveBeenCalledWith(expect.objectContaining({
+      types: ['storage'],
+      scopeType: 'storage',
+      scopeId: 50001,
+      demo: true,
+    })))
+    expect(screen.getByText('Showing bundled demo inventory')).toBeInTheDocument()
+  })
+
   it('renders vehicle cargo as honestly unavailable without calling inventory APIs', () => {
     render(
       <BrowserRouter>
@@ -164,6 +190,24 @@ describe('Shared Inventory Explorer', () => {
     )
 
     expect(screen.getByText('Shared inventory is not included in this backend')).toBeInTheDocument()
+    expect(inventoryApi).not.toHaveBeenCalled()
+  })
+
+  it.each([
+    '/players?view=inventory&scope_type=player',
+    '/players?view=inventory&scope_id=20001',
+    '/players?view=inventory&scope_type=player&scope_id=bad',
+    '/players?view=inventory&scope_type=player&scope_id=0',
+    '/players?view=inventory&scope_type=player&scope_id=-1',
+  ])('does not broaden invalid scoped URL %s', route => {
+    window.history.replaceState(null, '', route)
+    render(
+      <BrowserRouter>
+        <SharedInventoryExplorer entityTypes={['player']} />
+      </BrowserRouter>,
+    )
+
+    expect(screen.getByText('Invalid inventory scope')).toBeInTheDocument()
     expect(inventoryApi).not.toHaveBeenCalled()
   })
 })

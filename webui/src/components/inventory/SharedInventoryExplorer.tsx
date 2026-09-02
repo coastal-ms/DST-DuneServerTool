@@ -38,14 +38,28 @@ export function SharedInventoryExplorer({
 }) {
   const search = useSearch()
   const searchParams = useMemo(() => new URLSearchParams(search), [search])
-  const requestedScopeType = searchParams.get('scope_type') as InventoryEntityType | null
-  const requestedScopeId = Number(searchParams.get('scope_id') ?? 0)
-  const scopeType = requestedScopeType && entityTypes.includes(requestedScopeType)
-    ? requestedScopeType
+  const hasScopeType = searchParams.has('scope_type')
+  const hasScopeId = searchParams.has('scope_id')
+  const requestedScopeType = searchParams.get('scope_type')
+  const requestedScopeId = searchParams.get('scope_id')
+  const parsedScopeId = Number(requestedScopeId)
+  const validScopeType = requestedScopeType === 'player' || requestedScopeType === 'storage'
+  const validScopeId = requestedScopeId !== null
+    && /^\d+$/.test(requestedScopeId)
+    && Number.isSafeInteger(parsedScopeId)
+    && parsedScopeId > 0
+  const scopeError = hasScopeType !== hasScopeId
+    ? 'Both scope_type and scope_id are required for a scoped inventory link.'
+    : hasScopeType && (!validScopeType || !entityTypes.includes(requestedScopeType as InventoryEntityType))
+      ? 'The requested inventory scope type is not supported in this workspace.'
+      : hasScopeId && !validScopeId
+        ? 'The requested inventory scope ID must be a positive integer.'
+        : ''
+  const scopeType = !scopeError && validScopeType
+    ? requestedScopeType as InventoryEntityType
     : undefined
-  const scopeId = scopeType && Number.isSafeInteger(requestedScopeId) && requestedScopeId > 0
-    ? requestedScopeId
-    : undefined
+  const scopeId = !scopeError && validScopeId ? parsedScopeId : undefined
+  const demoRequested = ['1', 'true', 'yes'].includes((searchParams.get('demo') ?? '').toLowerCase())
   const initialQuery = searchParams.get('q') ?? ''
   const [draftQuery, setDraftQuery] = useState(initialQuery)
   const [submittedQuery, setSubmittedQuery] = useState(initialQuery)
@@ -61,7 +75,7 @@ export function SharedInventoryExplorer({
   const canReadInventory = capabilities.hasCapability('inventory.read')
 
   const load = useCallback(async (cursor?: string, append = false) => {
-    if (!canReadInventory || unavailableReason) return
+    if (!canReadInventory || unavailableReason || scopeError) return
     const version = ++requestVersion.current
     if (append) setLoadingMore(true)
     else setLoading(true)
@@ -74,6 +88,7 @@ export function SharedInventoryExplorer({
         scopeId,
         limit: 100,
         cursor,
+        demo: demoRequested,
       })
       if (version !== requestVersion.current) return
       setResponse(result)
@@ -87,11 +102,11 @@ export function SharedInventoryExplorer({
         setLoadingMore(false)
       }
     }
-  }, [canReadInventory, entityTypes, scopeId, scopeType, submittedQuery, unavailableReason])
+  }, [canReadInventory, demoRequested, entityTypes, scopeError, scopeId, scopeType, submittedQuery, unavailableReason])
 
   useEffect(() => {
-    if (capabilityReady && canReadInventory && !unavailableReason) void load()
-  }, [capabilityReady, canReadInventory, load, unavailableReason])
+    if (capabilityReady && canReadInventory && !unavailableReason && !scopeError) void load()
+  }, [capabilityReady, canReadInventory, load, scopeError, unavailableReason])
 
   useEffect(() => () => {
     requestVersion.current += 1
@@ -103,6 +118,14 @@ export function SharedInventoryExplorer({
     return (
       <WorkspaceSection id="shared-inventory" title={title} description={description}>
         <DataState state="unavailable" title="Inventory scope not yet available" message={unavailableReason} />
+      </WorkspaceSection>
+    )
+  }
+
+  if (scopeError) {
+    return (
+      <WorkspaceSection id="shared-inventory" title={title} description={description}>
+        <DataState state="error" title="Invalid inventory scope" message={scopeError} />
       </WorkspaceSection>
     )
   }
@@ -208,11 +231,9 @@ export function SharedInventoryExplorer({
 
       {response?.data.mode === 'demo' && (
         <DataState
-          state={response.freshness.state === 'partial' ? 'partial' : 'fresh'}
+          state="fresh"
           title="Showing bundled demo inventory"
-          message={response.data.liveError
-            ? `The live database could not be read. ${response.data.liveError}`
-            : 'Demo mode is active; these rows are examples and not live server contents.'}
+          message="Demo mode was explicitly requested; these rows are examples and not live server contents."
         />
       )}
       {error && (
