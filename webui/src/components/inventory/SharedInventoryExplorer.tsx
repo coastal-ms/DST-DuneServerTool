@@ -12,6 +12,8 @@ import { Icon } from '../Icon'
 import { DataState, FreshnessBadge } from '../platform/DataState'
 import { DetailPanel } from '../platform/DetailPanel'
 import { WorkspaceSection } from '../platform/WorkspaceLayout'
+import { itemDetailsUrl, resolveItemIcon } from './InventoryItemIcon'
+import { InventorySlot } from './InventorySlot'
 
 function errorMessage(error: unknown) {
   return error instanceof ApiError ? error.message : error instanceof Error ? error.message : String(error)
@@ -70,6 +72,7 @@ export function SharedInventoryExplorer({
   const [response, setResponse] = useState<SharedInventoryResponse | null>(null)
   const [items, setItems] = useState<SharedInventoryItem[]>([])
   const [selected, setSelected] = useState<SharedInventoryItem | null>(null)
+  const [verifiedDetailsUrl, setVerifiedDetailsUrl] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
   const [loadingMore, setLoadingMore] = useState(false)
   const [error, setError] = useState('')
@@ -172,6 +175,18 @@ export function SharedInventoryExplorer({
   useEffect(() => () => {
     requestVersion.current += 1
   }, [])
+
+  useEffect(() => {
+    setVerifiedDetailsUrl(null)
+    if (!currentSelection) return
+    let active = true
+    void resolveItemIcon(currentSelection.templateId).then(iconUrl => {
+      if (active && iconUrl) setVerifiedDetailsUrl(itemDetailsUrl(currentSelection.templateId))
+    })
+    return () => {
+      active = false
+    }
+  }, [currentSelection])
 
   const busy = loading || loadingMore
 
@@ -318,40 +333,10 @@ export function SharedInventoryExplorer({
 
       {currentItems.length > 0 && (
         <>
-          <ul className="grid min-w-0 grid-cols-1 gap-2 xl:grid-cols-2" aria-label="Inventory results">
+          <ul className="grid min-w-0 grid-cols-[repeat(auto-fill,minmax(min(6.5rem,100%),1fr))] gap-2.5" aria-label="Inventory results">
             {currentItems.map(item => (
               <li key={`${item.entity.type}:${item.id}`} className="min-w-0">
-                <button
-                  type="button"
-                  className="card min-h-11 w-full min-w-0 p-4 text-left hover:border-accent/45 focus:outline-none focus-visible:ring-2 focus-visible:ring-ibad"
-                  onClick={() => setSelected(item)}
-                >
-                  <div className="flex min-w-0 flex-wrap items-start justify-between gap-2">
-                    <div className="min-w-0">
-                      <h3 className="break-words font-semibold text-text">{item.displayName || item.templateId}</h3>
-                      <p className="mt-1 break-all font-mono text-xs text-text-dim">{item.templateId}</p>
-                    </div>
-                    <span className="pill shrink-0 border-border text-text-muted">x{item.quantity}</span>
-                  </div>
-                  <dl className="mt-3 grid grid-cols-1 gap-2 text-sm sm:grid-cols-2">
-                    <div>
-                      <dt className="text-xs text-text-dim">Source</dt>
-                      <dd className="mt-0.5 break-words text-text">{entityTypeLabel(item.entity.type)}</dd>
-                    </div>
-                    <div>
-                      <dt className="text-xs text-text-dim">Entity</dt>
-                      <dd className="mt-0.5 break-words text-text">{item.entity.label || `Actor ${item.entity.id}`}</dd>
-                    </div>
-                    <div>
-                      <dt className="text-xs text-text-dim">Owner</dt>
-                      <dd className="mt-0.5 break-words text-text">{item.entity.owner || 'Not proven'}</dd>
-                    </div>
-                    <div>
-                      <dt className="text-xs text-text-dim">Map</dt>
-                      <dd className="mt-0.5 break-words text-text">{item.entity.map || 'Not reported'}</dd>
-                    </div>
-                  </dl>
-                </button>
+                <InventorySlot item={item} onSelect={setSelected} />
               </li>
             ))}
           </ul>
@@ -397,9 +382,22 @@ export function SharedInventoryExplorer({
               <div><dt className="text-text-dim">Map</dt><dd className="break-words">{currentSelection.entity.map || 'Not reported'}</dd></div>
               <div><dt className="text-text-dim">Observed</dt><dd>{currentResponse?.freshness.observedAt ? new Date(currentResponse.freshness.observedAt).toLocaleString() : 'Not reported'}</dd></div>
             </dl>
-            <Link className="btn-secondary mt-5 inline-flex min-h-11" to={currentSelection.entity.workspacePath}>
-              Open owning {currentSelection.entity.type === 'player' ? 'player' : 'container'}
-            </Link>
+            <div className="mt-5 flex flex-wrap gap-2">
+              <Link className="btn-secondary inline-flex min-h-11" to={currentSelection.entity.workspacePath}>
+                Open owning {currentSelection.entity.type === 'player' ? 'player' : 'container'}
+              </Link>
+              {verifiedDetailsUrl && (
+                <a
+                  className="btn-ghost inline-flex min-h-11 text-text-muted"
+                  href={verifiedDetailsUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                >
+                  View on dune.gaming.tools
+                  <Icon name="ExternalLink" size={14} />
+                </a>
+              )}
+            </div>
           </div>
         )}
       </DetailPanel>

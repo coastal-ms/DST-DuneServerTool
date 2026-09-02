@@ -1,7 +1,7 @@
 import React from 'react'
 import { act, cleanup, render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { SharedInventoryExplorer } from '../src/components/inventory/SharedInventoryExplorer'
 import { BrowserRouter } from '../src/router'
 
@@ -14,6 +14,7 @@ const capabilityState = vi.hoisted(() => ({
 }))
 
 const inventoryApi = vi.hoisted(() => vi.fn())
+const itemIconResolver = vi.hoisted(() => vi.fn())
 
 vi.mock('../src/hooks/usePlatformCapabilities', () => ({
   usePlatformCapabilities: () => ({
@@ -28,6 +29,11 @@ vi.mock('../src/hooks/usePlatformCapabilities', () => ({
 vi.mock('../src/api/gameplay', async importOriginal => {
   const actual = await importOriginal<typeof import('../src/api/gameplay')>()
   return { ...actual, getSharedInventory: inventoryApi }
+})
+
+vi.mock('../src/components/inventory/InventoryItemIcon', async importOriginal => {
+  const actual = await importOriginal<typeof import('../src/components/inventory/InventoryItemIcon')>()
+  return { ...actual, resolveItemIcon: itemIconResolver }
 })
 
 const fixture = {
@@ -98,6 +104,10 @@ function deferred<T>() {
   return { promise, resolve }
 }
 
+beforeEach(() => {
+  itemIconResolver.mockResolvedValue('https://cdn-hosted.gaming.tools/dune/images/dune/items/spice.webp')
+})
+
 afterEach(() => {
   cleanup()
   capabilityState.loading = false
@@ -106,6 +116,7 @@ afterEach(() => {
   capabilityState.enabled = true
   capabilityState.refresh.mockClear()
   inventoryApi.mockReset()
+  itemIconResolver.mockReset()
   window.history.replaceState(null, '', '/')
 })
 
@@ -120,16 +131,79 @@ describe('Shared Inventory Explorer', () => {
     )
 
     expect(await screen.findByText('Spice Melange')).toBeInTheDocument()
-    expect(screen.getByText('Spice Vault')).toBeInTheDocument()
-    expect(screen.getByText('Stilgar')).toBeInTheDocument()
+    const resultSlot = screen.getByRole('button', { name: /Spice Melange/ })
+    expect(resultSlot).toHaveAccessibleName(/quantity 12, quality 3, Storage container, Spice Vault/)
+    expect(screen.getByRole('list', { name: 'Inventory results' }).className).toContain('auto-fill')
+    resultSlot.focus()
+    expect(await screen.findByRole('tooltip')).toHaveTextContent('Spice Vault')
+    expect(screen.getByRole('tooltip')).toHaveTextContent('Stilgar')
+    resultSlot.blur()
+    await waitFor(() => expect(screen.queryByRole('tooltip')).not.toBeInTheDocument())
+    await user.hover(resultSlot)
+    expect(await screen.findByRole('tooltip')).toHaveTextContent('Spice Vault')
     expect(screen.getByText('Live database')).toHaveAttribute('data-freshness-state', 'fresh')
     expect(screen.getAllByText('Read-only').length).toBeGreaterThan(0)
     expect(screen.queryByRole('button', { name: /give|delete|repair/i })).not.toBeInTheDocument()
 
-    await user.click(screen.getByRole('button', { name: /Spice Melange/ }))
+    await user.click(resultSlot)
     expect(screen.getByRole('dialog', { name: 'Spice Melange' })).toBeInTheDocument()
+    expect(screen.queryByRole('tooltip')).not.toBeInTheDocument()
     expect(screen.getByRole('link', { name: 'Open owning container' }))
       .toHaveAttribute('href', '/bases?view=inventory&scope_type=storage&scope_id=50001')
+    expect(await screen.findByRole('link', { name: 'View on dune.gaming.tools' })).toHaveAttribute(
+      'href',
+      'https://dune.gaming.tools/items/melangespice',
+    )
+  })
+
+  it('omits gaming.tools attribution when metadata or icon verification fails', async () => {
+    const user = userEvent.setup()
+    itemIconResolver.mockResolvedValue(null)
+    inventoryApi.mockResolvedValue(fixture)
+    render(
+      <BrowserRouter>
+        <SharedInventoryExplorer entityTypes={['storage']} />
+      </BrowserRouter>,
+    )
+
+    await user.click(await screen.findByRole('button', { name: /Spice Melange/ }))
+    expect(screen.getByRole('dialog', { name: 'Spice Melange' })).toBeInTheDocument()
+    await waitFor(() => expect(itemIconResolver).toHaveBeenCalledWith('MelangeSpice'))
+    expect(screen.queryByRole('link', { name: 'View on dune.gaming.tools' })).not.toBeInTheDocument()
+  })
+
+  it('places the info card using its measured height near the viewport edge', async () => {
+    inventoryApi.mockResolvedValue(fixture)
+    const heightSpy = vi.spyOn(HTMLElement.prototype, 'offsetHeight', 'get')
+      .mockImplementation(function measuredHeight() {
+        return this.getAttribute('role') === 'tooltip' ? 240 : 0
+      })
+    const widthSpy = vi.spyOn(HTMLElement.prototype, 'offsetWidth', 'get').mockReturnValue(288)
+    const viewportSpy = vi.spyOn(window, 'innerHeight', 'get').mockReturnValue(800)
+    render(
+      <BrowserRouter>
+        <SharedInventoryExplorer entityTypes={['storage']} />
+      </BrowserRouter>,
+    )
+
+    const resultSlot = await screen.findByRole('button', { name: /Spice Melange/ })
+    vi.spyOn(resultSlot, 'getBoundingClientRect').mockReturnValue({
+      x: 100,
+      y: 590,
+      top: 590,
+      right: 210,
+      bottom: 700,
+      left: 100,
+      width: 110,
+      height: 110,
+      toJSON: () => ({}),
+    })
+    resultSlot.focus()
+
+    expect(await screen.findByRole('tooltip')).toHaveStyle({ top: '342px' })
+    heightSpy.mockRestore()
+    widthSpy.mockRestore()
+    viewportSpy.mockRestore()
   })
 
   it('submits one typed search and preserves the bounded entity filter', async () => {
