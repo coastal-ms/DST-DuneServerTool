@@ -118,6 +118,67 @@ Describe 'Dungeon difficulty backup and write helpers' {
     }
 }
 
+Describe 'Dungeon battlegroup pod drain verification' {
+    BeforeEach {
+        Mock Get-Command { @{ Name = 'Invoke-DuneBackupShell' } } -ParameterFilter { $Name -eq 'Invoke-DuneBackupShell' }
+    }
+
+    It 'polls active pod phases until a verified zero count' {
+        Mock Invoke-DuneBackupShell {
+            $script:podWaitScript = $Script
+            @{ rc = 0; out = "__DST_DUNGEON_PODS_STOPPED:0" }
+        }
+
+        $result = Wait-DuneDungeonBattlegroupPodsStopped -Ip '10.0.0.1' -TimeoutSec 30 -PollSec 2
+
+        $result.ok | Should -BeTrue
+        $result.activePodCount | Should -Be 0
+        $script:podWaitScript | Should -Match 'custom-columns=NAME:\.metadata\.name,PHASE:\.status\.phase'
+        $script:podWaitScript | Should -Match '\(\^\|-\)\(sg\|mq\|sgw\|tr\|bgd\)-'
+        $script:podWaitScript | Should -Match '\$2 != "Succeeded" && \$2 != "Failed"'
+        $script:podWaitScript | Should -Match 'sleep 2'
+    }
+
+    It 'recognizes pod families at the start or within generated names' {
+        $familyPattern = '(^|-)(sg|mq|sgw|tr|bgd)-'
+
+        @('mq-game-sts-0', 'server-sg-map-0', 'host-bgd-job-123') | ForEach-Object {
+            $_ | Should -Match $familyPattern
+        }
+        @('postgres-0', 'messagequeue-0') | ForEach-Object {
+            $_ | Should -Not -Match $familyPattern
+        }
+    }
+
+    It 'fails closed with the last active count on timeout' {
+        Mock Invoke-DuneBackupShell { @{ rc = 22; out = '__DST_DUNGEON_POD_TIMEOUT:3' } }
+
+        $result = Wait-DuneDungeonBattlegroupPodsStopped -Ip '10.0.0.1' -TimeoutSec 30
+
+        $result.ok | Should -BeFalse
+        $result.activePodCount | Should -Be 3
+        $result.error | Should -Match 'Timed out after 30s'
+    }
+
+    It 'fails closed when the count is indeterminate' {
+        Mock Invoke-DuneBackupShell { @{ rc = 21; out = '__DST_DUNGEON_POD_ERROR:active pod count was indeterminate' } }
+
+        $result = Wait-DuneDungeonBattlegroupPodsStopped -Ip '10.0.0.1'
+
+        $result.ok | Should -BeFalse
+        $result.error | Should -Match 'not verifiable'
+    }
+
+    It 'fails closed when the pod-count helper errors without a marker' {
+        Mock Invoke-DuneBackupShell { @{ rc = 255; out = 'ssh failed' } }
+
+        $result = Wait-DuneDungeonBattlegroupPodsStopped -Ip '10.0.0.1'
+
+        $result.ok | Should -BeFalse
+        $result.error | Should -Match 'not verifiable \(exit 255\)'
+    }
+}
+
 Describe 'Dungeon difficulty normalization workflow' {
     BeforeEach {
         $script:calls = [Collections.Generic.List[string]]::new()
@@ -132,6 +193,10 @@ Describe 'Dungeon difficulty normalization workflow' {
         Mock Set-DuneDungeonDifficultyTarget {
             $script:calls.Add('write')
             @{ ok = $true; updated = 2 }
+        }
+        Mock Wait-DuneDungeonBattlegroupPodsStopped {
+            $script:calls.Add('wait-zero')
+            @{ ok = $true; activePodCount = 0 }
         }
     }
 
@@ -166,7 +231,7 @@ Describe 'Dungeon difficulty normalization workflow' {
         $result.changed | Should -BeTrue
         $result.verified | Should -BeTrue
         $result.restarted | Should -BeTrue
-        @($script:calls) | Should -Be @('summary1', 'backup', 'stop', 'summary2', 'backup', 'write', 'summary3', 'start')
+        @($script:calls) | Should -Be @('summary1', 'backup', 'stop', 'wait-zero', 'summary2', 'backup', 'write', 'summary3', 'start')
     }
 
     It 'fails before disruption when backup verification fails' {
@@ -203,6 +268,61 @@ Describe 'Dungeon difficulty normalization workflow' {
         $result.changed | Should -BeFalse
         $result.verified | Should -BeTrue
         $result.restarted | Should -BeTrue
+        Assert-MockCalled Set-DuneDungeonDifficultyTarget -Times 0
+    }
+
+    It 'never backs up stopped state or writes when active pods remain at timeout' {
+        Mock Get-DuneDungeonDifficultySummaryLive {
+            @{ ok = $true; total = 10; aboveTarget = 2; maximum = 91; affectedPlayers = 3; target = 50 }
+        }
+        Mock Wait-DuneDungeonBattlegroupPodsStopped {
+            $script:calls.Add('wait-timeout')
+            @{ ok = $false; activePodCount = 2; error = 'Timed out waiting; 2 remain.' }
+        }
+
+        $result = Invoke-DuneNormalizeDungeonDifficulty -Ip '10.0.0.1'
+
+        $result.ok | Should -BeFalse
+        $result.changed | Should -BeFalse
+        $result.restarted | Should -BeTrue
+        $result.error | Should -Match 'shutdown could not be verified'
+        @($script:calls) | Should -Be @('backup', 'stop', 'wait-timeout', 'start')
+        Assert-MockCalled Set-DuneDungeonDifficultyTarget -Times 0
+    }
+
+    It 'never backs up stopped state or writes when pod count is indeterminate' {
+        Mock Get-DuneDungeonDifficultySummaryLive {
+            @{ ok = $true; total = 10; aboveTarget = 2; maximum = 91; affectedPlayers = 3; target = 50 }
+        }
+        Mock Wait-DuneDungeonBattlegroupPodsStopped {
+            $script:calls.Add('wait-indeterminate')
+            @{ ok = $false; error = 'Active pod count was indeterminate.' }
+        }
+
+        $result = Invoke-DuneNormalizeDungeonDifficulty -Ip '10.0.0.1'
+
+        $result.ok | Should -BeFalse
+        $result.changed | Should -BeFalse
+        $result.restarted | Should -BeTrue
+        @($script:calls) | Should -Be @('backup', 'stop', 'wait-indeterminate', 'start')
+        Assert-MockCalled Set-DuneDungeonDifficultyTarget -Times 0
+    }
+
+    It 'never backs up stopped state or writes when pod verification errors' {
+        Mock Get-DuneDungeonDifficultySummaryLive {
+            @{ ok = $true; total = 10; aboveTarget = 2; maximum = 91; affectedPlayers = 3; target = 50 }
+        }
+        Mock Wait-DuneDungeonBattlegroupPodsStopped {
+            $script:calls.Add('wait-error')
+            @{ ok = $false; error = 'SSH helper failed.' }
+        }
+
+        $result = Invoke-DuneNormalizeDungeonDifficulty -Ip '10.0.0.1'
+
+        $result.ok | Should -BeFalse
+        $result.changed | Should -BeFalse
+        $result.restarted | Should -BeTrue
+        @($script:calls) | Should -Be @('backup', 'stop', 'wait-error', 'start')
         Assert-MockCalled Set-DuneDungeonDifficultyTarget -Times 0
     }
 

@@ -697,6 +697,69 @@ COMMIT;
     return @{ ok = $true; updated = [int64](ConvertTo-DuneInt $rows[0]['updated_n']) }
 }
 
+function Wait-DuneDungeonBattlegroupPodsStopped {
+    param(
+        [string]$Ip,
+        [ValidateRange(1, 1800)][int]$TimeoutSec = 360,
+        [ValidateRange(1, 60)][int]$PollSec = 5
+    )
+
+    if (-not (Get-Command Invoke-DuneBackupShell -ErrorAction SilentlyContinue)) {
+        return @{ ok = $false; error = 'Battlegroup pod-count helper is unavailable.' }
+    }
+
+    $script = @'
+DEADLINE=$(( $(date +%s) + __TIMEOUT__ ))
+while :; do
+  PODS=$(sudo k3s kubectl get pods -A --no-headers -o custom-columns=NAME:.metadata.name,PHASE:.status.phase 2>&1)
+  RC=$?
+  if [ "$RC" -ne 0 ]; then
+    echo "__DST_DUNGEON_POD_ERROR:kubectl exited $RC: $PODS"
+    exit 20
+  fi
+  COUNT=$(printf '%s\n' "$PODS" | awk '$1 ~ /(^|-)(sg|mq|sgw|tr|bgd)-/ && $2 != "Succeeded" && $2 != "Failed" { count++ } END { print count+0 }')
+  case "$COUNT" in
+    ''|*[!0-9]*) echo "__DST_DUNGEON_POD_ERROR:active pod count was indeterminate"; exit 21 ;;
+  esac
+  if [ "$COUNT" -eq 0 ]; then
+    echo "__DST_DUNGEON_PODS_STOPPED:0"
+    exit 0
+  fi
+  if [ "$(date +%s)" -ge "$DEADLINE" ]; then
+    echo "__DST_DUNGEON_POD_TIMEOUT:$COUNT"
+    exit 22
+  fi
+  sleep __POLL__
+done
+'@
+    $script = $script.Replace('__TIMEOUT__', [string]$TimeoutSec).Replace('__POLL__', [string]$PollSec)
+
+    try {
+        $result = Invoke-DuneBackupShell -Ip $Ip -Script $script -TimeoutSec ($TimeoutSec + 30)
+    } catch {
+        return @{ ok = $false; error = "Active battlegroup pod verification failed: $($_.Exception.Message)" }
+    }
+
+    $out = if ($null -eq $result) { '' } else { ([string]$result.out).Trim() }
+    if ($null -ne $result -and [int]$result.rc -eq 0 -and $out -match '__DST_DUNGEON_PODS_STOPPED:0') {
+        return @{ ok = $true; activePodCount = 0 }
+    }
+    $timeoutMatch = [regex]::Match($out, '__DST_DUNGEON_POD_TIMEOUT:(\d+)')
+    if ($timeoutMatch.Success) {
+        return @{
+            ok = $false
+            activePodCount = [int]$timeoutMatch.Groups[1].Value
+            error = "Timed out after ${TimeoutSec}s waiting for active battlegroup pods to terminate; $($timeoutMatch.Groups[1].Value) remain."
+        }
+    }
+    $errorMatch = [regex]::Match($out, '__DST_DUNGEON_POD_ERROR:([^\r\n]+)')
+    if ($errorMatch.Success) {
+        return @{ ok = $false; error = "Active battlegroup pod count was not verifiable: $($errorMatch.Groups[1].Value)" }
+    }
+    $rc = if ($null -eq $result) { -1 } else { [int]$result.rc }
+    return @{ ok = $false; error = "Active battlegroup pod count was not verifiable (exit $rc)." }
+}
+
 function Invoke-DuneNormalizeDungeonDifficulty {
     param([string]$Ip)
 
@@ -737,35 +800,40 @@ function Invoke-DuneNormalizeDungeonDifficulty {
         if (-not $stop.ok) {
             $operationError = "No dungeon rows changed because the battlegroup did not stop cleanly. $($stop.error)"
         } else {
-            $stoppedSummary = Get-DuneDungeonDifficultySummaryLive -Ip $Ip
-            if (-not $stoppedSummary.ok) {
-                $operationError = "No dungeon rows changed because the stopped-state summary failed. $($stoppedSummary.error)"
-            } elseif ($stoppedSummary.aboveTarget -eq 0) {
-                $after = $stoppedSummary
-                $verified = $true
-                $noOpAfterStop = $true
+            $podDrain = Wait-DuneDungeonBattlegroupPodsStopped -Ip $Ip
+            if (-not $podDrain.ok) {
+                $operationError = "No dungeon rows changed because battlegroup shutdown could not be verified. $($podDrain.error)"
             } else {
-                $stoppedBackup = Invoke-DuneDungeonDifficultyBgCommand -Ip $Ip -Command 'backup'
-                if (-not $stoppedBackup.ok) {
-                    $operationError = "No dungeon rows changed because the stopped-state rollback backup failed verification. $($stoppedBackup.error)"
+                $stoppedSummary = Get-DuneDungeonDifficultySummaryLive -Ip $Ip
+                if (-not $stoppedSummary.ok) {
+                    $operationError = "No dungeon rows changed because the stopped-state summary failed. $($stoppedSummary.error)"
+                } elseif ($stoppedSummary.aboveTarget -eq 0) {
+                    $after = $stoppedSummary
+                    $verified = $true
+                    $noOpAfterStop = $true
                 } else {
-                    $backup = $stoppedBackup
-                    $before = $stoppedSummary
-                    $write = Set-DuneDungeonDifficultyTarget -Ip $Ip
-                    if (-not $write.ok) {
-                        $operationError = $write.error
+                    $stoppedBackup = Invoke-DuneDungeonDifficultyBgCommand -Ip $Ip -Command 'backup'
+                    if (-not $stoppedBackup.ok) {
+                        $operationError = "No dungeon rows changed because the stopped-state rollback backup failed verification. $($stoppedBackup.error)"
                     } else {
-                        $after = Get-DuneDungeonDifficultySummaryLive -Ip $Ip
-                        if (-not $after.ok) {
-                            $operationError = "Dungeon difficulty changed, but post-write verification failed. $($after.error)"
-                        } elseif ($after.total -ne $before.total) {
-                            $operationError = "Post-write verification failed: completion row count changed from $($before.total) to $($after.total)."
-                        } elseif ($write.updated -ne $before.aboveTarget) {
-                            $operationError = "Post-write verification failed: expected $($before.aboveTarget) updated rows but PostgreSQL reported $($write.updated)."
-                        } elseif ($after.aboveTarget -ne 0 -or ($null -ne $after.maximum -and $after.maximum -gt 50)) {
-                            $operationError = "Post-write verification failed: $($after.aboveTarget) completion row(s) remain above 50."
+                        $backup = $stoppedBackup
+                        $before = $stoppedSummary
+                        $write = Set-DuneDungeonDifficultyTarget -Ip $Ip
+                        if (-not $write.ok) {
+                            $operationError = $write.error
                         } else {
-                            $verified = $true
+                            $after = Get-DuneDungeonDifficultySummaryLive -Ip $Ip
+                            if (-not $after.ok) {
+                                $operationError = "Dungeon difficulty changed, but post-write verification failed. $($after.error)"
+                            } elseif ($after.total -ne $before.total) {
+                                $operationError = "Post-write verification failed: completion row count changed from $($before.total) to $($after.total)."
+                            } elseif ($write.updated -ne $before.aboveTarget) {
+                                $operationError = "Post-write verification failed: expected $($before.aboveTarget) updated rows but PostgreSQL reported $($write.updated)."
+                            } elseif ($after.aboveTarget -ne 0 -or ($null -ne $after.maximum -and $after.maximum -gt 50)) {
+                                $operationError = "Post-write verification failed: $($after.aboveTarget) completion row(s) remain above 50."
+                            } else {
+                                $verified = $true
+                            }
                         }
                     }
                 }
