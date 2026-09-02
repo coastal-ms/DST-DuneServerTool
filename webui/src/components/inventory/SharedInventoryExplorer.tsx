@@ -69,16 +69,35 @@ export function SharedInventoryExplorer({
   const [loading, setLoading] = useState(true)
   const [loadingMore, setLoadingMore] = useState(false)
   const [error, setError] = useState('')
+  const [loadedIdentity, setLoadedIdentity] = useState('')
   const requestVersion = useRef(0)
   const capabilities = usePlatformCapabilities()
   const capabilityReady = capabilities.data !== null
   const canReadInventory = capabilities.hasCapability('inventory.read')
+  const requestIdentity = JSON.stringify({
+    query: submittedQuery.trim(),
+    entityTypes,
+    scopeType: scopeType ?? null,
+    scopeId: scopeId ?? null,
+    source: demoRequested ? 'demo' : 'live',
+    scopeError,
+  })
+  const hasCurrentResult = loadedIdentity === requestIdentity
+  const currentResponse = hasCurrentResult ? response : null
+  const currentItems = hasCurrentResult ? items : []
+  const currentSelection = hasCurrentResult ? selected : null
 
   const load = useCallback(async (cursor?: string, append = false) => {
     if (!canReadInventory || unavailableReason || scopeError) return
     const version = ++requestVersion.current
     if (append) setLoadingMore(true)
-    else setLoading(true)
+    else {
+      setLoading(true)
+      setResponse(null)
+      setItems([])
+      setSelected(null)
+      setLoadedIdentity('')
+    }
     setError('')
     try {
       const result = await getSharedInventory({
@@ -93,8 +112,13 @@ export function SharedInventoryExplorer({
       if (version !== requestVersion.current) return
       setResponse(result)
       setItems(current => append ? [...current, ...result.data.items] : result.data.items)
+      setLoadedIdentity(requestIdentity)
     } catch (loadError) {
       if (version !== requestVersion.current) return
+      setResponse(null)
+      setItems([])
+      setSelected(null)
+      setLoadedIdentity('')
       setError(errorMessage(loadError))
     } finally {
       if (version === requestVersion.current) {
@@ -102,7 +126,34 @@ export function SharedInventoryExplorer({
         setLoadingMore(false)
       }
     }
-  }, [canReadInventory, demoRequested, entityTypes, scopeError, scopeId, scopeType, submittedQuery, unavailableReason])
+  }, [
+    canReadInventory,
+    demoRequested,
+    entityTypes,
+    requestIdentity,
+    scopeError,
+    scopeId,
+    scopeType,
+    setError,
+    setItems,
+    setLoadedIdentity,
+    setLoading,
+    setLoadingMore,
+    setResponse,
+    setSelected,
+    submittedQuery,
+    unavailableReason,
+  ])
+
+  useEffect(() => {
+    requestVersion.current += 1
+    setResponse(null)
+    setItems([])
+    setSelected(null)
+    setLoadedIdentity('')
+    setError('')
+    setLoadingMore(false)
+  }, [requestIdentity])
 
   useEffect(() => {
     if (capabilityReady && canReadInventory && !unavailableReason && !scopeError) void load()
@@ -175,11 +226,11 @@ export function SharedInventoryExplorer({
         {entityTypes.map(type => (
           <span key={type} className="pill border-border text-text-muted">{entityTypeLabel(type)}</span>
         ))}
-        {response && (
+        {currentResponse && (
           <FreshnessBadge
-            state={response.freshness.state}
-            observedAt={response.freshness.observedAt}
-            label={response.data.mode === 'demo' ? 'Demo inventory' : 'Live database'}
+            state={currentResponse.freshness.state}
+            observedAt={currentResponse.freshness.observedAt}
+            label={currentResponse.data.mode === 'demo' ? 'Demo inventory' : 'Live database'}
           />
         )}
       </div>
@@ -229,7 +280,7 @@ export function SharedInventoryExplorer({
         </button>
       </form>
 
-      {response?.data.mode === 'demo' && (
+      {currentResponse?.data.mode === 'demo' && (
         <DataState
           state="fresh"
           title="Showing bundled demo inventory"
@@ -246,8 +297,8 @@ export function SharedInventoryExplorer({
           />
         </div>
       )}
-      {loading && items.length === 0 && !error && <DataState state="loading" title="Loading inventory" />}
-      {!loading && !error && response && items.length === 0 && (
+      {loading && currentItems.length === 0 && !error && <DataState state="loading" title="Loading inventory" />}
+      {!loading && !error && currentResponse && currentItems.length === 0 && (
         <DataState
           state="empty"
           title="No matching inventory items"
@@ -255,10 +306,10 @@ export function SharedInventoryExplorer({
         />
       )}
 
-      {items.length > 0 && (
+      {currentItems.length > 0 && (
         <>
           <ul className="grid min-w-0 grid-cols-1 gap-2 xl:grid-cols-2" aria-label="Inventory results">
-            {items.map(item => (
+            {currentItems.map(item => (
               <li key={`${item.entity.type}:${item.id}`} className="min-w-0">
                 <button
                   type="button"
@@ -294,12 +345,12 @@ export function SharedInventoryExplorer({
               </li>
             ))}
           </ul>
-          {response?.page.nextCursor && (
+          {currentResponse?.page.nextCursor && (
             <div className="mt-4 flex justify-center">
               <button
                 className="btn-secondary min-h-11"
                 disabled={loadingMore}
-                onClick={() => { void load(response.page.nextCursor ?? undefined, true) }}
+                onClick={() => { void load(currentResponse.page.nextCursor ?? undefined, true) }}
               >
                 <Icon name={loadingMore ? 'Loader2' : 'ChevronDown'} size={14} className={loadingMore ? 'animate-spin' : undefined} />
                 {loadingMore ? 'Loading...' : 'Load more'}
@@ -310,34 +361,34 @@ export function SharedInventoryExplorer({
       )}
 
       <DetailPanel
-        open={selected !== null}
-        title={selected?.displayName || selected?.templateId || 'Inventory item'}
+        open={currentSelection !== null}
+        title={currentSelection?.displayName || currentSelection?.templateId || 'Inventory item'}
         onClose={() => setSelected(null)}
       >
-        {selected && (
+        {currentSelection && (
           <div className="min-w-0">
             <div className="mb-4 flex flex-wrap gap-2">
               <span className="pill border-info/40 text-info">Read-only</span>
-              {selected.metadata.category && <span className="pill border-border">{selected.metadata.category}</span>}
-              {selected.metadata.rarity && <span className="pill border-border">{selected.metadata.rarity}</span>}
-              {selected.metadata.tier > 0 && <span className="pill border-border">Tier {selected.metadata.tier}</span>}
+              {currentSelection.metadata.category && <span className="pill border-border">{currentSelection.metadata.category}</span>}
+              {currentSelection.metadata.rarity && <span className="pill border-border">{currentSelection.metadata.rarity}</span>}
+              {currentSelection.metadata.tier > 0 && <span className="pill border-border">Tier {currentSelection.metadata.tier}</span>}
             </div>
             <dl className="grid grid-cols-1 gap-3 text-sm sm:grid-cols-2">
-              <div><dt className="text-text-dim">Template ID</dt><dd className="break-all font-mono">{selected.templateId}</dd></div>
-              <div><dt className="text-text-dim">Item ID</dt><dd>{selected.id}</dd></div>
-              <div><dt className="text-text-dim">Quantity</dt><dd>{selected.quantity}</dd></div>
-              <div><dt className="text-text-dim">Quality</dt><dd>{selected.quality}</dd></div>
-              <div><dt className="text-text-dim">Durability</dt><dd>{valueOrNotReported(selected.durability)} / {valueOrNotReported(selected.maxDurability)}</dd></div>
-              <div><dt className="text-text-dim">Water</dt><dd>{valueOrNotReported(selected.waterAmount)}{selected.waterType ? ` ${selected.waterType}` : ''}</dd></div>
-              <div><dt className="text-text-dim">Source</dt><dd>{entityTypeLabel(selected.entity.type)}</dd></div>
-              <div><dt className="text-text-dim">Inventory type</dt><dd>{selected.entity.inventoryType}</dd></div>
-              <div><dt className="text-text-dim">Entity</dt><dd className="break-words">{selected.entity.label || `Actor ${selected.entity.id}`}</dd></div>
-              <div><dt className="text-text-dim">Owner</dt><dd className="break-words">{selected.entity.owner || 'Not proven'}</dd></div>
-              <div><dt className="text-text-dim">Map</dt><dd className="break-words">{selected.entity.map || 'Not reported'}</dd></div>
-              <div><dt className="text-text-dim">Observed</dt><dd>{response?.freshness.observedAt ? new Date(response.freshness.observedAt).toLocaleString() : 'Not reported'}</dd></div>
+              <div><dt className="text-text-dim">Template ID</dt><dd className="break-all font-mono">{currentSelection.templateId}</dd></div>
+              <div><dt className="text-text-dim">Item ID</dt><dd>{currentSelection.id}</dd></div>
+              <div><dt className="text-text-dim">Quantity</dt><dd>{currentSelection.quantity}</dd></div>
+              <div><dt className="text-text-dim">Quality</dt><dd>{currentSelection.quality}</dd></div>
+              <div><dt className="text-text-dim">Durability</dt><dd>{valueOrNotReported(currentSelection.durability)} / {valueOrNotReported(currentSelection.maxDurability)}</dd></div>
+              <div><dt className="text-text-dim">Water</dt><dd>{valueOrNotReported(currentSelection.waterAmount)}{currentSelection.waterType ? ` ${currentSelection.waterType}` : ''}</dd></div>
+              <div><dt className="text-text-dim">Source</dt><dd>{entityTypeLabel(currentSelection.entity.type)}</dd></div>
+              <div><dt className="text-text-dim">Inventory type</dt><dd>{currentSelection.entity.inventoryType}</dd></div>
+              <div><dt className="text-text-dim">Entity</dt><dd className="break-words">{currentSelection.entity.label || `Actor ${currentSelection.entity.id}`}</dd></div>
+              <div><dt className="text-text-dim">Owner</dt><dd className="break-words">{currentSelection.entity.owner || 'Not proven'}</dd></div>
+              <div><dt className="text-text-dim">Map</dt><dd className="break-words">{currentSelection.entity.map || 'Not reported'}</dd></div>
+              <div><dt className="text-text-dim">Observed</dt><dd>{currentResponse?.freshness.observedAt ? new Date(currentResponse.freshness.observedAt).toLocaleString() : 'Not reported'}</dd></div>
             </dl>
-            <Link className="btn-secondary mt-5 inline-flex min-h-11" to={selected.entity.workspacePath}>
-              Open owning {selected.entity.type === 'player' ? 'player' : 'container'}
+            <Link className="btn-secondary mt-5 inline-flex min-h-11" to={currentSelection.entity.workspacePath}>
+              Open owning {currentSelection.entity.type === 'player' ? 'player' : 'container'}
             </Link>
           </div>
         )}

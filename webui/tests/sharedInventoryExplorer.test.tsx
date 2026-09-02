@@ -1,5 +1,5 @@
 import React from 'react'
-import { cleanup, render, screen, waitFor } from '@testing-library/react'
+import { act, cleanup, render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { SharedInventoryExplorer } from '../src/components/inventory/SharedInventoryExplorer'
@@ -84,6 +84,13 @@ const fixture = {
   },
   page: { limit: 100, nextCursor: null, truncated: false },
 } as const
+
+function navigateTo(url: string) {
+  act(() => {
+    window.history.pushState(null, '', url)
+    window.dispatchEvent(new PopStateEvent('popstate'))
+  })
+}
 
 afterEach(() => {
   cleanup()
@@ -209,5 +216,73 @@ describe('Shared Inventory Explorer', () => {
 
     expect(screen.getByText('Invalid inventory scope')).toBeInTheDocument()
     expect(inventoryApi).not.toHaveBeenCalled()
+  })
+
+  it('removes demo rows, metadata, cursor, and selection when a replacement live request fails', async () => {
+    const user = userEvent.setup()
+    window.history.replaceState(null, '', '/bases?view=inventory&demo=1')
+    inventoryApi
+      .mockResolvedValueOnce({
+        ...fixture,
+        source: 'static',
+        data: { ...fixture.data, mode: 'demo' },
+        page: { ...fixture.page, nextCursor: 'demo-cursor', truncated: true },
+      })
+      .mockRejectedValueOnce(new Error('live database unavailable'))
+    render(
+      <BrowserRouter>
+        <SharedInventoryExplorer entityTypes={['storage']} />
+      </BrowserRouter>,
+    )
+
+    await user.click(await screen.findByRole('button', { name: /Spice Melange/ }))
+    expect(screen.getByRole('dialog', { name: 'Spice Melange' })).toBeInTheDocument()
+    expect(screen.getByText('Demo inventory')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Load more' })).toBeInTheDocument()
+
+    navigateTo('/bases?view=inventory')
+
+    expect(await screen.findByText('Inventory search failed')).toBeInTheDocument()
+    expect(screen.getByText('live database unavailable')).toBeInTheDocument()
+    expect(screen.queryByRole('list', { name: 'Inventory results' })).not.toBeInTheDocument()
+    expect(screen.queryByText('Spice Melange')).not.toBeInTheDocument()
+    expect(screen.queryByText('x12')).not.toBeInTheDocument()
+    expect(screen.queryByText('Showing bundled demo inventory')).not.toBeInTheDocument()
+    expect(screen.queryByText('Demo inventory')).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Load more' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+  })
+
+  it('removes broader unscoped results when a replacement scoped request fails', async () => {
+    const user = userEvent.setup()
+    window.history.replaceState(null, '', '/bases?view=inventory')
+    inventoryApi
+      .mockResolvedValueOnce({
+        ...fixture,
+        page: { ...fixture.page, nextCursor: 'live-cursor', truncated: true },
+      })
+      .mockRejectedValueOnce(new Error('scoped inventory unavailable'))
+    render(
+      <BrowserRouter>
+        <SharedInventoryExplorer entityTypes={['storage']} />
+      </BrowserRouter>,
+    )
+
+    await user.click(await screen.findByRole('button', { name: /Spice Melange/ }))
+    expect(screen.getByRole('dialog', { name: 'Spice Melange' })).toBeInTheDocument()
+    expect(screen.getByText('Live database')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Load more' })).toBeInTheDocument()
+
+    navigateTo('/bases?view=inventory&scope_type=storage&scope_id=50001')
+
+    expect(await screen.findByText('Inventory search failed')).toBeInTheDocument()
+    expect(screen.getByText('scoped inventory unavailable')).toBeInTheDocument()
+    expect(screen.getByText('Scoped to storage container actor 50001.')).toBeInTheDocument()
+    expect(screen.queryByRole('list', { name: 'Inventory results' })).not.toBeInTheDocument()
+    expect(screen.queryByText('Spice Melange')).not.toBeInTheDocument()
+    expect(screen.queryByText('x12')).not.toBeInTheDocument()
+    expect(screen.queryByText('Live database')).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Load more' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
   })
 })
