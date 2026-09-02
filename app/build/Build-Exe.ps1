@@ -33,7 +33,7 @@
 
 [CmdletBinding()]
 param(
-    [string]$Version = '15.0.0',
+    [string]$Version = '15.0.0-phase2-test1',
     [string]$BuildCommit = '',
     [string]$BuildTag = '',
     [switch]$Prerelease,
@@ -58,6 +58,12 @@ if (-not (Test-Path $buildHelpers)) { throw "Build helpers not found: $buildHelp
 if (-not (Test-Path $outDir)) { New-Item -ItemType Directory -Force -Path $outDir | Out-Null }
 . $buildHelpers
 
+$versionInfo = Get-DuneVersionInfo -Version $Version
+if ($Prerelease -and -not $versionInfo.IsPrerelease) {
+    throw "Stable version $Version must not use -Prerelease."
+}
+$Prerelease = [bool]$versionInfo.IsPrerelease
+
 if (-not $BuildCommit) {
     $repoRoot = Split-Path -Parent $appRoot
     try { $BuildCommit = (& git -C $repoRoot rev-parse HEAD 2>$null).Trim() } catch { $BuildCommit = '' }
@@ -67,8 +73,8 @@ if ($BuildCommit -and $BuildCommit -notmatch '^[0-9a-f]{7,40}$') {
     throw 'BuildCommit must be a 7-40 character hexadecimal Git commit id.'
 }
 $BuildTag = $BuildTag.Trim()
-if ($BuildTag -and $BuildTag -notmatch '^v?\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$') {
-    throw 'BuildTag must be a release tag such as v14.0.0 or v14.0.0-test6.'
+if ($BuildTag) {
+    Assert-DuneTagPrereleaseConsistency -BuildTag $BuildTag -Prerelease:$Prerelease
 }
 $sourceText = Get-Content -LiteralPath $src -Raw
 $embedded = [ordered]@{
@@ -91,7 +97,7 @@ if (-not (Get-Module -ListAvailable ps2exe)) {
 }
 Import-Module ps2exe -Force
 
-$verNum = "$Version.0"  # ps2exe wants 4-part version
+$verNum = $versionInfo.NumericVersion
 
 Write-Host "Compiling DuneServer.exe (v$Version; prerelease=$([bool]$Prerelease); tag=$BuildTag; commit=$BuildCommit)..." -ForegroundColor Cyan
 

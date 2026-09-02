@@ -16,7 +16,8 @@
 ;                 -> NOT touched by install or uninstall (preserves user config)
 
 #define MyAppName        "Dune Server Tool"
-#define MyAppVersion "15.0.0"
+#define MyAppVersion "15.0.0-phase2-test1"
+#define MyAppNumericVersion Copy(MyAppVersion, 1, Pos("-", MyAppVersion + "-") - 1) + ".0"
 #define MyAppPublisher   "Dune Awakening Self-Hosted Tool"
 #define MyAppURL         "https://github.com/coastal-ms/DST-DuneServerTool"
 #define MyAppExeName     "DuneServer.exe"
@@ -31,7 +32,7 @@ AppPublisher={#MyAppPublisher}
 AppPublisherURL={#MyAppURL}
 AppSupportURL={#MyAppURL}/issues
 AppUpdatesURL={#MyAppURL}/releases
-VersionInfoVersion={#MyAppVersion}.0
+VersionInfoVersion={#MyAppNumericVersion}
 DefaultDirName={autopf}\Dune Server Tool
 DefaultGroupName=Dune Server Tool
 DisableProgramGroupPage=no

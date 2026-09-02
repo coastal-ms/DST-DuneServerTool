@@ -41,6 +41,27 @@ function Publish-DuneBuildArtifact {
     }
 }
 
+function Get-DuneVersionInfo {
+    [CmdletBinding()]
+    param([Parameter(Mandatory)][string]$Version)
+
+    $value = $Version.Trim()
+    $identifier = '(?:0|[1-9][0-9]*|[0-9A-Za-z-]*[A-Za-z-][0-9A-Za-z-]*)'
+    $pattern = "^(?<major>0|[1-9][0-9]*)\.(?<minor>0|[1-9][0-9]*)\.(?<patch>0|[1-9][0-9]*)(?:-(?<pre>$identifier(?:\.$identifier)*))?$"
+    $match = [regex]::Match($value, $pattern)
+    if (-not $match.Success) {
+        throw "Version must be a SemVer-compatible release version without build metadata (got '$Version')."
+    }
+
+    $core = "$($match.Groups['major'].Value).$($match.Groups['minor'].Value).$($match.Groups['patch'].Value)"
+    return [pscustomobject]@{
+        Version = $value
+        CoreVersion = $core
+        NumericVersion = "$core.0"
+        IsPrerelease = $match.Groups['pre'].Success
+    }
+}
+
 function Get-DuneExistingTagCommit {
     [CmdletBinding()]
     param(
@@ -62,7 +83,13 @@ function Test-DunePrereleaseTag {
     [CmdletBinding()]
     param([Parameter(Mandatory)][string]$BuildTag)
 
-    return $BuildTag.Trim() -match '^v?\d+\.\d+\.\d+-.+$'
+    $tag = $BuildTag.Trim()
+    $version = if ($tag.StartsWith('v', [StringComparison]::OrdinalIgnoreCase)) {
+        $tag.Substring(1)
+    } else {
+        $tag
+    }
+    return [bool](Get-DuneVersionInfo -Version $version).IsPrerelease
 }
 
 function Assert-DuneTagPrereleaseConsistency {
@@ -73,10 +100,11 @@ function Assert-DuneTagPrereleaseConsistency {
     )
 
     $tag = $BuildTag.Trim()
-    if ($tag -notmatch '^v?\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$') {
+    try {
+        $tagIsPrerelease = Test-DunePrereleaseTag -BuildTag $tag
+    } catch {
         throw 'BuildTag must be a release tag such as v15.0.0 or v15.0.0-test9.'
     }
-    $tagIsPrerelease = Test-DunePrereleaseTag -BuildTag $tag
     if ($tagIsPrerelease -and -not $Prerelease) {
         throw "Prerelease tag $tag requires -Prerelease."
     }
@@ -98,7 +126,14 @@ function Get-DuneReleaseTagsAtCommit {
     }
     return @($output |
         ForEach-Object { "$_".Trim() } |
-        Where-Object { $_ -match '^v?\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$' } |
+        Where-Object {
+            try {
+                $null = Test-DunePrereleaseTag -BuildTag $_
+                $true
+            } catch {
+                $false
+            }
+        } |
         Sort-Object -Unique)
 }
 
@@ -130,10 +165,6 @@ function Resolve-DuneBuildIdentity {
             }
             throw "Checkout HEAD $headCommit already has release tag $exampleTag, but -BuildTag was omitted. Refusing to embed '(manual)' identity. Run: $example"
         }
-        if ($Prerelease) {
-            throw 'Prerelease installer builds require an existing -BuildTag and an explicit full -BuildCommit.'
-        }
-
         $commit = if ($BuildCommitSpecified) { $BuildCommit.Trim().ToLowerInvariant() } else { $headCommit }
         if ($commit -and $commit -notmatch '^[0-9a-f]{7,40}$') {
             throw 'BuildCommit must be a 7-40 character hexadecimal Git commit id.'
@@ -141,7 +172,7 @@ function Resolve-DuneBuildIdentity {
         return [pscustomobject]@{
             Commit = $commit
             Tag = ''
-            Prerelease = $false
+            Prerelease = [bool]$Prerelease
             HeadCommit = $headCommit
         }
     }
@@ -230,8 +261,6 @@ function Assert-DuneBuildMetadataMatches {
     $commit = $ExpectedCommit.Trim().ToLowerInvariant()
     if ($tag) {
         Assert-DuneTagPrereleaseConsistency -BuildTag $tag -Prerelease:$ExpectedPrerelease
-    } elseif ($ExpectedPrerelease) {
-        throw 'Expected prerelease metadata requires a release tag.'
     }
     $commitPattern = if ($tag) { '^[0-9a-f]{40}$' } else { '^[0-9a-f]{7,40}$' }
     if ($commit -notmatch $commitPattern) {

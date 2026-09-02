@@ -13,6 +13,8 @@ here cover everything those tags shipped.
 
 ## [Unreleased]
 
+## [15.0.0-phase2-test1] - 2026-09-02
+
 ### Added
 
 - Added a read-only Shared Inventory Explorer across Players, Bases, Vehicles,

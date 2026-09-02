@@ -1040,6 +1040,49 @@ done
         $warnings.Add('Gameplay read helpers not loaded - read-path probe skipped.')
     }
 
+    # 6f) Shared Inventory Explorer read-path probe --------------------------
+    # Handled inventory database failures are returned to the UI and are not
+    # written to dune-server.log. Exercise the same read-only projection with a
+    # one-row bound per supported source, recording no rows or identifiers.
+    if ((Get-Command Get-DuneDbContext -ErrorAction SilentlyContinue) -and
+        (Get-Command Invoke-DuneInventorySearchLive -ErrorAction SilentlyContinue)) {
+        try {
+            $inventoryProbe = [System.Collections.Generic.List[string]]::new()
+            $inventoryProbe.Add('# Shared Inventory Explorer read-path probe (row-free and identifier-free)')
+            $inventoryProbe.Add("# Generated $(Get-Date -Format 'o')")
+            $inventoryProbe.Add('# Each source query is read-only and bounded to one row; only success/failure is recorded.')
+            $inventoryProbe.Add('')
+            $inventoryContext = Get-DuneDbContext
+            if (-not $inventoryContext.ok) {
+                $inventoryProbe.Add("DB context: NOT available - $($inventoryContext.message)")
+            } else {
+                $inventoryProbe.Add('DB context: available')
+                foreach ($inventoryType in @('player', 'storage')) {
+                    try {
+                        $inventoryResult = Invoke-DuneInventorySearchLive -Ip $inventoryContext.ip `
+                            -EntityTypes @($inventoryType) -Limit 1
+                        if ($inventoryResult.ok) {
+                            $hasSample = @($inventoryResult.items).Count -gt 0
+                            $inventoryProbe.Add("$inventoryType source: query ok; sample row present: $hasSample")
+                        } else {
+                            $inventoryProbe.Add("$inventoryType source: QUERY FAILED - $($inventoryResult.error)")
+                        }
+                    } catch {
+                        $inventoryProbe.Add("$inventoryType source: PROBE ERROR - $($_.Exception.Message)")
+                    }
+                }
+            }
+            $inventoryText = Invoke-DstRedaction -Text ($inventoryProbe -join "`r`n") @redactArgs
+            $inventoryOut = Join-Path $stageDir 'inventory-explorer.txt'
+            Set-Content -LiteralPath $inventoryOut -Value $inventoryText -Encoding UTF8
+            $included.Add(@{ name = 'inventory-explorer.txt'; bytes = (Get-Item -LiteralPath $inventoryOut).Length })
+        } catch {
+            $warnings.Add("Inventory Explorer read-path probe failed: $($_.Exception.Message)")
+        }
+    } else {
+        $warnings.Add('Inventory Explorer helpers not loaded - read-path probe skipped.')
+    }
+
     # 7) Manifest ------------------------------------------------------------
     $manLines = [System.Collections.Generic.List[string]]::new()
     $manLines.Add("Dune Server Tool diagnostic bundle")
@@ -1087,6 +1130,11 @@ done
     $manLines.Add('gameplay-read-probe.txt re-runs the Players/Bases list queries and records')
     $manLines.Add('COUNTS ONLY (no player names or ids) so "rows but blank detail" bugs are')
     $manLines.Add('triageable; absent when the DB is unreachable (see Warnings).')
+    $manLines.Add('')
+    $manLines.Add('inventory-explorer.txt exercises the same read-only player and storage inventory')
+    $manLines.Add('projections used by Shared Inventory Explorer, bounded to one row per source. It')
+    $manLines.Add('records only source success/failure and whether a sample row exists; no item,')
+    $manLines.Add('owner, container, inventory, actor, account, or database identifiers are included.')
     $manLines.Add('')
     $manLines.Add('vm-memory-pressure.txt probes the VM for the OOMKilled-operators / low-memory')
     $manLines.Add('signature (Funcom controller-manager restart counts + lastState, Postgres pod')
