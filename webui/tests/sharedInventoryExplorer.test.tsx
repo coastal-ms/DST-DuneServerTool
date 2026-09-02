@@ -171,8 +171,8 @@ describe('Shared Inventory Explorer grouped catalog', () => {
         playerId: 20001,
         location: { type: 'storage', id: 50001 },
         groups: [],
-        players: [],
-        locations: [],
+        players: [players[0]],
+        locations: [locations[1]],
         selectedPlayerValid: true,
         selectedLocationValid: true,
       },
@@ -180,6 +180,14 @@ describe('Shared Inventory Explorer grouped catalog', () => {
     renderExplorer()
     expect(await screen.findByText('No matching inventory items')).toBeInTheDocument()
     expect(screen.queryByText('Location does not match this player')).not.toBeInTheDocument()
+    expect(screen.getByRole('combobox', { name: 'Player' })).toHaveValue('20001')
+    expect(screen.getByRole('option', { name: 'Coastal' })).toBeInTheDocument()
+    expect(screen.getByRole('combobox', { name: 'Location' })).toHaveValue('storage:50001')
+    expect(screen.getByRole('option', { name: 'Copper box' })).toBeInTheDocument()
+
+    await userEvent.setup().selectOptions(screen.getByRole('combobox', { name: 'Player' }), '')
+    expect(window.location.search).not.toContain('player_id')
+    expect(window.location.search).not.toContain('location_id')
   })
 
   it('opens a lazy occurrence panel with inherited filters and adjustable sorting', async () => {
@@ -197,6 +205,22 @@ describe('Shared Inventory Explorer grouped catalog', () => {
     expect(within(occurrencePlayer).getByRole('option', { name: 'Coastal (2)' })).toBeInTheDocument()
     await user.selectOptions(screen.getByRole('combobox', { name: 'Sort occurrences' }), 'quality-desc')
     await waitFor(() => expect(occurrenceApi).toHaveBeenLastCalledWith(expect.objectContaining({ sort: 'quality-desc' })))
+  })
+
+  it('keeps proven active popup filters visible when the occurrence result is empty', async () => {
+    const user = userEvent.setup()
+    window.history.replaceState(null, '', '/economy?view=inventory&player_id=20001&location_type=storage&location_id=50001')
+    occurrenceApi.mockResolvedValue({
+      ...occurrenceFixture,
+      data: { ...occurrenceFixture.data, playerId: 20001, items: [], players: [], locations: [] },
+    })
+    renderExplorer()
+    await user.click(await screen.findByRole('button', { name: /Copper/ }))
+    expect(await screen.findByText('No matching occurrences')).toBeInTheDocument()
+    expect(screen.getByRole('combobox', { name: 'Occurrence player' })).toHaveValue('20001')
+    expect(screen.getByRole('combobox', { name: 'Occurrence location' })).toHaveValue('storage:50001')
+    expect(within(screen.getByRole('combobox', { name: 'Occurrence player' })).getByRole('option', { name: 'Coastal' })).toBeInTheDocument()
+    expect(within(screen.getByRole('combobox', { name: 'Occurrence location' })).getByRole('option', { name: 'Copper box' })).toBeInTheDocument()
   })
 
   it('omits gaming.tools attribution when icon verification fails', async () => {

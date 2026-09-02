@@ -401,8 +401,18 @@ function OccurrencePanel({
       if (request !== version.current) return
       setItems(current => append ? [...current, ...result.data.items] : result.data.items)
       setNextCursor(result.page.nextCursor)
-      setPanelPlayers(result.data.players)
-      setPanelLocations(result.data.locations)
+      setPanelPlayers(current => {
+        if (!playerId || result.data.players.some(player => player.id === playerId)) return result.data.players
+        const active = current.find(player => player.id === playerId)
+        return active ? [...result.data.players, active] : result.data.players
+      })
+      setPanelLocations(current => {
+        if (!location || result.data.locations.some(candidate => candidate.type === location.type && candidate.id === location.id)) {
+          return result.data.locations
+        }
+        const active = current.find(candidate => candidate.type === location.type && candidate.id === location.id)
+        return active ? [...result.data.locations, active] : result.data.locations
+      })
     } catch (reason) {
       if (request === version.current) setError(errorMessage(reason))
     } finally {

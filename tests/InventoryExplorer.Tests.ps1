@@ -168,6 +168,17 @@ Describe 'Shared Inventory Explorer read model' -Tag 'Pure' {
         }
     }
 
+    It 'projects names-only catalog entries with null sortable metadata' {
+        $templateId = 'HarkSandbike_MeshCustomization'
+        $metadata = Get-DuneInventoryCatalogMetadataJson | ConvertFrom-Json
+        $entry = $metadata.PSObject.Properties[$templateId.ToLowerInvariant()].Value
+
+        $entry.name | Should -Be (Get-DuneGameplayItemName -TemplateId $templateId)
+        $entry.name | Should -Not -Be $templateId
+        $entry.tier | Should -BeNullOrEmpty
+        $entry.volume | Should -BeNullOrEmpty
+    }
+
     It 'validates entity types and supports exact demo scopes' {
         { Get-DuneInventoryEntityTypes -Value 'player,storage' } | Should -Not -Throw
         { Get-DuneInventoryEntityTypes -Value 'vehicle' } | Should -Throw '*Unsupported inventory entity type*'
@@ -397,7 +408,7 @@ Describe 'Shared Inventory Explorer read model' -Tag 'Pure' {
             entity = [ordered]@{ type='player'; id=20001; label='Coastal'; owner='Coastal'; map='Hagga Basin' }
         }
         $emote = [pscustomobject]@{
-            id = 2; templateId = 'Emote_Wave_01'; displayName = 'Wave'; kind = 'emote'; quantity = 1; quality = 0
+            id = 2; templateId = 'D_TestEmote'; displayName = 'Test emote'; kind = 'emote'; quantity = 1; quality = 0
             metadata = [ordered]@{ category=''; tier=0; rarity=''; icon=''; stackMaximum=0; volume=0; vendorPrice=0; isGradeable=$false }
             player = [ordered]@{ id=20001; name='Coastal' }
             entity = [ordered]@{ type='player'; id=20001; label='Coastal'; owner='Coastal'; map='Hagga Basin' }
@@ -407,6 +418,10 @@ Describe 'Shared Inventory Explorer read model' -Tag 'Pure' {
 
         $result.Count | Should -Be 1
         $result[0].templateId | Should -Be 'Copper'
+
+        $cte = Get-DuneInventoryFilteredCteSql
+        $cte | Should -Match "template_id IN \(SELECT jsonb_array_elements_text\(p\.catalog_ids::jsonb\)\)"
+        $cte | Should -Match "r\.template_id !~\* 'Emote\|Gesture'"
     }
 
     It 'keeps backpack and storage locations separate under the same player filter' {
@@ -469,7 +484,7 @@ ORDER BY $($sort.sql)
         $sql | Should -Match 'SUM\(stack_size\)'
         $sql | Should -Match 'COUNT\(DISTINCT entity_type'
         $sql | Should -Match 'total_volume DESC NULLS LAST, sort_name ASC, template_id ASC'
-        $sql | Should -Match "template_id !~\* '\(\^\|_\)Emote"
+        $sql | Should -Match "r\.template_id !~\* 'Emote\|Gesture'"
     }
 
     It 'registers a GET-only v1 route without mutation vocabulary' {

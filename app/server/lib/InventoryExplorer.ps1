@@ -475,7 +475,9 @@ function Resolve-DuneInventoryOccurrenceSort {
 function Test-DuneInventoryVisibleItem {
     param([Parameter(Mandatory)]$Item)
     $templateId = [string]$Item.templateId
-    return [string]$Item.kind -ne 'emote' -and $templateId -notmatch '(?i)(^|_)Emote(_|$)|Gesture'
+    $rule = Get-DuneGameplayItemRule -TemplateId $templateId
+    if ([string]$rule.category) { return $true }
+    return [string]$Item.kind -ne 'emote' -and $templateId -notmatch '(?i)Emote|Gesture'
 }
 
 function New-DuneInventoryParameterizedSql {
@@ -515,12 +517,17 @@ function Get-DuneInventoryCatalogIdsJson {
 function Get-DuneInventoryCatalogMetadataJson {
     Initialize-DuneGameplayItemData
     $metadata = [ordered]@{}
-    foreach ($id in @($script:DuneGameplayItemRules.Keys | Sort-Object)) {
-        $rule = Get-DuneGameplayItemRule -TemplateId $id
+    $catalogIds = @(
+        @($script:DuneGameplayItemNames.Keys) + @($script:DuneGameplayItemRules.Keys) |
+            Sort-Object -Unique
+    )
+    foreach ($id in $catalogIds) {
+        $hasRule = $script:DuneGameplayItemRules.ContainsKey($id)
+        $rule = if ($hasRule) { Get-DuneGameplayItemRule -TemplateId $id } else { $null }
         $metadata[([string]$id).ToLowerInvariant()] = [ordered]@{
             name = Get-DuneGameplayItemName -TemplateId $id
-            tier = if ($null -ne $rule.tier) { [int]$rule.tier } else { $null }
-            volume = if ($null -ne $rule.volume) { [double]$rule.volume } else { $null }
+            tier = if ($hasRule -and $null -ne $rule.tier) { [int]$rule.tier } else { $null }
+            volume = if ($hasRule -and $null -ne $rule.volume) { [double]$rule.volume } else { $null }
         }
     }
     return ($metadata | ConvertTo-Json -Compress -Depth 4)
@@ -587,7 +594,10 @@ visible_rows AS (
     FROM inventory_rows r CROSS JOIN _dst_parameters p
     WHERE r.entity_type = ANY(string_to_array(p.entity_types, ','))
       AND (p.scope_type = '' OR (r.entity_type = p.scope_type AND r.entity_id = p.scope_id))
-      AND r.template_id !~* '(^|_)Emote(_|$)|Gesture'
+      AND (
+          r.template_id IN (SELECT jsonb_array_elements_text(p.catalog_ids::jsonb))
+          OR r.template_id !~* 'Emote|Gesture'
+      )
 ),
 searched_rows AS (
     SELECT r.*
@@ -755,6 +765,32 @@ function Get-DuneInventoryGroupedDemo {
                 playerName = [string]$first.player.name; occurrenceCount = $_.Count
             }
         } | Sort-Object type, label, id)
+    if ($PlayerId -and -not @($facets | Where-Object { [long]$_.id -eq $PlayerId }).Count) {
+        $activePlayerRows = @($visibleBase | Where-Object { [long]$_.player.id -eq $PlayerId })
+        if ($activePlayerRows.Count) {
+            $facets += [ordered]@{
+                id = $PlayerId; name = [string]$activePlayerRows[0].player.name
+                occurrenceCount = $activePlayerRows.Count
+            }
+        }
+    }
+    if ($LocationType -and -not @($locations | Where-Object {
+        [string]$_.type -eq $LocationType -and [long]$_.id -eq $LocationId
+    }).Count) {
+        $activeLocationRows = @($visibleBase | Where-Object {
+            (-not $PlayerId -or [long]$_.player.id -eq $PlayerId) -and
+            [string]$_.entity.type -eq $LocationType -and [long]$_.entity.id -eq $LocationId
+        })
+        if ($activeLocationRows.Count) {
+            $first = $activeLocationRows[0]
+            $locations += [ordered]@{
+                type = [string]$first.entity.type; id = [long]$first.entity.id
+                label = if ([string]$first.entity.type -eq 'player') { 'Backpack' } else { [string]$first.entity.label }
+                owner = [string]$first.entity.owner; playerId = [long]$first.player.id
+                playerName = [string]$first.player.name; occurrenceCount = $activeLocationRows.Count
+            }
+        }
+    }
     $filtered = @($base | Where-Object {
         (-not $PlayerId -or [long]$_.player.id -eq $PlayerId) -and
         (-not $LocationType -or ([string]$_.entity.type -eq $LocationType -and [long]$_.entity.id -eq $LocationId))
@@ -908,24 +944,51 @@ ORDER BY $($sortSpec.sql) LIMIT (SELECT row_limit FROM _dst_parameters)
     if (-not $groupResult.ok) { return @{ ok = $false; error = $groupResult.error } }
 
     $facetSql = @"
-WITH $cte
-SELECT 'player'::text AS row_kind, NULL::text AS group_key, NULL::text AS template_id,
-       NULL::bigint AS total_quantity, COUNT(*)::bigint AS occurrence_count, NULL::bigint AS location_count,
-       NULL::integer AS quality_min, NULL::integer AS quality_max, player_id, MAX(player_name) AS player_name
-FROM searched_rows WHERE player_id IS NOT NULL AND player_id > 0
-GROUP BY player_id ORDER BY player_name, player_id LIMIT 50000
+WITH $cte,
+search_facets AS (
+    SELECT player_id, MAX(player_name) AS player_name, COUNT(*)::bigint AS occurrence_count
+    FROM searched_rows WHERE player_id IS NOT NULL AND player_id > 0 GROUP BY player_id
+),
+active_facet AS (
+    SELECT r.player_id, MAX(r.player_name) AS player_name, COUNT(*)::bigint AS occurrence_count
+    FROM visible_rows r CROSS JOIN _dst_parameters p
+    WHERE p.player_id > 0 AND r.player_id = p.player_id GROUP BY r.player_id
+)
+SELECT player_id, player_name, occurrence_count FROM search_facets
+UNION ALL
+SELECT a.player_id, a.player_name, a.occurrence_count FROM active_facet a
+WHERE NOT EXISTS (SELECT 1 FROM search_facets s WHERE s.player_id = a.player_id)
+ORDER BY player_name, player_id LIMIT 50000
 "@
     $effectiveFacetSql = New-DuneInventoryParameterizedSql -Sql $facetSql -Parameters $binding.values -ParameterTypes $binding.types
     $facetResult = Invoke-DuneSqlQuery -Ip $Ip -Sql $effectiveFacetSql -ReadOnly $true -MaxRows 50000 -TimeoutSec 45 -Bulk
     if (-not $facetResult.ok) { return @{ ok = $false; error = $facetResult.error } }
     $locationSql = @"
-WITH $cte
-SELECT entity_type, entity_id, MAX(CASE WHEN entity_type = 'player' THEN 'Backpack' ELSE entity_label END) AS entity_label,
-       MAX(owner_name) AS owner_name, MAX(player_id)::bigint AS player_id, MAX(player_name) AS player_name,
-       COUNT(*)::bigint AS occurrence_count
-FROM searched_rows CROSS JOIN _dst_parameters p
-WHERE (p.player_id = 0 OR searched_rows.player_id = p.player_id)
-GROUP BY entity_type, entity_id ORDER BY entity_type, entity_label, entity_id LIMIT 50000
+WITH $cte,
+search_locations AS (
+    SELECT entity_type, entity_id, MAX(CASE WHEN entity_type = 'player' THEN 'Backpack' ELSE entity_label END) AS entity_label,
+           MAX(owner_name) AS owner_name, MAX(player_id)::bigint AS player_id, MAX(player_name) AS player_name,
+           COUNT(*)::bigint AS occurrence_count
+    FROM searched_rows CROSS JOIN _dst_parameters p
+    WHERE (p.player_id = 0 OR searched_rows.player_id = p.player_id)
+    GROUP BY entity_type, entity_id
+),
+active_location AS (
+    SELECT r.entity_type, r.entity_id, MAX(CASE WHEN r.entity_type = 'player' THEN 'Backpack' ELSE r.entity_label END) AS entity_label,
+           MAX(r.owner_name) AS owner_name, MAX(r.player_id)::bigint AS player_id, MAX(r.player_name) AS player_name,
+           COUNT(*)::bigint AS occurrence_count
+    FROM visible_rows r CROSS JOIN _dst_parameters p
+    WHERE p.location_type <> '' AND r.entity_type = p.location_type AND r.entity_id = p.location_id
+      AND (p.player_id = 0 OR r.player_id = p.player_id)
+    GROUP BY r.entity_type, r.entity_id
+)
+SELECT * FROM search_locations
+UNION ALL
+SELECT a.* FROM active_location a
+WHERE NOT EXISTS (
+    SELECT 1 FROM search_locations s WHERE s.entity_type = a.entity_type AND s.entity_id = a.entity_id
+)
+ORDER BY entity_type, entity_label, entity_id LIMIT 50000
 "@
     $effectiveLocationSql = New-DuneInventoryParameterizedSql -Sql $locationSql -Parameters $binding.values -ParameterTypes $binding.types
     $locationResult = Invoke-DuneSqlQuery -Ip $Ip -Sql $effectiveLocationSql -ReadOnly $true -MaxRows 50000 -TimeoutSec 45 -Bulk
