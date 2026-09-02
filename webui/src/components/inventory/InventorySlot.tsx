@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useId, useRef, useState } from 'react'
+import { useCallback, useEffect, useId, useLayoutEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import type { SharedInventoryItem } from '../../api/gameplay'
 import { InventoryItemIcon } from './InventoryItemIcon'
@@ -15,6 +15,7 @@ export function InventorySlot({
   onSelect: (item: SharedInventoryItem) => void
 }) {
   const buttonRef = useRef<HTMLButtonElement | null>(null)
+  const tooltipRef = useRef<HTMLDivElement | null>(null)
   const tooltipId = useId()
   const [hovered, setHovered] = useState(false)
   const [hoverSuppressed, setHoverSuppressed] = useState(false)
@@ -28,12 +29,12 @@ export function InventorySlot({
   const placeInfoCard = useCallback(() => {
     const rect = buttonRef.current?.getBoundingClientRect()
     if (!rect) return
-    const width = Math.min(288, window.innerWidth - 16)
-    const estimatedHeight = 184
+    const width = tooltipRef.current?.offsetWidth || Math.min(288, window.innerWidth - 16)
+    const height = tooltipRef.current?.offsetHeight || 0
     const left = Math.min(Math.max(8, rect.left + rect.width / 2 - width / 2), window.innerWidth - width - 8)
-    const top = rect.bottom + estimatedHeight + 8 <= window.innerHeight
+    const top = rect.bottom + height + 8 <= window.innerHeight
       ? rect.bottom + 8
-      : Math.max(8, rect.top - estimatedHeight - 8)
+      : Math.max(8, Math.min(rect.top - height - 8, window.innerHeight - height - 8))
     setPosition({ left, top })
   }, [])
 
@@ -47,12 +48,17 @@ export function InventorySlot({
     return () => document.removeEventListener('focusin', handleFocusIn)
   }, [])
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     if (!showInfo) return
     placeInfoCard()
+    const resizeObserver = typeof ResizeObserver === 'undefined'
+      ? null
+      : new ResizeObserver(placeInfoCard)
+    if (tooltipRef.current) resizeObserver?.observe(tooltipRef.current)
     window.addEventListener('resize', placeInfoCard)
     window.addEventListener('scroll', placeInfoCard, true)
     return () => {
+      resizeObserver?.disconnect()
       window.removeEventListener('resize', placeInfoCard)
       window.removeEventListener('scroll', placeInfoCard, true)
     }
@@ -96,10 +102,11 @@ export function InventorySlot({
 
       {showInfo && createPortal(
         <div
+          ref={tooltipRef}
           id={tooltipId}
           role="tooltip"
           style={{ position: 'fixed', left: position.left, top: position.top, width: 'min(18rem, calc(100vw - 1rem))' }}
-          className="pointer-events-none z-[100] rounded-xl border border-border-bright bg-surface px-3 py-2.5 text-xs shadow-[0_12px_32px_-10px_rgba(0,0,0,0.85)]"
+          className="pointer-events-none z-[100] max-h-[calc(100dvh-1rem)] overflow-hidden rounded-xl border border-border-bright bg-surface px-3 py-2.5 text-xs shadow-[0_12px_32px_-10px_rgba(0,0,0,0.85)]"
         >
           <p className="break-words text-sm font-semibold text-text">{name}</p>
           <p className="mt-0.5 break-all font-mono text-[11px] text-text-muted">{item.templateId}</p>
