@@ -90,6 +90,24 @@ function locationLabel(location: SharedInventoryLocationFacet, allPlayers: boole
   return duplicateOrdinal > 0 ? `${owned} (${duplicateOrdinal})` : owned
 }
 
+function duplicateOrdinals<T>(items: T[], labelOf: (item: T) => string, keyOf: (item: T) => string) {
+  const counts = new Map<string, number>()
+  const seen = new Map<string, number>()
+  const ordinals = new Map<string, number>()
+  items.forEach(item => {
+    const label = labelOf(item)
+    counts.set(label, (counts.get(label) ?? 0) + 1)
+  })
+  items.forEach(item => {
+    const label = labelOf(item)
+    if ((counts.get(label) ?? 0) < 2) return
+    const ordinal = (seen.get(label) ?? 0) + 1
+    seen.set(label, ordinal)
+    ordinals.set(keyOf(item), ordinal)
+  })
+  return ordinals
+}
+
 export function SharedInventoryExplorer({
   entityTypes,
   title = 'Shared Inventory Explorer',
@@ -116,7 +134,11 @@ export function SharedInventoryExplorer({
       : hasScopeId && !parsedScopeId ? 'The requested inventory scope ID must be a positive integer.' : ''
   const scopeType = !scopeError && validScopeType ? requestedScopeType as InventoryEntityType : undefined
   const scopeId = !scopeError ? parsedScopeId : undefined
-  const playerId = parsePositiveId(params.get('player_id'))
+  const requestedPlayerId = params.get('player_id')
+  const playerId = parsePositiveId(requestedPlayerId)
+  const playerError = params.has('player_id') && !playerId
+    ? 'The requested player ID must be a positive integer.'
+    : ''
   const requestedLocationType = params.get('location_type')
   const locationType = requestedLocationType === 'player' || requestedLocationType === 'storage'
     ? requestedLocationType : undefined
@@ -141,13 +163,19 @@ export function SharedInventoryExplorer({
   const canReadInventory = capabilities.hasCapability('inventory.read')
   const requestIdentity = JSON.stringify({
     query: query.trim(), entityTypes, scopeType, scopeId, playerId, locationType, locationId, sort,
-    source: demo ? 'demo' : 'live', scopeError, locationError,
+    source: demo ? 'demo' : 'live', scopeError, playerError, locationError,
   })
   const current = loadedIdentity === requestIdentity ? response : null
   const currentGroups = loadedIdentity === requestIdentity ? groups : []
+  const playerOrdinals = useMemo(() => duplicateOrdinals(
+    current?.data.players ?? [], player => player.name, player => String(player.id),
+  ), [current])
+  const locationOrdinals = useMemo(() => duplicateOrdinals(
+    current?.data.locations ?? [], location => location.label, location => `${location.type}:${location.id}`,
+  ), [current])
 
   const load = useCallback(async (cursor?: string, append = false) => {
-    if (!canReadInventory || unavailableReason || scopeError || locationError) return
+    if (!canReadInventory || unavailableReason || scopeError || playerError || locationError) return
     const version = ++requestVersion.current
     if (append) setLoadingMore(true)
     else {
@@ -181,7 +209,7 @@ export function SharedInventoryExplorer({
       }
     }
   }, [
-    canReadInventory, demo, entityTypes, locationError, locationId, locationType, playerId, query,
+    canReadInventory, demo, entityTypes, locationError, locationId, locationType, playerError, playerId, query,
     requestIdentity, scopeError, scopeId, scopeType, sort, unavailableReason,
     setError, setGroups, setLoadedIdentity, setLoading, setLoadingMore, setResponse, setSelected,
   ])
@@ -197,15 +225,15 @@ export function SharedInventoryExplorer({
     setLoadingMore(false)
   }, [requestIdentity])
   useEffect(() => {
-    if (capabilityReady && canReadInventory && !unavailableReason && !scopeError && !locationError) void load()
-  }, [capabilityReady, canReadInventory, load, locationError, scopeError, unavailableReason])
+    if (capabilityReady && canReadInventory && !unavailableReason && !scopeError && !playerError && !locationError) void load()
+  }, [capabilityReady, canReadInventory, load, locationError, playerError, scopeError, unavailableReason])
   useEffect(() => () => { requestVersion.current += 1 }, [])
 
   if (unavailableReason) {
     return <WorkspaceSection id="shared-inventory" title={title} description={description}><DataState state="unavailable" title="Inventory scope not yet available" message={unavailableReason} /></WorkspaceSection>
   }
-  if (scopeError || locationError) {
-    return <WorkspaceSection id="shared-inventory" title={title} description={description}><DataState state="error" title="Invalid inventory scope" message={scopeError || 'Both location_type and location_id must identify a supported location.'} /></WorkspaceSection>
+  if (scopeError || playerError || locationError) {
+    return <WorkspaceSection id="shared-inventory" title={title} description={description}><DataState state="error" title="Invalid inventory scope" message={scopeError || playerError || 'Both location_type and location_id must identify a supported location.'} /></WorkspaceSection>
   }
   if (!capabilityReady && capabilities.loading) {
     return <WorkspaceSection id="shared-inventory" title={title} description={description}><DataState state="loading" title="Checking inventory access" /></WorkspaceSection>
@@ -217,9 +245,7 @@ export function SharedInventoryExplorer({
     return <WorkspaceSection id="shared-inventory" title={title} description={description}><DataState state="unavailable" title="Shared inventory is not included in this backend" message="Install the matching DST backend build to use the read-only inventory explorer." /></WorkspaceSection>
   }
 
-  const locationCounts = new Map<string, number>()
-  current?.data.locations.forEach(location => locationCounts.set(location.label, (locationCounts.get(location.label) ?? 0) + 1))
-  const validSelectedLocation = !locationType || current?.data.locations.some(location => location.type === locationType && location.id === locationId)
+  const validSelectedLocation = !locationType || current?.data.selectedLocationValid !== false
 
   return (
     <WorkspaceSection id="shared-inventory" title={title} description={description}>
@@ -251,10 +277,9 @@ export function SharedInventoryExplorer({
             onChange={event => setUrlFilters({ player_id: event.target.value || undefined, location_type: undefined, location_id: undefined })}
           >
             <option value="">All players</option>
-            {current?.data.players.map((player, _index, players) => {
-              const duplicate = players.filter(candidate => candidate.name === player.name).length > 1
-              const ordinal = players.filter(candidate => candidate.name === player.name).findIndex(candidate => candidate.id === player.id) + 1
-              return <option key={player.id} value={player.id}>{player.name || 'Unnamed player'}{duplicate ? ` (${ordinal})` : ''}</option>
+            {current?.data.players.map(player => {
+              const ordinal = playerOrdinals.get(String(player.id))
+              return <option key={player.id} value={player.id}>{player.name || 'Unnamed player'}{ordinal ? ` (${ordinal})` : ''}</option>
             })}
           </select>
         </label>
@@ -275,9 +300,7 @@ export function SharedInventoryExplorer({
                 {locationLabel(
                   location,
                   !playerId,
-                  (locationCounts.get(location.label) ?? 0) > 1
-                    ? current.data.locations.filter(candidate => candidate.label === location.label).findIndex(candidate => candidate.type === location.type && candidate.id === location.id) + 1
-                    : 0,
+                  locationOrdinals.get(`${location.type}:${location.id}`) ?? 0,
                 )}
               </option>
             ))}
@@ -350,7 +373,16 @@ function OccurrencePanel({
   const initialLocationType = initialLocation?.type
   const initialLocationId = initialLocation?.id
   const identity = JSON.stringify({ templateId: group?.templateId, playerId, location, sort, scopeType, scopeId, demo })
-  const filteredLocations = panelLocations.filter(candidate => !playerId || candidate.playerId === playerId)
+  const playerOrdinals = useMemo(() => duplicateOrdinals(
+    panelPlayers, player => player.name, player => String(player.id),
+  ), [panelPlayers])
+  const filteredLocations = useMemo(
+    () => panelLocations.filter(candidate => !playerId || candidate.playerId === playerId),
+    [panelLocations, playerId],
+  )
+  const locationOrdinals = useMemo(() => duplicateOrdinals(
+    filteredLocations, location => location.label, location => `${location.type}:${location.id}`,
+  ), [filteredLocations])
 
   const load = useCallback(async (cursor?: string, append = false) => {
     if (!group) return
@@ -380,7 +412,11 @@ function OccurrencePanel({
 
   useEffect(() => {
     setPlayerId(initialPlayerId)
-    setLocation(initialLocationType && initialLocationId ? { type: initialLocationType, id: initialLocationId } : undefined)
+    setLocation(current => {
+      if (!initialLocationType || !initialLocationId) return undefined
+      if (current?.type === initialLocationType && current.id === initialLocationId) return current
+      return { type: initialLocationType, id: initialLocationId }
+    })
     setSort('player-asc')
     setPanelPlayers(players)
     setPanelLocations(locations)
@@ -420,7 +456,10 @@ function OccurrencePanel({
                 setLocation(undefined)
               }}>
                 <option value="">All players</option>
-                {panelPlayers.map(player => <option key={player.id} value={player.id}>{player.name || 'Unnamed player'}</option>)}
+                {panelPlayers.map(player => {
+                  const ordinal = playerOrdinals.get(String(player.id))
+                  return <option key={player.id} value={player.id}>{player.name || 'Unnamed player'}{ordinal ? ` (${ordinal})` : ''}</option>
+                })}
               </select>
             </label>
             <label className="text-sm font-medium text-text">Location
@@ -429,7 +468,7 @@ function OccurrencePanel({
                 setLocation(type && id ? { type: type as InventoryEntityType, id: Number(id) } : undefined)
               }}>
                 <option value="">All locations</option>
-                {filteredLocations.map((option, index) => <option key={`${option.type}:${option.id}`} value={locationValue(option)}>{locationLabel(option, !playerId, filteredLocations.filter(candidate => candidate.label === option.label).length > 1 ? index + 1 : 0)}</option>)}
+                {filteredLocations.map(option => <option key={`${option.type}:${option.id}`} value={locationValue(option)}>{locationLabel(option, !playerId, locationOrdinals.get(`${option.type}:${option.id}`) ?? 0)}</option>)}
               </select>
             </label>
             <label className="text-sm font-medium text-text">Sort occurrences

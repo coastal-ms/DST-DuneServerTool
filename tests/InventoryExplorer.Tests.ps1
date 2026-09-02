@@ -429,6 +429,29 @@ Describe 'Shared Inventory Explorer read model' -Tag 'Pure' {
             -PlayerId 20001 -LocationType storage -LocationId 50001).Count | Should -Be 1
     }
 
+    It 'keeps valid selected facets valid when search has no grouped matches' {
+        $item = [ordered]@{
+            id=1; templateId='Copper'; displayName='Copper'; kind='item'; quantity=5; quality=0
+            metadata=[ordered]@{category='Resources';tier=1;rarity='Common';icon='';stackMaximum=100;volume=0.1;vendorPrice=1;isGradeable=$false}
+            entity=[ordered]@{type='player';id=20001;label='Coastal';owner='Coastal';map='Hagga Basin'}
+        }
+        Mock Get-DuneInventoryDemoItems { @($item) }
+
+        $result = Get-DuneInventoryGroupedDemo -Query 'no match' -EntityTypes @('player') `
+            -PlayerId 20001 -LocationType player -LocationId 20001
+
+        $result.groups.Count | Should -Be 0
+        $result.selectedPlayerValid | Should -BeTrue
+        $result.selectedLocationValid | Should -BeTrue
+    }
+
+    It 'uses keyset-only occurrence SQL and pre-search validity checks' {
+        $source = Get-Content (Join-Path (Get-DstRepoRoot) 'app\server\lib\InventoryExplorer.ps1') -Raw
+        $source | Should -Not -Match 'OFFSET \(SELECT row_offset'
+        $source | Should -Match 'SELECT 1 FROM visible_rows r WHERE r\.player_id = p\.player_id'
+        $source | Should -Match 'r\.entity_type = p\.location_type AND r\.entity_id = p\.location_id'
+    }
+
     It 'builds grouped SQL with authoritative aggregation, null-last metadata sorting, and stable ties' {
         $sort = Resolve-DuneInventoryGroupSort -Value 'total-volume-desc'
         $binding = Get-DuneInventoryQueryParameters -EntityTypes @('player','storage') -Limit 101

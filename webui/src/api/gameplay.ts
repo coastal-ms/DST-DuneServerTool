@@ -110,6 +110,8 @@ export interface SharedInventoryResponse extends InventoryEnvelope {
     unavailableEntityTypes: Array<'base' | 'vehicle'>
     playerId: number | null
     location: { type: InventoryEntityType; id: number } | null
+    selectedPlayerValid: boolean
+    selectedLocationValid: boolean
     groups: SharedInventoryGroup[]
     players: SharedInventoryPlayerFacet[]
     locations: SharedInventoryLocationFacet[]

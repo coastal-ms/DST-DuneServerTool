@@ -104,13 +104,11 @@ Register-DuneRoute -Method GET -Path '/api/v1/inventory/items' -Handler {
                 Write-DuneError -Response $res -Status ([int]$groupResult.status) -Message ([string]$groupResult.error)
                 return
             }
-            if ($playerId -gt 0 -and -not @($groupResult.players | Where-Object { [long]$_.id -eq $playerId }).Count) {
+            if ($playerId -gt 0 -and -not [bool]$groupResult.selectedPlayerValid) {
                 Write-DuneError -Response $res -Status 400 -Message 'player_id is not available in the filtered inventory dataset.'
                 return
             }
-            if ($locationType -and -not @($groupResult.locations | Where-Object {
-                [string]$_.type -eq $locationType -and [long]$_.id -eq $locationId
-            }).Count) {
+            if ($locationType -and -not [bool]$groupResult.selectedLocationValid) {
                 Write-DuneError -Response $res -Status 400 -Message 'The selected location is not available for the selected player.'
                 return
             }
@@ -137,6 +135,8 @@ Register-DuneRoute -Method GET -Path '/api/v1/inventory/items' -Handler {
                 query = $query
                 playerId = if ($playerId -gt 0) { $playerId } else { $null }
                 location = if ($locationType) { [ordered]@{ type = $locationType; id = $locationId } } else { $null }
+                selectedPlayerValid = [bool]$groupResult.selectedPlayerValid
+                selectedLocationValid = [bool]$groupResult.selectedLocationValid
                 supportedEntityTypes = @('player', 'storage')
                 unavailableEntityTypes = @('base', 'vehicle')
                 groups = $pageGroups

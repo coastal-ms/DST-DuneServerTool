@@ -1,5 +1,5 @@
 import React from 'react'
-import { act, cleanup, render, screen, waitFor } from '@testing-library/react'
+import { act, cleanup, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { SharedInventoryExplorer } from '../src/components/inventory/SharedInventoryExplorer'
@@ -69,6 +69,8 @@ const fixture = {
     query: '',
     playerId: null,
     location: null,
+    selectedPlayerValid: true,
+    selectedLocationValid: true,
     supportedEntityTypes: ['player', 'storage'],
     unavailableEntityTypes: ['base', 'vehicle'],
     groups: [copperGroup],
@@ -152,6 +154,34 @@ describe('Shared Inventory Explorer grouped catalog', () => {
     expect(window.location.search).toContain('sort=quantity-desc')
   })
 
+  it('fails closed for a malformed player deep link', async () => {
+    window.history.replaceState(null, '', '/economy?view=inventory&player_id=bad')
+    renderExplorer()
+    expect(await screen.findByText('The requested player ID must be a positive integer.')).toBeInTheDocument()
+    expect(inventoryApi).not.toHaveBeenCalled()
+  })
+
+  it('keeps a valid selected location when search returns no facet matches', async () => {
+    window.history.replaceState(null, '', '/economy?view=inventory&q=missing&player_id=20001&location_type=storage&location_id=50001')
+    inventoryApi.mockResolvedValue({
+      ...fixture,
+      data: {
+        ...fixture.data,
+        query: 'missing',
+        playerId: 20001,
+        location: { type: 'storage', id: 50001 },
+        groups: [],
+        players: [],
+        locations: [],
+        selectedPlayerValid: true,
+        selectedLocationValid: true,
+      },
+    })
+    renderExplorer()
+    expect(await screen.findByText('No matching inventory items')).toBeInTheDocument()
+    expect(screen.queryByText('Location does not match this player')).not.toBeInTheDocument()
+  })
+
   it('opens a lazy occurrence panel with inherited filters and adjustable sorting', async () => {
     const user = userEvent.setup()
     window.history.replaceState(null, '', '/economy?view=inventory&player_id=20001&location_type=storage&location_id=50001')
@@ -162,6 +192,9 @@ describe('Shared Inventory Explorer grouped catalog', () => {
       templateId: 'Copper', playerId: 20001, locationType: 'storage', locationId: 50001, sort: 'player-asc',
     })))
     expect(screen.getByRole('list', { name: 'Item occurrences' })).toHaveTextContent('Copper box')
+    const occurrencePlayer = screen.getByRole('combobox', { name: 'Occurrence player' })
+    expect(within(occurrencePlayer).getByRole('option', { name: 'Coastal (1)' })).toBeInTheDocument()
+    expect(within(occurrencePlayer).getByRole('option', { name: 'Coastal (2)' })).toBeInTheDocument()
     await user.selectOptions(screen.getByRole('combobox', { name: 'Sort occurrences' }), 'quality-desc')
     await waitFor(() => expect(occurrenceApi).toHaveBeenLastCalledWith(expect.objectContaining({ sort: 'quality-desc' })))
   })
@@ -172,6 +205,7 @@ describe('Shared Inventory Explorer grouped catalog', () => {
     renderExplorer()
     await user.click(await screen.findByRole('button', { name: /Copper/ }))
     await screen.findByRole('dialog', { name: 'Copper' })
+    await waitFor(() => expect(itemIconResolver).toHaveBeenCalledWith('Copper'))
     expect(screen.queryByRole('link', { name: 'View on dune.gaming.tools' })).not.toBeInTheDocument()
   })
 

@@ -663,6 +663,11 @@ function ConvertTo-DuneInventoryPlayerFacet {
     }
 }
 
+function ConvertTo-DuneInventoryBoolean {
+    param($Value)
+    return $Value -eq $true -or [string]$Value -in @('1', 't', 'true')
+}
+
 function ConvertTo-DuneInventoryGroup {
     param([Parameter(Mandatory)]$Row)
     $templateId = [string]$Row['template_id']
@@ -734,8 +739,9 @@ function Get-DuneInventoryGroupedDemo {
         [string]$Sort = 'name-asc', [string]$AfterTemplateId = '', [int]$Limit = 101
     )
     $all = @(Get-DuneInventoryDemoItems | ForEach-Object { Add-DuneInventoryDemoPlayer -Item $_ })
-    $base = @(Select-DuneInventoryDemoFiltered -Items $all -Query $Query -EntityTypes $EntityTypes `
+    $visibleBase = @(Select-DuneInventoryDemoFiltered -Items $all -EntityTypes $EntityTypes `
         -ScopeType $ScopeType -ScopeId $ScopeId)
+    $base = @(Select-DuneInventoryDemoFiltered -Items $visibleBase -Query $Query -EntityTypes $EntityTypes)
     $facets = @($base | Where-Object { [long]$_.player.id -gt 0 } | Group-Object { [long]$_.player.id } | ForEach-Object {
         [ordered]@{ id = [long]$_.Name; name = [string]$_.Group[0].player.name; occurrenceCount = $_.Count }
     } | Sort-Object name, id)
@@ -812,7 +818,15 @@ function Get-DuneInventoryGroupedDemo {
             sortName = [string]$group.displayName; templateId = [string]$group.templateId
         }
     }
-    return @{ ok = $true; source = 'static'; groups = $groups; players = $facets; locations = $locations }
+    $selectedPlayerValid = -not $PlayerId -or @($visibleBase | Where-Object { [long]$_.player.id -eq $PlayerId }).Count -gt 0
+    $selectedLocationValid = -not $LocationType -or @($visibleBase | Where-Object {
+        (-not $PlayerId -or [long]$_.player.id -eq $PlayerId) -and
+        [string]$_.entity.type -eq $LocationType -and [long]$_.entity.id -eq $LocationId
+    }).Count -gt 0
+    return @{
+        ok = $true; source = 'static'; groups = $groups; players = $facets; locations = $locations
+        selectedPlayerValid = $selectedPlayerValid; selectedLocationValid = $selectedLocationValid
+    }
 }
 
 function Invoke-DuneInventoryGroupedLive {
@@ -916,6 +930,24 @@ GROUP BY entity_type, entity_id ORDER BY entity_type, entity_label, entity_id LI
     $effectiveLocationSql = New-DuneInventoryParameterizedSql -Sql $locationSql -Parameters $binding.values -ParameterTypes $binding.types
     $locationResult = Invoke-DuneSqlQuery -Ip $Ip -Sql $effectiveLocationSql -ReadOnly $true -MaxRows 50000 -TimeoutSec 45 -Bulk
     if (-not $locationResult.ok) { return @{ ok = $false; error = $locationResult.error } }
+    $validitySql = @"
+WITH $cte
+SELECT
+    (p.player_id = 0 OR EXISTS (
+        SELECT 1 FROM visible_rows r WHERE r.player_id = p.player_id
+    )) AS player_valid,
+    (p.location_type = '' OR EXISTS (
+        SELECT 1 FROM visible_rows r
+        WHERE (p.player_id = 0 OR r.player_id = p.player_id)
+          AND r.entity_type = p.location_type AND r.entity_id = p.location_id
+    )) AS location_valid
+FROM _dst_parameters p
+"@
+    $validityResult = Invoke-DuneSqlQuery -Ip $Ip `
+        -Sql (New-DuneInventoryParameterizedSql -Sql $validitySql -Parameters $binding.values -ParameterTypes $binding.types) `
+        -ReadOnly $true -MaxRows 1 -TimeoutSec 45 -Bulk
+    if (-not $validityResult.ok) { return @{ ok = $false; error = $validityResult.error } }
+    $validity = @(ConvertTo-DuneRowMaps -Result $validityResult)[0]
     return @{
         ok = $true
         groups = @(ConvertTo-DuneRowMaps -Result $groupResult | ForEach-Object { ConvertTo-DuneInventoryGroup -Row $_ })
@@ -928,6 +960,8 @@ GROUP BY entity_type, entity_id ORDER BY entity_type, entity_label, entity_id LI
                 occurrenceCount = ConvertTo-DuneInt $_['occurrence_count']
             }
         })
+        selectedPlayerValid = ConvertTo-DuneInventoryBoolean $validity['player_valid']
+        selectedLocationValid = ConvertTo-DuneInventoryBoolean $validity['location_valid']
     }
 }
 
@@ -1036,7 +1070,7 @@ WHERE lower(trim(template_id)) = lower(trim(p.template_id))
   AND (p.player_id = 0 OR searched_rows.player_id = p.player_id)
   AND (p.location_type = '' OR (searched_rows.entity_type = p.location_type AND searched_rows.entity_id = p.location_id))
   AND $pageWhere
-ORDER BY $($sortSpec.sql) LIMIT (SELECT row_limit FROM _dst_parameters) OFFSET (SELECT row_offset FROM _dst_parameters)
+ORDER BY $($sortSpec.sql) LIMIT (SELECT row_limit FROM _dst_parameters)
 "@
     $effectiveSql = New-DuneInventoryParameterizedSql -Sql $sql -Parameters $binding.values -ParameterTypes $binding.types
     $result = Invoke-DuneSqlQuery -Ip $Ip -Sql $effectiveSql -ReadOnly $true -MaxRows $Limit -TimeoutSec 45 -Bulk
