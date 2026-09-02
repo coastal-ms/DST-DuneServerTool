@@ -1,8 +1,9 @@
-import { renderHook } from '@testing-library/react'
+import { renderHook, waitFor } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   SIDEBAR_DIVIDER_LABEL_MAX_LENGTH,
   SIDEBAR_ORDER_STORAGE_KEY,
+  SIDEBAR_ORDER_V2_STORAGE_KEY,
   SIDEBAR_ORDER_V1_STORAGE_KEY,
   applySidebarNavigationOrder,
   getCanonicalSidebarNavigationOrder,
@@ -11,6 +12,7 @@ import {
   renameSidebarDivider,
   reorderSidebarNavigationItem,
   sanitizeSidebarDividerLabel,
+  setSidebarPagesHidden,
   useSidebarNavigationOrder,
 } from '../src/hooks/useSidebarNavigationOrder'
 import type { NavItem } from '../src/nav'
@@ -25,10 +27,10 @@ const items: NavItem[] = [
 
 beforeEach(() => localStorage.clear())
 
-describe('sidebar navigation order v2', () => {
+describe('sidebar navigation preferences v3', () => {
   it('defines a single canonical sequence of page and divider entries', () => {
     expect(getCanonicalSidebarNavigationOrder(items)).toEqual({
-      version: 2,
+      version: 3,
       items: [
         { type: 'divider', id: 'divider:overview', label: 'Server Management' },
         { type: 'page', id: '/' },
@@ -38,6 +40,7 @@ describe('sidebar navigation order v2', () => {
         { type: 'page', id: '/commands' },
         { type: 'page', id: '/gameconfig' },
       ],
+      hiddenPageIds: [],
     })
   })
 
@@ -63,7 +66,7 @@ describe('sidebar navigation order v2', () => {
 
   it('rejects malformed, duplicate, unknown, and empty entries', () => {
     const normalized = normalizeSidebarNavigationOrder({
-      version: 2,
+      version: 3,
       items: [
         { type: 'page', id: '/operations' },
         { type: 'page', id: '/operations' },
@@ -73,6 +76,7 @@ describe('sidebar navigation order v2', () => {
         { type: 'divider', id: 'divider:user:valid', label: '  My   Section  ' },
         null,
       ],
+      hiddenPageIds: ['/operations', '/operations', '/missing', 42],
     }, items)
 
     expect(normalized.items.filter(entry => entry.id === '/operations')).toHaveLength(1)
@@ -84,11 +88,12 @@ describe('sidebar navigation order v2', () => {
       id: 'divider:user:valid',
       label: 'My Section',
     })
+    expect(normalized.hiddenPageIds).toEqual(['/operations'])
   })
 
   it('reconciles newly introduced routes beside their canonical neighbors', () => {
     const normalized = normalizeSidebarNavigationOrder({
-      version: 2,
+      version: 3,
       items: [
         { type: 'divider', id: 'divider:overview', label: 'Server Management' },
         { type: 'page', id: '/operations' },
@@ -96,6 +101,7 @@ describe('sidebar navigation order v2', () => {
         { type: 'divider', id: 'divider:terminal', label: 'Server Controls' },
         { type: 'page', id: '/commands' },
       ],
+      hiddenPageIds: [],
     }, items)
 
     expect(normalized.items.map(entry => entry.id)).toEqual([
@@ -147,8 +153,64 @@ describe('sidebar navigation order v2', () => {
   })
 
   it('uses distinct storage keys for v2 and migration input', () => {
-    expect(SIDEBAR_ORDER_STORAGE_KEY).toBe('dst.sidebar.navigation-order.v2')
+    expect(SIDEBAR_ORDER_STORAGE_KEY).toBe('dst.sidebar.navigation-preferences.v3')
+    expect(SIDEBAR_ORDER_V2_STORAGE_KEY).toBe('dst.sidebar.navigation-order.v2')
     expect(SIDEBAR_ORDER_V1_STORAGE_KEY).toBe('dst.sidebar.navigation-order.v1')
+  })
+
+  it('migrates v2 order with every page visible by default', () => {
+    const migrated = normalizeSidebarNavigationOrder({
+      version: 2,
+      items: [
+        { type: 'divider', id: 'divider:overview', label: 'Favorites' },
+        { type: 'page', id: '/operations' },
+        { type: 'page', id: '/' },
+      ],
+    }, items)
+
+    expect(migrated.version).toBe(3)
+    expect(migrated.hiddenPageIds).toEqual([])
+    expect(migrated.items.slice(0, 3)).toEqual([
+      { type: 'divider', id: 'divider:overview', label: 'Favorites' },
+      { type: 'page', id: '/operations' },
+      { type: 'page', id: '/' },
+    ])
+  })
+
+  it('persists v2 storage as v3 before removing the old key', async () => {
+    const previousOrder = {
+      version: 2,
+      items: [
+        { type: 'divider', id: 'divider:overview', label: 'Favorites' },
+        { type: 'page', id: '/operations' },
+        { type: 'page', id: '/' },
+      ],
+    }
+    localStorage.setItem(SIDEBAR_ORDER_V2_STORAGE_KEY, JSON.stringify(previousOrder))
+
+    renderHook(() => useSidebarNavigationOrder(items, items))
+
+    await waitFor(() => expect(localStorage.getItem(SIDEBAR_ORDER_STORAGE_KEY)).not.toBeNull())
+    expect(JSON.parse(localStorage.getItem(SIDEBAR_ORDER_STORAGE_KEY) ?? 'null')).toMatchObject({
+      version: 3,
+      hiddenPageIds: [],
+    })
+    expect(localStorage.getItem(SIDEBAR_ORDER_V2_STORAGE_KEY)).toBeNull()
+  })
+
+  it('never stores protected pages as hidden', () => {
+    const protectedItems: NavItem[] = [
+      { ...items[0], sidebarAlwaysVisible: true },
+      ...items.slice(1),
+    ]
+    const canonical = getCanonicalSidebarNavigationOrder(protectedItems)
+    const hidden = setSidebarPagesHidden(canonical, protectedItems, ['/', '/operations'], true)
+
+    expect(hidden.hiddenPageIds).toEqual(['/operations'])
+    expect(normalizeSidebarNavigationOrder({
+      ...hidden,
+      hiddenPageIds: ['/', '/operations', '/missing'],
+    }, protectedItems).hiddenPageIds).toEqual(['/operations'])
   })
 
   it('retains the v1 order when persisting its migration fails', () => {

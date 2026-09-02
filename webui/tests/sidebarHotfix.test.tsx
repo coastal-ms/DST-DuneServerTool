@@ -3,6 +3,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import React, { useState } from 'react'
 import userEvent from '@testing-library/user-event'
 import { Sidebar } from '../src/layout/Sidebar'
+import { MenuBar } from '../src/layout/MenuBar'
 import { BrowserRouter } from '../src/router'
 import {
   SIDEBAR_ORDER_STORAGE_KEY,
@@ -72,7 +73,7 @@ describe('sidebar hotfix links', () => {
     expect(screen.getByRole('textbox', { name: /Rename section Server Management/ })).toBeInTheDocument()
     const divider = screen.getByRole('textbox', { name: /Rename section Server Management/ })
     expect(divider).toHaveClass('text-accent-bright')
-    expect(divider.parentElement).toHaveClass('border-accent/65', 'bg-accent/[0.14]')
+    expect(divider.closest('li')).toHaveClass('border-accent/65', 'bg-accent/[0.14]')
     expect(screen.queryByRole('link', { name: 'Server Overview' })).not.toBeInTheDocument()
 
     fireEvent.click(screen.getByRole('button', { name: 'Done' }))
@@ -111,7 +112,7 @@ describe('sidebar hotfix links', () => {
     await user.keyboard('[Space][ArrowUp][ArrowUp][ArrowUp][ArrowUp][Space]')
 
     const saved = JSON.parse(localStorage.getItem(SIDEBAR_ORDER_STORAGE_KEY) ?? 'null')
-    expect(saved.version).toBe(2)
+    expect(saved.version).toBe(3)
     expect(saved.items.findIndex((entry: { id: string }) => entry.id === '/commands'))
       .toBeLessThan(saved.items.findIndex((entry: { id: string }) => entry.id === 'divider:overview'))
   })
@@ -154,7 +155,7 @@ describe('sidebar hotfix links', () => {
     expect(localStorage.getItem(SIDEBAR_ORDER_STORAGE_KEY)).toBeNull()
   })
 
-  it('migrates v1 customization and Reset restores canonical v2 layout', async () => {
+  it('migrates v1 customization and Reset restores canonical v3 preferences', async () => {
     localStorage.setItem(SIDEBAR_ORDER_V1_STORAGE_KEY, JSON.stringify({
       version: 1,
       groups: { overview: ['/operations', '/', '/pods'] },
@@ -168,5 +169,94 @@ describe('sidebar hotfix links', () => {
     await user.click(screen.getByRole('button', { name: 'Reset' }))
     expect(localStorage.getItem(SIDEBAR_ORDER_STORAGE_KEY)).toBeNull()
     expect(screen.getAllByRole('textbox')[0]).toHaveValue('Server Management')
+  })
+
+  it('shows every optional page by default and marks protected pages as always shown', async () => {
+    const user = userEvent.setup()
+    renderSidebar(false)
+
+    expect(screen.getByRole('link', { name: 'Operations' })).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: 'Sponsors & Credits' })).toBeInTheDocument()
+
+    await user.click(screen.getByRole('button', { name: 'Customize navigation' }))
+    expect(screen.queryByRole('button', { name: 'Hide Server Overview in sidebar' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Hide Sponsors & Credits in sidebar' })).not.toBeInTheDocument()
+    expect(screen.getByLabelText('Server Overview is always shown')).toBeInTheDocument()
+    expect(screen.getByLabelText('Sponsors & Credits is always shown')).toBeInTheDocument()
+  })
+
+  it('hides and restores an individual page while keeping it available in customization', async () => {
+    const user = userEvent.setup()
+    renderSidebar(false)
+
+    await user.click(screen.getByRole('button', { name: 'Customize navigation' }))
+    await user.click(screen.getByRole('button', { name: 'Hide Operations in sidebar' }))
+    expect(screen.getByText('Operations')).toBeInTheDocument()
+    expect(screen.getByText('Hidden')).toBeInTheDocument()
+
+    await user.click(screen.getByRole('button', { name: 'Done' }))
+    expect(screen.queryByRole('link', { name: 'Operations' })).not.toBeInTheDocument()
+
+    await user.click(screen.getByRole('button', { name: 'Customize navigation' }))
+    await user.click(screen.getByRole('button', { name: 'Show Operations in sidebar' }))
+    await user.click(screen.getByRole('button', { name: 'Done' }))
+    expect(screen.getByRole('link', { name: 'Operations' })).toBeInTheDocument()
+  })
+
+  it('removes an empty section from the sidebar and can restore it from customization', async () => {
+    const user = userEvent.setup()
+    renderSidebar(false)
+
+    await user.click(screen.getByRole('button', { name: 'Customize navigation' }))
+    await user.click(screen.getByRole('button', { name: 'Hide pages in section Gameplay Administration' }))
+    await user.click(screen.getByRole('button', { name: 'Done' }))
+
+    expect(screen.queryByRole('link', { name: 'Gameplay Admin' })).not.toBeInTheDocument()
+    expect(screen.queryByText('Gameplay Administration')).not.toBeInTheDocument()
+
+    await user.click(screen.getByRole('button', { name: 'Customize navigation' }))
+    expect(screen.getByRole('textbox', { name: 'Rename section Gameplay Administration' })).toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: 'Show pages in section Gameplay Administration' }))
+    await user.click(screen.getByRole('button', { name: 'Done' }))
+    expect(screen.getByRole('link', { name: 'Gameplay Admin' })).toBeInTheDocument()
+  })
+
+  it('persists hidden pages across reloads without changing the top navigation', async () => {
+    const user = userEvent.setup()
+    const first = renderSidebar(false)
+
+    await user.click(screen.getByRole('button', { name: 'Customize navigation' }))
+    await user.click(screen.getByRole('button', { name: 'Hide Operations in sidebar' }))
+    await user.click(screen.getByRole('button', { name: 'Done' }))
+    first.unmount()
+
+    renderSidebar(false)
+    expect(screen.queryByRole('link', { name: 'Operations' })).not.toBeInTheDocument()
+    const saved = JSON.parse(localStorage.getItem(SIDEBAR_ORDER_STORAGE_KEY) ?? 'null')
+    expect(saved.hiddenPageIds).toContain('/operations')
+
+    render(
+      <BrowserRouter>
+        <MenuBar sidebarCollapsed={false} onToggleSidebar={vi.fn()} />
+      </BrowserRouter>,
+    )
+    await user.click(screen.getByRole('button', { name: 'Server Management' }))
+    expect(screen.getByRole('button', { name: 'Operations' })).toBeInTheDocument()
+  })
+
+  it('Reset restores default visibility and order', async () => {
+    const user = userEvent.setup()
+    renderSidebar(false)
+
+    await user.click(screen.getByRole('button', { name: 'Customize navigation' }))
+    await user.click(screen.getByRole('button', { name: 'Hide Operations in sidebar' }))
+    const commandsHandle = screen.getByRole('button', { name: 'Reorder Commands' })
+    commandsHandle.focus()
+    await user.keyboard('[Space][ArrowUp][ArrowUp][ArrowUp][ArrowUp][Space]')
+    await user.click(screen.getByRole('button', { name: 'Reset' }))
+
+    expect(localStorage.getItem(SIDEBAR_ORDER_STORAGE_KEY)).toBeNull()
+    expect(screen.getByRole('button', { name: 'Hide Operations in sidebar' })).toBeInTheDocument()
+    expect(screen.getAllByRole('button', { name: /^Reorder / })[0]).toHaveAccessibleName('Reorder section Server Management')
   })
 })
