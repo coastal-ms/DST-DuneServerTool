@@ -53,6 +53,32 @@ Describe 'Scheduled Funcom updates' -Tag 'RestartSchedule' {
         $scriptText | Should -Match '/var/lib/dune-server/dst-world-restart-recovery-required'
     }
 
+    It 'holds the shared kernel flock across scheduled restart or update maintenance' {
+        $scriptText = New-DuneVmDailyMaintenanceScript -ApplyFuncomUpdates $true
+        $playersAdmin = Get-Content (Join-Path (Get-DstRepoRoot) 'app\server\lib\PlayersAdmin.ps1') -Raw
+
+        $scriptText | Should -Match 'LOCK=/tmp/dst-battlegroup-maintenance\.lock'
+        $scriptText | Should -Match 'exec 9>"\$LOCK"'
+        $scriptText | Should -Match 'flock -n 9'
+        $playersAdmin | Should -Match "DuneMaintenanceLockPath = '/tmp/dst-battlegroup-maintenance\.lock'"
+    }
+
+    It 'makes in-process scheduled restart honor the shared flock' {
+        Mock Get-DuneBackupContext { @{ ok = $true; ip = '10.0.0.1' } }
+        Mock Invoke-DuneBackupShell {
+            param($Ip, $Script, $TimeoutSec)
+            $script:scheduledRestartCommand = $Script
+            @{ rc = 73; out = '' }
+        }
+
+        $result = Invoke-DuneScheduledRestart
+
+        $result.ok | Should -BeFalse
+        $result.status | Should -Be 423
+        $result.message | Should -Match 'maintenance is already running'
+        $script:scheduledRestartCommand | Should -Match "flock -n -E 73 '/tmp/dst-battlegroup-maintenance\.lock'"
+    }
+
     It 'renders the explicit unattended-update opt-in into the VM script' {
         (New-DuneVmDailyMaintenanceScript -ApplyFuncomUpdates $true) |
             Should -Match 'APPLY_UPDATES=1'

@@ -50,6 +50,9 @@ $script:DuneRestartVmLogPath = '/var/log/dst-daily-maintenance.log'
 $script:DuneRestartVmResultPath = '/var/lib/dune-server/daily-maintenance-result'
 $script:DuneRestartVmResultLastPoll = [datetime]::MinValue
 $script:DuneRestartVmResultPollSeconds = 300
+if (-not $script:DuneMaintenanceLockPath) {
+    $script:DuneMaintenanceLockPath = '/tmp/dst-battlegroup-maintenance.lock'
+}
 
 function Get-DuneRestartStatePath {
     $dir = Join-Path $env:LOCALAPPDATA 'DuneServer'
@@ -567,7 +570,10 @@ function Invoke-DuneScheduledRestart {
         return @{ ok = $false; status = $ctx.status; message = $ctx.message }
     }
     try {
-        $r = Invoke-DuneBackupShell -Ip $ctx.ip -Script "touch $script:DuneRestartMarkerPath 2>/dev/null; /home/dune/.dune/bin/battlegroup restart" -TimeoutSec 180
+        $inner = "touch $script:DuneRestartMarkerPath 2>/dev/null; /home/dune/.dune/bin/battlegroup restart"
+        $innerB64 = [Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes($inner))
+        $command = "printf '%s' '$innerB64' | base64 -d | sudo flock -n -E 73 '$script:DuneMaintenanceLockPath' /bin/bash"
+        $r = Invoke-DuneBackupShell -Ip $ctx.ip -Script $command -TimeoutSec 180
     } catch {
         return @{ ok = $false; status = 502; message = "Restart command failed: $($_.Exception.Message)" }
     }
@@ -576,7 +582,8 @@ function Invoke-DuneScheduledRestart {
     return @{
         ok      = $ok
         rc      = $rc
-        message = if ($ok) { 'Scheduled restart issued.' } else { "Restart command exited $rc." }
+        status  = if ($rc -eq 73) { 423 } elseif ($ok) { 200 } else { 502 }
+        message = if ($ok) { 'Scheduled restart issued.' } elseif ($rc -eq 73) { 'VM maintenance is already running.' } else { "Restart command exited $rc." }
         out     = if ($r) { [string]$r.out } else { '' }
     }
 }
@@ -590,14 +597,14 @@ function New-DuneVmDailyMaintenanceScript {
 set -u
 APPLY_UPDATES=$apply
 APPID=$appId
-LOCK=/tmp/dst-daily-maintenance.lock
+LOCK=$script:DuneMaintenanceLockPath
 LOG=$script:DuneRestartVmLogPath
 RESULT=$script:DuneRestartVmResultPath
 mkdir -p /var/lib/dune-server
-if ! mkdir "`$LOCK" 2>/dev/null; then
+exec 9>"`$LOCK"
+if ! flock -n 9; then
   exit 0
 fi
-trap 'rmdir "`$LOCK" 2>/dev/null || true' EXIT INT TERM
 exec >>"`$LOG" 2>&1
 if [ -f /var/lib/dune-server/dst-world-restart-recovery-required ] || find /tmp/dst-world-restart-active -mmin -120 2>/dev/null | grep -q .; then
   echo "=== `$(date -u +%Y-%m-%dT%H:%M:%SZ) scheduled maintenance skipped: World Restart active ==="

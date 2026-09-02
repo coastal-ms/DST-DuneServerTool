@@ -179,6 +179,74 @@ Describe 'Dungeon battlegroup pod drain verification' {
     }
 }
 
+Describe 'Shared VM maintenance lock lease' {
+    BeforeEach {
+        Mock Get-Command { @{ Name = 'Invoke-DuneBackupShell' } } -ParameterFilter { $Name -eq 'Invoke-DuneBackupShell' }
+    }
+
+    It 'acquires a kernel flock with bounded process-failure expiry' {
+        Mock Invoke-DuneBackupShell {
+            $script:lockAcquireScript = $Script
+            [void]($Script -match '__DST_MAINTENANCE_LOCK_ACQUIRED:([a-f0-9]{32})')
+            @{ rc = 0; out = "__DST_MAINTENANCE_LOCK_ACQUIRED:$($Matches[1])|1234" }
+        }
+
+        $result = Enter-DuneVmMaintenanceLock -Ip '10.0.0.1' -LeaseTimeoutSec 120
+
+        $result.ok | Should -BeTrue
+        $result.pid | Should -Be 1234
+        $encodedHolder = [regex]::Match($script:lockAcquireScript, "printf '%s' '([^']+)' \| base64 -d").Groups[1].Value
+        $decodedHolder = [Text.Encoding]::UTF8.GetString([Convert]::FromBase64String($encodedHolder))
+        $decodedHolder | Should -Match "flock -n 9"
+        $script:lockAcquireScript | Should -Match "'/tmp/dst-battlegroup-maintenance\.lock'"
+        $script:lockAcquireScript | Should -Match '/proc/\$PID/fdinfo/9'
+        $script:lockAcquireScript | Should -Match '"FLOCK"'
+        $script:lockAcquireScript | Should -Match "'120'"
+    }
+
+    It 'fails closed when another maintenance owner holds the flock' {
+        Mock Invoke-DuneBackupShell { @{ rc = 73; out = '__DST_MAINTENANCE_LOCK_BUSY' } }
+
+        $result = Enter-DuneVmMaintenanceLock -Ip '10.0.0.1'
+
+        $result.ok | Should -BeFalse
+        $result.busy | Should -BeTrue
+    }
+
+    It 'refreshes only a verified live owner lease' {
+        Mock Invoke-DuneBackupShell {
+            $script:lockHealthScript = $Script
+            @{ rc = 0; out = '__DST_MAINTENANCE_LOCK_HEALTHY' }
+        }
+        $lease = @{ token = ('a' * 32); pid = 1234; workPath = "/tmp/dst-maintenance-$('a' * 32)" }
+
+        $result = Update-DuneVmMaintenanceLock -Ip '10.0.0.1' -Lease $lease
+
+        $result.ok | Should -BeTrue
+        $script:lockHealthScript | Should -Match '/proc/\$EXPECTED_PID/fd/9'
+        $script:lockHealthScript | Should -Match '/proc/\$EXPECTED_PID/fdinfo/9'
+        $script:lockHealthScript | Should -Match '"FLOCK"'
+        $script:lockHealthScript | Should -Match 'touch "\$WORK/lease"'
+    }
+
+    It 'releases by ending the holder and verifies process exit' {
+        Mock Invoke-DuneBackupShell {
+            $script:lockReleaseScript = $Script
+            @{ rc = 0; out = '__DST_MAINTENANCE_LOCK_RELEASED' }
+        }
+        $lease = @{
+            token = ('b' * 32); pid = 1234; workPath = "/tmp/dst-maintenance-$('b' * 32)"
+            leaseTimeoutSec = 1200
+        }
+
+        $result = Exit-DuneVmMaintenanceLock -Ip '10.0.0.1' -Lease $lease
+
+        $result.ok | Should -BeTrue
+        $script:lockReleaseScript | Should -Match 'rm -f "\$WORK/lease"'
+        $script:lockReleaseScript | Should -Match 'kill -0'
+    }
+}
+
 Describe 'Dungeon difficulty normalization workflow' {
     BeforeEach {
         $script:calls = [Collections.Generic.List[string]]::new()
@@ -197,6 +265,21 @@ Describe 'Dungeon difficulty normalization workflow' {
         Mock Wait-DuneDungeonBattlegroupPodsStopped {
             $script:calls.Add('wait-zero')
             @{ ok = $true; activePodCount = 0 }
+        }
+        Mock Enter-DuneVmMaintenanceLock {
+            $script:calls.Add('lock-acquire')
+            @{
+                ok = $true; token = ('a' * 32); pid = 1234
+                workPath = "/tmp/dst-maintenance-$('a' * 32)"; leaseTimeoutSec = 1200
+            }
+        }
+        Mock Update-DuneVmMaintenanceLock {
+            $script:calls.Add('lock-health')
+            @{ ok = $true }
+        }
+        Mock Exit-DuneVmMaintenanceLock {
+            $script:calls.Add('lock-release')
+            @{ ok = $true }
         }
     }
 
@@ -231,7 +314,29 @@ Describe 'Dungeon difficulty normalization workflow' {
         $result.changed | Should -BeTrue
         $result.verified | Should -BeTrue
         $result.restarted | Should -BeTrue
-        @($script:calls) | Should -Be @('summary1', 'backup', 'stop', 'wait-zero', 'summary2', 'backup', 'write', 'summary3', 'start')
+        @($script:calls) | Should -Be @(
+            'summary1', 'lock-acquire', 'lock-health', 'backup', 'lock-health', 'stop',
+            'wait-zero', 'lock-health', 'summary2', 'backup', 'lock-health', 'write',
+            'summary3', 'lock-health', 'start', 'lock-release'
+        )
+    }
+
+    It 'fails before backup, stop, or SQL when the VM flock cannot be acquired' {
+        Mock Get-DuneDungeonDifficultySummaryLive {
+            @{ ok = $true; total = 10; aboveTarget = 2; maximum = 91; affectedPlayers = 3; target = 50 }
+        }
+        Mock Enter-DuneVmMaintenanceLock {
+            $script:calls.Add('lock-acquire-failed')
+            @{ ok = $false; busy = $true; error = 'VM maintenance is already running.' }
+        }
+
+        $result = Invoke-DuneNormalizeDungeonDifficulty -Ip '10.0.0.1'
+
+        $result.ok | Should -BeFalse
+        $result.changed | Should -BeFalse
+        $result.error | Should -Match 'maintenance lock was not acquired'
+        @($script:calls) | Should -Be @('lock-acquire-failed')
+        Assert-MockCalled Set-DuneDungeonDifficultyTarget -Times 0
     }
 
     It 'fails before disruption when backup verification fails' {
@@ -248,7 +353,7 @@ Describe 'Dungeon difficulty normalization workflow' {
 
         $result.ok | Should -BeFalse
         $result.changed | Should -BeFalse
-        @($script:calls) | Should -Be @('backup')
+        @($script:calls) | Should -Be @('lock-acquire', 'lock-health', 'backup', 'lock-release')
     }
 
     It 'returns a restarted no-op when no affected rows remain after stop' {
@@ -286,7 +391,10 @@ Describe 'Dungeon difficulty normalization workflow' {
         $result.changed | Should -BeFalse
         $result.restarted | Should -BeTrue
         $result.error | Should -Match 'shutdown could not be verified'
-        @($script:calls) | Should -Be @('backup', 'stop', 'wait-timeout', 'start')
+        @($script:calls) | Should -Be @(
+            'lock-acquire', 'lock-health', 'backup', 'lock-health', 'stop',
+            'wait-timeout', 'lock-health', 'start', 'lock-release'
+        )
         Assert-MockCalled Set-DuneDungeonDifficultyTarget -Times 0
     }
 
@@ -304,7 +412,10 @@ Describe 'Dungeon difficulty normalization workflow' {
         $result.ok | Should -BeFalse
         $result.changed | Should -BeFalse
         $result.restarted | Should -BeTrue
-        @($script:calls) | Should -Be @('backup', 'stop', 'wait-indeterminate', 'start')
+        @($script:calls) | Should -Be @(
+            'lock-acquire', 'lock-health', 'backup', 'lock-health', 'stop',
+            'wait-indeterminate', 'lock-health', 'start', 'lock-release'
+        )
         Assert-MockCalled Set-DuneDungeonDifficultyTarget -Times 0
     }
 
@@ -322,8 +433,149 @@ Describe 'Dungeon difficulty normalization workflow' {
         $result.ok | Should -BeFalse
         $result.changed | Should -BeFalse
         $result.restarted | Should -BeTrue
-        @($script:calls) | Should -Be @('backup', 'stop', 'wait-error', 'start')
+        @($script:calls) | Should -Be @(
+            'lock-acquire', 'lock-health', 'backup', 'lock-health', 'stop',
+            'wait-error', 'lock-health', 'start', 'lock-release'
+        )
         Assert-MockCalled Set-DuneDungeonDifficultyTarget -Times 0
+    }
+
+    It 'releases the VM flock after recovery start when an exception occurs' {
+        Mock Get-DuneDungeonDifficultySummaryLive {
+            @{ ok = $true; total = 10; aboveTarget = 2; maximum = 91; affectedPlayers = 3; target = 50 }
+        }
+        Mock Invoke-DuneDungeonDifficultyBgCommand {
+            param($Ip, $Command)
+            $script:calls.Add($Command)
+            if ($Command -eq 'backup') {
+                return @{ ok = $true; backupPath = '/mnt/backups/pre-stop.tar.gz'; backupSize = 2048 }
+            }
+            if ($Command -eq 'stop') { throw 'stop transport failed' }
+            @{ ok = $true; command = $Command }
+        }
+
+        $result = Invoke-DuneNormalizeDungeonDifficulty -Ip '10.0.0.1'
+
+        $result.ok | Should -BeFalse
+        $result.changed | Should -BeFalse
+        @($script:calls) | Should -Be @(
+            'lock-acquire', 'lock-health', 'backup', 'lock-health', 'stop',
+            'lock-health', 'start', 'lock-release'
+        )
+    }
+
+    It 'releases the VM flock when recovery start throws' {
+        Mock Get-DuneDungeonDifficultySummaryLive {
+            @{ ok = $true; total = 10; aboveTarget = 2; maximum = 91; affectedPlayers = 3; target = 50 }
+        }
+        Mock Wait-DuneDungeonBattlegroupPodsStopped {
+            $script:calls.Add('wait-timeout')
+            @{ ok = $false; activePodCount = 2; error = 'Timed out waiting; 2 remain.' }
+        }
+        Mock Invoke-DuneDungeonDifficultyBgCommand {
+            param($Ip, $Command)
+            $script:calls.Add($Command)
+            if ($Command -eq 'backup') {
+                return @{ ok = $true; backupPath = '/mnt/backups/pre-stop.tar.gz'; backupSize = 2048 }
+            }
+            if ($Command -eq 'start') { throw 'start transport failed' }
+            @{ ok = $true; command = $Command }
+        }
+
+        $result = Invoke-DuneNormalizeDungeonDifficulty -Ip '10.0.0.1'
+
+        $result.ok | Should -BeFalse
+        $result.restarted | Should -BeFalse
+        $result.error | Should -Match 'start transport failed'
+        @($script:calls)[-1] | Should -Be 'lock-release'
+    }
+
+    It 'reacquires the shared flock before recovery start when lease health is lost' {
+        $script:healthCall = 0
+        Mock Get-DuneDungeonDifficultySummaryLive {
+            @{ ok = $true; total = 10; aboveTarget = 2; maximum = 91; affectedPlayers = 3; target = 50 }
+        }
+        Mock Wait-DuneDungeonBattlegroupPodsStopped {
+            $script:calls.Add('wait-timeout')
+            @{ ok = $false; activePodCount = 2; error = 'Timed out waiting; 2 remain.' }
+        }
+        Mock Update-DuneVmMaintenanceLock {
+            $script:healthCall++
+            $script:calls.Add("lock-health$script:healthCall")
+            if ($script:healthCall -eq 3) {
+                return @{ ok = $false; error = 'lease indeterminate' }
+            }
+            @{ ok = $true }
+        }
+
+        $result = Invoke-DuneNormalizeDungeonDifficulty -Ip '10.0.0.1'
+
+        $result.ok | Should -BeFalse
+        $result.restarted | Should -BeTrue
+        @($script:calls) | Should -Be @(
+            'lock-acquire', 'lock-health1', 'backup', 'lock-health2', 'stop',
+            'wait-timeout', 'lock-health3', 'lock-release', 'lock-acquire',
+            'start', 'lock-release'
+        )
+    }
+
+    It 'does not start outside the flock when recovery lock reacquisition fails' {
+        $script:healthCall = 0
+        $script:acquireCall = 0
+        Mock Get-DuneDungeonDifficultySummaryLive {
+            @{ ok = $true; total = 10; aboveTarget = 2; maximum = 91; affectedPlayers = 3; target = 50 }
+        }
+        Mock Wait-DuneDungeonBattlegroupPodsStopped {
+            @{ ok = $false; activePodCount = 2; error = 'Timed out waiting; 2 remain.' }
+        }
+        Mock Update-DuneVmMaintenanceLock {
+            $script:healthCall++
+            if ($script:healthCall -eq 3) {
+                return @{ ok = $false; error = 'lease indeterminate' }
+            }
+            @{ ok = $true }
+        }
+        Mock Enter-DuneVmMaintenanceLock {
+            $script:acquireCall++
+            if ($script:acquireCall -eq 1) {
+                return @{
+                    ok = $true; token = ('a' * 32); pid = 1234
+                    workPath = "/tmp/dst-maintenance-$('a' * 32)"; leaseTimeoutSec = 1200
+                }
+            }
+            @{ ok = $false; busy = $true; error = 'VM maintenance is already running.' }
+        }
+
+        $result = Invoke-DuneNormalizeDungeonDifficulty -Ip '10.0.0.1'
+
+        $result.ok | Should -BeFalse
+        $result.restarted | Should -BeFalse
+        $result.error | Should -Match 'could not be reacquired'
+        Assert-MockCalled Invoke-DuneDungeonDifficultyBgCommand -ParameterFilter { $Command -eq 'start' } -Times 0
+    }
+
+    It 'surfaces lock cleanup failure after a verified write' {
+        $script:summaryCall = 0
+        Mock Get-DuneDungeonDifficultySummaryLive {
+            $script:summaryCall++
+            if ($script:summaryCall -lt 3) {
+                return @{ ok = $true; total = 10; aboveTarget = 2; maximum = 91; affectedPlayers = 3; target = 50 }
+            }
+            @{ ok = $true; total = 10; aboveTarget = 0; maximum = 50; affectedPlayers = 0; target = 50 }
+        }
+        Mock Exit-DuneVmMaintenanceLock {
+            $script:calls.Add('lock-release-failed')
+            @{ ok = $false; error = 'Lock release could not be verified; bounded lease remains.' }
+        }
+
+        $result = Invoke-DuneNormalizeDungeonDifficulty -Ip '10.0.0.1'
+
+        $result.ok | Should -BeFalse
+        $result.changed | Should -BeTrue
+        $result.verified | Should -BeTrue
+        $result.restarted | Should -BeTrue
+        $result.error | Should -Match 'Lock release could not be verified'
+        $script:calls[-2..-1] | Should -Be @('start', 'lock-release-failed')
     }
 
     It 'restarts without writing when the stopped-state backup fails' {

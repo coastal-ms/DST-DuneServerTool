@@ -697,6 +697,186 @@ COMMIT;
     return @{ ok = $true; updated = [int64](ConvertTo-DuneInt $rows[0]['updated_n']) }
 }
 
+if (-not $script:DuneMaintenanceLockPath) {
+    $script:DuneMaintenanceLockPath = '/tmp/dst-battlegroup-maintenance.lock'
+}
+
+function Enter-DuneVmMaintenanceLock {
+    param(
+        [string]$Ip,
+        [ValidateRange(60, 3600)][int]$LeaseTimeoutSec = 1200
+    )
+
+    if (-not (Get-Command Invoke-DuneBackupShell -ErrorAction SilentlyContinue)) {
+        return @{ ok = $false; error = 'VM maintenance lock helper is unavailable.' }
+    }
+
+    $token = [guid]::NewGuid().ToString('N')
+    $workPath = "/tmp/dst-maintenance-$token"
+    $holder = @'
+#!/bin/bash
+set -u
+LOCK="$1"
+WORK="$2"
+LEASE_TIMEOUT="$3"
+STATUS="$WORK/status"
+PIDFILE="$WORK/pid"
+exec 9>"$LOCK" || { echo error > "$STATUS"; exit 70; }
+if ! flock -n 9; then
+  echo busy > "$STATUS"
+  exit 73
+fi
+echo "$$" > "$PIDFILE"
+echo acquired > "$STATUS"
+while [ -f "$WORK/lease" ]; do
+  MODIFIED=$(stat -c %Y "$WORK/lease" 2>/dev/null || echo 0)
+  NOW=$(date +%s)
+  if [ "$MODIFIED" -le 0 ] || [ $((NOW - MODIFIED)) -ge "$LEASE_TIMEOUT" ]; then
+    break
+  fi
+  sleep 2
+done
+rm -rf "$WORK"
+'@
+    $holderB64 = [Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes($holder))
+    $script = @"
+set -u
+WORK='$workPath'
+mkdir -m 700 "`$WORK" || { echo '__DST_MAINTENANCE_LOCK_ERROR:workspace'; exit 70; }
+touch "`$WORK/lease"
+printf '%s' '$holderB64' | base64 -d > "`$WORK/holder.sh"
+chmod 700 "`$WORK/holder.sh"
+nohup sudo "`$WORK/holder.sh" '$script:DuneMaintenanceLockPath' "`$WORK" '$LeaseTimeoutSec' >/dev/null 2>&1 &
+for _ in `$(seq 1 50); do
+  STATUS=`$(cat "`$WORK/status" 2>/dev/null || true)
+  if [ "`$STATUS" = acquired ]; then
+    PID=`$(cat "`$WORK/pid" 2>/dev/null || true)
+    case "`$PID" in ''|*[!0-9]*) echo '__DST_MAINTENANCE_LOCK_ERROR:pid'; rm -f "`$WORK/lease"; exit 71 ;; esac
+    FD_TARGET=`$(sudo readlink "/proc/`$PID/fd/9" 2>/dev/null || true)
+    if [ "`$FD_TARGET" = '$script:DuneMaintenanceLockPath' ] &&
+       sudo awk -v expected="`$PID" '`$1 == "lock:" && `$3 == "FLOCK" && `$5 == "WRITE" && `$6 == expected { found=1 } END { exit !found }' "/proc/`$PID/fdinfo/9" 2>/dev/null; then
+      echo "__DST_MAINTENANCE_LOCK_ACQUIRED:$token|`$PID"
+      exit 0
+    fi
+    echo '__DST_MAINTENANCE_LOCK_ERROR:ownership'
+    rm -f "`$WORK/lease"
+    exit 72
+  fi
+  if [ "`$STATUS" = busy ]; then
+    sudo rm -rf "`$WORK"
+    echo '__DST_MAINTENANCE_LOCK_BUSY'
+    exit 73
+  fi
+  if [ "`$STATUS" = error ]; then
+    sudo rm -rf "`$WORK"
+    echo '__DST_MAINTENANCE_LOCK_ERROR:holder'
+    exit 74
+  fi
+  sleep 0.1
+done
+rm -f "`$WORK/lease"
+echo '__DST_MAINTENANCE_LOCK_ERROR:acquire-timeout'
+exit 75
+"@
+    try {
+        $result = Invoke-DuneBackupShell -Ip $Ip -Script $script -TimeoutSec 20
+    } catch {
+        return @{ ok = $false; error = "VM maintenance lock acquisition failed: $($_.Exception.Message)" }
+    }
+    $out = if ($null -eq $result) { '' } else { [string]$result.out }
+    $match = [regex]::Match($out, '__DST_MAINTENANCE_LOCK_ACQUIRED:([a-f0-9]{32})\|(\d+)')
+    if ($null -ne $result -and [int]$result.rc -eq 0 -and $match.Success -and $match.Groups[1].Value -eq $token) {
+        return @{
+            ok = $true
+            token = $token
+            pid = [int64]$match.Groups[2].Value
+            workPath = $workPath
+            leaseTimeoutSec = $LeaseTimeoutSec
+        }
+    }
+    if ($out -match '__DST_MAINTENANCE_LOCK_BUSY') {
+        return @{ ok = $false; busy = $true; error = 'VM maintenance is already running.' }
+    }
+    return @{ ok = $false; error = 'VM maintenance lock ownership could not be verified.' }
+}
+
+function Update-DuneVmMaintenanceLock {
+    param(
+        [string]$Ip,
+        [Parameter(Mandatory)]$Lease
+    )
+
+    $token = [string]$Lease.token
+    $holderPid = [int64]$Lease.pid
+    $workPath = [string]$Lease.workPath
+    if ($token -notmatch '^[a-f0-9]{32}$' -or $holderPid -le 0 -or $workPath -ne "/tmp/dst-maintenance-$token") {
+        return @{ ok = $false; error = 'VM maintenance lock lease is invalid.' }
+    }
+    $script = @"
+set -u
+WORK='$workPath'
+EXPECTED_PID='$holderPid'
+[ "`$(cat "`$WORK/status" 2>/dev/null || true)" = acquired ] || { echo '__DST_MAINTENANCE_LOCK_UNHEALTHY:status'; exit 76; }
+[ "`$(cat "`$WORK/pid" 2>/dev/null || true)" = "`$EXPECTED_PID" ] || { echo '__DST_MAINTENANCE_LOCK_UNHEALTHY:owner'; exit 77; }
+[ "`$(sudo readlink "/proc/`$EXPECTED_PID/fd/9" 2>/dev/null || true)" = '$script:DuneMaintenanceLockPath' ] || { echo '__DST_MAINTENANCE_LOCK_UNHEALTHY:descriptor'; exit 78; }
+sudo awk -v expected="`$EXPECTED_PID" '`$1 == "lock:" && `$3 == "FLOCK" && `$5 == "WRITE" && `$6 == expected { found=1 } END { exit !found }' "/proc/`$EXPECTED_PID/fdinfo/9" 2>/dev/null || { echo '__DST_MAINTENANCE_LOCK_UNHEALTHY:flock'; exit 78; }
+touch "`$WORK/lease" || { echo '__DST_MAINTENANCE_LOCK_UNHEALTHY:heartbeat'; exit 79; }
+sudo awk -v expected="`$EXPECTED_PID" '`$1 == "lock:" && `$3 == "FLOCK" && `$5 == "WRITE" && `$6 == expected { found=1 } END { exit !found }' "/proc/`$EXPECTED_PID/fdinfo/9" 2>/dev/null || { echo '__DST_MAINTENANCE_LOCK_UNHEALTHY:flock'; exit 78; }
+echo '__DST_MAINTENANCE_LOCK_HEALTHY'
+"@
+    try {
+        $result = Invoke-DuneBackupShell -Ip $Ip -Script $script -TimeoutSec 20
+    } catch {
+        return @{ ok = $false; error = "VM maintenance lock health check failed: $($_.Exception.Message)" }
+    }
+    if ($null -ne $result -and [int]$result.rc -eq 0 -and [string]$result.out -match '__DST_MAINTENANCE_LOCK_HEALTHY') {
+        return @{ ok = $true }
+    }
+    return @{ ok = $false; error = 'VM maintenance lock ownership is no longer verifiable.' }
+}
+
+function Exit-DuneVmMaintenanceLock {
+    param(
+        [string]$Ip,
+        [Parameter(Mandatory)]$Lease
+    )
+
+    $token = [string]$Lease.token
+    $holderPid = [int64]$Lease.pid
+    $workPath = [string]$Lease.workPath
+    if ($token -notmatch '^[a-f0-9]{32}$' -or $holderPid -le 0 -or $workPath -ne "/tmp/dst-maintenance-$token") {
+        return @{ ok = $false; error = 'VM maintenance lock lease is invalid and could not be released.' }
+    }
+    $script = @"
+set -u
+WORK='$workPath'
+EXPECTED_PID='$holderPid'
+rm -f "`$WORK/lease"
+for _ in `$(seq 1 15); do
+  if ! sudo kill -0 "`$EXPECTED_PID" 2>/dev/null; then
+    sudo rm -rf "`$WORK"
+    echo '__DST_MAINTENANCE_LOCK_RELEASED'
+    exit 0
+  fi
+  sleep 1
+done
+echo '__DST_MAINTENANCE_LOCK_RELEASE_ERROR:holder-still-running'
+exit 80
+"@
+    try {
+        $result = Invoke-DuneBackupShell -Ip $Ip -Script $script -TimeoutSec 25
+    } catch {
+        return @{ ok = $false; error = "VM maintenance lock release failed: $($_.Exception.Message)" }
+    }
+    if ($null -ne $result -and [int]$result.rc -eq 0 -and [string]$result.out -match '__DST_MAINTENANCE_LOCK_RELEASED') {
+        return @{ ok = $true }
+    }
+    return @{
+        ok = $false
+        error = "VM maintenance lock release could not be verified. Its bounded lease expires within $([int]$Lease.leaseTimeoutSec) seconds."
+    }
+}
+
 function Wait-DuneDungeonBattlegroupPodsStopped {
     param(
         [string]$Ip,
@@ -779,14 +959,15 @@ function Invoke-DuneNormalizeDungeonDifficulty {
         }
     }
 
-    $backup = Invoke-DuneDungeonDifficultyBgCommand -Ip $Ip -Command 'backup'
-    if (-not $backup.ok) {
+    $maintenanceLock = Enter-DuneVmMaintenanceLock -Ip $Ip
+    if (-not $maintenanceLock.ok) {
         return @{
             ok = $false; noOp = $false; changed = $false; verified = $false; restarted = $false
-            updated = 0; backupPath = ''; error = "No changes made because the safety backup failed verification. $($backup.error)"
+            updated = 0; backupPath = ''; error = "No changes made because the VM maintenance lock was not acquired. $($maintenanceLock.error)"
         }
     }
 
+    $backup = $null
     $stopAttempted = $false
     $write = $null
     $after = $null
@@ -794,60 +975,141 @@ function Invoke-DuneNormalizeDungeonDifficulty {
     $verified = $false
     $noOpAfterStop = $false
     $start = $null
+    $lockRelease = $null
+    $maintenanceLockHeld = $true
     try {
-        $stopAttempted = $true
-        $stop = Invoke-DuneDungeonDifficultyBgCommand -Ip $Ip -Command 'stop'
-        if (-not $stop.ok) {
-            $operationError = "No dungeon rows changed because the battlegroup did not stop cleanly. $($stop.error)"
-        } else {
+        $lockHealth = Update-DuneVmMaintenanceLock -Ip $Ip -Lease $maintenanceLock
+        if (-not $lockHealth.ok) {
+            $operationError = "No dungeon rows changed because VM maintenance lock ownership was not verifiable. $($lockHealth.error)"
+        }
+
+        if (-not $operationError) {
+            $backup = Invoke-DuneDungeonDifficultyBgCommand -Ip $Ip -Command 'backup'
+            if (-not $backup.ok) {
+                $operationError = "No changes made because the safety backup failed verification. $($backup.error)"
+            }
+        }
+
+        if (-not $operationError) {
+            $lockHealth = Update-DuneVmMaintenanceLock -Ip $Ip -Lease $maintenanceLock
+            if (-not $lockHealth.ok) {
+                $operationError = "No dungeon rows changed because VM maintenance lock ownership was not verifiable before stop. $($lockHealth.error)"
+            }
+        }
+
+        if (-not $operationError) {
+            $stopAttempted = $true
+            $stop = Invoke-DuneDungeonDifficultyBgCommand -Ip $Ip -Command 'stop'
+            if (-not $stop.ok) {
+                $operationError = "No dungeon rows changed because the battlegroup did not stop cleanly. $($stop.error)"
+            }
+        }
+
+        if (-not $operationError) {
             $podDrain = Wait-DuneDungeonBattlegroupPodsStopped -Ip $Ip
             if (-not $podDrain.ok) {
                 $operationError = "No dungeon rows changed because battlegroup shutdown could not be verified. $($podDrain.error)"
+            }
+        }
+
+        if (-not $operationError) {
+            $lockHealth = Update-DuneVmMaintenanceLock -Ip $Ip -Lease $maintenanceLock
+            if (-not $lockHealth.ok) {
+                $operationError = "No dungeon rows changed because VM maintenance lock ownership was not verifiable after shutdown. $($lockHealth.error)"
+            }
+        }
+
+        if (-not $operationError) {
+            $stoppedSummary = Get-DuneDungeonDifficultySummaryLive -Ip $Ip
+            if (-not $stoppedSummary.ok) {
+                $operationError = "No dungeon rows changed because the stopped-state summary failed. $($stoppedSummary.error)"
+            } elseif ($stoppedSummary.aboveTarget -eq 0) {
+                $after = $stoppedSummary
+                $verified = $true
+                $noOpAfterStop = $true
             } else {
-                $stoppedSummary = Get-DuneDungeonDifficultySummaryLive -Ip $Ip
-                if (-not $stoppedSummary.ok) {
-                    $operationError = "No dungeon rows changed because the stopped-state summary failed. $($stoppedSummary.error)"
-                } elseif ($stoppedSummary.aboveTarget -eq 0) {
-                    $after = $stoppedSummary
-                    $verified = $true
-                    $noOpAfterStop = $true
+                $stoppedBackup = Invoke-DuneDungeonDifficultyBgCommand -Ip $Ip -Command 'backup'
+                if (-not $stoppedBackup.ok) {
+                    $operationError = "No dungeon rows changed because the stopped-state rollback backup failed verification. $($stoppedBackup.error)"
                 } else {
-                    $stoppedBackup = Invoke-DuneDungeonDifficultyBgCommand -Ip $Ip -Command 'backup'
-                    if (-not $stoppedBackup.ok) {
-                        $operationError = "No dungeon rows changed because the stopped-state rollback backup failed verification. $($stoppedBackup.error)"
-                    } else {
-                        $backup = $stoppedBackup
-                        $before = $stoppedSummary
-                        $write = Set-DuneDungeonDifficultyTarget -Ip $Ip
-                        if (-not $write.ok) {
-                            $operationError = $write.error
-                        } else {
-                            $after = Get-DuneDungeonDifficultySummaryLive -Ip $Ip
-                            if (-not $after.ok) {
-                                $operationError = "Dungeon difficulty changed, but post-write verification failed. $($after.error)"
-                            } elseif ($after.total -ne $before.total) {
-                                $operationError = "Post-write verification failed: completion row count changed from $($before.total) to $($after.total)."
-                            } elseif ($write.updated -ne $before.aboveTarget) {
-                                $operationError = "Post-write verification failed: expected $($before.aboveTarget) updated rows but PostgreSQL reported $($write.updated)."
-                            } elseif ($after.aboveTarget -ne 0 -or ($null -ne $after.maximum -and $after.maximum -gt 50)) {
-                                $operationError = "Post-write verification failed: $($after.aboveTarget) completion row(s) remain above 50."
-                            } else {
-                                $verified = $true
-                            }
-                        }
-                    }
+                    $backup = $stoppedBackup
+                    $before = $stoppedSummary
+                }
+            }
+        }
+
+        if (-not $operationError -and -not $noOpAfterStop) {
+            $lockHealth = Update-DuneVmMaintenanceLock -Ip $Ip -Lease $maintenanceLock
+            if (-not $lockHealth.ok) {
+                $operationError = "No dungeon rows changed because VM maintenance lock ownership was not verifiable before the database write. $($lockHealth.error)"
+            }
+        }
+
+        if (-not $operationError -and -not $noOpAfterStop) {
+            $write = Set-DuneDungeonDifficultyTarget -Ip $Ip
+            if (-not $write.ok) {
+                $operationError = $write.error
+            } else {
+                $after = Get-DuneDungeonDifficultySummaryLive -Ip $Ip
+                if (-not $after.ok) {
+                    $operationError = "Dungeon difficulty changed, but post-write verification failed. $($after.error)"
+                } elseif ($after.total -ne $before.total) {
+                    $operationError = "Post-write verification failed: completion row count changed from $($before.total) to $($after.total)."
+                } elseif ($write.updated -ne $before.aboveTarget) {
+                    $operationError = "Post-write verification failed: expected $($before.aboveTarget) updated rows but PostgreSQL reported $($write.updated)."
+                } elseif ($after.aboveTarget -ne 0 -or ($null -ne $after.maximum -and $after.maximum -gt 50)) {
+                    $operationError = "Post-write verification failed: $($after.aboveTarget) completion row(s) remain above 50."
+                } else {
+                    $verified = $true
                 }
             }
         }
     } catch {
         $operationError = "Dungeon difficulty operation failed: $($_.Exception.Message)"
     } finally {
-        if ($stopAttempted) {
-            $start = Invoke-DuneDungeonDifficultyBgCommand -Ip $Ip -Command 'start'
+        try {
+            if ($stopAttempted) {
+                $lockHealth = Update-DuneVmMaintenanceLock -Ip $Ip -Lease $maintenanceLock
+                if (-not $lockHealth.ok) {
+                    $lockRelease = Exit-DuneVmMaintenanceLock -Ip $Ip -Lease $maintenanceLock
+                    $maintenanceLockHeld = $false
+                    if ($lockRelease.ok) {
+                        $replacementLock = Enter-DuneVmMaintenanceLock -Ip $Ip
+                        if ($replacementLock.ok) {
+                            $maintenanceLock = $replacementLock
+                            $maintenanceLockHeld = $true
+                            $lockRelease = $null
+                        } else {
+                            $healthError = "VM maintenance lock ownership was lost before recovery start and the lock could not be reacquired. $($replacementLock.error)"
+                            $operationError = if ($operationError) { "$operationError $healthError" } else { $healthError }
+                        }
+                    } else {
+                        $healthError = "VM maintenance lock ownership was not verifiable before recovery start and the uncertain lease could not be released. $($lockHealth.error) $($lockRelease.error)"
+                        $operationError = if ($operationError) { "$operationError $healthError" } else { $healthError }
+                    }
+                }
+                if ($maintenanceLockHeld) {
+                    try {
+                        $start = Invoke-DuneDungeonDifficultyBgCommand -Ip $Ip -Command 'start'
+                    } catch {
+                        $start = @{ ok = $false; error = "Battlegroup start failed: $($_.Exception.Message)" }
+                    }
+                }
+            }
+        } finally {
+            if ($maintenanceLockHeld) {
+                $lockRelease = Exit-DuneVmMaintenanceLock -Ip $Ip -Lease $maintenanceLock
+                $maintenanceLockHeld = $false
+            }
         }
     }
 
-    if ($null -eq $start -or -not $start.ok) {
+    if ($null -eq $lockRelease -or -not $lockRelease.ok) {
+        $releaseError = if ($null -eq $lockRelease) { 'VM maintenance lock release was not attempted.' } else { $lockRelease.error }
+        $operationError = if ($operationError) { "$operationError $releaseError" } else { $releaseError }
+    }
+
+    if ($stopAttempted -and ($null -eq $start -or -not $start.ok)) {
         $startError = if ($null -eq $start) { 'Battlegroup start was not launched.' } else { $start.error }
         $prefix = if ($operationError) { "$operationError " } elseif ($write -and $write.ok) { "Dungeon difficulty changed, but " } else { "No dungeon rows changed, but " }
         return @{
@@ -861,12 +1123,13 @@ function Invoke-DuneNormalizeDungeonDifficulty {
         }
     }
     if ($operationError) {
+        $recoveryMessage = if ($stopAttempted) { ' The battlegroup start command was launched.' } else { '' }
         return @{
             ok = $false; noOp = $false
             changed = [bool]($write -and $write.ok)
             verified = $verified
-            restarted = $true
-            error = "$operationError The battlegroup start command was launched."
+            restarted = [bool]$stopAttempted
+            error = "$operationError$recoveryMessage"
             backupPath = $backup.backupPath
             updated = if ($write -and $write.ok) { $write.updated } else { 0 }
         }
