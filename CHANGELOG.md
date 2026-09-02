@@ -13,10 +13,18 @@ here cover everything those tags shipped.
 
 ## [Unreleased]
 
+## [15.0.0-test9] - 2026-09-01
+
+Candidate metadata prepared for v15.0.0-test9; semantic version remains 15.0.0.
+
 ### Added
 
-- Added a missing-only **All House Swatches** cosmetic preset that requires the
-  player online and applies live unlocks without creating backpack items.
+- Added a missing-only **All House Swatches** cosmetic preset that delivers
+  physical unlock tokens through the live game, activates them while the player
+  remains online, and forces overflow if the backpack cannot hold them.
+- Batched online vehicle kits and saved item packages through one RMQ broker
+  session so every package entry is enqueued immediately without a separate
+  SSH/Kubernetes round trip or delay for each item.
 
 ## [15.0.0-test8] - 2026-08-31
 

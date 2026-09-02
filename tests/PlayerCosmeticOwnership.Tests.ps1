@@ -68,6 +68,21 @@ Describe 'Get-DunePlayerOwnedCosmeticsLive' -Tag 'Pure' {
         Get-DuneCosmeticCanonicalKey 'MTX_Smug_Formal01_Bottom' | Should -Be (
             Get-DuneCosmeticCanonicalKey 'MTX_SmugFormalSetVariant_Bottom'
         )
+        Get-DuneCosmeticCanonicalKey 'HArmCharDyepackAgrosaz' | Should -Be (
+            Get-DuneCosmeticCanonicalKey 'Agrosaz_HeavyArmor_Swatch'
+        )
+        Get-DuneCosmeticCanonicalKey 'LArmCharDyepackEcaz' | Should -Be (
+            Get-DuneCosmeticCanonicalKey 'Ecaz_LightArmor_Swatch'
+        )
+        Get-DuneCosmeticCanonicalKey 'StillSCharDyepackTalgari' | Should -Be (
+            Get-DuneCosmeticCanonicalKey 'Taligari_Stillsuit_Swatch'
+        )
+        Get-DuneCosmeticCanonicalKey 'PlaceableDyePackArgosaz' | Should -Be (
+            Get-DuneCosmeticCanonicalKey 'Argosaz_Placeables_Swatch'
+        )
+        Get-DuneCosmeticCanonicalKey 'PlaceableDyePackWayku' | Should -Be (
+            Get-DuneCosmeticCanonicalKey 'Wakyu_Placeables_Swatch'
+        )
     }
 
     It 'queries all persistence locations read by the ownership filter' {

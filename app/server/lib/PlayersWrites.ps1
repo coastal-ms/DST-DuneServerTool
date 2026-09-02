@@ -365,8 +365,9 @@ WHERE template_id = 'ContractItem'
 # §3 — Items / inventory
 # ---------------------------------------------------------------------------
 
-# Bulk give: loops the existing single-template give. Items is an array of
-# @{ template = '...'; qty = N; quality = M }.
+# Bulk give. Online default-quality entries with forced overflow share one
+# broker session; guarded-capacity, custom-quality, and offline writes retain
+# their existing per-item paths.
 function Invoke-DunePlayerGiveItemsBulk {
     param([string]$Ip, [long]$PawnId, $Items, [string]$FlsId, [bool]$AllowOverflow = $true)
     if ($PawnId -le 0) { return @{ ok = $false; error = 'pawn_id is required.' } }
@@ -386,30 +387,42 @@ function Invoke-DunePlayerGiveItemsBulk {
         $fr = Resolve-DuneFlsIdOrError -Ip $Ip -ActorId $PawnId
         if ($fr.ok) { $fls = [string]$fr.fls_id }
     }
-    $results = New-Object System.Collections.Generic.List[object]
-    $failures = 0
-    # Each RMQ ServerCommand is applied asynchronously by the game; firing several
-    # AddItemToInventory commands back-to-back can outrun the deposit so later items
-    # (often the bulky vehicle modules at the end of a kit) silently never land.
-    # Space consecutive live gives so the game finishes depositing each before the next.
-    $rmqGives = 0
-    $rmqSpacingMs = 500
-    foreach ($it in $Items) {
+    $sourceItems = @($Items)
+    $results = [object[]]::new($sourceItems.Count)
+    $batchEntries = [System.Collections.Generic.List[object]]::new()
+    $batchIndices = [System.Collections.Generic.List[int]]::new()
+    $rmqSpacingMs = 0
+    for ($index = 0; $index -lt $sourceItems.Count; $index++) {
+        $it = $sourceItems[$index]
         $tmpl = [string](Get-DuneBodyValue -Body $it -Name 'template')
         $qty = [int64](Get-DuneBodyInt -Body $it -Name 'qty')
         $qlevel = Get-DuneBodyInt -Body $it -Name 'quality'
         if ($null -eq $qlevel) { $qlevel = 0L }
         if (-not $tmpl) {
-            $results.Add(@{ ok = $false; error = 'template missing' })
-            $failures++; continue
+            $results[$index] = @{ ok = $false; error = 'template missing' }
+            continue
         }
         if ($qty -le 0) { $qty = 1 }
         if ($isOnline -and $qlevel -le 0 -and -not [string]::IsNullOrWhiteSpace($fls)) {
-            # Online + default quality → RMQ live (instant, no relog)
-            if ($rmqGives -gt 0) { Start-Sleep -Milliseconds $rmqSpacingMs }
-            $r = Invoke-DunePlayerGiveItemLive -Ip $Ip -ActorId $PawnId -FlsId $fls -Template $tmpl -Quantity ([int]$qty) -Durability 1.0 -AllowOverflow $AllowOverflow
+            if ($AllowOverflow) {
+                $tv = Test-DuneValidGiveTemplate -TemplateId $tmpl
+                if (-not $tv.ok) {
+                    $results[$index] = @{ ok = $false; error = $tv.error }
+                    continue
+                }
+                $batchEntries.Add([pscustomobject]@{
+                    ItemName = $tmpl
+                    Quantity = [int]$qty
+                    Durability = 1.0
+                })
+                $batchIndices.Add($index)
+                continue
+            }
+            # Capacity-guarded gives remain sequential because each deposit changes
+            # the available-space calculation for the next package entry.
+            $r = Invoke-DunePlayerGiveItemLive -Ip $Ip -ActorId $PawnId -FlsId $fls `
+                -Template $tmpl -Quantity ([int]$qty) -Durability 1.0 -AllowOverflow $false
             if ($r.ok -and -not $r.path) { $r['path'] = 'rmq' }
-            $rmqGives++
         } else {
             # Offline, OR online with custom quality / unresolved fls → SQL
             $r = Invoke-DunePlayerGiveItem -Ip $Ip -PawnId $PawnId -Template $tmpl -Qty $qty -Quality ([int64]$qlevel)
@@ -420,17 +433,30 @@ function Invoke-DunePlayerGiveItemsBulk {
                 }
             }
         }
-        $results.Add($r)
-        if (-not $r.ok) { $failures++ }
+        $results[$index] = $r
     }
-    $total = @($Items).Count
+
+    if ($batchEntries.Count -gt 0) {
+        $batchResult = Invoke-DuneRmqAddItemEntriesToInventoryBatch -FlsId $fls `
+            -Items $batchEntries.ToArray() -SpacingMilliseconds $rmqSpacingMs
+        foreach ($index in $batchIndices) {
+            $results[$index] = if ($batchResult.ok) {
+                @{ ok = $true; path = 'rmq'; message = 'Accepted in live item batch.' }
+            } else {
+                @{ ok = $false; error = $batchResult.message }
+            }
+        }
+    }
+
+    $failures = @($results | Where-Object { -not $_.ok }).Count
+    $total = $sourceItems.Count
     $ok = $failures -lt $total
     $msg = if ($failures -eq 0) {
         "Gave $total item template(s) to pawn $PawnId."
     } else {
         "$($total - $failures)/$total item templates gave OK; $failures failed."
     }
-    return @{ ok = $ok; message = $msg; results = $results.ToArray(); failures = $failures; total = $total }
+    return @{ ok = $ok; message = $msg; results = $results; failures = $failures; total = $total }
 }
 
 function Invoke-DunePlayerGrantHouseSwatches {
@@ -440,7 +466,7 @@ function Invoke-DunePlayerGrantHouseSwatches {
 
     $off = Test-DunePlayerOffline -Ip $Ip -PawnId $PawnId
     if ($off.ok) {
-        return @{ ok = $false; error = 'Player must be online so House Swatches unlock immediately instead of becoming backpack items.' }
+        return @{ ok = $false; error = 'Player must be online so House Swatch tokens can be delivered through the live game.' }
     }
     $fls = Resolve-DuneFlsIdOrError -Ip $Ip -ActorId $PawnId
     if (-not $fls.ok) { return @{ ok = $false; error = $fls.error } }
@@ -472,39 +498,34 @@ function Invoke-DunePlayerGrantHouseSwatches {
         }
     }
 
-    $failed = [System.Collections.Generic.List[string]]::new()
-    $granted = 0
-    foreach ($entry in $missing) {
-        $template = [string]$entry.template
-        if ($granted -gt 0) { Start-Sleep -Milliseconds 200 }
-        $result = Invoke-DunePlayerGiveItemLive -Ip $Ip -ActorId 0 -FlsId ([string]$fls.fls_id) `
-            -Template $template -Quantity 1 -Durability 1.0 -AllowOverflow $true
-        if ($result.ok) {
-            $granted++
-        } else {
-            $failed.Add($template)
-        }
-    }
-    if ($failed.Count -gt 0) {
+    $missingTemplates = @($missing | ForEach-Object { [string]$_.template })
+    $result = Invoke-DuneRmqAddItemsToInventoryBatch -FlsId ([string]$fls.fls_id) `
+        -ItemNames $missingTemplates -SpacingMilliseconds 200
+    if (-not $result.ok) {
         return @{
             ok = $false
-            error = "$granted/$($missing.Count) House Swatch live grants were accepted; $($failed.Count) failed."
+            error = "House Swatch token batch failed: $($result.message)"
             total = $houseSwatches.Count
             already_owned = $alreadyOwned
             requested = $missing.Count
-            granted = $granted
-            failed = $failed.ToArray()
+            granted = 0
+            failed = $missingTemplates
+            delivery = 'tokens'
+            overflow = $true
         }
     }
 
+    $granted = $missing.Count
     return @{
         ok = $true
-        message = "Granted $granted missing House Swatch$(if ($granted -eq 1) { '' } else { 'es' }) live with no backpack items."
+        message = "Delivered $granted missing House Swatch token$(if ($granted -eq 1) { '' } else { 's' }) through the live game. Delivery starts immediately; the player must remain online until the activation cascade starts and completely stops. This usually takes about a minute. Overflow drops beside the player."
         total = $houseSwatches.Count
         already_owned = $alreadyOwned
         requested = $missing.Count
         granted = $granted
         failed = @()
+        delivery = 'tokens'
+        overflow = $true
     }
 }
 

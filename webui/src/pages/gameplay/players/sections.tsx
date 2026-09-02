@@ -607,7 +607,7 @@ interface ActionDef {
   offlineOnly?: boolean   // requires player to be offline (DB write the game caches in memory)
   experimental?: boolean  // unverified — may not take effect in-game; shown with an EXPERIMENTAL badge
   fields?: ActionField[]
-  custom?: 'give-item' | 'grant-reward' | 'whisper' | 'spawn-vehicle' | 'funcom-spawn-vehicle' | 'quick-presets' | 'vehicle-kit' | 'give-package' | 'cheat-scripts' | 'dev-scripts' | 'unlock-trainers' | 'unlock-mainquest' | 'complete-contract' | 'progression-unlock' | 'refuel-vehicle' | 'starter-class' | 'teleport-player' | 'teleport-location' | 'set-respawn' | 'reset-faction' | 'grant-cosmetic' | 'fresh-start'
+  custom?: 'give-item' | 'grant-reward' | 'whisper' | 'spawn-vehicle' | 'funcom-spawn-vehicle' | 'quick-presets' | 'vehicle-kit' | 'give-package' | 'cheat-scripts' | 'dev-scripts' | 'unlock-trainers' | 'unlock-mainquest' | 'complete-contract' | 'progression-unlock' | 'refuel-vehicle' | 'starter-class' | 'teleport-player' | 'teleport-location' | 'set-respawn' | 'reset-faction' | 'grant-cosmetic' | 'grant-house-swatches' | 'fresh-start'
   balance?: 'solari' | 'scrip' | 'intel'  // show the player's current balance read-only above the form
   confirm?: (p: Player) => string  // confirm message; if returns '' no prompt
   doubleConfirm?: boolean // also requires a typed "i acknowledge" prompt inside run()
@@ -721,6 +721,9 @@ const ACTIONS: ActionDef[] = [
     run: () => Promise.resolve({ message: '' }) },
   { id: 'grant-cosmetic', group: 'Items', label: 'Grant Cosmetic / Building Set', icon: 'Shirt', custom: 'grant-cosmetic',
     rowNote: 'Private-server unlock only; does not grant account ownership or availability elsewhere.',
+    run: () => Promise.resolve({ message: '' }) },
+  { id: 'grant-house-swatches', group: 'Items', label: 'All House Swatches', icon: 'Palette', custom: 'grant-house-swatches', liveOnly: true,
+    rowNote: 'Online required. Delivery starts immediately; remain online until the activation cascade starts and completely stops (about a minute).',
     run: () => Promise.resolve({ message: '' }) },
   { id: 'repair-gear', group: 'Items', label: 'Repair All Items', icon: 'Wrench',
     run: p => repairGear(p.id) },
@@ -1011,7 +1014,11 @@ function ActionRow({ def, player, busy, stats, open, danger, onToggle, runAction
           ) : def.custom === 'spawn-vehicle' || def.custom === 'vehicle-kit' ? (
             <VehicleKitForm busy={busy}
               onSubmit={(veh, parts, overflow) => runAction(def, async () => {
-                for (const tpl of parts) await giveItem(player.id, tpl, veh.qty?.[tpl] ?? 1, 0, overflow)
+                await giveItems(player.id, parts.map(tpl => ({
+                  template: tpl,
+                  qty: veh.qty?.[tpl] ?? 1,
+                  quality: 0,
+                })), overflow)
                 const count = veh.kit.length + veh.unique.length
                 return { message: `Gave ${veh.label} kit — ${count} part${count === 1 ? '' : 's'} + Large Fuel Cell + Welding Torch Mk5 to ${player.name}.` }
               })} />
@@ -1095,7 +1102,6 @@ function ActionRow({ def, player, busy, stats, open, danger, onToggle, runAction
               })} />
           ) : def.custom === 'grant-cosmetic' ? (
             <GrantCosmeticForm busy={busy} playerName={player.name} accountId={player.account_id}
-              playerOnline={(player.online_status || '').toLowerCase() === 'online'}
               onGrant={async (tpl, label) => {
                 let succeeded = false
                 await runAction(def, async () => {
@@ -1104,8 +1110,11 @@ function ActionRow({ def, player, busy, stats, open, danger, onToggle, runAction
                   return { message: r.message || `Granted "${label}" to ${player.name}.` }
                 })
                 return succeeded
-              }}
-              onGrantHouseSwatches={async () => {
+              }} />
+          ) : def.custom === 'grant-house-swatches' ? (
+            <GrantHouseSwatchesForm busy={busy} playerName={player.name} accountId={player.account_id}
+              playerOnline={(player.online_status || '').toLowerCase() === 'online'}
+              onGrant={async () => {
                 let succeeded = false
                 await runAction(def, async () => {
                   const r = await grantHouseSwatches(player.id, player.account_id)
@@ -1343,13 +1352,11 @@ function DestinationForm({ busy, submitLabel, icon, note, onSubmit }: {
 // swatches, vehicle skins) and delivers the chosen template via the normal
 // give-item path so the player unlocks the appearance. Loads the catalog on
 // mount; filters by name/template; groups results by type.
-function GrantCosmeticForm({ busy, playerName, accountId, playerOnline, onGrant, onGrantHouseSwatches }: {
+function GrantCosmeticForm({ busy, playerName, accountId, onGrant }: {
   busy: boolean
   playerName: string
   accountId: number
-  playerOnline: boolean
   onGrant: (template: string, label: string) => Promise<boolean>
-  onGrantHouseSwatches: () => Promise<boolean>
 }) {
   const [catalog, setCatalog] = useState<CosmeticEntry[] | null>(null)
   const [err, setErr] = useState<string | null>(null)
@@ -1391,11 +1398,6 @@ function GrantCosmeticForm({ busy, playerName, accountId, playerOnline, onGrant,
     () => (catalog && owned ? catalog.filter(e => owned.has(e.template.toLowerCase())).length : 0),
     [catalog, owned],
   )
-  const houseSwatches = useMemo(() => getHouseSwatchCosmetics(catalog || []), [catalog])
-  const missingHouseSwatches = useMemo(
-    () => houseSwatches.filter(entry => !owned?.has(entry.template.toLowerCase())),
-    [houseSwatches, owned],
-  )
   const groups = useMemo(() => {
     const m = new Map<string, CosmeticEntry[]>()
     for (const e of matches) { const a = m.get(e.group); if (a) a.push(e); else m.set(e.group, [e]) }
@@ -1417,47 +1419,6 @@ function GrantCosmeticForm({ busy, playerName, accountId, playerOnline, onGrant,
         </p>
       </div>
       {ownershipWarning && <div className="text-xs text-warning">{ownershipWarning}</div>}
-      <div className="rounded-lg border border-border bg-surface-2 p-3 space-y-2">
-        <div className="flex items-start justify-between gap-3">
-          <div>
-            <div className="text-sm font-medium text-text">All House Swatches</div>
-            <div className="text-[11px] text-text-dim">
-              Grants only missing House Swatches live, without placing unlock items in the backpack.
-            </div>
-          </div>
-          <span className="text-[11px] text-text-dim whitespace-nowrap">
-            {houseSwatches.length - missingHouseSwatches.length}/{houseSwatches.length} owned
-          </span>
-        </div>
-        <button
-          type="button"
-          className="btn-secondary w-full"
-          disabled={busy || !playerOnline || missingHouseSwatches.length === 0}
-          title={!playerOnline ? 'Player must be online' : undefined}
-          onClick={async () => {
-            if (!window.confirm(
-              `Grant ${missingHouseSwatches.length} missing House Swatch unlock${missingHouseSwatches.length === 1 ? '' : 's'} to ${playerName}?\n\n` +
-              'The player must remain online until the live grants complete.'
-            )) return
-            if (await onGrantHouseSwatches()) {
-              setOwned(current => {
-                const next = new Set(current)
-                for (const entry of missingHouseSwatches) next.add(entry.template.toLowerCase())
-                return next
-              })
-            }
-          }}
-        >
-          {busy
-            ? <><Icon name="Loader2" size={13} className="animate-spin" /> Granting House Swatches...</>
-            : missingHouseSwatches.length === 0
-              ? <><Icon name="Check" size={13} /> All House Swatches owned</>
-              : <><Icon name="Palette" size={13} /> Grant {missingHouseSwatches.length} missing House Swatches</>}
-        </button>
-        {!playerOnline && (
-          <div className="text-[11px] text-warning">Player must be online so the swatches unlock directly instead of becoming backpack items.</div>
-        )}
-      </div>
       <label className="flex items-center justify-between gap-3 text-xs text-text-dim">
         <span className="flex items-center gap-2">
           <input type="checkbox" checked={showOwned} disabled={busy}
@@ -1493,6 +1454,117 @@ function GrantCosmeticForm({ busy, playerName, accountId, playerOnline, onGrant,
           }
         }}>
         {busy ? <Icon name="Loader2" size={13} className="animate-spin" /> : <Icon name="Shirt" size={13} />} Grant
+      </button>
+    </div>
+  )
+}
+
+function GrantHouseSwatchesForm({ busy, playerName, accountId, playerOnline, onGrant }: {
+  busy: boolean
+  playerName: string
+  accountId: number
+  playerOnline: boolean
+  onGrant: () => Promise<boolean>
+}) {
+  const [catalog, setCatalog] = useState<CosmeticEntry[] | null>(null)
+  const [owned, setOwned] = useState<Set<string> | null>(null)
+  const [err, setErr] = useState<string | null>(null)
+  const [ownershipWarning, setOwnershipWarning] = useState('')
+  const [activationQueued, setActivationQueued] = useState(false)
+
+  useEffect(() => {
+    let alive = true
+    Promise.all([getCosmeticsCatalog(), getPlayerOwnedCosmetics(accountId)])
+      .then(([entries, ownership]) => {
+        if (!alive) return
+        setCatalog(entries)
+        setOwned(new Set((ownership.owned || []).map(id => id.toLowerCase())))
+        if (ownership.liveError) setOwnershipWarning(`Ownership unavailable: ${ownership.liveError}. The full House Swatch set will be offered.`)
+      })
+      .catch(e => {
+        if (!alive) return
+        setErr(e instanceof Error ? e.message : String(e))
+      })
+    return () => { alive = false }
+  }, [accountId])
+
+  const houseSwatches = useMemo(() => getHouseSwatchCosmetics(catalog || []), [catalog])
+  const missingHouseSwatches = useMemo(
+    () => houseSwatches.filter(entry => !owned?.has(entry.template.toLowerCase())),
+    [houseSwatches, owned],
+  )
+
+  useEffect(() => {
+    if (!activationQueued || houseSwatches.length === 0) return
+
+    let alive = true
+    let timer: ReturnType<typeof setTimeout> | undefined
+    const refreshOwnership = async () => {
+      try {
+        const ownership = await getPlayerOwnedCosmetics(accountId)
+        if (!alive) return
+        const nextOwned = new Set((ownership.owned || []).map(id => id.toLowerCase()))
+        setOwned(nextOwned)
+        if (houseSwatches.every(entry => nextOwned.has(entry.template.toLowerCase()))) {
+          setActivationQueued(false)
+          setOwnershipWarning('')
+          return
+        }
+        timer = setTimeout(() => void refreshOwnership(), 2000)
+      } catch (e) {
+        if (!alive) return
+        setOwnershipWarning(`Could not refresh activation progress: ${e instanceof Error ? e.message : String(e)}`)
+        timer = setTimeout(() => void refreshOwnership(), 5000)
+      }
+    }
+
+    timer = setTimeout(() => void refreshOwnership(), 2000)
+    return () => {
+      alive = false
+      if (timer) clearTimeout(timer)
+    }
+  }, [accountId, activationQueued, houseSwatches])
+
+  if (err) return <ErrorBox msg={err} />
+  if (!catalog || !owned) return <div className="text-sm text-text-dim flex items-center gap-2"><Icon name="Loader2" size={13} className="animate-spin" /> Loading House Swatches and player ownership...</div>
+
+  return (
+    <div className="space-y-3">
+      <div className="flex items-start justify-between gap-3">
+        <div className="text-xs text-text-dim leading-relaxed">
+          Delivers verified physical House Swatch tokens through Funcom's live RMQ item command. Tokens use backpack slots; forced overflow drops excess tokens beside the player.
+        </div>
+        <span className="text-[11px] text-text-dim whitespace-nowrap">
+          {houseSwatches.length - missingHouseSwatches.length}/{houseSwatches.length} detected
+        </span>
+      </div>
+      <div className="rounded-lg bg-warning/10 border border-warning/40 p-3 text-warning text-xs leading-relaxed">
+        Online required. Delivery starts immediately, then Dune activates each token in a cascade. Remain online until the notifications start and completely stop, usually about a minute. DST skips persisted unlocks and tokens still in the player's inventory. Forced overflow drops excess tokens beside the player; Funcom does not link those loot bags back to a player, so pick up any overflow tokens before running this action again.
+      </div>
+      {ownershipWarning && <div className="text-xs text-warning">{ownershipWarning}</div>}
+      {!playerOnline && <div className="text-xs text-warning">Player must be online to receive House Swatch tokens.</div>}
+      <button
+        type="button"
+        className="btn-primary w-full"
+        disabled={busy || !playerOnline || missingHouseSwatches.length === 0 || activationQueued}
+        title={!playerOnline ? 'Player must be online' : undefined}
+        onClick={async () => {
+          if (!window.confirm(
+            `Deliver ${missingHouseSwatches.length} missing House Swatch token${missingHouseSwatches.length === 1 ? '' : 's'} to ${playerName}?\n\n` +
+            'Online required. Delivery starts immediately. Remain online until the activation notifications start and completely stop, usually about a minute.\n\nDST forces overflow, so excess tokens drop beside the player. Pick up all dropped tokens before running this action again.'
+          )) return
+          if (await onGrant()) {
+            setActivationQueued(true)
+          }
+        }}
+      >
+        {busy
+          ? <><Icon name="Loader2" size={13} className="animate-spin" /> Delivering House Swatch tokens...</>
+          : activationQueued
+            ? <><Icon name="Loader2" size={13} className="animate-spin" /> Activation cascade running — remain online</>
+          : missingHouseSwatches.length === 0
+            ? <><Icon name="Check" size={13} /> All House Swatches detected</>
+            : <><Icon name="Palette" size={13} /> Deliver {missingHouseSwatches.length} missing House Swatch tokens</>}
       </button>
     </div>
   )

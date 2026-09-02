@@ -115,12 +115,40 @@ function Get-DuneProgressionPresetCatalog {
     return $script:DuneProgressionPresetCatalog
 }
 
+# Convert Funcom's persisted House Swatch IDs back to the grant-token template
+# exposed by the catalog. These IDs use four prefix families and retain several
+# shipped spelling inconsistencies.
+function ConvertFrom-DuneHouseSwatchCustomizationId {
+    param([string]$Value)
+    if ([string]::IsNullOrWhiteSpace($Value)) { return '' }
+    if ($Value -notmatch '^(?<prefix>HArmCharDyepack|LArmCharDyepack|StillSCharDyepack|PlaceableDyePack)(?<house>[A-Za-z0-9]+)$') {
+        return ''
+    }
+
+    $prefix = [string]$Matches['prefix']
+    $house = [string]$Matches['house']
+    if ($house -ieq 'Talgari') { $house = 'Taligari' }
+    if ($prefix -ieq 'PlaceableDyePack' -and $house -ieq 'Wayku') { $house = 'Wakyu' }
+
+    $kind = switch -Regex ($prefix) {
+        '^HArmCharDyepack$'   { 'HeavyArmor'; break }
+        '^LArmCharDyepack$'   { 'LightArmor'; break }
+        '^StillSCharDyepack$' { 'Stillsuit'; break }
+        '^PlaceableDyePack$'  { 'Placeables'; break }
+        default               { return '' }
+    }
+    return "${house}_${kind}_Swatch"
+}
+
 # Convert both persisted customization IDs and grant-wrapper catalog entries to
 # the same semantic key. Funcom changes word order, abbreviates vehicle names,
 # stores armor slots instead of set wrappers, and occasionally ships typos.
 function Get-DuneCosmeticCanonicalKey {
     param([string]$Value)
     if ([string]::IsNullOrWhiteSpace($Value)) { return '' }
+
+    $houseSwatchTemplate = ConvertFrom-DuneHouseSwatchCustomizationId -Value $Value
+    if ($houseSwatchTemplate) { $Value = $houseSwatchTemplate }
 
     $expanded = $Value -replace '^(?i:MTX)_B\d+C\d+_', 'MTX_'
     $expanded = $expanded -creplace '([a-z0-9])([A-Z])', '$1_$2'

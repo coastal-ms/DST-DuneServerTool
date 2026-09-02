@@ -1871,6 +1871,8 @@ export interface HouseSwatchGrantResult extends Record<string, unknown> {
   requested: number
   granted: number
   failed: string[]
+  delivery: 'tokens'
+  overflow: boolean
 }
 
 export interface HouseSwatchGrantResponse extends WriteResult {
