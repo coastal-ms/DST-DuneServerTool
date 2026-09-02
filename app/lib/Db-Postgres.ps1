@@ -444,21 +444,20 @@ function Get-V6OnlinePlayersStrict {
     if ([string]::IsNullOrWhiteSpace($raw)) {
         throw (New-V6OnlinePlayerQueryException -Failure 'no_response' -Message 'The online-player query returned no response.')
     }
-    if ($raw -match '(?i)timed?\s*out|timeout') {
-        throw (New-V6OnlinePlayerQueryException -Failure 'timeout' -Message "The online-player query timed out: $raw")
-    }
-    if ($raw -match '(?i)^(ERROR:|FATAL:)|\bERROR:|\bFATAL:' -or
-        (Test-DunePsqlConnError -Output $raw)) {
-        throw (New-V6OnlinePlayerQueryException -Failure 'server_error' -Message "The online-player query failed: $raw")
-    }
-    if ($raw -match '^\s*\[\s*\]\s*$') { return @() }
     try {
         $list = $raw | ConvertFrom-Json -ErrorAction Stop
     } catch {
+        if ($raw -match '(?i)timed?\s*out|timeout') {
+            throw (New-V6OnlinePlayerQueryException -Failure 'timeout' -Message "The online-player query timed out: $raw")
+        }
+        if ($raw -match '(?i)^(ERROR:|FATAL:)|\bERROR:|\bFATAL:' -or
+            (Test-DunePsqlConnError -Output $raw)) {
+            throw (New-V6OnlinePlayerQueryException -Failure 'server_error' -Message "The online-player query failed: $raw")
+        }
         throw (New-V6OnlinePlayerQueryException -Failure 'invalid_response' -Message "The online-player query returned an invalid response: $($_.Exception.Message)")
     }
-    if ($null -eq $list) {
-        throw (New-V6OnlinePlayerQueryException -Failure 'invalid_response' -Message 'The online-player query returned JSON null instead of a roster.')
+    if ($raw.TrimStart()[0] -ne '[') {
+        throw (New-V6OnlinePlayerQueryException -Failure 'invalid_response' -Message 'The online-player query returned JSON that was not a roster array.')
     }
     return @($list)
 }

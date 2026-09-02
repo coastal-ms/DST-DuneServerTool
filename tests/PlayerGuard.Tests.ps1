@@ -86,6 +86,13 @@ Describe 'Disruptive action player guard' {
             $players[0].name | Should -Be 'Vospers'
         }
 
+        It 'does not classify transport keywords inside a valid roster' {
+            Mock Invoke-V6Psql { '[{"id":"10","name":"Timeout FATAL:","status":"Online"}]' }
+            $players = @(Get-V6OnlinePlayersStrict -Ip '192.0.2.1')
+            $players.Count | Should -Be 1
+            $players[0].name | Should -Be 'Timeout FATAL:'
+        }
+
         It 'distinguishes no response, timeout, server errors, and invalid responses' {
             $cases = @(
                 @{ response = ''; failure = 'no_response' }
@@ -93,6 +100,8 @@ Describe 'Disruptive action player guard' {
                 @{ response = 'FATAL: database unavailable'; failure = 'server_error' }
                 @{ response = 'not-json'; failure = 'invalid_response' }
                 @{ response = 'null'; failure = 'invalid_response' }
+                @{ response = '{}'; failure = 'invalid_response' }
+                @{ response = '"Timeout"'; failure = 'invalid_response' }
             )
             foreach ($case in $cases) {
                 $script:queryResponse = $case.response
