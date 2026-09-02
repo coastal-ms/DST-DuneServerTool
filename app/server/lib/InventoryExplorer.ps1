@@ -333,18 +333,20 @@ function Select-DuneInventoryDemoItems {
     )
     $needle = $Query.Trim()
     return @($Items | Where-Object {
+        $matchesQuery = -not $needle -or @(
+            $_.displayName,
+            $_.templateId,
+            $_.entity.label,
+            $_.entity.owner,
+            $_.entity.type,
+            $_.entity.map
+        ).Where({
+            ([string]$_).IndexOf($needle, [StringComparison]::OrdinalIgnoreCase) -ge 0
+        }, 'First').Count -gt 0
         [long]$_.id -gt $AfterItemId -and
         [string]$_.entity.type -in $EntityTypes -and
         (-not $ScopeType -or ([string]$_.entity.type -eq $ScopeType -and [long]$_.entity.id -eq $ScopeId)) -and
-        (
-            -not $needle -or
-            [string]$_.displayName -like "*$needle*" -or
-            [string]$_.templateId -like "*$needle*" -or
-            [string]$_.entity.label -like "*$needle*" -or
-            [string]$_.entity.owner -like "*$needle*" -or
-            [string]$_.entity.type -like "*$needle*" -or
-            [string]$_.entity.map -like "*$needle*"
-        )
+        $matchesQuery
     } | Sort-Object id | Select-Object -First $Limit)
 }
 

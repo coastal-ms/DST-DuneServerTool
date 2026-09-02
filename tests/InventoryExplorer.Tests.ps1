@@ -84,6 +84,47 @@ Describe 'Shared Inventory Explorer read model' -Tag 'Pure' {
         @($playerItems | Where-Object { $_.entity.type -ne 'player' -or $_.entity.id -ne 20001 }).Count | Should -Be 0
     }
 
+    It 'treats demo query <Query> as a case-insensitive literal substring' -TestCases @(
+        @{ Query = '[' }
+        @{ Query = ']' }
+        @{ Query = '*' }
+        @{ Query = '?' }
+        @{ Query = 'mIxEdCaSe' }
+    ) {
+        param($Query)
+        $items = @(
+            [pscustomobject]@{
+                id = 1
+                displayName = 'Brackets [and]'
+                templateId = 'Literal*Star'
+                entity = [pscustomobject]@{
+                    type = 'storage'
+                    id = 50001
+                    label = 'Question?Mark'
+                    owner = 'MixedCaseOwner'
+                    map = 'Hagga Basin'
+                }
+            },
+            [pscustomobject]@{
+                id = 2
+                displayName = 'Plain item'
+                templateId = 'PlainTemplate'
+                entity = [pscustomobject]@{
+                    type = 'storage'
+                    id = 50002
+                    label = 'Plain container'
+                    owner = 'Plain owner'
+                    map = 'Deep Desert'
+                }
+            }
+        )
+
+        $result = @(Select-DuneInventoryDemoItems -Items $items -Query $Query -EntityTypes @('storage'))
+
+        $result.Count | Should -Be 1
+        $result[0].id | Should -Be 1
+    }
+
     It 'rejects every malformed or incomplete supplied scope' {
         $types = @('player', 'storage')
         foreach ($case in @(
