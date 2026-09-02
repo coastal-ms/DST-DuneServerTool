@@ -77,13 +77,16 @@ function Test-DuneInventoryQueryParameterPresent {
 }
 
 function Get-DuneInventoryMetadataMatches {
-    param([string]$Query, [int]$Maximum = 500)
+    param([string]$Query)
     if (-not $Query) { return @() }
     Initialize-DuneGameplayItemData
     $needle = $Query.Trim()
     $ids = [Collections.Generic.HashSet[string]]::new([StringComparer]::OrdinalIgnoreCase)
-    foreach ($id in @($script:DuneGameplayItemNames.Keys) + @($script:DuneGameplayItemRules.Keys)) {
-        if ($ids.Count -ge $Maximum) { break }
+    $catalogIds = @(
+        @($script:DuneGameplayItemNames.Keys) + @($script:DuneGameplayItemRules.Keys) |
+            Sort-Object -Unique
+    )
+    foreach ($id in $catalogIds) {
         $name = Get-DuneGameplayItemName -TemplateId ([string]$id)
         if ($name.IndexOf($needle, [StringComparison]::OrdinalIgnoreCase) -ge 0) {
             [void]$ids.Add([string]$id)
@@ -261,7 +264,7 @@ function Invoke-DuneInventorySearchLive {
     )
     $sql = Get-DuneInventorySearchSql -Query $Query -EntityTypes $EntityTypes `
         -ScopeType $ScopeType -ScopeId $ScopeId -AfterItemId $AfterItemId -Limit $Limit
-    $result = Invoke-DuneSqlQuery -Ip $Ip -Sql $sql -ReadOnly $true -MaxRows $Limit -TimeoutSec 45
+    $result = Invoke-DuneSqlQuery -Ip $Ip -Sql $sql -ReadOnly $true -MaxRows $Limit -TimeoutSec 45 -Bulk
     if (-not $result.ok) { return @{ ok = $false; error = $result.error } }
     $items = @()
     foreach ($row in (ConvertTo-DuneRowMaps -Result $result)) {
@@ -335,13 +338,19 @@ function Select-DuneInventoryDemoItems {
     )
     $needle = $Query.Trim()
     return @($Items | Where-Object {
+        $entitySearchLabel = if ([string]$_.entity.type -eq 'storage') {
+            'container storage'
+        } else {
+            'player character'
+        }
         $matchesQuery = -not $needle -or @(
             $_.displayName,
             $_.templateId,
             $_.entity.label,
             $_.entity.owner,
             $_.entity.type,
-            $_.entity.map
+            $_.entity.map,
+            $entitySearchLabel
         ).Where({
             ([string]$_).IndexOf($needle, [StringComparison]::OrdinalIgnoreCase) -ge 0
         }, 'First').Count -gt 0
@@ -366,6 +375,9 @@ function Invoke-DuneInventoryRequestedPage {
         $items = @(Select-DuneInventoryDemoItems -Items (Get-DuneInventoryDemoItems) `
             -Query $Query -EntityTypes $EntityTypes -ScopeType $ScopeType -ScopeId $ScopeId `
             -AfterItemId $AfterItemId -Limit $Limit)
+        foreach ($item in $items) {
+            $item.entity.workspacePath = "$($item.entity.workspacePath)&demo=1"
+        }
         return @{ ok = $true; source = 'static'; mode = 'demo'; items = $items }
     }
 

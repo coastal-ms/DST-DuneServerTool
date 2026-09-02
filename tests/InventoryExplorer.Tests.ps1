@@ -74,6 +74,30 @@ Describe 'Shared Inventory Explorer read model' -Tag 'Pure' {
         $sql | Should -Match "strpos\(lower\(COALESCE\(entity_label, ''\)\), lower\('Spice Melange'\)\) > 0"
     }
 
+    It 'includes every bundled metadata display-name match in the bulk live query' {
+        $originalNames = $script:DuneGameplayItemNames
+        $originalRules = $script:DuneGameplayItemRules
+        try {
+            $script:DuneGameplayItemNames = @{}
+            $script:DuneGameplayItemRules = @{}
+            foreach ($index in 1..600) {
+                $script:DuneGameplayItemNames["A_Opaque_$($index.ToString('0000'))"] = "Common Display $index"
+            }
+            $tailId = 'Z_OpaqueTail'
+            $script:DuneGameplayItemNames[$tailId] = 'Common Display Tail'
+
+            $matches = @(Get-DuneInventoryMetadataMatches -Query 'common display')
+            $sql = Get-DuneInventorySearchSql -Query 'common display' -EntityTypes @('storage')
+
+            $matches.Count | Should -Be 601
+            $matches[-1] | Should -Be $tailId
+            $sql | Should -Match ([regex]::Escape("'$tailId'"))
+        } finally {
+            $script:DuneGameplayItemNames = $originalNames
+            $script:DuneGameplayItemRules = $originalRules
+        }
+    }
+
     It 'validates entity types and supports exact demo scopes' {
         { Get-DuneInventoryEntityTypes -Value 'player,storage' } | Should -Not -Throw
         { Get-DuneInventoryEntityTypes -Value 'vehicle' } | Should -Throw '*Unsupported inventory entity type*'
@@ -123,6 +147,19 @@ Describe 'Shared Inventory Explorer read model' -Tag 'Pure' {
 
         $result.Count | Should -Be 1
         $result[0].id | Should -Be 1
+    }
+
+    It 'matches the friendly <Query> entity label identically in demo mode' -TestCases @(
+        @{ Query = 'character'; ExpectedType = 'player' }
+        @{ Query = 'container'; ExpectedType = 'storage' }
+    ) {
+        param($Query, $ExpectedType)
+
+        $result = @(Select-DuneInventoryDemoItems -Items (Get-DuneInventoryDemoItems) `
+            -Query $Query -EntityTypes @('player', 'storage'))
+
+        $result.Count | Should -BeGreaterThan 0
+        @($result | Where-Object { $_.entity.type -ne $ExpectedType }).Count | Should -Be 0
     }
 
     It 'keeps live and demo search literal for <Name>' -TestCases @(
@@ -228,18 +265,20 @@ Describe 'Shared Inventory Explorer read model' -Tag 'Pure' {
         $result.mode | Should -Be 'demo'
         $result.source | Should -Be 'static'
         @($result.items).Count | Should -BeGreaterThan 0
+        @($result.items | Where-Object { $_.entity.workspacePath -notmatch '[?&]demo=1(?:&|$)' }).Count | Should -Be 0
         $script:DuneInventoryDbContextCalls | Should -Be 0
     }
 
     It 'keeps the live bridge read-only and bounded' {
         $script:InventorySqlCall = $null
         function global:Invoke-DuneSqlQuery {
-            param($Ip, $Sql, $ReadOnly, $MaxRows, $TimeoutSec)
+            param($Ip, $Sql, $ReadOnly, $MaxRows, $TimeoutSec, [switch]$Bulk)
             $script:InventorySqlCall = @{
                 Sql = $Sql
                 ReadOnly = $ReadOnly
                 MaxRows = $MaxRows
                 TimeoutSec = $TimeoutSec
+                Bulk = $Bulk.IsPresent
             }
             return @{
                 ok = $true
@@ -254,6 +293,7 @@ Describe 'Shared Inventory Explorer read model' -Tag 'Pure' {
             $script:InventorySqlCall.ReadOnly | Should -BeTrue
             $script:InventorySqlCall.MaxRows | Should -Be 51
             $script:InventorySqlCall.TimeoutSec | Should -Be 45
+            $script:InventorySqlCall.Bulk | Should -BeTrue
         } finally {
             Remove-Item Function:\global:Invoke-DuneSqlQuery -ErrorAction SilentlyContinue
         }

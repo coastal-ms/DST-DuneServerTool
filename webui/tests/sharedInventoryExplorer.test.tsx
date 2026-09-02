@@ -153,6 +153,7 @@ describe('Shared Inventory Explorer', () => {
   })
 
   it('sends a complete valid scope and explicit demo request without broadening', async () => {
+    const user = userEvent.setup()
     window.history.replaceState(
       null,
       '',
@@ -161,7 +162,17 @@ describe('Shared Inventory Explorer', () => {
     inventoryApi.mockResolvedValue({
       ...fixture,
       source: 'static',
-      data: { ...fixture.data, mode: 'demo' },
+      data: {
+        ...fixture.data,
+        mode: 'demo',
+        items: [{
+          ...fixture.data.items[0],
+          entity: {
+            ...fixture.data.items[0].entity,
+            workspacePath: '/bases?view=inventory&scope_type=storage&scope_id=50001&demo=1',
+          },
+        }],
+      },
     })
     render(
       <BrowserRouter>
@@ -176,6 +187,9 @@ describe('Shared Inventory Explorer', () => {
       demo: true,
     })))
     expect(screen.getByText('Showing bundled demo inventory')).toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: /Spice Melange/ }))
+    expect(screen.getByRole('link', { name: 'Open owning container' }))
+      .toHaveAttribute('href', '/bases?view=inventory&scope_type=storage&scope_id=50001&demo=1')
   })
 
   it('renders vehicle cargo as honestly unavailable without calling inventory APIs', () => {
