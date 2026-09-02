@@ -245,6 +245,17 @@ Describe 'Diagnostics route registration' -Tag 'Pure' {
         $source | Should -Not -Match "snapshot\['activeSpice'\]"
     }
 
+    It 'includes an identifier-free Shared Inventory Explorer read probe' {
+        $routeFile = Join-Path (Get-DstRepoRoot) 'app\server\routes\Diagnostics.ps1'
+        $source = Get-Content -LiteralPath $routeFile -Raw
+
+        $source | Should -Match "inventory-explorer\.txt"
+        $source | Should -Match "Invoke-DuneInventorySearchLive"
+        $source | Should -Match '-EntityTypes @\(\$inventoryType\) -Limit 1'
+        $source | Should -Match 'Invoke-DstRedaction -Text \(\$inventoryProbe'
+        $source | Should -Not -Match 'inventoryProbe\.Add\(.+\.(?:id|name|owner|templateId|inventoryId)'
+    }
+
     It 'registers failed database operation cleanup at script scope' {
         $routeFile = Join-Path (Get-DstRepoRoot) 'app\server\routes\Diagnostics.ps1'
         $tokens = $null

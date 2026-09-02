@@ -101,11 +101,11 @@ Write-Host ''
 # a deliberate intermediate test build), pass `-SkipVersionCheck`.
 # ---------------------------------------------------------------------------
 $versionFiles = @(
-    @{ Path = Join-Path $repoRoot 'dune-server.ps1';                 Pattern = '\$script:ToolVersion\s*=\s*"([0-9]+\.[0-9]+\.[0-9]+)"';     Label = '$script:ToolVersion' },
-    @{ Path = Join-Path $appRoot  'DuneServer.ps1';                  Pattern = "\`$script:DuneToolVersion\s*=\s*'([0-9]+\.[0-9]+\.[0-9]+)'"; Label = '$script:DuneToolVersion' },
-    @{ Path = Join-Path $appRoot  'build\Build-Exe.ps1';             Pattern = "\[string\]\`$Version\s*=\s*'([0-9]+\.[0-9]+\.[0-9]+)'";     Label = 'Build-Exe.ps1 default $Version' },
-    @{ Path = Join-Path $appRoot  'installer\DuneServer.iss';        Pattern = '#define\s+MyAppVersion\s+"([0-9]+\.[0-9]+\.[0-9]+)"';       Label = 'MyAppVersion' },
-    @{ Path = Join-Path $appRoot  'desktop\DuneShell\DuneShell.csproj'; Pattern = '<Version>([0-9]+\.[0-9]+\.[0-9]+)</Version>';            Label = 'DuneShell <Version>' }
+    @{ Path = Join-Path $repoRoot 'dune-server.ps1';                 Pattern = '\$script:ToolVersion\s*=\s*"([0-9]+\.[0-9]+\.[0-9]+(?:-[0-9A-Za-z.-]+)?)"';     Label = '$script:ToolVersion' },
+    @{ Path = Join-Path $appRoot  'DuneServer.ps1';                  Pattern = "\`$script:DuneToolVersion\s*=\s*'([0-9]+\.[0-9]+\.[0-9]+(?:-[0-9A-Za-z.-]+)?)'"; Label = '$script:DuneToolVersion' },
+    @{ Path = Join-Path $appRoot  'build\Build-Exe.ps1';             Pattern = "\[string\]\`$Version\s*=\s*'([0-9]+\.[0-9]+\.[0-9]+(?:-[0-9A-Za-z.-]+)?)'";     Label = 'Build-Exe.ps1 default $Version' },
+    @{ Path = Join-Path $appRoot  'installer\DuneServer.iss';        Pattern = '#define\s+MyAppVersion\s+"([0-9]+\.[0-9]+\.[0-9]+(?:-[0-9A-Za-z.-]+)?)"';       Label = 'MyAppVersion' },
+    @{ Path = Join-Path $appRoot  'desktop\DuneShell\DuneShell.csproj'; Pattern = '<Version>([0-9]+\.[0-9]+\.[0-9]+(?:-[0-9A-Za-z.-]+)?)</Version>';            Label = 'DuneShell <Version>' }
 )
 if (-not $SkipVersionCheck) {
     $stampReport = foreach ($vf in $versionFiles) {

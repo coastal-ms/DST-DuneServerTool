@@ -33,7 +33,7 @@
 
 [CmdletBinding()]
 param(
-    [string]$Version = '15.0.0',
+    [string]$Version = '15.0.0-phase2-test1',
     [string]$BuildCommit = '',
     [string]$BuildTag = '',
     [switch]$Prerelease,
@@ -91,7 +91,10 @@ if (-not (Get-Module -ListAvailable ps2exe)) {
 }
 Import-Module ps2exe -Force
 
-$verNum = "$Version.0"  # ps2exe wants 4-part version
+if ($Version -notmatch '^([0-9]+)\.([0-9]+)\.([0-9]+)(?:-[0-9A-Za-z.-]+)?$') {
+    throw "Version must be SemVer-compatible (got '$Version')."
+}
+$verNum = "$($Matches[1]).$($Matches[2]).$($Matches[3]).0"  # ps2exe wants numeric 4-part version
 
 Write-Host "Compiling DuneServer.exe (v$Version; prerelease=$([bool]$Prerelease); tag=$BuildTag; commit=$BuildCommit)..." -ForegroundColor Cyan
 
