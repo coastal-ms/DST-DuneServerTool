@@ -10,9 +10,16 @@ import {
   type VehicleFleetRow,
 } from '../../api/gameplay'
 import { Icon } from '../../components/Icon'
+import { SharedInventoryExplorer } from '../../components/inventory/SharedInventoryExplorer'
 import { DataState, FreshnessBadge } from '../../components/platform/DataState'
-import { WorkspaceLayout, WorkspaceSection } from '../../components/platform/WorkspaceLayout'
+import { WorkspaceLayout, WorkspaceSection, type WorkspaceTab } from '../../components/platform/WorkspaceLayout'
 import { getWorkspace } from '../../platform/workspaces'
+import { useSearch } from '../../router'
+
+const TABS: readonly WorkspaceTab[] = [
+  { id: 'fleet', label: 'Fleet', to: '/vehicles?view=fleet', icon: 'Truck' },
+  { id: 'cargo', label: 'Cargo', to: '/vehicles?view=cargo', icon: 'PackageSearch' },
+]
 
 function vehicleLabel(vehicle: VehicleFleetRow) {
   return vehicle.vehicle_name?.trim() || vehicle.class || `Vehicle ${vehicle.id}`
@@ -22,7 +29,7 @@ function errorMessage(error: unknown) {
   return error instanceof ApiError ? error.message : error instanceof Error ? error.message : String(error)
 }
 
-export default function VehiclesWorkspace() {
+function VehicleFleetWorkspace() {
   const [vehicles, setVehicles] = useState<VehicleFleetRow[] | null>(null)
   const [queue, setQueue] = useState<VehicleDeletionQueue | null>(null)
   const [error, setError] = useState('')
@@ -124,7 +131,7 @@ export default function VehiclesWorkspace() {
 
   if (loading && unavailable) {
     return (
-      <WorkspaceLayout workspace={getWorkspace('vehicles')}>
+      <WorkspaceLayout workspace={getWorkspace('vehicles')} tabs={TABS} activeTab="fleet">
         <DataState
           state="unavailable"
           title="Vehicle management is not included in this build"
@@ -136,7 +143,7 @@ export default function VehiclesWorkspace() {
 
   if (loading && error) {
     return (
-      <WorkspaceLayout workspace={getWorkspace('vehicles')}>
+      <WorkspaceLayout workspace={getWorkspace('vehicles')} tabs={TABS} activeTab="fleet">
         <DataState
           state="error"
           title="Vehicle management unavailable"
@@ -153,7 +160,7 @@ export default function VehiclesWorkspace() {
   }
 
   return (
-    <WorkspaceLayout workspace={getWorkspace('vehicles')}>
+    <WorkspaceLayout workspace={getWorkspace('vehicles')} tabs={TABS} activeTab="fleet">
       <WorkspaceSection
         id="vehicles-fleet"
         title="Vehicle fleet"
@@ -263,6 +270,21 @@ export default function VehiclesWorkspace() {
           </div>
         )}
       </WorkspaceSection>
+    </WorkspaceLayout>
+  )
+}
+
+export default function VehiclesWorkspace() {
+  const view = new URLSearchParams(useSearch()).get('view')
+  if (view !== 'cargo') return <VehicleFleetWorkspace />
+  return (
+    <WorkspaceLayout workspace={getWorkspace('vehicles')} tabs={TABS} activeTab="cargo">
+      <SharedInventoryExplorer
+        entityTypes={[]}
+        title="Vehicle cargo"
+        description="The shared inventory workspace will use this view once the game database relationship is proven."
+        unavailableReason="Vehicle ownership is proven, but a vehicle-to-cargo inventory join is not. DST will not guess from actor classes or owner names."
+      />
     </WorkspaceLayout>
   )
 }

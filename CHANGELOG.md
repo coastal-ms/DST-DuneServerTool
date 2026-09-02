@@ -15,6 +15,9 @@ here cover everything those tags shipped.
 
 ### Added
 
+- Added a read-only Shared Inventory Explorer across Players, Bases, Vehicles,
+  and Economy with bounded search over proven player and storage-container
+  inventories, item metadata, source ownership context, and freshness details.
 - Added optional per-browser sidebar visibility controls to Customize Navigation.
   Pages and whole sections can be hidden without changing top navigation or route
   access, protected destinations stay visible, and Reset restores visibility and

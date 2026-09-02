@@ -51,6 +51,22 @@ function last(): FetchCall {
 }
 
 describe('Phase A — currency / progression writes', () => {
+  it('builds the bounded shared inventory query', async () => {
+    await gp.getSharedInventory({
+      q: 'spice vault',
+      types: ['player', 'storage'],
+      scopeType: 'storage',
+      scopeId: 50001,
+      limit: 100,
+      cursor: 'next.page',
+      demo: true,
+    })
+    expect(last().url).toBe(
+      '/api/v1/inventory/items?q=spice%20vault&types=player%2Cstorage&scope_type=storage&scope_id=50001&limit=100&cursor=next.page&demo=1',
+    )
+    expect(last().method).toBeUndefined()
+  })
+
   it('giveScrip POSTs /give-scrip with account_id + amount', async () => {
     await gp.giveScrip(42, 1000)
     const c = last()
