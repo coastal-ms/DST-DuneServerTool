@@ -110,13 +110,15 @@ function Get-DuneInventorySearchSql {
     if ($Query) {
         $safe = ConvertTo-DuneSqlString $Query.Trim()
         $search = @(
-            "template_id ILIKE '%$safe%'",
-            "entity_label ILIKE '%$safe%'",
-            "owner_name ILIKE '%$safe%'",
-            "map ILIKE '%$safe%'",
-            "entity_type ILIKE '%$safe%'",
-            "CASE WHEN entity_type = 'storage' THEN 'container storage' ELSE 'player character' END ILIKE '%$safe%'"
-        )
+            'template_id',
+            'entity_label',
+            'owner_name',
+            'map',
+            'entity_type',
+            "CASE WHEN entity_type = 'storage' THEN 'container storage' ELSE 'player character' END"
+        ) | ForEach-Object {
+            "strpos(lower(COALESCE($_, '')), lower('$safe')) > 0"
+        }
         $metadataIds = @(Get-DuneInventoryMetadataMatches -Query $Query)
         if ($metadataIds.Count -gt 0) {
             $metadataSql = @($metadataIds | ForEach-Object { "'$(ConvertTo-DuneSqlString $_)'" }) -join ','

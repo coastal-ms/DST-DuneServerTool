@@ -71,7 +71,7 @@ Describe 'Shared Inventory Explorer read model' -Tag 'Pure' {
         $sql = Get-DuneInventorySearchSql -Query 'Spice Melange' -EntityTypes @('player', 'storage') -Limit 10
 
         $sql | Should -Match "template_id IN \([^)]*'MelangeSpice'"
-        $sql | Should -Match "entity_label ILIKE '%Spice Melange%'"
+        $sql | Should -Match "strpos\(lower\(COALESCE\(entity_label, ''\)\), lower\('Spice Melange'\)\) > 0"
     }
 
     It 'validates entity types and supports exact demo scopes' {
@@ -123,6 +123,51 @@ Describe 'Shared Inventory Explorer read model' -Tag 'Pure' {
 
         $result.Count | Should -Be 1
         $result[0].id | Should -Be 1
+    }
+
+    It 'keeps live and demo search literal for <Name>' -TestCases @(
+        @{ Name = 'percent'; Query = '%'; SqlLiteral = '%' }
+        @{ Name = 'underscore'; Query = '_'; SqlLiteral = '_' }
+        @{ Name = 'backslash'; Query = '\'; SqlLiteral = '\' }
+        @{ Name = 'apostrophe'; Query = "O'Brien"; SqlLiteral = "O''Brien" }
+        @{ Name = 'mixed case'; Query = 'mIxEdCaSe'; SqlLiteral = 'mIxEdCaSe' }
+    ) {
+        param($Query, $SqlLiteral)
+        $items = @(
+            [pscustomobject]@{
+                id = 1
+                displayName = 'Literal search item'
+                templateId = 'Percent%Value'
+                entity = [pscustomobject]@{
+                    type = 'storage'
+                    id = 50001
+                    label = 'Under_score'
+                    owner = "Back\Slash and O'Brien"
+                    map = 'MixedCaseMap'
+                }
+            },
+            [pscustomobject]@{
+                id = 2
+                displayName = 'Plain item'
+                templateId = 'PlainTemplate'
+                entity = [pscustomobject]@{
+                    type = 'storage'
+                    id = 50002
+                    label = 'Plain container'
+                    owner = 'Plain owner'
+                    map = 'Deep Desert'
+                }
+            }
+        )
+
+        $demo = @(Select-DuneInventoryDemoItems -Items $items -Query $Query -EntityTypes @('storage'))
+        $sql = Get-DuneInventorySearchSql -Query $Query -EntityTypes @('storage')
+
+        $demo.Count | Should -Be 1
+        $demo[0].id | Should -Be 1
+        $sql | Should -Match "strpos\(lower\(COALESCE\(template_id, ''\)\), lower\("
+        $sql | Should -Match ([regex]::Escape("lower('$SqlLiteral')"))
+        $sql | Should -Not -Match '\sILIKE\s'
     }
 
     It 'rejects every malformed or incomplete supplied scope' {
