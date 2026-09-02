@@ -101,7 +101,7 @@ Describe 'Inventory production router integration' {
             $parsed = ConvertFrom-DunePsqlCsv `
                 -Output "a,b`n1,2`nWARNING: late warning" -MaxRows 100
             $parsed.ok | Should -BeFalse
-            $parsed.message | Should -Match 'fewer fields'
+            $parsed.message | Should -Match 'fields but the header has'
             @($parsed.rows).Count | Should -Be 0
         }
 

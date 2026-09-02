@@ -149,47 +149,48 @@ function ConvertFrom-DunePsqlCsv {
     if ($filtered.Count -eq 1 -and $first -notmatch ',' -and $first -match '^(INSERT|UPDATE|DELETE|SELECT|MERGE|CREATE|DROP|ALTER|TRUNCATE|GRANT|REVOKE|COPY|VACUUM|ANALYZE)\b') {
         return @{ ok = $true; columns = @(); rows = @(); rowCount = 0; truncated = $false; message = $first }
     }
-    # CSV path — try to parse using PowerShell's CSV reader
+    # CSV path — TextFieldParser preserves explicit empty fields and rejects
+    # short/long records, unlike ConvertFrom-Csv which turns both missing and
+    # explicitly empty trailing fields into indistinguishable null values.
     try {
         $csvText = ($filtered -join "`n")
-        $parsed = $csvText | ConvertFrom-Csv
-        if (-not $parsed) {
-            return @{ ok = $true; columns = @(); rows = @(); rowCount = 0; truncated = $false; message = '' }
+        if (-not ('Microsoft.VisualBasic.FileIO.TextFieldParser' -as [type])) {
+            Add-Type -AssemblyName Microsoft.VisualBasic -ErrorAction Stop
         }
-        # Force to array (single-row results come back as a single PSCustomObject)
-        $parsedArr = @($parsed)
-        $cols = @($parsedArr[0].PSObject.Properties.Name)
+        # Windows PowerShell 5.1's TextFieldParser does not return a final
+        # header-only record unless the input ends with a line terminator.
+        $reader = [IO.StringReader]::new("$csvText`n")
+        $parser = [Microsoft.VisualBasic.FileIO.TextFieldParser]::new($reader)
+        $parser.TextFieldType = [Microsoft.VisualBasic.FileIO.FieldType]::Delimited
+        $parser.SetDelimiters(',')
+        $parser.HasFieldsEnclosedInQuotes = $true
+        $cols = @($parser.ReadFields())
         if ($cols.Count -eq 0 -or @($cols | Where-Object { [string]::IsNullOrWhiteSpace([string]$_) }).Count -gt 0) {
             throw 'CSV output has a missing or blank column header.'
         }
         if (@($cols | Sort-Object -Unique).Count -ne $cols.Count) {
             throw 'CSV output has duplicate column headers.'
         }
-        foreach ($obj in $parsedArr) {
-            foreach ($col in $cols) {
-                if ($null -eq $obj.PSObject.Properties[$col].Value) {
-                    throw "CSV output row has fewer fields than the '$col' column header."
-                }
-            }
-        }
         $truncated = $false
-        if ($parsedArr.Count -gt $MaxRows) {
-            $parsedArr = $parsedArr[0..($MaxRows - 1)]
-            $truncated = $true
-        }
         $rows = [System.Collections.Generic.List[object]]::new()
-        foreach ($obj in $parsedArr) {
-            $row = New-Object object[] $cols.Count
-            for ($i = 0; $i -lt $cols.Count; $i++) {
-                $row[$i] = $obj.($cols[$i])
+        while (-not $parser.EndOfData) {
+            $fields = $parser.ReadFields()
+            if ($null -eq $fields) { break }
+            $row = @($fields)
+            if ($row.Count -ne $cols.Count) {
+                throw "CSV output row has $($row.Count) fields but the header has $($cols.Count)."
             }
-            [void]$rows.Add($row)
+            if ($rows.Count -lt $MaxRows) {
+                [void]$rows.Add([object[]]$row)
+            } else {
+                $truncated = $true
+            }
         }
         return @{
             ok        = $true
             columns   = $cols
             rows      = $rows.ToArray()
-            rowCount  = $parsedArr.Count
+            rowCount  = $rows.Count
             truncated = $truncated
             message   = ''
         }
@@ -202,6 +203,9 @@ function ConvertFrom-DunePsqlCsv {
             truncated = $false
             message   = "Parse error: $($_.Exception.Message)"
         }
+    } finally {
+        if ($parser) { $parser.Dispose() }
+        if ($reader) { $reader.Dispose() }
     }
 }
 
