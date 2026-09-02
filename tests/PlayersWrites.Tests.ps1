@@ -152,12 +152,14 @@ Describe 'Invoke-DunePlayerUpdateTags' -Tag 'TagsDelta' {
 Describe 'Invoke-DunePlayerGiveItemsBulk overflow' -Tag 'Pure' {
     BeforeEach {
         $script:liveArgs = $null
+        $script:batchArgs = $null
         function global:Get-DuneBodyValue {
             param($Body, [string]$Name)
             if ($Body -is [System.Collections.IDictionary] -and $Body.Contains($Name)) { return $Body[$Name] }
             if ($null -ne $Body -and $Body.PSObject.Properties[$Name]) { return $Body.$Name }
             return $null
         }
+
         function global:Get-DuneBodyInt {
             param($Body, [string]$Name)
             $v = Get-DuneBodyValue -Body $Body -Name $Name
@@ -174,6 +176,14 @@ Describe 'Invoke-DunePlayerGiveItemsBulk overflow' -Tag 'Pure' {
             }
             return @{ ok = $true; path = 'rmq' }
         }
+        function global:Test-DuneValidGiveTemplate { return @{ ok = $true } }
+        function global:Invoke-DuneRmqAddItemEntriesToInventoryBatch {
+            param($FlsId, $Items, $SpacingMilliseconds)
+            $script:batchArgs = @{
+                FlsId = $FlsId; Items = @($Items); SpacingMilliseconds = $SpacingMilliseconds
+            }
+            return @{ ok = $true }
+        }
     }
     AfterEach {
         Remove-Item function:global:Get-DuneBodyValue -ErrorAction SilentlyContinue
@@ -181,17 +191,102 @@ Describe 'Invoke-DunePlayerGiveItemsBulk overflow' -Tag 'Pure' {
         Remove-Item function:global:Test-DunePlayerOffline -ErrorAction SilentlyContinue
         Remove-Item function:global:Resolve-DuneFlsIdOrError -ErrorAction SilentlyContinue
         Remove-Item function:global:Invoke-DunePlayerGiveItemLive -ErrorAction SilentlyContinue
+        Remove-Item function:global:Test-DuneValidGiveTemplate -ErrorAction SilentlyContinue
+        Remove-Item function:global:Invoke-DuneRmqAddItemEntriesToInventoryBatch -ErrorAction SilentlyContinue
     }
 
-    It 'passes AllowOverflow to live package item gives' {
-        $items = @(@{ template = 'Ammo'; qty = 500; quality = 0 })
+    It 'publishes online overflow packages through one paced broker session' {
+        $items = @(
+            @{ template = 'Ammo'; qty = 500; quality = 0 },
+            @{ template = 'FuelCell'; qty = 2; quality = 0 }
+        )
 
         $r = Invoke-DunePlayerGiveItemsBulk -Ip '1.2.3.4' -PawnId 24 -Items $items -AllowOverflow $true
 
         $r.ok | Should -BeTrue
-        $script:liveArgs.AllowOverflow | Should -BeTrue
+        $script:liveArgs | Should -BeNullOrEmpty
+        $script:batchArgs.FlsId | Should -Be 'fls-test'
+        $script:batchArgs.SpacingMilliseconds | Should -Be 0
+        $script:batchArgs.Items.Count | Should -Be 2
+        $script:batchArgs.Items[0].ItemName | Should -Be 'Ammo'
+        $script:batchArgs.Items[0].Quantity | Should -Be 500
+        $script:batchArgs.Items[1].ItemName | Should -Be 'FuelCell'
+        $r.results.path | Should -Be @('rmq', 'rmq')
+    }
+
+    It 'keeps capacity-guarded online package delivery sequential' {
+        $items = @(@{ template = 'Ammo'; qty = 500; quality = 0 })
+
+        $r = Invoke-DunePlayerGiveItemsBulk -Ip '1.2.3.4' -PawnId 24 -Items $items -AllowOverflow $false
+
+        $r.ok | Should -BeTrue
+        $script:batchArgs | Should -BeNullOrEmpty
+        $script:liveArgs.AllowOverflow | Should -BeFalse
         $script:liveArgs.Template | Should -Be 'Ammo'
-        $script:liveArgs.Quantity | Should -Be 500
+    }
+}
+
+Describe 'Invoke-DunePlayerGrantHouseSwatches' -Tag 'Pure' {
+    BeforeEach {
+        $script:ownershipReads = 0
+        $script:batchCalls = 0
+        $script:batchTemplates = @()
+        $script:batchSpacing = 0
+        function global:Test-DunePlayerOffline { return @{ ok = $false; reason = 'Player is online.' } }
+        function global:Resolve-DuneFlsIdOrError { return @{ ok = $true; fls_id = 'fls-test' } }
+        function global:Get-DuneHouseSwatchCatalog {
+            return @(
+                @{ template = 'Ecaz_HeavyArmor_Swatch'; name = 'House Ecaz Garment Swatch'; group = 'Swatches (Dyes)' },
+                @{ template = 'Ecaz_Placeables_Swatch'; name = 'House Ecaz Placeables Swatch'; group = 'Swatches (Dyes)' }
+            )
+        }
+        function global:Get-DunePlayerOwnedCosmeticsLive {
+            $script:ownershipReads++
+            if ($script:ownershipReads -eq 1) {
+                return @{ ok = $true; owned = @('Ecaz_HeavyArmor_Swatch') }
+            }
+            return @{ ok = $true; owned = @('Ecaz_HeavyArmor_Swatch') }
+        }
+        function global:Invoke-DuneRmqAddItemsToInventoryBatch {
+            param($FlsId, $ItemNames, $SpacingMilliseconds)
+            $script:batchCalls++
+            $script:batchTemplates = @($ItemNames)
+            $script:batchSpacing = $SpacingMilliseconds
+            return @{ ok = $true }
+        }
+    }
+
+    AfterEach {
+        Remove-Item function:global:Test-DunePlayerOffline -ErrorAction SilentlyContinue
+        Remove-Item function:global:Resolve-DuneFlsIdOrError -ErrorAction SilentlyContinue
+        Remove-Item function:global:Get-DuneHouseSwatchCatalog -ErrorAction SilentlyContinue
+        Remove-Item function:global:Get-DunePlayerOwnedCosmeticsLive -ErrorAction SilentlyContinue
+        Remove-Item function:global:Invoke-DuneRmqAddItemsToInventoryBatch -ErrorAction SilentlyContinue
+    }
+
+    It 'rejects an offline player before granting' {
+        function global:Test-DunePlayerOffline { return @{ ok = $true } }
+        $r = Invoke-DunePlayerGrantHouseSwatches -Ip '1.2.3.4' -PawnId 10 -AccountId 20
+        $r.ok | Should -BeFalse
+        $r.error | Should -Match 'online'
+        $script:batchCalls | Should -Be 0
+    }
+
+    It 'grants only missing swatches through the live path' {
+        $r = Invoke-DunePlayerGrantHouseSwatches -Ip '1.2.3.4' -PawnId 10 -AccountId 20
+        $r.ok | Should -BeTrue -Because $r.error
+        $r.total | Should -Be 2
+        $r.already_owned | Should -Be 1
+        $r.requested | Should -Be 1
+        $r.granted | Should -Be 1
+        $r.delivery | Should -Be 'tokens'
+        $r.overflow | Should -BeTrue
+        $r.message | Should -Match 'remain online'
+        $r.message | Should -Match 'cascade'
+        $script:ownershipReads | Should -Be 1
+        $script:batchCalls | Should -Be 1
+        $script:batchTemplates | Should -Be @('Ecaz_Placeables_Swatch')
+        $script:batchSpacing | Should -Be 200
     }
 }
 

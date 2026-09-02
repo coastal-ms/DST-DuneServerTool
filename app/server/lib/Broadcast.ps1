@@ -194,29 +194,28 @@ rabbit_queue_type:publish_at_most_once(X, Msg).
     }
 }
 
-# Internal: package an Erlang expression as a single base64-encoded blob,
-# pipe it over SSH into the mq-game pod, and run it through `rabbitmqctl eval`.
+# Internal: stream an Erlang expression over SSH stdin into the mq-game pod and
+# run it through `rabbitmqctl eval`. Keeping the payload off the command line
+# avoids Windows process-argument limits for large command batches.
 function _Invoke-V6BroadcastErl {
     param(
         [Parameter(Mandatory)] [string] $Ip,
         [Parameter(Mandatory)] $Pod,
         [Parameter(Mandatory)] [string] $Erl,
         [string] $Action = 'broadcast',
-        [hashtable] $Extra
+        [hashtable] $Extra,
+        [int] $TimeoutSec = 30
     )
     # Strip CRs — heredoc above is CRLF-terminated when read from a CRLF .ps1.
     $clean = ($Erl -replace "`r","")
-    $b64 = [Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes($clean))
 
-    # The inner remote script: base64-decode the Erlang into a temp file,
-    # ensure the RabbitMQ + Erlang binaries are on PATH, then run rabbitmqctl
-    # eval with the script contents. PATH mirrors the upstream
-    # send-dune-broadcast script.
+    # Keep the remote command tiny and feed the Erlang through Invoke-V6Ssh's
+    # redirected stdin. PATH mirrors the upstream send-dune-broadcast script.
     $remote = "set -eu; export PATH=/opt/rabbitmq/sbin:/opt/erlang/lib/erlang/bin:/opt/erlang/lib/erlang/erts-14.2.5.12/bin:/bin:/usr/bin:/usr/local/bin:`$PATH; expr=`$(cat); /opt/rabbitmq/sbin/rabbitmqctl eval `"`$expr`""
     $remoteB64 = [Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes($remote))
 
-    $sshCmd = "echo $b64 | base64 -d | sudo kubectl exec -i -n $($Pod.ns) $($Pod.name) -- sh -lc `"`$(echo $remoteB64 | base64 -d)`" 2>&1"
-    $out = Invoke-V6Ssh -Ip $Ip -Cmd $sshCmd -TimeoutSec 30
+    $sshCmd = "sudo kubectl exec -i -n $($Pod.ns) $($Pod.name) -- sh -lc `"`$(echo $remoteB64 | base64 -d)`" 2>&1"
+    $out = Invoke-V6Ssh -Ip $Ip -Cmd $sshCmd -TimeoutSec $TimeoutSec -StdinData $clean
     $text = (($out -join "`n")).Trim()
 
     # rabbitmqctl eval returns "{ok,enqueued}." or similar on success and

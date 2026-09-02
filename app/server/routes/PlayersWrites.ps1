@@ -25,6 +25,23 @@ Register-DuneRoute -Method POST -Path '/api/gameplay/players/give-items' -Handle
     }
 }
 
+# POST /api/gameplay/players/grant-house-swatches  { pawn_id, account_id }
+Register-DuneRoute -Method POST -Path '/api/gameplay/players/grant-house-swatches' -Handler {
+    param($req, $res, $routeParams, $body)
+    try {
+        $pawn = Get-DuneBodyInt -Body $body -Name 'pawn_id'
+        $account = Get-DuneBodyInt -Body $body -Name 'account_id'
+        if ($null -eq $pawn -or $pawn -le 0) { Write-DuneError -Response $res -Status 400 -Message 'pawn_id is required.'; return }
+        if ($null -eq $account -or $account -le 0) { Write-DuneError -Response $res -Status 400 -Message 'account_id is required.'; return }
+        Invoke-DunePlayerWriteRoute -Response $res -Action {
+            param($ip)
+            Invoke-DunePlayerGrantHouseSwatches -Ip $ip -PawnId $pawn -AccountId $account
+        }
+    } catch {
+        Write-DuneError -Response $res -Status 500 -Message "Grant House Swatches failed: $($_.Exception.Message)"
+    }
+}
+
 # POST /api/gameplay/players/repair-gear  { pawn_id }
 Register-DuneRoute -Method POST -Path '/api/gameplay/players/repair-gear' -Handler {
     param($req, $res, $routeParams, $body)

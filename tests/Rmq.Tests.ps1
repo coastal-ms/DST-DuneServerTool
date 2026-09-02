@@ -16,11 +16,13 @@ BeforeAll {
     $script:lastErl    = $null
     $script:lastExtra  = $null
     $script:lastAction = $null
+    $script:lastTimeoutSec = $null
     function global:_Invoke-V6BroadcastErl {
-        param($Ip, $Pod, $Erl, $Action, $Extra)
+        param($Ip, $Pod, $Erl, $Action, $Extra, $TimeoutSec)
         $script:lastErl    = $Erl
         $script:lastExtra  = $Extra
         $script:lastAction = $Action
+        $script:lastTimeoutSec = $TimeoutSec
         return @{ ok = $true; action = $Action; pod = $Pod; ip = $Ip }
     }
 
@@ -38,6 +40,7 @@ Describe 'Send-DuneRmqServerCommand envelope' -Tag 'Rmq' {
         $script:lastErl    = $null
         $script:lastExtra  = $null
         $script:lastAction = $null
+        $script:lastTimeoutSec = $null
     }
 
     It 'returns the broadcast context error when SSH context fails' {
@@ -90,6 +93,60 @@ Describe 'Send-DuneRmqServerCommand envelope' -Tag 'Rmq' {
         Send-DuneRmqServerCommand -Fields @{ ServerCommand = 'KickPlayer' } -Extra @{ player_id = 'abc' } | Out-Null
         $script:lastExtra | Should -Not -BeNullOrEmpty
         $script:lastExtra.player_id | Should -Be 'abc'
+    }
+}
+
+Describe 'Send-DuneRmqServerCommandBatch envelope' -Tag 'Rmq' {
+    BeforeEach {
+        $script:lastErl = $null
+        $script:lastExtra = $null
+        $script:lastAction = $null
+    }
+
+    It 'publishes every command in one paced broker invocation' {
+        $commands = @(
+            @{ ServerCommand = 'AddItemToInventory'; PlayerId = 'abc123'; ItemName = 'First_Swatch'; Quantity = 1; Durability = 1.0 },
+            @{ ServerCommand = 'AddItemToInventory'; PlayerId = 'abc123'; ItemName = 'Second_Swatch'; Quantity = 1; Durability = 1.0 }
+        )
+
+        $r = Send-DuneRmqServerCommandBatch -Fields $commands -SpacingMilliseconds 200 -Action 'swatch-batch'
+
+        $r.ok | Should -BeTrue
+        $script:lastAction | Should -Be 'swatch-batch'
+        $script:lastTimeoutSec | Should -Be 30
+        $script:lastExtra.total | Should -Be 2
+        $script:lastExtra.spacing_ms | Should -Be 200
+        $script:lastErl | Should -Match 'lists:foreach'
+        $script:lastErl | Should -Match 'timer:sleep\(200\)'
+        $script:lastErl | Should -Match 'dune-tool-batch-\d+-'
+
+        $matches = [regex]::Matches($script:lastErl, 'base64:decode\(<<"([A-Za-z0-9+/=]+)">>\)')
+        $matches.Count | Should -Be 2
+        $itemNames = @($matches | ForEach-Object {
+            $json = [Text.Encoding]::UTF8.GetString([Convert]::FromBase64String($_.Groups[1].Value))
+            (($json | ConvertFrom-Json).MessageContent | ConvertFrom-Json).ItemName
+        })
+        $itemNames | Should -Be @('First_Swatch', 'Second_Swatch')
+    }
+
+    It 'preserves per-item quantities in inventory batches' {
+        Invoke-DuneRmqAddItemEntriesToInventoryBatch -FlsId 'abc123' -Items @(
+            [pscustomobject]@{ ItemName = 'Ammo'; Quantity = 500; Durability = 1.0 },
+            [pscustomobject]@{ ItemName = 'FuelCell'; Quantity = 2; Durability = 0.5 }
+        ) -SpacingMilliseconds 500 | Out-Null
+
+        $matches = [regex]::Matches($script:lastErl, 'base64:decode\(<<"([A-Za-z0-9+/=]+)">>\)')
+        $payloads = @($matches | ForEach-Object {
+            $json = [Text.Encoding]::UTF8.GetString([Convert]::FromBase64String($_.Groups[1].Value))
+            (($json | ConvertFrom-Json).MessageContent | ConvertFrom-Json)
+        })
+        $payloads[0].ItemName | Should -Be 'Ammo'
+        $payloads[0].Quantity | Should -Be 500
+        $payloads[1].ItemName | Should -Be 'FuelCell'
+        $payloads[1].Quantity | Should -Be 2
+        $payloads[1].Durability | Should -Be 0.5
+        $script:lastErl | Should -Match 'timer:sleep\(500\)'
+        $script:lastTimeoutSec | Should -Be 30
     }
 }
 

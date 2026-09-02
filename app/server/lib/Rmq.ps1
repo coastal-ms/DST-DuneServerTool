@@ -61,6 +61,71 @@ rabbit_queue_type:publish_at_most_once(X, Msg).
     return _Invoke-V6BroadcastErl -Ip $ip -Pod $pod -Erl $erl -Action $Action -Extra $Extra
 }
 
+# Publish several ServerCommands through one rabbitmqctl invocation. Keeping the
+# pacing inside the broker session avoids an SSH/kubectl round trip per item.
+function Send-DuneRmqServerCommandBatch {
+    param(
+        [Parameter(Mandatory)] [hashtable[]] $Fields,
+        [ValidateRange(0, 5000)] [int] $SpacingMilliseconds = 0,
+        [string] $Action = 'server-command-batch',
+        [hashtable] $Extra
+    )
+
+    if ($Fields.Count -eq 0) {
+        return @{ ok = $false; status = 400; message = 'At least one ServerCommand is required.' }
+    }
+
+    $ctx = Get-V6BroadcastContext
+    if (-not $ctx.ok) { return $ctx }
+    $ip = $ctx.vm.ip
+    try { $pod = Find-V6MqGamePod -Ip $ip } catch {
+        return @{ ok = $false; status = 503; message = $_.Exception.Message }
+    }
+
+    $encoded = [System.Collections.Generic.List[string]]::new()
+    for ($i = 0; $i -lt $Fields.Count; $i++) {
+        $innerJson = ConvertTo-Json $Fields[$i] -Depth 8 -Compress
+        $envelope = [ordered]@{
+            Version        = 2
+            AuthToken      = $script:DuneRmqAuthToken
+            MessageContent = $innerJson
+        }
+        $outerJson = ConvertTo-Json $envelope -Depth 8 -Compress
+        $outerB64 = [Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes($outerJson))
+        $encoded.Add("{base64:decode(<<`"$outerB64`">>), $i}")
+    }
+
+    $messageList = $encoded -join ",`n"
+    $stamp = [DateTimeOffset]::UtcNow.ToUnixTimeMilliseconds()
+    $erl = @"
+XName = rabbit_misc:r(<<"/">>, exchange, <<"heartbeats">>),
+X = rabbit_exchange:lookup_or_die(XName),
+Messages = [$messageList],
+lists:foreach(fun({Outer, Index}) ->
+    MsgId = list_to_binary("dune-tool-batch-$stamp-" ++ integer_to_list(Index)),
+    P = {list_to_atom("P_basic"), <<"Content">>, undefined, [], undefined,
+         undefined, undefined, undefined, undefined, MsgId, undefined,
+         undefined, <<"fls">>, <<"fls_backend">>, undefined},
+    Content = rabbit_basic:build_content(P, Outer),
+    {ok, Msg} = rabbit_basic:message(XName, <<"notifications">>, Content),
+    rabbit_queue_type:publish_at_most_once(X, Msg),
+    timer:sleep($SpacingMilliseconds)
+end, Messages),
+{ok, enqueued, length(Messages)}.
+"@
+
+    $batchExtra = @{
+        total      = $Fields.Count
+        spacing_ms = $SpacingMilliseconds
+    }
+    if ($Extra) {
+        foreach ($key in $Extra.Keys) { $batchExtra[$key] = $Extra[$key] }
+    }
+    $timeoutSec = [Math]::Max(30, [int][Math]::Ceiling(($Fields.Count * $SpacingMilliseconds) / 1000.0) + 20)
+    return _Invoke-V6BroadcastErl -Ip $ip -Pod $pod -Erl $erl -Action $Action `
+        -Extra $batchExtra -TimeoutSec $timeoutSec
+}
+
 # Send-DuneRmqCourierMessage
 # Publishes a courier-system message (chat/whisper). Routing differs from
 # ServerCommand: exchange + routing key are channel-specific and the basic
@@ -274,6 +339,54 @@ function Invoke-DuneRmqAddItemToInventory {
         Quantity      = $Quantity
         Durability    = $Durability
     } -Action 'give-item-live'
+}
+
+function Invoke-DuneRmqAddItemEntriesToInventoryBatch {
+    param(
+        [Parameter(Mandatory)] [string] $FlsId,
+        [Parameter(Mandatory)] [object[]] $Items,
+        [ValidateRange(0, 5000)] [int] $SpacingMilliseconds = 200
+    )
+
+    if ($Items.Count -eq 0) {
+        return @{ ok = $false; status = 400; message = 'At least one item is required.' }
+    }
+
+    $commands = [System.Collections.Generic.List[hashtable]]::new()
+    foreach ($item in $Items) {
+        $itemName = [string]$item.ItemName
+        if ([string]::IsNullOrWhiteSpace($itemName)) {
+            return @{ ok = $false; status = 400; message = 'Item templates cannot be blank.' }
+        }
+        $quantity = [int]$item.Quantity
+        if ($quantity -le 0) { $quantity = 1 }
+        $durability = [double]$item.Durability
+        if ($durability -le 0) { $durability = 1.0 }
+        $commands.Add(@{
+            ServerCommand = 'AddItemToInventory'
+            PlayerId      = $FlsId
+            ItemName      = $itemName
+            Quantity      = $quantity
+            Durability    = $durability
+        })
+    }
+
+    return Send-DuneRmqServerCommandBatch -Fields $commands.ToArray() `
+        -SpacingMilliseconds $SpacingMilliseconds -Action 'give-items-live-batch'
+}
+
+function Invoke-DuneRmqAddItemsToInventoryBatch {
+    param(
+        [Parameter(Mandatory)] [string] $FlsId,
+        [Parameter(Mandatory)] [string[]] $ItemNames,
+        [ValidateRange(0, 5000)] [int] $SpacingMilliseconds = 200
+    )
+
+    $items = @($ItemNames | ForEach-Object {
+        [pscustomobject]@{ ItemName = $_; Quantity = 1; Durability = 1.0 }
+    })
+    return Invoke-DuneRmqAddItemEntriesToInventoryBatch -FlsId $FlsId -Items $items `
+        -SpacingMilliseconds $SpacingMilliseconds
 }
 
 function Invoke-DuneRmqCheatScript {
