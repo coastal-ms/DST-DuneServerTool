@@ -2,6 +2,25 @@ BeforeAll {
     . (Join-Path $PSScriptRoot '_TestHelpers.ps1')
     Import-DstLib 'BuildMetadata.ps1'
     . (Join-Path (Split-Path $PSScriptRoot -Parent) 'app\build\BuildHelpers.ps1')
+
+    function New-BuildIdentityTestRepo {
+        param(
+            [Parameter(Mandatory)][string]$Path,
+            [string[]]$Tags = @()
+        )
+
+        New-Item -ItemType Directory -Path $Path -Force | Out-Null
+        & git -C $Path init --quiet
+        & git -C $Path config user.name 'DST Tests'
+        & git -C $Path config user.email 'dst-tests@example.invalid'
+        Set-Content -LiteralPath (Join-Path $Path 'tracked.txt') -Value 'test'
+        & git -C $Path add tracked.txt
+        & git -C $Path commit --quiet -m 'test commit'
+        foreach ($tag in $Tags) {
+            & git -C $Path tag $tag
+        }
+        return "$(& git -C $Path rev-parse HEAD)".Trim().ToLowerInvariant()
+    }
 }
 
 Describe 'Build artifact metadata' {
@@ -47,7 +66,7 @@ Describe 'Build artifact metadata' {
         $installer | Should -Match '-Prerelease:\$Prerelease'
         $installer | Should -Match 'DST-BuildInstaller-'
         $installer | Should -Match 'Another installer build is already running'
-        $installer | Should -Match 'Existing release tag .* resolves to'
+        $helpers | Should -Match 'Existing release tag .* resolves to'
         $installer | Should -Match 'Tagged build .* requires a clean checkout'
         $helpers | Should -Match 'refs/tags/\$BuildTag\^\{commit\}'
         $installer | Should -Match '\[string\]\$BuildTag'
@@ -61,6 +80,10 @@ Describe 'Build artifact metadata' {
         $workflow | Should -Not -Match 'github\.ref.*Prerelease'
         $workflow | Should -Match '\$biArgs\s*=\s*@\{'
         $workflow | Should -Match '\$biArgs\.BuildTag\s*='
+        $workflow | Should -Match '\$biArgs\.BuildCommit\s*='
+        $workflow | Should -Match 'Verify-ReleaseArtifact\.ps1'
+        $workflow | Should -Match 'release\.prerelease'
+        $workflow | Should -Match 'refs/tags/\$env:BUILD_TAG\^\{commit\}'
         $workflow | Should -Not -Match '\$biArgs\s*=\s*@\('
         $workflow | Should -Not -Match '\$biArgs\s*\+='
     }
@@ -85,6 +108,130 @@ Describe 'Build artifact metadata' {
         Get-DuneExistingTagCommit `
             -RepoRoot $repo `
             -BuildTag 'v999.999.999-test-new-tag-regression' | Should -Be ''
+    }
+
+    It 'rejects the original plain installer build on a prerelease-tagged HEAD' {
+        $repo = Join-Path $TestDrive 'tagged-omission'
+        $null = New-BuildIdentityTestRepo -Path $repo -Tags 'v15.0.0-test9'
+
+        {
+            Resolve-DuneBuildIdentity -RepoRoot $repo
+        } | Should -Throw "*already has release tag v15.0.0-test9*BuildTag was omitted*Refusing to embed '(manual)' identity*"
+    }
+
+    It 'fails closed when an omitted build tag is ambiguous' {
+        $repo = Join-Path $TestDrive 'multiple-tags'
+        $null = New-BuildIdentityTestRepo -Path $repo -Tags @('v15.0.0-test9', 'v15.0.0-test10')
+
+        {
+            Resolve-DuneBuildIdentity -RepoRoot $repo
+        } | Should -Throw '*multiple release tags*Refusing an ambiguous manual build*'
+    }
+
+    It 'preserves stable manual builds on an untagged HEAD' {
+        $repo = Join-Path $TestDrive 'untagged-stable'
+        $head = New-BuildIdentityTestRepo -Path $repo
+
+        $identity = Resolve-DuneBuildIdentity -RepoRoot $repo
+
+        $identity.Tag | Should -Be ''
+        $identity.Prerelease | Should -BeFalse
+        $identity.Commit | Should -BeExactly $head
+    }
+
+    It 'requires prerelease-style tags to use the prerelease flag' {
+        {
+            Assert-DuneTagPrereleaseConsistency -BuildTag 'v15.0.0-test9'
+        } | Should -Throw '*requires -Prerelease*'
+    }
+
+    It 'rejects the prerelease flag for stable tags' {
+        {
+            Assert-DuneTagPrereleaseConsistency -BuildTag 'v15.0.0' -Prerelease
+        } | Should -Throw '*must not use -Prerelease*'
+    }
+
+    It 'requires an explicit full commit for tagged builds' {
+        $repo = Join-Path $TestDrive 'tagged-commit'
+        $head = New-BuildIdentityTestRepo -Path $repo -Tags 'v15.0.0-test9'
+
+        {
+            Resolve-DuneBuildIdentity -RepoRoot $repo -BuildTag 'v15.0.0-test9' -Prerelease
+        } | Should -Throw '*requires an explicit full -BuildCommit*'
+        {
+            Resolve-DuneBuildIdentity -RepoRoot $repo -BuildTag 'v15.0.0-test9' -BuildCommit $head.Substring(0, 12) -BuildCommitSpecified -Prerelease
+        } | Should -Throw '*requires a full 40-character BuildCommit*'
+        {
+            Resolve-DuneBuildIdentity -RepoRoot $repo -BuildTag 'v15.0.0-test9' -BuildCommit ('a' * 40) -BuildCommitSpecified -Prerelease
+        } | Should -Throw '*does not match existing release tag*'
+    }
+
+    It 'accepts only the exact tag commit for a tagged build' {
+        $repo = Join-Path $TestDrive 'exact-tagged-commit'
+        $head = New-BuildIdentityTestRepo -Path $repo -Tags 'v15.0.0-test9'
+
+        $identity = Resolve-DuneBuildIdentity `
+            -RepoRoot $repo `
+            -BuildTag 'v15.0.0-test9' `
+            -BuildCommit $head `
+            -BuildCommitSpecified `
+            -Prerelease
+
+        $identity.Commit | Should -BeExactly $head
+        $identity.Tag | Should -BeExactly 'v15.0.0-test9'
+        $identity.Prerelease | Should -BeTrue
+    }
+
+    It 'rejects compiled metadata that differs from the target release' {
+        $metadata = [pscustomobject]@{
+            present = $true
+            valid = $true
+            tag = 'v15.0.0-test9'
+            commit = 'a' * 40
+            prerelease = $false
+        }
+
+        {
+            Assert-DuneBuildMetadataMatches `
+               -Metadata $metadata `
+               -ExpectedTag 'v15.0.0-test9' `
+               -ExpectedCommit ('a' * 40) `
+               -ExpectedPrerelease
+        } | Should -Throw '*Built DuneServer.exe identity mismatch*'
+    }
+
+    It 'accepts matching stable manual compiled metadata' {
+        $metadata = [pscustomobject]@{
+            present = $true
+            valid = $true
+            tag = ''
+            commit = 'a' * 40
+            prerelease = $false
+        }
+
+        {
+            $null = Assert-DuneBuildMetadataMatches `
+                -Metadata $metadata `
+                -ExpectedTag '' `
+                -ExpectedCommit ('a' * 40)
+        } | Should -Not -Throw
+    }
+
+    It 'preserves abbreviated commit metadata for stable manual builds' {
+        $metadata = [pscustomobject]@{
+            present = $true
+            valid = $true
+            tag = ''
+            commit = 'abcdef123456'
+            prerelease = $false
+        }
+
+        {
+            $null = Assert-DuneBuildMetadataMatches `
+                -Metadata $metadata `
+                -ExpectedTag '' `
+                -ExpectedCommit 'abcdef123456'
+        } | Should -Not -Throw
     }
 
     It 'injects immutable build identity into API worker runspaces' {

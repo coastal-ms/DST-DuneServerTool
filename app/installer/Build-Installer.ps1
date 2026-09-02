@@ -64,6 +64,30 @@ try {
         throw 'Another installer build is already running for this checkout.'
     }
 
+# Resolve and validate artifact identity before any build work starts.
+$buildCommitSpecified = $PSBoundParameters.ContainsKey('BuildCommit') -and
+    -not [string]::IsNullOrWhiteSpace($BuildCommit)
+$identity = Resolve-DuneBuildIdentity `
+    -RepoRoot $repoRoot `
+    -BuildCommit $BuildCommit `
+    -BuildTag $BuildTag `
+    -Prerelease:$Prerelease `
+    -BuildCommitSpecified:$buildCommitSpecified
+$BuildCommit = $identity.Commit
+$BuildTag = $identity.Tag
+
+if ($BuildTag) {
+    $dirty = @(& git -C $repoRoot status --porcelain --untracked-files=all)
+    if ($LASTEXITCODE -ne 0) {
+        throw 'Could not verify checkout cleanliness for tagged build.'
+    }
+    if ($dirty.Count -gt 0) {
+        throw "Tagged build $BuildTag requires a clean checkout."
+    }
+}
+Write-Host "Build identity: prerelease=$([bool]$Prerelease), tag=$(if ($BuildTag) { $BuildTag } else { '(manual)' }), commit=$BuildCommit" -ForegroundColor Cyan
+Write-Host ''
+
 # ---------------------------------------------------------------------------
 # Pre-flight: version-stamp sync check.
 #
@@ -112,42 +136,6 @@ if (-not $SkipVersionCheck) {
     Write-Host "  All 5 stamps match: $($distinct[0])" -ForegroundColor Green
     Write-Host ""
 }
-
-# Resolve immutable artifact metadata without changing any version stamp.
-if (-not $BuildCommit) {
-    try { $BuildCommit = (& git -C $repoRoot rev-parse HEAD 2>$null).Trim() } catch { $BuildCommit = '' }
-}
-$BuildCommit = $BuildCommit.Trim().ToLowerInvariant()
-if ($BuildCommit -and $BuildCommit -notmatch '^[0-9a-f]{7,40}$') {
-    throw 'BuildCommit must be a 7-40 character hexadecimal Git commit id.'
-}
-$BuildTag = $BuildTag.Trim()
-if ($BuildTag -and $BuildTag -notmatch '^v?\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$') {
-    throw 'BuildTag must be a release tag such as v14.0.0 or v14.0.0-test6.'
-}
-if ($BuildTag) {
-    $dirty = @(& git -C $repoRoot status --porcelain --untracked-files=all)
-    if ($LASTEXITCODE -ne 0) {
-        throw 'Could not verify checkout cleanliness for tagged build.'
-    }
-    if ($dirty.Count -gt 0) {
-        throw "Tagged build $BuildTag requires a clean checkout."
-    }
-    $tagCommit = Get-DuneExistingTagCommit -RepoRoot $repoRoot -BuildTag $BuildTag
-    if ($tagCommit) {
-        $headCommit = (& git -C $repoRoot rev-parse HEAD 2>$null).Trim().ToLowerInvariant()
-        $tagCommit = $tagCommit.ToLowerInvariant()
-        if ($headCommit -ne $tagCommit) {
-            throw "Existing release tag $BuildTag resolves to $tagCommit, but checkout HEAD is $headCommit. Check out the exact tag before rebuilding its installer."
-        }
-        if ($BuildCommit -and $BuildCommit -ne $tagCommit) {
-            throw "BuildCommit $BuildCommit does not match existing release tag $BuildTag at $tagCommit."
-        }
-        $BuildCommit = $tagCommit
-    }
-}
-Write-Host "Build identity: prerelease=$([bool]$Prerelease), tag=$(if ($BuildTag) { $BuildTag } else { '(manual)' }), commit=$(if ($BuildCommit) { $BuildCommit } else { '(unknown)' })" -ForegroundColor Cyan
-Write-Host ''
 
 # Locate ISCC.exe
 $isccCandidates = @(
@@ -274,6 +262,14 @@ if (-not $SkipExeBuild) {
 if (-not (Test-Path $exePath)) {
     throw "DuneServer.exe not found at $exePath - run Build-Exe.ps1 first (or omit -SkipExeBuild)"
 }
+$builtMetadata = Get-DuneExecutableBuildMetadata -ExecutablePath $exePath
+$null = Assert-DuneBuildMetadataMatches `
+    -Metadata $builtMetadata `
+    -ExpectedTag $BuildTag `
+    -ExpectedCommit $BuildCommit `
+    -ExpectedPrerelease:$Prerelease
+Write-Host "  DuneServer.exe identity verified from embedded resource." -ForegroundColor Green
+Write-Host ""
 
 # Build the standalone WebView2 app window (DuneShell.exe). Self-contained
 # single-file publish; the .iss bundles it beside DuneServer.exe. Requires the
