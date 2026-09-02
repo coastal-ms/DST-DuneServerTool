@@ -88,6 +88,17 @@ Describe 'Build artifact metadata' {
         $workflow | Should -Not -Match '\$biArgs\s*\+='
     }
 
+    It 'validates release versions and derives numeric resource versions' {
+        $candidate = Get-DuneVersionInfo -Version '15.0.0-phase2-test1'
+
+        $candidate.IsPrerelease | Should -BeTrue
+        $candidate.CoreVersion | Should -BeExactly '15.0.0'
+        $candidate.NumericVersion | Should -BeExactly '15.0.0.0'
+        foreach ($invalid in @('01.2.3', '1.02.3', '1.2.03', '1.2.3-', '1.2.3-.test', '1.2.3-test.', '1.2.3-..', '1.2.3-01')) {
+            { Get-DuneVersionInfo -Version $invalid } | Should -Throw '*SemVer-compatible release version*'
+        }
+    }
+
     It 'publishes through replacement so an installed hardlink is not overwritten' {
         $installed = Join-Path $TestDrive 'installed.exe'
         $destination = Join-Path $TestDrive 'output.exe'
@@ -136,6 +147,17 @@ Describe 'Build artifact metadata' {
 
         $identity.Tag | Should -Be ''
         $identity.Prerelease | Should -BeFalse
+        $identity.Commit | Should -BeExactly $head
+    }
+
+    It 'preserves prerelease identity for an untagged candidate build' {
+        $repo = Join-Path $TestDrive 'untagged-prerelease'
+        $head = New-BuildIdentityTestRepo -Path $repo
+
+        $identity = Resolve-DuneBuildIdentity -RepoRoot $repo -Prerelease
+
+        $identity.Tag | Should -Be ''
+        $identity.Prerelease | Should -BeTrue
         $identity.Commit | Should -BeExactly $head
     }
 
@@ -214,6 +236,24 @@ Describe 'Build artifact metadata' {
                 -Metadata $metadata `
                 -ExpectedTag '' `
                 -ExpectedCommit ('a' * 40)
+        } | Should -Not -Throw
+    }
+
+    It 'accepts matching prerelease manual compiled metadata' {
+        $metadata = [pscustomobject]@{
+            present = $true
+            valid = $true
+            tag = ''
+            commit = 'a' * 40
+            prerelease = $true
+        }
+
+        {
+            $null = Assert-DuneBuildMetadataMatches `
+                -Metadata $metadata `
+                -ExpectedTag '' `
+                -ExpectedCommit ('a' * 40) `
+                -ExpectedPrerelease
         } | Should -Not -Throw
     }
 

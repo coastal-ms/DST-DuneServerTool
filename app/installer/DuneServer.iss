@@ -17,7 +17,7 @@
 
 #define MyAppName        "Dune Server Tool"
 #define MyAppVersion "15.0.0-phase2-test1"
-#define MyAppNumericVersion "15.0.0.0"
+#define MyAppNumericVersion Copy(MyAppVersion, 1, Pos("-", MyAppVersion + "-") - 1) + ".0"
 #define MyAppPublisher   "Dune Awakening Self-Hosted Tool"
 #define MyAppURL         "https://github.com/coastal-ms/DST-DuneServerTool"
 #define MyAppExeName     "DuneServer.exe"

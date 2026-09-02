@@ -15,8 +15,8 @@ param(
     [switch]$SkipSoloBuild,
     [switch]$SkipPlatformBuild,
     [switch]$SkipVersionCheck,
-    # Explicit artifact identity. Normal release/local builds default stable.
-    # Test candidates must pass -Prerelease; branch names are never inferred.
+    # Explicit artifact identity. The version suffix determines prerelease state;
+    # -Prerelease remains accepted as a consistency guard for release automation.
     [switch]$Prerelease,
     [string]$BuildCommit = '',
     [string]$BuildTag = '',
@@ -49,6 +49,41 @@ $platformExe = Join-Path $appRoot 'tools\DunePlatformStore\bin\Release\net10.0-w
 $buildHelpers = Join-Path $appRoot 'build\BuildHelpers.ps1'
 
 $null = . $buildHelpers
+$versionFiles = @(
+    @{ Path = Join-Path $repoRoot 'dune-server.ps1';                   Pattern = '\$script:ToolVersion\s*=\s*"([^"]+)"';       Label = '$script:ToolVersion' },
+    @{ Path = Join-Path $appRoot  'DuneServer.ps1';                    Pattern = "\`$script:DuneToolVersion\s*=\s*'([^']+)'"; Label = '$script:DuneToolVersion' },
+    @{ Path = Join-Path $appRoot  'build\Build-Exe.ps1';               Pattern = "\[string\]\`$Version\s*=\s*'([^']+)'";      Label = 'Build-Exe.ps1 default $Version' },
+    @{ Path = Join-Path $appRoot  'installer\DuneServer.iss';          Pattern = '#define\s+MyAppVersion\s+"([^"]+)"';         Label = 'MyAppVersion' },
+    @{ Path = Join-Path $appRoot  'desktop\DuneShell\DuneShell.csproj'; Pattern = '<Version>([^<]+)</Version>';                 Label = 'DuneShell <Version>' }
+)
+$stampReport = foreach ($vf in $versionFiles) {
+    if (-not (Test-Path -LiteralPath $vf.Path)) {
+        throw "Version-stamp file not found: $($vf.Path)"
+    }
+
+    $match = Select-String -Path $vf.Path -Pattern $vf.Pattern -List
+    if (-not $match) {
+        throw "Could not find version stamp in $($vf.Path) using pattern: $($vf.Pattern)"
+    }
+    $version = $match.Matches[0].Groups[1].Value
+    try {
+        $versionInfo = Get-DuneVersionInfo -Version $version
+    } catch {
+        throw "$($vf.Label) has an invalid release version: $($_.Exception.Message)"
+    }
+    [pscustomobject]@{
+        File = $vf.Path.Substring($repoRoot.Length + 1)
+        Label = $vf.Label
+        Version = $versionInfo.Version
+        VersionInfo = $versionInfo
+    }
+}
+$installerVersion = ($stampReport | Where-Object Label -eq 'MyAppVersion').VersionInfo
+if ($Prerelease -and -not $installerVersion.IsPrerelease) {
+    throw "Stable version $($installerVersion.Version) must not use -Prerelease."
+}
+$Prerelease = [bool]$installerVersion.IsPrerelease
+
 $repoKey = [Convert]::ToHexString(
     [Security.Cryptography.SHA256]::HashData(
         [Text.Encoding]::UTF8.GetBytes($repoRoot.ToLowerInvariant()))).Substring(0, 16)
@@ -100,29 +135,7 @@ Write-Host ''
 # If the stamps disagree, abort with a clear listing. To override (e.g. for
 # a deliberate intermediate test build), pass `-SkipVersionCheck`.
 # ---------------------------------------------------------------------------
-$versionFiles = @(
-    @{ Path = Join-Path $repoRoot 'dune-server.ps1';                 Pattern = '\$script:ToolVersion\s*=\s*"([0-9]+\.[0-9]+\.[0-9]+(?:-[0-9A-Za-z.-]+)?)"';     Label = '$script:ToolVersion' },
-    @{ Path = Join-Path $appRoot  'DuneServer.ps1';                  Pattern = "\`$script:DuneToolVersion\s*=\s*'([0-9]+\.[0-9]+\.[0-9]+(?:-[0-9A-Za-z.-]+)?)'"; Label = '$script:DuneToolVersion' },
-    @{ Path = Join-Path $appRoot  'build\Build-Exe.ps1';             Pattern = "\[string\]\`$Version\s*=\s*'([0-9]+\.[0-9]+\.[0-9]+(?:-[0-9A-Za-z.-]+)?)'";     Label = 'Build-Exe.ps1 default $Version' },
-    @{ Path = Join-Path $appRoot  'installer\DuneServer.iss';        Pattern = '#define\s+MyAppVersion\s+"([0-9]+\.[0-9]+\.[0-9]+(?:-[0-9A-Za-z.-]+)?)"';       Label = 'MyAppVersion' },
-    @{ Path = Join-Path $appRoot  'desktop\DuneShell\DuneShell.csproj'; Pattern = '<Version>([0-9]+\.[0-9]+\.[0-9]+(?:-[0-9A-Za-z.-]+)?)</Version>';            Label = 'DuneShell <Version>' }
-)
 if (-not $SkipVersionCheck) {
-    $stampReport = foreach ($vf in $versionFiles) {
-        if (-not (Test-Path -LiteralPath $vf.Path)) {
-            throw "Version-stamp file not found: $($vf.Path)"
-        }
-
-        $m = Select-String -Path $vf.Path -Pattern $vf.Pattern -List
-        if (-not $m) {
-            throw "Could not find version stamp in $($vf.Path) using pattern: $($vf.Pattern)"
-        }
-        [pscustomobject]@{
-            File    = $vf.Path.Substring($repoRoot.Length + 1)
-            Label   = $vf.Label
-            Version = $m.Matches[0].Groups[1].Value
-        }
-    }
     $distinct = @($stampReport.Version | Sort-Object -Unique)
     Write-Host "Version-stamp check:" -ForegroundColor Cyan
     foreach ($r in $stampReport) {
