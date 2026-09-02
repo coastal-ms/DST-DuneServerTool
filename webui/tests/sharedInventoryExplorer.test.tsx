@@ -120,16 +120,28 @@ describe('Shared Inventory Explorer', () => {
     )
 
     expect(await screen.findByText('Spice Melange')).toBeInTheDocument()
-    expect(screen.getByText('Spice Vault')).toBeInTheDocument()
-    expect(screen.getByText('Stilgar')).toBeInTheDocument()
+    const resultSlot = screen.getByRole('button', { name: /Spice Melange/ })
+    expect(resultSlot).toHaveAccessibleName(/quantity 12, quality 3, Storage container, Spice Vault/)
+    expect(screen.getByRole('list', { name: 'Inventory results' }).className).toContain('auto-fill')
+    resultSlot.focus()
+    expect(await screen.findByRole('tooltip')).toHaveTextContent('Spice Vault')
+    expect(screen.getByRole('tooltip')).toHaveTextContent('Stilgar')
+    resultSlot.blur()
+    await waitFor(() => expect(screen.queryByRole('tooltip')).not.toBeInTheDocument())
+    await user.hover(resultSlot)
+    expect(await screen.findByRole('tooltip')).toHaveTextContent('Spice Vault')
     expect(screen.getByText('Live database')).toHaveAttribute('data-freshness-state', 'fresh')
     expect(screen.getAllByText('Read-only').length).toBeGreaterThan(0)
     expect(screen.queryByRole('button', { name: /give|delete|repair/i })).not.toBeInTheDocument()
 
-    await user.click(screen.getByRole('button', { name: /Spice Melange/ }))
+    await user.click(resultSlot)
     expect(screen.getByRole('dialog', { name: 'Spice Melange' })).toBeInTheDocument()
     expect(screen.getByRole('link', { name: 'Open owning container' }))
       .toHaveAttribute('href', '/bases?view=inventory&scope_type=storage&scope_id=50001')
+    expect(screen.getByRole('link', { name: 'View on dune.gaming.tools' })).toHaveAttribute(
+      'href',
+      'https://dune.gaming.tools/items/melangespice',
+    )
   })
 
   it('submits one typed search and preserves the bounded entity filter', async () => {
