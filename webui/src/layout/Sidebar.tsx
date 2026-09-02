@@ -26,6 +26,7 @@ import {
 } from '../nav'
 import { useUpdateCheck } from '../hooks/useUpdateCheck'
 import {
+  isSidebarPageHideable,
   useSidebarNavigationOrder,
   type SidebarDividerEntry,
 } from '../hooks/useSidebarNavigationOrder'
@@ -183,19 +184,38 @@ export function Sidebar({ collapsed, onExpand }: Props) {
     addDivider,
     renameDivider,
     removeDivider,
+    hiddenPageIds,
+    setPageHidden,
+    setPagesHidden,
     reset: resetNavigationOrder,
     isCustomized,
   } = useSidebarNavigationOrder(NAV_ITEMS, visibleItems)
+  const visibleLayoutItems = layoutItems.filter(entry => (
+    entry.type === 'divider' || !hiddenPageIds.has(entry.id)
+  ))
   const displayItems = customizing
     ? layoutItems
-    : layoutItems.filter((entry, index) => {
+    : visibleLayoutItems.filter((entry, index) => {
         if (entry.type === 'page') return true
-        for (let nextIndex = index + 1; nextIndex < layoutItems.length; nextIndex += 1) {
-          if (layoutItems[nextIndex].type === 'divider') return false
-          if (layoutItems[nextIndex].type === 'page') return true
+        for (let nextIndex = index + 1; nextIndex < visibleLayoutItems.length; nextIndex += 1) {
+          if (visibleLayoutItems[nextIndex].type === 'divider') return false
+          if (visibleLayoutItems[nextIndex].type === 'page') return true
         }
         return false
       })
+  const dividerPageIds = useMemo(() => {
+    const result = new Map<string, string[]>()
+    let currentDividerId: string | null = null
+    for (const entry of layoutItems) {
+      if (entry.type === 'divider') {
+        currentDividerId = entry.id
+        result.set(entry.id, [])
+      } else if (currentDividerId && isSidebarPageHideable(entry.item)) {
+        result.get(currentDividerId)?.push(entry.id)
+      }
+    }
+    return result
+  }, [layoutItems])
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
     useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
@@ -283,7 +303,7 @@ export function Sidebar({ collapsed, onExpand }: Props) {
           <div className="sticky top-0 z-10 mb-2 rounded-lg border border-accent/30 bg-surface px-3 py-2 shadow-[0_4px_14px_-8px_rgba(0,0,0,0.8)]">
             <div className="text-xs font-semibold text-text">Customize navigation</div>
             <p className="mt-0.5 text-[11px] leading-snug text-text-dim">
-              Drag pages and section labels into any order. Changes stay in this browser.
+              Drag pages and sections into any order, or hide what you do not need. Changes stay in this browser.
             </p>
             <div className="mt-2 grid grid-cols-3 gap-1.5">
               <button
@@ -325,6 +345,8 @@ export function Sidebar({ collapsed, onExpand }: Props) {
                           key={entry.id}
                           item={entry.item}
                           active={isNavItemActive(entry.item, pathname, search)}
+                          hidden={hiddenPageIds.has(entry.id)}
+                          onVisibilityChange={hidden => setPageHidden(entry.id, hidden)}
                         />
                       )
                     : (
@@ -334,6 +356,9 @@ export function Sidebar({ collapsed, onExpand }: Props) {
                           autoFocus={entry.id === editingDividerId}
                           onRename={renameDivider}
                           onRemove={removeDivider}
+                          hideablePageIds={dividerPageIds.get(entry.id) ?? []}
+                          hiddenPageIds={hiddenPageIds}
+                          onVisibilityChange={(pageIds, hidden) => setPagesHidden(pageIds, hidden)}
                         />
                       )
                 ))}
@@ -534,7 +559,17 @@ export function Sidebar({ collapsed, onExpand }: Props) {
   )
 }
 
-function SortableSidebarPage({ item, active }: { item: NavItem; active: boolean }) {
+function SortableSidebarPage({
+  item,
+  active,
+  hidden,
+  onVisibilityChange,
+}: {
+  item: NavItem
+  active: boolean
+  hidden: boolean
+  onVisibilityChange: (hidden: boolean) => void
+}) {
   const {
     attributes,
     listeners,
@@ -552,8 +587,10 @@ function SortableSidebarPage({ item, active }: { item: NavItem; active: boolean 
         transition,
         opacity: isDragging ? 0.45 : undefined,
       }}
-      className={`flex min-h-9 items-center gap-1 rounded-lg border px-1.5 py-1 text-sm ${
-        active
+      className={`flex min-h-11 items-center gap-1 rounded-lg border px-1.5 py-1 text-sm ${
+        hidden
+          ? 'border-dashed border-border/80 bg-surface/35 text-text-dim'
+          : active
           ? 'bg-accent/15 text-accent-bright border-accent/30 shadow-inner'
           : 'bg-surface-2/30 text-text-muted border-border/70'
       }`}
@@ -570,9 +607,34 @@ function SortableSidebarPage({ item, active }: { item: NavItem; active: boolean 
       </button>
       <Icon name={item.icon} size={15} />
       <span className="min-w-0 flex-1 truncate">{item.label}</span>
+      {hidden && (
+        <span className="shrink-0 rounded border border-border bg-surface-2 px-1.5 py-0.5 text-[8px] font-semibold uppercase tracking-wider text-text-dim">
+          Hidden
+        </span>
+      )}
       {item.badge && (
         <span className="shrink-0 rounded border border-sky-400/40 bg-sky-400/15 px-1 py-0.5 text-[8px] font-semibold uppercase tracking-wider text-sky-400">
           {item.badge}
+        </span>
+      )}
+      {isSidebarPageHideable(item) ? (
+        <button
+          type="button"
+          className="flex min-h-11 min-w-11 shrink-0 items-center justify-center rounded text-text-dim hover:bg-surface-2 hover:text-text focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ibad"
+          aria-label={`${hidden ? 'Show' : 'Hide'} ${item.label} in sidebar`}
+          aria-pressed={hidden}
+          title={`${hidden ? 'Show' : 'Hide'} ${item.label} in the left sidebar`}
+          onClick={() => onVisibilityChange(!hidden)}
+        >
+          <Icon name={hidden ? 'Eye' : 'EyeOff'} size={15} />
+        </button>
+      ) : (
+        <span
+          className="flex min-h-11 min-w-11 shrink-0 items-center justify-center text-text-dim"
+          aria-label={`${item.label} is always shown`}
+          title="This page is always shown in the left sidebar"
+        >
+          <Icon name="LockKeyhole" size={14} />
         </span>
       )}
     </li>
@@ -584,11 +646,17 @@ function SortableSidebarDivider({
   autoFocus,
   onRename,
   onRemove,
+  hideablePageIds,
+  hiddenPageIds,
+  onVisibilityChange,
 }: {
   divider: SidebarDividerEntry
   autoFocus: boolean
   onRename: (id: string, label: string) => void
   onRemove: (id: string) => void
+  hideablePageIds: readonly string[]
+  hiddenPageIds: ReadonlySet<string>
+  onVisibilityChange: (pageIds: readonly string[], hidden: boolean) => void
 }) {
   const [label, setLabel] = useState(divider.label)
   const inputRef = useRef<HTMLInputElement | null>(null)
@@ -622,6 +690,8 @@ function SortableSidebarDivider({
     onRename(divider.id, label)
     if (!label.trim()) setLabel(divider.label)
   }
+  const allHideablePagesHidden = hideablePageIds.length > 0
+    && hideablePageIds.every(pageId => hiddenPageIds.has(pageId))
 
   return (
     <li
@@ -631,43 +701,57 @@ function SortableSidebarDivider({
         transition,
         opacity: isDragging ? 0.45 : undefined,
       }}
-      className="mt-2 flex min-h-11 items-center gap-1 rounded-lg border border-dashed border-accent/65 bg-accent/[0.14] px-1.5 py-1 shadow-sm shadow-black/30"
+      className="mt-2 flex flex-col gap-1 rounded-lg border border-dashed border-accent/65 bg-accent/[0.14] px-1.5 py-1.5 shadow-sm shadow-black/30"
     >
+      <div className="flex w-full items-center gap-1">
+        <button
+          type="button"
+          className="flex min-h-9 min-w-9 shrink-0 touch-none cursor-grab items-center justify-center rounded text-accent/75 hover:bg-accent/10 hover:text-accent-bright focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent active:cursor-grabbing"
+          aria-label={`Reorder section ${divider.label}`}
+          title={`Drag to reorder section ${divider.label}`}
+          {...attributes}
+          {...listeners}
+        >
+          <Icon name="GripVertical" size={14} />
+        </button>
+        <input
+          ref={inputRef}
+          value={label}
+          maxLength={48}
+          aria-label={`Rename section ${divider.label}`}
+          onChange={event => setLabel(event.target.value)}
+          onBlur={commitLabel}
+          onKeyDown={event => {
+            if (event.key === 'Enter') event.currentTarget.blur()
+            if (event.key === 'Escape') {
+              cancelRenameRef.current = true
+              setLabel(divider.label)
+              event.currentTarget.blur()
+            }
+          }}
+          className="min-h-9 min-w-0 flex-1 rounded border border-transparent bg-transparent px-1.5 text-[10px] font-semibold uppercase tracking-widest text-accent-bright focus:border-accent/70 focus:bg-surface focus:outline-none focus:ring-2 focus:ring-ibad"
+        />
+        <button
+          type="button"
+          className="flex min-h-11 min-w-11 shrink-0 items-center justify-center rounded text-text-dim hover:bg-danger/15 hover:text-danger focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ibad"
+          aria-label={`Remove section ${divider.label}`}
+          title="Remove this section label; pages remain"
+          onClick={() => onRemove(divider.id)}
+        >
+          <Icon name="Trash2" size={13} />
+        </button>
+      </div>
       <button
         type="button"
-        className="flex min-h-9 min-w-9 shrink-0 touch-none cursor-grab items-center justify-center rounded text-accent/75 hover:bg-accent/10 hover:text-accent-bright focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent active:cursor-grabbing"
-        aria-label={`Reorder section ${divider.label}`}
-        title={`Drag to reorder section ${divider.label}`}
-        {...attributes}
-        {...listeners}
+        className="flex min-h-11 w-full items-center justify-center gap-1.5 rounded border border-accent/25 bg-surface/25 px-2 text-[10px] font-semibold uppercase tracking-wider text-accent/80 hover:border-accent/45 hover:bg-accent/10 hover:text-accent-bright focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ibad disabled:cursor-not-allowed disabled:opacity-35"
+        aria-label={`${allHideablePagesHidden ? 'Show' : 'Hide'} pages in section ${divider.label}`}
+        aria-pressed={allHideablePagesHidden}
+        title={`${allHideablePagesHidden ? 'Show' : 'Hide'} optional pages in this section`}
+        disabled={hideablePageIds.length === 0}
+        onClick={() => onVisibilityChange(hideablePageIds, !allHideablePagesHidden)}
       >
-        <Icon name="GripVertical" size={14} />
-      </button>
-      <input
-        ref={inputRef}
-        value={label}
-        maxLength={48}
-        aria-label={`Rename section ${divider.label}`}
-        onChange={event => setLabel(event.target.value)}
-        onBlur={commitLabel}
-        onKeyDown={event => {
-          if (event.key === 'Enter') event.currentTarget.blur()
-          if (event.key === 'Escape') {
-            cancelRenameRef.current = true
-            setLabel(divider.label)
-            event.currentTarget.blur()
-          }
-        }}
-        className="min-h-9 min-w-0 flex-1 rounded border border-transparent bg-transparent px-1.5 text-[10px] font-semibold uppercase tracking-widest text-accent-bright focus:border-accent/70 focus:bg-surface focus:outline-none focus:ring-2 focus:ring-ibad"
-      />
-      <button
-        type="button"
-        className="flex min-h-9 min-w-9 shrink-0 items-center justify-center rounded text-text-dim hover:bg-danger/15 hover:text-danger focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ibad"
-        aria-label={`Remove section ${divider.label}`}
-        title="Remove this section label; pages remain"
-        onClick={() => onRemove(divider.id)}
-      >
-        <Icon name="Trash2" size={13} />
+        <Icon name={allHideablePagesHidden ? 'Eye' : 'EyeOff'} size={14} />
+        {allHideablePagesHidden ? 'Show section pages' : 'Hide section pages'}
       </button>
     </li>
   )

@@ -19,6 +19,9 @@ export type NavItem = {
   // Hide this item from the desktop sidebar while retaining it in other
   // navigation surfaces such as the classic top menu.
   sidebarHidden?: boolean
+  // Keep this item visible in the desktop sidebar even when the user
+  // customizes optional page visibility.
+  sidebarAlwaysVisible?: boolean
   // Hide this item from a grouped desktop top-menu dropdown when another
   // top-menu affordance links directly to the same route.
   topMenuGroupHidden?: boolean
@@ -34,7 +37,7 @@ export type NavItem = {
 }
 
 export const LEGACY_NAV_ITEMS: readonly NavItem[] = [
-  { to: '/',            label: 'Server Overview', icon: 'LayoutDashboard', group: 'overview', workspaceId: 'home' },
+  { to: '/',            label: 'Server Overview', icon: 'LayoutDashboard', group: 'overview', workspaceId: 'home', sidebarAlwaysVisible: true },
   { to: '/pods',        label: 'Pods',          icon: 'Boxes',           group: 'overview', legacy: true },
   { to: '/operations',  label: 'Operations',    icon: 'Activity',        group: 'overview', workspaceId: 'operations' },
   { to: '/commands',    label: 'Commands',     icon: 'Zap',             group: 'terminal', legacy: true },
@@ -48,7 +51,7 @@ export const LEGACY_NAV_ITEMS: readonly NavItem[] = [
   { to: '/database',    label: 'Database',       icon: 'Database',        group: 'database', ownerOnly: true, legacy: true },
   { to: '/sietches',    label: 'Sietches',     icon: 'Network',         group: 'database', ownerOnly: true, legacy: true },
   { to: '/settings',    label: 'Settings',     icon: 'Settings',        group: 'system', ownerOnly: true, workspaceId: 'settings' },
-  { to: '/sponsors',    label: 'Sponsors & Credits', icon: 'HeartHandshake', group: 'system', topMenuGroupHidden: true, legacy: true },
+  { to: '/sponsors',    label: 'Sponsors & Credits', icon: 'HeartHandshake', group: 'system', topMenuGroupHidden: true, sidebarAlwaysVisible: true, legacy: true },
   { to: '/setup',       label: 'Setup Wizard', icon: 'Wand2',           group: 'system', localOnly: true, sidebarHidden: true, legacy: true },
 ]
 

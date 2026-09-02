@@ -7,7 +7,8 @@ import {
   type NavItem,
 } from '../nav'
 
-export const SIDEBAR_ORDER_STORAGE_KEY = 'dst.sidebar.navigation-order.v2'
+export const SIDEBAR_ORDER_STORAGE_KEY = 'dst.sidebar.navigation-preferences.v3'
+export const SIDEBAR_ORDER_V2_STORAGE_KEY = 'dst.sidebar.navigation-order.v2'
 export const SIDEBAR_ORDER_V1_STORAGE_KEY = 'dst.sidebar.navigation-order.v1'
 export const SIDEBAR_DIVIDER_LABEL_MAX_LENGTH = 48
 
@@ -25,6 +26,12 @@ export type SidebarDividerEntry = {
 export type SidebarNavigationEntry = SidebarPageEntry | SidebarDividerEntry
 
 export type SidebarNavigationOrder = {
+  version: 3
+  items: SidebarNavigationEntry[]
+  hiddenPageIds: string[]
+}
+
+type SidebarNavigationOrderV2 = {
   version: 2
   items: SidebarNavigationEntry[]
 }
@@ -67,7 +74,7 @@ export function getCanonicalSidebarNavigationOrder(
     items.push(...groupItems.map(item => ({ type: 'page' as const, id: item.to })))
   }
 
-  return { version: 2, items }
+  return { version: 3, items, hiddenPageIds: [] }
 }
 
 function migrateV1Order(
@@ -101,7 +108,7 @@ function migrateV1Order(
       .map(id => ({ type: 'page' as const, id })))
   }
 
-  return { version: 2, items }
+  return { version: 3, items, hiddenPageIds: [] }
 }
 
 function reconcileMissingPages(
@@ -155,7 +162,9 @@ export function normalizeSidebarNavigationOrder(
   if (isRecord(saved) && saved.version === 1 && isRecord(saved.groups)) {
     return migrateV1Order(saved as SidebarNavigationOrderV1, canonicalItems)
   }
-  if (!isRecord(saved) || saved.version !== 2 || !Array.isArray(saved.items)) {
+  if (!isRecord(saved)
+    || (saved.version !== 2 && saved.version !== 3)
+    || !Array.isArray(saved.items)) {
     return canonical
   }
 
@@ -187,9 +196,30 @@ export function normalizeSidebarNavigationOrder(
     }
   }
 
+  const hideablePageIds = new Set(
+    canonicalSidebarItems(canonicalItems)
+      .filter(item => !item.sidebarAlwaysVisible)
+      .map(item => item.to),
+  )
+  const hiddenPageIds: string[] = []
+  const seenHiddenPageIds = new Set<string>()
+  const savedHiddenPageIds = saved.version === 3 && Array.isArray(saved.hiddenPageIds)
+    ? saved.hiddenPageIds
+    : []
+  for (const pageId of savedHiddenPageIds) {
+    if (typeof pageId !== 'string'
+      || !hideablePageIds.has(pageId)
+      || seenHiddenPageIds.has(pageId)) {
+      continue
+    }
+    seenHiddenPageIds.add(pageId)
+    hiddenPageIds.push(pageId)
+  }
+
   return {
-    version: 2,
+    version: 3,
     items: reconcileMissingPages(entries, canonical),
+    hiddenPageIds,
   }
 }
 
@@ -230,6 +260,35 @@ export function renameSidebarDivider(
   }
 }
 
+export function isSidebarPageHideable(item: NavItem) {
+  return !item.sidebarHidden && !item.sidebarAlwaysVisible
+}
+
+export function setSidebarPagesHidden(
+  order: SidebarNavigationOrder,
+  canonicalItems: readonly NavItem[],
+  pageIds: readonly string[],
+  hidden: boolean,
+): SidebarNavigationOrder {
+  const hideablePageIds = new Set(
+    canonicalSidebarItems(canonicalItems)
+      .filter(isSidebarPageHideable)
+      .map(item => item.to),
+  )
+  const requestedPageIds = new Set(pageIds.filter(pageId => hideablePageIds.has(pageId)))
+  if (requestedPageIds.size === 0) return order
+
+  const nextHiddenPageIds = hidden
+    ? [...order.hiddenPageIds, ...requestedPageIds]
+    : order.hiddenPageIds.filter(pageId => !requestedPageIds.has(pageId))
+  const normalizedHiddenPageIds = Array.from(new Set(nextHiddenPageIds))
+  if (normalizedHiddenPageIds.length === order.hiddenPageIds.length
+    && normalizedHiddenPageIds.every((pageId, index) => pageId === order.hiddenPageIds[index])) {
+    return order
+  }
+  return { ...order, hiddenPageIds: normalizedHiddenPageIds }
+}
+
 export function applySidebarNavigationOrder(
   canonicalItems: readonly NavItem[],
   order: SidebarNavigationOrder,
@@ -261,9 +320,14 @@ function readStorage(key: string): unknown {
 
 function loadSavedOrder() {
   const current = readStorage(SIDEBAR_ORDER_STORAGE_KEY)
-  if (current) return { saved: current, migrated: false }
+  if (current !== null) return { saved: current, migrationKey: null }
+  const previous = readStorage(SIDEBAR_ORDER_V2_STORAGE_KEY)
+  if (previous !== null) return { saved: previous as SidebarNavigationOrderV2, migrationKey: SIDEBAR_ORDER_V2_STORAGE_KEY }
   const legacy = readStorage(SIDEBAR_ORDER_V1_STORAGE_KEY)
-  return { saved: legacy, migrated: legacy !== null }
+  return {
+    saved: legacy,
+    migrationKey: legacy !== null ? SIDEBAR_ORDER_V1_STORAGE_KEY : null,
+  }
 }
 
 function saveOrder(order: SidebarNavigationOrder) {
@@ -278,6 +342,7 @@ function saveOrder(order: SidebarNavigationOrder) {
 
 function ordersMatch(left: SidebarNavigationOrder, right: SidebarNavigationOrder) {
   return JSON.stringify(left.items) === JSON.stringify(right.items)
+    && JSON.stringify(left.hiddenPageIds) === JSON.stringify(right.hiddenPageIds)
 }
 
 function newDividerId() {
@@ -310,14 +375,18 @@ export function useSidebarNavigationOrder(
     () => applySidebarNavigationOrder(canonicalItems, normalizedOrder, visiblePageIds),
     [canonicalItems, normalizedOrder, visiblePageIds],
   )
+  const hiddenPageIds = useMemo(
+    () => new Set(normalizedOrder.hiddenPageIds),
+    [normalizedOrder.hiddenPageIds],
+  )
 
   useEffect(() => {
-    if (!initial.migrated || migrationPersistedRef.current) return
+    if (!initial.migrationKey || migrationPersistedRef.current) return
     migrationPersistedRef.current = true
     if (saveOrder(normalizedOrder)) {
-      try { localStorage.removeItem(SIDEBAR_ORDER_V1_STORAGE_KEY) } catch { /* ignore */ }
+      try { localStorage.removeItem(initial.migrationKey) } catch { /* ignore */ }
     }
-  }, [initial.migrated, normalizedOrder])
+  }, [initial.migrationKey, normalizedOrder])
 
   const update = useCallback((change: (current: SidebarNavigationOrder) => SidebarNavigationOrder) => {
     setSavedOrder((current: unknown) => {
@@ -349,9 +418,18 @@ export function useSidebarNavigationOrder(
     update(current => removeSidebarDivider(current, id))
   }, [update])
 
+  const setPagesHidden = useCallback((pageIds: readonly string[], hidden: boolean) => {
+    update(current => setSidebarPagesHidden(current, canonicalItems, pageIds, hidden))
+  }, [canonicalItems, update])
+
+  const setPageHidden = useCallback((pageId: string, hidden: boolean) => {
+    setPagesHidden([pageId], hidden)
+  }, [setPagesHidden])
+
   const reset = useCallback(() => {
     try {
       localStorage.removeItem(SIDEBAR_ORDER_STORAGE_KEY)
+      localStorage.removeItem(SIDEBAR_ORDER_V2_STORAGE_KEY)
       localStorage.removeItem(SIDEBAR_ORDER_V1_STORAGE_KEY)
     } catch { /* ignore */ }
     setSavedOrder(null)
@@ -363,6 +441,9 @@ export function useSidebarNavigationOrder(
     addDivider,
     renameDivider,
     removeDivider,
+    hiddenPageIds,
+    setPageHidden,
+    setPagesHidden,
     reset,
     isCustomized: !ordersMatch(normalizedOrder, defaultOrder),
   }

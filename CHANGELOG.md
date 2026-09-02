@@ -13,6 +13,13 @@ here cover everything those tags shipped.
 
 ## [Unreleased]
 
+### Added
+
+- Added optional per-browser sidebar visibility controls to Customize Navigation.
+  Pages and whole sections can be hidden without changing top navigation or route
+  access, protected destinations stay visible, and Reset restores visibility and
+  order.
+
 ## [15.0.0-test9] - 2026-09-01
 
 Candidate metadata prepared for v15.0.0-test9; semantic version remains 15.0.0.
