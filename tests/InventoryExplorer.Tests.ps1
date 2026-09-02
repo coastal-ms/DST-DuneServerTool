@@ -11,10 +11,69 @@ BeforeAll {
         $script:DuneInventoryDbContextCalls += 1
         return $script:DuneInventoryDbContextResult
     }
+    function global:Get-DuneInventoryLiveSqlVariants {
+        $captured = [Collections.Generic.List[string]]::new()
+        $existing = Get-Command Invoke-DuneSqlQuery -ErrorAction SilentlyContinue
+        $originalNames = $script:DuneGameplayItemNames
+        $originalRules = $script:DuneGameplayItemRules
+        $script:DuneGameplayItemNames = @{ Copper = 'Copper' }
+        $script:DuneGameplayItemRules = @{}
+        function global:Invoke-DuneSqlQuery {
+            param($Ip, $Sql, $ReadOnly, $MaxRows, $TimeoutSec, [switch]$Bulk)
+            $captured.Add([string]$Sql)
+            return @{ ok = $true; columns = @(); rows = @() }
+        }
+        try {
+            $groupSorts = @(
+                'name-asc', 'name-desc', 'quantity-asc', 'quantity-desc',
+                'unit-volume-asc', 'unit-volume-desc', 'total-volume-asc', 'total-volume-desc',
+                'tier-asc', 'tier-desc', 'quality-asc', 'quality-desc',
+                'occurrences-asc', 'occurrences-desc', 'locations-asc', 'locations-desc'
+            )
+            foreach ($sort in $groupSorts) {
+                $result = Invoke-DuneInventoryGroupedLive -Ip 'fixture' -Query '[' `
+                    -EntityTypes @('player', 'storage') -PlayerId 20001 `
+                    -LocationType storage -LocationId 50001 -Sort $sort -Limit 2
+                if (-not $result.ok) { throw "Grouped SQL generation failed for $sort." }
+                $result = Invoke-DuneInventoryGroupedLive -Ip 'fixture' -Query '[' `
+                    -EntityTypes @('player', 'storage') -PlayerId 20001 `
+                    -LocationType storage -LocationId 50001 -Sort $sort `
+                    -AfterSortValue '1' -AfterSortSecondary '0' `
+                    -AfterSortName 'copper' -AfterTemplateId 'Copper' -Limit 2
+                if (-not $result.ok) { throw "Grouped cursor SQL generation failed for $sort." }
+            }
+
+            $occurrenceSorts = @(
+                'player-asc', 'player-desc', 'location-asc', 'location-desc',
+                'quantity-asc', 'quantity-desc', 'quality-asc', 'quality-desc'
+            )
+            foreach ($sort in $occurrenceSorts) {
+                $result = Invoke-DuneInventoryOccurrencesLive -Ip 'fixture' -TemplateId 'Copper' `
+                    -EntityTypes @('player', 'storage') -PlayerId 20001 `
+                    -LocationType storage -LocationId 50001 -Sort $sort -Limit 2
+                if (-not $result.ok) { throw "Occurrence SQL generation failed for $sort." }
+                $result = Invoke-DuneInventoryOccurrencesLive -Ip 'fixture' -TemplateId 'Copper' `
+                    -EntityTypes @('player', 'storage') -PlayerId 20001 `
+                    -LocationType storage -LocationId 50001 -Sort $sort `
+                    -AfterSortValue '1' -AfterItemId 42 -Limit 2
+                if (-not $result.ok) { throw "Occurrence cursor SQL generation failed for $sort." }
+            }
+        } finally {
+            $script:DuneGameplayItemNames = $originalNames
+            $script:DuneGameplayItemRules = $originalRules
+            if ($existing -and $existing.CommandType -eq 'Function') {
+                Set-Item Function:\global:Invoke-DuneSqlQuery -Value $existing.ScriptBlock
+            } else {
+                Remove-Item Function:\global:Invoke-DuneSqlQuery -ErrorAction SilentlyContinue
+            }
+        }
+        return @($captured)
+    }
 }
 
 AfterAll {
     Remove-Item Function:\global:Get-DuneDbContext -ErrorAction SilentlyContinue
+    Remove-Item Function:\global:Get-DuneInventoryLiveSqlVariants -ErrorAction SilentlyContinue
 }
 
 Describe 'Shared Inventory Explorer read model' -Tag 'Pure' {
@@ -381,11 +440,76 @@ Describe 'Shared Inventory Explorer read model' -Tag 'Pure' {
     }
 
     It 'rejects unknown grouped and occurrence sort values and maps allowed sorts to static SQL' {
-        (Resolve-DuneInventoryGroupSort -Value 'name-asc').sql | Should -Be 'sort_name ASC, template_id ASC'
-        (Resolve-DuneInventoryGroupSort -Value 'quality-desc').sql | Should -Match '^quality_max DESC, quality_min DESC'
-        (Resolve-DuneInventoryOccurrenceSort -Value 'location-asc').sql | Should -Match '^lower\(entity_label\) ASC NULLS LAST'
+        (Resolve-DuneInventoryGroupSort -Value 'name-asc').sql | Should -Be 'grouped.sort_name ASC, grouped.template_id ASC'
+        (Resolve-DuneInventoryGroupSort -Value 'quality-desc').sql | Should -Match '^grouped\.quality_max DESC, grouped\.quality_min DESC'
+        (Resolve-DuneInventoryOccurrenceSort -Value 'location-asc').sql | Should -Match '^lower\(r\.entity_label\) ASC NULLS LAST'
         (Resolve-DuneInventoryGroupSort -Value 'name-asc; DROP TABLE dune.items').ok | Should -BeFalse
         (Resolve-DuneInventoryOccurrenceSort -Value 'item_id DESC').ok | Should -BeFalse
+    }
+
+    It 'qualifies every colliding joined-scope column in all live grouped and occurrence variants' {
+        $queries = @(Get-DuneInventoryLiveSqlVariants)
+
+        $queries.Count | Should -Be 176
+        $defaultGrouped = $queries[0]
+        $defaultGrouped | Should -Match 'SELECT lower\(trim\(r\.template_id\)\) AS group_key'
+        $defaultGrouped | Should -Match 'grouped\.template_id'
+        $defaultGrouped | Should -Match 'ORDER BY grouped\.sort_name ASC, grouped\.template_id ASC'
+        $joinedSql = $queries -join "`n"
+        $joinedSql | Should -Not -Match 'lower\(trim\(template_id\)\)'
+        $joinedSql | Should -Not -Match 'FROM searched_rows CROSS JOIN _dst_parameters'
+        $joinedSql | Should -Not -Match 'FROM template_rows CROSS JOIN _dst_parameters'
+        $joinedSql | Should -Not -Match 'SELECT item_id, template_id, stack_size'
+        $joinedSql | Should -Match 'FROM searched_rows r CROSS JOIN _dst_parameters p'
+        $joinedSql | Should -Match 'FROM template_rows t CROSS JOIN _dst_parameters p'
+
+        $groupQueries = @($queries | Where-Object { $_ -match '(?m)^grouped AS \(' })
+        $groupQueries.Count | Should -Be 32
+        foreach ($sql in $groupQueries) {
+            $sql | Should -Not -Match 'MIN\(template_id\)'
+            $sql | Should -Not -Match 'GROUP BY lower\(trim\(template_id\)\)'
+            $sql | Should -Match 'ORDER BY grouped\.'
+        }
+
+        $occurrenceQueries = @($queries | Where-Object { $_ -match '(?m)^SELECT r\.item_id, r\.template_id' })
+        $occurrenceQueries.Count | Should -Be 16
+        foreach ($sql in $occurrenceQueries) {
+            $sql | Should -Match 'r\.player_id'
+            $sql | Should -Match 'r\.item_id > p\.after_item_id|p\.after_item_id = 0'
+            $sql | Should -Match 'ORDER BY (?:lower\(r\.|r\.)'
+        }
+    }
+
+    It 'executes every generated live query against a disposable PostgreSQL schema' `
+        -Skip:(-not $env:DST_TEST_POSTGRES_PSQL) {
+        $queries = @(Get-DuneInventoryLiveSqlVariants)
+        $fixture = @"
+\set ON_ERROR_STOP on
+BEGIN;
+CREATE SCHEMA dune;
+CREATE TABLE dune.items (
+    id bigint, template_id text, stack_size integer, quality_level integer,
+    stats jsonb, inventory_id bigint
+);
+CREATE TABLE dune.inventories (id bigint, inventory_type integer, actor_id bigint);
+CREATE TABLE dune.player_state (player_pawn_id bigint, character_name text, account_id bigint);
+CREATE TABLE dune.actors (id bigint, map text, owner_account_id bigint);
+CREATE TABLE dune.placeables (
+    id bigint, building_type text, is_hologram boolean, owner_entity_id bigint
+);
+CREATE TABLE dune.permission_actor (actor_id bigint, actor_name text);
+CREATE TABLE dune.actor_fgl_entities (actor_id bigint, entity_id bigint);
+CREATE TABLE dune.permission_actor_rank (
+    permission_actor_id bigint, player_id bigint, rank integer
+);
+"@
+        $scriptPath = Join-Path $TestDrive 'inventory-explorer-postgres.sql'
+        $sql = $fixture + "`n" + (($queries | ForEach-Object { "$_;"} ) -join "`n") + "`nROLLBACK;"
+        Set-Content -LiteralPath $scriptPath -Value $sql -Encoding utf8
+
+        & $env:DST_TEST_POSTGRES_PSQL -X -q -f $scriptPath 2>&1 | Out-String | Write-Verbose
+
+        $LASTEXITCODE | Should -Be 0
     }
 
     It 'binds inventory SQL values through encoded parameters instead of interpolating caller input' {
@@ -483,7 +607,7 @@ ORDER BY $($sort.sql)
 
         $sql | Should -Match 'SUM\(stack_size\)'
         $sql | Should -Match 'COUNT\(DISTINCT entity_type'
-        $sql | Should -Match 'total_volume DESC NULLS LAST, sort_name ASC, template_id ASC'
+        $sql | Should -Match 'grouped\.total_volume DESC NULLS LAST, grouped\.sort_name ASC, grouped\.template_id ASC'
         $sql | Should -Match "r\.template_id !~\* 'Emote\|Gesture'"
     }
 
