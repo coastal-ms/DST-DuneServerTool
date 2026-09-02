@@ -24,7 +24,7 @@ import { PageHeader } from '../components/PageHeader'
 import { Icon } from '../components/Icon'
 import { useStatus } from '../hooks/useStatus'
 import { useApi } from '../hooks/useApi'
-import { api, withOnlinePlayerGuard } from '../api/client'
+import { api, PlayerGuardCancelledError, withOnlinePlayerGuard } from '../api/client'
 import { isLocalViewer } from '../util/viewer'
 import type { Command, CommandsResponse } from '../api/types'
 import { usePortalAuth } from '../auth/PortalAuthGate'
@@ -347,6 +347,7 @@ export function Commands() {
       showToast('ok', `Launched '${r.name}'${r.pid ? ` (PID ${r.pid})` : ''} in a new console window.`)
       window.setTimeout(() => { void forceRefresh(); void cmdsState.refresh() }, 1500)
     } catch (e) {
+      if (e instanceof PlayerGuardCancelledError) return
       const msg = e instanceof Error ? e.message : String(e)
       showToast('err', `Launch failed: ${msg}`)
     } finally {

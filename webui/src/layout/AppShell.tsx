@@ -8,6 +8,7 @@ import { DecoupleNoticeModal } from '../components/DecoupleNoticeModal'
 import { useSidebarCollapsed } from '../hooks/useSidebarCollapsed'
 import { usePortalAccess } from '../auth/portalAccess'
 import { SectionJumpNav } from '../components/SectionJumpNav'
+import { OnlinePlayerGuardModal } from '../components/OnlinePlayerGuardModal'
 
 // Routes that should render full-bleed below the menu bar — no sidebar, no
 // status bar, no update banner, no max-width / padding. Keep the top menu bar
@@ -25,6 +26,7 @@ export function AppShell({ children }: { children: ReactNode }) {
     return (
       <div className="h-full w-full max-w-full flex flex-col overflow-hidden">
         <DecoupleNoticeModal />
+        <OnlinePlayerGuardModal />
         <MenuBar sidebarCollapsed={collapsed} onToggleSidebar={toggle} />
         <main className="flex-1 min-h-0 min-w-0 max-w-full overflow-hidden">
           {children}
@@ -36,6 +38,7 @@ export function AppShell({ children }: { children: ReactNode }) {
   return (
     <div className="h-full w-full max-w-full flex flex-col overflow-hidden">
       <DecoupleNoticeModal />
+      <OnlinePlayerGuardModal />
       <MenuBar sidebarCollapsed={collapsed} onToggleSidebar={toggle} />
       <div className="flex-1 flex overflow-hidden min-h-0">
         <Sidebar collapsed={collapsed} onExpand={() => setCollapsed(false)} />
