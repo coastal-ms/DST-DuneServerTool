@@ -163,7 +163,7 @@
     { "source": "PlayersAdmin.ps1", "capabilityId": "player.manage", "routeCount": 7, "sha256": "dc4f7da7eb846e1113f08a7ef04a1eb30878c5d05168c886ba1be4183e83883d" },
     { "source": "PlayersRead.ps1", "capabilityId": "player.view", "routeCount": 17, "sha256": "28e6db36d3b0f3f5f1ac92358d3eae529fdbb14cb4d069ab5af9378bba377cc0" },
     { "source": "PlayersRmq.ps1", "capabilityId": "player.manage", "routeCount": 10, "sha256": "b789053cad3a7c53140a41a5d4d70ab44354583750380a4d06835898c8010876" },
-    { "source": "PlayersWrites.ps1", "capabilityId": "player.manage", "routeCount": 36, "sha256": "93d72401d34ecec82c1ed817483d9352cc94a6a549e914d3b9a0a7405b665cd7" },
+    { "source": "PlayersWrites.ps1", "capabilityId": "player.manage", "routeCount": 37, "sha256": "655d27fb0a9873e0f7f57babb5cdc2c4e876e18102bfc8bd240aae90584a5662" },
     { "source": "Pods.ps1", "capabilityId": "operation.runtime", "routeCount": 3, "sha256": "86b85eb9a8fbc348525424496d562dd79589f8bf2b68feee0c096004bbdad749" },
     { "source": "Portal.ps1", "capabilityId": "platform.access", "routeCount": 4, "sha256": "5157a5616533c8ef9d71d691c9a01811ab69e87cdf6ce09ea60796bbc4cd260d" },
     { "source": "PortalAuth.ps1", "capabilityId": "platform.access", "routeCount": 13, "sha256": "35a10866afe87089d19960d895826b58b66d783cbc1d95078d62fb90bce56e6b" },
