@@ -39,6 +39,10 @@ export interface SharedInventoryItem {
   waterAmount: string
   waterType: string
   metadata: InventoryItemMetadata
+  player?: {
+    id: number
+    name: string
+  }
   entity: {
     type: InventoryEntityType
     id: number
@@ -52,7 +56,38 @@ export interface SharedInventoryItem {
   }
 }
 
-export interface SharedInventoryResponse {
+export interface SharedInventoryPlayerFacet {
+  id: number
+  name: string
+  occurrenceCount: number
+}
+
+export interface SharedInventoryLocationFacet {
+  type: InventoryEntityType
+  id: number
+  label: string
+  owner: string
+  playerId: number
+  playerName: string
+  occurrenceCount: number
+}
+
+export interface SharedInventoryGroup {
+  groupKey: string
+  templateId: string
+  displayName: string
+  totalQuantity: number
+  occurrenceCount: number
+  locationCount: number
+  quality: {
+    min: number
+    max: number
+    mixed: boolean
+  }
+  metadata: InventoryItemMetadata
+}
+
+interface InventoryEnvelope {
   schemaVersion: number
   requestId: string
   generatedAt: string
@@ -65,12 +100,21 @@ export interface SharedInventoryResponse {
     lastErrorCode: string | null
   }
   capabilities: string[]
+}
+
+export interface SharedInventoryResponse extends InventoryEnvelope {
   data: {
     mode: 'live' | 'demo'
     query: string
     supportedEntityTypes: InventoryEntityType[]
     unavailableEntityTypes: Array<'base' | 'vehicle'>
-    items: SharedInventoryItem[]
+    playerId: number | null
+    location: { type: InventoryEntityType; id: number } | null
+    selectedPlayerValid: boolean
+    selectedLocationValid: boolean
+    groups: SharedInventoryGroup[]
+    players: SharedInventoryPlayerFacet[]
+    locations: SharedInventoryLocationFacet[]
   }
   page: {
     limit: number
@@ -84,6 +128,52 @@ export interface SharedInventoryQuery {
   types?: InventoryEntityType[]
   scopeType?: InventoryEntityType
   scopeId?: number
+  playerId?: number
+  locationType?: InventoryEntityType
+  locationId?: number
+  sort?: SharedInventorySort
+  limit?: number
+  cursor?: string
+  demo?: boolean
+}
+
+export type SharedInventorySort =
+  | 'name-asc' | 'name-desc'
+  | 'quantity-desc' | 'quantity-asc'
+  | 'unit-volume-desc' | 'unit-volume-asc'
+  | 'total-volume-desc' | 'total-volume-asc'
+  | 'tier-desc' | 'tier-asc'
+  | 'quality-desc' | 'quality-asc'
+  | 'occurrences-desc' | 'occurrences-asc'
+  | 'locations-desc' | 'locations-asc'
+
+export type SharedInventoryOccurrenceSort =
+  | 'player-asc' | 'player-desc'
+  | 'location-asc' | 'location-desc'
+  | 'quantity-desc' | 'quantity-asc'
+  | 'quality-desc' | 'quality-asc'
+
+export interface SharedInventoryOccurrencesResponse extends InventoryEnvelope {
+  data: {
+    mode: 'live' | 'demo'
+    templateId: string
+    playerId: number | null
+    items: SharedInventoryItem[]
+    players: SharedInventoryPlayerFacet[]
+    locations: SharedInventoryLocationFacet[]
+  }
+  page: SharedInventoryResponse['page']
+}
+
+export interface SharedInventoryOccurrencesQuery {
+  templateId: string
+  types?: InventoryEntityType[]
+  scopeType?: InventoryEntityType
+  scopeId?: number
+  playerId?: number
+  locationType?: InventoryEntityType
+  locationId?: number
+  sort?: SharedInventoryOccurrenceSort
   limit?: number
   cursor?: string
   demo?: boolean
@@ -406,10 +496,32 @@ export function getSharedInventory(query: SharedInventoryQuery = {}) {
     types: query.types?.join(','),
     scope_type: query.scopeType,
     scope_id: query.scopeId,
+    player_id: query.playerId,
+    location_type: query.locationType,
+    location_id: query.locationId,
+    sort: query.sort,
+    grouped: 1,
     limit: query.limit,
     cursor: query.cursor,
     demo: query.demo ? 1 : undefined,
   })}`)
+}
+
+export function getSharedInventoryOccurrences(query: SharedInventoryOccurrencesQuery) {
+  return api<SharedInventoryOccurrencesResponse>(
+    `/api/v1/inventory/items/${encodeURIComponent(query.templateId)}/occurrences${qs({
+      types: query.types?.join(','),
+      scope_type: query.scopeType,
+      scope_id: query.scopeId,
+      player_id: query.playerId,
+      location_type: query.locationType,
+      location_id: query.locationId,
+      sort: query.sort,
+      limit: query.limit,
+      cursor: query.cursor,
+      demo: query.demo ? 1 : undefined,
+    })}`,
+  )
 }
 
 export type MarketSortKey =

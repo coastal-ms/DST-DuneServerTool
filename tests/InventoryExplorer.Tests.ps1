@@ -168,6 +168,17 @@ Describe 'Shared Inventory Explorer read model' -Tag 'Pure' {
         }
     }
 
+    It 'projects names-only catalog entries with null sortable metadata' {
+        $templateId = 'HarkSandbike_MeshCustomization'
+        $metadata = Get-DuneInventoryCatalogMetadataJson | ConvertFrom-Json
+        $entry = $metadata.PSObject.Properties[$templateId.ToLowerInvariant()].Value
+
+        $entry.name | Should -Be (Get-DuneGameplayItemName -TemplateId $templateId)
+        $entry.name | Should -Not -Be $templateId
+        $entry.tier | Should -BeNullOrEmpty
+        $entry.volume | Should -BeNullOrEmpty
+    }
+
     It 'validates entity types and supports exact demo scopes' {
         { Get-DuneInventoryEntityTypes -Value 'player,storage' } | Should -Not -Throw
         { Get-DuneInventoryEntityTypes -Value 'vehicle' } | Should -Throw '*Unsupported inventory entity type*'
@@ -369,9 +380,117 @@ Describe 'Shared Inventory Explorer read model' -Tag 'Pure' {
         }
     }
 
+    It 'rejects unknown grouped and occurrence sort values and maps allowed sorts to static SQL' {
+        (Resolve-DuneInventoryGroupSort -Value 'name-asc').sql | Should -Be 'sort_name ASC, template_id ASC'
+        (Resolve-DuneInventoryGroupSort -Value 'quality-desc').sql | Should -Match '^quality_max DESC, quality_min DESC'
+        (Resolve-DuneInventoryOccurrenceSort -Value 'location-asc').sql | Should -Match '^lower\(entity_label\) ASC NULLS LAST'
+        (Resolve-DuneInventoryGroupSort -Value 'name-asc; DROP TABLE dune.items').ok | Should -BeFalse
+        (Resolve-DuneInventoryOccurrenceSort -Value 'item_id DESC').ok | Should -BeFalse
+    }
+
+    It 'binds inventory SQL values through encoded parameters instead of interpolating caller input' {
+        $binding = Get-DuneInventoryQueryParameters -Query "100%_O'Brien" `
+            -EntityTypes @('player', 'storage') -PlayerId 20001 -LocationType storage -LocationId 50001
+        $sql = New-DuneInventoryParameterizedSql `
+            -Sql 'WITH /*__DST_PARAMETERS__*/ SELECT query FROM _dst_parameters' `
+            -Parameters $binding.values -ParameterTypes $binding.types
+
+        $sql | Should -Match 'jsonb_to_record'
+        $sql | Should -Not -Match "100%_O'Brien"
+        $sql | Should -Not -Match 'DROP TABLE'
+    }
+
+    It 'excludes emotes before demo grouping, facets, counts, and paging' {
+        $visible = [pscustomobject]@{
+            id = 1; templateId = 'Copper'; displayName = 'Copper'; kind = 'item'; quantity = 5; quality = 0
+            metadata = [ordered]@{ category='Resources'; tier=1; rarity='Common'; icon=''; stackMaximum=100; volume=0.1; vendorPrice=1; isGradeable=$false }
+            player = [ordered]@{ id=20001; name='Coastal' }
+            entity = [ordered]@{ type='player'; id=20001; label='Coastal'; owner='Coastal'; map='Hagga Basin' }
+        }
+        $emote = [pscustomobject]@{
+            id = 2; templateId = 'D_TestEmote'; displayName = 'Test emote'; kind = 'emote'; quantity = 1; quality = 0
+            metadata = [ordered]@{ category=''; tier=0; rarity=''; icon=''; stackMaximum=0; volume=0; vendorPrice=0; isGradeable=$false }
+            player = [ordered]@{ id=20001; name='Coastal' }
+            entity = [ordered]@{ type='player'; id=20001; label='Coastal'; owner='Coastal'; map='Hagga Basin' }
+        }
+
+        $result = @(Select-DuneInventoryDemoFiltered -Items @($visible, $emote) -EntityTypes @('player'))
+
+        $result.Count | Should -Be 1
+        $result[0].templateId | Should -Be 'Copper'
+
+        $cte = Get-DuneInventoryFilteredCteSql
+        $cte | Should -Match "template_id IN \(SELECT jsonb_array_elements_text\(p\.catalog_ids::jsonb\)\)"
+        $cte | Should -Match "r\.template_id !~\* 'Emote\|Gesture'"
+    }
+
+    It 'keeps backpack and storage locations separate under the same player filter' {
+        $items = @(
+            [pscustomobject]@{
+                id=1; templateId='Copper'; displayName='Copper'; kind='item'; quantity=5; quality=0
+                player=[ordered]@{id=20001;name='Coastal'}
+                entity=[ordered]@{type='player';id=20001;label='Coastal';owner='Coastal';map='Hagga Basin'}
+            },
+            [pscustomobject]@{
+                id=2; templateId='Copper'; displayName='Copper'; kind='item'; quantity=7; quality=0
+                player=[ordered]@{id=20001;name='Coastal'}
+                entity=[ordered]@{type='storage';id=50001;label='Copper box';owner='Coastal';map='Hagga Basin'}
+            }
+        )
+
+        @(Select-DuneInventoryDemoFiltered -Items $items -EntityTypes @('player','storage') `
+            -PlayerId 20001 -LocationType player -LocationId 20001).Count | Should -Be 1
+        @(Select-DuneInventoryDemoFiltered -Items $items -EntityTypes @('player','storage') `
+            -PlayerId 20001 -LocationType storage -LocationId 50001).Count | Should -Be 1
+    }
+
+    It 'keeps valid selected facets valid when search has no grouped matches' {
+        $item = [ordered]@{
+            id=1; templateId='Copper'; displayName='Copper'; kind='item'; quantity=5; quality=0
+            metadata=[ordered]@{category='Resources';tier=1;rarity='Common';icon='';stackMaximum=100;volume=0.1;vendorPrice=1;isGradeable=$false}
+            entity=[ordered]@{type='player';id=20001;label='Coastal';owner='Coastal';map='Hagga Basin'}
+        }
+        Mock Get-DuneInventoryDemoItems { @($item) }
+
+        $result = Get-DuneInventoryGroupedDemo -Query 'no match' -EntityTypes @('player') `
+            -PlayerId 20001 -LocationType player -LocationId 20001
+
+        $result.groups.Count | Should -Be 0
+        $result.selectedPlayerValid | Should -BeTrue
+        $result.selectedLocationValid | Should -BeTrue
+    }
+
+    It 'uses keyset-only occurrence SQL and pre-search validity checks' {
+        $source = Get-Content (Join-Path (Get-DstRepoRoot) 'app\server\lib\InventoryExplorer.ps1') -Raw
+        $source | Should -Not -Match 'OFFSET \(SELECT row_offset'
+        $source | Should -Match 'SELECT 1 FROM visible_rows r WHERE r\.player_id = p\.player_id'
+        $source | Should -Match 'r\.entity_type = p\.location_type AND r\.entity_id = p\.location_id'
+    }
+
+    It 'builds grouped SQL with authoritative aggregation, null-last metadata sorting, and stable ties' {
+        $sort = Resolve-DuneInventoryGroupSort -Value 'total-volume-desc'
+        $binding = Get-DuneInventoryQueryParameters -EntityTypes @('player','storage') -Limit 101
+        $cte = Get-DuneInventoryFilteredCteSql
+        $sql = New-DuneInventoryParameterizedSql -Sql @"
+WITH $cte
+SELECT lower(trim(template_id)) AS group_key,
+       SUM(stack_size) AS total_quantity,
+       COUNT(*) AS occurrence_count,
+       COUNT(DISTINCT entity_type || ':' || entity_id::text) AS location_count
+FROM searched_rows GROUP BY lower(trim(template_id))
+ORDER BY $($sort.sql)
+"@ -Parameters $binding.values -ParameterTypes $binding.types
+
+        $sql | Should -Match 'SUM\(stack_size\)'
+        $sql | Should -Match 'COUNT\(DISTINCT entity_type'
+        $sql | Should -Match 'total_volume DESC NULLS LAST, sort_name ASC, template_id ASC'
+        $sql | Should -Match "r\.template_id !~\* 'Emote\|Gesture'"
+    }
+
     It 'registers a GET-only v1 route without mutation vocabulary' {
         $source = Get-Content (Join-Path (Get-DstRepoRoot) 'app\server\routes\Inventory.ps1') -Raw
         $source | Should -Match "Register-DuneRoute -Method GET -Path '/api/v1/inventory/items'"
+        $source | Should -Match "Register-DuneRoute -Method GET -Path '/api/v1/inventory/items/\{templateId\}/occurrences'"
         $source | Should -Not -Match 'Register-DuneRoute -Method (POST|PUT|PATCH|DELETE)'
         $source | Should -Not -Match '(?i)give-item|delete-item|repair-item'
     }
