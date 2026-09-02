@@ -509,7 +509,8 @@ export function getSharedInventory(query: SharedInventoryQuery = {}) {
 
 export function getSharedInventoryOccurrences(query: SharedInventoryOccurrencesQuery) {
   return api<SharedInventoryOccurrencesResponse>(
-    `/api/v1/inventory/items/${encodeURIComponent(query.templateId)}/occurrences${qs({
+    `/api/v1/inventory/items/occurrences${qs({
+      template_id: query.templateId,
       types: query.types?.join(','),
       scope_type: query.scopeType,
       scope_id: query.scopeId,

@@ -84,7 +84,7 @@ describe('Phase A — currency / progression writes', () => {
       demo: true,
     })
     expect(last().url).toBe(
-      '/api/v1/inventory/items/Copper%2FBar/occurrences?types=player%2Cstorage&player_id=20001&location_type=player&location_id=20001&sort=quality-desc&limit=50&cursor=next.occurrence&demo=1',
+      '/api/v1/inventory/items/occurrences?template_id=Copper%2FBar&types=player%2Cstorage&player_id=20001&location_type=player&location_id=20001&sort=quality-desc&limit=50&cursor=next.occurrence&demo=1',
     )
     expect(last().method).toBeUndefined()
   })

@@ -195,12 +195,16 @@ Register-DuneRoute -Method GET -Path '/api/v1/inventory/items' -Handler {
     }
 }
 
-# GET /api/v1/inventory/items/{templateId}/occurrences
+# GET /api/v1/inventory/items/occurrences?template_id={templateId}
 # Lazy, bounded occurrence detail for a grouped inventory item.
-Register-DuneRoute -Method GET -Path '/api/v1/inventory/items/{templateId}/occurrences' -Handler {
+$script:DuneInventoryOccurrencesHandler = {
     param($req, $res, $routeParams, $body)
     try {
-        $templateId = [Uri]::UnescapeDataString([string]$routeParams.templateId).Trim()
+        $templateId = if ([string]$routeParams.templateId) {
+            [Uri]::UnescapeDataString([string]$routeParams.templateId).Trim()
+        } else {
+            (Get-DuneQ $req 'template_id').Trim()
+        }
         if (-not $templateId -or $templateId.Length -gt 240 -or $templateId -notmatch '^[A-Za-z0-9_.:/-]+$') {
             Write-DuneError -Response $res -Status 400 -Message 'templateId is invalid.'
             return
@@ -267,6 +271,7 @@ Register-DuneRoute -Method GET -Path '/api/v1/inventory/items/{templateId}/occur
                 return
             }
         }
+
         $requestedMode = Resolve-DuneInventoryRequestedMode `
             -DemoRequested (Test-DuneDemoRequested $req) -CursorMode $cursorMode
         if (-not $requestedMode.ok) {
@@ -339,3 +344,7 @@ Register-DuneRoute -Method GET -Path '/api/v1/inventory/items/{templateId}/occur
         Write-DuneError -Response $res -Status 500 -Message "Inventory occurrence search failed: $($_.Exception.Message)"
     }
 }
+
+Register-DuneRoute -Method GET -Path '/api/v1/inventory/items/occurrences' -Handler $script:DuneInventoryOccurrencesHandler
+# Compatibility for the first grouped-explorer client build.
+Register-DuneRoute -Method GET -Path '/api/v1/inventory/items/{templateId}/occurrences' -Handler $script:DuneInventoryOccurrencesHandler

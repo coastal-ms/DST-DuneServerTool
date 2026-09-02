@@ -228,6 +228,7 @@ LIMIT $Limit;
 
 function ConvertTo-DuneInventoryItem {
     param([Parameter(Mandatory)]$Row)
+    Assert-DuneInventoryDatabaseRow -Row $Row -Kind item
     $templateId = [string]$Row['template_id']
     $rule = Get-DuneGameplayItemRule -TemplateId $templateId
     $entityType = [string]$Row['entity_type']
@@ -666,6 +667,7 @@ function Get-DuneInventoryQueryParameters {
 
 function ConvertTo-DuneInventoryPlayerFacet {
     param([Parameter(Mandatory)]$Row)
+    Assert-DuneInventoryDatabaseRow -Row $Row -Kind playerFacet
     return [ordered]@{
         id = ConvertTo-DuneInt $Row['player_id']
         name = [string]$Row['player_name']
@@ -678,8 +680,70 @@ function ConvertTo-DuneInventoryBoolean {
     return $Value -eq $true -or [string]$Value -in @('1', 't', 'true')
 }
 
+function Assert-DuneInventoryDatabaseRow {
+    param(
+        [Parameter(Mandatory)]$Row,
+        [Parameter(Mandatory)]
+        [ValidateSet('item', 'group', 'playerFacet', 'locationFacet', 'validity')]
+        [string]$Kind
+    )
+    if ($Row -isnot [Collections.IDictionary]) {
+        throw "Malformed inventory database $Kind row: expected a name-keyed row."
+    }
+
+    $requiredText = switch ($Kind) {
+        'item' { @('template_id', 'entity_type') }
+        'group' { @('group_key', 'template_id', 'sort_name') }
+        'playerFacet' { @('player_name') }
+        'locationFacet' { @('entity_type', 'entity_label') }
+        default { @('player_valid', 'location_valid') }
+    }
+    foreach ($name in $requiredText) {
+        if (-not $Row.Contains($name) -or [string]::IsNullOrWhiteSpace([string]$Row[$name])) {
+            throw "Malformed inventory database $Kind row: '$name' is missing or blank."
+        }
+    }
+
+    $requiredPositive = switch ($Kind) {
+        'item' { @('item_id', 'inventory_id', 'entity_id') }
+        'playerFacet' { @('player_id') }
+        'locationFacet' { @('entity_id') }
+        default { @() }
+    }
+    foreach ($name in $requiredPositive) {
+        $value = 0L
+        if (-not $Row.Contains($name) -or
+            -not [Int64]::TryParse([string]$Row[$name], [ref]$value) -or $value -le 0) {
+            throw "Malformed inventory database $Kind row: '$name' must be a positive integer."
+        }
+    }
+
+    $requiredNonNegative = switch ($Kind) {
+        'item' { @('stack_size', 'quality_level', 'inventory_type') }
+        'group' { @('total_quantity', 'occurrence_count', 'location_count', 'quality_min', 'quality_max') }
+        'playerFacet' { @('occurrence_count') }
+        'locationFacet' { @('occurrence_count') }
+        default { @() }
+    }
+    foreach ($name in $requiredNonNegative) {
+        $value = 0L
+        if (-not $Row.Contains($name) -or
+            -not [Int64]::TryParse([string]$Row[$name], [ref]$value) -or $value -lt 0) {
+            throw "Malformed inventory database $Kind row: '$name' must be a non-negative integer."
+        }
+    }
+
+    if ($Kind -eq 'item' -and [string]$Row['entity_type'] -notin @('player', 'storage')) {
+        throw "Malformed inventory database item row: 'entity_type' is unsupported."
+    }
+    if ($Kind -eq 'locationFacet' -and [string]$Row['entity_type'] -notin @('player', 'storage')) {
+        throw "Malformed inventory database locationFacet row: 'entity_type' is unsupported."
+    }
+}
+
 function ConvertTo-DuneInventoryGroup {
     param([Parameter(Mandatory)]$Row)
+    Assert-DuneInventoryDatabaseRow -Row $Row -Kind group
     $templateId = [string]$Row['template_id']
     $rule = Get-DuneGameplayItemRule -TemplateId $templateId
     $qualityMin = ConvertTo-DuneInt $Row['quality_min']
@@ -703,6 +767,17 @@ function ConvertTo-DuneInventoryGroup {
             icon = [string]$rule.icon; stackMaximum = [int]$rule.stack_max; volume = [double]$rule.volume
             vendorPrice = [int]$rule.vendor_price; isGradeable = [bool]$rule.is_gradeable
         }
+    }
+}
+
+function ConvertTo-DuneInventoryLocationFacet {
+    param([Parameter(Mandatory)]$Row)
+    Assert-DuneInventoryDatabaseRow -Row $Row -Kind locationFacet
+    return [ordered]@{
+        type = [string]$Row['entity_type']; id = ConvertTo-DuneInt $Row['entity_id']
+        label = [string]$Row['entity_label']; owner = [string]$Row['owner_name']
+        playerId = ConvertTo-DuneInt $Row['player_id']; playerName = [string]$Row['player_name']
+        occurrenceCount = ConvertTo-DuneInt $Row['occurrence_count']
     }
 }
 
@@ -731,7 +806,8 @@ function Get-DuneInventoryDemoPlayerId {
     if ([string]$Item.entity.type -eq 'player') { return [long]$Item.entity.id }
     $owner = [string]$Item.entity.owner
     $player = @(Get-DunePlayersDemo | Where-Object { [string]$_.name -eq $owner } | Select-Object -First 1)
-    return if ($player.Count) { [long]$player[0].id } else { 0L }
+    if ($player.Count) { return [long]$player[0].id }
+    return 0L
 }
 
 function Add-DuneInventoryDemoPlayer {
@@ -1010,19 +1086,30 @@ FROM _dst_parameters p
         -Sql (New-DuneInventoryParameterizedSql -Sql $validitySql -Parameters $binding.values -ParameterTypes $binding.types) `
         -ReadOnly $true -MaxRows 1 -TimeoutSec 45 -Bulk
     if (-not $validityResult.ok) { return @{ ok = $false; error = $validityResult.error } }
-    $validity = @(ConvertTo-DuneRowMaps -Result $validityResult)[0]
+    try {
+        $validityRows = ConvertTo-DuneRowMaps -Result $validityResult
+        if ($validityRows.Count -ne 1) {
+            throw "Malformed inventory database validity result: expected one row, received $($validityRows.Count)."
+        }
+        $validity = $validityRows[0]
+        Assert-DuneInventoryDatabaseRow -Row $validity -Kind validity
+        $groups = @(foreach ($row in (ConvertTo-DuneRowMaps -Result $groupResult)) {
+            ConvertTo-DuneInventoryGroup -Row $row
+        })
+        $players = @(foreach ($row in (ConvertTo-DuneRowMaps -Result $facetResult)) {
+            ConvertTo-DuneInventoryPlayerFacet -Row $row
+        })
+        $locations = @(foreach ($row in (ConvertTo-DuneRowMaps -Result $locationResult)) {
+            ConvertTo-DuneInventoryLocationFacet -Row $row
+        })
+    } catch {
+        return @{ ok = $false; error = $_.Exception.Message }
+    }
     return @{
         ok = $true
-        groups = @(ConvertTo-DuneRowMaps -Result $groupResult | ForEach-Object { ConvertTo-DuneInventoryGroup -Row $_ })
-        players = @(ConvertTo-DuneRowMaps -Result $facetResult | ForEach-Object { ConvertTo-DuneInventoryPlayerFacet -Row $_ })
-        locations = @(ConvertTo-DuneRowMaps -Result $locationResult | ForEach-Object {
-            [ordered]@{
-                type = [string]$_['entity_type']; id = ConvertTo-DuneInt $_['entity_id']
-                label = [string]$_['entity_label']; owner = [string]$_['owner_name']
-                playerId = ConvertTo-DuneInt $_['player_id']; playerName = [string]$_['player_name']
-                occurrenceCount = ConvertTo-DuneInt $_['occurrence_count']
-            }
-        })
+        groups = $groups
+        players = $players
+        locations = $locations
         selectedPlayerValid = ConvertTo-DuneInventoryBoolean $validity['player_valid']
         selectedLocationValid = ConvertTo-DuneInventoryBoolean $validity['location_valid']
     }
@@ -1138,11 +1225,27 @@ ORDER BY $($sortSpec.sql) LIMIT (SELECT row_limit FROM _dst_parameters)
     $effectiveSql = New-DuneInventoryParameterizedSql -Sql $sql -Parameters $binding.values -ParameterTypes $binding.types
     $result = Invoke-DuneSqlQuery -Ip $Ip -Sql $effectiveSql -ReadOnly $true -MaxRows $Limit -TimeoutSec 45 -Bulk
     if (-not $result.ok) { return @{ ok = $false; error = $result.error } }
-    $items = @(ConvertTo-DuneRowMaps -Result $result | ForEach-Object {
-        $item = ConvertTo-DuneInventoryItem -Row $_
-        $item['player'] = [ordered]@{ id = ConvertTo-DuneInt $_['player_id']; name = [string]$_['player_name'] }
-        $item
-    } | Where-Object { Test-DuneInventoryVisibleItem -Item $_ })
+    try {
+        $items = @(foreach ($row in (ConvertTo-DuneRowMaps -Result $result)) {
+            $item = ConvertTo-DuneInventoryItem -Row $row
+            $playerIdValue = ConvertTo-DuneInt $row['player_id']
+            $playerName = [string]$row['player_name']
+            $hasPlayerId = $playerIdValue -gt 0
+            $hasPlayerName = -not [string]::IsNullOrWhiteSpace($playerName)
+            if ([string]$item.entity.type -eq 'player' -and (-not $hasPlayerId -or -not $hasPlayerName)) {
+                throw "Malformed inventory database item row: player identity is missing."
+            }
+            if ([string]$item.entity.type -eq 'storage' -and $hasPlayerId -ne $hasPlayerName) {
+                throw "Malformed inventory database item row: storage player identity is incomplete."
+            }
+            if ($hasPlayerId) {
+                $item['player'] = [ordered]@{ id = $playerIdValue; name = $playerName }
+            }
+            if (Test-DuneInventoryVisibleItem -Item $item) { $item }
+        })
+    } catch {
+        return @{ ok = $false; error = $_.Exception.Message }
+    }
     $facetSql = @"
 WITH $cte,
 template_rows AS (
@@ -1174,16 +1277,15 @@ GROUP BY t.entity_type, t.entity_id ORDER BY t.entity_type, entity_label, t.enti
         -Sql (New-DuneInventoryParameterizedSql -Sql $locationSql -Parameters $binding.values -ParameterTypes $binding.types) `
         -ReadOnly $true -MaxRows 1000 -TimeoutSec 45 -Bulk
     if (-not $locationResult.ok) { return @{ ok = $false; error = $locationResult.error } }
-    return @{
-        ok = $true; items = $items
-        players = @(ConvertTo-DuneRowMaps -Result $facetResult | ForEach-Object { ConvertTo-DuneInventoryPlayerFacet -Row $_ })
-        locations = @(ConvertTo-DuneRowMaps -Result $locationResult | ForEach-Object {
-            [ordered]@{
-                type = [string]$_['entity_type']; id = ConvertTo-DuneInt $_['entity_id']
-                label = [string]$_['entity_label']; owner = [string]$_['owner_name']
-                playerId = ConvertTo-DuneInt $_['player_id']; playerName = [string]$_['player_name']
-                occurrenceCount = ConvertTo-DuneInt $_['occurrence_count']
-            }
+    try {
+        $players = @(foreach ($row in (ConvertTo-DuneRowMaps -Result $facetResult)) {
+            ConvertTo-DuneInventoryPlayerFacet -Row $row
         })
+        $locations = @(foreach ($row in (ConvertTo-DuneRowMaps -Result $locationResult)) {
+            ConvertTo-DuneInventoryLocationFacet -Row $row
+        })
+    } catch {
+        return @{ ok = $false; error = $_.Exception.Message }
     }
+    return @{ ok = $true; items = $items; players = $players; locations = $locations }
 }

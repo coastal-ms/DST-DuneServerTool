@@ -70,7 +70,13 @@ function Get-V6DbPort {
 }
 
 function Invoke-V6Ssh {
-    param([string]$Ip, [string]$Cmd, [int]$TimeoutSec = 30, [string]$StdinData)
+    param(
+        [string]$Ip,
+        [string]$Cmd,
+        [int]$TimeoutSec = 30,
+        [string]$StdinData,
+        [switch]$SeparateStreams
+    )
     # Strip CRs from the command — here-strings in CRLF-saved .ps1 files
     # preserve \r, which breaks bash (commands appear as "head -1\r" etc).
     if ($Cmd) { $Cmd = $Cmd -replace "`r","" }
@@ -162,6 +168,9 @@ function Invoke-V6Ssh {
             # visible (vs. the silent `$null`/empty failure mode that
             # produced the misleading "kubectl patch may have failed:"
             # toast in the v10.1.13 incident).
+            if ($SeparateStreams) {
+                return @{ stdout = ''; stderr = "ssh timed out after ${TimeoutSec}s"; exitCode = -1 }
+            }
             return "ERROR: ssh timed out after ${TimeoutSec}s"
         }
         # The process exited within the deadline, but that is NOT enough to
@@ -176,16 +185,37 @@ function Invoke-V6Ssh {
         [void]$proc.WaitForExit()
         $drainMs = 5000
         $outDone = $false
+        $errDone = $false
         try { $outDone = $outTask.Wait($drainMs) } catch { $outDone = $true }  # faulted reader = no more output
-        try { [void]$errTask.Wait($drainMs) } catch {}                          # discarded — mirrors prior `2>$null`
+        try { $errDone = $errTask.Wait($drainMs) } catch { $errDone = $true }
         if (-not $outDone) {
             if (Get-Command Write-DuneLog -ErrorAction SilentlyContinue) {
                 Write-DuneLog "Invoke-V6Ssh: stdout drain to $Ip did not finish within ${drainMs}ms after exit (pipe held open by a grandchild?); abandoning reader" 'WARN'
             }
+            if ($SeparateStreams) {
+                return @{ stdout = ''; stderr = 'ssh output drain timed out'; exitCode = -1 }
+            }
             return "ERROR: ssh output drain timed out"
         }
+        if ($SeparateStreams -and -not $errDone) {
+            if (Get-Command Write-DuneLog -ErrorAction SilentlyContinue) {
+                Write-DuneLog "Invoke-V6Ssh: stderr drain to $Ip did not finish within ${drainMs}ms after exit; abandoning reader" 'WARN'
+            }
+            return @{ stdout = ''; stderr = 'ssh error drain timed out'; exitCode = -1 }
+        }
         $text = $null
+        $errorText = $null
         try { $text = $outTask.Result } catch { $text = $null }
+        if ($SeparateStreams -and $errDone) {
+            try { $errorText = $errTask.Result } catch { $errorText = $null }
+        }
+        if ($SeparateStreams) {
+            return @{
+                stdout = if ($text) { $text.TrimEnd("`r", "`n") } else { '' }
+                stderr = if ($errorText) { $errorText.TrimEnd("`r", "`n") } else { '' }
+                exitCode = [int]$proc.ExitCode
+            }
+        }
         if ([string]::IsNullOrEmpty($text)) { return }
         # Emit one pipeline item per stdout line — matches the original
         # `& ssh ...` capture semantics so existing callers keep working.

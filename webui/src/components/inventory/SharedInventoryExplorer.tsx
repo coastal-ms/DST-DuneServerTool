@@ -68,6 +68,31 @@ function parsePositiveId(value: string | null) {
   return Number.isSafeInteger(parsed) && parsed > 0 ? parsed : undefined
 }
 
+function assertInventoryGroups(groups: SharedInventoryGroup[]) {
+  const malformed = groups.find(group => (
+    !group.groupKey?.trim()
+    || !group.templateId?.trim()
+    || !group.displayName?.trim()
+    || !Number.isFinite(group.totalQuantity)
+    || !Number.isFinite(group.occurrenceCount)
+    || !Number.isFinite(group.locationCount)
+  ))
+  if (malformed) throw new Error('Inventory response contained a malformed grouped item. Refresh after updating the backend.')
+}
+
+function assertInventoryOccurrences(items: SharedInventoryItem[]) {
+  const malformed = items.find(item => (
+    !Number.isSafeInteger(item.id)
+    || item.id <= 0
+    || !item.templateId?.trim()
+    || !item.displayName?.trim()
+    || !item.entity?.type
+    || !Number.isSafeInteger(item.entity.id)
+    || item.entity.id <= 0
+  ))
+  if (malformed) throw new Error('Inventory response contained a malformed item occurrence. Refresh after updating the backend.')
+}
+
 function setUrlFilters(changes: Record<string, string | undefined>) {
   const params = new URLSearchParams(window.location.search)
   Object.entries(changes).forEach(([key, value]) => {
@@ -192,6 +217,7 @@ export function SharedInventoryExplorer({
         sort, limit: 100, cursor, demo,
       })
       if (version !== requestVersion.current) return
+      assertInventoryGroups(result.data.groups)
       setResponse(result)
       setGroups(existing => append ? [...existing, ...result.data.groups] : result.data.groups)
       setLoadedIdentity(requestIdentity)
@@ -399,6 +425,7 @@ function OccurrencePanel({
         locationType: location?.type, locationId: location?.id, sort, limit: 50, cursor, demo,
       })
       if (request !== version.current) return
+      assertInventoryOccurrences(result.data.items)
       setItems(current => append ? [...current, ...result.data.items] : result.data.items)
       setNextCursor(result.page.nextCursor)
       setPanelPlayers(current => {
