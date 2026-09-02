@@ -105,6 +105,14 @@ WHERE inv.actor_id = {0}::bigint
 ORDER BY i.template_id
 '@
 
+function Get-DuneStorageDisplayClass {
+    param([string]$Class)
+    if ($Class -like 'Developer_StorageContainer*' -or $Class -like 'Developer_Storage_Container*') {
+        return 'Developer Storage Container'
+    }
+    return Get-DuneShortClass $Class
+}
+
 function Get-DuneStorageLive {
     param([string]$Ip)
     $res = Invoke-DuneSqlQuery -Ip $Ip -Sql $script:DuneStorageListSql -ReadOnly $true -MaxRows 5000 -TimeoutSec 45
@@ -116,15 +124,10 @@ function Get-DuneStorageLive {
         if ($templatesRaw) { $templates = @($templatesRaw -split ',' | Where-Object { $_ }) }
         $names = @($templates | ForEach-Object { Get-DuneGameplayItemName -TemplateId $_ })
         $rawClass = [string]$r['class']
-        $displayClass = if ($rawClass -like 'Developer_StorageContainer*' -or $rawClass -like 'Developer_Storage_Container*') {
-            'Developer Storage Container'
-        } else {
-            Get-DuneShortClass $rawClass
-        }
         $containers += [ordered]@{
             id             = (ConvertTo-DuneInt $r['id'])
             name           = [string]$r['name']
-            class          = $displayClass
+            class          = Get-DuneStorageDisplayClass $rawClass
             raw_class      = $rawClass
             map            = [string]$r['map']
             item_count     = (ConvertTo-DuneInt $r['item_count'])

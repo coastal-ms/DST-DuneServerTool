@@ -95,6 +95,23 @@ function Get-DuneInventoryMetadataMatches {
     return @($ids | Sort-Object)
 }
 
+function Get-DuneInventoryStorageClassSql {
+    return @"
+CASE
+    WHEN strpos(lower(COALESCE(p.building_type, '')), 'developer_storagecontainer') = 1
+      OR strpos(lower(COALESCE(p.building_type, '')), 'developer_storage_container') = 1
+    THEN 'Developer Storage Container'
+    ELSE trim(replace(
+        regexp_replace(
+            regexp_replace(COALESCE(p.building_type, ''), '^.*[./]', ''),
+            '(^BP_|_C$)', '', 'g'
+        ),
+        '_', ' '
+    ))
+END
+"@
+}
+
 function Get-DuneInventorySearchSql {
     param(
         [string]$Query,
@@ -129,6 +146,7 @@ function Get-DuneInventorySearchSql {
         }
         $where += "($($search -join ' OR '))"
     }
+    $storageClassSql = Get-DuneInventoryStorageClassSql
 
     return @"
 WITH inventory_rows AS (
@@ -174,7 +192,7 @@ WITH inventory_rows AS (
                END)
                FROM dune.permission_actor pa
                WHERE pa.actor_id = p.id
-           ), ''), p.building_type, 'Storage container') AS entity_label,
+           ), ''), NULLIF(($storageClassSql), ''), 'Storage container') AS entity_label,
            COALESCE(owner.character_name, '') AS owner_name,
            COALESCE(a.map, '') AS map,
            COALESCE(p.building_type, '') AS entity_class
@@ -212,6 +230,11 @@ function ConvertTo-DuneInventoryItem {
     $rule = Get-DuneGameplayItemRule -TemplateId $templateId
     $entityType = [string]$Row['entity_type']
     $entityId = ConvertTo-DuneInt $Row['entity_id']
+    $entityClass = [string]$Row['entity_class']
+    $entityLabel = [string]$Row['entity_label']
+    if ($entityType -eq 'storage' -and -not $entityLabel) {
+        $entityLabel = Get-DuneStorageDisplayClass $entityClass
+    }
     $workspacePath = if ($entityType -eq 'player') {
         "/players?view=inventory&scope_type=player&scope_id=$entityId"
     } else {
@@ -241,10 +264,10 @@ function ConvertTo-DuneInventoryItem {
         entity = [ordered]@{
             type = $entityType
             id = $entityId
-            label = [string]$Row['entity_label']
+            label = $entityLabel
             owner = [string]$Row['owner_name']
             map = [string]$Row['map']
-            class = [string]$Row['entity_class']
+            class = $entityClass
             inventoryId = ConvertTo-DuneInt $Row['inventory_id']
             inventoryType = [int](ConvertTo-DuneInt $Row['inventory_type'])
             workspacePath = $workspacePath

@@ -67,6 +67,76 @@ Describe 'Shared Inventory Explorer read model' -Tag 'Pure' {
         $item.metadata.Keys | Should -Contain 'category'
     }
 
+    It 'normalizes unnamed live storage labels while preserving the raw class' {
+        $row = @{
+            item_id = 43
+            template_id = 'Spice_Melange'
+            stack_size = 1
+            quality_level = 0
+            durability = 'N/A'
+            max_durability = 'N/A'
+            water_amount = 'N/A'
+            water_type = ''
+            inventory_id = 100
+            inventory_type = 4
+            entity_type = 'storage'
+            entity_id = 50002
+            entity_label = ''
+            owner_name = 'Stilgar'
+            map = 'Hagga Basin'
+            entity_class = 'Developer_StorageContainer_Placeable'
+        }
+
+        $item = ConvertTo-DuneInventoryItem -Row $row
+
+        $item.entity.label | Should -Be 'Developer Storage Container'
+        $item.entity.class | Should -Be 'Developer_StorageContainer_Placeable'
+    }
+
+    It 'projects and searches the established friendly storage class label' {
+        $sql = Get-DuneInventorySearchSql -Query 'Developer Storage Container' -EntityTypes @('storage')
+
+        $sql | Should -Match "THEN 'Developer Storage Container'"
+        $sql | Should -Match "regexp_replace\(COALESCE\(p\.building_type, ''\), '\^\.\*\[\./\]', ''\)"
+        $sql | Should -Match "NULLIF\(\(CASE[\s\S]+Developer Storage Container[\s\S]+END\), ''\), 'Storage container'\) AS entity_label"
+        $sql | Should -Match "strpos\(lower\(COALESCE\(entity_label, ''\)\), lower\('Developer Storage Container'\)\) > 0"
+        $sql | Should -Match "COALESCE\(p\.building_type, ''\) AS entity_class"
+    }
+
+    It 'keeps custom storage names ahead of the normalized class fallback' {
+        $sql = Get-DuneInventorySearchSql -EntityTypes @('storage')
+
+        $sql | Should -Match "COALESCE\(NULLIF\(\([\s\S]+permission_actor[\s\S]+\), ''\), NULLIF\(\(CASE"
+    }
+
+    It 'keeps unnamed demo storage labels in parity with the established class normalization' {
+        $container = @(Get-DuneStorageDemo | Where-Object { $_.id -eq 50003 }) | Select-Object -First 1
+        $row = @{
+            item_id = 44
+            template_id = 'Plasteel_Plate'
+            stack_size = 1
+            quality_level = 0
+            durability = 'N/A'
+            max_durability = 'N/A'
+            water_amount = 'N/A'
+            water_type = ''
+            inventory_id = 100
+            inventory_type = 4
+            entity_type = 'storage'
+            entity_id = $container.id
+            entity_label = if ($container.name) { $container.name } else { $container.class }
+            owner_name = $container.owner_name
+            map = $container.map
+            entity_class = $container.raw_class
+        }
+        $item = ConvertTo-DuneInventoryItem -Row $row
+
+        $item.entity.label | Should -Be 'Generic Container'
+        $item.entity.class | Should -Be 'GenericContainer_Placeable'
+        @(Select-DuneInventoryDemoItems -Items @($item) -Query 'generic container' -EntityTypes @('storage')).Count |
+            Should -Be 1
+    }
+
     It 'matches display names through bundled metadata before the SQL page' {
         $sql = Get-DuneInventorySearchSql -Query 'Spice Melange' -EntityTypes @('player', 'storage') -Limit 10
 
