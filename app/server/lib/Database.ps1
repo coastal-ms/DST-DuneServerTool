@@ -134,9 +134,6 @@ function ConvertFrom-DunePsqlCsv {
             message = "Unexpected psql diagnostic in CSV output: $([string]$firstFiltered[0])"
         }
     }
-    # Some psql builds/configurations append a human-readable row-count footer
-    # even in CSV mode. It is transport metadata, never a database row.
-    $filtered = @($filtered | Where-Object { $_ -notmatch '^\(\d+ rows?\)$' })
     # If no lines, nothing to parse
     if (-not $filtered) {
         return @{ ok = $true; columns = @(); rows = @(); rowCount = 0; truncated = $false; message = '' }

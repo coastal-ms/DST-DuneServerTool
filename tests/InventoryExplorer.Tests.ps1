@@ -548,7 +548,7 @@ Describe 'Shared Inventory Explorer read model' -Tag 'Pure' {
     }
 
     It 'executes every generated live query against a disposable PostgreSQL schema' `
-        -Skip:(-not $env:DST_TEST_POSTGRES_PSQL) {
+        -Skip:(-not $env:DST_TEST_POSTGRES_PSQL -or -not $env:DST_TEST_POSTGRES_DATABASE) {
         $queries = @(Get-DuneInventoryLiveSqlVariants)
         $fixture = @"
 \set ON_ERROR_STOP on
@@ -610,13 +610,22 @@ INSERT INTO dune.items (id, template_id, stack_size, quality_level, stats, inven
         $sql = $fixture + "`n" + (($queries | ForEach-Object { "$_;"} ) -join "`n") + "`nROLLBACK;"
         Set-Content -LiteralPath $scriptPath -Value $sql -Encoding utf8
 
-        & $env:DST_TEST_POSTGRES_PSQL -X -q -f $scriptPath 2>&1 | Out-String | Write-Verbose
+        & $env:DST_TEST_POSTGRES_PSQL -X -q -d $env:DST_TEST_POSTGRES_DATABASE -f $scriptPath 2>&1 |
+            Out-String | Write-Verbose
 
         $LASTEXITCODE | Should -Be 0
     }
 
     It 'returns seeded PostgreSQL groups and occurrences through production conversion semantics' `
-        -Skip:(-not $env:DST_TEST_POSTGRES_PSQL) {
+        -Skip:(-not $env:DST_TEST_POSTGRES_PSQL -or -not $env:DST_TEST_POSTGRES_DATABASE) {
+        if ($env:DST_TEST_POSTGRES_DATABASE -notmatch '^dst_inventory(?:_[A-Za-z0-9_-]+)?$') {
+            throw 'DST_TEST_POSTGRES_DATABASE must name an explicit disposable dst_inventory database.'
+        }
+        $databaseName = (& $env:DST_TEST_POSTGRES_PSQL -X -q -A -t `
+            -d $env:DST_TEST_POSTGRES_DATABASE -c 'SELECT current_database();' 2>&1 | Out-String).Trim()
+        if ($LASTEXITCODE -ne 0 -or $databaseName -ne $env:DST_TEST_POSTGRES_DATABASE) {
+            throw 'The configured disposable PostgreSQL database could not be verified.'
+        }
         $setupPath = Join-Path $TestDrive 'inventory-semantic-setup.sql'
         $setup = @"
 \set ON_ERROR_STOP on
@@ -665,7 +674,8 @@ INSERT INTO dune.items (id, template_id, stack_size, quality_level, stats, inven
     (7, 'HarkSandbike_MeshCustomization', 2, 0, '{}'::jsonb, 60002);
 "@
         Set-Content -LiteralPath $setupPath -Value $setup -Encoding utf8
-        & $env:DST_TEST_POSTGRES_PSQL -X -q -f $setupPath 2>&1 | Out-String | Write-Verbose
+        & $env:DST_TEST_POSTGRES_PSQL -X -q -d $env:DST_TEST_POSTGRES_DATABASE -f $setupPath 2>&1 |
+            Out-String | Write-Verbose
         $LASTEXITCODE | Should -Be 0
 
         $existing = Get-Command Invoke-DuneSqlQuery -ErrorAction SilentlyContinue
@@ -678,7 +688,8 @@ INSERT INTO dune.items (id, template_id, stack_size, quality_level, stats, inven
             $queryPath = Join-Path $TestDrive "inventory-semantic-$($script:InventorySemanticQueryIndex).sql"
             $effective = if ($ReadOnly) { Wrap-DuneReadOnlySql -Sql $Sql } else { $Sql }
             Set-Content -LiteralPath $queryPath -Value $effective -Encoding utf8
-            $raw = (& $env:DST_TEST_POSTGRES_PSQL -X --csv -v ON_ERROR_STOP=1 -f $queryPath 2>&1) -join "`n"
+            $raw = (& $env:DST_TEST_POSTGRES_PSQL -X --csv -v ON_ERROR_STOP=1 `
+                -d $env:DST_TEST_POSTGRES_DATABASE -f $queryPath 2>&1) -join "`n"
             if ($LASTEXITCODE -ne 0 -or (Test-DunePsqlError -Output $raw)) {
                 return @{ ok = $false; error = (Get-DunePsqlErrorMessage -Output $raw) }
             }
@@ -793,7 +804,8 @@ INSERT INTO dune.items (id, template_id, stack_size, quality_level, stats, inven
             } else {
                 Remove-Item Function:\global:Invoke-DuneSqlQuery -ErrorAction SilentlyContinue
             }
-            & $env:DST_TEST_POSTGRES_PSQL -X -q -c 'DROP SCHEMA IF EXISTS dune CASCADE;' 2>&1 | Out-Null
+            & $env:DST_TEST_POSTGRES_PSQL -X -q -d $env:DST_TEST_POSTGRES_DATABASE `
+                -c 'DROP SCHEMA IF EXISTS dune CASCADE;' 2>&1 | Out-Null
         }
     }
 

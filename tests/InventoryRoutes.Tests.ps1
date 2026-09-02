@@ -70,10 +70,7 @@ Describe 'Inventory production router integration' {
 
     Describe 'Inventory PostgreSQL CSV conversion contract' {
         It 'returns zero rows for header-only and explicit zero-row output' {
-            foreach ($raw in @(
-                "BEGIN`ngroup_key,template_id,total_quantity`nROLLBACK",
-                "BEGIN`ngroup_key,template_id,total_quantity`n(0 rows)`nROLLBACK"
-            )) {
+            foreach ($raw in @("BEGIN`ngroup_key,template_id,total_quantity`nROLLBACK")) {
                 $parsed = ConvertFrom-DunePsqlCsv -Output $raw -MaxRows 100
                 $parsed.ok | Should -BeTrue
                 $parsed.rowCount | Should -Be 0
@@ -95,6 +92,13 @@ Describe 'Inventory production router integration' {
             $parsed.ok | Should -BeTrue
             $parsed.rowCount | Should -Be 1
             $parsed.rows[0][0] | Should -Be 'NOTICE: maintenance starts at 8'
+        }
+
+        It 'preserves data values that resemble a psql row-count footer' {
+            $parsed = ConvertFrom-DunePsqlCsv -Output "value`n(1 row)" -MaxRows 100
+            $parsed.ok | Should -BeTrue
+            $parsed.rowCount | Should -Be 1
+            $parsed.rows[0][0] | Should -Be '(1 row)'
         }
 
         It 'rejects a late merged diagnostic that has fewer fields than the CSV header' {
@@ -120,7 +124,7 @@ Describe 'Inventory production router integration' {
             $command = @"
 . '$repo\app\server\lib\Database.ps1'
 . '$repo\app\server\lib\Gameplay.ps1'
-`$empty = ConvertFrom-DunePsqlCsv -Output "BEGIN``na,b``n(0 rows)``nROLLBACK" -MaxRows 10
+`$empty = ConvertFrom-DunePsqlCsv -Output "BEGIN``na,b``nROLLBACK" -MaxRows 10
 if (-not `$empty.ok -or `$empty.rowCount -ne 0) { throw 'PS5.1 empty CSV semantics failed.' }
 `$parsed = ConvertFrom-DunePsqlCsv -Output "a,b``n1,2``n3,4" -MaxRows 10
 `$maps = ConvertTo-DuneRowMaps -Result @{ ok=`$true; columns=`$parsed.columns; rows=`$parsed.rows }

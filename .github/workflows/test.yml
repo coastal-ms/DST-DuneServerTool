@@ -148,6 +148,7 @@ jobs:
           "DST_TEST_POSTGRES_PSQL=$(Join-Path $bin 'psql.exe')" | Out-File $env:GITHUB_ENV -Append -Encoding utf8
           "DST_TEST_POSTGRES_PG_CTL=$(Join-Path $bin 'pg_ctl.exe')" | Out-File $env:GITHUB_ENV -Append -Encoding utf8
           "DST_TEST_POSTGRES_DATA=$data" | Out-File $env:GITHUB_ENV -Append -Encoding utf8
+          'DST_TEST_POSTGRES_DATABASE=dst_inventory' | Out-File $env:GITHUB_ENV -Append -Encoding utf8
           'PGHOST=localhost' | Out-File $env:GITHUB_ENV -Append -Encoding utf8
           'PGPORT=55439' | Out-File $env:GITHUB_ENV -Append -Encoding utf8
           'PGUSER=dst_inventory' | Out-File $env:GITHUB_ENV -Append -Encoding utf8
