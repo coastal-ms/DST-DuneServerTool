@@ -12,8 +12,8 @@ const capabilityState = vi.hoisted(() => ({
   enabled: true,
   refresh: vi.fn(),
 }))
-
 const inventoryApi = vi.hoisted(() => vi.fn())
+const occurrenceApi = vi.hoisted(() => vi.fn())
 const itemIconResolver = vi.hoisted(() => vi.fn())
 
 vi.mock('../src/hooks/usePlatformCapabilities', () => ({
@@ -25,454 +25,177 @@ vi.mock('../src/hooks/usePlatformCapabilities', () => ({
     hasCapability: (id: string) => id === 'inventory.read' && capabilityState.enabled,
   }),
 }))
-
 vi.mock('../src/api/gameplay', async importOriginal => {
   const actual = await importOriginal<typeof import('../src/api/gameplay')>()
-  return { ...actual, getSharedInventory: inventoryApi }
+  return { ...actual, getSharedInventory: inventoryApi, getSharedInventoryOccurrences: occurrenceApi }
 })
-
 vi.mock('../src/components/inventory/InventoryItemIcon', async importOriginal => {
   const actual = await importOriginal<typeof import('../src/components/inventory/InventoryItemIcon')>()
   return { ...actual, resolveItemIcon: itemIconResolver }
 })
 
+const metadata = {
+  category: 'Resources', tier: 2, rarity: 'Common', icon: '', stackMaximum: 100,
+  volume: 0.1, vendorPrice: 5, isGradeable: false,
+}
+const players = [
+  { id: 20001, name: 'Coastal', occurrenceCount: 5 },
+  { id: 20002, name: 'Coastal', occurrenceCount: 2 },
+]
+const locations = [
+  { type: 'player', id: 20001, label: 'Backpack', owner: 'Coastal', playerId: 20001, playerName: 'Coastal', occurrenceCount: 2 },
+  { type: 'storage', id: 50001, label: 'Copper box', owner: 'Coastal', playerId: 20001, playerName: 'Coastal', occurrenceCount: 3 },
+  { type: 'storage', id: 50002, label: 'Copper box', owner: 'Coastal', playerId: 20002, playerName: 'Coastal', occurrenceCount: 2 },
+] as const
+const copperGroup = {
+  groupKey: 'copper',
+  templateId: 'Copper',
+  displayName: 'Copper',
+  totalQuantity: 30,
+  occurrenceCount: 3,
+  locationCount: 3,
+  quality: { min: 0, max: 2, mixed: true },
+  metadata,
+}
 const fixture = {
   schemaVersion: 1,
-  requestId: 'request-1',
+  requestId: 'group-request',
   generatedAt: '2026-09-02T10:00:00Z',
   source: 'live',
-  freshness: {
-    observedAt: '2026-09-02T10:00:00Z',
-    cachedAt: null,
-    ageSeconds: null,
-    state: 'fresh',
-    lastErrorCode: null,
-  },
+  freshness: { observedAt: '2026-09-02T10:00:00Z', cachedAt: null, ageSeconds: null, state: 'fresh', lastErrorCode: null },
   capabilities: ['inventory.read'],
   data: {
     mode: 'live',
     query: '',
+    playerId: null,
+    location: null,
     supportedEntityTypes: ['player', 'storage'],
     unavailableEntityTypes: ['base', 'vehicle'],
-    items: [{
-      id: 42,
-      templateId: 'MelangeSpice',
-      displayName: 'Spice Melange',
-      kind: 'item',
-      quantity: 12,
-      quality: 3,
-      durability: 'N/A',
-      maxDurability: 'N/A',
-      waterAmount: 'N/A',
-      waterType: '',
-      metadata: {
-        category: 'Resources',
-        tier: 2,
-        rarity: 'Common',
-        icon: '',
-        stackMaximum: 100,
-        volume: 0.1,
-        vendorPrice: 5,
-        isGradeable: false,
-      },
-      entity: {
-        type: 'storage',
-        id: 50001,
-        label: 'Spice Vault',
-        owner: 'Stilgar',
-        map: 'Hagga Basin',
-        class: 'SpiceSilo_Placeable',
-        inventoryId: 60001,
-        inventoryType: 4,
-        workspacePath: '/bases?view=inventory&scope_type=storage&scope_id=50001',
-      },
-    }],
+    groups: [copperGroup],
+    players,
+    locations,
   },
   page: { limit: 100, nextCursor: null, truncated: false },
 } as const
+const occurrence = {
+  id: 42, templateId: 'Copper', displayName: 'Copper', kind: 'item', quantity: 10,
+  quality: 2, durability: '80', maxDurability: '100', waterAmount: 'N/A', waterType: '',
+  metadata, player: { id: 20001, name: 'Coastal' },
+  entity: {
+    type: 'storage', id: 50001, label: 'Copper box', owner: 'Coastal', map: 'Hagga Basin',
+    class: 'GenericContainer_Placeable', inventoryId: 60001, inventoryType: 4,
+    workspacePath: '/bases?view=inventory&scope_type=storage&scope_id=50001',
+  },
+} as const
+const occurrenceFixture = {
+  ...fixture,
+  requestId: 'occurrence-request',
+  data: { mode: 'live', templateId: 'Copper', playerId: null, items: [occurrence], players, locations },
+  page: { limit: 50, nextCursor: null, truncated: false },
+} as const
 
-function navigateTo(url: string) {
-  act(() => {
-    window.history.pushState(null, '', url)
-    window.dispatchEvent(new PopStateEvent('popstate'))
-  })
+function renderExplorer() {
+  return render(<BrowserRouter><SharedInventoryExplorer entityTypes={['player', 'storage']} /></BrowserRouter>)
 }
 
 function deferred<T>() {
-  let resolve!: (value: T | PromiseLike<T>) => void
+  let resolve!: (value: T) => void
   const promise = new Promise<T>(done => { resolve = done })
   return { promise, resolve }
 }
 
 beforeEach(() => {
-  itemIconResolver.mockResolvedValue('https://cdn-hosted.gaming.tools/dune/images/dune/items/spice.webp')
+  inventoryApi.mockResolvedValue(fixture)
+  occurrenceApi.mockResolvedValue(occurrenceFixture)
+  itemIconResolver.mockResolvedValue('https://cdn-hosted.gaming.tools/dune/images/dune/items/copper.webp')
 })
 
 afterEach(() => {
   cleanup()
-  capabilityState.loading = false
-  capabilityState.dataPresent = true
-  capabilityState.error = null
-  capabilityState.enabled = true
-  capabilityState.refresh.mockClear()
   inventoryApi.mockReset()
+  occurrenceApi.mockReset()
   itemIconResolver.mockReset()
   window.history.replaceState(null, '', '/')
 })
 
-describe('Shared Inventory Explorer', () => {
-  it('shows live item, owner, source, freshness, and read-only detail without write controls', async () => {
-    const user = userEvent.setup()
-    inventoryApi.mockResolvedValue(fixture)
-    render(
-      <BrowserRouter>
-        <SharedInventoryExplorer entityTypes={['player', 'storage']} />
-      </BrowserRouter>,
-    )
-
-    expect(await screen.findByText('Spice Melange')).toBeInTheDocument()
-    const resultSlot = screen.getByRole('button', { name: /Spice Melange/ })
-    expect(resultSlot).toHaveAccessibleName(/quantity 12, quality 3, Storage container, Spice Vault/)
-    expect(screen.getByRole('list', { name: 'Inventory results' }).className).toContain('auto-fill')
-    resultSlot.focus()
-    expect(await screen.findByRole('tooltip')).toHaveTextContent('Spice Vault')
-    expect(screen.getByRole('tooltip')).toHaveTextContent('Stilgar')
-    resultSlot.blur()
-    await waitFor(() => expect(screen.queryByRole('tooltip')).not.toBeInTheDocument())
-    await user.hover(resultSlot)
-    expect(await screen.findByRole('tooltip')).toHaveTextContent('Spice Vault')
-    expect(screen.getByText('Live database')).toHaveAttribute('data-freshness-state', 'fresh')
-    expect(screen.getAllByText('Read-only').length).toBeGreaterThan(0)
-    expect(screen.queryByRole('button', { name: /give|delete|repair/i })).not.toBeInTheDocument()
-
-    await user.click(resultSlot)
-    expect(screen.getByRole('dialog', { name: 'Spice Melange' })).toBeInTheDocument()
-    expect(screen.queryByRole('tooltip')).not.toBeInTheDocument()
-    expect(screen.getByRole('link', { name: 'Open owning container' }))
-      .toHaveAttribute('href', '/bases?view=inventory&scope_type=storage&scope_id=50001')
-    expect(await screen.findByRole('link', { name: 'View on dune.gaming.tools' })).toHaveAttribute(
-      'href',
-      'https://dune.gaming.tools/items/melangespice',
-    )
+describe('Shared Inventory Explorer grouped catalog', () => {
+  it('defaults to all players and locations and renders one aggregate slot', async () => {
+    renderExplorer()
+    const slot = await screen.findByRole('button', { name: /Copper, total quantity 30, 3 occurrences across 3 locations, quality 0-2/ })
+    expect(slot).toBeInTheDocument()
+    expect(screen.getByRole('combobox', { name: 'Player' })).toHaveValue('')
+    expect(screen.getByRole('combobox', { name: 'Location' })).toHaveValue('')
+    expect(screen.getByText('3 loc')).toBeInTheDocument()
+    expect(inventoryApi).toHaveBeenCalledWith(expect.objectContaining({ playerId: undefined, locationId: undefined, sort: 'name-asc' }))
   })
 
-  it('omits gaming.tools attribution when metadata or icon verification fails', async () => {
+  it('keeps duplicate player and storage names visibly distinct without raw IDs', async () => {
+    renderExplorer()
+    await screen.findByText('Copper')
+    expect(screen.getByRole('option', { name: 'Coastal (1)' })).toBeInTheDocument()
+    expect(screen.getByRole('option', { name: 'Coastal (2)' })).toBeInTheDocument()
+    expect(screen.getByRole('option', { name: 'Copper box - Coastal (1)' })).toBeInTheDocument()
+    expect(screen.getByRole('option', { name: 'Copper box - Coastal (2)' })).toBeInTheDocument()
+    expect(screen.queryByText('50001')).not.toBeInTheDocument()
+  })
+
+  it('writes player, location, and sort filters to URL and clears dependent location on player change', async () => {
+    const user = userEvent.setup()
+    window.history.replaceState(null, '', '/economy?view=inventory&location_type=storage&location_id=50001')
+    renderExplorer()
+    await screen.findByText('Copper')
+    await user.selectOptions(screen.getByRole('combobox', { name: 'Player' }), '20001')
+    expect(window.location.search).toContain('player_id=20001')
+    expect(window.location.search).not.toContain('location_id')
+    await screen.findByText('Copper')
+    await user.selectOptions(screen.getByRole('combobox', { name: 'Sort by' }), 'quantity-desc')
+    expect(window.location.search).toContain('sort=quantity-desc')
+  })
+
+  it('opens a lazy occurrence panel with inherited filters and adjustable sorting', async () => {
+    const user = userEvent.setup()
+    window.history.replaceState(null, '', '/economy?view=inventory&player_id=20001&location_type=storage&location_id=50001')
+    renderExplorer()
+    await user.click(await screen.findByRole('button', { name: /Copper/ }))
+    expect(await screen.findByRole('dialog', { name: 'Copper' })).toBeInTheDocument()
+    await waitFor(() => expect(occurrenceApi).toHaveBeenCalledWith(expect.objectContaining({
+      templateId: 'Copper', playerId: 20001, locationType: 'storage', locationId: 50001, sort: 'player-asc',
+    })))
+    expect(screen.getByRole('list', { name: 'Item occurrences' })).toHaveTextContent('Copper box')
+    await user.selectOptions(screen.getByRole('combobox', { name: 'Sort occurrences' }), 'quality-desc')
+    await waitFor(() => expect(occurrenceApi).toHaveBeenLastCalledWith(expect.objectContaining({ sort: 'quality-desc' })))
+  })
+
+  it('omits gaming.tools attribution when icon verification fails', async () => {
     const user = userEvent.setup()
     itemIconResolver.mockResolvedValue(null)
-    inventoryApi.mockResolvedValue(fixture)
-    render(
-      <BrowserRouter>
-        <SharedInventoryExplorer entityTypes={['storage']} />
-      </BrowserRouter>,
-    )
-
-    await user.click(await screen.findByRole('button', { name: /Spice Melange/ }))
-    expect(screen.getByRole('dialog', { name: 'Spice Melange' })).toBeInTheDocument()
-    await waitFor(() => expect(itemIconResolver).toHaveBeenCalledWith('MelangeSpice'))
+    renderExplorer()
+    await user.click(await screen.findByRole('button', { name: /Copper/ }))
+    await screen.findByRole('dialog', { name: 'Copper' })
     expect(screen.queryByRole('link', { name: 'View on dune.gaming.tools' })).not.toBeInTheDocument()
   })
 
-  it('places the info card using its measured height near the viewport edge', async () => {
-    inventoryApi.mockResolvedValue(fixture)
-    const heightSpy = vi.spyOn(HTMLElement.prototype, 'offsetHeight', 'get')
-      .mockImplementation(function measuredHeight() {
-        return this.getAttribute('role') === 'tooltip' ? 240 : 0
-      })
-    const widthSpy = vi.spyOn(HTMLElement.prototype, 'offsetWidth', 'get').mockReturnValue(288)
-    const viewportSpy = vi.spyOn(window, 'innerHeight', 'get').mockReturnValue(800)
-    render(
-      <BrowserRouter>
-        <SharedInventoryExplorer entityTypes={['storage']} />
-      </BrowserRouter>,
-    )
-
-    const resultSlot = await screen.findByRole('button', { name: /Spice Melange/ })
-    vi.spyOn(resultSlot, 'getBoundingClientRect').mockReturnValue({
-      x: 100,
-      y: 590,
-      top: 590,
-      right: 210,
-      bottom: 700,
-      left: 100,
-      width: 110,
-      height: 110,
-      toJSON: () => ({}),
-    })
-    resultSlot.focus()
-
-    expect(await screen.findByRole('tooltip')).toHaveStyle({ top: '342px' })
-    heightSpy.mockRestore()
-    widthSpy.mockRestore()
-    viewportSpy.mockRestore()
-  })
-
-  it('submits one typed search and preserves the bounded entity filter', async () => {
-    const user = userEvent.setup()
-    inventoryApi.mockResolvedValue(fixture)
-    render(
-      <BrowserRouter>
-        <SharedInventoryExplorer entityTypes={['storage']} />
-      </BrowserRouter>,
-    )
-    await screen.findByText('Spice Melange')
-    await user.clear(screen.getByRole('textbox', { name: 'Search inventory' }))
-    await user.type(screen.getByRole('textbox', { name: 'Search inventory' }), 'vault')
-    await user.click(screen.getByRole('button', { name: 'Search' }))
-
-    await waitFor(() => expect(inventoryApi).toHaveBeenLastCalledWith(expect.objectContaining({
-      q: 'vault',
-      types: ['storage'],
-      limit: 100,
-    })))
-  })
-
-  it('sends a complete valid scope and explicit demo request without broadening', async () => {
-    const user = userEvent.setup()
-    window.history.replaceState(
-      null,
-      '',
-      '/bases?view=inventory&scope_type=storage&scope_id=50001&demo=1',
-    )
-    inventoryApi.mockResolvedValue({
+  it('isolates late grouped responses after URL filter changes', async () => {
+    const late = deferred<typeof fixture>()
+    inventoryApi.mockReset()
+    inventoryApi.mockReturnValueOnce(late.promise).mockResolvedValueOnce({
       ...fixture,
-      source: 'static',
-      data: {
-        ...fixture.data,
-        mode: 'demo',
-        items: [{
-          ...fixture.data.items[0],
-          entity: {
-            ...fixture.data.items[0].entity,
-            workspacePath: '/bases?view=inventory&scope_type=storage&scope_id=50001&demo=1',
-          },
-        }],
-      },
+      data: { ...fixture.data, groups: [{ ...copperGroup, groupKey: 'iron', templateId: 'Iron', displayName: 'Iron' }] },
     })
-    render(
-      <BrowserRouter>
-        <SharedInventoryExplorer entityTypes={['storage']} />
-      </BrowserRouter>,
-    )
-
-    await waitFor(() => expect(inventoryApi).toHaveBeenCalledWith(expect.objectContaining({
-      types: ['storage'],
-      scopeType: 'storage',
-      scopeId: 50001,
-      demo: true,
-    })))
-    expect(screen.getByText('Showing bundled demo inventory')).toBeInTheDocument()
-    await user.click(screen.getByRole('button', { name: /Spice Melange/ }))
-    expect(screen.getByRole('link', { name: 'Open owning container' }))
-      .toHaveAttribute('href', '/bases?view=inventory&scope_type=storage&scope_id=50001&demo=1')
+    renderExplorer()
+    act(() => {
+      window.history.pushState(null, '', '/economy?view=inventory&q=iron')
+      window.dispatchEvent(new PopStateEvent('popstate'))
+    })
+    expect(await screen.findByText('Iron')).toBeInTheDocument()
+    await act(async () => { late.resolve(fixture); await late.promise })
+    expect(screen.queryByText('Copper')).not.toBeInTheDocument()
   })
 
-  it('renders vehicle cargo as honestly unavailable without calling inventory APIs', () => {
-    render(
-      <BrowserRouter>
-        <SharedInventoryExplorer
-          entityTypes={[]}
-          title="Vehicle cargo"
-          unavailableReason="No proven vehicle cargo join."
-        />
-      </BrowserRouter>,
-    )
-
-    expect(screen.getByText('Inventory scope not yet available')).toBeInTheDocument()
-    expect(screen.getByText('No proven vehicle cargo join.')).toBeInTheDocument()
-    expect(inventoryApi).not.toHaveBeenCalled()
-  })
-
-  it('fails closed when the capability is not advertised', () => {
-    capabilityState.enabled = false
-    render(
-      <BrowserRouter>
-        <SharedInventoryExplorer entityTypes={['player']} />
-      </BrowserRouter>,
-    )
-
-    expect(screen.getByText('Shared inventory is not included in this backend')).toBeInTheDocument()
-    expect(inventoryApi).not.toHaveBeenCalled()
-  })
-
-  it.each([
-    '/players?view=inventory&scope_type=player',
-    '/players?view=inventory&scope_id=20001',
-    '/players?view=inventory&scope_type=player&scope_id=bad',
-    '/players?view=inventory&scope_type=player&scope_id=0',
-    '/players?view=inventory&scope_type=player&scope_id=-1',
-  ])('does not broaden invalid scoped URL %s', route => {
-    window.history.replaceState(null, '', route)
-    render(
-      <BrowserRouter>
-        <SharedInventoryExplorer entityTypes={['player']} />
-      </BrowserRouter>,
-    )
-
+  it('fails closed for malformed direct location links', () => {
+    window.history.replaceState(null, '', '/economy?view=inventory&location_type=storage')
+    renderExplorer()
     expect(screen.getByText('Invalid inventory scope')).toBeInTheDocument()
     expect(inventoryApi).not.toHaveBeenCalled()
-  })
-
-  it('removes demo rows, metadata, cursor, and selection when a replacement live request fails', async () => {
-    const user = userEvent.setup()
-    window.history.replaceState(null, '', '/bases?view=inventory&demo=1')
-    inventoryApi
-      .mockResolvedValueOnce({
-        ...fixture,
-        source: 'static',
-        data: { ...fixture.data, mode: 'demo' },
-        page: { ...fixture.page, nextCursor: 'demo-cursor', truncated: true },
-      })
-      .mockRejectedValueOnce(new Error('live database unavailable'))
-    render(
-      <BrowserRouter>
-        <SharedInventoryExplorer entityTypes={['storage']} />
-      </BrowserRouter>,
-    )
-
-    await user.click(await screen.findByRole('button', { name: /Spice Melange/ }))
-    expect(screen.getByRole('dialog', { name: 'Spice Melange' })).toBeInTheDocument()
-    expect(screen.getByText('Demo inventory')).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: 'Load more' })).toBeInTheDocument()
-
-    navigateTo('/bases?view=inventory')
-
-    expect(await screen.findByText('Inventory search failed')).toBeInTheDocument()
-    expect(screen.getByText('live database unavailable')).toBeInTheDocument()
-    expect(screen.queryByRole('list', { name: 'Inventory results' })).not.toBeInTheDocument()
-    expect(screen.queryByText('Spice Melange')).not.toBeInTheDocument()
-    expect(screen.queryByText('x12')).not.toBeInTheDocument()
-    expect(screen.queryByText('Showing bundled demo inventory')).not.toBeInTheDocument()
-    expect(screen.queryByText('Demo inventory')).not.toBeInTheDocument()
-    expect(screen.queryByRole('button', { name: 'Load more' })).not.toBeInTheDocument()
-    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
-  })
-
-  it('removes broader unscoped results when a replacement scoped request fails', async () => {
-    const user = userEvent.setup()
-    window.history.replaceState(null, '', '/bases?view=inventory')
-    inventoryApi
-      .mockResolvedValueOnce({
-        ...fixture,
-        page: { ...fixture.page, nextCursor: 'live-cursor', truncated: true },
-      })
-      .mockRejectedValueOnce(new Error('scoped inventory unavailable'))
-    render(
-      <BrowserRouter>
-        <SharedInventoryExplorer entityTypes={['storage']} />
-      </BrowserRouter>,
-    )
-
-    await user.click(await screen.findByRole('button', { name: /Spice Melange/ }))
-    expect(screen.getByRole('dialog', { name: 'Spice Melange' })).toBeInTheDocument()
-    expect(screen.getByText('Live database')).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: 'Load more' })).toBeInTheDocument()
-
-    navigateTo('/bases?view=inventory&scope_type=storage&scope_id=50001')
-
-    expect(await screen.findByText('Inventory search failed')).toBeInTheDocument()
-    expect(screen.getByText('scoped inventory unavailable')).toBeInTheDocument()
-    expect(screen.getByText('Scoped to storage container actor 50001.')).toBeInTheDocument()
-    expect(screen.queryByRole('list', { name: 'Inventory results' })).not.toBeInTheDocument()
-    expect(screen.queryByText('Spice Melange')).not.toBeInTheDocument()
-    expect(screen.queryByText('x12')).not.toBeInTheDocument()
-    expect(screen.queryByText('Live database')).not.toBeInTheDocument()
-    expect(screen.queryByRole('button', { name: 'Load more' })).not.toBeInTheDocument()
-    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
-  })
-
-  it('synchronizes URL query navigation and ignores a late response from the prior query', async () => {
-    const user = userEvent.setup()
-    const lateFooPage = deferred<unknown>()
-    const barPage = deferred<unknown>()
-    const fooResponse = {
-      ...fixture,
-      data: { ...fixture.data, query: 'foo' },
-      page: { ...fixture.page, nextCursor: 'foo-cursor', truncated: true },
-    }
-    const barResponse = {
-      ...fixture,
-      data: {
-        ...fixture.data,
-        query: 'bar',
-        items: [{
-          ...fixture.data.items[0],
-          id: 84,
-          templateId: 'BarItem',
-          displayName: 'Bar Result',
-        }],
-      },
-    }
-    window.history.replaceState(null, '', '/bases?view=inventory&q=foo')
-    inventoryApi
-      .mockResolvedValueOnce(fooResponse)
-      .mockReturnValueOnce(lateFooPage.promise)
-      .mockReturnValueOnce(barPage.promise)
-    render(
-      <BrowserRouter>
-        <SharedInventoryExplorer entityTypes={['storage']} />
-      </BrowserRouter>,
-    )
-
-    await user.click(await screen.findByRole('button', { name: /Spice Melange/ }))
-    expect(screen.getByRole('dialog', { name: 'Spice Melange' })).toBeInTheDocument()
-    await user.click(screen.getByRole('button', { name: 'Load more' }))
-    await waitFor(() => expect(inventoryApi).toHaveBeenLastCalledWith(expect.objectContaining({
-      q: 'foo',
-      cursor: 'foo-cursor',
-    })))
-
-    navigateTo('/bases?view=inventory&q=bar')
-
-    expect(screen.getByRole('textbox', { name: 'Search inventory' })).toHaveValue('bar')
-    expect(screen.queryByText('Spice Melange')).not.toBeInTheDocument()
-    expect(screen.queryByText('Live database')).not.toBeInTheDocument()
-    expect(screen.queryByRole('button', { name: 'Load more' })).not.toBeInTheDocument()
-    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
-    await waitFor(() => expect(inventoryApi).toHaveBeenLastCalledWith(expect.objectContaining({
-      q: 'bar',
-      cursor: undefined,
-    })))
-
-    await act(async () => {
-      barPage.resolve(barResponse)
-      await barPage.promise
-    })
-    expect(await screen.findByText('Bar Result')).toBeInTheDocument()
-
-    await act(async () => {
-      lateFooPage.resolve(fooResponse)
-      await lateFooPage.promise
-    })
-    expect(screen.getByText('Bar Result')).toBeInTheDocument()
-    expect(screen.queryByText('Spice Melange')).not.toBeInTheDocument()
-  })
-
-  it('synchronizes and requests an explicitly cleared URL query', async () => {
-    const clearPage = deferred<unknown>()
-    window.history.replaceState(null, '', '/bases?view=inventory&q=bar')
-    inventoryApi
-      .mockResolvedValueOnce({ ...fixture, data: { ...fixture.data, query: 'bar' } })
-      .mockReturnValueOnce(clearPage.promise)
-    render(
-      <BrowserRouter>
-        <SharedInventoryExplorer entityTypes={['storage']} />
-      </BrowserRouter>,
-    )
-    expect(await screen.findByText('Spice Melange')).toBeInTheDocument()
-
-    navigateTo('/bases?view=inventory')
-
-    expect(screen.getByRole('textbox', { name: 'Search inventory' })).toHaveValue('')
-    expect(screen.queryByText('Spice Melange')).not.toBeInTheDocument()
-    await waitFor(() => expect(inventoryApi).toHaveBeenLastCalledWith(expect.objectContaining({
-      q: '',
-      cursor: undefined,
-    })))
-
-    await act(async () => {
-      clearPage.resolve(fixture)
-      await clearPage.promise
-    })
-    expect(await screen.findByText('Spice Melange')).toBeInTheDocument()
   })
 })

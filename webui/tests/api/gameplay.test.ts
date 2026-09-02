@@ -57,12 +57,34 @@ describe('Phase A — currency / progression writes', () => {
       types: ['player', 'storage'],
       scopeType: 'storage',
       scopeId: 50001,
+      playerId: 20001,
+      locationType: 'storage',
+      locationId: 50001,
+      sort: 'quantity-desc',
       limit: 100,
       cursor: 'next.page',
       demo: true,
     })
     expect(last().url).toBe(
-      '/api/v1/inventory/items?q=spice%20vault&types=player%2Cstorage&scope_type=storage&scope_id=50001&limit=100&cursor=next.page&demo=1',
+      '/api/v1/inventory/items?q=spice%20vault&types=player%2Cstorage&scope_type=storage&scope_id=50001&player_id=20001&location_type=storage&location_id=50001&sort=quantity-desc&grouped=1&limit=100&cursor=next.page&demo=1',
+    )
+    expect(last().method).toBeUndefined()
+  })
+
+  it('builds the bounded grouped occurrence query with inherited filters and sort', async () => {
+    await gp.getSharedInventoryOccurrences({
+      templateId: 'Copper/Bar',
+      types: ['player', 'storage'],
+      playerId: 20001,
+      locationType: 'player',
+      locationId: 20001,
+      sort: 'quality-desc',
+      limit: 50,
+      cursor: 'next.occurrence',
+      demo: true,
+    })
+    expect(last().url).toBe(
+      '/api/v1/inventory/items/Copper%2FBar/occurrences?types=player%2Cstorage&player_id=20001&location_type=player&location_id=20001&sort=quality-desc&limit=50&cursor=next.occurrence&demo=1',
     )
     expect(last().method).toBeUndefined()
   })

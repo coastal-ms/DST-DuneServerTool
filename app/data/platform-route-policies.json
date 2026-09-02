@@ -152,7 +152,7 @@
     { "source": "Gameplay.ps1", "capabilityId": "economy.market", "routeCount": 22, "sha256": "757d3fd58fe70e88c5ccc91b9549e8f9a121b9137c1a2c16cd574c271c46e258" },
     { "source": "GameplayPlayers.ps1", "capabilityId": "player.manage", "routeCount": 27, "sha256": "4f822fc3645a5196c477810daed318d097c5319fb920a34b8ce8be6ab191d24e" },
     { "source": "GameplayWorld.ps1", "capabilityId": "base.manage", "routeCount": 12, "sha256": "52bfaeee6658d490bedae03914b525e3272d89ece1dc957d3514dc8ee9a84c30" },
-    { "source": "Inventory.ps1", "capabilityId": "inventory.read", "routeCount": 1, "sha256": "6152c83c4eade7ec711473a482be9c47d64ba61dcc180e033251bc00d2183544" },
+    { "source": "Inventory.ps1", "capabilityId": "inventory.read", "routeCount": 2, "sha256": "6f55a9a618b3b5447e160dbd1a40015c0afb68b9e18b810daaee0cfb55aa7268" },
     { "source": "ItemPackages.ps1", "capabilityId": "player.inventory", "routeCount": 3, "sha256": "ed3aac4a943d300002f7aecacb8ecf04619917ee7aa549cde0068e1853e01cf9" },
     { "source": "Landsraad.ps1", "capabilityId": "economy.governance", "routeCount": 9, "sha256": "e78c0dfe1b1f969d781db180f8c73eb3439de9779dd62fde7a8879925ac762f0" },
     { "source": "Links.ps1", "capabilityId": "platform.status", "routeCount": 1, "sha256": "175305c4d511463c37a3c0c2484bf7178044f72d42fe444c2eec1733ef876a47" },

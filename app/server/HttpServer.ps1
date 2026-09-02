@@ -169,7 +169,8 @@ function Test-DunePortalOwnerOrAdminPath {
         (
             $Path -eq '/api/v1/maps' -or
             $Path.StartsWith('/api/v1/maps/') -or
-            $Path -eq '/api/v1/inventory/items'
+            $Path -eq '/api/v1/inventory/items' -or
+            $Path.StartsWith('/api/v1/inventory/items/')
         )
     )
 }
