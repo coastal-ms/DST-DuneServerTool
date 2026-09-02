@@ -137,7 +137,7 @@ export const FEATURE_PLACEMENTS: readonly FeaturePlacement[] = [
   { currentFeature: 'Gameplay Overview', currentRoutes: ['/gameplay?view=overview'], destination: 'Gameplay Admin / Overview', workspaceId: 'home', disposition: 'remain' },
   { currentFeature: 'Gameplay Players', currentRoutes: ['/players', '/gameplay?view=players'], destination: 'Gameplay Admin / Players', workspaceId: 'players', disposition: 'move' },
   { currentFeature: 'Gameplay Bases', currentRoutes: ['/bases', '/gameplay?view=bases'], destination: 'Gameplay Admin / Bases', workspaceId: 'bases', disposition: 'move' },
-  { currentFeature: 'Gameplay Storage', currentRoutes: ['/gameplay?view=storage'], destination: 'Gameplay Admin / Players / Storage', workspaceId: 'players', disposition: 'merge' },
+  { currentFeature: 'Gameplay Storage', currentRoutes: ['/gameplay?view=storage'], destination: 'Shared Inventory Explorer in Players, Bases, Vehicles, and Economy', workspaceId: 'players', disposition: 'merge' },
   { currentFeature: 'Gameplay Blueprints', currentRoutes: ['/gameplay?view=blueprints'], destination: 'Gameplay Admin / Bases / Blueprints', workspaceId: 'bases', disposition: 'move' },
   { currentFeature: 'Gameplay Market and Market Bot', currentRoutes: ['/economy', '/gameplay?view=market', '/gameplay?view=marketbot'], destination: 'Gameplay Admin / Economy', workspaceId: 'economy', disposition: 'move' },
   { currentFeature: 'Gameplay Landsraad', currentRoutes: ['/gameplay?view=landsraad'], destination: 'Gameplay Admin / Economy / Governance', workspaceId: 'economy', disposition: 'move' },

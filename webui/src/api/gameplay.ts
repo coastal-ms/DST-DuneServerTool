@@ -14,6 +14,81 @@ export interface GameplayStatus {
   source: DataSource
 }
 
+export type InventoryEntityType = 'player' | 'storage'
+
+export interface InventoryItemMetadata {
+  category: string
+  tier: number
+  rarity: string
+  icon: string
+  stackMaximum: number
+  volume: number
+  vendorPrice: number
+  isGradeable: boolean
+}
+
+export interface SharedInventoryItem {
+  id: number
+  templateId: string
+  displayName: string
+  kind: 'item' | 'emote' | 'contract'
+  quantity: number
+  quality: number
+  durability: string
+  maxDurability: string
+  waterAmount: string
+  waterType: string
+  metadata: InventoryItemMetadata
+  entity: {
+    type: InventoryEntityType
+    id: number
+    label: string
+    owner: string
+    map: string
+    class: string
+    inventoryId: number
+    inventoryType: number
+    workspacePath: string
+  }
+}
+
+export interface SharedInventoryResponse {
+  schemaVersion: number
+  requestId: string
+  generatedAt: string
+  source: 'live' | 'static'
+  freshness: {
+    observedAt: string | null
+    cachedAt: string | null
+    ageSeconds: number | null
+    state: 'fresh' | 'refreshing' | 'stale' | 'unavailable' | 'partial'
+    lastErrorCode: string | null
+  }
+  capabilities: string[]
+  data: {
+    mode: 'live' | 'demo'
+    query: string
+    supportedEntityTypes: InventoryEntityType[]
+    unavailableEntityTypes: Array<'base' | 'vehicle'>
+    items: SharedInventoryItem[]
+  }
+  page: {
+    limit: number
+    nextCursor: string | null
+    truncated: boolean
+  }
+}
+
+export interface SharedInventoryQuery {
+  q?: string
+  types?: InventoryEntityType[]
+  scopeType?: InventoryEntityType
+  scopeId?: number
+  limit?: number
+  cursor?: string
+  demo?: boolean
+}
+
 export interface MarketItem {
   template_id: string
   quality: number
@@ -323,6 +398,18 @@ function qs(params: Record<string, string | number | undefined>): string {
 
 export function getGameplayStatus() {
   return api<GameplayStatus>('/api/gameplay/status')
+}
+
+export function getSharedInventory(query: SharedInventoryQuery = {}) {
+  return api<SharedInventoryResponse>(`/api/v1/inventory/items${qs({
+    q: query.q,
+    types: query.types?.join(','),
+    scope_type: query.scopeType,
+    scope_id: query.scopeId,
+    limit: query.limit,
+    cursor: query.cursor,
+    demo: query.demo ? 1 : undefined,
+  })}`)
 }
 
 export type MarketSortKey =

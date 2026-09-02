@@ -166,7 +166,11 @@ function Test-DunePortalOwnerOrAdminPath {
     param([string]$Path, [string]$Method = 'GET')
     return (
         $Method -eq 'GET' -and
-        ($Path -eq '/api/v1/maps' -or $Path.StartsWith('/api/v1/maps/'))
+        (
+            $Path -eq '/api/v1/maps' -or
+            $Path.StartsWith('/api/v1/maps/') -or
+            $Path -eq '/api/v1/inventory/items'
+        )
     )
 }
 
