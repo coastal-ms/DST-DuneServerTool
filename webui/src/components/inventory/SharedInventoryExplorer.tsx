@@ -63,6 +63,10 @@ export function SharedInventoryExplorer({
   const initialQuery = searchParams.get('q') ?? ''
   const [draftQuery, setDraftQuery] = useState(initialQuery)
   const [submittedQuery, setSubmittedQuery] = useState(initialQuery)
+  const syncedUrlQuery = useRef(initialQuery)
+  const urlQueryChanged = syncedUrlQuery.current !== initialQuery
+  const currentDraftQuery = urlQueryChanged ? initialQuery : draftQuery
+  const currentSubmittedQuery = urlQueryChanged ? initialQuery : submittedQuery
   const [response, setResponse] = useState<SharedInventoryResponse | null>(null)
   const [items, setItems] = useState<SharedInventoryItem[]>([])
   const [selected, setSelected] = useState<SharedInventoryItem | null>(null)
@@ -75,7 +79,7 @@ export function SharedInventoryExplorer({
   const capabilityReady = capabilities.data !== null
   const canReadInventory = capabilities.hasCapability('inventory.read')
   const requestIdentity = JSON.stringify({
-    query: submittedQuery.trim(),
+    query: currentSubmittedQuery.trim(),
     entityTypes,
     scopeType: scopeType ?? null,
     scopeId: scopeId ?? null,
@@ -101,7 +105,7 @@ export function SharedInventoryExplorer({
     setError('')
     try {
       const result = await getSharedInventory({
-        q: submittedQuery.trim(),
+        q: currentSubmittedQuery.trim(),
         types: entityTypes,
         scopeType,
         scopeId,
@@ -141,9 +145,15 @@ export function SharedInventoryExplorer({
     setLoadingMore,
     setResponse,
     setSelected,
-    submittedQuery,
+    currentSubmittedQuery,
     unavailableReason,
   ])
+
+  useEffect(() => {
+    syncedUrlQuery.current = initialQuery
+    setDraftQuery(initialQuery)
+    setSubmittedQuery(initialQuery)
+  }, [initialQuery])
 
   useEffect(() => {
     requestVersion.current += 1
@@ -246,12 +256,12 @@ export function SharedInventoryExplorer({
         role="search"
         onSubmit={event => {
           event.preventDefault()
-          if (draftQuery === submittedQuery) {
+          if (currentDraftQuery === currentSubmittedQuery) {
             void load()
           } else {
             setItems([])
             setResponse(null)
-            setSubmittedQuery(draftQuery)
+            setSubmittedQuery(currentDraftQuery)
           }
         }}
       >
@@ -259,7 +269,7 @@ export function SharedInventoryExplorer({
           Search inventory
           <input
             className="input mt-1 min-h-11 w-full"
-            value={draftQuery}
+            value={currentDraftQuery}
             maxLength={200}
             placeholder="Item, template ID, owner, container, or entity type"
             onChange={event => setDraftQuery(event.target.value)}

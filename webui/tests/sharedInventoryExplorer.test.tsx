@@ -92,6 +92,12 @@ function navigateTo(url: string) {
   })
 }
 
+function deferred<T>() {
+  let resolve!: (value: T | PromiseLike<T>) => void
+  const promise = new Promise<T>(done => { resolve = done })
+  return { promise, resolve }
+}
+
 afterEach(() => {
   cleanup()
   capabilityState.loading = false
@@ -284,5 +290,101 @@ describe('Shared Inventory Explorer', () => {
     expect(screen.queryByText('Live database')).not.toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'Load more' })).not.toBeInTheDocument()
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+  })
+
+  it('synchronizes URL query navigation and ignores a late response from the prior query', async () => {
+    const user = userEvent.setup()
+    const lateFooPage = deferred<unknown>()
+    const barPage = deferred<unknown>()
+    const fooResponse = {
+      ...fixture,
+      data: { ...fixture.data, query: 'foo' },
+      page: { ...fixture.page, nextCursor: 'foo-cursor', truncated: true },
+    }
+    const barResponse = {
+      ...fixture,
+      data: {
+        ...fixture.data,
+        query: 'bar',
+        items: [{
+          ...fixture.data.items[0],
+          id: 84,
+          templateId: 'BarItem',
+          displayName: 'Bar Result',
+        }],
+      },
+    }
+    window.history.replaceState(null, '', '/bases?view=inventory&q=foo')
+    inventoryApi
+      .mockResolvedValueOnce(fooResponse)
+      .mockReturnValueOnce(lateFooPage.promise)
+      .mockReturnValueOnce(barPage.promise)
+    render(
+      <BrowserRouter>
+        <SharedInventoryExplorer entityTypes={['storage']} />
+      </BrowserRouter>,
+    )
+
+    await user.click(await screen.findByRole('button', { name: /Spice Melange/ }))
+    expect(screen.getByRole('dialog', { name: 'Spice Melange' })).toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: 'Load more' }))
+    await waitFor(() => expect(inventoryApi).toHaveBeenLastCalledWith(expect.objectContaining({
+      q: 'foo',
+      cursor: 'foo-cursor',
+    })))
+
+    navigateTo('/bases?view=inventory&q=bar')
+
+    expect(screen.getByRole('textbox', { name: 'Search inventory' })).toHaveValue('bar')
+    expect(screen.queryByText('Spice Melange')).not.toBeInTheDocument()
+    expect(screen.queryByText('Live database')).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Load more' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+    await waitFor(() => expect(inventoryApi).toHaveBeenLastCalledWith(expect.objectContaining({
+      q: 'bar',
+      cursor: undefined,
+    })))
+
+    await act(async () => {
+      barPage.resolve(barResponse)
+      await barPage.promise
+    })
+    expect(await screen.findByText('Bar Result')).toBeInTheDocument()
+
+    await act(async () => {
+      lateFooPage.resolve(fooResponse)
+      await lateFooPage.promise
+    })
+    expect(screen.getByText('Bar Result')).toBeInTheDocument()
+    expect(screen.queryByText('Spice Melange')).not.toBeInTheDocument()
+  })
+
+  it('synchronizes and requests an explicitly cleared URL query', async () => {
+    const clearPage = deferred<unknown>()
+    window.history.replaceState(null, '', '/bases?view=inventory&q=bar')
+    inventoryApi
+      .mockResolvedValueOnce({ ...fixture, data: { ...fixture.data, query: 'bar' } })
+      .mockReturnValueOnce(clearPage.promise)
+    render(
+      <BrowserRouter>
+        <SharedInventoryExplorer entityTypes={['storage']} />
+      </BrowserRouter>,
+    )
+    expect(await screen.findByText('Spice Melange')).toBeInTheDocument()
+
+    navigateTo('/bases?view=inventory')
+
+    expect(screen.getByRole('textbox', { name: 'Search inventory' })).toHaveValue('')
+    expect(screen.queryByText('Spice Melange')).not.toBeInTheDocument()
+    await waitFor(() => expect(inventoryApi).toHaveBeenLastCalledWith(expect.objectContaining({
+      q: '',
+      cursor: undefined,
+    })))
+
+    await act(async () => {
+      clearPage.resolve(fixture)
+      await clearPage.promise
+    })
+    expect(await screen.findByText('Spice Melange')).toBeInTheDocument()
   })
 })
