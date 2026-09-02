@@ -47,7 +47,10 @@ export function extractItemImageUrl(prefix: string) {
 
 async function readBoundedResponse(response: Response) {
   const declaredLength = Number(response.headers.get('content-length'))
-  if (Number.isFinite(declaredLength) && declaredLength > MAX_RESPONSE_BYTES) return null
+  if (Number.isFinite(declaredLength) && declaredLength > MAX_RESPONSE_BYTES) {
+    await response.body?.cancel().catch(() => undefined)
+    return null
+  }
   if (!response.body) return null
 
   const reader = response.body.getReader()

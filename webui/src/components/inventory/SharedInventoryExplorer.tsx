@@ -12,7 +12,7 @@ import { Icon } from '../Icon'
 import { DataState, FreshnessBadge } from '../platform/DataState'
 import { DetailPanel } from '../platform/DetailPanel'
 import { WorkspaceSection } from '../platform/WorkspaceLayout'
-import { itemDetailsUrl } from './InventoryItemIcon'
+import { itemDetailsUrl, resolveItemIcon } from './InventoryItemIcon'
 import { InventorySlot } from './InventorySlot'
 
 function errorMessage(error: unknown) {
@@ -72,6 +72,7 @@ export function SharedInventoryExplorer({
   const [response, setResponse] = useState<SharedInventoryResponse | null>(null)
   const [items, setItems] = useState<SharedInventoryItem[]>([])
   const [selected, setSelected] = useState<SharedInventoryItem | null>(null)
+  const [verifiedDetailsUrl, setVerifiedDetailsUrl] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
   const [loadingMore, setLoadingMore] = useState(false)
   const [error, setError] = useState('')
@@ -174,6 +175,18 @@ export function SharedInventoryExplorer({
   useEffect(() => () => {
     requestVersion.current += 1
   }, [])
+
+  useEffect(() => {
+    setVerifiedDetailsUrl(null)
+    if (!currentSelection) return
+    let active = true
+    void resolveItemIcon(currentSelection.templateId).then(iconUrl => {
+      if (active && iconUrl) setVerifiedDetailsUrl(itemDetailsUrl(currentSelection.templateId))
+    })
+    return () => {
+      active = false
+    }
+  }, [currentSelection])
 
   const busy = loading || loadingMore
 
@@ -373,15 +386,17 @@ export function SharedInventoryExplorer({
               <Link className="btn-secondary inline-flex min-h-11" to={currentSelection.entity.workspacePath}>
                 Open owning {currentSelection.entity.type === 'player' ? 'player' : 'container'}
               </Link>
-              <a
-                className="btn-ghost inline-flex min-h-11 text-text-muted"
-                href={itemDetailsUrl(currentSelection.templateId)}
-                target="_blank"
-                rel="noopener noreferrer"
-              >
-                View on dune.gaming.tools
-                <Icon name="ExternalLink" size={14} />
-              </a>
+              {verifiedDetailsUrl && (
+                <a
+                  className="btn-ghost inline-flex min-h-11 text-text-muted"
+                  href={verifiedDetailsUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                >
+                  View on dune.gaming.tools
+                  <Icon name="ExternalLink" size={14} />
+                </a>
+              )}
             </div>
           </div>
         )}

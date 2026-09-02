@@ -71,7 +71,13 @@ describe('inventory item icon resolution', () => {
   })
 
   it('caches null for failed and unexpectedly large responses', async () => {
-    const fetchMock = vi.fn().mockResolvedValue(new Response('ignored', {
+    let cancelled = false
+    const body = new ReadableStream({
+      cancel() {
+        cancelled = true
+      },
+    })
+    const fetchMock = vi.fn().mockResolvedValue(new Response(body, {
       status: 200,
       headers: { 'content-length': String(65 * 1024) },
     }))
@@ -80,6 +86,7 @@ describe('inventory item icon resolution', () => {
     await expect(resolveItemIcon('OversizedItem')).resolves.toBeNull()
     await expect(resolveItemIcon('OversizedItem')).resolves.toBeNull()
     expect(fetchMock).toHaveBeenCalledTimes(1)
+    expect(cancelled).toBe(true)
   })
 
   it('waits for viewport proximity and falls back without broken image chrome', async () => {

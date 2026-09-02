@@ -17,9 +17,10 @@ export function InventorySlot({
   const buttonRef = useRef<HTMLButtonElement | null>(null)
   const tooltipId = useId()
   const [hovered, setHovered] = useState(false)
+  const [hoverSuppressed, setHoverSuppressed] = useState(false)
   const [focused, setFocused] = useState(false)
   const [position, setPosition] = useState({ left: 8, top: 8 })
-  const showInfo = hovered || focused
+  const showInfo = (hovered && !hoverSuppressed) || focused
   const name = item.displayName || item.templateId
   const source = entityTypeLabel(item.entity.type)
   const entity = item.entity.label || `Actor ${item.entity.id}`
@@ -34,6 +35,16 @@ export function InventorySlot({
       ? rect.bottom + 8
       : Math.max(8, rect.top - estimatedHeight - 8)
     setPosition({ left, top })
+  }, [])
+
+  useEffect(() => {
+    const handleFocusIn = (event: FocusEvent) => {
+      const target = event.target
+      if (!(target instanceof Element) || !target.closest('[data-inventory-slot]')) return
+      setHoverSuppressed(target !== buttonRef.current)
+    }
+    document.addEventListener('focusin', handleFocusIn)
+    return () => document.removeEventListener('focusin', handleFocusIn)
   }, [])
 
   useEffect(() => {
@@ -52,14 +63,22 @@ export function InventorySlot({
       <button
         ref={buttonRef}
         type="button"
+        data-inventory-slot
         aria-label={`${name}, quantity ${item.quantity}, quality ${item.quality}, ${source}, ${entity}`}
         aria-describedby={showInfo ? tooltipId : undefined}
         className="group relative flex aspect-square min-h-22 w-full min-w-0 flex-col overflow-hidden rounded-xl border border-border bg-surface/85 text-left shadow-[inset_0_1px_rgba(255,255,255,0.04),0_6px_16px_-12px_rgba(0,0,0,0.9)] transition-[border-color,background-color,transform] duration-150 hover:-translate-y-0.5 hover:border-accent/60 hover:bg-surface-2 focus:outline-none focus-visible:border-ibad focus-visible:ring-2 focus-visible:ring-ibad active:translate-y-0"
-        onMouseEnter={() => setHovered(true)}
+        onMouseEnter={() => {
+          setHoverSuppressed(false)
+          setHovered(true)
+        }}
         onMouseLeave={() => setHovered(false)}
         onFocus={() => setFocused(true)}
         onBlur={() => setFocused(false)}
-        onClick={() => onSelect(item)}
+        onClick={() => {
+          setHovered(false)
+          setFocused(false)
+          onSelect(item)
+        }}
       >
         <span className="flex w-full items-center justify-between gap-1 px-1.5 pt-1.5">
           <span className="rounded-md border border-info/35 bg-base/90 px-1.5 py-0.5 text-[10px] font-semibold text-info">
