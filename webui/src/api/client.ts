@@ -59,6 +59,8 @@ export class ApiError extends Error {
   }
 }
 
+export class PlayerGuardCancelledError extends ApiError {}
+
 export async function api<T = unknown>(
   path: string,
   init: RequestInit = {},
@@ -115,19 +117,49 @@ export function wsUrl(path: string): string {
 export interface PlayersOnlineConflict {
   ok: false
   conflict: 'players_online' | 'player_status_unknown'
+  verificationFailure?: 'context_unavailable' | 'no_response' | 'timeout' | 'server_error' | 'invalid_response'
   playersOnline: number | null
   playerNames: string[]
   players: Array<{ id: string; name: string; status: string }>
   message: string
 }
 
+type OnlinePlayerConfirmationHandler = (
+  conflict: Partial<PlayersOnlineConflict>,
+) => Promise<boolean>
+
+let onlinePlayerConfirmationHandler: OnlinePlayerConfirmationHandler | null = null
+
+export function registerOnlinePlayerConfirmationHandler(
+  handler: OnlinePlayerConfirmationHandler,
+): () => void {
+  const previous = onlinePlayerConfirmationHandler
+  onlinePlayerConfirmationHandler = handler
+  return () => {
+    if (onlinePlayerConfirmationHandler === handler) {
+      onlinePlayerConfirmationHandler = previous
+    }
+  }
+}
+
+async function requestOnlinePlayerConfirmation(
+  conflict: Partial<PlayersOnlineConflict>,
+): Promise<boolean> {
+  if (!onlinePlayerConfirmationHandler) {
+    throw new ApiError(
+      409,
+      'Player safety confirmation is unavailable. The action was not started.',
+      conflict,
+    )
+  }
+  return onlinePlayerConfirmationHandler(conflict)
+}
+
 /**
  * Wraps a mutation that accepts an optional `force` flag. The first attempt
  * runs without `force`; if the server returns 409 with the players-online
- * conflict body, the user is prompted, and on confirmation the call is
- * retried with `force=true`. If the user declines, an ApiError(409) is
- * thrown so the caller's existing error handling reports it the same way
- * as any other failed save.
+ * conflict body, the registered DST confirmation UI is shown, and on explicit
+ * confirmation the call is retried with `force=true`.
  */
 export async function withOnlinePlayerGuard<T>(
   fn: (force: boolean) => Promise<T>,
@@ -138,27 +170,21 @@ export async function withOnlinePlayerGuard<T>(
     if (e instanceof ApiError && e.status === 409) {
       const body = e.body as Partial<PlayersOnlineConflict> | undefined
       if (body && body.conflict === 'players_online') {
-        const names = body.playerNames ?? []
-        const count = body.playersOnline ?? names.length
-        const list = names.length > 0
-          ? names.slice(0, 8).join(', ') + (names.length > 8 ? `, +${names.length - 8} more` : '')
-          : `${count} player(s)`
-        const ok = window.confirm(
-          `${count} player${count === 1 ? '' : 's'} currently online:\n  ${list}\n\n`
-          + `${body.message ?? 'This action may affect connected players.'}\n\n`
-          + 'Continue anyway?',
-        )
+        const ok = await requestOnlinePlayerConfirmation(body)
         if (!ok) {
-          throw new ApiError(409, 'Action cancelled because players are online.', body)
+          throw new PlayerGuardCancelledError(409, 'Action cancelled because players are online.', body)
         }
         return await fn(true)
       }
       if (body && body.conflict === 'player_status_unknown') {
-        const ok = window.confirm(
-          `${body.message ?? 'DST could not verify whether players are online.'}\n\n`
-          + 'Continue without verification? Connected players may be disconnected.',
-        )
-        if (!ok) throw new ApiError(409, 'Action cancelled because player status is unknown.', body)
+        const ok = await requestOnlinePlayerConfirmation(body)
+        if (!ok) {
+          throw new PlayerGuardCancelledError(
+            409,
+            'Action cancelled because player status is unknown.',
+            body,
+          )
+        }
         return await fn(true)
       }
     }

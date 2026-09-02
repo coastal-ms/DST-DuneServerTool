@@ -32,4 +32,7 @@ Describe 'Get-DuneOnlinePlayersSql' {
         $script:OnlineSql | Should -Match 'player_pawn_id::text'
         $script:OnlineSql | Should -Match 'decrypt_user_data\(eps\.encrypted_character_name\)'
     }
+    It 'returns an explicit empty JSON roster when no players are online' {
+        $script:OnlineSql | Should -Match "COALESCE\(json_agg\(row_to_json\(t\)\), '\[\]'::json\)"
+    }
 }

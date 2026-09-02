@@ -20,6 +20,13 @@ here cover everything those tags shipped.
   access, protected destinations stay visible, and Reset restores visibility and
   order.
 
+### Fixed
+
+- Fixed disruptive-action player checks incorrectly treating a verified empty
+  server as an unanswered query. Real verification failures remain fail-closed
+  with distinct timeout, server-error, no-response, and invalid-response details,
+  shown in an accessible DST confirmation dialog instead of a browser prompt.
+
 ## [15.0.0-test9] - 2026-09-01
 
 Candidate metadata prepared for v15.0.0-test9; semantic version remains 15.0.0.

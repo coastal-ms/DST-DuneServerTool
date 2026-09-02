@@ -70,13 +70,17 @@ function Test-DuneDisruptiveActionGuard {
     }
 
     if ([string]::IsNullOrWhiteSpace($Ip)) {
+        if (Get-Command Write-DuneLog -ErrorAction SilentlyContinue) {
+            Write-DuneLog "player safety verification failed before ${Action}: context_unavailable (no VM/database address)" 'WARN'
+        }
         Write-DuneJson -Response $Res -Status 409 -Body @{
-            ok            = $false
-            conflict      = 'player_status_unknown'
-            playersOnline = $null
-            playerNames   = @()
-            players       = @()
-            message       = "DST could not verify whether players are online before $Action."
+            ok                  = $false
+            conflict            = 'player_status_unknown'
+            verificationFailure = 'context_unavailable'
+            playersOnline       = $null
+            playerNames         = @()
+            players             = @()
+            message             = "DST could not verify whether players are online before $Action. The running VM or database address is unavailable."
         }
         return $false
     }
@@ -84,13 +88,21 @@ function Test-DuneDisruptiveActionGuard {
     try {
         $players = @(Get-V6OnlinePlayersStrict -Ip $Ip)
     } catch {
+        $failure = 'server_error'
+        if ($_.Exception.Data -and $_.Exception.Data.Contains('DunePlayerVerificationFailure')) {
+            $failure = [string]$_.Exception.Data['DunePlayerVerificationFailure']
+        }
+        if (Get-Command Write-DuneLog -ErrorAction SilentlyContinue) {
+            Write-DuneLog "player safety verification failed before ${Action}: $failure ($($_.Exception.Message))" 'WARN'
+        }
         Write-DuneJson -Response $Res -Status 409 -Body @{
-            ok            = $false
-            conflict      = 'player_status_unknown'
-            playersOnline = $null
-            playerNames   = @()
-            players       = @()
-            message       = "DST could not verify whether players are online before $Action. $($_.Exception.Message)"
+            ok                  = $false
+            conflict            = 'player_status_unknown'
+            verificationFailure = $failure
+            playersOnline       = $null
+            playerNames         = @()
+            players             = @()
+            message             = "DST could not verify whether players are online before $Action. $($_.Exception.Message)"
         }
         return $false
     }
