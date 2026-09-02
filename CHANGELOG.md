@@ -19,6 +19,8 @@ here cover everything those tags shipped.
   Pages and whole sections can be hidden without changing top navigation or route
   access, protected destinations stay visible, and Reset restores visibility and
   order.
+- Added a guarded Players control that normalizes historical dungeon completion
+  difficulty above 50, with a verified rollback backup and battlegroup restart.
 
 ### Fixed
 

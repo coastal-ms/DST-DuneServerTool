@@ -616,6 +616,222 @@ function Invoke-DuneFillPlayerBaseWater {
     }
 }
 
+function Invoke-DuneDungeonDifficultyBgCommand {
+    param(
+        [string]$Ip,
+        [Parameter(Mandatory)][ValidateSet('backup','stop','start')][string]$Command
+    )
+    if (-not (Get-Command Invoke-DuneBackupShell -ErrorAction SilentlyContinue)) {
+        return @{ ok = $false; error = 'Battlegroup shell helper is unavailable.' }
+    }
+
+    $timeout = if ($Command -eq 'backup') { 900 } elseif ($Command -eq 'stop') { 600 } else { 900 }
+    $script = "/home/dune/.dune/bin/battlegroup $Command"
+    if ($Command -eq 'backup') {
+        $stamp = [datetime]::UtcNow.ToString('yyyyMMdd-HHmmss')
+        $nonce = [guid]::NewGuid().ToString('N').Substring(0, 8)
+        $name = "dst-dungeon-difficulty-$stamp-$nonce"
+        $script = @"
+set -e
+OUT=`$(/home/dune/.dune/bin/battlegroup backup '$name' 2>&1)
+printf '%s\n' "`$OUT"
+FILE=`$(printf '%s\n' "`$OUT" | sed -n 's/^Backup file (on this host):[[:space:]]*//p' | tail -1)
+[ -n "`$FILE" ] && [ -s "`$FILE" ] || { echo '__DST_DUNGEON_BACKUP_ERROR:Backup file was not created or is empty.'; exit 20; }
+SIZE=`$(wc -c < "`$FILE")
+[ "`$SIZE" -gt 1024 ] || { echo '__DST_DUNGEON_BACKUP_ERROR:Backup file is too small.'; exit 21; }
+echo "__DST_DUNGEON_BACKUP:`$FILE|`$SIZE"
+"@
+    }
+
+    try {
+        $result = Invoke-DuneBackupShell -Ip $Ip -Script $script -TimeoutSec $timeout
+    } catch {
+        return @{ ok = $false; error = "Battlegroup $Command failed: $($_.Exception.Message)" }
+    }
+    if ($null -eq $result -or [int]$result.rc -ne 0) {
+        $rc = if ($null -eq $result) { -1 } else { [int]$result.rc }
+        $out = if ($null -eq $result) { '' } else { ([string]$result.out).Trim() }
+        return @{ ok = $false; error = "Battlegroup $Command exited $rc. $out".Trim() }
+    }
+
+    $out = ([string]$result.out).Trim()
+    if ($Command -eq 'backup') {
+        $match = [regex]::Match($out, '__DST_DUNGEON_BACKUP:([^|]+)\|(\d+)')
+        if (-not $match.Success) {
+            return @{ ok = $false; error = 'Battlegroup backup completed without a verifiable backup file.' }
+        }
+        return @{
+            ok         = $true
+            command    = $Command
+            output     = $out
+            backupPath = $match.Groups[1].Value
+            backupSize = [int64]$match.Groups[2].Value
+        }
+    }
+    return @{ ok = $true; command = $Command; output = $out }
+}
+
+function Set-DuneDungeonDifficultyTarget {
+    param([string]$Ip)
+
+    $sql = @'
+BEGIN;
+WITH updated AS (
+  UPDATE dune.dungeon_completion
+  SET difficulty = 50
+  WHERE difficulty > 50
+  RETURNING completion_id
+)
+SELECT COUNT(*)::text AS updated_n
+FROM updated;
+COMMIT;
+'@
+    $result = Invoke-DuneSqlQuery -Ip $Ip -Sql $sql -ReadOnly $false -MaxRows 1 -TimeoutSec 60
+    if (-not $result.ok) {
+        return @{ ok = $false; error = "Dungeon difficulty write failed: $($result.error)" }
+    }
+    $rows = ConvertTo-DuneRowMaps -Result $result
+    if ($rows.Count -ne 1 -or $null -eq $rows[0]['updated_n'] -or [string]$rows[0]['updated_n'] -notmatch '^\d+$') {
+        return @{ ok = $false; error = 'Dungeon difficulty write returned no verified affected-row count.' }
+    }
+    return @{ ok = $true; updated = [int64](ConvertTo-DuneInt $rows[0]['updated_n']) }
+}
+
+function Invoke-DuneNormalizeDungeonDifficulty {
+    param([string]$Ip)
+
+    $before = Get-DuneDungeonDifficultySummaryLive -Ip $Ip
+    if (-not $before.ok) { return $before }
+    if ($before.aboveTarget -eq 0) {
+        return @{
+            ok              = $true
+            noOp            = $true
+            changed         = $false
+            verified        = $true
+            restarted       = $false
+            updated         = 0
+            backupPath      = ''
+            summary         = $before
+            message         = 'Dungeon difficulty is already normalized. No backup or battlegroup stop was needed.'
+        }
+    }
+
+    $backup = Invoke-DuneDungeonDifficultyBgCommand -Ip $Ip -Command 'backup'
+    if (-not $backup.ok) {
+        return @{
+            ok = $false; noOp = $false; changed = $false; verified = $false; restarted = $false
+            updated = 0; backupPath = ''; error = "No changes made because the safety backup failed verification. $($backup.error)"
+        }
+    }
+
+    $stopAttempted = $false
+    $write = $null
+    $after = $null
+    $operationError = ''
+    $verified = $false
+    $noOpAfterStop = $false
+    $start = $null
+    try {
+        $stopAttempted = $true
+        $stop = Invoke-DuneDungeonDifficultyBgCommand -Ip $Ip -Command 'stop'
+        if (-not $stop.ok) {
+            $operationError = "No dungeon rows changed because the battlegroup did not stop cleanly. $($stop.error)"
+        } else {
+            $stoppedSummary = Get-DuneDungeonDifficultySummaryLive -Ip $Ip
+            if (-not $stoppedSummary.ok) {
+                $operationError = "No dungeon rows changed because the stopped-state summary failed. $($stoppedSummary.error)"
+            } elseif ($stoppedSummary.aboveTarget -eq 0) {
+                $after = $stoppedSummary
+                $verified = $true
+                $noOpAfterStop = $true
+            } else {
+                $stoppedBackup = Invoke-DuneDungeonDifficultyBgCommand -Ip $Ip -Command 'backup'
+                if (-not $stoppedBackup.ok) {
+                    $operationError = "No dungeon rows changed because the stopped-state rollback backup failed verification. $($stoppedBackup.error)"
+                } else {
+                    $backup = $stoppedBackup
+                    $before = $stoppedSummary
+                    $write = Set-DuneDungeonDifficultyTarget -Ip $Ip
+                    if (-not $write.ok) {
+                        $operationError = $write.error
+                    } else {
+                        $after = Get-DuneDungeonDifficultySummaryLive -Ip $Ip
+                        if (-not $after.ok) {
+                            $operationError = "Dungeon difficulty changed, but post-write verification failed. $($after.error)"
+                        } elseif ($after.total -ne $before.total) {
+                            $operationError = "Post-write verification failed: completion row count changed from $($before.total) to $($after.total)."
+                        } elseif ($write.updated -ne $before.aboveTarget) {
+                            $operationError = "Post-write verification failed: expected $($before.aboveTarget) updated rows but PostgreSQL reported $($write.updated)."
+                        } elseif ($after.aboveTarget -ne 0 -or ($null -ne $after.maximum -and $after.maximum -gt 50)) {
+                            $operationError = "Post-write verification failed: $($after.aboveTarget) completion row(s) remain above 50."
+                        } else {
+                            $verified = $true
+                        }
+                    }
+                }
+            }
+        }
+    } catch {
+        $operationError = "Dungeon difficulty operation failed: $($_.Exception.Message)"
+    } finally {
+        if ($stopAttempted) {
+            $start = Invoke-DuneDungeonDifficultyBgCommand -Ip $Ip -Command 'start'
+        }
+    }
+
+    if ($null -eq $start -or -not $start.ok) {
+        $startError = if ($null -eq $start) { 'Battlegroup start was not launched.' } else { $start.error }
+        $prefix = if ($operationError) { "$operationError " } elseif ($write -and $write.ok) { "Dungeon difficulty changed, but " } else { "No dungeon rows changed, but " }
+        return @{
+            ok = $false; noOp = $false
+            changed = [bool]($write -and $write.ok)
+            verified = $verified
+            restarted = $false
+            error = "$prefix$startError Start the battlegroup manually."
+            backupPath = $backup.backupPath
+            updated = if ($write -and $write.ok) { $write.updated } else { 0 }
+        }
+    }
+    if ($operationError) {
+        return @{
+            ok = $false; noOp = $false
+            changed = [bool]($write -and $write.ok)
+            verified = $verified
+            restarted = $true
+            error = "$operationError The battlegroup start command was launched."
+            backupPath = $backup.backupPath
+            updated = if ($write -and $write.ok) { $write.updated } else { 0 }
+        }
+    }
+    if ($noOpAfterStop) {
+        return @{
+            ok = $true
+            noOp = $true
+            changed = $false
+            verified = $true
+            restarted = $true
+            updated = 0
+            backupPath = $backup.backupPath
+            backupSize = $backup.backupSize
+            summary = $after
+            message = 'Dungeon difficulty became normalized before the write. No database rows changed; safety backup verified and battlegroup start launched.'
+        }
+    }
+
+    return @{
+        ok = $true
+        noOp = $false
+        changed = $true
+        verified = $true
+        restarted = $true
+        updated = $write.updated
+        backupPath = $backup.backupPath
+        backupSize = $backup.backupSize
+        summary = $after
+        message = "Normalized $($write.updated) dungeon completion row(s) to difficulty 50. Safety backup verified; battlegroup start launched."
+    }
+}
+
 
 
 # ----- Character XP table (verbatim from db.go) ----------------------------

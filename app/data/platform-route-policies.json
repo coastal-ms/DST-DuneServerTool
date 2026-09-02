@@ -75,6 +75,7 @@
     "http POST /api/gameplay/players/journey/reset": "destructive",
     "http POST /api/gameplay/players/journey/wipe": "destructive",
     "http POST /api/gameplay/players/wipe-codex": "destructive",
+    "http POST /api/gameplay/players/normalize-dungeon-difficulty": "destructive",
     "http DELETE /api/gameplay/item-packages": "reversible-write",
     "http DELETE /api/setup/hyperv-lan/credential": "reversible-write"
     ,"http POST /api/gameplay/vehicles/deletions": "reversible-write"
@@ -119,6 +120,7 @@
     "http POST /api/gameplay/players/journey/reset": "player.manage.destructive",
     "http POST /api/gameplay/players/journey/wipe": "player.manage.destructive",
     "http POST /api/gameplay/players/wipe-codex": "player.manage.destructive",
+    "http POST /api/gameplay/players/normalize-dungeon-difficulty": "player.manage.destructive",
     "http DELETE /api/remote-access/portal-accounts/{id}": "platform.access.destructive",
     "http POST /api/public-ip/apply": "settings.connectivity.manage",
     "http POST /api/public-ip/datacenter-id": "settings.connectivity.manage",
@@ -150,7 +152,7 @@
     { "source": "FlsToken.ps1", "capabilityId": "settings.connectivity", "routeCount": 3, "sha256": "5dbda64c9121b306d6d6f3487aef4e6f630a73beba73d0067baa14373237f2bb" },
     { "source": "GameConfig.ps1", "capabilityId": "settings.game-server", "routeCount": 26, "sha256": "5864b52d958ef8dceeabb527268f413806b5b29b086f450b423359b34d7396ce" },
     { "source": "Gameplay.ps1", "capabilityId": "economy.market", "routeCount": 22, "sha256": "757d3fd58fe70e88c5ccc91b9549e8f9a121b9137c1a2c16cd574c271c46e258" },
-    { "source": "GameplayPlayers.ps1", "capabilityId": "player.manage", "routeCount": 27, "sha256": "4f822fc3645a5196c477810daed318d097c5319fb920a34b8ce8be6ab191d24e" },
+    { "source": "GameplayPlayers.ps1", "capabilityId": "player.manage", "routeCount": 28, "sha256": "7bb0b9d263a45ef642c1321e48c3efff35b80424ff9ecf0a040bccacb3557a46" },
     { "source": "GameplayWorld.ps1", "capabilityId": "base.manage", "routeCount": 12, "sha256": "52bfaeee6658d490bedae03914b525e3272d89ece1dc957d3514dc8ee9a84c30" },
     { "source": "ItemPackages.ps1", "capabilityId": "player.inventory", "routeCount": 3, "sha256": "ed3aac4a943d300002f7aecacb8ecf04619917ee7aa549cde0068e1853e01cf9" },
     { "source": "Landsraad.ps1", "capabilityId": "economy.governance", "routeCount": 9, "sha256": "e78c0dfe1b1f969d781db180f8c73eb3439de9779dd62fde7a8879925ac762f0" },
@@ -161,7 +163,7 @@
     { "source": "Ping.ps1", "capabilityId": "platform.status", "routeCount": 2, "sha256": "67c579421a0597e78028350f74d09ff13ed82d75c113231ed1d9e0cfdda5c73b" },
     { "source": "Platform.ps1", "capabilityId": "platform.capabilities", "routeCount": 2, "sha256": "f38200ccc522826ec54e62f012d064f596b122e3acc45218916f8ffc8f7a0db4" },
     { "source": "PlayersAdmin.ps1", "capabilityId": "player.manage", "routeCount": 7, "sha256": "dc4f7da7eb846e1113f08a7ef04a1eb30878c5d05168c886ba1be4183e83883d" },
-    { "source": "PlayersRead.ps1", "capabilityId": "player.view", "routeCount": 17, "sha256": "28e6db36d3b0f3f5f1ac92358d3eae529fdbb14cb4d069ab5af9378bba377cc0" },
+    { "source": "PlayersRead.ps1", "capabilityId": "player.view", "routeCount": 18, "sha256": "bd67f91e3faf1d6e9a692b3f37aff72b650311a39b209a18abe2e629ea249a80" },
     { "source": "PlayersRmq.ps1", "capabilityId": "player.manage", "routeCount": 10, "sha256": "b789053cad3a7c53140a41a5d4d70ab44354583750380a4d06835898c8010876" },
     { "source": "PlayersWrites.ps1", "capabilityId": "player.manage", "routeCount": 37, "sha256": "655d27fb0a9873e0f7f57babb5cdc2c4e876e18102bfc8bd240aae90584a5662" },
     { "source": "Pods.ps1", "capabilityId": "operation.runtime", "routeCount": 3, "sha256": "86b85eb9a8fbc348525424496d562dd79589f8bf2b68feee0c096004bbdad749" },

@@ -140,6 +140,28 @@ Register-DuneRoute -Method GET -Path '/api/gameplay/players/dungeons' -Handler {
     }
 }
 
+# GET /api/gameplay/players/dungeon-difficulty-summary
+Register-DuneRoute -Method GET -Path '/api/gameplay/players/dungeon-difficulty-summary' -Handler {
+    param($req, $res, $routeParams, $body)
+    try {
+        if (Test-DuneDemoRequested $req) {
+            Write-DuneJson -Response $res -Body @{
+                ok = $true; total = 0; aboveTarget = 0; maximum = $null
+                affectedPlayers = 0; target = 50; source = 'demo'
+            }
+            return
+        }
+        $ctx = Get-DuneDbContext
+        if (-not $ctx.ok) { Write-DuneError -Response $res -Status 503 -Message $ctx.message; return }
+        $result = Get-DuneDungeonDifficultySummaryLive -Ip $ctx.ip
+        if (-not $result.ok) { Write-DuneError -Response $res -Status 503 -Message $result.error; return }
+        $result['source'] = 'live'
+        Write-DuneJson -Response $res -Body $result
+    } catch {
+        Write-DuneError -Response $res -Status 500 -Message "Dungeon difficulty summary failed: $($_.Exception.Message)"
+    }
+}
+
 # GET /api/gameplay/players/player-ids?actor_id=<id>
 Register-DuneRoute -Method GET -Path '/api/gameplay/players/player-ids' -Handler {
     param($req, $res, $routeParams, $body)

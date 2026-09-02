@@ -481,6 +481,33 @@ Spice Melange:
     ])
   })
 
+  describe('dungeon difficulty administration', () => {
+    it('loads the server-wide preview and sends the exact confirmation body', async () => {
+      await gp.getDungeonDifficultySummary()
+      expect(last().url).toBe('/api/gameplay/players/dungeon-difficulty-summary')
+
+      await gp.normalizeDungeonDifficulty('NORMALIZE DUNGEONS')
+      expect(last().url).toBe('/api/gameplay/players/normalize-dungeon-difficulty')
+      expect(last().method).toBe('POST')
+      expect(last().body).toEqual({ confirm: 'NORMALIZE DUNGEONS' })
+    })
+
+    it('uses the shipped dungeons response and query contract', async () => {
+      const row: gp.DungeonRunRow = {
+        dungeon_id: 'cave_01',
+        difficulty: '48',
+        duration_ms: 90210,
+        players_num: 3,
+        completion_id: 17,
+      }
+
+      await gp.getPlayerDungeons(42)
+
+      expect(row.completion_id).toBe(17)
+      expect(last().url).toBe('/api/gameplay/players/dungeons?player_id=42')
+    })
+  })
+
   describe('in-game teleport bookmark API', () => {
     it('arms the selected online player location capture', async () => {
       await gp.armChatTeleport('Base Camp', 42)

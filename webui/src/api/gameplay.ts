@@ -1814,10 +1814,57 @@ export function processVehicleDeletions(confirm: string) {
   )
 }
 
-export interface DungeonRunRow { dungeon_id: string; cleared: boolean; best_time_seconds?: number }
+export interface DungeonRunRow {
+  dungeon_id: string
+  difficulty: string
+  duration_ms: number
+  players_num: number
+  completion_id: number
+}
 export function getPlayerDungeons(id: number, demo?: boolean) {
-  return api<{ ok: boolean; runs: DungeonRunRow[]; source: DataSource }>(
+  return api<{ dungeons: DungeonRunRow[]; total: number; source: DataSource; liveError?: string }>(
     `/api/gameplay/players/dungeons${qs({ player_id: id, demo: demo ? 1 : undefined })}`)
+}
+
+export interface DungeonDifficultySummary {
+  ok: boolean
+  total: number
+  aboveTarget: number
+  maximum: number | null
+  affectedPlayers: number
+  target: 50
+  source: DataSource
+}
+
+export interface NormalizeDungeonDifficultyResult {
+  ok: boolean
+  noOp: boolean
+  changed: boolean
+  verified: boolean
+  restarted: boolean
+  updated: number
+  backupPath: string
+  backupSize?: number
+  summary: DungeonDifficultySummary
+  message: string
+}
+
+export function getDungeonDifficultySummary(demo?: boolean) {
+  return api<DungeonDifficultySummary>(
+    `/api/gameplay/players/dungeon-difficulty-summary${qs({ demo: demo ? 1 : undefined })}`,
+  )
+}
+
+export function normalizeDungeonDifficulty(confirm: string) {
+  return withOnlinePlayerGuard(force =>
+    api<NormalizeDungeonDifficultyResult>(
+      `/api/gameplay/players/normalize-dungeon-difficulty${force ? '?force=true' : ''}`,
+      {
+        method: 'POST',
+        body: JSON.stringify({ confirm }),
+      },
+    ),
+  )
 }
 
 export interface PlayerIdsResponse {

@@ -649,6 +649,49 @@ LIMIT 100;
     return @{ ok = $true; dungeons = $list; total = $list.Count }
 }
 
+function Get-DuneDungeonDifficultySummaryLive {
+    param([string]$Ip)
+
+    $sql = @'
+SELECT COUNT(*)::text AS total_n,
+       COUNT(*) FILTER (WHERE difficulty > 50)::text AS above_target_n,
+       COALESCE(MAX(difficulty), 0)::text AS maximum_difficulty,
+       (
+         SELECT COUNT(DISTINCT dcp.player_id)::text
+         FROM dune.dungeon_completion_players dcp
+         JOIN dune.dungeon_completion affected
+           ON affected.completion_id = dcp.completion_id
+         WHERE affected.difficulty > 50
+       ) AS affected_player_n
+FROM dune.dungeon_completion;
+'@
+    $r = Invoke-DuneSqlQuery -Ip $Ip -Sql $sql -ReadOnly $true -MaxRows 1 -TimeoutSec 15
+    if (-not $r.ok) {
+        return @{ ok = $false; error = "Dungeon difficulty summary failed: $($r.error)" }
+    }
+    $rows = ConvertTo-DuneRowMaps -Result $r
+    if ($rows.Count -ne 1) {
+        return @{ ok = $false; error = 'Dungeon difficulty summary returned no aggregate row.' }
+    }
+
+    $row = $rows[0]
+    foreach ($column in @('total_n', 'above_target_n', 'maximum_difficulty', 'affected_player_n')) {
+        if ($null -eq $row[$column] -or [string]$row[$column] -notmatch '^\d+$') {
+            return @{ ok = $false; error = "Dungeon difficulty summary returned an invalid $column value." }
+        }
+    }
+
+    $total = [int64](ConvertTo-DuneInt $row['total_n'])
+    return @{
+        ok              = $true
+        total           = $total
+        aboveTarget     = [int64](ConvertTo-DuneInt $row['above_target_n'])
+        maximum         = if ($total -gt 0) { [int](ConvertTo-DuneInt $row['maximum_difficulty']) } else { $null }
+        affectedPlayers = [int64](ConvertTo-DuneInt $row['affected_player_n'])
+        target          = 50
+    }
+}
+
 # ----- §1.9 GET /players/{id}/player-ids ----------------------------------
 function Get-DunePlayerIdsLive {
     param([string]$Ip, [long]$ActorId)

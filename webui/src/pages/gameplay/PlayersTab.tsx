@@ -15,6 +15,7 @@ import {
 } from './players/sections'
 import { CoriolisAdmin } from './players/coriolis'
 import { BaseWaterAdmin } from './players/base-water'
+import { DungeonDifficultyAdmin } from './players/dungeon-difficulty'
 
 type OnlineFilter = '' | 'online' | 'offline'
 
@@ -333,6 +334,13 @@ export function PlayersTab() {
                 <BaseWaterAdmin
                   players={visiblePlayers}
                   canWrite={source === 'live'}
+                  flash={(msg, kind = 'ok') => setFlash({ msg, kind })}
+                />
+              </div>
+              <div className="mt-3">
+                <DungeonDifficultyAdmin
+                  canWrite={source === 'live'}
+                  demo={source === 'demo'}
                   flash={(msg, kind = 'ok') => setFlash({ msg, kind })}
                 />
               </div>

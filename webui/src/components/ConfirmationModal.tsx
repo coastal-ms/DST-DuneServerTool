@@ -9,6 +9,7 @@ type Props = {
   onConfirm: () => void
   onCancel: () => void
   children?: ReactNode
+  confirmDisabled?: boolean
 }
 
 export function ConfirmationModal({
@@ -18,6 +19,7 @@ export function ConfirmationModal({
   onConfirm,
   onCancel,
   children,
+  confirmDisabled = false,
 }: Props) {
   const titleId = useId()
   const descriptionId = useId()
@@ -128,6 +130,7 @@ export function ConfirmationModal({
             type="button"
             className="btn-danger min-h-11 justify-center"
             onClick={onConfirm}
+            disabled={confirmDisabled}
           >
             <Icon name="TriangleAlert" size={15} />
             {confirmLabel}

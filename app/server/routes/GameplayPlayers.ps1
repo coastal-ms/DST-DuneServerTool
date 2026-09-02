@@ -600,3 +600,30 @@ Register-DuneRoute -Method POST -Path '/api/gameplay/players/fill-base-water' -H
         Write-DuneError -Response $res -Status 500 -Message "Fill base water failed: $($_.Exception.Message)"
     }
 }
+
+Register-DuneRoute -Method POST -Path '/api/gameplay/players/normalize-dungeon-difficulty' -Handler {
+    param($req, $res, $routeParams, $body)
+    try {
+        $confirm = [string](Get-DuneBodyValue -Body $body -Name 'confirm')
+        if ($confirm -cne 'NORMALIZE DUNGEONS') {
+            Write-DuneError -Response $res -Status 400 -Message 'Type NORMALIZE DUNGEONS exactly to continue.'
+            return
+        }
+        if (-not (Test-DuneDisruptiveActionGuard -Req $req -Res $res -Action 'normalizing server-wide dungeon completion difficulty')) { return }
+
+        $ctx = Get-DuneDbContext
+        if (-not $ctx.ok) { Write-DuneError -Response $res -Status 503 -Message $ctx.message; return }
+        try {
+            $result = Invoke-WithDuneLock -Name 'dungeon-difficulty-normalize' -TimeoutSec 1 -Script {
+                Invoke-DuneNormalizeDungeonDifficulty -Ip $ctx.ip
+            }
+        } catch {
+            Write-DuneError -Response $res -Status 409 -Message $_.Exception.Message
+            return
+        }
+        if (-not $result.ok) { Write-DuneJson -Response $res -Status 503 -Body $result; return }
+        Write-DuneJson -Response $res -Body $result
+    } catch {
+        Write-DuneError -Response $res -Status 500 -Message "Normalize dungeon difficulty failed: $($_.Exception.Message)"
+    }
+}
