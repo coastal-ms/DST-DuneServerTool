@@ -106,6 +106,54 @@ jobs:
           & icacls.exe $output /grant:r "${env:USERNAME}:(OI)(CI)RX" /T /Q
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
+      - name: Start disposable PostgreSQL fixture
+        shell: pwsh
+        run: |
+          $bin = $env:PGBIN
+          if (-not $bin -or -not (Test-Path (Join-Path $bin 'initdb.exe'))) {
+              $bin = Get-ChildItem "$env:ProgramFiles\PostgreSQL" -Directory -ErrorAction SilentlyContinue |
+                  Sort-Object Name -Descending |
+                  ForEach-Object { Join-Path $_.FullName 'bin' } |
+                  Where-Object { Test-Path (Join-Path $_ 'initdb.exe') } |
+                  Select-Object -First 1
+          }
+          if (-not $bin) { throw 'PostgreSQL server binaries are unavailable on this runner.' }
+
+          $data = Join-Path $env:RUNNER_TEMP 'dst-inventory-postgres'
+          $log = Join-Path $env:RUNNER_TEMP 'dst-inventory-postgres.log'
+          $passwordFile = Join-Path $env:RUNNER_TEMP 'dst-inventory-postgres.pw'
+          $superPassword = "$([guid]::NewGuid().ToString('N'))aA1!"
+          $rolePassword = "$([guid]::NewGuid().ToString('N'))bB2!"
+          Set-Content -LiteralPath $passwordFile -Value $superPassword -NoNewline
+          try {
+              & (Join-Path $bin 'initdb.exe') -D $data -A scram-sha-256 -U postgres `
+                  "--pwfile=$passwordFile" --no-locale --encoding=UTF8
+              $initExit = $LASTEXITCODE
+          } finally {
+              Remove-Item -LiteralPath $passwordFile -Force -ErrorAction SilentlyContinue
+          }
+          if ($initExit -ne 0) { exit $initExit }
+          & (Join-Path $bin 'pg_ctl.exe') -D $data -l $log -o '-p 55439' start
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+          $env:PGPASSWORD = $superPassword
+          & (Join-Path $bin 'psql.exe') -h localhost -p 55439 -U postgres -d postgres `
+              -v ON_ERROR_STOP=1 -c "CREATE ROLE dst_inventory LOGIN PASSWORD '$rolePassword' NOSUPERUSER NOCREATEDB NOCREATEROLE;"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          & (Join-Path $bin 'psql.exe') -h localhost -p 55439 -U postgres -d postgres `
+              -v ON_ERROR_STOP=1 -c 'CREATE DATABASE dst_inventory OWNER dst_inventory;'
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          Remove-Item Env:\PGPASSWORD
+
+          "DST_TEST_POSTGRES_PSQL=$(Join-Path $bin 'psql.exe')" | Out-File $env:GITHUB_ENV -Append -Encoding utf8
+          "DST_TEST_POSTGRES_PG_CTL=$(Join-Path $bin 'pg_ctl.exe')" | Out-File $env:GITHUB_ENV -Append -Encoding utf8
+          "DST_TEST_POSTGRES_DATA=$data" | Out-File $env:GITHUB_ENV -Append -Encoding utf8
+          'PGHOST=localhost' | Out-File $env:GITHUB_ENV -Append -Encoding utf8
+          'PGPORT=55439' | Out-File $env:GITHUB_ENV -Append -Encoding utf8
+          'PGUSER=dst_inventory' | Out-File $env:GITHUB_ENV -Append -Encoding utf8
+          'PGDATABASE=dst_inventory' | Out-File $env:GITHUB_ENV -Append -Encoding utf8
+          "PGPASSWORD=$rolePassword" | Out-File $env:GITHUB_ENV -Append -Encoding utf8
+
       - name: Run Pester suite
         shell: pwsh
         run: |
@@ -152,6 +200,15 @@ jobs:
           Write-Host $stdout.Result
           if ($stderr.Result) { Write-Host $stderr.Result }
           exit $process.ExitCode
+
+      - name: Stop disposable PostgreSQL fixture
+        if: always()
+        shell: pwsh
+        run: |
+          if ($env:DST_TEST_POSTGRES_PG_CTL -and (Test-Path $env:DST_TEST_POSTGRES_PG_CTL) -and
+              $env:DST_TEST_POSTGRES_DATA -and (Test-Path $env:DST_TEST_POSTGRES_DATA)) {
+              & $env:DST_TEST_POSTGRES_PG_CTL -D $env:DST_TEST_POSTGRES_DATA -m fast stop
+          }
 
       - name: Upload test results
         if: always()

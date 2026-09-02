@@ -432,22 +432,22 @@ function Resolve-DuneInventoryGroupSort {
         param([string]$Value)
         $sort = if ($Value) { $Value.Trim().ToLowerInvariant() } else { 'name-asc' }
         $map = @{
-            'name-asc' = @{ sql='sort_name ASC, template_id ASC'; primary='sort_name'; type='text'; direction='asc' }
-            'name-desc' = @{ sql='sort_name DESC, template_id ASC'; primary='sort_name'; type='text'; direction='desc' }
-            'quantity-desc' = @{ sql='total_quantity DESC, sort_name ASC, template_id ASC'; primary='total_quantity'; type='number'; direction='desc' }
-            'quantity-asc' = @{ sql='total_quantity ASC, sort_name ASC, template_id ASC'; primary='total_quantity'; type='number'; direction='asc' }
-            'unit-volume-desc' = @{ sql='unit_volume DESC NULLS LAST, sort_name ASC, template_id ASC'; primary='unit_volume'; type='number'; direction='desc' }
-            'unit-volume-asc' = @{ sql='unit_volume ASC NULLS LAST, sort_name ASC, template_id ASC'; primary='unit_volume'; type='number'; direction='asc' }
-            'total-volume-desc' = @{ sql='total_volume DESC NULLS LAST, sort_name ASC, template_id ASC'; primary='total_volume'; type='number'; direction='desc' }
-            'total-volume-asc' = @{ sql='total_volume ASC NULLS LAST, sort_name ASC, template_id ASC'; primary='total_volume'; type='number'; direction='asc' }
-            'tier-desc' = @{ sql='item_tier DESC NULLS LAST, sort_name ASC, template_id ASC'; primary='item_tier'; type='number'; direction='desc' }
-            'tier-asc' = @{ sql='item_tier ASC NULLS LAST, sort_name ASC, template_id ASC'; primary='item_tier'; type='number'; direction='asc' }
-            'quality-desc' = @{ sql='quality_max DESC, quality_min DESC, sort_name ASC, template_id ASC'; primary='quality_max'; secondary='quality_min'; type='number'; direction='desc' }
-            'quality-asc' = @{ sql='quality_max ASC, quality_min ASC, sort_name ASC, template_id ASC'; primary='quality_max'; secondary='quality_min'; type='number'; direction='asc' }
-            'occurrences-desc' = @{ sql='occurrence_count DESC, sort_name ASC, template_id ASC'; primary='occurrence_count'; type='number'; direction='desc' }
-            'occurrences-asc' = @{ sql='occurrence_count ASC, sort_name ASC, template_id ASC'; primary='occurrence_count'; type='number'; direction='asc' }
-            'locations-desc' = @{ sql='location_count DESC, sort_name ASC, template_id ASC'; primary='location_count'; type='number'; direction='desc' }
-            'locations-asc' = @{ sql='location_count ASC, sort_name ASC, template_id ASC'; primary='location_count'; type='number'; direction='asc' }
+            'name-asc' = @{ sql='grouped.sort_name ASC, grouped.template_id ASC'; primary='sort_name'; type='text'; direction='asc' }
+            'name-desc' = @{ sql='grouped.sort_name DESC, grouped.template_id ASC'; primary='sort_name'; type='text'; direction='desc' }
+            'quantity-desc' = @{ sql='grouped.total_quantity DESC, grouped.sort_name ASC, grouped.template_id ASC'; primary='total_quantity'; type='number'; direction='desc' }
+            'quantity-asc' = @{ sql='grouped.total_quantity ASC, grouped.sort_name ASC, grouped.template_id ASC'; primary='total_quantity'; type='number'; direction='asc' }
+            'unit-volume-desc' = @{ sql='grouped.unit_volume DESC NULLS LAST, grouped.sort_name ASC, grouped.template_id ASC'; primary='unit_volume'; type='number'; direction='desc' }
+            'unit-volume-asc' = @{ sql='grouped.unit_volume ASC NULLS LAST, grouped.sort_name ASC, grouped.template_id ASC'; primary='unit_volume'; type='number'; direction='asc' }
+            'total-volume-desc' = @{ sql='grouped.total_volume DESC NULLS LAST, grouped.sort_name ASC, grouped.template_id ASC'; primary='total_volume'; type='number'; direction='desc' }
+            'total-volume-asc' = @{ sql='grouped.total_volume ASC NULLS LAST, grouped.sort_name ASC, grouped.template_id ASC'; primary='total_volume'; type='number'; direction='asc' }
+            'tier-desc' = @{ sql='grouped.item_tier DESC NULLS LAST, grouped.sort_name ASC, grouped.template_id ASC'; primary='item_tier'; type='number'; direction='desc' }
+            'tier-asc' = @{ sql='grouped.item_tier ASC NULLS LAST, grouped.sort_name ASC, grouped.template_id ASC'; primary='item_tier'; type='number'; direction='asc' }
+            'quality-desc' = @{ sql='grouped.quality_max DESC, grouped.quality_min DESC, grouped.sort_name ASC, grouped.template_id ASC'; primary='quality_max'; secondary='quality_min'; type='number'; direction='desc' }
+            'quality-asc' = @{ sql='grouped.quality_max ASC, grouped.quality_min ASC, grouped.sort_name ASC, grouped.template_id ASC'; primary='quality_max'; secondary='quality_min'; type='number'; direction='asc' }
+            'occurrences-desc' = @{ sql='grouped.occurrence_count DESC, grouped.sort_name ASC, grouped.template_id ASC'; primary='occurrence_count'; type='number'; direction='desc' }
+            'occurrences-asc' = @{ sql='grouped.occurrence_count ASC, grouped.sort_name ASC, grouped.template_id ASC'; primary='occurrence_count'; type='number'; direction='asc' }
+            'locations-desc' = @{ sql='grouped.location_count DESC, grouped.sort_name ASC, grouped.template_id ASC'; primary='location_count'; type='number'; direction='desc' }
+            'locations-asc' = @{ sql='grouped.location_count ASC, grouped.sort_name ASC, grouped.template_id ASC'; primary='location_count'; type='number'; direction='asc' }
         }
         if (-not $map.ContainsKey($sort)) { return @{ ok = $false; error = "Unsupported inventory sort '$sort'." } }
         return @{
@@ -460,14 +460,14 @@ function Resolve-DuneInventoryOccurrenceSort {
         param([string]$Value)
         $sort = if ($Value) { $Value.Trim().ToLowerInvariant() } else { 'player-asc' }
         $map = @{
-            'player-asc' = @{ sql='lower(player_name) ASC NULLS LAST, item_id ASC'; primary='lower(player_name)'; type='text'; direction='asc' }
-            'player-desc' = @{ sql='lower(player_name) DESC NULLS LAST, item_id ASC'; primary='lower(player_name)'; type='text'; direction='desc' }
-            'location-asc' = @{ sql='lower(entity_label) ASC NULLS LAST, item_id ASC'; primary='lower(entity_label)'; type='text'; direction='asc' }
-            'location-desc' = @{ sql='lower(entity_label) DESC NULLS LAST, item_id ASC'; primary='lower(entity_label)'; type='text'; direction='desc' }
-            'quantity-desc' = @{ sql='stack_size DESC NULLS LAST, item_id ASC'; primary='stack_size'; type='number'; direction='desc' }
-            'quantity-asc' = @{ sql='stack_size ASC NULLS LAST, item_id ASC'; primary='stack_size'; type='number'; direction='asc' }
-            'quality-desc' = @{ sql='quality_level DESC NULLS LAST, item_id ASC'; primary='quality_level'; type='number'; direction='desc' }
-            'quality-asc' = @{ sql='quality_level ASC NULLS LAST, item_id ASC'; primary='quality_level'; type='number'; direction='asc' }
+            'player-asc' = @{ sql='lower(r.player_name) ASC NULLS LAST, r.item_id ASC'; primary='lower(r.player_name)'; type='text'; direction='asc' }
+            'player-desc' = @{ sql='lower(r.player_name) DESC NULLS LAST, r.item_id ASC'; primary='lower(r.player_name)'; type='text'; direction='desc' }
+            'location-asc' = @{ sql='lower(r.entity_label) ASC NULLS LAST, r.item_id ASC'; primary='lower(r.entity_label)'; type='text'; direction='asc' }
+            'location-desc' = @{ sql='lower(r.entity_label) DESC NULLS LAST, r.item_id ASC'; primary='lower(r.entity_label)'; type='text'; direction='desc' }
+            'quantity-desc' = @{ sql='r.stack_size DESC NULLS LAST, r.item_id ASC'; primary='r.stack_size'; type='number'; direction='desc' }
+            'quantity-asc' = @{ sql='r.stack_size ASC NULLS LAST, r.item_id ASC'; primary='r.stack_size'; type='number'; direction='asc' }
+            'quality-desc' = @{ sql='r.quality_level DESC NULLS LAST, r.item_id ASC'; primary='r.quality_level'; type='number'; direction='desc' }
+            'quality-asc' = @{ sql='r.quality_level ASC NULLS LAST, r.item_id ASC'; primary='r.quality_level'; type='number'; direction='asc' }
         }
         if (-not $map.ContainsKey($sort)) { return @{ ok = $false; error = "Unsupported occurrence sort '$sort'." } }
         return @{ ok = $true; value = $sort; sql = $map[$sort].sql; primary = $map[$sort].primary; type = $map[$sort].type; direction = $map[$sort].direction }
@@ -917,24 +917,24 @@ player_facets AS (
     FROM searched_rows WHERE player_id IS NOT NULL AND player_id > 0 GROUP BY player_id
 ),
 grouped AS (
-    SELECT lower(trim(template_id)) AS group_key, MIN(template_id) AS template_id,
-           SUM(stack_size)::bigint AS total_quantity, COUNT(*)::bigint AS occurrence_count,
-           COUNT(DISTINCT entity_type || ':' || entity_id::text)::bigint AS location_count,
-           MIN(quality_level)::integer AS quality_min, MAX(quality_level)::integer AS quality_max,
-           MIN(COALESCE(meta.value->>'name', template_id)) AS sort_name,
+    SELECT lower(trim(r.template_id)) AS group_key, MIN(r.template_id) AS template_id,
+           SUM(r.stack_size)::bigint AS total_quantity, COUNT(*)::bigint AS occurrence_count,
+           COUNT(DISTINCT r.entity_type || ':' || r.entity_id::text)::bigint AS location_count,
+           MIN(r.quality_level)::integer AS quality_min, MAX(r.quality_level)::integer AS quality_max,
+           MIN(COALESCE(meta.value->>'name', r.template_id)) AS sort_name,
            MAX((meta.value->>'tier')::integer) AS item_tier,
            MAX((meta.value->>'volume')::double precision) AS unit_volume,
-           MAX((meta.value->>'volume')::double precision) * SUM(stack_size)::double precision AS total_volume
-    FROM searched_rows CROSS JOIN _dst_parameters p
-    LEFT JOIN LATERAL jsonb_each(p.catalog_metadata::jsonb) meta ON meta.key = lower(trim(searched_rows.template_id))
-    WHERE (p.player_id = 0 OR searched_rows.player_id = p.player_id)
-      AND (p.location_type = '' OR (searched_rows.entity_type = p.location_type AND searched_rows.entity_id = p.location_id))
-    GROUP BY lower(trim(template_id))
+           MAX((meta.value->>'volume')::double precision) * SUM(r.stack_size)::double precision AS total_volume
+    FROM searched_rows r CROSS JOIN _dst_parameters p
+    LEFT JOIN LATERAL jsonb_each(p.catalog_metadata::jsonb) meta ON meta.key = lower(trim(r.template_id))
+    WHERE (p.player_id = 0 OR r.player_id = p.player_id)
+      AND (p.location_type = '' OR (r.entity_type = p.location_type AND r.entity_id = p.location_id))
+    GROUP BY lower(trim(r.template_id))
 )
-SELECT 'group'::text AS row_kind, group_key, template_id, total_quantity, occurrence_count,
-       location_count, quality_min, quality_max, NULL::bigint AS player_id, NULL::text AS player_name,
-       sort_name, COALESCE(($primary)::text, '') AS sort_value,
-       $(if ($sortSpec.secondary) { "COALESCE(($([string]$sortSpec.secondary))::text, '')" } else { "''::text" }) AS sort_secondary
+SELECT 'group'::text AS row_kind, grouped.group_key, grouped.template_id, grouped.total_quantity, grouped.occurrence_count,
+       grouped.location_count, grouped.quality_min, grouped.quality_max, NULL::bigint AS player_id, NULL::text AS player_name,
+       grouped.sort_name, COALESCE((grouped.$primary)::text, '') AS sort_value,
+       $(if ($sortSpec.secondary) { "COALESCE((grouped.$([string]$sortSpec.secondary))::text, '')" } else { "''::text" }) AS sort_secondary
 FROM grouped CROSS JOIN _dst_parameters p
 WHERE $pageWhere
 ORDER BY $($sortSpec.sql) LIMIT (SELECT row_limit FROM _dst_parameters)
@@ -966,12 +966,12 @@ ORDER BY player_name, player_id LIMIT 50000
     $locationSql = @"
 WITH $cte,
 search_locations AS (
-    SELECT entity_type, entity_id, MAX(CASE WHEN entity_type = 'player' THEN 'Backpack' ELSE entity_label END) AS entity_label,
-           MAX(owner_name) AS owner_name, MAX(player_id)::bigint AS player_id, MAX(player_name) AS player_name,
+    SELECT r.entity_type, r.entity_id, MAX(CASE WHEN r.entity_type = 'player' THEN 'Backpack' ELSE r.entity_label END) AS entity_label,
+           MAX(r.owner_name) AS owner_name, MAX(r.player_id)::bigint AS player_id, MAX(r.player_name) AS player_name,
            COUNT(*)::bigint AS occurrence_count
-    FROM searched_rows CROSS JOIN _dst_parameters p
-    WHERE (p.player_id = 0 OR searched_rows.player_id = p.player_id)
-    GROUP BY entity_type, entity_id
+    FROM searched_rows r CROSS JOIN _dst_parameters p
+    WHERE (p.player_id = 0 OR r.player_id = p.player_id)
+    GROUP BY r.entity_type, r.entity_id
 ),
 active_location AS (
     SELECT r.entity_type, r.entity_id, MAX(CASE WHEN r.entity_type = 'player' THEN 'Backpack' ELSE r.entity_label END) AS entity_label,
@@ -1118,20 +1118,20 @@ function Invoke-DuneInventoryOccurrencesLive {
     $primary = [string]$sortSpec.primary
     $comparison = if ($sortSpec.direction -eq 'asc') { '>' } else { '<' }
     if ($sortSpec.type -eq 'text') {
-        $pageWhere = "(p.after_item_id = 0 OR $primary $comparison p.after_sort_value OR ($primary = p.after_sort_value AND item_id > p.after_item_id))"
+        $pageWhere = "(p.after_item_id = 0 OR $primary $comparison p.after_sort_value OR ($primary = p.after_sort_value AND r.item_id > p.after_item_id))"
     } else {
-        $pageWhere = "(p.after_item_id = 0 OR $primary IS NULL OR $primary $comparison p.after_sort_value::double precision OR ($primary = p.after_sort_value::double precision AND item_id > p.after_item_id))"
+        $pageWhere = "(p.after_item_id = 0 OR $primary IS NULL OR $primary $comparison p.after_sort_value::double precision OR ($primary = p.after_sort_value::double precision AND r.item_id > p.after_item_id))"
     }
     $cte = Get-DuneInventoryFilteredCteSql
     $sql = @"
 WITH $cte
-SELECT item_id, template_id, stack_size, quality_level, durability, max_durability,
-       water_amount, water_type, inventory_id, inventory_type, entity_type, entity_id,
-       entity_label, owner_name, map, entity_class, player_id, player_name
-FROM searched_rows CROSS JOIN _dst_parameters p
-WHERE lower(trim(template_id)) = lower(trim(p.template_id))
-  AND (p.player_id = 0 OR searched_rows.player_id = p.player_id)
-  AND (p.location_type = '' OR (searched_rows.entity_type = p.location_type AND searched_rows.entity_id = p.location_id))
+SELECT r.item_id, r.template_id, r.stack_size, r.quality_level, r.durability, r.max_durability,
+       r.water_amount, r.water_type, r.inventory_id, r.inventory_type, r.entity_type, r.entity_id,
+       r.entity_label, r.owner_name, r.map, r.entity_class, r.player_id, r.player_name
+FROM searched_rows r CROSS JOIN _dst_parameters p
+WHERE lower(trim(r.template_id)) = lower(trim(p.template_id))
+  AND (p.player_id = 0 OR r.player_id = p.player_id)
+  AND (p.location_type = '' OR (r.entity_type = p.location_type AND r.entity_id = p.location_id))
   AND $pageWhere
 ORDER BY $($sortSpec.sql) LIMIT (SELECT row_limit FROM _dst_parameters)
 "@
@@ -1146,8 +1146,8 @@ ORDER BY $($sortSpec.sql) LIMIT (SELECT row_limit FROM _dst_parameters)
     $facetSql = @"
 WITH $cte,
 template_rows AS (
-    SELECT searched_rows.* FROM searched_rows CROSS JOIN _dst_parameters p
-    WHERE lower(trim(template_id)) = lower(trim(p.template_id))
+    SELECT r.* FROM searched_rows r CROSS JOIN _dst_parameters p
+    WHERE lower(trim(r.template_id)) = lower(trim(p.template_id))
 )
 SELECT player_id, MAX(player_name) AS player_name, COUNT(*)::bigint AS occurrence_count
 FROM template_rows WHERE player_id IS NOT NULL AND player_id > 0
@@ -1160,15 +1160,15 @@ GROUP BY player_id ORDER BY player_name, player_id LIMIT 500
     $locationSql = @"
 WITH $cte,
 template_rows AS (
-    SELECT searched_rows.* FROM searched_rows CROSS JOIN _dst_parameters p
-    WHERE lower(trim(template_id)) = lower(trim(p.template_id))
+    SELECT r.* FROM searched_rows r CROSS JOIN _dst_parameters p
+    WHERE lower(trim(r.template_id)) = lower(trim(p.template_id))
 )
-SELECT entity_type, entity_id, MAX(CASE WHEN entity_type = 'player' THEN 'Backpack' ELSE entity_label END) AS entity_label,
-       MAX(owner_name) AS owner_name, MAX(player_id)::bigint AS player_id, MAX(player_name) AS player_name,
+SELECT t.entity_type, t.entity_id, MAX(CASE WHEN t.entity_type = 'player' THEN 'Backpack' ELSE t.entity_label END) AS entity_label,
+       MAX(t.owner_name) AS owner_name, MAX(t.player_id)::bigint AS player_id, MAX(t.player_name) AS player_name,
        COUNT(*)::bigint AS occurrence_count
-FROM template_rows CROSS JOIN _dst_parameters p
-WHERE (p.player_id = 0 OR template_rows.player_id = p.player_id)
-GROUP BY entity_type, entity_id ORDER BY entity_type, entity_label, entity_id LIMIT 1000
+FROM template_rows t CROSS JOIN _dst_parameters p
+WHERE (p.player_id = 0 OR t.player_id = p.player_id)
+GROUP BY t.entity_type, t.entity_id ORDER BY t.entity_type, entity_label, t.entity_id LIMIT 1000
 "@
     $locationResult = Invoke-DuneSqlQuery -Ip $Ip `
         -Sql (New-DuneInventoryParameterizedSql -Sql $locationSql -Parameters $binding.values -ParameterTypes $binding.types) `
