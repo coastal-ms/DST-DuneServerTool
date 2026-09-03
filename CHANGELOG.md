@@ -25,6 +25,9 @@ here cover everything those tags shipped.
 
 - Fixed Shared Inventory Explorer results collapsing into one blank item and
   occurrence details failing to reach their read-only API route.
+- Hardened shared `!tp <destination>` replay against intermittent game-side
+  command misses by repeating only that safe teleport inside one paced broker
+  invocation.
 
 ## [15.0.0-phase2-test1] - 2026-09-02
 
