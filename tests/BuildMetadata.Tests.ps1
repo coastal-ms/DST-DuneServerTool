@@ -21,6 +21,44 @@ BeforeAll {
         }
         return "$(& git -C $Path rev-parse HEAD)".Trim().ToLowerInvariant()
     }
+
+    function Get-ReleaseLookupGuardScripts {
+        param([Parameter(Mandatory)][string]$Workflow)
+
+        $pattern = '(?ms)^ {10}\$nativeErrorPreference = .*?^ {10}if \(\(\$lookupOutput -join "`n"\) -notmatch .*?^ {10}\}\r?$'
+        return @([regex]::Matches($Workflow, $pattern) | ForEach-Object {
+            $source = $_.Value -replace '(?m)^ {10}', ''
+            $source = $source.Replace('${{ github.repository }}', 'coastal-ms/DST-DuneServerTool')
+            [scriptblock]::Create($source)
+        })
+    }
+
+    function Invoke-ReleaseLookupGuardScript {
+        param(
+            [Parameter(Mandatory)][scriptblock]$GuardScript,
+            [Parameter(Mandatory)][int]$ExitCode,
+            [Parameter(Mandatory)][string]$Output
+        )
+
+        $previousTag = $env:RELEASE_TAG
+        $previousExitCode = $env:DST_TEST_GH_EXIT_CODE
+        $previousOutput = $env:DST_TEST_GH_OUTPUT
+        try {
+            $env:RELEASE_TAG = 'v15.0.0-phase2-test1.1'
+            $env:DST_TEST_GH_EXIT_CODE = [string]$ExitCode
+            $env:DST_TEST_GH_OUTPUT = $Output
+            function global:gh {
+                $env:DST_TEST_GH_OUTPUT
+                $global:LASTEXITCODE = [int]$env:DST_TEST_GH_EXIT_CODE
+            }
+            & $GuardScript
+        } finally {
+            Remove-Item function:\global:gh -ErrorAction SilentlyContinue
+            $env:RELEASE_TAG = $previousTag
+            $env:DST_TEST_GH_EXIT_CODE = $previousExitCode
+            $env:DST_TEST_GH_OUTPUT = $previousOutput
+        }
+    }
 }
 
 Describe 'Build artifact metadata' {
@@ -98,16 +136,31 @@ Describe 'Build artifact metadata' {
     It 'treats only an API 404 as an absent release' {
         $repo = Split-Path $PSScriptRoot -Parent
         $workflow = Get-Content -LiteralPath (Join-Path $repo '.github\workflows\release-signed.yml') -Raw
+        $guards = @(Get-ReleaseLookupGuardScripts -Workflow $workflow)
+        $guards.Count | Should -Be 2
 
-        $workflow | Should -Not -Match 'gh release view .*--json tagName \*>\s*\$null'
-        ([regex]::Matches($workflow, [regex]::Escape('$PSNativeCommandUseErrorActionPreference = $false'))).Count |
-            Should -Be 2
-        ([regex]::Matches($workflow, 'gh api "repos/\$\{\{ github\.repository \}\}/releases/tags/\$encodedTag" --include 2>&1')).Count |
-            Should -Be 2
-        ([regex]::Matches($workflow, [regex]::Escape("(?m)^HTTP/\S+\s+404(?:\s|$)"))).Count |
-            Should -Be 2
-        ([regex]::Matches($workflow, 'Could not determine whether release .* exists:')).Count |
-            Should -Be 2
+        foreach ($guard in $guards) {
+            {
+                Invoke-ReleaseLookupGuardScript `
+                    -GuardScript $guard `
+                    -ExitCode 0 `
+                    -Output "HTTP/2.0 200 OK`nContent-Type: application/json"
+            } | Should -Throw '*already exists*'
+
+            {
+                Invoke-ReleaseLookupGuardScript `
+                    -GuardScript $guard `
+                    -ExitCode 1 `
+                    -Output "HTTP/2.0 404 Not Found`nContent-Type: application/json"
+            } | Should -Not -Throw
+
+            {
+                Invoke-ReleaseLookupGuardScript `
+                    -GuardScript $guard `
+                    -ExitCode 1 `
+                    -Output "HTTP/2.0 401 Unauthorized`nContent-Type: application/json"
+            } | Should -Throw '*Could not determine whether release*'
+        }
     }
 
     It 'validates release versions and derives numeric resource versions' {
