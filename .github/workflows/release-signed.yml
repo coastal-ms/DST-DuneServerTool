@@ -106,6 +106,7 @@ jobs:
           if (($lookupOutput -join "`n") -notmatch '(?m)^HTTP/\S+\s+404(?:\s|$)') {
             throw "Could not determine whether release $env:RELEASE_TAG exists:`n$($lookupOutput -join "`n")"
           }
+          $global:LASTEXITCODE = 0
 
       - name: Setup .NET 10 SDK
         uses: actions/setup-dotnet@v4
@@ -364,6 +365,7 @@ jobs:
           if (($lookupOutput -join "`n") -notmatch '(?m)^HTTP/\S+\s+404(?:\s|$)') {
             throw "Could not determine whether release $env:RELEASE_TAG exists:`n$($lookupOutput -join "`n")"
           }
+          $global:LASTEXITCODE = 0
 
           . '${{ github.workspace }}\app\build\BuildHelpers.ps1'
           $isPrerelease = Test-DunePrereleaseTag -BuildTag $env:RELEASE_TAG

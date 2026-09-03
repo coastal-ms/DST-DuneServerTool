@@ -25,7 +25,7 @@ BeforeAll {
     function Get-ReleaseLookupGuardScripts {
         param([Parameter(Mandatory)][string]$Workflow)
 
-        $pattern = '(?ms)^ {10}\$nativeErrorPreference = .*?^ {10}if \(\(\$lookupOutput -join "`n"\) -notmatch .*?^ {10}\}\r?$'
+        $pattern = '(?ms)^ {10}\$nativeErrorPreference = .*?^ {10}if \(\(\$lookupOutput -join "`n"\) -notmatch .*?^ {10}\}\r?\n^ {10}\$global:LASTEXITCODE = 0\r?$'
         return @([regex]::Matches($Workflow, $pattern) | ForEach-Object {
             $source = $_.Value -replace '(?m)^ {10}', ''
             $source = $source.Replace('${{ github.repository }}', 'coastal-ms/DST-DuneServerTool')
@@ -153,6 +153,7 @@ Describe 'Build artifact metadata' {
                     -ExitCode 1 `
                     -Output "HTTP/2.0 404 Not Found`nContent-Type: application/json"
             } | Should -Not -Throw
+            (Get-Variable -Name LASTEXITCODE -Scope Global).Value | Should -Be 0
 
             {
                 Invoke-ReleaseLookupGuardScript `
