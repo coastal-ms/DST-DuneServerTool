@@ -176,7 +176,15 @@ function VehicleFleetWorkspace() {
         {!loading && vehicles && queue && (
           <>
             <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-              <FreshnessBadge state="fresh" label={`${vehicles.length} live vehicle${vehicles.length === 1 ? '' : 's'}`} />
+              <div className="flex flex-wrap items-center gap-2">
+                <FreshnessBadge state="fresh" label={`${vehicles.length} live vehicle${vehicles.length === 1 ? '' : 's'}`} />
+                <span
+                  className="pill border-info/40 bg-info/10 text-info"
+                  title="This page uses temporary sample vehicle records until live vehicle details are complete."
+                >
+                  Demo Data
+                </span>
+              </div>
               <button className="btn-secondary" disabled={busy !== null} onClick={() => { void load() }}>
                 <Icon name="RefreshCw" size={14} />
                 Refresh

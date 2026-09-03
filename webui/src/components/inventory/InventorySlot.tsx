@@ -17,7 +17,7 @@ export function InventorySlot({
   const [hoverSuppressed, setHoverSuppressed] = useState(false)
   const [focused, setFocused] = useState(false)
   const [position, setPosition] = useState({ left: 8, top: 8 })
-  const showInfo = (hovered && !hoverSuppressed) || focused
+  const showInfo = (hovered || focused) && !hoverSuppressed
   const name = item.displayName || item.templateId
   const quality = item.quality.mixed ? `${item.quality.min}-${item.quality.max}` : String(item.quality.max)
 
@@ -76,6 +76,7 @@ export function InventorySlot({
         ref={buttonRef}
         type="button"
         data-inventory-slot
+        data-inventory-preview-id={tooltipId}
         aria-label={`${name}, total quantity ${item.totalQuantity}, ${item.occurrenceCount} occurrences across ${item.locationCount} locations, quality ${quality}`}
         aria-describedby={showInfo ? tooltipId : undefined}
         className="group relative flex aspect-square min-h-22 w-full min-w-0 flex-col overflow-hidden rounded-xl border border-border bg-surface/85 text-left shadow-[inset_0_1px_rgba(255,255,255,0.04),0_6px_16px_-12px_rgba(0,0,0,0.9)] transition-[border-color,background-color,transform] duration-150 hover:-translate-y-0.5 hover:border-accent/60 hover:bg-surface-2 focus:outline-none focus-visible:border-ibad focus-visible:ring-2 focus-visible:ring-ibad active:translate-y-0"
@@ -86,8 +87,18 @@ export function InventorySlot({
         }}
         onMouseLeave={() => {
           setHovered(false)
+          const focusedSlot = document.activeElement instanceof HTMLElement
+            ? document.activeElement.closest<HTMLElement>('[data-inventory-preview-id]')
+            : null
+          document.dispatchEvent(new CustomEvent('inventory-slot-hover', {
+            detail: focusedSlot?.dataset.inventoryPreviewId ?? '',
+          }))
         }}
-        onFocus={() => setFocused(true)}
+        onFocus={() => {
+          document.dispatchEvent(new CustomEvent('inventory-slot-hover', { detail: tooltipId }))
+          setHoverSuppressed(false)
+          setFocused(true)
+        }}
         onBlur={() => setFocused(false)}
         onClick={() => {
           setHovered(false)

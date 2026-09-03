@@ -13,6 +13,27 @@ here cover everything those tags shipped.
 
 ## [Unreleased]
 
+## [15.0.0-phase2-test3] - 2026-09-03
+
+### Added
+
+- Added a read-only current-inventory browser to Solo Mode with grouped item
+  icons, catalog names, search, location filtering, sorting, quantity and
+  quality summaries, and per-location details across the backpack and supported
+  built storage. Large inventories load in bounded groups of 100 item types.
+- Added backup-safe loaded-ammo editing for an exact Solo ranged weapon, with
+  clear guidance that values through 16,777,215 count down normally while
+  2,000,000,000 provides field-confirmed infinite ammo.
+- Added backup-safe editing of the Solo character backpack slot capacity,
+  independent from inventory volume.
+- Labeled the early Vehicles workspace as Demo Data until its live fleet
+  presentation is complete.
+
+### Fixed
+
+- Prevented a focused inventory slot and a hovered slot from showing two item
+  previews at once across Shared Inventory and Solo Mode.
+
 ## [15.0.0-phase2-test2] - 2026-09-03
 
 ### Added

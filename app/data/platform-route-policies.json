@@ -178,7 +178,7 @@
     { "source": "Setup.ps1", "capabilityId": "settings.setup", "routeCount": 11, "sha256": "c0fed70bfe378372fe315534a9598e6203b3b4c22b65a16070186cd296cac73c" },
     { "source": "Shutdown.ps1", "capabilityId": "host.lifecycle", "routeCount": 1, "sha256": "35a9d26192452ee7131cb3541e69cfcd242208f7db855c47e3a4998194797f4f" },
     { "source": "Sietch.ps1", "capabilityId": "operation.topology", "routeCount": 2, "sha256": "c8d97b8e6b93456bbb9eb3eb8a3a77cde95186a15891d5c8e135790e65b73ad6" },
-    { "source": "SoloMode.ps1", "capabilityId": "host.solo", "routeCount": 22, "sha256": "1b7d847949b2493c8eb96af7063673ff83c4d72975d044924a759cc789668349" },
+    { "source": "SoloMode.ps1", "capabilityId": "host.solo", "routeCount": 24, "sha256": "6a453d74048fe2fc46b38d1107f140cbd36c8b36054631656160ae009718fbb8" },
     { "source": "Status.ps1", "capabilityId": "platform.status", "routeCount": 3, "sha256": "d6cccf669f2d527afb82558161f0a8219345bd12240ddff6964ef0632d5cd56b" },
     { "source": "System.ps1", "capabilityId": "operation.health", "routeCount": 5, "sha256": "2840b487061a7fedff813099e99340c35828a620a1f7bdd703101a0a3fde5396" },
     { "source": "Terminal.ps1", "capabilityId": "host.powershell", "routeCount": 1, "sha256": "5d7ac95f866d37d8b7d5b1a1cfd35275ccac7a2f990f2ad2b80409717ad56873" },

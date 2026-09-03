@@ -93,6 +93,17 @@ internal static partial class Program
                     Require(options, "safety-backup"),
                     ParseItemId(RequireValue(options, "item-id")),
                     Require(options, "adapter")),
+                "set-weapon-ammo" => SetWeaponAmmo(
+                    Require(options, "input"),
+                    Require(options, "safety-backup"),
+                    ParseItemId(RequireValue(options, "item-id")),
+                    ParseBalance(RequireValue(options, "ammo"), "Ammo"),
+                    Require(options, "catalog")),
+                "set-backpack-slots" => SetBackpackSlots(
+                    Require(options, "input"),
+                    Require(options, "safety-backup"),
+                    ParseBalance(RequireValue(options, "slots"), "Backpack slots"),
+                    Require(options, "catalog")),
                 "max-augment-attributes" => MaxAugmentAttributes(
                     Require(options, "input"),
                     Require(options, "safety-backup")),
@@ -130,6 +141,163 @@ internal static partial class Program
         {
             WriteJson(new { ok = false, error = ex.Message });
             return 1;
+        }
+    }
+
+    private static object SetWeaponAmmo(
+        string input,
+        string safetyBackup,
+        long itemId,
+        long ammo,
+        string catalogPath,
+        bool requireGameClosed = true)
+    {
+        if (ammo > 2_000_000_000)
+        {
+            throw new InvalidDataException("Ammo must be between 0 and 2000000000.");
+        }
+        var catalog = ReadCatalog(catalogPath);
+        var originalBytes = ReadStable(input);
+        EnsureWritableInspection(InspectBytes(originalBytes, input, catalog));
+        var wrapped = Unwrap(originalBytes);
+        var root = Path.Combine(Path.GetTempPath(), $"dune-solo-ammo-{Guid.NewGuid():N}");
+        Directory.CreateDirectory(root);
+        var templateId = string.Empty;
+        try
+        {
+            var sqlitePath = Path.Combine(root, "ammo.sqlite");
+            File.WriteAllBytes(sqlitePath, wrapped.SqliteBytes);
+            var connectionString = new SqliteConnectionStringBuilder
+            {
+                DataSource = sqlitePath,
+                Mode = SqliteOpenMode.ReadWrite,
+                Pooling = false
+            }.ToString();
+            using (var connection = new SqliteConnection(connectionString))
+            {
+                connection.Open();
+                ExecuteNonQuery(connection, "PRAGMA foreign_keys = ON;");
+                ExecuteNonQuery(connection, "BEGIN IMMEDIATE;");
+                try
+                {
+                    var supportedInventories = ReadInventoryDestinations(connection, catalog)
+                        .Select(value => value.Id)
+                        .ToHashSet();
+                    var pawnId = ScalarLong(
+                        connection,
+                        "SELECT player_pawn_id FROM player_state LIMIT 1;");
+                    using var lookup = connection.CreateCommand();
+                    lookup.CommandText = """
+                        SELECT items.template_id,
+                               items.inventory_id,
+                               inventories.actor_id
+                        FROM items
+                        JOIN inventories ON inventories.id = items.inventory_id
+                        WHERE items.id = $item
+                          AND json_valid(items.stats)
+                          AND json_type(items.stats, '$.FWeaponItemStats[1].CurrentAmmo')
+                              IN ('integer', 'real');
+                        """;
+                    lookup.Parameters.AddWithValue("$item", itemId);
+                    using var lookupReader = lookup.ExecuteReader();
+                    if (!lookupReader.Read())
+                    {
+                        throw new InvalidDataException(
+                            "The selected ranged weapon no longer has an editable CurrentAmmo value.");
+                    }
+                    templateId = lookupReader.GetString(0);
+                    var inventoryId = lookupReader.GetInt64(1);
+                    var actorId = lookupReader.IsDBNull(2) ? 0 : lookupReader.GetInt64(2);
+                    lookupReader.Close();
+                    if (!supportedInventories.Contains(inventoryId) && actorId != pawnId)
+                    {
+                        throw new InvalidDataException(
+                            "The selected ranged weapon is not in a supported Solo inventory.");
+                    }
+                    var affected = ExecuteNonQuery(
+                        connection,
+                        """
+                        UPDATE items
+                        SET stats = json_set(
+                                stats,
+                                '$.FWeaponItemStats[1].CurrentAmmo',
+                                $ammo
+                            ),
+                            is_new = 1
+                        WHERE id = $item;
+                        """,
+                        ("$ammo", ammo),
+                        ("$item", itemId));
+                    if (affected != 1)
+                    {
+                        throw new InvalidDataException("The selected ranged weapon was not updated.");
+                    }
+                    var verified = ScalarLong(
+                        connection,
+                        """
+                        SELECT CAST(json_extract(
+                            stats,
+                            '$.FWeaponItemStats[1].CurrentAmmo'
+                        ) AS INTEGER)
+                        FROM items
+                        WHERE id = $item;
+                        """,
+                        ("$item", itemId));
+                    if (verified != ammo)
+                    {
+                        throw new InvalidDataException("Weapon ammo verification failed.");
+                    }
+                    var integrity = ScalarString(connection, "PRAGMA integrity_check;");
+                    var foreignKeys = ScalarLong(
+                        connection,
+                        "SELECT COUNT(*) FROM pragma_foreign_key_check;");
+                    if (!string.Equals(integrity, "ok", StringComparison.OrdinalIgnoreCase)
+                        || foreignKeys != 0)
+                    {
+                        throw new InvalidDataException(
+                            $"Weapon ammo validation failed (integrity={integrity}, foreignKeys={foreignKeys}).");
+                    }
+                    ExecuteNonQuery(connection, "COMMIT;");
+                }
+                catch
+                {
+                    try { ExecuteNonQuery(connection, "ROLLBACK;"); } catch { }
+                    throw;
+                }
+            }
+
+            var mutated = Path.Combine(root, "game.db");
+            WrapSqlite(sqlitePath, mutated);
+            EnsureWritableInspection(InspectPath(mutated, catalogPath));
+            Restore(
+                mutated,
+                input,
+                safetyBackup,
+                expectedTargetBytes: originalBytes,
+                requireGameClosed);
+            return new
+            {
+                ok = true,
+                itemId,
+                templateId,
+                currentAmmo = ammo,
+                safetyBackup,
+                inspection = InspectPath(input, catalogPath)
+            };
+        }
+        finally
+        {
+            try
+            {
+                if (Directory.Exists(root))
+                {
+                    Directory.Delete(root, recursive: true);
+                }
+            }
+            catch
+            {
+                // A stale temp directory is safer than hiding the ammo result.
+            }
         }
     }
 
@@ -194,7 +362,12 @@ internal static partial class Program
         return new { ok = true, path = output, inspection };
     }
 
-    private static object Restore(string input, string target, string safetyBackup)
+    private static object Restore(
+        string input,
+        string target,
+        string safetyBackup,
+        byte[]? expectedTargetBytes = null,
+        bool requireGameClosed = false)
     {
         if (!File.Exists(target))
         {
@@ -224,6 +397,18 @@ internal static partial class Program
         try
         {
             File.WriteAllBytes(temp, replacementBytes);
+            if (requireGameClosed)
+            {
+                AssertSoloGameClosedForMutation();
+            }
+            if (expectedTargetBytes is not null
+                && !CryptographicOperations.FixedTimeEquals(
+                    SHA256.HashData(expectedTargetBytes),
+                    SHA256.HashData(ReadStable(target))))
+            {
+                throw new IOException(
+                    "Solo save changed while the update was being prepared. Nothing was replaced.");
+            }
             File.Replace(temp, target, replaceBackup, ignoreMetadataErrors: true);
             targetReplaced = true;
             File.Copy(replaceBackup, safetyTemp);
@@ -459,6 +644,140 @@ internal static partial class Program
                 }
             }
         }
+
+    private static object SetBackpackSlots(
+        string input,
+        string safetyBackup,
+        long slots,
+        string catalogPath,
+        bool requireGameClosed = true)
+    {
+        if (slots is < 1 or > 100_000)
+        {
+            throw new InvalidDataException("Backpack slots must be between 1 and 100000.");
+        }
+        var catalog = ReadCatalog(catalogPath);
+        var originalBytes = ReadStable(input);
+        EnsureWritableInspection(InspectBytes(originalBytes, input, catalog));
+        var wrapped = Unwrap(originalBytes);
+        var root = Path.Combine(Path.GetTempPath(), $"dune-solo-slots-{Guid.NewGuid():N}");
+        Directory.CreateDirectory(root);
+        long inventoryId = 0;
+        try
+        {
+            var sqlitePath = Path.Combine(root, "slots.sqlite");
+            File.WriteAllBytes(sqlitePath, wrapped.SqliteBytes);
+            var connectionString = new SqliteConnectionStringBuilder
+            {
+                DataSource = sqlitePath,
+                Mode = SqliteOpenMode.ReadWrite,
+                Pooling = false
+            }.ToString();
+            using (var connection = new SqliteConnection(connectionString))
+            {
+                connection.Open();
+                ExecuteNonQuery(connection, "PRAGMA foreign_keys = ON;");
+                ExecuteNonQuery(connection, "BEGIN IMMEDIATE;");
+                try
+                {
+                    var pawnId = ScalarLong(
+                        connection,
+                        "SELECT player_pawn_id FROM player_state LIMIT 1;");
+                    using var lookup = connection.CreateCommand();
+                    lookup.CommandText = """
+                        SELECT id
+                        FROM inventories
+                        WHERE actor_id = $pawn
+                          AND inventory_type = 0
+                          AND COALESCE(max_item_count, 0) > 0
+                        ORDER BY id
+                        LIMIT 1;
+                        """;
+                    lookup.Parameters.AddWithValue("$pawn", pawnId);
+                    var found = lookup.ExecuteScalar();
+                    if (found is null || found is DBNull)
+                    {
+                        throw new InvalidDataException(
+                            "The Solo character backpack inventory was not found.");
+                    }
+                    inventoryId = Convert.ToInt64(found);
+                    var affected = ExecuteNonQuery(
+                        connection,
+                        """
+                        UPDATE inventories
+                        SET max_item_count = $slots
+                        WHERE id = $inventory
+                          AND actor_id = $pawn
+                          AND inventory_type = 0;
+                        """,
+                        ("$slots", slots),
+                        ("$inventory", inventoryId),
+                        ("$pawn", pawnId));
+                    if (affected != 1)
+                    {
+                        throw new InvalidDataException(
+                            "The Solo character backpack inventory was not updated.");
+                    }
+                    var verified = ScalarLong(
+                        connection,
+                        "SELECT max_item_count FROM inventories WHERE id = $inventory;",
+                        ("$inventory", inventoryId));
+                    if (verified != slots)
+                    {
+                        throw new InvalidDataException("Backpack slot verification failed.");
+                    }
+                    var integrity = ScalarString(connection, "PRAGMA integrity_check;");
+                    var foreignKeys = ScalarLong(
+                        connection,
+                        "SELECT COUNT(*) FROM pragma_foreign_key_check;");
+                    if (!string.Equals(integrity, "ok", StringComparison.OrdinalIgnoreCase)
+                        || foreignKeys != 0)
+                    {
+                        throw new InvalidDataException(
+                            $"Backpack slot validation failed (integrity={integrity}, foreignKeys={foreignKeys}).");
+                    }
+                    ExecuteNonQuery(connection, "COMMIT;");
+                }
+                catch
+                {
+                    try { ExecuteNonQuery(connection, "ROLLBACK;"); } catch { }
+                    throw;
+                }
+            }
+
+            var mutated = Path.Combine(root, "game.db");
+            WrapSqlite(sqlitePath, mutated);
+            EnsureWritableInspection(InspectPath(mutated, catalogPath));
+            Restore(
+                mutated,
+                input,
+                safetyBackup,
+                expectedTargetBytes: originalBytes,
+                requireGameClosed);
+            return new
+            {
+                ok = true,
+                inventoryId,
+                slots,
+                safetyBackup,
+                inspection = InspectPath(input, catalogPath)
+            };
+        }
+        finally
+        {
+            try
+            {
+                if (Directory.Exists(root))
+                {
+                    Directory.Delete(root, recursive: true);
+                }
+            }
+            catch
+            {
+                // A stale temp directory is safer than hiding the slot result.
+            }
+        }
+    }
 
     private static object FillWaterContainer(
         string input,
@@ -982,6 +1301,7 @@ internal static partial class Program
                     INSERT INTO inventories VALUES (5, 23, 4, 10, 250);
                     INSERT INTO inventories VALUES (6, 24, 4, 10, 250);
                     INSERT INTO inventories VALUES (7, 25, 4, 25, 1250);
+                    INSERT INTO inventories VALUES (8, 10, 15, 1, 0);
                     CREATE TABLE items (
                         id INTEGER PRIMARY KEY,
                         inventory_id INTEGER REFERENCES inventories(id),
@@ -1113,6 +1433,30 @@ internal static partial class Program
                         0,
                         NULL
                     );
+                    INSERT INTO items VALUES (
+                        105,
+                        1,
+                        0,
+                        4,
+                        'ZeroStackItem',
+                        0,
+                        0,
+                        '{}',
+                        0,
+                        NULL
+                    );
+                    INSERT INTO items VALUES (
+                        106,
+                        8,
+                        1,
+                        5,
+                        'HarkAr3',
+                        0,
+                        0,
+                        '{"FWeaponItemStats":[[],{"CurrentAmmo":20}]}',
+                        3,
+                        NULL
+                    );
                     CREATE TABLE parent (id INTEGER PRIMARY KEY);
                     CREATE TABLE child (
                         id INTEGER PRIMARY KEY,
@@ -1148,6 +1492,28 @@ internal static partial class Program
             {
                 throw new InvalidOperationException(
                     "Built/hologram storage destination filtering is incorrect.");
+            }
+            var initialInventory = inspection.InventoryItems.SingleOrDefault(value =>
+                value.TemplateId == "HighCapacityLiterjon_06"
+                && value.DestinationLabel == "Backpack");
+            if (initialInventory is null
+                || initialInventory.TotalQuantity != 1
+                || initialInventory.OccurrenceCount != 1)
+            {
+                throw new InvalidOperationException(
+                    "Solo inventory inspection did not return the expected grouped backpack item.");
+            }
+            if (inspection.InventoryItems.Single(value =>
+                    value.TemplateId == "ZeroStackItem").TotalQuantity != 0)
+            {
+                throw new InvalidOperationException(
+                    "Solo inventory inspection changed a stored zero-sized stack.");
+            }
+            if (inspection.RangedWeapons.Single(value =>
+                    value.TemplateId == "HarkAr3").CurrentAmmo != 20)
+            {
+                throw new InvalidOperationException(
+                    "Solo inventory inspection did not identify the ranged weapon ammo field.");
             }
 
             var backup = Path.Combine(root, "backups", "game-test.db");
@@ -1237,6 +1603,8 @@ internal static partial class Program
                 """
                 {
                   "names":{
+                    "HighCapacityLiterjon_06":"High Capacity Literjon Mk6",
+                    "HarkAr3":"Harkonnen Assault Rifle Mk3",
                     "TestResource":"Test Resource",
                     "HeavyAmmo":"Heavy Darts",
                     "AntiRadiationPill":"Iodine Pill",
@@ -1254,10 +1622,47 @@ internal static partial class Program
             var catalog = ReadCatalog(catalogPath);
             if (catalog["RepairTool5"].Volume != 10d
                 || catalog["TreadwheelHull_6"].Volume != 15d
-                || catalog["SandcrawlerSpiceHeader_6"].Volume != 1000d)
+                || catalog["SandcrawlerSpiceHeader_6"].Volume != 1000d
+                || InspectPath(target, catalogPath).InventoryItems.All(value =>
+                    value.DisplayName != "High Capacity Literjon Mk6"))
             {
                 throw new InvalidOperationException(
                     "Vehicle-kit volume fallbacks were not applied correctly.");
+            }
+            var ammoSafety = Path.Combine(root, "safety", "before-ammo.db");
+            SetWeaponAmmo(target, ammoSafety, 106, 250, catalogPath, requireGameClosed: false);
+            var ammoInspection = InspectPath(target, catalogPath);
+            if (!File.Exists(ammoSafety)
+                || ammoInspection.RangedWeapons.Single(value =>
+                    value.ItemId == 106).CurrentAmmo != 250
+                || ammoInspection.RangedWeapons.Single(value =>
+                    value.ItemId == 106).DisplayName != "Harkonnen Assault Rifle Mk3")
+            {
+                throw new InvalidOperationException(
+                    "Offline weapon ammo update did not retain, write, and verify the exact item.");
+            }
+            SetWeaponAmmo(
+                target,
+                Path.Combine(root, "safety", "before-infinite-ammo.db"),
+                106,
+                2_000_000_000,
+                catalogPath,
+                requireGameClosed: false);
+            if (InspectPath(target, catalogPath).RangedWeapons.Single(value =>
+                    value.ItemId == 106).CurrentAmmo != 2_000_000_000)
+            {
+                throw new InvalidOperationException(
+                    "Infinite weapon ammo mode did not retain the verified non-decrementing value.");
+            }
+            var slotSafety = Path.Combine(root, "safety", "before-backpack-slots.db");
+            SetBackpackSlots(target, slotSafety, 120, catalogPath, requireGameClosed: false);
+            var slotInspection = InspectPath(target, catalogPath);
+            if (!File.Exists(slotSafety)
+                || slotInspection.Inventories.Single(value =>
+                    value.Kind == "backpack").MaxItemCount != 120)
+            {
+                throw new InvalidOperationException(
+                    "Offline backpack slot update did not retain, write, and verify the exact inventory.");
             }
             File.WriteAllText(
                 planPath,
@@ -1837,6 +2242,9 @@ internal static partial class Program
                     "exactly-one-character",
                     "map-seed-from-coriolis-cycle",
                     "custom-storage-labels-with-generic-fallback",
+                    "solo-inventory-grouped-read-model",
+                    "offline-weapon-ammo-update-with-safety-backup",
+                    "offline-backpack-slot-update-with-safety-backup",
                     "retained-backup",
                     "atomic-restore-with-safety-backup",
                     "unsupported-wrapper-rejected",
@@ -1943,6 +2351,26 @@ internal static partial class Program
             Thread.Sleep(150);
         }
         throw new IOException("Solo save changed while it was being copied. Try again after the game finishes saving.");
+    }
+
+    private static void AssertSoloGameClosedForMutation()
+    {
+        var running = new List<string>();
+        foreach (var name in new[] { "DuneSandbox", "DuneSandbox_BE", "DuneSandbox-Win64-Shipping" })
+        {
+            foreach (var process in System.Diagnostics.Process.GetProcessesByName(name))
+            {
+                using (process)
+                {
+                    running.Add($"{process.ProcessName} (PID {process.Id})");
+                }
+            }
+        }
+        if (running.Count > 0)
+        {
+            throw new InvalidOperationException(
+                $"Dune: Awakening started while weapon ammo was being prepared: {string.Join(", ", running)}. Nothing was replaced.");
+        }
     }
 
     private static Inspection InspectBytes(
@@ -2052,6 +2480,12 @@ internal static partial class Program
         var inventories = hasPlayerState
             ? ReadInventoryDestinations(connection, catalog)
             : Array.Empty<InventoryDestination>();
+        var inventoryItems = hasPlayerState
+            ? ReadInventoryItemGroups(connection, inventories, catalog)
+            : Array.Empty<InventoryItemGroup>();
+        var rangedWeapons = hasPlayerState
+            ? ReadRangedWeapons(connection, inventories, catalog)
+            : Array.Empty<RangedWeapon>();
         var hasCurrencies = ScalarLong(
             connection,
             "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='player_virtual_currency_balances';") == 1;
@@ -2124,6 +2558,8 @@ internal static partial class Program
                 SHA256.HashData(Encoding.UTF8.GetBytes(schema.ToString()))).ToLowerInvariant(),
             MapSeed: mapSeed,
             Inventories: inventories,
+            InventoryItems: inventoryItems,
+            RangedWeapons: rangedWeapons,
             Currencies: currencies,
             Fillables: fillables,
             Progression: progression);
@@ -2284,7 +2720,10 @@ internal static partial class Program
         {
             foreach (var property in names.EnumerateObject())
             {
-                result[property.Name] = new CatalogRule(1, 0, false);
+                var displayName = property.Value.ValueKind == JsonValueKind.String
+                    ? property.Value.GetString() ?? property.Name
+                    : property.Name;
+                result[property.Name] = new CatalogRule(1, 0, false, displayName);
             }
         }
         if (document.RootElement.TryGetProperty("items", out var rules))
@@ -2299,7 +2738,10 @@ internal static partial class Program
                 var hasVolume = value.TryGetProperty("volume", out var volumeElement)
                     && volumeElement.ValueKind == JsonValueKind.Number;
                 var volume = hasVolume ? volumeElement.GetDouble() : 0;
-                result[property.Name] = new CatalogRule(stackMax, volume, hasVolume);
+                var displayName = result.TryGetValue(property.Name, out var existing)
+                    ? existing.DisplayName
+                    : property.Name;
+                result[property.Name] = new CatalogRule(stackMax, volume, hasVolume, displayName);
             }
         }
         foreach (var (templateId, stackMax) in KnownStackLimits)
@@ -2316,7 +2758,12 @@ internal static partial class Program
         {
             if (result.ContainsKey(templateId))
             {
-                result[templateId] = new CatalogRule(1, volume, true);
+                result[templateId] = result[templateId] with
+                {
+                    StackMax = 1,
+                    Volume = volume,
+                    HasVolume = true
+                };
             }
         }
         return result;
@@ -2467,6 +2914,108 @@ internal static partial class Program
         return results.ToArray();
     }
 
+    private static InventoryItemGroup[] ReadInventoryItemGroups(
+        SqliteConnection connection,
+        InventoryDestination[] inventories,
+        IReadOnlyDictionary<string, CatalogRule>? catalog)
+    {
+        var results = new List<InventoryItemGroup>();
+        foreach (var destination in inventories)
+        {
+            using var command = connection.CreateCommand();
+            command.CommandText = """
+                SELECT MIN(template_id),
+                       COALESCE(SUM(stack_size), 0),
+                       COUNT(*),
+                       MIN(quality_level),
+                       MAX(quality_level)
+                FROM items
+                WHERE inventory_id = $inventory
+                  AND TRIM(template_id) <> ''
+                GROUP BY LOWER(template_id)
+                ORDER BY LOWER(template_id);
+                """;
+            command.Parameters.AddWithValue("$inventory", destination.Id);
+            using var reader = command.ExecuteReader();
+            while (reader.Read())
+            {
+                var templateId = reader.GetString(0);
+                var displayName = catalog is not null
+                    && catalog.TryGetValue(templateId, out var rule)
+                    ? rule.DisplayName
+                    : templateId;
+                results.Add(new InventoryItemGroup(
+                    InventoryId: destination.Id,
+                    DestinationKey: destination.Key,
+                    DestinationLabel: destination.Label,
+                    DestinationKind: destination.Kind,
+                    TemplateId: templateId,
+                    DisplayName: displayName,
+                    TotalQuantity: reader.GetInt64(1),
+                    OccurrenceCount: reader.GetInt64(2),
+                    MinQuality: reader.GetInt32(3),
+                    MaxQuality: reader.GetInt32(4)));
+            }
+        }
+        return results.ToArray();
+    }
+
+    private static RangedWeapon[] ReadRangedWeapons(
+        SqliteConnection connection,
+        InventoryDestination[] inventories,
+        IReadOnlyDictionary<string, CatalogRule>? catalog)
+    {
+        var results = new List<RangedWeapon>();
+        var destinations = inventories.ToDictionary(value => value.Id);
+        var pawnId = ScalarLong(connection, "SELECT player_pawn_id FROM player_state LIMIT 1;");
+        using var command = connection.CreateCommand();
+        command.CommandText = """
+            SELECT items.id,
+                   items.template_id,
+                   CAST(json_extract(
+                       items.stats,
+                       '$.FWeaponItemStats[1].CurrentAmmo'
+                   ) AS INTEGER),
+                   inventories.id,
+                   inventories.actor_id,
+                   inventories.inventory_type
+            FROM items
+            JOIN inventories ON inventories.id = items.inventory_id
+            WHERE json_valid(items.stats)
+              AND json_type(items.stats, '$.FWeaponItemStats[1].CurrentAmmo')
+                  IN ('integer', 'real')
+            ORDER BY LOWER(items.template_id), items.id;
+            """;
+        using var reader = command.ExecuteReader();
+        while (reader.Read())
+        {
+            var inventoryId = reader.GetInt64(3);
+            var actorId = reader.IsDBNull(4) ? 0 : reader.GetInt64(4);
+            if (!destinations.TryGetValue(inventoryId, out var destination)
+                && actorId != pawnId)
+            {
+                continue;
+            }
+            var templateId = reader.GetString(1);
+            var displayName = catalog is not null
+                && catalog.TryGetValue(templateId, out var rule)
+                ? rule.DisplayName
+                : templateId;
+            var destinationKey = destination?.Key ?? $"inventory:{inventoryId}";
+            var destinationLabel = destination?.Label
+                ?? (reader.GetInt64(5) == 15 ? "Equipped weapon" : "Character equipment");
+            results.Add(new RangedWeapon(
+                ItemId: reader.GetInt64(0),
+                InventoryId: inventoryId,
+                DestinationKey: destinationKey,
+                DestinationLabel: destinationLabel,
+                TemplateId: templateId,
+                DisplayName: displayName,
+                CurrentAmmo: reader.GetInt64(2)));
+        }
+        return results.ToArray();
+    }
+
     private static string ItemStatsJson(int stackMax)
     {
         return stackMax > 1
@@ -2583,6 +3132,8 @@ internal static partial class Program
         string SchemaFingerprint,
         long? MapSeed,
         InventoryDestination[] Inventories,
+        InventoryItemGroup[] InventoryItems,
+        RangedWeapon[] RangedWeapons,
         CurrencyBalances Currencies,
         FillableItem[] Fillables,
         ProgressionSummary Progression);
@@ -2602,10 +3153,32 @@ internal static partial class Program
         double MaxItemVolume,
         double UsedVolume);
 
+    private sealed record InventoryItemGroup(
+        long InventoryId,
+        string DestinationKey,
+        string DestinationLabel,
+        string DestinationKind,
+        string TemplateId,
+        string DisplayName,
+        long TotalQuantity,
+        long OccurrenceCount,
+        int MinQuality,
+        int MaxQuality);
+
+    private sealed record RangedWeapon(
+        long ItemId,
+        long InventoryId,
+        string DestinationKey,
+        string DestinationLabel,
+        string TemplateId,
+        string DisplayName,
+        long CurrentAmmo);
+
     private sealed record CatalogRule(
         int StackMax,
         double Volume,
-        bool HasVolume);
+        bool HasVolume,
+        string DisplayName);
 
     private sealed record CurrencyBalances(
         long Solari,

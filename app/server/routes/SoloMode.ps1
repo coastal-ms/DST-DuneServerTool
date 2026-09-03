@@ -282,6 +282,42 @@ Register-DuneRoute -Method POST -Path '/api/solo/items/augments/max' -LocalOnly 
             Assert-DuneSoloExpectedProfile -ExpectedProfileToken $expectedProfileToken
             Invoke-DuneSoloMaxAugmentAttributes -Confirm $confirm
         }
+
+        Write-DuneJson -Response $res -Body $result
+    } catch {
+        $status = if ($_.Exception.Message -like '*still running*' -or $_.Exception.Message -like '*changed in another window*') { 409 } else { 400 }
+        Write-DuneError -Response $res -Status $status -Message $_.Exception.Message
+    }
+}
+
+Register-DuneRoute -Method PUT -Path '/api/solo/items/weapon-ammo' -LocalOnly -Handler {
+    param($req, $res, $routeParams, $body)
+    try {
+        $itemId = [long](Get-DuneSoloBodyField -Body $body -Name 'itemId' -Default 0)
+        $ammo = [long](Get-DuneSoloBodyField -Body $body -Name 'ammo' -Default -1)
+        $confirm = [string](Get-DuneSoloBodyField -Body $body -Name 'confirm' -Default '')
+        $expectedProfileToken = [string](Get-DuneSoloBodyField -Body $body -Name 'expectedProfileToken' -Default '')
+        $result = Invoke-WithDuneLock -Name 'solo-profile-data' -Script {
+            Assert-DuneSoloExpectedProfile -ExpectedProfileToken $expectedProfileToken
+            Set-DuneSoloWeaponAmmo -ItemId $itemId -Ammo $ammo -Confirm $confirm
+        }
+        Write-DuneJson -Response $res -Body $result
+    } catch {
+        $status = if ($_.Exception.Message -like '*still running*' -or $_.Exception.Message -like '*changed in another window*') { 409 } else { 400 }
+        Write-DuneError -Response $res -Status $status -Message $_.Exception.Message
+    }
+}
+
+Register-DuneRoute -Method PUT -Path '/api/solo/inventory/backpack-slots' -LocalOnly -Handler {
+    param($req, $res, $routeParams, $body)
+    try {
+        $slots = [long](Get-DuneSoloBodyField -Body $body -Name 'slots' -Default 0)
+        $confirm = [string](Get-DuneSoloBodyField -Body $body -Name 'confirm' -Default '')
+        $expectedProfileToken = [string](Get-DuneSoloBodyField -Body $body -Name 'expectedProfileToken' -Default '')
+        $result = Invoke-WithDuneLock -Name 'solo-profile-data' -Script {
+            Assert-DuneSoloExpectedProfile -ExpectedProfileToken $expectedProfileToken
+            Set-DuneSoloBackpackSlots -Slots $slots -Confirm $confirm
+        }
         Write-DuneJson -Response $res -Body $result
     } catch {
         $status = if ($_.Exception.Message -like '*still running*' -or $_.Exception.Message -like '*changed in another window*') { 409 } else { 400 }
