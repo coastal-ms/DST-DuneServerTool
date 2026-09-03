@@ -13,6 +13,18 @@ here cover everything those tags shipped.
 
 ## [Unreleased]
 
+## [15.0.0-phase2-test3] - 2026-09-03
+
+### Added
+
+- Added a read-only current-inventory browser to Solo Mode with grouped item
+  icons, catalog names, search, sorting, quantity and quality summaries, and
+  per-location details across the backpack and supported built storage.
+- Added backup-safe editing of the loaded ammo stored on an exact Solo ranged
+  weapon, with game-closed gating and post-write verification.
+- Labeled the early Vehicles workspace as Demo Data until its live fleet
+  presentation is complete.
+
 ## [15.0.0-phase2-test2] - 2026-09-03
 
 ### Added

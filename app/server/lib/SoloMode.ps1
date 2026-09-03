@@ -317,7 +317,7 @@ function Assert-DuneSoloGameClosed {
 
 function Invoke-DuneSoloHelper {
     param(
-        [Parameter(Mandatory)][ValidateSet('inspect','backup','restore','grant-items','import-blueprint','set-currencies','fill-water','max-augment-attributes','max-specializations','complete-fremen','complete-npe','enable-skills','set-progression-points')][string]$Command,
+        [Parameter(Mandatory)][ValidateSet('inspect','backup','restore','grant-items','import-blueprint','set-currencies','fill-water','set-weapon-ammo','max-augment-attributes','max-specializations','complete-fremen','complete-npe','enable-skills','set-progression-points')][string]$Command,
         [Parameter(Mandatory)][hashtable]$Arguments
     )
 
@@ -498,6 +498,7 @@ function Invoke-DuneSoloGiveItems {
     if ($Confirm -ne 'GIVE SOLO ITEMS') {
         throw 'Confirm the offline item grant before continuing.'
     }
+
     Assert-DuneSoloGameClosed
     if (-not $Destination.Trim()) { throw 'Choose a Solo inventory destination.' }
     if ($Items.Count -lt 1 -or $Items.Count -gt 200) {
@@ -561,6 +562,39 @@ function Invoke-DuneSoloGiveItems {
         }
     } finally {
         Remove-Item -LiteralPath $planPath -Force -ErrorAction SilentlyContinue
+    }
+}
+
+function Set-DuneSoloWeaponAmmo {
+    param(
+        [Parameter(Mandatory)][long]$ItemId,
+        [Parameter(Mandatory)][long]$Ammo,
+        [Parameter(Mandatory)][string]$Confirm
+    )
+
+    Assert-DuneSoloSupportedPlatform
+    if ($Confirm -ne 'SET SOLO WEAPON AMMO') {
+        throw 'Confirm the offline weapon ammo update before continuing.'
+    }
+    Assert-DuneSoloGameClosed
+    if ($ItemId -le 0) { throw 'Choose a ranged weapon.' }
+    if ($Ammo -lt 0 -or $Ammo -gt 2000000000) {
+        throw 'Ammo must be between 0 and 2000000000.'
+    }
+    $profile = Get-DuneSoloProfile
+    if (-not $profile.dbPath -or -not (Test-Path -LiteralPath $profile.dbPath -PathType Leaf)) {
+        throw 'Connect a valid Solo save before changing weapon ammo.'
+    }
+    $safetyDir = Join-Path (Get-DuneSoloProfileBackupRoot -DbPath $profile.dbPath) 'pre-ammo'
+    New-Item -ItemType Directory -Path $safetyDir -Force | Out-Null
+    $stamp = (Get-Date).ToUniversalTime().ToString('yyyyMMdd-HHmmssfff')
+    $safety = Join-Path $safetyDir "game-before-weapon-ammo-$stamp.db"
+    return Invoke-DuneSoloHelper -Command 'set-weapon-ammo' -Arguments @{
+        input = $profile.dbPath
+        'safety-backup' = $safety
+        'item-id' = $ItemId
+        ammo = $Ammo
+        catalog = Get-DuneSoloGameplayCatalogPath
     }
 }
 

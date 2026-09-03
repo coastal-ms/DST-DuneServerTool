@@ -29,6 +29,8 @@ export interface SoloInspection {
   schemaFingerprint: string
   mapSeed: number | null
   inventories: SoloInventoryDestination[]
+  inventoryItems: SoloInventoryItemGroup[]
+  rangedWeapons: SoloRangedWeapon[]
   currencies: {
     solari: number
     scrip: number
@@ -76,6 +78,29 @@ export interface SoloInventoryDestination {
   maxItemCount: number
   maxItemVolume: number
   usedVolume: number
+}
+
+export interface SoloInventoryItemGroup {
+  inventoryId: number
+  destinationKey: string
+  destinationLabel: string
+  destinationKind: SoloInventoryDestination['kind']
+  templateId: string
+  displayName: string
+  totalQuantity: number
+  occurrenceCount: number
+  minQuality: number
+  maxQuality: number
+}
+
+export interface SoloRangedWeapon {
+  itemId: number
+  inventoryId: number
+  destinationKey: string
+  destinationLabel: string
+  templateId: string
+  displayName: string
+  currentAmmo: number
 }
 
 export interface SoloStatus {
@@ -361,6 +386,29 @@ export function fillSoloWaterContainer(
       itemId,
       expectedProfileToken,
       confirm: 'FILL SOLO WATER',
+    }),
+  })
+}
+
+export function setSoloWeaponAmmo(
+  itemId: number,
+  ammo: number,
+  expectedProfileToken: string,
+): Promise<{
+  ok: boolean
+  itemId: number
+  templateId: string
+  currentAmmo: number
+  safetyBackup: string
+  inspection: SoloInspection
+}> {
+  return api('/api/solo/items/weapon-ammo', {
+    method: 'PUT',
+    body: JSON.stringify({
+      itemId,
+      ammo,
+      expectedProfileToken,
+      confirm: 'SET SOLO WEAPON AMMO',
     }),
   })
 }
