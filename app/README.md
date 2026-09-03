@@ -79,28 +79,11 @@ Outputs:
 - `app\build\output\DuneServer.exe`        (~80 KB)
 - `app\installer\output\DuneServerSetup.exe` (~2 MB)
 
-### Releasing a new version
+### Releases
 
-1. Keep the version stamps synchronized in `dune-server.ps1`,
-   `app\DuneServer.ps1`, `app\build\Build-Exe.ps1`,
-   `app\desktop\DuneShell\DuneShell.csproj`, and
-   `app\installer\DuneServer.iss`.
-2. Add the dated CHANGELOG entry and refresh the bug-report template.
-3. Merge the release change, then create and push an annotated tag at that
-   merged commit:
-   ```powershell
-   git tag -a vX.Y.Z -m "vX.Y.Z: ..."
-   git push origin vX.Y.Z
-   ```
-4. In GitHub Actions, run **Build & sign installer** with that immutable tag
-   and provide the release title and notes. Set **prerelease_build** for a test
-   tag. The workflow builds from the tag, verifies the embedded tag and commit,
-   attaches `DuneServerSetup.exe` to a new draft, and publishes it.
-5. Verify the published release has `DuneServerSetup.exe` as its sole asset.
-
-The workflow is the only publication path. A local installer build is for
-validation only; do not create a release or upload/replace release assets with
-`gh release`.
+Releases are maintainer-managed. This public repository documents how to build
+and validate DST, but does not publish private release operating procedures.
+Official installers are available only from this repository's GitHub Releases.
 
 ## Regenerating the icon
 

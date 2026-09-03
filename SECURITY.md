@@ -49,10 +49,8 @@ Please include:
 - Official binaries are distributed **only** as the `DuneServerSetup.exe` asset
   on this repository's [GitHub Releases](https://github.com/coastal-ms/DST-DuneServerTool/releases).
   Do not trust DST installers obtained from anywhere else.
-- Releases are built from this public repository. Authenticode **code signing
-  via [SignPath Foundation](https://signpath.org/)** (free OSS signing) is being
-  rolled out so release binaries carry a verifiable publisher signature — see
-  [`.github/workflows/release-signed.yml`](.github/workflows/release-signed.yml).
+- Releases are built from this public repository. Verify installers against the
+  asset digest shown by GitHub Releases and do not use third-party mirrors.
 - DST never transmits your SSH keys, server credentials, or public IP off your
   machine. Configuration is stored locally under `%APPDATA%\DuneServer\`.
 
