@@ -17,6 +17,8 @@ here cover everything those tags shipped.
 
 - Added storage-box renaming from Storage administration and the Shared
   Inventory Explorer for a selected or directly scoped container.
+- Added guarded single-item and multi-select deletion for live player-backpack
+  and storage-box occurrences in the Shared Inventory Explorer.
 
 ### Fixed
 

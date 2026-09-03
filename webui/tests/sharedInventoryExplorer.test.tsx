@@ -15,6 +15,8 @@ const capabilityState = vi.hoisted(() => ({
 const inventoryApi = vi.hoisted(() => vi.fn())
 const occurrenceApi = vi.hoisted(() => vi.fn())
 const renameStorageApi = vi.hoisted(() => vi.fn())
+const deleteInventoryItemApi = vi.hoisted(() => vi.fn())
+const deleteStorageItemApi = vi.hoisted(() => vi.fn())
 const itemIconResolver = vi.hoisted(() => vi.fn())
 
 vi.mock('../src/hooks/usePlatformCapabilities', () => ({
@@ -23,7 +25,12 @@ vi.mock('../src/hooks/usePlatformCapabilities', () => ({
     loading: capabilityState.loading,
     error: capabilityState.error,
     refresh: capabilityState.refresh,
-    hasCapability: (id: string) => capabilityState.enabled && (id === 'inventory.read' || id === 'base.manage'),
+    hasCapability: (id: string) => capabilityState.enabled && (
+      id === 'inventory.read'
+      || id === 'base.manage'
+      || id === 'player.manage.destructive'
+      || id === 'base.manage.destructive'
+    ),
   }),
 }))
 vi.mock('../src/api/gameplay', async importOriginal => {
@@ -33,6 +40,8 @@ vi.mock('../src/api/gameplay', async importOriginal => {
     getSharedInventory: inventoryApi,
     getSharedInventoryOccurrences: occurrenceApi,
     renameStorage: renameStorageApi,
+    deleteInventoryItem: deleteInventoryItemApi,
+    deleteStorageItem: deleteStorageItemApi,
   }
 })
 vi.mock('../src/components/inventory/InventoryItemIcon', async importOriginal => {
@@ -95,6 +104,20 @@ const occurrence = {
     workspacePath: '/bases?view=inventory&scope_type=storage&scope_id=50001',
   },
 } as const
+const playerOccurrence = {
+  ...occurrence,
+  id: 43,
+  quantity: 4,
+  entity: {
+    ...occurrence.entity,
+    type: 'player',
+    id: 20001,
+    label: 'Backpack',
+    inventoryId: 60002,
+    inventoryType: 1,
+    workspacePath: '/players?view=inventory&scope_type=player&scope_id=20001',
+  },
+} as const
 const occurrenceFixture = {
   ...fixture,
   requestId: 'occurrence-request',
@@ -117,14 +140,19 @@ beforeEach(() => {
   occurrenceApi.mockResolvedValue(occurrenceFixture)
   itemIconResolver.mockResolvedValue('https://cdn-hosted.gaming.tools/dune/images/dune/items/copper.webp')
   renameStorageApi.mockResolvedValue({ ok: true, message: "Renamed storage container to 'Ore Vault'." })
+  deleteInventoryItemApi.mockResolvedValue({ ok: true, message: 'Deleted player item.' })
+  deleteStorageItemApi.mockResolvedValue({ ok: true, message: 'Deleted storage item.' })
 })
 
 afterEach(() => {
   cleanup()
+  vi.restoreAllMocks()
   inventoryApi.mockReset()
   occurrenceApi.mockReset()
   itemIconResolver.mockReset()
   renameStorageApi.mockReset()
+  deleteInventoryItemApi.mockReset()
+  deleteStorageItemApi.mockReset()
   window.history.replaceState(null, '', '/')
 })
 
@@ -259,6 +287,63 @@ describe('Shared Inventory Explorer grouped catalog', () => {
     expect(within(occurrencePlayer).getByRole('option', { name: 'Coastal (2)' })).toBeInTheDocument()
     await user.selectOptions(screen.getByRole('combobox', { name: 'Sort occurrences' }), 'quality-desc')
     await waitFor(() => expect(occurrenceApi).toHaveBeenLastCalledWith(expect.objectContaining({ sort: 'quality-desc' })))
+  })
+
+  it('deletes selected player and storage occurrences through their guarded routes', async () => {
+    const confirm = vi.spyOn(window, 'confirm').mockReturnValue(true)
+    occurrenceApi.mockResolvedValue({
+      ...occurrenceFixture,
+      data: { ...occurrenceFixture.data, items: [occurrence, playerOccurrence] },
+    })
+    const user = userEvent.setup()
+    renderExplorer()
+    await user.click(await screen.findByRole('button', { name: /Copper/ }))
+    await screen.findByRole('list', { name: 'Item occurrences' })
+
+    await user.click(screen.getByRole('checkbox', { name: 'Select all loaded occurrences' }))
+    await user.click(screen.getByRole('button', { name: 'Delete selected (2)' }))
+
+    await waitFor(() => {
+      expect(deleteStorageItemApi).toHaveBeenCalledWith(42)
+      expect(deleteInventoryItemApi).toHaveBeenCalledWith(43)
+    })
+    expect(confirm).toHaveBeenCalledWith(expect.stringContaining('2 selected item occurrences'))
+    expect(await screen.findByText('Deleted 2 item occurrences.')).toBeInTheDocument()
+    confirm.mockRestore()
+  })
+
+  it('preserves partial multi-delete results across a fresh catalog refresh', async () => {
+    vi.spyOn(window, 'confirm').mockReturnValue(true)
+    inventoryApi.mockImplementation(async () => structuredClone(fixture))
+    occurrenceApi.mockResolvedValue({
+      ...occurrenceFixture,
+      data: { ...occurrenceFixture.data, items: [occurrence, playerOccurrence] },
+    })
+    deleteInventoryItemApi.mockRejectedValue(new Error('Player item delete was rejected.'))
+    const user = userEvent.setup()
+    renderExplorer()
+    await user.click(await screen.findByRole('button', { name: /Copper/ }))
+    await screen.findByRole('list', { name: 'Item occurrences' })
+
+    await user.click(screen.getByRole('checkbox', { name: 'Select all loaded occurrences' }))
+    await user.click(screen.getByRole('button', { name: 'Delete selected (2)' }))
+
+    expect(await screen.findByText('Deleted 1 item occurrence.')).toBeInTheDocument()
+    expect(screen.getByText(/1 deleted; 1 failed.*Player item delete was rejected/)).toBeInTheDocument()
+  })
+
+  it('keeps deletion confirmation visible when the final occurrence closes the panel', async () => {
+    vi.spyOn(window, 'confirm').mockReturnValue(true)
+    inventoryApi
+      .mockResolvedValueOnce(fixture)
+      .mockResolvedValue({ ...fixture, data: { ...fixture.data, groups: [] } })
+    const user = userEvent.setup()
+    renderExplorer()
+    await user.click(await screen.findByRole('button', { name: /Copper/ }))
+    await user.click(await screen.findByRole('button', { name: 'Delete Copper from Copper box' }))
+
+    expect(await screen.findByText('Deleted 1 item occurrence.')).toBeInTheDocument()
+    await waitFor(() => expect(screen.queryByRole('dialog', { name: 'Copper' })).not.toBeInTheDocument())
   })
 
   it('surfaces malformed occurrence rows instead of rendering blank details', async () => {

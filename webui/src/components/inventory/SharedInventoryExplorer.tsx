@@ -3,6 +3,8 @@ import { ApiError } from '../../api/client'
 import {
   getSharedInventory,
   getSharedInventoryOccurrences,
+  deleteInventoryItem,
+  deleteStorageItem,
   renameStorage,
   type InventoryEntityType,
   type SharedInventoryGroup,
@@ -137,7 +139,7 @@ function duplicateOrdinals<T>(items: T[], labelOf: (item: T) => string, keyOf: (
 export function SharedInventoryExplorer({
   entityTypes,
   title = 'Shared Inventory Explorer',
-  description = 'Browse distinct item types across proven player backpacks and storage locations from one read-only view.',
+  description = 'Browse distinct item types across proven player backpacks and storage locations.',
   unavailableReason,
 }: {
   entityTypes: InventoryEntityType[]
@@ -187,13 +189,18 @@ export function SharedInventoryExplorer({
   const [renameLoading, setRenameLoading] = useState(false)
   const [renameError, setRenameError] = useState('')
   const [renameMessage, setRenameMessage] = useState('')
+  const [inventoryMutationMessage, setInventoryMutationMessage] = useState('')
+  const [inventoryMutationError, setInventoryMutationError] = useState('')
   const [loadedIdentity, setLoadedIdentity] = useState('')
   const requestVersion = useRef(0)
   const renameRequestVersion = useRef(0)
+  const mutationRefresh = useRef<() => Promise<void>>(async () => {})
   const capabilities = usePlatformCapabilities()
   const capabilityReady = capabilities.data !== null
   const canReadInventory = capabilities.hasCapability('inventory.read')
   const canManageBases = capabilities.hasCapability('base.manage')
+  const canDeletePlayerItems = capabilities.hasCapability('player.manage.destructive')
+  const canDeleteStorageItems = capabilities.hasCapability('base.manage.destructive')
   const requestIdentity = JSON.stringify({
     query: query.trim(), entityTypes, scopeType, scopeId, playerId, locationType, locationId, sort,
     source: demo ? 'demo' : 'live', scopeError, playerError, locationError,
@@ -213,16 +220,18 @@ export function SharedInventoryExplorer({
     ? current?.data.locations.find(location => location.type === 'storage' && location.id === renameActorId)
     : undefined
 
-  const load = useCallback(async (cursor?: string, append = false) => {
+  const load = useCallback(async (cursor?: string, append = false, preserveSelection = false) => {
     if (!canReadInventory || unavailableReason || scopeError || playerError || locationError) return
     const version = ++requestVersion.current
     if (append) setLoadingMore(true)
-    else {
+    else if (!preserveSelection) {
       setLoading(true)
       setResponse(null)
       setGroups([])
       setSelected(null)
       setLoadedIdentity('')
+    } else {
+      setLoading(true)
     }
     setError('')
     try {
@@ -234,13 +243,22 @@ export function SharedInventoryExplorer({
       assertInventoryGroups(result.data.groups)
       setResponse(result)
       setGroups(existing => append ? [...existing, ...result.data.groups] : result.data.groups)
+      if (preserveSelection) {
+        setSelected(currentSelection => (
+          currentSelection
+            ? result.data.groups.find(group => group.groupKey === currentSelection.groupKey) ?? null
+            : null
+        ))
+      }
       setLoadedIdentity(requestIdentity)
     } catch (reason) {
       if (version !== requestVersion.current) return
-      setResponse(null)
-      setGroups([])
-      setSelected(null)
-      setLoadedIdentity('')
+      if (!preserveSelection) {
+        setResponse(null)
+        setGroups([])
+        setSelected(null)
+        setLoadedIdentity('')
+      }
       setError(errorMessage(reason))
     } finally {
       if (version === requestVersion.current) {
@@ -253,6 +271,7 @@ export function SharedInventoryExplorer({
     requestIdentity, scopeError, scopeId, scopeType, sort, unavailableReason,
     setError, setGroups, setLoadedIdentity, setLoading, setLoadingMore, setResponse, setSelected,
   ])
+  mutationRefresh.current = () => load(undefined, false, true)
 
   useEffect(() => setDraftQuery(query), [query])
   useEffect(() => {
@@ -261,6 +280,8 @@ export function SharedInventoryExplorer({
     setGroups([])
     setSelected(null)
     setError('')
+    setInventoryMutationMessage('')
+    setInventoryMutationError('')
     setLoadedIdentity('')
     setLoadingMore(false)
   }, [requestIdentity])
@@ -291,7 +312,7 @@ export function SharedInventoryExplorer({
     return <WorkspaceSection id="shared-inventory" title={title} description={description}><DataState state="error" title="Could not check inventory access" message={capabilities.error} action={<button className="btn-secondary min-h-11" onClick={() => { void capabilities.refresh() }}>Retry capability check</button>} /></WorkspaceSection>
   }
   if (capabilityReady && !canReadInventory) {
-    return <WorkspaceSection id="shared-inventory" title={title} description={description}><DataState state="unavailable" title="Shared inventory is not included in this backend" message="Install the matching DST backend build to use the read-only inventory explorer." /></WorkspaceSection>
+    return <WorkspaceSection id="shared-inventory" title={title} description={description}><DataState state="unavailable" title="Shared inventory is not included in this backend" message="Install the matching DST backend build to use the inventory explorer." /></WorkspaceSection>
   }
 
   const validSelectedLocation = !locationType || current?.data.selectedLocationValid !== false
@@ -299,7 +320,7 @@ export function SharedInventoryExplorer({
   return (
     <WorkspaceSection id="shared-inventory" title={title} description={description}>
       <div className="mb-3 flex flex-wrap items-center gap-2">
-        <span className="pill border-info/40 text-info">Inventory contents read-only</span>
+        <span className="pill border-info/40 text-info">Inventory catalog</span>
         {entityTypes.map(type => <span key={type} className="pill border-border text-text-muted">{type === 'player' ? 'Player backpacks' : 'Storage boxes'}</span>)}
         {canManageBases && entityTypes.includes('storage') && <span className="pill border-accent/40 text-accent-bright">Box names editable</span>}
         {current && <FreshnessBadge state={current.freshness.state} observedAt={current.freshness.observedAt} label={current.data.mode === 'demo' ? 'Demo inventory' : 'Live database'} />}
@@ -433,6 +454,8 @@ export function SharedInventoryExplorer({
         </form>
       )}
       {renameMessage && <div className="mb-4 rounded-lg border border-success/35 bg-success/10 px-4 py-3 text-sm text-text" role="status">{renameMessage}</div>}
+      {inventoryMutationMessage && <div className="mb-4 rounded-lg border border-success/35 bg-success/10 px-4 py-3 text-sm text-text" role="status">{inventoryMutationMessage}</div>}
+      {inventoryMutationError && <div className="mb-4 rounded-lg border border-danger/35 bg-danger/10 px-4 py-3 text-sm text-danger" role="alert">{inventoryMutationError}</div>}
 
       {locationType && current && !validSelectedLocation && <DataState state="error" title="Location does not match this player" message="Choose a location available to the selected player." />}
       {current?.data.mode === 'demo' && <DataState state="fresh" title="Showing bundled demo inventory" message="Demo mode was explicitly requested; these grouped items are examples and not live server contents." />}
@@ -457,6 +480,13 @@ export function SharedInventoryExplorer({
         scopeType={scopeType}
         scopeId={scopeId}
         demo={demo}
+        canDeletePlayerItems={canDeletePlayerItems}
+        canDeleteStorageItems={canDeleteStorageItems}
+        onInventoryChanged={() => mutationRefresh.current()}
+        onDeleteResult={(message, mutationError) => {
+          setInventoryMutationMessage(message)
+          setInventoryMutationError(mutationError)
+        }}
         onClose={() => setSelected(null)}
       />
     </WorkspaceSection>
@@ -464,7 +494,8 @@ export function SharedInventoryExplorer({
 }
 
 function OccurrencePanel({
-  group, players, locations, initialPlayerId, initialLocation, entityTypes, scopeType, scopeId, demo, onClose,
+  group, players, locations, initialPlayerId, initialLocation, entityTypes, scopeType, scopeId, demo,
+  canDeletePlayerItems, canDeleteStorageItems, onInventoryChanged, onDeleteResult, onClose,
 }: {
   group: SharedInventoryGroup | null
   players: SharedInventoryResponse['data']['players']
@@ -475,6 +506,10 @@ function OccurrencePanel({
   scopeType?: InventoryEntityType
   scopeId?: number
   demo: boolean
+  canDeletePlayerItems: boolean
+  canDeleteStorageItems: boolean
+  onInventoryChanged: () => Promise<void>
+  onDeleteResult: (message: string, error: string) => void
   onClose: () => void
 }) {
   const [playerId, setPlayerId] = useState<number | undefined>(initialPlayerId)
@@ -486,8 +521,11 @@ function OccurrencePanel({
   const [nextCursor, setNextCursor] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
+  const [selectedItemKeys, setSelectedItemKeys] = useState<Set<string>>(new Set())
+  const [deleteBusy, setDeleteBusy] = useState(false)
   const [verifiedDetailsUrl, setVerifiedDetailsUrl] = useState<string | null>(null)
   const version = useRef(0)
+  const groupTemplateId = group?.templateId
   const initialLocationType = initialLocation?.type
   const initialLocationId = initialLocation?.id
   const identity = JSON.stringify({ templateId: group?.templateId, playerId, location, sort, scopeType, scopeId, demo })
@@ -501,9 +539,52 @@ function OccurrencePanel({
   const locationOrdinals = useMemo(() => duplicateOrdinals(
     filteredLocations, location => location.label, location => `${location.type}:${location.id}`,
   ), [filteredLocations])
+  const itemKey = (item: SharedInventoryItem) => `${item.entity.type}:${item.id}`
+  const canDelete = (item: SharedInventoryItem) => !demo && (
+    item.entity.type === 'player' ? canDeletePlayerItems : canDeleteStorageItems
+  )
+  const deletableItems = items.filter(canDelete)
+  const selectedItems = deletableItems.filter(item => selectedItemKeys.has(itemKey(item)))
+
+  const deleteItems = async (targets: SharedInventoryItem[]) => {
+    if (targets.length === 0) return
+    const quantity = targets.reduce((sum, item) => sum + item.quantity, 0)
+    const message = targets.length === 1
+      ? `Delete ${targets[0].displayName} (x${targets[0].quantity}) from ${targets[0].entity.label || entityTypeLabel(targets[0].entity.type)}? This cannot be undone.`
+      : `Delete ${targets.length} selected item occurrences containing ${quantity} total items? Entire stacks will be removed. This cannot be undone.`
+    if (!window.confirm(message)) return
+
+    setDeleteBusy(true)
+    setError('')
+    const deleted = new Set<string>()
+    const failures: string[] = []
+    for (const item of targets) {
+      try {
+        if (item.entity.type === 'player') await deleteInventoryItem(item.id)
+        else await deleteStorageItem(item.id)
+        deleted.add(itemKey(item))
+      } catch (reason) {
+        failures.push(`${item.displayName} in ${item.entity.label || entityTypeLabel(item.entity.type)}: ${errorMessage(reason)}`)
+      }
+    }
+
+    if (deleted.size > 0) {
+      setItems(current => current.filter(item => !deleted.has(itemKey(item))))
+      setSelectedItemKeys(current => new Set([...current].filter(key => !deleted.has(key))))
+    }
+    const successMessage = deleted.size > 0
+      ? `Deleted ${deleted.size} item occurrence${deleted.size === 1 ? '' : 's'}.`
+      : ''
+    const failureMessage = failures.length > 0
+      ? `${deleted.size > 0 ? `${deleted.size} deleted; ` : ''}${failures.length} failed. ${failures.join(' ')}`
+      : ''
+    onDeleteResult(successMessage, failureMessage)
+    if (deleted.size > 0) await onInventoryChanged()
+    setDeleteBusy(false)
+  }
 
   const load = useCallback(async (cursor?: string, append = false) => {
-    if (!group) return
+    if (!groupTemplateId) return
     const request = ++version.current
     setLoading(true)
     setError('')
@@ -513,7 +594,7 @@ function OccurrencePanel({
     }
     try {
       const result = await getSharedInventoryOccurrences({
-        templateId: group.templateId, types: entityTypes, scopeType, scopeId, playerId,
+        templateId: groupTemplateId, types: entityTypes, scopeType, scopeId, playerId,
         locationType: location?.type, locationId: location?.id, sort, limit: 50, cursor, demo,
       })
       if (request !== version.current) return
@@ -537,7 +618,7 @@ function OccurrencePanel({
     } finally {
       if (request === version.current) setLoading(false)
     }
-  }, [demo, entityTypes, group, location, playerId, scopeId, scopeType, sort])
+  }, [demo, entityTypes, groupTemplateId, location, playerId, scopeId, scopeType, sort])
 
   useEffect(() => {
     setPlayerId(initialPlayerId)
@@ -551,12 +632,15 @@ function OccurrencePanel({
     setPanelLocations(locations)
   }, [group?.groupKey, initialLocationId, initialLocationType, initialPlayerId, locations, players])
   useEffect(() => {
+    setSelectedItemKeys(new Set())
+  }, [group?.groupKey])
+  useEffect(() => {
     version.current += 1
     setItems([])
     setNextCursor(null)
     setError('')
     if (group) void load()
-  }, [identity, group, load])
+  }, [identity, groupTemplateId, load])
   useEffect(() => {
     setVerifiedDetailsUrl(null)
     if (!group) return
@@ -572,7 +656,9 @@ function OccurrencePanel({
       {group && (
         <div className="min-w-0">
           <div className="mb-4 flex flex-wrap gap-2">
-            <span className="pill border-info/40 text-info">Read-only</span>
+            {(canDeletePlayerItems || canDeleteStorageItems) && !demo
+              ? <span className="pill border-danger/40 text-danger">Deletion enabled</span>
+              : <span className="pill border-info/40 text-info">Read-only</span>}
             <span className="pill border-border">x{group.totalQuantity} total</span>
             <span className="pill border-border">{group.occurrenceCount} occurrences</span>
             <span className="pill border-border">{group.locationCount} locations</span>
@@ -610,15 +696,68 @@ function OccurrencePanel({
           {loading && items.length === 0 && <DataState state="loading" title="Loading occurrences" />}
           {!loading && !error && items.length === 0 && <DataState state="empty" title="No matching occurrences" message="Try another player or location." />}
           {items.length > 0 && (
-            <ul className="divide-y divide-border" aria-label="Item occurrences">
+            <>
+              {deletableItems.length > 0 && (
+                <div className="mb-3 flex flex-wrap items-center justify-between gap-2 rounded-lg border border-border bg-surface-2 p-3">
+                  <label className="flex min-h-11 items-center gap-2 text-sm font-medium text-text">
+                    <input
+                      type="checkbox"
+                      aria-label="Select all loaded occurrences"
+                      checked={selectedItems.length === deletableItems.length}
+                      disabled={deleteBusy}
+                      onChange={event => setSelectedItemKeys(current => {
+                        const next = new Set(current)
+                        deletableItems.forEach(item => event.target.checked ? next.add(itemKey(item)) : next.delete(itemKey(item)))
+                        return next
+                      })}
+                    />
+                    Select all loaded
+                  </label>
+                  <button type="button" className="btn-danger min-h-11" disabled={deleteBusy || selectedItems.length === 0} onClick={() => { void deleteItems(selectedItems) }}>
+                    <Icon name={deleteBusy ? 'Loader2' : 'Trash2'} size={14} className={deleteBusy ? 'animate-spin' : undefined} />
+                    {deleteBusy ? 'Deleting...' : `Delete selected (${selectedItems.length})`}
+                  </button>
+                </div>
+              )}
+              <ul className="divide-y divide-border" aria-label="Item occurrences">
               {items.map(item => (
                 <li key={`${item.entity.type}:${item.id}`} className="py-3 first:pt-0">
                   <div className="flex min-w-0 items-start justify-between gap-3">
-                    <div className="min-w-0">
+                    <div className="flex min-w-0 items-start gap-3">
+                      {canDelete(item) && (
+                        <input
+                          type="checkbox"
+                          className="mt-1"
+                          aria-label={`Select ${item.displayName} in ${item.entity.label || entityTypeLabel(item.entity.type)}`}
+                          checked={selectedItemKeys.has(itemKey(item))}
+                          disabled={deleteBusy}
+                          onChange={event => setSelectedItemKeys(current => {
+                            const next = new Set(current)
+                            if (event.target.checked) next.add(itemKey(item))
+                            else next.delete(itemKey(item))
+                            return next
+                          })}
+                        />
+                      )}
+                      <div className="min-w-0">
                       <p className="truncate font-semibold text-text">{entityTypeLabel(item.entity.type)}: {item.entity.label || `Actor ${item.entity.id}`}</p>
                       <p className="mt-0.5 truncate text-xs text-text-muted">{item.player?.name || item.entity.owner || 'Owner not proven'} · {item.entity.map || 'Map not reported'}</p>
+                      </div>
                     </div>
-                    <span className="shrink-0 font-semibold text-accent-bright">x{item.quantity}</span>
+                    <div className="flex shrink-0 items-center gap-2">
+                      <span className="font-semibold text-accent-bright">x{item.quantity}</span>
+                      {canDelete(item) && (
+                        <button
+                          type="button"
+                          className="btn-icon min-h-11 min-w-11 text-danger"
+                          aria-label={`Delete ${item.displayName} from ${item.entity.label || entityTypeLabel(item.entity.type)}`}
+                          disabled={deleteBusy}
+                          onClick={() => { void deleteItems([item]) }}
+                        >
+                          <Icon name="Trash2" size={15} />
+                        </button>
+                      )}
+                    </div>
                   </div>
                   <dl className="mt-2 grid grid-cols-2 gap-x-4 gap-y-1 text-xs sm:grid-cols-4">
                     <div><dt className="text-text-dim">Quality</dt><dd>{item.quality}</dd></div>
@@ -629,7 +768,8 @@ function OccurrencePanel({
                   <Link className="mt-2 inline-flex text-xs font-semibold text-info hover:text-ibad" to={item.entity.workspacePath}>Open {item.entity.type === 'player' ? 'player' : 'container'}</Link>
                 </li>
               ))}
-            </ul>
+              </ul>
+            </>
           )}
           {nextCursor && <button className="btn-secondary mt-4 min-h-11 w-full" disabled={loading} onClick={() => { void load(nextCursor, true) }}>{loading ? 'Loading...' : 'Load more occurrences'}</button>}
           {verifiedDetailsUrl && <a className="btn-ghost mt-4 inline-flex min-h-11 text-text-muted" href={verifiedDetailsUrl} target="_blank" rel="noopener noreferrer">View on dune.gaming.tools<Icon name="ExternalLink" size={14} /></a>}
