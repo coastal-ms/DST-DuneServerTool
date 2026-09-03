@@ -242,6 +242,7 @@ var
   PortModePage:    TInputOptionWizardPage;
   SkipConfigPages: Boolean;
   PriorBridgeHash: string;
+  PriorBridgeInstallerHash: string;
 
 // ---------- v12.0.0 one-time migration helpers ----------
 
@@ -659,9 +660,13 @@ begin
   NeedsRestart := False;
 
   PriorBridgeHash := '';
+  PriorBridgeInstallerHash := '';
   if FileExists(ExpandConstant('{app}\helper\bridge\DstHelperBridge.ps1')) then
     PriorBridgeHash :=
       GetSHA256OfFile(ExpandConstant('{app}\helper\bridge\DstHelperBridge.ps1'));
+  if FileExists(ExpandConstant('{app}\helper\bridge\Install-Bridge.ps1')) then
+    PriorBridgeInstallerHash :=
+      GetSHA256OfFile(ExpandConstant('{app}\helper\bridge\Install-Bridge.ps1'));
 
   if ShouldUseInPlaceUpgrade() then
   begin
@@ -672,6 +677,7 @@ begin
   else
   begin
     PriorBridgeHash := '';
+    PriorBridgeInstallerHash := '';
     UninstallPreviousVersion();
   end;
 
@@ -680,17 +686,23 @@ end;
 
 function ShouldInstallBridge(): Boolean;
 var
-  newBridgePath, newBridgeHash: string;
+  newBridgePath, newInstallerPath, newBridgeHash, newInstallerHash: string;
 begin
   newBridgePath := ExpandConstant('{app}\helper\bridge\DstHelperBridge.ps1');
-  if (PriorBridgeHash = '') or (not FileExists(newBridgePath)) then
+  newInstallerPath := ExpandConstant('{app}\helper\bridge\Install-Bridge.ps1');
+  if (PriorBridgeHash = '') or
+     (PriorBridgeInstallerHash = '') or
+     (not FileExists(newBridgePath)) or
+     (not FileExists(newInstallerPath)) then
   begin
     Result := True;
     Exit;
   end;
 
   newBridgeHash := GetSHA256OfFile(newBridgePath);
-  Result := PriorBridgeHash <> newBridgeHash;
+  newInstallerHash := GetSHA256OfFile(newInstallerPath);
+  Result := (PriorBridgeHash <> newBridgeHash) or
+            (PriorBridgeInstallerHash <> newInstallerHash);
   if Result then
     Log('Bridge payload changed; reinstalling and restarting bridge task.')
   else
