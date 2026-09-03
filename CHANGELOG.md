@@ -24,6 +24,12 @@ here cover everything those tags shipped.
   once, reusing that result for keep-alive state, and taking a health-only fast
   path when the mobile bridge is already responding.
 
+### Fixed
+
+- Removed the ineffective Solo backpack-slot editor. Field testing confirmed
+  that PTC recomputes the saved slot count from progression and rewrites direct
+  database changes back to 60.
+
 ## [15.0.0-phase2-test3] - 2026-09-03
 
 ### Added
