@@ -13,6 +13,14 @@ here cover everything those tags shipped.
 
 ## [Unreleased]
 
+## [15.0.0-phase2-test4] - 2026-09-03
+
+### Changed
+
+- Updated v15 upgrades in place so the backend restarts while unchanged
+  scheduled tasks remain registered. The mobile bridge is reinstalled and
+  restarted only when its shipped payload changes.
+
 ## [15.0.0-phase2-test3] - 2026-09-03
 
 ### Added
