@@ -29,9 +29,9 @@ name: Build & sign installer
 #       *_EXE and *_INSTALLER to the same slug. Leaving a var blank falls back to
 #       the SignPath project's default artifact configuration.)
 #
-# After that, run this workflow (Actions tab > "Build & sign installer" > Run),
-# optionally passing attach_to_release_tag to replace the asset on an existing
-# GitHub release — which keeps the "DuneServerSetup.exe is the sole asset" rule.
+# After that, run this workflow (Actions tab > "Build & sign installer" > Run).
+# Passing release_tag builds from that immutable tag, creates a draft with the
+# installer attached, then publishes it. Existing releases are never modified.
 #
 # NOTE: SignPath's action is pinned to the v1 major tag below. For a hardened
 # supply chain, pin it to a full commit SHA instead.
@@ -40,8 +40,16 @@ name: Build & sign installer
 on:
   workflow_dispatch:
     inputs:
-      attach_to_release_tag:
-        description: 'Existing release tag to upload the (signed) installer to, e.g. v12.15.1 (blank = just build + upload as a workflow artifact)'
+      release_tag:
+        description: 'Immutable tag for a NEW release, e.g. v15.0.0-phase2-test1.1 (blank = build a workflow artifact only)'
+        required: false
+        default: ''
+      release_title:
+        description: 'Title for the new release (required when release_tag is set)'
+        required: false
+        default: ''
+      release_notes:
+        description: 'Release notes for the new release (required when release_tag is set)'
         required: false
         default: ''
       skip_version_check:
@@ -56,7 +64,7 @@ on:
         default: false
 
 permissions:
-  contents: write   # needed to upload the asset to an existing release
+  contents: write   # needed to create the release after its asset is ready
 
 jobs:
   build:
@@ -65,15 +73,27 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
         with:
-          ref: ${{ inputs.attach_to_release_tag != '' && inputs.attach_to_release_tag || github.ref }}
+          ref: ${{ inputs.release_tag != '' && inputs.release_tag || github.ref }}
           fetch-depth: 0
 
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: '22.22.2'
           cache: 'npm'
           cache-dependency-path: webui/package-lock.json
+
+      - name: Refuse an existing release
+        if: inputs.release_tag != ''
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ inputs.release_tag }}
+        run: |
+          & gh release view $env:RELEASE_TAG --repo '${{ github.repository }}' --json tagName *> $null
+          if ($LASTEXITCODE -eq 0) {
+            throw "Release $env:RELEASE_TAG already exists. Release assets are immutable; publish a new version instead."
+          }
 
       - name: Setup .NET 10 SDK
         uses: actions/setup-dotnet@v4
@@ -110,7 +130,7 @@ jobs:
       - name: Build raw artifacts (phase A)
         shell: pwsh
         env:
-          BUILD_TAG: ${{ inputs.attach_to_release_tag }}
+          BUILD_TAG: ${{ inputs.release_tag }}
         run: |
           $biArgs = @{ SkipInstaller = $true }
           if ($env:BUILD_TAG) { $biArgs.BuildCommit = (& git rev-parse HEAD).Trim() }
@@ -212,7 +232,7 @@ jobs:
       - name: Build installer (phase B)
         shell: pwsh
         env:
-          BUILD_TAG: ${{ inputs.attach_to_release_tag }}
+          BUILD_TAG: ${{ inputs.release_tag }}
         run: |
           $biArgs = @{
             SkipWebBuild = $true
@@ -271,27 +291,27 @@ jobs:
           }
 
       - name: Verify release artifact identity
-        if: inputs.attach_to_release_tag != ''
+        if: inputs.release_tag != ''
         shell: pwsh
         env:
-          GH_TOKEN: ${{ github.token }}
-          BUILD_TAG: ${{ inputs.attach_to_release_tag }}
+          BUILD_TAG: ${{ inputs.release_tag }}
+          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
         run: |
-          $releaseJson = gh api "repos/${{ github.repository }}/releases/tags/$env:BUILD_TAG"
-          if ($LASTEXITCODE -ne 0) { throw "Could not read GitHub release $env:BUILD_TAG." }
-          $release = $releaseJson | ConvertFrom-Json
-          if ([string]$release.tag_name -cne $env:BUILD_TAG) {
-           throw "GitHub release tag mismatch: requested '$env:BUILD_TAG', API returned '$($release.tag_name)'."
-          }
+          . '${{ github.workspace }}\app\build\BuildHelpers.ps1'
           $tagCommit = "$(& git rev-parse --verify "refs/tags/$env:BUILD_TAG^{commit}")".Trim().ToLowerInvariant()
           if ($LASTEXITCODE -ne 0 -or $tagCommit -notmatch '^[0-9a-f]{40}$') {
            throw "Could not resolve release tag $env:BUILD_TAG to an immutable commit."
           }
+          & git merge-base --is-ancestor $tagCommit "refs/remotes/origin/$env:DEFAULT_BRANCH"
+          if ($LASTEXITCODE -ne 0) {
+           throw "Release tag $env:BUILD_TAG does not point to a commit merged into $env:DEFAULT_BRANCH."
+          }
+          $expectedPrerelease = Test-DunePrereleaseTag -BuildTag $env:BUILD_TAG
           & '${{ github.workspace }}\app\build\Verify-ReleaseArtifact.ps1' `
            -ExecutablePath '${{ github.workspace }}\app\build\output\DuneServer.exe' `
            -ExpectedTag $env:BUILD_TAG `
            -ExpectedCommit $tagCommit `
-           -ExpectedPrerelease:([bool]$release.prerelease)
+           -ExpectedPrerelease:$expectedPrerelease
 
       - name: Upload installer as workflow artifact
         uses: actions/upload-artifact@v4
@@ -300,16 +320,62 @@ jobs:
           path: app/installer/output/DuneServerSetup.exe
           if-no-files-found: error
 
-      - name: Attach installer to release
-        if: inputs.attach_to_release_tag != ''
-        shell: bash
+      - name: Publish new release with installer
+        if: inputs.release_tag != ''
+        shell: pwsh
         env:
           GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ inputs.release_tag }}
+          RELEASE_TITLE: ${{ inputs.release_title }}
+          RELEASE_NOTES: ${{ inputs.release_notes }}
         run: |
-          set -euo pipefail
-          tag='${{ inputs.attach_to_release_tag }}'
-          echo "Uploading signed installer to release $tag (replacing any existing asset)…"
-          gh release upload "$tag" \
-            "app/installer/output/DuneServerSetup.exe" \
-            --repo "${{ github.repository }}" --clobber
-          echo "Done. Verify the release has DuneServerSetup.exe as its sole asset."
+          if ([string]::IsNullOrWhiteSpace($env:RELEASE_TITLE)) {
+            throw 'release_title is required when release_tag is set.'
+          }
+          if ([string]::IsNullOrWhiteSpace($env:RELEASE_NOTES)) {
+            throw 'release_notes is required when release_tag is set.'
+          }
+
+          & gh release view $env:RELEASE_TAG --repo '${{ github.repository }}' --json tagName *> $null
+          if ($LASTEXITCODE -eq 0) {
+            throw "Release $env:RELEASE_TAG already exists. Release assets are immutable; publish a new version instead."
+          }
+
+          . '${{ github.workspace }}\app\build\BuildHelpers.ps1'
+          $isPrerelease = Test-DunePrereleaseTag -BuildTag $env:RELEASE_TAG
+          $installer = '${{ github.workspace }}\app\installer\output\DuneServerSetup.exe'
+          $createArgs = @(
+            'release', 'create', $env:RELEASE_TAG, $installer,
+            '--repo', '${{ github.repository }}',
+            '--verify-tag',
+            '--draft',
+            '--title', $env:RELEASE_TITLE,
+            '--notes', $env:RELEASE_NOTES
+          )
+          if ($isPrerelease) { $createArgs += '--prerelease' }
+          & gh @createArgs
+          if ($LASTEXITCODE -ne 0) {
+            throw "Could not create draft release $env:RELEASE_TAG with its installer."
+          }
+
+          $publishArgs = @(
+            'release', 'edit', $env:RELEASE_TAG,
+            '--repo', '${{ github.repository }}',
+            '--draft=false'
+          )
+          if ($isPrerelease) { $publishArgs += '--prerelease' }
+          & gh @publishArgs
+          if ($LASTEXITCODE -ne 0) {
+            throw "Draft $env:RELEASE_TAG has its installer but could not be published."
+          }
+
+          $release = & gh release view $env:RELEASE_TAG `
+            --repo '${{ github.repository }}' `
+            --json assets,isDraft,tagName | ConvertFrom-Json
+          if ($LASTEXITCODE -ne 0 -or $release.isDraft -or
+              $release.tagName -cne $env:RELEASE_TAG -or
+              @($release.assets).Count -ne 1 -or
+              $release.assets[0].name -cne 'DuneServerSetup.exe') {
+            throw "Published release $env:RELEASE_TAG failed the immutable sole-asset verification."
+          }
+          Write-Host "Published immutable release $env:RELEASE_TAG with DuneServerSetup.exe." -ForegroundColor Green

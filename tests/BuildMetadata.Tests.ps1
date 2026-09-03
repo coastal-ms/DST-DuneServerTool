@@ -75,15 +75,22 @@ Describe 'Build artifact metadata' {
         $exe | Should -Not -Match 'rev-parse --short'
         $exe | Should -Match 'DuneBuildMetadataPresent = \$true'
         $workflow | Should -Match 'prerelease_build'
-        $workflow | Should -Match 'inputs\.attach_to_release_tag.*github\.ref'
+        $workflow | Should -Match 'inputs\.release_tag.*github\.ref'
         $workflow | Should -Match 'fetch-depth:\s*0'
         $workflow | Should -Not -Match 'github\.ref.*Prerelease'
         $workflow | Should -Match '\$biArgs\s*=\s*@\{'
         $workflow | Should -Match '\$biArgs\.BuildTag\s*='
         $workflow | Should -Match '\$biArgs\.BuildCommit\s*='
         $workflow | Should -Match 'Verify-ReleaseArtifact\.ps1'
-        $workflow | Should -Match 'release\.prerelease'
+        $workflow | Should -Match 'Test-DunePrereleaseTag'
         $workflow | Should -Match 'refs/tags/\$env:BUILD_TAG\^\{commit\}'
+        $workflow | Should -Match 'merge-base --is-ancestor \$tagCommit "refs/remotes/origin/\$env:DEFAULT_BRANCH"'
+        $workflow | Should -Match 'Release assets are immutable; publish a new version instead'
+        $workflow | Should -Match "'--draft'"
+        $workflow | Should -Match "'release', 'edit'"
+        $workflow | Should -Match "'release', 'create'"
+        $workflow | Should -Not -Match 'release upload'
+        $workflow | Should -Not -Match '--clobber'
         $workflow | Should -Not -Match '\$biArgs\s*=\s*@\('
         $workflow | Should -Not -Match '\$biArgs\s*\+='
     }
