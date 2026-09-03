@@ -90,9 +90,21 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           RELEASE_TAG: ${{ inputs.release_tag }}
         run: |
-          & gh release view $env:RELEASE_TAG --repo '${{ github.repository }}' --json tagName *> $null
-          if ($LASTEXITCODE -eq 0) {
+          $nativeErrorPreference = $PSNativeCommandUseErrorActionPreference
+          $PSNativeCommandUseErrorActionPreference = $false
+          try {
+            $encodedTag = [uri]::EscapeDataString($env:RELEASE_TAG)
+            $lookupOutput = & gh api "repos/${{ github.repository }}/releases/tags/$encodedTag" --include 2>&1
+            $lookupExitCode = $LASTEXITCODE
+          } finally {
+            $PSNativeCommandUseErrorActionPreference = $nativeErrorPreference
+          }
+
+          if ($lookupExitCode -eq 0) {
             throw "Release $env:RELEASE_TAG already exists. Release assets are immutable; publish a new version instead."
+          }
+          if (($lookupOutput -join "`n") -notmatch '(?m)^HTTP/\S+\s+404(?:\s|$)') {
+            throw "Could not determine whether release $env:RELEASE_TAG exists:`n$($lookupOutput -join "`n")"
           }
 
       - name: Setup .NET 10 SDK
@@ -336,9 +348,21 @@ jobs:
             throw 'release_notes is required when release_tag is set.'
           }
 
-          & gh release view $env:RELEASE_TAG --repo '${{ github.repository }}' --json tagName *> $null
-          if ($LASTEXITCODE -eq 0) {
+          $nativeErrorPreference = $PSNativeCommandUseErrorActionPreference
+          $PSNativeCommandUseErrorActionPreference = $false
+          try {
+            $encodedTag = [uri]::EscapeDataString($env:RELEASE_TAG)
+            $lookupOutput = & gh api "repos/${{ github.repository }}/releases/tags/$encodedTag" --include 2>&1
+            $lookupExitCode = $LASTEXITCODE
+          } finally {
+            $PSNativeCommandUseErrorActionPreference = $nativeErrorPreference
+          }
+
+          if ($lookupExitCode -eq 0) {
             throw "Release $env:RELEASE_TAG already exists. Release assets are immutable; publish a new version instead."
+          }
+          if (($lookupOutput -join "`n") -notmatch '(?m)^HTTP/\S+\s+404(?:\s|$)') {
+            throw "Could not determine whether release $env:RELEASE_TAG exists:`n$($lookupOutput -join "`n")"
           }
 
           . '${{ github.workspace }}\app\build\BuildHelpers.ps1'
