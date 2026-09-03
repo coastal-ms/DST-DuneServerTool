@@ -136,8 +136,8 @@ A session worktree may not have warm `webui/node_modules` — run `npm ci` in
   `gh release view vX.Y.Z --json assets`.
 - **Release assets are immutable.** Never upload or replace an asset on an
   existing release; any correction gets a new version and tag so checksums and
-  tester reports remain trustworthy. Maintainer release operations are private
-  and do not belong in this public repository.
+  tester reports remain trustworthy. The private publication procedure is not
+  maintained in this public repository.
 - **Every release, refresh the bug-report issue template.** When a release adds
   or changes user-facing features, update
   `.github/ISSUE_TEMPLATE/bug_report.yml` so bug reports and the log-gathering

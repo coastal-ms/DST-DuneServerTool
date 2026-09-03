@@ -13,6 +13,8 @@ here cover everything those tags shipped.
 
 ## [Unreleased]
 
+- Removed inactive hosted signing and release automation.
+
 ## [15.0.0-phase2-test1.1] - 2026-09-02
 
 ### Added
