@@ -507,6 +507,12 @@ export function getSharedInventory(query: SharedInventoryQuery = {}) {
   })}`)
 }
 
+export function refreshSharedInventory() {
+  return api<{ ok: boolean; generation: string; rowCount: number }>('/api/v1/inventory/refresh', {
+    method: 'POST',
+  })
+}
+
 export function getSharedInventoryOccurrences(query: SharedInventoryOccurrencesQuery) {
   return api<SharedInventoryOccurrencesResponse>(
     `/api/v1/inventory/items/occurrences${qs({

@@ -172,6 +172,24 @@ if (`$maps.Count -ne 2 -or [string]`$maps[1]['b'] -ne '4') { throw 'PS5.1 row-ma
         $result.body.data.templateId | Should -Be 'Spice_Melange'
     }
 
+    It 'refreshes the inventory cache on demand before the client reloads it' {
+        Mock Invoke-DuneInventoryCacheRefresh {
+            [pscustomobject]@{ ok = $true; generation = 'manual-refresh-1'; rowCount = 42 }
+        }
+        $route = @($script:DuneRoutes | Where-Object {
+            $_.Method -eq 'POST' -and $_.Path -eq '/api/v1/inventory/refresh'
+        })[0]
+        $response = New-InventoryRouteResponse
+
+        & $route.Handler $null $response @{} $null
+        $body = [Text.Encoding]::UTF8.GetString($response.OutputStream.ToArray()) | ConvertFrom-Json
+
+        $response.StatusCode | Should -Be 200
+        $body.generation | Should -Be 'manual-refresh-1'
+        $body.rowCount | Should -Be 42
+        Should -Invoke Invoke-DuneInventoryCacheRefresh -Times 1
+    }
+
     It 'serves cached grouped pages with generation-bound cursors without hitting PostgreSQL' {
         $script:CacheOffsets = [Collections.Generic.List[int]]::new()
         $script:CacheLimits = [Collections.Generic.List[int]]::new()

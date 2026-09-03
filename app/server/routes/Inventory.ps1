@@ -1,3 +1,19 @@
+# POST /api/v1/inventory/refresh
+# Refreshes the derived read model immediately, then returns the new generation.
+Register-DuneRoute -Method POST -Path '/api/v1/inventory/refresh' -Handler {
+    param($req, $res, $routeParams, $body)
+    try {
+        $result = Invoke-DuneInventoryCacheRefresh -TimeoutSec 120
+        Write-DuneJson -Response $res -Body @{
+            ok = $true
+            generation = [string]$result.generation
+            rowCount = [int]$result.rowCount
+        }
+    } catch {
+        Write-DuneError -Response $res -Status 503 -Message "Inventory refresh failed: $($_.Exception.Message)"
+    }
+}
+
 # GET /api/v1/inventory/items
 # Read-only shared projection for proven player and storage inventory scopes.
 Register-DuneRoute -Method GET -Path '/api/v1/inventory/items' -Handler {
