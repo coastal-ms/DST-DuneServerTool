@@ -134,12 +134,13 @@ A session worktree may not have warm `webui/node_modules` — run `npm ci` in
   Code-only releases break the in-app updater (it gates on an asset being
   present and silently reports "up to date"). After publishing, verify with
   `gh release view vX.Y.Z --json assets`.
-- **Release assets are immutable.** Publish through the
-  `Build & sign installer` workflow with an existing tag at the merged release
-  commit. The workflow builds from that tag, verifies the embedded identity,
-  creates a draft with `DuneServerSetup.exe`, and only then publishes it. Never
-  upload or replace an asset on an existing release; any correction gets a new
-  version and tag so checksums and tester reports remain trustworthy.
+- **Release assets are immutable.** After the tested PR is accepted and merged,
+  build the final installer locally from the exact release tag/40-character
+  commit with the intended prerelease metadata, copy it to the canonical primary
+  output path, verify its embedded identity, then create the new release directly
+  with `DuneServerSetup.exe` as its sole asset after the final publish gate.
+  Never upload or replace an asset on an existing release; any correction gets a
+  new version and tag so checksums and tester reports remain trustworthy.
 - **Every release, refresh the bug-report issue template.** When a release adds
   or changes user-facing features, update
   `.github/ISSUE_TEMPLATE/bug_report.yml` so bug reports and the log-gathering
