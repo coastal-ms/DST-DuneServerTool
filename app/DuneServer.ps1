@@ -25,6 +25,7 @@ try {
 # BEFORE we know whether the normal logger will load. Any exception in the
 # bootstrap is appended here so users always have something to send us.
 $script:DuneStartupLog = $null
+$script:DuneStartupClock = [System.Diagnostics.Stopwatch]::StartNew()
 try {
     $stateDir = Join-Path $env:LOCALAPPDATA 'DuneServer'
     if (-not (Test-Path -LiteralPath $stateDir)) {
@@ -39,7 +40,8 @@ function Write-DuneStartupLog {
     param([string]$Message)
     if (-not $script:DuneStartupLog) { return }
     try {
-        Add-Content -LiteralPath $script:DuneStartupLog -Value "[$(Get-Date -Format 'HH:mm:ss')] $Message" -Encoding UTF8
+        $elapsedMs = $script:DuneStartupClock.ElapsedMilliseconds
+        Add-Content -LiteralPath $script:DuneStartupLog -Value "[$(Get-Date -Format 'HH:mm:ss') +${elapsedMs}ms] $Message" -Encoding UTF8
     } catch { }
 }
 
@@ -161,6 +163,7 @@ public static extern bool IsIconic(System.IntPtr hWnd);
         # Non-fatal: console just stays at normal size if Win32 isn't available.
     }
 }
+Write-DuneStartupLog 'Console presentation initialized'
 
 # Version (one of the 5 sync'd constants; see persistent-notes.md)
 $script:DuneToolVersion = '15.0.0-phase2-test4'
@@ -301,6 +304,7 @@ if (-not $script:SingleInstanceOwned) {
         } catch {}
         exit 0
     }
+    Write-DuneStartupLog 'Single-instance gate complete'
 
     # Another instance is already running. Two scenarios:
     #
@@ -485,6 +489,7 @@ if (-not (Test-DuneIsAdmin)) {
     }
     exit 0
 }
+Write-DuneStartupLog 'Elevation confirmed'
 
 # ---------- Path resolution (works for ps2exe and plain pwsh) ------------------
 
@@ -557,6 +562,7 @@ $script:MainScript = Find-DuneSubpath 'dune-server.ps1'
 if (-not $script:MainScript) {
     Write-Host "WARNING: dune-server.ps1 not found near '$script:AppDir'. Command execution will fail." -ForegroundColor Yellow
 }
+Write-DuneStartupLog 'Runtime paths resolved'
 
 # ---------- Load server + routes -----------------------------------------------
 
@@ -577,6 +583,7 @@ $script:DuneLogFilePath = Join-Path $env:LOCALAPPDATA 'DuneServer\dune-server.lo
 Initialize-DuneLog -Path $script:DuneLogFilePath
 
 . (Join-Path $serverDir 'HttpServer.ps1')
+Write-DuneStartupLog 'HTTP module loaded'
 
 # Re-assert the server dir AFTER dot-sourcing HttpServer.ps1. Its top-level
 # declaration is guarded, but re-setting here is a second guarantee that the
@@ -589,6 +596,7 @@ $libDir = Join-Path $serverDir 'lib'
 if (Test-Path $libDir) {
     Get-ChildItem -Path $libDir -Filter '*.ps1' | ForEach-Object { . $_.FullName }
 }
+Write-DuneStartupLog 'Library modules loaded'
 
 # Hydrate the last persisted Maps read model before any HTTP route can observe it.
 # Source refresh is scheduled separately and never runs on the response path.
@@ -604,6 +612,7 @@ if (Get-Command Initialize-DunePlatformCache -ErrorAction SilentlyContinue) {
             Write-DuneLog "Maps platform startup refresh could not be scheduled: $($_.Exception.Message)" 'WARN'
         }
     }
+    Write-DuneStartupLog 'Platform cache initialized and refreshes scheduled'
     if (Get-Command Start-DuneInventoryCacheStartupRefresh -ErrorAction SilentlyContinue) {
         try {
             [void](Start-DuneInventoryCacheStartupRefresh -ServerDir $serverDir -AppDir $script:AppDir)
@@ -618,6 +627,7 @@ $routesDir = Join-Path $serverDir 'routes'
 if (Test-Path $routesDir) {
     Get-ChildItem -Path $routesDir -Filter '*.ps1' | ForEach-Object { . $_.FullName }
 }
+Write-DuneStartupLog 'Route modules loaded'
 
 # Start the native Market Bot ("Duke") scheduler in its own background runspace.
 # It only acts when the bot is enabled in gameplay-bot.json, so this is safe to
@@ -635,6 +645,7 @@ if (Get-Command Start-DuneGameplayBotScheduler -ErrorAction SilentlyContinue) {
 if (Get-Command Initialize-DuneMobileBridge -ErrorAction SilentlyContinue) {
     try { Initialize-DuneMobileBridge -ServerDir $serverDir } catch {}
 }
+Write-DuneStartupLog 'Background services initialized'
 
 # ---------- Token --------------------------------------------------------------
 
@@ -676,7 +687,7 @@ function Get-DuneShellExePath {
 
 # ---------- Start --------------------------------------------------------------
 
-Write-DuneStartupLog "Bootstrap complete, handing off to Start-DuneHttpServer"
+Write-DuneStartupLog 'Module bootstrap complete'
 Write-DuneLog "Dune Server v$script:DuneToolVersion starting"
 Write-DuneLog "Serving from: $script:DistRoot"
 
@@ -750,6 +761,7 @@ if (($script:DuneAutostartRegistered -or $script:DuneServiceModeRegistered) -and
 if (Get-Command Update-DuneKeepAliveFlag -ErrorAction SilentlyContinue) {
     try { [void](Update-DuneKeepAliveFlag) } catch {}
 }
+Write-DuneStartupLog 'Host lifecycle state resolved'
 
 $openInAppWindow = $false
 try { $openInAppWindow = Get-DstOpenInAppWindow } catch { $openInAppWindow = $true }
@@ -846,6 +858,7 @@ if ((-not $script:DuneHeadlessMode) -and -not ($openInAppWindow -and $script:Dun
 }
 
 try {
+    Write-DuneStartupLog 'Starting HTTP listener'
     Start-DuneHttpServer -DistRoot $script:DistRoot -PreferredPort 47823 -Token $script:LaunchToken
 } catch {
     Write-DuneLog "HTTP server failed: $($_.Exception.Message)" 'ERROR'
