@@ -28,6 +28,11 @@ here cover everything those tags shipped.
 - Labeled the early Vehicles workspace as Demo Data until its live fleet
   presentation is complete.
 
+### Fixed
+
+- Prevented a focused inventory slot and a hovered slot from showing two item
+  previews at once across Shared Inventory and Solo Mode.
+
 ## [15.0.0-phase2-test2] - 2026-09-03
 
 ### Added
