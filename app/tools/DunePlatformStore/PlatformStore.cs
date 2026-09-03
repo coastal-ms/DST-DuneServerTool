@@ -47,6 +47,7 @@ internal static partial class PlatformStore
         if (current == Schema.Version)
         {
             ValidateMigrationIdentity(connection);
+            ValidateDomainLifecycle(connection);
             return new
             {
                 ok = true,
@@ -61,12 +62,33 @@ internal static partial class PlatformStore
         var backupPath = existed && HasUserTables(connection)
             ? CreateMigrationBackup(connection, databasePath)
             : null;
-        Schema.CreateV1(connection, AppVersion);
+        if (backupPath is not null)
+        {
+            PruneMigrationBackups(databasePath, 1);
+        }
+        if (current == 0)
+        {
+            Schema.CreateV1(connection, AppVersion);
+            current = 1;
+        }
+        if (current == 1)
+        {
+            ValidateV1MigrationIdentity(connection);
+            Schema.CreateV2(connection, AppVersion);
+            current = 2;
+        }
+        if (current == 2)
+        {
+            ValidateV2MigrationIdentity(connection);
+            Schema.CreateV3(connection, AppVersion);
+        }
         quickCheck = Schema.QuickCheck(connection);
         if (!string.Equals(quickCheck, "ok", StringComparison.OrdinalIgnoreCase))
         {
             throw new InvalidDataException($"Cache quick check after migration failed: {quickCheck}");
         }
+        ValidateMigrationIdentity(connection);
+        ValidateDomainLifecycle(connection);
         PruneMigrationBackups(databasePath, 1);
         return new
         {
@@ -220,6 +242,7 @@ internal static partial class PlatformStore
         {
             throw new InvalidDataException($"Cache quick check failed: {quickCheck}");
         }
+        ValidateDomainLifecycle(connection);
         var generation = ReadMetadata(connection, "active_generation");
         var sources = ReadSourceHealth(connection);
         var layers = ReadLayerHealth(connection, generation);
@@ -239,7 +262,10 @@ internal static partial class PlatformStore
                 layerSnapshots = ScalarLong(connection, "SELECT COUNT(*) FROM layer_snapshots;"),
                 activeSpiceCurrent = ScalarLong(connection, "SELECT COUNT(*) FROM active_spice_current;"),
                 activeSpiceHistory = ScalarLong(connection, "SELECT COUNT(*) FROM active_spice_history;"),
-                publicPois = ScalarLong(connection, "SELECT COUNT(*) FROM public_poi_layer;")
+                publicPois = ScalarLong(connection, "SELECT COUNT(*) FROM public_poi_layer;"),
+                cacheDomains = ScalarLong(connection, "SELECT COUNT(*) FROM derived_cache_domains;"),
+                inventoryGenerations = ScalarLong(connection, "SELECT COUNT(*) FROM inventory_generations;"),
+                inventoryItems = ScalarLong(connection, "SELECT COUNT(*) FROM inventory_items;")
             },
             sources,
             layers
@@ -258,6 +284,7 @@ internal static partial class PlatformStore
         Schema.EnsureSupported(connection);
         ValidateMigrationIdentity(connection);
         using var transaction = connection.BeginTransaction();
+        var inventoryGenerationsRemoved = InventoryStore.PruneGenerations(connection, transaction);
         var historyBefore = ScalarLong(connection, "SELECT COUNT(*) FROM active_spice_history;", transaction);
         var snapshotsBefore = ScalarLong(connection, "SELECT COUNT(*) FROM layer_snapshots;", transaction);
         var cutoff = FormatTimestamp(DateTimeOffset.UtcNow.AddDays(-historyDays));
@@ -327,6 +354,7 @@ internal static partial class PlatformStore
             historyRows = historyAfter,
             sizePressureRowsRemoved,
             snapshotRows = snapshotsAfter,
+            inventoryGenerationsRemoved,
             fileBytes,
             sizePressure = fileBytes > maxBytes,
             maxBytes
@@ -399,7 +427,12 @@ internal static partial class PlatformStore
             VerifyInterruptedWriteRecovery(database);
             var integrity = Integrity(database);
             var prune = Prune(database, 90, 100_000, 20, 250L * 1024 * 1024);
+            var inventory = InventoryStore.SelfTest(database);
+            VerifyInterruptedWriteRecovery(database);
+            InventoryStore.RequireActiveGeneration(database, "inventory-3");
             VerifyMigrationBackup(root);
+            VerifyV1Migration(root);
+            VerifyV2Migration(root);
             VerifyInterruptedMigrationRecovery(root);
             VerifyNewerSchemaFailure(root);
             VerifyCorruptionFailure(root);
@@ -419,7 +452,11 @@ internal static partial class PlatformStore
                 oneShotExit = true,
                 interruptedWriteRecovery = true,
                 interruptedMigrationRecovery = true,
+                interruptedInventoryReplacementRecovery = true,
                 idempotentGenerationReplace = true,
+                inventory,
+                v1ToV3Migration = true,
+                v2ToV3Migration = true,
                 offsetTimestampPruning = true,
                 pathRaceResistance = true,
                 inheritableStandardHandles = true,
@@ -1042,11 +1079,54 @@ internal static partial class PlatformStore
     private static void ValidateMigrationIdentity(SqliteConnection connection)
     {
         using var command = connection.CreateCommand();
-        command.CommandText = "SELECT checksum FROM schema_migrations WHERE version=1;";
-        var checksum = Convert.ToString(command.ExecuteScalar(), CultureInfo.InvariantCulture);
-        if (!string.Equals(checksum, Schema.Checksum, StringComparison.Ordinal))
+        command.CommandText =
+            "SELECT version, checksum FROM schema_migrations WHERE version IN (1,2,3) ORDER BY version;";
+        using var reader = command.ExecuteReader();
+        if (!reader.Read() || reader.GetInt32(0) != 1 ||
+            !string.Equals(reader.GetString(1), Schema.V1Checksum, StringComparison.Ordinal) ||
+            !reader.Read() || reader.GetInt32(0) != 2 ||
+            !string.Equals(reader.GetString(1), Schema.V2Checksum, StringComparison.Ordinal) ||
+            !reader.Read() || reader.GetInt32(0) != 3 ||
+            !string.Equals(reader.GetString(1), Schema.Checksum, StringComparison.Ordinal) ||
+            reader.Read())
         {
             throw new InvalidDataException("Cache schema migration identity is missing or invalid.");
+        }
+    }
+
+    private static void ValidateV1MigrationIdentity(SqliteConnection connection)
+    {
+        using var command = connection.CreateCommand();
+        command.CommandText = "SELECT checksum FROM schema_migrations WHERE version=1;";
+        var checksum = Convert.ToString(command.ExecuteScalar(), CultureInfo.InvariantCulture);
+        if (!string.Equals(checksum, Schema.V1Checksum, StringComparison.Ordinal))
+        {
+            throw new InvalidDataException("Cache schema v1 migration identity is missing or invalid.");
+        }
+    }
+
+    private static void ValidateV2MigrationIdentity(SqliteConnection connection)
+    {
+        using var command = connection.CreateCommand();
+        command.CommandText =
+            "SELECT version, checksum FROM schema_migrations WHERE version IN (1,2) ORDER BY version;";
+        using var reader = command.ExecuteReader();
+        if (!reader.Read() || reader.GetInt32(0) != 1 ||
+            !string.Equals(reader.GetString(1), Schema.V1Checksum, StringComparison.Ordinal) ||
+            !reader.Read() || reader.GetInt32(0) != 2 ||
+            !string.Equals(reader.GetString(1), Schema.V2Checksum, StringComparison.Ordinal) ||
+            reader.Read())
+        {
+            throw new InvalidDataException("Cache schema v2 migration identity is missing or invalid.");
+        }
+    }
+
+    private static void ValidateDomainLifecycle(SqliteConnection connection)
+    {
+        if (ScalarLong(connection,
+                "SELECT COUNT(*) FROM derived_cache_domains WHERE domain_key='inventory';") != 1)
+        {
+            throw new InvalidDataException("Inventory cache domain lifecycle state is missing.");
         }
     }
 
@@ -1260,6 +1340,12 @@ internal static partial class PlatformStore
               projected_x, projected_y, source_fingerprint, observed_at_utc)
             VALUES ('crash-probe','farm-1','deep-desert','partition-1','crash-probe',
               'active','none',NULL,NULL,'probe',$now);
+            UPDATE derived_cache_domains
+            SET active_generation='interrupted-inventory',
+                refresh_requested_at_utc=$now,
+                last_trigger='recovery'
+            WHERE domain_key='inventory';
+            DELETE FROM inventory_items;
             """,
             ("$now", FormatTimestamp(DateTimeOffset.UtcNow)));
         Environment.FailFast("Intentional cache write crash probe before commit.");
@@ -1407,9 +1493,22 @@ internal static partial class PlatformStore
         var error = process.StandardError.ReadToEndAsync();
         if (request is not null)
         {
-            process.StandardInput.Write(request);
+            try
+            {
+                process.StandardInput.Write(request);
+            }
+            catch (IOException) when (process.HasExited)
+            {
+                // The caller below reports the child's bounded JSON error.
+            }
         }
-        process.StandardInput.Close();
+        try
+        {
+            process.StandardInput.Close();
+        }
+        catch (IOException) when (process.HasExited)
+        {
+        }
         return (process, output, error);
     }
 
@@ -1421,6 +1520,7 @@ internal static partial class PlatformStore
             var connection = securedConnection.Connection;
             Schema.Execute(connection, null, "CREATE TABLE legacy_probe(value TEXT NOT NULL); INSERT INTO legacy_probe VALUES ('preserved');");
         }
+
         Migrate(database);
         Require(
             Directory.GetFiles(root, "migration.sqlite.migration-*.bak").Length == 1,
@@ -1430,6 +1530,87 @@ internal static partial class PlatformStore
             "Migration retained WAL/SHM files outside the backup retention set.");
     }
 
+    private static void VerifyV1Migration(string root)
+    {
+        var database = Path.Combine(root, "v1-to-v3.sqlite");
+        using (var securedConnection = Schema.Open(database, readOnly: false))
+        {
+            var connection = securedConnection.Connection;
+            Schema.CreateV1(connection, AppVersion);
+            var now = FormatTimestamp(DateTimeOffset.UtcNow);
+            Schema.Execute(connection, null,
+                """
+                INSERT INTO map_catalog(
+                  generation, farm_id, map_id, partition_id, label, kind, last_seen_at_utc, active)
+                VALUES ('v1-generation','farm-v1','map-v1','partition-v1','Preserved Map',
+                  'deep-desert',$now,1);
+                UPDATE cache_metadata SET value='v1-generation' WHERE key='active_generation';
+                """,
+                ("$now", now));
+        }
+        Migrate(database);
+        using (var securedConnection = Schema.Open(database, readOnly: true))
+        {
+            var connection = securedConnection.Connection;
+            Require(Schema.ReadVersion(connection) == 3, "A v1 cache did not migrate to v3.");
+            ValidateMigrationIdentity(connection);
+            Require(
+                ScalarLong(connection,
+                    "SELECT COUNT(*) FROM map_catalog WHERE generation='v1-generation';") == 1,
+                "The v1 to v2 migration did not preserve Maps data.");
+        }
+        Require(
+            Directory.GetFiles(root, "v1-to-v3.sqlite.migration-*.bak").Length == 1,
+            "The v1 to v3 migration did not retain exactly one backup.");
+    }
+
+    private static void VerifyV2Migration(string root)
+    {
+        var database = Path.Combine(root, "v2-to-v3.sqlite");
+        using (var securedConnection = Schema.Open(database, readOnly: false))
+        {
+            var connection = securedConnection.Connection;
+            Schema.CreateV1(connection, AppVersion);
+            Schema.CreateV2(connection, AppVersion);
+            var now = FormatTimestamp(DateTimeOffset.UtcNow);
+            Schema.Execute(connection, null,
+                """
+                INSERT INTO inventory_generations(
+                  generation, observed_at_utc, cached_at_utc, expires_at_utc,
+                  source_fingerprint, row_count)
+                VALUES ('v2-generation',$now,$now,$now,'v2-fixture',1);
+                INSERT INTO inventory_items(
+                  generation_id, item_id, template_id, template_id_normalized, display_name,
+                  kind, quantity, quality, durability, max_durability, water_amount, water_type,
+                  category, tier, rarity, icon, stack_maximum, volume, vendor_price, is_gradeable,
+                  inventory_id, inventory_type, entity_type, entity_id, entity_label, owner_name,
+                  map_name, entity_class, player_id, player_name)
+                SELECT generation_id, 1, 'Unknown_Item', 'unknown_item', 'Unknown Item',
+                  'item', 1, 0, 'N/A', 'N/A', 'N/A', '', '', 0, '', '', 0, 0, 0, 0,
+                  10, 0, 'player', 20, 'Tester', 'Tester', 'Hagga Basin', '', 20, 'Tester'
+                FROM inventory_generations WHERE generation='v2-generation';
+                UPDATE derived_cache_domains
+                SET active_generation='v2-generation'
+                WHERE domain_key='inventory';
+                """,
+                ("$now", now));
+        }
+        Migrate(database);
+        using (var securedConnection = Schema.Open(database, readOnly: true))
+        {
+            var connection = securedConnection.Connection;
+            Require(Schema.ReadVersion(connection) == 3, "A v2 cache did not migrate to v3.");
+            ValidateMigrationIdentity(connection);
+            Require(
+                ScalarLong(connection,
+                    "SELECT COUNT(*) FROM inventory_items WHERE template_id='Unknown_Item';") == 1,
+                "The v2 to v3 migration did not preserve inventory rows.");
+        }
+        Require(
+            Directory.GetFiles(root, "v2-to-v3.sqlite.migration-*.bak").Length == 1,
+            "The v2 to v3 migration did not retain exactly one backup.");
+    }
+
     private static void VerifyNewerSchemaFailure(string root)
     {
         var database = Path.Combine(root, "newer.sqlite");
@@ -1437,7 +1618,7 @@ internal static partial class PlatformStore
         using (var securedConnection = Schema.Open(database, readOnly: false))
         {
             var connection = securedConnection.Connection;
-            Schema.Execute(connection, null, "PRAGMA user_version=2;");
+            Schema.Execute(connection, null, "PRAGMA user_version=4;");
         }
         try
         {

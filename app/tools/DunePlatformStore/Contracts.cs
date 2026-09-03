@@ -89,3 +89,80 @@ internal sealed record MapSnapshot(
     IReadOnlyList<ActiveSpiceInput> ActiveSpice,
     IReadOnlyList<ActiveSpiceInput> ActiveSpiceHistory,
     IReadOnlyList<PublicPoiInput> PublicPois);
+
+internal sealed record ReplaceInventoryRequest
+{
+    public string Generation { get; init; } = "";
+    public DateTimeOffset ObservedAt { get; init; }
+    public DateTimeOffset CachedAt { get; init; }
+    public DateTimeOffset ExpiresAt { get; init; }
+    public string SourceFingerprint { get; init; } = "";
+    public IReadOnlyList<InventoryItemInput> Items { get; init; } = [];
+}
+
+internal sealed record InventoryItemInput
+{
+    public long ItemId { get; init; }
+    public string TemplateId { get; init; } = "";
+    public string DisplayName { get; init; } = "";
+    public string Kind { get; init; } = "";
+    public long Quantity { get; init; }
+    public int Quality { get; init; }
+    public string Durability { get; init; } = "";
+    public string MaxDurability { get; init; } = "";
+    public string WaterAmount { get; init; } = "";
+    public string WaterType { get; init; } = "";
+    public InventoryMetadataInput Metadata { get; init; } = new();
+    public long InventoryId { get; init; }
+    public int InventoryType { get; init; }
+    public string EntityType { get; init; } = "";
+    public long EntityId { get; init; }
+    public string EntityLabel { get; init; } = "";
+    public string Owner { get; init; } = "";
+    public string Map { get; init; } = "";
+    public string EntityClass { get; init; } = "";
+    public long? PlayerId { get; init; }
+    public string? PlayerName { get; init; }
+}
+
+internal sealed record InventoryMetadataInput
+{
+    public string Category { get; init; } = "";
+    public int? Tier { get; init; }
+    public string Rarity { get; init; } = "";
+    public string Icon { get; init; } = "";
+    public int StackMaximum { get; init; }
+    public double? Volume { get; init; }
+    public long VendorPrice { get; init; }
+    public bool IsGradeable { get; init; }
+}
+
+internal abstract record InventoryFilterRequest
+{
+    public IReadOnlyList<string> EntityTypes { get; init; } = ["player", "storage"];
+    public string? ScopeType { get; init; }
+    public long? ScopeId { get; init; }
+    public long? PlayerId { get; init; }
+    public string? LocationType { get; init; }
+    public long? LocationId { get; init; }
+    public int Offset { get; init; }
+}
+
+internal sealed record QueryInventoryRequest : InventoryFilterRequest
+{
+    public string Query { get; init; } = "";
+    public string Sort { get; init; } = "name-asc";
+    public int Limit { get; init; } = 100;
+}
+
+internal sealed record QueryInventoryOccurrencesRequest : InventoryFilterRequest
+{
+    public string TemplateId { get; init; } = "";
+    public string Sort { get; init; } = "player-asc";
+    public int Limit { get; init; } = 50;
+}
+
+internal sealed record InventoryRefreshTriggerRequest
+{
+    public string Trigger { get; init; } = "";
+}

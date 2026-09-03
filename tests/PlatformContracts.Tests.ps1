@@ -170,7 +170,7 @@ Describe 'Complete route classification' {
     It 'classifies the exact registered HTTP and WebSocket inventory' {
         $records = @(Get-PlatformRouteRecords)
         $manifest = Get-DuneRoutePolicyManifest
-        $records.Count | Should -Be 359
+        $records.Count | Should -Be 360
         $sources = @($records.SourceFile | Sort-Object -Unique)
         @($manifest.groups.source | Sort-Object) | Should -Be $sources
 
@@ -270,6 +270,9 @@ Describe 'Complete route classification' {
         (Test-DuneRoutePrincipalAccess -Route $inventoryRoute -Principal @{
             type = 'portal-account'; role = 'owner'
         }) | Should -BeTrue
+        $inventoryRefresh = @($script:DuneRoutes | Where-Object Path -eq '/api/v1/inventory/refresh')[0]
+        $inventoryRefresh.Classification.capabilityId | Should -Be 'inventory.read'
+        $inventoryRefresh.Classification.lifecycle | Should -Be 'read'
         $occurrenceRoute = @($script:DuneRoutes | Where-Object Path -eq '/api/v1/inventory/items/{templateId}/occurrences')[0]
         $occurrenceRoute.Classification.capabilityId | Should -Be 'inventory.read'
         $occurrenceRoute.Classification.currentAccess | Should -Be 'owner-admin'
@@ -318,7 +321,7 @@ $result = @{
         $LASTEXITCODE | Should -Be 0 -Because ($output -join [Environment]::NewLine)
         $resultLine = @($output | Where-Object { [string]$_ -like 'ROUTE_RESULT:*' })[-1]
         $result = ([string]$resultLine).Substring('ROUTE_RESULT:'.Length) | ConvertFrom-Json
-        $result.total | Should -Be 359
+        $result.total | Should -Be 360
         $result.unclassified | Should -Be 0
         $result.incompatible | Should -Be 0
         $result.podsCleanup | Should -Be 1

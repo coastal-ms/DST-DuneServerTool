@@ -3,6 +3,7 @@ import { ApiError } from '../../api/client'
 import {
   getSharedInventory,
   getSharedInventoryOccurrences,
+  refreshSharedInventory,
   deleteInventoryItem,
   deleteStorageItem,
   renameStorage,
@@ -278,6 +279,21 @@ export function SharedInventoryExplorer({
     setError, setGroups, setLoadedIdentity, setLoading, setLoadingMore, setResponse, setSelected,
   ])
   mutationRefresh.current = () => load(undefined, false, true)
+  const refresh = useCallback(async () => {
+    if (demo) {
+      await load()
+      return
+    }
+    setLoading(true)
+    setError('')
+    try {
+      await refreshSharedInventory()
+      await load(undefined, false, true)
+    } catch (reason) {
+      setError(errorMessage(reason))
+      setLoading(false)
+    }
+  }, [demo, load])
 
   useEffect(() => setDraftQuery(query), [query])
   useEffect(() => {
@@ -390,7 +406,7 @@ export function SharedInventoryExplorer({
           </select>
         </label>
         <button type="submit" className="btn-primary min-h-11" disabled={loading || loadingMore}><Icon name="Search" size={15} />Search</button>
-        <button type="button" className="btn-secondary min-h-11" disabled={loading || loadingMore} onClick={() => { void load() }}><Icon name="RefreshCw" size={14} />Refresh</button>
+        <button type="button" className="btn-secondary min-h-11" disabled={loading || loadingMore} onClick={() => { void refresh() }}><Icon name="RefreshCw" size={14} />Refresh</button>
         {canManageBases && current?.data.mode === 'live' && renameTarget && (
           <button
             type="button"

@@ -7,6 +7,7 @@ BeforeAll {
     $env:LOCALAPPDATA = Join-Path $script:PlatformTestRoot 'Local'
     New-Item -ItemType Directory -Path $env:LOCALAPPDATA -Force | Out-Null
     Import-DstLib 'PlatformCache.ps1'
+    Import-DstLib 'InventoryCache.ps1'
     $script:PlatformHelper = Get-DunePlatformHelperPath
     if (-not $script:PlatformHelper) {
         throw 'Build DunePlatformStore in Release before running PlatformCache.Tests.ps1.'
@@ -80,7 +81,16 @@ Describe 'DunePlatformStore production helper' {
         $result.inheritableStandardHandles | Should -BeTrue
         $result.interruptedWriteRecovery | Should -BeTrue
         $result.interruptedMigrationRecovery | Should -BeTrue
+        $result.interruptedInventoryReplacementRecovery | Should -BeTrue
         $result.idempotentGenerationReplace | Should -BeTrue
+        $result.inventory.atomicValidation | Should -BeTrue
+        $result.inventory.normalizedGrouping | Should -BeTrue
+        $result.inventory.boundedQueries | Should -BeTrue
+        $result.inventory.generationRetention | Should -BeTrue
+        $result.inventory.typedRefreshTrigger | Should -BeTrue
+        $result.inventory.typedInvalidationTrigger | Should -BeTrue
+        $result.v1ToV3Migration | Should -BeTrue
+        $result.v2ToV3Migration | Should -BeTrue
         $result.offsetTimestampPruning | Should -BeTrue
         $result.pathRaceResistance | Should -BeTrue
         $result.runningElevated | Should -BeFalse
@@ -175,6 +185,69 @@ Describe 'DunePlatformStore production helper' {
             Start-Sleep -Milliseconds 50
         }
         @(Get-Process -Name DunePlatformStore -ErrorAction SilentlyContinue).Count | Should -Be 0
+    }
+
+    It 'replaces and queries a typed inventory generation through the production wrapper' {
+        $null = Invoke-DunePlatformHelper -Command migrate
+        $now = [DateTime]::UtcNow
+        $snapshot = [ordered]@{
+            generation = 'inventory-wrapper-1'
+            observedAt = $now.AddSeconds(-1).ToString('o')
+            cachedAt = $now.ToString('o')
+            expiresAt = $now.AddMinutes(5).ToString('o')
+            sourceFingerprint = 'inventory-test-v1'
+            items = @(
+                [ordered]@{
+                    itemId = 1001L; templateId = 'Copper'; displayName = 'Copper'; kind = 'item'
+                    quantity = 12L; quality = 2; durability = 'N/A'; maxDurability = 'N/A'
+                    waterAmount = 'N/A'; waterType = ''
+                    metadata = [ordered]@{
+                        category = 'resource'; tier = 1; rarity = 'common'; icon = ''
+                        stackMaximum = 100; volume = 0.1; vendorPrice = 1L; isGradeable = $false
+                    }
+                    inventoryId = 2001L; inventoryType = 0; entityType = 'player'
+                    entityId = 3001L; entityLabel = 'Tester'; owner = 'Tester'; map = 'Hagga Basin'
+                    entityClass = ''; playerId = 3001L; playerName = 'Tester'
+                },
+                [ordered]@{
+                    itemId = 1002L; templateId = 'Unknown_Item'; displayName = 'Unknown Item'; kind = 'item'
+                    quantity = 1L; quality = 0; durability = 'N/A'; maxDurability = 'N/A'
+                    waterAmount = 'N/A'; waterType = ''
+                    metadata = [ordered]@{
+                        category = ''; tier = $null; rarity = ''; icon = ''
+                        stackMaximum = 0; volume = $null; vendorPrice = 0L; isGradeable = $false
+                    }
+                    inventoryId = 2001L; inventoryType = 0; entityType = 'player'
+                    entityId = 3001L; entityLabel = 'Tester'; owner = 'Tester'; map = 'Hagga Basin'
+                    entityClass = ''; playerId = 3001L; playerName = 'Tester'
+                }
+            )
+        }
+
+        $replace = Invoke-DuneInventoryCacheReplace -Snapshot $snapshot
+        $status = Get-DuneInventoryCacheStatus
+        $groups = Invoke-DuneInventoryCacheQuery -Request @{
+            entityTypes = @('player','storage')
+            sort = 'name-asc'
+            limit = 100
+        }
+        $occurrences = Invoke-DuneInventoryCacheOccurrenceQuery -Request @{
+            templateId = 'copper'
+            entityTypes = @('player','storage')
+            sort = 'player-asc'
+            limit = 50
+        }
+
+        $replace.generation | Should -Be 'inventory-wrapper-1'
+        $status.available | Should -BeTrue
+        $status.generation | Should -Be 'inventory-wrapper-1'
+        @($groups.data.groups).Count | Should -Be 2
+        @($groups.data.groups | Where-Object templateId -eq 'Copper').Count | Should -Be 1
+        $unknown = @($groups.data.groups | Where-Object templateId -eq 'Unknown_Item')[0]
+        $unknown.metadata.tier | Should -BeNullOrEmpty
+        $unknown.metadata.volume | Should -BeNullOrEmpty
+        @($occurrences.data.items).Count | Should -Be 1
+        $occurrences.data.items[0].player.name | Should -Be 'Tester'
     }
 
     It 'prunes history to the configured retention cap' {
@@ -588,5 +661,58 @@ Describe 'Platform cache snapshot and refresh coordination' {
         $definition = (Get-Command Get-DunePlatformSnapshot).Definition
         $definition | Should -Not -Match 'Invoke-DunePlatformHelper'
         $definition | Should -Not -Match 'Invoke-DunePlatformSourceRead'
+    }
+
+    It 'refreshes the inventory cache from a bounded read and records a five-minute TTL' {
+        $script:CapturedInventorySnapshot = $null
+        function global:Get-DuneDbContext {}
+        function global:Invoke-DuneInventorySnapshotLive {}
+        Mock Get-DuneDbContext { @{ ok = $true; ip = 'fixture' } }
+        Mock Invoke-DuneInventorySnapshotLive {
+            param($Ip, $MaxRows)
+            $Ip | Should -Be 'fixture'
+            $MaxRows | Should -Be 100000
+            @{
+                ok = $true
+                items = @([ordered]@{
+                    itemId = 1L
+                    templateId = 'Copper'
+                    displayName = 'Copper'
+                })
+            }
+        }
+        Mock Invoke-DuneInventoryCacheReplace {
+            param($Snapshot)
+            $script:CapturedInventorySnapshot = $Snapshot
+            [pscustomobject]@{ ok = $true; generation = [string]$Snapshot.generation; rowCount = 1 }
+        }
+
+        $result = Invoke-DuneInventoryCacheRefresh
+        $ttl = [datetime]$script:CapturedInventorySnapshot.expiresAt -
+            [datetime]$script:CapturedInventorySnapshot.cachedAt
+
+        $result.ok | Should -BeTrue
+        @($script:CapturedInventorySnapshot.items).Count | Should -Be 1
+        $script:CapturedInventorySnapshot.sourceFingerprint | Should -Be 'inventory-v1:player-storage'
+        $ttl.TotalSeconds | Should -Be 300
+        Should -Invoke Invoke-DuneInventoryCacheReplace -Times 1
+        Remove-Item Function:\global\Get-DuneDbContext -ErrorAction SilentlyContinue
+        Remove-Item Function:\global\Invoke-DuneInventorySnapshotLive -ErrorAction SilentlyContinue
+    }
+
+    It 'cancels and disposes a completed inventory refresh scheduler' {
+        $cancellation = [Threading.CancellationTokenSource]::new()
+        $completion = [Threading.ManualResetEventSlim]::new($true)
+        $script:DuneInventoryCacheRefreshCancellation = $cancellation
+        $script:DuneInventoryCacheRefreshCompletion = $completion
+        $script:DuneInventoryCacheRefreshPowerShell = $null
+        $script:DuneInventoryCacheStartupRefreshStarted = $true
+
+        (Stop-DuneInventoryCacheRefresh -WaitMs 10) | Should -BeTrue
+
+        $cancellation.IsCancellationRequested | Should -BeTrue
+        $script:DuneInventoryCacheStartupRefreshStarted | Should -BeFalse
+        $script:DuneInventoryCacheRefreshCancellation | Should -BeNullOrEmpty
+        $script:DuneInventoryCacheRefreshCompletion | Should -BeNullOrEmpty
     }
 }

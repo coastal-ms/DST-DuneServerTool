@@ -16,7 +16,7 @@
 ;                 -> NOT touched by install or uninstall (preserves user config)
 
 #define MyAppName        "Dune Server Tool"
-#define MyAppVersion "15.0.0-phase2-test1.1"
+#define MyAppVersion "15.0.0-phase2-test2"
 #define MyAppNumericVersion Copy(MyAppVersion, 1, Pos("-", MyAppVersion + "-") - 1) + ".0"
 #define MyAppPublisher   "Dune Awakening Self-Hosted Tool"
 #define MyAppURL         "https://github.com/coastal-ms/DST-DuneServerTool"
@@ -77,7 +77,7 @@ Source: "..\desktop\DuneShell\bin\Release\net10.0-windows\win-x64\publish\DuneSh
 ; creates retained backups, and performs verified atomic restores.
 Source: "..\tools\DuneSoloDb\bin\Release\net10.0-windows\win-x64\publish\DuneSoloDb.exe"; DestDir: "{app}\tools\solo"; Flags: ignoreversion
 
-; Bounded one-shot Maps derived-cache helper. It owns typed SQLite operations
+; Bounded one-shot platform derived-cache helper. It owns typed SQLite operations
 ; and exits after every startup hydration, generation replace, or health task.
 Source: "..\tools\DunePlatformStore\bin\Release\net10.0-windows\win-x64\publish\DunePlatformStore.exe"; DestDir: "{app}\tools\platform"; Flags: ignoreversion
 

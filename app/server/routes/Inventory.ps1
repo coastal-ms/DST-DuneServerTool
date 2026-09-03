@@ -1,3 +1,19 @@
+# POST /api/v1/inventory/refresh
+# Refreshes the derived read model immediately, then returns the new generation.
+Register-DuneRoute -Method POST -Path '/api/v1/inventory/refresh' -Handler {
+    param($req, $res, $routeParams, $body)
+    try {
+        $result = Invoke-DuneInventoryCacheRefresh -TimeoutSec 120
+        Write-DuneJson -Response $res -Body @{
+            ok = $true
+            generation = [string]$result.generation
+            rowCount = [int]$result.rowCount
+        }
+    } catch {
+        Write-DuneError -Response $res -Status 503 -Message "Inventory refresh failed: $($_.Exception.Message)"
+    }
+}
+
 # GET /api/v1/inventory/items
 # Read-only shared projection for proven player and storage inventory scopes.
 Register-DuneRoute -Method GET -Path '/api/v1/inventory/items' -Handler {
@@ -62,6 +78,9 @@ Register-DuneRoute -Method GET -Path '/api/v1/inventory/items' -Handler {
         $afterSortSecondary = ''
         $afterSortName = ''
         $afterTemplateId = ''
+        $cacheOffset = 0
+        $cacheGeneration = ''
+        $cursorSource = ''
         $cursorMode = ''
         $cursor = (Get-DuneQ $req 'cursor').Trim()
         if ($cursor) {
@@ -70,11 +89,23 @@ Register-DuneRoute -Method GET -Path '/api/v1/inventory/items' -Handler {
                     -MapId 'shared-inventory' -Layers $entityTypes -Bbox $bindingScope `
                     -Query $query -Generation $(if ($grouped) { $script:DuneInventoryGroupedCursorGeneration } else { $script:DuneInventoryCursorGeneration })
                 if ($grouped) {
-                    $afterSortValue = [string]$cursorPayload.position.sortValue
-                    $afterSortSecondary = [string]$cursorPayload.position.sortSecondary
-                    $afterSortName = [string]$cursorPayload.position.sortName
-                    $afterTemplateId = [string]$cursorPayload.position.templateId
-                    if (-not $afterTemplateId) { throw 'Invalid cursor position.' }
+                    $cursorSource = [string]$cursorPayload.position.source
+                    if (-not $cursorSource) { $cursorSource = 'live' }
+                    if ($cursorSource -eq 'cache') {
+                        $cacheOffset = [int]$cursorPayload.position.offset
+                        $cacheGeneration = [string]$cursorPayload.position.cacheGeneration
+                        if ($cacheOffset -le 0 -or -not $cacheGeneration) {
+                            throw 'Invalid cache cursor position.'
+                        }
+                    } elseif ($cursorSource -eq 'live') {
+                        $afterSortValue = [string]$cursorPayload.position.sortValue
+                        $afterSortSecondary = [string]$cursorPayload.position.sortSecondary
+                        $afterSortName = [string]$cursorPayload.position.sortName
+                        $afterTemplateId = [string]$cursorPayload.position.templateId
+                        if (-not $afterTemplateId) { throw 'Invalid cursor position.' }
+                    } else {
+                        throw 'Invalid cursor source.'
+                    }
                 } else {
                     $afterItemId = [long]$cursorPayload.position.itemId
                     if ($afterItemId -le 0) { throw 'Invalid cursor position.' }
@@ -99,7 +130,9 @@ Register-DuneRoute -Method GET -Path '/api/v1/inventory/items' -Handler {
                 -PlayerId $playerId -LocationType $locationType -LocationId $locationId `
                 -Sort ([string]$groupSort.value) -AfterSortValue $afterSortValue `
                 -AfterSortSecondary $afterSortSecondary `
-                -AfterSortName $afterSortName -AfterTemplateId $afterTemplateId -Limit ($limit + 1)
+                -AfterSortName $afterSortName -AfterTemplateId $afterTemplateId `
+                -Offset $cacheOffset -Limit $limit `
+                -CursorSource $cursorSource -CacheGeneration $cacheGeneration
             if (-not $groupResult.ok) {
                 Write-DuneError -Response $res -Status ([int]$groupResult.status) -Message ([string]$groupResult.error)
                 return
@@ -113,22 +146,39 @@ Register-DuneRoute -Method GET -Path '/api/v1/inventory/items' -Handler {
                 return
             }
             $groups = @($groupResult.groups)
-            $truncated = $groups.Count -gt $limit
-            $pageGroups = @($groups | Select-Object -First $limit)
+            $truncated = if ([string]$groupResult.cursorSource -eq 'cache') {
+                [bool]$groupResult.truncated
+            } else {
+                $groups.Count -gt $limit
+            }
+            if ([string]$groupResult.cursorSource -eq 'cache') {
+                $pageGroups = @($groups)
+            } else {
+                $pageGroups = @($groups | Select-Object -First $limit)
+            }
             $nextCursor = ''
             if ($truncated -and $pageGroups.Count -gt 0) {
                 $nextCursor = New-DuneOpaqueCursor -Principal $principal `
                     -MapId 'shared-inventory' -Layers $entityTypes -Bbox $bindingScope `
                     -Query $query -Generation $script:DuneInventoryGroupedCursorGeneration `
-                    -Position ([ordered]@{
-                        sortValue = [string]$pageGroups[-1].cursor.sortValue
-                        sortSecondary = [string]$pageGroups[-1].cursor.sortSecondary
-                        sortName = [string]$pageGroups[-1].cursor.sortName
-                        templateId = [string]$pageGroups[-1].cursor.templateId
-                        mode = [string]$requestedMode.mode
+                    -Position $(if ([string]$groupResult.cursorSource -eq 'cache') {
+                        [ordered]@{
+                            offset = $cacheOffset + $limit
+                            cacheGeneration = [string]$groupResult.generation
+                            source = 'cache'
+                            mode = [string]$requestedMode.mode
+                        }
+                    } else {
+                        [ordered]@{
+                            sortValue = [string]$pageGroups[-1].cursor.sortValue
+                            sortSecondary = [string]$pageGroups[-1].cursor.sortSecondary
+                            sortName = [string]$pageGroups[-1].cursor.sortName
+                            templateId = [string]$pageGroups[-1].cursor.templateId
+                            source = 'live'
+                            mode = [string]$requestedMode.mode
+                        }
                     })
             }
-            $observedAt = (Get-Date).ToUniversalTime().ToString('o')
             $capabilities = @(Get-DuneCapabilitiesForPrincipal $principal | ForEach-Object { [string]$_.id })
             $data = [ordered]@{
                 mode = [string]$requestedMode.mode
@@ -145,7 +195,7 @@ Register-DuneRoute -Method GET -Path '/api/v1/inventory/items' -Handler {
             }
             $envelope = New-DuneApiV1Envelope `
                 -RequestId ([string]$routeParams.requestId) -Source ([string]$groupResult.source) `
-                -Freshness (New-DuneApiFreshness -State fresh -ObservedAt $observedAt) `
+                -Freshness $groupResult.freshness `
                 -Capabilities $capabilities -Data $data `
                 -Page (New-DuneApiPage -Limit $limit -NextCursor $nextCursor -Truncated $truncated)
             Write-DuneJson -Response $res -Body $envelope
@@ -255,6 +305,9 @@ $script:DuneInventoryOccurrencesHandler = {
         $bindingScope = "$scopeType`:$scopeId|player:$playerId|location:$locationType`:$locationId|sort:$([string]$occurrenceSort.value)"
         $afterItemId = 0L
         $afterOccurrenceSortValue = ''
+        $cacheOffset = 0
+        $cacheGeneration = ''
+        $cursorSource = ''
         $cursorMode = ''
         $cursor = (Get-DuneQ $req 'cursor').Trim()
         if ($cursor) {
@@ -262,9 +315,21 @@ $script:DuneInventoryOccurrencesHandler = {
                 $payload = Read-DuneOpaqueCursor -Cursor $cursor -Principal $principal `
                     -MapId "shared-inventory:$templateId" -Layers $entityTypes -Bbox $bindingScope `
                     -Generation $script:DuneInventoryOccurrenceCursorGeneration
-                $afterItemId = [long]$payload.position.itemId
-                $afterOccurrenceSortValue = [string]$payload.position.sortValue
-                if ($afterItemId -le 0) { throw 'Invalid cursor position.' }
+                $cursorSource = [string]$payload.position.source
+                if (-not $cursorSource) { $cursorSource = 'live' }
+                if ($cursorSource -eq 'cache') {
+                    $cacheOffset = [int]$payload.position.offset
+                    $cacheGeneration = [string]$payload.position.cacheGeneration
+                    if ($cacheOffset -le 0 -or -not $cacheGeneration) {
+                        throw 'Invalid cache cursor position.'
+                    }
+                } elseif ($cursorSource -eq 'live') {
+                    $afterItemId = [long]$payload.position.itemId
+                    $afterOccurrenceSortValue = [string]$payload.position.sortValue
+                    if ($afterItemId -le 0) { throw 'Invalid cursor position.' }
+                } else {
+                    throw 'Invalid cursor source.'
+                }
                 $cursorMode = [string]$payload.position.mode
             } catch {
                 Write-DuneError -Response $res -Status 400 -Message $_.Exception.Message
@@ -278,39 +343,45 @@ $script:DuneInventoryOccurrencesHandler = {
             Write-DuneError -Response $res -Status 400 -Message ([string]$requestedMode.error)
             return
         }
-        if ([string]$requestedMode.mode -eq 'demo') {
-            $result = Get-DuneInventoryOccurrencesDemo -TemplateId $templateId -EntityTypes $entityTypes `
-                -ScopeType $scopeType -ScopeId $scopeId -PlayerId $playerId -LocationType $locationType `
-                -LocationId $locationId -Sort ([string]$occurrenceSort.value) -AfterItemId $afterItemId -Limit ($limit + 1)
-        } else {
-            $context = Get-DuneDbContext
-            if (-not $context.ok) {
-                Write-DuneError -Response $res -Status 503 -Message "Inventory database unavailable: $([string]$context.message)"
-                return
-            }
-            $result = Invoke-DuneInventoryOccurrencesLive -Ip $context.ip -TemplateId $templateId `
-                -EntityTypes $entityTypes -ScopeType $scopeType -ScopeId $scopeId -PlayerId $playerId `
-                -LocationType $locationType -LocationId $locationId -Sort ([string]$occurrenceSort.value) `
-                -AfterSortValue $afterOccurrenceSortValue -AfterItemId $afterItemId -Limit ($limit + 1)
-            $result.source = 'live'
-        }
+        $result = Invoke-DuneInventoryOccurrencesPage `
+            -Mode ([string]$requestedMode.mode) `
+            -TemplateId $templateId `
+            -EntityTypes $entityTypes `
+            -ScopeType $scopeType `
+            -ScopeId $scopeId `
+            -PlayerId $playerId `
+            -LocationType $locationType `
+            -LocationId $locationId `
+            -Sort ([string]$occurrenceSort.value) `
+            -AfterSortValue $afterOccurrenceSortValue `
+            -AfterItemId $afterItemId `
+            -Offset $cacheOffset `
+            -Limit $limit `
+            -CursorSource $cursorSource `
+            -CacheGeneration $cacheGeneration
         if (-not $result.ok) {
-            Write-DuneError -Response $res -Status 503 -Message "Inventory database read failed: $([string]$result.error)"
+            Write-DuneError -Response $res -Status ([int]$result.status) -Message ([string]$result.error)
             return
         }
-        if ($playerId -gt 0 -and -not @($result.players | Where-Object { [long]$_.id -eq $playerId }).Count) {
+        if ($playerId -gt 0 -and -not [bool]$result.selectedPlayerValid) {
             Write-DuneError -Response $res -Status 400 -Message 'player_id is not available for this item.'
             return
         }
-        if ($locationType -and -not @($result.locations | Where-Object {
-            [string]$_.type -eq $locationType -and [long]$_.id -eq $locationId
-        }).Count) {
+        if ($locationType -and -not [bool]$result.selectedLocationValid) {
             Write-DuneError -Response $res -Status 400 -Message 'The selected location is not available for this player and item.'
             return
         }
         $items = @($result.items)
-        $truncated = $items.Count -gt $limit
-        $pageItems = @($items | Select-Object -First $limit)
+        $truncated = if ([string]$result.cursorSource -eq 'cache') {
+            [bool]$result.truncated
+        } else {
+            $items.Count -gt $limit
+        }
+        if ([string]$result.cursorSource -eq 'cache') {
+            $pageItems = @($items)
+        } else {
+            $pageItems = @($items | Select-Object -First $limit)
+        }
         $nextCursor = ''
         if ($truncated -and $pageItems.Count -gt 0) {
             $last = $pageItems[-1]
@@ -323,12 +394,25 @@ $script:DuneInventoryOccurrencesHandler = {
             $nextCursor = New-DuneOpaqueCursor -Principal $principal `
                 -MapId "shared-inventory:$templateId" -Layers $entityTypes -Bbox $bindingScope `
                 -Generation $script:DuneInventoryOccurrenceCursorGeneration `
-                -Position ([ordered]@{ itemId = [long]$last.id; sortValue = $sortValue.ToLowerInvariant(); mode = [string]$requestedMode.mode })
+                -Position $(if ([string]$result.cursorSource -eq 'cache') {
+                    [ordered]@{
+                        offset = $cacheOffset + $limit
+                        cacheGeneration = [string]$result.generation
+                        source = 'cache'
+                        mode = [string]$requestedMode.mode
+                    }
+                } else {
+                    [ordered]@{
+                        itemId = [long]$last.id
+                        sortValue = $sortValue.ToLowerInvariant()
+                        source = 'live'
+                        mode = [string]$requestedMode.mode
+                    }
+                })
         }
-        $observedAt = (Get-Date).ToUniversalTime().ToString('o')
         $envelope = New-DuneApiV1Envelope `
             -RequestId ([string]$routeParams.requestId) -Source ([string]$result.source) `
-            -Freshness (New-DuneApiFreshness -State fresh -ObservedAt $observedAt) `
+            -Freshness $result.freshness `
             -Capabilities @(Get-DuneCapabilitiesForPrincipal $principal | ForEach-Object { [string]$_.id }) `
             -Data ([ordered]@{
                 mode = [string]$requestedMode.mode

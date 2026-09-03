@@ -163,7 +163,7 @@ public static extern bool IsIconic(System.IntPtr hWnd);
 }
 
 # Version (one of the 5 sync'd constants; see persistent-notes.md)
-$script:DuneToolVersion = '15.0.0-phase2-test1.1'
+$script:DuneToolVersion = '15.0.0-phase2-test2'
 # Artifact identity defaults for source/dev runs. Build-Exe.ps1 replaces these
 # four declarations only in its generated compilation input, so the resulting
 # executable carries immutable identity without changing tracked version stamps.
@@ -604,6 +604,13 @@ if (Get-Command Initialize-DunePlatformCache -ErrorAction SilentlyContinue) {
             Write-DuneLog "Maps platform startup refresh could not be scheduled: $($_.Exception.Message)" 'WARN'
         }
     }
+    if (Get-Command Start-DuneInventoryCacheStartupRefresh -ErrorAction SilentlyContinue) {
+        try {
+            [void](Start-DuneInventoryCacheStartupRefresh -ServerDir $serverDir -AppDir $script:AppDir)
+        } catch {
+            Write-DuneLog "Inventory cache startup refresh could not be scheduled: $($_.Exception.Message)" 'WARN'
+        }
+    }
 }
 
 # Auto-load all route files
@@ -844,6 +851,9 @@ try {
     Write-DuneLog "HTTP server failed: $($_.Exception.Message)" 'ERROR'
     Show-DuneMessage "Dune Server failed to start: $($_.Exception.Message)" 'Dune Server' 'Error'
 } finally {
+    if (Get-Command Stop-DuneInventoryCacheRefresh -ErrorAction SilentlyContinue) {
+        try { [void](Stop-DuneInventoryCacheRefresh) } catch {}
+    }
     if (Get-Command Stop-DuneMapsPlatformRefresh -ErrorAction SilentlyContinue) {
         try { [void](Stop-DuneMapsPlatformRefresh) } catch {}
     }

@@ -324,7 +324,7 @@ if (-not (Test-Path $soloExe)) {
     throw "DuneSoloDb.exe not found at $soloExe - run 'dotnet publish' for DuneSoloDb (or omit -SkipSoloBuild)"
 }
 
-# Build the bounded one-shot SQLite helper used by the Maps derived cache.
+# Build the bounded one-shot SQLite helper used by platform derived caches.
 if (-not $SkipPlatformBuild) {
     if (-not (Test-Path $platformProj)) { throw "DunePlatformStore.csproj not found at $platformProj" }
     $dotnet = Get-Command dotnet -ErrorAction SilentlyContinue
@@ -334,7 +334,7 @@ if (-not $SkipPlatformBuild) {
     if ($audit -match 'has the following vulnerable packages') {
         throw 'DunePlatformStore dependency audit found a vulnerable package.'
     }
-    Write-Host "Publishing DunePlatformStore.exe (Maps derived cache helper)..." -ForegroundColor Cyan
+    Write-Host "Publishing DunePlatformStore.exe (platform derived cache helper)..." -ForegroundColor Cyan
     & $dotnet.Source publish $platformProj -c Release -r win-x64 -p:PublishSingleFile=true --self-contained true --nologo
     if ($LASTEXITCODE -ne 0) { throw "dotnet publish failed for DunePlatformStore (exit $LASTEXITCODE)" }
     Write-Host "Running DunePlatformStore self-test..." -ForegroundColor Cyan
