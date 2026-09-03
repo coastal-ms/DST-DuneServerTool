@@ -81,22 +81,26 @@ Outputs:
 
 ### Releasing a new version
 
-1. Bump `$script:ToolVersion` in `dune-server.ps1`
-2. Bump `$Version` default in `app\build\Build-Exe.ps1` (or pass `-Version` to it)
-3. Bump `MyAppVersion` in `app\installer\DuneServer.iss`
-4. Add a CHANGELOG entry
-5. Run `.\app\installer\Build-Installer.ps1`
-6. Commit, tag, push:
+1. Keep the version stamps synchronized in `dune-server.ps1`,
+   `app\DuneServer.ps1`, `app\build\Build-Exe.ps1`,
+   `app\desktop\DuneShell\DuneShell.csproj`, and
+   `app\installer\DuneServer.iss`.
+2. Add the dated CHANGELOG entry and refresh the bug-report template.
+3. Merge the release change, then create and push an annotated tag at that
+   merged commit:
    ```powershell
-   git tag -a v4.0.x -m "v4.0.x: ..."
-   git push origin main v4.0.x
+   git tag -a vX.Y.Z -m "vX.Y.Z: ..."
+   git push origin vX.Y.Z
    ```
-7. Create GitHub release (substitute the real version — DO NOT leave `X.Y.Z`
-   literal in the title; the releases page renders the title prominently):
-   ```powershell
-   gh release create v10.1.8 --title "10.1.8" --notes-file release-notes.md
-   gh release upload v10.1.8 app\installer\output\DuneServerSetup.exe
-   ```
+4. In GitHub Actions, run **Build & sign installer** with that immutable tag
+   and provide the release title and notes. Set **prerelease_build** for a test
+   tag. The workflow builds from the tag, verifies the embedded tag and commit,
+   attaches `DuneServerSetup.exe` to a new draft, and publishes it.
+5. Verify the published release has `DuneServerSetup.exe` as its sole asset.
+
+The workflow is the only publication path. A local installer build is for
+validation only; do not create a release or upload/replace release assets with
+`gh release`.
 
 ## Regenerating the icon
 

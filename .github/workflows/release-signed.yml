@@ -295,11 +295,16 @@ jobs:
         shell: pwsh
         env:
           BUILD_TAG: ${{ inputs.release_tag }}
+          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
         run: |
           . '${{ github.workspace }}\app\build\BuildHelpers.ps1'
           $tagCommit = "$(& git rev-parse --verify "refs/tags/$env:BUILD_TAG^{commit}")".Trim().ToLowerInvariant()
           if ($LASTEXITCODE -ne 0 -or $tagCommit -notmatch '^[0-9a-f]{40}$') {
            throw "Could not resolve release tag $env:BUILD_TAG to an immutable commit."
+          }
+          & git merge-base --is-ancestor $tagCommit "refs/remotes/origin/$env:DEFAULT_BRANCH"
+          if ($LASTEXITCODE -ne 0) {
+           throw "Release tag $env:BUILD_TAG does not point to a commit merged into $env:DEFAULT_BRANCH."
           }
           $expectedPrerelease = Test-DunePrereleaseTag -BuildTag $env:BUILD_TAG
           & '${{ github.workspace }}\app\build\Verify-ReleaseArtifact.ps1' `

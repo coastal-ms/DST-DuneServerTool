@@ -84,6 +84,7 @@ Describe 'Build artifact metadata' {
         $workflow | Should -Match 'Verify-ReleaseArtifact\.ps1'
         $workflow | Should -Match 'Test-DunePrereleaseTag'
         $workflow | Should -Match 'refs/tags/\$env:BUILD_TAG\^\{commit\}'
+        $workflow | Should -Match 'merge-base --is-ancestor \$tagCommit "refs/remotes/origin/\$env:DEFAULT_BRANCH"'
         $workflow | Should -Match 'Release assets are immutable; publish a new version instead'
         $workflow | Should -Match "'--draft'"
         $workflow | Should -Match "'release', 'edit'"
