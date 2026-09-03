@@ -86,21 +86,26 @@ Outputs:
    `app\desktop\DuneShell\DuneShell.csproj`, and
    `app\installer\DuneServer.iss`.
 2. Add the dated CHANGELOG entry and refresh the bug-report template.
-3. Merge the release change, then create and push an annotated tag at that
-   merged commit:
+3. Build the clean PR candidate locally, copy
+   `DuneServerSetup.exe` to the primary checkout's canonical output path, and
+   wait for live acceptance before merging.
+4. After acceptance, merge the release change, then create and push an annotated
+   tag at that exact merge commit:
    ```powershell
    git tag -a vX.Y.Z -m "vX.Y.Z: ..."
    git push origin vX.Y.Z
    ```
-4. In GitHub Actions, run **Build & sign installer** with that immutable tag
-   and provide the release title and notes. Set **prerelease_build** for a test
-   tag. The workflow builds from the tag, verifies the embedded tag and commit,
-   attaches `DuneServerSetup.exe` to a new draft, and publishes it.
-5. Verify the published release has `DuneServerSetup.exe` as its sole asset.
+5. From a clean checkout of that tag, build the final installer locally with the
+   exact 40-character commit, tag, and prerelease metadata. Copy it to the
+   canonical output path and verify the embedded identity.
+6. After the separate final publish gate, create the new release directly with
+   the verified canonical installer as its sole asset.
+7. Verify the published release has exactly one `DuneServerSetup.exe` asset.
 
-The workflow is the only publication path. A local installer build is for
-validation only; do not create a release or upload/replace release assets with
-`gh release`.
+The **Build & sign installer** Actions workflow is optional and must be used only
+when explicitly requested. It never replaces the local pre-merge acceptance
+build or becomes the default publication path. Existing release assets are never
+uploaded again or replaced; publish a new version/tag for every correction.
 
 ## Regenerating the icon
 
