@@ -228,8 +228,10 @@ Register-DuneRoute -Method POST -Path '/api/gameplay/players/delete-item' -Handl
     param($req, $res, $routeParams, $body)
     try {
         $iid = Get-DuneBodyInt -Body $body -Name 'item_id'
+        $expected = Get-DuneBodyInt -Body $body -Name 'expected_stack_size'
         if ($null -eq $iid -or $iid -le 0) { Write-DuneError -Response $res -Status 400 -Message 'item_id is required.'; return }
-        Invoke-DunePlayerWriteRoute -Response $res -Action { param($ip) Invoke-DunePlayerDeleteItem -Ip $ip -ItemId $iid }
+        if ($null -ne $expected -and $expected -lt 0) { Write-DuneError -Response $res -Status 400 -Message 'expected_stack_size cannot be negative.'; return }
+        Invoke-DunePlayerWriteRoute -Response $res -Action { param($ip) Invoke-DunePlayerDeleteItem -Ip $ip -ItemId $iid -ExpectedStackSize $expected }
     } catch {
         Write-DuneError -Response $res -Status 500 -Message "Delete item failed: $($_.Exception.Message)"
     }
@@ -316,9 +318,11 @@ Register-DuneRoute -Method POST -Path '/api/gameplay/players/set-item-stack' -Ha
         $iid = Get-DuneBodyInt -Body $body -Name 'item_id'
         if ($null -eq $iid -or $iid -le 0) { Write-DuneError -Response $res -Status 400 -Message 'item_id is required.'; return }
         $ss = Get-DuneBodyInt -Body $body -Name 'stack_size'
+        $expected = Get-DuneBodyInt -Body $body -Name 'expected_stack_size'
         if ($null -eq $ss -or $ss -lt 1) { Write-DuneError -Response $res -Status 400 -Message 'stack_size must be at least 1.'; return }
+        if ($null -ne $expected -and $expected -lt 1) { Write-DuneError -Response $res -Status 400 -Message 'expected_stack_size must be at least 1.'; return }
         Invoke-DunePlayerWriteRoute -Response $res -Action { param($ip)
-            Invoke-DunePlayerSetItemStack -Ip $ip -ItemId $iid -StackSize $ss
+            Invoke-DunePlayerSetItemStack -Ip $ip -ItemId $iid -StackSize $ss -ExpectedStackSize $expected
         }
     } catch {
         Write-DuneError -Response $res -Status 500 -Message "Set item stack failed: $($_.Exception.Message)"

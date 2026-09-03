@@ -17,6 +17,8 @@ const occurrenceApi = vi.hoisted(() => vi.fn())
 const renameStorageApi = vi.hoisted(() => vi.fn())
 const deleteInventoryItemApi = vi.hoisted(() => vi.fn())
 const deleteStorageItemApi = vi.hoisted(() => vi.fn())
+const setItemStackApi = vi.hoisted(() => vi.fn())
+const setStorageItemStackApi = vi.hoisted(() => vi.fn())
 const itemIconResolver = vi.hoisted(() => vi.fn())
 
 vi.mock('../src/hooks/usePlatformCapabilities', () => ({
@@ -42,6 +44,8 @@ vi.mock('../src/api/gameplay', async importOriginal => {
     renameStorage: renameStorageApi,
     deleteInventoryItem: deleteInventoryItemApi,
     deleteStorageItem: deleteStorageItemApi,
+    setItemStack: setItemStackApi,
+    setStorageItemStack: setStorageItemStackApi,
   }
 })
 vi.mock('../src/components/inventory/InventoryItemIcon', async importOriginal => {
@@ -142,6 +146,8 @@ beforeEach(() => {
   renameStorageApi.mockResolvedValue({ ok: true, message: "Renamed storage container to 'Ore Vault'." })
   deleteInventoryItemApi.mockResolvedValue({ ok: true, message: 'Deleted player item.' })
   deleteStorageItemApi.mockResolvedValue({ ok: true, message: 'Deleted storage item.' })
+  setItemStackApi.mockResolvedValue({ ok: true, message: 'Updated player stack.' })
+  setStorageItemStackApi.mockResolvedValue({ ok: true, message: 'Updated storage stack.' })
 })
 
 afterEach(() => {
@@ -153,6 +159,8 @@ afterEach(() => {
   renameStorageApi.mockReset()
   deleteInventoryItemApi.mockReset()
   deleteStorageItemApi.mockReset()
+  setItemStackApi.mockReset()
+  setStorageItemStackApi.mockReset()
   window.history.replaceState(null, '', '/')
 })
 
@@ -304,11 +312,11 @@ describe('Shared Inventory Explorer grouped catalog', () => {
     await user.click(screen.getByRole('button', { name: 'Delete selected (2)' }))
 
     await waitFor(() => {
-      expect(deleteStorageItemApi).toHaveBeenCalledWith(42)
-      expect(deleteInventoryItemApi).toHaveBeenCalledWith(43)
+      expect(deleteStorageItemApi).toHaveBeenCalledWith(42, 10)
+      expect(deleteInventoryItemApi).toHaveBeenCalledWith(43, 4)
     })
-    expect(confirm).toHaveBeenCalledWith(expect.stringContaining('2 selected item occurrences'))
-    expect(await screen.findByText('Deleted 2 item occurrences.')).toBeInTheDocument()
+    expect(confirm).toHaveBeenCalledWith(expect.stringContaining('2 selected occurrences'))
+    expect(await screen.findByText('Removed 14 items from 2 occurrences.')).toBeInTheDocument()
     confirm.mockRestore()
   })
 
@@ -328,8 +336,8 @@ describe('Shared Inventory Explorer grouped catalog', () => {
     await user.click(screen.getByRole('checkbox', { name: 'Select all loaded occurrences' }))
     await user.click(screen.getByRole('button', { name: 'Delete selected (2)' }))
 
-    expect(await screen.findByText('Deleted 1 item occurrence.')).toBeInTheDocument()
-    expect(screen.getByText(/1 deleted; 1 failed.*Player item delete was rejected/)).toBeInTheDocument()
+    expect(await screen.findByText('Removed 10 items from 1 occurrence.')).toBeInTheDocument()
+    expect(screen.getByText(/1 updated; 1 failed.*Player item delete was rejected/)).toBeInTheDocument()
   })
 
   it('keeps deletion confirmation visible when the final occurrence closes the panel', async () => {
@@ -342,8 +350,24 @@ describe('Shared Inventory Explorer grouped catalog', () => {
     await user.click(await screen.findByRole('button', { name: /Copper/ }))
     await user.click(await screen.findByRole('button', { name: 'Delete Copper from Copper box' }))
 
-    expect(await screen.findByText('Deleted 1 item occurrence.')).toBeInTheDocument()
+    expect(await screen.findByText('Removed 10 items from 1 occurrence.')).toBeInTheDocument()
     await waitFor(() => expect(screen.queryByRole('dialog', { name: 'Copper' })).not.toBeInTheDocument())
+  })
+
+  it('reduces a stack when the requested delete quantity is below the full quantity', async () => {
+    const confirm = vi.spyOn(window, 'confirm').mockReturnValue(true)
+    const user = userEvent.setup()
+    renderExplorer()
+    await user.click(await screen.findByRole('button', { name: /Copper/ }))
+    const quantity = await screen.findByRole('spinbutton', { name: 'Delete quantity for Copper in Copper box' })
+    await user.clear(quantity)
+    await user.type(quantity, '4')
+    await user.click(screen.getByRole('button', { name: 'Delete Copper from Copper box' }))
+
+    await waitFor(() => expect(setStorageItemStackApi).toHaveBeenCalledWith(42, 6, 10))
+    expect(deleteStorageItemApi).not.toHaveBeenCalled()
+    expect(confirm).toHaveBeenCalledWith(expect.stringContaining('Delete 4 of Copper (stack x10)'))
+    expect(await screen.findByText(/Removed 4 items from 1 occurrence.*server zone restarts/)).toBeInTheDocument()
   })
 
   it('surfaces malformed occurrence rows instead of rendering blank details', async () => {

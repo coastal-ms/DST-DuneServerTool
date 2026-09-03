@@ -6,6 +6,8 @@ import {
   deleteInventoryItem,
   deleteStorageItem,
   renameStorage,
+  setItemStack,
+  setStorageItemStack,
   type InventoryEntityType,
   type SharedInventoryGroup,
   type SharedInventoryItem,
@@ -109,6 +111,10 @@ function setUrlFilters(changes: Record<string, string | undefined>) {
 
 function locationValue(location?: { type: InventoryEntityType; id: number } | null) {
   return location ? `${location.type}:${location.id}` : ''
+}
+
+function inventoryItemKey(item: SharedInventoryItem) {
+  return `${item.entity.type}:${item.id}`
 }
 
 function locationLabel(location: SharedInventoryLocationFacet, allPlayers: boolean, duplicateOrdinal = 0) {
@@ -522,6 +528,7 @@ function OccurrencePanel({
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const [selectedItemKeys, setSelectedItemKeys] = useState<Set<string>>(new Set())
+  const [deleteQuantities, setDeleteQuantities] = useState<Record<string, string>>({})
   const [deleteBusy, setDeleteBusy] = useState(false)
   const [verifiedDetailsUrl, setVerifiedDetailsUrl] = useState<string | null>(null)
   const version = useRef(0)
@@ -539,47 +546,92 @@ function OccurrencePanel({
   const locationOrdinals = useMemo(() => duplicateOrdinals(
     filteredLocations, location => location.label, location => `${location.type}:${location.id}`,
   ), [filteredLocations])
-  const itemKey = (item: SharedInventoryItem) => `${item.entity.type}:${item.id}`
   const canDelete = (item: SharedInventoryItem) => !demo && (
     item.entity.type === 'player' ? canDeletePlayerItems : canDeleteStorageItems
   )
   const deletableItems = items.filter(canDelete)
-  const selectedItems = deletableItems.filter(item => selectedItemKeys.has(itemKey(item)))
+  const selectedItems = deletableItems.filter(item => selectedItemKeys.has(inventoryItemKey(item)))
 
   const deleteItems = async (targets: SharedInventoryItem[]) => {
     if (targets.length === 0) return
-    const quantity = targets.reduce((sum, item) => sum + item.quantity, 0)
+    const requests = targets.map(item => ({
+      item,
+      quantity: Number(deleteQuantities[inventoryItemKey(item)] ?? item.quantity),
+    }))
+    const invalid = requests.find(request => (
+      !Number.isSafeInteger(request.quantity)
+      || request.quantity < (request.item.quantity === 0 ? 0 : 1)
+      || request.quantity > request.item.quantity
+    ))
+    if (invalid) {
+      onDeleteResult('', `Delete quantity for ${invalid.item.displayName} must be a whole number from 1 to ${invalid.item.quantity}.`)
+      return
+    }
+    const quantity = requests.reduce((sum, request) => sum + request.quantity, 0)
     const message = targets.length === 1
-      ? `Delete ${targets[0].displayName} (x${targets[0].quantity}) from ${targets[0].entity.label || entityTypeLabel(targets[0].entity.type)}? This cannot be undone.`
-      : `Delete ${targets.length} selected item occurrences containing ${quantity} total items? Entire stacks will be removed. This cannot be undone.`
+      ? `Delete ${quantity} of ${targets[0].displayName} (stack x${targets[0].quantity}) from ${targets[0].entity.label || entityTypeLabel(targets[0].entity.type)}? This cannot be undone.`
+      : `Delete ${quantity} total items across ${targets.length} selected occurrences? Any full stacks will be removed. This cannot be undone.`
     if (!window.confirm(message)) return
 
     setDeleteBusy(true)
     setError('')
-    const deleted = new Set<string>()
+    const updated = new Map<string, number>()
     const failures: string[] = []
-    for (const item of targets) {
+    let removedQuantity = 0
+    const partialEntityTypes = new Set<InventoryEntityType>()
+    for (const request of requests) {
+      const { item, quantity: deleteQuantity } = request
       try {
-        if (item.entity.type === 'player') await deleteInventoryItem(item.id)
-        else await deleteStorageItem(item.id)
-        deleted.add(itemKey(item))
+        const remaining = item.quantity - deleteQuantity
+        const result = remaining === 0
+          ? item.entity.type === 'player'
+            ? await deleteInventoryItem(item.id, item.quantity)
+            : await deleteStorageItem(item.id, item.quantity)
+          : item.entity.type === 'player'
+            ? await setItemStack(item.id, remaining, item.quantity)
+            : await setStorageItemStack(item.id, remaining, item.quantity)
+        if (!result.ok) throw new Error(result.message || 'The inventory update was rejected.')
+        updated.set(inventoryItemKey(item), remaining)
+        removedQuantity += deleteQuantity
+        if (remaining > 0) partialEntityTypes.add(item.entity.type)
       } catch (reason) {
         failures.push(`${item.displayName} in ${item.entity.label || entityTypeLabel(item.entity.type)}: ${errorMessage(reason)}`)
       }
     }
 
-    if (deleted.size > 0) {
-      setItems(current => current.filter(item => !deleted.has(itemKey(item))))
-      setSelectedItemKeys(current => new Set([...current].filter(key => !deleted.has(key))))
+    if (updated.size > 0) {
+      setItems(current => current
+        .filter(item => updated.get(inventoryItemKey(item)) !== 0)
+        .map(item => {
+          const remaining = updated.get(inventoryItemKey(item))
+          return remaining === undefined ? item : { ...item, quantity: remaining }
+        }))
+      setSelectedItemKeys(current => new Set([...current].filter(key => !updated.has(key))))
+      setDeleteQuantities(current => {
+        const next = { ...current }
+        updated.forEach((remaining, key) => {
+          if (remaining === 0) delete next[key]
+          else next[key] = String(remaining)
+        })
+        return next
+      })
     }
-    const successMessage = deleted.size > 0
-      ? `Deleted ${deleted.size} item occurrence${deleted.size === 1 ? '' : 's'}.`
+    let successMessage = updated.size > 0
+      ? removedQuantity === 0
+        ? `Deleted ${updated.size} empty occurrence${updated.size === 1 ? '' : 's'}.`
+        : `Removed ${removedQuantity} item${removedQuantity === 1 ? '' : 's'} from ${updated.size} occurrence${updated.size === 1 ? '' : 's'}.`
       : ''
+    if (partialEntityTypes.has('player')) {
+      successMessage += ' Player changes require a relog or map restart and may be overwritten while the player is online.'
+    }
+    if (partialEntityTypes.has('storage')) {
+      successMessage += ' Storage changes appear in-game after the server zone restarts.'
+    }
     const failureMessage = failures.length > 0
-      ? `${deleted.size > 0 ? `${deleted.size} deleted; ` : ''}${failures.length} failed. ${failures.join(' ')}`
+      ? `${updated.size > 0 ? `${updated.size} updated; ` : ''}${failures.length} failed. ${failures.join(' ')}`
       : ''
     onDeleteResult(successMessage, failureMessage)
-    if (deleted.size > 0) await onInventoryChanged()
+    if (updated.size > 0) await onInventoryChanged()
     setDeleteBusy(false)
   }
 
@@ -600,6 +652,11 @@ function OccurrencePanel({
       if (request !== version.current) return
       assertInventoryOccurrences(result.data.items)
       setItems(current => append ? [...current, ...result.data.items] : result.data.items)
+      setDeleteQuantities(current => {
+        const next = append ? { ...current } : {}
+        result.data.items.forEach(item => { next[inventoryItemKey(item)] = String(item.quantity) })
+        return next
+      })
       setNextCursor(result.page.nextCursor)
       setPanelPlayers(current => {
         if (!playerId || result.data.players.some(player => player.id === playerId)) return result.data.players
@@ -633,6 +690,7 @@ function OccurrencePanel({
   }, [group?.groupKey, initialLocationId, initialLocationType, initialPlayerId, locations, players])
   useEffect(() => {
     setSelectedItemKeys(new Set())
+    setDeleteQuantities({})
   }, [group?.groupKey])
   useEffect(() => {
     version.current += 1
@@ -707,7 +765,7 @@ function OccurrencePanel({
                       disabled={deleteBusy}
                       onChange={event => setSelectedItemKeys(current => {
                         const next = new Set(current)
-                        deletableItems.forEach(item => event.target.checked ? next.add(itemKey(item)) : next.delete(itemKey(item)))
+                        deletableItems.forEach(item => event.target.checked ? next.add(inventoryItemKey(item)) : next.delete(inventoryItemKey(item)))
                         return next
                       })}
                     />
@@ -729,12 +787,12 @@ function OccurrencePanel({
                           type="checkbox"
                           className="mt-1"
                           aria-label={`Select ${item.displayName} in ${item.entity.label || entityTypeLabel(item.entity.type)}`}
-                          checked={selectedItemKeys.has(itemKey(item))}
+                          checked={selectedItemKeys.has(inventoryItemKey(item))}
                           disabled={deleteBusy}
                           onChange={event => setSelectedItemKeys(current => {
                             const next = new Set(current)
-                            if (event.target.checked) next.add(itemKey(item))
-                            else next.delete(itemKey(item))
+                            if (event.target.checked) next.add(inventoryItemKey(item))
+                            else next.delete(inventoryItemKey(item))
                             return next
                           })}
                         />
@@ -745,7 +803,27 @@ function OccurrencePanel({
                       </div>
                     </div>
                     <div className="flex shrink-0 items-center gap-2">
-                      <span className="font-semibold text-accent-bright">x{item.quantity}</span>
+                      {canDelete(item) && (
+                        <label className="text-xs font-medium text-text-muted">
+                          Delete quantity
+                          <input
+                            type="number"
+                            className="input mt-1 h-9 w-20 text-right font-semibold text-accent-bright"
+                            aria-label={`Delete quantity for ${item.displayName} in ${item.entity.label || entityTypeLabel(item.entity.type)}`}
+                            min={item.quantity === 0 ? 0 : 1}
+                            max={item.quantity}
+                            step={1}
+                            inputMode="numeric"
+                            value={deleteQuantities[inventoryItemKey(item)] ?? String(item.quantity)}
+                            disabled={deleteBusy}
+                            onChange={event => setDeleteQuantities(current => ({
+                              ...current,
+                              [inventoryItemKey(item)]: event.target.value,
+                            }))}
+                          />
+                        </label>
+                      )}
+                      {!canDelete(item) && <span className="font-semibold text-accent-bright">x{item.quantity}</span>}
                       {canDelete(item) && (
                         <button
                           type="button"

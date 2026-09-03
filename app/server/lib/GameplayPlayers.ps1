@@ -394,10 +394,22 @@ RETURNING keystone_id;
 
 # Delete item (delete-item): dune.delete_item(id).
 function Invoke-DunePlayerDeleteItem {
-    param([string]$Ip, [long]$ItemId)
-    $sql = "SELECT dune.delete_item($ItemId::bigint);"
+    param([string]$Ip, [long]$ItemId, [Nullable[long]]$ExpectedStackSize)
+    $expectedClause = if ($null -ne $ExpectedStackSize) { " AND stack_size = $ExpectedStackSize::bigint" } else { '' }
+    $sql = @"
+WITH matched AS (
+    SELECT id
+    FROM dune.items
+    WHERE id = $ItemId::bigint$expectedClause
+    FOR UPDATE
+)
+SELECT dune.delete_item(id) FROM matched;
+"@
     $res = Invoke-DuneSqlQuery -Ip $Ip -Sql $sql -ReadOnly $false -MaxRows 1 -TimeoutSec 30
     if (-not $res.ok) { return @{ ok = $false; error = $res.error } }
+    if (@(ConvertTo-DuneRowMaps -Result $res).Count -eq 0) {
+        return @{ ok = $false; error = 'Item quantity changed or the item no longer exists. Refresh and try again.' }
+    }
     return @{ ok = $true; message = "Deleted item $ItemId." }
 }
 
@@ -588,20 +600,21 @@ RETURNING i.id::text AS item_id;
 # may be overwritten) until the player relogs / the pod is restarted. The UI
 # surfaces this caveat.
 function Invoke-DunePlayerSetItemStack {
-    param([string]$Ip, [long]$ItemId, [long]$StackSize)
+    param([string]$Ip, [long]$ItemId, [long]$StackSize, [Nullable[long]]$ExpectedStackSize)
     if ($ItemId -le 0) { return @{ ok = $false; error = 'item_id is required.' } }
     if ($StackSize -lt 1) { return @{ ok = $false; error = 'stack_size must be at least 1.' } }
+    $expectedClause = if ($null -ne $ExpectedStackSize) { " AND stack_size = $ExpectedStackSize::bigint" } else { '' }
     $sql = @"
 UPDATE dune.items
 SET stack_size = $StackSize::bigint
-WHERE id = $ItemId::bigint
+WHERE id = $ItemId::bigint$expectedClause
 RETURNING id::text AS item_id;
 "@
     $res = Invoke-DuneSqlQuery -Ip $Ip -Sql $sql -ReadOnly $false -MaxRows 1 -TimeoutSec 30
     if (-not $res.ok) { return @{ ok = $false; error = $res.error } }
     $affected = @(ConvertTo-DuneRowMaps -Result $res).Count
     if ($affected -eq 0) {
-        return @{ ok = $false; error = "Item $ItemId not found." }
+        return @{ ok = $false; error = 'Item quantity changed or the item no longer exists. Refresh and try again.' }
     }
     return @{ ok = $true; message = "Set item $ItemId stack to $StackSize." }
 }
