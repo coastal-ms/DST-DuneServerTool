@@ -137,15 +137,39 @@ jobs:
             echo "::warning::SignPath is not configured (SIGNPATH_API_TOKEN secret / SIGNPATH_ORGANIZATION_ID var missing). Producing an UNSIGNED build. Set the SignPath secret + vars after Foundation approval to enable signing."
           fi
 
-      # ── Phase A: build the raw artifacts (webui + DuneServer.exe + DuneShell.exe +
-      #    DuneSoloDb.exe + DunePlatformStore.exe),
-      #    stopping before the installer so the inner exes can be signed first. ──
+      - name: Prepare platform cache helper
+        shell: pwsh
+        run: |
+          $project = '${{ github.workspace }}\app\tools\DunePlatformStore\DunePlatformStore.csproj'
+          $exe = '${{ github.workspace }}\app\tools\DunePlatformStore\bin\Release\net10.0-windows\win-x64\publish\DunePlatformStore.exe'
+          $audit = (& dotnet list $project package --include-transitive --vulnerable | Out-String)
+          Write-Host $audit
+          if ($audit -match 'has the following vulnerable packages') {
+            throw 'DunePlatformStore dependency audit found a vulnerable package.'
+          }
+          & dotnet publish $project -c Release -r win-x64 -p:PublishSingleFile=true --self-contained true --nologo
+          if ($LASTEXITCODE -ne 0) {
+            throw "dotnet publish failed for DunePlatformStore (exit $LASTEXITCODE)"
+          }
+
+          $identity = [Security.Principal.WindowsIdentity]::GetCurrent()
+          $principal = [Security.Principal.WindowsPrincipal]::new($identity)
+          $isElevated = $principal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
+          if ($isElevated) {
+            Write-Warning 'Skipping the privilege-drop self-test because this elevated runner has no interactive standard-user token.'
+          } else {
+            & $exe --command self-test
+            if ($LASTEXITCODE -ne 0) {
+              throw "DunePlatformStore self-test failed (exit $LASTEXITCODE)"
+            }
+          }
+
       - name: Build raw artifacts (phase A)
         shell: pwsh
         env:
           BUILD_TAG: ${{ inputs.release_tag }}
         run: |
-          $biArgs = @{ SkipInstaller = $true }
+          $biArgs = @{ SkipInstaller = $true; SkipPlatformBuild = $true }
           if ($env:BUILD_TAG) { $biArgs.BuildCommit = (& git rev-parse HEAD).Trim() }
           if ('${{ inputs.skip_version_check }}' -eq 'true') { $biArgs.SkipVersionCheck = $true }
           if ('${{ inputs.prerelease_build }}' -eq 'true') { $biArgs.Prerelease = $true }
