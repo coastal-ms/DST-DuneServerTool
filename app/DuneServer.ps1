@@ -741,19 +741,18 @@ $script:DuneIconPath = $null
 # em-dashes or right-arrows here would risk the v11.4.0-class parse breakage
 # the v11.4.1 hotfix addressed.
 $script:DuneAutostartRegistered = $false
-try {
-    if (Get-Command Test-DuneAutostartEnabled -ErrorAction SilentlyContinue) {
-        $script:DuneAutostartRegistered = [bool](Test-DuneAutostartEnabled)
-    }
-} catch { $script:DuneAutostartRegistered = $false }
-Write-DuneStartupLog 'Autostart task state resolved'
 $script:DuneServiceModeRegistered = $false
 try {
-    if (Get-Command Test-DuneServiceEnabled -ErrorAction SilentlyContinue) {
-        $script:DuneServiceModeRegistered = [bool](Test-DuneServiceEnabled)
+    if (Get-Command Get-DuneTaskModeState -ErrorAction SilentlyContinue) {
+        $taskModeState = Get-DuneTaskModeState
+        $script:DuneAutostartRegistered = [bool]$taskModeState.autostart
+        $script:DuneServiceModeRegistered = [bool]$taskModeState.service
     }
-} catch { $script:DuneServiceModeRegistered = $false }
-Write-DuneStartupLog 'Service task state resolved'
+} catch {
+    $script:DuneAutostartRegistered = $false
+    $script:DuneServiceModeRegistered = $false
+}
+Write-DuneStartupLog 'Scheduled task modes resolved'
 $script:DuneKeepAliveAfterShellClose = [bool]$script:DuneHeadlessMode -or $script:DuneAutostartRegistered -or $script:DuneServiceModeRegistered
 if (($script:DuneAutostartRegistered -or $script:DuneServiceModeRegistered) -and -not $script:DuneHeadlessMode) {
     Write-DuneLog "Autostart/service task registered for this user - closing the DuneShell window will leave the backend console running; click the shortcut again to re-open the viewer, or stop the backend explicitly via the tray / console window"
@@ -762,7 +761,12 @@ if (($script:DuneAutostartRegistered -or $script:DuneServiceModeRegistered) -and
 # The former includes service/headless mode; the latter is autostart-only.
 # Both are refreshed when either scheduled-task mode changes.
 if (Get-Command Update-DuneKeepAliveFlag -ErrorAction SilentlyContinue) {
-    try { [void](Update-DuneKeepAliveFlag) } catch {}
+    try {
+        [void](Update-DuneKeepAliveFlag `
+            -UseKnownState `
+            -AutostartEnabled $script:DuneAutostartRegistered `
+            -ServiceEnabled $script:DuneServiceModeRegistered)
+    } catch {}
 }
 Write-DuneStartupLog 'Keep-alive state persisted'
 

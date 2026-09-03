@@ -168,18 +168,28 @@ function Clear-DuneShellCloseToTrayFlag {
 # whether the autostart task is currently registered for this user) and write
 # or remove the sentinel file accordingly. Safe to call repeatedly.
 function Update-DuneKeepAliveFlag {
-    $autostart = $false
-    try {
-        if (Get-Command Test-DuneAutostartEnabled -ErrorAction SilentlyContinue) {
-            $autostart = [bool](Test-DuneAutostartEnabled)
-        }
-    } catch { $autostart = $false }
-    $service = $false
-    try {
-        if (Get-Command Test-DuneServiceEnabled -ErrorAction SilentlyContinue) {
-            $service = [bool](Test-DuneServiceEnabled)
-        }
-    } catch { $service = $false }
+    param(
+        [switch]$UseKnownState,
+        [bool]$AutostartEnabled = $false,
+        [bool]$ServiceEnabled = $false
+    )
+    if ($UseKnownState) {
+        $autostart = $AutostartEnabled
+        $service = $ServiceEnabled
+    } else {
+        $autostart = $false
+        try {
+            if (Get-Command Test-DuneAutostartEnabled -ErrorAction SilentlyContinue) {
+                $autostart = [bool](Test-DuneAutostartEnabled)
+            }
+        } catch { $autostart = $false }
+        $service = $false
+        try {
+            if (Get-Command Test-DuneServiceEnabled -ErrorAction SilentlyContinue) {
+                $service = [bool](Test-DuneServiceEnabled)
+            }
+        } catch { $service = $false }
+    }
     $keep = [bool]$script:DuneHeadlessMode -or $autostart -or $service
     if ($keep) { Set-DuneKeepAliveFlag } else { Clear-DuneKeepAliveFlag }
     # X retains the shell and tray only for the explicit "Run at Windows

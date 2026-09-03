@@ -230,6 +230,26 @@ function Get-DuneServiceTaskName {
     return "DuneServer-Service-$suffix"
 }
 
+function Get-DuneTaskModeState {
+    $folder = Get-DuneAutostartTaskFolder
+    $autostartName = Get-DuneAutostartTaskName
+    $serviceName = Get-DuneServiceTaskName
+    try {
+        if (Get-Command Get-ScheduledTask -ErrorAction SilentlyContinue) {
+            $taskNames = @(Get-ScheduledTask -TaskPath $folder -ErrorAction SilentlyContinue |
+                ForEach-Object { $_.TaskName })
+            return [pscustomobject]@{
+                autostart = $taskNames -contains $autostartName
+                service   = $taskNames -contains $serviceName
+            }
+        }
+    } catch {}
+    return [pscustomobject]@{
+        autostart = [bool](Test-DuneAutostartEnabled)
+        service   = [bool](Test-DuneServiceEnabled)
+    }
+}
+
 # Whether the always-on service task currently exists for THIS user.
 function Test-DuneServiceEnabled {
     $folder = Get-DuneAutostartTaskFolder

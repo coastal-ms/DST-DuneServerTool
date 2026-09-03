@@ -50,6 +50,15 @@ function Test-DuneBridgeElevated {
     } catch { return $false }
 }
 
+function Test-DuneBridgeHealth {
+    try {
+        $h = Invoke-RestMethod -Uri "http://127.0.0.1:$script:DuneMobileBridgePort/_dst/health" -TimeoutSec 1 -ErrorAction Stop
+        return [bool]$h.ok
+    } catch {
+        return $false
+    }
+}
+
 function Get-DuneBridgeStatus {
     $port = $script:DuneMobileBridgePort
 
@@ -64,11 +73,7 @@ function Get-DuneBridgeStatus {
     $listening = $false
     try { $listening = [bool](Get-NetTCPConnection -State Listen -LocalPort $port -ErrorAction SilentlyContinue) } catch {}
 
-    $healthOk = $false
-    try {
-        $h = Invoke-RestMethod -Uri "http://127.0.0.1:$port/_dst/health" -TimeoutSec 4 -ErrorAction Stop
-        $healthOk = [bool]$h.ok
-    } catch {}
+    $healthOk = Test-DuneBridgeHealth
 
     $issues = New-Object System.Collections.Generic.List[string]
     if (-not $hasTask)      { [void]$issues.Add('The mobile bridge background task is not installed.') }
@@ -142,6 +147,7 @@ function Invoke-DuneBridgeRepair {
 function Initialize-DuneMobileBridge {
     param([string]$ServerDir)
     try {
+        if (Test-DuneBridgeHealth) { return }
         $st = Get-DuneBridgeStatus
         if ($st.task -and $st.listening) { return }  # already healthy
         [void](Invoke-DuneBridgeRepair -NoWait)
