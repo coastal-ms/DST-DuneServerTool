@@ -128,11 +128,11 @@ internal sealed record InventoryItemInput
 internal sealed record InventoryMetadataInput
 {
     public string Category { get; init; } = "";
-    public int Tier { get; init; }
+    public int? Tier { get; init; }
     public string Rarity { get; init; } = "";
     public string Icon { get; init; } = "";
     public int StackMaximum { get; init; }
-    public double Volume { get; init; }
+    public double? Volume { get; init; }
     public long VendorPrice { get; init; }
     public bool IsGradeable { get; init; }
 }

@@ -6,9 +6,10 @@ namespace DunePlatformStore;
 
 internal static class Schema
 {
-    internal const int Version = 2;
+    internal const int Version = 3;
     internal const string V1Checksum = "maps-v1-20260828";
-    internal const string Checksum = "derived-domains-v2-20260902";
+    internal const string V2Checksum = "derived-domains-v2-20260902";
+    internal const string Checksum = "inventory-null-sort-v3-20260903";
     private const int SqliteOk = 0;
     private const int SqliteFcntlPersistWal = 10;
     private static readonly byte[] MainDatabaseName = "main\0"u8.ToArray();
@@ -340,6 +341,81 @@ internal static class Schema
             INSERT INTO schema_migrations(version, checksum, app_version, applied_at_utc)
             VALUES (2, $checksum, $appVersion, $now);
             PRAGMA user_version=2;
+            """,
+            ("$checksum", V2Checksum),
+            ("$appVersion", appVersion),
+            ("$now", DateTimeOffset.UtcNow.ToUniversalTime().ToString("O")));
+        transaction.Commit();
+    }
+
+    internal static void CreateV3(SqliteConnection connection, string appVersion)
+    {
+        using var transaction = connection.BeginTransaction();
+        Execute(connection, transaction,
+            """
+            CREATE TABLE inventory_items_v3 (
+              generation_id INTEGER NOT NULL
+                REFERENCES inventory_generations(generation_id) ON DELETE CASCADE,
+              item_id INTEGER NOT NULL CHECK (item_id > 0),
+              template_id TEXT NOT NULL,
+              template_id_normalized TEXT NOT NULL,
+              display_name TEXT NOT NULL,
+              kind TEXT NOT NULL CHECK (kind IN ('item','emote','contract')),
+              quantity INTEGER NOT NULL CHECK (quantity >= 0),
+              quality INTEGER NOT NULL CHECK (quality >= 0),
+              durability TEXT NOT NULL,
+              max_durability TEXT NOT NULL,
+              water_amount TEXT NOT NULL,
+              water_type TEXT NOT NULL,
+              category TEXT NOT NULL,
+              tier INTEGER CHECK (tier IS NULL OR tier >= 0),
+              rarity TEXT NOT NULL,
+              icon TEXT NOT NULL,
+              stack_maximum INTEGER NOT NULL CHECK (stack_maximum >= 0),
+              volume REAL CHECK (volume IS NULL OR volume >= 0),
+              vendor_price INTEGER NOT NULL CHECK (vendor_price >= 0),
+              is_gradeable INTEGER NOT NULL CHECK (is_gradeable IN (0, 1)),
+              inventory_id INTEGER NOT NULL CHECK (inventory_id > 0),
+              inventory_type INTEGER NOT NULL CHECK (inventory_type >= 0),
+              entity_type TEXT NOT NULL CHECK (entity_type IN ('player','storage')),
+              entity_id INTEGER NOT NULL CHECK (entity_id > 0),
+              entity_label TEXT NOT NULL,
+              owner_name TEXT NOT NULL,
+              map_name TEXT NOT NULL,
+              entity_class TEXT NOT NULL,
+              player_id INTEGER,
+              player_name TEXT,
+              PRIMARY KEY (generation_id, item_id),
+              CHECK (
+                (player_id IS NULL AND player_name IS NULL) OR
+                (player_id > 0 AND player_name IS NOT NULL AND length(player_name) > 0)
+              ),
+              CHECK (
+                entity_type <> 'player' OR
+                (player_id IS NOT NULL AND player_id = entity_id)
+              )
+            ) STRICT;
+            INSERT INTO inventory_items_v3
+            SELECT * FROM inventory_items;
+            DROP TABLE inventory_items;
+            ALTER TABLE inventory_items_v3 RENAME TO inventory_items;
+            CREATE INDEX inventory_items_template
+              ON inventory_items (generation_id, template_id_normalized, item_id);
+            CREATE INDEX inventory_items_entity
+              ON inventory_items (generation_id, entity_type, entity_id, item_id);
+            CREATE INDEX inventory_items_player
+              ON inventory_items (generation_id, player_id, item_id);
+            CREATE INDEX inventory_items_group
+              ON inventory_items (
+                generation_id, template_id_normalized, display_name, quantity, quality
+              );
+            CREATE INDEX inventory_items_location
+              ON inventory_items (
+                generation_id, entity_type, entity_id, player_id, template_id_normalized
+              );
+            INSERT INTO schema_migrations(version, checksum, app_version, applied_at_utc)
+            VALUES (3, $checksum, $appVersion, $now);
+            PRAGMA user_version=3;
             """,
             ("$checksum", Checksum),
             ("$appVersion", appVersion),

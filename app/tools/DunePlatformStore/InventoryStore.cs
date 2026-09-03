@@ -544,8 +544,8 @@ internal static class InventoryStore
             OptionalText(item.Metadata.Icon, 512, "metadata.icon");
             if (item.Metadata.Tier is < 0 or > 1_000_000 ||
                 item.Metadata.StackMaximum is < 0 or > 1_000_000_000 ||
-                !double.IsFinite(item.Metadata.Volume) ||
-                item.Metadata.Volume is < 0 or > 1_000_000_000 ||
+                (item.Metadata.Volume is double volume &&
+                 (!double.IsFinite(volume) || volume is < 0 or > 1_000_000_000)) ||
                 item.Metadata.VendorPrice is < 0 or > 1_000_000_000_000)
             {
                 throw new InvalidDataException("Inventory metadata numeric fields are outside their allowed range.");
@@ -666,8 +666,8 @@ internal static class InventoryStore
                 generationId, item.ItemId, item.TemplateId.Trim(), NormalizeTemplate(item.TemplateId),
                 item.DisplayName, item.Kind, item.Quantity, item.Quality, item.Durability,
                 item.MaxDurability, item.WaterAmount, item.WaterType, item.Metadata.Category,
-                item.Metadata.Tier, item.Metadata.Rarity, item.Metadata.Icon,
-                item.Metadata.StackMaximum, item.Metadata.Volume, item.Metadata.VendorPrice,
+                item.Metadata.Tier ?? (object)DBNull.Value, item.Metadata.Rarity, item.Metadata.Icon,
+                item.Metadata.StackMaximum, item.Metadata.Volume ?? (object)DBNull.Value, item.Metadata.VendorPrice,
                 item.Metadata.IsGradeable ? 1 : 0, item.InventoryId, item.InventoryType,
                 item.EntityType, item.EntityId, item.EntityLabel, item.Owner, item.Map,
                 item.EntityClass, item.PlayerId ?? (object)DBNull.Value,
@@ -754,11 +754,11 @@ internal static class InventoryStore
                 metadata = new
                 {
                     category = reader.GetString(8),
-                    tier = reader.GetInt32(9),
+                    tier = reader.IsDBNull(9) ? (int?)null : reader.GetInt32(9),
                     rarity = reader.GetString(10),
                     icon = reader.GetString(11),
                     stackMaximum = reader.GetInt32(12),
-                    volume = reader.GetDouble(13),
+                    volume = reader.IsDBNull(13) ? (double?)null : reader.GetDouble(13),
                     vendorPrice = reader.GetInt64(14),
                     isGradeable = reader.GetInt64(15) == 1
                 }
@@ -790,11 +790,11 @@ internal static class InventoryStore
                 ["metadata"] = new
                 {
                     category = reader.GetString(10),
-                    tier = reader.GetInt32(11),
+                    tier = reader.IsDBNull(11) ? (int?)null : reader.GetInt32(11),
                     rarity = reader.GetString(12),
                     icon = reader.GetString(13),
                     stackMaximum = reader.GetInt32(14),
-                    volume = reader.GetDouble(15),
+                    volume = reader.IsDBNull(15) ? (double?)null : reader.GetDouble(15),
                     vendorPrice = reader.GetInt64(16),
                     isGradeable = reader.GetInt64(17) == 1
                 },
@@ -1042,11 +1042,13 @@ internal static class InventoryStore
         using (var command = connection.CreateCommand())
         {
             command.CommandText =
-                "SELECT version, checksum FROM schema_migrations WHERE version IN (1,2) ORDER BY version;";
+                "SELECT version, checksum FROM schema_migrations WHERE version IN (1,2,3) ORDER BY version;";
             using var reader = command.ExecuteReader();
             if (!reader.Read() || reader.GetInt32(0) != 1 ||
                 !string.Equals(reader.GetString(1), Schema.V1Checksum, StringComparison.Ordinal) ||
                 !reader.Read() || reader.GetInt32(0) != 2 ||
+                !string.Equals(reader.GetString(1), Schema.V2Checksum, StringComparison.Ordinal) ||
+                !reader.Read() || reader.GetInt32(0) != 3 ||
                 !string.Equals(reader.GetString(1), Schema.Checksum, StringComparison.Ordinal) ||
                 reader.Read())
             {

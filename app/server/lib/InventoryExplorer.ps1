@@ -665,6 +665,107 @@ function Get-DuneInventoryQueryParameters {
     }
 }
 
+function ConvertTo-DuneInventoryCacheInput {
+    param([Parameter(Mandatory)]$Item)
+
+    $templateId = [string]$Item.templateId
+    $hasRule = $script:DuneGameplayItemRules -and
+        $script:DuneGameplayItemRules.ContainsKey($templateId)
+    $rule = if ($hasRule) { Get-DuneGameplayItemRule -TemplateId $templateId } else { $null }
+    $value = [ordered]@{
+        itemId = [long]$Item.id
+        templateId = $templateId
+        displayName = [string]$Item.displayName
+        kind = [string]$Item.kind
+        quantity = [long]$Item.quantity
+        quality = [int]$Item.quality
+        durability = [string]$Item.durability
+        maxDurability = [string]$Item.maxDurability
+        waterAmount = [string]$Item.waterAmount
+        waterType = [string]$Item.waterType
+        metadata = [ordered]@{
+            category = [string]$Item.metadata.category
+            tier = if ($hasRule -and $null -ne $rule.tier) { [int]$rule.tier } else { $null }
+            rarity = [string]$Item.metadata.rarity
+            icon = [string]$Item.metadata.icon
+            stackMaximum = [int]$Item.metadata.stackMaximum
+            volume = if ($hasRule -and $null -ne $rule.volume) { [double]$rule.volume } else { $null }
+            vendorPrice = [long]$Item.metadata.vendorPrice
+            isGradeable = [bool]$Item.metadata.isGradeable
+        }
+        inventoryId = [long]$Item.entity.inventoryId
+        inventoryType = [int]$Item.entity.inventoryType
+        entityType = [string]$Item.entity.type
+        entityId = [long]$Item.entity.id
+        entityLabel = [string]$Item.entity.label
+        owner = [string]$Item.entity.owner
+        map = [string]$Item.entity.map
+        entityClass = [string]$Item.entity.class
+    }
+    if ($Item.player -and [long]$Item.player.id -gt 0 -and [string]$Item.player.name) {
+        $value['playerId'] = [long]$Item.player.id
+        $value['playerName'] = [string]$Item.player.name
+    }
+    return $value
+}
+
+function Invoke-DuneInventorySnapshotLive {
+    param(
+        [Parameter(Mandatory)][string]$Ip,
+        [ValidateRange(1,100000)][int]$MaxRows = 100000
+    )
+
+    $binding = Get-DuneInventoryQueryParameters `
+        -EntityTypes @('player','storage') `
+        -Limit ($MaxRows + 1)
+    $sql = @"
+WITH $(Get-DuneInventoryFilteredCteSql)
+SELECT r.item_id, r.template_id, r.stack_size, r.quality_level, r.durability,
+       r.max_durability, r.water_amount, r.water_type, r.inventory_id,
+       r.inventory_type, r.entity_type, r.entity_id, r.entity_label, r.owner_name,
+       r.map, r.entity_class, r.player_id, r.player_name
+FROM visible_rows r
+ORDER BY r.item_id
+LIMIT (SELECT row_limit FROM _dst_parameters)
+"@
+    $result = Invoke-DuneSqlQuery `
+        -Ip $Ip `
+        -Sql (New-DuneInventoryParameterizedSql `
+            -Sql $sql `
+            -Parameters $binding.values `
+            -ParameterTypes $binding.types) `
+        -ReadOnly $true `
+        -MaxRows ($MaxRows + 1) `
+        -TimeoutSec 120 `
+        -Bulk
+    if (-not $result.ok) {
+        return @{ ok = $false; error = [string]$result.error }
+    }
+
+    try {
+        $rows = ConvertTo-DuneRowMaps -Result $result
+        if ($rows.Count -gt $MaxRows) {
+            return @{ ok = $false; error = "Inventory snapshot exceeds the $MaxRows row cache limit." }
+        }
+        $items = @(
+            foreach ($row in $rows) {
+                $item = ConvertTo-DuneInventoryItem -Row $row
+                $playerId = ConvertTo-DuneInt $row['player_id']
+                $playerName = [string]$row['player_name']
+                if ($playerId -gt 0 -and $playerName) {
+                    $item['player'] = [ordered]@{ id = $playerId; name = $playerName }
+                }
+                if (Test-DuneInventoryVisibleItem -Item $item) {
+                    ConvertTo-DuneInventoryCacheInput -Item $item
+                }
+            }
+        )
+        return @{ ok = $true; items = $items }
+    } catch {
+        return @{ ok = $false; error = $_.Exception.Message }
+    }
+}
+
 function ConvertTo-DuneInventoryPlayerFacet {
     param([Parameter(Mandatory)]$Row)
     Assert-DuneInventoryDatabaseRow -Row $Row -Kind playerFacet
@@ -1122,12 +1223,38 @@ function Invoke-DuneInventoryGroupedPage {
         [string]$LocationType = '', [long]$LocationId = 0,
         [string]$Sort = 'name-asc', [string]$AfterSortValue = '', [string]$AfterSortSecondary = '',
         [string]$AfterSortName = '',
-        [string]$AfterTemplateId = '', [int]$Limit = 101
+        [string]$AfterTemplateId = '', [int]$Offset = 0, [int]$Limit = 101,
+        [ValidateSet('','cache','live')][string]$CursorSource = '',
+        [string]$CacheGeneration = ''
     )
     if ($Mode -eq 'demo') {
-        return Get-DuneInventoryGroupedDemo -Query $Query -EntityTypes $EntityTypes -ScopeType $ScopeType `
+        $result = Get-DuneInventoryGroupedDemo -Query $Query -EntityTypes $EntityTypes -ScopeType $ScopeType `
             -ScopeId $ScopeId -PlayerId $PlayerId -LocationType $LocationType -LocationId $LocationId `
-            -Sort $Sort -AfterTemplateId $AfterTemplateId -Limit $Limit
+            -Sort $Sort -AfterTemplateId $AfterTemplateId -Limit ($Limit + 1)
+        $result.source = 'static'
+        $result.cursorSource = 'live'
+        $result.freshness = New-DuneApiFreshness `
+            -State fresh `
+            -ObservedAt ((Get-Date).ToUniversalTime().ToString('o'))
+        return $result
+    }
+    if ($CursorSource -ne 'live' -and
+        (Get-Command Invoke-DuneInventoryGroupedCachePage -ErrorAction SilentlyContinue)) {
+        $cached = Invoke-DuneInventoryGroupedCachePage `
+            -Query $Query `
+            -EntityTypes $EntityTypes `
+            -ScopeType $ScopeType `
+            -ScopeId $ScopeId `
+            -PlayerId $PlayerId `
+            -LocationType $LocationType `
+            -LocationId $LocationId `
+            -Sort $Sort `
+            -Offset $Offset `
+            -Limit $Limit `
+            -ExpectedGeneration $CacheGeneration
+        if ($cached.ok -or $CursorSource -eq 'cache' -or -not $cached.cacheUnavailable) {
+            return $cached
+        }
     }
     $context = Get-DuneDbContext
     if (-not $context.ok) { return @{ ok = $false; status = 503; error = "Inventory database unavailable: $([string]$context.message)" } }
@@ -1135,9 +1262,13 @@ function Invoke-DuneInventoryGroupedPage {
         -ScopeType $ScopeType -ScopeId $ScopeId -PlayerId $PlayerId -LocationType $LocationType `
         -LocationId $LocationId -Sort $Sort -AfterSortValue $AfterSortValue `
         -AfterSortSecondary $AfterSortSecondary -AfterSortName $AfterSortName `
-        -AfterTemplateId $AfterTemplateId -Limit $Limit
+        -AfterTemplateId $AfterTemplateId -Limit ($Limit + 1)
     if (-not $result.ok) { return @{ ok = $false; status = 503; error = "Inventory database read failed: $([string]$result.error)" } }
     $result.source = 'live'
+    $result.cursorSource = 'live'
+    $result.freshness = New-DuneApiFreshness `
+        -State fresh `
+        -ObservedAt ((Get-Date).ToUniversalTime().ToString('o'))
     return $result
 }
 
@@ -1277,6 +1408,27 @@ GROUP BY t.entity_type, t.entity_id ORDER BY t.entity_type, entity_label, t.enti
         -Sql (New-DuneInventoryParameterizedSql -Sql $locationSql -Parameters $binding.values -ParameterTypes $binding.types) `
         -ReadOnly $true -MaxRows 1000 -TimeoutSec 45 -Bulk
     if (-not $locationResult.ok) { return @{ ok = $false; error = $locationResult.error } }
+    $validitySql = @"
+WITH $cte,
+template_rows AS (
+    SELECT r.* FROM searched_rows r CROSS JOIN _dst_parameters p
+    WHERE lower(trim(r.template_id)) = lower(trim(p.template_id))
+)
+SELECT
+    (p.player_id = 0 OR EXISTS (
+        SELECT 1 FROM template_rows t WHERE t.player_id = p.player_id
+    )) AS player_valid,
+    (p.location_type = '' OR EXISTS (
+        SELECT 1 FROM template_rows t
+        WHERE (p.player_id = 0 OR t.player_id = p.player_id)
+          AND t.entity_type = p.location_type AND t.entity_id = p.location_id
+    )) AS location_valid
+FROM _dst_parameters p
+"@
+    $validityResult = Invoke-DuneSqlQuery -Ip $Ip `
+        -Sql (New-DuneInventoryParameterizedSql -Sql $validitySql -Parameters $binding.values -ParameterTypes $binding.types) `
+        -ReadOnly $true -MaxRows 1 -TimeoutSec 45 -Bulk
+    if (-not $validityResult.ok) { return @{ ok = $false; error = $validityResult.error } }
     try {
         $players = @(foreach ($row in (ConvertTo-DuneRowMaps -Result $facetResult)) {
             ConvertTo-DuneInventoryPlayerFacet -Row $row
@@ -1284,8 +1436,112 @@ GROUP BY t.entity_type, t.entity_id ORDER BY t.entity_type, entity_label, t.enti
         $locations = @(foreach ($row in (ConvertTo-DuneRowMaps -Result $locationResult)) {
             ConvertTo-DuneInventoryLocationFacet -Row $row
         })
+        $validityRows = ConvertTo-DuneRowMaps -Result $validityResult
+        if ($validityRows.Count -ne 1) {
+            throw "Malformed inventory database validity result: expected one row, received $($validityRows.Count)."
+        }
+        $validity = $validityRows[0]
+        Assert-DuneInventoryDatabaseRow -Row $validity -Kind validity
     } catch {
         return @{ ok = $false; error = $_.Exception.Message }
     }
-    return @{ ok = $true; items = $items; players = $players; locations = $locations }
+    return @{
+        ok = $true
+        items = $items
+        players = $players
+        locations = $locations
+        selectedPlayerValid = ConvertTo-DuneInventoryBoolean $validity['player_valid']
+        selectedLocationValid = ConvertTo-DuneInventoryBoolean $validity['location_valid']
+    }
+}
+
+function Invoke-DuneInventoryOccurrencesPage {
+    param(
+        [ValidateSet('live','demo')][string]$Mode,
+        [Parameter(Mandatory)][string]$TemplateId,
+        [string[]]$EntityTypes,
+        [string]$ScopeType = '',
+        [long]$ScopeId = 0,
+        [long]$PlayerId = 0,
+        [string]$LocationType = '',
+        [long]$LocationId = 0,
+        [string]$Sort = 'player-asc',
+        [string]$AfterSortValue = '',
+        [long]$AfterItemId = 0,
+        [int]$Offset = 0,
+        [int]$Limit = 51,
+        [ValidateSet('','cache','live')][string]$CursorSource = '',
+        [string]$CacheGeneration = ''
+    )
+
+    if ($Mode -eq 'demo') {
+        $result = Get-DuneInventoryOccurrencesDemo `
+            -TemplateId $TemplateId `
+            -EntityTypes $EntityTypes `
+            -ScopeType $ScopeType `
+            -ScopeId $ScopeId `
+            -PlayerId $PlayerId `
+            -LocationType $LocationType `
+            -LocationId $LocationId `
+            -Sort $Sort `
+            -AfterItemId $AfterItemId `
+            -Limit ($Limit + 1)
+        $result.source = 'static'
+        $result.cursorSource = 'live'
+        $result.selectedPlayerValid = -not $PlayerId -or
+            @($result.players | Where-Object { [long]$_.id -eq $PlayerId }).Count -gt 0
+        $result.selectedLocationValid = -not $LocationType -or
+            @($result.locations | Where-Object {
+                [string]$_.type -eq $LocationType -and [long]$_.id -eq $LocationId
+            }).Count -gt 0
+        $result.freshness = New-DuneApiFreshness `
+            -State fresh `
+            -ObservedAt ((Get-Date).ToUniversalTime().ToString('o'))
+        return $result
+    }
+    if ($CursorSource -ne 'live' -and
+        (Get-Command Invoke-DuneInventoryOccurrenceCachePage -ErrorAction SilentlyContinue)) {
+        $cached = Invoke-DuneInventoryOccurrenceCachePage `
+            -TemplateId $TemplateId `
+            -EntityTypes $EntityTypes `
+            -ScopeType $ScopeType `
+            -ScopeId $ScopeId `
+            -PlayerId $PlayerId `
+            -LocationType $LocationType `
+            -LocationId $LocationId `
+            -Sort $Sort `
+            -Offset $Offset `
+            -Limit $Limit `
+            -ExpectedGeneration $CacheGeneration
+        if ($cached.ok -or $CursorSource -eq 'cache' -or -not $cached.cacheUnavailable) {
+            return $cached
+        }
+    }
+
+    $context = Get-DuneDbContext
+    if (-not $context.ok) {
+        return @{ ok = $false; status = 503; error = "Inventory database unavailable: $([string]$context.message)" }
+    }
+    $result = Invoke-DuneInventoryOccurrencesLive `
+        -Ip $context.ip `
+        -TemplateId $TemplateId `
+        -EntityTypes $EntityTypes `
+        -ScopeType $ScopeType `
+        -ScopeId $ScopeId `
+        -PlayerId $PlayerId `
+        -LocationType $LocationType `
+        -LocationId $LocationId `
+        -Sort $Sort `
+        -AfterSortValue $AfterSortValue `
+        -AfterItemId $AfterItemId `
+        -Limit ($Limit + 1)
+    if (-not $result.ok) {
+        return @{ ok = $false; status = 503; error = "Inventory database read failed: $([string]$result.error)" }
+    }
+    $result.source = 'live'
+    $result.cursorSource = 'live'
+    $result.freshness = New-DuneApiFreshness `
+        -State fresh `
+        -ObservedAt ((Get-Date).ToUniversalTime().ToString('o'))
+    return $result
 }

@@ -13,6 +13,15 @@ here cover everything those tags shipped.
 
 ## [Unreleased]
 
+## [15.0.0-phase2-test2] - 2026-09-03
+
+### Added
+
+- Added a local derived inventory cache that refreshes player backpacks and
+  storage containers in the background, serves grouped searches and occurrence
+  details without repeating PostgreSQL reads, reports honest freshness, and
+  falls back to the existing live read path while the cache is unavailable.
+
 ## [15.0.0-phase2-test1.1] - 2026-09-02
 
 ### Added

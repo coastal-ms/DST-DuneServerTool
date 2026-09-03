@@ -10,6 +10,7 @@ BeforeAll {
     Import-DstLib 'GameplayPlayers.ps1'
     Import-DstLib 'GameplayWorld.ps1'
     Import-DstLib 'InventoryExplorer.ps1'
+    Import-DstLib 'InventoryCache.ps1'
 
     function global:Test-DunePortalAccountModeEnabled { return $false }
     function global:Test-DuneToken { return $true }
@@ -169,6 +170,91 @@ if (`$maps.Count -ne 2 -or [string]`$maps[1]['b'] -ne '4') { throw 'PS5.1 row-ma
         }
         $result.response.StatusCode | Should -Be 200 -Because ([string]$result.body.error)
         $result.body.data.templateId | Should -Be 'Spice_Melange'
+    }
+
+    It 'serves cached grouped pages with generation-bound cursors without hitting PostgreSQL' {
+        $script:CacheOffsets = [Collections.Generic.List[int]]::new()
+        $script:CacheLimits = [Collections.Generic.List[int]]::new()
+        Mock Get-DuneDbContext { throw 'PostgreSQL should not be queried for a cached page.' }
+        Mock Invoke-DuneInventoryGroupedCachePage {
+            param($Offset, $Limit)
+            $script:CacheOffsets.Add([int]$Offset)
+            $script:CacheLimits.Add([int]$Limit)
+            $group = if ($Offset -eq 0) {
+                [pscustomobject]@{
+                    groupKey = 'copper'; templateId = 'Copper'; displayName = 'Copper'
+                    totalQuantity = 10; occurrenceCount = 1; locationCount = 1
+                    quality = @{ min = 0; max = 0; mixed = $false }; metadata = @{}
+                }
+            } else {
+                [pscustomobject]@{
+                    groupKey = 'iron'; templateId = 'Iron'; displayName = 'Iron'
+                    totalQuantity = 5; occurrenceCount = 1; locationCount = 1
+                    quality = @{ min = 0; max = 0; mixed = $false }; metadata = @{}
+                }
+            }
+            return @{
+                ok = $true; source = 'cache'; cursorSource = 'cache'
+                generation = 'inventory-generation-1'
+                freshness = New-DuneApiFreshness -State fresh -AgeSeconds 5
+                groups = @($group); players = @(); locations = @()
+                selectedPlayerValid = $true; selectedLocationValid = $true
+                truncated = $true
+            }
+        }
+
+        $first = Invoke-InventoryRouteRequest -Path '/api/v1/inventory/items' -Query @{
+            grouped = '1'; types = 'player,storage'; sort = 'name-asc'; limit = '1'
+        }
+        $second = Invoke-InventoryRouteRequest -Path '/api/v1/inventory/items' -Query @{
+            grouped = '1'; types = 'player,storage'; sort = 'name-asc'; limit = '1'
+            cursor = [string]$first.body.page.nextCursor
+        }
+
+        $first.response.StatusCode | Should -Be 200 -Because ([string]$first.body.error)
+        $first.body.source | Should -Be 'cache'
+        $first.body.freshness.ageSeconds | Should -Be 5
+        $first.body.page.nextCursor | Should -Not -BeNullOrEmpty
+        $second.response.StatusCode | Should -Be 200 -Because ([string]$second.body.error)
+        $second.body.data.groups[0].templateId | Should -Be 'Iron'
+        $script:CacheOffsets | Should -Be @(0, 1)
+        $script:CacheLimits | Should -Be @(1, 1)
+        Should -Invoke Get-DuneDbContext -Times 0
+    }
+
+    It 'keeps maximum route limits within the cache helper contract' {
+        Mock Get-DuneDbContext { throw 'PostgreSQL should not be queried for a cached page.' }
+        Mock Invoke-DuneInventoryGroupedCachePage {
+            return @{
+                ok = $true; source = 'cache'; cursorSource = 'cache'
+                generation = 'inventory-generation-1'
+                freshness = New-DuneApiFreshness -State fresh -AgeSeconds 5
+                groups = @(); players = @(); locations = @()
+                selectedPlayerValid = $true; selectedLocationValid = $true; truncated = $false
+            }
+        }
+        Mock Invoke-DuneInventoryOccurrenceCachePage {
+            return @{
+                ok = $true; source = 'cache'; cursorSource = 'cache'
+                generation = 'inventory-generation-1'
+                freshness = New-DuneApiFreshness -State fresh -AgeSeconds 5
+                items = @(); players = @(); locations = @()
+                selectedPlayerValid = $true; selectedLocationValid = $true; truncated = $false
+            }
+        }
+
+        $groups = Invoke-InventoryRouteRequest -Path '/api/v1/inventory/items' -Query @{
+            grouped = '1'; types = 'player,storage'; sort = 'name-asc'; limit = '500'
+        }
+        $occurrences = Invoke-InventoryRouteRequest -Path '/api/v1/inventory/items/occurrences' -Query @{
+            template_id = 'Copper'; types = 'player,storage'; sort = 'player-asc'; limit = '100'
+        }
+
+        $groups.response.StatusCode | Should -Be 200 -Because ([string]$groups.body.error)
+        $occurrences.response.StatusCode | Should -Be 200 -Because ([string]$occurrences.body.error)
+        Should -Invoke Invoke-DuneInventoryGroupedCachePage -Times 1 -ParameterFilter { $Limit -eq 500 }
+        Should -Invoke Invoke-DuneInventoryOccurrenceCachePage -Times 1 -ParameterFilter { $Limit -eq 100 }
+        Should -Invoke Get-DuneDbContext -Times 0
     }
 
     It 'ships the inventory route and read model through the recursive server package source' {

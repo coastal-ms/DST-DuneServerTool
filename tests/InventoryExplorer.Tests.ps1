@@ -175,6 +175,13 @@ Describe 'Shared Inventory Explorer read model' -Tag 'Pure' {
                         rows = @(,@('storage','50001','Unclaimed cache','','','','1'))
                     }
                 }
+                if ($Sql -match 'AS player_valid') {
+                    return @{
+                        ok = $true
+                        columns = @('player_valid','location_valid')
+                        rows = @(,@('t','t'))
+                    }
+                }
                 return @{
                     ok = $true
                     columns = @('player_id','player_name','occurrence_count')
@@ -506,6 +513,47 @@ Describe 'Shared Inventory Explorer read model' -Tag 'Pure' {
         }
     }
 
+    It 'builds a bounded cache snapshot with flattened player and entity context' {
+        function global:Invoke-DuneSqlQuery {
+            param($Ip, $Sql, $ReadOnly, $MaxRows, $TimeoutSec, [switch]$Bulk)
+            $script:InventorySnapshotSqlCall = @{
+                Ip = $Ip; Sql = $Sql; ReadOnly = $ReadOnly; MaxRows = $MaxRows
+                TimeoutSec = $TimeoutSec; Bulk = $Bulk.IsPresent
+            }
+            return @{
+                ok = $true
+                columns = @(
+                    'item_id','template_id','stack_size','quality_level','durability',
+                    'max_durability','water_amount','water_type','inventory_id',
+                    'inventory_type','entity_type','entity_id','entity_label','owner_name',
+                    'map','entity_class','player_id','player_name'
+                )
+                rows = @(,@(
+                    '42','Copper','12','2','N/A','N/A','N/A','','99','0','player',
+                    '20001','Coastal','Coastal','Hagga Basin','','20001','Coastal'
+                ))
+            }
+        }
+        try {
+            $result = Invoke-DuneInventorySnapshotLive -Ip fixture -MaxRows 100000
+
+            $result.ok | Should -BeTrue -Because ([string]$result.error)
+            @($result.items).Count | Should -Be 1
+            $result.items[0].itemId | Should -Be 42
+            $result.items[0].entityType | Should -Be 'player'
+            $result.items[0].playerId | Should -Be 20001
+            $result.items[0].playerName | Should -Be 'Coastal'
+            $script:InventorySnapshotSqlCall.ReadOnly | Should -BeTrue
+            $script:InventorySnapshotSqlCall.MaxRows | Should -Be 100001
+            $script:InventorySnapshotSqlCall.TimeoutSec | Should -Be 120
+            $script:InventorySnapshotSqlCall.Bulk | Should -BeTrue
+            $script:InventorySnapshotSqlCall.Sql | Should -Match 'FROM visible_rows r'
+        } finally {
+            Remove-Variable -Name InventorySnapshotSqlCall -Scope Script -ErrorAction SilentlyContinue
+            Remove-Item Function:\global:Invoke-DuneSqlQuery -ErrorAction SilentlyContinue
+        }
+    }
+
     It 'rejects unknown grouped and occurrence sort values and maps allowed sorts to static SQL' {
         (Resolve-DuneInventoryGroupSort -Value 'name-asc').sql | Should -Be 'grouped.sort_name ASC, grouped.template_id ASC'
         (Resolve-DuneInventoryGroupSort -Value 'quality-desc').sql | Should -Match '^grouped\.quality_max DESC, grouped\.quality_min DESC'
@@ -517,7 +565,7 @@ Describe 'Shared Inventory Explorer read model' -Tag 'Pure' {
     It 'qualifies every colliding joined-scope column in all live grouped and occurrence variants' {
         $queries = @(Get-DuneInventoryLiveSqlVariants)
 
-        $queries.Count | Should -Be 176
+        $queries.Count | Should -Be 192
         $defaultGrouped = $queries[0]
         $defaultGrouped | Should -Match 'SELECT lower\(trim\(r\.template_id\)\) AS group_key'
         $defaultGrouped | Should -Match 'grouped\.template_id'

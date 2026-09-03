@@ -1,4 +1,5 @@
 $script:DunePlatformMaxRequestBytes = 5MB
+$script:DuneInventoryCacheMaxRequestBytes = 128MB
 $script:DunePlatformMaxResponseBytes = 8MB
 $script:DunePlatformQueryTimeoutSec = 15
 $script:DunePlatformMaxRows = 10000
@@ -127,7 +128,11 @@ function ConvertTo-DunePlatformProcessArgument {
 function Invoke-DunePlatformHelper {
     param(
         [Parameter(Mandatory)]
-        [ValidateSet('migrate','hydrate','replace-generation','integrity','prune','self-test-delayed-replace')]
+        [ValidateSet(
+            'migrate','hydrate','replace-generation','replace-inventory','inventory-status',
+            'query-inventory','query-inventory-occurrences','request-inventory-refresh',
+            'invalidate-inventory','integrity','prune','self-test-delayed-replace'
+        )]
         [string]$Command,
         [string]$RequestJson,
         [hashtable]$Options = @{},
@@ -145,6 +150,12 @@ function Invoke-DunePlatformHelper {
         migrate = @()
         hydrate = @()
         'replace-generation' = @()
+        'replace-inventory' = @()
+        'inventory-status' = @()
+        'query-inventory' = @()
+        'query-inventory-occurrences' = @()
+        'request-inventory-refresh' = @()
+        'invalidate-inventory' = @()
         'self-test-delayed-replace' = @('delay-ms')
         integrity = @()
         prune = @('history-days','history-rows','snapshot-generations','max-bytes')
@@ -154,15 +165,23 @@ function Invoke-DunePlatformHelper {
             throw "Unsupported option '$key' for platform cache command '$Command'."
         }
     }
-    $requestCommands = @('replace-generation','self-test-delayed-replace')
+    $requestCommands = @(
+        'replace-generation','replace-inventory','query-inventory','query-inventory-occurrences',
+        'request-inventory-refresh','invalidate-inventory','self-test-delayed-replace'
+    )
     if ($Command -in $requestCommands -and -not $RequestJson) {
         throw "$Command requires a JSON request."
     }
     if ($Command -notin $requestCommands -and $RequestJson) {
         throw "Command '$Command' does not accept a JSON request."
     }
-    if ($RequestJson -and [Text.Encoding]::UTF8.GetByteCount($RequestJson) -gt $script:DunePlatformMaxRequestBytes) {
-        throw 'Platform cache request exceeds the 5 MiB limit.'
+    $requestLimit = if ($Command -eq 'replace-inventory') {
+        $script:DuneInventoryCacheMaxRequestBytes
+    } else {
+        $script:DunePlatformMaxRequestBytes
+    }
+    if ($RequestJson -and [Text.Encoding]::UTF8.GetByteCount($RequestJson) -gt $requestLimit) {
+        throw "Platform cache request exceeds the $([Math]::Round($requestLimit / 1MB)) MiB limit."
     }
 
     $callerDeadline = [DateTime]::UtcNow.AddSeconds($TimeoutSec)
@@ -322,6 +341,7 @@ function Invoke-DunePlatformGenerationReplace {
             } else {
                 'cache-prune-failed'
             }
+
             if (Get-Command Write-DuneLog -ErrorAction SilentlyContinue) {
                 Write-DuneLog "Platform cache prune failed after generation '$($result.generation)': $($_.Exception.Message)" 'WARN'
             }
@@ -341,6 +361,63 @@ function Invoke-DunePlatformGenerationReplace {
             pruneErrorCode = $pruneErrorCode
         }
     }
+}
+
+function Invoke-DuneInventoryCacheReplace {
+    param(
+        [Parameter(Mandatory)]$Snapshot,
+        [int]$TimeoutSec = 120
+    )
+
+    $json = $Snapshot | ConvertTo-Json -Depth 10 -Compress
+    Invoke-DunePlatformGate -Name writer -TimeoutSec $TimeoutSec -Script {
+        Invoke-DunePlatformHelper -Command replace-inventory -RequestJson $json -TimeoutSec $TimeoutSec
+    }
+}
+
+function Get-DuneInventoryCacheStatus {
+    param([int]$TimeoutSec = 15)
+    Invoke-DunePlatformHelper -Command inventory-status -TimeoutSec $TimeoutSec
+}
+
+function Invoke-DuneInventoryCacheQuery {
+    param(
+        [Parameter(Mandatory)]$Request,
+        [int]$TimeoutSec = 15
+    )
+    $json = $Request | ConvertTo-Json -Depth 6 -Compress
+    Invoke-DunePlatformHelper -Command query-inventory -RequestJson $json -TimeoutSec $TimeoutSec
+}
+
+function Invoke-DuneInventoryCacheOccurrenceQuery {
+    param(
+        [Parameter(Mandatory)]$Request,
+        [int]$TimeoutSec = 15
+    )
+    $json = $Request | ConvertTo-Json -Depth 6 -Compress
+    Invoke-DunePlatformHelper -Command query-inventory-occurrences -RequestJson $json -TimeoutSec $TimeoutSec
+}
+
+function Request-DuneInventoryCacheRefresh {
+    param(
+        [Parameter(Mandatory)]
+        [ValidateSet('startup','ttl-expired','postgres-change','inventory-write','manual','recovery','configuration-change')]
+        [string]$Trigger,
+        [int]$TimeoutSec = 15
+    )
+    $json = @{ trigger = $Trigger } | ConvertTo-Json -Compress
+    Invoke-DunePlatformHelper -Command request-inventory-refresh -RequestJson $json -TimeoutSec $TimeoutSec
+}
+
+function Clear-DuneInventoryCacheGeneration {
+    param(
+        [Parameter(Mandatory)]
+        [ValidateSet('startup','ttl-expired','postgres-change','inventory-write','manual','recovery','configuration-change')]
+        [string]$Trigger,
+        [int]$TimeoutSec = 15
+    )
+    $json = @{ trigger = $Trigger } | ConvertTo-Json -Compress
+    Invoke-DunePlatformHelper -Command invalidate-inventory -RequestJson $json -TimeoutSec $TimeoutSec
 }
 
 function Get-DunePlatformCoordinationTable {
