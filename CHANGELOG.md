@@ -21,8 +21,10 @@ here cover everything those tags shipped.
   icons, catalog names, search, location filtering, sorting, quantity and
   quality summaries, and per-location details across the backpack and supported
   built storage. Large inventories load in bounded groups of 100 item types.
-- Added backup-safe editing of the loaded ammo stored on an exact Solo ranged
-  weapon, with game-closed gating and post-write verification.
+- Added backup-safe finite and infinite ammo modes for an exact Solo ranged
+  weapon. Finite values preserve normal per-shot decrement behavior; infinite
+  mode deliberately uses the field-confirmed float-precision threshold where
+  subtracting one no longer changes the stored value.
 - Added backup-safe editing of the Solo character backpack slot capacity,
   independent from inventory volume.
 - Labeled the early Vehicles workspace as Demo Data until its live fleet

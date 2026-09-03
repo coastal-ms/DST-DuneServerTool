@@ -569,6 +569,7 @@ function Set-DuneSoloWeaponAmmo {
     param(
         [Parameter(Mandatory)][long]$ItemId,
         [Parameter(Mandatory)][long]$Ammo,
+        [Parameter(Mandatory)][ValidateSet('finite','infinite')][string]$Mode,
         [Parameter(Mandatory)][string]$Confirm
     )
 
@@ -578,8 +579,11 @@ function Set-DuneSoloWeaponAmmo {
     }
     Assert-DuneSoloGameClosed
     if ($ItemId -le 0) { throw 'Choose a ranged weapon.' }
-    if ($Ammo -lt 0 -or $Ammo -gt 2000000000) {
-        throw 'Ammo must be between 0 and 2000000000.'
+    if ($Mode -eq 'finite' -and ($Ammo -lt 0 -or $Ammo -gt 16777215)) {
+        throw 'Finite ammo must be between 0 and 16777215.'
+    }
+    if ($Mode -eq 'infinite' -and $Ammo -ne 2000000000) {
+        throw 'Infinite ammo must use the verified value 2000000000.'
     }
     $profile = Get-DuneSoloProfile
     if (-not $profile.dbPath -or -not (Test-Path -LiteralPath $profile.dbPath -PathType Leaf)) {
@@ -594,6 +598,7 @@ function Set-DuneSoloWeaponAmmo {
         'safety-backup' = $safety
         'item-id' = $ItemId
         ammo = $Ammo
+        mode = $Mode
         catalog = Get-DuneSoloGameplayCatalogPath
     }
 }

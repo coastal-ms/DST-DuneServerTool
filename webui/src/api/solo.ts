@@ -393,12 +393,14 @@ export function fillSoloWaterContainer(
 export function setSoloWeaponAmmo(
   itemId: number,
   ammo: number,
+  mode: 'finite' | 'infinite',
   expectedProfileToken: string,
 ): Promise<{
   ok: boolean
   itemId: number
   templateId: string
   currentAmmo: number
+  mode: 'finite' | 'infinite'
   safetyBackup: string
   inspection: SoloInspection
 }> {
@@ -407,6 +409,7 @@ export function setSoloWeaponAmmo(
     body: JSON.stringify({
       itemId,
       ammo,
+      mode,
       expectedProfileToken,
       confirm: 'SET SOLO WEAPON AMMO',
     }),

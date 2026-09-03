@@ -230,21 +230,26 @@ export function SoloWeaponAmmoEditor({
   weapons: SoloRangedWeapon[]
   disabled: boolean
   busy: boolean
-  onSave: (weapon: SoloRangedWeapon, ammo: number) => void
+  onSave: (weapon: SoloRangedWeapon, ammo: number, mode: 'finite' | 'infinite') => void
 }) {
   const [itemId, setItemId] = useState(weapons[0]?.itemId ?? 0)
   const weapon = weapons.find(item => item.itemId === itemId) ?? weapons[0]
   const [ammo, setAmmo] = useState(weapon?.currentAmmo ?? 0)
+  const [mode, setMode] = useState<'finite' | 'infinite'>(
+    (weapon?.currentAmmo ?? 0) >= 16_777_216 ? 'infinite' : 'finite',
+  )
 
   useEffect(() => {
     if (!weapon) {
       setItemId(0)
       setAmmo(0)
+      setMode('finite')
       return
     }
 
     if (itemId !== weapon.itemId) setItemId(weapon.itemId)
     setAmmo(weapon.currentAmmo)
+    setMode(weapon.currentAmmo >= 16_777_216 ? 'infinite' : 'finite')
   }, [itemId, weapon])
 
   return (
@@ -256,12 +261,16 @@ export function SoloWeaponAmmoEditor({
       <p className="mt-1 text-sm text-text-muted">
         Set the loaded ammo stored on one ranged weapon. The game must be fully closed; DST retains and verifies the save.
       </p>
+      <p className="mt-2 max-w-[75ch] text-xs text-text-dim">
+        Finite ammo decreases normally and is capped at 16,777,215, immediately below the point where 32-bit float spacing exceeds one.
+        Infinite ammo stores 2,000,000,000; at that magnitude subtracting one rounds back to the same value, so firing does not reduce it.
+      </p>
       {weapons.length === 0 ? (
         <div className="mt-4">
           <DataState state="empty" title="No ranged weapons with editable ammo found" />
         </div>
       ) : (
-        <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-[minmax(14rem,1fr)_minmax(9rem,.35fr)_auto] sm:items-end">
+        <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-[minmax(14rem,1fr)_minmax(11rem,.45fr)_minmax(9rem,.35fr)_auto] xl:items-end">
           <label className="text-sm font-medium text-text">
             Weapon
             <select
@@ -273,6 +282,7 @@ export function SoloWeaponAmmoEditor({
                 if (!next) return
                 setItemId(next.itemId)
                 setAmmo(next.currentAmmo)
+                setMode(next.currentAmmo >= 16_777_216 ? 'infinite' : 'finite')
               }}
             >
               {weapons.map(item => (
@@ -283,26 +293,44 @@ export function SoloWeaponAmmoEditor({
             </select>
           </label>
           <label className="text-sm font-medium text-text">
+            Ammo behavior
+            <select
+              className="input mt-1 min-h-11 w-full"
+              value={mode}
+              disabled={disabled || busy}
+              onChange={event => {
+                const nextMode = event.target.value as 'finite' | 'infinite'
+                setMode(nextMode)
+                if (nextMode === 'infinite') setAmmo(2_000_000_000)
+                else if (ammo > 16_777_215) setAmmo(16_777_215)
+              }}
+            >
+              <option value="finite">Finite amount</option>
+              <option value="infinite">Infinite ammo</option>
+            </select>
+          </label>
+          <label className="text-sm font-medium text-text">
             Loaded ammo
             <input
               type="number"
               min={0}
-              max={2_000_000_000}
+              max={mode === 'finite' ? 16_777_215 : 2_000_000_000}
               step={1}
               className="input mt-1 min-h-11 w-full"
               value={ammo}
-              disabled={disabled || busy}
+              disabled={disabled || busy || mode === 'infinite'}
               onChange={event => setAmmo(Number(event.target.value))}
             />
           </label>
           <button
             type="button"
             className="btn-primary min-h-11"
-            disabled={disabled || busy || !weapon || !Number.isSafeInteger(ammo) || ammo < 0 || ammo > 2_000_000_000}
-            onClick={() => weapon && onSave(weapon, ammo)}
+            disabled={disabled || busy || !weapon || !Number.isSafeInteger(ammo) || ammo < 0
+              || (mode === 'finite' ? ammo > 16_777_215 : ammo !== 2_000_000_000)}
+            onClick={() => weapon && onSave(weapon, ammo, mode)}
           >
             <Icon name={busy ? 'LoaderCircle' : 'Save'} size={14} className={busy ? 'animate-spin' : undefined} />
-            {busy ? 'Saving...' : 'Set ammo'}
+            {busy ? 'Saving...' : 'Apply ammo'}
           </button>
         </div>
       )}

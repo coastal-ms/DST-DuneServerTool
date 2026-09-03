@@ -295,11 +295,12 @@ Register-DuneRoute -Method PUT -Path '/api/solo/items/weapon-ammo' -LocalOnly -H
     try {
         $itemId = [long](Get-DuneSoloBodyField -Body $body -Name 'itemId' -Default 0)
         $ammo = [long](Get-DuneSoloBodyField -Body $body -Name 'ammo' -Default -1)
+        $mode = [string](Get-DuneSoloBodyField -Body $body -Name 'mode' -Default '')
         $confirm = [string](Get-DuneSoloBodyField -Body $body -Name 'confirm' -Default '')
         $expectedProfileToken = [string](Get-DuneSoloBodyField -Body $body -Name 'expectedProfileToken' -Default '')
         $result = Invoke-WithDuneLock -Name 'solo-profile-data' -Script {
             Assert-DuneSoloExpectedProfile -ExpectedProfileToken $expectedProfileToken
-            Set-DuneSoloWeaponAmmo -ItemId $itemId -Ammo $ammo -Confirm $confirm
+            Set-DuneSoloWeaponAmmo -ItemId $itemId -Ammo $ammo -Mode $mode -Confirm $confirm
         }
         Write-DuneJson -Response $res -Body $result
     } catch {

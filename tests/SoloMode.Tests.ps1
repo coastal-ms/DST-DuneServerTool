@@ -458,7 +458,7 @@ Describe 'Solo Mode write gates and settings backups' {
             }
 
         }
-        $result = Set-DuneSoloWeaponAmmo -ItemId 106 -Ammo 250 `
+        $result = Set-DuneSoloWeaponAmmo -ItemId 106 -Ammo 250 -Mode finite `
             -Confirm 'SET SOLO WEAPON AMMO'
 
         $result.ok | Should -BeTrue
@@ -467,8 +467,13 @@ Describe 'Solo Mode write gates and settings backups' {
             $Arguments.input -eq $layout.db -and
             $Arguments['item-id'] -eq 106 -and
             $Arguments.ammo -eq 250 -and
+            $Arguments.mode -eq 'finite' -and
             $Arguments['safety-backup'] -like '*pre-ammo*'
         }
+        {
+            Set-DuneSoloWeaponAmmo -ItemId 106 -Ammo 20000000 -Mode finite `
+                -Confirm 'SET SOLO WEAPON AMMO'
+        } | Should -Throw '*Finite ammo must be between*'
     }
 
     It 'builds a backup-safe backpack slot update while the game is closed' {
