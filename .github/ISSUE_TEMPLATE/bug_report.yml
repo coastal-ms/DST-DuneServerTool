@@ -88,7 +88,7 @@ body:
     attributes:
       label: Tool version
       description: Shown in the bottom-left of the web portal sidebar (status bar) and in the CLI menu header.
-      placeholder: "v15.0.0-phase2-test3"
+      placeholder: "v15.0.0-phase2-test4"
     validations:
       required: true
 
@@ -142,7 +142,7 @@ body:
         - Web portal — Maps — DD Atlas — wrong or missing POI / cave sector / layout data for a seed
         - Web portal — Solo Mode — connection / wrapper or schema validation / process lock
         - Web portal — Solo Mode — native and Engine settings (load / apply / retained INI backup)
-        - Web portal — Solo Mode — Current inventory browser / backpack slot capacity / ranged weapon ammo / Give Item / Vehicle Kit / Package / Cosmetics / backpack or built-storage delivery
+        - Web portal — Solo Mode — Current inventory browser / ranged weapon ammo / Give Item / Vehicle Kit / Package / Cosmetics / backpack or built-storage delivery
         - Web portal — Solo Mode — Import Base Blueprint / portable blueprint JSON (disabled in PTC)
         - Web portal — Solo Mode — Solari / Landsraad Scrip / Hajra Literjon fill
         - Web portal — Solo Mode — save backup / restore / single or multi-select delete / safety backup

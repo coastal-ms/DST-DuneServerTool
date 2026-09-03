@@ -413,26 +413,6 @@ export function setSoloWeaponAmmo(
   })
 }
 
-export function setSoloBackpackSlots(
-  slots: number,
-  expectedProfileToken: string,
-): Promise<{
-  ok: boolean
-  inventoryId: number
-  slots: number
-  safetyBackup: string
-  inspection: SoloInspection
-}> {
-  return api('/api/solo/inventory/backpack-slots', {
-    method: 'PUT',
-    body: JSON.stringify({
-      slots,
-      expectedProfileToken,
-      confirm: 'SET SOLO BACKPACK SLOTS',
-    }),
-  })
-}
-
 export function maxSoloAugmentAttributes(expectedProfileToken: string): Promise<{
   ok: boolean
   updated: number

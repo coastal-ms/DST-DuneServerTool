@@ -16,7 +16,7 @@
 ;                 -> NOT touched by install or uninstall (preserves user config)
 
 #define MyAppName        "Dune Server Tool"
-#define MyAppVersion "15.0.0-phase2-test3"
+#define MyAppVersion "15.0.0-phase2-test4"
 #define MyAppNumericVersion Copy(MyAppVersion, 1, Pos("-", MyAppVersion + "-") - 1) + ".0"
 #define MyAppPublisher   "Dune Awakening Self-Hosted Tool"
 #define MyAppURL         "https://github.com/coastal-ms/DST-DuneServerTool"
@@ -120,6 +120,21 @@ Source: "..\..\tools\preflight\*"; DestDir: "{app}\tools\preflight"; Flags: igno
 ; Mobile/remote app bridge daemon (loopback reverse-proxy)
 Source: "..\..\helper\bridge\*"; DestDir: "{app}\helper\bridge"; Flags: ignoreversion recursesubdirs
 
+[InstallDelete]
+; v15.0.0-phase2-test4: Modern upgrades update in place so scheduled tasks
+; survive. Clear only installer-managed directory trees before copying to
+; prevent removed scripts and hashed web assets from lingering.
+Type: filesandordirs; Name: "{app}\server"
+Type: filesandordirs; Name: "{app}\lib"
+Type: filesandordirs; Name: "{app}\data"
+Type: filesandordirs; Name: "{app}\webui\dist"
+Type: filesandordirs; Name: "{app}\resources\remote-scripts"
+Type: filesandordirs; Name: "{app}\tools\preflight"
+Type: filesandordirs; Name: "{app}\tools\solo"
+Type: filesandordirs; Name: "{app}\tools\platform"
+Type: filesandordirs; Name: "{app}\helper\bridge"
+Type: filesandordirs; Name: "{app}\assets"
+
 [Icons]
 ; Start Menu shortcut (always created)
 Name: "{group}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; IconFilename: "{app}\{#MyAppExeName}"; Comment: "Dune Awakening server management"; Flags: runminimized
@@ -164,8 +179,15 @@ Filename: "powershell.exe"; Parameters: "-NoProfile -ExecutionPolicy Bypass -Com
 ; autostart preference. Idempotent; never blocks install on failure.
 Filename: "powershell.exe"; Parameters: "-NoProfile -ExecutionPolicy Bypass -Command ""try {{ Get-ScheduledTask -TaskPath '\Dune Server\' -ErrorAction SilentlyContinue | Where-Object {{ $_.TaskName -like 'DuneServer-Autostart-*' }} | Unregister-ScheduledTask -Confirm:$false -ErrorAction SilentlyContinue }} catch {{}}"""; Flags: runhidden waituntilterminated; Check: ShouldClearLegacyAutostart
 
-; Install mobile/remote app bridge (loopback proxy + self-healing task)
-Filename: "powershell.exe"; Parameters: "-NoProfile -ExecutionPolicy Bypass -File ""{app}\helper\bridge\Install-Bridge.ps1"""; Flags: runhidden waituntilterminated
+; Install or replace the mobile/remote bridge only when its shipped payload
+; changed. An unchanged bridge process and scheduled task survive modern
+; in-place upgrades.
+Filename: "powershell.exe"; Parameters: "-NoProfile -ExecutionPolicy Bypass -File ""{app}\helper\bridge\Install-Bridge.ps1"""; Flags: runhidden waituntilterminated; Check: ShouldInstallBridge
+
+; The backend executable is replaced on every upgrade, so an existing service
+; task must start its fresh process every time even though its registration and
+; stored credentials remain untouched.
+Filename: "powershell.exe"; Parameters: "-NoProfile -ExecutionPolicy Bypass -Command ""Get-ScheduledTask -TaskPath '\Dune Server\' -ErrorAction SilentlyContinue | Where-Object {{ $_.TaskName -like 'DuneServer-Service-*' }} | Start-ScheduledTask -ErrorAction SilentlyContinue"""; Flags: runhidden waituntilterminated
 
 ; Launch the shell immediately after install. It starts DuneServer.exe with
 ; --reattach when needed, so the user sees startup progress while the backend
@@ -219,6 +241,8 @@ var
   UserPage:        TInputQueryWizardPage;
   PortModePage:    TInputOptionWizardPage;
   SkipConfigPages: Boolean;
+  PriorBridgeHash: string;
+  PriorBridgeInstallerHash: string;
 
 // ---------- v12.0.0 one-time migration helpers ----------
 
@@ -250,6 +274,14 @@ begin
   dotPos := Pos('.', ver);
   if dotPos > 0 then head := Copy(ver, 1, dotPos - 1) else head := ver;
   Result := StrToIntDef(head, -1);
+end;
+
+// v15+ uses a stable install layout and stable scheduled-task actions. Update
+// installer-managed files in place so upgrades restart the backend without
+// unregistering and recreating those tasks.
+function ShouldUseInPlaceUpgrade(): Boolean;
+begin
+  Result := VersionMajor(GetPriorInstalledVersion()) >= 15;
 end;
 
 // True when upgrading from a build older than 12.0.0 (and so we should run
@@ -626,6 +658,53 @@ end;
 function PrepareToInstall(var NeedsRestart: Boolean): String;
 begin
   NeedsRestart := False;
-  UninstallPreviousVersion();
+
+  PriorBridgeHash := '';
+  PriorBridgeInstallerHash := '';
+  if FileExists(ExpandConstant('{app}\helper\bridge\DstHelperBridge.ps1')) then
+    PriorBridgeHash :=
+      GetSHA256OfFile(ExpandConstant('{app}\helper\bridge\DstHelperBridge.ps1'));
+  if FileExists(ExpandConstant('{app}\helper\bridge\Install-Bridge.ps1')) then
+    PriorBridgeInstallerHash :=
+      GetSHA256OfFile(ExpandConstant('{app}\helper\bridge\Install-Bridge.ps1'));
+
+  if ShouldUseInPlaceUpgrade() then
+  begin
+    StopRunningDuneServer();
+    Sleep(500);
+    Log('Using v15+ in-place upgrade; scheduled tasks remain registered.');
+  end
+  else
+  begin
+    PriorBridgeHash := '';
+    PriorBridgeInstallerHash := '';
+    UninstallPreviousVersion();
+  end;
+
   Result := '';
+end;
+
+function ShouldInstallBridge(): Boolean;
+var
+  newBridgePath, newInstallerPath, newBridgeHash, newInstallerHash: string;
+begin
+  newBridgePath := ExpandConstant('{app}\helper\bridge\DstHelperBridge.ps1');
+  newInstallerPath := ExpandConstant('{app}\helper\bridge\Install-Bridge.ps1');
+  if (PriorBridgeHash = '') or
+     (PriorBridgeInstallerHash = '') or
+     (not FileExists(newBridgePath)) or
+     (not FileExists(newInstallerPath)) then
+  begin
+    Result := True;
+    Exit;
+  end;
+
+  newBridgeHash := GetSHA256OfFile(newBridgePath);
+  newInstallerHash := GetSHA256OfFile(newInstallerPath);
+  Result := (PriorBridgeHash <> newBridgeHash) or
+            (PriorBridgeInstallerHash <> newInstallerHash);
+  if Result then
+    Log('Bridge payload changed; reinstalling and restarting bridge task.')
+  else
+    Log('Bridge payload unchanged; preserving running bridge and scheduled task.');
 end;

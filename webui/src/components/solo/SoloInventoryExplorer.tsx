@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import type { SharedInventoryGroup } from '../../api/gameplay'
 import type { SoloInventoryItemGroup, SoloRangedWeapon } from '../../api/solo'
-import type { SoloInventoryDestination } from '../../api/solo'
 import { Icon } from '../Icon'
 import { InventorySlot } from '../inventory/InventorySlot'
 import { DataState } from '../platform/DataState'
@@ -310,66 +309,6 @@ export function SoloWeaponAmmoEditor({
           >
             <Icon name={busy ? 'LoaderCircle' : 'Save'} size={14} className={busy ? 'animate-spin' : undefined} />
             {busy ? 'Saving...' : 'Set ammo'}
-          </button>
-        </div>
-      )}
-    </section>
-  )
-}
-
-export function SoloBackpackSlotsEditor({
-  backpack,
-  disabled,
-  busy,
-  onSave,
-}: {
-  backpack?: SoloInventoryDestination
-  disabled: boolean
-  busy: boolean
-  onSave: (slots: number) => void
-}) {
-  const [slots, setSlots] = useState(backpack?.maxItemCount ?? 60)
-
-  useEffect(() => {
-    setSlots(backpack?.maxItemCount ?? 60)
-  }, [backpack?.id, backpack?.maxItemCount])
-
-  return (
-    <section className="card p-5" aria-labelledby="solo-backpack-slots-title">
-      <h2 id="solo-backpack-slots-title" className="flex items-center gap-2 font-semibold">
-        <Icon name="Backpack" size={16} />
-        Backpack slot capacity
-      </h2>
-      <p className="mt-1 text-sm text-text-muted">
-        Change the backpack item-slot limit independently from inventory volume. The game must be fully closed; DST retains and verifies the save.
-      </p>
-      {!backpack ? (
-        <div className="mt-4">
-          <DataState state="empty" title="No Solo backpack inventory found" />
-        </div>
-      ) : (
-        <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-end">
-          <label className="w-full text-sm font-medium text-text sm:max-w-xs">
-            Maximum backpack slots
-            <input
-              type="number"
-              min={1}
-              max={100_000}
-              step={1}
-              className="input mt-1 min-h-11 w-full"
-              value={slots}
-              disabled={disabled || busy}
-              onChange={event => setSlots(Number(event.target.value))}
-            />
-          </label>
-          <button
-            type="button"
-            className="btn-primary min-h-11"
-            disabled={disabled || busy || !Number.isSafeInteger(slots) || slots < 1 || slots > 100_000}
-            onClick={() => onSave(slots)}
-          >
-            <Icon name={busy ? 'LoaderCircle' : 'Save'} size={14} className={busy ? 'animate-spin' : undefined} />
-            {busy ? 'Saving...' : 'Set backpack slots'}
           </button>
         </div>
       )}

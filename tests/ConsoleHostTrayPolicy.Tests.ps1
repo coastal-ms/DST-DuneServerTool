@@ -46,4 +46,15 @@ Describe 'DuneShell close-to-tray policy' {
         Test-Path (Get-DuneKeepAliveStateFile) | Should -BeFalse
         Test-Path (Get-DuneShellCloseToTrayStateFile) | Should -BeFalse
     }
+
+    It 'uses known startup task state without querying Task Scheduler again' {
+        function global:Test-DuneAutostartEnabled { throw 'unexpected autostart query' }
+        function global:Test-DuneServiceEnabled { throw 'unexpected service query' }
+
+        Update-DuneKeepAliveFlag -UseKnownState -AutostartEnabled $false -ServiceEnabled $true |
+            Should -BeTrue
+
+        Test-Path (Get-DuneKeepAliveStateFile) | Should -BeTrue
+        Test-Path (Get-DuneShellCloseToTrayStateFile) | Should -BeFalse
+    }
 }

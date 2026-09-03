@@ -13,6 +13,23 @@ here cover everything those tags shipped.
 
 ## [Unreleased]
 
+## [15.0.0-phase2-test4] - 2026-09-03
+
+### Changed
+
+- Updated v15 upgrades in place so the backend restarts while unchanged
+  scheduled tasks remain registered. The mobile bridge is reinstalled and
+  restarted only when its shipped payload changes.
+- Reduced measured backend cold-start time by resolving scheduled-task modes
+  once, reusing that result for keep-alive state, and taking a health-only fast
+  path when the mobile bridge is already responding.
+
+### Fixed
+
+- Removed the ineffective Solo backpack-slot editor. Field testing confirmed
+  that PTC recomputes the saved slot count from progression and rewrites direct
+  database changes back to 60.
+
 ## [15.0.0-phase2-test3] - 2026-09-03
 
 ### Added

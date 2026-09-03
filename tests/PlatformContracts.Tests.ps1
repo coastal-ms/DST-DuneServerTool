@@ -170,7 +170,7 @@ Describe 'Complete route classification' {
     It 'classifies the exact registered HTTP and WebSocket inventory' {
         $records = @(Get-PlatformRouteRecords)
         $manifest = Get-DuneRoutePolicyManifest
-        $records.Count | Should -Be 362
+        $records.Count | Should -Be 361
         $sources = @($records.SourceFile | Sort-Object -Unique)
         @($manifest.groups.source | Sort-Object) | Should -Be $sources
 
@@ -321,7 +321,7 @@ $result = @{
         $LASTEXITCODE | Should -Be 0 -Because ($output -join [Environment]::NewLine)
         $resultLine = @($output | Where-Object { [string]$_ -like 'ROUTE_RESULT:*' })[-1]
         $result = ([string]$resultLine).Substring('ROUTE_RESULT:'.Length) | ConvertFrom-Json
-        $result.total | Should -Be 362
+        $result.total | Should -Be 361
         $result.unclassified | Should -Be 0
         $result.incompatible | Should -Be 0
         $result.podsCleanup | Should -Be 1

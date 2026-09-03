@@ -99,11 +99,6 @@ internal static partial class Program
                     ParseItemId(RequireValue(options, "item-id")),
                     ParseBalance(RequireValue(options, "ammo"), "Ammo"),
                     Require(options, "catalog")),
-                "set-backpack-slots" => SetBackpackSlots(
-                    Require(options, "input"),
-                    Require(options, "safety-backup"),
-                    ParseBalance(RequireValue(options, "slots"), "Backpack slots"),
-                    Require(options, "catalog")),
                 "max-augment-attributes" => MaxAugmentAttributes(
                     Require(options, "input"),
                     Require(options, "safety-backup")),
@@ -644,140 +639,6 @@ internal static partial class Program
                 }
             }
         }
-
-    private static object SetBackpackSlots(
-        string input,
-        string safetyBackup,
-        long slots,
-        string catalogPath,
-        bool requireGameClosed = true)
-    {
-        if (slots is < 1 or > 100_000)
-        {
-            throw new InvalidDataException("Backpack slots must be between 1 and 100000.");
-        }
-        var catalog = ReadCatalog(catalogPath);
-        var originalBytes = ReadStable(input);
-        EnsureWritableInspection(InspectBytes(originalBytes, input, catalog));
-        var wrapped = Unwrap(originalBytes);
-        var root = Path.Combine(Path.GetTempPath(), $"dune-solo-slots-{Guid.NewGuid():N}");
-        Directory.CreateDirectory(root);
-        long inventoryId = 0;
-        try
-        {
-            var sqlitePath = Path.Combine(root, "slots.sqlite");
-            File.WriteAllBytes(sqlitePath, wrapped.SqliteBytes);
-            var connectionString = new SqliteConnectionStringBuilder
-            {
-                DataSource = sqlitePath,
-                Mode = SqliteOpenMode.ReadWrite,
-                Pooling = false
-            }.ToString();
-            using (var connection = new SqliteConnection(connectionString))
-            {
-                connection.Open();
-                ExecuteNonQuery(connection, "PRAGMA foreign_keys = ON;");
-                ExecuteNonQuery(connection, "BEGIN IMMEDIATE;");
-                try
-                {
-                    var pawnId = ScalarLong(
-                        connection,
-                        "SELECT player_pawn_id FROM player_state LIMIT 1;");
-                    using var lookup = connection.CreateCommand();
-                    lookup.CommandText = """
-                        SELECT id
-                        FROM inventories
-                        WHERE actor_id = $pawn
-                          AND inventory_type = 0
-                          AND COALESCE(max_item_count, 0) > 0
-                        ORDER BY id
-                        LIMIT 1;
-                        """;
-                    lookup.Parameters.AddWithValue("$pawn", pawnId);
-                    var found = lookup.ExecuteScalar();
-                    if (found is null || found is DBNull)
-                    {
-                        throw new InvalidDataException(
-                            "The Solo character backpack inventory was not found.");
-                    }
-                    inventoryId = Convert.ToInt64(found);
-                    var affected = ExecuteNonQuery(
-                        connection,
-                        """
-                        UPDATE inventories
-                        SET max_item_count = $slots
-                        WHERE id = $inventory
-                          AND actor_id = $pawn
-                          AND inventory_type = 0;
-                        """,
-                        ("$slots", slots),
-                        ("$inventory", inventoryId),
-                        ("$pawn", pawnId));
-                    if (affected != 1)
-                    {
-                        throw new InvalidDataException(
-                            "The Solo character backpack inventory was not updated.");
-                    }
-                    var verified = ScalarLong(
-                        connection,
-                        "SELECT max_item_count FROM inventories WHERE id = $inventory;",
-                        ("$inventory", inventoryId));
-                    if (verified != slots)
-                    {
-                        throw new InvalidDataException("Backpack slot verification failed.");
-                    }
-                    var integrity = ScalarString(connection, "PRAGMA integrity_check;");
-                    var foreignKeys = ScalarLong(
-                        connection,
-                        "SELECT COUNT(*) FROM pragma_foreign_key_check;");
-                    if (!string.Equals(integrity, "ok", StringComparison.OrdinalIgnoreCase)
-                        || foreignKeys != 0)
-                    {
-                        throw new InvalidDataException(
-                            $"Backpack slot validation failed (integrity={integrity}, foreignKeys={foreignKeys}).");
-                    }
-                    ExecuteNonQuery(connection, "COMMIT;");
-                }
-                catch
-                {
-                    try { ExecuteNonQuery(connection, "ROLLBACK;"); } catch { }
-                    throw;
-                }
-            }
-
-            var mutated = Path.Combine(root, "game.db");
-            WrapSqlite(sqlitePath, mutated);
-            EnsureWritableInspection(InspectPath(mutated, catalogPath));
-            Restore(
-                mutated,
-                input,
-                safetyBackup,
-                expectedTargetBytes: originalBytes,
-                requireGameClosed);
-            return new
-            {
-                ok = true,
-                inventoryId,
-                slots,
-                safetyBackup,
-                inspection = InspectPath(input, catalogPath)
-            };
-        }
-        finally
-        {
-            try
-            {
-                if (Directory.Exists(root))
-                {
-                    Directory.Delete(root, recursive: true);
-                }
-            }
-            catch
-            {
-                // A stale temp directory is safer than hiding the slot result.
-            }
-        }
-    }
 
     private static object FillWaterContainer(
         string input,
@@ -1654,16 +1515,6 @@ internal static partial class Program
                 throw new InvalidOperationException(
                     "Infinite weapon ammo mode did not retain the verified non-decrementing value.");
             }
-            var slotSafety = Path.Combine(root, "safety", "before-backpack-slots.db");
-            SetBackpackSlots(target, slotSafety, 120, catalogPath, requireGameClosed: false);
-            var slotInspection = InspectPath(target, catalogPath);
-            if (!File.Exists(slotSafety)
-                || slotInspection.Inventories.Single(value =>
-                    value.Kind == "backpack").MaxItemCount != 120)
-            {
-                throw new InvalidOperationException(
-                    "Offline backpack slot update did not retain, write, and verify the exact inventory.");
-            }
             File.WriteAllText(
                 planPath,
                 """
@@ -2244,7 +2095,6 @@ internal static partial class Program
                     "custom-storage-labels-with-generic-fallback",
                     "solo-inventory-grouped-read-model",
                     "offline-weapon-ammo-update-with-safety-backup",
-                    "offline-backpack-slot-update-with-safety-backup",
                     "retained-backup",
                     "atomic-restore-with-safety-backup",
                     "unsupported-wrapper-rejected",
