@@ -13,6 +13,11 @@ here cover everything those tags shipped.
 
 ## [Unreleased]
 
+### Added
+
+- Added storage-box renaming from Storage administration and the Shared
+  Inventory Explorer for a selected or directly scoped container.
+
 ### Fixed
 
 - Fixed Shared Inventory Explorer results collapsing into one blank item and

@@ -3,6 +3,7 @@ import { ApiError } from '../../api/client'
 import {
   getSharedInventory,
   getSharedInventoryOccurrences,
+  renameStorage,
   type InventoryEntityType,
   type SharedInventoryGroup,
   type SharedInventoryItem,
@@ -181,11 +182,18 @@ export function SharedInventoryExplorer({
   const [loading, setLoading] = useState(true)
   const [loadingMore, setLoadingMore] = useState(false)
   const [error, setError] = useState('')
+  const [renameOpen, setRenameOpen] = useState(false)
+  const [renameDraft, setRenameDraft] = useState('')
+  const [renameLoading, setRenameLoading] = useState(false)
+  const [renameError, setRenameError] = useState('')
+  const [renameMessage, setRenameMessage] = useState('')
   const [loadedIdentity, setLoadedIdentity] = useState('')
   const requestVersion = useRef(0)
+  const renameRequestVersion = useRef(0)
   const capabilities = usePlatformCapabilities()
   const capabilityReady = capabilities.data !== null
   const canReadInventory = capabilities.hasCapability('inventory.read')
+  const canManageBases = capabilities.hasCapability('base.manage')
   const requestIdentity = JSON.stringify({
     query: query.trim(), entityTypes, scopeType, scopeId, playerId, locationType, locationId, sort,
     source: demo ? 'demo' : 'live', scopeError, playerError, locationError,
@@ -198,6 +206,12 @@ export function SharedInventoryExplorer({
   const locationOrdinals = useMemo(() => duplicateOrdinals(
     current?.data.locations ?? [], location => location.label, location => `${location.type}:${location.id}`,
   ), [current])
+  const renameActorId = locationType === 'storage' && locationId
+    ? locationId
+    : scopeType === 'storage' && scopeId ? scopeId : undefined
+  const renameTarget = renameActorId
+    ? current?.data.locations.find(location => location.type === 'storage' && location.id === renameActorId)
+    : undefined
 
   const load = useCallback(async (cursor?: string, append = false) => {
     if (!canReadInventory || unavailableReason || scopeError || playerError || locationError) return
@@ -251,9 +265,18 @@ export function SharedInventoryExplorer({
     setLoadingMore(false)
   }, [requestIdentity])
   useEffect(() => {
+    renameRequestVersion.current += 1
+    setRenameOpen(false)
+    setRenameError('')
+    setRenameMessage('')
+  }, [requestIdentity])
+  useEffect(() => {
     if (capabilityReady && canReadInventory && !unavailableReason && !scopeError && !playerError && !locationError) void load()
   }, [capabilityReady, canReadInventory, load, locationError, playerError, scopeError, unavailableReason])
-  useEffect(() => () => { requestVersion.current += 1 }, [])
+  useEffect(() => () => {
+    requestVersion.current += 1
+    renameRequestVersion.current += 1
+  }, [])
 
   if (unavailableReason) {
     return <WorkspaceSection id="shared-inventory" title={title} description={description}><DataState state="unavailable" title="Inventory scope not yet available" message={unavailableReason} /></WorkspaceSection>
@@ -276,8 +299,9 @@ export function SharedInventoryExplorer({
   return (
     <WorkspaceSection id="shared-inventory" title={title} description={description}>
       <div className="mb-3 flex flex-wrap items-center gap-2">
-        <span className="pill border-info/40 text-info">Read-only</span>
+        <span className="pill border-info/40 text-info">Inventory contents read-only</span>
         {entityTypes.map(type => <span key={type} className="pill border-border text-text-muted">{type === 'player' ? 'Player backpacks' : 'Storage boxes'}</span>)}
+        {canManageBases && entityTypes.includes('storage') && <span className="pill border-accent/40 text-accent-bright">Box names editable</span>}
         {current && <FreshnessBadge state={current.freshness.state} observedAt={current.freshness.observedAt} label={current.data.mode === 'demo' ? 'Demo inventory' : 'Live database'} />}
       </div>
       {scopeType && scopeId && <div className="mb-3 rounded-lg border border-info/35 bg-info/10 px-4 py-3 text-sm text-text" role="status">Scoped to {entityTypeLabel(scopeType).toLowerCase()} actor {scopeId}.</div>}
@@ -340,7 +364,75 @@ export function SharedInventoryExplorer({
         </label>
         <button type="submit" className="btn-primary min-h-11" disabled={loading || loadingMore}><Icon name="Search" size={15} />Search</button>
         <button type="button" className="btn-secondary min-h-11" disabled={loading || loadingMore} onClick={() => { void load() }}><Icon name="RefreshCw" size={14} />Refresh</button>
+        {canManageBases && current?.data.mode === 'live' && renameTarget && (
+          <button
+            type="button"
+            className="btn-secondary min-h-11"
+            disabled={loading || loadingMore || renameLoading}
+            onClick={() => {
+              setRenameDraft(renameTarget.label)
+              setRenameError('')
+              setRenameMessage('')
+              setRenameOpen(true)
+            }}
+          >
+            <Icon name="PenLine" size={14} />Rename box
+          </button>
+        )}
       </form>
+      {renameOpen && renameTarget && (
+        <form
+          aria-label="Rename storage box"
+          className="mb-4 flex flex-col gap-3 rounded-lg border border-accent/35 bg-accent/10 p-4 sm:flex-row sm:items-end"
+          onSubmit={async event => {
+            event.preventDefault()
+            const name = renameDraft.trim()
+            if (!name) {
+              setRenameError('Enter a name for this storage box.')
+              return
+            }
+            if (name.length > 64) {
+              setRenameError('Storage box names must be 64 characters or fewer.')
+              return
+            }
+            const renameVersion = ++renameRequestVersion.current
+            setRenameLoading(true)
+            setRenameError('')
+            try {
+              const result = await renameStorage(renameTarget.id, name)
+              if (renameVersion !== renameRequestVersion.current) return
+              setRenameOpen(false)
+              setRenameMessage(result.message || `Renamed storage box to ${name}.`)
+              await load()
+            } catch (reason) {
+              if (renameVersion !== renameRequestVersion.current) return
+              setRenameError(errorMessage(reason))
+            } finally {
+              if (renameVersion === renameRequestVersion.current) setRenameLoading(false)
+            }
+          }}
+        >
+          <label className="min-w-0 flex-1 text-sm font-medium text-text">
+            Storage box name
+            <input
+              autoFocus
+              className="input mt-1 min-h-11 w-full"
+              value={renameDraft}
+              maxLength={64}
+              onChange={event => setRenameDraft(event.target.value)}
+            />
+          </label>
+          <div className="flex gap-2">
+            <button type="submit" className="btn-primary min-h-11" disabled={renameLoading}>
+              <Icon name={renameLoading ? 'Loader2' : 'Check'} size={14} className={renameLoading ? 'animate-spin' : undefined} />
+              {renameLoading ? 'Saving...' : 'Save name'}
+            </button>
+            <button type="button" className="btn-secondary min-h-11" disabled={renameLoading} onClick={() => setRenameOpen(false)}>Cancel</button>
+          </div>
+          {renameError && <p className="text-sm text-danger" role="alert">{renameError}</p>}
+        </form>
+      )}
+      {renameMessage && <div className="mb-4 rounded-lg border border-success/35 bg-success/10 px-4 py-3 text-sm text-text" role="status">{renameMessage}</div>}
 
       {locationType && current && !validSelectedLocation && <DataState state="error" title="Location does not match this player" message="Choose a location available to the selected player." />}
       {current?.data.mode === 'demo' && <DataState state="fresh" title="Showing bundled demo inventory" message="Demo mode was explicitly requested; these grouped items are examples and not live server contents." />}

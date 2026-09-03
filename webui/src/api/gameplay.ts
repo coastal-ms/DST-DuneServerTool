@@ -1292,6 +1292,12 @@ export function setStorageItemStack(itemId: number, stackSize: number) {
   })
 }
 
+export function renameStorage(containerId: number, name: string) {
+  return api<WriteResult>('/api/gameplay/storage/rename', {
+    method: 'POST', body: JSON.stringify({ container_id: containerId, name }),
+  })
+}
+
 // Trigger a client-side download of an exported blueprint/base JSON file.
 export function downloadBlueprintFile(blueprint: BlueprintFile, filename: string) {
   const blob = new Blob([JSON.stringify(blueprint, null, 2)], { type: 'application/json' })

@@ -182,6 +182,26 @@ Register-DuneRoute -Method GET -Path '/api/gameplay/bases/export' -Handler {
 # only become visible to other players after a server zone restart.
 # ---------------------------------------------------------------------------
 
+# POST /api/gameplay/storage/rename  { container_id, name }
+Register-DuneRoute -Method POST -Path '/api/gameplay/storage/rename' -Handler {
+    param($req, $res, $routeParams, $body)
+    try {
+        $cid = Get-DuneBodyInt -Body $body -Name 'container_id'
+        $name = [string](Get-DuneBodyValue -Body $body -Name 'name')
+        if ($null -eq $cid -or $cid -le 0) { Write-DuneError -Response $res -Status 400 -Message 'container_id is required.'; return }
+        $name = $name.Trim()
+        if (-not $name) { Write-DuneError -Response $res -Status 400 -Message 'name is required.'; return }
+        if ($name.Length -gt 64) { Write-DuneError -Response $res -Status 400 -Message 'name must be 64 characters or fewer.'; return }
+        if ($name -match '[\x00-\x1F\x7F]') { Write-DuneError -Response $res -Status 400 -Message 'name cannot contain control characters.'; return }
+        if ($name.StartsWith('##') -or $name -eq 'None') { Write-DuneError -Response $res -Status 400 -Message 'name is reserved by the game.'; return }
+        Invoke-DunePlayerWriteRoute -Response $res -Action {
+            param($ip) Invoke-DuneStorageRename -Ip $ip -ContainerId $cid -Name $name
+        }
+    } catch {
+        Write-DuneError -Response $res -Status 500 -Message "Storage rename failed: $($_.Exception.Message)"
+    }
+}
+
 # POST /api/gameplay/storage/give-item  { container_id, template, qty, quality }
 Register-DuneRoute -Method POST -Path '/api/gameplay/storage/give-item' -Handler {
     param($req, $res, $routeParams, $body)

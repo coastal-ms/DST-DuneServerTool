@@ -14,6 +14,7 @@ const capabilityState = vi.hoisted(() => ({
 }))
 const inventoryApi = vi.hoisted(() => vi.fn())
 const occurrenceApi = vi.hoisted(() => vi.fn())
+const renameStorageApi = vi.hoisted(() => vi.fn())
 const itemIconResolver = vi.hoisted(() => vi.fn())
 
 vi.mock('../src/hooks/usePlatformCapabilities', () => ({
@@ -22,12 +23,17 @@ vi.mock('../src/hooks/usePlatformCapabilities', () => ({
     loading: capabilityState.loading,
     error: capabilityState.error,
     refresh: capabilityState.refresh,
-    hasCapability: (id: string) => id === 'inventory.read' && capabilityState.enabled,
+    hasCapability: (id: string) => capabilityState.enabled && (id === 'inventory.read' || id === 'base.manage'),
   }),
 }))
 vi.mock('../src/api/gameplay', async importOriginal => {
   const actual = await importOriginal<typeof import('../src/api/gameplay')>()
-  return { ...actual, getSharedInventory: inventoryApi, getSharedInventoryOccurrences: occurrenceApi }
+  return {
+    ...actual,
+    getSharedInventory: inventoryApi,
+    getSharedInventoryOccurrences: occurrenceApi,
+    renameStorage: renameStorageApi,
+  }
 })
 vi.mock('../src/components/inventory/InventoryItemIcon', async importOriginal => {
   const actual = await importOriginal<typeof import('../src/components/inventory/InventoryItemIcon')>()
@@ -110,6 +116,7 @@ beforeEach(() => {
   inventoryApi.mockResolvedValue(fixture)
   occurrenceApi.mockResolvedValue(occurrenceFixture)
   itemIconResolver.mockResolvedValue('https://cdn-hosted.gaming.tools/dune/images/dune/items/copper.webp')
+  renameStorageApi.mockResolvedValue({ ok: true, message: "Renamed storage container to 'Ore Vault'." })
 })
 
 afterEach(() => {
@@ -117,6 +124,7 @@ afterEach(() => {
   inventoryApi.mockReset()
   occurrenceApi.mockReset()
   itemIconResolver.mockReset()
+  renameStorageApi.mockReset()
   window.history.replaceState(null, '', '/')
 })
 
@@ -173,6 +181,31 @@ describe('Shared Inventory Explorer grouped catalog', () => {
     await screen.findByText('Copper')
     await user.selectOptions(screen.getByRole('combobox', { name: 'Sort by' }), 'quantity-desc')
     expect(window.location.search).toContain('sort=quantity-desc')
+  })
+
+  it('renames the selected storage box and refreshes its live label', async () => {
+    const user = userEvent.setup()
+    window.history.replaceState(null, '', '/economy?view=inventory&scope_type=storage&scope_id=50001')
+    inventoryApi
+      .mockResolvedValueOnce(fixture)
+      .mockResolvedValue({
+        ...fixture,
+        data: {
+          ...fixture.data,
+          locations: [{ ...locations[1], label: 'Ore Vault' }],
+        },
+      })
+
+    renderExplorer()
+    await user.click(await screen.findByRole('button', { name: 'Rename box' }))
+    const input = screen.getByRole('textbox', { name: 'Storage box name' })
+    await user.clear(input)
+    await user.type(input, 'Ore Vault')
+    await user.click(screen.getByRole('button', { name: 'Save name' }))
+
+    await waitFor(() => expect(renameStorageApi).toHaveBeenCalledWith(50001, 'Ore Vault'))
+    expect(await screen.findByRole('option', { name: 'Ore Vault - Coastal' })).toBeInTheDocument()
+    expect(screen.getByText("Renamed storage container to 'Ore Vault'.")).toBeInTheDocument()
   })
 
   it('fails closed for a malformed player deep link', async () => {

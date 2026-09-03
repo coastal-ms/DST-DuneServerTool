@@ -179,6 +179,51 @@ function Get-DuneStorageItemsDemo {
     }
 }
 
+function Invoke-DuneStorageRename {
+    param([string]$Ip, [long]$ContainerId, [string]$Name)
+    $trimmedName = $Name.Trim()
+    if ($ContainerId -le 0) { return @{ ok = $false; error = 'container_id is required.' } }
+    if (-not $trimmedName) { return @{ ok = $false; error = 'name is required.' } }
+    if ($trimmedName.Length -gt 64) { return @{ ok = $false; error = 'name must be 64 characters or fewer.' } }
+    if ($trimmedName -match '[\x00-\x1F\x7F]') { return @{ ok = $false; error = 'name cannot contain control characters.' } }
+    if ($trimmedName.StartsWith('##') -or $trimmedName -eq 'None') {
+        return @{ ok = $false; error = 'name is reserved by the game.' }
+    }
+
+    $safeName = ConvertTo-DuneSqlString $trimmedName
+    $sql = @"
+WITH target AS (
+    SELECT p.id
+    FROM dune.placeables p
+    WHERE p.id = $ContainerId::bigint
+      AND p.is_hologram = false
+      AND p.owner_entity_id IS NOT NULL
+      AND p.owner_entity_id <> 0
+      AND EXISTS (
+          SELECT 1
+          FROM dune.inventories inv
+          WHERE inv.actor_id = p.id AND inv.inventory_type = 4
+      )
+),
+updated AS (
+    UPDATE dune.permission_actor pa
+    SET actor_name = '$safeName'
+    FROM target
+    WHERE pa.actor_id = target.id
+    RETURNING pa.actor_id
+)
+SELECT COUNT(*)::text AS updated_count FROM updated;
+"@
+    $res = Invoke-DuneSqlQuery -Ip $Ip -Sql $sql -ReadOnly $false -MaxRows 1 -TimeoutSec 30
+    if (-not $res.ok) { return @{ ok = $false; error = $res.error } }
+    $rows = @(ConvertTo-DuneRowMaps -Result $res)
+    $updated = if ($rows.Count -gt 0) { ConvertTo-DuneInt $rows[0]['updated_count'] } else { 0 }
+    if ($updated -eq 0) {
+        return @{ ok = $false; error = "Storage container $ContainerId was not found or has no permission name row." }
+    }
+    return @{ ok = $true; message = "Renamed storage container to '$trimmedName'."; containerId = $ContainerId; name = $trimmedName }
+}
+
 # ----------------------------------------------------------------------------
 # BLUEPRINTS — list (id, owner, item id, pieces, placeables, name). Read-only.
 # ----------------------------------------------------------------------------
