@@ -456,6 +456,7 @@ Describe 'Solo Mode write gates and settings backups' {
                 currentAmmo = 250
                 safetyBackup = 'test'
             }
+
         }
         $result = Set-DuneSoloWeaponAmmo -ItemId 106 -Ammo 250 `
             -Confirm 'SET SOLO WEAPON AMMO'
@@ -467,6 +468,30 @@ Describe 'Solo Mode write gates and settings backups' {
             $Arguments['item-id'] -eq 106 -and
             $Arguments.ammo -eq 250 -and
             $Arguments['safety-backup'] -like '*pre-ammo*'
+        }
+    }
+
+    It 'builds a backup-safe backpack slot update while the game is closed' {
+        $layout = New-TestSoloLayout
+        Save-DuneSoloState -DataRoot $layout.root -DbPath $layout.db | Out-Null
+        Mock Get-DuneSoloGameProcesses { @() }
+        Mock Get-DuneSoloGameplayCatalogPath { Join-Path $script:SoloTestRoot 'catalog.json' }
+        Mock Invoke-DuneSoloHelper {
+            @{
+                ok = $true
+                slots = 120
+                safetyBackup = 'test'
+            }
+        }
+        $result = Set-DuneSoloBackpackSlots -Slots 120 `
+            -Confirm 'SET SOLO BACKPACK SLOTS'
+
+        $result.ok | Should -BeTrue
+        Assert-MockCalled Invoke-DuneSoloHelper -Times 1 -ParameterFilter {
+            $Command -eq 'set-backpack-slots' -and
+            $Arguments.input -eq $layout.db -and
+            $Arguments.slots -eq 120 -and
+            $Arguments['safety-backup'] -like '*pre-slots*'
         }
     }
 
@@ -553,6 +578,7 @@ Describe 'Solo Mode route security metadata' {
             '/api/solo/currencies',
             '/api/solo/fillables/water',
             '/api/solo/items/weapon-ammo',
+            '/api/solo/inventory/backpack-slots',
             '/api/solo/progression/specializations/max',
             '/api/solo/progression/find-the-fremen',
             '/api/solo/progression/npe/complete',

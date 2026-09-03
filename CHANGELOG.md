@@ -23,6 +23,8 @@ here cover everything those tags shipped.
   built storage. Large inventories load in bounded groups of 100 item types.
 - Added backup-safe editing of the loaded ammo stored on an exact Solo ranged
   weapon, with game-closed gating and post-write verification.
+- Added backup-safe editing of the Solo character backpack slot capacity,
+  independent from inventory volume.
 - Labeled the early Vehicles workspace as Demo Data until its live fleet
   presentation is complete.
 

@@ -308,6 +308,23 @@ Register-DuneRoute -Method PUT -Path '/api/solo/items/weapon-ammo' -LocalOnly -H
     }
 }
 
+Register-DuneRoute -Method PUT -Path '/api/solo/inventory/backpack-slots' -LocalOnly -Handler {
+    param($req, $res, $routeParams, $body)
+    try {
+        $slots = [long](Get-DuneSoloBodyField -Body $body -Name 'slots' -Default 0)
+        $confirm = [string](Get-DuneSoloBodyField -Body $body -Name 'confirm' -Default '')
+        $expectedProfileToken = [string](Get-DuneSoloBodyField -Body $body -Name 'expectedProfileToken' -Default '')
+        $result = Invoke-WithDuneLock -Name 'solo-profile-data' -Script {
+            Assert-DuneSoloExpectedProfile -ExpectedProfileToken $expectedProfileToken
+            Set-DuneSoloBackpackSlots -Slots $slots -Confirm $confirm
+        }
+        Write-DuneJson -Response $res -Body $result
+    } catch {
+        $status = if ($_.Exception.Message -like '*still running*' -or $_.Exception.Message -like '*changed in another window*') { 409 } else { 400 }
+        Write-DuneError -Response $res -Status $status -Message $_.Exception.Message
+    }
+}
+
 Register-DuneRoute -Method POST -Path '/api/solo/progression/specializations/max' -LocalOnly -Handler {
     param($req, $res, $routeParams, $body)
     try {

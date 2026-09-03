@@ -317,7 +317,7 @@ function Assert-DuneSoloGameClosed {
 
 function Invoke-DuneSoloHelper {
     param(
-        [Parameter(Mandatory)][ValidateSet('inspect','backup','restore','grant-items','import-blueprint','set-currencies','fill-water','set-weapon-ammo','max-augment-attributes','max-specializations','complete-fremen','complete-npe','enable-skills','set-progression-points')][string]$Command,
+        [Parameter(Mandatory)][ValidateSet('inspect','backup','restore','grant-items','import-blueprint','set-currencies','fill-water','set-weapon-ammo','set-backpack-slots','max-augment-attributes','max-specializations','complete-fremen','complete-npe','enable-skills','set-progression-points')][string]$Command,
         [Parameter(Mandatory)][hashtable]$Arguments
     )
 
@@ -594,6 +594,36 @@ function Set-DuneSoloWeaponAmmo {
         'safety-backup' = $safety
         'item-id' = $ItemId
         ammo = $Ammo
+        catalog = Get-DuneSoloGameplayCatalogPath
+    }
+}
+
+function Set-DuneSoloBackpackSlots {
+    param(
+        [Parameter(Mandatory)][long]$Slots,
+        [Parameter(Mandatory)][string]$Confirm
+    )
+
+    Assert-DuneSoloSupportedPlatform
+    if ($Confirm -ne 'SET SOLO BACKPACK SLOTS') {
+        throw 'Confirm the offline backpack slot update before continuing.'
+    }
+    Assert-DuneSoloGameClosed
+    if ($Slots -lt 1 -or $Slots -gt 100000) {
+        throw 'Backpack slots must be between 1 and 100000.'
+    }
+    $profile = Get-DuneSoloProfile
+    if (-not $profile.dbPath -or -not (Test-Path -LiteralPath $profile.dbPath -PathType Leaf)) {
+        throw 'Connect a valid Solo save before changing backpack slots.'
+    }
+    $safetyDir = Join-Path (Get-DuneSoloProfileBackupRoot -DbPath $profile.dbPath) 'pre-slots'
+    New-Item -ItemType Directory -Path $safetyDir -Force | Out-Null
+    $stamp = (Get-Date).ToUniversalTime().ToString('yyyyMMdd-HHmmssfff')
+    $safety = Join-Path $safetyDir "game-before-backpack-slots-$stamp.db"
+    return Invoke-DuneSoloHelper -Command 'set-backpack-slots' -Arguments @{
+        input = $profile.dbPath
+        'safety-backup' = $safety
+        slots = $Slots
         catalog = Get-DuneSoloGameplayCatalogPath
     }
 }

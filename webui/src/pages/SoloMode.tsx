@@ -3,7 +3,11 @@ import { Icon } from '../components/Icon'
 import { PageHeader } from '../components/PageHeader'
 import { CollapsibleCard } from '../components/CollapsibleCard'
 import { ItemPicker } from '../components/ItemPicker'
-import { SoloInventoryExplorer, SoloWeaponAmmoEditor } from '../components/solo/SoloInventoryExplorer'
+import {
+  SoloBackpackSlotsEditor,
+  SoloInventoryExplorer,
+  SoloWeaponAmmoEditor,
+} from '../components/solo/SoloInventoryExplorer'
 import { ViewportNotice } from '../components/ViewportNotice'
 import { GivePackageForm } from './gameplay/players/sections'
 import { useApi } from '../hooks/useApi'
@@ -23,6 +27,7 @@ import {
   restoreSoloBackup,
   saveSoloConsoleSettings,
   saveSoloSettings,
+  setSoloBackpackSlots,
   setSoloWeaponAmmo,
   setSoloCurrencies,
   setSoloProgressionPoints,
@@ -1052,6 +1057,7 @@ export function SoloMode() {
       setNotice({ kind: 'err', text: 'Connect and validate the selected Solo profile before changing weapon ammo.' })
       return
     }
+
     if (gameRunning) {
       setNotice({ kind: 'err', text: 'Close Dune: Awakening completely before changing Solo weapon ammo.' })
       return
@@ -1067,6 +1073,35 @@ export function SoloMode() {
       setNotice({
         kind: 'ok',
         text: `Set ${label} to ${result.currentAmmo.toLocaleString()} loaded ammo. Backup: ${result.safetyBackup}`,
+      })
+      await Promise.all([statusState.refresh(), runtimeState.refresh(), backupsState.refresh()])
+    } catch (error) {
+      setNotice({ kind: 'err', text: error instanceof Error ? error.message : String(error) })
+    } finally {
+      setBusy(null)
+    }
+  }
+
+  const setBackpackSlots = async (slots: number) => {
+    if (!selectionMatchesActive) {
+      setNotice({ kind: 'err', text: 'Connect and validate the selected Solo profile before changing backpack slots.' })
+      return
+    }
+    if (gameRunning) {
+      setNotice({ kind: 'err', text: 'Close Dune: Awakening completely before changing Solo backpack slots.' })
+      return
+    }
+    if (!window.confirm(
+      `Set the Solo backpack to ${slots.toLocaleString()} item slots?\n\n`
+      + 'DST will retain the current game.db, update only the exact character backpack, and verify the saved limit.',
+    )) return
+    setBusy('backpack-slots')
+    setNotice(null)
+    try {
+      const result = await setSoloBackpackSlots(slots, statusState.data?.profileToken ?? '')
+      setNotice({
+        kind: 'ok',
+        text: `Backpack slot capacity set to ${result.slots.toLocaleString()}. Backup: ${result.safetyBackup}`,
       })
       await Promise.all([statusState.refresh(), runtimeState.refresh(), backupsState.refresh()])
     } catch (error) {
@@ -1764,6 +1799,12 @@ export function SoloMode() {
       {tab === 'inventory' && (
         <div className="space-y-4">
           <SoloInventoryExplorer items={inspection?.inventoryItems ?? []} connected={connected} />
+          <SoloBackpackSlotsEditor
+            backpack={inspection?.inventories.find(inventory => inventory.kind === 'backpack')}
+            disabled={!canMutateActiveProfile || gameRunning || busy !== null}
+            busy={busy === 'backpack-slots'}
+            onSave={slots => { void setBackpackSlots(slots) }}
+          />
           <SoloWeaponAmmoEditor
             weapons={inspection?.rangedWeapons ?? []}
             disabled={!canMutateActiveProfile || gameRunning || busy !== null}
