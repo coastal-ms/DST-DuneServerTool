@@ -635,6 +635,7 @@ Write-DuneStartupLog 'Route modules loaded'
 if (Get-Command Start-DuneGameplayBotScheduler -ErrorAction SilentlyContinue) {
     try { [void](Start-DuneGameplayBotScheduler -ServerDir $serverDir) } catch {}
 }
+Write-DuneStartupLog 'Gameplay bot scheduler initialized'
 
 # Self-heal the mobile-app bridge (the loopback reverse-proxy + its background
 # task). Covers the case where the bridge task or listener is missing. The bridge
@@ -645,7 +646,7 @@ if (Get-Command Start-DuneGameplayBotScheduler -ErrorAction SilentlyContinue) {
 if (Get-Command Initialize-DuneMobileBridge -ErrorAction SilentlyContinue) {
     try { Initialize-DuneMobileBridge -ServerDir $serverDir } catch {}
 }
-Write-DuneStartupLog 'Background services initialized'
+Write-DuneStartupLog 'Mobile bridge initialized'
 
 # ---------- Token --------------------------------------------------------------
 
@@ -745,12 +746,14 @@ try {
         $script:DuneAutostartRegistered = [bool](Test-DuneAutostartEnabled)
     }
 } catch { $script:DuneAutostartRegistered = $false }
+Write-DuneStartupLog 'Autostart task state resolved'
 $script:DuneServiceModeRegistered = $false
 try {
     if (Get-Command Test-DuneServiceEnabled -ErrorAction SilentlyContinue) {
         $script:DuneServiceModeRegistered = [bool](Test-DuneServiceEnabled)
     }
 } catch { $script:DuneServiceModeRegistered = $false }
+Write-DuneStartupLog 'Service task state resolved'
 $script:DuneKeepAliveAfterShellClose = [bool]$script:DuneHeadlessMode -or $script:DuneAutostartRegistered -or $script:DuneServiceModeRegistered
 if (($script:DuneAutostartRegistered -or $script:DuneServiceModeRegistered) -and -not $script:DuneHeadlessMode) {
     Write-DuneLog "Autostart/service task registered for this user - closing the DuneShell window will leave the backend console running; click the shortcut again to re-open the viewer, or stop the backend explicitly via the tray / console window"
@@ -761,7 +764,7 @@ if (($script:DuneAutostartRegistered -or $script:DuneServiceModeRegistered) -and
 if (Get-Command Update-DuneKeepAliveFlag -ErrorAction SilentlyContinue) {
     try { [void](Update-DuneKeepAliveFlag) } catch {}
 }
-Write-DuneStartupLog 'Host lifecycle state resolved'
+Write-DuneStartupLog 'Keep-alive state persisted'
 
 $openInAppWindow = $false
 try { $openInAppWindow = Get-DstOpenInAppWindow } catch { $openInAppWindow = $true }
