@@ -13,6 +13,8 @@ here cover everything those tags shipped.
 
 ## [Unreleased]
 
+## [15.0.0-phase2-test2] - 2026-09-02
+
 ### Added
 
 - Added storage-box renaming from Storage administration and the Shared
@@ -23,6 +25,9 @@ here cover everything those tags shipped.
 
 ### Fixed
 
+- Made release artifacts immutable: tagged builds are now verified and attached
+  before a new release is published, and existing release assets cannot be
+  silently replaced.
 - Fixed Shared Inventory Explorer results collapsing into one blank item and
   occurrence details failing to reach their read-only API route.
 - Hardened shared `!tp <destination>` replay against intermittent game-side
