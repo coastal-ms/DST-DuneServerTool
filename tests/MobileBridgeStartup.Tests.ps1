@@ -10,7 +10,7 @@ Describe 'Mobile bridge startup' {
 
         { Initialize-DuneMobileBridge } | Should -Not -Throw
 
-        Should -Invoke Invoke-RestMethod -Times 1
+        Should -Invoke Invoke-RestMethod -Times 1 -ParameterFilter { $TimeoutSec -eq 1 }
         Should -Invoke Get-DuneBridgeStatus -Times 0
         Should -Invoke Invoke-DuneBridgeRepair -Times 0
     }

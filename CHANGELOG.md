@@ -20,6 +20,9 @@ here cover everything those tags shipped.
 - Updated v15 upgrades in place so the backend restarts while unchanged
   scheduled tasks remain registered. The mobile bridge is reinstalled and
   restarted only when its shipped payload changes.
+- Reduced measured backend cold-start time by resolving scheduled-task modes
+  once, reusing that result for keep-alive state, and taking a health-only fast
+  path when the mobile bridge is already responding.
 
 ## [15.0.0-phase2-test3] - 2026-09-03
 

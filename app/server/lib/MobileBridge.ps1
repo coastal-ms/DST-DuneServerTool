@@ -51,8 +51,9 @@ function Test-DuneBridgeElevated {
 }
 
 function Test-DuneBridgeHealth {
+    param([int]$TimeoutSec = 4)
     try {
-        $h = Invoke-RestMethod -Uri "http://127.0.0.1:$script:DuneMobileBridgePort/_dst/health" -TimeoutSec 1 -ErrorAction Stop
+        $h = Invoke-RestMethod -Uri "http://127.0.0.1:$script:DuneMobileBridgePort/_dst/health" -TimeoutSec $TimeoutSec -ErrorAction Stop
         return [bool]$h.ok
     } catch {
         return $false
@@ -147,7 +148,7 @@ function Invoke-DuneBridgeRepair {
 function Initialize-DuneMobileBridge {
     param([string]$ServerDir)
     try {
-        if (Test-DuneBridgeHealth) { return }
+        if (Test-DuneBridgeHealth -TimeoutSec 1) { return }
         $st = Get-DuneBridgeStatus
         if ($st.task -and $st.listening) { return }  # already healthy
         [void](Invoke-DuneBridgeRepair -NoWait)
