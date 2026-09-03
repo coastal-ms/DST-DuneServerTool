@@ -216,7 +216,7 @@ SELECT COUNT(*)::text AS updated_count FROM updated;
 "@
     $res = Invoke-DuneSqlQuery -Ip $Ip -Sql $sql -ReadOnly $false -MaxRows 1 -TimeoutSec 30
     if (-not $res.ok) { return @{ ok = $false; error = $res.error } }
-    $rows = @(ConvertTo-DuneRowMaps -Result $res)
+    $rows = ConvertTo-DuneRowMaps -Result $res
     $updated = if ($rows.Count -gt 0) { ConvertTo-DuneInt $rows[0]['updated_count'] } else { 0 }
     if ($updated -eq 0) {
         return @{ ok = $false; error = "Storage container $ContainerId was not found or has no permission name row." }
@@ -740,7 +740,8 @@ SELECT dune.delete_item(id) FROM matched;
 "@
     $res = Invoke-DuneSqlQuery -Ip $Ip -Sql $sql -ReadOnly $false -MaxRows 1 -TimeoutSec 30
     if (-not $res.ok) { return @{ ok = $false; error = $res.error } }
-    if (@(ConvertTo-DuneRowMaps -Result $res).Count -eq 0) {
+    $rows = ConvertTo-DuneRowMaps -Result $res
+    if ($rows.Count -eq 0) {
         return @{ ok = $false; error = 'Item quantity changed or the item no longer exists. Refresh and try again.' }
     }
     return @{ ok = $true; message = "Removed item $ItemId from container." }
@@ -765,7 +766,7 @@ RETURNING id::text AS item_id;
 "@
     $res = Invoke-DuneSqlQuery -Ip $Ip -Sql $sql -ReadOnly $false -MaxRows 1 -TimeoutSec 30
     if (-not $res.ok) { return @{ ok = $false; error = $res.error } }
-    $affected = @(ConvertTo-DuneRowMaps -Result $res).Count
+    $affected = (ConvertTo-DuneRowMaps -Result $res).Count
     if ($affected -eq 0) {
         return @{ ok = $false; error = 'Item quantity changed or the item no longer exists. Refresh and try again.' }
     }

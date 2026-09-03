@@ -59,7 +59,7 @@ Describe 'Storage overview container coverage' -Tag 'Pure' {
         }
         Mock ConvertTo-DuneRowMaps {
             param($Result)
-            return @($Result.rows)
+            return ,@($Result.rows)
         }
 
         $result = Invoke-DuneStorageRename -Ip '1.2.3.4' -ContainerId 123 -Name "  Duke's Ore  "
@@ -93,6 +93,36 @@ Describe 'Storage overview container coverage' -Tag 'Pure' {
         $result.ok | Should -BeTrue
         $script:stackSql | Should -Match 'SET stack_size = 6::bigint'
         $script:stackSql | Should -Match 'AND stack_size = 10::bigint'
+    }
+
+    It 'reports a stale storage stack update when no row changed' {
+        Mock Invoke-DuneSqlQuery {
+            return @{ ok = $true; rows = @() }
+        }
+        Mock ConvertTo-DuneRowMaps {
+            param($Result)
+            return ,@($Result.rows)
+        }
+
+        $result = Invoke-DuneStorageSetItemStack -Ip '1.2.3.4' -ItemId 42 -StackSize 6 -ExpectedStackSize 10
+
+        $result.ok | Should -BeFalse
+        $result.error | Should -Match 'quantity changed'
+    }
+
+    It 'reports a stale storage deletion when no row matched' {
+        Mock Invoke-DuneSqlQuery {
+            return @{ ok = $true; rows = @() }
+        }
+        Mock ConvertTo-DuneRowMaps {
+            param($Result)
+            return ,@($Result.rows)
+        }
+
+        $result = Invoke-DuneStorageDeleteItem -Ip '1.2.3.4' -ItemId 42 -ExpectedStackSize 10
+
+        $result.ok | Should -BeFalse
+        $result.error | Should -Match 'quantity changed'
     }
 
     It 'guards full player item deletion with the quantity originally loaded' {
