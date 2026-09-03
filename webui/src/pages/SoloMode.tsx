@@ -1052,12 +1052,7 @@ export function SoloMode() {
     }
   }
 
-  const setWeaponAmmo = async (
-    itemId: number,
-    label: string,
-    ammo: number,
-    mode: 'finite' | 'infinite',
-  ) => {
+  const setWeaponAmmo = async (itemId: number, label: string, ammo: number) => {
     if (!selectionMatchesActive) {
       setNotice({ kind: 'err', text: 'Connect and validate the selected Solo profile before changing weapon ammo.' })
       return
@@ -1068,18 +1063,16 @@ export function SoloMode() {
       return
     }
     if (!window.confirm(
-      `${mode === 'infinite' ? 'Enable infinite ammo' : `Set ${label} to ${ammo.toLocaleString()} loaded ammo`}?\n\n`
+      `Set ${label} to ${ammo.toLocaleString()} loaded ammo?\n\n`
       + 'DST will retain the current game.db, update only this ranged weapon, and verify the saved value.',
     )) return
     setBusy(`ammo:${itemId}`)
     setNotice(null)
     try {
-      const result = await setSoloWeaponAmmo(itemId, ammo, mode, statusState.data?.profileToken ?? '')
+      const result = await setSoloWeaponAmmo(itemId, ammo, statusState.data?.profileToken ?? '')
       setNotice({
         kind: 'ok',
-        text: result.mode === 'infinite'
-          ? `Enabled infinite ammo for ${label}. Backup: ${result.safetyBackup}`
-          : `Set ${label} to ${result.currentAmmo.toLocaleString()} loaded ammo. Backup: ${result.safetyBackup}`,
+        text: `Set ${label} to ${result.currentAmmo.toLocaleString()} loaded ammo. Backup: ${result.safetyBackup}`,
       })
       await Promise.all([statusState.refresh(), runtimeState.refresh(), backupsState.refresh()])
     } catch (error) {
@@ -1816,7 +1809,7 @@ export function SoloMode() {
             weapons={inspection?.rangedWeapons ?? []}
             disabled={!canMutateActiveProfile || gameRunning || busy !== null}
             busy={busy?.startsWith('ammo:') ?? false}
-            onSave={(weapon, ammo, mode) => { void setWeaponAmmo(weapon.itemId, weapon.displayName, ammo, mode) }}
+            onSave={(weapon, ammo) => { void setWeaponAmmo(weapon.itemId, weapon.displayName, ammo) }}
           />
 
           <div className="card p-5 sticky top-0 z-20 bg-surface/95 backdrop-blur-sm shadow-lg">

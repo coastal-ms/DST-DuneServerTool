@@ -98,7 +98,6 @@ internal static partial class Program
                     Require(options, "safety-backup"),
                     ParseItemId(RequireValue(options, "item-id")),
                     ParseBalance(RequireValue(options, "ammo"), "Ammo"),
-                    RequireValue(options, "mode"),
                     Require(options, "catalog")),
                 "set-backpack-slots" => SetBackpackSlots(
                     Require(options, "input"),
@@ -150,22 +149,12 @@ internal static partial class Program
         string safetyBackup,
         long itemId,
         long ammo,
-        string mode,
         string catalogPath,
         bool requireGameClosed = true)
     {
-        var normalizedMode = mode.Trim().ToLowerInvariant();
-        if (normalizedMode is not ("finite" or "infinite"))
+        if (ammo > 2_000_000_000)
         {
-            throw new InvalidDataException("Ammo mode must be finite or infinite.");
-        }
-        if (normalizedMode == "finite" && ammo > 16_777_215)
-        {
-            throw new InvalidDataException("Finite ammo must be between 0 and 16777215.");
-        }
-        if (normalizedMode == "infinite" && ammo != 2_000_000_000)
-        {
-            throw new InvalidDataException("Infinite ammo must use the verified value 2000000000.");
+            throw new InvalidDataException("Ammo must be between 0 and 2000000000.");
         }
         var catalog = ReadCatalog(catalogPath);
         var originalBytes = ReadStable(input);
@@ -292,7 +281,6 @@ internal static partial class Program
                 itemId,
                 templateId,
                 currentAmmo = ammo,
-                mode = normalizedMode,
                 safetyBackup,
                 inspection = InspectPath(input, catalogPath)
             };
@@ -1642,7 +1630,7 @@ internal static partial class Program
                     "Vehicle-kit volume fallbacks were not applied correctly.");
             }
             var ammoSafety = Path.Combine(root, "safety", "before-ammo.db");
-            SetWeaponAmmo(target, ammoSafety, 106, 250, "finite", catalogPath, requireGameClosed: false);
+            SetWeaponAmmo(target, ammoSafety, 106, 250, catalogPath, requireGameClosed: false);
             var ammoInspection = InspectPath(target, catalogPath);
             if (!File.Exists(ammoSafety)
                 || ammoInspection.RangedWeapons.Single(value =>
@@ -1658,7 +1646,6 @@ internal static partial class Program
                 Path.Combine(root, "safety", "before-infinite-ammo.db"),
                 106,
                 2_000_000_000,
-                "infinite",
                 catalogPath,
                 requireGameClosed: false);
             if (InspectPath(target, catalogPath).RangedWeapons.Single(value =>
