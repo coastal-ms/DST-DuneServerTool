@@ -57,6 +57,7 @@
     "http POST /api/config/open-battlegroup-bat": "reversible-write",
     "http POST /api/db/test-connection": "read",
     "http POST /api/public-ip/resolve": "read",
+    "http POST /api/v1/inventory/refresh": "read",
     "http POST /api/public-ip/hostname": "reversible-write",
     "http POST /api/public-ip/validate": "read",
     "http POST /api/system/install-location/open": "reversible-write",

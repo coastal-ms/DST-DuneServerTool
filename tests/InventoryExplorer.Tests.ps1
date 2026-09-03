@@ -957,12 +957,14 @@ ORDER BY $($sort.sql)
         $sql | Should -Match "r\.template_id !~\* 'Emote\|Gesture'"
     }
 
-    It 'registers a GET-only v1 route without mutation vocabulary' {
+    It 'keeps inventory data read-only while allowing derived-cache refresh' {
         $source = Get-Content (Join-Path (Get-DstRepoRoot) 'app\server\routes\Inventory.ps1') -Raw
         $source | Should -Match "Register-DuneRoute -Method GET -Path '/api/v1/inventory/items'"
         $source | Should -Match "Register-DuneRoute -Method GET -Path '/api/v1/inventory/items/occurrences'"
         $source | Should -Match "Register-DuneRoute -Method GET -Path '/api/v1/inventory/items/\{templateId\}/occurrences'"
-        $source | Should -Not -Match 'Register-DuneRoute -Method (POST|PUT|PATCH|DELETE)'
+        $source | Should -Match "Register-DuneRoute -Method POST -Path '/api/v1/inventory/refresh'"
+        @([regex]::Matches($source, 'Register-DuneRoute -Method POST')).Count | Should -Be 1
+        $source | Should -Not -Match 'Register-DuneRoute -Method (PUT|PATCH|DELETE)'
         $source | Should -Not -Match '(?i)give-item|delete-item|repair-item'
     }
 }

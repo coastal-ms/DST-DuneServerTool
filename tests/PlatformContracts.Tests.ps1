@@ -272,7 +272,7 @@ Describe 'Complete route classification' {
         }) | Should -BeTrue
         $inventoryRefresh = @($script:DuneRoutes | Where-Object Path -eq '/api/v1/inventory/refresh')[0]
         $inventoryRefresh.Classification.capabilityId | Should -Be 'inventory.read'
-        $inventoryRefresh.Classification.lifecycle | Should -Be 'reversible-write'
+        $inventoryRefresh.Classification.lifecycle | Should -Be 'read'
         $occurrenceRoute = @($script:DuneRoutes | Where-Object Path -eq '/api/v1/inventory/items/{templateId}/occurrences')[0]
         $occurrenceRoute.Classification.capabilityId | Should -Be 'inventory.read'
         $occurrenceRoute.Classification.currentAccess | Should -Be 'owner-admin'

@@ -45,9 +45,16 @@ export function InventorySlot({
       if (!(target instanceof Element) || !target.closest('[data-inventory-slot]')) return
       setHoverSuppressed(target !== buttonRef.current)
     }
+    const handleSlotHover = (event: Event) => {
+      setHoverSuppressed((event as CustomEvent<string>).detail !== tooltipId)
+    }
     document.addEventListener('focusin', handleFocusIn)
-    return () => document.removeEventListener('focusin', handleFocusIn)
-  }, [])
+    document.addEventListener('inventory-slot-hover', handleSlotHover)
+    return () => {
+      document.removeEventListener('focusin', handleFocusIn)
+      document.removeEventListener('inventory-slot-hover', handleSlotHover)
+    }
+  }, [tooltipId])
 
   useLayoutEffect(() => {
     if (!showInfo) return
@@ -76,6 +83,7 @@ export function InventorySlot({
         className="group relative flex aspect-square min-h-22 w-full min-w-0 flex-col overflow-hidden rounded-xl border border-border bg-surface/85 text-left shadow-[inset_0_1px_rgba(255,255,255,0.04),0_6px_16px_-12px_rgba(0,0,0,0.9)] transition-[border-color,background-color,transform] duration-150 hover:-translate-y-0.5 hover:border-accent/60 hover:bg-surface-2 focus:outline-none focus-visible:border-ibad focus-visible:ring-2 focus-visible:ring-ibad active:translate-y-0"
         onMouseEnter={event => {
           hoverPointRef.current = { x: event.clientX, y: event.clientY }
+          document.dispatchEvent(new CustomEvent('inventory-slot-hover', { detail: tooltipId }))
           setHoverSuppressed(false)
           setHovered(true)
         }}
