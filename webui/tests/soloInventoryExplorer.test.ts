@@ -1,9 +1,12 @@
 import { describe, expect, it } from 'vitest'
-import { buildSoloInventoryGroups } from '../src/components/solo/SoloInventoryExplorer'
+import {
+  buildSoloInventoryGroups,
+  filterSoloInventoryItemsByLocation,
+} from '../src/components/solo/SoloInventoryExplorer'
 
 describe('Solo inventory explorer', () => {
   it('groups matching templates across Solo inventory locations', () => {
-    const groups = buildSoloInventoryGroups([
+    const items = [
       {
         inventoryId: 1,
         destinationKey: 'inventory:1',
@@ -28,7 +31,8 @@ describe('Solo inventory explorer', () => {
         minQuality: 1,
         maxQuality: 2,
       },
-    ])
+    ]
+    const groups = buildSoloInventoryGroups(items)
 
     expect(groups).toHaveLength(1)
     expect(groups[0]).toMatchObject({
@@ -38,5 +42,7 @@ describe('Solo inventory explorer', () => {
       locationCount: 2,
       quality: { min: 0, max: 2, mixed: true },
     })
+    expect(filterSoloInventoryItemsByLocation(items, 'inventory:2')).toEqual([items[1]])
+    expect(filterSoloInventoryItemsByLocation(items, '')).toEqual(items)
   })
 })

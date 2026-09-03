@@ -18,8 +18,9 @@ here cover everything those tags shipped.
 ### Added
 
 - Added a read-only current-inventory browser to Solo Mode with grouped item
-  icons, catalog names, search, sorting, quantity and quality summaries, and
-  per-location details across the backpack and supported built storage.
+  icons, catalog names, search, location filtering, sorting, quantity and
+  quality summaries, and per-location details across the backpack and supported
+  built storage. Large inventories load in bounded groups of 100 item types.
 - Added backup-safe editing of the loaded ammo stored on an exact Solo ranged
   weapon, with game-closed gating and post-write verification.
 - Labeled the early Vehicles workspace as Demo Data until its live fleet

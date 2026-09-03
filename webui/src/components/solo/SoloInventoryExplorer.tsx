@@ -54,6 +54,15 @@ export function buildSoloInventoryGroups(items: SoloInventoryItemGroup[]): Share
   return [...grouped.values()]
 }
 
+export function filterSoloInventoryItemsByLocation(
+  items: SoloInventoryItemGroup[],
+  destinationKey: string,
+) {
+  return destinationKey
+    ? items.filter(item => item.destinationKey === destinationKey)
+    : items
+}
+
 function qualityLabel(item: SoloInventoryItemGroup) {
   return item.minQuality === item.maxQuality
     ? String(item.maxQuality)
@@ -69,22 +78,39 @@ export function SoloInventoryExplorer({
 }) {
   const [query, setQuery] = useState('')
   const [sort, setSort] = useState<'name' | 'quantity'>('name')
+  const [destinationKey, setDestinationKey] = useState('')
+  const [visibleCount, setVisibleCount] = useState(100)
   const [selected, setSelected] = useState<SharedInventoryGroup | null>(null)
+  const locations = useMemo(() => {
+    const unique = new Map<string, string>()
+    items.forEach(item => unique.set(item.destinationKey, item.destinationLabel))
+    return [...unique.entries()]
+      .map(([key, label]) => ({ key, label }))
+      .sort((left, right) => {
+        if (left.label === 'Backpack') return -1
+        if (right.label === 'Backpack') return 1
+        return left.label.localeCompare(right.label)
+      })
+  }, [items])
   const groups = useMemo(() => {
     const needle = query.trim().toLowerCase()
-    return buildSoloInventoryGroups(items)
+    const visibleItems = filterSoloInventoryItemsByLocation(items, destinationKey)
+    return buildSoloInventoryGroups(visibleItems)
       .filter(item => !needle
         || item.displayName.toLowerCase().includes(needle)
         || item.templateId.toLowerCase().includes(needle)
-        || items.some(row => row.templateId.toLowerCase() === item.groupKey
+        || visibleItems.some(row => row.templateId.toLowerCase() === item.groupKey
           && row.destinationLabel.toLowerCase().includes(needle)))
       .sort((left, right) => sort === 'quantity'
         ? right.totalQuantity - left.totalQuantity || left.displayName.localeCompare(right.displayName)
         : left.displayName.localeCompare(right.displayName))
-  }, [items, query, sort])
+  }, [destinationKey, items, query, sort])
   const selectedLocations = selected
     ? items.filter(item => item.templateId.trim().toLowerCase() === selected.groupKey)
     : []
+  const visibleGroups = groups.slice(0, visibleCount)
+
+  useEffect(() => setVisibleCount(100), [destinationKey, items, query, sort])
 
   return (
     <section className="card p-5" aria-labelledby="solo-current-inventory-title">
@@ -105,7 +131,7 @@ export function SoloInventoryExplorer({
 
       {connected && items.length > 0 && (
         <>
-          <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-[minmax(14rem,1fr)_minmax(12rem,.45fr)]">
+          <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-[minmax(14rem,1fr)_minmax(12rem,.5fr)_minmax(12rem,.45fr)]">
             <label className="text-sm font-medium text-text">
               Search current inventory
               <input
@@ -115,6 +141,19 @@ export function SoloInventoryExplorer({
                 placeholder="Item, template, or location"
                 onChange={event => setQuery(event.target.value)}
               />
+            </label>
+            <label className="text-sm font-medium text-text">
+              Inventory location
+              <select
+                className="input mt-1 min-h-11 w-full"
+                value={destinationKey}
+                onChange={event => setDestinationKey(event.target.value)}
+              >
+                <option value="">All locations</option>
+                {locations.map(location => (
+                  <option key={location.key} value={location.key}>{location.label}</option>
+                ))}
+              </select>
             </label>
             <label className="text-sm font-medium text-text">
               Sort by
@@ -134,12 +173,20 @@ export function SoloInventoryExplorer({
             </div>
           ) : (
             <ul className="mt-4 grid min-w-0 grid-cols-[repeat(auto-fill,minmax(min(6.5rem,100%),1fr))] gap-2.5" aria-label="Solo inventory results">
-              {groups.map(group => (
+              {visibleGroups.map(group => (
                 <li key={group.groupKey} className="min-w-0">
                   <InventorySlot item={group} onSelect={setSelected} />
                 </li>
               ))}
             </ul>
+          )}
+          {visibleCount < groups.length && (
+            <div className="mt-4 flex justify-center">
+              <button type="button" className="btn-secondary min-h-11" onClick={() => setVisibleCount(count => count + 100)}>
+                <Icon name="ChevronDown" size={14} />
+                Load 100 more
+              </button>
+            </div>
           )}
         </>
       )}
