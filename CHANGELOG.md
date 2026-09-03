@@ -21,6 +21,7 @@ here cover everything those tags shipped.
   storage containers in the background, serves grouped searches and occurrence
   details without repeating PostgreSQL reads, reports honest freshness, and
   falls back to the existing live read path while the cache is unavailable.
+  The Inventory Explorer Refresh button rebuilds the snapshot on demand.
 
 ## [15.0.0-phase2-test1.1] - 2026-09-02
 

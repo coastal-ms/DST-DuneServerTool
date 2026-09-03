@@ -12,6 +12,7 @@ export function InventorySlot({
 }) {
   const buttonRef = useRef<HTMLButtonElement | null>(null)
   const tooltipRef = useRef<HTMLDivElement | null>(null)
+  const hoverPointRef = useRef<{ x: number; y: number } | null>(null)
   const tooltipId = useId()
   const [hovered, setHovered] = useState(false)
   const [hoverSuppressed, setHoverSuppressed] = useState(false)
@@ -26,10 +27,15 @@ export function InventorySlot({
     if (!rect) return
     const width = tooltipRef.current?.offsetWidth || Math.min(288, window.innerWidth - 16)
     const height = tooltipRef.current?.offsetHeight || 0
-    const left = Math.min(Math.max(8, rect.left + rect.width / 2 - width / 2), window.innerWidth - width - 8)
-    const top = rect.bottom + height + 8 <= window.innerHeight
-      ? rect.bottom + 8
-      : Math.max(8, Math.min(rect.top - height - 8, window.innerHeight - height - 8))
+    const hoverPoint = hoverPointRef.current
+    const preferredLeft = hoverPoint ? hoverPoint.x + 48 : rect.left + rect.width / 2 - width / 2
+    const preferredTop = hoverPoint ? hoverPoint.y + 48 : rect.bottom + 8
+    const left = preferredLeft + width + 8 <= window.innerWidth
+      ? Math.max(8, preferredLeft)
+      : Math.max(8, (hoverPoint?.x ?? rect.right) - width - 16)
+    const top = preferredTop + height + 8 <= window.innerHeight
+      ? Math.max(8, preferredTop)
+      : Math.max(8, (hoverPoint?.y ?? rect.top) - height - 16)
     setPosition({ left, top })
   }, [])
 
@@ -68,11 +74,15 @@ export function InventorySlot({
         aria-label={`${name}, total quantity ${item.totalQuantity}, ${item.occurrenceCount} occurrences across ${item.locationCount} locations, quality ${quality}`}
         aria-describedby={showInfo ? tooltipId : undefined}
         className="group relative flex aspect-square min-h-22 w-full min-w-0 flex-col overflow-hidden rounded-xl border border-border bg-surface/85 text-left shadow-[inset_0_1px_rgba(255,255,255,0.04),0_6px_16px_-12px_rgba(0,0,0,0.9)] transition-[border-color,background-color,transform] duration-150 hover:-translate-y-0.5 hover:border-accent/60 hover:bg-surface-2 focus:outline-none focus-visible:border-ibad focus-visible:ring-2 focus-visible:ring-ibad active:translate-y-0"
-        onMouseEnter={() => {
+        onMouseEnter={event => {
+          hoverPointRef.current = { x: event.clientX, y: event.clientY }
           setHoverSuppressed(false)
           setHovered(true)
         }}
-        onMouseLeave={() => setHovered(false)}
+        onMouseLeave={() => {
+          hoverPointRef.current = null
+          setHovered(false)
+        }}
         onFocus={() => setFocused(true)}
         onBlur={() => setFocused(false)}
         onClick={() => {

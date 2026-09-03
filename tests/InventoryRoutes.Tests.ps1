@@ -49,7 +49,7 @@ BeforeAll {
         $response = New-InventoryRouteResponse
         Invoke-DuneContext -Ctx ([pscustomobject]@{ Request = $request; Response = $response })
         $json = [Text.Encoding]::UTF8.GetString($response.OutputStream.ToArray())
-        return @{ response = $response; body = ($json | ConvertFrom-Json) }
+        return @{ response = $response; body = ($json | ConvertFrom-Json); raw = $json }
     }
 }
 
@@ -273,6 +273,38 @@ if (`$maps.Count -ne 2 -or [string]`$maps[1]['b'] -ne '4') { throw 'PS5.1 row-ma
         Should -Invoke Invoke-DuneInventoryGroupedCachePage -Times 1 -ParameterFilter { $Limit -eq 500 }
         Should -Invoke Invoke-DuneInventoryOccurrenceCachePage -Times 1 -ParameterFilter { $Limit -eq 100 }
         Should -Invoke Get-DuneDbContext -Times 0
+    }
+
+    It 'serializes one cached occurrence as an array' {
+        Mock Invoke-DuneInventoryOccurrenceCachePage {
+            return @{
+                ok = $true; source = 'cache'; cursorSource = 'cache'
+                generation = 'inventory-generation-1'
+                freshness = New-DuneApiFreshness -State fresh -AgeSeconds 5
+                items = @([pscustomobject]@{
+                    id = 42; templateId = 'Copper'; displayName = 'Copper'; kind = 'item'
+                    quantity = 1; quality = 0; durability = 'N/A'; maxDurability = 'N/A'
+                    waterAmount = 'N/A'; waterType = ''; metadata = @{}
+                    entity = [pscustomobject]@{
+                        type = 'player'; id = 20001; label = 'Coastal'; owner = 'Coastal'
+                        map = 'Hagga Basin'; class = ''; inventoryId = 60001; inventoryType = 0
+                        workspacePath = '/players?view=inventory&scope_type=player&scope_id=20001'
+                    }
+                    player = [pscustomobject]@{ id = 20001; name = 'Coastal' }
+                })
+                players = @(); locations = @()
+                selectedPlayerValid = $true; selectedLocationValid = $true; truncated = $false
+            }
+        }
+
+        $result = Invoke-InventoryRouteRequest -Path '/api/v1/inventory/items/occurrences' -Query @{
+            template_id = 'Copper'; types = 'player,storage'; sort = 'player-asc'; limit = '50'
+        }
+        $json = [Text.Json.JsonDocument]::Parse($result.raw)
+
+        $result.response.StatusCode | Should -Be 200 -Because ([string]$result.body.error)
+        $json.RootElement.GetProperty('data').GetProperty('items').ValueKind |
+            Should -Be ([Text.Json.JsonValueKind]::Array)
     }
 
     It 'ships the inventory route and read model through the recursive server package source' {

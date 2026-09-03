@@ -151,10 +151,10 @@ Register-DuneRoute -Method GET -Path '/api/v1/inventory/items' -Handler {
             } else {
                 $groups.Count -gt $limit
             }
-            $pageGroups = if ([string]$groupResult.cursorSource -eq 'cache') {
-                $groups
+            if ([string]$groupResult.cursorSource -eq 'cache') {
+                $pageGroups = @($groups)
             } else {
-                @($groups | Select-Object -First $limit)
+                $pageGroups = @($groups | Select-Object -First $limit)
             }
             $nextCursor = ''
             if ($truncated -and $pageGroups.Count -gt 0) {
@@ -377,10 +377,10 @@ $script:DuneInventoryOccurrencesHandler = {
         } else {
             $items.Count -gt $limit
         }
-        $pageItems = if ([string]$result.cursorSource -eq 'cache') {
-            $items
+        if ([string]$result.cursorSource -eq 'cache') {
+            $pageItems = @($items)
         } else {
-            @($items | Select-Object -First $limit)
+            $pageItems = @($items | Select-Object -First $limit)
         }
         $nextCursor = ''
         if ($truncated -and $pageItems.Count -gt 0) {
