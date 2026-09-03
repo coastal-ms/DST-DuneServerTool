@@ -41,7 +41,7 @@ on:
   workflow_dispatch:
     inputs:
       release_tag:
-        description: 'Immutable tag for a NEW release, e.g. v15.0.0-phase2-test2 (blank = build a workflow artifact only)'
+        description: 'Immutable tag for a NEW release, e.g. v15.0.0-phase2-test1.1 (blank = build a workflow artifact only)'
         required: false
         default: ''
       release_title:
