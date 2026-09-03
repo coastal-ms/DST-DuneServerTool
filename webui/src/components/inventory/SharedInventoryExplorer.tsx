@@ -3,6 +3,11 @@ import { ApiError } from '../../api/client'
 import {
   getSharedInventory,
   getSharedInventoryOccurrences,
+  deleteInventoryItem,
+  deleteStorageItem,
+  renameStorage,
+  setItemStack,
+  setStorageItemStack,
   type InventoryEntityType,
   type SharedInventoryGroup,
   type SharedInventoryItem,
@@ -108,6 +113,10 @@ function locationValue(location?: { type: InventoryEntityType; id: number } | nu
   return location ? `${location.type}:${location.id}` : ''
 }
 
+function inventoryItemKey(item: SharedInventoryItem) {
+  return `${item.entity.type}:${item.id}`
+}
+
 function locationLabel(location: SharedInventoryLocationFacet, allPlayers: boolean, duplicateOrdinal = 0) {
   const base = location.type === 'player' ? 'Backpack' : location.label || 'Storage box'
   const owner = location.playerName || location.owner
@@ -136,7 +145,7 @@ function duplicateOrdinals<T>(items: T[], labelOf: (item: T) => string, keyOf: (
 export function SharedInventoryExplorer({
   entityTypes,
   title = 'Shared Inventory Explorer',
-  description = 'Browse distinct item types across proven player backpacks and storage locations from one read-only view.',
+  description = 'Browse distinct item types across proven player backpacks and storage locations.',
   unavailableReason,
 }: {
   entityTypes: InventoryEntityType[]
@@ -181,11 +190,23 @@ export function SharedInventoryExplorer({
   const [loading, setLoading] = useState(true)
   const [loadingMore, setLoadingMore] = useState(false)
   const [error, setError] = useState('')
+  const [renameOpen, setRenameOpen] = useState(false)
+  const [renameDraft, setRenameDraft] = useState('')
+  const [renameLoading, setRenameLoading] = useState(false)
+  const [renameError, setRenameError] = useState('')
+  const [renameMessage, setRenameMessage] = useState('')
+  const [inventoryMutationMessage, setInventoryMutationMessage] = useState('')
+  const [inventoryMutationError, setInventoryMutationError] = useState('')
   const [loadedIdentity, setLoadedIdentity] = useState('')
   const requestVersion = useRef(0)
+  const renameRequestVersion = useRef(0)
+  const mutationRefresh = useRef<() => Promise<void>>(async () => {})
   const capabilities = usePlatformCapabilities()
   const capabilityReady = capabilities.data !== null
   const canReadInventory = capabilities.hasCapability('inventory.read')
+  const canManageBases = capabilities.hasCapability('base.manage')
+  const canDeletePlayerItems = capabilities.hasCapability('player.manage.destructive')
+  const canDeleteStorageItems = capabilities.hasCapability('base.manage.destructive')
   const requestIdentity = JSON.stringify({
     query: query.trim(), entityTypes, scopeType, scopeId, playerId, locationType, locationId, sort,
     source: demo ? 'demo' : 'live', scopeError, playerError, locationError,
@@ -198,17 +219,25 @@ export function SharedInventoryExplorer({
   const locationOrdinals = useMemo(() => duplicateOrdinals(
     current?.data.locations ?? [], location => location.label, location => `${location.type}:${location.id}`,
   ), [current])
+  const renameActorId = locationType === 'storage' && locationId
+    ? locationId
+    : scopeType === 'storage' && scopeId ? scopeId : undefined
+  const renameTarget = renameActorId
+    ? current?.data.locations.find(location => location.type === 'storage' && location.id === renameActorId)
+    : undefined
 
-  const load = useCallback(async (cursor?: string, append = false) => {
+  const load = useCallback(async (cursor?: string, append = false, preserveSelection = false) => {
     if (!canReadInventory || unavailableReason || scopeError || playerError || locationError) return
     const version = ++requestVersion.current
     if (append) setLoadingMore(true)
-    else {
+    else if (!preserveSelection) {
       setLoading(true)
       setResponse(null)
       setGroups([])
       setSelected(null)
       setLoadedIdentity('')
+    } else {
+      setLoading(true)
     }
     setError('')
     try {
@@ -220,13 +249,22 @@ export function SharedInventoryExplorer({
       assertInventoryGroups(result.data.groups)
       setResponse(result)
       setGroups(existing => append ? [...existing, ...result.data.groups] : result.data.groups)
+      if (preserveSelection) {
+        setSelected(currentSelection => (
+          currentSelection
+            ? result.data.groups.find(group => group.groupKey === currentSelection.groupKey) ?? null
+            : null
+        ))
+      }
       setLoadedIdentity(requestIdentity)
     } catch (reason) {
       if (version !== requestVersion.current) return
-      setResponse(null)
-      setGroups([])
-      setSelected(null)
-      setLoadedIdentity('')
+      if (!preserveSelection) {
+        setResponse(null)
+        setGroups([])
+        setSelected(null)
+        setLoadedIdentity('')
+      }
       setError(errorMessage(reason))
     } finally {
       if (version === requestVersion.current) {
@@ -239,6 +277,7 @@ export function SharedInventoryExplorer({
     requestIdentity, scopeError, scopeId, scopeType, sort, unavailableReason,
     setError, setGroups, setLoadedIdentity, setLoading, setLoadingMore, setResponse, setSelected,
   ])
+  mutationRefresh.current = () => load(undefined, false, true)
 
   useEffect(() => setDraftQuery(query), [query])
   useEffect(() => {
@@ -247,13 +286,24 @@ export function SharedInventoryExplorer({
     setGroups([])
     setSelected(null)
     setError('')
+    setInventoryMutationMessage('')
+    setInventoryMutationError('')
     setLoadedIdentity('')
     setLoadingMore(false)
   }, [requestIdentity])
   useEffect(() => {
+    renameRequestVersion.current += 1
+    setRenameOpen(false)
+    setRenameError('')
+    setRenameMessage('')
+  }, [requestIdentity])
+  useEffect(() => {
     if (capabilityReady && canReadInventory && !unavailableReason && !scopeError && !playerError && !locationError) void load()
   }, [capabilityReady, canReadInventory, load, locationError, playerError, scopeError, unavailableReason])
-  useEffect(() => () => { requestVersion.current += 1 }, [])
+  useEffect(() => () => {
+    requestVersion.current += 1
+    renameRequestVersion.current += 1
+  }, [])
 
   if (unavailableReason) {
     return <WorkspaceSection id="shared-inventory" title={title} description={description}><DataState state="unavailable" title="Inventory scope not yet available" message={unavailableReason} /></WorkspaceSection>
@@ -268,7 +318,7 @@ export function SharedInventoryExplorer({
     return <WorkspaceSection id="shared-inventory" title={title} description={description}><DataState state="error" title="Could not check inventory access" message={capabilities.error} action={<button className="btn-secondary min-h-11" onClick={() => { void capabilities.refresh() }}>Retry capability check</button>} /></WorkspaceSection>
   }
   if (capabilityReady && !canReadInventory) {
-    return <WorkspaceSection id="shared-inventory" title={title} description={description}><DataState state="unavailable" title="Shared inventory is not included in this backend" message="Install the matching DST backend build to use the read-only inventory explorer." /></WorkspaceSection>
+    return <WorkspaceSection id="shared-inventory" title={title} description={description}><DataState state="unavailable" title="Shared inventory is not included in this backend" message="Install the matching DST backend build to use the inventory explorer." /></WorkspaceSection>
   }
 
   const validSelectedLocation = !locationType || current?.data.selectedLocationValid !== false
@@ -276,8 +326,9 @@ export function SharedInventoryExplorer({
   return (
     <WorkspaceSection id="shared-inventory" title={title} description={description}>
       <div className="mb-3 flex flex-wrap items-center gap-2">
-        <span className="pill border-info/40 text-info">Read-only</span>
+        <span className="pill border-info/40 text-info">Inventory catalog</span>
         {entityTypes.map(type => <span key={type} className="pill border-border text-text-muted">{type === 'player' ? 'Player backpacks' : 'Storage boxes'}</span>)}
+        {canManageBases && entityTypes.includes('storage') && <span className="pill border-accent/40 text-accent-bright">Box names editable</span>}
         {current && <FreshnessBadge state={current.freshness.state} observedAt={current.freshness.observedAt} label={current.data.mode === 'demo' ? 'Demo inventory' : 'Live database'} />}
       </div>
       {scopeType && scopeId && <div className="mb-3 rounded-lg border border-info/35 bg-info/10 px-4 py-3 text-sm text-text" role="status">Scoped to {entityTypeLabel(scopeType).toLowerCase()} actor {scopeId}.</div>}
@@ -340,7 +391,77 @@ export function SharedInventoryExplorer({
         </label>
         <button type="submit" className="btn-primary min-h-11" disabled={loading || loadingMore}><Icon name="Search" size={15} />Search</button>
         <button type="button" className="btn-secondary min-h-11" disabled={loading || loadingMore} onClick={() => { void load() }}><Icon name="RefreshCw" size={14} />Refresh</button>
+        {canManageBases && current?.data.mode === 'live' && renameTarget && (
+          <button
+            type="button"
+            className="btn-secondary min-h-11"
+            disabled={loading || loadingMore || renameLoading}
+            onClick={() => {
+              setRenameDraft(renameTarget.label)
+              setRenameError('')
+              setRenameMessage('')
+              setRenameOpen(true)
+            }}
+          >
+            <Icon name="PenLine" size={14} />Rename box
+          </button>
+        )}
       </form>
+      {renameOpen && renameTarget && (
+        <form
+          aria-label="Rename storage box"
+          className="mb-4 flex flex-col gap-3 rounded-lg border border-accent/35 bg-accent/10 p-4 sm:flex-row sm:items-end"
+          onSubmit={async event => {
+            event.preventDefault()
+            const name = renameDraft.trim()
+            if (!name) {
+              setRenameError('Enter a name for this storage box.')
+              return
+            }
+            if (name.length > 64) {
+              setRenameError('Storage box names must be 64 characters or fewer.')
+              return
+            }
+            const renameVersion = ++renameRequestVersion.current
+            setRenameLoading(true)
+            setRenameError('')
+            try {
+              const result = await renameStorage(renameTarget.id, name)
+              if (renameVersion !== renameRequestVersion.current) return
+              setRenameOpen(false)
+              setRenameMessage(result.message || `Renamed storage box to ${name}.`)
+              await load()
+            } catch (reason) {
+              if (renameVersion !== renameRequestVersion.current) return
+              setRenameError(errorMessage(reason))
+            } finally {
+              if (renameVersion === renameRequestVersion.current) setRenameLoading(false)
+            }
+          }}
+        >
+          <label className="min-w-0 flex-1 text-sm font-medium text-text">
+            Storage box name
+            <input
+              autoFocus
+              className="input mt-1 min-h-11 w-full"
+              value={renameDraft}
+              maxLength={64}
+              onChange={event => setRenameDraft(event.target.value)}
+            />
+          </label>
+          <div className="flex gap-2">
+            <button type="submit" className="btn-primary min-h-11" disabled={renameLoading}>
+              <Icon name={renameLoading ? 'Loader2' : 'Check'} size={14} className={renameLoading ? 'animate-spin' : undefined} />
+              {renameLoading ? 'Saving...' : 'Save name'}
+            </button>
+            <button type="button" className="btn-secondary min-h-11" disabled={renameLoading} onClick={() => setRenameOpen(false)}>Cancel</button>
+          </div>
+          {renameError && <p className="text-sm text-danger" role="alert">{renameError}</p>}
+        </form>
+      )}
+      {renameMessage && <div className="mb-4 rounded-lg border border-success/35 bg-success/10 px-4 py-3 text-sm text-text" role="status">{renameMessage}</div>}
+      {inventoryMutationMessage && <div className="mb-4 rounded-lg border border-success/35 bg-success/10 px-4 py-3 text-sm text-text" role="status">{inventoryMutationMessage}</div>}
+      {inventoryMutationError && <div className="mb-4 rounded-lg border border-danger/35 bg-danger/10 px-4 py-3 text-sm text-danger" role="alert">{inventoryMutationError}</div>}
 
       {locationType && current && !validSelectedLocation && <DataState state="error" title="Location does not match this player" message="Choose a location available to the selected player." />}
       {current?.data.mode === 'demo' && <DataState state="fresh" title="Showing bundled demo inventory" message="Demo mode was explicitly requested; these grouped items are examples and not live server contents." />}
@@ -365,6 +486,13 @@ export function SharedInventoryExplorer({
         scopeType={scopeType}
         scopeId={scopeId}
         demo={demo}
+        canDeletePlayerItems={canDeletePlayerItems}
+        canDeleteStorageItems={canDeleteStorageItems}
+        onInventoryChanged={() => mutationRefresh.current()}
+        onDeleteResult={(message, mutationError) => {
+          setInventoryMutationMessage(message)
+          setInventoryMutationError(mutationError)
+        }}
         onClose={() => setSelected(null)}
       />
     </WorkspaceSection>
@@ -372,7 +500,8 @@ export function SharedInventoryExplorer({
 }
 
 function OccurrencePanel({
-  group, players, locations, initialPlayerId, initialLocation, entityTypes, scopeType, scopeId, demo, onClose,
+  group, players, locations, initialPlayerId, initialLocation, entityTypes, scopeType, scopeId, demo,
+  canDeletePlayerItems, canDeleteStorageItems, onInventoryChanged, onDeleteResult, onClose,
 }: {
   group: SharedInventoryGroup | null
   players: SharedInventoryResponse['data']['players']
@@ -383,6 +512,10 @@ function OccurrencePanel({
   scopeType?: InventoryEntityType
   scopeId?: number
   demo: boolean
+  canDeletePlayerItems: boolean
+  canDeleteStorageItems: boolean
+  onInventoryChanged: () => Promise<void>
+  onDeleteResult: (message: string, error: string) => void
   onClose: () => void
 }) {
   const [playerId, setPlayerId] = useState<number | undefined>(initialPlayerId)
@@ -394,8 +527,12 @@ function OccurrencePanel({
   const [nextCursor, setNextCursor] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
+  const [selectedItemKeys, setSelectedItemKeys] = useState<Set<string>>(new Set())
+  const [deleteQuantities, setDeleteQuantities] = useState<Record<string, string>>({})
+  const [deleteBusy, setDeleteBusy] = useState(false)
   const [verifiedDetailsUrl, setVerifiedDetailsUrl] = useState<string | null>(null)
   const version = useRef(0)
+  const groupTemplateId = group?.templateId
   const initialLocationType = initialLocation?.type
   const initialLocationId = initialLocation?.id
   const identity = JSON.stringify({ templateId: group?.templateId, playerId, location, sort, scopeType, scopeId, demo })
@@ -409,9 +546,97 @@ function OccurrencePanel({
   const locationOrdinals = useMemo(() => duplicateOrdinals(
     filteredLocations, location => location.label, location => `${location.type}:${location.id}`,
   ), [filteredLocations])
+  const canDelete = (item: SharedInventoryItem) => !demo && (
+    item.entity.type === 'player' ? canDeletePlayerItems : canDeleteStorageItems
+  )
+  const deletableItems = items.filter(canDelete)
+  const selectedItems = deletableItems.filter(item => selectedItemKeys.has(inventoryItemKey(item)))
+
+  const deleteItems = async (targets: SharedInventoryItem[]) => {
+    if (targets.length === 0) return
+    const requests = targets.map(item => ({
+      item,
+      quantity: Number(deleteQuantities[inventoryItemKey(item)] ?? item.quantity),
+    }))
+    const invalid = requests.find(request => (
+      !Number.isSafeInteger(request.quantity)
+      || request.quantity < (request.item.quantity === 0 ? 0 : 1)
+      || request.quantity > request.item.quantity
+    ))
+    if (invalid) {
+      onDeleteResult('', `Delete quantity for ${invalid.item.displayName} must be a whole number from 1 to ${invalid.item.quantity}.`)
+      return
+    }
+    const quantity = requests.reduce((sum, request) => sum + request.quantity, 0)
+    const message = targets.length === 1
+      ? `Delete ${quantity} of ${targets[0].displayName} (stack x${targets[0].quantity}) from ${targets[0].entity.label || entityTypeLabel(targets[0].entity.type)}? This cannot be undone.`
+      : `Delete ${quantity} total items across ${targets.length} selected occurrences? Any full stacks will be removed. This cannot be undone.`
+    if (!window.confirm(message)) return
+
+    setDeleteBusy(true)
+    setError('')
+    const updated = new Map<string, number>()
+    const failures: string[] = []
+    let removedQuantity = 0
+    const partialEntityTypes = new Set<InventoryEntityType>()
+    for (const request of requests) {
+      const { item, quantity: deleteQuantity } = request
+      try {
+        const remaining = item.quantity - deleteQuantity
+        const result = remaining === 0
+          ? item.entity.type === 'player'
+            ? await deleteInventoryItem(item.id, item.quantity)
+            : await deleteStorageItem(item.id, item.quantity)
+          : item.entity.type === 'player'
+            ? await setItemStack(item.id, remaining, item.quantity)
+            : await setStorageItemStack(item.id, remaining, item.quantity)
+        if (!result.ok) throw new Error(result.message || 'The inventory update was rejected.')
+        updated.set(inventoryItemKey(item), remaining)
+        removedQuantity += deleteQuantity
+        if (remaining > 0) partialEntityTypes.add(item.entity.type)
+      } catch (reason) {
+        failures.push(`${item.displayName} in ${item.entity.label || entityTypeLabel(item.entity.type)}: ${errorMessage(reason)}`)
+      }
+    }
+
+    if (updated.size > 0) {
+      setItems(current => current
+        .filter(item => updated.get(inventoryItemKey(item)) !== 0)
+        .map(item => {
+          const remaining = updated.get(inventoryItemKey(item))
+          return remaining === undefined ? item : { ...item, quantity: remaining }
+        }))
+      setSelectedItemKeys(current => new Set([...current].filter(key => !updated.has(key))))
+      setDeleteQuantities(current => {
+        const next = { ...current }
+        updated.forEach((remaining, key) => {
+          if (remaining === 0) delete next[key]
+          else next[key] = String(remaining)
+        })
+        return next
+      })
+    }
+    let successMessage = updated.size > 0
+      ? removedQuantity === 0
+        ? `Deleted ${updated.size} empty occurrence${updated.size === 1 ? '' : 's'}.`
+        : `Removed ${removedQuantity} item${removedQuantity === 1 ? '' : 's'} from ${updated.size} occurrence${updated.size === 1 ? '' : 's'}.`
+      : ''
+    if (partialEntityTypes.has('player')) {
+      successMessage += ' Player changes require a relog or map restart and may be overwritten while the player is online.'
+    }
+    if (partialEntityTypes.has('storage')) {
+      successMessage += ' Storage changes appear in-game after the server zone restarts.'
+    }
+    const failureMessage = failures.length > 0
+      ? `${updated.size > 0 ? `${updated.size} updated; ` : ''}${failures.length} failed. ${failures.join(' ')}`
+      : ''
+    onDeleteResult(successMessage, failureMessage)
+    if (updated.size > 0) await onInventoryChanged()
+    setDeleteBusy(false)
+  }
 
   const load = useCallback(async (cursor?: string, append = false) => {
-    if (!group) return
+    if (!groupTemplateId) return
     const request = ++version.current
     setLoading(true)
     setError('')
@@ -421,12 +646,17 @@ function OccurrencePanel({
     }
     try {
       const result = await getSharedInventoryOccurrences({
-        templateId: group.templateId, types: entityTypes, scopeType, scopeId, playerId,
+        templateId: groupTemplateId, types: entityTypes, scopeType, scopeId, playerId,
         locationType: location?.type, locationId: location?.id, sort, limit: 50, cursor, demo,
       })
       if (request !== version.current) return
       assertInventoryOccurrences(result.data.items)
       setItems(current => append ? [...current, ...result.data.items] : result.data.items)
+      setDeleteQuantities(current => {
+        const next = append ? { ...current } : {}
+        result.data.items.forEach(item => { next[inventoryItemKey(item)] = String(item.quantity) })
+        return next
+      })
       setNextCursor(result.page.nextCursor)
       setPanelPlayers(current => {
         if (!playerId || result.data.players.some(player => player.id === playerId)) return result.data.players
@@ -445,7 +675,7 @@ function OccurrencePanel({
     } finally {
       if (request === version.current) setLoading(false)
     }
-  }, [demo, entityTypes, group, location, playerId, scopeId, scopeType, sort])
+  }, [demo, entityTypes, groupTemplateId, location, playerId, scopeId, scopeType, sort])
 
   useEffect(() => {
     setPlayerId(initialPlayerId)
@@ -459,12 +689,16 @@ function OccurrencePanel({
     setPanelLocations(locations)
   }, [group?.groupKey, initialLocationId, initialLocationType, initialPlayerId, locations, players])
   useEffect(() => {
+    setSelectedItemKeys(new Set())
+    setDeleteQuantities({})
+  }, [group?.groupKey])
+  useEffect(() => {
     version.current += 1
     setItems([])
     setNextCursor(null)
     setError('')
     if (group) void load()
-  }, [identity, group, load])
+  }, [identity, groupTemplateId, load])
   useEffect(() => {
     setVerifiedDetailsUrl(null)
     if (!group) return
@@ -480,7 +714,9 @@ function OccurrencePanel({
       {group && (
         <div className="min-w-0">
           <div className="mb-4 flex flex-wrap gap-2">
-            <span className="pill border-info/40 text-info">Read-only</span>
+            {(canDeletePlayerItems || canDeleteStorageItems) && !demo
+              ? <span className="pill border-danger/40 text-danger">Deletion enabled</span>
+              : <span className="pill border-info/40 text-info">Read-only</span>}
             <span className="pill border-border">x{group.totalQuantity} total</span>
             <span className="pill border-border">{group.occurrenceCount} occurrences</span>
             <span className="pill border-border">{group.locationCount} locations</span>
@@ -518,15 +754,88 @@ function OccurrencePanel({
           {loading && items.length === 0 && <DataState state="loading" title="Loading occurrences" />}
           {!loading && !error && items.length === 0 && <DataState state="empty" title="No matching occurrences" message="Try another player or location." />}
           {items.length > 0 && (
-            <ul className="divide-y divide-border" aria-label="Item occurrences">
+            <>
+              {deletableItems.length > 0 && (
+                <div className="mb-3 flex flex-wrap items-center justify-between gap-2 rounded-lg border border-border bg-surface-2 p-3">
+                  <label className="flex min-h-11 items-center gap-2 text-sm font-medium text-text">
+                    <input
+                      type="checkbox"
+                      aria-label="Select all loaded occurrences"
+                      checked={selectedItems.length === deletableItems.length}
+                      disabled={deleteBusy}
+                      onChange={event => setSelectedItemKeys(current => {
+                        const next = new Set(current)
+                        deletableItems.forEach(item => event.target.checked ? next.add(inventoryItemKey(item)) : next.delete(inventoryItemKey(item)))
+                        return next
+                      })}
+                    />
+                    Select all loaded
+                  </label>
+                  <button type="button" className="btn-danger min-h-11" disabled={deleteBusy || selectedItems.length === 0} onClick={() => { void deleteItems(selectedItems) }}>
+                    <Icon name={deleteBusy ? 'Loader2' : 'Trash2'} size={14} className={deleteBusy ? 'animate-spin' : undefined} />
+                    {deleteBusy ? 'Deleting...' : `Delete selected (${selectedItems.length})`}
+                  </button>
+                </div>
+              )}
+              <ul className="divide-y divide-border" aria-label="Item occurrences">
               {items.map(item => (
                 <li key={`${item.entity.type}:${item.id}`} className="py-3 first:pt-0">
                   <div className="flex min-w-0 items-start justify-between gap-3">
-                    <div className="min-w-0">
+                    <div className="flex min-w-0 items-start gap-3">
+                      {canDelete(item) && (
+                        <input
+                          type="checkbox"
+                          className="mt-1"
+                          aria-label={`Select ${item.displayName} in ${item.entity.label || entityTypeLabel(item.entity.type)}`}
+                          checked={selectedItemKeys.has(inventoryItemKey(item))}
+                          disabled={deleteBusy}
+                          onChange={event => setSelectedItemKeys(current => {
+                            const next = new Set(current)
+                            if (event.target.checked) next.add(inventoryItemKey(item))
+                            else next.delete(inventoryItemKey(item))
+                            return next
+                          })}
+                        />
+                      )}
+                      <div className="min-w-0">
                       <p className="truncate font-semibold text-text">{entityTypeLabel(item.entity.type)}: {item.entity.label || `Actor ${item.entity.id}`}</p>
                       <p className="mt-0.5 truncate text-xs text-text-muted">{item.player?.name || item.entity.owner || 'Owner not proven'} · {item.entity.map || 'Map not reported'}</p>
+                      </div>
                     </div>
-                    <span className="shrink-0 font-semibold text-accent-bright">x{item.quantity}</span>
+                    <div className="flex shrink-0 items-center gap-2">
+                      {canDelete(item) && (
+                        <label className="text-xs font-medium text-text-muted">
+                          Delete quantity
+                          <input
+                            type="number"
+                            className="input mt-1 h-9 w-20 text-right font-semibold text-accent-bright"
+                            aria-label={`Delete quantity for ${item.displayName} in ${item.entity.label || entityTypeLabel(item.entity.type)}`}
+                            min={item.quantity === 0 ? 0 : 1}
+                            max={item.quantity}
+                            step={1}
+                            inputMode="numeric"
+                            value={deleteQuantities[inventoryItemKey(item)] ?? String(item.quantity)}
+                            disabled={deleteBusy}
+                            onChange={event => setDeleteQuantities(current => ({
+                              ...current,
+                              [inventoryItemKey(item)]: event.target.value,
+                            }))}
+                          />
+                        </label>
+                      )}
+                      {!canDelete(item) && <span className="font-semibold text-accent-bright">x{item.quantity}</span>}
+                      {canDelete(item) && (
+                        <button
+                          type="button"
+                          className="btn-icon min-h-11 min-w-11 text-danger"
+                          aria-label={`Delete ${item.displayName} from ${item.entity.label || entityTypeLabel(item.entity.type)}`}
+                          disabled={deleteBusy}
+                          onClick={() => { void deleteItems([item]) }}
+                        >
+                          <Icon name="Trash2" size={15} />
+                        </button>
+                      )}
+                    </div>
                   </div>
                   <dl className="mt-2 grid grid-cols-2 gap-x-4 gap-y-1 text-xs sm:grid-cols-4">
                     <div><dt className="text-text-dim">Quality</dt><dd>{item.quality}</dd></div>
@@ -537,7 +846,8 @@ function OccurrencePanel({
                   <Link className="mt-2 inline-flex text-xs font-semibold text-info hover:text-ibad" to={item.entity.workspacePath}>Open {item.entity.type === 'player' ? 'player' : 'container'}</Link>
                 </li>
               ))}
-            </ul>
+              </ul>
+            </>
           )}
           {nextCursor && <button className="btn-secondary mt-4 min-h-11 w-full" disabled={loading} onClick={() => { void load(nextCursor, true) }}>{loading ? 'Loading...' : 'Load more occurrences'}</button>}
           {verifiedDetailsUrl && <a className="btn-ghost mt-4 inline-flex min-h-11 text-text-muted" href={verifiedDetailsUrl} target="_blank" rel="noopener noreferrer">View on dune.gaming.tools<Icon name="ExternalLink" size={14} /></a>}

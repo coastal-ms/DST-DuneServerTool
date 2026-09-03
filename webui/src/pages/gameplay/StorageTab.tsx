@@ -1,8 +1,8 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Icon } from '../../components/Icon'
 import { ItemPicker } from '../../components/ItemPicker'
 import {
-  getStorage, getStorageItems, giveItemsToStorage, deleteStorageItem, setStorageItemStack, isValidTemplateId,
+  getStorage, getStorageItems, giveItemsToStorage, deleteStorageItem, renameStorage, setStorageItemStack, isValidTemplateId,
   type StorageContainer, type InventoryItem, type DataSource, type StorageGiveItemInput,
 } from '../../api/gameplay'
 import { GivePackageForm } from './players/sections'
@@ -20,19 +20,23 @@ export function StorageTab() {
   const [sort, setSort] = useState<SortKey>('item_count')
   const [dir, setDir] = useState<'asc' | 'desc'>('desc')
   const [selected, setSelected] = useState<StorageContainer | null>(null)
+  const loadVersion = useRef(0)
 
   const load = useCallback(async () => {
+    const version = ++loadVersion.current
     setLoading(true); setError(null)
     try {
       const r = await getStorage()
+      if (version !== loadVersion.current) return
       setContainers(r.containers); setSource(r.source); setLiveError(r.liveError)
     } catch (e) {
-      setError(e instanceof Error ? e.message : String(e))
+      if (version === loadVersion.current) setError(e instanceof Error ? e.message : String(e))
     } finally {
-      setLoading(false)
+      if (version === loadVersion.current) setLoading(false)
     }
   }, [])
   useEffect(() => { void load() }, [load])
+  useEffect(() => () => { loadVersion.current += 1 }, [])
 
   const toggleSort = (col: SortKey) => {
     if (sort === col) setDir(d => (d === 'asc' ? 'desc' : 'asc'))
@@ -125,13 +129,25 @@ export function StorageTab() {
         </table>
       </div>
 
-      {selected && <ContainerDetail container={selected} demo={source === 'demo'} onClose={() => setSelected(null)} onChanged={() => { void load() }} />}
+      {selected && (
+        <ContainerDetail
+          container={selected}
+          demo={source === 'demo'}
+          onClose={() => setSelected(null)}
+          onChanged={() => { void load() }}
+          onRenamed={(id, name) => {
+            setContainers(current => current.map(container => container.id === id ? { ...container, name } : container))
+            setSelected(current => current?.id === id ? { ...current, name } : current)
+          }}
+        />
+      )}
     </div>
   )
 }
 
-function ContainerDetail({ container, demo, onClose, onChanged }: {
+function ContainerDetail({ container, demo, onClose, onChanged, onRenamed }: {
   container: StorageContainer; demo: boolean; onClose: () => void; onChanged: () => void
+  onRenamed: (id: number, name: string) => void
 }) {
   const [items, setItems] = useState<InventoryItem[]>([])
   const [loading, setLoading] = useState(true)
@@ -140,6 +156,8 @@ function ContainerDetail({ container, demo, onClose, onChanged }: {
   const [flash, setFlash] = useState<string | null>(null)
   const [showAdd, setShowAdd] = useState(false)
   const [showPackage, setShowPackage] = useState(false)
+  const [showRename, setShowRename] = useState(false)
+  const [renameDraft, setRenameDraft] = useState(container.name)
   const [editingId, setEditingId] = useState<number | null>(null)
   const canWrite = !demo
 
@@ -213,11 +231,31 @@ function ContainerDetail({ container, demo, onClose, onChanged }: {
     }
   }
 
+  const handleRename = async () => {
+    const name = renameDraft.trim()
+    if (!name) {
+      setError('Enter a name for this storage box.')
+      return
+    }
+    setBusy(true); setError(null); setFlash(null)
+    try {
+      const r = await renameStorage(container.id, name)
+      setShowRename(false)
+      setFlash(r.message || `Renamed storage container to '${name}'.`)
+      onRenamed(container.id, name)
+      onChanged()
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e))
+    } finally {
+      setBusy(false)
+    }
+  }
+
   return (
     <div className="fixed inset-0 z-40 flex justify-end" onClick={onClose}>
       <div className="absolute inset-0 bg-black/50" />
       <div className="relative w-full max-w-md h-full bg-surface border-l border-border overflow-y-auto p-5" onClick={e => e.stopPropagation()}>
-        <div className="flex items-start justify-between mb-4">
+        <div className="flex items-start justify-between gap-3 mb-4">
           <div>
             <h3 className="text-lg font-semibold text-text">{container.name || 'Unnamed container'}</h3>
             <div className="text-xs text-text-dim">{container.class} · #{container.id}</div>
@@ -226,8 +264,51 @@ function ContainerDetail({ container, demo, onClose, onChanged }: {
               {container.map && <span>· {container.map}</span>}
             </div>
           </div>
-          <button onClick={onClose} className="text-text-dim hover:text-text"><Icon name="X" size={20} /></button>
+          <div className="flex shrink-0 items-center gap-1">
+            {canWrite && (
+              <button
+                type="button"
+                className="btn-ghost min-h-11"
+                disabled={busy}
+                onClick={() => {
+                  setRenameDraft(container.name)
+                  setError(null)
+                  setShowRename(current => !current)
+                }}
+              >
+                <Icon name="PenLine" size={14} />Rename
+              </button>
+            )}
+            <button type="button" aria-label="Close storage details" onClick={onClose} className="btn-icon min-h-11 min-w-11"><Icon name="X" size={20} /></button>
+          </div>
         </div>
+
+        {showRename && (
+          <form
+            aria-label="Rename storage box"
+            className="mb-3 rounded-lg border border-accent/35 bg-accent/10 p-3"
+            onSubmit={event => { event.preventDefault(); void handleRename() }}
+          >
+            <label className="block text-xs font-medium text-text">
+              Storage box name
+              <input
+                autoFocus
+                className="input mt-1 min-h-11 w-full"
+                value={renameDraft}
+                maxLength={64}
+                disabled={busy}
+                onChange={event => setRenameDraft(event.target.value)}
+              />
+            </label>
+            <div className="mt-2 flex justify-end gap-2">
+              <button type="button" className="btn-secondary min-h-11" disabled={busy} onClick={() => setShowRename(false)}>Cancel</button>
+              <button type="submit" className="btn-primary min-h-11" disabled={busy || !renameDraft.trim()}>
+                <Icon name={busy ? 'Loader2' : 'Check'} size={14} className={busy ? 'animate-spin' : undefined} />
+                {busy ? 'Saving...' : 'Save name'}
+              </button>
+            </div>
+          </form>
+        )}
 
         {canWrite ? (
           <>

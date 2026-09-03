@@ -396,7 +396,7 @@ Describe 'teleport bookmarks' {
             function global:Invoke-DuneSqlQuery { param($Ip, $Sql, $ReadOnly, $MaxRows, $TimeoutSec) }
         }
         if (-not (Get-Command Invoke-DuneRmqTeleportTo -ErrorAction SilentlyContinue)) {
-            function global:Invoke-DuneRmqTeleportTo { param($FlsId, $X, $Y, $Z) }
+            function global:Invoke-DuneRmqTeleportTo { param($FlsId, $X, $Y, $Z, [switch]$RepeatForReliability) }
         }
         if (-not (Get-Command Invoke-DuneRmqTeleportToExact -ErrorAction SilentlyContinue)) {
             function global:Invoke-DuneRmqTeleportToExact { param($FlsId, $X, $Y, $Z) }
@@ -656,7 +656,7 @@ Describe 'teleport bookmarks' {
         $r.reply | Should -BeLike "*Available: Base*"
     }
 
-    It 'uses the non-exact teleport path within the current map, partition and dimension' {
+    It 'repeats the safe non-exact teleport path within the current map, partition and dimension' {
         Save-DuneChatTeleports -Bookmarks @(
             [ordered]@{ name = 'Base'; key = 'base'; map = 'HaggaBasin'; partition = 1; dimension = 0; x = 1; y = 2; z = 3; capturedFrom = 'Coastal'; capturedAt = '2026-08-16T00:00:00Z' }
         ) | Should -BeTrue
@@ -669,7 +669,8 @@ Describe 'teleport bookmarks' {
         $r.ok | Should -BeTrue
         $r.reply | Should -Be 'Teleported to Base.'
         Should -Invoke Invoke-DuneRmqTeleportTo -Times 1 -Exactly -ParameterFilter {
-            $FlsId -eq 'FLS1' -and $X -eq 1 -and $Y -eq 2 -and $Z -eq 3
+            $FlsId -eq 'FLS1' -and $X -eq 1 -and $Y -eq 2 -and $Z -eq 3 -and
+            $RepeatForReliability
         }
         Should -Invoke Invoke-DuneRmqTeleportToExact -Times 0 -Exactly
     }

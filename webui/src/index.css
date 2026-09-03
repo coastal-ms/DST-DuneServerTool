@@ -56,6 +56,11 @@
       radial-gradient(ellipse 60% 40% at 80% 110%, color-mix(in oklab, var(--color-ibad) 5%, transparent), transparent);
     background-attachment: fixed;
   }
+  select option,
+  select optgroup {
+    background-color: var(--color-surface-2);
+    color: var(--color-text);
+  }
   ::-webkit-scrollbar { width: 10px; height: 10px; }
   ::-webkit-scrollbar-track { background: transparent; }
   ::-webkit-scrollbar-thumb { @apply bg-border rounded-full; }

@@ -231,7 +231,7 @@ export function Sidebar({ collapsed, onExpand }: Props) {
     const isActive = isNavItemActive(item, pathname, search)
     return (
       <Link
-        to={item.to}
+        to={item.sidebarTo ?? item.to}
         aria-current={isActive ? 'page' : undefined}
         title={collapsed ? item.label : undefined}
         className={

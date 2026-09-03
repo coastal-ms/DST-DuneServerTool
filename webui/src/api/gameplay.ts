@@ -810,9 +810,9 @@ export function preparePatternUpgrading(controllerId: number) {
   })
 }
 
-export function deleteInventoryItem(itemId: number) {
+export function deleteInventoryItem(itemId: number, expectedStackSize?: number) {
   return api<WriteResult>('/api/gameplay/players/delete-item', {
-    method: 'POST', body: JSON.stringify({ item_id: itemId }),
+    method: 'POST', body: JSON.stringify({ item_id: itemId, expected_stack_size: expectedStackSize }),
   })
 }
 
@@ -836,10 +836,10 @@ export function setItemWater(itemId: number, amount: number) {
   })
 }
 
-export function setItemStack(itemId: number, stackSize: number) {
+export function setItemStack(itemId: number, stackSize: number, expectedStackSize?: number) {
   return api<WriteResult>('/api/gameplay/players/set-item-stack', {
     method: 'POST',
-    body: JSON.stringify({ item_id: itemId, stack_size: stackSize }),
+    body: JSON.stringify({ item_id: itemId, stack_size: stackSize, expected_stack_size: expectedStackSize }),
   })
 }
 
@@ -1280,15 +1280,21 @@ export function giveItemsToStorage(containerId: number, items: StorageGiveItemIn
   })
 }
 
-export function deleteStorageItem(itemId: number) {
+export function deleteStorageItem(itemId: number, expectedStackSize?: number) {
   return api<WriteResult>('/api/gameplay/storage/delete-item', {
-    method: 'POST', body: JSON.stringify({ item_id: itemId }),
+    method: 'POST', body: JSON.stringify({ item_id: itemId, expected_stack_size: expectedStackSize }),
   })
 }
 
-export function setStorageItemStack(itemId: number, stackSize: number) {
+export function setStorageItemStack(itemId: number, stackSize: number, expectedStackSize?: number) {
   return api<WriteResult>('/api/gameplay/storage/set-item-stack', {
-    method: 'POST', body: JSON.stringify({ item_id: itemId, stack_size: stackSize }),
+    method: 'POST', body: JSON.stringify({ item_id: itemId, stack_size: stackSize, expected_stack_size: expectedStackSize }),
+  })
+}
+
+export function renameStorage(containerId: number, name: string) {
+  return api<WriteResult>('/api/gameplay/storage/rename', {
+    method: 'POST', body: JSON.stringify({ container_id: containerId, name }),
   })
 }
 

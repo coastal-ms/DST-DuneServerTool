@@ -13,10 +13,21 @@ here cover everything those tags shipped.
 
 ## [Unreleased]
 
+### Added
+
+- Added storage-box renaming from Storage administration and the Shared
+  Inventory Explorer for a selected or directly scoped container.
+- Added guarded single-item and multi-select deletion for live player-backpack
+  and storage-box occurrences in the Shared Inventory Explorer, including
+  editable delete quantities for reducing a stack without removing it entirely.
+
 ### Fixed
 
 - Fixed Shared Inventory Explorer results collapsing into one blank item and
   occurrence details failing to reach their read-only API route.
+- Hardened shared `!tp <destination>` replay against intermittent game-side
+  command misses by repeating only that safe teleport inside one paced broker
+  invocation.
 
 ## [15.0.0-phase2-test1] - 2026-09-02
 

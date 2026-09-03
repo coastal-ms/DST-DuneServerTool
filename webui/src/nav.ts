@@ -4,6 +4,7 @@ export type NavGroup = 'workspaces' | 'overview' | 'terminal' | 'data' | 'solo' 
 
 export type NavItem = {
   to: string
+  sidebarTo?: string
   label: string
   icon: string  // lucide-react icon name
   group?: NavGroup
@@ -46,7 +47,7 @@ export const LEGACY_NAV_ITEMS: readonly NavItem[] = [
   { to: '/gameconfig',  label: 'Game Config',  icon: 'Sliders',         group: 'terminal', ownerOnly: true, legacy: true },
   { to: '/experimental', label: 'Experimental Lab', icon: 'FlaskConical', group: 'terminal', ownerOnly: true, legacy: true },
   { to: '/broadcasts',  label: 'Broadcasts',   icon: 'Megaphone',       group: 'terminal', legacy: true },
-  { to: '/gameplay',    label: 'Gameplay Admin', icon: 'Gamepad2',       group: 'workspaces', activePaths: GAMEPLAY_PATHS, inactivePaths: ['/map?view=lifecycle'] },
+  { to: '/gameplay', sidebarTo: '/gameplay?view=overview', label: 'Gameplay Admin', icon: 'Gamepad2', group: 'workspaces', activePaths: GAMEPLAY_PATHS, inactivePaths: ['/map?view=lifecycle'] },
   { to: '/solo',        label: 'Solo Mode',      icon: 'Orbit',           group: 'solo', localOnly: true, windowsOnly: true, badge: 'Preview', legacy: true },
   { to: '/database',    label: 'Database',       icon: 'Database',        group: 'database', ownerOnly: true, legacy: true },
   { to: '/sietches',    label: 'Sietches',     icon: 'Network',         group: 'database', ownerOnly: true, legacy: true },

@@ -148,6 +148,28 @@ Describe 'Send-DuneRmqServerCommandBatch envelope' -Tag 'Rmq' {
         $script:lastErl | Should -Match 'timer:sleep\(500\)'
         $script:lastTimeoutSec | Should -Be 30
     }
+
+    It 'repeats a replay-safe teleport in one paced broker invocation' {
+        $r = Invoke-DuneRmqTeleportTo -FlsId 'abc123' -X 1 -Y 2 -Z 3 -RepeatForReliability
+
+        $r.ok | Should -BeTrue
+        $script:lastAction | Should -Be 'teleport-live-repeat'
+        $script:lastExtra.total | Should -Be 2
+        $script:lastExtra.spacing_ms | Should -Be 750
+        $script:lastErl | Should -Match 'timer:sleep\(750\)'
+
+        $matches = [regex]::Matches($script:lastErl, 'base64:decode\(<<"([A-Za-z0-9+/=]+)">>\)')
+        $matches.Count | Should -Be 2
+        $payloads = @($matches | ForEach-Object {
+            $json = [Text.Encoding]::UTF8.GetString([Convert]::FromBase64String($_.Groups[1].Value))
+            (($json | ConvertFrom-Json).MessageContent | ConvertFrom-Json)
+        })
+        @($payloads | ForEach-Object ServerCommand) | Should -Be @('TeleportTo', 'TeleportTo')
+        @($payloads | ForEach-Object PlayerId) | Should -Be @('abc123', 'abc123')
+        @($payloads | ForEach-Object X) | Should -Be @(1, 1)
+        @($payloads | ForEach-Object Y) | Should -Be @(2, 2)
+        @($payloads | ForEach-Object Z) | Should -Be @(3, 3)
+    }
 }
 
 Describe 'Send-DuneRmqCourierMessage envelope' -Tag 'Rmq' {

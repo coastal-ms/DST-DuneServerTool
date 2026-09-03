@@ -179,6 +179,51 @@ function Get-DuneStorageItemsDemo {
     }
 }
 
+function Invoke-DuneStorageRename {
+    param([string]$Ip, [long]$ContainerId, [string]$Name)
+    $trimmedName = $Name.Trim()
+    if ($ContainerId -le 0) { return @{ ok = $false; error = 'container_id is required.' } }
+    if (-not $trimmedName) { return @{ ok = $false; error = 'name is required.' } }
+    if ($trimmedName.Length -gt 64) { return @{ ok = $false; error = 'name must be 64 characters or fewer.' } }
+    if ($trimmedName -match '[\x00-\x1F\x7F]') { return @{ ok = $false; error = 'name cannot contain control characters.' } }
+    if ($trimmedName.StartsWith('##') -or $trimmedName -eq 'None') {
+        return @{ ok = $false; error = 'name is reserved by the game.' }
+    }
+
+    $safeName = ConvertTo-DuneSqlString $trimmedName
+    $sql = @"
+WITH target AS (
+    SELECT p.id
+    FROM dune.placeables p
+    WHERE p.id = $ContainerId::bigint
+      AND p.is_hologram = false
+      AND p.owner_entity_id IS NOT NULL
+      AND p.owner_entity_id <> 0
+      AND EXISTS (
+          SELECT 1
+          FROM dune.inventories inv
+          WHERE inv.actor_id = p.id AND inv.inventory_type = 4
+      )
+),
+updated AS (
+    UPDATE dune.permission_actor pa
+    SET actor_name = '$safeName'
+    FROM target
+    WHERE pa.actor_id = target.id
+    RETURNING pa.actor_id
+)
+SELECT COUNT(*)::text AS updated_count FROM updated;
+"@
+    $res = Invoke-DuneSqlQuery -Ip $Ip -Sql $sql -ReadOnly $false -MaxRows 1 -TimeoutSec 30
+    if (-not $res.ok) { return @{ ok = $false; error = $res.error } }
+    $rows = @(ConvertTo-DuneRowMaps -Result $res)
+    $updated = if ($rows.Count -gt 0) { ConvertTo-DuneInt $rows[0]['updated_count'] } else { 0 }
+    if ($updated -eq 0) {
+        return @{ ok = $false; error = "Storage container $ContainerId was not found or has no permission name row." }
+    }
+    return @{ ok = $true; message = "Renamed storage container to '$trimmedName'."; containerId = $ContainerId; name = $trimmedName }
+}
+
 # ----------------------------------------------------------------------------
 # BLUEPRINTS — list (id, owner, item id, pieces, placeables, name). Read-only.
 # ----------------------------------------------------------------------------
@@ -682,10 +727,22 @@ function Invoke-DuneStorageGiveItems {
 
 # Remove a single item from a container (dune.delete_item, same as player inventory).
 function Invoke-DuneStorageDeleteItem {
-    param([string]$Ip, [long]$ItemId)
-    $sql = "SELECT dune.delete_item($ItemId::bigint);"
+    param([string]$Ip, [long]$ItemId, [Nullable[long]]$ExpectedStackSize)
+    $expectedClause = if ($null -ne $ExpectedStackSize) { " AND stack_size = $ExpectedStackSize::bigint" } else { '' }
+    $sql = @"
+WITH matched AS (
+    SELECT id
+    FROM dune.items
+    WHERE id = $ItemId::bigint$expectedClause
+    FOR UPDATE
+)
+SELECT dune.delete_item(id) FROM matched;
+"@
     $res = Invoke-DuneSqlQuery -Ip $Ip -Sql $sql -ReadOnly $false -MaxRows 1 -TimeoutSec 30
     if (-not $res.ok) { return @{ ok = $false; error = $res.error } }
+    if (@(ConvertTo-DuneRowMaps -Result $res).Count -eq 0) {
+        return @{ ok = $false; error = 'Item quantity changed or the item no longer exists. Refresh and try again.' }
+    }
     return @{ ok = $true; message = "Removed item $ItemId from container." }
 }
 
@@ -696,20 +753,21 @@ function Invoke-DuneStorageDeleteItem {
 # quantity only becomes visible in-game after a server zone (battlegroup)
 # restart, because the map pod caches container contents in RAM.
 function Invoke-DuneStorageSetItemStack {
-    param([string]$Ip, [long]$ItemId, [long]$StackSize)
+    param([string]$Ip, [long]$ItemId, [long]$StackSize, [Nullable[long]]$ExpectedStackSize)
     if ($ItemId -le 0) { return @{ ok = $false; error = 'item_id is required.' } }
     if ($StackSize -lt 1) { return @{ ok = $false; error = 'stack_size must be at least 1.' } }
+    $expectedClause = if ($null -ne $ExpectedStackSize) { " AND stack_size = $ExpectedStackSize::bigint" } else { '' }
     $sql = @"
 UPDATE dune.items
 SET stack_size = $StackSize::bigint
-WHERE id = $ItemId::bigint
+WHERE id = $ItemId::bigint$expectedClause
 RETURNING id::text AS item_id;
 "@
     $res = Invoke-DuneSqlQuery -Ip $Ip -Sql $sql -ReadOnly $false -MaxRows 1 -TimeoutSec 30
     if (-not $res.ok) { return @{ ok = $false; error = $res.error } }
     $affected = @(ConvertTo-DuneRowMaps -Result $res).Count
     if ($affected -eq 0) {
-        return @{ ok = $false; error = "Item $ItemId not found." }
+        return @{ ok = $false; error = 'Item quantity changed or the item no longer exists. Refresh and try again.' }
     }
     return @{ ok = $true; message = "Set item $ItemId stack to $StackSize. Restart the server zone for it to appear in-game." }
 }

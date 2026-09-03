@@ -14,6 +14,11 @@ const capabilityState = vi.hoisted(() => ({
 }))
 const inventoryApi = vi.hoisted(() => vi.fn())
 const occurrenceApi = vi.hoisted(() => vi.fn())
+const renameStorageApi = vi.hoisted(() => vi.fn())
+const deleteInventoryItemApi = vi.hoisted(() => vi.fn())
+const deleteStorageItemApi = vi.hoisted(() => vi.fn())
+const setItemStackApi = vi.hoisted(() => vi.fn())
+const setStorageItemStackApi = vi.hoisted(() => vi.fn())
 const itemIconResolver = vi.hoisted(() => vi.fn())
 
 vi.mock('../src/hooks/usePlatformCapabilities', () => ({
@@ -22,12 +27,26 @@ vi.mock('../src/hooks/usePlatformCapabilities', () => ({
     loading: capabilityState.loading,
     error: capabilityState.error,
     refresh: capabilityState.refresh,
-    hasCapability: (id: string) => id === 'inventory.read' && capabilityState.enabled,
+    hasCapability: (id: string) => capabilityState.enabled && (
+      id === 'inventory.read'
+      || id === 'base.manage'
+      || id === 'player.manage.destructive'
+      || id === 'base.manage.destructive'
+    ),
   }),
 }))
 vi.mock('../src/api/gameplay', async importOriginal => {
   const actual = await importOriginal<typeof import('../src/api/gameplay')>()
-  return { ...actual, getSharedInventory: inventoryApi, getSharedInventoryOccurrences: occurrenceApi }
+  return {
+    ...actual,
+    getSharedInventory: inventoryApi,
+    getSharedInventoryOccurrences: occurrenceApi,
+    renameStorage: renameStorageApi,
+    deleteInventoryItem: deleteInventoryItemApi,
+    deleteStorageItem: deleteStorageItemApi,
+    setItemStack: setItemStackApi,
+    setStorageItemStack: setStorageItemStackApi,
+  }
 })
 vi.mock('../src/components/inventory/InventoryItemIcon', async importOriginal => {
   const actual = await importOriginal<typeof import('../src/components/inventory/InventoryItemIcon')>()
@@ -89,6 +108,20 @@ const occurrence = {
     workspacePath: '/bases?view=inventory&scope_type=storage&scope_id=50001',
   },
 } as const
+const playerOccurrence = {
+  ...occurrence,
+  id: 43,
+  quantity: 4,
+  entity: {
+    ...occurrence.entity,
+    type: 'player',
+    id: 20001,
+    label: 'Backpack',
+    inventoryId: 60002,
+    inventoryType: 1,
+    workspacePath: '/players?view=inventory&scope_type=player&scope_id=20001',
+  },
+} as const
 const occurrenceFixture = {
   ...fixture,
   requestId: 'occurrence-request',
@@ -110,13 +143,24 @@ beforeEach(() => {
   inventoryApi.mockResolvedValue(fixture)
   occurrenceApi.mockResolvedValue(occurrenceFixture)
   itemIconResolver.mockResolvedValue('https://cdn-hosted.gaming.tools/dune/images/dune/items/copper.webp')
+  renameStorageApi.mockResolvedValue({ ok: true, message: "Renamed storage container to 'Ore Vault'." })
+  deleteInventoryItemApi.mockResolvedValue({ ok: true, message: 'Deleted player item.' })
+  deleteStorageItemApi.mockResolvedValue({ ok: true, message: 'Deleted storage item.' })
+  setItemStackApi.mockResolvedValue({ ok: true, message: 'Updated player stack.' })
+  setStorageItemStackApi.mockResolvedValue({ ok: true, message: 'Updated storage stack.' })
 })
 
 afterEach(() => {
   cleanup()
+  vi.restoreAllMocks()
   inventoryApi.mockReset()
   occurrenceApi.mockReset()
   itemIconResolver.mockReset()
+  renameStorageApi.mockReset()
+  deleteInventoryItemApi.mockReset()
+  deleteStorageItemApi.mockReset()
+  setItemStackApi.mockReset()
+  setStorageItemStackApi.mockReset()
   window.history.replaceState(null, '', '/')
 })
 
@@ -175,6 +219,31 @@ describe('Shared Inventory Explorer grouped catalog', () => {
     expect(window.location.search).toContain('sort=quantity-desc')
   })
 
+  it('renames the selected storage box and refreshes its live label', async () => {
+    const user = userEvent.setup()
+    window.history.replaceState(null, '', '/economy?view=inventory&scope_type=storage&scope_id=50001')
+    inventoryApi
+      .mockResolvedValueOnce(fixture)
+      .mockResolvedValue({
+        ...fixture,
+        data: {
+          ...fixture.data,
+          locations: [{ ...locations[1], label: 'Ore Vault' }],
+        },
+      })
+
+    renderExplorer()
+    await user.click(await screen.findByRole('button', { name: 'Rename box' }))
+    const input = screen.getByRole('textbox', { name: 'Storage box name' })
+    await user.clear(input)
+    await user.type(input, 'Ore Vault')
+    await user.click(screen.getByRole('button', { name: 'Save name' }))
+
+    await waitFor(() => expect(renameStorageApi).toHaveBeenCalledWith(50001, 'Ore Vault'))
+    expect(await screen.findByRole('option', { name: 'Ore Vault - Coastal' })).toBeInTheDocument()
+    expect(screen.getByText("Renamed storage container to 'Ore Vault'.")).toBeInTheDocument()
+  })
+
   it('fails closed for a malformed player deep link', async () => {
     window.history.replaceState(null, '', '/economy?view=inventory&player_id=bad')
     renderExplorer()
@@ -226,6 +295,79 @@ describe('Shared Inventory Explorer grouped catalog', () => {
     expect(within(occurrencePlayer).getByRole('option', { name: 'Coastal (2)' })).toBeInTheDocument()
     await user.selectOptions(screen.getByRole('combobox', { name: 'Sort occurrences' }), 'quality-desc')
     await waitFor(() => expect(occurrenceApi).toHaveBeenLastCalledWith(expect.objectContaining({ sort: 'quality-desc' })))
+  })
+
+  it('deletes selected player and storage occurrences through their guarded routes', async () => {
+    const confirm = vi.spyOn(window, 'confirm').mockReturnValue(true)
+    occurrenceApi.mockResolvedValue({
+      ...occurrenceFixture,
+      data: { ...occurrenceFixture.data, items: [occurrence, playerOccurrence] },
+    })
+    const user = userEvent.setup()
+    renderExplorer()
+    await user.click(await screen.findByRole('button', { name: /Copper/ }))
+    await screen.findByRole('list', { name: 'Item occurrences' })
+
+    await user.click(screen.getByRole('checkbox', { name: 'Select all loaded occurrences' }))
+    await user.click(screen.getByRole('button', { name: 'Delete selected (2)' }))
+
+    await waitFor(() => {
+      expect(deleteStorageItemApi).toHaveBeenCalledWith(42, 10)
+      expect(deleteInventoryItemApi).toHaveBeenCalledWith(43, 4)
+    })
+    expect(confirm).toHaveBeenCalledWith(expect.stringContaining('2 selected occurrences'))
+    expect(await screen.findByText('Removed 14 items from 2 occurrences.')).toBeInTheDocument()
+    confirm.mockRestore()
+  })
+
+  it('preserves partial multi-delete results across a fresh catalog refresh', async () => {
+    vi.spyOn(window, 'confirm').mockReturnValue(true)
+    inventoryApi.mockImplementation(async () => structuredClone(fixture))
+    occurrenceApi.mockResolvedValue({
+      ...occurrenceFixture,
+      data: { ...occurrenceFixture.data, items: [occurrence, playerOccurrence] },
+    })
+    deleteInventoryItemApi.mockRejectedValue(new Error('Player item delete was rejected.'))
+    const user = userEvent.setup()
+    renderExplorer()
+    await user.click(await screen.findByRole('button', { name: /Copper/ }))
+    await screen.findByRole('list', { name: 'Item occurrences' })
+
+    await user.click(screen.getByRole('checkbox', { name: 'Select all loaded occurrences' }))
+    await user.click(screen.getByRole('button', { name: 'Delete selected (2)' }))
+
+    expect(await screen.findByText('Removed 10 items from 1 occurrence.')).toBeInTheDocument()
+    expect(screen.getByText(/1 updated; 1 failed.*Player item delete was rejected/)).toBeInTheDocument()
+  })
+
+  it('keeps deletion confirmation visible when the final occurrence closes the panel', async () => {
+    vi.spyOn(window, 'confirm').mockReturnValue(true)
+    inventoryApi
+      .mockResolvedValueOnce(fixture)
+      .mockResolvedValue({ ...fixture, data: { ...fixture.data, groups: [] } })
+    const user = userEvent.setup()
+    renderExplorer()
+    await user.click(await screen.findByRole('button', { name: /Copper/ }))
+    await user.click(await screen.findByRole('button', { name: 'Delete Copper from Copper box' }))
+
+    expect(await screen.findByText('Removed 10 items from 1 occurrence.')).toBeInTheDocument()
+    await waitFor(() => expect(screen.queryByRole('dialog', { name: 'Copper' })).not.toBeInTheDocument())
+  })
+
+  it('reduces a stack when the requested delete quantity is below the full quantity', async () => {
+    const confirm = vi.spyOn(window, 'confirm').mockReturnValue(true)
+    const user = userEvent.setup()
+    renderExplorer()
+    await user.click(await screen.findByRole('button', { name: /Copper/ }))
+    const quantity = await screen.findByRole('spinbutton', { name: 'Delete quantity for Copper in Copper box' })
+    await user.clear(quantity)
+    await user.type(quantity, '4')
+    await user.click(screen.getByRole('button', { name: 'Delete Copper from Copper box' }))
+
+    await waitFor(() => expect(setStorageItemStackApi).toHaveBeenCalledWith(42, 6, 10))
+    expect(deleteStorageItemApi).not.toHaveBeenCalled()
+    expect(confirm).toHaveBeenCalledWith(expect.stringContaining('Delete 4 of Copper (stack x10)'))
+    expect(await screen.findByText(/Removed 4 items from 1 occurrence.*server zone restarts/)).toBeInTheDocument()
   })
 
   it('surfaces malformed occurrence rows instead of rendering blank details', async () => {
