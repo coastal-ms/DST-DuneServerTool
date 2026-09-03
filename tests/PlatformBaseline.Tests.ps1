@@ -153,10 +153,19 @@ Describe 'Direct game database source-call cost model' -Tag 'Baseline' {
 
         function Get-V6DbPort { return 15432 }
         function Invoke-V6Ssh {
-            param([string] $Ip, [string] $Cmd, [int] $TimeoutSec, [string] $StdinData)
+            param(
+                [string] $Ip,
+                [string] $Cmd,
+                [int] $TimeoutSec,
+                [string] $StdinData,
+                [switch] $SeparateStreams
+            )
             $script:platformTransportCalls.Add($Cmd)
             if ($Cmd -match 'kubectl get pods') {
                 return 'fixture-ns fixture-db-dbdepl-sts-0 1/1 Running 0 1m'
+            }
+            if ($SeparateStreams) {
+                return @{ stdout = "value`n1"; stderr = ''; exitCode = 0 }
             }
             return @('value', '1')
         }
@@ -175,7 +184,7 @@ Describe 'Direct game database source-call cost model' -Tag 'Baseline' {
         foreach ($command in $queryCalls) {
             $match = [regex]::Match(
                 $command,
-                '^echo (?<sql>[A-Za-z0-9+/=]+) \| base64 -d \| sudo kubectl exec -i -n fixture-ns fixture-db-dbdepl-sts-0 -- psql -U dune -d dune -p 15432 -v ON_ERROR_STOP=1 -X --csv 2>&1$'
+                '^echo (?<sql>[A-Za-z0-9+/=]+) \| base64 -d \| sudo kubectl exec -i -n fixture-ns fixture-db-dbdepl-sts-0 -- psql -U dune -d dune -p 15432 -v ON_ERROR_STOP=1 -X --csv$'
             )
             $match.Success | Should -BeTrue
             $effectiveSql = [Text.Encoding]::UTF8.GetString([Convert]::FromBase64String($match.Groups['sql'].Value))

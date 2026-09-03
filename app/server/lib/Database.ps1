@@ -33,13 +33,18 @@ function Invoke-DuneSqlRaw {
         [string]$Ip,
         [string]$Sql,
         [int]$TimeoutSec = 30,
-        [switch]$Csv
+        [switch]$Csv,
+        [switch]$Detailed
     )
     $pod = Find-V6DbPod -Ip $Ip
     $port = Get-V6DbPort
     $b64 = [Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes($Sql))
     $flags = if ($Csv) { '-X --csv' } else { '-X -A' }
-    $cmd = "echo $b64 | base64 -d | sudo kubectl exec -i -n $($pod.ns) $($pod.name) -- psql -U dune -d dune -p $port -v ON_ERROR_STOP=1 $flags 2>&1"
+    $redirect = if ($Detailed) { '' } else { ' 2>&1' }
+    $cmd = "echo $b64 | base64 -d | sudo kubectl exec -i -n $($pod.ns) $($pod.name) -- psql -U dune -d dune -p $port -v ON_ERROR_STOP=1 $flags$redirect"
+    if ($Detailed) {
+        return Invoke-V6Ssh -Ip $Ip -Cmd $cmd -TimeoutSec $TimeoutSec -SeparateStreams
+    }
     $out = Invoke-V6Ssh -Ip $Ip -Cmd $cmd -TimeoutSec $TimeoutSec
     return ($out -join "`n")
 }
@@ -55,7 +60,8 @@ function Invoke-DuneSqlRawStdin {
         [string]$Ip,
         [string]$Sql,
         [int]$TimeoutSec = 30,
-        [switch]$Csv
+        [switch]$Csv,
+        [switch]$Detailed
     )
     $pod = Find-V6DbPod -Ip $Ip
     $port = Get-V6DbPort
@@ -64,7 +70,11 @@ function Invoke-DuneSqlRawStdin {
     # Remote cmd reads base64 bytes off OUR stdin (which Invoke-V6Ssh writes
     # via -StdinData), decodes them, and feeds the SQL into psql. Total
     # remote command length is < 200 chars regardless of payload size.
-    $cmd = "base64 -d | sudo kubectl exec -i -n $($pod.ns) $($pod.name) -- psql -U dune -d dune -p $port -v ON_ERROR_STOP=1 $flags 2>&1"
+    $redirect = if ($Detailed) { '' } else { ' 2>&1' }
+    $cmd = "base64 -d | sudo kubectl exec -i -n $($pod.ns) $($pod.name) -- psql -U dune -d dune -p $port -v ON_ERROR_STOP=1 $flags$redirect"
+    if ($Detailed) {
+        return Invoke-V6Ssh -Ip $Ip -Cmd $cmd -TimeoutSec $TimeoutSec -StdinData $b64 -SeparateStreams
+    }
     $out = Invoke-V6Ssh -Ip $Ip -Cmd $cmd -TimeoutSec $TimeoutSec -StdinData $b64
     return ($out -join "`n")
 }
@@ -109,16 +119,24 @@ function Get-DunePsqlErrorMessage {
 function ConvertFrom-DunePsqlCsv {
     param([string]$Output, [int]$MaxRows)
     if (-not $Output) {
-        return @{ columns = @(); rows = @(); rowCount = 0; truncated = $false; message = '' }
+        return @{ ok = $true; columns = @(); rows = @(); rowCount = 0; truncated = $false; message = '' }
     }
     $lines = ($Output -split "`r?`n")
     # Strip transaction wrappers if present (BEGIN/ROLLBACK psql tags)
     $filtered = $lines | Where-Object {
         $_ -notmatch '^(BEGIN|COMMIT|ROLLBACK|SET|SAVEPOINT|RELEASE)$' -and $_ -ne ''
     }
+    $firstFiltered = @($filtered | Select-Object -First 1)
+    if ($firstFiltered.Count -and
+        [string]$firstFiltered[0] -match '^(?:psql:|WARNING:|NOTICE:|DETAIL:|HINT:|CONTEXT:)') {
+        return @{
+            ok = $false; columns = @(); rows = @(); rowCount = 0; truncated = $false
+            message = "Unexpected psql diagnostic in CSV output: $([string]$firstFiltered[0])"
+        }
+    }
     # If no lines, nothing to parse
     if (-not $filtered) {
-        return @{ columns = @(); rows = @(); rowCount = 0; truncated = $false; message = '' }
+        return @{ ok = $true; columns = @(); rows = @(); rowCount = 0; truncated = $false; message = '' }
     }
     # Command-tag-only outputs: "UPDATE 5", "INSERT 0 3", "DELETE 12", "CREATE TABLE"
     # These have no commas in the trivial case and look like a single word + numbers.
@@ -126,46 +144,65 @@ function ConvertFrom-DunePsqlCsv {
     # known command-tag prefix, treat the whole thing as a message.
     $first = ($filtered | Select-Object -First 1)
     if ($filtered.Count -eq 1 -and $first -notmatch ',' -and $first -match '^(INSERT|UPDATE|DELETE|SELECT|MERGE|CREATE|DROP|ALTER|TRUNCATE|GRANT|REVOKE|COPY|VACUUM|ANALYZE)\b') {
-        return @{ columns = @(); rows = @(); rowCount = 0; truncated = $false; message = $first }
+        return @{ ok = $true; columns = @(); rows = @(); rowCount = 0; truncated = $false; message = $first }
     }
-    # CSV path — try to parse using PowerShell's CSV reader
+    # CSV path — TextFieldParser preserves explicit empty fields and rejects
+    # short/long records, unlike ConvertFrom-Csv which turns both missing and
+    # explicitly empty trailing fields into indistinguishable null values.
     try {
         $csvText = ($filtered -join "`n")
-        $parsed = $csvText | ConvertFrom-Csv
-        if (-not $parsed) {
-            return @{ columns = @(); rows = @(); rowCount = 0; truncated = $false; message = '' }
+        if (-not ('Microsoft.VisualBasic.FileIO.TextFieldParser' -as [type])) {
+            Add-Type -AssemblyName Microsoft.VisualBasic -ErrorAction Stop
         }
-        # Force to array (single-row results come back as a single PSCustomObject)
-        $parsedArr = @($parsed)
-        $cols = @($parsedArr[0].PSObject.Properties.Name)
+        # Windows PowerShell 5.1's TextFieldParser does not return a final
+        # header-only record unless the input ends with a line terminator.
+        $reader = [IO.StringReader]::new("$csvText`n")
+        $parser = [Microsoft.VisualBasic.FileIO.TextFieldParser]::new($reader)
+        $parser.TextFieldType = [Microsoft.VisualBasic.FileIO.FieldType]::Delimited
+        $parser.SetDelimiters(',')
+        $parser.HasFieldsEnclosedInQuotes = $true
+        $cols = @($parser.ReadFields())
+        if ($cols.Count -eq 0 -or @($cols | Where-Object { [string]::IsNullOrWhiteSpace([string]$_) }).Count -gt 0) {
+            throw 'CSV output has a missing or blank column header.'
+        }
+        if (@($cols | Sort-Object -Unique).Count -ne $cols.Count) {
+            throw 'CSV output has duplicate column headers.'
+        }
         $truncated = $false
-        if ($parsedArr.Count -gt $MaxRows) {
-            $parsedArr = $parsedArr[0..($MaxRows - 1)]
-            $truncated = $true
-        }
         $rows = [System.Collections.Generic.List[object]]::new()
-        foreach ($obj in $parsedArr) {
-            $row = New-Object object[] $cols.Count
-            for ($i = 0; $i -lt $cols.Count; $i++) {
-                $row[$i] = $obj.($cols[$i])
+        while (-not $parser.EndOfData) {
+            $fields = $parser.ReadFields()
+            if ($null -eq $fields) { break }
+            $row = @($fields)
+            if ($row.Count -ne $cols.Count) {
+                throw "CSV output row has $($row.Count) fields but the header has $($cols.Count)."
             }
-            [void]$rows.Add($row)
+            if ($rows.Count -lt $MaxRows) {
+                [void]$rows.Add([object[]]$row)
+            } else {
+                $truncated = $true
+            }
         }
         return @{
+            ok        = $true
             columns   = $cols
             rows      = $rows.ToArray()
-            rowCount  = $parsedArr.Count
+            rowCount  = $rows.Count
             truncated = $truncated
             message   = ''
         }
     } catch {
         return @{
+            ok        = $false
             columns   = @()
             rows      = @()
             rowCount  = 0
             truncated = $false
             message   = "Parse error: $($_.Exception.Message)"
         }
+    } finally {
+        if ($parser) { $parser.Dispose() }
+        if ($reader) { $reader.Dispose() }
     }
 }
 
@@ -193,11 +230,25 @@ function Invoke-DuneSqlQuery {
     # don't fail with "The filename or extension is too long". Use for
     # multi-statement transactions like the Seed Market chunked inserts.
     if ($Bulk) {
-        $raw = Invoke-DuneSqlRawStdin -Ip $Ip -Sql $effective -TimeoutSec $TimeoutSec -Csv
+        $transport = Invoke-DuneSqlRawStdin -Ip $Ip -Sql $effective -TimeoutSec $TimeoutSec -Csv -Detailed
     } else {
-        $raw = Invoke-DuneSqlRaw -Ip $Ip -Sql $effective -TimeoutSec $TimeoutSec -Csv
+        $transport = Invoke-DuneSqlRaw -Ip $Ip -Sql $effective -TimeoutSec $TimeoutSec -Csv -Detailed
     }
     $durationMs = [int](([DateTime]::UtcNow - $start).TotalMilliseconds)
+    $raw = [string]$transport.stdout
+    $stderr = [string]$transport.stderr
+
+    if ([int]$transport.exitCode -ne 0 -or $stderr) {
+        $diagnostic = if ($stderr) { $stderr } else { "psql transport exited with code $([int]$transport.exitCode)." }
+        return @{
+            ok = $false
+            error = Get-DunePsqlErrorMessage -Output $diagnostic
+            raw = $raw
+            stderr = $stderr
+            durationMs = $durationMs
+            readOnly = $ReadOnly
+        }
+    }
 
     if (Test-DunePsqlError -Output $raw) {
         return @{
@@ -210,6 +261,15 @@ function Invoke-DuneSqlQuery {
     }
 
     $parsed = ConvertFrom-DunePsqlCsv -Output $raw -MaxRows $MaxRows
+    if (-not $parsed.ok) {
+        return @{
+            ok = $false
+            error = $parsed.message
+            raw = $raw
+            durationMs = $durationMs
+            readOnly = $ReadOnly
+        }
+    }
     return @{
         ok         = $true
         columns    = $parsed.columns

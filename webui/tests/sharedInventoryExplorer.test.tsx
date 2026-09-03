@@ -131,6 +131,27 @@ describe('Shared Inventory Explorer grouped catalog', () => {
     expect(inventoryApi).toHaveBeenCalledWith(expect.objectContaining({ playerId: undefined, locationId: undefined, sort: 'name-asc' }))
   })
 
+  it('surfaces malformed grouped rows instead of rendering a phantom slot', async () => {
+    inventoryApi.mockResolvedValue({
+      ...fixture,
+      data: {
+        ...fixture.data,
+        groups: [{
+          ...copperGroup,
+          groupKey: '',
+          templateId: '',
+          displayName: '',
+          totalQuantity: 0,
+          occurrenceCount: 0,
+          locationCount: 0,
+        }],
+      },
+    })
+    renderExplorer()
+    expect(await screen.findByText(/malformed grouped item/)).toBeInTheDocument()
+    expect(screen.queryByRole('list', { name: 'Inventory results' })).not.toBeInTheDocument()
+  })
+
   it('keeps duplicate player and storage names visibly distinct without raw IDs', async () => {
     renderExplorer()
     await screen.findByText('Copper')
@@ -205,6 +226,21 @@ describe('Shared Inventory Explorer grouped catalog', () => {
     expect(within(occurrencePlayer).getByRole('option', { name: 'Coastal (2)' })).toBeInTheDocument()
     await user.selectOptions(screen.getByRole('combobox', { name: 'Sort occurrences' }), 'quality-desc')
     await waitFor(() => expect(occurrenceApi).toHaveBeenLastCalledWith(expect.objectContaining({ sort: 'quality-desc' })))
+  })
+
+  it('surfaces malformed occurrence rows instead of rendering blank details', async () => {
+    occurrenceApi.mockResolvedValue({
+      ...occurrenceFixture,
+      data: {
+        ...occurrenceFixture.data,
+        items: [{ ...occurrence, id: 0, templateId: '', displayName: '' }],
+      },
+    })
+    const user = userEvent.setup()
+    renderExplorer()
+    await user.click(await screen.findByRole('button', { name: /Copper/ }))
+    expect(await screen.findByText(/malformed item occurrence/)).toBeInTheDocument()
+    expect(screen.queryByRole('list', { name: 'Item occurrences' })).not.toBeInTheDocument()
   })
 
   it('keeps proven active popup filters visible when the occurrence result is empty', async () => {

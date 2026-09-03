@@ -13,6 +13,11 @@ here cover everything those tags shipped.
 
 ## [Unreleased]
 
+### Fixed
+
+- Fixed Shared Inventory Explorer results collapsing into one blank item and
+  occurrence details failing to reach their read-only API route.
+
 ## [15.0.0-phase2-test1] - 2026-09-02
 
 ### Added

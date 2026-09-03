@@ -1,5 +1,6 @@
 BeforeAll {
     . (Join-Path $PSScriptRoot '_TestHelpers.ps1')
+    Import-DstLib 'Database.ps1'
     Import-DstLib 'ApiContract.ps1'
     Import-DstLib 'Gameplay.ps1'
     Import-DstLib 'GameplayPlayers.ps1'
@@ -21,6 +22,13 @@ BeforeAll {
         function global:Invoke-DuneSqlQuery {
             param($Ip, $Sql, $ReadOnly, $MaxRows, $TimeoutSec, [switch]$Bulk)
             $captured.Add([string]$Sql)
+            if ($Sql -match 'AS player_valid') {
+                return @{
+                    ok = $true
+                    columns = @('player_valid', 'location_valid')
+                    rows = @(,@('t', 't'))
+                }
+            }
             return @{ ok = $true; columns = @(); rows = @() }
         }
         try {
@@ -34,13 +42,13 @@ BeforeAll {
                 $result = Invoke-DuneInventoryGroupedLive -Ip 'fixture' -Query '[' `
                     -EntityTypes @('player', 'storage') -PlayerId 20001 `
                     -LocationType storage -LocationId 50001 -Sort $sort -Limit 2
-                if (-not $result.ok) { throw "Grouped SQL generation failed for $sort." }
+                if (-not $result.ok) { throw "Grouped SQL generation failed for $sort`: $([string]$result.error)" }
                 $result = Invoke-DuneInventoryGroupedLive -Ip 'fixture' -Query '[' `
                     -EntityTypes @('player', 'storage') -PlayerId 20001 `
                     -LocationType storage -LocationId 50001 -Sort $sort `
                     -AfterSortValue '1' -AfterSortSecondary '0' `
                     -AfterSortName 'copper' -AfterTemplateId 'Copper' -Limit 2
-                if (-not $result.ok) { throw "Grouped cursor SQL generation failed for $sort." }
+                if (-not $result.ok) { throw "Grouped cursor SQL generation failed for $sort`: $([string]$result.error)" }
             }
 
             $occurrenceSorts = @(
@@ -124,6 +132,65 @@ Describe 'Shared Inventory Explorer read model' -Tag 'Pure' {
         $item.entity.owner | Should -Be 'Stilgar'
         $item.entity.workspacePath | Should -Be '/bases?view=inventory&scope_type=storage&scope_id=50001'
         $item.metadata.Keys | Should -Contain 'category'
+    }
+
+    It 'rejects malformed grouped and occurrence rows instead of emitting blank DTOs' {
+        {
+            ConvertTo-DuneInventoryGroup -Row @{
+                group_key = ''; template_id = ''; total_quantity = $null
+            }
+        } | Should -Throw '*Malformed inventory database group row*'
+        {
+            ConvertTo-DuneInventoryItem -Row @{
+                item_id = ''; template_id = ''; entity_type = ''
+            }
+        } | Should -Throw '*Malformed inventory database item row*'
+    }
+
+    It 'allows storage occurrences whose owner player cannot be proven' {
+        $originalRules = $script:DuneGameplayItemRules
+        try {
+            $script:DuneGameplayItemRules = @{ Copper = @{ category = 'Resources' } }
+            $script:UnownedStorageRow = @{
+                item_id = '42'; template_id = 'Copper'; stack_size = '3'; quality_level = '0'
+                durability = 'N/A'; max_durability = 'N/A'; water_amount = 'N/A'; water_type = ''
+                inventory_id = '60001'; inventory_type = '4'; entity_type = 'storage'; entity_id = '50001'
+                entity_label = 'Unclaimed cache'; owner_name = ''; map = ''; entity_class = 'BP_Cache_C'
+                player_id = ''; player_name = ''
+            }
+            function global:Invoke-DuneSqlQuery {
+                param($Ip, $Sql)
+                if ($Sql -match 'SELECT r\.item_id') {
+                    $row = $script:UnownedStorageRow
+                    return @{
+                        ok = $true
+                        columns = @($row.Keys)
+                        rows = @(,(@($row.Keys | ForEach-Object { $row[$_] })))
+                    }
+                }
+                if ($Sql -match 'SELECT t\.entity_type') {
+                    return @{
+                        ok = $true
+                        columns = @('entity_type','entity_id','entity_label','owner_name','player_id','player_name','occurrence_count')
+                        rows = @(,@('storage','50001','Unclaimed cache','','','','1'))
+                    }
+                }
+                return @{
+                    ok = $true
+                    columns = @('player_id','player_name','occurrence_count')
+                    rows = @()
+                }
+            }
+            $result = Invoke-DuneInventoryOccurrencesLive -Ip fixture -TemplateId Copper `
+                -EntityTypes @('storage') -Limit 10
+            $result.ok | Should -BeTrue -Because ([string]$result.error)
+            @($result.items).Count | Should -Be 1
+            $result.items[0].Contains('player') | Should -BeFalse
+        } finally {
+            $script:DuneGameplayItemRules = $originalRules
+            Remove-Variable -Name UnownedStorageRow -Scope Script -ErrorAction SilentlyContinue
+            Remove-Item Function:\global:Invoke-DuneSqlQuery -ErrorAction SilentlyContinue
+        }
     }
 
     It 'normalizes unnamed live storage labels while preserving the raw class' {
@@ -481,7 +548,7 @@ Describe 'Shared Inventory Explorer read model' -Tag 'Pure' {
     }
 
     It 'executes every generated live query against a disposable PostgreSQL schema' `
-        -Skip:(-not $env:DST_TEST_POSTGRES_PSQL) {
+        -Skip:(-not $env:DST_TEST_POSTGRES_PSQL -or -not $env:DST_TEST_POSTGRES_DATABASE) {
         $queries = @(Get-DuneInventoryLiveSqlVariants)
         $fixture = @"
 \set ON_ERROR_STOP on
@@ -502,14 +569,245 @@ CREATE TABLE dune.actor_fgl_entities (actor_id bigint, entity_id bigint);
 CREATE TABLE dune.permission_actor_rank (
     permission_actor_id bigint, player_id bigint, rank integer
 );
+INSERT INTO dune.actors (id, map, owner_account_id) VALUES
+    (20001, 'Hagga Basin', 30001),
+    (20002, 'Hagga Basin', 30002),
+    (20003, 'Deep Desert', 30003),
+    (50001, 'Hagga Basin', NULL),
+    (50002, 'Deep Desert', NULL);
+INSERT INTO dune.player_state (player_pawn_id, character_name, account_id) VALUES
+    (20001, 'Coastal', 30001),
+    (20002, 'Chani', 30002),
+    (20003, 'Stilgar', 30003);
+INSERT INTO dune.inventories (id, inventory_type, actor_id) VALUES
+    (60001, 0, 20001),
+    (60002, 0, 20002),
+    (60003, 0, 20003),
+    (61001, 4, 50001),
+    (61002, 4, 50002);
+INSERT INTO dune.placeables (id, building_type, is_hologram, owner_entity_id) VALUES
+    (50001, 'BP_GenericContainer_C', false, 90001),
+    (50002, 'Developer_StorageContainer_Placeable', false, 90002);
+INSERT INTO dune.permission_actor (actor_id, actor_name) VALUES
+    (50001, 'Copper Vault'),
+    (50002, 'Named Reserve');
+INSERT INTO dune.actor_fgl_entities (actor_id, entity_id) VALUES
+    (70001, 90001),
+    (70002, 90002);
+INSERT INTO dune.permission_actor_rank (permission_actor_id, player_id, rank) VALUES
+    (70001, 20003, 1),
+    (70002, 20001, 1);
+INSERT INTO dune.items (id, template_id, stack_size, quality_level, stats, inventory_id) VALUES
+    (1, 'Copper', 5, 0, '{}'::jsonb, 60001),
+    (2, 'Copper', 7, 2, '{}'::jsonb, 60002),
+    (3, 'Copper', 11, 1, '{}'::jsonb, 61001),
+    (4, 'Copper', 13, 3, '{}'::jsonb, 61002),
+    (5, 'Iron', 4, 1, '{}'::jsonb, 60003),
+    (6, 'D_TestEmote', 1, 0, '{}'::jsonb, 60001),
+    (7, 'HarkSandbike_MeshCustomization', 2, 0, '{}'::jsonb, 60002);
 "@
         $scriptPath = Join-Path $TestDrive 'inventory-explorer-postgres.sql'
         $sql = $fixture + "`n" + (($queries | ForEach-Object { "$_;"} ) -join "`n") + "`nROLLBACK;"
         Set-Content -LiteralPath $scriptPath -Value $sql -Encoding utf8
 
-        & $env:DST_TEST_POSTGRES_PSQL -X -q -f $scriptPath 2>&1 | Out-String | Write-Verbose
+        & $env:DST_TEST_POSTGRES_PSQL -X -q -d $env:DST_TEST_POSTGRES_DATABASE -f $scriptPath 2>&1 |
+            Out-String | Write-Verbose
 
         $LASTEXITCODE | Should -Be 0
+    }
+
+    It 'returns seeded PostgreSQL groups and occurrences through production conversion semantics' `
+        -Skip:(-not $env:DST_TEST_POSTGRES_PSQL -or -not $env:DST_TEST_POSTGRES_DATABASE) {
+        if ($env:DST_TEST_POSTGRES_DATABASE -notmatch '^dst_inventory(?:_[A-Za-z0-9_-]+)?$') {
+            throw 'DST_TEST_POSTGRES_DATABASE must name an explicit disposable dst_inventory database.'
+        }
+        $databaseName = (& $env:DST_TEST_POSTGRES_PSQL -X -q -A -t `
+            -d $env:DST_TEST_POSTGRES_DATABASE -c 'SELECT current_database();' 2>&1 | Out-String).Trim()
+        if ($LASTEXITCODE -ne 0 -or $databaseName -ne $env:DST_TEST_POSTGRES_DATABASE) {
+            throw 'The configured disposable PostgreSQL database could not be verified.'
+        }
+        $setupPath = Join-Path $TestDrive 'inventory-semantic-setup.sql'
+        $setup = @"
+\set ON_ERROR_STOP on
+DROP SCHEMA IF EXISTS dune CASCADE;
+CREATE SCHEMA dune;
+CREATE TABLE dune.items (
+    id bigint, template_id text, stack_size integer, quality_level integer,
+    stats jsonb, inventory_id bigint
+);
+CREATE TABLE dune.inventories (id bigint, inventory_type integer, actor_id bigint);
+CREATE TABLE dune.player_state (player_pawn_id bigint, character_name text, account_id bigint);
+CREATE TABLE dune.actors (id bigint, map text, owner_account_id bigint);
+CREATE TABLE dune.placeables (
+    id bigint, building_type text, is_hologram boolean, owner_entity_id bigint
+);
+CREATE TABLE dune.permission_actor (actor_id bigint, actor_name text);
+CREATE TABLE dune.actor_fgl_entities (actor_id bigint, entity_id bigint);
+CREATE TABLE dune.permission_actor_rank (
+    permission_actor_id bigint, player_id bigint, rank integer
+);
+INSERT INTO dune.actors (id, map, owner_account_id) VALUES
+    (20001, 'Hagga Basin', 30001), (20002, 'Hagga Basin', 30002),
+    (20003, 'Deep Desert', 30003), (50001, 'Hagga Basin', NULL),
+    (50002, 'Deep Desert', NULL);
+INSERT INTO dune.player_state (player_pawn_id, character_name, account_id) VALUES
+    (20001, 'Coastal', 30001), (20002, 'Chani', 30002), (20003, 'Stilgar', 30003);
+INSERT INTO dune.inventories (id, inventory_type, actor_id) VALUES
+    (60001, 0, 20001), (60002, 0, 20002), (60003, 0, 20003),
+    (61001, 4, 50001), (61002, 4, 50002);
+INSERT INTO dune.placeables (id, building_type, is_hologram, owner_entity_id) VALUES
+    (50001, 'BP_GenericContainer_C', false, 90001),
+    (50002, 'Developer_StorageContainer_Placeable', false, 90002);
+INSERT INTO dune.permission_actor (actor_id, actor_name) VALUES
+    (50001, 'Copper Vault'), (50002, 'Named Reserve');
+INSERT INTO dune.actor_fgl_entities (actor_id, entity_id) VALUES
+    (70001, 90001), (70002, 90002);
+INSERT INTO dune.permission_actor_rank (permission_actor_id, player_id, rank) VALUES
+    (70001, 20003, 1), (70002, 20001, 1);
+INSERT INTO dune.items (id, template_id, stack_size, quality_level, stats, inventory_id) VALUES
+    (1, 'Copper', 5, 0, '{}'::jsonb, 60001),
+    (2, 'Copper', 7, 2, '{}'::jsonb, 60002),
+    (3, 'Copper', 11, 1, '{}'::jsonb, 61001),
+    (4, 'Copper', 13, 3, '{}'::jsonb, 61002),
+    (5, 'Iron', 4, 1, '{}'::jsonb, 60003),
+    (6, 'D_TestEmote', 1, 0, '{}'::jsonb, 60001),
+    (7, 'HarkSandbike_MeshCustomization', 2, 0, '{}'::jsonb, 60002);
+"@
+        Set-Content -LiteralPath $setupPath -Value $setup -Encoding utf8
+        & $env:DST_TEST_POSTGRES_PSQL -X -q -d $env:DST_TEST_POSTGRES_DATABASE -f $setupPath 2>&1 |
+            Out-String | Write-Verbose
+        $LASTEXITCODE | Should -Be 0
+
+        $existing = Get-Command Invoke-DuneSqlQuery -ErrorAction SilentlyContinue
+        $originalNames = $script:DuneGameplayItemNames
+        $originalRules = $script:DuneGameplayItemRules
+        $script:InventorySemanticQueryIndex = 0
+        function global:Invoke-DuneSqlQuery {
+            param($Ip, $Sql, $ReadOnly, $MaxRows, $TimeoutSec, [switch]$Bulk)
+            $script:InventorySemanticQueryIndex += 1
+            $queryPath = Join-Path $TestDrive "inventory-semantic-$($script:InventorySemanticQueryIndex).sql"
+            $effective = if ($ReadOnly) { Wrap-DuneReadOnlySql -Sql $Sql } else { $Sql }
+            Set-Content -LiteralPath $queryPath -Value $effective -Encoding utf8
+            $raw = (& $env:DST_TEST_POSTGRES_PSQL -X --csv -v ON_ERROR_STOP=1 `
+                -d $env:DST_TEST_POSTGRES_DATABASE -f $queryPath 2>&1) -join "`n"
+            if ($LASTEXITCODE -ne 0 -or (Test-DunePsqlError -Output $raw)) {
+                return @{ ok = $false; error = (Get-DunePsqlErrorMessage -Output $raw) }
+            }
+            $parsed = ConvertFrom-DunePsqlCsv -Output $raw -MaxRows $MaxRows
+            if (-not $parsed.ok) {
+                return @{ ok = $false; error = $parsed.message }
+            }
+            return @{
+                ok = $true; columns = $parsed.columns; rows = $parsed.rows
+                rowCount = $parsed.rowCount; truncated = $parsed.truncated
+            }
+        }
+        try {
+            $script:DuneGameplayItemNames = @{
+                Copper = 'Copper'
+                Iron = 'Iron'
+                HarkSandbike_MeshCustomization = 'Harkonnen Sandbike Mesh'
+            }
+            $script:DuneGameplayItemRules = @{
+                Copper = @{ category='Resources'; tier=1; rarity='Common'; icon=''; stack_max=100; volume=0.1; vendor_price=1; is_gradeable=$false }
+                Iron = @{ category='Resources'; tier=2; rarity='Common'; icon=''; stack_max=100; volume=0.2; vendor_price=2; is_gradeable=$false }
+            }
+            foreach ($sort in @(
+                'name-asc', 'name-desc', 'quantity-asc', 'quantity-desc',
+                'unit-volume-asc', 'unit-volume-desc', 'total-volume-asc', 'total-volume-desc',
+                'tier-asc', 'tier-desc', 'quality-asc', 'quality-desc',
+                'occurrences-asc', 'occurrences-desc', 'locations-asc', 'locations-desc'
+            )) {
+                $grouped = Invoke-DuneInventoryGroupedLive -Ip fixture -EntityTypes @('player', 'storage') -Sort $sort -Limit 20
+                $grouped.ok | Should -BeTrue -Because ([string]$grouped.error)
+                @($grouped.groups | Where-Object { -not $_.templateId -or -not $_.displayName }).Count | Should -Be 0
+                $copper = @($grouped.groups | Where-Object templateId -eq 'Copper')[0]
+                $copper.displayName | Should -Be 'Copper'
+                $copper.totalQuantity | Should -Be 36
+                $copper.occurrenceCount | Should -Be 4
+                $copper.locationCount | Should -Be 4
+                $copper.quality.min | Should -Be 0
+                $copper.quality.max | Should -Be 3
+                $copper.quality.mixed | Should -BeTrue
+                @($grouped.groups | Where-Object templateId -eq 'D_TestEmote').Count | Should -Be 0
+                @($grouped.groups | Where-Object templateId -eq 'HarkSandbike_MeshCustomization').Count | Should -Be 1
+                @($grouped.players).Count | Should -Be 3
+                @($grouped.locations | Where-Object label -eq 'Copper Vault').Count | Should -Be 1
+
+                $firstPage = Invoke-DuneInventoryGroupedLive -Ip fixture -EntityTypes @('player', 'storage') `
+                    -Sort $sort -Limit 1
+                $first = $firstPage.groups[0]
+                $nextPage = Invoke-DuneInventoryGroupedLive -Ip fixture -EntityTypes @('player', 'storage') `
+                    -Sort $sort -AfterSortValue $first.cursor.sortValue `
+                    -AfterSortSecondary $first.cursor.sortSecondary -AfterSortName $first.cursor.sortName `
+                    -AfterTemplateId $first.templateId -Limit 1
+                $nextPage.ok | Should -BeTrue -Because ([string]$nextPage.error)
+                $nextPage.groups[0].templateId | Should -Not -Be $first.templateId
+            }
+
+            $storage = Invoke-DuneInventoryGroupedLive -Ip fixture -EntityTypes @('player', 'storage') `
+                -PlayerId 20003 -LocationType storage -LocationId 50001 -Limit 20
+            $storage.groups[0].templateId | Should -Be 'Copper'
+            $storage.groups[0].totalQuantity | Should -Be 11
+            $playerOnly = Invoke-DuneInventoryGroupedLive -Ip fixture -EntityTypes @('player') -Limit 20
+            @($playerOnly.groups | Where-Object templateId -eq 'Copper')[0].totalQuantity | Should -Be 12
+            $namesOnly = Invoke-DuneInventoryGroupedLive -Ip fixture -Query 'Harkonnen Sandbike Mesh' `
+                -EntityTypes @('player', 'storage') -Limit 20
+            @($namesOnly.groups).Count | Should -Be 1
+            $namesOnly.groups[0].templateId | Should -Be 'HarkSandbike_MeshCustomization'
+
+            foreach ($sort in @(
+                'player-asc', 'player-desc', 'location-asc', 'location-desc',
+                'quantity-asc', 'quantity-desc', 'quality-asc', 'quality-desc'
+            )) {
+                $occurrences = Invoke-DuneInventoryOccurrencesLive -Ip fixture -TemplateId Copper `
+                    -EntityTypes @('player', 'storage') -Sort $sort -Limit 20
+                $occurrences.ok | Should -BeTrue -Because ([string]$occurrences.error)
+                @($occurrences.items).Count | Should -Be 4
+                @($occurrences.items | Where-Object { -not $_.templateId -or -not $_.player.name }).Count | Should -Be 0
+                (($occurrences.items | ForEach-Object { [long]$_['quantity'] } |
+                    Measure-Object -Sum).Sum) | Should -Be 36
+
+                $firstOccurrencePage = Invoke-DuneInventoryOccurrencesLive -Ip fixture -TemplateId Copper `
+                    -EntityTypes @('player', 'storage') -Sort $sort -Limit 1
+                $firstOccurrence = $firstOccurrencePage.items[0]
+                $afterSortValue = switch -Wildcard ($sort) {
+                    'player-*' { [string]$firstOccurrence.player.name }
+                    'location-*' { [string]$firstOccurrence.entity.label }
+                    'quantity-*' { [string]$firstOccurrence.quantity }
+                    'quality-*' { [string]$firstOccurrence.quality }
+                }
+                $nextOccurrencePage = Invoke-DuneInventoryOccurrencesLive -Ip fixture -TemplateId Copper `
+                    -EntityTypes @('player', 'storage') -Sort $sort `
+                    -AfterSortValue $afterSortValue.ToLowerInvariant() -AfterItemId $firstOccurrence.id -Limit 1
+                $nextOccurrencePage.ok | Should -BeTrue -Because ([string]$nextOccurrencePage.error)
+                $nextOccurrencePage.items[0].id | Should -Not -Be $firstOccurrence.id
+            }
+            $filteredOccurrences = Invoke-DuneInventoryOccurrencesLive -Ip fixture -TemplateId Copper `
+                -EntityTypes @('player', 'storage') -PlayerId 20003 `
+                -LocationType storage -LocationId 50001 -Limit 20
+            @($filteredOccurrences.items).Count | Should -Be 1
+            $filteredOccurrences.items[0].quantity | Should -Be 11
+
+            $empty = Invoke-DuneInventoryGroupedLive -Ip fixture -Query 'does-not-exist' `
+                -EntityTypes @('player', 'storage') -Sort name-asc -Limit 20
+            $empty.ok | Should -BeTrue
+            @($empty.groups).Count | Should -Be 0
+            $emptyOccurrence = Invoke-DuneInventoryOccurrencesLive -Ip fixture -TemplateId Missing `
+                -EntityTypes @('player', 'storage') -Limit 20
+            $emptyOccurrence.ok | Should -BeTrue
+            @($emptyOccurrence.items).Count | Should -Be 0
+        } finally {
+            $script:DuneGameplayItemNames = $originalNames
+            $script:DuneGameplayItemRules = $originalRules
+            if ($existing -and $existing.CommandType -eq 'Function') {
+                Set-Item Function:\global:Invoke-DuneSqlQuery -Value $existing.ScriptBlock
+            } else {
+                Remove-Item Function:\global:Invoke-DuneSqlQuery -ErrorAction SilentlyContinue
+            }
+            & $env:DST_TEST_POSTGRES_PSQL -X -q -d $env:DST_TEST_POSTGRES_DATABASE `
+                -c 'DROP SCHEMA IF EXISTS dune CASCADE;' 2>&1 | Out-Null
+        }
     }
 
     It 'binds inventory SQL values through encoded parameters instead of interpolating caller input' {
@@ -614,6 +912,7 @@ ORDER BY $($sort.sql)
     It 'registers a GET-only v1 route without mutation vocabulary' {
         $source = Get-Content (Join-Path (Get-DstRepoRoot) 'app\server\routes\Inventory.ps1') -Raw
         $source | Should -Match "Register-DuneRoute -Method GET -Path '/api/v1/inventory/items'"
+        $source | Should -Match "Register-DuneRoute -Method GET -Path '/api/v1/inventory/items/occurrences'"
         $source | Should -Match "Register-DuneRoute -Method GET -Path '/api/v1/inventory/items/\{templateId\}/occurrences'"
         $source | Should -Not -Match 'Register-DuneRoute -Method (POST|PUT|PATCH|DELETE)'
         $source | Should -Not -Match '(?i)give-item|delete-item|repair-item'
