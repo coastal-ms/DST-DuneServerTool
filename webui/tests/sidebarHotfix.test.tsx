@@ -63,6 +63,19 @@ describe('sidebar hotfix links', () => {
     expect(screen.getAllByRole('link').filter(link => link.hasAttribute('aria-current'))).toHaveLength(1)
   })
 
+  it('opens Gameplay Admin overview when the left-navigation gateway is clicked', async () => {
+    window.history.replaceState(null, '', '/bases?view=inventory&scope_type=storage&scope_id=564')
+    const user = userEvent.setup()
+    renderSidebar(false)
+
+    const gameplayAdmin = screen.getByRole('link', { name: 'Gameplay Admin' })
+    expect(gameplayAdmin).toHaveAttribute('href', '/gameplay?view=overview')
+    await user.click(gameplayAdmin)
+
+    expect(window.location.pathname).toBe('/gameplay')
+    expect(window.location.search).toBe('?view=overview')
+  })
+
   it('requires explicit edit mode and prevents navigation while sorting', () => {
     renderSidebar(false)
 
