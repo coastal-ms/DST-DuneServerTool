@@ -7,6 +7,8 @@ namespace DunePlatformStore;
 internal static class Program
 {
     private const int MaxRequestBytes = 5 * 1024 * 1024;
+    private const int MaxQueryRequestBytes = 256 * 1024;
+    private const int MaxReplacementRequestBytes = 128 * 1024 * 1024;
     private static readonly JsonSerializerOptions JsonOptions = new()
     {
         PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
@@ -24,7 +26,9 @@ internal static class Program
             }
             var options = ParseArgs(args);
             var command = RequireValue(options, "command").ToLowerInvariant();
-            if (command is not ("migrate" or "hydrate" or "replace-generation" or "integrity" or
+            if (command is not ("migrate" or "hydrate" or "replace-generation" or "replace-inventory" or
+                "inventory-status" or "query-inventory" or "query-inventory-occurrences" or "integrity" or
+                "request-inventory-refresh" or "invalidate-inventory" or
                 "prune" or "self-test" or "create-test-fixture" or "self-test-crash-write" or
                 "self-test-crash-migration" or "self-test-delayed-replace"))
             {
@@ -48,6 +52,22 @@ internal static class Program
                 "replace-generation" => PlatformStore.ReplaceGeneration(
                     GetDatabasePath(options),
                     ReadRequest<ReplaceGenerationRequest>()),
+                "replace-inventory" => InventoryStore.Replace(
+                    GetDatabasePath(options),
+                    ReadRequest<ReplaceInventoryRequest>(MaxReplacementRequestBytes)),
+                "inventory-status" => InventoryStore.Status(GetDatabasePath(options)),
+                "query-inventory" => InventoryStore.Query(
+                    GetDatabasePath(options),
+                    ReadRequest<QueryInventoryRequest>(MaxQueryRequestBytes)),
+                "query-inventory-occurrences" => InventoryStore.QueryOccurrences(
+                    GetDatabasePath(options),
+                    ReadRequest<QueryInventoryOccurrencesRequest>(MaxQueryRequestBytes)),
+                "request-inventory-refresh" => InventoryStore.RequestRefresh(
+                    GetDatabasePath(options),
+                    ReadRequest<InventoryRefreshTriggerRequest>(MaxQueryRequestBytes)),
+                "invalidate-inventory" => InventoryStore.Invalidate(
+                    GetDatabasePath(options),
+                    ReadRequest<InventoryRefreshTriggerRequest>(MaxQueryRequestBytes)),
                 "integrity" => PlatformStore.Integrity(GetDatabasePath(options)),
                 "prune" => PlatformStore.Prune(
                     GetDatabasePath(options),
@@ -120,7 +140,10 @@ internal static class Program
         };
         var allowed = command switch
         {
-            "migrate" or "hydrate" or "replace-generation" or "integrity" =>
+            "migrate" or "hydrate" or "replace-generation" or "replace-inventory" or
+                "inventory-status" or "query-inventory" or "query-inventory-occurrences" or "integrity" =>
+                common.Concat(["database"]),
+            "request-inventory-refresh" or "invalidate-inventory" =>
                 common.Concat(["database"]),
             "prune" => common.Concat(["database", "history-days", "history-rows", "snapshot-generations", "max-bytes"]),
             "self-test" => common,
@@ -153,7 +176,7 @@ internal static class Program
         return StorageSecurity.GetDefaultDatabasePath();
     }
 
-    private static T ReadRequest<T>()
+    private static T ReadRequest<T>(int maximumBytes = MaxRequestBytes)
     {
         using var input = Console.OpenStandardInput();
         using var buffer = new MemoryStream();
@@ -166,9 +189,10 @@ internal static class Program
                 break;
             }
             buffer.Write(chunk, 0, read);
-            if (buffer.Length > MaxRequestBytes)
+            if (buffer.Length > maximumBytes)
             {
-                throw new InvalidDataException("Request exceeds the 5 MiB input limit.");
+                throw new InvalidDataException(
+                    $"Request exceeds the {maximumBytes / (1024 * 1024.0):0.##} MiB input limit.");
             }
         }
         if (buffer.Length == 0)
