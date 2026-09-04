@@ -13,6 +13,15 @@ here cover everything those tags shipped.
 
 ## [Unreleased]
 
+### Changed
+
+- Began the staged retirement of the separate Expo iOS and Android companion
+  apps. Existing native builds remain functional during the transition, while
+  in-app guidance directs users to the responsive Browser Portal over Tailscale.
+- Clarified that deprecated Cloudflare named-tunnel and Access support remains
+  operational through the current test line and is scheduled for removal when
+  v15 promotes to stable.
+
 ## [15.0.0-phase2-test4] - 2026-09-03
 
 ### Changed

@@ -103,6 +103,17 @@ export function MobileAppCard() {
       headerClassName="card-header"
       bodyClassName="card-body"
     >
+        <div className="card p-3 border-warning/40 bg-warning/10 text-sm" style={{ marginBottom: '1rem' }} role="status">
+          <div className="flex items-center gap-2 text-warning" style={{ fontWeight: 600 }}>
+            <Icon name="TriangleAlert" size={16} /> Native mobile apps are being retired
+          </div>
+          <p className="mt-2 text-text-muted">
+            The separate iOS and Android companion apps will keep working during
+            a short transition, then be removed. Use the Browser Portal link or
+            QR code below in Safari or Chrome. Tailscale remote access and this
+            responsive portal remain supported.
+          </p>
+        </div>
 
         {/* Secure remote access via Tailscale Funnel — the supported path for new
             Browser Portal setups. Existing Cloudflare custom-domain URLs remain

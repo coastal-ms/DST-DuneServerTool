@@ -33,6 +33,18 @@ const DstButton = ({ title, onPress, type = 'primary', disabled = false, loading
   );
 };
 
+const NativeAppSunsetNotice = () => (
+  <View style={styles.sunsetNotice} accessibilityRole="alert">
+    <Text style={styles.sunsetTitle}>Native app retirement planned</Text>
+    <Text style={styles.sunsetText}>
+      The iOS and Android companion apps will remain available during a short
+      transition, then retire. Move to DST&apos;s full Browser Portal in Safari or
+      Chrome using the Tailscale link or QR code in DST Desktop under Settings
+      and Remote Device Access.
+    </Text>
+  </View>
+);
+
 // --- Vehicle Data ---
 // Fetched at runtime from GET /api/catalog/vehicle-kits (the single source of
 // truth shared with the desktop app). Defaults below are only fallbacks used if
@@ -499,6 +511,7 @@ export default function App() {
         <StatusBar barStyle="light-content" />
         <Text style={styles.title}>Pair with Server</Text>
         <Text style={styles.subtitle}>Scan the pairing code from the DST Desktop app Settings tab.</Text>
+        <NativeAppSunsetNotice />
         <View style={styles.alertBox}>
           <Text style={styles.alertText}><Text style={{ fontWeight: 'bold' }}>No VPN needed.</Text> Start the secure tunnel in the DST Desktop app (Settings &gt; Mobile App), then scan the code it shows.</Text>
         </View>
@@ -685,6 +698,7 @@ export default function App() {
       <StatusBar barStyle="light-content" />
       <Text style={styles.title}>DST Dashboard</Text>
       <Text style={styles.subtitle}>Connected to {liveHost || (serverInfo.rendezvousBase ? 'your server' : apiHost(serverInfo))}</Text>
+      <NativeAppSunsetNotice />
       
       <View style={styles.card}>
         <Text style={styles.cardTitle}>Server State</Text>
@@ -832,5 +846,8 @@ const styles = StyleSheet.create({
   button: { paddingVertical: 14, borderRadius: 10, alignItems: 'center', justifyContent: 'center', borderWidth: 1, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.2, shadowRadius: 4, elevation: 3 },
   buttonText: { color: '#fff', fontSize: 16, fontWeight: '700', letterSpacing: 0.5 },
   alertBox: { backgroundColor: '#1e293b', padding: 16, borderRadius: 8, borderWidth: 1, borderColor: '#3b82f6', marginBottom: 20 },
-  alertText: { color: '#cbd5e1', fontSize: 14, lineHeight: 20 }
+  alertText: { color: '#cbd5e1', fontSize: 14, lineHeight: 20 },
+  sunsetNotice: { backgroundColor: '#422006', padding: 16, borderRadius: 10, borderWidth: 1, borderColor: '#f59e0b', marginBottom: 20 },
+  sunsetTitle: { color: '#fde68a', fontSize: 16, fontWeight: '800', marginBottom: 6 },
+  sunsetText: { color: '#fef3c7', fontSize: 14, lineHeight: 20 }
 });
