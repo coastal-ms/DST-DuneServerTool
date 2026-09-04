@@ -21,13 +21,13 @@ import {
   giveScrip, giveSolari, grantAllKeystones, grantMaxSpec,
   kickPlayer, maxAugmentAttributes, refuelVehicle, renamePlayer, repairGear, repairInventoryItem,
   getPlayerVehicles,
-  setItemDurability, setItemStack, setItemWater,
+  setItemDurability, setItemStack, setItemWater, setWeaponAmmo,
   resetAllKeystones, resetAllSpecs, resetJourney, resetProgressionLive, resetSpec,
   restoreDestroyed,
   setFactionTier, setSkillPoints,
   setStarterClass, spawnVehicle, teleportToPlayer, teleportToLocation, setRespawn, getTeleportDestinations, getPlayers, updatePlayerTags, wipeCodex, resetFaction, snapshotBuilds, getFreshStartSnapshots, restoreBuilds, grantAllSkills,
   chatWhisper, isValidTemplateId, getItemCatalog, getCosmeticsCatalog, getPlayerOwnedCosmetics, filterCosmeticsCatalog, getHouseSwatchCosmetics, type CosmeticEntry,
-  parseTcnoPackageText, grantHouseSwatches,
+  parseTcnoPackageText, grantHouseSwatches, type HouseSwatchKind,
   giveItems, getItemPackages, saveItemPackage, deleteItemPackage,
   getLandsraadOverview, getLandsraadPlayerContributions, setLandsraadContribution,
   getPlayerJourneyNodes, completeJourneyNode, resetJourneyNode,
@@ -607,7 +607,7 @@ interface ActionDef {
   offlineOnly?: boolean   // requires player to be offline (DB write the game caches in memory)
   experimental?: boolean  // unverified — may not take effect in-game; shown with an EXPERIMENTAL badge
   fields?: ActionField[]
-  custom?: 'give-item' | 'grant-reward' | 'whisper' | 'spawn-vehicle' | 'funcom-spawn-vehicle' | 'quick-presets' | 'vehicle-kit' | 'give-package' | 'cheat-scripts' | 'dev-scripts' | 'unlock-trainers' | 'unlock-mainquest' | 'complete-contract' | 'progression-unlock' | 'refuel-vehicle' | 'starter-class' | 'teleport-player' | 'teleport-location' | 'set-respawn' | 'reset-faction' | 'grant-cosmetic' | 'grant-house-swatches' | 'fresh-start'
+  custom?: 'give-item' | 'grant-reward' | 'whisper' | 'spawn-vehicle' | 'funcom-spawn-vehicle' | 'quick-presets' | 'vehicle-kit' | 'give-package' | 'cheat-scripts' | 'dev-scripts' | 'unlock-trainers' | 'unlock-mainquest' | 'complete-contract' | 'progression-unlock' | 'refuel-vehicle' | 'starter-class' | 'teleport-player' | 'teleport-location' | 'set-respawn' | 'reset-faction' | 'grant-cosmetic' | 'grant-house-swatches' | 'grant-buildable-swatches' | 'fresh-start'
   balance?: 'solari' | 'scrip' | 'intel'  // show the player's current balance read-only above the form
   confirm?: (p: Player) => string  // confirm message; if returns '' no prompt
   doubleConfirm?: boolean // also requires a typed "i acknowledge" prompt inside run()
@@ -724,6 +724,9 @@ const ACTIONS: ActionDef[] = [
     run: () => Promise.resolve({ message: '' }) },
   { id: 'grant-house-swatches', group: 'Items', label: 'All House Swatches', icon: 'Palette', custom: 'grant-house-swatches', liveOnly: true,
     rowNote: 'Online required. Delivery starts immediately; remain online until the activation cascade starts and completely stops (about a minute).',
+    run: () => Promise.resolve({ message: '' }) },
+  { id: 'grant-buildable-swatches', group: 'Items', label: 'Buildable House Swatches', icon: 'PaintBucket', custom: 'grant-buildable-swatches', liveOnly: true,
+    rowNote: 'Online required. Delivers only the Buildables/Placeables House Swatch tokens through the live game.',
     run: () => Promise.resolve({ message: '' }) },
   { id: 'repair-gear', group: 'Items', label: 'Repair All Items', icon: 'Wrench',
     run: p => repairGear(p.id) },
@@ -1111,13 +1114,14 @@ function ActionRow({ def, player, busy, stats, open, danger, onToggle, runAction
                 })
                 return succeeded
               }} />
-          ) : def.custom === 'grant-house-swatches' ? (
+          ) : def.custom === 'grant-house-swatches' || def.custom === 'grant-buildable-swatches' ? (
             <GrantHouseSwatchesForm busy={busy} playerName={player.name} accountId={player.account_id}
+              kind={def.custom === 'grant-buildable-swatches' ? 'placeables' : 'all'}
               playerOnline={(player.online_status || '').toLowerCase() === 'online'}
               onGrant={async () => {
                 let succeeded = false
                 await runAction(def, async () => {
-                  const r = await grantHouseSwatches(player.id, player.account_id)
+                  const r = await grantHouseSwatches(player.id, player.account_id, def.custom === 'grant-buildable-swatches' ? 'placeables' : 'all')
                   succeeded = true
                   return { message: r.message || `House Swatches updated for ${player.name}.` }
                 })
@@ -1459,10 +1463,11 @@ function GrantCosmeticForm({ busy, playerName, accountId, onGrant }: {
   )
 }
 
-function GrantHouseSwatchesForm({ busy, playerName, accountId, playerOnline, onGrant }: {
+function GrantHouseSwatchesForm({ busy, playerName, accountId, kind, playerOnline, onGrant }: {
   busy: boolean
   playerName: string
   accountId: number
+  kind: HouseSwatchKind
   playerOnline: boolean
   onGrant: () => Promise<boolean>
 }) {
@@ -1488,11 +1493,13 @@ function GrantHouseSwatchesForm({ busy, playerName, accountId, playerOnline, onG
     return () => { alive = false }
   }, [accountId])
 
-  const houseSwatches = useMemo(() => getHouseSwatchCosmetics(catalog || []), [catalog])
+  const houseSwatches = useMemo(() => getHouseSwatchCosmetics(catalog || [], kind), [catalog, kind])
   const missingHouseSwatches = useMemo(
     () => houseSwatches.filter(entry => !owned?.has(entry.template.toLowerCase())),
     [houseSwatches, owned],
   )
+  const label = kind === 'placeables' ? 'Buildable House Swatches' : 'House Swatches'
+  const tokenLabel = kind === 'placeables' ? 'Buildable House Swatch' : 'House Swatch'
 
   useEffect(() => {
     if (!activationQueued || houseSwatches.length === 0) return
@@ -1532,7 +1539,7 @@ function GrantHouseSwatchesForm({ busy, playerName, accountId, playerOnline, onG
     <div className="space-y-3">
       <div className="flex items-start justify-between gap-3">
         <div className="text-xs text-text-dim leading-relaxed">
-          Delivers verified physical House Swatch tokens through Funcom's live RMQ item command. Tokens use backpack slots; forced overflow drops excess tokens beside the player.
+          Delivers verified physical {label} tokens through Funcom's live RMQ item command. Tokens use backpack slots; forced overflow drops excess tokens beside the player.
         </div>
         <span className="text-[11px] text-text-dim whitespace-nowrap">
           {houseSwatches.length - missingHouseSwatches.length}/{houseSwatches.length} detected
@@ -1542,7 +1549,7 @@ function GrantHouseSwatchesForm({ busy, playerName, accountId, playerOnline, onG
         Online required. Delivery starts immediately, then Dune activates each token in a cascade. Remain online until the notifications start and completely stop, usually about a minute. DST skips persisted unlocks and tokens still in the player's inventory. Forced overflow drops excess tokens beside the player; Funcom does not link those loot bags back to a player, so pick up any overflow tokens before running this action again.
       </div>
       {ownershipWarning && <div className="text-xs text-warning">{ownershipWarning}</div>}
-      {!playerOnline && <div className="text-xs text-warning">Player must be online to receive House Swatch tokens.</div>}
+      {!playerOnline && <div className="text-xs text-warning">Player must be online to receive {label} tokens.</div>}
       <button
         type="button"
         className="btn-primary w-full"
@@ -1550,7 +1557,7 @@ function GrantHouseSwatchesForm({ busy, playerName, accountId, playerOnline, onG
         title={!playerOnline ? 'Player must be online' : undefined}
         onClick={async () => {
           if (!window.confirm(
-            `Deliver ${missingHouseSwatches.length} missing House Swatch token${missingHouseSwatches.length === 1 ? '' : 's'} to ${playerName}?\n\n` +
+            `Deliver ${missingHouseSwatches.length} missing ${tokenLabel} token${missingHouseSwatches.length === 1 ? '' : 's'} to ${playerName}?\n\n` +
             'Online required. Delivery starts immediately. Remain online until the activation notifications start and completely stop, usually about a minute.\n\nDST forces overflow, so excess tokens drop beside the player. Pick up all dropped tokens before running this action again.'
           )) return
           if (await onGrant()) {
@@ -1559,12 +1566,12 @@ function GrantHouseSwatchesForm({ busy, playerName, accountId, playerOnline, onG
         }}
       >
         {busy
-          ? <><Icon name="Loader2" size={13} className="animate-spin" /> Delivering House Swatch tokens...</>
+          ? <><Icon name="Loader2" size={13} className="animate-spin" /> Delivering {label} tokens...</>
           : activationQueued
             ? <><Icon name="Loader2" size={13} className="animate-spin" /> Activation cascade running — remain online</>
           : missingHouseSwatches.length === 0
-            ? <><Icon name="Check" size={13} /> All House Swatches detected</>
-            : <><Icon name="Palette" size={13} /> Deliver {missingHouseSwatches.length} missing House Swatch tokens</>}
+            ? <><Icon name="Check" size={13} /> All {label} detected</>
+            : <><Icon name="Palette" size={13} /> Deliver {missingHouseSwatches.length} missing {tokenLabel} tokens</>}
       </button>
     </div>
   )
@@ -2689,18 +2696,20 @@ export function InventorySection({ player, canWrite, demo, refreshKey, flash, on
         </button>
       </div>
       <ItemList title={`Inventory (${fmtNum(groups.gear.length)})`} icon="Backpack" items={groups.gear}
+        playerId={player.id}
         canWrite={canWrite} busy={busy} run={run} isOnline={isOnline}
         extra={<ItemsActionBlock player={player} canWrite={canWrite} flash={flash} onChanged={onChanged} onFlush={onFlush} />} />
       <ItemList title={`Emotes (${fmtNum(groups.emotes.length)})`} icon="Smile" items={groups.emotes} collapsed
-        canWrite={canWrite} busy={busy} run={run} isOnline={isOnline} />
+        playerId={player.id} canWrite={canWrite} busy={busy} run={run} isOnline={isOnline} />
       <ItemList title={`Contract items (${fmtNum(groups.contracts.length)})`} icon="FileText" items={groups.contracts} collapsed
-        canWrite={canWrite} busy={busy} run={run} isOnline={isOnline} />
+        playerId={player.id} canWrite={canWrite} busy={busy} run={run} isOnline={isOnline} />
     </div>
   )
 }
 
-function ItemList({ title, icon, items, canWrite, busy, run, collapsed, extra, isOnline }: {
+function ItemList({ title, icon, items, playerId, canWrite, busy, run, collapsed, extra, isOnline }: {
   title: string; icon: string; items: InventoryItem[]; canWrite: boolean; busy: boolean
+  playerId: number
   run: (fn: () => Promise<{ message: string }>, label: string) => Promise<boolean>
   collapsed?: boolean
   extra?: React.ReactNode
@@ -2729,6 +2738,8 @@ function ItemList({ title, icon, items, canWrite, busy, run, collapsed, extra, i
               const hasDur = it.durability !== 'N/A' && Number.isFinite(curN) && Number.isFinite(maxN) && maxN > 0
               const waterN = parseFloat(it.water_amount)
               const hasWater = it.water_amount !== 'N/A' && it.water_type === 'Water' && Number.isFinite(waterN)
+              const ammoN = parseInt(it.current_ammo ?? 'N/A', 10)
+              const hasAmmo = it.current_ammo !== 'N/A' && Number.isFinite(ammoN)
               const ratio = hasDur ? curN / maxN : 1
               const durCls =
                 !hasDur          ? 'text-text-dim' :
@@ -2769,6 +2780,11 @@ function ItemList({ title, icon, items, canWrite, busy, run, collapsed, extra, i
                         </span>
                       )}
                       <span className="ml-1.5 font-mono text-text-dim text-xs">×{fmtNum(it.stack_size)}</span>
+                      {hasAmmo && (
+                        <span className="ml-1.5 font-mono text-info text-xs" title={`Loaded ammo ${ammoN}`}>
+                          <Icon name="Crosshair" size={10} className="inline-block mr-0.5 -mt-0.5" />{fmtNum(ammoN)}
+                        </span>
+                      )}
                     </span>
                     {canWrite && (
                       <span className="flex items-center gap-2 shrink-0" onClick={e => e.stopPropagation()}>
@@ -2793,6 +2809,9 @@ function ItemList({ title, icon, items, canWrite, busy, run, collapsed, extra, i
                       )}
                       {hasWater && (
                         <WaterEditor item={it} busy={busy} run={run} onClose={() => setEditingId(null)} />
+                      )}
+                      {hasAmmo && (
+                        <AmmoEditor item={it} playerId={playerId} busy={busy} run={run} isOnline={isOnline} onClose={() => setEditingId(null)} />
                       )}
                     </div>
                   )}
@@ -3027,6 +3046,58 @@ function WaterEditor({ item, busy, run, onClose }: {
             <Icon name="Save" size={12} /> Save water
           </button>
         </div>
+      </div>
+    </div>
+  )
+}
+
+function AmmoEditor({ item, playerId, busy, run, isOnline, onClose }: {
+  item: InventoryItem
+  playerId: number
+  busy: boolean
+  run: (fn: () => Promise<{ message: string }>, label: string) => Promise<boolean>
+  isOnline: boolean
+  onClose: () => void
+}) {
+  const current = parseInt(item.current_ammo ?? '0', 10)
+  const [ammoStr, setAmmoStr] = useState(Number.isFinite(current) ? String(current) : '0')
+  const ammo = parseInt(ammoStr, 10)
+  const valid = Number.isFinite(ammo) && ammo >= 0 && ammo <= 2000000000
+
+  return (
+    <div className="border-t border-border/50 px-3 py-3 bg-surface-1/60 rounded-b-lg space-y-3">
+      <div className="text-[11px] text-warning flex items-start gap-1.5">
+        <Icon name="WifiOff" size={11} className="mt-0.5 shrink-0" />
+        <span>
+          Loaded ammo is written inside the weapon stats blob and only persists safely while the player is offline.
+          DST checks the current ammo value before writing so a stale inventory row cannot overwrite a newer save.
+        </span>
+      </div>
+      <div className="flex items-end gap-2">
+        <label className="text-xs flex-1">
+          <div className="text-text-dim mb-1">Loaded ammo</div>
+          <input
+            type="number" inputMode="numeric" step={1} min={0}
+            value={ammoStr}
+            onChange={e => setAmmoStr(e.target.value)}
+            disabled={busy || isOnline}
+            className="w-full font-mono text-sm bg-surface-2 border border-border rounded px-2 py-1"
+          />
+        </label>
+        <button
+          type="button"
+          className="btn-primary text-xs"
+          disabled={busy || isOnline || !valid}
+          title={isOnline ? 'Player must be offline' : undefined}
+          onClick={() => {
+            if (!valid || isOnline) return
+            void (async () => {
+              if (await run(() => setWeaponAmmo(playerId, item.id, ammo, current), 'Save ammo')) onClose()
+            })()
+          }}
+        >
+          <Icon name="Save" size={12} /> Save ammo
+        </button>
       </div>
     </div>
   )

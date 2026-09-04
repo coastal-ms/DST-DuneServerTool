@@ -13,8 +13,21 @@ here cover everything those tags shipped.
 
 ## [Unreleased]
 
+## [15.0.0-phase2-test5] - 2026-09-04
+
+### Added
+
+- Added offline loaded-ammo editing for exact Self-Hosted player-carried ranged
+  weapons, with current-value protection and readback so stale inventory views
+  cannot overwrite a newer save.
+- Added a separate Buildable House Swatches delivery action for placeables-only
+  swatch tokens, while keeping the existing All House Swatches action.
+
 ### Changed
 
+- Reviewed House Swatch classification so the separate buildable delivery path
+  follows the dedicated `*_Placeables_Swatch` token family and does not infer
+  buildable status from inconsistent garment/armor display names.
 - Began the staged retirement of the separate Expo iOS and Android companion
   apps. Existing native builds remain functional during the transition, while
   in-app guidance directs users to the responsive Browser Portal over Tailscale.

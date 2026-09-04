@@ -235,6 +235,10 @@ Describe 'Invoke-DunePlayerGrantHouseSwatches' -Tag 'Pure' {
         function global:Test-DunePlayerOffline { return @{ ok = $false; reason = 'Player is online.' } }
         function global:Resolve-DuneFlsIdOrError { return @{ ok = $true; fls_id = 'fls-test' } }
         function global:Get-DuneHouseSwatchCatalog {
+            param([string]$Kind = 'all')
+            if ($Kind -eq 'placeables') {
+                return @(@{ template = 'Ecaz_Placeables_Swatch'; name = 'House Ecaz Placeables Swatch'; group = 'Swatches (Dyes)' })
+            }
             return @(
                 @{ template = 'Ecaz_HeavyArmor_Swatch'; name = 'House Ecaz Garment Swatch'; group = 'Swatches (Dyes)' },
                 @{ template = 'Ecaz_Placeables_Swatch'; name = 'House Ecaz Placeables Swatch'; group = 'Swatches (Dyes)' }
@@ -265,7 +269,10 @@ Describe 'Invoke-DunePlayerGrantHouseSwatches' -Tag 'Pure' {
     }
 
     It 'rejects an offline player before granting' {
-        function global:Test-DunePlayerOffline { return @{ ok = $true } }
+        function global:Test-DunePlayerOffline {
+            param($Ip, $PawnId, [switch]$RequireVerifiedStatus)
+            return @{ ok = $true }
+        }
         $r = Invoke-DunePlayerGrantHouseSwatches -Ip '1.2.3.4' -PawnId 10 -AccountId 20
         $r.ok | Should -BeFalse
         $r.error | Should -Match 'online'
@@ -287,6 +294,68 @@ Describe 'Invoke-DunePlayerGrantHouseSwatches' -Tag 'Pure' {
         $script:batchCalls | Should -Be 1
         $script:batchTemplates | Should -Be @('Ecaz_Placeables_Swatch')
         $script:batchSpacing | Should -Be 200
+    }
+
+    It 'can grant only buildable/placeables swatches' {
+        function global:Get-DunePlayerOwnedCosmeticsLive { return @{ ok = $true; owned = @() } }
+
+        $r = Invoke-DunePlayerGrantHouseSwatches -Ip '1.2.3.4' -PawnId 10 -AccountId 20 -Kind placeables
+
+        $r.ok | Should -BeTrue -Because $r.error
+        $r.total | Should -Be 1
+        $r.requested | Should -Be 1
+        $r.message | Should -Match 'Buildable House Swatches'
+        $script:batchTemplates | Should -Be @('Ecaz_Placeables_Swatch')
+    }
+}
+
+Describe 'Invoke-DunePlayerSetWeaponAmmo' -Tag 'Pure' {
+    BeforeEach {
+        $script:capturedSql = $null
+        Set-Item function:global:ConvertTo-DuneRowMaps $script:realRowMaps
+        Set-Item function:global:ConvertTo-DuneInt $script:realDuneInt
+        function global:Test-DunePlayerOffline { return @{ ok = $true } }
+        function global:Invoke-DuneSqlQuery {
+            param($Ip, $Sql, $ReadOnly, $MaxRows, $TimeoutSec)
+            $script:capturedSql = $Sql
+            return @{
+                ok = $true
+                columns = @('item_id', 'before_ammo', 'after_ammo')
+                rows = @(, @('9001', '17', '250'))
+            }
+        }
+    }
+
+    AfterEach {
+        Remove-Item function:global:Test-DunePlayerOffline -ErrorAction SilentlyContinue
+        Remove-Item function:global:Invoke-DuneSqlQuery -ErrorAction SilentlyContinue
+    }
+
+    It 'requires the player to be offline' {
+        function global:Test-DunePlayerOffline {
+            param($Ip, $PawnId, [switch]$RequireVerifiedStatus)
+            return @{ ok = $false; reason = 'Player is online.' }
+        }
+
+        $r = Invoke-DunePlayerSetWeaponAmmo -Ip '1.2.3.4' -PawnId 42 -ItemId 9001 -Ammo 250 -ExpectedAmmo 17
+
+        $r.ok | Should -BeFalse
+        $r.error | Should -Match 'offline'
+        $script:capturedSql | Should -BeNullOrEmpty
+    }
+
+    It 'updates CurrentAmmo only for the selected player item with expected-value protection' {
+        $r = Invoke-DunePlayerSetWeaponAmmo -Ip '1.2.3.4' -PawnId 42 -ItemId 9001 -Ammo 250 -ExpectedAmmo 17
+
+        $r.ok | Should -BeTrue -Because $r.error
+        $r.before_ammo | Should -Be 17
+        $r.after_ammo | Should -Be 250
+        $script:capturedSql | Should -Match 'inv\.actor_id = 42::bigint'
+        $script:capturedSql | Should -Match 'i\.id = 9001::bigint'
+        $script:capturedSql | Should -Match "FWeaponItemStats"
+        $script:capturedSql | Should -Match "CurrentAmmo"
+        $script:capturedSql | Should -Match 't\.before_ammo::bigint = 17::bigint'
+        $script:capturedSql | Should -Match 'to_jsonb\(250::bigint\)'
     }
 }
 

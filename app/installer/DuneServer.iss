@@ -16,7 +16,7 @@
 ;                 -> NOT touched by install or uninstall (preserves user config)
 
 #define MyAppName        "Dune Server Tool"
-#define MyAppVersion "15.0.0-phase2-test4"
+#define MyAppVersion "15.0.0-phase2-test5"
 #define MyAppNumericVersion Copy(MyAppVersion, 1, Pos("-", MyAppVersion + "-") - 1) + ".0"
 #define MyAppPublisher   "Dune Awakening Self-Hosted Tool"
 #define MyAppURL         "https://github.com/coastal-ms/DST-DuneServerTool"
@@ -121,7 +121,7 @@ Source: "..\..\tools\preflight\*"; DestDir: "{app}\tools\preflight"; Flags: igno
 Source: "..\..\helper\bridge\*"; DestDir: "{app}\helper\bridge"; Flags: ignoreversion recursesubdirs
 
 [InstallDelete]
-; v15.0.0-phase2-test4: Modern upgrades update in place so scheduled tasks
+; v15.0.0-phase2-test5: Modern upgrades update in place so scheduled tasks
 ; survive. Clear only installer-managed directory trees before copying to
 ; prevent removed scripts and hashed web assets from lingering.
 Type: filesandordirs; Name: "{app}\server"

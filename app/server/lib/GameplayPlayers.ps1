@@ -54,7 +54,8 @@ SELECT i.id, i.template_id, i.stack_size, COALESCE(i.quality_level, 0) AS qualit
        COALESCE((i.stats->'FItemStackAndDurabilityStats'->1->>'CurrentDurability'), 'N/A') AS durability,
        COALESCE((i.stats->'FItemStackAndDurabilityStats'->1->>'MaxDurability'), 'N/A')     AS max_durability,
        COALESCE((i.stats->'FFillableItemStats'->1->>'CurrentAmount'), 'N/A')               AS water_amount,
-       COALESCE((i.stats->'FFillableItemStats'->1->>'FillableType'), '')                   AS water_type
+       COALESCE((i.stats->'FFillableItemStats'->1->>'FillableType'), '')                   AS water_type,
+       COALESCE((i.stats->'FWeaponItemStats'->1->>'CurrentAmmo'), 'N/A')                   AS current_ammo
 FROM dune.items i
 JOIN dune.inventories inv ON i.inventory_id = inv.id
 WHERE inv.actor_id = {0}::bigint
@@ -127,6 +128,7 @@ function Get-DunePlayerDetailLive {
             max_durability = [string]$r['max_durability']
             water_amount   = [string]$r['water_amount']
             water_type     = [string]$r['water_type']
+            current_ammo   = [string]$r['current_ammo']
         }
     }
     $specs = @()
@@ -617,6 +619,57 @@ RETURNING id::text AS item_id;
         return @{ ok = $false; error = 'Item quantity changed or the item no longer exists. Refresh and try again.' }
     }
     return @{ ok = $true; message = "Set item $ItemId stack to $StackSize." }
+}
+
+function Invoke-DunePlayerSetWeaponAmmo {
+    param([string]$Ip, [long]$PawnId, [long]$ItemId, [long]$Ammo, [long]$ExpectedAmmo)
+    if ($PawnId -le 0) { return @{ ok = $false; error = 'pawn_id is required.' } }
+    if ($ItemId -le 0) { return @{ ok = $false; error = 'item_id is required.' } }
+    if ($Ammo -lt 0 -or $Ammo -gt 2000000000) { return @{ ok = $false; error = 'ammo must be between 0 and 2000000000.' } }
+    if ($ExpectedAmmo -lt 0 -or $ExpectedAmmo -gt 2000000000) { return @{ ok = $false; error = 'expected_ammo must be between 0 and 2000000000.' } }
+
+    $off = Test-DunePlayerOffline -Ip $Ip -PawnId $PawnId -RequireVerifiedStatus
+    if (-not $off.ok) { return @{ ok = $false; error = "Player must be offline before changing loaded weapon ammo. $($off.reason)" } }
+
+    $sql = @"
+WITH target AS (
+    SELECT i.id,
+           i.stats->'FWeaponItemStats'->1->>'CurrentAmmo' AS before_ammo
+    FROM dune.items i
+    JOIN dune.inventories inv ON inv.id = i.inventory_id
+    WHERE inv.actor_id = $PawnId::bigint
+      AND i.id = $ItemId::bigint
+      AND i.stats ? 'FWeaponItemStats'
+      AND jsonb_typeof(i.stats->'FWeaponItemStats') = 'array'
+      AND jsonb_array_length(i.stats->'FWeaponItemStats') > 1
+      AND i.stats->'FWeaponItemStats'->1 ? 'CurrentAmmo'
+      AND i.stats->'FWeaponItemStats'->1->>'CurrentAmmo' ~ '^[0-9]+$'
+    FOR UPDATE
+),
+updated AS (
+    UPDATE dune.items i
+    SET stats = jsonb_set(i.stats, '{FWeaponItemStats,1,CurrentAmmo}', to_jsonb($Ammo::bigint), false)
+    FROM target t
+    WHERE i.id = t.id
+      AND t.before_ammo::bigint = $ExpectedAmmo::bigint
+    RETURNING i.id::text AS item_id, t.before_ammo, i.stats->'FWeaponItemStats'->1->>'CurrentAmmo' AS after_ammo
+)
+SELECT item_id, before_ammo, after_ammo FROM updated;
+"@
+    $res = Invoke-DuneSqlQuery -Ip $Ip -Sql $sql -ReadOnly $false -MaxRows 1 -TimeoutSec 30
+    if (-not $res.ok) { return @{ ok = $false; error = $res.error } }
+    $rows = ConvertTo-DuneRowMaps -Result $res
+    if (@($rows).Count -eq 0) {
+        return @{ ok = $false; error = 'Weapon ammo changed, the item is not a ranged weapon, or it no longer belongs to this offline player. Refresh and try again.' }
+    }
+    $row = $rows[0]
+    return @{
+        ok = $true
+        message = "Set weapon ammo on item $ItemId from $($row['before_ammo']) to $($row['after_ammo'])."
+        item_id = (ConvertTo-DuneInt $row['item_id'])
+        before_ammo = (ConvertTo-DuneInt $row['before_ammo'])
+        after_ammo = (ConvertTo-DuneInt $row['after_ammo'])
+    }
 }
 
 # Give item (give-item): stack onto a matching backpack stack or insert a new one.

@@ -743,6 +743,7 @@ export interface InventoryItem {
   max_durability: string
   water_amount: string
   water_type: string
+  current_ammo?: string
 }
 
 export interface SpecTrack {
@@ -846,6 +847,13 @@ export function setItemStack(itemId: number, stackSize: number, expectedStackSiz
   return api<WriteResult>('/api/gameplay/players/set-item-stack', {
     method: 'POST',
     body: JSON.stringify({ item_id: itemId, stack_size: stackSize, expected_stack_size: expectedStackSize }),
+  })
+}
+
+export function setWeaponAmmo(pawnId: number, itemId: number, ammo: number, expectedAmmo: number) {
+  return api<WriteResult>('/api/gameplay/players/set-weapon-ammo', {
+    method: 'POST',
+    body: JSON.stringify({ pawn_id: pawnId, item_id: itemId, ammo, expected_ammo: expectedAmmo }),
   })
 }
 
@@ -1419,9 +1427,14 @@ interface CosmeticsResponse { templates?: CosmeticEntry[]; total?: number }
 let _cosmeticsCache: CosmeticEntry[] | null = null
 let _cosmeticsPromise: Promise<CosmeticEntry[]> | null = null
 
-export function getHouseSwatchCosmetics(catalog: CosmeticEntry[]): CosmeticEntry[] {
+export type HouseSwatchKind = 'all' | 'placeables'
+
+export function getHouseSwatchCosmetics(catalog: CosmeticEntry[], kind: HouseSwatchKind = 'all'): CosmeticEntry[] {
   return catalog
-    .filter(entry => entry.group === 'Swatches (Dyes)' && /^House .+ Swatch$/i.test(entry.name))
+    .filter(entry => entry.group === 'Swatches (Dyes)')
+    .filter(entry => kind === 'placeables'
+      ? /_Placeables_Swatch$/i.test(entry.template)
+      : /^House .+ Swatch$/i.test(entry.name))
     .sort((a, b) => a.name.localeCompare(b.name) || a.template.localeCompare(b.template))
 }
 
@@ -2091,9 +2104,9 @@ export interface HouseSwatchGrantResponse extends WriteResult {
   result?: HouseSwatchGrantResult
 }
 
-export function grantHouseSwatches(pawnId: number, accountId: number) {
+export function grantHouseSwatches(pawnId: number, accountId: number, kind: HouseSwatchKind = 'all') {
   return api<HouseSwatchGrantResponse>('/api/gameplay/players/grant-house-swatches', {
-    method: 'POST', body: JSON.stringify({ pawn_id: pawnId, account_id: accountId }),
+    method: 'POST', body: JSON.stringify({ pawn_id: pawnId, account_id: accountId, kind }),
   })
 }
 

@@ -460,7 +460,7 @@ function Invoke-DunePlayerGiveItemsBulk {
 }
 
 function Invoke-DunePlayerGrantHouseSwatches {
-    param([string]$Ip, [long]$PawnId, [long]$AccountId)
+    param([string]$Ip, [long]$PawnId, [long]$AccountId, [ValidateSet('all','placeables')][string]$Kind = 'all')
     if ($PawnId -le 0) { return @{ ok = $false; error = 'pawn_id is required.' } }
     if ($AccountId -le 0) { return @{ ok = $false; error = 'account_id is required.' } }
 
@@ -471,9 +471,10 @@ function Invoke-DunePlayerGrantHouseSwatches {
     $fls = Resolve-DuneFlsIdOrError -Ip $Ip -ActorId $PawnId
     if (-not $fls.ok) { return @{ ok = $false; error = $fls.error } }
 
-    $houseSwatches = @(Get-DuneHouseSwatchCatalog)
+    $label = if ($Kind -eq 'placeables') { 'Buildable House Swatches' } else { 'House Swatches' }
+    $houseSwatches = @(Get-DuneHouseSwatchCatalog -Kind $Kind)
     if ($houseSwatches.Count -eq 0) {
-        return @{ ok = $false; error = 'House Swatch catalog is empty.' }
+        return @{ ok = $false; error = "$label catalog is empty." }
     }
 
     $before = Get-DunePlayerOwnedCosmeticsLive -Ip $Ip -AccountId $AccountId
@@ -489,7 +490,7 @@ function Invoke-DunePlayerGrantHouseSwatches {
     if ($missing.Count -eq 0) {
         return @{
             ok = $true
-            message = "All $($houseSwatches.Count) House Swatches are already owned."
+            message = "All $($houseSwatches.Count) $label are already owned."
             total = $houseSwatches.Count
             already_owned = $alreadyOwned
             requested = 0
@@ -504,7 +505,7 @@ function Invoke-DunePlayerGrantHouseSwatches {
     if (-not $result.ok) {
         return @{
             ok = $false
-            error = "House Swatch token batch failed: $($result.message)"
+            error = "$label token batch failed: $($result.message)"
             total = $houseSwatches.Count
             already_owned = $alreadyOwned
             requested = $missing.Count
@@ -518,7 +519,7 @@ function Invoke-DunePlayerGrantHouseSwatches {
     $granted = $missing.Count
     return @{
         ok = $true
-        message = "Delivered $granted missing House Swatch token$(if ($granted -eq 1) { '' } else { 's' }) through the live game. Delivery starts immediately; the player must remain online until the activation cascade starts and completely stops. This usually takes about a minute. Overflow drops beside the player."
+        message = "Delivered $granted missing $label token$(if ($granted -eq 1) { '' } else { 's' }) through the live game. Delivery starts immediately; the player must remain online until the activation cascade starts and completely stops. This usually takes about a minute. Overflow drops beside the player."
         total = $houseSwatches.Count
         already_owned = $alreadyOwned
         requested = $missing.Count
