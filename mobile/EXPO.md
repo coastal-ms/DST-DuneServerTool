@@ -1,4 +1,9 @@
-# Running the DST Mobile App via Expo (interim — before the App Store / Play release)
+# Running the DST Mobile App via Expo
+
+> Sunset transition: the Expo iOS/Android companion is being retired after a
+> short compatibility period. Keep it functional for existing users, but make
+> no native-only feature additions. New remote use belongs in the responsive
+> Browser Portal over Tailscale.
 
 > **DRAFT / internal.** This is the interim distribution path for testers while the
 > app is not yet on the Apple App Store / Google Play. Do **not** publish these

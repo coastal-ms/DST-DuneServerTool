@@ -210,7 +210,8 @@ export function RemoteAccessCard() {
                 <Icon name="Info" size={14} className="mt-0.5 flex-none" />
                 <span>
                   <strong>Deprecated — existing configurations only.</strong> Cloudflare
-                  named-tunnel/Access support is planned for removal. Existing
+                  named-tunnel/Access support is scheduled for removal when the
+                  current v15 test line promotes to stable. Existing
                   configurations remain editable and operational during migration,
                   but new setups should use <strong>Tailscale Funnel</strong> plus
                   Browser Portal accounts under <strong>Remote Device Access</strong>.
@@ -232,7 +233,7 @@ export function RemoteAccessCard() {
               </p>
 
               <div className="rounded-lg border border-warning/40 bg-warning/10 p-3 text-sm text-text-muted">
-                <div className="font-semibold text-warning mb-2">Migrate before Cloudflare removal</div>
+                <div className="font-semibold text-warning mb-2">Migrate before the v15 stable release</div>
                 <ol className="list-decimal pl-5 space-y-1">
                   <li>
                     Run <code className="break-all font-mono text-xs">tailscale funnel --bg http://127.0.0.1:47900</code> in
