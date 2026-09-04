@@ -25,17 +25,20 @@ Register-DuneRoute -Method POST -Path '/api/gameplay/players/give-items' -Handle
     }
 }
 
-# POST /api/gameplay/players/grant-house-swatches  { pawn_id, account_id }
+# POST /api/gameplay/players/grant-house-swatches  { pawn_id, account_id, kind? }
 Register-DuneRoute -Method POST -Path '/api/gameplay/players/grant-house-swatches' -Handler {
     param($req, $res, $routeParams, $body)
     try {
         $pawn = Get-DuneBodyInt -Body $body -Name 'pawn_id'
         $account = Get-DuneBodyInt -Body $body -Name 'account_id'
+        $kind = [string](Get-DuneBodyValue -Body $body -Name 'kind')
+        if ([string]::IsNullOrWhiteSpace($kind)) { $kind = 'all' }
+        if ($kind -notin @('all','placeables')) { Write-DuneError -Response $res -Status 400 -Message 'kind must be all or placeables.'; return }
         if ($null -eq $pawn -or $pawn -le 0) { Write-DuneError -Response $res -Status 400 -Message 'pawn_id is required.'; return }
         if ($null -eq $account -or $account -le 0) { Write-DuneError -Response $res -Status 400 -Message 'account_id is required.'; return }
         Invoke-DunePlayerWriteRoute -Response $res -Action {
             param($ip)
-            Invoke-DunePlayerGrantHouseSwatches -Ip $ip -PawnId $pawn -AccountId $account
+            Invoke-DunePlayerGrantHouseSwatches -Ip $ip -PawnId $pawn -AccountId $account -Kind $kind
         }
     } catch {
         Write-DuneError -Response $res -Status 500 -Message "Grant House Swatches failed: $($_.Exception.Message)"

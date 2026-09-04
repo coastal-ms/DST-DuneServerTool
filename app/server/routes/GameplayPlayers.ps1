@@ -329,6 +329,28 @@ Register-DuneRoute -Method POST -Path '/api/gameplay/players/set-item-stack' -Ha
     }
 }
 
+# POST /api/gameplay/players/set-weapon-ammo  { pawn_id, item_id, ammo, expected_ammo }
+# Offline-only loaded-ammo editor for player-carried ranged weapons. The expected
+# value prevents overwriting a stale row after the inventory view was loaded.
+Register-DuneRoute -Method POST -Path '/api/gameplay/players/set-weapon-ammo' -Handler {
+    param($req, $res, $routeParams, $body)
+    try {
+        $pawn = Get-DuneBodyInt -Body $body -Name 'pawn_id'
+        $iid = Get-DuneBodyInt -Body $body -Name 'item_id'
+        $ammo = Get-DuneBodyInt -Body $body -Name 'ammo'
+        $expected = Get-DuneBodyInt -Body $body -Name 'expected_ammo'
+        if ($null -eq $pawn -or $pawn -le 0) { Write-DuneError -Response $res -Status 400 -Message 'pawn_id is required.'; return }
+        if ($null -eq $iid -or $iid -le 0) { Write-DuneError -Response $res -Status 400 -Message 'item_id is required.'; return }
+        if ($null -eq $ammo -or $ammo -lt 0) { Write-DuneError -Response $res -Status 400 -Message 'ammo must be at least 0.'; return }
+        if ($null -eq $expected -or $expected -lt 0) { Write-DuneError -Response $res -Status 400 -Message 'expected_ammo must be at least 0.'; return }
+        Invoke-DunePlayerWriteRoute -Response $res -Action { param($ip)
+            Invoke-DunePlayerSetWeaponAmmo -Ip $ip -PawnId $pawn -ItemId $iid -Ammo $ammo -ExpectedAmmo $expected
+        }
+    } catch {
+        Write-DuneError -Response $res -Status 500 -Message "Set weapon ammo failed: $($_.Exception.Message)"
+    }
+}
+
 # ===========================================================================
 # v11.5.6 — extended player surface routes.
 # ===========================================================================

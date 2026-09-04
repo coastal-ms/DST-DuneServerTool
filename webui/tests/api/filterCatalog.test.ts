@@ -61,6 +61,7 @@ describe('filterCosmeticsCatalog', () => {
   const cosmetics: CosmeticEntry[] = [
     { template: 'Atreides_Buggy_Variant', name: 'Atreides Buggy Variant', group: 'Vehicle Skins' },
     { template: 'D_Choam_HeavyArmor_Swatch', name: 'CHOAM Heavy Armor Swatch', group: 'Swatches (Dyes)' },
+    { template: 'Atreides_Placeables_Swatch', name: 'Atreides Buildables Swatch', group: 'Swatches (Dyes)' },
     { template: 'Ecaz_HeavyArmor_Swatch', name: 'House Ecaz Garment Swatch', group: 'Swatches (Dyes)' },
     { template: 'Ecaz_Placeables_Swatch', name: 'House Ecaz Placeables Swatch', group: 'Swatches (Dyes)' },
     { template: 'NotASwatch', name: 'House Example Swatch', group: 'Other Customization' },
@@ -76,6 +77,10 @@ describe('filterCosmeticsCatalog', () => {
   })
 
   it('selects only vendor House Swatches in stable name order', () => {
-    expect(getHouseSwatchCosmetics(cosmetics)).toEqual([cosmetics[2], cosmetics[3]])
+    expect(getHouseSwatchCosmetics(cosmetics)).toEqual([cosmetics[3], cosmetics[4]])
+  })
+
+  it('can select only buildable/placeables House Swatches', () => {
+    expect(getHouseSwatchCosmetics(cosmetics, 'placeables')).toEqual([cosmetics[2], cosmetics[4]])
   })
 })

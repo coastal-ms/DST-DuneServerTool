@@ -264,6 +264,18 @@ describe('Phase G+H — RMQ live commands (PlayerTarget shape)', () => {
     expect(last().url).toBe('/api/gameplay/players/reset-progression')
   })
 
+  it('setWeaponAmmo sends pawn, item, ammo, and expected ammo', async () => {
+    await gp.setWeaponAmmo(42, 9001, 250, 17)
+    expect(last().url).toBe('/api/gameplay/players/set-weapon-ammo')
+    expect(last().body).toEqual({ pawn_id: 42, item_id: 9001, ammo: 250, expected_ammo: 17 })
+  })
+
+  it('grantHouseSwatches can request only buildable/placeables tokens', async () => {
+    await gp.grantHouseSwatches(42, 99, 'placeables')
+    expect(last().url).toBe('/api/gameplay/players/grant-house-swatches')
+    expect(last().body).toEqual({ pawn_id: 42, account_id: 99, kind: 'placeables' })
+  })
+
   it('setSkillModuleLive sends module_id + level', async () => {
     await gp.setSkillModuleLive({ fls_id: 'F-x' }, 'mod.weapons', 3)
     expect(last().body).toEqual({ fls_id: 'F-x', module_id: 'mod.weapons', level: 3 })

@@ -22,10 +22,15 @@ function Get-DuneRawFuncomId {
 
 # checkPlayerOffline(pawn) — nil player_state row is treated as offline.
 function Test-DunePlayerOffline {
-    param([string]$Ip, [long]$PawnId)
+    param([string]$Ip, [long]$PawnId, [switch]$RequireVerifiedStatus)
     $sql = "SELECT online_status::text AS status FROM dune.player_state WHERE player_pawn_id = $PawnId::bigint;"
     $r = Invoke-DuneSqlQuery -Ip $Ip -Sql $sql -ReadOnly $true -MaxRows 1 -TimeoutSec 10
-    if (-not $r.ok) { return @{ ok = $true; reason = $null } }
+    if (-not $r.ok) {
+        if ($RequireVerifiedStatus) {
+            return @{ ok = $false; reason = "player status could not be verified - $($r.error)" }
+        }
+        return @{ ok = $true; reason = $null }
+    }
     $maps = ConvertTo-DuneRowMaps -Result $r
     if ($maps.Count -eq 0) { return @{ ok = $true; reason = $null } }
     $status = [string]$maps[0]['status']

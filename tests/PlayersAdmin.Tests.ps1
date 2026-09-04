@@ -177,6 +177,22 @@ Describe 'Test-DunePlayerOfflineByController' -Tag 'PlayersAdmin' {
     }
 }
 
+Describe 'Test-DunePlayerOffline verified status' -Tag 'PlayersAdmin' {
+    BeforeEach {
+        $script:onlineStatus = 'Offline'
+        $script:statusQueryOk = $true
+    }
+
+    It 'fails closed when verification is required and the status query fails' {
+        $script:statusQueryOk = $false
+
+        $r = Test-DunePlayerOffline -Ip 'x' -PawnId 200 -RequireVerifiedStatus
+
+        $r.ok | Should -BeFalse
+        $r.reason | Should -Match 'could not be verified'
+    }
+}
+
 Describe 'Invoke-DunePlayerAwardCharXp offline actor targeting' -Tag 'PlayersAdmin' {
     BeforeEach {
         $script:onlineStatus     = 'Offline'

@@ -188,11 +188,20 @@ function Get-DuneCosmeticsCatalog {
 }
 
 function Get-DuneHouseSwatchCatalog {
+    param([ValidateSet('all','placeables')][string]$Kind = 'all')
     $catalog = Get-DuneCosmeticsCatalog
     return @($catalog.templates |
         Where-Object {
             [string]$_.group -eq 'Swatches (Dyes)' -and
-            [string]$_.name -match '^House .+ Swatch$'
+            (
+                (
+                    $Kind -eq 'all' -and
+                    [string]$_.name -match '^House .+ Swatch$'
+                ) -or (
+                    $Kind -eq 'placeables' -and
+                    [string]$_.template -match '_Placeables_Swatch$'
+                )
+            )
         } |
         Sort-Object { $_.name }, { $_.template })
 }
