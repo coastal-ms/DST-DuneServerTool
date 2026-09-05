@@ -27,6 +27,8 @@ here cover everything those tags shipped.
 - Loaded-ammo editing now preserves whole-number input, including scientific
   notation, and rejects empty, fractional, or out-of-range values instead of
   silently truncating them.
+- Solo and Self-Hosted Give Item forms now reset after a successful grant so
+  the previous item and augment selections cannot be submitted twice by mistake.
 
 ## [15.0.0-phase2-test5] - 2026-09-04
 

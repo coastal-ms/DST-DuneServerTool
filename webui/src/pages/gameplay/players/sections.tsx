@@ -865,16 +865,18 @@ export function ActionsSection({ player, canWrite, demo, flash, onChanged, onFlu
   const runAction = async (def: ActionDef, exec: () => Promise<{ message: string }>) => {
     if (def.confirm) {
       const msg = def.confirm(player)
-      if (msg && !window.confirm(msg)) return
+      if (msg && !window.confirm(msg)) return false
     }
     setBusy(true)
     try {
       const r = await exec()
       flash(r.message || `${def.label} done.`, 'ok')
-      // Keep the form OPEN (grant several in a row) + mark deferred refresh only.
+      // Mark a deferred refresh; custom forms decide whether successful input resets.
       onChanged()
+      return true
     } catch (e) {
       flash(e instanceof Error ? e.message : String(e), 'err')
+      return false
     } finally {
       setBusy(false)
     }
@@ -948,7 +950,7 @@ function ActionRow({ def, player, busy, stats, open, danger, onToggle, runAction
   open: boolean
   danger?: boolean
   onToggle: () => void
-  runAction: (def: ActionDef, exec: () => Promise<{ message: string }>) => void
+  runAction: (def: ActionDef, exec: () => Promise<{ message: string }>) => Promise<boolean>
 }) {
   const disabled = busy
   // Read-only "current balance" note shown above currency actions.
@@ -1586,8 +1588,8 @@ function GrantHouseSwatchesForm({ busy, playerName, accountId, kind, playerOnlin
 function GiveItemForm({ busy, submitLabel, playerOnline, onSubmit, onSubmitTierSet }: {
   busy: boolean; submitLabel: string
   playerOnline: boolean
-  onSubmit: (tpl: string, qty: number, qual: number, allowOverflow: boolean, augments: string[], augmentQuality: number) => void
-  onSubmitTierSet: (tpl: string, qty: number, allowOverflow: boolean) => void
+  onSubmit: (tpl: string, qty: number, qual: number, allowOverflow: boolean, augments: string[], augmentQuality: number) => Promise<boolean>
+  onSubmitTierSet: (tpl: string, qty: number, allowOverflow: boolean) => Promise<boolean>
 }) {
   const [giveTpl, setGiveTpl]   = useState('')
   const [giveName, setGiveName] = useState('')
@@ -1597,6 +1599,16 @@ function GiveItemForm({ busy, submitLabel, playerOnline, onSubmit, onSubmitTierS
   const [overflow, setOverflow] = useState(true)
   const [augments, setAugments] = useState<string[]>([])
   const [augmentQuality, setAugmentQuality] = useState(5)
+  const reset = () => {
+    setGiveTpl('')
+    setGiveName('')
+    setGiveQty('1')
+    setGiveQual('0')
+    setGradeable(false)
+    setOverflow(true)
+    setAugments([])
+    setAugmentQuality(5)
+  }
   return (
     <div className="space-y-3">
       <ItemPicker label="Item — type to search by name or template id"
@@ -1639,21 +1651,25 @@ function GiveItemForm({ busy, submitLabel, playerOnline, onSubmit, onSubmitTierS
       <button
         className="btn-primary w-full"
         disabled={busy || !isValidTemplateId(giveTpl) || (augments.length > 0 && (playerOnline || Number(giveQty) !== 1))}
-        onClick={() => onSubmit(
+        onClick={() => void onSubmit(
           giveTpl.trim(),
           Number(giveQty) || 1,
           Number(giveQual) || 0,
           overflow,
           augments,
           augmentQuality,
-        )}
+        ).then(success => { if (success) reset() })}
       >
         {busy ? <Icon name="Loader2" size={13} className="animate-spin" /> : <Icon name="Check" size={13} />} {submitLabel}
       </button>
       {gradeable && (
         <button className="btn-secondary w-full" disabled={busy || !isValidTemplateId(giveTpl) || augments.length > 0}
           title={augments.length > 0 ? 'Clear selected augments before giving all item grades' : 'Gives one of this item at every grade, Grade 0 through Grade 5'}
-          onClick={() => onSubmitTierSet(giveTpl.trim(), Number(giveQty) || 1, overflow)}>
+          onClick={() => void onSubmitTierSet(
+            giveTpl.trim(),
+            Number(giveQty) || 1,
+            overflow,
+          ).then(success => { if (success) reset() })}>
           {busy ? <Icon name="Loader2" size={13} className="animate-spin" /> : <Icon name="Layers" size={13} />} Give all grades (0-5)
         </button>
       )}
@@ -2638,16 +2654,18 @@ function ItemsActionBlock({ player, canWrite, flash, onChanged, onFlush }: {
   const runAction = async (def: ActionDef, exec: () => Promise<{ message: string }>) => {
     if (def.confirm) {
       const msg = def.confirm(player)
-      if (msg && !window.confirm(msg)) return
+      if (msg && !window.confirm(msg)) return false
     }
     setBusy(true)
     try {
       const r = await exec()
       flash(r.message || `${def.label} done.`, 'ok')
-      // Keep the form OPEN (grant several in a row) + mark deferred refresh only.
+      // Mark a deferred refresh; custom forms decide whether successful input resets.
       onChanged()
+      return true
     } catch (e) {
       flash(e instanceof Error ? e.message : String(e), 'err')
+      return false
     } finally {
       setBusy(false)
     }
