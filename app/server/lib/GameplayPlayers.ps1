@@ -720,7 +720,7 @@ existing AS (
 upd AS (
     UPDATE dune.items SET stack_size = stack_size + $Qty::bigint
     WHERE id = (SELECT id FROM existing)
-    RETURNING id
+    RETURNING id, stats
 ),
 ins AS (
     INSERT INTO dune.items (inventory_id, stack_size, position_index, template_id, quality_level, acquisition_time, stats)
@@ -729,15 +729,17 @@ ins AS (
         '$safeTmpl', $Quality::bigint, EXTRACT(EPOCH FROM now())::bigint, '$statsJson'::jsonb
     FROM inv
     WHERE NOT EXISTS (SELECT 1 FROM existing)
-    RETURNING id
+    RETURNING id, stats
 ),
 chosen AS (
-    SELECT COALESCE((SELECT id FROM upd), (SELECT id FROM ins)) AS item_id
+    SELECT id AS item_id, stats FROM upd
+    UNION ALL
+    SELECT id AS item_id, stats FROM ins
+    LIMIT 1
 )
 SELECT chosen.item_id,
-       (i.stats = '$statsJson'::jsonb)::text AS stats_match
-FROM chosen
-JOIN dune.items i ON i.id = chosen.item_id;
+       (chosen.stats = '$statsJson'::jsonb)::text AS stats_match
+FROM chosen;
 "@
     $res = Invoke-DuneSqlQuery -Ip $Ip -Sql $sql -ReadOnly $false -MaxRows 1 -TimeoutSec 30
     if (-not $res.ok) { return @{ ok = $false; error = $res.error } }

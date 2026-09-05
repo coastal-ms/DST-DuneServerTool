@@ -69,6 +69,8 @@ Describe 'Invoke-DunePlayerGiveItem pre-augmented grants' -Tag 'Pure' {
         $script:capturedSql | Should -Match 'AND FALSE'
         $script:capturedSql | Should -Match 'FAugmentedItemStats'
         $script:capturedSql | Should -Match 'stats_match'
+        $script:capturedSql | Should -Match 'RETURNING id, stats'
+        $script:capturedSql | Should -Not -Match 'JOIN dune\.items i ON i\.id = chosen\.item_id'
     }
 
     It 'rejects quantities above one before touching the database' {
