@@ -835,25 +835,25 @@ export function SoloMode() {
     label: string,
     destination = inventoryDestination,
     targetLabel = 'selected Solo inventory',
-  ) => {
+  ): Promise<boolean> => {
     if (!selectionMatchesActive) {
       setNotice({ kind: 'err', text: 'Connect and validate the selected Solo profile before giving items.' })
-      return
+      return false
     }
     if (gameRunning) {
       setNotice({ kind: 'err', text: 'Close Dune: Awakening completely before giving Solo items.' })
-      return
+      return false
     }
     if (!destination) {
       setNotice({ kind: 'err', text: 'Choose a backpack or built storage destination.' })
-      return
+      return false
     }
     if (!window.confirm(
       `Give ${label} to the ${targetLabel}?\n\n`
       + 'Dune: Awakening must be fully closed. DST will retain the current game.db, '
       + 'apply the item grant transactionally, run integrity and foreign-key checks, '
       + 'replace the save atomically, and verify the result.',
-    )) return
+    )) return false
 
     setBusy('give-items')
     setNotice(null)
@@ -868,8 +868,10 @@ export function SoloMode() {
         text: `${label} granted and verified. Previous save retained at ${result.safetyBackup}`,
       })
       await Promise.all([statusState.refresh(), runtimeState.refresh(), backupsState.refresh()])
+      return true
     } catch (error) {
       setNotice({ kind: 'err', text: error instanceof Error ? error.message : String(error) })
+      return false
     } finally {
       setBusy(null)
     }
@@ -882,7 +884,7 @@ export function SoloMode() {
     }
     const quantity = Math.max(1, Math.min(100000, Math.trunc(itemQuantity || 1)))
     const quality = Math.max(0, Math.min(5, Math.trunc(itemQuality || 0)))
-    await giveSoloItems(
+    const granted = await giveSoloItems(
       [{
         templateId: itemTemplate.trim(),
         quantity,
@@ -892,6 +894,14 @@ export function SoloMode() {
       }],
       itemDisplay ? `${quantity} x ${itemDisplay}` : `${quantity} x ${itemTemplate}`,
     )
+    if (granted) {
+      setItemTemplate('')
+      setItemDisplay(undefined)
+      setItemQuantity(1)
+      setItemQuality(0)
+      setItemAugments([])
+      setItemAugmentQuality(5)
+    }
   }
 
   const giveVehicleKit = async () => {
