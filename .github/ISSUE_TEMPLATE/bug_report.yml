@@ -88,7 +88,7 @@ body:
     attributes:
       label: Tool version
       description: Shown in the bottom-left of the web portal sidebar (status bar) and in the CLI menu header.
-      placeholder: "v15.0.0-phase2-test6"
+      placeholder: "v15.0.0-phase2-test6.1"
     validations:
       required: true
 

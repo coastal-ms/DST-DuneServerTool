@@ -57,6 +57,7 @@ Describe 'Get-DuneGiveItemStatsJson' -Tag 'Pure' {
         @($augmented.AppliedAugmentQualities) | Should -Be @(5, 4)
         @($augmented.AppliedAugmentRollData).Count | Should -Be 2
         [double]$augmented.AppliedAugmentRollData[0].StatRolls[0] | Should -Be 1.003398
+        [int]$stats.FWeaponItemStats[1].CurrentAmmo | Should -Be 0
     }
 
     It 'rejects incompatible augments instead of creating invalid gear' {

@@ -153,7 +153,7 @@ internal static partial class Program
             });
         }
 
-        return new JsonObject
+        var stats = new JsonObject
         {
             ["FCustomizationStats"] = new JsonArray(new JsonArray(), new JsonObject()),
             ["FAugmentedItemStats"] = new JsonArray(
@@ -165,6 +165,14 @@ internal static partial class Program
                     ["AppliedAugmentRollData"] = appliedRollData
                 }),
             ["FItemStackAndDurabilityStats"] = new JsonArray(new JsonArray(), new JsonObject())
-        }.ToJsonString();
+        };
+        if (itemTags.Any(tag =>
+                tag.StartsWith("Items.Holsters.RangedWeapons", StringComparison.OrdinalIgnoreCase)))
+        {
+            stats["FWeaponItemStats"] = new JsonArray(
+                new JsonArray(),
+                new JsonObject { ["CurrentAmmo"] = 0 });
+        }
+        return stats.ToJsonString();
     }
 }

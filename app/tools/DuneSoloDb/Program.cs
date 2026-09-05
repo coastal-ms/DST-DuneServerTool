@@ -1528,10 +1528,11 @@ internal static partial class Program
                 || augmentedValues?["AppliedAugmentQualities"]?[0]?.GetValue<int>() != 5
                 || augmentedValues?["AppliedAugmentQualities"]?[1]?.GetValue<int>() != 4
                 || augmentedValues?["AppliedAugmentRollData"]?[0]?["StatRolls"]?[0]
-                    ?.GetValue<decimal>() != DuneAugmentMaxRoll)
+                    ?.GetValue<decimal>() != DuneAugmentMaxRoll
+                || augmentedStats?["FWeaponItemStats"]?[1]?["CurrentAmmo"]?.GetValue<int>() != 0)
             {
                 throw new InvalidOperationException(
-                    "Pre-augmented grant stats did not preserve ids, grade, and maximum rolls.");
+                    "Pre-augmented ranged grant stats did not preserve augments and loaded ammo.");
             }
             var catalog = ReadCatalog(catalogPath);
             if (catalog["RepairTool5"].Volume != 10d
