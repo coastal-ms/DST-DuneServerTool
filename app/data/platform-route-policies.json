@@ -152,7 +152,7 @@
     { "source": "FlsToken.ps1", "capabilityId": "settings.connectivity", "routeCount": 3, "sha256": "5dbda64c9121b306d6d6f3487aef4e6f630a73beba73d0067baa14373237f2bb" },
     { "source": "GameConfig.ps1", "capabilityId": "settings.game-server", "routeCount": 26, "sha256": "5864b52d958ef8dceeabb527268f413806b5b29b086f450b423359b34d7396ce" },
     { "source": "Gameplay.ps1", "capabilityId": "economy.market", "routeCount": 22, "sha256": "757d3fd58fe70e88c5ccc91b9549e8f9a121b9137c1a2c16cd574c271c46e258" },
-    { "source": "GameplayPlayers.ps1", "capabilityId": "player.manage", "routeCount": 28, "sha256": "0e84ced9699cd5a47f9e86ac5a404c0a23e5878f62bd6d18d9787209e90b516c" },
+    { "source": "GameplayPlayers.ps1", "capabilityId": "player.manage", "routeCount": 29, "sha256": "12c6846a931b7d3e34d58f171411615be54a76bf401f7ace4ab09442cea6c8f0" },
     { "source": "GameplayWorld.ps1", "capabilityId": "base.manage", "routeCount": 13, "sha256": "4c6dcb579d2a5fab1ef37a5fb84d399e493ea079e14994cdc56bbafaa56f9fc6" },
     { "source": "Inventory.ps1", "capabilityId": "inventory.read", "routeCount": 4, "sha256": "3e8a38114c67450782febd31b7f42339be467aca11b741283c8ae3d09ebe44d9" },
     { "source": "ItemPackages.ps1", "capabilityId": "player.inventory", "routeCount": 3, "sha256": "ed3aac4a943d300002f7aecacb8ecf04619917ee7aa549cde0068e1853e01cf9" },

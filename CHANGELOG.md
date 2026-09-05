@@ -29,6 +29,8 @@ here cover everything those tags shipped.
   silently truncating them.
 - Solo and Self-Hosted Give Item forms now reset after a successful grant so
   the previous item and augment selections cannot be submitted twice by mistake.
+- Database backups remain available while the battlegroup is stopped because
+  PostgreSQL stays online for a consistent snapshot.
 
 ## [15.0.0-phase2-test5] - 2026-09-04
 

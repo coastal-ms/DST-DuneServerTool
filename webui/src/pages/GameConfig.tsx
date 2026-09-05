@@ -1109,9 +1109,12 @@ export function GameConfig({ mode = 'standard' }: { mode?: 'standard' | 'experim
     }
   }, [experimentalPage, search])
 
-  const experimentalFieldsToSeed = experimentalSearchActive
-    ? experimentalSearchFields
-    : (experimentalCategoryCache[selectedExperimentalGroup] ?? [])
+  const experimentalFieldsToSeed = useMemo(
+    () => experimentalSearchActive
+      ? experimentalSearchFields
+      : (experimentalCategoryCache[selectedExperimentalGroup] ?? []),
+    [experimentalCategoryCache, experimentalSearchActive, experimentalSearchFields, selectedExperimentalGroup],
+  )
 
   useEffect(() => {
     if (experimentalFieldsToSeed.length === 0 || loadState === 'idle' || loadState === 'loading') return
@@ -1187,7 +1190,7 @@ export function GameConfig({ mode = 'standard' }: { mode?: 'standard' | 'experim
         ),
       }))
       .filter(cat => cat.fields.length > 0)
-  }, [visibleSchema, search, experimentalPage, selectedExperimentalGroup, experimentalFilteredFields, experimentalPageIndex])
+  }, [visibleSchema, search, experimentalPage, experimentalSearchActive, selectedExperimentalGroup, experimentalFilteredFields, experimentalPageIndex])
 
   async function onSubmit(e: FormEvent) {
     e.preventDefault()

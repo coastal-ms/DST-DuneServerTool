@@ -1198,14 +1198,14 @@ function FreshStartForm({ busy, player, runAction }: {
 }) {
   const [snap, setSnap] = useState<FreshStartSnapshot | null>(null)
   const [loading, setLoading] = useState(true)
-  const refresh = () => {
+  const refresh = useCallback(() => {
     setLoading(true)
     getFreshStartSnapshots()
       .then(r => setSnap((r.snapshots || []).find(s => s.name.toLowerCase() === player.name.toLowerCase()) || null))
       .catch(() => setSnap(null))
       .finally(() => setLoading(false))
-  }
-  useEffect(() => { refresh() }, [player.name])
+  }, [player.name])
+  useEffect(() => { refresh() }, [refresh])
   const localDef: ActionDef = { id: 'fresh-start', group: 'Progression', label: 'Fresh Start', icon: 'Sunrise', run: () => Promise.resolve({ message: '' }) }
 
   return (

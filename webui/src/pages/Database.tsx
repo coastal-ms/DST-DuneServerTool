@@ -118,7 +118,7 @@ export function Database() {
   // disabled with no recovery while the dashboard still showed the BG running.
   // The server re-checks availability on POST /api/commands/run, so deriving
   // client-side here is safe.
-  const backupAvailable  = vmRunning && bgState !== 'stopped'   // backup dumps the live DB
+  const backupAvailable  = vmRunning                             // PostgreSQL stays available while the BG is stopped.
   const restoreAvailable = vmRunning                             // `battlegroup import` stops the BG on its own; no state gate needed.
   const [launching, setLaunching] = useState<string | null>(null)
   const [toast, setToast] = useState<{ kind: 'ok' | 'err'; msg: string } | null>(null)
@@ -231,7 +231,11 @@ export function Database() {
       setWorldRestart(null)
       return
     }
-    try { setWorldRestart(await getWorldRestartStatus()) } catch {}
+    try {
+      setWorldRestart(await getWorldRestartStatus())
+    } catch (error) {
+      console.warn('Failed to load World Restart status:', error)
+    }
   }, [localViewer])
 
   useEffect(() => { void loadWorldRestart() }, [loadWorldRestart])
@@ -256,7 +260,7 @@ export function Database() {
     } finally {
       setResearchAuditLoading(false)
     }
-  }, [localViewer])
+  }, [localViewer, showToast])
 
   useEffect(() => {
     if (worldRestart?.phase === 'done') void loadResearchAudit()
@@ -523,7 +527,7 @@ export function Database() {
           description="Snapshot the BG's PostgreSQL database to a timestamped file on the VM. Recommended before any character or game-config change."
           hint={
             !vmRunning ? 'VM must be running to take a backup.'
-            : bgState !== 'running' ? 'Start the battlegroup first; backup queries the live database.'
+            : bgState === 'stopped' ? 'Battlegroup is stopped — the database remains available for a consistent backup.'
             : 'Battlegroup is running — backup will open in a new console window.'
           }
           buttonLabel="Take Backup"

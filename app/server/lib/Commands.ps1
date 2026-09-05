@@ -36,7 +36,7 @@ $script:DuneCommands = @(
     @{ Section='Battlegroup'; Key='7';  Name='edit-advanced';            Label='Edit Director';   Mode='Console'; Requires='running'; External=$true; Desc='(Advanced) Edit battlegroup YAML directly' }
     @{ Section='Battlegroup'; Key='21'; Name='change-battlegroup-ip';    Label='Change Player IP'; Mode='Console'; Requires='running'; Desc='Change the IP that players connect to' }
     @{ Section='Battlegroup'; Key='8';  Name='enable-experimental-swap'; Mode='Console'; Requires='running'; Desc='(Experimental) Enable experimental swap memory' }
-    @{ Section='Battlegroup'; Key='9';  Name='backup';                   Mode='Console'; Requires='running'; DisabledWhen='bg-stopped';  Desc="Back up the battlegroup's database" }
+    @{ Section='Battlegroup'; Key='9';  Name='backup';                   Mode='Console'; Requires='running'; Desc="Back up the battlegroup's database" }
     @{ Section='Battlegroup'; Key='10'; Name='import';                   Mode='Console'; Requires='running'; Desc='Import a database backup (Funcom handles the BG lifecycle)' }
     @{ Section='Battlegroup'; Key='11'; Name='logs-export';              Mode='Console'; Requires='running'; DisabledWhen='bg-stopped';  Desc='Retrieve logs from all battlegroup pods' }
     @{ Section='Battlegroup'; Key='12'; Name='operator-logs-export';     Mode='Console'; Requires='running'; DisabledWhen='bg-stopped';  Desc='Retrieve logs from all operator pods' }
