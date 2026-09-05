@@ -13,6 +13,25 @@ here cover everything those tags shipped.
 
 ## [Unreleased]
 
+## [15.0.0-phase2-test6] - 2026-09-04
+
+### Added
+
+- Game Config now provides a local-time Coriolis cycle start selector while
+  storing the GMT/UTC hour required by the game.
+- Solo Mode and Self-Hosted Give Item can now grant compatible weapons and
+  garments with selected maximum-roll augments, each at its own chosen grade.
+
+### Fixed
+
+- Loaded-ammo editing now preserves whole-number input, including scientific
+  notation, and rejects empty, fractional, or out-of-range values instead of
+  silently truncating them.
+- Solo and Self-Hosted Give Item forms now reset after a successful grant so
+  the previous item and augment selections cannot be submitted twice by mistake.
+- Database backups remain available while the battlegroup is stopped because
+  PostgreSQL stays online for a consistent snapshot.
+
 ## [15.0.0-phase2-test5] - 2026-09-04
 
 ### Added

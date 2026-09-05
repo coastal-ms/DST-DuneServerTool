@@ -28,6 +28,15 @@ Describe 'One-shot command orchestration' -Tag 'Commands' {
             $availability.available | Should -BeTrue
         }
 
+        It 'keeps database backup available while the battlegroup is stopped' {
+            $command = Get-DuneCommandByName -Name 'backup'
+            $availability = Get-DuneCommandAvailability -Command $command -State @{
+                vmExists=$true; vmRunning=$true; bgState='stopped'; worldRestartActive=$false
+            }
+
+            $availability.available | Should -BeTrue
+        }
+
         It 'blocks shells and browser admin surfaces during maintenance' {
             foreach ($name in @('open-file-browser', 'open-director', 'shell-vm', 'shell-pod', 'ssh')) {
                 $command = Get-DuneCommandByName -Name $name

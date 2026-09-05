@@ -1432,6 +1432,34 @@ Describe 'DuneGameConfigSchema: forced Coriolis world seed' -Tag 'GameConfig' {
         $f.Category | Should -Be 'Storm Cycle'
     }
 
+    Describe 'DuneGameConfigSchema: Coriolis cycle start hour' -Tag 'GameConfig' {
+        It 'exposes the GMT start hour through the normal bounded game-setting path' {
+            $fields = @{}
+            foreach ($f in $script:DuneGameConfigSchema) { $fields[$f.Key] = $f }
+
+            $fields.ContainsKey('m_CycleStartHour') | Should -BeTrue
+            $f = $fields['m_CycleStartHour']
+            $f.Section  | Should -Be '/Script/DuneSandbox.CoriolisSubsystem'
+            $f.File     | Should -Be 'game'
+            $f.Type     | Should -Be 'int'
+            $f.Min      | Should -Be 0
+            $f.Max      | Should -Be 23
+            $f.Default  | Should -Be '5'
+            $f.Category | Should -Be 'Storm Cycle'
+        }
+
+        It 'documents GMT storage, local display, daylight saving, and restart behavior' {
+            $field = @($script:DuneGameConfigSchema | Where-Object Key -eq 'm_CycleStartHour')
+            $field.Count | Should -Be 1
+            $help = [string]$field[0].Help
+
+            $help | Should -Match 'GMT/UTC'
+            $help | Should -Match 'browser-local'
+            $help | Should -Match 'daylight saving'
+            $help | Should -Match 'Apply INIs & restart'
+        }
+    }
+
     It 'matches its CoriolisSubsystem neighbours on client apply' {
         $fields = @{}
         foreach ($f in $script:DuneGameConfigSchema) { $fields[$f.Key] = $f }

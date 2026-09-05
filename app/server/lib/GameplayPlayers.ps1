@@ -678,15 +678,30 @@ SELECT item_id, before_ammo, after_ammo FROM updated;
 # (1970) items as fully decayed and drops them on load, so an offline give would
 # vanish on the player's next login.
 function Invoke-DunePlayerGiveItem {
-    param([string]$Ip, [long]$PawnId, [string]$Template, [long]$Qty, [long]$Quality)
+    param(
+        [string]$Ip,
+        [long]$PawnId,
+        [string]$Template,
+        [long]$Qty,
+        [long]$Quality,
+        $Augments = @()
+    )
     $tv = Test-DuneValidGiveTemplate -TemplateId $Template
     if (-not $tv.ok) { return @{ ok = $false; error = $tv.error } }
+    if (@($Augments).Count -gt 0 -and $Qty -ne 1) {
+        return @{ ok = $false; error = 'Pre-augmented grants require a quantity of 1.' }
+    }
     # Gate on inventory space (volume + slots), same guard as the live path, so a
     # give only proceeds when it fits — online or offline.
     $cap = Test-DuneInventoryCapacity -Ip $Ip -PawnId $PawnId -Template $Template -Quantity ([int]$Qty) -Quality $Quality
     if (-not $cap.ok) { return $cap }
     $safeTmpl = ConvertTo-DuneSqlString $Template
-    $statsJson = ConvertTo-DuneSqlString (Get-DuneGiveItemStatsJson -TemplateId $Template)
+    try {
+        $statsJson = ConvertTo-DuneSqlString (Get-DuneGiveItemStatsJson -TemplateId $Template -Augments $Augments)
+    } catch {
+        return @{ ok = $false; error = $_.Exception.Message }
+    }
+    $allowExistingStack = if (@($Augments).Count -gt 0) { 'FALSE' } else { 'TRUE' }
     $sql = @"
 WITH inv AS (
     SELECT id FROM dune.inventories
@@ -698,12 +713,13 @@ existing AS (
     WHERE i.inventory_id = inv.id
       AND i.template_id = '$safeTmpl'
       AND COALESCE(i.quality_level, 0) = $Quality::bigint
+      AND $allowExistingStack
     ORDER BY i.id LIMIT 1
 ),
 upd AS (
     UPDATE dune.items SET stack_size = stack_size + $Qty::bigint
     WHERE id = (SELECT id FROM existing)
-    RETURNING id
+    RETURNING id, stats
 ),
 ins AS (
     INSERT INTO dune.items (inventory_id, stack_size, position_index, template_id, quality_level, acquisition_time, stats)
@@ -712,9 +728,17 @@ ins AS (
         '$safeTmpl', $Quality::bigint, EXTRACT(EPOCH FROM now())::bigint, '$statsJson'::jsonb
     FROM inv
     WHERE NOT EXISTS (SELECT 1 FROM existing)
-    RETURNING id
+    RETURNING id, stats
+),
+chosen AS (
+    SELECT id AS item_id, stats FROM upd
+    UNION ALL
+    SELECT id AS item_id, stats FROM ins
+    LIMIT 1
 )
-SELECT COALESCE((SELECT id FROM upd), (SELECT id FROM ins)) AS item_id;
+SELECT chosen.item_id,
+       (chosen.stats = '$statsJson'::jsonb)::text AS stats_match
+FROM chosen;
 "@
     $res = Invoke-DuneSqlQuery -Ip $Ip -Sql $sql -ReadOnly $false -MaxRows 1 -TimeoutSec 30
     if (-not $res.ok) { return @{ ok = $false; error = $res.error } }
@@ -723,7 +747,16 @@ SELECT COALESCE((SELECT id FROM upd), (SELECT id FROM ins)) AS item_id;
     if (-not $itemId) {
         return @{ ok = $false; error = 'No backpack inventory found for that player.' }
     }
-    return @{ ok = $true; message = "Gave $Qty x $Template (quality $Quality) to player (item $itemId)."; item_id = (ConvertTo-DuneInt $itemId) }
+    if (@($Augments).Count -gt 0 -and [string]$maps[0]['stats_match'] -ine 'true') {
+        return @{ ok = $false; error = 'The granted item failed exact augment readback.' }
+    }
+    $augmentGrades = @($Augments | ForEach-Object {
+        if ($_ -is [Collections.IDictionary]) { [int]$_['quality'] } else { [int]$_.quality }
+    })
+    $augmentNote = if ($augmentGrades.Count -gt 0) {
+        " with $($augmentGrades.Count) augment(s) at grade(s) $($augmentGrades -join ', ')"
+    } else { '' }
+    return @{ ok = $true; message = "Gave $Qty x $Template (quality $Quality)$augmentNote to player (item $itemId)."; item_id = (ConvertTo-DuneInt $itemId) }
 }
 
 # ----------------------------------------------------------------------------

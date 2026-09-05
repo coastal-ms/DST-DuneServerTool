@@ -787,9 +787,46 @@ export function giveSolari(controllerId: number, amount: number) {
   })
 }
 
-export function giveItem(pawnId: number, template: string, qty: number, quality: number, allowOverflow = true) {
+export interface AugmentCatalogEntry {
+  name: string
+  tags: string[]
+  gradeEffects: Record<string, string[]>
+  effectSummary?: string
+}
+
+export interface AugmentCatalog {
+  augments: Record<string, AugmentCatalogEntry>
+  methodItems: Record<string, string[]>
+  itemAliases: Record<string, string[]>
+}
+
+export interface AugmentSelection {
+  id: string
+  quality: number
+}
+
+export function getAugmentCatalog() {
+  return api<AugmentCatalog>('/api/gameplay/augments/catalog')
+}
+
+export function giveItem(
+  pawnId: number,
+  template: string,
+  qty: number,
+  quality: number,
+  allowOverflow = true,
+  augments: AugmentSelection[] = [],
+) {
   return api<WriteResult>('/api/gameplay/players/give-item', {
-    method: 'POST', body: JSON.stringify({ pawn_id: pawnId, template, qty, quality, allow_overflow: allowOverflow }),
+    method: 'POST',
+    body: JSON.stringify({
+      pawn_id: pawnId,
+      template,
+      qty,
+      quality,
+      allow_overflow: allowOverflow,
+      augments,
+    }),
   })
 }
 

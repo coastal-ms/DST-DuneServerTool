@@ -293,7 +293,7 @@ export function SharedInventoryExplorer({
       setError(errorMessage(reason))
       setLoading(false)
     }
-  }, [demo, load])
+  }, [demo, load, setError, setLoading])
 
   useEffect(() => setDraftQuery(query), [query])
   useEffect(() => {
@@ -713,7 +713,7 @@ function OccurrencePanel({
     setItems([])
     setNextCursor(null)
     setError('')
-    if (group) void load()
+    if (groupTemplateId) void load()
   }, [identity, groupTemplateId, load])
   useEffect(() => {
     setVerifiedDetailsUrl(null)

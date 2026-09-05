@@ -59,8 +59,9 @@ export function DependencyInstallModal({
 
   // Clean up any polling intervals on unmount.
   useEffect(() => {
+    const activePollers = pollers.current
     return () => {
-      Object.values(pollers.current).forEach(id => window.clearInterval(id))
+      Object.values(activePollers).forEach(id => window.clearInterval(id))
     }
   }, [])
 

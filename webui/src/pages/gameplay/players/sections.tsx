@@ -10,6 +10,7 @@
 import { useCallback, useEffect, useMemo, useState, type ReactElement, type ReactNode } from 'react'
 import { Icon } from '../../../components/Icon'
 import { ItemPicker } from '../../../components/ItemPicker'
+import { AugmentPicker } from '../../../components/AugmentPicker'
 import { TagPicker } from '../../../components/TagPicker'
 import {
   applySpecLevel, awardCharXp, awardIntel, setSpecLevel, preparePatternUpgrading, cheatScript, cleanPlayerInventory,
@@ -36,7 +37,7 @@ import {
   getContracts, completeContract,
   getVehicleKitCatalog,
   type Player, type PlayerEvent, type PlayerStats, type ProgressionPreset, type SpecTrackFull,
-  type CatalogItem, type ItemPackage, type GiveItemEntry, type FreshStartSnapshot,
+  type AugmentSelection, type CatalogItem, type ItemPackage, type GiveItemEntry, type FreshStartSnapshot,
   type LandsraadHouse, type LandsraadIniSetting,
   type JourneyNode, type TrainerInfo, type TrainerStatus, type MainQuestInfo,
   type PlayerVehicleRow, type TeleportDestination,
@@ -864,16 +865,18 @@ export function ActionsSection({ player, canWrite, demo, flash, onChanged, onFlu
   const runAction = async (def: ActionDef, exec: () => Promise<{ message: string }>) => {
     if (def.confirm) {
       const msg = def.confirm(player)
-      if (msg && !window.confirm(msg)) return
+      if (msg && !window.confirm(msg)) return false
     }
     setBusy(true)
     try {
       const r = await exec()
       flash(r.message || `${def.label} done.`, 'ok')
-      // Keep the form OPEN (grant several in a row) + mark deferred refresh only.
+      // Mark a deferred refresh; custom forms decide whether successful input resets.
       onChanged()
+      return true
     } catch (e) {
       flash(e instanceof Error ? e.message : String(e), 'err')
+      return false
     } finally {
       setBusy(false)
     }
@@ -947,7 +950,7 @@ function ActionRow({ def, player, busy, stats, open, danger, onToggle, runAction
   open: boolean
   danger?: boolean
   onToggle: () => void
-  runAction: (def: ActionDef, exec: () => Promise<{ message: string }>) => void
+  runAction: (def: ActionDef, exec: () => Promise<{ message: string }>) => Promise<boolean>
 }) {
   const disabled = busy
   // Read-only "current balance" note shown above currency actions.
@@ -991,7 +994,9 @@ function ActionRow({ def, player, busy, stats, open, danger, onToggle, runAction
           )}
           {def.custom === 'give-item' ? (
             <GiveItemForm busy={busy} submitLabel={def.label}
-              onSubmit={(tpl, qty, qual, overflow) => runAction(def, () => giveItem(player.id, tpl, qty, qual, overflow))}
+              playerOnline={['online', 'loggingout'].includes((player.online_status || '').toLowerCase())}
+              onSubmit={(tpl, qty, qual, overflow, augments) =>
+                runAction(def, () => giveItem(player.id, tpl, qty, qual, overflow, augments))}
               onSubmitTierSet={(tpl, qty, overflow) => runAction(def, async () => {
                 // Grades above 0 are SQL-only writes the game overwrites from RAM while a
                 // live session exists — refuse up front so the set isn't partially delivered.
@@ -1193,14 +1198,14 @@ function FreshStartForm({ busy, player, runAction }: {
 }) {
   const [snap, setSnap] = useState<FreshStartSnapshot | null>(null)
   const [loading, setLoading] = useState(true)
-  const refresh = () => {
+  const refresh = useCallback(() => {
     setLoading(true)
     getFreshStartSnapshots()
       .then(r => setSnap((r.snapshots || []).find(s => s.name.toLowerCase() === player.name.toLowerCase()) || null))
       .catch(() => setSnap(null))
       .finally(() => setLoading(false))
-  }
-  useEffect(() => { refresh() }, [player.name])
+  }, [player.name])
+  useEffect(() => { refresh() }, [refresh])
   const localDef: ActionDef = { id: 'fresh-start', group: 'Progression', label: 'Fresh Start', icon: 'Sunrise', run: () => Promise.resolve({ message: '' }) }
 
   return (
@@ -1580,10 +1585,11 @@ function GrantHouseSwatchesForm({ busy, playerName, accountId, kind, playerOnlin
 // Self-contained give-item form (item picker + qty/quality). Owns its own
 // state so it resets whenever the accordion row mounts. Renders without a card
 // wrapper — ActionRow provides the container.
-function GiveItemForm({ busy, submitLabel, onSubmit, onSubmitTierSet }: {
+function GiveItemForm({ busy, submitLabel, playerOnline, onSubmit, onSubmitTierSet }: {
   busy: boolean; submitLabel: string
-  onSubmit: (tpl: string, qty: number, qual: number, allowOverflow: boolean) => void
-  onSubmitTierSet: (tpl: string, qty: number, allowOverflow: boolean) => void
+  playerOnline: boolean
+  onSubmit: (tpl: string, qty: number, qual: number, allowOverflow: boolean, augments: AugmentSelection[]) => Promise<boolean>
+  onSubmitTierSet: (tpl: string, qty: number, allowOverflow: boolean) => Promise<boolean>
 }) {
   const [giveTpl, setGiveTpl]   = useState('')
   const [giveName, setGiveName] = useState('')
@@ -1591,11 +1597,26 @@ function GiveItemForm({ busy, submitLabel, onSubmit, onSubmitTierSet }: {
   const [giveQual, setGiveQual] = useState('0')
   const [gradeable, setGradeable] = useState(false)
   const [overflow, setOverflow] = useState(true)
+  const [augments, setAugments] = useState<AugmentSelection[]>([])
+  const reset = () => {
+    setGiveTpl('')
+    setGiveName('')
+    setGiveQty('1')
+    setGiveQual('0')
+    setGradeable(false)
+    setOverflow(true)
+    setAugments([])
+  }
   return (
     <div className="space-y-3">
       <ItemPicker label="Item — type to search by name or template id"
         value={giveTpl} displayValue={giveName || giveTpl}
-        onChange={(tpl, item) => { setGiveTpl(tpl); setGiveName(item ? item.name : ''); setGradeable(!!item?.gradeable) }}
+        onChange={(tpl, item) => {
+          setGiveTpl(tpl)
+          setGiveName(item ? item.name : '')
+          setGradeable(!!item?.gradeable)
+          setAugments([])
+        }}
         autoFocus disabled={busy} />
       <div className="grid grid-cols-2 gap-3">
         <div>
@@ -1615,15 +1636,35 @@ function GiveItemForm({ busy, submitLabel, onSubmit, onSubmitTierSet }: {
           </select>
         </div>
       </div>
+      <AugmentPicker
+        templateId={giveTpl}
+        displayName={giveName}
+        selected={augments}
+        disabled={busy || playerOnline}
+        onSelectedChange={setAugments}
+      />
       <OverflowToggle checked={overflow} disabled={busy} onChange={setOverflow} />
-      <button className="btn-primary w-full" disabled={busy || !isValidTemplateId(giveTpl)}
-        onClick={() => onSubmit(giveTpl.trim(), Number(giveQty) || 1, Number(giveQual) || 0, overflow)}>
+      <button
+        className="btn-primary w-full"
+        disabled={busy || !isValidTemplateId(giveTpl) || (augments.length > 0 && (playerOnline || Number(giveQty) !== 1))}
+        onClick={() => void onSubmit(
+          giveTpl.trim(),
+          Number(giveQty) || 1,
+          Number(giveQual) || 0,
+          overflow,
+          augments,
+        ).then(success => { if (success) reset() })}
+      >
         {busy ? <Icon name="Loader2" size={13} className="animate-spin" /> : <Icon name="Check" size={13} />} {submitLabel}
       </button>
       {gradeable && (
-        <button className="btn-secondary w-full" disabled={busy || !isValidTemplateId(giveTpl)}
-          title="Gives one of this item at every grade, Grade 0 through Grade 5"
-          onClick={() => onSubmitTierSet(giveTpl.trim(), Number(giveQty) || 1, overflow)}>
+        <button className="btn-secondary w-full" disabled={busy || !isValidTemplateId(giveTpl) || augments.length > 0}
+          title={augments.length > 0 ? 'Clear selected augments before giving all item grades' : 'Gives one of this item at every grade, Grade 0 through Grade 5'}
+          onClick={() => void onSubmitTierSet(
+            giveTpl.trim(),
+            Number(giveQty) || 1,
+            overflow,
+          ).then(success => { if (success) reset() })}>
           {busy ? <Icon name="Loader2" size={13} className="animate-spin" /> : <Icon name="Layers" size={13} />} Give all grades (0-5)
         </button>
       )}
@@ -2608,16 +2649,18 @@ function ItemsActionBlock({ player, canWrite, flash, onChanged, onFlush }: {
   const runAction = async (def: ActionDef, exec: () => Promise<{ message: string }>) => {
     if (def.confirm) {
       const msg = def.confirm(player)
-      if (msg && !window.confirm(msg)) return
+      if (msg && !window.confirm(msg)) return false
     }
     setBusy(true)
     try {
       const r = await exec()
       flash(r.message || `${def.label} done.`, 'ok')
-      // Keep the form OPEN (grant several in a row) + mark deferred refresh only.
+      // Mark a deferred refresh; custom forms decide whether successful input resets.
       onChanged()
+      return true
     } catch (e) {
       flash(e instanceof Error ? e.message : String(e), 'err')
+      return false
     } finally {
       setBusy(false)
     }
@@ -3061,8 +3104,8 @@ function AmmoEditor({ item, playerId, busy, run, isOnline, onClose }: {
 }) {
   const current = parseInt(item.current_ammo ?? '0', 10)
   const [ammoStr, setAmmoStr] = useState(Number.isFinite(current) ? String(current) : '0')
-  const ammo = parseInt(ammoStr, 10)
-  const valid = Number.isFinite(ammo) && ammo >= 0 && ammo <= 2000000000
+  const ammo = Number(ammoStr)
+  const valid = ammoStr.trim() !== '' && Number.isInteger(ammo) && ammo >= 0 && ammo <= 2000000000
 
   return (
     <div className="border-t border-border/50 px-3 py-3 bg-surface-1/60 rounded-b-lg space-y-3">
@@ -3077,7 +3120,7 @@ function AmmoEditor({ item, playerId, busy, run, isOnline, onClose }: {
         <label className="text-xs flex-1">
           <div className="text-text-dim mb-1">Loaded ammo</div>
           <input
-            type="number" inputMode="numeric" step={1} min={0}
+            type="number" inputMode="numeric" step={1} min={0} max={2000000000}
             value={ammoStr}
             onChange={e => setAmmoStr(e.target.value)}
             disabled={busy || isOnline}

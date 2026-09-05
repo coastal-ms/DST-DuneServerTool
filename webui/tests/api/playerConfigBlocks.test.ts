@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest'
-import { buildAllClientBlocks, buildCategoryClientBlocks, buildClientShareEntries } from '../../src/pages/GameConfig'
+import {
+  buildAllClientBlocks,
+  buildCategoryClientBlocks,
+  buildClientShareEntries,
+  formatCoriolisCycleStartHour,
+} from '../../src/pages/GameConfig'
 import type { GameConfigCategory, GameConfigResponse } from '../../src/api/types'
 
 // The "Player config" button promises one thing: exactly the lines a player must
@@ -36,6 +41,17 @@ const cats: GameConfigCategory[] = [
     ],
   },
 ] as unknown as GameConfigCategory[]
+
+describe('Coriolis cycle start time', () => {
+  it('shows a GMT hour as the current browser-local hour', () => {
+    expect(formatCoriolisCycleStartHour(5, 420)).toBe('10:00 PM local (05:00 GMT/UTC)')
+    expect(formatCoriolisCycleStartHour(12, 420)).toBe('5:00 AM local (12:00 GMT/UTC)')
+  })
+
+  it('keeps fractional timezone offsets accurate while storing a whole GMT hour', () => {
+    expect(formatCoriolisCycleStartHour(5, -330)).toBe('10:30 AM local (05:00 GMT/UTC)')
+  })
+})
 
 describe('buildAllClientBlocks', () => {
   it('includes only settings changed from their default', () => {

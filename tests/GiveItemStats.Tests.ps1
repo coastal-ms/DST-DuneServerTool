@@ -6,6 +6,7 @@
 BeforeAll {
     . (Join-Path $PSScriptRoot '_TestHelpers.ps1')
     Import-DstLib 'Gameplay.ps1'
+    Import-DstLib 'AugmentCatalog.ps1'
 }
 
 Describe 'Get-DuneGiveItemStatsJson' -Tag 'Pure' {
@@ -40,5 +41,45 @@ Describe 'Get-DuneGiveItemStatsJson' -Tag 'Pure' {
         foreach ($t in @('CopperBar', 'Combat_Light_SpiceMask', 'Unknown_zzz', '')) {
             Get-DuneGiveItemStatsJson -TemplateId $t | Should -Not -Be '{}'
         }
+    }
+
+    It 'builds compatible pre-augmented gear with parallel maximum-roll arrays' {
+        $json = Get-DuneGiveItemStatsJson `
+            -TemplateId 'SMG_Unique_LargeMag_06' `
+            -Augments @(
+                @{ id='T6_Augment_Damage2'; quality=5 },
+                @{ id='T6_Augment_Acuracy1'; quality=4 }
+            )
+        $stats = $json | ConvertFrom-Json
+        $augmented = $stats.FAugmentedItemStats[1]
+
+        @($augmented.AppliedAugments).Name | Should -Be @('T6_Augment_Damage2', 'T6_Augment_Acuracy1')
+        @($augmented.AppliedAugmentQualities) | Should -Be @(5, 4)
+        @($augmented.AppliedAugmentRollData).Count | Should -Be 2
+        [double]$augmented.AppliedAugmentRollData[0].StatRolls[0] | Should -Be 1.003398
+    }
+
+    It 'rejects incompatible augments instead of creating invalid gear' {
+        {
+            Get-DuneGiveItemStatsJson `
+                -TemplateId 'SMG_Unique_LargeMag_06' `
+                -Augments @(@{ id='T6_Augment_Armor1'; quality=3 })
+        } | Should -Throw '*not compatible*'
+    }
+
+    It 'rejects schematic aliases instead of augmenting a recipe item' {
+        {
+            Get-DuneGiveItemStatsJson `
+                -TemplateId 'SMG_Unique_LargeMag_06_Schematic' `
+                -Augments @(@{ id='T6_Augment_Damage2'; quality=5 })
+        } | Should -Throw '*no verified augment compatibility mapping*'
+    }
+
+    It 'rejects fractional grades instead of rounding them' {
+        {
+            Get-DuneGiveItemStatsJson `
+                -TemplateId 'SMG_Unique_LargeMag_06' `
+                -Augments @(@{ id='T6_Augment_Damage2'; quality=1.5 })
+        } | Should -Throw '*between 1 and 5*'
     }
 }

@@ -3,6 +3,7 @@ import { Icon } from '../components/Icon'
 import { PageHeader } from '../components/PageHeader'
 import { CollapsibleCard } from '../components/CollapsibleCard'
 import { ItemPicker } from '../components/ItemPicker'
+import { AugmentPicker } from '../components/AugmentPicker'
 import {
   SoloInventoryExplorer,
   SoloWeaponAmmoEditor,
@@ -33,6 +34,7 @@ import {
   type SoloBackup,
   type SoloBackupsResponse,
   type SoloConsoleSettingsResponse,
+  type SoloGiveItem,
   type SoloInventoryDestination,
   type SoloProfile,
   type SoloRuntime,
@@ -44,6 +46,7 @@ import {
   getCosmeticsCatalog,
   getVehicleKitCatalog,
   type BlueprintFile,
+  type AugmentSelection,
   type CatalogItem,
   type CosmeticEntry,
   type GiveItemEntry,
@@ -481,6 +484,7 @@ export function SoloMode() {
   const [itemDisplay, setItemDisplay] = useState<string | undefined>()
   const [itemQuantity, setItemQuantity] = useState(1)
   const [itemQuality, setItemQuality] = useState(0)
+  const [itemAugments, setItemAugments] = useState<AugmentSelection[]>([])
   const [inventoryDestination, setInventoryDestination] = useState('')
   const [vehicleKits, setVehicleKits] = useState<VehicleKitCatalog | null>(null)
   const [vehicleKitId, setVehicleKitId] = useState('')
@@ -827,29 +831,29 @@ export function SoloMode() {
   }
 
   const giveSoloItems = async (
-    items: Array<{ templateId: string; quantity: number; quality: number }>,
+    items: SoloGiveItem[],
     label: string,
     destination = inventoryDestination,
     targetLabel = 'selected Solo inventory',
-  ) => {
+  ): Promise<boolean> => {
     if (!selectionMatchesActive) {
       setNotice({ kind: 'err', text: 'Connect and validate the selected Solo profile before giving items.' })
-      return
+      return false
     }
     if (gameRunning) {
       setNotice({ kind: 'err', text: 'Close Dune: Awakening completely before giving Solo items.' })
-      return
+      return false
     }
     if (!destination) {
       setNotice({ kind: 'err', text: 'Choose a backpack or built storage destination.' })
-      return
+      return false
     }
     if (!window.confirm(
       `Give ${label} to the ${targetLabel}?\n\n`
       + 'Dune: Awakening must be fully closed. DST will retain the current game.db, '
       + 'apply the item grant transactionally, run integrity and foreign-key checks, '
       + 'replace the save atomically, and verify the result.',
-    )) return
+    )) return false
 
     setBusy('give-items')
     setNotice(null)
@@ -864,8 +868,10 @@ export function SoloMode() {
         text: `${label} granted and verified. Previous save retained at ${result.safetyBackup}`,
       })
       await Promise.all([statusState.refresh(), runtimeState.refresh(), backupsState.refresh()])
+      return true
     } catch (error) {
       setNotice({ kind: 'err', text: error instanceof Error ? error.message : String(error) })
+      return false
     } finally {
       setBusy(null)
     }
@@ -878,14 +884,22 @@ export function SoloMode() {
     }
     const quantity = Math.max(1, Math.min(100000, Math.trunc(itemQuantity || 1)))
     const quality = Math.max(0, Math.min(5, Math.trunc(itemQuality || 0)))
-    await giveSoloItems(
+    const granted = await giveSoloItems(
       [{
         templateId: itemTemplate.trim(),
         quantity,
         quality,
+        augments: itemAugments,
       }],
       itemDisplay ? `${quantity} x ${itemDisplay}` : `${quantity} x ${itemTemplate}`,
     )
+    if (granted) {
+      setItemTemplate('')
+      setItemDisplay(undefined)
+      setItemQuantity(1)
+      setItemQuality(0)
+      setItemAugments([])
+    }
   }
 
   const giveVehicleKit = async () => {
@@ -1831,6 +1845,7 @@ export function SoloMode() {
                 onChange={(templateId: string, item?: CatalogItem) => {
                   setItemTemplate(templateId)
                   setItemDisplay(item?.name)
+                  setItemAugments([])
                 }}
                 label="Item"
                 placeholder="Search name or template id"
@@ -1862,9 +1877,23 @@ export function SoloMode() {
                   />
                 </label>
               </div>
+              <div className="mt-3">
+                <AugmentPicker
+                  templateId={itemTemplate}
+                  displayName={itemDisplay ?? ''}
+                  selected={itemAugments}
+                  disabled={!canMutateActiveProfile || gameRunning}
+                  onSelectedChange={setItemAugments}
+                />
+              </div>
               <button
                 className={`btn-primary w-full mt-4 justify-center ${SOLO_DISABLED_PRIMARY_CLASS}`}
-                disabled={!canMutateActiveProfile || gameRunning || !itemTemplate.trim()}
+                disabled={
+                  !canMutateActiveProfile
+                  || gameRunning
+                  || !itemTemplate.trim()
+                  || (itemAugments.length > 0 && itemQuantity !== 1)
+                }
                 onClick={() => void giveOneItem()}
               >
                 <Icon name={busy === 'give-items' ? 'LoaderCircle' : 'PackagePlus'} size={14} className={busy === 'give-items' ? 'animate-spin' : ''} />

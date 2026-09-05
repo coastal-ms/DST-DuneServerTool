@@ -43,6 +43,10 @@ Apply this in **every session**, unless the maintainer explicitly asks otherwise
   Coastal alone has full local control; elevated Hawk may request bounded,
   backup-safe local Dune-server work only. Gateway autonomy never performs
   destructive work. Normal wait renewal does not re-gate.
+- **All troubleshooting threads are private by default.** Invite only the
+  reporter, Coastal, and Duke. The shared-channel redirect must explicitly say
+  **PRIVATE thread** and include its clickable channel mention. Create any useful
+  public FAQ only afterward from separately sanitized facts.
 
 ## Repository layout
 
