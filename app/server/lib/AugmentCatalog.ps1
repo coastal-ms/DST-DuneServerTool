@@ -153,9 +153,17 @@ function New-DuneAugmentedItemStatsJson {
     [void]$durabilityPair.Add([object[]]@())
     [void]$durabilityPair.Add([ordered]@{})
 
-    return ([ordered]@{
+    $stats = [ordered]@{
         FCustomizationStats = $customizationPair
         FAugmentedItemStats = $augmentPair
         FItemStackAndDurabilityStats = $durabilityPair
-    } | ConvertTo-Json -Depth 12 -Compress)
+    }
+    if (@($itemTags | Where-Object { $_ -like 'Items.Holsters.RangedWeapons*' }).Count -gt 0) {
+        $weaponPair = New-Object Collections.ArrayList
+        [void]$weaponPair.Add([object[]]@())
+        [void]$weaponPair.Add([ordered]@{ CurrentAmmo = 0 })
+        $stats.FWeaponItemStats = $weaponPair
+    }
+
+    return ($stats | ConvertTo-Json -Depth 12 -Compress)
 }

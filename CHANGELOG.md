@@ -13,6 +13,13 @@ here cover everything those tags shipped.
 
 ## [Unreleased]
 
+## [15.0.0-phase2-test6.1] - 2026-09-05
+
+### Fixed
+
+- Pre-augmented ranged-weapon grants now include loaded-ammo state so they
+  appear in the offline ammo editor.
+
 ## [15.0.0-phase2-test6] - 2026-09-04
 
 ### Added
