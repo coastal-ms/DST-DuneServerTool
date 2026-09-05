@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { Fragment, useEffect, useMemo, useState } from 'react'
 import {
   getAugmentCatalog,
   type AugmentCatalog,
@@ -25,6 +25,12 @@ export function augmentSlotLimit(tags: string[]): number {
   if (tags.some(tag => tag.startsWith('Items.Clothes'))) return 2
   if (tags.some(tag => tag.startsWith('Items.Holsters'))) return 3
   return 0
+}
+
+export function maxAugmentGrade(gradeEffects: Record<string, string[]>): number {
+  return Math.max(
+    ...Object.keys(gradeEffects).map(Number).filter(Number.isInteger),
+  )
 }
 
 export function AugmentPicker({
@@ -59,7 +65,9 @@ export function AugmentPicker({
         return tags.some(itemTag => augment.tags.some(augmentTag =>
           itemTag === augmentTag || itemTag.startsWith(`${augmentTag}.`)))
       })
-      .sort(([, left], [, right]) => left.name.localeCompare(right.name))
+      .sort(([, left], [, right]) =>
+        maxAugmentGrade(right.gradeEffects) - maxAugmentGrade(left.gradeEffects)
+        || left.name.localeCompare(right.name))
   }, [catalog, limit, tags])
 
   if (!templateId) return null
@@ -92,49 +100,60 @@ export function AugmentPicker({
           Augments ({selected.length}/{limit})
         </span>
       </div>
-      <div className="max-h-44 overflow-y-auto rounded-lg border border-border bg-surface-2/50 p-2 space-y-1">
-        {eligible.map(([id, augment]) => {
+      <div className="max-h-72 overflow-y-auto rounded-lg border border-border bg-surface-2/50 p-2 space-y-1">
+        {eligible.map(([id, augment], index) => {
           const selection = selected.find(value => value.id === id)
           const grades = Object.keys(augment.gradeEffects)
             .map(Number)
             .filter(Number.isInteger)
             .sort((left, right) => left - right)
           const displayGrade = selection?.quality ?? Math.max(...grades)
+          const maximumGrade = maxAugmentGrade(augment.gradeEffects)
+          const previousMaximum = index > 0
+            ? maxAugmentGrade(eligible[index - 1][1].gradeEffects)
+            : null
           return (
-            <div key={id} className="flex items-start gap-2 rounded px-2 py-1.5 hover:bg-surface-2">
-              <input
-                type="checkbox"
-                checked={!!selection}
-                disabled={disabled || (!selection && selected.length >= limit)}
-                onChange={() => toggle(id)}
-                className="mt-0.5 accent-ibad"
-              />
-              <button
-                type="button"
-                disabled={disabled}
-                onClick={() => toggle(id)}
-                className="min-w-0 flex-1 text-left"
-              >
-                <span className="block text-sm text-text">{augment.name}</span>
-                <span className="block text-[11px] text-text-dim">
-                  {augment.gradeEffects[String(displayGrade)].join(' · ')}
-                </span>
-              </button>
-              {selection && (
-                <label className="flex items-center gap-1 text-[11px] text-text-muted">
-                  Grade
-                  <select
-                    value={selection.quality}
-                    disabled={disabled}
-                    onChange={event => onSelectedChange(selected.map(value =>
-                      value.id === id ? { ...value, quality: Number(event.target.value) } : value))}
-                    className="rounded bg-surface-2 border border-border px-1.5 py-1 text-text"
-                  >
-                    {grades.map(value => <option key={value} value={value}>{value}</option>)}
-                  </select>
-                </label>
+            <Fragment key={id}>
+              {maximumGrade !== previousMaximum && (
+                <div className="mt-2 first:mt-0 border-b border-border pb-1 text-[10px] font-semibold uppercase tracking-wider text-text-dim">
+                  Maximum Grade {maximumGrade}
+                </div>
               )}
-            </div>
+              <div className="flex items-start gap-2 rounded px-2 py-1.5 hover:bg-surface-2">
+                <input
+                  type="checkbox"
+                  checked={!!selection}
+                  disabled={disabled || (!selection && selected.length >= limit)}
+                  onChange={() => toggle(id)}
+                  className="mt-0.5 accent-ibad"
+                />
+                <button
+                  type="button"
+                  disabled={disabled}
+                  onClick={() => toggle(id)}
+                  className="min-w-0 flex-1 text-left"
+                >
+                  <span className="block text-sm text-text">{augment.name}</span>
+                  <span className="block text-[11px] text-text-dim">
+                    {augment.gradeEffects[String(displayGrade)].join(' · ')}
+                  </span>
+                </button>
+                {selection && (
+                  <label className="flex items-center gap-1 text-[11px] text-text-muted">
+                    Grade
+                    <select
+                      value={selection.quality}
+                      disabled={disabled}
+                      onChange={event => onSelectedChange(selected.map(value =>
+                        value.id === id ? { ...value, quality: Number(event.target.value) } : value))}
+                      className="rounded bg-surface-2 border border-border px-1.5 py-1 text-text"
+                    >
+                      {grades.map(value => <option key={value} value={value}>{value}</option>)}
+                    </select>
+                  </label>
+                )}
+              </div>
+            </Fragment>
           )
         })}
         {eligible.length === 0 && (

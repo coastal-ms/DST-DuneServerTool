@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest'
-import { augmentSlotLimit, resolveAugmentItemTags } from '../src/components/AugmentPicker'
+import {
+  augmentSlotLimit,
+  maxAugmentGrade,
+  resolveAugmentItemTags,
+} from '../src/components/AugmentPicker'
 import type { AugmentCatalog } from '../src/api/gameplay'
 
 const catalog: AugmentCatalog = {
@@ -32,5 +36,10 @@ describe('AugmentPicker compatibility', () => {
 
   it('never treats a schematic alias as augmentable gear', () => {
     expect(resolveAugmentItemTags(catalog, 'ArmorTemplate_Schematic', 'Named Rifle')).toEqual([])
+  })
+
+  it('groups augments by their highest available grade', () => {
+    expect(maxAugmentGrade({ 1: ['low'], 4: ['high'] })).toBe(4)
+    expect(maxAugmentGrade({ 1: ['low'], 5: ['high'] })).toBe(5)
   })
 })
