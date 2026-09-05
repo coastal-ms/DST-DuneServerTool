@@ -112,7 +112,17 @@ Register-DuneRoute -Method POST -Path '/api/gameplay/players/give-solari' -Handl
     }
 }
 
-# POST /api/gameplay/players/give-item  { pawn_id, template, qty, quality, fls_id? }
+# GET /api/gameplay/augments/catalog
+Register-DuneRoute -Method GET -Path '/api/gameplay/augments/catalog' -Handler {
+    param($req, $res)
+    try {
+        Write-DuneJson -Response $res -Body (Get-DuneAugmentCatalog)
+    } catch {
+        Write-DuneError -Response $res -Status 500 -Message "Augment catalog failed: $($_.Exception.Message)"
+    }
+}
+
+# POST /api/gameplay/players/give-item  { pawn_id, template, qty, quality, augments?, augment_quality?, fls_id? }
 # v12.0.3 — Auto-routes between online (RMQ ServerCommand, instant) and offline
 # (SQL backpack insert) based on player state.
 # - Online + quality<=0     → RMQ live (instant in-game)
@@ -126,6 +136,10 @@ Register-DuneRoute -Method POST -Path '/api/gameplay/players/give-item' -Handler
         $tmpl = [string](Get-DuneBodyValue -Body $body -Name 'template')
         $qty  = Get-DuneBodyInt -Body $body -Name 'qty'
         $qual = Get-DuneBodyInt -Body $body -Name 'quality'
+        $augmentRaw = Get-DuneBodyValue -Body $body -Name 'augments'
+        $augments = @($augmentRaw | ForEach-Object { ([string]$_).Trim() } | Where-Object { $_ })
+        $augmentQuality = Get-DuneBodyInt -Body $body -Name 'augment_quality'
+        if ($null -eq $augmentQuality) { $augmentQuality = 5L }
         $fls  = [string](Get-DuneBodyValue -Body $body -Name 'fls_id')
         # Drop-to-ground (overflow) defaults ON so a full inventory never silently
         # swallows the give; pass allow_overflow=false explicitly to opt out.
@@ -141,8 +155,14 @@ Register-DuneRoute -Method POST -Path '/api/gameplay/players/give-item' -Handler
 
         Invoke-DunePlayerWriteRoute -Response $res -Action {
             param($ip)
-            $off = Test-DunePlayerOffline -Ip $ip -PawnId $pawn
+            $off = Test-DunePlayerOffline -Ip $ip -PawnId $pawn -RequireVerifiedStatus:($augments.Count -gt 0)
+            if ($augments.Count -gt 0 -and -not $off.ok) {
+                return @{ ok = $false; error = $off.reason }
+            }
             $isOnline = -not $off.ok
+            if ($isOnline -and $augments.Count -gt 0) {
+                return @{ ok = $false; error = 'Pre-augmented grants require the player to be offline. Ask the player to log out, then retry.' }
+            }
             # Online + default quality → RMQ live (instant, no relog)
             if ($isOnline -and $qual -le 0) {
                 $r = Invoke-DunePlayerGiveItemLive -Ip $ip -ActorId $pawn -FlsId $fls -Template $tmpl -Quantity ([int]$qty) -Durability 1.0 -AllowOverflow $overflow
@@ -156,7 +176,7 @@ Register-DuneRoute -Method POST -Path '/api/gameplay/players/give-item' -Handler
                 return @{ ok = $false; error = 'Changing the Grade requires the player to be offline. Ask the player to log out, then retry.' }
             }
             # Offline → SQL (appears on next login)
-            $r = Invoke-DunePlayerGiveItem -Ip $ip -PawnId $pawn -Template $tmpl -Qty $qty -Quality $qual
+            $r = Invoke-DunePlayerGiveItem -Ip $ip -PawnId $pawn -Template $tmpl -Qty $qty -Quality $qual -Augments $augments -AugmentQuality ([int]$augmentQuality)
             if ($r.ok) { $r['path'] = 'sql' }
             return $r
         }

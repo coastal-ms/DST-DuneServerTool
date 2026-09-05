@@ -3,6 +3,7 @@ import { Icon } from '../components/Icon'
 import { PageHeader } from '../components/PageHeader'
 import { CollapsibleCard } from '../components/CollapsibleCard'
 import { ItemPicker } from '../components/ItemPicker'
+import { AugmentPicker } from '../components/AugmentPicker'
 import {
   SoloInventoryExplorer,
   SoloWeaponAmmoEditor,
@@ -33,6 +34,7 @@ import {
   type SoloBackup,
   type SoloBackupsResponse,
   type SoloConsoleSettingsResponse,
+  type SoloGiveItem,
   type SoloInventoryDestination,
   type SoloProfile,
   type SoloRuntime,
@@ -481,6 +483,8 @@ export function SoloMode() {
   const [itemDisplay, setItemDisplay] = useState<string | undefined>()
   const [itemQuantity, setItemQuantity] = useState(1)
   const [itemQuality, setItemQuality] = useState(0)
+  const [itemAugments, setItemAugments] = useState<string[]>([])
+  const [itemAugmentQuality, setItemAugmentQuality] = useState(5)
   const [inventoryDestination, setInventoryDestination] = useState('')
   const [vehicleKits, setVehicleKits] = useState<VehicleKitCatalog | null>(null)
   const [vehicleKitId, setVehicleKitId] = useState('')
@@ -827,7 +831,7 @@ export function SoloMode() {
   }
 
   const giveSoloItems = async (
-    items: Array<{ templateId: string; quantity: number; quality: number }>,
+    items: SoloGiveItem[],
     label: string,
     destination = inventoryDestination,
     targetLabel = 'selected Solo inventory',
@@ -883,6 +887,8 @@ export function SoloMode() {
         templateId: itemTemplate.trim(),
         quantity,
         quality,
+        augments: itemAugments,
+        augmentQuality: itemAugmentQuality,
       }],
       itemDisplay ? `${quantity} x ${itemDisplay}` : `${quantity} x ${itemTemplate}`,
     )
@@ -1831,6 +1837,7 @@ export function SoloMode() {
                 onChange={(templateId: string, item?: CatalogItem) => {
                   setItemTemplate(templateId)
                   setItemDisplay(item?.name)
+                  setItemAugments([])
                 }}
                 label="Item"
                 placeholder="Search name or template id"
@@ -1862,9 +1869,25 @@ export function SoloMode() {
                   />
                 </label>
               </div>
+              <div className="mt-3">
+                <AugmentPicker
+                  templateId={itemTemplate}
+                  displayName={itemDisplay ?? ''}
+                  selected={itemAugments}
+                  quality={itemAugmentQuality}
+                  disabled={!canMutateActiveProfile || gameRunning}
+                  onSelectedChange={setItemAugments}
+                  onQualityChange={setItemAugmentQuality}
+                />
+              </div>
               <button
                 className={`btn-primary w-full mt-4 justify-center ${SOLO_DISABLED_PRIMARY_CLASS}`}
-                disabled={!canMutateActiveProfile || gameRunning || !itemTemplate.trim()}
+                disabled={
+                  !canMutateActiveProfile
+                  || gameRunning
+                  || !itemTemplate.trim()
+                  || (itemAugments.length > 0 && itemQuantity !== 1)
+                }
                 onClick={() => void giveOneItem()}
               >
                 <Icon name={busy === 'give-items' ? 'LoaderCircle' : 'PackagePlus'} size={14} className={busy === 'give-items' ? 'animate-spin' : ''} />

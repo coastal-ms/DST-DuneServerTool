@@ -10,6 +10,7 @@
 import { useCallback, useEffect, useMemo, useState, type ReactElement, type ReactNode } from 'react'
 import { Icon } from '../../../components/Icon'
 import { ItemPicker } from '../../../components/ItemPicker'
+import { AugmentPicker } from '../../../components/AugmentPicker'
 import { TagPicker } from '../../../components/TagPicker'
 import {
   applySpecLevel, awardCharXp, awardIntel, setSpecLevel, preparePatternUpgrading, cheatScript, cleanPlayerInventory,
@@ -991,7 +992,9 @@ function ActionRow({ def, player, busy, stats, open, danger, onToggle, runAction
           )}
           {def.custom === 'give-item' ? (
             <GiveItemForm busy={busy} submitLabel={def.label}
-              onSubmit={(tpl, qty, qual, overflow) => runAction(def, () => giveItem(player.id, tpl, qty, qual, overflow))}
+              playerOnline={['online', 'loggingout'].includes((player.online_status || '').toLowerCase())}
+              onSubmit={(tpl, qty, qual, overflow, augments, augmentQuality) =>
+                runAction(def, () => giveItem(player.id, tpl, qty, qual, overflow, augments, augmentQuality))}
               onSubmitTierSet={(tpl, qty, overflow) => runAction(def, async () => {
                 // Grades above 0 are SQL-only writes the game overwrites from RAM while a
                 // live session exists — refuse up front so the set isn't partially delivered.
@@ -1580,9 +1583,10 @@ function GrantHouseSwatchesForm({ busy, playerName, accountId, kind, playerOnlin
 // Self-contained give-item form (item picker + qty/quality). Owns its own
 // state so it resets whenever the accordion row mounts. Renders without a card
 // wrapper — ActionRow provides the container.
-function GiveItemForm({ busy, submitLabel, onSubmit, onSubmitTierSet }: {
+function GiveItemForm({ busy, submitLabel, playerOnline, onSubmit, onSubmitTierSet }: {
   busy: boolean; submitLabel: string
-  onSubmit: (tpl: string, qty: number, qual: number, allowOverflow: boolean) => void
+  playerOnline: boolean
+  onSubmit: (tpl: string, qty: number, qual: number, allowOverflow: boolean, augments: string[], augmentQuality: number) => void
   onSubmitTierSet: (tpl: string, qty: number, allowOverflow: boolean) => void
 }) {
   const [giveTpl, setGiveTpl]   = useState('')
@@ -1591,11 +1595,18 @@ function GiveItemForm({ busy, submitLabel, onSubmit, onSubmitTierSet }: {
   const [giveQual, setGiveQual] = useState('0')
   const [gradeable, setGradeable] = useState(false)
   const [overflow, setOverflow] = useState(true)
+  const [augments, setAugments] = useState<string[]>([])
+  const [augmentQuality, setAugmentQuality] = useState(5)
   return (
     <div className="space-y-3">
       <ItemPicker label="Item — type to search by name or template id"
         value={giveTpl} displayValue={giveName || giveTpl}
-        onChange={(tpl, item) => { setGiveTpl(tpl); setGiveName(item ? item.name : ''); setGradeable(!!item?.gradeable) }}
+        onChange={(tpl, item) => {
+          setGiveTpl(tpl)
+          setGiveName(item ? item.name : '')
+          setGradeable(!!item?.gradeable)
+          setAugments([])
+        }}
         autoFocus disabled={busy} />
       <div className="grid grid-cols-2 gap-3">
         <div>
@@ -1615,14 +1626,33 @@ function GiveItemForm({ busy, submitLabel, onSubmit, onSubmitTierSet }: {
           </select>
         </div>
       </div>
+      <AugmentPicker
+        templateId={giveTpl}
+        displayName={giveName}
+        selected={augments}
+        quality={augmentQuality}
+        disabled={busy || playerOnline}
+        onSelectedChange={setAugments}
+        onQualityChange={setAugmentQuality}
+      />
       <OverflowToggle checked={overflow} disabled={busy} onChange={setOverflow} />
-      <button className="btn-primary w-full" disabled={busy || !isValidTemplateId(giveTpl)}
-        onClick={() => onSubmit(giveTpl.trim(), Number(giveQty) || 1, Number(giveQual) || 0, overflow)}>
+      <button
+        className="btn-primary w-full"
+        disabled={busy || !isValidTemplateId(giveTpl) || (augments.length > 0 && (playerOnline || Number(giveQty) !== 1))}
+        onClick={() => onSubmit(
+          giveTpl.trim(),
+          Number(giveQty) || 1,
+          Number(giveQual) || 0,
+          overflow,
+          augments,
+          augmentQuality,
+        )}
+      >
         {busy ? <Icon name="Loader2" size={13} className="animate-spin" /> : <Icon name="Check" size={13} />} {submitLabel}
       </button>
       {gradeable && (
-        <button className="btn-secondary w-full" disabled={busy || !isValidTemplateId(giveTpl)}
-          title="Gives one of this item at every grade, Grade 0 through Grade 5"
+        <button className="btn-secondary w-full" disabled={busy || !isValidTemplateId(giveTpl) || augments.length > 0}
+          title={augments.length > 0 ? 'Clear selected augments before giving all item grades' : 'Gives one of this item at every grade, Grade 0 through Grade 5'}
           onClick={() => onSubmitTierSet(giveTpl.trim(), Number(giveQty) || 1, overflow)}>
           {busy ? <Icon name="Loader2" size={13} className="animate-spin" /> : <Icon name="Layers" size={13} />} Give all grades (0-5)
         </button>

@@ -19,6 +19,8 @@ here cover everything those tags shipped.
 
 - Game Config now provides a local-time Coriolis cycle start selector while
   storing the GMT/UTC hour required by the game.
+- Solo Mode and Self-Hosted Give Item can now grant compatible weapons and
+  garments with selected maximum-roll augments at a chosen augment grade.
 
 ### Fixed
 

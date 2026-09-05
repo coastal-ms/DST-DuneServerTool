@@ -155,6 +155,28 @@ describe('Phase C/D/E/F — items, vehicles, teleport, progression, jobs', () =>
     expect(last().body).toEqual({ pawn_id: 11, items, allow_overflow: true })
   })
 
+  it('giveItem forwards selected augments and their grade', async () => {
+    await gp.giveItem(
+      11,
+      'SMG_Unique_LargeMag_06',
+      1,
+      5,
+      false,
+      ['T6_Augment_Damage2'],
+      5,
+    )
+    expect(last().url).toBe('/api/gameplay/players/give-item')
+    expect(last().body).toEqual({
+      pawn_id: 11,
+      template: 'SMG_Unique_LargeMag_06',
+      qty: 1,
+      quality: 5,
+      allow_overflow: false,
+      augments: ['T6_Augment_Damage2'],
+      augment_quality: 5,
+    })
+  })
+
   it('repairGear / repairVehicle / refuelVehicle hit the right URLs', async () => {
     await gp.repairGear(11)
     expect(last().url).toBe('/api/gameplay/players/repair-gear')

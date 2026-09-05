@@ -220,7 +220,14 @@ function Get-DuneHouseSwatchCatalog {
 # heuristic is NOT used (its prefix list is never initialized). Returns a bare
 # JSON literal (no SQL quoting) — the value is one of two fixed constants.
 function Get-DuneGiveItemStatsJson {
-    param([string]$TemplateId)
+    param(
+        [string]$TemplateId,
+        [string[]]$Augments = @(),
+        [int]$AugmentQuality = 5
+    )
+    if (@($Augments).Count -gt 0) {
+        return New-DuneAugmentedItemStatsJson -TemplateId $TemplateId -Augments $Augments -AugmentQuality $AugmentQuality
+    }
     $stackMax = 0
     if ($TemplateId -and (Get-Command Get-DuneGameplayItemRule -ErrorAction SilentlyContinue)) {
         try {

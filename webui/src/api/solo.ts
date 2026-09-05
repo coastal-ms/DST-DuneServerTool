@@ -299,6 +299,8 @@ export interface SoloGiveItem {
   templateId: string
   quantity: number
   quality: number
+  augments?: string[]
+  augmentQuality?: number
 }
 
 export function grantSoloItems(

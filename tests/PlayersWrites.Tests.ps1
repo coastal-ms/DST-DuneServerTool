@@ -4,6 +4,7 @@
 BeforeAll {
     . (Join-Path $PSScriptRoot '_TestHelpers.ps1')
     Import-DstLib 'Gameplay.ps1'
+    Import-DstLib 'AugmentCatalog.ps1'
     Import-DstLib 'GameplayPlayers.ps1'
     Import-DstLib 'PlayersWrites.ps1'
     $script:realRowMaps = (Get-Command ConvertTo-DuneRowMaps).ScriptBlock
@@ -28,6 +29,61 @@ Describe 'ConvertTo-DuneSqlString' -Tag 'Pure' {
     }
     It 'stringifies non-string input' {
         ConvertTo-DuneSqlString 123 | Should -Be '123'
+    }
+}
+
+Describe 'Invoke-DunePlayerGiveItem pre-augmented grants' -Tag 'Pure' {
+    BeforeEach {
+        $script:capturedSql = ''
+        function global:Test-DuneValidGiveTemplate { return @{ ok = $true } }
+        function global:Test-DuneInventoryCapacity { return @{ ok = $true } }
+        function global:Invoke-DuneSqlQuery {
+            param($Ip, $Sql, $ReadOnly, $MaxRows, $TimeoutSec)
+            $script:capturedSql = $Sql
+            return @{
+                ok = $true
+                columns = @('item_id', 'stats_match')
+                rows = @(,@('501', 'true'))
+            }
+        }
+    }
+
+    AfterEach {
+        Remove-Item function:global:Test-DuneValidGiveTemplate -ErrorAction SilentlyContinue
+        Remove-Item function:global:Test-DuneInventoryCapacity -ErrorAction SilentlyContinue
+        Remove-Item function:global:Invoke-DuneSqlQuery -ErrorAction SilentlyContinue
+    }
+
+    It 'forces a new item row and verifies the exact augmented stats' {
+        $result = Invoke-DunePlayerGiveItem `
+            -Ip '192.0.2.1' `
+            -PawnId 42 `
+            -Template 'SMG_Unique_LargeMag_06' `
+            -Qty 1 `
+            -Quality 5 `
+            -Augments @('T6_Augment_Damage2') `
+            -AugmentQuality 5
+
+        $result.ok | Should -BeTrue -Because $result.error
+        $result.item_id | Should -Be 501
+        $script:capturedSql | Should -Match 'AND FALSE'
+        $script:capturedSql | Should -Match 'FAugmentedItemStats'
+        $script:capturedSql | Should -Match 'stats_match'
+    }
+
+    It 'rejects quantities above one before touching the database' {
+        $result = Invoke-DunePlayerGiveItem `
+            -Ip '192.0.2.1' `
+            -PawnId 42 `
+            -Template 'SMG_Unique_LargeMag_06' `
+            -Qty 2 `
+            -Quality 5 `
+            -Augments @('T6_Augment_Damage2') `
+            -AugmentQuality 5
+
+        $result.ok | Should -BeFalse
+        $result.error | Should -Match 'quantity of 1'
+        $script:capturedSql | Should -BeNullOrEmpty
     }
 }
 

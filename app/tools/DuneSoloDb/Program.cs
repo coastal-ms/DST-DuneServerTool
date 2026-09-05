@@ -78,7 +78,10 @@ internal static partial class Program
                     Require(options, "input"),
                     Require(options, "safety-backup"),
                     Require(options, "plan"),
-                    Require(options, "catalog")),
+                    Require(options, "catalog"),
+                    options.TryGetValue("augment-catalog", out var augmentCatalog)
+                        ? Path.GetFullPath(augmentCatalog)
+                        : null),
                 "import-blueprint" => ImportBlueprint(
                     Require(options, "input"),
                     Require(options, "safety-backup"),
@@ -473,7 +476,8 @@ internal static partial class Program
             string input,
             string safetyBackup,
             string planPath,
-            string catalogPath)
+            string catalogPath,
+            string? augmentCatalogPath = null)
         {
             var originalBytes = ReadStable(input);
             var originalInspection = InspectBytes(originalBytes, input);
@@ -481,6 +485,7 @@ internal static partial class Program
             var wrapped = Unwrap(originalBytes);
             var plan = ReadGrantPlan(planPath);
             var catalog = ReadCatalog(catalogPath);
+            var augmentCatalog = ReadGrantAugmentCatalog(augmentCatalogPath);
 
             var root = Path.Combine(Path.GetTempPath(), $"dune-solo-grant-{Guid.NewGuid():N}");
             Directory.CreateDirectory(root);
@@ -488,7 +493,7 @@ internal static partial class Program
             {
                 var sqlitePath = Path.Combine(root, "grant.sqlite");
                 File.WriteAllBytes(sqlitePath, wrapped.SqliteBytes);
-                var summaries = ApplyItemGrant(sqlitePath, plan, catalog);
+                var summaries = ApplyItemGrant(sqlitePath, plan, catalog, augmentCatalog);
                 var mutated = Path.Combine(root, "game.db");
                 WrapSqlite(sqlitePath, mutated);
                 var mutatedInspection = InspectPath(mutated);
@@ -806,7 +811,8 @@ internal static partial class Program
     private static IReadOnlyList<object> ApplyItemGrant(
             string sqlitePath,
             GrantPlan plan,
-            IReadOnlyDictionary<string, CatalogRule> catalog)
+            IReadOnlyDictionary<string, CatalogRule> catalog,
+            GrantAugmentCatalog? augmentCatalog)
         {
             var connectionString = new SqliteConnectionStringBuilder
             {
@@ -949,7 +955,7 @@ internal static partial class Program
                             ("$position", nextPosition),
                             ("$template", item.TemplateId),
                             ("$acquisition", acquisitionTime),
-                            ("$stats", ItemStatsJson(stackMax)),
+                            ("$stats", BuildAugmentedGrantStats(stackMax, item, rule, augmentCatalog)),
                             ("$quality", item.Quality));
                         nextPosition++;
                     }
@@ -1480,6 +1486,45 @@ internal static partial class Program
                   }
                 }
                 """);
+            var augmentCatalogPath = Path.Combine(root, "augment-catalog.json");
+            File.WriteAllText(
+                augmentCatalogPath,
+                """
+                {
+                  "augments":{
+                    "T6_Augment_Damage2":{
+                      "tags":["Items.Holsters.RangedWeapons"],
+                      "gradeEffects":{"5":["Damage +70%"]}
+                    }
+                  },
+                  "methodItems":{},
+                  "itemAliases":{
+                    "HarkAr3":["Items.Holsters.RangedWeapons.Light.Rifle"]
+                  }
+                }
+                """);
+            var testAugmentCatalog = ReadGrantAugmentCatalog(augmentCatalogPath)
+                ?? throw new InvalidOperationException("Augment catalog fixture did not load.");
+            var augmentedStats = JsonNode.Parse(BuildAugmentedGrantStats(
+                1,
+                new GrantItem(
+                    "HarkAr3",
+                    1,
+                    5,
+                    new[] { "T6_Augment_Damage2" },
+                    5),
+                new CatalogRule(1, 1, true, "Harkonnen Assault Rifle Mk3"),
+                testAugmentCatalog));
+            var augmentedValues = augmentedStats?["FAugmentedItemStats"]?[1];
+            if (augmentedValues?["AppliedAugments"]?[0]?["Name"]?.GetValue<string>()
+                    != "T6_Augment_Damage2"
+                || augmentedValues?["AppliedAugmentQualities"]?[0]?.GetValue<int>() != 5
+                || augmentedValues?["AppliedAugmentRollData"]?[0]?["StatRolls"]?[0]
+                    ?.GetValue<decimal>() != DuneAugmentMaxRoll)
+            {
+                throw new InvalidOperationException(
+                    "Pre-augmented grant stats did not preserve ids, grade, and maximum rolls.");
+            }
             var catalog = ReadCatalog(catalogPath);
             if (catalog["RepairTool5"].Volume != 10d
                 || catalog["TreadwheelHull_6"].Volume != 15d
@@ -1599,6 +1644,60 @@ internal static partial class Program
                 {
                     throw new InvalidOperationException(
                         "Picker-only stack-limit fallbacks were not applied correctly.");
+                }
+            }
+
+            File.WriteAllText(
+                planPath,
+                """
+                {"destination":"inventory:2","items":[
+                  {
+                    "templateId":"HarkAr3",
+                    "quantity":1,
+                    "quality":5,
+                    "augments":["T6_Augment_Damage2"],
+                    "augmentQuality":5
+                  }
+                ]}
+                """);
+            var augmentedGrantSafety = Path.Combine(
+                root,
+                "safety",
+                "before-augmented-grant.db");
+            GrantItems(
+                target,
+                augmentedGrantSafety,
+                planPath,
+                catalogPath,
+                augmentCatalogPath);
+            var augmentedSqlite = Path.Combine(root, "augmented-grant.sqlite");
+            File.WriteAllBytes(augmentedSqlite, Unwrap(ReadStable(target)).SqliteBytes);
+            using (var connection = new SqliteConnection(new SqliteConnectionStringBuilder
+                   {
+                       DataSource = augmentedSqlite,
+                       Mode = SqliteOpenMode.ReadOnly,
+                       Pooling = false
+                   }.ToString()))
+            {
+                connection.Open();
+                var stats = JsonNode.Parse(ScalarString(
+                    connection,
+                    """
+                    SELECT stats
+                    FROM items
+                    WHERE template_id = 'HarkAr3'
+                      AND quality_level = 5
+                    ORDER BY id DESC
+                    LIMIT 1;
+                    """));
+                if (!File.Exists(augmentedGrantSafety)
+                    || stats?["FAugmentedItemStats"]?[1]?["AppliedAugments"]?[0]?["Name"]
+                        ?.GetValue<string>() != "T6_Augment_Damage2"
+                    || stats?["FAugmentedItemStats"]?[1]?["AppliedAugmentQualities"]?[0]
+                        ?.GetValue<int>() != 5)
+                {
+                    throw new InvalidOperationException(
+                        "Pre-augmented Solo grant did not retain, write, and verify the selected augment.");
                 }
             }
 
@@ -2100,6 +2199,7 @@ internal static partial class Program
                     "unsupported-wrapper-rejected",
                     "offline-augment-max-with-safety-backup",
                     "offline-item-grant-with-capacity-and-safety-backup",
+                    "offline-pre-augmented-item-grant-with-safety-backup",
                     "vehicle-kit-volume-fallbacks-preserve-stock-backpack-grants",
                     "offline-portable-blueprint-import-with-safety-backup",
                     "invalid-blueprint-leaves-target-unchanged",
@@ -2541,6 +2641,15 @@ internal static partial class Program
             var quality = element.TryGetProperty("quality", out var qualityElement)
                 ? qualityElement.GetInt32()
                 : 0;
+            var augments = element.TryGetProperty("augments", out var augmentElement)
+                ? augmentElement.EnumerateArray()
+                    .Select(value => value.GetString()?.Trim() ?? string.Empty)
+                    .Where(value => value.Length > 0)
+                    .ToArray()
+                : Array.Empty<string>();
+            var augmentQuality = element.TryGetProperty("augmentQuality", out var augmentQualityElement)
+                ? augmentQualityElement.GetInt32()
+                : 5;
             if (string.IsNullOrWhiteSpace(templateId))
             {
                 throw new InvalidDataException("Item template id is required.");
@@ -2553,7 +2662,11 @@ internal static partial class Program
             {
                 throw new InvalidDataException("Item quality must be between 0 and 5.");
             }
-            items.Add(new GrantItem(templateId, quantity, quality));
+            if (augments.Length > 0 && (augmentQuality < 1 || augmentQuality > 5))
+            {
+                throw new InvalidDataException("Augment quality must be between 1 and 5.");
+            }
+            items.Add(new GrantItem(templateId, quantity, quality, augments, augmentQuality));
         }
         if (items.Count is < 1 or > 200)
         {
@@ -3045,7 +3158,9 @@ internal static partial class Program
     private sealed record GrantItem(
         string TemplateId,
         int Quantity,
-        int Quality);
+        int Quality,
+        IReadOnlyList<string> Augments,
+        int AugmentQuality);
 
     private sealed record GrantPlan(
         string Destination,
