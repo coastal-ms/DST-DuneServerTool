@@ -3061,8 +3061,8 @@ function AmmoEditor({ item, playerId, busy, run, isOnline, onClose }: {
 }) {
   const current = parseInt(item.current_ammo ?? '0', 10)
   const [ammoStr, setAmmoStr] = useState(Number.isFinite(current) ? String(current) : '0')
-  const ammo = parseInt(ammoStr, 10)
-  const valid = Number.isFinite(ammo) && ammo >= 0 && ammo <= 2000000000
+  const ammo = Number(ammoStr)
+  const valid = ammoStr.trim() !== '' && Number.isInteger(ammo) && ammo >= 0 && ammo <= 2000000000
 
   return (
     <div className="border-t border-border/50 px-3 py-3 bg-surface-1/60 rounded-b-lg space-y-3">
@@ -3077,7 +3077,7 @@ function AmmoEditor({ item, playerId, busy, run, isOnline, onClose }: {
         <label className="text-xs flex-1">
           <div className="text-text-dim mb-1">Loaded ammo</div>
           <input
-            type="number" inputMode="numeric" step={1} min={0}
+            type="number" inputMode="numeric" step={1} min={0} max={2000000000}
             value={ammoStr}
             onChange={e => setAmmoStr(e.target.value)}
             disabled={busy || isOnline}

@@ -93,6 +93,7 @@ function scrollPageToTop(from: HTMLElement) {
 }
 
 const SANDWORM_ENABLED_KEY = 'sandworm.dune.Enabled'
+const CORIOLIS_CYCLE_START_HOUR_KEY = 'm_CycleStartHour'
 const CLIENT_INI_PATHS = {
   game: '%LOCALAPPDATA%\\DuneSandbox\\Saved\\Config\\WindowsClient\\Game.ini',
   engine: '%LOCALAPPDATA%\\DuneSandbox\\Saved\\Config\\WindowsClient\\Engine.ini',
@@ -2439,6 +2440,12 @@ type FieldRowProps = {
 // Human-friendly rendering of a raw default value for the grayed "Default:" line.
 function formatDefaultDisplay(field: GameConfigField, def: string): string {
   if (def === '') return '(unset)'
+  if (field.key === CORIOLIS_CYCLE_START_HOUR_KEY) {
+    const hour = Number(def)
+    if (Number.isInteger(hour) && hour >= 0 && hour <= 23) {
+      return formatCoriolisCycleStartHour(hour, new Date().getTimezoneOffset())
+    }
+  }
   if (field.type === 'select' && field.options) {
     const opt = field.options.find(o => o.value === def)
     return opt ? opt.label : def
@@ -2446,6 +2453,16 @@ function formatDefaultDisplay(field: GameConfigField, def: string): string {
   const pair = boolPair(field.type)
   if (pair) return def === pair.on ? 'On' : def === pair.off ? 'Off' : def
   return def
+}
+
+export function formatCoriolisCycleStartHour(utcHour: number, timezoneOffsetMinutes: number): string {
+  const localMinutes = ((utcHour * 60 - timezoneOffsetMinutes) % 1440 + 1440) % 1440
+  const localHour = Math.floor(localMinutes / 60)
+  const localMinute = localMinutes % 60
+  const suffix = localHour >= 12 ? 'PM' : 'AM'
+  const displayHour = localHour % 12 || 12
+  const utc = `${String(utcHour).padStart(2, '0')}:00`
+  return `${displayHour}:${String(localMinute).padStart(2, '0')} ${suffix} local (${utc} GMT/UTC)`
 }
 
 function FieldRow({ field, value, onChange, disabled, isDirty, isSet, isCustom, defaultValue, managed, fixedHeight = false }: FieldRowProps) {
@@ -2456,6 +2473,7 @@ function FieldRow({ field, value, onChange, disabled, isDirty, isSet, isCustom, 
 
   const pair = boolPair(field.type)
   const isNumber = field.type === 'int' || field.type === 'float'
+  const isCoriolisCycleStart = field.key === CORIOLIS_CYCLE_START_HOUR_KEY
   const wide = field.wide
 
   // Whether the current input already equals the Funcom default (numeric/bool
@@ -2538,7 +2556,16 @@ function FieldRow({ field, value, onChange, disabled, isDirty, isSet, isCustom, 
         </div>
       )}
 
-      {field.type === 'select' && field.options ? (
+      {isCoriolisCycleStart ? (
+        <select value={value} disabled={disabled} onChange={e => onChange(e.target.value)} className={inputBase}>
+          <option value="">(unset)</option>
+          {Array.from({ length: 24 }, (_, utcHour) => (
+            <option key={utcHour} value={String(utcHour)}>
+              {formatCoriolisCycleStartHour(utcHour, new Date().getTimezoneOffset())}
+            </option>
+          ))}
+        </select>
+      ) : field.type === 'select' && field.options ? (
         <select value={value} disabled={disabled} onChange={e => onChange(e.target.value)} className={inputBase}>
           <option value="">(unset)</option>
           {(field.options ?? []).filter(o => o && typeof o.value === 'string').map(o => (

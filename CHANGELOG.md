@@ -13,6 +13,19 @@ here cover everything those tags shipped.
 
 ## [Unreleased]
 
+## [15.0.0-phase2-test6] - 2026-09-04
+
+### Added
+
+- Game Config now provides a local-time Coriolis cycle start selector while
+  storing the GMT/UTC hour required by the game.
+
+### Fixed
+
+- Loaded-ammo editing now preserves whole-number input, including scientific
+  notation, and rejects empty, fractional, or out-of-range values instead of
+  silently truncating them.
+
 ## [15.0.0-phase2-test5] - 2026-09-04
 
 ### Added
