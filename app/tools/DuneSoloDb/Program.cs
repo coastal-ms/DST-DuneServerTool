@@ -1495,6 +1495,10 @@ internal static partial class Program
                     "T6_Augment_Damage2":{
                       "tags":["Items.Holsters.RangedWeapons"],
                       "gradeEffects":{"5":["Damage +70%"]}
+                    },
+                    "T6_Augment_Acuracy1":{
+                      "tags":["Items.Holsters.RangedWeapons"],
+                      "gradeEffects":{"4":["Accuracy +20%"]}
                     }
                   },
                   "methodItems":{},
@@ -1511,14 +1515,18 @@ internal static partial class Program
                     "HarkAr3",
                     1,
                     5,
-                    new[] { "T6_Augment_Damage2" },
-                    5),
+                    new[]
+                    {
+                        new GrantAugmentSelection("T6_Augment_Damage2", 5),
+                        new GrantAugmentSelection("T6_Augment_Acuracy1", 4)
+                    }),
                 new CatalogRule(1, 1, true, "Harkonnen Assault Rifle Mk3"),
                 testAugmentCatalog));
             var augmentedValues = augmentedStats?["FAugmentedItemStats"]?[1];
             if (augmentedValues?["AppliedAugments"]?[0]?["Name"]?.GetValue<string>()
                     != "T6_Augment_Damage2"
                 || augmentedValues?["AppliedAugmentQualities"]?[0]?.GetValue<int>() != 5
+                || augmentedValues?["AppliedAugmentQualities"]?[1]?.GetValue<int>() != 4
                 || augmentedValues?["AppliedAugmentRollData"]?[0]?["StatRolls"]?[0]
                     ?.GetValue<decimal>() != DuneAugmentMaxRoll)
             {
@@ -1655,8 +1663,10 @@ internal static partial class Program
                     "templateId":"HarkAr3",
                     "quantity":1,
                     "quality":5,
-                    "augments":["T6_Augment_Damage2"],
-                    "augmentQuality":5
+                    "augments":[
+                      {"id":"T6_Augment_Damage2","quality":5},
+                      {"id":"T6_Augment_Acuracy1","quality":4}
+                    ]
                   }
                 ]}
                 """);
@@ -1694,7 +1704,9 @@ internal static partial class Program
                     || stats?["FAugmentedItemStats"]?[1]?["AppliedAugments"]?[0]?["Name"]
                         ?.GetValue<string>() != "T6_Augment_Damage2"
                     || stats?["FAugmentedItemStats"]?[1]?["AppliedAugmentQualities"]?[0]
-                        ?.GetValue<int>() != 5)
+                        ?.GetValue<int>() != 5
+                    || stats?["FAugmentedItemStats"]?[1]?["AppliedAugmentQualities"]?[1]
+                        ?.GetValue<int>() != 4)
                 {
                     throw new InvalidOperationException(
                         "Pre-augmented Solo grant did not retain, write, and verify the selected augment.");
@@ -2641,15 +2653,25 @@ internal static partial class Program
             var quality = element.TryGetProperty("quality", out var qualityElement)
                 ? qualityElement.GetInt32()
                 : 0;
-            var augments = element.TryGetProperty("augments", out var augmentElement)
-                ? augmentElement.EnumerateArray()
-                    .Select(value => value.GetString()?.Trim() ?? string.Empty)
-                    .Where(value => value.Length > 0)
-                    .ToArray()
-                : Array.Empty<string>();
-            var augmentQuality = element.TryGetProperty("augmentQuality", out var augmentQualityElement)
-                ? augmentQualityElement.GetInt32()
-                : 5;
+            var augments = new List<GrantAugmentSelection>();
+            if (element.TryGetProperty("augments", out var augmentElement))
+            {
+                foreach (var augment in augmentElement.EnumerateArray())
+                {
+                    var id = augment.GetProperty("id").GetString()?.Trim() ?? string.Empty;
+                    var augmentQuality = augment.GetProperty("quality").GetInt32();
+                    if (string.IsNullOrWhiteSpace(id))
+                    {
+                        throw new InvalidDataException("Each selected augment requires an id.");
+                    }
+                    if (augmentQuality < 1 || augmentQuality > 5)
+                    {
+                        throw new InvalidDataException(
+                            $"Augment quality for {id} must be between 1 and 5.");
+                    }
+                    augments.Add(new GrantAugmentSelection(id, augmentQuality));
+                }
+            }
             if (string.IsNullOrWhiteSpace(templateId))
             {
                 throw new InvalidDataException("Item template id is required.");
@@ -2662,11 +2684,7 @@ internal static partial class Program
             {
                 throw new InvalidDataException("Item quality must be between 0 and 5.");
             }
-            if (augments.Length > 0 && (augmentQuality < 1 || augmentQuality > 5))
-            {
-                throw new InvalidDataException("Augment quality must be between 1 and 5.");
-            }
-            items.Add(new GrantItem(templateId, quantity, quality, augments, augmentQuality));
+            items.Add(new GrantItem(templateId, quantity, quality, augments));
         }
         if (items.Count is < 1 or > 200)
         {
@@ -3155,12 +3173,15 @@ internal static partial class Program
         double CurrentAmount,
         double Capacity);
 
+    private sealed record GrantAugmentSelection(
+        string Id,
+        int Quality);
+
     private sealed record GrantItem(
         string TemplateId,
         int Quantity,
         int Quality,
-        IReadOnlyList<string> Augments,
-        int AugmentQuality);
+        IReadOnlyList<GrantAugmentSelection> Augments);
 
     private sealed record GrantPlan(
         string Destination,

@@ -1,5 +1,9 @@
 import { useEffect, useMemo, useState } from 'react'
-import { getAugmentCatalog, type AugmentCatalog } from '../api/gameplay'
+import {
+  getAugmentCatalog,
+  type AugmentCatalog,
+  type AugmentSelection,
+} from '../api/gameplay'
 
 let catalogPromise: Promise<AugmentCatalog> | null = null
 
@@ -27,18 +31,14 @@ export function AugmentPicker({
   templateId,
   displayName,
   selected,
-  quality,
   disabled,
   onSelectedChange,
-  onQualityChange,
 }: {
   templateId: string
   displayName: string
-  selected: string[]
-  quality: number
+  selected: AugmentSelection[]
   disabled: boolean
-  onSelectedChange: (value: string[]) => void
-  onQualityChange: (value: number) => void
+  onSelectedChange: (value: AugmentSelection[]) => void
 }) {
   const [catalog, setCatalog] = useState<AugmentCatalog | null>(null)
   const [loadFailed, setLoadFailed] = useState(false)
@@ -56,12 +56,11 @@ export function AugmentPicker({
     if (!catalog || limit === 0) return []
     return Object.entries(catalog.augments)
       .filter(([, augment]) => {
-        if (!augment.gradeEffects[String(quality)]) return false
         return tags.some(itemTag => augment.tags.some(augmentTag =>
           itemTag === augmentTag || itemTag.startsWith(`${augmentTag}.`)))
       })
       .sort(([, left], [, right]) => left.name.localeCompare(right.name))
-  }, [catalog, limit, quality, tags])
+  }, [catalog, limit, tags])
 
   if (!templateId) return null
   if (loadFailed) {
@@ -75,10 +74,14 @@ export function AugmentPicker({
   }
 
   const toggle = (augmentId: string) => {
-    if (selected.includes(augmentId)) {
-      onSelectedChange(selected.filter(value => value !== augmentId))
+    const current = selected.find(value => value.id === augmentId)
+    if (current) {
+      onSelectedChange(selected.filter(value => value.id !== augmentId))
     } else if (selected.length < limit) {
-      onSelectedChange([...selected, augmentId])
+      const grades = Object.keys(catalog.augments[augmentId].gradeEffects)
+        .map(Number)
+        .filter(Number.isInteger)
+      onSelectedChange([...selected, { id: augmentId, quality: Math.max(...grades) }])
     }
   }
 
@@ -88,39 +91,52 @@ export function AugmentPicker({
         <span className="text-[11px] uppercase tracking-wider text-text-dim">
           Augments ({selected.length}/{limit})
         </span>
-        <label className="flex items-center gap-2 text-xs text-text-muted">
-          Grade
-          <select
-            value={quality}
-            disabled={disabled}
-            onChange={event => {
-              onSelectedChange([])
-              onQualityChange(Number(event.target.value))
-            }}
-            className="rounded-lg bg-surface-2 border border-border px-2 py-1 text-text"
-          >
-            {[1, 2, 3, 4, 5].map(value => <option key={value} value={value}>{value}</option>)}
-          </select>
-        </label>
       </div>
       <div className="max-h-44 overflow-y-auto rounded-lg border border-border bg-surface-2/50 p-2 space-y-1">
-        {eligible.map(([id, augment]) => (
-          <label key={id} className="flex items-start gap-2 rounded px-2 py-1.5 hover:bg-surface-2 cursor-pointer">
-            <input
-              type="checkbox"
-              checked={selected.includes(id)}
-              disabled={disabled || (!selected.includes(id) && selected.length >= limit)}
-              onChange={() => toggle(id)}
-              className="mt-0.5 accent-ibad"
-            />
-            <span className="min-w-0">
-              <span className="block text-sm text-text">{augment.name}</span>
-              <span className="block text-[11px] text-text-dim">
-                {augment.gradeEffects[String(quality)].join(' · ')}
-              </span>
-            </span>
-          </label>
-        ))}
+        {eligible.map(([id, augment]) => {
+          const selection = selected.find(value => value.id === id)
+          const grades = Object.keys(augment.gradeEffects)
+            .map(Number)
+            .filter(Number.isInteger)
+            .sort((left, right) => left - right)
+          const displayGrade = selection?.quality ?? Math.max(...grades)
+          return (
+            <div key={id} className="flex items-start gap-2 rounded px-2 py-1.5 hover:bg-surface-2">
+              <input
+                type="checkbox"
+                checked={!!selection}
+                disabled={disabled || (!selection && selected.length >= limit)}
+                onChange={() => toggle(id)}
+                className="mt-0.5 accent-ibad"
+              />
+              <button
+                type="button"
+                disabled={disabled}
+                onClick={() => toggle(id)}
+                className="min-w-0 flex-1 text-left"
+              >
+                <span className="block text-sm text-text">{augment.name}</span>
+                <span className="block text-[11px] text-text-dim">
+                  {augment.gradeEffects[String(displayGrade)].join(' · ')}
+                </span>
+              </button>
+              {selection && (
+                <label className="flex items-center gap-1 text-[11px] text-text-muted">
+                  Grade
+                  <select
+                    value={selection.quality}
+                    disabled={disabled}
+                    onChange={event => onSelectedChange(selected.map(value =>
+                      value.id === id ? { ...value, quality: Number(event.target.value) } : value))}
+                    className="rounded bg-surface-2 border border-border px-1.5 py-1 text-text"
+                  >
+                    {grades.map(value => <option key={value} value={value}>{value}</option>)}
+                  </select>
+                </label>
+              )}
+            </div>
+          )
+        })}
         {eligible.length === 0 && (
           <p className="px-2 py-1 text-xs text-text-dim">No compatible augments support this grade.</p>
         )}

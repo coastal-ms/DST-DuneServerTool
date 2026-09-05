@@ -162,8 +162,10 @@ describe('Phase C/D/E/F — items, vehicles, teleport, progression, jobs', () =>
       1,
       5,
       false,
-      ['T6_Augment_Damage2'],
-      5,
+      [
+        { id: 'T6_Augment_Damage2', quality: 5 },
+        { id: 'T6_Augment_Acuracy1', quality: 4 },
+      ],
     )
     expect(last().url).toBe('/api/gameplay/players/give-item')
     expect(last().body).toEqual({
@@ -172,8 +174,10 @@ describe('Phase C/D/E/F — items, vehicles, teleport, progression, jobs', () =>
       qty: 1,
       quality: 5,
       allow_overflow: false,
-      augments: ['T6_Augment_Damage2'],
-      augment_quality: 5,
+      augments: [
+        { id: 'T6_Augment_Damage2', quality: 5 },
+        { id: 'T6_Augment_Acuracy1', quality: 4 },
+      ],
     })
   })
 

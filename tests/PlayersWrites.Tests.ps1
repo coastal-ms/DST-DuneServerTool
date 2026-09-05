@@ -61,8 +61,7 @@ Describe 'Invoke-DunePlayerGiveItem pre-augmented grants' -Tag 'Pure' {
             -Template 'SMG_Unique_LargeMag_06' `
             -Qty 1 `
             -Quality 5 `
-            -Augments @('T6_Augment_Damage2') `
-            -AugmentQuality 5
+            -Augments @(@{ id='T6_Augment_Damage2'; quality=5 })
 
         $result.ok | Should -BeTrue -Because $result.error
         $result.item_id | Should -Be 501
@@ -80,8 +79,7 @@ Describe 'Invoke-DunePlayerGiveItem pre-augmented grants' -Tag 'Pure' {
             -Template 'SMG_Unique_LargeMag_06' `
             -Qty 2 `
             -Quality 5 `
-            -Augments @('T6_Augment_Damage2') `
-            -AugmentQuality 5
+            -Augments @(@{ id='T6_Augment_Damage2'; quality=5 })
 
         $result.ok | Should -BeFalse
         $result.error | Should -Match 'quantity of 1'

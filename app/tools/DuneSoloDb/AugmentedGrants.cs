@@ -97,9 +97,12 @@ internal static partial class Program
             : itemTags.Any(tag => tag.StartsWith("Items.Holsters", StringComparison.OrdinalIgnoreCase))
                 ? 3
                 : 0;
-        var selected = item.Augments
-            .Distinct(StringComparer.OrdinalIgnoreCase)
-            .ToArray();
+        var selected = item.Augments.ToArray();
+        if (selected.Select(value => value.Id).Distinct(StringComparer.OrdinalIgnoreCase).Count()
+            != selected.Length)
+        {
+            throw new InvalidDataException("The same augment cannot be selected more than once.");
+        }
         if (slotLimit == 0)
         {
             throw new InvalidDataException(
@@ -114,8 +117,9 @@ internal static partial class Program
         var appliedAugments = new JsonArray();
         var appliedQualities = new JsonArray();
         var appliedRollData = new JsonArray();
-        foreach (var augmentId in selected)
+        foreach (var selection in selected)
         {
+            var augmentId = selection.Id;
             if (!catalog.Augments.TryGetValue(augmentId, out var augment))
             {
                 throw new InvalidDataException($"Unknown augment id: {augmentId}");
@@ -128,15 +132,15 @@ internal static partial class Program
                 throw new InvalidDataException(
                     $"{augmentId} is not compatible with {item.TemplateId}.");
             }
-            if (!augment.RollCounts.TryGetValue(item.AugmentQuality, out var rollCount)
+            if (!augment.RollCounts.TryGetValue(selection.Quality, out var rollCount)
                 || rollCount < 1)
             {
                 throw new InvalidDataException(
-                    $"{augmentId} does not support augment grade {item.AugmentQuality}.");
+                    $"{augmentId} does not support augment grade {selection.Quality}.");
             }
 
             appliedAugments.Add(new JsonObject { ["Name"] = augmentId });
-            appliedQualities.Add(item.AugmentQuality);
+            appliedQualities.Add(selection.Quality);
             var rolls = new JsonArray();
             for (var index = 0; index < rollCount; index++)
             {

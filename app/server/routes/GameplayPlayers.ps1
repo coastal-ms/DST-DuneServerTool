@@ -122,7 +122,7 @@ Register-DuneRoute -Method GET -Path '/api/gameplay/augments/catalog' -Handler {
     }
 }
 
-# POST /api/gameplay/players/give-item  { pawn_id, template, qty, quality, augments?, augment_quality?, fls_id? }
+# POST /api/gameplay/players/give-item  { pawn_id, template, qty, quality, augments?:[{id,quality}], fls_id? }
 # v12.0.3 — Auto-routes between online (RMQ ServerCommand, instant) and offline
 # (SQL backpack insert) based on player state.
 # - Online + quality<=0     → RMQ live (instant in-game)
@@ -137,9 +137,12 @@ Register-DuneRoute -Method POST -Path '/api/gameplay/players/give-item' -Handler
         $qty  = Get-DuneBodyInt -Body $body -Name 'qty'
         $qual = Get-DuneBodyInt -Body $body -Name 'quality'
         $augmentRaw = Get-DuneBodyValue -Body $body -Name 'augments'
-        $augments = @($augmentRaw | ForEach-Object { ([string]$_).Trim() } | Where-Object { $_ })
-        $augmentQuality = Get-DuneBodyInt -Body $body -Name 'augment_quality'
-        if ($null -eq $augmentQuality) { $augmentQuality = 5L }
+        try {
+            $augments = @(ConvertTo-DuneAugmentSelections -Augments $augmentRaw)
+        } catch {
+            Write-DuneError -Response $res -Status 400 -Message $_.Exception.Message
+            return
+        }
         $fls  = [string](Get-DuneBodyValue -Body $body -Name 'fls_id')
         # Drop-to-ground (overflow) defaults ON so a full inventory never silently
         # swallows the give; pass allow_overflow=false explicitly to opt out.
@@ -176,7 +179,7 @@ Register-DuneRoute -Method POST -Path '/api/gameplay/players/give-item' -Handler
                 return @{ ok = $false; error = 'Changing the Grade requires the player to be offline. Ask the player to log out, then retry.' }
             }
             # Offline → SQL (appears on next login)
-            $r = Invoke-DunePlayerGiveItem -Ip $ip -PawnId $pawn -Template $tmpl -Qty $qty -Quality $qual -Augments $augments -AugmentQuality ([int]$augmentQuality)
+            $r = Invoke-DunePlayerGiveItem -Ip $ip -PawnId $pawn -Template $tmpl -Qty $qty -Quality $qual -Augments $augments
             if ($r.ok) { $r['path'] = 'sql' }
             return $r
         }

@@ -1,5 +1,5 @@
 import { api } from './client'
-import type { BlueprintFile } from './gameplay'
+import type { AugmentSelection, BlueprintFile } from './gameplay'
 
 export interface SoloProcess {
   name: string
@@ -299,8 +299,7 @@ export interface SoloGiveItem {
   templateId: string
   quantity: number
   quality: number
-  augments?: string[]
-  augmentQuality?: number
+  augments?: AugmentSelection[]
 }
 
 export function grantSoloItems(

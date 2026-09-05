@@ -46,6 +46,7 @@ import {
   getCosmeticsCatalog,
   getVehicleKitCatalog,
   type BlueprintFile,
+  type AugmentSelection,
   type CatalogItem,
   type CosmeticEntry,
   type GiveItemEntry,
@@ -483,8 +484,7 @@ export function SoloMode() {
   const [itemDisplay, setItemDisplay] = useState<string | undefined>()
   const [itemQuantity, setItemQuantity] = useState(1)
   const [itemQuality, setItemQuality] = useState(0)
-  const [itemAugments, setItemAugments] = useState<string[]>([])
-  const [itemAugmentQuality, setItemAugmentQuality] = useState(5)
+  const [itemAugments, setItemAugments] = useState<AugmentSelection[]>([])
   const [inventoryDestination, setInventoryDestination] = useState('')
   const [vehicleKits, setVehicleKits] = useState<VehicleKitCatalog | null>(null)
   const [vehicleKitId, setVehicleKitId] = useState('')
@@ -890,7 +890,6 @@ export function SoloMode() {
         quantity,
         quality,
         augments: itemAugments,
-        augmentQuality: itemAugmentQuality,
       }],
       itemDisplay ? `${quantity} x ${itemDisplay}` : `${quantity} x ${itemTemplate}`,
     )
@@ -900,7 +899,6 @@ export function SoloMode() {
       setItemQuantity(1)
       setItemQuality(0)
       setItemAugments([])
-      setItemAugmentQuality(5)
     }
   }
 
@@ -1884,10 +1882,8 @@ export function SoloMode() {
                   templateId={itemTemplate}
                   displayName={itemDisplay ?? ''}
                   selected={itemAugments}
-                  quality={itemAugmentQuality}
                   disabled={!canMutateActiveProfile || gameRunning}
                   onSelectedChange={setItemAugments}
-                  onQualityChange={setItemAugmentQuality}
                 />
               </div>
               <button

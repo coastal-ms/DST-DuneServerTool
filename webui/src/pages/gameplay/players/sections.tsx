@@ -37,7 +37,7 @@ import {
   getContracts, completeContract,
   getVehicleKitCatalog,
   type Player, type PlayerEvent, type PlayerStats, type ProgressionPreset, type SpecTrackFull,
-  type CatalogItem, type ItemPackage, type GiveItemEntry, type FreshStartSnapshot,
+  type AugmentSelection, type CatalogItem, type ItemPackage, type GiveItemEntry, type FreshStartSnapshot,
   type LandsraadHouse, type LandsraadIniSetting,
   type JourneyNode, type TrainerInfo, type TrainerStatus, type MainQuestInfo,
   type PlayerVehicleRow, type TeleportDestination,
@@ -995,8 +995,8 @@ function ActionRow({ def, player, busy, stats, open, danger, onToggle, runAction
           {def.custom === 'give-item' ? (
             <GiveItemForm busy={busy} submitLabel={def.label}
               playerOnline={['online', 'loggingout'].includes((player.online_status || '').toLowerCase())}
-              onSubmit={(tpl, qty, qual, overflow, augments, augmentQuality) =>
-                runAction(def, () => giveItem(player.id, tpl, qty, qual, overflow, augments, augmentQuality))}
+              onSubmit={(tpl, qty, qual, overflow, augments) =>
+                runAction(def, () => giveItem(player.id, tpl, qty, qual, overflow, augments))}
               onSubmitTierSet={(tpl, qty, overflow) => runAction(def, async () => {
                 // Grades above 0 are SQL-only writes the game overwrites from RAM while a
                 // live session exists — refuse up front so the set isn't partially delivered.
@@ -1588,7 +1588,7 @@ function GrantHouseSwatchesForm({ busy, playerName, accountId, kind, playerOnlin
 function GiveItemForm({ busy, submitLabel, playerOnline, onSubmit, onSubmitTierSet }: {
   busy: boolean; submitLabel: string
   playerOnline: boolean
-  onSubmit: (tpl: string, qty: number, qual: number, allowOverflow: boolean, augments: string[], augmentQuality: number) => Promise<boolean>
+  onSubmit: (tpl: string, qty: number, qual: number, allowOverflow: boolean, augments: AugmentSelection[]) => Promise<boolean>
   onSubmitTierSet: (tpl: string, qty: number, allowOverflow: boolean) => Promise<boolean>
 }) {
   const [giveTpl, setGiveTpl]   = useState('')
@@ -1597,8 +1597,7 @@ function GiveItemForm({ busy, submitLabel, playerOnline, onSubmit, onSubmitTierS
   const [giveQual, setGiveQual] = useState('0')
   const [gradeable, setGradeable] = useState(false)
   const [overflow, setOverflow] = useState(true)
-  const [augments, setAugments] = useState<string[]>([])
-  const [augmentQuality, setAugmentQuality] = useState(5)
+  const [augments, setAugments] = useState<AugmentSelection[]>([])
   const reset = () => {
     setGiveTpl('')
     setGiveName('')
@@ -1607,7 +1606,6 @@ function GiveItemForm({ busy, submitLabel, playerOnline, onSubmit, onSubmitTierS
     setGradeable(false)
     setOverflow(true)
     setAugments([])
-    setAugmentQuality(5)
   }
   return (
     <div className="space-y-3">
@@ -1642,10 +1640,8 @@ function GiveItemForm({ busy, submitLabel, playerOnline, onSubmit, onSubmitTierS
         templateId={giveTpl}
         displayName={giveName}
         selected={augments}
-        quality={augmentQuality}
         disabled={busy || playerOnline}
         onSelectedChange={setAugments}
-        onQualityChange={setAugmentQuality}
       />
       <OverflowToggle checked={overflow} disabled={busy} onChange={setOverflow} />
       <button
@@ -1657,7 +1653,6 @@ function GiveItemForm({ busy, submitLabel, playerOnline, onSubmit, onSubmitTierS
           Number(giveQual) || 0,
           overflow,
           augments,
-          augmentQuality,
         ).then(success => { if (success) reset() })}
       >
         {busy ? <Icon name="Loader2" size={13} className="animate-spin" /> : <Icon name="Check" size={13} />} {submitLabel}

@@ -59,11 +59,46 @@ function Test-DuneAugmentTagMatch {
     return $false
 }
 
+function ConvertTo-DuneAugmentSelections {
+    param($Augments)
+    $seen = @{}
+    foreach ($selection in @($Augments)) {
+        $id = ''
+        $qualityRaw = $null
+        if ($selection -is [Collections.IDictionary]) {
+            if ($selection.Contains('id')) { $id = [string]$selection['id'] }
+            if ($selection.Contains('quality')) { $qualityRaw = $selection['quality'] }
+        } elseif ($null -ne $selection) {
+            if ($selection.PSObject.Properties['id']) { $id = [string]$selection.id }
+            if ($selection.PSObject.Properties['quality']) { $qualityRaw = $selection.quality }
+        }
+        $id = $id.Trim()
+        if (-not $id) { throw 'Each selected augment requires an id.' }
+        $qualityNumber = 0.0
+        $qualityText = [Convert]::ToString($qualityRaw, [Globalization.CultureInfo]::InvariantCulture)
+        if (-not [double]::TryParse(
+            $qualityText,
+            [Globalization.NumberStyles]::Float,
+            [Globalization.CultureInfo]::InvariantCulture,
+            [ref]$qualityNumber
+        ) -or [double]::IsNaN($qualityNumber) -or [double]::IsInfinity($qualityNumber) -or
+        $qualityNumber -ne [Math]::Truncate($qualityNumber) -or
+        $qualityNumber -lt 1 -or $qualityNumber -gt 5) {
+            throw "Augment quality for $id must be between 1 and 5."
+        }
+        $quality = [int]$qualityNumber
+        if ($seen.ContainsKey($id.ToLowerInvariant())) {
+            throw "Augment $id was selected more than once."
+        }
+        $seen[$id.ToLowerInvariant()] = $true
+        [ordered]@{ id = $id; quality = $quality }
+    }
+}
+
 function New-DuneAugmentedItemStatsJson {
     param(
         [Parameter(Mandatory)][string]$TemplateId,
-        [Parameter(Mandatory)][string[]]$Augments,
-        [Parameter(Mandatory)][ValidateRange(1, 5)][int]$AugmentQuality
+        [Parameter(Mandatory)]$Augments
     )
     $catalog = Get-DuneAugmentCatalog
     $itemTags = @(Get-DuneAugmentItemTags -Catalog $catalog -TemplateId $TemplateId)
@@ -74,7 +109,7 @@ function New-DuneAugmentedItemStatsJson {
     } else {
         0
     }
-    $selected = @($Augments | Select-Object -Unique)
+    $selected = @(ConvertTo-DuneAugmentSelections -Augments $Augments)
     if ($slotLimit -eq 0) { throw "DST has no verified augment compatibility mapping for $TemplateId." }
     if ($selected.Count -lt 1 -or $selected.Count -gt $slotLimit) {
         throw "$TemplateId supports between 1 and $slotLimit selected augment(s)."
@@ -83,19 +118,21 @@ function New-DuneAugmentedItemStatsJson {
     $applied = @()
     $qualities = @()
     $rollData = @()
-    foreach ($augmentId in $selected) {
+    foreach ($selection in $selected) {
+        $augmentId = [string]$selection.id
+        $augmentQuality = [int]$selection.quality
         $entry = Get-DuneObjectPropertyValue -Object $catalog.augments -Name $augmentId
         if ($null -eq $entry) { throw "Unknown augment id: $augmentId" }
         if (-not (Test-DuneAugmentTagMatch -ItemTags $itemTags -AugmentTags @($entry.tags))) {
             throw "$augmentId is not compatible with $TemplateId."
         }
-        $effects = Get-DuneObjectPropertyValue -Object $entry.gradeEffects -Name ([string]$AugmentQuality)
+        $effects = Get-DuneObjectPropertyValue -Object $entry.gradeEffects -Name ([string]$augmentQuality)
         $rollCount = @($effects).Count
         if ($rollCount -lt 1) {
-            throw "$augmentId does not support augment grade $AugmentQuality."
+            throw "$augmentId does not support augment grade $augmentQuality."
         }
         $applied += [ordered]@{ Name = $augmentId }
-        $qualities += $AugmentQuality
+        $qualities += $augmentQuality
         $rollData += [ordered]@{
             StatRolls = @(1..$rollCount | ForEach-Object { 1.003398 })
             AppliedEffectIndices = @()

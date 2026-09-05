@@ -222,11 +222,10 @@ function Get-DuneHouseSwatchCatalog {
 function Get-DuneGiveItemStatsJson {
     param(
         [string]$TemplateId,
-        [string[]]$Augments = @(),
-        [int]$AugmentQuality = 5
+        $Augments = @()
     )
     if (@($Augments).Count -gt 0) {
-        return New-DuneAugmentedItemStatsJson -TemplateId $TemplateId -Augments $Augments -AugmentQuality $AugmentQuality
+        return New-DuneAugmentedItemStatsJson -TemplateId $TemplateId -Augments $Augments
     }
     $stackMax = 0
     if ($TemplateId -and (Get-Command Get-DuneGameplayItemRule -ErrorAction SilentlyContinue)) {

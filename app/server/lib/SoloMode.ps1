@@ -511,19 +511,16 @@ function Invoke-DuneSoloGiveItems {
         $quantity = 0
         $quality = 0
         $augments = @()
-        $augmentQuality = 5
         if ($item -is [hashtable]) {
             if ($item.ContainsKey('templateId')) { $template = [string]$item.templateId }
             if ($item.ContainsKey('quantity')) { $quantity = [int]$item.quantity }
             if ($item.ContainsKey('quality')) { $quality = [int]$item.quality }
             if ($item.ContainsKey('augments')) { $augments = @($item.augments) }
-            if ($item.ContainsKey('augmentQuality')) { $augmentQuality = [int]$item.augmentQuality }
         } else {
             if ($item.PSObject.Properties.Name -contains 'templateId') { $template = [string]$item.templateId }
             if ($item.PSObject.Properties.Name -contains 'quantity') { $quantity = [int]$item.quantity }
             if ($item.PSObject.Properties.Name -contains 'quality') { $quality = [int]$item.quality }
             if ($item.PSObject.Properties.Name -contains 'augments') { $augments = @($item.augments) }
-            if ($item.PSObject.Properties.Name -contains 'augmentQuality') { $augmentQuality = [int]$item.augmentQuality }
         }
         $template = $template.Trim()
         if (-not $template) { throw 'Item id is required.' }
@@ -536,19 +533,15 @@ function Invoke-DuneSoloGiveItems {
         if ($quality -lt 0 -or $quality -gt 5) {
             throw "Quality for $template must be between 0 and 5."
         }
-        $augments = @($augments | ForEach-Object { ([string]$_).Trim() } | Where-Object { $_ } | Select-Object -Unique)
+        $augments = @(ConvertTo-DuneAugmentSelections -Augments $augments)
         if ($augments.Count -gt 0 -and $quantity -ne 1) {
             throw 'Pre-augmented grants require a quantity of 1.'
-        }
-        if ($augments.Count -gt 0 -and ($augmentQuality -lt 1 -or $augmentQuality -gt 5)) {
-            throw 'Augment quality must be between 1 and 5.'
         }
         $normalized += [ordered]@{
             templateId = $template.Trim()
             quantity = $quantity
             quality = $quality
             augments = @($augments)
-            augmentQuality = $augmentQuality
         }
     }
 

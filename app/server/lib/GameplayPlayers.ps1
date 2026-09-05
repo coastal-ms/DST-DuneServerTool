@@ -684,8 +684,7 @@ function Invoke-DunePlayerGiveItem {
         [string]$Template,
         [long]$Qty,
         [long]$Quality,
-        [string[]]$Augments = @(),
-        [int]$AugmentQuality = 5
+        $Augments = @()
     )
     $tv = Test-DuneValidGiveTemplate -TemplateId $Template
     if (-not $tv.ok) { return @{ ok = $false; error = $tv.error } }
@@ -698,7 +697,7 @@ function Invoke-DunePlayerGiveItem {
     if (-not $cap.ok) { return $cap }
     $safeTmpl = ConvertTo-DuneSqlString $Template
     try {
-        $statsJson = ConvertTo-DuneSqlString (Get-DuneGiveItemStatsJson -TemplateId $Template -Augments $Augments -AugmentQuality $AugmentQuality)
+        $statsJson = ConvertTo-DuneSqlString (Get-DuneGiveItemStatsJson -TemplateId $Template -Augments $Augments)
     } catch {
         return @{ ok = $false; error = $_.Exception.Message }
     }
@@ -751,7 +750,12 @@ FROM chosen;
     if (@($Augments).Count -gt 0 -and [string]$maps[0]['stats_match'] -ine 'true') {
         return @{ ok = $false; error = 'The granted item failed exact augment readback.' }
     }
-    $augmentNote = if (@($Augments).Count -gt 0) { " with $(@($Augments).Count) augment(s) at grade $AugmentQuality" } else { '' }
+    $augmentGrades = @($Augments | ForEach-Object {
+        if ($_ -is [Collections.IDictionary]) { [int]$_['quality'] } else { [int]$_.quality }
+    })
+    $augmentNote = if ($augmentGrades.Count -gt 0) {
+        " with $($augmentGrades.Count) augment(s) at grade(s) $($augmentGrades -join ', ')"
+    } else { '' }
     return @{ ok = $true; message = "Gave $Qty x $Template (quality $Quality)$augmentNote to player (item $itemId)."; item_id = (ConvertTo-DuneInt $itemId) }
 }
 

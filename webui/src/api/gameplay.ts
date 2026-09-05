@@ -800,6 +800,11 @@ export interface AugmentCatalog {
   itemAliases: Record<string, string[]>
 }
 
+export interface AugmentSelection {
+  id: string
+  quality: number
+}
+
 export function getAugmentCatalog() {
   return api<AugmentCatalog>('/api/gameplay/augments/catalog')
 }
@@ -810,8 +815,7 @@ export function giveItem(
   qty: number,
   quality: number,
   allowOverflow = true,
-  augments: string[] = [],
-  augmentQuality = 5,
+  augments: AugmentSelection[] = [],
 ) {
   return api<WriteResult>('/api/gameplay/players/give-item', {
     method: 'POST',
@@ -822,7 +826,6 @@ export function giveItem(
       quality,
       allow_overflow: allowOverflow,
       augments,
-      augment_quality: augmentQuality,
     }),
   })
 }
