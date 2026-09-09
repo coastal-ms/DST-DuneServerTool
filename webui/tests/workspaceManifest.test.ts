@@ -57,6 +57,30 @@ describe('workspace manifest', () => {
     }
   })
 
+  it('maps every Classic Players and Inventory surface into Command Deck', () => {
+    const playerPlacements = FEATURE_PLACEMENTS.filter(item => item.workspaceId === 'players')
+    expect(playerPlacements).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        currentFeature: 'Gameplay Players',
+        currentRoutes: ['/players', '/gameplay?view=players'],
+      }),
+      expect.objectContaining({
+        currentFeature: 'Gameplay Storage',
+        currentRoutes: ['/gameplay?view=storage'],
+      }),
+      expect.objectContaining({
+        currentFeature: 'In-game chat commands and shared teleport destinations',
+        currentRoutes: ['/gameplay?view=overview'],
+        destination: 'Gameplay Admin / Players / Community tools',
+      }),
+      expect.objectContaining({
+        currentFeature: 'Welcome Back packages',
+        currentRoutes: ['/gameplay?view=overview'],
+        destination: 'Gameplay Admin / Players / Community tools',
+      }),
+    ]))
+  })
+
   it('keeps every route module lazy and preserves the current permission matrix', () => {
     for (const route of LEGACY_ROUTE_MANIFEST) expect(route.load).toBeTypeOf('function')
 

@@ -13,6 +13,12 @@ here cover everything those tags shipped.
 
 ## [Unreleased]
 
+### Added
+
+- Added **Players > Community tools** to Command Deck, exposing the existing
+  in-game chat command controls, shared `!tp` destinations, and Welcome Back
+  packages while retaining their opt-in defaults and existing safeguards.
+
 ## [15.0.2] - 2026-09-09
 
 ### Added

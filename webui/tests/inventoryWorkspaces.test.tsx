@@ -11,6 +11,14 @@ vi.mock('../src/pages/gameplay/PlayersTab', () => ({
   PlayersTab: () => <div>Player admin fixture</div>,
 }))
 
+vi.mock('../src/pages/gameplay/ChatCommandsCard', () => ({
+  ChatCommandsCard: () => <div>In-game commands fixture</div>,
+}))
+
+vi.mock('../src/pages/gameplay/WelcomeBackCard', () => ({
+  WelcomeBackCard: () => <div>Welcome back fixture</div>,
+}))
+
 vi.mock('../src/pages/gameplay/BasesTab', () => ({
   BasesTab: () => <div>Bases fixture</div>,
 }))
@@ -40,17 +48,25 @@ afterEach(() => {
 })
 
 describe('inventory workspace embedding', () => {
-  it('preserves Player admin as default and adds the shared player inventory view', () => {
+  it('preserves Player admin as default and exposes every Players workspace view', () => {
     window.history.replaceState(null, '', '/players')
     const view = render(<BrowserRouter><PlayersWorkspace /></BrowserRouter>)
     expect(screen.getByText('Player admin fixture')).toBeInTheDocument()
     expect(screen.getByRole('link', { name: 'Player admin' })).toHaveAttribute('aria-current', 'page')
+    expect(screen.getByRole('link', { name: 'Community tools' })).toHaveAttribute('href', '/players?view=community')
 
     view.unmount()
     window.history.replaceState(null, '', '/players?view=inventory')
-    render(<BrowserRouter><PlayersWorkspace /></BrowserRouter>)
+    const inventory = render(<BrowserRouter><PlayersWorkspace /></BrowserRouter>)
     expect(screen.getByText('Inventory fixture: player')).toBeInTheDocument()
     expect(screen.getByRole('link', { name: 'Inventory' })).toHaveAttribute('aria-current', 'page')
+
+    inventory.unmount()
+    window.history.replaceState(null, '', '/players?view=community')
+    render(<BrowserRouter><PlayersWorkspace /></BrowserRouter>)
+    expect(screen.getByText('In-game commands fixture')).toBeInTheDocument()
+    expect(screen.getByText('Welcome back fixture')).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: 'Community tools' })).toHaveAttribute('aria-current', 'page')
   })
 
   it('limits the Bases inventory view to proven storage containers', () => {

@@ -136,6 +136,8 @@ export const FEATURE_PLACEMENTS: readonly FeaturePlacement[] = [
   { currentFeature: 'Experimental Lab', currentRoutes: ['/experimental'], destination: 'Server Management / Experimental Lab', workspaceId: 'settings', disposition: 'remain' },
   { currentFeature: 'Gameplay Overview', currentRoutes: ['/gameplay?view=overview'], destination: 'Gameplay Admin / Overview', workspaceId: 'home', disposition: 'remain' },
   { currentFeature: 'Gameplay Players', currentRoutes: ['/players', '/gameplay?view=players'], destination: 'Gameplay Admin / Players', workspaceId: 'players', disposition: 'move' },
+  { currentFeature: 'In-game chat commands and shared teleport destinations', currentRoutes: ['/gameplay?view=overview'], destination: 'Gameplay Admin / Players / Community tools', workspaceId: 'players', disposition: 'move' },
+  { currentFeature: 'Welcome Back packages', currentRoutes: ['/gameplay?view=overview'], destination: 'Gameplay Admin / Players / Community tools', workspaceId: 'players', disposition: 'move' },
   { currentFeature: 'Gameplay Bases', currentRoutes: ['/bases', '/gameplay?view=bases'], destination: 'Gameplay Admin / Bases', workspaceId: 'bases', disposition: 'move' },
   { currentFeature: 'Gameplay Storage', currentRoutes: ['/gameplay?view=storage'], destination: 'Shared Inventory Explorer in Players, Bases, Vehicles, and Economy', workspaceId: 'players', disposition: 'merge' },
   { currentFeature: 'Gameplay Blueprints', currentRoutes: ['/gameplay?view=blueprints'], destination: 'Gameplay Admin / Bases / Blueprints', workspaceId: 'bases', disposition: 'move' },

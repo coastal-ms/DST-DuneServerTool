@@ -220,7 +220,10 @@ contextual dossier, with section navigation beside the selected character.
 Player and inventory actions use a searchable task list and one focused form,
 retaining existing confirmations and live/offline rules. Switching characters
 clears the previous character's action form; filtering the directory does not
-silently change the current target. Classic retains its action lists.
+silently change the current target. **Players > Community tools** exposes the
+existing in-game chat command controls, shared `!tp` destinations, and Welcome
+Back packages without changing their opt-in defaults or safety gates. Classic
+retains the same controls and action lists.
 Commands uses the same task workbench while keeping its local-only layout
 editor. Bases, market entries, and vehicles have keyboard-accessible detail
 panels; fleet search and source labels distinguish reported and sample records.

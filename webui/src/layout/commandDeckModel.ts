@@ -7,7 +7,10 @@ const TASK_COPY: Record<string, { description: string; keywords: string }> = {
   '/operations': { description: 'Review runtime activity and maintenance tools.', keywords: 'runtime maintenance' },
   '/commands': { description: 'Choose a server action and review its safeguards.', keywords: 'start stop restart update' },
   '/database': { description: 'Manage backups, restores, and database queries.', keywords: 'backup restore sql protection' },
-  '/players': { description: 'Inspect a character, inventory, and progression.', keywords: 'give item grant ammo augments skills' },
+  '/players': {
+    description: 'Inspect players, inventory, progression, and community tools.',
+    keywords: 'give item grant ammo augments skills chat commands welcome back shared destinations teleport tp',
+  },
   '/bases': { description: 'Inspect claims, ownership, and base inventory.', keywords: 'buildings claims' },
   '/vehicles': { description: 'Inspect the fleet and vehicle inventory.', keywords: 'ornithopter buggy cargo' },
   '/economy': { description: 'Review market and governance tools.', keywords: 'market trade landsraad' },

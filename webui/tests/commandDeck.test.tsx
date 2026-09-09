@@ -46,6 +46,9 @@ describe('Command Deck destinations', () => {
   it('searches available task descriptions and requires every search word', () => {
     const routes = getDeckDestinations({ local: true, windows: true, canAccessOwnerSurfaces: true })
     expect(searchDeck(routes, 'give ammo').map(item => item.to)).toEqual(['/players'])
+    expect(searchDeck(routes, 'chat commands').map(item => item.to)).toEqual(['/players'])
+    expect(searchDeck(routes, 'welcome back').map(item => item.to)).toEqual(['/players'])
+    expect(searchDeck(routes, 'shared teleport destinations').map(item => item.to)).toEqual(['/players'])
     expect(searchDeck(routes, 'backup').map(item => item.to)).toEqual(['/database'])
     expect(searchDeck(routes, 'nonexistent')).toEqual([])
     expect(new Set(routes.map(item => item.to)).size).toBe(routes.length)
