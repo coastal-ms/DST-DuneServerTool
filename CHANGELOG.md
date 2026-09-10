@@ -40,6 +40,12 @@ here cover everything those tags shipped.
 - Protected Reserve items from direct deletion, quantity reduction, and live
   Clean Inventory so hidden remaining rows cannot keep base recycling blocked.
 
+### Fixed
+
+- Hyper-V lifecycle boot recovery now recognizes the current Funcom ready tuple
+  (`Running`, database `Ready`, gateway/director `Healthy`) as complete while
+  still requiring every reported game server to be `Running` and ready.
+
 ## [15.0.2] - 2026-09-09
 
 ### Added

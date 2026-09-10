@@ -376,8 +376,18 @@ bg_ready() {
         Healthy|Running) ;;
         *) return 1 ;;
     esac
-    [ "$_db" = Healthy ] && [ "$_gw" = Running ] &&
-        [ "$_director" = Ready ] || return 1
+    case "$_db" in
+        Healthy|Ready) ;;
+        *) return 1 ;;
+    esac
+    case "$_gw" in
+        Healthy|Running) ;;
+        *) return 1 ;;
+    esac
+    case "$_director" in
+        Healthy|Ready) ;;
+        *) return 1 ;;
+    esac
     [ -n "$_servers" ] || return 1
     printf '%s' "$_servers" | tr ',' '\n' |
         awk -F: 'NF == 2 { seen=1; if ($1 != "Running" || $2 != "true") exit 1 } END { if (!seen) exit 1 }'

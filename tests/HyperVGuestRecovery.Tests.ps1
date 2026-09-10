@@ -592,8 +592,11 @@ exec '$systemTimeout' 1 "`$@"
             & $bash.Source -lc "chmod +x '$rootPosix/fake-bin/k3s' '$rootPosix/fake-bin/timeout'"
             Set-Content (Join-Path $stateDir 'state') 'DESIRED=running'
 
-            foreach ($phase in @('Healthy', 'Running')) {
-                Set-Content $bgRow "$phase|Healthy|Running|Ready|Running:true,"
+            @(
+                'Running|Ready|Healthy|Healthy|Running:true,Running:true,',
+                'Healthy|Healthy|Running|Ready|Running:true,'
+            ) | ForEach-Object {
+                Set-Content $bgRow $_
                 & $bash.Source $env:DUNE_HYPERV_LIFECYCLE_BIN start
                 $LASTEXITCODE | Should -Be 0
                 $state = Get-Content (Join-Path $stateDir 'state') -Raw
@@ -602,11 +605,13 @@ exec '$systemTimeout' 1 "`$@"
             }
 
             @(
-                'Starting|Healthy|Running|Ready|Running:true,',
-                'Running|Operation|Running|Ready|Running:true,',
-                'Running|Healthy|Starting|Ready|Running:true,',
-                'Running|Healthy|Running|Starting|Running:true,',
-                'Running|Healthy|Running|Ready|Running:false,'
+                'Starting|Ready|Healthy|Healthy|Running:true,',
+                'Running|Operation|Healthy|Healthy|Running:true,',
+                'Running|Ready|Ready|Healthy|Running:true,',
+                'Running|Ready|Healthy|Starting|Running:true,',
+                'Running|Ready|Healthy|Healthy|Starting:true,',
+                'Running|Ready|Healthy|Healthy|Running:false,',
+                'Running|Ready|Healthy|Healthy|'
             ) | ForEach-Object {
                 Set-Content $bgRow $_
                 & $bash.Source $env:DUNE_HYPERV_LIFECYCLE_BIN start
