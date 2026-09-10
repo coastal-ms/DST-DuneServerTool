@@ -283,6 +283,19 @@ Describe 'Complete route classification' {
             Should -Be 'operation.diagnostics.manage'
         @($script:DuneRoutes | Where-Object Path -eq '/api/status').Classification.capabilityId |
             Should -Be 'platform.status'
+        $lifecycleRoutes = @($script:DuneRoutes | Where-Object {
+            $_.Path -like '/api/setup/hyperv-lifecycle*'
+        })
+        $lifecycleRoutes.Count | Should -Be 3
+        @($lifecycleRoutes | Where-Object { -not $_.LocalOnly }).Count | Should -Be 0
+        @($lifecycleRoutes | Where-Object { $_.Classification.capabilityId -ne 'settings.setup' }).Count |
+            Should -Be 0
+        @($lifecycleRoutes | Where-Object Method -eq 'GET').Classification.lifecycle |
+            Should -Be 'read'
+        @($lifecycleRoutes | Where-Object Method -eq 'POST').Classification.lifecycle |
+            Should -Be 'transactional-write'
+        @($lifecycleRoutes | Where-Object Method -eq 'DELETE').Classification.lifecycle |
+            Should -Be 'reversible-write'
     }
 
     It 'matches the actual startup registrations and keeps the Pods cleanup reachable' {

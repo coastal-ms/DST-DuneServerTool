@@ -32,6 +32,8 @@ guarded controls in one native Windows app.
 - Administer players, bases, storage, blueprints, Landsraad, and the Exchange.
 - Run Duke's native Market Bot with formula or market-follow pricing.
 - Manage one local VM or a separate Hyper-V host over LAN.
+- Reconcile graceful Hyper-V host shutdown with bounded Alpine battlegroup
+  shutdown and boot recovery, with operator-visible status and rollback.
 - Use the responsive full Browser Portal from a phone, tablet, or PC with
   optional host-managed Owner and Admin accounts.
 - Use Tailscale Funnel and the Browser Portal for new remote setups. v15 keeps
@@ -345,8 +347,8 @@ guarded World Restart testing.
 ![Unconfigured v15 Settings including the disabled Legacy Cloudflare section](docs/img/settings.png)
 
 Updates, installation, themes, warnings, Remote Device Access, Browser Portal
-accounts, Hyper-V over LAN, Public IP/DDNS, browser ping, and host-local
-preferences.
+accounts, Hyper-V over LAN, Hyper-V VM lifecycle, Public IP/DDNS, browser ping,
+and host-local preferences.
 </details>
 
 <details>

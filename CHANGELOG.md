@@ -22,6 +22,11 @@ here cover everything those tags shipped.
   exact rows and Backpack positions, requires the player to be Offline, verifies
   a fresh local backup and exact slot/volume capacity, moves rows intact in one
   changed-state-guarded transaction, reads them back, and retains exact rollback.
+- Added an explicit **Hyper-V VM lifecycle** Settings control for Self-Hosted
+  servers. It transactionally enables the VM's Operating System Shutdown
+  integration and `AutomaticStopAction=ShutDown`, installs a bounded Alpine
+  OpenRC battlegroup shutdown/boot-recovery hook, reports durable results, and
+  can restore the recorded host and guest state.
 
 ### Changed
 

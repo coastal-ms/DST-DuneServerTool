@@ -11,6 +11,7 @@ import { DashboardAlertsCard } from './settings/DashboardAlertsCard'
 import { PublicIpCard } from './settings/PublicIpCard'
 import { ServerBrowserPingCard } from './settings/ServerBrowserPingCard'
 import { HyperVLanCard } from './settings/HyperVLanCard'
+import { HyperVLifecycleCard } from './settings/HyperVLifecycleCard'
 import { RemoteAccessCard } from './settings/RemoteAccessCard'
 import { MobileAppCard } from './settings/MobileAppCard'
 import { FlsTokenCard } from './settings/FlsTokenCard'
@@ -713,6 +714,8 @@ export function Settings() {
       <SectionErrorBoundary name="Remote Access"><RemoteAccessCard /></SectionErrorBoundary>
 
       <SectionErrorBoundary name="Hyper-V over LAN"><HyperVLanCard /></SectionErrorBoundary>
+
+      <SectionErrorBoundary name="Hyper-V VM lifecycle"><HyperVLifecycleCard /></SectionErrorBoundary>
 
       <SectionErrorBoundary name="Public IP"><PublicIpCard /></SectionErrorBoundary>
 

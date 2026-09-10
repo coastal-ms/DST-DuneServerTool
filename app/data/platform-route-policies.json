@@ -78,7 +78,8 @@
     "http POST /api/gameplay/players/journey/wipe": "destructive",
     "http POST /api/gameplay/players/wipe-codex": "destructive",
     "http DELETE /api/gameplay/item-packages": "reversible-write",
-    "http DELETE /api/setup/hyperv-lan/credential": "reversible-write"
+    "http DELETE /api/setup/hyperv-lan/credential": "reversible-write",
+    "http DELETE /api/setup/hyperv-lifecycle": "reversible-write"
     ,"http POST /api/gameplay/vehicles/delete": "destructive"
     ,"http POST /api/gameplay/vehicles/names": "transactional-write"
     ,"http POST /api/gameplay/vehicles/deletions": "reversible-write"
@@ -179,7 +180,7 @@
     { "source": "RemoteAccess.ps1", "capabilityId": "settings.connectivity", "routeCount": 6, "sha256": "60f71a9c7a4b8b5eda4633ca337ed6b5dfbcdcfc1deaf0008c32f28df8669820" },
     { "source": "RestartSchedule.ps1", "capabilityId": "operation.maintenance", "routeCount": 4, "sha256": "377236ac8359ec7828642c234f07c127e9e2f7c4930b77eadcf0ab19f0201568" },
     { "source": "ServiceMode.ps1", "capabilityId": "operation.runtime", "routeCount": 2, "sha256": "5d5217dd5fca38e176da024ad005d571995b7e3430707609350656942b2fe3b9" },
-    { "source": "Setup.ps1", "capabilityId": "settings.setup", "routeCount": 11, "sha256": "c0fed70bfe378372fe315534a9598e6203b3b4c22b65a16070186cd296cac73c" },
+    { "source": "Setup.ps1", "capabilityId": "settings.setup", "routeCount": 14, "sha256": "955be1424b4c624c8a92e0e9ba82b2978dcdebccb6740a5626c92532608edeeb" },
     { "source": "Shutdown.ps1", "capabilityId": "host.lifecycle", "routeCount": 1, "sha256": "35a9d26192452ee7131cb3541e69cfcd242208f7db855c47e3a4998194797f4f" },
     { "source": "Sietch.ps1", "capabilityId": "operation.topology", "routeCount": 2, "sha256": "c8d97b8e6b93456bbb9eb3eb8a3a77cde95186a15891d5c8e135790e65b73ad6" },
     { "source": "SoloMode.ps1", "capabilityId": "host.solo", "routeCount": 25, "sha256": "8e96bd291775b67ec769d6ffaff3a31b055babc57014cf755ca96fddf0c1640e" },
