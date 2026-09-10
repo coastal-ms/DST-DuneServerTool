@@ -37,6 +37,27 @@ Describe 'One-shot command orchestration' -Tag 'Commands' {
             $availability.available | Should -BeTrue
         }
 
+        It 'restores Stop VM Only as a guarded graceful Hyper-V shutdown' {
+            $command = Get-DuneCommandByName -Name 'stop-vm'
+            $command.Label | Should -Be 'Stop VM Only'
+            $command.Section | Should -Be 'VM'
+            $command.Requires | Should -Be 'running'
+            $command.DisabledWhen | Should -BeNullOrEmpty
+            $command.Desc | Should -Match 'graceful Hyper-V guest shutdown'
+            $command.Desc | Should -Match 'will not hard-power-off'
+
+            $availability = Get-DuneCommandAvailability -Command $command -State @{
+                vmExists=$true; vmRunning=$true; bgState='running'; worldRestartActive=$false
+            }
+            $availability.available | Should -BeTrue
+
+            $route = Get-Content (Join-Path $PSScriptRoot '..\app\server\routes\Commands.ps1') -Raw
+            $route | Should -Match "'stop-vm'\s*=\s*'gracefully shutting down the VM and its running battlegroup'"
+
+            $categories = Get-Content (Join-Path $PSScriptRoot '..\webui\src\pages\commands\categories.ts') -Raw
+            $categories | Should -Match "commands:\s*\[[^\]]*'stop-vm'[^\]]*\]"
+        }
+
         It 'blocks shells and browser admin surfaces during maintenance' {
             foreach ($name in @('open-file-browser', 'open-director', 'shell-vm', 'shell-pod', 'ssh')) {
                 $command = Get-DuneCommandByName -Name $name
@@ -65,6 +86,17 @@ Describe 'One-shot command orchestration' -Tag 'Commands' {
     It 'does not hold Reboot All on a fixed post-reboot operator settle' {
         $script:entry | Should -Match "Invoke-OnDemandPartitionClear -Ip \`$ip -DelaySec 0 -Phase 'post-reboot' -Mode cron -Fast"
         $script:entry | Should -Not -Match "Invoke-OnDemandPartitionClear -Ip \`$ip -DelaySec 45 -Phase 'post-reboot'"
+    }
+
+    It 'keeps Stop VM Only on graceful shutdown without hard-power-off escalation' {
+        $start = $script:entry.IndexOf('if ($cmdName -eq "stop-vm")')
+        $end = $script:entry.IndexOf('if ($cmdName -eq "startup")', $start)
+        $handler = $script:entry.Substring($start, $end - $start)
+
+        $handler | Should -Match 'Stop-VmWithEscalation[\s\S]*-TotalSec 330 -GracefulOnly'
+        $handler | Should -Not -Match 'Stop-VM[^\r\n]*-(TurnOff|Save)\b'
+        $script:entry | Should -Match 'if \(-not \$GracefulOnly -and -not \$escalated'
+        $script:entry | Should -Match "if \(\`$GracefulOnly\) \{ ' DST did not attempt a hard power-off\.' \}"
     }
 
     It 'passes explicit conservative and manual partition-heal modes' {

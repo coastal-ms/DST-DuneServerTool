@@ -12,7 +12,7 @@ describe('Command purpose categories', () => {
     expect(catalog.length).toBeGreaterThan(20)
     expect([...categorized].sort()).toEqual([...catalog].sort())
     expect(new Set(categorized).size).toBe(categorized.length)
-    expect(COMMAND_CATEGORIES.every(category => category.commands.length >= 2 && category.commands.length <= 6)).toBe(true)
+    expect(COMMAND_CATEGORIES.every(category => category.commands.length >= 2 && category.commands.length <= 7)).toBe(true)
   })
   it.each([['VM', 'vm'], ['Battlegroup', 'battlegroup'], ['Tools', 'tools']])('keeps future %s commands reachable', (section, expected) => {
     const command: Command = { name: 'future-operation', section, label: '', key: '', mode: 'Console', requires: 'none', desc: '', available: true, reason: '', external: false }

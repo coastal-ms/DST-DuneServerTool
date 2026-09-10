@@ -138,6 +138,7 @@ Register-DuneRoute -Method POST -Path '/api/commands/run/{name}' -Handler {
 
     $disruptiveActions = @{
         shutdown = 'stopping the battlegroup and powering off the VM'
+        'stop-vm' = 'gracefully shutting down the VM and its running battlegroup'
         reboot = 'rebooting the VM and battlegroup'
         restart = 'restarting the battlegroup'
         stop = 'stopping the battlegroup'
