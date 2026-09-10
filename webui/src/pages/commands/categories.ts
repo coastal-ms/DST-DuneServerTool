@@ -4,7 +4,7 @@ export const COMMAND_CATEGORIES = [
   { id: 'battlegroup', label: 'Battlegroup', icon: 'Activity', description: 'Start, stop, update, and maintain the game servers.',
     commands: ['start', 'restart', 'stop', 'update', 'fix-on-demand-maps'] },
   { id: 'vm', label: 'VM & Power', icon: 'HardDrive', description: 'VM setup, power, and memory. All-server actions also affect the battlegroup.',
-    commands: ['initial-setup', 'start-vm', 'startup', 'shutdown', 'reboot', 'enable-experimental-swap'] },
+    commands: ['initial-setup', 'start-vm', 'stop-vm', 'startup', 'shutdown', 'reboot', 'enable-experimental-swap'] },
   { id: 'configuration', label: 'Configuration', icon: 'Settings', description: 'Apply INIs and open battlegroup or Director configuration.',
     commands: ['apply-inis', 'edit', 'edit-advanced', 'open-director'] },
   { id: 'network', label: 'Network & Access', icon: 'Network', description: 'Connection addresses, VM credentials, and SSH keys.',

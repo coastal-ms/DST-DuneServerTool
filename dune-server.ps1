@@ -735,14 +735,16 @@ function Get-VmInfo {
 # Issue Stop-VM as a background job, render a live MM:SS counter while the VM
 # transitions to Off, and escalate to a hard power-off (-TurnOff) if the
 # graceful shutdown stalls past $GracefulSec. Throws if the VM never reaches
-# Off within $TotalSec. Returns elapsed seconds on success.
+# Off within $TotalSec. GracefulOnly suppresses escalation for lifecycle-aware
+# callers. Returns elapsed seconds on success.
 function Stop-VmWithEscalation {
     param(
         [Parameter(Mandatory)][string]$Name,
         [string]$Label = "Stopping VM",
         [string]$EstimateText,
         [int]$GracefulSec = 90,
-        [int]$TotalSec = 240
+        [int]$TotalSec = 240,
+        [switch]$GracefulOnly
     )
     $start = Get-Date
     $jobs = @()
@@ -768,7 +770,7 @@ function Stop-VmWithEscalation {
             $vm = Get-VM -Name $Name @hvSplat -ErrorAction SilentlyContinue
             if (-not $vm -or $vm.State -eq 'Off') { break }
             $elapsed = [int]((Get-Date) - $start).TotalSeconds
-            if (-not $escalated -and $elapsed -ge $GracefulSec) {
+            if (-not $GracefulOnly -and -not $escalated -and $elapsed -ge $GracefulSec) {
                 Complete-WaitCounter -Message "Graceful shutdown still running after $(Format-Duration $elapsed) (state: $($vm.State)) - escalating to hard power-off." -Color Yellow
                 $jobs += Start-Job -ScriptBlock {
                     param($n, $cn, $credLibPath)
@@ -786,7 +788,8 @@ function Stop-VmWithEscalation {
                 $escalated = $true
             }
             if ($elapsed -ge $TotalSec) {
-                throw "VM '$Name' did not reach Off state within $(Format-Duration $elapsed) (last state: $($vm.State))."
+                $safety = if ($GracefulOnly) { ' DST did not attempt a hard power-off.' } else { '' }
+                throw "VM '$Name' did not reach Off state within $(Format-Duration $elapsed) (last state: $($vm.State)).$safety"
             }
             Write-WaitCounter -Start $start -Label "$Label (state: $($vm.State))..." -EstimateText $EstimateText
             Start-Sleep -Seconds 2
@@ -1816,14 +1819,12 @@ while ($true) {
             Write-Host "VM '$vmName' is already off." -ForegroundColor Green
             continue
         }
-        # Use the same graceful-then-hard-power-off escalation as Stop All
-        # instead of a bare Stop-VM -Force: the Alpine guest does not always honor
-        # the Hyper-V integration shutdown request, and a plain Stop-VM then writes
-        # an error (and on an already-off VM throws outright), flashing the InApp
-        # window shut before it can be read.
+        # The reconciled lifecycle hook has a 300-second guest-side bound. Wait
+        # through that bound, but never bypass it with Hyper-V TurnOff.
         $estVmStop = Format-PhaseEstimate 'vm-stop'
         try {
-            $vmStopSec = Stop-VmWithEscalation -Name $vmName -Label "Stopping VM" -EstimateText $estVmStop
+            $vmStopSec = Stop-VmWithEscalation -Name $vmName -Label "Stopping VM" `
+                -EstimateText $estVmStop -TotalSec 330 -GracefulOnly
             Save-PhaseTiming 'vm-stop' $vmStopSec
             Complete-WaitCounter -Message "VM stopped in $(Format-Duration $vmStopSec)." -Color Green
         } catch {

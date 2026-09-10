@@ -30,6 +30,10 @@ here cover everything those tags shipped.
   integration and `AutomaticStopAction=ShutDown`, installs a bounded Alpine
   OpenRC battlegroup shutdown/boot-recovery hook, reports durable results, and
   can restore the recorded host and guest state.
+- Restored **Stop VM Only** under **Commands > VM & Power**. It sends only a
+  graceful Hyper-V guest shutdown request, allowing the reconciled lifecycle
+  hook to stop a running battlegroup first; it never escalates to Hyper-V
+  `TurnOff` or `Save`.
 
 ### Changed
 
