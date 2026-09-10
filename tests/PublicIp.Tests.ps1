@@ -91,7 +91,7 @@ Describe 'DDNS hostname resolution resilience' {
     }
 
     It 'ignores private answers and reports no usable public IP' {
-        Mock -CommandName Get-DuneHostnameIPv4Records -MockWith { @('192.168.23.219') }
+        Mock -CommandName Get-DuneHostnameIPv4Records -MockWith { @('192.168.1.219') }
         $r = Resolve-DunePublicIpHostname -Hostname 'dunecoastal.myvnc.com'
         $r.ok | Should -BeFalse
         $r.message | Should -Match 'usable public IPv4'

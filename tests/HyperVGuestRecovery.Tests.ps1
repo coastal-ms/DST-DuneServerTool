@@ -26,7 +26,7 @@ Describe 'Hyper-V guest recovery backend' -Tag 'Pure' {
     }
 
     It 'validates usable IPv4 addresses' {
-        Test-DuneValidVmIpv4 '192.168.23.219' | Should -BeTrue
+        Test-DuneValidVmIpv4 '192.168.1.219' | Should -BeTrue
         Test-DuneValidVmIpv4 '127.0.0.1' | Should -BeFalse
         Test-DuneValidVmIpv4 'not-an-ip' | Should -BeFalse
     }
@@ -46,16 +46,16 @@ Describe 'Hyper-V guest recovery backend' -Tag 'Pure' {
             return @('DUNE_HYPERV_GUEST_RECOVERY_OK auto_online=online offline=0 kvp=running')
         }
 
-        (Invoke-DuneHyperVGuestRecovery -Ip '192.168.23.219').ok | Should -BeTrue
-        (Invoke-DuneHyperVGuestRecovery -Ip '192.168.23.219').cached | Should -BeTrue
+        (Invoke-DuneHyperVGuestRecovery -Ip '192.168.1.219').ok | Should -BeTrue
+        (Invoke-DuneHyperVGuestRecovery -Ip '192.168.1.219').cached | Should -BeTrue
         Should -Invoke Invoke-V6Ssh -Times 1 -Exactly
     }
 
     It 'backs off after a failed reconciliation' {
         Mock Get-DuneHyperVGuestRecoveryInstallerPath { $null }
 
-        $first = Invoke-DuneHyperVGuestRecovery -Ip '192.168.23.219'
-        $second = Invoke-DuneHyperVGuestRecovery -Ip '192.168.23.219'
+        $first = Invoke-DuneHyperVGuestRecovery -Ip '192.168.1.219'
+        $second = Invoke-DuneHyperVGuestRecovery -Ip '192.168.1.219'
 
         $first.reason | Should -Be 'installer-missing'
         $second.reason | Should -Be 'retry-backoff'
@@ -70,11 +70,11 @@ Describe 'Hyper-V guest recovery backend' -Tag 'Pure' {
             return & $Script
         }
 
-        Set-DuneLastKnownVmIp -Ip '192.168.23.219' | Should -BeTrue
+        Set-DuneLastKnownVmIp -Ip '192.168.1.219' | Should -BeTrue
 
         Should -Invoke Invoke-WithDuneLock -Times 1 -Exactly
         Should -Invoke Save-DuneConfig -ParameterFilter {
-            $Config.LastKnownVmIp -eq '192.168.23.219' -and
+            $Config.LastKnownVmIp -eq '192.168.1.219' -and
             $Config.LastKnownVmHost -eq (Get-DuneVmHostIdentity)
         }
     }
@@ -89,7 +89,7 @@ Describe 'Hyper-V guest recovery backend' -Tag 'Pure' {
             return @('DUNE_HYPERV_GUEST_RECOVERY_OK')
         }
 
-        (Invoke-DuneHyperVGuestRecovery -Ip '192.168.23.219' -ForceKvp).ok | Should -BeTrue
+        (Invoke-DuneHyperVGuestRecovery -Ip '192.168.1.219' -ForceKvp).ok | Should -BeTrue
     }
 
     It 'throttles repeated forced KVP restarts' {
@@ -98,9 +98,9 @@ Describe 'Hyper-V guest recovery backend' -Tag 'Pure' {
         Mock Get-DuneHyperVGuestRecoveryInstallerPath { $installer }
         Mock Invoke-V6Ssh { @('DUNE_HYPERV_GUEST_RECOVERY_OK') }
 
-        (Invoke-DuneHyperVGuestRecovery -Ip '192.168.23.219' -ForceKvp).ok | Should -BeTrue
+        (Invoke-DuneHyperVGuestRecovery -Ip '192.168.1.219' -ForceKvp).ok | Should -BeTrue
         $script:DuneHyperVGuestRecoveryLastKvpRestart = [datetime]::MinValue
-        $second = Invoke-DuneHyperVGuestRecovery -Ip '192.168.23.219' -ForceKvp
+        $second = Invoke-DuneHyperVGuestRecovery -Ip '192.168.1.219' -ForceKvp
 
         $second.reason | Should -Be 'kvp-restart-backoff'
         Should -Invoke Invoke-V6Ssh -Times 1 -Exactly
@@ -125,14 +125,14 @@ Describe 'Hyper-V guest recovery backend' -Tag 'Pure' {
             Save-DuneConfig -Config @{
                 VmHostMode = 'local'
                 HyperVHostIp = ''
-                LastKnownVmIp = '192.168.23.219'
+                LastKnownVmIp = '192.168.1.219'
                 LastKnownVmHost = 'local:test-host'
             } | Out-Null
 
             Save-DuneConfig -Config @{
                 VmHostMode = 'lan'
                 HyperVHostIp = '192.168.1.50'
-                LastKnownVmIp = '192.168.23.219'
+                LastKnownVmIp = '192.168.1.219'
                 LastKnownVmHost = 'local:test-host'
             } | Out-Null
 
