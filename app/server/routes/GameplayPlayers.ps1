@@ -98,6 +98,74 @@ function Invoke-DunePlayerWriteRoute {
     Write-DuneJson -Response $Response -Body @{ ok = $true; message = $result.message; result = $result }
 }
 
+# GET /api/gameplay/players/reserve-recovery?pawn=<id>&controller=<id>
+Register-DuneRoute -Method GET -Path '/api/gameplay/players/reserve-recovery' -Handler {
+    param($req, $res, $routeParams, $body)
+    try {
+        $pawn = 0L; $controller = 0L
+        [void][Int64]::TryParse((Get-DuneQ $req 'pawn'), [ref]$pawn)
+        [void][Int64]::TryParse((Get-DuneQ $req 'controller'), [ref]$controller)
+        if ($pawn -le 0 -or $controller -le 0) {
+            Write-DuneError -Response $res -Status 400 -Message 'pawn and controller ids are required.'
+            return
+        }
+        $ctx = Get-DuneDbContext
+        if (-not $ctx.ok) { Write-DuneError -Response $res -Status 503 -Message $ctx.message; return }
+        $preview = Get-DuneReserveRecoveryPreview -Ip $ctx.ip -PawnId $pawn -ControllerId $controller
+        if (-not $preview.ok) { Write-DuneError -Response $res -Status 503 -Message $preview.error; return }
+        Write-DuneJson -Response $res -Body (ConvertTo-DuneReservePublicPreview -Preview $preview)
+    } catch {
+        Write-DuneError -Response $res -Status 500 -Message "Reserve recovery preview failed: $($_.Exception.Message)"
+    }
+}
+
+# POST /api/gameplay/players/reserve-recovery  { pawn_id, controller_id, revision }
+Register-DuneRoute -Method POST -Path '/api/gameplay/players/reserve-recovery' -Handler {
+    param($req, $res, $routeParams, $body)
+    try {
+        $pawn = Get-DuneBodyInt -Body $body -Name 'pawn_id'
+        $controller = Get-DuneBodyInt -Body $body -Name 'controller_id'
+        $revision = [string](Get-DuneBodyValue -Body $body -Name 'revision')
+        if ($null -eq $pawn -or $pawn -le 0 -or $null -eq $controller -or $controller -le 0) {
+            Write-DuneError -Response $res -Status 400 -Message 'pawn_id and controller_id are required.'
+            return
+        }
+        if ($revision -notmatch '^[a-f0-9]{64}$') {
+            Write-DuneError -Response $res -Status 400 -Message 'A current Reserve preview revision is required.'
+            return
+        }
+        Invoke-DunePlayerWriteRoute -Response $res -Action { param($ip)
+            Invoke-DuneReserveRecovery -Ip $ip -PawnId $pawn -ControllerId $controller -Revision $revision
+        }
+    } catch {
+        Write-DuneError -Response $res -Status 500 -Message "Reserve recovery failed: $($_.Exception.Message)"
+    }
+}
+
+# POST /api/gameplay/players/reserve-recovery/rollback
+# { pawn_id, controller_id, recovery_id }
+Register-DuneRoute -Method POST -Path '/api/gameplay/players/reserve-recovery/rollback' -Handler {
+    param($req, $res, $routeParams, $body)
+    try {
+        $pawn = Get-DuneBodyInt -Body $body -Name 'pawn_id'
+        $controller = Get-DuneBodyInt -Body $body -Name 'controller_id'
+        $recoveryId = [string](Get-DuneBodyValue -Body $body -Name 'recovery_id')
+        if ($null -eq $pawn -or $pawn -le 0 -or $null -eq $controller -or $controller -le 0) {
+            Write-DuneError -Response $res -Status 400 -Message 'pawn_id and controller_id are required.'
+            return
+        }
+        if ($recoveryId -notmatch '^[a-f0-9]{32}$') {
+            Write-DuneError -Response $res -Status 400 -Message 'recovery_id is required.'
+            return
+        }
+        Invoke-DunePlayerWriteRoute -Response $res -Action { param($ip)
+            Invoke-DuneReserveRecoveryRollback -Ip $ip -PawnId $pawn -ControllerId $controller -RecoveryId $recoveryId
+        }
+    } catch {
+        Write-DuneError -Response $res -Status 500 -Message "Reserve recovery rollback failed: $($_.Exception.Message)"
+    }
+}
+
 # POST /api/gameplay/players/give-solari  { controller_id, amount }
 Register-DuneRoute -Method POST -Path '/api/gameplay/players/give-solari' -Handler {
     param($req, $res, $routeParams, $body)

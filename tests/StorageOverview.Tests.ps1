@@ -130,15 +130,38 @@ Describe 'Storage overview container coverage' -Tag 'Pure' {
         Mock Invoke-DuneSqlQuery {
             param($Sql)
             $script:deleteSql = $Sql
-            return @{ ok = $true; rows = @(@{ deleted = '' }) }
+            return @{ ok = $true; rows = @(@{ status = 'deleted'; changed = '1' }) }
         }
 
         $result = Invoke-DunePlayerDeleteItem -Ip '1.2.3.4' -ItemId 43 -ExpectedStackSize 4
 
         $result.ok | Should -BeTrue
         $script:deleteSql | Should -Match 'FROM dune\.items'
-        $script:deleteSql | Should -Match 'AND stack_size = 4::bigint'
+        $script:deleteSql | Should -Match 'AND i\.stack_size = 4::bigint'
         $script:deleteSql | Should -Match 'FOR UPDATE'
+        $script:deleteSql | Should -Match 'inventory_type = 33'
+        $script:deleteSql | Should -Match 'component_name_hash = -689927216'
+    }
+
+    It 'blocks every exact Reserve item instead of deleting it' {
+        Mock Invoke-DuneSqlQuery {
+            return @{ ok = $true; rows = @(@{ status = 'reserve_blocked'; changed = '0' }) }
+        }
+        $result = Invoke-DunePlayerDeleteItem -Ip '1.2.3.4' -ItemId 43 -ExpectedStackSize 4
+        $result.ok | Should -BeFalse
+        $result.error | Should -Match 'Reserve items cannot be deleted'
+    }
+
+    It 'blocks Reserve quantity reductions while allowing non-destructive increases' {
+        Mock Invoke-DuneSqlQuery {
+            param($Sql)
+            if ($Sql -match 'SET stack_size = 3') {
+                return @{ ok = $true; rows = @(@{ status = 'reserve_blocked' }) }
+            }
+            return @{ ok = $true; rows = @(@{ status = 'updated' }) }
+        }
+        (Invoke-DunePlayerSetItemStack -Ip fixture -ItemId 43 -StackSize 3 -ExpectedStackSize 4).ok | Should -BeFalse
+        (Invoke-DunePlayerSetItemStack -Ip fixture -ItemId 43 -StackSize 5 -ExpectedStackSize 4).ok | Should -BeTrue
     }
 
     Describe 'Placed-base portable blueprint ids' -Tag 'Pure' {

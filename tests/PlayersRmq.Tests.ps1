@@ -11,6 +11,7 @@ Describe 'Resolve-DuneStackMax' -Tag 'Pure' {
         function global:Invoke-DuneSqlQuery {
             return @{ ok = $true; rows = @(@{ s = '0' }) }
         }
+
     }
 
     AfterEach {
@@ -56,6 +57,56 @@ Describe 'Resolve-DuneStackMax' -Tag 'Pure' {
         $r.ok         | Should -BeTrue
         $r.new_stacks | Should -Be 1
         $r.free_slots | Should -Be 111
+    }
+}
+
+Describe 'Clean Inventory Reserve safety' -Tag 'Pure' {
+    BeforeEach {
+        function global:Resolve-DuneFlsIdOrError { @{ ok = $true; fls_id = 'fixture-user' } }
+        $script:reserveChecks = 0
+        $script:rmqCleanCalls = 0
+        function global:Test-DunePlayerReserveItems {
+            $script:reserveChecks++
+            @{ ok = $true; item_rows = 0; item_units = 0 }
+        }
+        function global:Invoke-DuneRmqCleanPlayerInventory {
+            $script:rmqCleanCalls++
+            @{ ok = $true }
+        }
+    }
+    AfterEach {
+        Remove-Item function:global:Resolve-DuneFlsIdOrError -ErrorAction SilentlyContinue
+        Remove-Item function:global:Test-DunePlayerReserveItems -ErrorAction SilentlyContinue
+        Remove-Item function:global:Invoke-DuneRmqCleanPlayerInventory -ErrorAction SilentlyContinue
+    }
+
+    It 'sends the command only after proving Reserve empty for the exact pawn' {
+        $result = Invoke-DunePlayerCleanInventoryLive -Ip fixture -ActorId 42
+        $result.ok | Should -BeTrue
+        $script:reserveChecks | Should -Be 1
+        $script:rmqCleanCalls | Should -Be 1
+    }
+
+    It 'blocks Clean Inventory whenever Reserve contains rows' {
+        function global:Test-DunePlayerReserveItems {
+            $script:reserveChecks++
+            @{ ok = $true; item_rows = 2; item_units = 9 }
+        }
+        $result = Invoke-DunePlayerCleanInventoryLive -Ip fixture -ActorId 42
+        $result.ok | Should -BeFalse
+        $result.error | Should -Match 'blocked while Reserve contains 2'
+        $script:rmqCleanCalls | Should -Be 0
+    }
+
+    It 'fails closed when Reserve inspection fails' {
+        function global:Test-DunePlayerReserveItems {
+            $script:reserveChecks++
+            @{ ok = $false; error = 'database unavailable' }
+        }
+        $result = Invoke-DunePlayerCleanInventoryLive -Ip fixture -ActorId 42
+        $result.ok | Should -BeFalse
+        $result.error | Should -Match 'safety could not be proven'
+        $script:rmqCleanCalls | Should -Be 0
     }
 }
 

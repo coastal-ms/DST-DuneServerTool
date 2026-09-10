@@ -597,9 +597,12 @@ function OccurrencePanel({
       return
     }
     const quantity = requests.reduce((sum, request) => sum + request.quantity, 0)
-    const message = targets.length === 1
+    const baseMessage = targets.length === 1
       ? `Delete ${quantity} of ${targets[0].displayName} (stack x${targets[0].quantity}) from ${targets[0].entity.label || entityTypeLabel(targets[0].entity.type)}? This cannot be undone.`
       : `Delete ${quantity} total items across ${targets.length} selected occurrences? Any full stacks will be removed. This cannot be undone.`
+    const message = targets.some(item => item.entity.type === 'player')
+      ? `${baseMessage}\n\nReserve rows cannot be deleted or reduced here. DST will reject them because remaining Reserve contents can become hidden and keep base recycling blocked.`
+      : baseMessage
     if (!window.confirm(message)) return
 
     setDeleteBusy(true)

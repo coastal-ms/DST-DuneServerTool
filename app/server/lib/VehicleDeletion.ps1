@@ -215,10 +215,14 @@ function Test-DuneVehicleWindowStopped {
     return @{ ok = $true }
 }
 
-function Invoke-DuneVehicleSafetyBackup {
-    param([string]$Ip)
+function Invoke-DuneVerifiedSafetyBackup {
+    param(
+        [string]$Ip,
+        [ValidatePattern('^[a-z0-9-]+$')][string]$StemPrefix,
+        [ValidatePattern('^[A-Z0-9_]+$')][string]$ProofLabel
+    )
     $scope = Get-DuneVehicleHostScope -Ip $Ip
-    $stem = 'dst-vehicle-delete-' + [guid]::NewGuid().ToString('N')
+    $stem = $StemPrefix + '-' + [guid]::NewGuid().ToString('N')
     $script = @'
 set -euo pipefail
 /home/dune/.dune/bin/battlegroup backup '__STEM__'
@@ -226,14 +230,25 @@ mapfile -t files < <(find '/funcom/artifacts/database-dumps/__WORLD__' -maxdepth
 [ "${#files[@]}" -eq 1 ]
 bytes=$(stat -c %s -- "${files[0]}")
 [ "$bytes" -gt 1024 ]
-printf '\nDST_VEHICLE_BACKUP=%s|%s\n' "${files[0]}" "$bytes"
-'@.Replace('__STEM__', $stem).Replace('__WORLD__', $scope.world)
+printf '\n__PROOF__=%s|%s\n' "${files[0]}" "$bytes"
+'@.Replace('__STEM__', $stem).Replace('__WORLD__', $scope.world).Replace('__PROOF__', $ProofLabel)
     $backup = Invoke-DuneBackupShell -Ip $Ip -Script $script -TimeoutSec 900
-    $proof = if ($backup) { [regex]::Matches([string]$backup.out, '(?m)^DST_VEHICLE_BACKUP=([^\r\n|]+)\|([0-9]+)\r?$') } else { @() }
+    $proof = if ($backup) {
+        [regex]::Matches([string]$backup.out, "(?m)^$([regex]::Escape($ProofLabel))=([^\r\n|]+)\|([0-9]+)\r?$")
+    } else { @() }
     if ($null -eq $backup -or $backup.rc -ne 0 -or $proof.Count -ne 1 -or [long]$proof[0].Groups[2].Value -le 1024) {
-        return @{ ok = $false; error = 'The fresh safety backup was not verified on disk. No vehicles were deleted.' }
+        return @{ ok = $false; error = 'the fresh safety backup was not verified on disk. No database write was attempted.' }
     }
     return @{ ok = $true; path = $proof[0].Groups[1].Value; bytes = [long]$proof[0].Groups[2].Value; database_scope = $scope.key }
+}
+
+function Invoke-DuneVehicleSafetyBackup {
+    param([string]$Ip)
+    $result = Invoke-DuneVerifiedSafetyBackup -Ip $Ip -StemPrefix 'dst-vehicle-delete' -ProofLabel 'DST_VEHICLE_BACKUP'
+    if (-not $result.ok) {
+        $result.error = 'The fresh safety backup was not verified on disk. No vehicles were deleted.'
+    }
+    return $result
 }
 
 function Invoke-DuneVehicleDeleteTransaction {

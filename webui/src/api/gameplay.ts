@@ -744,6 +744,9 @@ export interface InventoryItem {
   water_amount: string
   water_type: string
   current_ammo?: string
+  inventory_id?: number
+  inventory_type?: number
+  is_reserve?: boolean
 }
 
 export interface SpecTrack {
@@ -857,6 +860,64 @@ export function preparePatternUpgrading(controllerId: number) {
 export function deleteInventoryItem(itemId: number, expectedStackSize?: number) {
   return api<WriteResult>('/api/gameplay/players/delete-item', {
     method: 'POST', body: JSON.stringify({ item_id: itemId, expected_stack_size: expectedStackSize }),
+  })
+}
+
+export interface ReserveRecoveryItem {
+  item_id: number
+  template_id: string
+  name: string
+  stack_size: number
+  quality: number
+  source_position: number
+  destination_position: number
+  unit_volume: number
+  total_volume: number
+}
+
+export interface ReserveRecoveryPreview {
+  source: 'live'
+  available: boolean
+  blocked_reason: string
+  pawn_id: number
+  controller_id: number
+  online_status: string
+  reserve_inventory_id: number
+  backpack_inventory_id: number
+  item_rows: number
+  item_units: number
+  required_volume: number
+  used_volume: number
+  max_slots: number
+  used_slots: number
+  max_volume: number
+  revision: string
+  items: ReserveRecoveryItem[]
+  rollback: null | {
+    recovery_id: string
+    item_rows: number
+    created_at: string
+  }
+}
+
+export function getReserveRecovery(pawnId: number, controllerId: number) {
+  return api<ReserveRecoveryPreview>(`/api/gameplay/players/reserve-recovery${qs({
+    pawn: pawnId,
+    controller: controllerId,
+  })}`)
+}
+
+export function recoverReserve(pawnId: number, controllerId: number, revision: string) {
+  return api<WriteResult>('/api/gameplay/players/reserve-recovery', {
+    method: 'POST',
+    body: JSON.stringify({ pawn_id: pawnId, controller_id: controllerId, revision }),
+  })
+}
+
+export function rollbackReserve(pawnId: number, controllerId: number, recoveryId: string) {
+  return api<WriteResult>('/api/gameplay/players/reserve-recovery/rollback', {
+    method: 'POST',
+    body: JSON.stringify({ pawn_id: pawnId, controller_id: controllerId, recovery_id: recoveryId }),
   })
 }
 

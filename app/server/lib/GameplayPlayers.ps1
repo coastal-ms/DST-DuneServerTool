@@ -51,6 +51,13 @@ ORDER BY ps.account_id
 # Inventory for one pawn actor id ($1).
 $script:DunePlayerInventorySql = @'
 SELECT i.id, i.template_id, i.stack_size, COALESCE(i.quality_level, 0) AS quality_level,
+       inv.id AS inventory_id, inv.inventory_type,
+       (inv.inventory_type = 33 AND EXISTS (
+           SELECT 1
+           FROM dune.actor_inventories ai
+           WHERE ai.inventory_id = inv.id
+             AND ai.component_name_hash = -689927216
+       )) AS is_reserve,
        COALESCE((i.stats->'FItemStackAndDurabilityStats'->1->>'CurrentDurability'), 'N/A') AS durability,
        COALESCE((i.stats->'FItemStackAndDurabilityStats'->1->>'MaxDurability'), 'N/A')     AS max_durability,
        COALESCE((i.stats->'FFillableItemStats'->1->>'CurrentAmount'), 'N/A')               AS water_amount,
@@ -124,6 +131,9 @@ function Get-DunePlayerDetailLive {
             kind           = (Get-DuneItemKind -TemplateId $tmpl)
             stack_size     = (ConvertTo-DuneInt $r['stack_size'])
             quality        = (ConvertTo-DuneInt $r['quality_level'])
+            inventory_id   = (ConvertTo-DuneInt $r['inventory_id'])
+            inventory_type = (ConvertTo-DuneInt $r['inventory_type'])
+            is_reserve     = (Test-DuneTruthy $r['is_reserve'])
             durability     = [string]$r['durability']
             max_durability = [string]$r['max_durability']
             water_amount   = [string]$r['water_amount']
@@ -400,17 +410,34 @@ function Invoke-DunePlayerDeleteItem {
     $expectedClause = if ($null -ne $ExpectedStackSize) { " AND stack_size = $ExpectedStackSize::bigint" } else { '' }
     $sql = @"
 WITH matched AS (
-    SELECT id
-    FROM dune.items
-    WHERE id = $ItemId::bigint$expectedClause
+    SELECT i.id,
+           (inv.inventory_type = 33 AND EXISTS (
+               SELECT 1 FROM dune.actor_inventories ai
+               WHERE ai.inventory_id = inv.id
+                 AND ai.component_name_hash = -689927216
+           )) AS is_reserve
+    FROM dune.items i
+    JOIN dune.inventories inv ON inv.id = i.inventory_id
+    WHERE i.id = $ItemId::bigint$($expectedClause.Replace('stack_size', 'i.stack_size'))
     FOR UPDATE
+),
+deleted AS MATERIALIZED (
+    SELECT dune.delete_item(id) AS result
+    FROM matched
+    WHERE NOT is_reserve
 )
-SELECT dune.delete_item(id) FROM matched;
+SELECT CASE WHEN is_reserve THEN 'reserve_blocked' ELSE 'deleted' END AS status,
+       (SELECT count(*) FROM deleted)::text AS changed
+FROM matched;
 "@
     $res = Invoke-DuneSqlQuery -Ip $Ip -Sql $sql -ReadOnly $false -MaxRows 1 -TimeoutSec 30
     if (-not $res.ok) { return @{ ok = $false; error = $res.error } }
-    if (@(ConvertTo-DuneRowMaps -Result $res).Count -eq 0) {
+    $rows = @(ConvertTo-DuneRowMaps -Result $res)
+    if ($rows.Count -eq 0) {
         return @{ ok = $false; error = 'Item quantity changed or the item no longer exists. Refresh and try again.' }
+    }
+    if ([string]$rows[0]['status'] -ceq 'reserve_blocked') {
+        return @{ ok = $false; error = 'Reserve items cannot be deleted directly. Deleting any Reserve row can hide and strand the remaining Reserve contents while base recycling stays blocked. Use guarded Recover Reserve instead.' }
     }
     return @{ ok = $true; message = "Deleted item $ItemId." }
 }
@@ -605,18 +632,43 @@ function Invoke-DunePlayerSetItemStack {
     param([string]$Ip, [long]$ItemId, [long]$StackSize, [Nullable[long]]$ExpectedStackSize)
     if ($ItemId -le 0) { return @{ ok = $false; error = 'item_id is required.' } }
     if ($StackSize -lt 1) { return @{ ok = $false; error = 'stack_size must be at least 1.' } }
-    $expectedClause = if ($null -ne $ExpectedStackSize) { " AND stack_size = $ExpectedStackSize::bigint" } else { '' }
+    $expectedClause = if ($null -ne $ExpectedStackSize) { " AND i.stack_size = $ExpectedStackSize::bigint" } else { '' }
     $sql = @"
-UPDATE dune.items
-SET stack_size = $StackSize::bigint
-WHERE id = $ItemId::bigint$expectedClause
-RETURNING id::text AS item_id;
+WITH matched AS (
+    SELECT i.id, i.stack_size,
+           (inv.inventory_type = 33 AND EXISTS (
+               SELECT 1 FROM dune.actor_inventories ai
+               WHERE ai.inventory_id = inv.id
+                 AND ai.component_name_hash = -689927216
+           )) AS is_reserve
+    FROM dune.items i
+    JOIN dune.inventories inv ON inv.id = i.inventory_id
+    WHERE i.id = $ItemId::bigint$expectedClause
+    FOR UPDATE
+),
+updated AS (
+    UPDATE dune.items i
+       SET stack_size = $StackSize::bigint
+      FROM matched m
+     WHERE i.id = m.id
+       AND (NOT m.is_reserve OR $StackSize::bigint >= m.stack_size)
+    RETURNING i.id
+)
+SELECT CASE
+           WHEN is_reserve AND $StackSize::bigint < stack_size THEN 'reserve_blocked'
+           WHEN EXISTS (SELECT 1 FROM updated) THEN 'updated'
+           ELSE 'stale'
+       END AS status
+FROM matched;
 "@
     $res = Invoke-DuneSqlQuery -Ip $Ip -Sql $sql -ReadOnly $false -MaxRows 1 -TimeoutSec 30
     if (-not $res.ok) { return @{ ok = $false; error = $res.error } }
-    $affected = @(ConvertTo-DuneRowMaps -Result $res).Count
-    if ($affected -eq 0) {
+    $rows = @(ConvertTo-DuneRowMaps -Result $res)
+    if ($rows.Count -eq 0 -or [string]$rows[0]['status'] -eq 'stale') {
         return @{ ok = $false; error = 'Item quantity changed or the item no longer exists. Refresh and try again.' }
+    }
+    if ([string]$rows[0]['status'] -eq 'reserve_blocked') {
+        return @{ ok = $false; error = 'Reserve quantities cannot be reduced directly because remaining rows can become hidden and keep base recycling blocked. Use guarded Recover Reserve instead.' }
     }
     return @{ ok = $true; message = "Set item $ItemId stack to $StackSize." }
 }

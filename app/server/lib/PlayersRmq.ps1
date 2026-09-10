@@ -184,6 +184,32 @@ function Invoke-DunePlayerCleanInventoryLive {
     param([string] $Ip, [string] $FlsId, [long] $ActorId = 0)
     $r = Resolve-DuneFlsIdOrError -Ip $Ip -FlsId $FlsId -ActorId $ActorId
     if (-not $r.ok) { return @{ ok = $false; error = $r.error } }
+    $pawnId = $ActorId
+    if ($pawnId -le 0) {
+        $safeFls = ([string]$r.fls_id) -replace "'", "''"
+        $target = Invoke-DuneSqlQuery -Ip $Ip -Sql @"
+SELECT ps.player_pawn_id::text AS pawn_id
+FROM dune.player_state ps
+JOIN dune.accounts account ON account.id = ps.account_id
+WHERE account."user" = '$safeFls';
+"@ -ReadOnly $true -MaxRows 2 -TimeoutSec 15
+        if (-not $target.ok) { return @{ ok = $false; error = "Clean Inventory target could not be proven. $($target.error)" } }
+        $targetRows = @(ConvertTo-DuneRowMaps -Result $target)
+        if ($targetRows.Count -ne 1) {
+            return @{ ok = $false; error = 'Clean Inventory requires one exact player target before Reserve safety can be checked.' }
+        }
+        $pawnId = [long](ConvertTo-DuneInt $targetRows[0]['pawn_id'])
+    }
+    $reserve = Test-DunePlayerReserveItems -Ip $Ip -PawnId $pawnId
+    if (-not $reserve.ok) {
+        return @{ ok = $false; error = "Clean Inventory was blocked because Reserve safety could not be proven. $($reserve.error)" }
+    }
+    if ($reserve.item_rows -gt 0) {
+        return @{
+            ok = $false
+            error = "Clean Inventory is blocked while Reserve contains $($reserve.item_rows) item row(s). Cleaning can strand hidden Reserve contents and keep base recycling blocked; use guarded Recover Reserve first."
+        }
+    }
     $res = Invoke-DuneRmqCleanPlayerInventory -FlsId $r.fls_id
     if ($res.ok) { $res.message = "Clean inventory command sent for $($r.fls_id)." }
     return $res
