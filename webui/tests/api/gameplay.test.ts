@@ -50,6 +50,25 @@ function last(): FetchCall {
   return calls[calls.length - 1]!
 }
 
+describe('Reserve exact identity transport', () => {
+  it('uses the same pawn/controller pair for preview, recovery and rollback without account substitution', async () => {
+    const player: gp.Player = {
+      id: 42, controller_id: 43, account_id: 99, name: 'Test player',
+      class: '', map: '', faction_id: 0, faction_name: '', online_status: 'Offline',
+    }
+    await gp.getPlayerDetail(player.id, player.controller_id)
+    expect(last().url).toBe('/api/gameplay/players/detail?pawn=42&controller=43')
+    await gp.getReserveRecovery(player.id, player.controller_id)
+    expect(last().url).toBe('/api/gameplay/players/reserve-recovery?pawn=42&controller=43')
+    await gp.recoverReserve(player.id, player.controller_id, 'a'.repeat(64))
+    expect(last().url).toBe('/api/gameplay/players/reserve-recovery')
+    expect(last().body).toEqual({ pawn_id: 42, controller_id: 43, revision: 'a'.repeat(64) })
+    await gp.rollbackReserve(player.id, player.controller_id, 'b'.repeat(32))
+    expect(last().url).toBe('/api/gameplay/players/reserve-recovery/rollback')
+    expect(last().body).toEqual({ pawn_id: 42, controller_id: 43, recovery_id: 'b'.repeat(32) })
+  })
+})
+
 describe('Phase A — currency / progression writes', () => {
   it('builds the bounded shared inventory query', async () => {
     await gp.getSharedInventory({
