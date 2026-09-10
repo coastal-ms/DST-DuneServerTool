@@ -81,6 +81,13 @@ jobs:
           $v = (Get-Module PSScriptAnalyzer).Version
           Write-Host "PSScriptAnalyzer $v ready."
 
+          # The Actions pwsh wrapper appends `exit $LASTEXITCODE`, so a
+          # non-zero code left behind by nuget.exe in the fallback path
+          # would fail this step even though the import above succeeded.
+          # Import-Module uses -ErrorAction Stop, so reaching this line
+          # means the module really is loaded; make that the exit code.
+          exit 0
+
       - name: Parse-validate dune-server.ps1
         shell: pwsh
         run: |
