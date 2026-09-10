@@ -248,7 +248,7 @@ DUNE_HYPERV_LIFECYCLE_STATUS supported=true hv_utils=true shutdown_channel=true 
     It 'restores host values and removes a newly installed guest hook when reconcile fails' {
         $script:testLifecycleState = $null
         $status = @{
-            ip = '192.168.23.219'
+            ip = '192.168.1.219'
             guest = @{ reachable = $true; supported = $true; installed = $false }
         }
         $hostSnapshot = @{
@@ -302,7 +302,7 @@ DUNE_HYPERV_LIFECYCLE_STATUS supported=true hv_utils=true shutdown_channel=true 
     It 'preserves configured host values when a repeat reconcile fails' {
         $script:testHostApplyCalls = 0
         $status = @{
-            ip = '192.168.23.219'
+            ip = '192.168.1.219'
             guest = @{ reachable = $true; supported = $true; installed = $true }
         }
         $hostSnapshot = @{
@@ -346,7 +346,7 @@ DUNE_HYPERV_LIFECYCLE_STATUS supported=true hv_utils=true shutdown_channel=true 
 
     It 'compensates back to fully configured state when uninstall host restore fails' {
         $status = @{
-            ip = '192.168.23.219'
+            ip = '192.168.1.219'
             host = @{ compliant = $true }
             guest = @{ installed = $true }
         }
