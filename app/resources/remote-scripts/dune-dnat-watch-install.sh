@@ -18,7 +18,7 @@
 #
 #   THE GAME-UDP BRIDGE IS BIND-DETECTED, NOT UNCONDITIONAL.
 #   A remote player's game traffic is forwarded by their home router to the VM's
-#   LAN IP (e.g. 192.168.23.219:7778). When the Funcom game pods run hostNetwork
+#   LAN IP (e.g. 192.168.1.219:7778). When the Funcom game pods run hostNetwork
 #   and bind their UDP ports to the PUBLIC IP only (verified 2026-07-07 by
 #   tcpdump: packets to <lan-ip>:7778 drew "ICMP udp port unreachable" -> P34),
 #   nothing listens on the LAN IP, so the packet is black-holed. The bridge
