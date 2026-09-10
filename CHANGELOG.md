@@ -35,8 +35,6 @@ here cover everything those tags shipped.
 
 - Protected Reserve items from direct deletion, quantity reduction, and live
   Clean Inventory so hidden remaining rows cannot keep base recycling blocked.
-- Replaced an environment-specific example address in the test suite with a
-  documentation placeholder.
 
 ## [15.0.2] - 2026-09-09
 
