@@ -372,8 +372,12 @@ bg_ready() {
     _db=${_rest%%|*}; _rest=${_rest#*|}
     _gw=${_rest%%|*}; _rest=${_rest#*|}
     _director=${_rest%%|*}; _servers=${_rest#*|}
-    [ "$_head" = Healthy ] && [ "$_db" = Healthy ] &&
-        [ "$_gw" = Running ] && [ "$_director" = Ready ] || return 1
+    case "$_head" in
+        Healthy|Running) ;;
+        *) return 1 ;;
+    esac
+    [ "$_db" = Healthy ] && [ "$_gw" = Running ] &&
+        [ "$_director" = Ready ] || return 1
     [ -n "$_servers" ] || return 1
     printf '%s' "$_servers" | tr ',' '\n' |
         awk -F: 'NF == 2 { seen=1; if ($1 != "Running" || $2 != "true") exit 1 } END { if (!seen) exit 1 }'

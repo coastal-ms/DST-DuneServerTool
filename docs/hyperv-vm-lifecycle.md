@@ -29,7 +29,10 @@ The guest lifecycle service:
 - records shutdown failure durably but releases OpenRC after 300 seconds;
 - restarts only when the battlegroup was running before shutdown;
 - waits for the k3s API, database pods, operators, webhook endpoints, and the
-  established battlegroup readiness fields, with a 900-second bound; and
+  established battlegroup readiness fields, with a 900-second bound. The
+  top-level Funcom phase may be `Running` (current) or `Healthy` (legacy), but
+  database, gateway, director, and every game server must still report their
+  healthy/ready states; and
 - records startup success, failure, or skip state for the Settings status view.
 
 Reconcile snapshots original host and guest state before mutation. Removal
