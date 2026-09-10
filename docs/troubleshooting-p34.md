@@ -88,7 +88,7 @@ P34s for you while outside players connect fine.
   route -p add <PUBLIC_IP> mask 255.255.255.255 <VM_LAN_IP>
   ```
 
-  Example: `route -p add 67.55.18.153 mask 255.255.255.255 192.168.68.62`.
+  Example: `route -p add 203.0.113.10 mask 255.255.255.255 192.168.1.50`.
   `-p` makes it survive reboots; undo with `route delete <PUBLIC_IP>`. This works
   because the server VM already answers on its public IP. A **console**
   (PlayStation/Xbox) can't take a local route — it must connect by the server's
