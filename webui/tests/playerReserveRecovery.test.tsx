@@ -1,5 +1,5 @@
 import React from 'react'
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   getPlayerDetail, getReserveRecovery, recoverReserve, rollbackReserve,
@@ -77,6 +77,65 @@ describe('Reserve recovery inventory controls', () => {
     expect(button).toBeEnabled()
     fireEvent.click(button)
     await waitFor(() => expect(recoverReserve).toHaveBeenCalledExactlyOnceWith(42, 100, 'a'.repeat(64)))
+  })
+
+  it('shows truthful blocked identity evidence even when protected inventory loads', async () => {
+    vi.mocked(getReserveRecovery).mockResolvedValue({
+      ...preview, available: false, blocked_reason: 'The exact pawn/controller pair no longer identifies one player.',
+    })
+    renderInventory()
+    expect(await screen.findByText('Reserve · protected')).toBeInTheDocument()
+    expect(await screen.findByText(/exact pawn\/controller pair/)).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /Recover Reserve to Backpack/ })).not.toBeInTheDocument()
+    expect(recoverReserve).not.toHaveBeenCalled()
+  })
+
+  it('discards a prior acknowledgement while refreshing and requires a new one even for the same revision', async () => {
+    renderInventory()
+    await screen.findByRole('button', { name: /Recover Reserve to Backpack/ })
+    fireEvent.change(screen.getByRole('textbox', { name: 'Reserve recovery confirmation' }), { target: { value: 'RECOVER' } })
+    let finish!: (value: ReserveRecoveryPreview) => void
+    vi.mocked(getReserveRecovery).mockImplementationOnce(() => new Promise(resolve => { finish = resolve }))
+    fireEvent.click(screen.getByRole('button', { name: 'Refresh inventory' }))
+    expect(await screen.findByText('Checking Reserve safety…')).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /Recover Reserve to Backpack/ })).not.toBeInTheDocument()
+    await act(async () => { finish(preview) })
+    expect(await screen.findByRole('button', { name: /Recover Reserve to Backpack/ })).toBeDisabled()
+  })
+
+  it('does not pair an earlier player preview with the current selection', async () => {
+    vi.mocked(getReserveRecovery).mockResolvedValue({ ...preview, controller_id: 101 })
+    renderInventory()
+    expect(await screen.findByText(/Reserve preview does not match the selected player/)).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /Recover Reserve to Backpack/ })).not.toBeInTheDocument()
+  })
+
+  it('keeps both writes unavailable when current player status is not Offline', async () => {
+    vi.mocked(getReserveRecovery).mockResolvedValue({
+      ...preview,
+      rollback: { recovery_id: 'b'.repeat(32), item_rows: 1, created_at: '2026-01-01T00:00:00Z' },
+    })
+    render(<InventorySection player={{ ...player, online_status: 'Online' }} canWrite demo={false} refreshKey={0} flash={vi.fn()} onChanged={vi.fn()} />)
+    await screen.findByRole('button', { name: /Recover Reserve to Backpack/ })
+    fireEvent.change(screen.getByRole('textbox', { name: 'Reserve recovery confirmation' }), { target: { value: 'RECOVER' } })
+    expect(screen.getByRole('button', { name: /Recover Reserve to Backpack/ })).toBeDisabled()
+    fireEvent.change(screen.getByRole('textbox', { name: 'Reserve rollback confirmation' }), { target: { value: 'ROLLBACK' } })
+    expect(screen.getByRole('button', { name: /Roll back recovery/ })).toBeDisabled()
+  })
+
+  it('does not restore a stale preview after the selection changes', async () => {
+    let finishOld!: (value: ReserveRecoveryPreview) => void
+    vi.mocked(getReserveRecovery).mockImplementationOnce(() => new Promise(resolve => { finishOld = resolve }))
+    const props = { canWrite: true, demo: false, refreshKey: 0, flash: vi.fn(), onChanged: vi.fn() }
+    const { rerender } = render(<InventorySection {...props} player={player} />)
+    await waitFor(() => expect(getReserveRecovery).toHaveBeenCalledWith(42, 100))
+    vi.mocked(getReserveRecovery).mockResolvedValue({ ...preview, pawn_id: 44, controller_id: 102, revision: 'c'.repeat(64) })
+    rerender(<InventorySection {...props} player={{ ...player, id: 44, controller_id: 102 }} />)
+    await screen.findByRole('button', { name: /Recover Reserve to Backpack/ })
+    await act(async () => { finishOld(preview) })
+    fireEvent.change(screen.getByRole('textbox', { name: 'Reserve recovery confirmation' }), { target: { value: 'RECOVER' } })
+    fireEvent.click(screen.getByRole('button', { name: /Recover Reserve to Backpack/ }))
+    await waitFor(() => expect(recoverReserve).toHaveBeenCalledExactlyOnceWith(44, 102, 'c'.repeat(64)))
   })
 
   it('offers only exact persisted rollback and requires a second typed acknowledgement', async () => {

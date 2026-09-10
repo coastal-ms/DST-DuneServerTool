@@ -94,14 +94,20 @@ WHERE inv.actor_id = $PawnId::bigint
     if (-not $result.ok) {
         return @{ ok = $false; error = "Reserve inventory could not be checked. $($result.error)" }
     }
-    $rows = @(ConvertTo-DuneRowMaps -Result $result)
+    $rows = ConvertTo-DuneRowMaps -Result $result
     if ($rows.Count -ne 1) {
         return @{ ok = $false; error = 'Reserve inventory could not be checked exactly.' }
     }
+    $itemRows = 0L
+    $itemUnits = 0L
+    if (-not [long]::TryParse([string]$rows[0]['item_rows'], [ref]$itemRows) -or $itemRows -lt 0 -or
+        -not [long]::TryParse([string]$rows[0]['item_units'], [ref]$itemUnits) -or $itemUnits -lt 0) {
+        return @{ ok = $false; error = 'Reserve inventory counts could not be proven.' }
+    }
     return @{
         ok = $true
-        item_rows = [long](ConvertTo-DuneInt $rows[0]['item_rows'])
-        item_units = [long](ConvertTo-DuneInt $rows[0]['item_units'])
+        item_rows = $itemRows
+        item_units = $itemUnits
     }
 }
 
@@ -149,7 +155,7 @@ backpack_items AS (
 ),
 snapshot AS (
     SELECT jsonb_build_object(
-        'player', COALESCE((SELECT to_jsonb(p) FROM exact_player p), '{}'::jsonb),
+        'player', COALESCE((SELECT to_jsonb(p) FROM exact_player p WHERE (SELECT count(*) FROM exact_player) = 1), '{}'::jsonb),
         'reserve', COALESCE((SELECT jsonb_agg(to_jsonb(r) ORDER BY r.id) FROM reserve_rows r), '[]'::jsonb),
         'reserve_items', COALESCE((SELECT jsonb_agg(item) FROM reserve_items), '[]'::jsonb),
         'backpack', COALESCE((SELECT jsonb_agg(to_jsonb(b) ORDER BY b.id) FROM backpack_rows b), '[]'::jsonb),
@@ -157,7 +163,10 @@ snapshot AS (
     ) AS value
 )
 SELECT (SELECT count(*) FROM exact_player)::text AS player_count,
-       COALESCE((SELECT online_status::text FROM exact_player), '') AS online_status,
+       COALESCE((SELECT online_status::text FROM exact_player WHERE (SELECT count(*) FROM exact_player) = 1), '') AS online_status,
+       COALESCE((SELECT md5(jsonb_build_array(p.id, p.account_id, p.player_pawn_id, p.player_controller_id)::text)
+                 FROM exact_player p
+                 WHERE (SELECT count(*) FROM exact_player) = 1 AND p.id > 0 AND p.account_id > 0), '') AS player_identity_revision,
        (SELECT count(*) FROM reserve_rows)::text AS reserve_count,
        (SELECT count(*) FROM backpack_rows)::text AS backpack_count,
        COALESCE((SELECT to_jsonb(r)::text FROM reserve_rows r ORDER BY r.id LIMIT 1), '{}') AS reserve_inventory,
@@ -187,7 +196,8 @@ function Get-DuneReserveSnapshot {
     $result = Invoke-DuneSqlQuery -Ip $Ip -Sql (Get-DuneReserveSnapshotSql -PawnId $PawnId -ControllerId $ControllerId) `
         -ReadOnly $true -MaxRows 1 -TimeoutSec 30
     if (-not $result.ok) { return @{ ok = $false; error = $result.error } }
-    $rows = @(ConvertTo-DuneRowMaps -Result $result)
+    # ConvertTo-DuneRowMaps already returns a non-enumerated array of row maps.
+    $rows = ConvertTo-DuneRowMaps -Result $result
     if ($rows.Count -ne 1) { return @{ ok = $false; error = 'Reserve snapshot did not return exactly one result.' } }
     $row = $rows[0]
     try {
@@ -196,6 +206,7 @@ function Get-DuneReserveSnapshot {
             database_scope = [string]$scope.key
             player_count = [int](ConvertTo-DuneInt $row['player_count'])
             online_status = [string]$row['online_status']
+            player_identity_revision = [string]$row['player_identity_revision']
             reserve_count = [int](ConvertTo-DuneInt $row['reserve_count'])
             backpack_count = [int](ConvertTo-DuneInt $row['backpack_count'])
             reserve_inventory = ConvertFrom-DuneReserveJson -Value ([string]$row['reserve_inventory']) -Fallback ([pscustomobject]@{})
@@ -263,8 +274,10 @@ function ConvertTo-DuneReservePreview {
         rollback = $null
         database_scope = [string]$Snapshot.database_scope
         snapshot_revision = [string]$Snapshot.snapshot_revision
+        player_identity_revision = [string]$Snapshot.player_identity_revision
     }
     if ($Snapshot.player_count -ne 1) { $preview.blocked_reason = 'The exact pawn/controller pair no longer identifies one player.'; return $preview }
+    if ([string]$Snapshot.player_identity_revision -notmatch '^[a-f0-9]{32}$') { $preview.blocked_reason = 'The exact character and account identity could not be proven.'; return $preview }
     if ([string]$Snapshot.online_status -cne 'Offline') { $preview.blocked_reason = 'The player must be Offline before Reserve recovery.'; return $preview }
     if ($Snapshot.reserve_count -ne 1) { $preview.blocked_reason = 'DST requires exactly one Reserve inventory with the proven type and component identity.'; return $preview }
     if ($Snapshot.backpack_count -ne 1) { $preview.blocked_reason = 'DST requires exactly one pawn-owned Backpack inventory.'; return $preview }
@@ -290,6 +303,11 @@ function ConvertTo-DuneReservePreview {
     try {
         $active = Get-DuneReserveActiveRollback -PawnId $PawnId -DatabaseScope $Snapshot.database_scope
         if ($active) {
+            if ([long]$active.controller_id -ne $ControllerId -or
+                [string]$active.player_identity_revision -cne [string]$Snapshot.player_identity_revision) {
+                $preview.blocked_reason = 'The prior recovery has no matching character/account proof. Its rollback cannot be used for this identity.'
+                return $preview
+            }
             $preview.rollback = @{
                 recovery_id = [string]$active.recovery_id
                 item_rows = @($active.items).Count
@@ -425,13 +443,6 @@ DECLARE
 BEGIN
     PERFORM 1 FROM dune.encrypted_player_state
      WHERE player_pawn_id = $([long]$Preview.pawn_id)::bigint FOR UPDATE;
-    IF NOT EXISTS (
-        SELECT 1 FROM dune.player_state
-        WHERE player_pawn_id = $([long]$Preview.pawn_id)::bigint
-          AND player_controller_id = $([long]$Preview.controller_id)::bigint
-          AND online_status::text = 'Offline'
-    ) THEN RAISE EXCEPTION 'player identity or Offline state changed'; END IF;
-
     PERFORM 1 FROM dune.inventories
      WHERE id IN ($([long]$Preview.reserve_inventory_id)::bigint, $([long]$Preview.backpack_inventory_id)::bigint)
      ORDER BY id FOR UPDATE;
@@ -444,7 +455,10 @@ BEGIN
      ORDER BY id FOR UPDATE;
 
     SELECT snapshot_revision INTO actual_revision
-    FROM ($snapshotSql) current_snapshot;
+    FROM ($snapshotSql) current_snapshot
+    WHERE player_count = '1' AND online_status = 'Offline'
+      AND player_identity_revision = '$([string]$Preview.player_identity_revision)';
+    IF actual_revision IS NULL THEN RAISE EXCEPTION 'player identity or Offline state changed'; END IF;
     IF actual_revision IS DISTINCT FROM '$([string]$Preview.snapshot_revision)' THEN
         RAISE EXCEPTION 'Reserve or Backpack changed after preview';
     END IF;
@@ -508,7 +522,7 @@ ORDER BY i.id;
 "@
     $result = Invoke-DuneSqlQuery -Ip $Ip -Sql $sql -ReadOnly $true -MaxRows @($Entry.items).Count -TimeoutSec 20
     if (-not $result.ok) { return @{ ok = $false; error = $result.error } }
-    $actual = @(ConvertTo-DuneRowMaps -Result $result)
+    $actual = ConvertTo-DuneRowMaps -Result $result
     if ($actual.Count -ne @($Entry.items).Count) { return @{ ok = $false; error = 'Moved item count did not read back exactly.' } }
     foreach ($expected in @($Entry.items)) {
         $row = @($actual | Where-Object { [long]$_['item_id'] -eq [long]$expected.item_id })
@@ -546,6 +560,7 @@ function Invoke-DuneReserveRecovery {
         database_scope = $preview.database_scope
         preview_revision = $preview.revision
         snapshot_revision = $preview.snapshot_revision
+        player_identity_revision = $preview.player_identity_revision
         reserve_inventory_id = $preview.reserve_inventory_id
         backpack_inventory_id = $preview.backpack_inventory_id
         backup_path = $backup.path
@@ -592,6 +607,10 @@ function Invoke-DuneReserveRecovery {
 
 function Get-DuneReserveRollbackSql {
     param([Parameter(Mandatory)]$Entry)
+    if ([string]$Entry.player_identity_revision -notmatch '^[a-f0-9]{32}$') {
+        throw 'The recovery record has no proven character/account identity. Nothing was restored.'
+    }
+    $snapshotSql = (Get-DuneReserveSnapshotSql -PawnId ([long]$Entry.pawn_id) -ControllerId ([long]$Entry.controller_id)).Trim().TrimEnd(';')
     $values = @($Entry.items | ForEach-Object {
         "($([long]$_.item_id)::bigint,$([int]$_.source_position)::integer,$([int]$_.destination_position)::integer,'$([string]$_.invariant_revision)'::text)"
     }) -join ",`n        "
@@ -604,12 +623,6 @@ DECLARE restored_count integer;
 BEGIN
     PERFORM 1 FROM dune.encrypted_player_state
      WHERE player_pawn_id = $([long]$Entry.pawn_id)::bigint FOR UPDATE;
-    IF NOT EXISTS (
-        SELECT 1 FROM dune.player_state
-        WHERE player_pawn_id = $([long]$Entry.pawn_id)::bigint
-          AND player_controller_id = $([long]$Entry.controller_id)::bigint
-          AND online_status::text = 'Offline'
-    ) THEN RAISE EXCEPTION 'player identity or Offline state changed'; END IF;
     PERFORM 1 FROM dune.inventories
      WHERE id IN ($([long]$Entry.reserve_inventory_id)::bigint, $([long]$Entry.backpack_inventory_id)::bigint)
      ORDER BY id FOR UPDATE;
@@ -620,6 +633,12 @@ BEGIN
     PERFORM 1 FROM dune.items
      WHERE inventory_id IN ($([long]$Entry.reserve_inventory_id)::bigint, $([long]$Entry.backpack_inventory_id)::bigint)
      ORDER BY id FOR UPDATE;
+    IF NOT EXISTS (
+        SELECT 1 FROM ($snapshotSql) current_snapshot
+        WHERE player_count = '1' AND online_status = 'Offline'
+          AND player_identity_revision = '$([string]$Entry.player_identity_revision)'
+          AND reserve_count = '1' AND backpack_count = '1'
+    ) THEN RAISE EXCEPTION 'player identity, Offline state or inventory identity changed'; END IF;
     IF NOT EXISTS (
         SELECT 1 FROM dune.inventories inv
         JOIN dune.actor_inventories ai
@@ -689,6 +708,19 @@ function Invoke-DuneReserveRecoveryRollback {
     })
     if ($matches.Count -ne 1) { return @{ ok = $false; error = 'No exact active rollback record matches this player and database.' } }
     $entry = $matches[0]
+    if ([string]$entry.player_identity_revision -notmatch '^[a-f0-9]{32}$') {
+        return @{ ok = $false; error = 'The recovery record has no proven character/account identity. Nothing was restored.' }
+    }
+    $snapshot = Get-DuneReserveSnapshot -Ip $Ip -PawnId $PawnId -ControllerId $ControllerId
+    if (-not $snapshot.ok) { return $snapshot }
+    if ($snapshot.database_scope -cne [string]$entry.database_scope -or $snapshot.player_count -ne 1 -or
+        $snapshot.online_status -cne 'Offline' -or
+        $snapshot.player_identity_revision -cne [string]$entry.player_identity_revision -or
+        $snapshot.reserve_count -ne 1 -or $snapshot.backpack_count -ne 1 -or
+        [long]$snapshot.reserve_inventory.id -ne [long]$entry.reserve_inventory_id -or
+        [long]$snapshot.backpack_inventory.id -ne [long]$entry.backpack_inventory_id) {
+        return @{ ok = $false; error = 'The exact player, Offline state, database or inventory identity changed. Nothing was restored.' }
+    }
     $backup = Invoke-DuneVerifiedSafetyBackup -Ip $Ip -StemPrefix 'dst-reserve-rollback' -ProofLabel 'DST_RESERVE_BACKUP'
     if (-not $backup.ok) { return @{ ok = $false; error = "Rollback stopped because $($backup.error)" } }
     if ($backup.database_scope -cne [string]$entry.database_scope) {

@@ -2786,13 +2786,14 @@ export function InventorySection({ player, canWrite, demo, refreshKey, flash, on
 
   useEffect(() => {
     let alive = true
-    if (demo) { setReserve(null); setReserveErr(null); return () => { alive = false } }
+    setReserve(null)
+    if (demo) { setReserveErr(null); return () => { alive = false } }
     setReserveErr(null)
     getReserveRecovery(player.id, player.controller_id)
       .then(r => { if (alive) setReserve(r) })
       .catch(e => { if (alive) setReserveErr(e instanceof Error ? e.message : String(e)) })
     return () => { alive = false }
-  }, [player.id, player.controller_id, demo, refreshKey, tick])
+  }, [player.id, player.controller_id, player.account_id, player.online_status, demo, refreshKey, tick])
 
   const groups = useMemo(() => {
     const inv = detail?.inventory ?? []
@@ -2860,7 +2861,7 @@ function ReserveRecoveryCard({ preview, error, canWrite, busy, player, run }: {
   run: (fn: () => Promise<{ message: string }>, label: string) => Promise<boolean>
 }) {
   const [ack, setAck] = useState('')
-  useEffect(() => { setAck('') }, [preview?.revision, preview?.rollback?.recovery_id])
+  useEffect(() => { setAck('') }, [preview?.revision, preview?.rollback?.recovery_id, player.id, player.controller_id, player.account_id])
   if (error) {
     return <div className="rounded-lg border border-danger/40 bg-danger/5 px-3 py-2 text-xs text-danger" role="alert">
       Reserve safety preview unavailable: {error}
@@ -2869,6 +2870,10 @@ function ReserveRecoveryCard({ preview, error, canWrite, busy, player, run }: {
   if (!preview) {
     return <div className="rounded-lg border border-border bg-surface-2 px-3 py-2 text-xs text-text-dim">Checking Reserve safety…</div>
   }
+  if (preview.pawn_id !== player.id || preview.controller_id !== player.controller_id) {
+    return <ErrorBox msg="Reserve preview does not match the selected player. Refresh inventory before continuing." />
+  }
+  const writable = canWrite && player.online_status === 'Offline' && preview.online_status === 'Offline'
   const recoveryAck = ack === 'RECOVER'
   const rollbackAck = ack === 'ROLLBACK'
   const afterVolume = preview.used_volume + preview.required_volume
@@ -2912,8 +2917,8 @@ function ReserveRecoveryCard({ preview, error, canWrite, busy, player, run }: {
             <input className="mt-1 w-full max-w-48 font-mono bg-surface-2 border border-border rounded px-2 py-1"
               value={ack} onChange={e => setAck(e.target.value)} disabled={busy} aria-label="Reserve recovery confirmation" />
           </label>
-          <button className="btn-danger text-xs" disabled={!canWrite || busy || !recoveryAck}
-            onClick={() => void run(() => recoverReserve(player.id, player.controller_id, preview.revision), 'Recover Reserve')}>
+          <button className="btn-danger text-xs" disabled={!writable || busy || !recoveryAck}
+            onClick={() => void run(() => recoverReserve(preview.pawn_id, preview.controller_id, preview.revision), 'Recover Reserve')}>
             <Icon name="ArchiveRestore" size={12} /> Recover Reserve to Backpack
           </button>
         </div>
@@ -2926,8 +2931,8 @@ function ReserveRecoveryCard({ preview, error, canWrite, busy, player, run }: {
             <input className="mt-1 w-full max-w-48 font-mono bg-surface-2 border border-border rounded px-2 py-1"
               value={ack} onChange={e => setAck(e.target.value)} disabled={busy} aria-label="Reserve rollback confirmation" />
           </label>
-          <button className="btn-danger text-xs" disabled={!canWrite || busy || !rollbackAck}
-            onClick={() => void run(() => rollbackReserve(player.id, player.controller_id, preview.rollback!.recovery_id), 'Rollback Reserve recovery')}>
+          <button className="btn-danger text-xs" disabled={!writable || busy || !rollbackAck}
+            onClick={() => void run(() => rollbackReserve(preview.pawn_id, preview.controller_id, preview.rollback!.recovery_id), 'Rollback Reserve recovery')}>
             <Icon name="Undo2" size={12} /> Roll back recovery
           </button>
         </div>

@@ -13,6 +13,19 @@ here cover everything those tags shipped.
 
 ## [Unreleased]
 
+## [15.0.4] - 2026-09-10
+
+### Fixed
+
+- Fixed Hidden Reserve safety previews rejecting a valid Offline player because
+  database result rows were wrapped twice. Reserve protection and independent
+  recovery readback now use the same row-mapping contract as player inventory.
+- Reserve recovery and rollback retain exact player, database, inventory,
+  capacity, backup and changed-state checks. Rollback also binds the original
+  character/account identity; older records without that proof remain blocked.
+  Refreshing or switching players clears stale recovery previews and
+  acknowledgements.
+
 ## [15.0.3] - 2026-09-09
 
 ### Added
