@@ -81,6 +81,54 @@ export function deleteHyperVLanCredential() {
   return api<{ ok: boolean }>('/api/setup/hyperv-lan/credential', { method: 'DELETE' })
 }
 
+export interface HyperVLifecycleGuestStatus {
+  reachable: boolean
+  supported: boolean
+  reason: string
+  hvUtils?: boolean
+  shutdownChannel?: boolean
+  installed?: boolean
+  runlevel?: boolean
+  serviceStarted?: boolean
+  desired?: string
+  lastShutdownResult?: string
+  lastShutdownPhase?: string
+  lastShutdownAt?: string
+  lastStartResult?: string
+  lastStartPhase?: string
+  lastStartAt?: string
+}
+
+export interface HyperVLifecycleStatus {
+  ok: boolean
+  configured: boolean
+  ip: string
+  rollbackStatePresent: boolean
+  rollbackStateMatches: boolean
+  rollbackStateError: string
+  host: {
+    identity: string
+    vmId: string
+    vmName: string
+    vmState: string
+    shutdownServiceId: string
+    shutdownEnabled: boolean
+    automaticStopAction: string
+    compliant: boolean
+  }
+  guest: HyperVLifecycleGuestStatus
+}
+
+export function getHyperVLifecycle() {
+  return api<HyperVLifecycleStatus>('/api/setup/hyperv-lifecycle')
+}
+export function reconcileHyperVLifecycle() {
+  return api<HyperVLifecycleStatus>('/api/setup/hyperv-lifecycle/reconcile', { method: 'POST' })
+}
+export function removeHyperVLifecycle() {
+  return api<HyperVLifecycleStatus>('/api/setup/hyperv-lifecycle', { method: 'DELETE' })
+}
+
 // Remote install (VM lives on a headless Hyper-V host). user/password are
 // optional — omit them to use the saved Hyper-V LAN credential for hostIp
 // (set in the Connect step) instead of re-entering it; an explicit value here

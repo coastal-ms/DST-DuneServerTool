@@ -6,6 +6,9 @@ import {
   deleteHyperVLanCredential,
   getHyperVLanHostResources,
   startHyperVLanInstall,
+  getHyperVLifecycle,
+  reconcileHyperVLifecycle,
+  removeHyperVLifecycle,
 } from '../../src/api/setup'
 
 interface FetchCall {
@@ -45,6 +48,20 @@ describe('Hyper-V LAN credential API', () => {
       url: '/api/setup/hyperv-lan/test',
       method: 'POST',
       body: { hostIp: '192.168.1.50', user: undefined, password: undefined },
+    })
+  })
+
+  describe('Hyper-V VM lifecycle API', () => {
+    it('keeps status read-only and mutations explicit', async () => {
+      await getHyperVLifecycle()
+      await reconcileHyperVLifecycle()
+      await removeHyperVLifecycle()
+
+      expect(calls.slice(-3)).toEqual([
+        { url: '/api/setup/hyperv-lifecycle', method: undefined, body: undefined },
+        { url: '/api/setup/hyperv-lifecycle/reconcile', method: 'POST', body: undefined },
+        { url: '/api/setup/hyperv-lifecycle', method: 'DELETE', body: undefined },
+      ])
     })
   })
 

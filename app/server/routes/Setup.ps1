@@ -26,6 +26,35 @@ Register-DuneRoute -Method GET -Path '/api/setup/hyperv-lan' -LocalOnly -Handler
     }
 }
 
+# Hyper-V VM lifecycle is deliberately separate from passive VM status polling:
+# GET is read-only, while reconcile/remove are explicit host-local actions.
+Register-DuneRoute -Method GET -Path '/api/setup/hyperv-lifecycle' -LocalOnly -Handler {
+    param($req, $res, $routeParams, $body)
+    try {
+        Write-DuneJson -Response $res -Body (Get-DuneHyperVLifecycleStatus)
+    } catch {
+        Write-DuneError -Response $res -Status 500 -Message $_.Exception.Message
+    }
+}
+
+Register-DuneRoute -Method POST -Path '/api/setup/hyperv-lifecycle/reconcile' -LocalOnly -Handler {
+    param($req, $res, $routeParams, $body)
+    try {
+        Write-DuneJson -Response $res -Body (Invoke-DuneHyperVLifecycleReconcile)
+    } catch {
+        Write-DuneError -Response $res -Status 500 -Message $_.Exception.Message
+    }
+}
+
+Register-DuneRoute -Method DELETE -Path '/api/setup/hyperv-lifecycle' -LocalOnly -Handler {
+    param($req, $res, $routeParams, $body)
+    try {
+        Write-DuneJson -Response $res -Body (Remove-DuneHyperVLifecycle)
+    } catch {
+        Write-DuneError -Response $res -Status 500 -Message $_.Exception.Message
+    }
+}
+
 # Save the Hyper-V-over-LAN settings. This is the routing toggle: mode='lan' +
 # a host IP points every Hyper-V call at the remote host; mode='local' (or the
 # checkbox unchecked) restores today's local behavior and fully bypasses the
