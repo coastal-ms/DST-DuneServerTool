@@ -220,7 +220,15 @@ contextual dossier, with section navigation beside the selected character.
 Player and inventory actions use a searchable task list and one focused form,
 retaining existing confirmations and live/offline rules. Switching characters
 clears the previous character's action form; filtering the directory does not
-silently change the current target. Classic retains its action lists.
+silently change the current target. **Players > Community tools** exposes the
+existing in-game chat command controls, shared `!tp` destinations, and Welcome
+Back packages without changing their opt-in defaults or safety gates. Classic
+retains the same controls and action lists. Player Inventory also identifies
+hidden Reserve rows and blocks direct deletion, quantity reduction, and live
+Clean Inventory when those operations could strand remaining items. **Recover
+Reserve to Backpack** is available only for an Offline player after exact
+identity, free-slot, item-volume, changed-state, and fresh local-backup checks;
+it moves rows intact and preserves an exact guarded rollback.
 Commands uses the same task workbench while keeping its local-only layout
 editor. Bases, market entries, and vehicles have keyboard-accessible detail
 panels; fleet search and source labels distinguish reported and sample records.

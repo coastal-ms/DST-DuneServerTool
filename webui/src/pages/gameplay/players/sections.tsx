@@ -36,6 +36,7 @@ import {
   getMainQuestCatalog, unlockMainQuest,
   getContracts, completeContract,
   getVehicleKitCatalog,
+  getReserveRecovery, recoverReserve, rollbackReserve,
   type Player, type PlayerEvent, type PlayerStats, type ProgressionPreset, type SpecTrackFull,
   type AugmentSelection, type CatalogItem, type ItemPackage, type GiveItemEntry, type FreshStartSnapshot,
   type LandsraadHouse, type LandsraadIniSetting,
@@ -43,6 +44,7 @@ import {
   type PlayerVehicleRow, type TeleportDestination,
   type VehicleTemplate, type VehicleKitCatalog,
   type ContractRow,
+  type ReserveRecoveryPreview,
 } from '../../../api/gameplay'
 import { fmtNum, fmtSolari } from '../shared'
 import { useCommandDeck } from '../../../hooks/useCommandDeck'
@@ -772,7 +774,8 @@ const ACTIONS: ActionDef[] = [
   { id: 'fill-water', group: 'Items', label: 'Fill Water', icon: 'Droplets',
     run: p => fillWater(p.id) },
   { id: 'clean-inventory', group: 'Items', label: 'Clean Inventory (live)', icon: 'Trash', liveOnly: true,
-    confirm: p => `WIPE ${p.name}'s inventory? Cannot be undone.`,
+    rowNote: 'Blocked while the exact Reserve contains any item rows; recover Reserve first.',
+    confirm: p => `WIPE ${p.name}'s inventory? Cannot be undone.\n\nDST will refuse this command if Reserve contains items, because cleaning can strand hidden Reserve contents and keep base recycling blocked.`,
     run: p => cleanPlayerInventory({ actor_id: p.id }) },
 
   // ----- Vehicle -----
@@ -2767,6 +2770,8 @@ export function InventorySection({ player, canWrite, demo, refreshKey, flash, on
   const [err, setErr] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
   const [tick, setTick] = useState(0)
+  const [reserve, setReserve] = useState<ReserveRecoveryPreview | null>(null)
+  const [reserveErr, setReserveErr] = useState<string | null>(null)
   const isOnline = (player.online_status || '').toLowerCase() === 'online'
 
   useEffect(() => {
@@ -2776,6 +2781,16 @@ export function InventorySection({ player, canWrite, demo, refreshKey, flash, on
       .then(r => { if (alive) setDetail(r) })
       .catch(e => { if (alive) setErr(e instanceof Error ? e.message : String(e)) })
       .finally(() => { if (alive) setLoading(false) })
+    return () => { alive = false }
+  }, [player.id, player.controller_id, demo, refreshKey, tick])
+
+  useEffect(() => {
+    let alive = true
+    if (demo) { setReserve(null); setReserveErr(null); return () => { alive = false } }
+    setReserveErr(null)
+    getReserveRecovery(player.id, player.controller_id)
+      .then(r => { if (alive) setReserve(r) })
+      .catch(e => { if (alive) setReserveErr(e instanceof Error ? e.message : String(e)) })
     return () => { alive = false }
   }, [player.id, player.controller_id, demo, refreshKey, tick])
 
@@ -2816,6 +2831,14 @@ export function InventorySection({ player, canWrite, demo, refreshKey, flash, on
   return (
     <div className="space-y-4">
       {!contextual && <div className="flex items-center justify-end">{refreshButton}</div>}
+      {!demo && <ReserveRecoveryCard
+        preview={reserve}
+        error={reserveErr}
+        canWrite={canWrite}
+        busy={busy}
+        player={player}
+        run={run}
+      />}
       <ItemList title={`Inventory (${fmtNum(groups.gear.length)})`} icon="Backpack" items={groups.gear}
         playerId={player.id}
         toolbar={contextual ? refreshButton : undefined}
@@ -2825,6 +2848,91 @@ export function InventorySection({ player, canWrite, demo, refreshKey, flash, on
       <ItemList title={`Contract items (${fmtNum(groups.contracts.length)})`} icon="FileText" items={groups.contracts} collapsed
         playerId={player.id} canWrite={canWrite} busy={busy} run={run} isOnline={isOnline} />
     </div>
+  )
+}
+
+function ReserveRecoveryCard({ preview, error, canWrite, busy, player, run }: {
+  preview: ReserveRecoveryPreview | null
+  error: string | null
+  canWrite: boolean
+  busy: boolean
+  player: Player
+  run: (fn: () => Promise<{ message: string }>, label: string) => Promise<boolean>
+}) {
+  const [ack, setAck] = useState('')
+  useEffect(() => { setAck('') }, [preview?.revision, preview?.rollback?.recovery_id])
+  if (error) {
+    return <div className="rounded-lg border border-danger/40 bg-danger/5 px-3 py-2 text-xs text-danger" role="alert">
+      Reserve safety preview unavailable: {error}
+    </div>
+  }
+  if (!preview) {
+    return <div className="rounded-lg border border-border bg-surface-2 px-3 py-2 text-xs text-text-dim">Checking Reserve safety…</div>
+  }
+  const recoveryAck = ack === 'RECOVER'
+  const rollbackAck = ack === 'ROLLBACK'
+  const afterVolume = preview.used_volume + preview.required_volume
+  return (
+    <section className="rounded-lg border border-warning/40 bg-warning/5 p-3 space-y-3" aria-label="Reserve recovery">
+      <div className="flex items-start gap-2">
+        <Icon name="ShieldAlert" size={15} className="text-warning mt-0.5 shrink-0" />
+        <div>
+          <div className="text-sm font-semibold text-text">Hidden Reserve safety</div>
+          <p className="text-xs text-text-dim mt-1">
+            Direct deletion is blocked for every Reserve item because it can leave other rows hidden while base recycling remains blocked.
+            Guarded recovery moves intact rows only to this player&apos;s Backpack after a verified fresh backup.
+          </p>
+        </div>
+      </div>
+      {preview.item_rows > 0 && (
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs">
+          <div><span className="text-text-dim">Reserve rows</span><div className="font-mono">{fmtNum(preview.item_rows)}</div></div>
+          <div><span className="text-text-dim">Units</span><div className="font-mono">{fmtNum(preview.item_units)}</div></div>
+          <div><span className="text-text-dim">Backpack slots</span><div className="font-mono">{preview.used_slots + preview.item_rows}/{preview.max_slots}</div></div>
+          <div><span className="text-text-dim">Backpack volume</span><div className="font-mono">{afterVolume.toFixed(1)}/{preview.max_volume.toFixed(1)}</div></div>
+        </div>
+      )}
+      {preview.items.length > 0 && (
+        <div className="max-h-36 overflow-auto rounded border border-border/60 bg-surface-1/60 divide-y divide-border/50">
+          {preview.items.map(item => (
+            <div key={item.item_id} className="flex items-center justify-between gap-3 px-2 py-1.5 text-xs">
+              <span className="truncate">{item.name || item.template_id} <span className="text-text-dim">×{fmtNum(item.stack_size)}</span></span>
+              <span className="font-mono text-text-dim shrink-0">Reserve {item.source_position} → Backpack {item.destination_position}</span>
+            </div>
+          ))}
+        </div>
+      )}
+      {!preview.available && preview.blocked_reason && (
+        <div className="text-xs text-warning">{preview.blocked_reason}</div>
+      )}
+      {preview.available && (
+        <div className="space-y-2">
+          <label className="block text-xs">
+            <span className="text-text-dim">Type <strong className="text-text">RECOVER</strong> to create a fresh verified backup and move these exact rows.</span>
+            <input className="mt-1 w-full max-w-48 font-mono bg-surface-2 border border-border rounded px-2 py-1"
+              value={ack} onChange={e => setAck(e.target.value)} disabled={busy} aria-label="Reserve recovery confirmation" />
+          </label>
+          <button className="btn-danger text-xs" disabled={!canWrite || busy || !recoveryAck}
+            onClick={() => void run(() => recoverReserve(player.id, player.controller_id, preview.revision), 'Recover Reserve')}>
+            <Icon name="ArchiveRestore" size={12} /> Recover Reserve to Backpack
+          </button>
+        </div>
+      )}
+      {preview.rollback && (
+        <div className="space-y-2 border-t border-warning/30 pt-2">
+          <p className="text-xs text-text-dim">Exact rollback remains available for the last {preview.rollback.item_rows}-row recovery.</p>
+          <label className="block text-xs">
+            <span className="text-text-dim">Type <strong className="text-text">ROLLBACK</strong> to create another fresh backup and restore the original Reserve positions.</span>
+            <input className="mt-1 w-full max-w-48 font-mono bg-surface-2 border border-border rounded px-2 py-1"
+              value={ack} onChange={e => setAck(e.target.value)} disabled={busy} aria-label="Reserve rollback confirmation" />
+          </label>
+          <button className="btn-danger text-xs" disabled={!canWrite || busy || !rollbackAck}
+            onClick={() => void run(() => rollbackReserve(player.id, player.controller_id, preview.rollback!.recovery_id), 'Rollback Reserve recovery')}>
+            <Icon name="Undo2" size={12} /> Roll back recovery
+          </button>
+        </div>
+      )}
+    </section>
   )
 }
 
@@ -2893,6 +3001,7 @@ function ItemList({ title, icon, items, playerId, canWrite, busy, run, collapsed
                         <Icon name={isEditing ? 'ChevronDown' : 'ChevronRight'} size={11} className="inline-block mr-1 text-text-dim" />
                       )}
                       <span className="text-text">{it.name || it.template_id}</span>
+                      {it.is_reserve && <span className="ml-1.5 text-[10px] uppercase tracking-wide text-warning">Reserve · protected</span>}
                       {it.quality > 0 && <span className={`ml-1.5 text-[11px] ${qualityClass(it.quality)}`}>Q{it.quality}</span>}
                       {hasDur && (
                         <span className={`ml-1.5 font-mono text-[11px] ${durCls}`} title={`Durability ${curN.toFixed(0)} / ${maxN.toFixed(0)} (${Math.round(ratio * 100)}%)`}>
@@ -2919,8 +3028,8 @@ function ItemList({ title, icon, items, playerId, canWrite, busy, run, collapsed
                             <Icon name="Wrench" size={13} />
                           </button>
                         )}
-                        <button className="text-danger/80 hover:text-danger" title="Delete item" disabled={busy}
-                          onClick={() => void run(() => deleteInventoryItem(it.id), 'Delete')}>
+                        <button className="text-danger/80 hover:text-danger" title={it.is_reserve ? 'Reserve items cannot be deleted directly; use guarded Recover Reserve' : 'Delete item'} disabled={busy || it.is_reserve}
+                          onClick={() => void run(() => deleteInventoryItem(it.id, it.stack_size), 'Delete')}>
                           <Icon name="Trash2" size={13} />
                         </button>
                       </span>
@@ -2967,6 +3076,7 @@ function StackEditor({ item, busy, run, isOnline, onClose }: {
   const [str, setStr] = useState(String(item.stack_size))
   const n = parseInt(str, 10)
   const valid = Number.isFinite(n) && n >= 1
+  const reserveReduction = Boolean(item.is_reserve && valid && n < item.stack_size)
 
   return (
     <div className="border-t border-border/50 px-3 py-3 bg-surface-1/60 rounded-b-lg space-y-3">
@@ -2978,6 +3088,12 @@ function StackEditor({ item, busy, run, isOnline, onClose }: {
             quantity writes to the database immediately but won't appear in-game
             until the player relogs.
           </span>
+        </div>
+      )}
+      {item.is_reserve && (
+        <div className="text-[11px] text-warning flex items-start gap-1.5">
+          <Icon name="ShieldAlert" size={11} className="mt-0.5 shrink-0" />
+          <span>Reserve quantities cannot be reduced directly. Use guarded Recover Reserve so no hidden rows remain stranded.</span>
         </div>
       )}
       <div className="flex items-end gap-2">
@@ -2994,10 +3110,10 @@ function StackEditor({ item, busy, run, isOnline, onClose }: {
         <button
           type="button"
           className="btn-primary text-xs"
-          disabled={busy || !valid}
+          disabled={busy || !valid || reserveReduction}
           onClick={() => {
             if (!valid) return
-            void (async () => { if (await run(() => setItemStack(item.id, n), 'Save')) onClose() })()
+            void (async () => { if (await run(() => setItemStack(item.id, n, item.stack_size), 'Save')) onClose() })()
           }}
         >
           <Icon name="Save" size={12} /> Save

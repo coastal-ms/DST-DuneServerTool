@@ -1,13 +1,14 @@
 import React from 'react'
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { getPlayerDetail, setWeaponAmmo, type Player } from '../src/api/gameplay'
+import { getPlayerDetail, getReserveRecovery, setWeaponAmmo, type Player } from '../src/api/gameplay'
 import { InventorySection } from '../src/pages/gameplay/players/sections'
 import { COMMAND_DECK_KEY } from '../src/hooks/useCommandDeck'
 
 vi.mock('../src/api/gameplay', async importOriginal => ({
   ...await importOriginal<typeof import('../src/api/gameplay')>(),
   getPlayerDetail: vi.fn(),
+  getReserveRecovery: vi.fn(),
   setWeaponAmmo: vi.fn(),
 }))
 
@@ -27,6 +28,14 @@ beforeEach(() => {
     }],
   })
   vi.mocked(setWeaponAmmo).mockResolvedValue({ ok: true, message: 'Ammo saved.' })
+  vi.mocked(getReserveRecovery).mockResolvedValue({
+    source: 'live', available: false, blocked_reason: 'Reserve is empty.',
+    pawn_id: 42, controller_id: 100, online_status: 'Offline',
+    reserve_inventory_id: 216, backpack_inventory_id: 205,
+    item_rows: 0, item_units: 0, required_volume: 0, used_volume: 10,
+    max_slots: 50, used_slots: 2, max_volume: 1000, revision: 'a'.repeat(64),
+    items: [], rollback: null,
+  })
 })
 
 afterEach(() => {

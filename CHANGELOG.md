@@ -13,6 +13,21 @@ here cover everything those tags shipped.
 
 ## [Unreleased]
 
+### Added
+
+- Added **Players > Community tools** to Command Deck, exposing the existing
+  in-game chat command controls, shared `!tp` destinations, and Welcome Back
+  packages while retaining their opt-in defaults and existing safeguards.
+- Added guarded hidden-Reserve recovery to Player Inventory. DST previews the
+  exact rows and Backpack positions, requires the player to be Offline, verifies
+  a fresh local backup and exact slot/volume capacity, moves rows intact in one
+  changed-state-guarded transaction, reads them back, and retains exact rollback.
+
+### Changed
+
+- Protected Reserve items from direct deletion, quantity reduction, and live
+  Clean Inventory so hidden remaining rows cannot keep base recycling blocked.
+
 ## [15.0.2] - 2026-09-09
 
 ### Added
