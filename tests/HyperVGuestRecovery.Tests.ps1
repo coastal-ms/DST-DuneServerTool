@@ -497,7 +497,7 @@ Describe 'Hyper-V guest recovery POSIX installer' {
         $source | Should -Not -Match 'rc-update\s+add\s+hv_(fcopy|vss)_daemon'
     }
 
-    It 'installs idempotently, records bounded stop failure, and uninstalls cleanly' {
+    It 'accepts Running readiness only with healthy subcomponents and preserves lifecycle rollback' {
         $bash = Get-Command bash -ErrorAction SilentlyContinue
         if (-not $bash) { Set-ItResult -Skipped -Because 'bash is unavailable'; return }
 
@@ -571,6 +571,52 @@ esac
             $LASTEXITCODE | Should -Be 0
             ($second -join "`n") | Should -Match 'service_started=true'
 
+            $systemTimeout = (& $bash.Source -lc 'command -v timeout').Trim()
+            $bgRow = Join-Path $root 'battlegroup-row'
+            Set-Content $k3s @"
+#!/bin/sh
+case "`$*" in
+  *"get battlegroups -A"*) cat '$rootPosix/battlegroup-row' ;;
+  *"get --raw=/readyz"*) printf 'ok\n' ;;
+  *"get pods -n funcom-operators"*) printf 'battlegroup-controller true Running\n' ;;
+  *"get endpoints"*) printf '10.0.0.2' ;;
+  *"get pods -A"*) printf 'default dune-db-0 true Running\ndefault dune-sg-0 true Running\n' ;;
+  *) exit 1 ;;
+esac
+"@ -NoNewline
+            Set-Content $timeout @"
+#!/bin/sh
+shift
+exec '$systemTimeout' 1 "`$@"
+"@ -NoNewline
+            & $bash.Source -lc "chmod +x '$rootPosix/fake-bin/k3s' '$rootPosix/fake-bin/timeout'"
+            Set-Content (Join-Path $stateDir 'state') 'DESIRED=running'
+
+            foreach ($phase in @('Healthy', 'Running')) {
+                Set-Content $bgRow "$phase|Healthy|Running|Ready|Running:true,"
+                & $bash.Source $env:DUNE_HYPERV_LIFECYCLE_BIN start
+                $LASTEXITCODE | Should -Be 0
+                $state = Get-Content (Join-Path $stateDir 'state') -Raw
+                $state | Should -Match 'LAST_START_RESULT=ok'
+                $state | Should -Match 'LAST_START_PHASE=complete'
+            }
+
+            @(
+                'Starting|Healthy|Running|Ready|Running:true,',
+                'Running|Operation|Running|Ready|Running:true,',
+                'Running|Healthy|Starting|Ready|Running:true,',
+                'Running|Healthy|Running|Starting|Running:true,',
+                'Running|Healthy|Running|Ready|Running:false,'
+            ) | ForEach-Object {
+                Set-Content $bgRow $_
+                & $bash.Source $env:DUNE_HYPERV_LIFECYCLE_BIN start
+                $LASTEXITCODE | Should -Be 0
+                $state = Get-Content (Join-Path $stateDir 'state') -Raw
+                $state | Should -Match 'LAST_START_RESULT=failed'
+            }
+
+            Set-Content $timeout "#!/bin/sh`nexit 124`n" -NoNewline
+            & $bash.Source -lc "chmod +x '$rootPosix/fake-bin/timeout'"
             $env:DUNE_HYPERV_ACTION = $null
             & $bash.Source $env:DUNE_HYPERV_LIFECYCLE_BIN stop
             $LASTEXITCODE | Should -Be 0
