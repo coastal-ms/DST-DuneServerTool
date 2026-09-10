@@ -50,9 +50,22 @@ if ($Tag) { $config.Filter.Tag = $Tag }
 
 $result = Invoke-Pester -Configuration $config
 
-if ($result.FailedCount -gt 0) {
+if ($null -eq $result) {
     Write-Host ""
-    Write-Host "$($result.FailedCount) test(s) failed." -ForegroundColor Red
+    Write-Host "Pester did not return a test result." -ForegroundColor Red
+    exit 1
+}
+# The aggregate result includes discovery/container and setup/teardown failures;
+# FailedCount only counts failed tests.
+if ($result.Result -ne 'Passed') {
+    Write-Host ""
+    Write-Host "Pester result: $($result.Result). $($result.FailedCount) test(s), $($result.FailedBlocksCount) block(s), $($result.FailedContainersCount) container(s) failed." -ForegroundColor Red
+    exit 1
+}
+# TotalCount includes filtered NotRun tests and skipped tests.
+if ($result.TotalCount -le 0) {
+    Write-Host ""
+    Write-Host "No tests were discovered. Check the test paths and definitions." -ForegroundColor Red
     exit 1
 }
 Write-Host ""

@@ -13,6 +13,12 @@ here cover everything those tags shipped.
 
 ## [Unreleased]
 
+### Fixed
+
+- The PowerShell test runner now fails on Pester discovery, parse, and
+  setup/teardown errors or empty discovery instead of reporting false success.
+  Valid filtered and skipped test runs remain supported.
+
 ## [15.0.4] - 2026-09-10
 
 ### Fixed

@@ -27,6 +27,10 @@ pwsh -NoProfile -File tests\Run-Tests.ps1 -Path tests\Schema.Tests.ps1
 pwsh -NoProfile -File tests\Run-Tests.ps1 -Tag Rmq
 ```
 
+The server runner exits nonzero for test, setup/teardown, discovery, or parse
+failures, and when no tests are discovered. Discovered tests that are skipped or
+excluded by a tag filter (`NotRun`) remain valid, including a filter matching none.
+
 ### WebUI only
 
 ```pwsh
@@ -57,6 +61,8 @@ cd webui ; npm install
 - `HyperVSplat.Tests.ps1` — `Get-DuneHyperVComputerName`/`Get-DuneHyperVSplat` routing (local stays credential-free; LAN attaches `-Credential` only for a matching saved credential) and the "never silently fall back to the current Windows identity" guarantee: `Get-DuneHyperVSplat` throws an actionable error instead when LAN mode is on but no matching credential is saved.
 - `_TestHelpers.ps1` — shared `Import-DstLib` (promotes lib functions to global so Pester `It` blocks see them) + `Register-DstStubs` (HTTP server shims).
 - `Run-Tests.ps1` — Pester runner wrapper.
+- `TestRunner.Tests.ps1` — isolated runner exit-code fixtures for discovery, parse,
+  teardown and assertion failures, empty discovery, and valid filtered/skipped runs.
 
 **Webui side** (`webui/tests/`):
 
