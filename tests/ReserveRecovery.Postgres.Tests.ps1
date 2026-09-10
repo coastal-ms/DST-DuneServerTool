@@ -20,6 +20,16 @@ BeforeAll {
         $result.ok | Should -BeTrue
         return (ConvertTo-DuneRowMaps -Result $result)[0]['inventory_id']
     }
+    function Remove-ReserveFixtureSchema {
+        if (-not $script:ReserveFixtureOwnsSchema) { return }
+        $cleanup = Invoke-ReserveFixtureSql 'SET client_min_messages = warning; DROP SCHEMA dune CASCADE;'
+        if (-not $cleanup.ok) { throw $cleanup.error }
+        $script:ReserveFixtureOwnsSchema = $false
+        $probe = Invoke-ReserveFixtureSql "SELECT to_regnamespace('dune') IS NULL AS empty;"
+        if (-not $probe.ok -or (ConvertTo-DuneRowMaps -Result $probe)[0]['empty'] -ne 't') {
+            throw 'Reserve fixture schema cleanup could not be verified.'
+        }
+    }
 }
 
 AfterAll {
@@ -31,14 +41,21 @@ Describe 'Reserve disposable PostgreSQL transactions' -Skip:(
     -not $env:DST_TEST_POSTGRES_PSQL -or -not $env:DST_TEST_POSTGRES_DATABASE
 ) {
     BeforeEach {
+        $script:ReserveFixtureOwnsSchema = $false
         $script:DuneReserveRecoveryStateFile = Join-Path $TestDrive 'postgres-state.json'
         Remove-Item -LiteralPath $script:DuneReserveRecoveryStateFile -Force -ErrorAction SilentlyContinue
         $probe = Invoke-ReserveFixtureSql 'SELECT current_database() AS database;'
         $probe.ok | Should -BeTrue
         (ConvertTo-DuneRowMaps -Result $probe)[0]['database'] | Should -BeExactly $env:DST_TEST_POSTGRES_DATABASE
+        $existing = Invoke-ReserveFixtureSql "SELECT to_regnamespace('dune') IS NULL AS empty;"
+        if (-not $existing.ok -or (ConvertTo-DuneRowMaps -Result $existing)[0]['empty'] -ne 't') {
+            throw 'Reserve fixture schema must be absent before running destructive tests.'
+        }
+        $created = Invoke-ReserveFixtureSql 'CREATE SCHEMA dune;'
+        if (-not $created.ok) { throw $created.error }
+        # AfterEach also runs when the remaining setup or a test assertion fails.
+        $script:ReserveFixtureOwnsSchema = $true
         $setup = Invoke-ReserveFixtureSql @'
-DROP SCHEMA IF EXISTS dune CASCADE;
-CREATE SCHEMA dune;
 CREATE TABLE dune.encrypted_player_state (
     id bigint PRIMARY KEY, account_id bigint, player_pawn_id bigint,
     player_controller_id bigint, online_status text
@@ -63,6 +80,9 @@ INSERT INTO dune.items VALUES (301,216,4,'CopperBar',6,0,2,'{}'),(201,205,1,'Cop
         Mock Get-DuneVehicleHostScope { @{ key = ('b' * 64) } }
         Mock Invoke-DuneSqlQuery { param($Sql) Invoke-ReserveFixtureSql $Sql }
         Mock Invoke-DuneVerifiedSafetyBackup { @{ ok = $true; path = 'synthetic'; bytes = 2048; database_scope = ('b' * 64) } }
+    }
+    AfterEach {
+        Remove-ReserveFixtureSchema
     }
 
     It 'executes the exact snapshot, guarded move, independent readback and guarded rollback' {
@@ -145,5 +165,15 @@ INSERT INTO dune.items VALUES (301,216,4,'CopperBar',6,0,2,'{}'),(201,205,1,'Cop
         $rollback.error | Should -Match 'transaction made no changes'
         Get-ReserveFixtureLocation | Should -Be '205'
         (Read-DuneReserveRecoveryState).entries[0].status | Should -Be 'moved'
+    }
+}
+
+Describe 'Reserve fixture isolation postcondition' -Skip:(
+    -not $env:DST_TEST_POSTGRES_PSQL -or -not $env:DST_TEST_POSTGRES_DATABASE
+) {
+    It 'leaves no Reserve schema for subsequent PostgreSQL suites' {
+        $probe = Invoke-ReserveFixtureSql "SELECT to_regnamespace('dune') IS NULL AS empty;"
+        $probe.ok | Should -BeTrue
+        (ConvertTo-DuneRowMaps -Result $probe)[0]['empty'] | Should -Be 't'
     }
 }
