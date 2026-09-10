@@ -15,7 +15,7 @@ vi.mock('../../src/api/client', () => ({
 const readyStatus = {
   ok: true,
   configured: false,
-  ip: '192.168.23.219',
+  ip: '192.168.1.219',
   rollbackStatePresent: false,
   rollbackStateMatches: false,
   rollbackStateError: '',
