@@ -5,7 +5,7 @@ Marketing + docs site for the Dune Server Tool. Built with **Astro 7 + React-fre
 This site lives inside the main `DST-DuneServerTool` repo so that:
 
 - Screenshots in `../docs/img/` and the canonical `../CHANGELOG.md` are pulled in at build time — no duplication, the site always reflects what's in the repo.
-- The download button auto-resolves to the latest `DuneServerSetup.exe` via the GitHub Releases API at build time, so a new release picks up the link without a code change.
+- The download button uses the triggering stable release payload for release-triggered Pages builds, avoiding the GitHub API's eventual-consistency window; push and manual builds retain the latest-release API fallback.
 
 ## Local dev
 

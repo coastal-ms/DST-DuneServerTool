@@ -10,6 +10,14 @@ export interface LatestRelease {
   publishedAt: string | null;
 }
 
+export interface ReleaseEvent {
+  tag_name?: string;
+  html_url?: string;
+  published_at?: string | null;
+  prerelease?: boolean;
+  assets?: Array<{ name?: string; browser_download_url?: string }>;
+}
+
 const REPO = "coastal-ms/DST-DuneServerTool";
 const FALLBACK: LatestRelease = {
   tag: "latest",
@@ -19,7 +27,38 @@ const FALLBACK: LatestRelease = {
   publishedAt: null,
 };
 
+export function releaseFromEvent(event: ReleaseEvent): LatestRelease | null {
+  if (event.prerelease || !event.tag_name) return null;
+
+  return {
+    tag: event.tag_name,
+    version: event.tag_name.replace(/^v/, ""),
+    htmlUrl: event.html_url ?? `https://github.com/${REPO}/releases`,
+    installerUrl:
+      event.assets?.find(
+        (asset) =>
+          asset.name === "DuneServerSetup.exe" &&
+          Boolean(asset.browser_download_url),
+      )?.browser_download_url ?? null,
+    publishedAt: event.published_at ?? null,
+  };
+}
+
 export async function getLatestRelease(): Promise<LatestRelease> {
+  if (process.env.GITHUB_EVENT_NAME === "release") {
+    const serializedEvent = process.env.DST_RELEASE_EVENT;
+    if (serializedEvent) {
+      try {
+        const release = releaseFromEvent(
+          JSON.parse(serializedEvent) as ReleaseEvent,
+        );
+        if (release) return release;
+      } catch (err) {
+        console.warn("[release] event payload parse failed:", err);
+      }
+    }
+  }
+
   try {
     const headers: Record<string, string> = {
       Accept: "application/vnd.github+json",
