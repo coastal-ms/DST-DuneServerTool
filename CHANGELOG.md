@@ -13,6 +13,10 @@ here cover everything those tags shipped.
 
 ## [Unreleased]
 
+### Fixed
+
+- Fixed the Pages release-metadata race by using the release event payload during builds.
+
 ## [15.0.5] - 2026-09-10
 
 ### Fixed
