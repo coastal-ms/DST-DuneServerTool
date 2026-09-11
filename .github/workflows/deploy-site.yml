@@ -16,11 +16,6 @@ on:
       - "CHANGELOG.md"
       - "docs/img/**"
       - ".github/workflows/deploy-site.yml"
-  # The site reads the latest release at BUILD time. A release merge lands on
-  # main (touching CHANGELOG.md) before `gh release create` runs, so the push
-  # deploy alone always publishes the previous version and the site stays stale
-  # until someone dispatches a manual run — this bit v13.3.0 and v13.8.0.
-  #
   # This trigger was previously removed because the release run collided with
   # the in-flight CHANGELOG push run and the github-pages environment rejected
   # the second deploy. The concurrency block below now cancels the in-flight run
@@ -68,6 +63,7 @@ jobs:
         working-directory: site
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          DST_RELEASE_EVENT: ${{ github.event_name == 'release' && toJSON(github.event.release) || '' }}
         run: npm run build
 
       - name: Upload Pages artifact
