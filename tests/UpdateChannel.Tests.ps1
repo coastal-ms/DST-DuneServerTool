@@ -82,6 +82,12 @@ Describe 'Get-DunePreReleaseList filtering' {
         $tags | Should -Not -Contain 'v12.9.6-test0'
         $tags | Should -Not -Contain 'v12.9.7-draft'
     }
+    It 'recognizes the silent prerelease mirror wording used by stable publication' {
+        Test-DuneStableMirrorLabel -Release ([pscustomobject]@{
+            name='v15.0.4-test1'
+            releaseNotes='Silent prerelease mirror of v15.0.4. Uses the exact verified stable installer artifact.'
+        }) | Should -BeTrue
+    }
     It 'shows only a fresh stable mirror when it identifies the current stable commit' {
         function global:Get-DuneReleases {
             param([switch]$Force)
@@ -229,7 +235,10 @@ Describe 'Get-DuneSelectedRelease channel resolution' {
         (Get-DuneSelectedRelease).tag | Should -Be 'v15.0.0-test10'
     }
 
-    It 'keeps a fresh v15 stable client on the stable identity during mirror rollover' {
+    It 'keeps a fresh v15 stable client on the stable identity during <MirrorNotes> rollover' -ForEach @(
+        @{ MirrorNotes='Stable channel mirror' }
+        @{ MirrorNotes='Silent prerelease mirror of v15.0.0. Uses the exact verified stable installer artifact.' }
+    ) {
         $script:DuneToolVersion = '15.0.0'
         function global:Get-DuneUpdateChannel { 'test' }
         function global:Read-DuneConfigRaw { @{} }
@@ -243,10 +252,11 @@ Describe 'Get-DuneSelectedRelease channel resolution' {
                 assetUrl='https://x/stable.exe'; assetName='DuneServerSetup.exe'
             }
         }
+        $script:MirrorNotes = $MirrorNotes
         function global:Get-DuneReleases {
             param([switch]$Force)
             @(
-                [pscustomobject]@{ tag='v15.0.0-test10'; name='Stable channel mirror'; releaseNotes='same stable commit'; targetCommit='bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb'; isPrerelease=$true; isDraft=$false; assetUrl='https://x/fresh-mirror.exe' }
+                [pscustomobject]@{ tag='v15.0.0-test10'; name='v15.0.0-test10'; releaseNotes=$script:MirrorNotes; targetCommit='bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb'; isPrerelease=$true; isDraft=$false; assetUrl='https://x/fresh-mirror.exe' }
                 [pscustomobject]@{ tag='v15.0.0-test1'; name='Stable channel mirror'; releaseNotes='old immutable mirror'; targetCommit='aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa'; isPrerelease=$true; isDraft=$false; assetUrl='https://x/old-mirror.exe' }
             )
         }

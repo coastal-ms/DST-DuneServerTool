@@ -13,6 +13,12 @@ here cover everything those tags shipped.
 
 ## [Unreleased]
 
+### Fixed
+
+- Stable installers delivered through the Test channel mirror now verify against
+  their embedded stable build tag instead of incorrectly reporting an update
+  failure. Genuine test builds retain exact test-tag and commit verification.
+
 ## [15.0.4] - 2026-09-10
 
 ### Fixed

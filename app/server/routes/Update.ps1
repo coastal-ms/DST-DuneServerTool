@@ -174,7 +174,7 @@ function Get-DuneReleases {
 function Test-DuneStableMirrorLabel {
     param($Release)
     $text = "$($Release.name)`n$($Release.releaseNotes)"
-    return ($text -match '(?i)\b(?:test|stable)(?:[-\s]+channel)?[-\s]+mirror\b')
+    return ($text -match '(?i)\b(?:test|stable|pre-?release)(?:[-\s]+channel)?[-\s]+mirror\b')
 }
 
 function Test-DuneStableMirrorRelease {
@@ -404,6 +404,25 @@ function Get-DuneReleaseExpectedCommit {
     $target = ([string]$Release.targetCommit).Trim().ToLowerInvariant()
     if ($target -match '^[0-9a-f]{40}$') { return $target }
     return Get-DuneReleaseCommitSha -Tag ([string]$Release.tag)
+}
+
+function Get-DuneReleaseExpectedTag {
+    param([Parameter(Mandatory)]$Release)
+    if (-not $Release.isPrerelease -or -not (Test-DuneStableMirrorLabel -Release $Release)) {
+        return [string]$Release.tag
+    }
+
+    $stable = Get-DuneLatestRelease
+    if (-not (Test-DuneStableMirrorRelease -Release $Release -StableRelease $stable)) {
+        throw 'The selected stable mirror does not match the current stable release identity.'
+    }
+    # A release-list mirror tag is not necessarily the embedded build tag.
+    # Only byte-identical installers share the stable identity; separately
+    # built test artifacts keep their own exact tag, even at the same commit.
+    $releaseHash = Get-DuneUpdateExpectedSha256 -Digest ([string]$Release.assetDigest)
+    $stableHash = Get-DuneUpdateExpectedSha256 -Digest ([string]$stable.assetDigest)
+    if ($releaseHash -eq $stableHash) { return [string]$stable.tag }
+    return [string]$Release.tag
 }
 
 function Get-DuneSelectedReleaseIdentity {
@@ -821,6 +840,7 @@ Register-DuneRoute -Method POST -Path '/api/update/install' -Handler {
 
         $safeTag = ($rel.tag -replace '[^A-Za-z0-9._-]','_')
         try {
+            $expectedTag = Get-DuneReleaseExpectedTag -Release $rel
             $updateDir = Get-DuneProtectedUpdateDirectory
             $dest = Save-DuneVerifiedUpdateAsset -Release $rel -Directory $updateDir
             $resolvedReleaseCommit = if ([string]$identity.expectedCommit) {
@@ -873,7 +893,6 @@ Register-DuneRoute -Method POST -Path '/api/update/install' -Handler {
         $innoLogPath = Join-Path $updateDir ("inno-$safeTag-$launchId.log")
         $resultPath = Join-Path $updateDir ("update-result-$safeTag-$launchId.json")
         $installedExe = Join-Path $script:AppDir 'DuneServer.exe'
-        $expectedTag = [string]$rel.tag
         $expectedCommit = [string]$resolvedReleaseCommit
         # Arguments are selected only from these constants after strict mode/source
         # validation above. No request value is ever interpolated as executable code.
