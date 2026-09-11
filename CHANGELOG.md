@@ -13,6 +13,8 @@ here cover everything those tags shipped.
 
 ## [Unreleased]
 
+## [15.0.5] - 2026-09-10
+
 ### Fixed
 
 - Stable installers delivered through the Test channel mirror now verify against
