@@ -33,7 +33,7 @@
 
 [CmdletBinding()]
 param(
-    [string]$Version = '15.0.4',
+    [string]$Version = '15.0.5',
     [string]$BuildCommit = '',
     [string]$BuildTag = '',
     [switch]$Prerelease,
