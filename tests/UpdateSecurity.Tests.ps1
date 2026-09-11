@@ -22,6 +22,35 @@ BeforeAll {
             [Text.Encoding]::UTF8.GetString($Response.OutputStream.ToArray()) | ConvertFrom-Json
         }
     }
+
+    function global:Invoke-TestUpdateVerification {
+        param([string]$ScriptPath, $InstalledIdentity)
+        $tokens = $null
+        $errors = $null
+        $ast = [Management.Automation.Language.Parser]::ParseFile(
+            $ScriptPath, [ref]$tokens, [ref]$errors
+        )
+        $errors | Should -BeNullOrEmpty
+        $saveResult = $ast.Find({
+            param($node)
+            $node -is [Management.Automation.Language.FunctionDefinitionAst] -and
+                $node.Name -eq 'Save-DuneUpdateResult'
+        }, $true)
+        $verification = $ast.Find({
+            param($node)
+            $node -is [Management.Automation.Language.TryStatementAst] -and
+                $node.Body.Statements[0].Extent.Text -eq '$actualInstalledExe = Resolve-DuneInstalledExecutablePath'
+        }, $true)
+        $saveResult | Should -Not -BeNullOrEmpty
+        $verification | Should -Not -BeNullOrEmpty
+
+        # Execute only the generated verification/result block, never the
+        # process shutdown, installer, registry lookup, or failure dialog.
+        function Resolve-DuneInstalledExecutablePath { 'test-installed.exe' }
+        function Get-DuneInstalledBuildIdentity { param($Path) $InstalledIdentity }
+        function Show-DuneUpdateFailure { param($Title, $Message) }
+        & ([scriptblock]::Create($saveResult.Extent.Text + "`n" + $verification.Extent.Text))
+    }
 }
 
 Describe 'Protected updater download seam' {
@@ -33,6 +62,104 @@ Describe 'Protected updater download seam' {
         Mock Invoke-WebRequest {
             $script:DownloadCalls++
             [IO.File]::WriteAllBytes($OutFile, $script:Payload)
+        }
+    }
+
+    Describe 'Updater installed artifact identity' {
+        BeforeEach {
+            $script:StableCommit = '7ea6b333cefdc20ac2ae347a6bf19fd9ae61409e'
+            $script:StableRelease = [pscustomobject]@{
+                tag='v15.0.4'; name='v15.0.4'; releaseNotes=''
+                targetCommit=$script:StableCommit; isPrerelease=$false
+                assetUrl='https://example.test/stable.exe'
+                assetDigest=('sha256:' + ('a' * 64))
+            }
+            Mock Get-DuneLatestRelease { $script:StableRelease }
+            Mock Get-DuneSelectedRelease { $script:SelectedRelease }
+            Mock Get-DuneLock { [Threading.SemaphoreSlim]::new(1, 1) }
+            Mock Get-DuneDecoupleNotice { @{ Needed=$false } }
+            Mock Get-DuneUpdateChannel {
+                if ($script:SelectedRelease.isPrerelease) { 'test' } else { 'stable' }
+            }
+            Mock Get-DuneUpdateRunningBuildInfo {
+                @{ runningIsPrerelease=$false; installedTag='v15.0.3'; buildCommit=('c' * 40) }
+            }
+            Mock Get-DuneProtectedUpdateDirectory { $TestDrive }
+            Mock Save-DuneVerifiedUpdateAsset {
+                $path = Join-Path $TestDrive 'verified-installer.exe'
+                [IO.File]::WriteAllText($path, 'installer')
+                return $path
+            }
+            Mock Start-Process {}
+            Mock Write-Host {}
+            $script:DuneToolVersion = '15.0.3'
+            $script:AppDir = $TestDrive
+        }
+
+        It '<Scenario>' -ForEach @(
+            @{ Scenario='verifies a stable release against its stable tag'; Tag='v15.0.4'; Notes=''; SameAsset=$true; InstalledTag='v15.0.4'; ExpectedTag='v15.0.4'; Success=$true }
+            @{ Scenario='verifies an ordinary test build against its exact test tag'; Tag='v15.0.4-test1'; Notes='Test candidate'; SameAsset=$false; InstalledTag='v15.0.4-test1'; ExpectedTag='v15.0.4-test1'; Success=$true }
+            @{ Scenario='verifies the v15.0.4 silent mirror against the stable artifact tag'; Tag='v15.0.4-test1'; Notes='Silent prerelease mirror of v15.0.4. Uses the exact verified stable installer artifact.'; SameAsset=$true; InstalledTag='v15.0.4'; ExpectedTag='v15.0.4'; Success=$true }
+            @{ Scenario='verifies an older mirror label against the stable artifact tag'; Tag='v15.0.4-test10'; Notes='Stable channel mirror'; SameAsset=$true; InstalledTag='v15.0.4'; ExpectedTag='v15.0.4'; Success=$true }
+            @{ Scenario='keeps a separately built mirror on its own test identity'; Tag='v15.0.4-test1'; Notes='Stable channel mirror'; SameAsset=$false; InstalledTag='v15.0.4-test1'; ExpectedTag='v15.0.4-test1'; Success=$true }
+            @{ Scenario='rejects a test tag when the stable artifact was expected'; Tag='v15.0.4'; Notes=''; SameAsset=$true; InstalledTag='v15.0.4-test1'; ExpectedTag='v15.0.4'; Success=$false }
+            @{ Scenario='rejects a stable tag when a genuine test artifact was expected'; Tag='v15.0.4-test1'; Notes='Test candidate'; SameAsset=$false; InstalledTag='v15.0.4'; ExpectedTag='v15.0.4-test1'; Success=$false }
+            @{ Scenario='rejects the mirror tag when its shared stable artifact was expected'; Tag='v15.0.4-test1'; Notes='Silent prerelease mirror of v15.0.4.'; SameAsset=$true; InstalledTag='v15.0.4-test1'; ExpectedTag='v15.0.4'; Success=$false }
+            @{ Scenario='still rejects the wrong commit for a shared stable artifact'; Tag='v15.0.4-test1'; Notes='Silent prerelease mirror of v15.0.4.'; SameAsset=$true; InstalledTag='v15.0.4'; ExpectedTag='v15.0.4'; Success=$false; WrongCommit=$true }
+            @{ Scenario='still requires embedded build metadata for a shared stable artifact'; Tag='v15.0.4-test1'; Notes='Silent prerelease mirror of v15.0.4.'; SameAsset=$true; InstalledTag='v15.0.4'; ExpectedTag='v15.0.4'; Success=$false; MissingMetadata=$true }
+        ) {
+            $script:SelectedRelease = [pscustomobject]@{
+                tag=$Tag; name=$Tag; releaseNotes=$Notes
+                targetCommit=$script:StableCommit; isPrerelease=($Tag -ne 'v15.0.4')
+                assetUrl='https://example.test/selected.exe'
+                assetDigest=if ($SameAsset) { $script:StableRelease.assetDigest } else { 'sha256:' + ('b' * 64) }
+            }
+            $request = [pscustomobject]@{ QueryString=@{} }
+            $response = New-UpdateSecurityResponse
+            & $script:UpdateInstallHandler $request $response @{} @{ mode='silent'; source='banner' }
+            $response.StatusCode | Should -Be 200
+            (Read-UpdateSecurityResponse $response).toVersion | Should -Be ($Tag -replace '^v','')
+            Assert-MockCalled Save-DuneVerifiedUpdateAsset -Times 1 -Exactly -ParameterFilter { $Release.tag -eq $Tag }
+            $scripts = @(Get-ChildItem $TestDrive -Filter 'DuneRelaunch-*.ps1')
+            $scripts.Count | Should -Be 1
+            Invoke-TestUpdateVerification -ScriptPath $scripts[0].FullName -InstalledIdentity @{
+                present=(-not $MissingMetadata)
+                tag=$InstalledTag
+                commit=if ($WrongCommit) { 'd' * 40 } else { $script:StableCommit }
+            }
+            $results = @(Get-ChildItem $TestDrive -Filter 'update-result-*.json')
+            $results.Count | Should -Be 1
+            $result = Get-Content -LiteralPath $results[0].FullName -Raw | ConvertFrom-Json
+            $result.expectedTag | Should -Be $ExpectedTag
+            $result.expectedCommit | Should -Be $script:StableCommit
+            $result.actualTag | Should -Be $InstalledTag
+            $result.success | Should -Be $Success
+            if (-not $Success) { $result.message | Should -Match 'Installed identity mismatch' }
+        }
+
+        It 'does not launch a mirror with <Problem>' -ForEach @(
+            @{ Problem='a different stable core'; Field='tag'; Value='v15.0.5'; ErrorPattern='*does not match*' }
+            @{ Problem='a different stable commit'; Field='targetCommit'; Value=('b' * 40); ErrorPattern='*does not match*' }
+            @{ Problem='a missing stable digest'; Field='assetDigest'; Value=''; ErrorPattern='*valid GitHub SHA-256*' }
+            @{ Problem='an invalid stable digest'; Field='assetDigest'; Value='sha256:invalid'; ErrorPattern='*valid GitHub SHA-256*' }
+            @{ Problem='an unavailable stable release'; Field='unavailable'; Value=$null; ErrorPattern='*does not match*' }
+        ) {
+            $script:SelectedRelease = [pscustomobject]@{
+                tag='v15.0.4-test1'; name='v15.0.4-test1'
+                releaseNotes='Silent prerelease mirror of v15.0.4.'
+                targetCommit=$script:StableCommit; isPrerelease=$true
+                assetUrl='https://example.test/mirror.exe'; assetDigest=$script:StableRelease.assetDigest
+            }
+            if ($Field -eq 'unavailable') { $script:StableRelease = $null }
+            else { $script:StableRelease.$Field = $Value }
+            $response = New-UpdateSecurityResponse
+            & $script:UpdateInstallHandler ([pscustomobject]@{ QueryString=@{} }) $response @{} @{
+                mode='interactive'; source='settings'
+            }
+            $response.StatusCode | Should -Be 502
+            (Read-UpdateSecurityResponse $response).error | Should -BeLike $ErrorPattern
+            Assert-MockCalled Save-DuneVerifiedUpdateAsset -Times 0 -Exactly
+            Assert-MockCalled Start-Process -Times 0 -Exactly
         }
     }
 
