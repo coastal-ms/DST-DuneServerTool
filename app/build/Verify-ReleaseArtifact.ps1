@@ -1,7 +1,7 @@
 [CmdletBinding()]
 param(
     [Parameter(Mandatory)][string]$ExecutablePath,
-    [Parameter(Mandatory)][string]$ExpectedTag,
+    [Parameter(Mandatory)][AllowEmptyString()][string]$ExpectedTag,
     [Parameter(Mandatory)][string]$ExpectedCommit,
     [switch]$ExpectedPrerelease
 )
