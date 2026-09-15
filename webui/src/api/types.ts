@@ -564,6 +564,30 @@ export type SpicefieldsResponse = {
   partitionGate?: boolean
 }
 
+export type SpicefieldStateField = {
+  fieldId: string
+  valueRemaining: string
+}
+
+export type SpicefieldStateResponse = {
+  available: boolean
+  spicefieldTypeId: number
+  mapName: string
+  dimensionIndex: number
+  requestedFieldType: string
+  fieldTypeResolved: false
+  fields: SpicefieldStateField[]
+  totalRawValueRemaining: string
+  totalAvailable: number
+  returned: number
+  truncated: boolean
+  source: {
+    schema: 'dune.resourcefield_state'
+    schemaFingerprint: string
+    queryDurationMs: number
+  }
+}
+
 export type SpicefieldSaveResponse = {
   ok: boolean
   row: SpicefieldType

@@ -2,6 +2,7 @@
 # narrow map projections rather than raw database rows or generic game entities.
 
 $script:DuneMapDataSpiceMaxRows = 200
+$script:DuneSpicefieldStateMaxRows = 200
 $script:DuneMapDataPoiMaxRows = 250
 $script:DuneMapDataStaticPoiPayloadType = 'EMarkerPayloadType::StaticLocation'
 $script:DuneMapDataCapabilityCacheTtlSec = 1800
@@ -640,6 +641,132 @@ ORDER BY map, dimension_index, field_id;
             schemaFingerprint = $Capability.schemaFingerprint
             queryDurationMs    = $result.durationMs
             spatialStatus     = [string]$Capability.activeSpice.spatialStatus
+        }
+    }
+}
+
+function Get-DuneSpicefieldStateLive {
+    param(
+        [Parameter(Mandatory)][string]$Ip,
+        [Parameter(Mandatory)]
+        [ValidateSet('HaggaBasin', 'DeepDesert')]
+        [string]$MapName,
+        [Parameter(Mandatory)]
+        [ValidateRange(0, 10000)]
+        [int]$DimensionIndex,
+        [int]$Limit = $script:DuneSpicefieldStateMaxRows,
+        $Capability,
+        [ValidateRange(1,120)][int]$TimeoutSec = 20
+    )
+
+    $Limit = [Math]::Max(1, [Math]::Min($Limit, $script:DuneSpicefieldStateMaxRows))
+    if (-not $Capability) { $Capability = Get-DuneMapDataCapabilities -Ip $Ip }
+    if (-not $Capability.ok) {
+        return @{
+            ok = $false; status = 'error'; capability = 'spicefield-state'
+            error = $Capability.error; source = $Capability.source
+        }
+    }
+    if (-not $Capability.activeSpice.available) {
+        return [ordered]@{
+            ok         = $false
+            status     = 'unavailable'
+            capability = 'spicefield-state'
+            reasonCode = 'unsupported-schema'
+            evidence   = @{ missingColumns = @($Capability.activeSpice.missingColumns) }
+            source     = @{ schemaFingerprint = $Capability.schemaFingerprint }
+        }
+    }
+
+    $sql = @"
+WITH /*__DST_PARAMETERS__*/,
+matching_fields AS (
+    SELECT field_id::text AS field_id,
+           map,
+           dimension_index,
+           value_remaining::text AS value_remaining,
+           count(*) OVER ()::text AS source_count,
+           sum(value_remaining) OVER ()::text AS total_value_remaining
+    FROM dune.resourcefield_state
+    WHERE field_kind_id = 1
+      AND value_remaining > 0
+      AND map = (SELECT map_name FROM _dst_parameters)
+      AND dimension_index = (SELECT dimension_index FROM _dst_parameters)
+    ORDER BY field_id
+)
+SELECT *
+FROM matching_fields
+ORDER BY field_id
+LIMIT ((SELECT row_limit FROM _dst_parameters) + 1);
+"@
+    $result = Invoke-DuneMapDataQuery `
+        -Ip $Ip `
+        -Sql $sql `
+        -Parameters @{
+            row_limit = $Limit
+            map_name = $MapName
+            dimension_index = $DimensionIndex
+        } `
+        -ParameterTypes @{
+            row_limit = 'integer'
+            map_name = 'text'
+            dimension_index = 'integer'
+        } `
+        -SourceKey 'gameconfig.spicefield-state' `
+        -MaxRows ($Limit + 1) `
+        -TimeoutSec $TimeoutSec
+    $validation = Test-DuneMapDataQueryResult -Result $result -ExpectedColumns @(
+        'field_id', 'map', 'dimension_index', 'value_remaining',
+        'source_count', 'total_value_remaining'
+    )
+    if (-not $validation.ok) {
+        return [ordered]@{
+            ok         = $false
+            status     = 'error'
+            capability = 'spicefield-state'
+            reasonCode = $validation.reasonCode
+            error      = $validation.error
+            source     = [ordered]@{
+                schemaFingerprint = $Capability.schemaFingerprint
+                queryDurationMs    = $result.durationMs
+            }
+        }
+    }
+
+    $rawRows = @(ConvertTo-DuneMapDataRowMaps -Result $result)
+    $sourceCount = if ($rawRows.Count -gt 0) {
+        ConvertTo-DuneMapDataLong $rawRows[0]['source_count']
+    } else {
+        0L
+    }
+    $totalValueRemaining = if ($rawRows.Count -gt 0) {
+        [string]$rawRows[0]['total_value_remaining']
+    } else {
+        '0'
+    }
+    $truncated = ($result.truncated -or $rawRows.Count -gt $Limit -or $sourceCount -gt $Limit)
+    $fields = @($rawRows | Select-Object -First $Limit | ForEach-Object {
+        [ordered]@{
+            fieldId        = [string]$_['field_id']
+            valueRemaining = [string]$_['value_remaining']
+        }
+    })
+
+    return [ordered]@{
+        ok                     = $true
+        status                 = if ($truncated) { 'partial' } else { 'ready' }
+        capability             = 'spicefield-state'
+        mapName                = $MapName
+        dimensionIndex         = $DimensionIndex
+        fields                 = $fields
+        totalRawValueRemaining = $totalValueRemaining
+        totalAvailable         = $sourceCount
+        returned               = $fields.Count
+        truncated              = $truncated
+        source                 = [ordered]@{
+            schema            = 'dune.resourcefield_state'
+            schemaFingerprint = $Capability.schemaFingerprint
+            queryDurationMs    = $result.durationMs
         }
     }
 }

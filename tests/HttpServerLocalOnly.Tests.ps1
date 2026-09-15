@@ -70,6 +70,7 @@ Describe 'HTTP local-only request enforcement' {
         Test-DunePortalOwnerOnlyPath -Path '/api/status' | Should -BeFalse
         Test-DunePortalOwnerOnlyPath -Path '/api/gameconfig/spicefields' -Method GET | Should -BeFalse
         Test-DunePortalOwnerOnlyPath -Path '/api/gameconfig/spicefields/42' -Method PUT | Should -BeFalse
+        Test-DunePortalOwnerOnlyPath -Path '/api/gameconfig/spicefields/42/state' -Method GET | Should -BeFalse
         Test-DunePortalOwnerOnlyPath -Path '/api/gameconfig/spicefields/42/spawning' -Method PUT | Should -BeFalse
         Test-DunePortalOwnerOnlyPath -Path '/api/gameconfig/schema' -Method GET | Should -BeTrue
     }

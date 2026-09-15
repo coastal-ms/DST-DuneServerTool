@@ -20,6 +20,7 @@ import type {
   LandclaimTimerState,
   LandclaimTimerSaveResponse,
   SpicefieldsResponse,
+  SpicefieldStateResponse,
   SpicefieldSaveResponse,
   SpicefieldType,
   DeepDesertPvpState,
@@ -214,6 +215,10 @@ export function saveLandclaimTimer(enabled: boolean, seconds: string) {
 
 export function getSpicefields() {
   return api<SpicefieldsResponse>('/api/gameconfig/spicefields')
+}
+
+export function getSpicefieldState(id: number) {
+  return api<SpicefieldStateResponse>(`/api/gameconfig/spicefields/${id}/state`)
 }
 
 export function saveSpicefield(

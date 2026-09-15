@@ -715,6 +715,69 @@ Register-DuneRoute -Method GET -Path '/api/gameconfig/spicefields' -Handler {
 }
 
 # -----------------------------------------------------------------------------
+# GET /api/gameconfig/spicefields/{id}/state — bounded active field values for
+# the selected spicefield row's map and dimension. resourcefield_state does not
+# expose Small/Medium/Large, so the response explicitly marks size as unresolved.
+# -----------------------------------------------------------------------------
+Register-DuneRoute -Method GET -Path '/api/gameconfig/spicefields/{id}/state' -Handler {
+    param($req, $res, $routeParams, $body)
+    $ctx = Get-DuneGameConfigContext
+    if (-not $ctx.ok) {
+        Write-DuneError -Response $res -Status $ctx.status -Message $ctx.message
+        return
+    }
+
+    $typeId = 0
+    if (-not [int]::TryParse("$($routeParams.id)", [ref]$typeId) -or $typeId -le 0) {
+        Write-DuneError -Response $res -Status 400 -Message 'Invalid spicefield_type id.'
+        return
+    }
+
+    try {
+        $typeRow = @(Get-V6SpicefieldTypes -Ip $ctx.ip |
+            Where-Object { [int]$_.spicefield_type_id -eq $typeId } |
+            Select-Object -First 1)
+        if ($typeRow.Count -eq 0) {
+            Write-DuneError -Response $res -Status 404 -Message 'Spicefield type not found.'
+            return
+        }
+
+        $mapName = [string]$typeRow[0].map_name
+        if ($mapName -notin @('HaggaBasin', 'DeepDesert')) {
+            Write-DuneError -Response $res -Status 422 -Message 'Raw field state is available only for Hagga Basin and Deep Desert.'
+            return
+        }
+
+        $state = Get-DuneSpicefieldStateLive `
+            -Ip $ctx.ip `
+            -MapName $mapName `
+            -DimensionIndex ([int]$typeRow[0].dimension_index)
+        if (-not $state.ok) {
+            $message = if ($state.error) { $state.error } else { 'Raw spice field state is unavailable.' }
+            Write-DuneError -Response $res -Status 500 -Message $message
+            return
+        }
+
+        Write-DuneJson -Response $res -Body @{
+            available               = $true
+            spicefieldTypeId        = $typeId
+            mapName                 = $mapName
+            dimensionIndex          = [int]$typeRow[0].dimension_index
+            requestedFieldType      = [string]$typeRow[0].field_type
+            fieldTypeResolved       = $false
+            fields                  = @($state.fields)
+            totalRawValueRemaining  = [string]$state.totalRawValueRemaining
+            totalAvailable          = [long]$state.totalAvailable
+            returned                = [int]$state.returned
+            truncated               = [bool]$state.truncated
+            source                  = $state.source
+        }
+    } catch {
+        Write-DuneError -Response $res -Status 500 -Message "Raw spice field state load failed: $($_.Exception.Message)"
+    }
+}
+
+# -----------------------------------------------------------------------------
 # PUT /api/gameconfig/spicefields/{id} — update one spicefield_type row.
 # Body: { maxActive, maxPrimed, isSpawningActive, spawnWeight }
 # Returns the freshly-fetched row.
