@@ -9,8 +9,8 @@
 // endpoint (only ever writes TRUE/FALSE to that one column). Each
 // checkbox has an independent 5-second click cooldown.
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { getSpicefields, setSpicefieldSpawning } from '../../api/gameconfig'
-import type { SpicefieldType } from '../../api/types'
+import { getSpicefields, getSpicefieldState, setSpicefieldSpawning } from '../../api/gameconfig'
+import type { SpicefieldStateResponse, SpicefieldType } from '../../api/types'
 import { mapLabel } from '../../util/mapLabel'
 
 type Props = {
@@ -58,6 +58,14 @@ function formatTime(d: Date) {
   return d.toLocaleTimeString([], { hour12: false })
 }
 
+function formatRawInteger(value: string) {
+  try {
+    return BigInt(value).toLocaleString()
+  } catch {
+    return value
+  }
+}
+
 export function BgSpiceSummary({ enabled }: Props) {
   const [rows, setRows] = useState<SpicefieldType[] | null>(null)
   // False only when the backend could read the battlegroup; a failed read
@@ -67,6 +75,11 @@ export function BgSpiceSummary({ enabled }: Props) {
   const [updatedAt, setUpdatedAt] = useState<Date | null>(null)
   const [togglingId, setTogglingId] = useState<number | null>(null)
   const [toggleErr, setToggleErr]   = useState<string | null>(null)
+  const [detailsRow, setDetailsRow] = useState<SpicefieldType | null>(null)
+  const [details, setDetails] = useState<SpicefieldStateResponse | null>(null)
+  const [detailsLoading, setDetailsLoading] = useState(false)
+  const [detailsErr, setDetailsErr] = useState<string | null>(null)
+  const detailsRequestRef = useRef(0)
   // SHARED cooldown: one click anywhere on this card locks every
   // checkbox for 5 seconds. Ref (not state) so the cooldown check
   // doesn't depend on re-render timing.
@@ -102,6 +115,10 @@ export function BgSpiceSummary({ enabled }: Props) {
     const id = window.setInterval(() => { void load() }, 10000)
     return () => window.clearInterval(id)
   }, [enabled, load])
+
+  useEffect(() => () => {
+    detailsRequestRef.current += 1
+  }, [])
 
   // Live-commit toggle: optimistically flip the row in state, send to
   // the guard-railed PUT endpoint, and roll back on failure. ONE shared
@@ -142,6 +159,34 @@ export function BgSpiceSummary({ enabled }: Props) {
       setTogglingId(null)
     }
   }, [bumpCooldown, cooldownRemaining, togglingId])
+
+  const onToggleDetails = useCallback(async (row: SpicefieldType) => {
+    if (detailsRow?.spicefieldTypeId === row.spicefieldTypeId) {
+      detailsRequestRef.current += 1
+      setDetailsRow(null)
+      setDetails(null)
+      setDetailsErr(null)
+      setDetailsLoading(false)
+      return
+    }
+
+    const requestId = detailsRequestRef.current + 1
+    detailsRequestRef.current = requestId
+    setDetailsRow(row)
+    setDetails(null)
+    setDetailsErr(null)
+    setDetailsLoading(true)
+    try {
+      const data = await getSpicefieldState(row.spicefieldTypeId)
+      if (detailsRequestRef.current !== requestId) return
+      setDetails(data)
+    } catch (e) {
+      if (detailsRequestRef.current !== requestId) return
+      setDetailsErr(e instanceof Error ? e.message : String(e))
+    } finally {
+      if (detailsRequestRef.current === requestId) setDetailsLoading(false)
+    }
+  }, [detailsRow])
 
   // Only partitions that are live or pinned. dune.spicefield_types keeps a row
   // per (map, size, dimension) forever, so a battlegroup that once ran two
@@ -196,6 +241,14 @@ export function BgSpiceSummary({ enabled }: Props) {
     return new Set(Object.keys(dims).filter(m => dims[m].size > 1))
   }, [sorted])
 
+  const detailsMapDisplay = useMemo(() => {
+    if (!detailsRow) return ''
+    const mapId = detailsRow.mapId ?? detailsRow.mapName
+    return multiInstanceMaps.has(mapId)
+      ? `${mapLabel(mapId)} #${(detailsRow.dimensionIndex ?? 0) + 1}`
+      : mapLabel(mapId)
+  }, [detailsRow, multiInstanceMaps])
+
   if (!enabled) return null
 
   return (
@@ -230,6 +283,7 @@ export function BgSpiceSummary({ enabled }: Props) {
               <th className="text-right font-medium pb-1">Active</th>
               <th className="text-right font-medium pb-1">Primed</th>
               <th className="text-center font-medium pb-1" title="Spawning enabled — click to toggle">Active</th>
+              <th className="text-right font-medium pb-1">Details</th>
             </tr>
           </thead>
           <tbody>
@@ -250,6 +304,7 @@ export function BgSpiceSummary({ enabled }: Props) {
               const onCooldown = cooldownMs > 0
               const isBusy     = togglingId === r.spicefieldTypeId
               const disabled   = isBusy || onCooldown || (togglingId !== null && togglingId !== r.spicefieldTypeId)
+              const detailsOpen = detailsRow?.spicefieldTypeId === r.spicefieldTypeId
               const cdSecs     = Math.ceil(cooldownMs / 1000)
               const title      = isBusy ? 'Saving…'
                                  : onCooldown ? `Wait ${cdSecs}s before clicking again`
@@ -291,11 +346,107 @@ export function BgSpiceSummary({ enabled }: Props) {
                       )}
                     </label>
                   </td>
+                  <td className="text-right py-0.5 pl-2">
+                    <button
+                      type="button"
+                      className="inline-flex min-h-9 min-w-16 items-center justify-center rounded-sm px-2 text-[11px] font-sans text-accent hover:bg-bg-dim focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+                      aria-expanded={detailsOpen}
+                      aria-controls="active-spice-details"
+                      aria-label={`${detailsOpen ? 'Hide' : 'Show'} raw field details for ${display} ${r.fieldType}`}
+                      onClick={() => void onToggleDetails(r)}
+                    >
+                      {detailsOpen ? 'Hide' : 'Details'}
+                    </button>
+                  </td>
                 </tr>
               )
             })}
           </tbody>
         </table>
+      )}
+
+      {detailsRow && (
+        <section
+          id="active-spice-details"
+          className="mt-2 border border-border bg-bg-dim/40 p-3"
+          aria-labelledby="active-spice-details-heading"
+          aria-busy={detailsLoading}
+        >
+          <div className="flex items-start justify-between gap-3">
+            <div className="min-w-0">
+              <h4 id="active-spice-details-heading" className="text-xs font-semibold text-text">
+                {detailsMapDisplay} · raw field values
+              </h4>
+              <p className="mt-1 max-w-[72ch] text-[11px] leading-relaxed text-text-muted">
+                Opened from the {detailsRow.fieldType} summary row. The game reports these fields
+                for the map instance, but does not identify their Small, Medium, or Large type.
+                Values are raw <code>value_remaining</code> data, not a proven conversion to
+                harvestable spice.
+              </p>
+            </div>
+            <button
+              type="button"
+              className="inline-flex min-h-9 shrink-0 items-center px-2 text-[11px] text-text-muted hover:text-text focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+              onClick={() => void onToggleDetails(detailsRow)}
+            >
+              Close
+            </button>
+          </div>
+
+          {detailsLoading && (
+            <p role="status" className="mt-3 text-xs italic text-text-dim">
+              Loading raw field values…
+            </p>
+          )}
+          {detailsErr && (
+            <p role="alert" className="mt-3 text-xs text-danger">
+              Could not load raw field values: {detailsErr}
+            </p>
+          )}
+          {details && (
+            <>
+              <div className="mt-3 flex flex-wrap items-baseline justify-between gap-2 border-y border-border/60 py-2">
+                <span className="text-[11px] text-text-muted">Total raw value remaining</span>
+                <strong className="font-mono text-sm tabular-nums text-accent-bright">
+                  {formatRawInteger(details.totalRawValueRemaining)}
+                </strong>
+              </div>
+              {details.fields.length === 0 ? (
+                <p className="mt-3 text-xs italic text-text-dim">
+                  No active field rows reported for this map instance.
+                </p>
+              ) : (
+                <div className="mt-2 max-h-48 overflow-y-auto border border-border/60">
+                  <table className="w-full table-fixed font-mono text-xs">
+                    <thead className="sticky top-0 bg-bg-dim text-[11px] uppercase tracking-wider text-text-dim">
+                      <tr>
+                        <th className="w-1/2 px-2 py-1.5 text-left font-medium">Field identifier</th>
+                        <th className="w-1/2 px-2 py-1.5 text-right font-medium">Raw remaining</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {details.fields.map(field => (
+                        <tr key={field.fieldId} className="border-t border-border/40">
+                          <td className="truncate px-2 py-1.5 text-text" title={field.fieldId}>
+                            {field.fieldId}
+                          </td>
+                          <td className="px-2 py-1.5 text-right tabular-nums text-text">
+                            {formatRawInteger(field.valueRemaining)}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+              {details.truncated && (
+                <p className="mt-2 text-[11px] text-text-dim">
+                  Showing {details.returned.toLocaleString()} of {details.totalAvailable.toLocaleString()} active fields.
+                </p>
+              )}
+            </>
+          )}
+        </section>
       )}
 
       {toggleErr && (

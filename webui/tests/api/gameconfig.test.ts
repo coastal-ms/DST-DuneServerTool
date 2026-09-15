@@ -3,6 +3,7 @@ import {
   getDeepDesertPvp,
   getGameConfigExperimentalCategories,
   getGameConfigExperimentalCategory,
+  getSpicefieldState,
   reloadGameConfigPods,
   saveDeepDesertPvp,
 } from '../../src/api/gameconfig'
@@ -68,6 +69,17 @@ describe('Game Config pod reload API', () => {
     expect(calls.at(-1)).toEqual({
       url: '/api/gameconfig/reload-pods',
       method: 'POST',
+      body: undefined,
+    })
+  })
+})
+
+describe('Spicefield state API', () => {
+  it('loads bounded raw state for one spicefield summary row', async () => {
+    await getSpicefieldState(42)
+    expect(calls.at(-1)).toEqual({
+      url: '/api/gameconfig/spicefields/42/state',
+      method: undefined,
       body: undefined,
     })
   })

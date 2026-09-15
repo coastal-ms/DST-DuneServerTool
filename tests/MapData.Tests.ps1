@@ -362,6 +362,101 @@ Describe 'Active spice live projection' -Tag 'MapData' {
     }
 }
 
+Describe 'Spicefield state detail projection' -Tag 'MapData' {
+    BeforeEach {
+        $script:capturedSpicefieldStateSql = ''
+        Mock Invoke-DuneSqlQuery {
+            param($Ip, $Sql, $ReadOnly, $MaxRows, $TimeoutSec)
+            $script:capturedSpicefieldStateSql = $Sql
+            return New-MapDataResult `
+                -Columns @(
+                    'field_id', 'map', 'dimension_index', 'value_remaining',
+                    'source_count', 'total_value_remaining'
+                ) `
+                -Rows @(
+                    ,@('9007199254740992', 'HaggaBasin', '1', '150000', '3', '305000'),
+                    ,@('9007199254740993', 'HaggaBasin', '1', '150000', '3', '305000'),
+                    ,@('9007199254740994', 'HaggaBasin', '1', '5000', '3', '305000')
+                )
+        }
+        $script:spiceCapability = @{
+            ok = $true
+            activeSpice = @{ available = $true }
+            schemaFingerprint = ('a' * 64)
+        }
+    }
+
+    It 'returns exact raw strings and a bounded list for Hagga Basin' {
+        $result = Get-DuneSpicefieldStateLive `
+            -Ip '192.0.2.1' `
+            -MapName 'HaggaBasin' `
+            -DimensionIndex 1 `
+            -Limit 2 `
+            -Capability $script:spiceCapability
+
+        $result.ok | Should -BeTrue
+        $result.status | Should -Be 'partial'
+        $result.mapName | Should -Be 'HaggaBasin'
+        $result.dimensionIndex | Should -Be 1
+        $result.totalRawValueRemaining | Should -Be '305000'
+        $result.totalAvailable | Should -Be 3
+        $result.returned | Should -Be 2
+        $result.truncated | Should -BeTrue
+        $result.fields[0].fieldId | Should -Be '9007199254740992'
+        $result.fields[0].valueRemaining | Should -Be '150000'
+        $script:capturedSpicefieldStateSql | Should -Match 'dst-source:gameconfig\.spicefield-state'
+        $script:capturedSpicefieldStateSql | Should -Match 'WHERE field_kind_id = 1'
+        $script:capturedSpicefieldStateSql | Should -Match 'value_remaining > 0'
+        $script:capturedSpicefieldStateSql | Should -Match 'LIMIT .*row_limit'
+    }
+
+    It 'binds Deep Desert map and dimension without interpolating them into SQL' {
+        $null = Get-DuneSpicefieldStateLive `
+            -Ip '192.0.2.1' `
+            -MapName 'DeepDesert' `
+            -DimensionIndex 4 `
+            -Capability $script:spiceCapability
+
+        $script:capturedSpicefieldStateSql | Should -Not -Match "'DeepDesert'"
+        $parameterMatch = [regex]::Match(
+            $script:capturedSpicefieldStateSql,
+            "decode\('([^']+)', 'base64'\)"
+        )
+        $parameterMatch.Success | Should -BeTrue
+        $json = [Text.Encoding]::UTF8.GetString(
+            [Convert]::FromBase64String($parameterMatch.Groups[1].Value)
+        )
+        $parameters = $json | ConvertFrom-Json
+        $parameters.map_name | Should -Be 'DeepDesert'
+        $parameters.dimension_index | Should -Be 4
+        $parameters.row_limit | Should -Be 200
+    }
+
+    It 'returns an empty ready result when the map instance has no active fields' {
+        Mock Invoke-DuneSqlQuery {
+            New-MapDataResult `
+                -Columns @(
+                    'field_id', 'map', 'dimension_index', 'value_remaining',
+                    'source_count', 'total_value_remaining'
+                ) `
+                -Rows @()
+        }
+
+        $result = Get-DuneSpicefieldStateLive `
+            -Ip '192.0.2.1' `
+            -MapName 'DeepDesert' `
+            -DimensionIndex 0 `
+            -Capability $script:spiceCapability
+
+        $result.ok | Should -BeTrue
+        $result.status | Should -Be 'ready'
+        $result.totalRawValueRemaining | Should -Be '0'
+        $result.totalAvailable | Should -Be 0
+        $result.fields.Count | Should -Be 0
+        $result.truncated | Should -BeFalse
+    }
+}
+
 Describe 'Public static POI projection' -Tag 'MapData' {
     BeforeEach {
         Clear-DuneMapDataCapabilityCache
