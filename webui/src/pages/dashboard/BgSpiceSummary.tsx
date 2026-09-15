@@ -200,6 +200,18 @@ export function BgSpiceSummary({ enabled }: Props) {
     return rows.filter(r => r.partitionActive !== false)
   }, [rows, gateOk])
 
+  useEffect(() => {
+    const selectedStillVisible = detailsRow !== null
+      && visible.some(row => row.spicefieldTypeId === detailsRow.spicefieldTypeId)
+    if (enabled && (detailsRow === null || selectedStillVisible)) return
+
+    detailsRequestRef.current += 1
+    setDetailsRow(null)
+    setDetails(null)
+    setDetailsLoading(false)
+    setDetailsErr(null)
+  }, [detailsRow, enabled, visible])
+
   // Group key is map + dimension so two instances of the same map stay apart.
   const groupKey = useCallback(
     (r: SpicefieldType) => `${r.mapId ?? r.mapName}|${r.dimensionIndex ?? 0}`,
