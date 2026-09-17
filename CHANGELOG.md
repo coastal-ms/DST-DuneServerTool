@@ -33,12 +33,12 @@ here cover everything those tags shipped.
   clean pre-import backups, verifies both files, and fails closed when no prior
   managed configuration can be identified.
 - Restored an explicit **Apply to my client** action for settings that Retail
-  evaluates from each player's local config. In particular, disabling **Shield
-  Drops While Shooting** can now write
-  `Dune.DisableShieldOnShooting=0` to this PC's Retail
-  `Config\Windows\Engine.ini` after the existing Engine.ini opt-in; server saves
-  remain separate, automatic client mirroring stays disabled, and other players
-  must apply their own matching value.
+  evaluates from each player's local config. In particular, **Maximum Vehicles
+  Per Player** and **Shield Drops While Shooting** can now write
+  `Vehicle.MaxVehiclesPerPlayer` and `Dune.DisableShieldOnShooting` to this PC's
+  Retail `Config\Windows\Engine.ini` after the existing Engine.ini opt-in;
+  server saves remain separate, automatic client mirroring stays disabled, and
+  other players must apply their own matching value.
 
 ## [15.1.0] - 2026-09-17
 

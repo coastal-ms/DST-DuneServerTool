@@ -1945,7 +1945,7 @@ Describe 'GameConfig: client-apply flag covers local gameplay settings' -Tag 'Ga
         $missing -join ', ' | Should -Be ''
     }
 
-    It 'mirrors only console variables the client is proven to read' {
+    It 'offers Maximum Vehicles Per Player and Shield Drops While Shooting as proven client-read settings' {
         # Console variables reach the server through the startup command, not any
         # INI, so a client copy is only meaningful for the ones the client
         # evaluates itself. Flagging the rest is not harmless: it tells players to
@@ -1957,8 +1957,8 @@ Describe 'GameConfig: client-apply flag covers local gameplay settings' -Tag 'Ga
         $flagged = @($gameplayEngine | Where-Object { $_.ClientApply } | ForEach-Object { $_.Key })
         @($flagged | Sort-Object) | Should -Be @($script:DuneClientEvaluatedConsoleVariables | Sort-Object)
 
-        # Both controls have client-side field evidence, including same-build
-        # Retail players observing different shield behaviour from local values.
+        # Both controls have client-side field evidence: the displayed vehicle
+        # cap and shield behavior follow each Retail player's local values.
         $flagged | Should -Contain 'Vehicle.MaxVehiclesPerPlayer'
         $flagged | Should -Contain 'Dune.DisableShieldOnShooting'
 
