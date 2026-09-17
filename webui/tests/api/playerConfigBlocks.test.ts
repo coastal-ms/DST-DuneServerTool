@@ -7,8 +7,8 @@ import {
 } from '../../src/pages/GameConfig'
 import type { GameConfigCategory, GameConfigResponse } from '../../src/api/types'
 
-// The "Player config" button promises one thing: exactly the lines a player must
-// add locally, and nothing else. These lock that promise down — a default value
+// Client-share controls promise one thing: exactly the lines a player must add
+// locally, and nothing else. These lock that promise down — a default value
 // leaking in wastes a player's time, and a missing one silently breaks the
 // setting for everyone but the admin.
 
