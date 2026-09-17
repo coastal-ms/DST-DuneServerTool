@@ -319,6 +319,12 @@ $script:DuneGameConfigDeprecatedManagedKeys = @(
     'dw.ReturningPlayer.DaysBeforeEligibleForReward'
     'dw.ReturningPlayer.GiveAward.TierOverride'
 
+    # Removed from the Retail 2111270 server binary. These were exposed during
+    # the PTC, but Retail no longer registers the console-variable names.
+    'NPC.AllowDoorAutoAccessToAllNPCs'
+    'NPC.AllowDoorAutoAccessToAllNPCsRadius'
+    'NPC.DoorAutoAccessRadius'
+
 )
 
 $script:DuneGameConfigSchema = @(
@@ -623,9 +629,6 @@ $script:DuneGameConfigSchema = @(
     @{ Section=$script:DuneGcSecConsole; Key='NPC.EnableWeaponRotationRateOverride'; File='engine'; Type='bool01'; Label='NPC Weapon Rotation Rate Override'; Help='Funcom: "If set to 1, NPC''s yaw rotation rate is overriden if the rotation rate override firing pattern config has a or dummy weapon rotation rate override is set".'; Category='Experimental 2' }
     @{ Section=$script:DuneGcSecConsole; Key='NPC.DummyWeaponRotationRateOverride'; File='engine'; Type='float'; Min=0; Label='NPC Dummy Weapon Rotation Rate'; Help='Funcom: "If set value > 0, shooting weapon will use dummy rotation rate override instead of the weapon''s configured one". Only applies while NPC Weapon Rotation Rate Override is on.'; Category='Experimental 2' }
     @{ Section=$script:DuneGcSecConsole; Key='NPC.Respawn.StartCountdownOnEachNPCKilled'; File='engine'; Type='bool01'; Label='Restart NPC Respawn Timer Per Kill'; Help='Funcom: "If true, the respawn timer for NPC content will be restarted for each NPC killed".'; Category='Experimental 2' }
-    @{ Section=$script:DuneGcSecConsole; Key='NPC.AllowDoorAutoAccessToAllNPCs'; File='engine'; Type='bool01'; Label='NPCs Use Pentashield Doors'; Help='Funcom: "if this option is on, all the NPCs can walk through the pentashield doors. If not, only assigned room descriptors can have a access".'; Category='Experimental 2' }
-    @{ Section=$script:DuneGcSecConsole; Key='NPC.AllowDoorAutoAccessToAllNPCsRadius'; File='engine'; Type='float'; Min=0; Label='All-NPC Door Access Radius'; Help='Funcom: "When a radius is set, all NPCs will be granted access to doors within the radius when they spawn. This is applied when NPCAllowDoorAutoAccessToAllNPCs is on. default: 100000(1km)". Applies while NPCs Use Pentashield Doors is on.'; Category='Experimental 2' }
-    @{ Section=$script:DuneGcSecConsole; Key='NPC.DoorAutoAccessRadius'; File='engine'; Type='float'; Min=0; Default='25000'; Label='NPC Door Access Radius'; Help='Funcom: "When a radius is set, NPCs will be granted access to doors within the radius when they spawn. default: 25000(250m)". 25000 is 250 metres.'; Category='Experimental 2' }
     @{ Section=$script:DuneGcSecConsole; Key='Sandworm.SandwormSharkwormRoam'; File='engine'; Type='select'; Default='0'; Options=@(@{V='0';L='Always off'},@{V='1';L='Always on'},@{V='2';L='Cooldown based'}); Label='Sharkworm Roaming'; Help='Funcom: "Determines if sharkworm roam is always on, always off or cooldown based. 0 = Always Off. 1 = Always On. 2 = Cooldown based. (default=0)".'; Category='Experimental 2' }
     @{ Section=$script:DuneGcSecConsole; Key='Sandworm.SandwormDeathVolumeEnabled'; File='engine'; Type='bool01'; Default='1'; Label='Worm Death Volume'; Help='Funcom: "Specifies if the sandworm death volume is enabled. (default=true)".'; Category='Experimental 2' }
     @{ Section=$script:DuneGcSecConsole; Key='Sandworm.SandwormCheckIfBreachLocationIsFreeOfPlayers'; File='engine'; Type='bool01'; Default='1'; Label='Worm Avoids Breaching On Players'; Help='Funcom: "Specifies if the sandworm should check if breach location is free of players. (default=true)". Turning this off lets a worm surface directly underneath players.'; Category='Experimental 2' }
