@@ -2074,6 +2074,24 @@ Describe 'GameConfig: local client Game.ini and Engine.ini' -Tag 'GameConfig' {
         @($result.items | ForEach-Object file | Sort-Object -Unique) | Should -Be @('engine','game')
     }
 
+    It 'writes customized inventory slots, volume, and weight to Retail client Game.ini' {
+        $dir = Join-Path (Get-PSDrive TestDrive).Root 'inventory-client'
+        [void](New-Item -ItemType Directory -Path $dir)
+
+        $result = Save-DuneGameConfigClient -Dir $dir -Updates @(
+            @{ key='PlayerInventoryStartingSize'; value='70' },
+            @{ key='PlayerInventoryStartingVolumeCapacity'; value='2500' },
+            @{ key='m_InventoryWeightMultiplier'; value='0.5' }
+        )
+
+        $raw = [IO.File]::ReadAllText((Join-Path $dir 'Game.ini'))
+        $raw | Should -Match '(?m)^PlayerInventoryStartingSize=70\r?$'
+        $raw | Should -Match '(?m)^PlayerInventoryStartingVolumeCapacity=2500\r?$'
+        $raw | Should -Match '(?m)^m_InventoryWeightMultiplier=0\.5\r?$'
+        $result.files.game.path | Should -Be (Join-Path $dir 'Game.ini')
+        @($result.items).Count | Should -Be 3
+    }
+
     It 'writes the disabled shield setting to the Retail client Engine.ini' {
         $dir = (Get-PSDrive TestDrive).Root
 

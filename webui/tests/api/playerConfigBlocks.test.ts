@@ -68,6 +68,29 @@ describe('buildAllClientBlocks', () => {
   })
 
   describe('buildAllClientApplyItems', () => {
+    it('offers customized inventory fields for explicit Retail Game.ini apply', () => {
+      const inventory: GameConfigCategory[] = [{
+        category: 'Inventory',
+        fields: [
+          { section: '/Script/DuneSandbox.InventorySystemSettings', key: 'PlayerInventoryStartingSize', file: 'game', type: 'int', label: 'Starting Inventory Slots', default: '35', clientApply: true },
+          { section: '/Script/DuneSandbox.InventorySystemSettings', key: 'PlayerInventoryStartingVolumeCapacity', file: 'game', type: 'float', label: 'Starting Inventory Volume', default: '175.0', clientApply: true },
+          { section: '/Script/DuneSandbox.DuneGameMode', key: 'm_InventoryWeightMultiplier', file: 'game', type: 'float', label: 'Inventory Weight Multiplier', default: '1.0', clientApply: true },
+        ],
+      }] as GameConfigCategory[]
+
+      const items = buildAllClientApplyItems(inventory, cfg({
+        '/Script/DuneSandbox.InventorySystemSettings||PlayerInventoryStartingSize': '70',
+        '/Script/DuneSandbox.InventorySystemSettings||PlayerInventoryStartingVolumeCapacity': '2500',
+        '/Script/DuneSandbox.DuneGameMode||m_InventoryWeightMultiplier': '0.5',
+      }, {}))
+
+      expect(items.map(item => [item.file, item.key, item.value])).toEqual([
+        ['game', 'PlayerInventoryStartingSize', '70'],
+        ['game', 'PlayerInventoryStartingVolumeCapacity', '2500'],
+        ['game', 'm_InventoryWeightMultiplier', '0.5'],
+      ])
+    })
+
     it('offers the field-confirmed shield CVar for an explicit local apply', () => {
       const shield: GameConfigCategory[] = [{
         category: 'PvP & Security',
