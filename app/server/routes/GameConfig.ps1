@@ -719,7 +719,7 @@ Register-DuneRoute -Method GET -Path '/api/gameconfig/spicefields' -Handler {
                 maxActive        = [int]$_.max_globally_active
                 maxPrimed        = [int]$_.max_globally_primed
                 currentActive    = [int]$_.current_globally_active
-                currentPrimed    = [int]$_.current_globally_primed
+                currentPrimed    = if ($legacyAdapter) { [int]$_.current_globally_primed } else { $null }
                 isSpawningActive = [bool]$_.is_spawning_active
                 spawnWeight      = [double]$_.global_spawn_weight
                 partitionLive    = if ($legacyAdapter) { [bool]($hit -and $hit.live) } else { [bool]$_.partition_live }
@@ -866,7 +866,7 @@ Register-DuneRoute -Method PUT -Path '/api/gameconfig/spicefields/{id}' -Handler
                 maxActive        = [int]$row.max_globally_active
                 maxPrimed        = [int]$row.max_globally_primed
                 currentActive    = [int]$row.current_globally_active
-                currentPrimed    = [int]$row.current_globally_primed
+                currentPrimed    = if ($legacyAdapter) { [int]$row.current_globally_primed } else { $null }
                 isSpawningActive = [bool]$row.is_spawning_active
                 spawnWeight      = [double]$row.global_spawn_weight
                 adapter          = if ($legacyAdapter) { 'legacy-db' } else { 'retail-config' }
@@ -965,7 +965,7 @@ Register-DuneRoute -Method PUT -Path '/api/gameconfig/spicefields/{id}/spawning'
                 maxActive        = [int]$row.max_globally_active
                 maxPrimed        = [int]$row.max_globally_primed
                 currentActive    = [int]$row.current_globally_active
-                currentPrimed    = [int]$row.current_globally_primed
+                currentPrimed    = if ($legacyAdapter) { [int]$row.current_globally_primed } else { $null }
                 isSpawningActive = [bool]$row.is_spawning_active
                 spawnWeight      = [double]$row.global_spawn_weight
                 adapter          = if ($legacyAdapter) { 'legacy-db' } else { 'retail-config' }

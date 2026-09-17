@@ -545,7 +545,7 @@ export type SpicefieldType = {
   maxActive: number
   maxPrimed: number
   currentActive: number   // read-only — maintained by the game
-  currentPrimed: number   // read-only — maintained by the game
+  currentPrimed: number | null // null when the server build exposes no authoritative count
   isSpawningActive: boolean
   spawnWeight: number     // float
   adapter?: 'legacy-db' | 'retail-config'

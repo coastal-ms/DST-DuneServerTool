@@ -359,7 +359,7 @@ export function SpicefieldsCard({ vmRunning }: Props) {
           {groupOrder.map(([mapName, list]) => {
             const totalActive = list.reduce((s, r) => s + r.currentActive, 0)
             const totalMaxActive = list.reduce((s, r) => s + r.maxActive, 0)
-            const totalPrimed = list.reduce((s, r) => s + r.currentPrimed, 0)
+            const totalPrimed = list.reduce((s, r) => s + (r.currentPrimed ?? 0), 0)
             const totalMaxPrimed = list.reduce((s, r) => s + r.maxPrimed, 0)
             // Every row for this map belongs to a partition that is neither
             // running nor pinned - i.e. leftovers from an instance that no
@@ -385,9 +385,17 @@ export function SpicefieldsCard({ vmRunning }: Props) {
                     <span className="ml-1">active</span>
                   </span>
                   <span className="text-border">·</span>
-                  <span title={`Total currently primed across all ${mapName} field sizes`}>
-                    <span className="text-text font-medium">{list.some(r => r.currentPrimedExact === false) ? '—' : totalPrimed}</span>
-                    <span className="text-text-dim"> / {totalMaxPrimed}</span>
+                  <span title={list.some(r => r.currentPrimedExact === false || r.currentPrimed === null)
+                    ? `Current primed count is unavailable; ${totalMaxPrimed} is the configured ceiling, not a target.`
+                    : `Total currently primed across all ${mapName} field sizes`}>
+                    <span className="text-text font-medium">
+                      {list.some(r => r.currentPrimedExact === false || r.currentPrimed === null) ? 'N/A' : totalPrimed}
+                    </span>
+                    <span className="text-text-dim">
+                      {list.some(r => r.currentPrimedExact === false || r.currentPrimed === null)
+                        ? ` (cap ${totalMaxPrimed})`
+                        : ` / ${totalMaxPrimed}`}
+                    </span>
                     <span className="ml-1">primed</span>
                   </span>
                 </div>
@@ -406,7 +414,8 @@ export function SpicefieldsCard({ vmRunning }: Props) {
                   const toggleDisabled = !vmRunning || toggling || toggleCdMs > 0
                   const saveDisabled   = !vmRunning || !dirty || saving || saveCdMs > 0
                   const activeAtCap = r.maxActive > 0 && r.currentActive >= r.maxActive
-                  const primedAtCap = r.currentPrimedExact !== false && r.maxPrimed > 0 && r.currentPrimed >= r.maxPrimed
+                  const primedAtCap = r.currentPrimedExact !== false && r.currentPrimed !== null
+                    && r.maxPrimed > 0 && r.currentPrimed >= r.maxPrimed
                   return (
                     <div key={r.spicefieldTypeId}
                          className="border border-border rounded-lg p-3 bg-surface-2/40">

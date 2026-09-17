@@ -19,6 +19,10 @@ here cover everything those tags shipped.
   self-hosted schema moved actor state onto the actor row. The guard now
   recognizes and preserves both the legacy and Retail cleanup-function forms
   when reapplying its `BaseBackup` exclusion after a Funcom update.
+- Retail's unavailable current primed-spice count now remains `null` through
+  the API and appears as `N/A (cap N)` in Server Health, instead of becoming
+  numeric zero internally or showing an unexplained dash that could be mistaken
+  for inactive priming.
 
 ## [15.1.0] - 2026-09-17
 

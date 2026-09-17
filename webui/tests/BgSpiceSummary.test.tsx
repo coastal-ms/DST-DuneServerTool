@@ -77,6 +77,22 @@ afterEach(() => {
 })
 
 describe('BgSpiceSummary raw field details', () => {
+  it('labels an unavailable Retail primed count without presenting it as zero', async () => {
+    vi.mocked(getSpicefields).mockResolvedValue({
+      available: true,
+      rows: [{ ...summaryRow, currentPrimed: null, currentPrimedExact: false }],
+      partitionGate: true,
+    })
+
+    render(<BgSpiceSummary enabled />)
+
+    const primed = await screen.findByLabelText(
+      'Current primed count is unavailable on this server build; 3 is the configured ceiling, not a target.',
+    )
+    expect(primed).toHaveTextContent('N/A (cap 3)')
+    expect(primed).not.toHaveTextContent('0/3')
+  })
+
   it('opens from an explicit row control and labels untyped raw values accurately', async () => {
     const user = userEvent.setup()
     render(<BgSpiceSummary enabled />)

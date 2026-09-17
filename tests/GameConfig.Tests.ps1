@@ -2425,6 +2425,8 @@ Describe 'GameConfig: UE struct-member engine (LandsraadSettings Data blob)' -Ta
 Describe 'GameConfig: spicefield startup defaults' -Tag 'GameConfig' {
     BeforeAll {
         function Invoke-V6Ssh { param([string]$Ip, [string]$Cmd) }
+        function Get-V6RetailSpicefieldActivity { param([string]$Ip) }
+        function Get-DuneActiveMapPartitions { param([string]$Ip) }
         $script:SpiceSection = '/Script/DuneSandbox.SpiceHarvestingSystem'
         $script:SpiceOverride = 'm_PerMapSystemSettings=(("Editor_Default", (m_SpiceFieldTypeSettings=(((Name="Small"), (MaxGloballyPrimed=3,MaxGloballyActive=5)),((Name="Medium"), (MaxGloballyPrimed=2,MaxGloballyActive=22)),((Name="Large"), (MaxGloballyPrimed=2,MaxGloballyActive=6))))),("DeepDesert_1", (m_SpiceFieldTypeSettings=(((Name="Small"), (MaxGloballyPrimed=10,MaxGloballyActive=60)),((Name="Medium"), (MaxGloballyPrimed=12,MaxGloballyActive=12)),((Name="Large"), (MaxGloballyPrimed=2,MaxGloballyActive=6))))),("Survival_1", (m_SpiceFieldTypeSettings=(((Name="Small"), (MaxGloballyPrimed=3,MaxGloballyActive=10))))))'
         $script:SpiceFallback = 'm_DefaultSystemSettings=(m_SpiceFieldTypeSettings=(((Name="Small"), (MaxGloballyPrimed=3,MaxGloballyActive=20)),((Name="Medium"), (MaxGloballyPrimed=2,MaxGloballyActive=10)),((Name="Large"), (MaxGloballyPrimed=2,MaxGloballyActive=6))))'
@@ -2462,6 +2464,35 @@ Describe 'GameConfig: spicefield startup defaults' -Tag 'GameConfig' {
         @($defs | Where-Object mapId -eq 'Survival_1').fieldType | Should -Be @('Small')
         @($defs | Where-Object mapId -eq 'DeepDesert_1').fieldType | Should -Be @('Small', 'Medium', 'Large')
         @($defs.id | Sort-Object -Unique).Count | Should -Be 4
+    }
+
+    It 'preserves the unavailable Retail primed count as null instead of numeric zero' {
+        Mock Get-DuneGameConfig { @{ game = @{ raw = $script:SpiceUserRaw } } }
+        Mock Get-DuneGameConfigDefaults { @{ game = $script:SpiceDefaultsRaw } }
+        Mock Get-V6RetailSpicefieldActivity {
+            @([pscustomobject]@{
+                map_name = 'HaggaBasin'
+                dimension_index = 0
+                field_type = 'Small'
+                current_active = 5
+            })
+        }
+        Mock Get-DuneActiveMapPartitions {
+            @{ ok = $true; partitions = @([pscustomobject]@{
+                mapId = 'Survival_1'
+                dimensionIndex = 0
+                live = $true
+                pinned = $false
+            }) }
+        }
+
+        $row = @((Get-DuneRetailSpicefieldRows -Ip '192.0.2.1').rows |
+            Where-Object spicefield_type_id -eq 9101)[0]
+
+        $row.current_globally_active | Should -Be 5
+        $row.current_globally_primed | Should -BeNullOrEmpty
+        $row.current_primed_exact | Should -BeFalse
+        $row.max_globally_primed | Should -Be 3
     }
 
     It 'keeps the installed Funcom INIs as DST authoritative source' {

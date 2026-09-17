@@ -317,7 +317,11 @@ export function BgSpiceSummary({ enabled }: Props) {
                 : mapLabel(mapId)
               const sizeCls   = SIZE_CLASS[r.fieldType] ?? 'text-text-muted'
               const activeCls = activeFillClass(r.currentActive, r.maxActive)
-              const primCls   = r.currentPrimedExact === false ? 'text-text-dim' : primedClass(r.currentPrimed)
+              const primedUnavailable = r.currentPrimedExact === false || r.currentPrimed === null
+              const primCls   = primedUnavailable ? 'text-text-dim' : primedClass(r.currentPrimed ?? 0)
+              const primedTitle = primedUnavailable
+                ? `Current primed count is unavailable on this server build; ${r.maxPrimed} is the configured ceiling, not a target.`
+                : undefined
               const cooldownMs = cooldownRemaining()
               const onCooldown = cooldownMs > 0
               const isBusy     = togglingId === r.spicefieldTypeId
@@ -343,8 +347,12 @@ export function BgSpiceSummary({ enabled }: Props) {
                   <td className={`text-right tabular-nums pr-3 py-0.5 ${activeCls}`}>
                     {r.currentActive}<span className="text-text-dim">/{r.maxActive}</span>
                   </td>
-                  <td className={`text-right tabular-nums pr-3 py-0.5 ${primCls}`}>
-                    {r.currentPrimedExact === false ? '—' : r.currentPrimed}<span className="text-text-dim">/{r.maxPrimed}</span>
+                  <td className={`text-right tabular-nums pr-3 py-0.5 ${primCls}`}
+                      title={primedTitle}
+                      aria-label={primedTitle}>
+                    {primedUnavailable
+                      ? <>N/A <span className="text-text-dim">(cap {r.maxPrimed})</span></>
+                      : <>{r.currentPrimed}<span className="text-text-dim">/{r.maxPrimed}</span></>}
                   </td>
                   <td className="text-center py-0.5 whitespace-nowrap">
                     <label className={`inline-flex items-center gap-1 ${disabled ? 'cursor-wait opacity-70' : 'cursor-pointer'}`}

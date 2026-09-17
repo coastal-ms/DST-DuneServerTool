@@ -2157,7 +2157,7 @@ function Get-DuneRetailSpicefieldRows {
             max_globally_active    = [int]$limits.maxActive
             max_globally_primed    = [int]$limits.maxPrimed
             current_globally_active = [int]$activity["$($definition.mapName)|$dimension|$($definition.fieldType)"]
-            current_globally_primed = 0
+            current_globally_primed = $null
             is_spawning_active     = [bool]$spawningActive
             global_spawn_weight    = 0.5
             partition_live         = [bool]($partition -and $partition.live)
