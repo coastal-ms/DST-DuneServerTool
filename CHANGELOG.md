@@ -25,7 +25,9 @@ here cover everything those tags shipped.
   spawning state remain visible, and the editable Max primed cap remains
   available. Legacy database paths still show their authoritative current
   primed counts.
-- Added Retail's Zanovar story area to Map Spin-Up and exposed its director
+- Added Retail's newly shipped Zanovar, Arrakeen Spaceport, Place of
+  Contemplation, Glutton's Dining Room, and Sietch Talab areas to Map Spin-Up
+  with friendly labels. Zanovar also exposes its verified director
   party-sharing override so self-hosted operators can allow separate parties
   to share the area instead of retaining the shipped one-party isolation.
 - Hardened the conditional Retail INI migration used when multiple battlegroup

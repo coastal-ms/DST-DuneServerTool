@@ -4,6 +4,7 @@ BeforeAll {
     . $lib
     foreach ($name in @(
         '_Get-DuneSpinUpTargetCount',
+        '_Get-DuneSpinUpLabel',
         '_Parse-DuneDirectorIni',
         '_Test-DuneSpinUpControllableSection',
         '_Set-DuneIniMinServers',
@@ -39,6 +40,24 @@ Describe 'Map SpinUp partition-aware floors' {
         $out | Should -Match 'MinServers=2'
     }
 
+    It 'recognizes every verified Retail area without NumExtraServers' {
+        $maps = @(
+            'CB_Story_DestroyedZanovar'
+            'CB_Story_OrbitalMonitor'
+            'CB_Arrakis_Story_Paranoid_PrayerRoom'
+            'CB_Arrakis_Story_Glutton_DiningRoom'
+            'CB_Arrakis_Generic_Sietch_Room'
+        )
+        $ini = ($maps | ForEach-Object { "[ $_ ]`nPlayerHardCap=1`n" }) -join "`n"
+        $sections = @(_Parse-DuneDirectorIni -Ini $ini)
+
+        @($sections.Name) | Should -Be $maps
+        foreach ($section in $sections) {
+            $section.IsMap | Should -BeFalse
+            (_Test-DuneSpinUpControllableSection -Section $section) | Should -BeTrue
+        }
+    }
+
     It 'recognizes the Retail Zanovar party-isolation setting' {
         $ini = "[ CB_Story_DestroyedZanovar ]`nMaxParties=1`n"
         $section = @(_Parse-DuneDirectorIni -Ini $ini)[0]
@@ -46,6 +65,19 @@ Describe 'Map SpinUp partition-aware floors' {
         $section.HasMaxParties | Should -BeTrue
         $section.MaxParties | Should -Be 1
         (_Test-DuneSpinUpControllableSection -Section $section) | Should -BeTrue
+    }
+
+    It 'uses the official friendly labels for the new Retail areas' {
+        $labels = [ordered]@{
+            'CB_Story_DestroyedZanovar'              = 'Zanovar'
+            'CB_Story_OrbitalMonitor'                = 'Arrakeen Spaceport'
+            'CB_Arrakis_Story_Paranoid_PrayerRoom'   = 'Place of Contemplation'
+            'CB_Arrakis_Story_Glutton_DiningRoom'    = "The Glutton's Dining Room"
+            'CB_Arrakis_Generic_Sietch_Room'         = 'Sietch Talab'
+        }
+        foreach ($map in $labels.Keys) {
+            (_Get-DuneSpinUpLabel -Map $map) | Should -Be $labels[$map]
+        }
     }
 
     It 'does not treat an unknown config-only section as a controllable map' {

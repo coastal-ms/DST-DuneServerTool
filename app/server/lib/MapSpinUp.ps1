@@ -68,10 +68,15 @@ $script:DuneSpinUpNativeMaps = @(
     'DLC_Story_LostHarvest_ForgottenLab'
 )
 
-# Retail story areas that need lifecycle controls even when Funcom's director
-# section does not include NumExtraServers.
+# Retail areas that need lifecycle controls even when Funcom's director section
+# does not include NumExtraServers. Keep this explicit so unrelated config
+# sections remain excluded.
 $script:DuneSpinUpRetailMaps = @(
     'CB_Story_DestroyedZanovar'
+    'CB_Story_OrbitalMonitor'
+    'CB_Arrakis_Story_Paranoid_PrayerRoom'
+    'CB_Arrakis_Story_Glutton_DiningRoom'
+    'CB_Arrakis_Generic_Sietch_Room'
 )
 
 # MaxParties=1 isolates each party into its own dimension. Retail currently
@@ -96,6 +101,10 @@ $script:DuneSpinUpLabels = @{
     'CB_Dungeon_ThePit'                  = 'Dungeon: The Pit'
     'CB_Story_BanditFortress01'          = 'Bandit Fortress'
     'CB_Story_DestroyedZanovar'           = 'Zanovar'
+    'CB_Story_OrbitalMonitor'             = 'Arrakeen Spaceport'
+    'CB_Arrakis_Story_Paranoid_PrayerRoom' = 'Place of Contemplation'
+    'CB_Arrakis_Story_Glutton_DiningRoom' = "The Glutton's Dining Room"
+    'CB_Arrakis_Generic_Sietch_Room'      = 'Sietch Talab'
     'Story_ArtOfKanly'                   = 'The Art of Kanly'
     'Story_ProcesVerbal'                 = 'Procès-Verbal'
     'Story_Faction_Outpost_Atre'         = 'Faction Outpost: Atreides'
