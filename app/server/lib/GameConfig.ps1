@@ -956,7 +956,8 @@ function Get-DuneExperimentalGroup {
 $script:DuneGameConfigLiveGlobDir    = '/var/lib/rancher/k3s/storage/*/Saved/UserSettings'
 $script:DuneGameConfigTplGamePath    = '/home/dune/.dune/download/scripts/setup/config/UserGame.ini'
 $script:DuneGameConfigTplEnginePath  = '/home/dune/.dune/download/scripts/setup/config/UserEngine.ini'
-$script:DuneGameConfigAuthorityMarker = '/home/dune/.dune/download/scripts/setup/config/.dst-live-settings-imported-v1'
+$script:DuneGameConfigLegacyAuthorityMarker = '/home/dune/.dune/download/scripts/setup/config/.dst-live-settings-imported-v1'
+$script:DuneGameConfigAuthorityMarker = '/home/dune/.dune/download/scripts/setup/config/.dst-live-settings-imported-v2'
 
 # Cached, player-facing server name shown in the in-game server browser. This is
 # the battlegroup title (CRD spec.title, e.g. "Reapers") — NOT Bgd.ServerDisplayName
@@ -2232,15 +2233,86 @@ function Get-DuneGameConfigContext {
     return @{ ok=$true; ip=$vm.ip; vm=$vm }
 }
 
+function Get-DuneGameConfigMigrationUpdates {
+    param(
+        [string]$GameRaw,
+        [string]$EngineRaw
+    )
+    $values = @{
+        game   = (Get-DuneIniEffectiveByKey -Raw $GameRaw)
+        engine = (Get-DuneIniEffectiveByKey -Raw $EngineRaw)
+    }
+    $updates = New-Object 'System.Collections.Generic.List[object]'
+    $seen = @{}
+    foreach ($field in $script:DuneGameConfigSchema) {
+        $file = "$($field.File)"
+        $key = "$($field.Key)"
+        $id = "$file||$key"
+        if ($seen.ContainsKey($id) -or -not $values.ContainsKey($file) -or
+            -not $values[$file].ContainsKey($key)) {
+            continue
+        }
+        $seen[$id] = $true
+        $value = "$($values[$file][$key])".Trim()
+        if (Test-DuneGameConfigValueIsDefault -Key $key -Value $value) { continue }
+        $updates.Add(@{
+            file    = $file
+            section = "$($field.Section)"
+            key     = $key
+            value   = $value
+            remove  = $false
+        })
+    }
+    return $updates.ToArray()
+}
+
+function Get-DuneGameConfigManagedRaw {
+    param([string]$Raw)
+    $doc = ConvertFrom-DuneIniDoc -Raw $Raw
+    if ($doc.malformed) {
+        throw 'Managed block is malformed; refusing to use it as a migration source.'
+    }
+    $lines = New-Object 'System.Collections.Generic.List[string]'
+    foreach ($section in $doc.sections) {
+        if (-not $section.managed) { continue }
+        $lines.Add("$($section.header)")
+        foreach ($line in $section.body) { $lines.Add("$line") }
+    }
+    return ($lines -join "`n")
+}
+
+function Merge-DuneGameConfigMigrationValues {
+    param(
+        [string]$BaseRaw,
+        [object[]]$Updates,
+        [string]$File
+    )
+    $fileUpdates = @($Updates | Where-Object { "$($_.file)" -eq $File })
+    if ($fileUpdates.Count -eq 0) { return $BaseRaw }
+    $folded = Convert-DuneSpicefieldUpdates -Raw $BaseRaw -Updates $fileUpdates -DefaultsRaw $BaseRaw
+    $folded = Convert-DuneStructUpdates -Raw $BaseRaw -Updates $folded -DefaultsRaw $BaseRaw
+    return ConvertTo-DuneIniManaged -Raw $BaseRaw -Updates $folded -QuotedKeys (Get-DuneGameConfigQuotedKeys)
+}
+
+function Get-DuneGameConfigTextSha256 {
+    param([AllowEmptyString()][string]$Value)
+    $sha = [Security.Cryptography.SHA256]::Create()
+    try {
+        return ([BitConverter]::ToString($sha.ComputeHash([Text.Encoding]::UTF8.GetBytes($Value)))).Replace('-', '').ToLowerInvariant()
+    } finally {
+        $sha.Dispose()
+    }
+}
+
 function Resolve-DuneGameConfigPaths {
     param([string]$Ip, [switch]$Force)
 
     # Funcom's Retail updater creates setup/config with stock defaults even when
     # the battlegroup already has an administrator's established User*.ini files.
-    # On first use, import the existing live pair INTO the installed directory
-    # before declaring that directory authoritative. Never push stock installed
-    # defaults over an unimported live configuration.
-    $installedState = ((Invoke-V6Ssh -Ip $Ip -Cmd "sudo bash -c 'if test -f ''$script:DuneGameConfigTplGamePath'' && test -f ''$script:DuneGameConfigTplEnginePath''; then if test -f ''$script:DuneGameConfigAuthorityMarker''; then echo ready; else echo uninitialized; fi; fi'") -join '').Trim()
+    # Carry only non-default DST-managed values onto those installed defaults
+    # before declaring the directory authoritative. The v1 migration copied one
+    # whole PVC file, so repair it from the clean pre-import backup.
+    $installedState = ((Invoke-V6Ssh -Ip $Ip -Cmd "sudo bash -c 'if test -f ''$script:DuneGameConfigTplGamePath'' && test -f ''$script:DuneGameConfigTplEnginePath''; then if test -f ''$script:DuneGameConfigAuthorityMarker''; then echo ready; elif test -f ''$script:DuneGameConfigLegacyAuthorityMarker''; then echo repair-v1; else echo uninitialized; fi; fi'") -join '').Trim()
     if ($installedState -eq 'ready') {
         return @{
             game   = $script:DuneGameConfigTplGamePath
@@ -2249,47 +2321,91 @@ function Resolve-DuneGameConfigPaths {
         }
     }
 
-    $dir = ((Invoke-V6Ssh -Ip $Ip -Cmd "sudo bash -c 'ls -t $($script:DuneGameConfigLiveGlobDir)/UserGame.ini 2>/dev/null | head -1 | xargs -r dirname'") -join '').Trim()
-    if ($dir) {
+    $dirs = @(
+        Invoke-V6Ssh -Ip $Ip -Cmd "sudo bash -c 'ls -t $($script:DuneGameConfigLiveGlobDir)/UserGame.ini 2>/dev/null | xargs -r -n1 dirname'"
+    ) | ForEach-Object { "$_".Trim() } | Where-Object { $_ } | Select-Object -Unique
+    if ($installedState -in @('uninitialized', 'repair-v1')) {
+        $baseGamePath = $script:DuneGameConfigTplGamePath
+        $baseEnginePath = $script:DuneGameConfigTplEnginePath
+        if ($installedState -eq 'repair-v1') {
+            $baseGamePath = ((Invoke-V6Ssh -Ip $Ip -Cmd "sudo bash -c 'ls -t $script:DuneGameConfigTplGamePath.pre-live-import-* 2>/dev/null | head -1'") -join '').Trim()
+            if ($baseGamePath) {
+                $suffix = $baseGamePath.Substring($script:DuneGameConfigTplGamePath.Length)
+                $baseEnginePath = "$script:DuneGameConfigTplEnginePath$suffix"
+            }
+        }
+        $installedGame = (Invoke-V6Ssh -Ip $Ip -Cmd "sudo cat '$baseGamePath' 2>/dev/null") -join "`n"
+        $installedEngine = (Invoke-V6Ssh -Ip $Ip -Cmd "sudo cat '$baseEnginePath' 2>/dev/null") -join "`n"
+        if ([string]::IsNullOrWhiteSpace($installedGame) -or [string]::IsNullOrWhiteSpace($installedEngine)) {
+            throw 'The clean installed User*.ini defaults could not be read. Deployment is blocked.'
+        }
+        foreach ($dir in $dirs) {
+            $g = "$dir/UserGame.ini"
+            $e = "$dir/UserEngine.ini"
+            $gameRaw = (Invoke-V6Ssh -Ip $Ip -Cmd "sudo cat '$g' 2>/dev/null") -join "`n"
+            $engineRaw = (Invoke-V6Ssh -Ip $Ip -Cmd "sudo cat '$e' 2>/dev/null") -join "`n"
+            $gameDoc = ConvertFrom-DuneIniDoc -Raw $gameRaw
+            $engineDoc = ConvertFrom-DuneIniDoc -Raw $engineRaw
+            if ($gameDoc.malformed -or $engineDoc.malformed -or
+                (-not $gameDoc.hadManaged -and -not $engineDoc.hadManaged)) {
+                continue
+            }
+            $managedGame = Get-DuneGameConfigManagedRaw -Raw $gameRaw
+            $managedEngine = Get-DuneGameConfigManagedRaw -Raw $engineRaw
+            $updates = @(Get-DuneGameConfigMigrationUpdates -GameRaw $managedGame -EngineRaw $managedEngine)
+            if ($updates.Count -eq 0) { continue }
+
+            $mergedGame = Merge-DuneGameConfigMigrationValues -BaseRaw $installedGame -Updates $updates -File 'game'
+            $mergedEngine = Merge-DuneGameConfigMigrationValues -BaseRaw $installedEngine -Updates $updates -File 'engine'
+            $stamp = [DateTime]::UtcNow.ToString('yyyyMMddHHmmss')
+            $installedDir = $script:DuneGameConfigTplGamePath -replace '/[^/]+$', ''
+            $gameTmp = "$installedDir/.dst-UserGame.ini.$stamp.tmp"
+            $engineTmp = "$installedDir/.dst-UserEngine.ini.$stamp.tmp"
+            $gameB64 = [Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes($mergedGame))
+            $engineB64 = [Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes($mergedEngine))
+            Invoke-V6Ssh -Ip $Ip -Cmd "base64 -d | sudo tee '$gameTmp' > /dev/null" -StdinData $gameB64 -TimeoutSec 30 | Out-Null
+            Invoke-V6Ssh -Ip $Ip -Cmd "base64 -d | sudo tee '$engineTmp' > /dev/null" -StdinData $engineB64 -TimeoutSec 30 | Out-Null
+
+            $gameHash = Get-DuneGameConfigTextSha256 -Value $mergedGame
+            $engineHash = Get-DuneGameConfigTextSha256 -Value $mergedEngine
+            $migrateCmd = "set -e; " +
+                "echo '$gameHash  $gameTmp' | sha256sum -c - >/dev/null; " +
+                "echo '$engineHash  $engineTmp' | sha256sum -c - >/dev/null; " +
+                "sudo cp '$script:DuneGameConfigTplGamePath' '$script:DuneGameConfigTplGamePath.pre-live-import-$stamp'; " +
+                "sudo cp '$script:DuneGameConfigTplEnginePath' '$script:DuneGameConfigTplEnginePath.pre-live-import-$stamp'; " +
+                "sudo install -o dune -g dune -m 0664 '$gameTmp' '$script:DuneGameConfigTplGamePath'; " +
+                "sudo install -o dune -g dune -m 0664 '$engineTmp' '$script:DuneGameConfigTplEnginePath'; " +
+                "sudo rm -f '$gameTmp' '$engineTmp'; " +
+                "echo '$gameHash  $script:DuneGameConfigTplGamePath' | sha256sum -c - >/dev/null; " +
+                "echo '$engineHash  $script:DuneGameConfigTplEnginePath' | sha256sum -c - >/dev/null; " +
+                "printf 'live-imported-v2\n' | sudo tee '$script:DuneGameConfigAuthorityMarker' > /dev/null; " +
+                "echo __DST_AUTH__:migrated"
+            $migrated = ((Invoke-V6Ssh -Ip $Ip -Cmd $migrateCmd -TimeoutSec 30) -join "`n").Trim()
+            if ($migrated -notmatch '(?m)^__DST_AUTH__:migrated$') {
+                throw 'DST could not safely migrate the existing battlegroup INI overrides. Installed defaults were not deployed.'
+            }
+            return @{
+                game         = $script:DuneGameConfigTplGamePath
+                engine       = $script:DuneGameConfigTplEnginePath
+                source       = 'installed'
+                migrated     = $true
+                migratedFrom = $dir
+                migratedKeys = $updates.Count
+            }
+        }
+        throw 'Installed User*.ini defaults are not initialized and no prior DST-managed battlegroup overrides could be migrated. Deployment is blocked.'
+    }
+
+    if ($dirs.Count -gt 0) {
+        $dir = $dirs[0]
         $g = "$dir/UserGame.ini"
         $e = "$dir/UserEngine.ini"
         $chk = ((Invoke-V6Ssh -Ip $Ip -Cmd "sudo bash -c 'test -f ''$g'' && test -f ''$e'' && echo ok'") -join '').Trim()
         if ($chk -eq 'ok') {
-            if ($installedState -eq 'uninitialized') {
-                $stamp = [DateTime]::UtcNow.ToString('yyyyMMddHHmmss')
-                $installedDir = $script:DuneGameConfigTplGamePath -replace '/[^/]+$', ''
-                $migrateCmd = "set -e; " +
-                    "sudo cp '$script:DuneGameConfigTplGamePath' '$script:DuneGameConfigTplGamePath.pre-live-import-$stamp'; " +
-                    "sudo cp '$script:DuneGameConfigTplEnginePath' '$script:DuneGameConfigTplEnginePath.pre-live-import-$stamp'; " +
-                    "sudo install -o dune -g dune -m 0664 '$g' '$installedDir/.dst-UserGame.ini.tmp'; " +
-                    "sudo install -o dune -g dune -m 0664 '$e' '$installedDir/.dst-UserEngine.ini.tmp'; " +
-                    "sudo cmp -s '$g' '$installedDir/.dst-UserGame.ini.tmp'; " +
-                    "sudo cmp -s '$e' '$installedDir/.dst-UserEngine.ini.tmp'; " +
-                    "sudo mv '$installedDir/.dst-UserGame.ini.tmp' '$script:DuneGameConfigTplGamePath'; " +
-                    "sudo mv '$installedDir/.dst-UserEngine.ini.tmp' '$script:DuneGameConfigTplEnginePath'; " +
-                    "printf 'live-imported-v1\n' | sudo tee '$script:DuneGameConfigAuthorityMarker' > /dev/null; " +
-                    "echo __DST_AUTH__:migrated"
-                $migrated = ((Invoke-V6Ssh -Ip $Ip -Cmd $migrateCmd -TimeoutSec 30) -join "`n").Trim()
-                if ($migrated -notmatch '(?m)^__DST_AUTH__:migrated$') {
-                    throw 'DST could not safely import the existing battlegroup INIs. Installed defaults were not deployed.'
-                }
-                return @{
-                    game      = $script:DuneGameConfigTplGamePath
-                    engine    = $script:DuneGameConfigTplEnginePath
-                    source    = 'installed'
-                    migrated  = $true
-                    migratedFrom = $dir
-                }
-            }
-
             # Compatibility fallback for older Funcom installations that do not
             # ship the installed source directory yet.
             return @{ game = $g; engine = $e; source = 'legacy-live' }
         }
-    }
-
-    if ($installedState -eq 'uninitialized') {
-        throw 'Installed User*.ini defaults are not initialized and no existing battlegroup configuration could be imported. Deployment is blocked.'
     }
     throw 'No authoritative installed UserGame.ini/UserEngine.ini files were found.'
 }

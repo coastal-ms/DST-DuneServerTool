@@ -26,6 +26,12 @@ here cover everything those tags shipped.
 - Added Retail's Zanovar story area to Map Spin-Up and exposed its director
   party-sharing override so self-hosted operators can allow separate parties
   to share the area instead of retaining the shipped one-party isolation.
+- Preserved non-default DST-managed Self-Hosted INI settings across the Retail
+  migration, including inventory capacity and Deep Desert base-backup access.
+  Migration now skips newly generated default PVCs, layers supported overrides
+  onto Funcom's installed defaults, repairs the earlier v1 migration from its
+  clean pre-import backups, verifies both files, and fails closed when no prior
+  managed configuration can be identified.
 
 ## [15.1.0] - 2026-09-17
 

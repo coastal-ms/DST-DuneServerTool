@@ -2495,23 +2495,71 @@ Describe 'GameConfig: spicefield startup defaults' -Tag 'GameConfig' {
         $row.max_globally_primed | Should -Be 3
     }
 
-    It 'keeps the installed Funcom INIs as DST authoritative source' {
+    It 'uses the installed files immediately after the v2 migration is marked ready' {
+        Mock Invoke-V6Ssh { 'ready' }
+
+        $paths = Resolve-DuneGameConfigPaths -Ip '192.0.2.1'
+
+        $paths.source | Should -Be 'installed'
+        $paths.game | Should -Be '/home/dune/.dune/download/scripts/setup/config/UserGame.ini'
+        $paths.engine | Should -Be '/home/dune/.dune/download/scripts/setup/config/UserEngine.ini'
+        Should -Invoke Invoke-V6Ssh -Times 1
+    }
+
+    It 'migrates prior managed overrides onto installed Funcom defaults' {
+        $oldGame = @"
+[$script:DuneGcSecGame]
+m_InventoryWeightMultiplier=0.25
+$script:DstManagedBegin
+[$script:SecInventory]
+PlayerInventoryStartingSize=80
+PlayerInventoryStartingVolumeCapacity=350
+[$script:SecBuilding]
+m_BaseBackupToolMapRestriction=((Name="HaggaBasin"), (Name="DeepDesert"))
+$script:DstManagedEnd
+"@
+        $installedGame = @"
+[$script:SecInventory]
+PlayerInventoryStartingSize=35
+PlayerInventoryStartingVolumeCapacity=175
+RetailAddedInventoryDefault=42
+[$script:SecBuilding]
+m_BaseBackupToolMapRestriction=((Name="HaggaBasin"))
+RetailAddedBuildingDefault=True
+"@
+        $script:writes = @()
         Mock Invoke-V6Ssh {
-            param([string]$Ip, [string]$Cmd)
+            param([string]$Ip, [string]$Cmd, [string]$StdinData)
             if ($Cmd -match '__DST_AUTH__:migrated') { return '__DST_AUTH__:migrated' }
-            if ($Cmd -match 'DuneGameConfigAuthorityMarker|dst-live-settings-imported') { return 'uninitialized' }
-            if ($Cmd -match 'ls -t') { return '/srv/UserSettings' }
-            if ($Cmd -match 'test -f') { return 'ok' }
+            if ($Cmd -match 'if test -f') { return 'repair-v1' }
+            if ($Cmd -match 'pre-live-import-\*') { return '/home/dune/.dune/download/scripts/setup/config/UserGame.ini.pre-live-import-20260917120000' }
+            if ($Cmd -match 'ls -t') { return @('/srv/new-defaults', '/srv/old-managed') }
+            if ($Cmd -match "cat '/home/dune/.dune/download/scripts/setup/config/UserGame.ini.pre-live-import-") { return $installedGame }
+            if ($Cmd -match "cat '/home/dune/.dune/download/scripts/setup/config/UserEngine.ini.pre-live-import-") { return '[ConsoleVariables]' }
+            if ($Cmd -match "cat '/srv/new-defaults/") { return '[Unmanaged]' }
+            if ($Cmd -match "cat '/srv/old-managed/UserGame.ini'") { return $oldGame }
+            if ($Cmd -match "cat '/srv/old-managed/UserEngine.ini'") { return '[ConsoleVariables]' }
+            if ($StdinData) {
+                $script:writes += [Text.Encoding]::UTF8.GetString([Convert]::FromBase64String($StdinData))
+            }
         }
         $paths = Resolve-DuneGameConfigPaths -Ip '192.0.2.1'
 
         $paths.source | Should -Be 'installed'
         $paths.migrated | Should -BeTrue
+        $paths.migratedFrom | Should -Be '/srv/old-managed'
+        $paths.migratedKeys | Should -Be 3
         $paths.game | Should -Be '/home/dune/.dune/download/scripts/setup/config/UserGame.ini'
         $paths.engine | Should -Be '/home/dune/.dune/download/scripts/setup/config/UserEngine.ini'
+        $merged = @($script:writes | Where-Object { $_ -match 'PlayerInventoryStartingSize' })[0]
+        $merged | Should -Match 'PlayerInventoryStartingSize=80'
+        $merged | Should -Match 'PlayerInventoryStartingVolumeCapacity=350'
+        $merged | Should -Match 'm_BaseBackupToolMapRestriction=\(\(Name="HaggaBasin"\), \(Name="DeepDesert"\)\)'
+        $merged | Should -Match 'RetailAddedInventoryDefault=42'
+        $merged | Should -Match 'RetailAddedBuildingDefault=True'
+        $merged | Should -Not -Match 'm_InventoryWeightMultiplier'
         Should -Invoke Invoke-V6Ssh -Times 1 -ParameterFilter {
-            $Cmd -match "install -o dune -g dune" -and
-            $Cmd -match '/srv/UserSettings/UserGame.ini' -and
+            $Cmd -match 'sha256sum -c' -and
             $Cmd -match '__DST_AUTH__:migrated'
         }
     }
