@@ -301,14 +301,14 @@ function SpecRow({ name, track, canWrite, busy, onGrantMax, onReset, onSetLevel,
 
   return (
     <div className="card p-3">
-      <div className="flex items-center justify-between gap-3">
+      <div className="flex flex-wrap items-center gap-3">
         <div className="min-w-[140px]">
           <div className="text-sm font-medium text-text">{name}</div>
           <div className="text-[11px] text-text-dim font-mono">Lv {level}/{levelMax} · {fmtNum(xp)}/{fmtNum(xpMax)} xp</div>
         </div>
         {canWrite ? (
           <>
-            <div className="flex-1 mx-2 flex items-center gap-2">
+            <div className="mx-2 flex min-w-[220px] flex-[1_1_280px] items-center gap-2">
               <input
                 type="range" min={0} max={levelMax} step={1}
                 className="flex-1 h-1.5 accent-accent cursor-pointer disabled:cursor-not-allowed"
@@ -320,7 +320,7 @@ function SpecRow({ name, track, canWrite, busy, onGrantMax, onReset, onSetLevel,
                 Lv {valid ? parsed : level}/{levelMax}
               </span>
             </div>
-            <div className="flex items-center gap-1.5 shrink-0">
+            <div className="flex flex-[1_1_auto] flex-wrap items-center justify-end gap-1.5">
               <input
                 type="number" inputMode="numeric" step={1} min={0} max={levelMax}
                 className="w-16 font-mono text-sm bg-surface-2 border border-border rounded px-2 py-1" value={draft} disabled={busy}

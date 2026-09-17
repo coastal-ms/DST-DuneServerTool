@@ -30,17 +30,18 @@ BeforeAll {
     function global:New-MapDataSchemaRows {
         param(
             [switch]$IncludeSpice,
+            [switch]$IncludeRetailSpice,
             [switch]$IncludeMarker,
+            [switch]$IncludeRetailMarker,
             [switch]$IncludePrivacyProof,
             [string[]]$Omit = @()
         )
 
         $rows = @()
-        if ($IncludeSpice) {
-            foreach ($name in @(
-                'field_id', 'map', 'dimension_index', 'spawn_time',
-                'value_remaining', 'field_kind_id'
-            )) {
+        if ($IncludeSpice -or $IncludeRetailSpice) {
+            $spiceColumns = @('field_id', 'map', 'dimension_index', 'spawn_time', 'value_remaining')
+            if ($IncludeSpice) { $spiceColumns += 'field_kind_id' }
+            foreach ($name in $spiceColumns) {
                 if ($Omit -contains "resourcefield_state.$name") { continue }
                 $rows += ,@('column', 'resourcefield_state', $name, 'text', 'text', 'NO')
             }
@@ -57,13 +58,29 @@ BeforeAll {
                 $rows += ,@('attribute', 'marker', $name, 'text', '', '')
             }
         }
+        if ($IncludeRetailMarker) {
+            foreach ($name in @(
+                'marker_hash_id', 'dimension_index', 'marker_type', 'position',
+                'payload_type', 'payload', 'map_name_id'
+            )) {
+                if ($Omit -contains "markers.$name") { continue }
+                $rows += ,@('column', 'markers', $name, 'text', 'text', 'NO')
+            }
+            $rows += ,@('column', 'player_markers', 'player_id', 'bigint', 'int8', 'NO')
+            foreach ($name in @('x', 'y', 'z')) {
+                if ($Omit -contains "vector.$name") { continue }
+                $rows += ,@('attribute', 'vector', $name, 'double precision', '', '')
+            }
+        }
         Write-Output -NoEnumerate $rows
     }
 
     function global:New-MapDataSchemaResult {
         param(
             [switch]$IncludeSpice,
+            [switch]$IncludeRetailSpice,
             [switch]$IncludeMarker,
+            [switch]$IncludeRetailMarker,
             [switch]$IncludePrivacyProof,
             [string[]]$Omit = @()
         )
@@ -191,6 +208,20 @@ Describe 'Map live-data schema capabilities' -Tag 'MapData' {
         $capability.publicStaticPoi.available | Should -BeTrue
         $capability.publicStaticPoi.category | Should -Be 'static-location'
         $capability.schemaFingerprint | Should -Match '^[a-f0-9]{64}$'
+    }
+
+    It 'recognizes the Retail resourcefield and separated player-marker schema' {
+        Mock Invoke-DuneSqlQuery {
+            New-MapDataSchemaResult -IncludeRetailSpice -IncludeRetailMarker
+        }
+
+        $capability = Get-DuneMapDataCapabilities -Ip '192.0.2.1'
+
+        $capability.status | Should -Be 'ready'
+        $capability.activeSpice.adapter | Should -Be 'retail-resourcefield'
+        $capability.publicStaticPoi.adapter | Should -Be 'retail-direct'
+        $capability.publicStaticPoi.payloadType | Should -Be 'StaticLocation'
+        $capability.publicStaticPoi.privacyProof | Should -Match 'player-created markers are isolated'
     }
 
     It 'reports missing tables as unavailable rather than an empty success' {
@@ -497,6 +528,62 @@ Describe 'Public static POI projection' -Tag 'MapData' {
         $script:capturedPoiSql | Should -Match 'owner_account_id IS NULL'
         $script:capturedPoiSql | Should -Match "payload, '\{\}'::jsonb"
         $script:capturedPoiSql | Should -Not -Match [regex]::Escape('EMarkerPayloadType::StaticLocation')
+    }
+
+    It 'reads Retail resource fields without the removed kind column' {
+        $script:mapDataQuery = 0
+        Mock Invoke-DuneSqlQuery {
+            param($Ip, $Sql, $ReadOnly, $MaxRows, $TimeoutSec)
+            $script:mapDataQuery++
+            if ($script:mapDataQuery -eq 1) {
+                return New-MapDataSchemaResult -IncludeRetailSpice
+            }
+            $script:capturedSpiceSql = $Sql
+            return New-MapDataResult `
+                -Columns @(
+                    'field_id', 'map', 'dimension_index', 'spawn_time',
+                    'value_remaining', 'field_kind_id', 'x', 'y', 'z',
+                    'coordinate_system', 'source_count'
+                ) `
+                -Rows @(,@('101', 'DeepDesert', '0', '605236.5', '150000', '1', $null, $null, $null, '', '1'))
+        }
+
+        $result = Get-DuneActiveSpiceLive -Ip '192.0.2.1'
+
+        $result.ok | Should -BeTrue
+        $result.fields[0].fieldKindId | Should -Be 1
+        $script:capturedSpiceSql | Should -Match '1::integer AS field_kind_id'
+        $script:capturedSpiceSql | Should -Not -Match 'WHERE field_kind_id = 1'
+    }
+
+    It 'uses Retail direct marker columns while preserving the payload privacy exclusion' {
+        $script:mapDataQuery = 0
+        $script:capturedPoiSql = ''
+        Mock Invoke-DuneSqlQuery {
+            param($Ip, $Sql, $ReadOnly, $MaxRows, $TimeoutSec)
+            $script:mapDataQuery++
+            if ($script:mapDataQuery -eq 1) {
+                return New-MapDataSchemaResult -IncludeRetailSpice -IncludeRetailMarker
+            }
+            $script:capturedPoiSql = $Sql
+            return New-MapDataResult `
+                -Columns @(
+                    'marker_hash_id', 'dimension_index', 'map_name_id',
+                    'marker_type', 'x', 'y', 'z', 'display_name',
+                    'location_key', 'source_count'
+                ) `
+                -Rows @(,@('701', '0', '1', 'Shipwreck', '1', '2', '3', 'Wreck', 'poi.wreck', '1'))
+        }
+
+        $result = Get-DunePublicStaticPoiLive -Ip '192.0.2.1'
+
+        $result.ok | Should -BeTrue
+        $result.source.payloadType | Should -Be 'StaticLocation'
+        $script:capturedPoiSql | Should -Match '\(position\)\.x'
+        $script:capturedPoiSql | Should -Match 'payload_type::text'
+        $script:capturedPoiSql | Should -Not -Match 'is_private IS FALSE'
+        $script:capturedPoiSql | Should -Not -Match 'owner_account_id IS NULL'
+        $script:capturedPoiSql | Should -Match "payload, '\{\}'::jsonb"
     }
 
     It 'keeps partialReasons as an array when the POI limit truncates' {

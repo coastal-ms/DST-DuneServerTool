@@ -93,6 +93,14 @@ export interface SoloInventoryItemGroup {
   occurrenceCount: number
   minQuality: number
   maxQuality: number
+  occurrences?: SoloInventoryItemOccurrence[]
+}
+
+export interface SoloInventoryItemOccurrence {
+  itemId: number
+  stackSize: number
+  quality: number
+  templateId: string
 }
 
 export interface SoloRangedWeapon {
@@ -324,6 +332,32 @@ export function grantSoloItems(
       items,
       expectedProfileToken,
       confirm: 'GIVE SOLO ITEMS',
+    }),
+  })
+}
+
+export function deleteSoloInventoryItem(
+  itemId: number,
+  expectedStackSize: number,
+  quantity: number,
+  expectedProfileToken: string,
+): Promise<{
+  ok: boolean
+  itemId: number
+  templateId: string
+  removed: number
+  remaining: number
+  safetyBackup: string
+  inspection: SoloInspection
+}> {
+  return api('/api/solo/items/delete', {
+    method: 'POST',
+    body: JSON.stringify({
+      itemId,
+      expectedStackSize,
+      quantity,
+      expectedProfileToken,
+      confirm: 'DELETE SOLO ITEM',
     }),
   })
 }

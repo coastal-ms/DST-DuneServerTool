@@ -315,10 +315,10 @@ SELECT 'column'::text AS item_kind,
        c.is_nullable
 FROM information_schema.columns c
 WHERE c.table_schema = 'dune'
-  AND c.table_name IN ('resourcefield_state', 'markers')
+  AND c.table_name IN ('resourcefield_state', 'markers', 'player_markers')
 UNION ALL
 SELECT 'attribute',
-       'marker',
+       t.typname,
        a.attname,
        pg_catalog.format_type(a.atttypid, a.atttypmod),
        '',
@@ -328,7 +328,7 @@ JOIN pg_namespace n ON n.oid = t.typnamespace
 JOIN pg_class composite ON composite.oid = t.typrelid
 JOIN pg_attribute a ON a.attrelid = composite.oid
 WHERE n.nspname = 'dune'
-  AND t.typname = 'marker'
+  AND t.typname IN ('marker', 'vector')
   AND a.attnum > 0
   AND NOT a.attisdropped
 ORDER BY item_kind, object_name, member_name
@@ -347,7 +347,7 @@ LIMIT 128;
 
     $rows = @(ConvertTo-DuneMapDataRowMaps -Result $result)
     $columnsByTable = @{}
-    foreach ($table in @('resourcefield_state', 'markers')) {
+    foreach ($table in @('resourcefield_state', 'markers', 'player_markers')) {
         $columnsByTable[$table] = @($rows |
             Where-Object { $_['item_kind'] -eq 'column' -and $_['object_name'] -eq $table } |
             ForEach-Object { [string]$_['member_name'] })
@@ -355,10 +355,11 @@ LIMIT 128;
     $markerAttributes = @($rows |
         Where-Object { $_['item_kind'] -eq 'attribute' -and $_['object_name'] -eq 'marker' } |
         ForEach-Object { [string]$_['member_name'] })
+    $vectorAttributes = @($rows |
+        Where-Object { $_['item_kind'] -eq 'attribute' -and $_['object_name'] -eq 'vector' } |
+        ForEach-Object { [string]$_['member_name'] })
 
-    $spiceRequired = @(
-        'field_id', 'map', 'dimension_index', 'spawn_time', 'value_remaining', 'field_kind_id'
-    )
+    $spiceRequired = @('field_id', 'map', 'dimension_index', 'spawn_time', 'value_remaining')
     $spiceMissing = @($spiceRequired | Where-Object {
         $columnsByTable['resourcefield_state'] -notcontains $_
     })
@@ -370,18 +371,47 @@ LIMIT 128;
         $columnsByTable['resourcefield_state'] -notcontains $_
     }).Count -eq 0)
 
-    $markerRequired = @(
+    $legacyMarkerRequired = @(
         'marker_hash_id', 'dimension_index', 'marker', 'payload', 'map_name_id',
         'is_private', 'owner_account_id'
     )
-    $markerMissing = @($markerRequired | Where-Object {
+    $legacyMarkerMissing = @($legacyMarkerRequired | Where-Object {
         $columnsByTable['markers'] -notcontains $_
     })
-    $markerAttributeRequired = @('marker_type', 'x', 'y', 'z', 'payload_type')
-    $markerAttributeMissing = @($markerAttributeRequired | Where-Object {
+    $legacyMarkerAttributeRequired = @('marker_type', 'x', 'y', 'z', 'payload_type')
+    $legacyMarkerAttributeMissing = @($legacyMarkerAttributeRequired | Where-Object {
         $markerAttributes -notcontains $_
     })
-    $poiMissing = @($markerMissing + ($markerAttributeMissing | ForEach-Object { "marker.$_" }))
+    $legacyPoiMissing = @($legacyMarkerMissing + ($legacyMarkerAttributeMissing | ForEach-Object { "marker.$_" }))
+
+    # Retail moved marker identity/type onto direct columns and position into
+    # dune.vector. Player-created markers remain isolated in player_markers,
+    # which gives us the same privacy boundary without the removed flags.
+    $retailMarkerRequired = @(
+        'marker_hash_id', 'dimension_index', 'marker_type', 'position',
+        'payload_type', 'payload', 'map_name_id'
+    )
+    $retailMarkerMissing = @($retailMarkerRequired | Where-Object {
+        $columnsByTable['markers'] -notcontains $_
+    })
+    if ($columnsByTable['player_markers'].Count -eq 0) {
+        $retailMarkerMissing += 'player_markers relation'
+    }
+    $retailVectorMissing = @(@('x', 'y', 'z') | Where-Object {
+        $vectorAttributes -notcontains $_
+    })
+    $retailPoiMissing = @($retailMarkerMissing + ($retailVectorMissing | ForEach-Object { "vector.$_" }))
+
+    $poiAdapter = if ($legacyPoiMissing.Count -eq 0) {
+        'legacy-composite'
+    } elseif ($retailPoiMissing.Count -eq 0) {
+        'retail-direct'
+    } else {
+        'unavailable'
+    }
+    $poiMissing = if ($poiAdapter -eq 'retail-direct') { @() } elseif ($poiAdapter -eq 'legacy-composite') { @() } else {
+        @($legacyPoiMissing + $retailPoiMissing | Select-Object -Unique)
+    }
 
     $fingerprint = Get-DuneMapDataSchemaFingerprint -Rows $rows
     $spiceAvailable = ($spiceMissing.Count -eq 0)
@@ -397,6 +427,7 @@ LIMIT 128;
         }
         activeSpice       = [ordered]@{
             available          = $spiceAvailable
+            adapter            = if ($columnsByTable['resourcefield_state'] -contains 'field_kind_id') { 'legacy-kind-filter' } else { 'retail-resourcefield' }
             missingColumns     = $spiceMissing
             spatialStatus      = if ($spiceCoordinatesVerified) { 'verified' } else { 'unresolved' }
             coordinateColumns  = @($(if ($spiceCoordinatesVerified) {
@@ -406,10 +437,13 @@ LIMIT 128;
         publicStaticPoi   = [ordered]@{
             available      = $poiAvailable
             category       = 'static-location'
-            payloadType    = $script:DuneMapDataStaticPoiPayloadType
+            payloadType    = if ($poiAdapter -eq 'retail-direct') { 'StaticLocation' } else { $script:DuneMapDataStaticPoiPayloadType }
+            adapter        = $poiAdapter
             missingMembers = $poiMissing
-            privacyProof   = if ($poiAvailable) {
+            privacyProof   = if ($poiAdapter -eq 'legacy-composite') {
                 'Explicit is_private=false and owner_account_id IS NULL predicates'
+            } elseif ($poiAdapter -eq 'retail-direct') {
+                'StaticLocation payloads from markers; player-created markers are isolated in player_markers'
             } else {
                 'Unavailable: schema cannot prove exclusion of private or owned markers'
             }
@@ -512,6 +546,16 @@ function Get-DuneActiveSpiceLive {
     } else {
         "NULL::text AS x, NULL::text AS y, NULL::text AS z, ''::text AS coordinate_system,"
     }
+    $fieldKindSelect = if ($Capability.activeSpice.adapter -eq 'retail-resourcefield') {
+        '1::integer AS field_kind_id,'
+    } else {
+        'field_kind_id,'
+    }
+    $fieldKindWhere = if ($Capability.activeSpice.adapter -eq 'retail-resourcefield') {
+        ''
+    } else {
+        'field_kind_id = 1 AND'
+    }
     $sql = @"
 WITH /*__DST_PARAMETERS__*/,
 active_fields AS (
@@ -520,12 +564,11 @@ active_fields AS (
            dimension_index,
            spawn_time::text AS spawn_time,
            value_remaining::text AS value_remaining,
-           field_kind_id,
+           $fieldKindSelect
            $coordinateSelect
            count(*) OVER ()::text AS source_count
     FROM dune.resourcefield_state
-    WHERE field_kind_id = 1
-      AND value_remaining > 0
+    WHERE $fieldKindWhere value_remaining > 0
       AND map LIKE ((SELECT map_prefix FROM _dst_parameters) || '%')
     ORDER BY map, dimension_index, field_id
     LIMIT ((SELECT row_limit FROM _dst_parameters) + 1)
@@ -678,6 +721,11 @@ function Get-DuneSpicefieldStateLive {
         }
     }
 
+    $fieldKindWhere = if ($Capability.activeSpice.adapter -eq 'retail-resourcefield') {
+        ''
+    } else {
+        'field_kind_id = 1 AND'
+    }
     $sql = @"
 WITH /*__DST_PARAMETERS__*/,
 matching_fields AS (
@@ -688,8 +736,7 @@ matching_fields AS (
            count(*) OVER ()::text AS source_count,
            sum(value_remaining) OVER ()::text AS total_value_remaining
     FROM dune.resourcefield_state
-    WHERE field_kind_id = 1
-      AND value_remaining > 0
+    WHERE $fieldKindWhere value_remaining > 0
       AND map = (SELECT map_name FROM _dst_parameters)
       AND dimension_index = (SELECT dimension_index FROM _dst_parameters)
     ORDER BY field_id
@@ -801,7 +848,35 @@ function Get-DunePublicStaticPoiLive {
         }
     }
 
-    $sql = @'
+    if ($Capability.publicStaticPoi.adapter -eq 'retail-direct') {
+        $sql = @'
+WITH /*__DST_PARAMETERS__*/,
+public_markers AS (
+    SELECT marker_hash_id::text AS marker_hash_id,
+           dimension_index,
+           map_name_id,
+           marker_type,
+           (position).x::text AS x,
+           (position).y::text AS y,
+           (position).z::text AS z,
+           COALESCE(payload->>'DisplayName', '') AS display_name,
+           COALESCE(payload->>'LocationKey', '') AS location_key,
+           count(*) OVER ()::text AS source_count
+    FROM dune.markers
+    WHERE payload_type::text = (SELECT payload_type FROM _dst_parameters)
+      AND NOT (COALESCE(payload, '{}'::jsonb) ?| ARRAY[
+          'OwnerId', 'OwnerAccountId', 'PlayerId', 'AccountId',
+          'Private', 'IsPrivate', 'Visibility', 'PermissionActorId'
+      ])
+    ORDER BY marker_hash_id
+    LIMIT ((SELECT row_limit FROM _dst_parameters) + 1)
+)
+SELECT *
+FROM public_markers
+ORDER BY marker_hash_id;
+'@
+    } else {
+        $sql = @'
 WITH /*__DST_PARAMETERS__*/,
 public_markers AS (
     SELECT marker_hash_id::text AS marker_hash_id,
@@ -829,11 +904,12 @@ SELECT *
 FROM public_markers
 ORDER BY marker_hash_id;
 '@
+    }
     $result = Invoke-DuneMapDataQuery `
         -Ip $Ip `
         -Sql $sql `
         -Parameters @{
-            payload_type = $script:DuneMapDataStaticPoiPayloadType
+            payload_type = [string]$Capability.publicStaticPoi.payloadType
             row_limit    = $Limit
         } `
         -ParameterTypes @{
@@ -904,7 +980,7 @@ ORDER BY marker_hash_id;
         source         = [ordered]@{
             schema            = 'dune.markers'
             schemaFingerprint = $Capability.schemaFingerprint
-            payloadType       = $script:DuneMapDataStaticPoiPayloadType
+            payloadType       = [string]$Capability.publicStaticPoi.payloadType
             privacyProof      = $Capability.publicStaticPoi.privacyProof
             queryDurationMs   = $result.durationMs
         }

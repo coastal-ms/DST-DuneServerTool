@@ -1114,6 +1114,9 @@ function Invoke-DuneChatCommandSpiceField {
     param([string]$Ip, [string]$Size)
 
     $label = (Get-Culture).TextInfo.ToTitleCase("$Size".ToLowerInvariant())
+    if (-not (Test-V6SpicefieldTypesAvailable -Ip $Ip)) {
+        return @{ ok = $false; reply = 'Spice field activation is unavailable on this Funcom server build.' }
+    }
 
     # Live server guids, straight from the battlegroup's own status.
     $liveIds = @{}

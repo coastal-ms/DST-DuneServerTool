@@ -349,9 +349,8 @@ Describe 'Vehicle lifecycle PostgreSQL model' -Skip:(-not $env:DST_TEST_POSTGRES
         $schema = @'
 CREATE SCHEMA dune;
 SET search_path TO dune, public;
-CREATE TABLE dune.actors (id bigint PRIMARY KEY, class text, map text, owner_account_id bigint);
+CREATE TABLE dune.actors (id bigint PRIMARY KEY, class text, map text, owner_account_id bigint, state text NOT NULL DEFAULT 'Default');
 CREATE TABLE dune.vehicles (id bigint PRIMARY KEY REFERENCES dune.actors(id) ON DELETE CASCADE);
-CREATE TABLE dune.actor_state (actor_id bigint REFERENCES dune.actors(id) ON DELETE CASCADE, state text);
 CREATE TABLE dune.vehicle_modules (
     id bigint PRIMARY KEY, vehicle_id bigint REFERENCES dune.vehicles(id) ON DELETE CASCADE,
     template_id text, stats jsonb
@@ -370,7 +369,6 @@ CREATE TABLE dune.permission_actor (actor_id bigint PRIMARY KEY, actor_type int,
 CREATE TABLE dune.permission_actor_rank (permission_actor_id bigint, player_id bigint, rank int);
 CREATE TABLE dune.recovered_vehicles (vehicle_id bigint REFERENCES dune.vehicles(id) ON DELETE CASCADE, character_id bigint, chassis_durability numeric);
 CREATE TABLE dune.backup_vehicles (vehicle_id bigint REFERENCES dune.vehicles(id) ON DELETE CASCADE, character_id bigint);
-CREATE TABLE dune.overmap_players (vehicle_id bigint REFERENCES dune.actors(id) ON DELETE SET NULL);
 CREATE TABLE dune.markers (marker_hash_id bigint);
 CREATE TABLE dune.player_markers (marker_hash_id bigint);
 CREATE TABLE dune.placeables (id bigint, building_type text, is_hologram boolean, owner_entity_id bigint);
@@ -385,13 +383,13 @@ END $$;
 CREATE FUNCTION dune.delete_actors(targets bigint[]) RETURNS void LANGUAGE sql AS $$
     DELETE FROM actors WHERE id = ANY(targets);
 $$;
-INSERT INTO dune.actors VALUES (42, 'BP_Buggy_C', 'Hagga', NULL), (43, 'BP_Unknown_C', 'Hagga', NULL),
+INSERT INTO dune.actors (id, class, map, owner_account_id) VALUES
+    (42, 'BP_Buggy_C', 'Hagga', NULL), (43, 'BP_Unknown_C', 'Hagga', NULL),
     (100, 'BP_Player_C', 'Hagga', 900), (200, 'BP_Container_C', 'Hagga', NULL);
 INSERT INTO dune.vehicles VALUES (42), (43);
 INSERT INTO dune.player_state VALUES (100, 101, 'Owner', 900, 'Offline'), (110, 111, 'Shared', 901, 'Offline');
 INSERT INTO dune.permission_actor VALUES (42, 2, 'Scout');
 INSERT INTO dune.permission_actor_rank VALUES (42, 101, 1), (42, 111, 2);
-INSERT INTO dune.actor_state VALUES (42, 'Default'), (42, 'Default');
 INSERT INTO dune.vehicle_modules VALUES (300, 42, 'Chassis', '{"FVehicleModuleDurabilityStats":[{},{"CurrentDurability":25,"MaxDurability":100,"DecayedMaxDurability":80}]}'),
     (301, 42, 'Engine', '{}');
 INSERT INTO dune.inventories (id, actor_id, inventory_type, vehicle_module_id, max_item_count, max_item_volume) VALUES
@@ -403,7 +401,6 @@ INSERT INTO dune.recovered_vehicles VALUES (42, 1000, 0.5);
 INSERT INTO dune.backup_vehicles VALUES (42, 1000);
 INSERT INTO dune.markers VALUES (42);
 INSERT INTO dune.player_markers VALUES (42);
-INSERT INTO dune.overmap_players VALUES (42);
 '@
         $setup = Invoke-TestVehicleSql -Sql $schema
         if (-not $setup.ok) { throw $setup.error }
@@ -587,7 +584,7 @@ INSERT INTO dune.inventories (id, actor_id, inventory_type, vehicle_module_id) V
 
     It 'blocks travel inside the transaction' {
         $revision = (Get-DuneVehicleFleetLive -Ip fixture -VehicleId 42).vehicles[0].target_revision
-        [void](Invoke-TestVehicleSql -Sql "INSERT INTO dune.actor_state VALUES (42, 'Travel');")
+        [void](Invoke-TestVehicleSql -Sql "UPDATE dune.actors SET state = 'Travel' WHERE id = 42;")
         $result = Invoke-DuneVehicleDeleteTransaction -Ip fixture -VehicleId 42 -TargetRevision $revision -DatabaseScope $script:scopeKey
         $result.ok | Should -BeFalse
         $result.error | Should -Match 'travel is still pending'
@@ -596,7 +593,7 @@ INSERT INTO dune.inventories (id, actor_id, inventory_type, vehicle_module_id) V
 
     It 'allows backup and recovery state records to be explicitly deleted' -TestCases @(@{ State = 'VehicleRecovery' }, @{ State = 'VehicleBackup' }) {
         param($State)
-        [void](Invoke-TestVehicleSql -Sql "INSERT INTO dune.actor_state VALUES (42, '$State');")
+        [void](Invoke-TestVehicleSql -Sql "UPDATE dune.actors SET state = '$State' WHERE id = 42;")
         $fleet = Get-DuneVehicleFleetLive -Ip fixture -VehicleId 42
         $fleet.vehicles[0].deletion_blocked_reason | Should -BeNullOrEmpty
         $result = Invoke-DuneVehicleDeleteTransaction -Ip fixture -VehicleId 42 -TargetRevision $fleet.vehicles[0].target_revision -DatabaseScope $script:scopeKey

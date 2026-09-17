@@ -671,6 +671,15 @@ Register-DuneRoute -Method GET -Path '/api/gameconfig/spicefields' -Handler {
         return
     }
     try {
+        if (-not (Test-V6SpicefieldTypesAvailable -Ip $ctx.ip)) {
+            Write-DuneJson -Response $res -Body @{
+                available = $false
+                rows = @()
+                partitionGate = $true
+                unavailableReason = 'This Funcom server build no longer exposes spicefield type configuration. DST has disabled these controls to avoid unsafe writes.'
+            }
+            return
+        }
         $raw = Get-V6SpicefieldTypes -Ip $ctx.ip
 
         # Which (map, dimension) pairs are live or pinned. Annotating rather than
@@ -734,6 +743,10 @@ Register-DuneRoute -Method GET -Path '/api/gameconfig/spicefields/{id}/state' -H
     }
 
     try {
+        if (-not (Test-V6SpicefieldTypesAvailable -Ip $ctx.ip)) {
+            Write-DuneError -Response $res -Status 410 -Message 'This Funcom server build no longer exposes spicefield type configuration.'
+            return
+        }
         $typeRow = @(Get-V6SpicefieldTypes -Ip $ctx.ip |
             Where-Object { [int]$_.spicefield_type_id -eq $typeId } |
             Select-Object -First 1)
@@ -800,6 +813,10 @@ Register-DuneRoute -Method PUT -Path '/api/gameconfig/spicefields/{id}' -Handler
         return
     }
     try {
+        if (-not (Test-V6SpicefieldTypesAvailable -Ip $ctx.ip)) {
+            Write-DuneError -Response $res -Status 410 -Message 'This Funcom server build no longer exposes spicefield type configuration.'
+            return
+        }
         $maxA = 0; $maxP = 0; $sw = 0.0
         try { $maxA = [int]$body.maxActive } catch {}
         try { $maxP = [int]$body.maxPrimed } catch {}
@@ -889,6 +906,10 @@ Register-DuneRoute -Method PUT -Path '/api/gameconfig/spicefields/{id}/spawning'
     }
 
     try {
+        if (-not (Test-V6SpicefieldTypesAvailable -Ip $ctx.ip)) {
+            Write-DuneError -Response $res -Status 410 -Message 'This Funcom server build no longer exposes spicefield type configuration.'
+            return
+        }
         Set-V6SpicefieldSpawning -Ip $ctx.ip -TypeId $typeId -Active $active
 
         # Read back the canonical row so the UI can refresh state without a

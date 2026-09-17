@@ -24,6 +24,7 @@ const CLICK_COOLDOWN_MS = 5000
 
 export function SpicefieldsCard({ vmRunning }: Props) {
   const [rows, setRows] = useState<SpicefieldType[] | null>(null)
+  const [unavailableReason, setUnavailableReason] = useState<string | null>(null)
   const [drafts, setDrafts] = useState<Record<number, RowDraft>>({})
   const [loading, setLoading] = useState(false)
   const [savingId, setSavingId] = useState<number | null>(null)
@@ -66,6 +67,7 @@ export function SpicefieldsCard({ vmRunning }: Props) {
     if (!opts?.silent) { setLoading(true); setErr(null) }
     try {
       const data = await getSpicefields()
+      setUnavailableReason(data.available ? null : (data.unavailableReason ?? 'Spice field controls are unavailable on this Funcom server build.'))
       const sorted = [...data.rows].sort((a, b) =>
         a.mapName.localeCompare(b.mapName) ||
         a.spicefieldTypeId - b.spicefieldTypeId,
@@ -305,9 +307,15 @@ export function SpicefieldsCard({ vmRunning }: Props) {
         </div>
       )}
 
-      {vmRunning && rows && rows.length === 0 && (
+      {vmRunning && rows && rows.length === 0 && unavailableReason && (
+        <div className="text-xs text-warning flex items-start gap-2">
+          <Icon name="AlertTriangle" size={13} className="mt-0.5 shrink-0" /> {unavailableReason}
+        </div>
+      )}
+
+      {vmRunning && rows && rows.length === 0 && !unavailableReason && (
         <div className="text-xs text-text-muted">
-          No rows in <code>dune.spicefield_types</code>.
+          No spicefield type rows are present.
         </div>
       )}
 

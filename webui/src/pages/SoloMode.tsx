@@ -16,6 +16,7 @@ import {
   createSoloBackup,
   deleteSoloBackup,
   deleteSoloBackups,
+  deleteSoloInventoryItem,
   discoverSolo,
   fillSoloWaterContainer,
   completeSoloFindTheFremen,
@@ -37,6 +38,8 @@ import {
   type SoloConsoleSettingsResponse,
   type SoloGiveItem,
   type SoloInventoryDestination,
+  type SoloInventoryItemGroup,
+  type SoloInventoryItemOccurrence,
   type SoloProfile,
   type SoloRuntime,
   type SoloSavedBlueprint,
@@ -1090,6 +1093,48 @@ export function SoloMode() {
     }
   }
 
+  const deleteInventoryItem = async (
+    item: SoloInventoryItemOccurrence,
+    location: SoloInventoryItemGroup,
+    quantity: number,
+  ) => {
+    if (!selectionMatchesActive) {
+      setNotice({ kind: 'err', text: 'Connect and validate the selected Solo profile before deleting an item.' })
+      return
+    }
+    if (gameRunning) {
+      setNotice({ kind: 'err', text: 'Close Dune: Awakening completely before deleting a Solo item.' })
+      return
+    }
+    const wholeStack = quantity === item.stackSize
+    const action = item.stackSize === 0
+      ? `Delete empty ${location.displayName} stack from ${location.destinationLabel}`
+      : `${wholeStack ? 'Delete' : 'Remove'} ${quantity.toLocaleString()} x ${location.displayName} from ${location.destinationLabel}`
+    if (!window.confirm(
+      `${action}?\n\n`
+      + 'DST will retain the current game.db, require the stack to still match, apply the deletion transactionally, and verify the save.',
+    )) return
+    setBusy(`delete-item:${item.itemId}`)
+    setNotice(null)
+    try {
+      const result = await deleteSoloInventoryItem(
+        item.itemId,
+        item.stackSize,
+        quantity,
+        statusState.data?.profileToken ?? '',
+      )
+      setNotice({
+        kind: 'ok',
+        text: `${item.stackSize === 0 ? `Empty ${location.displayName} stack deleted` : `${result.removed.toLocaleString()} x ${location.displayName} removed`} and verified. Previous save retained at ${result.safetyBackup}`,
+      })
+      await Promise.all([statusState.refresh(), runtimeState.refresh(), backupsState.refresh()])
+    } catch (error) {
+      setNotice({ kind: 'err', text: error instanceof Error ? error.message : String(error) })
+    } finally {
+      setBusy(null)
+    }
+  }
+
   const setWeaponAmmo = async (itemId: number, label: string, ammo: number) => {
     if (!selectionMatchesActive) {
       setNotice({ kind: 'err', text: 'Connect and validate the selected Solo profile before changing weapon ammo.' })
@@ -1343,7 +1388,7 @@ export function SoloMode() {
                   setSelectedDb('')
                   setDiscoveredProfiles([])
                 }}
-                placeholder="%LOCALAPPDATA%\DuneSandbox\Saved\Cloud\PlayerClientStorage\FLS_beta\<SteamID>"
+                placeholder="%LOCALAPPDATA%\DuneSandbox\Saved\Cloud\PlayerClientStorage\FLS_retail\<SteamID>"
               />
               <button type="button" className="btn-secondary" onClick={() => void browse()}>
                 <Icon name="FolderOpen" size={14} /> Browse
@@ -1363,7 +1408,7 @@ export function SoloMode() {
                 <option value="">Choose one save...</option>
                 {discoveredProfiles.map(profile => (
                   <option key={profile.dbPath} value={profile.dbPath}>
-                    {profile.channel} / {profile.id}
+                    {profile.channel === 'FLS_retail' ? 'Retail' : 'Legacy'} / {profile.id}
                   </option>
                 ))}
               </select>
@@ -1810,6 +1855,9 @@ export function SoloMode() {
             items={inspection?.inventoryItems ?? []}
             inventories={inspection?.inventories ?? []}
             connected={connected}
+            disabled={!canMutateActiveProfile || gameRunning || busy !== null}
+            busyItemId={busy?.startsWith('delete-item:') ? Number(busy.slice('delete-item:'.length)) : null}
+            onDelete={(item, location, quantity) => { void deleteInventoryItem(item, location, quantity) }}
           />
           <SoloWeaponAmmoEditor
             weapons={inspection?.rangedWeapons ?? []}

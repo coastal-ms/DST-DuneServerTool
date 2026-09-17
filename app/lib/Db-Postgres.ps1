@@ -750,8 +750,34 @@ ON CONFLICT (actor_id, faction_id) DO UPDATE SET reputation_amount = EXCLUDED.re
 # One row per (map, field-size) combo. Controls how many spice fields can be
 # active/primed globally, the spawn-weight, and whether spawning is enabled.
 # `current_*` columns are read-only state maintained by the game.
+function Test-V6SpicefieldTypesAvailable {
+    param([string]$Ip)
+    $raw = Invoke-V6Psql -Ip $Ip -Sql "SELECT CASE WHEN to_regclass('dune.spicefield_types') IS NULL THEN 'false' ELSE 'true' END"
+    return "$raw".Trim() -eq 'true'
+}
+
+function Test-V6LegacySolarisFunctionAvailable {
+    param([string]$Ip)
+    $legacyName = 'dune.get_' + 'solaris_id()'
+    $raw = Invoke-V6Psql -Ip $Ip -Sql "SELECT CASE WHEN to_regprocedure('$legacyName') IS NULL THEN 'false' ELSE 'true' END"
+    return "$raw".Trim() -eq 'true'
+}
+
+function Get-V6SolarisSqlExpression {
+    param([string]$Ip)
+    if (Test-V6LegacySolarisFunctionAvailable -Ip $Ip) { return ('dune.get_' + 'solaris_id()') }
+    return "'Solaris'::dune.virtualwallettype"
+}
+
+function Get-V6HouseCreditSqlExpression {
+    param([string]$Ip)
+    if (Test-V6LegacySolarisFunctionAvailable -Ip $Ip) { return '1::smallint' }
+    return "'HouseCredit'::dune.virtualwallettype"
+}
+
 function Get-V6SpicefieldTypes {
     param([string]$Ip)
+    if (-not (Test-V6SpicefieldTypesAvailable -Ip $Ip)) { return @() }
     $raw = Invoke-V6Psql -Ip $Ip -Sql @"
 SELECT COALESCE(json_agg(row_to_json(t) ORDER BY t.map_name, t.spicefield_type_id), '[]') FROM (
   SELECT spicefield_type_id, map_name, field_type, dimension_index,

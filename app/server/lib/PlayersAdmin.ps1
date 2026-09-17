@@ -299,14 +299,16 @@ $script:DuneScripCurrencyIdDefault = 1
 
 function Resolve-DuneScripCurrencyId {
     param([string]$Ip)
+    if (-not (Test-V6LegacySolarisFunctionAvailable -Ip $Ip)) { return 'HouseCredit' }
     if ($null -ne $script:DuneScripCurrencyIdCache) { return $script:DuneScripCurrencyIdCache }
     $sql = @'
 SELECT currency_id, COALESCE(SUM(balance), 0) AS total
 FROM dune.player_virtual_currency_balances
-WHERE currency_id <> dune.get_solaris_id()
+WHERE currency_id <> __SOLARIS_CURRENCY__
 GROUP BY currency_id
 ORDER BY total DESC, currency_id;
 '@
+    $sql = $sql.Replace('__SOLARIS_CURRENCY__', (Get-V6SolarisSqlExpression -Ip $Ip))
     $res = Invoke-DuneSqlQuery -Ip $Ip -Sql $sql -ReadOnly $true -MaxRows 50 -TimeoutSec 15
     if (-not $res.ok) {
         return $script:DuneScripCurrencyIdDefault
@@ -326,14 +328,16 @@ ORDER BY total DESC, currency_id;
 function Invoke-DunePlayerGiveScrip {
     param([string]$Ip, [long]$ActorId, [long]$Delta, [int]$CurrencyIdOverride = 0)
     if ($ActorId -le 0) { return @{ ok = $false; error = 'actor_id is required.' } }
-    $currencyId = if ($CurrencyIdOverride -gt 0) { $CurrencyIdOverride } else { Resolve-DuneScripCurrencyId -Ip $Ip }
+    $legacyWallet = Test-V6LegacySolarisFunctionAvailable -Ip $Ip
+    $currencyId = if (-not $legacyWallet) { 'HouseCredit' } elseif ($CurrencyIdOverride -gt 0) { $CurrencyIdOverride } else { Resolve-DuneScripCurrencyId -Ip $Ip }
     if ($null -eq $currencyId) {
         return @{ ok = $false; error = 'Could not auto-resolve scrip currency id (2+ non-Solaris balances on this server). Pass currency_id explicitly.' }
     }
-    $sql = "SELECT dune.adjust_player_virtual_currency_balance($ActorId::bigint, $currencyId::smallint, $Delta::bigint);"
+    $currencySql = if ($legacyWallet) { "$currencyId::smallint" } else { Get-V6HouseCreditSqlExpression -Ip $Ip }
+    $sql = "SELECT dune.adjust_player_virtual_currency_balance($ActorId::bigint, $currencySql, $Delta::bigint);"
     $r = Invoke-DuneSqlQuery -Ip $Ip -Sql $sql -ReadOnly $false -MaxRows 1 -TimeoutSec 30
     if (-not $r.ok) { return @{ ok = $false; error = $r.error } }
-    $balSql = "SELECT balance FROM dune.player_virtual_currency_balances WHERE player_controller_id = $ActorId::bigint AND currency_id = $currencyId::smallint;"
+    $balSql = "SELECT balance FROM dune.player_virtual_currency_balances WHERE player_controller_id = $ActorId::bigint AND currency_id = $currencySql;"
     $bal = Invoke-DuneSqlQuery -Ip $Ip -Sql $balSql -ReadOnly $true -MaxRows 1 -TimeoutSec 10
     $balance = $null
     if ($bal.ok) {
