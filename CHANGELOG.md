@@ -13,6 +13,8 @@ here cover everything those tags shipped.
 
 ## [Unreleased]
 
+## [15.0.6] - 2026-09-16
+
 ### Added
 
 - **Active Spice raw-value details.** Each Server Health spice summary row now has an explicit Details control that shows the bounded active field list and total game-reported `dune.resourcefield_state.value_remaining` for its Hagga Basin or Deep Desert map instance. The disclosure explains that the game does not expose field size on these rows and that the raw value is not a proven harvested-spice conversion.
