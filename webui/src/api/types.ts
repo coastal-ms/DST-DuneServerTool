@@ -548,6 +548,11 @@ export type SpicefieldType = {
   currentPrimed: number   // read-only — maintained by the game
   isSpawningActive: boolean
   spawnWeight: number     // float
+  adapter?: 'legacy-db' | 'retail-config'
+  requiresRestart?: boolean
+  supportsSpawnWeight?: boolean
+  currentPrimedExact?: boolean
+  globalSpawning?: boolean
   // Whether this (map, dimension) is currently running or kept warm by a pin.
   // Rows survive in the DB long after an instance stops existing, so these
   // drive what the dashboard shows.
@@ -558,6 +563,8 @@ export type SpicefieldType = {
 
 export type SpicefieldsResponse = {
   available: boolean
+  adapter?: 'legacy-db' | 'retail-config'
+  requiresRestart?: boolean
   rows: SpicefieldType[]
   unavailableReason?: string
   // False when the battlegroup could not be read, in which case callers should

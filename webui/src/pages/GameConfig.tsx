@@ -425,30 +425,14 @@ export function GameConfig({ mode = 'standard' }: { mode?: 'standard' | 'experim
   const [applying, setApplying] = useState(false)
   const [clientSnippetCopied, setClientSnippetCopied] = useState(false)
 
-  // Server-vs-client mismatch popup. Auto-shown on load when a configured client
-  // Game.ini disagrees with the server on a customised ClientApply setting.
+  // Server-vs-client mismatch details are available on demand. They are never
+  // auto-opened after a normal settings save.
   const [mismatchOpen, setMismatchOpen] = useState(false)
-  const [mismatchAutoShown, setMismatchAutoShown] = useState(false)
   const [mismatchFixing, setMismatchFixing] = useState(false)
   const [mismatchErr, setMismatchErr] = useState<string | null>(null)
   const [mismatchMsg, setMismatchMsg] = useState<string | null>(null)
   const [mismatchFallback, setMismatchFallback] = useState(false)
   const [mismatchCopied, setMismatchCopied] = useState(false)
-  // Signature of the mismatch set the user last dismissed ("Not now"/close),
-  // persisted so we don't re-nag with the modal on every page load for the same
-  // unchanged values. A successful fix clears it; a genuinely new/changed
-  // mismatch produces a different signature and surfaces again.
-  const [mismatchDismissedSig, setMismatchDismissedSig] = useState<string>(() => {
-    try { return window.localStorage.getItem('dst.gameconfig.mismatchDismissed') ?? '' } catch { return '' }
-  })
-  const persistMismatchDismissed = useCallback((sig: string) => {
-    setMismatchDismissedSig(sig)
-    try {
-      if (sig) window.localStorage.setItem('dst.gameconfig.mismatchDismissed', sig)
-      else window.localStorage.removeItem('dst.gameconfig.mismatchDismissed')
-    } catch { /* localStorage may be unavailable; in-memory state still applies */ }
-  }, [])
-
   // INI text the admin can hand to OTHER players (who don't run DST) to paste
   // into their own client Game.ini — grouped by section, last-write-wins order.
   const clientSnippetEntries = useMemo<ClientShareEntry[]>(() => {
@@ -572,16 +556,6 @@ export function GameConfig({ mode = 'standard' }: { mode?: 'standard' | 'experim
     )
   }, [clientMismatches, cfg, clientInfo])
 
-  // Stable signature of the current mismatch set: changes only when the set of
-  // keys or their server/client values change. Drives "don't re-nag" logic.
-  const mismatchSignature = useMemo(() => {
-    if (clientMismatches.length === 0) return ''
-    return clientMismatches
-      .map(m => `${m.file}||${m.section}||${m.key}=${m.serverValue}>${m.clientValue ?? ''}`)
-      .sort()
-      .join('|')
-  }, [clientMismatches])
-
   const onCopyMismatchSnippet = useCallback(async () => {
     if (mismatchSnippetEntries.length === 0) return
     try {
@@ -593,31 +567,12 @@ export function GameConfig({ mode = 'standard' }: { mode?: 'standard' | 'experim
     } catch { /* clipboard may be unavailable; the snippet is still shown */ }
   }, [mismatchSnippetEntries])
 
-  // Auto-surface the popup once per detected mismatch set, but NOT if the user
-  // already dismissed this exact set (persisted across reloads). When the
-  // mismatch clears (e.g. after a fix), drop any saved dismissal so a future
-  // genuine mismatch can surface again.
-  useEffect(() => {
-    if (mismatchSignature === '') {
-      if (mismatchAutoShown) setMismatchAutoShown(false)
-      if (mismatchOpen) setMismatchOpen(false)
-      if (mismatchDismissedSig) persistMismatchDismissed('')
-      return
-    }
-    if (!mismatchAutoShown && mismatchSignature !== mismatchDismissedSig) {
-      setMismatchOpen(true)
-      setMismatchAutoShown(true)
-    }
-  }, [mismatchSignature, mismatchAutoShown, mismatchOpen, mismatchDismissedSig, persistMismatchDismissed])
-
-  // Close the modal without fixing; remember this exact mismatch set so it
-  // doesn't auto-pop again until the underlying values change.
+  // Close the on-demand details without creating another prompt cycle.
   const onDismissMismatch = useCallback(() => {
-    persistMismatchDismissed(mismatchSignature)
     setMismatchOpen(false)
     setMismatchFallback(false)
     setMismatchErr(null)
-  }, [mismatchSignature, persistMismatchDismissed])
+  }, [])
 
   // Write the server's values into the matching local client INI files.
   const onFixClientMismatch = useCallback(async () => {
@@ -1248,10 +1203,9 @@ export function GameConfig({ mode = 'standard' }: { mode?: 'standard' | 'experim
 
       }
       setSavedMsg(msg)
-      // Some settings (e.g. landclaim limits, building restrictions) are read by
-      // BOTH server and client — remind the admin to mirror them on each client.
-      const ca = out.clientApply
-      setClientApply(ca && ca.items && ca.items.length > 0 ? ca : null)
+      // Client mirroring remains available through the explicit client-config
+      // tools and mismatch banner. Saving server settings no longer opens an INI
+      // popup automatically.
     } catch (err) {
       setSavedMsg(null)
       setSaveError(err instanceof Error ? err.message : String(err))
@@ -1378,7 +1332,7 @@ export function GameConfig({ mode = 'standard' }: { mode?: 'standard' | 'experim
           <strong>Back up before editing. </strong>
           {experimentalPage
             ? 'Recovered controls are unconfirmed: crashes, disconnects, state corruption and performance loss are possible. Change one setting at a time; save, then Apply INIs & restart.'
-            : 'Saving writes to live INIs; some settings need Apply INIs & restart to take effect.'}
+            : 'Saving writes to the installed authoritative INIs; Apply INIs & restart pushes them to the battlegroup.'}
           <span> Safety &amp; player config</span>
         </summary>}
         <Icon name="FlaskConical" size={18} className={'mt-0.5 shrink-0 ' + (experimentalPage ? 'text-warning' : 'text-ibad')} />
@@ -2184,7 +2138,7 @@ export function GameConfig({ mode = 'standard' }: { mode?: 'standard' | 'experim
                 On-server snapshots of <span className="font-mono">UserGame.ini</span> /{' '}
                 <span className="font-mono">UserEngine.ini</span> (saved as{' '}
                 <span className="font-mono">.dstbak-&lt;timestamp&gt;</span>). To restore one, open it in the File Browser
-                and copy it back over the live file.
+                and copy it back over the installed authoritative file.
               </p>
               {backupsLoading && (
                 <div className="flex items-center gap-2 text-sm text-text-muted py-6 justify-center">

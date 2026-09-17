@@ -697,6 +697,8 @@ function Get-DuneSpicefieldStateLive {
         [Parameter(Mandatory)]
         [ValidateRange(0, 10000)]
         [int]$DimensionIndex,
+        [ValidateSet('Small', 'Medium', 'Large')]
+        [string]$FieldType,
         [int]$Limit = $script:DuneSpicefieldStateMaxRows,
         $Capability,
         [ValidateRange(1,120)][int]$TimeoutSec = 20
@@ -722,7 +724,12 @@ function Get-DuneSpicefieldStateLive {
     }
 
     $fieldKindWhere = if ($Capability.activeSpice.adapter -eq 'retail-resourcefield') {
-        ''
+        switch ($FieldType) {
+            'Small'  { 'value_remaining BETWEEN 1 AND 5000 AND' }
+            'Medium' { 'value_remaining BETWEEN 60001 AND 150000 AND' }
+            'Large'  { 'value_remaining BETWEEN 150001 AND 2500000 AND' }
+            default  { 'value_remaining <> 60000 AND' }
+        }
     } else {
         'field_kind_id = 1 AND'
     }

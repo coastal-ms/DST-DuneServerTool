@@ -1512,9 +1512,9 @@ Describe 'DuneGameConfigSchema: experimental twilight evidence gate' -Tag 'GameC
 
     BeforeEach {
         $script:TwilightLivePaths = @{
-            source = 'live'
-            game = '/var/lib/rancher/k3s/storage/pvc-test/Saved/UserSettings/UserGame.ini'
-            engine = '/var/lib/rancher/k3s/storage/pvc-test/Saved/UserSettings/UserEngine.ini'
+            source = 'installed'
+            game = '/home/dune/.dune/download/scripts/setup/config/UserGame.ini'
+            engine = '/home/dune/.dune/download/scripts/setup/config/UserEngine.ini'
         }
         Mock Resolve-DuneGameConfigPaths { $script:TwilightLivePaths }
     }
@@ -1648,7 +1648,7 @@ m_bTimeOfDayEnabled=False
         $result.candidate | Should -Be '18.0'
         $result.clientApplied | Should -BeFalse
         Assert-MockCalled Backup-DuneGameConfig -Times 1 -ParameterFilter {
-            $ResolvedPaths.source -eq 'live' -and
+            $ResolvedPaths.source -eq 'installed' -and
             $ResolvedPaths.game -eq $script:TwilightLivePaths.game
         }
         Assert-MockCalled Save-DuneGameConfigLocked -Times 1 -ParameterFilter {
@@ -1660,21 +1660,21 @@ m_bTimeOfDayEnabled=False
         Assert-MockCalled Invoke-V6Ssh -Times 1
     }
 
-    It 'refuses setup templates before backup or mutation' {
+    It 'refuses a generated live PVC copy before backup or mutation' {
         Mock Resolve-DuneGameConfigPaths {
             @{
-                source = 'template'
-                game = '/home/dune/.dune/download/scripts/setup/config/UserGame.ini'
-                engine = '/home/dune/.dune/download/scripts/setup/config/UserEngine.ini'
+                source = 'legacy-live'
+                game = '/var/lib/rancher/k3s/storage/pvc-test/Saved/UserSettings/UserGame.ini'
+                engine = '/var/lib/rancher/k3s/storage/pvc-test/Saved/UserSettings/UserEngine.ini'
             }
         }
         Mock Backup-DuneGameConfig {}
         Mock Save-DuneGameConfigLocked {}
 
         { Invoke-DuneTwilightLockStage -Ip '192.0.2.1' -Candidate '18.0' } |
-            Should -Throw '*requires a live battlegroup UserGame.ini*'
+            Should -Throw '*requires the installed authoritative UserGame.ini*'
         { Invoke-DuneTwilightLockRestore -Ip '192.0.2.1' } |
-            Should -Throw '*requires a live battlegroup UserGame.ini*'
+            Should -Throw '*requires the installed authoritative UserGame.ini*'
         Assert-MockCalled Backup-DuneGameConfig -Times 0
         Assert-MockCalled Save-DuneGameConfigLocked -Times 0
     }
@@ -1715,7 +1715,7 @@ m_bTimeOfDayEnabled=False
         Mock Invoke-V6Ssh { 'ERROR: remote write failed' }
 
         { Invoke-DuneTwilightLockStage -Ip '192.0.2.1' -Candidate '18.0' } |
-            Should -Throw '*could not verify the live UserGame.ini*'
+            Should -Throw '*could not verify the authoritative UserGame.ini*'
     }
 
     It 'backs up then removes both managed overrides on restore' {
@@ -2397,6 +2397,7 @@ Describe 'GameConfig: UE struct-member engine (LandsraadSettings Data blob)' -Ta
 
 Describe 'GameConfig: spicefield startup defaults' -Tag 'GameConfig' {
     BeforeAll {
+        function Invoke-V6Ssh { param([string]$Ip, [string]$Cmd) }
         $script:SpiceSection = '/Script/DuneSandbox.SpiceHarvestingSystem'
         $script:SpiceOverride = 'm_PerMapSystemSettings=(("Editor_Default", (m_SpiceFieldTypeSettings=(((Name="Small"), (MaxGloballyPrimed=3,MaxGloballyActive=5)),((Name="Medium"), (MaxGloballyPrimed=2,MaxGloballyActive=22)),((Name="Large"), (MaxGloballyPrimed=2,MaxGloballyActive=6))))),("DeepDesert_1", (m_SpiceFieldTypeSettings=(((Name="Small"), (MaxGloballyPrimed=10,MaxGloballyActive=60)),((Name="Medium"), (MaxGloballyPrimed=12,MaxGloballyActive=12)),((Name="Large"), (MaxGloballyPrimed=2,MaxGloballyActive=6))))),("Survival_1", (m_SpiceFieldTypeSettings=(((Name="Small"), (MaxGloballyPrimed=3,MaxGloballyActive=10))))))'
         $script:SpiceFallback = 'm_DefaultSystemSettings=(m_SpiceFieldTypeSettings=(((Name="Small"), (MaxGloballyPrimed=3,MaxGloballyActive=20)),((Name="Medium"), (MaxGloballyPrimed=2,MaxGloballyActive=10)),((Name="Large"), (MaxGloballyPrimed=2,MaxGloballyActive=6))))'
@@ -2426,6 +2427,47 @@ Describe 'GameConfig: spicefield startup defaults' -Tag 'GameConfig' {
         ($fields | Where-Object Key -eq 'DST.SpiceStartup.DeepDesert.Medium.Max').Default | Should -Be '12'
         ($fields | Where-Object Key -eq 'DST.SpiceStartup.DeepDesert.Large.Max').Default | Should -Be '1'
         ($fields | Where-Object Key -eq 'DST.SpiceStartup.Hagga.Small.Max').Default | Should -Be '5'
+    }
+
+    It 'defines the complete Retail compatibility surface without removing a field size' {
+        $defs = @(Get-DuneRetailSpicefieldDefinitions)
+        $defs.Count | Should -Be 4
+        @($defs | Where-Object mapId -eq 'Survival_1').fieldType | Should -Be @('Small')
+        @($defs | Where-Object mapId -eq 'DeepDesert_1').fieldType | Should -Be @('Small', 'Medium', 'Large')
+        @($defs.id | Sort-Object -Unique).Count | Should -Be 4
+    }
+
+    It 'keeps the installed Funcom INIs as DST authoritative source' {
+        Mock Invoke-V6Ssh { 'ok' }
+        $paths = Resolve-DuneGameConfigPaths -Ip '192.0.2.1'
+
+        $paths.source | Should -Be 'installed'
+        $paths.game | Should -Be '/home/dune/.dune/download/scripts/setup/config/UserGame.ini'
+        $paths.engine | Should -Be '/home/dune/.dune/download/scripts/setup/config/UserEngine.ini'
+    }
+
+    It 'writes the Retail spawning flag as an exact Unreal boolean' {
+        Mock Get-DuneRetailSpicefieldRows {
+            @{
+                defaultRaw = ''
+                blob = 'existing'
+                rows = @(@{
+                    spicefield_type_id = 9101
+                    max_globally_active = 5
+                    max_globally_primed = 5
+                    is_spawning_active = $true
+                })
+            }
+        }
+        Mock Set-DuneSpicefieldLimitsInBlob { 'updated' }
+        Mock Save-DuneGameConfigLocked {}
+
+        $null = Set-DuneRetailSpicefieldRow -Ip '192.0.2.1' -TypeId 9101 `
+            -MaxActive 5 -MaxPrimed 5 -SpawningActive $true
+
+        Should -Invoke Save-DuneGameConfigLocked -Times 1 -ParameterFilter {
+            @($Updates | Where-Object key -eq 'm_bSpawningActive')[0].value -eq 'True'
+        }
     }
 
     It 'surfaces the active cap from the complete existing override' {

@@ -463,6 +463,24 @@ Describe 'Spicefield state detail projection' -Tag 'MapData' {
         $parameters.row_limit | Should -Be 200
     }
 
+    It 'filters Retail field details to the selected spice size without the removed kind column' {
+        $retailCapability = @{
+            ok = $true
+            activeSpice = @{ available = $true; adapter = 'retail-resourcefield' }
+            schemaFingerprint = ('b' * 64)
+        }
+
+        $null = Get-DuneSpicefieldStateLive `
+            -Ip '192.0.2.1' `
+            -MapName 'DeepDesert' `
+            -DimensionIndex 0 `
+            -FieldType 'Medium' `
+            -Capability $retailCapability
+
+        $script:capturedSpicefieldStateSql | Should -Match 'value_remaining BETWEEN 60001 AND 150000'
+        $script:capturedSpicefieldStateSql | Should -Not -Match 'field_kind_id'
+    }
+
     It 'returns an empty ready result when the map instance has no active fields' {
         Mock Invoke-DuneSqlQuery {
             New-MapDataResult `

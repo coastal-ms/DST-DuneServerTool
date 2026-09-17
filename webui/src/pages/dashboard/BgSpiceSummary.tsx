@@ -3,11 +3,8 @@
 // row per (map, field type), sorted by map and then largest-first.
 // Lives under the Battlegroup Info card on Server Health.
 //
-// Per-row spawning toggle: clicking the checkbox to the right of
-// Primed flips `is_spawning_active` in dune.spicefield_types live,
-// via the guard-railed PUT /api/gameconfig/spicefields/{id}/spawning
-// endpoint (only ever writes TRUE/FALSE to that one column). Each
-// checkbox has an independent 5-second click cooldown.
+// Spawning toggle: legacy servers write the selected DB row live. Retail uses
+// the authoritative INI master switch and requires Apply INIs & restart.
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { getSpicefields, getSpicefieldState, setSpicefieldSpawning } from '../../api/gameconfig'
 import type { SpicefieldStateResponse, SpicefieldType } from '../../api/types'
@@ -138,21 +135,24 @@ export function BgSpiceSummary({ enabled }: Props) {
     setToggleErr(null)
     // Optimistic update.
     setRows(prev => prev
-      ? prev.map(r => r.spicefieldTypeId === row.spicefieldTypeId
+      ? prev.map(r => row.globalSpawning || r.spicefieldTypeId === row.spicefieldTypeId
           ? { ...r, isSpawningActive: newActive }
           : r)
       : prev)
     try {
       const resp = await setSpicefieldSpawning(row.spicefieldTypeId, newActive)
       const saved = resp.row
-      // Adopt canonical row from server (in case backend normalized).
-      setRows(prev => prev
-        ? prev.map(r => r.spicefieldTypeId === saved.spicefieldTypeId ? saved : r)
-        : prev)
+      if (saved.globalSpawning) await load()
+      else {
+        // Adopt canonical row from server (in case backend normalized).
+        setRows(prev => prev
+          ? prev.map(r => r.spicefieldTypeId === saved.spicefieldTypeId ? saved : r)
+          : prev)
+      }
     } catch (e) {
       // Rollback.
       setRows(prev => prev
-        ? prev.map(r => r.spicefieldTypeId === row.spicefieldTypeId
+        ? prev.map(r => row.globalSpawning || r.spicefieldTypeId === row.spicefieldTypeId
             ? { ...r, isSpawningActive: row.isSpawningActive }
             : r)
         : prev)
@@ -160,7 +160,7 @@ export function BgSpiceSummary({ enabled }: Props) {
     } finally {
       setTogglingId(null)
     }
-  }, [bumpCooldown, cooldownRemaining, togglingId])
+  }, [bumpCooldown, cooldownRemaining, load, togglingId])
 
   const onToggleDetails = useCallback(async (row: SpicefieldType) => {
     if (detailsRow?.spicefieldTypeId === row.spicefieldTypeId) {
@@ -317,7 +317,7 @@ export function BgSpiceSummary({ enabled }: Props) {
                 : mapLabel(mapId)
               const sizeCls   = SIZE_CLASS[r.fieldType] ?? 'text-text-muted'
               const activeCls = activeFillClass(r.currentActive, r.maxActive)
-              const primCls   = primedClass(r.currentPrimed)
+              const primCls   = r.currentPrimedExact === false ? 'text-text-dim' : primedClass(r.currentPrimed)
               const cooldownMs = cooldownRemaining()
               const onCooldown = cooldownMs > 0
               const isBusy     = togglingId === r.spicefieldTypeId
@@ -326,8 +326,10 @@ export function BgSpiceSummary({ enabled }: Props) {
               const cdSecs     = Math.ceil(cooldownMs / 1000)
               const title      = isBusy ? 'Saving…'
                                  : onCooldown ? `Wait ${cdSecs}s before clicking again`
-                                 : r.isSpawningActive ? 'Spawning ENABLED — click to disable'
-                                                       : 'Spawning DISABLED — click to enable'
+                                 : r.globalSpawning
+                                   ? `${r.isSpawningActive ? 'Spawning ENABLED' : 'Spawning DISABLED'} — Retail master switch; applies after Apply INIs & restart`
+                                   : r.isSpawningActive ? 'Spawning ENABLED — click to disable'
+                                                         : 'Spawning DISABLED — click to enable'
               return (
                 <tr key={r.spicefieldTypeId}
                     className={newMap && idx > 0 ? 'border-t border-border/40' : ''}>
@@ -342,7 +344,7 @@ export function BgSpiceSummary({ enabled }: Props) {
                     {r.currentActive}<span className="text-text-dim">/{r.maxActive}</span>
                   </td>
                   <td className={`text-right tabular-nums pr-3 py-0.5 ${primCls}`}>
-                    {r.currentPrimed}<span className="text-text-dim">/{r.maxPrimed}</span>
+                    {r.currentPrimedExact === false ? '—' : r.currentPrimed}<span className="text-text-dim">/{r.maxPrimed}</span>
                   </td>
                   <td className="text-center py-0.5 whitespace-nowrap">
                     <label className={`inline-flex items-center gap-1 ${disabled ? 'cursor-wait opacity-70' : 'cursor-pointer'}`}

@@ -756,6 +756,57 @@ function Test-V6SpicefieldTypesAvailable {
     return "$raw".Trim() -eq 'true'
 }
 
+function Test-V6RetailResourceFieldStateAvailable {
+    param([string]$Ip)
+    $raw = Invoke-V6Psql -Ip $Ip -Sql @"
+SELECT CASE WHEN
+  to_regclass('dune.resourcefield_state') IS NOT NULL
+  AND EXISTS (
+    SELECT 1 FROM information_schema.columns
+    WHERE table_schema = 'dune' AND table_name = 'resourcefield_state'
+      AND column_name = 'value_remaining'
+  )
+THEN 'true' ELSE 'false' END
+"@
+    return "$raw".Trim() -eq 'true'
+}
+
+# Retail removed dune.spicefield_types and folded live persistence into the
+# general resourcefield_state table. The field kind column disappeared too,
+# but the shipped spice assets still have distinct maximum values (Small 5k,
+# Medium 150k, Large 2.5m). Exclude the 60k flour-sand capacity and return a
+# bounded per-map projection for the compatibility adapter. Partially harvested
+# values retain their size band; zero-value rows are inactive and excluded.
+function Get-V6RetailSpicefieldActivity {
+    param([string]$Ip)
+    if (-not (Test-V6RetailResourceFieldStateAvailable -Ip $Ip)) { return @() }
+    $raw = Invoke-V6Psql -Ip $Ip -Sql @"
+SELECT COALESCE(json_agg(row_to_json(t) ORDER BY t.map_name, t.dimension_index, t.field_type), '[]')
+FROM (
+  SELECT map AS map_name,
+         dimension_index,
+         CASE
+           WHEN value_remaining BETWEEN 1 AND 5000 THEN 'Small'
+           WHEN value_remaining BETWEEN 60001 AND 150000 THEN 'Medium'
+           WHEN value_remaining BETWEEN 150001 AND 2500000 THEN 'Large'
+           ELSE NULL
+         END AS field_type,
+         COUNT(*)::integer AS current_active
+  FROM dune.resourcefield_state
+  WHERE value_remaining > 0
+  GROUP BY map, dimension_index,
+           CASE
+             WHEN value_remaining BETWEEN 1 AND 5000 THEN 'Small'
+             WHEN value_remaining BETWEEN 60001 AND 150000 THEN 'Medium'
+             WHEN value_remaining BETWEEN 150001 AND 2500000 THEN 'Large'
+             ELSE NULL
+           END
+) t
+WHERE t.field_type IS NOT NULL
+"@
+    return ConvertFrom-V6PsqlJson -Raw $raw -Default @()
+}
+
 function Test-V6LegacySolarisFunctionAvailable {
     param([string]$Ip)
     $legacyName = 'dune.get_' + 'solaris_id()'

@@ -671,33 +671,43 @@ Register-DuneRoute -Method GET -Path '/api/gameconfig/spicefields' -Handler {
         return
     }
     try {
-        if (-not (Test-V6SpicefieldTypesAvailable -Ip $ctx.ip)) {
+        $legacyAdapter = Test-V6SpicefieldTypesAvailable -Ip $ctx.ip
+        $retailAdapter = -not $legacyAdapter -and (Test-V6RetailResourceFieldStateAvailable -Ip $ctx.ip)
+        if (-not $legacyAdapter -and -not $retailAdapter) {
             Write-DuneJson -Response $res -Body @{
                 available = $false
                 rows = @()
                 partitionGate = $true
-                unavailableReason = 'This Funcom server build no longer exposes spicefield type configuration. DST has disabled these controls to avoid unsafe writes.'
+                unavailableReason = 'Spice field state is unavailable on this server build.'
             }
             return
         }
-        $raw = Get-V6SpicefieldTypes -Ip $ctx.ip
+        $retail = $null
+        $raw = if ($legacyAdapter) {
+            @(Get-V6SpicefieldTypes -Ip $ctx.ip)
+        } else {
+            $retail = Get-DuneRetailSpicefieldRows -Ip $ctx.ip
+            @($retail.rows)
+        }
 
         # Which (map, dimension) pairs are live or pinned. Annotating rather than
         # filtering here keeps the endpoint honest: the client decides what to
         # show, and a failure to read the battlegroup degrades to "show all"
         # instead of silently hiding real spicefield data.
         $active = @{}
-        $gateOk = $false
-        try {
-            $ap = Get-DuneActiveMapPartitions -Ip $ctx.ip
-            $gateOk = [bool]$ap.ok
-            foreach ($p in @($ap.partitions)) {
-                $active["$($p.mapId)|$([int]$p.dimensionIndex)"] = $p
-            }
-        } catch {}
+        $gateOk = if ($retail) { [bool]$retail.partitionGate } else { $false }
+        if ($legacyAdapter) {
+            try {
+                $ap = Get-DuneActiveMapPartitions -Ip $ctx.ip
+                $gateOk = [bool]$ap.ok
+                foreach ($p in @($ap.partitions)) {
+                    $active["$($p.mapId)|$([int]$p.dimensionIndex)"] = $p
+                }
+            } catch {}
+        }
 
         $rows = @($raw | ForEach-Object {
-            $mapId = ConvertTo-DuneServerMapId -Name "$($_.map_name)"
+            $mapId = if ($_.map_id) { "$($_.map_id)" } else { ConvertTo-DuneServerMapId -Name "$($_.map_name)" }
             $key   = "$mapId|$([int]$_.dimension_index)"
             $hit   = $active[$key]
             @{
@@ -712,12 +722,23 @@ Register-DuneRoute -Method GET -Path '/api/gameconfig/spicefields' -Handler {
                 currentPrimed    = [int]$_.current_globally_primed
                 isSpawningActive = [bool]$_.is_spawning_active
                 spawnWeight      = [double]$_.global_spawn_weight
-                partitionLive    = [bool]($hit -and $hit.live)
-                partitionPinned  = [bool]($hit -and $hit.pinned)
-                partitionActive  = [bool]($null -ne $hit)
+                partitionLive    = if ($legacyAdapter) { [bool]($hit -and $hit.live) } else { [bool]$_.partition_live }
+                partitionPinned  = if ($legacyAdapter) { [bool]($hit -and $hit.pinned) } else { [bool]$_.partition_pinned }
+                partitionActive  = if ($legacyAdapter) { [bool]($null -ne $hit) } else { [bool]$_.partition_active }
+                adapter          = if ($legacyAdapter) { 'legacy-db' } else { 'retail-config' }
+                requiresRestart  = if ($legacyAdapter) { $false } else { $true }
+                supportsSpawnWeight = if ($legacyAdapter) { $true } else { $false }
+                currentPrimedExact  = if ($legacyAdapter) { $true } else { $false }
+                globalSpawning      = if ($legacyAdapter) { $false } else { $true }
             }
         })
-        Write-DuneJson -Response $res -Body @{ available = $true; rows = $rows; partitionGate = $gateOk }
+        Write-DuneJson -Response $res -Body @{
+            available = $true
+            adapter = if ($legacyAdapter) { 'legacy-db' } else { 'retail-config' }
+            requiresRestart = -not $legacyAdapter
+            rows = $rows
+            partitionGate = $gateOk
+        }
     } catch {
         Write-DuneError -Response $res -Status 500 -Message "Spicefield types load failed: $($_.Exception.Message)"
     }
@@ -743,11 +764,9 @@ Register-DuneRoute -Method GET -Path '/api/gameconfig/spicefields/{id}/state' -H
     }
 
     try {
-        if (-not (Test-V6SpicefieldTypesAvailable -Ip $ctx.ip)) {
-            Write-DuneError -Response $res -Status 410 -Message 'This Funcom server build no longer exposes spicefield type configuration.'
-            return
-        }
-        $typeRow = @(Get-V6SpicefieldTypes -Ip $ctx.ip |
+        $legacyAdapter = Test-V6SpicefieldTypesAvailable -Ip $ctx.ip
+        $typeRows = if ($legacyAdapter) { @(Get-V6SpicefieldTypes -Ip $ctx.ip) } else { @((Get-DuneRetailSpicefieldRows -Ip $ctx.ip).rows) }
+        $typeRow = @($typeRows |
             Where-Object { [int]$_.spicefield_type_id -eq $typeId } |
             Select-Object -First 1)
         if ($typeRow.Count -eq 0) {
@@ -764,7 +783,8 @@ Register-DuneRoute -Method GET -Path '/api/gameconfig/spicefields/{id}/state' -H
         $state = Get-DuneSpicefieldStateLive `
             -Ip $ctx.ip `
             -MapName $mapName `
-            -DimensionIndex ([int]$typeRow[0].dimension_index)
+            -DimensionIndex ([int]$typeRow[0].dimension_index) `
+            -FieldType ([string]$typeRow[0].field_type)
         if (-not $state.ok) {
             $message = if ($state.error) { $state.error } else { 'Raw spice field state is unavailable.' }
             Write-DuneError -Response $res -Status 500 -Message $message
@@ -777,7 +797,7 @@ Register-DuneRoute -Method GET -Path '/api/gameconfig/spicefields/{id}/state' -H
             mapName                 = $mapName
             dimensionIndex          = [int]$typeRow[0].dimension_index
             requestedFieldType      = [string]$typeRow[0].field_type
-            fieldTypeResolved       = $false
+            fieldTypeResolved       = -not $legacyAdapter
             fields                  = @($state.fields)
             totalRawValueRemaining  = [string]$state.totalRawValueRemaining
             totalAvailable          = [long]$state.totalAvailable
@@ -813,10 +833,7 @@ Register-DuneRoute -Method PUT -Path '/api/gameconfig/spicefields/{id}' -Handler
         return
     }
     try {
-        if (-not (Test-V6SpicefieldTypesAvailable -Ip $ctx.ip)) {
-            Write-DuneError -Response $res -Status 410 -Message 'This Funcom server build no longer exposes spicefield type configuration.'
-            return
-        }
+        $legacyAdapter = Test-V6SpicefieldTypesAvailable -Ip $ctx.ip
         $maxA = 0; $maxP = 0; $sw = 0.0
         try { $maxA = [int]$body.maxActive } catch {}
         try { $maxP = [int]$body.maxPrimed } catch {}
@@ -824,12 +841,17 @@ Register-DuneRoute -Method PUT -Path '/api/gameconfig/spicefields/{id}' -Handler
             try { $sw = [double]::Parse("$($body.spawnWeight)", [System.Globalization.CultureInfo]::InvariantCulture) } catch {}
         }
         $isActive = [bool]$body.isSpawningActive
-        Set-V6SpicefieldType -Ip $ctx.ip -TypeId $typeId `
-            -MaxActive $maxA -MaxPrimed $maxP `
-            -IsSpawningActive $isActive -SpawnWeight $sw
-
-        $rows = Get-V6SpicefieldTypes -Ip $ctx.ip
-        $row  = $rows | Where-Object { [int]$_.spicefield_type_id -eq $typeId } | Select-Object -First 1
+        if ($legacyAdapter) {
+            Set-V6SpicefieldType -Ip $ctx.ip -TypeId $typeId `
+                -MaxActive $maxA -MaxPrimed $maxP `
+                -IsSpawningActive $isActive -SpawnWeight $sw
+            $rows = Get-V6SpicefieldTypes -Ip $ctx.ip
+            $row  = $rows | Where-Object { [int]$_.spicefield_type_id -eq $typeId } | Select-Object -First 1
+        } else {
+            $row = @(Set-DuneRetailSpicefieldRow -Ip $ctx.ip -TypeId $typeId `
+                -MaxActive $maxA -MaxPrimed $maxP -SpawningActive $isActive | Select-Object -First 1)
+            if ($row.Count -gt 0) { $row = $row[0] } else { $row = $null }
+        }
         if (-not $row) {
             Write-DuneError -Response $res -Status 404 -Message "Spicefield type $typeId not found after update."
             return
@@ -847,6 +869,11 @@ Register-DuneRoute -Method PUT -Path '/api/gameconfig/spicefields/{id}' -Handler
                 currentPrimed    = [int]$row.current_globally_primed
                 isSpawningActive = [bool]$row.is_spawning_active
                 spawnWeight      = [double]$row.global_spawn_weight
+                adapter          = if ($legacyAdapter) { 'legacy-db' } else { 'retail-config' }
+                requiresRestart  = -not $legacyAdapter
+                supportsSpawnWeight = [bool]$legacyAdapter
+                currentPrimedExact  = [bool]$legacyAdapter
+                globalSpawning      = -not $legacyAdapter
             }
         }
     } catch {
@@ -906,16 +933,24 @@ Register-DuneRoute -Method PUT -Path '/api/gameconfig/spicefields/{id}/spawning'
     }
 
     try {
-        if (-not (Test-V6SpicefieldTypesAvailable -Ip $ctx.ip)) {
-            Write-DuneError -Response $res -Status 410 -Message 'This Funcom server build no longer exposes spicefield type configuration.'
-            return
+        $legacyAdapter = Test-V6SpicefieldTypesAvailable -Ip $ctx.ip
+        if ($legacyAdapter) {
+            Set-V6SpicefieldSpawning -Ip $ctx.ip -TypeId $typeId -Active $active
+            $rows = Get-V6SpicefieldTypes -Ip $ctx.ip
+            $row  = $rows | Where-Object { [int]$_.spicefield_type_id -eq $typeId } | Select-Object -First 1
+        } else {
+            $retailRows = @((Get-DuneRetailSpicefieldRows -Ip $ctx.ip).rows)
+            $current = @($retailRows | Where-Object { [int]$_.spicefield_type_id -eq $typeId } | Select-Object -First 1)
+            if ($current.Count -eq 0) {
+                Write-DuneError -Response $res -Status 404 -Message "Spicefield type $typeId not found."
+                return
+            }
+            $row = @(Set-DuneRetailSpicefieldRow -Ip $ctx.ip -TypeId $typeId `
+                -MaxActive ([int]$current[0].max_globally_active) `
+                -MaxPrimed ([int]$current[0].max_globally_primed) `
+                -SpawningActive $active | Select-Object -First 1)
+            if ($row.Count -gt 0) { $row = $row[0] } else { $row = $null }
         }
-        Set-V6SpicefieldSpawning -Ip $ctx.ip -TypeId $typeId -Active $active
-
-        # Read back the canonical row so the UI can refresh state without a
-        # full list reload.
-        $rows = Get-V6SpicefieldTypes -Ip $ctx.ip
-        $row  = $rows | Where-Object { [int]$_.spicefield_type_id -eq $typeId } | Select-Object -First 1
         if (-not $row) {
             Write-DuneError -Response $res -Status 404 -Message "Spicefield type $typeId not found after update."
             return
@@ -933,6 +968,11 @@ Register-DuneRoute -Method PUT -Path '/api/gameconfig/spicefields/{id}/spawning'
                 currentPrimed    = [int]$row.current_globally_primed
                 isSpawningActive = [bool]$row.is_spawning_active
                 spawnWeight      = [double]$row.global_spawn_weight
+                adapter          = if ($legacyAdapter) { 'legacy-db' } else { 'retail-config' }
+                requiresRestart  = -not $legacyAdapter
+                supportsSpawnWeight = [bool]$legacyAdapter
+                currentPrimedExact  = [bool]$legacyAdapter
+                globalSpawning      = -not $legacyAdapter
             }
         }
     } catch {

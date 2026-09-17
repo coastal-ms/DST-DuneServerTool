@@ -73,10 +73,8 @@ Describe 'Rolling INI reload waits for the map, not just the pod' {
 
 Describe 'Apply INIs is available as a command' {
 
-    # Saving a console variable is inert until the server startup values are
-    # rebuilt from the INI, and only the Apply INIs path does that - a plain
-    # 'restart' does not. It therefore has to be reachable from the Commands page,
-    # not just from Game Config.
+    # The installed INIs are authoritative. Apply INIs and normal DST restarts
+    # both push them and rebuild startup values through the shared helper.
 
     BeforeAll {
         $script:cmdLib = Join-Path $PSScriptRoot '..\app\server\lib\Commands.ps1'
@@ -103,7 +101,7 @@ Describe 'Apply INIs is available as a command' {
     It 'runs through the shared restart helper rather than the external launcher' {
         # Invoke-DuneBattlegroupRestart is what rebuilds the startup values; going
         # via Invoke-DuneCommandExternal would silently skip that.
-        $script:routeText | Should -Match "if \(\`$name -eq 'apply-inis'\)"
+        $script:routeText | Should -Match "if \(\`$name -in @\('apply-inis', 'restart'\)\)"
         $script:routeText | Should -Match 'Invoke-DuneBattlegroupRestart -Ip \$ctx\.ip'
     }
 
@@ -127,8 +125,13 @@ Describe 'Battlegroup restart stages console variables' {
     # rebuilt here rather than on save so that saving never replaces a running pod
     # and no stale command can outrank a hand-edited INI.
 
-    It 'syncs the startup console variables before launching the restart' {
+    It 'deploys installed INIs, syncs console variables, then launches the restart' {
         $order = New-Object 'System.Collections.Generic.List[string]'
+        Mock Invoke-DuneDeployInstalledUserSettings {
+            param([string]$Ip)
+            $order.Add("deploy:$Ip")
+            @{ ok = $true }
+        }
         Set-Item -Path 'function:global:Sync-DuneStartupConsoleVariableOverrides' -Value {
             param([string]$Ip)
             $order.Add("sync:$Ip")
@@ -142,7 +145,7 @@ Describe 'Battlegroup restart stages console variables' {
         try {
             $r = Invoke-DuneBattlegroupRestart -Ip '192.0.2.1'
             $r.ok | Should -BeTrue
-            @($order) | Should -Be @('sync:192.0.2.1', 'cmd:restart')
+            @($order) | Should -Be @('deploy:192.0.2.1', 'sync:192.0.2.1', 'cmd:restart')
         } finally {
             Remove-Item 'function:global:Sync-DuneStartupConsoleVariableOverrides' -ErrorAction SilentlyContinue
             Remove-Item 'function:global:Invoke-DuneCommandExternal' -ErrorAction SilentlyContinue
@@ -150,6 +153,10 @@ Describe 'Battlegroup restart stages console variables' {
     }
 
     It 'still restarts when the console-variable sync fails' {
+        Mock Invoke-DuneDeployInstalledUserSettings {
+            param([string]$Ip)
+            @{ ok = $true }
+        }
         Set-Item -Path 'function:global:Sync-DuneStartupConsoleVariableOverrides' -Value {
             param([string]$Ip)
             throw 'battlegroup unreachable'
@@ -167,6 +174,26 @@ Describe 'Battlegroup restart stages console variables' {
             $script:ranRestart | Should -BeTrue
         } finally {
             Remove-Item 'function:global:Sync-DuneStartupConsoleVariableOverrides' -ErrorAction SilentlyContinue
+            Remove-Item 'function:global:Invoke-DuneCommandExternal' -ErrorAction SilentlyContinue
+        }
+    }
+
+    It 'does not restart when the authoritative INI deployment fails' {
+        Mock Invoke-DuneDeployInstalledUserSettings {
+            param([string]$Ip)
+            @{ ok = $false; error = 'copy failed' }
+        }
+        $script:ranRestart = $false
+        Set-Item -Path 'function:global:Invoke-DuneCommandExternal' -Value {
+            param([string]$Name)
+            $script:ranRestart = $true
+        }
+        try {
+            $r = Invoke-DuneBattlegroupRestart -Ip '192.0.2.1'
+            $r.ok | Should -BeFalse
+            $r.message | Should -Match 'was not restarted'
+            $script:ranRestart | Should -BeFalse
+        } finally {
             Remove-Item 'function:global:Invoke-DuneCommandExternal' -ErrorAction SilentlyContinue
         }
     }
