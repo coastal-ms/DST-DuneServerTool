@@ -35,7 +35,7 @@ describe('Deep Desert atlas golden fixture', () => {
       { seed: 3, poiCount: 54, largeSpiceSectors: ['F3', 'F9', 'G4', 'H2', 'H8'], reliability: 'medium' },
       { seed: 4, poiCount: 52, largeSpiceSectors: ['F1', 'F9', 'H5', 'I3', 'I9'], reliability: 'high' },
       { seed: 5, poiCount: 60, largeSpiceSectors: ['F5', 'F7', 'I2', 'I5', 'I9'], reliability: 'medium' },
-      { seed: 6, poiCount: 47, largeSpiceSectors: ['H2', 'H8', 'I5'], reliability: 'high' },
+      { seed: 6, poiCount: 51, largeSpiceSectors: ['H2', 'H8', 'I5'], reliability: 'high' },
       { seed: 7, poiCount: 30, largeSpiceSectors: ['E5', 'H2', 'H8'], reliability: 'low' },
       { seed: 8, poiCount: 58, largeSpiceSectors: ['F1', 'F4', 'F8', 'I7'], reliability: 'high' },
       { seed: 9, poiCount: 45, largeSpiceSectors: ['F1', 'F6', 'F8', 'I1', 'I9'], reliability: 'medium' },
@@ -55,7 +55,7 @@ describe('Deep Desert atlas golden fixture', () => {
       pois: seed.pois,
     })))
     expect(createHash('sha256').update(canonical).digest('hex'))
-      .toBe('148a2524adeb117e14edb2ee26c65df7537acc354993813548f2170c41c8d1d8')
+      .toBe('ea9ec7da47f213478ee57102828b06924cb5ad17fd3b62d2ac9dfbbc84775c2b')
   })
 
   it('keeps every marker visible by default with attribution and keyboard/touch-accessible detail', async () => {

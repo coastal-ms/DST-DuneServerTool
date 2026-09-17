@@ -19,6 +19,8 @@ here cover everything those tags shipped.
 
 ### Fixed
 
+- Updated the Deep Desert seed-six map to match the current live reference by
+  adding the missing D2 testing station and C3, D6, and B9 loot caves.
 - Fixed the Pages release-metadata race by using the release event payload during builds.
 
 ## [15.0.5] - 2026-09-10

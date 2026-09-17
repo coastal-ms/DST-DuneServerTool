@@ -1,6 +1,6 @@
 {
  "schemaVersion": 2,
- "generated": "2026-08-07",
+ "generated": "2026-09-16",
  "disclaimer": "This layout data was compiled from publicly archived community sources, not from your server. It may be incomplete or inaccurate, and the game may have changed since it was captured. Please report anything that looks wrong so it can be corrected.",
  "note": "Deep Desert POI layouts per Coriolis world seed.",
  "seeds": [
@@ -2108,7 +2108,7 @@
    "seed": 6,
    "confidence": "CONFIRMED",
    "reliability": "high",
-   "note": "Large spice set matches the reference table exactly.",
+   "note": "Large spice set matches the reference table exactly. Live seed 6 reference rechecked 2026-09-16; added the D2 testing station and caves at C3, D6, and B9.",
    "capturedUtc": "20250930025700",
    "image": "dd_seed_06.png",
    "imageSha256Short": null,
@@ -2117,12 +2117,12 @@
     "H8",
     "I5"
    ],
-   "poiCount": 47,
+   "poiCount": 51,
    "legend": [
     {
      "type": "cave",
      "label": "Cave",
-     "count": 15
+     "count": 18
     },
     {
      "type": "wreck",
@@ -2132,7 +2132,7 @@
     {
      "type": "testing-station",
      "label": "Testing Station",
-     "count": 9
+     "count": 10
     },
     {
      "type": "large-spice-field",
@@ -2278,6 +2278,12 @@
     },
     {
      "sector": "D2",
+     "subx": 1,
+     "suby": 0,
+     "type": "testing-station"
+    },
+    {
+     "sector": "D2",
      "subx": 3,
      "suby": 0,
      "type": "cave"
@@ -2302,8 +2308,20 @@
     },
     {
      "sector": "D6",
+     "subx": 1,
+     "suby": 0,
+     "type": "cave"
+    },
+    {
+     "sector": "D6",
      "subx": 2,
      "suby": 2,
+     "type": "cave"
+    },
+    {
+     "sector": "C3",
+     "subx": 2,
+     "suby": 3,
      "type": "cave"
     },
     {
@@ -2322,6 +2340,12 @@
      "sector": "C8",
      "subx": 1,
      "suby": 3,
+     "type": "cave"
+    },
+    {
+     "sector": "B9",
+     "subx": 1,
+     "suby": 1,
      "type": "cave"
     },
     {
