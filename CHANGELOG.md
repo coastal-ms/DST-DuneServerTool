@@ -31,8 +31,14 @@ here cover everything those tags shipped.
 - Added exact Solo inventory-item deletion, including partial stack removal and
   empty-stack cleanup, with stale-value protection and a retained pre-delete save.
 - Updated Self-Hosted reads for Retail's actor-state, wallet, resource-field,
-  and marker schema; removed spice controls when the updated server no longer
-  exposes those controls instead of showing a false empty configuration.
+  and marker schema. Active Spice remains available through a Retail
+  compatibility adapter backed by the installed Funcom configuration and
+  Retail resource-field state.
+- Made the installed Funcom `UserGame.ini` and `UserEngine.ini` files
+  authoritative for DST. Apply/restart now pushes those files into the
+  battlegroup before startup CVar rebuilding and restart.
+- Removed the automatic client-INI popup after settings changes. The explicit
+  client configuration and repair tools remain available.
 - Fixed specialization controls overflowing their card at narrower widths.
 
 ## [15.0.6] - 2026-09-16

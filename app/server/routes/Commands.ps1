@@ -164,11 +164,10 @@ Register-DuneRoute -Method POST -Path '/api/commands/run/{name}' -Handler {
             }
         }
 
-        # Apply INIs runs in-app: it rebuilds each server's startup values from
-        # the current UserEngine.ini and then restarts the battlegroup through the
-        # same shared helper Game Config uses. A plain 'restart' skips the rebuild,
-        # which is why saved console variables need this command specifically.
-        if ($name -eq 'apply-inis') {
+        # Retail's installed User*.ini files are authoritative. Both explicit
+        # Apply INIs and a DST-initiated restart push them into the battlegroup,
+        # rebuild startup values, then restart through the same guarded helper.
+        if ($name -in @('apply-inis', 'restart')) {
             $ctx = Get-DuneGameConfigContext
             if (-not $ctx.ok) {
                 Write-DuneError -Response $res -Status $ctx.status -Message $ctx.message

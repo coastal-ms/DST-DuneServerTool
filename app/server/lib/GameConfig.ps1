@@ -1,9 +1,10 @@
 ﻿# GameConfig lib - section-aware visual editor for UserGame.ini + UserEngine.ini.
 #
-# Reads the LIVE INI files inside the battlegroup PVC (same files FileBrowser
-# exposes under /files/UserSettings/), NOT the setup templates under
-# /home/dune/.dune/download/scripts/setup/config/ which are only used at
-# first-boot provisioning.
+# Reads and writes Funcom's installed User*.ini source directory under
+# /home/dune/.dune/download/scripts/setup/config/. Retail's self-deploy command
+# copies those authoritative files into the battlegroup PVC. DST therefore edits
+# the installed source and pushes it outward before a restart instead of letting
+# a generated pod copy become the source of truth.
 #
 # WRITE MODEL (DST-managed block):
 #   UE5 reads these files top-to-bottom with last-key-wins semantics. DST owns a
@@ -137,9 +138,9 @@ function Test-DuneTwilightCandidateHour {
 function Resolve-DuneTwilightLiveGameConfigTarget {
     param([Parameter(Mandatory)][string]$Ip)
     $paths = Resolve-DuneGameConfigPaths -Ip $Ip
-    $liveGamePattern = '^/var/lib/rancher/k3s/storage/[^/]+/Saved/UserSettings/UserGame\.ini$'
-    if ("$($paths.source)" -ne 'live' -or "$($paths.game)" -notmatch $liveGamePattern) {
-        throw 'Twilight experiment requires a live battlegroup UserGame.ini; setup templates are never modified.'
+    $installedGamePattern = '^/home/dune/\.dune/download/scripts/setup/config/UserGame\.ini$'
+    if ("$($paths.source)" -ne 'installed' -or "$($paths.game)" -notmatch $installedGamePattern) {
+        throw 'Twilight experiment requires the installed authoritative UserGame.ini.'
     }
     return $paths
 }
@@ -151,7 +152,7 @@ function Read-DuneTwilightLiveGameConfig {
     )
     $raw = ((Invoke-V6Ssh -Ip $Ip -Cmd "sudo cat '$Path' 2>/dev/null") -join "`n")
     if ([string]::IsNullOrWhiteSpace($raw) -or $raw.TrimStart().StartsWith('ERROR:')) {
-        throw 'Twilight experiment could not verify the live UserGame.ini after writing it.'
+        throw 'Twilight experiment could not verify the authoritative UserGame.ini after writing it.'
     }
     return $raw
 }
@@ -165,7 +166,7 @@ function Assert-DuneTwilightStageReadback {
     $prefix = "$script:DuneGcSecTimeOfDay||"
     if ("$($effective["${prefix}m_StartTime"])" -ne $Candidate -or
         "$($effective["${prefix}m_bTimeOfDayEnabled"])" -ine 'False') {
-        throw 'Twilight experiment write verification failed; the live UserGame.ini does not contain the exact staged values.'
+        throw 'Twilight experiment write verification failed; the authoritative UserGame.ini does not contain the exact staged values.'
     }
 }
 
@@ -175,7 +176,7 @@ function Assert-DuneTwilightRestoreReadback {
     $prefix = "$script:DuneGcSecTimeOfDay||"
     if ($effective.ContainsKey("${prefix}m_StartTime") -or
         $effective.ContainsKey("${prefix}m_bTimeOfDayEnabled")) {
-        throw 'Normal-cycle restore verification failed; a DST-managed twilight override remains in the live UserGame.ini.'
+        throw 'Normal-cycle restore verification failed; a DST-managed twilight override remains in the authoritative UserGame.ini.'
     }
 }
 
@@ -2075,6 +2076,142 @@ function Get-DuneIniManagedSectionNames {
     return ,[string[]]@($names.Keys)
 }
 
+# Retail spice compatibility -------------------------------------------------
+#
+# Funcom's DA-7323 migration removed dune.spicefield_types, including its live
+# write procedures. Retail still exposes the authoritative controls in
+# SpiceHarvestingSystem's UserGame.ini settings and persists active fields in
+# dune.resourcefield_state. Keep DST's Spice Fields surface intact by adapting
+# those two sources instead of treating the missing legacy table as a feature
+# gate.
+function Get-DuneRetailSpicefieldDefinitions {
+    return @(
+        [pscustomobject]@{ id=9101; mapName='HaggaBasin'; mapId='Survival_1';   fieldType='Small'  }
+        [pscustomobject]@{ id=9201; mapName='DeepDesert'; mapId='DeepDesert_1'; fieldType='Small'  }
+        [pscustomobject]@{ id=9202; mapName='DeepDesert'; mapId='DeepDesert_1'; fieldType='Medium' }
+        [pscustomobject]@{ id=9203; mapName='DeepDesert'; mapId='DeepDesert_1'; fieldType='Large'  }
+    )
+}
+
+function Get-DuneRetailSpicefieldRows {
+    param([Parameter(Mandatory)][string]$Ip)
+
+    $config = Get-DuneGameConfig -Ip $Ip
+    $defaults = $null
+    try { $defaults = Get-DuneGameConfigDefaults -Ip $Ip } catch { $defaults = $null }
+    $raw = [string]$config.game.raw
+    $defaultRaw = if ($defaults) { [string]$defaults.game } else { '' }
+
+    $blob = Get-DuneIniSectionScalarValue -Raw $raw -Section $script:DuneGcSecSpice -Key 'm_PerMapSystemSettings'
+    if ([string]::IsNullOrWhiteSpace($blob) -and -not [string]::IsNullOrWhiteSpace($defaultRaw)) {
+        $blob = Get-DuneIniSectionScalarValue -Raw $defaultRaw -Section $script:DuneGcSecSpice -Key 'm_PerMapSystemSettings'
+    }
+    $fallback = Get-DuneIniSectionScalarValue -Raw $raw -Section $script:DuneGcSecSpice -Key 'm_DefaultSystemSettings'
+    if ([string]::IsNullOrWhiteSpace($fallback) -and -not [string]::IsNullOrWhiteSpace($defaultRaw)) {
+        $fallback = Get-DuneIniSectionScalarValue -Raw $defaultRaw -Section $script:DuneGcSecSpice -Key 'm_DefaultSystemSettings'
+    }
+    if ([string]::IsNullOrWhiteSpace($blob)) {
+        throw 'Retail spice settings are absent from UserGame.ini and Funcom defaults.'
+    }
+
+    $spawnRaw = Get-DuneIniSectionScalarValue -Raw $raw -Section $script:DuneGcSecSpice -Key 'm_bSpawningActive'
+    if ([string]::IsNullOrWhiteSpace($spawnRaw) -and -not [string]::IsNullOrWhiteSpace($defaultRaw)) {
+        $spawnRaw = Get-DuneIniSectionScalarValue -Raw $defaultRaw -Section $script:DuneGcSecSpice -Key 'm_bSpawningActive'
+    }
+    $spawningActive = "$spawnRaw".Trim() -match '^(?i:true|1|yes|on)$'
+
+    $activity = @{}
+    if (Get-Command Get-V6RetailSpicefieldActivity -ErrorAction SilentlyContinue) {
+        foreach ($row in @(Get-V6RetailSpicefieldActivity -Ip $Ip)) {
+            $activity["$($row.map_name)|$([int]$row.dimension_index)|$($row.field_type)"] = [int]$row.current_active
+        }
+    }
+
+    $partitions = @{}
+    $partitionGate = $false
+    try {
+        $active = Get-DuneActiveMapPartitions -Ip $Ip
+        $partitionGate = [bool]$active.ok
+        foreach ($partition in @($active.partitions)) {
+            $partitions["$($partition.mapId)|$([int]$partition.dimensionIndex)"] = $partition
+        }
+    } catch {}
+
+    $rows = foreach ($definition in Get-DuneRetailSpicefieldDefinitions) {
+        $limits = Get-DuneSpicefieldLimitsFromBlob -Blob $blob -MapId $definition.mapId -FieldType $definition.fieldType
+        if (-not $limits.found) {
+            $limits = Get-DuneSpicefieldDefaultLimitsFromBlob -Blob $fallback -FieldType $definition.fieldType
+        }
+        if (-not $limits.found -or $limits.malformed) { continue }
+        $dimension = 0
+        $partition = $partitions["$($definition.mapId)|$dimension"]
+        [pscustomobject]@{
+            spicefield_type_id     = [int]$definition.id
+            map_name               = [string]$definition.mapName
+            map_id                 = [string]$definition.mapId
+            field_type             = [string]$definition.fieldType
+            dimension_index        = $dimension
+            max_globally_active    = [int]$limits.maxActive
+            max_globally_primed    = [int]$limits.maxPrimed
+            current_globally_active = [int]$activity["$($definition.mapName)|$dimension|$($definition.fieldType)"]
+            current_globally_primed = 0
+            is_spawning_active     = [bool]$spawningActive
+            global_spawn_weight    = 0.5
+            partition_live         = [bool]($partition -and $partition.live)
+            partition_pinned       = [bool]($partition -and $partition.pinned)
+            partition_active       = [bool]($null -ne $partition)
+            adapter                = 'retail-config'
+            requires_restart       = $true
+            supports_spawn_weight  = $false
+            current_primed_exact   = $false
+            global_spawning        = $true
+        }
+    }
+    return @{
+        rows = @($rows)
+        partitionGate = $partitionGate
+        raw = $raw
+        defaultRaw = $defaultRaw
+        blob = $blob
+    }
+}
+
+function Set-DuneRetailSpicefieldRow {
+    param(
+        [Parameter(Mandatory)][string]$Ip,
+        [Parameter(Mandatory)][int]$TypeId,
+        [Parameter(Mandatory)][int]$MaxActive,
+        [Parameter(Mandatory)][int]$MaxPrimed,
+        [Nullable[bool]]$SpawningActive
+    )
+    if ($MaxActive -lt 0 -or $MaxPrimed -lt 0) {
+        throw 'Spice field limits must be zero or greater.'
+    }
+    $definition = @(Get-DuneRetailSpicefieldDefinitions | Where-Object { [int]$_.id -eq $TypeId } | Select-Object -First 1)
+    if ($definition.Count -eq 0) { throw "Retail spice field type $TypeId was not found." }
+
+    $state = Get-DuneRetailSpicefieldRows -Ip $Ip
+    $defaultBlob = Get-DuneIniSectionScalarValue -Raw $state.defaultRaw -Section $script:DuneGcSecSpice -Key 'm_PerMapSystemSettings'
+    $newBlob = Set-DuneSpicefieldLimitsInBlob -Blob $state.blob `
+        -MapId $definition[0].mapId -FieldType $definition[0].fieldType `
+        -MaxActive $MaxActive -MaxPrimed $MaxPrimed -DefaultsBlob $defaultBlob
+    $updates = [System.Collections.Generic.List[object]]::new()
+    $updates.Add(@{
+        file='game'; section=$script:DuneGcSecSpice; key='m_PerMapSystemSettings'; value=$newBlob; remove=$false
+    })
+    if ($null -ne $SpawningActive) {
+        $spawnValue = if ([bool]$SpawningActive) { 'True' } else { 'False' }
+        $updates.Add(@{
+            file='game'; section=$script:DuneGcSecSpice; key='m_bSpawningActive';
+            value=$spawnValue; remove=$false
+        })
+    }
+    Save-DuneGameConfigLocked -Ip $Ip -Updates $updates.ToArray()
+
+    $fresh = Get-DuneRetailSpicefieldRows -Ip $Ip
+    return @($fresh.rows | Where-Object { [int]$_.spicefield_type_id -eq $TypeId } | Select-Object -First 1)
+}
+
 # =============================================================================
 # VM CONTEXT + PATH RESOLUTION (SSH plumbing - unchanged behaviour)
 # =============================================================================
@@ -2094,25 +2231,30 @@ function Get-DuneGameConfigContext {
 
 function Resolve-DuneGameConfigPaths {
     param([string]$Ip, [switch]$Force)
-    # Resolve LIVE every call - never cache. The User*.ini live under the running
-    # battlegroup's PVC dir, whose hash is UNIQUE per battlegroup, so any cached
-    # path would silently read/write the wrong (or a deleted) battlegroup's INI
-    # after a VM switch or battlegroup rebuild - even on the same IP. We pick the
-    # newest UserGame.ini (file mtime - the game touches it on write) and take
-    # UserEngine.ini from that same dir, so both always come from one battlegroup.
-    # $Force is accepted for call-site compatibility but is a no-op (always live).
+    # Retail self-hosting makes setup/config the deploy source. Never reverse the
+    # direction by adopting a generated PVC copy back into DST.
+    $installed = ((Invoke-V6Ssh -Ip $Ip -Cmd "sudo bash -c 'test -f ''$script:DuneGameConfigTplGamePath'' && test -f ''$script:DuneGameConfigTplEnginePath'' && echo ok'") -join '').Trim()
+    if ($installed -eq 'ok') {
+        return @{
+            game   = $script:DuneGameConfigTplGamePath
+            engine = $script:DuneGameConfigTplEnginePath
+            source = 'installed'
+        }
+    }
+
+    # Compatibility fallback for older Funcom installations that do not ship
+    # the installed source directory yet. This branch is read/write only because
+    # no authoritative deploy source exists on those builds.
     $dir = ((Invoke-V6Ssh -Ip $Ip -Cmd "sudo bash -c 'ls -t $($script:DuneGameConfigLiveGlobDir)/UserGame.ini 2>/dev/null | head -1 | xargs -r dirname'") -join '').Trim()
     if ($dir) {
         $g = "$dir/UserGame.ini"
         $e = "$dir/UserEngine.ini"
         $chk = ((Invoke-V6Ssh -Ip $Ip -Cmd "sudo bash -c 'test -f ''$g'' && test -f ''$e'' && echo ok'") -join '').Trim()
         if ($chk -eq 'ok') {
-            return @{ game = $g; engine = $e; source = 'live' }
+            return @{ game = $g; engine = $e; source = 'legacy-live' }
         }
     }
-    # No live User*.ini yet (fresh server / battlegroup not provisioned). Fall back
-    # to the seed template so the editor still renders sane defaults.
-    return @{ game = $script:DuneGameConfigTplGamePath; engine = $script:DuneGameConfigTplEnginePath; source = 'template' }
+    throw 'No authoritative installed UserGame.ini/UserEngine.ini files were found.'
 }
 
 # =============================================================================
@@ -3114,9 +3256,9 @@ function Get-DuneGameConfigCatalog {
     }
 }
 
-# Back up the live INI files server-side WITHOUT writing any changes. Copies each
+# Back up the authoritative INI files server-side WITHOUT writing any changes. Copies each
 # resolved file to "<path>.dstbak-<ts>" and verifies the copy landed. Returns a
-# summary the UI can show. Only meaningful for a live BG (templates aren't backed up).
+# summary the UI can show.
 function Backup-DuneGameConfig {
     param(
         [string]$Ip,

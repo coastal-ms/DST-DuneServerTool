@@ -800,6 +800,21 @@ function Get-DuneActiveMapPartitions {
     }
 }
 
+function Invoke-DuneDeployInstalledUserSettings {
+    param([Parameter(Mandatory)][string]$Ip)
+
+    $scriptPath = '/home/dune/.dune/download/scripts/battlegroup.sh'
+    $cmd = "sudo '$scriptPath' apply-default-usersettings 2>&1; rc=`$?; echo __DST_EXIT__:`$rc"
+    $lines = @(Invoke-V6Ssh -Ip $Ip -Cmd $cmd -TimeoutSec 120)
+    $marker = @($lines | Where-Object { "$_" -match '^__DST_EXIT__:(\d+)$' } | Select-Object -Last 1)
+    $exitCode = if ($marker.Count -gt 0) { [int]([regex]::Match("$($marker[0])", '(\d+)$').Groups[1].Value) } else { -1 }
+    $output = @($lines | Where-Object { "$_" -notmatch '^__DST_EXIT__:' }) -join "`n"
+    if ($exitCode -ne 0) {
+        return @{ ok=$false; exitCode=$exitCode; output=$output; error='Funcom could not deploy the installed User*.ini files to the battlegroup.' }
+    }
+    return @{ ok=$true; exitCode=0; output=$output }
+}
+
 function Invoke-DuneBattlegroupRestart {
     param([string]$Ip)
 
@@ -807,6 +822,23 @@ function Invoke-DuneBattlegroupRestart {
     # a prior run is moot; leaving the flag set would block fresh runs afterwards.
     if (Get-Command Clear-DuneBotStaleRunFlags -ErrorAction SilentlyContinue) {
         try { Clear-DuneBotStaleRunFlags } catch {}
+    }
+
+    # Retail's installed setup/config directory is authoritative. Push it to the
+    # battlegroup before rebuilding startup arguments or restarting. Failing
+    # closed here prevents a restart that claims to apply settings but actually
+    # boots an older PVC copy.
+    $iniDeploy = $null
+    if ($Ip) {
+        try { $iniDeploy = Invoke-DuneDeployInstalledUserSettings -Ip $Ip }
+        catch { $iniDeploy = @{ ok=$false; error=$_.Exception.Message } }
+        if (-not $iniDeploy.ok) {
+            return @{
+                ok        = $false
+                iniDeploy = $iniDeploy
+                message   = "INI deployment failed; the battlegroup was not restarted. $($iniDeploy.error)"
+            }
+        }
     }
 
     # Console variables are staged in UserEngine.ini and only reach the servers as
@@ -831,6 +863,7 @@ function Invoke-DuneBattlegroupRestart {
     return @{
         ok           = $true
         result       = $result
+        iniDeploy    = $iniDeploy
         startupApply = $startupApply
         message      = $message
     }

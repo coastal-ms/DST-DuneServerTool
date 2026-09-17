@@ -1,6 +1,4 @@
-// SpicefieldsCard — editor for dune.spicefield_types.
-// Live read/write directly against the live BG Postgres pod over SSH.
-// Disabled when the VM is not running.
+// SpicefieldsCard — legacy DB editor plus the Retail INI/resource-field adapter.
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Icon } from '../../components/Icon'
 import { CollapsibleCard } from '../../components/CollapsibleCard'
@@ -135,6 +133,8 @@ export function SpicefieldsCard({ vmRunning }: Props) {
     })
   }, [grouped])
 
+  const retailAdapter = (rows ?? []).some(row => row.adapter === 'retail-config')
+
   function isDirty(r: SpicefieldType) {
     const d = drafts[r.spicefieldTypeId]
     if (!d) return false
@@ -143,7 +143,7 @@ export function SpicefieldsCard({ vmRunning }: Props) {
     return (
       Number(d.maxActive)   !== r.maxActive   ||
       Number(d.maxPrimed)   !== r.maxPrimed   ||
-      Number(d.spawnWeight) !== r.spawnWeight
+      (r.supportsSpawnWeight !== false && Number(d.spawnWeight) !== r.spawnWeight)
     )
   }
 
@@ -164,18 +164,22 @@ export function SpicefieldsCard({ vmRunning }: Props) {
         spawnWeight:      Math.max(0, Number(d.spawnWeight) || 0),
         isSpawningActive: !!d.isSpawningActive,
       })
-      setRows(prev => (prev ?? []).map(row =>
-        row.spicefieldTypeId === r.spicefieldTypeId ? out.row : row,
-      ))
-      setDrafts(prev => ({
-        ...prev,
-        [r.spicefieldTypeId]: {
-          maxActive:        String(out.row.maxActive),
-          maxPrimed:        String(out.row.maxPrimed),
-          spawnWeight:      String(out.row.spawnWeight),
-          isSpawningActive: out.row.isSpawningActive,
-        },
-      }))
+      if (out.row.globalSpawning) {
+        await load()
+      } else {
+        setRows(prev => (prev ?? []).map(row =>
+          row.spicefieldTypeId === r.spicefieldTypeId ? out.row : row,
+        ))
+        setDrafts(prev => ({
+          ...prev,
+          [r.spicefieldTypeId]: {
+            maxActive:        String(out.row.maxActive),
+            maxPrimed:        String(out.row.maxPrimed),
+            spawnWeight:      String(out.row.spawnWeight),
+            isSpawningActive: out.row.isSpawningActive,
+          },
+        }))
+      }
       setOk(`${r.mapName} • ${r.fieldType}: saved.`)
       window.setTimeout(() => setOk(null), 3500)
     } catch (e) {
@@ -195,38 +199,58 @@ export function SpicefieldsCard({ vmRunning }: Props) {
     markClick('toggle', r.spicefieldTypeId)
     // Optimistic UI — flip the draft + the row immediately so the checkbox
     // tracks the user's intent while the request is in flight.
-    setDrafts(prev => ({
-      ...prev,
-      [r.spicefieldTypeId]: { ...prev[r.spicefieldTypeId], isSpawningActive: next },
-    }))
+    setDrafts(prev => {
+      const nextDrafts = { ...prev }
+      for (const row of rows ?? []) {
+        if (r.globalSpawning || row.spicefieldTypeId === r.spicefieldTypeId) {
+          nextDrafts[row.spicefieldTypeId] = {
+            ...prev[row.spicefieldTypeId],
+            isSpawningActive: next,
+          }
+        }
+      }
+      return nextDrafts
+    })
     setRows(prev => (prev ?? []).map(row =>
-      row.spicefieldTypeId === r.spicefieldTypeId
+      r.globalSpawning || row.spicefieldTypeId === r.spicefieldTypeId
         ? { ...row, isSpawningActive: next }
         : row,
     ))
     setTogglingId(r.spicefieldTypeId); setErr(null); setOk(null)
     try {
       const out = await setSpicefieldSpawning(r.spicefieldTypeId, next === true)
-      setRows(prev => (prev ?? []).map(row =>
-        row.spicefieldTypeId === r.spicefieldTypeId ? out.row : row,
-      ))
-      setDrafts(prev => ({
-        ...prev,
-        [r.spicefieldTypeId]: {
-          ...prev[r.spicefieldTypeId],
-          isSpawningActive: out.row.isSpawningActive,
-        },
-      }))
+      if (out.row.globalSpawning) {
+        await load()
+      } else {
+        setRows(prev => (prev ?? []).map(row =>
+          row.spicefieldTypeId === r.spicefieldTypeId ? out.row : row,
+        ))
+        setDrafts(prev => ({
+          ...prev,
+          [r.spicefieldTypeId]: {
+            ...prev[r.spicefieldTypeId],
+            isSpawningActive: out.row.isSpawningActive,
+          },
+        }))
+      }
       setOk(`${r.mapName} • ${r.fieldType}: spawning ${out.row.isSpawningActive ? 'ON' : 'OFF'}.`)
       window.setTimeout(() => setOk(null), 3500)
     } catch (e) {
       // Roll back the optimistic flip on failure.
-      setDrafts(prev => ({
-        ...prev,
-        [r.spicefieldTypeId]: { ...prev[r.spicefieldTypeId], isSpawningActive: r.isSpawningActive },
-      }))
+      setDrafts(prev => {
+        const rolledBack = { ...prev }
+        for (const row of rows ?? []) {
+          if (r.globalSpawning || row.spicefieldTypeId === r.spicefieldTypeId) {
+            rolledBack[row.spicefieldTypeId] = {
+              ...prev[row.spicefieldTypeId],
+              isSpawningActive: r.isSpawningActive,
+            }
+          }
+        }
+        return rolledBack
+      })
       setRows(prev => (prev ?? []).map(row =>
-        row.spicefieldTypeId === r.spicefieldTypeId
+        r.globalSpawning || row.spicefieldTypeId === r.spicefieldTypeId
           ? { ...row, isSpawningActive: r.isSpawningActive }
           : row,
       ))
@@ -245,7 +269,7 @@ export function SpicefieldsCard({ vmRunning }: Props) {
         <span className="flex items-center gap-2">
           Spice Fields
           <span className="text-[10px] font-mono normal-case text-text-dim tracking-normal">
-            dune.spicefield_types
+            {retailAdapter ? 'Retail adapter' : 'dune.spicefield_types'}
           </span>
         </span>
       }
@@ -269,18 +293,29 @@ export function SpicefieldsCard({ vmRunning }: Props) {
     >
 
       <p className="text-xs text-text-muted mb-3">
-        How many spice fields can be active &amp; primed per map/size, the per-type
-        spawn weight, and whether spawning is enabled. <em>Current</em> counts are
-        read-only and reflect what is on the map right now.
+        How many spice fields can be active &amp; primed per map/size and whether
+        spawning is enabled. <em>Current</em> active counts are read from the live
+        field state.
       </p>
 
       <div className="mb-3 px-3 py-2 rounded border border-info/40 bg-info/10 text-info text-xs flex items-start gap-2">
         <Icon name="Info" size={13} className="mt-0.5 shrink-0" />
         <span>
-          These live adjustments take effect immediately and do not persist across
-          battlegroup restarts. Use the <strong>Spice Field Startup</strong> settings in
-          the Spice category, then <strong>Apply INIs &amp; restart</strong>, to change
-          the defaults loaded at startup.
+          {retailAdapter ? (
+            <>
+              Retail moved these controls out of Postgres. DST now writes the
+              authoritative <strong>UserGame.ini</strong> spice settings; use
+              <strong> Apply INIs &amp; restart</strong> after saving. Spawning is a
+              Retail-wide master switch, so changing it updates every row.
+            </>
+          ) : (
+            <>
+              These live adjustments take effect immediately and do not persist across
+              battlegroup restarts. Use the <strong>Spice Field Startup</strong> settings in
+              the Spice category, then <strong>Apply INIs &amp; restart</strong>, to change
+              the defaults loaded at startup.
+            </>
+          )}
         </span>
       </div>
 
@@ -351,7 +386,7 @@ export function SpicefieldsCard({ vmRunning }: Props) {
                   </span>
                   <span className="text-border">·</span>
                   <span title={`Total currently primed across all ${mapName} field sizes`}>
-                    <span className="text-text font-medium">{totalPrimed}</span>
+                    <span className="text-text font-medium">{list.some(r => r.currentPrimedExact === false) ? '—' : totalPrimed}</span>
                     <span className="text-text-dim"> / {totalMaxPrimed}</span>
                     <span className="ml-1">primed</span>
                   </span>
@@ -371,7 +406,7 @@ export function SpicefieldsCard({ vmRunning }: Props) {
                   const toggleDisabled = !vmRunning || toggling || toggleCdMs > 0
                   const saveDisabled   = !vmRunning || !dirty || saving || saveCdMs > 0
                   const activeAtCap = r.maxActive > 0 && r.currentActive >= r.maxActive
-                  const primedAtCap = r.maxPrimed > 0 && r.currentPrimed >= r.maxPrimed
+                  const primedAtCap = r.currentPrimedExact !== false && r.maxPrimed > 0 && r.currentPrimed >= r.maxPrimed
                   return (
                     <div key={r.spicefieldTypeId}
                          className="border border-border rounded-lg p-3 bg-surface-2/40">
@@ -404,19 +439,26 @@ export function SpicefieldsCard({ vmRunning }: Props) {
                         />
                         <StatTile
                           label="Primed to spawn"
-                          current={r.currentPrimed}
+                          current={r.currentPrimedExact === false ? null : r.currentPrimed}
                           max={r.maxPrimed}
                           atCap={primedAtCap}
                         />
                       </div>
 
-                      <div className="grid grid-cols-2 md:grid-cols-[1fr_1fr_1fr_auto_auto] gap-3 items-end">
+                      <div className={
+                        'grid grid-cols-2 gap-3 items-end ' +
+                        (r.supportsSpawnWeight === false
+                          ? 'md:grid-cols-[1fr_1fr_auto_auto]'
+                          : 'md:grid-cols-[1fr_1fr_1fr_auto_auto]')
+                      }>
                         <NumField label="Max active" value={d.maxActive}
                                   onChange={v => setDraft(r.spicefieldTypeId, { maxActive: v, maxPrimed: v })} />
                         <NumField label="Max primed" value={d.maxPrimed}
                                   onChange={v => setDraft(r.spicefieldTypeId, { maxPrimed: v })} />
-                        <NumField label="Spawn weight" value={d.spawnWeight} step="0.1"
-                                  onChange={v => setDraft(r.spicefieldTypeId, { spawnWeight: v })} />
+                        {r.supportsSpawnWeight !== false && (
+                          <NumField label="Spawn weight" value={d.spawnWeight} step="0.1"
+                                    onChange={v => setDraft(r.spicefieldTypeId, { spawnWeight: v })} />
+                        )}
                         <label
                           className={
                             'flex items-center gap-2 text-xs select-none pb-2 ' +
@@ -426,8 +468,12 @@ export function SpicefieldsCard({ vmRunning }: Props) {
                             toggleCdMs > 0
                               ? `Rate-limited — wait ${toggleCdSec}s before toggling again`
                               : (d.isSpawningActive
-                                  ? 'Click to disable spawning for this field (live DB write)'
-                                  : 'Click to enable spawning for this field (live DB write)')
+                                  ? (r.globalSpawning
+                                      ? 'Disable the Retail master spawning switch; applies after Apply INIs & restart'
+                                      : 'Click to disable spawning for this field (live DB write)')
+                                  : (r.globalSpawning
+                                      ? 'Enable the Retail master spawning switch; applies after Apply INIs & restart'
+                                      : 'Click to enable spawning for this field (live DB write)'))
                           }
                         >
                           <input
@@ -477,11 +523,11 @@ export function SpicefieldsCard({ vmRunning }: Props) {
 
 function StatTile({ label, current, max, atCap }: {
   label: string
-  current: number
+  current: number | null
   max: number
   atCap: boolean
 }) {
-  const pct = max > 0 ? Math.min(100, Math.round((current / max) * 100)) : 0
+  const pct = current !== null && max > 0 ? Math.min(100, Math.round((current / max) * 100)) : 0
   const barColor = atCap
     ? 'bg-warning'
     : pct >= 75 ? 'bg-accent-bright'
@@ -503,7 +549,7 @@ function StatTile({ label, current, max, atCap }: {
       </div>
       <div className="flex items-baseline gap-1 mt-0.5">
         <span className={'font-mono text-lg leading-none ' + (atCap ? 'text-warning' : 'text-text')}>
-          {current}
+          {current === null ? '—' : current}
         </span>
         <span className="font-mono text-sm text-text-dim">/ {max}</span>
       </div>
