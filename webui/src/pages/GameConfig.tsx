@@ -979,23 +979,24 @@ export function GameConfig({ mode = 'standard' }: { mode?: 'standard' | 'experim
     setSavedMsg(null)
   }
 
-  const sourcePill = cfg && (
+  const sourcePresentation = cfg && (
+    cfg.source === 'installed'
+      ? { className: 'pill-success', title: 'Values from the authoritative installed INI files.', icon: 'CircleCheck' as const, label: 'Authoritative' }
+      : cfg.source === 'legacy-live'
+        ? { className: 'pill-success', title: 'Values from the live battlegroup INI files on an older Funcom installation.', icon: 'CircleCheck' as const, label: 'Live' }
+        : cfg.source === 'live'
+          ? { className: 'pill-success', title: 'Values from the live battlegroup INI files.', icon: 'CircleCheck' as const, label: 'Live' }
+          : cfg.source === 'cache'
+            ? { className: 'pill-info', title: 'Paths cached from a prior request this session.', icon: 'Info' as const, label: 'Cached' }
+            : { className: 'pill-warning', title: 'No live battlegroup yet — values from setup templates.', icon: 'AlertTriangle' as const, label: 'Template' }
+  )
+  const sourcePill = sourcePresentation && (
     <span
-      className={
-        cfg.source === 'live' ? 'pill-success' :
-        cfg.source === 'cache' ? 'pill-info' : 'pill-warning'
-      }
-      title={cfg.source === 'template'
-        ? 'No live BG yet — values from setup templates.'
-        : cfg.source === 'cache'
-          ? 'Paths cached from a prior request this session.'
-          : 'Values from the live BG PVC.'}
+      className={sourcePresentation.className}
+      title={sourcePresentation.title}
     >
-      <Icon
-        name={cfg.source === 'live' ? 'CircleCheck' : cfg.source === 'cache' ? 'Info' : 'AlertTriangle'}
-        size={12}
-      />
-      {cfg.source === 'live' ? 'Live' : cfg.source === 'cache' ? 'Cached' : 'Template'}
+      <Icon name={sourcePresentation.icon} size={12} />
+      {sourcePresentation.label}
     </span>
   )
 

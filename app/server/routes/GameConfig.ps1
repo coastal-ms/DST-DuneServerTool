@@ -129,7 +129,7 @@ Register-DuneRoute -Method GET -Path '/api/gameconfig/defaults' -Handler {
 # -----------------------------------------------------------------------------
 # GET /api/gameconfig — fetch live INI values from the BG VM.
 # Returns:
-#   { available: true, source: 'live'|'template'|'cache',
+#   { available: true, source: 'installed'|'legacy-live'|'live'|'template'|'cache',
 #     game: { path, values, raw }, engine: { path, values, raw } }
 # 503 with message when VM not available.
 # -----------------------------------------------------------------------------
