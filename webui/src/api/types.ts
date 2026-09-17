@@ -199,7 +199,7 @@ export type GameConfigFileBundle = {
 
 export type GameConfigResponse = {
   available: boolean
-  source: 'live' | 'template' | 'cache'
+  source: 'installed' | 'legacy-live' | 'live' | 'template' | 'cache'
   game: GameConfigFileBundle
   engine: GameConfigFileBundle
 }

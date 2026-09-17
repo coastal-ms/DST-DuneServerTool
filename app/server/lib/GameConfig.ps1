@@ -948,11 +948,10 @@ function Get-DuneExperimentalGroup {
 }
 
 # -----------------------------------------------------------------------------
-# Live INI paths inside the running battlegroup's PVC. These are resolved LIVE on
-# every read/write (never cached): the PVC directory carries a hash that is
-# UNIQUE per battlegroup, so a cached path would point at the wrong - or a
-# deleted - battlegroup's INI after a VM switch or a battlegroup rebuild, even on
-# the same IP. Templates are the fallback used when no BG has been provisioned.
+# The installed INI pair becomes authoritative after DST safely imports an
+# existing battlegroup configuration. Older Funcom installations without that
+# source directory fall back to live INIs inside the battlegroup PVC; those
+# paths are resolved on every read/write because the PVC hash is unique.
 # -----------------------------------------------------------------------------
 $script:DuneGameConfigLiveGlobDir    = '/var/lib/rancher/k3s/storage/*/Saved/UserSettings'
 $script:DuneGameConfigTplGamePath    = '/home/dune/.dune/download/scripts/setup/config/UserGame.ini'
