@@ -18,15 +18,17 @@
 #   server except the ones whose state is 'Travel', 'VehicleBackup' or
 #   'VehicleRecovery'. 'BaseBackup' is a real ActorState value but is NOT in
 #   that list, because Funcom never allowed the base backup tool in the Deep
-#   Desert, so the case never arose for them.
+#   Desert, so the case never arose for them. Legacy builds read the state from
+#   actor_state through s.state; Retail stores it on actors and uses a.state.
 #
 #   Result once an admin adds "DeepDesert" to m_BaseBackupToolMapRestriction:
 #   the wipe deletes the backup's actors, the base_backups row survives with
 #   nothing behind it, and the tool can only offer Recycle.
 #
-# The fix is one predicate added to that function's exclusion list:
+# The fix is one predicate added to that function's exclusion list, using the
+# same state expression as the live VehicleRecovery predicate:
 #
-#     AND s.state IS DISTINCT FROM 'BaseBackup'
+#     AND <live state expression> IS DISTINCT FROM 'BaseBackup'
 #
 # This lib reads the live definition with pg_get_functiondef, inserts that one
 # line after the 'VehicleRecovery' predicate, and writes the result back with
@@ -48,16 +50,17 @@
 # Fully-qualified name of the Funcom function we patch.
 $script:DuneBaseBackupGuardFunction = 'delete_actors_and_respawns_on_server'
 
-# The predicate we add. Detection is done with a regex (whitespace tolerant) so
-# a reformatted Funcom body still reads as "already patched".
-$script:DuneBaseBackupGuardPredicate = "AND s.state IS DISTINCT FROM 'BaseBackup'"
-$script:DuneBaseBackupGuardDetectRe  = "IS\s+DISTINCT\s+FROM\s+'BaseBackup'"
+# The state value we add. Detection is whitespace tolerant and accepts either
+# the legacy actor_state alias (s.state) or Retail's actors column (a.state).
+$script:DuneBaseBackupGuardState     = 'BaseBackup'
+$script:DuneBaseBackupGuardDetectRe  = "\b(?:[A-Za-z_][A-Za-z0-9_]*\.)?state\s+IS\s+DISTINCT\s+FROM\s+'BaseBackup'"
 
 # We anchor on the LAST predicate of Funcom's existing exclusion list rather
-# than on a line number or on the whole function text. If Funcom ever renames or
-# removes that predicate the anchor stops matching and we fail closed instead of
-# guessing where to inject SQL.
-$script:DuneBaseBackupGuardAnchorRe = "(?m)^([ \t]*)AND\s+s\.state\s+IS\s+DISTINCT\s+FROM\s+'VehicleRecovery'[ \t]*\r?$"
+# than on a line number or on the whole function text. The actor-state expression
+# changed from s.state to a.state in Retail, so capture and reuse it verbatim.
+# If Funcom renames or removes that predicate the anchor stops matching and we
+# fail closed instead of guessing where to inject SQL.
+$script:DuneBaseBackupGuardAnchorRe = "(?m)^(?<indent>[ \t]*)AND\s+(?<state>(?:[A-Za-z_][A-Za-z0-9_]*\.)?state)\s+IS\s+DISTINCT\s+FROM\s+'VehicleRecovery'[ \t]*\r?$"
 
 # Marker-delimited read. psql decoration (column header, "(1 row)", alignment)
 # varies with flags, so we bracket the payload ourselves and cut between the
@@ -95,14 +98,16 @@ function Add-DuneBaseBackupGuardPredicate {
     if (-not $m.Success) {
         return @{ ok = $false; reason = 'anchor-not-found'; definition = $Definition; changed = $false }
     }
-    $indent = $m.Groups[1].Value
+    $indent = $m.Groups['indent'].Value
+    $stateExpression = $m.Groups['state'].Value
     # Preserve the file's line-ending style. psql hands us LF, but a definition
     # captured on Windows can be CRLF, and normalising it here would rewrite
     # every following line and break an exact revert round-trip.
     $isCrlf = $m.Value.EndsWith("`r")
     $eol    = if ($isCrlf) { "`r`n" } else { "`n" }
     $anchor = $m.Value.TrimEnd("`r")
-    $insert = $anchor + $eol + $indent + $script:DuneBaseBackupGuardPredicate + $(if ($isCrlf) { "`r" } else { '' })
+    $predicate = "AND $stateExpression IS DISTINCT FROM '$($script:DuneBaseBackupGuardState)'"
+    $insert = $anchor + $eol + $indent + $predicate + $(if ($isCrlf) { "`r" } else { '' })
     $patched = $Definition.Remove($m.Index, $m.Length).Insert($m.Index, $insert)
     return @{ ok = $true; reason = 'patched'; definition = $patched; changed = $true }
 }
@@ -116,7 +121,7 @@ function Remove-DuneBaseBackupGuardPredicate {
     if (-not (Test-DuneBaseBackupGuardApplied -Definition $Definition)) {
         return @{ ok = $true; reason = 'already-absent'; definition = $Definition; changed = $false }
     }
-    $lineRe = "(?m)^[ \t]*AND\s+s\.state\s+IS\s+DISTINCT\s+FROM\s+'BaseBackup'[ \t]*\r?\n"
+    $lineRe = "(?m)^[ \t]*AND\s+(?:[A-Za-z_][A-Za-z0-9_]*\.)?state\s+IS\s+DISTINCT\s+FROM\s+'BaseBackup'[ \t]*\r?\n"
     $stripped = [regex]::Replace($Definition, $lineRe, '')
     if ($stripped -eq $Definition) {
         return @{ ok = $false; reason = 'predicate-not-on-its-own-line'; definition = $Definition; changed = $false }
@@ -203,7 +208,7 @@ function Invoke-DuneBaseBackupGuardApply {
     $patch = Add-DuneBaseBackupGuardPredicate -Definition $state.definition
     if (-not $patch.ok) {
         $msg = if ($patch.reason -eq 'anchor-not-found') {
-            "Could not apply safely: this server's copy of dune.$($script:DuneBaseBackupGuardFunction) no longer contains the expected VehicleRecovery exclusion, so DST will not guess where to edit it."
+            "Could not apply safely: this server's copy of dune.$($script:DuneBaseBackupGuardFunction) no longer contains a supported VehicleRecovery state exclusion, so DST will not guess where to edit it."
         } else {
             "Could not apply: $($patch.reason)."
         }

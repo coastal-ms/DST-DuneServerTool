@@ -13,6 +13,13 @@ here cover everything those tags shipped.
 
 ## [Unreleased]
 
+### Fixed
+
+- Restored automatic Deep Desert base-backup protection after the Retail
+  self-hosted schema moved actor state onto the actor row. The guard now
+  recognizes and preserves both the legacy and Retail cleanup-function forms
+  when reapplying its `BaseBackup` exclusion after a Funcom update.
+
 ## [15.1.0] - 2026-09-17
 
 ### Fixed
