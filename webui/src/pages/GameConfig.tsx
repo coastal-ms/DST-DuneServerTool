@@ -724,13 +724,6 @@ export function GameConfig({ mode = 'standard' }: { mode?: 'standard' | 'experim
     return experimentalPage ? groupExperimental(mine) : mine
   }, [schema, experimentalPage])
 
-  // Everything a player must add locally — built from the WHOLE schema, not just
-  // this page, so Game Config and Experimental show the identical list.
-  const playerConfig = useMemo(
-    () => buildAllClientBlocks(schemaWithLoadedExperimental, cfg),
-    [schemaWithLoadedExperimental, cfg],
-  )
-
   const experimentalGroups = useMemo(() => {
     if (!experimentalPage) return []
     const counts = new Map<string, number>()
@@ -1127,22 +1120,6 @@ export function GameConfig({ mode = 'standard' }: { mode?: 'standard' | 'experim
           >
             <Icon name="History" size={14} />
             View backups
-          </button>
-          <button
-            type="button"
-            onClick={() => setShareBlock({
-              title: 'Give your players this',
-              subtitle: 'Every setting DST manages that a player must also set on their own PC — the same list on both pages.',
-              entries: playerConfig.entries,
-            })}
-            disabled={playerConfig.count === 0}
-            className="btn-secondary mt-2.5 ml-2"
-            title={playerConfig.count === 0
-              ? 'No settings currently need a matching value on players’ PCs'
-              : 'Show every line your players need to add to their own Engine.ini / Game.ini'}
-          >
-            <Icon name="Users" size={14} />
-            Player config{playerConfig.count > 0 ? ` (${playerConfig.count})` : ''}
           </button>
         </div>
       </Guidance>
