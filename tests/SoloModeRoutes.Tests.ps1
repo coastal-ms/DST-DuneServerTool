@@ -4,7 +4,7 @@ BeforeAll {
 }
 
 Describe 'Solo Mode route registration' {
-    It 'registers PTC console settings as local-only read and write routes' {
+    It 'registers Retail console settings as local-only read and write routes' {
         $routes = @(& {
             function Register-DuneRoute {
                 param($Method, $Path, [switch]$LocalOnly, $Handler)

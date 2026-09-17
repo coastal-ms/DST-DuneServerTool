@@ -6,7 +6,7 @@ import { useState } from 'react'
 import { createPortal } from 'react-dom'
 import { Icon } from './Icon'
 
-const CLIENT_GAME_INI_PATH = '%LOCALAPPDATA%\\DuneSandbox\\Saved\\Config\\WindowsClient\\Game.ini'
+const CLIENT_GAME_INI_PATH = '%LOCALAPPDATA%\\DuneSandbox\\Saved\\Config\\Windows\\Game.ini'
 
 type Props = {
   title?: string

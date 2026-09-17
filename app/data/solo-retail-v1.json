@@ -1,10 +1,22 @@
 {
-  "id": "ptc-wrapper-v1-2026-08",
+  "id": "retail-wrapper-v1-2026-09",
+  "channel": "FLS_retail",
   "wrapper_version": 1,
-  "schema_fingerprint": "feede0b0d0629b1b8553e9ad9434e5009f4422b9d662ec6bbc44f6c3d3291518",
-  "compatible_schema_fingerprints": [
-    "abb4dd3b358668f5d79ef10215d38e7ebe3801a37347374d4c3d66a1557dc223",
-    "421d15955599ea223b3a72d1b418eb94befe333b7be9c20babd40ddf60274130"
+  "schema_fingerprint": "421d15955599ea223b3a72d1b418eb94befe333b7be9c20babd40ddf60274130",
+  "compatible_schema_fingerprints": [],
+  "capabilities": [
+    "inspect",
+    "native-settings",
+    "backup",
+    "restore",
+    "item-grant",
+    "weapon-ammo",
+    "currencies",
+    "water-fill",
+    "augment-max",
+    "blueprint-read",
+    "blueprint-import",
+    "progression"
   ],
   "specializations": {
     "max_level": 100,

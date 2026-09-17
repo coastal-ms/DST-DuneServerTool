@@ -11,7 +11,7 @@ describe('Solo Mode setting controls', () => {
     expect(getSoloSettingControl('bLandsraadDisableDecreeRerollLimit')).toEqual({ type: 'boolean' })
   })
 
-  it('uses verified PTC enum values for dropdown settings', () => {
+  it('uses supported Retail Solo enum values for dropdown settings', () => {
     expect(getSoloSettingControl('DropEquipmentOnDeath')).toEqual({
       type: 'select',
       options: [

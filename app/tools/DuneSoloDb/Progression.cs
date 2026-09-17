@@ -12,7 +12,7 @@ internal static partial class Program
         string adapterPath,
         string keystonePath)
     {
-        var adapter = ReadPtcAdapter(adapterPath);
+        var adapter = ReadSoloAdapter(adapterPath);
         AssertProgressionSchema(input, adapter);
         var keystones = ReadKeystones(keystonePath);
         return RunProgressionMutation(
@@ -143,7 +143,7 @@ internal static partial class Program
         string safetyBackup,
         string adapterPath)
     {
-        var adapter = ReadPtcAdapter(adapterPath);
+        var adapter = ReadSoloAdapter(adapterPath);
         AssertProgressionSchema(input, adapter);
         return RunProgressionMutation(
             input,
@@ -169,7 +169,7 @@ internal static partial class Program
                 if (!observedNodes.SequenceEqual(adapter.FremenNodes, StringComparer.Ordinal))
                 {
                     throw new InvalidDataException(
-                        $"PTC Find-the-Fremen adapter mismatch: expected {adapter.FremenNodes.Count} exact nodes, found {observedNodes.Length}.");
+                        $"Solo Find-the-Fremen adapter mismatch: expected {adapter.FremenNodes.Count} exact nodes, found {observedNodes.Length}.");
                 }
 
                 BeginImmediate(connection);
@@ -307,7 +307,7 @@ internal static partial class Program
         string adapterPath,
         string skillsPath)
     {
-        var adapter = ReadPtcAdapter(adapterPath);
+        var adapter = ReadSoloAdapter(adapterPath);
         AssertProgressionSchema(input, adapter);
         var catalog = ReadSkillCatalog(skillsPath);
         var included = catalog
@@ -380,7 +380,7 @@ internal static partial class Program
                         if ((verifyModule[pair.Key]?.ToJsonString() ?? "null") != pair.Value)
                         {
                             throw new InvalidDataException(
-                                $"Unknown PTC skill key was modified: {pair.Key}");
+                                $"Unknown Solo skill key was modified: {pair.Key}");
                         }
                     }
                     foreach (var pair in excludedBefore)
@@ -432,7 +432,7 @@ internal static partial class Program
         string safetyBackup,
         string adapterPath)
     {
-        var adapter = ReadPtcAdapter(adapterPath);
+        var adapter = ReadSoloAdapter(adapterPath);
         AssertProgressionSchema(input, adapter);
         return RunProgressionMutation(
             input,
@@ -464,7 +464,7 @@ internal static partial class Program
                 if (unknown.Length > 0)
                 {
                     throw new InvalidDataException(
-                        $"PTC NPE adapter mismatch: found {unknown.Length} unknown journey node(s), beginning with {unknown[0]}.");
+                        $"Solo NPE adapter mismatch: found {unknown.Length} unknown journey node(s), beginning with {unknown[0]}.");
                 }
 
                 BeginImmediate(connection);
@@ -567,7 +567,7 @@ internal static partial class Program
         long skillPoints,
         long intel)
     {
-        var adapter = ReadPtcAdapter(adapterPath);
+        var adapter = ReadSoloAdapter(adapterPath);
         AssertProgressionSchema(input, adapter);
         return RunProgressionMutation(
             input,
@@ -687,19 +687,19 @@ internal static partial class Program
 
     private static void AssertProgressionSchema(
         string input,
-        PtcAdapter adapter)
+        SoloAdapter adapter)
     {
         var inspection = InspectPath(input);
         if (!adapter.SchemaFingerprints.Contains(inspection.SchemaFingerprint))
         {
             throw new InvalidDataException(
-                $"PTC progression adapter schema mismatch: expected one of {string.Join(", ", adapter.SchemaFingerprints.Order())}, found {inspection.SchemaFingerprint}.");
+                $"Solo progression adapter schema mismatch: expected one of {string.Join(", ", adapter.SchemaFingerprints.Order())}, found {inspection.SchemaFingerprint}.");
         }
     }
 
     private static ProgressionSummary ReadProgressionSummary(
         SqliteConnection connection,
-        PtcAdapter? adapter = null)
+        SoloAdapter? adapter = null)
     {
         try
         {
@@ -1132,30 +1132,52 @@ internal static partial class Program
         return result.ToArray();
     }
 
-    private static PtcAdapter ReadPtcAdapter(string path)
+    private static SoloAdapter ReadSoloAdapter(string path)
     {
         using var document = JsonDocument.Parse(File.ReadAllText(path));
         var root = document.RootElement;
-        var specializations = root.GetProperty("specializations");
         var tracks = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
-        foreach (var property in specializations.GetProperty("tracks").EnumerateObject())
+        var maxLevel = 0;
+        var maxXp = 0;
+        if (root.TryGetProperty("specializations", out var specializations))
         {
-            tracks[property.Name] = property.Value.GetInt32();
+            maxLevel = specializations.GetProperty("max_level").GetInt32();
+            maxXp = specializations.GetProperty("max_xp").GetInt32();
+            foreach (var property in specializations.GetProperty("tracks").EnumerateObject())
+            {
+                tracks[property.Name] = property.Value.GetInt32();
+            }
         }
-        var fremen = root.GetProperty("find_the_fremen");
-        var npe = root.GetProperty("complete_npe");
-        var skills = root.GetProperty("enable_all_skills");
-        var npeNodes = npe.GetProperty("nodes")
-            .EnumerateArray()
-            .Select(value => value.GetString() ?? "")
-            .Where(value => value.Length > 0)
-            .ToArray();
-        var declaredNpeNodes = npe.GetProperty("node_count").GetInt32();
-        if (npeNodes.Length != declaredNpeNodes
-            || npeNodes.Distinct(StringComparer.Ordinal).Count() != npeNodes.Length)
+        var fremenNodes = Array.Empty<string>();
+        var fremenTags = Array.Empty<string>();
+        var fremenRecipes = Array.Empty<string>();
+        var spiceStatus = string.Empty;
+        if (root.TryGetProperty("find_the_fremen", out var fremen))
         {
-            throw new InvalidDataException(
-                $"PTC NPE catalog expected {declaredNpeNodes} unique nodes, found {npeNodes.Length}.");
+            fremenNodes = fremen.GetProperty("nodes").EnumerateArray()
+                .Select(value => value.GetString() ?? "").ToArray();
+            fremenTags = fremen.GetProperty("tags").EnumerateArray()
+                .Select(value => value.GetString() ?? "").ToArray();
+            fremenRecipes = fremen.GetProperty("recipes").EnumerateArray()
+                .Select(value => value.GetString() ?? "").ToArray();
+            spiceStatus = fremen.GetProperty("spice_status").GetString() ?? "";
+        }
+        var npeNodes = Array.Empty<string>();
+        var npeTag = string.Empty;
+        if (root.TryGetProperty("complete_npe", out var npe))
+        {
+            npeNodes = npe.GetProperty("nodes").EnumerateArray()
+                .Select(value => value.GetString() ?? "")
+                .Where(value => value.Length > 0)
+                .ToArray();
+            var declaredNpeNodes = npe.GetProperty("node_count").GetInt32();
+            if (npeNodes.Length != declaredNpeNodes
+                || npeNodes.Distinct(StringComparer.Ordinal).Count() != npeNodes.Length)
+            {
+                throw new InvalidDataException(
+                    $"Solo NPE catalog expected {declaredNpeNodes} unique nodes, found {npeNodes.Length}.");
+            }
+            npeTag = npe.GetProperty("tag").GetString() ?? "";
         }
         var schemaFingerprints = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
         {
@@ -1169,34 +1191,45 @@ internal static partial class Program
                 if (!string.IsNullOrWhiteSpace(value)) { schemaFingerprints.Add(value); }
             }
         }
-        return new PtcAdapter(
-            Id: root.GetProperty("id").GetString() ?? "",
-            SchemaFingerprints: schemaFingerprints,
-            MaxLevel: specializations.GetProperty("max_level").GetInt32(),
-            MaxXp: specializations.GetProperty("max_xp").GetInt32(),
-            Tracks: tracks,
-            FremenNodes: fremen.GetProperty("nodes")
-                .EnumerateArray().Select(value => value.GetString() ?? "").ToArray(),
-            FremenTags: fremen.GetProperty("tags")
-                .EnumerateArray().Select(value => value.GetString() ?? "").ToArray(),
-            FremenRecipes: fremen.GetProperty("recipes")
-                .EnumerateArray().Select(value => value.GetString() ?? "").ToArray(),
-            SpiceStatus: fremen.GetProperty("spice_status").GetString() ?? "",
-            NpeNodes: npeNodes,
-            NpeTag: npe.GetProperty("tag").GetString() ?? "",
-            WaterCapacities: root.GetProperty("water_fillable_capacities")
-                .EnumerateObject()
-                .ToDictionary(
-                    property => property.Name,
-                    property => property.Value.GetInt32(),
-                    StringComparer.OrdinalIgnoreCase),
-            SkillLevel: skills.GetProperty("level_value").GetInt32(),
-            SkillBuffer: skills.GetProperty("point_buffer").GetInt32(),
-            IntelFloor: skills.GetProperty("intel_floor").GetInt32(),
-            SkillExcludes: skills.GetProperty("exclude")
-                .EnumerateArray()
+        var waterCapacities = root.TryGetProperty("water_fillable_capacities", out var water)
+            ? water.EnumerateObject().ToDictionary(
+                property => property.Name,
+                property => property.Value.GetInt32(),
+                StringComparer.OrdinalIgnoreCase)
+            : new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+        var skillLevel = 0;
+        var skillBuffer = 0;
+        var intelFloor = 0;
+        var skillExcludes = new HashSet<string>(StringComparer.Ordinal);
+        if (root.TryGetProperty("enable_all_skills", out var skills))
+        {
+            skillLevel = skills.GetProperty("level_value").GetInt32();
+            skillBuffer = skills.GetProperty("point_buffer").GetInt32();
+            intelFloor = skills.GetProperty("intel_floor").GetInt32();
+            skillExcludes = skills.GetProperty("exclude").EnumerateArray()
                 .Select(value => value.GetString() ?? "")
-                .ToHashSet(StringComparer.Ordinal));
+                .ToHashSet(StringComparer.Ordinal);
+        }
+        return new SoloAdapter(
+            Id: root.GetProperty("id").GetString() ?? "",
+            WrapperVersion: root.TryGetProperty("wrapper_version", out var wrapperVersion)
+                ? wrapperVersion.GetUInt32()
+                : 1,
+            SchemaFingerprints: schemaFingerprints,
+            MaxLevel: maxLevel,
+            MaxXp: maxXp,
+            Tracks: tracks,
+            FremenNodes: fremenNodes,
+            FremenTags: fremenTags,
+            FremenRecipes: fremenRecipes,
+            SpiceStatus: spiceStatus,
+            NpeNodes: npeNodes,
+            NpeTag: npeTag,
+            WaterCapacities: waterCapacities,
+            SkillLevel: skillLevel,
+            SkillBuffer: skillBuffer,
+            IntelFloor: intelFloor,
+            SkillExcludes: skillExcludes);
     }
 
     private static Dictionary<int, KeystoneRule> ReadKeystones(string path)
@@ -1224,8 +1257,9 @@ internal static partial class Program
             .ToArray();
     }
 
-    private sealed record PtcAdapter(
+    private sealed record SoloAdapter(
         string Id,
+        uint WrapperVersion,
         HashSet<string> SchemaFingerprints,
         int MaxLevel,
         int MaxXp,

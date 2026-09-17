@@ -13,6 +13,22 @@ here cover everything those tags shipped.
 
 ## [Unreleased]
 
+## [15.1.0] - 2026-09-17
+
+### Fixed
+
+- Updated Solo Mode for the released Retail save location and adapter, including
+  the existing settings, inventory, character, backup, blueprint, and
+  progression actions.
+- Solo Engine settings now read and write Retail's active
+  `Config\Windows\Engine.ini` file without mirroring the stale WindowsClient
+  file.
+- Self-Hosted client configuration now targets Retail's active
+  `Config\Windows\Game.ini` and `Engine.ini` files, restoring client-applied
+  settings such as custom Landsraad contract counts after the Retail update.
+- Removed preview-channel labels and gates from Solo Mode. Existing offline,
+  backup, integrity, foreign-key, and post-write verification safeguards remain.
+
 ## [15.0.6] - 2026-09-16
 
 ### Added
@@ -303,7 +319,7 @@ here cover everything those tags shipped.
 ### Fixed
 
 - Removed the ineffective Solo backpack-slot editor. Field testing confirmed
-  that PTC recomputes the saved slot count from progression and rewrites direct
+  that the preview build recomputes the saved slot count from progression and rewrites direct
   database changes back to 60.
 
 ## [15.0.0-phase2-test3] - 2026-09-03
@@ -504,7 +520,7 @@ Candidate metadata prepared for v15.0.0-test7; semantic version remains 15.0.0.
 
 ### Fixed
 
-- Solo Mode now recognizes the August 24 PTC save schema, which adds the
+- Solo Mode now recognizes the August 24 preview-build save schema, which adds the
   game-owned sandstorm schedule table without changing DST-managed data.
 
 ## [14.0.2] - 2026-08-23
@@ -512,8 +528,8 @@ Candidate metadata prepared for v15.0.0-test7; semantic version remains 15.0.0.
 ### Added
 
 - Solo Mode progression now combines **Complete Find the Fremen** and the
-  PTC-specific **Complete NPE** in one selector. Complete NPE applies the exact
-  140-node PTC catalog, including its four Base Backup Tool objectives.
+  preview-build-specific **Complete NPE** in one selector. Complete NPE applies the exact
+  140-node preview-build catalog, including its four Base Backup Tool objectives.
 - Solo Mode can read and set exact unspent skill-point and Intel balances while
   preserving learned skills.
 - Solo inventory destinations now display their custom in-game container names,
@@ -566,7 +582,7 @@ Candidate metadata prepared for v15.0.0-test7; semantic version remains 15.0.0.
   retain bounded installer/relauncher diagnostics, recognize mismatched dev
   builds, sort multi-digit test tags correctly, and support same-tag test
   reinstall recovery.
-- PTC Solo portable blueprint import is disabled before save access after
+- Preview-build Solo portable blueprint import is disabled before save access after
   cross-build blueprints caused confirmed game crashes. The backup-first
   importer remains dormant for Retail Solo validation.
 
@@ -600,10 +616,10 @@ Candidate metadata prepared for v15.0.0-test7; semantic version remains 15.0.0.
   allows the Attitude of the Knife quest's learn-a-skill step to complete;
   field testing confirmed its connected nodes can remain enabled.
 - Solo progression actions now accept the fresh-character schema created by the
-  current PTC build. The additional fingerprint differs only in unrelated actor
+  current preview build. The additional fingerprint differs only in unrelated actor
   spawner and map-marker definitions; all progression mutations remain
   exact-schema gated and backup-first. After character deletion, fully restart
-  PTC before creating the replacement character so its local database is
+  the preview build before creating the replacement character so its local database is
   released and initialized cleanly.
 
 ## [13.8.3] - 2026-08-20
@@ -673,11 +689,11 @@ Candidate metadata prepared for v15.0.0-test7; semantic version remains 15.0.0.
 - Solo item delivery now selects the character backpack by default instead of
   preferring Developer Storage; users can still choose another supported
   destination.
-- PTC Solo Settings can manage Sun Exposure, Maximum Vehicles Per Player, and
+- Preview-build Solo Settings can manage Sun Exposure, Maximum Vehicles Per Player, and
   Shield Drops While Shooting in both observed `FLS_beta` Engine files:
   `Config\Windows\Engine.ini` and `Config\WindowsClient\Engine.ini`. Writes are
   allowlisted, game-closed, backup-first, atomic, and verified across both
-  files; all three controls are field-confirmed in PTC Solo, and no retail path
+  files; all three controls are field-confirmed in the preview Solo build, and no retail path
   is assumed.
 - Solo Mode exposes the canonical DST package store directly, so Solo-only
   users can create, import, edit, delete, and grant reusable item packages
@@ -732,20 +748,20 @@ Candidate metadata prepared for v15.0.0-test7; semantic version remains 15.0.0.
   `!tp list` and `!tp <name>` to teleport themselves while on the same map,
   partition and dimension. Destinations stay local to that DST installation,
   the command is off by default, and each player has a configurable cooldown.
-- Solo Mode adds a host-local PTC preview workspace that operates independently
+- Solo Mode adds a host-local preview-build workspace that operates independently
   of Self-Hosted VM setup. It auto-detects or connects a local Solo save,
   validates Funcom's wrapped SQLite database, reads all 48 native Solo settings,
   presents only applicable controls, and creates retained validated backups with
   guarded atomic restore. Difficulty stays game-controlled and PVP is hidden.
   Game writes require Dune: Awakening to be fully closed and are never exposed
-  through Remote Access. Field-confirmed PTC actions include catalogued item
+  through Remote Access. Field-confirmed preview-build actions include catalogued item
   grants, canonical vehicle kits, backpack or selected Developer Storage
   delivery, exact Solari/Scrip balances, and filling supported carried water
   containers to their verified capacity. Profile-scoped backups can be deleted explicitly. The verified
   progression adapter can max all five specializations with all 205 rewards,
   complete the exact 59-node Find-the-Fremen chain with 14 tags, five Fremkit
   recipes, Prescience and the third ability slot, and enable 144 approved skills
-  while preserving Voice Ignore and unknown PTC keys. The page includes
+  while preserving Voice Ignore and unknown Solo keys. The page includes
   first-use instructions: launch Solo once,
   enter the world to create the save, exit fully before writes, and verify
   in-game after applying settings or restoring. Solo Overview reports the

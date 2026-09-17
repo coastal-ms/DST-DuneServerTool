@@ -34,7 +34,7 @@ const pages = [
   { route: '/', file: 'server-health.png', label: 'Server Health', wait: 3500 },
   { route: '/gameconfig', file: 'game-config.png', label: 'Game Config', wait: 3000 },
   { route: '/gameplay', file: 'gameplay-admin.png', label: 'Gameplay Admin', wait: 3000, tab: 'Players' },
-  { route: '/solo', file: 'solo-mode.png', label: 'Solo Mode', wait: 2500, tab: 'Settings', focus: 'PTC Engine settings' },
+  { route: '/solo', file: 'solo-mode.png', label: 'Solo Mode', wait: 2500, tab: 'Settings', focus: 'Retail Solo Engine settings' },
   { route: '/wick-maps', file: 'dd-seed-maps.png', label: 'DD Seed Maps', wait: 2500 },
   { route: '/database', file: 'database.png', label: 'Database', wait: 2500, focus: 'Backups' },
   { route: '/settings', file: 'settings.png', label: 'Settings', wait: 2500, focus: 'Remote Access' },

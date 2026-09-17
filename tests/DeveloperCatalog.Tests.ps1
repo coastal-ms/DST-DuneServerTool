@@ -39,6 +39,11 @@ Describe 'Developer template catalog coverage' -Tag 'Catalog' {
         $script:items.items.templateId | Should -Contain 'Developer_Storage_Container_Patent'
     }
 
+    It 'includes Retail Solo inventory discoveries in Give Item' {
+        $script:items.items.templateId | Should -Contain 'Schematic_UniqueLiterjon'
+        $script:items.items.templateId | Should -Contain 'Developer_Storage_Container_Patent'
+    }
+
     It 'contains no case-insensitive duplicate Give Item ids' {
         $ids = @($script:items.items.templateId)
         @($ids | Group-Object { $_.ToLowerInvariant() } | Where-Object Count -GT 1).Count | Should -Be 0
