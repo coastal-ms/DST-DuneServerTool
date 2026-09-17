@@ -11,7 +11,7 @@ Patch releases within a major series are rolled up under the major's entry
 on GitHub still exist for each individual release; the consolidated entries
 here cover everything those tags shipped.
 
-## [Unreleased]
+## [15.1.1] - 2026-09-17
 
 ### Fixed
 
