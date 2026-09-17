@@ -1169,6 +1169,8 @@ export function GameConfig({ mode = 'standard' }: { mode?: 'standard' | 'experim
         </div>
       ))}
 
+      {cfg && <AdvancedIniBrowser cfg={cfg} />}
+
       {localViewer && (
         <>
           {/* Local client config (this PC) */}
@@ -1176,7 +1178,7 @@ export function GameConfig({ mode = 'standard' }: { mode?: 'standard' | 'experim
             id="gameconfig.clientConfig"
             icon="MonitorSmartphone"
             iconClassName="text-accent-bright shrink-0"
-            title="Your client config (this PC)"
+            title="Optional local client overrides (this PC)"
             titleClassName="text-sm font-semibold text-text"
             className="mb-4 border-border"
             headerClassName="px-4 pt-4 pb-2"
@@ -1190,7 +1192,7 @@ export function GameConfig({ mode = 'standard' }: { mode?: 'standard' | 'experim
                   className="btn-secondary"
                   title="Open local client Game.ini in Notepad"
                 >
-                  <Icon name="ExternalLink" size={14} /> Game.ini
+                  <Icon name="ExternalLink" size={14} /> Open local Game.ini
                 </button>
                 <button
                   type="button"
@@ -1199,7 +1201,7 @@ export function GameConfig({ mode = 'standard' }: { mode?: 'standard' | 'experim
                   className="btn-secondary"
                   title="Open local client Engine.ini in Notepad"
                 >
-                  <Icon name="ExternalLink" size={14} /> Engine.ini
+                  <Icon name="ExternalLink" size={14} /> Open local Engine.ini
                 </button>
                 <button
                   type="button"
@@ -1207,7 +1209,7 @@ export function GameConfig({ mode = 'standard' }: { mode?: 'standard' | 'experim
                   className="btn-secondary"
                   title="View local client Game.ini"
                 >
-                  <Icon name="FileSearch" size={14} /> View Game
+                  <Icon name="FileSearch" size={14} /> View local Game.ini
                 </button>
                 <button
                   type="button"
@@ -1215,7 +1217,7 @@ export function GameConfig({ mode = 'standard' }: { mode?: 'standard' | 'experim
                   className="btn-secondary"
                   title="View local client Engine.ini"
                 >
-                  <Icon name="FileSearch" size={14} /> View Engine
+                  <Icon name="FileSearch" size={14} /> View local Engine.ini
                 </button>
               </>
             }
@@ -1498,7 +1500,6 @@ export function GameConfig({ mode = 'standard' }: { mode?: 'standard' | 'experim
 
                 <LandclaimTimerCard vmRunning={vmRunning} />
 
-                {cfg && <AdvancedIniBrowser cfg={cfg} />}
               </>
             )}
             {experimentalPage && (
@@ -2687,14 +2688,14 @@ function DefaultsKeyRow({
 // -----------------------------------------------------------------------------
 
 function AdvancedIniBrowser({ cfg }: { cfg: GameConfigResponse }) {
-  const { open, setOpen } = useCardCollapse('gameconfig.advancedIni', false)
+  const { open, setOpen } = useCardCollapse('gameconfig.authoritativeIni', false)
   const [file, setFile] = useState<'game' | 'engine'>('game')
   const [showRaw, setShowRaw] = useState(false)
 
   const bundle = file === 'game' ? cfg.game : cfg.engine
 
   return (
-    <div className="card p-5" data-section-nav-id="gameconfig.advancedIni" data-section-nav-label="Advanced INI contents">
+    <div className="card p-5 mb-4" data-section-nav-id="gameconfig.advancedIni" data-section-nav-label="Authoritative server INIs">
       <button
         type="button"
         onClick={() => setOpen(o => !o)}
@@ -2703,13 +2704,18 @@ function AdvancedIniBrowser({ cfg }: { cfg: GameConfigResponse }) {
         className="w-full flex items-center justify-between text-sm font-semibold uppercase tracking-wider text-accent-bright"
       >
         <span className="flex items-center gap-2">
-          <Icon name={open ? 'ChevronDown' : 'ChevronRight'} size={14} /> Advanced — full INI contents
+          <Icon name={open ? 'ChevronDown' : 'ChevronRight'} size={14} /> Authoritative server INIs
         </span>
         <span className="text-[10px] font-normal text-text-dim normal-case tracking-normal">read-only</span>
       </button>
 
       {open && (
         <div className="mt-4">
+          <p className="text-xs text-text-muted mb-3">
+            These are the exact <span className="font-mono">UserGame.ini</span> and{' '}
+            <span className="font-mono">UserEngine.ini</span> overrides DST owns and deploys to the battlegroup.
+            Funcom defaults are inherited and appear here only after they are overridden.
+          </p>
           <div className="flex items-center justify-between mb-3">
             <div className="flex items-center gap-1 bg-surface-2 rounded-lg p-0.5">
               {(['game', 'engine'] as const).map(f => (
