@@ -2438,12 +2438,35 @@ Describe 'GameConfig: spicefield startup defaults' -Tag 'GameConfig' {
     }
 
     It 'keeps the installed Funcom INIs as DST authoritative source' {
-        Mock Invoke-V6Ssh { 'ok' }
+        Mock Invoke-V6Ssh {
+            param([string]$Ip, [string]$Cmd)
+            if ($Cmd -match '__DST_AUTH__:migrated') { return '__DST_AUTH__:migrated' }
+            if ($Cmd -match 'DuneGameConfigAuthorityMarker|dst-live-settings-imported') { return 'uninitialized' }
+            if ($Cmd -match 'ls -t') { return '/srv/UserSettings' }
+            if ($Cmd -match 'test -f') { return 'ok' }
+        }
         $paths = Resolve-DuneGameConfigPaths -Ip '192.0.2.1'
 
         $paths.source | Should -Be 'installed'
+        $paths.migrated | Should -BeTrue
         $paths.game | Should -Be '/home/dune/.dune/download/scripts/setup/config/UserGame.ini'
         $paths.engine | Should -Be '/home/dune/.dune/download/scripts/setup/config/UserEngine.ini'
+        Should -Invoke Invoke-V6Ssh -Times 1 -ParameterFilter {
+            $Cmd -match "install -o dune -g dune" -and
+            $Cmd -match '/srv/UserSettings/UserGame.ini' -and
+            $Cmd -match '__DST_AUTH__:migrated'
+        }
+    }
+
+    It 'blocks installed defaults when no existing battlegroup configuration can be imported' {
+        Mock Invoke-V6Ssh {
+            param([string]$Ip, [string]$Cmd)
+            if ($Cmd -match 'DuneGameConfigAuthorityMarker|dst-live-settings-imported') { return 'uninitialized' }
+            return ''
+        }
+
+        { Resolve-DuneGameConfigPaths -Ip '192.0.2.1' } |
+            Should -Throw '*Deployment is blocked*'
     }
 
     It 'writes the Retail spawning flag as an exact Unreal boolean' {

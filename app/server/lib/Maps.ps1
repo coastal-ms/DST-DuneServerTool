@@ -803,6 +803,18 @@ function Get-DuneActiveMapPartitions {
 function Invoke-DuneDeployInstalledUserSettings {
     param([Parameter(Mandatory)][string]$Ip)
 
+    if (-not (Get-Command Resolve-DuneGameConfigPaths -ErrorAction SilentlyContinue)) {
+        return @{ ok=$false; error='Game Config authority validation is unavailable; installed INIs were not deployed.' }
+    }
+    try {
+        $authority = Resolve-DuneGameConfigPaths -Ip $Ip
+    } catch {
+        return @{ ok=$false; error=$_.Exception.Message }
+    }
+    if ("$($authority.source)" -ne 'installed') {
+        return @{ ok=$false; error='The installed INIs are not verified authoritative; the battlegroup was not changed.' }
+    }
+
     $scriptPath = '/home/dune/.dune/download/scripts/battlegroup.sh'
     $cmd = "sudo '$scriptPath' apply-default-usersettings 2>&1; rc=`$?; echo __DST_EXIT__:`$rc"
     $lines = @(Invoke-V6Ssh -Ip $Ip -Cmd $cmd -TimeoutSec 120)
