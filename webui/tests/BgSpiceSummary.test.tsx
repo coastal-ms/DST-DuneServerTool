@@ -77,20 +77,33 @@ afterEach(() => {
 })
 
 describe('BgSpiceSummary raw field details', () => {
-  it('labels an unavailable Retail primed count without presenting it as zero', async () => {
+  it('hides unavailable Retail primed status without hiding active or spawning state', async () => {
     vi.mocked(getSpicefields).mockResolvedValue({
       available: true,
-      rows: [{ ...summaryRow, currentPrimed: null, currentPrimedExact: false }],
+      rows: [{ ...summaryRow, adapter: 'retail-config', currentPrimed: null, currentPrimedExact: false }],
       partitionGate: true,
     })
 
     render(<BgSpiceSummary enabled />)
 
-    const primed = await screen.findByLabelText(
-      'Queued/current primed count is unavailable on this server build; spawning can still be active, and 3 is the configured ceiling, not a target.',
-    )
-    expect(primed).toHaveTextContent('N/A (cap 3)')
-    expect(primed).not.toHaveTextContent('0/3')
+    expect(await screen.findByText('Hagga Basin')).toBeInTheDocument()
+    expect(screen.getAllByRole('columnheader', { name: 'Active' })).toHaveLength(2)
+    expect(screen.queryByRole('columnheader', { name: 'Primed' })).not.toBeInTheDocument()
+    expect(screen.queryByText(/N\/A/)).not.toBeInTheDocument()
+    expect(screen.getByRole('checkbox')).toBeChecked()
+  })
+
+  it('keeps authoritative current primed counts on legacy database rows', async () => {
+    vi.mocked(getSpicefields).mockResolvedValue({
+      available: true,
+      rows: [{ ...summaryRow, adapter: 'legacy-db', currentPrimedExact: true }],
+      partitionGate: true,
+    })
+
+    render(<BgSpiceSummary enabled />)
+
+    expect(await screen.findByRole('columnheader', { name: 'Primed' })).toBeInTheDocument()
+    expect(screen.getAllByRole('cell').some(cell => cell.textContent === '1/3')).toBe(true)
   })
 
   it('opens from an explicit row control and labels untyped raw values accurately', async () => {

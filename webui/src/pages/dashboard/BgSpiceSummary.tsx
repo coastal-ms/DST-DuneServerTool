@@ -233,6 +233,9 @@ export function BgSpiceSummary({ enabled }: Props) {
       return ar - br
     })
   }, [visible])
+  const showPrimedColumn = sorted.some(
+    r => r.adapter !== 'retail-config' && r.currentPrimedExact !== false && r.currentPrimed !== null,
+  )
 
   // Row span data so the Map column collapses repeats, per map+dimension.
   const mapSpan = useMemo(() => {
@@ -299,7 +302,7 @@ export function BgSpiceSummary({ enabled }: Props) {
               <th className="text-left font-medium pb-1">Map</th>
               <th className="text-left font-medium pb-1">Size</th>
               <th className="text-right font-medium pb-1">Active</th>
-              <th className="text-right font-medium pb-1">Primed</th>
+              {showPrimedColumn && <th className="text-right font-medium pb-1">Primed</th>}
               <th className="text-center font-medium pb-1" title="Spawning enabled — click to toggle">Active</th>
               <th className="text-right font-medium pb-1">Details</th>
             </tr>
@@ -317,11 +320,9 @@ export function BgSpiceSummary({ enabled }: Props) {
                 : mapLabel(mapId)
               const sizeCls   = SIZE_CLASS[r.fieldType] ?? 'text-text-muted'
               const activeCls = activeFillClass(r.currentActive, r.maxActive)
-              const primedUnavailable = r.currentPrimedExact === false || r.currentPrimed === null
-              const primCls   = primedUnavailable ? 'text-text-dim' : primedClass(r.currentPrimed ?? 0)
-              const primedTitle = primedUnavailable
-                ? `Queued/current primed count is unavailable on this server build; spawning can still be active, and ${r.maxPrimed} is the configured ceiling, not a target.`
-                : undefined
+              const showRowPrimed = r.adapter !== 'retail-config'
+                && r.currentPrimedExact !== false
+                && r.currentPrimed !== null
               const cooldownMs = cooldownRemaining()
               const onCooldown = cooldownMs > 0
               const isBusy     = togglingId === r.spicefieldTypeId
@@ -347,13 +348,13 @@ export function BgSpiceSummary({ enabled }: Props) {
                   <td className={`text-right tabular-nums pr-3 py-0.5 ${activeCls}`}>
                     {r.currentActive}<span className="text-text-dim">/{r.maxActive}</span>
                   </td>
-                  <td className={`text-right tabular-nums pr-3 py-0.5 ${primCls}`}
-                      title={primedTitle}
-                      aria-label={primedTitle}>
-                    {primedUnavailable
-                      ? <>N/A <span className="text-text-dim">(cap {r.maxPrimed})</span></>
-                      : <>{r.currentPrimed}<span className="text-text-dim">/{r.maxPrimed}</span></>}
-                  </td>
+                  {showPrimedColumn && (
+                    <td className={`text-right tabular-nums pr-3 py-0.5 ${showRowPrimed ? primedClass(r.currentPrimed ?? 0) : ''}`}>
+                      {showRowPrimed
+                        ? <>{r.currentPrimed}<span className="text-text-dim">/{r.maxPrimed}</span></>
+                        : null}
+                    </td>
+                  )}
                   <td className="text-center py-0.5 whitespace-nowrap">
                     <label className={`inline-flex items-center gap-1 ${disabled ? 'cursor-wait opacity-70' : 'cursor-pointer'}`}
                            title={title}>
