@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   getDeepDesertPvp,
+  applyGameConfigClient,
   getGameConfigExperimentalCategories,
   getGameConfigExperimentalCategory,
   getSpicefieldState,
@@ -70,6 +71,31 @@ describe('Game Config pod reload API', () => {
       url: '/api/gameconfig/reload-pods',
       method: 'POST',
       body: undefined,
+    })
+  })
+})
+
+describe('Game Config local client API', () => {
+  it('sends an explicit client-evaluated shield update to the local-only apply route', async () => {
+    await applyGameConfigClient([{
+      file: 'engine',
+      section: 'ConsoleVariables',
+      key: 'Dune.DisableShieldOnShooting',
+      label: 'Shield Drops While Shooting',
+      value: '0',
+    }], '%LOCALAPPDATA%\\DuneSandbox\\Saved\\Config\\Windows')
+
+    expect(calls.at(-1)).toEqual({
+      url: '/api/gameconfig/client/apply',
+      method: 'PUT',
+      body: {
+        updates: [{
+          file: 'engine',
+          key: 'Dune.DisableShieldOnShooting',
+          value: '0',
+        }],
+        dir: '%LOCALAPPDATA%\\DuneSandbox\\Saved\\Config\\Windows',
+      },
     })
   })
 })

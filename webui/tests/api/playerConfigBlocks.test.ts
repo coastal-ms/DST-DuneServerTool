@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   buildAllClientBlocks,
+  buildAllClientApplyItems,
   buildCategoryClientBlocks,
   buildClientShareEntries,
   formatCoriolisCycleStartHour,
@@ -64,6 +65,41 @@ describe('buildAllClientBlocks', () => {
     expect(out.entries[0].file).toBe('engine')
     expect(out.entries[0].block).toContain('Vehicle.MaxVehiclesPerPlayer=20')
     expect(out.entries[0].block).not.toContain('m_bEnableHibernation')
+  })
+
+  describe('buildAllClientApplyItems', () => {
+    it('offers the field-confirmed shield CVar for an explicit local apply', () => {
+      const shield: GameConfigCategory[] = [{
+        category: 'PvP & Security',
+        fields: [{
+          section: 'ConsoleVariables',
+          key: 'Dune.DisableShieldOnShooting',
+          file: 'engine',
+          type: 'bool01',
+          label: 'Shield Drops While Shooting',
+          default: '1',
+          clientApply: true,
+        }],
+      }] as GameConfigCategory[]
+
+      expect(buildAllClientApplyItems(shield, cfg({}, {
+        'ConsoleVariables||Dune.DisableShieldOnShooting': '0',
+      }))).toEqual([{
+        file: 'engine',
+        section: 'ConsoleVariables',
+        key: 'Dune.DisableShieldOnShooting',
+        label: 'Shield Drops While Shooting',
+        value: '0',
+        structKey: undefined,
+      }])
+    })
+
+    it('does not offer defaults or server-only controls for local apply', () => {
+      expect(buildAllClientApplyItems(cats, cfg({}, {
+        'ConsoleVariables||Vehicle.MaxVehiclesPerPlayer': '10',
+        'ConsoleVariables||Bgd.ServerPlayerHardCap': '80',
+      }))).toEqual([])
+    })
   })
 
   it('puts Engine.ini first so it renders on the left, Game.ini second', () => {

@@ -25,6 +25,7 @@ import {
   getGameConfigClient,
   setGameConfigClientDir,
   setGameConfigClientEngineEnabled,
+  applyGameConfigClient,
   openGameConfigClientFile,
   getGameConfigDefaults,
   saveGameConfigRaw,
@@ -41,6 +42,7 @@ import type {
   GameConfigDefaultSection,
   GameConfigDefaultKey,
   GameConfigRawUpdate,
+  GameConfigClientApplyItem,
 } from '../api/types'
 import { SpicefieldsCard } from './gameconfig/SpicefieldsCard'
 import { LandclaimTimerCard } from './gameconfig/LandclaimTimerCard'
@@ -213,6 +215,33 @@ export function buildAllClientBlocks(
     }
   }
   return { entries: buildClientShareEntries(items, cfg), count }
+}
+
+export function buildAllClientApplyItems(
+  cats: GameConfigCategory[] | null,
+  cfg: GameConfigResponse | null,
+): GameConfigClientApplyItem[] {
+  const items: GameConfigClientApplyItem[] = []
+  const seen = new Set<string>()
+  for (const cat of cats ?? []) {
+    for (const field of cat.fields ?? []) {
+      if (!field?.key || !field.clientApply || !isCustomized(cfg, field)) continue
+      const value = liveValue(cfg, field)
+      if (value === '') continue
+      const id = `${field.file}||${field.section}||${field.key}`
+      if (seen.has(id)) continue
+      seen.add(id)
+      items.push({
+        file: field.file,
+        section: field.section,
+        key: field.key,
+        label: field.label,
+        value,
+        structKey: field.structKey,
+      })
+    }
+  }
+  return items
 }
 
 function isExperimentalCategory(category: string): boolean {
@@ -714,6 +743,33 @@ export function GameConfig({ mode = 'standard' }: { mode?: 'standard' | 'experim
     () => dirtyKeys.filter(k => experimentalStartupKeys.has(k)),
     [dirtyKeys, experimentalStartupKeys],
   )
+  const clientApplyItems = useMemo(
+    () => buildAllClientApplyItems(schemaWithLoadedExperimental, cfg),
+    [schemaWithLoadedExperimental, cfg],
+  )
+  const enabledClientApplyItems = useMemo(
+    () => clientApplyItems.filter(item => item.file === 'game' || clientInfo?.engineEnabled === true),
+    [clientApplyItems, clientInfo?.engineEnabled],
+  )
+
+  const onApplyCurrentClientSettings = useCallback(async () => {
+    if (enabledClientApplyItems.length === 0) return
+    setClientErr(null)
+    setClientMsg(null)
+    setClientBusy(true)
+    try {
+      const result = await applyGameConfigClient(enabledClientApplyItems, clientInfo?.dir)
+      setClientInfo(result.client)
+      setClientMsg(
+        `Applied ${result.applied} setting${result.applied === 1 ? '' : 's'} to this PC's local Dune client config. Other players must apply their own copy.`,
+      )
+      window.setTimeout(() => setClientMsg(null), 7000)
+    } catch (e) {
+      setClientErr(e instanceof Error ? e.message : String(e))
+    } finally {
+      setClientBusy(false)
+    }
+  }, [enabledClientApplyItems, clientInfo])
 
   // The two pages share this component and split the same schema between them:
   // Game Config shows the settings we stand behind, Experimental shows the
@@ -1247,6 +1303,24 @@ export function GameConfig({ mode = 'standard' }: { mode?: 'standard' | 'experim
                 </span>
               </span>
             </label>
+            <div className="mb-3 flex flex-wrap items-center gap-2">
+              <button
+                type="button"
+                onClick={() => void onApplyCurrentClientSettings()}
+                disabled={clientBusy || enabledClientApplyItems.length === 0}
+                className="btn-primary"
+                title="Write the current client-evaluated server values into this PC's local Dune config"
+              >
+                <Icon name={clientBusy ? 'Loader2' : 'MonitorCog'} size={14} className={clientBusy ? 'animate-spin' : ''} />
+                Apply to my client
+              </button>
+              <span className="text-xs text-text-muted">
+                Writes {enabledClientApplyItems.length} customized client-evaluated setting{enabledClientApplyItems.length === 1 ? '' : 's'} to this PC only.
+                {clientApplyItems.some(item => item.file === 'engine') && clientInfo?.engineEnabled !== true
+                  ? ' Enable Engine.ini management to include shield, vehicle-cap, and other proven client-read CVars.'
+                  : ' Other players still need the matching values in their own client config.'}
+              </span>
+            </div>
             <div className="flex items-center gap-2">
               <input
                 type="text"

@@ -1957,8 +1957,10 @@ Describe 'GameConfig: client-apply flag covers local gameplay settings' -Tag 'Ga
         $flagged = @($gameplayEngine | Where-Object { $_.ClientApply } | ForEach-Object { $_.Key })
         @($flagged | Sort-Object) | Should -Be @($script:DuneClientEvaluatedConsoleVariables | Sort-Object)
 
-        # The one control with client-side field evidence.
+        # Both controls have client-side field evidence, including same-build
+        # Retail players observing different shield behaviour from local values.
         $flagged | Should -Contain 'Vehicle.MaxVehiclesPerPlayer'
+        $flagged | Should -Contain 'Dune.DisableShieldOnShooting'
 
         # Server-instance and connection settings could never qualify.
         foreach ($key in @('Bgd.ServerDisplayName','Bgd.ServerLoginPassword','Port','IGWPort')) {
@@ -1976,6 +1978,8 @@ Describe 'GameConfig: client-apply flag covers local gameplay settings' -Tag 'Ga
         Test-DuneGameConfigValueIsDefault -Key 'm_WaterConsumptionRate' -Value '1'   | Should -BeTrue
         Test-DuneGameConfigValueIsDefault -Key 'm_WaterConsumptionRate' -Value '1.0' | Should -BeTrue
         Test-DuneGameConfigValueIsDefault -Key 'm_WaterConsumptionRate' -Value '2.0' | Should -BeFalse
+        Test-DuneGameConfigValueIsDefault -Key 'Dune.DisableShieldOnShooting' -Value '1' | Should -BeTrue
+        Test-DuneGameConfigValueIsDefault -Key 'Dune.DisableShieldOnShooting' -Value '0' | Should -BeFalse
     }
 
     It 'only queues a deprecated key for removal when the file actually contains it' {
@@ -2068,6 +2072,20 @@ Describe 'GameConfig: local client Game.ini and Engine.ini' -Tag 'GameConfig' {
         $result.files.game.path | Should -Be (Join-Path $dir 'Game.ini')
         $result.files.engine.path | Should -Be (Join-Path $dir 'Engine.ini')
         @($result.items | ForEach-Object file | Sort-Object -Unique) | Should -Be @('engine','game')
+    }
+
+    It 'writes the disabled shield setting to the Retail client Engine.ini' {
+        $dir = (Get-PSDrive TestDrive).Root
+
+        $result = Save-DuneGameConfigClient -Dir $dir -Updates @(
+            @{ key='Dune.DisableShieldOnShooting'; value='0' }
+        )
+
+        $raw = [IO.File]::ReadAllText((Join-Path $dir 'Engine.ini'))
+        $raw | Should -Match '(?m)^\[ConsoleVariables\]\r?$'
+        $raw | Should -Match '(?m)^Dune\.DisableShieldOnShooting=0\r?$'
+        $result.files.engine.path | Should -Be (Join-Path $dir 'Engine.ini')
+        @($result.items).Count | Should -Be 1
     }
 
     It 'writes the complete spice startup struct through the normal client Game.ini path' {
