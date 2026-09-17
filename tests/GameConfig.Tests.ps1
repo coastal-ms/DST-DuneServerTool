@@ -876,9 +876,6 @@ Describe 'DuneGameConfigSchema: experimental binary CVars' -Tag 'GameConfig' {
             'NPC.EnableWeaponRotationRateOverride'
             'NPC.DummyWeaponRotationRateOverride'
             'NPC.Respawn.StartCountdownOnEachNPCKilled'
-            'NPC.AllowDoorAutoAccessToAllNPCs'
-            'NPC.AllowDoorAutoAccessToAllNPCsRadius'
-            'NPC.DoorAutoAccessRadius'
             'Sandworm.SandwormSharkwormRoam'
             'Sandworm.SandwormDeathVolumeEnabled'
             'Sandworm.SandwormCheckIfBreachLocationIsFreeOfPlayers'
@@ -915,7 +912,7 @@ Describe 'DuneGameConfigSchema: experimental binary CVars' -Tag 'GameConfig' {
         $experimental2 = @($script:DuneGameConfigSchema | Where-Object Category -eq 'Experimental 2')
 
         $experimental.Count | Should -Be 54
-        $experimental2.Count | Should -Be 68
+        $experimental2.Count | Should -Be 65
         @($experimental.Key | Sort-Object) | Should -Be @($script:ExperimentalKeys | Sort-Object)
         @($experimental2.Key | Sort-Object) | Should -Be @($script:Experimental2Keys | Sort-Object)
         foreach ($key in @($script:ExperimentalKeys) + @($script:Experimental2Keys)) {
@@ -928,7 +925,7 @@ Describe 'DuneGameConfigSchema: experimental binary CVars' -Tag 'GameConfig' {
         @($script:DuneGameConfigSchema | Where-Object Category -eq 'Experimental Lab').Count | Should -Be 0
         (Test-DuneStartupConsoleVariableKey -Key 'm_TaskGoalAmount') | Should -BeFalse
         $script:DuneAdvancedCvarCatalogCache | Should -BeNullOrEmpty
-        @($script:DuneStartupConsoleVariableKeys).Count | Should -Be 145
+        @($script:DuneStartupConsoleVariableKeys).Count | Should -Be 142
 
         $lab = @(Get-DuneAdvancedCvarCatalog)
         $lab.Count | Should -BeGreaterThan 4900
@@ -967,7 +964,7 @@ Describe 'DuneGameConfigSchema: experimental binary CVars' -Tag 'GameConfig' {
         # Uncategorized rather than being forced into a neighbouring group.
         $api = @(Get-DuneGameConfigSchemaApi)
         $fields = @($api | Where-Object { $_.category -like 'Experimental*' } | ForEach-Object { $_.fields })
-        $fields.Count | Should -Be 122
+        $fields.Count | Should -Be 119
         foreach ($f in $fields) {
             $f.group | Should -Not -BeNullOrEmpty
             $f.status | Should -BeIn @('Confirmed', 'Unconfirmed')
@@ -1215,6 +1212,36 @@ dw.ReturningPlayer.GiveAward.TierOverride=2
         $out = ConvertTo-DuneIniManaged -Raw $raw -Updates @() -QuotedKeys @{}
 
         $out | Should -Not -Match 'dw\.ReturningPlayer'
+        $out | Should -Match 'dw\.FuelBurningMultiplier=6'
+    }
+
+    It 'scrubs NPC door CVars removed from the Retail server binary' {
+        $retired = @(
+            'NPC.AllowDoorAutoAccessToAllNPCs'
+            'NPC.AllowDoorAutoAccessToAllNPCsRadius'
+            'NPC.DoorAutoAccessRadius'
+        )
+        foreach ($key in $retired) {
+            @($script:DuneGameConfigSchema.Key) | Should -Not -Contain $key
+            @($script:DuneGameConfigDeprecatedManagedKeys) | Should -Contain $key
+            @($script:DuneStartupConsoleVariableKeys) | Should -Not -Contain $key
+            (Get-DuneManagedStartupConsoleVariableKeyMap).ContainsKey($key) | Should -BeTrue
+        }
+
+        $raw = @"
+; ===== Dune Server Tool (DST) managed section BEGIN =====
+[ConsoleVariables]
+NPC.AllowDoorAutoAccessToAllNPCs=1
+NPC.AllowDoorAutoAccessToAllNPCsRadius=100000
+NPC.DoorAutoAccessRadius=25000
+dw.FuelBurningMultiplier=6
+; ===== Dune Server Tool (DST) managed section END =====
+"@
+        $out = ConvertTo-DuneIniManaged -Raw $raw -Updates @() -QuotedKeys @{}
+
+        $out | Should -Not -Match 'NPC\.AllowDoorAutoAccessToAllNPCs='
+        $out | Should -Not -Match 'NPC\.AllowDoorAutoAccessToAllNPCsRadius'
+        $out | Should -Not -Match 'NPC\.DoorAutoAccessRadius'
         $out | Should -Match 'dw\.FuelBurningMultiplier=6'
     }
 
