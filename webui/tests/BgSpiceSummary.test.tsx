@@ -87,7 +87,7 @@ describe('BgSpiceSummary raw field details', () => {
     render(<BgSpiceSummary enabled />)
 
     const primed = await screen.findByLabelText(
-      'Current primed count is unavailable on this server build; 3 is the configured ceiling, not a target.',
+      'Queued/current primed count is unavailable on this server build; spawning can still be active, and 3 is the configured ceiling, not a target.',
     )
     expect(primed).toHaveTextContent('N/A (cap 3)')
     expect(primed).not.toHaveTextContent('0/3')

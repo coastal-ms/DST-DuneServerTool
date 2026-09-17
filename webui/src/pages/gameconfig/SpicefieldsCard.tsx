@@ -386,7 +386,7 @@ export function SpicefieldsCard({ vmRunning }: Props) {
                   </span>
                   <span className="text-border">·</span>
                   <span title={list.some(r => r.currentPrimedExact === false || r.currentPrimed === null)
-                    ? `Current primed count is unavailable; ${totalMaxPrimed} is the configured ceiling, not a target.`
+                    ? `Queued/current primed count is unavailable; spawning can still be active, and ${totalMaxPrimed} is the configured ceiling, not a target.`
                     : `Total currently primed across all ${mapName} field sizes`}>
                     <span className="text-text font-medium">
                       {list.some(r => r.currentPrimedExact === false || r.currentPrimed === null) ? 'N/A' : totalPrimed}

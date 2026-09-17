@@ -320,7 +320,7 @@ export function BgSpiceSummary({ enabled }: Props) {
               const primedUnavailable = r.currentPrimedExact === false || r.currentPrimed === null
               const primCls   = primedUnavailable ? 'text-text-dim' : primedClass(r.currentPrimed ?? 0)
               const primedTitle = primedUnavailable
-                ? `Current primed count is unavailable on this server build; ${r.maxPrimed} is the configured ceiling, not a target.`
+                ? `Queued/current primed count is unavailable on this server build; spawning can still be active, and ${r.maxPrimed} is the configured ceiling, not a target.`
                 : undefined
               const cooldownMs = cooldownRemaining()
               const onCooldown = cooldownMs > 0
