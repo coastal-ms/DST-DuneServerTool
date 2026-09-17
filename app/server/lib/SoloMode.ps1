@@ -72,7 +72,7 @@ $script:DuneSoloConsoleSettings = @(
         type = 'bool01'
         default = '1'
         label = 'Sun Exposure Enabled'
-        help = 'PTC Solo field-confirmed. Disabled prevents sun exposure and its water drain.'
+        help = 'Retail Solo confirmed. Disabled prevents sun exposure and its water drain.'
         status = 'Confirmed'
     },
     [ordered]@{
@@ -90,7 +90,7 @@ $script:DuneSoloConsoleSettings = @(
         type = 'bool01'
         default = '1'
         label = 'Shield Drops While Shooting'
-        help = 'PTC Solo field-confirmed. Disabled keeps the player shield raised while firing.'
+        help = 'Retail Solo confirmed. Disabled keeps the player shield raised while firing.'
         status = 'Confirmed'
     }
 )
@@ -167,6 +167,56 @@ function Get-DuneSoloDataFilePath {
     throw "DST data file is unavailable: $Name"
 }
 
+function Get-DuneSoloAdapterDescriptor {
+    param([Parameter(Mandatory)][string]$DbPath)
+
+    $profileDir = Split-Path -Parent ([IO.Path]::GetFullPath($DbPath))
+    $channel = [IO.Path]::GetFileName((Split-Path -Parent $profileDir))
+    $manifestName = switch ($channel) {
+        'FLS_retail' { 'solo-retail-v1.json' }
+        'FLS_beta' { 'solo-legacy-v1.json' }
+        default { '' }
+    }
+    if (-not $manifestName) {
+        return @{
+            id = "unsupported-wrapper-v1-$channel"
+            channel = $channel
+            manifestPath = ''
+            capabilities = @()
+            supported = $false
+            legacy = $false
+        }
+    }
+
+    $manifestPath = Get-DuneSoloDataFilePath -Name $manifestName
+    $manifest = Get-Content -LiteralPath $manifestPath -Raw | ConvertFrom-Json
+    return @{
+        id = [string]$manifest.id
+        channel = $channel
+        manifestPath = $manifestPath
+        capabilities = @($manifest.capabilities | ForEach-Object { [string]$_ })
+        supported = $true
+        legacy = ($channel -eq 'FLS_beta')
+    }
+}
+
+function Assert-DuneSoloAdapterCapability {
+    param(
+        [Parameter(Mandatory)][hashtable]$Profile,
+        [Parameter(Mandatory)][string]$Capability
+    )
+
+    $adapter = Get-DuneSoloAdapterDescriptor -DbPath ([string]$Profile.dbPath)
+    if (-not $adapter.supported) {
+        throw "Solo channel '$($adapter.channel)' has no supported DST adapter."
+    }
+    if ($adapter.capabilities -notcontains '*' -and
+        $adapter.capabilities -notcontains $Capability) {
+        throw "Solo adapter '$($adapter.id)' has not proven the '$Capability' capability; no save data was changed."
+    }
+    return $adapter
+}
+
 function Read-DuneSoloState {
     $path = Get-DuneSoloStatePath
     if (-not (Test-Path -LiteralPath $path -PathType Leaf)) { return @{} }
@@ -175,7 +225,7 @@ function Read-DuneSoloState {
         return @{
             dataRoot = if ($value.dataRoot) { [string]$value.dataRoot } else { '' }
             dbPath = if ($value.dbPath) { [string]$value.dbPath } else { '' }
-            adapter = if ($value.adapter) { [string]$value.adapter } else { 'ptc-auto' }
+            adapter = if ($value.adapter) { [string]$value.adapter } else { '' }
         }
     } catch {
         throw "Solo Mode state is malformed: $($_.Exception.Message)"
@@ -186,13 +236,16 @@ function Save-DuneSoloState {
     param(
         [Parameter(Mandatory)][string]$DataRoot,
         [Parameter(Mandatory)][string]$DbPath,
-        [string]$Adapter = 'ptc-auto'
+        [string]$Adapter = ''
     )
 
     $statePath = Get-DuneSoloStatePath
     $dir = Split-Path -Parent $statePath
     if (-not (Test-Path -LiteralPath $dir)) {
         New-Item -ItemType Directory -Path $dir -Force | Out-Null
+    }
+    if (-not $Adapter) {
+        $Adapter = [string](Get-DuneSoloAdapterDescriptor -DbPath $DbPath).id
     }
     $payload = [ordered]@{
         dataRoot = [IO.Path]::GetFullPath($DataRoot)
@@ -260,15 +313,20 @@ function Find-DuneSoloProfiles {
     $profiles = foreach ($file in $files) {
         $profileDir = Split-Path -Parent $file.FullName
         $channelDir = Split-Path -Parent $profileDir
+        $adapter = Get-DuneSoloAdapterDescriptor -DbPath $file.FullName
         [pscustomobject]@{
             id = [IO.Path]::GetFileName($profileDir)
             channel = [IO.Path]::GetFileName($channelDir)
+            adapter = [string]$adapter.id
+            legacy = [bool]$adapter.legacy
             dbPath = $file.FullName
             modifiedAt = $file.LastWriteTimeUtc.ToString('o')
             bytes = [long]$file.Length
         }
     }
-    return @($profiles)
+    return @($profiles | Sort-Object `
+        @{ Expression = { if ($_.channel -eq 'FLS_retail') { 0 } elseif ($_.channel -eq 'FLS_beta') { 1 } else { 2 } } }, `
+        @{ Expression = { $_.modifiedAt }; Descending = $true })
 }
 
 function Get-DuneSoloDiscovery {
@@ -282,6 +340,8 @@ function Get-DuneSoloDiscovery {
     $suggestedDb = ''
     if (Test-Path -LiteralPath $directDb -PathType Leaf) {
         $suggestedDb = $directDb
+    } elseif (@($profiles | Where-Object channel -eq 'FLS_retail').Count -eq 1) {
+        $suggestedDb = [string]@($profiles | Where-Object channel -eq 'FLS_retail')[0].dbPath
     } elseif ($profiles.Count -eq 1) {
         $suggestedDb = [string]$profiles[0].dbPath
     }
@@ -347,13 +407,10 @@ function Invoke-DuneSoloHelper {
     return $result
 }
 
-function Assert-DuneSoloPtcAdapter {
+function Assert-DuneSoloProgressionAdapter {
     param([Parameter(Mandatory)][hashtable]$Profile)
-    $profileDir = Split-Path -Parent ([string]$Profile.dbPath)
-    $channel = [IO.Path]::GetFileName((Split-Path -Parent $profileDir))
-    if ($channel -ne 'FLS_beta') {
-        throw "Progression actions are enabled only for the verified PTC FLS_beta adapter; found '$channel'."
-    }
+    $adapter = Get-DuneSoloAdapterDescriptor -DbPath ([string]$Profile.dbPath)
+    Assert-DuneSoloAdapterCapability -Profile $Profile -Capability 'progression' | Out-Null
 }
 
 function Invoke-DuneSoloProgressionAction {
@@ -372,7 +429,8 @@ function Invoke-DuneSoloProgressionAction {
     if (-not $profile.dbPath -or -not (Test-Path -LiteralPath $profile.dbPath -PathType Leaf)) {
         throw 'Connect a valid Solo save before changing progression.'
     }
-    Assert-DuneSoloPtcAdapter -Profile $profile
+    Assert-DuneSoloProgressionAdapter -Profile $profile
+    $adapter = Get-DuneSoloAdapterDescriptor -DbPath $profile.dbPath
     $safetyDir = Join-Path (Get-DuneSoloProfileBackupRoot -DbPath $profile.dbPath) 'pre-progression'
     New-Item -ItemType Directory -Path $safetyDir -Force | Out-Null
     $stamp = (Get-Date).ToUniversalTime().ToString('yyyyMMdd-HHmmssfff')
@@ -380,7 +438,7 @@ function Invoke-DuneSoloProgressionAction {
     $arguments = @{
         input = $profile.dbPath
         'safety-backup' = $safety
-        adapter = Get-DuneSoloDataFilePath -Name 'solo-ptc-v1.json'
+        adapter = $adapter.manifestPath
     }
     if ($Action -eq 'max-specializations') {
         $arguments['keystones'] = Get-DuneSoloDataFilePath -Name 'dune-keystones.json'
@@ -412,7 +470,8 @@ function Set-DuneSoloProgressionPoints {
     if (-not $profile.dbPath -or -not (Test-Path -LiteralPath $profile.dbPath -PathType Leaf)) {
         throw 'Connect a valid Solo save before changing progression points.'
     }
-    Assert-DuneSoloPtcAdapter -Profile $profile
+    Assert-DuneSoloProgressionAdapter -Profile $profile
+    $adapter = Get-DuneSoloAdapterDescriptor -DbPath $profile.dbPath
     $safetyDir = Join-Path (Get-DuneSoloProfileBackupRoot -DbPath $profile.dbPath) 'pre-progression'
     New-Item -ItemType Directory -Path $safetyDir -Force | Out-Null
     $stamp = (Get-Date).ToUniversalTime().ToString('yyyyMMdd-HHmmssfff')
@@ -420,7 +479,7 @@ function Set-DuneSoloProgressionPoints {
     return Invoke-DuneSoloHelper -Command 'set-progression-points' -Arguments @{
         input = $profile.dbPath
         'safety-backup' = $safety
-        adapter = Get-DuneSoloDataFilePath -Name 'solo-ptc-v1.json'
+        adapter = $adapter.manifestPath
         'skill-points' = $SkillPoints
         intel = $Intel
     }
@@ -442,6 +501,7 @@ function Fill-DuneSoloWaterContainer {
     if (-not $profile.dbPath -or -not (Test-Path -LiteralPath $profile.dbPath -PathType Leaf)) {
         throw 'Connect a valid Solo save before filling a water container.'
     }
+    $adapter = Assert-DuneSoloAdapterCapability -Profile $profile -Capability 'water-fill'
     $safetyDir = Join-Path (Get-DuneSoloProfileBackupRoot -DbPath $profile.dbPath) 'pre-fill'
     New-Item -ItemType Directory -Path $safetyDir -Force | Out-Null
     $stamp = (Get-Date).ToUniversalTime().ToString('yyyyMMdd-HHmmssfff')
@@ -450,7 +510,7 @@ function Fill-DuneSoloWaterContainer {
         input = $profile.dbPath
         'safety-backup' = $safety
         'item-id' = $ItemId
-        adapter = Get-DuneSoloDataFilePath -Name 'solo-ptc-v1.json'
+        adapter = $adapter.manifestPath
     }
 }
 
@@ -475,6 +535,7 @@ function Set-DuneSoloCurrencies {
     if (-not $profile.dbPath -or -not (Test-Path -LiteralPath $profile.dbPath -PathType Leaf)) {
         throw 'Connect a valid Solo save before setting currencies.'
     }
+    Assert-DuneSoloAdapterCapability -Profile $profile -Capability 'currencies' | Out-Null
     $safetyDir = Join-Path (Get-DuneSoloProfileBackupRoot -DbPath $profile.dbPath) 'pre-currency'
     New-Item -ItemType Directory -Path $safetyDir -Force | Out-Null
     $stamp = (Get-Date).ToUniversalTime().ToString('yyyyMMdd-HHmmssfff')
@@ -549,6 +610,7 @@ function Invoke-DuneSoloGiveItems {
     if (-not $profile.dbPath -or -not (Test-Path -LiteralPath $profile.dbPath -PathType Leaf)) {
         throw 'Connect a valid Solo save before giving items.'
     }
+    Assert-DuneSoloAdapterCapability -Profile $profile -Capability 'item-grant' | Out-Null
     $profileBackupRoot = Get-DuneSoloProfileBackupRoot -DbPath $profile.dbPath
     $safetyDir = Join-Path $profileBackupRoot 'pre-grant'
     New-Item -ItemType Directory -Path $safetyDir -Force | Out-Null
@@ -594,6 +656,7 @@ function Set-DuneSoloWeaponAmmo {
     if (-not $profile.dbPath -or -not (Test-Path -LiteralPath $profile.dbPath -PathType Leaf)) {
         throw 'Connect a valid Solo save before changing weapon ammo.'
     }
+    Assert-DuneSoloAdapterCapability -Profile $profile -Capability 'weapon-ammo' | Out-Null
     $safetyDir = Join-Path (Get-DuneSoloProfileBackupRoot -DbPath $profile.dbPath) 'pre-ammo'
     New-Item -ItemType Directory -Path $safetyDir -Force | Out-Null
     $stamp = (Get-Date).ToUniversalTime().ToString('yyyyMMdd-HHmmssfff')
@@ -613,6 +676,7 @@ function Get-DuneSoloBlueprints {
     if (-not $profile.dbPath -or -not (Test-Path -LiteralPath $profile.dbPath -PathType Leaf)) {
         throw 'Connect a valid Solo save before listing blueprints.'
     }
+    Assert-DuneSoloAdapterCapability -Profile $profile -Capability 'blueprint-read' | Out-Null
     return Invoke-DuneSoloHelper -Command 'list-blueprints' -Arguments @{
         input = $profile.dbPath
     }
@@ -629,6 +693,7 @@ function Export-DuneSoloBlueprint {
     if (-not $profile.dbPath -or -not (Test-Path -LiteralPath $profile.dbPath -PathType Leaf)) {
         throw 'Connect a valid Solo save before exporting a blueprint.'
     }
+    Assert-DuneSoloAdapterCapability -Profile $profile -Capability 'blueprint-read' | Out-Null
     return Invoke-DuneSoloHelper -Command 'export-blueprint' -Arguments @{
         input = $profile.dbPath
         id = $Id
@@ -645,10 +710,6 @@ function Import-DuneSoloBlueprint {
     if ($Confirm -ne 'IMPORT SOLO BLUEPRINT') {
         throw 'Confirm the offline blueprint import before continuing.'
     }
-    throw 'Portable blueprint import is disabled for PTC Solo after confirmed save-loading and placement-preview crashes from incompatible cross-build class names. It will be reevaluated when Retail Solo is available.'
-
-    # Retained for a future Retail Solo adapter after its exact folder, schema,
-    # and building/placeable compatibility catalog are observed.
     Assert-DuneSoloGameClosed
     if ($null -eq $Blueprint) {
         throw 'Choose a portable blueprint file to import.'
@@ -658,6 +719,7 @@ function Import-DuneSoloBlueprint {
     if (-not $profile.dbPath -or -not (Test-Path -LiteralPath $profile.dbPath -PathType Leaf)) {
         throw 'Connect a valid Solo save before importing a blueprint.'
     }
+    Assert-DuneSoloAdapterCapability -Profile $profile -Capability 'blueprint-import' | Out-Null
     $profileBackupRoot = Get-DuneSoloProfileBackupRoot -DbPath $profile.dbPath
     $safetyDir = Join-Path $profileBackupRoot 'pre-blueprint'
     New-Item -ItemType Directory -Path $safetyDir -Force | Out-Null
@@ -689,6 +751,7 @@ function Invoke-DuneSoloMaxAugmentAttributes {
     if (-not $profile.dbPath -or -not (Test-Path -LiteralPath $profile.dbPath -PathType Leaf)) {
         throw 'Connect a valid Solo save before maximizing augment attributes.'
     }
+    Assert-DuneSoloAdapterCapability -Profile $profile -Capability 'augment-max' | Out-Null
     $profileBackupRoot = Get-DuneSoloProfileBackupRoot -DbPath $profile.dbPath
     $safetyDir = Join-Path $profileBackupRoot 'pre-augment'
     New-Item -ItemType Directory -Path $safetyDir -Force | Out-Null
@@ -708,15 +771,23 @@ function Get-DuneSoloProfile {
     if ($dbPath -and -not (Test-DuneSoloPathWithinRoot -Path $dbPath -Root $dataRoot)) {
         throw 'Saved Solo database path is outside the configured data root.'
     }
-    if (-not $dbPath -and $profiles.Count -eq 1) {
-        $dbPath = [string]$profiles[0].dbPath
+    if (-not $dbPath) {
+        $retailProfiles = @($profiles | Where-Object channel -eq 'FLS_retail')
+        if ($retailProfiles.Count -eq 1) {
+            $dbPath = [string]$retailProfiles[0].dbPath
+        } elseif ($profiles.Count -eq 1) {
+            $dbPath = [string]$profiles[0].dbPath
+        }
     }
+    $adapter = if ($dbPath) { Get-DuneSoloAdapterDescriptor -DbPath $dbPath } else { $null }
     $settingsPath = Join-Path $dataRoot 'Config\Windows\ServerCustomSettings.ini'
     return @{
         dataRoot = $dataRoot
         dbPath = $dbPath
         settingsPath = $settingsPath
-        adapter = if ($state.adapter) { [string]$state.adapter } else { 'ptc-auto' }
+        adapter = if ($adapter) { [string]$adapter.id } else { '' }
+        channel = if ($adapter) { [string]$adapter.channel } else { '' }
+        legacyAdapter = if ($adapter) { [bool]$adapter.legacy } else { $false }
         profiles = $profiles
     }
 }
@@ -750,8 +821,16 @@ function Connect-DuneSoloProfile {
         throw "Found $($profiles.Count) Solo saves. Select one profile explicitly."
     }
 
-    $inspection = Invoke-DuneSoloHelper -Command inspect -Arguments @{ input = $DbPath }
-    Save-DuneSoloState -DataRoot $dataRoot -DbPath $DbPath -Adapter 'ptc-auto' | Out-Null
+    $adapter = Get-DuneSoloAdapterDescriptor -DbPath $DbPath
+    if (-not $adapter.supported) {
+        throw "Selected Solo channel '$($adapter.channel)' has no supported DST adapter."
+    }
+    $inspection = Invoke-DuneSoloHelper -Command inspect -Arguments @{
+        input = $DbPath
+        catalog = Get-DuneSoloGameplayCatalogPath
+        adapter = $adapter.manifestPath
+    }
+    Save-DuneSoloState -DataRoot $dataRoot -DbPath $DbPath -Adapter $adapter.id | Out-Null
     return Get-DuneSoloStatus
 }
 
@@ -768,6 +847,8 @@ function Get-DuneSoloStatus {
             profileToken = ''
             settingsPath = ''
             adapter = ''
+            channel = ''
+            legacyAdapter = $false
             profiles = @()
             gameRunning = $false
             processes = @()
@@ -784,10 +865,14 @@ function Get-DuneSoloStatus {
     $inspectionError = ''
     if ($connected) {
         try {
+            $adapter = Get-DuneSoloAdapterDescriptor -DbPath $profile.dbPath
+            if (-not $adapter.supported) {
+                throw "Selected Solo channel '$($adapter.channel)' has no supported DST adapter."
+            }
             $inspection = Invoke-DuneSoloHelper -Command inspect -Arguments @{
                 input = $profile.dbPath
                 catalog = Get-DuneSoloGameplayCatalogPath
-                adapter = Get-DuneSoloDataFilePath -Name 'solo-ptc-v1.json'
+                adapter = $adapter.manifestPath
             }
         } catch {
             $inspectionError = $_.Exception.Message
@@ -803,6 +888,8 @@ function Get-DuneSoloStatus {
         profileToken = if ($profile.dbPath) { Get-DuneSoloProfileToken -DbPath $profile.dbPath } else { '' }
         settingsPath = $profile.settingsPath
         adapter = $profile.adapter
+        channel = $profile.channel
+        legacyAdapter = [bool]$profile.legacyAdapter
         profiles = @($profile.profiles)
         gameRunning = ($processes.Count -gt 0)
         processes = $processes
@@ -876,6 +963,7 @@ function Set-DuneSoloSettings {
     Assert-DuneSoloGameClosed
     $profile = Get-DuneSoloProfile
     if (-not $profile.dbPath) { throw 'Connect a Solo save before applying settings.' }
+    Assert-DuneSoloAdapterCapability -Profile $profile -Capability 'native-settings' | Out-Null
 
     $allowed = @{}
     foreach ($key in $script:DuneSoloSettingKeys) { $allowed[$key] = $true }
@@ -1017,12 +1105,14 @@ function Set-DuneSoloSettings {
     }
 }
 
-function Get-DuneSoloPtcEnginePaths {
+function Get-DuneSoloEnginePaths {
     param([Parameter(Mandatory)][hashtable]$Profile)
-    Assert-DuneSoloPtcAdapter -Profile $Profile
+    $adapter = Get-DuneSoloAdapterDescriptor -DbPath ([string]$Profile.dbPath)
+    if ($adapter.channel -ne 'FLS_retail') {
+        throw "Solo Engine settings require the supported Retail adapter; found '$($adapter.channel)'."
+    }
     return @(
         (Join-Path ([string]$Profile.dataRoot) 'Config\Windows\Engine.ini')
-        (Join-Path ([string]$Profile.dataRoot) 'Config\WindowsClient\Engine.ini')
     )
 }
 
@@ -1042,7 +1132,7 @@ function Read-DuneSoloConsoleSettings {
     $profile = Get-DuneSoloProfile
     $profileDir = if ($profile.dbPath) { Split-Path -Parent ([string]$profile.dbPath) } else { '' }
     $channel = if ($profileDir) { [IO.Path]::GetFileName((Split-Path -Parent $profileDir)) } else { '' }
-    if ($channel -ne 'FLS_beta') {
+    if ($channel -ne 'FLS_retail') {
         return @{
             ok = $true
             supported = $false
@@ -1053,10 +1143,10 @@ function Read-DuneSoloConsoleSettings {
             entries = @()
         }
     }
-    $paths = @(Get-DuneSoloPtcEnginePaths -Profile $profile)
-    # WindowsClient is the player-visible authority for these controls. Writes
-    # mirror both observed PTC files, while reads display the local-client value.
-    if (-not $Path) { $Path = $paths[-1] }
+    $paths = @(Get-DuneSoloEnginePaths -Profile $profile)
+    # Retail creates and updates Config\Windows\Engine.ini. The stale
+    # WindowsClient file is not mirrored because Retail did not consume it.
+    if (-not $Path) { $Path = $paths[0] }
 
     $values = @{}
     if (Test-Path -LiteralPath $Path -PathType Leaf) {
@@ -1108,19 +1198,19 @@ function Set-DuneSoloConsoleSettings {
 
     Assert-DuneSoloSupportedPlatform
     if ($Confirm -ne 'APPLY SOLO CONSOLE SETTINGS') {
-        throw 'Confirm the PTC Solo Engine.ini write before continuing.'
+        throw 'Confirm the Solo Engine.ini write before continuing.'
     }
     Assert-DuneSoloGameClosed
     $profile = Get-DuneSoloProfile
-    if (-not $profile.dbPath) { throw 'Connect a Solo save before applying PTC console settings.' }
-    $paths = @(Get-DuneSoloPtcEnginePaths -Profile $profile)
+    if (-not $profile.dbPath) { throw 'Connect a Solo save before applying console settings.' }
+    $paths = @(Get-DuneSoloEnginePaths -Profile $profile)
 
     $schema = @{}
     foreach ($field in $script:DuneSoloConsoleSettings) { $schema[[string]$field.key] = $field }
     $normalized = @{}
     foreach ($rawKey in $Settings.Keys) {
         $key = [string]$rawKey
-        if (-not $schema.ContainsKey($key)) { throw "Unsupported PTC Solo console setting: $key" }
+        if (-not $schema.ContainsKey($key)) { throw "Unsupported Solo console setting: $key" }
         $value = ([string]$Settings[$rawKey]).Trim()
         $field = $schema[$key]
         if ($field.type -eq 'bool01') {
@@ -1135,7 +1225,7 @@ function Set-DuneSoloConsoleSettings {
         }
         $normalized[$key] = $value
     }
-    if ($normalized.Count -eq 0) { throw 'No PTC Solo console settings were provided.' }
+    if ($normalized.Count -eq 0) { throw 'No Solo console settings were provided.' }
 
     if (-not $SingleFile) {
         $completed = New-Object System.Collections.Generic.List[object]
@@ -1169,7 +1259,7 @@ function Set-DuneSoloConsoleSettings {
                 }
             }
             if ($rollbackErrors.Count -gt 0) {
-                throw "PTC Solo Engine.ini write failed ($($writeError.Exception.Message)); rollback failed: $($rollbackErrors -join '; ')"
+                throw "Solo Engine.ini write failed ($($writeError.Exception.Message)); rollback failed: $($rollbackErrors -join '; ')"
             }
             throw $writeError
         }
@@ -1181,7 +1271,7 @@ function Set-DuneSoloConsoleSettings {
             backupPath = [string](@($completed | ForEach-Object { $_.backupPath } | Where-Object { $_ } | Select-Object -First 1)[0])
         }
     }
-    if (-not $Path) { throw 'PTC Solo Engine.ini target path is required.' }
+    if (-not $Path) { throw 'Solo Engine.ini target path is required.' }
     $path = [IO.Path]::GetFullPath($Path)
 
     $dir = Split-Path -Parent $path
@@ -1265,7 +1355,7 @@ function Set-DuneSoloConsoleSettings {
             $entry = @($verified.entries | Where-Object key -eq $key)
             if ($entry.Count -ne 1 -or -not $entry[0].present -or
                 [string]$normalized[$key] -ne [string]$entry[0].value) {
-                throw "PTC Solo console setting verification failed for $key."
+                throw "Solo console setting verification failed for $key."
             }
             $occurrences = 0
             $verifyInside = $false
@@ -1280,7 +1370,7 @@ function Set-DuneSoloConsoleSettings {
                 }
             }
             if ($occurrences -ne 1) {
-                throw "PTC Solo console setting verification found $occurrences copies of $key."
+                throw "Solo console setting verification found $occurrences copies of $key."
             }
         }
         Remove-Item -LiteralPath $replaceBackup -Force -ErrorAction SilentlyContinue
@@ -1300,13 +1390,13 @@ function Set-DuneSoloConsoleSettings {
                     -Destination $path -Backup $failedCopy
                 Remove-Item -LiteralPath $failedCopy -Force -ErrorAction SilentlyContinue
             } catch {
-                throw "PTC Solo Engine.ini write failed ($($writeError.Exception.Message)); rollback also failed. Recovery file retained at $replaceBackup"
+                throw "Solo Engine.ini write failed ($($writeError.Exception.Message)); rollback also failed. Recovery file retained at $replaceBackup"
             }
         } elseif (-not $targetExisted -and (Test-Path -LiteralPath $path -PathType Leaf)) {
             try {
                 Remove-Item -LiteralPath $path -Force -ErrorAction Stop
             } catch {
-                throw "PTC Solo Engine.ini write failed ($($writeError.Exception.Message)); the newly created file could not be removed."
+                throw "Solo Engine.ini write failed ($($writeError.Exception.Message)); the newly created file could not be removed."
             }
         }
         throw $writeError
@@ -1322,6 +1412,7 @@ function New-DuneSoloSaveBackup {
     if (-not $profile.dbPath -or -not (Test-Path -LiteralPath $profile.dbPath -PathType Leaf)) {
         throw 'Connect a valid Solo save before creating a backup.'
     }
+    Assert-DuneSoloAdapterCapability -Profile $profile -Capability 'backup' | Out-Null
     $dir = Get-DuneSoloProfileBackupRoot -DbPath $profile.dbPath
     New-Item -ItemType Directory -Path $dir -Force | Out-Null
     $stamp = (Get-Date).ToUniversalTime().ToString('yyyyMMdd-HHmmssfff')
@@ -1577,6 +1668,7 @@ function Restore-DuneSoloBackup {
     if (-not $profile.dbPath -or -not (Test-Path -LiteralPath $profile.dbPath -PathType Leaf)) {
         throw 'Connect a valid Solo save before restoring.'
     }
+    Assert-DuneSoloAdapterCapability -Profile $profile -Capability 'restore' | Out-Null
     $root = Get-DuneSoloProfileBackupRoot -DbPath $profile.dbPath
     $backup = [IO.Path]::GetFullPath((Join-Path $root $RelativePath))
     if (-not (Test-DuneSoloPathWithinRoot -Path $backup -Root $root)) {

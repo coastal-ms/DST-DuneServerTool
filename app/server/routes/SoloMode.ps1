@@ -109,7 +109,7 @@ Register-DuneRoute -Method PUT -Path '/api/solo/console-settings' -LocalOnly -Ha
         $confirm = [string](Get-DuneSoloBodyField -Body $body -Name 'confirm' -Default '')
         $expectedProfileToken = [string](Get-DuneSoloBodyField -Body $body -Name 'expectedProfileToken' -Default '')
         if (-not $rawSettings) {
-            Write-DuneError -Response $res -Status 400 -Message 'Missing PTC Solo console settings.'
+            Write-DuneError -Response $res -Status 400 -Message 'Missing Retail Solo console settings.'
             return
         }
         $settings = @{}

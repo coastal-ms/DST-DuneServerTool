@@ -97,8 +97,8 @@ function scrollPageToTop(from: HTMLElement) {
 const SANDWORM_ENABLED_KEY = 'sandworm.dune.Enabled'
 const CORIOLIS_CYCLE_START_HOUR_KEY = 'm_CycleStartHour'
 const CLIENT_INI_PATHS = {
-  game: '%LOCALAPPDATA%\\DuneSandbox\\Saved\\Config\\WindowsClient\\Game.ini',
-  engine: '%LOCALAPPDATA%\\DuneSandbox\\Saved\\Config\\WindowsClient\\Engine.ini',
+  game: '%LOCALAPPDATA%\\DuneSandbox\\Saved\\Config\\Windows\\Game.ini',
+  engine: '%LOCALAPPDATA%\\DuneSandbox\\Saved\\Config\\Windows\\Engine.ini',
 } as const
 
 type ClientShareEntry = { file: 'game' | 'engine'; path: string; block: string }
@@ -1582,7 +1582,7 @@ export function GameConfig({ mode = 'standard' }: { mode?: 'standard' | 'experim
                 value={clientDirInput}
                 onChange={e => setClientDirInput(e.target.value)}
                 spellCheck={false}
-                placeholder={clientInfo?.default ?? '%LOCALAPPDATA%\\DuneSandbox\\Saved\\Config\\WindowsClient'}
+                placeholder={clientInfo?.default ?? '%LOCALAPPDATA%\\DuneSandbox\\Saved\\Config\\Windows'}
                 className="flex-1 min-w-0 px-3 py-2 rounded-lg bg-surface-2 border border-border text-text text-sm font-mono placeholder:text-text-dim focus:outline-none focus:ring-2 focus:ring-ibad focus:border-ibad/50"
               />
               <button type="button" onClick={() => void onBrowseClientDir()} disabled={clientBusy} className="btn-secondary shrink-0">

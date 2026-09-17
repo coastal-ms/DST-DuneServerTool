@@ -59,9 +59,6 @@ import { pickLocalFolder } from '../util/pathPicker'
 import { soloSaveFolder } from '../util/soloSaveFolder'
 
 type Tab = 'overview' | 'settings' | 'backups' | 'character' | 'inventory' | 'progression'
-export const SOLO_BLUEPRINT_IMPORT_DISABLED = true
-export const SOLO_BLUEPRINT_IMPORT_NOTICE = 'Disabled for PTC after confirmed save-loading and placement-preview crashes from Self-Hosted/retail building class names that do not resolve safely in PTC. DST rejects the backend action before any save change. This will be reevaluated against the observed Retail Solo adapter when Retail Solo is available.'
-
 const TABS: Array<{ id: Tab; label: string; icon: string }> = [
   { id: 'overview', label: 'Overview', icon: 'LayoutGrid' },
   { id: 'settings', label: 'Settings', icon: 'SlidersHorizontal' },
@@ -72,7 +69,7 @@ const TABS: Array<{ id: Tab; label: string; icon: string }> = [
 ]
 
 export const SOLO_FIRST_USE_STEPS = [
-  'Launch Dune: Awakening PTC (or the supported retail build) at least once.',
+  'Launch Dune: Awakening at least once.',
   'Start or load Solo Mode, enter the world, and wait until the character finishes loading so the game creates and saves game.db.',
   'Quit all the way to the desktop. Do not leave the game, launcher handoff, or anti-cheat process running.',
   'Open DST Solo Mode, select the DuneSandbox Saved folder or exact profile folder, then choose Connect and validate.',
@@ -102,7 +99,7 @@ export const SOLO_ACTION_RULES = [
   {
     title: 'Progression actions',
     state: 'Game must be closed',
-    detail: 'Each proven PTC progression action runs as one transaction with its own retained pre-progression backup.',
+    detail: 'Each progression action runs as one transaction with its own retained pre-progression backup.',
   },
   {
     title: 'Restore save',
@@ -703,17 +700,17 @@ export function SoloMode() {
 
   const saveConsoleSettings = async () => {
     if (!selectionMatchesActive) {
-      setNotice({ kind: 'err', text: 'Connect and validate the selected PTC Solo profile before applying Engine.ini settings.' })
+      setNotice({ kind: 'err', text: 'Connect and validate the selected Retail Solo profile before applying Engine.ini settings.' })
       return
     }
     if (gameRunning) {
-      setNotice({ kind: 'err', text: 'Close Dune: Awakening completely before applying PTC Engine.ini settings.' })
+      setNotice({ kind: 'err', text: 'Close Dune: Awakening completely before applying Retail Engine.ini settings.' })
       return
     }
     if (Object.keys(changedConsoleSettings).length === 0) return
     if (!window.confirm(
-      `Apply ${Object.keys(changedConsoleSettings).length} PTC Solo Engine.ini setting(s)?\n\n`
-      + 'PTC must be fully closed. DST will retain both observed Engine.ini files, write only the three allowlisted ConsoleVariables, and verify both results.',
+      `Apply ${Object.keys(changedConsoleSettings).length} Retail Solo Engine.ini setting(s)?\n\n`
+      + 'Dune: Awakening must be fully closed. DST will retain Config\\Windows\\Engine.ini, write only the three allowlisted ConsoleVariables, and verify the result.',
     )) return
 
     setBusy('console-settings')
@@ -726,8 +723,8 @@ export function SoloMode() {
       setNotice({
         kind: 'ok',
         text: result.backupPaths.length > 0
-          ? `PTC Solo Engine.ini settings applied and verified in both observed files. Previous files retained at ${result.backupPaths.join('; ')}`
-          : 'PTC Solo Engine.ini settings created and verified in both observed files.',
+          ? `Retail Solo Engine.ini settings applied and verified. Previous file retained at ${result.backupPaths.join('; ')}`
+          : 'Retail Solo Engine.ini settings created and verified.',
       })
       await Promise.all([consoleSettingsState.refresh(), runtimeState.refresh()])
     } catch (error) {
@@ -1173,7 +1170,7 @@ export function SoloMode() {
     }
     if (!window.confirm(
       `${label}?\n\n`
-      + 'This PTC-only action retains the current game.db, writes one transaction, verifies progression semantics and SQLite integrity, then replaces the save atomically.',
+      + 'This action retains the current game.db, writes one transaction, verifies progression semantics and SQLite integrity, then replaces the save atomically.',
     )) return
     setBusy(`progression:${key}`)
     setNotice(null)
@@ -1252,9 +1249,9 @@ export function SoloMode() {
         <div className="flex items-start gap-2">
           <Icon name="FlaskConical" size={16} className="text-sky-400 mt-0.5 shrink-0" />
           <div>
-            <div className="font-medium text-sky-300">PTC preview adapter</div>
+            <div className="font-medium text-sky-300">Retail Solo adapter</div>
             <p className="text-text-muted mt-0.5">
-              Current support targets the proven PTC wrapper-v1 save. Retail will use a separate versioned adapter after its paths and schema are verified.
+              DST targets the released Retail Solo wrapper-v1 save with guarded offline writes, retained backups, and post-write verification.
             </p>
           </div>
         </div>
@@ -1409,7 +1406,7 @@ export function SoloMode() {
               <StatusPill ok={!gameRunning}>{gameRunning ? 'Game running - writes locked' : 'Game closed - writes available'}</StatusPill>
             </div>
             <dl className="grid grid-cols-[9rem_1fr] gap-x-3 gap-y-2 text-sm">
-              <dt className="text-text-muted">Adapter</dt><dd className="font-mono">{status?.adapter ?? 'ptc-auto'}</dd>
+              <dt className="text-text-muted">Adapter</dt><dd className="font-mono">{status?.adapter ?? 'retail-auto'}</dd>
               <dt className="text-text-muted">Platform</dt><dd>{status?.platform || runtime?.platform || 'Unknown'}</dd>
               <dt className="text-text-muted">Helper</dt><dd>{(runtime?.helperAvailable ?? status?.helperAvailable) ? 'Available' : 'Missing'}</dd>
               <dt className="text-text-muted">Profiles found</dt><dd>{discoveredProfiles.length}</dd>
@@ -1452,10 +1449,10 @@ export function SoloMode() {
             <div className="card p-5 text-sm text-text-muted">Loading Solo settings...</div>
           ) : (
             <>
-              <CollapsibleCard id="solo-settings-ptc-engine" title="PTC Engine settings" icon="Gauge">
+              <CollapsibleCard id="solo-settings-retail-engine" title="Retail Engine settings" icon="Gauge">
                 {consoleSettingsState.error ? (
                   <div className="rounded border border-danger/30 bg-danger/5 p-3 text-sm text-danger">
-                    <div>Could not load PTC Engine.ini settings: {consoleSettingsState.error}</div>
+                    <div>Could not load Retail Engine.ini settings: {consoleSettingsState.error}</div>
                     <button
                       className="btn-secondary mt-3"
                       onClick={() => void consoleSettingsState.refresh()}
@@ -1465,18 +1462,17 @@ export function SoloMode() {
                     </button>
                   </div>
                 ) : !consoleSettingsState.data ? (
-                  <div className="text-sm text-text-muted">Loading PTC Engine.ini settings...</div>
+                  <div className="text-sm text-text-muted">Loading Retail Engine.ini settings...</div>
                 ) : !consoleSettingsState.data.supported ? (
                   <div className="rounded border border-warning/30 bg-warning/5 p-3 text-sm text-text-muted">
-                    These controls are available only for the verified PTC <span className="font-mono">FLS_beta</span> profile. Retail folder structure is not assumed.
+                    These controls require a verified Retail <span className="font-mono">FLS_retail</span> profile.
                   </div>
                 ) : (
                   <div className="space-y-4">
                     <div className="rounded border border-warning/30 bg-warning/5 p-3 text-xs text-text-muted">
-                      Writes only <span className="font-mono">Config\Windows\Engine.ini</span> and{' '}
-                      <span className="font-mono">Config\WindowsClient\Engine.ini</span> under the
-                      connected PTC Solo root. Sun Exposure, Maximum Vehicles Per Player and Shield
-                      Drops While Shooting are field-confirmed in PTC Solo.
+                      Writes only <span className="font-mono">Config\Windows\Engine.ini</span> under the
+                      connected Retail Solo root. Sun Exposure, Maximum Vehicles Per Player and Shield
+                      Drops While Shooting are confirmed in Retail Solo.
                     </div>
                     <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
                       {consoleSettingsState.data.entries.map(entry => (
@@ -1532,7 +1528,7 @@ export function SoloMode() {
                         size={14}
                         className={busy === 'console-settings' ? 'animate-spin' : ''}
                       />
-                      Apply PTC Engine settings
+                      Apply Retail Engine settings
                     </button>
                   </div>
                 )}
@@ -1722,7 +1718,7 @@ export function SoloMode() {
                   <Icon name="Coins" size={16} /> Currencies
                 </h2>
                 <p className="text-sm text-text-muted mt-1">
-                  Exact Solari and Landsraad Scrip balances are field-confirmed in PTC.
+                  Exact Solari and Landsraad Scrip balances are supported in Retail Solo.
                 </p>
               </div>
               <StatusPill ok={!gameRunning}>
@@ -1937,7 +1933,7 @@ export function SoloMode() {
             <div className="card p-5">
               <h3 className="font-semibold mb-1">Give Vehicle Kit</h3>
               <p className="text-xs text-text-muted mb-4">
-                Delivers the canonical parts, unique modules, fuel cells, and repair torch already field-tested in PTC.
+                Delivers the canonical parts, unique modules, fuel cells, and repair torch for Retail Solo.
               </p>
               <label>
                 <span className="text-xs text-text-muted">Vehicle</span>
@@ -1974,7 +1970,7 @@ export function SoloMode() {
                 <Icon name="Download" size={15} /> Export Base Blueprint
               </h3>
               <p className="text-xs text-text-muted mb-4">
-                Download a saved Solo solido as portable DST JSON. Import stays disabled in PTC.
+                Download a saved Solo solido as portable DST JSON for backup or transfer.
               </p>
               {savedBlueprints.length === 0 ? (
                 <div className="rounded border border-border bg-surface-2/50 p-3 text-xs text-text-muted">
@@ -2016,8 +2012,7 @@ export function SoloMode() {
                 <Icon name="ScrollText" size={15} /> Import Base Blueprint
               </h3>
               <p className="text-xs text-text-muted mb-4">
-                The import implementation is retained for Retail Solo, but it is
-                disabled in PTC.
+                Import a portable DST blueprint into the connected Retail Solo save. DST retains the current save and verifies the result.
               </p>
               <label className="block text-[11px] uppercase tracking-wider text-text-dim mb-1">
                 Blueprint file (.json)
@@ -2026,7 +2021,7 @@ export function SoloMode() {
                 key={blueprintInputKey}
                 type="file"
                 accept="application/json,.json"
-                disabled={SOLO_BLUEPRINT_IMPORT_DISABLED || !canMutateActiveProfile || gameRunning}
+                disabled={!canMutateActiveProfile || gameRunning}
                 onChange={event => { void chooseBlueprintFile(event.target.files?.[0]) }}
                 className="w-full text-sm text-text-muted file:mr-3 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:bg-surface-2 file:text-text file:text-sm mb-1 disabled:opacity-50"
               />
@@ -2044,16 +2039,16 @@ export function SoloMode() {
                   {blueprintError}
                 </div>
               )}
-              <div className="rounded border border-danger/30 bg-danger/5 p-3 mt-4 text-xs text-text-muted">
-                {SOLO_BLUEPRINT_IMPORT_NOTICE}
+              <div className="rounded border border-warning/30 bg-warning/5 p-3 mt-4 text-xs text-text-muted">
+                Close Dune: Awakening fully before importing. Use blueprints exported from the released Retail Solo format.
               </div>
               <button
                 className={`btn-primary w-full mt-4 justify-center ${SOLO_DISABLED_PRIMARY_CLASS}`}
-                disabled={SOLO_BLUEPRINT_IMPORT_DISABLED || !canMutateActiveProfile || gameRunning || !blueprint}
+                disabled={!canMutateActiveProfile || gameRunning || !blueprint}
                 onClick={() => void importBlueprint()}
               >
                 <Icon name={busy === 'import-blueprint' ? 'LoaderCircle' : 'Upload'} size={14} className={busy === 'import-blueprint' ? 'animate-spin' : ''} />
-                Unavailable in PTC
+                Import blueprint
               </button>
             </div>
 
@@ -2082,7 +2077,7 @@ export function SoloMode() {
                 the confirmed maximum while preserving zero and non-numeric entries. Developer Storage is excluded.
               </p>
               <div className="rounded border border-warning/30 bg-warning/5 p-3 mt-4 text-xs text-text-muted">
-                Field-confirmed in PTC. Close the game fully; DST retains the current save before writing. Relog after the action.
+                Close the game fully; DST retains the current save before writing. Relog after the action.
               </div>
               <button
                 className={`btn-primary w-full mt-4 justify-center ${SOLO_DISABLED_PRIMARY_CLASS}`}
@@ -2120,7 +2115,7 @@ export function SoloMode() {
           <div className="rounded-lg border border-warning/30 bg-warning/5 px-4 py-3 text-sm flex items-start gap-2">
             <Icon name="ShieldAlert" size={15} className="text-warning mt-0.5 shrink-0" />
             <span>
-              PTC adapter only. Close the game fully before every action. Each action creates its own retained pre-progression backup.
+              Retail Solo progression actions require the game to be fully closed. Each action creates its own retained pre-progression backup.
             </span>
           </div>
           <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
@@ -2143,7 +2138,7 @@ export function SoloMode() {
               </div>
               <h2 className="font-semibold">Journey completion</h2>
               <p className="text-sm text-text-muted mt-1">
-                Choose one independently verified PTC progression path. Each selection keeps its own retained backup.
+                Choose a progression path. Each selection keeps its own retained backup and verifies the resulting save.
               </p>
               <label className="mt-4">
                 <span className="text-xs text-text-muted">Progression path</span>
@@ -2159,7 +2154,7 @@ export function SoloMode() {
               </label>
               <p className="text-xs text-text-muted mt-3 flex-1">
                 {journeyAction === 'npe'
-                  ? 'Complete the exact 140-node PTC tutorial catalog and apply the NPE completion tag, including the four PTC-only Base Backup Tool objectives.'
+                  ? 'Complete the exact 140-node Solo tutorial catalog and apply the NPE completion tag, including the four Base Backup Tool objectives.'
                   : 'Complete all 59 verified nodes, add 14 reward tags and five Fremkit recipes, then enable Prescience and the third ability slot.'}
               </p>
               <div className="rounded border border-border bg-surface-2/50 px-3 py-2 text-xs text-text-muted mt-4">
@@ -2185,7 +2180,7 @@ export function SoloMode() {
             <ProgressionActionCard
               icon="Sparkles"
               title="Enable all skills"
-              description="Raise 143 approved skills to value 7, leave Bindu Sprint and Voice Ignore learnable, preserve unknown PTC keys, keep at least 20 unspent points, and raise Intel to 100."
+              description="Raise 143 approved skills to value 7, leave Bindu Sprint and Voice Ignore learnable, preserve unknown Solo keys, keep at least 20 unspent points, and raise Intel to 100."
               status={`${inspection?.progression.skillsAtSeven ?? 0}/143 enabled · ${inspection?.progression.unspentSkillPoints ?? 0} unspent · ${inspection?.progression.intel ?? 0} Intel`}
               busy={busy === 'progression:skills'}
               disabled={!canMutateActiveProfile || gameRunning}

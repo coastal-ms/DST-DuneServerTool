@@ -48,7 +48,7 @@ export const LEGACY_NAV_ITEMS: readonly NavItem[] = [
   { to: '/experimental', label: 'Experimental Lab', icon: 'FlaskConical', group: 'terminal', ownerOnly: true, legacy: true },
   { to: '/broadcasts',  label: 'Broadcasts',   icon: 'Megaphone',       group: 'terminal', legacy: true },
   { to: '/gameplay', sidebarTo: '/gameplay?view=overview', label: 'Gameplay Admin', icon: 'Gamepad2', group: 'workspaces', activePaths: GAMEPLAY_PATHS, inactivePaths: ['/map?view=atlas', '/map?view=lifecycle'] },
-  { to: '/solo',        label: 'Solo Mode',      icon: 'Orbit',           group: 'solo', localOnly: true, windowsOnly: true, badge: 'Preview', legacy: true },
+  { to: '/solo',        label: 'Solo Mode',      icon: 'Orbit',           group: 'solo', localOnly: true, windowsOnly: true, legacy: true },
   { to: '/database',    label: 'Database',       icon: 'Database',        group: 'database', ownerOnly: true, legacy: true },
   { to: '/sietches',    label: 'Sietches',     icon: 'Network',         group: 'database', ownerOnly: true, legacy: true },
   { to: '/settings',    label: 'Settings',     icon: 'Settings',        group: 'system', ownerOnly: true, workspaceId: 'settings' },

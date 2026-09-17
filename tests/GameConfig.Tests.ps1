@@ -1981,6 +1981,20 @@ Describe 'GameConfig: Engine.ini opt-in setting' -Tag 'GameConfig' {
         Mock Read-DuneConfig { [ordered]@{ ClientConfigPath = 'C:\DuneClient'; ClientEngineIniEnabled = '' } }
         Get-DuneGameConfigClientDir | Should -Be 'C:\DuneClient'
     }
+
+    It 'defaults Retail client config to the active Windows folder' {
+        Mock Read-DuneConfig { [ordered]@{ ClientConfigPath = ''; ClientEngineIniEnabled = '' } }
+        Get-DuneGameConfigClientDir | Should -Be '%LOCALAPPDATA%\DuneSandbox\Saved\Config\Windows'
+        $script:DuneGameConfigClientPath | Should -Be '%LOCALAPPDATA%\DuneSandbox\Saved\Config\Windows\Game.ini'
+        $script:DuneGameConfigClientEnginePath | Should -Be '%LOCALAPPDATA%\DuneSandbox\Saved\Config\Windows\Engine.ini'
+    }
+
+    It 'migrates the former default WindowsClient folder to Retail Windows' {
+        Mock Read-DuneConfig { [ordered]@{ ClientConfigPath = '%LOCALAPPDATA%\DuneSandbox\Saved\Config\WindowsClient'; ClientEngineIniEnabled = '' } }
+        Get-DuneGameConfigClientDir | Should -Be '%LOCALAPPDATA%\DuneSandbox\Saved\Config\Windows'
+        Resolve-DuneGameConfigClientDir -Dir '%LOCALAPPDATA%\DuneSandbox\Saved\Config\WindowsClient' |
+            Should -Be ([Environment]::ExpandEnvironmentVariables('%LOCALAPPDATA%\DuneSandbox\Saved\Config\Windows'))
+    }
 }
 
 Describe 'GameConfig: local client Game.ini and Engine.ini' -Tag 'GameConfig' {
@@ -2063,7 +2077,7 @@ Vehicle.MaxVehiclesPerPlayer=20
         [IO.File]::ReadAllText((Join-Path $dir 'Engine.ini')) | Should -Not -Match 'Vehicle\.MaxVehiclesPerPlayer'
     }
 
-    It 'refuses Engine.ini writes while the game client is running before touching either file' {
+    It 'refuses active Retail client-file writes while the game is running before touching either file' {
         Mock Test-DuneGameClientRunning { $true }
         $dir = Join-Path (Get-PSDrive TestDrive).Root 'running-guard'
         [void](New-Item -ItemType Directory -Path $dir)
@@ -2077,6 +2091,20 @@ Vehicle.MaxVehiclesPerPlayer=20
 
         Test-Path (Join-Path $dir 'Game.ini') | Should -BeFalse
         Test-Path (Join-Path $dir 'Engine.ini') | Should -BeFalse
+    }
+
+    It 'refuses a Game.ini-only write while the Retail client is running' {
+        Mock Test-DuneGameClientRunning { $true }
+        $dir = Join-Path (Get-PSDrive TestDrive).Root 'running-game-only'
+        [void](New-Item -ItemType Directory -Path $dir)
+
+        {
+            Save-DuneGameConfigClient -Dir $dir -Updates @(
+                @{ key='m_RepairCostWeight'; value='0.25' }
+            )
+        } | Should -Throw '*Close Dune: Awakening*'
+
+        Test-Path (Join-Path $dir 'Game.ini') | Should -BeFalse
     }
 
     It 'bypasses Engine.ini notices and writes when the opt-in is disabled' {

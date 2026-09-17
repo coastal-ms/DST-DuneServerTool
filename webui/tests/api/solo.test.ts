@@ -89,12 +89,12 @@ describe('Solo Mode API contracts', () => {
       },
     })
 
-    await solo.deleteSoloBackup('FLS_beta-123\\game-old.db', 'profile-token')
+    await solo.deleteSoloBackup('FLS_retail-123\\game-old.db', 'profile-token')
     expect(last()).toEqual({
       url: '/api/solo/backups',
       method: 'DELETE',
       body: {
-        relativePath: 'FLS_beta-123\\game-old.db',
+        relativePath: 'FLS_retail-123\\game-old.db',
         expectedProfileToken: 'profile-token',
         confirm: 'DELETE SOLO BACKUP',
       },

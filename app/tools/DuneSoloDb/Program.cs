@@ -655,7 +655,7 @@ internal static partial class Program
         long itemId,
         string adapterPath)
     {
-        var adapter = ReadPtcAdapter(adapterPath);
+        var adapter = ReadSoloAdapter(adapterPath);
         var originalBytes = ReadStable(input);
         EnsureWritableInspection(InspectBytes(originalBytes, input));
         var wrapped = Unwrap(originalBytes);
@@ -2264,7 +2264,7 @@ internal static partial class Program
                     "offline-water-container-fills-with-safety-backups",
                     "offline-specialization-max-with-rewards",
                     "offline-find-the-fremen-completion",
-                    "offline-ptc-npe-completion",
+                    "offline-solo-npe-completion",
                     "offline-enable-all-skills-preserves-unknowns",
                     "offline-exact-progression-points",
                     "progression-compatible-schema-accepted",
@@ -2314,7 +2314,7 @@ internal static partial class Program
             : ReadCatalog(catalogPath);
         var adapter = adapterPath is null
             ? null
-            : ReadPtcAdapter(adapterPath);
+            : ReadSoloAdapter(adapterPath);
         return InspectBytes(
             ReadStable(input),
             input,
@@ -2384,7 +2384,7 @@ internal static partial class Program
         string sourcePath,
         IReadOnlyDictionary<string, CatalogRule>? catalog = null,
         IReadOnlyDictionary<string, int>? waterCapacities = null,
-        PtcAdapter? adapter = null)
+        SoloAdapter? adapter = null)
     {
         var database = Unwrap(wrapped);
         var sqliteBytes = database.SqliteBytes;
@@ -2458,8 +2458,13 @@ internal static partial class Program
         uint declaredLength,
         IReadOnlyDictionary<string, CatalogRule>? catalog,
         IReadOnlyDictionary<string, int>? waterCapacities,
-        PtcAdapter? adapter)
+        SoloAdapter? adapter)
     {
+        if (adapter is not null && wrapperVersion != adapter.WrapperVersion)
+        {
+            throw new InvalidDataException(
+                $"Solo adapter '{adapter.Id}' requires wrapper version {adapter.WrapperVersion}, found {wrapperVersion}.");
+        }
         var connectionString = new SqliteConnectionStringBuilder
         {
             DataSource = sqlitePath,
@@ -2548,6 +2553,14 @@ internal static partial class Program
             }
         }
 
+        var schemaFingerprint = Convert.ToHexString(
+            SHA256.HashData(Encoding.UTF8.GetBytes(schema.ToString()))).ToLowerInvariant();
+        if (adapter is not null && !adapter.SchemaFingerprints.Contains(schemaFingerprint))
+        {
+            throw new InvalidDataException(
+                $"Solo adapter '{adapter.Id}' schema mismatch: expected one of {string.Join(", ", adapter.SchemaFingerprints.Order())}, found {schemaFingerprint}.");
+        }
+
         return new Inspection(
             Ok: true,
             SourcePath: Path.GetFullPath(sourcePath),
@@ -2560,8 +2573,7 @@ internal static partial class Program
             ForeignKeyViolations: foreignKeyViolations,
             TableCount: tableCount,
             CharacterCount: characterCount,
-            SchemaFingerprint: Convert.ToHexString(
-                SHA256.HashData(Encoding.UTF8.GetBytes(schema.ToString()))).ToLowerInvariant(),
+            SchemaFingerprint: schemaFingerprint,
             MapSeed: mapSeed,
             Inventories: inventories,
             InventoryItems: inventoryItems,

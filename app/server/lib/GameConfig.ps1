@@ -1012,8 +1012,8 @@ function Write-DuneServerNameState {
 # SpiceHarvestingSystem, SandstormConfig, HydrationSubsystem,
 # DuneSandboxGameModeBase, SpiceAddictionSubsystem, RespawnSettings,
 # EncountersSubsystem, ContractsSubsystem, and SandwormSettings.
-$script:DuneGameConfigClientPath = '%LOCALAPPDATA%\DuneSandbox\Saved\Config\WindowsClient\Game.ini'
-$script:DuneGameConfigClientEnginePath = '%LOCALAPPDATA%\DuneSandbox\Saved\Config\WindowsClient\Engine.ini'
+$script:DuneGameConfigClientPath = '%LOCALAPPDATA%\DuneSandbox\Saved\Config\Windows\Game.ini'
+$script:DuneGameConfigClientEnginePath = '%LOCALAPPDATA%\DuneSandbox\Saved\Config\Windows\Engine.ini'
 
 # Build the post-save "apply this on each client too" reminder from a set of
 # structured updates (@{ file; section; key; value }). Returns @{ path; items }
@@ -1059,7 +1059,8 @@ function Get-DuneGameConfigClientApplyNotice {
 # read/write the player's client Game.ini directly. Used by the optional
 # "apply to my client too" flow + the read-only client viewer.
 # -----------------------------------------------------------------------------
-$script:DuneGameConfigClientDirDefault     = '%LOCALAPPDATA%\DuneSandbox\Saved\Config\WindowsClient'
+$script:DuneGameConfigClientDirDefault     = '%LOCALAPPDATA%\DuneSandbox\Saved\Config\Windows'
+$script:DuneGameConfigClientDirLegacy      = '%LOCALAPPDATA%\DuneSandbox\Saved\Config\WindowsClient'
 $script:DuneGameConfigClientGameFileName   = 'Game.ini'
 $script:DuneGameConfigClientEngineFileName = 'Engine.ini'
 
@@ -1087,7 +1088,12 @@ function Get-DuneGameConfigClientDir {
             if ($cfg -and $cfg.Contains('ClientConfigPath')) { $configured = "$($cfg['ClientConfigPath'])".Trim() }
         } catch { }
     }
-    if ($configured) { return $configured }
+    if ($configured) {
+        $configuredExpanded = [Environment]::ExpandEnvironmentVariables($configured).TrimEnd('\')
+        $legacyExpanded = [Environment]::ExpandEnvironmentVariables($script:DuneGameConfigClientDirLegacy).TrimEnd('\')
+        if ($configuredExpanded -ieq $legacyExpanded) { return $script:DuneGameConfigClientDirDefault }
+        return $configured
+    }
     return $script:DuneGameConfigClientDirDefault
 }
 
@@ -1095,7 +1101,12 @@ function Get-DuneGameConfigClientDir {
 function Resolve-DuneGameConfigClientDir {
     param([string]$Dir = '')
     if (-not $Dir) { $Dir = Get-DuneGameConfigClientDir }
-    return [Environment]::ExpandEnvironmentVariables($Dir)
+    $resolved = [Environment]::ExpandEnvironmentVariables($Dir).TrimEnd('\')
+    $legacy = [Environment]::ExpandEnvironmentVariables($script:DuneGameConfigClientDirLegacy).TrimEnd('\')
+    if ($resolved -ieq $legacy) {
+        return [Environment]::ExpandEnvironmentVariables($script:DuneGameConfigClientDirDefault)
+    }
+    return $resolved
 }
 
 # Full path to one client INI under the configured (or given) folder.
@@ -1281,8 +1292,8 @@ function Save-DuneGameConfigClient {
 
     $dirResolved = Resolve-DuneGameConfigClientDir -Dir $Dir
     if (-not (Test-Path -LiteralPath $dirResolved)) { throw "Client config folder not found: $dirResolved" }
-    if (@($clean | Where-Object { $_.file -eq 'engine' }).Count -gt 0 -and (Test-DuneGameClientRunning)) {
-        throw 'Close Dune: Awakening before applying client Engine.ini settings; the game overwrites Engine.ini when it exits.'
+    if (Test-DuneGameClientRunning) {
+        throw 'Close Dune: Awakening before applying client Game.ini or Engine.ini settings; Retail can overwrite these active files when it exits.'
     }
 
     $plans = New-Object 'System.Collections.Generic.List[object]'
@@ -2884,6 +2895,9 @@ function Set-DuneLandclaimTimer {
         $quoted = Get-DuneGameConfigQuotedKeys
         $dirResolved = Resolve-DuneGameConfigClientDir
         if (Test-Path -LiteralPath $dirResolved) {
+            if (Test-DuneGameClientRunning) {
+                throw 'Close Dune: Awakening before applying the client Game.ini setting; Retail can overwrite this active file when it exits.'
+            }
             $path     = Get-DuneGameConfigClientFilePath
             $existing = ''
             if (Test-Path -LiteralPath $path -PathType Leaf) { $existing = [IO.File]::ReadAllText($path) }

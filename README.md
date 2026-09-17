@@ -42,7 +42,7 @@ guarded controls in one native Windows app.
 
 ### Solo Mode
 
-- Connect one local PTC Solo save without Self-Hosted setup.
+- Connect one local Retail Solo save without Self-Hosted setup.
 - Validate wrapper, SQLite integrity, foreign keys, schema, and character count.
 - Create, restore, and delete retained backups.
 - Edit typed Solo and confirmed Engine settings.
@@ -310,7 +310,7 @@ The capture contains no player buildings or imported designs.
 
 Validated local-save settings, backups, character and inventory tools,
 currencies, fillables, cosmetics, packages, augments, and progression.
-The current adapter targets the supported PTC save format, not every retail save.
+The current adapter targets the supported Retail Solo save format. Other or older save formats may not be compatible.
 </details>
 
 <details>

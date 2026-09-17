@@ -9,6 +9,8 @@ export interface SoloProcess {
 export interface SoloProfile {
   id: string
   channel: string
+  adapter?: string
+  legacy?: boolean
   dbPath: string
   modifiedAt: string
   bytes: number
@@ -113,6 +115,8 @@ export interface SoloStatus {
   profileToken: string
   settingsPath: string
   adapter: string
+  channel: string
+  legacyAdapter: boolean
   profiles: SoloProfile[]
   gameRunning: boolean
   processes: SoloProcess[]

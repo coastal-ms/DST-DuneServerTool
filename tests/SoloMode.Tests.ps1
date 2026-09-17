@@ -23,7 +23,7 @@ function global:Reset-TestSoloState {
 }
 
 function global:New-TestSoloLayout {
-    param([string]$Channel = 'FLS_beta')
+    param([string]$Channel = 'FLS_retail')
     $root = Join-Path $env:LOCALAPPDATA 'DuneSandbox\Saved'
     $profile = Join-Path $root "Cloud\PlayerClientStorage\$Channel\123456789"
     $config = Join-Path $root 'Config\Windows'
@@ -36,13 +36,42 @@ function global:New-TestSoloLayout {
 Describe 'Solo Mode profile discovery and persistence' {
     BeforeEach { Reset-TestSoloState }
 
-    It 'finds the one PTC profile beneath the Saved root' {
+    It 'finds the released Retail profile beneath the Saved root' {
         $layout = New-TestSoloLayout
         $profiles = @(Find-DuneSoloProfiles -DataRoot $layout.root)
         $profiles.Count | Should -Be 1
         $profiles[0].id | Should -Be '123456789'
-        $profiles[0].channel | Should -Be 'FLS_beta'
+        $profiles[0].channel | Should -Be 'FLS_retail'
         $profiles[0].dbPath | Should -Be $layout.db
+        $profiles[0].adapter | Should -Be 'retail-wrapper-v1-2026-09'
+        $profiles[0].legacy | Should -BeFalse
+    }
+
+    It 'identifies the legacy wrapper-v1 profile separately from Retail' {
+        $layout = New-TestSoloLayout -Channel 'FLS_beta'
+        $profiles = @(Find-DuneSoloProfiles -DataRoot $layout.root)
+
+        $profiles.Count | Should -Be 1
+        $profiles[0].channel | Should -Be 'FLS_beta'
+        $profiles[0].adapter | Should -Be 'legacy-wrapper-v1-2026-08'
+        $profiles[0].legacy | Should -BeTrue
+
+        $manifest = Get-Content -LiteralPath (Get-DuneSoloDataFilePath -Name 'solo-retail-v1.json') -Raw |
+            ConvertFrom-Json
+        $manifest.wrapper_version | Should -Be 1
+        $manifest.schema_fingerprint | Should -Be '421d15955599ea223b3a72d1b418eb94befe333b7be9c20babd40ddf60274130'
+    }
+
+    It 'prefers the single Retail profile when Retail and legacy profiles both exist' {
+        $legacy = New-TestSoloLayout -Channel 'FLS_beta'
+        $retail = New-TestSoloLayout -Channel 'FLS_retail'
+
+        $discovery = Get-DuneSoloDiscovery -SelectedPath $retail.root
+
+        @($discovery.profiles).Count | Should -Be 2
+        $discovery.profiles[0].channel | Should -Be 'FLS_retail'
+        $discovery.suggestedDbPath | Should -Be $retail.db
+        (Get-DuneSoloProfile).dbPath | Should -Be $retail.db
     }
 
     It 'resolves a nested profile selection back to the Saved root' {
@@ -66,12 +95,72 @@ Describe 'Solo Mode profile discovery and persistence' {
         $status.dbPath | Should -Be $layout.db
     }
 
+    It 'connects Retail with its exact manifest and persists its versioned adapter identity' {
+        $layout = New-TestSoloLayout -Channel 'FLS_retail'
+        Mock Invoke-DuneSoloHelper {
+            [pscustomobject]@{
+                ok = $true
+                wrapperVersion = 1
+                schemaFingerprint = '421d15955599ea223b3a72d1b418eb94befe333b7be9c20babd40ddf60274130'
+                integrity = 'ok'
+                foreignKeyViolations = 0
+                characterCount = 1
+            }
+        }
+
+        $status = Connect-DuneSoloProfile -SelectedPath (Split-Path -Parent $layout.db)
+
+        $status.adapter | Should -Be 'retail-wrapper-v1-2026-09'
+        (Read-DuneSoloState).adapter | Should -Be 'retail-wrapper-v1-2026-09'
+        Assert-MockCalled Invoke-DuneSoloHelper -Times 2 -Exactly -ParameterFilter {
+            $Command -eq 'inspect' -and $Arguments.adapter -like '*solo-retail-v1.json'
+        }
+    }
+
+    It 'runs established write capabilities on the released Retail adapter' {
+        $layout = New-TestSoloLayout -Channel 'FLS_retail'
+        Save-DuneSoloState -DataRoot $layout.root -DbPath $layout.db | Out-Null
+        Mock Get-DuneSoloGameProcesses { @() }
+        Mock Invoke-DuneSoloHelper { @{ ok = $true } }
+
+        { Set-DuneSoloCurrencies -Solari 1 -Scrip 2 -Confirm 'SET SOLO CURRENCIES' } |
+            Should -Not -Throw
+        Assert-MockCalled Invoke-DuneSoloHelper -Times 1 -Exactly -ParameterFilter {
+            $Command -eq 'set-currencies'
+        }
+    }
+
+    It 'allows the established Solo capabilities on Retail' {
+        $layout = New-TestSoloLayout -Channel 'FLS_retail'
+        $profile = @{ dbPath = $layout.db }
+
+        { Assert-DuneSoloAdapterCapability -Profile $profile -Capability 'inspect' | Out-Null } |
+            Should -Not -Throw
+        { Assert-DuneSoloAdapterCapability -Profile $profile -Capability 'backup' | Out-Null } |
+            Should -Not -Throw
+        foreach ($capability in @('restore','currencies','item-grant','blueprint-import','progression')) {
+            { Assert-DuneSoloAdapterCapability -Profile $profile -Capability $capability | Out-Null } |
+                Should -Not -Throw
+        }
+    }
+
+    It 'keeps the incompatible legacy blueprint import blocked' {
+        $layout = New-TestSoloLayout -Channel 'FLS_beta'
+        $profile = @{ dbPath = $layout.db }
+
+        { Assert-DuneSoloAdapterCapability -Profile $profile -Capability 'blueprint-read' | Out-Null } |
+            Should -Not -Throw
+        { Assert-DuneSoloAdapterCapability -Profile $profile -Capability 'blueprint-import' | Out-Null } |
+            Should -Throw '*has not proven*blueprint-import*'
+    }
+
     It 'persists and reloads an active profile atomically' {
         $layout = New-TestSoloLayout
         Save-DuneSoloState -DataRoot $layout.root -DbPath $layout.db | Out-Null
         $state = Read-DuneSoloState
         $state.dataRoot | Should -Be $layout.root
         $state.dbPath | Should -Be $layout.db
+        $state.adapter | Should -Be 'retail-wrapper-v1-2026-09'
         (Test-Path -LiteralPath (Get-DuneSoloStatePath)) | Should -BeTrue
     }
 
@@ -202,7 +291,7 @@ Describe 'Solo Mode write gates and settings backups' {
         (Get-Content -LiteralPath $ini -Raw).Trim() | Should -Be $original.Trim()
     }
 
-    It 'reads and atomically writes allowlisted PTC Engine.ini settings' {
+    It 'reads and atomically writes the allowlisted Retail Engine.ini settings' {
         $layout = New-TestSoloLayout
         $engine = Join-Path $layout.config 'Engine.ini'
         $clientConfig = Join-Path $layout.root 'Config\WindowsClient'
@@ -238,12 +327,9 @@ Describe 'Solo Mode write gates and settings backups' {
 
         $result.ok | Should -BeTrue
         (Test-Path -LiteralPath $result.backupPath) | Should -BeTrue
-        @($result.backupPaths).Count | Should -Be 2
-        @($result.backupPaths | Select-Object -Unique).Count | Should -Be 2
+        @($result.backupPaths).Count | Should -Be 1
         (Get-Content -LiteralPath ($result.backupPaths | Where-Object { $_ -like '*Engine-Windows-*' }) -Raw) |
             Should -Match 'Unknown\.FutureKey=KeepMe'
-        (Get-Content -LiteralPath ($result.backupPaths | Where-Object { $_ -like '*Engine-WindowsClient-*' }) -Raw) |
-            Should -Match 'Client\.FutureKey=KeepMe'
         $written = Get-Content -LiteralPath $engine -Raw
         $clientWritten = Get-Content -LiteralPath $clientEngine -Raw
         $written | Should -Match '(?m)^KeepMe=Yes\r?$'
@@ -253,13 +339,15 @@ Describe 'Solo Mode write gates and settings backups' {
         $written | Should -Match '(?m)^Vehicle\.MaxVehiclesPerPlayer=20\r?$'
         $written | Should -Match '(?m)^Dune\.DisableShieldOnShooting=0\r?$'
         $clientWritten | Should -Match '(?m)^Client\.FutureKey=KeepMe\r?$'
-        $clientWritten | Should -Match '(?m)^Hydration\.SunExposureEnabled=0\r?$'
-        $clientWritten | Should -Match '(?m)^Vehicle\.MaxVehiclesPerPlayer=20\r?$'
-        @([regex]::Matches($clientWritten, '(?m)^Dune\.DisableShieldOnShooting=0\r?$')).Count |
-            Should -Be 1
+        $clientWritten.Trim() | Should -Be ((@(
+            '[ConsoleVariables]'
+            'Dune.DisableShieldOnShooting=1'
+            'Dune.DisableShieldOnShooting=1'
+            'Client.FutureKey=KeepMe'
+        ) -join [Environment]::NewLine).Trim())
     }
 
-    It 'blocks PTC Engine.ini writes while the game is running' {
+    It 'blocks Retail Engine.ini writes while the game is running' {
         $layout = New-TestSoloLayout
         Save-DuneSoloState -DataRoot $layout.root -DbPath $layout.db | Out-Null
         Mock Get-DuneSoloGameProcesses { @([pscustomobject]@{ name = 'DuneSandbox'; pid = 42 }) }
@@ -299,7 +387,7 @@ Describe 'Solo Mode write gates and settings backups' {
         (Get-Content -LiteralPath $engine -Raw).Trim() | Should -Be $original.Trim()
     }
 
-    It 'rolls back the host Engine.ini when the client-file commit fails' {
+    It 'does not write the stale WindowsClient Engine.ini file' {
         $layout = New-TestSoloLayout
         $engine = Join-Path $layout.config 'Engine.ini'
         $clientConfig = Join-Path $layout.root 'Config\WindowsClient'
@@ -311,24 +399,14 @@ Describe 'Solo Mode write gates and settings backups' {
         [IO.File]::WriteAllText($clientEngine, $clientOriginal)
         Save-DuneSoloState -DataRoot $layout.root -DbPath $layout.db | Out-Null
         Mock Get-DuneSoloGameProcesses { @() }
-        Mock Invoke-DuneSoloFileReplace {
-            param($Source, $Destination, $Backup)
-            if ($Destination -like '*WindowsClient\Engine.ini' -and $Source -like '*.tmp') {
-                throw 'simulated client commit failure'
-            }
-            [IO.File]::Replace($Source, $Destination, $Backup, $true)
-        }
-
-        {
-            Set-DuneSoloConsoleSettings -Settings @{
-                'Hydration.SunExposureEnabled' = '0'
-            } -Confirm 'APPLY SOLO CONSOLE SETTINGS'
-        } | Should -Throw '*simulated client commit failure*'
-        (Get-Content -LiteralPath $engine -Raw).Trim() | Should -Be $hostOriginal.Trim()
+        Set-DuneSoloConsoleSettings -Settings @{
+            'Hydration.SunExposureEnabled' = '0'
+        } -Confirm 'APPLY SOLO CONSOLE SETTINGS' | Out-Null
+        (Get-Content -LiteralPath $engine -Raw) | Should -Match 'Hydration\.SunExposureEnabled=0'
         (Get-Content -LiteralPath $clientEngine -Raw).Trim() | Should -Be $clientOriginal.Trim()
     }
 
-    It 'rejects unsupported or out-of-range PTC console settings' {
+    It 'rejects unsupported or out-of-range Retail console settings' {
         $layout = New-TestSoloLayout
         Save-DuneSoloState -DataRoot $layout.root -DbPath $layout.db | Out-Null
         Mock Get-DuneSoloGameProcesses { @() }
@@ -336,7 +414,7 @@ Describe 'Solo Mode write gates and settings backups' {
         {
             Set-DuneSoloConsoleSettings -Settings @{ 'Unknown.Key' = '1' } `
                 -Confirm 'APPLY SOLO CONSOLE SETTINGS'
-        } | Should -Throw '*Unsupported PTC Solo console setting*'
+        } | Should -Throw '*Unsupported Solo console setting*'
         {
             Set-DuneSoloConsoleSettings -Settings @{
                 'Vehicle.MaxVehiclesPerPlayer' = '1001'
@@ -344,7 +422,7 @@ Describe 'Solo Mode write gates and settings backups' {
         } | Should -Throw '*between 0 and 1000*'
     }
 
-    It 'does not guess a retail Engine.ini folder' {
+    It 'does not guess an unsupported Engine.ini folder' {
         $layout = New-TestSoloLayout -Channel 'FLS_live'
         Save-DuneSoloState -DataRoot $layout.root -DbPath $layout.db | Out-Null
         Mock Get-DuneSoloGameProcesses { @() }
@@ -354,7 +432,7 @@ Describe 'Solo Mode write gates and settings backups' {
             Set-DuneSoloConsoleSettings -Settings @{
                 'Hydration.SunExposureEnabled' = '0'
             } -Confirm 'APPLY SOLO CONSOLE SETTINGS'
-        } | Should -Throw '*verified PTC FLS_beta adapter*'
+        } | Should -Throw '*supported Retail adapter*'
     }
 
     It 'requires the exact item-grant confirmation phrase' {
@@ -400,13 +478,11 @@ Describe 'Solo Mode write gates and settings backups' {
         } | Should -Throw '*Confirm the offline blueprint import*'
     }
 
-    It 'rejects portable blueprint import before any PTC save access' {
-        Mock Assert-DuneSoloGameClosed {
-            throw 'The disabled import reached the process gate.'
-        }
-        Mock Invoke-DuneSoloHelper {
-            throw 'The disabled import reached the save helper.'
-        }
+    It 'builds a backup-safe Retail blueprint import while the game is closed' {
+        $layout = New-TestSoloLayout
+        Save-DuneSoloState -DataRoot $layout.root -DbPath $layout.db | Out-Null
+        Mock Get-DuneSoloGameProcesses { @() }
+        Mock Invoke-DuneSoloHelper { @{ ok = $true; safetyBackup = 'test' } }
 
         {
             Import-DuneSoloBlueprint -Blueprint @{
@@ -415,10 +491,13 @@ Describe 'Solo Mode write gates and settings backups' {
                 placeables = @()
                 pentashields = @()
             } -Confirm 'IMPORT SOLO BLUEPRINT'
-        } | Should -Throw '*disabled for PTC Solo*'
+        } | Should -Not -Throw
 
-        Assert-MockCalled Assert-DuneSoloGameClosed -Times 0
-        Assert-MockCalled Invoke-DuneSoloHelper -Times 0
+        Assert-MockCalled Invoke-DuneSoloHelper -Times 1 -ParameterFilter {
+            $Command -eq 'import-blueprint' -and
+            $Arguments.input -eq $layout.db -and
+            $Arguments['safety-backup'] -like '*pre-blueprint*'
+        }
     }
 
     It 'lists and exports Solo blueprints from a connected save without opening import' {
@@ -559,11 +638,16 @@ Describe 'Solo Mode write gates and settings backups' {
         }
     }
 
-    It 'builds each PTC progression command with a retained backup' {
+    It 'builds each Retail progression command with a retained backup' {
         $layout = New-TestSoloLayout
         Save-DuneSoloState -DataRoot $layout.root -DbPath $layout.db | Out-Null
         Mock Get-DuneSoloGameProcesses { @() }
-        Mock Get-DuneSoloDataFilePath { Join-Path $script:SoloTestRoot $Name }
+        Mock Get-DuneSoloDataFilePath {
+            if ($Name -eq 'solo-retail-v1.json') {
+                return Join-Path (Get-DstRepoRoot) 'app\data\solo-retail-v1.json'
+            }
+            Join-Path $script:SoloTestRoot $Name
+        }
         Mock Invoke-DuneSoloHelper { @{ ok = $true; action = $Command } }
 
         $spec = Invoke-DuneSoloProgressionAction -Action 'max-specializations' `
@@ -585,7 +669,7 @@ Describe 'Solo Mode write gates and settings backups' {
         Assert-MockCalled Invoke-DuneSoloHelper -Times 5 -ParameterFilter {
             $Arguments.input -eq $layout.db -and
             $Arguments['safety-backup'] -like '*pre-progression*' -and
-            $Arguments.adapter -like '*solo-ptc-v1.json'
+            $Arguments.adapter -like '*solo-retail-v1.json'
         }
         Assert-MockCalled Invoke-DuneSoloHelper -Times 1 -ParameterFilter {
             $Command -eq 'set-progression-points' -and
@@ -707,20 +791,20 @@ Describe 'Solo Mode route security metadata' {
     }
 }
 
-Describe 'Solo Mode PTC progression catalogs' {
-    It 'keeps the 140-node PTC NPE catalog separate from the 136-node shared catalog' {
+Describe 'Solo Mode Retail progression catalogs' {
+    It 'keeps the 140-node Retail NPE catalog separate from the 136-node shared catalog' {
         $root = Get-DstRepoRoot
         $shared = Get-Content (Join-Path $root 'app\data\dune-npe-completion-nodes.json') -Raw | ConvertFrom-Json
-        $ptc = Get-Content (Join-Path $root 'app\data\solo-ptc-v1.json') -Raw | ConvertFrom-Json
-        $ptcNodes = @($ptc.complete_npe.nodes)
+        $retail = Get-Content (Join-Path $root 'app\data\solo-retail-v1.json') -Raw | ConvertFrom-Json
+        $retailNodes = @($retail.complete_npe.nodes)
         $sharedNodes = @($shared.nodes)
-        $extras = @($ptcNodes | Where-Object { $_ -notin $sharedNodes })
+        $extras = @($retailNodes | Where-Object { $_ -notin $sharedNodes })
 
         $sharedNodes.Count | Should -Be 136
-        $ptc.complete_npe.node_count | Should -Be 140
-        $ptcNodes.Count | Should -Be 140
-        @($ptcNodes | Sort-Object -Unique).Count | Should -Be 140
-        @($ptc.compatible_schema_fingerprints) | Should -Contain '421d15955599ea223b3a72d1b418eb94befe333b7be9c20babd40ddf60274130'
+        $retail.complete_npe.node_count | Should -Be 140
+        $retailNodes.Count | Should -Be 140
+        @($retailNodes | Sort-Object -Unique).Count | Should -Be 140
+        $retail.schema_fingerprint | Should -Be '421d15955599ea223b3a72d1b418eb94befe333b7be9c20babd40ddf60274130'
         $extras | Should -Be @(
             'DA_MQ_ANewBeginning.Dangerous Mission No 2.BaseBackupTool'
             'DA_MQ_ANewBeginning.Dangerous Mission No 2.BaseBackupTool.CraftBaseBackupTool'
@@ -747,9 +831,9 @@ Describe 'Solo Mode backup profile isolation' {
 
     It 'uses distinct backup roots for the same account in different channels' {
         $root = Join-Path $env:LOCALAPPDATA 'DuneSandbox\Saved\Cloud\PlayerClientStorage'
-        $ptc = Join-Path $root 'FLS_beta\123\game.db'
+        $legacy = Join-Path $root 'FLS_beta\123\game.db'
         $retail = Join-Path $root 'FLS\123\game.db'
-        (Get-DuneSoloProfileBackupRoot -DbPath $ptc) |
+        (Get-DuneSoloProfileBackupRoot -DbPath $legacy) |
             Should -Not -Be (Get-DuneSoloProfileBackupRoot -DbPath $retail)
     }
 

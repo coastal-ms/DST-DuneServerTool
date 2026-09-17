@@ -19,7 +19,7 @@ const TASK_COPY: Record<string, { description: string; keywords: string }> = {
   '/gameplay': { description: 'Open all gameplay administration views.', keywords: 'storage blueprints market landsraad' },
   '/gameconfig': { description: 'Review and edit server configuration.', keywords: 'ini settings' },
   '/broadcasts': { description: 'Send a message through the existing broadcast tools.', keywords: 'message announcement' },
-  '/solo': { description: 'Work with local Solo saves and inventory.', keywords: 'ptc single player' },
+  '/solo': { description: 'Work with local Retail Solo saves and inventory.', keywords: 'retail solo single player' },
   '/settings': { description: 'Configure DST, connections, and remote access.', keywords: 'appearance theme remote accounts updates' },
 }
 
