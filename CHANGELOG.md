@@ -34,9 +34,11 @@ here cover everything those tags shipped.
   and marker schema. Active Spice remains available through a Retail
   compatibility adapter backed by the installed Funcom configuration and
   Retail resource-field state.
-- Made the installed Funcom `UserGame.ini` and `UserEngine.ini` files
-  authoritative for DST. Apply/restart now pushes those files into the
-  battlegroup before startup CVar rebuilding and restart.
+- Preserved existing Self-Hosted settings during Retail migration by importing
+  and verifying the battlegroup's current `UserGame.ini` and `UserEngine.ini`
+  before marking Funcom's installed copies authoritative. Apply/restart fails
+  closed until that import is proven, then pushes the installed files before
+  startup CVar rebuilding and restart.
 - Removed the automatic client-INI popup after settings changes. The explicit
   client configuration and repair tools remain available.
 - Fixed specialization controls overflowing their card at narrower widths.

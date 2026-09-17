@@ -954,6 +954,7 @@ function Get-DuneExperimentalGroup {
 $script:DuneGameConfigLiveGlobDir    = '/var/lib/rancher/k3s/storage/*/Saved/UserSettings'
 $script:DuneGameConfigTplGamePath    = '/home/dune/.dune/download/scripts/setup/config/UserGame.ini'
 $script:DuneGameConfigTplEnginePath  = '/home/dune/.dune/download/scripts/setup/config/UserEngine.ini'
+$script:DuneGameConfigAuthorityMarker = '/home/dune/.dune/download/scripts/setup/config/.dst-live-settings-imported-v1'
 
 # Cached, player-facing server name shown in the in-game server browser. This is
 # the battlegroup title (CRD spec.title, e.g. "Reapers") — NOT Bgd.ServerDisplayName
@@ -2231,10 +2232,14 @@ function Get-DuneGameConfigContext {
 
 function Resolve-DuneGameConfigPaths {
     param([string]$Ip, [switch]$Force)
-    # Retail self-hosting makes setup/config the deploy source. Never reverse the
-    # direction by adopting a generated PVC copy back into DST.
-    $installed = ((Invoke-V6Ssh -Ip $Ip -Cmd "sudo bash -c 'test -f ''$script:DuneGameConfigTplGamePath'' && test -f ''$script:DuneGameConfigTplEnginePath'' && echo ok'") -join '').Trim()
-    if ($installed -eq 'ok') {
+
+    # Funcom's Retail updater creates setup/config with stock defaults even when
+    # the battlegroup already has an administrator's established User*.ini files.
+    # On first use, import the existing live pair INTO the installed directory
+    # before declaring that directory authoritative. Never push stock installed
+    # defaults over an unimported live configuration.
+    $installedState = ((Invoke-V6Ssh -Ip $Ip -Cmd "sudo bash -c 'if test -f ''$script:DuneGameConfigTplGamePath'' && test -f ''$script:DuneGameConfigTplEnginePath''; then if test -f ''$script:DuneGameConfigAuthorityMarker''; then echo ready; else echo uninitialized; fi; fi'") -join '').Trim()
+    if ($installedState -eq 'ready') {
         return @{
             game   = $script:DuneGameConfigTplGamePath
             engine = $script:DuneGameConfigTplEnginePath
@@ -2242,17 +2247,47 @@ function Resolve-DuneGameConfigPaths {
         }
     }
 
-    # Compatibility fallback for older Funcom installations that do not ship
-    # the installed source directory yet. This branch is read/write only because
-    # no authoritative deploy source exists on those builds.
     $dir = ((Invoke-V6Ssh -Ip $Ip -Cmd "sudo bash -c 'ls -t $($script:DuneGameConfigLiveGlobDir)/UserGame.ini 2>/dev/null | head -1 | xargs -r dirname'") -join '').Trim()
     if ($dir) {
         $g = "$dir/UserGame.ini"
         $e = "$dir/UserEngine.ini"
         $chk = ((Invoke-V6Ssh -Ip $Ip -Cmd "sudo bash -c 'test -f ''$g'' && test -f ''$e'' && echo ok'") -join '').Trim()
         if ($chk -eq 'ok') {
+            if ($installedState -eq 'uninitialized') {
+                $stamp = [DateTime]::UtcNow.ToString('yyyyMMddHHmmss')
+                $installedDir = $script:DuneGameConfigTplGamePath -replace '/[^/]+$', ''
+                $migrateCmd = "set -e; " +
+                    "sudo cp '$script:DuneGameConfigTplGamePath' '$script:DuneGameConfigTplGamePath.pre-live-import-$stamp'; " +
+                    "sudo cp '$script:DuneGameConfigTplEnginePath' '$script:DuneGameConfigTplEnginePath.pre-live-import-$stamp'; " +
+                    "sudo install -o dune -g dune -m 0664 '$g' '$installedDir/.dst-UserGame.ini.tmp'; " +
+                    "sudo install -o dune -g dune -m 0664 '$e' '$installedDir/.dst-UserEngine.ini.tmp'; " +
+                    "sudo cmp -s '$g' '$installedDir/.dst-UserGame.ini.tmp'; " +
+                    "sudo cmp -s '$e' '$installedDir/.dst-UserEngine.ini.tmp'; " +
+                    "sudo mv '$installedDir/.dst-UserGame.ini.tmp' '$script:DuneGameConfigTplGamePath'; " +
+                    "sudo mv '$installedDir/.dst-UserEngine.ini.tmp' '$script:DuneGameConfigTplEnginePath'; " +
+                    "printf 'live-imported-v1\n' | sudo tee '$script:DuneGameConfigAuthorityMarker' > /dev/null; " +
+                    "echo __DST_AUTH__:migrated"
+                $migrated = ((Invoke-V6Ssh -Ip $Ip -Cmd $migrateCmd -TimeoutSec 30) -join "`n").Trim()
+                if ($migrated -notmatch '(?m)^__DST_AUTH__:migrated$') {
+                    throw 'DST could not safely import the existing battlegroup INIs. Installed defaults were not deployed.'
+                }
+                return @{
+                    game      = $script:DuneGameConfigTplGamePath
+                    engine    = $script:DuneGameConfigTplEnginePath
+                    source    = 'installed'
+                    migrated  = $true
+                    migratedFrom = $dir
+                }
+            }
+
+            # Compatibility fallback for older Funcom installations that do not
+            # ship the installed source directory yet.
             return @{ game = $g; engine = $e; source = 'legacy-live' }
         }
+    }
+
+    if ($installedState -eq 'uninitialized') {
+        throw 'Installed User*.ini defaults are not initialized and no existing battlegroup configuration could be imported. Deployment is blocked.'
     }
     throw 'No authoritative installed UserGame.ini/UserEngine.ini files were found.'
 }
