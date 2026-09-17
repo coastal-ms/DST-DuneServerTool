@@ -28,12 +28,12 @@ here cover everything those tags shipped.
 - Added Retail's Zanovar story area to Map Spin-Up and exposed its director
   party-sharing override so self-hosted operators can allow separate parties
   to share the area instead of retaining the shipped one-party isolation.
-- Preserved non-default DST-managed Self-Hosted INI settings across the Retail
-  migration, including inventory capacity and Deep Desert base-backup access.
-  Migration now skips newly generated default PVCs, layers supported overrides
-  onto Funcom's installed defaults, repairs the earlier v1 migration from its
-  clean pre-import backups, verifies both files, and fails closed when no prior
-  managed configuration can be identified.
+- Hardened the conditional Retail INI migration used when multiple battlegroup
+  PVC configurations exist or the earlier v1 import marker requires repair.
+  It now skips newly generated default PVCs, layers supported non-default
+  DST-managed overrides onto Funcom's installed defaults, repairs v1 imports
+  from clean pre-import backups, verifies both files, and fails closed when no
+  prior managed configuration can be identified.
 - Restored an explicit **Apply to my client** action for settings that Retail
   evaluates from each player's local config. In particular, **Maximum Vehicles
   Per Player** and **Shield Drops While Shooting** can now write
