@@ -39,8 +39,9 @@ here cover everything those tags shipped.
   before marking Funcom's installed copies authoritative. Apply/restart fails
   closed until that import is proven, then pushes the installed files before
   startup CVar rebuilding and restart.
-- Removed the automatic client-INI popup after settings changes. The explicit
-  client configuration and repair tools remain available.
+- Removed obsolete client/server mismatch banners and automatic client-INI
+  popups now that Retail Self-Hosted uses the authoritative server INIs. The
+  explicit local client configuration tools remain available for manual use.
 - Fixed specialization controls overflowing their card at narrower widths.
 
 ## [15.0.6] - 2026-09-16
