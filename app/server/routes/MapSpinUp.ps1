@@ -31,3 +31,23 @@ Register-DuneRoute -Method POST -Path '/api/map-spinup/{map}' -Handler {
         Write-DuneError -Response $res -Status 500 -Message $_.Exception.Message
     }
 }
+
+Register-DuneRoute -Method POST -Path '/api/map-spinup/{map}/party-sharing' -Handler {
+    param($req, $res, $routeParams, $body)
+    try {
+        $shared = $false
+        if ($body -is [hashtable] -and $body.ContainsKey('shared')) { $shared = [bool]$body['shared'] }
+        elseif ($null -ne $body -and $null -ne $body.shared)        { $shared = [bool]$body.shared }
+
+        $r = Invoke-WithDuneLock -Name 'director-ini' -Script {
+            Set-DuneSpinUpMapPartySharing -Map $routeParams.map -Shared:$shared
+        }
+        if (-not $r.ok -and $r.status) {
+            Write-DuneError -Response $res -Status $r.status -Message $r.message
+            return
+        }
+        Write-DuneJson -Response $res -Body $r
+    } catch {
+        Write-DuneError -Response $res -Status 500 -Message $_.Exception.Message
+    }
+}

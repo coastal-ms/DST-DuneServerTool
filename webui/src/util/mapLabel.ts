@@ -21,6 +21,7 @@ const MAP_LABELS: Record<string, string> = {
   CB_Dungeon_OldCarthag: 'Dungeon: Old Carthag',
   CB_Dungeon_ThePit: 'Dungeon: The Pit',
   CB_Story_BanditFortress01: 'Bandit Fortress',
+  CB_Story_DestroyedZanovar: 'Zanovar',
   Story_ArtOfKanly: 'The Art of Kanly',
   Story_ProcesVerbal: 'Procès-Verbal',
   Story_Faction_Outpost_Atre: 'Faction Outpost: Atreides',

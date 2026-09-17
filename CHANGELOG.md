@@ -23,6 +23,9 @@ here cover everything those tags shipped.
   the API and appears as `N/A (cap N)` in Server Health, instead of becoming
   numeric zero internally or showing an unexplained dash that could be mistaken
   for inactive priming.
+- Added Retail's Zanovar story area to Map Spin-Up and exposed its director
+  party-sharing override so self-hosted operators can allow separate parties
+  to share the area instead of retaining the shipped one-party isolation.
 
 ## [15.1.0] - 2026-09-17
 

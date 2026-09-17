@@ -25,7 +25,8 @@
 # travel-to spawn — a deliberate trade-off, not a side effect).
 #
 # This module:
-#   * lists every real map section (anything with a NumExtraServers key),
+#   * lists real map sections (NumExtraServers plus explicitly verified Retail
+#     areas whose director sections omit that legacy marker),
 #   * reports its current MinServers value (absent = 0 = off),
 #   * toggles MinServers between 0 and 1 by rewriting director.ini and
 #     patching the CRD (hot-swappable — the operator reconciles it live),
@@ -33,7 +34,7 @@
 #
 # Overmap / Survival_1 are always-on and aren't in director.ini at all, so
 # they never appear. Config-only sections ([ Battlegroup ], [ InstancingModes ])
-# have no NumExtraServers key and are excluded.
+# have no NumExtraServers key and are excluded unless explicitly cataloged.
 #
 # Pattern (SSH + kubectl patch) cribbed from app/server/lib/Maps.ps1.
 
@@ -67,6 +68,20 @@ $script:DuneSpinUpNativeMaps = @(
     'DLC_Story_LostHarvest_ForgottenLab'
 )
 
+# Retail story areas that need lifecycle controls even when Funcom's director
+# section does not include NumExtraServers.
+$script:DuneSpinUpRetailMaps = @(
+    'CB_Story_DestroyedZanovar'
+)
+
+# MaxParties=1 isolates each party into its own dimension. Retail currently
+# ships this override for Zanovar, which prevents separate parties from sharing
+# its single self-hosted dimension. Removing the override restores the
+# director's shared-party default.
+$script:DuneSpinUpPartySharingMaps = @(
+    'CB_Story_DestroyedZanovar'
+)
+
 # Friendly labels for the common maps. Anything not listed falls back to a
 # generic prettifier (strip known prefixes, underscores -> spaces).
 $script:DuneSpinUpLabels = @{
@@ -80,6 +95,7 @@ $script:DuneSpinUpLabels = @{
     'CB_Dungeon_OldCarthag'              = 'Dungeon: Old Carthag'
     'CB_Dungeon_ThePit'                  = 'Dungeon: The Pit'
     'CB_Story_BanditFortress01'          = 'Bandit Fortress'
+    'CB_Story_DestroyedZanovar'           = 'Zanovar'
     'Story_ArtOfKanly'                   = 'The Art of Kanly'
     'Story_ProcesVerbal'                 = 'Procès-Verbal'
     'Story_Faction_Outpost_Atre'         = 'Faction Outpost: Atreides'
@@ -144,6 +160,8 @@ function _Parse-DuneDirectorIni {
                 HasMinServers        = $false
                 MinServers           = 0
                 HasEnableAutoScaling = $false
+                HasMaxParties         = $false
+                MaxParties            = $null
             }
 
             continue
@@ -157,9 +175,18 @@ function _Parse-DuneDirectorIni {
         if ($trim -match '^EnableAutomaticInstanceScaling\s*=\s*true\s*$') {
             $current.HasEnableAutoScaling = $true
         }
+        if ($trim -match '^MaxParties\s*=\s*(\d+)') {
+            $current.HasMaxParties = $true
+            $current.MaxParties = [int]$matches[1]
+        }
     }
     if ($current) { $sections.Add($current) }
     return $sections
+}
+
+function _Test-DuneSpinUpControllableSection {
+    param([Parameter(Mandatory)]$Section)
+    return ($Section.IsMap -or $script:DuneSpinUpRetailMaps -contains $Section.Name)
 }
 
 function Get-DuneSpinUpMaps {
@@ -171,7 +198,7 @@ function Get-DuneSpinUpMaps {
     $sections = _Parse-DuneDirectorIni -Ini $r.ini
     $maps = @()
     foreach ($s in $sections) {
-        if (-not $s.IsMap) { continue }
+        if (-not (_Test-DuneSpinUpControllableSection -Section $s)) { continue }
         $native = $script:DuneSpinUpNativeMaps -contains $s.Name
         $targetCount = _Get-DuneSpinUpTargetCount -Map $s.Name -Bg $r.info.Bg
         $maps += [pscustomobject]@{
@@ -181,6 +208,8 @@ function Get-DuneSpinUpMaps {
             minServers = [int]$s.MinServers
             enabled    = ([int]$s.MinServers -ge 1)
             availablePartitions = $targetCount
+            supportsPartySharing = ($script:DuneSpinUpPartySharingMaps -contains $s.Name)
+            sharedParties = (-not $s.HasMaxParties -or [int]$s.MaxParties -ne 1)
         }
     }
     return @{
@@ -272,6 +301,60 @@ function _Set-DuneIniEnableAutoScaling {
     return ($lines -join "`n")
 }
 
+function _Set-DuneIniPartySharing {
+    param(
+        [Parameter(Mandatory)][string]$Ini,
+        [Parameter(Mandatory)][string]$Map,
+        [Parameter(Mandatory)][bool]$Shared
+    )
+    $lines = [System.Collections.Generic.List[string]]::new()
+    foreach ($l in ($Ini -split "`n")) { $lines.Add(($l -replace "`r", '')) }
+
+    $secStart = -1
+    for ($i = 0; $i -lt $lines.Count; $i++) {
+        if ($lines[$i].Trim() -match '^\[\s*(.+?)\s*\]$' -and $matches[1] -eq $Map) { $secStart = $i; break }
+    }
+    if ($secStart -lt 0) { return $Ini }
+
+    $secEnd = $lines.Count
+    for ($i = $secStart + 1; $i -lt $lines.Count; $i++) {
+        if ($lines[$i].Trim() -match '^\[\s*.+?\s*\]$') { $secEnd = $i; break }
+    }
+
+    $maxPartiesIdx = -1
+    for ($i = $secStart + 1; $i -lt $secEnd; $i++) {
+        if ($lines[$i].Trim() -match '^MaxParties\s*=') { $maxPartiesIdx = $i; break }
+    }
+
+    if ($Shared) {
+        if ($maxPartiesIdx -ge 0) { $lines.RemoveAt($maxPartiesIdx) }
+    } elseif ($maxPartiesIdx -ge 0) {
+        $lines[$maxPartiesIdx] = 'MaxParties=1'
+    } else {
+        $lines.Insert($secStart + 1, 'MaxParties=1')
+    }
+    return ($lines -join "`n")
+}
+
+function _Invoke-DuneDirectorIniPatch {
+    param(
+        [Parameter(Mandatory)]$Read,
+        [Parameter(Mandatory)][string]$Ini
+    )
+    $patch = @(@{ op = 'replace'; path = $script:DuneDirectorIniPath; value = $Ini })
+    $patchJson = $patch | ConvertTo-Json -Depth 30 -Compress
+    if ($patchJson -notmatch '^\s*\[') { $patchJson = "[$patchJson]" }
+    $b64 = [Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes($patchJson))
+    $remoteFile = "/tmp/dst-mapspinup-$([guid]::NewGuid().ToString('N')).json"
+    $cmd = "echo $b64 | base64 -d > $remoteFile && sudo kubectl patch battlegroup $($Read.info.Name) -n $($Read.info.Ns) --type=json --patch-file $remoteFile 2>&1; rm -f $remoteFile"
+    $out = Invoke-V6Ssh -Ip $Read.ctx.vm.ip -Cmd $cmd -TimeoutSec 60
+    $outText = (($out -join "`n")).Trim()
+    return @{
+        success = ($outText -match 'patched' -and $outText -notmatch 'error|Error|ERROR')
+        raw = $outText
+    }
+}
+
 function Set-DuneSpinUpMap {
     # Toggles a single map's MinServers floor. $Enabled -> 1, else 0.
     param(
@@ -282,7 +365,9 @@ function Set-DuneSpinUpMap {
     if (-not $r.ok) { return $r }
 
     $sections = _Parse-DuneDirectorIni -Ini $r.ini
-    $target = $sections | Where-Object { $_.IsMap -and $_.Name -eq $Map } | Select-Object -First 1
+    $target = $sections |
+        Where-Object { (_Test-DuneSpinUpControllableSection -Section $_) -and $_.Name -eq $Map } |
+        Select-Object -First 1
     if (-not $target) {
         return @{ ok = $false; status = 404; message = "Map '$Map' is not a controllable map section in director.ini." }
     }
@@ -321,22 +406,9 @@ function Set-DuneSpinUpMap {
         }
     }
 
-    $patch = @(@{ op = 'replace'; path = $script:DuneDirectorIniPath; value = $newIni })
-    $patchJson = $patch | ConvertTo-Json -Depth 30 -Compress
-    if ($patchJson -notmatch '^\s*\[') { $patchJson = "[$patchJson]" }
-    $b64 = [Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes($patchJson))
-    # IMPORTANT: build a command with NO embedded double-quotes. The legacy
-    # PowerShell runtime that hosts the server mangles embedded " when passing
-    # the command to ssh.exe as a native argument, which corrupted the older
-    # -p "$(echo .. | base64 -d)" form (kubectl saw a truncated patch value).
-    # Decode the patch to a temp file and use --patch-file instead. The path is
-    # generated host-side from a GUID so it contains only safe chars.
-    $remoteFile = "/tmp/dst-mapspinup-$([guid]::NewGuid().ToString('N')).json"
-    $cmd = "echo $b64 | base64 -d > $remoteFile && sudo kubectl patch battlegroup $($r.info.Name) -n $($r.info.Ns) --type=json --patch-file $remoteFile 2>&1; rm -f $remoteFile"
-    $out = Invoke-V6Ssh -Ip $r.ctx.vm.ip -Cmd $cmd -TimeoutSec 60
-    $outText = (($out -join "`n")).Trim()
-
-    $success = ($outText -match 'patched' -and $outText -notmatch 'error|Error|ERROR')
+    $patched = _Invoke-DuneDirectorIniPatch -Read $r -Ini $newIni
+    $success = $patched.success
+    $outText = $patched.raw
     $label = _Get-DuneSpinUpLabel -Map $Map
     return @{
         ok         = $success
@@ -351,6 +423,55 @@ function Set-DuneSpinUpMap {
             else              { "$label spin-up floor disabled (MinServers = 0)." }
         } else {
             "kubectl patch may have failed: $outText"
+        }
+    }
+}
+
+function Set-DuneSpinUpMapPartySharing {
+    param(
+        [Parameter(Mandatory)][string]$Map,
+        [Parameter(Mandatory)][bool]$Shared
+    )
+    if ($script:DuneSpinUpPartySharingMaps -notcontains $Map) {
+        return @{ ok = $false; status = 400; message = "Party sharing is not supported for map '$Map'." }
+    }
+
+    $r = _Get-DuneDirectorIni
+    if (-not $r.ok) { return $r }
+    $target = _Parse-DuneDirectorIni -Ini $r.ini |
+        Where-Object { $_.Name -eq $Map } |
+        Select-Object -First 1
+    if (-not $target) {
+        return @{ ok = $false; status = 404; message = "Map '$Map' is not present in director.ini." }
+    }
+
+    $currentlyShared = (-not $target.HasMaxParties -or [int]$target.MaxParties -ne 1)
+    if ($currentlyShared -eq $Shared) {
+        return @{
+            ok = $true; map = $Map; label = (_Get-DuneSpinUpLabel -Map $Map)
+            sharedParties = $Shared; noop = $true
+            message = if ($Shared) { 'Zanovar already allows separate parties to share its server.' }
+                      else { 'Zanovar is already isolated to one party per server.' }
+        }
+    }
+
+    $newIni = _Set-DuneIniPartySharing -Ini $r.ini -Map $Map -Shared:$Shared
+    if ($newIni -eq $r.ini) {
+        return @{ ok = $false; status = 500; message = "No party-sharing change produced for '$Map'." }
+    }
+
+    $patched = _Invoke-DuneDirectorIniPatch -Read $r -Ini $newIni
+    return @{
+        ok = $patched.success
+        map = $Map
+        label = (_Get-DuneSpinUpLabel -Map $Map)
+        sharedParties = $Shared
+        raw = $patched.raw
+        message = if ($patched.success) {
+            if ($Shared) { 'Zanovar now allows separate parties to share its server.' }
+            else { 'Zanovar now keeps one party per server.' }
+        } else {
+            "kubectl patch may have failed: $($patched.raw)"
         }
     }
 }

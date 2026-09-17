@@ -19,7 +19,7 @@ import { CSS } from '@dnd-kit/utilities'
 import { PageHeader } from '../components/PageHeader'
 import { Icon } from '../components/Icon'
 import { ApiError } from '../api/client'
-import { getMapSpinUp, setMapSpinUp, type SpinUpMap } from '../api/mapSpinUp'
+import { getMapSpinUp, setMapPartySharing, setMapSpinUp, type SpinUpMap } from '../api/mapSpinUp'
 import { fixOnDemandPartitions, getMapState, restartMapPods, type MapState } from '../api/maps'
 import { SpicefieldsCard } from './gameconfig/SpicefieldsCard'
 import { useStatus } from '../hooks/useStatus'
@@ -173,6 +173,24 @@ export function MapSpinUp({ embedded = false }: { embedded?: boolean }) {
       setBusy(null)
     }
   }, [refresh, startTracking, stopTracking, dismissLoadError])
+
+  const onPartySharing = useCallback(async (m: SpinUpMap, shared: boolean) => {
+    setBusy(m.map); setMessage(null); setError(null)
+    setMaps(prev => prev?.map(x => x.map === m.map ? { ...x, sharedParties: shared } : x) ?? prev)
+    try {
+      const r = await setMapPartySharing(m.map, shared)
+      setMessage(r.message ?? (shared
+        ? `${m.label} now allows separate parties to share its server.`
+        : `${m.label} now keeps one party per server.`))
+      if (!r.ok) setError(r.message ?? 'The party-sharing change may not have applied.')
+      await refresh()
+    } catch (e) {
+      setError(e instanceof ApiError ? e.message : String(e))
+      await refresh()
+    } finally {
+      setBusy(null)
+    }
+  }, [refresh])
 
   // Drive the loading counter + readiness polling for any tracked map. Ticks
   // once a second for the elapsed display and polls the live pod state every
@@ -426,6 +444,7 @@ export function MapSpinUp({ embedded = false }: { embedded?: boolean }) {
             maps={orderedMaps}
             busy={busy}
             onToggle={onToggle}
+            onPartySharing={onPartySharing}
             loadElapsed={loadElapsed}
             loadErrors={loadErrors}
             onDismissError={dismissLoadError}
@@ -438,13 +457,14 @@ export function MapSpinUp({ embedded = false }: { embedded?: boolean }) {
   )
 }
 
-function MapGroup({ title, hint, tone = 'text', maps, busy, onToggle, loadElapsed, loadErrors, onDismissError, sensors, onDragEnd }: {
+function MapGroup({ title, hint, tone = 'text', maps, busy, onToggle, onPartySharing, loadElapsed, loadErrors, onDismissError, sensors, onDragEnd }: {
   title: string
   hint: string
   tone?: 'text' | 'warning'
   maps: SpinUpMap[]
   busy: string | null
   onToggle: (m: SpinUpMap, next: boolean) => void
+  onPartySharing: (m: SpinUpMap, shared: boolean) => void
   loadElapsed: Record<string, number>
   loadErrors: Record<string, string>
   onDismissError: (mapName: string) => void
@@ -469,6 +489,7 @@ function MapGroup({ title, hint, tone = 'text', maps, busy, onToggle, loadElapse
                 map={m}
                 busy={busy}
                 onToggle={onToggle}
+                onPartySharing={onPartySharing}
                 elapsed={loadElapsed[m.map]}
                 loadError={loadErrors[m.map]}
                 onDismissError={onDismissError}
@@ -481,10 +502,11 @@ function MapGroup({ title, hint, tone = 'text', maps, busy, onToggle, loadElapse
   )
 }
 
-function SortableMapCard({ map: m, busy, onToggle, elapsed, loadError, onDismissError }: {
+function SortableMapCard({ map: m, busy, onToggle, onPartySharing, elapsed, loadError, onDismissError }: {
   map: SpinUpMap
   busy: string | null
   onToggle: (m: SpinUpMap, next: boolean) => void
+  onPartySharing: (m: SpinUpMap, shared: boolean) => void
   elapsed?: number
   loadError?: string
   onDismissError: (mapName: string) => void
@@ -543,6 +565,23 @@ function SortableMapCard({ map: m, busy, onToggle, elapsed, loadError, onDismiss
           </div>
         </label>
       </div>
+      {m.supportsPartySharing && (
+        <label className="flex items-start justify-between gap-3 border-t border-border/40 pt-2 text-xs cursor-pointer">
+          <span>
+            <span className="block font-semibold text-text">Shared multiplayer</span>
+            <span className="text-text-dim">
+              Let separate parties use the same Zanovar server instead of limiting it to one party.
+            </span>
+          </span>
+          <input
+            type="checkbox"
+            className="mt-0.5 h-4 w-4 shrink-0 accent-accent"
+            checked={m.sharedParties === true}
+            disabled={busy !== null}
+            onChange={e => onPartySharing(m, e.target.checked)}
+          />
+        </label>
+      )}
       {loadError && (
         <div className="flex items-start gap-2 rounded-md border border-danger/40 bg-danger/10 px-2.5 py-1.5 text-xs text-danger">
           <Icon name="AlertTriangle" size={13} className="shrink-0 mt-0.5" />
