@@ -10,6 +10,7 @@
     "backup",
     "restore",
     "item-grant",
+    "item-delete",
     "weapon-ammo",
     "currencies",
     "water-fill",

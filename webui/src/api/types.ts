@@ -559,6 +559,7 @@ export type SpicefieldType = {
 export type SpicefieldsResponse = {
   available: boolean
   rows: SpicefieldType[]
+  unavailableReason?: string
   // False when the battlegroup could not be read, in which case callers should
   // show every row rather than hide real data on a transient failure.
   partitionGate?: boolean

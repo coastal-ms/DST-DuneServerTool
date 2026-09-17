@@ -138,7 +138,7 @@ Describe 'Solo Mode profile discovery and persistence' {
             Should -Not -Throw
         { Assert-DuneSoloAdapterCapability -Profile $profile -Capability 'backup' | Out-Null } |
             Should -Not -Throw
-        foreach ($capability in @('restore','currencies','item-grant','blueprint-import','progression')) {
+        foreach ($capability in @('restore','currencies','item-grant','item-delete','blueprint-import','progression')) {
             { Assert-DuneSoloAdapterCapability -Profile $profile -Capability $capability | Out-Null } |
                 Should -Not -Throw
         }
@@ -465,6 +465,46 @@ Describe 'Solo Mode write gates and settings backups' {
             $Arguments.input -eq $layout.db -and
             $Arguments['safety-backup'] -like '*pre-grant*'
         }
+    }
+
+    It 'builds a backup-safe exact Solo item deletion while the game is closed' {
+        $layout = New-TestSoloLayout
+        Save-DuneSoloState -DataRoot $layout.root -DbPath $layout.db | Out-Null
+        Mock Get-DuneSoloGameProcesses { @() }
+        Mock Get-DuneSoloGameplayCatalogPath { Join-Path $script:SoloTestRoot 'catalog.json' }
+        Mock Invoke-DuneSoloHelper {
+            @{
+                ok = $true
+                itemId = 107
+                removed = 4
+                remaining = 6
+                safetyBackup = 'test'
+            }
+        }
+
+        $result = Remove-DuneSoloInventoryItem -ItemId 107 `
+            -ExpectedStackSize 10 -Quantity 4 -Confirm 'DELETE SOLO ITEM'
+
+        $result.ok | Should -BeTrue
+        Assert-MockCalled Invoke-DuneSoloHelper -Times 1 -ParameterFilter {
+            $Command -eq 'delete-item' -and
+            $Arguments.input -eq $layout.db -and
+            $Arguments['item-id'] -eq 107 -and
+            $Arguments['expected-stack-size'] -eq 10 -and
+            $Arguments.quantity -eq 4 -and
+            $Arguments['safety-backup'] -like '*pre-item-delete*'
+        }
+    }
+
+    It 'rejects invalid or unconfirmed Solo item deletion input before invoking the helper' {
+        {
+            Remove-DuneSoloInventoryItem -ItemId 107 `
+                -ExpectedStackSize 10 -Quantity 11 -Confirm 'DELETE SOLO ITEM'
+        } | Should -Throw '*between 1 and the current stack size*'
+        {
+            Remove-DuneSoloInventoryItem -ItemId 107 `
+                -ExpectedStackSize 10 -Quantity 4 -Confirm 'yes'
+        } | Should -Throw '*Confirm the offline Solo item deletion*'
     }
 
     It 'requires the exact blueprint-import confirmation phrase' {

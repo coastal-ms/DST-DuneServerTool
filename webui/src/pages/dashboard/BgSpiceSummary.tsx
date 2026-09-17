@@ -68,6 +68,7 @@ function formatRawInteger(value: string) {
 
 export function BgSpiceSummary({ enabled }: Props) {
   const [rows, setRows] = useState<SpicefieldType[] | null>(null)
+  const [unavailableReason, setUnavailableReason] = useState<string | null>(null)
   // False only when the backend could read the battlegroup; a failed read
   // leaves this true so nothing is hidden on a transient error.
   const [gateOk, setGateOk] = useState(false)
@@ -99,6 +100,7 @@ export function BgSpiceSummary({ enabled }: Props) {
     try {
       const data = await getSpicefields()
       setRows(data.rows)
+      setUnavailableReason(data.available ? null : (data.unavailableReason ?? 'Spice field controls are unavailable on this Funcom server build.'))
       setGateOk(data.partitionGate === true)
       setUpdatedAt(new Date())
       setErr(null)
@@ -282,8 +284,12 @@ export function BgSpiceSummary({ enabled }: Props) {
         <p className="text-xs text-danger font-mono">spice: {err}</p>
       )}
 
-      {rows && rows.length === 0 && !err && (
-        <p className="text-xs text-text-dim italic">No spicefield types configured.</p>
+      {unavailableReason && !err && (
+        <p className="text-xs text-warning">{unavailableReason}</p>
+      )}
+
+      {rows && rows.length === 0 && !err && !unavailableReason && (
+        <p className="text-xs text-text-dim italic">No spicefield types are present.</p>
       )}
 
       {rows && rows.length > 0 && (

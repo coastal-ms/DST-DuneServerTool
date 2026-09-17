@@ -277,7 +277,7 @@ BEGIN
                AND application_name LIKE 'DuneSandbox%' AND pid <> pg_backend_pid()) THEN
         RAISE EXCEPTION 'A live game database session remains; refusing vehicle deletion.';
     END IF;
-    IF EXISTS (SELECT 1 FROM dune.actor_state WHERE actor_id = __VEHICLE_ID__::bigint
+    IF EXISTS (SELECT 1 FROM dune.actors WHERE id = __VEHICLE_ID__::bigint
                AND state::text = 'Travel') THEN
         RAISE EXCEPTION 'Vehicle travel is still pending; refusing deletion.';
     END IF;
@@ -345,8 +345,6 @@ OR EXISTS(SELECT 1 FROM dune.backup_vehicles WHERE vehicle_id = __VEHICLE_ID__::
 OR EXISTS(SELECT 1 FROM dune.inventories WHERE actor_id = __VEHICLE_ID__::bigint)
 OR EXISTS(SELECT 1 FROM dune.markers WHERE marker_hash_id = __VEHICLE_ID__::bigint)
 OR EXISTS(SELECT 1 FROM dune.player_markers WHERE marker_hash_id = __VEHICLE_ID__::bigint)
-OR EXISTS(SELECT 1 FROM dune.overmap_players WHERE vehicle_id = __VEHICLE_ID__::bigint)
-OR EXISTS(SELECT 1 FROM dune.actor_state WHERE actor_id = __VEHICLE_ID__::bigint)
 '@.Replace('__VEHICLE_ID__', [string]$VehicleId)
     $sql = $sql.Replace('__REVISION_SQL__', $revisionSql).Replace('__REVISION__', $TargetRevision).Replace('__REMAINS_SQL__', $remainsSql).Replace('__VEHICLE_ID__', [string]$VehicleId)
     $delete = Invoke-DuneSqlQuery -Ip $Ip -Sql $sql -ReadOnly $false -MaxRows 10 -TimeoutSec 60

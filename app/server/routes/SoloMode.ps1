@@ -217,6 +217,26 @@ Register-DuneRoute -Method POST -Path '/api/solo/items/grant' -LocalOnly -Handle
     }
 }
 
+Register-DuneRoute -Method POST -Path '/api/solo/items/delete' -LocalOnly -Handler {
+    param($req, $res, $routeParams, $body)
+    try {
+        $itemId = [long](Get-DuneSoloBodyField -Body $body -Name 'itemId' -Default 0)
+        $expectedStackSize = [long](Get-DuneSoloBodyField -Body $body -Name 'expectedStackSize' -Default 0)
+        $quantity = [long](Get-DuneSoloBodyField -Body $body -Name 'quantity' -Default 0)
+        $confirm = [string](Get-DuneSoloBodyField -Body $body -Name 'confirm' -Default '')
+        $expectedProfileToken = [string](Get-DuneSoloBodyField -Body $body -Name 'expectedProfileToken' -Default '')
+        $result = Invoke-WithDuneLock -Name 'solo-profile-data' -Script {
+            Assert-DuneSoloExpectedProfile -ExpectedProfileToken $expectedProfileToken
+            Remove-DuneSoloInventoryItem -ItemId $itemId `
+                -ExpectedStackSize $expectedStackSize -Quantity $quantity -Confirm $confirm
+        }
+        Write-DuneJson -Response $res -Body $result
+    } catch {
+        $status = if ($_.Exception.Message -like '*still running*' -or $_.Exception.Message -like '*changed in another window*') { 409 } else { 400 }
+        Write-DuneError -Response $res -Status $status -Message $_.Exception.Message
+    }
+}
+
 Register-DuneRoute -Method GET -Path '/api/solo/blueprints' -LocalOnly -Handler {
     param($req, $res, $routeParams, $body)
     try {

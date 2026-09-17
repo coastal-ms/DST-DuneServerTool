@@ -1,8 +1,11 @@
-import { describe, expect, it } from 'vitest'
+import { createElement } from 'react'
+import { fireEvent, render, screen } from '@testing-library/react'
+import { describe, expect, it, vi } from 'vitest'
 import {
   buildSoloInventoryLocations,
   buildSoloInventoryGroups,
   filterSoloInventoryItemsByLocation,
+  SoloInventoryExplorer,
 } from '../src/components/solo/SoloInventoryExplorer'
 
 describe('Solo inventory explorer', () => {
@@ -97,5 +100,38 @@ describe('Solo inventory explorer', () => {
       { key: 'inventory:1', label: 'Backpack' },
       { key: 'inventory:11', label: 'Bank Storage' },
     ])
+  })
+
+  it('deletes an exact Solo occurrence with a bounded quantity', () => {
+    const onDelete = vi.fn()
+    const item = {
+      inventoryId: 1,
+      destinationKey: 'inventory:1',
+      destinationLabel: 'Backpack',
+      destinationKind: 'backpack' as const,
+      templateId: 'PlantFiber',
+      displayName: 'Plant Fiber',
+      totalQuantity: 50,
+      occurrenceCount: 1,
+      minQuality: 0,
+      maxQuality: 0,
+      occurrences: [{ itemId: 42, stackSize: 50, quality: 0, templateId: 'PlantFiber' }],
+    }
+
+    render(createElement(SoloInventoryExplorer, {
+      items: [item],
+      inventories: [],
+      connected: true,
+      disabled: false,
+      busyItemId: null,
+      onDelete,
+    }))
+
+    fireEvent.click(screen.getByText('Plant Fiber'))
+    const quantity = screen.getByLabelText('Delete quantity')
+    fireEvent.change(quantity, { target: { value: '12' } })
+    fireEvent.click(screen.getByTitle('Delete item'))
+
+    expect(onDelete).toHaveBeenCalledWith(item.occurrences[0], item, 12)
   })
 })

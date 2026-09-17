@@ -82,6 +82,17 @@ internal static partial class Program
                     options.TryGetValue("augment-catalog", out var augmentCatalog)
                         ? Path.GetFullPath(augmentCatalog)
                         : null),
+                "delete-item" => DeleteInventoryItem(
+                    Require(options, "input"),
+                    Require(options, "safety-backup"),
+                    ParseItemId(RequireValue(options, "item-id"), "Solo item id"),
+                    ParseNonNegativeQuantity(
+                        RequireValue(options, "expected-stack-size"),
+                        "Expected stack size"),
+                    ParseNonNegativeQuantity(
+                        RequireValue(options, "quantity"),
+                        "Delete quantity"),
+                    Require(options, "catalog")),
                 "import-blueprint" => ImportBlueprint(
                     Require(options, "input"),
                     Require(options, "safety-backup"),
@@ -542,6 +553,15 @@ internal static partial class Program
             if (!long.TryParse(value, out var parsed) || parsed <= 0)
             {
                 throw new ArgumentException($"A valid {label} is required.");
+            }
+            return parsed;
+        }
+
+        private static long ParseNonNegativeQuantity(string value, string label)
+        {
+            if (!long.TryParse(value, out var parsed) || parsed < 0)
+            {
+                throw new ArgumentException($"{label} must be a non-negative integer.");
             }
             return parsed;
         }
@@ -1330,6 +1350,18 @@ internal static partial class Program
                         3,
                         NULL
                     );
+                    INSERT INTO items VALUES (
+                        107,
+                        1,
+                        10,
+                        6,
+                        'TestResource',
+                        0,
+                        0,
+                        '{}',
+                        0,
+                        NULL
+                    );
                     CREATE TABLE parent (id INTEGER PRIMARY KEY);
                     CREATE TABLE child (
                         id INTEGER PRIMARY KEY,
@@ -1391,6 +1423,16 @@ internal static partial class Program
             {
                 throw new InvalidOperationException(
                     "Solo inventory inspection changed a stored zero-sized stack.");
+            }
+            var deleteFixture = inspection.InventoryItems.Single(value =>
+                value.TemplateId == "TestResource"
+                && value.DestinationLabel == "Backpack");
+            if (deleteFixture.Occurrences.Length != 1
+                || deleteFixture.Occurrences[0].ItemId != 107
+                || deleteFixture.Occurrences[0].StackSize != 10)
+            {
+                throw new InvalidOperationException(
+                    "Solo inventory inspection did not return exact item occurrences.");
             }
             if (inspection.RangedWeapons.Single(value =>
                     value.TemplateId == "HarkAr3").CurrentAmmo != 20)
@@ -1571,6 +1613,42 @@ internal static partial class Program
             {
                 throw new InvalidOperationException(
                     "Offline weapon ammo update did not retain, write, and verify the exact item.");
+            }
+            var partialDeleteSafety = Path.Combine(root, "safety", "before-partial-delete.db");
+            DeleteInventoryItem(
+                target,
+                partialDeleteSafety,
+                107,
+                10,
+                4,
+                catalogPath,
+                requireGameClosed: false);
+            var partialDelete = InspectPath(target, catalogPath).InventoryItems.Single(value =>
+                value.TemplateId == "TestResource"
+                && value.DestinationLabel == "Backpack");
+            if (!File.Exists(partialDeleteSafety)
+                || partialDelete.TotalQuantity != 6
+                || partialDelete.Occurrences.Single().StackSize != 6)
+            {
+                throw new InvalidOperationException(
+                    "Partial Solo item deletion did not retain, update, and verify the exact stack.");
+            }
+            var fullDeleteSafety = Path.Combine(root, "safety", "before-full-delete.db");
+            DeleteInventoryItem(
+                target,
+                fullDeleteSafety,
+                107,
+                6,
+                6,
+                catalogPath,
+                requireGameClosed: false);
+            if (!File.Exists(fullDeleteSafety)
+                || InspectPath(target, catalogPath).InventoryItems.Any(value =>
+                    value.TemplateId == "TestResource"
+                    && value.DestinationLabel == "Backpack"))
+            {
+                throw new InvalidOperationException(
+                    "Full Solo item deletion did not retain, remove, and verify the exact stack.");
             }
             SetWeaponAmmo(
                 target,
@@ -2249,6 +2327,7 @@ internal static partial class Program
                     "bank-storage-destination-discovery",
                     "solo-inventory-grouped-read-model",
                     "offline-weapon-ammo-update-with-safety-backup",
+                    "offline-partial-and-full-item-deletion-with-safety-backups",
                     "retained-backup",
                     "atomic-restore-with-safety-backup",
                     "unsupported-wrapper-rejected",
@@ -2990,26 +3069,42 @@ internal static partial class Program
         {
             using var command = connection.CreateCommand();
             command.CommandText = """
-                SELECT MIN(template_id),
-                       COALESCE(SUM(stack_size), 0),
-                       COUNT(*),
-                       MIN(quality_level),
-                       MAX(quality_level)
+                SELECT id,
+                       template_id,
+                       stack_size,
+                       quality_level
                 FROM items
                 WHERE inventory_id = $inventory
                   AND TRIM(template_id) <> ''
-                GROUP BY LOWER(template_id)
-                ORDER BY LOWER(template_id);
+                ORDER BY LOWER(template_id), id;
                 """;
             command.Parameters.AddWithValue("$inventory", destination.Id);
             using var reader = command.ExecuteReader();
+            var occurrences = new List<InventoryItemOccurrence>();
             while (reader.Read())
             {
-                var templateId = reader.GetString(0);
+                occurrences.Add(new InventoryItemOccurrence(
+                    ItemId: reader.GetInt64(0),
+                    StackSize: reader.GetInt64(2),
+                    Quality: reader.GetInt32(3),
+                    TemplateId: reader.GetString(1)));
+            }
+            foreach (var group in occurrences.GroupBy(
+                         value => value.TemplateId,
+                         StringComparer.OrdinalIgnoreCase))
+            {
+                var templateId = group.First().TemplateId;
                 var displayName = catalog is not null
                     && catalog.TryGetValue(templateId, out var rule)
                     ? rule.DisplayName
                     : templateId;
+                var groupedOccurrences = group
+                    .Select(value => new InventoryItemOccurrence(
+                        value.ItemId,
+                        value.StackSize,
+                        value.Quality,
+                        value.TemplateId))
+                    .ToArray();
                 results.Add(new InventoryItemGroup(
                     InventoryId: destination.Id,
                     DestinationKey: destination.Key,
@@ -3017,10 +3112,11 @@ internal static partial class Program
                     DestinationKind: destination.Kind,
                     TemplateId: templateId,
                     DisplayName: displayName,
-                    TotalQuantity: reader.GetInt64(1),
-                    OccurrenceCount: reader.GetInt64(2),
-                    MinQuality: reader.GetInt32(3),
-                    MaxQuality: reader.GetInt32(4)));
+                    TotalQuantity: groupedOccurrences.Sum(value => value.StackSize),
+                    OccurrenceCount: groupedOccurrences.LongLength,
+                    MinQuality: groupedOccurrences.Min(value => value.Quality),
+                    MaxQuality: groupedOccurrences.Max(value => value.Quality),
+                    Occurrences: groupedOccurrences));
             }
         }
         return results.ToArray();
@@ -3229,7 +3325,14 @@ internal static partial class Program
         long TotalQuantity,
         long OccurrenceCount,
         int MinQuality,
-        int MaxQuality);
+        int MaxQuality,
+        InventoryItemOccurrence[] Occurrences);
+
+    private sealed record InventoryItemOccurrence(
+        long ItemId,
+        long StackSize,
+        int Quality,
+        string TemplateId);
 
     private sealed record RangedWeapon(
         long ItemId,

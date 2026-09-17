@@ -126,7 +126,7 @@ Describe 'Vehicle deletion SQL' {
         $script:queries[0] | Should -Match 'vm\.id = inv\.vehicle_module_id AND vm\.vehicle_id = 42::bigint'
     }
 
-    It 'aggregates duplicate actor-state rows into one vehicle row' {
+    It 'reads the Retail actor state directly without the removed state table' {
         Mock Get-DuneVehicleHostScope { @{ key = $script:testScope } }
         Mock Invoke-DuneSqlQuery {
             param($Ip, $Sql, $ReadOnly, $MaxRows, $TimeoutSec)
@@ -134,7 +134,7 @@ Describe 'Vehicle deletion SQL' {
             return @{
                 ok = $true
                 Columns = @('vehicle_id','class','map','vehicle_name','actor_state','permissions','target_revision')
-                Rows = @(, @('42','BP_Sandbike_C','Hagga','Scout','ready, stored','[]',$script:testRevision))
+                Rows = @(, @('42','BP_Sandbike_C','Hagga','Scout','Default','[]',$script:testRevision))
             }
 
         }
@@ -142,9 +142,9 @@ Describe 'Vehicle deletion SQL' {
         $result = Get-DuneVehicleFleetLive -Ip '192.0.2.1'
 
         $result.total | Should -Be 1
-        $result.vehicles[0].actor_state | Should -Be 'ready, stored'
-        $script:fleetSql | Should -Match "string_agg\(DISTINCT s\.state::text"
-        $script:fleetSql | Should -Not -Match 'pa\.actor_name, s\.state'
+        $result.vehicles[0].actor_state | Should -Be 'Default'
+        $script:fleetSql | Should -Match "COALESCE\(a\.state::text, ''\) AS actor_state"
+        $script:fleetSql | Should -Not -Match 'dune\.actor_state'
     }
 
     It 'serializes rename and deletion routes under one lifecycle lock' {

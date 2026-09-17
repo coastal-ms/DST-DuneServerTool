@@ -377,7 +377,7 @@ function Assert-DuneSoloGameClosed {
 
 function Invoke-DuneSoloHelper {
     param(
-        [Parameter(Mandatory)][ValidateSet('inspect','backup','restore','grant-items','import-blueprint','list-blueprints','export-blueprint','set-currencies','fill-water','set-weapon-ammo','max-augment-attributes','max-specializations','complete-fremen','complete-npe','enable-skills','set-progression-points')][string]$Command,
+        [Parameter(Mandatory)][ValidateSet('inspect','backup','restore','grant-items','delete-item','import-blueprint','list-blueprints','export-blueprint','set-currencies','fill-water','set-weapon-ammo','max-augment-attributes','max-specializations','complete-fremen','complete-npe','enable-skills','set-progression-points')][string]$Command,
         [Parameter(Mandatory)][hashtable]$Arguments
     )
 
@@ -666,6 +666,44 @@ function Set-DuneSoloWeaponAmmo {
         'safety-backup' = $safety
         'item-id' = $ItemId
         ammo = $Ammo
+        catalog = Get-DuneSoloGameplayCatalogPath
+    }
+}
+
+function Remove-DuneSoloInventoryItem {
+    param(
+        [Parameter(Mandatory)][long]$ItemId,
+        [Parameter(Mandatory)][long]$ExpectedStackSize,
+        [Parameter(Mandatory)][long]$Quantity,
+        [Parameter(Mandatory)][string]$Confirm
+    )
+
+    Assert-DuneSoloSupportedPlatform
+    if ($Confirm -ne 'DELETE SOLO ITEM') {
+        throw 'Confirm the offline Solo item deletion before continuing.'
+    }
+    Assert-DuneSoloGameClosed
+    if ($ItemId -le 0) { throw 'Choose a Solo inventory item.' }
+    if ($ExpectedStackSize -lt 0) { throw 'Expected stack size cannot be negative.' }
+    if ($Quantity -lt 0 -or $Quantity -gt $ExpectedStackSize -or
+        ($ExpectedStackSize -gt 0 -and $Quantity -eq 0)) {
+        throw 'Delete quantity must match an empty stack or be between 1 and the current stack size.'
+    }
+    $profile = Get-DuneSoloProfile
+    if (-not $profile.dbPath -or -not (Test-Path -LiteralPath $profile.dbPath -PathType Leaf)) {
+        throw 'Connect a valid Solo save before deleting an item.'
+    }
+    Assert-DuneSoloAdapterCapability -Profile $profile -Capability 'item-delete' | Out-Null
+    $safetyDir = Join-Path (Get-DuneSoloProfileBackupRoot -DbPath $profile.dbPath) 'pre-item-delete'
+    New-Item -ItemType Directory -Path $safetyDir -Force | Out-Null
+    $stamp = (Get-Date).ToUniversalTime().ToString('yyyyMMdd-HHmmssfff')
+    $safety = Join-Path $safetyDir "game-before-item-delete-$stamp.db"
+    return Invoke-DuneSoloHelper -Command 'delete-item' -Arguments @{
+        input = $profile.dbPath
+        'safety-backup' = $safety
+        'item-id' = $ItemId
+        'expected-stack-size' = $ExpectedStackSize
+        quantity = $Quantity
         catalog = Get-DuneSoloGameplayCatalogPath
     }
 }

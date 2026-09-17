@@ -171,7 +171,8 @@ function ConvertTo-DuneSqlString {
 # Give Solari (give-currency): dune.adjust_player_virtual_currency_balance.
 function Invoke-DunePlayerGiveSolari {
     param([string]$Ip, [long]$ControllerId, [long]$Amount)
-    $sql = "SELECT dune.adjust_player_virtual_currency_balance($ControllerId::bigint, dune.get_solaris_id(), $Amount::bigint) AS new_balance;"
+    $currency = Get-V6SolarisSqlExpression -Ip $Ip
+    $sql = "SELECT dune.adjust_player_virtual_currency_balance($ControllerId::bigint, $currency, $Amount::bigint) AS new_balance;"
     $res = Invoke-DuneSqlQuery -Ip $Ip -Sql $sql -ReadOnly $false -MaxRows 1 -TimeoutSec 30
     if (-not $res.ok) { return @{ ok = $false; error = $res.error } }
     $maps = ConvertTo-DuneRowMaps -Result $res
@@ -973,7 +974,7 @@ SELECT
     COALESCE(f.name, '')                                              AS faction_name,
     COALESCE((SELECT balance FROM dune.player_virtual_currency_balances
               WHERE player_controller_id = ps.player_controller_id
-                AND currency_id = dune.get_solaris_id()), 0)::bigint  AS solaris,
+                AND currency_id = __SOLARIS_CURRENCY__), 0)::bigint  AS solaris,
     COALESCE((SELECT SUM(balance) FROM dune.player_virtual_currency_balances
               WHERE player_controller_id = ps.player_controller_id), 0)::bigint AS total_currency
 FROM dune.actors a
@@ -987,6 +988,7 @@ LIMIT 1;
 function Get-DunePlayerStatsLive {
     param([string]$Ip, [long]$PawnId)
     $sql = [string]::Format($script:DunePlayerStatsSql, $PawnId)
+    $sql = $sql.Replace('__SOLARIS_CURRENCY__', (Get-V6SolarisSqlExpression -Ip $Ip))
     $res = Invoke-DuneSqlQuery -Ip $Ip -Sql $sql -ReadOnly $true -MaxRows 1 -TimeoutSec 30
     if (-not $res.ok) { return @{ ok = $false; error = $res.error } }
     $maps = ConvertTo-DuneRowMaps -Result $res

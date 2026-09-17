@@ -3,6 +3,7 @@ import type { SharedInventoryGroup } from '../../api/gameplay'
 import type {
   SoloInventoryDestination,
   SoloInventoryItemGroup,
+  SoloInventoryItemOccurrence,
   SoloRangedWeapon,
 } from '../../api/solo'
 import { Icon } from '../Icon'
@@ -84,26 +85,31 @@ export function buildSoloInventoryLocations(
     })
 }
 
-function qualityLabel(item: SoloInventoryItemGroup) {
-  return item.minQuality === item.maxQuality
-    ? String(item.maxQuality)
-    : `${item.minQuality}-${item.maxQuality}`
-}
-
 export function SoloInventoryExplorer({
   items,
   inventories,
   connected,
+  disabled,
+  busyItemId,
+  onDelete,
 }: {
   items: SoloInventoryItemGroup[]
   inventories: SoloInventoryDestination[]
   connected: boolean
+  disabled: boolean
+  busyItemId: number | null
+  onDelete: (
+    item: SoloInventoryItemOccurrence,
+    location: SoloInventoryItemGroup,
+    quantity: number,
+  ) => void
 }) {
   const [query, setQuery] = useState('')
   const [sort, setSort] = useState<'name' | 'quantity'>('name')
   const [destinationKey, setDestinationKey] = useState('')
   const [visibleCount, setVisibleCount] = useState(100)
   const [selected, setSelected] = useState<SharedInventoryGroup | null>(null)
+  const [deleteQuantities, setDeleteQuantities] = useState<Record<number, string>>({})
   const locations = useMemo(
     () => buildSoloInventoryLocations(items, inventories),
     [inventories, items],
@@ -127,6 +133,11 @@ export function SoloInventoryExplorer({
   const visibleGroups = groups.slice(0, visibleCount)
 
   useEffect(() => setVisibleCount(100), [destinationKey, items, query, sort])
+  useEffect(() => {
+    setSelected(current => current
+      ? groups.find(group => group.groupKey === current.groupKey) ?? null
+      : null)
+  }, [groups])
 
   return (
     <section className="card p-5" aria-labelledby="solo-current-inventory-title">
@@ -137,7 +148,7 @@ export function SoloInventoryExplorer({
             Current inventory
           </h2>
           <p className="mt-1 text-sm text-text-muted">
-            Browse grouped items in the Backpack, Bank Storage, and supported built storage. This view is read-only.
+            Browse or remove items from the Backpack, Bank Storage, and supported built storage. The game must be fully closed before deletion.
           </p>
         </div>
         <span className="pill border-info/40 bg-info/10 text-info">
@@ -219,15 +230,49 @@ export function SoloInventoryExplorer({
               </p>
             </div>
             <ul className="divide-y divide-border rounded-lg border border-border bg-surface-2 px-3">
-              {selectedLocations.map(item => (
-                <li key={`${item.destinationKey}:${item.templateId}`} className="flex items-center justify-between gap-4 py-3 text-sm">
-                  <div className="min-w-0">
-                    <p className="truncate font-medium text-text">{item.destinationLabel}</p>
-                    <p className="text-xs text-text-muted">{item.occurrenceCount} stack{item.occurrenceCount === 1 ? '' : 's'} · quality {qualityLabel(item)}</p>
-                  </div>
-                  <span className="shrink-0 font-semibold text-accent-bright">x{item.totalQuantity}</span>
-                </li>
-              ))}
+              {selectedLocations.flatMap(location => (location.occurrences ?? []).map(occurrence => {
+                const rawQuantity = deleteQuantities[occurrence.itemId] ?? String(occurrence.stackSize)
+                const quantity = Number(rawQuantity)
+                const validQuantity = Number.isSafeInteger(quantity)
+                  && quantity >= (occurrence.stackSize === 0 ? 0 : 1)
+                  && quantity <= occurrence.stackSize
+                return (
+                  <li key={occurrence.itemId} className="flex items-center justify-between gap-4 py-3 text-sm">
+                    <div className="min-w-0">
+                      <p className="truncate font-medium text-text">{location.destinationLabel}</p>
+                      <p className="text-xs text-text-muted">Item {occurrence.itemId} · quality {occurrence.quality} · stack x{occurrence.stackSize}</p>
+                    </div>
+                    <div className="flex shrink-0 items-end gap-2">
+                      <label className="text-xs font-medium text-text-muted">
+                        Delete quantity
+                        <input
+                          type="number"
+                          className="input mt-1 h-9 w-20 text-right font-semibold text-accent-bright"
+                          min={occurrence.stackSize === 0 ? 0 : 1}
+                          max={occurrence.stackSize}
+                          step={1}
+                          value={rawQuantity}
+                          disabled={disabled || busyItemId !== null}
+                          onChange={event => setDeleteQuantities(current => ({
+                            ...current,
+                            [occurrence.itemId]: event.target.value,
+                          }))}
+                        />
+                      </label>
+                      <button
+                        type="button"
+                        className="btn-icon min-h-11 min-w-11 text-danger"
+                        aria-label={`Delete ${location.displayName} from ${location.destinationLabel}`}
+                        title="Delete item"
+                        disabled={disabled || busyItemId !== null || !validQuantity}
+                        onClick={() => onDelete(occurrence, location, quantity)}
+                      >
+                        <Icon name={busyItemId === occurrence.itemId ? 'LoaderCircle' : 'Trash2'} size={15} className={busyItemId === occurrence.itemId ? 'animate-spin' : undefined} />
+                      </button>
+                    </div>
+                  </li>
+                )
+              }))}
             </ul>
           </div>
         )}

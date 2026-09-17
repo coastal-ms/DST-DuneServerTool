@@ -28,6 +28,12 @@ here cover everything those tags shipped.
   settings such as custom Landsraad contract counts after the Retail update.
 - Removed preview-channel labels and gates from Solo Mode. Existing offline,
   backup, integrity, foreign-key, and post-write verification safeguards remain.
+- Added exact Solo inventory-item deletion, including partial stack removal and
+  empty-stack cleanup, with stale-value protection and a retained pre-delete save.
+- Updated Self-Hosted reads for Retail's actor-state, wallet, resource-field,
+  and marker schema; removed spice controls when the updated server no longer
+  exposes those controls instead of showing a false empty configuration.
+- Fixed specialization controls overflowing their card at narrower widths.
 
 ## [15.0.6] - 2026-09-16
 

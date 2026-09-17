@@ -109,8 +109,7 @@ function Get-DuneVehicleFleetLive {
     $sql = @"
 SELECT a.id::text AS vehicle_id, a.class, COALESCE(a.map, '') AS map,
        COALESCE(pa.actor_name, '') AS vehicle_name,
-       COALESCE((SELECT string_agg(DISTINCT s.state::text, ', ' ORDER BY s.state::text)
-                 FROM dune.actor_state s WHERE s.actor_id = a.id), '') AS actor_state,
+       COALESCE(a.state::text, '') AS actor_state,
        COALESCE((SELECT jsonb_agg(jsonb_build_object(
            'player_id', par.player_id::text, 'rank', par.rank,
            'character_name', (SELECT CASE WHEN count(*) = 1 THEN min(ps.character_name) END
@@ -329,8 +328,8 @@ BEGIN
     IF EXISTS (
         SELECT 1
         FROM dst_vehicle_rename_targets t
-        LEFT JOIN dune.actor_state s ON s.actor_id = t.vehicle_id
-        WHERE s.state::text IN ('VehicleRecovery', 'VehicleBackup')
+        JOIN dune.actors actor_state ON actor_state.id = t.vehicle_id
+        WHERE actor_state.state::text IN ('VehicleRecovery', 'VehicleBackup')
     ) OR EXISTS (
         SELECT 1 FROM dst_vehicle_rename_targets t
         JOIN dune.recovered_vehicles rv ON rv.vehicle_id = t.vehicle_id
