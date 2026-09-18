@@ -114,41 +114,33 @@ Describe 'UserSettings three-way reconciliation' {
         $script = Get-DuneUserSettingsDeployTransactionScript -Files $files -Stamp 'stamp'
 
         $script | Should -Match 'flock -n 9'
-        $script | Should -Match 'for tool in flock ln mv sha256sum sleep stat chown chmod'
-        $script | Should -Not -Match 'python'
+        $script | Should -Match 'renameat2'
         $script | Should -Not -Match 'ServerCustomSettings|Config/LinuxServer'
-        $script | Should -Match 'wait_inode_closed\(\)'
-        $script | Should -Match '/proc/\[0-9\]\*/fd'
-        $script | Should -Match 'still open after 15 seconds'
-        $script | Should -Match 'restore_without_overwrite\(\)'
-        $script | Should -Match ([regex]::Escape("sudo mv '/installed/UserGame.ini' '/installed/UserGame.ini.bak.tmp'"))
-        $script | Should -Match ([regex]::Escape("sudo ln '/installed/UserGame.ini.stage' '/installed/UserGame.ini'"))
-        $script | Should -Match ([regex]::Escape("sudo mv '/pvc/UserGame.ini' '/pvc/UserGame.ini.bak.tmp'"))
-        $script | Should -Match ([regex]::Escape("sudo ln '/pvc/UserGame.ini.stage' '/pvc/UserGame.ini'"))
+        $script | Should -Match ([regex]::Escape("atomic_exchange '/installed/UserGame.ini.stage' '/installed/UserGame.ini'"))
+        $script | Should -Match ([regex]::Escape("atomic_exchange '/pvc/UserGame.ini.stage' '/pvc/UserGame.ini'"))
         $script | Should -Match 'rollback\(\)'
         $script | Should -Match 'exit "\$rc"'
-        $script | Should -Match "trap 'rollback 129' HUP"
         $script | Should -Match 'installed_mutated_0=1'
         $script | Should -Match 'pvc_mutated_0=1'
         $script | Should -Match 'baseline_mutated_0=1'
         $script | Should -Match 'if test "\$installed_mutated_0" = 1'
         $script | Should -Match 'if test "\$pvc_mutated_0" = 1'
         $script | Should -Match 'if test "\$baseline_mutated_0" = 1'
-        $script | Should -Match ([regex]::Escape("sudo mv '/installed/.dst-last-deployed-UserGame.ini' '/installed/.dst-last-deployed-UserGame.ini.bak.tmp'"))
-        $script | Should -Match ([regex]::Escape("sudo ln '/installed/.dst-last-deployed-UserEngine.ini.stage' '/installed/.dst-last-deployed-UserEngine.ini'"))
+        $script | Should -Match ([regex]::Escape("sudo cp -p '/installed/UserGame.ini.stage' '/installed/UserGame.ini.bak.tmp'"))
+        $script | Should -Match ([regex]::Escape("sudo cp -p '/pvc/UserGame.ini.stage' '/pvc/UserGame.ini.bak.tmp'"))
+        $script | Should -Match ([regex]::Escape("sudo cp -p '/installed/.dst-last-deployed-UserGame.ini.stage' '/installed/.dst-last-deployed-UserGame.ini.bak.tmp'"))
+        $script | Should -Match ([regex]::Escape("sudo rm -f '/installed/.dst-last-deployed-UserEngine.ini'"))
         $script | Should -Match ([regex]::Escape("c  /installed/UserGame.ini"))
         $script | Should -Match ([regex]::Escape("c  /pvc/UserGame.ini"))
         $firstPreflight = $script.IndexOf("echo 'a  /installed/UserGame.ini'")
-        $installedGuard = $script.IndexOf("sudo mv '/installed/UserGame.ini' '/installed/UserGame.ini.bak.tmp'", $script.IndexOf('trap ''rollback $?'' ERR'))
-        $installedReplace = $script.IndexOf("sudo ln '/installed/UserGame.ini.stage' '/installed/UserGame.ini'")
-        $pvcGuard = $script.IndexOf("sudo mv '/pvc/UserGame.ini' '/pvc/UserGame.ini.bak.tmp'", $script.IndexOf('trap ''rollback $?'' ERR'))
-        $pvcReplace = $script.IndexOf("sudo ln '/pvc/UserGame.ini.stage' '/pvc/UserGame.ini'")
-        $firstPreflight | Should -BeLessThan $installedGuard
-        $script.IndexOf('installed_mutated_0=1', $script.IndexOf('trap ''rollback $?'' ERR')) | Should -BeLessThan $installedGuard
-        $installedGuard | Should -BeLessThan $installedReplace
-        $installedReplace | Should -BeLessThan $pvcGuard
-        $script.IndexOf('pvc_mutated_0=1', $script.IndexOf('trap ''rollback $?'' ERR')) | Should -BeLessThan $pvcGuard
-        $pvcGuard | Should -BeLessThan $pvcReplace
+        $installedExchange = $script.IndexOf("atomic_exchange '/installed/UserGame.ini.stage' '/installed/UserGame.ini'", $script.IndexOf('trap ''rollback $?'' ERR'))
+        $installedBackup = $script.IndexOf("sudo cp -p '/installed/UserGame.ini.stage' '/installed/UserGame.ini.bak.tmp'")
+        $pvcExchange = $script.IndexOf("atomic_exchange '/pvc/UserGame.ini.stage' '/pvc/UserGame.ini'", $script.IndexOf('trap ''rollback $?'' ERR'))
+        $pvcBackup = $script.IndexOf("sudo cp -p '/pvc/UserGame.ini.stage' '/pvc/UserGame.ini.bak.tmp'")
+        $firstPreflight | Should -BeLessThan $installedExchange
+        $installedExchange | Should -BeLessThan $installedBackup
+        $installedBackup | Should -BeLessThan $pvcExchange
+        $pvcExchange | Should -BeLessThan $pvcBackup
     }
 
     It 'surfaces transaction failure so restart remains blocked' {
