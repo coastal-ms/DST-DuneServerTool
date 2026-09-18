@@ -101,4 +101,69 @@ Describe 'Portable Self-Hosted blueprint compatibility' {
         $placeable.ry | Should -Be 45
         $placeable.rz | Should -Be 67
     }
+
+    It 'round-trips nonzero base placeable rotations with the portable pitch yaw roll mapping' {
+        $global:BaseExportQuery = 0
+        $global:CapturedBlueprintSql = ''
+        Mock Invoke-DuneSqlQuery {
+            $global:BaseExportQuery++
+            if ($global:BaseExportQuery -eq 1) {
+                return @{
+                    ok = $true
+                    rows = @(@{
+                        building_type = 'Foundation'
+                        transform = '100,200,300,0,0,0,1'
+                        owner_entity_id = 99
+                    })
+                }
+            }
+            if ($global:BaseExportQuery -eq 2) {
+                return @{
+                    ok = $true
+                    rows = @(@{
+                        building_type = 'Storage'
+                        location = '(101,202,303)'
+                        rotation = '(0.038134576,0.189307857,0.239298338,0.951548525)'
+                        properties = ''
+                    })
+                }
+            }
+            return @{ ok = $true; rows = @() }
+        }
+        Mock Invoke-DuneSqlRawStdin {
+            param($Ip, $Sql, $TimeoutSec)
+            $global:CapturedBlueprintSql = $Sql
+            return 'NOTICE: DST_BP_RESULT bp=40 item=50'
+        }
+
+        $export = Get-DuneBaseExportLive -Ip 'test' -BaseId 7
+        $export.ok | Should -BeTrue
+        $basePlaceable = $export.blueprint.placeables[0]
+        [Math]::Abs($basePlaceable.rx - 20) | Should -BeLessThan 0.0001
+        [Math]::Abs($basePlaceable.ry - 30) | Should -BeLessThan 0.0001
+        [Math]::Abs($basePlaceable.rz - 10) | Should -BeLessThan 0.0001
+
+        $savedPlaceable = ConvertTo-DunePortableBlueprintPlaceable -Row @{
+            placeable_id = 1
+            building_type = 'Storage'
+            transform = '1,2,3,30,20,10'
+        }
+        [Math]::Abs($basePlaceable.rx - $savedPlaceable.rx) | Should -BeLessThan 0.0001
+        [Math]::Abs($basePlaceable.ry - $savedPlaceable.ry) | Should -BeLessThan 0.0001
+        [Math]::Abs($basePlaceable.rz - $savedPlaceable.rz) | Should -BeLessThan 0.0001
+
+        $import = Import-DuneBlueprintLive -Ip 'test' -PlayerPawnId 8 -Blueprint $export.blueprint
+        $import.ok | Should -BeTrue
+        $match = [regex]::Match(
+            $global:CapturedBlueprintSql,
+            "\(v_bp, 1, 'Storage', '\{1,2,3,([^,]+),([^,]+),([^}]+)\}'::real\[\]"
+        )
+        $match.Success | Should -BeTrue
+        [Math]::Abs(([double]$match.Groups[1].Value) - 30) | Should -BeLessThan 0.0001
+        [Math]::Abs(([double]$match.Groups[2].Value) - 20) | Should -BeLessThan 0.0001
+        [Math]::Abs(([double]$match.Groups[3].Value) - 10) | Should -BeLessThan 0.0001
+
+        Remove-Variable BaseExportQuery -Scope Global
+        Remove-Variable CapturedBlueprintSql -Scope Global
+    }
 }

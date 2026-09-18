@@ -1012,9 +1012,9 @@ WHERE p.owner_entity_id = $ownerEntityId::bigint
                 x             = ($loc[0] - $cx)
                 y             = ($loc[1] - $cy)
                 z             = ($loc[2] - $cz)
-                rx            = $e[0]
-                ry            = $e[1]
-                rz            = $e[2]
+                rx            = $e[1]
+                ry            = $e[2]
+                rz            = $e[0]
             }
             if ($bt -like '*PentashieldSurface*') {
                 $scale = Get-DunePentashieldScale -BuildingType $bt -PropertiesJson ([string]$r['properties'])
