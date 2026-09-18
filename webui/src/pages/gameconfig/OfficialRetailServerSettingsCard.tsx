@@ -4,54 +4,134 @@ import { Icon } from '../../components/Icon'
 import { getRetailServerSettings, saveRetailServerSettings } from '../../api/gameconfig'
 import type { RetailServerSetting, RetailServerSettingsResponse } from '../../api/types'
 
-const NUMERIC_SLIDER_MIN = 0
+const INTEGER_SLIDER_MIN = 0
+const FLOAT_SLIDER_MIN = 0.1
 const NUMERIC_SLIDER_MAX = 25
+const FLOAT_DECIMAL_PLACES = 6
+
+type RetailSettingGuidance = {
+  defaultValue: string
+  effect: string
+}
+
+// Patch 1.5 defaults from Red-Blink/dune-awakening-selfhost-docker at acc3d43c.
+export const RETAIL_SETTING_GUIDANCE: Record<string, RetailSettingGuidance> = {
+  DifficultyLevel: { defaultValue: 'Custom', effect: 'Selects the overall difficulty preset. Managed server settings use Custom.' },
+  PVPMode: { defaultValue: 'Limited', effect: 'Controls where and under which rules player-versus-player combat is allowed.' },
+  GatheringAmount: { defaultValue: '1.000000', effect: 'Higher values yield more resources per gathering action; lower values yield less.' },
+  CraftingCost: { defaultValue: '1.000000', effect: 'Higher values require more crafting materials; lower values require fewer materials.' },
+  WaterExtractionRate: { defaultValue: '1.000000', effect: 'Higher values extract water faster; lower values extract it slower.' },
+  CraftingTimeMultiplier: { defaultValue: '1.000000', effect: 'Higher values make crafting take longer; lower values make it faster.' },
+  BuildingCostMultiplier: { defaultValue: '1.000000', effect: 'Higher values require more building materials; lower values require fewer materials.' },
+  ResourceRespawnSpeed: { defaultValue: '1.000000', effect: 'Higher values make world resources return faster; lower values make them return slower.' },
+  LootRespawnSpeed: { defaultValue: '1.000000', effect: 'Higher values make loot return faster; lower values make it return slower.' },
+  FuelBurnTimeMultiplier: { defaultValue: '1.000000', effect: 'Higher values make fuel last longer; lower values shorten its burn time.' },
+  InventoryVolumeMultiplier: { defaultValue: '1.000000', effect: 'Higher values increase inventory capacity; lower values reduce it.' },
+  PlayerDamageToPlayer: { defaultValue: '1.000000', effect: 'Higher values increase player damage to other players; lower values reduce it.' },
+  PlayerDamageToNPC: { defaultValue: '1.000000', effect: 'Higher values increase player damage to NPCs; lower values reduce it.' },
+  PlayerDamageToVehicle: { defaultValue: '1.000000', effect: 'Higher values increase player damage to vehicles; lower values reduce it.' },
+  PlayerStaminaDrain: { defaultValue: '1.000000', effect: 'Higher values drain stamina faster; lower values make stamina more forgiving.' },
+  IntelPointsGainMultiplier: { defaultValue: '1.000000', effect: 'Higher values award Intel points faster; lower values slow Intel progression.' },
+  NPCHealth: { defaultValue: '1.000000', effect: 'Higher values make NPCs tougher; lower values make them easier to defeat.' },
+  NPCDamageToPlayer: { defaultValue: '1.000000', effect: 'Higher values make NPC attacks on players more damaging; lower values make them less damaging.' },
+  NPCDamageToNPC: { defaultValue: '1.000000', effect: 'Higher values increase damage between NPCs; lower values reduce it.' },
+  NPCRespawnMultiplier: { defaultValue: '1.000000', effect: 'Controls the multiplier used by NPC respawning.' },
+  PVPDamageStructures: { defaultValue: '1.000000', effect: 'Higher values increase PvP damage to structures; lower values reduce it.' },
+  GlobalXpMultiplier: { defaultValue: '1.000000', effect: 'Higher values increase all XP gains; lower values slow overall progression.' },
+  CombatXp: { defaultValue: '1.000000', effect: 'Higher values increase combat XP gains; lower values slow combat progression.' },
+  GatheringXp: { defaultValue: '1.000000', effect: 'Higher values increase gathering XP gains; lower values slow gathering progression.' },
+  MissionXp: { defaultValue: '1.000000', effect: 'Higher values increase mission XP rewards; lower values slow mission progression.' },
+  ItemDurabilityDrainMultiplier: { defaultValue: '1.000000', effect: 'Higher values wear items faster; lower values make equipment last longer.' },
+  bEnableItemMaxDurabilityLoss: { defaultValue: 'True', effect: 'Enabled allows items to lose maximum durability; disabled preserves their maximum.' },
+  PlayerShieldDamageAbsorptionMultiplier: { defaultValue: '1.000000', effect: 'Higher values increase damage absorbed by player shields; lower values reduce shield absorption.' },
+  NPCShieldDamageAbsorptionMultiplier: { defaultValue: '1.000000', effect: 'Higher values increase damage absorbed by NPC shields; lower values reduce shield absorption.' },
+  HeatBuildupRate: { defaultValue: '1.000000', effect: 'Higher values build heat faster; lower values make heat exposure more forgiving.' },
+  ColdBuildupRate: { defaultValue: '1.000000', effect: 'Higher values build cold faster; lower values make cold exposure more forgiving.' },
+  ThirstMultiplier: { defaultValue: '1.000000', effect: 'Higher values increase thirst faster; lower values make hydration more forgiving.' },
+  DropEquipmentOnDeath: { defaultValue: 'Default', effect: 'Chooses how much carried equipment is dropped when a player dies.' },
+  bAllowDynamicBuildingDamage: { defaultValue: 'True', effect: 'Enabled allows dynamic gameplay damage to affect buildings; disabled prevents that damage.' },
+  bAllowSandstorms: { defaultValue: 'True', effect: 'Enabled allows sandstorms; disabled removes that world threat.' },
+  bAllowSandworms: { defaultValue: 'True', effect: 'Enabled allows sandworms; disabled removes that world threat.' },
+  SandwormConsequences: { defaultValue: 'All', effect: 'Chooses how much equipment is lost to sandworm consequences.' },
+  PlayerDeathLootRule: { defaultValue: 'DependsOnSecurityZone', effect: 'Controls whether other players may loot a player death, including security-zone rules.' },
+  bIsBuildingRestrictionsEnabled: { defaultValue: 'True', effect: 'Enabled enforces general building restrictions; disabled is less restrictive but does not remove permanent no-build zones.' },
+  FiefdomLimit: { defaultValue: '3', effect: 'Higher values allow more sub-fiefs; lower values allow fewer.' },
+  BuildingPieceLimitMultiplier: { defaultValue: '1.000000', effect: 'Higher values allow more building pieces; lower values allow fewer.' },
+  bBuildingInfiniteStability: { defaultValue: 'False', effect: 'Enabled enforces building stability limits; disabled gives buildings infinite stability.' },
+  BaseBackupToolTimeRestriction: { defaultValue: '10.000000', effect: 'Controls the time restriction applied to the base backup tool.' },
+  LandsraadContributionMultiplier: { defaultValue: '1.000000', effect: 'Higher values increase Landsraad contribution gains; lower values reduce them.' },
+  LandsraadSpecializationXpMultiplier: { defaultValue: '1.000000', effect: 'Higher values increase Landsraad specialization XP; lower values reduce it.' },
+  LandsraadFactionStandingMultiplier: { defaultValue: '1.000000', effect: 'Higher values increase Landsraad faction standing gains; lower values reduce them.' },
+  bLandsraadDisableDecreeRerollLimit: { defaultValue: 'False', effect: 'Enabled removes the Landsraad decree reroll limit; disabled keeps the limit.' },
+}
+
+function normalizeSettingValue(setting: RetailServerSetting, value: string): string {
+  if (setting.type !== 'float') return value
+  const parsed = Number(value)
+  return Number.isFinite(parsed) ? parsed.toFixed(FLOAT_DECIMAL_PLACES) : value
+}
 
 function NumericSettingControl({
   setting,
   value,
   disabled,
   onChange,
+  onCommit,
 }: {
   setting: RetailServerSetting
   value: string
   disabled: boolean
   onChange: (value: string) => void
+  onCommit: () => void
 }) {
+  const sliderMin = setting.type === 'float' ? FLOAT_SLIDER_MIN : INTEGER_SLIDER_MIN
   const parsedValue = Number(value)
   const sourceValue = Number(setting.value)
   const sliderSource = Number.isFinite(parsedValue)
     ? parsedValue
-    : (Number.isFinite(sourceValue) ? sourceValue : NUMERIC_SLIDER_MIN)
-  const sliderValue = Math.min(NUMERIC_SLIDER_MAX, Math.max(NUMERIC_SLIDER_MIN, sliderSource))
+    : (Number.isFinite(sourceValue) ? sourceValue : sliderMin)
+  const sliderValue = Math.min(NUMERIC_SLIDER_MAX, Math.max(sliderMin, sliderSource))
+  const belowSliderRange = Number.isFinite(parsedValue) && parsedValue < sliderMin
   const aboveSliderRange = Number.isFinite(parsedValue) && parsedValue > NUMERIC_SLIDER_MAX
-  const sliderStep = setting.type === 'int' ? 1 : 'any'
-  const rangeDescription = `${NUMERIC_SLIDER_MIN} to ${NUMERIC_SLIDER_MAX}`
+  const sliderStep = setting.type === 'int' ? 1 : 0.1
+  const inputStep = setting.type === 'int' ? 1 : 'any'
+  const rangeDescription = `${sliderMin} to ${NUMERIC_SLIDER_MAX}`
+  const sliderDisplayValue = setting.type === 'float'
+    ? sliderValue.toFixed(FLOAT_DECIMAL_PLACES)
+    : String(sliderValue)
 
   return (
-    <div className="flex min-w-[220px] flex-wrap items-center justify-end gap-2">
+    <div className="flex w-full min-w-0 flex-wrap items-center justify-end gap-2">
       {setting.valid && (
-        <div className="flex min-w-[180px] flex-[1_1_220px] items-center gap-2">
+        <div className="flex min-w-0 flex-[1_1_220px] items-center gap-2">
           <input
             aria-label={`${setting.label} slider, range ${rangeDescription}`}
-            aria-valuetext={aboveSliderRange
-              ? `${NUMERIC_SLIDER_MAX}, slider maximum; exact value ${value} is preserved`
-              : String(sliderValue)}
+            aria-valuetext={aboveSliderRange || belowSliderRange
+              ? `${sliderValue}, slider ${aboveSliderRange ? 'maximum' : 'minimum'}; exact value ${value} is preserved`
+              : sliderDisplayValue}
             type="range"
-            min={NUMERIC_SLIDER_MIN}
+            min={sliderMin}
             max={NUMERIC_SLIDER_MAX}
             step={sliderStep}
             value={sliderValue}
-            onChange={event => onChange(event.target.value)}
+            onChange={event => onChange(setting.type === 'float'
+              ? Number(event.target.value).toFixed(FLOAT_DECIMAL_PLACES)
+              : event.target.value)}
             disabled={disabled}
             title={`Adjust ${setting.label} from ${rangeDescription}. Use the exact value field for values outside this convenience range.`}
-            className="h-1.5 min-w-28 flex-1 cursor-pointer accent-accent focus:outline-none focus-visible:ring-2 focus-visible:ring-ibad disabled:cursor-not-allowed disabled:opacity-60"
+            className="h-1.5 min-w-0 flex-1 cursor-pointer accent-accent focus:outline-none focus-visible:ring-2 focus-visible:ring-ibad disabled:cursor-not-allowed disabled:opacity-60"
           />
           <span
-            className="w-20 text-right font-mono text-[11px] tabular-nums text-text-dim"
-            title={aboveSliderRange ? `Slider is at its maximum; exact value ${value} is preserved.` : undefined}
+            className="shrink-0 whitespace-nowrap text-right font-mono text-[11px] tabular-nums text-text-dim"
+            title={aboveSliderRange || belowSliderRange
+              ? `Slider is at its ${aboveSliderRange ? 'maximum' : 'minimum'}; exact value ${value} is preserved.`
+              : undefined}
           >
-            {aboveSliderRange ? `${NUMERIC_SLIDER_MAX} / ${NUMERIC_SLIDER_MAX} max` : `${sliderValue} / ${NUMERIC_SLIDER_MAX}`}
+            {aboveSliderRange
+              ? `${NUMERIC_SLIDER_MAX} / ${NUMERIC_SLIDER_MAX} max`
+              : belowSliderRange
+                ? `${sliderDisplayValue} / ${NUMERIC_SLIDER_MAX} min`
+                : `${sliderDisplayValue} / ${NUMERIC_SLIDER_MAX}`}
           </span>
         </div>
       )}
@@ -59,18 +139,25 @@ function NumericSettingControl({
         aria-label={`${setting.label} exact value`}
         type="number"
         inputMode={setting.type === 'int' ? 'numeric' : 'decimal'}
-        step={sliderStep}
+        step={inputStep}
         value={value}
         onChange={event => onChange(event.target.value)}
+        onBlur={onCommit}
         disabled={disabled}
-        title={`Set exact ${setting.label}. Values outside the slider's ${rangeDescription} convenience range remain unchanged.`}
-        className="w-24 border border-border bg-surface px-2 py-1 text-right font-mono text-xs tabular-nums text-text focus:outline-none focus:ring-2 focus:ring-ibad disabled:cursor-not-allowed disabled:opacity-60"
+        title={`Exact value ${value}. Values outside the slider's ${rangeDescription} convenience range remain unchanged.`}
+        className="w-28 max-w-full shrink-0 border border-border bg-surface px-2 py-1 text-right font-mono text-xs tabular-nums text-text focus:outline-none focus:ring-2 focus:ring-ibad disabled:cursor-not-allowed disabled:opacity-60"
       />
     </div>
   )
 }
 
-export function OfficialRetailServerSettingsCard({ vmRunning }: { vmRunning: boolean }) {
+export function OfficialRetailServerSettingsCard({
+  vmRunning,
+  statusRefreshKey,
+}: {
+  vmRunning: boolean
+  statusRefreshKey?: string
+}) {
   const [state, setState] = useState<RetailServerSettingsResponse | null>(null)
   const [loading, setLoading] = useState(false)
   const [saving, setSaving] = useState(false)
@@ -82,10 +169,13 @@ export function OfficialRetailServerSettingsCard({ vmRunning }: { vmRunning: boo
     if (!vmRunning) return
     setLoading(true)
     setError(null)
+    setMessage(null)
     try {
       const next = await getRetailServerSettings()
       setState(next)
-      setValues(Object.fromEntries((next.settings ?? []).map(setting => [setting.key, setting.value])))
+      setValues(Object.fromEntries(
+        (next.settings ?? []).map(setting => [setting.key, normalizeSettingValue(setting, setting.value)]),
+      ))
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e))
     } finally {
@@ -98,7 +188,7 @@ export function OfficialRetailServerSettingsCard({ vmRunning }: { vmRunning: boo
     // The card owns its endpoint so it can move to a dedicated page without
     // changing the Retail settings API or coupling to legacy Game Config state.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [vmRunning])
+  }, [vmRunning, statusRefreshKey])
 
   const groups = useMemo(() => {
     const grouped = new Map<string, RetailServerSetting[]>()
@@ -111,8 +201,13 @@ export function OfficialRetailServerSettingsCard({ vmRunning }: { vmRunning: boo
   }, [state])
   const updates = useMemo(() => Object.fromEntries(
     (state?.settings ?? [])
-      .filter(setting => setting.editable && (values[setting.key] ?? setting.value) !== setting.value)
-      .map(setting => [setting.key, values[setting.key] ?? setting.value]),
+      .map(setting => ({
+        setting,
+        current: normalizeSettingValue(setting, setting.value),
+        draft: normalizeSettingValue(setting, values[setting.key] ?? setting.value),
+      }))
+      .filter(({ setting, current, draft }) => setting.editable && draft !== current)
+      .map(({ setting, draft }) => [setting.key, draft]),
   ), [state, values])
   const dirtyCount = Object.keys(updates).length
   const canSave = state?.available === true
@@ -120,6 +215,22 @@ export function OfficialRetailServerSettingsCard({ vmRunning }: { vmRunning: boo
     && state.target.serverPodCount === 0
     && dirtyCount > 0
     && !saving
+
+  const applyDefaults = () => {
+    if (!state?.available || !state.target.stopped || state.target.serverPodCount !== 0 || saving) return
+    setValues(previous => {
+      const next = { ...previous }
+      for (const setting of state.settings) {
+        const guidance = RETAIL_SETTING_GUIDANCE[setting.key]
+        if (setting.supported && setting.editable && guidance) {
+          next[setting.key] = normalizeSettingValue(setting, guidance.defaultValue)
+        }
+      }
+      return next
+    })
+    setError(null)
+    setMessage('Default settings loaded as a draft. Review the changes, then use Save to apply them.')
+  }
 
   const save = async () => {
     if (!state?.revision || !canSave) return
@@ -143,7 +254,9 @@ export function OfficialRetailServerSettingsCard({ vmRunning }: { vmRunning: boo
           upstreamFileName: 'ServerCustomSettings.ini',
         },
       } : previous)
-      setValues(Object.fromEntries(nextSettings.map(setting => [setting.key, setting.value])))
+      setValues(Object.fromEntries(
+        nextSettings.map(setting => [setting.key, normalizeSettingValue(setting, setting.value)]),
+      ))
       setMessage(`${result.applied} setting${result.applied === 1 ? '' : 's'} saved with backup ${result.backup.path}. Start the battlegroup to apply them.`)
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e))
@@ -175,6 +288,16 @@ export function OfficialRetailServerSettingsCard({ vmRunning }: { vmRunning: boo
           >
             <Icon name={loading ? 'Loader2' : 'RefreshCw'} size={14} className={loading ? 'animate-spin' : ''} />
             Refresh
+          </button>
+          <button
+            type="button"
+            className="btn-secondary"
+            onClick={applyDefaults}
+            disabled={!state?.available || !state.target.stopped || state.target.serverPodCount !== 0 || saving}
+            title="Load Funcom Patch 1.5 defaults into this draft without saving"
+          >
+            <Icon name="RotateCcw" size={14} />
+            Default Settings
           </button>
           <button
             type="button"
@@ -269,16 +392,19 @@ export function OfficialRetailServerSettingsCard({ vmRunning }: { vmRunning: boo
                   {settings.map(setting => (
                     <div
                       key={setting.key}
-                      className={`grid gap-2 border-b border-border/70 px-1 py-2.5 last:border-b-0 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center ${
+                      className={`grid min-w-0 gap-2 border-b border-border/70 px-1 py-2.5 last:border-b-0 lg:grid-cols-[minmax(0,1fr)_minmax(16rem,24rem)] lg:items-center ${
                         !setting.supported || !setting.valid ? 'bg-warning/5' : ''
                       }`}
                     >
                       <div className="min-w-0">
                         <div className="text-sm font-medium text-text">{setting.label}</div>
                         <div className="mt-0.5 break-all font-mono text-[10px] text-text-dim">{setting.key}</div>
-                        {setting.key === 'bIsBuildingRestrictionsEnabled' && (
-                          <div className="mt-1 text-[11px] text-text-muted">
-                            Controls general building restrictions. It does not override permanent POI or other restricted no-build zones.
+                        {RETAIL_SETTING_GUIDANCE[setting.key] && (
+                          <div className="mt-1 max-w-prose text-[11px] leading-snug text-text-muted">
+                            <span>{RETAIL_SETTING_GUIDANCE[setting.key].effect}</span>{' '}
+                            <span className="whitespace-nowrap text-text-dim">
+                              Funcom default: <span className="font-mono tabular-nums">{RETAIL_SETTING_GUIDANCE[setting.key].defaultValue}</span>.
+                            </span>
                           </div>
                         )}
                         {setting.inverted && (
@@ -293,8 +419,8 @@ export function OfficialRetailServerSettingsCard({ vmRunning }: { vmRunning: boo
                           <div className="mt-1 text-[11px] text-warning">{setting.validationError}</div>
                         )}
                       </div>
-                      <div className="flex items-center gap-2 sm:justify-end">
-                        <span className="text-[10px] uppercase tracking-wide text-text-dim">{setting.type}</span>
+                      <div className="flex min-w-0 flex-wrap items-center gap-2 lg:justify-end">
+                        <span className="shrink-0 self-center text-[10px] uppercase tracking-wide text-text-dim">{setting.type}</span>
                         {setting.type === 'bool' && setting.editable ? (
                           <select
                             aria-label={setting.label}
@@ -322,6 +448,10 @@ export function OfficialRetailServerSettingsCard({ vmRunning }: { vmRunning: boo
                             value={values[setting.key] ?? setting.value}
                             disabled={!state.target.stopped || state.target.serverPodCount !== 0 || saving}
                             onChange={value => setValues(previous => ({ ...previous, [setting.key]: value }))}
+                            onCommit={() => setValues(previous => ({
+                              ...previous,
+                              [setting.key]: normalizeSettingValue(setting, previous[setting.key] ?? setting.value),
+                            }))}
                           />
                         ) : (
                           <span className="min-w-20 border border-border bg-surface px-2 py-1 text-center text-xs font-semibold text-text">

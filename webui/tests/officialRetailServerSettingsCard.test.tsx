@@ -1,6 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
-import { OfficialRetailServerSettingsCard } from '../src/pages/gameconfig/OfficialRetailServerSettingsCard'
+import {
+  OfficialRetailServerSettingsCard,
+  RETAIL_SETTING_GUIDANCE,
+} from '../src/pages/gameconfig/OfficialRetailServerSettingsCard'
 
 beforeEach(() => {
   window.localStorage.clear()
@@ -72,8 +75,9 @@ describe('Official Retail Server Settings card', () => {
 
     expect(await screen.findByText('General Building Restrictions')).toBeInTheDocument()
     expect(screen.getByText(
-      'Controls general building restrictions. It does not override permanent POI or other restricted no-build zones.',
+      'Enabled enforces general building restrictions; disabled is less restrictive but does not remove permanent no-build zones.',
     )).toBeInTheDocument()
+    expect(screen.getByText('True')).toBeInTheDocument()
     expect(screen.getByText('Building Stability Limits')).toBeInTheDocument()
     expect(screen.getAllByText('Enabled')).toHaveLength(2)
     expect(screen.getByText((_, element) =>
@@ -242,7 +246,7 @@ describe('Official Retail Server Settings card', () => {
       name: 'Maximum Sub-Fief Amount slider, range 0 to 25',
     })
     const floatSlider = screen.getByRole('slider', {
-      name: 'Building Piece Limit slider, range 0 to 25',
+      name: 'Building Piece Limit slider, range 0.1 to 25',
     })
     const intInput = screen.getByRole('spinbutton', { name: 'Maximum Sub-Fief Amount exact value' })
     const floatInput = screen.getByRole('spinbutton', { name: 'Building Piece Limit exact value' })
@@ -250,9 +254,9 @@ describe('Official Retail Server Settings card', () => {
     expect(intSlider).toHaveAttribute('min', '0')
     expect(intSlider).toHaveAttribute('max', '25')
     expect(intSlider).toHaveAttribute('step', '1')
-    expect(floatSlider).toHaveAttribute('min', '0')
+    expect(floatSlider).toHaveAttribute('min', '0.1')
     expect(floatSlider).toHaveAttribute('max', '25')
-    expect(floatSlider).toHaveAttribute('step', 'any')
+    expect(floatSlider).toHaveAttribute('step', '0.1')
     expect(intInput).not.toHaveAttribute('min')
     expect(intInput).not.toHaveAttribute('max')
     expect(intInput).toHaveAttribute('step', '1')
@@ -262,6 +266,9 @@ describe('Official Retail Server Settings card', () => {
     expect(intInput).toHaveValue(7)
     expect(screen.getByRole('button', { name: 'Save (1)' })).toBeEnabled()
 
+    fireEvent.change(floatSlider, { target: { value: '1.1' } })
+    expect(floatInput).toHaveAttribute('value', '1.100000')
+    expect(floatSlider).toHaveValue('1.1')
     fireEvent.change(floatInput, { target: { value: '2.75' } })
     expect(floatSlider).toHaveValue('2.75')
     expect(screen.getByRole('button', { name: 'Save (2)' })).toBeEnabled()
@@ -310,6 +317,84 @@ describe('Official Retail Server Settings card', () => {
     expect(screen.getByRole('button', { name: 'Save (1)' })).toBeEnabled()
   })
 
+  it('normalizes long floats to Funcom precision without narrow-layout bleed or draft loss', async () => {
+    const fetchMock = vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) => {
+      if (init?.method === 'PUT') {
+        return new Response(JSON.stringify({
+          ok: true,
+          applied: 1,
+          revision: 'next',
+          backup: { path: '/srv/settings.dstbak-1', sha256: 'backup', timestamp: '1' },
+          restartRequired: true,
+          message: 'saved',
+          settings: [],
+        }), { status: 200, headers: { 'Content-Type': 'application/json' } })
+      }
+      return new Response(JSON.stringify({
+        available: true,
+        readOnly: false,
+        source: 'funcom-servergroup-user-ini-config',
+        authority: 'Funcom BattleGroup operator configuration',
+        revision: 'current',
+        target: { available: true, stopped: true, serverPodCount: 0 },
+        settings: [{
+          key: 'BuildingDecayRateModifier',
+          value: '0.576036866359447',
+          displayValue: '0.576036866359447',
+          label: 'Building Decay Rate',
+          group: 'World threats and building',
+          type: 'float',
+          options: [],
+          inverted: false,
+          supported: true,
+          valid: true,
+          validationError: '',
+          editable: true,
+          readOnly: false,
+        }],
+        malformedLines: [],
+      }), { status: 200, headers: { 'Content-Type': 'application/json' } })
+    })
+    vi.stubGlobal('fetch', fetchMock)
+
+    render(<OfficialRetailServerSettingsCard vmRunning />)
+
+    const input = await screen.findByRole('spinbutton', { name: 'Building Decay Rate exact value' })
+    const slider = screen.getByRole('slider', { name: 'Building Decay Rate slider, range 0.1 to 25' })
+    const measurement = screen.getByText('0.576037 / 25')
+    expect(input).toHaveValue(0.576037)
+    expect(input).toHaveAttribute('title', expect.stringContaining('Exact value 0.576037'))
+    expect(slider).toHaveAttribute('aria-valuetext', '0.576037')
+    expect(measurement).toHaveClass('whitespace-nowrap', 'tabular-nums')
+    expect(measurement.parentElement).toHaveClass('min-w-0')
+    expect(screen.getByText('float')).toHaveClass('shrink-0', 'self-center')
+    expect(input.closest('.grid')).toHaveClass('min-w-0')
+    expect(screen.getByRole('button', { name: 'Save' })).toBeDisabled()
+
+    fireEvent.change(input, { target: { value: '1.2345678' } })
+    expect(input).toHaveAttribute('value', '1.2345678')
+    fireEvent.change(input, { target: { value: '30.1234567' } })
+    expect(input).toHaveAttribute('value', '30.1234567')
+    fireEvent.blur(input)
+    expect(input).toHaveValue(30.123457)
+    expect(slider).toHaveValue('25')
+    expect(screen.getByText('25 / 25 max')).toHaveClass('whitespace-nowrap')
+
+    fireEvent.change(slider, { target: { value: '0.1' } })
+    expect(input).toHaveAttribute('value', '0.100000')
+    fireEvent.change(slider, { target: { value: '2.5' } })
+    expect(input).toHaveAttribute('value', '2.500000')
+    fireEvent.change(input, { target: { value: '3.12345678' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Save (1)' }))
+
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2))
+    const [, putInit] = fetchMock.mock.calls[1]
+    expect(JSON.parse(putInit?.body as string)).toEqual({
+      revision: 'current',
+      updates: { BuildingDecayRateModifier: '3.123457' },
+    })
+  })
+
   it('disables both numeric controls unless the battlegroup has zero running pods', async () => {
     vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify({
       available: true,
@@ -342,6 +427,121 @@ describe('Official Retail Server Settings card', () => {
       name: 'Maximum Sub-Fief Amount slider, range 0 to 25',
     })).toBeDisabled()
     expect(screen.getByRole('spinbutton', { name: 'Maximum Sub-Fief Amount exact value' })).toBeDisabled()
+  })
+
+  it('loads present editable defaults as a draft and refresh discards them without an immediate save', async () => {
+    const settings = [
+      {
+        key: 'GatheringAmount',
+        value: '2.000000',
+        displayValue: '2.000000',
+        label: 'Gathering Amount',
+        group: 'World and economy',
+        type: 'float',
+        options: [],
+        inverted: false,
+        supported: true,
+        valid: true,
+        validationError: '',
+        editable: true,
+        readOnly: false,
+      },
+      {
+        key: 'FiefdomLimit',
+        value: '5',
+        displayValue: '5',
+        label: 'Maximum Sub-Fief Amount',
+        group: 'World threats and building',
+        type: 'int',
+        options: [],
+        inverted: false,
+        supported: true,
+        valid: true,
+        validationError: '',
+        editable: true,
+        readOnly: false,
+      },
+      {
+        key: 'DifficultyLevel',
+        value: 'Custom-Test',
+        displayValue: 'Custom-Test',
+        label: 'Difficulty Level',
+        group: 'World and economy',
+        type: 'string',
+        options: [],
+        inverted: false,
+        supported: true,
+        valid: true,
+        validationError: '',
+        editable: false,
+        readOnly: true,
+      },
+      {
+        key: 'FutureRetailKey',
+        value: 'leave-me',
+        displayValue: 'leave-me',
+        label: 'FutureRetailKey',
+        group: 'Other values',
+        type: 'string',
+        options: [],
+        inverted: false,
+        supported: false,
+        valid: true,
+        validationError: '',
+        editable: false,
+        readOnly: true,
+      },
+    ]
+    const fetchMock = vi.fn(async () => new Response(JSON.stringify({
+      available: true,
+      readOnly: false,
+      source: 'funcom-servergroup-user-ini-config',
+      authority: 'Funcom BattleGroup operator configuration',
+      revision: 'current',
+      target: { available: true, stopped: true, serverPodCount: 0 },
+      settings,
+      malformedLines: [],
+    }), { status: 200, headers: { 'Content-Type': 'application/json' } }))
+    vi.stubGlobal('fetch', fetchMock)
+
+    render(<OfficialRetailServerSettingsCard vmRunning />)
+
+    const floatInput = await screen.findByRole('spinbutton', { name: 'Gathering Amount exact value' })
+    const intInput = screen.getByRole('spinbutton', { name: 'Maximum Sub-Fief Amount exact value' })
+    const defaultButton = screen.getByRole('button', { name: 'Default Settings' })
+    expect(floatInput).toHaveValue(2)
+    expect(intInput).toHaveValue(5)
+    expect(intInput).toHaveAttribute('step', '1')
+    expect(screen.getByRole('slider', { name: 'Maximum Sub-Fief Amount slider, range 0 to 25' })).toHaveAttribute('step', '1')
+
+    fireEvent.click(defaultButton)
+
+    expect(floatInput).toHaveAttribute('value', '1.000000')
+    expect(intInput).toHaveAttribute('value', '3')
+    expect(screen.getByText('Custom-Test')).toBeInTheDocument()
+    expect(screen.getAllByText('leave-me')).toHaveLength(1)
+    expect(screen.getByRole('button', { name: 'Save (2)' })).toBeEnabled()
+    expect(fetchMock).toHaveBeenCalledOnce()
+    expect(fetchMock.mock.calls.some(([, init]) => init?.method === 'PUT')).toBe(false)
+
+    fireEvent.click(screen.getByRole('button', { name: 'Refresh' }))
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2))
+    expect(floatInput).toHaveAttribute('value', '2.000000')
+    expect(intInput).toHaveAttribute('value', '5')
+    expect(screen.getByRole('button', { name: 'Save' })).toBeDisabled()
+  })
+
+  it('provides verified defaults and operator guidance for every supported Retail key', () => {
+    expect(Object.keys(RETAIL_SETTING_GUIDANCE)).toHaveLength(47)
+    for (const [key, guidance] of Object.entries(RETAIL_SETTING_GUIDANCE)) {
+      expect(key).not.toBe('')
+      expect(guidance.defaultValue).not.toBe('')
+      expect(guidance.effect).toMatch(/[.!]$/)
+    }
+    expect(RETAIL_SETTING_GUIDANCE.NPCHealth.effect).toContain('tougher')
+    expect(RETAIL_SETTING_GUIDANCE.NPCRespawnMultiplier.effect).not.toMatch(/easier|harder|faster|slower/)
+    expect(RETAIL_SETTING_GUIDANCE.DifficultyLevel.defaultValue).toBe('Custom')
+    expect(RETAIL_SETTING_GUIDANCE.PVPMode.defaultValue).toBe('Limited')
   })
 
   it('keeps malformed numeric settings on the existing exact-input fallback', async () => {
