@@ -15,9 +15,17 @@ here cover everything those tags shipped.
 
 ### Added
 
-- Added a dedicated owner-only **Official Server Settings** page driven by the
-  current `ServerCustomSettings.ini` catalog. Common values provide convenient
-  0-25 sliders alongside uncapped exact numeric fields.
+- Added a dedicated owner-only **Official Server Settings** page for managed
+  `ServerCustomSettings.ini` values. Saves use a timestamped backup, revision
+  and readback verification, and automatic rollback on failure.
+- Common numeric settings provide 0.1-25 sliders for six-decimal floats and
+  0-25 sliders for integer counts, while uncapped exact fields preserve values
+  outside those convenience ranges. Each setting shows its Funcom default,
+  effect, and direction, and loading Patch 1.5 defaults changes only the draft
+  until Save is selected.
+- Added guarded Stop and Start controls that launch the existing visible-console
+  workflow, wait for the battlegroup and server pods to stop before unlocking
+  edits, and refresh until restarted settings are active.
 - Official server setting updates preserve existing comments, whitespace,
   ordering, unknown keys, and newline conventions.
 
@@ -72,7 +80,6 @@ here cover everything those tags shipped.
   recognized settings without current local-consumption evidence are never
   copied. Existing destination files are backed up, replaced atomically, and
   verified by readback.
-
 - Restored Set Ammo for Retail ranged weapons whose empty
   `FWeaponItemStats` block omits the `CurrentAmmo` field.
 - Corrected Patch 1.5 portable Blueprint compatibility for both Solo and
