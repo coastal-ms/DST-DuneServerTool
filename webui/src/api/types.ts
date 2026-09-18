@@ -47,10 +47,11 @@ export type PortResult = {
   protocol: 'TCP' | 'UDP'
   label: string
   status: 'open' | 'closed' | 'unknown' | 'udp-skip'
+  detail?: string | null
 }
 
 export type PortStatus = {
-  mode: 'builtin' | 'custom' | 'disabled'
+  mode: 'builtin' | 'checkhost' | 'yougetsignal' | 'canyouseeme' | 'custom' | 'disabled'
   publicIp: string | null
   results: PortResult[]
   showUdp?: boolean
