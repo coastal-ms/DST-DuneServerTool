@@ -210,6 +210,11 @@ export function OfficialRetailServerSettingsCard({ vmRunning }: { vmRunning: boo
                       <div className="min-w-0">
                         <div className="text-sm font-medium text-text">{setting.label}</div>
                         <div className="mt-0.5 break-all font-mono text-[10px] text-text-dim">{setting.key}</div>
+                        {setting.key === 'bIsBuildingRestrictionsEnabled' && (
+                          <div className="mt-1 text-[11px] text-text-muted">
+                            Controls general building restrictions. It does not override permanent POI or other restricted no-build zones.
+                          </div>
+                        )}
                         {setting.inverted && (
                           <div className="mt-1 text-[11px] text-text-muted">
                             Inverted game key: raw <span className="font-mono">{setting.value}</span> means {setting.displayValue.toLowerCase()}.

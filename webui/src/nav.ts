@@ -44,6 +44,7 @@ export const LEGACY_NAV_ITEMS: readonly NavItem[] = [
   { to: '/commands',    label: 'Commands',     icon: 'Zap',             group: 'terminal', legacy: true },
   { to: '/map?view=atlas', label: 'DD Atlas', icon: 'Map',              group: 'database', legacy: true },
   { to: '/terminal',    label: 'PowerShell',   icon: 'SquareTerminal',  group: 'terminal', localOnly: true, sidebarHidden: true, legacy: true },
+  { to: '/server-settings', label: 'Server Settings', icon: 'ServerCog', group: 'terminal', ownerOnly: true, legacy: true },
   { to: '/gameconfig',  label: 'Game Config',  icon: 'Sliders',         group: 'terminal', ownerOnly: true, legacy: true },
   { to: '/experimental', label: 'Experimental Lab', icon: 'FlaskConical', group: 'terminal', ownerOnly: true, legacy: true },
   { to: '/broadcasts',  label: 'Broadcasts',   icon: 'Megaphone',       group: 'terminal', legacy: true },

@@ -32,7 +32,7 @@ describe('Official Retail Server Settings card', () => {
           key: 'bIsBuildingRestrictionsEnabled',
           value: 'True',
           displayValue: 'Enabled',
-          label: 'Area Building Restrictions',
+          label: 'General Building Restrictions',
           group: 'World threats and building',
           type: 'bool',
           options: [],
@@ -70,7 +70,10 @@ describe('Official Retail Server Settings card', () => {
 
     render(<OfficialRetailServerSettingsCard vmRunning />)
 
-    expect(await screen.findByText('Area Building Restrictions')).toBeInTheDocument()
+    expect(await screen.findByText('General Building Restrictions')).toBeInTheDocument()
+    expect(screen.getByText(
+      'Controls general building restrictions. It does not override permanent POI or other restricted no-build zones.',
+    )).toBeInTheDocument()
     expect(screen.getByText('Building Stability Limits')).toBeInTheDocument()
     expect(screen.getAllByText('Enabled')).toHaveLength(2)
     expect(screen.getByText((_, element) =>

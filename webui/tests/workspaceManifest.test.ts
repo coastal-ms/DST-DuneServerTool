@@ -83,6 +83,10 @@ describe('workspace manifest', () => {
 
   it('keeps every route module lazy and preserves the current permission matrix', () => {
     for (const route of LEGACY_ROUTE_MANIFEST) expect(route.load).toBeTypeOf('function')
+    expect(LEGACY_ROUTE_MANIFEST.find(route => route.path === '/server-settings')).toMatchObject({
+      label: 'Server Settings',
+      access: 'owner',
+    })
 
     const adminPaths = getVisibleNavItems({
       local: false,
@@ -95,6 +99,7 @@ describe('workspace manifest', () => {
     expect(adminPaths).not.toContain('/map')
     expect(adminPaths).not.toContain('/players')
     expect(adminPaths).not.toContain('/settings')
+    expect(adminPaths).not.toContain('/server-settings')
     expect(adminPaths).not.toContain('/database')
     expect(adminPaths).not.toContain('/terminal')
     expect(adminPaths).not.toContain('/solo')
@@ -105,6 +110,7 @@ describe('workspace manifest', () => {
       canAccessOwnerSurfaces: true,
     }).map(item => item.to)
     expect(localPaths).toContain('/settings')
+    expect(localPaths).toContain('/server-settings')
     expect(localPaths).toContain('/database')
     expect(localPaths).toContain('/terminal')
     expect(localPaths).toContain('/solo')
@@ -124,7 +130,7 @@ describe('workspace manifest', () => {
     expect(localItems.filter(item => item.label === 'DD Atlas')).toHaveLength(1)
     expect(localItems.some(item => ['Map', 'Players', 'Bases', 'Vehicles', 'Economy'].includes(item.label))).toBe(false)
     expect(new Set(localItems.map(item => item.to)).size).toBe(localItems.length)
-    expect(localItems.length).toBeLessThanOrEqual(14)
+    expect(localItems.length).toBeLessThanOrEqual(15)
   })
 
   it('highlights DD Atlas instead of Gameplay Admin on the static atlas view', () => {

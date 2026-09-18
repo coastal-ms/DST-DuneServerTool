@@ -41,7 +41,7 @@ Describe 'Official Retail Server Settings parsing' -Tag 'GameConfig', 'RetailSer
         $stability = (ConvertFrom-DuneRetailServerSettingsRaw -Raw $script:RetailRaw).settings |
             Where-Object key -eq 'bBuildingInfiniteStability'
 
-        $restrictions.label | Should -Be 'Area Building Restrictions'
+        $restrictions.label | Should -Be 'General Building Restrictions'
         $restrictions.displayValue | Should -Be 'Enabled'
         $stability.label | Should -Be 'Building Stability Limits'
         $stability.inverted | Should -BeTrue
@@ -93,6 +93,23 @@ OtherKey=OtherValue
         $updated | Should -Match '(?m)^bIsBuildingRestrictionsEnabled=False$'
         $updated | Should -Match '(?m)^FiefdomLimit=4$'
         $updated | Should -Match '(?m)^OtherKey=OtherValue$'
+    }
+
+    It 'preserves spacing and trailing comments on changed lines' {
+        $raw = @(
+            "[$script:RetailSection]"
+            ('FiefdomLimit=   3   ; retained limit note' + '  ')
+            "bIsBuildingRestrictionsEnabled =`tTrue`t# retained restriction note"
+            'FutureRetailKey = keep-me ; untouched'
+        ) -join "`n"
+        $updated = ConvertTo-DuneRetailServerSettingsUpdatedRaw -Raw $raw -Updates @{
+            FiefdomLimit = '4'
+            bIsBuildingRestrictionsEnabled = 'False'
+        }
+
+        $updated | Should -Match '(?m)^FiefdomLimit=   4   ; retained limit note  $'
+        $updated | Should -Match "(?m)^bIsBuildingRestrictionsEnabled =`tFalse`t# retained restriction note$"
+        $updated | Should -Match '(?m)^FutureRetailKey = keep-me ; untouched$'
     }
 
     It 'rejects unsupported, read-only, and malformed writes' {

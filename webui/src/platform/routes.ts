@@ -13,6 +13,7 @@ export const LEGACY_ROUTE_MANIFEST: readonly LazyRouteDefinition[] = [
   { path: '/pods', label: 'Pods', access: 'all', load: () => import('../pages/Pods').then(module => ({ default: module.Pods })) },
   { path: '/commands', label: 'Commands', access: 'all', load: () => import('../pages/Commands').then(module => ({ default: module.Commands })) },
   { path: '/terminal', label: 'Terminal', access: 'local', load: () => import('../pages/Terminal').then(module => ({ default: module.TerminalPage })) },
+  { path: '/server-settings', label: 'Server Settings', access: 'owner', load: () => import('../pages/ServerSettings').then(module => ({ default: module.ServerSettings })) },
   { path: '/gameconfig', label: 'Game Config', access: 'owner', load: () => import('../pages/GameConfig').then(module => ({ default: module.GameConfig })) },
   { path: '/experimental', label: 'Experimental Lab', access: 'owner', load: () => import('../pages/workspaces/ExperimentalWorkspace') },
   { path: '/gameplay', label: 'Gameplay Admin', access: 'all', load: () => import('../pages/GameplayEnvironment').then(module => ({ default: module.GameplayEnvironment })) },

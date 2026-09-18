@@ -89,7 +89,7 @@ $script:DuneRetailServerLabels = @{
     bAllowSandworms = 'Sandworms'
     SandwormConsequences = 'Sandworm Consequences'
     PlayerDeathLootRule = 'Player Death Loot Rule'
-    bIsBuildingRestrictionsEnabled = 'Area Building Restrictions'
+    bIsBuildingRestrictionsEnabled = 'General Building Restrictions'
     FiefdomLimit = 'Maximum Sub-Fief Amount'
     BuildingPieceLimitMultiplier = 'Building Piece Limit'
     bBuildingInfiniteStability = 'Building Stability Limits'
@@ -544,10 +544,10 @@ function ConvertTo-DuneRetailServerSettingsUpdatedRaw {
             $result.Add($line)
             continue
         }
-        if ($inside -and $line -match '^(\s*([^=]+?)\s*=)(.*)$') {
+        if ($inside -and $line -match '^(\s*([^=]+?)\s*=)(\s*)(.*?)(\s*(?:[;#].*)?)$') {
             $key = $Matches[2].Trim()
             if ($normalized.ContainsKey($key)) {
-                $result.Add("$($Matches[1])$($normalized[$key])")
+                $result.Add("$($Matches[1])$($Matches[3])$($normalized[$key])$($Matches[5])")
                 continue
             }
         }
