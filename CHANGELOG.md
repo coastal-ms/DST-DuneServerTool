@@ -51,6 +51,11 @@ here cover everything those tags shipped.
   mirroring stays disabled, and every player must apply matching local values
   for client-read tool availability, inventory, vehicle-cap, and shield behavior.
 
+### Fixed
+
+- Restored Set Ammo for Retail ranged weapons whose empty
+  `FWeaponItemStats` block omits the `CurrentAmmo` field.
+
 ## [15.1.0] - 2026-09-17
 
 ### Fixed

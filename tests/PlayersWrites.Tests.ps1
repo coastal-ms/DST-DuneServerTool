@@ -413,6 +413,24 @@ Describe 'Invoke-DunePlayerSetWeaponAmmo' -Tag 'Pure' {
         $script:capturedSql | Should -Match 't\.before_ammo::bigint = 17::bigint'
         $script:capturedSql | Should -Match 'to_jsonb\(250::bigint\)'
     }
+
+    It 'treats a Retail weapon with an omitted CurrentAmmo leaf as empty and creates the leaf' {
+        Invoke-DunePlayerSetWeaponAmmo -Ip '1.2.3.4' -PawnId 42 -ItemId 9001 -Ammo 250 -ExpectedAmmo 0 | Out-Null
+
+        $script:capturedSql | Should -Match "COALESCE\(i\.stats->'FWeaponItemStats'->1->>'CurrentAmmo', '0'\) AS before_ammo"
+        $script:capturedSql | Should -Match "jsonb_typeof\(i\.stats->'FWeaponItemStats'->1\) = 'object'"
+        $script:capturedSql | Should -Match "t\.before_ammo::bigint = 0::bigint"
+        $script:capturedSql | Should -Match "jsonb_set\(i\.stats, '\{FWeaponItemStats,1,CurrentAmmo\}', to_jsonb\(250::bigint\), true\)"
+    }
+}
+
+Describe 'Retail weapon ammo inventory read model' -Tag 'Pure' {
+    It 'lists an empty FWeaponItemStats object as zero ammo without classifying non-weapons' {
+        $script:DunePlayerInventorySql | Should -Match "jsonb_typeof\(i\.stats->'FWeaponItemStats'\) = 'array'"
+        $script:DunePlayerInventorySql | Should -Match "jsonb_typeof\(i\.stats->'FWeaponItemStats'->1\) = 'object'"
+        $script:DunePlayerInventorySql | Should -Match "COALESCE\(i\.stats->'FWeaponItemStats'->1->>'CurrentAmmo', '0'\)"
+        $script:DunePlayerInventorySql | Should -Match "ELSE 'N/A'"
+    }
 }
 
 Describe 'Invoke-DunePlayerMaxAugmentAttributes' -Tag 'Pure' {

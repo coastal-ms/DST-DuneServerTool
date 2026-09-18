@@ -62,7 +62,12 @@ SELECT i.id, i.template_id, i.stack_size, COALESCE(i.quality_level, 0) AS qualit
        COALESCE((i.stats->'FItemStackAndDurabilityStats'->1->>'MaxDurability'), 'N/A')     AS max_durability,
        COALESCE((i.stats->'FFillableItemStats'->1->>'CurrentAmount'), 'N/A')               AS water_amount,
        COALESCE((i.stats->'FFillableItemStats'->1->>'FillableType'), '')                   AS water_type,
-       COALESCE((i.stats->'FWeaponItemStats'->1->>'CurrentAmmo'), 'N/A')                   AS current_ammo
+       CASE
+           WHEN jsonb_typeof(i.stats->'FWeaponItemStats') = 'array'
+            AND jsonb_typeof(i.stats->'FWeaponItemStats'->1) = 'object'
+               THEN COALESCE(i.stats->'FWeaponItemStats'->1->>'CurrentAmmo', '0')
+           ELSE 'N/A'
+       END                                                                                AS current_ammo
 FROM dune.items i
 JOIN dune.inventories inv ON i.inventory_id = inv.id
 WHERE inv.actor_id = {0}::bigint
@@ -687,7 +692,7 @@ function Invoke-DunePlayerSetWeaponAmmo {
     $sql = @"
 WITH target AS (
     SELECT i.id,
-           i.stats->'FWeaponItemStats'->1->>'CurrentAmmo' AS before_ammo
+           COALESCE(i.stats->'FWeaponItemStats'->1->>'CurrentAmmo', '0') AS before_ammo
     FROM dune.items i
     JOIN dune.inventories inv ON inv.id = i.inventory_id
     WHERE inv.actor_id = $PawnId::bigint
@@ -695,13 +700,13 @@ WITH target AS (
       AND i.stats ? 'FWeaponItemStats'
       AND jsonb_typeof(i.stats->'FWeaponItemStats') = 'array'
       AND jsonb_array_length(i.stats->'FWeaponItemStats') > 1
-      AND i.stats->'FWeaponItemStats'->1 ? 'CurrentAmmo'
-      AND i.stats->'FWeaponItemStats'->1->>'CurrentAmmo' ~ '^[0-9]+$'
+      AND jsonb_typeof(i.stats->'FWeaponItemStats'->1) = 'object'
+      AND COALESCE(i.stats->'FWeaponItemStats'->1->>'CurrentAmmo', '0') ~ '^[0-9]+$'
     FOR UPDATE
 ),
 updated AS (
     UPDATE dune.items i
-    SET stats = jsonb_set(i.stats, '{FWeaponItemStats,1,CurrentAmmo}', to_jsonb($Ammo::bigint), false)
+    SET stats = jsonb_set(i.stats, '{FWeaponItemStats,1,CurrentAmmo}', to_jsonb($Ammo::bigint), true)
     FROM target t
     WHERE i.id = t.id
       AND t.before_ammo::bigint = $ExpectedAmmo::bigint
