@@ -1945,6 +1945,22 @@ Describe 'GameConfig: client-apply flag covers local gameplay settings' -Tag 'Ga
         $missing -join ', ' | Should -Be ''
     }
 
+    It 'offers Deep Desert Base Backup Tool availability for explicit client Game.ini apply' {
+        $notice = Get-DuneGameConfigClientApplyNotice -Updates @(
+            @{
+                file = 'game'
+                section = $script:DuneGcSecBuilding
+                key = 'm_BaseBackupToolMapRestriction'
+                value = '((Name="HaggaBasin"), (Name="DeepDesert"))'
+            }
+        )
+
+        @($notice.items).Count | Should -Be 1
+        @($notice.items)[0].key | Should -Be 'm_BaseBackupToolMapRestriction'
+        @($notice.items)[0].file | Should -Be 'game'
+        $notice.paths.game | Should -Match 'Game\.ini$'
+    }
+
     It 'offers Maximum Vehicles Per Player and Shield Drops While Shooting as proven client-read settings' {
         # Console variables reach the server through the startup command, not any
         # INI, so a client copy is only meaningful for the ones the client
