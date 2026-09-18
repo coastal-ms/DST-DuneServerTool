@@ -15,8 +15,8 @@ param(
     [switch]$SkipSoloBuild,
     [switch]$SkipPlatformBuild,
     [switch]$SkipVersionCheck,
-    # Explicit artifact identity. The version suffix determines prerelease state;
-    # -Prerelease remains accepted as a consistency guard for release automation.
+    # Artifact/release-channel identity is independent of stable product stamps.
+    # A product prerelease suffix defaults this on; tagged test builds pass it.
     [switch]$Prerelease,
     [string]$BuildCommit = '',
     [string]$BuildTag = '',
@@ -70,10 +70,7 @@ $stampReport = foreach ($vf in $versionFiles) {
     }
 }
 $installerVersion = ($stampReport | Where-Object Label -eq 'MyAppVersion').VersionInfo
-if ($Prerelease -and -not $installerVersion.IsPrerelease) {
-    throw "Stable version $($installerVersion.Version) must not use -Prerelease."
-}
-$Prerelease = [bool]$installerVersion.IsPrerelease
+$Prerelease = Get-DuneArtifactPrerelease -ProductVersionInfo $installerVersion -Prerelease:$Prerelease
 
 $repoKey = [Convert]::ToHexString(
     [Security.Cryptography.SHA256]::HashData(

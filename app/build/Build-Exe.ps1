@@ -33,6 +33,8 @@
 
 [CmdletBinding()]
 param(
+    # Product/file version. A prerelease suffix defaults artifact identity to
+    # prerelease; stable product stamps can use -Prerelease for a test artifact.
     [string]$Version = '15.1.1',
     [string]$BuildCommit = '',
     [string]$BuildTag = '',
@@ -59,10 +61,7 @@ if (-not (Test-Path $outDir)) { New-Item -ItemType Directory -Force -Path $outDi
 . $buildHelpers
 
 $versionInfo = Get-DuneVersionInfo -Version $Version
-if ($Prerelease -and -not $versionInfo.IsPrerelease) {
-    throw "Stable version $Version must not use -Prerelease."
-}
-$Prerelease = [bool]$versionInfo.IsPrerelease
+$Prerelease = Get-DuneArtifactPrerelease -ProductVersionInfo $versionInfo -Prerelease:$Prerelease
 
 if (-not $BuildCommit) {
     $repoRoot = Split-Path -Parent $appRoot

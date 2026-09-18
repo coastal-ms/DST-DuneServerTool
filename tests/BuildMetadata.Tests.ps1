@@ -63,6 +63,10 @@ Describe 'Build artifact metadata' {
         $helpers = Get-Content -LiteralPath (Join-Path $repo 'app\build\BuildHelpers.ps1') -Raw
         $installer | Should -Match '\[switch\]\$Prerelease'
         $exe | Should -Match '\[switch\]\$Prerelease'
+        $installer | Should -Match 'Get-DuneArtifactPrerelease'
+        $exe | Should -Match 'Get-DuneArtifactPrerelease'
+        $installer | Should -Not -Match 'Stable version .* must not use -Prerelease'
+        $exe | Should -Not -Match 'Stable version .* must not use -Prerelease'
         $installer | Should -Match '-Prerelease:\$Prerelease'
         $installer | Should -Match 'DST-BuildInstaller-'
         $installer | Should -Match 'Another installer build is already running'
@@ -85,6 +89,27 @@ Describe 'Build artifact metadata' {
         foreach ($invalid in @('01.2.3', '1.02.3', '1.2.03', '1.2.3-', '1.2.3-.test', '1.2.3-test.', '1.2.3-..', '1.2.3-01')) {
             { Get-DuneVersionInfo -Version $invalid } | Should -Throw '*SemVer-compatible release version*'
         }
+    }
+
+    It 'keeps stable product stamps while explicitly marking a test artifact prerelease' {
+        $product = Get-DuneVersionInfo -Version '15.1.1'
+
+        $product.Version | Should -BeExactly '15.1.1'
+        $product.NumericVersion | Should -BeExactly '15.1.1.0'
+        $product.IsPrerelease | Should -BeFalse
+        Get-DuneArtifactPrerelease -ProductVersionInfo $product -Prerelease | Should -BeTrue
+    }
+
+    It 'defaults product prerelease suffixes to prerelease artifact identity' {
+        $product = Get-DuneVersionInfo -Version '15.1.1-test1'
+
+        Get-DuneArtifactPrerelease -ProductVersionInfo $product | Should -BeTrue
+    }
+
+    It 'keeps stable product artifacts stable when prerelease identity is not requested' {
+        $product = Get-DuneVersionInfo -Version '15.1.1'
+
+        Get-DuneArtifactPrerelease -ProductVersionInfo $product | Should -BeFalse
     }
 
     It 'publishes through replacement so an installed hardlink is not overwritten' {
@@ -189,6 +214,24 @@ Describe 'Build artifact metadata' {
 
         $identity.Commit | Should -BeExactly $head
         $identity.Tag | Should -BeExactly 'v15.0.0-test9'
+        $identity.Prerelease | Should -BeTrue
+    }
+
+    It 'accepts stable 15.1.1 product stamps for the exact v15.1.1-test1 artifact' {
+        $repo = Join-Path $TestDrive 'stable-product-test-artifact'
+        $head = New-BuildIdentityTestRepo -Path $repo -Tags 'v15.1.1-test1'
+        $product = Get-DuneVersionInfo -Version '15.1.1'
+        $artifactPrerelease = Get-DuneArtifactPrerelease -ProductVersionInfo $product -Prerelease
+
+        $identity = Resolve-DuneBuildIdentity `
+            -RepoRoot $repo `
+            -BuildTag 'v15.1.1-test1' `
+            -BuildCommit $head `
+            -BuildCommitSpecified `
+            -Prerelease:$artifactPrerelease
+
+        $identity.Commit | Should -BeExactly $head
+        $identity.Tag | Should -BeExactly 'v15.1.1-test1'
         $identity.Prerelease | Should -BeTrue
     }
 
