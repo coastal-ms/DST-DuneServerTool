@@ -2042,6 +2042,80 @@ Describe 'GameConfig: Engine.ini opt-in setting' -Tag 'GameConfig' {
         Resolve-DuneGameConfigClientDir -Dir '%LOCALAPPDATA%\DuneSandbox\Saved\Config\WindowsClient' |
             Should -Be ([Environment]::ExpandEnvironmentVariables('%LOCALAPPDATA%\DuneSandbox\Saved\Config\Windows'))
     }
+
+    It 'offers only field-proven non-default WindowsClient settings and flags conflicts' {
+        Mock Read-DuneConfig { [ordered]@{ ClientConfigPath = ''; ClientEngineIniEnabled = 'true' } }
+        Mock Resolve-DuneGameConfigClientDir {
+            [Environment]::ExpandEnvironmentVariables('%LOCALAPPDATA%\DuneSandbox\Saved\Config\Windows')
+        }
+        Mock Get-DuneGameConfigLegacyClientFile {
+            param($File)
+            if ($File -eq 'engine') {
+                return @{
+                    exists = $true
+                    effective = @{
+                        "$script:DuneGcSecConsole||Vehicle.MaxVehiclesPerPlayer" = '20'
+                        "$script:DuneGcSecConsole||Dune.DisableShieldOnShooting" = '0'
+                    }
+                    effectiveByKey = @{}
+                }
+            }
+            return @{
+                exists = $true
+                effective = @{
+                    "$script:DuneGcSecInventory||PlayerInventoryStartingSize" = '70'
+                    "$script:DuneGcSecInventory||PlayerInventoryStartingVolumeCapacity" = '250'
+                    "$script:DuneGcSecSandworm||m_bGiantWormSystemEnabled" = 'False'
+                }
+                effectiveByKey = @{}
+            }
+        }
+        Mock Get-DuneGameConfigClientFile {
+            param($Dir, $File)
+            if ($File -eq 'engine') {
+                return @{
+                    effective = @{
+                        "$script:DuneGcSecConsole||Vehicle.MaxVehiclesPerPlayer" = '20'
+                        "$script:DuneGcSecConsole||Dune.DisableShieldOnShooting" = '1'
+                    }
+                    effectiveByKey = @{}
+                }
+            }
+            return @{
+                effective = @{
+                    "$script:DuneGcSecInventory||PlayerInventoryStartingVolumeCapacity" = '175'
+                }
+                effectiveByKey = @{}
+            }
+        }
+
+        $migration = Get-DuneGameConfigLegacyMigration
+
+        $migration.available | Should -BeTrue
+        @($migration.candidates).Count | Should -Be 4
+        ($migration.candidates | Where-Object key -eq 'PlayerInventoryStartingSize').state | Should -Be 'missing'
+        ($migration.candidates | Where-Object key -eq 'PlayerInventoryStartingSize').selected | Should -BeTrue
+        ($migration.candidates | Where-Object key -eq 'PlayerInventoryStartingVolumeCapacity').state | Should -Be 'conflict'
+        ($migration.candidates | Where-Object key -eq 'PlayerInventoryStartingVolumeCapacity').selected | Should -BeFalse
+        ($migration.candidates | Where-Object key -eq 'Vehicle.MaxVehiclesPerPlayer').state | Should -Be 'current'
+        @($migration.excludedRecognized | Where-Object key -eq 'm_bGiantWormSystemEnabled').Count | Should -Be 1
+    }
+
+    It 'does not report numeric formatting differences as migration conflicts' {
+        Test-DuneGameConfigValuesEqual -Left '300.000000' -Right '300.0' | Should -BeTrue
+        Test-DuneGameConfigValuesEqual -Left 'False' -Right 'false' | Should -BeTrue
+    }
+
+    It 'does not offer the default WindowsClient migration for a custom destination' {
+        Mock Resolve-DuneGameConfigClientDir { 'D:\CustomClientConfig' }
+        Mock Get-DuneGameConfigLegacyClientFile { throw 'must not read the legacy default for a custom destination' }
+
+        $migration = Get-DuneGameConfigLegacyMigration -CurrentDir 'D:\CustomClientConfig'
+
+        $migration.available | Should -BeFalse
+        $migration.reason | Should -Be 'custom-client-directory'
+        Assert-MockCalled Get-DuneGameConfigLegacyClientFile -Times 0
+    }
 }
 
 Describe 'GameConfig: local client Game.ini and Engine.ini' -Tag 'GameConfig' {
@@ -2087,6 +2161,11 @@ Describe 'GameConfig: local client Game.ini and Engine.ini' -Tag 'GameConfig' {
         $engineRaw | Should -Match "`r`n"
         $result.files.game.path | Should -Be (Join-Path $dir 'Game.ini')
         $result.files.engine.path | Should -Be (Join-Path $dir 'Engine.ini')
+        $result.backups.game | Should -Not -BeNullOrEmpty
+        $result.backups.engine | Should -Not -BeNullOrEmpty
+        [IO.File]::ReadAllText($result.backups.game) | Should -Match 'MasterVolume=0.8'
+        [IO.File]::ReadAllText($result.backups.engine) | Should -Match 'r\.ScreenPercentage=100'
+        @(Get-ChildItem -LiteralPath $dir -Filter '*.dst-tmp-*').Count | Should -Be 0
         @($result.items | ForEach-Object file | Sort-Object -Unique) | Should -Be @('engine','game')
     }
 

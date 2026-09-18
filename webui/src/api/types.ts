@@ -263,6 +263,9 @@ export type GameConfigClientApplyItem = {
   value: string
   structKey?: string
   remove?: boolean
+  currentValue?: string
+  state?: 'missing' | 'current' | 'conflict'
+  selected?: boolean
 }
 
 export type GameConfigClientApply = {
@@ -343,6 +346,23 @@ export type GameConfigClientInfo = GameConfigClientFileInfo & {
   engineEnabled: boolean
   game: GameConfigClientFileInfo
   engine: GameConfigClientFileInfo
+  legacyMigration?: {
+    available: boolean
+    reason: string
+    sourceDir: string
+    destinationDir: string
+    candidates: GameConfigClientApplyItem[]
+    excludedRecognized: Array<{
+      file: 'game' | 'engine'
+      section: string
+      key: string
+      label: string
+      reason: string
+    }>
+    actionableCount?: number
+    alreadyCurrentCount?: number
+    conflictCount?: number
+  }
 }
 
 export type GameConfigClientEngineGateResult = {
@@ -361,8 +381,10 @@ export type GameConfigClientApplyResult = {
     path: string
     created: boolean
     applied: number
+    backup?: string
   }>>
   backup: string
+  backups?: Partial<Record<'game' | 'engine', string>>
   created: boolean
   applied: number
   items: GameConfigClientApplyItem[]

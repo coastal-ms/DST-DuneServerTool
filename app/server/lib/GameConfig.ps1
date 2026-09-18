@@ -1068,6 +1068,13 @@ $script:DuneGameConfigClientDirDefault     = '%LOCALAPPDATA%\DuneSandbox\Saved\C
 $script:DuneGameConfigClientDirLegacy      = '%LOCALAPPDATA%\DuneSandbox\Saved\Config\WindowsClient'
 $script:DuneGameConfigClientGameFileName   = 'Game.ini'
 $script:DuneGameConfigClientEngineFileName = 'Engine.ini'
+$script:DuneRetailClientCompatibilityKeys  = @(
+    'm_BaseBackupToolMapRestriction'
+    'PlayerInventoryStartingSize'
+    'PlayerInventoryStartingVolumeCapacity'
+    'Vehicle.MaxVehiclesPerPlayer'
+    'Dune.DisableShieldOnShooting'
+)
 
 # Engine.ini management is a disabled-by-default opt-in because the game
 # rewrites this file and client-side CVar overrides can materially change play.
@@ -1141,6 +1148,125 @@ function Get-DuneGameConfigClientFile {
     }
 }
 
+function Get-DuneGameConfigLegacyClientFile {
+    param([ValidateSet('game','engine')][string]$File = 'game')
+    $dir = [Environment]::ExpandEnvironmentVariables($script:DuneGameConfigClientDirLegacy).TrimEnd('\')
+    $fileName = if ($File -eq 'engine') { $script:DuneGameConfigClientEngineFileName } else { $script:DuneGameConfigClientGameFileName }
+    $path = Join-Path $dir $fileName
+    $exists = Test-Path -LiteralPath $path -PathType Leaf
+    $raw = if ($exists) { [IO.File]::ReadAllText($path) } else { '' }
+    return @{
+        file           = $File
+        path           = $path
+        exists         = [bool]$exists
+        raw            = $raw
+        effective      = (Get-DuneIniEffective -Raw $raw)
+        effectiveByKey = (Get-DuneIniEffectiveByKey -Raw $raw)
+    }
+}
+
+function Get-DuneGameConfigLegacyMigration {
+    param([string]$CurrentDir = '')
+    $currentRaw = if ($CurrentDir) { $CurrentDir } else { Get-DuneGameConfigClientDir }
+    $currentResolved = Resolve-DuneGameConfigClientDir -Dir $currentRaw
+    $defaultResolved = [Environment]::ExpandEnvironmentVariables($script:DuneGameConfigClientDirDefault).TrimEnd('\')
+    $legacyResolved = [Environment]::ExpandEnvironmentVariables($script:DuneGameConfigClientDirLegacy).TrimEnd('\')
+    if ($currentResolved -ine $defaultResolved) {
+        return @{
+            available = $false
+            reason = 'custom-client-directory'
+            sourceDir = $legacyResolved
+            destinationDir = $currentResolved
+            candidates = @()
+            excludedRecognized = @()
+        }
+    }
+
+    $legacyFiles = @{
+        game = Get-DuneGameConfigLegacyClientFile -File 'game'
+        engine = Get-DuneGameConfigLegacyClientFile -File 'engine'
+    }
+    $currentFiles = @{
+        game = Get-DuneGameConfigClientFile -Dir $currentRaw -File 'game'
+        engine = Get-DuneGameConfigClientFile -Dir $currentRaw -File 'engine'
+    }
+    $legacyExists = [bool]($legacyFiles.game.exists -or $legacyFiles.engine.exists)
+    if (-not $legacyExists) {
+        return @{
+            available = $false
+            reason = 'legacy-directory-not-found'
+            sourceDir = $legacyResolved
+            destinationDir = $currentResolved
+            candidates = @()
+            excludedRecognized = @()
+        }
+    }
+
+    $compatibility = @{}
+    foreach ($key in $script:DuneRetailClientCompatibilityKeys) { $compatibility[$key] = $true }
+    $candidates = New-Object 'System.Collections.Generic.List[object]'
+    $excluded = New-Object 'System.Collections.Generic.List[object]'
+    foreach ($field in $script:DuneGameConfigSchema) {
+        if (-not ($field.ContainsKey('ClientApply') -and $field.ClientApply)) { continue }
+        $file = "$($field.File)"
+        if ($file -notin @('game','engine')) { continue }
+        $sectionKey = "$($field.Section)||$($field.Key)"
+        $legacyValue = $legacyFiles[$file].effective[$sectionKey]
+        if ($null -eq $legacyValue -or "$legacyValue" -eq '') {
+            $legacyValue = $legacyFiles[$file].effectiveByKey["$($field.Key)"]
+        }
+        if ($null -eq $legacyValue -or "$legacyValue" -eq '') { continue }
+        $legacyValue = "$legacyValue"
+        if (Test-DuneGameConfigValueIsDefault -Key "$($field.Key)" -Value $legacyValue) { continue }
+
+        if (-not $compatibility.ContainsKey("$($field.Key)")) {
+            $excluded.Add(@{
+                file = $file
+                section = "$($field.Section)"
+                key = "$($field.Key)"
+                label = "$($field.Label)"
+                reason = 'No direct current-Retail evidence that this setting is still evaluated from the local client INI.'
+            })
+            continue
+        }
+
+        $currentValue = $currentFiles[$file].effective[$sectionKey]
+        if ($null -eq $currentValue -or "$currentValue" -eq '') {
+            $currentValue = $currentFiles[$file].effectiveByKey["$($field.Key)"]
+        }
+        $currentValue = if ($null -eq $currentValue) { '' } else { "$currentValue" }
+        $state = if (-not $currentValue) {
+            'missing'
+        } elseif (Test-DuneGameConfigValuesEqual -Left $currentValue -Right $legacyValue) {
+            'current'
+        } else {
+            'conflict'
+        }
+        $candidates.Add(@{
+            file = $file
+            section = "$($field.Section)"
+            key = "$($field.Key)"
+            label = "$($field.Label)"
+            value = $legacyValue
+            currentValue = $currentValue
+            state = $state
+            selected = ($state -eq 'missing')
+        })
+    }
+
+    return @{
+        available = $true
+        reason = ''
+        sourceDir = $legacyResolved
+        destinationDir = $currentResolved
+        candidates = $candidates.ToArray()
+        excludedRecognized = $excluded.ToArray()
+        actionableCount = @($candidates | Where-Object { $_.state -ne 'current' }).Count
+        alreadyCurrentCount = @($candidates | Where-Object { $_.state -eq 'current' }).Count
+        conflictCount = @($candidates | Where-Object { $_.state -eq 'conflict' }).Count
+    }
+}
+
 # Read the LOCAL client Game.ini + Engine.ini. Legacy top-level file fields keep
 # representing Game.ini so existing land-claim callers remain compatible.
 function Get-DuneGameConfigClient {
@@ -1165,6 +1291,7 @@ function Get-DuneGameConfigClient {
         managedSections = $game.managedSections
         game            = $game
         engine          = $engine
+        legacyMigration = (Get-DuneGameConfigLegacyMigration -CurrentDir $dirRaw)
     }
 }
 
@@ -1336,10 +1463,69 @@ function Save-DuneGameConfigClient {
         $plans.Add(@{ file = $file; path = $path; created = $created; raw = $new; applied = $fileUpdates.Count })
     }
 
-    $files = @{}
+    $stamp = [datetime]::UtcNow.ToString('yyyyMMddTHHmmssfffZ')
+    $prepared = New-Object 'System.Collections.Generic.List[object]'
     foreach ($plan in $plans) {
-        [IO.File]::WriteAllText($plan.path, $plan.raw, (New-Object System.Text.UTF8Encoding($false)))
-        $files[$plan.file] = @{ file = $plan.file; path = $plan.path; created = $plan.created; applied = $plan.applied }
+        $tempPath = "$($plan.path).dst-tmp-$([guid]::NewGuid().ToString('N'))"
+        $backupPath = if ($plan.created) { '' } else { "$($plan.path).dst-backup-$stamp" }
+        [IO.File]::WriteAllText($tempPath, $plan.raw, (New-Object System.Text.UTF8Encoding($false)))
+        if ([IO.File]::ReadAllText($tempPath) -cne $plan.raw) {
+            Remove-Item -LiteralPath $tempPath -Force -ErrorAction SilentlyContinue
+            throw "Client config staging verification failed: $($plan.path)"
+        }
+        $prepared.Add(@{
+            file = $plan.file
+            path = $plan.path
+            tempPath = $tempPath
+            backup = $backupPath
+            created = $plan.created
+            raw = $plan.raw
+            applied = $plan.applied
+        })
+    }
+
+    $committed = New-Object 'System.Collections.Generic.List[object]'
+    try {
+        foreach ($plan in $prepared) {
+            if ($plan.created) {
+                [IO.File]::Move($plan.tempPath, $plan.path)
+            } else {
+                [IO.File]::Replace($plan.tempPath, $plan.path, $plan.backup, $true)
+            }
+            if ([IO.File]::ReadAllText($plan.path) -cne $plan.raw) {
+                throw "Client config readback verification failed: $($plan.path)"
+            }
+            $committed.Add($plan)
+        }
+    } catch {
+        for ($i = $committed.Count - 1; $i -ge 0; $i--) {
+            $plan = $committed[$i]
+            if ($plan.backup -and (Test-Path -LiteralPath $plan.backup -PathType Leaf)) {
+                [IO.File]::Copy($plan.backup, $plan.path, $true)
+            } elseif ($plan.created -and (Test-Path -LiteralPath $plan.path -PathType Leaf)) {
+                Remove-Item -LiteralPath $plan.path -Force
+            }
+        }
+        throw
+    } finally {
+        foreach ($plan in $prepared) {
+            if (Test-Path -LiteralPath $plan.tempPath -PathType Leaf) {
+                Remove-Item -LiteralPath $plan.tempPath -Force -ErrorAction SilentlyContinue
+            }
+        }
+    }
+
+    $files = @{}
+    $backups = @{}
+    foreach ($plan in $prepared) {
+        $files[$plan.file] = @{
+            file = $plan.file
+            path = $plan.path
+            created = $plan.created
+            applied = $plan.applied
+            backup = $plan.backup
+        }
+        if ($plan.backup) { $backups[$plan.file] = $plan.backup }
     }
     $first = $plans[0]
     return @{
@@ -1350,7 +1536,8 @@ function Save-DuneGameConfigClient {
             engine = (Get-DuneGameConfigClientFilePath -Dir $Dir -File 'engine')
         }
         files   = $files
-        backup  = ''
+        backup  = $(if ($backups.Count -gt 0) { "$($backups[@($backups.Keys)[0]])" } else { '' })
+        backups = $backups
         created = [bool](@($plans | Where-Object { $_.created }).Count -gt 0)
         applied = $clean.Count
         items   = $clean.ToArray()
@@ -2612,19 +2799,11 @@ function Get-DuneGameConfigQuotedKeys {
     return $q
 }
 
-# Numeric/bool-aware comparison of a submitted value against a field's Funcom
-# default. When they match, the caller drops the key from the INI (a reset) so
-# defaults never clutter the managed block or the client Game.ini. Mirrors the
-# webui valuesEqual() logic: 4 == 4.0, True == true, trimmed, case-insensitive.
-function Test-DuneGameConfigValueIsDefault {
-    param([string]$Key, [string]$Value)
-    $field = $null
-    foreach ($f in $script:DuneGameConfigSchema) { if ($f.Key -eq $Key) { $field = $f; break } }
-    if ($null -eq $field) { return $false }
-    if (-not $field.ContainsKey('Default')) { return $false }
-    $def = [string]$field.Default
-    $a = "$Value".Trim()
-    $b = "$def".Trim()
+# Numeric/bool-aware comparison used for defaults and migration conflicts.
+function Test-DuneGameConfigValuesEqual {
+    param([string]$Left, [string]$Right)
+    $a = "$Left".Trim()
+    $b = "$Right".Trim()
     if ($a -ne '' -and $b -ne '') {
         $na = 0.0; $nb = 0.0
         $ci = [System.Globalization.CultureInfo]::InvariantCulture
@@ -2633,6 +2812,18 @@ function Test-DuneGameConfigValueIsDefault {
         if ($sa -and $sb) { return ($na -eq $nb) }
     }
     return ($a.ToLowerInvariant() -eq $b.ToLowerInvariant())
+}
+
+# Numeric/bool-aware comparison of a submitted value against a field's Funcom
+# default. When they match, the caller drops the key from the INI (a reset) so
+# defaults never clutter the managed block or the client Game.ini.
+function Test-DuneGameConfigValueIsDefault {
+    param([string]$Key, [string]$Value)
+    $field = $null
+    foreach ($f in $script:DuneGameConfigSchema) { if ($f.Key -eq $Key) { $field = $f; break } }
+    if ($null -eq $field) { return $false }
+    if (-not $field.ContainsKey('Default')) { return $false }
+    return (Test-DuneGameConfigValuesEqual -Left $Value -Right ([string]$field.Default))
 }
 
 function Test-DuneStartupConsoleVariableValue {

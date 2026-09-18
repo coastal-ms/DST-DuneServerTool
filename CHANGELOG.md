@@ -53,6 +53,15 @@ here cover everything those tags shipped.
   Engine.ini entries still require the existing opt-in. Server saves remain
   separate, automatic client mirroring stays disabled, and no other historical
   `ClientApply` field is included without equivalent current-Retail evidence.
+- Added a guarded **Review WindowsClient migration** action for Retail's client
+  config directory change. It detects the former `WindowsClient` files but
+  offers only recognized, non-default values from the same field-proven
+  compatibility allowlist. Missing `Windows` values are preselected, different
+  current values are shown as unselected conflicts, and already-current values
+  are left alone. Whole files, account/session data, unknown keys, and
+  recognized settings without current local-consumption evidence are never
+  copied. Existing destination files are backed up, replaced atomically, and
+  verified by readback.
 
 ### Fixed
 

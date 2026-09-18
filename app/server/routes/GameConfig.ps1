@@ -616,6 +616,7 @@ Register-DuneRoute -Method PUT -Path '/api/gameconfig/client/apply' -LocalOnly -
             paths   = $r.paths
             files   = $r.files
             backup  = $r.backup
+            backups = $r.backups
             created = $r.created
             applied = $r.applied
             items   = $r.items

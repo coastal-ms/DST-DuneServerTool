@@ -204,4 +204,76 @@ describe('Game Config advanced client compatibility action', () => {
     expect(within(dialog).queryByText('Maximum Vehicles Per Player')).not.toBeInTheDocument()
     expect(within(dialog).getByText(/Game.ini compatibility values do not require Engine.ini management/)).toBeInTheDocument()
   })
+
+  it('reviews only eligible WindowsClient values, preselects missing values, and leaves conflicts opt-in', async () => {
+    const user = userEvent.setup()
+    const info = clientInfo(true)
+    info.legacyMigration = {
+      available: true,
+      reason: '',
+      sourceDir: 'C:\\Dune\\WindowsClient',
+      destinationDir: 'C:\\Dune\\Windows',
+      actionableCount: 2,
+      alreadyCurrentCount: 1,
+      conflictCount: 1,
+      excludedRecognized: [{
+        file: 'game',
+        section: '/Script/DuneSandbox.SandwormSettings',
+        key: 'm_bGiantWormSystemEnabled',
+        label: 'Giant Worm System',
+        reason: 'No current evidence.',
+      }],
+      candidates: [
+        {
+          file: 'game',
+          section: '/Script/DuneSandbox.InventorySystemSettings',
+          key: 'PlayerInventoryStartingSize',
+          label: 'Starting Inventory Slots',
+          value: '70',
+          currentValue: '',
+          state: 'missing',
+          selected: true,
+        },
+        {
+          file: 'engine',
+          section: 'ConsoleVariables',
+          key: 'Vehicle.MaxVehiclesPerPlayer',
+          label: 'Maximum Vehicles Per Player',
+          value: '20',
+          currentValue: '10',
+          state: 'conflict',
+          selected: false,
+        },
+        {
+          file: 'game',
+          section: '/Script/DuneSandbox.BuildingSettings',
+          key: 'm_BaseBackupToolMapRestriction',
+          label: 'Allowed Maps',
+          value: 'Hagga,DeepDesert',
+          currentValue: 'Hagga,DeepDesert',
+          state: 'current',
+          selected: false,
+        },
+      ],
+    }
+    vi.mocked(getGameConfigClient).mockResolvedValue(info)
+
+    render(<GameConfig />)
+    await user.click(await screen.findByRole('button', { name: 'Review WindowsClient migration' }))
+
+    const dialog = screen.getByRole('dialog', { name: 'Review WindowsClient migration' })
+    expect(within(dialog).getByText('Starting Inventory Slots')).toBeInTheDocument()
+    expect(within(dialog).getByText('Maximum Vehicles Per Player')).toBeInTheDocument()
+    expect(within(dialog).queryByText('Allowed Maps')).not.toBeInTheDocument()
+    expect(within(dialog).getByText('old: 70 • current: missing')).toBeInTheDocument()
+    expect(within(dialog).getByText('old: 20 • current: 10')).toBeInTheDocument()
+    expect(within(dialog).getByRole('checkbox', { name: /Starting Inventory Slots/ })).toBeChecked()
+    expect(within(dialog).getByRole('checkbox', { name: /Maximum Vehicles Per Player/ })).not.toBeChecked()
+
+    await user.click(within(dialog).getByRole('button', { name: 'Apply 1 selected setting' }))
+    await waitFor(() => expect(applyGameConfigClient).toHaveBeenCalledOnce())
+    expect(applyGameConfigClient).toHaveBeenCalledWith([
+      expect.objectContaining({ key: 'PlayerInventoryStartingSize', value: '70' }),
+    ], 'C:\\Dune')
+  })
 })

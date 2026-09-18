@@ -63,6 +63,7 @@ const RETAIL_CLIENT_COMPATIBILITY_TARGETS = new Set([
 ])
 
 type LoadState = 'idle' | 'loading' | 'ready' | 'error' | 'unavailable'
+type ClientReviewMode = 'server' | 'legacy'
 
 function clientBundleFor(info: GameConfigClientInfo, file: 'game' | 'engine') {
   return file === 'engine' ? info.engine : (info.game ?? info)
@@ -422,7 +423,7 @@ export function GameConfig({ mode = 'standard' }: { mode?: 'standard' | 'experim
   const [clientBusy, setClientBusy] = useState(false)
   const [clientMsg, setClientMsg] = useState<string | null>(null)
   const [clientErr, setClientErr] = useState<string | null>(null)
-  const [clientReviewItems, setClientReviewItems] = useState<GameConfigClientApplyItem[] | null>(null)
+  const [clientReview, setClientReview] = useState<{ mode: ClientReviewMode; items: GameConfigClientApplyItem[] } | null>(null)
   const [clientViewFile, setClientViewFile] = useState<'game' | 'engine' | null>(null)
   const refreshClient = useCallback(async () => {
     if (!localViewer) return null
@@ -763,6 +764,12 @@ export function GameConfig({ mode = 'standard' }: { mode?: 'standard' | 'experim
     () => clientApplyItems.filter(item => item.file === 'game' || clientInfo?.engineEnabled === true),
     [clientApplyItems, clientInfo?.engineEnabled],
   )
+  const legacyMigrationItems = useMemo(
+    () => (clientInfo?.legacyMigration?.candidates ?? [])
+      .filter(item => item.state !== 'current')
+      .filter(item => item.file === 'game' || clientInfo?.engineEnabled === true),
+    [clientInfo],
+  )
 
   const onApplyCurrentClientSettings = useCallback(async (reviewedItems: GameConfigClientApplyItem[]) => {
     if (reviewedItems.length === 0) return
@@ -772,9 +779,10 @@ export function GameConfig({ mode = 'standard' }: { mode?: 'standard' | 'experim
     try {
       const result = await applyGameConfigClient(reviewedItems, clientInfo?.dir)
       setClientInfo(result.client)
-      setClientReviewItems(null)
+      setClientReview(null)
+      const backupCount = Object.keys(result.backups ?? {}).length
       setClientMsg(
-        `Applied ${result.applied} setting${result.applied === 1 ? '' : 's'} to this PC's local Dune client config. Other players must apply their own copy.`,
+        `Applied ${result.applied} setting${result.applied === 1 ? '' : 's'} to this PC's local Dune client config${backupCount ? ` after backing up ${backupCount} destination file${backupCount === 1 ? '' : 's'}` : ''}. Other players must apply their own copy.`,
       )
       window.setTimeout(() => setClientMsg(null), 7000)
     } catch (e) {
@@ -1326,6 +1334,41 @@ export function GameConfig({ mode = 'standard' }: { mode?: 'standard' | 'experim
                 ? ' Enable Engine.ini management here to include shield, vehicle-cap, and other proven client-read CVars.'
                 : ' Engine.ini values are included only while Engine.ini management is enabled.'}
             </div>
+            {clientInfo?.legacyMigration?.available && (
+              <div className="mb-3 rounded-lg border border-warning/30 bg-warning/5 p-3 text-xs text-text-muted">
+                <strong className="text-text">Retail moved its active client config from WindowsClient to Windows.</strong>{' '}
+                DST found the former folder and can review only recognized, non-default settings with direct current-Retail
+                evidence of local client evaluation. It never copies whole files or unrelated account, UI, session, or unknown
+                settings. Missing destination values are preselected; conflicts require an explicit selection.
+                <div className="mt-2 font-mono break-all text-[11px] text-text-dim">
+                  {clientInfo.legacyMigration.sourceDir} → {clientInfo.legacyMigration.destinationDir}
+                </div>
+                <div className="mt-2 flex flex-wrap items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setClientReview({ mode: 'legacy', items: legacyMigrationItems.map(item => ({ ...item })) })}
+                    disabled={clientBusy || legacyMigrationItems.length === 0}
+                    className="btn-secondary"
+                    title={legacyMigrationItems.length === 0
+                      ? 'No eligible WindowsClient values need review'
+                      : 'Review recognized WindowsClient values before writing the active Windows config'}
+                  >
+                    <Icon name="FolderSync" size={14} /> Review WindowsClient migration
+                  </button>
+                  <span>
+                    {clientInfo.legacyMigration.alreadyCurrentCount ?? 0} already current
+                    {' • '}{clientInfo.legacyMigration.conflictCount ?? 0} conflict{clientInfo.legacyMigration.conflictCount === 1 ? '' : 's'}
+                    {' • '}{clientInfo.legacyMigration.excludedRecognized.length} recognized setting{clientInfo.legacyMigration.excludedRecognized.length === 1 ? '' : 's'} excluded without current evidence
+                  </span>
+                </div>
+                {clientInfo.legacyMigration.candidates.some(item => item.file === 'engine' && item.state !== 'current')
+                  && clientInfo.engineEnabled !== true && (
+                    <div className="mt-2 text-warning">
+                      Enable Engine.ini management above to review eligible legacy Engine.ini values.
+                    </div>
+                  )}
+              </div>
+            )}
             <div className="flex items-center gap-2">
               <input
                 type="text"
@@ -1623,7 +1666,7 @@ export function GameConfig({ mode = 'standard' }: { mode?: 'standard' | 'experim
               {localViewer && (
                 <button
                   type="button"
-                  onClick={() => setClientReviewItems(enabledClientApplyItems.map(item => ({ ...item })))}
+                  onClick={() => setClientReview({ mode: 'server', items: enabledClientApplyItems.map(item => ({ ...item })) })}
                   disabled={clientBusy || enabledClientApplyItems.length === 0}
                   className="btn-primary"
                   title={enabledClientApplyItems.length === 0
@@ -1664,11 +1707,12 @@ export function GameConfig({ mode = 'standard' }: { mode?: 'standard' | 'experim
         onConfirm={confirmSandwormEnable}
       />
 
-      {clientReviewItems && (
+      {clientReview && (
         <ClientApplyReviewModal
-          items={clientReviewItems}
+          items={clientReview.items}
+          mode={clientReview.mode}
           busy={clientBusy}
-          onCancel={() => setClientReviewItems(null)}
+          onCancel={() => setClientReview(null)}
           onConfirm={reviewedItems => void onApplyCurrentClientSettings(reviewedItems)}
         />
       )}
@@ -2889,15 +2933,16 @@ function IniSectionBlock({ section }: { section: GameConfigIniSection }) {
 }
 
 function ClientApplyReviewModal({
-  items, busy, onCancel, onConfirm,
+  items, mode, busy, onCancel, onConfirm,
 }: {
   items: GameConfigClientApplyItem[]
+  mode: ClientReviewMode
   busy: boolean
   onCancel: () => void
   onConfirm: (items: GameConfigClientApplyItem[]) => void
 }) {
   const itemId = (item: GameConfigClientApplyItem) => `${item.file}||${item.key}`.toLowerCase()
-  const [selectedIds, setSelectedIds] = useState(() => new Set(items.map(itemId)))
+  const [selectedIds, setSelectedIds] = useState(() => new Set(items.filter(item => item.selected !== false).map(itemId)))
   const selectedItems = items.filter(item => selectedIds.has(itemId(item)))
   const groups = (['game', 'engine'] as const)
     .map(file => ({ file, items: items.filter(item => item.file === file) }))
@@ -2928,11 +2973,12 @@ function ClientApplyReviewModal({
           <div>
             <h3 id="client-apply-review-title" className="font-semibold text-text flex items-center gap-2">
               <Icon name="MonitorCog" size={16} className="text-accent-bright" />
-              Review advanced compatibility overrides
+              {mode === 'legacy' ? 'Review WindowsClient migration' : 'Review advanced compatibility overrides'}
             </h3>
             <p className="mt-1 text-xs text-text-muted">
-              This writes only customized, non-default compatibility overrides with direct current-Retail evidence of
-              local evaluation. It does not copy every server INI setting.
+              {mode === 'legacy'
+                ? 'This imports only recognized, non-default compatibility values with direct current-Retail evidence. Whole files and unrelated settings are never copied.'
+                : 'This writes only customized, non-default compatibility overrides with direct current-Retail evidence of local evaluation. It does not copy every server INI setting.'}
             </p>
           </div>
           <button
@@ -2973,11 +3019,19 @@ function ClientApplyReviewModal({
                     <span className="min-w-0 flex-1">
                       <span className="block text-sm font-medium text-text">{item.label}</span>
                       <span className="mt-0.5 block text-xs text-text-muted">
-                        Offered because current Retail field testing shows this advanced value is evaluated from the local client config.
+                        {mode === 'legacy'
+                          ? item.state === 'conflict'
+                            ? 'Conflict: the active Windows file has a different value. Review both values before selecting this item.'
+                            : 'Missing from the active Windows file and preselected for import from WindowsClient.'
+                          : 'Offered because current Retail field testing shows this advanced value is evaluated from the local client config.'}
                       </span>
                       <span className="mt-1 grid gap-1 text-xs font-mono sm:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
                         <span className="text-text-muted break-all">[{item.section}] {item.key}</span>
-                        <span className="text-text break-all sm:text-right">{item.value}</span>
+                        <span className="text-text break-all sm:text-right">
+                          {mode === 'legacy'
+                            ? <>old: {item.value}{item.currentValue ? ` • current: ${item.currentValue}` : ' • current: missing'}</>
+                            : item.value}
+                        </span>
                       </span>
                     </span>
                   </label>
@@ -2987,7 +3041,8 @@ function ClientApplyReviewModal({
           ))}
           <p className="text-xs text-text-muted">
             Game.ini compatibility values do not require Engine.ini management. Engine.ini entries appear here only after
-            that separate opt-in is enabled. This changes this PC only; other players must review and apply their own matching values.
+            that separate opt-in is enabled. Existing destination files are backed up before an atomic, verified write.
+            This changes this PC only; other players must review and apply their own matching values.
           </p>
         </div>
 
