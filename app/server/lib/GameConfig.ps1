@@ -2580,8 +2580,8 @@ function Resolve-DuneGameConfigPaths {
             $migrateCmd = "set -e; " +
                 "echo '$gameHash  $gameTmp' | sha256sum -c - >/dev/null; " +
                 "echo '$engineHash  $engineTmp' | sha256sum -c - >/dev/null; " +
-                "sudo cp '$script:DuneGameConfigTplGamePath' '$script:DuneGameConfigTplGamePath.pre-live-import-$stamp'; " +
-                "sudo cp '$script:DuneGameConfigTplEnginePath' '$script:DuneGameConfigTplEnginePath.pre-live-import-$stamp'; " +
+                "sudo cp '$script:DuneGameConfigTplGamePath' '$script:DuneGameConfigTplGamePath.pre-v2-migration-attempt-$stamp'; " +
+                "sudo cp '$script:DuneGameConfigTplEnginePath' '$script:DuneGameConfigTplEnginePath.pre-v2-migration-attempt-$stamp'; " +
                 "sudo install -o dune -g dune -m 0664 '$gameTmp' '$script:DuneGameConfigTplGamePath'; " +
                 "sudo install -o dune -g dune -m 0664 '$engineTmp' '$script:DuneGameConfigTplEnginePath'; " +
                 "sudo rm -f '$gameTmp' '$engineTmp'; " +

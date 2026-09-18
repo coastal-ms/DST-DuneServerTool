@@ -383,48 +383,29 @@ function Get-DuneRetailServerSettingsTextSha256 {
     }
 }
 
-function Get-DuneRetailServerSettings {
+function Get-DuneRetailServerSettingsSnapshot {
     param([Parameter(Mandatory)][string]$Ip)
 
     $target = Resolve-DuneRetailServerSettingsTarget -Ip $Ip
     if (-not $target.available) {
         return [ordered]@{
             available = $false
-            readOnly = $false
             source = 'funcom-runtime-projection'
             reason = [string]$target.reason
-            target = Get-DuneRetailServerSettingsPublicTarget -Target $target
-            settings = @()
-            malformedLines = @()
+            target = $target
         }
     }
     if ($target.upstreamConfigured) {
         $raw = [string]$target.upstreamContent
-        $parsed = ConvertFrom-DuneRetailServerSettingsRaw -Raw $raw
         return [ordered]@{
             available = $true
-            readOnly = $false
             source = 'funcom-servergroup-user-ini-config'
             authority = 'Funcom BattleGroup operator configuration'
+            raw = $raw
             revision = Get-DuneRetailServerSettingsTextSha256 -Value $raw
             modifiedAt = ''
             bytes = [Text.Encoding]::UTF8.GetByteCount($raw)
-            observedAt = [DateTime]::UtcNow.ToString('o')
-            target = Get-DuneRetailServerSettingsPublicTarget -Target $target
-            section = $parsed.section
-            sectionFound = [bool]$parsed.sectionFound
-            settings = @($parsed.settings)
-            malformedLines = @($parsed.malformedLines)
-            writeBehavior = [ordered]@{
-                supported = $true
-                requiresStoppedBattlegroup = $true
-                backup = 'Saved/Config/LinuxServer/ServerCustomSettings.ini.dstbak-<UTC timestamp>'
-            }
-            applyBehavior = [ordered]@{
-                mode = 'operator-mounted'
-                restartRequired = $true
-                note = 'Start the stopped battlegroup after saving. Funcom mounts the configured file into every game pod.'
-            }
+            target = $target
         }
     }
     Assert-DuneRetailKubernetesName -Value ([string]$target.pod) -Label 'pod name'
@@ -443,12 +424,9 @@ base64 "`$f" | tr -d "\n"
     if ($output -match '(?m)^__DST_MISSING__$') {
         return [ordered]@{
             available = $false
-            readOnly = $false
             source = 'funcom-runtime-projection'
             reason = "Funcom runtime file is missing: $($target.path)"
-            target = Get-DuneRetailServerSettingsPublicTarget -Target $target
-            settings = @()
-            malformedLines = @()
+            target = $target
         }
     }
     if ($output -notmatch '(?ms)^__DST_META__\s*\n([^\n]+)\n([0-9a-f]{64})\s*\n__DST_CONTENT__\s*\n([A-Za-z0-9+/=]+)\s*$') {
@@ -465,12 +443,11 @@ base64 "`$f" | tr -d "\n"
     } catch {
         throw 'Retail Server Settings runtime file was not valid base64/UTF-8.'
     }
-    $parsed = ConvertFrom-DuneRetailServerSettingsRaw -Raw $raw
     return [ordered]@{
         available = $true
-        readOnly = $false
         source = 'funcom-runtime-projection'
         authority = 'Funcom-managed live server output'
+        raw = $raw
         revision = $revision
         modifiedAt = if ($modifiedEpoch -gt 0) {
             [DateTimeOffset]::FromUnixTimeSeconds($modifiedEpoch).UtcDateTime.ToString('o')
@@ -478,8 +455,37 @@ base64 "`$f" | tr -d "\n"
             ''
         }
         bytes = $size
+        target = $target
+    }
+}
+
+function Get-DuneRetailServerSettings {
+    param([Parameter(Mandatory)][string]$Ip)
+
+    $snapshot = Get-DuneRetailServerSettingsSnapshot -Ip $Ip
+    if (-not $snapshot.available) {
+        return [ordered]@{
+            available = $false
+            readOnly = $false
+            source = [string]$snapshot.source
+            reason = [string]$snapshot.reason
+            target = Get-DuneRetailServerSettingsPublicTarget -Target $snapshot.target
+            settings = @()
+            malformedLines = @()
+        }
+    }
+    $raw = [string]$snapshot.raw
+    $parsed = ConvertFrom-DuneRetailServerSettingsRaw -Raw $raw
+    return [ordered]@{
+        available = $true
+        readOnly = $false
+        source = [string]$snapshot.source
+        authority = [string]$snapshot.authority
+        revision = [string]$snapshot.revision
+        modifiedAt = [string]$snapshot.modifiedAt
+        bytes = [long]$snapshot.bytes
         observedAt = [DateTime]::UtcNow.ToString('o')
-        target = Get-DuneRetailServerSettingsPublicTarget -Target $target
+        target = Get-DuneRetailServerSettingsPublicTarget -Target $snapshot.target
         section = $parsed.section
         sectionFound = [bool]$parsed.sectionFound
         settings = @($parsed.settings)
@@ -492,7 +498,11 @@ base64 "`$f" | tr -d "\n"
         applyBehavior = [ordered]@{
             mode = 'operator-mounted'
             restartRequired = $true
-            note = 'Stop the battlegroup before saving, then start it. Funcom mounts the configured file into every game pod.'
+            note = if ($snapshot.source -eq 'funcom-servergroup-user-ini-config') {
+                'Start the stopped battlegroup after saving. Funcom mounts the configured file into every game pod.'
+            } else {
+                'Stop the battlegroup before saving, then start it. Funcom mounts the configured file into every game pod.'
+            }
         }
     }
 }
@@ -573,7 +583,7 @@ function Set-DuneRetailServerSettings {
         [Parameter(Mandatory)][hashtable]$Updates,
         [Parameter(Mandatory)][string]$ExpectedRevision
     )
-    $current = Get-DuneRetailServerSettings -Ip $Ip
+    $current = Get-DuneRetailServerSettingsSnapshot -Ip $Ip
     if (-not $current.available) { throw [InvalidOperationException]::new([string]$current.reason) }
     if (-not $ExpectedRevision -or $ExpectedRevision -cne [string]$current.revision) {
         throw [InvalidOperationException]::new('Retail Server Settings changed since they were loaded. Refresh and review the current values before saving.')
@@ -582,18 +592,8 @@ function Set-DuneRetailServerSettings {
         throw [InvalidOperationException]::new('Stop the battlegroup fully before saving Official Retail Server Settings.')
     }
 
-    $raw = if ($current.source -eq 'funcom-servergroup-user-ini-config') {
-        $target = Resolve-DuneRetailServerSettingsTarget -Ip $Ip
-        [string]$target.upstreamContent
-    } else {
-        $target = Resolve-DuneRetailServerSettingsTarget -Ip $Ip
-        Assert-DuneRetailKubernetesName -Value ([string]$target.pod) -Label 'pod name'
-        $encoded = ((Invoke-V6Ssh -Ip $Ip -Cmd "sudo kubectl exec -n '$($target.namespace)' '$($target.pod)' -- sh -lc 'base64 ''$($target.path)'' | tr -d `\"\\n`\"'" -TimeoutSec 30) -join '').Trim()
-        [Text.Encoding]::UTF8.GetString([Convert]::FromBase64String($encoded))
-    }
-    if ((Get-DuneRetailServerSettingsTextSha256 -Value $raw) -cne $ExpectedRevision) {
-        throw [InvalidOperationException]::new('Retail Server Settings changed during save. No operator configuration was changed.')
-    }
+    $target = $current.target
+    $raw = [string]$current.raw
     $updated = ConvertTo-DuneRetailServerSettingsUpdatedRaw -Raw $raw -Updates $Updates
     $updatedRevision = Get-DuneRetailServerSettingsTextSha256 -Value $updated
     $backup = Backup-DuneRetailServerSettingsContent -Ip $Ip -Target $target -Raw $raw

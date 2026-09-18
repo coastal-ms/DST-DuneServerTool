@@ -161,14 +161,18 @@ export function MapSpinUp({ embedded = false }: { embedded?: boolean }) {
       : x) ?? prev)
     try {
       const r = await setMapSpinUp(m.map, next)
-      setMessage(r.message ?? (next ? `${m.label} spin-up enabled.` : `${m.label} spin-up disabled.`))
-      if (!r.ok) setError(r.message ?? 'The change may not have applied.')
       await refresh()
+      if (r.ok) {
+        setMessage(r.message ?? (next ? `${m.label} spin-up enabled.` : `${m.label} spin-up disabled.`))
+      } else {
+        setError(r.message ?? 'The change may not have applied.')
+      }
       // Once the floor is set, watch the pod actually come up (on-demand maps only).
       if (next && r.ok && ON_DEMAND_KEY[m.map]) startTracking(m.map)
     } catch (e) {
-      setError(e instanceof ApiError ? e.message : String(e))
+      const mutationError = e instanceof ApiError ? e.message : String(e)
       await refresh()
+      setError(mutationError)
     } finally {
       setBusy(null)
     }
@@ -179,14 +183,18 @@ export function MapSpinUp({ embedded = false }: { embedded?: boolean }) {
     setMaps(prev => prev?.map(x => x.map === m.map ? { ...x, sharedParties: shared } : x) ?? prev)
     try {
       const r = await setMapPartySharing(m.map, shared)
-      setMessage(r.message ?? (shared
-        ? `${m.label} now allows separate parties to share its server.`
-        : `${m.label} now keeps one party per server.`))
-      if (!r.ok) setError(r.message ?? 'The party-sharing change may not have applied.')
       await refresh()
+      if (r.ok) {
+        setMessage(r.message ?? (shared
+          ? `${m.label} now allows separate parties to share its server.`
+          : `${m.label} now keeps one party per server.`))
+      } else {
+        setError(r.message ?? 'The party-sharing change may not have applied.')
+      }
     } catch (e) {
-      setError(e instanceof ApiError ? e.message : String(e))
+      const mutationError = e instanceof ApiError ? e.message : String(e)
       await refresh()
+      setError(mutationError)
     } finally {
       setBusy(null)
     }

@@ -205,6 +205,26 @@ describe('Game Config advanced client compatibility action', () => {
     expect(within(dialog).getByText(/Game.ini compatibility values do not require Engine.ini management/)).toBeInTheDocument()
   })
 
+  it('moves and traps focus safely, closes with Escape, and restores the opener', async () => {
+    const user = userEvent.setup()
+    render(<GameConfig />)
+    const opener = await screen.findByRole('button', { name: 'Apply advanced compatibility overrides' })
+    await user.click(opener)
+
+    const dialog = screen.getByRole('dialog', { name: 'Review advanced compatibility overrides' })
+    const cancel = within(dialog).getByRole('button', { name: 'Cancel' })
+    expect(cancel).toHaveFocus()
+
+    const apply = within(dialog).getByRole('button', { name: /Apply \d+ selected settings/ })
+    apply.focus()
+    await user.tab()
+    expect(within(dialog).getByRole('button', { name: 'Close client settings review' })).toHaveFocus()
+
+    await user.keyboard('{Escape}')
+    expect(screen.queryByRole('dialog', { name: 'Review advanced compatibility overrides' })).not.toBeInTheDocument()
+    expect(opener).toHaveFocus()
+  })
+
   it('reviews only eligible WindowsClient values, preselects missing values, and leaves conflicts opt-in', async () => {
     const user = userEvent.setup()
     const info = clientInfo(true)

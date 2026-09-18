@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, useCallback, type FormEvent, type KeyboardEvent, type ReactElement } from 'react'
+import { useState, useEffect, useMemo, useCallback, useId, useRef, type FormEvent, type KeyboardEvent, type ReactElement } from 'react'
 import { PageHeader } from '../components/PageHeader'
 import { Icon } from '../components/Icon'
 import { CollapsibleCard, useCardCollapse } from '../components/CollapsibleCard'
@@ -2944,6 +2944,13 @@ function ClientApplyReviewModal({
   onCancel: () => void
   onConfirm: (items: GameConfigClientApplyItem[]) => void
 }) {
+  const titleId = useId()
+  const modalRef = useRef<HTMLDivElement | null>(null)
+  const cancelRef = useRef<HTMLButtonElement | null>(null)
+  const onCancelRef = useRef(onCancel)
+  const busyRef = useRef(busy)
+  onCancelRef.current = onCancel
+  busyRef.current = busy
   const itemId = (item: GameConfigClientApplyItem) => `${item.file}||${item.key}`.toLowerCase()
   const [selectedIds, setSelectedIds] = useState(() => new Set(items.filter(item => item.selected !== false).map(itemId)))
   const selectedItems = items.filter(item => selectedIds.has(itemId(item)))
@@ -2960,21 +2967,63 @@ function ClientApplyReviewModal({
     })
   }
 
+  useEffect(() => {
+    const previousFocus = document.activeElement instanceof HTMLElement
+      ? document.activeElement
+      : null
+    cancelRef.current?.focus()
+
+    const onKeyDown = (event: globalThis.KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        if (busyRef.current) return
+        event.preventDefault()
+        onCancelRef.current()
+        return
+      }
+      if (event.key !== 'Tab') return
+      const focusable = Array.from(modalRef.current?.querySelectorAll<HTMLElement>(
+        'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])',
+      ) ?? [])
+      if (focusable.length === 0) {
+        event.preventDefault()
+        modalRef.current?.focus()
+        return
+      }
+      const first = focusable[0]
+      const last = focusable[focusable.length - 1]
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault()
+        last.focus()
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault()
+        first.focus()
+      }
+    }
+
+    document.addEventListener('keydown', onKeyDown)
+    return () => {
+      document.removeEventListener('keydown', onKeyDown)
+      previousFocus?.focus()
+    }
+  }, [])
+
   return (
     <div
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4"
       onClick={() => { if (!busy) onCancel() }}
     >
       <div
+        ref={modalRef}
         role="dialog"
         aria-modal="true"
-        aria-labelledby="client-apply-review-title"
+        aria-labelledby={titleId}
+        tabIndex={-1}
         className="card p-0 max-w-2xl w-full max-h-[85vh] flex flex-col overflow-hidden"
         onClick={e => e.stopPropagation()}
       >
         <div className="px-5 py-4 border-b border-border flex items-center justify-between gap-3">
           <div>
-            <h3 id="client-apply-review-title" className="font-semibold text-text flex items-center gap-2">
+            <h3 id={titleId} className="font-semibold text-text flex items-center gap-2">
               <Icon name="MonitorCog" size={16} className="text-accent-bright" />
               {mode === 'legacy' ? 'Review WindowsClient migration' : 'Review advanced compatibility overrides'}
             </h3>
@@ -3054,7 +3103,7 @@ function ClientApplyReviewModal({
             {selectedItems.length} of {items.length} reviewed setting{items.length === 1 ? '' : 's'} selected
           </span>
           <div className="flex items-center gap-2">
-            <button type="button" className="btn-secondary" onClick={onCancel} disabled={busy}>
+            <button ref={cancelRef} type="button" className="btn-secondary" onClick={onCancel} disabled={busy}>
               Cancel
             </button>
             <button

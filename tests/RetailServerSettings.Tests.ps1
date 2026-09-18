@@ -221,6 +221,7 @@ Describe 'Official Retail Server Settings discovery' -Tag 'GameConfig', 'RetailS
 
         $result.source | Should -Be 'funcom-servergroup-user-ini-config'
         $result.target.upstreamConfigured | Should -BeTrue
+        $result.PSObject.Properties['raw'] | Should -BeNullOrEmpty
         ($result.settings | Where-Object key -eq 'FiefdomLimit').value | Should -Be '4'
         Should -Invoke Invoke-V6Ssh -Times 1
     }
@@ -262,6 +263,81 @@ Describe 'Official Retail Server Settings route safety' -Tag 'GameConfig', 'Reta
         Get-Command Set-DuneRetailServerSettings -ErrorAction SilentlyContinue | Should -Not -BeNullOrEmpty
         Get-Command Set-DuneRetailServerSettingsFile -ErrorAction SilentlyContinue | Should -BeNullOrEmpty
     }
+
+    It 'runs a stable stopped save through the registered PUT handler' {
+        $routeFile = Join-Path (Get-DstRepoRoot) 'app\server\routes\GameConfig.ps1'
+        $routes = @(& {
+            function Register-DuneRoute {
+                param($Method, $Path, $Handler)
+                [pscustomobject]@{ method = $Method; path = $Path; handler = $Handler }
+            }
+            . $routeFile
+        })
+        $put = $routes | Where-Object {
+            $_.method -eq 'PUT' -and $_.path -eq '/api/gameconfig/retail-server-settings'
+        } | Select-Object -First 1
+        $revision = Get-DuneRetailServerSettingsTextSha256 -Value $script:RetailRaw
+        $updated = ConvertTo-DuneRetailServerSettingsUpdatedRaw -Raw $script:RetailRaw -Updates @{ FiefdomLimit = '4' }
+        $script:RouteBgRead = 0
+        $script:RouteResult = $null
+        $script:RouteError = $null
+        function Get-DuneGameConfigContext {}
+        function Test-DunePlayerGuard {}
+        Mock Get-DuneGameConfigContext { @{ ok = $true; ip = '192.0.2.10' } }
+        Mock Test-DunePlayerGuard { $true }
+        Mock Resolve-DuneRetailServerSettingsTarget {
+            @{
+                available = $true
+                namespace = 'funcom-test'
+                battlegroup = 'retail-test'
+                pod = 'retail-test-fb-deploy-abc'
+                path = '/srv/Config/LinuxServer/ServerCustomSettings.ini'
+                upstreamConfigured = $true
+                upstreamContent = $script:RetailRaw
+                resourceVersion = '100'
+                stopped = $true
+                serverPodCount = 0
+            }
+        }
+        Mock Backup-DuneRetailServerSettingsContent {
+            @{ path = 'backup'; sha256 = 'backup'; timestamp = '1' }
+        }
+        Mock Get-V6Battlegroup {
+            $script:RouteBgRead++
+            $content = if ($script:RouteBgRead -eq 1) { $script:RetailRaw } else { $updated }
+            @{
+                Bg = [pscustomobject]@{
+                    metadata = [pscustomobject]@{ resourceVersion = "$($script:RouteBgRead + 99)" }
+                    spec = [pscustomobject]@{
+                        serverGroup = [pscustomobject]@{
+                            template = [pscustomobject]@{
+                                spec = [pscustomobject]@{
+                                    global = [pscustomobject]@{
+                                        userIniConfig = [pscustomobject]@{
+                                            files = [pscustomobject]@{ 'ServerCustomSettings.ini' = $content }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        Mock Invoke-V6Ssh { 'battlegroup.igw.funcom.com/retail-test patched' }
+        function Write-DuneJson { param($Response, $Body); $script:RouteResult = $Body }
+        function Write-DuneError { param($Response, $Status, $Message); $script:RouteError = "$Status $Message" }
+        $body = @{ revision = $revision; updates = @{ FiefdomLimit = '4' } } |
+            ConvertTo-Json -Depth 4 |
+            ConvertFrom-Json -AsHashtable
+
+        & $put.handler $null $null @{} $body
+
+        $script:RouteError | Should -BeNullOrEmpty
+        $script:RouteResult.ok | Should -BeTrue
+        Should -Invoke Backup-DuneRetailServerSettingsContent -Times 1
+        Should -Invoke Invoke-V6Ssh -Times 1
+    }
 }
 
 Describe 'Official Retail Server Settings backups' -Tag 'GameConfig', 'RetailServerSettings' {
@@ -284,28 +360,21 @@ Describe 'Official Retail Server Settings backups' -Tag 'GameConfig', 'RetailSer
 Describe 'Official Retail Server Settings writes' -Tag 'GameConfig', 'RetailServerSettings' {
     BeforeEach {
         $script:PatchCount = 0
-        Mock Get-DuneRetailServerSettings {
+        Mock Get-DuneRetailServerSettingsSnapshot {
             @{
                 available = $true
                 source = 'funcom-servergroup-user-ini-config'
+                raw = $script:RetailRaw
                 revision = Get-DuneRetailServerSettingsTextSha256 -Value $script:RetailRaw
                 target = @{
+                    namespace = 'funcom-test'
+                    battlegroup = 'retail-test'
+                    pod = 'retail-test-fb-deploy-abc'
+                    path = '/srv/Config/LinuxServer/ServerCustomSettings.ini'
+                    resourceVersion = '100'
                     stopped = $true
                     serverPodCount = 0
                 }
-            }
-        }
-        Mock Resolve-DuneRetailServerSettingsTarget {
-            @{
-                available = $true
-                namespace = 'funcom-test'
-                battlegroup = 'retail-test'
-                pod = 'retail-test-fb-deploy-abc'
-                path = '/srv/Config/LinuxServer/ServerCustomSettings.ini'
-                upstreamContent = $script:RetailRaw
-                resourceVersion = '100'
-                stopped = $true
-                serverPodCount = 0
             }
         }
         Mock Backup-DuneRetailServerSettingsContent {
@@ -325,10 +394,11 @@ Describe 'Official Retail Server Settings writes' -Tag 'GameConfig', 'RetailServ
     }
 
     It 'rejects writes until the battlegroup is fully stopped' {
-        Mock Get-DuneRetailServerSettings {
+        Mock Get-DuneRetailServerSettingsSnapshot {
             @{
                 available = $true
                 source = 'funcom-servergroup-user-ini-config'
+                raw = $script:RetailRaw
                 revision = 'current'
                 target = @{ stopped = $false; serverPodCount = 1 }
             }

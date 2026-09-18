@@ -11,7 +11,7 @@ Patch releases within a major series are rolled up under the major's entry
 on GitHub still exist for each individual release; the consolidated entries
 here cover everything those tags shipped.
 
-## [15.1.1] - 2026-09-17
+## [Unreleased]
 
 ### Fixed
 
@@ -79,8 +79,6 @@ here cover everything those tags shipped.
   recognized settings without current local-consumption evidence are never
   copied. Existing destination files are backed up, replaced atomically, and
   verified by readback.
-
-### Fixed
 
 - Restored Set Ammo for Retail ranged weapons whose empty
   `FWeaponItemStats` block omits the `CurrentAmmo` field.

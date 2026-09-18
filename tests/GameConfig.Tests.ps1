@@ -2717,8 +2717,55 @@ RetailAddedBuildingDefault=True
         $merged | Should -Not -Match 'm_InventoryWeightMultiplier'
         Should -Invoke Invoke-V6Ssh -Times 1 -ParameterFilter {
             $Cmd -match 'sha256sum -c' -and
-            $Cmd -match '__DST_AUTH__:migrated'
+            $Cmd -match '__DST_AUTH__:migrated' -and
+            $Cmd -match 'pre-v2-migration-attempt-' -and
+            $Cmd -notmatch "cp '[^']+' '[^']+\.pre-live-import-"
         }
+    }
+
+    It 'keeps the clean v1 repair baseline isolated across a failed v2 retry' {
+        $oldGame = @"
+$script:DstManagedBegin
+[$script:SecInventory]
+PlayerInventoryStartingSize=80
+$script:DstManagedEnd
+"@
+        $installedGame = @"
+[$script:SecInventory]
+PlayerInventoryStartingSize=35
+"@
+        $script:migrationCommands = @()
+        $script:migrationAttempt = 0
+        Mock Invoke-V6Ssh {
+            param([string]$Ip, [string]$Cmd, [string]$StdinData)
+            if ($Cmd -match '__DST_AUTH__:migrated') {
+                $script:migrationCommands += $Cmd
+                $script:migrationAttempt++
+                if ($script:migrationAttempt -eq 1) { return 'migration failed' }
+                return '__DST_AUTH__:migrated'
+            }
+            if ($Cmd -match 'if test -f') { return 'repair-v1' }
+            if ($Cmd -match 'pre-live-import-\*') {
+                return '/home/dune/.dune/download/scripts/setup/config/UserGame.ini.pre-live-import-clean'
+            }
+            if ($Cmd -match 'ls -t') { return '/srv/old-managed' }
+            if ($Cmd -match "cat '/home/dune/.dune/download/scripts/setup/config/UserGame.ini.pre-live-import-clean'") { return $installedGame }
+            if ($Cmd -match "cat '/home/dune/.dune/download/scripts/setup/config/UserEngine.ini.pre-live-import-clean'") { return '[ConsoleVariables]' }
+            if ($Cmd -match "cat '/srv/old-managed/UserGame.ini'") { return $oldGame }
+            if ($Cmd -match "cat '/srv/old-managed/UserEngine.ini'") { return '[ConsoleVariables]' }
+        }
+
+        { Resolve-DuneGameConfigPaths -Ip '192.0.2.1' } |
+            Should -Throw '*could not safely migrate*'
+        $paths = Resolve-DuneGameConfigPaths -Ip '192.0.2.1'
+
+        $paths.migrated | Should -BeTrue
+        $script:migrationCommands.Count | Should -Be 2
+        foreach ($command in $script:migrationCommands) {
+            $command | Should -Match 'pre-v2-migration-attempt-'
+            $command | Should -Not -Match "cp '[^']+' '[^']+\.pre-live-import-"
+        }
+        Should -Invoke Invoke-V6Ssh -Times 2 -ParameterFilter { $Cmd -match 'pre-live-import-\*' }
     }
 
     It 'blocks installed defaults when no existing battlegroup configuration can be imported' {
