@@ -15,6 +15,13 @@ here cover everything those tags shipped.
 
 ### Fixed
 
+- Preserved manual `UserGame.ini` and `UserEngine.ini` edits made through
+  Funcom's VM Utilities when **Apply INIs & Restart** deploys DST's installed
+  configuration. DST now reconciles each installed/PVC pair against a durable
+  last-deployed baseline, accepts one-sided changes byte-for-byte, blocks
+  first-run or concurrent two-sided conflicts without guessing, backs up every
+  changed copy, rolls back failed deployments, and verifies the deployed
+  readback before allowing the battlegroup restart.
 - Restored automatic Deep Desert base-backup protection after the Retail
   self-hosted schema moved actor state onto the actor row. The guard now
   recognizes and preserves both the legacy and Retail cleanup-function forms
