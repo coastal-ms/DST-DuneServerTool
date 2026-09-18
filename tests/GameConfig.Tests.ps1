@@ -2779,6 +2779,200 @@ PlayerInventoryStartingSize=35
             Should -Throw '*Deployment is blocked*'
     }
 
+    # --- Field defect fix (Jess, v15.1.1): installed-uninitialized read fallback ---
+
+    It 'returns the installed defaults as a non-authoritative read for the exact Jess v15.1.1 field defect, with zero writes' {
+        $script:writes = @()
+        Mock Invoke-V6Ssh {
+            param([string]$Ip, [string]$Cmd, [string]$StdinData)
+            if ($Cmd -match 'DuneGameConfigAuthorityMarker|dst-live-settings-imported') { return 'uninitialized' }
+            if ($Cmd -match 'ls -t') { return @() }
+            if ($Cmd -match 'sudo cat') { return '[ConsoleVariables]' }
+            if ($StdinData) { $script:writes += $StdinData }
+        }
+
+        $paths = Resolve-DuneGameConfigPaths -Ip '192.0.2.1'
+
+        $paths.source | Should -Be 'installed-uninitialized'
+        $paths.authoritative | Should -BeFalse
+        $paths.needsInitialization | Should -BeTrue
+        $paths.game | Should -Be $script:DuneGameConfigTplGamePath
+        $paths.engine | Should -Be $script:DuneGameConfigTplEnginePath
+        $script:writes.Count | Should -Be 0
+        Should -Invoke Invoke-V6Ssh -Times 0 -ParameterFilter { $Cmd -match 'tee|sha256sum -c|install -o dune' }
+    }
+
+    It 'propagates non-authoritative/needsInitialization through Get-DuneGameConfig with zero writes' {
+        $script:writes = @()
+        Mock Invoke-V6Ssh {
+            param([string]$Ip, [string]$Cmd, [string]$StdinData)
+            if ($Cmd -match 'DuneGameConfigAuthorityMarker|dst-live-settings-imported') { return 'uninitialized' }
+            if ($Cmd -match 'ls -t') { return @() }
+            if ($Cmd -match 'sudo cat') { return '[ConsoleVariables]' }
+            if ($StdinData) { $script:writes += $StdinData }
+        }
+
+        $cfg = Get-DuneGameConfig -Ip '192.0.2.1'
+
+        $cfg.source | Should -Be 'installed-uninitialized'
+        $cfg.authoritative | Should -BeFalse
+        $cfg.needsInitialization | Should -BeTrue
+        $cfg.game.path | Should -Be $script:DuneGameConfigTplGamePath
+        $script:writes.Count | Should -Be 0
+    }
+
+    It 'treats a live directory with no DST-managed content as safe to fall back to installed defaults' {
+        Mock Invoke-V6Ssh {
+            param([string]$Ip, [string]$Cmd)
+            if ($Cmd -match 'DuneGameConfigAuthorityMarker|dst-live-settings-imported') { return 'uninitialized' }
+            if ($Cmd -match 'ls -t') { return '/srv/vanilla' }
+            return '[ConsoleVariables]'
+        }
+
+        $paths = Resolve-DuneGameConfigPaths -Ip '192.0.2.1'
+
+        $paths.source | Should -Be 'installed-uninitialized'
+        $paths.needsInitialization | Should -BeTrue
+    }
+
+    It 'keeps a prior-managed candidate blocked even when it produces zero migration updates' {
+        $managedButNoOp = @"
+$script:DstManagedBegin
+[ConsoleVariables]
+$script:DstManagedEnd
+"@
+        Mock Invoke-V6Ssh {
+            param([string]$Ip, [string]$Cmd)
+            if ($Cmd -match 'DuneGameConfigAuthorityMarker|dst-live-settings-imported') { return 'uninitialized' }
+            if ($Cmd -match 'ls -t') { return '/srv/old-managed' }
+            if ($Cmd -match "cat '/srv/old-managed/UserGame.ini'") { return $managedButNoOp }
+            return '[ConsoleVariables]'
+        }
+
+        { Resolve-DuneGameConfigPaths -Ip '192.0.2.1' } | Should -Throw '*Deployment is blocked*'
+    }
+
+    It 'keeps a malformed live candidate blocked rather than falling back to installed defaults' {
+        $malformedGame = @"
+$script:DstManagedBegin
+[ConsoleVariables]
+dw.FuelBurningMultiplier=10
+"@
+        Mock Invoke-V6Ssh {
+            param([string]$Ip, [string]$Cmd)
+            if ($Cmd -match 'DuneGameConfigAuthorityMarker|dst-live-settings-imported') { return 'uninitialized' }
+            if ($Cmd -match 'ls -t') { return '/srv/broken' }
+            if ($Cmd -match "cat '/srv/broken/UserGame.ini'") { return $malformedGame }
+            return '[ConsoleVariables]'
+        }
+
+        { Resolve-DuneGameConfigPaths -Ip '192.0.2.1' } | Should -Throw '*Deployment is blocked*'
+    }
+
+    It 'refuses to save Game Config while it is uninitialized (installed-uninitialized)' {
+        Mock Resolve-DuneGameConfigPaths {
+            @{ game = $script:DuneGameConfigTplGamePath; engine = $script:DuneGameConfigTplEnginePath; source = 'installed-uninitialized'; authoritative = $false; needsInitialization = $true }
+        }
+        Mock Invoke-V6Ssh {}
+
+        { Save-DuneGameConfig -Ip '192.0.2.1' -Updates @(@{ file = 'game'; section = $script:DuneGcSecGame; key = 'm_InventoryWeightMultiplier'; value = '0.5'; remove = $false }) } |
+            Should -Throw '*has not been initialized*'
+        Should -Invoke Invoke-V6Ssh -Times 0
+    }
+
+    It 'refuses to save even when a non-authoritative ResolvedPaths object is supplied directly (deploy entry points)' {
+        Mock Invoke-V6Ssh {}
+        $paths = @{ game = $script:DuneGameConfigTplGamePath; engine = $script:DuneGameConfigTplEnginePath; source = 'installed-uninitialized'; authoritative = $false; needsInitialization = $true }
+
+        { Save-DuneGameConfig -Ip '192.0.2.1' -Updates @(@{ file = 'game'; section = $script:DuneGcSecGame; key = 'm_InventoryWeightMultiplier'; value = '0.5'; remove = $false }) -ResolvedPaths $paths } |
+            Should -Throw '*has not been initialized*'
+        Should -Invoke Invoke-V6Ssh -Times 0
+    }
+
+    It 'refuses to initialize Game Config without explicit confirmation' {
+        Mock Invoke-V6Ssh {}
+        { Initialize-DuneGameConfigAuthority -Ip '192.0.2.1' -Confirmed $false } | Should -Throw '*confirmation is required*'
+        Should -Invoke Invoke-V6Ssh -Times 0
+    }
+
+    It 'initializes Game Config by writing only the v2 authority marker, never UserGame.ini/UserEngine.ini' {
+        $script:writes = @()
+        Mock Invoke-V6Ssh {
+            param([string]$Ip, [string]$Cmd)
+            if ($Cmd -match 'sudo tee') { $script:writes += $Cmd; return '__DST_AUTH__:initialized' }
+            if ($Cmd -match 'echo ready') { return 'uninitialized' }
+            if ($Cmd -match 'ls -t') { return @() }
+            if ($Cmd -match 'echo yes \|\| echo no') { return 'yes' }
+            if ($Cmd -match 'sudo cat') { return '[ConsoleVariables]' }
+            return ''
+        }
+
+        $result = Initialize-DuneGameConfigAuthority -Ip '192.0.2.1' -Confirmed $true
+
+        $result.ok | Should -BeTrue
+        $result.initialized | Should -BeTrue
+        $result.source | Should -Be 'installed'
+        $result.authoritative | Should -BeTrue
+        $result.needsInitialization | Should -BeFalse
+        $script:writes.Count | Should -Be 1
+        $script:writes[0] | Should -Match ([regex]::Escape($script:DuneGameConfigAuthorityMarker))
+        $script:writes[0] | Should -Not -Match 'UserGame\.ini|UserEngine\.ini'
+    }
+
+    It 'reports already-initialized without writing when another admin initialized concurrently (race safety)' {
+        Mock Invoke-V6Ssh {
+            param([string]$Ip, [string]$Cmd)
+            if ($Cmd -match 'DuneGameConfigAuthorityMarker|dst-live-settings-imported') { return 'ready' }
+            return ''
+        }
+
+        $result = Initialize-DuneGameConfigAuthority -Ip '192.0.2.1' -Confirmed $true
+
+        $result.ok | Should -BeTrue
+        $result.alreadyInitialized | Should -BeTrue
+        $result.source | Should -Be 'installed'
+        Should -Invoke Invoke-V6Ssh -Times 0 -ParameterFilter { $Cmd -match 'sudo tee' }
+    }
+
+    It 'refuses to initialize when the recheck finds a prior-managed candidate now exists (race safety)' {
+        $managedButNoOp = @"
+$script:DstManagedBegin
+[ConsoleVariables]
+$script:DstManagedEnd
+"@
+        Mock Invoke-V6Ssh {
+            param([string]$Ip, [string]$Cmd)
+            if ($Cmd -match 'DuneGameConfigAuthorityMarker|dst-live-settings-imported') { return 'uninitialized' }
+            if ($Cmd -match 'ls -t') { return '/srv/appeared' }
+            if ($Cmd -match "cat '/srv/appeared/UserGame.ini'") { return $managedButNoOp }
+            return '[ConsoleVariables]'
+        }
+
+        { Initialize-DuneGameConfigAuthority -Ip '192.0.2.1' -Confirmed $true } | Should -Throw '*Deployment is blocked*'
+    }
+
+    It 'reads as fully authoritative immediately after Initialize-DuneGameConfigAuthority completes' {
+        Mock Invoke-V6Ssh {
+            param([string]$Ip, [string]$Cmd)
+            if ($Cmd -match 'DuneGameConfigAuthorityMarker|dst-live-settings-imported') { return 'ready' }
+            return '[ConsoleVariables]'
+        }
+
+        $cfg = Get-DuneGameConfig -Ip '192.0.2.1'
+
+        $cfg.source | Should -Be 'installed'
+        $cfg.authoritative | Should -BeTrue
+        $cfg.needsInitialization | Should -BeFalse
+    }
+
+    It 'registers POST /api/gameconfig/initialize with an exact typed confirmation, marker-only write' {
+        $route = Get-Content (Join-Path (Get-DstRepoRoot) 'app\server\routes\GameConfig.ps1') -Raw
+
+        $route | Should -Match "Register-DuneRoute -Method POST -Path '/api/gameconfig/initialize' -Handler"
+        $route | Should -Match "-cne 'INITIALIZE GAME CONFIG'"
+        $route | Should -Match 'Initialize-DuneGameConfigAuthority -Ip \$ctx\.ip -Confirmed \$true'
+    }
+
     It 'writes the Retail spawning flag as an exact Unreal boolean' {
         Mock Get-DuneRetailSpicefieldRows {
             @{

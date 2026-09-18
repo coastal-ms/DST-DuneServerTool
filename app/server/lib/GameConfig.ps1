@@ -2548,6 +2548,12 @@ function Resolve-DuneGameConfigPaths {
         if ([string]::IsNullOrWhiteSpace($installedGame) -or [string]::IsNullOrWhiteSpace($installedEngine)) {
             throw 'The clean installed User*.ini defaults could not be read. Deployment is blocked.'
         }
+        # Track whether ANY live directory looked ambiguous (malformed) or carried
+        # prior DST-managed content, even if it produced zero migration updates.
+        # Only a battlegroup with NEITHER — the genuine "nothing to carry" case —
+        # is safe to fall back to a non-authoritative installed-defaults read.
+        $hadAmbiguousCandidate = $false
+        $hadManagedCandidate = $false
         foreach ($dir in $dirs) {
             $g = "$dir/UserGame.ini"
             $e = "$dir/UserEngine.ini"
@@ -2555,10 +2561,14 @@ function Resolve-DuneGameConfigPaths {
             $engineRaw = (Invoke-V6Ssh -Ip $Ip -Cmd "sudo cat '$e' 2>/dev/null") -join "`n"
             $gameDoc = ConvertFrom-DuneIniDoc -Raw $gameRaw
             $engineDoc = ConvertFrom-DuneIniDoc -Raw $engineRaw
-            if ($gameDoc.malformed -or $engineDoc.malformed -or
-                (-not $gameDoc.hadManaged -and -not $engineDoc.hadManaged)) {
+            if ($gameDoc.malformed -or $engineDoc.malformed) {
+                $hadAmbiguousCandidate = $true
                 continue
             }
+            if (-not $gameDoc.hadManaged -and -not $engineDoc.hadManaged) {
+                continue
+            }
+            $hadManagedCandidate = $true
             $managedGame = Get-DuneGameConfigManagedRaw -Raw $gameRaw
             $managedEngine = Get-DuneGameConfigManagedRaw -Raw $engineRaw
             $updates = @(Get-DuneGameConfigMigrationUpdates -GameRaw $managedGame -EngineRaw $managedEngine)
@@ -2602,6 +2612,21 @@ function Resolve-DuneGameConfigPaths {
                 migratedKeys = $updates.Count
             }
         }
+        # Field defect (Jess, v15.1.1): a genuinely fresh battlegroup has neither
+        # authority marker NOR any prior DST-managed candidate to carry — every
+        # live directory (if any) was vanilla Funcom defaults. Reads can safely
+        # fall back to the installed defaults as non-authoritative; nothing is
+        # written here. Malformed or prior-managed candidates stay blocked below
+        # exactly as before (never invent a faithful carry).
+        if ($installedState -eq 'uninitialized' -and -not $hadAmbiguousCandidate -and -not $hadManagedCandidate) {
+            return @{
+                game                = $baseGamePath
+                engine              = $baseEnginePath
+                source              = 'installed-uninitialized'
+                authoritative       = $false
+                needsInitialization = $true
+            }
+        }
         throw 'Installed User*.ini defaults are not initialized and no prior DST-managed battlegroup overrides could be migrated. Deployment is blocked.'
     }
 
@@ -2619,6 +2644,57 @@ function Resolve-DuneGameConfigPaths {
     throw 'No authoritative installed UserGame.ini/UserEngine.ini files were found.'
 }
 
+# Adopt the currently-installed, non-authoritative UserGame.ini/UserEngine.ini
+# defaults as authoritative by writing ONLY the v2 authority marker file. Never
+# rewrites UserGame.ini/UserEngine.ini themselves. Rechecks the exact same safe
+# "nothing to carry" state immediately before writing so a race (another admin
+# initializing concurrently, or a candidate appearing) is refused rather than
+# silently overwritten. Requires explicit typed confirmation from the caller.
+function Initialize-DuneGameConfigAuthority {
+    param([string]$Ip, [bool]$Confirmed)
+    if (-not $Confirmed) {
+        throw 'Explicit confirmation is required to initialize Game Config.'
+    }
+
+    $recheck = Resolve-DuneGameConfigPaths -Ip $Ip
+    if ("$($recheck.source)" -ne 'installed-uninitialized') {
+        if ("$($recheck.source)" -eq 'installed') {
+            return @{
+                ok                  = $true
+                alreadyInitialized  = $true
+                source              = $recheck.source
+                authoritative       = $true
+                needsInitialization = $false
+                game                = $recheck.game
+                engine              = $recheck.engine
+            }
+        }
+        throw 'Game Config state changed and is no longer the safe uninitialized case; re-check before retrying.'
+    }
+
+    $gameOk = ((Invoke-V6Ssh -Ip $Ip -Cmd "sudo bash -c 'test -f ''$($recheck.game)'' && echo yes || echo no'") -join '').Trim()
+    $engineOk = ((Invoke-V6Ssh -Ip $Ip -Cmd "sudo bash -c 'test -f ''$($recheck.engine)'' && echo yes || echo no'") -join '').Trim()
+    if ($gameOk -ne 'yes' -or $engineOk -ne 'yes') {
+        throw 'Installed User*.ini defaults are not both readable; initialization refused.'
+    }
+
+    $markerCmd = "printf 'live-imported-v2\n' | sudo tee '$script:DuneGameConfigAuthorityMarker' > /dev/null; echo __DST_AUTH__:initialized"
+    $result = ((Invoke-V6Ssh -Ip $Ip -Cmd $markerCmd -TimeoutSec 30) -join "`n").Trim()
+    if ($result -notmatch '(?m)^__DST_AUTH__:initialized$') {
+        throw 'Game Config initialization marker could not be written.'
+    }
+
+    return @{
+        ok                  = $true
+        initialized         = $true
+        source              = 'installed'
+        authoritative       = $true
+        needsInitialization = $false
+        game                = $recheck.game
+        engine              = $recheck.engine
+    }
+}
+
 # =============================================================================
 # READ + WRITE (SSH)
 # =============================================================================
@@ -2630,7 +2706,9 @@ function Get-DuneGameConfig {
     $gameRaw   = ($gameOut   -join "`n")
     $engineRaw = ($engineOut -join "`n")
     return @{
-        source = $paths.source
+        source              = $paths.source
+        authoritative       = if ($paths.ContainsKey('authoritative')) { [bool]$paths.authoritative } else { $true }
+        needsInitialization = [bool]$paths.needsInitialization
         game = @{
             path            = $paths.game
             raw             = $gameRaw
@@ -3070,6 +3148,12 @@ function Save-DuneGameConfig {
     )
     if (-not $Updates -or $Updates.Count -eq 0) { return }
     $paths  = if ($ResolvedPaths) { $ResolvedPaths } else { Resolve-DuneGameConfigPaths -Ip $Ip }
+    # A resolver read-fallback (installed defaults readable, but not yet adopted
+    # as authoritative) must never silently become a write target. Refuse until
+    # POST /api/gameconfig/initialize explicitly adopts it.
+    if ($paths.ContainsKey('authoritative') -and -not $paths.authoritative) {
+        throw 'Game Config has not been initialized on this battlegroup yet. Initialize Game Config before saving.'
+    }
     $quoted = Get-DuneGameConfigQuotedKeys
 
     $byFile = @{ game = (New-Object 'System.Collections.Generic.List[object]'); engine = (New-Object 'System.Collections.Generic.List[object]') }
