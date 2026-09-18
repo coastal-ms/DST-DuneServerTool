@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import { useNavigate } from '../router'
+import { externalPortVerificationUrl, summarizeTcpPorts } from '../util/portStatusPresentation'
 import { PageHeader } from '../components/PageHeader'
 import { Icon } from '../components/Icon'
 import { CollapsibleCard } from '../components/CollapsibleCard'
@@ -199,9 +200,6 @@ export function Dashboard() {
   const gameServers = status?.bg?.gameServers ?? []
   const survivalPhase = findSurvivalServer(gameServers)?.phase?.trim() || ''
   const ports = status?.ports
-  const portResults = Array.isArray(ports?.results) ? ports.results : []
-  const tcp = portResults.filter(r => r.protocol === 'TCP')
-  const openTcp = tcp.filter(r => r.status === 'open').length
 
   // Deep Desert / Arakeen / Harko Village — on-demand map pods.
   const bgReady = bgState === 'running'
@@ -261,12 +259,7 @@ export function Dashboard() {
       : vm.running
         ? `VM ${vm.state.toLowerCase()} · up ${fmtUptime(vm.uptime)}`
         : `VM ${vm.state.toLowerCase()}`
-  const portsLabel = ports?.mode === 'disabled' ? 'Disabled'
-                  : tcp.length === 0 ? '—'
-                  : `${openTcp}/${tcp.length}`
-  const portsTone = tcp.length > 0 && openTcp === tcp.length ? 'text-success'
-                : tcp.length > 0 && openTcp === 0 ? 'text-danger'
-                : 'text-text-muted'
+  const portSummary = summarizeTcpPorts(ports)
   const portsSub = [
     vm?.ip ? `VM ip: ${vm.ip}` : 'No VM ip',
     ports?.publicIp ? `public: ${ports.publicIp}` : null,
@@ -296,12 +289,22 @@ export function Dashboard() {
           )}
           <div className="mt-3 pt-3 border-t border-border/40 flex items-center justify-between gap-3">
             <span className="text-xs uppercase tracking-wider text-text-dim flex items-center gap-1.5">
-              <Icon name="Plug" size={13} className={portsTone} />
-              {ports?.mode === 'disabled' ? 'Port checks' : 'TCP ports open'}
+              <Icon name="Plug" size={13} className={portSummary.tone} />
+              {portSummary.heading}
             </span>
-            <span className={`text-sm font-semibold ${portsTone} truncate`}>{portsLabel}</span>
+            <span className={`text-sm font-semibold ${portSummary.tone} truncate`}>{portSummary.label}</span>
           </div>
           <div className="mt-1 text-xs text-text-dim truncate">{portsSub || '—'}</div>
+          {portSummary.state === 'unknown' && ports?.publicIp && (
+            <a
+              className="mt-2 inline-flex items-center gap-1 text-xs text-warning hover:underline"
+              href={externalPortVerificationUrl(ports.publicIp)}
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              Verify externally <Icon name="ExternalLink" size={12} />
+            </a>
+          )}
         </div>
         <div className="card card-hover p-4 flex flex-col">
           <div className="flex items-center justify-between">

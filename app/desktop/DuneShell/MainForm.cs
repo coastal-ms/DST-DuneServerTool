@@ -34,6 +34,7 @@ internal sealed class MainForm : Form
     private ShellPreferences? _shellPreferences;
     private bool _softwareRenderingActive;
     private bool _restartShellOnly;
+    private bool _recoveringWebView;
     private const int MaxNavRetries = 20;
 
     // ----- Minimize-to-tray state --------------------------------------------
@@ -172,6 +173,7 @@ internal sealed class MainForm : Form
         core.NavigationCompleted += OnNavigationCompleted;
         core.DownloadStarting += OnDownloadStarting;
         core.WebMessageReceived += OnWebMessageReceived;
+        core.ProcessFailed += OnProcessFailed;
         core.DocumentTitleChanged += (_, _) =>
         {
             var t = core.DocumentTitle;
@@ -216,8 +218,6 @@ internal sealed class MainForm : Form
 
             var exceptionRecv = core.GetDevToolsProtocolEventReceiver("Runtime.exceptionThrown");
             exceptionRecv.DevToolsProtocolEventReceived += OnRuntimeExceptionThrown;
-
-            core.ProcessFailed += OnProcessFailed;
 
             AppendDiagnosticLine($"[shell] DST v{typeof(MainForm).Assembly.GetName().Version} logging started; WebView2 runtime {core.Environment.BrowserVersionString}");
         }
@@ -321,12 +321,76 @@ internal sealed class MainForm : Form
 
     private void OnProcessFailed(object? sender, CoreWebView2ProcessFailedEventArgs e)
     {
+        AppendDiagnosticLine(
+            $"[process-failed] kind={e.ProcessFailedKind} reason={e.Reason} exitCode={e.ExitCode} status={e.ProcessDescription}");
+
+        switch (e.ProcessFailedKind)
+        {
+            case CoreWebView2ProcessFailedKind.RenderProcessExited:
+            case CoreWebView2ProcessFailedKind.RenderProcessUnresponsive:
+                ScheduleWebViewRecovery(RecoverRenderProcess);
+                break;
+
+            case CoreWebView2ProcessFailedKind.BrowserProcessExited:
+                ScheduleWebViewRecovery(() =>
+                {
+                    AppendDiagnosticLine("[process-recovery] browser process exited; restarting shell");
+                    RestartShell();
+                });
+                break;
+
+            default:
+                AppendDiagnosticLine(
+                    $"[process-recovery] no automatic recovery for {e.ProcessFailedKind}");
+                break;
+        }
+    }
+
+    private void ScheduleWebViewRecovery(Action recovery)
+    {
+        if (_recoveringWebView || IsDisposed || Disposing)
+        {
+            AppendDiagnosticLine("[process-recovery] ignored duplicate recovery or shell shutdown");
+            return;
+        }
+
+        _recoveringWebView = true;
         try
         {
-            AppendDiagnosticLine(
-                $"[process-failed] kind={e.ProcessFailedKind} reason={e.Reason} exitCode={e.ExitCode} status={e.ProcessDescription}");
+            BeginInvoke(recovery);
         }
-        catch { /* best-effort */ }
+        catch (Exception ex)
+        {
+            AppendDiagnosticLine($"[process-recovery] failed to schedule UI recovery: {ex}");
+        }
+    }
+
+    private void RecoverRenderProcess()
+    {
+        if (IsDisposed || Disposing)
+        {
+            AppendDiagnosticLine("[process-recovery] render recovery cancelled during shell shutdown");
+            return;
+        }
+
+        try
+        {
+            CoreWebView2 core = _web.CoreWebView2
+                ?? throw new InvalidOperationException("WebView2 is unavailable for render recovery.");
+
+            _firstLoadDone = false;
+            _navRetries = 0;
+            _status.Text = "Recovering Dune Server Tool…";
+            _status.Visible = true;
+            _web.Visible = false;
+            AppendDiagnosticLine("[process-recovery] reloading WebView after render process failure");
+            core.Reload();
+        }
+        catch (Exception ex)
+        {
+            AppendDiagnosticLine($"[process-recovery] render reload failed; restarting shell: {ex}");
+            RestartShell();
+        }
     }
 
     private static void AppendDiagnosticLine(string line)
@@ -376,10 +440,14 @@ internal sealed class MainForm : Form
 
         if (e.IsSuccess)
         {
+            bool recoveredWebView = _recoveringWebView;
             _firstLoadDone = true;
             _navRetries = 0;
             _status.Visible = false;
             _web.Visible = true;
+            _recoveringWebView = false;
+            if (recoveredWebView)
+                AppendDiagnosticLine("[process-recovery] WebView reload completed");
             return;
         }
 
@@ -396,8 +464,30 @@ internal sealed class MainForm : Form
             _web.Visible = false;
             _status.Text = $"Connecting to Dune Server Tool… (attempt {_navRetries})";
             await Task.Delay(600);
-            try { _web.CoreWebView2?.Navigate(_targetUrl); }
-            catch { /* surfaces on the next NavigationCompleted */ }
+            if (IsDisposed || Disposing)
+            {
+                AppendDiagnosticLine("[navigation] retry cancelled during shell shutdown");
+                return;
+            }
+            try
+            {
+                CoreWebView2 core = _web.CoreWebView2
+                    ?? throw new InvalidOperationException("WebView2 is unavailable for navigation retry.");
+                core.Navigate(_targetUrl);
+            }
+            catch (Exception ex)
+            {
+                AppendDiagnosticLine($"[navigation] retry failed: {ex}");
+                if (_recoveringWebView)
+                    RestartShell();
+            }
+            return;
+        }
+
+        if (_recoveringWebView)
+        {
+            AppendDiagnosticLine("[process-recovery] render reload navigation failed; restarting shell");
+            RestartShell();
             return;
         }
 
@@ -706,8 +796,9 @@ internal sealed class MainForm : Form
         }
         catch (Exception ex)
         {
+            AppendDiagnosticLine($"[shell-restart] failed: {ex}");
             MessageBox.Show(
-                "The shell preference was saved, but the shell could not restart.\r\n\r\n" +
+                "The Dune Server Tool window could not restart.\r\n\r\n" +
                 ex.Message + "\r\n\r\nClose and reopen Dune Server Tool to apply it.",
                 "Shell restart failed",
                 MessageBoxButtons.OK,

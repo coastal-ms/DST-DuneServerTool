@@ -77,6 +77,7 @@ export async function api<T = unknown>(
   try {
     res = await fetch(`${API_BASE}${path}`, { ...init, headers, credentials: 'same-origin' })
   } catch (e) {
+    if (e instanceof DOMException && e.name === 'AbortError') throw e
     // Network-level failure (server restarting / listener down). Flag it so the
     // reconnect overlay can take over and recover, then surface the error.
     reportNetworkError()

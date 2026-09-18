@@ -13,8 +13,29 @@ here cover everything those tags shipped.
 
 ## [15.1.1] - 2026-09-17
 
+### Added
+
+- Added a dedicated owner-only **Official Server Settings** page for managed
+  `ServerCustomSettings.ini` values. Saves use a timestamped backup, revision
+  and readback verification, and automatic rollback on failure.
+- Common numeric settings provide 0.1-25 sliders for six-decimal floats and
+  0-25 sliders for integer counts, while uncapped exact fields preserve values
+  outside those convenience ranges. Each setting shows its Funcom default,
+  effect, and direction, and loading Patch 1.5 defaults changes only the draft
+  until Save is selected.
+- Added guarded Stop and Start controls that launch the existing visible-console
+  workflow, wait for the battlegroup and server pods to stop before unlocking
+  edits, and refresh until restarted settings are active.
+- Official server setting updates preserve existing comments, whitespace,
+  ordering, unknown keys, and newline conventions.
+
 ### Fixed
 
+- Replaced the retired external TCP checker with documented multi-node
+  verification, now distinguishing open, closed, and unknown results honestly
+  and offering an explicit external verification fallback when status is unknown.
+- DuneShell now recovers its WebView process during long restart operations
+  without stopping the backend.
 - Restored automatic Deep Desert base-backup protection after the Retail
   self-hosted schema moved actor state onto the actor row. The guard now
   recognizes and preserves both the legacy and Retail cleanup-function forms
@@ -62,9 +83,15 @@ here cover everything those tags shipped.
   recognized settings without current local-consumption evidence are never
   copied. Existing destination files are backed up, replaced atomically, and
   verified by readback.
-
 - Restored Set Ammo for Retail ranged weapons whose empty
   `FWeaponItemStats` block omits the `CurrentAmmo` field.
+- Corrected Patch 1.5 portable Blueprint compatibility for both Solo and
+  Self-Hosted imports and exports. Zero-based, one-based, omitted, and mixed
+  instance/placeable IDs now normalize without collisions, pentashields retain
+  their placeable references, invalid IDs fail closed, and Pitch/Yaw rotation
+  axes round-trip in the portable format. Existing imports are not bulk
+  migrated because their source provenance cannot be identified reliably;
+  affected designs require re-import or manual rotation recovery.
 
 ## [15.1.0] - 2026-09-17
 

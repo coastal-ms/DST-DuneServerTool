@@ -22,6 +22,7 @@ const items: NavItem[] = [
   { to: '/operations', label: 'Operations', icon: 'Activity', group: 'overview' },
   { to: '/pods', label: 'Pods', icon: 'Boxes', group: 'overview' },
   { to: '/commands', label: 'Commands', icon: 'Zap', group: 'terminal' },
+  { to: '/server-settings', label: 'Server Settings', icon: 'ServerCog', group: 'terminal', ownerOnly: true },
   { to: '/gameconfig', label: 'Game Config', icon: 'Sliders', group: 'terminal', ownerOnly: true },
 ]
 
@@ -38,6 +39,7 @@ describe('sidebar navigation preferences v3', () => {
         { type: 'page', id: '/pods' },
         { type: 'divider', id: 'divider:terminal', label: 'Server Controls' },
         { type: 'page', id: '/commands' },
+        { type: 'page', id: '/server-settings' },
         { type: 'page', id: '/gameconfig' },
       ],
       hiddenPageIds: [],
@@ -61,6 +63,7 @@ describe('sidebar navigation preferences v3', () => {
       { type: 'divider', id: 'divider:terminal', label: 'Server Controls' },
       { type: 'page', id: '/gameconfig' },
       { type: 'page', id: '/commands' },
+      { type: 'page', id: '/server-settings' },
     ])
   })
 
@@ -111,6 +114,7 @@ describe('sidebar navigation preferences v3', () => {
       '/pods',
       'divider:terminal',
       '/commands',
+      '/server-settings',
       '/gameconfig',
     ])
   })
@@ -142,7 +146,7 @@ describe('sidebar navigation preferences v3', () => {
       label: 'Favorites',
     })
     expect(removed.items.some(entry => entry.id === 'divider:overview')).toBe(false)
-    expect(removed.items.filter(entry => entry.type === 'page')).toHaveLength(5)
+    expect(removed.items.filter(entry => entry.type === 'page')).toHaveLength(6)
   })
 
   it('sanitizes control characters and bounds divider labels', () => {

@@ -7,6 +7,7 @@ import { usePortalAuth } from '../auth/PortalAuthGate'
 import { getTestBuildIdentity } from '../util/testBuildIdentity'
 import { usePortalAccess } from '../auth/portalAccess'
 import { setCommandDeck, useCommandDeck } from '../hooks/useCommandDeck'
+import { portResultPresentation } from '../util/portStatusPresentation'
 
 function vmPillClass(vm: VmStatus | undefined | null): string {
   if (!vm || !vm.exists) return 'pill-muted'
@@ -14,10 +15,10 @@ function vmPillClass(vm: VmStatus | undefined | null): string {
   return 'pill-warning'
 }
 
-function portPillClass(ports: PortStatus | null | undefined, port: number, protocol: 'TCP' | 'UDP'): string {
+function getPortPresentation(ports: PortStatus | null | undefined, port: number, protocol: 'TCP' | 'UDP') {
   const results = Array.isArray(ports?.results) ? ports.results : []
   const r = results.find(x => x.port === port && x.protocol === protocol)
-  return r?.status === 'open' ? 'pill-success' : 'pill-muted'
+  return { ...portResultPresentation(r), detail: r?.detail }
 }
 
 function vmPillText(vm: VmStatus | undefined | null): string {
@@ -55,6 +56,8 @@ export function StatusBar() {
   const serverName = (status?.serverName ?? '').trim()
   const portalAuth = usePortalAuth()
   const commandDeck = useCommandDeck()
+  const udpPort = getPortPresentation(ports, 7777, 'UDP')
+  const rabbitPort = getPortPresentation(ports, 31982, 'TCP')
 
   return (
     <header className="h-14 shrink-0 border-b border-border bg-surface/60 backdrop-blur-md px-3 sm:px-5 flex items-center justify-between gap-2 sm:gap-4 overflow-hidden">
@@ -101,12 +104,12 @@ export function StatusBar() {
           </Link>
         )}
         {ports?.showUdp && (
-          <span className={`${portPillClass(ports, 7777, 'UDP')} hidden md:inline-flex`} title="Game server ports (forward on your router/firewall). Shown because you enabled a custom UDP port check.">
-            <Icon name="Plug" size={11} /> 7777–7810 UDP
+          <span className={`${udpPort.pillClass} hidden md:inline-flex`} title="Game server ports (forward on your router/firewall). Shown because you enabled a custom UDP port check.">
+            <Icon name="Plug" size={11} /> 7777–7810 UDP · {udpPort.label}
           </span>
         )}
-        <span className={`${portPillClass(ports, 31982, 'TCP')} hidden md:inline-flex`} title="RabbitMQ port (forward on your router/firewall)">
-          <Icon name="Plug" size={11} /> 31982 TCP
+        <span className={`${rabbitPort.pillClass} hidden md:inline-flex`} title={`RabbitMQ port (forward on your router/firewall). ${rabbitPort.label}.${rabbitPort.detail ? ` ${rabbitPort.detail}` : ''}`}>
+          <Icon name="Plug" size={11} /> 31982 TCP · {rabbitPort.label}
         </span>
         <span className={`${vmPillClass(vm)} hidden sm:inline-flex`}>
           <Icon name="HardDrive" size={11} /> VM · {vmPillText(vm)}

@@ -89,7 +89,7 @@ $script:DuneRetailServerLabels = @{
     bAllowSandworms = 'Sandworms'
     SandwormConsequences = 'Sandworm Consequences'
     PlayerDeathLootRule = 'Player Death Loot Rule'
-    bIsBuildingRestrictionsEnabled = 'Area Building Restrictions'
+    bIsBuildingRestrictionsEnabled = 'General Building Restrictions'
     FiefdomLimit = 'Maximum Sub-Fief Amount'
     BuildingPieceLimitMultiplier = 'Building Piece Limit'
     bBuildingInfiniteStability = 'Building Stability Limits'
@@ -137,7 +137,7 @@ function Get-DuneRetailServerSettingDefinition {
             @()
         }
         editable = ($script:DuneRetailServerTextKeys -notcontains $Key)
-        inverted = ($Key -in @('bBuildingInfiniteStability', 'bLandsraadDisableDecreeRerollLimit'))
+        inverted = ($Key -eq 'bBuildingInfiniteStability')
     }
 }
 
@@ -179,6 +179,19 @@ function Test-DuneRetailServerSettingValue {
     }
 }
 
+function Split-DuneRetailServerSettingValue {
+    param([AllowEmptyString()][string]$Content)
+
+    if ($Content -notmatch '^(\s*)(.*?)(\s*(?:[;#].*)?)$') {
+        return [ordered]@{ leading = ''; value = $Content; trailing = '' }
+    }
+    return [ordered]@{
+        leading = $Matches[1]
+        value = $Matches[2]
+        trailing = $Matches[3]
+    }
+}
+
 function ConvertFrom-DuneRetailServerSettingsRaw {
     param([AllowEmptyString()][string]$Raw)
 
@@ -187,7 +200,7 @@ function ConvertFrom-DuneRetailServerSettingsRaw {
     $sectionFound = $false
     $malformed = New-Object 'System.Collections.Generic.List[object]'
     $lineNumber = 0
-    foreach ($line in ($Raw -replace "`r", '' -split "`n")) {
+    foreach ($line in [regex]::Split($Raw, '\r\n|\n|\r')) {
         $lineNumber++
         if ($line -match '^\s*\[(.+)\]\s*$') {
             $inside = ($Matches[1] -eq $script:DuneRetailServerSettingsSection)
@@ -200,7 +213,7 @@ function ConvertFrom-DuneRetailServerSettingsRaw {
             continue
         }
         $key = $Matches[1].Trim()
-        $value = $Matches[2].Trim()
+        $value = (Split-DuneRetailServerSettingValue -Content $Matches[2]).value.Trim()
         if (-not $key) {
             $malformed.Add(@{ line = $lineNumber; raw = $line })
             continue
@@ -537,25 +550,23 @@ function ConvertTo-DuneRetailServerSettingsUpdatedRaw {
     if ($normalized.Count -eq 0) { throw 'No editable Retail Server Settings were provided.' }
 
     $inside = $false
-    $result = New-Object 'System.Collections.Generic.List[string]'
-    foreach ($line in ($Raw -replace "`r", '' -split "`n")) {
+    $parts = [regex]::Split($Raw, '(\r\n|\n|\r)')
+    for ($index = 0; $index -lt $parts.Length; $index += 2) {
+        $line = $parts[$index]
         if ($line -match '^\s*\[(.+)\]\s*$') {
             $inside = ($Matches[1] -eq $script:DuneRetailServerSettingsSection)
-            $result.Add($line)
             continue
         }
         if ($inside -and $line -match '^(\s*([^=]+?)\s*=)(.*)$') {
+            $prefix = $Matches[1]
             $key = $Matches[2].Trim()
+            $valueParts = Split-DuneRetailServerSettingValue -Content $Matches[3]
             if ($normalized.ContainsKey($key)) {
-                $result.Add("$($Matches[1])$($normalized[$key])")
-                continue
+                $parts[$index] = "$prefix$($valueParts.leading)$($normalized[$key])$($valueParts.trailing)"
             }
         }
-        $result.Add($line)
     }
-    $updated = $result.ToArray() -join "`n"
-    if ($Raw.EndsWith("`n") -and -not $updated.EndsWith("`n")) { $updated += "`n" }
-    return $updated
+    return $parts -join ''
 }
 
 function Backup-DuneRetailServerSettingsContent {

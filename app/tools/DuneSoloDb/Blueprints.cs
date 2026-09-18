@@ -233,8 +233,8 @@ internal static partial class Program
                         ["x"] = reader.GetFloat(2),
                         ["y"] = reader.GetFloat(3),
                         ["z"] = reader.GetFloat(4),
-                        ["rx"] = reader.GetFloat(5),
-                        ["ry"] = reader.GetFloat(6),
+                        ["rx"] = reader.GetFloat(6),
+                        ["ry"] = reader.GetFloat(5),
                         ["rz"] = reader.GetFloat(7)
                     });
                 }
@@ -412,6 +412,10 @@ internal static partial class Program
                 "Blueprint exceeds the supported 200000-row limit.");
         }
 
+        var instanceIds = NormalizeBlueprintIds(
+            instanceElements,
+            "instance_id",
+            "instance");
         var instances = new List<PortableBlueprintInstance>(instanceElements.Length);
         for (var index = 0; index < instanceElements.Length; index++)
         {
@@ -420,11 +424,6 @@ internal static partial class Program
                 element,
                 "building_type",
                 $"instances[{index}].building_type");
-            var id = ReadBlueprintPositiveId(
-                element,
-                "instance_id",
-                index + 1,
-                $"instances[{index}].instance_id");
             var providesStability = element.TryGetProperty(
                 "provides_stability",
                 out var stabilityElement)
@@ -433,7 +432,7 @@ internal static partial class Program
                     $"instances[{index}].provides_stability")
                 : StructuralBuildingTypes.Contains(buildingType);
             instances.Add(new PortableBlueprintInstance(
-                Id: id,
+                Id: instanceIds.ImportedIds[index],
                 BuildingType: buildingType,
                 X: ReadRequiredBlueprintFloat(
                     element,
@@ -453,21 +452,10 @@ internal static partial class Program
                     $"instances[{index}].rotation"),
                 ProvidesStability: providesStability));
         }
-        EnsureDistinctBlueprintIds(
-            instances.Select(value => value.Id),
-            "instance");
-
-        var explicitPlaceableIds = placeableElements.Count(element =>
-            element.ValueKind == JsonValueKind.Object
-            && element.TryGetProperty("placeable_id", out var id)
-            && id.ValueKind != JsonValueKind.Null);
-        if (explicitPlaceableIds != 0
-            && explicitPlaceableIds != placeableElements.Length)
-        {
-            throw new InvalidDataException(
-                "Blueprint placeable ids must be present on every placeable or omitted from all placeables.");
-        }
-        var hasExplicitPlaceableIds = explicitPlaceableIds > 0;
+        var placeableIds = NormalizeBlueprintIds(
+            placeableElements,
+            "placeable_id",
+            "placeable");
         var placeables = new List<PortableBlueprintPlaceable>(placeableElements.Length);
         for (var index = 0; index < placeableElements.Length; index++)
         {
@@ -475,11 +463,7 @@ internal static partial class Program
                 placeableElements[index],
                 $"placeables[{index}]");
             placeables.Add(new PortableBlueprintPlaceable(
-                Id: ReadBlueprintPositiveId(
-                    element,
-                    "placeable_id",
-                    index + 1,
-                    $"placeables[{index}].placeable_id"),
+                Id: placeableIds.ImportedIds[index],
                 BuildingType: ReadBlueprintBuildingType(
                     element,
                     "building_type",
@@ -496,11 +480,11 @@ internal static partial class Program
                     element,
                     "z",
                     $"placeables[{index}].z"),
-                Yaw: ReadOptionalBlueprintFloat(
+                Pitch: ReadOptionalBlueprintFloat(
                     element,
                     "rx",
                     $"placeables[{index}].rx"),
-                Pitch: ReadRequiredBlueprintFloat(
+                Yaw: ReadRequiredBlueprintFloat(
                     element,
                     "ry",
                     $"placeables[{index}].ry"),
@@ -509,10 +493,6 @@ internal static partial class Program
                     "rz",
                     $"placeables[{index}].rz")));
         }
-        EnsureDistinctBlueprintIds(
-            placeables.Select(value => value.Id),
-            "placeable");
-
         var rawPentashieldIds = new long[pentashieldElements.Length];
         for (var index = 0; index < pentashieldElements.Length; index++)
         {
@@ -524,10 +504,7 @@ internal static partial class Program
                 "placeable_id",
                 $"pentashields[{index}].placeable_id");
         }
-        var legacyZeroBasedPentashields = !hasExplicitPlaceableIds;
-        var placeableIds = placeables
-            .Select(value => value.Id)
-            .ToHashSet();
+        EnsureDistinctBlueprintIds(rawPentashieldIds, "pentashield source placeable");
         var pentashields = new List<PortableBlueprintPentashield>(
             pentashieldElements.Length);
         for (var index = 0; index < pentashieldElements.Length; index++)
@@ -542,10 +519,9 @@ internal static partial class Program
                 throw new InvalidDataException(
                     $"pentashields[{index}].scale must contain three values.");
             }
-            var placeableId = legacyZeroBasedPentashields
-                ? checked(rawPentashieldIds[index] + 1)
-                : rawPentashieldIds[index];
-            if (placeableId <= 0 || !placeableIds.Contains(placeableId))
+            if (!placeableIds.SourceToImported.TryGetValue(
+                    rawPentashieldIds[index],
+                    out var placeableId))
             {
                 throw new InvalidDataException(
                     $"pentashields[{index}].placeable_id does not reference an imported placeable.");
@@ -935,48 +911,94 @@ internal static partial class Program
         return result;
     }
 
-    private static long ReadBlueprintPositiveId(
-        JsonElement element,
+    private static NormalizedBlueprintIds NormalizeBlueprintIds(
+        IReadOnlyList<JsonElement> elements,
         string property,
-        long fallback,
         string label)
     {
-        if (!element.TryGetProperty(property, out var value)
-            || value.ValueKind == JsonValueKind.Null)
+        var sourceIds = new long?[elements.Count];
+        var seenSources = new HashSet<long>();
+        var hasZero = false;
+        var explicitCount = 0;
+        for (var index = 0; index < elements.Count; index++)
         {
-            if (fallback > 0)
+            var element = RequireBlueprintObject(elements[index], $"{label}s[{index}]");
+            if (!element.TryGetProperty(property, out var value)
+                || value.ValueKind == JsonValueKind.Null)
             {
-                return fallback;
+                continue;
             }
-            throw new InvalidDataException($"{label} is required.");
+            var sourceId = ReadBlueprintNonNegativeId(
+                element,
+                property,
+                $"{label}s[{index}].{property}");
+            if (!seenSources.Add(sourceId))
+            {
+                throw new InvalidDataException(
+                    $"Blueprint contains duplicate {label} source ids.");
+            }
+            sourceIds[index] = sourceId;
+            explicitCount++;
+            hasZero |= sourceId == 0;
         }
 
-        long result;
-        if (value.ValueKind == JsonValueKind.Number
-            && value.TryGetInt64(out result))
+        var importedIds = new long[elements.Count];
+        var reserved = new HashSet<long>();
+        var sourceToImported = new Dictionary<long, long>();
+        for (var index = 0; index < sourceIds.Length; index++)
         {
-            // Parsed below.
+            if (!sourceIds[index].HasValue)
+            {
+                continue;
+            }
+            var sourceId = sourceIds[index]!.Value;
+            if (hasZero && sourceId == long.MaxValue)
+            {
+                throw new InvalidDataException(
+                    $"Blueprint {label} id is too large to normalize.");
+            }
+            var importedId = hasZero ? sourceId + 1 : sourceId;
+            if (importedId <= 0 || !reserved.Add(importedId))
+            {
+                throw new InvalidDataException(
+                    $"Blueprint contains duplicate normalized {label} ids.");
+            }
+            importedIds[index] = importedId;
+            sourceToImported.Add(sourceId, importedId);
         }
-        else if (value.ValueKind == JsonValueKind.String
-            && long.TryParse(
-                value.GetString(),
-                NumberStyles.Integer,
-                CultureInfo.InvariantCulture,
-                out result))
+
+        var nextId = 1L;
+        for (var index = 0; index < sourceIds.Length; index++)
         {
-            // Parsed below.
+            if (sourceIds[index].HasValue)
+            {
+                continue;
+            }
+            while (reserved.Contains(nextId))
+            {
+                if (nextId == long.MaxValue)
+                {
+                    throw new InvalidDataException(
+                        $"Blueprint has no available {label} ids.");
+                }
+                nextId++;
+            }
+            importedIds[index] = nextId;
+            reserved.Add(nextId);
+            nextId++;
         }
-        else
+
+        // Older portable files omitted every placeable id but used zero-based
+        // positional pentashield references.
+        if (explicitCount == 0)
         {
-            throw new InvalidDataException(
-                $"{label} must be a positive integer.");
+            for (var index = 0; index < importedIds.Length; index++)
+            {
+                sourceToImported.Add(index, importedIds[index]);
+            }
         }
-        if (result <= 0)
-        {
-            throw new InvalidDataException(
-                $"{label} must be a positive integer.");
-        }
-        return result;
+
+        return new NormalizedBlueprintIds(importedIds, sourceToImported);
     }
 
     private static long ReadBlueprintNonNegativeId(
@@ -1180,6 +1202,10 @@ internal static partial class Program
         short ScaleX,
         short ScaleY,
         short ScaleZ);
+
+    private sealed record NormalizedBlueprintIds(
+        long[] ImportedIds,
+        IReadOnlyDictionary<long, long> SourceToImported);
 
     private sealed record BlueprintImportResult(long BlueprintId, long ItemId);
 }

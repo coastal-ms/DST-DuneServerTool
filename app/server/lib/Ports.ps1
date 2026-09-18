@@ -1,4 +1,4 @@
-﻿# Ports — external port-check (TCP via yougetsignal, UDP marked as skipped).
+﻿# Ports — external TCP port checks; UDP is marked as skipped.
 # Per-launch cache with 5 minute TTL so the dashboard auto-refresh repaints
 # from cache and only re-fetches on TTL expiry.
 
@@ -31,28 +31,66 @@ function Get-DunePublicIp {
     return $null
 }
 
-function Test-DunePortYougetsignal {
-    param([string]$PublicIp, [int]$Port)
-    # Returns 'open' | 'closed' | 'ratelimit' | 'unknown'
-    try {
-        $resp = Invoke-WebRequest -Uri 'https://ports.yougetsignal.com/check-port.php' `
-            -Method POST -UseBasicParsing -TimeoutSec 10 -ErrorAction Stop `
-            -Body @{ remoteAddress = $PublicIp; portNumber = "$Port" } `
-            -Headers @{ 'User-Agent' = 'Mozilla/5.0 (dune-server-tool)' }
-        $body = "$($resp.Content)"
-        if ($body -match '(?i)Daily\s+open\s+port\s+check\s+limit\s+reached') { return 'ratelimit' }
-        if ($body -match '(?i)is\s+open|"open"\s*:\s*true')                    { return 'open' }
-        if ($body -match '(?i)is\s+(closed|not\s+visible|not\s+open)|"open"\s*:\s*false') { return 'closed' }
-        return 'unknown'
-    } catch {
-        return 'unknown'
+function Get-DuneCheckHostTcpVerdict {
+    param($Result, [string[]]$Nodes)
+    if (-not $Result -or -not $Nodes -or $Nodes.Count -eq 0) { return 'unknown' }
+
+    $successes = 0
+    $failures = 0
+    foreach ($node in $Nodes) {
+        $property = $Result.PSObject.Properties[$node]
+        if (-not $property -or $null -eq $property.Value) { continue }
+        $entry = @($property.Value)[0]
+        if ($entry -and $entry.address -and $null -ne $entry.time) {
+            $successes++
+        } elseif ($entry -and $entry.error) {
+            $failures++
+        }
     }
+
+    if ($successes -gt 0) { return 'open' }
+    if ($failures -eq $Nodes.Count) { return 'closed' }
+    return 'unknown'
+}
+
+function Test-DunePortCheckHost {
+    param([string]$PublicIp, [int]$Port)
+    if (-not $PublicIp) { return 'unknown' }
+
+    # Documented API contract: https://check-host.net/about/api
+    # Three independent nodes avoid treating one regional failure as closed.
+    $headers = @{
+        'Accept'     = 'application/json'
+        'User-Agent' = 'DuneServerTool/port-check'
+    }
+    try {
+        $target = [uri]::EscapeDataString("${PublicIp}:$Port")
+        $startResponse = Invoke-WebRequest `
+            -Uri "https://check-host.net/check-tcp?host=$target&max_nodes=3" `
+            -UseBasicParsing -TimeoutSec 8 -ErrorAction Stop -Headers $headers
+        $start = "$($startResponse.Content)" | ConvertFrom-Json
+        if ($start.ok -ne 1 -or -not $start.request_id -or -not $start.nodes) { return 'unknown' }
+        $nodes = @($start.nodes.PSObject.Properties.Name)
+        if ($nodes.Count -eq 0) { return 'unknown' }
+
+        $requestId = [uri]::EscapeDataString("$($start.request_id)")
+        for ($attempt = 1; $attempt -le 3; $attempt++) {
+            if ($attempt -gt 1) { Start-Sleep -Milliseconds 750 }
+            $resultResponse = Invoke-WebRequest `
+                -Uri "https://check-host.net/check-result/$requestId" `
+                -UseBasicParsing -TimeoutSec 8 -ErrorAction Stop -Headers $headers
+            $result = "$($resultResponse.Content)" | ConvertFrom-Json
+            $verdict = Get-DuneCheckHostTcpVerdict -Result $result -Nodes $nodes
+            if ($verdict -ne 'unknown') { return $verdict }
+        }
+    } catch {}
+    return 'unknown'
 }
 
 function Test-DunePortCanYouSeeMe {
     param([string]$PublicIp, [int]$Port)
-    # Fallback when yougetsignal rate-limits us. POSTs to canyouseeme.org and
-    # parses the success/error verdict line out of the response HTML.
+    # Alternate external observer. Parses the success/error verdict line out
+    # of the response HTML and leaves transport or markup failures unknown.
     try {
         $resp = Invoke-WebRequest -Uri 'https://canyouseeme.org/' `
             -Method POST -UseBasicParsing -TimeoutSec 12 -ErrorAction Stop `
@@ -75,13 +113,9 @@ function Test-DunePortBuiltin {
     # No public UDP checker available across free services - mark as skipped
     # and let the UI render "UDP - skipped" so the user knows to check manually.
     if ($Protocol -ne 'TCP') { return 'udp-skip' }
-    # Primary: yougetsignal (fast, no referer dance). Falls through to
-    # canyouseeme.org when yougetsignal is rate-limited (per-public-IP daily
-    # cap; the response body says "Daily open port check limit reached for ...")
-    # or returns an unparseable body.
-    $s = Test-DunePortYougetsignal -PublicIp $PublicIp -Port $Port
-    if ($s -eq 'open' -or $s -eq 'closed') { return $s }
-    return Test-DunePortCanYouSeeMe -PublicIp $PublicIp -Port $Port
+    # The former legacy checker hostname no longer resolves.
+    # Check-Host supplies a documented JSON API and independent observer nodes.
+    return Test-DunePortCheckHost -PublicIp $PublicIp -Port $Port
 }
 
 function Test-DunePortCustom {
@@ -150,20 +184,27 @@ function Get-DunePortStatus {
                 else { Test-DunePortCanYouSeeMe -PublicIp $pubIp -Port $p.Port }
             }
             'yougetsignal' {
-                # Force primary-only (no canyouseeme fallback) for users who
-                # want to bypass the per-IP rate-limit fallback hop.
+                # Backward-compatible alias for installs that selected the old
+                # primary-only mode before its hostname was retired.
                 if ($p.Protocol -ne 'TCP') { 'udp-skip' }
-                else { Test-DunePortYougetsignal -PublicIp $pubIp -Port $p.Port }
+                else { Test-DunePortCheckHost -PublicIp $pubIp -Port $p.Port }
+            }
+            'checkhost' {
+                if ($p.Protocol -ne 'TCP') { 'udp-skip' }
+                else { Test-DunePortCheckHost -PublicIp $pubIp -Port $p.Port }
             }
             'custom' {
                 Test-DunePortCustom -Template $cfg.PortCheckUrlTemplate -PublicIp $pubIp -Port $p.Port -Protocol $p.Protocol
             }
             default {
-                # 'builtin' (yougetsignal w/ canyouseeme fallback) — the default.
+                # 'builtin' (Check-Host multi-node JSON API) — the default.
                 Test-DunePortBuiltin -PublicIp $pubIp -Port $p.Port -Protocol $p.Protocol
             }
         }
-        $results += @{ port = $p.Port; protocol = $p.Protocol; label = $p.Label; status = $status }
+        $detail = if ($status -eq 'unknown') {
+            'Public reachability could not be verified because the external checker was unavailable or returned no verdict.'
+        } else { $null }
+        $results += @{ port = $p.Port; protocol = $p.Protocol; label = $p.Label; status = $status; detail = $detail }
     }
     $script:DunePortCheckCache   = $results
     $script:DunePortCheckPubIp   = $pubIp
