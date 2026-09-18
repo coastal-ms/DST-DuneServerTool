@@ -13,8 +13,18 @@ here cover everything those tags shipped.
 
 ## [15.1.1] - 2026-09-17
 
+### Added
+
+- Added a dedicated owner-only **Official Server Settings** page driven by the
+  current `ServerCustomSettings.ini` catalog. Common values provide convenient
+  0-25 sliders alongside uncapped exact numeric fields.
+- Official server setting updates preserve existing comments, whitespace,
+  ordering, unknown keys, and newline conventions.
+
 ### Fixed
 
+- DuneShell now recovers its WebView process during long restart operations
+  without stopping the backend.
 - Restored automatic Deep Desert base-backup protection after the Retail
   self-hosted schema moved actor state onto the actor row. The guard now
   recognizes and preserves both the legacy and Retail cleanup-function forms
