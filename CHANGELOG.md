@@ -27,6 +27,10 @@ here cover everything those tags shipped.
   spawning state remain visible, and the editable Max primed cap remains
   available. Legacy database paths still show their authoritative current
   primed counts.
+- Retail spice limits now distinguish an existing configured override from the
+  live Funcom default and DST guidance. This keeps intentional custom caps
+  unchanged while making inherited values such as a Hagga 10/10 override clear
+  beside the longstanding 5/5 default guidance.
 - Added Retail's newly shipped Zanovar, Arrakeen Spaceport, Place of
   Contemplation, Glutton's Dining Room, and Sietch Talab areas to Map Spin-Up
   with friendly labels. Zanovar also exposes its verified director

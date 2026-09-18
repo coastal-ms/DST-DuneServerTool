@@ -718,6 +718,10 @@ Register-DuneRoute -Method GET -Path '/api/gameconfig/spicefields' -Handler {
                 dimensionIndex   = [int]$_.dimension_index
                 maxActive        = [int]$_.max_globally_active
                 maxPrimed        = [int]$_.max_globally_primed
+                defaultMaxActive = if ($legacyAdapter -or $null -eq $_.default_max_globally_active) { $null } else { [int]$_.default_max_globally_active }
+                defaultMaxPrimed = if ($legacyAdapter -or $null -eq $_.default_max_globally_primed) { $null } else { [int]$_.default_max_globally_primed }
+                guidanceMax      = if ($legacyAdapter -or $null -eq $_.guidance_max) { $null } else { [int]$_.guidance_max }
+                configuredOverride = if ($legacyAdapter) { $null } else { [bool]$_.configured_override }
                 currentActive    = [int]$_.current_globally_active
                 currentPrimed    = if ($legacyAdapter) { [int]$_.current_globally_primed } else { $null }
                 isSpawningActive = [bool]$_.is_spawning_active
@@ -865,6 +869,10 @@ Register-DuneRoute -Method PUT -Path '/api/gameconfig/spicefields/{id}' -Handler
                 dimensionIndex   = [int]$row.dimension_index
                 maxActive        = [int]$row.max_globally_active
                 maxPrimed        = [int]$row.max_globally_primed
+                defaultMaxActive = if ($legacyAdapter -or $null -eq $row.default_max_globally_active) { $null } else { [int]$row.default_max_globally_active }
+                defaultMaxPrimed = if ($legacyAdapter -or $null -eq $row.default_max_globally_primed) { $null } else { [int]$row.default_max_globally_primed }
+                guidanceMax      = if ($legacyAdapter -or $null -eq $row.guidance_max) { $null } else { [int]$row.guidance_max }
+                configuredOverride = if ($legacyAdapter) { $null } else { [bool]$row.configured_override }
                 currentActive    = [int]$row.current_globally_active
                 currentPrimed    = if ($legacyAdapter) { [int]$row.current_globally_primed } else { $null }
                 isSpawningActive = [bool]$row.is_spawning_active
@@ -964,6 +972,10 @@ Register-DuneRoute -Method PUT -Path '/api/gameconfig/spicefields/{id}/spawning'
                 dimensionIndex   = [int]$row.dimension_index
                 maxActive        = [int]$row.max_globally_active
                 maxPrimed        = [int]$row.max_globally_primed
+                defaultMaxActive = if ($legacyAdapter -or $null -eq $row.default_max_globally_active) { $null } else { [int]$row.default_max_globally_active }
+                defaultMaxPrimed = if ($legacyAdapter -or $null -eq $row.default_max_globally_primed) { $null } else { [int]$row.default_max_globally_primed }
+                guidanceMax      = if ($legacyAdapter -or $null -eq $row.guidance_max) { $null } else { [int]$row.guidance_max }
+                configuredOverride = if ($legacyAdapter) { $null } else { [bool]$row.configured_override }
                 currentActive    = [int]$row.current_globally_active
                 currentPrimed    = if ($legacyAdapter) { [int]$row.current_globally_primed } else { $null }
                 isSpawningActive = [bool]$row.is_spawning_active

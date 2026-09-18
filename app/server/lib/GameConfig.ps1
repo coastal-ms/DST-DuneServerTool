@@ -2107,9 +2107,11 @@ function Get-DuneRetailSpicefieldRows {
     $defaultRaw = if ($defaults) { [string]$defaults.game } else { '' }
 
     $blob = Get-DuneIniSectionScalarValue -Raw $raw -Section $script:DuneGcSecSpice -Key 'm_PerMapSystemSettings'
+    $configuredBlob = $blob
     if ([string]::IsNullOrWhiteSpace($blob) -and -not [string]::IsNullOrWhiteSpace($defaultRaw)) {
         $blob = Get-DuneIniSectionScalarValue -Raw $defaultRaw -Section $script:DuneGcSecSpice -Key 'm_PerMapSystemSettings'
     }
+    $defaultBlob = Get-DuneIniSectionScalarValue -Raw $defaultRaw -Section $script:DuneGcSecSpice -Key 'm_PerMapSystemSettings'
     $fallback = Get-DuneIniSectionScalarValue -Raw $raw -Section $script:DuneGcSecSpice -Key 'm_DefaultSystemSettings'
     if ([string]::IsNullOrWhiteSpace($fallback) -and -not [string]::IsNullOrWhiteSpace($defaultRaw)) {
         $fallback = Get-DuneIniSectionScalarValue -Raw $defaultRaw -Section $script:DuneGcSecSpice -Key 'm_DefaultSystemSettings'
@@ -2142,11 +2144,27 @@ function Get-DuneRetailSpicefieldRows {
     } catch {}
 
     $rows = foreach ($definition in Get-DuneRetailSpicefieldDefinitions) {
-        $limits = Get-DuneSpicefieldLimitsFromBlob -Blob $blob -MapId $definition.mapId -FieldType $definition.fieldType
+        $configuredLimits = Get-DuneSpicefieldLimitsFromBlob -Blob $configuredBlob `
+            -MapId $definition.mapId -FieldType $definition.fieldType
+        $defaultLimits = Get-DuneSpicefieldLimitsFromBlob -Blob $defaultBlob `
+            -MapId $definition.mapId -FieldType $definition.fieldType
+        $limits = $configuredLimits
         if (-not $limits.found) {
             $limits = Get-DuneSpicefieldDefaultLimitsFromBlob -Blob $fallback -FieldType $definition.fieldType
         }
         if (-not $limits.found -or $limits.malformed) { continue }
+        $schemaField = @($script:DuneGameConfigSchema | Where-Object {
+            $_.ContainsKey('SpiceMap') -and
+            "$($_.SpiceMap)" -eq "$($definition.mapId)" -and
+            "$($_.SpiceFieldType)" -eq "$($definition.fieldType)"
+        } | Select-Object -First 1)
+        $guidanceMax = if ($schemaField.Count -gt 0) { [int]$schemaField[0].Default } else { $null }
+        $configuredOverride = [bool](
+            $configuredLimits.found -and
+            $defaultLimits.found -and
+            ([int]$configuredLimits.maxActive -ne [int]$defaultLimits.maxActive -or
+                [int]$configuredLimits.maxPrimed -ne [int]$defaultLimits.maxPrimed)
+        )
         $dimension = 0
         $partition = $partitions["$($definition.mapId)|$dimension"]
         [pscustomobject]@{
@@ -2157,6 +2175,10 @@ function Get-DuneRetailSpicefieldRows {
             dimension_index        = $dimension
             max_globally_active    = [int]$limits.maxActive
             max_globally_primed    = [int]$limits.maxPrimed
+            default_max_globally_active = if ($defaultLimits.found) { [int]$defaultLimits.maxActive } else { $null }
+            default_max_globally_primed = if ($defaultLimits.found) { [int]$defaultLimits.maxPrimed } else { $null }
+            guidance_max           = $guidanceMax
+            configured_override    = $configuredOverride
             current_globally_active = [int]$activity["$($definition.mapName)|$dimension|$($definition.fieldType)"]
             current_globally_primed = $null
             is_spawning_active     = [bool]$spawningActive

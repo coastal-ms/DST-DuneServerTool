@@ -40,7 +40,18 @@ describe('SpicefieldsCard primed status', () => {
     vi.mocked(getSpicefields).mockResolvedValue({
       available: true,
       adapter: 'retail-config',
-      rows: [{ ...row, adapter: 'retail-config' as const, currentPrimed: null, currentPrimedExact: false }],
+      rows: [{
+        ...row,
+        maxActive: 10,
+        maxPrimed: 10,
+        defaultMaxActive: 5,
+        defaultMaxPrimed: 5,
+        guidanceMax: 5,
+        configuredOverride: true,
+        adapter: 'retail-config' as const,
+        currentPrimed: null,
+        currentPrimedExact: false,
+      }],
     })
 
     render(<SpicefieldsCard vmRunning />)
@@ -49,6 +60,9 @@ describe('SpicefieldsCard primed status', () => {
     expect(screen.queryByText('Primed to spawn')).not.toBeInTheDocument()
     expect(screen.queryByText(/N\/A/)).not.toBeInTheDocument()
     expect(screen.getByText('Max primed')).toBeInTheDocument()
+    expect(screen.getByText(/Configured override\./)).toHaveTextContent(
+      'Configured override. Funcom default: 5 active / 5 primed. DST guidance: 5 for both.',
+    )
     expect(screen.getAllByText('Spawning').length).toBeGreaterThan(0)
   })
 
@@ -63,5 +77,30 @@ describe('SpicefieldsCard primed status', () => {
 
     expect(await screen.findByText('Primed to spawn')).toBeInTheDocument()
     expect(screen.getByText('Max primed')).toBeInTheDocument()
+  })
+
+  it('labels a changed Funcom default separately from DST guidance', async () => {
+    vi.mocked(getSpicefields).mockResolvedValue({
+      available: true,
+      adapter: 'retail-config',
+      rows: [{
+        ...row,
+        maxActive: 10,
+        maxPrimed: 10,
+        defaultMaxActive: 10,
+        defaultMaxPrimed: 10,
+        guidanceMax: 5,
+        configuredOverride: false,
+        adapter: 'retail-config' as const,
+        currentPrimed: null,
+        currentPrimedExact: false,
+      }],
+    })
+
+    render(<SpicefieldsCard vmRunning />)
+
+    expect(await screen.findByText(/Current configuration\./)).toHaveTextContent(
+      'Current configuration. Funcom default: 10 active / 10 primed. DST guidance: 5 for both.',
+    )
   })
 })

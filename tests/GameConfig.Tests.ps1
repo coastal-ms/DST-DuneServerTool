@@ -2545,6 +2545,29 @@ Describe 'GameConfig: spicefield startup defaults' -Tag 'GameConfig' {
         $row.current_globally_primed | Should -BeNullOrEmpty
         $row.current_primed_exact | Should -BeFalse
         $row.max_globally_primed | Should -Be 3
+        $row.default_max_globally_active | Should -Be 5
+        $row.default_max_globally_primed | Should -Be 5
+        $row.guidance_max | Should -Be 5
+        $row.configured_override | Should -BeTrue
+    }
+
+    It 'keeps a changed live Funcom default separate from DST guidance' {
+        $retailDefaults = $script:SpiceDefaultsRaw.Replace(
+            'MaxGloballyPrimed=5,MaxGloballyActive=5',
+            'MaxGloballyPrimed=10,MaxGloballyActive=10'
+        )
+        Mock Get-DuneGameConfig { @{ game = @{ raw = $retailDefaults } } }
+        Mock Get-DuneGameConfigDefaults { @{ game = $retailDefaults } }
+        Mock Get-V6RetailSpicefieldActivity { @() }
+        Mock Get-DuneActiveMapPartitions { @{ ok = $true; partitions = @() } }
+
+        $row = @((Get-DuneRetailSpicefieldRows -Ip '192.0.2.1').rows |
+            Where-Object spicefield_type_id -eq 9101)[0]
+
+        $row.max_globally_active | Should -Be 10
+        $row.default_max_globally_active | Should -Be 10
+        $row.guidance_max | Should -Be 5
+        $row.configured_override | Should -BeFalse
     }
 
     It 'uses the installed files immediately after the v2 migration is marked ready' {

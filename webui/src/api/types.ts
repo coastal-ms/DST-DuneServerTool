@@ -544,6 +544,10 @@ export type SpicefieldType = {
   dimensionIndex: number  // instance index — a map can have more than one
   maxActive: number
   maxPrimed: number
+  defaultMaxActive?: number | null
+  defaultMaxPrimed?: number | null
+  guidanceMax?: number | null
+  configuredOverride?: boolean | null
   currentActive: number   // read-only — maintained by the game
   currentPrimed: number | null // null when the server build exposes no authoritative count
   isSpawningActive: boolean

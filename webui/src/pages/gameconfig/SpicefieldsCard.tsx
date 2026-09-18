@@ -522,6 +522,19 @@ export function SpicefieldsCard({ vmRunning }: Props) {
                           {saveCdMs > 0 && !saving ? `Save (${saveCdSec}s)` : 'Save'}
                         </button>
                       </div>
+                      {r.adapter === 'retail-config' && (
+                        <div className="mt-2 text-[11px] text-text-dim">
+                          {r.configuredOverride === true ? 'Configured override.' : 'Current configuration.'}
+                          {r.defaultMaxActive != null && r.defaultMaxPrimed != null && (
+                            <>
+                              {' '}Funcom default: {r.defaultMaxActive} active / {r.defaultMaxPrimed} primed.
+                            </>
+                          )}
+                          {r.guidanceMax != null && (
+                            <> DST guidance: {r.guidanceMax} for both.</>
+                          )}
+                        </div>
+                      )}
                     </div>
                   )
                 })}
