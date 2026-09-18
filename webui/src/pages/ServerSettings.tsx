@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { api, PlayerGuardCancelledError, withOnlinePlayerGuard } from '../api/client'
 import { Icon } from '../components/Icon'
 import { PageHeader } from '../components/PageHeader'
@@ -16,6 +16,10 @@ type LaunchResult = {
 export function ServerSettings() {
   const { status, forceRefresh } = useStatus()
   const [launchingStop, setLaunchingStop] = useState(false)
+  const [launchingStart, setLaunchingStart] = useState(false)
+  const [startRequested, setStartRequested] = useState(false)
+  const [settingsBusy, setSettingsBusy] = useState(true)
+  const [settingsIdleKey, setSettingsIdleKey] = useState<string | null>(null)
   const [stopRequested, setStopRequested] = useState(false)
   const [stopError, setStopError] = useState<string | null>(null)
   const [stopMessage, setStopMessage] = useState<string | null>(null)
@@ -24,8 +28,20 @@ export function ServerSettings() {
   const serverPodCount = status?.bg?.gameServers?.length ?? null
   const fullyStopped = bgState === 'stopped' && serverPodCount === 0
   const showStop = vmRunning && !fullyStopped
-  const canStop = bgState === 'running' && !launchingStop && !stopRequested
+  const canStop = bgState === 'running' && !launchingStop && !launchingStart && !stopRequested && !startRequested
+  const showStart = vmRunning && fullyStopped
   const settingsRefreshKey = `${bgState}:${serverPodCount ?? 'unknown'}`
+  const canStart = showStart
+    && settingsIdleKey === settingsRefreshKey
+    && !settingsBusy
+    && !launchingStop
+    && !launchingStart
+    && !stopRequested
+    && !startRequested
+  const handleSettingsActionStateChange = useCallback((busy: boolean) => {
+    setSettingsBusy(busy)
+    if (!busy) setSettingsIdleKey(settingsRefreshKey)
+  }, [settingsRefreshKey])
 
   useEffect(() => {
     if (fullyStopped && stopRequested) {
@@ -33,6 +49,33 @@ export function ServerSettings() {
       setStopMessage('Battlegroup stopped. Server settings are now unlocked.')
     }
   }, [fullyStopped, stopRequested])
+
+  useEffect(() => {
+    if (bgState === 'running' && startRequested) {
+      setStartRequested(false)
+      setStopMessage('Battlegroup started. Server settings are now active.')
+    }
+  }, [bgState, startRequested])
+
+  useEffect(() => {
+    if (!startRequested || bgState === 'running') return
+    let cancelled = false
+    let timer: number
+    const refreshUntilRunning = async () => {
+      try {
+        await forceRefresh()
+      } catch (e) {
+        setStopError(`Start launched, but status refresh failed: ${e instanceof Error ? e.message : String(e)}`)
+      } finally {
+        if (!cancelled) timer = window.setTimeout(() => void refreshUntilRunning(), 1000)
+      }
+    }
+    timer = window.setTimeout(() => void refreshUntilRunning(), 1000)
+    return () => {
+      cancelled = true
+      window.clearTimeout(timer)
+    }
+  }, [bgState, forceRefresh, startRequested])
 
   const stopBattlegroup = async () => {
     if (!canStop) return
@@ -55,6 +98,27 @@ export function ServerSettings() {
       setStopError(`Stop failed: ${e instanceof Error ? e.message : String(e)}`)
     } finally {
       setLaunchingStop(false)
+    }
+  }
+
+  const startBattlegroup = async () => {
+    if (!canStart) return
+    setLaunchingStart(true)
+    setStopError(null)
+    setStopMessage(null)
+    try {
+      await api<LaunchResult>('/api/commands/run/start', { method: 'POST' })
+      setStartRequested(true)
+      setStopMessage('Start launched. Waiting for the battlegroup to report running.')
+      try {
+        await forceRefresh()
+      } catch (e) {
+        setStopError(`Start launched, but status refresh failed: ${e instanceof Error ? e.message : String(e)}`)
+      }
+    } catch (e) {
+      setStopError(`Start failed: ${e instanceof Error ? e.message : String(e)}`)
+    } finally {
+      setLaunchingStart(false)
     }
   }
 
@@ -102,6 +166,36 @@ export function ServerSettings() {
           </button>
         </div>
       )}
+      {showStart && (
+        <div className="card mb-4 flex flex-wrap items-center justify-between gap-3 border-success/30 p-4">
+          <div className="min-w-0">
+            <div className="text-sm font-semibold text-text">Battlegroup is stopped</div>
+            <div className="mt-1 text-xs text-text-muted">
+              Edit and save settings below, then start the battlegroup here to apply them.
+            </div>
+          </div>
+          <button
+            type="button"
+            className="btn-primary"
+            disabled={!canStart}
+            onClick={() => void startBattlegroup()}
+            title={settingsBusy
+              ? 'Wait for the current settings action to finish'
+              : 'Start the battlegroup using DST’s existing start command'}
+          >
+            <Icon
+              name={launchingStart || startRequested ? 'Loader2' : 'Play'}
+              size={14}
+              className={launchingStart || startRequested ? 'animate-spin' : ''}
+            />
+            {launchingStart
+              ? 'Launching start…'
+              : startRequested
+                ? 'Starting battlegroup…'
+                : 'Start Battlegroup'}
+          </button>
+        </div>
+      )}
       {stopError && (
         <div className="card mb-4 flex items-center gap-2 border-danger/40 bg-danger/10 p-3 text-sm text-danger" role="alert">
           <Icon name="AlertCircle" size={14} /> {stopError}
@@ -112,7 +206,11 @@ export function ServerSettings() {
           <Icon name="CheckCircle2" size={14} /> {stopMessage}
         </div>
       )}
-      <OfficialRetailServerSettingsCard vmRunning={vmRunning} statusRefreshKey={settingsRefreshKey} />
+      <OfficialRetailServerSettingsCard
+        vmRunning={vmRunning}
+        statusRefreshKey={settingsRefreshKey}
+        onActionStateChange={handleSettingsActionStateChange}
+      />
     </>
   )
 }

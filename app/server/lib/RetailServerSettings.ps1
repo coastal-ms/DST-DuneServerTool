@@ -137,7 +137,7 @@ function Get-DuneRetailServerSettingDefinition {
             @()
         }
         editable = ($script:DuneRetailServerTextKeys -notcontains $Key)
-        inverted = ($Key -in @('bBuildingInfiniteStability', 'bLandsraadDisableDecreeRerollLimit'))
+        inverted = ($Key -eq 'bBuildingInfiniteStability')
     }
 }
 

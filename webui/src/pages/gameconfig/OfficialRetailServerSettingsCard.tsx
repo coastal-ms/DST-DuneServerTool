@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { CollapsibleCard } from '../../components/CollapsibleCard'
 import { Icon } from '../../components/Icon'
 import { getRetailServerSettings, saveRetailServerSettings } from '../../api/gameconfig'
@@ -69,6 +69,14 @@ function normalizeSettingValue(setting: RetailServerSetting, value: string): str
   if (setting.type !== 'float') return value
   const parsed = Number(value)
   return Number.isFinite(parsed) ? parsed.toFixed(FLOAT_DECIMAL_PLACES) : value
+}
+
+function getDraftValidationError(setting: RetailServerSetting, value: string): string | null {
+  if (setting.type !== 'int') return null
+  const parsed = Number(value)
+  return /^-?\d+$/.test(value) && Number.isFinite(parsed) && Number.isInteger(parsed)
+    ? null
+    : `${setting.label} must be a finite whole integer.`
 }
 
 function NumericSettingControl({
@@ -154,9 +162,11 @@ function NumericSettingControl({
 export function OfficialRetailServerSettingsCard({
   vmRunning,
   statusRefreshKey,
+  onActionStateChange,
 }: {
   vmRunning: boolean
   statusRefreshKey?: string
+  onActionStateChange?: (busy: boolean) => void
 }) {
   const [state, setState] = useState<RetailServerSettingsResponse | null>(null)
   const [loading, setLoading] = useState(false)
@@ -164,22 +174,38 @@ export function OfficialRetailServerSettingsCard({
   const [error, setError] = useState<string | null>(null)
   const [message, setMessage] = useState<string | null>(null)
   const [values, setValues] = useState<Record<string, string>>({})
+  const loadRequest = useRef<{ sequence: number; controller: AbortController | null }>({
+    sequence: 0,
+    controller: null,
+  })
 
   const load = async () => {
     if (!vmRunning) return
+    const sequence = loadRequest.current.sequence + 1
+    loadRequest.current.sequence = sequence
+    loadRequest.current.controller?.abort()
+    const controller = new AbortController()
+    loadRequest.current.controller = controller
+    onActionStateChange?.(true)
     setLoading(true)
     setError(null)
     setMessage(null)
     try {
-      const next = await getRetailServerSettings()
+      const next = await getRetailServerSettings(controller.signal)
+      if (controller.signal.aborted || sequence !== loadRequest.current.sequence) return
       setState(next)
       setValues(Object.fromEntries(
         (next.settings ?? []).map(setting => [setting.key, normalizeSettingValue(setting, setting.value)]),
       ))
     } catch (e) {
+      if (controller.signal.aborted || sequence !== loadRequest.current.sequence) return
       setError(e instanceof Error ? e.message : String(e))
     } finally {
-      setLoading(false)
+      if (sequence === loadRequest.current.sequence) {
+        loadRequest.current.controller = null
+        setLoading(false)
+        onActionStateChange?.(false)
+      }
     }
   }
 
@@ -188,6 +214,7 @@ export function OfficialRetailServerSettingsCard({
     // The card owns its endpoint so it can move to a dedicated page without
     // changing the Retail settings API or coupling to legacy Game Config state.
     // eslint-disable-next-line react-hooks/exhaustive-deps
+    return () => loadRequest.current.controller?.abort()
   }, [vmRunning, statusRefreshKey])
 
   const groups = useMemo(() => {
@@ -210,10 +237,21 @@ export function OfficialRetailServerSettingsCard({
       .map(({ setting, draft }) => [setting.key, draft]),
   ), [state, values])
   const dirtyCount = Object.keys(updates).length
+  const draftValidationErrors = useMemo(() => Object.fromEntries(
+    (state?.settings ?? [])
+      .filter(setting => setting.editable)
+      .map(setting => [
+        setting.key,
+        getDraftValidationError(setting, values[setting.key] ?? setting.value),
+      ])
+      .filter((entry): entry is [string, string] => entry[1] !== null),
+  ), [state, values])
+  const hasDraftValidationErrors = Object.keys(draftValidationErrors).length > 0
   const canSave = state?.available === true
     && state.target.stopped === true
     && state.target.serverPodCount === 0
     && dirtyCount > 0
+    && !hasDraftValidationErrors
     && !saving
 
   const applyDefaults = () => {
@@ -234,6 +272,7 @@ export function OfficialRetailServerSettingsCard({
 
   const save = async () => {
     if (!state?.revision || !canSave) return
+    onActionStateChange?.(true)
     setSaving(true)
     setError(null)
     setMessage(null)
@@ -262,6 +301,7 @@ export function OfficialRetailServerSettingsCard({
       setError(e instanceof Error ? e.message : String(e))
     } finally {
       setSaving(false)
+      onActionStateChange?.(false)
     }
   }
 
@@ -304,8 +344,10 @@ export function OfficialRetailServerSettingsCard({
             className="btn-primary"
             onClick={() => void save()}
             disabled={!canSave}
-            title={state?.target.stopped
-              ? 'Save changed settings to Funcom operator configuration'
+            title={hasDraftValidationErrors
+              ? 'Correct invalid setting values before saving'
+              : state?.target.stopped
+                ? 'Save changed settings to Funcom operator configuration'
               : 'Stop the battlegroup fully before saving'}
           >
             <Icon name={saving ? 'Loader2' : 'Save'} size={14} className={saving ? 'animate-spin' : ''} />
@@ -331,7 +373,7 @@ export function OfficialRetailServerSettingsCard({
         <div className="text-sm text-text-muted">Start the battlegroup to read its official Retail Server Settings.</div>
       )}
       {error && (
-        <div className="rounded-lg border border-danger/40 bg-danger/10 p-3 text-sm text-danger">
+        <div className="rounded-lg border border-danger/40 bg-danger/10 p-3 text-sm text-danger" role="alert">
           <Icon name="AlertCircle" size={14} className="inline mr-2" />{error}
         </div>
       )}
@@ -417,6 +459,11 @@ export function OfficialRetailServerSettingsCard({
                         )}
                         {!setting.valid && (
                           <div className="mt-1 text-[11px] text-warning">{setting.validationError}</div>
+                        )}
+                        {draftValidationErrors[setting.key] && (
+                          <div className="mt-1 text-[11px] text-warning" role="alert">
+                            {draftValidationErrors[setting.key]}
+                          </div>
                         )}
                       </div>
                       <div className="flex min-w-0 flex-wrap items-center gap-2 lg:justify-end">

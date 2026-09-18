@@ -49,6 +49,20 @@ Describe 'Official Retail Server Settings parsing' -Tag 'GameConfig', 'RetailSer
         $stability.displayValue | Should -Be 'Enabled'
     }
 
+    It 'maps Unlimited Landsraad Decree Rerolls directly without inversion' {
+        $rawFalse = "$script:RetailRaw`nbLandsraadDisableDecreeRerollLimit=False"
+        $rawTrue = "$script:RetailRaw`nbLandsraadDisableDecreeRerollLimit=True"
+        $disabled = (ConvertFrom-DuneRetailServerSettingsRaw -Raw $rawFalse).settings |
+            Where-Object key -eq 'bLandsraadDisableDecreeRerollLimit'
+        $enabled = (ConvertFrom-DuneRetailServerSettingsRaw -Raw $rawTrue).settings |
+            Where-Object key -eq 'bLandsraadDisableDecreeRerollLimit'
+
+        $disabled.inverted | Should -BeFalse
+        $disabled.displayValue | Should -Be 'Disabled'
+        $enabled.inverted | Should -BeFalse
+        $enabled.displayValue | Should -Be 'Enabled'
+    }
+
     It 'reports malformed lines and malformed known values without dropping them' {
         $raw = @"
 [$script:RetailSection]

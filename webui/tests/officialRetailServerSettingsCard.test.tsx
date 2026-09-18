@@ -197,6 +197,175 @@ describe('Official Retail Server Settings card', () => {
     expect(await screen.findByText(/saved with backup/)).toBeInTheDocument()
   })
 
+  it('rejects a fractional integer draft before PUT while preserving partial editing', async () => {
+    const fetchMock = vi.fn(async () => new Response(JSON.stringify({
+      available: true,
+      readOnly: false,
+      source: 'funcom-servergroup-user-ini-config',
+      authority: 'Funcom BattleGroup operator configuration',
+      revision: 'current',
+      target: { available: true, stopped: true, serverPodCount: 0 },
+      settings: [{
+        key: 'FiefdomLimit',
+        value: '3',
+        displayValue: '3',
+        label: 'Maximum Sub-Fief Amount',
+        group: 'World threats and building',
+        type: 'int',
+        options: [],
+        inverted: false,
+        supported: true,
+        valid: true,
+        validationError: '',
+        editable: true,
+        readOnly: false,
+      }],
+      malformedLines: [],
+    }), { status: 200, headers: { 'Content-Type': 'application/json' } }))
+    vi.stubGlobal('fetch', fetchMock)
+    render(<OfficialRetailServerSettingsCard vmRunning />)
+
+    const input = await screen.findByRole('spinbutton', { name: 'Maximum Sub-Fief Amount exact value' })
+    fireEvent.change(input, { target: { value: '3.5' } })
+
+    expect(input).toHaveAttribute('value', '3.5')
+    expect(screen.getByRole('alert')).toHaveTextContent('must be a finite whole integer')
+    expect(screen.getByRole('button', { name: 'Save (1)' })).toBeDisabled()
+    fireEvent.click(screen.getByRole('button', { name: 'Save (1)' }))
+    expect(fetchMock).toHaveBeenCalledOnce()
+  })
+
+  it('keeps the newest status-triggered Retail response when requests resolve out of order', async () => {
+    let resolveOlder!: (response: Response) => void
+    let resolveNewer!: (response: Response) => void
+    const older = new Promise<Response>(resolve => { resolveOlder = resolve })
+    const newer = new Promise<Response>(resolve => { resolveNewer = resolve })
+    const fetchMock = vi.fn()
+      .mockReturnValueOnce(older)
+      .mockReturnValueOnce(newer)
+    vi.stubGlobal('fetch', fetchMock)
+    const view = render(<OfficialRetailServerSettingsCard vmRunning statusRefreshKey="stopping:1" />)
+    view.rerender(<OfficialRetailServerSettingsCard vmRunning statusRefreshKey="stopped:0" />)
+
+    resolveNewer(new Response(JSON.stringify({
+      available: true,
+      readOnly: false,
+      source: 'funcom-servergroup-user-ini-config',
+      authority: 'Funcom BattleGroup operator configuration',
+      revision: 'newer',
+      target: { available: true, stopped: true, serverPodCount: 0 },
+      settings: [{
+        key: 'FiefdomLimit',
+        value: '8',
+        displayValue: '8',
+        label: 'Maximum Sub-Fief Amount',
+        group: 'World threats and building',
+        type: 'int',
+        options: [],
+        inverted: false,
+        supported: true,
+        valid: true,
+        validationError: '',
+        editable: true,
+        readOnly: false,
+      }],
+      malformedLines: [],
+    }), { status: 200, headers: { 'Content-Type': 'application/json' } }))
+    expect(await screen.findByRole('spinbutton', { name: 'Maximum Sub-Fief Amount exact value' })).toHaveValue(8)
+
+    resolveOlder(new Response(JSON.stringify({
+      available: true,
+      readOnly: true,
+      source: 'funcom-runtime-projection',
+      authority: 'older running response',
+      revision: 'older',
+      target: { available: true, stopped: false, serverPodCount: 1 },
+      settings: [{
+        key: 'FiefdomLimit',
+        value: '3',
+        displayValue: '3',
+        label: 'Maximum Sub-Fief Amount',
+        group: 'World threats and building',
+        type: 'int',
+        options: [],
+        inverted: false,
+        supported: true,
+        valid: true,
+        validationError: '',
+        editable: true,
+        readOnly: true,
+      }],
+      malformedLines: [],
+    }), { status: 200, headers: { 'Content-Type': 'application/json' } }))
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2))
+    expect(screen.getByRole('spinbutton', { name: 'Maximum Sub-Fief Amount exact value' })).toHaveValue(8)
+    expect(screen.queryByText('older running response')).not.toBeInTheDocument()
+  })
+
+  it('reports a non-abort Retail load failure', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => {
+      throw new Error('Retail settings unavailable')
+    }))
+
+    render(<OfficialRetailServerSettingsCard vmRunning />)
+
+    expect(await screen.findByRole('alert')).toHaveTextContent('Retail settings unavailable')
+  })
+
+  it('uses direct raw semantics and the documented default for Unlimited Landsraad Decree Rerolls', async () => {
+    const fetchMock = vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) => {
+      if (init?.method === 'PUT') {
+        return new Response(JSON.stringify({
+          ok: true,
+          applied: 1,
+          revision: 'next',
+          backup: { path: '/srv/settings.dstbak-1', sha256: 'backup', timestamp: '1' },
+          restartRequired: true,
+          message: 'saved',
+          settings: [],
+        }), { status: 200, headers: { 'Content-Type': 'application/json' } })
+      }
+      return new Response(JSON.stringify({
+        available: true,
+        readOnly: false,
+        source: 'funcom-servergroup-user-ini-config',
+        authority: 'Funcom BattleGroup operator configuration',
+        revision: 'current',
+        target: { available: true, stopped: true, serverPodCount: 0 },
+        settings: [{
+          key: 'bLandsraadDisableDecreeRerollLimit',
+          value: 'False',
+          displayValue: 'Disabled',
+          label: 'Unlimited Landsraad Decree Rerolls',
+          group: 'Landsraad',
+          type: 'bool',
+          options: [],
+          inverted: false,
+          supported: true,
+          valid: true,
+          validationError: '',
+          editable: true,
+          readOnly: false,
+        }],
+        malformedLines: [],
+      }), { status: 200, headers: { 'Content-Type': 'application/json' } })
+    })
+    vi.stubGlobal('fetch', fetchMock)
+    render(<OfficialRetailServerSettingsCard vmRunning />)
+
+    const toggle = await screen.findByRole('combobox', { name: 'Unlimited Landsraad Decree Rerolls' })
+    expect(toggle).toHaveValue('False')
+    expect(RETAIL_SETTING_GUIDANCE.bLandsraadDisableDecreeRerollLimit.defaultValue).toBe('False')
+    fireEvent.change(toggle, { target: { value: 'True' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Save (1)' }))
+
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2))
+    expect(JSON.parse(fetchMock.mock.calls[1][1]?.body as string)).toEqual({
+      revision: 'current',
+      updates: { bLandsraadDisableDecreeRerollLimit: 'True' },
+    })
+  })
+
   it('renders synchronized int and float convenience sliders with exact type steps', async () => {
     vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify({
       available: true,

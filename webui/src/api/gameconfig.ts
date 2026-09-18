@@ -111,8 +111,8 @@ export function getGameConfig() {
   return api<GameConfigResponse>('/api/gameconfig')
 }
 
-export function getRetailServerSettings() {
-  return api<RetailServerSettingsResponse>('/api/gameconfig/retail-server-settings')
+export function getRetailServerSettings(signal?: AbortSignal) {
+  return api<RetailServerSettingsResponse>('/api/gameconfig/retail-server-settings', { signal })
 }
 
 export function saveRetailServerSettings(revision: string, updates: Record<string, string>) {

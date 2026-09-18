@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { useEffect } from 'react'
 import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import {
   api,
@@ -28,14 +29,22 @@ vi.mock('../src/pages/gameconfig/OfficialRetailServerSettingsCard', () => ({
   OfficialRetailServerSettingsCard: ({
     vmRunning,
     statusRefreshKey,
+    onActionStateChange,
   }: {
     vmRunning: boolean
     statusRefreshKey?: string
-  }) => (
-    <div data-testid="retail-settings-card">
-      {vmRunning ? 'VM running' : 'VM stopped'} · {statusRefreshKey}
-    </div>
-  ),
+    onActionStateChange?: (busy: boolean) => void
+  }) => {
+    useEffect(() => {
+      onActionStateChange?.(false)
+    }, [onActionStateChange])
+    return (
+      <div data-testid="retail-settings-card">
+        {vmRunning ? 'VM running' : 'VM stopped'} · {statusRefreshKey}
+        <button type="button" onClick={() => onActionStateChange?.(true)}>Mark settings busy</button>
+      </div>
+    )
+  },
 }))
 
 let unregisterGuard: (() => void) | undefined
@@ -117,8 +126,73 @@ describe('Server Settings page', () => {
       bg: { state: 'stopped', gameServers: [] },
     }
     view.rerender(<ServerSettings />)
-    expect(screen.queryByRole('button', { name: /battlegroup/i })).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Start Battlegroup' })).toBeEnabled()
     expect(screen.getByTestId('retail-settings-card')).toHaveTextContent('stopped:0')
     expect(await screen.findByRole('status')).toHaveTextContent('settings are now unlocked')
+  })
+
+  it('shows Start only when fully stopped and launches the existing start command once', async () => {
+    state.status = {
+      vm: { running: true },
+      bg: { state: 'stopped', gameServers: [] },
+    }
+    const view = render(<ServerSettings />)
+
+    const start = await screen.findByRole('button', { name: 'Start Battlegroup' })
+    await waitFor(() => expect(start).toBeEnabled())
+    expect(start).toBeEnabled()
+    fireEvent.click(start)
+    expect(await screen.findByRole('button', { name: 'Starting battlegroup…' })).toBeDisabled()
+    fireEvent.click(screen.getByRole('button', { name: 'Starting battlegroup…' }))
+
+    expect(api).toHaveBeenCalledExactlyOnceWith('/api/commands/run/start', { method: 'POST' })
+    expect(state.forceRefresh).toHaveBeenCalledOnce()
+    expect(screen.getByRole('status')).toHaveTextContent('Start launched')
+
+    state.status = {
+      vm: { running: true },
+      bg: { state: 'running', gameServers: [{ map: 'Arrakeen' }] },
+    }
+    view.rerender(<ServerSettings />)
+    expect(await screen.findByRole('status')).toHaveTextContent('settings are now active')
+    expect(screen.getByRole('button', { name: 'Stop Battlegroup' })).toBeEnabled()
+  })
+
+  it('reports start errors and allows retry without leaving the page', async () => {
+    state.status = {
+      vm: { running: true },
+      bg: { state: 'stopped', gameServers: [] },
+    }
+    vi.mocked(api).mockRejectedValueOnce(new Error('start unavailable'))
+    render(<ServerSettings />)
+
+    const start = await screen.findByRole('button', { name: 'Start Battlegroup' })
+    await waitFor(() => expect(start).toBeEnabled())
+    fireEvent.click(start)
+
+    expect(await screen.findByRole('alert')).toHaveTextContent('Start failed: start unavailable')
+    expect(screen.getByRole('button', { name: 'Start Battlegroup' })).toBeEnabled()
+    expect(state.forceRefresh).not.toHaveBeenCalled()
+  })
+
+  it('keeps Start disabled during settings work and reflects the running transition', async () => {
+    state.status = {
+      vm: { running: true },
+      bg: { state: 'stopped', gameServers: [] },
+    }
+    const view = render(<ServerSettings />)
+    fireEvent.click(screen.getByRole('button', { name: 'Mark settings busy' }))
+    expect(screen.getByRole('button', { name: 'Start Battlegroup' })).toBeDisabled()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Start Battlegroup' }))
+    expect(api).not.toHaveBeenCalled()
+
+    state.status = {
+      vm: { running: true },
+      bg: { state: 'running', gameServers: [{ map: 'Arrakeen' }] },
+    }
+    view.rerender(<ServerSettings />)
+    expect(screen.queryByRole('button', { name: 'Start Battlegroup' })).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Stop Battlegroup' })).toBeEnabled()
   })
 })
