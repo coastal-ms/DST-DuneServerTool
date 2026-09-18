@@ -62,6 +62,19 @@ function Get-DuneVersionInfo {
     }
 }
 
+function Get-DuneArtifactPrerelease {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)]$ProductVersionInfo,
+        [switch]$Prerelease
+    )
+
+    # Product versions describe installed files; artifact identity describes the
+    # release channel. A product prerelease suffix implies a prerelease artifact,
+    # while -Prerelease allows stable product stamps on a tagged test artifact.
+    return [bool]($Prerelease -or [bool]$ProductVersionInfo.IsPrerelease)
+}
+
 function Get-DuneExistingTagCommit {
     [CmdletBinding()]
     param(

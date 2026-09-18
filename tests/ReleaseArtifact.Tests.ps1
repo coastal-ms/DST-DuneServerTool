@@ -136,6 +136,18 @@ Describe 'Release artifact verifier entrypoint' {
         Should -Invoke Write-Host -Times 0 -Exactly
     }
 
+    It 'strictly rejects stable metadata embedded in the v15.1.1-test1 artifact' {
+        $script:metadata.tag = 'v15.1.1-test1'
+        $script:metadata.prerelease = $false
+        $script:arguments.ExpectedTag = 'v15.1.1-test1'
+        $script:arguments.ExpectedPrerelease = $true
+        $script:metadata | ConvertTo-Json | Set-Content -LiteralPath $script:metadataPath
+
+        { & $script:verifier @script:arguments } | Should -Throw '*identity mismatch*'
+
+        Should -Invoke Write-Host -Times 0 -Exactly
+    }
+
     It 'preserves tag and prerelease consistency for <Tag>' -ForEach @(
         @{ Tag = 'v15.0.5'; Prerelease = $true; ExpectedError = '*must not use -Prerelease*' }
         @{ Tag = 'v15.0.5-test1'; Prerelease = $false; ExpectedError = '*requires -Prerelease*' }
