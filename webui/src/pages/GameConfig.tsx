@@ -51,6 +51,10 @@ import { BaseBackupGuardPanel } from './gameconfig/BaseBackupGuardPanel'
 import { OfficialRetailServerSettingsCard } from './gameconfig/OfficialRetailServerSettingsCard'
 import { isLocalViewer } from '../util/viewer'
 
+// Retain the proven integration for follow-up without exposing an unfinished
+// settings surface in this release.
+const OFFICIAL_RETAIL_SERVER_SETTINGS_VISIBLE = false
+
 export const EXPERIMENTAL_BLOCKED_DEFAULT_TARGETS = new Set([
   'game||/script/dunesandbox.timeofdaysettings||m_starttime',
 ])
@@ -1222,7 +1226,8 @@ export function GameConfig({ mode = 'standard' }: { mode?: 'standard' | 'experim
       />
       )}
 
-      {!experimentalPage && <OfficialRetailServerSettingsCard vmRunning={vmRunning} />}
+      {OFFICIAL_RETAIL_SERVER_SETTINGS_VISIBLE && !experimentalPage
+        && <OfficialRetailServerSettingsCard vmRunning={vmRunning} />}
 
       {/* How it works. On the Experimental page this is also where the user is
           told to go back to Game Config to apply — that path rebuilds the server
