@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { api, PlayerGuardCancelledError, withOnlinePlayerGuard } from '../api/client'
 import { Icon } from '../components/Icon'
 import { PageHeader } from '../components/PageHeader'
@@ -23,20 +23,17 @@ export function ServerSettings() {
   const [stopRequested, setStopRequested] = useState(false)
   const [stopError, setStopError] = useState<string | null>(null)
   const [stopMessage, setStopMessage] = useState<string | null>(null)
+  const stopRefreshInFlight = useRef(false)
   const vmRunning = status?.vm?.running === true
   const bgState = status?.bg?.state ?? 'unknown'
   const serverPodCount = status?.bg?.gameServers?.length ?? null
   const fullyStopped = bgState === 'stopped' && serverPodCount === 0
-  const showStop = vmRunning && !fullyStopped
-  const canStop = bgState === 'running' && !launchingStop && !launchingStart && !stopRequested && !startRequested
-  const showStart = vmRunning && fullyStopped
+  const canStop = !launchingStop && !launchingStart && !stopRequested && !startRequested
   const settingsRefreshKey = `${bgState}:${serverPodCount ?? 'unknown'}`
-  const canStart = showStart
-    && settingsIdleKey === settingsRefreshKey
+  const canStart = settingsIdleKey === settingsRefreshKey
     && !settingsBusy
     && !launchingStop
     && !launchingStart
-    && !stopRequested
     && !startRequested
   const handleSettingsActionStateChange = useCallback((busy: boolean) => {
     setSettingsBusy(busy)
@@ -46,9 +43,41 @@ export function ServerSettings() {
   useEffect(() => {
     if (fullyStopped && stopRequested) {
       setStopRequested(false)
+      setStopError(null)
       setStopMessage('Battlegroup stopped. Server settings are now unlocked.')
     }
   }, [fullyStopped, stopRequested])
+
+  useEffect(() => {
+    if (!stopRequested || fullyStopped) return
+    if (!vmRunning || !['running', 'stopping', 'stopped'].includes(bgState)) {
+      setStopRequested(false)
+      setStopError(`Stop launched, but status polling ended because the battlegroup is ${vmRunning ? bgState : 'unavailable'}. Check the console for authoritative progress.`)
+      return
+    }
+    let cancelled = false
+    let timer: number
+    const refreshUntilFullyStopped = async () => {
+      if (stopRefreshInFlight.current) {
+        if (!cancelled) timer = window.setTimeout(() => void refreshUntilFullyStopped(), 1000)
+        return
+      }
+      stopRefreshInFlight.current = true
+      try {
+        await forceRefresh()
+      } catch (e) {
+        setStopError(`Stop launched, but status refresh failed: ${e instanceof Error ? e.message : String(e)}`)
+      } finally {
+        stopRefreshInFlight.current = false
+        if (!cancelled) timer = window.setTimeout(() => void refreshUntilFullyStopped(), 1000)
+      }
+    }
+    timer = window.setTimeout(() => void refreshUntilFullyStopped(), 1000)
+    return () => {
+      cancelled = true
+      window.clearTimeout(timer)
+    }
+  }, [bgState, forceRefresh, fullyStopped, stopRequested, vmRunning])
 
   useEffect(() => {
     if (bgState === 'running' && startRequested) {
@@ -88,10 +117,13 @@ export function ServerSettings() {
       )
       setStopRequested(true)
       setStopMessage('Stop launched. Settings will unlock after the battlegroup is fully stopped and all server pods exit.')
+      stopRefreshInFlight.current = true
       try {
         await forceRefresh()
       } catch (e) {
         setStopError(`Stop launched, but status refresh failed: ${e instanceof Error ? e.message : String(e)}`)
+      } finally {
+        stopRefreshInFlight.current = false
       }
     } catch (e) {
       if (e instanceof PlayerGuardCancelledError) return
@@ -139,15 +171,16 @@ export function ServerSettings() {
         icon="ServerCog"
         description="Official Retail settings from the battlegroup's ServerCustomSettings.ini file."
       />
-      {showStop && (
-        <div className="card mb-4 flex flex-wrap items-center justify-between gap-3 border-warning/30 p-4">
-          <div className="min-w-0">
-            <div className="text-sm font-semibold text-text">Battlegroup must be fully stopped to edit settings</div>
-            <div className="mt-1 text-xs text-text-muted">
-              Current state: <span className="font-mono">{bgState}</span>
-              {serverPodCount !== null ? ` · ${serverPodCount} server pod${serverPodCount === 1 ? '' : 's'}` : ''}
-            </div>
+      <div className="card mb-4 flex flex-wrap items-center justify-between gap-3 border-warning/30 p-4">
+        <div className="min-w-0">
+          <div className="text-sm font-semibold text-text">Battlegroup must be fully stopped to edit settings</div>
+          <div className="mt-1 text-xs text-text-muted">
+            Current state: <span className="font-mono">{bgState}</span>
+            {serverPodCount !== null ? ` · ${serverPodCount} server pod${serverPodCount === 1 ? '' : 's'}` : ''}
           </div>
+        </div>
+        <div className="flex items-center gap-2">
+          <span className="pill-info"><Icon name="SquareTerminal" size={10} /> Console</span>
           <button
             type="button"
             className="btn-danger"
@@ -165,15 +198,16 @@ export function ServerSettings() {
             {stopLabel}
           </button>
         </div>
-      )}
-      {showStart && (
-        <div className="card mb-4 flex flex-wrap items-center justify-between gap-3 border-success/30 p-4">
-          <div className="min-w-0">
-            <div className="text-sm font-semibold text-text">Battlegroup is stopped</div>
-            <div className="mt-1 text-xs text-text-muted">
-              Edit and save settings below, then start the battlegroup here to apply them.
-            </div>
+      </div>
+      <div className="card mb-4 flex flex-wrap items-center justify-between gap-3 border-success/30 p-4">
+        <div className="min-w-0">
+          <div className="text-sm font-semibold text-text">Start battlegroup</div>
+          <div className="mt-1 text-xs text-text-muted">
+            Start uses DST’s existing command and reports its authoritative availability response.
           </div>
+        </div>
+        <div className="flex items-center gap-2">
+          <span className="pill-info"><Icon name="SquareTerminal" size={10} /> Console</span>
           <button
             type="button"
             className="btn-primary"
@@ -195,7 +229,7 @@ export function ServerSettings() {
                 : 'Start Battlegroup'}
           </button>
         </div>
-      )}
+      </div>
       {stopError && (
         <div className="card mb-4 flex items-center gap-2 border-danger/40 bg-danger/10 p-3 text-sm text-danger" role="alert">
           <Icon name="AlertCircle" size={14} /> {stopError}

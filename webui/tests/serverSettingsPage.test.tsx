@@ -62,15 +62,18 @@ afterEach(() => {
   unregisterGuard?.()
   unregisterGuard = undefined
   cleanup()
+  vi.useRealTimers()
 })
 
 describe('Server Settings page', () => {
-  it('shows an enabled explicit stop control only while a live battlegroup can be stopped', () => {
+  it('keeps both Console command controls visible with the current battlegroup state', () => {
     render(<ServerSettings />)
 
     expect(screen.getByRole('heading', { name: 'Server Settings' })).toBeInTheDocument()
     expect(screen.getByText(/ServerCustomSettings\.ini/)).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Stop Battlegroup' })).toBeEnabled()
+    expect(screen.getByRole('button', { name: 'Start Battlegroup' })).toBeEnabled()
+    expect(screen.getAllByText('Console')).toHaveLength(2)
     expect(screen.getByTestId('retail-settings-card')).toHaveTextContent('VM running · running:1')
   })
 
@@ -108,30 +111,62 @@ describe('Server Settings page', () => {
     expect(state.forceRefresh).not.toHaveBeenCalled()
   })
 
-  it('keeps settings locked through stopping and reloads them only after stopped with zero pods', async () => {
+  it('polls without overlap until stopped with zero pods, then reloads settings and cleans up its timer', async () => {
+    vi.useFakeTimers()
+    let rejectStoppedWithPod!: (reason: Error) => void
+    let resolveFullyStopped!: () => void
+    const stoppedWithPod = new Promise<void>((_resolve, reject) => { rejectStoppedWithPod = reject })
+    const fullyStoppedRefresh = new Promise<void>(resolve => { resolveFullyStopped = resolve })
+    state.forceRefresh
+      .mockResolvedValueOnce(undefined)
+      .mockReturnValueOnce(stoppedWithPod)
+      .mockReturnValueOnce(fullyStoppedRefresh)
+
     const view = render(<ServerSettings />)
     fireEvent.click(screen.getByRole('button', { name: 'Stop Battlegroup' }))
-    await waitFor(() => expect(state.forceRefresh).toHaveBeenCalledOnce())
+    await act(async () => {})
+    expect(state.forceRefresh).toHaveBeenCalledOnce()
+
+    await act(async () => { vi.advanceTimersByTime(1000) })
+    expect(state.forceRefresh).toHaveBeenCalledTimes(2)
+    await act(async () => { vi.advanceTimersByTime(5000) })
+    expect(state.forceRefresh).toHaveBeenCalledTimes(2)
 
     state.status = {
       vm: { running: true },
-      bg: { state: 'stopping', gameServers: [{ map: 'Arrakeen' }] },
+      bg: { state: 'stopped', gameServers: [{ map: 'Arrakeen' }] },
     }
     view.rerender(<ServerSettings />)
+    await act(async () => { rejectStoppedWithPod(new Error('status temporarily unavailable')) })
     expect(screen.getByRole('button', { name: 'Stopping battlegroup…' })).toBeDisabled()
-    expect(screen.getByTestId('retail-settings-card')).toHaveTextContent('stopping:1')
+    expect(screen.getByTestId('retail-settings-card')).toHaveTextContent('stopped:1')
+    expect(screen.getByRole('alert')).toHaveTextContent('status temporarily unavailable')
+    expect(screen.getByRole('button', { name: 'Start Battlegroup' })).toBeEnabled()
 
+    vi.mocked(api).mockRejectedValueOnce(new Error('Battlegroup still has one server pod'))
+    fireEvent.click(screen.getByRole('button', { name: 'Start Battlegroup' }))
+    await act(async () => {})
+    expect(api).toHaveBeenLastCalledWith('/api/commands/run/start', { method: 'POST' })
+    expect(screen.getByRole('alert')).toHaveTextContent('Start failed: Battlegroup still has one server pod')
+
+    await act(async () => { vi.advanceTimersByTime(1000) })
+    expect(state.forceRefresh).toHaveBeenCalledTimes(3)
     state.status = {
       vm: { running: true },
       bg: { state: 'stopped', gameServers: [] },
     }
     view.rerender(<ServerSettings />)
+    await act(async () => { resolveFullyStopped() })
+
     expect(screen.getByRole('button', { name: 'Start Battlegroup' })).toBeEnabled()
     expect(screen.getByTestId('retail-settings-card')).toHaveTextContent('stopped:0')
-    expect(await screen.findByRole('status')).toHaveTextContent('settings are now unlocked')
+    expect(screen.getByRole('status')).toHaveTextContent('settings are now unlocked')
+    expect(vi.getTimerCount()).toBe(0)
+    await act(async () => { vi.advanceTimersByTime(5000) })
+    expect(state.forceRefresh).toHaveBeenCalledTimes(3)
   })
 
-  it('shows Start only when fully stopped and launches the existing start command once', async () => {
+  it('launches the existing start command once and reflects the running transition', async () => {
     state.status = {
       vm: { running: true },
       bg: { state: 'stopped', gameServers: [] },
@@ -192,7 +227,7 @@ describe('Server Settings page', () => {
       bg: { state: 'running', gameServers: [{ map: 'Arrakeen' }] },
     }
     view.rerender(<ServerSettings />)
-    expect(screen.queryByRole('button', { name: 'Start Battlegroup' })).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Start Battlegroup' })).toBeEnabled()
     expect(screen.getByRole('button', { name: 'Stop Battlegroup' })).toBeEnabled()
   })
 })
