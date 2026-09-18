@@ -88,11 +88,11 @@ OtherKey=OtherValue
             FiefdomLimit = '4'
         }
 
-        $updated | Should -Match '(?m)^; retained heading$'
-        $updated | Should -Match '(?m)^FutureRetailKey=keep-me$'
-        $updated | Should -Match '(?m)^bIsBuildingRestrictionsEnabled=False$'
-        $updated | Should -Match '(?m)^FiefdomLimit=4$'
-        $updated | Should -Match '(?m)^OtherKey=OtherValue$'
+        $updated | Should -Match '(?m)^; retained heading\r?$'
+        $updated | Should -Match '(?m)^FutureRetailKey=keep-me\r?$'
+        $updated | Should -Match '(?m)^bIsBuildingRestrictionsEnabled=False\r?$'
+        $updated | Should -Match '(?m)^FiefdomLimit=4\r?$'
+        $updated | Should -Match '(?m)^OtherKey=OtherValue\r?$'
     }
 
     It 'preserves spacing and trailing comments on changed lines' {
@@ -110,6 +110,38 @@ OtherKey=OtherValue
         $updated | Should -Match '(?m)^FiefdomLimit=   4   ; retained limit note  $'
         $updated | Should -Match "(?m)^bIsBuildingRestrictionsEnabled =`tFalse`t# retained restriction note$"
         $updated | Should -Match '(?m)^FutureRetailKey = keep-me ; untouched$'
+    }
+
+    It 'parses typed values before trailing comments and preserves comments when updating' {
+        $raw = @(
+            "[$script:RetailSection]"
+            'FiefdomLimit=3 ; retained limit note'
+            'bIsBuildingRestrictionsEnabled=True # retained restriction note'
+        ) -join "`n"
+
+        $parsed = ConvertFrom-DuneRetailServerSettingsRaw -Raw $raw
+        $fiefdom = $parsed.settings | Where-Object key -eq 'FiefdomLimit'
+        $restrictions = $parsed.settings | Where-Object key -eq 'bIsBuildingRestrictionsEnabled'
+        $updated = ConvertTo-DuneRetailServerSettingsUpdatedRaw -Raw $raw -Updates @{
+            FiefdomLimit = '4'
+            bIsBuildingRestrictionsEnabled = 'False'
+        }
+
+        $fiefdom.value | Should -Be '3'
+        $fiefdom.valid | Should -BeTrue
+        $restrictions.value | Should -Be 'True'
+        $restrictions.valid | Should -BeTrue
+        $updated | Should -Match '(?m)^FiefdomLimit=4 ; retained limit note$'
+        $updated | Should -Match '(?m)^bIsBuildingRestrictionsEnabled=False # retained restriction note$'
+    }
+
+    It 'preserves CRLF line endings exactly when updating one setting' {
+        $raw = "[$script:RetailSection]`r`nFiefdomLimit=3 ; retained`r`nFutureRetailKey=keep-me`r`n"
+
+        $updated = ConvertTo-DuneRetailServerSettingsUpdatedRaw -Raw $raw -Updates @{ FiefdomLimit = '4' }
+
+        $updated | Should -BeExactly "[$script:RetailSection]`r`nFiefdomLimit=4 ; retained`r`nFutureRetailKey=keep-me`r`n"
+        $updated.Replace("`r`n", '').Contains("`n") | Should -BeFalse
     }
 
     It 'rejects unsupported, read-only, and malformed writes' {
@@ -293,8 +325,14 @@ Describe 'Official Retail Server Settings route safety' -Tag 'GameConfig', 'Reta
         $put = $routes | Where-Object {
             $_.method -eq 'PUT' -and $_.path -eq '/api/gameconfig/retail-server-settings'
         } | Select-Object -First 1
-        $revision = Get-DuneRetailServerSettingsTextSha256 -Value $script:RetailRaw
-        $updated = ConvertTo-DuneRetailServerSettingsUpdatedRaw -Raw $script:RetailRaw -Updates @{ FiefdomLimit = '4' }
+        $script:CommentedRetailRaw = $script:RetailRaw.Replace(
+            'FiefdomLimit=3',
+            'FiefdomLimit=3 ; retained limit note'
+        )
+        $revision = Get-DuneRetailServerSettingsTextSha256 -Value $script:CommentedRetailRaw
+        $updated = ConvertTo-DuneRetailServerSettingsUpdatedRaw `
+            -Raw $script:CommentedRetailRaw `
+            -Updates @{ FiefdomLimit = '4' }
         $script:RouteBgRead = 0
         $script:RouteResult = $null
         $script:RouteError = $null
@@ -310,7 +348,7 @@ Describe 'Official Retail Server Settings route safety' -Tag 'GameConfig', 'Reta
                 pod = 'retail-test-fb-deploy-abc'
                 path = '/srv/Config/LinuxServer/ServerCustomSettings.ini'
                 upstreamConfigured = $true
-                upstreamContent = $script:RetailRaw
+                upstreamContent = $script:CommentedRetailRaw
                 resourceVersion = '100'
                 stopped = $true
                 serverPodCount = 0
@@ -321,7 +359,7 @@ Describe 'Official Retail Server Settings route safety' -Tag 'GameConfig', 'Reta
         }
         Mock Get-V6Battlegroup {
             $script:RouteBgRead++
-            $content = if ($script:RouteBgRead -eq 1) { $script:RetailRaw } else { $updated }
+            $content = if ($script:RouteBgRead -eq 1) { $script:CommentedRetailRaw } else { $updated }
             @{
                 Bg = [pscustomobject]@{
                     metadata = [pscustomobject]@{ resourceVersion = "$($script:RouteBgRead + 99)" }
@@ -352,6 +390,9 @@ Describe 'Official Retail Server Settings route safety' -Tag 'GameConfig', 'Reta
 
         $script:RouteError | Should -BeNullOrEmpty
         $script:RouteResult.ok | Should -BeTrue
+        ($script:RouteResult.settings | Where-Object key -eq 'FiefdomLimit').value | Should -Be '4'
+        ($script:RouteResult.settings | Where-Object key -eq 'FiefdomLimit').valid | Should -BeTrue
+        $updated | Should -Match '(?m)^FiefdomLimit=4 ; retained limit note\r?$'
         Should -Invoke Backup-DuneRetailServerSettingsContent -Times 1
         Should -Invoke Invoke-V6Ssh -Times 1
     }
