@@ -179,7 +179,7 @@ describe('Official Retail Server Settings card', () => {
     vi.stubGlobal('fetch', fetchMock)
 
     render(<OfficialRetailServerSettingsCard vmRunning />)
-    const input = await screen.findByRole('spinbutton', { name: 'Maximum Sub-Fief Amount' })
+    const input = await screen.findByRole('spinbutton', { name: 'Maximum Sub-Fief Amount exact value' })
     fireEvent.change(input, { target: { value: '4' } })
     fireEvent.click(screen.getByRole('button', { name: 'Save (1)' }))
 
@@ -191,5 +191,189 @@ describe('Official Retail Server Settings card', () => {
       updates: { FiefdomLimit: '4' },
     })
     expect(await screen.findByText(/saved with backup/)).toBeInTheDocument()
+  })
+
+  it('renders synchronized int and float convenience sliders with exact type steps', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify({
+      available: true,
+      readOnly: false,
+      source: 'funcom-servergroup-user-ini-config',
+      authority: 'Funcom BattleGroup operator configuration',
+      revision: 'current',
+      target: { available: true, stopped: true, serverPodCount: 0 },
+      settings: [
+        {
+          key: 'FiefdomLimit',
+          value: '3',
+          displayValue: '3',
+          label: 'Maximum Sub-Fief Amount',
+          group: 'World threats and building',
+          type: 'int',
+          options: [],
+          inverted: false,
+          supported: true,
+          valid: true,
+          validationError: '',
+          editable: true,
+          readOnly: false,
+        },
+        {
+          key: 'BuildingPieceLimitMultiplier',
+          value: '1.5',
+          displayValue: '1.5',
+          label: 'Building Piece Limit',
+          group: 'World threats and building',
+          type: 'float',
+          options: [],
+          inverted: false,
+          supported: true,
+          valid: true,
+          validationError: '',
+          editable: true,
+          readOnly: false,
+        },
+      ],
+      malformedLines: [],
+    }), { status: 200, headers: { 'Content-Type': 'application/json' } })))
+
+    render(<OfficialRetailServerSettingsCard vmRunning />)
+
+    const intSlider = await screen.findByRole('slider', {
+      name: 'Maximum Sub-Fief Amount slider, range 0 to 25',
+    })
+    const floatSlider = screen.getByRole('slider', {
+      name: 'Building Piece Limit slider, range 0 to 25',
+    })
+    const intInput = screen.getByRole('spinbutton', { name: 'Maximum Sub-Fief Amount exact value' })
+    const floatInput = screen.getByRole('spinbutton', { name: 'Building Piece Limit exact value' })
+
+    expect(intSlider).toHaveAttribute('min', '0')
+    expect(intSlider).toHaveAttribute('max', '25')
+    expect(intSlider).toHaveAttribute('step', '1')
+    expect(floatSlider).toHaveAttribute('min', '0')
+    expect(floatSlider).toHaveAttribute('max', '25')
+    expect(floatSlider).toHaveAttribute('step', 'any')
+    expect(intInput).not.toHaveAttribute('min')
+    expect(intInput).not.toHaveAttribute('max')
+    expect(intInput).toHaveAttribute('step', '1')
+    expect(floatInput).toHaveAttribute('step', 'any')
+
+    fireEvent.change(intSlider, { target: { value: '7' } })
+    expect(intInput).toHaveValue(7)
+    expect(screen.getByRole('button', { name: 'Save (1)' })).toBeEnabled()
+
+    fireEvent.change(floatInput, { target: { value: '2.75' } })
+    expect(floatSlider).toHaveValue('2.75')
+    expect(screen.getByRole('button', { name: 'Save (2)' })).toBeEnabled()
+  })
+
+  it('preserves an exact value above 25 until the operator moves the saturated slider', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify({
+      available: true,
+      readOnly: false,
+      source: 'funcom-servergroup-user-ini-config',
+      authority: 'Funcom BattleGroup operator configuration',
+      revision: 'current',
+      target: { available: true, stopped: true, serverPodCount: 0 },
+      settings: [{
+        key: 'FiefdomLimit',
+        value: '40',
+        displayValue: '40',
+        label: 'Maximum Sub-Fief Amount',
+        group: 'World threats and building',
+        type: 'int',
+        options: [],
+        inverted: false,
+        supported: true,
+        valid: true,
+        validationError: '',
+        editable: true,
+        readOnly: false,
+      }],
+      malformedLines: [],
+    }), { status: 200, headers: { 'Content-Type': 'application/json' } })))
+
+    render(<OfficialRetailServerSettingsCard vmRunning />)
+
+    const slider = await screen.findByRole('slider', {
+      name: 'Maximum Sub-Fief Amount slider, range 0 to 25',
+    })
+    const input = screen.getByRole('spinbutton', { name: 'Maximum Sub-Fief Amount exact value' })
+    expect(slider).toHaveValue('25')
+    expect(slider).toHaveAttribute('aria-valuetext', '25, slider maximum; exact value 40 is preserved')
+    expect(input).toHaveValue(40)
+    expect(screen.getByText('25 / 25 max')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Save' })).toBeDisabled()
+
+    fireEvent.change(slider, { target: { value: '24' } })
+    expect(input).toHaveValue(24)
+    expect(screen.getByRole('button', { name: 'Save (1)' })).toBeEnabled()
+  })
+
+  it('disables both numeric controls unless the battlegroup has zero running pods', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify({
+      available: true,
+      readOnly: false,
+      source: 'funcom-servergroup-user-ini-config',
+      authority: 'Funcom BattleGroup operator configuration',
+      revision: 'current',
+      target: { available: true, stopped: true, serverPodCount: 1 },
+      settings: [{
+        key: 'FiefdomLimit',
+        value: '3',
+        displayValue: '3',
+        label: 'Maximum Sub-Fief Amount',
+        group: 'World threats and building',
+        type: 'int',
+        options: [],
+        inverted: false,
+        supported: true,
+        valid: true,
+        validationError: '',
+        editable: true,
+        readOnly: false,
+      }],
+      malformedLines: [],
+    }), { status: 200, headers: { 'Content-Type': 'application/json' } })))
+
+    render(<OfficialRetailServerSettingsCard vmRunning />)
+
+    expect(await screen.findByRole('slider', {
+      name: 'Maximum Sub-Fief Amount slider, range 0 to 25',
+    })).toBeDisabled()
+    expect(screen.getByRole('spinbutton', { name: 'Maximum Sub-Fief Amount exact value' })).toBeDisabled()
+  })
+
+  it('keeps malformed numeric settings on the existing exact-input fallback', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify({
+      available: true,
+      readOnly: false,
+      source: 'funcom-servergroup-user-ini-config',
+      authority: 'Funcom BattleGroup operator configuration',
+      revision: 'current',
+      target: { available: true, stopped: true, serverPodCount: 0 },
+      settings: [{
+        key: 'FiefdomLimit',
+        value: 'not-a-number',
+        displayValue: 'not-a-number',
+        label: 'Maximum Sub-Fief Amount',
+        group: 'World threats and building',
+        type: 'int',
+        options: [],
+        inverted: false,
+        supported: true,
+        valid: false,
+        validationError: "Unexpected int value 'not-a-number'.",
+        editable: true,
+        readOnly: false,
+      }],
+      malformedLines: [],
+    }), { status: 200, headers: { 'Content-Type': 'application/json' } })))
+
+    render(<OfficialRetailServerSettingsCard vmRunning />)
+
+    expect(await screen.findByRole('spinbutton', { name: 'Maximum Sub-Fief Amount exact value' })).toBeInTheDocument()
+    expect(screen.queryByRole('slider')).not.toBeInTheDocument()
+    expect(screen.getByText("Unexpected int value 'not-a-number'.")).toBeInTheDocument()
   })
 })

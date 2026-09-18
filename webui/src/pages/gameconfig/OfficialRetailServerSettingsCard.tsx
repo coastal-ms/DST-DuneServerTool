@@ -4,6 +4,72 @@ import { Icon } from '../../components/Icon'
 import { getRetailServerSettings, saveRetailServerSettings } from '../../api/gameconfig'
 import type { RetailServerSetting, RetailServerSettingsResponse } from '../../api/types'
 
+const NUMERIC_SLIDER_MIN = 0
+const NUMERIC_SLIDER_MAX = 25
+
+function NumericSettingControl({
+  setting,
+  value,
+  disabled,
+  onChange,
+}: {
+  setting: RetailServerSetting
+  value: string
+  disabled: boolean
+  onChange: (value: string) => void
+}) {
+  const parsedValue = Number(value)
+  const sourceValue = Number(setting.value)
+  const sliderSource = Number.isFinite(parsedValue)
+    ? parsedValue
+    : (Number.isFinite(sourceValue) ? sourceValue : NUMERIC_SLIDER_MIN)
+  const sliderValue = Math.min(NUMERIC_SLIDER_MAX, Math.max(NUMERIC_SLIDER_MIN, sliderSource))
+  const aboveSliderRange = Number.isFinite(parsedValue) && parsedValue > NUMERIC_SLIDER_MAX
+  const sliderStep = setting.type === 'int' ? 1 : 'any'
+  const rangeDescription = `${NUMERIC_SLIDER_MIN} to ${NUMERIC_SLIDER_MAX}`
+
+  return (
+    <div className="flex min-w-[220px] flex-wrap items-center justify-end gap-2">
+      {setting.valid && (
+        <div className="flex min-w-[180px] flex-[1_1_220px] items-center gap-2">
+          <input
+            aria-label={`${setting.label} slider, range ${rangeDescription}`}
+            aria-valuetext={aboveSliderRange
+              ? `${NUMERIC_SLIDER_MAX}, slider maximum; exact value ${value} is preserved`
+              : String(sliderValue)}
+            type="range"
+            min={NUMERIC_SLIDER_MIN}
+            max={NUMERIC_SLIDER_MAX}
+            step={sliderStep}
+            value={sliderValue}
+            onChange={event => onChange(event.target.value)}
+            disabled={disabled}
+            title={`Adjust ${setting.label} from ${rangeDescription}. Use the exact value field for values outside this convenience range.`}
+            className="h-1.5 min-w-28 flex-1 cursor-pointer accent-accent focus:outline-none focus-visible:ring-2 focus-visible:ring-ibad disabled:cursor-not-allowed disabled:opacity-60"
+          />
+          <span
+            className="w-20 text-right font-mono text-[11px] tabular-nums text-text-dim"
+            title={aboveSliderRange ? `Slider is at its maximum; exact value ${value} is preserved.` : undefined}
+          >
+            {aboveSliderRange ? `${NUMERIC_SLIDER_MAX} / ${NUMERIC_SLIDER_MAX} max` : `${sliderValue} / ${NUMERIC_SLIDER_MAX}`}
+          </span>
+        </div>
+      )}
+      <input
+        aria-label={`${setting.label} exact value`}
+        type="number"
+        inputMode={setting.type === 'int' ? 'numeric' : 'decimal'}
+        step={sliderStep}
+        value={value}
+        onChange={event => onChange(event.target.value)}
+        disabled={disabled}
+        title={`Set exact ${setting.label}. Values outside the slider's ${rangeDescription} convenience range remain unchanged.`}
+        className="w-24 border border-border bg-surface px-2 py-1 text-right font-mono text-xs tabular-nums text-text focus:outline-none focus:ring-2 focus:ring-ibad disabled:cursor-not-allowed disabled:opacity-60"
+      />
+    </div>
+  )
+}
+
 export function OfficialRetailServerSettingsCard({ vmRunning }: { vmRunning: boolean }) {
   const [state, setState] = useState<RetailServerSettingsResponse | null>(null)
   const [loading, setLoading] = useState(false)
@@ -251,14 +317,11 @@ export function OfficialRetailServerSettingsCard({ vmRunning }: { vmRunning: boo
                             {setting.options.map(option => <option key={option} value={option}>{option}</option>)}
                           </select>
                         ) : (setting.type === 'int' || setting.type === 'float') && setting.editable ? (
-                          <input
-                            aria-label={setting.label}
-                            type="number"
-                            step={setting.type === 'int' ? 1 : 'any'}
+                          <NumericSettingControl
+                            setting={setting}
                             value={values[setting.key] ?? setting.value}
-                            onChange={event => setValues(previous => ({ ...previous, [setting.key]: event.target.value }))}
                             disabled={!state.target.stopped || state.target.serverPodCount !== 0 || saving}
-                            className="w-28 border border-border bg-surface px-2 py-1 text-right text-xs text-text focus:outline-none focus:ring-2 focus:ring-ibad disabled:cursor-not-allowed disabled:opacity-60"
+                            onChange={value => setValues(previous => ({ ...previous, [setting.key]: value }))}
                           />
                         ) : (
                           <span className="min-w-20 border border-border bg-surface px-2 py-1 text-center text-xs font-semibold text-text">
