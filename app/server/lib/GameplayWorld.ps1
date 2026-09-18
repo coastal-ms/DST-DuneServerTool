@@ -371,6 +371,87 @@ function Format-DuneReal {
     return ([float](ConvertTo-DuneFloat $Value)).ToString([System.Globalization.CultureInfo]::InvariantCulture)
 }
 
+function Resolve-DuneBlueprintIds {
+    param(
+        [object[]]$Rows,
+        [string]$Property,
+        [string]$Label
+    )
+
+    $sourceIds = [object[]]::new($Rows.Count)
+    $seenSources = [System.Collections.Generic.HashSet[long]]::new()
+    $hasZero = $false
+    $explicitCount = 0
+    for ($i = 0; $i -lt $Rows.Count; $i++) {
+        $raw = Get-DuneBpField $Rows[$i] $Property
+        if ($null -eq $raw) { continue }
+        $text = [Convert]::ToString($raw, [Globalization.CultureInfo]::InvariantCulture)
+        $sourceId = 0L
+        if (-not [long]::TryParse($text, [Globalization.NumberStyles]::Integer, [Globalization.CultureInfo]::InvariantCulture, [ref]$sourceId) -or $sourceId -lt 0) {
+            throw "Blueprint $Label source ids must be non-negative integers."
+        }
+        if (-not $seenSources.Add($sourceId)) {
+            throw "Blueprint contains duplicate $Label source ids."
+        }
+        $sourceIds[$i] = $sourceId
+        $explicitCount++
+        if ($sourceId -eq 0) { $hasZero = $true }
+    }
+
+    $ids = [long[]]::new($Rows.Count)
+    $reserved = [System.Collections.Generic.HashSet[long]]::new()
+    $map = [System.Collections.Generic.Dictionary[long,long]]::new()
+    for ($i = 0; $i -lt $sourceIds.Count; $i++) {
+        if ($null -eq $sourceIds[$i]) { continue }
+        $sourceId = [long]$sourceIds[$i]
+        if ($hasZero -and $sourceId -eq [long]::MaxValue) {
+            throw "Blueprint $Label id is too large to normalize."
+        }
+        $importedId = if ($hasZero) { $sourceId + 1L } else { $sourceId }
+        if ($importedId -le 0 -or -not $reserved.Add($importedId)) {
+            throw "Blueprint contains duplicate normalized $Label ids."
+        }
+        $ids[$i] = $importedId
+        $map.Add($sourceId, $importedId)
+    }
+
+    $nextId = 1L
+    for ($i = 0; $i -lt $sourceIds.Count; $i++) {
+        if ($null -ne $sourceIds[$i]) { continue }
+        while ($reserved.Contains($nextId)) {
+            if ($nextId -eq [long]::MaxValue) {
+                throw "Blueprint has no available $Label ids."
+            }
+            $nextId++
+        }
+        $ids[$i] = $nextId
+        [void]$reserved.Add($nextId)
+        $nextId++
+    }
+
+    if ($explicitCount -eq 0) {
+        for ($i = 0; $i -lt $ids.Count; $i++) {
+            $map.Add([long]$i, $ids[$i])
+        }
+    }
+
+    return @{ ids = $ids; sourceToImported = $map }
+}
+
+function ConvertTo-DuneBlueprintReferenceId {
+    param($Value, [System.Collections.Generic.Dictionary[long,long]]$Map, [string]$Label)
+    $text = [Convert]::ToString($Value, [Globalization.CultureInfo]::InvariantCulture)
+    $sourceId = 0L
+    if (-not [long]::TryParse($text, [Globalization.NumberStyles]::Integer, [Globalization.CultureInfo]::InvariantCulture, [ref]$sourceId) -or $sourceId -lt 0) {
+        throw "$Label must be a non-negative integer."
+    }
+    $importedId = 0L
+    if (-not $Map.TryGetValue($sourceId, [ref]$importedId)) {
+        throw "$Label does not reference an imported placeable."
+    }
+    return $importedId
+}
+
 # Suggested download filename: sanitized in-game name, else blueprint_<id>.json.
 function Get-DuneBlueprintFilename {
     param([string]$Name, [long]$Id)
@@ -384,6 +465,22 @@ function Get-DuneBlueprintFilename {
     $clean = $sb.ToString().Trim()
     if (-not $clean) { return "blueprint_$Id.json" }
     return "$clean.json"
+}
+
+function ConvertTo-DunePortableBlueprintPlaceable {
+    param($Row)
+    $parts = @(([string]$Row['transform']) -split ',')
+    if ($parts.Count -lt 6) { return $null }
+    return [ordered]@{
+        placeable_id  = (ConvertTo-DuneInt $Row['placeable_id'])
+        building_type = [string]$Row['building_type']
+        x             = (ConvertTo-DuneFloat $parts[0])
+        y             = (ConvertTo-DuneFloat $parts[1])
+        z             = (ConvertTo-DuneFloat $parts[2])
+        rx            = (ConvertTo-DuneFloat $parts[4])
+        ry            = (ConvertTo-DuneFloat $parts[3])
+        rz            = (ConvertTo-DuneFloat $parts[5])
+    }
 }
 
 function Get-DuneBlueprintExportLive {
@@ -436,18 +533,8 @@ ORDER BY placeable_id
     if (-not $pres.ok) { return @{ ok = $false; error = $pres.error } }
     $placeables = @()
     foreach ($r in (ConvertTo-DuneRowMaps -Result $pres)) {
-        $p = @(([string]$r['transform']) -split ',')
-        if ($p.Count -lt 6) { continue }
-        $placeables += [ordered]@{
-            placeable_id  = (ConvertTo-DuneInt $r['placeable_id'])
-            building_type = [string]$r['building_type']
-            x             = (ConvertTo-DuneFloat $p[0])
-            y             = (ConvertTo-DuneFloat $p[1])
-            z             = (ConvertTo-DuneFloat $p[2])
-            rx            = (ConvertTo-DuneFloat $p[3])
-            ry            = (ConvertTo-DuneFloat $p[4])
-            rz            = (ConvertTo-DuneFloat $p[5])
-        }
+        $placeable = ConvertTo-DunePortableBlueprintPlaceable -Row $r
+        if ($null -ne $placeable) { $placeables += $placeable }
     }
 
     $pentSql = @"
@@ -505,6 +592,13 @@ function Import-DuneBlueprintLive {
         return @{ ok = $false; error = 'Blueprint has no instances or placeables.' }
     }
 
+    try {
+        $instanceIds = Resolve-DuneBlueprintIds -Rows $instancesRaw -Property 'instance_id' -Label 'instance'
+        $placeableIds = Resolve-DuneBlueprintIds -Rows $placeablesRaw -Property 'placeable_id' -Label 'placeable'
+    } catch {
+        return @{ ok = $false; error = $_.Exception.Message }
+    }
+
     # Player must be offline (no player_state row also counts as offline).
     $offSql = "SELECT online_status::text AS s FROM dune.player_state WHERE player_pawn_id = $PlayerPawnId::bigint"
     $ores = Invoke-DuneSqlQuery -Ip $Ip -Sql $offSql -ReadOnly $true -MaxRows 1 -TimeoutSec 30
@@ -526,8 +620,7 @@ function Import-DuneBlueprintLive {
         $y    = Format-DuneReal (Get-DuneBpField $inst 'y')
         $z    = Format-DuneReal (Get-DuneBpField $inst 'z')
         $rot  = Format-DuneReal (Get-DuneBpField $inst 'rotation')
-        $iidV = Get-DuneBpField $inst 'instance_id'
-        $iid  = if ($null -ne $iidV -and "$iidV" -ne '') { [long](ConvertTo-DuneInt $iidV) } else { $i + 1 }
+        $iid  = $instanceIds.ids[$i]
         $stabV = Get-DuneBpField $inst 'provides_stability'
         if ($null -ne $stabV -and "$stabV" -ne '') {
             $stab = if (Test-DuneTruthy $stabV) { 'true' } else { 'false' }
@@ -545,22 +638,34 @@ function Import-DuneBlueprintLive {
         $x   = Format-DuneReal (Get-DuneBpField $pl 'x')
         $y   = Format-DuneReal (Get-DuneBpField $pl 'y')
         $z   = Format-DuneReal (Get-DuneBpField $pl 'z')
-        $rx  = Format-DuneReal (Get-DuneBpField $pl 'rx')
-        $ry  = Format-DuneReal (Get-DuneBpField $pl 'ry')
+        $pitch = Format-DuneReal (Get-DuneBpField $pl 'rx')
+        $yaw   = Format-DuneReal (Get-DuneBpField $pl 'ry')
         $rz  = Format-DuneReal (Get-DuneBpField $pl 'rz')
-        $pidV = Get-DuneBpField $pl 'placeable_id'
-        $placId  = if ($null -ne $pidV -and "$pidV" -ne '') { [long](ConvertTo-DuneInt $pidV) } else { $i + 1 }
-        [void]$placRows.Add("(v_bp, $placId, '$bt', '{$x,$y,$z,$rx,$ry,$rz}'::real[], true)")
+        $placId = $placeableIds.ids[$i]
+        [void]$placRows.Add("(v_bp, $placId, '$bt', '{$x,$y,$z,$yaw,$pitch,$rz}'::real[], true)")
     }
 
     # Resolve pentashield rows.
     $pentRows = [System.Collections.Generic.List[string]]::new()
-    foreach ($ps in $pentashieldsRaw) {
-        $scale = @(Get-DuneBpField $ps 'scale')
-        if ($scale.Count -lt 3) { continue }
-        $w = [int](ConvertTo-DuneInt $scale[0]); $h = [int](ConvertTo-DuneInt $scale[1]); $d = [int](ConvertTo-DuneInt $scale[2])
-        $plId = [long](ConvertTo-DuneInt (Get-DuneBpField $ps 'placeable_id'))
-        [void]$pentRows.Add("(v_bp, $plId, ARRAY[$w,$h,$d]::smallint[])")
+    $seenPentashieldSources = [System.Collections.Generic.HashSet[long]]::new()
+    $seenPentashieldTargets = [System.Collections.Generic.HashSet[long]]::new()
+    try {
+        foreach ($ps in $pentashieldsRaw) {
+            $scale = @(Get-DuneBpField $ps 'scale')
+            if ($scale.Count -lt 3) { throw 'Pentashield scale must contain three values.' }
+            $sourceText = [Convert]::ToString((Get-DuneBpField $ps 'placeable_id'), [Globalization.CultureInfo]::InvariantCulture)
+            $sourceId = 0L
+            if (-not [long]::TryParse($sourceText, [Globalization.NumberStyles]::Integer, [Globalization.CultureInfo]::InvariantCulture, [ref]$sourceId) -or $sourceId -lt 0) {
+                throw 'Pentashield placeable_id must be a non-negative integer.'
+            }
+            if (-not $seenPentashieldSources.Add($sourceId)) { throw 'Blueprint contains duplicate pentashield source placeable ids.' }
+            $plId = ConvertTo-DuneBlueprintReferenceId -Value $sourceId -Map $placeableIds.sourceToImported -Label 'Pentashield placeable_id'
+            if (-not $seenPentashieldTargets.Add($plId)) { throw 'Blueprint contains duplicate normalized pentashield placeable ids.' }
+            $w = [int](ConvertTo-DuneInt $scale[0]); $h = [int](ConvertTo-DuneInt $scale[1]); $d = [int](ConvertTo-DuneInt $scale[2])
+            [void]$pentRows.Add("(v_bp, $plId, ARRAY[$w,$h,$d]::smallint[])")
+        }
+    } catch {
+        return @{ ok = $false; error = $_.Exception.Message }
     }
 
     $instSql = Join-DuneBlueprintInserts -Prefix 'INSERT INTO dune.building_blueprint_instances (building_blueprint_id, instance_id, building_type, transform, hologram, provides_stability, health) VALUES' -Rows $instRows

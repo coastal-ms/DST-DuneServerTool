@@ -1878,6 +1878,48 @@ internal static partial class Program
                     "Oversized unknown vehicle part did not fail closed.");
             }
 
+            using (var oneBasedIdsDocument = JsonDocument.Parse(
+                       """[{"instance_id":1},{"instance_id":4}]"""))
+            using (var mixedIdsDocument = JsonDocument.Parse(
+                       """[{"placeable_id":2},{},{"placeable_id":4},{}]"""))
+            {
+                var oneBasedIds = NormalizeBlueprintIds(
+                    oneBasedIdsDocument.RootElement.EnumerateArray().ToArray(),
+                    "instance_id",
+                    "instance");
+                var mixedIds = NormalizeBlueprintIds(
+                    mixedIdsDocument.RootElement.EnumerateArray().ToArray(),
+                    "placeable_id",
+                    "placeable");
+                if (!oneBasedIds.ImportedIds.SequenceEqual([1L, 4L])
+                    || !mixedIds.ImportedIds.SequenceEqual([2L, 1L, 4L, 3L]))
+                {
+                    throw new InvalidOperationException(
+                        "Portable blueprint id allocation compatibility failed.");
+                }
+            }
+            foreach (var invalidIdsJson in new[]
+            {
+                """[{"instance_id":-1}]""",
+                """[{"instance_id":1.5}]"""
+            })
+            {
+                using var invalidIdsDocument = JsonDocument.Parse(invalidIdsJson);
+                try
+                {
+                    NormalizeBlueprintIds(
+                        invalidIdsDocument.RootElement.EnumerateArray().ToArray(),
+                        "instance_id",
+                        "instance");
+                    throw new InvalidOperationException(
+                        "Invalid portable blueprint source id was accepted.");
+                }
+                catch (InvalidDataException)
+                {
+                    // Expected fail-closed validation.
+                }
+            }
+
             var blueprintPath = Path.Combine(root, "portable-blueprint.json");
             File.WriteAllText(
                 blueprintPath,
@@ -1886,7 +1928,7 @@ internal static partial class Program
                   "name":"Self Test Base",
                   "instances":[
                     {
-                      "instance_id":1,
+                      "instance_id":0,
                       "building_type":"Atreides_Outpost_Foundation",
                       "x":0,
                       "y":0,
@@ -1895,7 +1937,6 @@ internal static partial class Program
                       "provides_stability":true
                     },
                     {
-                      "instance_id":2,
                       "building_type":"Atreides_Outpost_Wall",
                       "x":512,
                       "y":0,
@@ -1905,11 +1946,23 @@ internal static partial class Program
                   ],
                   "placeables":[
                     {
+                      "placeable_id":0,
                       "building_type":"Choam_PentashieldSurfaceHorizontal_Placeable",
                       "x":0,
                       "y":0,
                       "z":256,
-                      "ry":45
+                      "rx":12,
+                      "ry":45,
+                      "rz":67
+                    },
+                    {
+                      "building_type":"StorageContainer_Placeable",
+                      "x":128,
+                      "y":64,
+                      "z":32,
+                      "rx":1,
+                      "ry":2,
+                      "rz":3
                     }
                   ],
                   "pentashields":[
@@ -1985,15 +2038,43 @@ internal static partial class Program
                     WHERE building_blueprint_id=$id;
                     """,
                     ("$id", blueprintId));
-                var missingRotationDefaults = ScalarLong(
+                var rotationMappingCount = ScalarLong(
                     connection,
                     """
                     SELECT COUNT(*)
                     FROM building_blueprint_placeables
                     WHERE building_blueprint_id=$id
-                      AND transform_yaw=0
-                      AND transform_pitch=45
-                      AND transform_roll=0;
+                      AND placeable_id=1
+                      AND transform_yaw=45
+                      AND transform_pitch=12
+                      AND transform_roll=67;
+                    """,
+                    ("$id", blueprintId));
+                var normalizedIds = ScalarLong(
+                    connection,
+                    """
+                    SELECT COUNT(*)
+                    FROM building_blueprint_instances
+                    WHERE building_blueprint_id=$id
+                      AND instance_id IN (1, 2);
+                    """,
+                    ("$id", blueprintId))
+                    + ScalarLong(
+                        connection,
+                        """
+                        SELECT COUNT(*)
+                        FROM building_blueprint_placeables
+                        WHERE building_blueprint_id=$id
+                          AND placeable_id IN (1, 2);
+                        """,
+                        ("$id", blueprintId));
+                var preservedPentashieldReference = ScalarLong(
+                    connection,
+                    """
+                    SELECT COUNT(*)
+                    FROM building_blueprint_pentashields
+                    WHERE building_blueprint_id=$id
+                      AND placeable_id=1;
                     """,
                     ("$id", blueprintId));
                 if (template != "BuildingBlueprint_CopyDevice"
@@ -2004,12 +2085,29 @@ internal static partial class Program
                         "Self Test Base",
                         StringComparison.Ordinal)
                     || instanceCount != 2
-                    || placeableCount != 1
+                    || placeableCount != 2
                     || pentashieldCount != 1
-                    || missingRotationDefaults != 1)
+                    || rotationMappingCount != 1
+                    || normalizedIds != 4
+                    || preservedPentashieldReference != 1)
                 {
                     throw new InvalidOperationException(
                         "Portable blueprint import verification failed.");
+                }
+
+                var exported = JsonSerializer.Serialize(
+                    ExportBlueprint(target, blueprintId),
+                    JsonOptions);
+                using var exportedDocument = JsonDocument.Parse(exported);
+                var exportedPlaceable = exportedDocument.RootElement
+                    .GetProperty("blueprint")
+                    .GetProperty("placeables")[0];
+                if (exportedPlaceable.GetProperty("rx").GetSingle() != 12f
+                    || exportedPlaceable.GetProperty("ry").GetSingle() != 45f
+                    || exportedPlaceable.GetProperty("rz").GetSingle() != 67f)
+                {
+                    throw new InvalidOperationException(
+                        "Portable blueprint rotation round-trip failed.");
                 }
             }
 
@@ -2040,7 +2138,7 @@ internal static partial class Program
             }
             catch (InvalidDataException ex)
                 when (ex.Message.Contains(
-                    "duplicate instance ids",
+                    "duplicate instance source ids",
                     StringComparison.OrdinalIgnoreCase))
             {
                 invalidBlueprintRejected = true;
@@ -2050,6 +2148,44 @@ internal static partial class Program
             {
                 throw new InvalidOperationException(
                     "Invalid blueprint did not fail closed.");
+            }
+
+            var invalidSourceIdPath = Path.Combine(
+                root,
+                "invalid-source-id-blueprint.json");
+            File.WriteAllText(
+                invalidSourceIdPath,
+                """
+                {
+                  "name":"Invalid source id",
+                  "instances":[
+                    {"instance_id":-1,"building_type":"Wall","x":0,"y":0,"z":0,"rotation":0}
+                  ],
+                  "placeables":[],
+                  "pentashields":[]
+                }
+                """);
+            var beforeInvalidSourceId = File.ReadAllBytes(target);
+            var invalidSourceIdRejected = false;
+            try
+            {
+                ImportBlueprint(
+                    target,
+                    Path.Combine(root, "safety", "invalid-source-id.db"),
+                    invalidSourceIdPath);
+            }
+            catch (InvalidDataException ex)
+                when (ex.Message.Contains(
+                    "non-negative integer",
+                    StringComparison.OrdinalIgnoreCase))
+            {
+                invalidSourceIdRejected = true;
+            }
+            if (!invalidSourceIdRejected
+                || !File.ReadAllBytes(target).SequenceEqual(beforeInvalidSourceId))
+            {
+                throw new InvalidOperationException(
+                    "Invalid source id did not fail atomically.");
             }
 
             var missingTransformBlueprintPath = Path.Combine(

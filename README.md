@@ -309,6 +309,12 @@ Teleport tracing is diagnostic; it does not fix game-side teleport execution.
 
 A dedicated Blueprints tab beside base management and storage inventory.
 The capture contains no player buildings or imported designs.
+Portable imports accept zero-based, one-based, omitted, or mixed instance and
+placeable IDs and preserve pentashield references while allocating safe IDs.
+Patch 1.5 rotation axes are preserved on new imports and exports. Blueprints
+imported by older DST versions have no reliable provenance marker, so incorrect
+existing rotations are not bulk-migrated; re-import the source JSON or recover
+the affected rotation manually.
 </details>
 
 <details>

@@ -75,6 +75,13 @@ here cover everything those tags shipped.
 
 - Restored Set Ammo for Retail ranged weapons whose empty
   `FWeaponItemStats` block omits the `CurrentAmmo` field.
+- Corrected Patch 1.5 portable Blueprint compatibility for both Solo and
+  Self-Hosted imports and exports. Zero-based, one-based, omitted, and mixed
+  instance/placeable IDs now normalize without collisions, pentashields retain
+  their placeable references, invalid IDs fail closed, and Pitch/Yaw rotation
+  axes round-trip in the portable format. Existing imports are not bulk
+  migrated because their source provenance cannot be identified reliably;
+  affected designs require re-import or manual rotation recovery.
 
 ## [15.1.0] - 2026-09-17
 
