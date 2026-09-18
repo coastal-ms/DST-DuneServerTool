@@ -43,17 +43,16 @@ here cover everything those tags shipped.
   Funcom's installed defaults, repairs v1 imports from clean pre-import backups,
   verifies both files, and fails closed when no prior managed configuration can
   be identified.
-- Restored an explicit **Apply to my client** action for settings that Retail
-  evaluates from each player's local config. **Allowed Maps** can enable the
-  Base Backup Tool in the Deep Desert through Retail
-  `Config\Windows\Game.ini`; customized **Starting Inventory Slots**,
-  **Starting Inventory Volume**, and **Inventory Weight Multiplier** use that
-  same client file. **Maximum Vehicles Per Player** and **Shield Drops While
-  Shooting** can write `Vehicle.MaxVehiclesPerPlayer` and
-  `Dune.DisableShieldOnShooting` to Retail `Config\Windows\Engine.ini` after the
-  existing Engine.ini opt-in. Server saves remain separate, automatic client
-  mirroring stays disabled, and every player must apply matching local values
-  for client-read tool availability, inventory, vehicle-cap, and shield behavior.
+- Added a prominent, review-first **Apply advanced compatibility overrides**
+  action for the small set of advanced values field-proven to remain locally
+  evaluated by Retail outside Funcom's normal Custom Settings synchronization.
+  The review lists and individually selects the exact `Game.ini` or `Engine.ini`
+  target, section/key, and value before writing. The supported set is **Allowed
+  Maps**, **Starting Inventory Slots**, **Starting Inventory Volume**,
+  **Maximum Vehicles Per Player**, and **Shield Drops While Shooting**;
+  Engine.ini entries still require the existing opt-in. Server saves remain
+  separate, automatic client mirroring stays disabled, and no other historical
+  `ClientApply` field is included without equivalent current-Retail evidence.
 
 ### Fixed
 

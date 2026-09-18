@@ -68,7 +68,7 @@ describe('buildAllClientBlocks', () => {
   })
 
   describe('buildAllClientApplyItems', () => {
-    it('offers customized inventory fields for explicit Retail Game.ini apply', () => {
+    it('offers only the field-proven customized Retail Game.ini compatibility fields', () => {
       const inventory: GameConfigCategory[] = [{
         category: 'Inventory',
         fields: [
@@ -87,7 +87,6 @@ describe('buildAllClientBlocks', () => {
       expect(items.map(item => [item.file, item.key, item.value])).toEqual([
         ['game', 'PlayerInventoryStartingSize', '70'],
         ['game', 'PlayerInventoryStartingVolumeCapacity', '2500'],
-        ['game', 'm_InventoryWeightMultiplier', '0.5'],
       ])
     })
 
@@ -122,6 +121,21 @@ describe('buildAllClientBlocks', () => {
         'ConsoleVariables||Vehicle.MaxVehiclesPerPlayer': '10',
         'ConsoleVariables||Bgd.ServerPlayerHardCap': '80',
       }))).toEqual([])
+    })
+
+    it('collapses duplicate schema representations to the one API target write', () => {
+      const duplicates: GameConfigCategory[] = [{
+        category: 'Vehicles',
+        fields: [
+          { section: 'ConsoleVariables', key: 'Vehicle.MaxVehiclesPerPlayer', file: 'engine', type: 'int', label: 'Maximum Vehicles Per Player', default: '10', clientApply: true },
+          { section: 'LegacyConsoleVariables', key: 'vehicle.maxvehiclesperplayer', file: 'engine', type: 'int', label: 'Legacy vehicle cap alias', default: '10', clientApply: true },
+        ],
+      }]
+
+      expect(buildAllClientApplyItems(duplicates, cfg({}, {
+        'ConsoleVariables||Vehicle.MaxVehiclesPerPlayer': '100',
+        'LegacyConsoleVariables||vehicle.maxvehiclesperplayer': '100',
+      }))).toHaveLength(1)
     })
   })
 

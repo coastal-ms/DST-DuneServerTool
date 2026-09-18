@@ -54,6 +54,14 @@ export const EXPERIMENTAL_BLOCKED_DEFAULT_TARGETS = new Set([
   'game||/script/dunesandbox.timeofdaysettings||m_starttime',
 ])
 
+const RETAIL_CLIENT_COMPATIBILITY_TARGETS = new Set([
+  'engine||vehicle.maxvehiclesperplayer',
+  'engine||dune.disableshieldonshooting',
+  'game||playerinventorystartingsize',
+  'game||playerinventorystartingvolumecapacity',
+  'game||m_basebackuptoolmaprestriction',
+])
+
 type LoadState = 'idle' | 'loading' | 'ready' | 'error' | 'unavailable'
 
 function clientBundleFor(info: GameConfigClientInfo, file: 'game' | 'engine') {
@@ -226,11 +234,14 @@ export function buildAllClientApplyItems(
   for (const cat of cats ?? []) {
     for (const field of cat.fields ?? []) {
       if (!field?.key || !field.clientApply || !isCustomized(cfg, field)) continue
+      const target = `${field.file}||${field.key}`.toLowerCase()
+      if (!RETAIL_CLIENT_COMPATIBILITY_TARGETS.has(target)) continue
       const value = liveValue(cfg, field)
       if (value === '') continue
-      const id = `${field.file}||${field.section}||${field.key}`
-      if (seen.has(id)) continue
-      seen.add(id)
+      // The client API identifies a write by file + schema key; section is
+      // display metadata resolved authoritatively from that key on the server.
+      if (seen.has(target)) continue
+      seen.add(target)
       items.push({
         file: field.file,
         section: field.section,
@@ -411,6 +422,7 @@ export function GameConfig({ mode = 'standard' }: { mode?: 'standard' | 'experim
   const [clientBusy, setClientBusy] = useState(false)
   const [clientMsg, setClientMsg] = useState<string | null>(null)
   const [clientErr, setClientErr] = useState<string | null>(null)
+  const [clientReviewItems, setClientReviewItems] = useState<GameConfigClientApplyItem[] | null>(null)
   const [clientViewFile, setClientViewFile] = useState<'game' | 'engine' | null>(null)
   const refreshClient = useCallback(async () => {
     if (!localViewer) return null
@@ -752,14 +764,15 @@ export function GameConfig({ mode = 'standard' }: { mode?: 'standard' | 'experim
     [clientApplyItems, clientInfo?.engineEnabled],
   )
 
-  const onApplyCurrentClientSettings = useCallback(async () => {
-    if (enabledClientApplyItems.length === 0) return
+  const onApplyCurrentClientSettings = useCallback(async (reviewedItems: GameConfigClientApplyItem[]) => {
+    if (reviewedItems.length === 0) return
     setClientErr(null)
     setClientMsg(null)
     setClientBusy(true)
     try {
-      const result = await applyGameConfigClient(enabledClientApplyItems, clientInfo?.dir)
+      const result = await applyGameConfigClient(reviewedItems, clientInfo?.dir)
       setClientInfo(result.client)
+      setClientReviewItems(null)
       setClientMsg(
         `Applied ${result.applied} setting${result.applied === 1 ? '' : 's'} to this PC's local Dune client config. Other players must apply their own copy.`,
       )
@@ -769,7 +782,7 @@ export function GameConfig({ mode = 'standard' }: { mode?: 'standard' | 'experim
     } finally {
       setClientBusy(false)
     }
-  }, [enabledClientApplyItems, clientInfo])
+  }, [clientInfo])
 
   // The two pages share this component and split the same schema between them:
   // Game Config shows the settings we stand behind, Experimental shows the
@@ -1279,7 +1292,9 @@ export function GameConfig({ mode = 'standard' }: { mode?: 'standard' | 'experim
             }
           >
             <p className="text-xs text-text-muted mb-3">
-              DST can mirror game settings into <span className="font-mono">Game.ini</span>. Managing{' '}
+              Funcom&apos;s in-game Custom Settings deployment remains authoritative for supported settings. DST can
+              optionally mirror a small, field-proven set of advanced Retail values that are still evaluated locally into
+              this PC&apos;s <span className="font-mono">Game.ini</span>. Managing{' '}
               <span className="font-mono">Engine.ini</span> is a separate opt-in because client console-variable overrides
               can materially change gameplay.
             </p>
@@ -1303,23 +1318,13 @@ export function GameConfig({ mode = 'standard' }: { mode?: 'standard' | 'experim
                 </span>
               </span>
             </label>
-            <div className="mb-3 flex flex-wrap items-center gap-2">
-              <button
-                type="button"
-                onClick={() => void onApplyCurrentClientSettings()}
-                disabled={clientBusy || enabledClientApplyItems.length === 0}
-                className="btn-primary"
-                title="Write the current client-evaluated server values into this PC's local Dune config"
-              >
-                <Icon name={clientBusy ? 'Loader2' : 'MonitorCog'} size={14} className={clientBusy ? 'animate-spin' : ''} />
-                Apply to my client
-              </button>
-              <span className="text-xs text-text-muted">
-                Writes {enabledClientApplyItems.length} customized client-evaluated setting{enabledClientApplyItems.length === 1 ? '' : 's'} to this PC only.
-                {clientApplyItems.some(item => item.file === 'engine') && clientInfo?.engineEnabled !== true
-                  ? ' Enable Engine.ini management to include shield, vehicle-cap, and other proven client-read CVars.'
-                  : ' Other players still need the matching values in their own client config.'}
-              </span>
+            <div className="mb-3 rounded-lg border border-border bg-surface-2/40 p-3 text-xs text-text-muted">
+              <strong className="text-text">Review compatibility overrides from the action bar below.</strong>{' '}
+              Only customized, non-default advanced settings outside Funcom&apos;s normal synchronized surface and backed
+              by direct current-Retail evidence are offered. Game.ini values can apply without the Engine.ini opt-in.
+              {clientApplyItems.some(item => item.file === 'engine') && clientInfo?.engineEnabled !== true
+                ? ' Enable Engine.ini management here to include shield, vehicle-cap, and other proven client-read CVars.'
+                : ' Engine.ini values are included only while Engine.ini management is enabled.'}
             </div>
             <div className="flex items-center gap-2">
               <input
@@ -1594,7 +1599,7 @@ export function GameConfig({ mode = 'standard' }: { mode?: 'standard' | 'experim
                 </>
               )}
             </div>
-            <div className="flex items-center gap-2">
+            <div className="flex flex-wrap items-center justify-end gap-2">
               <button
                 type="button"
                 onClick={e => scrollPageToTop(e.currentTarget)}
@@ -1615,6 +1620,20 @@ export function GameConfig({ mode = 'standard' }: { mode?: 'standard' | 'experim
                 <Icon name={reloadingPods ? 'Loader2' : 'RefreshCw'} size={14} className={reloadingPods ? 'animate-spin' : ''} />
                 {reloadingPods ? 'Restarting battlegroup…' : 'Apply INIs & restart'}
               </button>
+              {localViewer && (
+                <button
+                  type="button"
+                  onClick={() => setClientReviewItems(enabledClientApplyItems.map(item => ({ ...item })))}
+                  disabled={clientBusy || enabledClientApplyItems.length === 0}
+                  className="btn-primary"
+                  title={enabledClientApplyItems.length === 0
+                    ? 'No customized field-proven advanced compatibility overrides are available'
+                    : 'Review advanced compatibility overrides before writing this PC’s local Dune config'}
+                >
+                  <Icon name={clientBusy ? 'Loader2' : 'MonitorCog'} size={14} className={clientBusy ? 'animate-spin' : ''} />
+                  Apply advanced compatibility overrides
+                </button>
+              )}
               <span className="text-xs text-text-muted">
                 {dirtyKeys.length === 0 ? 'No changes' : `${dirtyKeys.length} change${dirtyKeys.length === 1 ? '' : 's'}`}
               </span>
@@ -1644,6 +1663,15 @@ export function GameConfig({ mode = 'standard' }: { mode?: 'standard' | 'experim
         onCancel={() => setSandwormModalOpen(false)}
         onConfirm={confirmSandwormEnable}
       />
+
+      {clientReviewItems && (
+        <ClientApplyReviewModal
+          items={clientReviewItems}
+          busy={clientBusy}
+          onCancel={() => setClientReviewItems(null)}
+          onConfirm={reviewedItems => void onApplyCurrentClientSettings(reviewedItems)}
+        />
+      )}
 
       {shareBlock && (
         <IniShareModal
@@ -2855,6 +2883,133 @@ function IniSectionBlock({ section }: { section: GameConfigIniSection }) {
             <span className="text-text break-all">{k.value}</span>
           </div>
         ))}
+      </div>
+    </div>
+  )
+}
+
+function ClientApplyReviewModal({
+  items, busy, onCancel, onConfirm,
+}: {
+  items: GameConfigClientApplyItem[]
+  busy: boolean
+  onCancel: () => void
+  onConfirm: (items: GameConfigClientApplyItem[]) => void
+}) {
+  const itemId = (item: GameConfigClientApplyItem) => `${item.file}||${item.key}`.toLowerCase()
+  const [selectedIds, setSelectedIds] = useState(() => new Set(items.map(itemId)))
+  const selectedItems = items.filter(item => selectedIds.has(itemId(item)))
+  const groups = (['game', 'engine'] as const)
+    .map(file => ({ file, items: items.filter(item => item.file === file) }))
+    .filter(group => group.items.length > 0)
+  const toggleItem = (item: GameConfigClientApplyItem) => {
+    const id = itemId(item)
+    setSelectedIds(previous => {
+      const next = new Set(previous)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
+  }
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4"
+      onClick={() => { if (!busy) onCancel() }}
+    >
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="client-apply-review-title"
+        className="card p-0 max-w-2xl w-full max-h-[85vh] flex flex-col overflow-hidden"
+        onClick={e => e.stopPropagation()}
+      >
+        <div className="px-5 py-4 border-b border-border flex items-center justify-between gap-3">
+          <div>
+            <h3 id="client-apply-review-title" className="font-semibold text-text flex items-center gap-2">
+              <Icon name="MonitorCog" size={16} className="text-accent-bright" />
+              Review advanced compatibility overrides
+            </h3>
+            <p className="mt-1 text-xs text-text-muted">
+              This writes only customized, non-default compatibility overrides with direct current-Retail evidence of
+              local evaluation. It does not copy every server INI setting.
+            </p>
+          </div>
+          <button
+            type="button"
+            className="btn-ghost px-2 py-1"
+            onClick={onCancel}
+            disabled={busy}
+            aria-label="Close client settings review"
+          >
+            <Icon name="X" size={16} />
+          </button>
+        </div>
+
+        <div className="px-5 py-4 overflow-y-auto space-y-4">
+          {groups.map(group => (
+            <section key={group.file} aria-labelledby={`client-review-${group.file}`}>
+              <div className="mb-2 flex items-center justify-between gap-3">
+                <h4 id={`client-review-${group.file}`} className="text-sm font-semibold text-text font-mono">
+                  {group.file === 'game' ? 'Game.ini' : 'Engine.ini'}
+                </h4>
+                <span className="text-xs text-text-muted">
+                  {group.items.filter(item => selectedIds.has(itemId(item))).length} of {group.items.length} selected
+                </span>
+              </div>
+              <div className="divide-y divide-border border border-border rounded-lg overflow-hidden">
+                {group.items.map(item => (
+                  <label
+                    key={itemId(item)}
+                    className="flex items-start gap-3 p-3 bg-surface-2/40 cursor-pointer"
+                  >
+                    <input
+                      type="checkbox"
+                      checked={selectedIds.has(itemId(item))}
+                      onChange={() => toggleItem(item)}
+                      disabled={busy}
+                      className="h-4 w-4 mt-0.5 accent-accent shrink-0"
+                    />
+                    <span className="min-w-0 flex-1">
+                      <span className="block text-sm font-medium text-text">{item.label}</span>
+                      <span className="mt-0.5 block text-xs text-text-muted">
+                        Offered because current Retail field testing shows this advanced value is evaluated from the local client config.
+                      </span>
+                      <span className="mt-1 grid gap-1 text-xs font-mono sm:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
+                        <span className="text-text-muted break-all">[{item.section}] {item.key}</span>
+                        <span className="text-text break-all sm:text-right">{item.value}</span>
+                      </span>
+                    </span>
+                  </label>
+                ))}
+              </div>
+            </section>
+          ))}
+          <p className="text-xs text-text-muted">
+            Game.ini compatibility values do not require Engine.ini management. Engine.ini entries appear here only after
+            that separate opt-in is enabled. This changes this PC only; other players must review and apply their own matching values.
+          </p>
+        </div>
+
+        <div className="px-5 py-3 border-t border-border flex flex-wrap items-center justify-between gap-2">
+          <span className="text-xs text-text-muted">
+            {selectedItems.length} of {items.length} reviewed setting{items.length === 1 ? '' : 's'} selected
+          </span>
+          <div className="flex items-center gap-2">
+            <button type="button" className="btn-secondary" onClick={onCancel} disabled={busy}>
+              Cancel
+            </button>
+            <button
+              type="button"
+              className="btn-primary"
+              onClick={() => onConfirm(selectedItems)}
+              disabled={busy || selectedItems.length === 0}
+            >
+              <Icon name={busy ? 'Loader2' : 'MonitorCog'} size={14} className={busy ? 'animate-spin' : ''} />
+              {busy ? 'Applying…' : `Apply ${selectedItems.length} selected setting${selectedItems.length === 1 ? '' : 's'}`}
+            </button>
+          </div>
+        </div>
       </div>
     </div>
   )
