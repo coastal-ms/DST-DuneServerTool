@@ -186,13 +186,42 @@ Register-DuneRoute -Method GET -Path '/api/gameconfig' -Handler {
     try {
         $cfg = Get-DuneGameConfig -Ip $ctx.ip
         Write-DuneJson -Response $res -Body @{
-            available = $true
-            source    = $cfg.source
-            game      = $cfg.game
-            engine    = $cfg.engine
+            available           = $true
+            source              = $cfg.source
+            authoritative       = $cfg.authoritative
+            needsInitialization = $cfg.needsInitialization
+            game                = $cfg.game
+            engine              = $cfg.engine
         }
     } catch {
         Write-DuneError -Response $res -Status 500 -Message "Game config load failed: $($_.Exception.Message)"
+    }
+}
+
+# -----------------------------------------------------------------------------
+# POST /api/gameconfig/initialize — adopt the currently-installed, readable
+# UserGame.ini/UserEngine.ini defaults as authoritative when no authority marker
+# and no prior DST-managed candidate exist (installed-uninitialized). Writes
+# ONLY the v2 authority marker file — never UserGame.ini/UserEngine.ini. Owner
+# access is already required for the whole /api/gameconfig prefix; this also
+# requires an exact typed confirmation string.
+# -----------------------------------------------------------------------------
+Register-DuneRoute -Method POST -Path '/api/gameconfig/initialize' -Handler {
+    param($req, $res, $routeParams, $body)
+    $ctx = Get-DuneGameConfigContext
+    if (-not $ctx.ok) {
+        Write-DuneError -Response $res -Status $ctx.status -Message $ctx.message
+        return
+    }
+    $confirm = [string](Get-DuneBodyValue -Body $body -Name 'confirm')
+    if ($confirm -cne 'INITIALIZE GAME CONFIG') {
+        Write-DuneError -Response $res -Status 400 -Message 'Type INITIALIZE GAME CONFIG exactly to adopt the installed defaults.'
+        return
+    }
+    try {
+        Write-DuneJson -Response $res -Body (Initialize-DuneGameConfigAuthority -Ip $ctx.ip -Confirmed $true)
+    } catch {
+        Write-DuneError -Response $res -Status 409 -Message "Game Config initialization failed: $($_.Exception.Message)"
     }
 }
 
@@ -362,7 +391,8 @@ Register-DuneRoute -Method PUT -Path '/api/gameconfig' -Handler {
         if ($restartRequired) { $body.restartRequired = $true }
         Write-DuneJson -Response $res -Body $body
     } catch {
-        Write-DuneError -Response $res -Status 500 -Message "Game config save failed: $($_.Exception.Message)"
+        $status = if ($_.Exception.Message -match 'has not been initialized') { 409 } else { 500 }
+        Write-DuneError -Response $res -Status $status -Message "Game config save failed: $($_.Exception.Message)"
     }
 }
 

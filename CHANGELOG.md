@@ -11,6 +11,16 @@ Patch releases within a major series are rolled up under the major's entry
 on GitHub still exist for each individual release; the consolidated entries
 here cover everything those tags shipped.
 
+## [15.1.2] - 2026-09-18
+
+### Fixed
+
+- Game Config can now safely read a fresh battlegroup's installed Funcom
+  defaults before DST has established its authority marker. Saving remains
+  blocked until the owner explicitly initializes Game Config; initialization
+  adopts the existing files without rewriting their contents. Prior managed,
+  malformed, or ambiguous configurations continue to fail closed.
+
 ## [15.1.1] - 2026-09-17
 
 ### Added

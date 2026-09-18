@@ -390,6 +390,7 @@ export function GameConfig({ mode = 'standard' }: { mode?: 'standard' | 'experim
   const [saveError, setSaveError] = useState<string | null>(null)
   const [savedMsg, setSavedMsg] = useState<string | null>(null)
   const [reloadingPods, setReloadingPods] = useState(false)
+  const [initializing, setInitializing] = useState(false)
   const [sandwormModalOpen, setSandwormModalOpen] = useState(false)
   const [search, setSearch] = useState('')
   const [experimentalGroup, setExperimentalGroup] = useState<string | null>(null)
@@ -1021,6 +1022,32 @@ export function GameConfig({ mode = 'standard' }: { mode?: 'standard' | 'experim
     }
   }
 
+  async function onInitializeGameConfig() {
+    if (initializing) return
+    const typed = window.prompt(
+      'Adopt the currently-installed Funcom UserGame.ini/UserEngine.ini defaults as this battlegroup\'s managed Game Config?\n\n'
+      + 'This does NOT change the contents of either file — it only marks them as ready to manage here so saves and dependent features (Landsraad, Maps, Diagnostics) work.\n\n'
+      + 'Type INITIALIZE GAME CONFIG to continue:',
+    )
+    if (typed == null) return
+    if (typed.trim() !== 'INITIALIZE GAME CONFIG') {
+      setSaveError('Initialization cancelled — confirmation text did not match.')
+      return
+    }
+    setInitializing(true)
+    setSaveError(null)
+    setSavedMsg(null)
+    try {
+      await api('/api/gameconfig/initialize', { method: 'POST', body: JSON.stringify({ confirm: typed.trim() }) })
+      setSavedMsg('Game Config initialized — installed defaults are now managed here.')
+      await loadAll()
+    } catch (err) {
+      setSaveError(err instanceof Error ? err.message : String(err))
+    } finally {
+      setInitializing(false)
+    }
+  }
+
   async function onReloadPods() {
     if (dirtyKeys.length > 0 || reloadingPods) return
     const ok = window.confirm(
@@ -1058,7 +1085,9 @@ export function GameConfig({ mode = 'standard' }: { mode?: 'standard' | 'experim
           ? { className: 'pill-success', title: 'Values from the live battlegroup INI files.', icon: 'CircleCheck' as const, label: 'Live' }
           : cfg.source === 'cache'
             ? { className: 'pill-info', title: 'Paths cached from a prior request this session.', icon: 'Info' as const, label: 'Cached' }
-            : { className: 'pill-warning', title: 'No live battlegroup yet — values from setup templates.', icon: 'AlertTriangle' as const, label: 'Template' }
+            : cfg.source === 'installed-uninitialized'
+              ? { className: 'pill-warning', title: 'Installed Funcom defaults, not yet initialized as managed here.', icon: 'AlertTriangle' as const, label: 'Not initialized' }
+              : { className: 'pill-warning', title: 'No live battlegroup yet — values from setup templates.', icon: 'AlertTriangle' as const, label: 'Template' }
   )
   const sourcePill = sourcePresentation && (
     <span
@@ -1423,6 +1452,25 @@ export function GameConfig({ mode = 'standard' }: { mode?: 'standard' | 'experim
       )}
 
       {/* Status / error banners */}
+      {cfg?.needsInitialization && loadState === 'ready' && (
+        <div className="card p-4 mb-4 border-accent/30 bg-accent/5 text-text-muted text-sm flex items-start gap-2 justify-between">
+          <div className="flex items-start gap-2">
+            <Icon name="Info" size={16} className="mt-0.5 shrink-0 text-accent-bright" />
+            <div>
+              <div className="font-medium text-text">Installed Funcom defaults are readable but not yet managed here.</div>
+              <div className="text-xs text-text-muted mt-0.5">Initializing adopts the existing UserGame.ini/UserEngine.ini files as-is — their contents are not changed. Saving is disabled until then.</div>
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={() => void onInitializeGameConfig()}
+            disabled={initializing}
+            className="px-3 py-1.5 rounded bg-accent/20 hover:bg-accent/30 text-accent-bright text-xs font-medium shrink-0 disabled:opacity-50"
+          >
+            {initializing ? 'Initializing…' : 'Initialize Game Config'}
+          </button>
+        </div>
+      )}
       {loadState === 'unavailable' && (
         <div className="card p-4 mb-4 border-accent/30 bg-accent/5 text-text-muted text-sm flex items-start gap-2">
           <Icon name="Info" size={16} className="mt-0.5 shrink-0 text-accent-bright" />
