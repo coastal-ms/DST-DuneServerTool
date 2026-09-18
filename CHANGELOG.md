@@ -31,6 +31,9 @@ here cover everything those tags shipped.
 
 ### Fixed
 
+- Replaced the retired external TCP checker with documented multi-node
+  verification, now distinguishing open, closed, and unknown results honestly
+  and offering an explicit external verification fallback when status is unknown.
 - DuneShell now recovers its WebView process during long restart operations
   without stopping the backend.
 - Restored automatic Deep Desert base-backup protection after the Retail
