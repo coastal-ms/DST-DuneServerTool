@@ -4,6 +4,8 @@ import {
   applyGameConfigClient,
   getGameConfigExperimentalCategories,
   getGameConfigExperimentalCategory,
+  getRetailServerSettings,
+  saveRetailServerSettings,
   getSpicefieldState,
   reloadGameConfigPods,
   saveDeepDesertPvp,
@@ -71,6 +73,29 @@ describe('Game Config pod reload API', () => {
       url: '/api/gameconfig/reload-pods',
       method: 'POST',
       body: undefined,
+    })
+  })
+})
+
+describe('Official Retail Server Settings API', () => {
+  it('uses a read-only endpoint', async () => {
+    await getRetailServerSettings()
+    expect(calls.at(-1)).toEqual({
+      url: '/api/gameconfig/retail-server-settings',
+      method: undefined,
+      body: undefined,
+    })
+  })
+
+  it('sends the expected revision and changed values through the guarded write endpoint', async () => {
+    await saveRetailServerSettings('sha256-current', { FiefdomLimit: '4' })
+    expect(calls.at(-1)).toEqual({
+      url: '/api/gameconfig/retail-server-settings',
+      method: 'PUT',
+      body: {
+        revision: 'sha256-current',
+        updates: { FiefdomLimit: '4' },
+      },
     })
   })
 })

@@ -204,6 +204,79 @@ export type GameConfigResponse = {
   engine: GameConfigFileBundle
 }
 
+export type RetailServerSetting = {
+  key: string
+  value: string
+  displayValue: string
+  label: string
+  group: string
+  type: GameConfigFieldType
+  options: string[]
+  inverted: boolean
+  supported: boolean
+  valid: boolean
+  validationError: string
+  editable: boolean
+  readOnly: boolean
+}
+
+export type RetailServerSettingsTarget = {
+  available: boolean
+  namespace?: string
+  battlegroup?: string
+  pod?: string
+  persistentVolumeClaim?: string
+  mountPath?: '/srv'
+  mountSubPath?: 'Saved'
+  path?: '/srv/Config/LinuxServer/ServerCustomSettings.ini'
+  gamePath?: '/home/dune/server/DuneSandbox/Saved/Config/LinuxServer/ServerCustomSettings.ini'
+  reason?: string
+  upstreamField?: 'spec.serverGroup.template.spec.global.userIniConfig'
+  upstreamConfigured?: boolean
+  upstreamMountPath?: string
+  upstreamFileName?: string
+  stopped?: boolean
+  serverPodCount?: number
+}
+
+export type RetailServerSettingsResponse = {
+  available: boolean
+  readOnly: boolean
+  source: 'funcom-runtime-projection' | 'funcom-servergroup-user-ini-config'
+  authority?: string
+  reason?: string
+  revision?: string
+  modifiedAt?: string
+  observedAt?: string
+  bytes?: number
+  target: RetailServerSettingsTarget
+  section?: '/Script/DuneSandbox.UserServerCustomSettings'
+  sectionFound?: boolean
+  settings: RetailServerSetting[]
+  malformedLines: Array<{ line: number; raw: string }>
+  writeBehavior?: {
+    supported: boolean
+    requiresStoppedBattlegroup?: boolean
+    backup?: string
+    reason?: string
+  }
+  applyBehavior?: {
+    mode: 'live-reconciled' | 'operator-mounted'
+    restartRequired: boolean
+    note: string
+  }
+}
+
+export type RetailServerSettingsSaveResponse = {
+  ok: boolean
+  applied: number
+  revision: string
+  backup: { path: string; sha256: string; timestamp: string }
+  restartRequired: true
+  message: string
+  settings: RetailServerSetting[]
+}
+
 export type GameConfigPodReloadResponse = {
   ok: boolean
   noop?: boolean

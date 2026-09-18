@@ -22,6 +22,16 @@ here cover everything those tags shipped.
   first-run or concurrent two-sided conflicts without guessing, backs up every
   changed copy, rolls back failed deployments, and verifies the deployed
   readback before allowing the battlegroup restart.
+- Added a distinct **Official Retail Server Settings** card to Game Config. It
+  reads all current values from Funcom's live
+  `Config/LinuxServer/ServerCustomSettings.ini`, gives established values typed
+  controls, and retains unknown or malformed future values visibly without
+  editing them. Retail regenerates the PVC file, so DST never writes it
+  directly. Saves require a fully stopped battlegroup, create and verify a
+  timestamped full-file backup, enforce an expected-content revision, preserve
+  comments/order/unknown keys, then atomically update Funcom's durable
+  `spec.serverGroup.template.spec.global.userIniConfig` source with exact
+  readback and automatic rollback on failure.
 - Restored automatic Deep Desert base-backup protection after the Retail
   self-hosted schema moved actor state onto the actor row. The guard now
   recognizes and preserves both the legacy and Retail cleanup-function forms

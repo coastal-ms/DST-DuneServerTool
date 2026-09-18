@@ -48,6 +48,7 @@ import { SpicefieldsCard } from './gameconfig/SpicefieldsCard'
 import { LandclaimTimerCard } from './gameconfig/LandclaimTimerCard'
 import { DeepDesertPvpCard } from './gameconfig/DeepDesertPvpCard'
 import { BaseBackupGuardPanel } from './gameconfig/BaseBackupGuardPanel'
+import { OfficialRetailServerSettingsCard } from './gameconfig/OfficialRetailServerSettingsCard'
 import { isLocalViewer } from '../util/viewer'
 
 export const EXPERIMENTAL_BLOCKED_DEFAULT_TARGETS = new Set([
@@ -1220,6 +1221,8 @@ export function GameConfig({ mode = 'standard' }: { mode?: 'standard' | 'experim
         onRenamed={() => { void forceRefresh() }}
       />
       )}
+
+      {!experimentalPage && <OfficialRetailServerSettingsCard vmRunning={vmRunning} />}
 
       {/* How it works. On the Experimental page this is also where the user is
           told to go back to Game Config to apply — that path rebuilds the server

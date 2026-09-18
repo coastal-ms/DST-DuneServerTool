@@ -11,6 +11,49 @@ Register-DuneRoute -Method GET -Path '/api/gameconfig/schema' -Handler {
     Write-DuneJson -Response $res -Body @{ schema = Get-DuneGameConfigSchemaApi }
 }
 
+# Official Retail Self-Hosted settings are a Funcom-managed runtime projection
+# on the Saved PVC. Funcom reconciles direct edits, and no durable upstream write
+# source is currently configured in the battlegroup. The ServerGroup CRD exposes
+# global.userIniConfig as the intended upstream mount contract. Writes below
+# target only that durable field while the battlegroup is fully stopped.
+Register-DuneRoute -Method GET -Path '/api/gameconfig/retail-server-settings' -Handler {
+    param($req, $res, $routeParams, $body)
+    $ctx = Get-DuneGameConfigContext
+    if (-not $ctx.ok) {
+        Write-DuneError -Response $res -Status $ctx.status -Message $ctx.message
+        return
+    }
+
+    Register-DuneRoute -Method PUT -Path '/api/gameconfig/retail-server-settings' -Handler {
+        param($req, $res, $routeParams, $body)
+        $ctx = Get-DuneGameConfigContext
+        if (-not $ctx.ok) {
+            Write-DuneError -Response $res -Status $ctx.status -Message $ctx.message
+            return
+        }
+        if (-not (Test-DunePlayerGuard -Req $req -Res $res -Ip $ctx.ip)) { return }
+        if (-not ($body -is [hashtable]) -or
+            -not $body.ContainsKey('revision') -or
+            -not $body.ContainsKey('updates') -or
+            -not ($body.updates -is [hashtable])) {
+            Write-DuneError -Response $res -Status 400 -Message 'Body must include revision and an updates object.'
+            return
+        }
+        try {
+            Write-DuneJson -Response $res -Body (
+                Set-DuneRetailServerSettings -Ip $ctx.ip -Updates $body.updates -ExpectedRevision "$($body.revision)")
+        } catch {
+            $status = if ($_.Exception.Message -match 'changed since|changed during save') { 409 } else { 400 }
+            Write-DuneError -Response $res -Status $status -Message $_.Exception.Message
+        }
+    }
+    try {
+        Write-DuneJson -Response $res -Body (Get-DuneRetailServerSettings -Ip $ctx.ip)
+    } catch {
+        Write-DuneError -Response $res -Status 500 -Message "Official Retail Server Settings load failed: $($_.Exception.Message)"
+    }
+}
+
 # Experimental Lab metadata and category fields are separate from the normal
 # schema so opening DST or Game Config never loads the 5,000-control catalog.
 Register-DuneRoute -Method GET -Path '/api/gameconfig/experimental/categories' -Handler {
