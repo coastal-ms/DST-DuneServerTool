@@ -928,22 +928,50 @@ function Get-DuneUserSettingsDeployTransactionScript {
 
     $lines = New-Object 'System.Collections.Generic.List[string]'
     $lines.Add('set -Eeuo pipefail')
+    $lines.Add("for tool in flock ln mv sha256sum sleep stat chown chmod; do command -v `"`$tool`" >/dev/null 2>&1 || { echo `"required UserSettings tool missing: `$tool`" >&2; exit 74; }; done")
     $lines.Add("exec 9>'/home/dune/.dune/download/scripts/setup/config/.dst-usersettings-deploy.lock'")
     $lines.Add("flock -n 9 || { echo 'another UserSettings deployment is active' >&2; exit 73; }")
-    $lines.Add('command -v python3 >/dev/null 2>&1 || { echo ''python3 is required for atomic UserSettings exchange'' >&2; exit 74; }')
-    $lines.Add('atomic_exchange() {')
-    $lines.Add('  sudo python3 - "$1" "$2" <<''PY''')
-    $lines.Add('import ctypes')
-    $lines.Add('import os')
-    $lines.Add('import sys')
-    $lines.Add('libc = ctypes.CDLL(None, use_errno=True)')
-    $lines.Add('renameat2 = libc.renameat2')
-    $lines.Add('renameat2.argtypes = [ctypes.c_int, ctypes.c_char_p, ctypes.c_int, ctypes.c_char_p, ctypes.c_uint]')
-    $lines.Add('renameat2.restype = ctypes.c_int')
-    $lines.Add('if renameat2(-100, os.fsencode(sys.argv[1]), -100, os.fsencode(sys.argv[2]), 2) != 0:')
-    $lines.Add('    error = ctypes.get_errno()')
-    $lines.Add('    raise OSError(error, os.strerror(error))')
-    $lines.Add('PY')
+    $lines.Add('wait_inode_closed() {')
+    $lines.Add('  sudo sh -c ''')
+    $lines.Add('    path=$1')
+    $lines.Add('    target=$(stat -Lc "%d:%i" "$path") || exit 1')
+    $lines.Add('    attempts=0')
+    $lines.Add('    while [ "$attempts" -lt 15 ]; do')
+    $lines.Add('      open=0')
+    $lines.Add('      for dir in /proc/[0-9]*/fd; do')
+    $lines.Add('        [ -d "$dir" ] || continue')
+    $lines.Add('        for fd in "$dir"/*; do')
+    $lines.Add('          [ -e "$fd" ] || continue')
+    $lines.Add('          current=$(stat -Lc "%d:%i" "$fd" 2>/dev/null || true)')
+    $lines.Add('          if [ "$current" = "$target" ]; then open=1; break 2; fi')
+    $lines.Add('        done')
+    $lines.Add('      done')
+    $lines.Add('      [ "$open" -eq 0 ] && exit 0')
+    $lines.Add('      attempts=$((attempts + 1))')
+    $lines.Add('      sleep 1')
+    $lines.Add('    done')
+    $lines.Add('    echo "UserSettings file is still open after 15 seconds: $path" >&2')
+    $lines.Add('    exit 1')
+    $lines.Add('  '' sh "$1"')
+    $lines.Add('}')
+    $lines.Add('restore_without_overwrite() {')
+    $lines.Add('  current=$1')
+    $lines.Add('  merged_hash=$2')
+    $lines.Add('  rollback_src=$3')
+    $lines.Add('  rollback_backup=$4')
+    $lines.Add('  conflict_copy=$5')
+    $lines.Add('  test -f "$rollback_src" || rollback_src=$rollback_backup')
+    $lines.Add('  if test -e "$current"; then')
+    $lines.Add('    sudo mv "$current" "$conflict_copy" || return 0')
+    $lines.Add('    if echo "$merged_hash  $conflict_copy" | sudo sha256sum -c - >/dev/null 2>&1; then')
+    $lines.Add('      test ! -f "$rollback_src" || sudo ln "$rollback_src" "$current" 2>/dev/null || true')
+    $lines.Add('    else')
+    $lines.Add('      sudo ln "$conflict_copy" "$current" 2>/dev/null || true')
+    $lines.Add('    fi')
+    $lines.Add('  else')
+    $lines.Add('    test ! -f "$rollback_src" || sudo ln "$rollback_src" "$current" 2>/dev/null || true')
+    $lines.Add('  fi')
+    $lines.Add('  test ! -f "$rollback_src" || sudo mv "$rollback_src" "$rollback_backup"')
     $lines.Add('}')
     for ($i = 0; $i -lt $Files.Count; $i++) {
         $lines.Add("installed_mutated_$i=0")
@@ -958,39 +986,28 @@ function Get-DuneUserSettingsDeployTransactionScript {
         $file = $Files[$i]
         if ($file.installedChanged) {
             $lines.Add("  if test `"`$installed_mutated_$i`" = 1; then")
-            $lines.Add("    atomic_exchange '$($file.installedStagePath)' '$($file.installedPath)'")
-            $lines.Add("    if echo '$($file.mergedHash)  $($file.installedStagePath)' | sudo sha256sum -c - >/dev/null 2>&1; then")
-            $lines.Add("      installed_mutated_$i=0")
-            $lines.Add('    else')
-            $lines.Add("      atomic_exchange '$($file.installedStagePath)' '$($file.installedPath)'")
-            $lines.Add("      echo 'Concurrent installed UserSettings edit preserved; automatic rollback skipped.' >&2")
-            $lines.Add('    fi')
+            $lines.Add("    restore_without_overwrite '$($file.installedPath)' '$($file.mergedHash)' '$($file.installedBackup).tmp' '$($file.installedBackup)' '$($file.installedPath).dst-concurrent-$Stamp'")
+            $lines.Add("    installed_mutated_$i=0")
             $lines.Add('  fi')
         }
         if ($file.pvcChanged) {
             $lines.Add("  if test `"`$pvc_mutated_$i`" = 1; then")
-            $lines.Add("    atomic_exchange '$($file.pvcStagePath)' '$($file.pvcPath)'")
-            $lines.Add("    if echo '$($file.mergedHash)  $($file.pvcStagePath)' | sudo sha256sum -c - >/dev/null 2>&1; then")
-            $lines.Add("      pvc_mutated_$i=0")
-            $lines.Add('    else')
-            $lines.Add("      atomic_exchange '$($file.pvcStagePath)' '$($file.pvcPath)'")
-            $lines.Add("      echo 'Concurrent VM Utilities edit preserved; automatic rollback skipped.' >&2")
-            $lines.Add('    fi')
+            $lines.Add("    restore_without_overwrite '$($file.pvcPath)' '$($file.mergedHash)' '$($file.pvcBackup).tmp' '$($file.pvcBackup)' '$($file.pvcPath).dst-concurrent-$Stamp'")
+            $lines.Add("    pvc_mutated_$i=0")
             $lines.Add('  fi')
         }
         $lines.Add("  if test `"`$baseline_mutated_$i`" = 1; then")
         if ($file.baselineExists) {
-            $lines.Add("    atomic_exchange '$($file.baselineStagePath)' '$($file.baselinePath)'")
-            $lines.Add("    if echo '$($file.mergedHash)  $($file.baselineStagePath)' | sudo sha256sum -c - >/dev/null 2>&1; then")
-            $lines.Add("      baseline_mutated_$i=0")
-            $lines.Add('    else')
-            $lines.Add("      atomic_exchange '$($file.baselineStagePath)' '$($file.baselinePath)'")
-            $lines.Add('    fi')
+            $lines.Add("    restore_without_overwrite '$($file.baselinePath)' '$($file.mergedHash)' '$($file.baselineBackup).tmp' '$($file.baselineBackup)' '$($file.baselinePath).dst-concurrent-$Stamp'")
+            $lines.Add("    baseline_mutated_$i=0")
         } else {
-            $lines.Add("    if echo '$($file.mergedHash)  $($file.baselinePath)' | sudo sha256sum -c - >/dev/null 2>&1; then")
-            $lines.Add("      sudo rm -f '$($file.baselinePath)'")
-            $lines.Add("      baseline_mutated_$i=0")
+            $lines.Add("    if test -e '$($file.baselinePath)'; then")
+            $lines.Add("      sudo mv '$($file.baselinePath)' '$($file.baselinePath).dst-concurrent-$Stamp'")
+            $lines.Add("      if ! echo '$($file.mergedHash)  $($file.baselinePath).dst-concurrent-$Stamp' | sudo sha256sum -c - >/dev/null 2>&1; then")
+            $lines.Add("        sudo ln '$($file.baselinePath).dst-concurrent-$Stamp' '$($file.baselinePath)' 2>/dev/null || true")
+            $lines.Add('      fi')
             $lines.Add('    fi')
+            $lines.Add("    baseline_mutated_$i=0")
         }
         $lines.Add('  fi')
         $lines.Add("  sudo rm -f '$($file.installedStagePath)' '$($file.pvcStagePath)' '$($file.baselineStagePath)'")
@@ -998,10 +1015,12 @@ function Get-DuneUserSettingsDeployTransactionScript {
     $lines.Add('  exit "$rc"')
     $lines.Add('}')
     $lines.Add("trap 'rollback `$?' ERR")
+    $lines.Add("trap 'rollback 129' HUP")
+    $lines.Add("trap 'rollback 130' INT")
+    $lines.Add("trap 'rollback 143' TERM")
 
     # Validate every observed input and staged output before changing a live
-    # destination. Each stage lives beside its target so renameat2 can exchange
-    # the two names atomically.
+    # destination. Each stage lives beside its target so mv is an atomic rename.
     foreach ($file in $Files) {
         $lines.Add("echo '$($file.installedHash)  $($file.installedPath)' | sudo sha256sum -c - >/dev/null")
         $lines.Add("echo '$($file.pvcHash)  $($file.pvcPath)' | sudo sha256sum -c - >/dev/null")
@@ -1009,10 +1028,10 @@ function Get-DuneUserSettingsDeployTransactionScript {
         $lines.Add("echo '$($file.mergedHash)  $($file.pvcStagePath)' | sudo sha256sum -c - >/dev/null")
         $lines.Add("sudo cp -p '$($file.installedStagePath)' '$($file.baselineStagePath)'")
         $lines.Add("echo '$($file.mergedHash)  $($file.baselineStagePath)' | sudo sha256sum -c - >/dev/null")
-        $lines.Add("sudo chown --reference='$($file.installedPath)' '$($file.installedStagePath)'")
-        $lines.Add("sudo chmod --reference='$($file.installedPath)' '$($file.installedStagePath)'")
-        $lines.Add("sudo chown --reference='$($file.pvcPath)' '$($file.pvcStagePath)'")
-        $lines.Add("sudo chmod --reference='$($file.pvcPath)' '$($file.pvcStagePath)'")
+        $lines.Add("sudo chown `"`$(sudo stat -c '%u:%g' '$($file.installedPath)')`" '$($file.installedStagePath)'")
+        $lines.Add("sudo chmod `"`$(sudo stat -c '%a' '$($file.installedPath)')`" '$($file.installedStagePath)'")
+        $lines.Add("sudo chown `"`$(sudo stat -c '%u:%g' '$($file.pvcPath)')`" '$($file.pvcStagePath)'")
+        $lines.Add("sudo chmod `"`$(sudo stat -c '%a' '$($file.pvcPath)')`" '$($file.pvcStagePath)'")
         if ($file.baselineExists) {
             $lines.Add("echo '$($file.baselineHash)  $($file.baselinePath)' | sudo sha256sum -c - >/dev/null")
         }
@@ -1021,17 +1040,21 @@ function Get-DuneUserSettingsDeployTransactionScript {
     for ($i = 0; $i -lt $Files.Count; $i++) {
         $file = $Files[$i]
         if ($file.installedChanged) {
-            $lines.Add("atomic_exchange '$($file.installedStagePath)' '$($file.installedPath)'")
             $lines.Add("installed_mutated_$i=1")
-            $lines.Add("echo '$($file.installedHash)  $($file.installedStagePath)' | sudo sha256sum -c - >/dev/null")
-            $lines.Add("sudo cp -p '$($file.installedStagePath)' '$($file.installedBackup).tmp'")
+            $lines.Add("sudo mv '$($file.installedPath)' '$($file.installedBackup).tmp'")
+            $lines.Add("wait_inode_closed '$($file.installedBackup).tmp'")
+            $lines.Add("echo '$($file.installedHash)  $($file.installedBackup).tmp' | sudo sha256sum -c - >/dev/null")
+            $lines.Add("sudo ln '$($file.installedStagePath)' '$($file.installedPath)'")
+            $lines.Add("echo '$($file.mergedHash)  $($file.installedPath)' | sudo sha256sum -c - >/dev/null")
             $lines.Add("sudo mv -f '$($file.installedBackup).tmp' '$($file.installedBackup)'")
         }
         if ($file.pvcChanged) {
-            $lines.Add("atomic_exchange '$($file.pvcStagePath)' '$($file.pvcPath)'")
             $lines.Add("pvc_mutated_$i=1")
-            $lines.Add("echo '$($file.pvcHash)  $($file.pvcStagePath)' | sudo sha256sum -c - >/dev/null")
-            $lines.Add("sudo cp -p '$($file.pvcStagePath)' '$($file.pvcBackup).tmp'")
+            $lines.Add("sudo mv '$($file.pvcPath)' '$($file.pvcBackup).tmp'")
+            $lines.Add("wait_inode_closed '$($file.pvcBackup).tmp'")
+            $lines.Add("echo '$($file.pvcHash)  $($file.pvcBackup).tmp' | sudo sha256sum -c - >/dev/null")
+            $lines.Add("sudo ln '$($file.pvcStagePath)' '$($file.pvcPath)'")
+            $lines.Add("echo '$($file.mergedHash)  $($file.pvcPath)' | sudo sha256sum -c - >/dev/null")
             $lines.Add("sudo mv -f '$($file.pvcBackup).tmp' '$($file.pvcBackup)'")
         }
     }
@@ -1041,18 +1064,18 @@ function Get-DuneUserSettingsDeployTransactionScript {
         $lines.Add("echo '$($file.mergedHash)  $($file.installedPath)' | sudo sha256sum -c - >/dev/null")
         $lines.Add("echo '$($file.mergedHash)  $($file.pvcPath)' | sudo sha256sum -c - >/dev/null")
         if ($file.baselineExists) {
-            $lines.Add("atomic_exchange '$($file.baselineStagePath)' '$($file.baselinePath)'")
             $lines.Add("baseline_mutated_$i=1")
-            $lines.Add("echo '$($file.baselineHash)  $($file.baselineStagePath)' | sudo sha256sum -c - >/dev/null")
-            $lines.Add("sudo cp -p '$($file.baselineStagePath)' '$($file.baselineBackup).tmp'")
+            $lines.Add("sudo mv '$($file.baselinePath)' '$($file.baselineBackup).tmp'")
+            $lines.Add("echo '$($file.baselineHash)  $($file.baselineBackup).tmp' | sudo sha256sum -c - >/dev/null")
+            $lines.Add("sudo ln '$($file.baselineStagePath)' '$($file.baselinePath)'")
             $lines.Add("sudo mv -f '$($file.baselineBackup).tmp' '$($file.baselineBackup)'")
         } else {
-            $lines.Add("sudo mv '$($file.baselineStagePath)' '$($file.baselinePath)'")
             $lines.Add("baseline_mutated_$i=1")
+            $lines.Add("sudo ln '$($file.baselineStagePath)' '$($file.baselinePath)'")
         }
         $lines.Add("echo '$($file.mergedHash)  $($file.baselinePath)' | sudo sha256sum -c - >/dev/null")
     }
-    $lines.Add('trap - ERR')
+    $lines.Add('trap - ERR HUP INT TERM')
     foreach ($file in $Files) {
         $lines.Add("sudo rm -f '$($file.installedStagePath)' '$($file.pvcStagePath)' '$($file.baselineStagePath)'")
     }
@@ -1069,7 +1092,9 @@ function Invoke-DuneUserSettingsDeployTransaction {
     $cmd = Get-DuneUserSettingsDeployTransactionScript -Files $Files -Stamp $Stamp
     $output = @(Invoke-V6Ssh -Ip $Ip -Cmd $cmd -TimeoutSec 120)
     if (-not ($output -match '^__DST_USERSETTINGS_DEPLOYED__$')) {
-        throw 'UserSettings deployment or verified readback failed; changed files were rolled back and the battlegroup was not restarted.'
+        $detail = ($output -join "`n").Trim()
+        $suffix = if ($detail) { " Remote detail: $detail" } else { '' }
+        throw "UserSettings deployment or verified readback failed; changed files were rolled back and the battlegroup was not restarted.$suffix"
     }
     return ($output -join "`n")
 }
