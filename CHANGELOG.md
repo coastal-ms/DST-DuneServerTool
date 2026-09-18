@@ -11,7 +11,60 @@ Patch releases within a major series are rolled up under the major's entry
 on GitHub still exist for each individual release; the consolidated entries
 here cover everything those tags shipped.
 
-## [Unreleased]
+## [15.1.1] - 2026-09-17
+
+### Fixed
+
+- Restored automatic Deep Desert base-backup protection after the Retail
+  self-hosted schema moved actor state onto the actor row. The guard now
+  recognizes and preserves both the legacy and Retail cleanup-function forms
+  when reapplying its `BaseBackup` exclusion after a Funcom update. This
+  server-side guard preserves stored base actors through Coriolis; it is
+  separate from enabling the Base Backup Tool in each player's client.
+- Retail's unavailable queued/current primed-spice count now remains `null`
+  through the API and is hidden from Retail status readouts instead of becoming
+  numeric zero or implying that priming is inactive. Active-field counts and
+  spawning state remain visible, and the editable Max primed cap remains
+  available. Legacy database paths still show their authoritative current
+  primed counts.
+- Retail spice limits now distinguish an existing configured override from the
+  live Funcom default and DST guidance. This keeps intentional custom caps
+  unchanged while making inherited values such as a Hagga 10/10 override clear
+  beside the longstanding 5/5 default guidance.
+- Added Retail's newly shipped Zanovar, Arrakeen Spaceport, Place of
+  Contemplation, Glutton's Dining Room, and Sietch Talab areas to Map Spin-Up
+  with friendly labels. Zanovar also exposes its verified director
+  party-sharing override so self-hosted operators can allow separate parties
+  to share the area instead of retaining the shipped one-party isolation.
+- Hardened the conditional Retail INI migration used when multiple battlegroup
+  PVC configurations exist or the earlier v1 import marker requires repair.
+  It now skips newly generated default PVCs, layers supported non-default
+  DST-managed overrides—including disabled building restriction limits—onto
+  Funcom's installed defaults, repairs v1 imports from clean pre-import backups,
+  verifies both files, and fails closed when no prior managed configuration can
+  be identified.
+- Added a prominent, review-first **Apply advanced compatibility overrides**
+  action for the small set of advanced values field-proven to remain locally
+  evaluated by Retail outside Funcom's normal Custom Settings synchronization.
+  The review lists and individually selects the exact `Game.ini` or `Engine.ini`
+  target, section/key, and value before writing. The supported set is **Allowed
+  Maps**, **Starting Inventory Slots**, **Starting Inventory Volume**,
+  **Maximum Vehicles Per Player**, and **Shield Drops While Shooting**;
+  Engine.ini entries still require the existing opt-in. Server saves remain
+  separate, automatic client mirroring stays disabled, and no other historical
+  `ClientApply` field is included without equivalent current-Retail evidence.
+- Added a guarded **Review WindowsClient migration** action for Retail's client
+  config directory change. It detects the former `WindowsClient` files but
+  offers only recognized, non-default values from the same field-proven
+  compatibility allowlist. Missing `Windows` values are preselected, different
+  current values are shown as unselected conflicts, and already-current values
+  are left alone. Whole files, account/session data, unknown keys, and
+  recognized settings without current local-consumption evidence are never
+  copied. Existing destination files are backed up, replaced atomically, and
+  verified by readback.
+
+- Restored Set Ammo for Retail ranged weapons whose empty
+  `FWeaponItemStats` block omits the `CurrentAmmo` field.
 
 ## [15.1.0] - 2026-09-17
 

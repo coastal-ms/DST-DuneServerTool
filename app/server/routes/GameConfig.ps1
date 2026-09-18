@@ -11,6 +11,49 @@ Register-DuneRoute -Method GET -Path '/api/gameconfig/schema' -Handler {
     Write-DuneJson -Response $res -Body @{ schema = Get-DuneGameConfigSchemaApi }
 }
 
+# Official Retail Self-Hosted settings are a Funcom-managed runtime projection
+# on the Saved PVC. Funcom reconciles direct edits, and no durable upstream write
+# source is currently configured in the battlegroup. The ServerGroup CRD exposes
+# global.userIniConfig as the intended upstream mount contract. Writes below
+# target only that durable field while the battlegroup is fully stopped.
+Register-DuneRoute -Method GET -Path '/api/gameconfig/retail-server-settings' -Handler {
+    param($req, $res, $routeParams, $body)
+    $ctx = Get-DuneGameConfigContext
+    if (-not $ctx.ok) {
+        Write-DuneError -Response $res -Status $ctx.status -Message $ctx.message
+        return
+    }
+    try {
+        Write-DuneJson -Response $res -Body (Get-DuneRetailServerSettings -Ip $ctx.ip)
+    } catch {
+        Write-DuneError -Response $res -Status 500 -Message "Official Retail Server Settings load failed: $($_.Exception.Message)"
+    }
+}
+
+Register-DuneRoute -Method PUT -Path '/api/gameconfig/retail-server-settings' -Handler {
+    param($req, $res, $routeParams, $body)
+    $ctx = Get-DuneGameConfigContext
+    if (-not $ctx.ok) {
+        Write-DuneError -Response $res -Status $ctx.status -Message $ctx.message
+        return
+    }
+    if (-not (Test-DunePlayerGuard -Req $req -Res $res -Ip $ctx.ip)) { return }
+    if (-not ($body -is [hashtable]) -or
+        -not $body.ContainsKey('revision') -or
+        -not $body.ContainsKey('updates') -or
+        -not ($body.updates -is [hashtable])) {
+        Write-DuneError -Response $res -Status 400 -Message 'Body must include revision and an updates object.'
+        return
+    }
+    try {
+        Write-DuneJson -Response $res -Body (
+            Set-DuneRetailServerSettings -Ip $ctx.ip -Updates $body.updates -ExpectedRevision "$($body.revision)")
+    } catch {
+        $status = if ($_.Exception.Message -match 'changed since|changed during save') { 409 } else { 400 }
+        Write-DuneError -Response $res -Status $status -Message $_.Exception.Message
+    }
+}
+
 # Experimental Lab metadata and category fields are separate from the normal
 # schema so opening DST or Game Config never loads the 5,000-control catalog.
 Register-DuneRoute -Method GET -Path '/api/gameconfig/experimental/categories' -Handler {
@@ -616,6 +659,7 @@ Register-DuneRoute -Method PUT -Path '/api/gameconfig/client/apply' -LocalOnly -
             paths   = $r.paths
             files   = $r.files
             backup  = $r.backup
+            backups = $r.backups
             created = $r.created
             applied = $r.applied
             items   = $r.items
@@ -718,8 +762,12 @@ Register-DuneRoute -Method GET -Path '/api/gameconfig/spicefields' -Handler {
                 dimensionIndex   = [int]$_.dimension_index
                 maxActive        = [int]$_.max_globally_active
                 maxPrimed        = [int]$_.max_globally_primed
+                defaultMaxActive = if ($legacyAdapter -or $null -eq $_.default_max_globally_active) { $null } else { [int]$_.default_max_globally_active }
+                defaultMaxPrimed = if ($legacyAdapter -or $null -eq $_.default_max_globally_primed) { $null } else { [int]$_.default_max_globally_primed }
+                guidanceMax      = if ($legacyAdapter -or $null -eq $_.guidance_max) { $null } else { [int]$_.guidance_max }
+                configuredOverride = if ($legacyAdapter) { $null } else { [bool]$_.configured_override }
                 currentActive    = [int]$_.current_globally_active
-                currentPrimed    = [int]$_.current_globally_primed
+                currentPrimed    = if ($legacyAdapter) { [int]$_.current_globally_primed } else { $null }
                 isSpawningActive = [bool]$_.is_spawning_active
                 spawnWeight      = [double]$_.global_spawn_weight
                 partitionLive    = if ($legacyAdapter) { [bool]($hit -and $hit.live) } else { [bool]$_.partition_live }
@@ -865,8 +913,12 @@ Register-DuneRoute -Method PUT -Path '/api/gameconfig/spicefields/{id}' -Handler
                 dimensionIndex   = [int]$row.dimension_index
                 maxActive        = [int]$row.max_globally_active
                 maxPrimed        = [int]$row.max_globally_primed
+                defaultMaxActive = if ($legacyAdapter -or $null -eq $row.default_max_globally_active) { $null } else { [int]$row.default_max_globally_active }
+                defaultMaxPrimed = if ($legacyAdapter -or $null -eq $row.default_max_globally_primed) { $null } else { [int]$row.default_max_globally_primed }
+                guidanceMax      = if ($legacyAdapter -or $null -eq $row.guidance_max) { $null } else { [int]$row.guidance_max }
+                configuredOverride = if ($legacyAdapter) { $null } else { [bool]$row.configured_override }
                 currentActive    = [int]$row.current_globally_active
-                currentPrimed    = [int]$row.current_globally_primed
+                currentPrimed    = if ($legacyAdapter) { [int]$row.current_globally_primed } else { $null }
                 isSpawningActive = [bool]$row.is_spawning_active
                 spawnWeight      = [double]$row.global_spawn_weight
                 adapter          = if ($legacyAdapter) { 'legacy-db' } else { 'retail-config' }
@@ -964,8 +1016,12 @@ Register-DuneRoute -Method PUT -Path '/api/gameconfig/spicefields/{id}/spawning'
                 dimensionIndex   = [int]$row.dimension_index
                 maxActive        = [int]$row.max_globally_active
                 maxPrimed        = [int]$row.max_globally_primed
+                defaultMaxActive = if ($legacyAdapter -or $null -eq $row.default_max_globally_active) { $null } else { [int]$row.default_max_globally_active }
+                defaultMaxPrimed = if ($legacyAdapter -or $null -eq $row.default_max_globally_primed) { $null } else { [int]$row.default_max_globally_primed }
+                guidanceMax      = if ($legacyAdapter -or $null -eq $row.guidance_max) { $null } else { [int]$row.guidance_max }
+                configuredOverride = if ($legacyAdapter) { $null } else { [bool]$row.configured_override }
                 currentActive    = [int]$row.current_globally_active
-                currentPrimed    = [int]$row.current_globally_primed
+                currentPrimed    = if ($legacyAdapter) { [int]$row.current_globally_primed } else { $null }
                 isSpawningActive = [bool]$row.is_spawning_active
                 spawnWeight      = [double]$row.global_spawn_weight
                 adapter          = if ($legacyAdapter) { 'legacy-db' } else { 'retail-config' }

@@ -373,7 +373,7 @@ $script:DuneGameConfigSchema = @(
     # --- Building ---
     @{ Section=$script:DuneGcSecBuilding; Key='m_MaxNumLandclaimSegments'; File='game'; Type='int'; Min=1; Default='6'; Label='Max Landclaim Segments'; Help='Maximum territory claim segments. Also needs client-side apply.'; ClientApply=$true; Category='Building' }
     @{ Section=$script:DuneGcSecBuilding; Key='m_BuildingBlueprintMaxExtensions'; File='game'; Type='int'; Min=0; Default='4'; Label='Blueprint Max Extensions'; Help='Maximum blueprint extension slots. Also needs client-side apply.'; ClientApply=$true; Category='Building' }
-    @{ Section=$script:DuneGcSecBuilding; Key='m_bBuildingRestrictionLimitsEnabled'; File='game'; Type='bool'; Default='True'; Label='Building Restriction Limits'; Help='Enforce building restriction limits. Also needs client-side apply.'; ClientApply=$true; Category='Building' }
+    @{ Section=$script:DuneGcSecBuilding; Key='m_bBuildingRestrictionLimitsEnabled'; File='game'; Type='bool'; Default='True'; Label='Building Restriction Limits'; Help='Enforce production-item and other building restriction caps. Turn this off to allow construction beyond the displayed caps. Also needs client-side apply.'; ClientApply=$true; Category='Building' }
     @{ Section=$script:DuneGcSecGame; Key='m_GlobalBuildingDamageMultiplier'; File='game'; Type='float'; Min=0; Default='1.0'; Label='Building Damage Multiplier'; Help='Scales damage dealt to player buildings (0.5 = stronger bases). Also needs client-side apply.'; ClientApply=$true; Category='Building' }
 
     # --- BaseBackUp ---
@@ -593,7 +593,7 @@ $script:DuneGameConfigSchema = @(
     @{ Section=$script:DuneGcSecConsole; Key='Dac.EnableNearDeathDamageMitigation'; File='engine'; Type='bool01'; Label='Near-Death Damage Mitigation'; Help='Funcom: "If true, enable damage mitigation based on remaining health". Softens incoming damage as health drops.'; Category='Experimental 2' }
     @{ Section=$script:DuneGcSecConsole; Key='Dac.EnableKnockbackDurationDamageScaling'; File='engine'; Type='bool01'; Label='Stagger Damage Scaling'; Help='Funcom: "If true, damage can be increased based on how long the target has been in stagger state".'; Category='Experimental 2' }
     @{ Section=$script:DuneGcSecConsole; Key='Dac.ShieldBreakWhileAirborne'; File='engine'; Type='bool01'; Label='Shield Break While Airborne'; Help='Funcom: "Apply shield break stagger type when character is airborne".'; Category='Experimental 2' }
-    @{ Section=$script:DuneGcSecConsole; Key='Dune.DisableShieldOnShooting'; File='engine'; Type='bool01'; Label='Shield Drops While Shooting'; Help='Funcom: "Toggles if the shield should go down w". Funcom''s help text is truncated in the binary. Field-confirmed: turning this off keeps a player''s shield up while they fire.'; Status='Confirmed'; Startup=$true; Category='PvP & Security' }
+    @{ Section=$script:DuneGcSecConsole; Key='Dune.DisableShieldOnShooting'; File='engine'; Type='bool01'; Default='1'; Label='Shield Drops While Shooting'; Help='Funcom: "Toggles if the shield should go down w". Funcom''s help text is truncated in the Retail binary. Field-confirmed as client-evaluated: disabling it keeps a player''s shield raised only when that player also applies 0 to their local Engine.ini.'; Status='Confirmed'; Startup=$true; Category='PvP & Security' }
     @{ Section=$script:DuneGcSecConsole; Key='Abilities.HoltzmanShield.UsePowerWhenDisabled'; File='engine'; Type='bool01'; Default='0'; Label='Shield Uses Power When Disabled'; Help='Funcom: "0 (Default): off, 1 : on - When on shield will use power even if it''s disabled by ADS".'; Category='Experimental 2' }
     @{ Section=$script:DuneGcSecConsole; Key='Abilities.AllowRepsecOutsideLandclaim'; File='engine'; Type='bool01'; Label='Respec Outside Land Claim'; Help='Funcom: "Allow players to repsec outside landclaim or socialhub". Funcom''s spelling is preserved in the key name.'; Category='Experimental 2' }
     @{ Section=$script:DuneGcSecConsole; Key='Dune.LootNpcDroppedOnCorpseEnabled'; File='engine'; Type='bool01'; Label='NPC Loot On Corpses'; Help='Funcom: "Allows the client to enable or disable NPC loot dropped on NPC corpses". Controls where NPC loot lands, not whether NPCs drop loot - that is NPCs Drop Loot on Death under Loot & Death.'; Category='Experimental 2' }
@@ -956,7 +956,8 @@ function Get-DuneExperimentalGroup {
 $script:DuneGameConfigLiveGlobDir    = '/var/lib/rancher/k3s/storage/*/Saved/UserSettings'
 $script:DuneGameConfigTplGamePath    = '/home/dune/.dune/download/scripts/setup/config/UserGame.ini'
 $script:DuneGameConfigTplEnginePath  = '/home/dune/.dune/download/scripts/setup/config/UserEngine.ini'
-$script:DuneGameConfigAuthorityMarker = '/home/dune/.dune/download/scripts/setup/config/.dst-live-settings-imported-v1'
+$script:DuneGameConfigLegacyAuthorityMarker = '/home/dune/.dune/download/scripts/setup/config/.dst-live-settings-imported-v1'
+$script:DuneGameConfigAuthorityMarker = '/home/dune/.dune/download/scripts/setup/config/.dst-live-settings-imported-v2'
 
 # Cached, player-facing server name shown in the in-game server browser. This is
 # the battlegroup title (CRD spec.title, e.g. "Reapers") — NOT Bgd.ServerDisplayName
@@ -1067,6 +1068,13 @@ $script:DuneGameConfigClientDirDefault     = '%LOCALAPPDATA%\DuneSandbox\Saved\C
 $script:DuneGameConfigClientDirLegacy      = '%LOCALAPPDATA%\DuneSandbox\Saved\Config\WindowsClient'
 $script:DuneGameConfigClientGameFileName   = 'Game.ini'
 $script:DuneGameConfigClientEngineFileName = 'Engine.ini'
+$script:DuneRetailClientCompatibilityKeys  = @(
+    'm_BaseBackupToolMapRestriction'
+    'PlayerInventoryStartingSize'
+    'PlayerInventoryStartingVolumeCapacity'
+    'Vehicle.MaxVehiclesPerPlayer'
+    'Dune.DisableShieldOnShooting'
+)
 
 # Engine.ini management is a disabled-by-default opt-in because the game
 # rewrites this file and client-side CVar overrides can materially change play.
@@ -1140,6 +1148,125 @@ function Get-DuneGameConfigClientFile {
     }
 }
 
+function Get-DuneGameConfigLegacyClientFile {
+    param([ValidateSet('game','engine')][string]$File = 'game')
+    $dir = [Environment]::ExpandEnvironmentVariables($script:DuneGameConfigClientDirLegacy).TrimEnd('\')
+    $fileName = if ($File -eq 'engine') { $script:DuneGameConfigClientEngineFileName } else { $script:DuneGameConfigClientGameFileName }
+    $path = Join-Path $dir $fileName
+    $exists = Test-Path -LiteralPath $path -PathType Leaf
+    $raw = if ($exists) { [IO.File]::ReadAllText($path) } else { '' }
+    return @{
+        file           = $File
+        path           = $path
+        exists         = [bool]$exists
+        raw            = $raw
+        effective      = (Get-DuneIniEffective -Raw $raw)
+        effectiveByKey = (Get-DuneIniEffectiveByKey -Raw $raw)
+    }
+}
+
+function Get-DuneGameConfigLegacyMigration {
+    param([string]$CurrentDir = '')
+    $currentRaw = if ($CurrentDir) { $CurrentDir } else { Get-DuneGameConfigClientDir }
+    $currentResolved = Resolve-DuneGameConfigClientDir -Dir $currentRaw
+    $defaultResolved = [Environment]::ExpandEnvironmentVariables($script:DuneGameConfigClientDirDefault).TrimEnd('\')
+    $legacyResolved = [Environment]::ExpandEnvironmentVariables($script:DuneGameConfigClientDirLegacy).TrimEnd('\')
+    if ($currentResolved -ine $defaultResolved) {
+        return @{
+            available = $false
+            reason = 'custom-client-directory'
+            sourceDir = $legacyResolved
+            destinationDir = $currentResolved
+            candidates = @()
+            excludedRecognized = @()
+        }
+    }
+
+    $legacyFiles = @{
+        game = Get-DuneGameConfigLegacyClientFile -File 'game'
+        engine = Get-DuneGameConfigLegacyClientFile -File 'engine'
+    }
+    $currentFiles = @{
+        game = Get-DuneGameConfigClientFile -Dir $currentRaw -File 'game'
+        engine = Get-DuneGameConfigClientFile -Dir $currentRaw -File 'engine'
+    }
+    $legacyExists = [bool]($legacyFiles.game.exists -or $legacyFiles.engine.exists)
+    if (-not $legacyExists) {
+        return @{
+            available = $false
+            reason = 'legacy-directory-not-found'
+            sourceDir = $legacyResolved
+            destinationDir = $currentResolved
+            candidates = @()
+            excludedRecognized = @()
+        }
+    }
+
+    $compatibility = @{}
+    foreach ($key in $script:DuneRetailClientCompatibilityKeys) { $compatibility[$key] = $true }
+    $candidates = New-Object 'System.Collections.Generic.List[object]'
+    $excluded = New-Object 'System.Collections.Generic.List[object]'
+    foreach ($field in $script:DuneGameConfigSchema) {
+        if (-not ($field.ContainsKey('ClientApply') -and $field.ClientApply)) { continue }
+        $file = "$($field.File)"
+        if ($file -notin @('game','engine')) { continue }
+        $sectionKey = "$($field.Section)||$($field.Key)"
+        $legacyValue = $legacyFiles[$file].effective[$sectionKey]
+        if ($null -eq $legacyValue -or "$legacyValue" -eq '') {
+            $legacyValue = $legacyFiles[$file].effectiveByKey["$($field.Key)"]
+        }
+        if ($null -eq $legacyValue -or "$legacyValue" -eq '') { continue }
+        $legacyValue = "$legacyValue"
+        if (Test-DuneGameConfigValueIsDefault -Key "$($field.Key)" -Value $legacyValue) { continue }
+
+        if (-not $compatibility.ContainsKey("$($field.Key)")) {
+            $excluded.Add(@{
+                file = $file
+                section = "$($field.Section)"
+                key = "$($field.Key)"
+                label = "$($field.Label)"
+                reason = 'No direct current-Retail evidence that this setting is still evaluated from the local client INI.'
+            })
+            continue
+        }
+
+        $currentValue = $currentFiles[$file].effective[$sectionKey]
+        if ($null -eq $currentValue -or "$currentValue" -eq '') {
+            $currentValue = $currentFiles[$file].effectiveByKey["$($field.Key)"]
+        }
+        $currentValue = if ($null -eq $currentValue) { '' } else { "$currentValue" }
+        $state = if (-not $currentValue) {
+            'missing'
+        } elseif (Test-DuneGameConfigValuesEqual -Left $currentValue -Right $legacyValue) {
+            'current'
+        } else {
+            'conflict'
+        }
+        $candidates.Add(@{
+            file = $file
+            section = "$($field.Section)"
+            key = "$($field.Key)"
+            label = "$($field.Label)"
+            value = $legacyValue
+            currentValue = $currentValue
+            state = $state
+            selected = ($state -eq 'missing')
+        })
+    }
+
+    return @{
+        available = $true
+        reason = ''
+        sourceDir = $legacyResolved
+        destinationDir = $currentResolved
+        candidates = $candidates.ToArray()
+        excludedRecognized = $excluded.ToArray()
+        actionableCount = @($candidates | Where-Object { $_.state -ne 'current' }).Count
+        alreadyCurrentCount = @($candidates | Where-Object { $_.state -eq 'current' }).Count
+        conflictCount = @($candidates | Where-Object { $_.state -eq 'conflict' }).Count
+    }
+}
+
 # Read the LOCAL client Game.ini + Engine.ini. Legacy top-level file fields keep
 # representing Game.ini so existing land-claim callers remain compatible.
 function Get-DuneGameConfigClient {
@@ -1164,6 +1291,7 @@ function Get-DuneGameConfigClient {
         managedSections = $game.managedSections
         game            = $game
         engine          = $engine
+        legacyMigration = (Get-DuneGameConfigLegacyMigration -CurrentDir $dirRaw)
     }
 }
 
@@ -1335,10 +1463,69 @@ function Save-DuneGameConfigClient {
         $plans.Add(@{ file = $file; path = $path; created = $created; raw = $new; applied = $fileUpdates.Count })
     }
 
-    $files = @{}
+    $stamp = [datetime]::UtcNow.ToString('yyyyMMddTHHmmssfffZ')
+    $prepared = New-Object 'System.Collections.Generic.List[object]'
     foreach ($plan in $plans) {
-        [IO.File]::WriteAllText($plan.path, $plan.raw, (New-Object System.Text.UTF8Encoding($false)))
-        $files[$plan.file] = @{ file = $plan.file; path = $plan.path; created = $plan.created; applied = $plan.applied }
+        $tempPath = "$($plan.path).dst-tmp-$([guid]::NewGuid().ToString('N'))"
+        $backupPath = if ($plan.created) { '' } else { "$($plan.path).dst-backup-$stamp" }
+        [IO.File]::WriteAllText($tempPath, $plan.raw, (New-Object System.Text.UTF8Encoding($false)))
+        if ([IO.File]::ReadAllText($tempPath) -cne $plan.raw) {
+            Remove-Item -LiteralPath $tempPath -Force -ErrorAction SilentlyContinue
+            throw "Client config staging verification failed: $($plan.path)"
+        }
+        $prepared.Add(@{
+            file = $plan.file
+            path = $plan.path
+            tempPath = $tempPath
+            backup = $backupPath
+            created = $plan.created
+            raw = $plan.raw
+            applied = $plan.applied
+        })
+    }
+
+    $committed = New-Object 'System.Collections.Generic.List[object]'
+    try {
+        foreach ($plan in $prepared) {
+            if ($plan.created) {
+                [IO.File]::Move($plan.tempPath, $plan.path)
+            } else {
+                [IO.File]::Replace($plan.tempPath, $plan.path, $plan.backup, $true)
+            }
+            if ([IO.File]::ReadAllText($plan.path) -cne $plan.raw) {
+                throw "Client config readback verification failed: $($plan.path)"
+            }
+            $committed.Add($plan)
+        }
+    } catch {
+        for ($i = $committed.Count - 1; $i -ge 0; $i--) {
+            $plan = $committed[$i]
+            if ($plan.backup -and (Test-Path -LiteralPath $plan.backup -PathType Leaf)) {
+                [IO.File]::Copy($plan.backup, $plan.path, $true)
+            } elseif ($plan.created -and (Test-Path -LiteralPath $plan.path -PathType Leaf)) {
+                Remove-Item -LiteralPath $plan.path -Force
+            }
+        }
+        throw
+    } finally {
+        foreach ($plan in $prepared) {
+            if (Test-Path -LiteralPath $plan.tempPath -PathType Leaf) {
+                Remove-Item -LiteralPath $plan.tempPath -Force -ErrorAction SilentlyContinue
+            }
+        }
+    }
+
+    $files = @{}
+    $backups = @{}
+    foreach ($plan in $prepared) {
+        $files[$plan.file] = @{
+            file = $plan.file
+            path = $plan.path
+            created = $plan.created
+            applied = $plan.applied
+            backup = $plan.backup
+        }
+        if ($plan.backup) { $backups[$plan.file] = $plan.backup }
     }
     $first = $plans[0]
     return @{
@@ -1349,7 +1536,8 @@ function Save-DuneGameConfigClient {
             engine = (Get-DuneGameConfigClientFilePath -Dir $Dir -File 'engine')
         }
         files   = $files
-        backup  = ''
+        backup  = $(if ($backups.Count -gt 0) { "$($backups[@($backups.Keys)[0]])" } else { '' })
+        backups = $backups
         created = [bool](@($plans | Where-Object { $_.created }).Count -gt 0)
         applied = $clean.Count
         items   = $clean.ToArray()
@@ -2106,9 +2294,11 @@ function Get-DuneRetailSpicefieldRows {
     $defaultRaw = if ($defaults) { [string]$defaults.game } else { '' }
 
     $blob = Get-DuneIniSectionScalarValue -Raw $raw -Section $script:DuneGcSecSpice -Key 'm_PerMapSystemSettings'
+    $configuredBlob = $blob
     if ([string]::IsNullOrWhiteSpace($blob) -and -not [string]::IsNullOrWhiteSpace($defaultRaw)) {
         $blob = Get-DuneIniSectionScalarValue -Raw $defaultRaw -Section $script:DuneGcSecSpice -Key 'm_PerMapSystemSettings'
     }
+    $defaultBlob = Get-DuneIniSectionScalarValue -Raw $defaultRaw -Section $script:DuneGcSecSpice -Key 'm_PerMapSystemSettings'
     $fallback = Get-DuneIniSectionScalarValue -Raw $raw -Section $script:DuneGcSecSpice -Key 'm_DefaultSystemSettings'
     if ([string]::IsNullOrWhiteSpace($fallback) -and -not [string]::IsNullOrWhiteSpace($defaultRaw)) {
         $fallback = Get-DuneIniSectionScalarValue -Raw $defaultRaw -Section $script:DuneGcSecSpice -Key 'm_DefaultSystemSettings'
@@ -2141,11 +2331,27 @@ function Get-DuneRetailSpicefieldRows {
     } catch {}
 
     $rows = foreach ($definition in Get-DuneRetailSpicefieldDefinitions) {
-        $limits = Get-DuneSpicefieldLimitsFromBlob -Blob $blob -MapId $definition.mapId -FieldType $definition.fieldType
+        $configuredLimits = Get-DuneSpicefieldLimitsFromBlob -Blob $configuredBlob `
+            -MapId $definition.mapId -FieldType $definition.fieldType
+        $defaultLimits = Get-DuneSpicefieldLimitsFromBlob -Blob $defaultBlob `
+            -MapId $definition.mapId -FieldType $definition.fieldType
+        $limits = $configuredLimits
         if (-not $limits.found) {
             $limits = Get-DuneSpicefieldDefaultLimitsFromBlob -Blob $fallback -FieldType $definition.fieldType
         }
         if (-not $limits.found -or $limits.malformed) { continue }
+        $schemaField = @($script:DuneGameConfigSchema | Where-Object {
+            $_.ContainsKey('SpiceMap') -and
+            "$($_.SpiceMap)" -eq "$($definition.mapId)" -and
+            "$($_.SpiceFieldType)" -eq "$($definition.fieldType)"
+        } | Select-Object -First 1)
+        $guidanceMax = if ($schemaField.Count -gt 0) { [int]$schemaField[0].Default } else { $null }
+        $configuredOverride = [bool](
+            $configuredLimits.found -and
+            $defaultLimits.found -and
+            ([int]$configuredLimits.maxActive -ne [int]$defaultLimits.maxActive -or
+                [int]$configuredLimits.maxPrimed -ne [int]$defaultLimits.maxPrimed)
+        )
         $dimension = 0
         $partition = $partitions["$($definition.mapId)|$dimension"]
         [pscustomobject]@{
@@ -2156,8 +2362,12 @@ function Get-DuneRetailSpicefieldRows {
             dimension_index        = $dimension
             max_globally_active    = [int]$limits.maxActive
             max_globally_primed    = [int]$limits.maxPrimed
+            default_max_globally_active = if ($defaultLimits.found) { [int]$defaultLimits.maxActive } else { $null }
+            default_max_globally_primed = if ($defaultLimits.found) { [int]$defaultLimits.maxPrimed } else { $null }
+            guidance_max           = $guidanceMax
+            configured_override    = $configuredOverride
             current_globally_active = [int]$activity["$($definition.mapName)|$dimension|$($definition.fieldType)"]
-            current_globally_primed = 0
+            current_globally_primed = $null
             is_spawning_active     = [bool]$spawningActive
             global_spawn_weight    = 0.5
             partition_live         = [bool]($partition -and $partition.live)
@@ -2232,15 +2442,86 @@ function Get-DuneGameConfigContext {
     return @{ ok=$true; ip=$vm.ip; vm=$vm }
 }
 
+function Get-DuneGameConfigMigrationUpdates {
+    param(
+        [string]$GameRaw,
+        [string]$EngineRaw
+    )
+    $values = @{
+        game   = (Get-DuneIniEffectiveByKey -Raw $GameRaw)
+        engine = (Get-DuneIniEffectiveByKey -Raw $EngineRaw)
+    }
+    $updates = New-Object 'System.Collections.Generic.List[object]'
+    $seen = @{}
+    foreach ($field in $script:DuneGameConfigSchema) {
+        $file = "$($field.File)"
+        $key = "$($field.Key)"
+        $id = "$file||$key"
+        if ($seen.ContainsKey($id) -or -not $values.ContainsKey($file) -or
+            -not $values[$file].ContainsKey($key)) {
+            continue
+        }
+        $seen[$id] = $true
+        $value = "$($values[$file][$key])".Trim()
+        if (Test-DuneGameConfigValueIsDefault -Key $key -Value $value) { continue }
+        $updates.Add(@{
+            file    = $file
+            section = "$($field.Section)"
+            key     = $key
+            value   = $value
+            remove  = $false
+        })
+    }
+    return $updates.ToArray()
+}
+
+function Get-DuneGameConfigManagedRaw {
+    param([string]$Raw)
+    $doc = ConvertFrom-DuneIniDoc -Raw $Raw
+    if ($doc.malformed) {
+        throw 'Managed block is malformed; refusing to use it as a migration source.'
+    }
+    $lines = New-Object 'System.Collections.Generic.List[string]'
+    foreach ($section in $doc.sections) {
+        if (-not $section.managed) { continue }
+        $lines.Add("$($section.header)")
+        foreach ($line in $section.body) { $lines.Add("$line") }
+    }
+    return ($lines -join "`n")
+}
+
+function Merge-DuneGameConfigMigrationValues {
+    param(
+        [string]$BaseRaw,
+        [object[]]$Updates,
+        [string]$File
+    )
+    $fileUpdates = @($Updates | Where-Object { "$($_.file)" -eq $File })
+    if ($fileUpdates.Count -eq 0) { return $BaseRaw }
+    $folded = Convert-DuneSpicefieldUpdates -Raw $BaseRaw -Updates $fileUpdates -DefaultsRaw $BaseRaw
+    $folded = Convert-DuneStructUpdates -Raw $BaseRaw -Updates $folded -DefaultsRaw $BaseRaw
+    return ConvertTo-DuneIniManaged -Raw $BaseRaw -Updates $folded -QuotedKeys (Get-DuneGameConfigQuotedKeys)
+}
+
+function Get-DuneGameConfigTextSha256 {
+    param([AllowEmptyString()][string]$Value)
+    $sha = [Security.Cryptography.SHA256]::Create()
+    try {
+        return ([BitConverter]::ToString($sha.ComputeHash([Text.Encoding]::UTF8.GetBytes($Value)))).Replace('-', '').ToLowerInvariant()
+    } finally {
+        $sha.Dispose()
+    }
+}
+
 function Resolve-DuneGameConfigPaths {
     param([string]$Ip, [switch]$Force)
 
     # Funcom's Retail updater creates setup/config with stock defaults even when
     # the battlegroup already has an administrator's established User*.ini files.
-    # On first use, import the existing live pair INTO the installed directory
-    # before declaring that directory authoritative. Never push stock installed
-    # defaults over an unimported live configuration.
-    $installedState = ((Invoke-V6Ssh -Ip $Ip -Cmd "sudo bash -c 'if test -f ''$script:DuneGameConfigTplGamePath'' && test -f ''$script:DuneGameConfigTplEnginePath''; then if test -f ''$script:DuneGameConfigAuthorityMarker''; then echo ready; else echo uninitialized; fi; fi'") -join '').Trim()
+    # Carry only non-default DST-managed values onto those installed defaults
+    # before declaring the directory authoritative. The v1 migration copied one
+    # whole PVC file, so repair it from the clean pre-import backup.
+    $installedState = ((Invoke-V6Ssh -Ip $Ip -Cmd "sudo bash -c 'if test -f ''$script:DuneGameConfigTplGamePath'' && test -f ''$script:DuneGameConfigTplEnginePath''; then if test -f ''$script:DuneGameConfigAuthorityMarker''; then echo ready; elif test -f ''$script:DuneGameConfigLegacyAuthorityMarker''; then echo repair-v1; else echo uninitialized; fi; fi'") -join '').Trim()
     if ($installedState -eq 'ready') {
         return @{
             game   = $script:DuneGameConfigTplGamePath
@@ -2249,47 +2530,91 @@ function Resolve-DuneGameConfigPaths {
         }
     }
 
-    $dir = ((Invoke-V6Ssh -Ip $Ip -Cmd "sudo bash -c 'ls -t $($script:DuneGameConfigLiveGlobDir)/UserGame.ini 2>/dev/null | head -1 | xargs -r dirname'") -join '').Trim()
-    if ($dir) {
+    $dirs = @(
+        Invoke-V6Ssh -Ip $Ip -Cmd "sudo bash -c 'ls -t $($script:DuneGameConfigLiveGlobDir)/UserGame.ini 2>/dev/null | xargs -r -n1 dirname'"
+    ) | ForEach-Object { "$_".Trim() } | Where-Object { $_ } | Select-Object -Unique
+    if ($installedState -in @('uninitialized', 'repair-v1')) {
+        $baseGamePath = $script:DuneGameConfigTplGamePath
+        $baseEnginePath = $script:DuneGameConfigTplEnginePath
+        if ($installedState -eq 'repair-v1') {
+            $baseGamePath = ((Invoke-V6Ssh -Ip $Ip -Cmd "sudo bash -c 'ls -t $script:DuneGameConfigTplGamePath.pre-live-import-* 2>/dev/null | head -1'") -join '').Trim()
+            if ($baseGamePath) {
+                $suffix = $baseGamePath.Substring($script:DuneGameConfigTplGamePath.Length)
+                $baseEnginePath = "$script:DuneGameConfigTplEnginePath$suffix"
+            }
+        }
+        $installedGame = (Invoke-V6Ssh -Ip $Ip -Cmd "sudo cat '$baseGamePath' 2>/dev/null") -join "`n"
+        $installedEngine = (Invoke-V6Ssh -Ip $Ip -Cmd "sudo cat '$baseEnginePath' 2>/dev/null") -join "`n"
+        if ([string]::IsNullOrWhiteSpace($installedGame) -or [string]::IsNullOrWhiteSpace($installedEngine)) {
+            throw 'The clean installed User*.ini defaults could not be read. Deployment is blocked.'
+        }
+        foreach ($dir in $dirs) {
+            $g = "$dir/UserGame.ini"
+            $e = "$dir/UserEngine.ini"
+            $gameRaw = (Invoke-V6Ssh -Ip $Ip -Cmd "sudo cat '$g' 2>/dev/null") -join "`n"
+            $engineRaw = (Invoke-V6Ssh -Ip $Ip -Cmd "sudo cat '$e' 2>/dev/null") -join "`n"
+            $gameDoc = ConvertFrom-DuneIniDoc -Raw $gameRaw
+            $engineDoc = ConvertFrom-DuneIniDoc -Raw $engineRaw
+            if ($gameDoc.malformed -or $engineDoc.malformed -or
+                (-not $gameDoc.hadManaged -and -not $engineDoc.hadManaged)) {
+                continue
+            }
+            $managedGame = Get-DuneGameConfigManagedRaw -Raw $gameRaw
+            $managedEngine = Get-DuneGameConfigManagedRaw -Raw $engineRaw
+            $updates = @(Get-DuneGameConfigMigrationUpdates -GameRaw $managedGame -EngineRaw $managedEngine)
+            if ($updates.Count -eq 0) { continue }
+
+            $mergedGame = Merge-DuneGameConfigMigrationValues -BaseRaw $installedGame -Updates $updates -File 'game'
+            $mergedEngine = Merge-DuneGameConfigMigrationValues -BaseRaw $installedEngine -Updates $updates -File 'engine'
+            $stamp = [DateTime]::UtcNow.ToString('yyyyMMddHHmmss')
+            $installedDir = $script:DuneGameConfigTplGamePath -replace '/[^/]+$', ''
+            $gameTmp = "$installedDir/.dst-UserGame.ini.$stamp.tmp"
+            $engineTmp = "$installedDir/.dst-UserEngine.ini.$stamp.tmp"
+            $gameB64 = [Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes($mergedGame))
+            $engineB64 = [Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes($mergedEngine))
+            Invoke-V6Ssh -Ip $Ip -Cmd "base64 -d | sudo tee '$gameTmp' > /dev/null" -StdinData $gameB64 -TimeoutSec 30 | Out-Null
+            Invoke-V6Ssh -Ip $Ip -Cmd "base64 -d | sudo tee '$engineTmp' > /dev/null" -StdinData $engineB64 -TimeoutSec 30 | Out-Null
+
+            $gameHash = Get-DuneGameConfigTextSha256 -Value $mergedGame
+            $engineHash = Get-DuneGameConfigTextSha256 -Value $mergedEngine
+            $migrateCmd = "set -e; " +
+                "echo '$gameHash  $gameTmp' | sha256sum -c - >/dev/null; " +
+                "echo '$engineHash  $engineTmp' | sha256sum -c - >/dev/null; " +
+                "sudo cp '$script:DuneGameConfigTplGamePath' '$script:DuneGameConfigTplGamePath.pre-v2-migration-attempt-$stamp'; " +
+                "sudo cp '$script:DuneGameConfigTplEnginePath' '$script:DuneGameConfigTplEnginePath.pre-v2-migration-attempt-$stamp'; " +
+                "sudo install -o dune -g dune -m 0664 '$gameTmp' '$script:DuneGameConfigTplGamePath'; " +
+                "sudo install -o dune -g dune -m 0664 '$engineTmp' '$script:DuneGameConfigTplEnginePath'; " +
+                "sudo rm -f '$gameTmp' '$engineTmp'; " +
+                "echo '$gameHash  $script:DuneGameConfigTplGamePath' | sha256sum -c - >/dev/null; " +
+                "echo '$engineHash  $script:DuneGameConfigTplEnginePath' | sha256sum -c - >/dev/null; " +
+                "printf 'live-imported-v2\n' | sudo tee '$script:DuneGameConfigAuthorityMarker' > /dev/null; " +
+                "echo __DST_AUTH__:migrated"
+            $migrated = ((Invoke-V6Ssh -Ip $Ip -Cmd $migrateCmd -TimeoutSec 30) -join "`n").Trim()
+            if ($migrated -notmatch '(?m)^__DST_AUTH__:migrated$') {
+                throw 'DST could not safely migrate the existing battlegroup INI overrides. Installed defaults were not deployed.'
+            }
+            return @{
+                game         = $script:DuneGameConfigTplGamePath
+                engine       = $script:DuneGameConfigTplEnginePath
+                source       = 'installed'
+                migrated     = $true
+                migratedFrom = $dir
+                migratedKeys = $updates.Count
+            }
+        }
+        throw 'Installed User*.ini defaults are not initialized and no prior DST-managed battlegroup overrides could be migrated. Deployment is blocked.'
+    }
+
+    if ($dirs.Count -gt 0) {
+        $dir = $dirs[0]
         $g = "$dir/UserGame.ini"
         $e = "$dir/UserEngine.ini"
         $chk = ((Invoke-V6Ssh -Ip $Ip -Cmd "sudo bash -c 'test -f ''$g'' && test -f ''$e'' && echo ok'") -join '').Trim()
         if ($chk -eq 'ok') {
-            if ($installedState -eq 'uninitialized') {
-                $stamp = [DateTime]::UtcNow.ToString('yyyyMMddHHmmss')
-                $installedDir = $script:DuneGameConfigTplGamePath -replace '/[^/]+$', ''
-                $migrateCmd = "set -e; " +
-                    "sudo cp '$script:DuneGameConfigTplGamePath' '$script:DuneGameConfigTplGamePath.pre-live-import-$stamp'; " +
-                    "sudo cp '$script:DuneGameConfigTplEnginePath' '$script:DuneGameConfigTplEnginePath.pre-live-import-$stamp'; " +
-                    "sudo install -o dune -g dune -m 0664 '$g' '$installedDir/.dst-UserGame.ini.tmp'; " +
-                    "sudo install -o dune -g dune -m 0664 '$e' '$installedDir/.dst-UserEngine.ini.tmp'; " +
-                    "sudo cmp -s '$g' '$installedDir/.dst-UserGame.ini.tmp'; " +
-                    "sudo cmp -s '$e' '$installedDir/.dst-UserEngine.ini.tmp'; " +
-                    "sudo mv '$installedDir/.dst-UserGame.ini.tmp' '$script:DuneGameConfigTplGamePath'; " +
-                    "sudo mv '$installedDir/.dst-UserEngine.ini.tmp' '$script:DuneGameConfigTplEnginePath'; " +
-                    "printf 'live-imported-v1\n' | sudo tee '$script:DuneGameConfigAuthorityMarker' > /dev/null; " +
-                    "echo __DST_AUTH__:migrated"
-                $migrated = ((Invoke-V6Ssh -Ip $Ip -Cmd $migrateCmd -TimeoutSec 30) -join "`n").Trim()
-                if ($migrated -notmatch '(?m)^__DST_AUTH__:migrated$') {
-                    throw 'DST could not safely import the existing battlegroup INIs. Installed defaults were not deployed.'
-                }
-                return @{
-                    game      = $script:DuneGameConfigTplGamePath
-                    engine    = $script:DuneGameConfigTplEnginePath
-                    source    = 'installed'
-                    migrated  = $true
-                    migratedFrom = $dir
-                }
-            }
-
             # Compatibility fallback for older Funcom installations that do not
             # ship the installed source directory yet.
             return @{ game = $g; engine = $e; source = 'legacy-live' }
         }
-    }
-
-    if ($installedState -eq 'uninitialized') {
-        throw 'Installed User*.ini defaults are not initialized and no existing battlegroup configuration could be imported. Deployment is blocked.'
     }
     throw 'No authoritative installed UserGame.ini/UserEngine.ini files were found.'
 }
@@ -2474,19 +2799,11 @@ function Get-DuneGameConfigQuotedKeys {
     return $q
 }
 
-# Numeric/bool-aware comparison of a submitted value against a field's Funcom
-# default. When they match, the caller drops the key from the INI (a reset) so
-# defaults never clutter the managed block or the client Game.ini. Mirrors the
-# webui valuesEqual() logic: 4 == 4.0, True == true, trimmed, case-insensitive.
-function Test-DuneGameConfigValueIsDefault {
-    param([string]$Key, [string]$Value)
-    $field = $null
-    foreach ($f in $script:DuneGameConfigSchema) { if ($f.Key -eq $Key) { $field = $f; break } }
-    if ($null -eq $field) { return $false }
-    if (-not $field.ContainsKey('Default')) { return $false }
-    $def = [string]$field.Default
-    $a = "$Value".Trim()
-    $b = "$def".Trim()
+# Numeric/bool-aware comparison used for defaults and migration conflicts.
+function Test-DuneGameConfigValuesEqual {
+    param([string]$Left, [string]$Right)
+    $a = "$Left".Trim()
+    $b = "$Right".Trim()
     if ($a -ne '' -and $b -ne '') {
         $na = 0.0; $nb = 0.0
         $ci = [System.Globalization.CultureInfo]::InvariantCulture
@@ -2495,6 +2812,18 @@ function Test-DuneGameConfigValueIsDefault {
         if ($sa -and $sb) { return ($na -eq $nb) }
     }
     return ($a.ToLowerInvariant() -eq $b.ToLowerInvariant())
+}
+
+# Numeric/bool-aware comparison of a submitted value against a field's Funcom
+# default. When they match, the caller drops the key from the INI (a reset) so
+# defaults never clutter the managed block or the client Game.ini.
+function Test-DuneGameConfigValueIsDefault {
+    param([string]$Key, [string]$Value)
+    $field = $null
+    foreach ($f in $script:DuneGameConfigSchema) { if ($f.Key -eq $Key) { $field = $f; break } }
+    if ($null -eq $field) { return $false }
+    if (-not $field.ContainsKey('Default')) { return $false }
+    return (Test-DuneGameConfigValuesEqual -Left $Value -Right ([string]$field.Default))
 }
 
 function Test-DuneStartupConsoleVariableValue {

@@ -8,6 +8,8 @@ export interface SpinUpMap {
   minServers: number
   enabled: boolean
   availablePartitions?: number
+  supportsPartySharing?: boolean
+  sharedParties?: boolean
 }
 
 export interface SpinUpMapsResult {
@@ -27,6 +29,7 @@ export interface SpinUpSetResult {
   noop?: boolean
   raw?: string
   message?: string
+  sharedParties?: boolean
 }
 
 export function getMapSpinUp() {
@@ -37,5 +40,12 @@ export function setMapSpinUp(map: string, enabled: boolean) {
   return api<SpinUpSetResult>(`/api/map-spinup/${encodeURIComponent(map)}`, {
     method: 'POST',
     body: JSON.stringify({ enabled }),
+  })
+}
+
+export function setMapPartySharing(map: string, shared: boolean) {
+  return api<SpinUpSetResult>(`/api/map-spinup/${encodeURIComponent(map)}/party-sharing`, {
+    method: 'POST',
+    body: JSON.stringify({ shared }),
   })
 }

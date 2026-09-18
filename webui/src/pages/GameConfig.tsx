@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, useCallback, type FormEvent, type KeyboardEvent, type ReactElement } from 'react'
+import { useState, useEffect, useMemo, useCallback, useId, useRef, type FormEvent, type KeyboardEvent, type ReactElement } from 'react'
 import { PageHeader } from '../components/PageHeader'
 import { Icon } from '../components/Icon'
 import { CollapsibleCard, useCardCollapse } from '../components/CollapsibleCard'
@@ -25,6 +25,7 @@ import {
   getGameConfigClient,
   setGameConfigClientDir,
   setGameConfigClientEngineEnabled,
+  applyGameConfigClient,
   openGameConfigClientFile,
   getGameConfigDefaults,
   saveGameConfigRaw,
@@ -41,18 +42,33 @@ import type {
   GameConfigDefaultSection,
   GameConfigDefaultKey,
   GameConfigRawUpdate,
+  GameConfigClientApplyItem,
 } from '../api/types'
 import { SpicefieldsCard } from './gameconfig/SpicefieldsCard'
 import { LandclaimTimerCard } from './gameconfig/LandclaimTimerCard'
 import { DeepDesertPvpCard } from './gameconfig/DeepDesertPvpCard'
 import { BaseBackupGuardPanel } from './gameconfig/BaseBackupGuardPanel'
+import { OfficialRetailServerSettingsCard } from './gameconfig/OfficialRetailServerSettingsCard'
 import { isLocalViewer } from '../util/viewer'
+
+// Retain the proven integration for follow-up without exposing an unfinished
+// settings surface in this release.
+const OFFICIAL_RETAIL_SERVER_SETTINGS_VISIBLE = false
 
 export const EXPERIMENTAL_BLOCKED_DEFAULT_TARGETS = new Set([
   'game||/script/dunesandbox.timeofdaysettings||m_starttime',
 ])
 
+const RETAIL_CLIENT_COMPATIBILITY_TARGETS = new Set([
+  'engine||vehicle.maxvehiclesperplayer',
+  'engine||dune.disableshieldonshooting',
+  'game||playerinventorystartingsize',
+  'game||playerinventorystartingvolumecapacity',
+  'game||m_basebackuptoolmaprestriction',
+])
+
 type LoadState = 'idle' | 'loading' | 'ready' | 'error' | 'unavailable'
+type ClientReviewMode = 'server' | 'legacy'
 
 function clientBundleFor(info: GameConfigClientInfo, file: 'game' | 'engine') {
   return file === 'engine' ? info.engine : (info.game ?? info)
@@ -213,6 +229,36 @@ export function buildAllClientBlocks(
     }
   }
   return { entries: buildClientShareEntries(items, cfg), count }
+}
+
+export function buildAllClientApplyItems(
+  cats: GameConfigCategory[] | null,
+  cfg: GameConfigResponse | null,
+): GameConfigClientApplyItem[] {
+  const items: GameConfigClientApplyItem[] = []
+  const seen = new Set<string>()
+  for (const cat of cats ?? []) {
+    for (const field of cat.fields ?? []) {
+      if (!field?.key || !field.clientApply || !isCustomized(cfg, field)) continue
+      const target = `${field.file}||${field.key}`.toLowerCase()
+      if (!RETAIL_CLIENT_COMPATIBILITY_TARGETS.has(target)) continue
+      const value = liveValue(cfg, field)
+      if (value === '') continue
+      // The client API identifies a write by file + schema key; section is
+      // display metadata resolved authoritatively from that key on the server.
+      if (seen.has(target)) continue
+      seen.add(target)
+      items.push({
+        file: field.file,
+        section: field.section,
+        key: field.key,
+        label: field.label,
+        value,
+        structKey: field.structKey,
+      })
+    }
+  }
+  return items
 }
 
 function isExperimentalCategory(category: string): boolean {
@@ -382,6 +428,7 @@ export function GameConfig({ mode = 'standard' }: { mode?: 'standard' | 'experim
   const [clientBusy, setClientBusy] = useState(false)
   const [clientMsg, setClientMsg] = useState<string | null>(null)
   const [clientErr, setClientErr] = useState<string | null>(null)
+  const [clientReview, setClientReview] = useState<{ mode: ClientReviewMode; items: GameConfigClientApplyItem[] } | null>(null)
   const [clientViewFile, setClientViewFile] = useState<'game' | 'engine' | null>(null)
   const refreshClient = useCallback(async () => {
     if (!localViewer) return null
@@ -714,6 +761,41 @@ export function GameConfig({ mode = 'standard' }: { mode?: 'standard' | 'experim
     () => dirtyKeys.filter(k => experimentalStartupKeys.has(k)),
     [dirtyKeys, experimentalStartupKeys],
   )
+  const clientApplyItems = useMemo(
+    () => buildAllClientApplyItems(schemaWithLoadedExperimental, cfg),
+    [schemaWithLoadedExperimental, cfg],
+  )
+  const enabledClientApplyItems = useMemo(
+    () => clientApplyItems.filter(item => item.file === 'game' || clientInfo?.engineEnabled === true),
+    [clientApplyItems, clientInfo?.engineEnabled],
+  )
+  const legacyMigrationItems = useMemo(
+    () => (clientInfo?.legacyMigration?.candidates ?? [])
+      .filter(item => item.state !== 'current')
+      .filter(item => item.file === 'game' || clientInfo?.engineEnabled === true),
+    [clientInfo],
+  )
+
+  const onApplyCurrentClientSettings = useCallback(async (reviewedItems: GameConfigClientApplyItem[]) => {
+    if (reviewedItems.length === 0) return
+    setClientErr(null)
+    setClientMsg(null)
+    setClientBusy(true)
+    try {
+      const result = await applyGameConfigClient(reviewedItems, clientInfo?.dir)
+      setClientInfo(result.client)
+      setClientReview(null)
+      const backupCount = Object.keys(result.backups ?? {}).length
+      setClientMsg(
+        `Applied ${result.applied} setting${result.applied === 1 ? '' : 's'} to this PC's local Dune client config${backupCount ? ` after backing up ${backupCount} destination file${backupCount === 1 ? '' : 's'}` : ''}. Other players must apply their own copy.`,
+      )
+      window.setTimeout(() => setClientMsg(null), 7000)
+    } catch (e) {
+      setClientErr(e instanceof Error ? e.message : String(e))
+    } finally {
+      setClientBusy(false)
+    }
+  }, [clientInfo])
 
   // The two pages share this component and split the same schema between them:
   // Game Config shows the settings we stand behind, Experimental shows the
@@ -1144,6 +1226,9 @@ export function GameConfig({ mode = 'standard' }: { mode?: 'standard' | 'experim
       />
       )}
 
+      {OFFICIAL_RETAIL_SERVER_SETTINGS_VISIBLE && !experimentalPage
+        && <OfficialRetailServerSettingsCard vmRunning={vmRunning} />}
+
       {/* How it works. On the Experimental page this is also where the user is
           told to go back to Game Config to apply — that path rebuilds the server
           startup values from the INI, which is what makes these take effect. */}
@@ -1223,7 +1308,9 @@ export function GameConfig({ mode = 'standard' }: { mode?: 'standard' | 'experim
             }
           >
             <p className="text-xs text-text-muted mb-3">
-              DST can mirror game settings into <span className="font-mono">Game.ini</span>. Managing{' '}
+              Funcom&apos;s in-game Custom Settings deployment remains authoritative for supported settings. DST can
+              optionally mirror a small, field-proven set of advanced Retail values that are still evaluated locally into
+              this PC&apos;s <span className="font-mono">Game.ini</span>. Managing{' '}
               <span className="font-mono">Engine.ini</span> is a separate opt-in because client console-variable overrides
               can materially change gameplay.
             </p>
@@ -1247,6 +1334,49 @@ export function GameConfig({ mode = 'standard' }: { mode?: 'standard' | 'experim
                 </span>
               </span>
             </label>
+            <div className="mb-3 rounded-lg border border-border bg-surface-2/40 p-3 text-xs text-text-muted">
+              <strong className="text-text">Review compatibility overrides from the action bar below.</strong>{' '}
+              Only customized, non-default advanced settings outside Funcom&apos;s normal synchronized surface and backed
+              by direct current-Retail evidence are offered. Game.ini values can apply without the Engine.ini opt-in.
+              {clientApplyItems.some(item => item.file === 'engine') && clientInfo?.engineEnabled !== true
+                ? ' Enable Engine.ini management here to include shield, vehicle-cap, and other proven client-read CVars.'
+                : ' Engine.ini values are included only while Engine.ini management is enabled.'}
+            </div>
+            {clientInfo?.legacyMigration?.available && (
+              <div className="mb-3 rounded-lg border border-warning/30 bg-warning/5 p-3 text-xs text-text-muted">
+                <strong className="text-text">Retail moved its active client config from WindowsClient to Windows.</strong>{' '}
+                DST found the former folder and can review only recognized, non-default settings with direct current-Retail
+                evidence of local client evaluation. It never copies whole files or unrelated account, UI, session, or unknown
+                settings. Missing destination values are preselected; conflicts require an explicit selection.
+                <div className="mt-2 font-mono break-all text-[11px] text-text-dim">
+                  {clientInfo.legacyMigration.sourceDir} → {clientInfo.legacyMigration.destinationDir}
+                </div>
+                <div className="mt-2 flex flex-wrap items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setClientReview({ mode: 'legacy', items: legacyMigrationItems.map(item => ({ ...item })) })}
+                    disabled={clientBusy || legacyMigrationItems.length === 0}
+                    className="btn-secondary"
+                    title={legacyMigrationItems.length === 0
+                      ? 'No eligible WindowsClient values need review'
+                      : 'Review recognized WindowsClient values before writing the active Windows config'}
+                  >
+                    <Icon name="FolderSync" size={14} /> Review WindowsClient migration
+                  </button>
+                  <span>
+                    {clientInfo.legacyMigration.alreadyCurrentCount ?? 0} already current
+                    {' • '}{clientInfo.legacyMigration.conflictCount ?? 0} conflict{clientInfo.legacyMigration.conflictCount === 1 ? '' : 's'}
+                    {' • '}{clientInfo.legacyMigration.excludedRecognized.length} recognized setting{clientInfo.legacyMigration.excludedRecognized.length === 1 ? '' : 's'} excluded without current evidence
+                  </span>
+                </div>
+                {clientInfo.legacyMigration.candidates.some(item => item.file === 'engine' && item.state !== 'current')
+                  && clientInfo.engineEnabled !== true && (
+                    <div className="mt-2 text-warning">
+                      Enable Engine.ini management above to review eligible legacy Engine.ini values.
+                    </div>
+                  )}
+              </div>
+            )}
             <div className="flex items-center gap-2">
               <input
                 type="text"
@@ -1520,7 +1650,7 @@ export function GameConfig({ mode = 'standard' }: { mode?: 'standard' | 'experim
                 </>
               )}
             </div>
-            <div className="flex items-center gap-2">
+            <div className="flex flex-wrap items-center justify-end gap-2">
               <button
                 type="button"
                 onClick={e => scrollPageToTop(e.currentTarget)}
@@ -1541,6 +1671,20 @@ export function GameConfig({ mode = 'standard' }: { mode?: 'standard' | 'experim
                 <Icon name={reloadingPods ? 'Loader2' : 'RefreshCw'} size={14} className={reloadingPods ? 'animate-spin' : ''} />
                 {reloadingPods ? 'Restarting battlegroup…' : 'Apply INIs & restart'}
               </button>
+              {localViewer && (
+                <button
+                  type="button"
+                  onClick={() => setClientReview({ mode: 'server', items: enabledClientApplyItems.map(item => ({ ...item })) })}
+                  disabled={clientBusy || enabledClientApplyItems.length === 0}
+                  className="btn-primary"
+                  title={enabledClientApplyItems.length === 0
+                    ? 'No customized field-proven advanced compatibility overrides are available'
+                    : 'Review advanced compatibility overrides before writing this PC’s local Dune config'}
+                >
+                  <Icon name={clientBusy ? 'Loader2' : 'MonitorCog'} size={14} className={clientBusy ? 'animate-spin' : ''} />
+                  Apply advanced compatibility overrides
+                </button>
+              )}
               <span className="text-xs text-text-muted">
                 {dirtyKeys.length === 0 ? 'No changes' : `${dirtyKeys.length} change${dirtyKeys.length === 1 ? '' : 's'}`}
               </span>
@@ -1570,6 +1714,16 @@ export function GameConfig({ mode = 'standard' }: { mode?: 'standard' | 'experim
         onCancel={() => setSandwormModalOpen(false)}
         onConfirm={confirmSandwormEnable}
       />
+
+      {clientReview && (
+        <ClientApplyReviewModal
+          items={clientReview.items}
+          mode={clientReview.mode}
+          busy={clientBusy}
+          onCancel={() => setClientReview(null)}
+          onConfirm={reviewedItems => void onApplyCurrentClientSettings(reviewedItems)}
+        />
+      )}
 
       {shareBlock && (
         <IniShareModal
@@ -2781,6 +2935,193 @@ function IniSectionBlock({ section }: { section: GameConfigIniSection }) {
             <span className="text-text break-all">{k.value}</span>
           </div>
         ))}
+      </div>
+    </div>
+  )
+}
+
+function ClientApplyReviewModal({
+  items, mode, busy, onCancel, onConfirm,
+}: {
+  items: GameConfigClientApplyItem[]
+  mode: ClientReviewMode
+  busy: boolean
+  onCancel: () => void
+  onConfirm: (items: GameConfigClientApplyItem[]) => void
+}) {
+  const titleId = useId()
+  const modalRef = useRef<HTMLDivElement | null>(null)
+  const cancelRef = useRef<HTMLButtonElement | null>(null)
+  const onCancelRef = useRef(onCancel)
+  const busyRef = useRef(busy)
+  onCancelRef.current = onCancel
+  busyRef.current = busy
+  const itemId = (item: GameConfigClientApplyItem) => `${item.file}||${item.key}`.toLowerCase()
+  const [selectedIds, setSelectedIds] = useState(() => new Set(items.filter(item => item.selected !== false).map(itemId)))
+  const selectedItems = items.filter(item => selectedIds.has(itemId(item)))
+  const groups = (['game', 'engine'] as const)
+    .map(file => ({ file, items: items.filter(item => item.file === file) }))
+    .filter(group => group.items.length > 0)
+  const toggleItem = (item: GameConfigClientApplyItem) => {
+    const id = itemId(item)
+    setSelectedIds(previous => {
+      const next = new Set(previous)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
+  }
+
+  useEffect(() => {
+    const previousFocus = document.activeElement instanceof HTMLElement
+      ? document.activeElement
+      : null
+    cancelRef.current?.focus()
+
+    const onKeyDown = (event: globalThis.KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        if (busyRef.current) return
+        event.preventDefault()
+        onCancelRef.current()
+        return
+      }
+      if (event.key !== 'Tab') return
+      const focusable = Array.from(modalRef.current?.querySelectorAll<HTMLElement>(
+        'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])',
+      ) ?? [])
+      if (focusable.length === 0) {
+        event.preventDefault()
+        modalRef.current?.focus()
+        return
+      }
+      const first = focusable[0]
+      const last = focusable[focusable.length - 1]
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault()
+        last.focus()
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault()
+        first.focus()
+      }
+    }
+
+    document.addEventListener('keydown', onKeyDown)
+    return () => {
+      document.removeEventListener('keydown', onKeyDown)
+      previousFocus?.focus()
+    }
+  }, [])
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4"
+      onClick={() => { if (!busy) onCancel() }}
+    >
+      <div
+        ref={modalRef}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby={titleId}
+        tabIndex={-1}
+        className="card p-0 max-w-2xl w-full max-h-[85vh] flex flex-col overflow-hidden"
+        onClick={e => e.stopPropagation()}
+      >
+        <div className="px-5 py-4 border-b border-border flex items-center justify-between gap-3">
+          <div>
+            <h3 id={titleId} className="font-semibold text-text flex items-center gap-2">
+              <Icon name="MonitorCog" size={16} className="text-accent-bright" />
+              {mode === 'legacy' ? 'Review WindowsClient migration' : 'Review advanced compatibility overrides'}
+            </h3>
+            <p className="mt-1 text-xs text-text-muted">
+              {mode === 'legacy'
+                ? 'This imports only recognized, non-default compatibility values with direct current-Retail evidence. Whole files and unrelated settings are never copied.'
+                : 'This writes only customized, non-default compatibility overrides with direct current-Retail evidence of local evaluation. It does not copy every server INI setting.'}
+            </p>
+          </div>
+          <button
+            type="button"
+            className="btn-ghost px-2 py-1"
+            onClick={onCancel}
+            disabled={busy}
+            aria-label="Close client settings review"
+          >
+            <Icon name="X" size={16} />
+          </button>
+        </div>
+
+        <div className="px-5 py-4 overflow-y-auto space-y-4">
+          {groups.map(group => (
+            <section key={group.file} aria-labelledby={`client-review-${group.file}`}>
+              <div className="mb-2 flex items-center justify-between gap-3">
+                <h4 id={`client-review-${group.file}`} className="text-sm font-semibold text-text font-mono">
+                  {group.file === 'game' ? 'Game.ini' : 'Engine.ini'}
+                </h4>
+                <span className="text-xs text-text-muted">
+                  {group.items.filter(item => selectedIds.has(itemId(item))).length} of {group.items.length} selected
+                </span>
+              </div>
+              <div className="divide-y divide-border border border-border rounded-lg overflow-hidden">
+                {group.items.map(item => (
+                  <label
+                    key={itemId(item)}
+                    className="flex items-start gap-3 p-3 bg-surface-2/40 cursor-pointer"
+                  >
+                    <input
+                      type="checkbox"
+                      checked={selectedIds.has(itemId(item))}
+                      onChange={() => toggleItem(item)}
+                      disabled={busy}
+                      className="h-4 w-4 mt-0.5 accent-accent shrink-0"
+                    />
+                    <span className="min-w-0 flex-1">
+                      <span className="block text-sm font-medium text-text">{item.label}</span>
+                      <span className="mt-0.5 block text-xs text-text-muted">
+                        {mode === 'legacy'
+                          ? item.state === 'conflict'
+                            ? 'Conflict: the active Windows file has a different value. Review both values before selecting this item.'
+                            : 'Missing from the active Windows file and preselected for import from WindowsClient.'
+                          : 'Offered because current Retail field testing shows this advanced value is evaluated from the local client config.'}
+                      </span>
+                      <span className="mt-1 grid gap-1 text-xs font-mono sm:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
+                        <span className="text-text-muted break-all">[{item.section}] {item.key}</span>
+                        <span className="text-text break-all sm:text-right">
+                          {mode === 'legacy'
+                            ? <>old: {item.value}{item.currentValue ? ` • current: ${item.currentValue}` : ' • current: missing'}</>
+                            : item.value}
+                        </span>
+                      </span>
+                    </span>
+                  </label>
+                ))}
+              </div>
+            </section>
+          ))}
+          <p className="text-xs text-text-muted">
+            Game.ini compatibility values do not require Engine.ini management. Engine.ini entries appear here only after
+            that separate opt-in is enabled. Existing destination files are backed up before an atomic, verified write.
+            This changes this PC only; other players must review and apply their own matching values.
+          </p>
+        </div>
+
+        <div className="px-5 py-3 border-t border-border flex flex-wrap items-center justify-between gap-2">
+          <span className="text-xs text-text-muted">
+            {selectedItems.length} of {items.length} reviewed setting{items.length === 1 ? '' : 's'} selected
+          </span>
+          <div className="flex items-center gap-2">
+            <button ref={cancelRef} type="button" className="btn-secondary" onClick={onCancel} disabled={busy}>
+              Cancel
+            </button>
+            <button
+              type="button"
+              className="btn-primary"
+              onClick={() => onConfirm(selectedItems)}
+              disabled={busy || selectedItems.length === 0}
+            >
+              <Icon name={busy ? 'Loader2' : 'MonitorCog'} size={14} className={busy ? 'animate-spin' : ''} />
+              {busy ? 'Applying…' : `Apply ${selectedItems.length} selected setting${selectedItems.length === 1 ? '' : 's'}`}
+            </button>
+          </div>
+        </div>
       </div>
     </div>
   )

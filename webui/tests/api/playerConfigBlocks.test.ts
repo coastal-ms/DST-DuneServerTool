@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   buildAllClientBlocks,
+  buildAllClientApplyItems,
   buildCategoryClientBlocks,
   buildClientShareEntries,
   formatCoriolisCycleStartHour,
@@ -64,6 +65,78 @@ describe('buildAllClientBlocks', () => {
     expect(out.entries[0].file).toBe('engine')
     expect(out.entries[0].block).toContain('Vehicle.MaxVehiclesPerPlayer=20')
     expect(out.entries[0].block).not.toContain('m_bEnableHibernation')
+  })
+
+  describe('buildAllClientApplyItems', () => {
+    it('offers only the field-proven customized Retail Game.ini compatibility fields', () => {
+      const inventory: GameConfigCategory[] = [{
+        category: 'Inventory',
+        fields: [
+          { section: '/Script/DuneSandbox.InventorySystemSettings', key: 'PlayerInventoryStartingSize', file: 'game', type: 'int', label: 'Starting Inventory Slots', default: '35', clientApply: true },
+          { section: '/Script/DuneSandbox.InventorySystemSettings', key: 'PlayerInventoryStartingVolumeCapacity', file: 'game', type: 'float', label: 'Starting Inventory Volume', default: '175.0', clientApply: true },
+          { section: '/Script/DuneSandbox.DuneGameMode', key: 'm_InventoryWeightMultiplier', file: 'game', type: 'float', label: 'Inventory Weight Multiplier', default: '1.0', clientApply: true },
+        ],
+      }] as GameConfigCategory[]
+
+      const items = buildAllClientApplyItems(inventory, cfg({
+        '/Script/DuneSandbox.InventorySystemSettings||PlayerInventoryStartingSize': '70',
+        '/Script/DuneSandbox.InventorySystemSettings||PlayerInventoryStartingVolumeCapacity': '2500',
+        '/Script/DuneSandbox.DuneGameMode||m_InventoryWeightMultiplier': '0.5',
+      }, {}))
+
+      expect(items.map(item => [item.file, item.key, item.value])).toEqual([
+        ['game', 'PlayerInventoryStartingSize', '70'],
+        ['game', 'PlayerInventoryStartingVolumeCapacity', '2500'],
+      ])
+    })
+
+    it('offers the field-confirmed shield CVar for an explicit local apply', () => {
+      const shield: GameConfigCategory[] = [{
+        category: 'PvP & Security',
+        fields: [{
+          section: 'ConsoleVariables',
+          key: 'Dune.DisableShieldOnShooting',
+          file: 'engine',
+          type: 'bool01',
+          label: 'Shield Drops While Shooting',
+          default: '1',
+          clientApply: true,
+        }],
+      }] as GameConfigCategory[]
+
+      expect(buildAllClientApplyItems(shield, cfg({}, {
+        'ConsoleVariables||Dune.DisableShieldOnShooting': '0',
+      }))).toEqual([{
+        file: 'engine',
+        section: 'ConsoleVariables',
+        key: 'Dune.DisableShieldOnShooting',
+        label: 'Shield Drops While Shooting',
+        value: '0',
+        structKey: undefined,
+      }])
+    })
+
+    it('does not offer defaults or server-only controls for local apply', () => {
+      expect(buildAllClientApplyItems(cats, cfg({}, {
+        'ConsoleVariables||Vehicle.MaxVehiclesPerPlayer': '10',
+        'ConsoleVariables||Bgd.ServerPlayerHardCap': '80',
+      }))).toEqual([])
+    })
+
+    it('collapses duplicate schema representations to the one API target write', () => {
+      const duplicates: GameConfigCategory[] = [{
+        category: 'Vehicles',
+        fields: [
+          { section: 'ConsoleVariables', key: 'Vehicle.MaxVehiclesPerPlayer', file: 'engine', type: 'int', label: 'Maximum Vehicles Per Player', default: '10', clientApply: true },
+          { section: 'LegacyConsoleVariables', key: 'vehicle.maxvehiclesperplayer', file: 'engine', type: 'int', label: 'Legacy vehicle cap alias', default: '10', clientApply: true },
+        ],
+      }]
+
+      expect(buildAllClientApplyItems(duplicates, cfg({}, {
+        'ConsoleVariables||Vehicle.MaxVehiclesPerPlayer': '100',
+        'LegacyConsoleVariables||vehicle.maxvehiclesperplayer': '100',
+      }))).toHaveLength(1)
+    })
   })
 
   it('puts Engine.ini first so it renders on the left, Game.ini second', () => {

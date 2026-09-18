@@ -1945,7 +1945,23 @@ Describe 'GameConfig: client-apply flag covers local gameplay settings' -Tag 'Ga
         $missing -join ', ' | Should -Be ''
     }
 
-    It 'mirrors only console variables the client is proven to read' {
+    It 'offers Deep Desert Base Backup Tool availability for explicit client Game.ini apply' {
+        $notice = Get-DuneGameConfigClientApplyNotice -Updates @(
+            @{
+                file = 'game'
+                section = $script:DuneGcSecBuilding
+                key = 'm_BaseBackupToolMapRestriction'
+                value = '((Name="HaggaBasin"), (Name="DeepDesert"))'
+            }
+        )
+
+        @($notice.items).Count | Should -Be 1
+        @($notice.items)[0].key | Should -Be 'm_BaseBackupToolMapRestriction'
+        @($notice.items)[0].file | Should -Be 'game'
+        $notice.paths.game | Should -Match 'Game\.ini$'
+    }
+
+    It 'offers Maximum Vehicles Per Player and Shield Drops While Shooting as proven client-read settings' {
         # Console variables reach the server through the startup command, not any
         # INI, so a client copy is only meaningful for the ones the client
         # evaluates itself. Flagging the rest is not harmless: it tells players to
@@ -1957,8 +1973,10 @@ Describe 'GameConfig: client-apply flag covers local gameplay settings' -Tag 'Ga
         $flagged = @($gameplayEngine | Where-Object { $_.ClientApply } | ForEach-Object { $_.Key })
         @($flagged | Sort-Object) | Should -Be @($script:DuneClientEvaluatedConsoleVariables | Sort-Object)
 
-        # The one control with client-side field evidence.
+        # Both controls have client-side field evidence: the displayed vehicle
+        # cap and shield behavior follow each Retail player's local values.
         $flagged | Should -Contain 'Vehicle.MaxVehiclesPerPlayer'
+        $flagged | Should -Contain 'Dune.DisableShieldOnShooting'
 
         # Server-instance and connection settings could never qualify.
         foreach ($key in @('Bgd.ServerDisplayName','Bgd.ServerLoginPassword','Port','IGWPort')) {
@@ -1976,6 +1994,8 @@ Describe 'GameConfig: client-apply flag covers local gameplay settings' -Tag 'Ga
         Test-DuneGameConfigValueIsDefault -Key 'm_WaterConsumptionRate' -Value '1'   | Should -BeTrue
         Test-DuneGameConfigValueIsDefault -Key 'm_WaterConsumptionRate' -Value '1.0' | Should -BeTrue
         Test-DuneGameConfigValueIsDefault -Key 'm_WaterConsumptionRate' -Value '2.0' | Should -BeFalse
+        Test-DuneGameConfigValueIsDefault -Key 'Dune.DisableShieldOnShooting' -Value '1' | Should -BeTrue
+        Test-DuneGameConfigValueIsDefault -Key 'Dune.DisableShieldOnShooting' -Value '0' | Should -BeFalse
     }
 
     It 'only queues a deprecated key for removal when the file actually contains it' {
@@ -2022,6 +2042,80 @@ Describe 'GameConfig: Engine.ini opt-in setting' -Tag 'GameConfig' {
         Resolve-DuneGameConfigClientDir -Dir '%LOCALAPPDATA%\DuneSandbox\Saved\Config\WindowsClient' |
             Should -Be ([Environment]::ExpandEnvironmentVariables('%LOCALAPPDATA%\DuneSandbox\Saved\Config\Windows'))
     }
+
+    It 'offers only field-proven non-default WindowsClient settings and flags conflicts' {
+        Mock Read-DuneConfig { [ordered]@{ ClientConfigPath = ''; ClientEngineIniEnabled = 'true' } }
+        Mock Resolve-DuneGameConfigClientDir {
+            [Environment]::ExpandEnvironmentVariables('%LOCALAPPDATA%\DuneSandbox\Saved\Config\Windows')
+        }
+        Mock Get-DuneGameConfigLegacyClientFile {
+            param($File)
+            if ($File -eq 'engine') {
+                return @{
+                    exists = $true
+                    effective = @{
+                        "$script:DuneGcSecConsole||Vehicle.MaxVehiclesPerPlayer" = '20'
+                        "$script:DuneGcSecConsole||Dune.DisableShieldOnShooting" = '0'
+                    }
+                    effectiveByKey = @{}
+                }
+            }
+            return @{
+                exists = $true
+                effective = @{
+                    "$script:DuneGcSecInventory||PlayerInventoryStartingSize" = '70'
+                    "$script:DuneGcSecInventory||PlayerInventoryStartingVolumeCapacity" = '250'
+                    "$script:DuneGcSecSandworm||m_bGiantWormSystemEnabled" = 'False'
+                }
+                effectiveByKey = @{}
+            }
+        }
+        Mock Get-DuneGameConfigClientFile {
+            param($Dir, $File)
+            if ($File -eq 'engine') {
+                return @{
+                    effective = @{
+                        "$script:DuneGcSecConsole||Vehicle.MaxVehiclesPerPlayer" = '20'
+                        "$script:DuneGcSecConsole||Dune.DisableShieldOnShooting" = '1'
+                    }
+                    effectiveByKey = @{}
+                }
+            }
+            return @{
+                effective = @{
+                    "$script:DuneGcSecInventory||PlayerInventoryStartingVolumeCapacity" = '175'
+                }
+                effectiveByKey = @{}
+            }
+        }
+
+        $migration = Get-DuneGameConfigLegacyMigration
+
+        $migration.available | Should -BeTrue
+        @($migration.candidates).Count | Should -Be 4
+        ($migration.candidates | Where-Object key -eq 'PlayerInventoryStartingSize').state | Should -Be 'missing'
+        ($migration.candidates | Where-Object key -eq 'PlayerInventoryStartingSize').selected | Should -BeTrue
+        ($migration.candidates | Where-Object key -eq 'PlayerInventoryStartingVolumeCapacity').state | Should -Be 'conflict'
+        ($migration.candidates | Where-Object key -eq 'PlayerInventoryStartingVolumeCapacity').selected | Should -BeFalse
+        ($migration.candidates | Where-Object key -eq 'Vehicle.MaxVehiclesPerPlayer').state | Should -Be 'current'
+        @($migration.excludedRecognized | Where-Object key -eq 'm_bGiantWormSystemEnabled').Count | Should -Be 1
+    }
+
+    It 'does not report numeric formatting differences as migration conflicts' {
+        Test-DuneGameConfigValuesEqual -Left '300.000000' -Right '300.0' | Should -BeTrue
+        Test-DuneGameConfigValuesEqual -Left 'False' -Right 'false' | Should -BeTrue
+    }
+
+    It 'does not offer the default WindowsClient migration for a custom destination' {
+        Mock Resolve-DuneGameConfigClientDir { 'D:\CustomClientConfig' }
+        Mock Get-DuneGameConfigLegacyClientFile { throw 'must not read the legacy default for a custom destination' }
+
+        $migration = Get-DuneGameConfigLegacyMigration -CurrentDir 'D:\CustomClientConfig'
+
+        $migration.available | Should -BeFalse
+        $migration.reason | Should -Be 'custom-client-directory'
+        Assert-MockCalled Get-DuneGameConfigLegacyClientFile -Times 0
+    }
 }
 
 Describe 'GameConfig: local client Game.ini and Engine.ini' -Tag 'GameConfig' {
@@ -2067,7 +2161,44 @@ Describe 'GameConfig: local client Game.ini and Engine.ini' -Tag 'GameConfig' {
         $engineRaw | Should -Match "`r`n"
         $result.files.game.path | Should -Be (Join-Path $dir 'Game.ini')
         $result.files.engine.path | Should -Be (Join-Path $dir 'Engine.ini')
+        $result.backups.game | Should -Not -BeNullOrEmpty
+        $result.backups.engine | Should -Not -BeNullOrEmpty
+        [IO.File]::ReadAllText($result.backups.game) | Should -Match 'MasterVolume=0.8'
+        [IO.File]::ReadAllText($result.backups.engine) | Should -Match 'r\.ScreenPercentage=100'
+        @(Get-ChildItem -LiteralPath $dir -Filter '*.dst-tmp-*').Count | Should -Be 0
         @($result.items | ForEach-Object file | Sort-Object -Unique) | Should -Be @('engine','game')
+    }
+
+    It 'writes customized inventory slots, volume, and weight to Retail client Game.ini' {
+        $dir = Join-Path (Get-PSDrive TestDrive).Root 'inventory-client'
+        [void](New-Item -ItemType Directory -Path $dir)
+
+        $result = Save-DuneGameConfigClient -Dir $dir -Updates @(
+            @{ key='PlayerInventoryStartingSize'; value='70' },
+            @{ key='PlayerInventoryStartingVolumeCapacity'; value='2500' },
+            @{ key='m_InventoryWeightMultiplier'; value='0.5' }
+        )
+
+        $raw = [IO.File]::ReadAllText((Join-Path $dir 'Game.ini'))
+        $raw | Should -Match '(?m)^PlayerInventoryStartingSize=70\r?$'
+        $raw | Should -Match '(?m)^PlayerInventoryStartingVolumeCapacity=2500\r?$'
+        $raw | Should -Match '(?m)^m_InventoryWeightMultiplier=0\.5\r?$'
+        $result.files.game.path | Should -Be (Join-Path $dir 'Game.ini')
+        @($result.items).Count | Should -Be 3
+    }
+
+    It 'writes the disabled shield setting to the Retail client Engine.ini' {
+        $dir = (Get-PSDrive TestDrive).Root
+
+        $result = Save-DuneGameConfigClient -Dir $dir -Updates @(
+            @{ key='Dune.DisableShieldOnShooting'; value='0' }
+        )
+
+        $raw = [IO.File]::ReadAllText((Join-Path $dir 'Engine.ini'))
+        $raw | Should -Match '(?m)^\[ConsoleVariables\]\r?$'
+        $raw | Should -Match '(?m)^Dune\.DisableShieldOnShooting=0\r?$'
+        $result.files.engine.path | Should -Be (Join-Path $dir 'Engine.ini')
+        @($result.items).Count | Should -Be 1
     }
 
     It 'writes the complete spice startup struct through the normal client Game.ini path' {
@@ -2425,6 +2556,8 @@ Describe 'GameConfig: UE struct-member engine (LandsraadSettings Data blob)' -Ta
 Describe 'GameConfig: spicefield startup defaults' -Tag 'GameConfig' {
     BeforeAll {
         function Invoke-V6Ssh { param([string]$Ip, [string]$Cmd) }
+        function Get-V6RetailSpicefieldActivity { param([string]$Ip) }
+        function Get-DuneActiveMapPartitions { param([string]$Ip) }
         $script:SpiceSection = '/Script/DuneSandbox.SpiceHarvestingSystem'
         $script:SpiceOverride = 'm_PerMapSystemSettings=(("Editor_Default", (m_SpiceFieldTypeSettings=(((Name="Small"), (MaxGloballyPrimed=3,MaxGloballyActive=5)),((Name="Medium"), (MaxGloballyPrimed=2,MaxGloballyActive=22)),((Name="Large"), (MaxGloballyPrimed=2,MaxGloballyActive=6))))),("DeepDesert_1", (m_SpiceFieldTypeSettings=(((Name="Small"), (MaxGloballyPrimed=10,MaxGloballyActive=60)),((Name="Medium"), (MaxGloballyPrimed=12,MaxGloballyActive=12)),((Name="Large"), (MaxGloballyPrimed=2,MaxGloballyActive=6))))),("Survival_1", (m_SpiceFieldTypeSettings=(((Name="Small"), (MaxGloballyPrimed=3,MaxGloballyActive=10))))))'
         $script:SpiceFallback = 'm_DefaultSystemSettings=(m_SpiceFieldTypeSettings=(((Name="Small"), (MaxGloballyPrimed=3,MaxGloballyActive=20)),((Name="Medium"), (MaxGloballyPrimed=2,MaxGloballyActive=10)),((Name="Large"), (MaxGloballyPrimed=2,MaxGloballyActive=6))))'
@@ -2464,25 +2597,175 @@ Describe 'GameConfig: spicefield startup defaults' -Tag 'GameConfig' {
         @($defs.id | Sort-Object -Unique).Count | Should -Be 4
     }
 
-    It 'keeps the installed Funcom INIs as DST authoritative source' {
+    It 'preserves the unavailable Retail primed count as null instead of numeric zero' {
+        Mock Get-DuneGameConfig { @{ game = @{ raw = $script:SpiceUserRaw } } }
+        Mock Get-DuneGameConfigDefaults { @{ game = $script:SpiceDefaultsRaw } }
+        Mock Get-V6RetailSpicefieldActivity {
+            @([pscustomobject]@{
+                map_name = 'HaggaBasin'
+                dimension_index = 0
+                field_type = 'Small'
+                current_active = 5
+            })
+        }
+        Mock Get-DuneActiveMapPartitions {
+            @{ ok = $true; partitions = @([pscustomobject]@{
+                mapId = 'Survival_1'
+                dimensionIndex = 0
+                live = $true
+                pinned = $false
+            }) }
+        }
+
+        $row = @((Get-DuneRetailSpicefieldRows -Ip '192.0.2.1').rows |
+            Where-Object spicefield_type_id -eq 9101)[0]
+
+        $row.current_globally_active | Should -Be 5
+        $row.current_globally_primed | Should -BeNullOrEmpty
+        $row.current_primed_exact | Should -BeFalse
+        $row.max_globally_primed | Should -Be 3
+        $row.default_max_globally_active | Should -Be 5
+        $row.default_max_globally_primed | Should -Be 5
+        $row.guidance_max | Should -Be 5
+        $row.configured_override | Should -BeTrue
+    }
+
+    It 'keeps a changed live Funcom default separate from DST guidance' {
+        $retailDefaults = $script:SpiceDefaultsRaw.Replace(
+            'MaxGloballyPrimed=5,MaxGloballyActive=5',
+            'MaxGloballyPrimed=10,MaxGloballyActive=10'
+        )
+        Mock Get-DuneGameConfig { @{ game = @{ raw = $retailDefaults } } }
+        Mock Get-DuneGameConfigDefaults { @{ game = $retailDefaults } }
+        Mock Get-V6RetailSpicefieldActivity { @() }
+        Mock Get-DuneActiveMapPartitions { @{ ok = $true; partitions = @() } }
+
+        $row = @((Get-DuneRetailSpicefieldRows -Ip '192.0.2.1').rows |
+            Where-Object spicefield_type_id -eq 9101)[0]
+
+        $row.max_globally_active | Should -Be 10
+        $row.default_max_globally_active | Should -Be 10
+        $row.guidance_max | Should -Be 5
+        $row.configured_override | Should -BeFalse
+    }
+
+    It 'uses the installed files immediately after the v2 migration is marked ready' {
+        Mock Invoke-V6Ssh { 'ready' }
+
+        $paths = Resolve-DuneGameConfigPaths -Ip '192.0.2.1'
+
+        $paths.source | Should -Be 'installed'
+        $paths.game | Should -Be '/home/dune/.dune/download/scripts/setup/config/UserGame.ini'
+        $paths.engine | Should -Be '/home/dune/.dune/download/scripts/setup/config/UserEngine.ini'
+        Should -Invoke Invoke-V6Ssh -Times 1
+    }
+
+    It 'migrates prior managed overrides onto installed Funcom defaults' {
+        $oldGame = @"
+[$script:DuneGcSecGame]
+m_InventoryWeightMultiplier=0.25
+$script:DstManagedBegin
+[$script:SecInventory]
+PlayerInventoryStartingSize=80
+PlayerInventoryStartingVolumeCapacity=350
+[$script:SecBuilding]
+m_BaseBackupToolMapRestriction=((Name="HaggaBasin"), (Name="DeepDesert"))
+m_bBuildingRestrictionLimitsEnabled=False
+$script:DstManagedEnd
+"@
+        $installedGame = @"
+[$script:SecInventory]
+PlayerInventoryStartingSize=35
+PlayerInventoryStartingVolumeCapacity=175
+RetailAddedInventoryDefault=42
+[$script:SecBuilding]
+m_BaseBackupToolMapRestriction=((Name="HaggaBasin"))
+m_bBuildingRestrictionLimitsEnabled=True
+RetailAddedBuildingDefault=True
+"@
+        $script:writes = @()
         Mock Invoke-V6Ssh {
-            param([string]$Ip, [string]$Cmd)
+            param([string]$Ip, [string]$Cmd, [string]$StdinData)
             if ($Cmd -match '__DST_AUTH__:migrated') { return '__DST_AUTH__:migrated' }
-            if ($Cmd -match 'DuneGameConfigAuthorityMarker|dst-live-settings-imported') { return 'uninitialized' }
-            if ($Cmd -match 'ls -t') { return '/srv/UserSettings' }
-            if ($Cmd -match 'test -f') { return 'ok' }
+            if ($Cmd -match 'if test -f') { return 'repair-v1' }
+            if ($Cmd -match 'pre-live-import-\*') { return '/home/dune/.dune/download/scripts/setup/config/UserGame.ini.pre-live-import-20260917120000' }
+            if ($Cmd -match 'ls -t') { return @('/srv/new-defaults', '/srv/old-managed') }
+            if ($Cmd -match "cat '/home/dune/.dune/download/scripts/setup/config/UserGame.ini.pre-live-import-") { return $installedGame }
+            if ($Cmd -match "cat '/home/dune/.dune/download/scripts/setup/config/UserEngine.ini.pre-live-import-") { return '[ConsoleVariables]' }
+            if ($Cmd -match "cat '/srv/new-defaults/") { return '[Unmanaged]' }
+            if ($Cmd -match "cat '/srv/old-managed/UserGame.ini'") { return $oldGame }
+            if ($Cmd -match "cat '/srv/old-managed/UserEngine.ini'") { return '[ConsoleVariables]' }
+            if ($StdinData) {
+                $script:writes += [Text.Encoding]::UTF8.GetString([Convert]::FromBase64String($StdinData))
+            }
         }
         $paths = Resolve-DuneGameConfigPaths -Ip '192.0.2.1'
 
         $paths.source | Should -Be 'installed'
         $paths.migrated | Should -BeTrue
+        $paths.migratedFrom | Should -Be '/srv/old-managed'
+        $paths.migratedKeys | Should -Be 4
         $paths.game | Should -Be '/home/dune/.dune/download/scripts/setup/config/UserGame.ini'
         $paths.engine | Should -Be '/home/dune/.dune/download/scripts/setup/config/UserEngine.ini'
+        $merged = @($script:writes | Where-Object { $_ -match 'PlayerInventoryStartingSize' })[0]
+        $merged | Should -Match 'PlayerInventoryStartingSize=80'
+        $merged | Should -Match 'PlayerInventoryStartingVolumeCapacity=350'
+        $merged | Should -Match 'm_BaseBackupToolMapRestriction=\(\(Name="HaggaBasin"\), \(Name="DeepDesert"\)\)'
+        $merged | Should -Match 'm_bBuildingRestrictionLimitsEnabled=False'
+        $merged | Should -Match 'RetailAddedInventoryDefault=42'
+        $merged | Should -Match 'RetailAddedBuildingDefault=True'
+        $merged | Should -Not -Match 'm_InventoryWeightMultiplier'
         Should -Invoke Invoke-V6Ssh -Times 1 -ParameterFilter {
-            $Cmd -match "install -o dune -g dune" -and
-            $Cmd -match '/srv/UserSettings/UserGame.ini' -and
-            $Cmd -match '__DST_AUTH__:migrated'
+            $Cmd -match 'sha256sum -c' -and
+            $Cmd -match '__DST_AUTH__:migrated' -and
+            $Cmd -match 'pre-v2-migration-attempt-' -and
+            $Cmd -notmatch "cp '[^']+' '[^']+\.pre-live-import-"
         }
+    }
+
+    It 'keeps the clean v1 repair baseline isolated across a failed v2 retry' {
+        $oldGame = @"
+$script:DstManagedBegin
+[$script:SecInventory]
+PlayerInventoryStartingSize=80
+$script:DstManagedEnd
+"@
+        $installedGame = @"
+[$script:SecInventory]
+PlayerInventoryStartingSize=35
+"@
+        $script:migrationCommands = @()
+        $script:migrationAttempt = 0
+        Mock Invoke-V6Ssh {
+            param([string]$Ip, [string]$Cmd, [string]$StdinData)
+            if ($Cmd -match '__DST_AUTH__:migrated') {
+                $script:migrationCommands += $Cmd
+                $script:migrationAttempt++
+                if ($script:migrationAttempt -eq 1) { return 'migration failed' }
+                return '__DST_AUTH__:migrated'
+            }
+            if ($Cmd -match 'if test -f') { return 'repair-v1' }
+            if ($Cmd -match 'pre-live-import-\*') {
+                return '/home/dune/.dune/download/scripts/setup/config/UserGame.ini.pre-live-import-clean'
+            }
+            if ($Cmd -match 'ls -t') { return '/srv/old-managed' }
+            if ($Cmd -match "cat '/home/dune/.dune/download/scripts/setup/config/UserGame.ini.pre-live-import-clean'") { return $installedGame }
+            if ($Cmd -match "cat '/home/dune/.dune/download/scripts/setup/config/UserEngine.ini.pre-live-import-clean'") { return '[ConsoleVariables]' }
+            if ($Cmd -match "cat '/srv/old-managed/UserGame.ini'") { return $oldGame }
+            if ($Cmd -match "cat '/srv/old-managed/UserEngine.ini'") { return '[ConsoleVariables]' }
+        }
+
+        { Resolve-DuneGameConfigPaths -Ip '192.0.2.1' } |
+            Should -Throw '*could not safely migrate*'
+        $paths = Resolve-DuneGameConfigPaths -Ip '192.0.2.1'
+
+        $paths.migrated | Should -BeTrue
+        $script:migrationCommands.Count | Should -Be 2
+        foreach ($command in $script:migrationCommands) {
+            $command | Should -Match 'pre-v2-migration-attempt-'
+            $command | Should -Not -Match "cp '[^']+' '[^']+\.pre-live-import-"
+        }
+        Should -Invoke Invoke-V6Ssh -Times 2 -ParameterFilter { $Cmd -match 'pre-live-import-\*' }
     }
 
     It 'blocks installed defaults when no existing battlegroup configuration can be imported' {

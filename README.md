@@ -281,6 +281,14 @@ spice, scheduled restarts, memory warnings, interfaces, and log exports.
 ![Game Config safety guidance with no live INI values loaded](docs/img/game-config.png)
 
 Typed `UserGame.ini` and `UserEngine.ini` controls, Funcom defaults, backups,
+plus a separate **Official Retail Server Settings** card showing the live
+`Config/LinuxServer/ServerCustomSettings.ini` values used by Retail's
+multiplayer Server Settings preview. Funcom regenerates that runtime file at
+battlegroup startup, so DST writes only the durable BattleGroup
+`global.userIniConfig` source while the battlegroup is fully stopped. Every save
+backs up the complete current file, preserves comments/order/unknown keys, and
+uses revision and exact-readback guards; unknown future keys remain read-only
+and visible rather than being discarded.
 DST-managed blocks, local-client mirroring, and isolated Experimental features.
 </details>
 

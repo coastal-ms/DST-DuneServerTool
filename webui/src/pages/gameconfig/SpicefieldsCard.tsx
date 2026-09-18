@@ -359,8 +359,11 @@ export function SpicefieldsCard({ vmRunning }: Props) {
           {groupOrder.map(([mapName, list]) => {
             const totalActive = list.reduce((s, r) => s + r.currentActive, 0)
             const totalMaxActive = list.reduce((s, r) => s + r.maxActive, 0)
-            const totalPrimed = list.reduce((s, r) => s + r.currentPrimed, 0)
+            const totalPrimed = list.reduce((s, r) => s + (r.currentPrimed ?? 0), 0)
             const totalMaxPrimed = list.reduce((s, r) => s + r.maxPrimed, 0)
+            const showPrimedStatus = list.some(
+              r => r.adapter !== 'retail-config' && r.currentPrimedExact !== false && r.currentPrimed !== null,
+            )
             // Every row for this map belongs to a partition that is neither
             // running nor pinned - i.e. leftovers from an instance that no
             // longer exists.
@@ -384,12 +387,16 @@ export function SpicefieldsCard({ vmRunning }: Props) {
                     <span className="text-text-dim"> / {totalMaxActive}</span>
                     <span className="ml-1">active</span>
                   </span>
-                  <span className="text-border">·</span>
-                  <span title={`Total currently primed across all ${mapName} field sizes`}>
-                    <span className="text-text font-medium">{list.some(r => r.currentPrimedExact === false) ? '—' : totalPrimed}</span>
-                    <span className="text-text-dim"> / {totalMaxPrimed}</span>
-                    <span className="ml-1">primed</span>
-                  </span>
+                  {showPrimedStatus && (
+                    <>
+                      <span className="text-border">·</span>
+                      <span title={`Total currently primed across all ${mapName} field sizes`}>
+                        <span className="text-text font-medium">{totalPrimed}</span>
+                        <span className="text-text-dim"> / {totalMaxPrimed}</span>
+                        <span className="ml-1">primed</span>
+                      </span>
+                    </>
+                  )}
                 </div>
               </div>
               <div className="space-y-2">
@@ -406,7 +413,12 @@ export function SpicefieldsCard({ vmRunning }: Props) {
                   const toggleDisabled = !vmRunning || toggling || toggleCdMs > 0
                   const saveDisabled   = !vmRunning || !dirty || saving || saveCdMs > 0
                   const activeAtCap = r.maxActive > 0 && r.currentActive >= r.maxActive
-                  const primedAtCap = r.currentPrimedExact !== false && r.maxPrimed > 0 && r.currentPrimed >= r.maxPrimed
+                  const currentPrimed = r.currentPrimed
+                  const showRowPrimed = r.adapter !== 'retail-config'
+                    && r.currentPrimedExact !== false
+                    && currentPrimed !== null
+                  const primedAtCap = showRowPrimed && currentPrimed !== null
+                    && r.maxPrimed > 0 && currentPrimed >= r.maxPrimed
                   return (
                     <div key={r.spicefieldTypeId}
                          className="border border-border rounded-lg p-3 bg-surface-2/40">
@@ -430,19 +442,21 @@ export function SpicefieldsCard({ vmRunning }: Props) {
                         </span>
                       </div>
 
-                      <div className="grid grid-cols-2 gap-2 mb-3">
+                      <div className={`grid gap-2 mb-3 ${showRowPrimed ? 'grid-cols-2' : 'grid-cols-1'}`}>
                         <StatTile
                           label="Active on map"
                           current={r.currentActive}
                           max={r.maxActive}
                           atCap={activeAtCap}
                         />
-                        <StatTile
-                          label="Primed to spawn"
-                          current={r.currentPrimedExact === false ? null : r.currentPrimed}
-                          max={r.maxPrimed}
-                          atCap={primedAtCap}
-                        />
+                        {showRowPrimed && (
+                          <StatTile
+                            label="Primed to spawn"
+                            current={currentPrimed ?? 0}
+                            max={r.maxPrimed}
+                            atCap={primedAtCap}
+                          />
+                        )}
                       </div>
 
                       <div className={
@@ -508,6 +522,19 @@ export function SpicefieldsCard({ vmRunning }: Props) {
                           {saveCdMs > 0 && !saving ? `Save (${saveCdSec}s)` : 'Save'}
                         </button>
                       </div>
+                      {r.adapter === 'retail-config' && (
+                        <div className="mt-2 text-[11px] text-text-dim">
+                          {r.configuredOverride === true ? 'Configured override.' : 'Current configuration.'}
+                          {r.defaultMaxActive != null && r.defaultMaxPrimed != null && (
+                            <>
+                              {' '}Funcom default: {r.defaultMaxActive} active / {r.defaultMaxPrimed} primed.
+                            </>
+                          )}
+                          {r.guidanceMax != null && (
+                            <> DST guidance: {r.guidanceMax} for both.</>
+                          )}
+                        </div>
+                      )}
                     </div>
                   )
                 })}

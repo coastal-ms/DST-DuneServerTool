@@ -29,6 +29,12 @@ BEGIN
 END
 $function$
 '@
+
+    # Retail removed dune.actor_state and stores the state directly on actors.
+    # Funcom's function therefore uses a.state rather than the legacy s.state.
+    $script:RetailDefinition = $script:StockDefinition `
+        -replace '(?m)^\s*LEFT JOIN actor_state s ON a\.id = s\.actor_id\r?\n', '' `
+        -replace '\bs\.state\b', 'a.state'
 }
 
 Describe 'Test-DuneBaseBackupGuardApplied' {
@@ -41,6 +47,9 @@ Describe 'Test-DuneBaseBackupGuardApplied' {
     It 'detects the predicate regardless of whitespace style' {
         $odd = "AND s.state   IS   DISTINCT   FROM   'BaseBackup'"
         Test-DuneBaseBackupGuardApplied -Definition $odd | Should -BeTrue
+    }
+    It 'detects the Retail actors-state predicate' {
+        Test-DuneBaseBackupGuardApplied -Definition "AND a.state IS DISTINCT FROM 'BaseBackup'" | Should -BeTrue
     }
 }
 
@@ -59,6 +68,13 @@ Describe 'Add-DuneBaseBackupGuardPredicate' {
         $added  = ($r.definition -split "`n") | Where-Object { $_ -match "'BaseBackup'" } | Select-Object -First 1
         $indentOf = { param($l) ([regex]::Match($l, '^[ \t]*')).Value }
         (& $indentOf $added) | Should -Be (& $indentOf $anchor)
+    }
+    It 'reuses Retail actor state when the separate actor_state table is absent' {
+        $r = Add-DuneBaseBackupGuardPredicate -Definition $script:RetailDefinition
+        $r.ok | Should -BeTrue
+        $r.changed | Should -BeTrue
+        $r.definition | Should -Match "AND a\.state IS DISTINCT FROM 'BaseBackup'"
+        $r.definition | Should -Not -Match "s\.state IS DISTINCT FROM 'BaseBackup'"
     }
     It 'changes nothing except adding that one line' {
         $r = Add-DuneBaseBackupGuardPredicate -Definition $script:StockDefinition
@@ -84,6 +100,13 @@ Describe 'Add-DuneBaseBackupGuardPredicate' {
         $r.reason | Should -Be 'anchor-not-found'
         $r.changed | Should -BeFalse
     }
+    It 'fails closed when VehicleRecovery is not a direct state predicate' {
+        $rewritten = $script:RetailDefinition -replace "a\.state IS DISTINCT FROM 'VehicleRecovery'", "coalesce(a.state::text, '') <> 'VehicleRecovery'"
+        $r = Add-DuneBaseBackupGuardPredicate -Definition $rewritten
+        $r.ok | Should -BeFalse
+        $r.reason | Should -Be 'anchor-not-found'
+        $r.changed | Should -BeFalse
+    }
     It 'fails closed on an empty definition' {
         $r = Add-DuneBaseBackupGuardPredicate -Definition ''
         $r.ok | Should -BeFalse
@@ -98,6 +121,13 @@ Describe 'Remove-DuneBaseBackupGuardPredicate' {
         $r.ok | Should -BeTrue
         $r.changed | Should -BeTrue
         $r.definition | Should -Be $script:StockDefinition
+    }
+    It 'round-trips the Retail definition exactly' {
+        $applied = Add-DuneBaseBackupGuardPredicate -Definition $script:RetailDefinition
+        $r = Remove-DuneBaseBackupGuardPredicate -Definition $applied.definition
+        $r.ok | Should -BeTrue
+        $r.changed | Should -BeTrue
+        $r.definition | Should -Be $script:RetailDefinition
     }
     It 'is a no-op when the predicate is already absent' {
         $r = Remove-DuneBaseBackupGuardPredicate -Definition $script:StockDefinition

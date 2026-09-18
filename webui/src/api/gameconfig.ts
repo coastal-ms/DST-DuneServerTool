@@ -7,6 +7,8 @@ import type {
   GameConfigExperimentalSearchResponse,
   GameConfigField,
   GameConfigResponse,
+  RetailServerSettingsResponse,
+  RetailServerSettingsSaveResponse,
   GameConfigSaveResponse,
   GameConfigBackupResponse,
   GameConfigBackupListResponse,
@@ -107,6 +109,19 @@ export function restoreTimeOfDayCycle() {
 
 export function getGameConfig() {
   return api<GameConfigResponse>('/api/gameconfig')
+}
+
+export function getRetailServerSettings() {
+  return api<RetailServerSettingsResponse>('/api/gameconfig/retail-server-settings')
+}
+
+export function saveRetailServerSettings(revision: string, updates: Record<string, string>) {
+  return withOnlinePlayerGuard(force =>
+    api<RetailServerSettingsSaveResponse>(`/api/gameconfig/retail-server-settings${fq(force)}`, {
+      method: 'PUT',
+      body: JSON.stringify({ revision, updates }),
+    }),
+  )
 }
 
 export function saveGameConfig(updates: Record<string, string>) {

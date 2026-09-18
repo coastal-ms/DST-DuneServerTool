@@ -77,6 +77,35 @@ afterEach(() => {
 })
 
 describe('BgSpiceSummary raw field details', () => {
+  it('hides unavailable Retail primed status without hiding active or spawning state', async () => {
+    vi.mocked(getSpicefields).mockResolvedValue({
+      available: true,
+      rows: [{ ...summaryRow, adapter: 'retail-config', currentPrimed: null, currentPrimedExact: false }],
+      partitionGate: true,
+    })
+
+    render(<BgSpiceSummary enabled />)
+
+    expect(await screen.findByText('Hagga Basin')).toBeInTheDocument()
+    expect(screen.getAllByRole('columnheader', { name: 'Active' })).toHaveLength(2)
+    expect(screen.queryByRole('columnheader', { name: 'Primed' })).not.toBeInTheDocument()
+    expect(screen.queryByText(/N\/A/)).not.toBeInTheDocument()
+    expect(screen.getByRole('checkbox')).toBeChecked()
+  })
+
+  it('keeps authoritative current primed counts on legacy database rows', async () => {
+    vi.mocked(getSpicefields).mockResolvedValue({
+      available: true,
+      rows: [{ ...summaryRow, adapter: 'legacy-db', currentPrimedExact: true }],
+      partitionGate: true,
+    })
+
+    render(<BgSpiceSummary enabled />)
+
+    expect(await screen.findByRole('columnheader', { name: 'Primed' })).toBeInTheDocument()
+    expect(screen.getAllByRole('cell').some(cell => cell.textContent === '1/3')).toBe(true)
+  })
+
   it('opens from an explicit row control and labels untyped raw values accurately', async () => {
     const user = userEvent.setup()
     render(<BgSpiceSummary enabled />)
