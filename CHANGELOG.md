@@ -35,9 +35,10 @@ here cover everything those tags shipped.
 - Hardened the conditional Retail INI migration used when multiple battlegroup
   PVC configurations exist or the earlier v1 import marker requires repair.
   It now skips newly generated default PVCs, layers supported non-default
-  DST-managed overrides onto Funcom's installed defaults, repairs v1 imports
-  from clean pre-import backups, verifies both files, and fails closed when no
-  prior managed configuration can be identified.
+  DST-managed overrides—including disabled building restriction limits—onto
+  Funcom's installed defaults, repairs v1 imports from clean pre-import backups,
+  verifies both files, and fails closed when no prior managed configuration can
+  be identified.
 - Restored an explicit **Apply to my client** action for settings that Retail
   evaluates from each player's local config. **Allowed Maps** can enable the
   Base Backup Tool in the Deep Desert through Retail

@@ -373,7 +373,7 @@ $script:DuneGameConfigSchema = @(
     # --- Building ---
     @{ Section=$script:DuneGcSecBuilding; Key='m_MaxNumLandclaimSegments'; File='game'; Type='int'; Min=1; Default='6'; Label='Max Landclaim Segments'; Help='Maximum territory claim segments. Also needs client-side apply.'; ClientApply=$true; Category='Building' }
     @{ Section=$script:DuneGcSecBuilding; Key='m_BuildingBlueprintMaxExtensions'; File='game'; Type='int'; Min=0; Default='4'; Label='Blueprint Max Extensions'; Help='Maximum blueprint extension slots. Also needs client-side apply.'; ClientApply=$true; Category='Building' }
-    @{ Section=$script:DuneGcSecBuilding; Key='m_bBuildingRestrictionLimitsEnabled'; File='game'; Type='bool'; Default='True'; Label='Building Restriction Limits'; Help='Enforce building restriction limits. Also needs client-side apply.'; ClientApply=$true; Category='Building' }
+    @{ Section=$script:DuneGcSecBuilding; Key='m_bBuildingRestrictionLimitsEnabled'; File='game'; Type='bool'; Default='True'; Label='Building Restriction Limits'; Help='Enforce production-item and other building restriction caps. Turn this off to allow construction beyond the displayed caps. Also needs client-side apply.'; ClientApply=$true; Category='Building' }
     @{ Section=$script:DuneGcSecGame; Key='m_GlobalBuildingDamageMultiplier'; File='game'; Type='float'; Min=0; Default='1.0'; Label='Building Damage Multiplier'; Help='Scales damage dealt to player buildings (0.5 = stronger bases). Also needs client-side apply.'; ClientApply=$true; Category='Building' }
 
     # --- BaseBackUp ---

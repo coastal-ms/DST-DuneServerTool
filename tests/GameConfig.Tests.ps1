@@ -2568,6 +2568,7 @@ PlayerInventoryStartingSize=80
 PlayerInventoryStartingVolumeCapacity=350
 [$script:SecBuilding]
 m_BaseBackupToolMapRestriction=((Name="HaggaBasin"), (Name="DeepDesert"))
+m_bBuildingRestrictionLimitsEnabled=False
 $script:DstManagedEnd
 "@
         $installedGame = @"
@@ -2577,6 +2578,7 @@ PlayerInventoryStartingVolumeCapacity=175
 RetailAddedInventoryDefault=42
 [$script:SecBuilding]
 m_BaseBackupToolMapRestriction=((Name="HaggaBasin"))
+m_bBuildingRestrictionLimitsEnabled=True
 RetailAddedBuildingDefault=True
 "@
         $script:writes = @()
@@ -2600,13 +2602,14 @@ RetailAddedBuildingDefault=True
         $paths.source | Should -Be 'installed'
         $paths.migrated | Should -BeTrue
         $paths.migratedFrom | Should -Be '/srv/old-managed'
-        $paths.migratedKeys | Should -Be 3
+        $paths.migratedKeys | Should -Be 4
         $paths.game | Should -Be '/home/dune/.dune/download/scripts/setup/config/UserGame.ini'
         $paths.engine | Should -Be '/home/dune/.dune/download/scripts/setup/config/UserEngine.ini'
         $merged = @($script:writes | Where-Object { $_ -match 'PlayerInventoryStartingSize' })[0]
         $merged | Should -Match 'PlayerInventoryStartingSize=80'
         $merged | Should -Match 'PlayerInventoryStartingVolumeCapacity=350'
         $merged | Should -Match 'm_BaseBackupToolMapRestriction=\(\(Name="HaggaBasin"\), \(Name="DeepDesert"\)\)'
+        $merged | Should -Match 'm_bBuildingRestrictionLimitsEnabled=False'
         $merged | Should -Match 'RetailAddedInventoryDefault=42'
         $merged | Should -Match 'RetailAddedBuildingDefault=True'
         $merged | Should -Not -Match 'm_InventoryWeightMultiplier'
