@@ -11,6 +11,15 @@ Patch releases within a major series are rolled up under the major's entry
 on GitHub still exist for each individual release; the consolidated entries
 here cover everything those tags shipped.
 
+## [15.1.3] - 2026-09-18
+
+### Fixed
+
+- Spice migration now completes the current Funcom defaults when the source is
+  sparse or incomplete, and fails closed when those defaults are unavailable.
+- Deep Desert PvP changes now deploy installed INI files before a targeted
+  restart and do not claim the change is active if deployment or restart fails.
+
 ## [15.1.2] - 2026-09-18
 
 ### Fixed

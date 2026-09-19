@@ -46,6 +46,15 @@ BeforeAll {
 }
 
 Describe 'Deep Desert per-partition PvP' -Tag 'GameConfig' {
+    BeforeAll {
+        function Invoke-DuneDeployInstalledUserSettings { param([string]$Ip) }
+        function Restart-DuneMapPods { param([string]$Key) }
+    }
+
+    BeforeEach {
+        Mock Invoke-DuneDeployInstalledUserSettings { @{ ok=$true; exitCode=0 } }
+    }
+
     It 'parses global and repeated partition settings' {
         $raw = @"
 [/Script/DuneSandbox.PvpPveSettings]
@@ -78,6 +87,125 @@ m_bShouldForceEnablePvpOnAllPartitions=True
             -QuotedKeys @{}
         $out | Should -Match 'm_bShouldForceEnablePvpOnAllPartitions=False'
         $out | Should -Not -Match 'm_PvpEnabledPartitions'
+    }
+
+    It 'does not report PvP active when no Deep Desert pod restarted' {
+        Mock Get-DuneGameConfigContext { @{ ok=$true; ip='192.0.2.10' } }
+        Mock Get-DuneDeepDesertPvp {
+            @{
+                ok=$true
+                inactiveSelectedPartitionIds=@()
+                instances=@(@{ partitionId=8; pvpEnabled=$true })
+            }
+        }
+        Mock Save-DuneGameConfigLocked {}
+        Mock Restart-DuneMapPods {
+            @{ ok=$true; noop=$true; podsFound=0; podsDeleted=0; message='nothing to restart' }
+        }
+
+        $state = Set-DuneDeepDesertPvp -Enabled $true -PartitionIds @(8)
+
+        $state.ok | Should -BeFalse
+        $state.status | Should -Be 502
+        $state.message | Should -Match 'selection was saved'
+        $state.message | Should -Match 'not been confirmed active'
+    }
+
+    It 'does not report PvP active when the Deep Desert restart fails' {
+        Mock Get-DuneGameConfigContext { @{ ok=$true; ip='192.0.2.10' } }
+        Mock Get-DuneDeepDesertPvp {
+            @{
+                ok=$true
+                inactiveSelectedPartitionIds=@()
+                instances=@(@{ partitionId=8; pvpEnabled=$true })
+            }
+        }
+        Mock Save-DuneGameConfigLocked {}
+        Mock Restart-DuneMapPods {
+            @{ ok=$false; status=503; message='map context unavailable' }
+        }
+
+        $state = Set-DuneDeepDesertPvp -Enabled $true -PartitionIds @(8)
+
+        $state.ok | Should -BeFalse
+        $state.status | Should -Be 502
+        $state.message | Should -Match 'restart did not complete successfully'
+        $state.message | Should -Match 'not been confirmed active'
+    }
+
+    It 'does not report PvP active when a non-noop restart deletes zero pods' {
+        Mock Get-DuneGameConfigContext { @{ ok=$true; ip='192.0.2.10' } }
+        Mock Get-DuneDeepDesertPvp {
+            @{
+                ok=$true
+                inactiveSelectedPartitionIds=@()
+                instances=@(@{ partitionId=8; pvpEnabled=$true })
+            }
+        }
+        Mock Save-DuneGameConfigLocked {}
+        Mock Restart-DuneMapPods {
+            @{ ok=$true; noop=$false; podsFound=1; podsDeleted=0; message='zero deleted' }
+        }
+
+        $state = Set-DuneDeepDesertPvp -Enabled $true -PartitionIds @(8)
+
+        $state.ok | Should -BeFalse
+        $state.status | Should -Be 502
+        $state.message | Should -Match 'restart did not complete successfully'
+        $state.message | Should -Match 'not been confirmed active'
+    }
+
+    It 'deploys the installed INIs before restarting Deep Desert pods' {
+        $script:pvpApplyOrder = [System.Collections.Generic.List[string]]::new()
+        Mock Get-DuneGameConfigContext { @{ ok=$true; ip='192.0.2.10' } }
+        Mock Get-DuneDeepDesertPvp {
+            @{
+                ok=$true
+                inactiveSelectedPartitionIds=@()
+                instances=@(@{ partitionId=8; pvpEnabled=$true })
+            }
+        }
+        Mock Save-DuneGameConfigLocked { $script:pvpApplyOrder.Add('save') }
+        Mock Invoke-DuneDeployInstalledUserSettings {
+            $script:pvpApplyOrder.Add('deploy')
+            @{ ok=$true; exitCode=0 }
+        }
+        Mock Restart-DuneMapPods {
+            $script:pvpApplyOrder.Add('restart')
+            @{ ok=$true; noop=$false; podsFound=1; podsDeleted=1 }
+        }
+
+        $state = Set-DuneDeepDesertPvp -Enabled $true -PartitionIds @(8)
+
+        $state.ok | Should -BeTrue
+        @($script:pvpApplyOrder) | Should -Be @('save', 'deploy', 'restart')
+        Should -Invoke Invoke-DuneDeployInstalledUserSettings -Times 1 -Exactly -ParameterFilter { $Ip -eq '192.0.2.10' }
+        Should -Invoke Restart-DuneMapPods -Times 1 -Exactly -ParameterFilter { $Key -eq 'deepdesert' }
+    }
+
+    It 'does not restart Deep Desert pods when installed INI deployment fails' {
+        Mock Get-DuneGameConfigContext { @{ ok=$true; ip='192.0.2.10' } }
+        Mock Get-DuneDeepDesertPvp {
+            @{
+                ok=$true
+                inactiveSelectedPartitionIds=@()
+                instances=@(@{ partitionId=8; pvpEnabled=$true })
+            }
+        }
+        Mock Save-DuneGameConfigLocked {}
+        Mock Invoke-DuneDeployInstalledUserSettings {
+            @{ ok=$false; exitCode=1; error='deploy failed' }
+        }
+        Mock Restart-DuneMapPods { throw 'must not restart after a failed deployment' }
+
+        $state = Set-DuneDeepDesertPvp -Enabled $true -PartitionIds @(8)
+
+        $state.ok | Should -BeFalse
+        $state.status | Should -Be 502
+        $state.message | Should -Match 'could not be deployed'
+        $state.message | Should -Match 'No Deep Desert pods were restarted'
+        $state.message | Should -Match 'not been confirmed active'
+        Should -Invoke Restart-DuneMapPods -Times 0 -Exactly
     }
 
     It 'lists only partitions bound to running Deep Desert sets' {
@@ -2660,6 +2788,61 @@ Describe 'GameConfig: spicefield startup defaults' -Tag 'GameConfig' {
         Should -Invoke Invoke-V6Ssh -Times 1
     }
 
+    It 'fetches current complete defaults before migrating Spice from a sparse installed baseline' {
+        Mock Get-DuneGameConfigDefaults { @{ game = $script:SpiceDefaultsRaw } }
+        Mock Invoke-V6Ssh {
+            param($Ip, $Cmd, $StdinData)
+            if ($Cmd -match '__DST_AUTH__:migrated') { return '__DST_AUTH__:migrated' }
+            if ($Cmd -match 'if test -f') { return 'uninitialized' }
+            if ($Cmd -match 'ls -t') { return '/srv/managed' }
+            if ($Cmd -match "cat '/srv/managed/UserGame.ini'") {
+                return "$script:DstManagedBegin`n$script:SpiceUserRaw`n$script:DstManagedEnd"
+            }
+            if ($Cmd -match 'sudo cat') { return "[Other]`nKeepMe=42" }
+        }
+
+        $paths = Resolve-DuneGameConfigPaths -Ip '192.0.2.1'
+
+        $paths.migrated | Should -BeTrue
+        Should -Invoke Get-DuneGameConfigDefaults -Times 1 -Exactly -ParameterFilter { $Force -and $Ip -eq '192.0.2.1' }
+    }
+
+    It 'fetches complete defaults when the installed Spice struct is present but incomplete' {
+        Mock Get-DuneGameConfigDefaults { @{ game = $script:SpiceDefaultsRaw } }
+        Mock Invoke-V6Ssh {
+            param($Ip, $Cmd, $StdinData)
+            if ($Cmd -match '__DST_AUTH__:migrated') { return '__DST_AUTH__:migrated' }
+            if ($Cmd -match 'if test -f') { return 'uninitialized' }
+            if ($Cmd -match 'ls -t') { return '/srv/managed' }
+            if ($Cmd -match "cat '/srv/managed/UserGame.ini'") {
+                $partialSpice = $script:SpiceUserRaw.Replace($script:SpiceOverride, 'm_PerMapSystemSettings=(("DeepDesert_1", (m_SpiceFieldTypeSettings=(((Name="Small"), (MaxGloballyPrimed=60,MaxGloballyActive=60))))))')
+                return "$script:DstManagedBegin`n$partialSpice`n$script:DstManagedEnd"
+            }
+            if ($Cmd -match 'sudo cat') { return "[Other]`nKeepMe=42" }
+        }
+
+        $paths = Resolve-DuneGameConfigPaths -Ip '192.0.2.1'
+
+        $paths.migrated | Should -BeTrue
+        Should -Invoke Get-DuneGameConfigDefaults -Times 1 -Exactly -ParameterFilter { $Force -and $Ip -eq '192.0.2.1' }
+    }
+
+    It 'does not write migration files if current Spice defaults cannot be read' {
+        Mock Get-DuneGameConfigDefaults { throw 'defaults read failed' }
+        Mock Invoke-V6Ssh {
+            param($Ip, $Cmd, $StdinData)
+            if ($Cmd -match 'if test -f') { return 'uninitialized' }
+            if ($Cmd -match 'ls -t') { return '/srv/managed' }
+            if ($Cmd -match "cat '/srv/managed/UserGame.ini'") {
+                return "$script:DstManagedBegin`n$script:SpiceUserRaw`n$script:DstManagedEnd"
+            }
+            if ($Cmd -match 'sudo cat') { return "[Other]`nKeepMe=42" }
+        }
+
+        { Resolve-DuneGameConfigPaths -Ip '192.0.2.1' } | Should -Throw '*defaults read failed*'
+        Should -Invoke Invoke-V6Ssh -Times 0 -Exactly -ParameterFilter { $Cmd -match 'sudo tee|sudo install|sudo cp' }
+    }
+
     It 'migrates prior managed overrides onto installed Funcom defaults' {
         $oldGame = @"
 [$script:DuneGcSecGame]
@@ -3072,6 +3255,23 @@ $script:DstManagedEnd
         $state.maxActive | Should -Be 6
         $state.maxPrimed | Should -Be 6
         (Get-DuneSpicefieldLimitsFromBlob -Blob $folded[0].value -MapId 'Survival_1' -FieldType 'Small').maxActive | Should -Be 5
+    }
+
+    It 'migrates Spice onto a sparse installed baseline using complete vendor defaults' {
+        $merged = Merge-DuneGameConfigMigrationValues -BaseRaw "[Other]`nKeepMe=42" -File game -DefaultsRaw $script:SpiceDefaultsRaw -Updates @(
+            @{ file='game'; section=$script:SpiceSection; key='DST.SpiceStartup.DeepDesert.Large.Max'; value='6'; remove=$false }
+        )
+        $doc = ConvertFrom-DuneIniDoc -Raw $merged
+        $blob = Get-DuneStructBlobFromDoc -Doc $doc -Section $script:SpiceSection -StructKey 'm_PerMapSystemSettings'
+        (Get-DuneSpicefieldLimitsFromBlob -Blob $blob -MapId 'DeepDesert_1' -FieldType 'Large').maxActive | Should -Be 6
+        (Get-DuneSpicefieldLimitsFromBlob -Blob $blob -MapId 'Survival_1' -FieldType 'Small').maxActive | Should -Be 5
+        $merged | Should -Match 'KeepMe=42'
+    }
+
+    It 'still refuses Spice migration when the complete structure is unavailable' {
+        { Merge-DuneGameConfigMigrationValues -BaseRaw '[Other]' -File game -DefaultsRaw '[Other]' -Updates @(
+            @{ file='game'; section=$script:SpiceSection; key='DST.SpiceStartup.DeepDesert.Large.Max'; value='6'; remove=$false }
+        ) } | Should -Throw '*refusing to create a partial override*'
     }
 
     It 'resets a Funcom per-map size to its exact active and primed defaults' {
