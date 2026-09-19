@@ -1,8 +1,22 @@
 ---
-const { variant = "primary" } = Astro.props as {
+import { getLatestRelease } from "../lib/release";
+
+const { variant = "primary", destination = "installer" } = Astro.props as {
   variant?: "primary" | "ghost";
+  destination?: "installer" | "releases";
 };
 const releasesUrl = "https://github.com/coastal-ms/DST-DuneServerTool/releases";
+const release = destination === "installer" ? await getLatestRelease() : null;
+const primaryHref = release?.installerUrl ?? releasesUrl;
+const notesHref = release?.htmlUrl ?? releasesUrl;
+const primaryLabel =
+  destination === "installer"
+    ? "Download latest stable for Windows"
+    : "Browse downloads for Windows";
+const notesLabel =
+  destination === "installer"
+    ? "Stable release notes →"
+    : "View latest release notes →";
 const classes =
   variant === "primary"
     ? "inline-flex items-center gap-2 sm:gap-3 rounded-lg bg-dune-accent hover:bg-dune-accent-soft text-dune-bg text-sm sm:text-base font-medium px-4 sm:px-6 py-3 transition-colors shadow-lg shadow-amber-900/30"
@@ -11,7 +25,7 @@ const classes =
 
 <div class="flex flex-col items-start gap-2">
   <a
-    href={releasesUrl}
+    href={primaryHref}
     class={classes}
     rel="noopener"
   >
@@ -26,13 +40,13 @@ const classes =
       <path d="M12 3v14m0 0l-5-5m5 5l5-5" stroke-linecap="round" />
       <path d="M5 21h14" stroke-linecap="round" />
     </svg>
-    <span>Download for Windows</span>
+    <span>{primaryLabel}</span>
   </a>
   <a
-    href={releasesUrl}
+    href={notesHref}
     class="text-xs text-dune-muted hover:text-dune-text underline decoration-dotted"
     rel="noopener"
   >
-    View latest release notes →
+    {notesLabel}
   </a>
 </div>
