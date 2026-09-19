@@ -56,6 +56,11 @@ Describe 'One-shot command orchestration' -Tag 'Commands' {
 
             $categories = Get-Content (Join-Path $PSScriptRoot '..\webui\src\pages\commands\categories.ts') -Raw
             $categories | Should -Match "commands:\s*\[[^\]]*'stop-vm'[^\]]*\]"
+
+            $script:entry | Should -Match '\$vmCommands\s*=\s*@\([\s\S]*Name\s*=\s*"stop-vm"'
+
+            $commandsLib = Get-Content (Join-Path $PSScriptRoot '..\app\server\lib\Commands.ps1') -Raw
+            $commandsLib | Should -Match ([regex]::Escape("if (`$cmd.Mode -eq 'Console' -or `$cmd.Name -eq 'stop-vm')"))
         }
 
         It 'blocks shells and browser admin surfaces during maintenance' {

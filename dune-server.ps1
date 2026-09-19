@@ -1513,6 +1513,7 @@ function Invoke-DuneBackupDumpPodPrune {
 $vmCommands = @(
     [pscustomobject]@{ Key = "a"; Name = "initial-setup";      Desc = "Run the initial VM setup" }
     [pscustomobject]@{ Key = "c"; Name = "start-vm";           Label = "Start VM Only";    Desc = "Power on the VM only (no battlegroup) - useful for maintenance or running an update" }
+    [pscustomobject]@{ Key = "b"; Name = "stop-vm";            Label = "Stop VM Only";     Desc = "Request a graceful guest shutdown without hard-power-off escalation" }
     [pscustomobject]@{ Key = "d"; Name = "startup";            Label = "Start All";        Desc = "Power on VM -> start battlegroup -> wait for overmap + survival maps" }
     [pscustomobject]@{ Key = "e"; Name = "shutdown";           Label = "Stop All";         Desc = "Stop battlegroup (if running) -> power off VM (e.g. shut down for the night)" }
     [pscustomobject]@{ Key = "f"; Name = "reboot";             Label = "Reboot All";       Desc = "Stop battlegroup -> restart VM -> start battlegroup (clean cycle)" }
