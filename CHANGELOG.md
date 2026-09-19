@@ -11,6 +11,13 @@ Patch releases within a major series are rolled up under the major's entry
 on GitHub still exist for each individual release; the consolidated entries
 here cover everything those tags shipped.
 
+## [15.1.4] - 2026-09-18
+
+### Fixed
+
+- Stop VM Only now reaches the existing guarded shutdown handler, and its
+  visible console remains open when a launch error needs to be read.
+
 ## [15.1.3] - 2026-09-18
 
 ### Fixed
