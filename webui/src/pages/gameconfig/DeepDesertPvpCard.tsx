@@ -79,11 +79,7 @@ export function DeepDesertPvpCard({ vmRunning }: Props) {
     try {
       const next = await saveDeepDesertPvp(enabled, [...selected])
       seed(next)
-      if (next.restart && !next.restart.ok) {
-        setErr(`PvP settings saved, but the Deep Desert restart failed: ${next.restart.message ?? 'unknown restart error'}`)
-      } else {
-        setOk(next.message ?? 'Deep Desert PvP saved. Running instances are restarting.')
-      }
+      setOk(next.message ?? 'Deep Desert PvP selection saved. Use Apply INIs & restart to deploy it.')
     } catch (e) {
       setErr(e instanceof Error ? e.message : String(e))
     } finally {
@@ -181,7 +177,7 @@ export function DeepDesertPvpCard({ vmRunning }: Props) {
                     onClick={() => void apply()}>
               <Icon name={saving ? 'Loader2' : 'Save'} size={14}
                     className={saving ? 'animate-spin' : ''} />
-              {saving ? 'Applying…' : 'Apply & restart Deep Desert'}
+              {saving ? 'Saving…' : 'Save PvP selection'}
             </button>
           </div>
         </>

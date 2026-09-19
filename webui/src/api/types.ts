@@ -322,6 +322,7 @@ export type DeepDesertPvpState = {
   staleSelectedPartitionIds: number[]
   instances: DeepDesertPvpInstance[]
   message?: string
+  pendingApply?: boolean
   restart?: {
     ok: boolean
     noop?: boolean

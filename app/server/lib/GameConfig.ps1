@@ -3334,35 +3334,13 @@ function Set-DuneDeepDesertPvp {
         $desired = @($requested + @($current.inactiveSelectedPartitionIds) | Sort-Object -Unique)
     }
     Save-DuneGameConfigLocked -Ip $ctx.ip -Updates (New-DuneDeepDesertPvpUpdates -PartitionIds $desired)
-    try { $iniDeploy = Invoke-DuneDeployInstalledUserSettings -Ip $ctx.ip }
-    catch { $iniDeploy = @{ ok=$false; error=$_.Exception.Message } }
-    if (-not $iniDeploy.ok) {
-        $state = Get-DuneDeepDesertPvp
-        $state.ok = $false
-        $state.status = 502
-        $state.iniDeploy = $iniDeploy
-        $state.message = "The PvP selection was saved, but the installed INIs could not be deployed to the battlegroup. No Deep Desert pods were restarted, and the setting has not been confirmed active. $($iniDeploy.error)"
-        return $state
-    }
-    $restart = Restart-DuneMapPods -Key 'deepdesert'
     $state = Get-DuneDeepDesertPvp
-    $state.iniDeploy = $iniDeploy
-    $state.restart = $restart
-    if (-not $restart.ok -or [bool]$restart.noop -or [int]$restart.podsDeleted -lt 1) {
-        $state.ok = $false
-        $state.status = 502
-        $state.message = if ([bool]$restart.noop) {
-            'The PvP selection was saved, but no running Deep Desert pod was found to restart. The setting has not been confirmed active; refresh Server Health and retry only after a Deep Desert pod is running.'
-        } else {
-            'The PvP selection was saved, but the Deep Desert pod restart did not complete successfully. The setting has not been confirmed active; refresh Server Health and retry the restart.'
-        }
-        return $state
-    }
     $state.ok = $true
+    $state.pendingApply = $true
     $state.message = if ($Enabled) {
-        "Saved Deep Desert PvP for partition(s) $($requested -join ', '). Running Deep Desert instances are restarting to apply it."
+        "Saved Deep Desert PvP for partition(s) $($requested -join ', '). Use Apply INIs & restart to deploy the selection safely; it is not active yet."
     } else {
-        'Disabled Deep Desert partition PvP. Running Deep Desert instances are restarting to apply it.'
+        'Saved Deep Desert partition PvP as disabled. Use Apply INIs & restart to deploy the change safely; it is not active yet.'
     }
     return $state
 }

@@ -17,8 +17,8 @@ here cover everything those tags shipped.
 
 - Spice migration now completes the current Funcom defaults when the source is
   sparse or incomplete, and fails closed when those defaults are unavailable.
-- Deep Desert PvP changes now deploy installed INI files before a targeted
-  restart and do not claim the change is active if deployment or restart fails.
+- Deep Desert PvP changes now save safely as pending configuration and require
+  the existing explicit Apply INIs & restart workflow before becoming active.
 
 ## [15.1.2] - 2026-09-18
 
