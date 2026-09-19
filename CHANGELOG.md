@@ -15,8 +15,9 @@ here cover everything those tags shipped.
 
 ### Fixed
 
-- Stop VM Only now reaches the existing guarded shutdown handler, and its
-  visible console remains open when a launch error needs to be read.
+- Stop VM Only now reaches the guarded graceful shutdown handler used by the
+  Hyper-V recovery workflow and intentional overnight shutdowns. Its visible
+  console also remains open when a launch error needs to be read.
 
 ## [15.1.3] - 2026-09-18
 
