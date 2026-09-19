@@ -1,11 +1,8 @@
 ---
-import { formatDisplayVersion, getLatestRelease } from "../lib/release";
 const { variant = "primary" } = Astro.props as {
   variant?: "primary" | "ghost";
 };
-const release = await getLatestRelease();
-const versionLabel =
-  release.version === "latest" ? "" : formatDisplayVersion(release.version);
+const releasesUrl = "https://github.com/coastal-ms/DST-DuneServerTool/releases";
 const classes =
   variant === "primary"
     ? "inline-flex items-center gap-2 sm:gap-3 rounded-lg bg-dune-accent hover:bg-dune-accent-soft text-dune-bg text-sm sm:text-base font-medium px-4 sm:px-6 py-3 transition-colors shadow-lg shadow-amber-900/30"
@@ -14,7 +11,7 @@ const classes =
 
 <div class="flex flex-col items-start gap-2">
   <a
-    href={release.installerUrl ?? release.htmlUrl}
+    href={releasesUrl}
     class={classes}
     rel="noopener"
   >
@@ -29,14 +26,13 @@ const classes =
       <path d="M12 3v14m0 0l-5-5m5 5l5-5" stroke-linecap="round" />
       <path d="M5 21h14" stroke-linecap="round" />
     </svg>
-    <span>Download stable for Windows</span>
-    {versionLabel && <span class="font-mono text-xs opacity-80">{" "}{versionLabel}</span>}
+    <span>Download for Windows</span>
   </a>
   <a
-    href={release.htmlUrl}
+    href={releasesUrl}
     class="text-xs text-dune-muted hover:text-dune-text underline decoration-dotted"
     rel="noopener"
   >
-    Stable release notes →
+    View latest release notes →
   </a>
 </div>
