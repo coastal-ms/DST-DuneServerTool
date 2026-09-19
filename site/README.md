@@ -5,7 +5,7 @@ Marketing + docs site for the Dune Server Tool. Built with **Astro 7 + React-fre
 This site lives inside the main `DST-DuneServerTool` repo so that:
 
 - Screenshots in `../docs/img/` and the canonical `../CHANGELOG.md` are pulled in at build time — no duplication, the site always reflects what's in the repo.
-- The download button uses the triggering stable release payload for release-triggered Pages builds, avoiding the GitHub API's eventual-consistency window; push and manual builds retain the latest-release API fallback.
+- The homepage download button points to GitHub Releases, where visitors can choose the current stable build or an active prerelease.
 
 ## Local dev
 
@@ -97,7 +97,7 @@ npm run preview
 | `/features`   | `src/pages/features.astro`            | Eleven-surface v15 tour with explicit capture provenance. |
 | `/market`     | `src/pages/market.astro`              | Player/admin guide to Exchange and Duke Market Bot. |
 | `/install`    | `src/pages/install.astro`             | Install paths, requirements, and local file paths. |
-| `/testing`    | `src/pages/testing.astro`             | Live list of active named test releases.           |
+| `/testing`    | `src/pages/testing.astro`             | Live list of the current stable release and active test releases. |
 | `/remote`     | `src/pages/remote.astro`              | Remote portal security and setup guide.            |
 | `/changelog`  | `src/pages/changelog.astro`           | Renders `../CHANGELOG.md` at build time.           |
 | `/community`  | `src/pages/community.astro`           | Discord support and community overview.            |
