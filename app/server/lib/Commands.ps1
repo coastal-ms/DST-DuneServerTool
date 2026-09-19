@@ -459,7 +459,10 @@ function Invoke-DuneCommandExternal {
     # to pause for a keypress before exiting so the result (especially a warning
     # or error) stays readable instead of the window closing instantly. InApp
     # commands capture stdout and must never pause, so they don't get the flag.
-    if ($cmd.Mode -eq 'Console') { $argList += '-PauseOnExit' }
+    # Stop VM Only still uses the external lifecycle script even though its UI
+    # mode is InApp. Keep that console open so a launch/guest-shutdown failure
+    # remains readable instead of flashing away before the operator can see it.
+    if ($cmd.Mode -eq 'Console' -or $cmd.Name -eq 'stop-vm') { $argList += '-PauseOnExit' }
     # Launch so the window is VISIBLE to the signed-in user even when this
     # backend runs in Session 0 ("Keep serving while DST is closed" service
     # mode). A plain Start-Process there opens the console on the invisible
