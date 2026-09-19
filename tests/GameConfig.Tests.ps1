@@ -52,7 +52,8 @@ Describe 'Deep Desert per-partition PvP' -Tag 'GameConfig' {
     }
 
     BeforeEach {
-        Mock Invoke-DuneDeployInstalledUserSettings { @{ ok=$true; exitCode=0 } }
+        Mock Invoke-DuneDeployInstalledUserSettings { throw 'PvP save must not deploy installed INIs implicitly' }
+        Mock Restart-DuneMapPods { throw 'PvP save must not restart pods implicitly' }
     }
 
     It 'parses global and repeated partition settings' {
@@ -89,7 +90,7 @@ m_bShouldForceEnablePvpOnAllPartitions=True
         $out | Should -Not -Match 'm_PvpEnabledPartitions'
     }
 
-    It 'does not report PvP active when no Deep Desert pod restarted' {
+    It 'saves as pending without deploying INIs or restarting pods implicitly' {
         Mock Get-DuneGameConfigContext { @{ ok=$true; ip='192.0.2.10' } }
         Mock Get-DuneDeepDesertPvp {
             @{
@@ -99,112 +100,15 @@ m_bShouldForceEnablePvpOnAllPartitions=True
             }
         }
         Mock Save-DuneGameConfigLocked {}
-        Mock Restart-DuneMapPods {
-            @{ ok=$true; noop=$true; podsFound=0; podsDeleted=0; message='nothing to restart' }
-        }
-
-        $state = Set-DuneDeepDesertPvp -Enabled $true -PartitionIds @(8)
-
-        $state.ok | Should -BeFalse
-        $state.status | Should -Be 502
-        $state.message | Should -Match 'selection was saved'
-        $state.message | Should -Match 'not been confirmed active'
-    }
-
-    It 'does not report PvP active when the Deep Desert restart fails' {
-        Mock Get-DuneGameConfigContext { @{ ok=$true; ip='192.0.2.10' } }
-        Mock Get-DuneDeepDesertPvp {
-            @{
-                ok=$true
-                inactiveSelectedPartitionIds=@()
-                instances=@(@{ partitionId=8; pvpEnabled=$true })
-            }
-        }
-        Mock Save-DuneGameConfigLocked {}
-        Mock Restart-DuneMapPods {
-            @{ ok=$false; status=503; message='map context unavailable' }
-        }
-
-        $state = Set-DuneDeepDesertPvp -Enabled $true -PartitionIds @(8)
-
-        $state.ok | Should -BeFalse
-        $state.status | Should -Be 502
-        $state.message | Should -Match 'restart did not complete successfully'
-        $state.message | Should -Match 'not been confirmed active'
-    }
-
-    It 'does not report PvP active when a non-noop restart deletes zero pods' {
-        Mock Get-DuneGameConfigContext { @{ ok=$true; ip='192.0.2.10' } }
-        Mock Get-DuneDeepDesertPvp {
-            @{
-                ok=$true
-                inactiveSelectedPartitionIds=@()
-                instances=@(@{ partitionId=8; pvpEnabled=$true })
-            }
-        }
-        Mock Save-DuneGameConfigLocked {}
-        Mock Restart-DuneMapPods {
-            @{ ok=$true; noop=$false; podsFound=1; podsDeleted=0; message='zero deleted' }
-        }
-
-        $state = Set-DuneDeepDesertPvp -Enabled $true -PartitionIds @(8)
-
-        $state.ok | Should -BeFalse
-        $state.status | Should -Be 502
-        $state.message | Should -Match 'restart did not complete successfully'
-        $state.message | Should -Match 'not been confirmed active'
-    }
-
-    It 'deploys the installed INIs before restarting Deep Desert pods' {
-        $script:pvpApplyOrder = [System.Collections.Generic.List[string]]::new()
-        Mock Get-DuneGameConfigContext { @{ ok=$true; ip='192.0.2.10' } }
-        Mock Get-DuneDeepDesertPvp {
-            @{
-                ok=$true
-                inactiveSelectedPartitionIds=@()
-                instances=@(@{ partitionId=8; pvpEnabled=$true })
-            }
-        }
-        Mock Save-DuneGameConfigLocked { $script:pvpApplyOrder.Add('save') }
-        Mock Invoke-DuneDeployInstalledUserSettings {
-            $script:pvpApplyOrder.Add('deploy')
-            @{ ok=$true; exitCode=0 }
-        }
-        Mock Restart-DuneMapPods {
-            $script:pvpApplyOrder.Add('restart')
-            @{ ok=$true; noop=$false; podsFound=1; podsDeleted=1 }
-        }
 
         $state = Set-DuneDeepDesertPvp -Enabled $true -PartitionIds @(8)
 
         $state.ok | Should -BeTrue
-        @($script:pvpApplyOrder) | Should -Be @('save', 'deploy', 'restart')
-        Should -Invoke Invoke-DuneDeployInstalledUserSettings -Times 1 -Exactly -ParameterFilter { $Ip -eq '192.0.2.10' }
-        Should -Invoke Restart-DuneMapPods -Times 1 -Exactly -ParameterFilter { $Key -eq 'deepdesert' }
-    }
-
-    It 'does not restart Deep Desert pods when installed INI deployment fails' {
-        Mock Get-DuneGameConfigContext { @{ ok=$true; ip='192.0.2.10' } }
-        Mock Get-DuneDeepDesertPvp {
-            @{
-                ok=$true
-                inactiveSelectedPartitionIds=@()
-                instances=@(@{ partitionId=8; pvpEnabled=$true })
-            }
-        }
-        Mock Save-DuneGameConfigLocked {}
-        Mock Invoke-DuneDeployInstalledUserSettings {
-            @{ ok=$false; exitCode=1; error='deploy failed' }
-        }
-        Mock Restart-DuneMapPods { throw 'must not restart after a failed deployment' }
-
-        $state = Set-DuneDeepDesertPvp -Enabled $true -PartitionIds @(8)
-
-        $state.ok | Should -BeFalse
-        $state.status | Should -Be 502
-        $state.message | Should -Match 'could not be deployed'
-        $state.message | Should -Match 'No Deep Desert pods were restarted'
-        $state.message | Should -Match 'not been confirmed active'
+        $state.pendingApply | Should -BeTrue
+        $state.message | Should -Match 'Apply INIs & restart'
+        $state.message | Should -Match 'not active yet'
+        Should -Invoke Save-DuneGameConfigLocked -Times 1 -Exactly
+        Should -Invoke Invoke-DuneDeployInstalledUserSettings -Times 0 -Exactly
         Should -Invoke Restart-DuneMapPods -Times 0 -Exactly
     }
 

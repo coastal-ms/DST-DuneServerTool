@@ -38,8 +38,8 @@ beforeEach(() => {
     enabled: true,
     selectedPartitionIds: [8],
     instances: [{ ...baseState.instances[0], pvpEnabled: true }],
-    message: 'Saved and restarting.',
-    restart: { ok: true, podsFound: 1, podsDeleted: 1 },
+    pendingApply: true,
+    message: 'Saved. Use Apply INIs & restart.',
   })
 })
 
@@ -59,11 +59,11 @@ describe('DeepDesertPvpCard', () => {
     expect(screen.getByText(/partition 8/)).toBeInTheDocument()
 
     await user.click(screen.getAllByRole('checkbox')[1])
-    await user.click(screen.getByRole('button', { name: /apply & restart deep desert/i }))
+    await user.click(screen.getByRole('button', { name: /save pvp selection/i }))
 
     await waitFor(() => {
       expect(saveDeepDesertPvp).toHaveBeenCalledWith(true, [8])
     })
-    expect(await screen.findByText('Saved and restarting.')).toBeInTheDocument()
+    expect(await screen.findByText('Saved. Use Apply INIs & restart.')).toBeInTheDocument()
   })
 })
