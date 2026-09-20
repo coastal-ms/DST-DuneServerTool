@@ -2780,12 +2780,21 @@ while ($true) {
     # `battlegroup update` so the fetch always starts from a clean slate.
     # Confirmed cause of failed updates on gd.py (2026-07-04) and Coastal's
     # UAT (2026-07-05); manual `rm -rf` clears it in both cases.
+    #
+    # The orphaned directory is root-owned (created by SteamCMD/Funcom's
+    # process), but this SSH session connects as the unprivileged `dune`
+    # user (see $sshUser above) - a plain `rm -rf` fails with "Permission
+    # denied" and leaves the orphan in place. Use `sudo`, same as every other
+    # privileged remote command in this file (e.g. the `sudo k3s kubectl`
+    # calls). Found live on Panta's v15.1.5 dump 2026-09-20: the CRLF fix
+    # (#849) got the cleanup line actually RUNNING for the first time, which
+    # is what surfaced this pre-existing permission gap.
     if ($cmdName -eq 'update') {
         $SteamCmdAppId = '4754530'  # Dune: Awakening Dedicated Server
         $preflight = @"
 if [ -d /home/dune/.dune/download/steamapps/downloading/$SteamCmdAppId ] || [ -d /home/dune/.dune/download/steamapps/temp ]; then
   echo '[dst] Cleaning SteamCMD orphan workdir before update (prevents state=0x206)...'
-  rm -rf /home/dune/.dune/download/steamapps/downloading/$SteamCmdAppId /home/dune/.dune/download/steamapps/temp
+  sudo rm -rf /home/dune/.dune/download/steamapps/downloading/$SteamCmdAppId /home/dune/.dune/download/steamapps/temp
 fi
 "@
         # Strip CRs: this file is CRLF on Windows checkouts (core.autocrlf), and
