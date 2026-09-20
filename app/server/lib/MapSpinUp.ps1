@@ -198,6 +198,41 @@ function _Test-DuneSpinUpControllableSection {
     return ($Section.IsMap -or $script:DuneSpinUpRetailMaps -contains $Section.Name)
 }
 
+function _Test-DuneSpinUpKnownMap {
+    # True for maps DST expects a director.ini section to exist for — the
+    # native-MinServers maps plus the explicitly cataloged Retail areas. Used
+    # only to tell "the section should exist but is missing" (a director.ini
+    # config gap) apart from "not a map DST manages at all" (a bad/unknown
+    # map name). A section merely lacking NumExtraServers/MinServers keys
+    # is not this case — this is for the header itself being gone.
+    param([Parameter(Mandatory)][string]$Map)
+    return ($script:DuneSpinUpNativeMaps -contains $Map) -or ($script:DuneSpinUpRetailMaps -contains $Map)
+}
+
+function _New-DuneSpinUpMissingSectionResult {
+    # Built when a known map's [ Map_Name ] header is entirely absent from
+    # director.ini — seen in the wild when a battlegroup's embedded
+    # director.ini was missing DeepDesert_1's whole section, so Deep Desert
+    # just vanished from Lifecycle with nothing pointing at the real cause.
+    #
+    # The message deliberately never tells the end user to hand-edit
+    # director.ini or the battlegroup YAML themselves (e.g. DST Commands ->
+    # Edit Director), and never frames this as DST's fault or something DST
+    # promises to fix — it's a neutral pointer to ask in the DST Discord,
+    # with no specific channel named since channels can change over time.
+    # Any real repair of the file is a separate, DST-assisted action.
+    param([Parameter(Mandatory)][string]$Map)
+    $label = _Get-DuneSpinUpLabel -Map $Map
+    return @{
+        ok             = $false
+        status         = 404
+        missingSection = $true
+        map            = $Map
+        label          = $label
+        message        = "$label ([ $Map ]) isn't showing up in this battlegroup's director.ini. If a map goes missing like this, reach out on the DST Discord for help."
+    }
+}
+
 function Get-DuneSpinUpMaps {
     # Lists every map section with its current MinServers state, grouped into
     # supported (native MinServers) vs experimental (we'd add MinServers).
@@ -205,6 +240,7 @@ function Get-DuneSpinUpMaps {
     if (-not $r.ok) { return $r }
 
     $sections = _Parse-DuneDirectorIni -Ini $r.ini
+    $sectionNames = @($sections | ForEach-Object { $_.Name })
     $maps = @()
     foreach ($s in $sections) {
         if (-not (_Test-DuneSpinUpControllableSection -Section $s)) { continue }
@@ -221,11 +257,24 @@ function Get-DuneSpinUpMaps {
             sharedParties = (-not $s.HasMaxParties -or [int]$s.MaxParties -ne 1)
         }
     }
+
+    # Maps DST expects to control but whose section header is entirely
+    # absent from director.ini (a config gap) rather than merely off. Kept
+    # separate from $maps so the UI can flag them distinctly instead of the
+    # map just silently disappearing with no diagnostic, as happened with a
+    # battlegroup that lost DeepDesert_1's whole section.
+    $missingSections = @()
+    foreach ($known in (@($script:DuneSpinUpNativeMaps) + @($script:DuneSpinUpRetailMaps))) {
+        if ($sectionNames -contains $known) { continue }
+        $missingSections += (_New-DuneSpinUpMissingSectionResult -Map $known)
+    }
+
     return @{
-        ok   = $true
-        ns   = $r.info.Ns
-        name = $r.info.Name
-        maps = $maps
+        ok              = $true
+        ns              = $r.info.Ns
+        name            = $r.info.Name
+        maps            = $maps
+        missingSections = $missingSections
     }
 }
 
@@ -378,6 +427,14 @@ function Set-DuneSpinUpMap {
         Where-Object { (_Test-DuneSpinUpControllableSection -Section $_) -and $_.Name -eq $Map } |
         Select-Object -First 1
     if (-not $target) {
+        # Distinguish "the section is entirely missing from director.ini"
+        # (a config gap on a map DST expects to manage) from "this isn't a
+        # map name DST controls at all". Only the former gets the
+        # support-routing diagnostic — see _New-DuneSpinUpMissingSectionResult.
+        $sectionExists = $sections | Where-Object { $_.Name -eq $Map } | Select-Object -First 1
+        if (-not $sectionExists -and (_Test-DuneSpinUpKnownMap -Map $Map)) {
+            return _New-DuneSpinUpMissingSectionResult -Map $Map
+        }
         return @{ ok = $false; status = 404; message = "Map '$Map' is not a controllable map section in director.ini." }
     }
 
