@@ -31,9 +31,13 @@ here cover everything those tags shipped.
   free login-reward set Funcom is granting every account that logs in between
   September 17 and October 22 to celebrate the console release; self-hosted
   servers have no entitlement pipeline to deliver it automatically, so it
-  needed admin-grant support. Real `NA_ReverendMotherRoom_*_Patent` template
-  IDs sourced from the community item database (dune.gaming.tools), since the
-  set hasn't landed in the dedicated server build's own data yet.
+  needed admin-grant support.
+
+  The `MTX_ReverendMotherRoom_*_Patent` ids were read back from a real account
+  that had claimed the set, via `dune.building_progression.learned_building_sets`
+  — not from a third-party database. Worth noting because the community item
+  database lists these with an `NA_` prefix, which does not match what the game
+  actually grants; those ids would have produced silent no-op grants.
 
 ## [15.1.6] - 2026-09-20
 
