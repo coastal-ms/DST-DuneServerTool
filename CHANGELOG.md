@@ -22,6 +22,19 @@ here cover everything those tags shipped.
   message points the user to ask in the DST Discord and never instructs a
   self-serve manual edit of director.ini.
 
+## [15.1.7] - 2026-09-20
+
+### Added
+
+- Added the "Matron's Decor" building set (Cathedra, Chair, Table, Roundtable,
+  Banner, Rug) to the Grant Cosmetic / Building Set catalogue. This is the
+  free login-reward set Funcom is granting every account that logs in between
+  September 17 and October 22 to celebrate the console release; self-hosted
+  servers have no entitlement pipeline to deliver it automatically, so it
+  needed admin-grant support. Real `NA_ReverendMotherRoom_*_Patent` template
+  IDs sourced from the community item database (dune.gaming.tools), since the
+  set hasn't landed in the dedicated server build's own data yet.
+
 ## [15.1.6] - 2026-09-20
 
 ### Fixed
