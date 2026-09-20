@@ -7,8 +7,12 @@ BeforeAll {
         '_Get-DuneSpinUpLabel',
         '_Parse-DuneDirectorIni',
         '_Test-DuneSpinUpControllableSection',
+        '_Test-DuneSpinUpKnownMap',
+        '_New-DuneSpinUpMissingSectionResult',
         '_Set-DuneIniMinServers',
-        '_Set-DuneIniPartySharing'
+        '_Set-DuneIniPartySharing',
+        'Set-DuneSpinUpMap',
+        'Get-DuneSpinUpMaps'
     )) {
         Set-Item -Path "function:global:$name" -Value (Get-Item "function:$name").ScriptBlock
     }
@@ -175,5 +179,118 @@ Describe 'Map SpinUp partition-aware floors' {
         $out = _Set-DuneIniPartySharing -Ini $ini -Map 'CB_Story_DestroyedZanovar' -Shared $false
         $out | Should -Match '(?ms)^\[ CB_Story_DestroyedZanovar \]\r?\nMaxParties=1\r?\nMinServers=1'
         $out | Should -Match '(?ms)^\[ DeepDesert_1 \]\r?\nNumExtraServers=0'
+    }
+}
+
+Describe 'A director.ini section missing entirely is detected and routed to support' {
+    # Regression coverage for the 2026-09-20 Tri case: a battlegroup's embedded
+    # director.ini was missing the whole [ DeepDesert_1 ] section, so Deep
+    # Desert just vanished from Lifecycle with no diagnostic pointing at the
+    # cause. Detection must distinguish "known map, section entirely gone"
+    # from "not a map DST manages at all", and the resulting message must
+    # never tell the end user to hand-edit director.ini/YAML themselves.
+
+    BeforeAll {
+        function New-DuneTestBg {
+            param([Parameter(Mandatory)][string]$Ini)
+            [pscustomobject]@{
+                spec = [pscustomobject]@{
+                    utilities = [pscustomobject]@{
+                        director = [pscustomobject]@{
+                            spec = [pscustomobject]@{
+                                configFiles = [pscustomobject]@{
+                                    files = [pscustomobject]@{ 'director.ini' = $Ini }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        Set-Item -Path 'function:global:New-DuneTestBg' -Value (Get-Item 'function:New-DuneTestBg').ScriptBlock
+    }
+
+    It 'recognizes native and Retail maps as sections DST expects to exist' {
+        foreach ($map in @('DeepDesert_1', 'SH_Arrakeen', 'SH_HarkoVillage', 'CB_Story_DestroyedZanovar')) {
+            (_Test-DuneSpinUpKnownMap -Map $map) | Should -BeTrue -Because "$map is a catalogued map"
+        }
+        (_Test-DuneSpinUpKnownMap -Map 'NotARealMap') | Should -BeFalse
+    }
+
+    It 'names the map, the missing section, and director.ini without directing a self-serve edit' {
+        $r = _New-DuneSpinUpMissingSectionResult -Map 'DeepDesert_1'
+
+        $r.ok | Should -BeFalse
+        $r.missingSection | Should -BeTrue
+        $r.map | Should -Be 'DeepDesert_1'
+        $r.message | Should -Match 'Deep Desert'
+        $r.message | Should -Match '\[ DeepDesert_1 \]'
+        $r.message | Should -Match 'director\.ini'
+        $r.message | Should -Match 'DST Discord'
+
+        # Never a self-serve manual-edit instruction, and never frames this
+        # as DST's fault or a specific channel/promise to restore it.
+        $r.message | Should -Not -Match '(?i)Edit Director'
+        $r.message | Should -Not -Match '(?i)DST Commands'
+        $r.message | Should -Not -Match 'NumExtraServers\s*='
+        $r.message | Should -Not -Match 'MinServers\s*='
+        $r.message | Should -Not -Match '(?i)config gap'
+        $r.message | Should -Not -Match '(?i)restore the section'
+    }
+
+    It 'flags the toggle as a missing-section config gap, not a generic unknown-map error' {
+        $ini = "[ SH_Arrakeen ]`nNumExtraServers = 0`nMinServers=1`n"
+        function Get-DuneMapsContext { @{ ok = $true; vm = @{ ip = '10.0.0.1' } } }
+        function Get-V6Battlegroup { param($Ip) @{ Ns = 'ns1'; Name = 'bg1'; Bg = (New-DuneTestBg -Ini $ini) } }
+
+        $r = Set-DuneSpinUpMap -Map 'DeepDesert_1' -Enabled $true
+
+        $r.ok | Should -BeFalse
+        $r.status | Should -Be 404
+        $r.missingSection | Should -BeTrue
+        $r.map | Should -Be 'DeepDesert_1'
+        $r.message | Should -Match 'director\.ini'
+        $r.message | Should -Not -Match '(?i)Edit Director'
+    }
+
+    It 'keeps the plain unknown-map error for a name DST does not catalog at all' {
+        $ini = "[ SH_Arrakeen ]`nNumExtraServers = 0`nMinServers=1`n"
+        function Get-DuneMapsContext { @{ ok = $true; vm = @{ ip = '10.0.0.1' } } }
+        function Get-V6Battlegroup { param($Ip) @{ Ns = 'ns1'; Name = 'bg1'; Bg = (New-DuneTestBg -Ini $ini) } }
+
+        $r = Set-DuneSpinUpMap -Map 'NotARealMap' -Enabled $true
+
+        $r.ok | Should -BeFalse
+        $r.status | Should -Be 404
+        $r.ContainsKey('missingSection') | Should -BeFalse
+        $r.message | Should -Be "Map 'NotARealMap' is not a controllable map section in director.ini."
+    }
+
+    It 'still treats an existing section needing a value change as a normal toggle, not a missing section' {
+        $ini = "[ DeepDesert_1 ]`nNumExtraServers = 0`n"
+        function Get-DuneMapsContext { @{ ok = $true; vm = @{ ip = '10.0.0.1' } } }
+        function Get-V6Battlegroup { param($Ip) @{ Ns = 'ns1'; Name = 'bg1'; Bg = (New-DuneTestBg -Ini $ini) } }
+        function Invoke-V6Ssh { param($Ip, $Cmd, $TimeoutSec) 'battlegroup.dst.example patched' }
+
+        $r = Set-DuneSpinUpMap -Map 'DeepDesert_1' -Enabled $true
+
+        $r.ContainsKey('missingSection') | Should -BeFalse
+        $r.status | Should -Not -Be 404
+    }
+
+    It 'lists missing native sections separately from present maps in Get-DuneSpinUpMaps' {
+        $ini = "[ SH_Arrakeen ]`nNumExtraServers = 0`nMinServers=1`n"
+        function Get-DuneMapsContext { @{ ok = $true; vm = @{ ip = '10.0.0.1' } } }
+        function Get-V6Battlegroup { param($Ip) @{ Ns = 'ns1'; Name = 'bg1'; Bg = (New-DuneTestBg -Ini $ini) } }
+
+        $r = Get-DuneSpinUpMaps
+
+        $r.ok | Should -BeTrue
+        @($r.maps.map) | Should -Contain 'SH_Arrakeen'
+        @($r.maps.map) | Should -Not -Contain 'DeepDesert_1'
+        @($r.missingSections.map) | Should -Contain 'DeepDesert_1'
+        $deepDesert = $r.missingSections | Where-Object { $_.map -eq 'DeepDesert_1' } | Select-Object -First 1
+        $deepDesert.message | Should -Match 'director\.ini'
+        $deepDesert.message | Should -Not -Match '(?i)Edit Director'
     }
 }

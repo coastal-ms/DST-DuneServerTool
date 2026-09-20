@@ -11,6 +11,17 @@ Patch releases within a major series are rolled up under the major's entry
 on GitHub still exist for each individual release; the consolidated entries
 here cover everything those tags shipped.
 
+## [Unreleased]
+
+### Fixed
+
+- Map Spin-Up now detects and reports when a battlegroup's embedded
+  director.ini is missing a map's `[ Map_Name ]` section entirely (rather
+  than the section being present but disabled), instead of the map just
+  silently vanishing from the list and Lifecycle with no diagnostic. The
+  message points the user to ask in the DST Discord and never instructs a
+  self-serve manual edit of director.ini.
+
 ## [15.1.6] - 2026-09-20
 
 ### Fixed
