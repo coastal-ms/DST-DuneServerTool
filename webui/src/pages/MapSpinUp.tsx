@@ -19,7 +19,7 @@ import { CSS } from '@dnd-kit/utilities'
 import { PageHeader } from '../components/PageHeader'
 import { Icon } from '../components/Icon'
 import { ApiError } from '../api/client'
-import { getMapSpinUp, setMapPartySharing, setMapSpinUp, type SpinUpMap } from '../api/mapSpinUp'
+import { getMapSpinUp, setMapPartySharing, setMapSpinUp, type SpinUpMap, type SpinUpMissingSection } from '../api/mapSpinUp'
 import { fixOnDemandPartitions, getMapState, restartMapPods, type MapState } from '../api/maps'
 import { SpicefieldsCard } from './gameconfig/SpicefieldsCard'
 import { useStatus } from '../hooks/useStatus'
@@ -104,6 +104,7 @@ export function MapSpinUp({ embedded = false }: { embedded?: boolean }) {
   const { status } = useStatus()
   const vmRunning = status?.vm?.running === true
   const [maps, setMaps] = useState<SpinUpMap[] | null>(null)
+  const [missingSections, setMissingSections] = useState<SpinUpMissingSection[]>([])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [message, setMessage] = useState<string | null>(null)
@@ -142,8 +143,10 @@ export function MapSpinUp({ embedded = false }: { embedded?: boolean }) {
     try {
       const r = await getMapSpinUp()
       setMaps(r.maps ?? [])
+      setMissingSections(r.missingSections ?? [])
     } catch (e) {
       setMaps(null)
+      setMissingSections([])
       setError(e instanceof ApiError ? e.message : String(e))
     } finally {
       setLoading(false)
@@ -446,6 +449,9 @@ export function MapSpinUp({ embedded = false }: { embedded?: boolean }) {
         </div>
       ) : (
         <>
+          {missingSections.length > 0 && (
+            <MissingSectionsGroup sections={missingSections} />
+          )}
           <MapGroup
             title="Maps"
             hint="Deep Desert keeps all configured partitions warm; other maps keep one server warm. Some maps don't ship MinServers natively — enabling those may be ignored or consume additional RAM."
@@ -462,6 +468,29 @@ export function MapSpinUp({ embedded = false }: { embedded?: boolean }) {
         </>
       )}
     </>
+  )
+}
+
+// Maps DST expects a director.ini section for, but whose [ Map_Name ] header
+// is entirely absent — a config gap, not something the user can toggle here.
+// Rendered separately from the normal cards since there's nothing to enable.
+function MissingSectionsGroup({ sections }: { sections: SpinUpMissingSection[] }) {
+  return (
+    <section className="mb-6">
+      <h2 className="text-sm font-semibold uppercase tracking-wider mb-1 flex items-center gap-2 text-danger">
+        <Icon name="AlertTriangle" size={14} className="text-danger" />
+        Missing from director.ini
+      </h2>
+      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
+        {sections.map(s => (
+          <div key={s.map} className="card p-4 flex flex-col gap-1 border-danger/40">
+            <div className="text-sm font-semibold truncate">{s.label}</div>
+            <div className="text-xs text-text-dim font-mono truncate">{s.map}</div>
+            <p className="text-xs text-danger mt-1 break-words">{s.message}</p>
+          </div>
+        ))}
+      </div>
+    </section>
   )
 }
 

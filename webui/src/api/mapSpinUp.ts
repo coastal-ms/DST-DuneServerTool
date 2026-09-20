@@ -12,11 +12,21 @@ export interface SpinUpMap {
   sharedParties?: boolean
 }
 
+// A map DST expects a director.ini section for, but whose [ Map_Name ]
+// header is entirely absent (a config gap), not merely disabled. Distinct
+// from a map simply not being controllable/known.
+export interface SpinUpMissingSection {
+  map: string
+  label: string
+  message: string
+}
+
 export interface SpinUpMapsResult {
   ok: boolean
   ns?: string
   name?: string
   maps: SpinUpMap[]
+  missingSections?: SpinUpMissingSection[]
 }
 
 export interface SpinUpSetResult {
@@ -30,6 +40,7 @@ export interface SpinUpSetResult {
   raw?: string
   message?: string
   sharedParties?: boolean
+  missingSection?: boolean
 }
 
 export function getMapSpinUp() {
