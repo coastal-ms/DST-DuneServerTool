@@ -11,6 +11,17 @@ Patch releases within a major series are rolled up under the major's entry
 on GitHub still exist for each individual release; the consolidated entries
 here cover everything those tags shipped.
 
+## [15.1.6] - 2026-09-20
+
+### Fixed
+
+- The SteamCMD orphan-workdir preflight cleanup added in 15.1.5 now actually
+  runs, but `rm -rf` was failing with `Permission denied`: the orphaned
+  directory is root-owned (left behind by SteamCMD/Funcom's process), while
+  the cleanup connects over SSH as the unprivileged `dune` user. Prefixed
+  the removal with `sudo`, matching every other privileged remote command in
+  the tool.
+
 ## [15.1.5] - 2026-09-20
 
 ### Fixed
