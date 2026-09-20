@@ -11,6 +11,18 @@ Patch releases within a major series are rolled up under the major's entry
 on GitHub still exist for each individual release; the consolidated entries
 here cover everything those tags shipped.
 
+## [15.1.5] - 2026-09-20
+
+### Fixed
+
+- The SteamCMD orphan-workdir preflight cleanup (added to prevent
+  `state=0x206` update failures) was silently never running: the script
+  checks out with CRLF line endings on Windows, and piping that heredoc
+  raw to `ssh` made bash choke on the trailing `\r` before `fi`, skipping
+  the cleanup every time. Server-side updates could stall (e.g. hanging at
+  "Waiting for user info...OK") whenever a prior interrupted download left
+  an orphaned SteamCMD workdir behind.
+
 ## [15.1.4] - 2026-09-18
 
 ### Fixed

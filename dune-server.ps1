@@ -21,7 +21,7 @@ param(
 # Wraps the original battlegroup.ps1 menu and adds extra tools
 # ============================================================
 
-$script:ToolVersion = "15.1.4"
+$script:ToolVersion = "15.1.5"
 
 # Cold-boot readiness budgets (seconds). A fresh battlegroup's FIRST boot can
 # take 10-30 min: k3s + funcom-operators initialize, metrics-server restarts a
@@ -2788,6 +2788,12 @@ if [ -d /home/dune/.dune/download/steamapps/downloading/$SteamCmdAppId ] || [ -d
   rm -rf /home/dune/.dune/download/steamapps/downloading/$SteamCmdAppId /home/dune/.dune/download/steamapps/temp
 fi
 "@
+        # Strip CRs: this file is CRLF on Windows checkouts (core.autocrlf), and
+        # .ps1 isn't covered by .gitattributes' eol=lf rules like .sh is. A CRLF
+        # here-string piped raw to bash fails with "syntax error near unexpected
+        # token `fi'" and silently skips the cleanup below - see BackupSchedule.ps1
+        # Invoke-DuneBackupShell for the same fix applied there.
+        $preflight = $preflight -replace "`r", ''
         ssh -o BatchMode=yes -o StrictHostKeyChecking=no -o LogLevel=QUIET -i "$sshKey" "$sshUser@$ip" $preflight
     }
 
