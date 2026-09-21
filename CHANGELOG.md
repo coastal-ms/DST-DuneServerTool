@@ -39,6 +39,13 @@ here cover everything those tags shipped.
   silently vanishing from the list and Lifecycle with no diagnostic. The
   message points the user to ask in the DST Discord and never instructs a
   self-serve manual edit of director.ini.
+- Map Spin-Up no longer treats a Retail area (Zanovar, Arrakeen Spaceport,
+  Place of Contemplation, The Glutton's Dining Room, Sietch Talab) as broken
+  just because it hasn't been started yet in this battlegroup — that's
+  normal for those areas, not a config gap. They now get their own calm
+  "Not started yet" notice instead of the same error treatment as a real
+  director.ini gap, with a one-click "Start it" control to bring the area
+  online directly.
 
 ## [15.1.6] - 2026-09-20
 
