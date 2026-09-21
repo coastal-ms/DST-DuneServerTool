@@ -80,6 +80,29 @@ Describe 'Get-DuneCosmeticsCatalog includes the full building-set universe' -Tag
         $script:cat.templates.template | Should -Contain 'D_AdvFabricationSet_Patent'
         $script:cat.templates.template | Should -Contain 'D_StartingSet'
     }
+    It 'includes the exact Matron''s Decor templates and friendly names (regression)' {
+        # Pins the six live-account-verified MTX_ReverendMotherRoom_* ids
+        # exactly, not just a raised count - the community item database
+        # lists these with an NA_ prefix that silently no-ops on grant, so a
+        # `-Contain` per id (rather than a wider count assertion) is what
+        # actually catches a misspelled or reverted template.
+        $expected = @{
+            'MTX_ReverendMotherRoom_Banner_Patent'     = "Matron's Banner"
+            'MTX_ReverendMotherRoom_Carpet_Patent'     = "Matron's Rug"
+            'MTX_ReverendMotherRoom_Chair_01_Patent'   = "Matron's Cathedra"
+            'MTX_ReverendMotherRoom_Chair_02_Patent'   = "Matron's Chair"
+            'MTX_ReverendMotherRoom_TableRound_Patent' = "Matron's Roundtable"
+            'MTX_ReverendMotherRoom_Table_Patent'      = "Matron's Table"
+        }
+        foreach ($id in $expected.Keys) {
+            $script:cat.templates.template | Should -Contain $id
+            $entry = $script:cat.templates | Where-Object { $_.template -eq $id }
+            $entry.name | Should -Be $expected[$id]
+            $entry.group | Should -BeLike 'Building Sets*'
+        }
+        $script:cat.templates.template | Should -Not -Contain 'NA_ReverendMotherRoom_Chair_01_Patent'
+    }
+
     It 'every building-set entry has a template, a name, and a Building Sets group' {
         foreach ($e in ($script:cat.templates | Where-Object { $_.group -like 'Building Sets*' })) {
             $e.template | Should -Not -BeNullOrEmpty

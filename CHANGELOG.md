@@ -13,15 +13,6 @@ here cover everything those tags shipped.
 
 ## [Unreleased]
 
-### Fixed
-
-- Map Spin-Up now detects and reports when a battlegroup's embedded
-  director.ini is missing a map's `[ Map_Name ]` section entirely (rather
-  than the section being present but disabled), instead of the map just
-  silently vanishing from the list and Lifecycle with no diagnostic. The
-  message points the user to ask in the DST Discord and never instructs a
-  self-serve manual edit of director.ini.
-
 ## [15.1.7] - 2026-09-20
 
 ### Added
@@ -38,6 +29,16 @@ here cover everything those tags shipped.
   — not from a third-party database. Worth noting because the community item
   database lists these with an `NA_` prefix, which does not match what the game
   actually grants; those ids would have produced silent no-op grants.
+- Added Carl D. Holland to the Sponsors & Credits supporter list.
+
+### Fixed
+
+- Map Spin-Up now detects and reports when a battlegroup's embedded
+  director.ini is missing a map's `[ Map_Name ]` section entirely (rather
+  than the section being present but disabled), instead of the map just
+  silently vanishing from the list and Lifecycle with no diagnostic. The
+  message points the user to ask in the DST Discord and never instructs a
+  self-serve manual edit of director.ini.
 
 ## [15.1.6] - 2026-09-20
 
