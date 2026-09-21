@@ -29,7 +29,7 @@ here cover everything those tags shipped.
   — not from a third-party database. Worth noting because the community item
   database lists these with an `NA_` prefix, which does not match what the game
   actually grants; those ids would have produced silent no-op grants.
-- Added Carl D. Holland to the Sponsors & Credits supporter list.
+- Framework adjustments to the Sponsors & Credits supporter list.
 
 ### Fixed
 
