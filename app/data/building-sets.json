@@ -1,8 +1,8 @@
 {
   "_meta": {
     "source": "Authoritative grantable building-set/recipe item ids: union of dune.building_progression.learned_building_sets (live cross-check) and every building Patent/Placeable item id in gameplay-item-data.json names. Friendly names + grouping are resolved at runtime from gameplay-item-data.json. Regenerate when the game adds building sets.",
-    "generated": "2026-06-29",
-    "count": 225,
+    "generated": "2026-09-20",
+    "count": 231,
     "flagged_no_item_form": [
       "MTX_Atre_TeaSet_Patent",
       "MTX_Atre_TeaSet_Patent2",
@@ -208,6 +208,12 @@
     "MTX_Neut_StrategyTable_Patent",
     "MTX_Neut_Strategy_RoomSign_Patent",
     "MTX_Neut_TeleporterDevice_Placeable",
+    "MTX_ReverendMotherRoom_Banner_Patent",
+    "MTX_ReverendMotherRoom_Carpet_Patent",
+    "MTX_ReverendMotherRoom_Chair_01_Patent",
+    "MTX_ReverendMotherRoom_Chair_02_Patent",
+    "MTX_ReverendMotherRoom_TableRound_Patent",
+    "MTX_ReverendMotherRoom_Table_Patent",
     "MTX_Smug_BuildingSet_Patent",
     "MTX_Smug_BuildingSet_Placeables_Patent",
     "MTX_WaterShippers_BuildingSet_Patent",

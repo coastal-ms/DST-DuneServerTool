@@ -19,7 +19,7 @@ import { CSS } from '@dnd-kit/utilities'
 import { PageHeader } from '../components/PageHeader'
 import { Icon } from '../components/Icon'
 import { ApiError } from '../api/client'
-import { getMapSpinUp, setMapPartySharing, setMapSpinUp, type SpinUpMap, type SpinUpMissingSection } from '../api/mapSpinUp'
+import { getMapSpinUp, setMapPartySharing, setMapSpinUp, type SpinUpMap, type SpinUpMissingSection, type SpinUpNotStartedSection } from '../api/mapSpinUp'
 import { fixOnDemandPartitions, getMapState, restartMapPods, type MapState } from '../api/maps'
 import { SpicefieldsCard } from './gameconfig/SpicefieldsCard'
 import { useStatus } from '../hooks/useStatus'
@@ -105,6 +105,7 @@ export function MapSpinUp({ embedded = false }: { embedded?: boolean }) {
   const vmRunning = status?.vm?.running === true
   const [maps, setMaps] = useState<SpinUpMap[] | null>(null)
   const [missingSections, setMissingSections] = useState<SpinUpMissingSection[]>([])
+  const [notStartedSections, setNotStartedSections] = useState<SpinUpNotStartedSection[]>([])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [message, setMessage] = useState<string | null>(null)
@@ -144,9 +145,11 @@ export function MapSpinUp({ embedded = false }: { embedded?: boolean }) {
       const r = await getMapSpinUp()
       setMaps(r.maps ?? [])
       setMissingSections(r.missingSections ?? [])
+      setNotStartedSections(r.notStartedSections ?? [])
     } catch (e) {
       setMaps(null)
       setMissingSections([])
+      setNotStartedSections([])
       setError(e instanceof ApiError ? e.message : String(e))
     } finally {
       setLoading(false)
@@ -180,6 +183,34 @@ export function MapSpinUp({ embedded = false }: { embedded?: boolean }) {
       setBusy(null)
     }
   }, [refresh, startTracking, stopTracking, dismissLoadError])
+
+  const onStartRetail = useCallback(async (s: SpinUpNotStartedSection) => {
+    const ok = confirmRoutineAction(
+      `Start ${s.label} for the first time?\n\n`
+      + 'This creates its director.ini section and keeps one server instance warm '
+      + '(MinServers = 1) from now on.\n\n'
+      + "It spins up a brand-new server instance, which needs additional Hyper-V VM "
+      + 'RAM on top of whatever is already running. Make sure the VM has room before '
+      + 'starting several of these back-to-back.',
+    )
+    if (!ok) return
+    setBusy(s.map); setMessage(null); setError(null)
+    try {
+      const r = await setMapSpinUp(s.map, true)
+      await refresh()
+      if (r.ok) {
+        setMessage(r.message ?? `${s.label} is starting up.`)
+      } else {
+        setError(r.message ?? 'The change may not have applied.')
+      }
+    } catch (e) {
+      const mutationError = e instanceof ApiError ? e.message : String(e)
+      await refresh()
+      setError(mutationError)
+    } finally {
+      setBusy(null)
+    }
+  }, [refresh])
 
   const onPartySharing = useCallback(async (m: SpinUpMap, shared: boolean) => {
     setBusy(m.map); setMessage(null); setError(null)
@@ -452,6 +483,9 @@ export function MapSpinUp({ embedded = false }: { embedded?: boolean }) {
           {missingSections.length > 0 && (
             <MissingSectionsGroup sections={missingSections} />
           )}
+          {notStartedSections.length > 0 && (
+            <NotStartedSectionsGroup sections={notStartedSections} busy={busy} onStart={onStartRetail} />
+          )}
           <MapGroup
             title="Maps"
             hint="Deep Desert keeps all configured partitions warm; other maps keep one server warm. Some maps don't ship MinServers natively — enabling those may be ignored or consume additional RAM."
@@ -487,6 +521,43 @@ function MissingSectionsGroup({ sections }: { sections: SpinUpMissingSection[] }
             <div className="text-sm font-semibold truncate">{s.label}</div>
             <div className="text-xs text-text-dim font-mono truncate">{s.map}</div>
             <p className="text-xs text-danger mt-1 break-words">{s.message}</p>
+          </div>
+        ))}
+      </div>
+    </section>
+  )
+}
+
+// Retail maps whose section is absent only because they haven't been
+// started yet - the normal, low-severity case. Deliberately calmer than
+// MissingSectionsGroup: an info tone, not danger, since this isn't
+// game-breaking, just a one-time "hasn't run yet" state.
+function NotStartedSectionsGroup({ sections, busy, onStart }: {
+  sections: SpinUpNotStartedSection[]
+  busy: string | null
+  onStart: (s: SpinUpNotStartedSection) => void
+}) {
+  return (
+    <section className="mb-6">
+      <h2 className="text-sm font-semibold uppercase tracking-wider mb-1 flex items-center gap-2 text-info">
+        <Icon name="Info" size={14} className="text-info" />
+        Not started yet
+      </h2>
+      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
+        {sections.map(s => (
+          <div key={s.map} className="card p-4 flex flex-col gap-1 border-info/40">
+            <div className="text-sm font-semibold truncate">{s.label}</div>
+            <div className="text-xs text-text-dim font-mono truncate">{s.map}</div>
+            <p className="text-xs text-text-dim mt-1 break-words">{s.message}</p>
+            <button
+              type="button"
+              className="btn-secondary min-h-9 mt-2 justify-center"
+              disabled={busy !== null}
+              onClick={() => onStart(s)}
+            >
+              <Icon name={busy === s.map ? 'Loader2' : 'Power'} size={14} className={busy === s.map ? 'animate-spin' : ''} />
+              {busy === s.map ? 'Starting…' : 'Start it'}
+            </button>
           </div>
         ))}
       </div>

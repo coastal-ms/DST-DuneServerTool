@@ -13,6 +13,24 @@ here cover everything those tags shipped.
 
 ## [Unreleased]
 
+## [15.1.7] - 2026-09-20
+
+### Added
+
+- Added the "Matron's Decor" building set (Cathedra, Chair, Table, Roundtable,
+  Banner, Rug) to the Grant Cosmetic / Building Set catalogue. This is the
+  free login-reward set Funcom is granting every account that logs in between
+  September 17 and October 22 to celebrate the console release; self-hosted
+  servers have no entitlement pipeline to deliver it automatically, so it
+  needed admin-grant support.
+
+  The `MTX_ReverendMotherRoom_*_Patent` ids were read back from a real account
+  that had claimed the set, via `dune.building_progression.learned_building_sets`
+  — not from a third-party database. Worth noting because the community item
+  database lists these with an `NA_` prefix, which does not match what the game
+  actually grants; those ids would have produced silent no-op grants.
+- Added Carl D. Holland to the Sponsors & Credits supporter list.
+
 ### Fixed
 
 - Map Spin-Up now detects and reports when a battlegroup's embedded

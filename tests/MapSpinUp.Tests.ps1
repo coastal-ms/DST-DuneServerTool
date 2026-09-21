@@ -8,7 +8,9 @@ BeforeAll {
         '_Parse-DuneDirectorIni',
         '_Test-DuneSpinUpControllableSection',
         '_Test-DuneSpinUpKnownMap',
+        '_Test-DuneSpinUpKnownRetailMap',
         '_New-DuneSpinUpMissingSectionResult',
+        '_New-DuneSpinUpNotStartedResult',
         '_Set-DuneIniMinServers',
         '_Set-DuneIniPartySharing',
         'Set-DuneSpinUpMap',
@@ -210,11 +212,105 @@ Describe 'A director.ini section missing entirely is detected and routed to supp
         Set-Item -Path 'function:global:New-DuneTestBg' -Value (Get-Item 'function:New-DuneTestBg').ScriptBlock
     }
 
-    It 'recognizes native and Retail maps as sections DST expects to exist' {
-        foreach ($map in @('DeepDesert_1', 'SH_Arrakeen', 'SH_HarkoVillage', 'CB_Story_DestroyedZanovar')) {
-            (_Test-DuneSpinUpKnownMap -Map $map) | Should -BeTrue -Because "$map is a catalogued map"
+    It 'recognizes native-MinServers maps as sections DST expects to exist' {
+        foreach ($map in @('DeepDesert_1', 'SH_Arrakeen', 'SH_HarkoVillage')) {
+            (_Test-DuneSpinUpKnownMap -Map $map) | Should -BeTrue -Because "$map is a native-MinServers map"
         }
         (_Test-DuneSpinUpKnownMap -Map 'NotARealMap') | Should -BeFalse
+    }
+
+    It 'does NOT flag Retail maps as a real error when absent - regression for a real false positive' {
+        # Caught during v15.1.7 release-candidate testing (2026-09-20): a live
+        # self-hosted battlegroup had all five DuneSpinUpRetailMaps sections
+        # absent from director.ini while every one of them was fully alive
+        # and working via the battlegroup director's own live admin page
+        # (real queue-fail routing, instance throttling, per-map caps - none
+        # of it sourced from director.ini). Flagging these in the same
+        # error tier as a native-map gap would have told a healthy
+        # self-hoster their server was broken, when it wasn't - these are
+        # cataloged as their own low-severity "not started yet" tier instead
+        # (see _Test-DuneSpinUpKnownRetailMap).
+        foreach ($map in @(
+            'CB_Story_DestroyedZanovar', 'CB_Story_OrbitalMonitor',
+            'CB_Arrakis_Story_Paranoid_PrayerRoom', 'CB_Arrakis_Story_Glutton_DiningRoom',
+            'CB_Arrakis_Generic_Sietch_Room'
+        )) {
+            (_Test-DuneSpinUpKnownMap -Map $map) | Should -BeFalse -Because "$map is a Retail map, not the native-error tier"
+            (_Test-DuneSpinUpKnownRetailMap -Map $map) | Should -BeTrue -Because "$map is a cataloged Retail map"
+        }
+
+        $ini = "[ SH_Arrakeen ]`nNumExtraServers = 0`nMinServers=1`n"
+        function Get-DuneMapsContext { @{ ok = $true; vm = @{ ip = '10.0.0.1' } } }
+        function Get-V6Battlegroup { param($Ip) @{ Ns = 'ns1'; Name = 'bg1'; Bg = (New-DuneTestBg -Ini $ini) } }
+        $r = Get-DuneSpinUpMaps
+        @($r.missingSections.map) | Should -Not -Contain 'CB_Story_DestroyedZanovar'
+        @($r.missingSections.map) | Should -Not -Contain 'CB_Arrakis_Generic_Sietch_Room'
+        @($r.notStartedSections.map) | Should -Contain 'CB_Story_DestroyedZanovar'
+        @($r.notStartedSections.map) | Should -Contain 'CB_Arrakis_Generic_Sietch_Room'
+    }
+
+    It 'gives Retail "not started" maps a calm, non-game-breaking message distinct from the error tier' {
+        $r = _New-DuneSpinUpNotStartedResult -Map 'CB_Story_DestroyedZanovar'
+
+        $r.ok | Should -BeFalse
+        $r.notStarted | Should -BeTrue
+        $r.ContainsKey('missingSection') | Should -BeFalse
+        $r.map | Should -Be 'CB_Story_DestroyedZanovar'
+        $r.message | Should -Match 'Zanovar'
+        $r.message | Should -Match "hasn't been started yet"
+        $r.message | Should -Match 'normal'
+        $r.message | Should -Match 'DST Discord'
+
+        # Same guardrails as the error tier: no self-serve edit instruction,
+        # and never claims this is a config gap or something to restore.
+        $r.message | Should -Not -Match '(?i)Edit Director'
+        $r.message | Should -Not -Match '(?i)DST Commands'
+        $r.message | Should -Not -Match 'NumExtraServers\s*='
+        $r.message | Should -Not -Match 'MinServers\s*='
+    }
+
+    It 'declining to enable an un-started Retail map still returns the calm notStarted result' {
+        $ini = "[ SH_Arrakeen ]`nNumExtraServers = 0`nMinServers=1`n"
+        function Get-DuneMapsContext { @{ ok = $true; vm = @{ ip = '10.0.0.1' } } }
+        function Get-V6Battlegroup { param($Ip) @{ Ns = 'ns1'; Name = 'bg1'; Bg = (New-DuneTestBg -Ini $ini) } }
+
+        $r = Set-DuneSpinUpMap -Map 'CB_Story_DestroyedZanovar' -Enabled $false
+
+        $r.ok | Should -BeFalse
+        $r.status | Should -Be 404
+        $r.notStarted | Should -BeTrue
+        $r.ContainsKey('missingSection') | Should -BeFalse
+        $r.map | Should -Be 'CB_Story_DestroyedZanovar'
+    }
+
+    It 'enabling an un-started Retail map creates the section from scratch and patches it directly' {
+        # Regression coverage for the 2026-09-20 finding: Coastal manually
+        # added a brand-new [ CB_Story_DestroyedZanovar ] section with just
+        # MinServers=1 via a raw CRD edit, and it came online immediately -
+        # no battlegroup restart. Set-DuneSpinUpMap should do the same patch
+        # itself on first enable instead of only reporting "not started yet".
+        $ini = "[ SH_Arrakeen ]`nNumExtraServers = 0`nMinServers=1`n"
+        function Get-DuneMapsContext { @{ ok = $true; vm = @{ ip = '10.0.0.1' } } }
+        function Get-V6Battlegroup { param($Ip) @{ Ns = 'ns1'; Name = 'bg1'; Bg = (New-DuneTestBg -Ini $ini) } }
+        $script:capturedCmd = $null
+        function Invoke-V6Ssh { param($Ip, $Cmd, $TimeoutSec) $script:capturedCmd = $Cmd; 'battlegroup.dst.example patched' }
+
+        $r = Set-DuneSpinUpMap -Map 'CB_Story_DestroyedZanovar' -Enabled $true
+
+        $r.ok | Should -BeTrue
+        $r.map | Should -Be 'CB_Story_DestroyedZanovar'
+        $r.enabled | Should -BeTrue
+        $r.minServers | Should -Be 1
+        $r.firstStart | Should -BeTrue
+        $r.ContainsKey('notStarted') | Should -BeFalse
+        $r.ContainsKey('missingSection') | Should -BeFalse
+
+        # Decode the base64 JSON patch payload embedded in the SSH command to
+        # confirm the actual director.ini content sent is a clean new section.
+        $script:capturedCmd -match 'echo (\S+) \|' | Should -BeTrue
+        $decoded = [Text.Encoding]::UTF8.GetString([Convert]::FromBase64String($Matches[1]))
+        $decoded | Should -Match '\[ CB_Story_DestroyedZanovar \]'
+        $decoded | Should -Match 'MinServers=1'
     }
 
     It 'names the map, the missing section, and director.ini without directing a self-serve edit' {
