@@ -21,12 +21,22 @@ export interface SpinUpMissingSection {
   message: string
 }
 
+// A Retail map (see DuneSpinUpRetailMaps) whose section is absent only
+// because it hasn't been started yet - the normal, low-severity case, not
+// game-breaking. Distinct from SpinUpMissingSection's real-error tier.
+export interface SpinUpNotStartedSection {
+  map: string
+  label: string
+  message: string
+}
+
 export interface SpinUpMapsResult {
   ok: boolean
   ns?: string
   name?: string
   maps: SpinUpMap[]
   missingSections?: SpinUpMissingSection[]
+  notStartedSections?: SpinUpNotStartedSection[]
 }
 
 export interface SpinUpSetResult {
@@ -41,6 +51,8 @@ export interface SpinUpSetResult {
   message?: string
   sharedParties?: boolean
   missingSection?: boolean
+  notStarted?: boolean
+  firstStart?: boolean
 }
 
 export function getMapSpinUp() {

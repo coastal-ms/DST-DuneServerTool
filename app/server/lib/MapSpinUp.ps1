@@ -199,21 +199,40 @@ function _Test-DuneSpinUpControllableSection {
 }
 
 function _Test-DuneSpinUpKnownMap {
-    # True for maps DST expects a director.ini section to exist for — the
-    # native-MinServers maps plus the explicitly cataloged Retail areas. Used
-    # only to tell "the section should exist but is missing" (a director.ini
-    # config gap) apart from "not a map DST manages at all" (a bad/unknown
-    # map name). A section merely lacking NumExtraServers/MinServers keys
-    # is not this case — this is for the header itself being gone.
+    # True for the native-MinServers maps - the ones that genuinely need a
+    # director.ini section to exist at all before MinServers can be read or
+    # set (the DeepDesert_1 case this whole feature was built for). A gap
+    # here is a real anomaly: these maps are always expected to have a
+    # section, so its absence can indicate an actual server-side problem.
     param([Parameter(Mandatory)][string]$Map)
-    return ($script:DuneSpinUpNativeMaps -contains $Map) -or ($script:DuneSpinUpRetailMaps -contains $Map)
+    return ($script:DuneSpinUpNativeMaps -contains $Map)
+}
+
+function _Test-DuneSpinUpKnownRetailMap {
+    # True for the cataloged Retail areas (DuneSpinUpRetailMaps). Unlike
+    # native maps, these are managed by Funcom's director via its own
+    # internal defaults (queue-fail routing, instance throttling, per-map
+    # caps - all visible live on the battlegroup director's own admin page)
+    # and normally ship with NO director.ini section until the map has been
+    # started at least once. Confirmed directly on a real self-hosted
+    # battlegroup during v15.1.7 testing (2026-09-20): all five were fully
+    # alive with no section, and each gained a real section in director.ini
+    # once it was actually spun up - no separate battlegroup restart needed,
+    # the director reconciles it live (see _Invoke-DuneDirectorIniPatch). So
+    # an absent section here is a normal, low-severity state - not
+    # game-breaking, just "hasn't been started yet" - and gets its own
+    # calmer notice rather than the native-map error treatment.
+    param([Parameter(Mandatory)][string]$Map)
+    return ($script:DuneSpinUpRetailMaps -contains $Map)
 }
 
 function _New-DuneSpinUpMissingSectionResult {
-    # Built when a known map's [ Map_Name ] header is entirely absent from
+    # Built when a NATIVE map's [ Map_Name ] header is entirely absent from
     # director.ini — seen in the wild when a battlegroup's embedded
     # director.ini was missing DeepDesert_1's whole section, so Deep Desert
     # just vanished from Lifecycle with nothing pointing at the real cause.
+    # This is the real-error tier: native maps are always expected to have a
+    # section, so its absence can mean something's actually wrong.
     #
     # The message deliberately never tells the end user to hand-edit
     # director.ini or the battlegroup YAML themselves (e.g. DST Commands ->
@@ -230,6 +249,25 @@ function _New-DuneSpinUpMissingSectionResult {
         map            = $Map
         label          = $label
         message        = "$label ([ $Map ]) isn't showing up in this battlegroup's director.ini. If a map goes missing like this, reach out on the DST Discord for help."
+    }
+}
+
+function _New-DuneSpinUpNotStartedResult {
+    # Built when a RETAIL map's section is absent - the low-severity, "just
+    # hasn't been started yet" case (see _Test-DuneSpinUpKnownRetailMap).
+    # Distinct shape from the native-map result (notStarted, not
+    # missingSection) so the webui can render it as a calm info notice
+    # instead of an error, and word it accordingly - never claiming this is
+    # game-breaking, since it isn't.
+    param([Parameter(Mandatory)][string]$Map)
+    $label = _Get-DuneSpinUpLabel -Map $Map
+    return @{
+        ok          = $false
+        status      = 404
+        notStarted  = $true
+        map         = $Map
+        label       = $label
+        message     = "$label ([ $Map ]) hasn't been started yet, so it isn't showing up here - that's normal for this area. Use Start it below to bring it online, or it'll show up on its own once someone plays there. If it still doesn't appear after that, reach out on the DST Discord for help."
     }
 }
 
@@ -258,23 +296,35 @@ function Get-DuneSpinUpMaps {
         }
     }
 
-    # Maps DST expects to control but whose section header is entirely
-    # absent from director.ini (a config gap) rather than merely off. Kept
-    # separate from $maps so the UI can flag them distinctly instead of the
-    # map just silently disappearing with no diagnostic, as happened with a
-    # battlegroup that lost DeepDesert_1's whole section.
+    # Native-MinServers maps whose section header is entirely absent from
+    # director.ini (a config gap) rather than merely off. Kept separate from
+    # $maps so the UI can flag them distinctly instead of the map just
+    # silently disappearing with no diagnostic, as happened with a
+    # battlegroup that lost DeepDesert_1's whole section. This is the
+    # real-error tier - see _Test-DuneSpinUpKnownMap.
     $missingSections = @()
-    foreach ($known in (@($script:DuneSpinUpNativeMaps) + @($script:DuneSpinUpRetailMaps))) {
+    foreach ($known in @($script:DuneSpinUpNativeMaps)) {
         if ($sectionNames -contains $known) { continue }
         $missingSections += (_New-DuneSpinUpMissingSectionResult -Map $known)
     }
 
+    # Retail maps whose section is absent because they simply haven't been
+    # started yet - the normal, low-severity state. Kept in its own list so
+    # the UI can render it as a calm info notice, not an error - see
+    # _Test-DuneSpinUpKnownRetailMap.
+    $notStartedSections = @()
+    foreach ($known in @($script:DuneSpinUpRetailMaps)) {
+        if ($sectionNames -contains $known) { continue }
+        $notStartedSections += (_New-DuneSpinUpNotStartedResult -Map $known)
+    }
+
     return @{
-        ok              = $true
-        ns              = $r.info.Ns
-        name            = $r.info.Name
-        maps            = $maps
-        missingSections = $missingSections
+        ok                  = $true
+        ns                  = $r.info.Ns
+        name                = $r.info.Name
+        maps                = $maps
+        missingSections     = $missingSections
+        notStartedSections  = $notStartedSections
     }
 }
 
@@ -394,6 +444,23 @@ function _Set-DuneIniPartySharing {
     return ($lines -join "`n")
 }
 
+function _Add-DuneIniRetailSection {
+    # Appends a brand-new [ Map ] section with MinServers=$Value for a Retail
+    # map whose section is entirely absent from director.ini (see
+    # _Test-DuneSpinUpKnownRetailMap). Confirmed safe and immediate on a real
+    # self-hosted battlegroup (2026-09-20): patching in just this section -
+    # no other keys needed - brought the map fully online with no separate
+    # battlegroup restart, the same way Set-DuneSpinUpMap already patches
+    # existing sections.
+    param(
+        [Parameter(Mandatory)][string]$Ini,
+        [Parameter(Mandatory)][string]$Map,
+        [Parameter(Mandatory)][ValidateRange(1,64)][int]$Value
+    )
+    $trimmed = $Ini.TrimEnd("`n", "`r")
+    return "$trimmed`n`n[ $Map ]`nMinServers=$Value`n"
+}
+
 function _Invoke-DuneDirectorIniPatch {
     param(
         [Parameter(Mandatory)]$Read,
@@ -434,6 +501,33 @@ function Set-DuneSpinUpMap {
         $sectionExists = $sections | Where-Object { $_.Name -eq $Map } | Select-Object -First 1
         if (-not $sectionExists -and (_Test-DuneSpinUpKnownMap -Map $Map)) {
             return _New-DuneSpinUpMissingSectionResult -Map $Map
+        }
+        if (-not $sectionExists -and (_Test-DuneSpinUpKnownRetailMap -Map $Map)) {
+            if (-not $Enabled) {
+                # Nothing to turn off - the section doesn't exist yet.
+                return _New-DuneSpinUpNotStartedResult -Map $Map
+            }
+            # First-time spin-up: create the section from scratch instead of
+            # merely editing an existing one. See _Add-DuneIniRetailSection.
+            $value = _Get-DuneSpinUpTargetCount -Map $Map -Bg $r.info.Bg
+            $newIni = _Add-DuneIniRetailSection -Ini $r.ini -Map $Map -Value $value
+            $patched = _Invoke-DuneDirectorIniPatch -Read $r -Ini $newIni
+            $label = _Get-DuneSpinUpLabel -Map $Map
+            return @{
+                ok         = $patched.success
+                map        = $Map
+                label      = $label
+                minServers = $value
+                enabled    = $true
+                availablePartitions = $value
+                raw        = $patched.raw
+                firstStart = $true
+                message    = if ($patched.success) {
+                    "$label is starting up for the first time - it'll show up in the map list as soon as the director brings it online."
+                } else {
+                    "kubectl patch may have failed: $($patched.raw)"
+                }
+            }
         }
         return @{ ok = $false; status = 404; message = "Map '$Map' is not a controllable map section in director.ini." }
     }
