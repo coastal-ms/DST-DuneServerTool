@@ -185,6 +185,15 @@ export function MapSpinUp({ embedded = false }: { embedded?: boolean }) {
   }, [refresh, startTracking, stopTracking, dismissLoadError])
 
   const onStartRetail = useCallback(async (s: SpinUpNotStartedSection) => {
+    const ok = confirmRoutineAction(
+      `Start ${s.label} for the first time?\n\n`
+      + 'This creates its director.ini section and keeps one server instance warm '
+      + '(MinServers = 1) from now on.\n\n'
+      + "It spins up a brand-new server instance, which needs additional Hyper-V VM "
+      + 'RAM on top of whatever is already running. Make sure the VM has room before '
+      + 'starting several of these back-to-back.',
+    )
+    if (!ok) return
     setBusy(s.map); setMessage(null); setError(null)
     try {
       const r = await setMapSpinUp(s.map, true)
