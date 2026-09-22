@@ -29,6 +29,12 @@ here cover everything those tags shipped.
   live/legacy config directory. Save now re-stamps the marker with the
   file's real hash immediately after writing, so a normal save no longer
   self-inflicts a false "stale" read.
+- The above Game Config save and marker writes ran over an SSH wrapper that
+  discards the remote command's exit code, so a silently failed write
+  (permissions, disk full) and a successful one both came back as the same
+  empty output - the save could believe a write had landed when it hadn't.
+  Both writes now have the remote echo back the sha256 of what it actually
+  wrote, and the save fails loudly instead of proceeding on a mismatch.
 
 ## [15.1.9] - 2026-09-22
 
