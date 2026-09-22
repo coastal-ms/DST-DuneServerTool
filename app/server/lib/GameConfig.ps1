@@ -3261,7 +3261,18 @@ function Save-DuneGameConfig {
         $fileUpdates = Convert-DuneStructUpdates -Raw $raw -Updates $fileUpdates -DefaultsRaw $defRaw
         $new  = ConvertTo-DuneIniManaged -Raw $raw -Updates $fileUpdates -QuotedKeys $quoted
         $b64 = [Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes($new))
-        Invoke-V6Ssh -Ip $Ip -Cmd "base64 -d | sudo tee '$path' > /dev/null" -StdinData $b64 -TimeoutSec 30 | Out-Null
+        $expectedHash = Get-DuneGameConfigTextSha256 -Value $new
+        # BUG FIXED 2026-09-22 (Copilot review, PR #857): Invoke-V6Ssh discards
+        # the remote exit code, so a failed `tee` (permissions, disk full, etc.)
+        # returns the same empty stdout as success - the write could silently
+        # not happen at all while the caller believed it had. Have the remote
+        # command echo back the sha256 of what it actually wrote and compare
+        # that against the local hash before trusting the write happened; this
+        # also feeds the marker re-stamp below without a separate read.
+        $writeResult = ((Invoke-V6Ssh -Ip $Ip -Cmd "base64 -d | sudo tee '$path' > /dev/null && sha256sum '$path' | cut -d' ' -f1" -StdinData $b64 -TimeoutSec 30) -join "`n").Trim()
+        if ($writeResult -ne $expectedHash) {
+            throw "Game Config write verification failed for '$path': expected sha256=$expectedHash, remote reported '$writeResult'."
+        }
         $wroteAny = $true
         $writtenContent[$f] = $new
     }
@@ -3287,8 +3298,14 @@ function Save-DuneGameConfig {
         $engineContent = if ($writtenContent.ContainsKey('engine')) { $writtenContent['engine'] } else { (Invoke-V6Ssh -Ip $Ip -Cmd "sudo cat '$($paths.engine)' 2>/dev/null") -join "`n" }
         $gameHash = Get-DuneGameConfigTextSha256 -Value $gameContent
         $engineHash = Get-DuneGameConfigTextSha256 -Value $engineContent
-        $stampCmd = "printf 'live-imported-v2\n$gameHash\n$engineHash\n' | sudo tee '$script:DuneGameConfigAuthorityMarker' > /dev/null"
-        Invoke-V6Ssh -Ip $Ip -Cmd $stampCmd -TimeoutSec 15 | Out-Null
+        # Same silent-failure risk as the content write above: verify the
+        # marker actually landed rather than trusting empty stdout as success.
+        $stampCmd = "printf 'live-imported-v2\n$gameHash\n$engineHash\n' | sudo tee '$script:DuneGameConfigAuthorityMarker' > /dev/null && sha256sum '$script:DuneGameConfigAuthorityMarker' | cut -d' ' -f1"
+        $expectedMarkerHash = Get-DuneGameConfigTextSha256 -Value "live-imported-v2`n$gameHash`n$engineHash`n"
+        $stampResult = ((Invoke-V6Ssh -Ip $Ip -Cmd $stampCmd -TimeoutSec 15) -join "`n").Trim()
+        if ($stampResult -ne $expectedMarkerHash) {
+            throw "Game Config authority marker re-stamp verification failed: expected sha256=$expectedMarkerHash, remote reported '$stampResult'. The settings were saved but the next read may incorrectly see the template as stale - retry the save or re-run Initialize Game Config."
+        }
     }
 }
 
