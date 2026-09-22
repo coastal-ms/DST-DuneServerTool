@@ -35,6 +35,60 @@ $function$
     $script:RetailDefinition = $script:StockDefinition `
         -replace '(?m)^\s*LEFT JOIN actor_state s ON a\.id = s\.actor_id\r?\n', '' `
         -replace '\bs\.state\b', 'a.state'
+
+    # Funcom's 2026-09-22 patch, reproduced verbatim from a live self-hosted
+    # server (pg_get_functiondef). Same exclusion list, but rewritten from
+    # "a.state IS DISTINCT FROM 'X'" to the plain "a.state <> 'X'" form, plus
+    # a substantial unrelated rewrite of the rest of the function (vehicle
+    # recovery, per-map vehicle class filtering, respawn-location cleanup).
+    # Included as-is (not trimmed) so the anchor/patch logic is proven against
+    # the real body shape, not a minimized stand-in.
+    $script:Patch20260922Definition = @'
+CREATE OR REPLACE FUNCTION dune.delete_actors_and_respawns_on_server(in_server_info serverinfo, in_vehicle_classes_spawned_on_map text[], in_allow_vehicle_recovery boolean)
+ RETURNS void
+ LANGUAGE plpgsql
+AS $function$
+BEGIN
+    WITH actors_to_delete AS (
+	    SELECT a.id
+        FROM actors a
+	    WHERE owner_account_id IS NULL
+	    AND a.state <> 'Travel'
+	    AND a.state <> 'VehicleBackup'
+	    AND a.state <> 'VehicleRecovery'
+	    AND server_info_match(a, in_server_info)
+        AND (
+            -- Actors that are not vehicles should always be deleted
+            NOT EXISTS (SELECT 1 FROM vehicles v WHERE v.id = a.id)
+            -- Only vehicles that are allowed to be spawned on this map should be deleted
+            OR in_vehicle_classes_spawned_on_map IS NULL -- If the list is NULL all vehicles are allowed
+            OR a.class = ANY(in_vehicle_classes_spawned_on_map) -- Vehicle type is explicitly allowed on this map
+        )
+	    ORDER BY a.id FOR UPDATE OF a
+    ),
+    vehicles_to_recover AS (
+        SELECT COALESCE(ARRAY_AGG(v.id), ARRAY[]::BIGINT[]) AS ids FROM actors_to_delete a JOIN vehicles v ON (a.id = v.id)
+        WHERE in_allow_vehicle_recovery AND NOT EXISTS (SELECT 1 FROM travel_actor_parent t WHERE t.id = a.id)
+    ),
+    recovered_vehicles AS (
+        SELECT ids, store_recovered_vehicles_wiped_before_spawn(ids) FROM vehicles_to_recover
+    )
+    DELETE FROM actors a USING recovered_vehicles rv
+    WHERE a.id = ANY(SELECT id FROM actors_to_delete)
+    AND NOT a.id = ANY(rv.ids)
+    AND NOT EXISTS (SELECT 1 FROM travel_actor_parent t WHERE t.id = a.id);
+
+	with
+		deleted_ids as (
+			DELETE from player_respawn_locations
+				WHERE map = in_server_info.map AND dimension = in_server_info.dimension_index
+				returning id
+		)
+		update player_state set pending_respawn_location_id=null
+			where pending_respawn_location_id in (select * from deleted_ids);
+END
+$function$
+'@
 }
 
 Describe 'Test-DuneBaseBackupGuardApplied' {
@@ -50,6 +104,12 @@ Describe 'Test-DuneBaseBackupGuardApplied' {
     }
     It 'detects the Retail actors-state predicate' {
         Test-DuneBaseBackupGuardApplied -Definition "AND a.state IS DISTINCT FROM 'BaseBackup'" | Should -BeTrue
+    }
+    It 'detects the 2026-09-22 patch predicate style (plain <>)' {
+        Test-DuneBaseBackupGuardApplied -Definition "AND a.state <> 'BaseBackup'" | Should -BeTrue
+    }
+    It 'reports the 2026-09-22 patch function as not applied' {
+        Test-DuneBaseBackupGuardApplied -Definition $script:Patch20260922Definition | Should -BeFalse
     }
 }
 
@@ -112,6 +172,29 @@ Describe 'Add-DuneBaseBackupGuardPredicate' {
         $r.ok | Should -BeFalse
         $r.reason | Should -Be 'empty-definition'
     }
+    It 'patches the 2026-09-22 function, matching its plain <> style rather than hard-coding IS DISTINCT FROM' {
+        $r = Add-DuneBaseBackupGuardPredicate -Definition $script:Patch20260922Definition
+        $r.ok | Should -BeTrue
+        $r.changed | Should -BeTrue
+        $r.definition | Should -Match "AND a\.state <> 'BaseBackup'"
+        $r.definition | Should -Not -Match "IS DISTINCT FROM 'BaseBackup'"
+    }
+    It 'inserts the 2026-09-22 predicate directly after the VehicleRecovery exclusion and changes nothing else' {
+        $r = Add-DuneBaseBackupGuardPredicate -Definition $script:Patch20260922Definition
+        $before = ($script:Patch20260922Definition -split "`n")
+        $after  = ($r.definition -split "`n")
+        ($after.Count - $before.Count) | Should -Be 1
+        (Compare-Object $before $after | Where-Object { $_.SideIndicator -eq '<=' }).Count | Should -Be 0
+        $lines = ($r.definition -split "`n") | Where-Object { $_ -match "state\s+<>" }
+        $lines[3].Trim() | Should -Be "AND a.state <> 'BaseBackup'"
+    }
+    It 'is idempotent on the 2026-09-22 definition' {
+        $once  = Add-DuneBaseBackupGuardPredicate -Definition $script:Patch20260922Definition
+        $twice = Add-DuneBaseBackupGuardPredicate -Definition $once.definition
+        $twice.ok | Should -BeTrue
+        $twice.changed | Should -BeFalse
+        $twice.reason | Should -Be 'already-applied'
+    }
 }
 
 Describe 'Remove-DuneBaseBackupGuardPredicate' {
@@ -134,6 +217,13 @@ Describe 'Remove-DuneBaseBackupGuardPredicate' {
         $r.ok | Should -BeTrue
         $r.changed | Should -BeFalse
         $r.reason | Should -Be 'already-absent'
+    }
+    It 'round-trips the 2026-09-22 patch definition exactly' {
+        $applied = Add-DuneBaseBackupGuardPredicate -Definition $script:Patch20260922Definition
+        $r = Remove-DuneBaseBackupGuardPredicate -Definition $applied.definition
+        $r.ok | Should -BeTrue
+        $r.changed | Should -BeTrue
+        $r.definition | Should -Be $script:Patch20260922Definition
     }
 }
 

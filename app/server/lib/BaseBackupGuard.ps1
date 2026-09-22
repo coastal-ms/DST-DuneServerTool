@@ -52,15 +52,24 @@ $script:DuneBaseBackupGuardFunction = 'delete_actors_and_respawns_on_server'
 
 # The state value we add. Detection is whitespace tolerant and accepts either
 # the legacy actor_state alias (s.state) or Retail's actors column (a.state).
+# Operator is tolerant too: Funcom's 2026-09-22 patch rewrote this function's
+# exclusion list from "IS DISTINCT FROM 'X'" to the plain "<> 'X'" form
+# (functionally equivalent for a NOT NULL state column, but a different
+# anchor string). Accept either so a future Funcom formatting-only change
+# doesn't fail closed the way this one did.
 $script:DuneBaseBackupGuardState     = 'BaseBackup'
-$script:DuneBaseBackupGuardDetectRe  = "\b(?:[A-Za-z_][A-Za-z0-9_]*\.)?state\s+IS\s+DISTINCT\s+FROM\s+'BaseBackup'"
+$script:DuneBaseBackupGuardDetectRe  = "\b(?:[A-Za-z_][A-Za-z0-9_]*\.)?state\s+(?:IS\s+DISTINCT\s+FROM|<>)\s+'BaseBackup'"
 
 # We anchor on the LAST predicate of Funcom's existing exclusion list rather
 # than on a line number or on the whole function text. The actor-state expression
 # changed from s.state to a.state in Retail, so capture and reuse it verbatim.
-# If Funcom renames or removes that predicate the anchor stops matching and we
-# fail closed instead of guessing where to inject SQL.
-$script:DuneBaseBackupGuardAnchorRe = "(?m)^(?<indent>[ \t]*)AND\s+(?<state>(?:[A-Za-z_][A-Za-z0-9_]*\.)?state)\s+IS\s+DISTINCT\s+FROM\s+'VehicleRecovery'[ \t]*\r?$"
+# The comparison operator is captured too (see note above) so the predicate we
+# inject matches whichever style Funcom's current function body uses, instead
+# of hard-coding one. If Funcom renames or removes the VehicleRecovery
+# predicate entirely, or uses anything other than a plain (alias.)?state
+# column reference, the anchor stops matching and we fail closed instead of
+# guessing where to inject SQL.
+$script:DuneBaseBackupGuardAnchorRe = "(?m)^(?<indent>[ \t]*)AND\s+(?<state>(?:[A-Za-z_][A-Za-z0-9_]*\.)?state)\s+(?<op>IS\s+DISTINCT\s+FROM|<>)\s+'VehicleRecovery'[ \t]*\r?$"
 
 # Marker-delimited read. psql decoration (column header, "(1 row)", alignment)
 # varies with flags, so we bracket the payload ourselves and cut between the
@@ -100,13 +109,14 @@ function Add-DuneBaseBackupGuardPredicate {
     }
     $indent = $m.Groups['indent'].Value
     $stateExpression = $m.Groups['state'].Value
+    $operator = $m.Groups['op'].Value
     # Preserve the file's line-ending style. psql hands us LF, but a definition
     # captured on Windows can be CRLF, and normalising it here would rewrite
     # every following line and break an exact revert round-trip.
     $isCrlf = $m.Value.EndsWith("`r")
     $eol    = if ($isCrlf) { "`r`n" } else { "`n" }
     $anchor = $m.Value.TrimEnd("`r")
-    $predicate = "AND $stateExpression IS DISTINCT FROM '$($script:DuneBaseBackupGuardState)'"
+    $predicate = "AND $stateExpression $operator '$($script:DuneBaseBackupGuardState)'"
     $insert = $anchor + $eol + $indent + $predicate + $(if ($isCrlf) { "`r" } else { '' })
     $patched = $Definition.Remove($m.Index, $m.Length).Insert($m.Index, $insert)
     return @{ ok = $true; reason = 'patched'; definition = $patched; changed = $true }
@@ -121,7 +131,7 @@ function Remove-DuneBaseBackupGuardPredicate {
     if (-not (Test-DuneBaseBackupGuardApplied -Definition $Definition)) {
         return @{ ok = $true; reason = 'already-absent'; definition = $Definition; changed = $false }
     }
-    $lineRe = "(?m)^[ \t]*AND\s+(?:[A-Za-z_][A-Za-z0-9_]*\.)?state\s+IS\s+DISTINCT\s+FROM\s+'BaseBackup'[ \t]*\r?\n"
+    $lineRe = "(?m)^[ \t]*AND\s+(?:[A-Za-z_][A-Za-z0-9_]*\.)?state\s+(?:IS\s+DISTINCT\s+FROM|<>)\s+'BaseBackup'[ \t]*\r?\n"
     $stripped = [regex]::Replace($Definition, $lineRe, '')
     if ($stripped -eq $Definition) {
         return @{ ok = $false; reason = 'predicate-not-on-its-own-line'; definition = $Definition; changed = $false }

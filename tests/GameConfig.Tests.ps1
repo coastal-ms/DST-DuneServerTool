@@ -2692,6 +2692,81 @@ Describe 'GameConfig: spicefield startup defaults' -Tag 'GameConfig' {
         Should -Invoke Invoke-V6Ssh -Times 1
     }
 
+    # --- Fix (2026-09-22): a Steam/Funcom update can silently overwrite the
+    # installed template out from under an already-'ready' marker, reverting a
+    # player's real customized values to Funcom's stock numbers in DST's own
+    # reads/UI while the actually-running server (unaffected) kept the real
+    # values the whole time. Proven live against a real self-hosted server:
+    # SteamCMD overwrote UserGame.ini at patch time, dropping the
+    # SpiceHarvestingSystem section entirely, while the marker file was
+    # untouched and still claimed 'ready'.
+
+    It 're-migrates when the template was overwritten since the marker was written (hash mismatch = stale, not ready)' {
+        Mock Invoke-V6Ssh {
+            param([string]$Ip, [string]$Cmd, [string]$StdinData)
+            if ($Cmd -match '__DST_AUTH__:migrated') { return '__DST_AUTH__:migrated' }
+            # The state-check script computes real sha256sums of the (mocked)
+            # installed files and compares them to what's stored in the
+            # marker; since this test doesn't touch real files, simulate the
+            # detection result directly instead of re-implementing sha256sum.
+            if ($Cmd -match 'if test -f') { return 'stale' }
+            if ($Cmd -match 'ls -t') { return '/srv/managed' }
+            if ($Cmd -match "cat '/srv/managed/UserGame.ini'") {
+                return "$script:DstManagedBegin`n[$script:DuneGcSecGame]`nm_PlayerStartingWater=250`n$script:DstManagedEnd"
+            }
+            if ($Cmd -match 'sudo cat') { return '[ConsoleVariables]' }
+        }
+
+        $paths = Resolve-DuneGameConfigPaths -Ip '192.0.2.1'
+
+        # 'stale' takes the same merge-base path as 'uninitialized' (the
+        # current, freshly-overwritten template IS the correct Funcom
+        # baseline to merge onto), not the 'repair-v1' backup path.
+        $paths.source | Should -Be 'installed'
+        $paths.migrated | Should -BeTrue
+        $paths.game | Should -Be '/home/dune/.dune/download/scripts/setup/config/UserGame.ini'
+        Should -Invoke Invoke-V6Ssh -ParameterFilter { $Cmd -match 'pre-live-import-\*' } -Times 0
+    }
+
+    It 'writes the current template file hashes into the marker on migration, so a later untouched read reports ready' {
+        $script:writes = @()
+        Mock Invoke-V6Ssh {
+            param([string]$Ip, [string]$Cmd, [string]$StdinData)
+            if ($Cmd -match "printf 'live-imported-v2") { $script:writes += $Cmd }
+            if ($Cmd -match '__DST_AUTH__:migrated') { return '__DST_AUTH__:migrated' }
+            if ($Cmd -match 'if test -f') { return 'uninitialized' }
+            if ($Cmd -match 'ls -t') { return '/srv/managed' }
+            if ($Cmd -match "cat '/srv/managed/UserGame.ini'") {
+                return "$script:DstManagedBegin`n[$script:DuneGcSecGame]`nm_PlayerStartingWater=250`n$script:DstManagedEnd"
+            }
+            if ($Cmd -match 'sudo cat') { return '[ConsoleVariables]' }
+        }
+
+        Resolve-DuneGameConfigPaths -Ip '192.0.2.1' | Out-Null
+
+        $script:writes.Count | Should -Be 1
+        # The marker command must carry two hash lines after the literal
+        # 'live-imported-v2' line - a marker with no hashes is exactly the
+        # old-format case that must always compare as stale, never ready.
+        ($script:writes[0] -split '\\n').Count | Should -BeGreaterOrEqual 3
+    }
+
+    It 're-stamps the marker as ready (no Initialize-Game-Config banner) when a stale template has nothing to carry forward' {
+        Mock Invoke-V6Ssh {
+            param([string]$Ip, [string]$Cmd)
+            if ($Cmd -match 'if test -f') { return 'stale' }
+            if ($Cmd -match 'ls -t') { return @() }
+            return '[ConsoleVariables]'
+        }
+
+        $paths = Resolve-DuneGameConfigPaths -Ip '192.0.2.1'
+
+        $paths.source | Should -Be 'installed'
+        $paths.authoritative | Should -Not -Be $false
+        $paths.needsInitialization | Should -BeNullOrEmpty
+        Should -Invoke Invoke-V6Ssh -ParameterFilter { $Cmd -match "printf 'live-imported-v2" } -Times 1
+    }
+
     It 'fetches current complete defaults before migrating Spice from a sparse installed baseline' {
         Mock Get-DuneGameConfigDefaults { @{ game = $script:SpiceDefaultsRaw } }
         Mock Invoke-V6Ssh {

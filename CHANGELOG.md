@@ -13,6 +13,30 @@ here cover everything those tags shipped.
 
 ## [Unreleased]
 
+## [15.1.8] - 2026-09-22
+
+### Fixed
+
+- "Keep stored base backups through the Deep Desert reset" failed to apply
+  after the 2026-09-22 Funcom server patch changed the wording of the
+  database function it edits, from `IS DISTINCT FROM 'X'` to `<> 'X'`. DST's
+  safety anchor only recognized the old wording and correctly refused to
+  guess rather than risk corrupting the function, but that meant the setting
+  could no longer be turned on at all. Both wordings are now recognized, and
+  the predicate DST inserts matches whichever one the server is currently
+  using.
+- Game Config could silently display and re-save reverted values for any
+  customized setting after a Funcom server patch, because a Steam update
+  overwrites DST's installed settings template without touching the marker
+  file DST uses to decide whether that template is still trustworthy. DST
+  kept treating the marker's mere presence as proof the template was current,
+  so it read the freshly Funcom-reset file instead of the real configured
+  values - Spice Field caps and other customized settings could appear to
+  have reverted to Funcom's defaults even though nothing was actually lost.
+  DST now also checks the template's contents against what it last saw, and
+  automatically recovers the real settings from the running server if a
+  patch has changed the template underneath it.
+
 ## [15.1.7] - 2026-09-20
 
 ### Added
