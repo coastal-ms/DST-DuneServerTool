@@ -121,6 +121,36 @@ function New-DuneBackupFilePruneSnippet {
 # backups, so the pod count stays bounded automatically (issue #363). The
 # pruner is skipped during the restart window too: a kubectl-delete storm
 # while k3s is restarting would just compete for the API server.
+# Reconstructs EXACTLY what New-DuneBackupCmd rendered before the 2026-09-22
+# pg_dump-backfill fix — used only to recognize an already-installed cron
+# block as "stale from before this fix", so Get-DuneBackupSchedule can
+# reconcile it automatically without also silently clobbering a genuine
+# operator hand-edit it can't otherwise tell apart from "just old". Every
+# pre-fix install is missing the # DST-BACKUP-CMD-VERSION marker entirely
+# (this is the first version to write one), so a missing marker + an exact
+# match against this legacy shape is the only reliable signal available at
+# this transition. Do not "clean up" or remove this once the fix has been out
+# for a while — every pre-existing installed server needs it to self-heal the
+# very first time DST touches its schedule after upgrading, however long that
+# takes for that particular operator.
+function New-DuneBackupCmdLegacyV1 {
+    param(
+        [int]$KeepLastPods = 10,
+        [int]$KeepLast = 0
+    )
+    $podSnippet  = New-DuneBackupPodPruneSnippet -KeepLast $KeepLastPods
+    $fileSnippet = New-DuneBackupFilePruneSnippet -KeepLast $KeepLast
+    $tail = $podSnippet
+    if ($fileSnippet) { $tail = "$podSnippet; $fileSnippet" }
+    return "if [ -f /var/lib/dune-server/dst-world-restart-recovery-required ] || find /tmp/dst-restart-active -mmin -30 2>/dev/null | grep -q .; then echo `"`$(date) dst: backup skipped - BG restart or recovery window active`" >> /var/log/dune-backup.log; else /home/dune/.dune/bin/battlegroup backup >> /var/log/dune-backup.log 2>&1; $tail; fi"
+}
+
+# Bump whenever New-DuneBackupCmd's rendered command changes in a way that
+# already-installed crontabs need to pick up automatically (see
+# Get-DuneBackupSchedule's self-heal below) — not for cosmetic/comment-only
+# changes.
+$script:DuneBackupCmdVersion = 2
+
 function New-DuneBackupCmd {
     param(
         [int]$KeepLastPods = 10,
@@ -345,6 +375,7 @@ function New-DuneBackupBlock {
     $lines += "# DST-BACKUP-KEEP-LAST: $KeepLast"
     $lines += "# DST-BACKUP-KEEP-LAST-PODS: $KeepLastPods"
     $lines += "# DST-BACKUP-KEEP-DAYS-PODS: $KeepDaysPods"
+    $lines += "# DST-BACKUP-CMD-VERSION: $script:DuneBackupCmdVersion"
     foreach ($cronExpr in $script:DuneBackupPresets[$Preset].crons) {
         $lines += "$cronExpr $cmd"
     }
@@ -387,10 +418,16 @@ function ConvertFrom-DuneBackupCrontab {
         $keepLast = 0
         $keepLastPods = $script:DuneBackupPodPruneKeepLastDefault
         $keepDaysPods = $script:DuneBackupPodPruneKeepDaysDefault
+        # $null = no version marker at all, i.e. installed before the marker
+        # existed. Never assume that means "version 1" — a genuinely
+        # hand-edited block also has no marker, and the two must stay
+        # distinguishable (see Get-DuneBackupSchedule's legacy-shape check).
+        $cmdVersion = $null
         foreach ($bl in $blockLines) {
             if ($bl -match '^# DST-BACKUP-PRESET:\s*(\S+)') { $preset = $Matches[1] }
             elseif ($bl -match '^# DST-BACKUP-KEEP-LAST-PODS:\s*(\d+)') { $keepLastPods = [int]$Matches[1] }
             elseif ($bl -match '^# DST-BACKUP-KEEP-DAYS-PODS:\s*(\d+)') { $keepDaysPods = [int]$Matches[1] }
+            elseif ($bl -match '^# DST-BACKUP-CMD-VERSION:\s*(\d+)') { $cmdVersion = [int]$Matches[1] }
             elseif ($bl -match '^# DST-BACKUP-(?:KEEP-LAST|RETENTION):\s*(\d+)') { $keepLast = [int]$Matches[1] }
         }
         if (-not $preset) { $preset = 'Custom' }
@@ -399,6 +436,7 @@ function ConvertFrom-DuneBackupCrontab {
             keepLast     = $keepLast
             keepLastPods = $keepLastPods
             keepDaysPods = $keepDaysPods
+            cmdVersion   = $cmdVersion
             raw          = ($blockLines -join "`n")
         }
     }
@@ -427,7 +465,12 @@ function ConvertFrom-DuneBackupCrontab {
 # Public: read the current schedule from the VM.
 # -----------------------------------------------------------------------------
 function Get-DuneBackupSchedule {
-    param([Parameter(Mandatory)][string]$Ip)
+    param(
+        [Parameter(Mandatory)][string]$Ip,
+        # Internal recursion guard for the one-time self-heal below — callers
+        # never need to pass this.
+        [switch]$SkipReconcile
+    )
     # crond status + timezone probe + crontab fetch in a single SSH round-trip.
     $script = @'
 echo "__DST_SECTION:TZ"
@@ -485,7 +528,39 @@ sudo crontab -l 2>&1 || true
         $expected = (New-DuneBackupBlock -Preset $preset -KeepLast $keepLast -KeepLastPods $keepLastPods -KeepDaysPods $keepDaysPods)
         if ($expected) {
             $expectedInner = ($expected.TrimEnd("`n") -split "`n" | Select-Object -Skip 1 | Select-Object -SkipLast 1) -join "`n"
-            if ($expectedInner -ne $parsed.block.raw) { $looksTampered = $true }
+            if ($expectedInner -ne $parsed.block.raw) {
+                $looksTampered = $true
+                # Self-heal an already-installed schedule that's just stale
+                # from before a New-DuneBackupCmd fix (e.g. 2026-09-22's
+                # pg_dump backfill for Funcom's dump-pod regression) — every
+                # server that saved a schedule before that fix shipped is
+                # stuck running the old, silently-broken command until this
+                # runs, since nothing else rewrites an already-installed
+                # crontab block. Only auto-reconcile when the installed block
+                # exactly matches a KNOWN prior rendering (currently just
+                # legacy v1, pre-versioning) — never a block whose command
+                # version marker is present but simply unrecognized, and
+                # never on a block that doesn't match anything we know how to
+                # produce, which stays flagged as tampered exactly as before.
+                if (-not $SkipReconcile -and $null -eq $parsed.block.cmdVersion) {
+                    $legacyCmd = New-DuneBackupCmdLegacyV1 -KeepLastPods $keepLastPods -KeepLast $keepLast
+                    $legacyInner = (@(
+                        "# DST-BACKUP-PRESET: $preset"
+                        "# DST-BACKUP-KEEP-LAST: $keepLast"
+                        "# DST-BACKUP-KEEP-LAST-PODS: $keepLastPods"
+                        "# DST-BACKUP-KEEP-DAYS-PODS: $keepDaysPods"
+                    ) + @($script:DuneBackupPresets[$preset].crons | ForEach-Object { "$_ $legacyCmd" })) -join "`n"
+                    if ($legacyInner -eq $parsed.block.raw) {
+                        $reconciled = Set-DuneBackupSchedule -Ip $Ip -Preset $preset -KeepLast $keepLast -KeepLastPods $keepLastPods -KeepDaysPods $keepDaysPods
+                        if ($reconciled.ok) {
+                            return Get-DuneBackupSchedule -Ip $Ip -SkipReconcile
+                        }
+                        # Reconcile attempt failed (e.g. lock held by a
+                        # concurrent save) — fall through and report the
+                        # pre-reconcile state honestly rather than hide it.
+                    }
+                }
+            }
         }
     } elseif ($parsed.hasUnmanagedBackupLines) {
         # No managed block, but a hand-installed `battlegroup backup` cron

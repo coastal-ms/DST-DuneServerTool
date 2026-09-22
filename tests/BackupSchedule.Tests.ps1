@@ -22,10 +22,23 @@
 # dump, matches Funcom's own file for a healthy run) was verified live
 # against Coastal's dev server (192.168.23.219) before this patch landed.
 
+# The manual "Take Backup" button (dune-server.ps1's `backup` console command)
+# is a completely separate code path — a raw interactive `ssh -t` passthrough
+# to Funcom's own `battlegroup backup` CLI, unrelated to the cron command
+# above. It hit the exact same regression live (Coastal reproduced it via the
+# desktop app), so it needs the same verify-and-backfill follow-up. Live-
+# verified against the dev server: the follow-up correctly detected the
+# missing file, backfilled a valid dump via `sudo sh -c "... > file"` (the
+# manual path runs as the unprivileged `dune` user over plain ssh, unlike the
+# cron path which already runs as root — the redirect itself needs its own
+# sudo, not just the kubectl exec), and was idempotent on a second run against
+# an already-valid file.
+
 BeforeAll {
     $repo = Split-Path $PSScriptRoot -Parent
     . (Join-Path $repo 'app\lib\Db-Postgres.ps1')
     . (Join-Path $repo 'app\server\lib\BackupSchedule.ps1')
+    $script:DuneServerCliSource = Get-Content (Join-Path $repo 'dune-server.ps1') -Raw
 
     function Get-DstBashScriptPath {
         $tmp = [IO.Path]::Combine([IO.Path]::GetTempPath(), [IO.Path]::GetRandomFileName() + '.sh')
@@ -127,5 +140,185 @@ Describe 'New-DuneBackupCmd pg_dump backfill' -Tag 'Pure' {
         } finally {
             Remove-Item -LiteralPath $path -Force -ErrorAction SilentlyContinue
         }
+    }
+}
+
+Describe 'dune-server.ps1 manual "backup" command backfill' -Tag 'Pure' {
+
+    It 'runs the interactive backup exactly as before, unchanged' {
+        $script:DuneServerCliSource | Should -Match ([regex]::Escape('ssh -t -o StrictHostKeyChecking=no -o LogLevel=QUIET -i "$sshKey" "$sshUser@$ip" "$bgBinPath backup"'))
+    }
+
+    It 'checks the newest backup .yaml sidecar rather than guessing a filename' {
+        $script:DuneServerCliSource | Should -Match ([regex]::Escape('ls -t /funcom/artifacts/database-dumps/*/*.backup.yaml'))
+    }
+
+    It 'never touches a file that is already present and non-empty' {
+        $script:DuneServerCliSource | Should -Match ([regex]::Escape('elif [ -s "$_bf" ]; then'))
+    }
+
+    It 'writes the pg_dump backfill through sudo end-to-end, since this path runs as the unprivileged dune user (unlike the root cron path)' {
+        $script:DuneServerCliSource | Should -Match ([regex]::Escape('sudo sh -c "kubectl exec -i -n $_ns $_pn -- pg_dump -U dune -d dune -p __DBPORT__ -F custom --no-owner > $_bf"'))
+    }
+
+    It 'substitutes the configured DB port (not a hardcoded literal) into the manual-path pg_dump call' {
+        $script:DuneServerCliSource | Should -Match ([regex]::Escape("-replace '__DBPORT__', `$dbPort"))
+    }
+
+    It 'cleans up a failed/partial backfill with sudo too' {
+        $script:DuneServerCliSource | Should -Match ([regex]::Escape('sudo rm -f "$_bf"'))
+    }
+
+    It 'falls through with continue, relying on the shared end-of-script pause rather than pausing twice' {
+        if ($script:DuneServerCliSource -notmatch '(?s)if \(\$cmdName -eq "backup"\) \{(.*?)\n    \}') {
+            throw 'Could not locate the backup special-case block in dune-server.ps1'
+        }
+        $block = $Matches[1]
+        $block | Should -Match 'continue'
+        $block | Should -Not -Match 'Invoke-DunePauseBeforeClose'
+    }
+
+    It 'produces valid bash for the manual-path verify/backfill script' -Skip:(-not $script:DstBashAvailable) {
+        if ($script:DuneServerCliSource -notmatch "(?s)\`$verifyScript = @'\r?\n(.*?)\r?\n'@") {
+            throw 'Could not locate the manual-path verifyScript here-string in dune-server.ps1'
+        }
+        $rendered = $Matches[1] -replace '__DBPORT__', '15432'
+        $path = Get-DstBashScriptPath
+        try {
+            [IO.File]::WriteAllText($path, $rendered)
+            & bash -n $path 2>$null
+            $LASTEXITCODE | Should -Be 0
+        } finally {
+            Remove-Item -LiteralPath $path -Force -ErrorAction SilentlyContinue
+        }
+    }
+}
+
+# 2026-09-22 Copilot review on PR #856: the pg_dump backfill only takes effect
+# on a crontab block that's (re)rendered after this fix — an already-installed
+# schedule from before it keeps running the old, silently-broken command
+# forever, since nothing else touches an installed crontab block. Nobody
+# reconciles it just because the DST version bumped. This covers the fix:
+# Get-DuneBackupSchedule now recognizes an installed block that exactly
+# matches the known pre-fix (legacy v1) shape and self-heals it in place, the
+# next time anything reads the schedule (e.g. opening the Database page) —
+# no operator action required. A block that doesn't match any known prior
+# rendering is left alone and still reported as tampered, exactly as before.
+Describe 'Get-DuneBackupSchedule self-heals a stale pre-fix installed block' -Tag 'Pure' {
+
+    BeforeAll {
+        function New-DstLegacyCrontabFixture {
+            param([string]$Preset = 'Hourly', [int]$KeepLast = 0, [int]$KeepLastPods = 10, [int]$KeepDaysPods = 0)
+            $legacyCmd = New-DuneBackupCmdLegacyV1 -KeepLastPods $KeepLastPods -KeepLast $KeepLast
+            $lines = @(
+                $script:DuneBackupBeginMarker
+                "# DST-BACKUP-PRESET: $Preset"
+                "# DST-BACKUP-KEEP-LAST: $KeepLast"
+                "# DST-BACKUP-KEEP-LAST-PODS: $KeepLastPods"
+                "# DST-BACKUP-KEEP-DAYS-PODS: $KeepDaysPods"
+            ) + @($script:DuneBackupPresets[$Preset].crons | ForEach-Object { "$_ $legacyCmd" }) + @($script:DuneBackupEndMarker)
+            return ($lines -join "`n")
+        }
+
+        function New-DstShellSectionsOutput {
+            param([string]$CrontabText)
+            return @(
+                '__DST_SECTION:TZ'
+                'UTC'
+                '__DST_SECTION:DATE'
+                '2026-09-22T20:00:00Z'
+                '__DST_SECTION:CROND'
+                'status: started'
+                '__DST_SECTION:CRONTAB'
+                $CrontabText
+            ) -join "`n"
+        }
+    }
+
+    It 'reconciles a legacy pre-fix block automatically and reports the healed state' {
+        $legacyText = New-DstShellSectionsOutput -CrontabText (New-DstLegacyCrontabFixture -Preset 'Hourly' -KeepLast 5)
+        $healedText = New-DstShellSectionsOutput -CrontabText (New-DuneBackupBlock -Preset 'Hourly' -KeepLast 5 -KeepLastPods 10 -KeepDaysPods 0).TrimEnd("`n")
+
+        $script:sshCallCount = 0
+        Mock -CommandName Invoke-DuneBackupShell -MockWith {
+            $script:sshCallCount++
+            if ($script:sshCallCount -eq 1) { return @{ rc = 0; out = $legacyText } }
+            return @{ rc = 0; out = $healedText }
+        }
+        Mock -CommandName Set-DuneBackupSchedule -MockWith {
+            return @{ ok = $true }
+        }
+
+        $result = Get-DuneBackupSchedule -Ip '10.0.0.1'
+
+        Should -Invoke -CommandName Set-DuneBackupSchedule -Times 1 -ParameterFilter {
+            $Preset -eq 'Hourly' -and $KeepLast -eq 5 -and $KeepLastPods -eq 10 -and $KeepDaysPods -eq 0
+        }
+        $result.preset | Should -Be 'Hourly'
+        $result.managedBlockLooksTampered | Should -BeFalse
+    }
+
+    It 'does not reconcile, and still reports tampered, for a block that matches no known prior rendering' {
+        $foreignText = New-DstShellSectionsOutput -CrontabText (@(
+            $script:DuneBackupBeginMarker
+            '# DST-BACKUP-PRESET: Hourly'
+            '# DST-BACKUP-KEEP-LAST: 0'
+            '# DST-BACKUP-KEEP-LAST-PODS: 10'
+            '# DST-BACKUP-KEEP-DAYS-PODS: 0'
+            '0 * * * * echo "a human wrote this by hand" >> /var/log/dune-backup.log'
+            $script:DuneBackupEndMarker
+        ) -join "`n")
+
+        Mock -CommandName Invoke-DuneBackupShell -MockWith { return @{ rc = 0; out = $foreignText } }
+        Mock -CommandName Set-DuneBackupSchedule -MockWith { return @{ ok = $true } }
+
+        $result = Get-DuneBackupSchedule -Ip '10.0.0.1'
+
+        Should -Invoke -CommandName Set-DuneBackupSchedule -Times 0
+        $result.managedBlockLooksTampered | Should -BeTrue
+    }
+
+    It 'does not reconcile a block that is already current' {
+        $currentText = New-DstShellSectionsOutput -CrontabText (New-DuneBackupBlock -Preset 'Hourly' -KeepLast 0 -KeepLastPods 10 -KeepDaysPods 0).TrimEnd("`n")
+
+        Mock -CommandName Invoke-DuneBackupShell -MockWith { return @{ rc = 0; out = $currentText } }
+        Mock -CommandName Set-DuneBackupSchedule -MockWith { return @{ ok = $true } }
+
+        $result = Get-DuneBackupSchedule -Ip '10.0.0.1'
+
+        Should -Invoke -CommandName Set-DuneBackupSchedule -Times 0
+        $result.managedBlockLooksTampered | Should -BeFalse
+    }
+
+    It 'does not reconcile a block that carries an unrecognized (future) version marker' {
+        $futureCmd = New-DuneBackupCmd -KeepLastPods 10 -KeepLast 0
+        $futureText = New-DstShellSectionsOutput -CrontabText ((@(
+            $script:DuneBackupBeginMarker
+            '# DST-BACKUP-PRESET: Hourly'
+            '# DST-BACKUP-KEEP-LAST: 0'
+            '# DST-BACKUP-KEEP-LAST-PODS: 10'
+            '# DST-BACKUP-KEEP-DAYS-PODS: 0'
+            '# DST-BACKUP-CMD-VERSION: 99'
+        ) + @($script:DuneBackupPresets['Hourly'].crons | ForEach-Object { "$_ $futureCmd modified-by-something-newer" }) + @($script:DuneBackupEndMarker)) -join "`n")
+
+        Mock -CommandName Invoke-DuneBackupShell -MockWith { return @{ rc = 0; out = $futureText } }
+        Mock -CommandName Set-DuneBackupSchedule -MockWith { return @{ ok = $true } }
+
+        $result = Get-DuneBackupSchedule -Ip '10.0.0.1'
+
+        Should -Invoke -CommandName Set-DuneBackupSchedule -Times 0
+        $result.managedBlockLooksTampered | Should -BeTrue
+    }
+
+    It 'falls through and reports honestly if the reconcile attempt itself fails' {
+        $legacyText = New-DstShellSectionsOutput -CrontabText (New-DstLegacyCrontabFixture -Preset 'Hourly' -KeepLast 0)
+        Mock -CommandName Invoke-DuneBackupShell -MockWith { return @{ rc = 0; out = $legacyText } }
+        Mock -CommandName Set-DuneBackupSchedule -MockWith { return @{ ok = $false; status = 423; message = 'lock held' } }
+
+        $result = Get-DuneBackupSchedule -Ip '10.0.0.1'
+
+        Should -Invoke -CommandName Set-DuneBackupSchedule -Times 1
+        $result.managedBlockLooksTampered | Should -BeTrue
+        $result.preset | Should -Be 'Hourly'
     }
 }
