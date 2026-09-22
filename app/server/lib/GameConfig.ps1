@@ -3247,6 +3247,8 @@ function Save-DuneGameConfig {
         try { $defaults = Get-DuneGameConfigDefaults -Ip $Ip } catch { $defaults = $null }
     }
 
+    $wroteAny = $false
+    $writtenContent = @{}
     foreach ($f in @('game','engine')) {
         if ($byFile[$f].Count -eq 0) { continue }
         $path = if ($f -eq 'game') { $paths.game } else { $paths.engine }
@@ -3260,6 +3262,33 @@ function Save-DuneGameConfig {
         $new  = ConvertTo-DuneIniManaged -Raw $raw -Updates $fileUpdates -QuotedKeys $quoted
         $b64 = [Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes($new))
         Invoke-V6Ssh -Ip $Ip -Cmd "base64 -d | sudo tee '$path' > /dev/null" -StdinData $b64 -TimeoutSec 30 | Out-Null
+        $wroteAny = $true
+        $writtenContent[$f] = $new
+    }
+
+    # BUG FIXED 2026-09-22: this save path writes straight to the authoritative
+    # installed template but never touched the v2 authority marker's sha256
+    # lines added by the same day's stale-template fix (Resolve-DuneGameConfigPaths
+    # above). That made the write self-inflict "stale" on the very next read -
+    # every ordinary settings save, including a reset-to-default, legitimately
+    # changes the template's hash, so the next Resolve-DuneGameConfigPaths call
+    # saw a mismatch, declared the template stale, and re-ran the carry-forward
+    # migration - which pulls values from the last live/legacy managed directory
+    # and overwrites whatever was just saved with whatever was sitting there
+    # (reported live: resetting "Database Wipe on Season End" and "Forced
+    # Coriolis World Seed" to default, Save immediately reverting to the
+    # pre-reset values). Re-stamp both hashes from the files as they now stand
+    # whenever this save targets the authoritative installed template, so the
+    # marker matches reality again and the next read comes back 'ready'. Hash
+    # locally (same helper the migration path uses) rather than shelling out,
+    # so only a file this call did NOT touch needs an extra read.
+    if ($wroteAny -and "$($paths.source)" -eq 'installed') {
+        $gameContent = if ($writtenContent.ContainsKey('game')) { $writtenContent['game'] } else { (Invoke-V6Ssh -Ip $Ip -Cmd "sudo cat '$($paths.game)' 2>/dev/null") -join "`n" }
+        $engineContent = if ($writtenContent.ContainsKey('engine')) { $writtenContent['engine'] } else { (Invoke-V6Ssh -Ip $Ip -Cmd "sudo cat '$($paths.engine)' 2>/dev/null") -join "`n" }
+        $gameHash = Get-DuneGameConfigTextSha256 -Value $gameContent
+        $engineHash = Get-DuneGameConfigTextSha256 -Value $engineContent
+        $stampCmd = "printf 'live-imported-v2\n$gameHash\n$engineHash\n' | sudo tee '$script:DuneGameConfigAuthorityMarker' > /dev/null"
+        Invoke-V6Ssh -Ip $Ip -Cmd $stampCmd -TimeoutSec 15 | Out-Null
     }
 }
 

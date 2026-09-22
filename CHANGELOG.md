@@ -13,6 +13,23 @@ here cover everything those tags shipped.
 
 ## [Unreleased]
 
+## [15.1.10] - 2026-09-22
+
+### Fixed
+
+- Saving Game Config settings that live on the authoritative installed
+  template - including resetting a value back to its default - could
+  immediately revert to the old value. Today's stale-template fix (15.1.8)
+  taught DST to detect an externally-touched template by comparing its
+  current hash against a hash recorded in an authority marker, but the
+  ordinary settings-save path never updated that marker after writing, so
+  every normal save legitimately changed the file's hash and made the very
+  next read think an external update had happened - which re-ran the
+  carry-forward migration and pulled the old value back in from the last
+  live/legacy config directory. Save now re-stamps the marker with the
+  file's real hash immediately after writing, so a normal save no longer
+  self-inflicts a false "stale" read.
+
 ## [15.1.9] - 2026-09-22
 
 ### Fixed

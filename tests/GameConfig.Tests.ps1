@@ -3057,6 +3057,49 @@ dw.FuelBurningMultiplier=10
         Should -Invoke Invoke-V6Ssh -Times 0
     }
 
+    It 'BUG FIXED 2026-09-22: re-stamps the v2 authority marker hash after saving to the installed template, so the next read is not falsely stale' {
+        # Reproduces the live report: resetting "Database Wipe on
+        # Season End" / "Forced Coriolis World Seed" to default reverted to the
+        # old values immediately after Save. Root cause: Save-DuneGameConfig
+        # wrote the template but never re-stamped the marker's sha256 lines that
+        # Resolve-DuneGameConfigPaths' staleness check relies on, so the very
+        # next read saw a hash mismatch, called it 'stale', and re-ran the
+        # carry-forward migration - reasserting whatever the last live/legacy
+        # managed directory still held.
+        $paths = @{ game = $script:DuneGameConfigTplGamePath; engine = $script:DuneGameConfigTplEnginePath; source = 'installed'; authoritative = $true; needsInitialization = $false }
+        $stampedCmd = $null
+        Mock Invoke-V6Ssh {
+            param([string]$Ip, [string]$Cmd)
+            if ($Cmd -match "cat '$([regex]::Escape($script:DuneGameConfigTplGamePath))'") { return '[CoriolisSubsystem]' }
+            if ($Cmd -match "cat '$([regex]::Escape($script:DuneGameConfigTplEnginePath))'") { return '[Engine]' }
+            if ($Cmd -match [regex]::Escape($script:DuneGameConfigAuthorityMarker)) { $script:stampedCmd = $Cmd; return '' }
+            return ''
+        }
+
+        Save-DuneGameConfig -Ip '192.0.2.1' -Updates @(@{ file = 'game'; section = $script:DuneGcSecCoriolis; key = 'm_bIsDbWipeEnabled'; value = 'True'; remove = $true }) -ResolvedPaths $paths
+
+        $script:stampedCmd | Should -Not -BeNullOrEmpty
+        $script:stampedCmd | Should -Match 'live-imported-v2'
+        $script:stampedCmd | Should -Match ([regex]::Escape($script:DuneGameConfigAuthorityMarker))
+        # Marker must carry two fresh, non-empty hash lines (game + untouched
+        # engine, re-read since this save only wrote game).
+        if ($script:stampedCmd -notmatch "printf 'live-imported-v2\\n([0-9a-f]{64})\\n([0-9a-f]{64})\\n'") {
+            throw "Marker stamp command did not contain two 64-char hex hashes: $script:stampedCmd"
+        }
+    }
+
+    It 'does not touch the v2 authority marker when saving to a non-installed (legacy-live) target' {
+        $paths = @{ game = '/srv/live/UserGame.ini'; engine = '/srv/live/UserEngine.ini'; source = 'legacy-live' }
+        Mock Invoke-V6Ssh {
+            param([string]$Ip, [string]$Cmd)
+            if ($Cmd -match [regex]::Escape($script:DuneGameConfigAuthorityMarker)) { throw 'marker should not be restamped for a non-installed source' }
+            return ''
+        }
+
+        { Save-DuneGameConfig -Ip '192.0.2.1' -Updates @(@{ file = 'game'; section = $script:DuneGcSecGame; key = 'm_InventoryWeightMultiplier'; value = '0.5'; remove = $false }) -ResolvedPaths $paths } |
+            Should -Not -Throw
+    }
+
     It 'initializes Game Config by writing only the v2 authority marker, never UserGame.ini/UserEngine.ini' {
         $script:writes = @()
         Mock Invoke-V6Ssh {
