@@ -93,7 +93,7 @@ body:
     attributes:
       label: Tool version
       description: Shown in the bottom-left of the web portal sidebar (status bar) and in the CLI menu header.
-      placeholder: "v15.1.8"
+      placeholder: "v15.1.9"
     validations:
       required: true
 
