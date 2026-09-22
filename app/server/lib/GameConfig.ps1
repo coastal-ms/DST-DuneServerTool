@@ -2523,7 +2523,49 @@ function Resolve-DuneGameConfigPaths {
     # Carry only non-default DST-managed values onto those installed defaults
     # before declaring the directory authoritative. The v1 migration copied one
     # whole PVC file, so repair it from the clean pre-import backup.
-    $installedState = ((Invoke-V6Ssh -Ip $Ip -Cmd "sudo bash -c 'if test -f ''$script:DuneGameConfigTplGamePath'' && test -f ''$script:DuneGameConfigTplEnginePath''; then if test -f ''$script:DuneGameConfigAuthorityMarker''; then echo ready; elif test -f ''$script:DuneGameConfigLegacyAuthorityMarker''; then echo repair-v1; else echo uninitialized; fi; fi'") -join '').Trim()
+    #
+    # BUG FIXED 2026-09-22: a Steam/Funcom update silently overwrites this
+    # installed template (proven live: the 2026-09-22 patch rewrote it at
+    # 14:45 UTC, dropping the SpiceHarvestingSystem section entirely) without
+    # touching the v2 marker file. The marker's mere presence used to be
+    # treated as permanent proof the template was still authoritative, so DST
+    # kept reading and displaying the freshly-blanked template - including a
+    # player's actual customized values reverting to Funcom's stock numbers in
+    # the UI - while the live running server, unaffected, kept using its own
+    # real settings the whole time. The marker now also records the sha256 of
+    # the game/engine files at migration time; a mismatch here means
+    # something external (an update) touched the template since our last
+    # write, and the state is reported 'stale' rather than 'ready' so the
+    # carry-forward migration below runs again against the freshly-updated
+    # template. An old-format marker (written before this fix, containing no
+    # hash lines) always compares as stale on first check, which correctly
+    # self-heals any install that was already sitting on a silently-stale
+    # template when this fix landed.
+    $installedState = ((Invoke-V6Ssh -Ip $Ip -Cmd @"
+sudo bash -c '
+GAME="$script:DuneGameConfigTplGamePath"
+ENGINE="$script:DuneGameConfigTplEnginePath"
+MARKER="$script:DuneGameConfigAuthorityMarker"
+LEGACY="$script:DuneGameConfigLegacyAuthorityMarker"
+if test -f "`$GAME" && test -f "`$ENGINE"; then
+  if test -f "`$MARKER"; then
+    curGame=`$(sha256sum "`$GAME" | cut -d" " -f1)
+    curEngine=`$(sha256sum "`$ENGINE" | cut -d" " -f1)
+    stGame=`$(sed -n "2p" "`$MARKER")
+    stEngine=`$(sed -n "3p" "`$MARKER")
+    if [ -n "`$stGame" ] && [ -n "`$stEngine" ] && [ "`$curGame" = "`$stGame" ] && [ "`$curEngine" = "`$stEngine" ]; then
+      echo ready
+    else
+      echo stale
+    fi
+  elif test -f "`$LEGACY"; then
+    echo repair-v1
+  else
+    echo uninitialized
+  fi
+fi
+'
+"@) -join '').Trim()
     if ($installedState -eq 'ready') {
         return @{
             game   = $script:DuneGameConfigTplGamePath
@@ -2535,7 +2577,11 @@ function Resolve-DuneGameConfigPaths {
     $dirs = @(
         Invoke-V6Ssh -Ip $Ip -Cmd "sudo bash -c 'ls -t $($script:DuneGameConfigLiveGlobDir)/UserGame.ini 2>/dev/null | xargs -r -n1 dirname'"
     ) | ForEach-Object { "$_".Trim() } | Where-Object { $_ } | Select-Object -Unique
-    if ($installedState -in @('uninitialized', 'repair-v1')) {
+    if ($installedState -in @('uninitialized', 'repair-v1', 'stale')) {
+        # 'stale' behaves exactly like 'uninitialized' here: the current
+        # template IS the freshly-updated Funcom defaults (an update just
+        # overwrote it), so it is the correct merge base - unlike 'repair-v1',
+        # which specifically needs the pre-v1-migration backup instead.
         $baseGamePath = $script:DuneGameConfigTplGamePath
         $baseEnginePath = $script:DuneGameConfigTplEnginePath
         if ($installedState -eq 'repair-v1') {
@@ -2610,7 +2656,7 @@ function Resolve-DuneGameConfigPaths {
                 "sudo rm -f '$gameTmp' '$engineTmp'; " +
                 "echo '$gameHash  $script:DuneGameConfigTplGamePath' | sha256sum -c - >/dev/null; " +
                 "echo '$engineHash  $script:DuneGameConfigTplEnginePath' | sha256sum -c - >/dev/null; " +
-                "printf 'live-imported-v2\n' | sudo tee '$script:DuneGameConfigAuthorityMarker' > /dev/null; " +
+                "printf 'live-imported-v2\n$gameHash\n$engineHash\n' | sudo tee '$script:DuneGameConfigAuthorityMarker' > /dev/null; " +
                 "echo __DST_AUTH__:migrated"
             $migrated = ((Invoke-V6Ssh -Ip $Ip -Cmd $migrateCmd -TimeoutSec 30) -join "`n").Trim()
             if ($migrated -notmatch '(?m)^__DST_AUTH__:migrated$') {
@@ -2638,6 +2684,22 @@ function Resolve-DuneGameConfigPaths {
                 source              = 'installed-uninitialized'
                 authoritative       = $false
                 needsInitialization = $true
+            }
+        }
+        # 'stale' with nothing to carry forward means the battlegroup was never
+        # customized beyond Funcom's defaults in the first place - the freshly
+        # updated template genuinely IS the correct, fully authoritative
+        # config, not an uninitialized one. Do not raise the "Initialize Game
+        # Config" banner for this case; just re-stamp the marker so the next
+        # read is a quiet 'ready' instead of re-running this check every time.
+        if ($installedState -eq 'stale' -and -not $hadAmbiguousCandidate -and -not $hadManagedCandidate) {
+            $reGameHash = Get-DuneGameConfigTextSha256 -Value $installedGame
+            $reEngineHash = Get-DuneGameConfigTextSha256 -Value $installedEngine
+            Invoke-V6Ssh -Ip $Ip -Cmd "printf 'live-imported-v2\n$reGameHash\n$reEngineHash\n' | sudo tee '$script:DuneGameConfigAuthorityMarker' > /dev/null" -TimeoutSec 15 | Out-Null
+            return @{
+                game   = $baseGamePath
+                engine = $baseEnginePath
+                source = 'installed'
             }
         }
         throw 'Installed User*.ini defaults are not initialized and no prior DST-managed battlegroup overrides could be migrated. Deployment is blocked.'
