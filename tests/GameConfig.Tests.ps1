@@ -3069,10 +3069,22 @@ dw.FuelBurningMultiplier=10
         $paths = @{ game = $script:DuneGameConfigTplGamePath; engine = $script:DuneGameConfigTplEnginePath; source = 'installed'; authoritative = $true; needsInitialization = $false }
         $stampedCmd = $null
         Mock Invoke-V6Ssh {
-            param([string]$Ip, [string]$Cmd)
+            param([string]$Ip, [string]$Cmd, [int]$TimeoutSec, [string]$StdinData)
             if ($Cmd -match "cat '$([regex]::Escape($script:DuneGameConfigTplGamePath))'") { return '[CoriolisSubsystem]' }
             if ($Cmd -match "cat '$([regex]::Escape($script:DuneGameConfigTplEnginePath))'") { return '[Engine]' }
-            if ($Cmd -match [regex]::Escape($script:DuneGameConfigAuthorityMarker)) { $script:stampedCmd = $Cmd; return '' }
+            if ($Cmd -match 'base64 -d \| sudo tee') {
+                # Simulate the remote: hash what was actually sent, exactly the
+                # readback contract the fixed write-verification relies on.
+                $bytes = [Convert]::FromBase64String($StdinData)
+                return Get-DuneGameConfigTextSha256 -Value ([Text.Encoding]::UTF8.GetString($bytes))
+            }
+            if ($Cmd -match [regex]::Escape($script:DuneGameConfigAuthorityMarker)) {
+                $script:stampedCmd = $Cmd
+                if ($Cmd -match "printf 'live-imported-v2\\n([0-9a-f]{64})\\n([0-9a-f]{64})\\n'") {
+                    return Get-DuneGameConfigTextSha256 -Value "live-imported-v2`n$($Matches[1])`n$($Matches[2])`n"
+                }
+                return ''
+            }
             return ''
         }
 
@@ -3088,11 +3100,55 @@ dw.FuelBurningMultiplier=10
         }
     }
 
+    It 'BUG FIXED 2026-09-22 (Copilot review, PR #857): throws instead of stamping the marker when the remote content write cannot be verified' {
+        # Invoke-V6Ssh discards the remote exit code, so a failed `tee` and a
+        # successful one can both come back as empty stdout. Simulate that
+        # silent-failure shape (mock returns '' instead of the real hash) and
+        # assert the save refuses to proceed - it must never trust content
+        # that was never confirmed to reach disk, and must never stamp the
+        # marker off content that might not be there.
+        $paths = @{ game = $script:DuneGameConfigTplGamePath; engine = $script:DuneGameConfigTplEnginePath; source = 'installed'; authoritative = $true; needsInitialization = $false }
+        $markerTouched = $false
+        Mock Invoke-V6Ssh {
+            param([string]$Ip, [string]$Cmd, [int]$TimeoutSec, [string]$StdinData)
+            if ($Cmd -match "cat '$([regex]::Escape($script:DuneGameConfigTplGamePath))'") { return '[CoriolisSubsystem]' }
+            if ($Cmd -match 'base64 -d \| sudo tee') { return '' }  # silent write failure
+            if ($Cmd -match [regex]::Escape($script:DuneGameConfigAuthorityMarker)) { $script:markerTouched = $true; return '' }
+            return ''
+        }
+
+        { Save-DuneGameConfig -Ip '192.0.2.1' -Updates @(@{ file = 'game'; section = $script:DuneGcSecCoriolis; key = 'm_bIsDbWipeEnabled'; value = 'True'; remove = $true }) -ResolvedPaths $paths } |
+            Should -Throw '*write verification failed*'
+        $script:markerTouched | Should -BeFalse
+    }
+
+    It 'BUG FIXED 2026-09-22 (Copilot review, PR #857): throws when the marker re-stamp itself cannot be verified' {
+        $paths = @{ game = $script:DuneGameConfigTplGamePath; engine = $script:DuneGameConfigTplEnginePath; source = 'installed'; authoritative = $true; needsInitialization = $false }
+        Mock Invoke-V6Ssh {
+            param([string]$Ip, [string]$Cmd, [int]$TimeoutSec, [string]$StdinData)
+            if ($Cmd -match "cat '$([regex]::Escape($script:DuneGameConfigTplGamePath))'") { return '[CoriolisSubsystem]' }
+            if ($Cmd -match "cat '$([regex]::Escape($script:DuneGameConfigTplEnginePath))'") { return '[Engine]' }
+            if ($Cmd -match 'base64 -d \| sudo tee') {
+                $bytes = [Convert]::FromBase64String($StdinData)
+                return Get-DuneGameConfigTextSha256 -Value ([Text.Encoding]::UTF8.GetString($bytes))
+            }
+            if ($Cmd -match [regex]::Escape($script:DuneGameConfigAuthorityMarker)) { return '' }  # silent marker-write failure
+            return ''
+        }
+
+        { Save-DuneGameConfig -Ip '192.0.2.1' -Updates @(@{ file = 'game'; section = $script:DuneGcSecCoriolis; key = 'm_bIsDbWipeEnabled'; value = 'True'; remove = $true }) -ResolvedPaths $paths } |
+            Should -Throw '*marker re-stamp verification failed*'
+    }
+
     It 'does not touch the v2 authority marker when saving to a non-installed (legacy-live) target' {
         $paths = @{ game = '/srv/live/UserGame.ini'; engine = '/srv/live/UserEngine.ini'; source = 'legacy-live' }
         Mock Invoke-V6Ssh {
-            param([string]$Ip, [string]$Cmd)
+            param([string]$Ip, [string]$Cmd, [int]$TimeoutSec, [string]$StdinData)
             if ($Cmd -match [regex]::Escape($script:DuneGameConfigAuthorityMarker)) { throw 'marker should not be restamped for a non-installed source' }
+            if ($Cmd -match 'base64 -d \| sudo tee') {
+                $bytes = [Convert]::FromBase64String($StdinData)
+                return Get-DuneGameConfigTextSha256 -Value ([Text.Encoding]::UTF8.GetString($bytes))
+            }
             return ''
         }
 
