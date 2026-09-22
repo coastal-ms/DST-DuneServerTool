@@ -13,6 +13,16 @@ here cover everything those tags shipped.
 
 ## [Unreleased]
 
+### Fixed
+
+- "Keep stored base backups through the Deep Desert reset" failed to apply
+  after today's Funcom server patch changed the wording of the database
+  function it edits, from `IS DISTINCT FROM 'X'` to `<> 'X'`. DST's safety
+  anchor only recognized the old wording and correctly refused to guess
+  rather than risk corrupting the function, but that meant the setting could
+  no longer be turned on at all. Both wordings are now recognized, and the
+  predicate DST inserts matches whichever one the server is currently using.
+
 ## [15.1.7] - 2026-09-20
 
 ### Added
