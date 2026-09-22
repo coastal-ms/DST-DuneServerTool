@@ -137,6 +137,8 @@ function New-DuneBackupCmd {
     # a mid-restart tick still skips everything.
     $tail = $podSnippet
     if ($fileSnippet) { $tail = "$podSnippet; $fileSnippet" }
+    $dbPort = 15432
+    try { if (Get-Command Get-V6DbPort -ErrorAction SilentlyContinue) { $dbPort = Get-V6DbPort } } catch {}
     # Let `battlegroup backup` name the file itself (no name argument). Funcom
     # then auto-generates the SAME convention as a manual/default backup —
     # `sh-<hostid>-<suffix>-<utc-ts>.backup` in the per-battlegroup subdir
@@ -149,7 +151,45 @@ function New-DuneBackupCmd {
     # couldn't tell which server a file came from (Coastal, 2026-07-18). The
     # listing/prune/delete matchers still recognize the legacy `dst-scheduled-*`
     # shape so pre-existing scheduled files aren't orphaned.
-    return "if [ -f /var/lib/dune-server/dst-world-restart-recovery-required ] || find /tmp/dst-restart-active -mmin -30 2>/dev/null | grep -q .; then echo `"`$(date) dst: backup skipped - BG restart or recovery window active`" >> /var/log/dune-backup.log; else /home/dune/.dune/bin/battlegroup backup >> /var/log/dune-backup.log 2>&1; $tail; fi"
+    #
+    # 2026-09-22 (Funcom patch regression): `battlegroup backup` still logs
+    # "Database dump succeeded" and correctly writes the .yaml spec sidecar,
+    # but the dump pod's volumeMount for its own output path lost its leading
+    # slash in Funcom's pod template, so the actual .backup payload lands on
+    # the pod's own ephemeral container layer instead of the mounted PVC and
+    # is gone the instant the (~1s-lived) pod is garbage-collected. The pod
+    # itself logs "Backup file (on this host): <path>" with the exact path it
+    # expected to land at, then DST's own wrapper already re-prints that same
+    # line with a WARNING when the file is missing. We keep calling
+    # `battlegroup backup` unchanged (still owns the DatabaseOperation CR, the
+    # yaml sidecar, and Funcom's own bookkeeping) and only backfill the actual
+    # dump payload when it's missing, by running pg_dump directly against the
+    # always-on Postgres pod — the exact same kubectl-exec path DST already
+    # uses for every other database read/write — and piping its stdout
+    # straight to the path Funcom's own tool told us it expected. This is a
+    # fallback, not a replacement: the moment Funcom fixes their volumeMount,
+    # the expected file exists again and this whole block becomes a no-op.
+    $fallback = (
+        '_bk=$(/home/dune/.dune/bin/battlegroup backup 2>&1); ' +
+        'printf "%s\n" "$_bk" >> /var/log/dune-backup.log; ' +
+        '_bf=$(printf "%s\n" "$_bk" | sed -n "s/^Backup file (on this host): //p" | tail -1); ' +
+        'if [ -n "$_bf" ] && [ ! -s "$_bf" ]; then ' +
+            '_dbl=$(sudo kubectl get pods --all-namespaces --no-headers 2>/dev/null | grep "db-dbdepl-sts.*Running" | head -1); ' +
+            '_ns=$(echo "$_dbl" | awk "{print \$1}"); ' +
+            '_pn=$(echo "$_dbl" | awk "{print \$2}"); ' +
+            'if [ -n "$_pn" ]; then ' +
+                "if sudo kubectl exec -i -n `"`$_ns`" `"`$_pn`" -- pg_dump -U dune -d dune -p $dbPort -F custom --no-owner > `"`$_bf`" 2>>/var/log/dune-backup.log && [ -s `"`$_bf`" ]; then " +
+                    'echo "$(date) dst: battlegroup backup dump file missing (Funcom pod-write regression) - backfilled via direct pg_dump: $_bf" >> /var/log/dune-backup.log; ' +
+                'else ' +
+                    'echo "$(date) dst: pg_dump backfill FAILED for $_bf" >> /var/log/dune-backup.log; ' +
+                    'rm -f "$_bf"; ' +
+                'fi; ' +
+            'else ' +
+                'echo "$(date) dst: pg_dump backfill skipped - no running db pod found" >> /var/log/dune-backup.log; ' +
+            'fi; ' +
+        'fi'
+    )
+    return "if [ -f /var/lib/dune-server/dst-world-restart-recovery-required ] || find /tmp/dst-restart-active -mmin -30 2>/dev/null | grep -q .; then echo `"`$(date) dst: backup skipped - BG restart or recovery window active`" >> /var/log/dune-backup.log; else $fallback; $tail; fi"
 }
 $script:DuneBackupBeginMarker = '# DST-BACKUP BEGIN'
 $script:DuneBackupEndMarker   = '# DST-BACKUP END'

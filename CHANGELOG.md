@@ -13,6 +13,24 @@ here cover everything those tags shipped.
 
 ## [Unreleased]
 
+## [15.1.9] - 2026-09-22
+
+### Fixed
+
+- Scheduled and manual database backups silently stopped producing a usable
+  dump file after a Funcom server patch changed the backup pod's own output
+  path, breaking the connection between where the dump is written and the
+  storage that's supposed to persist it. `battlegroup backup` kept reporting
+  success and correctly wrote its `.yaml` metadata sidecar, but the actual
+  multi-megabyte database dump never landed on the host - it existed only on
+  the backup pod's own temporary storage and was gone within seconds of the
+  pod finishing, before it could ever be copied out. Every backup since
+  around 2026-09-18 was silently incomplete. DST now checks for the exact
+  file Funcom's own tool reports writing, and if it's missing, immediately
+  backfills a real, verified-restorable dump itself using the same direct
+  database connection DST already relies on elsewhere - so backups keep
+  working correctly even while the underlying issue remains on Funcom's side.
+
 ## [15.1.8] - 2026-09-22
 
 ### Fixed
