@@ -13,7 +13,7 @@ here cover everything those tags shipped.
 
 ## [Unreleased]
 
-## [15.1.11] - 2026-09-22
+## [15.2.0] - 2026-09-22
 
 ### Added
 
