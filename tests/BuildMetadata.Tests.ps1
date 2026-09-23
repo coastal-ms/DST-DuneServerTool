@@ -74,10 +74,13 @@ Describe 'Build artifact metadata' {
         $installer | Should -Match 'Tagged build .* requires a clean checkout'
         $helpers | Should -Match 'refs/tags/\$BuildTag\^\{commit\}'
         $installer | Should -Match '\[string\]\$BuildTag'
-        $exe | Should -Match 'DuneServer\.\$buildId\.generated\.ps1'
+        $exe | Should -Match 'BuildMetadata\.generated\.ps1'
         $exe | Should -Match 'rev-parse HEAD'
         $exe | Should -Not -Match 'rev-parse --short'
         $exe | Should -Match 'DuneBuildMetadataPresent = \$true'
+        $dune = Get-Content -LiteralPath (Join-Path $repo 'app\DuneServer.ps1') -Raw
+        $dune | Should -Match '#_if PSEXE'
+        $dune | Should -Match '#_include\s+"\$PSScriptRoot/build/output/BuildMetadata\.generated\.ps1"'
     }
 
     It 'validates release versions and derives numeric resource versions' {

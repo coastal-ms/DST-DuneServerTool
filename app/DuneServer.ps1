@@ -126,13 +126,13 @@ if ($script:DuneReattachMode) { $script:DuneRelaunchArgs += '--reattach' }
 # launched the EXE was still attached to the same console at startup
 # (count > 1), leaving the window full-size. Process-name detection is
 # reliable in all those cases.
+# Compiled to an EXE by ps12exe: $PSScriptRoot/$PSCommandPath are $null and the
+# process is the EXE itself. Rather than probing that at runtime, select the
+# compiled branch at compile time with #_if PSEXE.
 $script:DuneIsCompiledExe = $false
-try {
-    $procName = [System.Diagnostics.Process]::GetCurrentProcess().ProcessName
-    if ($procName -and $procName -notmatch '^(pwsh|powershell|powershell_ise)$') {
-        $script:DuneIsCompiledExe = $true
-    }
-} catch { }
+#_if PSEXE
+#_!!$script:DuneIsCompiledExe = $true
+#_endif
 
 if ($script:DuneIsCompiledExe) {
     try {
@@ -167,13 +167,17 @@ Write-DuneStartupLog 'Console presentation initialized'
 
 # Version (one of the 5 sync'd constants; see persistent-notes.md)
 $script:DuneToolVersion = '15.2.0'
-# Artifact identity defaults for source/dev runs. Build-Exe.ps1 replaces these
-# four declarations only in its generated compilation input, so the resulting
-# executable carries immutable identity without changing tracked version stamps.
+# Artifact identity defaults for source/dev runs. Build-Exe.ps1 writes a small
+# generated #_include; ps12exe inlines it during compilation, so the executable
+# carries immutable identity without changing tracked version stamps (and the
+# source still runs directly with these defaults).
 $script:DuneBuildMetadataPresent = $false
 $script:DuneBuildCommit = ''
 $script:DuneBuildPrerelease = $false
 $script:DuneBuildTag = ''
+#_if PSEXE
+#_include "$PSScriptRoot/build/output/BuildMetadata.generated.ps1"
+#_endif
 
 # ---------- Restart-on-detach handoff -----------------------------------------
 # When a prior "Web Portal" detach left the server running headless, the
@@ -492,16 +496,15 @@ if (-not (Test-DuneIsAdmin)) {
 Write-DuneStartupLog 'Elevation confirmed'
 
 # ---------- Path resolution (works for ps12exe and plain pwsh) ------------------
-
-if ($PSScriptRoot) {
-    $script:AppDir = $PSScriptRoot
-} elseif ($PSCommandPath) {
-    $script:AppDir = Split-Path -Parent $PSCommandPath
-} else {
-    # ps12exe: $PSScriptRoot and $PSCommandPath are both $null
-    $exePath = [System.Diagnostics.Process]::GetCurrentProcess().MainModule.FileName
-    $script:AppDir = Split-Path -Parent $exePath
-}
+# Run as a plain .ps1, $PSScriptRoot is set. Compiled to an EXE by ps12exe,
+# $PSScriptRoot is $null and the script lives inside the assembly, so resolve
+# the directory from the process image. The compiled branch is selected at
+# compile time via #_if PSEXE.
+$script:AppDir = $PSScriptRoot
+#_if PSEXE
+#_!!$exePath = [System.Diagnostics.Process]::GetCurrentProcess().MainModule.FileName
+#_!!$script:AppDir = Split-Path -Parent $exePath
+#_endif
 
 # Repo layout — when running from source:
 #   <repo>/app/DuneServer.ps1       (this file)

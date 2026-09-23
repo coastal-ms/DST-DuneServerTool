@@ -51,7 +51,7 @@ $outDir    = Join-Path $appRoot 'build\output'
 $outExe    = Join-Path $outDir 'DuneServer.exe'
 $buildId   = [guid]::NewGuid().ToString('N')
 $tempExe   = Join-Path $outDir "DuneServer.$buildId.tmp.exe"
-$compileSrc = Join-Path $outDir "DuneServer.$buildId.generated.ps1"
+$metadataFile = Join-Path $outDir 'BuildMetadata.generated.ps1'
 $buildHelpers = Join-Path $PSScriptRoot 'BuildHelpers.ps1'
 
 if (-not (Test-Path $src))  { throw "Source not found: $src" }
@@ -75,19 +75,18 @@ $BuildTag = $BuildTag.Trim()
 if ($BuildTag) {
     Assert-DuneTagPrereleaseConsistency -BuildTag $BuildTag -Prerelease:$Prerelease
 }
-$sourceText = Get-Content -LiteralPath $src -Raw
-$embedded = [ordered]@{
-    '^\$script:DuneBuildMetadataPresent\s*=\s*\$false\s*$' = '$script:DuneBuildMetadataPresent = $true'
-    "^\`$script:DuneBuildCommit\s*=\s*''\s*$" = "`$script:DuneBuildCommit = '$BuildCommit'"
-    '^\$script:DuneBuildPrerelease\s*=\s*\$false\s*$' = if ($Prerelease) { '$script:DuneBuildPrerelease = $true' } else { '$script:DuneBuildPrerelease = $false' }
-    "^\`$script:DuneBuildTag\s*=\s*''\s*$" = "`$script:DuneBuildTag = '$BuildTag'"
-}
-foreach ($entry in $embedded.GetEnumerator()) {
-    $matches = [regex]::Matches($sourceText, $entry.Key, [Text.RegularExpressions.RegexOptions]::Multiline)
-    if ($matches.Count -ne 1) { throw "Build metadata placeholder mismatch for pattern: $($entry.Key)" }
-    $sourceText = [regex]::Replace($sourceText, $entry.Key, [string]$entry.Value, [Text.RegularExpressions.RegexOptions]::Multiline)
-}
-[IO.File]::WriteAllText($compileSrc, $sourceText, [Text.UTF8Encoding]::new($true))
+# The metadata is inlined into DuneServer.ps1 at compile time by its
+# `#_if PSEXE` / `#_include` block, which reads this generated file. Running
+# DuneServer.ps1 directly (dev) ignores the include and keeps the defaults.
+$prereleaseLiteral = if ($Prerelease) { '$true' } else { '$false' }
+$metadataText = @'
+$script:DuneBuildMetadataPresent = $true
+$script:DuneBuildCommit = '__COMMIT__'
+$script:DuneBuildPrerelease = __PRERELEASE__
+$script:DuneBuildTag = '__TAG__'
+'@
+$metadataText = $metadataText.Replace('__COMMIT__', $BuildCommit).Replace('__PRERELEASE__', $prereleaseLiteral).Replace('__TAG__', $BuildTag)
+[IO.File]::WriteAllText($metadataFile, $metadataText, [Text.UTF8Encoding]::new($true))
 
 # Ensure ps12exe is available
 if (-not (Get-Module -ListAvailable ps12exe)) {
@@ -113,7 +112,7 @@ Write-Host "Compiling DuneServer.exe (v$Version; prerelease=$([bool]$Prerelease)
 # clicks just open the browser to the existing portal URL without prompting
 # for UAC again.
 $ps12exeArgs = @{
-    InputFile  = $compileSrc
+    InputFile  = $src
     OutputFile = $tempExe
     Resources  = @{
         Icon        = $icon
@@ -131,7 +130,7 @@ try {
     Publish-DuneBuildArtifact -TemporaryPath $tempExe -DestinationPath $outExe
 } finally {
     Remove-Item -LiteralPath $tempExe -Force -ErrorAction SilentlyContinue
-    Remove-Item -LiteralPath $compileSrc -Force -ErrorAction SilentlyContinue
+    Remove-Item -LiteralPath $metadataFile -Force -ErrorAction SilentlyContinue
 }
 
 $size = [Math]::Round(((Get-Item $outExe).Length / 1KB), 1)
