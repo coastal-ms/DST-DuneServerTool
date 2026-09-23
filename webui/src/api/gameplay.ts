@@ -2296,6 +2296,12 @@ export function repairGear(pawnId: number) {
   })
 }
 
+export function repairOrphanedBuildingPieces(pawnId: number) {
+  return api<WriteResult>('/api/gameplay/players/repair-orphaned-building-pieces', {
+    method: 'POST', body: JSON.stringify({ pawn_id: pawnId }),
+  })
+}
+
 export function maxAugmentAttributes(pawnId: number) {
   return api<WriteResult>('/api/gameplay/players/max-augment-attributes', {
     method: 'POST', body: JSON.stringify({ pawn_id: pawnId }),

@@ -13,6 +13,24 @@ here cover everything those tags shipped.
 
 ## [Unreleased]
 
+## [15.1.11] - 2026-09-22
+
+### Added
+
+- **Repair Orphaned Building Pieces** (Players → Items): a same-day Funcom
+  patch orphaned six pre-existing Gunner/Sentinel building-set piece ids.
+  Any character that unlocked that set before the patch carries them in
+  its save, and the live client's entitlement check fails for them every
+  time - confirmed live via a crash log showing the game repeatedly
+  failing entitlement checks for these exact six ids in a tight loop.
+  Opening the construction tool re-evaluates every unlocked piece, so a
+  character carrying these hangs/crashes on that loop. This action removes
+  just the six dead ids and leaves the legitimate parts of the set (and
+  everything else the character owns) untouched. Offline-only, verified
+  by read-back, safe to run even if nothing is present (no-op).
+- Added the Sardaukar building-set patents to the Grant Cosmetic / Building
+  Set catalogue, which were missing after this week's content update.
+
 ## [15.1.10] - 2026-09-22
 
 ### Fixed

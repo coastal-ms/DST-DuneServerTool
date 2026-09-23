@@ -34,6 +34,8 @@ Describe 'Get-DuneBuildingSetGroup' -Tag 'Pure' {
         Get-DuneBuildingSetGroup -Id 'HarkonnenSet'                         | Should -Be 'Building Sets - Faction & House Sets'
         Get-DuneBuildingSetGroup -Id 'MTX_Smug_BuildingSet_Patent'          | Should -Be 'Building Sets - Faction & House Sets'
         Get-DuneBuildingSetGroup -Id 'MTX_WaterShippers_BuildingSet_Patent' | Should -Be 'Building Sets - Faction & House Sets'
+        Get-DuneBuildingSetGroup -Id 'MTX_Sardaukar_BuildingSet_Patent'     | Should -Be 'Building Sets - Faction & House Sets'
+        Get-DuneBuildingSetGroup -Id 'MTX_SardaukarDecorationSet_Patent'    | Should -Be 'Building Sets - Faction & House Sets'
     }
     It 'maps movie collab sets' {
         Get-DuneBuildingSetGroup -Id 'MTX_Atre_Movie_Glowglobe_Patent' | Should -Be 'Building Sets - Movie Collab'
@@ -101,6 +103,19 @@ Describe 'Get-DuneCosmeticsCatalog includes the full building-set universe' -Tag
             $entry.group | Should -BeLike 'Building Sets*'
         }
         $script:cat.templates.template | Should -Not -Contain 'NA_ReverendMotherRoom_Chair_01_Patent'
+    }
+
+    It 'includes the Sardaukar building-set umbrella patents added 2026-09-22' {
+        $expected = @{
+            'MTX_Sardaukar_BuildingSet_Patent'  = 'Sardaukar Building Set'
+            'MTX_SardaukarDecorationSet_Patent' = 'Sardaukar Decoration Set'
+        }
+        foreach ($id in $expected.Keys) {
+            $script:cat.templates.template | Should -Contain $id
+            $entry = $script:cat.templates | Where-Object { $_.template -eq $id }
+            $entry.name | Should -Be $expected[$id]
+            $entry.group | Should -Be 'Building Sets - Faction & House Sets'
+        }
     }
 
     It 'every building-set entry has a template, a name, and a Building Sets group' {

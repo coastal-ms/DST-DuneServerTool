@@ -604,6 +604,78 @@ RETURNING i.id::text AS item_id;
     }
 }
 
+# BUG FIXED 2026-09-22: a same-day Funcom patch orphaned six pre-existing
+# Gunner/Sentinel building-set piece ids. Any character that unlocked that
+# set before the patch still carries them in building_progression.
+# new_buildable_pieces, and the live client's entitlement check fails for
+# them every time - confirmed live via a player's crash log, which showed
+# LogPlayerRewards spamming "Entitlement check failed" for these exact six
+# ids hundreds of times within the same millisecond right where the log
+# cut off. Opening the construction tool re-evaluates every unlocked piece,
+# so any character carrying these hangs/crashes on that tight loop. The
+# umbrella patents (MTX_Neut_GunnerSet_Patent / _Patent_02, which grant the
+# legitimate, still-working parts of the set) are untouched - only these
+# six dead component ids are ever removed. Extend this list if a future
+# Funcom patch orphans further ids the same way.
+$script:DuneOrphanedBuildingPieceIds = @(
+    'MTX_Neut_Gunner_Column',
+    'MTX_Neut_Gunner_Floor',
+    'MTX_Neut_Gunner_Foundation',
+    'MTX_Neut_Gunner_Railing_01',
+    'MTX_Neut_Gunner_Railing_02',
+    'MTX_Neut_Gunner_Railing_Round_Corner'
+)
+
+function Invoke-DunePlayerRepairOrphanedBuildingPieces {
+    param([string]$Ip, [long]$PawnId)
+    if ($PawnId -le 0) { return @{ ok = $false; error = 'pawn_id is required.' } }
+    $off = Test-DunePlayerOffline -Ip $Ip -PawnId $PawnId
+    if (-not $off.ok) { return @{ ok = $false; error = $off.reason } }
+
+    $idSql = "SELECT id::text AS cid FROM dune.player_state WHERE player_pawn_id = $PawnId::bigint LIMIT 1;"
+    $ir = Invoke-DuneSqlQuery -Ip $Ip -Sql $idSql -ReadOnly $true -MaxRows 1 -TimeoutSec 15
+    if (-not $ir.ok) { return @{ ok = $false; error = "resolve character: $($ir.error)" } }
+    $imaps = ConvertTo-DuneRowMaps -Result $ir
+    if ($imaps.Count -eq 0) { return @{ ok = $false; error = "no character found for pawn $PawnId." } }
+    $charID = [int64](ConvertTo-DuneInt $imaps[0]['cid'])
+
+    $idsArr = ConvertTo-DunePgTextArray $script:DuneOrphanedBuildingPieceIds
+    $beforeSql = "SELECT COALESCE(array_length(new_buildable_pieces,1),0) AS cnt FROM dune.building_progression WHERE character_id=$charID::bigint;"
+    $br = Invoke-DuneSqlQuery -Ip $Ip -Sql $beforeSql -ReadOnly $true -MaxRows 1 -TimeoutSec 15
+    if (-not $br.ok) { return @{ ok = $false; error = "read building_progression: $($br.error)" } }
+    $bmaps = ConvertTo-DuneRowMaps -Result $br
+    if ($bmaps.Count -eq 0) { return @{ ok = $true; message = 'No building_progression row for this character — nothing to repair.'; repaired = 0 } }
+    $beforeCount = [int](ConvertTo-DuneInt $bmaps[0]['cnt'])
+
+    $removeExpr = 'new_buildable_pieces'
+    foreach ($bad in $script:DuneOrphanedBuildingPieceIds) {
+        $safe = ConvertTo-DuneSqlString ([string]$bad)
+        $removeExpr = "array_remove($removeExpr, '$safe')"
+    }
+    $sql = "UPDATE dune.building_progression SET new_buildable_pieces = $removeExpr WHERE character_id=$charID::bigint;"
+    $r = Invoke-DuneSqlQuery -Ip $Ip -Sql $sql -ReadOnly $false -MaxRows 1 -TimeoutSec 30
+    if (-not $r.ok) { return @{ ok = $false; error = "repair orphaned building pieces: $($r.error)" } }
+
+    # Verify: read back rather than trusting the UPDATE's own success response.
+    $vSql = "SELECT COALESCE(array_length(new_buildable_pieces,1),0) AS cnt, (new_buildable_pieces && $idsArr) AS still_has FROM dune.building_progression WHERE character_id=$charID::bigint;"
+    $vr = Invoke-DuneSqlQuery -Ip $Ip -Sql $vSql -ReadOnly $true -MaxRows 1 -TimeoutSec 15
+    if (-not $vr.ok) { return @{ ok = $false; error = "verify repair: $($vr.error)" } }
+    $vmaps = ConvertTo-DuneRowMaps -Result $vr
+    $afterCount = if ($vmaps.Count -gt 0) { [int](ConvertTo-DuneInt $vmaps[0]['cnt']) } else { $beforeCount }
+    $stillHas = if ($vmaps.Count -gt 0) { ConvertTo-DuneBool $vmaps[0]['still_has'] } else { $true }
+    if ($stillHas) { return @{ ok = $false; error = 'Repair committed but verification still shows orphaned pieces present.' } }
+
+    $removed = $beforeCount - $afterCount
+    if ($removed -le 0) {
+        return @{ ok = $true; message = 'No orphaned building pieces found — nothing to repair.'; repaired = 0 }
+    }
+    return @{
+        ok = $true
+        message = "Removed $removed orphaned building piece id(s) from pawn $PawnId's unlocked pieces."
+        repaired = $removed
+    }
+}
+
 # Max every non-zero roll on augment items owned by one player. Zero entries
 # are structural placeholders and must remain zero. The roll ceiling comes from
 # the confirmed in-game script; scoping through inventories.actor_id prevents

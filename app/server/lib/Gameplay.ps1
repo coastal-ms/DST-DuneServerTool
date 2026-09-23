@@ -148,7 +148,7 @@ function Get-DuneBuildingSetGroup {
     if ($Id -match 'Fabricator|Refinery|Station|Container|Extraction|Augment|Compactor|Printer|Workbench|Generator|Pentashield') { return 'Building Sets - Crafting Stations & Utilities' }
     if ($Id -match 'Statue|Miniature|Cage|Hologram|Flagpole|Flagship|ChristmasTree|Glowglobe|Plaque|Seal|Raider|Gunner|Placeable|Carpet|Banner|Trophy') { return 'Building Sets - Statues & Decor' }
     if ($Id -match 'BedroomSet|DiningRoomSet|OfficeSet|BreakfastRoomSet|TeaHouse|TeaSet|Lighting|Strategy|Kaitan|RoomSet|Furniture|Chair|Table') { return 'Building Sets - Furniture & Themed Rooms' }
-    if ($Id -match 'Atre|Harko|Choam|Smug|WaterShipper|Watershipper|Frem|AtreidesSet|HarkonnenSet') { return 'Building Sets - Faction & House Sets' }
+    if ($Id -match 'Atre|Harko|Choam|Smug|WaterShipper|Watershipper|Frem|AtreidesSet|HarkonnenSet|Sardaukar') { return 'Building Sets - Faction & House Sets' }
     return 'Building Sets - Structures & Other'
 }
 
