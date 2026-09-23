@@ -154,7 +154,7 @@ if (-not $iscc) {
 # Pre-flight: Windows PowerShell 5.1 parse-check of every .ps1 the installer
 # will bundle.
 #
-# DuneServer.exe is compiled via PS2EXE, which produces a Windows PowerShell
+# DuneServer.exe is compiled via ps12exe, which produces a Windows PowerShell
 # 5.1 host. PS 5.1 reads .ps1 files WITHOUT a UTF-8 BOM as the system ANSI
 # codepage (Windows-1252 on en-US), not UTF-8. If a BOM-less file contains
 # UTF-8 multi-byte characters (em-dash, ellipsis, right-arrow, etc.) the
@@ -176,7 +176,7 @@ if (Test-Path $ps5Exe) {
     $bundledPs1 += Get-Item (Join-Path $appRoot 'DuneServer.ps1')
 
     # Stricter BOM check: any file containing non-ASCII bytes MUST have a
-    # UTF-8 BOM, otherwise PS 5.1 (the runtime PS2EXE targets) decodes it
+    # UTF-8 BOM, otherwise PS 5.1 (the runtime ps12exe targets) decodes it
     # as Windows-1252 and produces silent mojibake (em-dash becomes â€",
     # the 0x94 byte terminates string literals early, etc.).
     #
@@ -224,7 +224,7 @@ exit $exitCode
         $paths = $bundledPs1 | ForEach-Object { $_.FullName }
         & $ps5Exe -NoProfile -ExecutionPolicy Bypass -File $ps5ScriptPath -Paths $paths
         if ($LASTEXITCODE -ne 0) {
-            throw "PS 5.1 parse pre-flight failed. PS2EXE compiles against PS 5.1; files that fail here will break DuneServer.exe at startup. Fix: add a UTF-8 BOM to any BOM-less .ps1 file containing non-ASCII characters."
+            throw "PS 5.1 parse pre-flight failed. ps12exe compiles against PS 5.1; files that fail here will break DuneServer.exe at startup. Fix: add a UTF-8 BOM to any BOM-less .ps1 file containing non-ASCII characters."
         }
         Write-Host "  All .ps1 files parse under PS 5.1." -ForegroundColor Green
         Write-Host ""
@@ -232,7 +232,7 @@ exit $exitCode
         Remove-Item -LiteralPath $ps5ScriptPath -ErrorAction SilentlyContinue
     }
 } else {
-    Write-Warning "Windows PowerShell 5.1 not found at $ps5Exe — skipping PS 5.1 parse pre-flight. This is the runtime PS2EXE targets; missing the check means v11.4.0-class encoding bugs could ship undetected."
+    Write-Warning "Windows PowerShell 5.1 not found at $ps5Exe — skipping PS 5.1 parse pre-flight. This is the runtime ps12exe targets; missing the check means v11.4.0-class encoding bugs could ship undetected."
 }
 
 # Build the React SPA (writes webui/dist) — bundled into installer below.

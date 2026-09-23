@@ -74,7 +74,7 @@ Write-DuneStartupLog 'Bootstrap entered'
 # always has SOME visible handle on the running server.
 #
 # Detection: scan the full process command line for --headless / -headless /
-# /headless and --reattach / -reattach / /reattach (case-insensitive). PS2EXE-
+# /headless and --reattach / -reattach / /reattach (case-insensitive). ps12exe-
 # compiled binaries expose CLI args via [Environment]::GetCommandLineArgs()
 # reliably, including double-dash options.
 #
@@ -117,7 +117,7 @@ if ($script:DuneReattachMode) { $script:DuneRelaunchArgs += '--reattach' }
 # want the console visible, so minimize it as the very first action.
 #
 # Detection rule: process name is the compiled EXE name (e.g. "DuneServer")
-# when launched as the ps2exe build. When the script runs as plain .ps1
+# when launched as the ps12exe build. When the script runs as plain .ps1
 # inside an existing pwsh/powershell session, the process name is
 # "pwsh" / "powershell" — leave that console alone (it's the user's working shell).
 #
@@ -428,7 +428,7 @@ if (-not $script:SingleInstanceOwned) {
 
 # ---------- Self-elevate -------------------------------------------------------
 # Hyper-V cmdlets (Get-VM etc.) require admin or Hyper-V Administrators group.
-# We elevate in-script (rather than via a ps2exe -requireAdmin manifest) so the
+# We elevate in-script (rather than via a ps12exe -requireAdmin manifest) so the
 # single-instance check above runs FIRST and subsequent shortcut clicks open
 # the browser without a UAC prompt.
 function Test-DuneIsAdmin {
@@ -491,14 +491,14 @@ if (-not (Test-DuneIsAdmin)) {
 }
 Write-DuneStartupLog 'Elevation confirmed'
 
-# ---------- Path resolution (works for ps2exe and plain pwsh) ------------------
+# ---------- Path resolution (works for ps12exe and plain pwsh) ------------------
 
 if ($PSScriptRoot) {
     $script:AppDir = $PSScriptRoot
 } elseif ($PSCommandPath) {
     $script:AppDir = Split-Path -Parent $PSCommandPath
 } else {
-    # ps2exe: $PSScriptRoot and $PSCommandPath are both $null
+    # ps12exe: $PSScriptRoot and $PSCommandPath are both $null
     $exePath = [System.Diagnostics.Process]::GetCurrentProcess().MainModule.FileName
     $script:AppDir = Split-Path -Parent $exePath
 }
@@ -709,7 +709,7 @@ $script:DuneIconPath = $null
 # Evaluated at startup only. Toggling Help -> Run at Windows startup mid-run
 # does not flip this flag; the new semantic takes effect on the next launch.
 #
-# ASCII-only on purpose: this file is BOM-less and PS2EXE compiles against
+# ASCII-only on purpose: this file is BOM-less and ps12exe compiles against
 # Windows PowerShell 5.1, which reads BOM-less files as Windows-1252. Adding
 # em-dashes or right-arrows here would risk the v11.4.0-class parse breakage
 # the v11.4.1 hotfix addressed.

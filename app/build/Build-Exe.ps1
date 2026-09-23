@@ -1,10 +1,10 @@
-﻿# Build-Exe.ps1 - Compiles app/DuneServer.ps1 into DuneServer.exe via ps2exe.
+﻿# Build-Exe.ps1 - Compiles app/DuneServer.ps1 into DuneServer.exe via ps12exe.
 #
 # Output: app/build/output/DuneServer.exe
 #
 # Requirements:
 #   - PowerShell 7+ (pwsh)
-#   - ps2exe module (auto-installed if missing)
+#   - ps12exe module (auto-installed if missing)
 #
 # The compiled .exe (v6.1.7+):
 #   - NO -requireAdmin manifest. Elevation is handled IN-SCRIPT after the
@@ -89,42 +89,45 @@ foreach ($entry in $embedded.GetEnumerator()) {
 }
 [IO.File]::WriteAllText($compileSrc, $sourceText, [Text.UTF8Encoding]::new($true))
 
-# Ensure ps2exe is available
-if (-not (Get-Module -ListAvailable ps2exe)) {
-    Write-Host "Installing ps2exe..." -ForegroundColor Yellow
-    Install-Module ps2exe -Scope CurrentUser -Force -AllowClobber
+# Ensure ps12exe is available
+if (-not (Get-Module -ListAvailable ps12exe)) {
+    Write-Host "Installing ps12exe..." -ForegroundColor Yellow
+    Install-Module ps12exe -Scope CurrentUser -Force -AllowClobber
 }
-Import-Module ps2exe -Force
+Import-Module ps12exe -Force
 
 $verNum = $versionInfo.NumericVersion
 
 Write-Host "Compiling DuneServer.exe (v$Version; prerelease=$([bool]$Prerelease); tag=$BuildTag; commit=$BuildCommit)..." -ForegroundColor Cyan
 
-# Critical flags (v6.1.7):
-#   -noConsole=$false : console-subsystem EXE so child kubectl/ssh/etc. inherit
-#                       a console (no per-child window-flash). Script minimizes
-#                       its own console at startup so it never visually intrudes.
-#   -STA              : required for System.Windows.Forms.MessageBox
-#   -iconFile         : taskbar / file explorer icon (also used for the EXE)
-# NOTE: -requireAdmin INTENTIONALLY OMITTED. The script self-elevates after
-# the single-instance mutex check so subsequent shortcut clicks just open the
-# browser to the existing portal URL without prompting for UAC again.
-$ps2exeArgs = @{
-    InputFile      = $compileSrc
-    OutputFile     = $tempExe
-    IconFile       = $icon
-    Title          = 'Dune Server'
-    Description    = 'Dune Awakening server management - web portal'
-    Company        = 'Dune Awakening Self-Hosted Tool'
-    Product        = 'Dune Server'
-    Version        = $verNum
-    Copyright      = '(c) 2026 Dune Awakening Self-Hosted Tool'
-    NoConsole      = $false
-    STA            = $true
+# Target configuration (v6.1.7 behavior preserved):
+#   Console subsystem : ps12exe's App.Windowed defaults to $false, so child
+#                       kubectl/ssh/etc. inherit a console (no per-child
+#                       window-flash). Script minimizes its own console at
+#                       startup so it never visually intrudes.
+#   STA apartment     : ps12exe's Build.Apartment default; required for
+#                       System.Windows.Forms.MessageBox
+#   Resources.Icon    : taskbar / file explorer icon (also used for the EXE)
+# NOTE: no admin manifest is requested (Os.Admin omitted). The script
+# self-elevates after the single-instance mutex check so subsequent shortcut
+# clicks just open the browser to the existing portal URL without prompting
+# for UAC again.
+$ps12exeArgs = @{
+    InputFile  = $compileSrc
+    OutputFile = $tempExe
+    Resources  = @{
+        Icon        = $icon
+        Title       = 'Dune Server'
+        Description = 'Dune Awakening server management - web portal'
+        Company     = 'Dune Awakening Self-Hosted Tool'
+        Product     = 'Dune Server'
+        Version     = $verNum
+        Copyright   = '(c) 2026 Dune Awakening Self-Hosted Tool'
+    }
 }
 
 try {
-    Invoke-ps2exe @ps2exeArgs
+    ps12exe @ps12exeArgs
     Publish-DuneBuildArtifact -TemporaryPath $tempExe -DestinationPath $outExe
 } finally {
     Remove-Item -LiteralPath $tempExe -Force -ErrorAction SilentlyContinue
