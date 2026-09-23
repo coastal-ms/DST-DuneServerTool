@@ -167,15 +167,17 @@ Write-DuneStartupLog 'Console presentation initialized'
 
 # Version (one of the 5 sync'd constants; see persistent-notes.md)
 $script:DuneToolVersion = '15.2.0'
-# Artifact identity defaults for source/dev runs. Build-Exe.ps1 writes a small
-# generated #_include; ps12exe inlines it during compilation, so the executable
-# carries immutable identity without changing tracked version stamps (and the
-# source still runs directly with these defaults).
+# Artifact identity: source/dev runs use the defaults below; when compiled,
+# ps12exe swaps in the generated metadata via #_include instead of staging a
+# rewritten copy of this file, so the executable carries immutable identity
+# without changing tracked version stamps. Keeping the defaults in the
+# #_if PSScript branch means the compiled script contains only the real values.
+#_if PSScript
 $script:DuneBuildMetadataPresent = $false
 $script:DuneBuildCommit = ''
 $script:DuneBuildPrerelease = $false
 $script:DuneBuildTag = ''
-#_if PSEXE
+#_else
 #_include "$PSScriptRoot/build/output/BuildMetadata.generated.ps1"
 #_endif
 

@@ -218,6 +218,51 @@ function Resolve-DuneBuildIdentity {
     }
 }
 
+function Get-DuneEmbeddedScriptText {
+    [CmdletBinding()]
+    param([Parameter(Mandatory)][Reflection.Assembly]$Assembly)
+
+    # ps2exe embeds the script directly as "<name>.ps1" in the executable.
+    foreach ($name in @($Assembly.GetManifestResourceNames())) {
+        if ($name -match '\.ps1$') {
+            $stream = $Assembly.GetManifestResourceStream($name)
+            if ($stream) {
+                $reader = [IO.StreamReader]::new($stream, [Text.Encoding]::UTF8, $true)
+                try { return $reader.ReadToEnd() } finally { $reader.Dispose(); $stream.Dispose() }
+            }
+        }
+    }
+
+    # ps12exe's launcher embeds a gzip'd payload assembly as "main"; the payload
+    # in turn carries the script as "main.ps1".
+    $mainStream = $Assembly.GetManifestResourceStream('main')
+    if (-not $mainStream) { return $null }
+    try {
+        $buffer = [IO.MemoryStream]::new()
+        try {
+            $gzip = [IO.Compression.GZipStream]::new($mainStream, [IO.Compression.CompressionMode]::Decompress)
+            try { $gzip.CopyTo($buffer) } finally { $gzip.Dispose() }
+            $payloadBytes = $buffer.ToArray()
+        } finally { $buffer.Dispose() }
+    } catch {
+        return $null
+    } finally {
+        $mainStream.Dispose()
+    }
+
+    $payload = [Reflection.Assembly]::Load($payloadBytes)
+    foreach ($name in @($payload.GetManifestResourceNames())) {
+        if ($name -match '\.ps1$') {
+            $stream = $payload.GetManifestResourceStream($name)
+            if ($stream) {
+                $reader = [IO.StreamReader]::new($stream, [Text.Encoding]::UTF8, $true)
+                try { return $reader.ReadToEnd() } finally { $reader.Dispose(); $stream.Dispose() }
+            }
+        }
+    }
+    return $null
+}
+
 function Get-DuneExecutableBuildMetadata {
     [CmdletBinding()]
     param([Parameter(Mandatory)][string]$ExecutablePath)
@@ -228,23 +273,9 @@ function Get-DuneExecutableBuildMetadata {
     }
 
     $assembly = [Reflection.Assembly]::LoadFile($path)
-    $resourceNames = @($assembly.GetManifestResourceNames() | Where-Object {
-        $_ -match '^DuneServer(?:\.[0-9a-f]{32})?\.generated\.ps1$'
-    })
-    if ($resourceNames.Count -ne 1) {
-        throw "DuneServer executable has $($resourceNames.Count) recognized embedded script resources."
-    }
-
-    $stream = $assembly.GetManifestResourceStream($resourceNames[0])
-    if (-not $stream) {
-        throw 'DuneServer executable has no readable embedded script resource.'
-    }
-    $reader = [IO.StreamReader]::new($stream, [Text.Encoding]::UTF8, $true)
-    try {
-        $text = $reader.ReadToEnd()
-    } finally {
-        $reader.Dispose()
-        $stream.Dispose()
+    $text = Get-DuneEmbeddedScriptText -Assembly $assembly
+    if (-not $text) {
+        throw 'DuneServer executable has no recognized embedded script resource.'
     }
 
     $presentMatch = [regex]::Match($text, '(?m)^\$script:DuneBuildMetadataPresent\s*=\s*\$true\s*$')
@@ -257,7 +288,6 @@ function Get-DuneExecutableBuildMetadata {
         commit = if ($commitMatch.Success) { $commitMatch.Groups[1].Value.Trim().ToLowerInvariant() } else { '' }
         prerelease = $prereleaseMatch.Success -and $prereleaseMatch.Groups[1].Value -eq 'true'
         tag = if ($tagMatch.Success) { $tagMatch.Groups[1].Value.Trim() } else { '' }
-        resource = $resourceNames[0]
     }
 }
 

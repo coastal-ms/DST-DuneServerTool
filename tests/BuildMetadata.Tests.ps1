@@ -79,7 +79,7 @@ Describe 'Build artifact metadata' {
         $exe | Should -Not -Match 'rev-parse --short'
         $exe | Should -Match 'DuneBuildMetadataPresent = \$true'
         $dune = Get-Content -LiteralPath (Join-Path $repo 'app\DuneServer.ps1') -Raw
-        $dune | Should -Match '#_if PSEXE'
+        $dune | Should -Match '#_if PSScript'
         $dune | Should -Match '#_include\s+"\$PSScriptRoot/build/output/BuildMetadata\.generated\.ps1"'
     }
 
