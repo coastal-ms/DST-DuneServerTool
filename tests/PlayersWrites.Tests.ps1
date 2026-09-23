@@ -479,7 +479,12 @@ Describe 'Invoke-DunePlayerRepairOrphanedBuildingPieces' -Tag 'Pure' {
         $script:orphanedRepairAfterCount = 448
         $script:orphanedRepairStillHas = $false
         $script:orphanedRepairHasCharacter = $true
-        function global:Test-DunePlayerOffline { return @{ ok = $true } }
+        $script:orphanedRepairOfflineCheckRequiredVerified = $null
+        function global:Test-DunePlayerOffline {
+            param($Ip, $PawnId, [switch]$RequireVerifiedStatus)
+            $script:orphanedRepairOfflineCheckRequiredVerified = [bool]$RequireVerifiedStatus
+            return @{ ok = $true }
+        }
         function global:Invoke-DuneSqlQuery {
             param($Ip, $Sql, $ReadOnly, $MaxRows, $TimeoutSec)
             $script:capturedSqls.Add($Sql)
@@ -512,6 +517,11 @@ Describe 'Invoke-DunePlayerRepairOrphanedBuildingPieces' -Tag 'Pure' {
         $r = Invoke-DunePlayerRepairOrphanedBuildingPieces -Ip '1.2.3.4' -PawnId 0
         $r.ok | Should -BeFalse
         $r.error | Should -Match 'pawn_id'
+    }
+
+    It 'requires a verified offline status rather than failing open on a status-query error' {
+        Invoke-DunePlayerRepairOrphanedBuildingPieces -Ip '1.2.3.4' -PawnId 42 | Out-Null
+        $script:orphanedRepairOfflineCheckRequiredVerified | Should -BeTrue
     }
 
     It 'refuses while the player is online' {
