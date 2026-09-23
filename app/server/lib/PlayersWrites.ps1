@@ -629,7 +629,15 @@ $script:DuneOrphanedBuildingPieceIds = @(
 function Invoke-DunePlayerRepairOrphanedBuildingPieces {
     param([string]$Ip, [long]$PawnId)
     if ($PawnId -le 0) { return @{ ok = $false; error = 'pawn_id is required.' } }
-    $off = Test-DunePlayerOffline -Ip $Ip -PawnId $PawnId
+    # -RequireVerifiedStatus: without it, Test-DunePlayerOffline fails OPEN
+    # (treats an unverifiable status query as "offline") - fine for most of
+    # this file's actions, but this one directly edits building_progression
+    # array contents rather than re-seeding stats, so a write that lands
+    # while the player is actually online would get silently overwritten on
+    # logout (the exact failure mode Restore-Builds/building_progression
+    # writes elsewhere in this file guard against). Require a verified
+    # status here rather than assuming offline on a DB hiccup.
+    $off = Test-DunePlayerOffline -Ip $Ip -PawnId $PawnId -RequireVerifiedStatus
     if (-not $off.ok) { return @{ ok = $false; error = $off.reason } }
 
     $idSql = "SELECT id::text AS cid FROM dune.player_state WHERE player_pawn_id = $PawnId::bigint LIMIT 1;"
