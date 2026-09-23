@@ -6,7 +6,7 @@
 ;  Admin requirements (preserved at every layer):
 ;    1. Setup itself requires admin (PrivilegesRequired=admin)
 ;       -> needed to write to Program Files
-;    2. DuneServer.exe has UAC manifest embedded (-requireAdmin via ps2exe)
+;    2. DuneServer.exe has UAC manifest embedded (via ps12exe)
 ;       -> launching from Start Menu auto-elevates with UAC prompt
 ;    3. dune-server.ps1 has '#Requires -RunAsAdministrator' at line 1
 ;       -> child pwsh processes inherit elevation from the parent .exe

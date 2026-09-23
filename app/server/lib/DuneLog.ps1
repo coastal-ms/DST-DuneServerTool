@@ -55,7 +55,7 @@ function Write-DuneLog {
     }
 
     # Mirror to console ONLY when running as plain pwsh/powershell — not when
-    # compiled by ps2exe -noConsole (which routes Write-Host to MessageBox.Show
+    # compiled by ps12exe in windowed mode (which routes Write-Host to MessageBox.Show
     # and pops a modal for every line. Yes really. The "no-op" claim was wrong).
     if (-not $script:DuneLogConsoleProbed) {
         $script:DuneLogConsoleProbed = $true

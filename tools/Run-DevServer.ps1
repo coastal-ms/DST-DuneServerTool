@@ -1,7 +1,7 @@
 #Requires -Version 7.0
 <#
 .SYNOPSIS
-    Run the DST backend HTTP server directly from source — no PS2EXE build, no
+    Run the DST backend HTTP server directly from source — no ps12exe build, no
     installer, no tray/app-window launcher.
 
 .DESCRIPTION
