@@ -57,6 +57,21 @@ Register-DuneRoute -Method POST -Path '/api/gameplay/players/repair-gear' -Handl
     }
 }
 
+# POST /api/gameplay/players/repair-orphaned-building-pieces  { pawn_id }
+# 2026-09-22: removes the six Gunner/Sentinel building-set piece ids a same-day
+# Funcom patch orphaned (see Invoke-DunePlayerRepairOrphanedBuildingPieces).
+# Offline-only.
+Register-DuneRoute -Method POST -Path '/api/gameplay/players/repair-orphaned-building-pieces' -Handler {
+    param($req, $res, $routeParams, $body)
+    try {
+        $pawn = Get-DuneBodyInt -Body $body -Name 'pawn_id'
+        if ($null -eq $pawn -or $pawn -le 0) { Write-DuneError -Response $res -Status 400 -Message 'pawn_id is required.'; return }
+        Invoke-DunePlayerWriteRoute -Response $res -Action { param($ip) Invoke-DunePlayerRepairOrphanedBuildingPieces -Ip $ip -PawnId $pawn }
+    } catch {
+        Write-DuneError -Response $res -Status 500 -Message "Repair orphaned building pieces failed: $($_.Exception.Message)"
+    }
+}
+
 # POST /api/gameplay/players/max-augment-attributes  { pawn_id }
 Register-DuneRoute -Method POST -Path '/api/gameplay/players/max-augment-attributes' -Handler {
     param($req, $res, $routeParams, $body)

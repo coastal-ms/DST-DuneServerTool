@@ -472,6 +472,100 @@ Describe 'Invoke-DunePlayerMaxAugmentAttributes' -Tag 'Pure' {
     }
 }
 
+Describe 'Invoke-DunePlayerRepairOrphanedBuildingPieces' -Tag 'Pure' {
+    BeforeEach {
+        $script:capturedSqls = New-Object System.Collections.Generic.List[string]
+        $script:orphanedRepairBeforeCount = 454
+        $script:orphanedRepairAfterCount = 448
+        $script:orphanedRepairStillHas = $false
+        $script:orphanedRepairHasCharacter = $true
+        function global:Test-DunePlayerOffline { return @{ ok = $true } }
+        function global:Invoke-DuneSqlQuery {
+            param($Ip, $Sql, $ReadOnly, $MaxRows, $TimeoutSec)
+            $script:capturedSqls.Add($Sql)
+            if ($Sql -match 'SELECT id::text AS cid FROM dune\.player_state') {
+                if (-not $script:orphanedRepairHasCharacter) {
+                    return @{ ok = $true; columns = @('cid'); rows = @() }
+                }
+                return @{ ok = $true; columns = @('cid'); rows = @(,@('7')) }
+            }
+            if ($Sql -match 'SELECT COALESCE\(array_length\(new_buildable_pieces,1\),0\) AS cnt FROM dune\.building_progression') {
+                return @{ ok = $true; columns = @('cnt'); rows = @(,@("$($script:orphanedRepairBeforeCount)")) }
+            }
+            if ($Sql -match '^UPDATE dune\.building_progression') {
+                return @{ ok = $true; message = 'UPDATE 1' }
+            }
+            if ($Sql -match 'still_has') {
+                $stillHasStr = if ($script:orphanedRepairStillHas) { 't' } else { 'f' }
+                return @{ ok = $true; columns = @('cnt', 'still_has'); rows = @(,@("$($script:orphanedRepairAfterCount)", $stillHasStr)) }
+            }
+            return @{ ok = $false; error = "unexpected SQL: $Sql" }
+        }
+    }
+
+    AfterEach {
+        Remove-Item function:global:Test-DunePlayerOffline -ErrorAction SilentlyContinue
+        Remove-Item function:global:Invoke-DuneSqlQuery -ErrorAction SilentlyContinue
+    }
+
+    It 'rejects a zero pawn id' {
+        $r = Invoke-DunePlayerRepairOrphanedBuildingPieces -Ip '1.2.3.4' -PawnId 0
+        $r.ok | Should -BeFalse
+        $r.error | Should -Match 'pawn_id'
+    }
+
+    It 'refuses while the player is online' {
+        function global:Test-DunePlayerOffline { return @{ ok = $false; reason = 'Player is online.' } }
+        $r = Invoke-DunePlayerRepairOrphanedBuildingPieces -Ip '1.2.3.4' -PawnId 42
+        $r.ok | Should -BeFalse
+        $r.error | Should -Match 'online'
+    }
+
+    It 'removes exactly the six known orphaned ids and reports the true removed count' {
+        $r = Invoke-DunePlayerRepairOrphanedBuildingPieces -Ip '1.2.3.4' -PawnId 42
+        $r.ok | Should -BeTrue
+        $r.repaired | Should -Be 6
+        $r.message | Should -Match 'Removed 6 orphaned building piece'
+        $updateSql = $script:capturedSqls | Where-Object { $_ -match '^UPDATE dune\.building_progression' }
+        $updateSql | Should -Match "array_remove\(new_buildable_pieces, 'MTX_Neut_Gunner_Column'\)"
+        $updateSql | Should -Match "'MTX_Neut_Gunner_Floor'"
+        $updateSql | Should -Match "'MTX_Neut_Gunner_Foundation'"
+        $updateSql | Should -Match "'MTX_Neut_Gunner_Railing_01'"
+        $updateSql | Should -Match "'MTX_Neut_Gunner_Railing_02'"
+        $updateSql | Should -Match "'MTX_Neut_Gunner_Railing_Round_Corner'"
+        $updateSql | Should -Match 'WHERE character_id=7::bigint'
+    }
+
+    It 'resolves the character via player_pawn_id, not the pawn id itself' {
+        Invoke-DunePlayerRepairOrphanedBuildingPieces -Ip '1.2.3.4' -PawnId 42 | Out-Null
+        $resolveSql = $script:capturedSqls | Where-Object { $_ -match 'SELECT id::text AS cid' }
+        $resolveSql | Should -Match 'player_pawn_id = 42::bigint'
+    }
+
+    It 'is a clean no-op when no orphaned pieces are present' {
+        $script:orphanedRepairBeforeCount = 200
+        $script:orphanedRepairAfterCount = 200
+        $r = Invoke-DunePlayerRepairOrphanedBuildingPieces -Ip '1.2.3.4' -PawnId 42
+        $r.ok | Should -BeTrue
+        $r.repaired | Should -Be 0
+        $r.message | Should -Match 'nothing to repair'
+    }
+
+    It 'returns no character error when the pawn has no player_state row' {
+        $script:orphanedRepairHasCharacter = $false
+        $r = Invoke-DunePlayerRepairOrphanedBuildingPieces -Ip '1.2.3.4' -PawnId 999
+        $r.ok | Should -BeFalse
+        $r.error | Should -Match 'no character found'
+    }
+
+    It 'fails loudly instead of reporting success when verification still shows orphaned ids' {
+        $script:orphanedRepairStillHas = $true
+        $r = Invoke-DunePlayerRepairOrphanedBuildingPieces -Ip '1.2.3.4' -PawnId 42
+        $r.ok | Should -BeFalse
+        $r.error | Should -Match 'still shows orphaned pieces'
+    }
+}
+
 Describe 'Invoke-DunePlayerWipeJourneyNodes' -Tag 'Pure' {
     BeforeEach {
         $script:capturedSql = New-Object System.Collections.Generic.List[string]
