@@ -19,6 +19,7 @@ here cover everything those tags shipped.
 - Fix Retail Server Settings parsing when ServerCustomSettings.ini starts with a UTF-8 BOM.
 - Remove obsolete spicefield database assumptions and use Funcom's current INI settings for Spice Fields.
 - Fix the bundled Maps.ps1 startup parse error caused by a missing newline before the map-partition table.
+- Add all eight Rain of Blood CHOAM Extension reward patents to the Grant Catalog with their friendly names.
 
 ## [15.2.0] - 2026-09-22
 
