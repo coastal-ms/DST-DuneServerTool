@@ -2630,7 +2630,7 @@ Describe 'GameConfig: spicefield startup defaults' -Tag 'GameConfig' {
     BeforeAll {
         function Invoke-V6Ssh { param([string]$Ip, [string]$Cmd) }
         $script:SpiceSection = '/Script/DuneSandbox.SpiceHarvestingSystem'
-        $script:SpiceOverride = 'm_PerMapSystemSettings=(("Editor_Default", (m_SpiceFieldTypeSettings=(((Name="Small"), (MaxGloballyPrimed=3,MaxGloballyActive=5)),((Name="Medium"), (MaxGloballyPrimed=2,MaxGloballyActive=22)),((Name="Large"), (MaxGloballyPrimed=2,MaxGloballyActive=6))))),("DeepDesert_1", (m_SpiceFieldTypeSettings=(((Name="Small"), (MaxGloballyPrimed=10,MaxGloballyActive=60)),((Name="Medium"), (MaxGloballyPrimed=12,MaxGloballyActive=12)),((Name="Large"), (MaxGloballyPrimed=2,MaxGloballyActive=6))))),("Survival_1", (m_SpiceFieldTypeSettings=(((Name="Small"), (MaxGloballyPrimed=3,MaxGloballyActive=10))))))'
+        $script:SpiceOverride = 'm_PerMapSystemSettings=(("Editor_Default", (m_SpiceFieldTypeSettings=(((Name="Small"), (MaxGloballyPrimed=3,MaxGloballyActive=5)),((Name="Medium"), (MaxGloballyPrimed=2,MaxGloballyActive=22)),((Name="Large"), (MaxGloballyPrimed=2,MaxGloballyActive=6))))),("DeepDesert_1", (m_SpiceFieldTypeSettings=(((Name="Small"), (MaxGloballyPrimed=10,MaxGloballyActive=60)),((Name="Medium"), (MaxGloballyPrimed=12,MaxGloballyActive=12)),((Name="Large"), (MaxGloballyPrimed=2,MaxGloballyActive=6))))),("Survival_1", (m_SpiceFieldTypeSettings=(((Name="Small"), (MaxGloballyPrimed=3,MaxGloballyActive=5))))))'
         $script:SpiceFallback = 'm_DefaultSystemSettings=(m_SpiceFieldTypeSettings=(((Name="Small"), (MaxGloballyPrimed=3,MaxGloballyActive=20)),((Name="Medium"), (MaxGloballyPrimed=2,MaxGloballyActive=10)),((Name="Large"), (MaxGloballyPrimed=2,MaxGloballyActive=6))))'
         $script:SpiceUserRaw = "[$script:SpiceSection]`n$script:SpiceOverride`n$script:SpiceFallback`n"
         $script:SpiceDefaultsRaw = "[$script:SpiceSection]`n" +
@@ -2638,7 +2638,7 @@ Describe 'GameConfig: spicefield startup defaults' -Tag 'GameConfig' {
             'm_DefaultSystemSettings=(m_SpiceFieldTypeSettings=(((Name="Small"), (MaxGloballyPrimed=6,MaxGloballyActive=3)),((Name="Medium"), (MaxGloballyPrimed=10,MaxGloballyActive=5)),((Name="Large"), (MaxGloballyPrimed=5,MaxGloballyActive=3))))' + "`n"
     }
 
-    It 'exposes Deep Desert sizes and Hagga Small in the normal Spice card' {
+    It 'exposes Deep Desert sizes and Hagga Small as ordinary capped config rows' {
         $fields = @($script:DuneGameConfigSchema | Where-Object { $_.ContainsKey('SpiceMap') })
 
         $fields.Count | Should -Be 4
@@ -2653,7 +2653,7 @@ Describe 'GameConfig: spicefield startup defaults' -Tag 'GameConfig' {
         @($fields | Where-Object { $_.SpiceLimit -ne 'Both' }).Count | Should -Be 0
         @($fields | Where-Object { $_.ClientStructKey -ne 'm_PerMapSystemSettings' }).Count | Should -Be 0
         ($fields | Where-Object Key -eq 'DST.SpiceStartup.DeepDesert.Large.Max').Help |
-            Should -Match 'ceiling.*max of 6.*only 4'
+            Should -Match 'Maximum 6.*Funcom''s default of 1'
         ($fields | Where-Object Key -eq 'DST.SpiceStartup.DeepDesert.Small.Max').Default | Should -Be '60'
         ($fields | Where-Object Key -eq 'DST.SpiceStartup.DeepDesert.Medium.Max').Default | Should -Be '12'
         ($fields | Where-Object Key -eq 'DST.SpiceStartup.DeepDesert.Large.Max').Default | Should -Be '1'
@@ -3284,7 +3284,7 @@ $script:DstManagedEnd
         $values['DST.SpiceStartup.DeepDesert.Small.Max'] | Should -Be '60'
         $values['DST.SpiceStartup.DeepDesert.Medium.Max'] | Should -Be '12'
         $values['DST.SpiceStartup.DeepDesert.Large.Max'] | Should -Be '6'
-        $values['DST.SpiceStartup.Hagga.Small.Max'] | Should -Be '10'
+        $values['DST.SpiceStartup.Hagga.Small.Max'] | Should -Be '5'
     }
 
     It 'shares the complete parent struct instead of invalid pseudo keys' {
@@ -3337,7 +3337,7 @@ $script:DstManagedEnd
         $state.maxActive | Should -Be 4
         $state.maxPrimed | Should -Be 4
         (Get-DuneSpicefieldLimitsFromBlob -Blob $folded[0].value -MapId 'Editor_Default' -FieldType 'Large').maxActive | Should -Be 6
-        (Get-DuneSpicefieldLimitsFromBlob -Blob $folded[0].value -MapId 'Survival_1' -FieldType 'Small').maxActive | Should -Be 10
+        (Get-DuneSpicefieldLimitsFromBlob -Blob $folded[0].value -MapId 'Survival_1' -FieldType 'Small').maxActive | Should -Be 5
 
         $out = ConvertTo-DuneIniManaged -Raw $script:SpiceUserRaw -Updates $folded -QuotedKeys @{}
         ([regex]::Matches($out, '(?m)^m_PerMapSystemSettings=')).Count | Should -Be 1
