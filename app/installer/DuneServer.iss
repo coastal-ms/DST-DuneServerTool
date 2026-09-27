@@ -16,7 +16,7 @@
 ;                 -> NOT touched by install or uninstall (preserves user config)
 
 #define MyAppName        "Dune Server Tool"
-#define MyAppVersion "15.2.1"
+#define MyAppVersion "15.2.2"
 #define MyAppNumericVersion Copy(MyAppVersion, 1, Pos("-", MyAppVersion + "-") - 1) + ".0"
 #define MyAppPublisher   "Dune Awakening Self-Hosted Tool"
 #define MyAppURL         "https://github.com/coastal-ms/DST-DuneServerTool"

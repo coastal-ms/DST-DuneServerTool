@@ -125,6 +125,6 @@ describe('Command Deck navigation', () => {
     fireEvent.change(screen.getByRole('textbox', { name: 'Find a task' }), { target: { value: 'backup' } })
     expect(screen.getByRole('link', { name: 'Database' })).toHaveAttribute('href', '/database')
     fireEvent.keyDown(screen.getByRole('textbox', { name: 'Find a task' }), { key: 'Escape' })
-    expect(screen.getByRole('link', { name: 'Sponsors & Credits' })).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: 'DST Credits' })).toBeInTheDocument()
   })
 })

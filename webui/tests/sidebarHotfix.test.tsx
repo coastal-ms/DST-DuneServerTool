@@ -37,21 +37,18 @@ describe('sidebar hotfix links', () => {
   it('keeps support page-local, restores Hawk recognition, and removes PowerShell', () => {
     renderSidebar(false)
 
-    expect(screen.getByRole('link', { name: 'Sponsors & Credits' })).toHaveAttribute('href', '/sponsors')
-    expect(screen.getByRole('link', { name: 'Buy Me a Coffee' })).toHaveAttribute(
-      'href',
-      'https://buymeacoffee.com/coastal_dst',
-    )
+    expect(screen.getByRole('link', { name: 'DST Credits' })).toHaveAttribute('href', '/sponsors')
+    expect(screen.queryByRole('link', { name: /coffee|donat/i })).not.toBeInTheDocument()
     expect(screen.queryByRole('link', { name: 'PowerShell' })).not.toBeInTheDocument()
     expect(screen.getAllByText('Thank you Hawk_I5')).toHaveLength(1)
     expect(screen.queryByText('Decker (@decker177)')).not.toBeInTheDocument()
     expect(screen.queryByText('Ed O.')).not.toBeInTheDocument()
   })
 
-  it('keeps Sponsors & Credits available when the sidebar is collapsed', () => {
+  it('keeps DST Credits available when the sidebar is collapsed', () => {
     renderSidebar(true)
 
-    expect(screen.getByTitle('Sponsors & Credits')).toHaveAttribute('href', '/sponsors')
+    expect(screen.getByTitle('DST Credits')).toHaveAttribute('href', '/sponsors')
   })
 
   it('shows one active DD Atlas link for the static atlas URL', () => {
@@ -191,13 +188,13 @@ describe('sidebar hotfix links', () => {
     renderSidebar(false)
 
     expect(screen.getByRole('link', { name: 'Operations' })).toBeInTheDocument()
-    expect(screen.getByRole('link', { name: 'Sponsors & Credits' })).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: 'DST Credits' })).toBeInTheDocument()
 
     await user.click(screen.getByRole('button', { name: 'Customize navigation' }))
     expect(screen.queryByRole('button', { name: 'Hide Server Overview in sidebar' })).not.toBeInTheDocument()
-    expect(screen.queryByRole('button', { name: 'Hide Sponsors & Credits in sidebar' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Hide DST Credits in sidebar' })).not.toBeInTheDocument()
     expect(screen.getByLabelText('Server Overview is always shown')).toBeInTheDocument()
-    expect(screen.getByLabelText('Sponsors & Credits is always shown')).toBeInTheDocument()
+    expect(screen.getByLabelText('DST Credits is always shown')).toBeInTheDocument()
   })
 
   it('hides and restores an individual page while keeping it available in customization', async () => {

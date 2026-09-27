@@ -53,7 +53,7 @@ export const LEGACY_NAV_ITEMS: readonly NavItem[] = [
   { to: '/database',    label: 'Database',       icon: 'Database',        group: 'database', ownerOnly: true, legacy: true },
   { to: '/sietches',    label: 'Sietches',     icon: 'Network',         group: 'database', ownerOnly: true, legacy: true },
   { to: '/settings',    label: 'Settings',     icon: 'Settings',        group: 'system', ownerOnly: true, workspaceId: 'settings' },
-  { to: '/sponsors',    label: 'Sponsors & Credits', icon: 'HeartHandshake', group: 'system', topMenuGroupHidden: true, sidebarAlwaysVisible: true, legacy: true },
+  { to: '/sponsors',    label: 'DST Credits', icon: 'HeartHandshake', group: 'system', topMenuGroupHidden: true, sidebarAlwaysVisible: true, legacy: true },
   { to: '/setup',       label: 'Setup Wizard', icon: 'Wand2',           group: 'system', localOnly: true, sidebarHidden: true, legacy: true },
 ]
 

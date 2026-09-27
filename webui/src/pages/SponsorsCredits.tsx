@@ -6,37 +6,19 @@ export function SponsorsCredits() {
   return (
     <div className="mx-auto max-w-3xl">
       <PageHeader
-        title="Sponsors & Credits"
+        title="DST Credits"
         icon="HeartHandshake"
-        description="Recognizing the people who help sustain Dune Server Tool."
+        description="Recognizing the people who have contributed to Dune Server Tool and its community."
       />
-
-      <section aria-labelledby="support-dst-title" className="border-y border-border py-7 sm:py-9">
-        <h2 id="support-dst-title" className="text-base font-semibold text-text">Support DST</h2>
-        <p className="mt-2 max-w-[68ch] text-sm leading-6 text-text-muted">
-          If DST is useful to you and you would like to support its continued development,
-          you can do so through Buy Me a Coffee.
-        </p>
-        <a
-          href="https://buymeacoffee.com/coastal_dst"
-          target="_blank"
-          rel="noopener noreferrer"
-          className="btn-secondary mt-4 min-h-11"
-        >
-          <Icon name="Coffee" size={16} />
-          Buy Me a Coffee
-          <Icon name="ExternalLink" size={13} className="text-text-dim" />
-        </a>
-      </section>
 
       <section aria-labelledby="project-supporters-title" className="py-7 sm:py-9">
         <div className="max-w-2xl">
           <h2 id="project-supporters-title" className="text-lg font-semibold text-text">
-            Project Supporters
+            Supporters
           </h2>
           <p className="mt-2 max-w-[68ch] text-sm leading-6 text-text-muted">
-            These supporters have helped sustain DST development and the time spent helping the
-            community. Thank you for standing behind the project.
+            Thank you to the people who have shared their time, ideas, feedback, and encouragement
+            with the DST project and community.
           </p>
         </div>
 
@@ -54,7 +36,7 @@ export function SponsorsCredits() {
           </div>
         </div>
 
-        <ul className="mt-4 divide-y divide-border" aria-label="Project supporters" aria-describedby="duke-notes-title">
+        <ul className="mt-4 divide-y divide-border" aria-label="Supporters" aria-describedby="duke-notes-title">
           {SUPPORTER_CREDITS.map(credit => (
             <li
               key={credit.displayName}
