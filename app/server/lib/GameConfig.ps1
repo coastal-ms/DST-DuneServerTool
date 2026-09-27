@@ -152,9 +152,43 @@ function Read-DuneTwilightLiveGameConfig {
     )
     $raw = ((Invoke-V6Ssh -Ip $Ip -Cmd "sudo cat '$Path' 2>/dev/null") -join "`n")
     if ([string]::IsNullOrWhiteSpace($raw) -or $raw.TrimStart().StartsWith('ERROR:')) {
-        throw 'Twilight experiment could not verify the authoritative UserGame.ini after writing it.'
+        throw 'Twilight experiment could not read the authoritative UserGame.ini.'
     }
     return $raw
+}
+
+function Get-DuneTwilightLockConfig {
+    param([Parameter(Mandatory)][string]$Ip)
+
+    $paths = Resolve-DuneTwilightLiveGameConfigTarget -Ip $Ip
+    $raw = Read-DuneTwilightLiveGameConfig -Ip $Ip -Path $paths.game
+    $effective = Get-DuneIniEffective -Raw $raw
+    $prefix = "$script:DuneGcSecTimeOfDay||"
+    $startKey = "${prefix}m_StartTime"
+    $cycleKey = "${prefix}m_bTimeOfDayEnabled"
+    $startTime = if ($effective.ContainsKey($startKey)) { [string]$effective[$startKey] } else { $null }
+    $cycle = if ($effective.ContainsKey($cycleKey)) { [string]$effective[$cycleKey] } else { $null }
+    $candidate = $null
+    $hour = 0.0
+    if ($null -ne $startTime -and [double]::TryParse(
+        $startTime, [Globalization.NumberStyles]::Float,
+        [Globalization.CultureInfo]::InvariantCulture, [ref]$hour
+    ) -and -not [double]::IsNaN($hour) -and -not [double]::IsInfinity($hour)) {
+        foreach ($option in $script:DuneTwilightCandidates) {
+            if ($hour -eq [double]::Parse($option.value, [Globalization.CultureInfo]::InvariantCulture)) {
+                $candidate = [string]$option.value
+                break
+            }
+        }
+    }
+
+    $config = Get-DuneTwilightLockExperiment
+    $config.current = [ordered]@{
+        startTime = $startTime
+        timeOfDayEnabled = $cycle
+        candidate = $candidate
+    }
+    return $config
 }
 
 function Assert-DuneTwilightStageReadback {
@@ -439,10 +473,10 @@ $script:DuneGameConfigSchema = @(
     @{ Section=$script:DuneGcSecSpiceAddict; Key='m_bIsSpiceVisionEnabled'; File='game'; Type='bool'; Default='True'; Label='Spice Vision Enabled'; Help='Whether spice vision effects are active. Also needs client-side apply.'; ClientApply=$true; Category='Spice' }
 
     # --- Deep Desert startup caps (members of SpiceHarvestingSystem m_PerMapSystemSettings) ---
-    @{ Section=$script:DuneGcSecSpice; Key='DST.SpiceStartup.DeepDesert.Small.Max'; File='game'; Type='int'; Min=0; Default='60'; Label='Deep Desert Small Fields at Startup'; Help='Caps both active and primed Small fields after Apply INIs & restart. Guidance: 60 is Funcom''s normal high cap. This is a ceiling, not a forced count; if the current layout provides fewer fields, only those fields can appear.'; SpiceMap='DeepDesert_1'; SpiceFieldType='Small'; SpiceLimit='Both'; ClientStructKey='m_PerMapSystemSettings'; ClientApply=$true; Category='Spice' }
-    @{ Section=$script:DuneGcSecSpice; Key='DST.SpiceStartup.DeepDesert.Medium.Max'; File='game'; Type='int'; Min=0; Default='12'; Label='Deep Desert Medium Fields at Startup'; Help='Caps both active and primed Medium fields after Apply INIs & restart. Guidance: 12 is Funcom''s normal high cap. This is a ceiling, not a forced count; if the current layout provides fewer fields, only those fields can appear.'; SpiceMap='DeepDesert_1'; SpiceFieldType='Medium'; SpiceLimit='Both'; ClientStructKey='m_PerMapSystemSettings'; ClientApply=$true; Category='Spice' }
-    @{ Section=$script:DuneGcSecSpice; Key='DST.SpiceStartup.DeepDesert.Large.Max'; File='game'; Type='int'; Min=0; Default='1'; Label='Deep Desert Large Fields at Startup'; Help='Caps both active and primed Large fields after Apply INIs & restart. Guidance: use up to 6 to cover the largest known layouts. This is a ceiling, not a forced count: a max of 6 with only 4 fields in the seed still produces at most 4.'; SpiceMap='DeepDesert_1'; SpiceFieldType='Large'; SpiceLimit='Both'; ClientStructKey='m_PerMapSystemSettings'; ClientApply=$true; Category='Spice' }
-    @{ Section=$script:DuneGcSecSpice; Key='DST.SpiceStartup.Hagga.Small.Max'; File='game'; Type='int'; Min=0; Default='5'; Label='Hagga Small Fields at Startup'; Help='Caps both active and primed Small fields after Apply INIs & restart. Guidance: 5 is Funcom''s normal active cap. This is a ceiling; it does not create fields beyond what Hagga can place.'; SpiceMap='Survival_1'; SpiceFieldType='Small'; SpiceLimit='Both'; ClientStructKey='m_PerMapSystemSettings'; ClientApply=$true; Category='Spice' }
+    @{ Section=$script:DuneGcSecSpice; Key='DST.SpiceStartup.DeepDesert.Small.Max'; File='game'; Type='int'; Min=0; Max=60; Default='60'; Label='Deep Desert Small Fields at Startup'; Help='Caps both active and primed Small fields after Apply INIs & restart. Maximum 60 matches Funcom''s current default. This is a ceiling, not a forced count; a map layout may provide fewer fields.'; SpiceMap='DeepDesert_1'; SpiceFieldType='Small'; SpiceLimit='Both'; ClientStructKey='m_PerMapSystemSettings'; ClientApply=$true; Category='Spice' }
+    @{ Section=$script:DuneGcSecSpice; Key='DST.SpiceStartup.DeepDesert.Medium.Max'; File='game'; Type='int'; Min=0; Max=12; Default='12'; Label='Deep Desert Medium Fields at Startup'; Help='Caps both active and primed Medium fields after Apply INIs & restart. Maximum 12 matches Funcom''s current default. This is a ceiling, not a forced count; a map layout may provide fewer fields.'; SpiceMap='DeepDesert_1'; SpiceFieldType='Medium'; SpiceLimit='Both'; ClientStructKey='m_PerMapSystemSettings'; ClientApply=$true; Category='Spice' }
+    @{ Section=$script:DuneGcSecSpice; Key='DST.SpiceStartup.DeepDesert.Large.Max'; File='game'; Type='int'; Min=0; Max=6; Default='1'; Label='Deep Desert Large Fields at Startup'; Help='Caps both active and primed Large fields after Apply INIs & restart. Maximum 6 covers the largest known layouts; untouched settings retain Funcom''s default of 1.'; SpiceMap='DeepDesert_1'; SpiceFieldType='Large'; SpiceLimit='Both'; ClientStructKey='m_PerMapSystemSettings'; ClientApply=$true; Category='Spice' }
+    @{ Section=$script:DuneGcSecSpice; Key='DST.SpiceStartup.Hagga.Small.Max'; File='game'; Type='int'; Min=0; Max=5; Default='5'; Label='Hagga Small Fields at Startup'; Help='Caps both active and primed Small fields after Apply INIs & restart. Maximum 5 matches Funcom''s current default; it does not create fields beyond what Hagga can place.'; SpiceMap='Survival_1'; SpiceFieldType='Small'; SpiceLimit='Both'; ClientStructKey='m_PerMapSystemSettings'; ClientApply=$true; Category='Spice' }
 
     # --- Taxation ---
     @{ Section=$script:DuneGcSecTaxation; Key='m_bTaxationEnabled'; File='game'; Type='bool'; Default='False'; Label='Taxation Enabled'; Help='Whether the taxation system is active. Also needs client-side apply.'; ClientApply=$true; Category='Taxation' }
@@ -2267,20 +2301,16 @@ function Get-DuneIniManagedSectionNames {
     return ,[string[]]@($names.Keys)
 }
 
-# Retail spice compatibility -------------------------------------------------
-#
-# Funcom's DA-7323 migration removed dune.spicefield_types, including its live
-# write procedures. Retail still exposes the authoritative controls in
-# SpiceHarvestingSystem's UserGame.ini settings and persists active fields in
-# dune.resourcefield_state. Keep DST's Spice Fields surface intact by adapting
-# those two sources instead of treating the missing legacy table as a feature
-# gate.
+# Retail Spice Fields ---------------------------------------------------------
+# Current Funcom exposes field limits in UserGame.ini. The current resource
+# state table has no size identifier, so DST must not infer Small/Medium/Large
+# from remaining-resource values.
 function Get-DuneRetailSpicefieldDefinitions {
     return @(
-        [pscustomobject]@{ id=9101; mapName='HaggaBasin'; mapId='Survival_1';   fieldType='Small'  }
-        [pscustomobject]@{ id=9201; mapName='DeepDesert'; mapId='DeepDesert_1'; fieldType='Small'  }
-        [pscustomobject]@{ id=9202; mapName='DeepDesert'; mapId='DeepDesert_1'; fieldType='Medium' }
-        [pscustomobject]@{ id=9203; mapName='DeepDesert'; mapId='DeepDesert_1'; fieldType='Large'  }
+        [pscustomobject]@{ id=9101; mapName='HaggaBasin'; mapId='Survival_1';   fieldType='Small';  max=5  }
+        [pscustomobject]@{ id=9201; mapName='DeepDesert'; mapId='DeepDesert_1'; fieldType='Small';  max=60 }
+        [pscustomobject]@{ id=9202; mapName='DeepDesert'; mapId='DeepDesert_1'; fieldType='Medium'; max=12 }
+        [pscustomobject]@{ id=9203; mapName='DeepDesert'; mapId='DeepDesert_1'; fieldType='Large';  max=6  }
     )
 }
 
@@ -2313,23 +2343,6 @@ function Get-DuneRetailSpicefieldRows {
     }
     $spawningActive = "$spawnRaw".Trim() -match '^(?i:true|1|yes|on)$'
 
-    $activity = @{}
-    if (Get-Command Get-V6RetailSpicefieldActivity -ErrorAction SilentlyContinue) {
-        foreach ($row in @(Get-V6RetailSpicefieldActivity -Ip $Ip)) {
-            $activity["$($row.map_name)|$([int]$row.dimension_index)|$($row.field_type)"] = [int]$row.current_active
-        }
-    }
-
-    $partitions = @{}
-    $partitionGate = $false
-    try {
-        $active = Get-DuneActiveMapPartitions -Ip $Ip
-        $partitionGate = [bool]$active.ok
-        foreach ($partition in @($active.partitions)) {
-            $partitions["$($partition.mapId)|$([int]$partition.dimensionIndex)"] = $partition
-        }
-    } catch {}
-
     $rows = foreach ($definition in Get-DuneRetailSpicefieldDefinitions) {
         $configuredLimits = Get-DuneSpicefieldLimitsFromBlob -Blob $configuredBlob `
             -MapId $definition.mapId -FieldType $definition.fieldType
@@ -2340,12 +2353,8 @@ function Get-DuneRetailSpicefieldRows {
             $limits = Get-DuneSpicefieldDefaultLimitsFromBlob -Blob $fallback -FieldType $definition.fieldType
         }
         if (-not $limits.found -or $limits.malformed) { continue }
-        $schemaField = @($script:DuneGameConfigSchema | Where-Object {
-            $_.ContainsKey('SpiceMap') -and
-            "$($_.SpiceMap)" -eq "$($definition.mapId)" -and
-            "$($_.SpiceFieldType)" -eq "$($definition.fieldType)"
-        } | Select-Object -First 1)
-        $guidanceMax = if ($schemaField.Count -gt 0) { [int]$schemaField[0].Default } else { $null }
+        $guidanceMax = [int]$definition.max
+        $overCap = ([int]$limits.maxActive -gt $guidanceMax -or [int]$limits.maxPrimed -gt $guidanceMax)
         $configuredOverride = [bool](
             $configuredLimits.found -and
             $defaultLimits.found -and
@@ -2353,7 +2362,6 @@ function Get-DuneRetailSpicefieldRows {
                 [int]$configuredLimits.maxPrimed -ne [int]$defaultLimits.maxPrimed)
         )
         $dimension = 0
-        $partition = $partitions["$($definition.mapId)|$dimension"]
         [pscustomobject]@{
             spicefield_type_id     = [int]$definition.id
             map_name               = [string]$definition.mapName
@@ -2365,14 +2373,12 @@ function Get-DuneRetailSpicefieldRows {
             default_max_globally_active = if ($defaultLimits.found) { [int]$defaultLimits.maxActive } else { $null }
             default_max_globally_primed = if ($defaultLimits.found) { [int]$defaultLimits.maxPrimed } else { $null }
             guidance_max           = $guidanceMax
+            over_cap               = [bool]$overCap
             configured_override    = $configuredOverride
-            current_globally_active = [int]$activity["$($definition.mapName)|$dimension|$($definition.fieldType)"]
+            current_globally_active = $null
             current_globally_primed = $null
             is_spawning_active     = [bool]$spawningActive
-            global_spawn_weight    = 0.5
-            partition_live         = [bool]($partition -and $partition.live)
-            partition_pinned       = [bool]($partition -and $partition.pinned)
-            partition_active       = [bool]($null -ne $partition)
+            global_spawn_weight    = 0.0
             adapter                = 'retail-config'
             requires_restart       = $true
             supports_spawn_weight  = $false
@@ -2382,7 +2388,6 @@ function Get-DuneRetailSpicefieldRows {
     }
     return @{
         rows = @($rows)
-        partitionGate = $partitionGate
         raw = $raw
         defaultRaw = $defaultRaw
         blob = $blob
@@ -2402,6 +2407,10 @@ function Set-DuneRetailSpicefieldRow {
     }
     $definition = @(Get-DuneRetailSpicefieldDefinitions | Where-Object { [int]$_.id -eq $TypeId } | Select-Object -First 1)
     if ($definition.Count -eq 0) { throw "Retail spice field type $TypeId was not found." }
+    $cap = [int]$definition[0].max
+    if ($MaxActive -gt $cap -or $MaxPrimed -gt $cap) {
+        throw "Spice field limits for $($definition[0].mapId)/$($definition[0].fieldType) cannot exceed the approved cap of $cap for either active or primed fields."
+    }
 
     $state = Get-DuneRetailSpicefieldRows -Ip $Ip
     $defaultBlob = Get-DuneIniSectionScalarValue -Raw $state.defaultRaw -Section $script:DuneGcSecSpice -Key 'm_PerMapSystemSettings'
@@ -3007,6 +3016,7 @@ function Get-DuneSchemaSpicefieldFieldMap {
             fieldType = "$($field.SpiceFieldType)"
             limit     = "$($field.SpiceLimit)"
             default   = [int]$field.Default
+            max       = [int]$field.Max
         }
     }
     return $map
@@ -3189,6 +3199,9 @@ function Convert-DuneSpicefieldUpdates {
             $parsed = 0
             if (-not [int]::TryParse("$($update.value)", [ref]$parsed) -or $parsed -lt 0) {
                 throw "$key must be a whole number zero or greater."
+            }
+            if ($parsed -gt [int]$field.max) {
+                throw "$key cannot exceed the approved cap of $($field.max) for $($field.mapId)/$($field.fieldType)."
             }
             $active = if ($state.found) { [int]$state.maxActive } else { [int]$field.default }
             $primed = if ($state.found) { [int]$state.maxPrimed } else { [int]$field.default }

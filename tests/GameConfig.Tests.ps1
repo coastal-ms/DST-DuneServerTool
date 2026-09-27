@@ -1,4 +1,4 @@
-# Tests the pure INI-writer engine in GameConfig.ps1, focused on the
+﻿# Tests the pure INI-writer engine in GameConfig.ps1, focused on the
 # managed-block writer's guarantee that any section name appears EXACTLY ONCE
 # in the output. Regression coverage for the v12.0.13 duplicate-header bug where
 # DST's managed override was silently ignored by UE5 (first-header / last-key
@@ -1566,7 +1566,7 @@ Describe 'DuneGameConfigSchema: forced Coriolis world seed' -Tag 'GameConfig' {
 
 Describe 'DuneGameConfigSchema: experimental twilight evidence gate' -Tag 'GameConfig' {
     BeforeAll {
-        function Invoke-V6Ssh { throw 'Unexpected unmocked twilight SSH call.' }
+        function Invoke-V6Ssh { param($Ip, $Cmd) throw 'Unexpected unmocked twilight SSH call.' }
     }
 
     BeforeEach {
@@ -1667,6 +1667,46 @@ Describe 'DuneGameConfigSchema: experimental twilight evidence gate' -Tag 'GameC
         foreach ($invalid in @('', '17.0', '20', '22.0', 'NaN', 'Infinity', "18`nInjected=True")) {
             (Test-DuneTwilightCandidateHour -Value $invalid) | Should -BeFalse
         }
+    }
+
+    It 'reads the exact installed time-of-day values and selects the matching candidate' {
+        Mock Invoke-V6Ssh {
+            $script:TwilightReadCmd = $Cmd
+            @(
+                '[/Script/DuneSandbox.TimeOfDaySettings]',
+                ';m_StartTime=18.0',
+                'm_StartTime=19.0',
+                'm_StartTime=4.0',
+                'm_bTimeOfDayEnabled=False'
+            )
+        }
+
+        $result = Get-DuneTwilightLockConfig -Ip '192.0.2.1'
+
+        $result.current.startTime | Should -Be '4.0'
+        $result.current.timeOfDayEnabled | Should -Be 'False'
+        $result.current.candidate | Should -Be '4.0'
+        Assert-MockCalled Invoke-V6Ssh -Times 1
+        $script:TwilightReadCmd | Should -Be "sudo cat '/home/dune/.dune/download/scripts/setup/config/UserGame.ini' 2>/dev/null"
+    }
+
+    It 'does not invent a candidate when the installed phase is absent or unsupported' {
+        Mock Invoke-V6Ssh {
+            @(
+                '[/Script/DuneSandbox.TimeOfDaySettings]',
+                'm_StartTime=17.0',
+                'm_bTimeOfDayEnabled=True'
+            )
+        }
+        $unsupported = Get-DuneTwilightLockConfig -Ip '192.0.2.1'
+        $unsupported.current.startTime | Should -Be '17.0'
+        $unsupported.current.candidate | Should -BeNullOrEmpty
+
+        Mock Invoke-V6Ssh { '[OtherSection]' }
+        $absent = Get-DuneTwilightLockConfig -Ip '192.0.2.1'
+        $absent.current.startTime | Should -BeNullOrEmpty
+        $absent.current.timeOfDayEnabled | Should -BeNullOrEmpty
+        $absent.current.candidate | Should -BeNullOrEmpty
     }
 
     It 'writes an active candidate when the source contains only a commented value' {
@@ -1774,7 +1814,7 @@ m_bTimeOfDayEnabled=False
         Mock Invoke-V6Ssh { 'ERROR: remote write failed' }
 
         { Invoke-DuneTwilightLockStage -Ip '192.0.2.1' -Candidate '18.0' } |
-            Should -Throw '*could not verify the authoritative UserGame.ini*'
+            Should -Throw '*could not read the authoritative UserGame.ini*'
     }
 
     It 'backs up then removes both managed overrides on restore' {
@@ -1831,6 +1871,7 @@ m_bTimeOfDayEnabled=False
         }
         $route | Should -Match 'Invoke-DuneTwilightLockStage'
         $route | Should -Match 'Invoke-DuneTwilightLockRestore'
+        $route | Should -Match 'Get-DuneTwilightLockConfig'
         $route | Should -Match 'Test-DunePlayerGuard'
     }
 }
@@ -2588,18 +2629,16 @@ Describe 'GameConfig: UE struct-member engine (LandsraadSettings Data blob)' -Ta
 Describe 'GameConfig: spicefield startup defaults' -Tag 'GameConfig' {
     BeforeAll {
         function Invoke-V6Ssh { param([string]$Ip, [string]$Cmd) }
-        function Get-V6RetailSpicefieldActivity { param([string]$Ip) }
-        function Get-DuneActiveMapPartitions { param([string]$Ip) }
         $script:SpiceSection = '/Script/DuneSandbox.SpiceHarvestingSystem'
-        $script:SpiceOverride = 'm_PerMapSystemSettings=(("Editor_Default", (m_SpiceFieldTypeSettings=(((Name="Small"), (MaxGloballyPrimed=3,MaxGloballyActive=5)),((Name="Medium"), (MaxGloballyPrimed=2,MaxGloballyActive=22)),((Name="Large"), (MaxGloballyPrimed=2,MaxGloballyActive=6))))),("DeepDesert_1", (m_SpiceFieldTypeSettings=(((Name="Small"), (MaxGloballyPrimed=10,MaxGloballyActive=60)),((Name="Medium"), (MaxGloballyPrimed=12,MaxGloballyActive=12)),((Name="Large"), (MaxGloballyPrimed=2,MaxGloballyActive=6))))),("Survival_1", (m_SpiceFieldTypeSettings=(((Name="Small"), (MaxGloballyPrimed=3,MaxGloballyActive=10))))))'
-        $script:SpiceFallback = 'm_DefaultSystemSettings=(m_SpiceFieldTypeSettings=(((Name="Small"), (MaxGloballyPrimed=3,MaxGloballyActive=20)),((Name="Medium"), (MaxGloballyPrimed=2,MaxGloballyActive=10)),((Name="Large"), (MaxGloballyPrimed=2,MaxGloballyActive=6))))'
+        $script:SpiceOverride = 'm_PerMapSystemSettings=(("Editor_Default", (m_SpiceFieldTypeSettings=(((Name="Small"), (MaxGloballyPrimed=3,MaxGloballyActive=5)),((Name="Medium"), (MaxGloballyPrimed=2,MaxGloballyActive=22)),((Name="Large"), (MaxGloballyPrimed=2,MaxGloballyActive=6))))),("DeepDesert_1", (m_SpiceFieldTypeSettings=(((Name="Small"), (MaxGloballyPrimed=10,MaxGloballyActive=60)),((Name="Medium"), (MaxGloballyPrimed=12,MaxGloballyActive=12)),((Name="Large"), (MaxGloballyPrimed=2,MaxGloballyActive=6))))),("Survival_1", (m_SpiceFieldTypeSettings=(((Name="Small"), (MaxGloballyPrimed=3,MaxGloballyActive=5))))))'
+        $script:SpiceFallback = 'm_DefaultSystemSettings=(m_SpiceFieldTypeSettings=(((Name="Small"), (MaxGloballyPrimed=3,MaxGloballyActive=5)),((Name="Medium"), (MaxGloballyPrimed=2,MaxGloballyActive=10)),((Name="Large"), (MaxGloballyPrimed=2,MaxGloballyActive=6))))'
         $script:SpiceUserRaw = "[$script:SpiceSection]`n$script:SpiceOverride`n$script:SpiceFallback`n"
         $script:SpiceDefaultsRaw = "[$script:SpiceSection]`n" +
             'm_PerMapSystemSettings=(("DeepDesert_1", (m_SpiceFieldTypeSettings=(((Name="Small"), (MaxGloballyPrimed=60,MaxGloballyActive=60)),((Name="Medium"), (MaxGloballyPrimed=12,MaxGloballyActive=12)),((Name="Large"), (MaxGloballyPrimed=1,MaxGloballyActive=1))))),("Survival_1", (m_SpiceFieldTypeSettings=(((Name="Small"), (MaxGloballyPrimed=5,MaxGloballyActive=5))))))' + "`n" +
             'm_DefaultSystemSettings=(m_SpiceFieldTypeSettings=(((Name="Small"), (MaxGloballyPrimed=6,MaxGloballyActive=3)),((Name="Medium"), (MaxGloballyPrimed=10,MaxGloballyActive=5)),((Name="Large"), (MaxGloballyPrimed=5,MaxGloballyActive=3))))' + "`n"
     }
 
-    It 'exposes Deep Desert sizes and Hagga Small in the normal Spice card' {
+    It 'exposes Deep Desert sizes and Hagga Small as ordinary capped config rows' {
         $fields = @($script:DuneGameConfigSchema | Where-Object { $_.ContainsKey('SpiceMap') })
 
         $fields.Count | Should -Be 4
@@ -2614,14 +2653,14 @@ Describe 'GameConfig: spicefield startup defaults' -Tag 'GameConfig' {
         @($fields | Where-Object { $_.SpiceLimit -ne 'Both' }).Count | Should -Be 0
         @($fields | Where-Object { $_.ClientStructKey -ne 'm_PerMapSystemSettings' }).Count | Should -Be 0
         ($fields | Where-Object Key -eq 'DST.SpiceStartup.DeepDesert.Large.Max').Help |
-            Should -Match 'ceiling.*max of 6.*only 4'
+            Should -Match 'Maximum 6.*Funcom''s default of 1'
         ($fields | Where-Object Key -eq 'DST.SpiceStartup.DeepDesert.Small.Max').Default | Should -Be '60'
         ($fields | Where-Object Key -eq 'DST.SpiceStartup.DeepDesert.Medium.Max').Default | Should -Be '12'
         ($fields | Where-Object Key -eq 'DST.SpiceStartup.DeepDesert.Large.Max').Default | Should -Be '1'
         ($fields | Where-Object Key -eq 'DST.SpiceStartup.Hagga.Small.Max').Default | Should -Be '5'
     }
 
-    It 'defines the complete Retail compatibility surface without removing a field size' {
+    It 'defines the current Funcom field-size settings for Hagga and Deep Desert' {
         $defs = @(Get-DuneRetailSpicefieldDefinitions)
         $defs.Count | Should -Be 4
         @($defs | Where-Object mapId -eq 'Survival_1').fieldType | Should -Be @('Small')
@@ -2629,30 +2668,14 @@ Describe 'GameConfig: spicefield startup defaults' -Tag 'GameConfig' {
         @($defs.id | Sort-Object -Unique).Count | Should -Be 4
     }
 
-    It 'preserves the unavailable Retail primed count as null instead of numeric zero' {
+    It 'does not infer active field size from resource values' {
         Mock Get-DuneGameConfig { @{ game = @{ raw = $script:SpiceUserRaw } } }
         Mock Get-DuneGameConfigDefaults { @{ game = $script:SpiceDefaultsRaw } }
-        Mock Get-V6RetailSpicefieldActivity {
-            @([pscustomobject]@{
-                map_name = 'HaggaBasin'
-                dimension_index = 0
-                field_type = 'Small'
-                current_active = 5
-            })
-        }
-        Mock Get-DuneActiveMapPartitions {
-            @{ ok = $true; partitions = @([pscustomobject]@{
-                mapId = 'Survival_1'
-                dimensionIndex = 0
-                live = $true
-                pinned = $false
-            }) }
-        }
 
         $row = @((Get-DuneRetailSpicefieldRows -Ip '192.0.2.1').rows |
             Where-Object spicefield_type_id -eq 9101)[0]
 
-        $row.current_globally_active | Should -Be 5
+        $row.current_globally_active | Should -BeNullOrEmpty
         $row.current_globally_primed | Should -BeNullOrEmpty
         $row.current_primed_exact | Should -BeFalse
         $row.max_globally_primed | Should -Be 3
@@ -2669,9 +2692,6 @@ Describe 'GameConfig: spicefield startup defaults' -Tag 'GameConfig' {
         )
         Mock Get-DuneGameConfig { @{ game = @{ raw = $retailDefaults } } }
         Mock Get-DuneGameConfigDefaults { @{ game = $retailDefaults } }
-        Mock Get-V6RetailSpicefieldActivity { @() }
-        Mock Get-DuneActiveMapPartitions { @{ ok = $true; partitions = @() } }
-
         $row = @((Get-DuneRetailSpicefieldRows -Ip '192.0.2.1').rows |
             Where-Object spicefield_type_id -eq 9101)[0]
 
@@ -3264,7 +3284,7 @@ $script:DstManagedEnd
         $values['DST.SpiceStartup.DeepDesert.Small.Max'] | Should -Be '60'
         $values['DST.SpiceStartup.DeepDesert.Medium.Max'] | Should -Be '12'
         $values['DST.SpiceStartup.DeepDesert.Large.Max'] | Should -Be '6'
-        $values['DST.SpiceStartup.Hagga.Small.Max'] | Should -Be '10'
+        $values['DST.SpiceStartup.Hagga.Small.Max'] | Should -Be '5'
     }
 
     It 'shares the complete parent struct instead of invalid pseudo keys' {
@@ -3317,7 +3337,7 @@ $script:DstManagedEnd
         $state.maxActive | Should -Be 4
         $state.maxPrimed | Should -Be 4
         (Get-DuneSpicefieldLimitsFromBlob -Blob $folded[0].value -MapId 'Editor_Default' -FieldType 'Large').maxActive | Should -Be 6
-        (Get-DuneSpicefieldLimitsFromBlob -Blob $folded[0].value -MapId 'Survival_1' -FieldType 'Small').maxActive | Should -Be 10
+        (Get-DuneSpicefieldLimitsFromBlob -Blob $folded[0].value -MapId 'Survival_1' -FieldType 'Small').maxActive | Should -Be 5
 
         $out = ConvertTo-DuneIniManaged -Raw $script:SpiceUserRaw -Updates $folded -QuotedKeys @{}
         ([regex]::Matches($out, '(?m)^m_PerMapSystemSettings=')).Count | Should -Be 1

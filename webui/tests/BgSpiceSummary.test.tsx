@@ -24,10 +24,7 @@ const summaryRow = {
   maxActive: 5,
   maxPrimed: 3,
   currentActive: 2,
-  currentPrimed: 1,
   isSpawningActive: true,
-  spawnWeight: 1,
-  partitionActive: true,
 }
 
 const detailsResponse = {
@@ -64,7 +61,6 @@ beforeEach(() => {
   vi.mocked(getSpicefields).mockResolvedValue({
     available: true,
     rows: [summaryRow],
-    partitionGate: true,
   })
   vi.mocked(getSpicefieldState).mockResolvedValue(detailsResponse)
   vi.mocked(setSpicefieldSpawning).mockResolvedValue({ ok: true, row: summaryRow })
@@ -80,30 +76,16 @@ describe('BgSpiceSummary raw field details', () => {
   it('hides unavailable Retail primed status without hiding active or spawning state', async () => {
     vi.mocked(getSpicefields).mockResolvedValue({
       available: true,
-      rows: [{ ...summaryRow, adapter: 'retail-config', currentPrimed: null, currentPrimedExact: false }],
-      partitionGate: true,
+      rows: [{ ...summaryRow, adapter: 'retail-config', currentActive: null, currentPrimedExact: false }],
     })
 
     render(<BgSpiceSummary enabled />)
 
     expect(await screen.findByText('Hagga Basin')).toBeInTheDocument()
-    expect(screen.getAllByRole('columnheader', { name: 'Active' })).toHaveLength(2)
+    expect(screen.getByRole('columnheader', { name: 'Size count' })).toBeInTheDocument()
     expect(screen.queryByRole('columnheader', { name: 'Primed' })).not.toBeInTheDocument()
     expect(screen.queryByText(/N\/A/)).not.toBeInTheDocument()
     expect(screen.getByRole('checkbox')).toBeChecked()
-  })
-
-  it('keeps authoritative current primed counts on legacy database rows', async () => {
-    vi.mocked(getSpicefields).mockResolvedValue({
-      available: true,
-      rows: [{ ...summaryRow, adapter: 'legacy-db', currentPrimedExact: true }],
-      partitionGate: true,
-    })
-
-    render(<BgSpiceSummary enabled />)
-
-    expect(await screen.findByRole('columnheader', { name: 'Primed' })).toBeInTheDocument()
-    expect(screen.getAllByRole('cell').some(cell => cell.textContent === '1/3')).toBe(true)
   })
 
   it('opens from an explicit row control and labels untyped raw values accurately', async () => {
@@ -192,12 +174,10 @@ describe('BgSpiceSummary raw field details', () => {
       .mockResolvedValueOnce({
         available: true,
         rows: [summaryRow],
-        partitionGate: true,
       })
       .mockResolvedValue({
         available: true,
-        rows: [{ ...summaryRow, partitionActive: false }],
-        partitionGate: true,
+        rows: [],
       })
     render(<BgSpiceSummary enabled />)
     await act(async () => {})
@@ -226,12 +206,10 @@ describe('BgSpiceSummary raw field details', () => {
       .mockResolvedValueOnce({
         available: true,
         rows: [summaryRow],
-        partitionGate: true,
       })
       .mockResolvedValue({
         available: true,
-        rows: [{ ...summaryRow, partitionActive: false }],
-        partitionGate: true,
+        rows: [],
       })
     render(<BgSpiceSummary enabled />)
     await act(async () => {})

@@ -28,6 +28,43 @@ afterEach(() => {
 })
 
 describe('Experimental twilight lock field-test harness', () => {
+  it('initializes to the installed dew-harvest phase instead of the first candidate', async () => {
+    api.getExperiment.mockResolvedValue({
+      available: true,
+      evidenceStatus: 'visual-phases-verified',
+      candidates: [
+        { value: '18.0', label: 'Sunset - 18:00' },
+        { value: '4.0', label: 'Dew harvest - 04:00' },
+      ],
+      current: { startTime: '4.0', timeOfDayEnabled: 'False', candidate: '4.0' },
+      clientApply: { available: false, reason: 'Unverified.' },
+      restartRequired: true,
+      minimumObservationMinutes: 30,
+    })
+
+    render(<TimeOfDayLockPanel vmRunning />)
+
+    await waitFor(() => expect(screen.getByLabelText('Candidate phase value')).toHaveValue('4.0'))
+    expect(screen.getByText(/Installed UserGame.ini: m_StartTime=4.0; m_bTimeOfDayEnabled=False/)).toBeInTheDocument()
+  })
+
+  it('leaves staging unselected when the installed phase is outside verified candidates', async () => {
+    api.getExperiment.mockResolvedValue({
+      available: true,
+      evidenceStatus: 'visual-phases-verified',
+      candidates: [{ value: '18.0', label: 'Sunset - 18:00' }],
+      current: { startTime: '17.0', timeOfDayEnabled: 'True', candidate: null },
+      clientApply: { available: false, reason: 'Unverified.' },
+      restartRequired: true,
+      minimumObservationMinutes: 30,
+    })
+
+    render(<TimeOfDayLockPanel vmRunning />)
+
+    await waitFor(() => expect(screen.getByLabelText('Candidate phase value')).toHaveValue(''))
+    expect(screen.getByRole('button', { name: 'Back up & stage candidate' })).toBeDisabled()
+  })
+
   it('stages only bounded candidates after confirmation and explains the experiment', async () => {
     const user = userEvent.setup()
     vi.spyOn(window, 'confirm').mockReturnValue(true)
@@ -41,6 +78,7 @@ describe('Experimental twilight lock field-test harness', () => {
         { value: '21.0', label: 'Full night - 21:00' },
         { value: '4.0', label: 'Dew harvest - 04:00' },
       ],
+      current: { startTime: '18.0', timeOfDayEnabled: 'False', candidate: '18.0' },
       clientApply: { available: false, reason: 'Unverified.' },
       restartRequired: true,
       minimumObservationMinutes: 30,
@@ -61,6 +99,7 @@ describe('Experimental twilight lock field-test harness', () => {
     expect(screen.getByText(/DST does not modify client INIs/)).toBeInTheDocument()
     expect(screen.getByText(/crafting timers continue/)).toBeInTheDocument()
     expect(screen.getAllByRole('option').map(option => option.getAttribute('value'))).toEqual([
+      '',
       '18.0',
       '19.0',
       '20.0',
@@ -81,6 +120,7 @@ describe('Experimental twilight lock field-test harness', () => {
       available: true,
       evidenceStatus: 'candidate-only',
       candidates: [{ value: '17.0', label: 'Candidate 17.0' }],
+      current: { startTime: '17.0', timeOfDayEnabled: 'False', candidate: null },
       clientApply: { available: false, reason: 'Unverified.' },
       restartRequired: true,
       minimumObservationMinutes: 30,
@@ -107,6 +147,7 @@ describe('Experimental twilight lock field-test harness', () => {
       available: true,
       evidenceStatus: 'candidate-only',
       candidates: [{ value: '17.0', label: 'Candidate 17.0' }],
+      current: { startTime: '17.0', timeOfDayEnabled: 'True', candidate: null },
       clientApply: { available: false, reason: 'Unverified.' },
       restartRequired: true,
       minimumObservationMinutes: 30,

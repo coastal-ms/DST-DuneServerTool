@@ -21,8 +21,6 @@ import { Icon } from '../components/Icon'
 import { ApiError } from '../api/client'
 import { getMapSpinUp, setMapPartySharing, setMapSpinUp, type SpinUpMap, type SpinUpMissingSection, type SpinUpNotStartedSection } from '../api/mapSpinUp'
 import { fixOnDemandPartitions, getMapState, restartMapPods, type MapState } from '../api/maps'
-import { SpicefieldsCard } from './gameconfig/SpicefieldsCard'
-import { useStatus } from '../hooks/useStatus'
 import { confirmRoutineAction } from '../hooks/useReducedRoutineUi'
 
 // Map SpinUp section names → on-demand map keys that expose a live, schedulable
@@ -101,8 +99,6 @@ function reconcileOrder(saved: string[] | null, maps: SpinUpMap[]): string[] {
 }
 
 export function MapSpinUp({ embedded = false }: { embedded?: boolean }) {
-  const { status } = useStatus()
-  const vmRunning = status?.vm?.running === true
   const [maps, setMaps] = useState<SpinUpMap[] | null>(null)
   const [missingSections, setMissingSections] = useState<SpinUpMissingSection[]>([])
   const [notStartedSections, setNotStartedSections] = useState<SpinUpNotStartedSection[]>([])
@@ -452,10 +448,6 @@ export function MapSpinUp({ embedded = false }: { embedded?: boolean }) {
             simply lets you start the spawn process ahead of time, before you arrive, if desired.
           </span>
         </div>
-      </div>
-
-      <div className="mb-4">
-        <SpicefieldsCard vmRunning={vmRunning} />
       </div>
 
       {error && (

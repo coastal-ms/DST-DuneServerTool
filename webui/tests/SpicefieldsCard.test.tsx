@@ -17,11 +17,8 @@ const row = {
   dimensionIndex: 0,
   maxActive: 5,
   maxPrimed: 3,
-  currentActive: 2,
-  currentPrimed: 1,
+  currentActive: null,
   isSpawningActive: true,
-  spawnWeight: 1,
-  partitionActive: true,
 }
 
 beforeEach(() => {
@@ -35,8 +32,8 @@ afterEach(() => {
   vi.clearAllMocks()
 })
 
-describe('SpicefieldsCard primed status', () => {
-  it('hides Retail primed status while retaining Max primed configuration', async () => {
+describe('SpicefieldsCard current Funcom settings', () => {
+  it('does not infer active field counts from resource values', async () => {
     vi.mocked(getSpicefields).mockResolvedValue({
       available: true,
       adapter: 'retail-config',
@@ -49,37 +46,23 @@ describe('SpicefieldsCard primed status', () => {
         guidanceMax: 5,
         configuredOverride: true,
         adapter: 'retail-config' as const,
-        currentPrimed: null,
-        currentPrimedExact: false,
       }],
     })
 
     render(<SpicefieldsCard vmRunning />)
 
-    expect(await screen.findByText('Active on map')).toBeInTheDocument()
+    expect(await screen.findByText(/Current active count by size is unavailable/)).toBeInTheDocument()
+    expect(screen.queryByText('Active on map')).not.toBeInTheDocument()
     expect(screen.queryByText('Primed to spawn')).not.toBeInTheDocument()
     expect(screen.queryByText(/N\/A/)).not.toBeInTheDocument()
     expect(screen.getByText('Max primed')).toBeInTheDocument()
     expect(screen.getByText(/Configured override\./)).toHaveTextContent(
-      'Configured override. Funcom default: 5 active / 5 primed. DST guidance: 5 for both.',
+      'Configured override. Funcom default: 5 active / 5 primed. Approved cap: 5 for active and primed.',
     )
     expect(screen.getAllByText('Spawning').length).toBeGreaterThan(0)
   })
 
-  it('keeps exact current primed status for legacy database rows', async () => {
-    vi.mocked(getSpicefields).mockResolvedValue({
-      available: true,
-      adapter: 'legacy-db',
-      rows: [{ ...row, adapter: 'legacy-db' as const, currentPrimedExact: true }],
-    })
-
-    render(<SpicefieldsCard vmRunning />)
-
-    expect(await screen.findByText('Primed to spawn')).toBeInTheDocument()
-    expect(screen.getByText('Max primed')).toBeInTheDocument()
-  })
-
-  it('labels a changed Funcom default separately from DST guidance', async () => {
+  it('labels a changed Funcom default separately from the approved cap', async () => {
     vi.mocked(getSpicefields).mockResolvedValue({
       available: true,
       adapter: 'retail-config',
@@ -92,15 +75,13 @@ describe('SpicefieldsCard primed status', () => {
         guidanceMax: 5,
         configuredOverride: false,
         adapter: 'retail-config' as const,
-        currentPrimed: null,
-        currentPrimedExact: false,
       }],
     })
 
     render(<SpicefieldsCard vmRunning />)
 
     expect(await screen.findByText(/Current configuration\./)).toHaveTextContent(
-      'Current configuration. Funcom default: 10 active / 10 primed. DST guidance: 5 for both.',
+      'Current configuration. Funcom default: 10 active / 10 primed. Approved cap: 5 for active and primed.',
     )
   })
 })

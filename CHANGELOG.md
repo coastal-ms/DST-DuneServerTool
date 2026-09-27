@@ -13,6 +13,14 @@ here cover everything those tags shipped.
 
 ## [Unreleased]
 
+## [15.2.1] - 2026-09-26
+
+- Fix Game Config loading the saved Dew Harvest phase instead of displaying Sunset.
+- Fix Retail Server Settings parsing when ServerCustomSettings.ini starts with a UTF-8 BOM.
+- Use Funcom's current per-map INI settings for Spice Fields, enforce the Hagga/Deep Desert Active and Primed caps, and hide legacy spice tracking on DD Atlas Lifecycle and Server Health while retaining its code paths.
+- Fix the bundled Maps.ps1 startup parse error caused by a missing newline before the map-partition table.
+- Add all eight Rain of Blood CHOAM Extension reward patents to the Grant Catalog with their friendly names.
+
 ## [15.2.0] - 2026-09-22
 
 ### Added

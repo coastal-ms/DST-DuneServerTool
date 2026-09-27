@@ -10,8 +10,7 @@ import {
   saveChatCommands,
   saveChatTeleport,
 } from '../../api/gameplay'
-import { getSpicefields, saveSpicefield } from '../../api/gameconfig'
-import type { ChatCommandsState, SpicefieldType } from '../../api/types'
+import type { ChatCommandsState } from '../../api/types'
 
 // In-game !commands. Players type into game chat and DST acts on it.
 //
@@ -27,9 +26,9 @@ const DESCRIPTIONS: Record<string, string> = {
   water:   'Refills the water in that player\u2019s stillsuit, jons and canteens.',
   tp:      'Teleports the sender to an admin-saved destination on their current map. "!tp list" shows the shared list.',
   vehicle: 'Hands over a vehicle part kit plus fuel and a repair tool, to be assembled at a Vehicle Assembly. Typing !vehicle on its own lists them.',
-  small:   'Activates Small spice fields, up to the limit you have already set.',
-  medium:  'Activates Medium spice fields, up to the limit you have already set.',
-  large:   'Activates Large spice fields, up to the limit you have already set.',
+  small:   'Manual field activation is unavailable on the current Funcom server build.',
+  medium:  'Manual field activation is unavailable on the current Funcom server build.',
+  large:   'Manual field activation is unavailable on the current Funcom server build.',
 }
 
 const ORDER = ['kit', 'item', 'vehicle', 'water', 'tp', 'small', 'medium', 'large']
@@ -48,99 +47,6 @@ const POLL_COST: Record<number, string> = {
   1: '1.50', 3: '0.50', 5: '0.30', 10: '0.15', 15: '0.10', 30: '0.05',
 }
 
-// The cap a spice command works within is not part of this feature - it is the
-// spicefield type's own max_globally_active, which already has an editor in Game
-// Config. It is surfaced here anyway because "!large did nothing" is almost
-// always "the map is already at its limit", and making an admin leave the page
-// to find that out is the sort of thing that gets reported as a bug.
-//
-// There is one row per map+dimension, so a size can have several limits, and a
-// size with no row at all (Hagga has no Large) means the command genuinely
-// cannot do anything on that map. Both are worth showing plainly.
-function SpiceLimits({
-  size, rows, busy, onSaved,
-}: {
-  size: string
-  rows: SpicefieldType[]
-  busy: boolean
-  onSaved: (row: SpicefieldType) => void
-}) {
-  const [draft, setDraft] = useState<Record<number, string>>({})
-  const [saving, setSaving] = useState<number | null>(null)
-  const [err, setErr] = useState<string | null>(null)
-
-  const mine = rows.filter(r => r.fieldType.toLowerCase() === size)
-  // Only live/pinned partitions can drain a request, which is the same rule the
-  // command itself follows - a limit on a retired map is noise here.
-  const live = mine.filter(r => r.partitionActive !== false)
-
-  if (rows.length === 0) return null
-  if (live.length === 0) {
-    return (
-      <div className="mt-2 text-[11px] text-warning">
-        No running map has {size} spice fields, so !{size} has nothing to activate.
-      </div>
-    )
-  }
-
-  async function commit(row: SpicefieldType) {
-    const raw = draft[row.spicefieldTypeId]
-    if (raw === undefined) return
-    const n = Number(raw)
-    if (!Number.isFinite(n) || n < 0 || n === row.maxActive) {
-      setDraft(d => { const c = { ...d }; delete c[row.spicefieldTypeId]; return c })
-      return
-    }
-    setSaving(row.spicefieldTypeId); setErr(null)
-    try {
-      const res = await saveSpicefield(row.spicefieldTypeId, {
-        maxActive: n,
-        maxPrimed: row.maxPrimed,
-        isSpawningActive: row.isSpawningActive,
-        spawnWeight: row.spawnWeight,
-      })
-      onSaved(res.row)
-      setDraft(d => { const c = { ...d }; delete c[row.spicefieldTypeId]; return c })
-    } catch (e) {
-      setErr(e instanceof Error ? e.message : String(e))
-    } finally {
-      setSaving(null)
-    }
-  }
-
-  return (
-    <div className="mt-2 space-y-1">
-      {err && <div className="text-[11px] text-danger">{err}</div>}
-      {live.map(row => {
-        const id = row.spicefieldTypeId
-        const atCap = row.currentActive >= row.maxActive
-        return (
-          <div key={id} className="flex items-center gap-2 text-[11px]">
-            <span className="text-text-dim w-28 shrink-0">{row.mapName}</span>
-            <span className={atCap ? 'text-warning' : 'text-text-muted'}>
-              {row.currentActive} of {row.maxActive} active
-            </span>
-            <span className="text-text-dim ml-auto">limit</span>
-            <input
-              type="text" inputMode="numeric"
-              value={draft[id] ?? String(row.maxActive)}
-              disabled={busy || saving === id}
-              onChange={e => setDraft(d => ({ ...d, [id]: e.target.value.replace(/[^\d]/g, '') }))}
-              onBlur={() => void commit(row)}
-              onKeyDown={e => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur() }}
-              className="w-16 px-2 py-0.5 rounded bg-surface border border-border text-text font-mono text-[11px]"
-            />
-            {saving === id && <Icon name="Loader2" size={11} className="animate-spin text-text-dim" />}
-            {atCap && saving !== id && (
-              <span className="text-warning">at cap — raise it or !{size} will do nothing</span>
-            )}
-          </div>
-        )
-      })}
-    </div>
-  )
-}
-
 function humanCooldown(seconds: number): string {
   if (!Number.isFinite(seconds) || seconds <= 0) return 'no cooldown'
   if (seconds < 60) return `${seconds}s`
@@ -155,7 +61,6 @@ export function ChatCommandsCard() {
   const [saving, setSaving] = useState(false)
   const [err, setErr] = useState<string | null>(null)
   const [ok, setOk] = useState<string | null>(null)
-  const [spice, setSpice] = useState<SpicefieldType[]>([])
   const [onlinePlayers, setOnlinePlayers] = useState<Array<{ id: number; name: string; map: string }>>([])
   const [capturePawn, setCapturePawn] = useState<number>(0)
   const [captureName, setCaptureName] = useState('')
@@ -173,12 +78,6 @@ export function ChatCommandsCard() {
     } finally {
       setLoading(false)
     }
-    // Spice limits are a nice-to-have on this card, so a failure to read them
-    // must not make the whole card look broken.
-    try {
-      const s = await getSpicefields()
-      setSpice(s.available ? s.rows : [])
-    } catch { setSpice([]) }
     try {
       const p = await getPlayers()
       const live = p.source === 'live'
@@ -600,13 +499,9 @@ export function ChatCommandsCard() {
                 </div>
               )}
               {SPICE_VERBS.has(verb) && c.enabled && (
-                <SpiceLimits
-                  size={verb}
-                  rows={spice}
-                  busy={saving || loading}
-                  onSaved={row => setSpice(prev =>
-                    prev.map(r => (r.spicefieldTypeId === row.spicefieldTypeId ? row : r)))}
-                />
+                <div className="mt-2 text-[11px] text-warning">
+                  Funcom removed the manual spawn request from the current server build. Natural fields still use the startup caps in Game Config.
+                </div>
               )}
             </div>
           )

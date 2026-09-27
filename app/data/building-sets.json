@@ -2,7 +2,7 @@
   "_meta": {
     "source": "Authoritative grantable building-set/recipe item ids: union of dune.building_progression.learned_building_sets (live cross-check) and every building Patent/Placeable item id in gameplay-item-data.json names. Friendly names + grouping are resolved at runtime from gameplay-item-data.json. Regenerate when the game adds building sets.",
     "generated": "2026-09-22",
-    "count": 233,
+    "count": 241,
     "flagged_no_item_form": [
       "MTX_Atre_TeaSet_Patent",
       "MTX_Atre_TeaSet_Patent2",
@@ -110,6 +110,14 @@
     "MTX_Caladan_Movie_Cushion_Patent",
     "MTX_Caladan_Movie_Mural_Patent",
     "MTX_Choam_KirabTurret_Placeable",
+    "MTX_ChoamExtention_Column_Patent",
+    "MTX_ChoamExtention_Floor_01_Patent",
+    "MTX_ChoamExtention_Passageway_01_Patent",
+    "MTX_ChoamExtention_Roof_01_Patent",
+    "MTX_ChoamExtention_Wall_01_Patent",
+    "MTX_ChoamExtention_Wall_02_Patent",
+    "MTX_ChoamExtention_Wall_03_Patent",
+    "MTX_ChoamExtention_WallRoundCorner_Patent",
     "MTX_Choam_TwitchReward_Column_02_Patent",
     "MTX_Choam_TwitchReward_Column_Patent",
     "MTX_Choam_TwitchReward_Door_Patent",
@@ -246,5 +254,15 @@
     "WindTurbineOmni_Patent",
     "Windtrap_Patent",
     "WindturbineDirectional_Patent"
-  ]
+  ],
+  "labels": {
+    "MTX_ChoamExtention_Column_Patent": "CHOAM Extension Column",
+    "MTX_ChoamExtention_Floor_01_Patent": "CHOAM Extension Floor",
+    "MTX_ChoamExtention_Passageway_01_Patent": "CHOAM Extension Passageway",
+    "MTX_ChoamExtention_Roof_01_Patent": "CHOAM Extension Roof",
+    "MTX_ChoamExtention_Wall_01_Patent": "CHOAM Extension Wall 01",
+    "MTX_ChoamExtention_Wall_02_Patent": "CHOAM Extension Wall 02",
+    "MTX_ChoamExtention_Wall_03_Patent": "CHOAM Extension Wall 03",
+    "MTX_ChoamExtention_WallRoundCorner_Patent": "CHOAM Extension Wall Round Corner"
+  }
 }

@@ -112,6 +112,7 @@ function Get-DuneGameplayItemName {
 # (live cross-check) and every building Patent/Placeable item form in gameplay-item-data.json.
 # Loaded once into a case-insensitive set; friendly names come from gameplay-item-data.json.
 $script:DuneBuildingSetIds = $null
+$script:DuneBuildingSetLabels = $null
 function Get-DuneBuildingSetsPath {
     foreach ($candidate in @(
         (Join-Path $PSScriptRoot '..\..\data\building-sets.json'),
@@ -124,14 +125,19 @@ function Get-DuneBuildingSetsPath {
 function Initialize-DuneBuildingSets {
     if ($null -ne $script:DuneBuildingSetIds) { return }
     $set = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::OrdinalIgnoreCase)
+    $labels = @{}
     $path = Get-DuneBuildingSetsPath
     if ($path) {
         try {
             $json = Get-Content -LiteralPath $path -Raw | ConvertFrom-Json
             foreach ($id in @($json.ids)) { if ($id) { [void]$set.Add([string]$id) } }
+            foreach ($property in $json.labels.PSObject.Properties) {
+                if ($property.Name -and $property.Value) { $labels[[string]$property.Name] = [string]$property.Value }
+            }
         } catch {}
     }
     $script:DuneBuildingSetIds = $set
+    $script:DuneBuildingSetLabels = $labels
 }
 
 # Readable group label for a grantable building set / building recipe (Observer Twitch
@@ -142,6 +148,7 @@ function Initialize-DuneBuildingSets {
 # the appearance cosmetics, just absent from the give-item catalog.
 function Get-DuneBuildingSetGroup {
     param([string]$Id)
+    if ($Id -match '^MTX_ChoamExtention_.*_Patent$') { return 'Building Sets - El Sayldam: The Rain of Blood' }
     if ($Id -match 'TwitchReward')                                              { return 'Building Sets - Observer (Twitch)' }
     if ($Id -match 'Mural')                                                     { return 'Building Sets - Murals & Wall Art' }
     if ($Id -match 'Movie')                                                     { return 'Building Sets - Movie Collab' }
@@ -182,6 +189,10 @@ function Get-DuneCosmeticsCatalog {
         if ($group) {
             $out += @{ template = [string]$k; name = $name; group = $group }
         }
+    }
+    foreach ($id in $script:DuneBuildingSetLabels.Keys) {
+        if ($out.template -contains $id) { continue }
+        $out += @{ template = [string]$id; name = [string]$script:DuneBuildingSetLabels[$id]; group = Get-DuneBuildingSetGroup -Id $id }
     }
     $out = @($out | Sort-Object { $_.group }, { $_.name })
     return @{ ok = $true; templates = $out; total = $out.Count }

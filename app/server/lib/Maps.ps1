@@ -703,28 +703,9 @@ function Test-DuneGameServerPodName {
 #
 # Shared by Game Config's "Apply INIs & restart" and the Landsraad control card.
 # -----------------------------------------------------------------------------
-# Active map partitions — which (map, dimension) pairs actually matter right now.
-#
-# dune.spicefield_types carries one row per (map, field-size, dimension), so a
-# battlegroup that has ever run two instances of a map keeps rows for both
-# dimensions forever. Displaying them ungated shows every size twice with
-# nothing to tell the rows apart, which reads as duplicate data.
-#
-# A pair is considered active when it is LIVE (present in the battlegroup CR's
-# status.servers) or PINNED (the director keeps it warm via MinServers). Live
-# alone is not enough: on-demand maps like Deep Desert are legitimately down most
-# of the time, and gating on live only would hide them right when an operator
-# wants to tune them. Pinned alone is not enough either: always-on maps such as
-# Survival_1 never appear in director.ini and so can never be pinned.
-#
-# ASSUMPTION: dimensionIndex is the instance index, so MinServers = N pins
-# dimensions 0..N-1. That matches a multi-sietch Hagga producing dimension 1,
-# but it is inferred from observed data rather than documented by Funcom.
-# -----------------------------------------------------------------------------
-
-# Spicefield rows key maps as HaggaBasin / DeepDesert; the battlegroup CR and
-# director.ini use Survival_1 / DeepDesert_1. Normalise onto the CR's ids so one
-# naming scheme drives Game Servers, Map Spin-Up and the spice readout.
+# Active map partitions — return map/dimension pairs that are live or pinned in
+# the current battlegroup. Used by map operations that need current instances.
+# Dimension numbering is inferred from observed current battlegroup behavior.
 $script:DuneSpiceMapToServerMap = @{
     'HaggaBasin' = 'Survival_1'
     'DeepDesert' = 'DeepDesert_1'

@@ -1094,116 +1094,18 @@ function Invoke-DuneChatCommandKit {
     return @{ ok = $true; reply = $reply; given = $given; failed = $failed }
 }
 
-# !small / !medium / !large - ask the server to spawn spice fields of that size.
-#
-# WHICH FUNCTION, AND WHY (learned the hard way 2026-08-04):
-#   dune.try_prime_spicefield() looks like the obvious choice and is NOT. On a
-#   map with no active fields it moves current_globally_primed 0 -> 2 and back
-#   to 0 with current_globally_active never leaving 0 - nothing spawns.
-#   dune.request_spawn_spice_field() is the real entry point: it appends to
-#   requested_spawned_of_type, which the game server drains into an actual
-#   field. Spawning is not instant, so do not report it as such.
-#
-# ONLY EVER TARGET A RUNNING SERVER. spicefield_server_availability keeps a row
-# for every server that ever registered and nothing removes it when a map is
-# retired, so a Deep Desert used for testing months ago still looks real. A
-# request queued against a dead server is accepted, increments the counter, and
-# NEVER drains. Get-DuneActiveMapPartitions already answers "which maps are
-# live or pinned", so reuse it rather than inventing a second liveness rule.
+# Funcom's current DA-7323 migration removes every request-spawn procedure and
+# the per-server spice request tables. Do not recreate the old SQL mutation.
+# The INI startup limits remain adjustable through Game Config, but current
+# Retail exposes no supported request to manually create a new field.
 function Invoke-DuneChatCommandSpiceField {
     param([string]$Ip, [string]$Size)
 
     $label = (Get-Culture).TextInfo.ToTitleCase("$Size".ToLowerInvariant())
-    if (-not (Test-V6SpicefieldTypesAvailable -Ip $Ip)) {
-        return @{ ok = $false; reply = 'Spice field activation is unavailable on this Funcom server build.' }
+    return @{
+        ok = $false
+        reply = "Manual $label Spice Field activation is unavailable on the current Funcom server build. The server still manages fields using its configured startup limits."
     }
-
-    # Live server guids, straight from the battlegroup's own status.
-    $liveIds = @{}
-    $liveMaps = @{}
-    try {
-        $bg = (Get-V6Battlegroup -Ip $Ip).Bg
-        foreach ($s in @($bg.status.servers)) {
-            if (-not $s) { continue }
-            if ($s.PSObject.Properties['serverGuid'] -and $s.serverGuid) { $liveIds["$($s.serverGuid)"] = $true }
-            if ($s.PSObject.Properties['partitionMap'] -and $s.partitionMap) { $liveMaps["$($s.partitionMap)"] = $true }
-        }
-    } catch {
-        return @{ ok = $false; reply = 'Could not reach the server list.' }
-    }
-    if ($liveIds.Count -eq 0) {
-        return @{ ok = $false; reply = 'No game servers are running right now.' }
-    }
-
-    $safe = $Size -replace "'", "''"
-    # free_slots is the GLOBAL headroom for the type (cap minus active minus
-    # everything already queued), repeated on each row so it can be budgeted
-    # once. Budgeting per row would queue servers x headroom and overshoot -
-    # request_spawn_spice_field checks the cap at REQUEST time, not spawn time.
-    $sql = @"
-SELECT a.server_id, t.spicefield_type_id, t.map_name, a.inactive_fields_of_type,
-       GREATEST(t.max_globally_active - t.current_globally_active
-                - COALESCE((SELECT SUM(q.requested_spawned_of_type)
-                            FROM dune.spicefield_server_availability q
-                            WHERE q.spicefield_type_id = t.spicefield_type_id), 0), 0)
-FROM dune.spicefield_types t
-JOIN dune.spicefield_server_availability a USING (spicefield_type_id)
-WHERE lower(t.field_type) = lower('$safe') AND t.is_spawning_active IS TRUE
-ORDER BY t.spicefield_type_id, a.server_id;
-"@
-    try {
-        $res = Invoke-DuneSqlQuery -Ip $Ip -Sql $sql -ReadOnly $true -MaxRows 100 -TimeoutSec 25
-        if (-not $res.ok) { return @{ ok = $false; reply = 'Could not read spice field settings.' } }
-    } catch {
-        return @{ ok = $false; reply = 'Could not read spice field settings.' }
-    }
-
-    $rows = @($res.rows)
-    if ($rows.Count -eq 0) {
-        return @{ ok = $false; reply = "No $label spice fields are configured on this server." }
-    }
-
-    # Drop rows belonging to servers that are not running, then say plainly when
-    # that leaves nothing - "the map is down" is a different answer from "the
-    # cap is full", and players should be told which.
-    $usable = @($rows | Where-Object { $liveIds.ContainsKey("$($_[0])") })
-    if ($usable.Count -eq 0) {
-        $mapName = "$(@($rows)[0][2])"
-        $mapLabel = if ($mapName -eq 'DeepDesert') { 'Deep Desert' } elseif ($mapName -eq 'HaggaBasin') { 'Hagga Basin' } else { $mapName }
-        return @{ ok = $false; reply = "The $mapLabel is not running, so no $label fields can be activated." }
-    }
-
-    $budget = @{}
-    foreach ($r in $usable) {
-        $t = [int]$r[1]
-        if (-not $budget.ContainsKey($t)) { try { $budget[$t] = [int]$r[4] } catch { $budget[$t] = 0 } }
-    }
-
-    $requested = 0
-    foreach ($r in $usable) {
-        $server = [string]$r[0]
-        $t = [int]$r[1]
-        $pool = 0; try { $pool = [int]$r[3] } catch { $pool = 0 }
-        if ($pool -le 0 -or $budget[$t] -le 0) { continue }
-        $take = [math]::Min($pool, $budget[$t])
-        if ($take -gt 20) { $take = 20 }   # hard ceiling against a malformed row
-        $safeServer = $server -replace "'", "''"
-        for ($i = 0; $i -lt $take; $i++) {
-            try {
-                $r2 = Invoke-DuneSqlQuery -Ip $Ip -ReadOnly $false -MaxRows 2 -TimeoutSec 20 `
-                        -Sql "SELECT dune.request_spawn_spice_field('$safeServer', $t);"
-                if (-not $r2.ok) { break }
-                $requested++
-                $budget[$t] = $budget[$t] - 1
-                if ($budget[$t] -le 0) { break }
-            } catch { break }
-        }
-    }
-
-    if ($requested -eq 0) {
-        return @{ ok = $false; reply = "$label Spice Fields are already at their limit." }
-    }
-    return @{ ok = $true; reply = "$label Spice Fields Activated"; requested = $requested }
 }
 
 # Dispatch table.

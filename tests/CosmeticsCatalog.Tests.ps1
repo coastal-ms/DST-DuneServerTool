@@ -10,6 +10,9 @@ BeforeAll {
 }
 
 Describe 'Get-DuneBuildingSetGroup' -Tag 'Pure' {
+    It 'groups Rain of Blood CHOAM Extension rewards' {
+        Get-DuneBuildingSetGroup -Id 'MTX_ChoamExtention_Floor_01_Patent' | Should -Be 'Building Sets - El Sayldam: The Rain of Blood'
+    }
     It 'maps the Observer Twitch reward pieces' {
         Get-DuneBuildingSetGroup -Id 'MTX_Choam_TwitchReward_Wall_01_Patent' | Should -Be 'Building Sets - Observer (Twitch)'
     }
@@ -115,6 +118,25 @@ Describe 'Get-DuneCosmeticsCatalog includes the full building-set universe' -Tag
             $entry = $script:cat.templates | Where-Object { $_.template -eq $id }
             $entry.name | Should -Be $expected[$id]
             $entry.group | Should -Be 'Building Sets - Faction & House Sets'
+        }
+    }
+
+    It 'includes all eight Rain of Blood CHOAM Extension rewards with friendly names' {
+        $expected = @{
+            'MTX_ChoamExtention_Column_Patent' = 'CHOAM Extension Column'
+            'MTX_ChoamExtention_Floor_01_Patent' = 'CHOAM Extension Floor'
+            'MTX_ChoamExtention_Passageway_01_Patent' = 'CHOAM Extension Passageway'
+            'MTX_ChoamExtention_Roof_01_Patent' = 'CHOAM Extension Roof'
+            'MTX_ChoamExtention_Wall_01_Patent' = 'CHOAM Extension Wall 01'
+            'MTX_ChoamExtention_Wall_02_Patent' = 'CHOAM Extension Wall 02'
+            'MTX_ChoamExtention_Wall_03_Patent' = 'CHOAM Extension Wall 03'
+            'MTX_ChoamExtention_WallRoundCorner_Patent' = 'CHOAM Extension Wall Round Corner'
+        }
+        foreach ($id in $expected.Keys) {
+            $script:cat.templates.template | Should -Contain $id
+            $entry = $script:cat.templates | Where-Object { $_.template -eq $id }
+            $entry.name | Should -Be $expected[$id]
+            $entry.group | Should -Be 'Building Sets - El Sayldam: The Rain of Blood'
         }
     }
 
