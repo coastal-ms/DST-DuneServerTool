@@ -366,9 +366,9 @@ export function SpicefieldsCard({ vmRunning }: Props) {
                       </div>
 
                       <div className="grid grid-cols-2 gap-3 items-end md:grid-cols-[1fr_1fr_auto_auto]">
-                        <NumField label="Max active" value={d.maxActive}
+                        <NumField label="Max active" value={d.maxActive} max={r.guidanceMax ?? undefined}
                                   onChange={v => setDraft(r.spicefieldTypeId, { maxActive: v, maxPrimed: v })} />
-                        <NumField label="Max primed" value={d.maxPrimed}
+                        <NumField label="Max primed" value={d.maxPrimed} max={r.guidanceMax ?? undefined}
                                   onChange={v => setDraft(r.spicefieldTypeId, { maxPrimed: v })} />
                         <label
                           className={
@@ -424,9 +424,14 @@ export function SpicefieldsCard({ vmRunning }: Props) {
                             </>
                           )}
                           {r.guidanceMax != null && (
-                            <> DST guidance: {r.guidanceMax} for both.</>
+                            <> Approved cap: {r.guidanceMax} for active and primed.</>
                           )}
                         </div>
+                      )}
+                      {r.overCap && (
+                        <p role="alert" className="mt-2 text-[11px] text-warning">
+                          Saved INI values exceed the approved cap. They are shown unchanged; set both values at or below {r.guidanceMax} and save to correct them.
+                        </p>
                       )}
                     </div>
                   )
@@ -441,10 +446,11 @@ export function SpicefieldsCard({ vmRunning }: Props) {
   )
 }
 
-function NumField({ label, value, step, onChange }: {
+function NumField({ label, value, step, max, onChange }: {
   label: string
   value: string
   step?: string
+  max?: number
   onChange: (v: string) => void
 }) {
   return (
@@ -453,6 +459,7 @@ function NumField({ label, value, step, onChange }: {
       <input
         type="number"
         min={0}
+        max={max}
         step={step ?? 1}
         value={value}
         onChange={e => onChange(e.target.value)}

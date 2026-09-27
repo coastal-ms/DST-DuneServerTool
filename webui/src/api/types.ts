@@ -646,6 +646,7 @@ export type SpicefieldType = {
   defaultMaxActive?: number | null
   defaultMaxPrimed?: number | null
   guidanceMax?: number | null
+  overCap?: boolean
   configuredOverride?: boolean | null
   currentActive: number | null // null: current state cannot identify field size
   isSpawningActive: boolean

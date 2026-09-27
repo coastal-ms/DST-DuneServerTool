@@ -5,7 +5,6 @@ import { PageHeader } from '../components/PageHeader'
 import { Icon } from '../components/Icon'
 import { CollapsibleCard } from '../components/CollapsibleCard'
 import { useStatus } from '../hooks/useStatus'
-import { BgSpiceSummary } from './dashboard/BgSpiceSummary'
 import { ScheduledRestarts } from './dashboard/ScheduledRestarts'
 import { VmMemoryPressureBanner } from './dashboard/VmMemoryPressureBanner'
 import type { BgState, BgGameServer } from '../api/types'
@@ -385,7 +384,6 @@ export function Dashboard() {
           {showRawBg && status?.bg?.output && (
             <pre className="mt-2 text-[10px] font-mono bg-bg-dim border border-border rounded p-2 max-h-64 overflow-auto whitespace-pre-wrap break-words text-text-dim">{status.bg.output}</pre>
           )}
-          <BgSpiceSummary enabled={bgReady} />
         </CollapsibleCard>
 
         <CollapsibleCard

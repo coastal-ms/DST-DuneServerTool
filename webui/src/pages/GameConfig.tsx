@@ -44,7 +44,6 @@ import type {
   GameConfigRawUpdate,
   GameConfigClientApplyItem,
 } from '../api/types'
-import { SpicefieldsCard } from './gameconfig/SpicefieldsCard'
 import { LandclaimTimerCard } from './gameconfig/LandclaimTimerCard'
 import { DeepDesertPvpCard } from './gameconfig/DeepDesertPvpCard'
 import { BaseBackupGuardPanel } from './gameconfig/BaseBackupGuardPanel'
@@ -1664,8 +1663,6 @@ export function GameConfig({ mode = 'standard' }: { mode?: 'standard' | 'experim
 
             {!experimentalPage && (
               <>
-                <SpicefieldsCard vmRunning={vmRunning} />
-
                 <DeepDesertPvpCard vmRunning={vmRunning} />
 
                 <LandclaimTimerCard vmRunning={vmRunning} />

@@ -770,6 +770,7 @@ Register-DuneRoute -Method GET -Path '/api/gameconfig/spicefields' -Handler {
                 defaultMaxActive = if ($null -eq $_.default_max_globally_active) { $null } else { [int]$_.default_max_globally_active }
                 defaultMaxPrimed = if ($null -eq $_.default_max_globally_primed) { $null } else { [int]$_.default_max_globally_primed }
                 guidanceMax      = if ($null -eq $_.guidance_max) { $null } else { [int]$_.guidance_max }
+                overCap          = [bool]$_.over_cap
                 configuredOverride = [bool]$_.configured_override
                 currentActive    = $null
                 currentPrimed    = $null
@@ -904,6 +905,7 @@ Register-DuneRoute -Method PUT -Path '/api/gameconfig/spicefields/{id}' -Handler
                 defaultMaxActive = if ($null -eq $row.default_max_globally_active) { $null } else { [int]$row.default_max_globally_active }
                 defaultMaxPrimed = if ($null -eq $row.default_max_globally_primed) { $null } else { [int]$row.default_max_globally_primed }
                 guidanceMax      = if ($null -eq $row.guidance_max) { $null } else { [int]$row.guidance_max }
+                overCap          = [bool]$row.over_cap
                 configuredOverride = [bool]$row.configured_override
                 currentActive    = $null
                 currentPrimed    = $null
@@ -997,6 +999,7 @@ Register-DuneRoute -Method PUT -Path '/api/gameconfig/spicefields/{id}/spawning'
                 defaultMaxActive = if ($null -eq $row.default_max_globally_active) { $null } else { [int]$row.default_max_globally_active }
                 defaultMaxPrimed = if ($null -eq $row.default_max_globally_primed) { $null } else { [int]$row.default_max_globally_primed }
                 guidanceMax      = if ($null -eq $row.guidance_max) { $null } else { [int]$row.guidance_max }
+                overCap          = [bool]$row.over_cap
                 configuredOverride = [bool]$row.configured_override
                 currentActive    = $null
                 currentPrimed    = $null
