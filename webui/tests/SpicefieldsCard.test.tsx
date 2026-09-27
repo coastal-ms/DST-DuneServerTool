@@ -57,12 +57,12 @@ describe('SpicefieldsCard current Funcom settings', () => {
     expect(screen.queryByText(/N\/A/)).not.toBeInTheDocument()
     expect(screen.getByText('Max primed')).toBeInTheDocument()
     expect(screen.getByText(/Configured override\./)).toHaveTextContent(
-      'Configured override. Funcom default: 5 active / 5 primed. DST guidance: 5 for both.',
+      'Configured override. Funcom default: 5 active / 5 primed. Approved cap: 5 for active and primed.',
     )
     expect(screen.getAllByText('Spawning').length).toBeGreaterThan(0)
   })
 
-  it('labels a changed Funcom default separately from DST guidance', async () => {
+  it('labels a changed Funcom default separately from the approved cap', async () => {
     vi.mocked(getSpicefields).mockResolvedValue({
       available: true,
       adapter: 'retail-config',
@@ -81,7 +81,7 @@ describe('SpicefieldsCard current Funcom settings', () => {
     render(<SpicefieldsCard vmRunning />)
 
     expect(await screen.findByText(/Current configuration\./)).toHaveTextContent(
-      'Current configuration. Funcom default: 10 active / 10 primed. DST guidance: 5 for both.',
+      'Current configuration. Funcom default: 10 active / 10 primed. Approved cap: 5 for active and primed.',
     )
   })
 })
