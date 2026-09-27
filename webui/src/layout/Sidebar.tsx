@@ -410,21 +410,6 @@ export function Sidebar({ collapsed, onExpand }: Props) {
             {!collapsed && <span>Customize navigation</span>}
           </button>
         )}
-        <a
-          href="https://buymeacoffee.com/coastal_dst"
-          target="_blank"
-          rel="noopener noreferrer"
-          title="Support DST on Buy Me a Coffee"
-          className={
-            collapsed
-              ? 'w-full flex items-center justify-center h-8 rounded-md border border-accent/30 text-accent-bright/90 hover:text-accent-bright hover:bg-accent/10 hover:border-accent/50 transition-colors'
-              : 'w-full flex items-center justify-center gap-1.5 px-2 py-1.5 rounded-md border border-accent/30 text-accent-bright/90 hover:text-accent-bright hover:bg-accent/10 hover:border-accent/50 transition-colors uppercase tracking-widest'
-          }
-        >
-          <Icon name="Coffee" size={collapsed ? 14 : 11} />
-          {!collapsed && <span>Buy Me a Coffee</span>}
-          {!collapsed && <Icon name="ExternalLink" size={9} className="text-text-dim" />}
-        </a>
         {collapsed && testBuild && (
           <NavLink
             to="/settings"

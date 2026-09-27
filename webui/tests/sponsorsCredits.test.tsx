@@ -45,6 +45,7 @@ const EXPECTED_CREDIT_NAMES = [
   'Wick',
   'Ed O.',
   'Carl D. Holland',
+  'Wenzel32 (@Wenzel32)',
 ] as const
 
 afterEach(() => {
@@ -52,26 +53,28 @@ afterEach(() => {
   window.history.replaceState(null, '', '/')
 })
 
-describe('Sponsors & Credits', () => {
+describe('DST Credits', () => {
   it('uses the typed source as the complete, unique public credit list', () => {
     expect(SUPPORTER_CREDITS.map(credit => credit.displayName)).toEqual(EXPECTED_CREDIT_NAMES)
-    expect(new Set(SUPPORTER_CREDITS.map(credit => credit.displayName)).size).toBe(20)
-    expect(new Set(SUPPORTER_CREDITS.map(credit => credit.thanks)).size).toBe(20)
+    expect(new Set(SUPPORTER_CREDITS.map(credit => credit.displayName)).size).toBe(21)
+    expect(new Set(SUPPORTER_CREDITS.map(credit => credit.thanks)).size).toBe(21)
     expect(SUPPORTER_CREDITS.every(credit => credit.thanks.startsWith('Thank') || credit.thanks.startsWith('You') || credit.thanks.startsWith('Your'))).toBe(true)
   })
 
-  it('renders every public credit once with one separate support action', () => {
+  it('renders every public credit once without monetary solicitation', () => {
     render(<SponsorsCredits />)
 
-    expect(screen.getByRole('heading', { name: 'Sponsors & Credits' })).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: 'DST Credits' })).toBeInTheDocument()
     const dukeNotesHeading = screen.getByRole('heading', { name: 'Notes from Duke', level: 3 })
-    const credits = screen.getByRole('list', { name: 'Project supporters' })
+    const credits = screen.getByRole('list', { name: 'Supporters' })
+    expect(screen.queryByText(/buy me a coffee|donat|monetary/i)).not.toBeInTheDocument()
+    expect(screen.queryByRole('link', { name: /coffee|donat/i })).not.toBeInTheDocument()
     expect(
       screen.getByText(
         "These personal thank-you notes are written by Duke, DST's AI admin—not by Coastal. 🙂",
       ),
     ).toBeInTheDocument()
-    expect(within(credits).getAllByRole('listitem')).toHaveLength(20)
+    expect(within(credits).getAllByRole('listitem')).toHaveLength(21)
     expect(within(credits).getAllByText('— Duke', { exact: true })).toHaveLength(SUPPORTER_CREDITS.length)
     for (const name of EXPECTED_CREDIT_NAMES) {
       expect(within(credits).getAllByText(name, { exact: true })).toHaveLength(1)
@@ -80,15 +83,7 @@ describe('Sponsors & Credits', () => {
     for (const credit of SUPPORTER_CREDITS) {
       expect(within(credits).getByText(credit.thanks)).toBeInTheDocument()
     }
-    expect(screen.getAllByRole('link', { name: /Buy Me a Coffee/ })).toHaveLength(1)
-    expect(screen.getByRole('link', { name: /Buy Me a Coffee/ })).toHaveAttribute(
-      'href',
-      'https://buymeacoffee.com/coastal_dst',
-    )
-    const supportHeading = screen.getByRole('heading', { name: 'Support DST' })
-    const creditsHeading = screen.getByRole('heading', { name: 'Project Supporters' })
-    expect(supportHeading.compareDocumentPosition(creditsHeading) & Node.DOCUMENT_POSITION_FOLLOWING)
-      .toBeTruthy()
+    const creditsHeading = screen.getByRole('heading', { name: 'Supporters' })
     expect(creditsHeading.compareDocumentPosition(dukeNotesHeading) & Node.DOCUMENT_POSITION_FOLLOWING)
       .toBeTruthy()
     expect(dukeNotesHeading.compareDocumentPosition(credits) & Node.DOCUMENT_POSITION_FOLLOWING)
@@ -120,7 +115,7 @@ describe('Sponsors & Credits', () => {
 
   it('is public and preserves one direct top-menu route without crowding intermediate widths', () => {
     expect(LEGACY_ROUTE_MANIFEST.find(route => route.path === '/sponsors')).toMatchObject({
-      label: 'Sponsors & Credits',
+      label: 'DST Credits',
       access: 'all',
     })
     const remotePaths = getVisibleNavItems({
@@ -136,10 +131,10 @@ describe('Sponsors & Credits', () => {
         <MenuBar sidebarCollapsed={false} onToggleSidebar={vi.fn()} />
       </BrowserRouter>,
     )
-    const coffeeCreditsLink = screen.getByRole('link', { name: 'Thanks for the Coffee' })
-    expect(coffeeCreditsLink).toHaveAttribute('href', '/sponsors')
-    expect(coffeeCreditsLink).toHaveClass('hidden', 'xl:inline-flex')
-    fireEvent.click(coffeeCreditsLink)
+    const supportersLink = screen.getByRole('link', { name: 'Supporters' })
+    expect(supportersLink).toHaveAttribute('href', '/sponsors')
+    expect(supportersLink).toHaveClass('hidden', 'xl:inline-flex')
+    fireEvent.click(supportersLink)
     expect(window.location.pathname).toBe('/sponsors')
   })
 })

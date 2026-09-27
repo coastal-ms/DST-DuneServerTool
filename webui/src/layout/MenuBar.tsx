@@ -546,8 +546,8 @@ export function MenuBar({ sidebarCollapsed, onToggleSidebar, sidebarAvailable = 
             : 'text-text-muted hover:text-text hover:bg-surface-2/80'
         }`}
       >
-        <Icon name="Coffee" size={14} />
-        <span>Thanks for the Coffee</span>
+        <Icon name="HeartHandshake" size={14} />
+        <span>Supporters</span>
       </Link>
 
       {/* Community Discord + marketing site links, pushed to the far right of
