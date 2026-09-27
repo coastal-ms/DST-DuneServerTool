@@ -13,6 +13,12 @@ here cover everything those tags shipped.
 
 ## [Unreleased]
 
+## [15.2.1] - 2026-09-26
+
+- Fix Game Config loading the saved Dew Harvest phase instead of displaying Sunset.
+- Fix Retail Server Settings parsing when ServerCustomSettings.ini starts with a UTF-8 BOM.
+- Remove obsolete spicefield database assumptions and use Funcom's current INI settings for Spice Fields.
+
 ## [15.2.0] - 2026-09-22
 
 ### Added

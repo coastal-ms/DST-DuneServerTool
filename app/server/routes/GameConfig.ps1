@@ -102,7 +102,16 @@ Register-DuneRoute -Method GET -Path '/api/gameconfig/experimental/search' -Hand
 
 Register-DuneRoute -Method GET -Path '/api/gameconfig/time-of-day' -Handler {
     param($req, $res, $routeParams, $body)
-    Write-DuneJson -Response $res -Body (Get-DuneTwilightLockExperiment)
+    $ctx = Get-DuneGameConfigContext
+    if (-not $ctx.ok) {
+        Write-DuneError -Response $res -Status $ctx.status -Message $ctx.message
+        return
+    }
+    try {
+        Write-DuneJson -Response $res -Body (Get-DuneTwilightLockConfig -Ip $ctx.ip)
+    } catch {
+        Write-DuneError -Response $res -Status 500 -Message "Time of Day load failed: $($_.Exception.Message)"
+    }
 }
 
 Register-DuneRoute -Method POST -Path '/api/gameconfig/time-of-day/stage' -Handler {
@@ -729,7 +738,7 @@ Register-DuneRoute -Method POST -Path '/api/gameconfig/client/open' -LocalOnly -
 }
 
 # -----------------------------------------------------------------------------
-# GET /api/gameconfig/spicefields — list rows from dune.spicefield_types.
+# GET /api/gameconfig/spicefields — current Funcom UserGame.ini limits.
 # Returns: { available: true, rows: [ { spicefieldTypeId, mapName, fieldType,
 #                                       dimensionIndex,
 #                                       maxActive, maxPrimed,
@@ -745,45 +754,11 @@ Register-DuneRoute -Method GET -Path '/api/gameconfig/spicefields' -Handler {
         return
     }
     try {
-        $legacyAdapter = Test-V6SpicefieldTypesAvailable -Ip $ctx.ip
-        $retailAdapter = -not $legacyAdapter -and (Test-V6RetailResourceFieldStateAvailable -Ip $ctx.ip)
-        if (-not $legacyAdapter -and -not $retailAdapter) {
-            Write-DuneJson -Response $res -Body @{
-                available = $false
-                rows = @()
-                partitionGate = $true
-                unavailableReason = 'Spice field state is unavailable on this server build.'
-            }
-            return
-        }
-        $retail = $null
-        $raw = if ($legacyAdapter) {
-            @(Get-V6SpicefieldTypes -Ip $ctx.ip)
-        } else {
-            $retail = Get-DuneRetailSpicefieldRows -Ip $ctx.ip
-            @($retail.rows)
-        }
-
-        # Which (map, dimension) pairs are live or pinned. Annotating rather than
-        # filtering here keeps the endpoint honest: the client decides what to
-        # show, and a failure to read the battlegroup degrades to "show all"
-        # instead of silently hiding real spicefield data.
-        $active = @{}
-        $gateOk = if ($retail) { [bool]$retail.partitionGate } else { $false }
-        if ($legacyAdapter) {
-            try {
-                $ap = Get-DuneActiveMapPartitions -Ip $ctx.ip
-                $gateOk = [bool]$ap.ok
-                foreach ($p in @($ap.partitions)) {
-                    $active["$($p.mapId)|$([int]$p.dimensionIndex)"] = $p
-                }
-            } catch {}
-        }
+        $retail = Get-DuneRetailSpicefieldRows -Ip $ctx.ip
+        $raw = @($retail.rows)
 
         $rows = @($raw | ForEach-Object {
             $mapId = if ($_.map_id) { "$($_.map_id)" } else { ConvertTo-DuneServerMapId -Name "$($_.map_name)" }
-            $key   = "$mapId|$([int]$_.dimension_index)"
-            $hit   = $active[$key]
             @{
                 spicefieldTypeId = [int]$_.spicefield_type_id
                 mapName          = "$($_.map_name)"
@@ -792,30 +767,26 @@ Register-DuneRoute -Method GET -Path '/api/gameconfig/spicefields' -Handler {
                 dimensionIndex   = [int]$_.dimension_index
                 maxActive        = [int]$_.max_globally_active
                 maxPrimed        = [int]$_.max_globally_primed
-                defaultMaxActive = if ($legacyAdapter -or $null -eq $_.default_max_globally_active) { $null } else { [int]$_.default_max_globally_active }
-                defaultMaxPrimed = if ($legacyAdapter -or $null -eq $_.default_max_globally_primed) { $null } else { [int]$_.default_max_globally_primed }
-                guidanceMax      = if ($legacyAdapter -or $null -eq $_.guidance_max) { $null } else { [int]$_.guidance_max }
-                configuredOverride = if ($legacyAdapter) { $null } else { [bool]$_.configured_override }
-                currentActive    = [int]$_.current_globally_active
-                currentPrimed    = if ($legacyAdapter) { [int]$_.current_globally_primed } else { $null }
+                defaultMaxActive = if ($null -eq $_.default_max_globally_active) { $null } else { [int]$_.default_max_globally_active }
+                defaultMaxPrimed = if ($null -eq $_.default_max_globally_primed) { $null } else { [int]$_.default_max_globally_primed }
+                guidanceMax      = if ($null -eq $_.guidance_max) { $null } else { [int]$_.guidance_max }
+                configuredOverride = [bool]$_.configured_override
+                currentActive    = $null
+                currentPrimed    = $null
                 isSpawningActive = [bool]$_.is_spawning_active
                 spawnWeight      = [double]$_.global_spawn_weight
-                partitionLive    = if ($legacyAdapter) { [bool]($hit -and $hit.live) } else { [bool]$_.partition_live }
-                partitionPinned  = if ($legacyAdapter) { [bool]($hit -and $hit.pinned) } else { [bool]$_.partition_pinned }
-                partitionActive  = if ($legacyAdapter) { [bool]($null -ne $hit) } else { [bool]$_.partition_active }
-                adapter          = if ($legacyAdapter) { 'legacy-db' } else { 'retail-config' }
-                requiresRestart  = if ($legacyAdapter) { $false } else { $true }
-                supportsSpawnWeight = if ($legacyAdapter) { $true } else { $false }
-                currentPrimedExact  = if ($legacyAdapter) { $true } else { $false }
-                globalSpawning      = if ($legacyAdapter) { $false } else { $true }
+                adapter          = 'retail-config'
+                requiresRestart  = $true
+                supportsSpawnWeight = $false
+                currentPrimedExact  = $false
+                globalSpawning      = $true
             }
         })
         Write-DuneJson -Response $res -Body @{
             available = $true
-            adapter = if ($legacyAdapter) { 'legacy-db' } else { 'retail-config' }
-            requiresRestart = -not $legacyAdapter
+            adapter = 'retail-config'
+            requiresRestart = $true
             rows = $rows
-            partitionGate = $gateOk
         }
     } catch {
         Write-DuneError -Response $res -Status 500 -Message "Spicefield types load failed: $($_.Exception.Message)"
@@ -842,8 +813,7 @@ Register-DuneRoute -Method GET -Path '/api/gameconfig/spicefields/{id}/state' -H
     }
 
     try {
-        $legacyAdapter = Test-V6SpicefieldTypesAvailable -Ip $ctx.ip
-        $typeRows = if ($legacyAdapter) { @(Get-V6SpicefieldTypes -Ip $ctx.ip) } else { @((Get-DuneRetailSpicefieldRows -Ip $ctx.ip).rows) }
+        $typeRows = @((Get-DuneRetailSpicefieldRows -Ip $ctx.ip).rows)
         $typeRow = @($typeRows |
             Where-Object { [int]$_.spicefield_type_id -eq $typeId } |
             Select-Object -First 1)
@@ -875,7 +845,7 @@ Register-DuneRoute -Method GET -Path '/api/gameconfig/spicefields/{id}/state' -H
             mapName                 = $mapName
             dimensionIndex          = [int]$typeRow[0].dimension_index
             requestedFieldType      = [string]$typeRow[0].field_type
-            fieldTypeResolved       = -not $legacyAdapter
+            fieldTypeResolved       = $false
             fields                  = @($state.fields)
             totalRawValueRemaining  = [string]$state.totalRawValueRemaining
             totalAvailable          = [long]$state.totalAvailable
@@ -890,7 +860,7 @@ Register-DuneRoute -Method GET -Path '/api/gameconfig/spicefields/{id}/state' -H
 
 # -----------------------------------------------------------------------------
 # PUT /api/gameconfig/spicefields/{id} — update one spicefield_type row.
-# Body: { maxActive, maxPrimed, isSpawningActive, spawnWeight }
+# Body: { maxActive, maxPrimed, isSpawningActive }
 # Returns the freshly-fetched row.
 # -----------------------------------------------------------------------------
 Register-DuneRoute -Method PUT -Path '/api/gameconfig/spicefields/{id}' -Handler {
@@ -911,25 +881,13 @@ Register-DuneRoute -Method PUT -Path '/api/gameconfig/spicefields/{id}' -Handler
         return
     }
     try {
-        $legacyAdapter = Test-V6SpicefieldTypesAvailable -Ip $ctx.ip
-        $maxA = 0; $maxP = 0; $sw = 0.0
+        $maxA = 0; $maxP = 0
         try { $maxA = [int]$body.maxActive } catch {}
         try { $maxP = [int]$body.maxPrimed } catch {}
-        if ($null -ne $body.spawnWeight) {
-            try { $sw = [double]::Parse("$($body.spawnWeight)", [System.Globalization.CultureInfo]::InvariantCulture) } catch {}
-        }
         $isActive = [bool]$body.isSpawningActive
-        if ($legacyAdapter) {
-            Set-V6SpicefieldType -Ip $ctx.ip -TypeId $typeId `
-                -MaxActive $maxA -MaxPrimed $maxP `
-                -IsSpawningActive $isActive -SpawnWeight $sw
-            $rows = Get-V6SpicefieldTypes -Ip $ctx.ip
-            $row  = $rows | Where-Object { [int]$_.spicefield_type_id -eq $typeId } | Select-Object -First 1
-        } else {
-            $row = @(Set-DuneRetailSpicefieldRow -Ip $ctx.ip -TypeId $typeId `
-                -MaxActive $maxA -MaxPrimed $maxP -SpawningActive $isActive | Select-Object -First 1)
-            if ($row.Count -gt 0) { $row = $row[0] } else { $row = $null }
-        }
+        $row = @(Set-DuneRetailSpicefieldRow -Ip $ctx.ip -TypeId $typeId `
+            -MaxActive $maxA -MaxPrimed $maxP -SpawningActive $isActive | Select-Object -First 1)
+        if ($row.Count -gt 0) { $row = $row[0] } else { $row = $null }
         if (-not $row) {
             Write-DuneError -Response $res -Status 404 -Message "Spicefield type $typeId not found after update."
             return
@@ -943,19 +901,19 @@ Register-DuneRoute -Method PUT -Path '/api/gameconfig/spicefields/{id}' -Handler
                 dimensionIndex   = [int]$row.dimension_index
                 maxActive        = [int]$row.max_globally_active
                 maxPrimed        = [int]$row.max_globally_primed
-                defaultMaxActive = if ($legacyAdapter -or $null -eq $row.default_max_globally_active) { $null } else { [int]$row.default_max_globally_active }
-                defaultMaxPrimed = if ($legacyAdapter -or $null -eq $row.default_max_globally_primed) { $null } else { [int]$row.default_max_globally_primed }
-                guidanceMax      = if ($legacyAdapter -or $null -eq $row.guidance_max) { $null } else { [int]$row.guidance_max }
-                configuredOverride = if ($legacyAdapter) { $null } else { [bool]$row.configured_override }
-                currentActive    = [int]$row.current_globally_active
-                currentPrimed    = if ($legacyAdapter) { [int]$row.current_globally_primed } else { $null }
+                defaultMaxActive = if ($null -eq $row.default_max_globally_active) { $null } else { [int]$row.default_max_globally_active }
+                defaultMaxPrimed = if ($null -eq $row.default_max_globally_primed) { $null } else { [int]$row.default_max_globally_primed }
+                guidanceMax      = if ($null -eq $row.guidance_max) { $null } else { [int]$row.guidance_max }
+                configuredOverride = [bool]$row.configured_override
+                currentActive    = $null
+                currentPrimed    = $null
                 isSpawningActive = [bool]$row.is_spawning_active
                 spawnWeight      = [double]$row.global_spawn_weight
-                adapter          = if ($legacyAdapter) { 'legacy-db' } else { 'retail-config' }
-                requiresRestart  = -not $legacyAdapter
-                supportsSpawnWeight = [bool]$legacyAdapter
-                currentPrimedExact  = [bool]$legacyAdapter
-                globalSpawning      = -not $legacyAdapter
+                adapter          = 'retail-config'
+                requiresRestart  = $true
+                supportsSpawnWeight = $false
+                currentPrimedExact  = $false
+                globalSpawning      = $true
             }
         }
     } catch {
@@ -964,15 +922,12 @@ Register-DuneRoute -Method PUT -Path '/api/gameconfig/spicefields/{id}' -Handler
 }
 
 # -----------------------------------------------------------------------------
-# PUT /api/gameconfig/spicefields/{id}/spawning — live toggle.
+# PUT /api/gameconfig/spicefields/{id}/spawning — current Funcom master switch.
 # Body: { "active": true|false }   — must be a JSON boolean. No other shape
 # is accepted; null, missing, strings, numbers all 400.
 #
-# This endpoint exists specifically so the per-row checkbox in the UI can
-# commit each click straight to the live DB without involving the bulk
-# editor. The DB layer (Set-V6SpicefieldSpawning) only ever mutates
-# is_spawning_active for the given spicefield_type_id — no other columns,
-# no NULL, only literal TRUE/FALSE.
+# Writes the current Funcom setting to UserGame.ini. It takes effect after
+# applying INIs and restarting the battlegroup.
 # -----------------------------------------------------------------------------
 Register-DuneRoute -Method PUT -Path '/api/gameconfig/spicefields/{id}/spawning' -Handler {
     param($req, $res, $routeParams, $body)
@@ -1015,24 +970,17 @@ Register-DuneRoute -Method PUT -Path '/api/gameconfig/spicefields/{id}/spawning'
     }
 
     try {
-        $legacyAdapter = Test-V6SpicefieldTypesAvailable -Ip $ctx.ip
-        if ($legacyAdapter) {
-            Set-V6SpicefieldSpawning -Ip $ctx.ip -TypeId $typeId -Active $active
-            $rows = Get-V6SpicefieldTypes -Ip $ctx.ip
-            $row  = $rows | Where-Object { [int]$_.spicefield_type_id -eq $typeId } | Select-Object -First 1
-        } else {
-            $retailRows = @((Get-DuneRetailSpicefieldRows -Ip $ctx.ip).rows)
-            $current = @($retailRows | Where-Object { [int]$_.spicefield_type_id -eq $typeId } | Select-Object -First 1)
-            if ($current.Count -eq 0) {
-                Write-DuneError -Response $res -Status 404 -Message "Spicefield type $typeId not found."
-                return
-            }
-            $row = @(Set-DuneRetailSpicefieldRow -Ip $ctx.ip -TypeId $typeId `
-                -MaxActive ([int]$current[0].max_globally_active) `
-                -MaxPrimed ([int]$current[0].max_globally_primed) `
-                -SpawningActive $active | Select-Object -First 1)
-            if ($row.Count -gt 0) { $row = $row[0] } else { $row = $null }
+        $retailRows = @((Get-DuneRetailSpicefieldRows -Ip $ctx.ip).rows)
+        $current = @($retailRows | Where-Object { [int]$_.spicefield_type_id -eq $typeId } | Select-Object -First 1)
+        if ($current.Count -eq 0) {
+            Write-DuneError -Response $res -Status 404 -Message "Spicefield type $typeId not found."
+            return
         }
+        $row = @(Set-DuneRetailSpicefieldRow -Ip $ctx.ip -TypeId $typeId `
+            -MaxActive ([int]$current[0].max_globally_active) `
+            -MaxPrimed ([int]$current[0].max_globally_primed) `
+            -SpawningActive $active | Select-Object -First 1)
+        if ($row.Count -gt 0) { $row = $row[0] } else { $row = $null }
         if (-not $row) {
             Write-DuneError -Response $res -Status 404 -Message "Spicefield type $typeId not found after update."
             return
@@ -1046,19 +994,19 @@ Register-DuneRoute -Method PUT -Path '/api/gameconfig/spicefields/{id}/spawning'
                 dimensionIndex   = [int]$row.dimension_index
                 maxActive        = [int]$row.max_globally_active
                 maxPrimed        = [int]$row.max_globally_primed
-                defaultMaxActive = if ($legacyAdapter -or $null -eq $row.default_max_globally_active) { $null } else { [int]$row.default_max_globally_active }
-                defaultMaxPrimed = if ($legacyAdapter -or $null -eq $row.default_max_globally_primed) { $null } else { [int]$row.default_max_globally_primed }
-                guidanceMax      = if ($legacyAdapter -or $null -eq $row.guidance_max) { $null } else { [int]$row.guidance_max }
-                configuredOverride = if ($legacyAdapter) { $null } else { [bool]$row.configured_override }
-                currentActive    = [int]$row.current_globally_active
-                currentPrimed    = if ($legacyAdapter) { [int]$row.current_globally_primed } else { $null }
+                defaultMaxActive = if ($null -eq $row.default_max_globally_active) { $null } else { [int]$row.default_max_globally_active }
+                defaultMaxPrimed = if ($null -eq $row.default_max_globally_primed) { $null } else { [int]$row.default_max_globally_primed }
+                guidanceMax      = if ($null -eq $row.guidance_max) { $null } else { [int]$row.guidance_max }
+                configuredOverride = [bool]$row.configured_override
+                currentActive    = $null
+                currentPrimed    = $null
                 isSpawningActive = [bool]$row.is_spawning_active
                 spawnWeight      = [double]$row.global_spawn_weight
-                adapter          = if ($legacyAdapter) { 'legacy-db' } else { 'retail-config' }
-                requiresRestart  = -not $legacyAdapter
-                supportsSpawnWeight = [bool]$legacyAdapter
-                currentPrimedExact  = [bool]$legacyAdapter
-                globalSpawning      = -not $legacyAdapter
+                adapter          = 'retail-config'
+                requiresRestart  = $true
+                supportsSpawnWeight = $false
+                currentPrimedExact  = $false
+                globalSpawning      = $true
             }
         }
     } catch {

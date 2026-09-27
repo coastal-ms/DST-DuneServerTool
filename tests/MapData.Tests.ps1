@@ -1,4 +1,4 @@
-BeforeAll {
+﻿BeforeAll {
     . (Join-Path $PSScriptRoot '_TestHelpers.ps1')
 
     if (-not (Get-Command Invoke-DuneSqlQuery -ErrorAction SilentlyContinue)) {
@@ -40,7 +40,6 @@ BeforeAll {
         $rows = @()
         if ($IncludeSpice -or $IncludeRetailSpice) {
             $spiceColumns = @('field_id', 'map', 'dimension_index', 'spawn_time', 'value_remaining')
-            if ($IncludeSpice) { $spiceColumns += 'field_kind_id' }
             foreach ($name in $spiceColumns) {
                 if ($Omit -contains "resourcefield_state.$name") { continue }
                 $rows += ,@('column', 'resourcefield_state', $name, 'text', 'text', 'NO')
@@ -286,13 +285,13 @@ Describe 'Active spice live projection' -Tag 'MapData' {
             return New-MapDataResult `
                 -Columns @(
                     'field_id', 'map', 'dimension_index', 'spawn_time',
-                    'value_remaining', 'field_kind_id', 'x', 'y', 'z',
+                    'value_remaining', 'x', 'y', 'z',
                     'coordinate_system', 'source_count'
                 ) `
                 -Rows @(
-                    ,@('101', 'DeepDesert', '0', '605236.5', '150000', '1', $null, $null, $null, '', '3'),
-                    ,@('102', 'DeepDesert', '0', '605237.5', '150000', '1', $null, $null, $null, '', '3'),
-                    ,@('103', 'DeepDesert', '0', '605238.5', '5000', '1', $null, $null, $null, '', '3')
+                    ,@('101', 'DeepDesert', '0', '605236.5', '150000', $null, $null, $null, '', '3'),
+                    ,@('102', 'DeepDesert', '0', '605237.5', '150000', $null, $null, $null, '', '3'),
+                    ,@('103', 'DeepDesert', '0', '605238.5', '5000', $null, $null, $null, '', '3')
                 )
         }
     }
@@ -309,7 +308,7 @@ Describe 'Active spice live projection' -Tag 'MapData' {
         $result.historyStatus | Should -Be 'current-observation-only'
         $result.source.schemaFingerprint | Should -Match '^[a-f0-9]{64}$'
         $script:capturedSpiceSql | Should -Match 'dst-source:maps\.active-spice'
-        $script:capturedSpiceSql | Should -Match 'WHERE field_kind_id = 1'
+        $script:capturedSpiceSql | Should -Match 'value_remaining > 0'
         $script:capturedSpiceSql | Should -Match "map LIKE .*map_prefix"
         $result.partialReasons.GetType().FullName | Should -Be 'System.String[]'
         $result.partialReasons.Count | Should -Be 0
@@ -436,7 +435,7 @@ Describe 'Spicefield state detail projection' -Tag 'MapData' {
         $result.fields[0].fieldId | Should -Be '9007199254740992'
         $result.fields[0].valueRemaining | Should -Be '150000'
         $script:capturedSpicefieldStateSql | Should -Match 'dst-source:gameconfig\.spicefield-state'
-        $script:capturedSpicefieldStateSql | Should -Match 'WHERE field_kind_id = 1'
+        $script:capturedSpicefieldStateSql | Should -Match 'value_remaining > 0'
         $script:capturedSpicefieldStateSql | Should -Match 'value_remaining > 0'
         $script:capturedSpicefieldStateSql | Should -Match 'LIMIT .*row_limit'
     }
@@ -463,7 +462,7 @@ Describe 'Spicefield state detail projection' -Tag 'MapData' {
         $parameters.row_limit | Should -Be 200
     }
 
-    It 'filters Retail field details to the selected spice size without the removed kind column' {
+    It 'returns raw map field values without inferring size from remaining amounts' {
         $retailCapability = @{
             ok = $true
             activeSpice = @{ available = $true; adapter = 'retail-resourcefield' }
@@ -477,7 +476,8 @@ Describe 'Spicefield state detail projection' -Tag 'MapData' {
             -FieldType 'Medium' `
             -Capability $retailCapability
 
-        $script:capturedSpicefieldStateSql | Should -Match 'value_remaining BETWEEN 60001 AND 150000'
+        $script:capturedSpicefieldStateSql | Should -Match 'value_remaining > 0'
+        $script:capturedSpicefieldStateSql | Should -Not -Match 'value_remaining BETWEEN'
         $script:capturedSpicefieldStateSql | Should -Not -Match 'field_kind_id'
     }
 
@@ -548,7 +548,7 @@ Describe 'Public static POI projection' -Tag 'MapData' {
         $script:capturedPoiSql | Should -Not -Match [regex]::Escape('EMarkerPayloadType::StaticLocation')
     }
 
-    It 'reads Retail resource fields without the removed kind column' {
+    It 'reads current resource fields without inventing a kind identifier' {
         $script:mapDataQuery = 0
         Mock Invoke-DuneSqlQuery {
             param($Ip, $Sql, $ReadOnly, $MaxRows, $TimeoutSec)
@@ -560,17 +560,17 @@ Describe 'Public static POI projection' -Tag 'MapData' {
             return New-MapDataResult `
                 -Columns @(
                     'field_id', 'map', 'dimension_index', 'spawn_time',
-                    'value_remaining', 'field_kind_id', 'x', 'y', 'z',
+                    'value_remaining', 'x', 'y', 'z',
                     'coordinate_system', 'source_count'
                 ) `
-                -Rows @(,@('101', 'DeepDesert', '0', '605236.5', '150000', '1', $null, $null, $null, '', '1'))
+                -Rows @(,@('101', 'DeepDesert', '0', '605236.5', '150000', $null, $null, $null, '', '1'))
         }
 
         $result = Get-DuneActiveSpiceLive -Ip '192.0.2.1'
 
         $result.ok | Should -BeTrue
-        $result.fields[0].fieldKindId | Should -Be 1
-        $script:capturedSpiceSql | Should -Match '1::integer AS field_kind_id'
+        $result.fields[0].fieldKindId | Should -BeNullOrEmpty
+        $script:capturedSpiceSql | Should -Not -Match 'field_kind_id'
         $script:capturedSpiceSql | Should -Not -Match 'WHERE field_kind_id = 1'
     }
 

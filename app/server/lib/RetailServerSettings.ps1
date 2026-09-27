@@ -200,7 +200,9 @@ function ConvertFrom-DuneRetailServerSettingsRaw {
     $sectionFound = $false
     $malformed = New-Object 'System.Collections.Generic.List[object]'
     $lineNumber = 0
-    foreach ($line in [regex]::Split($Raw, '\r\n|\n|\r')) {
+    # A UTF-8 BOM decoded by the file browser is U+FEFF at the start of the
+    # first line, which is not matched by \s in the section-header expression.
+    foreach ($line in [regex]::Split($Raw.TrimStart([char]0xFEFF), '\r\n|\n|\r')) {
         $lineNumber++
         if ($line -match '^\s*\[(.+)\]\s*$') {
             $inside = ($Matches[1] -eq $script:DuneRetailServerSettingsSection)
@@ -553,7 +555,7 @@ function ConvertTo-DuneRetailServerSettingsUpdatedRaw {
     $parts = [regex]::Split($Raw, '(\r\n|\n|\r)')
     for ($index = 0; $index -lt $parts.Length; $index += 2) {
         $line = $parts[$index]
-        if ($line -match '^\s*\[(.+)\]\s*$') {
+        if ($line.TrimStart([char]0xFEFF) -match '^\s*\[(.+)\]\s*$') {
             $inside = ($Matches[1] -eq $script:DuneRetailServerSettingsSection)
             continue
         }

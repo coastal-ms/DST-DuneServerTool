@@ -69,6 +69,7 @@ export interface TimeOfDayLockConfig {
   available: boolean
   evidenceStatus: 'visual-phases-verified'
   candidates: Array<{ value: string; label: string }>
+  current: { startTime: string | null; timeOfDayEnabled: string | null; candidate: string | null }
   clientApply: { available: false; reason: string }
   restartRequired: true
   minimumObservationMinutes: number
@@ -238,7 +239,7 @@ export function getSpicefieldState(id: number) {
 
 export function saveSpicefield(
   id: number,
-  payload: Pick<SpicefieldType, 'maxActive' | 'maxPrimed' | 'isSpawningActive' | 'spawnWeight'>,
+  payload: Pick<SpicefieldType, 'maxActive' | 'maxPrimed' | 'isSpawningActive'>,
 ) {
   return withOnlinePlayerGuard(force =>
     api<SpicefieldSaveResponse>(`/api/gameconfig/spicefields/${id}${fq(force)}`, {

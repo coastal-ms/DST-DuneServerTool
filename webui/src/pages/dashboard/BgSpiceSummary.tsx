@@ -1,10 +1,8 @@
 // BgSpiceSummary — compact read-only spice activity readout that
 // recreates the old `bg-status` terminal layout. Tabular form: one
 // row per (map, field type), sorted by map and then largest-first.
-// Lives under the Battlegroup Info card on Server Health.
-//
-// Spawning toggle: legacy servers write the selected DB row live. Retail uses
-// the authoritative INI master switch and requires Apply INIs & restart.
+// Lives under the Battlegroup Info card on Server Health. Current Funcom field
+// state does not identify size, so this shows settings without inferred counts.
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { getSpicefields, getSpicefieldState, setSpicefieldSpawning } from '../../api/gameconfig'
 import type { SpicefieldStateResponse, SpicefieldType } from '../../api/types'
@@ -37,20 +35,6 @@ const MAP_LABEL_CLASS: Record<string, string> = {
 }
 
 // Color the Active count by fill ratio so the eye is drawn to busy fields.
-function activeFillClass(cur: number, max: number): string {
-  if (max <= 0) return 'text-text-dim'
-  const pct = cur / max
-  if (pct >= 1)    return 'text-warning font-semibold'  // at cap
-  if (pct >= 0.75) return 'text-accent-bright font-semibold'
-  if (pct >= 0.25) return 'text-ibad'
-  if (cur === 0)   return 'text-text-dim'
-  return 'text-text'
-}
-
-function primedClass(cur: number): string {
-  return cur > 0 ? 'text-accent' : 'text-text-dim'
-}
-
 function formatTime(d: Date) {
   return d.toLocaleTimeString([], { hour12: false })
 }
@@ -66,9 +50,6 @@ function formatRawInteger(value: string) {
 export function BgSpiceSummary({ enabled }: Props) {
   const [rows, setRows] = useState<SpicefieldType[] | null>(null)
   const [unavailableReason, setUnavailableReason] = useState<string | null>(null)
-  // False only when the backend could read the battlegroup; a failed read
-  // leaves this true so nothing is hidden on a transient error.
-  const [gateOk, setGateOk] = useState(false)
   const [err, setErr]   = useState<string | null>(null)
   const [updatedAt, setUpdatedAt] = useState<Date | null>(null)
   const [togglingId, setTogglingId] = useState<number | null>(null)
@@ -98,7 +79,6 @@ export function BgSpiceSummary({ enabled }: Props) {
       const data = await getSpicefields()
       setRows(data.rows)
       setUnavailableReason(data.available ? null : (data.unavailableReason ?? 'Spice field controls are unavailable on this Funcom server build.'))
-      setGateOk(data.partitionGate === true)
       setUpdatedAt(new Date())
       setErr(null)
     } catch (e) {
@@ -190,17 +170,7 @@ export function BgSpiceSummary({ enabled }: Props) {
     }
   }, [detailsRow])
 
-  // Only partitions that are live or pinned. dune.spicefield_types keeps a row
-  // per (map, size, dimension) forever, so a battlegroup that once ran two
-  // instances of a map still carries rows for the second one — which rendered as
-  // every size listed twice with nothing to distinguish them. When the backend
-  // could not read the battlegroup (partitionGate false) nothing is hidden, so a
-  // transient failure never silently drops real data.
-  const visible = useMemo(() => {
-    if (!rows) return []
-    if (!gateOk) return rows
-    return rows.filter(r => r.partitionActive !== false)
-  }, [rows, gateOk])
+  const visible = rows ?? []
 
   useEffect(() => {
     const selectedStillVisible = detailsRow !== null
@@ -233,9 +203,6 @@ export function BgSpiceSummary({ enabled }: Props) {
       return ar - br
     })
   }, [visible])
-  const showPrimedColumn = sorted.some(
-    r => r.adapter !== 'retail-config' && r.currentPrimedExact !== false && r.currentPrimed !== null,
-  )
 
   // Row span data so the Map column collapses repeats, per map+dimension.
   const mapSpan = useMemo(() => {
@@ -301,8 +268,7 @@ export function BgSpiceSummary({ enabled }: Props) {
             <tr>
               <th className="text-left font-medium pb-1">Map</th>
               <th className="text-left font-medium pb-1">Size</th>
-              <th className="text-right font-medium pb-1">Active</th>
-              {showPrimedColumn && <th className="text-right font-medium pb-1">Primed</th>}
+              <th className="text-right font-medium pb-1">Size count</th>
               <th className="text-center font-medium pb-1" title="Spawning enabled — click to toggle">Active</th>
               <th className="text-right font-medium pb-1">Details</th>
             </tr>
@@ -319,10 +285,6 @@ export function BgSpiceSummary({ enabled }: Props) {
                 ? `${mapLabel(mapId)} #${dim + 1}`
                 : mapLabel(mapId)
               const sizeCls   = SIZE_CLASS[r.fieldType] ?? 'text-text-muted'
-              const activeCls = activeFillClass(r.currentActive, r.maxActive)
-              const showRowPrimed = r.adapter !== 'retail-config'
-                && r.currentPrimedExact !== false
-                && r.currentPrimed !== null
               const cooldownMs = cooldownRemaining()
               const onCooldown = cooldownMs > 0
               const isBusy     = togglingId === r.spicefieldTypeId
@@ -332,7 +294,7 @@ export function BgSpiceSummary({ enabled }: Props) {
               const title      = isBusy ? 'Saving…'
                                  : onCooldown ? `Wait ${cdSecs}s before clicking again`
                                  : r.globalSpawning
-                                   ? `${r.isSpawningActive ? 'Spawning ENABLED' : 'Spawning DISABLED'} — Retail master switch; applies after Apply INIs & restart`
+                                   ? `${r.isSpawningActive ? 'Spawning ENABLED' : 'Spawning DISABLED'} — Funcom master switch; applies after Apply INIs & restart`
                                    : r.isSpawningActive ? 'Spawning ENABLED — click to disable'
                                                          : 'Spawning DISABLED — click to enable'
               return (
@@ -345,16 +307,7 @@ export function BgSpiceSummary({ enabled }: Props) {
                     </td>
                   ) : null}
                   <td className={`pr-3 py-0.5 ${sizeCls}`}>{r.fieldType}</td>
-                  <td className={`text-right tabular-nums pr-3 py-0.5 ${activeCls}`}>
-                    {r.currentActive}<span className="text-text-dim">/{r.maxActive}</span>
-                  </td>
-                  {showPrimedColumn && (
-                    <td className={`text-right tabular-nums pr-3 py-0.5 ${showRowPrimed ? primedClass(r.currentPrimed ?? 0) : ''}`}>
-                      {showRowPrimed
-                        ? <>{r.currentPrimed}<span className="text-text-dim">/{r.maxPrimed}</span></>
-                        : null}
-                    </td>
-                  )}
+                  <td className="text-right tabular-nums pr-3 py-0.5 text-text-dim">Unavailable</td>
                   <td className="text-center py-0.5 whitespace-nowrap">
                     <label className={`inline-flex items-center gap-1 ${disabled ? 'cursor-wait opacity-70' : 'cursor-pointer'}`}
                            title={title}>

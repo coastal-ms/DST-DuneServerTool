@@ -1,4 +1,4 @@
-// SpicefieldsCard — legacy DB editor plus the Retail INI/resource-field adapter.
+// Spice Fields editor backed by current Funcom UserGame.ini settings.
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Icon } from '../../components/Icon'
 import { CollapsibleCard } from '../../components/CollapsibleCard'
@@ -8,7 +8,6 @@ import type { SpicefieldType } from '../../api/types'
 type RowDraft = {
   maxActive: string
   maxPrimed: string
-  spawnWeight: string
   isSpawningActive: boolean
 }
 
@@ -53,7 +52,6 @@ export function SpicefieldsCard({ vmRunning }: Props) {
       next[r.spicefieldTypeId] = {
         maxActive:        String(r.maxActive),
         maxPrimed:        String(r.maxPrimed),
-        spawnWeight:      String(r.spawnWeight),
         isSpawningActive: r.isSpawningActive,
       }
     }
@@ -81,7 +79,6 @@ export function SpicefieldsCard({ vmRunning }: Props) {
               next[r.spicefieldTypeId] = {
                 maxActive:        String(r.maxActive),
                 maxPrimed:        String(r.maxPrimed),
-                spawnWeight:      String(r.spawnWeight),
                 isSpawningActive: r.isSpawningActive,
               }
             }
@@ -100,50 +97,24 @@ export function SpicefieldsCard({ vmRunning }: Props) {
 
   useEffect(() => { void load() }, [load])
 
-  // Light polling so the read-only "current active / primed" counters track
-  // what's actually on the map without the operator hitting Refresh — and
-  // without clobbering any unsaved edits in the form.
-  useEffect(() => {
-    if (!vmRunning) return
-    const id = window.setInterval(() => { void load({ silent: true }) }, 15000)
-    return () => window.clearInterval(id)
-  }, [vmRunning, load])
+  // Counts by field size are not exposed by the current Funcom state schema.
 
-  // Maps whose partition is running or pinned come first; retired instances sink
-  // to the bottom rather than being hidden. The DB keeps spicefield rows long
-  // after an instance stops existing (a Deep Desert used for testing months ago
-  // still has rows), so without this an operator sees dead maps mixed in with
-  // live ones and cannot tell which is which. Hiding them outright would be
-  // worse: partitionActive is undefined when the battlegroup could not be read,
-  // and silently dropping real data is not a trade worth making.
   const grouped = useMemo(() => {
     const out: Record<string, SpicefieldType[]> = {}
     for (const r of rows ?? []) (out[r.mapName] ??= []).push(r)
     return out
   }, [rows])
 
-  const groupOrder = useMemo(() => {
-    const isRetired = (list: SpicefieldType[]) =>
-      list.length > 0 && list.every(r => r.partitionActive === false)
-    return Object.entries(grouped).sort(([an, al], [bn, bl]) => {
-      const ar = isRetired(al) ? 1 : 0
-      const br = isRetired(bl) ? 1 : 0
-      if (ar !== br) return ar - br
-      return an.localeCompare(bn)
-    })
-  }, [grouped])
-
-  const retailAdapter = (rows ?? []).some(row => row.adapter === 'retail-config')
+  const groupOrder = useMemo(() => Object.entries(grouped).sort(([an], [bn]) => an.localeCompare(bn)), [grouped])
 
   function isDirty(r: SpicefieldType) {
     const d = drafts[r.spicefieldTypeId]
     if (!d) return false
-    // Only numeric fields gate the Save button. isSpawningActive is
-    // committed live via its own endpoint, so it never makes the row "dirty".
+    // The spawning switch saves independently; only the two cap values make
+    // the numeric row dirty.
     return (
       Number(d.maxActive)   !== r.maxActive   ||
-      Number(d.maxPrimed)   !== r.maxPrimed   ||
-      (r.supportsSpawnWeight !== false && Number(d.spawnWeight) !== r.spawnWeight)
+      Number(d.maxPrimed)   !== r.maxPrimed
     )
   }
 
@@ -161,7 +132,6 @@ export function SpicefieldsCard({ vmRunning }: Props) {
       const out = await saveSpicefield(r.spicefieldTypeId, {
         maxActive:        Math.max(0, Math.floor(Number(d.maxActive)   || 0)),
         maxPrimed:        Math.max(0, Math.floor(Number(d.maxPrimed)   || 0)),
-        spawnWeight:      Math.max(0, Number(d.spawnWeight) || 0),
         isSpawningActive: !!d.isSpawningActive,
       })
       if (out.row.globalSpawning) {
@@ -175,7 +145,6 @@ export function SpicefieldsCard({ vmRunning }: Props) {
           [r.spicefieldTypeId]: {
             maxActive:        String(out.row.maxActive),
             maxPrimed:        String(out.row.maxPrimed),
-            spawnWeight:      String(out.row.spawnWeight),
             isSpawningActive: out.row.isSpawningActive,
           },
         }))
@@ -189,10 +158,8 @@ export function SpicefieldsCard({ vmRunning }: Props) {
     }
   }
 
-  // Live-commit toggle for is_spawning_active. Each click hits the dedicated
-  // /spawning endpoint that only ever writes TRUE or FALSE to that single
-  // column. Rate-limited to one click every CLICK_COOLDOWN_MS per row to
-  // prevent a stuck user from hammering the DB.
+  // Save the current Funcom-wide spawning setting. The backend requires an
+  // INI apply and restart for it to take effect.
   async function onToggleSpawning(r: SpicefieldType, next: boolean) {
     if (cooldownRemaining('toggle', r.spicefieldTypeId) > 0) return
     if (togglingId === r.spicefieldTypeId) return
@@ -269,7 +236,7 @@ export function SpicefieldsCard({ vmRunning }: Props) {
         <span className="flex items-center gap-2">
           Spice Fields
           <span className="text-[10px] font-mono normal-case text-text-dim tracking-normal">
-            {retailAdapter ? 'Retail adapter' : 'dune.spicefield_types'}
+            Funcom settings
           </span>
         </span>
       }
@@ -283,7 +250,7 @@ export function SpicefieldsCard({ vmRunning }: Props) {
           onClick={() => void load()}
           disabled={!vmRunning || loading}
           className="btn-secondary"
-          title="Re-fetch from the live BG Postgres"
+          title="Re-read current Funcom game settings"
         >
           <Icon name={loading ? 'Loader2' : 'RefreshCw'} size={14}
                 className={loading ? 'animate-spin' : ''} />
@@ -293,29 +260,16 @@ export function SpicefieldsCard({ vmRunning }: Props) {
     >
 
       <p className="text-xs text-text-muted mb-3">
-        How many spice fields can be active &amp; primed per map/size and whether
-        spawning is enabled. <em>Current</em> active counts are read from the live
-        field state.
+        Set the startup caps per map and field size, plus Funcom's global spice
+        spawning switch.
       </p>
 
       <div className="mb-3 px-3 py-2 rounded border border-info/40 bg-info/10 text-info text-xs flex items-start gap-2">
         <Icon name="Info" size={13} className="mt-0.5 shrink-0" />
         <span>
-          {retailAdapter ? (
-            <>
-              Retail moved these controls out of Postgres. DST now writes the
-              authoritative <strong>UserGame.ini</strong> spice settings; use
-              <strong> Apply INIs &amp; restart</strong> after saving. Spawning is a
-              Retail-wide master switch, so changing it updates every row.
-            </>
-          ) : (
-            <>
-              These live adjustments take effect immediately and do not persist across
-              battlegroup restarts. Use the <strong>Spice Field Startup</strong> settings in
-              the Spice category, then <strong>Apply INIs &amp; restart</strong>, to change
-              the defaults loaded at startup.
-            </>
-          )}
+          DST writes Funcom's <strong>UserGame.ini</strong> settings. Use
+          <strong> Apply INIs &amp; restart</strong> after saving. Active field counts
+          by size are unavailable because current field state does not identify size.
         </span>
       </div>
 
@@ -338,7 +292,7 @@ export function SpicefieldsCard({ vmRunning }: Props) {
 
       {vmRunning && loading && !rows && (
         <div className="text-xs text-text-muted flex items-center gap-2">
-          <Icon name="Loader2" size={13} className="animate-spin" /> Loading from Postgres…
+          <Icon name="Loader2" size={13} className="animate-spin" /> Loading current server settings…
         </div>
       )}
 
@@ -350,53 +304,23 @@ export function SpicefieldsCard({ vmRunning }: Props) {
 
       {vmRunning && rows && rows.length === 0 && !unavailableReason && (
         <div className="text-xs text-text-muted">
-          No spicefield type rows are present.
+          No current Funcom spice field settings were returned.
         </div>
       )}
 
       {vmRunning && rows && rows.length > 0 && (
         <div className="space-y-4">
           {groupOrder.map(([mapName, list]) => {
-            const totalActive = list.reduce((s, r) => s + r.currentActive, 0)
             const totalMaxActive = list.reduce((s, r) => s + r.maxActive, 0)
-            const totalPrimed = list.reduce((s, r) => s + (r.currentPrimed ?? 0), 0)
             const totalMaxPrimed = list.reduce((s, r) => s + r.maxPrimed, 0)
-            const showPrimedStatus = list.some(
-              r => r.adapter !== 'retail-config' && r.currentPrimedExact !== false && r.currentPrimed !== null,
-            )
-            // Every row for this map belongs to a partition that is neither
-            // running nor pinned - i.e. leftovers from an instance that no
-            // longer exists.
-            const retired = list.length > 0 && list.every(r => r.partitionActive === false)
             return (
-            <div key={mapName} className={retired ? 'opacity-60' : ''}>
+            <div key={mapName}>
               <div className="flex items-center justify-between mb-2">
                 <div className="text-[11px] font-mono uppercase tracking-wider text-text-dim flex items-center gap-2">
                   {mapName}
-                  {retired && (
-                    <span className="normal-case font-sans tracking-normal text-text-dim border border-border rounded px-1.5 py-0.5"
-                          title="This map instance is not running and is not pinned. These rows are left over in the database from an instance that no longer exists.">
-                      not running
-                    </span>
-                  )}
                 </div>
-                <div className="text-[11px] text-text-muted flex items-center gap-3">
-                  <span title={`Total currently active across all ${mapName} field sizes`}>
-                    <Icon name="Sparkles" size={11} className="inline mr-1 text-accent-bright" />
-                    <span className="text-text font-medium">{totalActive}</span>
-                    <span className="text-text-dim"> / {totalMaxActive}</span>
-                    <span className="ml-1">active</span>
-                  </span>
-                  {showPrimedStatus && (
-                    <>
-                      <span className="text-border">·</span>
-                      <span title={`Total currently primed across all ${mapName} field sizes`}>
-                        <span className="text-text font-medium">{totalPrimed}</span>
-                        <span className="text-text-dim"> / {totalMaxPrimed}</span>
-                        <span className="ml-1">primed</span>
-                      </span>
-                    </>
-                  )}
+                <div className="text-[11px] text-text-muted">
+                  Startup caps: {totalMaxActive} active / {totalMaxPrimed} primed
                 </div>
               </div>
               <div className="space-y-2">
@@ -412,13 +336,6 @@ export function SpicefieldsCard({ vmRunning }: Props) {
                   const saveCdSec   = Math.ceil(saveCdMs   / 1000)
                   const toggleDisabled = !vmRunning || toggling || toggleCdMs > 0
                   const saveDisabled   = !vmRunning || !dirty || saving || saveCdMs > 0
-                  const activeAtCap = r.maxActive > 0 && r.currentActive >= r.maxActive
-                  const currentPrimed = r.currentPrimed
-                  const showRowPrimed = r.adapter !== 'retail-config'
-                    && r.currentPrimedExact !== false
-                    && currentPrimed !== null
-                  const primedAtCap = showRowPrimed && currentPrimed !== null
-                    && r.maxPrimed > 0 && currentPrimed >= r.maxPrimed
                   return (
                     <div key={r.spicefieldTypeId}
                          className="border border-border rounded-lg p-3 bg-surface-2/40">
@@ -434,45 +351,25 @@ export function SpicefieldsCard({ vmRunning }: Props) {
                           )}
                         </div>
                         <span className={r.isSpawningActive ? 'pill-success' : 'pill-muted'}
-                              title={r.isSpawningActive
-                                ? 'Game is spawning this field type'
-                                : 'Spawning disabled for this field type'}>
+                          title={r.isSpawningActive
+                                ? 'Funcom spice spawning is enabled'
+                                : 'Funcom spice spawning is disabled'}>
                           <Icon name={r.isSpawningActive ? 'Sparkles' : 'CircleOff'} size={11} />
                           {r.isSpawningActive ? 'Spawning' : 'Off'}
                         </span>
                       </div>
 
-                      <div className={`grid gap-2 mb-3 ${showRowPrimed ? 'grid-cols-2' : 'grid-cols-1'}`}>
-                        <StatTile
-                          label="Active on map"
-                          current={r.currentActive}
-                          max={r.maxActive}
-                          atCap={activeAtCap}
-                        />
-                        {showRowPrimed && (
-                          <StatTile
-                            label="Primed to spawn"
-                            current={currentPrimed ?? 0}
-                            max={r.maxPrimed}
-                            atCap={primedAtCap}
-                          />
-                        )}
+                      <div className="mb-3">
+                        <div className="rounded-md border border-border bg-base/40 px-3 py-2 text-[11px] text-text-dim">
+                          Current active count by size is unavailable in the current Funcom field-state data.
+                        </div>
                       </div>
 
-                      <div className={
-                        'grid grid-cols-2 gap-3 items-end ' +
-                        (r.supportsSpawnWeight === false
-                          ? 'md:grid-cols-[1fr_1fr_auto_auto]'
-                          : 'md:grid-cols-[1fr_1fr_1fr_auto_auto]')
-                      }>
+                      <div className="grid grid-cols-2 gap-3 items-end md:grid-cols-[1fr_1fr_auto_auto]">
                         <NumField label="Max active" value={d.maxActive}
                                   onChange={v => setDraft(r.spicefieldTypeId, { maxActive: v, maxPrimed: v })} />
                         <NumField label="Max primed" value={d.maxPrimed}
                                   onChange={v => setDraft(r.spicefieldTypeId, { maxPrimed: v })} />
-                        {r.supportsSpawnWeight !== false && (
-                          <NumField label="Spawn weight" value={d.spawnWeight} step="0.1"
-                                    onChange={v => setDraft(r.spicefieldTypeId, { spawnWeight: v })} />
-                        )}
                         <label
                           className={
                             'flex items-center gap-2 text-xs select-none pb-2 ' +
@@ -482,12 +379,8 @@ export function SpicefieldsCard({ vmRunning }: Props) {
                             toggleCdMs > 0
                               ? `Rate-limited — wait ${toggleCdSec}s before toggling again`
                               : (d.isSpawningActive
-                                  ? (r.globalSpawning
-                                      ? 'Disable the Retail master spawning switch; applies after Apply INIs & restart'
-                                      : 'Click to disable spawning for this field (live DB write)')
-                                  : (r.globalSpawning
-                                      ? 'Enable the Retail master spawning switch; applies after Apply INIs & restart'
-                                      : 'Click to enable spawning for this field (live DB write)'))
+                                  ? 'Disable the Funcom master switch; applies after Apply INIs & restart'
+                                  : 'Enable the Funcom master switch; applies after Apply INIs & restart')
                           }
                         >
                           <input
@@ -545,45 +438,6 @@ export function SpicefieldsCard({ vmRunning }: Props) {
         </div>
       )}
     </CollapsibleCard>
-  )
-}
-
-function StatTile({ label, current, max, atCap }: {
-  label: string
-  current: number | null
-  max: number
-  atCap: boolean
-}) {
-  const pct = current !== null && max > 0 ? Math.min(100, Math.round((current / max) * 100)) : 0
-  const barColor = atCap
-    ? 'bg-warning'
-    : pct >= 75 ? 'bg-accent-bright'
-    : 'bg-ibad'
-  return (
-    <div className={
-      'rounded-md border px-3 py-2 ' +
-      (atCap
-        ? 'border-warning/40 bg-warning/5'
-        : 'border-border bg-base/40')
-    }>
-      <div className="flex items-baseline justify-between gap-2">
-        <span className="text-[10px] uppercase tracking-wider text-text-dim">{label}</span>
-        {atCap && (
-          <span className="text-[10px] uppercase tracking-wider text-warning font-semibold">
-            at cap
-          </span>
-        )}
-      </div>
-      <div className="flex items-baseline gap-1 mt-0.5">
-        <span className={'font-mono text-lg leading-none ' + (atCap ? 'text-warning' : 'text-text')}>
-          {current === null ? '—' : current}
-        </span>
-        <span className="font-mono text-sm text-text-dim">/ {max}</span>
-      </div>
-      <div className="mt-1.5 h-1 rounded-full bg-surface-3 overflow-hidden">
-        <div className={'h-full ' + barColor} style={{ width: pct + '%' }} />
-      </div>
-    </div>
   )
 }
 

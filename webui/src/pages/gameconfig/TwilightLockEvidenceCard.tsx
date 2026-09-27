@@ -20,7 +20,7 @@ export function TimeOfDayLockPanel({ vmRunning }: { vmRunning: boolean }) {
       .then(result => {
         if (cancelled) return
         setConfig(result)
-        setCandidate(result.candidates[0]?.value ?? '')
+        setCandidate(result.current.candidate ?? '')
       })
       .catch(reason => {
         if (!cancelled) setError(reason instanceof Error ? reason.message : String(reason))
@@ -94,6 +94,11 @@ export function TimeOfDayLockPanel({ vmRunning }: { vmRunning: boolean }) {
           <label className="mt-3 block text-xs font-medium text-text-muted" htmlFor="twilight-candidate">
             Candidate phase value
           </label>
+          {config && (
+            <p className="mt-2 text-xs text-text-muted">
+              Installed UserGame.ini: m_StartTime={config.current.startTime ?? 'not set'}; m_bTimeOfDayEnabled={config.current.timeOfDayEnabled ?? 'not set'}.
+            </p>
+          )}
           <select
             id="twilight-candidate"
             className="mt-1 min-h-11 rounded-lg border border-border bg-surface px-3 text-sm text-text"
@@ -101,6 +106,7 @@ export function TimeOfDayLockPanel({ vmRunning }: { vmRunning: boolean }) {
             onChange={event => setCandidate(event.target.value)}
             disabled={!config || busy !== null}
           >
+            <option value="" disabled>Select a verified phase</option>
             {(config?.candidates ?? []).map(option => (
               <option key={option.value} value={option.value}>{option.label}</option>
             ))}
@@ -142,7 +148,7 @@ export function TimeOfDayLockPanel({ vmRunning }: { vmRunning: boolean }) {
         <button
           type="button"
           className="btn-primary min-h-11"
-          disabled={!vmRunning || !config?.available || busy !== null}
+          disabled={!vmRunning || !config?.available || !candidate || busy !== null}
           onClick={() => { void stage() }}
         >
           <Icon name={busy === 'stage' ? 'Loader2' : 'Sunset'} size={14} className={busy === 'stage' ? 'animate-spin' : undefined} />

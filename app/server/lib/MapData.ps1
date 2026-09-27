@@ -427,7 +427,7 @@ LIMIT 128;
         }
         activeSpice       = [ordered]@{
             available          = $spiceAvailable
-            adapter            = if ($columnsByTable['resourcefield_state'] -contains 'field_kind_id') { 'legacy-kind-filter' } else { 'retail-resourcefield' }
+            adapter            = 'retail-resourcefield'
             missingColumns     = $spiceMissing
             spatialStatus      = if ($spiceCoordinatesVerified) { 'verified' } else { 'unresolved' }
             coordinateColumns  = @($(if ($spiceCoordinatesVerified) {
@@ -546,16 +546,6 @@ function Get-DuneActiveSpiceLive {
     } else {
         "NULL::text AS x, NULL::text AS y, NULL::text AS z, ''::text AS coordinate_system,"
     }
-    $fieldKindSelect = if ($Capability.activeSpice.adapter -eq 'retail-resourcefield') {
-        '1::integer AS field_kind_id,'
-    } else {
-        'field_kind_id,'
-    }
-    $fieldKindWhere = if ($Capability.activeSpice.adapter -eq 'retail-resourcefield') {
-        ''
-    } else {
-        'field_kind_id = 1 AND'
-    }
     $sql = @"
 WITH /*__DST_PARAMETERS__*/,
 active_fields AS (
@@ -564,11 +554,10 @@ active_fields AS (
            dimension_index,
            spawn_time::text AS spawn_time,
            value_remaining::text AS value_remaining,
-           $fieldKindSelect
            $coordinateSelect
            count(*) OVER ()::text AS source_count
     FROM dune.resourcefield_state
-    WHERE $fieldKindWhere value_remaining > 0
+    WHERE value_remaining > 0
       AND map LIKE ((SELECT map_prefix FROM _dst_parameters) || '%')
     ORDER BY map, dimension_index, field_id
     LIMIT ((SELECT row_limit FROM _dst_parameters) + 1)
@@ -587,7 +576,7 @@ ORDER BY map, dimension_index, field_id;
         -TimeoutSec $TimeoutSec
     $validation = Test-DuneMapDataQueryResult -Result $result -ExpectedColumns @(
         'field_id', 'map', 'dimension_index', 'spawn_time', 'value_remaining',
-        'field_kind_id', 'x', 'y', 'z', 'coordinate_system', 'source_count'
+        'x', 'y', 'z', 'coordinate_system', 'source_count'
     )
     if (-not $validation.ok) {
         return [ordered]@{
@@ -649,7 +638,7 @@ ORDER BY map, dimension_index, field_id;
             fieldId       = $fieldId
             map           = [string]$row['map']
             dimensionIndex = [int](ConvertTo-DuneMapDataLong $row['dimension_index'])
-            fieldKindId   = [int](ConvertTo-DuneMapDataLong $row['field_kind_id'])
+            fieldKindId   = $null
             state         = 'active'
             spawnTime     = ConvertTo-DuneMapDataDouble $row['spawn_time']
             valueRemaining = ConvertTo-DuneMapDataLong $row['value_remaining']
@@ -723,16 +712,9 @@ function Get-DuneSpicefieldStateLive {
         }
     }
 
-    $fieldKindWhere = if ($Capability.activeSpice.adapter -eq 'retail-resourcefield') {
-        switch ($FieldType) {
-            'Small'  { 'value_remaining BETWEEN 1 AND 5000 AND' }
-            'Medium' { 'value_remaining BETWEEN 60001 AND 150000 AND' }
-            'Large'  { 'value_remaining BETWEEN 150001 AND 2500000 AND' }
-            default  { 'value_remaining <> 60000 AND' }
-        }
-    } else {
-        'field_kind_id = 1 AND'
-    }
+    # Current Funcom state has no field-size/kind column. Return the map's raw
+    # positive resource values without guessing a size from remaining amount.
+    $fieldKindWhere = 'value_remaining > 0 AND'
     $sql = @"
 WITH /*__DST_PARAMETERS__*/,
 matching_fields AS (
@@ -743,7 +725,7 @@ matching_fields AS (
            count(*) OVER ()::text AS source_count,
            sum(value_remaining) OVER ()::text AS total_value_remaining
     FROM dune.resourcefield_state
-    WHERE $fieldKindWhere value_remaining > 0
+    WHERE $fieldKindWhere true
       AND map = (SELECT map_name FROM _dst_parameters)
       AND dimension_index = (SELECT dimension_index FROM _dst_parameters)
     ORDER BY field_id

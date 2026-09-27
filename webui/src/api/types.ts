@@ -558,7 +558,7 @@ export type GameConfigBackupListResponse = {
   backups: GameConfigBackupEntry[]
 }
 
-// ---------- Spicefield types (dune.spicefield_types) ------------------------
+// ---------- Current Funcom spice field settings -----------------------------
 
 // In-game !commands: which are enabled, their cooldowns, and where DST listens.
 export type ChatCommandSetting = {
@@ -637,7 +637,7 @@ export type WelcomeBackState = {
 
 export type SpicefieldType = {
   spicefieldTypeId: number
-  mapName: string         // raw DB name, e.g. "HaggaBasin", "DeepDesert"
+  mapName: string         // map label such as Hagga Basin or Deep Desert
   mapId?: string          // normalised to the battlegroup's id, e.g. "Survival_1"
   fieldType: string       // e.g. "Small", "Medium", "Large"
   dimensionIndex: number  // instance index — a map can have more than one
@@ -647,32 +647,19 @@ export type SpicefieldType = {
   defaultMaxPrimed?: number | null
   guidanceMax?: number | null
   configuredOverride?: boolean | null
-  currentActive: number   // read-only — maintained by the game
-  currentPrimed: number | null // null when the server build exposes no authoritative count
+  currentActive: number | null // null: current state cannot identify field size
   isSpawningActive: boolean
-  spawnWeight: number     // float
-  adapter?: 'legacy-db' | 'retail-config'
+  adapter?: 'retail-config'
   requiresRestart?: boolean
-  supportsSpawnWeight?: boolean
-  currentPrimedExact?: boolean
   globalSpawning?: boolean
-  // Whether this (map, dimension) is currently running or kept warm by a pin.
-  // Rows survive in the DB long after an instance stops existing, so these
-  // drive what the dashboard shows.
-  partitionLive?: boolean
-  partitionPinned?: boolean
-  partitionActive?: boolean
 }
 
 export type SpicefieldsResponse = {
   available: boolean
-  adapter?: 'legacy-db' | 'retail-config'
+  adapter?: 'retail-config'
   requiresRestart?: boolean
   rows: SpicefieldType[]
   unavailableReason?: string
-  // False when the battlegroup could not be read, in which case callers should
-  // show every row rather than hide real data on a transient failure.
-  partitionGate?: boolean
 }
 
 export type SpicefieldStateField = {

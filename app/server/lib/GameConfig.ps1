@@ -152,9 +152,43 @@ function Read-DuneTwilightLiveGameConfig {
     )
     $raw = ((Invoke-V6Ssh -Ip $Ip -Cmd "sudo cat '$Path' 2>/dev/null") -join "`n")
     if ([string]::IsNullOrWhiteSpace($raw) -or $raw.TrimStart().StartsWith('ERROR:')) {
-        throw 'Twilight experiment could not verify the authoritative UserGame.ini after writing it.'
+        throw 'Twilight experiment could not read the authoritative UserGame.ini.'
     }
     return $raw
+}
+
+function Get-DuneTwilightLockConfig {
+    param([Parameter(Mandatory)][string]$Ip)
+
+    $paths = Resolve-DuneTwilightLiveGameConfigTarget -Ip $Ip
+    $raw = Read-DuneTwilightLiveGameConfig -Ip $Ip -Path $paths.game
+    $effective = Get-DuneIniEffective -Raw $raw
+    $prefix = "$script:DuneGcSecTimeOfDay||"
+    $startKey = "${prefix}m_StartTime"
+    $cycleKey = "${prefix}m_bTimeOfDayEnabled"
+    $startTime = if ($effective.ContainsKey($startKey)) { [string]$effective[$startKey] } else { $null }
+    $cycle = if ($effective.ContainsKey($cycleKey)) { [string]$effective[$cycleKey] } else { $null }
+    $candidate = $null
+    $hour = 0.0
+    if ($null -ne $startTime -and [double]::TryParse(
+        $startTime, [Globalization.NumberStyles]::Float,
+        [Globalization.CultureInfo]::InvariantCulture, [ref]$hour
+    ) -and -not [double]::IsNaN($hour) -and -not [double]::IsInfinity($hour)) {
+        foreach ($option in $script:DuneTwilightCandidates) {
+            if ($hour -eq [double]::Parse($option.value, [Globalization.CultureInfo]::InvariantCulture)) {
+                $candidate = [string]$option.value
+                break
+            }
+        }
+    }
+
+    $config = Get-DuneTwilightLockExperiment
+    $config.current = [ordered]@{
+        startTime = $startTime
+        timeOfDayEnabled = $cycle
+        candidate = $candidate
+    }
+    return $config
 }
 
 function Assert-DuneTwilightStageReadback {
@@ -2267,14 +2301,10 @@ function Get-DuneIniManagedSectionNames {
     return ,[string[]]@($names.Keys)
 }
 
-# Retail spice compatibility -------------------------------------------------
-#
-# Funcom's DA-7323 migration removed dune.spicefield_types, including its live
-# write procedures. Retail still exposes the authoritative controls in
-# SpiceHarvestingSystem's UserGame.ini settings and persists active fields in
-# dune.resourcefield_state. Keep DST's Spice Fields surface intact by adapting
-# those two sources instead of treating the missing legacy table as a feature
-# gate.
+# Retail Spice Fields ---------------------------------------------------------
+# Current Funcom exposes field limits in UserGame.ini. The current resource
+# state table has no size identifier, so DST must not infer Small/Medium/Large
+# from remaining-resource values.
 function Get-DuneRetailSpicefieldDefinitions {
     return @(
         [pscustomobject]@{ id=9101; mapName='HaggaBasin'; mapId='Survival_1';   fieldType='Small'  }
@@ -2313,23 +2343,6 @@ function Get-DuneRetailSpicefieldRows {
     }
     $spawningActive = "$spawnRaw".Trim() -match '^(?i:true|1|yes|on)$'
 
-    $activity = @{}
-    if (Get-Command Get-V6RetailSpicefieldActivity -ErrorAction SilentlyContinue) {
-        foreach ($row in @(Get-V6RetailSpicefieldActivity -Ip $Ip)) {
-            $activity["$($row.map_name)|$([int]$row.dimension_index)|$($row.field_type)"] = [int]$row.current_active
-        }
-    }
-
-    $partitions = @{}
-    $partitionGate = $false
-    try {
-        $active = Get-DuneActiveMapPartitions -Ip $Ip
-        $partitionGate = [bool]$active.ok
-        foreach ($partition in @($active.partitions)) {
-            $partitions["$($partition.mapId)|$([int]$partition.dimensionIndex)"] = $partition
-        }
-    } catch {}
-
     $rows = foreach ($definition in Get-DuneRetailSpicefieldDefinitions) {
         $configuredLimits = Get-DuneSpicefieldLimitsFromBlob -Blob $configuredBlob `
             -MapId $definition.mapId -FieldType $definition.fieldType
@@ -2353,7 +2366,6 @@ function Get-DuneRetailSpicefieldRows {
                 [int]$configuredLimits.maxPrimed -ne [int]$defaultLimits.maxPrimed)
         )
         $dimension = 0
-        $partition = $partitions["$($definition.mapId)|$dimension"]
         [pscustomobject]@{
             spicefield_type_id     = [int]$definition.id
             map_name               = [string]$definition.mapName
@@ -2366,13 +2378,10 @@ function Get-DuneRetailSpicefieldRows {
             default_max_globally_primed = if ($defaultLimits.found) { [int]$defaultLimits.maxPrimed } else { $null }
             guidance_max           = $guidanceMax
             configured_override    = $configuredOverride
-            current_globally_active = [int]$activity["$($definition.mapName)|$dimension|$($definition.fieldType)"]
+            current_globally_active = $null
             current_globally_primed = $null
             is_spawning_active     = [bool]$spawningActive
-            global_spawn_weight    = 0.5
-            partition_live         = [bool]($partition -and $partition.live)
-            partition_pinned       = [bool]($partition -and $partition.pinned)
-            partition_active       = [bool]($null -ne $partition)
+            global_spawn_weight    = 0.0
             adapter                = 'retail-config'
             requires_restart       = $true
             supports_spawn_weight  = $false
@@ -2382,7 +2391,6 @@ function Get-DuneRetailSpicefieldRows {
     }
     return @{
         rows = @($rows)
-        partitionGate = $partitionGate
         raw = $raw
         defaultRaw = $defaultRaw
         blob = $blob

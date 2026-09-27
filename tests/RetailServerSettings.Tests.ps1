@@ -18,6 +18,15 @@ FutureRetailKey=27
 }
 
 Describe 'Official Retail Server Settings parsing' -Tag 'GameConfig', 'RetailServerSettings' {
+    It 'accepts a Retail section on the first line after a UTF-8 BOM' {
+        $raw = [char]0xFEFF + "[$script:RetailSection]`nFiefdomLimit=3"
+        $result = ConvertFrom-DuneRetailServerSettingsRaw -Raw $raw
+        $result.sectionFound | Should -BeTrue
+        ($result.settings | Where-Object key -eq 'FiefdomLimit').value | Should -Be '3'
+        $updated = ConvertTo-DuneRetailServerSettingsUpdatedRaw -Raw $raw -Updates @{ FiefdomLimit = '4' }
+        $updated | Should -Be ([char]0xFEFF + "[$script:RetailSection]`nFiefdomLimit=4")
+    }
+
     It 'covers the complete current 47-key Retail catalogue' {
         (Get-DuneRetailServerSettingKeyMap).Count | Should -Be 47
     }

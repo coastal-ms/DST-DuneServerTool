@@ -754,4 +754,16 @@ Describe 'spice field verbs' {
             $act.verb | Should -Be $size
         }
     }
+
+    It 'does not issue a database spawn request on the current Funcom build' {
+        Mock Invoke-DuneSqlQuery { throw 'Spice activation must not write the database.' }
+
+        foreach ($size in @('Small', 'Medium', 'Large')) {
+            $result = Invoke-DuneChatCommandSpiceField -Ip 'vm' -Size $size
+            $result.ok | Should -BeFalse
+            $result.reply | Should -Match "Manual $size Spice Field activation is unavailable on the current Funcom server build"
+        }
+
+        Should -Not -Invoke Invoke-DuneSqlQuery
+    }
 }
