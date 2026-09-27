@@ -705,7 +705,8 @@ function Test-DuneGameServerPodName {
 # -----------------------------------------------------------------------------
 # Active map partitions — return map/dimension pairs that are live or pinned in
 # the current battlegroup. Used by map operations that need current instances.
-# Dimension numbering is inferred from observed current battlegroup behavior.$script:DuneSpiceMapToServerMap = @{
+# Dimension numbering is inferred from observed current battlegroup behavior.
+$script:DuneSpiceMapToServerMap = @{
     'HaggaBasin' = 'Survival_1'
     'DeepDesert' = 'DeepDesert_1'
 }
