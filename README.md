@@ -16,9 +16,9 @@ Solo saves.
 
 Current stable release: **v15.2.3**
 
-A targeted live database check against Dune: Awakening 1.5.3.5 on September 30, 2026
-confirmed that the dune.permission_actor and dune.permission_actor_rank tables
-exist with compatible column types for DST's permission-repair SQL.
+A targeted live database contract check against Dune: Awakening 1.5.3.5 on
+September 30, 2026 confirmed that all 61 tables and 25 functions referenced by DST
+are present in the live schema.
 
 ## What DST does
 
