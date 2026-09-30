@@ -13,6 +13,8 @@ here cover everything those tags shipped.
 
 ## [Unreleased]
 
+- Fix Market Bot's Stackables Only setting reverting after saving and reopening.
+
 ## [15.2.2] - 2026-09-27
 
 - Remove monetary support links and update the supporter and credits labels.
