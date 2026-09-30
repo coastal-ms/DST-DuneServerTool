@@ -66,12 +66,17 @@ export const RETAIL_SETTING_GUIDANCE: Record<string, RetailSettingGuidance> = {
 }
 
 function normalizeSettingValue(setting: RetailServerSetting, value: string): string {
+  if (!value.trim()) return value
+  if (setting.type === 'bool' && /^(true|false)$/i.test(value)) {
+    return value.toLowerCase() === 'true' ? 'True' : 'False'
+  }
   if (setting.type !== 'float') return value
   const parsed = Number(value)
   return Number.isFinite(parsed) ? parsed.toFixed(FLOAT_DECIMAL_PLACES) : value
 }
 
 function getDraftValidationError(setting: RetailServerSetting, value: string): string | null {
+  if (setting.present === false && !value.trim()) return null
   if (setting.type !== 'int') return null
   const parsed = Number(value)
   return /^-?\d+$/.test(value) && Number.isFinite(parsed) && Number.isInteger(parsed)
@@ -110,7 +115,7 @@ function NumericSettingControl({
 
   return (
     <div className="flex w-full min-w-0 flex-wrap items-center justify-end gap-2">
-      {setting.valid && (
+      {setting.valid && value.trim() !== '' && (
         <div className="flex min-w-0 flex-[1_1_220px] items-center gap-2">
           <input
             aria-label={`${setting.label} slider, range ${rangeDescription}`}
@@ -285,11 +290,15 @@ export function OfficialRetailServerSettingsCard({
         source: 'funcom-servergroup-user-ini-config',
         authority: 'Funcom BattleGroup operator configuration',
         revision: result.revision,
+        sectionFound: true,
         settings: nextSettings,
         target: {
           ...previous.target,
+          ...result.target,
           upstreamConfigured: true,
-          upstreamMountPath: '/home/dune/server/DuneSandbox/Saved/Config/LinuxServer',
+          upstreamMountPath: result.target?.upstreamMountPath
+            ?? previous.target.upstreamMountPath
+            ?? '/home/dune/server/DuneSandbox/Saved/Config/LinuxServer',
           upstreamFileName: 'ServerCustomSettings.ini',
         },
       } : previous)
@@ -415,7 +424,7 @@ export function OfficialRetailServerSettingsCard({
             {state.target.upstreamConfigured && (
               <div>
                 <span className="text-text-muted">Operator mount:</span>{' '}
-                <span className="font-mono">{state.target.upstreamMountPath}/{state.target.upstreamFileName}</span>
+                <span className="font-mono">{state.target.upstreamMountPath?.replace(/\/+$/, '')}/{state.target.upstreamFileName}</span>
               </div>
             )}
           </div>
@@ -423,6 +432,14 @@ export function OfficialRetailServerSettingsCard({
           {state.malformedLines.length > 0 && (
             <div className="mb-3 rounded-lg border border-warning/40 bg-warning/10 p-3 text-xs text-warning">
               {state.malformedLines.length} non-comment line{state.malformedLines.length === 1 ? '' : 's'} could not be parsed and remain visible only in the source file.
+            </div>
+          )}
+
+          {state.settings.some(setting => setting.present === false) && (
+            <div className="mb-3 border-y border-border py-2 text-xs text-text-muted">
+              Settings marked Not configured are absent from the source file; their effective game values are not known.
+              Enter a value or use Default Settings to draft the documented defaults for editable settings.
+              Only drafted changes are added when you save; no settings are written automatically.
             </div>
           )}
 
@@ -449,7 +466,10 @@ export function OfficialRetailServerSettingsCard({
                             </span>
                           </div>
                         )}
-                        {setting.inverted && (
+                        {setting.present === false && (
+                          <div className="mt-1 text-[11px] text-text-muted">Not configured in the source file.</div>
+                        )}
+                        {setting.inverted && setting.present !== false && (
                           <div className="mt-1 text-[11px] text-text-muted">
                             Inverted game key: raw <span className="font-mono">{setting.value}</span> means {setting.displayValue.toLowerCase()}.
                           </div>
@@ -476,6 +496,7 @@ export function OfficialRetailServerSettingsCard({
                             disabled={!state.target.stopped || state.target.serverPodCount !== 0 || saving}
                             className="min-w-28 border border-border bg-surface px-2 py-1 text-xs font-semibold text-text disabled:cursor-not-allowed disabled:opacity-60"
                           >
+                            {setting.present === false && <option value="">Not configured</option>}
                             <option value={setting.inverted ? 'False' : 'True'}>Enabled</option>
                             <option value={setting.inverted ? 'True' : 'False'}>Disabled</option>
                           </select>
@@ -487,6 +508,7 @@ export function OfficialRetailServerSettingsCard({
                             disabled={!state.target.stopped || state.target.serverPodCount !== 0 || saving}
                             className="min-w-36 border border-border bg-surface px-2 py-1 text-xs text-text disabled:cursor-not-allowed disabled:opacity-60"
                           >
+                            {setting.present === false && <option value="">Not configured</option>}
                             {setting.options.map(option => <option key={option} value={option}>{option}</option>)}
                           </select>
                         ) : (setting.type === 'int' || setting.type === 'float') && setting.editable ? (

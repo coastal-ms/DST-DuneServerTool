@@ -289,6 +289,16 @@ battlegroup startup, so DST writes only the durable BattleGroup
 backs up the complete current file, preserves comments/order/unknown keys, and
 uses revision and exact-readback guards; unknown future keys remain read-only
 and visible rather than being discarded.
+All 47 supported settings remain visible even when absent from the source, with
+an explicit **Not configured** state rather than an assumed live value.
+**Default Settings** drafts the documented defaults for editable settings;
+saving adds only the requested keys. Boolean values accept case variations.
+Existing operator INI files and fields are preserved. An incompatible existing
+operator mount path blocks saving instead of being silently changed; failed
+readback restores the original operator field, including removing newly added
+configuration.
+Rollback atomically checks both the resource version and the value DST wrote;
+concurrent operator changes are not overwritten.
 DST-managed blocks, local-client mirroring, and isolated Experimental features.
 </details>
 

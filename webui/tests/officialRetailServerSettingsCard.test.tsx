@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import type { RetailServerSetting } from '../src/api/types'
 import {
   OfficialRetailServerSettingsCard,
   RETAIL_SETTING_GUIDANCE,
@@ -16,6 +17,135 @@ afterEach(() => {
 })
 
 describe('Official Retail Server Settings card', () => {
+  const absentCatalogue = (): RetailServerSetting[] => Object.entries(RETAIL_SETTING_GUIDANCE).map(([key, guidance]) => ({
+    key,
+    present: false,
+    value: '',
+    displayValue: 'Not configured',
+    label: key,
+    group: 'Supported settings',
+    type: /^(True|False)$/.test(guidance.defaultValue) ? 'bool'
+      : key === 'FiefdomLimit' ? 'int'
+        : guidance.defaultValue.includes('.') ? 'float'
+          : ['DifficultyLevel', 'PVPMode'].includes(key) ? 'string' : 'select',
+    options: [guidance.defaultValue],
+    inverted: key === 'bBuildingInfiniteStability',
+    supported: true,
+    valid: true,
+    validationError: '',
+    editable: !['DifficultyLevel', 'PVPMode'].includes(key),
+    readOnly: ['DifficultyLevel', 'PVPMode'].includes(key),
+  }))
+
+  it('drafts and saves all 45 editable defaults from an empty source without inventing live values', async () => {
+    const settings = absentCatalogue()
+    const fetchMock = vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) => {
+      if (init?.method === 'PUT') {
+        const { updates } = JSON.parse(init.body as string) as { updates: Record<string, string> }
+        return new Response(JSON.stringify({
+          ok: true, applied: 45, revision: 'next',
+          backup: { path: 'backup', sha256: 'backup', timestamp: '1' },
+          restartRequired: true,
+          target: {
+            upstreamMountPath: '/home/dune/server/DuneSandbox/Saved/Config/LinuxServer/',
+            upstreamFileName: 'ServerCustomSettings.ini',
+          },
+          settings: settings.map(setting => updates[setting.key] ? {
+            ...setting, present: true, value: updates[setting.key], displayValue: updates[setting.key],
+          } : setting),
+        }))
+      }
+      return new Response(JSON.stringify({
+        available: true, revision: 'empty-source', sectionFound: false,
+        target: { stopped: true, serverPodCount: 0 },
+        settings, malformedLines: [],
+      }))
+    })
+    vi.stubGlobal('fetch', fetchMock)
+    render(<OfficialRetailServerSettingsCard vmRunning />)
+
+    const building = await screen.findByRole('spinbutton', { name: 'BuildingCostMultiplier exact value' })
+    expect(building).toHaveValue(null)
+    expect(screen.getByRole('spinbutton', { name: 'PlayerDamageToNPC exact value' })).toHaveValue(null)
+    expect(screen.getByRole('combobox', { name: 'bAllowSandworms' })).toHaveValue('')
+    expect(screen.getByText(/effective game values are not known/)).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Save' })).toBeDisabled()
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument()
+    expect(fetchMock).toHaveBeenCalledOnce()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Default Settings' }))
+    expect(building).toHaveValue(1)
+    expect(screen.getByRole('combobox', { name: 'bBuildingInfiniteStability' })).toHaveValue('False')
+    expect(screen.getByRole('button', { name: 'Save (45)' })).toBeEnabled()
+    expect(fetchMock).toHaveBeenCalledOnce()
+    fireEvent.click(screen.getByRole('button', { name: 'Save (45)' }))
+    expect(await screen.findByText(/45 settings saved with backup/)).toBeInTheDocument()
+    expect(screen.getByText('/home/dune/server/DuneSandbox/Saved/Config/LinuxServer/ServerCustomSettings.ini')).toBeInTheDocument()
+    expect(JSON.parse(fetchMock.mock.calls[1][1]?.body as string)).toEqual({
+      revision: 'empty-source',
+      updates: Object.fromEntries(Object.entries(RETAIL_SETTING_GUIDANCE)
+        .filter(([key]) => !['DifficultyLevel', 'PVPMode'].includes(key))
+        .map(([key, guidance]) => [key, guidance.defaultValue])),
+    })
+    expect(screen.getByRole('button', { name: 'Save' })).toBeDisabled()
+  })
+
+  it('adds only one explicitly edited missing setting and refresh discards the draft', async () => {
+    const settings = absentCatalogue().map(setting => setting.key === 'FiefdomLimit' ? {
+      ...setting, present: true, value: '7', displayValue: '7',
+    } : setting)
+    const fetchMock = vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) => {
+      if (init?.method === 'PUT') {
+        return new Response(JSON.stringify({
+          ok: true, applied: 1, revision: 'next',
+          backup: { path: 'backup', sha256: 'backup', timestamp: '1' },
+          restartRequired: true,
+          settings: settings.map(setting => setting.key === 'BuildingCostMultiplier' ? {
+            ...setting, present: true, value: '2.000000', displayValue: '2.000000',
+          } : setting),
+        }))
+      }
+      return new Response(JSON.stringify({
+        available: true, revision: 'partial-source', sectionFound: true,
+        target: { stopped: true, serverPodCount: 0 },
+        settings, malformedLines: [],
+      }))
+    })
+    vi.stubGlobal('fetch', fetchMock)
+    render(<OfficialRetailServerSettingsCard vmRunning />)
+    const building = await screen.findByRole('spinbutton', { name: 'BuildingCostMultiplier exact value' })
+    fireEvent.change(building, { target: { value: '2' } })
+    expect(screen.getByRole('spinbutton', { name: 'FiefdomLimit exact value' })).toHaveValue(7)
+    expect(screen.getByRole('button', { name: 'Save (1)' })).toBeEnabled()
+    fireEvent.click(screen.getByRole('button', { name: 'Refresh' }))
+    await waitFor(() => expect(building).toHaveValue(null))
+    expect(screen.getByRole('button', { name: 'Save' })).toBeDisabled()
+    fireEvent.change(building, { target: { value: '2' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Save (1)' }))
+    expect(await screen.findByText(/1 setting saved with backup/)).toBeInTheDocument()
+    expect(JSON.parse(fetchMock.mock.calls[2][1]?.body as string)).toEqual({
+      revision: 'partial-source', updates: { BuildingCostMultiplier: '2.000000' },
+    })
+    expect(screen.getByRole('button', { name: 'Save' })).toBeDisabled()
+  })
+
+  it('matches lowercase boolean source values to canonical dropdown options without a dirty draft', async () => {
+    const settings = absentCatalogue().filter(setting => setting.type === 'bool').map(setting => ({
+      ...setting, present: true, value: 'false', displayValue: setting.inverted ? 'Enabled' : 'Disabled',
+    }))
+    vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify({
+      available: true, revision: 'current',
+      target: { stopped: true, serverPodCount: 0 },
+      settings, malformedLines: [],
+    }))))
+    render(<OfficialRetailServerSettingsCard vmRunning />)
+    expect(await screen.findByRole('combobox', { name: 'bAllowSandworms' })).toHaveValue('False')
+    expect(screen.getByRole('combobox', { name: 'bBuildingInfiniteStability' })).toHaveValue('False')
+    expect(screen.getByRole('button', { name: 'Save' })).toBeDisabled()
+    fireEvent.change(screen.getByRole('combobox', { name: 'bAllowSandworms' }), { target: { value: 'True' } })
+    expect(screen.getByRole('button', { name: 'Save (1)' })).toBeEnabled()
+  })
+
   it('shows field-proven labels, raw paths, and inverted semantics read-only', async () => {
     vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify({
       available: true,

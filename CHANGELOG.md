@@ -13,6 +13,9 @@ here cover everything those tags shipped.
 
 ## [Unreleased]
 
+- Fix Official Retail Server Settings hiding absent supported keys and doing nothing when defaults are drafted from an empty section. Saves can initialize requested editable keys while preserving the source file, and boolean values accept case variations.
+- Preserve existing operator INI files and fields during Retail settings initialization, reject incompatible mount paths, and restore the exact original operator field if readback fails.
+
 ## [15.2.3] - 2026-09-29
 
 - Fix Market Bot's Stackables Only setting reverting after saving and reopening.
