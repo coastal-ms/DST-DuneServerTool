@@ -14,9 +14,11 @@ Solo saves.
 [Changelog](CHANGELOG.md) ·
 [Discord](https://discord.gg/tj2x7cywSC)**
 
-Current stable release: **v15.0.0**
+Current stable release: **v15.2.3**
 
-Confirmed compatible with Dune: Awakening **1.4.10.4**.
+A targeted live database contract check against Dune: Awakening 1.5.3.5 on
+September 30, 2026 confirmed that all 61 tables and 25 functions referenced by DST
+are present in the live schema.
 
 ## What DST does
 
@@ -289,6 +291,16 @@ battlegroup startup, so DST writes only the durable BattleGroup
 backs up the complete current file, preserves comments/order/unknown keys, and
 uses revision and exact-readback guards; unknown future keys remain read-only
 and visible rather than being discarded.
+All 47 supported settings remain visible even when absent from the source, with
+an explicit **Not configured** state rather than an assumed live value.
+**Default Settings** drafts the documented defaults for editable settings;
+saving adds only the requested keys. Boolean values accept case variations.
+Existing operator INI files and fields are preserved. An incompatible existing
+operator mount path blocks saving instead of being silently changed; failed
+readback restores the original operator field, including removing newly added
+configuration.
+Rollback atomically checks both the resource version and the value DST wrote;
+concurrent operator changes are not overwritten.
 DST-managed blocks, local-client mirroring, and isolated Experimental features.
 </details>
 

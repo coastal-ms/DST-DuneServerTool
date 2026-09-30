@@ -209,6 +209,7 @@ export type GameConfigResponse = {
 
 export type RetailServerSetting = {
   key: string
+  present?: boolean
   value: string
   displayValue: string
   label: string
@@ -278,6 +279,7 @@ export type RetailServerSettingsSaveResponse = {
   restartRequired: true
   message: string
   settings: RetailServerSetting[]
+  target?: RetailServerSettingsTarget
 }
 
 export type GameConfigPodReloadResponse = {
