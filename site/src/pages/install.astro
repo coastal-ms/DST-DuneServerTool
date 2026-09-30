@@ -87,10 +87,9 @@ const base = import.meta.env.BASE_URL;
         <strong class="text-dune-text">Self-Hosted only:</strong> the{" "}
         <strong class="text-dune-text">Dune: Awakening Self-Hosted Server</strong>{" "}
         installed via Steam (provides battlegroup management and the VM image).
-        A targeted live database contract check against Dune: Awakening 1.5.3.5 on
-        September 30, 2026 found two referenced permission functions absent
-        (dune.permission_actor() and dune.permission_actor_rank()).
-        Full end-to-end compatibility is not confirmed.
+        A live database contract check against Dune: Awakening 1.5.3.5 on September 30, 2026
+        found that dune.permission_actor() and dune.permission_actor_rank() are referenced
+        by DST but absent from the database.
       </li>
       <li>
         <strong class="text-dune-text">Self-Hosted only:</strong> the{" "}
