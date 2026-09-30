@@ -13,6 +13,8 @@ here cover everything those tags shipped.
 
 ## [Unreleased]
 
+## [15.2.3] - 2026-09-29
+
 - Fix Market Bot's Stackables Only setting reverting after saving and reopening.
 - Patch vulnerable brace-expansion, fast-uri, and undici dependency chains, and align mobile animation peers with React Native 0.87.
 
