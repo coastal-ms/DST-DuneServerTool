@@ -486,7 +486,7 @@ function Save-DuneBotConfig {
     # die_target must be within 1..die_size to ever win.
     if ($cfg['die_target'] -gt $cfg['die_size']) { $cfg['die_target'] = $cfg['die_size'] }
     # Bump the revision so a config saved through the UI is never re-migrated.
-    $cfg['sane_defaults_revision'] = 1
+    $cfg['sane_defaults_revision'] = 3
 
     # Market-follow toggle changed direction -> the pricing basis is now
     # different, so Duke's existing listings are stale. Flag relist_pending in
