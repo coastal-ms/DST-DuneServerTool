@@ -16,8 +16,10 @@ Solo saves.
 
 Current stable release: **v15.2.3**
 
-Last documented compatibility verification: Dune: Awakening 1.4.10.4 (July 31, 2026).
-Compatibility with 1.5.3.5 has not been verified by DST.
+A targeted live database contract check against Dune: Awakening 1.5.3.5 on
+September 30, 2026 found two referenced permission functions absent
+(dune.permission_actor() and dune.permission_actor_rank()).
+Full end-to-end compatibility is not confirmed.
 
 ## What DST does
 
