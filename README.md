@@ -16,9 +16,9 @@ Solo saves.
 
 Current stable release: **v15.2.3**
 
-A live database contract check against Dune: Awakening 1.5.3.5 on September 30, 2026
-found that dune.permission_actor() and dune.permission_actor_rank() are referenced
-by DST but absent from the database.
+A targeted live database check against Dune: Awakening 1.5.3.5 on September 30, 2026
+confirmed that the dune.permission_actor and dune.permission_actor_rank tables
+exist with compatible column types for DST's permission-repair SQL.
 
 ## What DST does
 
