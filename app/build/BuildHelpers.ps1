@@ -47,17 +47,18 @@ function Get-DuneVersionInfo {
 
     $value = $Version.Trim()
     $identifier = '(?:0|[1-9][0-9]*|[0-9A-Za-z-]*[A-Za-z-][0-9A-Za-z-]*)'
-    $pattern = "^(?<major>0|[1-9][0-9]*)\.(?<minor>0|[1-9][0-9]*)\.(?<patch>0|[1-9][0-9]*)(?:-(?<pre>$identifier(?:\.$identifier)*))?$"
+    $pattern = "^(?<major>0|[1-9][0-9]*)\.(?<minor>0|[1-9][0-9]*)\.(?<patch>0|[1-9][0-9]*)(?:\.(?<revision>0|[1-9][0-9]*))?(?:-(?<pre>$identifier(?:\.$identifier)*))?$"
     $match = [regex]::Match($value, $pattern)
     if (-not $match.Success) {
         throw "Version must be a SemVer-compatible release version without build metadata (got '$Version')."
     }
 
     $core = "$($match.Groups['major'].Value).$($match.Groups['minor'].Value).$($match.Groups['patch'].Value)"
+    if ($match.Groups['revision'].Success) { $core += ".$($match.Groups['revision'].Value)" }
     return [pscustomobject]@{
         Version = $value
         CoreVersion = $core
-        NumericVersion = "$core.0"
+        NumericVersion = if ($match.Groups['revision'].Success) { $core } else { "$core.0" }
         IsPrerelease = $match.Groups['pre'].Success
     }
 }

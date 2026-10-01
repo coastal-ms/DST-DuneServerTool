@@ -477,8 +477,8 @@ function ConvertTo-DunePortableBlueprintPlaceable {
         x             = (ConvertTo-DuneFloat $parts[0])
         y             = (ConvertTo-DuneFloat $parts[1])
         z             = (ConvertTo-DuneFloat $parts[2])
-        rx            = (ConvertTo-DuneFloat $parts[4])
-        ry            = (ConvertTo-DuneFloat $parts[3])
+        rx            = (ConvertTo-DuneFloat $parts[3])
+        ry            = (ConvertTo-DuneFloat $parts[4])
         rz            = (ConvertTo-DuneFloat $parts[5])
     }
 }
@@ -642,7 +642,8 @@ function Import-DuneBlueprintLive {
         $yaw   = Format-DuneReal (Get-DuneBpField $pl 'ry')
         $rz  = Format-DuneReal (Get-DuneBpField $pl 'rz')
         $placId = $placeableIds.ids[$i]
-        [void]$placRows.Add("(v_bp, $placId, '$bt', '{$x,$y,$z,$yaw,$pitch,$rz}'::real[], true)")
+        # Preserve portable rotation component order in the native array.
+        [void]$placRows.Add("(v_bp, $placId, '$bt', '{$x,$y,$z,$pitch,$yaw,$rz}'::real[], true)")
     }
 
     # Resolve pentashield rows.

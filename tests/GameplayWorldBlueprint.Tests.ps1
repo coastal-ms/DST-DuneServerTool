@@ -40,7 +40,7 @@ Describe 'Portable Self-Hosted blueprint compatibility' {
         $result.ok | Should -BeTrue
         $global:CapturedBlueprintSql | Should -Match "\(v_bp, 1, 'Foundation'"
         $global:CapturedBlueprintSql | Should -Match "\(v_bp, 3, 'Wall'"
-        $global:CapturedBlueprintSql | Should -Match "\(v_bp, 1, 'Shield', '\{1,2,3,45,12,67\}'::real\[\]"
+        $global:CapturedBlueprintSql | Should -Match "\(v_bp, 1, 'Shield', '\{1,2,3,12,45,67\}'::real\[\]"
         $global:CapturedBlueprintSql | Should -Match "\(v_bp, 1, ARRAY\[10,20,30\]::smallint\[\]\)"
         Remove-Variable CapturedBlueprintSql -Scope Global
     }
@@ -90,11 +90,11 @@ Describe 'Portable Self-Hosted blueprint compatibility' {
         Assert-MockCalled Invoke-DuneSqlRawStdin -Times 0 -Exactly
     }
 
-    It 'exports persisted yaw and pitch to portable ry and rx respectively' {
+    It 'exports persisted pitch and yaw to portable rx and ry respectively' {
         $placeable = ConvertTo-DunePortableBlueprintPlaceable -Row @{
             placeable_id = 1
             building_type = 'Shield'
-            transform = '1,2,3,45,12,67'
+            transform = '1,2,3,12,45,67'
         }
 
         $placeable.rx | Should -Be 12
@@ -102,7 +102,7 @@ Describe 'Portable Self-Hosted blueprint compatibility' {
         $placeable.rz | Should -Be 67
     }
 
-    It 'round-trips nonzero base placeable rotations with the portable pitch yaw roll mapping' {
+    It 'round-trips nonzero base placeable rotations with the native pitch yaw roll array mapping' {
         $global:BaseExportQuery = 0
         $global:CapturedBlueprintSql = ''
         Mock Invoke-DuneSqlQuery {
@@ -146,7 +146,7 @@ Describe 'Portable Self-Hosted blueprint compatibility' {
         $savedPlaceable = ConvertTo-DunePortableBlueprintPlaceable -Row @{
             placeable_id = 1
             building_type = 'Storage'
-            transform = '1,2,3,30,20,10'
+            transform = '1,2,3,20,30,10'
         }
         [Math]::Abs($basePlaceable.rx - $savedPlaceable.rx) | Should -BeLessThan 0.0001
         [Math]::Abs($basePlaceable.ry - $savedPlaceable.ry) | Should -BeLessThan 0.0001
@@ -159,8 +159,8 @@ Describe 'Portable Self-Hosted blueprint compatibility' {
             "\(v_bp, 1, 'Storage', '\{1,2,3,([^,]+),([^,]+),([^}]+)\}'::real\[\]"
         )
         $match.Success | Should -BeTrue
-        [Math]::Abs(([double]$match.Groups[1].Value) - 30) | Should -BeLessThan 0.0001
-        [Math]::Abs(([double]$match.Groups[2].Value) - 20) | Should -BeLessThan 0.0001
+        [Math]::Abs(([double]$match.Groups[1].Value) - 20) | Should -BeLessThan 0.0001
+        [Math]::Abs(([double]$match.Groups[2].Value) - 30) | Should -BeLessThan 0.0001
         [Math]::Abs(([double]$match.Groups[3].Value) - 10) | Should -BeLessThan 0.0001
 
         Remove-Variable BaseExportQuery -Scope Global
