@@ -1084,3 +1084,42 @@ Describe 'Solo Mode backup profile isolation' {
             Should -Throw '*reparse point*'
     }
 }
+
+Describe 'Solo diagnostic export and specialization edits' {
+    BeforeEach {
+        Reset-TestSoloState
+        $script:DiagnosticLayout = New-TestSoloLayout
+        Mock Assert-DuneSoloSupportedPlatform {}
+        Mock Assert-DuneSoloGameClosed {}
+        Mock Get-DuneSoloProfile { @{ dbPath = $script:DiagnosticLayout.db; channel = 'FLS_retail' } }
+        Mock Assert-DuneSoloProgressionAdapter {}
+        Mock Get-DuneSoloAdapterDescriptor { @{ manifestPath = 'retail-adapter.json' } }
+        Mock Invoke-DuneSoloHelper { [pscustomobject]@{ ok = $true; report = [pscustomobject]@{ format = 'dst-solo-diagnostics-v1' } } }
+    }
+    It 'exports through a read-only command and excludes the source path from the returned report' {
+        $result = Export-DuneSoloDiagnostics
+        $result.ok | Should -BeTrue
+        $result.report.channel | Should -Be 'FLS_retail'
+        ($result.report | ConvertTo-Json) | Should -Not -Match 'dbPath'
+        Should -Invoke Invoke-DuneSoloHelper -Times 1 -ParameterFilter { $Command -eq 'diagnostics' -and $Arguments.input -eq $script:DiagnosticLayout.db }
+    }
+    It 'refuses diagnostics while the game is running' {
+        Mock Assert-DuneSoloGameClosed { throw 'Game is still running' }
+        { Export-DuneSoloDiagnostics } | Should -Throw '*still running*'
+        Should -Invoke Invoke-DuneSoloHelper -Times 0
+    }
+    It 'edits a single track with an explicit target and retained pre-progression backup' {
+        Set-DuneSoloSpecialization -Track Crafting -Level 37 -Confirm 'SET SOLO SPECIALIZATION'
+        Should -Invoke Invoke-DuneSoloHelper -Times 1 -ParameterFilter {
+            $Command -eq 'set-specialization' -and $Arguments.level -eq 37 -and $Arguments.track -eq 'Crafting' -and $Arguments['safety-backup'] -like '*pre-progression*game-before-set-specialization*'
+        }
+    }
+    It 'rejects out-of-range levels without invoking the helper' {
+        { Set-DuneSoloSpecialization -Track Crafting -Level 101 -Confirm 'SET SOLO SPECIALIZATION' } | Should -Throw '*0 to 100*'
+        Should -Invoke Invoke-DuneSoloHelper -Times 0
+    }
+    It 'requires the exact edit confirmation' {
+        { Set-DuneSoloSpecialization -Track Crafting -Level 37 -Confirm '' } | Should -Throw '*Confirm*'
+        Should -Invoke Invoke-DuneSoloHelper -Times 0
+    }
+}

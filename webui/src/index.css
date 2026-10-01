@@ -87,6 +87,13 @@
       radial-gradient(ellipse 60% 40% at 80% 110%, color-mix(in oklab, var(--color-ibad) 5%, transparent), transparent);
     background-attachment: fixed;
   }
+  html[data-dst-desktop],
+  html[data-dst-desktop] body,
+  html[data-dst-desktop] #root {
+    height: 100dvh;
+    min-height: 0;
+    overflow: hidden;
+  }
   select option,
   select optgroup {
     background-color: var(--color-surface-2);

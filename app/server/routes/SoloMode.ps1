@@ -475,3 +475,38 @@ Register-DuneRoute -Method PUT -Path '/api/solo/progression/points' -LocalOnly -
         Write-DuneError -Response $res -Status $status -Message $_.Exception.Message
     }
 }
+
+Register-DuneRoute -Method GET -Path '/api/solo/diagnostics' -LocalOnly -Handler {
+    param($req, $res, $routeParams, $body)
+    try {
+        $expectedProfileToken = [string]$req.QueryString['expectedProfileToken']
+        $result = Invoke-WithDuneLock -Name 'solo-profile-data' -Script {
+            Assert-DuneSoloExpectedProfile -ExpectedProfileToken $expectedProfileToken
+            Export-DuneSoloDiagnostics
+        }
+        Write-DuneJson -Response $res -Body $result
+    } catch {
+        $status = if ($_.Exception.Message -like '*still running*' -or $_.Exception.Message -like '*changed in another window*') { 409 } else { 400 }
+        Write-DuneError -Response $res -Status $status -Message $_.Exception.Message
+    }
+}
+
+Register-DuneRoute -Method PUT -Path '/api/solo/progression/specializations' -LocalOnly -Handler {
+    param($req, $res, $routeParams, $body)
+    try {
+        $track = [string](Get-DuneSoloBodyField -Body $body -Name 'track' -Default '')
+        $rawLevel = Get-DuneSoloBodyField -Body $body -Name 'level' -Default -1
+        $level = 0L
+        if (-not [long]::TryParse([Convert]::ToString($rawLevel, [Globalization.CultureInfo]::InvariantCulture), [Globalization.NumberStyles]::Integer, [Globalization.CultureInfo]::InvariantCulture, [ref]$level)) { throw 'Specialization level must be a whole number.' }
+        $confirm = [string](Get-DuneSoloBodyField -Body $body -Name 'confirm' -Default '')
+        $expectedProfileToken = [string](Get-DuneSoloBodyField -Body $body -Name 'expectedProfileToken' -Default '')
+        $result = Invoke-WithDuneLock -Name 'solo-profile-data' -Script {
+            Assert-DuneSoloExpectedProfile -ExpectedProfileToken $expectedProfileToken
+            Set-DuneSoloSpecialization -Track $track -Level $level -Confirm $confirm
+        }
+        Write-DuneJson -Response $res -Body $result
+    } catch {
+        $status = if ($_.Exception.Message -like '*still running*' -or $_.Exception.Message -like '*changed in another window*') { 409 } else { 400 }
+        Write-DuneError -Response $res -Status $status -Message $_.Exception.Message
+    }
+}

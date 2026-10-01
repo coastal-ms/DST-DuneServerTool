@@ -61,6 +61,11 @@ internal static partial class Program
             var command = RequireValue(options, "command").ToLowerInvariant();
             object result = command switch
             {
+                "diagnostics" => ExportDiagnostics(Require(options, "input")),
+                "set-specialization" => SetSpecialization(
+                    Require(options, "input"), Require(options, "safety-backup"),
+                    Require(options, "adapter"), RequireValue(options, "track"),
+                    ParseBalance(RequireValue(options, "level"), "Specialization level")),
                 "inspect" => InspectPath(
                     Require(options, "input"),
                     options.TryGetValue("catalog", out var inspectCatalog)
@@ -2366,6 +2371,37 @@ internal static partial class Program
                     "Progression self-test did not reach verified target state.");
             }
 
+            var specializationBefore = InspectPath(target).Progression;
+            var levelBackup = Path.Combine(root, "safety", "before-lower-specialization.db");
+            var beforeLevelBytes = File.ReadAllBytes(target);
+            SetSpecialization(target, levelBackup, adapterPath, "Crafting", 37);
+            var lowered = InspectPath(target).Progression;
+            if (lowered.Specializations.Single(track => track.TrackType == 1).Level != 37
+                || lowered.PurchasedRewards != specializationBefore.PurchasedRewards
+                || lowered.FremenNodesComplete != specializationBefore.FremenNodesComplete
+                || lowered.KeystoneBonusSkillPoints != specializationBefore.KeystoneBonusSkillPoints
+                || !beforeLevelBytes.SequenceEqual(File.ReadAllBytes(levelBackup)))
+                throw new InvalidOperationException("Lowering a Solo track changed rewards, journeys or backup semantics.");
+            SetSpecialization(target, Path.Combine(root, "safety", "before-zero-spec.db"), adapterPath, "Crafting", 0);
+            if (InspectPath(target).Progression.Specializations.Single(track => track.TrackType == 1).Level != 0)
+                throw new InvalidOperationException("Solo specialization did not reach zero.");
+            var beforeRejectedLevel = File.ReadAllBytes(target);
+            foreach (var invalid in new[] { (Track: "Unknown", Level: 20L), (Track: "Crafting", Level: 101L) })
+            {
+                var levelRejected = false;
+                try { SetSpecialization(target, Path.Combine(root, "safety", "invalid-level.db"), adapterPath, invalid.Track, invalid.Level); }
+                catch (ArgumentException) { levelRejected = true; }
+                if (!levelRejected || !beforeRejectedLevel.SequenceEqual(File.ReadAllBytes(target)))
+                    throw new InvalidOperationException("Invalid Solo specialization edit changed the save.");
+            }
+            var diagnosticBefore = File.ReadAllBytes(target);
+            var diagnosticJson = JsonSerializer.Serialize(ExportDiagnostics(target), JsonOptions);
+            if (!diagnosticBefore.SequenceEqual(File.ReadAllBytes(target))
+                || diagnosticJson.Contains(target, StringComparison.OrdinalIgnoreCase)
+                || diagnosticJson.Contains("playerControllerId", StringComparison.OrdinalIgnoreCase)
+                || diagnosticJson.Contains("playerPawnId", StringComparison.OrdinalIgnoreCase))
+                throw new InvalidOperationException("Solo diagnostics changed the save or disclosed identity fields.");
+
             var compatibleAdapterPath = Path.Combine(root, "compatible-adapter.json");
             File.WriteAllText(
                 compatibleAdapterPath,
@@ -2478,6 +2514,9 @@ internal static partial class Program
                     "offline-currency-write-with-safety-backup",
                     "offline-water-container-fills-with-safety-backups",
                     "offline-specialization-max-with-rewards",
+                    "offline-specialization-lowering-preserves-rewards-and-backup",
+                    "invalid-specialization-edit-leaves-save-unchanged",
+                    "read-only-solo-diagnostics-excludes-identities-and-paths",
                     "offline-find-the-fremen-completion",
                     "offline-solo-npe-completion",
                     "offline-enable-all-skills-preserves-unknowns",

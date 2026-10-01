@@ -23,6 +23,8 @@ import {
   completeSoloNpe,
   enableSoloAllSkills,
   exportSoloBlueprint,
+  exportSoloDiagnostics,
+  setSoloSpecialization,
   grantSoloItems,
   importSoloBlueprint,
   maxSoloAugmentAttributes,
@@ -2160,6 +2162,31 @@ export function SoloMode() {
       )}
       {tab === 'progression' && (
         <div className="space-y-4">
+          <div className="card p-5">
+            <h3 className="font-semibold mb-2">Solo diagnostics</h3>
+            <p className="text-sm text-text-muted mb-3">Export a read-only report of save integrity, specializations, journey conditions and progression unlock flags for support. Account IDs, character names, inventory and local paths are excluded. Close the game first, then review the downloaded report before sharing it.</p>
+            <button className="btn btn-secondary" disabled={!selectionMatchesActive || gameRunning || !!busy} onClick={async () => {
+              setBusy('diagnostics')
+              try {
+                const result = await exportSoloDiagnostics(activeProfileToken)
+                const url = URL.createObjectURL(new Blob([JSON.stringify(result.report, null, 2)], { type: 'application/json' }))
+                const link = document.createElement('a')
+                link.href = url
+                link.download = result.filename
+                link.click()
+                URL.revokeObjectURL(url)
+                setNotice({ kind: 'ok', text: 'Solo diagnostics exported. Your save was not changed.' })
+              } catch (error) {
+                setNotice({ kind: 'err', text: error instanceof Error ? error.message : String(error) })
+              } finally { setBusy(null) }
+            }}>Export Solo diagnostics</button>
+          </div>
+          <SoloSpecializationEditor
+            key={activeProfileToken}
+            tracks={inspection?.progression.specializations ?? []}
+            disabled={!canMutateActiveProfile || gameRunning || !!busy}
+            onSet={(track, level) => void runProgressionAction('set-specialization', `Set ${track} to level ${level} (existing rewards stay unlocked; journey triggers are not replayed)`, token => setSoloSpecialization(track, level, token))}
+          />
           <div className="rounded-lg border border-warning/30 bg-warning/5 px-4 py-3 text-sm flex items-start gap-2">
             <Icon name="ShieldAlert" size={15} className="text-warning mt-0.5 shrink-0" />
             <span>
@@ -2337,4 +2364,28 @@ function ProgressionActionCard({
       </button>
     </div>
   )
+}
+
+export function SoloSpecializationEditor({ tracks, disabled, onSet }: {
+  tracks: Array<{ trackType: number; level: number }>
+  disabled: boolean
+  onSet: (track: string, level: number) => void
+}) {
+  const [levels, setLevels] = useState<Record<string, string>>({})
+  const names = ['Combat', 'Crafting', 'Exploration', 'Gathering', 'Sabotage']
+  return <div className="card p-5">
+    <h3 className="font-semibold mb-2">Specialization levels</h3>
+    <p className="text-sm text-text-muted mb-3">Set an individual track from 0 to 100, including lowering a maxed track. Existing rewards and skill points are preserved. This does not replay journey objectives or grant missing cosmetic unlocks.</p>
+    <div className="space-y-3">{names.map((name, index) => {
+      const current = tracks.find(track => track.trackType === index)?.level ?? 0
+      const value = levels[name] ?? String(Math.floor(current))
+      const valid = /^\d+$/.test(value) && Number(value) >= 0 && Number(value) <= 100
+      return <div key={name} className="flex flex-wrap items-center gap-3">
+        <label className="w-28" htmlFor={`solo-level-${name}`}>{name} <span className="text-xs text-text-muted">({current})</span></label>
+        <input id={`solo-level-${name}`} className="input w-24" type="number" min={0} max={100} step={1} value={value} disabled={disabled} onChange={event => setLevels(prev => ({ ...prev, [name]: event.target.value }))} />
+        <button className="btn btn-secondary" disabled={disabled || !valid} onClick={() => onSet(name, Number(value))}>Set level</button>
+        <button className="btn btn-secondary" disabled={disabled} onClick={() => onSet(name, 0)}>Set to 0</button>
+      </div>
+    })}</div>
+  </div>
 }
