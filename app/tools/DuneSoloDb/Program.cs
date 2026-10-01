@@ -2045,8 +2045,8 @@ internal static partial class Program
                     FROM building_blueprint_placeables
                     WHERE building_blueprint_id=$id
                       AND placeable_id=1
-                      AND transform_yaw=12
-                      AND transform_pitch=45
+                      AND transform_yaw=45
+                      AND transform_pitch=12
                       AND transform_roll=67;
                     """,
                     ("$id", blueprintId));

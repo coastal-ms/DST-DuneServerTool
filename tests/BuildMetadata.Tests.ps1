@@ -91,18 +91,6 @@ Describe 'Build artifact metadata' {
         }
     }
 
-    It 'preserves four-part stable hotfix versions without adding a fifth resource component' {
-        $hotfix = Get-DuneVersionInfo -Version '15.2.3.1'
-        $hotfix.CoreVersion | Should -BeExactly '15.2.3.1'
-        $hotfix.NumericVersion | Should -BeExactly '15.2.3.1'
-        $hotfix.IsPrerelease | Should -BeFalse
-        { Get-DuneVersionInfo -Version '15.2.3.01' } | Should -Throw
-        $script:DuneBuildMetadataPresent = $true
-        $script:DuneBuildCommit = 'abcdef123456'
-        $script:DuneBuildTag = 'v15.2.3.1-test1'
-        (Get-DuneBuildMetadata).tag | Should -BeExactly 'v15.2.3.1-test1'
-    }
-
     It 'keeps stable product stamps while explicitly marking a test artifact prerelease' {
         $product = Get-DuneVersionInfo -Version '15.1.1'
 

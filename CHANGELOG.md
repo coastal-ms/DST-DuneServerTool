@@ -13,12 +13,6 @@ here cover everything those tags shipped.
 
 ## [Unreleased]
 
-## [15.2.3.1] - 2026-09-30
-
-- Correct blueprint placeable rotation component order in Self-Hosted and Solo import/export paths. Re-import affected blueprints from their original files; existing imported copies are not changed automatically.
-- Support four-part hotfix versions in installer build metadata.
-- Update the web UI's DOMPurify dependency to 3.4.16 and run PR checks for all target branches.
-
 ## [15.2.3] - 2026-09-29
 
 - Fix Market Bot's Stackables Only setting reverting after saving and reopening.
