@@ -555,3 +555,23 @@ export function setSoloProgressionPoints(
     }),
   })
 }
+
+export function exportSoloDiagnostics(expectedProfileToken: string): Promise<{
+  ok: boolean; filename: string; report: Record<string, unknown>
+}> {
+  return api(`/api/solo/diagnostics?expectedProfileToken=${encodeURIComponent(expectedProfileToken)}`)
+}
+
+export function setSoloSpecialization(track: string, level: number, expectedProfileToken: string): Promise<SoloProgressionResult> {
+  return api('/api/solo/progression/specializations', {
+    method: 'PUT',
+    body: JSON.stringify({ track, level, expectedProfileToken, confirm: 'SET SOLO SPECIALIZATION' }),
+  })
+}
+
+export function resetSoloSpecializationRewards(track: string, expectedProfileToken: string): Promise<SoloProgressionResult> {
+  return api('/api/solo/progression/specializations/reset-rewards', {
+    method: 'POST',
+    body: JSON.stringify({ track, expectedProfileToken, confirm: 'RESET SOLO SPECIALIZATION REWARDS' }),
+  })
+}

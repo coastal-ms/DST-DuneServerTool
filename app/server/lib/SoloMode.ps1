@@ -377,7 +377,7 @@ function Assert-DuneSoloGameClosed {
 
 function Invoke-DuneSoloHelper {
     param(
-        [Parameter(Mandatory)][ValidateSet('inspect','backup','restore','grant-items','delete-item','import-blueprint','list-blueprints','export-blueprint','set-currencies','fill-water','set-weapon-ammo','max-augment-attributes','max-specializations','complete-fremen','complete-npe','enable-skills','set-progression-points')][string]$Command,
+        [Parameter(Mandatory)][ValidateSet('inspect','diagnostics','set-specialization','reset-specialization-rewards','backup','restore','grant-items','delete-item','import-blueprint','list-blueprints','export-blueprint','set-currencies','fill-water','set-weapon-ammo','max-augment-attributes','max-specializations','complete-fremen','complete-npe','enable-skills','set-progression-points')][string]$Command,
         [Parameter(Mandatory)][hashtable]$Arguments
     )
 
@@ -1725,4 +1725,43 @@ function Restore-DuneSoloBackup {
         target = $profile.dbPath
         'safety-backup' = $safety
     }
+}
+function Export-DuneSoloDiagnostics {
+    Assert-DuneSoloSupportedPlatform
+    Assert-DuneSoloGameClosed
+    $profile = Get-DuneSoloProfile
+    if (-not $profile.dbPath -or -not (Test-Path -LiteralPath $profile.dbPath -PathType Leaf)) { throw 'Connect a valid Solo save before exporting diagnostics.' }
+    $result = Invoke-DuneSoloHelper -Command 'diagnostics' -Arguments @{ input = $profile.dbPath }
+    Add-Member -InputObject $result.report -NotePropertyName dstVersion -NotePropertyValue $script:DuneToolVersion -Force
+    Add-Member -InputObject $result.report -NotePropertyName channel -NotePropertyValue $profile.channel -Force
+    return @{ ok = $true; filename = ('DST-Solo-Diagnostics-' + (Get-Date).ToUniversalTime().ToString('yyyyMMdd-HHmmss') + '.json'); report = $result.report }
+}
+
+function Set-DuneSoloSpecialization {
+    param([string]$Track, [long]$Level, [string]$Confirm)
+    Assert-DuneSoloSupportedPlatform
+    if ($Confirm -ne 'SET SOLO SPECIALIZATION') { throw 'Confirm the Solo specialization edit before continuing.' }
+    if ($Level -lt 0 -or $Level -gt 100) { throw 'Specialization level must be from 0 to 100.' }
+    Assert-DuneSoloGameClosed
+    $profile = Get-DuneSoloProfile
+    Assert-DuneSoloProgressionAdapter -Profile $profile
+    $adapter = Get-DuneSoloAdapterDescriptor -DbPath $profile.dbPath
+    $safetyDir = Join-Path (Get-DuneSoloProfileBackupRoot -DbPath $profile.dbPath) 'pre-progression'
+    New-Item -ItemType Directory -Path $safetyDir -Force | Out-Null
+    $safety = Join-Path $safetyDir ('game-before-set-specialization-' + (Get-Date).ToUniversalTime().ToString('yyyyMMdd-HHmmssfff') + '.db')
+    return Invoke-DuneSoloHelper -Command 'set-specialization' -Arguments @{ input = $profile.dbPath; 'safety-backup' = $safety; adapter = $adapter.manifestPath; track = $Track; level = $Level }
+}
+
+function Reset-DuneSoloSpecializationRewards {
+    param([string]$Track, [string]$Confirm)
+    Assert-DuneSoloSupportedPlatform
+    if ($Confirm -ne 'RESET SOLO SPECIALIZATION REWARDS') { throw 'Confirm the Solo specialization reward reset before continuing.' }
+    Assert-DuneSoloGameClosed
+    $profile = Get-DuneSoloProfile
+    Assert-DuneSoloProgressionAdapter -Profile $profile
+    $adapter = Get-DuneSoloAdapterDescriptor -DbPath $profile.dbPath
+    $safetyDir = Join-Path (Get-DuneSoloProfileBackupRoot -DbPath $profile.dbPath) 'pre-progression'
+    New-Item -ItemType Directory -Path $safetyDir -Force | Out-Null
+    $safety = Join-Path $safetyDir ('game-before-reset-specialization-rewards-' + (Get-Date).ToUniversalTime().ToString('yyyyMMdd-HHmmssfff') + '.db')
+    return Invoke-DuneSoloHelper -Command 'reset-specialization-rewards' -Arguments @{ input = $profile.dbPath; 'safety-backup' = $safety; adapter = $adapter.manifestPath; keystones = (Get-DuneSoloDataFilePath -Name 'dune-keystones.json'); track = $Track }
 }

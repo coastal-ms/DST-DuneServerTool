@@ -338,7 +338,7 @@ if (-not (Test-Path $platformExe)) {
 if (-not (Test-Path $outDir)) { New-Item -ItemType Directory -Force -Path $outDir | Out-Null }
 
 Write-Host "Compiling installer via $iscc ..." -ForegroundColor Cyan
-$proc = Start-Process -FilePath $iscc -ArgumentList "`"$iss`"" -NoNewWindow -Wait -PassThru
+$proc = Start-Process -FilePath $iscc -ArgumentList @("/DMyAppNumericVersion=$($installerVersion.NumericVersion)", "`"$iss`"") -NoNewWindow -Wait -PassThru
 if ($proc.ExitCode -ne 0) {
     throw "ISCC failed with exit code $($proc.ExitCode)"
 }
@@ -346,6 +346,7 @@ if ($proc.ExitCode -ne 0) {
 if (-not (Test-Path $installer)) {
     throw "Installer not produced: $installer"
 }
+Assert-DuneInstallerVersion -InstallerPath $installer -ExpectedNumericVersion $installerVersion.NumericVersion
 
 $size = [Math]::Round(((Get-Item $installer).Length / 1MB), 2)
 Write-Host ""

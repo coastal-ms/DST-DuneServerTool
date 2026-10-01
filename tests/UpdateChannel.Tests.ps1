@@ -34,6 +34,13 @@ BeforeAll {
 }
 
 Describe 'Compare-DuneSemver (prerelease-aware)' {
+    It 'keeps four-part hotfix identity and orders it below the next patch test' {
+        Get-DuneVersionCore 'v15.2.3.1-test1' | Should -BeExactly '15.2.3.1'
+        Compare-DuneSemver -A '15.2.3.1' -B '15.2.3' | Should -BeGreaterThan 0
+        Compare-DuneSemver -A '15.2.3.1' -B '15.2.4-test1' | Should -BeLessThan 0
+        Compare-DuneSemver -A '15.2.3.1' -B '15.2.3.1-test1' | Should -BeGreaterThan 0
+    }
+
     It 'ranks a higher patch above a lower one' {
         Compare-DuneSemver -A '12.9.5' -B '12.9.4' | Should -BeGreaterThan 0
         Compare-DuneSemver -A '12.9.4' -B '12.9.5' | Should -BeLessThan 0

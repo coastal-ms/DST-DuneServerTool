@@ -155,7 +155,7 @@ function Get-DuneUpdatePreReleaseTag {
 # (a normal stable install never wrote it).
 function Get-DuneVersionCore {
     param([string]$Value)
-    $m = [regex]::Match($Value.Trim(), '^v?(\d+\.\d+\.\d+)(?:-|$)', 'IgnoreCase')
+    $m = [regex]::Match($Value.Trim(), '^v?(\d+\.\d+\.\d+(?:\.\d+)?)(?:-|$)', 'IgnoreCase')
     if (-not $m.Success) { return '' }
     return $m.Groups[1].Value
 }

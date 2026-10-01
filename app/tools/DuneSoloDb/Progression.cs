@@ -641,7 +641,8 @@ internal static partial class Program
         string input,
         string safetyBackup,
         string action,
-        Func<string, object> mutation)
+        Func<string, object> mutation,
+        bool requireGameClosed = false)
     {
         var original = ReadStable(input);
         EnsureWritableInspection(InspectBytes(original, input));
@@ -658,7 +659,7 @@ internal static partial class Program
             var mutated = Path.Combine(root, "game.db");
             WrapSqlite(sqlitePath, mutated);
             EnsureWritableInspection(InspectPath(mutated));
-            Restore(mutated, input, safetyBackup);
+            Restore(mutated, input, safetyBackup, requireGameClosed: requireGameClosed);
             return new
             {
                 ok = true,

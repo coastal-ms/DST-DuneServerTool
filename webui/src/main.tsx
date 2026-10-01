@@ -29,6 +29,8 @@ if ('serviceWorker' in navigator) {
 const isRemote = window.location.pathname === '/remote'
   || window.location.pathname.startsWith('/remote/')
 
+if (!isRemote) document.documentElement.dataset.dstDesktop = ''
+
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
     <ThemeProvider>

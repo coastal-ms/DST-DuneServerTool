@@ -371,7 +371,7 @@ function Get-DuneEmbeddedBuildIdentityFromText {
 function Get-DuneReleaseCommitSha {
     param([Parameter(Mandatory)][string]$Tag)
     $tagValue = $Tag.Trim()
-    if ($tagValue -notmatch '^v?\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$') {
+    if ($tagValue -notmatch '^v?\d+\.\d+\.\d+(?:\.\d+)?(?:-[0-9A-Za-z.-]+)?$') {
         throw 'Release tag is invalid.'
     }
     [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
