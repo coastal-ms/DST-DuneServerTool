@@ -262,6 +262,21 @@ function Get-DuneExecutableBuildMetadata {
     }
 }
 
+function Assert-DuneInstallerVersion {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)][string]$InstallerPath,
+        [Parameter(Mandatory)][string]$ExpectedNumericVersion
+    )
+
+    $path = (Resolve-Path -LiteralPath $InstallerPath -ErrorAction Stop).ProviderPath
+    $resource = [System.Diagnostics.FileVersionInfo]::GetVersionInfo($path)
+    $actual = '{0}.{1}.{2}.{3}' -f $resource.FileMajorPart, $resource.FileMinorPart, $resource.FileBuildPart, $resource.FilePrivatePart
+    if ($actual -cne $ExpectedNumericVersion) {
+        throw "Built installer version resource mismatch. Expected '$ExpectedNumericVersion'; found '$actual'."
+    }
+}
+
 function Assert-DuneBuildMetadataMatches {
     [CmdletBinding()]
     param(

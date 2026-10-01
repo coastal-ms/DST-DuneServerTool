@@ -22,6 +22,7 @@ here cover everything those tags shipped.
 - Allow a selected Solo specialization's reward claims to be reset for in-game repurchase while preserving its level and XP. Retain a backup, reconcile removed skill-point bonuses, and require an in-game respec first if those points are already spent.
 - Keep desktop Settings scrolling inside the application viewport to prevent duplicate scrollbars and blank space below the page.
 - Update the website's devalue dependency to 5.9.4 to resolve security findings.
+- Correct four-part hotfix installer version resources and verify the compiled resource version during builds.
 
 ## [15.2.3.1] - 2026-09-30
 
