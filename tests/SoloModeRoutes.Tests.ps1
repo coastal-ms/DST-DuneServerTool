@@ -12,26 +12,29 @@ Describe 'Solo Mode route registration' {
             }
             . $script:RouteFile
         })
-        $newRoutes = @($routes | Where-Object { $_.path -in @('/api/solo/diagnostics', '/api/solo/progression/specializations') })
-        $newRoutes.Count | Should -Be 2
+        $newRoutes = @($routes | Where-Object { $_.path -in @('/api/solo/diagnostics', '/api/solo/progression/specializations', '/api/solo/progression/specializations/reset-rewards') })
+        $newRoutes.Count | Should -Be 3
         @($newRoutes | Where-Object { -not $_.localOnly }).Count | Should -Be 0
     }
 
     It 'rejects an invalid specialization request before writing (<case>)' -TestCases @(
         @{ case = 'fractional level'; level = 37.5; stale = $false; status = 400 }
         @{ case = 'changed profile'; level = 37; stale = $true; status = 409 }
+        @{ case = 'changed profile during reward reset'; level = 37; stale = $true; status = 409 }
     ) {
         param($case, $level, $stale, $status)
         $result = & {
-            param($level, $stale)
+            param($level, $stale, $case)
             function Register-DuneRoute {
                 param($Method, $Path, [switch]$LocalOnly, $Handler)
                 [pscustomobject]@{ method = $Method; path = $Path; handler = $Handler }
             }
-            $route = @(. $script:RouteFile) | Where-Object path -eq '/api/solo/progression/specializations'
+            $path = if ($case -eq 'changed profile during reward reset') { '/api/solo/progression/specializations/reset-rewards' } else { '/api/solo/progression/specializations' }
+            $route = @(. $script:RouteFile) | Where-Object path -eq $path
             $script:specializationCalled = $false
             $script:specializationError = $null
             function Set-DuneSoloSpecialization { $script:specializationCalled = $true }
+            function Reset-DuneSoloSpecializationRewards { $script:specializationCalled = $true }
             function Invoke-WithDuneLock { param($Name, $Script); & $Script }
             function Assert-DuneSoloExpectedProfile {
                 if ($stale) { throw 'Solo profile changed in another window.' }
@@ -43,7 +46,7 @@ Describe 'Solo Mode route registration' {
             }
             & $route.handler $null $null $null @{ track = 'Crafting'; level = $level; expectedProfileToken = 'old'; confirm = 'SET SOLO SPECIALIZATION' }
             [pscustomobject]@{ called = $script:specializationCalled; status = $script:specializationError }
-        } $level $stale
+        } $level $stale $case
         $result.called | Should -BeFalse
         $result.status | Should -Be $status
     }

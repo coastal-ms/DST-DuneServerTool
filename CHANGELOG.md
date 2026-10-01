@@ -19,6 +19,7 @@ here cover everything those tags shipped.
 - Preserve existing operator INI files and fields during Retail settings initialization, reject incompatible mount paths, and restore the exact original operator field if readback fails.
 - Add a read-only Solo diagnostic report with save integrity and progression information for support, excluding account identifiers, character names, inventory, and local paths.
 - Allow individual Solo specialization levels to be set from 0 to 100 while the game is closed, retaining a backup and preserving existing rewards and skill points.
+- Allow a selected Solo specialization's reward claims to be reset for in-game repurchase while preserving its level and XP. Retain a backup, reconcile removed skill-point bonuses, and require an in-game respec first if those points are already spent.
 - Keep desktop Settings scrolling inside the application viewport to prevent duplicate scrollbars and blank space below the page.
 
 ## [15.2.3.1] - 2026-09-30

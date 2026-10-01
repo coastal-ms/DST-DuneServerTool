@@ -62,6 +62,9 @@ internal static partial class Program
             object result = command switch
             {
                 "diagnostics" => ExportDiagnostics(Require(options, "input")),
+                "reset-specialization-rewards" => ResetSpecializationRewards(
+                    Require(options, "input"), Require(options, "safety-backup"),
+                    Require(options, "adapter"), Require(options, "keystones"), RequireValue(options, "track")),
                 "set-specialization" => SetSpecialization(
                     Require(options, "input"), Require(options, "safety-backup"),
                     Require(options, "adapter"), RequireValue(options, "track"),
@@ -1147,6 +1150,8 @@ internal static partial class Program
                         level REAL NOT NULL,
                         PRIMARY KEY (player_id, track_type)
                     );
+                    CREATE TABLE specialization_keystones_map (id INTEGER PRIMARY KEY, name TEXT NOT NULL);
+                    INSERT INTO specialization_keystones_map VALUES (1,'Combat_CombatKeystone_SkillPoint1'), (2,'Crafting_CraftingKeystone_RangedWeaponAugmentSlots1');
                     CREATE TABLE purchased_specialization_keystones (
                         player_id INTEGER NOT NULL,
                         keystone_id INTEGER NOT NULL,
@@ -2402,6 +2407,47 @@ internal static partial class Program
                 || diagnosticJson.Contains("playerPawnId", StringComparison.OrdinalIgnoreCase))
                 throw new InvalidOperationException("Solo diagnostics changed the save or disclosed identity fields.");
 
+            var beforeResetRewards = File.ReadAllBytes(target);
+            var rewardsBefore = InspectPath(target).Progression;
+            var rewardResetBackup = Path.Combine(root, "safety", "before-crafting-reward-reset.db");
+            ResetSpecializationRewards(target, rewardResetBackup, adapterPath, keystonePath, "Crafting");
+            var rewardsAfter = InspectPath(target).Progression;
+            if (rewardsAfter.PurchasedRewards != rewardsBefore.PurchasedRewards - 1
+                || rewardsAfter.KeystoneBonusSkillPoints != rewardsBefore.KeystoneBonusSkillPoints
+                || rewardsAfter.UnspentSkillPoints != rewardsBefore.UnspentSkillPoints
+                || rewardsAfter.FremenNodesComplete != rewardsBefore.FremenNodesComplete
+                || JsonSerializer.Serialize(rewardsAfter.Specializations) != JsonSerializer.Serialize(rewardsBefore.Specializations)
+                || !beforeResetRewards.SequenceEqual(File.ReadAllBytes(rewardResetBackup)))
+                throw new InvalidOperationException("Crafting reward reset changed unrelated progression or did not retain its exact backup.");
+            RunProgressionMutation(target, Path.Combine(root, "safety", "before-repurchase.db"), "test-repurchase", path => {
+                using var connection = OpenWritable(path);
+                var identity = ReadIdentity(connection);
+                ExecuteNonQuery(connection, "INSERT INTO purchased_specialization_keystones(player_id,keystone_id) VALUES($player,2);", ("$player", identity.ControllerId));
+                return new { repurchased = true };
+            });
+            if (InspectPath(target).Progression.PurchasedRewards != rewardsBefore.PurchasedRewards)
+                throw new InvalidOperationException("Reset Crafting reward could not be purchased again.");
+            var beforeCombatReset = InspectPath(target).Progression;
+            ResetSpecializationRewards(target, Path.Combine(root, "safety", "before-combat-reward-reset.db"), adapterPath, keystonePath, "Combat");
+            var afterCombatReset = InspectPath(target).Progression;
+            if (afterCombatReset.KeystoneBonusSkillPoints != beforeCombatReset.KeystoneBonusSkillPoints - 3
+                || afterCombatReset.UnspentSkillPoints != beforeCombatReset.UnspentSkillPoints - 3
+                || afterCombatReset.PurchasedRewards != 1)
+                throw new InvalidOperationException("Skill-point reward reset did not reconcile its bonus.");
+            MaxSpecializations(target, Path.Combine(root, "safety", "before-regrant.db"), adapterPath, keystonePath);
+            var afterRegrant = InspectPath(target).Progression;
+            if (afterRegrant.KeystoneBonusSkillPoints != beforeCombatReset.KeystoneBonusSkillPoints
+                || afterRegrant.UnspentSkillPoints != beforeCombatReset.UnspentSkillPoints)
+                throw new InvalidOperationException("Repurchasing skill-point rewards duplicated or lost points.");
+            SetProgressionPoints(target, Path.Combine(root, "safety", "before-spent-reward-test.db"), adapterPath, 0, 654);
+            var beforeSpentRewardReset = File.ReadAllBytes(target);
+            var spentResetRejected = false;
+            try { ResetSpecializationRewards(target, Path.Combine(root, "safety", "rejected-spent-reset.db"), adapterPath, keystonePath, "Combat"); }
+            catch (InvalidDataException error) when (error.Message.Contains("Respec", StringComparison.Ordinal)) { spentResetRejected = true; }
+            if (!spentResetRejected || !beforeSpentRewardReset.SequenceEqual(File.ReadAllBytes(target)))
+                throw new InvalidOperationException("Spent specialization reward reset was not rejected without changing the save.");
+            SetProgressionPoints(target, Path.Combine(root, "safety", "after-spent-reward-test.db"), adapterPath, 321, 654);
+
             var compatibleAdapterPath = Path.Combine(root, "compatible-adapter.json");
             File.WriteAllText(
                 compatibleAdapterPath,
@@ -2517,6 +2563,10 @@ internal static partial class Program
                     "offline-specialization-lowering-preserves-rewards-and-backup",
                     "invalid-specialization-edit-leaves-save-unchanged",
                     "read-only-solo-diagnostics-excludes-identities-and-paths",
+                    "offline-track-reward-reset-preserves-levels-other-tracks-and-journeys",
+                    "reset-specialization-reward-can-be-repurchased",
+                    "skill-point-reward-reset-and-regrant-do-not-duplicate-points",
+                    "spent-reward-reset-rejected-with-save-unchanged",
                     "offline-find-the-fremen-completion",
                     "offline-solo-npe-completion",
                     "offline-enable-all-skills-preserves-unknowns",

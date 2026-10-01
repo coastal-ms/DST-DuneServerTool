@@ -1,4 +1,5 @@
 using System.Security.Cryptography;
+using System.Text.Json.Nodes;
 using Microsoft.Data.Sqlite;
 
 namespace DuneSoloDb;
@@ -70,6 +71,75 @@ internal static partial class Program
         }
     }
 
+    private static object ResetSpecializationRewards(string input, string safetyBackup,
+        string adapterPath, string keystonePath, string track)
+    {
+        var adapter = ReadSoloAdapter(adapterPath);
+        AssertProgressionSchema(input, adapter);
+        var match = adapter.Tracks.FirstOrDefault(pair => pair.Key.Equals(track, StringComparison.OrdinalIgnoreCase));
+        if (match.Key is null) throw new ArgumentException("Choose a valid specialization.");
+        var catalog = ReadKeystones(keystonePath);
+        return RunProgressionMutation(input, safetyBackup, "reset-specialization-rewards", sqlitePath => {
+            using var connection = OpenWritable(sqlitePath);
+            var identity = ReadIdentity(connection);
+            if (!TableExists(connection, "specialization_keystones_map"))
+                throw new InvalidDataException("The save's specialization reward map is unavailable. Export Solo diagnostics for support.");
+            BeginImmediate(connection);
+            try
+            {
+                var rewardIds = new List<long>();
+                var removedBonus = 0;
+                using (var command = connection.CreateCommand())
+                {
+                    command.CommandText = "SELECT p.keystone_id, m.name FROM purchased_specialization_keystones p LEFT JOIN specialization_keystones_map m ON m.id=p.keystone_id WHERE p.player_id=$player;";
+                    command.Parameters.AddWithValue("$player", identity.ControllerId);
+                    using var reader = command.ExecuteReader();
+                    while (reader.Read())
+                    {
+                        if (reader.IsDBNull(1)) throw new InvalidDataException("An unlocked reward is missing from the save's reward map. Export Solo diagnostics for support.");
+                        var name = reader.GetString(1);
+                        if (!name.StartsWith(match.Key + "_", StringComparison.Ordinal)) continue;
+                        var id = reader.GetInt64(0);
+                        if (!catalog.TryGetValue(checked((int)id), out var rule)
+                            || !rule.Track.Equals(match.Key, StringComparison.OrdinalIgnoreCase))
+                            throw new InvalidDataException("The save's reward map does not match the supported catalog. Export Solo diagnostics for support.");
+                        var bonus = SkillPointBonus(rule.Name);
+                        if (name.Contains("_SkillPoint", StringComparison.Ordinal) != (bonus > 0))
+                            throw new InvalidDataException("Specialization skill-point reward mapping could not be verified.");
+                        rewardIds.Add(id);
+                        removedBonus += bonus;
+                    }
+                }
+                if (removedBonus > 0)
+                {
+                    var components = ReadFglComponents(connection, identity.EntityId);
+                    var level = RequireComponentObject(components, "FLevelComponent");
+                    var currentBonus = GetInt(level, "KeystoneBonusSkillPoints");
+                    var total = GetInt(level, "TotalSkillPoints");
+                    var unspent = GetInt(level, "UnspentSkillPoints");
+                    var spent = SumSkillSpend(level["ModuleData"] as JsonObject ?? new JsonObject());
+                    if (currentBonus < removedBonus || total < removedBonus)
+                        throw new InvalidDataException("Specialization skill-point accounting does not match the claimed rewards. Export Solo diagnostics for support.");
+                    if (unspent < removedBonus || total - removedBonus < spent)
+                        throw new InvalidDataException("Respec skills in-game first so the specialization's skill points are unspent, then close the game and reset rewards.");
+                    level["KeystoneBonusSkillPoints"] = currentBonus - removedBonus;
+                    level["TotalSkillPoints"] = total - removedBonus;
+                    level["UnspentSkillPoints"] = unspent - removedBonus;
+                    WriteFglComponents(connection, identity.EntityId, components);
+                }
+                foreach (var id in rewardIds)
+                {
+                    if (ExecuteNonQuery(connection, "DELETE FROM purchased_specialization_keystones WHERE player_id=$player AND keystone_id=$reward;", ("$player", identity.ControllerId), ("$reward", id)) != 1)
+                        throw new InvalidDataException("Specialization reward reset verification failed.");
+                }
+                ValidateDatabase(connection);
+                Commit(connection);
+                return new { track = match.Key, rewardsRemoved = rewardIds.Count, skillPointsRemoved = removedBonus, levelPreserved = true };
+            }
+            catch { Rollback(connection); throw; }
+        }, requireGameClosed: true);
+    }
+
     private static object SetSpecialization(string input, string safetyBackup,
         string adapterPath, string track, long level)
     {
@@ -96,6 +166,6 @@ internal static partial class Program
                 return new { track = match.Key, level, xp, rewardsPreserved = true };
             }
             catch { Rollback(connection); throw; }
-        });
+        }, requireGameClosed: true);
     }
 }

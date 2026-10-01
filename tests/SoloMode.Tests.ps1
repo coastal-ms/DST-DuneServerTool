@@ -1122,4 +1122,19 @@ Describe 'Solo diagnostic export and specialization edits' {
         { Set-DuneSoloSpecialization -Track Crafting -Level 37 -Confirm '' } | Should -Throw '*Confirm*'
         Should -Invoke Invoke-DuneSoloHelper -Times 0
     }
+    It 'resets reward claims using the verified catalog and retained backup' {
+        Reset-DuneSoloSpecializationRewards -Track Crafting -Confirm 'RESET SOLO SPECIALIZATION REWARDS'
+        Should -Invoke Invoke-DuneSoloHelper -Times 1 -ParameterFilter {
+            $Command -eq 'reset-specialization-rewards' -and $Arguments.track -eq 'Crafting' -and $Arguments.keystones -like '*dune-keystones.json' -and $Arguments['safety-backup'] -like '*pre-progression*game-before-reset-specialization-rewards*'
+        }
+    }
+    It 'requires explicit confirmation before resetting rewards' {
+        { Reset-DuneSoloSpecializationRewards -Track Crafting -Confirm '' } | Should -Throw '*Confirm*'
+        Should -Invoke Invoke-DuneSoloHelper -Times 0
+    }
+    It 'refuses reward resets while the game is running' {
+        Mock Assert-DuneSoloGameClosed { throw 'Game is still running' }
+        { Reset-DuneSoloSpecializationRewards -Track Crafting -Confirm 'RESET SOLO SPECIALIZATION REWARDS' } | Should -Throw '*still running*'
+        Should -Invoke Invoke-DuneSoloHelper -Times 0
+    }
 }

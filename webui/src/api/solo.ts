@@ -568,3 +568,10 @@ export function setSoloSpecialization(track: string, level: number, expectedProf
     body: JSON.stringify({ track, level, expectedProfileToken, confirm: 'SET SOLO SPECIALIZATION' }),
   })
 }
+
+export function resetSoloSpecializationRewards(track: string, expectedProfileToken: string): Promise<SoloProgressionResult> {
+  return api('/api/solo/progression/specializations/reset-rewards', {
+    method: 'POST',
+    body: JSON.stringify({ track, expectedProfileToken, confirm: 'RESET SOLO SPECIALIZATION REWARDS' }),
+  })
+}

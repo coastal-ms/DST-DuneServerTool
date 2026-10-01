@@ -6,7 +6,8 @@ import { SoloSpecializationEditor } from '../../src/pages/SoloMode'
 describe('Solo specialization level editor', () => {
   it('lets an existing maxed track be lowered while explaining preserved rewards', () => {
     const onSet = vi.fn()
-    render(<SoloSpecializationEditor tracks={[{ trackType: 1, level: 100 }]} disabled={false} onSet={onSet} />)
+    const onResetRewards = vi.fn()
+    render(<SoloSpecializationEditor tracks={[{ trackType: 1, level: 100 }]} disabled={false} onSet={onSet} onResetRewards={onResetRewards} />)
     const crafting = screen.getByLabelText(/Crafting/)
     fireEvent.change(crafting, { target: { value: '37' } })
     fireEvent.click(crafting.parentElement!.querySelector('button')!)
@@ -14,5 +15,8 @@ describe('Solo specialization level editor', () => {
     expect(screen.getByText(/Existing rewards and skill points are preserved/)).toBeTruthy()
     fireEvent.change(crafting, { target: { value: '101' } })
     expect(crafting.parentElement!.querySelector('button')!.disabled).toBe(true)
+    fireEvent.click(screen.getAllByText('Reset rewards')[1])
+    expect(onResetRewards).toHaveBeenCalledWith('Crafting')
+    expect(screen.getByText(/Max specializations grants the rewards again/)).toBeTruthy()
   })
 })

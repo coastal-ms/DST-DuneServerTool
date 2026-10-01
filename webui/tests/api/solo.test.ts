@@ -248,4 +248,6 @@ it('exports diagnostics for the exact connected profile and sends an explicit sp
   expect(last().url).toBe('/api/solo/diagnostics?expectedProfileToken=profile%20token')
   await solo.setSoloSpecialization('Crafting', 37, 'profile-token')
   expect(last()).toEqual({ url: '/api/solo/progression/specializations', method: 'PUT', body: { track: 'Crafting', level: 37, expectedProfileToken: 'profile-token', confirm: 'SET SOLO SPECIALIZATION' } })
+  await solo.resetSoloSpecializationRewards('Crafting', 'profile-token')
+  expect(last()).toEqual({ url: '/api/solo/progression/specializations/reset-rewards', method: 'POST', body: { track: 'Crafting', expectedProfileToken: 'profile-token', confirm: 'RESET SOLO SPECIALIZATION REWARDS' } })
 })

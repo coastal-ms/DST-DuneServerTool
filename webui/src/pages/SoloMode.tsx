@@ -25,6 +25,7 @@ import {
   exportSoloBlueprint,
   exportSoloDiagnostics,
   setSoloSpecialization,
+  resetSoloSpecializationRewards,
   grantSoloItems,
   importSoloBlueprint,
   maxSoloAugmentAttributes,
@@ -2186,6 +2187,7 @@ export function SoloMode() {
             tracks={inspection?.progression.specializations ?? []}
             disabled={!canMutateActiveProfile || gameRunning || !!busy}
             onSet={(track, level) => void runProgressionAction('set-specialization', `Set ${track} to level ${level} (existing rewards stay unlocked; journey triggers are not replayed)`, token => setSoloSpecialization(track, level, token))}
+            onResetRewards={track => void runProgressionAction('reset-specialization-rewards', `Reset ${track} reward claims so they can be purchased again in-game. Keep its level and XP. Remove its claimed skill-point bonus from unspent points; respec first if needed. No journey objectives are completed by this action`, token => resetSoloSpecializationRewards(track, token))}
           />
           <div className="rounded-lg border border-warning/30 bg-warning/5 px-4 py-3 text-sm flex items-start gap-2">
             <Icon name="ShieldAlert" size={15} className="text-warning mt-0.5 shrink-0" />
@@ -2198,7 +2200,7 @@ export function SoloMode() {
               icon="Medal"
               title="Max specializations"
               description="Set all five tracks to level 100, grant all 205 rewards, and reconcile the 54 specialization skill points idempotently."
-              status={`${inspection?.progression.specializations.filter(track => track.level >= 100).length ?? 0}/5 tracks at 100 · ${inspection?.progression.purchasedRewards ?? 0}/205 rewards`}
+              status={`${inspection?.progression.specializations.filter(track => track.level >= 100).length ?? 0}/5 tracks at 100 · ${inspection?.progression.purchasedRewards ?? 0}/205 unlocked rewards`}
               busy={busy === 'progression:specializations'}
               disabled={!canMutateActiveProfile || gameRunning}
               onRun={() => void runProgressionAction(
@@ -2366,16 +2368,18 @@ function ProgressionActionCard({
   )
 }
 
-export function SoloSpecializationEditor({ tracks, disabled, onSet }: {
+export function SoloSpecializationEditor({ tracks, disabled, onSet, onResetRewards }: {
   tracks: Array<{ trackType: number; level: number }>
   disabled: boolean
   onSet: (track: string, level: number) => void
+  onResetRewards?: (track: string) => void
 }) {
   const [levels, setLevels] = useState<Record<string, string>>({})
   const names = ['Combat', 'Crafting', 'Exploration', 'Gathering', 'Sabotage']
   return <div className="card p-5">
     <h3 className="font-semibold mb-2">Specialization levels</h3>
     <p className="text-sm text-text-muted mb-3">Set an individual track from 0 to 100, including lowering a maxed track. Existing rewards and skill points are preserved. This does not replay journey objectives or grant missing cosmetic unlocks.</p>
+    <p className="text-sm text-text-muted mb-3">To unlock a reward again for a journey, use Reset rewards for that track, set its level high enough using Set level, then buy the required reward in-game. Reset rewards keeps level and XP, clears reward claims, and removes their unspent skill-point bonus. Respec skills first if those points are spent. Max specializations grants the rewards again, so use Set level during recovery.</p>
     <div className="space-y-3">{names.map((name, index) => {
       const current = tracks.find(track => track.trackType === index)?.level ?? 0
       const value = levels[name] ?? String(Math.floor(current))
@@ -2385,6 +2389,7 @@ export function SoloSpecializationEditor({ tracks, disabled, onSet }: {
         <input id={`solo-level-${name}`} className="input w-24" type="number" min={0} max={100} step={1} value={value} disabled={disabled} onChange={event => setLevels(prev => ({ ...prev, [name]: event.target.value }))} />
         <button className="btn btn-secondary" disabled={disabled || !valid} onClick={() => onSet(name, Number(value))}>Set level</button>
         <button className="btn btn-secondary" disabled={disabled} onClick={() => onSet(name, 0)}>Set to 0</button>
+        {onResetRewards && <button className="btn btn-secondary" disabled={disabled} onClick={() => onResetRewards(name)}>Reset rewards</button>}
       </div>
     })}</div>
   </div>
