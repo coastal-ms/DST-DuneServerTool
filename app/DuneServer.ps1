@@ -1,4 +1,4 @@
-﻿# Dune Server — entry point (v6.1 web portal)
+# Dune Server — entry point (v6.1 web portal)
 #
 # Bootstrap: pick a free port, start HttpListener, open default browser at the
 # tokened localhost URL. The full UI is the React SPA in webui/dist/.
@@ -166,7 +166,7 @@ public static extern bool IsIconic(System.IntPtr hWnd);
 Write-DuneStartupLog 'Console presentation initialized'
 
 # Version (one of the 5 sync'd constants; see persistent-notes.md)
-$script:DuneToolVersion = '15.2.4-test1'
+$script:DuneToolVersion = '15.2.4'
 # Artifact identity defaults for source/dev runs. Build-Exe.ps1 replaces these
 # four declarations only in its generated compilation input, so the resulting
 # executable carries immutable identity without changing tracked version stamps.

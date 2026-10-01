@@ -13,8 +13,19 @@ here cover everything those tags shipped.
 
 ## [Unreleased]
 
+## [15.2.4] - 2026-10-01
+
 - Fix Official Retail Server Settings hiding absent supported keys and doing nothing when defaults are drafted from an empty section. Saves can initialize requested editable keys while preserving the source file, and boolean values accept case variations.
 - Preserve existing operator INI files and fields during Retail settings initialization, reject incompatible mount paths, and restore the exact original operator field if readback fails.
+- Add a read-only Solo diagnostic report with save integrity and progression information for support, excluding account identifiers, character names, inventory, and local paths.
+- Allow individual Solo specialization levels to be set from 0 to 100 while the game is closed, retaining a backup and preserving existing rewards and skill points.
+- Keep desktop Settings scrolling inside the application viewport to prevent duplicate scrollbars and blank space below the page.
+
+## [15.2.3.1] - 2026-09-30
+
+- Correct blueprint placeable rotation component order in Self-Hosted and Solo import/export paths. Re-import affected blueprints from their original files; existing imported copies are not changed automatically.
+- Support four-part hotfix versions in installer build metadata.
+- Update the web UI's DOMPurify dependency to 3.4.16 and run PR checks for all target branches.
 
 ## [15.2.3] - 2026-09-29
 

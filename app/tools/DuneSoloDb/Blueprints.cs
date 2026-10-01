@@ -233,8 +233,8 @@ internal static partial class Program
                         ["x"] = reader.GetFloat(2),
                         ["y"] = reader.GetFloat(3),
                         ["z"] = reader.GetFloat(4),
-                        ["rx"] = reader.GetFloat(6),
-                        ["ry"] = reader.GetFloat(5),
+                        ["rx"] = reader.GetFloat(5),
+                        ["ry"] = reader.GetFloat(6),
                         ["rz"] = reader.GetFloat(7)
                     });
                 }
@@ -480,14 +480,14 @@ internal static partial class Program
                     element,
                     "z",
                     $"placeables[{index}].z"),
-                Pitch: ReadOptionalBlueprintFloat(
-                    element,
-                    "rx",
-                    $"placeables[{index}].rx"),
-                Yaw: ReadRequiredBlueprintFloat(
+                Pitch: ReadRequiredBlueprintFloat(
                     element,
                     "ry",
                     $"placeables[{index}].ry"),
+                Yaw: ReadOptionalBlueprintFloat(
+                    element,
+                    "rx",
+                    $"placeables[{index}].rx"),
                 Roll: ReadOptionalBlueprintFloat(
                     element,
                     "rz",

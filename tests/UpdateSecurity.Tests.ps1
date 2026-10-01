@@ -238,6 +238,15 @@ Describe 'Protected updater download seam' {
         Assert-MockCalled Invoke-RestMethod -Times 2
     }
 
+    It 'resolves a four-part hotfix tag without bypassing tag validation' {
+        Mock Invoke-RestMethod {
+            [pscustomobject]@{ object = [pscustomobject]@{ type='commit'; sha=('a' * 40) } }
+        }
+        Get-DuneReleaseCommitSha -Tag 'v15.2.3.1-test1' | Should -Be ('a' * 40)
+        { Get-DuneReleaseCommitSha -Tag 'v15.2.3.1.1-test1' } | Should -Throw '*tag is invalid*'
+        Assert-MockCalled Invoke-RestMethod -Times 1
+    }
+
     It 'prunes bounded installer, relaunch, Inno, and result evidence' {
         foreach ($prefix in 'DuneServerSetup','DuneRelaunch','relaunch','inno','update-result') {
             $extension = switch ($prefix) {

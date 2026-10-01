@@ -7,7 +7,7 @@ name: Tests
 #   * the Vitest webui suite under webui/tests/           -> job `vitest`
 #
 # Triggered on:
-#   - pull_request to main: ALWAYS (no path filter). Same rationale as
+#   - pull_request to any branch: ALWAYS (no path filter). Same rationale as
 #     lint.yml -- if these ever become required status checks, a path filter
 #     would make PRs that don't touch the filtered paths wait forever on a
 #     check that never runs. The jobs are cheap when there's nothing to test.
@@ -24,7 +24,6 @@ on:
       - 'webui/**'
       - '.github/workflows/test.yml'
   pull_request:
-    branches: [main]
 
 jobs:
   pester:
