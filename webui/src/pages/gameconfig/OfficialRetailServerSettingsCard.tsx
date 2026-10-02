@@ -16,7 +16,7 @@ type RetailSettingGuidance = {
 
 // Patch 1.5 defaults from Red-Blink/dune-awakening-selfhost-docker at acc3d43c.
 export const RETAIL_SETTING_GUIDANCE: Record<string, RetailSettingGuidance> = {
-  DifficultyLevel: { defaultValue: 'Custom', effect: 'Selects the overall difficulty preset. Managed server settings use Custom.' },
+  DifficultyLevel: { defaultValue: 'Custom', effect: 'DST supports only Custom mode for managed server settings. Difficulty Level is not adjustable here. Other presets can override these values and must be configured manually outside DST.' },
   PVPMode: { defaultValue: 'Limited', effect: 'Controls where and under which rules player-versus-player combat is allowed.' },
   GatheringAmount: { defaultValue: '1.000000', effect: 'Higher values yield more resources per gathering action; lower values yield less.' },
   CraftingCost: { defaultValue: '1.000000', effect: 'Higher values require more crafting materials; lower values require fewer materials.' },
