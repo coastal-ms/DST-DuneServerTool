@@ -112,15 +112,15 @@ export function getGameConfig() {
   return api<GameConfigResponse>('/api/gameconfig')
 }
 
-export function getRetailServerSettings(signal?: AbortSignal) {
-  return api<RetailServerSettingsResponse>('/api/gameconfig/retail-server-settings', { signal })
+export function getRetailServerSettings(signal?: AbortSignal, source?: 'operator') {
+  return api<RetailServerSettingsResponse>(`/api/gameconfig/retail-server-settings${source ? '?source=operator' : ''}`, { signal })
 }
 
-export function saveRetailServerSettings(revision: string, updates: Record<string, string>) {
+export function saveRetailServerSettings(revision: string, updates: Record<string, string>, importOperatorRevision?: string) {
   return withOnlinePlayerGuard(force =>
     api<RetailServerSettingsSaveResponse>(`/api/gameconfig/retail-server-settings${fq(force)}`, {
       method: 'PUT',
-      body: JSON.stringify({ revision, updates }),
+      body: JSON.stringify({ revision, updates, ...(importOperatorRevision ? { importOperatorRevision } : {}) }),
     }),
   )
 }

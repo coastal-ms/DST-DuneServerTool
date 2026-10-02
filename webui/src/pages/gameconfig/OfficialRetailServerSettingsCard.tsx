@@ -193,7 +193,7 @@ export function OfficialRetailServerSettingsCard({
     controller: null,
   })
 
-  const load = async () => {
+  const load = async (source?: 'operator') => {
     if (!vmRunning) return
     const sequence = loadRequest.current.sequence + 1
     loadRequest.current.sequence = sequence
@@ -205,12 +205,13 @@ export function OfficialRetailServerSettingsCard({
     setError(null)
     setMessage(null)
     try {
-      const next = await getRetailServerSettings(controller.signal)
+      const next = await getRetailServerSettings(controller.signal, source)
       if (controller.signal.aborted || sequence !== loadRequest.current.sequence) return
       setState(next)
       setValues(Object.fromEntries(
         (next.settings ?? []).map(setting => [setting.key, normalizeSettingValue(setting, setting.value)]),
       ))
+      if (source === 'operator') setMessage('Current YAML settings loaded as a draft. Save writes them into the Linux UserSettings file.')
     } catch (e) {
       if (controller.signal.aborted || sequence !== loadRequest.current.sequence) return
       setError(e instanceof Error ? e.message : String(e))
@@ -252,7 +253,7 @@ export function OfficialRetailServerSettingsCard({
       )
       .map(({ setting, draft }) => [setting.key, draft]),
   ), [state, values])
-  const dirtyCount = Object.keys(updates).length
+  const dirtyCount = Object.keys(updates).length + (state?.operatorRevision ? 1 : 0)
   const draftValidationErrors = useMemo(() => Object.fromEntries(
     (state?.settings ?? [])
       .filter(setting => setting.editable)
@@ -269,6 +270,7 @@ export function OfficialRetailServerSettingsCard({
     && dirtyCount > 0
     && !hasDraftValidationErrors
     && !saving
+    && !loading
 
   const applyDefaults = () => {
     if (!state?.available || !state.target.stopped || state.target.serverPodCount !== 0 || saving) return
@@ -294,14 +296,16 @@ export function OfficialRetailServerSettingsCard({
     setError(null)
     setMessage(null)
     try {
-      const result = await saveRetailServerSettings(state.revision, updates)
+      const result = await saveRetailServerSettings(state.revision, updates, state.operatorRevision ?? undefined)
       const nextSettings = result.settings
       setState(previous => previous ? {
         ...previous,
         readOnly: false,
-        source: 'funcom-servergroup-user-ini-config',
-        authority: 'Funcom BattleGroup operator configuration',
+        source: 'funcom-persistent-user-settings',
+        authority: 'Linux UserSettings/UserServerCustomSettings.ini',
         revision: result.revision,
+        operatorRevision: null,
+        operatorMismatch: false,
         sectionFound: true,
         settings: nextSettings,
         target: {
@@ -338,14 +342,14 @@ export function OfficialRetailServerSettingsCard({
       bodyClassName="px-4 pb-4"
       headerRight={(
         <>
-          <span className="pill-info" title="Saved through Funcom's BattleGroup operator configuration">
-            <Icon name="ShieldCheck" size={12} /> Operator managed
+          <span className="pill-info" title="Reads and saves the persistent Linux UserSettings file">
+            <Icon name="ShieldCheck" size={12} /> Linux file
           </span>
           <button
             type="button"
             className="btn-secondary"
             onClick={() => void load()}
-            disabled={!vmRunning || loading}
+            disabled={!vmRunning || loading || saving}
           >
             <Icon name={loading ? 'Loader2' : 'RefreshCw'} size={14} className={loading ? 'animate-spin' : ''} />
             Refresh
@@ -354,11 +358,21 @@ export function OfficialRetailServerSettingsCard({
             type="button"
             className="btn-secondary"
             onClick={applyDefaults}
-            disabled={!state?.available || !state.target.stopped || state.target.serverPodCount !== 0 || saving}
+            disabled={!state?.available || !state.target.stopped || state.target.serverPodCount !== 0 || saving || loading}
             title="Draft Custom difficulty and documented defaults, including missing settings, without saving"
           >
             <Icon name="RotateCcw" size={14} />
             Default Settings
+          </button>
+          <button
+            type="button"
+            className="btn-secondary"
+            onClick={() => void load('operator')}
+            disabled={!vmRunning || loading || saving || !state?.target.upstreamConfigured}
+            title="Read current YAML settings as a draft; Save writes them into the Linux UserSettings file"
+          >
+            <Icon name="Download" size={14} />
+            Read current settings
           </button>
           <button
             type="button"
@@ -368,7 +382,7 @@ export function OfficialRetailServerSettingsCard({
             title={hasDraftValidationErrors
               ? 'Correct invalid setting values before saving'
               : state?.target.stopped
-                ? 'Save changed settings to Funcom operator configuration'
+                ? 'Save changed settings to the Linux UserSettings file'
               : 'Stop the battlegroup fully before saving'}
           >
             <Icon name={saving ? 'Loader2' : 'Save'} size={14} className={saving ? 'animate-spin' : ''} />
@@ -378,11 +392,18 @@ export function OfficialRetailServerSettingsCard({
       )}
     >
       <div className="mb-3 rounded-lg border border-warning/30 bg-warning/5 p-3 text-xs text-text-muted">
-        <strong className="text-text">Funcom operator-managed settings.</strong>{' '}
-        These values drive the greyed-out multiplayer Server Settings preview. Direct file edits are regenerated.
-        DST saves only through the BattleGroup&apos;s official <span className="font-mono">global.userIniConfig</span>{' '}
-        source, while the battlegroup is fully stopped.
+        <strong className="text-text">Linux file settings.</strong>{' '}
+        Refresh reads manual edits to <span className="font-mono">UserSettings/UserServerCustomSettings.ini</span>.
+        Save writes changes to that same file while the battlegroup is fully stopped.
+        Starting the battlegroup synchronizes those values to its Linux runtime configuration.
       </div>
+      {state?.operatorMismatch && (
+        <div className="mb-3 rounded-lg border border-warning/30 bg-warning/5 p-3 text-xs text-warning" role="status">
+          {state.operatorRevision
+            ? 'Current YAML settings are loaded as a draft. Review them, then Save to write them into the Linux UserSettings file.'
+            : 'The Linux UserSettings file and current YAML settings differ. Read current settings first to review the YAML values before saving.'}
+        </div>
+      )}
       {state?.available && !state.target.stopped && (
         <div className="mb-3 border-y border-border py-2 text-xs text-text-muted">
           Stop the battlegroup to unlock edits. Saving creates a timestamped copy of the complete current file;
@@ -418,21 +439,18 @@ export function OfficialRetailServerSettingsCard({
       {state?.available && (
         <>
           <div className="mb-3 grid gap-1 text-[11px] text-text-dim">
-            {!state.target.upstreamConfigured && (
-              <div><span className="text-text-muted">Generated File Browser output:</span> <span className="font-mono">{state.target.path}</span></div>
-            )}
+            <div><span className="text-text-muted">Authoritative Linux file:</span> <span className="font-mono">{state.target.path}</span></div>
             <div><span className="text-text-muted">Game pod:</span> <span className="font-mono">{state.target.gamePath}</span></div>
             <div>
               <span className="text-text-muted">Source:</span> {state.authority}
               {state.modifiedAt ? ` • updated ${new Date(state.modifiedAt).toLocaleString()}` : ''}
             </div>
-            <div>
-              <span className="text-text-muted">Durable operator field:</span>{' '}
-              <span className="font-mono">{state.target.upstreamField}</span>{' '}
-              <span className={state.target.upstreamConfigured ? 'text-success' : 'text-warning'}>
-                • {state.target.upstreamConfigured ? 'configured' : 'not configured'}
-              </span>
-            </div>
+            {state.source === 'existing-operator-settings-pending-migration' && (
+              <div className="text-warning">
+                Existing YAML settings are preserved. The next stopped-battlegroup Save or Start backs them up
+                and migrates them into the Linux file before file edits become authoritative.
+              </div>
+            )}
             {state.target.upstreamConfigured && (
               <div>
                 <span className="text-text-muted">Operator mount:</span>{' '}

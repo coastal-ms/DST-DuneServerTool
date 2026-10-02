@@ -1302,6 +1302,29 @@ function Invoke-OnDemandPartitionClear {
     Write-Host "  Done — on-demand maps will spawn for the next player." -ForegroundColor Green
 }
 
+function Sync-DuneRetailSettingsBeforeStart {
+    param([Parameter(Mandatory)][string]$Ip)
+    $retailRoot = @($scriptDir, (Join-Path $scriptDir 'app')) | Where-Object {
+        Test-Path -LiteralPath (Join-Path $_ 'server\lib\RetailServerSettings.ps1')
+    } | Select-Object -First 1
+    if (-not $retailRoot) { throw 'Server Settings synchronization library is missing. Battlegroup was not started.' }
+    & {
+        param($Root, $VmIp, $KeyPath)
+        . (Join-Path $Root 'lib\Db-Postgres.ps1')
+        . (Join-Path $Root 'lib\K8s.ps1')
+        . (Join-Path $Root 'server\lib\RetailServerSettings.ps1')
+        $script:V6SshKeyCache = $KeyPath
+        $deadline = [DateTime]::UtcNow.AddSeconds(90)
+        do {
+            $target = Resolve-DuneRetailServerSettingsTarget -Ip $VmIp
+            if (-not $target.available -or -not $target.stopped -or $target.serverPodCount -eq 0) { break }
+            if ([DateTime]::UtcNow -ge $deadline) { throw 'Game pods have not stopped. Server Settings were not synchronized and the battlegroup was not started.' }
+            Start-Sleep -Seconds 2
+        } while ($true)
+        $null = Sync-DuneRetailServerSettingsForStartup -Ip $VmIp
+    } $retailRoot $Ip $sshKey
+}
+
 function Get-DuneDnatWatchScriptPath {
     $candidates = @(
         (Join-Path $scriptDir 'resources\remote-scripts\dune-dnat-watch-install.sh')
@@ -2066,6 +2089,7 @@ while ($true) {
         $bgHint = if ($estBg) { " $estBg" } else { "" }
         Write-Host "[3/4] Starting battlegroup...$bgHint" -ForegroundColor Cyan
         $t_bg = Get-Date
+        Sync-DuneRetailSettingsBeforeStart -Ip $ip
         ssh -t -o StrictHostKeyChecking=no -o LogLevel=QUIET -i "$sshKey" "$sshUser@$ip" "$bgBinPath start"
         $bgStartExit = $LASTEXITCODE
         Save-PhaseTiming 'battlegroup-start' ([int]((Get-Date) - $t_bg).TotalSeconds)
@@ -2387,6 +2411,7 @@ while ($true) {
         $bgHint = if ($estBg) { " $estBg" } else { "" }
         Write-Host "[3/3] Starting battlegroup...$bgHint" -ForegroundColor Cyan
         $t_bg = Get-Date
+        Sync-DuneRetailSettingsBeforeStart -Ip $ip
         ssh -t -o StrictHostKeyChecking=no -o LogLevel=QUIET -i "$sshKey" "$sshUser@$ip" "$bgBinPath start"
         $bgStartExit = $LASTEXITCODE
         Save-PhaseTiming 'battlegroup-start' ([int]((Get-Date) - $t_bg).TotalSeconds)
@@ -2839,9 +2864,15 @@ fi
         # Refresh monitoring before issuing start/restart, not after readiness.
         Invoke-DuneHyperVGuestRecoveryInstall -Ip $ip -Phase "pre-$cmdName"
         Invoke-DuneDnatWatchdogInstall -Ip $ip -Phase "pre-$cmdName"
+        if ($cmdName -eq 'restart') {
+            ssh -t -o StrictHostKeyChecking=no -o LogLevel=QUIET -i "$sshKey" "$sshUser@$ip" "$bgBinPath stop"
+            if ($LASTEXITCODE -ne 0) { throw 'Battlegroup stop failed. Server Settings were not synchronized.' }
+        }
+        Sync-DuneRetailSettingsBeforeStart -Ip $ip
     }
 
-    ssh -t -o StrictHostKeyChecking=no -o LogLevel=QUIET -i "$sshKey" "$sshUser@$ip" "$bgBinPath $cmdName"
+    $dispatchCommand = if ($cmdName -eq 'restart') { 'start' } else { $cmdName }
+    ssh -t -o StrictHostKeyChecking=no -o LogLevel=QUIET -i "$sshKey" "$sshUser@$ip" "$bgBinPath $dispatchCommand"
     $bgFallbackExit = $LASTEXITCODE
 
     # Battlegroup commands (status/start/restart/stop) can change observable

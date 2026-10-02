@@ -796,8 +796,17 @@ function Invoke-DuneDeployInstalledUserSettings {
         return @{ ok=$false; error='The installed INIs are not verified authoritative; the battlegroup was not changed.' }
     }
 
-    $scriptPath = '/home/dune/.dune/download/scripts/battlegroup.sh'
-    $cmd = "sudo '$scriptPath' apply-default-usersettings 2>&1; rc=`$?; echo __DST_EXIT__:`$rc"
+    # Do not deploy the User*.ini glob: it would overwrite the authoritative
+    # UserServerCustomSettings.ini with a shipped template on every restart.
+    try { $target = Resolve-DuneRetailServerSettingsTarget -Ip $Ip }
+    catch { return @{ ok=$false; error=$_.Exception.Message } }
+    if (-not $target.available) { return @{ ok=$false; error=$target.reason } }
+    $cmd = @"
+sudo kubectl exec -n '$($target.namespace)' '$($target.pod)' -- mkdir -p /srv/UserSettings &&
+sudo kubectl cp '/home/dune/.dune/download/scripts/setup/config/UserGame.ini' '$($target.namespace)/$($target.pod):/srv/UserSettings/UserGame.ini' &&
+sudo kubectl cp '/home/dune/.dune/download/scripts/setup/config/UserEngine.ini' '$($target.namespace)/$($target.pod):/srv/UserSettings/UserEngine.ini'
+rc=`$?; echo __DST_EXIT__:`$rc
+"@
     $lines = @(Invoke-V6Ssh -Ip $Ip -Cmd $cmd -TimeoutSec 120)
     $marker = @($lines | Where-Object { "$_" -match '^__DST_EXIT__:(\d+)$' } | Select-Object -Last 1)
     $exitCode = if ($marker.Count -gt 0) { [int]([regex]::Match("$($marker[0])", '(\d+)$').Groups[1].Value) } else { -1 }

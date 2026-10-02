@@ -284,21 +284,28 @@ spice, scheduled restarts, memory warnings, interfaces, and log exports.
 
 Typed `UserGame.ini` and `UserEngine.ini` controls, Funcom defaults, backups,
 plus a separate **Official Retail Server Settings** card showing the live
-`Config/LinuxServer/ServerCustomSettings.ini` values used by Retail's
-multiplayer Server Settings preview. Funcom regenerates that runtime file at
-battlegroup startup, so DST writes only the durable BattleGroup
-`global.userIniConfig` source while the battlegroup is fully stopped. Every save
+`UserSettings/UserServerCustomSettings.ini` values used by Retail's
+multiplayer Server Settings preview. This persistent Linux file is authoritative:
+Refresh reads manual edits, and Save writes changes to the same file while the
+battlegroup is fully stopped. Save synchronizes the physical Linux runtime INI
+and BattleGroup operator configuration; startup refreshes them from the source
+file so later manual edits apply. Every save
 backs up the complete current file, preserves comments/order/unknown keys, and
 uses revision and exact-readback guards; unknown future keys remain read-only
 and visible rather than being discarded.
 All 47 supported settings remain visible even when absent from the source, with
 an explicit **Not configured** state rather than an assumed live value.
-**Default Settings** drafts the documented defaults for editable settings;
-saving adds only the requested keys. Boolean values accept case variations.
+Existing YAML settings are backed up and migrated on the first stopped-BG Save
+or Start, preserving existing overrides. A mismatch notice directs users to
+**Read current settings**, which loads YAML as a draft; Save copies its complete
+settings block into the UserSettings file. **Default Settings** drafts Custom
+difficulty and all missing documented defaults. Existing PvP mode is preserved.
+Boolean values accept case variations.
 Existing operator INI files and fields are preserved. An incompatible existing
 operator mount path blocks saving instead of being silently changed; failed
-readback restores the original operator field, including removing newly added
-configuration.
+readback restores both Linux files and the original operator field, including
+removing newly added configuration. Concurrent file edits are preserved when
+rollback would overwrite newer contents.
 Rollback atomically checks both the resource version and the value DST wrote;
 concurrent operator changes are not overwritten.
 DST-managed blocks, local-client mirroring, and isolated Experimental features.

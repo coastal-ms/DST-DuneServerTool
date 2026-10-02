@@ -882,6 +882,42 @@ describe('Official Retail Server Settings card', () => {
     expect(RETAIL_SETTING_GUIDANCE.PVPMode.defaultValue).toBe('Limited')
   })
 
+  it('shows a mismatch, reads YAML without writing, and imports it only on Save', async () => {
+    const catalogue = absentCatalogue()
+    const fiefdom = { ...catalogue.find(setting => setting.key === 'FiefdomLimit')!,
+      present: true, value: '3', displayValue: '3', label: 'Maximum Sub-Fief Amount', valid: true }
+    const file = {
+      available: true, readOnly: false, source: 'funcom-persistent-user-settings',
+      revision: 'file-revision', operatorMismatch: true,
+      target: { available: true, stopped: true, serverPodCount: 0, upstreamConfigured: true,
+        path: '/srv/UserSettings/UserServerCustomSettings.ini' },
+      settings: [fiefdom], malformedLines: [],
+    }
+    const yaml = { ...file, source: 'operator-import-draft', operatorRevision: 'yaml-revision',
+      settings: [{ ...fiefdom, value: '7', displayValue: '7' }] }
+    const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      if (init?.method === 'PUT') return new Response(JSON.stringify({
+        ok: true, applied: 0, revision: 'saved', settings: yaml.settings,
+        backup: { path: 'backup', sha256: 'backup', timestamp: '1' },
+        restartRequired: true, target: file.target,
+      }))
+      return new Response(JSON.stringify(String(input).includes('source=operator') ? yaml : file))
+    })
+    vi.stubGlobal('fetch', fetchMock)
+    render(<OfficialRetailServerSettingsCard vmRunning />)
+    expect(await screen.findByText(/Read current settings first to review the YAML/)).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: 'Read current settings' }))
+    await waitFor(() => expect(screen.getByRole('spinbutton', { name: 'Maximum Sub-Fief Amount exact value' })).toHaveValue(7))
+    expect(fetchMock.mock.calls.filter(([, init]) => init?.method === 'PUT')).toHaveLength(0)
+    fireEvent.click(screen.getByRole('button', { name: 'Save (1)' }))
+    await waitFor(() => expect(fetchMock.mock.calls.filter(([, init]) => init?.method === 'PUT')).toHaveLength(1))
+    const [, request] = fetchMock.mock.calls.find(([, init]) => init?.method === 'PUT')!
+    expect(JSON.parse(request!.body as string)).toEqual({
+      revision: 'file-revision', updates: {}, importOperatorRevision: 'yaml-revision',
+    })
+    await waitFor(() => expect(screen.queryByText(/Read current settings first to review the YAML/)).not.toBeInTheDocument())
+  })
+
   it('keeps malformed numeric settings on the existing exact-input fallback', async () => {
     vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify({
       available: true,
