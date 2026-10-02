@@ -11,7 +11,7 @@ Describe 'Backup verification behavior' -Tag 'Pure' {
         [IO.File]::WriteAllText($scriptPath, (New-DuneBackupVerifyScript))
         $output = & $bash (Join-Path $PSScriptRoot 'fixtures/backup-verification.sh') $scriptPath 2>&1
         $LASTEXITCODE | Should -Be 0 -Because ($output -join "`n")
-        @($output | Where-Object { $_ -match ' passed$' }).Count | Should -Be 9
+        @($output | Where-Object { $_ -match ' passed$' }).Count | Should -Be 10
     }
     It 'rejects an invalid database port' {
         { New-DuneBackupVerifyScript -DbPort 0 } | Should -Throw

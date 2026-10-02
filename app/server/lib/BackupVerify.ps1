@@ -11,6 +11,10 @@ _pods=$(sudo kubectl get pods -n "$_ns" --no-headers 2>/dev/null | awk -v bg="$_
 if [ "$(printf '%s\n' "$_pods" | grep -c .)" != 1 ]; then echo '[dst] backup verification FAILED: no unique running DB pod for current battlegroup'; false;
 else
 _pn=$_pods; _ok=1;
+# pg_restore reads only the catalog. Drain the remaining input so kubectl can close its stdin stream.
+_dst_archive_readable() {
+(set -o pipefail; sudo cat "$1" | sudo timeout 60 kubectl exec -i -n "$_ns" "$_pn" -- sh -c 'pg_restore --list >/dev/null; _rc=$?; cat >/dev/null; exit "$_rc"');
+};
 sudo mkdir -p "$_dir" || _ok=0;
 if [ "$_ok" = 1 ] && ! sudo test -s "$_bf.yaml"; then
 _yt=$(sudo mktemp "$_dir/.dst-spec-XXXXXX") || _ok=0;
@@ -21,11 +25,11 @@ fi;
 if [ "$_ok" = 1 ] && ! sudo test -s "$_bf"; then
 _dt=$(sudo mktemp "$_dir/.dst-dump-XXXXXX") || _ok=0;
 if [ "$_ok" = 1 ]; then
-if sudo sh -c 'kubectl exec -i -n "$1" "$2" -- pg_dump -U dune -d dune -p __DBPORT__ -F custom --no-owner > "$3"' sh "$_ns" "$_pn" "$_dt" && sudo test -s "$_dt" && (set -o pipefail; sudo cat "$_dt" | sudo kubectl exec -i -n "$_ns" "$_pn" -- pg_restore --list >/dev/null); then sudo mv -n "$_dt" "$_bf" || _ok=0; else _ok=0; fi;
+if sudo sh -c 'timeout 600 kubectl exec -n "$1" "$2" -- pg_dump -U dune -d dune -p __DBPORT__ -F custom --no-owner > "$3"' sh "$_ns" "$_pn" "$_dt" && sudo test -s "$_dt" && _dst_archive_readable "$_dt"; then sudo mv -n "$_dt" "$_bf" || _ok=0; else _ok=0; fi;
 sudo rm -f "$_dt";
 fi;
 fi;
-if [ "$_ok" = 1 ] && sudo test -s "$_bf.yaml" && (set -o pipefail; sudo cat "$_bf" | sudo kubectl exec -i -n "$_ns" "$_pn" -- pg_restore --list >/dev/null); then echo "[dst] current backup archive verified readable: $_bf"; else echo "[dst] backup verification FAILED: $_bf (archive or matching spec unavailable/unreadable)"; false; fi;
+if [ "$_ok" = 1 ] && sudo test -s "$_bf.yaml" && _dst_archive_readable "$_bf"; then echo "[dst] current backup archive verified readable: $_bf"; else echo "[dst] backup verification FAILED: $_bf (archive or matching spec unavailable/unreadable; verification timeout 60s)"; false; fi;
 fi;
 fi
 '@
