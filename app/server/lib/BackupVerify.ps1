@@ -26,7 +26,9 @@ fi;
 if [ "$_ok" = 1 ] && ! sudo test -s "$_bf"; then
 _dt=$(sudo mktemp "$_dir/.dst-dump-XXXXXX") || _ok=0;
 if [ "$_ok" = 1 ]; then
-if sudo sh -c 'timeout 600 kubectl exec -n "$1" "$2" -- pg_dump -U dune -d dune -p __DBPORT__ -F custom --no-owner > "$3"' sh "$_ns" "$_pn" "$_dt" && sudo test -s "$_dt" && _dst_archive_readable "$_dt"; then sudo mv -n "$_dt" "$_bf" || _ok=0; else _ok=0; fi;
+if sudo sh -c 'timeout 600 kubectl exec -n "$1" "$2" -- pg_dump -U dune -d dune -p __DBPORT__ -F custom --no-owner > "$3"' sh "$_ns" "$_pn" "$_dt" && sudo test -s "$_dt" && _dst_archive_readable "$_dt"; then
+if sudo test -e "$_bf" && ! sudo test -s "$_bf"; then sudo mv "$_dt" "$_bf" || _ok=0; else sudo mv -n "$_dt" "$_bf" || _ok=0; fi;
+else _ok=0; fi;
 sudo rm -f "$_dt";
 fi;
 fi;

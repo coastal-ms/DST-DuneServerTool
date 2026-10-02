@@ -11,10 +11,20 @@ Describe 'Backup verification behavior' -Tag 'Pure' {
         [IO.File]::WriteAllText($scriptPath, (New-DuneBackupVerifyScript))
         $output = & $bash (Join-Path $PSScriptRoot 'fixtures/backup-verification.sh') $scriptPath 2>&1
         $LASTEXITCODE | Should -Be 0 -Because ($output -join "`n")
-        @($output | Where-Object { $_ -match ' passed$' }).Count | Should -Be 10
+        @($output | Where-Object { $_ -match ' passed$' }).Count | Should -Be 11
     }
     It 'rejects an invalid database port' {
         { New-DuneBackupVerifyScript -DbPort 0 } | Should -Throw
+    }
+    It 'runs scheduled retention only after successful current archive verification' -Skip:(-not (Test-Path 'C:/Program Files/Git/bin/bash.exe') -and -not (Get-Command bash -ErrorAction SilentlyContinue)) {
+        Mock New-DuneBackupPodPruneSnippet { 'echo retained > __RETENTION_MARKER__' }
+        $scriptPath = Join-Path $TestDrive 'verifier.sh'
+        $scheduledPath = Join-Path $TestDrive 'scheduled.sh'
+        [IO.File]::WriteAllText($scriptPath, (New-DuneBackupVerifyScript))
+        [IO.File]::WriteAllText($scheduledPath, (New-DuneBackupCmd))
+        $output = & $bash (Join-Path $PSScriptRoot 'fixtures/backup-verification.sh') $scriptPath $scheduledPath 2>&1
+        $LASTEXITCODE | Should -Be 0 -Because ($output -join "`n")
+        @($output | Where-Object { $_ -match ' passed$' }).Count | Should -Be 22
     }
     It 'escapes percent signs at the cron boundary' {
         $block = New-DuneBackupBlock -Preset Hourly
