@@ -550,10 +550,14 @@ function ConvertTo-DuneRetailServerSettingsUpdatedRaw {
     foreach ($keyValue in $Updates.GetEnumerator()) {
         $key = [string]$keyValue.Key
         $definition = Get-DuneRetailServerSettingDefinition -Key $key
-        if (-not $definition -or -not $definition.editable) {
+        $value = ([string]$keyValue.Value).Trim()
+        # Default Settings explicitly requests Custom, and can seed an absent
+        # PvP mode. Preserve existing PvP rules and reject other preset writes.
+        $defaultUpdate = ($key -ceq 'DifficultyLevel' -and $value -ceq 'Custom') -or
+            ($key -ceq 'PVPMode' -and -not $present.ContainsKey($key) -and $value -ceq 'Limited')
+        if (-not $definition -or (-not $definition.editable -and -not $defaultUpdate)) {
             throw "Retail setting $key is not editable."
         }
-        $value = ([string]$keyValue.Value).Trim()
         if (-not (Test-DuneRetailServerSettingValue -Definition $definition -Value $value)) {
             throw "Retail setting $key has an invalid $($definition.type) value."
         }

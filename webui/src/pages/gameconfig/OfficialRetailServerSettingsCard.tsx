@@ -75,6 +75,15 @@ function normalizeSettingValue(setting: RetailServerSetting, value: string): str
   return Number.isFinite(parsed) ? parsed.toFixed(FLOAT_DECIMAL_PLACES) : value
 }
 
+// Defaults can set the required difficulty and initialize an absent PvP mode;
+// neither read-only field becomes a freely editable control.
+function isDefaultSettingUpdate(setting: RetailServerSetting, value: string): boolean {
+  return setting.supported && (
+    (setting.key === 'DifficultyLevel' && value === 'Custom')
+    || (setting.key === 'PVPMode' && setting.present === false && value === 'Limited')
+  )
+}
+
 function getDraftValidationError(setting: RetailServerSetting, value: string): string | null {
   if (setting.present === false && !value.trim()) return null
   if (setting.type !== 'int') return null
@@ -238,7 +247,9 @@ export function OfficialRetailServerSettingsCard({
         current: normalizeSettingValue(setting, setting.value),
         draft: normalizeSettingValue(setting, values[setting.key] ?? setting.value),
       }))
-      .filter(({ setting, current, draft }) => setting.editable && draft !== current)
+      .filter(({ setting, current, draft }) =>
+        (setting.editable || isDefaultSettingUpdate(setting, draft)) && draft !== current,
+      )
       .map(({ setting, draft }) => [setting.key, draft]),
   ), [state, values])
   const dirtyCount = Object.keys(updates).length
@@ -265,14 +276,15 @@ export function OfficialRetailServerSettingsCard({
       const next = { ...previous }
       for (const setting of state.settings) {
         const guidance = RETAIL_SETTING_GUIDANCE[setting.key]
-        if (setting.supported && setting.editable && guidance) {
+        if (setting.supported && guidance
+          && (setting.editable || isDefaultSettingUpdate(setting, guidance.defaultValue))) {
           next[setting.key] = normalizeSettingValue(setting, guidance.defaultValue)
         }
       }
       return next
     })
     setError(null)
-    setMessage('Default settings loaded as a draft. Review the changes, then use Save to apply them.')
+    setMessage('Default settings and Custom difficulty loaded as a draft. Review the changes, then use Save to apply them.')
   }
 
   const save = async () => {
@@ -343,7 +355,7 @@ export function OfficialRetailServerSettingsCard({
             className="btn-secondary"
             onClick={applyDefaults}
             disabled={!state?.available || !state.target.stopped || state.target.serverPodCount !== 0 || saving}
-            title="Load Funcom Patch 1.5 defaults into this draft without saving"
+            title="Draft Custom difficulty and documented defaults, including missing settings, without saving"
           >
             <Icon name="RotateCcw" size={14} />
             Default Settings
@@ -438,7 +450,7 @@ export function OfficialRetailServerSettingsCard({
           {state.settings.some(setting => setting.present === false) && (
             <div className="mb-3 border-y border-border py-2 text-xs text-text-muted">
               Settings marked Not configured are absent from the source file; their effective game values are not known.
-              Enter a value or use Default Settings to draft the documented defaults for editable settings.
+              Enter a value or use Default Settings to draft Custom difficulty and the documented defaults, including missing settings.
               Only drafted changes are added when you save; no settings are written automatically.
             </div>
           )}
@@ -524,7 +536,8 @@ export function OfficialRetailServerSettingsCard({
                           />
                         ) : (
                           <span className="min-w-20 border border-border bg-surface px-2 py-1 text-center text-xs font-semibold text-text">
-                            {setting.displayValue}
+                            {isDefaultSettingUpdate(setting, values[setting.key] ?? '')
+                              ? values[setting.key] : setting.displayValue}
                           </span>
                         )}
                       </div>

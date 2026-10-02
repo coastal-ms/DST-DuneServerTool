@@ -13,6 +13,11 @@ here cover everything those tags shipped.
 
 ## [Unreleased]
 
+## [15.2.6] - 2026-10-02
+
+- Make Default Settings draft `DifficultyLevel=Custom` so saved custom server settings can take effect.
+- Populate missing documented defaults, including Difficulty Level and an absent PvP Mode, while preserving an existing PvP Mode. Defaults remain a draft until Save; stopped-battlegroup, backup, revision, and operator-readback checks remain in place.
+
 ## [15.2.5] - 2026-10-01
 
 - Verify the archive reported by the current backup run instead of selecting the newest YAML from any battlegroup.

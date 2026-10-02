@@ -151,11 +151,11 @@ FiefdomLimit=99
         @((ConvertFrom-DuneRetailServerSettingsRaw -Raw $updated).settings | Where-Object present).Count | Should -Be 1
         { ConvertTo-DuneRetailServerSettingsUpdatedRaw -Raw '' -Updates @{ FutureRetailKey = '1' } } |
             Should -Throw '*not editable*'
-        { ConvertTo-DuneRetailServerSettingsUpdatedRaw -Raw '' -Updates @{ DifficultyLevel = 'Custom' } } |
+        { ConvertTo-DuneRetailServerSettingsUpdatedRaw -Raw '' -Updates @{ DifficultyLevel = 'Medium' } } |
             Should -Throw '*not editable*'
     }
 
-    It 'initializes the 45 editable documented defaults with catalogue-valid values' {
+    It 'initializes all 47 documented defaults including Custom difficulty from an empty source' {
         $card = Get-Content (Join-Path (Get-DstRepoRoot) 'webui\src\pages\gameconfig\OfficialRetailServerSettingsCard.tsx') -Raw
         $guidance = [regex]::Matches($card, "(?m)^  (\w+): \{ defaultValue: '([^']+)'")
         $guidance.Count | Should -Be 47
@@ -163,15 +163,33 @@ FiefdomLimit=99
         foreach ($entry in $guidance) {
             $definition = Get-DuneRetailServerSettingDefinition -Key $entry.Groups[1].Value
             $definition | Should -Not -BeNullOrEmpty
-            if ($definition.editable) { $updates[$entry.Groups[1].Value] = $entry.Groups[2].Value }
+            $updates[$entry.Groups[1].Value] = $entry.Groups[2].Value
         }
-        $updates.Count | Should -Be 45
+        $updates.Count | Should -Be 47
         $updated = ConvertTo-DuneRetailServerSettingsUpdatedRaw -Raw '' -Updates $updates
         $parsed = ConvertFrom-DuneRetailServerSettingsRaw -Raw $updated
-        @($parsed.settings | Where-Object present).Count | Should -Be 45
+        @($parsed.settings | Where-Object present).Count | Should -Be 47
         @($parsed.settings | Where-Object { -not $_.valid }).Count | Should -Be 0
-        ($parsed.settings | Where-Object key -eq 'DifficultyLevel').present | Should -BeFalse
-        ($parsed.settings | Where-Object key -eq 'PVPMode').present | Should -BeFalse
+        ($parsed.settings | Where-Object key -eq 'DifficultyLevel').value | Should -BeExactly 'Custom'
+        ($parsed.settings | Where-Object key -eq 'PVPMode').value | Should -BeExactly 'Limited'
+    }
+
+    It 'sets Custom only when explicitly requested and preserves existing PvP and unrelated content' {
+        $raw = "; heading`r`n[$script:RetailSection]`r`nDifficultyLevel=Medium ; preset`r`nPVPMode=Full`r`nFutureRetailKey=keep`r`n[Other]`r`nDifficultyLevel=Hard`r`n"
+        $updated = ConvertTo-DuneRetailServerSettingsUpdatedRaw -Raw $raw -Updates @{
+            DifficultyLevel = 'Custom'
+            CraftingCost = '1.000000'
+        }
+        $updated | Should -Match 'DifficultyLevel=Custom ; preset'
+        $updated | Should -Match 'PVPMode=Full'
+        $updated | Should -Match 'FutureRetailKey=keep'
+        $updated | Should -Match '\[Other\]\r\nDifficultyLevel=Hard'
+        (ConvertTo-DuneRetailServerSettingsUpdatedRaw -Raw $raw -Updates @{ CraftingCost = '0.000000' }) |
+            Should -Match 'DifficultyLevel=Medium ; preset'
+        { ConvertTo-DuneRetailServerSettingsUpdatedRaw -Raw $raw -Updates @{ PVPMode = 'Limited' } } |
+            Should -Throw '*not editable*'
+        { ConvertTo-DuneRetailServerSettingsUpdatedRaw -Raw '' -Updates @{ PVPMode = 'Full' } } |
+            Should -Throw '*not editable*'
     }
 
     It 'updates only requested values while preserving comments, order, and unknown keys' {
