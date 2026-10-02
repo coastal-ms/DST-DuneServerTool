@@ -20,4 +20,10 @@ Describe 'Backup verification behavior' -Tag 'Pure' {
         $block = New-DuneBackupBlock -Preset Hourly
         $block | Should -Not -Match '(?<!\\)%'
     }
+    It 'preserves shell syntax when flattened for scheduled execution' {
+        $scriptPath = Join-Path $TestDrive 'scheduled.sh'
+        [IO.File]::WriteAllText($scriptPath, (New-DuneBackupCmd))
+        $output = & $bash -n $scriptPath 2>&1
+        $LASTEXITCODE | Should -Be 0 -Because ($output -join "`n")
+    }
 }

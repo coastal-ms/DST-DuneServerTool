@@ -2,6 +2,8 @@
 function New-DuneBackupVerifyScript {
     param([int]$DbPort = 15432)
     if ($DbPort -lt 1 -or $DbPort -gt 65535) { throw 'Invalid database port' }
+    # pg_restore reads only the catalog. Drain the rest so kubectl can close stdin.
+    # Keep shell comments out of the payload, which is flattened into one cron line.
     $shell = @'
 _paths=$(printf '%s\n' "$_bk" | sed -n 's/^Backup file (on this host): //p' | tr -d '\r' | sort -u);
 if [ "$(printf '%s\n' "$_paths" | grep -c .)" != 1 ] || ! printf '%s\n' "$_paths" | grep -Eq '^/funcom/artifacts/database-dumps/[A-Za-z0-9_-]+/[A-Za-z0-9_-]+\.backup$'; then echo '[dst] backup verification FAILED: no unique current backup path'; false;
@@ -11,7 +13,6 @@ _pods=$(sudo kubectl get pods -n "$_ns" --no-headers 2>/dev/null | awk -v bg="$_
 if [ "$(printf '%s\n' "$_pods" | grep -c .)" != 1 ]; then echo '[dst] backup verification FAILED: no unique running DB pod for current battlegroup'; false;
 else
 _pn=$_pods; _ok=1;
-# pg_restore reads only the catalog. Drain the remaining input so kubectl can close its stdin stream.
 _dst_archive_readable() {
 (set -o pipefail; sudo cat "$1" | sudo timeout 60 kubectl exec -i -n "$_ns" "$_pn" -- sh -c 'pg_restore --list >/dev/null; _rc=$?; cat >/dev/null; exit "$_rc"');
 };
