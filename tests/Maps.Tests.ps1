@@ -206,6 +206,27 @@ Describe 'Battlegroup restart stages console variables' {
     }
 }
 
+Describe 'Installed INI deployment preserves authoritative Server Settings' {
+    BeforeAll {
+        function global:Resolve-DuneGameConfigPaths { param($Ip) }
+        function global:Resolve-DuneRetailServerSettingsTarget { param($Ip) }
+        function global:Invoke-V6Ssh { param($Ip, $Cmd, $TimeoutSec, $StdinData) }
+    }
+    It 'deploys only UserGame and UserEngine, never the custom-settings template' {
+        Mock Resolve-DuneGameConfigPaths { @{ source='installed' } }
+        Mock Resolve-DuneRetailServerSettingsTarget {
+            @{ available=$true; namespace='test'; pod='test-fb-deploy-abc' }
+        }
+        Mock Invoke-V6Ssh { '__DST_EXIT__:0' }
+        $result = Invoke-DuneDeployInstalledUserSettings -Ip '192.0.2.10'
+        $result.ok | Should -BeTrue
+        Should -Invoke Invoke-V6Ssh -Times 1 -ParameterFilter {
+            $Cmd -match 'UserGame.ini' -and $Cmd -match 'UserEngine.ini' -and
+            $Cmd -notmatch 'UserServerCustomSettings|apply-default-usersettings|User\*'
+        }
+    }
+}
+
 Describe 'Director-driven map status' {
     BeforeAll {
         $script:bg = [pscustomobject]@{ status=[pscustomobject]@{ servers=@(

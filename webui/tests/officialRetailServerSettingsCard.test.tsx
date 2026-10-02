@@ -37,13 +37,13 @@ describe('Official Retail Server Settings card', () => {
     readOnly: ['DifficultyLevel', 'PVPMode'].includes(key),
   }))
 
-  it('drafts and saves all 45 editable defaults from an empty source without inventing live values', async () => {
+  it('drafts and saves all 47 defaults including Custom from an empty source without writing on click', async () => {
     const settings = absentCatalogue()
     const fetchMock = vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) => {
       if (init?.method === 'PUT') {
         const { updates } = JSON.parse(init.body as string) as { updates: Record<string, string> }
         return new Response(JSON.stringify({
-          ok: true, applied: 45, revision: 'next',
+          ok: true, applied: 47, revision: 'next',
           backup: { path: 'backup', sha256: 'backup', timestamp: '1' },
           restartRequired: true,
           target: {
@@ -76,17 +76,55 @@ describe('Official Retail Server Settings card', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Default Settings' }))
     expect(building).toHaveValue(1)
     expect(screen.getByRole('combobox', { name: 'bBuildingInfiniteStability' })).toHaveValue('False')
-    expect(screen.getByRole('button', { name: 'Save (45)' })).toBeEnabled()
+    expect(screen.getByRole('button', { name: 'Save (47)' })).toBeEnabled()
     expect(fetchMock).toHaveBeenCalledOnce()
-    fireEvent.click(screen.getByRole('button', { name: 'Save (45)' }))
-    expect(await screen.findByText(/45 settings saved with backup/)).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: 'Save (47)' }))
+    expect(await screen.findByText(/47 settings saved with backup/)).toBeInTheDocument()
     expect(screen.getByText('/home/dune/server/DuneSandbox/Saved/Config/LinuxServer/ServerCustomSettings.ini')).toBeInTheDocument()
     expect(JSON.parse(fetchMock.mock.calls[1][1]?.body as string)).toEqual({
       revision: 'empty-source',
       updates: Object.fromEntries(Object.entries(RETAIL_SETTING_GUIDANCE)
-        .filter(([key]) => !['DifficultyLevel', 'PVPMode'].includes(key))
         .map(([key, guidance]) => [key, guidance.defaultValue])),
     })
+    expect(screen.getByRole('button', { name: 'Save' })).toBeDisabled()
+  })
+
+  it('replaces Medium with Custom, fills missing defaults, and preserves existing PvP and unknown values', async () => {
+    const settings = absentCatalogue().map(setting => {
+      const value = { DifficultyLevel: 'Medium', PVPMode: 'Full', FiefdomLimit: '3' }[setting.key]
+      return value ? { ...setting, present: true, value, displayValue: value } : setting
+    })
+    settings.push({ ...settings[0], key: 'FutureRetailKey', label: 'Future key',
+      supported: false, present: true, value: 'keep', displayValue: 'keep', editable: false })
+    const fetchMock = vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) => {
+      const updates = init?.method === 'PUT'
+        ? (JSON.parse(init.body as string) as { updates: Record<string, string> }).updates : {}
+      return new Response(JSON.stringify(init?.method === 'PUT' ? {
+        ok: true, applied: Object.keys(updates).length, revision: 'next',
+        backup: { path: 'backup', sha256: 'backup', timestamp: '1' }, restartRequired: true,
+        settings: settings.map(setting => updates[setting.key]
+          ? { ...setting, present: true, value: updates[setting.key], displayValue: updates[setting.key] }
+          : setting),
+      } : {
+        available: true, revision: 'medium-source', sectionFound: true,
+        target: { stopped: true, serverPodCount: 0 }, settings, malformedLines: [],
+      }))
+    })
+    vi.stubGlobal('fetch', fetchMock)
+    render(<OfficialRetailServerSettingsCard vmRunning />)
+    expect(await screen.findByText('Medium')).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: 'Default Settings' }))
+    expect(screen.queryByText('Medium')).not.toBeInTheDocument()
+    expect(screen.getByText('Full')).toBeInTheDocument()
+    expect(screen.getByText('keep')).toBeInTheDocument()
+    expect(fetchMock).toHaveBeenCalledOnce()
+    fireEvent.click(screen.getByRole('button', { name: 'Save (45)' }))
+    await screen.findByText(/45 settings saved with backup/)
+    const payload = JSON.parse(fetchMock.mock.calls[1][1]?.body as string)
+    expect(payload).toEqual({ revision: 'medium-source', updates: Object.fromEntries(
+      Object.entries(RETAIL_SETTING_GUIDANCE).filter(([key]) => !['PVPMode', 'FiefdomLimit'].includes(key))
+        .map(([key, guidance]) => [key, guidance.defaultValue]),
+    ) })
     expect(screen.getByRole('button', { name: 'Save' })).toBeDisabled()
   })
 
@@ -817,9 +855,9 @@ describe('Official Retail Server Settings card', () => {
 
     expect(floatInput).toHaveAttribute('value', '1.000000')
     expect(intInput).toHaveAttribute('value', '3')
-    expect(screen.getByText('Custom-Test')).toBeInTheDocument()
+    expect(screen.queryByText('Custom-Test')).not.toBeInTheDocument()
     expect(screen.getAllByText('leave-me')).toHaveLength(1)
-    expect(screen.getByRole('button', { name: 'Save (2)' })).toBeEnabled()
+    expect(screen.getByRole('button', { name: 'Save (3)' })).toBeEnabled()
     expect(fetchMock).toHaveBeenCalledOnce()
     expect(fetchMock.mock.calls.some(([, init]) => init?.method === 'PUT')).toBe(false)
 
@@ -827,6 +865,7 @@ describe('Official Retail Server Settings card', () => {
     await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2))
     expect(floatInput).toHaveAttribute('value', '2.000000')
     expect(intInput).toHaveAttribute('value', '5')
+    expect(screen.getByText('Custom-Test')).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Save' })).toBeDisabled()
   })
 
@@ -841,6 +880,42 @@ describe('Official Retail Server Settings card', () => {
     expect(RETAIL_SETTING_GUIDANCE.NPCRespawnMultiplier.effect).not.toMatch(/easier|harder|faster|slower/)
     expect(RETAIL_SETTING_GUIDANCE.DifficultyLevel.defaultValue).toBe('Custom')
     expect(RETAIL_SETTING_GUIDANCE.PVPMode.defaultValue).toBe('Limited')
+  })
+
+  it('shows a mismatch, reads YAML without writing, and imports it only on Save', async () => {
+    const catalogue = absentCatalogue()
+    const fiefdom = { ...catalogue.find(setting => setting.key === 'FiefdomLimit')!,
+      present: true, value: '3', displayValue: '3', label: 'Maximum Sub-Fief Amount', valid: true }
+    const file = {
+      available: true, readOnly: false, source: 'funcom-persistent-user-settings',
+      revision: 'file-revision', operatorMismatch: true,
+      target: { available: true, stopped: true, serverPodCount: 0, upstreamConfigured: true,
+        path: '/srv/UserSettings/UserServerCustomSettings.ini' },
+      settings: [fiefdom], malformedLines: [],
+    }
+    const yaml = { ...file, source: 'operator-import-draft', operatorRevision: 'yaml-revision',
+      settings: [{ ...fiefdom, value: '7', displayValue: '7' }] }
+    const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      if (init?.method === 'PUT') return new Response(JSON.stringify({
+        ok: true, applied: 0, revision: 'saved', settings: yaml.settings,
+        backup: { path: 'backup', sha256: 'backup', timestamp: '1' },
+        restartRequired: true, target: file.target,
+      }))
+      return new Response(JSON.stringify(String(input).includes('source=operator') ? yaml : file))
+    })
+    vi.stubGlobal('fetch', fetchMock)
+    render(<OfficialRetailServerSettingsCard vmRunning />)
+    expect(await screen.findByText(/Read current settings first to review the YAML/)).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: 'Read current settings' }))
+    await waitFor(() => expect(screen.getByRole('spinbutton', { name: 'Maximum Sub-Fief Amount exact value' })).toHaveValue(7))
+    expect(fetchMock.mock.calls.filter(([, init]) => init?.method === 'PUT')).toHaveLength(0)
+    fireEvent.click(screen.getByRole('button', { name: 'Save (1)' }))
+    await waitFor(() => expect(fetchMock.mock.calls.filter(([, init]) => init?.method === 'PUT')).toHaveLength(1))
+    const [, request] = fetchMock.mock.calls.find(([, init]) => init?.method === 'PUT')!
+    expect(JSON.parse(request!.body as string)).toEqual({
+      revision: 'file-revision', updates: {}, importOperatorRevision: 'yaml-revision',
+    })
+    await waitFor(() => expect(screen.queryByText(/Read current settings first to review the YAML/)).not.toBeInTheDocument())
   })
 
   it('keeps malformed numeric settings on the existing exact-input fallback', async () => {

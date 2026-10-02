@@ -11,11 +11,8 @@ Register-DuneRoute -Method GET -Path '/api/gameconfig/schema' -Handler {
     Write-DuneJson -Response $res -Body @{ schema = Get-DuneGameConfigSchemaApi }
 }
 
-# Official Retail Self-Hosted settings are a Funcom-managed runtime projection
-# on the Saved PVC. Funcom reconciles direct edits, and no durable upstream write
-# source is currently configured in the battlegroup. The ServerGroup CRD exposes
-# global.userIniConfig as the intended upstream mount contract. Writes below
-# target only that durable field while the battlegroup is fully stopped.
+# Server Settings use the persistent Linux UserSettings file. Existing YAML is
+# retained until a backed-up migration completes; it can also be read as a draft.
 Register-DuneRoute -Method GET -Path '/api/gameconfig/retail-server-settings' -Handler {
     param($req, $res, $routeParams, $body)
     $ctx = Get-DuneGameConfigContext
@@ -24,7 +21,8 @@ Register-DuneRoute -Method GET -Path '/api/gameconfig/retail-server-settings' -H
         return
     }
     try {
-        Write-DuneJson -Response $res -Body (Get-DuneRetailServerSettings -Ip $ctx.ip)
+        $readOperator = $req -and $req.QueryString['source'] -eq 'operator'
+        Write-DuneJson -Response $res -Body (Get-DuneRetailServerSettings -Ip $ctx.ip -ReadOperator:$readOperator)
     } catch {
         Write-DuneError -Response $res -Status 500 -Message "Official Retail Server Settings load failed: $($_.Exception.Message)"
     }
@@ -47,7 +45,8 @@ Register-DuneRoute -Method PUT -Path '/api/gameconfig/retail-server-settings' -H
     }
     try {
         Write-DuneJson -Response $res -Body (
-            Set-DuneRetailServerSettings -Ip $ctx.ip -Updates $body.updates -ExpectedRevision "$($body.revision)")
+            Set-DuneRetailServerSettings -Ip $ctx.ip -Updates $body.updates -ExpectedRevision "$($body.revision)" `
+                -ImportOperatorRevision "$($body.importOperatorRevision)")
     } catch {
         $status = if ($_.Exception.Message -match 'changed since|changed during save') { 409 } else { 400 }
         Write-DuneError -Response $res -Status $status -Message $_.Exception.Message

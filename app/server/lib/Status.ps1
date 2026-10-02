@@ -695,7 +695,10 @@ function Get-BgGameServerValues {
     param([string]$Line)
     if (-not $Line) { return @() }
     # Strip any residual ANSI just in case, then tokenize on runs of whitespace.
-    $clean = ($Line -replace "`e\[[0-9;]*[A-Za-z]", '').Trim()
+    $clean = ($Line -replace "$([char]27)\[[0-9;]*[A-Za-z]", '').Trim()
+    # kubectl prints this notice below the Game Servers headers when empty.
+    # It is not a server row: counting it prevents shutdown polling completing.
+    if ($clean -match '^No resources found(?:\s|$)') { return @() }
     $tokens = @($clean -split '\s+' | Where-Object { $_ -ne '' })
     if ($tokens.Count -lt 4) { return @() }
     $n       = $tokens.Count

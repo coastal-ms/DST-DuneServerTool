@@ -247,9 +247,12 @@ export type RetailServerSettingsResponse = {
   available: boolean
   readOnly: boolean
   source: 'funcom-runtime-projection' | 'funcom-servergroup-user-ini-config'
+    | 'funcom-persistent-user-settings' | 'existing-operator-settings-pending-migration' | 'operator-import-draft'
   authority?: string
   reason?: string
   revision?: string
+  operatorRevision?: string | null
+  operatorMismatch?: boolean
   modifiedAt?: string
   observedAt?: string
   bytes?: number

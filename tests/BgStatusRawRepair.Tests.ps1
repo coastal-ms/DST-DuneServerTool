@@ -25,6 +25,36 @@ BeforeAll {
     }
 }
 
+Describe 'Stopped battlegroup Game Servers table' {
+    It 'reports zero servers for the kubectl empty-table notice' {
+        $text = @'
+Battlegroup: sh-example
+Battlegroup Info
+Status     Database   Gateway    Director   Uptime
+---------- ---------- ---------- ---------- --------
+Stopped    Ready      Suspended  Suspended
+
+Game Servers
+Map             Phase                  Ready  Players  Age
+--------------- ---------------------- ------ -------- ------
+No resources found in funcom-seabass-sh-example namespace.
+'@
+        $parsed = ConvertFrom-BgStatusText -Text $text
+        Get-BgStateFromStatusText -Text $text | Should -Be 'stopped'
+        @($parsed.gameServers).Count | Should -Be 0
+    }
+
+    It 'keeps actual draining server rows while ignoring an ANSI-colored empty-table notice' {
+        $notice = "$([char]27)[33mNo resources found in funcom-seabass-sh-example namespace.$([char]27)[0m"
+        @(Get-BgGameServerValues -Line $notice).Count | Should -Be 0
+        $text = "Game Servers`nMap Phase Ready Players Age`n--- ----- ----- ------- ---`nSurvival_1 Reconciling Stopping False 0 2m"
+        $parsed = ConvertFrom-BgStatusText -Text $text
+        @($parsed.gameServers).Count | Should -Be 1
+        $parsed.gameServers[0].map | Should -Be 'Survival_1'
+        $parsed.gameServers[0].phase | Should -Be 'Reconciling Stopping'
+    }
+}
+
 Describe 'Repair-DuneBgInfoRawOutput' {
     It 'rewrites a drifted row from JSON and marks it corrected' {
         # Multi-word title "Dune, my Arrakis" -> Funcom puts "my" in the Status cell.
