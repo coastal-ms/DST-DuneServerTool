@@ -13,6 +13,14 @@ here cover everything those tags shipped.
 
 ## [Unreleased]
 
+## [15.2.5] - 2026-10-01
+
+- Verify the archive reported by the current backup run instead of selecting the newest YAML from any battlegroup.
+- Recover a missing backup directory, matching battlegroup YAML, and dump using the current battlegroup's unique running database pod. Reject missing or ambiguous targets and failed dumps without overwriting existing archives.
+- Check the archive catalog with `pg_restore --list` and skip scheduled retention when verification fails. This checks archive readability, not a full restore.
+- Drain the archive stream after its catalog is read so verification can finish, and bound dump recovery and archive checks with timeouts.
+- Update schedules that exactly match the previous managed backup command while preserving hand-edited schedules.
+
 ## [15.2.4] - 2026-10-01
 
 - Fix Official Retail Server Settings hiding absent supported keys and doing nothing when defaults are drafted from an empty section. Saves can initialize requested editable keys while preserving the source file, and boolean values accept case variations.

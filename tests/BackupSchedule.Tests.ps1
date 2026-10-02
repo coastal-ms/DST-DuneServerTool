@@ -38,6 +38,7 @@ BeforeAll {
     $repo = Split-Path $PSScriptRoot -Parent
     . (Join-Path $repo 'app\lib\Db-Postgres.ps1')
     . (Join-Path $repo 'app\server\lib\BackupSchedule.ps1')
+    . (Join-Path $repo 'app/server/lib/BackupVerify.ps1')
     $script:DuneServerCliSource = Get-Content (Join-Path $repo 'dune-server.ps1') -Raw
 
     function Get-DstBashScriptPath {
@@ -52,145 +53,22 @@ BeforeAll {
     $script:DstBashAvailable = $null -ne (Get-Command bash -ErrorAction SilentlyContinue)
 }
 
-Describe 'New-DuneBackupCmd pg_dump backfill' -Tag 'Pure' {
-
-    It 'keeps calling battlegroup backup unchanged, before the fallback' {
-        $cmd = New-DuneBackupCmd -KeepLastPods 10 -KeepLast 0
-        $cmd | Should -Match ([regex]::Escape('_bk=$(/home/dune/.dune/bin/battlegroup backup 2>&1)'))
+Describe 'Current backup verification integration' -Tag 'Pure' {
+    It 'captures this run and avoids global sidecar or pod selection' {
+        $cmd = New-DuneBackupCmd -KeepLast 3
+        $cmd | Should -Match '_br=\$\?'
+        $cmd | Should -Match 'current backup archive verified readable'
+        $cmd | Should -Match '&& \{.*prune backup/restore pod'
+        (New-DuneBackupVerifyScript) | Should -Not -Match 'ls -t|--all-namespaces|head -1'
     }
-
-    It 'captures and re-logs battlegroup backup''s own stdout/stderr' {
-        $cmd = New-DuneBackupCmd -KeepLastPods 10 -KeepLast 0
-        $cmd | Should -Match ([regex]::Escape('printf "%s\n" "$_bk" >> /var/log/dune-backup.log'))
+    It 'shares the verifier with the manual path' {
+        $script:DuneServerCliSource | Should -Match 'Tee-Object -Variable backupOutput'
+        $script:DuneServerCliSource | Should -Match 'New-DuneBackupVerifyScript -DbPort \$dbPort'
+        $script:DuneServerCliSource | Should -Not -Match 'ls -t /funcom/artifacts/database-dumps/\*/\*\.backup.yaml'
     }
-
-    It 'parses the exact "Backup file (on this host):" path battlegroup backup reports' {
-        $cmd = New-DuneBackupCmd -KeepLastPods 10 -KeepLast 0
-        $cmd | Should -Match ([regex]::Escape('sed -n "s/^Backup file (on this host): //p"'))
-    }
-
-    It 'only backfills when the file is missing or empty ([ ! -s ]), never overwriting a real dump' {
-        $cmd = New-DuneBackupCmd -KeepLastPods 10 -KeepLast 0
-        $cmd | Should -Match ([regex]::Escape('if [ -n "$_bf" ] && [ ! -s "$_bf" ]; then'))
-    }
-
-    It 'discovers the DB pod the same way Find-V6DbPod does (db-dbdepl-sts, Running)' {
-        $cmd = New-DuneBackupCmd -KeepLastPods 10 -KeepLast 0
-        $cmd | Should -Match ([regex]::Escape('grep "db-dbdepl-sts.*Running"'))
-    }
-
-    It 'runs pg_dump with Funcom''s own flags (-F custom --no-owner) so the format matches byte-for-byte' {
-        $cmd = New-DuneBackupCmd -KeepLastPods 10 -KeepLast 0
-        $cmd | Should -Match ([regex]::Escape('pg_dump -U dune -d dune -p'))
-        $cmd | Should -Match ([regex]::Escape('-F custom --no-owner'))
-    }
-
-    It 'interpolates the configured DB port into the pg_dump call' {
-        Mock -CommandName Get-V6DbPort -MockWith { 25555 }
-        $cmd = New-DuneBackupCmd -KeepLastPods 10 -KeepLast 0
-        $cmd | Should -Match ([regex]::Escape('-p 25555 -F custom'))
-    }
-
-    It 'defaults to port 15432 when Get-V6DbPort is unavailable' {
-        $cmd = New-DuneBackupCmd -KeepLastPods 10 -KeepLast 0
-        $cmd | Should -Match ([regex]::Escape('-p 15432 -F custom'))
-    }
-
-    It 'removes a failed/partial backfill attempt rather than leaving a corrupt file behind' {
-        $cmd = New-DuneBackupCmd -KeepLastPods 10 -KeepLast 0
-        $cmd | Should -Match ([regex]::Escape('rm -f "$_bf"'))
-    }
-
-    It 'logs a clear reason when no running DB pod is found, instead of failing silently' {
-        $cmd = New-DuneBackupCmd -KeepLastPods 10 -KeepLast 0
-        $cmd | Should -Match ([regex]::Escape('pg_dump backfill skipped - no running db pod found'))
-    }
-
-    It 'still wraps everything in the existing BG-restart/recovery-window guard' {
-        $cmd = New-DuneBackupCmd -KeepLastPods 10 -KeepLast 0
-        $cmd | Should -Match ([regex]::Escape('dst-world-restart-recovery-required'))
-        $cmd | Should -Match ([regex]::Escape('backup skipped - BG restart or recovery window active'))
-    }
-
-    It 'still runs the pod-prune and file-prune tail after the backfill logic' {
-        $cmd = New-DuneBackupCmd -KeepLastPods 10 -KeepLast 5
-        $cmd | Should -Match ([regex]::Escape('prune backup/restore pod'))
-        $cmd | Should -Match ([regex]::Escape('tail -n +6'))
-    }
-
-    It 'produces a single valid bash statement (no unbalanced quotes/braces from the PowerShell interpolation)' -Skip:(-not $script:DstBashAvailable) {
-        $cmd = New-DuneBackupCmd -KeepLastPods 10 -KeepLast 3
-        $path = Get-DstBashScriptPath
-        try {
-            [IO.File]::WriteAllText($path, "if true; then $cmd`nfi`n")
-            & bash -n $path 2>$null
-            $LASTEXITCODE | Should -Be 0
-        } finally {
-            Remove-Item -LiteralPath $path -Force -ErrorAction SilentlyContinue
-        }
-    }
-
-    It 'produces valid bash at KeepLast=0 too (file-prune snippet empty)' -Skip:(-not $script:DstBashAvailable) {
-        $cmd = New-DuneBackupCmd -KeepLastPods 10 -KeepLast 0
-        $path = Get-DstBashScriptPath
-        try {
-            [IO.File]::WriteAllText($path, "if true; then $cmd`nfi`n")
-            & bash -n $path 2>$null
-            $LASTEXITCODE | Should -Be 0
-        } finally {
-            Remove-Item -LiteralPath $path -Force -ErrorAction SilentlyContinue
-        }
-    }
-}
-
-Describe 'dune-server.ps1 manual "backup" command backfill' -Tag 'Pure' {
-
-    It 'runs the interactive backup exactly as before, unchanged' {
-        $script:DuneServerCliSource | Should -Match ([regex]::Escape('ssh -t -o StrictHostKeyChecking=no -o LogLevel=QUIET -i "$sshKey" "$sshUser@$ip" "$bgBinPath backup"'))
-    }
-
-    It 'checks the newest backup .yaml sidecar rather than guessing a filename' {
-        $script:DuneServerCliSource | Should -Match ([regex]::Escape('ls -t /funcom/artifacts/database-dumps/*/*.backup.yaml'))
-    }
-
-    It 'never touches a file that is already present and non-empty' {
-        $script:DuneServerCliSource | Should -Match ([regex]::Escape('elif [ -s "$_bf" ]; then'))
-    }
-
-    It 'writes the pg_dump backfill through sudo end-to-end, since this path runs as the unprivileged dune user (unlike the root cron path)' {
-        $script:DuneServerCliSource | Should -Match ([regex]::Escape('sudo sh -c "kubectl exec -i -n $_ns $_pn -- pg_dump -U dune -d dune -p __DBPORT__ -F custom --no-owner > $_bf"'))
-    }
-
-    It 'substitutes the configured DB port (not a hardcoded literal) into the manual-path pg_dump call' {
-        $script:DuneServerCliSource | Should -Match ([regex]::Escape("-replace '__DBPORT__', `$dbPort"))
-    }
-
-    It 'cleans up a failed/partial backfill with sudo too' {
-        $script:DuneServerCliSource | Should -Match ([regex]::Escape('sudo rm -f "$_bf"'))
-    }
-
-    It 'falls through with continue, relying on the shared end-of-script pause rather than pausing twice' {
-        if ($script:DuneServerCliSource -notmatch '(?s)if \(\$cmdName -eq "backup"\) \{(.*?)\n    \}') {
-            throw 'Could not locate the backup special-case block in dune-server.ps1'
-        }
-        $block = $Matches[1]
-        $block | Should -Match 'continue'
-        $block | Should -Not -Match 'Invoke-DunePauseBeforeClose'
-    }
-
-    It 'produces valid bash for the manual-path verify/backfill script' -Skip:(-not $script:DstBashAvailable) {
-        if ($script:DuneServerCliSource -notmatch "(?s)\`$verifyScript = @'\r?\n(.*?)\r?\n'@") {
-            throw 'Could not locate the manual-path verifyScript here-string in dune-server.ps1'
-        }
-        $rendered = $Matches[1] -replace '__DBPORT__', '15432'
-        $path = Get-DstBashScriptPath
-        try {
-            [IO.File]::WriteAllText($path, $rendered)
-            & bash -n $path 2>$null
-            $LASTEXITCODE | Should -Be 0
-        } finally {
-            Remove-Item -LiteralPath $path -Force -ErrorAction SilentlyContinue
-        }
+    It 'uses the configured database port' {
+        Mock Get-V6DbPort { 25555 }
+        New-DuneBackupCmd | Should -Match '-p 25555 -F custom'
     }
 }
 
@@ -276,6 +154,31 @@ Describe 'Get-DuneBackupSchedule self-heals a stale pre-fix installed block' -Ta
 
         Should -Invoke -CommandName Set-DuneBackupSchedule -Times 0
         $result.managedBlockLooksTampered | Should -BeTrue
+    }
+
+    It 'migrates an exact version 2 schedule but preserves a hand-edited version 2 command' {
+        $oldCmd = New-DuneBackupCmdLegacyV2 -KeepLastPods 10 -KeepLast 5
+        $lines = @(
+            $script:DuneBackupBeginMarker
+            '# DST-BACKUP-PRESET: Hourly'
+            '# DST-BACKUP-KEEP-LAST: 5'
+            '# DST-BACKUP-KEEP-LAST-PODS: 10'
+            '# DST-BACKUP-KEEP-DAYS-PODS: 0'
+            '# DST-BACKUP-CMD-VERSION: 2'
+            "0 * * * * $oldCmd"
+            $script:DuneBackupEndMarker
+        ) -join "`n"
+        $oldText = New-DstShellSectionsOutput -CrontabText $lines
+        $healedText = New-DstShellSectionsOutput -CrontabText (New-DuneBackupBlock -Preset Hourly -KeepLast 5 -KeepLastPods 10 -KeepDaysPods 0).TrimEnd("`n")
+        $script:reads = 0
+        Mock Invoke-DuneBackupShell { $script:reads++; @{ rc=0; out= $(if ($script:reads -eq 1) { $oldText } else { $healedText }) } }
+        Mock Set-DuneBackupSchedule { @{ ok=$true } }
+        (Get-DuneBackupSchedule -Ip '10.0.0.1').managedBlockLooksTampered | Should -BeFalse
+        Should -Invoke Set-DuneBackupSchedule -Times 1
+        $editedText = New-DstShellSectionsOutput -CrontabText ($lines.Replace($oldCmd, "$oldCmd; echo customized"))
+        Mock Invoke-DuneBackupShell { @{ rc=0; out=$editedText } }
+        (Get-DuneBackupSchedule -Ip '10.0.0.1').managedBlockLooksTampered | Should -BeTrue
+        Should -Invoke Set-DuneBackupSchedule -Times 1
     }
 
     It 'does not reconcile a block that is already current' {
