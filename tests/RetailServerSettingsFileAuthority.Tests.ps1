@@ -24,8 +24,16 @@ Describe 'Linux Server Settings atomic file transactions' -Skip:(
             $localCmd = $localCmd.Replace('/srv/Config/LinuxServer', "$script:RetailShellRoot/runtime")
             $psi = [Diagnostics.ProcessStartInfo]::new()
             $psi.FileName = $script:RetailTestBash
-            $psi.ArgumentList.Add('-c')
-            $psi.ArgumentList.Add($localCmd)
+            if ($IsWindows) {
+                # Match Invoke-V6Ssh's PS 5.1-compatible Windows command line.
+                # ArgumentList bypasses this transport and misses escaped-quote failures.
+                $psi.Arguments = (@('-c', $localCmd) | ForEach-Object {
+                    if ($_ -match '[\s"]') { '"' + ($_ -replace '"','\"') + '"' } else { $_ }
+                }) -join ' '
+            } else {
+                $psi.ArgumentList.Add('-c')
+                $psi.ArgumentList.Add($localCmd)
+            }
             $psi.RedirectStandardInput = $true
             $psi.RedirectStandardOutput = $true
             $psi.RedirectStandardError = $true

@@ -673,7 +673,10 @@ f="$($Target.path)"
 mkdir -p /srv/UserSettings
 mkdir -p "`$(dirname "`$f")"
 t=`$(mktemp /srv/UserSettings/.dst-settings.XXXXXX)
-trap "rm -f \"`$t\"" EXIT
+# A cleanup function avoids backslash-escaped quotes, which are corrupted by
+# the PS 5.1-compatible Windows SSH command-line transport.
+cleanup() { rm -f "`$t"; }
+trap cleanup EXIT
 cat > "`$t"
 [ "`$(sha256sum "`$t" | cut -d" " -f1)" = "$hash" ]
 if [ -f "`$f" ]; then
@@ -705,7 +708,8 @@ set -eu
 [ "`$(sha256sum "$($Target.path)" | cut -d" " -f1)" = "$ExpectedRevision" ]
 m=/srv/UserSettings/.dst-server-settings-file-authority-v1
 t=`$(mktemp /srv/UserSettings/.dst-authority.XXXXXX)
-trap "rm -f \"`$t\"" EXIT
+cleanup() { rm -f "`$t"; }
+trap cleanup EXIT
 printf "file-authority-v1\n" > "`$t"
 chmod 644 "`$t"
 mv -f "`$t" "`$m"
