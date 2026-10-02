@@ -15,6 +15,7 @@ here cover everything those tags shipped.
 
 ## [15.2.6] - 2026-10-02
 
+- Stop counting kubectl's empty-table notice as a server pod, allowing Server Settings shutdown progress to finish without leaving the page.
 - Make the persistent Linux UserSettings file authoritative for Server Settings, with manual edits reflected on Refresh and synchronized to the runtime configuration at BG startup.
 - Preserve and back up existing YAML overrides on the first migration. Warn when YAML and the file differ; Read current settings loads YAML as a draft that Save writes to the UserSettings file, preserving unknown settings.
 - Prevent restart preparation from overwriting UserServerCustomSettings.ini with a shipped template. Save also updates the physical Linux runtime INI; verify both file writes and restore prior contents if operator synchronization fails.
