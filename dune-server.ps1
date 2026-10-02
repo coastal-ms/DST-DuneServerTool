@@ -21,7 +21,7 @@ param(
 # Wraps the original battlegroup.ps1 menu and adds extra tools
 # ============================================================
 
-$script:ToolVersion = "15.2.4"
+$script:ToolVersion = "15.2.5"
 
 # Cold-boot readiness budgets (seconds). A fresh battlegroup's FIRST boot can
 # take 10-30 min: k3s + funcom-operators initialize, metrics-server restarts a
@@ -2775,37 +2775,24 @@ while ($true) {
     # the instant the pod is garbage-collected. Confirmed live on multiple
     # servers, every run since ~Sept 18. Run the interactive backup exactly
     # as before (unchanged - the operator should still see Funcom's real
-    # output), then verify the newest dump actually landed and backfill it
+    # output), then verify this run's reported dump and backfill it
     # via direct pg_dump against the always-on Postgres pod if not. See
     # BackupSchedule.ps1's New-DuneBackupCmd for the same fix on the
     # scheduled-cron path.
     if ($cmdName -eq "backup") {
-        ssh -t -o StrictHostKeyChecking=no -o LogLevel=QUIET -i "$sshKey" "$sshUser@$ip" "$bgBinPath backup"
-        Write-Host "Verifying the backup file actually landed..." -ForegroundColor DarkGray
-        $verifyScript = @'
-_bf=$(ls -t /funcom/artifacts/database-dumps/*/*.backup.yaml 2>/dev/null | head -1 | sed "s/\.yaml$//")
-if [ -z "$_bf" ]; then
-  echo "[dst] no backup .yaml sidecar found yet - nothing to verify."
-elif [ -s "$_bf" ]; then
-  echo "[dst] backup file verified present and non-empty: $_bf"
-else
-  _dbl=$(sudo kubectl get pods --all-namespaces --no-headers 2>/dev/null | grep "db-dbdepl-sts.*Running" | head -1)
-  _ns=$(echo "$_dbl" | awk "{print \$1}")
-  _pn=$(echo "$_dbl" | awk "{print \$2}")
-  if [ -n "$_pn" ]; then
-    if sudo sh -c "kubectl exec -i -n $_ns $_pn -- pg_dump -U dune -d dune -p __DBPORT__ -F custom --no-owner > $_bf" 2>/tmp/dst-manual-backup-backfill.log && [ -s "$_bf" ]; then
-      echo "[dst] battlegroup backup's dump file was missing (Funcom pod-write regression) - backfilled via direct pg_dump: $_bf"
-    else
-      echo "[dst] pg_dump backfill FAILED for $_bf - see /tmp/dst-manual-backup-backfill.log on the VM"
-      sudo rm -f "$_bf"
-    fi
-  else
-    echo "[dst] pg_dump backfill skipped - no running db pod found"
-  fi
-fi
-'@
-        $verifyScript = ($verifyScript -replace "`r", '') -replace '__DBPORT__', $dbPort
+        $verifyLib = @(
+            (Join-Path $scriptDir 'server/lib/BackupVerify.ps1')
+            (Join-Path $scriptDir 'app/server/lib/BackupVerify.ps1')
+        ) | Where-Object { Test-Path -LiteralPath $_ } | Select-Object -First 1
+        if (-not $verifyLib) { Write-Host 'Backup verifier missing; reinstall DST.' -ForegroundColor Red; continue }
+        . $verifyLib
+        ssh -t -o StrictHostKeyChecking=no -o LogLevel=QUIET -i "$sshKey" "$sshUser@$ip" "$bgBinPath backup" 2>&1 | Tee-Object -Variable backupOutput | Out-Host
+        if ($LASTEXITCODE -ne 0) { Write-Host 'Backup command failed; verification skipped.' -ForegroundColor Red; continue }
+        Write-Host "Verifying this run's backup archive..." -ForegroundColor DarkGray
+        $encodedOutput = [Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes(($backupOutput -join "`n")))
+        $verifyScript = "_bk=`$(printf '%s' '$encodedOutput' | base64 -d);`n" + (New-DuneBackupVerifyScript -DbPort $dbPort)
         ssh -o BatchMode=yes -o StrictHostKeyChecking=no -o LogLevel=QUIET -i "$sshKey" "$sshUser@$ip" $verifyScript
+        if ($LASTEXITCODE -ne 0) { Write-Host 'Backup verification failed. Keep existing backups and inspect the output above.' -ForegroundColor Red }
         continue
     }
 

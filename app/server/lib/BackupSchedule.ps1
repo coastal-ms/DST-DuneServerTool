@@ -149,56 +149,19 @@ function New-DuneBackupCmdLegacyV1 {
 # already-installed crontabs need to pick up automatically (see
 # Get-DuneBackupSchedule's self-heal below) — not for cosmetic/comment-only
 # changes.
-$script:DuneBackupCmdVersion = 2
+$script:DuneBackupCmdVersion = 3
 
-function New-DuneBackupCmd {
+function New-DuneBackupCmdLegacyV2 {
     param(
         [int]$KeepLastPods = 10,
         [int]$KeepLast = 0
     )
     $podSnippet  = New-DuneBackupPodPruneSnippet -KeepLast $KeepLastPods
     $fileSnippet = New-DuneBackupFilePruneSnippet -KeepLast $KeepLast
-    # File-retention prune (issue: hourly backups accumulated up to 24 files
-    # before the old daily `15 5 * * *` line ran once). Fire the prune on the
-    # SAME tick as the backup that just wrote the file, so keep-last-N is
-    # enforced continuously instead of once a day. KeepLast=0 emits an empty
-    # snippet, preserving the "keep forever" opt-out. The prune runs AFTER the
-    # backup + pod-prune succeed and shares the same restart-window guard, so
-    # a mid-restart tick still skips everything.
     $tail = $podSnippet
     if ($fileSnippet) { $tail = "$podSnippet; $fileSnippet" }
     $dbPort = 15432
     try { if (Get-Command Get-V6DbPort -ErrorAction SilentlyContinue) { $dbPort = Get-V6DbPort } } catch {}
-    # Let `battlegroup backup` name the file itself (no name argument). Funcom
-    # then auto-generates the SAME convention as a manual/default backup —
-    # `sh-<hostid>-<suffix>-<utc-ts>.backup` in the per-battlegroup subdir
-    # /funcom/artifacts/database-dumps/<bg>/ — so every scheduled snapshot is
-    # self-labeling by battlegroup (critical when a host runs multiple VMs/BGs:
-    # the suffix rotates per Funcom redeploy, e.g. ttbsdg -> cffjby) and matches
-    # Funcom's own files byte-for-byte in naming. Previously DST passed an
-    # explicit `dst-scheduled-<ts>` name, which Funcom wrote verbatim WITHOUT the
-    # battlegroup identity or a `.backup` extension — so a flattened local mirror
-    # couldn't tell which server a file came from (Coastal, 2026-07-18). The
-    # listing/prune/delete matchers still recognize the legacy `dst-scheduled-*`
-    # shape so pre-existing scheduled files aren't orphaned.
-    #
-    # 2026-09-22 (Funcom patch regression): `battlegroup backup` still logs
-    # "Database dump succeeded" and correctly writes the .yaml spec sidecar,
-    # but the dump pod's volumeMount for its own output path lost its leading
-    # slash in Funcom's pod template, so the actual .backup payload lands on
-    # the pod's own ephemeral container layer instead of the mounted PVC and
-    # is gone the instant the (~1s-lived) pod is garbage-collected. The pod
-    # itself logs "Backup file (on this host): <path>" with the exact path it
-    # expected to land at, then DST's own wrapper already re-prints that same
-    # line with a WARNING when the file is missing. We keep calling
-    # `battlegroup backup` unchanged (still owns the DatabaseOperation CR, the
-    # yaml sidecar, and Funcom's own bookkeeping) and only backfill the actual
-    # dump payload when it's missing, by running pg_dump directly against the
-    # always-on Postgres pod — the exact same kubectl-exec path DST already
-    # uses for every other database read/write — and piping its stdout
-    # straight to the path Funcom's own tool told us it expected. This is a
-    # fallback, not a replacement: the moment Funcom fixes their volumeMount,
-    # the expected file exists again and this whole block becomes a no-op.
     $fallback = (
         '_bk=$(/home/dune/.dune/bin/battlegroup backup 2>&1); ' +
         'printf "%s\n" "$_bk" >> /var/log/dune-backup.log; ' +
@@ -220,6 +183,38 @@ function New-DuneBackupCmd {
         'fi'
     )
     return "if [ -f /var/lib/dune-server/dst-world-restart-recovery-required ] || find /tmp/dst-restart-active -mmin -30 2>/dev/null | grep -q .; then echo `"`$(date) dst: backup skipped - BG restart or recovery window active`" >> /var/log/dune-backup.log; else $fallback; $tail; fi"
+}
+
+function New-DuneBackupCmd {
+    param(
+        [int]$KeepLastPods = 10,
+        [int]$KeepLast = 0
+    )
+    $podSnippet  = New-DuneBackupPodPruneSnippet -KeepLast $KeepLastPods
+    $fileSnippet = New-DuneBackupFilePruneSnippet -KeepLast $KeepLast
+    # File-retention prune (issue: hourly backups accumulated up to 24 files
+    # before the old daily `15 5 * * *` line ran once). Fire the prune on the
+    # SAME tick as the backup that just wrote the file, so keep-last-N is
+    # enforced continuously instead of once a day. KeepLast=0 emits an empty
+    # snippet, preserving the "keep forever" opt-out. The prune runs AFTER the
+    # backup + pod-prune succeed and shares the same restart-window guard, so
+    # a mid-restart tick still skips everything.
+    $tail = $podSnippet
+    if ($fileSnippet) { $tail = "$podSnippet; $fileSnippet" }
+    $dbPort = 15432
+    try { if (Get-Command Get-V6DbPort -ErrorAction SilentlyContinue) { $dbPort = Get-V6DbPort } } catch {}
+    # Use only the path reported by this successful invocation. Verification
+    # must succeed before retention runs; the shared verifier scopes the DB
+    # pod to that artifact's battlegroup and recovers missing payload/spec.
+    if (-not (Get-Command New-DuneBackupVerifyScript -ErrorAction SilentlyContinue)) {
+        . (Join-Path $PSScriptRoot 'BackupVerify.ps1')
+    }
+    $verification = (New-DuneBackupVerifyScript -DbPort $dbPort) -replace '\r?\n', ' '
+    $fallback = '_bk=$(/home/dune/.dune/bin/battlegroup backup 2>&1); _br=$?; ' +
+        'printf "%s\n" "$_bk" >> /var/log/dune-backup.log; ' +
+        'if [ "$_br" = 0 ]; then { ' + $verification + '; } >> /var/log/dune-backup.log 2>&1; else echo "[dst] backup command failed" >> /var/log/dune-backup.log; false; fi'
+
+    return "if [ -f /var/lib/dune-server/dst-world-restart-recovery-required ] || find /tmp/dst-restart-active -mmin -30 2>/dev/null | grep -q .; then echo `"`$(date) dst: backup skipped - BG restart or recovery window active`" >> /var/log/dune-backup.log; else $fallback && { $tail; }; fi"
 }
 $script:DuneBackupBeginMarker = '# DST-BACKUP BEGIN'
 $script:DuneBackupEndMarker   = '# DST-BACKUP END'
@@ -367,7 +362,7 @@ function New-DuneBackupBlock {
     if ($null -eq $KeepDaysPods -or $KeepDaysPods -lt 0) { $KeepDaysPods = $script:DuneBackupPodPruneKeepDaysDefault }
     if ($KeepDaysPods -gt 365) { $KeepDaysPods = 365 }
 
-    $cmd = New-DuneBackupCmd -KeepLastPods $KeepLastPods -KeepLast $KeepLast
+    $cmd = (New-DuneBackupCmd -KeepLastPods $KeepLastPods -KeepLast $KeepLast) -replace '%', '\%'
 
     $lines = @()
     $lines += $script:DuneBackupBeginMarker
@@ -537,19 +532,21 @@ sudo crontab -l 2>&1 || true
                 # stuck running the old, silently-broken command until this
                 # runs, since nothing else rewrites an already-installed
                 # crontab block. Only auto-reconcile when the installed block
-                # exactly matches a KNOWN prior rendering (currently just
-                # legacy v1, pre-versioning) — never a block whose command
+                # exactly matches a KNOWN prior rendering (legacy v1 (pre-versioning) and v2) — never a block whose command
                 # version marker is present but simply unrecognized, and
                 # never on a block that doesn't match anything we know how to
                 # produce, which stays flagged as tampered exactly as before.
-                if (-not $SkipReconcile -and $null -eq $parsed.block.cmdVersion) {
-                    $legacyCmd = New-DuneBackupCmdLegacyV1 -KeepLastPods $keepLastPods -KeepLast $keepLast
+                if (-not $SkipReconcile -and ($null -eq $parsed.block.cmdVersion -or $parsed.block.cmdVersion -eq 2)) {
+                    $legacyCmd = if ($parsed.block.cmdVersion -eq 2) { New-DuneBackupCmdLegacyV2 -KeepLastPods $keepLastPods -KeepLast $keepLast } else { New-DuneBackupCmdLegacyV1 -KeepLastPods $keepLastPods -KeepLast $keepLast }
                     $legacyInner = (@(
                         "# DST-BACKUP-PRESET: $preset"
                         "# DST-BACKUP-KEEP-LAST: $keepLast"
                         "# DST-BACKUP-KEEP-LAST-PODS: $keepLastPods"
                         "# DST-BACKUP-KEEP-DAYS-PODS: $keepDaysPods"
                     ) + @($script:DuneBackupPresets[$preset].crons | ForEach-Object { "$_ $legacyCmd" })) -join "`n"
+                    if ($parsed.block.cmdVersion -eq 2) {
+                        $legacyInner = $legacyInner -replace "(# DST-BACKUP-KEEP-DAYS-PODS: [0-9]+)", "`$1`n# DST-BACKUP-CMD-VERSION: 2"
+                    }
                     if ($legacyInner -eq $parsed.block.raw) {
                         $reconciled = Set-DuneBackupSchedule -Ip $Ip -Preset $preset -KeepLast $keepLast -KeepLastPods $keepLastPods -KeepDaysPods $keepDaysPods
                         if ($reconciled.ok) {
