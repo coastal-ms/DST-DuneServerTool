@@ -377,15 +377,26 @@ function Invoke-DunePlayerGiveItemsBulk {
     # Route each item the same way the single give-item endpoint does: an online
     # player keeps their inventory in memory, so a direct SQL write is ignored and
     # overwritten on the next save (the item never appears, or vanishes on relog).
-    # Default-quality gives to an online player must therefore go through the RMQ
-    # live path. Custom-quality gives can't be delivered live, so they fall back to
-    # SQL with a "must relog" note. Resolve online status + fls_id once up front.
+    # Default-quality gives to an online player use RMQ. Grade overrides require
+    # an offline player, just like the single-item route. Preflight the whole
+    # package before granting anything so a Grade rejection cannot partly apply it.
     $off = Test-DunePlayerOffline -Ip $Ip -PawnId $PawnId
     $isOnline = -not $off.ok
+    if ($isOnline) {
+        foreach ($it in @($Items)) {
+            if ((Get-DuneBodyInt -Body $it -Name 'quality') -gt 0) {
+                return @{ ok = $false; error = 'Changing the Grade requires the player to be offline. No package items were sent. Ask the player to log out, then retry.' }
+            }
+        }
+    }
     $fls = $FlsId
     if ($isOnline -and [string]::IsNullOrWhiteSpace($fls)) {
         $fr = Resolve-DuneFlsIdOrError -Ip $Ip -ActorId $PawnId
-        if ($fr.ok) { $fls = [string]$fr.fls_id }
+        if (-not $fr.ok) { return @{ ok = $false; error = $fr.error } }
+        $fls = [string]$fr.fls_id
+    }
+    if ($isOnline -and [string]::IsNullOrWhiteSpace($fls)) {
+        return @{ ok = $false; error = 'Cannot resolve the online player for live package delivery. No package items were sent.' }
     }
     $sourceItems = @($Items)
     $results = [object[]]::new($sourceItems.Count)
@@ -424,13 +435,10 @@ function Invoke-DunePlayerGiveItemsBulk {
                 -Template $tmpl -Quantity ([int]$qty) -Durability 1.0 -AllowOverflow $false
             if ($r.ok -and -not $r.path) { $r['path'] = 'rmq' }
         } else {
-            # Offline, OR online with custom quality / unresolved fls → SQL
+            # Only offline players may receive SQL inventory writes.
             $r = Invoke-DunePlayerGiveItem -Ip $Ip -PawnId $PawnId -Template $tmpl -Qty $qty -Quality ([int64]$qlevel)
             if ($r.ok) {
                 $r['path'] = 'sql'
-                if ($isOnline) {
-                    $r['message'] = "$($r.message) Player is online — they must relog to see this item."
-                }
             }
         }
         $results[$index] = $r
@@ -456,7 +464,7 @@ function Invoke-DunePlayerGiveItemsBulk {
     } else {
         "$($total - $failures)/$total item templates gave OK; $failures failed."
     }
-    return @{ ok = $ok; message = $msg; results = $results; failures = $failures; total = $total }
+    return @{ ok = $ok; message = $msg; error = $msg; results = $results; failures = $failures; total = $total }
 }
 
 function Invoke-DunePlayerGrantHouseSwatches {

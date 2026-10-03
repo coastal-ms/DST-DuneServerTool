@@ -1185,9 +1185,9 @@ function ActionRow({ def, player, busy, stats, open, danger, onToggle, runAction
           ) : def.custom === 'give-package' ? (
             <GivePackageForm busy={busy} playerName={player.name}
               onGive={(items, pkgName, overflow) => runAction(def, async () => {
-                await giveItems(player.id, items, overflow)
-                const n = items.length
-                return { message: `Gave package "${pkgName}" — ${n} item${n === 1 ? '' : 's'} to ${player.name}.` }
+                const r = await giveItems(player.id, items, overflow)
+                if (Number(r.result?.failures || 0) > 0) throw new Error(r.message)
+                return { message: `Package "${pkgName}": ${r.message}` }
               })} />
           ) : def.custom === 'grant-cosmetic' ? (
             <GrantCosmeticForm busy={busy} playerName={player.name} accountId={player.account_id}
@@ -1967,7 +1967,7 @@ export function GivePackageForm({ busy, giveDisabled = false, playerName, target
                     className="w-full px-3 py-2 rounded-lg bg-surface-2 border border-border text-text text-sm focus:outline-none focus:ring-2 focus:ring-ibad focus:border-ibad/50" />
                 </div>
                 <div>
-                  <label className="block text-[11px] uppercase tracking-wider text-text-dim mb-1">Tier — Mk1-Mk6 (0-5)</label>
+                  <label className="block text-[11px] uppercase tracking-wider text-text-dim mb-1">Grade override (0 = default, 1–5 = custom)</label>
                   <input type="number" min={0} max={5} value={row.quality} disabled={saving}
                     onChange={e => setDraftRows(rows => rows.map((r, j) => j === i ? { ...r, quality: e.target.value } : r))}
                     className="w-full px-3 py-2 rounded-lg bg-surface-2 border border-border text-text text-sm focus:outline-none focus:ring-2 focus:ring-ibad focus:border-ibad/50" />
@@ -2019,7 +2019,7 @@ export function GivePackageForm({ busy, giveDisabled = false, playerName, target
                 <li key={i} className="flex items-center gap-2">
                   <Icon name="Box" size={11} className="shrink-0 text-text-dim/70" />
                   <span className="flex-1 min-w-0 truncate font-mono">{it.template}</span>
-                  <span className="shrink-0">x{it.qty}{it.quality ? ` · Mk${it.quality + 1}` : ''}</span>
+                  <span className="shrink-0">x{it.qty}{it.quality ? ` · Grade ${it.quality}` : ' · Default grade'}</span>
                 </li>
               ))}
             </ul>
@@ -2028,6 +2028,7 @@ export function GivePackageForm({ busy, giveDisabled = false, playerName, target
       )}
       {err && <div className="text-xs text-error">{err}</div>}
       {showOverflow && selected && <OverflowToggle checked={overflow} disabled={busy || saving} onChange={setOverflow} />}
+      {selected && <p className="text-xs text-text-dim">The item template determines its Mk tier. Custom Grade overrides require the player to be offline.</p>}
       {selected && (
         <button className="btn-primary w-full" disabled={busy || saving || giveDisabled}
           onClick={() => onGive(selected.items, selected.name, overflow)}>

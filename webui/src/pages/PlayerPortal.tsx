@@ -69,7 +69,7 @@ export default function PlayerPortal() {
     finally { setWarming('') }
   }
   const Section = SECTION_COMPONENTS[section]
-  return <main className="min-h-full p-4 space-y-4">
+  return <main className="h-dvh min-h-0 overflow-y-auto p-4 space-y-4">
     <header className="card p-4 flex flex-wrap items-center gap-3">
       <h1 className="text-xl font-semibold flex-1">Player Portal</h1>
       <span>Server: {state}</span>
