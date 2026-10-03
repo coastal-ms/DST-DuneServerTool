@@ -63,8 +63,10 @@ export function LandclaimTimerCard({ vmRunning }: Props) {
   const curSeconds = server?.available ? server.seconds : ''
   const client = state?.client
   const clientNeedsApply = !!client?.dirExists && (enabled !== client.enabled ||
-    (enabled && (trimmed !== client.seconds.trim() || !client.formattedOk)))
-  const dirty = enabled !== curEnabled || (enabled && (trimmed !== curSeconds.trim() || !server?.formattedOk)) || clientNeedsApply
+    (enabled && (trimmed !== client.seconds.trim() || !client.formattedOk)) ||
+    (!enabled && client.hasOverrides === true))
+  const dirty = enabled !== curEnabled || (enabled && (trimmed !== curSeconds.trim() || !server?.formattedOk)) ||
+    (!enabled && server?.hasOverrides === true) || clientNeedsApply
   const canApply = vmRunning && !saving && dirty && (!enabled || validSeconds)
 
   async function apply() {

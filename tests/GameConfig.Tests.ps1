@@ -3530,6 +3530,20 @@ Describe 'GameConfig: Landsraad struct fields integrate with read + save' -Tag '
 
 Describe 'Land-claim (staking unit) extension timer' -Tag 'GameConfig' {
 
+    It 'distinguishes residual timer lines from clean defaults without calling them enabled' {
+        foreach ($line in @('m_StakingUnitExtensionDefaultTimes=5', '-m_StakingUnitVerticalExtensionDefaultTimes=60.000000')) {
+            $raw = "[/Script/DuneSandbox.BuildingSettings]`n$line`nm_MaxNumLandclaimSegments=10`n"
+            $partial = Get-DuneLandclaimTimerState -Raw $raw
+            $partial.enabled | Should -BeFalse
+            $partial.hasOverrides | Should -BeTrue
+            $cleared = ConvertTo-DuneIniManaged -Raw $raw -Updates (Build-DuneLandclaimUpdates -Enabled $false -Seconds '' -File 'game') -QuotedKeys @{}
+            (Get-DuneLandclaimTimerState -Raw $cleared).hasOverrides | Should -BeFalse
+            $cleared | Should -Match 'm_MaxNumLandclaimSegments=10'
+        }
+        (Get-DuneLandclaimTimerState -Raw '').hasOverrides | Should -BeFalse
+        (Get-DuneLandclaimTimerState -Raw "[/OtherSection]`nm_StakingUnitExtensionDefaultTimes=5").hasOverrides | Should -BeFalse
+    }
+
     It 'enable writes both scalars + full removal schedule into the managed BuildingSettings block' {
         $ups = Build-DuneLandclaimUpdates -Enabled $true -Seconds '1' -File 'game'
         $out = ConvertTo-DuneIniManaged -Raw '' -Updates $ups -QuotedKeys @{}

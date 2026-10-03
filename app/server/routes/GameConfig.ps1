@@ -1035,7 +1035,7 @@ Register-DuneRoute -Method GET -Path '/api/gameconfig/landclaim-timer' -Handler 
             $cst    = Get-DuneLandclaimTimerState -Raw $client.raw
             Write-DuneJson -Response $res -Body @{
                 server = @{ available = $false; enabled = $false; seconds = ''; formattedOk = $false; reason = $ctx.message }
-                client = @{ exists = [bool]$client.exists; dirExists = [bool]$client.dirExists; path = $client.path; dir = $client.dir; enabled = $cst.enabled; seconds = $cst.seconds; formattedOk = $cst.formattedOk }
+                client = @{ exists = [bool]$client.exists; dirExists = [bool]$client.dirExists; path = $client.path; dir = $client.dir; enabled = $cst.enabled; seconds = $cst.seconds; formattedOk = $cst.formattedOk; hasOverrides = $cst.hasOverrides }
                 clientBlock = (Get-DuneLandclaimClientBlock -Seconds ($(if ($cst.enabled) { $cst.seconds } else { '' })))
             }
         }

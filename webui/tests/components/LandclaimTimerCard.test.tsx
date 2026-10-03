@@ -60,6 +60,21 @@ describe('Land claim timer client retry', () => {
     render(<LandclaimTimerCard vmRunning />)
     await waitFor(() => expect(screen.getByRole('button', { name: 'Apply', exact: true })).toBeEnabled())
   })
+  it.each(['server', 'client'] as const)('allows clearing residual lines in the disabled %s but keeps clean defaults idle', async target => {
+    const disabled = { ...state,
+      server: { ...state.server, enabled: false, seconds: '', formattedOk: false, hasOverrides: false },
+      client: { ...state.client, enabled: false, seconds: '', formattedOk: false, hasOverrides: false } }
+    const partial = { ...disabled, [target]: { ...disabled[target], hasOverrides: true } }
+    vi.mocked(getLandclaimTimer).mockResolvedValue(partial)
+    vi.mocked(saveLandclaimTimer).mockResolvedValue({ ...disabled, ok: true, enabled: false, seconds: '',
+      result: { ok: true, server: { ok: true, applied: true }, client: { ok: true, applied: true } } })
+    render(<LandclaimTimerCard vmRunning />)
+    const clear = await screen.findByRole('button', { name: 'Clear & restore default' })
+    await waitFor(() => expect(clear).toBeEnabled())
+    fireEvent.click(clear)
+    await waitFor(() => expect(clear).toBeDisabled())
+    expect(saveLandclaimTimer).toHaveBeenCalledWith(false, '')
+  })
   it('starts with an empty input when enabling and requires a typed value', async () => {
     vi.mocked(getLandclaimTimer).mockResolvedValue({ ...state, server: { ...state.server, enabled: false, seconds: '' } })
     render(<LandclaimTimerCard vmRunning />)
