@@ -12,8 +12,7 @@ import { PublicIpCard } from './settings/PublicIpCard'
 import { ServerBrowserPingCard } from './settings/ServerBrowserPingCard'
 import { HyperVLanCard } from './settings/HyperVLanCard'
 import { HyperVLifecycleCard } from './settings/HyperVLifecycleCard'
-import { RemoteAccessCard } from './settings/RemoteAccessCard'
-import { MobileAppCard } from './settings/MobileAppCard'
+import { BrowserAccessCard } from './settings/BrowserAccessCard'
 import { FlsTokenCard } from './settings/FlsTokenCard'
 import { FreshStartSnapshotsCard } from './settings/FreshStartSnapshotsCard'
 import { InstallLocationCard } from './settings/InstallLocationCard'
@@ -711,7 +710,6 @@ export function Settings() {
 
       <SectionErrorBoundary name="Dashboard warnings"><DashboardAlertsCard /></SectionErrorBoundary>
 
-      <SectionErrorBoundary name="Remote Access"><RemoteAccessCard /></SectionErrorBoundary>
 
       <SectionErrorBoundary name="Hyper-V over LAN"><HyperVLanCard /></SectionErrorBoundary>
 
@@ -951,7 +949,7 @@ export function Settings() {
         </div>
       </form>
 
-      <SectionErrorBoundary name="Mobile App Pairing"><MobileAppCard /></SectionErrorBoundary>
+      <SectionErrorBoundary name="Mobile App Pairing"><BrowserAccessCard /></SectionErrorBoundary>
     </>
   )
 }

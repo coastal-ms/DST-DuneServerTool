@@ -1,4 +1,4 @@
-BeforeAll {
+﻿BeforeAll {
     . "$PSScriptRoot\_TestHelpers.ps1"
     $script:OriginalAppData = $env:APPDATA
     $script:PortalRouteTestRoot = Join-Path (Get-DstRepoRoot) '.portal-auth-route-test-data'
@@ -46,66 +46,11 @@ AfterAll {
     Remove-Item -LiteralPath $script:PortalRouteTestRoot -Recurse -Force -ErrorAction SilentlyContinue
 }
 
-Describe 'Legacy Cloudflare ACL routes' {
-    BeforeEach {
-        Remove-Item -LiteralPath $script:PortalRouteTestRoot -Recurse -Force -ErrorAction SilentlyContinue
-    }
-
-    It 'keeps the enablement flag and retained ACL metadata behind local-only routes' {
-        $getRoute = @($script:DuneRoutes | Where-Object {
-            $_.Method -eq 'GET' -and $_.Path -eq '/api/remote-access/acl'
-        })[0]
-        $putRoute = @($script:DuneRoutes | Where-Object {
-            $_.Method -eq 'PUT' -and $_.Path -eq '/api/remote-access/acl'
-        })[0]
-        $getRoute.LocalOnly | Should -BeTrue
-        $putRoute.LocalOnly | Should -BeTrue
-
-        $response = New-RouteResponse
-        & $putRoute.Handler (New-RouteRequest) $response @{} @{
-            owner = 'owner@example.test'
-            admins = @('admin@example.test')
-            hostname = 'portal.example.test'
-            cloudflareTeamDomain = 'team.cloudflareaccess.com'
-            cloudflareAudience = 'audience-value'
-            legacyCloudflareEnabled = $true
-        }
-        $body = [Text.Encoding]::UTF8.GetString($response.OutputStream.ToArray()) | ConvertFrom-Json
-
-        $response.StatusCode | Should -Be 200
-        $body.legacyCloudflareEnabled | Should -BeTrue
-        $body.owner | Should -Be 'owner@example.test'
-        $body.admins | Should -Contain 'admin@example.test'
-        $body.hostname | Should -Be 'portal.example.test'
-
-        $disabledResponse = New-RouteResponse
-        & $putRoute.Handler (New-RouteRequest) $disabledResponse @{} @{
-            owner = 'owner@example.test'
-            admins = @('admin@example.test')
-            hostname = 'portal.example.test'
-            cloudflareTeamDomain = 'team.cloudflareaccess.com'
-            cloudflareAudience = 'audience-value'
-            legacyCloudflareEnabled = $false
-        }
-        $disabled = [Text.Encoding]::UTF8.GetString($disabledResponse.OutputStream.ToArray()) | ConvertFrom-Json
-
-        $disabled.legacyCloudflareEnabled | Should -BeFalse
-        $disabled.owner | Should -Be 'owner@example.test'
-        (Get-DuneRemoteAcl).cloudflareAudience | Should -Be 'audience-value'
-    }
-
-    It 'rejects a non-boolean legacy portal enablement value' {
-        $response = New-RouteResponse
-        & (Get-RegisteredHandler PUT '/api/remote-access/acl') (New-RouteRequest) $response @{} @{
-            legacyCloudflareEnabled = 'true'
-        }
-        $body = [Text.Encoding]::UTF8.GetString($response.OutputStream.ToArray()) | ConvertFrom-Json
-
-        $response.StatusCode | Should -Be 400
-        $body.error | Should -Be 'legacyCloudflareEnabled must be a boolean.'
+Describe 'Retired Cloudflare management routes' {
+    It 'does not register Cloudflare settings or service-token endpoints' {
+        @($script:DuneRoutes | Where-Object { $_.Path -in @('/api/remote-access/acl', '/api/remote-access/cloudflared-status', '/api/remote-access/mobile-service-token') }).Count | Should -Be 0
     }
 }
-
 Describe 'Registered portal login/logout production handlers' {
     BeforeEach {
         Remove-Item -LiteralPath $script:PortalRouteTestRoot -Recurse -Force -ErrorAction SilentlyContinue

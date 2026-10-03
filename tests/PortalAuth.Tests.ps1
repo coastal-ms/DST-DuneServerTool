@@ -1,4 +1,4 @@
-BeforeAll {
+﻿BeforeAll {
     . "$PSScriptRoot\_TestHelpers.ps1"
     $script:OriginalAppData = $env:APPDATA
     $script:PortalTestRoot = Join-Path (Get-DstRepoRoot) '.portal-auth-test-data'
@@ -164,7 +164,7 @@ Describe 'Legacy Cloudflare ACL enablement' {
         Assert-MockCalled Test-DuneCloudflareAccessJwt -Times 0 -Exactly
     }
 
-    It 'keeps JWT and owner authorization unchanged after an explicit re-enable' {
+    It 'rejects retained Cloudflare enablement without validating JWTs' {
         Save-DuneRemoteAcl -Acl @{
             owner = 'owner@example.test'
             legacyCloudflareEnabled = $true
@@ -173,9 +173,8 @@ Describe 'Legacy Cloudflare ACL enablement' {
 
         $result = Test-DuneRemoteRequest -Request ([pscustomobject]@{ Headers = @{} })
 
-        $result.ok | Should -BeTrue
-        $result.role | Should -Be 'owner'
-        Assert-MockCalled Test-DuneCloudflareAccessJwt -Times 1 -Exactly
+        $result.ok | Should -BeFalse
+        Assert-MockCalled Test-DuneCloudflareAccessJwt -Times 0 -Exactly
     }
 
     It 'revokes ordinary API and WebSocket launch-token access after disablement' {
@@ -238,9 +237,7 @@ Describe 'Legacy Cloudflare ACL enablement' {
             })
             $enabledBody = [Text.Encoding]::UTF8.GetString($enabledResponse.OutputStream.ToArray()) | ConvertFrom-Json
 
-            $enabledResponse.StatusCode | Should -Be 200
-            $enabledBody.principal | Should -Be 'legacy-token'
-            $enabledBody.transport | Should -Be 'cloudflare-access'
+            $enabledResponse.StatusCode | Should -Be 401
 
             Save-DuneRemoteAcl -Acl @{
                 owner = 'owner@example.test'

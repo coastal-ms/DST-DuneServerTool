@@ -38,9 +38,7 @@ guarded controls in one native Windows app.
   shutdown and boot recovery, with operator-visible status and rollback.
 - Use the responsive full Browser Portal from a phone, tablet, or PC with
   optional host-managed Owner and Admin accounts.
-- Use Tailscale Funnel and the Browser Portal for new remote setups. v15 keeps
-  existing Cloudflare custom-domain configuration but disables its legacy portal
-  by default; the host can explicitly re-enable it in local Settings.
+- Use Tailscale Funnel and the Browser Portal for remote access. Native mobile apps and legacy Cloudflare remote tunnels are retired.
 
 ### Solo Mode
 
@@ -377,7 +375,7 @@ guarded World Restart testing.
 <details>
 <summary><strong>Settings</strong></summary>
 
-![Unconfigured v15 Settings including the disabled Legacy Cloudflare section](docs/img/settings.png)
+![Settings overview](docs/img/settings.png)
 
 Updates, installation, themes, warnings, Remote Device Access, Browser Portal
 accounts, Hyper-V over LAN, Hyper-V VM lifecycle, Public IP/DDNS, browser ping,
@@ -389,10 +387,7 @@ and host-local preferences.
 
 ![Browser Portal sign-in on a phone-sized screen with empty account fields](docs/img/browser-portal.png)
 
-Responsive remote access with host-created accounts. Tailscale Funnel is the
-forward path; retained legacy Cloudflare configuration stays disabled by
-default until explicitly re-enabled in local Settings. The screenshot is the
-offline sign-in screen, not a connected remote session.
+Responsive remote access with host-created accounts over Tailscale Funnel. Native mobile apps and legacy Cloudflare remote access are retired. The screenshot is the offline sign-in screen.
 
 Hosts can choose **Player** when creating an account and must link it to a game
 character. Player accounts open a dedicated portal with server status, maps,

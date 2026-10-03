@@ -27,12 +27,10 @@ interface MobilePairingData {
   bridge?: BridgeStatus | null
   pairingId?: string
   remoteToken?: string
-  cfAccessClientId?: string
-  cfAccessClientSecret?: string
   accountLoginEnabled?: boolean
 }
 
-export function MobileAppCard() {
+export function BrowserAccessCard() {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [data, setData] = useState<MobilePairingData | null>(null)
@@ -105,25 +103,22 @@ export function MobileAppCard() {
     >
         <div className="card p-3 border-warning/40 bg-warning/10 text-sm" style={{ marginBottom: '1rem' }} role="status">
           <div className="flex items-center gap-2 text-warning" style={{ fontWeight: 600 }}>
-            <Icon name="TriangleAlert" size={16} /> Native mobile apps are being retired
+            <Icon name="TriangleAlert" size={16} /> Native mobile apps have been retired
           </div>
           <p className="mt-2 text-text-muted">
-            The separate iOS and Android companion apps will keep working during
-            a short transition, then be removed. Use the Browser Portal link or
+            The separate iOS and Android companion apps are no longer supported. Use the Browser Portal link or
             QR code below in Safari or Chrome. Tailscale remote access and this
             responsive portal remain supported.
           </p>
         </div>
 
-        {/* Secure remote access via Tailscale Funnel — the supported path for new
-            Browser Portal setups. Existing Cloudflare custom-domain URLs remain
-            readable during their deprecation window. */}
+        {/* Secure remote access via Tailscale Funnel. */}
         <div className="card p-3" style={{ marginBottom: '1rem' }}>
           <div className="flex items-center gap-2" style={{ fontWeight: 600 }}>
             <Icon name="Globe" size={16} /> Secure remote access
             {data && (
               data.url
-                ? <span className="badge safe" style={{ marginLeft: 'auto' }}>{data.source === 'funnel' ? 'Tailscale Funnel' : 'legacy custom domain'}</span>
+                ? <span className="badge safe" style={{ marginLeft: 'auto' }}>Tailscale Funnel</span>
                 : <span className="badge" style={{ marginLeft: 'auto' }}>not set up</span>
             )}
           </div>
@@ -138,13 +133,7 @@ export function MobileAppCard() {
                 The address remains stable across DST restarts. Scan the current QR
                 whenever you need to open or save the Browser Portal on a device.
               </div>
-              {data.source !== 'funnel' && (
-                <div className="card p-2 border-warning/40 bg-warning/10 text-warning text-sm" style={{ marginTop: '0.75rem' }}>
-                  This Cloudflare custom-domain path is deprecated. Keep it running
-                  while you migrate to Tailscale Funnel, then test the Funnel URL
-                  before disabling Cloudflare.
-                </div>
-              )}
+
             </div>
           ) : (
             <div className="help-text" style={{ marginTop: '0.75rem' }}>

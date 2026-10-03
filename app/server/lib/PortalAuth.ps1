@@ -1,4 +1,4 @@
-# PortalAuth.ps1 - opt-in local accounts for the existing Browser Portal.
+﻿# PortalAuth.ps1 - opt-in local accounts for the existing Browser Portal.
 
 $script:DunePortalAuthIterations = 310000
 $script:DunePortalSessionHours = 12
@@ -211,21 +211,7 @@ function Write-DunePortalAudit {
     } catch {}
 }
 
-function Get-DunePortalVerifiedProxyIdentity {
-    param($Request)
-    try {
-        $assertion = [string]$Request.Headers['Cf-Access-Jwt-Assertion']
-        if ($assertion -and
-            (Get-Command Get-DuneRemoteAcl -ErrorAction SilentlyContinue) -and
-            (Get-Command Test-DuneCloudflareAccessJwt -ErrorAction SilentlyContinue)) {
-            $identity = Test-DuneCloudflareAccessJwt -Request $Request -Acl (Get-DuneRemoteAcl)
-            if ($identity.ok -and $identity.email) {
-                return ([string]$identity.email).Trim().ToLowerInvariant()
-            }
-        }
-    } catch {}
-    return ''
-}
+function Get-DunePortalVerifiedProxyIdentity { param($Request) return '' }
 
 function Get-DunePortalClientKey {
     param($Request)

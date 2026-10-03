@@ -1,20 +1,4 @@
-// Local-only management client for the Settings → Remote Access card.
-// Targets /api/remote-access/*  (NOT /api/remote/*) — these endpoints are
-// gated by DuneToken (same as the rest of the desktop portal), and are
-// intentionally unreachable through the Cloudflare tunnel.
-//
-// Issue #74 (v11.1.0).
-
 import { api } from './client'
-
-export interface RemoteAcl {
-  owner: string
-  admins: string[]
-  hostname: string
-  cloudflareTeamDomain: string
-  cloudflareAudience: string
-  legacyCloudflareEnabled: boolean
-}
 
 export interface PortalManagedAccount {
   id: string
@@ -74,59 +58,5 @@ export function setPortalAccountMode(enabled: boolean, acknowledgeNativeAppRetir
   return api('/api/remote-access/portal-account-mode', {
     method: 'PUT',
     body: JSON.stringify({ enabled, acknowledgeNativeAppRetirement }),
-  })
-}
-
-export interface CloudflaredStatus {
-  installed: boolean
-  path: string
-  version: string
-}
-
-export interface RemoteAuditEntry {
-  ts: string
-  role: string
-  email: string
-  method: string
-  path: string
-  status: string
-  note: string
-  raw: string
-}
-
-export function getAcl(): Promise<RemoteAcl> {
-  return api<RemoteAcl>('/api/remote-access/acl')
-}
-
-export function saveAcl(acl: RemoteAcl): Promise<RemoteAcl> {
-  return api<RemoteAcl>('/api/remote-access/acl', {
-    method: 'PUT',
-    body: JSON.stringify(acl),
-  })
-}
-
-export function getAuditLog(lines = 50): Promise<{ entries: RemoteAuditEntry[]; count: number }> {
-  return api(`/api/remote-access/audit-log?lines=${encodeURIComponent(String(lines))}`)
-}
-
-export function getCloudflaredStatus(): Promise<CloudflaredStatus> {
-  return api<CloudflaredStatus>('/api/remote-access/cloudflared-status')
-}
-
-export interface MobileServiceTokenStatus {
-  configured: boolean
-  clientId: string
-}
-
-export function getMobileServiceToken(): Promise<MobileServiceTokenStatus> {
-  return api<MobileServiceTokenStatus>('/api/remote-access/mobile-service-token')
-}
-
-// Save (both fields) or clear (both empty) the mobile Cloudflare Access service
-// token. The secret is write-only: the GET route never echoes it back.
-export function saveMobileServiceToken(clientId: string, clientSecret: string): Promise<MobileServiceTokenStatus> {
-  return api<MobileServiceTokenStatus>('/api/remote-access/mobile-service-token', {
-    method: 'PUT',
-    body: JSON.stringify({ clientId, clientSecret }),
   })
 }

@@ -308,9 +308,9 @@ export function PortalAccountsManager() {
                   className="mt-0.5"
                 />
                 <span>
-                  I understand that paired native mobile apps stop working while account login is enabled.
-                  The current app sends only the browser-spoofable X-Dune-Token header, so it cannot be safely exempted.
-                  Disable account login locally to restore native-app and legacy magic-link access.
+                  I understand that enabling account login disables existing token-based Browser Portal links.
+                  Use the sign-in link and host-created accounts for remote access.
+                  Disable account login locally to restore token-based browser links.
                 </span>
               </label>
               <button className="btn-primary" disabled={busy || !nativeRetirementAcknowledged} onClick={() => void toggleMode(true)}>Enable account login</button>
