@@ -3543,6 +3543,7 @@ function Get-DuneLandclaimTimerState {
     $doc = ConvertFrom-DuneIniDoc -Raw $Raw
     $scalar     = @{}
     $arrayCount = @{}
+    $hasOverrides = $false
     foreach ($k in $script:DuneLandclaimKeys) { $arrayCount[$k] = 0 }
     foreach ($s in $doc.sections) {
         if ($s.name -ne $script:DuneGcSecBuilding) { continue }
@@ -3550,6 +3551,7 @@ function Get-DuneLandclaimTimerState {
             $info = Get-DuneIniLineKey $line
             if (-not $info) { continue }
             if ($script:DuneLandclaimKeys -notcontains $info.key) { continue }
+            $hasOverrides = $true
             if ($info.isArray) {
                 if ("$line".Trim().StartsWith('-')) { $arrayCount[$info.key] = $arrayCount[$info.key] + 1 }
             } else {
@@ -3563,7 +3565,7 @@ function Get-DuneLandclaimTimerState {
     $seconds = if ($has1) { $scalar[$k1] } elseif ($has2) { $scalar[$k2] } else { '' }
     $expected = $script:DuneLandclaimDefaultRemovals.Count
     $formattedOk = [bool]($enabled -and ($arrayCount[$k1] -ge $expected) -and ($arrayCount[$k2] -ge $expected) -and ($scalar[$k1] -eq $scalar[$k2]))
-    return @{ enabled = $enabled; seconds = "$seconds"; formattedOk = $formattedOk }
+    return @{ enabled = $enabled; seconds = "$seconds"; formattedOk = $formattedOk; hasOverrides = $hasOverrides }
 }
 
 # Read the current land-claim timer state from the server game file + the local
@@ -3575,7 +3577,7 @@ function Get-DuneLandclaimTimer {
         $paths = Resolve-DuneGameConfigPaths -Ip $Ip
         $raw   = (Invoke-V6Ssh -Ip $Ip -Cmd "sudo cat '$($paths.game)' 2>/dev/null") -join "`n"
         $st    = Get-DuneLandclaimTimerState -Raw $raw
-        $server = @{ available = $true; enabled = $st.enabled; seconds = $st.seconds; formattedOk = $st.formattedOk; path = $paths.game }
+        $server = @{ available = $true; enabled = $st.enabled; seconds = $st.seconds; formattedOk = $st.formattedOk; hasOverrides = $st.hasOverrides; path = $paths.game }
     } catch {
         $server = @{ available = $false; enabled = $false; seconds = ''; formattedOk = $false; error = "$($_.Exception.Message)" }
     }
@@ -3597,6 +3599,7 @@ function Get-DuneLandclaimTimer {
             enabled     = $cst.enabled
             seconds     = $cst.seconds
             formattedOk = $cst.formattedOk
+            hasOverrides = $cst.hasOverrides
         }
         clientBlock = (Get-DuneLandclaimClientBlock -Seconds $activeSeconds)
     }

@@ -497,6 +497,7 @@ export type LandclaimTimerServerState = {
   enabled: boolean
   seconds: string
   formattedOk: boolean
+  hasOverrides?: boolean
   path?: string
   reason?: string
   error?: string
@@ -510,6 +511,7 @@ export type LandclaimTimerClientState = {
   enabled: boolean
   seconds: string
   formattedOk: boolean
+  hasOverrides?: boolean
 }
 
 export type LandclaimTimerState = {

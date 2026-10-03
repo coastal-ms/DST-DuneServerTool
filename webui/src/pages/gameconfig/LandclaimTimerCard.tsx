@@ -26,6 +26,7 @@ export function LandclaimTimerCard({ vmRunning }: Props) {
   const [loading, setLoading] = useState(false)
   const [saving, setSaving] = useState(false)
   const [err, setErr] = useState<string | null>(null)
+  const [warning, setWarning] = useState<string | null>(null)
   const [ok, setOk] = useState<string | null>(null)
   const [showBlock, setShowBlock] = useState(false)
 
@@ -38,7 +39,7 @@ export function LandclaimTimerCard({ vmRunning }: Props) {
   }, [])
 
   const load = useCallback(async () => {
-    setLoading(true); setErr(null)
+    setLoading(true); setErr(null); setWarning(null)
     try {
       const s = await getLandclaimTimer()
       setState(s)
@@ -57,25 +58,31 @@ export function LandclaimTimerCard({ vmRunning }: Props) {
   const validSeconds = trimmed !== '' && Number.isFinite(num) && num > 0
   const server = state?.server
 
-  // Dirty vs the server's current state (what actually governs the server).
+  // Include client mismatches so a skipped local write can be retried.
   const curEnabled = server?.available ? server.enabled : false
   const curSeconds = server?.available ? server.seconds : ''
-  const dirty = enabled !== curEnabled || (enabled && trimmed !== curSeconds.trim())
+  const client = state?.client
+  const clientNeedsApply = !!client?.dirExists && (enabled !== client.enabled ||
+    (enabled && (trimmed !== client.seconds.trim() || !client.formattedOk)) ||
+    (!enabled && client.hasOverrides === true))
+  const dirty = enabled !== curEnabled || (enabled && (trimmed !== curSeconds.trim() || !server?.formattedOk)) ||
+    (!enabled && server?.hasOverrides === true) || clientNeedsApply
   const canApply = vmRunning && !saving && dirty && (!enabled || validSeconds)
 
   async function apply() {
     if (!canApply) return
-    setSaving(true); setErr(null); setOk(null)
+    setSaving(true); setErr(null); setWarning(null); setOk(null)
     try {
       const r = await saveLandclaimTimer(enabled, enabled ? trimmed : '')
       setState({ server: r.server, client: r.client, clientBlock: r.clientBlock })
       seed({ server: r.server, client: r.client, clientBlock: r.clientBlock })
       const clientNote = r.result.client.applied
-        ? 'client Game.ini updated'
-        : `client Game.ini skipped (${r.result.client.reason ?? 'no client folder'})`
+        ? ', client Game.ini updated'
+        : ''
+      if (!r.result.client.applied) setWarning(`Client Game.ini was not updated: ${r.result.client.reason ?? 'client config folder unavailable'}`)
       setOk(enabled
-        ? `Land-claim timer set to ${trimmed}s — server UserGame.ini updated, ${clientNote}.`
-        : `Land-claim timer cleared — game defaults restored. ${clientNote}.`)
+        ? `Land-claim timer set to ${trimmed}s — server UserGame.ini updated${clientNote}.`
+        : `Land-claim timer cleared — server game defaults restored${clientNote}.`)
       // Client-side setting: surface the exact block so the admin can hand it to
       // connecting players (it only takes effect on their end if THEIR Game.ini
       // carries the same block).
@@ -119,7 +126,7 @@ export function LandclaimTimerCard({ vmRunning }: Props) {
         <input
           type="checkbox"
           checked={enabled}
-          onChange={e => { setEnabled(e.target.checked); setOk(null); setErr(null) }}
+          onChange={e => { setEnabled(e.target.checked); setOk(null); setErr(null); setWarning(null) }}
           disabled={!vmRunning || saving}
           className="h-4 w-4 accent-accent"
         />
@@ -134,10 +141,9 @@ export function LandclaimTimerCard({ vmRunning }: Props) {
             min={1}
             step={1}
             value={seconds}
-            onChange={e => { setSeconds(e.target.value); setOk(null); setErr(null) }}
+            onChange={e => { setSeconds(e.target.value); setOk(null); setErr(null); setWarning(null) }}
             disabled={!vmRunning || saving}
             className="w-40 px-3 py-2 rounded-lg bg-surface-2 border border-border text-text focus:outline-none focus:ring-2 focus:ring-accent focus:border-accent/50"
-            placeholder="1"
           />
           {trimmed !== '' && !validSeconds && (
             <div className="mt-1 text-xs text-danger">Enter a positive number of seconds.</div>
@@ -194,6 +200,11 @@ export function LandclaimTimerCard({ vmRunning }: Props) {
       {err && (
         <div className="mt-3 text-sm text-danger flex items-center gap-2">
           <Icon name="AlertCircle" size={14} /> {err}
+        </div>
+      )}
+      {warning && (
+        <div role="status" className="mt-3 text-sm text-warning flex items-start gap-2">
+          <Icon name="AlertTriangle" size={14} className="mt-0.5 shrink-0" /> <span>{warning}</span>
         </div>
       )}
       {ok && (
