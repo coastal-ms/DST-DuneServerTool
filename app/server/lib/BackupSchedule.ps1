@@ -149,7 +149,7 @@ function New-DuneBackupCmdLegacyV1 {
 # already-installed crontabs need to pick up automatically (see
 # Get-DuneBackupSchedule's self-heal below) — not for cosmetic/comment-only
 # changes.
-$script:DuneBackupCmdVersion = 3
+$script:DuneBackupCmdVersion = 4
 
 function New-DuneBackupCmdLegacyV2 {
     param(
@@ -362,7 +362,12 @@ function New-DuneBackupBlock {
     if ($null -eq $KeepDaysPods -or $KeepDaysPods -lt 0) { $KeepDaysPods = $script:DuneBackupPodPruneKeepDaysDefault }
     if ($KeepDaysPods -gt 365) { $KeepDaysPods = 365 }
 
-    $cmd = (New-DuneBackupCmd -KeepLastPods $KeepLastPods -KeepLast $KeepLast) -replace '%', '\%'
+    # BusyBox crond passes escaped percent through to the shell. Inside the
+    # verifier's single-quoted printf formats that changes the actual output.
+    # Encode the complete command so neither cron implementation sees percent.
+    $payload = New-DuneBackupCmd -KeepLastPods $KeepLastPods -KeepLast $KeepLast
+    $encoded = [Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes($payload))
+    $cmd = "echo '$encoded' | base64 -d | /bin/sh"
 
     $lines = @()
     $lines += $script:DuneBackupBeginMarker
@@ -532,20 +537,20 @@ sudo crontab -l 2>&1 || true
                 # stuck running the old, silently-broken command until this
                 # runs, since nothing else rewrites an already-installed
                 # crontab block. Only auto-reconcile when the installed block
-                # exactly matches a KNOWN prior rendering (legacy v1 (pre-versioning) and v2) — never a block whose command
+                # exactly matches a KNOWN prior rendering (unversioned v1, v2 or v3) — never a block whose command
                 # version marker is present but simply unrecognized, and
                 # never on a block that doesn't match anything we know how to
                 # produce, which stays flagged as tampered exactly as before.
-                if (-not $SkipReconcile -and ($null -eq $parsed.block.cmdVersion -or $parsed.block.cmdVersion -eq 2)) {
-                    $legacyCmd = if ($parsed.block.cmdVersion -eq 2) { New-DuneBackupCmdLegacyV2 -KeepLastPods $keepLastPods -KeepLast $keepLast } else { New-DuneBackupCmdLegacyV1 -KeepLastPods $keepLastPods -KeepLast $keepLast }
+                if (-not $SkipReconcile -and ($null -eq $parsed.block.cmdVersion -or $parsed.block.cmdVersion -in @(2,3))) {
+                    $legacyCmd = if ($parsed.block.cmdVersion -eq 3) { (New-DuneBackupCmd -KeepLastPods $keepLastPods -KeepLast $keepLast) -replace '%', '\%' } elseif ($parsed.block.cmdVersion -eq 2) { New-DuneBackupCmdLegacyV2 -KeepLastPods $keepLastPods -KeepLast $keepLast } else { New-DuneBackupCmdLegacyV1 -KeepLastPods $keepLastPods -KeepLast $keepLast }
                     $legacyInner = (@(
                         "# DST-BACKUP-PRESET: $preset"
                         "# DST-BACKUP-KEEP-LAST: $keepLast"
                         "# DST-BACKUP-KEEP-LAST-PODS: $keepLastPods"
                         "# DST-BACKUP-KEEP-DAYS-PODS: $keepDaysPods"
                     ) + @($script:DuneBackupPresets[$preset].crons | ForEach-Object { "$_ $legacyCmd" })) -join "`n"
-                    if ($parsed.block.cmdVersion -eq 2) {
-                        $legacyInner = $legacyInner -replace "(# DST-BACKUP-KEEP-DAYS-PODS: [0-9]+)", "`$1`n# DST-BACKUP-CMD-VERSION: 2"
+                    if ($parsed.block.cmdVersion -in @(2,3)) {
+                        $legacyInner = $legacyInner -replace "(# DST-BACKUP-KEEP-DAYS-PODS: [0-9]+)", "`$1`n# DST-BACKUP-CMD-VERSION: $($parsed.block.cmdVersion)"
                     }
                     if ($legacyInner -eq $parsed.block.raw) {
                         $reconciled = Set-DuneBackupSchedule -Ip $Ip -Preset $preset -KeepLast $keepLast -KeepLastPods $keepLastPods -KeepDaysPods $keepDaysPods
