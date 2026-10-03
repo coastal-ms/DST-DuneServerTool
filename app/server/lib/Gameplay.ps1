@@ -170,9 +170,9 @@ function Get-DuneCosmeticsCatalog {
         if     ($k -match 'SetVariant')        { $group = 'Armor & Suit Sets' }
         elseif ($k -match 'Swatch')            { $group = 'Swatches (Dyes)' }
         elseif ($k -match 'MeshCustomization') { $group = 'Vehicle Skins' }
-        elseif ($k -match 'Variant$') {
+        elseif ($k -match 'Variant$' -or $name -match '\bVariant$') {
             # `<thing>_Variant` (distinct from the armor `SetVariant`, matched above)
-            # is the game's naming for grantable skin cosmetics — vehicles, weapons,
+            # and display names ending in Variant identify grantable skin cosmetics — vehicles, weapons,
             # and a few armor/mask pieces. None of these matched the groups above, so
             # the whole family was silently dropped from the catalog. Bucket by the
             # object keyword so they surface under a sensible header; anything that
@@ -180,7 +180,7 @@ function Get-DuneCosmeticsCatalog {
             # "Other Customization" (grantable) rather than vanishing.
             if     ($k -match '(Buggy|Ornithopter|Orni|Sandbike|Sandcrawler|MechanicBike)') { $group = 'Vehicle Skins' }
             elseif ($k -match '(Sword|Pistol|Rifle|SMG|LMG|Shotgun|Knife|Kindjal|Dirk|Rapier|Flamethrower|Battlerifle|Sniper|Blade|Melee|Memento|Snubnose|Drillshot|Fireballer|Frameblade|Lasgun|Maula)') { $group = 'Weapon Skins' }
-            elseif ($k -match '(Armor|Suit|Mask)') { $group = 'Armor & Suit Sets' }
+            elseif ($k -match '(Armor|Suit|Mask|Helmet)') { $group = 'Armor & Suit Sets' }
             else   { $group = 'Other Customization' }
         }
         elseif ($k -match 'Customization')     { $group = 'Other Customization' }
