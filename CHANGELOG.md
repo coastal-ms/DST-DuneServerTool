@@ -18,6 +18,7 @@ here cover everything those tags shipped.
 ## [15.2.6] - 2026-10-03
 
 - Promote the accepted 15.2.6 test changes to stable: Linux Server Settings authority and Custom defaults, host-created Player accounts and Player Portal fixes, retired mobile/Cloudflare removal, and cosmetic/Give Item catalog restoration. Historical catalog availability does not prove every item is functional in the current game.
+- Allow Land Claim Timer client writes to be retried after the game closes, show skipped writes as warnings, require an explicit timer value, and clear leftover timer overrides when restoring defaults.
 - Fix scheduled backup verification on BusyBox cron by transporting the command without percent escaping. Migrate exact managed version 3 schedules while preserving customized commands and retention settings.
 - Restart the unchanged installed package after a failed unattended update, unless recovery is active. Skip fallback if the installed build changed or cannot be verified, preserve the update failure result, and keep the update available indicator truthful.
 - Stop counting kubectl's empty-table notice as a server pod, allowing Server Settings shutdown progress to finish without leaving the page.
