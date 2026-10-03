@@ -91,7 +91,7 @@ Register-DuneRoute -Method GET -Path '/api/remote-access/portal-accounts' -Local
         accountLoginEnabled = [bool]$store.accountLoginEnabled
         nativeAppsBlockedInAccountMode = $true
         accounts = @($store.accounts | ForEach-Object { Get-DunePortalPublicAccount $_ })
-        roles = @('owner','admin')
+        roles = @('owner','admin','player')
     }
 }
 
@@ -125,7 +125,7 @@ Register-DuneRoute -Method PUT -Path '/api/remote-access/portal-accounts/{id}' -
             if ($null -ne $enabledValue) { $account.enabled = [bool]$enabledValue }
             $role = [string](Get-DunePortalBodyValue $body 'role')
             if ($role) {
-                if ($role -notin @('owner','admin')) { throw 'Invalid role.' }
+                if ($role -notin @('owner','admin','player')) { throw 'Invalid role.' }
                 $account.role = $role
             }
             $characterId = Get-DunePortalBodyValue $body 'gameCharacterId'
@@ -136,13 +136,14 @@ Register-DuneRoute -Method PUT -Path '/api/remote-access/portal-accounts/{id}' -
                 $account.gameCharacterId = ([string]$characterId).Trim()
                 $account.gameCharacterLabel = ([string](Get-DunePortalBodyValue $body 'gameCharacterLabel')).Trim()
             }
+            if ($account.role -eq 'player' -and [string]$account.gameCharacterId -notmatch '^[1-9][0-9]*$') { throw 'Player accounts require a linked game character.' }
             $remainingOwners = @($store.accounts | Where-Object { $_.enabled -and $_.role -eq 'owner' })
             if ($store.accountLoginEnabled -and $remainingOwners.Count -lt 1) {
                 throw 'Account login needs at least one enabled owner.'
             }
             $account.updatedAt = (Get-Date).ToUniversalTime().ToString('o')
             Save-DunePortalAccountStore $store
-            if (-not $account.enabled) { Revoke-DunePortalSessions -AccountId ([string]$account.id) }
+            Revoke-DunePortalSessions -AccountId ([string]$account.id)
             return $account
         }
         if (-not $updated.enabled) { Clear-DunePortalSessionCookie $res }

@@ -3,7 +3,7 @@ import { api } from './client'
 export interface PortalAccount {
   id: string
   username: string
-  role: 'owner' | 'admin'
+  role: 'owner' | 'admin' | 'player'
   enabled: boolean
   mustChangePassword: boolean
   gameCharacterId: string

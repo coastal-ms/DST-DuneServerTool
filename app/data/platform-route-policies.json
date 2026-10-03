@@ -35,7 +35,6 @@
     "PortalAuth.ps1": "reversible-write",
     "PublicIp.ps1": "transactional-write",
     "Remote.ps1": "reversible-write",
-    "RemoteAccess.ps1": "reversible-write",
     "RestartSchedule.ps1": "reversible-write",
     "ServiceMode.ps1": "reversible-write",
     "Setup.ps1": "transactional-write",
@@ -140,6 +139,7 @@
     "ws CONNECT /ws/terminal": "host.powershell.execute"
   },
   "groups": [
+    {"source": "PlayerPortal.ps1", "capabilityId": "platform.status", "routeCount": 1, "sha256": "13b7b6c67fa733839a522b53a6a79d1f6b3287286e83959f0227568d1ff55e9c"},
     { "source": "Autostart.ps1", "capabilityId": "host.autostart", "routeCount": 2, "sha256": "e77701cf6bd2dec5c71b06145ec9e4bbe99c5ae1008ec887e636939ad0fc2f0c" },
     { "source": "BackupMirror.ps1", "capabilityId": "operation.data-protection", "routeCount": 4, "sha256": "f62b29ee7598d65958bfb93fdcf5e1b9978d05ca1f7c722a0ba817a319f31694" },
     { "source": "BackupSchedule.ps1", "capabilityId": "operation.data-protection", "routeCount": 5, "sha256": "110e6e76669508aab614fa4a95ab04229a9cc2bf0faa164dbd21e657c05671e9" },
@@ -179,7 +179,6 @@
     { "source": "PortalAuth.ps1", "capabilityId": "platform.access", "routeCount": 13, "sha256": "35a10866afe87089d19960d895826b58b66d783cbc1d95078d62fb90bce56e6b" },
     { "source": "PublicIp.ps1", "capabilityId": "settings.connectivity", "routeCount": 9, "sha256": "e4d36b9e6f9a1d8151b978b834d5e2f1c20231c10cb1715caae9180bbb03623b" },
     { "source": "Remote.ps1", "capabilityId": "operation.remote-compat", "routeCount": 6, "sha256": "b0e586ee5b903ad17abe41f3c7389650783eb284cc1f7516c0ced09f3b4ad7bc" },
-    { "source": "RemoteAccess.ps1", "capabilityId": "settings.connectivity", "routeCount": 6, "sha256": "60f71a9c7a4b8b5eda4633ca337ed6b5dfbcdcfc1deaf0008c32f28df8669820" },
     { "source": "RestartSchedule.ps1", "capabilityId": "operation.maintenance", "routeCount": 4, "sha256": "377236ac8359ec7828642c234f07c127e9e2f7c4930b77eadcf0ab19f0201568" },
     { "source": "ServiceMode.ps1", "capabilityId": "operation.runtime", "routeCount": 2, "sha256": "5d5217dd5fca38e176da024ad005d571995b7e3430707609350656942b2fe3b9" },
     { "source": "Setup.ps1", "capabilityId": "settings.setup", "routeCount": 14, "sha256": "955be1424b4c624c8a92e0e9ba82b2978dcdebccb6740a5626c92532608edeeb" },

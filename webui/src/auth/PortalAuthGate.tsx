@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useState, type FormEvent, type ReactNode } from 'react'
+import { createContext, lazy, Suspense, useContext, useEffect, useState, type FormEvent, type ReactNode } from 'react'
 import { Icon } from '../components/Icon'
 import {
   changePortalPassword,
@@ -14,6 +14,7 @@ interface PortalAuthContextValue {
 }
 
 const PortalAuthContext = createContext<PortalAuthContextValue | null>(null)
+const PlayerPortal = lazy(() => import('../pages/PlayerPortal'))
 
 export function usePortalAuth() {
   return useContext(PortalAuthContext)
@@ -191,5 +192,9 @@ export function PortalAuthGate({ children }: { children: ReactNode }) {
     await logoutPortal()
     await refresh()
   }
-  return <PortalAuthContext.Provider value={{ status, logout }}>{children}</PortalAuthContext.Provider>
+  return <PortalAuthContext.Provider value={{ status, logout }}>
+    {status.account?.role === 'player'
+      ? <Suspense fallback={<p role="status">Loading Player Portal…</p>}><PlayerPortal /></Suspense>
+      : children}
+  </PortalAuthContext.Provider>
 }

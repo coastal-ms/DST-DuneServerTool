@@ -13,6 +13,16 @@ here cover everything those tags shipped.
 
 ## [Unreleased]
 
+- Ignore the unfixed CVE-2026-93748 in Astro's transitive `http-cache-semantics` dependency during Trivy scans.
+
+## [15.2.6-test2] - 2026-10-02
+
+- Add host-created Player accounts linked to one game character. Players can view server status and maps, warm maps, and manage their own character, inventory, progression, and item grants.
+- Enforce character and item ownership on the server for every Player request. Server commands, host settings, other characters, and map stop/reset controls remain unavailable; saved-data edits retain offline requirements.
+- Revoke account sessions when the host changes a role or character link.
+- Restore scrolling throughout the Player Portal. Show package Grade separately from item Mk tier, reject online packages with custom Grade overrides before sending any items, and report package failures instead of unconditional success.
+- Remove the retired native mobile app project and legacy Cloudflare remote-access settings, authentication, and service-token pairing. Keep the responsive Browser Portal, Player accounts, website, and Tailscale Funnel access.
+
 ## [15.2.6] - 2026-10-02
 
 - Stop counting kubectl's empty-table notice as a server pod, allowing Server Settings shutdown progress to finish without leaving the page.

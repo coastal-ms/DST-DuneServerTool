@@ -29,6 +29,10 @@ function Get-DuneBodyInt {
 Register-DuneRoute -Method GET -Path '/api/gameplay/players' -Handler {
     param($req, $res, $routeParams, $body)
     try {
+        if ([string]$routeParams.requestPrincipal.type -eq 'linked-player') {
+            Write-DuneJson -Response $res -Body @{ players = @($routeParams.linkedPlayer); total = 1; source = 'live' }
+            return
+        }
         $source = 'demo'
         $players = $null
         $liveError = $null

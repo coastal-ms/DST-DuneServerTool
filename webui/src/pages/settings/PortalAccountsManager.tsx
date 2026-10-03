@@ -22,7 +22,7 @@ export function PortalAccountsManager() {
   const [state, setState] = useState<PortalAccountsState | null>(null)
   const [players, setPlayers] = useState<PlayerOption[]>([])
   const [username, setUsername] = useState('')
-  const [role, setRole] = useState<'owner' | 'admin'>('admin')
+  const [role, setRole] = useState<'owner' | 'admin' | 'player'>('admin')
   const [characterId, setCharacterId] = useState('')
   const [explicitPassword, setExplicitPassword] = useState('')
   const [oneTimePassword, setOneTimePassword] = useState('')
@@ -121,13 +121,13 @@ export function PortalAccountsManager() {
         {!firstOwner && (
           <div>
             <label htmlFor="portal-account-role" className="block text-sm font-medium mb-1">Role</label>
-            <select id="portal-account-role" value={role} onChange={e => setRole(e.target.value as 'owner' | 'admin')} className="w-full px-3 py-2 rounded-lg bg-surface-2 border border-border">
-              <option value="admin">Admin</option><option value="owner">Owner</option>
+            <select id="portal-account-role" value={role} onChange={e => setRole(e.target.value as 'owner' | 'admin' | 'player')} className="w-full px-3 py-2 rounded-lg bg-surface-2 border border-border">
+              <option value="player">Player</option><option value="admin">Admin</option><option value="owner">Owner</option>
             </select>
           </div>
         )}
         <div>
-          <label htmlFor="portal-account-character" className="block text-sm font-medium mb-1">Linked game character (optional)</label>
+          <label htmlFor="portal-account-character" className="block text-sm font-medium mb-1">Linked game character (required for Player)</label>
           <select id="portal-account-character" value={characterId} onChange={e => {
             setCharacterId(e.target.value)
             if (!username) setUsername(players.find(p => String(p.account_id) === e.target.value)?.name ?? '')
@@ -141,7 +141,7 @@ export function PortalAccountsManager() {
           <input id="portal-account-password" type="password" minLength={12} maxLength={128} value={explicitPassword} onChange={e => setExplicitPassword(e.target.value)} className="w-full px-3 py-2 rounded-lg bg-surface-2 border border-border" placeholder="Leave blank to generate securely" />
         </div>
       </div>
-      <button className="btn-primary" disabled={busy || username.trim().length < 3} onClick={() => void create()}>
+      <button className="btn-primary" disabled={busy || username.trim().length < 3 || (!firstOwner && role === 'player' && !characterId)} onClick={() => void create()}>
         <Icon name="Plus" size={14} /> {firstOwner ? 'Create first Owner' : 'Create account'}
       </button>
     </div>
@@ -186,19 +186,37 @@ export function PortalAccountsManager() {
                 value={account.role}
                 disabled={busy}
                 onChange={event => {
-                  const nextRole = event.target.value as 'owner' | 'admin'
+                  const nextRole = event.target.value as 'owner' | 'admin' | 'player'
                   void run(async () => {
                     await updatePortalAccount(account.id, { role: nextRole })
-                    setMessage(`${account.username} is now ${nextRole === 'owner' ? 'an Owner' : 'an Admin'}. Their login and password are unchanged.`)
+                    setMessage(`${account.username} is now ${nextRole === 'owner' ? 'an Owner' : nextRole === 'player' ? 'a Player' : 'an Admin'}. Existing sessions were revoked; sign in again.`)
                   })
                 }}
                 className="min-h-9 rounded-lg bg-surface border border-border px-2 text-sm text-text"
               >
-                <option value="admin">Admin</option>
+                <option value="player">Player</option><option value="admin">Admin</option>
                 <option value="owner">Owner</option>
               </select>
             </label>
           </div>
+          <label className="text-xs text-text-muted">
+            Linked game character
+            <select aria-label={`Character for ${account.username}`} value={account.gameCharacterId}
+              disabled={busy} className="w-full min-h-9 rounded-lg bg-surface border border-border px-2 text-sm text-text"
+              onChange={event => {
+                const id = event.target.value
+                const player = players.find(item => String(item.account_id) === id)
+                void run(async () => {
+                  await updatePortalAccount(account.id, { gameCharacterId: id, gameCharacterLabel: player?.name ?? '' })
+                  setMessage('Character link updated. Existing sessions were revoked; sign in again.')
+                })
+              }}>
+              <option value="" disabled={account.role === 'player'}>No character link</option>
+              {account.gameCharacterId && !players.some(player => String(player.account_id) === account.gameCharacterId) &&
+                <option value={account.gameCharacterId}>{account.gameCharacterLabel || account.gameCharacterId} (unavailable)</option>}
+              {players.map(player => <option key={player.account_id} value={String(player.account_id)}>{player.name}</option>)}
+            </select>
+          </label>
           <div className="mt-auto grid grid-cols-2 gap-2">
             <button className="btn-secondary justify-center px-2 py-1.5 text-xs" disabled={busy} onClick={() => void run(async () => {
               const result = await resetPortalAccountPassword(account.id)
@@ -226,7 +244,7 @@ export function PortalAccountsManager() {
         <p className="text-xs text-text-dim mt-1">
           Optional local sign-in for the existing full portal. Owners have full trusted remote access except host-only
           safeguards. Admins can operate the server and manage players, but cannot access host configuration, files,
-          credentials, Database, Sietches, Experimental, or Settings.
+          credentials, Database, Sietches, Experimental, or Settings. Players can view server status and maps, warm maps, and manage only their linked character.
         </p>
       </div>
       {error && <div role="alert" className="text-sm text-danger bg-danger/10 border border-danger/40 rounded-lg px-3 py-2">{error}</div>}
@@ -290,9 +308,9 @@ export function PortalAccountsManager() {
                   className="mt-0.5"
                 />
                 <span>
-                  I understand that paired native mobile apps stop working while account login is enabled.
-                  The current app sends only the browser-spoofable X-Dune-Token header, so it cannot be safely exempted.
-                  Disable account login locally to restore native-app and legacy magic-link access.
+                  I understand that enabling account login disables existing token-based Browser Portal links.
+                  Use the sign-in link and host-created accounts for remote access.
+                  Disable account login locally to restore token-based browser links.
                 </span>
               </label>
               <button className="btn-primary" disabled={busy || !nativeRetirementAcknowledged} onClick={() => void toggleMode(true)}>Enable account login</button>

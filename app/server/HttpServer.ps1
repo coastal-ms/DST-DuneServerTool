@@ -306,6 +306,7 @@ function Add-DuneRouteContractContext {
         [Parameter(Mandatory)][string]$RequestId
     )
     $RouteParams['requestPrincipal'] = $Principal
+    $RouteParams['registeredPath'] = [string]$Route.Path
     $RouteParams['requestId'] = $RequestId
     if (Get-Command Get-DuneRouteClassification -ErrorAction SilentlyContinue) {
         $classification = Get-DuneRouteClassification $Route
@@ -316,7 +317,7 @@ function Add-DuneRouteContractContext {
 
 function Test-DuneDispatchPrincipalAccess {
     param([Parameter(Mandatory)]$Route, [Parameter(Mandatory)]$Principal)
-    if (-not (Get-Command Test-DuneRoutePrincipalAccess -ErrorAction SilentlyContinue)) { return $true }
+    if (-not (Get-Command Test-DuneRoutePrincipalAccess -ErrorAction SilentlyContinue)) { return ([string]$Principal.type -ne 'linked-player') }
     return [bool](Test-DuneRoutePrincipalAccess -Route $Route -Principal $Principal)
 }
 
@@ -620,7 +621,11 @@ function Invoke-DuneApiHandlerAsync {
             }
 
             $h = [scriptblock]::Create($handlerText)
-            $invoke = { & $h $req $res $routeParams $body }
+            $invoke = {
+                if ([string]$routeParams.requestPrincipal.type -eq 'linked-player' -and
+                    -not (Test-DunePlayerRequestAccess -Request $req -Response $res -RouteParams $routeParams -Body $body)) { return }
+                & $h $req $res $routeParams $body
+            }
             $admitted = Invoke-DuneWorldRestartAdmission -Method $method -Path $path -Action $invoke
             if ($admitted -is [System.Collections.IDictionary] -and $admitted.blocked) {
                 Write-DuneError -Response $res -Status 423 -Message 'World Restart maintenance is active. Wait for completion or use its rollback control.'
@@ -1366,6 +1371,8 @@ function Invoke-DuneContext {
             return
         }
         if ((Test-DunePortalOwnerOrAdminPath -Path $rawPath -Method $method) -and
+            -not ($portalSessionAuth.ok -and $portalSessionAuth.account.role -eq 'player' -and
+                $method -eq 'GET' -and $rawPath.StartsWith('/api/v1/maps/')) -and
             -not (Test-DunePortalOwnerOrAdminAccess `
                 -AccountMode $accountMode `
                 -IsLocalRequest $isLocalRequest `
@@ -1435,7 +1442,11 @@ function Invoke-DuneContext {
                         $body = ConvertFrom-DuneRequestJson -Raw $body
                     }
                 }
-                $invoke = { & $r.Handler $req $res $routeParams $body }
+                $invoke = {
+                    if ([string]$routeParams.requestPrincipal.type -eq 'linked-player' -and
+                        -not (Test-DunePlayerRequestAccess -Request $req -Response $res -RouteParams $routeParams -Body $body)) { return }
+                    & $r.Handler $req $res $routeParams $body
+                }
                 $admitted = Invoke-DuneWorldRestartAdmission -Method $method -Path $rawPath -Action $invoke
                 if ($admitted -is [System.Collections.IDictionary] -and $admitted.blocked) {
                     Write-DuneError -Response $res -Status 423 -Message 'World Restart maintenance is active. Wait for completion or use its rollback control.'

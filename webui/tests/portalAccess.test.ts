@@ -6,6 +6,7 @@ import { canAccessCommand } from '../src/auth/commandAccess'
 describe('Browser Portal role access', () => {
   it('gives remote Owners full portal access except host-only Setup', () => {
     expect(resolvePortalAccess(false, true, 'owner')).toEqual({
+      isPlayer: false,
       canAccessOwnerSurfaces: true,
       canAccessSetup: false,
     })
@@ -13,6 +14,7 @@ describe('Browser Portal role access', () => {
 
   it('limits remote Admins to delegated operational surfaces', () => {
     expect(resolvePortalAccess(false, true, 'admin')).toEqual({
+      isPlayer: false,
       canAccessOwnerSurfaces: false,
       canAccessSetup: false,
     })
@@ -20,6 +22,7 @@ describe('Browser Portal role access', () => {
 
   it('keeps the local host fully trusted regardless of account role', () => {
     expect(resolvePortalAccess(true, true, 'admin')).toEqual({
+      isPlayer: false,
       canAccessOwnerSurfaces: true,
       canAccessSetup: true,
     })
@@ -28,6 +31,14 @@ describe('Browser Portal role access', () => {
   it('fails closed for remote account-mode launch access without an account role', () => {
     expect(resolvePortalAccess(false, true, null).canAccessOwnerSurfaces).toBe(false)
     expect(resolvePortalAccess(false, false, null).canAccessOwnerSurfaces).toBe(true)
+  })
+
+  it('gives Players no server-command access', () => {
+    expect(resolvePortalAccess(false, true, 'player').isPlayer).toBe(true)
+    expect(resolvePortalAccess(false, true, 'player').canAccessOwnerSurfaces).toBe(false)
+    for (const command of ['start', 'restart', 'startup', 'apply-inis', 'update', 'reboot']) {
+      expect(canAccessCommand(command, false, 'player')).toBe(false)
+    }
   })
 
   it('marks sensitive pages Owner-only and Setup host-only', () => {

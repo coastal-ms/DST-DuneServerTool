@@ -50,6 +50,12 @@ import {
 import { fmtNum, fmtSolari } from '../shared'
 import { useCommandDeck } from '../../../hooks/useCommandDeck'
 import { CommandCategoryPages } from '../../commands/CommandCategoryPages'
+import { usePortalAccess } from '../../../auth/portalAccess'
+
+// These controls administer the server/world or other identities, rather than
+// the linked character. The backend independently denies their endpoints.
+const PLAYER_HIDDEN_ACTIONS = new Set(['spawn-vehicle', 'funcom-spawn-vehicle', 'refuel-vehicle',
+  'teleport', 'whisper', 'cheat-script', 'dev-scripts', 'fresh-start'])
 
 type Flash = (msg: string, kind?: 'ok' | 'err') => void
 
@@ -885,6 +891,7 @@ const ACTION_CATEGORIES = [
 const ITEMS_GROUP: ActionGroup = 'Items'
 
 export function ActionsSection({ player, canWrite, demo, flash, onChanged, onFlush }: SectionProps) {
+  const { isPlayer } = usePortalAccess()
   const contextual = useCommandDeck()
   const [openId, setOpenId] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
@@ -939,12 +946,13 @@ export function ActionsSection({ player, canWrite, demo, flash, onChanged, onFlu
       Currency: [], Progression: [], Items: [], Vehicle: [], Live: [], Identity: [], Danger: [],
     }
     for (const a of ACTIONS) {
+      if (isPlayer && PLAYER_HIDDEN_ACTIONS.has(a.id)) continue
       // Items is rendered inside InventorySection — skip here.
       if (a.group === ITEMS_GROUP) continue
       map[a.group].push(a)
     }
     return map
-  }, [])
+  }, [isPlayer])
 
   if (!canWrite) {
     return (
@@ -1177,9 +1185,9 @@ function ActionRow({ def, player, busy, stats, open, danger, onToggle, runAction
           ) : def.custom === 'give-package' ? (
             <GivePackageForm busy={busy} playerName={player.name}
               onGive={(items, pkgName, overflow) => runAction(def, async () => {
-                await giveItems(player.id, items, overflow)
-                const n = items.length
-                return { message: `Gave package "${pkgName}" — ${n} item${n === 1 ? '' : 's'} to ${player.name}.` }
+                const r = await giveItems(player.id, items, overflow)
+                if (Number(r.result?.failures || 0) > 0) throw new Error(r.message)
+                return { message: `Package "${pkgName}": ${r.message}` }
               })} />
           ) : def.custom === 'grant-cosmetic' ? (
             <GrantCosmeticForm busy={busy} playerName={player.name} accountId={player.account_id}
@@ -1781,6 +1789,7 @@ export function GivePackageForm({ busy, giveDisabled = false, playerName, target
   showOverflow?: boolean
   onGive: (items: GiveItemEntry[], pkgName: string, allowOverflow: boolean) => void
 }) {
+  const { isPlayer } = usePortalAccess()
   const giveLabel = targetLabel ?? playerName ?? 'player'
   const [packages, setPackages] = useState<ItemPackage[]>([])
   const [loading, setLoading]   = useState(true)
@@ -1958,7 +1967,7 @@ export function GivePackageForm({ busy, giveDisabled = false, playerName, target
                     className="w-full px-3 py-2 rounded-lg bg-surface-2 border border-border text-text text-sm focus:outline-none focus:ring-2 focus:ring-ibad focus:border-ibad/50" />
                 </div>
                 <div>
-                  <label className="block text-[11px] uppercase tracking-wider text-text-dim mb-1">Tier — Mk1-Mk6 (0-5)</label>
+                  <label className="block text-[11px] uppercase tracking-wider text-text-dim mb-1">Grade override (0 = default, 1–5 = custom)</label>
                   <input type="number" min={0} max={5} value={row.quality} disabled={saving}
                     onChange={e => setDraftRows(rows => rows.map((r, j) => j === i ? { ...r, quality: e.target.value } : r))}
                     className="w-full px-3 py-2 rounded-lg bg-surface-2 border border-border text-text text-sm focus:outline-none focus:ring-2 focus:ring-ibad focus:border-ibad/50" />
@@ -2010,7 +2019,7 @@ export function GivePackageForm({ busy, giveDisabled = false, playerName, target
                 <li key={i} className="flex items-center gap-2">
                   <Icon name="Box" size={11} className="shrink-0 text-text-dim/70" />
                   <span className="flex-1 min-w-0 truncate font-mono">{it.template}</span>
-                  <span className="shrink-0">x{it.qty}{it.quality ? ` · Mk${it.quality + 1}` : ''}</span>
+                  <span className="shrink-0">x{it.qty}{it.quality ? ` · Grade ${it.quality}` : ' · Default grade'}</span>
                 </li>
               ))}
             </ul>
@@ -2019,13 +2028,14 @@ export function GivePackageForm({ busy, giveDisabled = false, playerName, target
       )}
       {err && <div className="text-xs text-error">{err}</div>}
       {showOverflow && selected && <OverflowToggle checked={overflow} disabled={busy || saving} onChange={setOverflow} />}
+      {selected && <p className="text-xs text-text-dim">The item template determines its Mk tier. Custom Grade overrides require the player to be offline.</p>}
       {selected && (
         <button className="btn-primary w-full" disabled={busy || saving || giveDisabled}
           onClick={() => onGive(selected.items, selected.name, overflow)}>
           {busy ? <Icon name="Loader2" size={13} className="animate-spin" /> : <Icon name="Check" size={13} />} Give to {giveLabel}
         </button>
       )}
-      <div className="grid grid-cols-4 gap-2">
+      {!isPlayer && <div className="grid grid-cols-4 gap-2">
         <button className="btn-secondary" disabled={busy || saving} onClick={startNew}>
           <Icon name="Plus" size={13} /> New
         </button>
@@ -2038,7 +2048,7 @@ export function GivePackageForm({ busy, giveDisabled = false, playerName, target
         <button className="btn-secondary" disabled={busy || saving || !selected} onClick={() => void remove()}>
           {saving ? <Icon name="Loader2" size={13} className="animate-spin" /> : <Icon name="Trash2" size={13} />} Delete
         </button>
-      </div>
+      </div>}
     </div>
   )
 }
@@ -2705,10 +2715,11 @@ function ProgressionUnlockForm({ busy, onUnlock, onReverse }: {
 function ItemsActionBlock({ player, canWrite, flash, onChanged, onFlush }: {
   player: Player; canWrite: boolean; flash: Flash; onChanged: () => void; onFlush?: () => void
 }) {
+  const { isPlayer } = usePortalAccess()
   const [openId, setOpenId] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
 
-  const acts = useMemo(() => ACTIONS.filter(a => a.group === ITEMS_GROUP), [])
+  const acts = useMemo(() => ACTIONS.filter(a => a.group === ITEMS_GROUP && (!isPlayer || !PLAYER_HIDDEN_ACTIONS.has(a.id))), [isPlayer])
 
   if (!canWrite || acts.length === 0) return null
 

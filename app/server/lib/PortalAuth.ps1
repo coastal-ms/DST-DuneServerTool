@@ -1,4 +1,4 @@
-# PortalAuth.ps1 - opt-in local accounts for the existing Browser Portal.
+﻿# PortalAuth.ps1 - opt-in local accounts for the existing Browser Portal.
 
 $script:DunePortalAuthIterations = 310000
 $script:DunePortalSessionHours = 12
@@ -211,21 +211,7 @@ function Write-DunePortalAudit {
     } catch {}
 }
 
-function Get-DunePortalVerifiedProxyIdentity {
-    param($Request)
-    try {
-        $assertion = [string]$Request.Headers['Cf-Access-Jwt-Assertion']
-        if ($assertion -and
-            (Get-Command Get-DuneRemoteAcl -ErrorAction SilentlyContinue) -and
-            (Get-Command Test-DuneCloudflareAccessJwt -ErrorAction SilentlyContinue)) {
-            $identity = Test-DuneCloudflareAccessJwt -Request $Request -Acl (Get-DuneRemoteAcl)
-            if ($identity.ok -and $identity.email) {
-                return ([string]$identity.email).Trim().ToLowerInvariant()
-            }
-        }
-    } catch {}
-    return ''
-}
+function Get-DunePortalVerifiedProxyIdentity { param($Request) return '' }
 
 function Get-DunePortalClientKey {
     param($Request)
@@ -263,13 +249,14 @@ function Get-DunePortalAccountById {
 function New-DunePortalAccount {
     param(
         [Parameter(Mandatory)][string]$Username,
-        [ValidateSet('owner','admin')][string]$Role = 'admin',
+        [ValidateSet('owner','admin','player')][string]$Role = 'admin',
         [string]$Password = '',
         [string]$GameCharacterId = '',
         [string]$GameCharacterLabel = ''
     )
     if (-not (Test-DunePortalUsername $Username)) { throw 'Username must be 3-64 characters using letters, numbers, spaces, dot, underscore, or hyphen.' }
     if ($GameCharacterId.Length -gt 128 -or $GameCharacterLabel.Length -gt 128) { throw 'Character linkage is too long.' }
+    if ($Role -eq 'player' -and $GameCharacterId.Trim() -notmatch '^[1-9][0-9]*$') { throw 'Player accounts require a linked game character.' }
     $oneTime = $Password
     $generated = $false
     if (-not $oneTime) { $oneTime = New-DunePortalOneTimePassword; $generated = $true }

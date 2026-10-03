@@ -280,6 +280,43 @@ Describe 'Invoke-DunePlayerGiveItemsBulk overflow' -Tag 'Pure' {
         $script:liveArgs.AllowOverflow | Should -BeFalse
         $script:liveArgs.Template | Should -Be 'Ammo'
     }
+
+    It 'rejects a mixed online package with a Grade override before sending any items' {
+        Mock Invoke-DunePlayerGiveItem { throw 'SQL must not run for an online player' }
+        $r = Invoke-DunePlayerGiveItemsBulk -Ip '1.2.3.4' -PawnId 24 -Items @(
+            @{ template = 'Ammo'; qty = 10; quality = 0 },
+            @{ template = 'Stillsuit_Unique_Armored_06_Top'; qty = 1; quality = 5 }
+        )
+        $r.ok | Should -BeFalse
+        $r.error | Should -Match 'Grade requires the player to be offline'
+        $script:batchArgs | Should -BeNullOrEmpty
+        $script:liveArgs | Should -BeNullOrEmpty
+        Should -Invoke Invoke-DunePlayerGiveItem -Times 0
+    }
+
+    It 'never falls back to SQL when the online player cannot be resolved' {
+        Mock Resolve-DuneFlsIdOrError { return @{ ok = $false; error = 'Player lookup failed.' } }
+        Mock Invoke-DunePlayerGiveItem { throw 'SQL must not run for an online player' }
+        $r = Invoke-DunePlayerGiveItemsBulk -Ip '1.2.3.4' -PawnId 24 -Items @(
+            @{ template = 'Stillsuit_Unique_Armored_06_Top'; qty = 1; quality = 0 }
+        )
+        $r.ok | Should -BeFalse
+        $r.error | Should -Be 'Player lookup failed.'
+        Should -Invoke Invoke-DunePlayerGiveItem -Times 0
+    }
+
+    It 'preserves the Mk6 template and Grade 5 for an offline grant' {
+        Mock Test-DunePlayerOffline { return @{ ok = $true } }
+        Mock Invoke-DunePlayerGiveItem { return @{ ok = $true; message = 'Saved offline.' } }
+        $r = Invoke-DunePlayerGiveItemsBulk -Ip '1.2.3.4' -PawnId 24 -Items @(
+            @{ template = 'Stillsuit_Unique_Armored_06_Top'; qty = 1; quality = 5 }
+        )
+        $r.ok | Should -BeTrue
+        $r.results[0].path | Should -Be 'sql'
+        Should -Invoke Invoke-DunePlayerGiveItem -Times 1 -ParameterFilter {
+            $Template -eq 'Stillsuit_Unique_Armored_06_Top' -and $Quality -eq 5
+        }
+    }
 }
 
 Describe 'Invoke-DunePlayerGrantHouseSwatches' -Tag 'Pure' {

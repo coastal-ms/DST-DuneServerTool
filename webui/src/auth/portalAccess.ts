@@ -1,7 +1,7 @@
 import { usePortalAuth } from './PortalAuthGate'
 import { isLocalViewer } from '../util/viewer'
 
-export type PortalAccountRole = 'owner' | 'admin' | null
+export type PortalAccountRole = 'owner' | 'admin' | 'player' | null
 
 export function resolvePortalAccess(
   localViewer: boolean,
@@ -9,6 +9,7 @@ export function resolvePortalAccess(
   role: PortalAccountRole,
 ) {
   return {
+    isPlayer: accountLoginEnabled && role === 'player',
     canAccessOwnerSurfaces: localViewer || !accountLoginEnabled || role === 'owner',
     canAccessSetup: localViewer,
   }

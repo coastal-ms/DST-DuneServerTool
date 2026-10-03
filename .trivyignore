@@ -2,3 +2,6 @@
 # Mobile builds process trusted local project assets, not user-supplied images.
 CVE-2025-71329
 CVE-2025-71330
+
+# Revisit when http-cache-semantics publishes a fix; this is an Astro build dependency.
+CVE-2026-93748

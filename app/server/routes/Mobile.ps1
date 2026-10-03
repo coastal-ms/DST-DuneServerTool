@@ -17,29 +17,6 @@ Register-DuneRoute -Method GET -Path '/api/mobile/pairing' -Handler {
 
         $url = $null
         $source = 'none'
-        $cfClientId = ''
-        $cfClientSecret = ''
-
-        # Resolve the configured custom hostname (if any) and the mobile service
-        # token (if any) up front.
-        $hostUrl = $null
-        try {
-            if (Get-Command Get-DuneRemoteAcl -ErrorAction SilentlyContinue) {
-                $acl = Get-DuneRemoteAcl
-                if ($acl -and $acl.hostname) {
-                    $h = [string]$acl.hostname
-                    if ($h -notmatch '^https?://') { $h = "https://$h" }
-                    $hostUrl = $h.TrimEnd('/')
-                }
-            }
-        } catch {}
-        $svc = $null
-        try {
-            if (Get-Command Get-DuneMobileServiceToken -ErrorAction SilentlyContinue) {
-                $s = Get-DuneMobileServiceToken
-                if ($s -and $s.clientId -and $s.clientSecret) { $svc = $s }
-            }
-        } catch {}
 
         # Preferred (reliable, no domain): Tailscale Funnel. A stable public HTTPS
         # URL the phone app + browser use directly.
@@ -49,22 +26,6 @@ Register-DuneRoute -Method GET -Path '/api/mobile/pairing' -Handler {
                 if ($fu) { $url = $fu; $source = 'funnel' }
             }
         } catch {}
-
-        # Next (stable): the Cloudflare custom domain reached past Access via the
-        # service token (advanced, bring-your-own-domain).
-        if (-not $url -and $hostUrl -and $svc) {
-            $url = $hostUrl
-            $source = 'domain-service-token'
-            $cfClientId = $svc.clientId
-            $cfClientSecret = $svc.clientSecret
-        }
-        # Last resort: the bare custom domain with NO service token. The browser
-        # portal can still reach it (email login), but the app cannot pass Access
-        # without the service token — kept so the UI can prompt the user.
-        if (-not $url -and $hostUrl) {
-            $url = $hostUrl
-            $source = 'domain'
-        }
 
         $bridge = $null
         if (Get-Command Get-DuneBridgeStatus -ErrorAction SilentlyContinue) {
@@ -90,8 +51,6 @@ Register-DuneRoute -Method GET -Path '/api/mobile/pairing' -Handler {
             source               = $source
             port                 = $port
             bridge               = $bridge
-            cfAccessClientId     = $cfClientId
-            cfAccessClientSecret = $cfClientSecret
             pairingId            = $pairingId
             remoteToken          = $remoteToken
             accountLoginEnabled  = [bool](Test-DunePortalAccountModeEnabled)
