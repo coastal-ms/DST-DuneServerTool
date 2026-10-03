@@ -13,7 +13,7 @@ here cover everything those tags shipped.
 
 ## [Unreleased]
 
-- Suppress Trivy's CVE-2026-85393 finding for Expo's transitive `node-forge` dependency until an upstream fix is released.
+- Suppress Trivy findings for CVE-2026-85393 (`node-forge`), CVE-2026-93687 (`braces`), and CVE-2026-93748 (`http-cache-semantics`), which have no fixed upstream releases yet.
 
 ## [15.2.6] - 2026-10-02
 

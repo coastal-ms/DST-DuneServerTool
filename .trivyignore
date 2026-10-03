@@ -4,3 +4,6 @@ CVE-2025-71329
 CVE-2025-71330
 # Transitive Expo tooling dependency; node-forge 1.4.0 is the latest release and no fix is available yet.
 CVE-2026-85393
+# Current latest releases are affected; no patched versions are available yet.
+CVE-2026-93687
+CVE-2026-93748
