@@ -13,6 +13,8 @@ here cover everything those tags shipped.
 
 ## [Unreleased]
 
+- Ignore the unfixed CVE-2026-93748 in Astro's transitive `http-cache-semantics` dependency during Trivy scans.
+
 ## [15.2.6-test2] - 2026-10-02
 
 - Add host-created Player accounts linked to one game character. Players can view server status and maps, warm maps, and manage their own character, inventory, progression, and item grants.
