@@ -1,6 +1,6 @@
 {
   "_meta": {
-    "total": 2725,
+    "total": 2751,
     "source": "awakening.wiki",
     "scraped": "2026-05-20",
     "gradeable": 378,
@@ -11662,6 +11662,110 @@
     "Developer_Storage_Container_Patent": {
       "name": "Developer Storage Container",
       "category": "Developer - Building Unlocks"
+    },
+    "D_Combat_Neut_AtreidesDeserter02_Boots": {
+      "name": "Atreides Deserter Boots",
+      "category": "Garments - Feet"
+    },
+    "D_Combat_Neut_AtreidesDeserter02_Top": {
+      "name": "Atreides Deserter Chestpiece",
+      "category": "Garments - Chest"
+    },
+    "D_Combat_Neut_AtreidesDeserter02_Gloves": {
+      "name": "Atreides Deserter Gauntlets",
+      "category": "Garments - Hands"
+    },
+    "D_Combat_Neut_AtreidesDeserter02_Helmet": {
+      "name": "Atreides Deserter Hood",
+      "category": "Garments - Head"
+    },
+    "D_Combat_Neut_AtreidesDeserter02_Bottom": {
+      "name": "Atreides Deserter Pants",
+      "category": "Garments - Legs"
+    },
+    "D_Social_Atre_Formal01_Boots": {
+      "name": "Atreides Dress Uniform Boots",
+      "category": "Garments - Feet"
+    },
+    "D_Social_Atre_Formal01_Top": {
+      "name": "Atreides Dress Uniform Chestpiece",
+      "category": "Garments - Chest"
+    },
+    "D_Social_Atre_Formal01_Gloves": {
+      "name": "Atreides Dress Uniform Gloves",
+      "category": "Garments - Hands"
+    },
+    "D_Social_Atre_Formal01_Bottom": {
+      "name": "Atreides Dress Uniform Pants",
+      "category": "Garments - Legs"
+    },
+    "D_Combat_Choam_Assault03_Shoes": {
+      "name": "CHOAM Assault Boots",
+      "category": "Garments - Feet"
+    },
+    "D_Combat_Choam_Assault03_Top": {
+      "name": "CHOAM Assault Chestpiece",
+      "category": "Garments - Chest"
+    },
+    "D_Combat_Choam_Assault03_Helmet": {
+      "name": "CHOAM Assault Helmet",
+      "category": "Garments - Head"
+    },
+    "D_WoHCaptainClearenceCard": {
+      "name": "Captain's Clearance Card",
+      "category": "Contract Items"
+    },
+    "D_Carpets_Patent": {
+      "name": "Decorative Carpets",
+      "category": "Building"
+    },
+    "D_ufphz": {
+      "name": "Foreman's Dew Reaper",
+      "category": "Resources"
+    },
+    "D_Social_Hark_MilitaryUniform_Top_L3": {
+      "name": "Harkonnen Officer Jacket",
+      "category": "Garments - Chest"
+    },
+    "D_Social_Hark_MilitaryUniform_Top_L1": {
+      "name": "Harkonnen Recruit Jacket",
+      "category": "Garments - Chest"
+    },
+    "D_bcvvk": {
+      "name": "Harkonnen Spice Shipping Ledger",
+      "category": "Contract Items"
+    },
+    "D_ContractSeronValkinSwordHilt": {
+      "name": "Seron's Sword Hilt",
+      "category": "Weapons - Melee"
+    },
+    "D_ContractSeronValkinTleilaxuEyes": {
+      "name": "Tleilaxu Eyes",
+      "category": "Contract Items"
+    },
+    "D_Combat_Nati_WovenFiber01_Shoes": {
+      "name": "Woven Fiber Boots",
+      "category": "Resources"
+    },
+    "D_Combat_Nati_WovenFiber01_Top": {
+      "name": "Woven Fiber Chestpiece",
+      "category": "Resources"
+    },
+    "D_Combat_Nati_WovenFiber01_Gloves": {
+      "name": "Woven Fiber Gloves",
+      "category": "Resources"
+    },
+    "D_Combat_Nati_WovenFiber01_Helmet": {
+      "name": "Woven Fiber Helmet",
+      "category": "Resources"
+    },
+    "D_Combat_Nati_WovenFiber01_Bottom": {
+      "name": "Woven Fiber Pants",
+      "category": "Resources"
+    },
+    "D_ContractWrappedPackage": {
+      "name": "Wrapped Package",
+      "category": "Contract Items"
     }
   }
 }

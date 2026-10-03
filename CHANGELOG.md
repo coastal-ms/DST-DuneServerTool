@@ -15,6 +15,11 @@ here cover everything those tags shipped.
 
 - Ignore the unfixed CVE-2026-93748 in Astro's transitive `http-cache-semantics` dependency during Trivy scans.
 
+## [15.2.6-test3] - 2026-10-02
+
+- Restore 26 cosmetic variants omitted from the picker, including Atreides and Harkonnen carrier ornithopters, faction vehicle/weapon/armor skins, and specialization helmets. Recognize variant display names when their template IDs lack the Variant suffix.
+- Restore 26 historical Give Item catalog entries with their original IDs, names, and categories. Catalog availability does not establish that every legacy item is supported by the current game.
+
 ## [15.2.6-test2] - 2026-10-02
 
 - Add host-created Player accounts linked to one game character. Players can view server status and maps, warm maps, and manage their own character, inventory, progression, and item grants.
