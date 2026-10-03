@@ -7,6 +7,7 @@ export function canAccessCommand(
   localViewer: boolean,
   role: PortalAccountRole,
 ) {
+  if (role === 'player') return false
   return localViewer ||
     REMOTE_ALLOWED.has(commandName) ||
     (role === 'owner' && commandName === 'update')

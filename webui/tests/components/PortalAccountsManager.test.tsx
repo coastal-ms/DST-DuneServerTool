@@ -44,7 +44,7 @@ describe('PortalAccountsManager progressive setup', () => {
 
     expect(await screen.findByText('Step 1 — Create the first Owner')).toBeInTheDocument()
     expect(screen.queryByLabelText('Role')).not.toBeInTheDocument()
-    await user.selectOptions(screen.getByLabelText('Linked game character (optional)'), '42')
+    await user.selectOptions(screen.getByLabelText('Linked game character (required for Player)'), '42')
     await user.click(screen.getByRole('button', { name: 'Create first Owner' }))
     expect(await screen.findByText('Step 2 — Store the one-time password')).toBeInTheDocument()
     expect(screen.getByText('generated-password-value')).toBeInTheDocument()
@@ -174,7 +174,7 @@ describe('PortalAccountsManager progressive setup', () => {
     await user.selectOptions(await screen.findByLabelText('Role for Hawk'), 'owner')
     const request = requests.find(entry => entry.path === '/api/remote-access/portal-accounts/admin-id')
     expect(JSON.parse(String(request?.init?.body))).toEqual({ role: 'owner' })
-    expect(await screen.findByText(/Hawk is now an Owner. Their login and password are unchanged./i)).toBeInTheDocument()
+    expect(await screen.findByText(/Hawk is now an Owner. Existing sessions were revoked; sign in again./i)).toBeInTheDocument()
     expect(screen.getByLabelText('Role for Hawk')).toHaveValue('owner')
   })
 

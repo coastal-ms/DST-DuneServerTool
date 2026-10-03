@@ -393,6 +393,13 @@ Responsive remote access with host-created accounts. Tailscale Funnel is the
 forward path; retained legacy Cloudflare configuration stays disabled by
 default until explicitly re-enabled in local Settings. The screenshot is the
 offline sign-in screen, not a connected remote session.
+
+Hosts can choose **Player** when creating an account and must link it to a game
+character. Player accounts open a dedicated portal with server status, maps,
+map warming, and management of that character, including item grants. They
+cannot run server commands or manage other characters. Actions that edit saved
+character data still require the character to be offline. Changing an account's
+role or character link signs out its existing sessions.
 </details>
 
 ## Safety model

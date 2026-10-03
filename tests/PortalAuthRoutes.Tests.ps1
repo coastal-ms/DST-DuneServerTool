@@ -297,10 +297,13 @@ Describe 'Registered portal login/logout production handlers' {
     }
 
     It 'immediately revokes remembered sessions and clears cookies on every admin revoke path' {
+        # Role changes and relinking must also revoke previously trusted sessions.
         $cases = @(
             @{ method='POST'; path='/api/remote-access/portal-accounts/{id}/reset-password'; body=@{} },
             @{ method='POST'; path='/api/remote-access/portal-accounts/{id}/revoke-sessions'; body=@{} },
             @{ method='PUT'; path='/api/remote-access/portal-accounts/{id}'; body=@{ enabled=$false } },
+            @{ method='PUT'; path='/api/remote-access/portal-accounts/{id}'; body=@{ role='player'; gameCharacterId='11' } },
+            @{ method='PUT'; path='/api/remote-access/portal-accounts/{id}'; body=@{ gameCharacterId='12' } },
             @{ method='DELETE'; path='/api/remote-access/portal-accounts/{id}'; body=@{} }
         )
         $index = 0
@@ -312,7 +315,9 @@ Describe 'Registered portal login/logout production handlers' {
             & (Get-RegisteredHandler $case.method $case.path) (New-RouteRequest -Cookie $issued.token) `
                 $response @{ id=$created.account.id } $case.body
             $response.StatusCode | Should -Be 200
-            $response.Headers['Set-Cookie'] | Should -Match 'Max-Age=0'
+            if ($case.method -ne 'PUT' -or $case.body.ContainsKey('enabled')) {
+                $response.Headers['Set-Cookie'] | Should -Match 'Max-Age=0'
+            }
             @((Get-DunePortalSessionStore).sessions | Where-Object { $_.accountId -eq $created.account.id }).Count |
                 Should -Be 0
         }

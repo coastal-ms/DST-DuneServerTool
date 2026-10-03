@@ -4,6 +4,8 @@ import userEvent from '@testing-library/user-event'
 import React from 'react'
 import { PortalAuthGate } from '../../src/auth/PortalAuthGate'
 
+vi.mock('../../src/pages/PlayerPortal', () => ({ default: () => <div>Linked character portal</div> }))
+
 function jsonResponse(body: unknown, status = 200) {
   return Promise.resolve(new Response(JSON.stringify(body), {
     status,
@@ -18,6 +20,16 @@ afterEach(() => {
 })
 
 describe('PortalAuthGate', () => {
+  it('routes an authenticated Player to their portal instead of requested admin content', async () => {
+    vi.spyOn(globalThis, 'fetch').mockImplementationOnce(() => jsonResponse({
+      accountLoginEnabled: true, authenticated: true, mustChangePassword: false,
+      account: { id: 'p', username: 'player', role: 'player', enabled: true },
+    }))
+    render(<PortalAuthGate><div>Server administration</div></PortalAuthGate>)
+    expect(await screen.findByText('Linked character portal')).toBeInTheDocument()
+    expect(screen.queryByText('Server administration')).not.toBeInTheDocument()
+  })
+
   it('shows incumbent-themed login and returns to the requested portal content', async () => {
     const fetchMock = vi.spyOn(globalThis, 'fetch')
       .mockImplementationOnce(() => jsonResponse({

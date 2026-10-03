@@ -19,7 +19,7 @@ export interface RemoteAcl {
 export interface PortalManagedAccount {
   id: string
   username: string
-  role: 'owner' | 'admin'
+  role: 'owner' | 'admin' | 'player'
   enabled: boolean
   mustChangePassword: boolean
   locallyVerified: boolean
@@ -33,7 +33,7 @@ export interface PortalAccountsState {
   accountLoginEnabled: boolean
   nativeAppsBlockedInAccountMode: boolean
   accounts: PortalManagedAccount[]
-  roles: Array<'owner' | 'admin'>
+  roles: Array<'owner' | 'admin' | 'player'>
 }
 
 export function getPortalAccounts(): Promise<PortalAccountsState> {
@@ -42,7 +42,7 @@ export function getPortalAccounts(): Promise<PortalAccountsState> {
 
 export function createPortalAccount(input: {
   username: string
-  role: 'owner' | 'admin'
+  role: 'owner' | 'admin' | 'player'
   password?: string
   gameCharacterId?: string
   gameCharacterLabel?: string

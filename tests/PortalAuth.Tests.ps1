@@ -28,6 +28,16 @@ AfterAll {
 
 Describe 'Portal account password security' {
     BeforeEach { Remove-Item -LiteralPath $script:PortalTestRoot -Recurse -Force -ErrorAction SilentlyContinue }
+    It 'requires a host-assigned character for a Player account and creates a linked-player principal' {
+        { New-DunePortalAccount -Username 'player-one' -Role player } | Should -Throw '*linked game character*'
+        $created = New-DunePortalAccount -Username 'player-one' -Role player -GameCharacterId '11' -GameCharacterLabel 'Own'
+        $principal = New-DuneRequestPrincipal -Request (New-PortalTestRequest -Address '192.0.2.1') -AccountMode $true -PortalSessionAuth @{ ok=$true;account=$created.account;sessionId='session' }
+        $principal.type | Should -Be 'linked-player'
+        $principal.linkedCharacter.id | Should -Be '11'
+        $public = Get-DunePortalPublicAccount $created.account
+        $public.role | Should -Be 'player'
+        $public.ContainsKey('password') | Should -BeFalse
+    }
     It 'hashes with versioned PBKDF2-HMAC-SHA256 and verifies in constant-time code' {
         $hash = New-DunePortalPasswordHash 'correct horse battery'
         $hash.algorithm | Should -Be 'PBKDF2-HMAC-SHA256'

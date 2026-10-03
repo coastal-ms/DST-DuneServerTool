@@ -272,6 +272,10 @@ function Get-DuneCapabilityPrincipalName {
 function Test-DuneRoutePrincipalAccess {
     param([Parameter(Mandatory)]$Route, [Parameter(Mandatory)]$Principal)
     $type = [string]$Principal.type
+    if ($type -eq 'linked-player') {
+        if ([bool]$Route.LocalOnly -or -not (Get-Command Get-DunePlayerRoutePolicy -ErrorAction SilentlyContinue)) { return $false }
+        return [bool](Get-DunePlayerRoutePolicy -Method ([string]$Route.Method) -Path ([string]$Route.Path))
+    }
     if ($type -eq 'portal-account') {
         $classification = Get-DuneRouteClassification $Route
         if ([string]$classification.currentAccess -eq 'owner-admin') {

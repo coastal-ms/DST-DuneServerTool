@@ -86,6 +86,13 @@ Register-DuneRoute -Method GET -Path '/api/maps/{key}' -Handler {
             Write-DuneError -Response $res -Status $state.status -Message $state.message
             return
         }
+        if ([string]$routeParams.requestPrincipal.type -eq 'linked-player') {
+            $state = @{
+                ok=$true; key=$state.key; label=$state.label; running=[bool]$state.running
+                playersOnline=$state.playersOnline; present=[bool]$state.present
+                targetInstances=$state.targetInstances; readyInstances=$state.readyInstances
+            }
+        }
         Write-DuneJson -Response $res -Body $state
     } catch {
         Write-DuneError -Response $res -Status 500 -Message $_.Exception.Message

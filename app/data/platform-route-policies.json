@@ -140,6 +140,7 @@
     "ws CONNECT /ws/terminal": "host.powershell.execute"
   },
   "groups": [
+    {"source": "PlayerPortal.ps1", "capabilityId": "platform.status", "routeCount": 1, "sha256": "13b7b6c67fa733839a522b53a6a79d1f6b3287286e83959f0227568d1ff55e9c"},
     { "source": "Autostart.ps1", "capabilityId": "host.autostart", "routeCount": 2, "sha256": "e77701cf6bd2dec5c71b06145ec9e4bbe99c5ae1008ec887e636939ad0fc2f0c" },
     { "source": "BackupMirror.ps1", "capabilityId": "operation.data-protection", "routeCount": 4, "sha256": "f62b29ee7598d65958bfb93fdcf5e1b9978d05ca1f7c722a0ba817a319f31694" },
     { "source": "BackupSchedule.ps1", "capabilityId": "operation.data-protection", "routeCount": 5, "sha256": "110e6e76669508aab614fa4a95ab04229a9cc2bf0faa164dbd21e657c05671e9" },
