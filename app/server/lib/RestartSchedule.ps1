@@ -631,6 +631,22 @@ if [ "`$ACTION" = "update" ]; then
   fi
   /home/dune/.dune/bin/battlegroup update
   RC=`$?
+  if [ "`$RC" -ne 0 ]; then
+    echo "[dst] Scheduled update failed (rc=`$RC)."
+    AFTER=""
+    if [ -n "`$MANIFEST" ]; then
+      AFTER=`$(grep -E '"buildid"' "`$MANIFEST" 2>/dev/null | head -1 | grep -oE '[0-9]+' | head -1 || true)
+    fi
+    if [ "`$AFTER" = "`$INSTALLED" ] && [ -n "`$AFTER" ] && ! { [ -f /var/lib/dune-server/dst-world-restart-recovery-required ] || find /tmp/dst-world-restart-active -mmin -120 2>/dev/null | grep -q .; }; then
+      echo '[dst] Installed package unchanged; restarting after failed download.'
+      /home/dune/.dune/bin/battlegroup restart
+      RESTART_RC=`$?
+      if [ "`$RESTART_RC" -eq 0 ]; then ACTION=update-failed-restart-ok; else ACTION=update-failed-restart-failed; fi
+      echo "[dst] Fallback restart exited `$RESTART_RC; update remains failed (rc=`$RC)."
+    else
+      echo '[dst] Fallback restart skipped: installed package changed/unavailable or recovery active.'
+    fi
+  fi
 else
   /home/dune/.dune/bin/battlegroup restart
   RC=`$?
@@ -731,10 +747,19 @@ fi
         $resultText = if ($rc -eq 0) { "$action ok @ $stamp" } else { "$action error (rc=$rc) @ $stamp" }
         $changed = ($state.lastResult -ne $resultText)
         $state.lastResult = $resultText
-        $state.installedBuild = $installed
-        $state.latestBuild = $latest
-        $state.updateAvailable = (($installed -match '^\d+$') -and ($latest -match '^\d+$') -and ([int64]$latest -gt [int64]$installed) -and $action -ne 'update')
-        $state.updateCheckedAt = $stamp
+        # The result describes the builds at maintenance time, not the current
+        # installation. Never replay it over a newer live update check, or
+        # reapply an already-imported result after a manual server update.
+        $resultAt = [datetimeoffset]::MinValue
+        $checkedAt = [datetimeoffset]::MinValue
+        $validResultAt = [datetimeoffset]::TryParse($stamp, [ref]$resultAt)
+        $validCheckedAt = [datetimeoffset]::TryParse([string]$state.updateCheckedAt, [ref]$checkedAt)
+        if ($changed -and $validResultAt -and (-not $validCheckedAt -or $resultAt -gt $checkedAt)) {
+            $state.installedBuild = $installed
+            $state.latestBuild = $latest
+            $state.updateAvailable = (($installed -match '^\d+$') -and ($latest -match '^\d+$') -and ([int64]$latest -gt [int64]$installed) -and -not ($action -eq 'update' -and $rc -eq 0))
+            $state.updateCheckedAt = $stamp
+        }
         Save-DuneRestartSchedule -State $state
         return @{ ok = $true; changed = $changed; action = $action; rc = $rc; message = $resultText }
     } catch {

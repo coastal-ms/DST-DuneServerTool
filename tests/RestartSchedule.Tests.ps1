@@ -115,4 +115,60 @@ Describe 'Scheduled Funcom updates' -Tag 'RestartSchedule' {
         $body | Should -Match '/sbin/rc-update add crond default'
         $body | Should -Match '/sbin/rc-service crond start'
     }
+
+    It 'executes maintenance success, download failure, failed restart and recovery guards' {
+        $bash = if (Test-Path 'C:/Program Files/Git/bin/bash.exe') { 'C:/Program Files/Git/bin/bash.exe' } else { 'bash' }
+        $scriptPath = Join-Path $TestDrive 'maintenance.sh'
+        [IO.File]::WriteAllText($scriptPath, (New-DuneVmDailyMaintenanceScript -ApplyFuncomUpdates $true))
+        $output = & $bash (Join-Path $PSScriptRoot 'fixtures/daily-maintenance.sh') $scriptPath 2>&1
+        $LASTEXITCODE | Should -Be 0 -Because ($output -join "`n")
+        @($output | Where-Object { $_ -match ' passed$' }).Count | Should -Be 7
+    }
+
+    It 'preserves a newer live build check when importing and replaying old failed maintenance' {
+        Mock Get-DuneBackupContext { @{ ok=$true; ip='10.0.0.1' } }
+        $script:currentSchedule = Get-DuneRestartScheduleDefault
+        $script:currentSchedule.installedBuild = '200'
+        $script:currentSchedule.latestBuild = '200'
+        $script:currentSchedule.updateCheckedAt = '2026-10-03T09:00:00-07:00'
+        Mock Get-DuneRestartSchedule { $script:currentSchedule }
+        Mock Invoke-DuneBackupShell { @{ rc=0; out='2026-10-03T11:00:19Z|update|1|100|200' } }
+        foreach ($poll in 1..2) {
+            $result = Sync-DuneVmDailyMaintenanceResult -Force
+            $result.rc | Should -Be 1
+            $script:savedSchedule.lastResult | Should -Match 'update error'
+            $script:savedSchedule.installedBuild | Should -Be '200'
+            $script:savedSchedule.updateAvailable | Should -BeFalse
+            $script:savedSchedule.updateCheckedAt | Should -Be '2026-10-03T09:00:00-07:00'
+        }
+    }
+
+    It 'imports a genuinely newer maintenance result but never replays its build snapshot' {
+        Mock Get-DuneBackupContext { @{ ok=$true; ip='10.0.0.1' } }
+        $script:currentSchedule = Get-DuneRestartScheduleDefault
+        $script:currentSchedule.updateCheckedAt = '2026-10-03T10:00:00Z'
+        Mock Get-DuneRestartSchedule { $script:currentSchedule }
+        Mock Invoke-DuneBackupShell { @{ rc=0; out='2026-10-03T11:00:19Z|update|1|100|200' } }
+        Sync-DuneVmDailyMaintenanceResult -Force | Out-Null
+        $script:savedSchedule.updateAvailable | Should -BeTrue
+        $script:currentSchedule.installedBuild = '200'
+        $script:currentSchedule.updateAvailable = $false
+        Sync-DuneVmDailyMaintenanceResult -Force | Out-Null
+        $script:savedSchedule.installedBuild | Should -Be '200'
+        $script:savedSchedule.updateAvailable | Should -BeFalse
+    }
+
+    It 'keeps updates available after failed maintenance, including a successful fallback restart' {
+        Mock Get-DuneBackupContext { @{ ok=$true; ip='10.0.0.1' } }
+        foreach ($action in @('update','update-failed-restart-ok','update-failed-restart-failed')) {
+            $script:maintenanceLine = "2026-10-03T11:00:19Z|$action|1|100|200"
+            Mock Invoke-DuneBackupShell { @{ rc=0; out=$script:maintenanceLine } }
+            (Sync-DuneVmDailyMaintenanceResult -Force).rc | Should -Be 1
+            $script:savedSchedule.updateAvailable | Should -BeTrue
+            $script:savedSchedule.lastResult | Should -Match 'error'
+        }
+        $script:maintenanceLine = '2026-10-03T11:00:19Z|update|0|100|200'
+        Sync-DuneVmDailyMaintenanceResult -Force | Out-Null
+        $script:savedSchedule.updateAvailable | Should -BeFalse
+    }
 }

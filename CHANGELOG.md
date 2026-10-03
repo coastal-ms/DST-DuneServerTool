@@ -15,6 +15,18 @@ here cover everything those tags shipped.
 
 - Ignore the unfixed CVE-2026-93748 in Astro's transitive `http-cache-semantics` dependency during Trivy scans.
 
+## [15.2.6] - 2026-10-03
+
+- Promote the accepted 15.2.6 test changes to stable: Linux Server Settings authority and Custom defaults, host-created Player accounts and Player Portal fixes, retired mobile/Cloudflare removal, and cosmetic/Give Item catalog restoration. Historical catalog availability does not prove every item is functional in the current game.
+- Fix scheduled backup verification on BusyBox cron by transporting the command without percent escaping. Migrate exact managed version 3 schedules while preserving customized commands and retention settings.
+- Restart the unchanged installed package after a failed unattended update, unless recovery is active. Skip fallback if the installed build changed or cannot be verified, preserve the update failure result, and keep the update available indicator truthful.
+- Stop counting kubectl's empty-table notice as a server pod, allowing Server Settings shutdown progress to finish without leaving the page.
+- Make the persistent Linux UserSettings file authoritative for Server Settings, with manual edits reflected on Refresh and synchronized to the runtime configuration at BG startup.
+- Preserve and back up existing YAML overrides on the first migration. Warn when YAML and the file differ; Read current settings loads YAML as a draft that Save writes to the UserSettings file, preserving unknown settings.
+- Prevent restart preparation from overwriting UserServerCustomSettings.ini with a shipped template. Save also updates the physical Linux runtime INI; verify both file writes and restore prior contents if operator synchronization fails.
+- Make Default Settings draft `DifficultyLevel=Custom` so saved custom server settings can take effect.
+- Populate missing documented defaults, including Difficulty Level and an absent PvP Mode, while preserving an existing PvP Mode. Defaults remain a draft until Save; stopped-battlegroup, backup, revision, and operator-readback checks remain in place.
+
 ## [15.2.6-test3] - 2026-10-02
 
 - Restore 26 cosmetic variants omitted from the picker, including Atreides and Harkonnen carrier ornithopters, faction vehicle/weapon/armor skins, and specialization helmets. Recognize variant display names when their template IDs lack the Variant suffix.
@@ -27,15 +39,6 @@ here cover everything those tags shipped.
 - Revoke account sessions when the host changes a role or character link.
 - Restore scrolling throughout the Player Portal. Show package Grade separately from item Mk tier, reject online packages with custom Grade overrides before sending any items, and report package failures instead of unconditional success.
 - Remove the retired native mobile app project and legacy Cloudflare remote-access settings, authentication, and service-token pairing. Keep the responsive Browser Portal, Player accounts, website, and Tailscale Funnel access.
-
-## [15.2.6] - 2026-10-02
-
-- Stop counting kubectl's empty-table notice as a server pod, allowing Server Settings shutdown progress to finish without leaving the page.
-- Make the persistent Linux UserSettings file authoritative for Server Settings, with manual edits reflected on Refresh and synchronized to the runtime configuration at BG startup.
-- Preserve and back up existing YAML overrides on the first migration. Warn when YAML and the file differ; Read current settings loads YAML as a draft that Save writes to the UserSettings file, preserving unknown settings.
-- Prevent restart preparation from overwriting UserServerCustomSettings.ini with a shipped template. Save also updates the physical Linux runtime INI; verify both file writes and restore prior contents if operator synchronization fails.
-- Make Default Settings draft `DifficultyLevel=Custom` so saved custom server settings can take effect.
-- Populate missing documented defaults, including Difficulty Level and an absent PvP Mode, while preserving an existing PvP Mode. Defaults remain a draft until Save; stopped-battlegroup, backup, revision, and operator-readback checks remain in place.
 
 ## [15.2.5] - 2026-10-01
 

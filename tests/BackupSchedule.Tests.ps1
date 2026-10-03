@@ -181,6 +181,38 @@ Describe 'Get-DuneBackupSchedule self-heals a stale pre-fix installed block' -Ta
         Should -Invoke Set-DuneBackupSchedule -Times 1
     }
 
+    It 'migrates an exact version 3 schedule and preserves customized version 3 commands' {
+        $oldCmd = (New-DuneBackupCmd -KeepLastPods 10 -KeepLast 5) -replace '%', '\%'
+        $lines = (New-DuneBackupBlock -Preset Hourly -KeepLast 5 -KeepLastPods 10 -KeepDaysPods 0).TrimEnd("`n")
+        $lines = $lines.Replace('# DST-BACKUP-CMD-VERSION: 4', '# DST-BACKUP-CMD-VERSION: 3') -replace '(?m)^0 \* \* \* \* .+$', ('0 * * * * ' + $oldCmd).Replace('$', '$$')
+        $oldText = New-DstShellSectionsOutput -CrontabText $lines
+        $healedText = New-DstShellSectionsOutput -CrontabText (New-DuneBackupBlock -Preset Hourly -KeepLast 5 -KeepLastPods 10 -KeepDaysPods 0).TrimEnd("`n")
+        $script:reads = 0
+        Mock Invoke-DuneBackupShell { $script:reads++; @{ rc=0; out= $(if ($script:reads -eq 1) { $oldText } else { $healedText }) } }
+        Mock Set-DuneBackupSchedule { @{ ok=$true } }
+        (Get-DuneBackupSchedule -Ip '10.0.0.1').managedBlockLooksTampered | Should -BeFalse
+        Should -Invoke Set-DuneBackupSchedule -Times 1
+        $editedText = New-DstShellSectionsOutput -CrontabText ($lines.Replace($oldCmd, "$oldCmd; echo customized"))
+        Mock Invoke-DuneBackupShell { @{ rc=0; out=$editedText } }
+        (Get-DuneBackupSchedule -Ip '10.0.0.1').managedBlockLooksTampered | Should -BeTrue
+        Should -Invoke Set-DuneBackupSchedule -Times 1
+    }
+
+    It 'migrates the historical v3 fixture with its original retention and protects custom edits' {
+        $lines = (Get-Content -Raw -LiteralPath (Join-Path $PSScriptRoot 'fixtures/backup-schedule-v3-before-empty-archive-fix.cron')).TrimEnd("`r", "`n")
+        $oldText = New-DstShellSectionsOutput -CrontabText $lines
+        $healedText = New-DstShellSectionsOutput -CrontabText (New-DuneBackupBlock -Preset Hourly -KeepLast 12 -KeepLastPods 7 -KeepDaysPods 0).TrimEnd("`n")
+        $script:reads = 0
+        Mock Invoke-DuneBackupShell { $script:reads++; @{ rc=0; out= $(if ($script:reads -eq 1) { $oldText } else { $healedText }) } }
+        Mock Set-DuneBackupSchedule { @{ ok=$true } }
+        (Get-DuneBackupSchedule -Ip '10.0.0.1').managedBlockLooksTampered | Should -BeFalse
+        Should -Invoke Set-DuneBackupSchedule -Times 1 -ParameterFilter { $KeepLast -eq 12 -and $KeepLastPods -eq 7 -and $KeepDaysPods -eq 0 -and $Preset -eq 'Hourly' }
+        $editedText = New-DstShellSectionsOutput -CrontabText ($lines.Replace('sudo mv -n', 'echo customized; sudo mv -n'))
+        Mock Invoke-DuneBackupShell { @{ rc=0; out=$editedText } }
+        (Get-DuneBackupSchedule -Ip '10.0.0.1').managedBlockLooksTampered | Should -BeTrue
+        Should -Invoke Set-DuneBackupSchedule -Times 1
+    }
+
     It 'does not reconcile a block that is already current' {
         $currentText = New-DstShellSectionsOutput -CrontabText (New-DuneBackupBlock -Preset 'Hourly' -KeepLast 0 -KeepLastPods 10 -KeepDaysPods 0).TrimEnd("`n")
 
