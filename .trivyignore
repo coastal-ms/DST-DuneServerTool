@@ -2,3 +2,5 @@
 # Mobile builds process trusted local project assets, not user-supplied images.
 CVE-2025-71329
 CVE-2025-71330
+# Transitive Expo tooling dependency; node-forge 1.4.0 is the latest release and no fix is available yet.
+CVE-2026-85393

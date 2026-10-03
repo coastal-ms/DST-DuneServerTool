@@ -13,6 +13,8 @@ here cover everything those tags shipped.
 
 ## [Unreleased]
 
+- Suppress Trivy's CVE-2026-85393 finding for Expo's transitive `node-forge` dependency until an upstream fix is released.
+
 ## [15.2.6] - 2026-10-02
 
 - Stop counting kubectl's empty-table notice as a server pod, allowing Server Settings shutdown progress to finish without leaving the page.
