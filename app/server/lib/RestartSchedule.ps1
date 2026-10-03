@@ -747,10 +747,19 @@ fi
         $resultText = if ($rc -eq 0) { "$action ok @ $stamp" } else { "$action error (rc=$rc) @ $stamp" }
         $changed = ($state.lastResult -ne $resultText)
         $state.lastResult = $resultText
-        $state.installedBuild = $installed
-        $state.latestBuild = $latest
-        $state.updateAvailable = (($installed -match '^\d+$') -and ($latest -match '^\d+$') -and ([int64]$latest -gt [int64]$installed) -and -not ($action -eq 'update' -and $rc -eq 0))
-        $state.updateCheckedAt = $stamp
+        # The result describes the builds at maintenance time, not the current
+        # installation. Never replay it over a newer live update check, or
+        # reapply an already-imported result after a manual server update.
+        $resultAt = [datetimeoffset]::MinValue
+        $checkedAt = [datetimeoffset]::MinValue
+        $validResultAt = [datetimeoffset]::TryParse($stamp, [ref]$resultAt)
+        $validCheckedAt = [datetimeoffset]::TryParse([string]$state.updateCheckedAt, [ref]$checkedAt)
+        if ($changed -and $validResultAt -and (-not $validCheckedAt -or $resultAt -gt $checkedAt)) {
+            $state.installedBuild = $installed
+            $state.latestBuild = $latest
+            $state.updateAvailable = (($installed -match '^\d+$') -and ($latest -match '^\d+$') -and ([int64]$latest -gt [int64]$installed) -and -not ($action -eq 'update' -and $rc -eq 0))
+            $state.updateCheckedAt = $stamp
+        }
         Save-DuneRestartSchedule -State $state
         return @{ ok = $true; changed = $changed; action = $action; rc = $rc; message = $resultText }
     } catch {
