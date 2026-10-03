@@ -552,7 +552,15 @@ sudo crontab -l 2>&1 || true
                     if ($parsed.block.cmdVersion -in @(2,3)) {
                         $legacyInner = $legacyInner -replace "(# DST-BACKUP-KEEP-DAYS-PODS: [0-9]+)", "`$1`n# DST-BACKUP-CMD-VERSION: $($parsed.block.cmdVersion)"
                     }
-                    if ($legacyInner -eq $parsed.block.raw) {
+                    # Earlier v3 releases predate the empty-archive replacement
+                    # repair. Recognize only that exact shipped command variant;
+                    # all other edits must remain protected from reconciliation.
+                    $legacyBeforeEmptyArchiveFix = $null
+                    if ($parsed.block.cmdVersion -eq 3) {
+                        $replacement = 'if sudo test -e "$_bf" && ! sudo test -s "$_bf"; then sudo mv "$_dt" "$_bf" || _ok=0; else sudo mv -n "$_dt" "$_bf" || _ok=0; fi;'
+                        $legacyBeforeEmptyArchiveFix = $legacyInner.Replace($replacement, 'sudo mv -n "$_dt" "$_bf" || _ok=0;')
+                    }
+                    if ($legacyInner -eq $parsed.block.raw -or ($null -ne $legacyBeforeEmptyArchiveFix -and $legacyBeforeEmptyArchiveFix -eq $parsed.block.raw)) {
                         $reconciled = Set-DuneBackupSchedule -Ip $Ip -Preset $preset -KeepLast $keepLast -KeepLastPods $keepLastPods -KeepDaysPods $keepDaysPods
                         if ($reconciled.ok) {
                             return Get-DuneBackupSchedule -Ip $Ip -SkipReconcile
