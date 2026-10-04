@@ -1591,6 +1591,9 @@ function GrantUnlockTokensForm({ busy, playerName, accountId, kind, playerOnline
   const [err, setErr] = useState<string | null>(null)
   const [ownershipWarning, setOwnershipWarning] = useState('')
   const [activationQueued, setActivationQueued] = useState(false)
+  const [manualRefreshing, setManualRefreshing] = useState(false)
+  const [refreshRequest, setRefreshRequest] = useState(0)
+  const [refreshFeedback, setRefreshFeedback] = useState<{ error: boolean; message: string } | null>(null)
   const [requestSubmitted, setRequestSubmitted] = useState(false)
   const [submittedTokens, setSubmittedTokens] = useState<Set<string>>(new Set())
   const buildingSets = kind === 'building-sets'
@@ -1630,10 +1633,12 @@ function GrantUnlockTokensForm({ busy, playerName, accountId, kind, playerOnline
     : skins ? e.group === (kind === 'armor' ? 'Armor & Suit Sets' : kind === 'vehicle' ? 'Vehicle Skins' : kind === 'dyes' ? 'Swatches (Dyes)' : 'Weapon Skins') : false), [catalog, buildingSets, skins, kind])
 
   useEffect(() => {
-    if (!activationQueued || tokens.length === 0) return
+    if ((!activationQueued && !manualRefreshing) || tokens.length === 0) return
 
+    const manual = manualRefreshing
     let alive = true
-    const deadline = Date.now() + 10000
+    const timeoutMs = manual ? 5000 : 10000
+    const deadline = Date.now() + timeoutMs
     const controller = new AbortController()
     let timer: ReturnType<typeof setTimeout> | undefined
     const deadlineTimer = setTimeout(() => {
@@ -1641,8 +1646,13 @@ function GrantUnlockTokensForm({ busy, playerName, accountId, kind, playerOnline
       controller.abort()
       if (timer) clearTimeout(timer)
       setActivationQueued(false)
-      setOwnershipWarning('Some unlocks remain unconfirmed. Use Refresh unlock status after the game processes the tokens; check held tokens and overflow before granting again.')
-    }, 10000)
+      if (manual) {
+        setManualRefreshing(false)
+        setRefreshFeedback({ error: true, message: 'Status refresh timed out. Counts were not updated. Try again.' })
+      } else {
+        setOwnershipWarning('Some unlocks remain unconfirmed. Use Refresh unlock status after the game processes the tokens; check held tokens and overflow before granting again.')
+      }
+    }, timeoutMs)
     const refreshOwnership = async () => {
       try {
         const ownership = await getPlayerOwnedCosmetics(accountId, controller.signal)
@@ -1652,7 +1662,17 @@ function GrantUnlockTokensForm({ busy, playerName, accountId, kind, playerOnline
         const nextUnlocked = new Set((ownership.unlocked || []).map(id => id.toLowerCase()))
         setOwned(nextOwned)
         setUnlocked(nextUnlocked)
-        setPending(new Set((ownership.pending || []).map(id => id.toLowerCase())))
+        const nextPending = new Set((ownership.pending || []).map(id => id.toLowerCase()))
+        setPending(nextPending)
+        if (manual) {
+          clearTimeout(deadlineTimer)
+          const unlockedCount = tokens.filter(entry => nextUnlocked.has(entry.template.toLowerCase())).length
+          const heldCount = (bulkUnlocks ? browseEntries : tokens).filter(entry => nextPending.has(entry.template.toLowerCase()) && !nextUnlocked.has(entry.template.toLowerCase())).length
+          setOwnershipWarning('')
+          setManualRefreshing(false)
+          setRefreshFeedback({ error: false, message: `Status refreshed: ${unlockedCount}/${tokens.length} unlocked · ${heldCount} held tokens.` })
+          return
+        }
         if (tokens.every(entry => nextUnlocked.has(entry.template.toLowerCase()))) {
           setActivationQueued(false)
           setOwnershipWarning('')
@@ -1666,6 +1686,12 @@ function GrantUnlockTokensForm({ busy, playerName, accountId, kind, playerOnline
         timer = setTimeout(() => void refreshOwnership(), 2000)
       } catch (e) {
         if (!alive) return
+        if (manual) {
+          clearTimeout(deadlineTimer)
+          setManualRefreshing(false)
+          setRefreshFeedback({ error: true, message: `Status refresh failed. Counts were not updated: ${e instanceof Error ? e.message : String(e)}` })
+          return
+        }
         setOwnershipWarning(`Could not refresh activation progress: ${e instanceof Error ? e.message : String(e)}`)
         if (bulkUnlocks && Date.now() >= deadline) {
           setActivationQueued(false)
@@ -1675,14 +1701,15 @@ function GrantUnlockTokensForm({ busy, playerName, accountId, kind, playerOnline
       }
     }
 
-    timer = setTimeout(() => void refreshOwnership(), 500)
+    if (manual) void refreshOwnership()
+    else timer = setTimeout(() => void refreshOwnership(), 500)
     return () => {
       alive = false
       controller.abort()
       if (timer) clearTimeout(timer)
       clearTimeout(deadlineTimer)
     }
-  }, [accountId, activationQueued, tokens, buildingSets, bulkUnlocks])
+  }, [accountId, activationQueued, manualRefreshing, tokens, buildingSets, bulkUnlocks, refreshRequest, browseEntries])
 
   if (err) return <ErrorBox msg={err} />
   if (!catalog || !owned) return <div className="text-sm text-text-dim flex items-center gap-2"><Icon name="Loader2" size={13} className="animate-spin" /> Loading {label} and player ownership...</div>
@@ -1740,7 +1767,18 @@ function GrantUnlockTokensForm({ busy, playerName, accountId, kind, playerOnline
             ? <>No new {label} tokens to request — see unlock status</>
             : <><Icon name={buildingSets ? "Blocks" : skins ? (kind === 'armor' ? "Shirt" : kind === 'vehicle' ? "Truck" : kind === 'dyes' ? "Palette" : "Sword") : "Palette"} size={13} /> Deliver {missingTokens.length} missing {tokenLabel} tokens</>}
       </button>
-      <button type="button" className="btn-secondary w-full" disabled={busy} onClick={() => setActivationQueued(true)}>Refresh unlock status</button>
+      <button type="button" className="btn-secondary w-full active:scale-[0.99]" disabled={busy || manualRefreshing} aria-busy={manualRefreshing} onClick={() => {
+        setActivationQueued(false)
+        setRefreshFeedback(null)
+        setManualRefreshing(true)
+        setRefreshRequest(current => current + 1)
+      }}>
+        <Icon name={manualRefreshing ? 'Loader2' : 'RefreshCw'} size={13} className={manualRefreshing ? 'animate-spin' : undefined} />
+        {manualRefreshing ? 'Refreshing status…' : 'Refresh unlock status'}
+      </button>
+      {refreshFeedback && <p role="status" aria-live="polite" className={`text-xs flex items-center gap-2 ${refreshFeedback.error ? 'text-warning' : 'text-text-dim'}`}>
+        <Icon name={refreshFeedback.error ? 'TriangleAlert' : 'Check'} size={13} /> {refreshFeedback.message}
+      </p>}
     </div>
   )
 }

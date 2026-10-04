@@ -17,6 +17,8 @@ here cover everything those tags shipped.
 
 ## [15.2.7] - 2026-10-04
 
+- Give unlock-status refresh immediate button feedback and an explicit completion, error or timeout result; check saved counts once without resending grants.
+
 - Recognize persisted carrier/scout vehicle, Heavy Racer clothing and vehicle/weapon dye IDs so saved unlocks are skipped instead of offered repeatedly.
 
 - Add All Dyes and All Vehicle Skins using the same missing-only bulk grant flow. Show request submission as a neutral notice, finish the action immediately after submission, and refresh unlock status separately without a blocking activation spinner.

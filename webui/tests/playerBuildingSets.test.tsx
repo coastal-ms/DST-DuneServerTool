@@ -31,7 +31,7 @@ afterEach(() => { cleanup(); vi.useRealTimers(); vi.restoreAllMocks(); vi.clearA
 async function open(status = 'Online', label = 'All Building Sets') {
   render(<ManagePlayerSection player={{ ...player, online_status: status }} canWrite demo={false} refreshKey={0} flash={actionFlash} onChanged={vi.fn()} />)
   fireEvent.click(screen.getByRole('button', { name: new RegExp(label) }))
-  return screen.findByRole('button', { name: /Deliver 1 missing/ })
+  return screen.findByRole('button', { name: /Deliver \d+ missing/ })
 }
 describe('All Building Sets', () => {
   it('offers own-character bulk grant, excludes crafting and skips owned sets', async () => {
@@ -175,4 +175,58 @@ it('stops verification and aborts a hung ownership request without granting agai
   expect(screen.queryByRole('button', { name: /Grant requests submitted/ })).not.toBeInTheDocument()
   expect(screen.getByRole('button', { name: 'Refresh unlock status' })).toBeEnabled()
   expect(grantBuildingSets).toHaveBeenCalledTimes(1)
+})
+
+
+describe.each(['All Building Sets', 'All Armor Skins', 'All Weapon Skins', 'All Vehicle Skins', 'All Dyes'])('%s status refresh', label => {
+  it('shows immediate progress and confirms a completed check even when counts do not change', async () => {
+    await open('Online', label)
+    let finish!: (value: Awaited<ReturnType<typeof getPlayerOwnedCosmetics>>) => void
+    vi.mocked(getPlayerOwnedCosmetics).mockImplementationOnce(() => new Promise(resolve => { finish = resolve }))
+    const beforeCalls = vi.mocked(getPlayerOwnedCosmetics).mock.calls.length
+    fireEvent.click(screen.getByRole('button', { name: 'Refresh unlock status' }))
+    const refreshing = screen.getByRole('button', { name: /Refreshing status/ })
+    expect(refreshing).toBeDisabled()
+    expect(refreshing).toHaveAttribute('aria-busy', 'true')
+    expect(getPlayerOwnedCosmetics).toHaveBeenCalledTimes(beforeCalls + 1)
+    fireEvent.click(refreshing)
+    expect(getPlayerOwnedCosmetics).toHaveBeenCalledTimes(beforeCalls + 1)
+    await act(async () => { finish({ account_id: 99, owned: ['ownedset'], unlocked: ['ownedset'], pending: [], total: 1, source: 'live' }) })
+    expect(screen.getByRole('status')).toHaveTextContent(/Status refreshed: .* unlocked · 0 held tokens/)
+    expect(screen.getByRole('button', { name: 'Refresh unlock status' })).toBeEnabled()
+    expect(grantBuildingSets).not.toHaveBeenCalled()
+    expect(grantSkins).not.toHaveBeenCalled()
+    expect(grantHouseSwatches).not.toHaveBeenCalled()
+  })
+})
+
+it('updates saved counts when an explicit refresh finds a newly unlocked set', async () => {
+  await open()
+  vi.mocked(getPlayerOwnedCosmetics).mockResolvedValue({ account_id: 99, owned: ['OwnedSet', 'MissingSet'], unlocked: ['OwnedSet', 'MissingSet'], pending: [], total: 2, source: 'live' })
+  fireEvent.click(screen.getByRole('button', { name: 'Refresh unlock status' }))
+  expect(await screen.findByRole('status')).toHaveTextContent('Status refreshed: 2/2 unlocked · 0 held tokens.')
+  expect(screen.getByText('2/2 unlocked · 0 held tokens')).toBeInTheDocument()
+})
+
+it('shows a failed refresh without claiming counts were updated', async () => {
+  await open()
+  vi.mocked(getPlayerOwnedCosmetics).mockResolvedValue({ account_id: 99, owned: [], unlocked: [], pending: [], total: 0, source: 'live', liveError: 'Server unavailable' })
+  fireEvent.click(screen.getByRole('button', { name: 'Refresh unlock status' }))
+  expect(await screen.findByRole('status')).toHaveTextContent('Status refresh failed. Counts were not updated: Server unavailable')
+  expect(screen.getByText('1/2 unlocked · 0 held tokens')).toBeInTheDocument()
+  expect(screen.getByRole('button', { name: 'Refresh unlock status' })).toBeEnabled()
+})
+
+it('aborts a hung explicit refresh and gives the user a retry result', async () => {
+  await open()
+  vi.useFakeTimers()
+  vi.mocked(getPlayerOwnedCosmetics).mockImplementation(() => new Promise(() => {}))
+  await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Refresh unlock status' })) })
+  const signal = vi.mocked(getPlayerOwnedCosmetics).mock.calls.at(-1)?.[1]
+  expect(signal?.aborted).toBe(false)
+  await act(async () => { await vi.advanceTimersByTimeAsync(5000) })
+  expect(signal?.aborted).toBe(true)
+  expect(screen.getByRole('status')).toHaveTextContent('Status refresh timed out. Counts were not updated. Try again.')
+  expect(screen.getByRole('button', { name: 'Refresh unlock status' })).toBeEnabled()
+  expect(grantBuildingSets).not.toHaveBeenCalled()
 })
