@@ -11,7 +11,7 @@ Describe 'Get-DunePlayerOwnedCosmeticsLive' -Tag 'Pure' {
             param([string]$Ip, [string]$Sql, [bool]$ReadOnly, [int]$MaxRows, [int]$TimeoutSec)
             $script:capturedSql = $Sql
             $row = [object[]]@(
-                '["D_Choam_HeavyArmor_Swatch","MTX_DesertMechanic_Dirk","AtreidesHeavy_Boots_MeshVariant","MTX_Smug_Formal01_Bottom","Atreides_FlyingVehicle_01","Atreides_Buggy","AtreSandbike","HarkSandbike_Customization","Artreides_Light_Ornithopter","Atreides_Medium_Ornithopter","BuggyAtreides","BuggyHarkonnen","BuggySmuggler","MTX_Buggy_Nomad","MTX_WaterS_Light_Orni","Smuggler_Light_Ornithopter"]'
+                '["D_Choam_HeavyArmor_Swatch","MTX_DesertMechanic_Dirk","AtreidesHeavy_Boots_MeshVariant","MTX_Smug_Formal01_Bottom","FVehDyePackAtre01","Atreides_Buggy","AtreSandbike","HarkSandbike_Customization","Artreides_Light_Ornithopter","Atreides_Medium_Ornithopter","BuggyAtreides","BuggyHarkonnen","BuggySmuggler","MTX_Buggy_Nomad","MTX_WaterS_Light_Orni","Smuggler_Light_Ornithopter"]'
                 '["MTX_Atre_BreakfastRoomSet"]'
                 '["MTX_Atre_Movie_Bench"]'
                 '["D_TestMeshVariant"]'
@@ -134,5 +134,53 @@ Describe 'Get-DunePlayerOwnedCosmeticsLive' -Tag 'Pure' {
         $owned = [Collections.Generic.HashSet[string]]::new([StringComparer]::OrdinalIgnoreCase)
         { Add-DuneCosmeticCatalogOwnership -Owned $owned -CustomizationIds @() } | Should -Not -Throw
         $owned.Count | Should -Be 0
+    }
+    It 'recognizes the exact saved customization for <TemplateId>' -TestCases @(
+        @{ TemplateId = 'B1C3_Atre_TransportOrnithopter'; Saved = 'Atre_TransportOrnithopter' }
+        @{ TemplateId = 'B1C3_Atre_Ornitopther'; Saved = 'Atre_Ornitopther' }
+        @{ TemplateId = 'B1C3_Hark_TransportOrnithopter'; Saved = 'Hark_TransportOrnithopter' }
+        @{ TemplateId = 'B1C3_Hark_Ornitopther'; Saved = 'Hark_Ornitopther' }
+        @{ TemplateId = 'B1C3_Smuggler_Transport_Ornithopter_Variant'; Saved = 'MTX_Smuggler_Transport_Ornithopter' }
+        @{ TemplateId = 'MTX_Nomad_SetVariant_Top'; Saved = 'MTX_HeavyRacer_Top' }
+        @{ TemplateId = 'MTX_Nomad_SetVariant_Bottom'; Saved = 'MTX_HeavyRacer_Bottom' }
+        @{ TemplateId = 'Atreides_FlyingVehicle_01_Swatch'; Saved = 'FVehDyePackAtre01' }
+        @{ TemplateId = 'Atreides_GroundVehicle_01_Swatch'; Saved = 'GVehDyePackAtre01' }
+        @{ TemplateId = 'Atreides_MeleeWeapon_01_Swatch'; Saved = 'MWpnDyepackAtre' }
+        @{ TemplateId = 'Atreides_RangedWeapon_01_Swatch'; Saved = 'RWpnDyepackAtre' }
+        @{ TemplateId = 'Harkonnen_FlyingVehicle_01_Swatch'; Saved = 'FVehDyePackHark01' }
+        @{ TemplateId = 'Harkonnen_GroundVehicle_01_Swatch'; Saved = 'GVehDyePackHark01' }
+        @{ TemplateId = 'Harkonnen_MeleeWeapon_01_Swatch'; Saved = 'MWpnDyepackHark' }
+        @{ TemplateId = 'Harkonnen_RangedWeapon_01_Swatch'; Saved = 'RWpnDyepackHark' }
+        @{ TemplateId = 'MTX_Ultimate_Ornithopter_01_Swatch'; Saved = 'FVehDyePackUltimate01' }
+        @{ TemplateId = 'MTX_WaterFat_Ornithopter_01_Swatch'; Saved = 'FVehDyePackWaterFat01' }
+        @{ TemplateId = 'MTX_Deluxe_Sandbike_01_Swatch'; Saved = 'SandbikeDyePackDeluxe01' }
+        @{ TemplateId = 'MTX_Graben_Flamethrower_01_Swatch'; Saved = 'FlamerDyepackGraben' }
+        @{ TemplateId = 'MTX_Graben_Melee_01_Swatch'; Saved = 'MWpnDyepackGraben' }
+        @{ TemplateId = 'MTX_Graben_Pistol_01_Swatch'; Saved = 'LPistolDyepackGraben' }
+        @{ TemplateId = 'MTX_Graben_Sandcrawler_01_Swatch'; Saved = 'SandcrawlerDyePackGraben01' }
+        @{ TemplateId = 'MTX_Graben_Social_01_Swatch'; Saved = 'SocialCharDyepackGraben' }
+        @{ TemplateId = 'MTX_Bonus_Universal_01_Swatch'; Saved = 'AllDyePackBonusUniversal01' }
+        @{ TemplateId = 'B1C3_SmugTech_Swatch'; Saved = 'SmugTechGlobal' }
+        @{ TemplateId = 'MTX_B1C3_Smuggler_Universal_Swatch'; Saved = 'SmugglerGlobal' }
+        @{ TemplateId = 'B1C3_Smuggler_Universal_Swatch'; Saved = 'SmugglerGlobal' }
+        @{ TemplateId = 'MTX_Watershippers_Swatch'; Saved = 'Watershippers Global' }
+        @{ TemplateId = 'MTX_CargoContainer_RedD_Swatch'; Saved = 'CargoContainerRedDSwatch' }
+    ) {
+        param($TemplateId, $Saved)
+        $owned = [Collections.Generic.HashSet[string]]::new([StringComparer]::OrdinalIgnoreCase)
+        Add-DuneCosmeticCatalogOwnership -Owned $owned -CustomizationIds @($Saved)
+        $owned | Should -Contain $TemplateId
+    }
+
+    It 'keeps faction, vehicle and dye types distinct when using saved aliases' {
+        $owned = [Collections.Generic.HashSet[string]]::new([StringComparer]::OrdinalIgnoreCase)
+        Add-DuneCosmeticCatalogOwnership -Owned $owned -CustomizationIds @('Atre_Ornitopther','FVehDyePackAtre01','MTX_HeavyRacer_Top')
+        $owned | Should -Not -Contain 'B1C3_Atre_TransportOrnithopter'
+        $owned | Should -Not -Contain 'B1C3_Hark_Ornitopther'
+        $owned | Should -Not -Contain 'Atreides_GroundVehicle_01_Swatch'
+        $owned | Should -Not -Contain 'Harkonnen_FlyingVehicle_01_Swatch'
+        $owned | Should -Not -Contain 'MTX_Nomad_SetVariant_Bottom'
+        $owned | Should -Not -Contain 'MTX_DesertMechanicBike_Variant'
+        $owned | Should -Not -Contain 'MTX_Kirab_Buggy_Variant'
     }
 }
