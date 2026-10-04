@@ -2213,6 +2213,33 @@ Describe 'GameConfig: local client Game.ini and Engine.ini' -Tag 'GameConfig' {
         $client.engine.effective["$script:DuneGcSecConsole||Vehicle.MaxVehiclesPerPlayer"] | Should -Be '20'
     }
 
+    It 'writes reviewed landclaim segments with an exact backup and preserves other client settings' {
+        $dir = Join-Path (Get-PSDrive TestDrive).Root 'landclaim-segments'
+        [void](New-Item -ItemType Directory -Path $dir)
+        $path = Join-Path $dir 'Game.ini'
+        $original = "[Audio]`nMasterVolume=0.8`n[$script:SecBuilding]`nm_MaxNumLandclaimSegments=6`n"
+        [IO.File]::WriteAllText($path, $original)
+        $result = Save-DuneGameConfigClient -Dir $dir -Updates @(@{ key='m_MaxNumLandclaimSegments'; value='23' })
+        $raw = [IO.File]::ReadAllText($path)
+        (Get-EffectiveValue -Raw $raw -Section $script:SecBuilding -Key 'm_MaxNumLandclaimSegments') | Should -Be '23'
+        (Get-HeaderCount -Raw $raw -Name $script:SecBuilding) | Should -Be 1
+        $raw | Should -Match 'MasterVolume=0.8'
+        [IO.File]::ReadAllText($result.files.game.backup) | Should -BeExactly $original
+        $result.applied | Should -Be 1
+    }
+
+    It 'refuses a reviewed landclaim segment write while the game is running without changing the file' {
+        Mock Test-DuneGameClientRunning { $true }
+        $dir = Join-Path (Get-PSDrive TestDrive).Root 'landclaim-running'
+        [void](New-Item -ItemType Directory -Path $dir)
+        $path = Join-Path $dir 'Game.ini'
+        $original = "[Audio]`nMasterVolume=0.8`n"
+        [IO.File]::WriteAllText($path, $original)
+        { Save-DuneGameConfigClient -Dir $dir -Updates @(@{ key='m_MaxNumLandclaimSegments'; value='23' }) } | Should -Throw '*Close Dune: Awakening*'
+        [IO.File]::ReadAllText($path) | Should -BeExactly $original
+        @(Get-ChildItem -LiteralPath $dir -Filter '*.dst-*').Count | Should -Be 0
+    }
+
     It 'routes mixed updates into the correct managed client files' {
         $dir = (Get-PSDrive TestDrive).Root
         [IO.File]::WriteAllText((Join-Path $dir 'Game.ini'), "[Audio]`nMasterVolume=0.8`n")
