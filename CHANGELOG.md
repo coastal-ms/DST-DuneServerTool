@@ -15,6 +15,13 @@ here cover everything those tags shipped.
 
 - Ignore the unfixed CVE-2026-93748 in Astro's transitive `http-cache-semantics` dependency during Trivy scans.
 
+## [15.2.7] - 2026-10-04
+
+- Add separate All Armor Skins and All Weapon Skins actions for online players, including linked-player self grants. Skip learned and pending tokens, and explain Funcom activation limitations.
+
+- Add All Building Sets alongside House Swatches for online players, including linked-player self grants. Deliver only missing building set tokens while preserving existing unlocks and pending inventory tokens.
+- Exclude crafting stations and entries without an item form. Explain that Funcom limitations may prevent some sets from activating, and retain overflow pickup and uncertain-delivery guidance.
+
 ## [15.2.6] - 2026-10-03
 
 - Promote the accepted 15.2.6 test changes to stable: Linux Server Settings authority and Custom defaults, host-created Player accounts and Player Portal fixes, retired mobile/Cloudflare removal, and cosmetic/Give Item catalog restoration. Historical catalog availability does not prove every item is functional in the current game.

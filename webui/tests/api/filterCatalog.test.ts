@@ -84,3 +84,17 @@ describe('filterCosmeticsCatalog', () => {
     expect(getHouseSwatchCosmetics(cosmetics, 'placeables')).toEqual([cosmetics[2], cosmetics[4]])
   })
 })
+
+
+describe('bulk building set selection', () => {
+  it('uses server grant eligibility, excluding stations, missing item forms and cosmetics', async () => {
+    const { getBuildingSetCosmetics } = await import('../../src/api/gameplay')
+    const entries: CosmeticEntry[] = [
+      { template: 'AtreidesSet', name: 'Atreides', group: 'Building Sets - Faction', bulk_building_set: true },
+      { template: 'BasicFabricator_Patent', name: 'Fabricator', group: 'Building Sets - Crafting', bulk_building_set: false },
+      { template: 'MissingItem_Patent', name: 'Missing', group: 'Building Sets - Decor', bulk_building_set: false },
+      { template: 'HouseSwatch', name: 'Swatch', group: 'Swatches (Dyes)' },
+    ]
+    expect(getBuildingSetCosmetics(entries)).toEqual([entries[0]])
+  })
+})

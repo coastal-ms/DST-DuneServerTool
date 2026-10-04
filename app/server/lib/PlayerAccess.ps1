@@ -1,4 +1,4 @@
-# Player portal access is an explicit allowlist, never a URL prefix grant.
+﻿# Player portal access is an explicit allowlist, never a URL prefix grant.
 # Character links are assigned on the host. Resolve their current pawn and
 # controller from the live DB for every request; never trust client identities.
 function Get-DunePlayerRoutePolicy {
@@ -47,7 +47,7 @@ function Get-DunePlayerRoutePolicy {
             'grant-max-spec','reset-spec','reset-all-specs','grant-all-keystones','reset-all-keystones')) { return 'controller_id' }
         if ($action -in @('give-item','give-items','repair-gear','repair-orphaned-building-pieces',
             'max-augment-attributes','restore-destroyed','award-char-xp','fill-water')) { return 'pawn_id' }
-        if ($action -eq 'grant-house-swatches') { return 'pawn_id,account_id' }
+        if ($action -in @('grant-house-swatches','grant-building-sets','grant-skins')) { return 'pawn_id,account_id' }
         if ($action -in @('give-scrip','give-faction-rep','set-faction-tier','progression-unlock','progression-reverse','award-intel')) { return 'actor_id' }
         if ($action -in @('set-skill-points','clean-inventory','reset-progression','set-skill-module','give-item-live','kick')) { return 'actor_id' }
         if ($action -in @('delete-item','repair-item','set-item-durability','set-item-water','set-item-stack')) { return 'item_id' }
