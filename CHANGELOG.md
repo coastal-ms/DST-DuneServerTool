@@ -17,6 +17,8 @@ here cover everything those tags shipped.
 
 ## [15.2.7] - 2026-10-04
 
+- Add All Dyes and All Vehicle Skins using the same missing-only bulk grant flow. Show request submission as a neutral notice, finish the action immediately after submission, and refresh unlock status separately without a blocking activation spinner.
+
 - Correct cosmetic ownership matching for campaign weapon skins, trainer armor and individual clothing slots. Distinguish saved unlocks from held tokens, show a searchable bulk catalog including unlocked entries, and exclude known unusable armor tokens and unverified developer building patents from bulk delivery.
 
 - Add separate All Armor Skins and All Weapon Skins actions for online players, including linked-player self grants. Skip learned and pending tokens, and explain Funcom activation limitations.

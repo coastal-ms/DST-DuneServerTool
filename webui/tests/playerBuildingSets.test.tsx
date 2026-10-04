@@ -19,6 +19,7 @@ beforeEach(() => {
     { template: 'WeaponSkin', name: 'Weapon Skin', group: 'Weapon Skins' },
     { template: 'VehicleSkin', name: 'Vehicle Skin', group: 'Vehicle Skins' },
     { template: 'Ecaz_Placeables_Swatch', name: 'House Ecaz Placeables Swatch', group: 'Swatches (Dyes)' },
+    { template: 'PlainDye', name: 'Desert Red Swatch', group: 'Swatches (Dyes)' },
   ])
   vi.mocked(getPlayerOwnedCosmetics).mockResolvedValue({ account_id: 99, owned: ['ownedset'], unlocked: ['ownedset'], pending: [], total: 1, source: 'live' })
   vi.mocked(grantSkins).mockResolvedValue({ ok: true, message: 'Skin batch sent.' })
@@ -96,6 +97,32 @@ describe.each(['armor', 'weapon'] as const)('All %s Skins', kind => {
     render(<ManagePlayerSection player={player} canWrite demo={false} refreshKey={0} flash={vi.fn()} onChanged={vi.fn()} />)
     fireEvent.click(screen.getByRole('button', { name: new RegExp(label) }))
     expect(await screen.findByRole('button', { name: /No new .* Skins tokens to request/ })).toBeDisabled()
+    expect(grantSkins).not.toHaveBeenCalled()
+  })
+})
+
+describe.each([
+  { kind: 'vehicle' as const, label: 'All Vehicle Skins', tokens: ['VehicleSkin'] },
+  { kind: 'dyes' as const, label: 'All Dyes', tokens: ['PlainDye', 'Ecaz_Placeables_Swatch'] },
+])('$label', ({ kind, label, tokens }) => {
+  it('uses the same own-character action and submits a neutral request notice', async () => {
+    render(<ManagePlayerSection player={player} canWrite demo={false} refreshKey={0} flash={actionFlash} onChanged={vi.fn()} />)
+    fireEvent.click(screen.getByRole('button', { name: new RegExp(label) }))
+    const button = await screen.findByRole('button', { name: new RegExp(`Deliver ${tokens.length} missing`) })
+    const catalog = await getCosmeticsCatalog()
+    expect(getSkinCosmetics(catalog, kind).map(e => e.template).sort()).toEqual([...tokens].sort())
+    fireEvent.click(button)
+    await waitFor(() => expect(grantSkins).toHaveBeenCalledExactlyOnceWith(42, 99, kind))
+    expect(actionFlash).toHaveBeenCalledWith('Skin batch sent.', 'info')
+    expect(screen.getByRole('button', { name: 'Refresh unlock status' })).toBeEnabled()
+    expect(grantBuildingSets).not.toHaveBeenCalled()
+    expect(grantHouseSwatches).not.toHaveBeenCalled()
+  })
+  it('skips saved unlocks and held tokens', async () => {
+    vi.mocked(getPlayerOwnedCosmetics).mockResolvedValue({ account_id: 99, owned: tokens, unlocked: [], pending: tokens, total: tokens.length, source: 'live' })
+    render(<ManagePlayerSection player={player} canWrite demo={false} refreshKey={0} flash={actionFlash} onChanged={vi.fn()} />)
+    fireEvent.click(screen.getByRole('button', { name: new RegExp(label) }))
+    expect(await screen.findByRole('button', { name: /No new .* tokens to request/ })).toBeDisabled()
     expect(grantSkins).not.toHaveBeenCalled()
   })
 })

@@ -541,8 +541,8 @@ function Invoke-DunePlayerGrantHouseSwatches {
 # Uses the same paced live token delivery as House Swatches; never writes unlock
 # arrays directly or falls back to offline inventory insertion.
 function Invoke-DunePlayerGrantUnlockTokens {
-    param([string]$Ip, [long]$PawnId, [long]$AccountId, [ValidateSet('building-sets','armor','weapon')][string]$Kind)
-    $label = switch ($Kind) { 'armor' { 'armor skin' }; 'weapon' { 'weapon skin' }; default { 'building set' } }
+    param([string]$Ip, [long]$PawnId, [long]$AccountId, [ValidateSet('building-sets','armor','weapon','vehicle','dyes')][string]$Kind)
+    $label = switch ($Kind) { 'armor' { 'armor skin' }; 'weapon' { 'weapon skin' }; 'vehicle' { 'vehicle skin' }; 'dyes' { 'dye' }; default { 'building set' } }
     if ($PawnId -le 0) { return @{ ok = $false; error = 'pawn_id is required.' } }
     if ($AccountId -le 0) { return @{ ok = $false; error = 'account_id is required.' } }
 
@@ -594,7 +594,7 @@ function Invoke-DunePlayerGrantBuildingSets {
 }
 
 function Invoke-DunePlayerGrantSkins {
-    param([string]$Ip, [long]$PawnId, [long]$AccountId, [ValidateSet('armor','weapon')][string]$Kind)
+    param([string]$Ip, [long]$PawnId, [long]$AccountId, [ValidateSet('armor','weapon','vehicle','dyes')][string]$Kind)
     Invoke-DunePlayerGrantUnlockTokens -Ip $Ip -PawnId $PawnId -AccountId $AccountId -Kind $Kind
 }
 

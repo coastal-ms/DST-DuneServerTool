@@ -179,6 +179,19 @@ Describe 'Bulk building set catalog' {
 }
 
 Describe 'Bulk skin catalogs' {
+    It 'includes every dye rather than only House Swatches' {
+        $dyes = @(Get-DuneSkinGrantCatalog -Kind dyes)
+        $house = @(Get-DuneHouseSwatchCatalog -Kind all)
+        $dyes.Count | Should -BeGreaterThan $house.Count
+        @($dyes | Where-Object group -ne 'Swatches (Dyes)').Count | Should -Be 0
+        foreach ($entry in $house) { $dyes.template | Should -Contain $entry.template }
+    }
+    It 'includes vehicle skins without weapon, armor or building unlocks' {
+        $vehicles = @(Get-DuneSkinGrantCatalog -Kind vehicle)
+        $vehicles.Count | Should -BeGreaterThan 0
+        @($vehicles | Where-Object group -ne 'Vehicle Skins').Count | Should -Be 0
+        $vehicles.template | Should -Contain 'Atreides_Buggy_Variant'
+    }
     It 'excludes known tokens without a research action while keeping them visible for diagnosis' {
         $catalog = Get-DuneCosmeticsCatalog
         $skins = @(Get-DuneSkinGrantCatalog -Kind armor)

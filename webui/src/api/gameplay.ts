@@ -1541,9 +1541,9 @@ export function getBuildingSetCosmetics(catalog: CosmeticEntry[]): CosmeticEntry
     .sort((a, b) => a.name.localeCompare(b.name) || a.template.localeCompare(b.template))
 }
 
-export type SkinKind = 'armor' | 'weapon'
+export type SkinKind = 'armor' | 'weapon' | 'vehicle' | 'dyes'
 export function getSkinCosmetics(catalog: CosmeticEntry[], kind: SkinKind): CosmeticEntry[] {
-  const group = kind === 'armor' ? 'Armor & Suit Sets' : 'Weapon Skins'
+  const group = { armor: 'Armor & Suit Sets', weapon: 'Weapon Skins', vehicle: 'Vehicle Skins', dyes: 'Swatches (Dyes)' }[kind]
   return catalog.filter(entry => entry.group === group && !entry.bulk_exclusion)
     .sort((a, b) => a.name.localeCompare(b.name) || a.template.localeCompare(b.template))
 }

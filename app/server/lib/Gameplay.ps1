@@ -228,8 +228,8 @@ function Get-DuneBuildingSetGrantCatalog {
 }
 
 function Get-DuneSkinGrantCatalog {
-    param([ValidateSet('armor','weapon')][string]$Kind)
-    $group = if ($Kind -eq 'armor') { 'Armor & Suit Sets' } else { 'Weapon Skins' }
+    param([ValidateSet('armor','weapon','vehicle','dyes')][string]$Kind)
+    $group = switch ($Kind) { 'armor' { 'Armor & Suit Sets' }; 'weapon' { 'Weapon Skins' }; 'vehicle' { 'Vehicle Skins' }; 'dyes' { 'Swatches (Dyes)' } }
     $catalog = Get-DuneCosmeticsCatalog
     return @($catalog.templates | Where-Object { $_.group -eq $group -and -not $_.bulk_exclusion })
 }

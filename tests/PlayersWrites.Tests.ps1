@@ -1225,7 +1225,7 @@ Describe 'Invoke-DunePlayerGrantBuildingSets' {
     }
 }
 
-Describe 'Invoke-DunePlayerGrantSkins <Kind>' -ForEach @(@{Kind='armor'},@{Kind='weapon'}) {
+Describe 'Invoke-DunePlayerGrantSkins <Kind>' -ForEach @(@{Kind='armor'},@{Kind='weapon'},@{Kind='vehicle'},@{Kind='dyes'}) {
     BeforeEach {
         $script:online = 'Online'; $script:playerAccount = 20; $script:playersOk = $true
         $script:owned = @('OwnedSet'); $script:ownershipOk = $true; $script:flsOk = $true
