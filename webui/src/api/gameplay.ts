@@ -1541,6 +1541,18 @@ export function getBuildingSetCosmetics(catalog: CosmeticEntry[]): CosmeticEntry
     .sort((a, b) => a.name.localeCompare(b.name) || a.template.localeCompare(b.template))
 }
 
+export type SkinKind = 'armor' | 'weapon'
+export function getSkinCosmetics(catalog: CosmeticEntry[], kind: SkinKind): CosmeticEntry[] {
+  const group = kind === 'armor' ? 'Armor & Suit Sets' : 'Weapon Skins'
+  return catalog.filter(entry => entry.group === group)
+    .sort((a, b) => a.name.localeCompare(b.name) || a.template.localeCompare(b.template))
+}
+export function grantSkins(pawnId: number, accountId: number, kind: SkinKind) {
+  return api<WriteResult>('/api/gameplay/players/grant-skins', {
+    method: 'POST', body: JSON.stringify({ pawn_id: pawnId, account_id: accountId, kind }),
+  })
+}
+
 export function filterCosmeticsCatalog(catalog: CosmeticEntry[], query: string): CosmeticEntry[] {
   const q = query.trim().toLowerCase()
   if (!q) return catalog

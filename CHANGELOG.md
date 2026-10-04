@@ -17,6 +17,8 @@ here cover everything those tags shipped.
 
 ## [15.2.7] - 2026-10-04
 
+- Add separate All Armor Skins and All Weapon Skins actions for online players, including linked-player self grants. Skip learned and pending tokens, and explain Funcom activation limitations.
+
 - Add All Building Sets alongside House Swatches for online players, including linked-player self grants. Deliver only missing building set tokens while preserving existing unlocks and pending inventory tokens.
 - Exclude crafting stations and entries without an item form. Explain that Funcom limitations may prevent some sets from activating, and retain overflow pickup and uncertain-delivery guidance.
 

@@ -141,4 +141,12 @@ Describe 'Bulk building set Player portal ownership' {
         Invoke-PlayerCheck $f @{pawn_id=21;account_id=12} | Should -BeFalse
         Invoke-PlayerCheck $f @{pawn_id=21;account_id=11;fls_id='another-player'} | Should -BeFalse
     }
+    It 'allows skin grants only to the linked pawn/account and refuses FLS overrides' {
+        $f=New-PlayerFixture POST '/api/gameplay/players/grant-skins'
+        Invoke-PlayerCheck $f @{pawn_id=21;account_id=11;kind='armor'} | Should -BeTrue
+        Invoke-PlayerCheck $f @{pawn_id=22;account_id=11;kind='weapon'} | Should -BeFalse
+        Invoke-PlayerCheck $f @{pawn_id=21;account_id=12;kind='armor'} | Should -BeFalse
+        Invoke-PlayerCheck $f @{pawn_id=21;account_id=11;kind='weapon';fls_id='other'} | Should -BeFalse
+    }
+
 }

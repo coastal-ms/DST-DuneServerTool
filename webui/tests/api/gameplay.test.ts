@@ -622,3 +622,11 @@ describe('bulk building set grants', () => {
     expect(last().body).toEqual({ pawn_id: 42, account_id: 99 })
   })
 })
+
+describe('bulk skin grants', () => {
+  it.each(['armor', 'weapon'] as const)('submits %s with both ownership identities', async kind => {
+    await gp.grantSkins(42, 99, kind)
+    expect(last().url).toBe('/api/gameplay/players/grant-skins')
+    expect(last().body).toEqual({ pawn_id: 42, account_id: 99, kind })
+  })
+})

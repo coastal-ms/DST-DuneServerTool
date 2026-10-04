@@ -1,12 +1,12 @@
 import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { getCosmeticsCatalog, getPlayerOwnedCosmetics, grantBuildingSets, grantHouseSwatches, type Player } from '../src/api/gameplay'
+import { getCosmeticsCatalog, getPlayerOwnedCosmetics, grantBuildingSets, grantHouseSwatches, grantSkins, getSkinCosmetics, type Player } from '../src/api/gameplay'
 import { ManagePlayerSection } from '../src/pages/gameplay/players/sections'
 
 vi.mock('../src/auth/portalAccess', () => ({ usePortalAccess: () => ({ isPlayer: true }) }))
 vi.mock('../src/api/gameplay', async original => ({
   ...await original<typeof import('../src/api/gameplay')>(),
-  getCosmeticsCatalog: vi.fn(), getPlayerOwnedCosmetics: vi.fn(), grantBuildingSets: vi.fn(), grantHouseSwatches: vi.fn(),
+  getCosmeticsCatalog: vi.fn(), getPlayerOwnedCosmetics: vi.fn(), grantBuildingSets: vi.fn(), grantHouseSwatches: vi.fn(), grantSkins: vi.fn(),
 }))
 const player: Player = { id: 42, account_id: 99, controller_id: 100, name: 'Own character', class: '', map: '', faction_id: 0, faction_name: '', online_status: 'Online' }
 beforeEach(() => {
@@ -14,9 +14,13 @@ beforeEach(() => {
     { template: 'OwnedSet', name: 'Owned', group: 'Building Sets - Faction', bulk_building_set: true },
     { template: 'MissingSet', name: 'Missing', group: 'Building Sets - Decor', bulk_building_set: true },
     { template: 'Fabricator_Patent', name: 'Fabricator', group: 'Building Sets - Crafting', bulk_building_set: false },
+    { template: 'ArmorSkin', name: 'Armor Skin', group: 'Armor & Suit Sets' },
+    { template: 'WeaponSkin', name: 'Weapon Skin', group: 'Weapon Skins' },
+    { template: 'VehicleSkin', name: 'Vehicle Skin', group: 'Vehicle Skins' },
     { template: 'Ecaz_Placeables_Swatch', name: 'House Ecaz Placeables Swatch', group: 'Swatches (Dyes)' },
   ])
   vi.mocked(getPlayerOwnedCosmetics).mockResolvedValue({ account_id: 99, owned: ['ownedset'], total: 1, source: 'live' })
+  vi.mocked(grantSkins).mockResolvedValue({ ok: true, message: 'Skin batch sent.' })
   vi.mocked(grantBuildingSets).mockResolvedValue({ ok: true, message: 'Token batch sent.' })
   vi.mocked(grantHouseSwatches).mockResolvedValue({ ok: true, message: 'Swatch tokens sent.' })
   vi.spyOn(window, 'confirm').mockReturnValue(true)
@@ -63,5 +67,31 @@ describe('All Building Sets', () => {
     fireEvent.click(await open('Online', 'All House Swatches'))
     await waitFor(() => expect(grantHouseSwatches).toHaveBeenCalledExactlyOnceWith(42, 99, 'all'))
     expect(grantBuildingSets).not.toHaveBeenCalled()
+  })
+})
+
+describe.each(['armor', 'weapon'] as const)('All %s Skins', kind => {
+  const label = kind === 'armor' ? 'All Armor Skins' : 'All Weapon Skins'
+  it('submits only the chosen skin category and shows the limitation', async () => {
+    const button = await open('Online', label)
+    expect(screen.getByText(/Some skins may not unlock because of Funcom/)).toBeInTheDocument()
+    const catalog = await getCosmeticsCatalog()
+    expect(getSkinCosmetics(catalog, kind).map(entry => entry.template)).toEqual([kind === 'armor' ? 'ArmorSkin' : 'WeaponSkin'])
+    fireEvent.click(button)
+    await waitFor(() => expect(grantSkins).toHaveBeenCalledExactlyOnceWith(42, 99, kind))
+    expect(window.confirm).toHaveBeenCalledWith(expect.stringContaining('Some skins may not unlock'))
+    expect(grantBuildingSets).not.toHaveBeenCalled()
+    expect(grantHouseSwatches).not.toHaveBeenCalled()
+  })
+  it('blocks offline grants', async () => {
+    expect(await open('Offline', label)).toBeDisabled()
+    expect(grantSkins).not.toHaveBeenCalled()
+  })
+  it('skips learned skins and pending tokens', async () => {
+    vi.mocked(getPlayerOwnedCosmetics).mockResolvedValue({ account_id: 99, owned: ['ARMORSKIN', 'weaponskin'], total: 2, source: 'live' })
+    render(<ManagePlayerSection player={player} canWrite demo={false} refreshKey={0} flash={vi.fn()} onChanged={vi.fn()} />)
+    fireEvent.click(screen.getByRole('button', { name: new RegExp(label) }))
+    expect(await screen.findByRole('button', { name: /All .* Skins detected/ })).toBeDisabled()
+    expect(grantSkins).not.toHaveBeenCalled()
   })
 })

@@ -212,6 +212,13 @@ function Get-DuneBuildingSetGrantCatalog {
     return @($catalog.templates | Where-Object { $_.bulk_building_set })
 }
 
+function Get-DuneSkinGrantCatalog {
+    param([ValidateSet('armor','weapon')][string]$Kind)
+    $group = if ($Kind -eq 'armor') { 'Armor & Suit Sets' } else { 'Weapon Skins' }
+    $catalog = Get-DuneCosmeticsCatalog
+    return @($catalog.templates | Where-Object { $_.group -eq $group })
+}
+
 function Get-DuneHouseSwatchCatalog {
     param([ValidateSet('all','placeables')][string]$Kind = 'all')
     $catalog = Get-DuneCosmeticsCatalog

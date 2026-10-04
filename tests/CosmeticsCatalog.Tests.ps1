@@ -172,3 +172,18 @@ Describe 'Bulk building set catalog' {
         $script:bulk.Count | Should -BeGreaterThan 150
     }
 }
+
+Describe 'Bulk skin catalogs' {
+    It 'selects armor and suits without dyes, building recipes, weapons or vehicles' {
+        $skins = @(Get-DuneSkinGrantCatalog -Kind armor)
+        $skins.Count | Should -BeGreaterThan 0
+        @($skins | Where-Object { $_.group -ne 'Armor & Suit Sets' }).Count | Should -Be 0
+        $skins.template | Should -Contain 'MTX_B1C3_Smug_LightArmor_SetVariant_Boots'
+        $skins.template | Should -Not -Contain 'D_Choam_HeavyArmor_Swatch'
+    }
+    It 'selects only weapon appearances' {
+        $skins = @(Get-DuneSkinGrantCatalog -Kind weapon)
+        $skins.Count | Should -BeGreaterThan 0
+        @($skins | Where-Object { $_.group -ne 'Weapon Skins' }).Count | Should -Be 0
+    }
+}
