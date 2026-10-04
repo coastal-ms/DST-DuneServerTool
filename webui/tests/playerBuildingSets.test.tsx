@@ -79,7 +79,7 @@ describe.each(['armor', 'weapon'] as const)('All %s Skins', kind => {
   const label = kind === 'armor' ? 'All Armor Skins' : 'All Weapon Skins'
   it('submits only the chosen skin category and shows the limitation', async () => {
     const button = await open('Online', label)
-    expect(screen.getByText(/Some skins may not unlock because of Funcom/)).toBeInTheDocument()
+    expect(screen.getByText(/Some entries may not unlock because of Funcom/)).toBeInTheDocument()
     const catalog = await getCosmeticsCatalog()
     expect(getSkinCosmetics(catalog, kind).map(entry => entry.template)).toEqual([kind === 'armor' ? 'ArmorSkin' : 'WeaponSkin'])
     fireEvent.click(button)
