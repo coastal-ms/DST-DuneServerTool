@@ -197,7 +197,7 @@ function Get-DuneCosmeticSlot {
 function Add-DuneCosmeticCatalogOwnership {
     param(
         [Parameter(Mandatory)]$Owned,
-        [Parameter(Mandatory)][string[]]$CustomizationIds
+        [Parameter(Mandatory)][AllowEmptyCollection()][string[]]$CustomizationIds
     )
     if (-not (Get-Command Get-DuneCosmeticsCatalog -ErrorAction SilentlyContinue)) { return }
     $catalog = Get-DuneCosmeticsCatalog

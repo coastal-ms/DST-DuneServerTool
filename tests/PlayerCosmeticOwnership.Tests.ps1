@@ -130,4 +130,9 @@ Describe 'Get-DunePlayerOwnedCosmeticsLive' -Tag 'Pure' {
         Add-DuneCosmeticCatalogOwnership -Owned $owned -CustomizationIds @('MTX_Smug_Formal01_Bottom')
         $owned | Should -Contain 'MTX_SmugFormalSetVariant_Bottom'
     }
+    It 'handles a character with no saved cosmetic unlocks' {
+        $owned = [Collections.Generic.HashSet[string]]::new([StringComparer]::OrdinalIgnoreCase)
+        { Add-DuneCosmeticCatalogOwnership -Owned $owned -CustomizationIds @() } | Should -Not -Throw
+        $owned.Count | Should -Be 0
+    }
 }
