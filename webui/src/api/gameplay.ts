@@ -1520,7 +1520,7 @@ export function getItemCatalog(): Promise<CatalogItem[]> {
 // by GET /api/catalog/cosmetics (from gameplay-item-data names). These aren't in
 // the standard item catalog; granting one delivers it via the normal give-item
 // path so the player unlocks the appearance.
-export interface CosmeticEntry { template: string; name: string; group: string }
+export interface CosmeticEntry { template: string; name: string; group: string; bulk_building_set?: boolean }
 interface CosmeticsResponse { templates?: CosmeticEntry[]; total?: number }
 let _cosmeticsCache: CosmeticEntry[] | null = null
 let _cosmeticsPromise: Promise<CosmeticEntry[]> | null = null
@@ -1533,6 +1533,11 @@ export function getHouseSwatchCosmetics(catalog: CosmeticEntry[], kind: HouseSwa
     .filter(entry => kind === 'placeables'
       ? /_Placeables_Swatch$/i.test(entry.template)
       : /^House .+ Swatch$/i.test(entry.name))
+    .sort((a, b) => a.name.localeCompare(b.name) || a.template.localeCompare(b.template))
+}
+
+export function getBuildingSetCosmetics(catalog: CosmeticEntry[]): CosmeticEntry[] {
+  return catalog.filter(entry => entry.bulk_building_set === true)
     .sort((a, b) => a.name.localeCompare(b.name) || a.template.localeCompare(b.template))
 }
 
@@ -2263,6 +2268,12 @@ export interface HouseSwatchGrantResponse extends WriteResult {
 export function grantHouseSwatches(pawnId: number, accountId: number, kind: HouseSwatchKind = 'all') {
   return api<HouseSwatchGrantResponse>('/api/gameplay/players/grant-house-swatches', {
     method: 'POST', body: JSON.stringify({ pawn_id: pawnId, account_id: accountId, kind }),
+  })
+}
+
+export function grantBuildingSets(pawnId: number, accountId: number) {
+  return api<WriteResult>('/api/gameplay/players/grant-building-sets', {
+    method: 'POST', body: JSON.stringify({ pawn_id: pawnId, account_id: accountId }),
   })
 }
 

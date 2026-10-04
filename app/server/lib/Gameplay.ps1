@@ -113,6 +113,7 @@ function Get-DuneGameplayItemName {
 # Loaded once into a case-insensitive set; friendly names come from gameplay-item-data.json.
 $script:DuneBuildingSetIds = $null
 $script:DuneBuildingSetLabels = $null
+$script:DuneBuildingSetNoItemIds = $null
 function Get-DuneBuildingSetsPath {
     foreach ($candidate in @(
         (Join-Path $PSScriptRoot '..\..\data\building-sets.json'),
@@ -126,11 +127,13 @@ function Initialize-DuneBuildingSets {
     if ($null -ne $script:DuneBuildingSetIds) { return }
     $set = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::OrdinalIgnoreCase)
     $labels = @{}
+    $noItems = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::OrdinalIgnoreCase)
     $path = Get-DuneBuildingSetsPath
     if ($path) {
         try {
             $json = Get-Content -LiteralPath $path -Raw | ConvertFrom-Json
             foreach ($id in @($json.ids)) { if ($id) { [void]$set.Add([string]$id) } }
+            foreach ($id in @($json._meta.flagged_no_item_form)) { if ($id) { [void]$noItems.Add([string]$id) } }
             foreach ($property in $json.labels.PSObject.Properties) {
                 if ($property.Name -and $property.Value) { $labels[[string]$property.Name] = [string]$property.Value }
             }
@@ -138,6 +141,7 @@ function Initialize-DuneBuildingSets {
     }
     $script:DuneBuildingSetIds = $set
     $script:DuneBuildingSetLabels = $labels
+    $script:DuneBuildingSetNoItemIds = $noItems
 }
 
 # Readable group label for a grantable building set / building recipe (Observer Twitch
@@ -194,8 +198,18 @@ function Get-DuneCosmeticsCatalog {
         if ($out.template -contains $id) { continue }
         $out += @{ template = [string]$id; name = [string]$script:DuneBuildingSetLabels[$id]; group = Get-DuneBuildingSetGroup -Id $id }
     }
+    foreach ($entry in $out) {
+        $entry.bulk_building_set = $entry.group -like 'Building Sets - *' -and
+            -not $script:DuneBuildingSetNoItemIds.Contains([string]$entry.template) -and
+            $entry.template -notmatch 'Fabricat|Refinery|AugmentStation|RepairStation|ModStation|Workbench|Recycler|Deathstill|BloodWaterExtraction|^D_(StartingSet|WaterProgression)'
+    }
     $out = @($out | Sort-Object { $_.group }, { $_.name })
     return @{ ok = $true; templates = $out; total = $out.Count }
+}
+
+function Get-DuneBuildingSetGrantCatalog {
+    $catalog = Get-DuneCosmeticsCatalog
+    return @($catalog.templates | Where-Object { $_.bulk_building_set })
 }
 
 function Get-DuneHouseSwatchCatalog {

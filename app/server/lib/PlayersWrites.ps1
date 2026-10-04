@@ -538,6 +538,54 @@ function Invoke-DunePlayerGrantHouseSwatches {
     }
 }
 
+# Uses the same paced live token delivery as House Swatches; never writes unlock
+# arrays directly or falls back to offline inventory insertion.
+function Invoke-DunePlayerGrantBuildingSets {
+    param([string]$Ip, [long]$PawnId, [long]$AccountId)
+    if ($PawnId -le 0) { return @{ ok = $false; error = 'pawn_id is required.' } }
+    if ($AccountId -le 0) { return @{ ok = $false; error = 'account_id is required.' } }
+
+    # Match both identities and an exact Online state; unknown status and
+    # LoggingOut must not turn into a live grant to a different character.
+    $players = Get-DunePlayersLive -Ip $Ip
+    if (-not $players.ok) { return @{ ok = $false; error = "Player status could not be verified: $($players.error)" } }
+    $target = @($players.players | Where-Object { [long]$_.id -eq $PawnId -and [long]$_.account_id -eq $AccountId })
+    if ($target.Count -ne 1 -or [string]$target[0].online_status -ne 'Online') {
+        return @{ ok = $false; error = 'The matching player must be online to receive building set tokens.' }
+    }
+
+    $sets = @(Get-DuneBuildingSetGrantCatalog)
+    if ($sets.Count -eq 0) { return @{ ok = $false; error = 'Grantable building set catalog is empty.' } }
+    $before = Get-DunePlayerOwnedCosmeticsLive -Ip $Ip -AccountId $AccountId
+    if (-not $before.ok) { return @{ ok = $false; error = "Read current building set ownership: $($before.error)" } }
+    $owned = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::OrdinalIgnoreCase)
+    foreach ($id in @($before.owned)) {
+        if (-not [string]::IsNullOrWhiteSpace([string]$id)) { [void]$owned.Add([string]$id) }
+    }
+    $missing = @($sets | Where-Object { -not $owned.Contains([string]$_.template) } |
+        ForEach-Object { [string]$_.template } | Select-Object -Unique)
+    $result = @{
+        ok = $true; total = $sets.Count; already_owned = $sets.Count - $missing.Count
+        requested = $missing.Count; granted = 0; failed = @(); delivery = 'tokens'; overflow = $true
+    }
+    if ($missing.Count -eq 0) {
+        $result.message = "All $($sets.Count) building sets are already detected."
+        return $result
+    }
+    $fls = Resolve-DuneFlsIdOrError -Ip $Ip -ActorId $PawnId
+    if (-not $fls.ok) { return @{ ok = $false; error = $fls.error } }
+    $batch = Invoke-DuneRmqAddItemsToInventoryBatch -FlsId ([string]$fls.fls_id) -ItemNames $missing -SpacingMilliseconds 200
+    if (-not $batch.ok) {
+        $result.ok = $false
+        $result.failed = $missing
+        $result.error = "Building set delivery was not confirmed: $($batch.message). Some tokens may have arrived. Check unlocks, inventory and dropped tokens before retrying."
+        return $result
+    }
+    $result.granted = $missing.Count
+    $result.message = "Delivered $($missing.Count) missing building set tokens through the live game. Remain online until the activation notifications stop; pick up any overflow tokens beside the player. Delivery does not confirm every set activated."
+    return $result
+}
+
 # Repair equipped gear — OFFLINE only. Sets every durability item in the gear
 # inventory types to GREATEST(catalog.max_durability, item.MaxDurability,
 # item.CurrentDurability, item.DecayedMaxDurability), so a buggy/decayed

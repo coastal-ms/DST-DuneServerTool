@@ -1,4 +1,4 @@
-# Tests the building-set additions to the cosmetics catalog: the group-mapping
+﻿# Tests the building-set additions to the cosmetics catalog: the group-mapping
 # helper (pure), the building-sets.json loader, and that Get-DuneCosmeticsCatalog
 # surfaces the full grantable building-set universe (Observer Twitch set, collab
 # murals, statues/decor, furniture, movie sets, faction/house sets, base-game
@@ -145,5 +145,30 @@ Describe 'Get-DuneCosmeticsCatalog includes the full building-set universe' -Tag
             $e.template | Should -Not -BeNullOrEmpty
             $e.name     | Should -Not -BeNullOrEmpty
         }
+    }
+}
+
+
+Describe 'Bulk building set catalog' {
+    BeforeAll { $script:bulk = @(Get-DuneBuildingSetGrantCatalog) }
+    It 'includes construction, decor and restored CHOAM pieces without appearance cosmetics' {
+        $script:bulk.template | Should -Contain 'AtreidesSet'
+        $script:bulk.template | Should -Contain 'MTX_ChoamExtention_Floor_01_Patent'
+        $script:bulk.template | Should -Contain 'MTX_ReverendMotherRoom_Chair_01_Patent'
+        @($script:bulk | Where-Object { $_.group -notlike 'Building Sets - *' }).Count | Should -Be 0
+    }
+    It 'excludes crafting stations even when the existing display group is not crafting' {
+        foreach ($id in @('BasicFabricator_Patent','IceRefinery_Patent','AugmentStation_Patent',
+            'RepairStation_Patent','D_ModStation_Patent','Recycler_Patent','Deathstill_Patent',
+            'Fremen_Deathstill_Patent','D_AdvFabricationSet_Patent','D_StartingSet')) {
+            $script:bulk.template | Should -Not -Contain $id
+        }
+    }
+    It 'excludes every flagged token with no item form but retains construction utilities' {
+        $data = Get-Content -LiteralPath (Get-DuneBuildingSetsPath) -Raw | ConvertFrom-Json
+        foreach ($id in $data._meta.flagged_no_item_form) { $script:bulk.template | Should -Not -Contain $id }
+        $script:bulk.template | Should -Contain 'ChoamPentashieldSurfaceVertical_Patent'
+        $script:bulk.template | Should -Contain 'BasicContainer_Patent'
+        $script:bulk.Count | Should -BeGreaterThan 150
     }
 }
