@@ -17,6 +17,8 @@ here cover everything those tags shipped.
 
 ## [15.2.7] - 2026-10-04
 
+- Correct cosmetic ownership matching for campaign weapon skins, trainer armor and individual clothing slots. Distinguish saved unlocks from held tokens, show a searchable bulk catalog including unlocked entries, and exclude known unusable armor tokens and unverified developer building patents from bulk delivery.
+
 - Add separate All Armor Skins and All Weapon Skins actions for online players, including linked-player self grants. Skip learned and pending tokens, and explain Funcom activation limitations.
 
 - Add All Building Sets alongside House Swatches for online players, including linked-player self grants. Deliver only missing building set tokens while preserving existing unlocks and pending inventory tokens.

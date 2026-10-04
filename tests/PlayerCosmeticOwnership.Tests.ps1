@@ -52,6 +52,9 @@ Describe 'Get-DunePlayerOwnedCosmeticsLive' -Tag 'Pure' {
         $result.owned | Should -Contain 'MTX_Atre_BreakfastRoomSet_Patent'
         $result.owned | Should -Contain 'MTX_Atre_Movie_Bench_Patent'
         $result.owned | Should -Contain 'D_TestMeshVariant'
+        $result.pending | Should -Contain 'D_TestMeshVariant'
+        $result.unlocked | Should -Not -Contain 'D_TestMeshVariant'
+        $result.unlocked | Should -Contain 'MTX_Atre_Movie_Bench_Patent'
         $result.owned | Should -Not -Contain 'D_TestMeshVariant_Patent'
     }
 
@@ -101,5 +104,30 @@ Describe 'Get-DunePlayerOwnedCosmeticsLive' -Tag 'Pure' {
         $result.ok | Should -BeFalse
         $result.error | Should -Match 'account_id'
         $script:capturedSql | Should -BeNullOrEmpty
+    }
+
+    It 'recognizes saved campaign weapon IDs without confusing distinct weapons' {
+        $owned = [Collections.Generic.HashSet[string]]::new([StringComparer]::OrdinalIgnoreCase)
+        Add-DuneCosmeticCatalogOwnership -Owned $owned -CustomizationIds @('Atre_Karpov_Rifle','MTX_Choam_SpiceMask_Head')
+        $owned | Should -Contain 'B1C3_Atre_Karpov_Rifle'
+        $owned | Should -Contain 'MTX_Choam_SpiceMask_Variant'
+        $owned | Should -Not -Contain 'B1C3_Atre_Spitdart_Rifle'
+        $owned | Should -Not -Contain 'B1C3_Hark_Spitdart_Rifle'
+    }
+
+    It 'requires every persisted trainer armor slot to mark its set unlocked' {
+        $owned = [Collections.Generic.HashSet[string]]::new([StringComparer]::OrdinalIgnoreCase)
+        Add-DuneCosmeticCatalogOwnership -Owned $owned -CustomizationIds @('Trainer_Mentat_Top_MeshVariant')
+        $owned | Should -Not -Contain 'AdvancedTrainer_Mentat_SetVariant'
+        Add-DuneCosmeticCatalogOwnership -Owned $owned -CustomizationIds @('Trainer_Mentat_Top_MeshVariant','Trainer_Mentat_Bottom_MeshVariant','Trainer_Mentat_Boots_MeshVariant','Trainer_Mentat_Gloves_MeshVariant','Trainer_Mentat_Helmet_MeshVariant')
+        $owned | Should -Contain 'AdvancedTrainer_Mentat_SetVariant'
+        $owned | Should -Not -Contain 'AdvancedTrainer_Trooper_SetVariant'
+    }
+    It 'does not mark an individual clothing slot owned from a different slot' {
+        $owned = [Collections.Generic.HashSet[string]]::new([StringComparer]::OrdinalIgnoreCase)
+        Add-DuneCosmeticCatalogOwnership -Owned $owned -CustomizationIds @('MTX_Smug_Formal01_Gloves')
+        $owned | Should -Not -Contain 'MTX_SmugFormalSetVariant_Bottom'
+        Add-DuneCosmeticCatalogOwnership -Owned $owned -CustomizationIds @('MTX_Smug_Formal01_Bottom')
+        $owned | Should -Contain 'MTX_SmugFormalSetVariant_Bottom'
     }
 }

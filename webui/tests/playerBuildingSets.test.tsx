@@ -19,7 +19,7 @@ beforeEach(() => {
     { template: 'VehicleSkin', name: 'Vehicle Skin', group: 'Vehicle Skins' },
     { template: 'Ecaz_Placeables_Swatch', name: 'House Ecaz Placeables Swatch', group: 'Swatches (Dyes)' },
   ])
-  vi.mocked(getPlayerOwnedCosmetics).mockResolvedValue({ account_id: 99, owned: ['ownedset'], total: 1, source: 'live' })
+  vi.mocked(getPlayerOwnedCosmetics).mockResolvedValue({ account_id: 99, owned: ['ownedset'], unlocked: ['ownedset'], pending: [], total: 1, source: 'live' })
   vi.mocked(grantSkins).mockResolvedValue({ ok: true, message: 'Skin batch sent.' })
   vi.mocked(grantBuildingSets).mockResolvedValue({ ok: true, message: 'Token batch sent.' })
   vi.mocked(grantHouseSwatches).mockResolvedValue({ ok: true, message: 'Swatch tokens sent.' })
@@ -34,13 +34,13 @@ async function open(status = 'Online', label = 'All Building Sets') {
 describe('All Building Sets', () => {
   it('offers own-character bulk grant, excludes crafting and skips owned sets', async () => {
     const button = await open()
-    expect(screen.getByText('1/2 detected')).toBeInTheDocument()
+    expect(screen.getByText('1/2 unlocked · 0 held tokens')).toBeInTheDocument()
     expect(screen.getByText(/Crafting stations.*excluded/)).toBeInTheDocument()
     expect(screen.getByText(/Some sets may not unlock because of Funcom/)).toBeInTheDocument()
     fireEvent.click(button)
     await waitFor(() => expect(grantBuildingSets).toHaveBeenCalledExactlyOnceWith(42, 99))
     expect(window.confirm).toHaveBeenCalledWith(expect.stringContaining('1 missing Building Set token'))
-    expect(await screen.findByRole('button', { name: /Activation cascade running/ })).toBeDisabled()
+    expect(await screen.findByRole('button', { name: /Checking unlocks/ })).toBeDisabled()
     expect(grantHouseSwatches).not.toHaveBeenCalled()
   })
   it.each(['Offline', 'LoggingOut', 'Unknown'])('blocks delivery when %s', async status => {
@@ -60,7 +60,7 @@ describe('All Building Sets', () => {
     vi.mocked(Date.now).mockReturnValue(120001)
     await act(async () => { await vi.advanceTimersByTimeAsync(2000) })
     expect(screen.getByText(/Some building sets remain unconfirmed/)).toBeInTheDocument()
-    expect(screen.queryByRole('button', { name: /Activation cascade running/ })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /Checking unlocks/ })).not.toBeInTheDocument()
     expect(grantBuildingSets).toHaveBeenCalledTimes(1)
   })
   it('retains the existing House Swatch endpoint and catalog filter', async () => {
@@ -91,7 +91,28 @@ describe.each(['armor', 'weapon'] as const)('All %s Skins', kind => {
     vi.mocked(getPlayerOwnedCosmetics).mockResolvedValue({ account_id: 99, owned: ['ARMORSKIN', 'weaponskin'], total: 2, source: 'live' })
     render(<ManagePlayerSection player={player} canWrite demo={false} refreshKey={0} flash={vi.fn()} onChanged={vi.fn()} />)
     fireEvent.click(screen.getByRole('button', { name: new RegExp(label) }))
-    expect(await screen.findByRole('button', { name: /All .* Skins detected/ })).toBeDisabled()
+    expect(await screen.findByRole('button', { name: /No new .* Skins tokens to request/ })).toBeDisabled()
     expect(grantSkins).not.toHaveBeenCalled()
   })
+})
+
+it('does not call held armor tokens unlocked or send duplicates', async () => {
+  vi.mocked(getPlayerOwnedCosmetics).mockResolvedValue({ account_id: 99, owned: ['ArmorSkin'], unlocked: [], pending: ['ArmorSkin'], total: 1, source: 'live' })
+  render(<ManagePlayerSection player={player} canWrite demo={false} refreshKey={0} flash={vi.fn()} onChanged={vi.fn()} />)
+  fireEvent.click(screen.getByRole('button', { name: /All Armor Skins/ }))
+  expect(await screen.findByText('0/1 unlocked · 1 held tokens')).toBeInTheDocument()
+  expect(screen.getByText('Token held — unlock unconfirmed')).toBeInTheDocument()
+  expect(screen.getByRole('button', { name: /No new Armor Skins tokens to request/ })).toBeDisabled()
+  expect(grantSkins).not.toHaveBeenCalled()
+})
+
+it('finds the unlocked Muad’Dib terrarium using plain apostrophe spelling', async () => {
+  vi.mocked(getCosmeticsCatalog).mockResolvedValue([{ template: 'MTX_Neut_MuadDibCage_Patent', name: 'Terrarium of Muad’dib', group: 'Building Sets - Decor', bulk_building_set: true }])
+  vi.mocked(getPlayerOwnedCosmetics).mockResolvedValue({ account_id: 99, owned: ['MTX_Neut_MuadDibCage_Patent'], unlocked: ['MTX_Neut_MuadDibCage_Patent'], pending: [], total: 1, source: 'live' })
+  render(<ManagePlayerSection player={player} canWrite demo={false} refreshKey={0} flash={vi.fn()} onChanged={vi.fn()} />)
+  fireEvent.click(screen.getByRole('button', { name: /All Building Sets/ }))
+  const search = await screen.findByRole('textbox', { name: 'Search unlock catalog' })
+  fireEvent.change(search, { target: { value: "Muad'dib" } })
+  expect(screen.getByText('Terrarium of Muad’dib')).toBeInTheDocument()
+  expect(screen.getByText('Unlocked on character')).toBeInTheDocument()
 })

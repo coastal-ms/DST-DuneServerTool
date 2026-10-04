@@ -567,10 +567,10 @@ function Invoke-DunePlayerGrantUnlockTokens {
         ForEach-Object { [string]$_.template } | Select-Object -Unique)
     $result = @{
         ok = $true; total = $sets.Count; already_owned = $sets.Count - $missing.Count
-        requested = $missing.Count; granted = 0; failed = @(); delivery = 'tokens'; overflow = $true
+        requested = $missing.Count; granted = 0; submitted = 0; failed = @(); delivery = 'tokens'; overflow = $true
     }
     if ($missing.Count -eq 0) {
-        $result.message = "All $($sets.Count) ${label}s are already detected."
+        $result.message = "No new $label requests: existing unlocks and held tokens were skipped. Held tokens do not confirm activation."
         return $result
     }
     $fls = Resolve-DuneFlsIdOrError -Ip $Ip -ActorId $PawnId
@@ -582,8 +582,9 @@ function Invoke-DunePlayerGrantUnlockTokens {
         $result.error = "$label delivery was not confirmed: $($batch.message). Some tokens may have arrived. Check unlocks, inventory and dropped tokens before retrying."
         return $result
     }
-    $result.granted = $missing.Count
-    $result.message = "Delivered $($missing.Count) missing $label tokens through the live game. Remain online until the activation notifications stop; pick up any overflow tokens beside the player. Delivery does not confirm every unlock activated."
+    # RMQ acceptance is a submitted request, not proof of delivery or activation.
+    $result.submitted = $missing.Count
+    $result.message = "Submitted $($missing.Count) missing $label token requests to the live game. This does not confirm every unlock activated. Check the unlocked and held-token counts; pick up any overflow. Tokens without a working research action cannot be activated by this delivery process."
     return $result
 }
 

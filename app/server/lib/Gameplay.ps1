@@ -163,6 +163,15 @@ function Get-DuneBuildingSetGroup {
     return 'Building Sets - Structures & Other'
 }
 
+$script:DuneCosmeticGrantMetadata = $null
+function Get-DuneCosmeticGrantMetadata {
+    if ($null -eq $script:DuneCosmeticGrantMetadata) {
+        $path = Join-Path $PSScriptRoot '..\..\data\cosmetic-grants.json'
+        $script:DuneCosmeticGrantMetadata = [IO.File]::ReadAllText($path, [Text.Encoding]::UTF8) | ConvertFrom-Json
+    }
+    return $script:DuneCosmeticGrantMetadata
+}
+
 function Get-DuneCosmeticsCatalog {
     Initialize-DuneGameplayItemData
     Initialize-DuneBuildingSets
@@ -199,7 +208,13 @@ function Get-DuneCosmeticsCatalog {
         $out += @{ template = [string]$id; name = [string]$script:DuneBuildingSetLabels[$id]; group = Get-DuneBuildingSetGroup -Id $id }
     }
     foreach ($entry in $out) {
+        $entry.bulk_exclusion = if ($entry.template -in (Get-DuneCosmeticGrantMetadata).unsupported_tokens) {
+            'This token has no working research action; excluded from bulk grants.'
+        } elseif ($entry.group -like 'Building Sets - *' -and $entry.template -match '^D_.*_Patent$') {
+            'Developer patent with unverified activation; excluded from bulk grants.'
+        } else { '' }
         $entry.bulk_building_set = $entry.group -like 'Building Sets - *' -and
+            -not $entry.bulk_exclusion -and
             -not $script:DuneBuildingSetNoItemIds.Contains([string]$entry.template) -and
             $entry.template -notmatch 'Fabricat|Refinery|AugmentStation|RepairStation|ModStation|Workbench|Recycler|Deathstill|BloodWaterExtraction|^D_(StartingSet|WaterProgression)'
     }
@@ -216,7 +231,7 @@ function Get-DuneSkinGrantCatalog {
     param([ValidateSet('armor','weapon')][string]$Kind)
     $group = if ($Kind -eq 'armor') { 'Armor & Suit Sets' } else { 'Weapon Skins' }
     $catalog = Get-DuneCosmeticsCatalog
-    return @($catalog.templates | Where-Object { $_.group -eq $group })
+    return @($catalog.templates | Where-Object { $_.group -eq $group -and -not $_.bulk_exclusion })
 }
 
 function Get-DuneHouseSwatchCatalog {

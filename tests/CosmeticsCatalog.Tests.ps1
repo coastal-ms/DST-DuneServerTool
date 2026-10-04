@@ -152,10 +152,15 @@ Describe 'Get-DuneCosmeticsCatalog includes the full building-set universe' -Tag
 Describe 'Bulk building set catalog' {
     BeforeAll { $script:bulk = @(Get-DuneBuildingSetGrantCatalog) }
     It 'includes construction, decor and restored CHOAM pieces without appearance cosmetics' {
+        $script:bulk.template | Should -Contain 'MTX_Neut_MuadDibCage_Patent'
         $script:bulk.template | Should -Contain 'AtreidesSet'
         $script:bulk.template | Should -Contain 'MTX_ChoamExtention_Floor_01_Patent'
         $script:bulk.template | Should -Contain 'MTX_ReverendMotherRoom_Chair_01_Patent'
         @($script:bulk | Where-Object { $_.group -notlike 'Building Sets - *' }).Count | Should -Be 0
+    }
+    It 'keeps unverified developer patents out of bulk delivery' {
+        $script:bulk.template | Should -Not -Contain 'D_AdvFurnitureSet_Patent'
+        $script:bulk.template | Should -Not -Contain 'D_Pentashield_Patent'
     }
     It 'excludes crafting stations even when the existing display group is not crafting' {
         foreach ($id in @('BasicFabricator_Patent','IceRefinery_Patent','AugmentStation_Patent',
@@ -174,6 +179,14 @@ Describe 'Bulk building set catalog' {
 }
 
 Describe 'Bulk skin catalogs' {
+    It 'excludes known tokens without a research action while keeping them visible for diagnosis' {
+        $catalog = Get-DuneCosmeticsCatalog
+        $skins = @(Get-DuneSkinGrantCatalog -Kind armor)
+        foreach ($id in @('D_Choam_Assault_SetVariant','D_Choam_HeavyArmor_SetVariant','D_Choam_Scout_SetVariant','D_Choam_Stillsuit_SetVariant','D_HarkonnenAssault_SetVariant')) {
+            $skins.template | Should -Not -Contain $id
+            ($catalog.templates | Where-Object template -eq $id).bulk_exclusion | Should -Match 'no working research action'
+        }
+    }
     It 'selects armor and suits without dyes, building recipes, weapons or vehicles' {
         $skins = @(Get-DuneSkinGrantCatalog -Kind armor)
         $skins.Count | Should -BeGreaterThan 0

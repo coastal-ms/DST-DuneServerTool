@@ -1464,6 +1464,8 @@ function GrantCosmeticForm({ busy, playerName, accountId, onGrant }: {
   const [filter, setFilter] = useState('')
   const [sel, setSel] = useState('')
   const [owned, setOwned] = useState<Set<string> | null>(null)
+  const [unlocked, setUnlocked] = useState<Set<string>>(new Set())
+  const [pending, setPending] = useState<Set<string>>(new Set())
   const [showOwned, setShowOwned] = useState(false)
   const [ownershipWarning, setOwnershipWarning] = useState('')
   useEffect(() => {
@@ -1481,6 +1483,8 @@ function GrantCosmeticForm({ busy, playerName, accountId, onGrant }: {
       .then(r => {
         if (!alive) return
         setOwned(new Set((r.owned || []).map(id => id.toLowerCase())))
+        setUnlocked(new Set((r.unlocked || []).map(id => id.toLowerCase())))
+        setPending(new Set((r.pending || []).map(id => id.toLowerCase())))
         if (r.liveError) setOwnershipWarning(`Ownership unavailable: ${r.liveError}. Showing the full catalog.`)
       })
       .catch(e => {
@@ -1495,9 +1499,9 @@ function GrantCosmeticForm({ busy, playerName, accountId, onGrant }: {
     const available = showOwned || !owned ? list : list.filter(e => !owned.has(e.template.toLowerCase()))
     return filterCosmeticsCatalog(available, filter)
   }, [catalog, filter, owned, showOwned])
-  const ownedCatalogCount = useMemo(
-    () => (catalog && owned ? catalog.filter(e => owned.has(e.template.toLowerCase())).length : 0),
-    [catalog, owned],
+  const unlockedCatalogCount = useMemo(
+    () => (catalog ? catalog.filter(e => unlocked.has(e.template.toLowerCase())).length : 0),
+    [catalog, unlocked],
   )
   const groups = useMemo(() => {
     const m = new Map<string, CosmeticEntry[]>()
@@ -1529,7 +1533,7 @@ function GrantCosmeticForm({ busy, playerName, accountId, onGrant }: {
             }} />
           Show already owned
         </span>
-        <span>{ownedCatalogCount} server-detected owned / {catalog.length - ownedCatalogCount} available</span>
+        <span>{unlockedCatalogCount} unlocked / {catalog.filter(e => pending.has(e.template.toLowerCase()) && !unlocked.has(e.template.toLowerCase())).length} held tokens</span>
       </label>
       <input type="text" value={filter} disabled={busy} placeholder="Contains search: name, id, or group…"
         onChange={e => setFilter(e.target.value)} className={selectCls} />
@@ -1537,7 +1541,7 @@ function GrantCosmeticForm({ busy, playerName, accountId, onGrant }: {
         <option value="">Select a cosmetic or building set… ({matches.length})</option>
         {groups.map(([g, items]) => (
           <optgroup key={g} label={`${g} (${items.length})`}>
-            {items.map(e => <option key={e.template} value={e.template}>{e.name}</option>)}
+            {items.map(e => <option key={e.template} value={e.template}>{e.name}{unlocked.has(e.template.toLowerCase()) ? ' — Unlocked' : pending.has(e.template.toLowerCase()) ? ' — Token held, unlock unconfirmed' : ''}</option>)}
           </optgroup>
         ))}
       </select>
@@ -1546,11 +1550,12 @@ function GrantCosmeticForm({ busy, playerName, accountId, onGrant }: {
         onClick={async () => {
           if (!chosen) return
           if (await onGrant(chosen.template, chosen.name)) {
-            setOwned(current => {
-              const next = new Set(current)
-              next.add(chosen.template.toLowerCase())
-              return next
-            })
+            try {
+              const ownership = await getPlayerOwnedCosmetics(accountId)
+              setOwned(new Set((ownership.owned || []).map(id => id.toLowerCase())))
+              setUnlocked(new Set((ownership.unlocked || []).map(id => id.toLowerCase())))
+              setPending(new Set((ownership.pending || []).map(id => id.toLowerCase())))
+            } catch { setOwnershipWarning('Request submitted; unlock status could not be refreshed. Check in-game before retrying.') }
             setSel('')
           }
         }}>
@@ -1570,6 +1575,9 @@ function GrantUnlockTokensForm({ busy, playerName, accountId, kind, playerOnline
 }) {
   const [catalog, setCatalog] = useState<CosmeticEntry[] | null>(null)
   const [owned, setOwned] = useState<Set<string> | null>(null)
+  const [unlocked, setUnlocked] = useState<Set<string>>(new Set())
+  const [pending, setPending] = useState<Set<string>>(new Set())
+  const [catalogFilter, setCatalogFilter] = useState('')
   const [err, setErr] = useState<string | null>(null)
   const [ownershipWarning, setOwnershipWarning] = useState('')
   const [activationQueued, setActivationQueued] = useState(false)
@@ -1586,6 +1594,8 @@ function GrantUnlockTokensForm({ busy, playerName, accountId, kind, playerOnline
         if (!alive) return
         setCatalog(entries)
         setOwned(new Set((ownership.owned || []).map(id => id.toLowerCase())))
+        setUnlocked(new Set((ownership.unlocked || []).map(id => id.toLowerCase())))
+        setPending(new Set((ownership.pending || []).map(id => id.toLowerCase())))
         if (ownership.liveError) setOwnershipWarning(`Ownership unavailable: ${ownership.liveError}. Ownership will be checked again before delivery.`)
       })
       .catch(e => {
@@ -1615,8 +1625,11 @@ function GrantUnlockTokensForm({ busy, playerName, accountId, kind, playerOnline
         const ownership = await getPlayerOwnedCosmetics(accountId)
         if (!alive) return
         const nextOwned = new Set((ownership.owned || []).map(id => id.toLowerCase()))
+        const nextUnlocked = new Set((ownership.unlocked || []).map(id => id.toLowerCase()))
         setOwned(nextOwned)
-        if (tokens.every(entry => nextOwned.has(entry.template.toLowerCase()))) {
+        setUnlocked(nextUnlocked)
+        setPending(new Set((ownership.pending || []).map(id => id.toLowerCase())))
+        if (tokens.every(entry => nextUnlocked.has(entry.template.toLowerCase()))) {
           setActivationQueued(false)
           setOwnershipWarning('')
           return
@@ -1655,15 +1668,26 @@ function GrantUnlockTokensForm({ busy, playerName, accountId, kind, playerOnline
           Delivers missing {label} tokens through the live game. Tokens use backpack slots; forced overflow drops excess tokens beside the player.
         </div>
         <span className="text-[11px] text-text-dim whitespace-nowrap">
-          {tokens.length - missingTokens.length}/{tokens.length} detected
+          {bulkUnlocks ? `${tokens.filter(e => unlocked.has(e.template.toLowerCase())).length}/${tokens.length} unlocked · ${tokens.filter(e => pending.has(e.template.toLowerCase()) && !unlocked.has(e.template.toLowerCase())).length} held tokens` : `${tokens.length - missingTokens.length}/${tokens.length} detected`}
         </span>
       </div>
       <div className="rounded-lg bg-warning/10 border border-warning/40 p-3 text-warning text-xs leading-relaxed">
-        Online required. Delivery starts immediately, then Dune activates each token in a cascade. Remain online until the notifications start and completely stop{bulkUnlocks ? '; larger batches can take several minutes' : ', usually about a minute'}. DST skips persisted unlocks and tokens still in the player's inventory. Forced overflow drops excess tokens beside the player; Funcom does not link those loot bags back to a player, so pick up any overflow tokens before running this action again.
+        Online required. Dune processes supported tokens after delivery{bulkUnlocks ? '; larger batches can take several minutes' : ', usually about a minute'}. DST skips persisted unlocks and tokens still in the player's inventory. Held tokens are not unlocked; some have no working research action. Forced overflow drops excess tokens beside the player; pick up any overflow before running this action again.
       </div>
-      {buildingSets && <div className="text-xs text-text-dim">Includes building sets, individual pieces and decor. Crafting stations and entries without an item form are excluded. Some sets may not unlock because of Funcom's game-side limitations. Delivery does not guarantee activation. Unlocks apply to this private server character, not account purchases.</div>}
+      {buildingSets && <div className="text-xs text-text-dim">Includes building sets, individual pieces and decor. Crafting stations, developer patents and entries without an item form are excluded. Some sets may not unlock because of Funcom's game-side limitations. Delivery does not guarantee activation or account entitlement.</div>}
       {skins && <div className="text-xs text-text-dim">Includes {kind === 'armor' ? 'armor, suits, masks and helmets' : 'weapon appearances'} from the skin catalog. Some skins may not unlock because of Funcom's game-side limitations. Delivery does not guarantee activation. Unlocks apply to this private server character, not account purchases.</div>}
       {ownershipWarning && <div className="text-xs text-warning">{ownershipWarning}</div>}
+      {bulkUnlocks && <details className="text-xs text-text-dim">
+        <summary className="cursor-pointer">Browse {label} and unlock status (includes already unlocked)</summary>
+        <input aria-label="Search unlock catalog" value={catalogFilter} onChange={e => setCatalogFilter(e.target.value)} placeholder="Search name or item ID" className="w-full my-2 px-3 py-2 rounded-lg bg-surface-2 border border-border" />
+        <div className="max-h-60 overflow-y-auto space-y-2">
+          {filterCosmeticsCatalog(catalog.filter(e => buildingSets ? e.group.startsWith('Building Sets - ') : e.group === (kind === 'armor' ? 'Armor & Suit Sets' : 'Weapon Skins')), catalogFilter).map(e => {
+            const id = e.template.toLowerCase()
+            const status = unlocked.has(id) ? 'Unlocked on character' : pending.has(id) ? 'Token held — unlock unconfirmed' : 'Unlock not detected'
+            return <div key={e.template} className="border-b border-border pb-2"><div>{e.name}</div><div>{status}{e.bulk_exclusion ? ` · ${e.bulk_exclusion}` : buildingSets && !e.bulk_building_set ? ' · Excluded from bulk delivery' : ''}</div></div>
+          })}
+        </div>
+      </details>}
       {!playerOnline && <div className="text-xs text-warning">Player must be online to receive {label} tokens.</div>}
       <button
         type="button"
@@ -1684,9 +1708,9 @@ function GrantUnlockTokensForm({ busy, playerName, accountId, kind, playerOnline
         {busy
           ? <><Icon name="Loader2" size={13} className="animate-spin" /> Delivering {label} tokens...</>
           : activationQueued
-            ? <><Icon name="Loader2" size={13} className="animate-spin" /> Activation cascade running — remain online</>
+            ? <><Icon name="Loader2" size={13} className="animate-spin" /> Checking unlocks — remain online</>
           : missingTokens.length === 0
-            ? <><Icon name="Check" size={13} /> All {label} detected</>
+            ? <><Icon name="Check" size={13} /> No new {label} tokens to request</>
             : <><Icon name={buildingSets ? "Blocks" : skins ? (kind === 'armor' ? "Shirt" : "Sword") : "Palette"} size={13} /> Deliver {missingTokens.length} missing {tokenLabel} tokens</>}
       </button>
     </div>
