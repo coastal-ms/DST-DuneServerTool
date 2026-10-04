@@ -9,6 +9,7 @@ vi.mock('../src/api/gameplay', async original => ({
   getCosmeticsCatalog: vi.fn(), getPlayerOwnedCosmetics: vi.fn(), grantBuildingSets: vi.fn(), grantHouseSwatches: vi.fn(), grantSkins: vi.fn(),
 }))
 const player: Player = { id: 42, account_id: 99, controller_id: 100, name: 'Own character', class: '', map: '', faction_id: 0, faction_name: '', online_status: 'Online' }
+const actionFlash = vi.fn()
 beforeEach(() => {
   vi.mocked(getCosmeticsCatalog).mockResolvedValue([
     { template: 'OwnedSet', name: 'Owned', group: 'Building Sets - Faction', bulk_building_set: true },
@@ -27,7 +28,7 @@ beforeEach(() => {
 })
 afterEach(() => { cleanup(); vi.useRealTimers(); vi.restoreAllMocks(); vi.clearAllMocks(); localStorage.clear() })
 async function open(status = 'Online', label = 'All Building Sets') {
-  render(<ManagePlayerSection player={{ ...player, online_status: status }} canWrite demo={false} refreshKey={0} flash={vi.fn()} onChanged={vi.fn()} />)
+  render(<ManagePlayerSection player={{ ...player, online_status: status }} canWrite demo={false} refreshKey={0} flash={actionFlash} onChanged={vi.fn()} />)
   fireEvent.click(screen.getByRole('button', { name: new RegExp(label) }))
   return screen.findByRole('button', { name: /Deliver 1 missing/ })
 }
@@ -40,7 +41,10 @@ describe('All Building Sets', () => {
     fireEvent.click(button)
     await waitFor(() => expect(grantBuildingSets).toHaveBeenCalledExactlyOnceWith(42, 99))
     expect(window.confirm).toHaveBeenCalledWith(expect.stringContaining('1 missing Building Set token'))
-    expect(await screen.findByRole('button', { name: /Checking unlocks/ })).toBeDisabled()
+    expect(await screen.findByRole('button', { name: /No new Building Sets tokens to request/ })).toBeDisabled()
+    expect(screen.getByRole('button', { name: 'Refresh unlock status' })).toBeEnabled()
+    expect(actionFlash).toHaveBeenCalledWith('Token batch sent.', 'info')
+    expect(screen.queryByRole('button', { name: /Checking unlocks|remain online/ })).not.toBeInTheDocument()
     expect(grantHouseSwatches).not.toHaveBeenCalled()
   })
   it.each(['Offline', 'LoggingOut', 'Unknown'])('blocks delivery when %s', async status => {
@@ -60,7 +64,7 @@ describe('All Building Sets', () => {
     vi.mocked(Date.now).mockReturnValue(120001)
     await act(async () => { await vi.advanceTimersByTimeAsync(2000) })
     expect(screen.getByText(/Some building sets remain unconfirmed/)).toBeInTheDocument()
-    expect(screen.queryByRole('button', { name: /Checking unlocks/ })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /Grant requests submitted/ })).not.toBeInTheDocument()
     expect(grantBuildingSets).toHaveBeenCalledTimes(1)
   })
   it('retains the existing House Swatch endpoint and catalog filter', async () => {
@@ -115,4 +119,33 @@ it('finds the unlocked Muad’Dib terrarium using plain apostrophe spelling', as
   fireEvent.change(search, { target: { value: "Muad'dib" } })
   expect(screen.getByText('Terrarium of Muad’dib')).toBeInTheDocument()
   expect(screen.getByText('Unlocked on character')).toBeInTheDocument()
+})
+
+it('shows held unusable tokens while excluding them from the request', async () => {
+  vi.mocked(getCosmeticsCatalog).mockResolvedValue([
+    { template: 'UsableSkin', name: 'Usable Skin', group: 'Armor & Suit Sets' },
+    { template: 'UnusableSkin', name: 'Unusable Skin', group: 'Armor & Suit Sets', bulk_exclusion: 'No working research action' },
+  ])
+  vi.mocked(getPlayerOwnedCosmetics).mockResolvedValue({ account_id: 99, owned: ['UnusableSkin'], unlocked: [], pending: ['UnusableSkin'], total: 1, source: 'live' })
+  const button = await open('Online', 'All Armor Skins')
+  expect(screen.getByText('0/1 unlocked · 1 held tokens')).toBeInTheDocument()
+  expect(screen.getByText(/No working research action/)).toBeInTheDocument()
+  fireEvent.click(button)
+  await waitFor(() => expect(grantSkins).toHaveBeenCalledExactlyOnceWith(42, 99, 'armor'))
+})
+
+it('stops verification and aborts a hung ownership request without granting again', async () => {
+  const button = await open()
+  vi.useFakeTimers()
+  await act(async () => { fireEvent.click(button) })
+  vi.mocked(getPlayerOwnedCosmetics).mockImplementation(() => new Promise(() => {}))
+  await act(async () => { await vi.advanceTimersByTimeAsync(500) })
+  const signal = vi.mocked(getPlayerOwnedCosmetics).mock.calls.at(-1)?.[1]
+  expect(signal?.aborted).toBe(false)
+  await act(async () => { await vi.advanceTimersByTimeAsync(9500) })
+  expect(signal?.aborted).toBe(true)
+  expect(screen.getByText(/Some unlocks remain unconfirmed/)).toBeInTheDocument()
+  expect(screen.queryByRole('button', { name: /Grant requests submitted/ })).not.toBeInTheDocument()
+  expect(screen.getByRole('button', { name: 'Refresh unlock status' })).toBeEnabled()
+  expect(grantBuildingSets).toHaveBeenCalledTimes(1)
 })

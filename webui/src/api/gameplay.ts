@@ -1593,8 +1593,8 @@ export interface OwnedCosmeticsResponse {
   liveError?: string
 }
 
-export function getPlayerOwnedCosmetics(accountId: number) {
-  return api<OwnedCosmeticsResponse>(`/api/gameplay/players/cosmetics-owned${qs({ account_id: accountId })}`)
+export function getPlayerOwnedCosmetics(accountId: number, signal?: AbortSignal) {
+  return api<OwnedCosmeticsResponse>(`/api/gameplay/players/cosmetics-owned${qs({ account_id: accountId })}`, { signal })
 }
 
 // ===========================================================================
