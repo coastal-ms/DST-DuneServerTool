@@ -17,6 +17,8 @@ here cover everything those tags shipped.
 
 ## [15.2.8] - 2026-10-05
 
+- Restrict individual cosmetic building grants and All Building Sets to reviewed cosmetic building pieces and decorations. Remove intel progression recipes, crafting stations, utilities and developer building patents from the cosmetic catalog.
+
 - Preserve game UDP forwarding after Start/Restart and Settings IP updates when Kubernetes reports the public-IP alias as InternalIP. Refresh the forwarding helper during manual and DDNS updates, derive the VM address from its local route, reject obsolete public/public caches, and retain working rules when address discovery fails.
 
 ## [15.2.7] - 2026-10-04
