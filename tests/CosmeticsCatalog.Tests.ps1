@@ -150,6 +150,10 @@ Describe 'Get-DuneCosmeticsCatalog includes the full building-set universe' -Tag
 
 
 Describe 'Bulk building set catalog' {
+    It 'keeps only developer storage as an individual storage exception' {
+        (Get-DuneCosmeticsCatalog).templates.template | Should -Contain 'Developer_Storage_Container_Patent'
+        (Get-DuneBuildingSetGrantCatalog).template | Should -Not -Contain 'Developer_Storage_Container_Patent'
+    }
     It 'never exposes progression utilities in either individual or bulk cosmetic grants' {
         $individual = (Get-DuneCosmeticsCatalog).templates.template
         $bulk = (Get-DuneBuildingSetGrantCatalog).template
