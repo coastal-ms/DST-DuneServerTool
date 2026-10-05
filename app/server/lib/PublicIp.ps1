@@ -290,6 +290,21 @@ function Invoke-DunePublicIpRemoteScript {
     return $clean
 }
 
+function Invoke-DunePublicIpWatchdogRefresh {
+    param([Parameter(Mandatory)][string]$Ip)
+    $installerPath = Join-Path $PSScriptRoot '..\..\resources\remote-scripts\dune-dnat-watch-install.sh'
+    if (-not (Test-Path -LiteralPath $installerPath -PathType Leaf)) {
+        throw 'Bundled forwarding helper is missing. Repair the DST installation before updating the IP.'
+    }
+    $installer = [IO.File]::ReadAllText($installerPath) -replace "`r", ''
+    $payload = "sudo -n sh -s <<'DST_DNAT_INSTALLER'`n" + $installer + "`nDST_DNAT_INSTALLER`n"
+    $raw = Invoke-DunePublicIpRemoteScript -Ip $Ip -Script $payload -TimeoutSec 45
+    if ($raw -notmatch '(?m)^DUNE_DNAT_WATCH_OK\s*$') {
+        throw 'Forwarding helper refresh did not verify healthy. The IP update was stopped before changing network settings.'
+    }
+    return $raw
+}
+
 function New-DunePublicIpStepResult {
     param([string]$Id, [string]$Label, [string]$Status, [string]$Detail = '', [string]$Raw = '')
     return @{ id=$Id; label=$Label; status=$Status; detail=$Detail; raw=$Raw }
@@ -785,6 +800,14 @@ function Invoke-DunePublicIpApply {
                 throw $reason
             }
             $steps[$steps.Count - 1] = New-DunePublicIpStepResult 'preflight' 'Preflight host and VM' 'done' "VM $($vm.ip) reachable."
+            & $pub
+
+            # Upgrade stale helpers before changing any IP surfaces. The worker
+            # follows subsequent ExternalIP changes and newly bound game ports.
+            $steps.Add((New-DunePublicIpStepResult 'forwarding' 'Prepare game connection forwarding' 'running' 'Refreshing game connection forwarding.')) | Out-Null
+            & $pub
+            $rawForwarding = Invoke-DunePublicIpWatchdogRefresh -Ip $vm.ip
+            $steps[$steps.Count - 1] = New-DunePublicIpStepResult 'forwarding' 'Prepare game connection forwarding' 'done' 'Game connection forwarding is ready for the IP update.' $rawForwarding
             & $pub
 
             $hostRouteEnabled = Get-DunePublicIpHostRouteEnabled

@@ -15,6 +15,10 @@ here cover everything those tags shipped.
 
 - Ignore the unfixed CVE-2026-93748 in Astro's transitive `http-cache-semantics` dependency during Trivy scans.
 
+## [15.2.8] - 2026-10-05
+
+- Preserve game UDP forwarding after Start/Restart and Settings IP updates when Kubernetes reports the public-IP alias as InternalIP. Refresh the forwarding helper during manual and DDNS updates, derive the VM address from its local route, reject obsolete public/public caches, and retain working rules when address discovery fails.
+
 ## [15.2.7] - 2026-10-04
 
 - Give unlock-status refresh immediate button feedback and an explicit completion, error or timeout result; check saved counts once without resending grants.
