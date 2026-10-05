@@ -302,6 +302,57 @@ Describe 'Mixed-bind game UDP bridge' {
         }
     }
 
+    It 'uses the routed source when Kubernetes InternalIP is the public alias (<RouteSource>)' -ForEach @(
+        @{ RouteSource = '192.168.1.20'; Expected = '203.0.113.10 192.168.1.20' }
+        @{ RouteSource = ''; Expected = 'PRESERVED' }
+        @{ RouteSource = '999.1.1.1'; Expected = 'PRESERVED' }
+        @{ RouteSource = '203.0.113.10'; Expected = 'PRESERVED' }
+    ) {
+        if (-not $script:posixShell) {
+            Set-ItResult -Skipped -Because 'A POSIX shell is not installed.'
+            return
+        }
+        $watchMatch = [regex]::Match($script:dnatWatchSource,
+            '(?ms)^if ! cat > "\$WATCH_STAGE" <<''WATCHEOF''\r?\n(.*?)\r?\nWATCHEOF$')
+        $watchMatch.Success | Should -BeTrue
+        # Execute the installed worker's functions without starting its daemon.
+        $definitions = ($watchMatch.Groups[1].Value -split '(?m)^case "\$\{1:-\}" in')[0]
+        $harness = $definitions + "`n" + @'
+kube() {
+    case "$*" in
+        *'get nodes'*) printf 'ExternalIP=203.0.113.10\nInternalIP=203.0.113.10\n' ;;
+        *'get endpoints'*) return 1 ;;
+        *) return 1 ;;
+    esac
+}
+ip() {
+    [ "$*" = '-4 route get 1.1.1.1' ] || exit 2
+    [ -n "$HARNESS_ROUTE_SOURCE" ] || return 1
+    printf '1.1.1.1 via 192.168.1.1 dev eth0 src %s uid 0\n' "$HARNESS_ROUTE_SOURCE"
+}
+worker_owned() { [ "$1" = test-owner ]; }
+write_cluster_state() { printf '%s %s\n' "$1" "$2"; written=1; }
+log() { :; }
+_last_cluster_problem=''
+_last_rabbit_problem=''
+written=0
+run_cluster_pass test-owner
+[ "$written" = 1 ] || echo PRESERVED
+'@
+        $tempScript = Join-Path ([System.IO.Path]::GetTempPath()) ("dst-dnat-route-{0}.sh" -f [guid]::NewGuid())
+        $priorSource = $env:HARNESS_ROUTE_SOURCE
+        try {
+            $env:HARNESS_ROUTE_SOURCE = $RouteSource
+            [System.IO.File]::WriteAllText($tempScript, $harness, [System.Text.UTF8Encoding]::new($false))
+            $actual = @(& $script:posixShell.FullName $tempScript)
+            $LASTEXITCODE | Should -Be 0
+            $actual | Should -Be @($Expected)
+        } finally {
+            $env:HARNESS_ROUTE_SOURCE = $priorSource
+            Remove-Item -LiteralPath $tempScript -Force -ErrorAction SilentlyContinue
+        }
+    }
+
     It 'classifies each active port independently from one listener snapshot' {
         if (-not $script:posixShell) {
             Set-ItResult -Skipped -Because 'A POSIX shell is not installed.'

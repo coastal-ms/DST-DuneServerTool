@@ -231,7 +231,12 @@ LISTENER_STALE_SEC=5
 
 ts() { date "+%Y-%m-%d %H:%M:%S"; }
 log() { echo "[$(ts)] $*" >> "$LOG" 2>/dev/null; }
-is_ipv4() { echo "$1" | grep -Eq '^([0-9]{1,3}\.){3}[0-9]{1,3}$'; }
+is_ipv4() {
+    printf '%s\n' "$1" | awk -F. '
+        NF != 4 {exit 1}
+        {for(i=1;i<=4;i++) if($i !~ /^[0-9]+$/ || length($i)>3 || $i+0>255) exit 1}
+    '
+}
 kube() { timeout 3 "$K3S" kubectl --request-timeout=2s "$@"; }
 file_age() {
     _age_file="$1"
@@ -443,8 +448,10 @@ run_cluster_pass() {
     _pass_token="$1"
     _addresses=$(kube get nodes -o jsonpath='{range .items[0].status.addresses[*]}{.type}={.address}{"\n"}{end}' 2>/dev/null)
     _worker_pub=$(printf '%s\n' "$_addresses" | awk -F= '$1=="ExternalIP"{print $2; exit}')
-    _worker_vm=$(printf '%s\n' "$_addresses" | awk -F= '$1=="InternalIP"{print $2; exit}')
-    if is_ipv4 "$_worker_pub" && is_ipv4 "$_worker_vm" && worker_owned "$_pass_token"; then
+    # K3s InternalIP can be the public eth0 alias. Router-forwarded game
+    # traffic arrives at the host's routed address, not that node alias.
+    _worker_vm=$(ip -4 route get 1.1.1.1 2>/dev/null | awk '{for(i=1;i<NF;i++) if($i=="src") {print $(i+1); exit}}')
+    if is_ipv4 "$_worker_pub" && is_ipv4 "$_worker_vm" && [ "$_worker_vm" != "$_worker_pub" ] && worker_owned "$_pass_token"; then
         if write_cluster_state "$_worker_pub" "$_worker_vm" "$_pass_token"; then
             _last_cluster_problem=""
         else
@@ -453,7 +460,7 @@ run_cluster_pass() {
             _last_cluster_problem="$_problem"
         fi
     else
-        _problem="node addresses unavailable/invalid; preserving cached addresses and rules"
+        _problem="public/routed VM addresses unavailable/invalid; preserving cached addresses and rules"
         if [ "$_problem" != "$_last_cluster_problem" ]; then log "$_problem"; fi
         _last_cluster_problem="$_problem"
     fi
