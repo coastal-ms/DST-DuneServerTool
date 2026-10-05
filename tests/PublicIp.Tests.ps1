@@ -40,6 +40,87 @@ Describe 'Public IP validation' {
     }
 }
 
+Describe 'Settings IP update forwarding preparation' {
+    It 'updates a changed IP through Settings with automatic forwarding refresh (<Mode>)' -ForEach @(
+        @{ Mode = 'manual' }
+        @{ Mode = 'ddns' }
+    ) {
+        function global:Get-DuneVmStatus { @{ exists=$true; running=$true; ip='192.168.1.20' } }
+        function global:Invoke-DuneSshHidden { @{ Exit=0; Stdout='DST_SSH_OK' } }
+        function global:Invoke-V6Ssh { '0|Healthy' }
+        Mock Read-DuneConfig { @{ SshKey = $PSCommandPath; LastAppliedPublicIp = '8.8.8.8' } }
+        Mock Test-Path { $true }
+        Mock Save-DunePublicIpApplyState {}
+        Mock Get-DunePublicIpHostRouteEnabled { $true }
+        Mock Invoke-DunePublicIpHostRoute { $script:applyOrder.Add('host-route') }
+        Mock Test-NetConnection { $true }
+        Mock Save-DuneConfig {}
+        $script:applyOrder = [Collections.Generic.List[string]]::new()
+        Mock Invoke-DunePublicIpRemoteScript {
+            param($Ip, $Script, $Arguments)
+            if ($Script -match 'DST_DNAT_INSTALLER') {
+                $script:applyOrder.Add('forwarding')
+                return 'DUNE_DNAT_WATCH_OK'
+            }
+            $Arguments[0] | Should -Be '8.8.4.4'
+            $Arguments[1] | Should -Be '192.168.1.20'
+            if ($Script -match 'NETWORK_DONE') {
+                $script:applyOrder.Add('network')
+                return 'NETWORK_DONE'
+            }
+            if ($Script -match 'BGIP_MUTATE_DONE') {
+                $script:applyOrder.Add('battlegroup')
+                return "BG_NS=funcom-test`nBG_NAME=test`nBGIP_MUTATE_DONE"
+            }
+            if ($Script -match 'BGIP_VERIFY_DONE') {
+                $script:applyOrder.Add('verify')
+                return "EXTERNALIP=8.8.4.4`nALIAS_OK=yes`nBG_PHASE=Healthy"
+            }
+            throw 'Unexpected remote apply operation'
+        }
+        $result = Invoke-DunePublicIpApply -PublicIp '8.8.4.4' -Mode $Mode -Hostname 'server.example.com'
+        $result.ok | Should -BeTrue -Because $result.error
+        @($script:applyOrder) | Should -Be @('forwarding','host-route','network','battlegroup','verify')
+        Should -Invoke Save-DuneConfig -Times 1 -ParameterFilter {
+            $Config.LastAppliedPublicIp -eq '8.8.4.4' -and $Config.PublicIpMode -eq $Mode
+        }
+    }
+
+    It 'refreshes the shipped installer with privilege and verified completion' {
+        Mock Invoke-DunePublicIpRemoteScript { 'DUNE_DNAT_WATCH_OK' }
+        Invoke-DunePublicIpWatchdogRefresh -Ip '192.168.1.20' | Should -Be 'DUNE_DNAT_WATCH_OK'
+        Should -Invoke Invoke-DunePublicIpRemoteScript -Times 1 -Exactly -ParameterFilter {
+            $Ip -eq '192.168.1.20' -and $TimeoutSec -eq 45 -and
+            $Script -match "sudo -n sh -s <<'DST_DNAT_INSTALLER'" -and
+            $Script -match 'ip -4 route get 1.1.1.1'
+        }
+    }
+
+    It 'rejects success-shaped output without the verified completion marker' {
+        Mock Invoke-DunePublicIpRemoteScript { 'service started' }
+        { Invoke-DunePublicIpWatchdogRefresh -Ip '192.168.1.20' } | Should -Throw '*did not verify healthy*'
+    }
+
+    It 'stops the Settings apply before IP mutations when forwarding refresh fails' {
+        function global:Get-DuneVmStatus { @{ exists=$true; running=$true; ip='192.168.1.20' } }
+        function global:Invoke-DuneSshHidden { @{ Exit=0; Stdout='DST_SSH_OK' } }
+        Mock Read-DuneConfig { @{ SshKey = $PSCommandPath; LastAppliedPublicIp = '' } }
+        Mock Test-Path { $true }
+        Mock Save-DunePublicIpApplyState {}
+        Mock Invoke-DunePublicIpWatchdogRefresh { throw 'forwarding refresh failed' }
+        Mock Invoke-DunePublicIpHostRoute {}
+        Mock Invoke-DunePublicIpRemoteScript {}
+        $result = Invoke-DunePublicIpApply -PublicIp '8.8.8.8'
+        $result.ok | Should -BeFalse
+        $result.error | Should -Be 'forwarding refresh failed'
+        ($result.steps | Select-Object -Last 1).id | Should -Be 'forwarding'
+        ($result.steps | Select-Object -Last 1).status | Should -Be 'failed'
+        Should -Invoke Invoke-DunePublicIpWatchdogRefresh -Times 1 -Exactly
+        Should -Invoke Invoke-DunePublicIpHostRoute -Times 0
+        Should -Invoke Invoke-DunePublicIpRemoteScript -Times 0
+    }
+}
+
 Describe 'DDNS hostname validation' {
     It 'normalizes a valid hostname' {
         $r = Test-DuneDdnsHostname -Hostname 'Your-Server.DDNS.net'
@@ -307,6 +388,7 @@ Describe 'Mixed-bind game UDP bridge' {
         @{ RouteSource = ''; Expected = 'PRESERVED' }
         @{ RouteSource = '999.1.1.1'; Expected = 'PRESERVED' }
         @{ RouteSource = '203.0.113.10'; Expected = 'PRESERVED' }
+        @{ RouteSource = '192.168.1.20'; NodePublic = '198.51.100.11'; Expected = '198.51.100.11 192.168.1.20' }
     ) {
         if (-not $script:posixShell) {
             Set-ItResult -Skipped -Because 'A POSIX shell is not installed.'
@@ -320,7 +402,7 @@ Describe 'Mixed-bind game UDP bridge' {
         $harness = $definitions + "`n" + @'
 kube() {
     case "$*" in
-        *'get nodes'*) printf 'ExternalIP=203.0.113.10\nInternalIP=203.0.113.10\n' ;;
+        *'get nodes'*) printf 'ExternalIP=%s\nInternalIP=%s\n' "${HARNESS_NODE_PUBLIC:-203.0.113.10}" "${HARNESS_NODE_PUBLIC:-203.0.113.10}" ;;
         *'get endpoints'*) return 1 ;;
         *) return 1 ;;
     esac
@@ -341,14 +423,17 @@ run_cluster_pass test-owner
 '@
         $tempScript = Join-Path ([System.IO.Path]::GetTempPath()) ("dst-dnat-route-{0}.sh" -f [guid]::NewGuid())
         $priorSource = $env:HARNESS_ROUTE_SOURCE
+        $priorPublic = $env:HARNESS_NODE_PUBLIC
         try {
             $env:HARNESS_ROUTE_SOURCE = $RouteSource
+            $env:HARNESS_NODE_PUBLIC = $NodePublic
             [System.IO.File]::WriteAllText($tempScript, $harness, [System.Text.UTF8Encoding]::new($false))
             $actual = @(& $script:posixShell.FullName $tempScript)
             $LASTEXITCODE | Should -Be 0
             $actual | Should -Be @($Expected)
         } finally {
             $env:HARNESS_ROUTE_SOURCE = $priorSource
+            $env:HARNESS_NODE_PUBLIC = $priorPublic
             Remove-Item -LiteralPath $tempScript -Force -ErrorAction SilentlyContinue
         }
     }
