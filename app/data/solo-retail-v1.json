@@ -23,11 +23,11 @@
     "max_level": 100,
     "max_xp": 44182,
     "tracks": {
-      "Combat": 0,
+      "Combat": 4,
       "Crafting": 1,
-      "Exploration": 2,
-      "Gathering": 3,
-      "Sabotage": 4
+      "Exploration": 3,
+      "Gathering": 2,
+      "Sabotage": 5
     }
   },
   "find_the_fremen": {
