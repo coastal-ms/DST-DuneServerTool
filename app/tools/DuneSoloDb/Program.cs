@@ -2408,6 +2408,8 @@ internal static partial class Program
                         .SequenceEqual(afterTrack.Specializations.Where(t => t.TrackType != expected.Id)))
                     throw new InvalidOperationException($"Retail {expected.Name} targeted the wrong track.");
             }
+            // Reproduce the reported saved level before exercising the reset.
+            SetSpecialization(target, Path.Combine(root, "safety", "before-sabotage-77.db"), adapterPath, "Sabotage", 77);
             var beforeSabotage = InspectPath(target).Progression;
             SetSpecialization(target, Path.Combine(root, "safety", "before-sabotage-reset.db"), adapterPath, "Sabotage", 0);
             var afterSabotage = InspectPath(target).Progression;
@@ -2588,6 +2590,8 @@ internal static partial class Program
                     "offline-water-container-fills-with-safety-backups",
                     "offline-specialization-max-with-rewards",
                     "offline-specialization-lowering-preserves-rewards-and-backup",
+                    "retail-all-five-track-targets-preserve-other-tracks",
+                    "retail-sabotage-77-reset-preserves-rewards-and-journeys",
                     "invalid-specialization-edit-leaves-save-unchanged",
                     "read-only-solo-diagnostics-excludes-identities-and-paths",
                     "offline-track-reward-reset-preserves-levels-other-tracks-and-journeys",
