@@ -183,18 +183,42 @@ function Get-DuneCosmeticCanonicalKey {
     return (@($normalized | Sort-Object) -join '|')
 }
 
+function Get-DuneCosmeticSlot {
+    param([string]$Value)
+    if ($Value -match '_(Top|Torso|Bottom|Boots|Footwear|Gloves|Helmet|Head)(?:_MeshVariant)?$') {
+        switch ($Matches[1].ToLowerInvariant()) {
+            'torso' { return 'top' }; 'footwear' { return 'boots' }; 'head' { return 'helmet' }
+            default { return $Matches[1].ToLowerInvariant() }
+        }
+    }
+    return ''
+}
+
 function Add-DuneCosmeticCatalogOwnership {
     param(
         [Parameter(Mandatory)]$Owned,
-        [Parameter(Mandatory)][string[]]$CustomizationIds
+        [Parameter(Mandatory)][AllowEmptyCollection()][string[]]$CustomizationIds
     )
     if (-not (Get-Command Get-DuneCosmeticsCatalog -ErrorAction SilentlyContinue)) { return }
     $catalog = Get-DuneCosmeticsCatalog
+    $aliases = (Get-DuneCosmeticGrantMetadata).customization_aliases
+    $persisted = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::OrdinalIgnoreCase)
+    foreach ($id in $CustomizationIds) { [void]$persisted.Add($id) }
+    foreach ($property in $aliases.PSObject.Properties) {
+        $required = @($property.Value)
+        if ($required.Count -gt 0 -and @($required | Where-Object { -not $persisted.Contains([string]$_) }).Count -eq 0) {
+            [void]$Owned.Add([string]$property.Name)
+        }
+    }
     $byKey = @{}
     foreach ($entry in @($catalog.templates)) {
+        # Explicit set aliases require every slot, never just one matching slot.
+        if ($aliases.PSObject.Properties.Name -contains [string]$entry.template) { continue }
         foreach ($source in @([string]$entry.template, [string]$entry.name)) {
             $key = Get-DuneCosmeticCanonicalKey -Value $source
             if (-not $key) { continue }
+            $slot = Get-DuneCosmeticSlot -Value ([string]$entry.template)
+            if ($slot) { $key += "|slot:$slot" }
             if (-not $byKey.ContainsKey($key)) {
                 $byKey[$key] = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::OrdinalIgnoreCase)
             }
@@ -203,8 +227,14 @@ function Add-DuneCosmeticCatalogOwnership {
     }
     foreach ($id in $CustomizationIds) {
         $key = Get-DuneCosmeticCanonicalKey -Value $id
-        if (-not $key -or -not $byKey.ContainsKey($key)) { continue }
-        foreach ($template in $byKey[$key]) { [void]$Owned.Add([string]$template) }
+        if (-not $key) { continue }
+        $keys = @($key)
+        $slot = Get-DuneCosmeticSlot -Value $id
+        if ($slot) { $keys += "${key}|slot:$slot" }
+        foreach ($candidate in $keys) {
+            if (-not $byKey.ContainsKey($candidate)) { continue }
+            foreach ($template in $byKey[$candidate]) { [void]$Owned.Add([string]$template) }
+        }
     }
 }
 
@@ -243,17 +273,20 @@ LIMIT 1;
     if (-not $r.ok) { return @{ ok = $false; error = "read cosmetic ownership: $($r.error)" } }
     $maps = ConvertTo-DuneRowMaps -Result $r
     if ($maps.Count -eq 0) {
-        return @{ ok = $true; account_id = $AccountId; owned = @(); total = 0 }
+        return @{ ok = $true; account_id = $AccountId; owned = @(); unlocked = @(); pending = @(); total = 0 }
     }
 
     $owned = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::OrdinalIgnoreCase)
     $customizationIds = [System.Collections.Generic.List[string]]::new()
+    $unlocked = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::OrdinalIgnoreCase)
+    $pending = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::OrdinalIgnoreCase)
     foreach ($column in @('customizations', 'building_sets', 'buildable_pieces', 'pending_items')) {
         try {
             $values = @(([string]$maps[0][$column] | ConvertFrom-Json) | ForEach-Object { [string]$_ })
             foreach ($id in $values) {
                 if ([string]::IsNullOrWhiteSpace($id)) { continue }
                 [void]$owned.Add($id)
+                if ($column -eq 'pending_items') { [void]$pending.Add($id) } else { [void]$unlocked.Add($id) }
                 if ($column -eq 'customizations') {
                     $customizationIds.Add($id)
                 }
@@ -261,6 +294,7 @@ LIMIT 1;
                 # catalog exposes its consumable Patent item form.
                 if ($column -in @('building_sets', 'buildable_pieces') -and $id -notmatch '_Patent$') {
                     [void]$owned.Add("${id}_Patent")
+                    [void]$unlocked.Add("${id}_Patent")
                 }
             }
         } catch {
@@ -268,8 +302,9 @@ LIMIT 1;
         }
     }
     Add-DuneCosmeticCatalogOwnership -Owned $owned -CustomizationIds $customizationIds.ToArray()
+    Add-DuneCosmeticCatalogOwnership -Owned $unlocked -CustomizationIds $customizationIds.ToArray()
     $list = @($owned | Sort-Object)
-    return @{ ok = $true; account_id = $AccountId; owned = $list; total = $list.Count }
+    return @{ ok = $true; account_id = $AccountId; owned = $list; total = $list.Count; unlocked = @($unlocked | Sort-Object); pending = @($pending | Sort-Object) }
 }
 
 # NPE (tutorial) completion nodes — the full DA_MQ_ANewBeginning* +

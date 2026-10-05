@@ -57,7 +57,7 @@ import { usePortalAccess } from '../../../auth/portalAccess'
 const PLAYER_HIDDEN_ACTIONS = new Set(['spawn-vehicle', 'funcom-spawn-vehicle', 'refuel-vehicle',
   'teleport', 'whisper', 'cheat-script', 'dev-scripts', 'fresh-start'])
 
-type Flash = (msg: string, kind?: 'ok' | 'err') => void
+type Flash = (msg: string, kind?: 'ok' | 'err' | 'info') => void
 
 interface SectionProps {
   player: Player
@@ -648,7 +648,7 @@ interface ActionDef {
   offlineOnly?: boolean   // requires player to be offline (DB write the game caches in memory)
   experimental?: boolean  // unverified — may not take effect in-game; shown with an EXPERIMENTAL badge
   fields?: ActionField[]
-  custom?: 'give-item' | 'grant-reward' | 'whisper' | 'spawn-vehicle' | 'funcom-spawn-vehicle' | 'quick-presets' | 'vehicle-kit' | 'give-package' | 'cheat-scripts' | 'dev-scripts' | 'unlock-trainers' | 'unlock-mainquest' | 'complete-contract' | 'progression-unlock' | 'refuel-vehicle' | 'starter-class' | 'teleport-player' | 'teleport-location' | 'set-respawn' | 'reset-faction' | 'grant-cosmetic' | 'grant-house-swatches' | 'grant-buildable-swatches' | 'grant-building-sets' | 'grant-armor-skins' | 'grant-weapon-skins' | 'fresh-start'
+  custom?: 'give-item' | 'grant-reward' | 'whisper' | 'spawn-vehicle' | 'funcom-spawn-vehicle' | 'quick-presets' | 'vehicle-kit' | 'give-package' | 'cheat-scripts' | 'dev-scripts' | 'unlock-trainers' | 'unlock-mainquest' | 'complete-contract' | 'progression-unlock' | 'refuel-vehicle' | 'starter-class' | 'teleport-player' | 'teleport-location' | 'set-respawn' | 'reset-faction' | 'grant-cosmetic' | 'grant-house-swatches' | 'grant-buildable-swatches' | 'grant-building-sets' | 'grant-armor-skins' | 'grant-weapon-skins' | 'grant-vehicle-skins' | 'grant-all-dyes' | 'fresh-start'
   balance?: 'solari' | 'scrip' | 'intel'  // show the player's current balance read-only above the form
   confirm?: (p: Player) => string  // confirm message; if returns '' no prompt
   doubleConfirm?: boolean // also requires a typed "i acknowledge" prompt inside run()
@@ -770,6 +770,10 @@ const ACTIONS: ActionDef[] = [
     rowNote: 'Delivers missing armor and suit skin tokens. Online required; existing unlocks are preserved.', run: () => Promise.resolve({ message: '' }) },
   { id: 'grant-weapon-skins', group: 'Items', label: 'All Weapon Skins', icon: 'Sword', custom: 'grant-weapon-skins', liveOnly: true,
     rowNote: 'Delivers missing weapon skin tokens. Online required; existing unlocks are preserved.', run: () => Promise.resolve({ message: '' }) },
+  { id: 'grant-vehicle-skins', group: 'Items', label: 'All Vehicle Skins', icon: 'Truck', custom: 'grant-vehicle-skins', liveOnly: true,
+    rowNote: 'Request missing vehicle appearances. Saved unlocks and held tokens are skipped.', run: () => Promise.resolve({ message: '' }) },
+  { id: 'grant-all-dyes', group: 'Items', label: 'All Dyes', icon: 'Palette', custom: 'grant-all-dyes', liveOnly: true,
+    rowNote: 'Request every missing dye token, including dyes outside the House Swatches subset.', run: () => Promise.resolve({ message: '' }) },
   { id: 'grant-house-swatches', group: 'Items', label: 'All House Swatches', icon: 'Palette', custom: 'grant-house-swatches', liveOnly: true,
     rowNote: 'Online required. Delivery starts immediately; remain online until the activation cascade starts and completely stops (about a minute).',
     run: () => Promise.resolve({ message: '' }) },
@@ -933,7 +937,8 @@ export function ActionsSection({ player, canWrite, demo, flash, onChanged, onFlu
     setBusy(true)
     try {
       const r = await exec()
-      flash(r.message || `${def.label} done.`, 'ok')
+      const requestOnly = ['grant-cosmetic', 'grant-house-swatches', 'grant-buildable-swatches', 'grant-building-sets', 'grant-armor-skins', 'grant-weapon-skins', 'grant-vehicle-skins', 'grant-all-dyes'].includes(def.custom || '')
+      flash(r.message || (requestOnly ? `${def.label} request submitted.` : `${def.label} done.`), requestOnly ? 'info' : 'ok')
       // Mark a deferred refresh; custom forms decide whether successful input resets.
       onChanged()
       return true
@@ -1207,17 +1212,17 @@ function ActionRow({ def, player, busy, stats, open, danger, onToggle, runAction
                 })
                 return succeeded
               }} />
-          ) : def.custom === 'grant-house-swatches' || def.custom === 'grant-buildable-swatches' || def.custom === 'grant-building-sets' || def.custom === 'grant-armor-skins' || def.custom === 'grant-weapon-skins' ? (
+          ) : def.custom === 'grant-house-swatches' || def.custom === 'grant-buildable-swatches' || def.custom === 'grant-building-sets' || def.custom === 'grant-armor-skins' || def.custom === 'grant-weapon-skins' || def.custom === 'grant-vehicle-skins' || def.custom === 'grant-all-dyes' ? (
             <GrantUnlockTokensForm busy={busy} playerName={player.name} accountId={player.account_id}
-              kind={def.custom === 'grant-armor-skins' ? 'armor' : def.custom === 'grant-weapon-skins' ? 'weapon' : def.custom === 'grant-building-sets' ? 'building-sets' : def.custom === 'grant-buildable-swatches' ? 'placeables' : 'all'}
+              kind={def.custom === 'grant-all-dyes' ? 'dyes' : def.custom === 'grant-vehicle-skins' ? 'vehicle' : def.custom === 'grant-armor-skins' ? 'armor' : def.custom === 'grant-weapon-skins' ? 'weapon' : def.custom === 'grant-building-sets' ? 'building-sets' : def.custom === 'grant-buildable-swatches' ? 'placeables' : 'all'}
               playerOnline={(player.online_status || '').toLowerCase() === 'online'}
               onGrant={async () => {
                 let succeeded = false
                 await runAction(def, async () => {
                   const r = def.custom === 'grant-building-sets'
                     ? await grantBuildingSets(player.id, player.account_id)
-                    : def.custom === 'grant-armor-skins' || def.custom === 'grant-weapon-skins'
-                      ? await grantSkins(player.id, player.account_id, def.custom === 'grant-armor-skins' ? 'armor' : 'weapon')
+                    : def.custom === 'grant-armor-skins' || def.custom === 'grant-weapon-skins' || def.custom === 'grant-vehicle-skins' || def.custom === 'grant-all-dyes'
+                      ? await grantSkins(player.id, player.account_id, def.custom === 'grant-all-dyes' ? 'dyes' : def.custom === 'grant-vehicle-skins' ? 'vehicle' : def.custom === 'grant-armor-skins' ? 'armor' : 'weapon')
                     : await grantHouseSwatches(player.id, player.account_id, def.custom === 'grant-buildable-swatches' ? 'placeables' : 'all')
                   succeeded = true
                   return { message: r.message || `Unlock token delivery submitted for ${player.name}.` }
@@ -1464,7 +1469,10 @@ function GrantCosmeticForm({ busy, playerName, accountId, onGrant }: {
   const [filter, setFilter] = useState('')
   const [sel, setSel] = useState('')
   const [owned, setOwned] = useState<Set<string> | null>(null)
+  const [unlocked, setUnlocked] = useState<Set<string>>(new Set())
+  const [pending, setPending] = useState<Set<string>>(new Set())
   const [showOwned, setShowOwned] = useState(false)
+  const [showExcluded, setShowExcluded] = useState(false)
   const [ownershipWarning, setOwnershipWarning] = useState('')
   useEffect(() => {
     let alive = true
@@ -1481,6 +1489,8 @@ function GrantCosmeticForm({ busy, playerName, accountId, onGrant }: {
       .then(r => {
         if (!alive) return
         setOwned(new Set((r.owned || []).map(id => id.toLowerCase())))
+        setUnlocked(new Set((r.unlocked || []).map(id => id.toLowerCase())))
+        setPending(new Set((r.pending || []).map(id => id.toLowerCase())))
         if (r.liveError) setOwnershipWarning(`Ownership unavailable: ${r.liveError}. Showing the full catalog.`)
       })
       .catch(e => {
@@ -1492,12 +1502,13 @@ function GrantCosmeticForm({ busy, playerName, accountId, onGrant }: {
   }, [accountId])
   const matches = useMemo(() => {
     const list = catalog || []
-    const available = showOwned || !owned ? list : list.filter(e => !owned.has(e.template.toLowerCase()))
+    const eligible = showExcluded ? list : list.filter(e => !e.bulk_exclusion)
+    const available = showOwned || !owned ? eligible : eligible.filter(e => !owned.has(e.template.toLowerCase()))
     return filterCosmeticsCatalog(available, filter)
-  }, [catalog, filter, owned, showOwned])
-  const ownedCatalogCount = useMemo(
-    () => (catalog && owned ? catalog.filter(e => owned.has(e.template.toLowerCase())).length : 0),
-    [catalog, owned],
+  }, [catalog, filter, owned, showOwned, showExcluded])
+  const unlockedCatalogCount = useMemo(
+    () => (catalog ? catalog.filter(e => unlocked.has(e.template.toLowerCase())).length : 0),
+    [catalog, unlocked],
   )
   const groups = useMemo(() => {
     const m = new Map<string, CosmeticEntry[]>()
@@ -1529,28 +1540,32 @@ function GrantCosmeticForm({ busy, playerName, accountId, onGrant }: {
             }} />
           Show already owned
         </span>
-        <span>{ownedCatalogCount} server-detected owned / {catalog.length - ownedCatalogCount} available</span>
+        <span>{unlockedCatalogCount} unlocked / {catalog.filter(e => pending.has(e.template.toLowerCase()) && !unlocked.has(e.template.toLowerCase())).length} held tokens</span>
       </label>
+      <p className="text-xs text-text-dim">This picker includes all customization categories, crafting stations and utilities. Its remaining count is not a count of failed bulk grants.</p>
+      <label className="flex items-center gap-2 text-xs text-text-dim"><input type="checkbox" checked={showExcluded} onChange={e => { setShowExcluded(e.target.checked); setSel('') }} />Show tokens excluded from bulk grants</label>
       <input type="text" value={filter} disabled={busy} placeholder="Contains search: name, id, or group…"
         onChange={e => setFilter(e.target.value)} className={selectCls} />
       <select value={sel} disabled={busy} className={selectCls} onChange={e => setSel(e.target.value)} size={1}>
         <option value="">Select a cosmetic or building set… ({matches.length})</option>
         {groups.map(([g, items]) => (
           <optgroup key={g} label={`${g} (${items.length})`}>
-            {items.map(e => <option key={e.template} value={e.template}>{e.name}</option>)}
+            {items.map(e => <option key={e.template} value={e.template}>{e.name}{e.bulk_exclusion ? ' — Excluded from bulk' : unlocked.has(e.template.toLowerCase()) ? ' — Unlocked' : pending.has(e.template.toLowerCase()) ? ' — Token held, unlock unconfirmed' : ''}</option>)}
           </optgroup>
         ))}
       </select>
       {chosen && <p className="text-[11px] font-mono text-text-dim truncate">{chosen.template}</p>}
+      {chosen?.bulk_exclusion && <p className="text-xs text-warning">{chosen.bulk_exclusion}</p>}
       <button className="btn-primary w-full" disabled={busy || !sel}
         onClick={async () => {
           if (!chosen) return
           if (await onGrant(chosen.template, chosen.name)) {
-            setOwned(current => {
-              const next = new Set(current)
-              next.add(chosen.template.toLowerCase())
-              return next
-            })
+            try {
+              const ownership = await getPlayerOwnedCosmetics(accountId)
+              setOwned(new Set((ownership.owned || []).map(id => id.toLowerCase())))
+              setUnlocked(new Set((ownership.unlocked || []).map(id => id.toLowerCase())))
+              setPending(new Set((ownership.pending || []).map(id => id.toLowerCase())))
+            } catch { setOwnershipWarning('Request submitted; unlock status could not be refreshed. Check in-game before retrying.') }
             setSel('')
           }
         }}>
@@ -1564,20 +1579,28 @@ function GrantUnlockTokensForm({ busy, playerName, accountId, kind, playerOnline
   busy: boolean
   playerName: string
   accountId: number
-  kind: HouseSwatchKind | 'building-sets' | 'armor' | 'weapon'
+  kind: HouseSwatchKind | 'building-sets' | 'armor' | 'weapon' | 'vehicle' | 'dyes'
   playerOnline: boolean
   onGrant: () => Promise<boolean>
 }) {
   const [catalog, setCatalog] = useState<CosmeticEntry[] | null>(null)
   const [owned, setOwned] = useState<Set<string> | null>(null)
+  const [unlocked, setUnlocked] = useState<Set<string>>(new Set())
+  const [pending, setPending] = useState<Set<string>>(new Set())
+  const [catalogFilter, setCatalogFilter] = useState('')
   const [err, setErr] = useState<string | null>(null)
   const [ownershipWarning, setOwnershipWarning] = useState('')
   const [activationQueued, setActivationQueued] = useState(false)
+  const [manualRefreshing, setManualRefreshing] = useState(false)
+  const [refreshRequest, setRefreshRequest] = useState(0)
+  const [refreshFeedback, setRefreshFeedback] = useState<{ error: boolean; message: string } | null>(null)
+  const [requestSubmitted, setRequestSubmitted] = useState(false)
+  const [submittedTokens, setSubmittedTokens] = useState<Set<string>>(new Set())
   const buildingSets = kind === 'building-sets'
-  const skins = kind === 'armor' || kind === 'weapon'
+  const skins = kind === 'armor' || kind === 'weapon' || kind === 'vehicle' || kind === 'dyes'
   const bulkUnlocks = buildingSets || skins
-  const label = skins ? (kind === 'armor' ? 'Armor Skins' : 'Weapon Skins') : buildingSets ? 'Building Sets' : kind === 'placeables' ? 'Buildable House Swatches' : 'House Swatches'
-  const tokenLabel = skins ? (kind === 'armor' ? 'Armor Skin' : 'Weapon Skin') : buildingSets ? 'Building Set' : kind === 'placeables' ? 'Buildable House Swatch' : 'House Swatch'
+  const label = skins ? (kind === 'armor' ? 'Armor Skins' : kind === 'vehicle' ? 'Vehicle Skins' : kind === 'dyes' ? 'Dyes' : 'Weapon Skins') : buildingSets ? 'Building Sets' : kind === 'placeables' ? 'Buildable House Swatches' : 'House Swatches'
+  const tokenLabel = skins ? (kind === 'armor' ? 'Armor Skin' : kind === 'vehicle' ? 'Vehicle Skin' : kind === 'dyes' ? 'Dye' : 'Weapon Skin') : buildingSets ? 'Building Set' : kind === 'placeables' ? 'Buildable House Swatch' : 'House Swatch'
 
   useEffect(() => {
     let alive = true
@@ -1586,6 +1609,8 @@ function GrantUnlockTokensForm({ busy, playerName, accountId, kind, playerOnline
         if (!alive) return
         setCatalog(entries)
         setOwned(new Set((ownership.owned || []).map(id => id.toLowerCase())))
+        setUnlocked(new Set((ownership.unlocked || []).map(id => id.toLowerCase())))
+        setPending(new Set((ownership.pending || []).map(id => id.toLowerCase())))
         if (ownership.liveError) setOwnershipWarning(`Ownership unavailable: ${ownership.liveError}. Ownership will be checked again before delivery.`)
       })
       .catch(e => {
@@ -1597,26 +1622,58 @@ function GrantUnlockTokensForm({ busy, playerName, accountId, kind, playerOnline
 
   const tokens = useMemo(() => kind === 'building-sets'
     ? getBuildingSetCosmetics(catalog || [])
-    : kind === 'armor' || kind === 'weapon' ? getSkinCosmetics(catalog || [], kind)
+    : kind === 'armor' || kind === 'weapon' || kind === 'vehicle' || kind === 'dyes' ? getSkinCosmetics(catalog || [], kind)
     : getHouseSwatchCosmetics(catalog || [], kind), [catalog, kind])
   const missingTokens = useMemo(
-    () => tokens.filter(entry => !owned?.has(entry.template.toLowerCase())),
-    [tokens, owned],
+    () => tokens.filter(entry => !owned?.has(entry.template.toLowerCase()) && !submittedTokens.has(entry.template.toLowerCase())),
+    [tokens, owned, submittedTokens],
   )
+  const browseEntries = useMemo(() => (catalog || []).filter(e => buildingSets
+    ? e.group.startsWith('Building Sets - ')
+    : skins ? e.group === (kind === 'armor' ? 'Armor & Suit Sets' : kind === 'vehicle' ? 'Vehicle Skins' : kind === 'dyes' ? 'Swatches (Dyes)' : 'Weapon Skins') : false), [catalog, buildingSets, skins, kind])
 
   useEffect(() => {
-    if (!activationQueued || tokens.length === 0) return
+    if ((!activationQueued && !manualRefreshing) || tokens.length === 0) return
 
+    const manual = manualRefreshing
     let alive = true
-    const deadline = Date.now() + 120000
+    const timeoutMs = manual ? 5000 : 10000
+    const deadline = Date.now() + timeoutMs
+    const controller = new AbortController()
     let timer: ReturnType<typeof setTimeout> | undefined
+    const deadlineTimer = setTimeout(() => {
+      alive = false
+      controller.abort()
+      if (timer) clearTimeout(timer)
+      setActivationQueued(false)
+      if (manual) {
+        setManualRefreshing(false)
+        setRefreshFeedback({ error: true, message: 'Status refresh timed out. Counts were not updated. Try again.' })
+      } else {
+        setOwnershipWarning('Some unlocks remain unconfirmed. Use Refresh unlock status after the game processes the tokens; check held tokens and overflow before granting again.')
+      }
+    }, timeoutMs)
     const refreshOwnership = async () => {
       try {
-        const ownership = await getPlayerOwnedCosmetics(accountId)
+        const ownership = await getPlayerOwnedCosmetics(accountId, controller.signal)
         if (!alive) return
+        if (ownership.liveError) throw new Error(ownership.liveError)
         const nextOwned = new Set((ownership.owned || []).map(id => id.toLowerCase()))
+        const nextUnlocked = new Set((ownership.unlocked || []).map(id => id.toLowerCase()))
         setOwned(nextOwned)
-        if (tokens.every(entry => nextOwned.has(entry.template.toLowerCase()))) {
+        setUnlocked(nextUnlocked)
+        const nextPending = new Set((ownership.pending || []).map(id => id.toLowerCase()))
+        setPending(nextPending)
+        if (manual) {
+          clearTimeout(deadlineTimer)
+          const unlockedCount = tokens.filter(entry => nextUnlocked.has(entry.template.toLowerCase())).length
+          const heldCount = (bulkUnlocks ? browseEntries : tokens).filter(entry => nextPending.has(entry.template.toLowerCase()) && !nextUnlocked.has(entry.template.toLowerCase())).length
+          setOwnershipWarning('')
+          setManualRefreshing(false)
+          setRefreshFeedback({ error: false, message: `Status refreshed: ${unlockedCount}/${tokens.length} unlocked · ${heldCount} held tokens.` })
+          return
+        }
+        if (tokens.every(entry => nextUnlocked.has(entry.template.toLowerCase()))) {
           setActivationQueued(false)
           setOwnershipWarning('')
           return
@@ -1629,6 +1686,12 @@ function GrantUnlockTokensForm({ busy, playerName, accountId, kind, playerOnline
         timer = setTimeout(() => void refreshOwnership(), 2000)
       } catch (e) {
         if (!alive) return
+        if (manual) {
+          clearTimeout(deadlineTimer)
+          setManualRefreshing(false)
+          setRefreshFeedback({ error: true, message: `Status refresh failed. Counts were not updated: ${e instanceof Error ? e.message : String(e)}` })
+          return
+        }
         setOwnershipWarning(`Could not refresh activation progress: ${e instanceof Error ? e.message : String(e)}`)
         if (bulkUnlocks && Date.now() >= deadline) {
           setActivationQueued(false)
@@ -1638,12 +1701,15 @@ function GrantUnlockTokensForm({ busy, playerName, accountId, kind, playerOnline
       }
     }
 
-    timer = setTimeout(() => void refreshOwnership(), 2000)
+    if (manual) void refreshOwnership()
+    else timer = setTimeout(() => void refreshOwnership(), 500)
     return () => {
       alive = false
+      controller.abort()
       if (timer) clearTimeout(timer)
+      clearTimeout(deadlineTimer)
     }
-  }, [accountId, activationQueued, tokens, buildingSets, bulkUnlocks])
+  }, [accountId, activationQueued, manualRefreshing, tokens, buildingSets, bulkUnlocks, refreshRequest, browseEntries])
 
   if (err) return <ErrorBox msg={err} />
   if (!catalog || !owned) return <div className="text-sm text-text-dim flex items-center gap-2"><Icon name="Loader2" size={13} className="animate-spin" /> Loading {label} and player ownership...</div>
@@ -1655,20 +1721,32 @@ function GrantUnlockTokensForm({ busy, playerName, accountId, kind, playerOnline
           Delivers missing {label} tokens through the live game. Tokens use backpack slots; forced overflow drops excess tokens beside the player.
         </div>
         <span className="text-[11px] text-text-dim whitespace-nowrap">
-          {tokens.length - missingTokens.length}/{tokens.length} detected
+          {bulkUnlocks ? `${tokens.filter(e => unlocked.has(e.template.toLowerCase())).length}/${tokens.length} unlocked · ${browseEntries.filter(e => pending.has(e.template.toLowerCase()) && !unlocked.has(e.template.toLowerCase())).length} held tokens` : `${tokens.length - missingTokens.length}/${tokens.length} detected`}
         </span>
       </div>
       <div className="rounded-lg bg-warning/10 border border-warning/40 p-3 text-warning text-xs leading-relaxed">
-        Online required. Delivery starts immediately, then Dune activates each token in a cascade. Remain online until the notifications start and completely stop{bulkUnlocks ? '; larger batches can take several minutes' : ', usually about a minute'}. DST skips persisted unlocks and tokens still in the player's inventory. Forced overflow drops excess tokens beside the player; Funcom does not link those loot bags back to a player, so pick up any overflow tokens before running this action again.
+        Online required. Dune processes supported tokens after delivery{bulkUnlocks ? '; larger batches can take several minutes' : ', usually about a minute'}. DST skips persisted unlocks and tokens still in the player's inventory. Held tokens are not unlocked; some have no working research action. Forced overflow drops excess tokens beside the player; pick up any overflow before running this action again.
       </div>
-      {buildingSets && <div className="text-xs text-text-dim">Includes building sets, individual pieces and decor. Crafting stations and entries without an item form are excluded. Some sets may not unlock because of Funcom's game-side limitations. Delivery does not guarantee activation. Unlocks apply to this private server character, not account purchases.</div>}
-      {skins && <div className="text-xs text-text-dim">Includes {kind === 'armor' ? 'armor, suits, masks and helmets' : 'weapon appearances'} from the skin catalog. Some skins may not unlock because of Funcom's game-side limitations. Delivery does not guarantee activation. Unlocks apply to this private server character, not account purchases.</div>}
+      {buildingSets && <div className="text-xs text-text-dim">Includes building sets, individual pieces and decor. Crafting stations, developer patents and entries without an item form are excluded. Some sets may not unlock because of Funcom's game-side limitations. Delivery does not guarantee activation or account entitlement.</div>}
+      {skins && <div className="text-xs text-text-dim">Includes {kind === 'armor' ? 'armor, suits, masks and helmets' : kind === 'vehicle' ? 'vehicle appearances' : kind === 'dyes' ? 'all catalog dyes' : 'weapon appearances'} from the cosmetic catalog. Some entries may not unlock because of Funcom's game-side limitations. Delivery does not guarantee activation. Unlocks apply to this private server character, not account purchases.</div>}
       {ownershipWarning && <div className="text-xs text-warning">{ownershipWarning}</div>}
+      {requestSubmitted && <p className="text-xs text-text-dim">Grant requests submitted. Game processing may take longer; the counts below show saved unlocks and held tokens. No additional grants are sent by status checks.</p>}
+      {bulkUnlocks && <details className="text-xs text-text-dim">
+        <summary className="cursor-pointer">Browse {label} and unlock status (includes already unlocked)</summary>
+        <input aria-label="Search unlock catalog" value={catalogFilter} onChange={e => setCatalogFilter(e.target.value)} placeholder="Search name or item ID" className="w-full my-2 px-3 py-2 rounded-lg bg-surface-2 border border-border" />
+        <div className="max-h-60 overflow-y-auto space-y-2">
+          {filterCosmeticsCatalog(browseEntries, catalogFilter).map(e => {
+            const id = e.template.toLowerCase()
+            const status = unlocked.has(id) ? 'Unlocked on character' : pending.has(id) ? 'Token held — unlock unconfirmed' : submittedTokens.has(id) ? 'Request submitted — unlock unconfirmed' : 'Unlock not detected'
+            return <div key={e.template} className="border-b border-border pb-2"><div>{e.name}</div><div>{status}{e.bulk_exclusion ? ` · ${e.bulk_exclusion}` : buildingSets && !e.bulk_building_set ? ' · Excluded from bulk delivery' : ''}</div></div>
+          })}
+        </div>
+      </details>}
       {!playerOnline && <div className="text-xs text-warning">Player must be online to receive {label} tokens.</div>}
       <button
         type="button"
         className="btn-primary w-full"
-        disabled={busy || !playerOnline || missingTokens.length === 0 || activationQueued}
+        disabled={busy || !playerOnline || missingTokens.length === 0}
         title={!playerOnline ? 'Player must be online' : undefined}
         onClick={async () => {
           if (!window.confirm(
@@ -1677,18 +1755,30 @@ function GrantUnlockTokensForm({ busy, playerName, accountId, kind, playerOnline
             'Online required. Delivery starts immediately. Remain online until the activation notifications stop.\n\nDST forces overflow, so excess tokens drop beside the player. Pick up all dropped tokens before running this action again.'
           )) return
           if (await onGrant()) {
+            setSubmittedTokens(current => new Set([...current, ...missingTokens.map(e => e.template.toLowerCase())]))
+            setRequestSubmitted(true)
             setActivationQueued(true)
           }
         }}
       >
         {busy
           ? <><Icon name="Loader2" size={13} className="animate-spin" /> Delivering {label} tokens...</>
-          : activationQueued
-            ? <><Icon name="Loader2" size={13} className="animate-spin" /> Activation cascade running — remain online</>
           : missingTokens.length === 0
-            ? <><Icon name="Check" size={13} /> All {label} detected</>
-            : <><Icon name={buildingSets ? "Blocks" : skins ? (kind === 'armor' ? "Shirt" : "Sword") : "Palette"} size={13} /> Deliver {missingTokens.length} missing {tokenLabel} tokens</>}
+            ? <>No new {label} tokens to request — see unlock status</>
+            : <><Icon name={buildingSets ? "Blocks" : skins ? (kind === 'armor' ? "Shirt" : kind === 'vehicle' ? "Truck" : kind === 'dyes' ? "Palette" : "Sword") : "Palette"} size={13} /> Deliver {missingTokens.length} missing {tokenLabel} tokens</>}
       </button>
+      <button type="button" className="btn-secondary w-full active:scale-[0.99]" disabled={busy || manualRefreshing} aria-busy={manualRefreshing} onClick={() => {
+        setActivationQueued(false)
+        setRefreshFeedback(null)
+        setManualRefreshing(true)
+        setRefreshRequest(current => current + 1)
+      }}>
+        <Icon name={manualRefreshing ? 'Loader2' : 'RefreshCw'} size={13} className={manualRefreshing ? 'animate-spin' : undefined} />
+        {manualRefreshing ? 'Refreshing status…' : 'Refresh unlock status'}
+      </button>
+      {refreshFeedback && <p role="status" aria-live="polite" className={`text-xs flex items-center gap-2 ${refreshFeedback.error ? 'text-warning' : 'text-text-dim'}`}>
+        <Icon name={refreshFeedback.error ? 'TriangleAlert' : 'Check'} size={13} /> {refreshFeedback.message}
+      </p>}
     </div>
   )
 }
@@ -2766,7 +2856,8 @@ function ItemsActionBlock({ player, canWrite, flash, onChanged, onFlush }: {
     setBusy(true)
     try {
       const r = await exec()
-      flash(r.message || `${def.label} done.`, 'ok')
+      const requestOnly = ['grant-cosmetic', 'grant-house-swatches', 'grant-buildable-swatches', 'grant-building-sets', 'grant-armor-skins', 'grant-weapon-skins', 'grant-vehicle-skins', 'grant-all-dyes'].includes(def.custom || '')
+      flash(r.message || (requestOnly ? `${def.label} request submitted.` : `${def.label} done.`), requestOnly ? 'info' : 'ok')
       onChanged()
       return true
     } catch (e) {

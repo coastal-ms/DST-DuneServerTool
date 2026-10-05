@@ -1520,7 +1520,7 @@ export function getItemCatalog(): Promise<CatalogItem[]> {
 // by GET /api/catalog/cosmetics (from gameplay-item-data names). These aren't in
 // the standard item catalog; granting one delivers it via the normal give-item
 // path so the player unlocks the appearance.
-export interface CosmeticEntry { template: string; name: string; group: string; bulk_building_set?: boolean }
+export interface CosmeticEntry { template: string; name: string; group: string; bulk_building_set?: boolean; bulk_exclusion?: string }
 interface CosmeticsResponse { templates?: CosmeticEntry[]; total?: number }
 let _cosmeticsCache: CosmeticEntry[] | null = null
 let _cosmeticsPromise: Promise<CosmeticEntry[]> | null = null
@@ -1541,10 +1541,10 @@ export function getBuildingSetCosmetics(catalog: CosmeticEntry[]): CosmeticEntry
     .sort((a, b) => a.name.localeCompare(b.name) || a.template.localeCompare(b.template))
 }
 
-export type SkinKind = 'armor' | 'weapon'
+export type SkinKind = 'armor' | 'weapon' | 'vehicle' | 'dyes'
 export function getSkinCosmetics(catalog: CosmeticEntry[], kind: SkinKind): CosmeticEntry[] {
-  const group = kind === 'armor' ? 'Armor & Suit Sets' : 'Weapon Skins'
-  return catalog.filter(entry => entry.group === group)
+  const group = { armor: 'Armor & Suit Sets', weapon: 'Weapon Skins', vehicle: 'Vehicle Skins', dyes: 'Swatches (Dyes)' }[kind]
+  return catalog.filter(entry => entry.group === group && !entry.bulk_exclusion)
     .sort((a, b) => a.name.localeCompare(b.name) || a.template.localeCompare(b.template))
 }
 export function grantSkins(pawnId: number, accountId: number, kind: SkinKind) {
@@ -1556,12 +1556,13 @@ export function grantSkins(pawnId: number, accountId: number, kind: SkinKind) {
 export function filterCosmeticsCatalog(catalog: CosmeticEntry[], query: string): CosmeticEntry[] {
   const q = query.trim().toLowerCase()
   if (!q) return catalog
-  const normalizedQuery = q.replace(/[_-]+/g, ' ').replace(/\s+/g, ' ').trim()
+  const normalize = (value: string) => value.replace(/[’']/g, '').replace(/[_-]+/g, ' ').replace(/\s+/g, ' ').trim()
+  const normalizedQuery = normalize(q)
   return catalog.filter(entry => {
     const fields = [entry.name, entry.template, entry.group]
     return fields.some(field => {
       const lower = field.toLowerCase()
-      const normalized = lower.replace(/[_-]+/g, ' ').replace(/\s+/g, ' ').trim()
+      const normalized = normalize(lower)
       return lower.includes(q) || (normalizedQuery.length > 0 && normalized.includes(normalizedQuery))
     })
   })
@@ -1585,13 +1586,15 @@ export function getCosmeticsCatalog(): Promise<CosmeticEntry[]> {
 export interface OwnedCosmeticsResponse {
   account_id: number
   owned: string[]
+  unlocked?: string[]
+  pending?: string[]
   total: number
   source: DataSource
   liveError?: string
 }
 
-export function getPlayerOwnedCosmetics(accountId: number) {
-  return api<OwnedCosmeticsResponse>(`/api/gameplay/players/cosmetics-owned${qs({ account_id: accountId })}`)
+export function getPlayerOwnedCosmetics(accountId: number, signal?: AbortSignal) {
+  return api<OwnedCosmeticsResponse>(`/api/gameplay/players/cosmetics-owned${qs({ account_id: accountId })}`, { signal })
 }
 
 // ===========================================================================

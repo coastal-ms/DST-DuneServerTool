@@ -1184,7 +1184,7 @@ Describe 'Invoke-DunePlayerGrantBuildingSets' {
     }
     It 'sends only missing tokens as one paced batch to one resolved FLS identity' {
         $r=Invoke-DunePlayerGrantBuildingSets -Ip fixture -PawnId 10 -AccountId 20
-        $r.ok | Should -BeTrue; $r.already_owned | Should -Be 1; $r.granted | Should -Be 1
+        $r.ok | Should -BeTrue; $r.already_owned | Should -Be 1; $r.granted | Should -Be 0; $r.submitted | Should -Be 1
         $script:batchCalls | Should -Be 1; $script:flsCalls | Should -Be 1
         $script:batchTemplates | Should -Be @('MissingSet')
         $r.message | Should -Match 'does not confirm every unlock activated'
@@ -1225,7 +1225,7 @@ Describe 'Invoke-DunePlayerGrantBuildingSets' {
     }
 }
 
-Describe 'Invoke-DunePlayerGrantSkins <Kind>' -ForEach @(@{Kind='armor'},@{Kind='weapon'}) {
+Describe 'Invoke-DunePlayerGrantSkins <Kind>' -ForEach @(@{Kind='armor'},@{Kind='weapon'},@{Kind='vehicle'},@{Kind='dyes'}) {
     BeforeEach {
         $script:online = 'Online'; $script:playerAccount = 20; $script:playersOk = $true
         $script:owned = @('OwnedSet'); $script:ownershipOk = $true; $script:flsOk = $true
@@ -1248,7 +1248,7 @@ Describe 'Invoke-DunePlayerGrantSkins <Kind>' -ForEach @(@{Kind='armor'},@{Kind=
     }
     It 'sends only missing tokens as one paced batch to one resolved FLS identity' {
         $r=Invoke-DunePlayerGrantSkins -Ip fixture -PawnId 10 -AccountId 20 -Kind $Kind
-        $r.ok | Should -BeTrue; $r.already_owned | Should -Be 1; $r.granted | Should -Be 1
+        $r.ok | Should -BeTrue; $r.already_owned | Should -Be 1; $r.granted | Should -Be 0; $r.submitted | Should -Be 1
         $script:batchCalls | Should -Be 1; $script:flsCalls | Should -Be 1
         $script:batchTemplates | Should -Be @('MissingSet')
         $r.message | Should -Match 'does not confirm every unlock activated'
