@@ -353,6 +353,40 @@ run_cluster_pass test-owner
         }
     }
 
+    It 'rejects the obsolete public/public cache while retaining a valid bridge (<CachedVm>)' -ForEach @(
+        @{ CachedVm = '192.168.1.20'; Expected = 'ACCEPTED' }
+        @{ CachedVm = '203.0.113.10'; Expected = 'REJECTED' }
+        @{ CachedVm = '999.1.1.1'; Expected = 'REJECTED' }
+    ) {
+        if (-not $script:posixShell) {
+            Set-ItResult -Skipped -Because 'A POSIX shell is not installed.'
+            return
+        }
+        $definitions = foreach ($name in 'is_ipv4','load_cluster_state') {
+            $match = [regex]::Match($script:dnatWatchSource, "(?ms)^$name\(\) \{.*?^\}")
+            $match.Success | Should -BeTrue
+            $match.Value
+        }
+        $harness = ($definitions -join "`n") + "`n" + @'
+CLUSTER_STATE=$(mktemp) || exit 1
+trap 'rm -f "$CLUSTER_STATE"' EXIT
+printf '203.0.113.10\n%s\n' "$HARNESS_CACHED_VM" > "$CLUSTER_STATE"
+if load_cluster_state; then echo ACCEPTED; else echo REJECTED; fi
+'@
+        $tempScript = Join-Path ([System.IO.Path]::GetTempPath()) ("dst-dnat-cache-{0}.sh" -f [guid]::NewGuid())
+        $prior = $env:HARNESS_CACHED_VM
+        try {
+            $env:HARNESS_CACHED_VM = $CachedVm
+            [System.IO.File]::WriteAllText($tempScript, $harness, [System.Text.UTF8Encoding]::new($false))
+            $actual = @(& $script:posixShell.FullName $tempScript)
+            $LASTEXITCODE | Should -Be 0
+            $actual | Should -Be @($Expected)
+        } finally {
+            $env:HARNESS_CACHED_VM = $prior
+            Remove-Item -LiteralPath $tempScript -Force -ErrorAction SilentlyContinue
+        }
+    }
+
     It 'classifies each active port independently from one listener snapshot' {
         if (-not $script:posixShell) {
             Set-ItResult -Skipped -Because 'A POSIX shell is not installed.'

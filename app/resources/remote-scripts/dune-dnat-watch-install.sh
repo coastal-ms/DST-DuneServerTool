@@ -358,7 +358,7 @@ load_cluster_state() {
     _cached_state=$(cat "$CLUSTER_STATE" 2>/dev/null) || return 1
     set -- $_cached_state
     [ "$#" -eq 2 ] || return 1
-    is_ipv4 "$1" && is_ipv4 "$2" || return 1
+    is_ipv4 "$1" && is_ipv4 "$2" && [ "$1" != "$2" ] || return 1
     PUB="$1"
     VM_IP="$2"
 }
