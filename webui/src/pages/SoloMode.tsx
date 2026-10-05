@@ -680,10 +680,6 @@ export function SoloMode() {
       setNotice({ kind: 'err', text: validationError })
       return
     }
-    if (!window.confirm(
-      'Confirm Dune: Awakening is fully closed.\n\n'
-      + 'DST will retain a copy of ServerCustomSettings.ini, replace the file, and verify every changed value.',
-    )) return
     setBusy('settings')
     setNotice(null)
     try {
@@ -714,10 +710,6 @@ export function SoloMode() {
       return
     }
     if (Object.keys(changedConsoleSettings).length === 0) return
-    if (!window.confirm(
-      `Apply ${Object.keys(changedConsoleSettings).length} Retail Solo Engine.ini setting(s)?\n\n`
-      + 'Dune: Awakening must be fully closed. DST will retain Config\\Windows\\Engine.ini, write only the three allowlisted ConsoleVariables, and verify the result.',
-    )) return
 
     setBusy('console-settings')
     setNotice(null)
@@ -862,12 +854,6 @@ export function SoloMode() {
       setNotice({ kind: 'err', text: 'Choose a backpack or built storage destination.' })
       return false
     }
-    if (!window.confirm(
-      `Give ${label} to the ${targetLabel}?\n\n`
-      + 'Dune: Awakening must be fully closed. DST will retain the current game.db, '
-      + 'apply the item grant transactionally, run integrity and foreign-key checks, '
-      + 'replace the save atomically, and verify the result.',
-    )) return false
 
     setBusy('give-items')
     setNotice(null)
@@ -879,7 +865,7 @@ export function SoloMode() {
       )
       setNotice({
         kind: 'ok',
-        text: `${label} granted and verified. Previous save retained at ${result.safetyBackup}`,
+        text: `${label} granted to the ${targetLabel} and verified. Previous save retained at ${result.safetyBackup}`,
       })
       await Promise.all([statusState.refresh(), runtimeState.refresh(), backupsState.refresh()])
       return true
@@ -995,14 +981,6 @@ export function SoloMode() {
       return
     }
     const label = blueprint.name || blueprintFileName || 'Unnamed blueprint'
-    if (!window.confirm(
-      `Import ${label} into the Solo backpack?\n\n`
-      + `This blueprint contains ${blueprint.instances.length} pieces, ${blueprint.placeables.length} placeables, `
-      + `and ${blueprint.pentashields.length} pentashields.\n\n`
-      + 'Dune: Awakening must be fully closed. DST will retain the current game.db, '
-      + 'write the blueprint transactionally, run integrity and foreign-key checks, '
-      + 'replace the save atomically, and verify the result.',
-    )) return
 
     setBusy('import-blueprint')
     setNotice(null)
@@ -1039,10 +1017,6 @@ export function SoloMode() {
     }
     const solari = Math.max(0, Math.min(2_000_000_000, Math.trunc(solariDraft || 0)))
     const scrip = Math.max(0, Math.min(2_000_000_000, Math.trunc(scripDraft || 0)))
-    if (!window.confirm(
-      `Set Solo balances to ${solari.toLocaleString()} Solari and ${scrip.toLocaleString()} Landsraad Scrip?\n\n`
-      + 'DST will retain the current game.db and verify both balances before replacing the save.',
-    )) return
     setBusy('currencies')
     setNotice(null)
     try {
@@ -1073,10 +1047,6 @@ export function SoloMode() {
       setNotice({ kind: 'err', text: 'Close Dune: Awakening completely before filling a Solo item.' })
       return
     }
-    if (!window.confirm(
-      `Fill ${label} to ${capacity.toLocaleString()} mL?\n\n`
-      + 'DST will retain the current game.db, update only this item, and verify the result.',
-    )) return
     setBusy(`fill:${itemId}`)
     setNotice(null)
     try {
@@ -1086,7 +1056,7 @@ export function SoloMode() {
       )
       setNotice({
         kind: 'ok',
-        text: `${label} filled and verified. Previous save retained at ${result.safetyBackup}`,
+        text: `${label} filled to ${capacity.toLocaleString()} mL and verified. Previous save retained at ${result.safetyBackup}`,
       })
       await Promise.all([statusState.refresh(), runtimeState.refresh(), backupsState.refresh()])
     } catch (error) {
@@ -1148,10 +1118,6 @@ export function SoloMode() {
       setNotice({ kind: 'err', text: 'Close Dune: Awakening completely before changing Solo weapon ammo.' })
       return
     }
-    if (!window.confirm(
-      `Set ${label} to ${ammo.toLocaleString()} loaded ammo?\n\n`
-      + 'DST will retain the current game.db, update only this ranged weapon, and verify the saved value.',
-    )) return
     setBusy(`ammo:${itemId}`)
     setNotice(null)
     try {
@@ -1177,11 +1143,6 @@ export function SoloMode() {
       setNotice({ kind: 'err', text: 'Close Dune: Awakening completely before changing Solo augments.' })
       return
     }
-    if (!window.confirm(
-      'Max every non-zero attribute roll on the Solo character’s carried augments?\n\n'
-      + 'This action preserves zero and non-numeric entries, excludes Developer Storage, '
-      + 'retains the current game.db, and verifies the write before replacing the save. Relog required.',
-    )) return
     setBusy('max-augments')
     setNotice(null)
     try {
@@ -1216,7 +1177,7 @@ export function SoloMode() {
       setNotice({ kind: 'err', text: 'Close Dune: Awakening completely before changing Solo progression.' })
       return
     }
-    if (!window.confirm(
+    if (key === 'reset-specialization-rewards' && !window.confirm(
       `${label}?\n\n`
       + 'This action retains the current game.db, writes one transaction, verifies progression semantics and SQLite integrity, then replaces the save atomically.',
     )) return
@@ -1247,10 +1208,6 @@ export function SoloMode() {
     }
     const skillPoints = Math.max(0, Math.min(2_000_000_000, Math.trunc(skillPointsDraft || 0)))
     const intel = Math.max(0, Math.min(2_000_000_000, Math.trunc(intelDraft || 0)))
-    if (!window.confirm(
-      `Set the Solo character to ${skillPoints.toLocaleString()} unspent skill points and ${intel.toLocaleString()} Intel?\n\n`
-      + 'DST will retain the current game.db, preserve all learned skills, write the exact requested balances, and verify them before replacing the save.',
-    )) return
     setBusy('progression:points')
     setNotice(null)
     try {
