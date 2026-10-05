@@ -197,6 +197,7 @@ function Get-DuneCosmeticsCatalog {
             else   { $group = 'Other Customization' }
         }
         elseif ($k -match 'Customization')     { $group = 'Other Customization' }
+        elseif ($k -eq 'Developer_Storage_Container_Patent') { $group = 'Building Sets - Developer Storage' }
         elseif ($script:DuneBuildingSetIds.Contains($k)) { $group = Get-DuneBuildingSetGroup -Id $k }
 
         if ($group) {
@@ -207,9 +208,11 @@ function Get-DuneCosmeticsCatalog {
         if ($out.template -contains $id) { continue }
         $out += @{ template = [string]$id; name = [string]$script:DuneBuildingSetLabels[$id]; group = Get-DuneBuildingSetGroup -Id $id }
     }
-    $out = @($out | Where-Object { $_.group -notlike 'Building Sets - *' -or $script:DuneBuildingSetIds.Contains([string]$_.template) })
+    $out = @($out | Where-Object { $_.group -notlike 'Building Sets - *' -or $_.template -eq 'Developer_Storage_Container_Patent' -or $script:DuneBuildingSetIds.Contains([string]$_.template) })
     foreach ($entry in $out) {
-        $entry.bulk_exclusion = if ($entry.template -in (Get-DuneCosmeticGrantMetadata).unsupported_tokens) {
+        $entry.bulk_exclusion = if ($entry.template -eq 'Developer_Storage_Container_Patent') {
+            'Developer storage is an individual-grant exception; excluded from All Building Sets.'
+        } elseif ($entry.template -in (Get-DuneCosmeticGrantMetadata).unsupported_tokens) {
             'This token has no working research action; excluded from bulk grants.'
         } elseif ($entry.group -like 'Building Sets - *' -and $entry.template -match '^D_.*_Patent$') {
             'Developer patent with unverified activation; excluded from bulk grants.'
