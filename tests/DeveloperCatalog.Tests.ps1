@@ -1,4 +1,4 @@
-BeforeAll {
+﻿BeforeAll {
     . (Join-Path $PSScriptRoot '_TestHelpers.ps1')
     Import-DstLib 'Catalog.ps1'
     Import-DstLib 'Gameplay.ps1'
@@ -15,7 +15,7 @@ BeforeAll {
 }
 
 Describe 'Developer template catalog coverage' -Tag 'Catalog' {
-    It 'exposes every developer template' {
+    It 'exposes developer items without restoring excluded building progression' {
         $itemIds = [System.Collections.Generic.HashSet[string]]::new(
             [System.StringComparer]::OrdinalIgnoreCase
         )
@@ -26,6 +26,10 @@ Describe 'Developer template catalog coverage' -Tag 'Catalog' {
         foreach ($entry in $script:cosmetics.templates) { [void]$cosmeticIds.Add([string]$entry.template) }
 
         foreach ($id in $script:developerIds) {
+            if ($id -eq 'D_StartingSet' -or $id -match '^D_.*_Patent$') {
+                $cosmeticIds.Contains($id) | Should -BeFalse -Because 'developer building progression is outside cosmetic grants'
+                continue
+            }
             $matches = [int]$itemIds.Contains($id) + [int]$cosmeticIds.Contains($id)
             $matches | Should -BeGreaterOrEqual 1 -Because "$id must appear in Give Item or Cosmetics"
         }
