@@ -107,9 +107,9 @@ function Get-DuneGameplayItemName {
 # appearance when it lands. Developer cosmetics remain visible so operators can
 # test every grantable template shipped in the bundled item metadata. Returns
 # @{ templates = @(@{template;name;group}); total }.
-# Authoritative grantable building-set / building-recipe item ids
-# (app/data/building-sets.json): the union of dune.building_progression.learned_building_sets
-# (live cross-check) and every building Patent/Placeable item form in gameplay-item-data.json.
+# Reviewed cosmetic building and decoration item allowlist
+# (app/data/building-sets.json): excludes intel progression and utility recipes.
+# New building IDs require explicit review before inclusion.
 # Loaded once into a case-insensitive set; friendly names come from gameplay-item-data.json.
 $script:DuneBuildingSetIds = $null
 $script:DuneBuildingSetLabels = $null
@@ -197,8 +197,9 @@ function Get-DuneCosmeticsCatalog {
             else   { $group = 'Other Customization' }
         }
         elseif ($k -match 'Customization')     { $group = 'Other Customization' }
+        elseif ($k -eq 'Developer_Storage_Container_Patent') { $group = 'Building Sets - Developer Storage' }
         elseif ($script:DuneBuildingSetIds.Contains($k)) { $group = Get-DuneBuildingSetGroup -Id $k }
-        elseif ($k -like 'D_*' -and $name -match '\bPatent$') { $group = Get-DuneBuildingSetGroup -Id $k }
+
         if ($group) {
             $out += @{ template = [string]$k; name = $name; group = $group }
         }
@@ -207,8 +208,11 @@ function Get-DuneCosmeticsCatalog {
         if ($out.template -contains $id) { continue }
         $out += @{ template = [string]$id; name = [string]$script:DuneBuildingSetLabels[$id]; group = Get-DuneBuildingSetGroup -Id $id }
     }
+    $out = @($out | Where-Object { $_.group -notlike 'Building Sets - *' -or $_.template -eq 'Developer_Storage_Container_Patent' -or $script:DuneBuildingSetIds.Contains([string]$_.template) })
     foreach ($entry in $out) {
-        $entry.bulk_exclusion = if ($entry.template -in (Get-DuneCosmeticGrantMetadata).unsupported_tokens) {
+        $entry.bulk_exclusion = if ($entry.template -eq 'Developer_Storage_Container_Patent') {
+            'Developer storage is an individual-grant exception; excluded from All Building Sets.'
+        } elseif ($entry.template -in (Get-DuneCosmeticGrantMetadata).unsupported_tokens) {
             'This token has no working research action; excluded from bulk grants.'
         } elseif ($entry.group -like 'Building Sets - *' -and $entry.template -match '^D_.*_Patent$') {
             'Developer patent with unverified activation; excluded from bulk grants.'

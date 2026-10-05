@@ -132,6 +132,30 @@ afterEach(() => {
 })
 
 describe('Game Config advanced client compatibility action', () => {
+  it('reviews and applies a customized landclaim segment limit without enabling unrelated client fields', async () => {
+    const user = userEvent.setup()
+    const section = '/Script/DuneSandbox.BuildingSettings'
+    vi.mocked(getGameConfigSchema).mockResolvedValue({ schema: [{ category: 'Building', fields: [
+      { file: 'game', section, key: 'm_MaxNumLandclaimSegments', label: 'Max Landclaim Segments', type: 'int', default: '6', clientApply: true },
+      { file: 'game', section, key: 'm_UnverifiedSetting', label: 'Unverified Setting', type: 'int', default: '1', clientApply: true },
+    ] }] })
+    vi.mocked(getGameConfig).mockResolvedValue({ ...config, game: fileBundle('game', {
+      [`${section}||m_MaxNumLandclaimSegments`]: '23',
+      [`${section}||m_UnverifiedSetting`]: '2',
+    }), engine: fileBundle('engine', {}) })
+    render(<GameConfig />)
+    await user.click(await screen.findByRole('button', { name: 'Apply advanced compatibility overrides' }))
+    const dialog = screen.getByRole('dialog', { name: 'Review advanced compatibility overrides' })
+    expect(within(dialog).getByText('Max Landclaim Segments')).toBeInTheDocument()
+    expect(within(dialog).getByText('23')).toBeInTheDocument()
+    expect(within(dialog).queryByText('Unverified Setting')).not.toBeInTheDocument()
+    expect(applyGameConfigClient).not.toHaveBeenCalled()
+    await user.click(within(dialog).getByRole('button', { name: 'Apply 1 selected setting' }))
+    await waitFor(() => expect(applyGameConfigClient).toHaveBeenCalledWith([
+      expect.objectContaining({ file: 'game', section, key: 'm_MaxNumLandclaimSegments', value: '23' }),
+    ], 'C:\\Dune'))
+  })
+
   it('shows the action locally, hides it remotely, and disables it without eligible custom values', async () => {
     const { unmount } = render(<GameConfig />)
     expect(await screen.findByRole('button', { name: 'Apply advanced compatibility overrides' })).toBeEnabled()

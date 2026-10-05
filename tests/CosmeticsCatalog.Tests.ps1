@@ -56,17 +56,17 @@ Describe 'Get-DuneCosmeticsCatalog includes the full building-set universe' -Tag
         $script:cat.total | Should -BeGreaterThan 0
     }
     It 'surfaces the full grantable building-set universe (200+ ids)' {
-        @($script:cat.templates | Where-Object { $_.group -like 'Building Sets*' }).Count | Should -BeGreaterThan 200
+        @($script:cat.templates | Where-Object { $_.group -like 'Building Sets*' }).Count | Should -BeGreaterThan 150
     }
     It 'surfaces the 39 Observer Twitch building pieces under one group' {
         $observer = @($script:cat.templates | Where-Object { $_.template -like 'MTX_Choam_TwitchReward_*' })
         $observer.Count | Should -Be 39
         ($observer | ForEach-Object group | Select-Object -Unique) | Should -Be 'Building Sets - Observer (Twitch)'
     }
-    It 'includes base-game faction sets and crafting stations (not just MTX)' {
-        $script:cat.templates.template | Should -Contain 'AtreidesSet'
-        $script:cat.templates.template | Should -Contain 'HarkonnenSet'
-        $script:cat.templates.template | Should -Contain 'SmallSpiceRefinery'
+    It 'excludes base-game progression recipes while retaining cosmetic decorations' {
+        $script:cat.templates.template | Should -Not -Contain 'AtreidesSet'
+        $script:cat.templates.template | Should -Not -Contain 'HarkonnenSet'
+        $script:cat.templates.template | Should -Not -Contain 'SmallSpiceRefinery'
         $script:cat.templates.template | Should -Contain 'MTX_Neut_MuralPainting_01_Patent'
     }
     It 'still includes the existing appearance cosmetics (regression)' {
@@ -79,11 +79,11 @@ Describe 'Get-DuneCosmeticsCatalog includes the full building-set universe' -Tag
         $boots.name | Should -Be ("Smuggler{0}s Agile Assault Boots" -f [char]0x2019)
         $boots.name | Should -Not -Match ([char]0x00E2)
     }
-    It 'includes developer cosmetics and building unlocks' {
+    It 'retains appearance cosmetics but excludes developer building progression' {
         $script:cat.templates.template | Should -Contain 'D_Choam_HeavyArmor_Swatch'
         $script:cat.templates.template | Should -Contain 'D_TestMeshVariant'
-        $script:cat.templates.template | Should -Contain 'D_AdvFabricationSet_Patent'
-        $script:cat.templates.template | Should -Contain 'D_StartingSet'
+        $script:cat.templates.template | Should -Not -Contain 'D_AdvFabricationSet_Patent'
+        $script:cat.templates.template | Should -Not -Contain 'D_StartingSet'
     }
     It 'includes the exact Matron''s Decor templates and friendly names (regression)' {
         # Pins the six live-account-verified MTX_ReverendMotherRoom_* ids
@@ -150,10 +150,26 @@ Describe 'Get-DuneCosmeticsCatalog includes the full building-set universe' -Tag
 
 
 Describe 'Bulk building set catalog' {
+    It 'keeps only developer storage as an individual storage exception' {
+        (Get-DuneCosmeticsCatalog).templates.template | Should -Contain 'Developer_Storage_Container_Patent'
+        (Get-DuneBuildingSetGrantCatalog).template | Should -Not -Contain 'Developer_Storage_Container_Patent'
+    }
+    It 'never exposes progression utilities in either individual or bulk cosmetic grants' {
+        $individual = (Get-DuneCosmeticsCatalog).templates.template
+        $bulk = (Get-DuneBuildingSetGrantCatalog).template
+        foreach ($id in @('BasicFabricator_Patent','AdvancedWeaponsFabricator_Patent',
+            'PowerGenerator_Patent','SpiceGenerator_Patent','BasicContainer_Patent',
+            'WaterTower_Patent','LargeWindTrap_Patent','SpiceSilo_Patent','Totem_Patent',
+            'D_WaterStorageSet_Patent','D_StartingSet','MTX_Choam_KirabTurret_Placeable',
+            'MTX_Neut_TeleporterDevice_Placeable')) {
+            $individual | Should -Not -Contain $id
+            $bulk | Should -Not -Contain $id
+        }
+    }
     BeforeAll { $script:bulk = @(Get-DuneBuildingSetGrantCatalog) }
     It 'includes construction, decor and restored CHOAM pieces without appearance cosmetics' {
         $script:bulk.template | Should -Contain 'MTX_Neut_MuadDibCage_Patent'
-        $script:bulk.template | Should -Contain 'AtreidesSet'
+        $script:bulk.template | Should -Not -Contain 'AtreidesSet'
         $script:bulk.template | Should -Contain 'MTX_ChoamExtention_Floor_01_Patent'
         $script:bulk.template | Should -Contain 'MTX_ReverendMotherRoom_Chair_01_Patent'
         @($script:bulk | Where-Object { $_.group -notlike 'Building Sets - *' }).Count | Should -Be 0
@@ -169,11 +185,11 @@ Describe 'Bulk building set catalog' {
             $script:bulk.template | Should -Not -Contain $id
         }
     }
-    It 'excludes every flagged token with no item form but retains construction utilities' {
+    It 'excludes no-item tokens and progression utilities' {
         $data = Get-Content -LiteralPath (Get-DuneBuildingSetsPath) -Raw | ConvertFrom-Json
         foreach ($id in $data._meta.flagged_no_item_form) { $script:bulk.template | Should -Not -Contain $id }
-        $script:bulk.template | Should -Contain 'ChoamPentashieldSurfaceVertical_Patent'
-        $script:bulk.template | Should -Contain 'BasicContainer_Patent'
+        $script:bulk.template | Should -Not -Contain 'ChoamPentashieldSurfaceVertical_Patent'
+        $script:bulk.template | Should -Not -Contain 'BasicContainer_Patent'
         $script:bulk.Count | Should -BeGreaterThan 150
     }
 }

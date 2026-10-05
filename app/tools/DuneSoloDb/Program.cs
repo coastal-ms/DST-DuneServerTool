@@ -152,7 +152,7 @@ internal static partial class Program
                     Require(options, "adapter"),
                     ParseBalance(RequireValue(options, "skill-points"), "Skill points"),
                     ParseBalance(RequireValue(options, "intel"), "Intel points")),
-                "self-test" => SelfTest(),
+                "self-test" => SelfTest(options.TryGetValue("adapter", out var selfTestAdapter) ? selfTestAdapter : null),
                 _ => throw new ArgumentException($"Unknown command: {command}")
             };
             WriteJson(result);
@@ -1044,7 +1044,7 @@ internal static partial class Program
             }
         }
 
-    private static object SelfTest()
+    private static object SelfTest(string? retailAdapterPath = null)
     {
         var root = Path.Combine(Path.GetTempPath(), $"dune-solo-self-test-{Guid.NewGuid():N}");
         Directory.CreateDirectory(root);
@@ -2260,7 +2260,7 @@ internal static partial class Program
                   "specializations":{
                     "max_level":100,
                     "max_xp":44182,
-                    "tracks":{"Combat":0,"Crafting":1,"Exploration":2,"Gathering":3,"Sabotage":4}
+                    "tracks":{"Combat":4,"Crafting":1,"Exploration":3,"Gathering":2,"Sabotage":5}
                   },
                   "find_the_fremen":{
                     "nodes":["DA_MQ_FindTheFremen","DA_MQ_FindTheFremen.FirstTest"],
@@ -2314,6 +2314,13 @@ internal static partial class Program
             {
                 throw new InvalidOperationException(
                     "Generic water-container detection or stillsuit exclusion failed.");
+            }
+            if (retailAdapterPath is not null)
+            {
+                var shipped = JsonNode.Parse(File.ReadAllText(retailAdapterPath))!.AsObject();
+                var fixture = JsonNode.Parse(File.ReadAllText(adapterPath))!.AsObject();
+                fixture["specializations"] = shipped["specializations"]!.DeepClone();
+                File.WriteAllText(adapterPath, fixture.ToJsonString());
             }
             var keystonePath = Path.Combine(root, "keystones.json");
             File.WriteAllText(
@@ -2390,6 +2397,28 @@ internal static partial class Program
             SetSpecialization(target, Path.Combine(root, "safety", "before-zero-spec.db"), adapterPath, "Crafting", 0);
             if (InspectPath(target).Progression.Specializations.Single(track => track.TrackType == 1).Level != 0)
                 throw new InvalidOperationException("Solo specialization did not reach zero.");
+            foreach (var expected in new[] { (Name: "Crafting", Id: 1), (Name: "Gathering", Id: 2),
+                (Name: "Exploration", Id: 3), (Name: "Combat", Id: 4), (Name: "Sabotage", Id: 5) })
+            {
+                var beforeTrack = InspectPath(target).Progression;
+                SetSpecialization(target, Path.Combine(root, "safety", $"before-track-{expected.Id}.db"), adapterPath, expected.Name, 43);
+                var afterTrack = InspectPath(target).Progression;
+                if (afterTrack.Specializations.Single(t => t.TrackType == expected.Id).Level != 43
+                    || !beforeTrack.Specializations.Where(t => t.TrackType != expected.Id)
+                        .SequenceEqual(afterTrack.Specializations.Where(t => t.TrackType != expected.Id)))
+                    throw new InvalidOperationException($"Retail {expected.Name} targeted the wrong track.");
+            }
+            // Reproduce the reported saved level before exercising the reset.
+            SetSpecialization(target, Path.Combine(root, "safety", "before-sabotage-77.db"), adapterPath, "Sabotage", 77);
+            var beforeSabotage = InspectPath(target).Progression;
+            SetSpecialization(target, Path.Combine(root, "safety", "before-sabotage-reset.db"), adapterPath, "Sabotage", 0);
+            var afterSabotage = InspectPath(target).Progression;
+            if (afterSabotage.Specializations.Single(track => track.TrackType == 5).Level != 0
+                || !beforeSabotage.Specializations.Where(track => track.TrackType != 5)
+                    .SequenceEqual(afterSabotage.Specializations.Where(track => track.TrackType != 5))
+                || afterSabotage.PurchasedRewards != beforeSabotage.PurchasedRewards
+                || afterSabotage.FremenNodesComplete != beforeSabotage.FremenNodesComplete)
+                throw new InvalidOperationException("Sabotage reset changed another track, rewards or journeys.");
             var beforeRejectedLevel = File.ReadAllBytes(target);
             foreach (var invalid in new[] { (Track: "Unknown", Level: 20L), (Track: "Crafting", Level: 101L) })
             {
@@ -2561,6 +2590,8 @@ internal static partial class Program
                     "offline-water-container-fills-with-safety-backups",
                     "offline-specialization-max-with-rewards",
                     "offline-specialization-lowering-preserves-rewards-and-backup",
+                    "retail-all-five-track-targets-preserve-other-tracks",
+                    "retail-sabotage-77-reset-preserves-rewards-and-journeys",
                     "invalid-specialization-edit-leaves-save-unchanged",
                     "read-only-solo-diagnostics-excludes-identities-and-paths",
                     "offline-track-reward-reset-preserves-levels-other-tracks-and-journeys",

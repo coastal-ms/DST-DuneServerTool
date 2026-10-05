@@ -59,6 +59,7 @@ const RETAIL_CLIENT_COMPATIBILITY_TARGETS = new Set([
   'game||playerinventorystartingsize',
   'game||playerinventorystartingvolumecapacity',
   'game||m_basebackuptoolmaprestriction',
+  'game||m_maxnumlandclaimsegments',
 ])
 
 type LoadState = 'idle' | 'loading' | 'ready' | 'error' | 'unavailable'
