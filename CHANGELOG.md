@@ -15,6 +15,10 @@ here cover everything those tags shipped.
 
 - Ignore the unfixed CVE-2026-93748 in Astro's transitive `http-cache-semantics` dependency during Trivy scans.
 
+## [15.2.9] - 2026-10-05
+
+- Correct Retail Solo specialization track IDs so Gathering, Exploration, Combat and Sabotage edits target the matching in-game specialization. Preserve Crafting, the legacy adapter, other tracks, purchased rewards and journeys during individual level edits.
+
 ## [15.2.8] - 2026-10-05
 
 - Restrict individual cosmetic building grants and All Building Sets to reviewed cosmetic building pieces and decorations. Remove intel progression recipes, crafting stations, utilities and developer building patents from the cosmetic catalog.

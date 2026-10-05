@@ -263,5 +263,5 @@ jobs:
           if ($audit -match 'has the following vulnerable packages') {
             throw 'DuneSoloDb dependency audit found a vulnerable package.'
           }
-          dotnet run --project $project -c Release -- --command self-test
+          dotnet run --project $project -c Release -- --command self-test --adapter app/data/solo-retail-v1.json
           if ($LASTEXITCODE -ne 0) { throw 'DuneSoloDb self-test failed.' }
