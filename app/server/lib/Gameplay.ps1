@@ -107,9 +107,8 @@ function Get-DuneGameplayItemName {
 # appearance when it lands. Developer cosmetics remain visible so operators can
 # test every grantable template shipped in the bundled item metadata. Returns
 # @{ templates = @(@{template;name;group}); total }.
-# Reviewed cosmetic building and decoration item allowlist
-# (app/data/building-sets.json): excludes intel progression and utility recipes.
-# New building IDs require explicit review before inclusion.
+# Building grant catalog cross-referenced against tech BLD_ keys.
+# Only tech buildables are omitted; preserve non-tech grants regardless of prefix.
 # Loaded once into a case-insensitive set; friendly names come from gameplay-item-data.json.
 $script:DuneBuildingSetIds = $null
 $script:DuneBuildingSetLabels = $null
@@ -214,13 +213,9 @@ function Get-DuneCosmeticsCatalog {
             'Developer storage is an individual-grant exception; excluded from All Building Sets.'
         } elseif ($entry.template -in (Get-DuneCosmeticGrantMetadata).unsupported_tokens) {
             'This token has no working research action; excluded from bulk grants.'
-        } elseif ($entry.group -like 'Building Sets - *' -and $entry.template -match '^D_.*_Patent$') {
-            'Developer patent with unverified activation; excluded from bulk grants.'
         } else { '' }
         $entry.bulk_building_set = $entry.group -like 'Building Sets - *' -and
-            -not $entry.bulk_exclusion -and
-            -not $script:DuneBuildingSetNoItemIds.Contains([string]$entry.template) -and
-            $entry.template -notmatch 'Fabricat|Refinery|AugmentStation|RepairStation|ModStation|Workbench|Recycler|Deathstill|BloodWaterExtraction|^D_(StartingSet|WaterProgression)'
+            $entry.template -ne 'Developer_Storage_Container_Patent'
     }
     $out = @($out | Sort-Object { $_.group }, { $_.name })
     return @{ ok = $true; templates = $out; total = $out.Count }
