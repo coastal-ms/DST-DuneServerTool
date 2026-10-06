@@ -13,6 +13,11 @@ here cover everything those tags shipped.
 
 ## [Unreleased]
 
+### 15.2.8-test2 — Solo grants
+
+- Add Solo bulk grants for building sets, armor, weapon and vehicle skins, dyes and house swatches using the same curated catalogs as Self-Hosted. Skip saved unlocks and held tokens, recheck ownership before writing, batch into available backpack slots and retain the previous save automatically. Tokens are processed after login; grants do not guarantee in-game activation.
+- Remove repeated confirmation popups from routine Solo grants and backed-up edits. Keep confirmations for restores, deletions and reward resets.
+
 - Ignore the unfixed CVE-2026-93748 in Astro's transitive `http-cache-semantics` dependency during Trivy scans.
 
 ## [15.2.8] - 2026-10-05
@@ -21,7 +26,7 @@ here cover everything those tags shipped.
 
 
 
-- Restrict individual cosmetic building grants and All Building Sets to reviewed cosmetic building pieces and decorations. Remove intel progression recipes, crafting stations, utilities and developer building patents from the cosmetic catalog.
+- Exclude buildables unlocked through the tech tree from cosmetic building grants. Preserve other building pieces and decorations; Developer Storage remains available as an individual grant.
 
 - Preserve game UDP forwarding after Start/Restart and Settings IP updates when Kubernetes reports the public-IP alias as InternalIP. Refresh the forwarding helper during manual and DDNS updates, derive the VM address from its local route, reject obsolete public/public caches, and retain working rules when address discovery fails.
 

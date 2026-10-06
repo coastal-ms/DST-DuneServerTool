@@ -1046,6 +1046,7 @@ internal static partial class Program
 
     private static object SelfTest(string? retailAdapterPath = null)
     {
+        SelfTestCosmeticOwnership();
         var root = Path.Combine(Path.GetTempPath(), $"dune-solo-self-test-{Guid.NewGuid():N}");
         Directory.CreateDirectory(root);
         try
@@ -2915,7 +2916,8 @@ internal static partial class Program
             RangedWeapons: rangedWeapons,
             Currencies: currencies,
             Fillables: fillables,
-            Progression: progression);
+            Progression: progression,
+            Cosmetics: ReadCosmeticOwnership(connection, inventoryItems));
     }
 
     private static InventoryDestination[] ReadInventoryDestinations(
@@ -3554,7 +3556,8 @@ internal static partial class Program
         RangedWeapon[] RangedWeapons,
         CurrencyBalances Currencies,
         FillableItem[] Fillables,
-        ProgressionSummary Progression);
+        ProgressionSummary Progression,
+        CosmeticOwnership Cosmetics);
 
     private sealed record WrappedDatabase(
         uint WrapperVersion,

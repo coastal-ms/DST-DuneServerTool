@@ -27,6 +27,9 @@ import {
   setSoloSpecialization,
   resetSoloSpecializationRewards,
   grantSoloItems,
+  grantSoloUnlocks,
+  type SoloUnlockKind,
+  type SoloCosmeticOwnership,
   importSoloBlueprint,
   maxSoloAugmentAttributes,
   restoreSoloBackup,
@@ -53,6 +56,9 @@ import {
   downloadBlueprintFile,
   filterCosmeticsCatalog,
   getCosmeticsCatalog,
+  getBuildingSetCosmetics,
+  getSkinCosmetics,
+  getHouseSwatchCosmetics,
   getVehicleKitCatalog,
   type BlueprintFile,
   type AugmentSelection,
@@ -382,11 +388,15 @@ export function SoloCosmeticGrantCard({
   disabled,
   loadCatalog = getCosmeticsCatalog,
   onGrant,
+  onBulkGrant,
+  ownership,
 }: {
   busy: boolean
   disabled: boolean
   loadCatalog?: () => Promise<CosmeticEntry[]>
   onGrant: (templateId: string, label: string) => Promise<void>
+  onBulkGrant?: (kind: SoloUnlockKind, label: string) => Promise<void>
+  ownership?: SoloCosmeticOwnership
 }) {
   const [catalog, setCatalog] = useState<CosmeticEntry[] | null>(null)
   const [catalogError, setCatalogError] = useState('')
@@ -409,15 +419,25 @@ export function SoloCosmeticGrantCard({
   const matches = useMemo(() => groups.flatMap(([, entries]) => entries), [groups])
   const chosen = matches.find(entry => entry.template === selected)
   const controlsDisabled = disabled || busy
+  const owned = new Set((ownership?.owned ?? []).map(id => id.toLowerCase()))
+  const bulkGroups: Array<[SoloUnlockKind, string, CosmeticEntry[]]> = [
+    ['building-sets', 'All Building Sets', getBuildingSetCosmetics(catalog ?? [])],
+    ['armor', 'All Armor Skins', getSkinCosmetics(catalog ?? [], 'armor')],
+    ['weapon', 'All Weapon Skins', getSkinCosmetics(catalog ?? [], 'weapon')],
+    ['vehicle', 'All Vehicle Skins', getSkinCosmetics(catalog ?? [], 'vehicle')],
+    ['dyes', 'All Dyes', getSkinCosmetics(catalog ?? [], 'dyes')],
+    ['house', 'House Swatches', getHouseSwatchCosmetics(catalog ?? [])],
+    ['placeables', 'Buildable House Swatches', getHouseSwatchCosmetics(catalog ?? [], 'placeables')],
+  ]
 
   return (
     <div className="card p-5 xl:col-span-2">
       <h3 className="font-semibold mb-1">Grant Cosmetic / Building Set</h3>
       <p className="text-xs text-text-muted mb-4">
-        Delivers one unlock item to the Solo backpack for processing on next login.
+        Delivers unlock tokens to the Solo backpack for processing on next login. Bulk grants use available slots; log in, exit, and repeat for remaining tokens.
       </p>
       <div className="rounded border border-warning/30 bg-warning/5 p-3 mb-4 text-xs text-text-muted">
-        {SOLO_COSMETIC_ENTITLEMENT_WARNING} Some developer or entitlement entries may remain ordinary inventory items and do nothing. Owned-state detection is not available for Solo yet, so the full catalog is shown and duplicate grants are possible.
+        {SOLO_COSMETIC_ENTITLEMENT_WARNING} Saved unlocks do not guarantee in-game usability. Bulk grants skip saved unlocks and held tokens; new tokens are processed on next login.
       </div>
       {catalogError ? (
         <div className="text-xs text-danger">Cosmetics catalog failed to load: {catalogError}</div>
@@ -427,6 +447,14 @@ export function SoloCosmeticGrantCard({
         </div>
       ) : (
         <>
+          {onBulkGrant && <div className="grid sm:grid-cols-2 gap-2 mb-4">
+            {bulkGroups.map(([kind, label, entries]) => {
+              const missing = entries.filter(entry => !owned.has(entry.template.toLowerCase())).length
+              return <button key={kind} className="btn-secondary" disabled={controlsDisabled || !ownership?.available || missing === 0}
+                onClick={() => void onBulkGrant(kind, label)}>{label} ({missing} missing)</button>
+            })}
+            {!ownership?.available && <p className="text-xs text-warning sm:col-span-2">{ownership?.error || 'Reconnect and validate the save to check unlock ownership.'}</p>}
+          </div>}
           <input
             type="text"
             value={query}
@@ -452,9 +480,10 @@ export function SoloCosmeticGrantCard({
             ))}
           </select>
           {chosen && <p className="text-[11px] font-mono text-text-dim truncate mt-2">{chosen.template}</p>}
+          {chosen && owned.has(chosen.template.toLowerCase()) && <p className="text-xs text-text-muted mt-2">Already saved or held in inventory.</p>}
           <button
             className={`btn-primary w-full mt-4 justify-center ${SOLO_DISABLED_PRIMARY_CLASS}`}
-            disabled={controlsDisabled || !chosen}
+            disabled={controlsDisabled || !chosen || owned.has(chosen.template.toLowerCase())}
             onClick={() => {
               if (chosen) void onGrant(chosen.template, chosen.name)
             }}
@@ -2062,6 +2091,18 @@ export function SoloMode() {
 
             <SoloCosmeticGrantCard
               busy={busy === 'give-items'}
+              ownership={statusState.data?.cosmeticOwnership}
+              onBulkGrant={async (kind, label) => {
+                setBusy('give-items')
+                setNotice(null)
+                try {
+                  const result = await grantSoloUnlocks(kind, statusState.data?.profileToken ?? '')
+                  setNotice({ kind: 'ok', text: `${label}: ${result.submitted} tokens saved for next login; ${result.skipped} already saved or held.${result.remaining ? ` ${result.remaining} remain: log in to process tokens, exit, and grant again after freeing backpack slots.` : ''} In-game activation remains unconfirmed.${result.safetyBackup ? ` Previous save retained at ${result.safetyBackup}` : ''}` })
+                  await Promise.all([statusState.refresh(), runtimeState.refresh(), backupsState.refresh()])
+                } catch (error) {
+                  setNotice({ kind: 'err', text: error instanceof Error ? error.message : String(error) })
+                } finally { setBusy(null) }
+              }}
               disabled={
                 !canMutateActiveProfile
                 || gameRunning
