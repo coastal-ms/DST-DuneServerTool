@@ -1,0 +1,4 @@
+# Exact reviewed false positive: the generic key rule matched a game-catalog
+# string already present before this commit. This commit only adds eight CHOAM
+# patent display names; no existing names or item rules changed.
+2a0a46fbd76a7267471697bfdf83ee185cedd3f4:app/data/gameplay-item-data.json:generic-api-key:1
