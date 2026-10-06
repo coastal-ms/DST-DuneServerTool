@@ -947,11 +947,14 @@ fi
 
 step runner
 runner=/usr/local/bin/k3s-custom-runner.sh
-target="dynamic_ip=$NEW_IP"
+# Keep the node/control-plane address on the VM's LAN. The public or relay
+# address belongs only to the external advertisement, including after reboot.
+target="dynamic_ip=$VM_IP"
+external_target="external_ip=$NEW_IP # DST_MANAGED_EXTERNAL_IP"
 if [ -f "$runner" ]; then
   sudo cp "$runner" "$runner.bak.$(date -u +%Y%m%d%H%M%S)"
   # DST_K3S_RUNNER_AWK_BEGIN
-  awk -v target="$target" '
+  awk -v target="$target" -v external_target="$external_target" '
     BEGIN { dynamic_done=0; exec_done=0 }
     /^dynamic_ip=/ {
       print target
@@ -964,7 +967,7 @@ if [ -f "$runner" ]; then
         print target
         dynamic_done=1
       }
-      print "external_ip=$dynamic_ip # DST_MANAGED_EXTERNAL_IP"
+      print external_target
       print
       exec_done=1
       next
@@ -978,7 +981,7 @@ if [ -f "$runner" ]; then
   sudo install -m 0755 /tmp/dst-runner "$runner"
   rm -f /tmp/dst-runner
   grep -F "$target" "$runner"
-  grep -F 'external_ip=$dynamic_ip # DST_MANAGED_EXTERNAL_IP' "$runner"
+  grep -F "$external_target" "$runner"
 fi
 
 step k3s
