@@ -7,6 +7,14 @@
 }
 
 Describe 'Solo bulk unlock grants' {
+    It 'recognizes every offered cosmetic in the Solo helper item catalog' {
+        $data = Get-Content (Get-DuneSoloGameplayCatalogPath) -Raw | ConvertFrom-Json
+        $recognized = [Collections.Generic.HashSet[string]]::new([StringComparer]::OrdinalIgnoreCase)
+        foreach ($property in $data.names.PSObject.Properties) { [void]$recognized.Add($property.Name) }
+        foreach ($property in $data.items.PSObject.Properties) { [void]$recognized.Add($property.Name) }
+        $missing = @((Get-DuneCosmeticsCatalog).templates | Where-Object { -not $recognized.Contains($_.template) })
+        $missing.template | Should -BeNullOrEmpty
+    }
     BeforeEach {
         Mock Assert-DuneSoloSupportedPlatform {}
         Mock Assert-DuneSoloGameClosed {}
