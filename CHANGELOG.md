@@ -13,6 +13,11 @@ here cover everything those tags shipped.
 
 ## [Unreleased]
 
+### 15.2.8-test3 — Public IP updates
+
+- Keep the VM LAN address as Kubernetes InternalIP and the control-plane address when applying a public IP or DDNS update. Apply the public or relay address only as ExternalIP, including after reboot with legacy settings.
+
+
 ### 15.2.8-test2 — Solo grants
 
 - Add Solo bulk grants for building sets, armor, weapon and vehicle skins, dyes and house swatches using the same curated catalogs as Self-Hosted. Skip saved unlocks and held tokens, recheck ownership before writing, batch into available backpack slots and retain the previous save automatically. Tokens are processed after login; grants do not guarantee in-game activation.
