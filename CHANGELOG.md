@@ -17,6 +17,7 @@ here cover everything those tags shipped.
 
 - Add Solo bulk grants for building sets, armor, weapon and vehicle skins, dyes and house swatches using the same curated catalogs as Self-Hosted. Skip saved unlocks and held tokens, recheck ownership before writing, batch into available backpack slots and retain the previous save automatically. Tokens are processed after login; grants do not guarantee in-game activation.
 - Remove repeated confirmation popups from routine Solo grants and backed-up edits. Keep confirmations for restores, deletions and reward resets.
+- Update vulnerable build dependencies: source-map-js to 1.2.2, smol-toml to 1.9.0 and the site CSS selector parser to 7.1.6.
 
 - Ignore the unfixed CVE-2026-93748 in Astro's transitive `http-cache-semantics` dependency during Trivy scans.
 
