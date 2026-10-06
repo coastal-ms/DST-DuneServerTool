@@ -4,6 +4,27 @@ BeforeAll {
 }
 
 Describe 'Solo Mode route registration' {
+    It 'keeps bulk grants local-only and rejects a changed profile before writing' {
+        $result = & {
+            function Register-DuneRoute {
+                param($Method, $Path, [switch]$LocalOnly, $Handler)
+                [pscustomobject]@{ path=$Path; localOnly=[bool]$LocalOnly; handler=$Handler }
+            }
+            $route = @(. $script:RouteFile) | Where-Object path -eq '/api/solo/grant-unlocks'
+            $script:bulkCalled = $false
+            $script:bulkError = $null
+            function Invoke-WithDuneLock { param($Name, $Script); & $Script }
+            function Assert-DuneSoloExpectedProfile { throw 'Solo profile changed in another window.' }
+            function Invoke-DuneSoloGrantUnlocks { $script:bulkCalled = $true }
+            function Write-DuneJson {}
+            function Write-DuneError { param($Response, $Status, $Message); $script:bulkError=$Status }
+            & $route.handler $null $null $null @{kind='building-sets';expectedProfileToken='old'}
+            [pscustomobject]@{localOnly=$route.localOnly;called=$script:bulkCalled;status=$script:bulkError}
+        }
+        $result.localOnly | Should -BeTrue
+        $result.called | Should -BeFalse
+        $result.status | Should -Be 409
+    }
     It 'keeps diagnostic export and specialization edits local-only' {
         $routes = @(& {
             function Register-DuneRoute {

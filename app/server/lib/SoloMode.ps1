@@ -1,3 +1,4 @@
+. (Join-Path $PSScriptRoot 'SoloCosmetics.ps1')
 $script:DuneSoloSection = '/Script/DuneSandbox.UserServerCustomSettings'
 $script:DuneSoloSettingKeys = @(
     'DifficultyLevel',
@@ -932,6 +933,7 @@ function Get-DuneSoloStatus {
         gameRunning = ($processes.Count -gt 0)
         processes = $processes
         helperAvailable = [bool]$runtime.helperAvailable
+        cosmeticOwnership = Get-DuneSoloCosmeticOwnership -Inspection $inspection
         inspection = $inspection
         inspectionError = $inspectionError
         backupRoot = Get-DuneSoloBackupRoot

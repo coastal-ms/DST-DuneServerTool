@@ -113,6 +113,23 @@ export interface SoloRangedWeapon {
   currentAmmo: number
 }
 
+export type SoloUnlockKind = 'building-sets' | 'armor' | 'weapon' | 'vehicle' | 'dyes' | 'house' | 'placeables'
+export interface SoloCosmeticOwnership {
+  available: boolean
+  owned: string[]
+  unlocked: string[]
+  pending: string[]
+  error: string
+}
+
+export function grantSoloUnlocks(kind: SoloUnlockKind, expectedProfileToken: string): Promise<{
+  ok: boolean; submitted: number; remaining: number; skipped: number; safetyBackup?: string
+}> {
+  return api('/api/solo/grant-unlocks', {
+    method: 'POST', body: JSON.stringify({ kind, expectedProfileToken }),
+  })
+}
+
 export interface SoloStatus {
   ok: boolean
   supported: boolean
@@ -131,6 +148,7 @@ export interface SoloStatus {
   helperAvailable: boolean
   inspection: SoloInspection | null
   inspectionError: string
+  cosmeticOwnership?: SoloCosmeticOwnership
   backupRoot: string
 }
 
