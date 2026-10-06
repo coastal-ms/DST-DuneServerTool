@@ -86,6 +86,45 @@ Describe 'Settings IP update forwarding preparation' {
         }
     }
 
+    It 'reports the final IP audit after restart (<FinalMismatch>)' -ForEach @(
+        @{ FinalMismatch = $false; ExpectedStatus = 'done' }
+        @{ FinalMismatch = $true; ExpectedStatus = 'warning' }
+    ) {
+        function global:Get-DuneVmStatus { @{ exists=$true; running=$true; ip='192.168.1.20' } }
+        function global:Invoke-DuneSshHidden { @{ Exit=0; Stdout='DST_SSH_OK' } }
+        function global:Invoke-V6Ssh { '0|Healthy' }
+        Mock Read-DuneConfig { @{ SshKey = $PSCommandPath; LastAppliedPublicIp = '8.8.8.8' } }
+        Mock Test-Path { $true }
+        Mock Save-DunePublicIpApplyState {}
+        Mock Invoke-DunePublicIpWatchdogRefresh { 'DUNE_DNAT_WATCH_OK' }
+        Mock Get-DunePublicIpHostRouteEnabled { $true }
+        Mock Invoke-DunePublicIpHostRoute {}
+        Mock Test-NetConnection { $true }
+        Mock Save-DuneConfig {}
+        $script:finalMismatch = $FinalMismatch
+        Mock Invoke-DunePublicIpRemoteScript {
+            param($Ip, $Script, $Arguments)
+            if ($Script -match 'NETWORK_DONE') { return 'NETWORK_DONE' }
+            if ($Script -match 'BGIP_MUTATE_DONE') {
+                # Status still advertises the old WAN address during mutation.
+                $Script | Should -Not -Match 'AUDIT_MISMATCH'
+                return "BG_NS=funcom-test`nBG_NAME=test`nBGIP_MUTATE_DONE"
+            }
+            if ($Script -match 'BGIP_VERIFY_DONE') {
+                $Script | Should -Match 'messageQueues.statuses'
+                $audit = if ($script:finalMismatch) { 'AUDIT_MISMATCH count=2' } else { 'AUDIT_OK all IP surfaces match 8.8.4.4' }
+                return "EXTERNALIP=8.8.4.4`nALIAS_OK=yes`nBG_PHASE=Healthy`n$audit"
+            }
+            throw 'Unexpected remote apply operation'
+        }
+        $result = Invoke-DunePublicIpApply -PublicIp '8.8.4.4'
+        $result.ok | Should -BeTrue -Because $result.error
+        $step = $result.steps | Where-Object id -EQ 'bg-ip'
+        $step.status | Should -Be $ExpectedStatus
+        if ($FinalMismatch) { $step.detail | Should -Match '2 IP-surface mismatch' }
+        else { $step.detail | Should -Not -Match 'mismatch' }
+    }
+
     It 'refreshes the shipped installer with privilege and verified completion' {
         Mock Invoke-DunePublicIpRemoteScript { 'DUNE_DNAT_WATCH_OK' }
         Invoke-DunePublicIpWatchdogRefresh -Ip '192.168.1.20' | Should -Be 'DUNE_DNAT_WATCH_OK'
