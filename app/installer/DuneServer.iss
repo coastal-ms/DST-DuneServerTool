@@ -16,7 +16,7 @@
 ;                 -> NOT touched by install or uninstall (preserves user config)
 
 #define MyAppName        "Dune Server Tool"
-#define MyAppVersion "15.2.8-test3"
+#define MyAppVersion "15.2.8-test4"
 #ifndef MyAppNumericVersion
 #define MyAppCoreVersion Copy(MyAppVersion, 1, Pos("-", MyAppVersion + "-") - 1)
 #define MyAppNumericVersion MyAppCoreVersion + (Len(MyAppCoreVersion) - Len(StringChange(MyAppCoreVersion, ".", "")) == 2 ? ".0" : "")

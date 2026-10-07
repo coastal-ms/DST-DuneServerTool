@@ -13,6 +13,14 @@ here cover everything those tags shipped.
 
 ## [Unreleased]
 
+### 15.2.8-test4 — LAN installation and management
+
+- Provision LAN hosts from a completed local Steam server-tool download, then transfer and verify the VM image before import. The remote host no longer depends on anonymous SteamCMD access.
+- Keep the existing SSH key when authorizing a new guest, collect world details before setup, and report each provisioning stage accurately.
+- Discover VM state, uptime and guest addresses together with the saved host credential. Share recent observations across requests to reduce repeated remote calls.
+- Verify public TCP reachability through independent external observers, consistently with the header check. An unavailable check remains unverified rather than being reported as a closed port.
+
+
 ### 15.2.8-test3 — Public IP updates
 
 - Keep the VM LAN address as Kubernetes InternalIP and the control-plane address when applying a public IP or DDNS update. Apply the public or relay address only as ExternalIP, including after reboot with legacy settings.

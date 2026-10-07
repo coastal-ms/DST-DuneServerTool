@@ -9,6 +9,9 @@ BeforeAll {
 
 Describe 'Get-DuneVmStatus batched LAN discovery' {
     BeforeEach {
+        function global:Invoke-WithDuneLock { param($Name, $TimeoutSec, $Script) & $Script }
+        $script:DuneLanVmSnapshotCache = $null
+        $script:DuneApiLockTable = $null
         $script:fakeCred = [System.Management.Automation.PSCredential]::new(
             'HOST\Administrator', (ConvertTo-SecureString 'x' -AsPlainText -Force))
         function global:Get-DuneHyperVSplat { @{ ComputerName = '192.168.1.50'; Credential = $script:fakeCred } }
@@ -29,6 +32,38 @@ Describe 'Get-DuneVmStatus batched LAN discovery' {
         }
         Should -Invoke Get-VM -Times 0
         Should -Invoke Get-VMNetworkAdapter -Times 0
+    }
+
+    It 'shares recent discovery and forces an updated observation on demand' {
+        Get-DuneVmStatus | Out-Null
+        Get-DuneVmStatus | Out-Null
+        Should -Invoke Invoke-Command -Times 1
+        Get-DuneVmStatus -Force | Out-Null
+        Should -Invoke Invoke-Command -Times 2
+    }
+
+    It 'does not reuse a different host snapshot' {
+        Get-DuneVmStatus | Out-Null
+        function global:Get-DuneHyperVSplat { @{ ComputerName = '192.168.1.51'; Credential = $script:fakeCred } }
+        Get-DuneVmStatus | Out-Null
+        Should -Invoke Invoke-Command -Times 2
+    }
+
+    It 'uses separate named lock and cache entries in the shared API table' {
+        $script:DuneApiLockTable = [hashtable]::Synchronized(@{})
+        function global:Invoke-WithDuneLock {
+            param($Name, $TimeoutSec, $Script)
+            if (-not $script:DuneApiLockTable.ContainsKey($Name)) {
+                $script:DuneApiLockTable[$Name] = [Threading.SemaphoreSlim]::new(1, 1)
+            }
+            $lock = $script:DuneApiLockTable[$Name]
+            $lock.Wait(1000) | Should -BeTrue
+            try { & $Script } finally { $lock.Release() | Out-Null }
+        }
+        Get-DuneVmStatus -Force | Out-Null
+            Get-DuneVmStatus -Force | Out-Null
+            Should -Invoke Invoke-Command -Times 2
+            @($script:DuneApiLockTable.Values | Where-Object { $_ -is [Threading.SemaphoreSlim] }).Count | Should -Be 1
     }
 
     It 'reports an unavailable host instead of a stale running snapshot' {

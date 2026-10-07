@@ -1,7 +1,8 @@
-BeforeAll {
+﻿BeforeAll {
     . (Join-Path $PSScriptRoot '_TestHelpers.ps1')
     Import-DstLib 'Config.ps1'
     Import-DstLib 'PublicIp.ps1'
+    Import-DstLib 'Ports.ps1'
 }
 
 Describe 'Public IP validation' {
@@ -42,8 +43,10 @@ Describe 'Public IP validation' {
 
 Describe 'Settings IP update forwarding preparation' {
     It 'updates a changed IP through Settings with automatic forwarding refresh (<Mode>)' -ForEach @(
-        @{ Mode = 'manual' }
-        @{ Mode = 'ddns' }
+        @{ Mode = 'manual'; Verdict = 'open'; VerifyStatus = 'done' }
+        @{ Mode = 'ddns'; Verdict = 'open'; VerifyStatus = 'done' }
+        @{ Mode = 'manual'; Verdict = 'closed'; VerifyStatus = 'warning' }
+        @{ Mode = 'manual'; Verdict = 'unknown'; VerifyStatus = 'warning' }
     ) {
         function global:Get-DuneVmStatus { @{ exists=$true; running=$true; ip='192.168.1.20' } }
         function global:Invoke-DuneSshHidden { @{ Exit=0; Stdout='DST_SSH_OK' } }
@@ -53,7 +56,8 @@ Describe 'Settings IP update forwarding preparation' {
         Mock Save-DunePublicIpApplyState {}
         Mock Get-DunePublicIpHostRouteEnabled { $true }
         Mock Invoke-DunePublicIpHostRoute { $script:applyOrder.Add('host-route') }
-        Mock Test-NetConnection { $true }
+        $script:portVerdict = $Verdict
+        Mock Test-DunePortBuiltin { $script:portVerdict }
         Mock Save-DuneConfig {}
         $script:applyOrder = [Collections.Generic.List[string]]::new()
         Mock Invoke-DunePublicIpRemoteScript {
@@ -80,6 +84,8 @@ Describe 'Settings IP update forwarding preparation' {
         }
         $result = Invoke-DunePublicIpApply -PublicIp '8.8.4.4' -Mode $Mode -Hostname 'server.example.com'
         $result.ok | Should -BeTrue -Because $result.error
+        ($result.steps | Where-Object id -EQ 'verify').status | Should -Be $VerifyStatus
+        Should -Invoke Test-DunePortBuiltin -Times 1 -Exactly -ParameterFilter { $PublicIp -eq '8.8.4.4' -and $Port -eq 31982 -and $Protocol -eq 'TCP' }
         @($script:applyOrder) | Should -Be @('forwarding','host-route','network','battlegroup','verify')
         Should -Invoke Save-DuneConfig -Times 1 -ParameterFilter {
             $Config.LastAppliedPublicIp -eq '8.8.4.4' -and $Config.PublicIpMode -eq $Mode
@@ -99,7 +105,7 @@ Describe 'Settings IP update forwarding preparation' {
         Mock Invoke-DunePublicIpWatchdogRefresh { 'DUNE_DNAT_WATCH_OK' }
         Mock Get-DunePublicIpHostRouteEnabled { $true }
         Mock Invoke-DunePublicIpHostRoute {}
-        Mock Test-NetConnection { $true }
+        Mock Test-DunePortBuiltin { 'open' }
         Mock Save-DuneConfig {}
         $script:finalMismatch = $FinalMismatch
         Mock Invoke-DunePublicIpRemoteScript {
