@@ -6,7 +6,6 @@ BeforeAll {
     # Isolate the transport boundary without opening a live PSSession. The real
     # remote verification script still runs against fixture files below.
     function global:Invoke-Command { param($Session, $ArgumentList, $ScriptBlock, $ComputerName, $Credential, $ErrorAction) }
-    function global:Copy-Item { param($LiteralPath, $Destination, $ToSession, $ErrorAction) }
     $script:token = 'e30.' + [Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes('{"HostId":"test-host"}')).TrimEnd('=').Replace('+','-').Replace('/','_') + '.signature'
     function New-TestImage($library, $state = 4) {
         $root = Join-Path $library 'steamapps\common\Self Hosted Server'
@@ -20,7 +19,7 @@ BeforeAll {
 }
 
 AfterAll {
-    Remove-Item function:global:Invoke-Command, function:global:Copy-Item -ErrorAction SilentlyContinue
+    Remove-Item function:global:Invoke-Command -ErrorAction SilentlyContinue
 }
 
 Describe 'Local Steam image selection' {
@@ -89,6 +88,9 @@ Describe 'World setup validation before import' {
 }
 
 Describe 'Verified transfer of VM files only' {
+    BeforeAll {
+        function Copy-Item { param($LiteralPath, $Destination, $ToSession, $ErrorAction) }
+    }
     BeforeEach {
         $script:image = New-TestImage (Join-Path $TestDrive ([guid]::NewGuid().ToString('N')))
         New-Item -ItemType Directory -Path "$image\.logs" | Out-Null
