@@ -13,6 +13,10 @@ here cover everything those tags shipped.
 
 ## [Unreleased]
 
+## [15.2.8] - 2026-10-07
+
+- Use the dedicated-server Landsraad struct supplied by the installed game's defaults. Preserve legacy custom values and complete default members when updating settings, and read the current struct in Player Admin. Older game defaults retain their legacy format.
+
 ### 15.2.8-test5 — Lifecycle rollback after host switches
 
 - Store lifecycle rollback settings separately for each Hyper-V host and VM. Preserve the legacy local record for its original owner so switching to a LAN host no longer blocks reconciliation with another host's rollback state. Identity checks still prevent applying rollback settings to the wrong VM.
@@ -38,7 +42,7 @@ here cover everything those tags shipped.
 
 - Ignore the unfixed CVE-2026-93748 in Astro's transitive `http-cache-semantics` dependency during Trivy scans.
 
-## [15.2.8] - 2026-10-05
+### Additional accepted fixes
 
 - Correct Retail Solo specialization track IDs so Gathering, Exploration, Combat and Sabotage edits target the matching in-game specialization. Preserve Crafting, the legacy adapter, other tracks, purchased rewards and journeys during individual level edits.
 

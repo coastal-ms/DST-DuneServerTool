@@ -68,13 +68,10 @@ function Get-DuneLandsraadIniSettings {
     } catch {
         return @{ ok = $false; error = "read UserGame.ini: $($_.Exception.Message)"; settings = @() }
     }
-    # Isolate the LandsraadSettings Data=(...) line.
-    $blob = ''
-    foreach ($line in ($raw -replace "`r", '' -split "`n")) {
-        if ($line -match '^\s*Data\s*=\s*\(' -and $line -match 'm_Landsraad|m_NumberOfWeeksTermRetention|m_TaskGoalAmount') {
-            $blob = $line; break
-        }
-    }
+    # Read the current server box, falling back to the legacy format in-section.
+    $doc = ConvertFrom-DuneIniDoc -Raw $raw
+    $structKey = Get-DuneLandsraadStructKey -Doc $doc
+    $blob = Get-DuneStructBlobFromDoc -Doc $doc -Section '/Script/DuneSandbox.LandsraadSettings' -StructKey $structKey
     foreach ($def in $script:DuneLandsraadIniKeys) {
         $val = $null
         if ($blob -and $blob -match ($def.Key + '\s*=\s*([^,()]+)')) {

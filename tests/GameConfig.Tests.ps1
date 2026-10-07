@@ -1004,7 +1004,7 @@ Describe 'DuneGameConfigSchema: experimental binary CVars' -Tag 'GameConfig' {
             $f.risk | Should -BeIn @('experimental', 'diagnostic', 'high', 'critical')
         }
         $categories = @(Get-DuneAdvancedCvarCategoriesApi)
-        ($categories | Measure-Object count -Sum).Sum | Should -BeGreaterThan 4900
+        ($categories | ForEach-Object { $_['count'] } | Measure-Object -Sum).Sum | Should -BeGreaterThan 4900
         @(Get-DuneAdvancedCvarCategoryApi -Category 'Dune gameplay').Count | Should -BeGreaterThan 500
         $fullCatalog = @(Get-DuneAdvancedCvarCatalog)
         @(Get-DuneAdvancedCvarCategoryApi -Category 'All').Count | Should -Be $fullCatalog.Count
@@ -1436,14 +1436,14 @@ $script:DstManagedEnd
         )
 
         @($notice.items).Count | Should -Be 1
-        @($notice.items)[0].structKey | Should -Be 'Data'
+        @($notice.items)[0].structKey | Should -Be 'DedicatedServerData'
     }
 
-    It 'exposes the field-confirmed Landsraad abandon cooldown' {
+    It 'exposes the Landsraad abandon cooldown' {
         $field = @($script:DuneGameConfigSchema | Where-Object { $_.Key -eq 'm_LandsraadContractsAbandonCooldownSeconds' })
 
         $field.Count | Should -Be 1
-        $field[0].StructKey | Should -Be 'Data'
+        $field[0].StructKey | Should -Be 'DedicatedServerData'
         $field[0].Default | Should -Be '3600'
         $field[0].ClientApply | Should -BeTrue
     }
@@ -1949,6 +1949,7 @@ Describe 'DuneGameConfigSchema: CraftingSettings fields' -Tag 'GameConfig' {
     }
 
     It 'allows the client-side writer to persist repair and recycler weights' {
+        Mock Test-DuneGameClientRunning { $false }
         $dir = (Get-PSDrive TestDrive).Root
         $result = Save-DuneGameConfigClient -Dir $dir -Updates @(
             @{ key='m_RepairCostWeight'; value='0.25' },
@@ -1963,6 +1964,7 @@ Describe 'DuneGameConfigSchema: CraftingSettings fields' -Tag 'GameConfig' {
     }
 
     It 'parks client-touched sections inside the DST managed block at the bottom' {
+        Mock Test-DuneGameClientRunning { $false }
         # Users want to copy the DST section to share with players connecting to
         # their server, so every DST-touched key must live below the BEGIN marker
         # and unrelated sections (audio/video) must stay where they were.
