@@ -14,6 +14,53 @@ $script:DuneUpdateRepo  = 'coastal-ms/DST-DuneServerTool'
 $script:DuneUpdateUA    = 'DuneServerTool-Updater'
 $script:DuneUpdateCache = $null    # cached release lookup (1 h TTL)
 
+
+# All updater requests share a cooldown after failures, including forced checks.
+$script:DuneUpdateRetryAt = [DateTime]::MinValue
+$script:DuneUpdateRetryMessage = ''
+$script:DuneUpdateCommitCache = @{}
+
+function Invoke-DuneUpdateApi {
+    param([Parameter(Mandatory)][string]$Uri, [hashtable]$Headers)
+    if ([DateTime]::UtcNow -lt $script:DuneUpdateRetryAt) {
+        throw $script:DuneUpdateRetryMessage
+    }
+    try {
+        return Invoke-RestMethod -Uri $Uri -Headers $Headers -TimeoutSec 15 -ErrorAction Stop
+    } catch {
+        $failure = $_
+        $retryAt = [DateTime]::UtcNow.AddMinutes(1)
+        $message = $failure.Exception.Message
+        try {
+            $response = $failure.Exception.Response
+            $remaining = ''; $reset = ''; $retryAfter = ''
+            # PowerShell 7 exposes HttpResponseHeaders instead of WebHeaderCollection.
+            if ($response.Headers -is [System.Net.Http.Headers.HttpResponseHeaders]) {
+                if ($response.Headers.Contains('X-RateLimit-Remaining')) { $remaining = @($response.Headers.GetValues('X-RateLimit-Remaining'))[0] }
+                if ($response.Headers.Contains('X-RateLimit-Reset')) { $reset = @($response.Headers.GetValues('X-RateLimit-Reset'))[0] }
+                if ($response.Headers.Contains('Retry-After')) { $retryAfter = @($response.Headers.GetValues('Retry-After'))[0] }
+            }
+            else {
+                $remaining = [string]$response.Headers['X-RateLimit-Remaining']
+                $reset = [string]$response.Headers['X-RateLimit-Reset']
+                $retryAfter = [string]$response.Headers['Retry-After']
+            }
+            $seconds = 0L
+            if ($remaining -eq '0' -and [long]::TryParse($reset, [ref]$seconds)) {
+                $resetAt = [DateTimeOffset]::FromUnixTimeSeconds($seconds).UtcDateTime
+                if ($resetAt -gt $retryAt) { $retryAt = $resetAt }
+                $message = 'GitHub update-check limit reached. Try again after ' + $retryAt.ToLocalTime().ToString('h:mm tt') + ' (local time).'
+            } elseif ([long]::TryParse($retryAfter, [ref]$seconds) -and $seconds -gt 0) {
+                $retryAt = [DateTime]::UtcNow.AddSeconds([Math]::Max(60, $seconds))
+                $message = 'GitHub temporarily limited update checks. Try again after ' + $retryAt.ToLocalTime().ToString('h:mm tt') + ' (local time).'
+            }
+        } catch { }
+        $script:DuneUpdateRetryAt = $retryAt
+        $script:DuneUpdateRetryMessage = $message
+        throw $message
+    }
+}
+
 # --- Helpers -----------------------------------------------------------------
 
 function Compare-DuneSemver {
@@ -86,15 +133,15 @@ function Compare-DuneSemver {
 function Get-DuneLatestRelease {
     param([switch]$Force)
     $now = [DateTime]::UtcNow
-    if (-not $Force -and $script:DuneUpdateCache -and
-        ($now - $script:DuneUpdateCache.fetchedAt).TotalMinutes -lt 60) {
+    if ($script:DuneUpdateCache -and
+        ($now - $script:DuneUpdateCache.fetchedAt).TotalSeconds -lt $(if ($Force) { 300 } else { 3600 })) {
         return $script:DuneUpdateCache
     }
     try {
         [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
         $headers = @{ 'User-Agent' = $script:DuneUpdateUA; 'Accept' = 'application/vnd.github+json' }
         $uri = "https://api.github.com/repos/$($script:DuneUpdateRepo)/releases/latest"
-        $rel = Invoke-RestMethod -Uri $uri -Headers $headers -TimeoutSec 15 -ErrorAction Stop
+        $rel = Invoke-DuneUpdateApi -Uri $uri -Headers $headers
         # Strict: the release rule requires `DuneServerSetup.exe` as the sole
         # asset. Match it exactly. Do NOT fall back to "any *.exe" - that
         # masked malformed releases historically and conflicts with the
@@ -135,14 +182,14 @@ $script:DuneReleasesCache = $null   # cached /releases list (1 h TTL)
 function Get-DuneReleases {
     param([switch]$Force)
     $now = [DateTime]::UtcNow
-    if (-not $Force -and $script:DuneReleasesCache -and
-        ($now - $script:DuneReleasesCache.fetchedAt).TotalMinutes -lt 60) {
+    if ($script:DuneReleasesCache -and
+        ($now - $script:DuneReleasesCache.fetchedAt).TotalSeconds -lt $(if ($Force) { 300 } else { 3600 })) {
         return $script:DuneReleasesCache.releases
     }
     [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
     $headers = @{ 'User-Agent' = $script:DuneUpdateUA; 'Accept' = 'application/vnd.github+json' }
     $uri = "https://api.github.com/repos/$($script:DuneUpdateRepo)/releases?per_page=30"
-    $rels = Invoke-RestMethod -Uri $uri -Headers $headers -TimeoutSec 15 -ErrorAction Stop
+    $rels = Invoke-DuneUpdateApi -Uri $uri -Headers $headers
     $mapped = foreach ($rel in $rels) {
         $asset = $rel.assets | Where-Object { $_.name -eq 'DuneServerSetup.exe' } | Select-Object -First 1
         [pscustomobject]@{
@@ -371,6 +418,7 @@ function Get-DuneEmbeddedBuildIdentityFromText {
 function Get-DuneReleaseCommitSha {
     param([Parameter(Mandatory)][string]$Tag)
     $tagValue = $Tag.Trim()
+    if ($script:DuneUpdateCommitCache.ContainsKey($tagValue)) { return $script:DuneUpdateCommitCache[$tagValue] }
     if ($tagValue -notmatch '^v?\d+\.\d+\.\d+(?:\.\d+)?(?:-[0-9A-Za-z.-]+)?$') {
         throw 'Release tag is invalid.'
     }
@@ -381,7 +429,7 @@ function Get-DuneReleaseCommitSha {
     }
     $encoded = [uri]::EscapeDataString($tagValue)
     $refUri = "https://api.github.com/repos/$($script:DuneUpdateRepo)/git/ref/tags/$encoded"
-    $ref = Invoke-RestMethod -Uri $refUri -Headers $headers -TimeoutSec 15 -ErrorAction Stop
+    $ref = Invoke-DuneUpdateApi -Uri $refUri -Headers $headers
     $type = [string]$ref.object.type
     $sha = ([string]$ref.object.sha).Trim().ToLowerInvariant()
     for ($depth = 0; $depth -lt 5 -and $type -eq 'tag'; $depth++) {
@@ -389,13 +437,14 @@ function Get-DuneReleaseCommitSha {
             throw 'Annotated release tag returned an invalid object id.'
         }
         $tagObjectUri = "https://api.github.com/repos/$($script:DuneUpdateRepo)/git/tags/$sha"
-        $tagObject = Invoke-RestMethod -Uri $tagObjectUri -Headers $headers -TimeoutSec 15 -ErrorAction Stop
+        $tagObject = Invoke-DuneUpdateApi -Uri $tagObjectUri -Headers $headers
         $type = [string]$tagObject.object.type
         $sha = ([string]$tagObject.object.sha).Trim().ToLowerInvariant()
     }
     if ($type -ne 'commit' -or $sha -notmatch '^[0-9a-f]{40}$') {
         throw 'Release tag does not resolve to an immutable Git commit.'
     }
+    $script:DuneUpdateCommitCache[$tagValue] = $sha
     return $sha
 }
 
