@@ -165,23 +165,42 @@ function ConvertFrom-DuneHyperVLifecycleStatus {
 }
 
 function Get-DuneHyperVLifecycleStatePath {
-    Join-Path $env:APPDATA 'DuneServer\hyperv-lifecycle-state.json'
+    param([hashtable]$HostSnapshot)
+    $root = Join-Path $env:APPDATA 'DuneServer'
+    if (-not $HostSnapshot) { return Join-Path $root 'hyperv-lifecycle-state.json' }
+    if (-not $HostSnapshot.HostIdentity -or -not $HostSnapshot.VmId) {
+        throw 'Lifecycle rollback storage requires a host identity and VM ID.'
+    }
+    $identity = ([string]$HostSnapshot.HostIdentity).ToLowerInvariant() + '|' + ([string]$HostSnapshot.VmId).ToLowerInvariant()
+    $sha = [Security.Cryptography.SHA256]::Create()
+    try { $key = ([BitConverter]::ToString($sha.ComputeHash([Text.Encoding]::UTF8.GetBytes($identity)))).Replace('-', '').ToLowerInvariant() }
+    finally { $sha.Dispose() }
+    return Join-Path $root "hyperv-lifecycle-states\$key.json"
 }
 
 function Read-DuneHyperVLifecycleState {
-    $path = Get-DuneHyperVLifecycleStatePath
-    if (-not (Test-Path -LiteralPath $path -PathType Leaf)) { return $null }
+    param([hashtable]$HostSnapshot)
+    $path = Get-DuneHyperVLifecycleStatePath -HostSnapshot $HostSnapshot
+    $legacy = $false
+    if (-not (Test-Path -LiteralPath $path -PathType Leaf)) {
+        if (-not $HostSnapshot) { return $null }
+        $path = Get-DuneHyperVLifecycleStatePath
+        if (-not (Test-Path -LiteralPath $path -PathType Leaf)) { return $null }
+        $legacy = $true
+    }
     try {
-        return (Get-Content -LiteralPath $path -Raw -ErrorAction Stop |
-            ConvertFrom-Json -ErrorAction Stop)
+        $state = Get-Content -LiteralPath $path -Raw -ErrorAction Stop | ConvertFrom-Json -ErrorAction Stop
     } catch {
         throw "Hyper-V lifecycle rollback state is unreadable: $($_.Exception.Message)"
     }
+    # An older single-file record remains available only to its original owner.
+    if ($legacy -and -not (Test-DuneHyperVLifecycleStateIdentity -State $state -HostSnapshot $HostSnapshot)) { return $null }
+    return $state
 }
 
 function Save-DuneHyperVLifecycleState {
     param([Parameter(Mandatory)][hashtable]$State)
-    $path = Get-DuneHyperVLifecycleStatePath
+    $path = Get-DuneHyperVLifecycleStatePath -HostSnapshot @{ HostIdentity=$State.hostIdentity; VmId=$State.vmId }
     $dir = Split-Path -Parent $path
     if (-not (Test-Path -LiteralPath $dir)) {
         New-Item -ItemType Directory -Path $dir -Force -ErrorAction Stop | Out-Null
@@ -197,9 +216,13 @@ function Save-DuneHyperVLifecycleState {
 }
 
 function Remove-DuneHyperVLifecycleState {
-    $path = Get-DuneHyperVLifecycleStatePath
-    if (Test-Path -LiteralPath $path -PathType Leaf) {
-        Remove-Item -LiteralPath $path -Force -ErrorAction Stop
+    param([Parameter(Mandatory)][hashtable]$HostSnapshot)
+    foreach ($path in @((Get-DuneHyperVLifecycleStatePath -HostSnapshot $HostSnapshot), (Get-DuneHyperVLifecycleStatePath))) {
+        if (-not (Test-Path -LiteralPath $path -PathType Leaf)) { continue }
+        $state = Get-Content -LiteralPath $path -Raw -ErrorAction Stop | ConvertFrom-Json -ErrorAction Stop
+        if (Test-DuneHyperVLifecycleStateIdentity -State $state -HostSnapshot $HostSnapshot) {
+            Remove-Item -LiteralPath $path -Force -ErrorAction Stop
+        }
     }
 }
 
@@ -270,7 +293,7 @@ function Get-DuneHyperVLifecycleStatus {
     }
     $saved = $null
     $savedError = ''
-    try { $saved = Read-DuneHyperVLifecycleState } catch { $savedError = $_.Exception.Message }
+    try { $saved = Read-DuneHyperVLifecycleState -HostSnapshot $hostSnapshot } catch { $savedError = $_.Exception.Message }
     $stateMatches = if ($saved) {
         Test-DuneHyperVLifecycleStateIdentity -State $saved -HostSnapshot $hostSnapshot
     } else { $false }
@@ -348,7 +371,7 @@ function Invoke-DuneHyperVLifecycleReconcile {
     if (-not $before.guest.supported) { throw $before.guest.reason }
 
     $hostSnapshot = Get-DuneHyperVLifecycleHostSnapshot
-    $saved = Read-DuneHyperVLifecycleState
+    $saved = Read-DuneHyperVLifecycleState -HostSnapshot $hostSnapshot
     $createdState = $false
     if ($saved -and -not (Test-DuneHyperVLifecycleStateIdentity -State $saved -HostSnapshot $hostSnapshot)) {
         throw 'Saved Hyper-V lifecycle rollback state belongs to a different host or VM. Remove or correct that state before reconciling.'
@@ -362,7 +385,7 @@ function Invoke-DuneHyperVLifecycleReconcile {
             priorAutomaticStopAction = $hostSnapshot.AutomaticStopAction
             recordedAt = [datetime]::UtcNow.ToString('o')
         }
-        $saved = Read-DuneHyperVLifecycleState
+        $saved = Read-DuneHyperVLifecycleState -HostSnapshot $hostSnapshot
         $createdState = $true
     }
 
@@ -404,7 +427,7 @@ function Invoke-DuneHyperVLifecycleReconcile {
             } catch { $rollbackErrors.Add("guest: $($_.Exception.Message)") }
         }
         if ($createdState -and $rollbackErrors.Count -eq 0) {
-            try { Remove-DuneHyperVLifecycleState } catch {
+            try { Remove-DuneHyperVLifecycleState -HostSnapshot $hostSnapshot } catch {
                 $rollbackErrors.Add("state: $($_.Exception.Message)")
             }
         }
@@ -426,7 +449,7 @@ function Remove-DuneHyperVLifecycle {
 
     $status = Get-DuneHyperVLifecycleStatus
     $hostSnapshot = Get-DuneHyperVLifecycleHostSnapshot
-    $saved = Read-DuneHyperVLifecycleState
+    $saved = Read-DuneHyperVLifecycleState -HostSnapshot $hostSnapshot
     if (-not $saved) {
         if (-not $status.guest.installed -and -not $status.host.compliant) {
             return $status
@@ -452,7 +475,7 @@ function Remove-DuneHyperVLifecycle {
         [void](Set-DuneHyperVLifecycleHostValues -HostSnapshot $hostSnapshot `
             -ShutdownEnabled ([bool]$saved.priorShutdownEnabled) `
             -AutomaticStopAction ([string]$saved.priorAutomaticStopAction))
-        Remove-DuneHyperVLifecycleState
+        Remove-DuneHyperVLifecycleState -HostSnapshot $hostSnapshot
         if (Get-Command Write-DuneLog -ErrorAction SilentlyContinue) {
             Write-DuneLog "Hyper-V VM lifecycle integration removed for $($hostSnapshot.HostIdentity)"
         }

@@ -13,6 +13,10 @@ here cover everything those tags shipped.
 
 ## [Unreleased]
 
+### 15.2.8-test5 — Lifecycle rollback after host switches
+
+- Store lifecycle rollback settings separately for each Hyper-V host and VM. Preserve the legacy local record for its original owner so switching to a LAN host no longer blocks reconciliation with another host's rollback state. Identity checks still prevent applying rollback settings to the wrong VM.
+
 ### 15.2.8-test4 — LAN installation and management
 
 - Provision LAN hosts from a completed local Steam server-tool download, then transfer and verify the VM image before import. The remote host no longer depends on anonymous SteamCMD access.
