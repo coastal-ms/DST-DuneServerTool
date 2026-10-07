@@ -77,11 +77,24 @@ function Copy-DuneLanImage {
     return @{ ok=$true; imageRoot=$destination }
 }
 
+function Remove-DuneLanImageStage {
+    param($Session, [string]$ImageRoot)
+    Invoke-Command -Session $Session -ArgumentList $ImageRoot -ScriptBlock {
+        param($root)
+        $resolved = [IO.Path]::GetFullPath($root)
+        if ($resolved -notmatch '^[A-Za-z]:\\DuneServerStage\\[a-fA-F0-9]{32}$') { throw 'Unexpected VM image staging path; preserving it.' }
+        if (-not (Test-Path -LiteralPath $resolved)) { return }
+        $entries = @(Get-Item -LiteralPath $resolved -Force) + @(Get-ChildItem -LiteralPath $resolved -Recurse -Force)
+        if (@($entries | Where-Object { $_.Attributes -band [IO.FileAttributes]::ReparsePoint }).Count) { throw 'VM image staging contains a link; preserving it.' }
+        Remove-Item -LiteralPath $resolved -Recurse -Force -ErrorAction Stop
+    } -ErrorAction Stop
+}
+
 function Assert-DuneLanWorldInputs {
     param([string]$WorldName, [int]$Region, [string]$ServerToken)
     # Funcom interpolates the name into YAML and sed. Reject metacharacters
     # before any import instead of letting them alter that generated document.
-    if ($WorldName -notmatch '^[A-Za-z0-9][A-Za-z0-9 ._-]{0,49}$') { throw 'Enter a world name of 1â€“50 letters, numbers, spaces, dots, underscores or hyphens.' }
+    if ($WorldName -notmatch '^[A-Za-z0-9][A-Za-z0-9 ._-]{0,49}$') { throw 'Enter a world name of 1-50 letters, numbers, spaces, dots, underscores or hyphens.' }
     if ($Region -lt 1 -or $Region -gt 5) { throw 'Select a world region.' }
     if ($ServerToken -notmatch '^[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+$') { throw 'Enter the self-hosted server token from your Dune account.' }
     try {

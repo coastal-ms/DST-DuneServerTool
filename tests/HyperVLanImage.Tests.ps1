@@ -153,3 +153,38 @@ Describe 'Move only the recorded old VM client route' {
         Should -Invoke Remove-NetRoute -Times 0
     }
 }
+
+Describe 'Transferred VM image staging cleanup' {
+    BeforeEach {
+        Mock Invoke-Command {
+            & $ScriptBlock $ArgumentList
+        }
+    }
+    It 'rejects paths outside a single generated staging directory before deletion' {
+        Mock Remove-Item { throw 'Must never delete an unrelated directory.' }
+        { Remove-DuneLanImageStage -Session $null -ImageRoot 'C:\DuneAwakeningServer' } | Should -Throw '*Unexpected VM image staging path*'
+        Should -Invoke Remove-Item -Times 0
+    }
+    It 'accepts an absent generated stage without deleting another path' {
+        Mock Test-Path { $false }
+        Mock Remove-Item {}
+        Remove-DuneLanImageStage -Session $null -ImageRoot ('C:\DuneServerStage\' + ('a' * 32))
+        Should -Invoke Remove-Item -Times 0
+    }
+    It 'removes only the verified stage after checking links' {
+        Mock Test-Path { $true }
+        Mock Get-Item { @{Attributes=[IO.FileAttributes]::Directory} }
+        Mock Get-ChildItem { @{Attributes=[IO.FileAttributes]::Archive} }
+        Mock Remove-Item {}
+        Remove-DuneLanImageStage -Session $null -ImageRoot ('C:\DuneServerStage\' + ('a' * 32))
+        Should -Invoke Remove-Item -Times 1 -ParameterFilter { $LiteralPath -eq ('C:\DuneServerStage\' + ('a' * 32)) -and $Recurse -and $Force }
+    }
+    It 'preserves a stage containing a filesystem link' {
+        Mock Test-Path { $true }
+        Mock Get-Item { @{Attributes=[IO.FileAttributes]::Directory} }
+        Mock Get-ChildItem { @{Attributes=[IO.FileAttributes]::ReparsePoint} }
+        Mock Remove-Item {}
+        { Remove-DuneLanImageStage -Session $null -ImageRoot ('C:\DuneServerStage\' + ('a' * 32)) } | Should -Throw '*contains a link*'
+        Should -Invoke Remove-Item -Times 0
+    }
+}

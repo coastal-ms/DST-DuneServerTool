@@ -868,7 +868,7 @@ function StepInstallLan() {
 
       <div className="rounded-lg border border-info/40 bg-info/10 p-3 text-sm text-text-dim mb-4">
         DST connects to <span className="font-mono">{hostIp || '(host set in previous step)'}</span> over PowerShell Remoting,
-        downloads the server image there with SteamCMD (anonymous — no Steam login), imports and starts the VM, then sets up the
+        uses the Self-Hosted Server image downloaded in Steam on this PC, transfers and verifies it on the host, imports and starts the VM, then sets up the
         battlegroup over the LAN. If the VM already exists on the host, you can skip this step.
       </div>
 

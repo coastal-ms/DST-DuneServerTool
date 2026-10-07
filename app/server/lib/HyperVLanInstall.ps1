@@ -192,7 +192,10 @@ function Invoke-DuneHyperVLanInstall {
             return (Fail 'error' "VM import failed on the host: $($importResult.error)")
         }
         $guestIp = [string]$importResult.ip
-        Step 'import' 'Import + start the VM' 'done' "VM running on the host at guest IP $guestIp."
+        $importDetail = "VM running on the host at guest IP $guestIp."
+        try { Remove-DuneLanImageStage -Session $sess -ImageRoot $stageResult.imageRoot }
+        catch { $importDetail += " Staged image retained: $($_.Exception.Message)" }
+        Step 'import' 'Import + start the VM' 'done' $importDetail
 
         # --- 4. bootstrap the battlegroup from the DST PC over the LAN -----
         Step 'bootstrap' 'Set up the battlegroup (SSH)' 'running' "Authorizing DST's key on $guestIp and running first-time battlegroup setup."
