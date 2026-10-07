@@ -231,10 +231,10 @@ export function Settings() {
   const [prLoading, setPrLoading] = useState(false)
   const [updSwitching, setUpdSwitching] = useState(false)
 
-  async function loadPreReleases() {
+  async function loadPreReleases(force = false) {
     setPrLoading(true)
     try {
-      const r = await listPreReleases({ force: true })
+      const r = await listPreReleases({ force })
       setPreReleases(r.releases ?? [])
       return r.releases ?? []
     } catch (e) {
@@ -261,7 +261,7 @@ export function Settings() {
       } else {
         setSelectedTag('')
       }
-      await onCheckUpdate()
+      await onCheckUpdate(false)
     } catch (e) {
       setUpdErr(e instanceof Error ? e.message : String(e))
     } finally {
@@ -276,7 +276,7 @@ export function Settings() {
     try {
       await setPreReleaseTag(tag)
       setSelectedTag(tag)
-      await onCheckUpdate()
+      await onCheckUpdate(false)
     } catch (e) {
       setUpdErr(e instanceof Error ? e.message : String(e))
     } finally {
@@ -284,12 +284,13 @@ export function Settings() {
     }
   }
 
-  async function onCheckUpdate() {
+  async function onCheckUpdate(force = true) {
     setUpdChecking(true)
     setUpdErr(null)
     setUpdMsg(null)
     try {
-      const res = await checkForUpdate({ force: true })
+      if (force && updChannel === 'test') { await loadPreReleases(true) }
+      const res = await checkForUpdate({ force })
       setUpdCheck(res)
       // Share the result so the global UpdateBanner reflects it immediately.
       publishUpdateCheck(res)
@@ -545,7 +546,7 @@ export function Settings() {
               <p className="text-sm text-text-dim">
                 Checks GitHub releases for newer versions. Settings installs launch the visible installer wizard; your config in <span className="font-mono">%APPDATA%\DuneServer</span> is preserved.
               </p>
-              <button type="button" onClick={onCheckUpdate} disabled={updChecking} className="btn-secondary ml-3 shrink-0">
+              <button type="button" onClick={() => void onCheckUpdate()} disabled={updChecking} className="btn-secondary ml-3 shrink-0">
                 <Icon name={updChecking ? 'Loader2' : 'RefreshCw'} size={15} className={updChecking ? 'animate-spin' : ''} />
                 {updChecking ? 'Checking…' : 'Check now'}
               </button>
