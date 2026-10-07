@@ -16,6 +16,7 @@ here cover everything those tags shipped.
 ## [15.2.9] - 2026-10-07
 
 ### Fixed
+- Require a fresh installed-default read before Landsraad saves and refuse to write when defaults are unavailable or lack the required struct, preventing partial legacy fallback writes. This protects INI integrity without guaranteeing game-setting behavior.
 - Prevent repeated update checks and channel changes from amplifying GitHub API requests. Reuse release data for channel/build selection, throttle forced refreshes to five minutes, and cache immutable source-tag identities.
 - Respect GitHub rate-limit reset and retry intervals across updater endpoints, with a readable local retry time instead of a generic Forbidden error.
 - Refresh the Test build picker when explicitly checking for updates.
