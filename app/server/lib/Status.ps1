@@ -59,22 +59,69 @@ function Get-DuneSshFailureReason {
     return $null
 }
 
+function Get-DuneLanVmSnapshot {
+    param($HyperV, [switch]$Force)
+    # Share only discovery metadata across API runspaces. Credentials stay in
+    # the current request; changing host/account selects a different cache.
+    $key = '__cache:lan-vm:' + $HyperV.ComputerName + ':' + $HyperV.Credential.UserName + ':' + $script:DuneVmName
+    $table = $script:DuneApiLockTable
+    if (-not $table) {
+        if (-not $script:DuneLanVmSnapshotCache) { $script:DuneLanVmSnapshotCache = [hashtable]::Synchronized(@{}) }
+        $table = $script:DuneLanVmSnapshotCache
+    }
+    $read = {
+        [Threading.Monitor]::Enter($table.SyncRoot)
+        try { $entry = $table[$key] } finally { [Threading.Monitor]::Exit($table.SyncRoot) }
+        if (-not $Force -and $entry -and ([datetime]::UtcNow - $entry.Fetched).TotalSeconds -lt 3) {
+            return $entry.Snapshot
+        }
+        return $null
+    }
+    $refresh = {
+        $cached = & $read
+        if ($null -ne $cached) { return $cached }
+        $snapshot = Invoke-Command -ComputerName $HyperV.ComputerName -Credential $HyperV.Credential -ArgumentList $script:DuneVmName -ScriptBlock {
+            param($name)
+            $vm = Get-VM -Name $name -ErrorAction Stop
+            $addresses = @((Get-VMNetworkAdapter -VMName $name -ErrorAction Stop).IPAddresses)
+            @{ State=[string]$vm.State; UptimeSeconds=[int]$vm.Uptime.TotalSeconds; IPAddresses=$addresses }
+        } -ErrorAction Stop
+        [Threading.Monitor]::Enter($table.SyncRoot)
+        try { $table[$key] = @{ Snapshot=$snapshot; Fetched=[datetime]::UtcNow } }
+        finally { [Threading.Monitor]::Exit($table.SyncRoot) }
+        return $snapshot
+    }
+    $cached = & $read
+    if ($null -ne $cached) { return $cached }
+    if (Get-Command Invoke-WithDuneLock -ErrorAction SilentlyContinue) {
+        return Invoke-WithDuneLock -Name ("lan-vm-discovery:" + $key) -TimeoutSec 20 -Script $refresh
+    }
+    [Threading.Monitor]::Enter($table.SyncRoot)
+    try { return & $refresh } finally { [Threading.Monitor]::Exit($table.SyncRoot) }
+}
+
 function Get-DuneVmStatus {
+    param([switch]$Force)
     try {
         # Local by default; targets a LAN Hyper-V host when VmHostMode='lan'.
         # The guest IP resolved below is what the entire SSH layer talks to, so
         # this discovery must succeed against whichever host owns the VM.
         $hv = Get-DuneHyperVSplat
-        $vm = Get-VM -Name $script:DuneVmName @hv -ErrorAction Stop
-        # Re-apply @hv (ComputerName + Credential) explicitly rather than
-        # piping $vm - confirmed by Get-Command that Get-VMNetworkAdapter's
-        # piped "-VM <VirtualMachine[]>" parameter set carries NO
-        # ComputerName/Credential/CimSession parameters at all, unlike its
-        # "-VMName <string[]>" set. Piping a remotely-fetched $vm silently
-        # drops the LAN host's credential (field-confirmed: VM running and its
-        # IP visible in Hyper-V Manager, but DST's own discovery came back
-        # empty/failed, leaving ServerHealth stuck on "Unknown").
-        $ip = (Get-VMNetworkAdapter -VMName $script:DuneVmName @hv).IPAddresses |
+        if ($hv.ComputerName) {
+            # Execute both Hyper-V reads on the host in one authenticated
+            # round-trip. Two remote CIM calls otherwise repeat authentication
+            # and discovery for every page's status request.
+            $snapshot = Get-DuneLanVmSnapshot -HyperV $hv -Force:$Force
+            $vm = [pscustomobject]@{ State=$snapshot.State; Uptime=[timespan]::FromSeconds($snapshot.UptimeSeconds) }
+            $addresses = $snapshot.IPAddresses
+        } else {
+            $vm = Get-VM -Name $script:DuneVmName @hv -ErrorAction Stop
+            $addresses = (Get-VMNetworkAdapter -VMName $script:DuneVmName @hv).IPAddresses
+        }
+        # The LAN adapter query runs locally on the credentialed host above;
+        # local mode uses the existing VMName parameter set. Never pipe a
+        # deserialized remote VM object into an uncredentialed adapter query.
+        $ip = $addresses |
               Where-Object { $_ -match '^\d+\.\d+\.\d+\.\d+$' } | Select-Object -First 1
         # Coerce to string. On VMs with multiple network adapters the pipeline
         # can hand back a PSObject wrapping the IP; without the cast, ConvertTo-Json

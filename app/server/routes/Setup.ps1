@@ -198,7 +198,7 @@ Register-DuneRoute -Method POST -Path '/api/setup/hyperv-lan/install' -LocalOnly
         $replace = $false; if ($body.Contains('replaceExisting')) { $replace = [bool]$body['replaceExisting'] }
         if (-not $hostIp) { Write-DuneError -Response $res -Status 400 -Message 'A Hyper-V host IP is required.'; return }
         if (-not $drive -or -not $switch -or $memGB -lt 1) { Write-DuneError -Response $res -Status 400 -Message 'Destination drive, external switch, and a memory size (GB) are required.'; return }
-        $r = Start-DuneHyperVLanInstallAsync -HostIp $hostIp -User $user -Password $pass -DestDrive $drive -MemoryGB $memGB -SwitchName $switch -VmPassword $vmPass -ReplaceExisting $replace
+        $r = Start-DuneHyperVLanInstallAsync -HostIp $hostIp -User $user -Password $pass -DestDrive $drive -MemoryGB $memGB -SwitchName $switch -VmPassword $vmPass -ReplaceExisting $replace -WorldName ([string]$body['worldName']) -Region ([int]$body['region']) -ServerToken ([string]$body['serverToken'])
         if (-not $r.ok) { Write-DuneError -Response $res -Status 409 -Message $r.error; return }
         Write-DuneJson -Response $res -Body $r
     } catch {

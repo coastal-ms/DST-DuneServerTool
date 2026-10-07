@@ -127,6 +127,9 @@ describe('Hyper-V LAN credential API', () => {
       switchName: 'DuneExternal',
       vmPassword: '',
       replaceExisting: false,
+      worldName: 'Test World',
+      region: 3,
+      serverToken: 'test.payload.signature',
     })
     expect(calls.at(-1)?.body).toMatchObject({
       hostIp: '192.168.1.50',

@@ -71,15 +71,12 @@ try {
     }
 
     if (Test-Path $dest) {
-        Get-ChildItem $dest -Recurse -Force | Sort-Object FullName -Descending | ForEach-Object {
-            Remove-Item $_.FullName -Force -ErrorAction SilentlyContinue
-        }
-        Remove-Item $dest -Force -ErrorAction SilentlyContinue
+        return (Fail "Destination '$dest' already contains files. Preserve it and select an empty install drive/location before retrying.")
     }
 
     # --- Import ------------------------------------------------------------
     $steps.Add("Checking VM compatibility for import to $dest...")
-    $compat = Compare-VM -Path $vmcx.FullName -Copy -VirtualMachinePath $dest -VhdDestinationPath "$dest\Virtual Hard Disks" -ErrorAction Stop
+    $compat = Compare-VM -Path $vmcx.FullName -Copy -GenerateNewId -VirtualMachinePath $dest -VhdDestinationPath "$dest\Virtual Hard Disks" -ErrorAction Stop
     if ($compat.Incompatibilities.Count -gt 0) {
         # Repoint the network adapter incompatibility is the common one; every
         # other incompatibility is fatal for an unattended run.

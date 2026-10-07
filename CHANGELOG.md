@@ -13,6 +13,29 @@ here cover everything those tags shipped.
 
 ## [Unreleased]
 
+## [15.2.8] - 2026-10-07
+
+- Update the website image dependency to sharp 0.35.5 to resolve its vulnerable bundled SVG renderer.
+
+- Use the dedicated-server Landsraad struct supplied by the installed game's defaults. Preserve legacy custom values and complete default members when updating settings, and read the current struct in Player Admin. Older game defaults retain their legacy format.
+
+### 15.2.8-test5 — Lifecycle rollback after host switches
+
+- Store lifecycle rollback settings separately for each Hyper-V host and VM. Preserve the legacy local record for its original owner so switching to a LAN host no longer blocks reconciliation with another host's rollback state. Identity checks still prevent applying rollback settings to the wrong VM.
+
+### 15.2.8-test4 — LAN installation and management
+
+- Provision LAN hosts from a completed local Steam server-tool download, then transfer and verify the VM image before import. The remote host no longer depends on anonymous SteamCMD access.
+- Keep the existing SSH key when authorizing a new guest, collect world details before setup, and report each provisioning stage accurately.
+- Discover VM state, uptime and guest addresses together with the saved host credential. Share recent observations across requests to reduce repeated remote calls.
+- Verify public TCP reachability through independent external observers, consistently with the header check. An unavailable check remains unverified rather than being reported as a closed port.
+
+
+### 15.2.8-test3 — Public IP updates
+
+- Keep the VM LAN address as Kubernetes InternalIP and the control-plane address when applying a public IP or DDNS update. Apply the public or relay address only as ExternalIP, including after reboot with legacy settings.
+
+
 ### 15.2.8-test2 — Solo grants
 
 - Add Solo bulk grants for building sets, armor, weapon and vehicle skins, dyes and house swatches using the same curated catalogs as Self-Hosted. Skip saved unlocks and held tokens, recheck ownership before writing, batch into available backpack slots and retain the previous save automatically. Tokens are processed after login; grants do not guarantee in-game activation.
@@ -21,7 +44,7 @@ here cover everything those tags shipped.
 
 - Ignore the unfixed CVE-2026-93748 in Astro's transitive `http-cache-semantics` dependency during Trivy scans.
 
-## [15.2.8] - 2026-10-05
+### Additional accepted fixes
 
 - Correct Retail Solo specialization track IDs so Gathering, Exploration, Combat and Sabotage edits target the matching in-game specialization. Preserve Crafting, the legacy adapter, other tracks, purchased rewards and journeys during individual level edits.
 

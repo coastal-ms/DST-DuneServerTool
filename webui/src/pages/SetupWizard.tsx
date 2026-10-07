@@ -759,6 +759,9 @@ function StepInstallLan() {
   const [memoryGB, setMemoryGB] = useState(20)
   const [switchName, setSwitchName] = useState('')
   const [vmPassword, setVmPassword] = useState('')
+  const [worldName, setWorldName] = useState('')
+  const [region, setRegion] = useState(3)
+  const [serverToken, setServerToken] = useState('')
 
   const [status, setStatus] = useState<HyperVLanInstallStatus | null>(null)
   const [installing, setInstalling] = useState(false)
@@ -845,7 +848,7 @@ function StepInstallLan() {
     try {
       const r = await startHyperVLanInstall({
         hostIp: hostIp.trim(), user: user.trim() || undefined, password: password || undefined,
-        destDrive, memoryGB, switchName, vmPassword, replaceExisting: false,
+        destDrive, memoryGB, switchName, vmPassword, worldName, region, serverToken, replaceExisting: false,
       })
       if (!r.ok) { setError(r.error ?? 'Could not start the install.'); return }
       setInstalling(true)
@@ -853,7 +856,7 @@ function StepInstallLan() {
     } catch (e) {
       setError(e instanceof ApiError ? e.message : String(e))
     }
-  }, [hostIp, user, password, destDrive, switchName, memoryGB, vmPassword])
+  }, [hostIp, user, password, destDrive, switchName, memoryGB, vmPassword, worldName, region, serverToken])
 
   const done = status && !status.running && status.phase === 'done'
   const failed = status && !status.running && status.phase === 'error'
@@ -865,7 +868,7 @@ function StepInstallLan() {
 
       <div className="rounded-lg border border-info/40 bg-info/10 p-3 text-sm text-text-dim mb-4">
         DST connects to <span className="font-mono">{hostIp || '(host set in previous step)'}</span> over PowerShell Remoting,
-        downloads the server image there with SteamCMD (anonymous — no Steam login), imports and starts the VM, then sets up the
+        uses the Self-Hosted Server image downloaded in Steam on this PC, transfers and verifies it on the host, imports and starts the VM, then sets up the
         battlegroup over the LAN. If the VM already exists on the host, you can skip this step.
       </div>
 
@@ -906,6 +909,22 @@ function StepInstallLan() {
 
       {res?.ok && !res.vmExists && !done && (
         <div className="space-y-3">
+          <label className="flex flex-col gap-1 text-sm">
+            World name
+            <input value={worldName} onChange={e => setWorldName(e.target.value)} disabled={installing} maxLength={50} className="px-3 py-2 rounded-lg bg-surface-2 border border-border" />
+          </label>
+          <label className="flex flex-col gap-1 text-sm">
+            World region
+            <select value={region} onChange={e => setRegion(Number(e.target.value))} disabled={installing} className="px-3 py-2 rounded-lg bg-surface-2 border border-border">
+              {['Asia', 'Europe', 'North America', 'Oceania', 'South America'].map((name, i) => <option key={name} value={i + 1}>{name}</option>)}
+            </select>
+          </label>
+          <label className="flex flex-col gap-1 text-sm">
+            Self-hosted server token
+            <input type="password" autoComplete="off" value={serverToken} onChange={e => setServerToken(e.target.value)} disabled={installing} className="px-3 py-2 rounded-lg bg-surface-2 border border-border" />
+            <span className="text-xs text-text-dim">From your Dune account page. Used only for this setup; never saved in DST configuration.</span>
+          </label>
+
           {noSwitches && (
             <div className="rounded-lg border border-warning/40 bg-warning/10 p-3 text-xs text-text-dim">
               No external virtual switch found on the host. Create one once on the host, then re-check:

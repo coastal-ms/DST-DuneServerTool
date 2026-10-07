@@ -947,11 +947,14 @@ fi
 
 step runner
 runner=/usr/local/bin/k3s-custom-runner.sh
-target="dynamic_ip=$NEW_IP"
+# Keep the node/control-plane address on the VM's LAN. The public or relay
+# address belongs only to the external advertisement, including after reboot.
+target="dynamic_ip=$VM_IP"
+external_target="external_ip=$NEW_IP # DST_MANAGED_EXTERNAL_IP"
 if [ -f "$runner" ]; then
   sudo cp "$runner" "$runner.bak.$(date -u +%Y%m%d%H%M%S)"
   # DST_K3S_RUNNER_AWK_BEGIN
-  awk -v target="$target" '
+  awk -v target="$target" -v external_target="$external_target" '
     BEGIN { dynamic_done=0; exec_done=0 }
     /^dynamic_ip=/ {
       print target
@@ -964,7 +967,7 @@ if [ -f "$runner" ]; then
         print target
         dynamic_done=1
       }
-      print "external_ip=$dynamic_ip # DST_MANAGED_EXTERNAL_IP"
+      print external_target
       print
       exec_done=1
       next
@@ -978,7 +981,7 @@ if [ -f "$runner" ]; then
   sudo install -m 0755 /tmp/dst-runner "$runner"
   rm -f /tmp/dst-runner
   grep -F "$target" "$runner"
-  grep -F 'external_ip=$dynamic_ip # DST_MANAGED_EXTERNAL_IP' "$runner"
+  grep -F "$external_target" "$runner"
 fi
 
 step k3s
@@ -1255,58 +1258,6 @@ for POD in $(sudo kubectl get pods -n "$BG_NS" --no-headers -o custom-columns=':
   sudo kubectl delete pod -n "$BG_NS" "$POD" --wait=false 2>&1 | sed 's/^/  /'
 done
 
-step audit-ip-surfaces
-# Cross-place IP audit: verify every surface that should hold NEW_IP actually
-# does. Adds an authoritative check after the operator has had a chance to
-# reconcile (~10s post pod-delete). Reports AUDIT_OK or per-surface mismatches
-# so the PowerShell side can surface them to the user. Also flags CGNAT
-# (100.64.0.0/10) and private amqpAddress values -- the amqpAddress must be a
-# publicly routable IP so clients can queue to join. Requires jq.
-if command -v jq >/dev/null 2>&1; then
-  sleep 10  # give the operator a moment to repopulate status after pod deletes
-  AUDIT_MISMATCHES=0
-  AUDIT_REPORT=""
-
-  # Utility envs -- every HOST_DATACENTER_IP_ADDRESS should equal NEW_IP.
-  for u in director serverGateway textRouter; do
-    val=$(sudo kubectl get battlegroup "$BG_NAME" -n "$BG_NS" -o json 2>/dev/null | jq -r ".spec.utilities.$u.spec.envVars // [] | map(select(.name==\"HOST_DATACENTER_IP_ADDRESS\")) | .[0].value // \"MISSING\"")
-    if [ "$val" != "$NEW_IP" ]; then
-      AUDIT_REPORT="$AUDIT_REPORT  MISMATCH utilities.$u HOST_DATACENTER_IP_ADDRESS: got '$val' expected '$NEW_IP'\n"
-      AUDIT_MISMATCHES=$((AUDIT_MISMATCHES + 1))
-    fi
-  done
-
-  # amqpAddress (game + admin). host portion must equal NEW_IP.
-  for mq in game admin; do
-    val=$(sudo kubectl get battlegroup "$BG_NAME" -n "$BG_NS" -o json 2>/dev/null | jq -r ".status.utilities.messageQueues.statuses.$mq.amqpAddress // \"MISSING\"")
-    host=$(printf '%s' "$val" | cut -d: -f1)
-    if [ "$host" != "$NEW_IP" ]; then
-      AUDIT_REPORT="$AUDIT_REPORT  MISMATCH status.utilities.messageQueues.statuses.$mq.amqpAddress: got '$val' expected '$NEW_IP:*'\n"
-      AUDIT_MISMATCHES=$((AUDIT_MISMATCHES + 1))
-    fi
-    # Sora's rule: amqpAddress must be publicly routable (not private, not CGNAT).
-    case "$host" in
-      10.*|172.1[6-9].*|172.2[0-9].*|172.3[0-1].*|192.168.*)
-        AUDIT_REPORT="$AUDIT_REPORT  PRIVATE-AMQP-ADDR $mq.amqpAddress='$val' -- LAN address, players cannot join.\n"
-        AUDIT_MISMATCHES=$((AUDIT_MISMATCHES + 1))
-        ;;
-      100.6[4-9].*|100.[7-9][0-9].*|100.1[0-1][0-9].*|100.12[0-7].*)
-        AUDIT_REPORT="$AUDIT_REPORT  CGNAT-AMQP-ADDR $mq.amqpAddress='$val' -- behind Carrier-Grade NAT (100.64.0.0/10); contact ISP.\n"
-        AUDIT_MISMATCHES=$((AUDIT_MISMATCHES + 1))
-        ;;
-    esac
-  done
-
-  if [ "$AUDIT_MISMATCHES" -eq 0 ]; then
-    echo "AUDIT_OK all IP surfaces match $NEW_IP"
-  else
-    printf 'AUDIT_MISMATCH count=%d\n' "$AUDIT_MISMATCHES"
-    printf '%b' "$AUDIT_REPORT"
-  fi
-else
-  echo "AUDIT_SKIP jq not available"
-fi
-
 step change-ip
 # LAST because this restarts the battlegroup, which cycles every game/gateway/
 # director/rmq pod and typically severs any stdio inherited from SSH. Firing
@@ -1404,6 +1355,51 @@ ALIAS_OK=no
 BGPHASE=$(sudo kubectl -n "$BG_NS" get battlegroup "$BG_NAME" -o jsonpath='{.status.phase}' 2>/dev/null || true)
 printf 'EXTERNALIP=%s\nALIAS_OK=%s\nBG_PHASE=%s\n' "$EXT" "$ALIAS_OK" "$BGPHASE"
 sudo kubectl -n "$BG_NS" get serverset 2>/dev/null | awk 'NR==1 || /survival-1|overmap|deepdesert-1/' || true
+# Audit the final advertised addresses after the detached restart has settled.
+if command -v jq >/dev/null 2>&1; then
+  AUDIT_MISMATCHES=0
+  AUDIT_REPORT=""
+
+  # Utility envs -- every HOST_DATACENTER_IP_ADDRESS should equal NEW_IP.
+  for u in director serverGateway textRouter; do
+    val=$(sudo kubectl get battlegroup "$BG_NAME" -n "$BG_NS" -o json 2>/dev/null | jq -r ".spec.utilities.$u.spec.envVars // [] | map(select(.name==\"HOST_DATACENTER_IP_ADDRESS\")) | .[0].value // \"MISSING\"")
+    if [ "$val" != "$NEW_IP" ]; then
+      AUDIT_REPORT="$AUDIT_REPORT  MISMATCH utilities.$u HOST_DATACENTER_IP_ADDRESS: got '$val' expected '$NEW_IP'\n"
+      AUDIT_MISMATCHES=$((AUDIT_MISMATCHES + 1))
+    fi
+  done
+
+  # amqpAddress (game + admin). host portion must equal NEW_IP.
+  for mq in game admin; do
+    val=$(sudo kubectl get battlegroup "$BG_NAME" -n "$BG_NS" -o json 2>/dev/null | jq -r ".status.utilities.messageQueues.statuses.$mq.amqpAddress // \"MISSING\"")
+    host=$(printf '%s' "$val" | cut -d: -f1)
+    if [ "$host" != "$NEW_IP" ]; then
+      AUDIT_REPORT="$AUDIT_REPORT  MISMATCH status.utilities.messageQueues.statuses.$mq.amqpAddress: got '$val' expected '$NEW_IP:*'\n"
+      AUDIT_MISMATCHES=$((AUDIT_MISMATCHES + 1))
+    fi
+    # Sora's rule: amqpAddress must be publicly routable (not private, not CGNAT).
+    case "$host" in
+      10.*|172.1[6-9].*|172.2[0-9].*|172.3[0-1].*|192.168.*)
+        AUDIT_REPORT="$AUDIT_REPORT  PRIVATE-AMQP-ADDR $mq.amqpAddress='$val' -- LAN address, players cannot join.\n"
+        AUDIT_MISMATCHES=$((AUDIT_MISMATCHES + 1))
+        ;;
+      100.6[4-9].*|100.[7-9][0-9].*|100.1[0-1][0-9].*|100.12[0-7].*)
+        AUDIT_REPORT="$AUDIT_REPORT  CGNAT-AMQP-ADDR $mq.amqpAddress='$val' -- behind Carrier-Grade NAT (100.64.0.0/10); contact ISP.\n"
+        AUDIT_MISMATCHES=$((AUDIT_MISMATCHES + 1))
+        ;;
+    esac
+  done
+
+  if [ "$AUDIT_MISMATCHES" -eq 0 ]; then
+    echo "AUDIT_OK all IP surfaces match $NEW_IP"
+  else
+    printf 'AUDIT_MISMATCH count=%d\n' "$AUDIT_MISMATCHES"
+    printf '%b' "$AUDIT_REPORT"
+  fi
+else
+  echo "AUDIT_SKIP jq not available"
+fi
+
 echo "BGIP_VERIFY_DONE"
 '@
             $rawVerify = Invoke-DunePublicIpRemoteScript -Ip $vm.ip -Script $remoteVerify -Arguments @($target, $vm.ip, $bgNs, $bgName) -TimeoutSec 60
@@ -1420,7 +1416,7 @@ echo "BGIP_VERIFY_DONE"
             # value didn't reconcile cleanly. Non-fatal — reported but the
             # step still completes so the rest of the apply flow finishes.
             $bgStatus = 'done'
-            if ($rawMutate -match '(?m)^AUDIT_MISMATCH count=(\d+)') {
+            if ($rawVerify -match '(?m)^AUDIT_MISMATCH count=(\d+)') {
                 $bgDetail = "$bgDetail`nAudit found $($Matches[1]) IP-surface mismatch(es) — see raw output."
                 $bgStatus = 'warning'
             }
@@ -1446,52 +1442,24 @@ echo "BGIP_VERIFY_DONE"
             # --- Verify --------------------------------------------------------
             $steps.Add((New-DunePublicIpStepResult 'verify' 'Verify external IP + RabbitMQ port' 'running' "Checking node ExternalIP and TCP $target:31982.")) | Out-Null
             & $pub
-            # The battlegroup restart above brings the mq-game pod (which serves
-            # RabbitMQ on the DNAT'd port 31982) back cold; its endpoint isn't
-            # ready for ~30-90s after the restart. A single TCP probe fires
-            # during that boot gap and false-FAILs even though the server is
-            # fine moments later (the header "31982 TCP" pill goes green on its
-            # own). So poll with backoff up to ~90s and exit early on the first
-            # success. Discovered live 2026-07-07: verify printed FAILED while
-            # node ExternalIP, eth0 alias, DNAT -d, and 31982 were all correct
-            # ~1 min later.
-            $tcp = $false
-            $verifyAttempts = 10
-            $verifyTick     = 9
-            for ($vi = 1; $vi -le $verifyAttempts; $vi++) {
-                $vwait = New-DunePublicIpStepResult 'verify' 'Verify external IP + RabbitMQ port' 'running' "Checking TCP $target:31982 (attempt $vi/$verifyAttempts, up to $($verifyAttempts * $verifyTick)s)..."
-                $steps[$steps.Count - 1] = $vwait
-                & $pub
-                try { $tcp = Test-NetConnection -ComputerName $target -Port 31982 -InformationLevel Quiet -WarningAction SilentlyContinue } catch { $tcp = $false }
-                if ($tcp) { break }
-                if ($vi -lt $verifyAttempts) { Start-Sleep -Seconds $verifyTick }
-            }
+            # Use the same independent observers as the header. A client-side
+            # connection tests router hairpin behavior, not outside reachability.
+            $verdict = 'unknown'
+            try { $verdict = Test-DunePortBuiltin -PublicIp $target -Port 31982 -Protocol TCP } catch { }
             $extOk = ($extIp -eq $target)
-            if (-not $tcp) {
-                $detail = "TCP $target:31982 not reachable after $verifyAttempts attempts (~$($verifyAttempts * $verifyTick)s)"
-                if (-not $ready) { $detail += ' (servers still starting)' }
-                # If the external probe never succeeded BUT every internal signal
-                # is healthy — node ExternalIP == target, the eth0 alias is up,
-                # and the battlegroup reached Healthy — the server is actually
-                # reconciled. A TCP probe from the host itself can false-negative
-                # on routers without NAT loopback (hairpin), so don't scream
-                # FAILED: downgrade to a warning that says to confirm 31982 from
-                # an outside network.
-                $aliasOk   = ($rawVerify -match '(?m)^ALIAS_OK=yes\s*$')
-                $bgHealthy = $ready -or ($rawVerify -match '(?m)^BG_PHASE=Healthy\s*$')
-                if ($extOk -and $aliasOk -and $bgHealthy) {
-                    $wdetail = "$detail, but internal signals are healthy (node ExternalIP=$target, eth0 alias present, battlegroup Healthy). This host's external TCP probe can false-negative on routers without NAT loopback (hairpin) - confirm port 31982 from an outside network. Watch the header's '31982 TCP' status pill, which reflects the live port."
-                    $steps[$steps.Count - 1] = New-DunePublicIpStepResult 'verify' 'Verify external IP + RabbitMQ port' 'warning' $wdetail $rawVerify
-                    & $pub
-                } else {
-                    throw "$detail. Node ExternalIP=$extIp. If servers are still booting, retry the check from Server Health shortly."
-                }
+            $aliasOk = ($rawVerify -match '(?m)^ALIAS_OK=yes\s*$')
+            $bgHealthy = $ready -or ($rawVerify -match '(?m)^BG_PHASE=Healthy\s*$')
+            if ($verdict -eq 'open') {
+                $steps[$steps.Count - 1] = New-DunePublicIpStepResult 'verify' 'Verify external IP + RabbitMQ port' 'done' "External observers reached TCP ${target}:31982. Node ExternalIP=$extIp."
+            } elseif ($extOk -and $aliasOk -and $bgHealthy) {
+                $detail = if ($verdict -eq 'closed') {
+                    "External observers reported TCP ${target}:31982 closed. Check the router's TCP 31982 forwarding to this VM."
+                } else { "External TCP verification is unavailable; outside reachability remains unverified." }
+                $steps[$steps.Count - 1] = New-DunePublicIpStepResult 'verify' 'Verify external IP + RabbitMQ port' 'warning' "$detail Server network and battlegroup reconciliation succeeded." $rawVerify
             } else {
-                $vdetail = "TCP $target:31982 reachable."
-                if ($extOk) { $vdetail += " Node ExternalIP=$target." } else { $vdetail += " WARNING: node ExternalIP reported '$extIp'." }
-                $steps[$steps.Count - 1] = New-DunePublicIpStepResult 'verify' 'Verify external IP + RabbitMQ port' 'done' $vdetail
-                & $pub
+                throw "Server reconciliation is incomplete. Node ExternalIP=$extIp; external TCP result=$verdict. Retry Server Health after startup."
             }
+            & $pub
 
             Save-DuneConfig -Config @{
                 PublicIpMode = $Mode

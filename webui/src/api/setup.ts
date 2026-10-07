@@ -152,6 +152,9 @@ export interface HyperVLanInstallStatus {
   error: string
 }
 export interface HyperVLanInstallRequest {
+  worldName: string
+  region: number
+  serverToken: string
   hostIp: string
   user?: string
   password?: string

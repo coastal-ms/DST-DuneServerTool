@@ -295,11 +295,11 @@ function Invoke-DuneTwilightLockRestore {
 }
 
 # Funcom stores ALL Landsraad settings as scalar members inside ONE nested struct
-# value: [/Script/DuneSandbox.LandsraadSettings] Data=(m_TaskGoalAmount=5000.0,...).
-# Schema fields tagged StructKey='Data' are read from / written to that struct via
+# value: [/Script/DuneSandbox.LandsraadSettings] DedicatedServerData=(...).
+# Schema fields tagged with a Landsraad StructKey are read from / written to that struct via
 # the UE struct-member engine (Get/Set-DuneStructScalarMember), so they edit the
 # member in place and leave the nested members (messages/curves/widgets) intact.
-$script:DuneGcLandsraadStructKey = 'Data'
+$script:DuneGcLandsraadStructKey = 'DedicatedServerData'
 
 # -----------------------------------------------------------------------------
 # Land-claim (staking unit) extension timer. A single admin-entered seconds value
@@ -456,7 +456,7 @@ $script:DuneGameConfigSchema = @(
     @{ Section=$script:DuneGcSecLandsraad; StructKey=$script:DuneGcLandsraadStructKey; Key='m_LandsraadSuspendedPeriodDurationInSeconds'; File='game'; Type='int'; Min=0; Unit='sec'; Default='300'; Label='Suspended Period Duration'; Help='Gap between the end of one Landsraad term and the start of the next.'; ClientApply=$true; Category='Landsraad' }
     @{ Section=$script:DuneGcSecLandsraad; StructKey=$script:DuneGcLandsraadStructKey; Key='m_LandsraadContractsMaxActiveAmount'; File='game'; Type='int'; Min=0; Default='3'; Label='Max Active Contracts'; Help='Maximum simultaneously-active Landsraad contracts per player.'; ClientApply=$true; Category='Landsraad' }
     @{ Section=$script:DuneGcSecLandsraad; StructKey=$script:DuneGcLandsraadStructKey; Key='m_LandsraadContractsPerVotingBlock'; File='game'; Type='int'; Min=0; Default='3'; Label='Contracts per Voting Block'; Help='Number of contracts offered per voting block.'; ClientApply=$true; Category='Landsraad' }
-    @{ Section=$script:DuneGcSecLandsraad; StructKey=$script:DuneGcLandsraadStructKey; Key='m_LandsraadContractsAbandonCooldownSeconds'; File='game'; Type='int'; Min=0; Unit='sec'; Default='3600'; Label='Contract Abandon Cooldown'; Help='How long a player must wait after abandoning a Landsraad contract. Field-confirmed at 5 seconds.'; ClientApply=$true; Category='Landsraad' }
+    @{ Section=$script:DuneGcSecLandsraad; StructKey=$script:DuneGcLandsraadStructKey; Key='m_LandsraadContractsAbandonCooldownSeconds'; File='game'; Type='int'; Min=0; Unit='sec'; Default='3600'; Label='Contract Abandon Cooldown'; Help='How long a player must wait after abandoning a Landsraad contract.'; ClientApply=$true; Category='Landsraad' }
     @{ Section=$script:DuneGcSecLandsraad; StructKey=$script:DuneGcLandsraadStructKey; Key='m_LandsraadContractsDailyBonusPerDay'; File='game'; Type='int'; Min=0; Default='5'; Label='Daily Contract Bonus'; Help='Bonus contracts granted per day.'; ClientApply=$true; Category='Landsraad' }
     @{ Section=$script:DuneGcSecLandsraad; StructKey=$script:DuneGcLandsraadStructKey; Key='m_LandsraadContractsDailyBonusMax'; File='game'; Type='int'; Min=0; Default='35'; Label='Daily Contract Bonus Max'; Help='Maximum accumulated daily contract bonus.'; ClientApply=$true; Category='Landsraad' }
     @{ Section=$script:DuneGcSecLandsraad; StructKey=$script:DuneGcLandsraadStructKey; Key='m_LandsraadTaskDailyRevealFrequency'; File='game'; Type='float'; Min=0; Default='25.0'; Label='Task Daily Reveal Frequency'; Help='How often new House tasks are revealed each day.'; ClientApply=$true; Category='Landsraad' }
@@ -2065,6 +2065,12 @@ function Get-DuneIniEffective {
             }
         }
     }
+    # Project the legacy box for schema consumers without rewriting the file.
+    $current = "$($script:DuneGcSecLandsraad)||DedicatedServerData"
+    $legacy = "$($script:DuneGcSecLandsraad)||Data"
+    if (-not $eff.ContainsKey($current) -and $eff.ContainsKey($legacy)) {
+        $eff[$current] = $eff[$legacy]
+    }
     return $eff
 }
 
@@ -2089,12 +2095,16 @@ function Get-DuneIniEffectiveByKey {
     # Struct-member fields (e.g. LandsraadSettings Data=(...)) aren't flat keys, so
     # surface their scalar members by-key too, so the UI shows their real values.
     foreach ($sm in (Get-DuneSchemaStructTargets)) {
+        $readStructKey = $sm.structKey
+        if ($sm.section -eq $script:DuneGcSecLandsraad) {
+            $readStructKey = Get-DuneLandsraadStructKey -Doc $doc
+        }
         $sec = $null
         foreach ($s in $doc.sections) { if ($s.name -eq $sm.section) { $sec = $s } }
         if ($null -eq $sec) { continue }
         foreach ($l in $sec.body) {
             $info = Get-DuneIniLineKey $l
-            if ($info -and -not $info.isArray -and $info.key -eq $sm.structKey) {
+            if ($info -and -not $info.isArray -and $info.key -eq $readStructKey) {
                 $members = Get-DuneStructScalarMembers -Blob (Get-DuneIniLineValue $l)
                 foreach ($k in $members.Keys) { $eff[$k] = $members[$k] }
             }
@@ -2510,7 +2520,7 @@ function Merge-DuneGameConfigMigrationValues {
     if ($fileUpdates.Count -eq 0) { return $BaseRaw }
     if ([string]::IsNullOrWhiteSpace($DefaultsRaw)) { $DefaultsRaw = $BaseRaw }
     $folded = Convert-DuneSpicefieldUpdates -Raw $BaseRaw -Updates $fileUpdates -DefaultsRaw $DefaultsRaw
-    $folded = Convert-DuneStructUpdates -Raw $BaseRaw -Updates $folded -DefaultsRaw $BaseRaw
+    $folded = Convert-DuneStructUpdates -Raw $BaseRaw -Updates $folded -DefaultsRaw $DefaultsRaw
     return ConvertTo-DuneIniManaged -Raw $BaseRaw -Updates $folded -QuotedKeys (Get-DuneGameConfigQuotedKeys)
 }
 
@@ -3061,6 +3071,59 @@ function Get-DuneStructBlobFromDoc {
     return $null
 }
 
+# Shipped defaults identify which server struct the installed game consumes.
+# Without defaults, retain the existing format rather than guessing a migration.
+function Get-DuneLandsraadStructKey {
+    param([object]$Doc, [object]$DefaultsDoc)
+    foreach ($candidateDoc in @($DefaultsDoc, $Doc)) {
+        if ($null -eq $candidateDoc) { continue }
+        foreach ($key in @('DedicatedServerData', 'Data')) {
+            if ($null -ne (Get-DuneStructBlobFromDoc -Doc $candidateDoc -Section $script:DuneGcSecLandsraad -StructKey $key)) {
+                return $key
+            }
+        }
+    }
+    return 'Data'
+}
+
+# Preserve whole top-level members, including nested arrays, messages and paths.
+function Get-DuneStructTopLevelMembers {
+    param([string]$Blob)
+    $text = $Blob.Trim()
+    if (-not $text.StartsWith('(') -or -not $text.EndsWith(')')) { throw 'Malformed Landsraad struct.' }
+    $text = $text.Substring(1, $text.Length - 2)
+    $members = @{}
+    $depth = 0; $quoted = $false; $start = 0
+    for ($i = 0; $i -le $text.Length; $i++) {
+        if ($i -lt $text.Length) {
+            $ch = $text[$i]
+            if ($ch -eq '"' -and ($i -eq 0 -or $text[$i - 1] -ne '\')) { $quoted = -not $quoted }
+            if (-not $quoted) {
+                if ($ch -eq '(') { $depth++ }
+                elseif ($ch -eq ')') { $depth--; if ($depth -lt 0) { throw 'Malformed Landsraad struct.' } }
+            }
+        }
+        if ($i -eq $text.Length -or ($text[$i] -eq ',' -and -not $quoted -and $depth -eq 0)) {
+            $part = $text.Substring($start, $i - $start).Trim()
+            if ($part) {
+                if ($part -notmatch '^([A-Za-z_][A-Za-z0-9_]*)\s*=') { throw 'Malformed Landsraad member.' }
+                $members[$Matches[1]] = $part
+            }
+            $start = $i + 1
+        }
+    }
+    if ($quoted -or $depth -ne 0) { throw 'Malformed Landsraad struct.' }
+    return $members
+}
+
+function Merge-DuneLandsraadLegacyStruct {
+    param([string]$DefaultsBlob, [string]$LegacyBlob)
+    $members = Get-DuneStructTopLevelMembers -Blob $DefaultsBlob
+    $legacy = Get-DuneStructTopLevelMembers -Blob $LegacyBlob
+    foreach ($key in $legacy.Keys) { $members[$key] = $legacy[$key] }
+    return '(' + (($members.Keys | Sort-Object | ForEach-Object { $members[$_] }) -join ',') + ')'
+}
+
 # Fold struct-member updates (e.g. LandsraadSettings Data members) into ONE flat
 # update that sets the parent struct key (Data) to the recomputed blob, leaving
 # every non-struct update as-is. $Raw is the current file content (to read the
@@ -3088,6 +3151,7 @@ function Convert-DuneStructUpdates {
     $structMap = Get-DuneSchemaStructFieldMap
     if ($structMap.Count -eq 0) { return $Updates }
     $doc = ConvertFrom-DuneIniDoc -Raw $Raw
+    $defaultsDoc = if ([string]::IsNullOrWhiteSpace($DefaultsRaw)) { $null } else { ConvertFrom-DuneIniDoc -Raw $DefaultsRaw }
     $flat = New-Object 'System.Collections.Generic.List[object]'
     # Group struct member updates by "section||structKey".
     $structGroups = @{}
@@ -3095,6 +3159,9 @@ function Convert-DuneStructUpdates {
         $k = "$($u.key)"
         if ($structMap.ContainsKey($k)) {
             $sm = $structMap[$k]
+            if ($sm.section -eq $script:DuneGcSecLandsraad) {
+                $sm = @{ section=$sm.section; default=$sm.default; structKey=(Get-DuneLandsraadStructKey -Doc $doc -DefaultsDoc $defaultsDoc) }
+            }
             $gid = "$($sm.section)||$($sm.structKey)"
             if (-not $structGroups.ContainsKey($gid)) {
                 $structGroups[$gid] = @{ section = $sm.section; structKey = $sm.structKey; file = "$($u.file)"; members = (New-Object 'System.Collections.Generic.List[object]') }
@@ -3105,19 +3172,23 @@ function Convert-DuneStructUpdates {
             $flat.Add($u)
         }
     }
-    $defaultsDoc = $null
-    if (-not [string]::IsNullOrWhiteSpace($DefaultsRaw)) { $defaultsDoc = ConvertFrom-DuneIniDoc -Raw $DefaultsRaw }
     foreach ($gid in $structGroups.Keys) {
         $g = $structGroups[$gid]
         # Current blob for this section's struct key. $null means the live file has
         # NO struct line at all (distinct from an explicit, possibly-empty "()").
         $blob = Get-DuneStructBlobFromDoc -Doc $doc -Section $g.section -StructKey $g.structKey
         $seed = if ($defaultsDoc) { Get-DuneStructBlobFromDoc -Doc $defaultsDoc -Section $g.section -StructKey $g.structKey } else { $null }
+        if ($null -eq $blob -and $null -ne $seed -and $g.section -eq $script:DuneGcSecLandsraad -and $g.structKey -eq 'DedicatedServerData') {
+            $legacyBlob = Get-DuneStructBlobFromDoc -Doc $doc -Section $g.section -StructKey 'Data'
+            if ($null -ne $legacyBlob) { $blob = Merge-DuneLandsraadLegacyStruct -DefaultsBlob $seed -LegacyBlob $legacyBlob }
+        }
         if ($null -eq $blob) {
             # Fresh file: seed the FULL default struct so the ~35 members the game
             # ships (board layouts, messages, curves, contract timings, ...) survive
             # the override instead of being wiped by a stripped few-member stub.
             $blob = if ($null -ne $seed) { $seed } else { '()' }
+        } elseif ($null -ne $seed -and $g.section -eq $script:DuneGcSecLandsraad -and $g.structKey -eq 'DedicatedServerData') {
+            $blob = Merge-DuneLandsraadLegacyStruct -DefaultsBlob $seed -LegacyBlob $blob
         } elseif ($null -ne $seed) {
             # File HAS a struct line. Heal a legacy STUB: if it carries fewer scalar
             # members than the default box ships, it's missing members the game needs
@@ -3129,7 +3200,7 @@ function Convert-DuneStructUpdates {
             if ($existingMembers.Count -lt $defaultMembers.Count) {
                 $healed = $seed
                 foreach ($mk in $existingMembers.Keys) { $healed = Set-DuneStructScalarMember -Blob $healed -Key $mk -Value $existingMembers[$mk] }
-                $blob = $healed
+                $blob = if ($g.section -eq $script:DuneGcSecLandsraad) { Merge-DuneLandsraadLegacyStruct -DefaultsBlob $seed -LegacyBlob $blob } else { $healed }
             }
         }
         foreach ($m in $g.members) { $blob = Set-DuneStructScalarMember -Blob $blob -Key $m.key -Value $m.value }

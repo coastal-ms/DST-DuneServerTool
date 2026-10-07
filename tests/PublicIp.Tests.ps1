@@ -1,7 +1,8 @@
-BeforeAll {
+﻿BeforeAll {
     . (Join-Path $PSScriptRoot '_TestHelpers.ps1')
     Import-DstLib 'Config.ps1'
     Import-DstLib 'PublicIp.ps1'
+    Import-DstLib 'Ports.ps1'
 }
 
 Describe 'Public IP validation' {
@@ -42,8 +43,10 @@ Describe 'Public IP validation' {
 
 Describe 'Settings IP update forwarding preparation' {
     It 'updates a changed IP through Settings with automatic forwarding refresh (<Mode>)' -ForEach @(
-        @{ Mode = 'manual' }
-        @{ Mode = 'ddns' }
+        @{ Mode = 'manual'; Verdict = 'open'; VerifyStatus = 'done' }
+        @{ Mode = 'ddns'; Verdict = 'open'; VerifyStatus = 'done' }
+        @{ Mode = 'manual'; Verdict = 'closed'; VerifyStatus = 'warning' }
+        @{ Mode = 'manual'; Verdict = 'unknown'; VerifyStatus = 'warning' }
     ) {
         function global:Get-DuneVmStatus { @{ exists=$true; running=$true; ip='192.168.1.20' } }
         function global:Invoke-DuneSshHidden { @{ Exit=0; Stdout='DST_SSH_OK' } }
@@ -53,7 +56,8 @@ Describe 'Settings IP update forwarding preparation' {
         Mock Save-DunePublicIpApplyState {}
         Mock Get-DunePublicIpHostRouteEnabled { $true }
         Mock Invoke-DunePublicIpHostRoute { $script:applyOrder.Add('host-route') }
-        Mock Test-NetConnection { $true }
+        $script:portVerdict = $Verdict
+        Mock Test-DunePortBuiltin { $script:portVerdict }
         Mock Save-DuneConfig {}
         $script:applyOrder = [Collections.Generic.List[string]]::new()
         Mock Invoke-DunePublicIpRemoteScript {
@@ -80,10 +84,51 @@ Describe 'Settings IP update forwarding preparation' {
         }
         $result = Invoke-DunePublicIpApply -PublicIp '8.8.4.4' -Mode $Mode -Hostname 'server.example.com'
         $result.ok | Should -BeTrue -Because $result.error
+        ($result.steps | Where-Object id -EQ 'verify').status | Should -Be $VerifyStatus
+        Should -Invoke Test-DunePortBuiltin -Times 1 -Exactly -ParameterFilter { $PublicIp -eq '8.8.4.4' -and $Port -eq 31982 -and $Protocol -eq 'TCP' }
         @($script:applyOrder) | Should -Be @('forwarding','host-route','network','battlegroup','verify')
         Should -Invoke Save-DuneConfig -Times 1 -ParameterFilter {
             $Config.LastAppliedPublicIp -eq '8.8.4.4' -and $Config.PublicIpMode -eq $Mode
         }
+    }
+
+    It 'reports the final IP audit after restart (<FinalMismatch>)' -ForEach @(
+        @{ FinalMismatch = $false; ExpectedStatus = 'done' }
+        @{ FinalMismatch = $true; ExpectedStatus = 'warning' }
+    ) {
+        function global:Get-DuneVmStatus { @{ exists=$true; running=$true; ip='192.168.1.20' } }
+        function global:Invoke-DuneSshHidden { @{ Exit=0; Stdout='DST_SSH_OK' } }
+        function global:Invoke-V6Ssh { '0|Healthy' }
+        Mock Read-DuneConfig { @{ SshKey = $PSCommandPath; LastAppliedPublicIp = '8.8.8.8' } }
+        Mock Test-Path { $true }
+        Mock Save-DunePublicIpApplyState {}
+        Mock Invoke-DunePublicIpWatchdogRefresh { 'DUNE_DNAT_WATCH_OK' }
+        Mock Get-DunePublicIpHostRouteEnabled { $true }
+        Mock Invoke-DunePublicIpHostRoute {}
+        Mock Test-DunePortBuiltin { 'open' }
+        Mock Save-DuneConfig {}
+        $script:finalMismatch = $FinalMismatch
+        Mock Invoke-DunePublicIpRemoteScript {
+            param($Ip, $Script, $Arguments)
+            if ($Script -match 'NETWORK_DONE') { return 'NETWORK_DONE' }
+            if ($Script -match 'BGIP_MUTATE_DONE') {
+                # Status still advertises the old WAN address during mutation.
+                $Script | Should -Not -Match 'AUDIT_MISMATCH'
+                return "BG_NS=funcom-test`nBG_NAME=test`nBGIP_MUTATE_DONE"
+            }
+            if ($Script -match 'BGIP_VERIFY_DONE') {
+                $Script | Should -Match 'messageQueues.statuses'
+                $audit = if ($script:finalMismatch) { 'AUDIT_MISMATCH count=2' } else { 'AUDIT_OK all IP surfaces match 8.8.4.4' }
+                return "EXTERNALIP=8.8.4.4`nALIAS_OK=yes`nBG_PHASE=Healthy`n$audit"
+            }
+            throw 'Unexpected remote apply operation'
+        }
+        $result = Invoke-DunePublicIpApply -PublicIp '8.8.4.4'
+        $result.ok | Should -BeTrue -Because $result.error
+        $step = $result.steps | Where-Object id -EQ 'bg-ip'
+        $step.status | Should -Be $ExpectedStatus
+        if ($FinalMismatch) { $step.detail | Should -Match '2 IP-surface mismatch' }
+        else { $step.detail | Should -Not -Match 'mismatch' }
     }
 
     It 'refreshes the shipped installer with privilege and verified completion' {
@@ -263,11 +308,11 @@ Describe 'Public IP diagnostic target selection' {
         $target.source | Should -Be 'vm'
     }
 
-    It 'pins both K3s startup IP inputs to the applied public IP' {
+    It 'keeps the K3s internal address separate from the applied public address' {
         $source = Get-Content -LiteralPath (Join-Path $PSScriptRoot '..\app\server\lib\PublicIp.ps1') -Raw
-        $source | Should -Match 'target="dynamic_ip=\$NEW_IP"'
-        $source | Should -Match 'external_ip=\$dynamic_ip # DST_MANAGED_EXTERNAL_IP'
-        $source | Should -Match '(?s)/# DST_MANAGED_EXTERNAL_IP\$/ \{ next \}.*?external_ip=\$dynamic_ip # DST_MANAGED_EXTERNAL_IP.*?exec_done=1'
+        $source | Should -Match 'target="dynamic_ip=\$VM_IP"'
+        $source | Should -Match 'external_target="external_ip=\$NEW_IP # DST_MANAGED_EXTERNAL_IP"'
+        $source | Should -Match '(?s)/# DST_MANAGED_EXTERNAL_IP\$/ \{ next \}.*?print external_target.*?exec_done=1'
         $source | Should -Not -Match "target='dynamic_ip=\$\(/sbin/ip addr show eth0"
     }
 
@@ -285,7 +330,7 @@ Describe 'Public IP diagnostic target selection' {
         $source = Get-Content -LiteralPath (Join-Path $PSScriptRoot '..\app\server\lib\PublicIp.ps1') -Raw
         $match = [regex]::Match(
             $source,
-            "(?s)# DST_K3S_RUNNER_AWK_BEGIN\s+awk -v target=`"\`$target`" '(?<program>.*?)'\s+`"\`$runner`" > /tmp/dst-runner\s+# DST_K3S_RUNNER_AWK_END"
+            "(?s)# DST_K3S_RUNNER_AWK_BEGIN\s+awk -v target=`"\`$target`" -v external_target=`"\`$external_target`" '(?<program>.*?)'\s+`"\`$runner`" > /tmp/dst-runner\s+# DST_K3S_RUNNER_AWK_END"
         )
         $match.Success | Should -BeTrue
 
@@ -299,22 +344,35 @@ dynamic_ip=203.0.113.9
 if [[ "$internal_ip" == "$external_ip" ]]; then
   external_ip=$dynamic_ip
 fi
-exec /usr/local/bin/k3s server --node-external-ip=${external_ip} --advertise-address=${dynamic_ip}
+exec /usr/local/bin/k3s server --node-ip=${dynamic_ip} --node-external-ip=${external_ip} --advertise-address=${dynamic_ip}
 '@ | Set-Content -LiteralPath $runnerPath -NoNewline
 
         $awkPath = if ($awk.Source) { $awk.Source } else { $awk.FullName }
-        $result = & $awkPath -v 'target=dynamic_ip=198.51.100.44' -f $programPath $runnerPath
+        $result = & $awkPath -v 'target=dynamic_ip=192.0.2.20' -v 'external_target=external_ip=198.51.100.44 # DST_MANAGED_EXTERNAL_IP' -f $programPath $runnerPath
         $LASTEXITCODE | Should -Be 0
-        $result | Should -Contain 'dynamic_ip=198.51.100.44'
-        $result | Should -Contain 'external_ip=$dynamic_ip # DST_MANAGED_EXTERNAL_IP'
-        [array]::IndexOf([string[]]$result, 'external_ip=$dynamic_ip # DST_MANAGED_EXTERNAL_IP') |
-            Should -BeLessThan ([array]::IndexOf([string[]]$result, 'exec /usr/local/bin/k3s server --node-external-ip=${external_ip} --advertise-address=${dynamic_ip}'))
-        @($result | Where-Object { $_ -eq 'external_ip=$dynamic_ip # DST_MANAGED_EXTERNAL_IP' }).Count | Should -Be 1
+        $result | Should -Contain 'dynamic_ip=192.0.2.20'
+        $result | Should -Contain 'external_ip=198.51.100.44 # DST_MANAGED_EXTERNAL_IP'
+        [array]::IndexOf([string[]]$result, 'external_ip=198.51.100.44 # DST_MANAGED_EXTERNAL_IP') |
+            Should -BeLessThan ([array]::IndexOf([string[]]$result, 'exec /usr/local/bin/k3s server --node-ip=${dynamic_ip} --node-external-ip=${external_ip} --advertise-address=${dynamic_ip}'))
+        @($result | Where-Object { $_ -eq 'external_ip=198.51.100.44 # DST_MANAGED_EXTERNAL_IP' }).Count | Should -Be 1
 
         $result | Set-Content -LiteralPath $runnerPath
-        $secondResult = & $awkPath -v 'target=dynamic_ip=198.51.100.44' -f $programPath $runnerPath
+        $secondResult = & $awkPath -v 'target=dynamic_ip=192.0.2.20' -v 'external_target=external_ip=198.51.100.44 # DST_MANAGED_EXTERNAL_IP' -f $programPath $runnerPath
         $LASTEXITCODE | Should -Be 0
-        @($secondResult | Where-Object { $_ -eq 'external_ip=$dynamic_ip # DST_MANAGED_EXTERNAL_IP' }).Count | Should -Be 1
+        @($secondResult | Where-Object { $_ -eq 'external_ip=198.51.100.44 # DST_MANAGED_EXTERNAL_IP' }).Count | Should -Be 1
+
+        # Execute the rewritten runner with stale legacy settings and a stand-in
+        # for K3s. Verify the arguments the process receives, not just its text.
+        $bashPath = Join-Path $env:ProgramFiles 'Git\bin\bash.exe'
+        if (Test-Path -LiteralPath $bashPath) {
+            $fixture = ($secondResult -join "`n") -replace '(?m)^\{ read .*settings.conf$', 'internal_ip=192.0.2.20; external_ip=203.0.113.9'
+            $fixture = $fixture.Replace('exec /usr/local/bin/k3s server ', "printf '%s\n' ")
+            $actualArgs = & $bashPath -c $fixture
+            $LASTEXITCODE | Should -Be 0
+            $actualArgs | Should -Contain '--node-ip=192.0.2.20'
+            $actualArgs | Should -Contain '--advertise-address=192.0.2.20'
+            $actualArgs | Should -Contain '--node-external-ip=198.51.100.44'
+        }
     }
 }
 
