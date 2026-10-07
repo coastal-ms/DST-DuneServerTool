@@ -3324,11 +3324,30 @@ function Save-DuneGameConfig {
     # When any struct-member edit is present, read DefaultGame/Engine.ini ONCE so a
     # fresh UserGame.ini can seed the FULL default struct before folding edits
     # (otherwise the override wipes the ~35 nested LandsraadSettings members). A
-    # defaults-read failure (e.g. no running pod) falls back to prior behaviour.
+    # Landsraad writes require fresh defaults and refuse to write on read failure.
+    # Other struct edits retain their existing best-effort behaviour.
     $defaults = $null
+    $structFields = Get-DuneSchemaStructFieldMap
+    $hasLandsraadEdit = @($Updates | Where-Object {
+        $structFields.ContainsKey("$($_.key)") -and
+        $structFields["$($_.key)"].section -eq $script:DuneGcSecLandsraad
+    }).Count -gt 0
     if ((Test-DuneUpdatesHaveStructMember -Updates $Updates) -or
         (Test-DuneUpdatesHaveSpicefieldMember -Updates $Updates)) {
-        try { $defaults = Get-DuneGameConfigDefaults -Ip $Ip } catch { $defaults = $null }
+        try { $defaults = Get-DuneGameConfigDefaults -Ip $Ip -Force:$hasLandsraadEdit } catch {
+            if ($hasLandsraadEdit) {
+                throw ('Cannot safely save Landsraad settings because the current server defaults could not be read. No INI files were changed. Start the battlegroup and retry. Details: ' + $_.Exception.Message)
+            }
+            $defaults = $null
+        }
+    }
+    if ($hasLandsraadEdit) {
+        $defaultsDoc = ConvertFrom-DuneIniDoc -Raw "$($defaults.game)"
+        $defaultKey = Get-DuneLandsraadStructKey -DefaultsDoc $defaultsDoc
+        $defaultBlob = Get-DuneStructBlobFromDoc -Doc $defaultsDoc -Section $script:DuneGcSecLandsraad -StructKey $defaultKey
+        if ([string]::IsNullOrWhiteSpace($defaultBlob)) {
+            throw 'Cannot safely save Landsraad settings: the installed server defaults contain no Landsraad struct. No INI files were changed.'
+        }
     }
 
     $wroteAny = $false
