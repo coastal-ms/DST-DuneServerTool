@@ -13,6 +13,13 @@ here cover everything those tags shipped.
 
 ## [Unreleased]
 
+## [15.2.9] - 2026-10-07
+
+### Fixed
+- Prevent repeated update checks and channel changes from amplifying GitHub API requests. Reuse release data for channel/build selection, throttle forced refreshes to five minutes, and cache immutable source-tag identities.
+- Respect GitHub rate-limit reset and retry intervals across updater endpoints, with a readable local retry time instead of a generic Forbidden error.
+- Refresh the Test build picker when explicitly checking for updates.
+
 ## [15.2.8] - 2026-10-07
 
 - Update the website image dependency to sharp 0.35.5 to resolve its vulnerable bundled SVG renderer.
