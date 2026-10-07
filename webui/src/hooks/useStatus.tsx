@@ -3,6 +3,7 @@ import { useApi } from './useApi'
 import type { StatusSnapshot } from '../api/types'
 import { api } from '../api/client'
 import { useHealthRefreshPreset } from './useHealthRefresh'
+import { useSoloInstallation } from './useInstallationMode'
 
 type StatusCtx = {
   status: StatusSnapshot | null
@@ -60,7 +61,8 @@ export function writeCachedStatus(
 
 export function StatusProvider({ children }: { children: ReactNode }) {
   const refreshPreset = useHealthRefreshPreset()
-  const s = useApi<StatusSnapshot>('/api/status', { intervalMs: refreshPreset.statusIntervalMs })
+  const soloOnly = useSoloInstallation()
+  const s = useApi<StatusSnapshot>('/api/status', { intervalMs: refreshPreset.statusIntervalMs, enabled: !soloOnly })
   const [cachedStatus] = useState<StatusSnapshot | null>(() => readCachedStatus())
 
   useEffect(() => {
@@ -68,11 +70,11 @@ export function StatusProvider({ children }: { children: ReactNode }) {
   }, [s.data])
 
   const value: StatusCtx = {
-    status:   s.data ?? cachedStatus,
-    loading:  s.loading,
-    error:    s.error,
+    status:   soloOnly ? null : s.data ?? cachedStatus,
+    loading:  !soloOnly && s.loading,
+    error:    soloOnly ? null : s.error,
     refresh:  s.refresh,
-    forceRefresh: async () => { await api<StatusSnapshot>('/api/status/refresh', { method: 'POST' }); await s.refresh() },
+    forceRefresh: async () => { if (soloOnly) return; await api<StatusSnapshot>('/api/status/refresh', { method: 'POST' }); await s.refresh() },
   }
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>
 }

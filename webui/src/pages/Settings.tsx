@@ -1,3 +1,4 @@
+import { useSoloInstallation } from '../hooks/useInstallationMode'
 import { useState, useEffect, type FormEvent } from 'react'
 import { PageHeader } from '../components/PageHeader'
 import { Icon } from '../components/Icon'
@@ -59,6 +60,7 @@ const FIELDS: {
 ]
 
 export function Settings() {
+  const soloOnly = useSoloInstallation()
   const [cfg, setCfg] = useState<ConfigResponse | null>(null)
   const [values, setValues] = useState<Record<string, string>>({})
   const [loading, setLoading] = useState(true)
@@ -709,7 +711,7 @@ export function Settings() {
         <SectionErrorBoundary name="Desktop shell"><ShellPreferencesCard /></SectionErrorBoundary>
       )}
 
-      <SectionErrorBoundary name="Dashboard warnings"><DashboardAlertsCard /></SectionErrorBoundary>
+      {!soloOnly && <><SectionErrorBoundary name="Dashboard warnings"><DashboardAlertsCard /></SectionErrorBoundary>
 
 
       <SectionErrorBoundary name="Hyper-V over LAN"><HyperVLanCard /></SectionErrorBoundary>
@@ -950,7 +952,8 @@ export function Settings() {
         </div>
       </form>
 
-      <SectionErrorBoundary name="Mobile App Pairing"><BrowserAccessCard /></SectionErrorBoundary>
+      </>}
+      {!soloOnly && <SectionErrorBoundary name="Mobile App Pairing"><BrowserAccessCard /></SectionErrorBoundary>}
     </>
   )
 }

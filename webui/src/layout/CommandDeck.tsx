@@ -1,3 +1,4 @@
+import { useSoloInstallation } from '../hooks/useInstallationMode'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useLocation, useSearch } from '../router'
 import { usePortalAccess } from '../auth/portalAccess'
@@ -16,13 +17,14 @@ export default function CommandDeck({ collapsed }: { collapsed: boolean }) {
   const { pathname } = useLocation()
   const search = useSearch()
   const { canAccessOwnerSurfaces } = usePortalAccess()
+  const soloOnly = useSoloInstallation()
   const [query, setQuery] = useState('')
   const input = useRef<HTMLInputElement>(null)
   const local = isLocalViewer()
   const windows = isWindowsViewer()
   const destinations = useMemo(
-    () => getDeckDestinations({ local, windows, canAccessOwnerSurfaces }),
-    [local, windows, canAccessOwnerSurfaces],
+    () => getDeckDestinations({ local, windows, canAccessOwnerSurfaces, soloOnly }),
+    [local, windows, canAccessOwnerSurfaces, soloOnly],
   )
   const results = searchDeck(destinations, query)
 

@@ -4,6 +4,7 @@
 # $script:AppDir (the app/ directory).
 
 $script:DuneConfigKeys = @(
+    'InstallationMode',
     'SteamPath',
     'SshKey',
     'WindowsUser',
@@ -103,6 +104,21 @@ function Get-DstOpenInAppWindow {
 # distinct function so callers have a single "resolved config" entry point.
 function Read-DuneConfig {
     return Read-DuneConfigRaw
+}
+
+function Get-DuneInstallationMode {
+    $raw = Read-DuneConfigRaw
+    if ([string]$raw['InstallationMode'] -eq 'solo') { return 'solo' }
+    return 'full'
+}
+
+function Test-DuneSoloInstallation {
+    return (Get-DuneInstallationMode) -eq 'solo'
+}
+
+function Test-DuneSoloServerApiPath {
+    param([string]$Path)
+    return $Path -match '^/api/(?:vm|bg|server|commands|terminal|db|maps|gameconfig|restart-schedule|backup-schedule|setup|remote)(?:/|$)'
 }
 
 # Resolve the in-pod PostgreSQL port DST should use. Reads the DbPort config key,
@@ -318,6 +334,7 @@ function Save-DuneConfig {
 function Test-DuneConfigComplete {
     param([hashtable]$Config)
     if (-not $Config) { $Config = Read-DuneConfig }
+    if ([string]$Config['InstallationMode'] -eq 'solo') { return $true }
     if (-not $Config.SshKey -or -not (Test-Path -LiteralPath $Config.SshKey)) { return $false }
     if (-not $Config.SteamPath) { return $false }
     return $true

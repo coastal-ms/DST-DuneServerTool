@@ -1,3 +1,4 @@
+import { useSoloInstallation } from '../hooks/useInstallationMode'
 import { lazy, Suspense, useRef, type ReactNode } from 'react'
 import { useLocation } from '../router'
 import { MenuBar } from './MenuBar'
@@ -22,6 +23,7 @@ const IMMERSIVE_ROUTES = new Set<string>([])
 export function AppShell({ children }: { children: ReactNode }) {
   const mainRef = useRef<HTMLElement | null>(null)
   const { canAccessOwnerSurfaces } = usePortalAccess()
+  const soloOnly = useSoloInstallation()
   const classicSidebar = useSidebarCollapsed()
   const deckSidebar = useSidebarCollapsed('dst.deck.sidebar.collapsed', true)
   const { pathname } = useLocation()
@@ -56,7 +58,7 @@ export function AppShell({ children }: { children: ReactNode }) {
         </Suspense>}
         <div className="flex-1 flex flex-col min-w-0 min-h-0">
           {canAccessOwnerSurfaces && <UpdateBanner />}
-          {!commandDeck && <StatusBar />}
+          {!commandDeck && !soloOnly && <StatusBar />}
           <main ref={mainRef} data-app-scroll-container={commandDeck && !spatialHome ? undefined : ''}
             data-app-scroll-host={commandDeck && !spatialHome ? '' : undefined}
             className={`flex-1 min-h-0 min-w-0 max-w-full overflow-x-hidden ${commandDeck && !spatialHome ? 'overflow-y-hidden' : 'overflow-y-auto'} overscroll-y-contain`}>

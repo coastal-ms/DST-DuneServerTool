@@ -1,3 +1,4 @@
+import { useSoloInstallation } from '../hooks/useInstallationMode'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { Link, useNavigate, useLocation, useSearch } from '../router'
@@ -28,6 +29,7 @@ type Props = {
 // sidebar collapse toggle.
 export function MenuBar({ sidebarCollapsed, onToggleSidebar, sidebarAvailable = true }: Props) {
   const { canAccessOwnerSurfaces } = usePortalAccess()
+  const soloOnly = useSoloInstallation()
   const navigate = useNavigate()
   const location = useLocation()
   const [open, setOpen] = useState<MenuKey | null>(null)
@@ -67,7 +69,7 @@ export function MenuBar({ sidebarCollapsed, onToggleSidebar, sidebarAvailable = 
   >(null)
 
   const refreshAutostart = useCallback(async () => {
-    if (!local) return
+    if (!local || soloOnly) return
     try {
       const s = await getAutostartState()
       setAutostart(s)
@@ -76,18 +78,18 @@ export function MenuBar({ sidebarCollapsed, onToggleSidebar, sidebarAvailable = 
       // no toast, no scary error, the feature simply isn't there.
       setAutostart(null)
     }
-  }, [local])
+  }, [local, soloOnly])
 
   useEffect(() => { void refreshAutostart() }, [refreshAutostart])
 
   const refreshService = useCallback(async () => {
-    if (!local) return
+    if (!local || soloOnly) return
     try {
       setService(await getServiceModeState())
     } catch {
       setService(null)
     }
-  }, [local])
+  }, [local, soloOnly])
 
   useEffect(() => { void refreshService() }, [refreshService])
 
@@ -95,14 +97,14 @@ export function MenuBar({ sidebarCollapsed, onToggleSidebar, sidebarAvailable = 
   // tracks the real window state even if the user minimized / restored it
   // outside the app (e.g. via the taskbar).
   const refreshConsole = useCallback(async () => {
-    if (!local) return
+    if (!local || soloOnly) return
     try {
       const s = await getConsoleState()
       setConsoleState(s)
     } catch {
       setConsoleState(null)
     }
-  }, [local])
+  }, [local, soloOnly])
 
   useEffect(() => { void refreshConsole() }, [refreshConsole])
   useEffect(() => { if (open === 'help') void refreshConsole() }, [open, refreshConsole])
@@ -253,6 +255,7 @@ export function MenuBar({ sidebarCollapsed, onToggleSidebar, sidebarAvailable = 
     local: isLocalViewer(),
     windows: isWindowsViewer(),
     canAccessOwnerSurfaces,
+    soloOnly,
   })
   const mobileGroups = GROUP_ORDER.map(group => ({
     key: group,
@@ -424,7 +427,7 @@ export function MenuBar({ sidebarCollapsed, onToggleSidebar, sidebarAvailable = 
                 </span>
               </button>
             )}
-            {canAccessOwnerSurfaces && (
+            {canAccessOwnerSurfaces && !soloOnly && (
               <button
                 type="button"
                 onClick={onCreateDiagnosticsPackage}

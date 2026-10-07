@@ -1,6 +1,7 @@
 ﻿BeforeAll {
     . "$PSScriptRoot\_TestHelpers.ps1"
     $script:OriginalAppData = $env:APPDATA
+    $script:OriginalConfigFile = $script:DuneConfigFile
     $script:PortalTestRoot = Join-Path (Get-DstRepoRoot) '.portal-auth-test-data'
     $env:APPDATA = $script:PortalTestRoot
     Remove-Item -LiteralPath $script:PortalTestRoot -Recurse -Force -ErrorAction SilentlyContinue
@@ -9,6 +10,7 @@
     . (Join-Path (Get-DstRepoRoot) 'app\server\lib\RemoteAccess.ps1')
     . (Join-Path (Get-DstRepoRoot) 'app\server\lib\RequestPrincipal.ps1')
     . (Join-Path (Get-DstRepoRoot) 'app\server\HttpServer.ps1')
+    $script:DuneConfigFile = Join-Path $script:PortalTestRoot 'dune-server.config'
     function New-PortalTestRequest {
         param([string]$Cookie = '', [string]$Address = '127.0.0.1', [string]$Origin = 'https://portal.example.test')
         $cookies = @{}
@@ -23,6 +25,7 @@
 
 AfterAll {
     $env:APPDATA = $script:OriginalAppData
+    $script:DuneConfigFile = $script:OriginalConfigFile
     Remove-Item -LiteralPath $script:PortalTestRoot -Recurse -Force -ErrorAction SilentlyContinue
 }
 

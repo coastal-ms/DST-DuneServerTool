@@ -1,3 +1,4 @@
+import { useSoloInstallation } from '../hooks/useInstallationMode'
 import { Link, NavLink, useLocation, useSearch } from '../router'
 import { useEffect, useMemo, useState, useRef } from 'react'
 import { createPortal } from 'react-dom'
@@ -54,6 +55,7 @@ export function Sidebar({ collapsed, onExpand }: Props) {
   const { pathname } = useLocation()
   const search = useSearch()
   const { canAccessOwnerSurfaces } = usePortalAccess()
+  const soloOnly = useSoloInstallation()
   const { data: upd } = useUpdateCheck()
   const version = upd?.currentVersion ?? ''
   const testBuild = getTestBuildIdentity(upd)
@@ -177,7 +179,8 @@ export function Sidebar({ collapsed, onExpand }: Props) {
     windows: windowsViewer,
     canAccessOwnerSurfaces,
     includeSidebarHidden: false,
-  }), [canAccessOwnerSurfaces, localViewer, windowsViewer])
+    soloOnly,
+  }), [canAccessOwnerSurfaces, localViewer, windowsViewer, soloOnly])
   const {
     layoutItems,
     reorder,

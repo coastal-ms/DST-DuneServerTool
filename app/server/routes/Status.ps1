@@ -1,6 +1,13 @@
 ﻿# GET /api/status — combined VM + Battlegroup + Ports snapshot
 Register-DuneRoute -Method GET -Path '/api/status' -Handler {
     param($req, $res, $routeParams, $body)
+    if (Test-DuneSoloInstallation) {
+        Write-DuneJson -Response $res -Body @{
+            vm = @{ exists=$false; running=$false; name=''; state='Not applicable'; ip=$null; uptime=0 }
+            bg=$null; ports=$null; serverName=''; ts=(Get-Date).ToString('o')
+        }
+        return
+    }
     $vm = Get-DuneVmStatus
     $bg = $null
     if ($vm.running) {

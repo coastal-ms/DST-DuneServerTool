@@ -235,3 +235,8 @@ Register-DuneRoute -Method POST -Path '/api/config/open-battlegroup-bat' -Handle
         }
     }
 }
+# Mode discovery does not touch dedicated-server infrastructure.
+Register-DuneRoute -Method GET -Path '/api/installation' -Handler {
+    param($req, $res, $routeParams, $body)
+    Write-DuneJson -Response $res -Body @{ mode = (Get-DuneInstallationMode) }
+}

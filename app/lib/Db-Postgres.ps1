@@ -77,6 +77,9 @@ function Invoke-V6Ssh {
         [string]$StdinData,
         [switch]$SeparateStreams
     )
+    if ((Get-Command Test-DuneSoloInstallation -ErrorAction SilentlyContinue) -and (Test-DuneSoloInstallation)) {
+        throw 'Dedicated-server access is unavailable in a Solo-only installation.'
+    }
     # Strip CRs from the command — here-strings in CRLF-saved .ps1 files
     # preserve \r, which breaks bash (commands appear as "head -1\r" etc).
     if ($Cmd) { $Cmd = $Cmd -replace "`r","" }

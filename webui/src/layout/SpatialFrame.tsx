@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { Link, useLocation, useSearch } from '../router'
 import { Icon } from '../components/Icon'
 import { useStatus } from '../hooks/useStatus'
+import { useSoloInstallation } from '../hooks/useInstallationMode'
 import { useUpdateCheck } from '../hooks/useUpdateCheck'
 import { setCommandDeck } from '../hooks/useCommandDeck'
 import { usePortalAccess } from '../auth/portalAccess'
@@ -34,6 +35,7 @@ export default function SpatialFrame({ children, onDetails, tools = false, dashb
   dashboard?: boolean
 }) {
   const { status, error, loading } = useStatus()
+  const soloOnly = useSoloInstallation()
   const { data: update } = useUpdateCheck()
   const { canAccessOwnerSurfaces } = usePortalAccess()
   const theme = useTheme()
@@ -47,7 +49,7 @@ export default function SpatialFrame({ children, onDetails, tools = false, dashb
   const toolScroll = useRef<HTMLDivElement>(null)
   const { dockRef, dockAnchorRef } = useFloatingDock({ enabled: !dashboard && !portal })
   const frameRef = useDashboardViewport(dashboard || portal)
-  const destinations = getDeckDestinations({ local: isLocalViewer(), windows: isWindowsViewer(), canAccessOwnerSurfaces })
+  const destinations = getDeckDestinations({ local: isLocalViewer(), windows: isWindowsViewer(), canAccessOwnerSurfaces, soloOnly })
   const results = searchDeck(destinations, query)
   const current = destinations.find(item => item.to === pathname)
 
@@ -80,7 +82,7 @@ export default function SpatialFrame({ children, onDetails, tools = false, dashb
       className={`spatial-workspace${tools && !dashboard ? ' spatial-tool-workspace' : ''}${dashboard ? ' spatial-dashboard-frame' : ''}${portal ? ' spatial-tool-portal' : ''}`}>
       <header className="spatial-header">
         <Link to="/" className="spatial-brand" aria-label="DST home"><span>◈</span><strong>DST<span>WORLD CONTROL</span></strong></Link>
-        <div className="spatial-server-name"><span>{status?.serverName || 'Server connection'}</span><small>{error ? 'Last known snapshot' : loading ? 'Refreshing snapshot' : 'Observed snapshot'}</small></div>
+        <div className="spatial-server-name"><span>{soloOnly ? 'Solo Mode' : status?.serverName || 'Server connection'}</span><small>{soloOnly ? 'Local save tools' : error ? 'Last known snapshot' : loading ? 'Refreshing snapshot' : 'Observed snapshot'}</small></div>
         <div className="spatial-header-actions">
           <label className="spatial-palette">
             <Icon name="Palette" size={17} />
@@ -97,6 +99,7 @@ export default function SpatialFrame({ children, onDetails, tools = false, dashb
           <button onClick={openFinder} aria-haspopup="dialog" aria-label="Find a tool" title="Find a tool (Ctrl+K)"><Icon name="Search" size={17} /><span>Find a tool</span></button>
           {onDetails
             ? <button onClick={onDetails} aria-label="Dashboard" title="Server health dashboard"><Icon name="LayoutDashboard" size={17} /><span>Dashboard</span></button>
+            : soloOnly ? <Link to="/settings" aria-label="Settings"><Icon name="Settings" size={17} /><span>Settings</span></Link>
             : <Link to="/operations" aria-label="Diagnostics"><Icon name="Activity" size={17} /><span>Diagnostics</span></Link>}
           <button onClick={() => setCommandDeck(false)} aria-label="Classic" title="Return to classic layout"><Icon name="PanelsTopLeft" size={17} /><span>Classic</span></button>
         </div>
@@ -113,10 +116,10 @@ export default function SpatialFrame({ children, onDetails, tools = false, dashb
           {children}
         </div>
         <footer className="spatial-bottom">
-          {!dashboard && <div className="spatial-infrastructure"><span>VM <b>{status ? status.vm.running ? 'Running' : status.vm.state || 'Unknown' : 'Unknown'}</b></span><span>Database <b>{status?.bg?.info?.database || 'Unknown'}</b></span></div>}
+          {!dashboard && !soloOnly && <div className="spatial-infrastructure"><span>VM <b>{status ? status.vm.running ? 'Running' : status.vm.state || 'Unknown' : 'Unknown'}</b></span><span>Database <b>{status?.bg?.info?.database || 'Unknown'}</b></span></div>}
           <div ref={dockAnchorRef} className="spatial-dock-slot">
             <nav ref={dockRef} className="spatial-dock" aria-label="Workspace dock">
-              {DOCK.filter(route => tools || route !== '/').flatMap(route => destinations.filter(item => item.to === route)).map(item => (
+              {(soloOnly ? ['/solo', '/settings', '/sponsors'] : DOCK).filter(route => tools || route !== '/').flatMap(route => destinations.filter(item => item.to === route)).map(item => (
                 <Link to={item.to} key={item.to} aria-current={isActiveDockDestination(item.to, pathname, search) ? 'page' : undefined}><Icon name={item.icon} size={20} /><span>{item.to === '/' ? 'World' : item.label}</span></Link>
               ))}
               <button onClick={openFinder} aria-haspopup="dialog"><Icon name="Grid2X2" size={20} /><span>All tools</span></button>

@@ -22,6 +22,8 @@ function render(ui: ReactNode) {
 
 const state = vi.hoisted(() => ({
   owner: false,
+  soloOnly: false,
+  local: false,
   status: null as StatusSnapshot | null,
   error: null,
   loading: false,
@@ -33,6 +35,9 @@ const state = vi.hoisted(() => ({
   rosterReads: vi.fn(),
 }))
 vi.mock('../src/hooks/useStatus', () => ({ useStatus: () => state }))
+vi.mock('../src/hooks/useInstallationMode', async importOriginal => ({
+  ...await importOriginal<object>(), useSoloInstallation: () => state.soloOnly,
+}))
 vi.mock('../src/hooks/useUpdateCheck', () => ({ useUpdateCheck: () => ({ data: { currentVersion: '15.0.0-finalphase-1.2' } }) }))
 vi.mock('../src/hooks/useApi', () => ({
   useApi: (_path: string, options?: { enabled?: boolean; intervalMs?: number }) => {
@@ -41,7 +46,7 @@ vi.mock('../src/hooks/useApi', () => ({
   },
 }))
 vi.mock('../src/auth/portalAccess', () => ({ usePortalAccess: () => ({ canAccessOwnerSurfaces: state.owner }) }))
-vi.mock('../src/util/viewer', () => ({ isLocalViewer: () => false, isWindowsViewer: () => true }))
+vi.mock('../src/util/viewer', () => ({ isLocalViewer: () => state.local, isWindowsViewer: () => true }))
 vi.mock('../src/pages/workspaces/spatialRenderer', () => ({
   createSpatialRenderer: state.create,
 }))
@@ -58,6 +63,8 @@ beforeEach(() => {
     }
   }
   state.owner = false
+  state.soloOnly = false
+  state.local = false
   state.roster.data = null
   state.status = {
     vm: { exists: true, running: true, state: 'Running', name: 'Example', ip: null, uptime: 1 },
@@ -72,6 +79,19 @@ beforeEach(() => {
 afterEach(() => { cleanup(); vi.restoreAllMocks(); vi.unstubAllGlobals() })
 
 describe('Spatial object workspace', () => {
+  it('keeps Solo tools free of dedicated-server navigation and indicators', () => {
+    state.soloOnly = true
+    state.local = true
+    state.owner = true
+    render(<SpatialFrame tools><p>Solo save</p></SpatialFrame>)
+    expect(screen.getByText('Local save tools')).toBeInTheDocument()
+    expect(screen.queryByText('Database')).not.toBeInTheDocument()
+    expect(screen.queryByRole('link', { name: 'Diagnostics' })).not.toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: 'Find a tool' }))
+    const finder = screen.getByRole('dialog')
+    expect(within(finder).queryByRole('link', { name: /Server Settings/ })).not.toBeInTheDocument()
+    expect(within(finder).getByRole('link', { name: /Settings/ })).toBeInTheDocument()
+  })
   it('shows Duke attribution and the running version beside the dock', () => {
     render(<SpatialFrame tools><p>Tools</p></SpatialFrame>)
     expect(screen.getByText('BUILT WITH DUKE WITH LOVE')).toBeInTheDocument()

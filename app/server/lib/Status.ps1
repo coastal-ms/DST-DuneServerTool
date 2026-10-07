@@ -102,6 +102,9 @@ function Get-DuneLanVmSnapshot {
 
 function Get-DuneVmStatus {
     param([switch]$Force)
+    if ((Get-Command Test-DuneSoloInstallation -ErrorAction SilentlyContinue) -and (Test-DuneSoloInstallation)) {
+        return @{ exists=$false; running=$false; name=''; state='Not applicable'; ip=$null; uptime=0 }
+    }
     try {
         # Local by default; targets a LAN Hyper-V host when VmHostMode='lan'.
         # The guest IP resolved below is what the entire SSH layer talks to, so

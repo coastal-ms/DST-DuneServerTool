@@ -1,4 +1,5 @@
 import { GAMEPLAY_PATHS } from './platform/gameplay'
+import { isSoloDestination } from './hooks/useInstallationMode'
 
 export type NavGroup = 'workspaces' | 'overview' | 'terminal' | 'data' | 'solo' | 'database' | 'system'
 
@@ -91,13 +92,16 @@ export function getVisibleNavItems({
   windows,
   canAccessOwnerSurfaces,
   includeSidebarHidden = true,
+  soloOnly = false,
 }: {
   local: boolean
   windows: boolean
   canAccessOwnerSurfaces: boolean
   includeSidebarHidden?: boolean
+  soloOnly?: boolean
 }) {
   return NAV_ITEMS
+    .filter(item => !soloOnly || isSoloDestination(item.to))
     .filter(item => includeSidebarHidden || !item.sidebarHidden)
     .filter(item => !item.localOnly || local)
     .filter(item => !item.ownerOnly || canAccessOwnerSurfaces)
