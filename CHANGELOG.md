@@ -15,6 +15,8 @@ here cover everything those tags shipped.
 
 ## [15.2.8] - 2026-10-07
 
+- Update the website image dependency to sharp 0.35.5 to resolve its vulnerable bundled SVG renderer.
+
 - Use the dedicated-server Landsraad struct supplied by the installed game's defaults. Preserve legacy custom values and complete default members when updating settings, and read the current struct in Player Admin. Older game defaults retain their legacy format.
 
 ### 15.2.8-test5 — Lifecycle rollback after host switches
