@@ -65,16 +65,26 @@ function Get-DuneVmStatus {
         # The guest IP resolved below is what the entire SSH layer talks to, so
         # this discovery must succeed against whichever host owns the VM.
         $hv = Get-DuneHyperVSplat
-        $vm = Get-VM -Name $script:DuneVmName @hv -ErrorAction Stop
-        # Re-apply @hv (ComputerName + Credential) explicitly rather than
-        # piping $vm - confirmed by Get-Command that Get-VMNetworkAdapter's
-        # piped "-VM <VirtualMachine[]>" parameter set carries NO
-        # ComputerName/Credential/CimSession parameters at all, unlike its
-        # "-VMName <string[]>" set. Piping a remotely-fetched $vm silently
-        # drops the LAN host's credential (field-confirmed: VM running and its
-        # IP visible in Hyper-V Manager, but DST's own discovery came back
-        # empty/failed, leaving ServerHealth stuck on "Unknown").
-        $ip = (Get-VMNetworkAdapter -VMName $script:DuneVmName @hv).IPAddresses |
+        if ($hv.ComputerName) {
+            # Execute both Hyper-V reads on the host in one authenticated
+            # round-trip. Two remote CIM calls otherwise repeat authentication
+            # and discovery for every page's status request.
+            $snapshot = Invoke-Command -ComputerName $hv.ComputerName -Credential $hv.Credential -ArgumentList $script:DuneVmName -ScriptBlock {
+                param($name)
+                $vm = Get-VM -Name $name -ErrorAction Stop
+                $addresses = @((Get-VMNetworkAdapter -VMName $name -ErrorAction Stop).IPAddresses)
+                @{ State=[string]$vm.State; UptimeSeconds=[int]$vm.Uptime.TotalSeconds; IPAddresses=$addresses }
+            } -ErrorAction Stop
+            $vm = [pscustomobject]@{ State=$snapshot.State; Uptime=[timespan]::FromSeconds($snapshot.UptimeSeconds) }
+            $addresses = $snapshot.IPAddresses
+        } else {
+            $vm = Get-VM -Name $script:DuneVmName @hv -ErrorAction Stop
+            $addresses = (Get-VMNetworkAdapter -VMName $script:DuneVmName @hv).IPAddresses
+        }
+        # The LAN adapter query runs locally on the credentialed host above;
+        # local mode uses the existing VMName parameter set. Never pipe a
+        # deserialized remote VM object into an uncredentialed adapter query.
+        $ip = $addresses |
               Where-Object { $_ -match '^\d+\.\d+\.\d+\.\d+$' } | Select-Object -First 1
         # Coerce to string. On VMs with multiple network adapters the pipeline
         # can hand back a PSObject wrapping the IP; without the cast, ConvertTo-Json

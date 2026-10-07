@@ -1,26 +1,9 @@
 ﻿# HyperVLanInstall — provision a Dune VM onto a REMOTE headless Hyper-V host
 # over the LAN, driven entirely from the DST PC.
 #
-# Flow (all steps report progress into a state file the UI polls):
-#   1. connect   - open a WinRM PSSession to the host (admin credential).
-#   2. steamcmd  - on the host: download steamcmd (direct zip), then
-#                  `steamcmd +login anonymous +app_update 4754530` (the same
-#                  anonymous pull Funcom's own bootstrap uses) to fetch the VM
-#                  image. Nothing is shipped or copied from the DST PC.
-#   3. import    - Invoke-Command the DST import script (install-dune-vm-lan.ps1)
-#                  on the host: import the VM, attach the existing switch, size
-#                  disk/RAM, start it, return the guest IP.
-#   4. bootstrap - FROM THE DST PC over the LAN: authorize DST's SSH key on the
-#                  guest (first contact uses the default 'dune' password), set a
-#                  new VM password, then upload + run Funcom's battlegroup setup.
-#   5. done      - save VmHostMode=lan + HyperVHostIp so management takes over.
-#
-# CANNOT be tested locally (needs a real remote Hyper-V 2019 host). Every step
-# therefore fails LOUD with a specific, actionable message — the only debugging
-# channel is a tester relaying the error text.
+# Download the official VM image through local Steam, transfer and verify it,
+# then import on the LAN host and supply the guided world inputs over SSH stdin.
 
-$script:DuneHyperVLanAppId = '4754530'   # Steam appid: Dune Awakening Self-Hosted Server (anonymous)
-$script:DuneHyperVLanSteamCmdUrl = 'https://steamcdn-a.akamaihd.net/client/installer/steamcmd.zip'
 $script:DuneHyperVLanInstallRunspace = $null
 
 # Server dir captured at load time so the async install runspace resolves paths
@@ -145,9 +128,12 @@ function Invoke-DuneHyperVLanInstall {
     param(
         [string]$HostIp, [string]$User, [string]$Password,
         [string]$DestDrive, [int]$MemoryGB, [string]$SwitchName,
-        [string]$VmPassword, [bool]$ReplaceExisting, [string]$ServerDir
+        [string]$VmPassword, [bool]$ReplaceExisting, [string]$ServerDir,
+        [string]$WorldName, [int]$Region, [string]$ServerToken
     )
 
+    Assert-DuneLanWorldInputs $WorldName $Region $ServerToken
+    $previousConfig = Read-DuneConfig
     $steps = [System.Collections.Generic.List[object]]::new()
     function Step($id, $label, $status, $detail) {
         $existing = $steps | Where-Object { $_.id -eq $id } | Select-Object -First 1
@@ -180,38 +166,14 @@ function Invoke-DuneHyperVLanInstall {
         }
         Step 'connect' 'Connect to Hyper-V host' 'done' "Connected to $HostIp."
 
-        # --- 2. steamcmd: fetch the VM image on the host -------------------
-        Step 'steamcmd' 'Download VM image on host (SteamCMD)' 'running' 'Fetching SteamCMD and pulling the self-hosted server image. This can take several minutes.'
-        Publish 'steamcmd' $true '' ''
-        $stageResult = Invoke-Command -Session $sess -ArgumentList $script:DuneHyperVLanSteamCmdUrl, $script:DuneHyperVLanAppId -ScriptBlock {
-            param($SteamUrl, $AppId)
-            $ErrorActionPreference = 'Stop'
-            try {
-                $root = 'C:\DuneServerStage'
-                $scDir = Join-Path $root 'steamcmd'
-                $appDir = Join-Path $root 'server'
-                New-Item -ItemType Directory -Force -Path $scDir, $appDir | Out-Null
-                $scExe = Join-Path $scDir 'steamcmd.exe'
-                if (-not (Test-Path $scExe)) {
-                    $zip = Join-Path $scDir 'steamcmd.zip'
-                    [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
-                    Invoke-WebRequest -Uri $SteamUrl -OutFile $zip -UseBasicParsing
-                    Expand-Archive -Path $zip -DestinationPath $scDir -Force
-                }
-                if (-not (Test-Path $scExe)) { return @{ ok=$false; error='steamcmd.exe not present after download/extract.' } }
-                # Force the Windows depot so we get the VM image, not the Linux server content.
-                & $scExe +@sSteamCmdForcePlatformType windows +force_install_dir $appDir +login anonymous +app_update $AppId +quit 2>&1 | Out-Null
-                $rc = $LASTEXITCODE
-                $vmcx = Get-Item (Join-Path $appDir 'Virtual Machines\*.vmcx') -ErrorAction SilentlyContinue | Select-Object -First 1
-                if (-not $vmcx) { return @{ ok=$false; error="SteamCMD finished (exit $rc) but no VM image (.vmcx) is present under $appDir. If the depot needs an owned login this anonymous pull won't work." } }
-                return @{ ok=$true; imageRoot=$appDir }
-            } catch { return @{ ok=$false; error=$_.Exception.Message } }
-        } -ErrorAction Stop
-        if (-not $stageResult.ok) {
-            Step 'steamcmd' 'Download VM image on host (SteamCMD)' 'failed' $stageResult.error
-            return (Fail 'error' "SteamCMD image download failed on the host: $($stageResult.error)")
-        }
-        Step 'steamcmd' 'Download VM image on host (SteamCMD)' 'done' "Image downloaded to $($stageResult.imageRoot) on the host."
+        Step 'download' 'Download VM image on this PC' 'running' 'Finish the Self-Hosted Server install in Steam if prompted. DST will continue when the download completes.'
+        Publish 'download' $true '' ''
+        $localImage = Wait-DuneLanLocalImage
+        Step 'download' 'Download VM image on this PC' 'done' 'Completed Steam image found on this PC.'
+        Step 'transfer' 'Transfer and verify VM image' 'running' 'Copying the image to the host and checking every file with SHA-256.'
+        Publish 'transfer' $true '' ''
+        $stageResult = Copy-DuneLanImage -Session $sess -ImageRoot $localImage -DestDrive $DestDrive
+        Step 'transfer' 'Transfer and verify VM image' 'done' 'Image transferred and verified on the host.'
 
         # --- 3. import the VM on the host ---------------------------------
         Step 'import' 'Import + start the VM' 'running' 'Importing the VM, attaching the switch, sizing disk/RAM, and starting it.'
@@ -235,7 +197,7 @@ function Invoke-DuneHyperVLanInstall {
         # --- 4. bootstrap the battlegroup from the DST PC over the LAN -----
         Step 'bootstrap' 'Set up the battlegroup (SSH)' 'running' "Authorizing DST's key on $guestIp and running first-time battlegroup setup."
         Publish 'bootstrap' $true $guestIp ''
-        $bs = Initialize-DuneLanGuest -GuestIp $guestIp -VmPassword $VmPassword
+        $bs = Initialize-DuneLanGuest -GuestIp $guestIp -VmPassword $VmPassword -ImageRoot $localImage -WorldName $WorldName -Region $Region -ServerToken $ServerToken
         if (-not $bs.ok) {
             Step 'bootstrap' 'Set up the battlegroup (SSH)' 'failed' $bs.error
             return (Fail 'error' "Battlegroup bootstrap failed on the VM ($guestIp): $($bs.error)")
@@ -243,11 +205,17 @@ function Invoke-DuneHyperVLanInstall {
         Step 'bootstrap' 'Set up the battlegroup (SSH)' 'done' 'Battlegroup provisioned.'
 
         # --- 5. flip DST to manage this host over the LAN -----------------
+        Step 'route' 'Update this PC connection route' 'running' 'Reconciling the previous VM route, if present.'
+        Publish 'route' $true $guestIp ''
+        Update-DuneLanClientRoute -PublicIp $previousConfig.LastAppliedPublicIp -PreviousVmIp $previousConfig.LastKnownVmIp -VmIp $guestIp
+        Step 'route' 'Update this PC connection route' 'done' 'Connection route checked.'
         Step 'finalize' 'Enable LAN management' 'running' 'Pointing DST at the LAN host.'
         Save-DuneConfig -Config @{ VmHostMode = 'lan'; HyperVHostIp = $HostIp } | Out-Null
         Step 'finalize' 'Enable LAN management' 'done' "DST now manages the VM on $HostIp over the LAN."
         Publish 'done' $false $guestIp ''
     } catch {
+        $activeStep = $steps | Where-Object { $_.status -eq 'running' } | Select-Object -Last 1
+        if ($activeStep) { $activeStep.status = 'failed'; $activeStep.detail = $_.Exception.Message }
         Publish 'error' $false '' "Unexpected install error: $($_.Exception.Message)"
     } finally {
         if ($sess) { Remove-PSSession $sess -ErrorAction SilentlyContinue }
@@ -293,7 +261,7 @@ function Invoke-DuneLanSshPassword {
 # the default 'dune' password), optionally set a new VM password, then upload and
 # run Funcom's battlegroup setup. Returns @{ ok; error }.
 function Initialize-DuneLanGuest {
-    param([string]$GuestIp, [string]$VmPassword)
+    param([string]$GuestIp, [string]$VmPassword, [string]$ImageRoot, [string]$WorldName, [int]$Region, [string]$ServerToken)
 
     $cfg = Read-DuneConfig
     $key = $cfg.SshKey
@@ -313,7 +281,7 @@ function Initialize-DuneLanGuest {
     # 1) Authorize our public key using the default 'dune' password.
     $pub = (Get-Content -Raw -LiteralPath "$key.pub").Trim()
     $b64Pub = [Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes("$pub`n"))
-    $installKeyCmd = "mkdir -p `$HOME/.ssh && chmod 700 `$HOME/.ssh && echo $b64Pub | base64 -d > `$HOME/.ssh/authorized_keys && chmod 600 `$HOME/.ssh/authorized_keys && echo KEYOK"
+    $installKeyCmd = "mkdir -p `$HOME/.ssh && chmod 700 `$HOME/.ssh && touch `$HOME/.ssh/authorized_keys && pub=`$(echo $b64Pub | base64 -d) && (grep -qxF -- `"`$pub`" `$HOME/.ssh/authorized_keys || printf '%s\n' `"`$pub`" >> `$HOME/.ssh/authorized_keys) && chmod 600 `$HOME/.ssh/authorized_keys && echo KEYOK"
     $r = Invoke-DuneLanSshPassword -GuestIp $GuestIp -Password 'dune' -RemoteCmd $installKeyCmd
     if (-not $r.ok -or $r.output -notmatch 'KEYOK') {
         return @{ ok = $false; error = "Could not authorize DST's SSH key on the VM using the default 'dune' password. The VM may not have booted with the stock password, or password SSH is unavailable. Output: $($r.output)" }
@@ -332,7 +300,7 @@ function Initialize-DuneLanGuest {
     }
 
     # 4) Upload Funcom's bootstrap 'setup' and run it (streamed best-effort).
-    $bootstrap = Join-Path $cfg.SteamPath 'battlegroup-management\bootstrap\setup'
+    $bootstrap = Join-Path $ImageRoot 'battlegroup-management\bootstrap\setup'
     if (-not (Test-Path -LiteralPath $bootstrap)) {
         return @{ ok = $false; error = "Funcom's bootstrap file not found on this PC at $bootstrap. Is the Steam self-hosted-server app installed here?" }
     }
@@ -342,13 +310,8 @@ function Initialize-DuneLanGuest {
     $uOut = & ssh -o StrictHostKeyChecking=no -o LogLevel=ERROR -i "$key" "dune@$GuestIp" $uploadCmd 2>&1
     if (($uOut | Out-String) -notmatch 'UPLOADOK') { return @{ ok = $false; error = "Could not upload the battlegroup setup script: $($uOut | Out-String)" } }
 
-    # Run first-time setup. This downloads the server via steamcmd INSIDE the VM
-    # (anonymous) and provisions the battlegroup — several minutes. Non-interactive.
-    $setupOut = & ssh -o StrictHostKeyChecking=no -o LogLevel=ERROR -i "$key" "dune@$GuestIp" "/home/dune/.dune/bin/setup" 2>&1
-    if ($LASTEXITCODE -ne 0) {
-        $tail = (($setupOut | Out-String) -split "`n" | Select-Object -Last 15) -join "`n"
-        return @{ ok = $false; error = "Battlegroup setup script exited $LASTEXITCODE on the VM. If it stalled waiting for input, the downloaded setup.sh may be interactive on this build. Tail:`n$tail" }
-    }
+    try { Invoke-DuneLanSetup -GuestIp $GuestIp -Key $key -WorldName $WorldName -Region $Region -ServerToken $ServerToken }
+    catch { return @{ ok=$false; error=$_.Exception.Message } }
     return @{ ok = $true; error = '' }
 }
 
@@ -356,8 +319,11 @@ function Start-DuneHyperVLanInstallAsync {
     param(
         [string]$HostIp, [string]$User, [string]$Password,
         [string]$DestDrive, [int]$MemoryGB, [string]$SwitchName,
-        [string]$VmPassword, [bool]$ReplaceExisting, [string]$ServerDir
+        [string]$VmPassword, [bool]$ReplaceExisting, [string]$ServerDir,
+        [string]$WorldName, [int]$Region, [string]$ServerToken
     )
+    try { Assert-DuneLanWorldInputs $WorldName $Region $ServerToken }
+    catch { return @{ ok=$false; error=$_.Exception.Message } }
     if (-not $ServerDir) { $ServerDir = $script:DuneHyperVLanServerDir }
     if (-not $ServerDir -or -not (Test-Path -LiteralPath $ServerDir)) {
         return @{ ok = $false; error = "Server dir not resolved ('$ServerDir')." }
@@ -377,20 +343,20 @@ function Start-DuneHyperVLanInstallAsync {
         $ps = [powershell]::Create(); $ps.Runspace = $rs
         $script:DuneHyperVLanInstallRunspace = @{ ps = $ps; rs = $rs }
         [void]$ps.AddScript({
-            param($ServerDir, $HostIp, $User, $Password, $DestDrive, $MemoryGB, $SwitchName, $VmPassword, $ReplaceExisting)
+            param($ServerDir, $HostIp, $User, $Password, $DestDrive, $MemoryGB, $SwitchName, $VmPassword, $ReplaceExisting, $WorldName, $Region, $ServerToken)
             try {
                 $boot = Join-Path $ServerDir 'lib\Bootstrap.ps1'; if (Test-Path $boot) { . $boot }
                 Get-ChildItem -Path (Join-Path $ServerDir 'lib') -Filter '*.ps1' | ForEach-Object {
                     if ($_.Name -ieq 'Bootstrap.ps1') { return }
                     try { . $_.FullName } catch {}
                 }
-                Invoke-DuneHyperVLanInstall -HostIp $HostIp -User $User -Password $Password -DestDrive $DestDrive -MemoryGB $MemoryGB -SwitchName $SwitchName -VmPassword $VmPassword -ReplaceExisting $ReplaceExisting -ServerDir $ServerDir
+                Invoke-DuneHyperVLanInstall -HostIp $HostIp -User $User -Password $Password -DestDrive $DestDrive -MemoryGB $MemoryGB -SwitchName $SwitchName -VmPassword $VmPassword -ReplaceExisting $ReplaceExisting -ServerDir $ServerDir -WorldName $WorldName -Region $Region -ServerToken $ServerToken
             } catch {
                 try {
                     Save-DuneHyperVLanInstallState -State @{ running=$false; phase='error'; ip=''; error="Install runspace crashed: $($_.Exception.Message)"; steps=@(); finished=(Get-Date).ToUniversalTime().ToString('o') }
                 } catch {}
             }
-        }).AddArgument($ServerDir).AddArgument($HostIp).AddArgument($User).AddArgument($Password).AddArgument($DestDrive).AddArgument($MemoryGB).AddArgument($SwitchName).AddArgument($VmPassword).AddArgument($ReplaceExisting)
+        }).AddArgument($ServerDir).AddArgument($HostIp).AddArgument($User).AddArgument($Password).AddArgument($DestDrive).AddArgument($MemoryGB).AddArgument($SwitchName).AddArgument($VmPassword).AddArgument($ReplaceExisting).AddArgument($WorldName).AddArgument($Region).AddArgument($ServerToken)
         [void]$ps.BeginInvoke()
         return @{ ok = $true; running = $true }
     } catch {
