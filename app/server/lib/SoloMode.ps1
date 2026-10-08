@@ -93,6 +93,31 @@ $script:DuneSoloConsoleSettings = @(
         label = 'Shield Drops While Shooting'
         help = 'Retail Solo confirmed. Disabled keeps the player shield raised while firing.'
         status = 'Confirmed'
+    },
+    [ordered]@{
+        key = 'Vehicle.RecoveryTimeLimit'; type = 'float'; min = 0; max = 2147483647; default = ''
+        label = 'Vehicle Recovery Time Limit'
+        help = 'Coastal tested 1 in Solo. Unset leaves game behavior unchanged.'; status = 'Confirmed'
+    },
+    [ordered]@{
+        key = 'dw.VehicleDurabilityDamageMultiplier'; type = 'float'; min = 0; max = 2147483647; default = ''
+        label = 'Vehicle Durability Damage Multiplier'
+        help = 'Coastal tested 0.01 in Solo. Unset leaves game behavior unchanged.'; status = 'Confirmed'
+    },
+    [ordered]@{
+        key = 'Vehicle.RelocationEnabled'; type = 'bool01'; default = ''
+        label = 'Vehicle Relocation Enabled'
+        help = 'Coastal tested Enabled (1) in Solo. Unset leaves game behavior unchanged.'; status = 'Confirmed'
+    },
+    [ordered]@{
+        key = 'Vehicle.RecoveryChassisDurabilityReductionFraction'; type = 'float'; min = 0; max = 1; default = ''
+        label = 'Recovery Chassis Durability Reduction Fraction'
+        help = 'Coastal tested 0.001 in Solo. Enter a fraction from 0 to 1.'; status = 'Confirmed'
+    },
+    [ordered]@{
+        key = 'Vehicle.RecoveryCurrencyBaseCost'; type = 'int'; min = 0; max = 2147483647; default = ''
+        label = 'Vehicle Recovery Currency Base Cost'
+        help = 'Coastal tested 100 in Solo. Unset leaves game behavior unchanged.'; status = 'Confirmed'
     }
 )
 
@@ -1229,8 +1254,8 @@ function Read-DuneSoloConsoleSettings {
             present = $values.ContainsKey($key)
             type = [string]$field.type
             default = [string]$field.default
-            min = if ($field.Contains('min')) { [int]$field.min } else { $null }
-            max = if ($field.Contains('max')) { [int]$field.max } else { $null }
+            min = if ($field.Contains('min')) { [double]$field.min } else { $null }
+            max = if ($field.Contains('max')) { [double]$field.max } else { $null }
             label = [string]$field.label
             help = [string]$field.help
             status = [string]$field.status
@@ -1282,6 +1307,15 @@ function Set-DuneSoloConsoleSettings {
                 throw "$key must be between $($field.min) and $($field.max)."
             }
             $value = [string]$number
+        } elseif ($field.type -eq 'float') {
+            $number = 0.0
+            if (-not [double]::TryParse($value, [Globalization.NumberStyles]::Float,
+                    [Globalization.CultureInfo]::InvariantCulture, [ref]$number) -or
+                [double]::IsNaN($number) -or [double]::IsInfinity($number) -or
+                $number -lt [double]$field.min -or $number -gt [double]$field.max) {
+                throw "$key must be a finite number between $($field.min) and $($field.max)."
+            }
+            $value = $number.ToString('R', [Globalization.CultureInfo]::InvariantCulture)
         }
         $normalized[$key] = $value
     }

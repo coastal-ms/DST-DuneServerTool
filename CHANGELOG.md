@@ -13,6 +13,9 @@ here cover everything those tags shipped.
 
 ## [Unreleased]
 
+### Added
+- Add Solo client Engine.ini controls for vehicle recovery time limit, durability damage multiplier, relocation, recovery chassis durability reduction fraction, and recovery currency base cost. Coastal tested values 1, 0.01, enabled, 0.001, and 100 respectively. Writes require the game closed, retain a backup, and verify the selected values.
+
 ## [16.0.1] - 2026-10-07
 
 ### Fixed

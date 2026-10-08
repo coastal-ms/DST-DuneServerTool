@@ -324,6 +324,11 @@ Describe 'Solo Mode write gates and settings backups' {
             'Hydration.SunExposureEnabled' = '0'
             'Vehicle.MaxVehiclesPerPlayer' = '20'
             'Dune.DisableShieldOnShooting' = '0'
+            'Vehicle.RecoveryTimeLimit' = '1'
+            'dw.VehicleDurabilityDamageMultiplier' = '0.01'
+            'Vehicle.RelocationEnabled' = '1'
+            'Vehicle.RecoveryChassisDurabilityReductionFraction' = '0.001'
+            'Vehicle.RecoveryCurrencyBaseCost' = '100'
         } -Confirm 'APPLY SOLO CONSOLE SETTINGS'
 
         $result.ok | Should -BeTrue
@@ -339,6 +344,11 @@ Describe 'Solo Mode write gates and settings backups' {
             Should -Be 1
         $written | Should -Match '(?m)^Vehicle\.MaxVehiclesPerPlayer=20\r?$'
         $written | Should -Match '(?m)^Dune\.DisableShieldOnShooting=0\r?$'
+        $written | Should -Match '(?m)^Vehicle\.RecoveryTimeLimit=1\r?$'
+        $written | Should -Match '(?m)^dw\.VehicleDurabilityDamageMultiplier=0\.01\r?$'
+        $written | Should -Match '(?m)^Vehicle\.RelocationEnabled=1\r?$'
+        $written | Should -Match '(?m)^Vehicle\.RecoveryChassisDurabilityReductionFraction=0\.001\r?$'
+        $written | Should -Match '(?m)^Vehicle\.RecoveryCurrencyBaseCost=100\r?$'
         $clientWritten | Should -Match '(?m)^Client\.FutureKey=KeepMe\r?$'
         $clientWritten.Trim() | Should -Be ((@(
             '[ConsoleVariables]'
@@ -346,6 +356,27 @@ Describe 'Solo Mode write gates and settings backups' {
             'Dune.DisableShieldOnShooting=1'
             'Client.FutureKey=KeepMe'
         ) -join [Environment]::NewLine).Trim())
+    }
+
+    It 'rejects invalid vehicle values before changing Engine.ini' -TestCases @(
+        @{ Key = 'dw.VehicleDurabilityDamageMultiplier'; Value = 'NaN' }
+        @{ Key = 'dw.VehicleDurabilityDamageMultiplier'; Value = 'Infinity' }
+        @{ Key = 'dw.VehicleDurabilityDamageMultiplier'; Value = '0,01' }
+        @{ Key = 'Vehicle.RecoveryTimeLimit'; Value = '-1' }
+        @{ Key = 'Vehicle.RecoveryChassisDurabilityReductionFraction'; Value = '1.01' }
+        @{ Key = 'Vehicle.RecoveryCurrencyBaseCost'; Value = '100.5' }
+        @{ Key = 'Vehicle.RelocationEnabled'; Value = '2' }
+    ) {
+        param($Key, $Value)
+        $layout = New-TestSoloLayout
+        $engine = Join-Path $layout.config 'Engine.ini'
+        $original = "[ConsoleVariables]`nUnknown.FutureKey=KeepMe"
+        [IO.File]::WriteAllText($engine, $original)
+        Save-DuneSoloState -DataRoot $layout.root -DbPath $layout.db | Out-Null
+        Mock Get-DuneSoloGameProcesses { @() }
+        { Set-DuneSoloConsoleSettings -Settings @{ $Key = $Value } -Confirm 'APPLY SOLO CONSOLE SETTINGS' } |
+            Should -Throw
+        [IO.File]::ReadAllText($engine) | Should -BeExactly $original
     }
 
     It 'blocks Retail Engine.ini writes while the game is running' {
