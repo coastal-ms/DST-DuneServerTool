@@ -28,7 +28,8 @@ export function AppShell({ children }: { children: ReactNode }) {
   const deckSidebar = useSidebarCollapsed('dst.deck.sidebar.collapsed', true)
   const { pathname } = useLocation()
   const immersive = IMMERSIVE_ROUTES.has(pathname)
-  const commandDeck = useCommandDeck()
+  const preferredCommandDeck = useCommandDeck()
+  const commandDeck = preferredCommandDeck && !soloOnly
   const fontScale = useFontScale()
   useDocumentFontScale(fontScale)
   const spatialHome = commandDeck && pathname === '/'
