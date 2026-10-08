@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { useNavigate } from '../router'
 import { externalPortVerificationUrl, summarizeTcpPorts } from '../util/portStatusPresentation'
 import { PageHeader } from '../components/PageHeader'
@@ -211,8 +211,11 @@ export function Dashboard() {
   const [links, setLinks] = useState<LinksResponse | null>(null)
   const [linksLoading, setLinksLoading] = useState(false)
   const [linksError, setLinksError] = useState<string | null>(null)
+  const linksRequestPending = useRef(false)
 
   const refreshLinks = useCallback(async (force = false) => {
+    if (linksRequestPending.current) return
+    linksRequestPending.current = true
     setLinksLoading(true); setLinksError(null)
     try {
       const r = await getLinks({ force })
@@ -221,13 +224,18 @@ export function Dashboard() {
       setLinks(null)
       setLinksError(e instanceof ApiError ? e.message : String(e))
     } finally {
+      linksRequestPending.current = false
       setLinksLoading(false)
     }
   }, [])
 
-  // The links endpoint resolves battlegroup state itself. Depending on bgReady
-  // caused a duplicate cold-start request as soon as /api/status completed.
-  useEffect(() => { void refreshLinks() }, [refreshLinks])
+  // Resolve again after VM/BG startup instead of retaining the first unavailable
+  // response for the whole visit. Keep the cheap cadence and skip busy requests.
+  useEffect(() => {
+    void refreshLinks()
+    const timer = window.setInterval(() => { void refreshLinks() }, 60_000)
+    return () => window.clearInterval(timer)
+  }, [refreshLinks])
 
   // Log exports — run-command wrappers
   const [exportBusy, setExportBusy] = useState<string | null>(null)
