@@ -2,21 +2,43 @@
 import Base from "../layouts/Base.astro";
 import PageHeader from "../components/PageHeader.astro";
 import DownloadButton from "../components/DownloadButton.astro";
+import Screenshot from "../components/Screenshot.astro";
 
 const base = import.meta.env.BASE_URL;
 ---
 
 <Base
   title="Install — DST"
-  description="Requirements and quick install for the Dune Server Tool."
+  description="Install DST v16 for Solo only or Self-Hosted + Solo. Solo needs no VM or dedicated server."
 >
   <PageHeader
     eyebrow="Install"
-    title="Quick install"
+    title="Install DST v16"
     intro="Choose Solo only or Self-Hosted + Solo in one Windows installer. Solo needs no server setup or VM."
   />
 
   <section class="mx-auto max-w-3xl px-6 pb-12">
+    <div id="solo" class="rounded-xl border border-dune-border bg-dune-surface p-8 mb-8 scroll-mt-24">
+      <h2 class="text-2xl font-semibold mb-4">Play Solo? Choose Solo only.</h2>
+      <p class="text-dune-muted leading-relaxed mb-4">
+        v16 includes a dedicated <strong class="text-dune-text">Solo only</strong>
+        installation choice in the same DuneServerSetup.exe. It opens local save
+        tools directly, without server setup pages, VM discovery, server port
+        checks, or server background jobs. No Hyper-V or Self-Hosted Server installation is needed.
+      </p>
+      <ol class="list-decimal pl-6 space-y-3 text-dune-muted leading-relaxed">
+        <li>Install <strong class="text-dune-text">PowerShell 7</strong> first. v16.0.1 checks for it before installing or upgrading either mode.</li>
+        <li>Run DuneServerSetup.exe and select <strong class="text-dune-text">Solo only</strong>.</li>
+        <li>Launch Dune: Awakening Solo once to create a save, then close the game.</li>
+        <li>Open DST, connect your supported Retail Solo save, and follow its validation guidance. Save edits require the game to be closed and retain backups.</li>
+      </ol>
+      <Screenshot src={`${base}screenshots/solo-v16-installer.png`} alt="DST v16 installer Choose your DST setup page with Solo only selected and Self-Hosted + Solo available" caption="The v16 installer lets you choose Solo only. Both installation modes include Solo tools." width={606} height={472} />
+      <p class="text-dune-muted leading-relaxed mt-4">
+        Managing a server too? Choose <strong class="text-dune-text">Self-Hosted + Solo</strong>.
+        Both choices include the same Solo tools. Reinstalls and silent updates preserve
+        the selected mode and existing configuration; existing server installations keep Self-Hosted + Solo.
+      </p>
+    </div>
     <div class="rounded-xl border border-dune-border bg-dune-surface p-8 mb-12">
       <ol class="space-y-5 text-dune-text">
         <li class="flex gap-4">
@@ -79,7 +101,8 @@ const base = import.meta.env.BASE_URL;
       <li>
         <strong class="text-dune-text">PowerShell 7</strong> (<span
           class="font-mono">pwsh</span
-        >). The launcher prompts with a download link if missing.
+        >). Install it before running the installer. v16.0.1 stops installation or
+        upgrade if it is missing and provides Microsoft Store guidance, preserving an existing installation.
       </li>
       <li>
         <strong class="text-dune-text">Microsoft Edge WebView2 Runtime</strong> —
@@ -111,7 +134,7 @@ const base = import.meta.env.BASE_URL;
         >
         — the responsive full Browser Portal on a phone, tablet, or PC, with
         optional Owner/Admin accounts. New setups use a free Tailscale Funnel
-        with no domain. v15 retains existing Cloudflare custom-domain
+        with no domain. DST retains existing Cloudflare custom-domain
         configuration, but its legacy portal is disabled by default and can be
         explicitly re-enabled in local Settings.
       </li>
@@ -119,7 +142,8 @@ const base = import.meta.env.BASE_URL;
 
     <h2 class="text-2xl font-semibold mb-4">Choose your view</h2>
     <p class="text-dune-muted leading-relaxed mb-8">
-      DST opens in <strong>Classic</strong>. Select <strong>Try Command Deck</strong>{" "}
+      Solo-only installations open Solo Mode in a focused Classic interface.
+      In Self-Hosted + Solo, DST opens in <strong>Classic</strong>. Select <strong>Try Command Deck</strong>{" "}
       in the status bar for the optional World/dashboard and focused workspaces.
       Its bottom dock includes <strong>DD Atlas</strong>, the shipped static
       Deep Desert reference. Select <strong>Classic</strong> to return.
@@ -223,7 +247,7 @@ const base = import.meta.env.BASE_URL;
     <div class="mt-12 rounded-xl border border-dune-border bg-dune-surface p-6">
       <h2 class="text-2xl font-semibold mb-3">Remote access</h2>
       <p class="text-dune-muted leading-relaxed">
-        Remote access is optional. v15 uses the same responsive Browser Portal
+        Remote access is optional. DST uses the same responsive Browser Portal
         as the desktop app, with host-created Owner/Admin accounts and
         role-enforced navigation and APIs. New setups use Tailscale Funnel.
         Existing Cloudflare custom-domain configuration is retained, but its
