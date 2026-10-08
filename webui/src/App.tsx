@@ -13,6 +13,7 @@ import { WORKSPACE_MANIFEST } from './platform/workspaces'
 import { COMPATIBILITY_REDIRECTS, LEGACY_ROUTE_MANIFEST, type RouteAccess } from './platform/routes'
 import { GameplayAdminShell } from './components/platform/GameplayAdminShell'
 import type { GameplaySectionId } from './platform/gameplay'
+import { InstallationProvider, isSoloDestination, useSoloInstallation } from './hooks/useInstallationMode'
 
 const WORKSPACE_ROUTES = WORKSPACE_MANIFEST.map(workspace => ({
   ...workspace,
@@ -50,7 +51,8 @@ function canAccessRoute(
   return true
 }
 
-export default function App() {
+function InstalledApp() {
+  const soloOnly = useSoloInstallation()
   const { canAccessOwnerSurfaces, canAccessSetup } = usePortalAccess()
 
   useEffect(() => {
@@ -59,6 +61,8 @@ export default function App() {
       api('/api/portal/checkin', { method: 'POST' }).catch(() => { /* best effort */ })
     }
   }, [])
+
+  if (soloOnly && !isLocalViewer()) return <p>Solo Mode is available on the PC where DST is installed.</p>
 
   return (
     <StatusProvider>
@@ -77,7 +81,9 @@ export default function App() {
               key={id}
               path={path}
               element={
-                visibility === 'owner' && !canAccessOwnerSurfaces
+                soloOnly && !isSoloDestination(path)
+                  ? <Navigate to="/solo" replace />
+                  : visibility === 'owner' && !canAccessOwnerSurfaces
                   ? <Navigate to="/" replace />
                   : (
                       <LazyPage name={label}>
@@ -98,7 +104,9 @@ export default function App() {
               key={path}
               path={path}
               element={
-                canAccessRoute(access, canAccessOwnerSurfaces, canAccessSetup)
+                soloOnly && !isSoloDestination(path)
+                  ? <Navigate to="/solo" replace />
+                  : canAccessRoute(access, canAccessOwnerSurfaces, canAccessSetup)
                   ? <LazyPage name={label}><Component /></LazyPage>
                   : <Navigate to="/" replace />
               }
@@ -112,4 +120,8 @@ export default function App() {
       </AppShell>
     </StatusProvider>
   )
+}
+
+export default function App() {
+  return <InstallationProvider><InstalledApp /></InstallationProvider>
 }

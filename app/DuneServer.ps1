@@ -166,7 +166,7 @@ public static extern bool IsIconic(System.IntPtr hWnd);
 Write-DuneStartupLog 'Console presentation initialized'
 
 # Version (one of the 5 sync'd constants; see persistent-notes.md)
-$script:DuneToolVersion = '15.2.9'
+$script:DuneToolVersion = '16.0.0'
 # Artifact identity defaults for source/dev runs. Build-Exe.ps1 replaces these
 # four declarations only in its generated compilation input, so the resulting
 # executable carries immutable identity without changing tracked version stamps.
@@ -614,7 +614,7 @@ Write-DuneStartupLog 'Route modules loaded'
 # Start the native Market Bot ("Duke") scheduler in its own background runspace.
 # It only acts when the bot is enabled in gameplay-bot.json, so this is safe to
 # always start; it idles otherwise.
-if (Get-Command Start-DuneGameplayBotScheduler -ErrorAction SilentlyContinue) {
+if (-not (Test-DuneSoloInstallation) -and (Get-Command Start-DuneGameplayBotScheduler -ErrorAction SilentlyContinue)) {
     try { [void](Start-DuneGameplayBotScheduler -ServerDir $serverDir) } catch {}
 }
 Write-DuneStartupLog 'Gameplay bot scheduler initialized'

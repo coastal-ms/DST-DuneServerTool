@@ -135,6 +135,7 @@ function Test-DunePortCustom {
 
 function Get-DunePortStatus {
     param([switch]$Force)
+    if ((Get-Command Test-DuneSoloInstallation -ErrorAction SilentlyContinue) -and (Test-DuneSoloInstallation)) { return $null }
     $cfg  = Read-DuneConfig
     $mode = if ($cfg.PortCheckMode) { $cfg.PortCheckMode } else { 'builtin' }
     $hasCustomUrl = -not [string]::IsNullOrWhiteSpace("$($cfg.PortCheckUrlTemplate)")

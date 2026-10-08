@@ -983,7 +983,7 @@ function Start-DuneHttpServer {
     }
 
     $httpReady = [Threading.ManualResetEventSlim]::new($false)
-    if (Get-Command Start-DunePlatformCacheStartup -ErrorAction SilentlyContinue) {
+    if (-not ((Get-Command Test-DuneSoloInstallation -ErrorAction SilentlyContinue) -and (Test-DuneSoloInstallation)) -and (Get-Command Start-DunePlatformCacheStartup -ErrorAction SilentlyContinue)) {
         try {
             [void](Start-DunePlatformCacheStartup -ServerDir $script:DuneServerDir -HttpReady $httpReady)
         } catch {
@@ -994,7 +994,7 @@ function Start-DuneHttpServer {
     # Launch the in-process scheduled-restart loop. It lives in this process, so
     # it only fires while DST is open and running (the UI states this). Failure
     # to start must not block the server from accepting requests.
-    if (Get-Command Start-DuneRestartScheduler -ErrorAction SilentlyContinue) {
+    if (-not ((Get-Command Test-DuneSoloInstallation -ErrorAction SilentlyContinue) -and (Test-DuneSoloInstallation)) -and (Get-Command Start-DuneRestartScheduler -ErrorAction SilentlyContinue)) {
         try { Start-DuneRestartScheduler -ServerDir $script:DuneServerDir -HttpReady $httpReady } catch {
             if (Get-Command Write-DuneLog -ErrorAction SilentlyContinue) {
                 Write-DuneLog "restart scheduler launch failed: $($_.Exception.Message)" 'WARN'
@@ -1134,6 +1134,10 @@ function Invoke-DuneContext {
             $res.OutputStream.Close()
             return
         }
+        if ((Get-Command Test-DuneSoloInstallation -ErrorAction SilentlyContinue) -and (Test-DuneSoloInstallation)) {
+            Write-DuneError -Response $res -Status 409 -Message 'Dedicated-server connections require the Self-Hosted + Solo installation.'
+            return
+        }
         foreach ($r in $script:DuneWsRoutes) {
             $m = $r.Regex.Match($rawPath)
             if ($m.Success) {
@@ -1266,6 +1270,10 @@ function Invoke-DuneContext {
                     $routeParams['remoteEmail'] = $auth.email
                     $routeParams['remoteRole']  = $auth.role
                     Add-DuneRouteContractContext -Route $r -RouteParams $routeParams -Principal $remotePrincipal -RequestId $requestId
+                    if ((Get-Command Test-DuneSoloInstallation -ErrorAction SilentlyContinue) -and (Test-DuneSoloServerApiPath -Path $rawPath -Method $method) -and (Test-DuneSoloInstallation)) {
+                        Write-DuneError -Response $res -Status 409 -Message 'Dedicated-server tools require the Self-Hosted + Solo installation.'
+                        return
+                    }
                     if (Test-DuneWorldRestartWriteBlocked -Method $method -Path $rawPath) {
                         Write-DuneError -Response $res -Status 423 -Message 'World Restart maintenance is active. Wait for completion or use its rollback control.'
                         return
@@ -1416,6 +1424,10 @@ function Invoke-DuneContext {
                     $routeParams['portalAccountRole'] = [string]$portalSessionAuth.account.role
                 }
                 Add-DuneRouteContractContext -Route $r -RouteParams $routeParams -Principal $principal -RequestId $requestId
+                if ((Get-Command Test-DuneSoloInstallation -ErrorAction SilentlyContinue) -and (Test-DuneSoloServerApiPath -Path $rawPath -Method $method) -and (Test-DuneSoloInstallation)) {
+                    Write-DuneError -Response $res -Status 409 -Message 'This feature requires a Self-Hosted + Solo installation.'
+                    return
+                }
                 if (Test-DuneWorldRestartWriteBlocked -Method $method -Path $rawPath) {
                     Write-DuneError -Response $res -Status 423 -Message 'World Restart maintenance is active. Wait for completion or use its rollback control.'
                     return

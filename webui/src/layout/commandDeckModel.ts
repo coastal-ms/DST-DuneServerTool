@@ -40,6 +40,7 @@ export const DECK_TASK_LABELS: Record<string, string> = {
 
 export function getDeckDestinations(access: Parameters<typeof getVisibleNavItems>[0]): DeckDestination[] {
   const visible = getVisibleNavItems(access)
+  if (access.soloOnly) return visible.map(item => ({ ...item, description: TASK_COPY[item.to]?.description ?? `Open ${item.label}.`, keywords: TASK_COPY[item.to]?.keywords ?? '' }))
   const seen = new Set(visible.map(item => item.to))
   const workspaces: NavItem[] = WORKSPACE_MANIFEST
     .filter(item => !seen.has(item.path) && (item.visibility !== 'owner' || access.canAccessOwnerSurfaces))

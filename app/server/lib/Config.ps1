@@ -4,6 +4,7 @@
 # $script:AppDir (the app/ directory).
 
 $script:DuneConfigKeys = @(
+    'InstallationMode',
     'SteamPath',
     'SshKey',
     'WindowsUser',
@@ -66,9 +67,13 @@ function Get-DuneConfigPath {
     $appdataPath = Join-Path $env:APPDATA 'DuneServer\dune-server.config'
     if (Test-Path -LiteralPath $appdataPath) { return $appdataPath }
     # Dev fallback: repo-root file next to dune-server.ps1.
-    $root = Split-Path -Parent $script:AppDir
-    $devPath = Join-Path $root 'dune-server.config'
-    if (Test-Path -LiteralPath $devPath) { return $devPath }
+    if ($script:AppDir) {
+        $root = Split-Path -Parent $script:AppDir
+        if ($root) {
+            $devPath = Join-Path $root 'dune-server.config'
+            if (Test-Path -LiteralPath $devPath) { return $devPath }
+        }
+    }
     # Neither exists yet — return the canonical APPDATA path so a future
     # Save-DuneConfig creates it there.
     return $appdataPath
@@ -103,6 +108,40 @@ function Get-DstOpenInAppWindow {
 # distinct function so callers have a single "resolved config" entry point.
 function Read-DuneConfig {
     return Read-DuneConfigRaw
+}
+
+function Get-DuneInstallationMode {
+    # Standalone tools and isolated test runtimes may not have a Windows profile
+    # or an explicit config. They retain the pre-existing full-mode behavior.
+    if (-not $env:APPDATA -and -not $script:DuneConfigFile) { return 'full' }
+    $raw = Read-DuneConfigRaw
+    if ([string]$raw['InstallationMode'] -eq 'solo') { return 'solo' }
+    return 'full'
+}
+
+function Test-DuneSoloInstallation {
+    return (Get-DuneInstallationMode) -eq 'solo'
+}
+
+function Test-DuneSoloServerApiPath {
+    param([string]$Path, [string]$Method = 'GET')
+    # Solo permits its local save API and explicitly shared controls. New server
+    # route families stay unavailable until deliberately reviewed for Solo use.
+    if ($Path -notmatch '^/(?:api|ws)/') { return $false }
+    if ($Path -match '^/api/(?:solo|update|portal)(?:/|$)') { return $false }
+    if ($Path -eq '/api/config' -and $Method -in @('GET','PUT')) { return $false }
+    if ($Method -eq 'GET' -and $Path -in @(
+        '/api/installation', '/api/status', '/api/portal-auth/status',
+        '/api/system/install-location', '/api/v1/capabilities',
+        '/api/catalog/items', '/api/catalog/cosmetics', '/api/catalog/vehicle-kits',
+        '/api/catalog/character-defs', '/api/gameplay/augments/catalog',
+        '/api/gameplay/tags/catalog'
+    )) { return $false }
+    if ($Method -eq 'POST' -and $Path -in @(
+        '/api/browse-path', '/api/system/install-location/open',
+        '/api/status/refresh', '/api/portal-auth/logout', '/api/shutdown'
+    )) { return $false }
+    return $true
 }
 
 # Resolve the in-pod PostgreSQL port DST should use. Reads the DbPort config key,
@@ -318,6 +357,7 @@ function Save-DuneConfig {
 function Test-DuneConfigComplete {
     param([hashtable]$Config)
     if (-not $Config) { $Config = Read-DuneConfig }
+    if ([string]$Config['InstallationMode'] -eq 'solo') { return $true }
     if (-not $Config.SshKey -or -not (Test-Path -LiteralPath $Config.SshKey)) { return $false }
     if (-not $Config.SteamPath) { return $false }
     return $true

@@ -8,6 +8,7 @@ BeforeAll {
     New-Item -ItemType Directory -Path $env:APPDATA, $env:LOCALAPPDATA -Force | Out-Null
     Import-DstLib 'AugmentCatalog.ps1'
     Import-DstLib 'SoloMode.ps1'
+    Import-DstLib 'SoloCosmetics.ps1'
 }
 
 AfterAll {
@@ -676,6 +677,27 @@ Describe 'Solo Mode write gates and settings backups' {
             $Arguments.input -eq $layout.db -and
             $Arguments['safety-backup'] -like '*pre-augment*'
         }
+    }
+
+    It 'builds a main quest unlock with the selected save and retained backup' {
+        $layout = New-TestSoloLayout
+        Save-DuneSoloState -DataRoot $layout.root -DbPath $layout.db | Out-Null
+        Mock Get-DuneSoloGameProcesses { @() }
+        Mock Invoke-DuneSoloHelper { @{ ok = $true } }
+        (Unlock-DuneSoloMainQuest -Quest 'DA_MQ_AssassinsHandbook' -Confirm 'UNLOCK SOLO MAIN QUEST').ok | Should -BeTrue
+        Assert-MockCalled Invoke-DuneSoloHelper -Times 1 -ParameterFilter {
+            $Command -eq 'unlock-main-quest' -and $Arguments.input -eq $layout.db -and
+            $Arguments.quest -eq 'DA_MQ_AssassinsHandbook' -and
+            $Arguments.tags -like '*dune-tags.json' -and
+            $Arguments['safety-backup'] -like '*pre-progression*'
+        }
+    }
+
+    It 'rejects a main quest unlock while the game is running' {
+        Mock Get-DuneSoloGameProcesses { @(@{name='DuneSandbox';pid=42}) }
+        Mock Invoke-DuneSoloHelper { throw 'Must not run' }
+        { Unlock-DuneSoloMainQuest -Quest 'DA_MQ_ANewBeginning' -Confirm 'UNLOCK SOLO MAIN QUEST' } | Should -Throw '*still running*'
+        Assert-MockCalled Invoke-DuneSoloHelper -Times 0
     }
 
     It 'builds each Retail progression command with a retained backup' {
