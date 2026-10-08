@@ -1,4 +1,4 @@
-BeforeAll {
+﻿BeforeAll {
     . "$PSScriptRoot\_TestHelpers.ps1"
     $script:OriginalLocalAppData = $env:LOCALAPPDATA
     $script:OriginalPlatformSelfTest = $env:DST_PLATFORM_SELF_TEST
@@ -71,7 +71,9 @@ Describe 'DunePlatformStore production helper' {
     }
 
     It 'passes scale, process concurrency, WAL, migration, and corruption self-tests' {
-        $result = (& $script:PlatformHelper --command self-test) | ConvertFrom-Json
+        # This aggregates scale, crash recovery and child-process tests on CI.
+        # Keep the production default deadline; allow this suite a bounded two minutes.
+        $result = (& $script:PlatformHelper --command self-test --timeout-ms 120000) | ConvertFrom-Json
         $LASTEXITCODE | Should -Be 0
         $result.ok | Should -BeTrue
         $result.historyScale | Should -Be 100000

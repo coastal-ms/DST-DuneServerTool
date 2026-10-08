@@ -4,10 +4,9 @@ import mdx from "@astrojs/mdx";
 import sitemap from "@astrojs/sitemap";
 import tailwindcss from "@tailwindcss/vite";
 
-// GitHub Pages project site — served at /DST-DuneServerTool/.
-// If a custom domain is configured later, set SITE_BASE=/ in CI env to override.
-const base = process.env.SITE_BASE ?? "/DST-DuneServerTool/";
-const site = process.env.SITE_URL ?? "https://coastal-ms.github.io";
+// Primary website, served at the domain root.
+const base = process.env.SITE_BASE ?? "/";
+const site = process.env.SITE_URL ?? "https://duneservertool.com";
 
 export default defineConfig({
   site,

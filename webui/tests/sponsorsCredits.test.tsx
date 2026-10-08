@@ -104,7 +104,7 @@ describe('DST Credits', () => {
     const remoteSetup = screen.getByRole('link', { name: /Remote Portal Setup/ })
     expect(remoteSetup).toHaveAttribute(
       'href',
-      'https://coastal-ms.github.io/DST-DuneServerTool/remote',
+      'https://duneservertool.com/remote',
     )
     expect(remoteSetup).toHaveClass('text-text')
     const localHandoff = screen.getByRole('button', { name: /Open local portal in browser/ })
