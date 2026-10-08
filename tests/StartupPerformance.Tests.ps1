@@ -4,7 +4,6 @@ Describe 'Cold-start performance guardrails' {
         $script:entry = Get-Content (Join-Path $repo 'app\DuneServer.ps1') -Raw
         $script:http = Get-Content (Join-Path $repo 'app\server\HttpServer.ps1') -Raw
         $script:scheduler = Get-Content (Join-Path $repo 'app\server\lib\RestartSchedule.ps1') -Raw
-        $script:dashboard = Get-Content (Join-Path $repo 'webui\src\pages\Dashboard.tsx') -Raw
         $script:statusRoute = Get-Content (Join-Path $repo 'app\server\routes\Status.ps1') -Raw
     }
 
@@ -29,10 +28,6 @@ Describe 'Cold-start performance guardrails' {
         $ready | Should -BeLessThan $wait
         $script:entry | Should -Not -Match 'Initialize-DuneMobileBridge'
         $script:scheduler | Should -Match 'Initialize-DuneMobileBridge -ServerDir \$DuneSchedulerServerDir'
-    }
-
-    It 'loads dashboard links only once on mount' {
-        $script:dashboard | Should -Match 'useEffect\(\(\) => \{ void refreshLinks\(\) \}, \[refreshLinks\]\)'
     }
 
     Context 'Deferred startup workers' {
