@@ -483,11 +483,11 @@ export function SoloCosmeticGrantCard({
             ))}
           </select>
           {chosen && <p className="text-[11px] font-mono text-text-dim truncate mt-2">{chosen.template}</p>}
-          {chosen && pending.has(chosen.template.toLowerCase()) && <p className="text-xs text-text-muted mt-2">Unlock token already held in inventory. Log in to process it before granting another.</p>}
+          {chosen && pending.has(chosen.template.toLowerCase()) && <p className="text-xs text-text-muted mt-2">Unlock token already held in inventory. You can grant another token.</p>}
           {chosen && !pending.has(chosen.template.toLowerCase()) && saved.has(chosen.template.toLowerCase()) && <p className="text-xs text-text-muted mt-2">Unlock record saved; in-game usability is unverified. You can grant another token if the game still reports it locked.</p>}
           <button
             className={`btn-primary w-full mt-4 justify-center ${SOLO_DISABLED_PRIMARY_CLASS}`}
-            disabled={controlsDisabled || !chosen || pending.has(chosen.template.toLowerCase())}
+            disabled={controlsDisabled || !chosen}
             onClick={() => {
               if (chosen) void onGrant(chosen.template, chosen.name)
             }}

@@ -34,10 +34,22 @@ describe('SoloCosmeticGrantCard', () => {
     expect(screen.getByRole('button', { name: 'Grant unlock' })).toBeEnabled()
     expect(screen.getByText(/Unlock record saved; in-game usability is unverified/)).toBeInTheDocument()
     await user.selectOptions(screen.getByRole('combobox'), 'Dye')
-    expect(screen.getByRole('button', { name: 'Grant unlock' })).toBeDisabled()
+    expect(screen.getByRole('button', { name: 'Grant unlock' })).toBeEnabled()
     expect(screen.getByText(/Unlock token already held in inventory/)).toBeInTheDocument()
     await user.selectOptions(screen.getByRole('combobox'), 'Developer_Storage')
     expect(screen.getByRole('button', { name: 'Grant unlock' })).toBeEnabled()
+  })
+
+  it('grants a selected token even when the same token is already held', async () => {
+    const user = userEvent.setup()
+    const onGrant = vi.fn(async () => {})
+    render(<SoloCosmeticGrantCard busy={false} disabled={false}
+      loadCatalog={async () => catalog}
+      ownership={{ available: true, owned: ['DesertSwatch'], unlocked: [], pending: ['DesertSwatch'], error: '' }}
+      onGrant={onGrant} />)
+    await user.selectOptions(await screen.findByRole('combobox'), 'DesertSwatch')
+    await user.click(screen.getByRole('button', { name: 'Grant unlock' }))
+    expect(onGrant).toHaveBeenCalledWith('DesertSwatch', 'Desert Dye')
   })
 
   it('allows retrying a saved building patent without an inventory token', async () => {

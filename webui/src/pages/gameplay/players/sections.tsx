@@ -1471,7 +1471,7 @@ function GrantCosmeticForm({ busy, playerName, accountId, onGrant }: {
   const [owned, setOwned] = useState<Set<string> | null>(null)
   const [unlocked, setUnlocked] = useState<Set<string>>(new Set())
   const [pending, setPending] = useState<Set<string>>(new Set())
-  const [showOwned, setShowOwned] = useState(false)
+  const [showOwned, setShowOwned] = useState(true)
   const [showExcluded, setShowExcluded] = useState(false)
   const [ownershipWarning, setOwnershipWarning] = useState('')
   useEffect(() => {
