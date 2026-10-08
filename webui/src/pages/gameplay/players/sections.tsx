@@ -1523,9 +1523,9 @@ function GrantCosmeticForm({ busy, playerName, accountId, onGrant }: {
 
   return (
     <div className="space-y-3">
-      <p className="text-[11px] text-text-dim">Delivers the unlock item to {playerName}'s inventory (online: instant; offline: next login). The unlock applies when acquired in-game.</p>
+      <p className="text-[11px] text-text-dim">Delivers the unlock item to {playerName}'s inventory (online: instant; offline: next login). Check in-game whether the item activates the unlock.</p>
       <div className="rounded-lg bg-warning/10 border border-warning/40 p-3 text-warning text-xs leading-relaxed">
-        <p>Some entries may be account-entitlement content. Granting one here only unlocks it for this character on this private server; it does not grant account ownership or make it available on official or other servers.</p>
+        <p>Some entries require an account entitlement. Delivering a token or finding a saved unlock record does not confirm in-game usability or grant account ownership.</p>
         <p className="mt-2">
           Developer, test, placeholder, and Polar entries are experimental. Some have no working unlock action or are missing from retail game assets, so they may remain ordinary inventory items and do nothing. Some developer unlock items appear to register only when added to the inventory while the player is offline, then processed on next login. PowerTester is a Funcom account permission that private servers cannot grant; enabling <span className="font-mono">dw.PlayerProgressionUnlockEnabled</span> does not provide it.
         </p>
@@ -1538,9 +1538,9 @@ function GrantCosmeticForm({ busy, playerName, accountId, onGrant }: {
               setShowOwned(e.target.checked)
               if (!e.target.checked && sel && owned.has(sel.toLowerCase())) setSel('')
             }} />
-          Show already owned
+          Show saved records and held tokens
         </span>
-        <span>{unlockedCatalogCount} unlocked / {catalog.filter(e => pending.has(e.template.toLowerCase()) && !unlocked.has(e.template.toLowerCase())).length} held tokens</span>
+        <span>{unlockedCatalogCount} saved unlock records / {catalog.filter(e => pending.has(e.template.toLowerCase()) && !unlocked.has(e.template.toLowerCase())).length} held tokens</span>
       </label>
       <p className="text-xs text-text-dim">This picker includes all customization categories, crafting stations and utilities. Its remaining count is not a count of failed bulk grants.</p>
       <label className="flex items-center gap-2 text-xs text-text-dim"><input type="checkbox" checked={showExcluded} onChange={e => { setShowExcluded(e.target.checked); setSel('') }} />Show tokens excluded from bulk grants</label>
@@ -1550,7 +1550,7 @@ function GrantCosmeticForm({ busy, playerName, accountId, onGrant }: {
         <option value="">Select a cosmetic or building set… ({matches.length})</option>
         {groups.map(([g, items]) => (
           <optgroup key={g} label={`${g} (${items.length})`}>
-            {items.map(e => <option key={e.template} value={e.template}>{e.name}{e.bulk_exclusion ? ' — Excluded from bulk' : unlocked.has(e.template.toLowerCase()) ? ' — Unlocked' : pending.has(e.template.toLowerCase()) ? ' — Token held, unlock unconfirmed' : ''}</option>)}
+            {items.map(e => <option key={e.template} value={e.template}>{e.name}{e.bulk_exclusion ? ' — Excluded from bulk' : unlocked.has(e.template.toLowerCase()) ? ' — Saved record, usability unverified' : pending.has(e.template.toLowerCase()) ? ' — Token held, unlock unconfirmed' : ''}</option>)}
           </optgroup>
         ))}
       </select>
