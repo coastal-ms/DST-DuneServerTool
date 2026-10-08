@@ -74,9 +74,10 @@ describe('Reserve recovery inventory controls', () => {
     expect(await screen.findByText(/Reserve 4 → Backpack 0/)).toBeInTheDocument()
     const button = screen.getByRole('button', { name: /Recover Reserve to Backpack/ })
     expect(button).toBeDisabled()
-    fireEvent.change(screen.getByRole('textbox', { name: 'Reserve recovery confirmation' }), { target: { value: 'RECOVER' } })
-    expect(button).toBeEnabled()
-    fireEvent.click(button)
+    const user = userEvent.setup()
+    await user.type(screen.getByRole('textbox', { name: 'Reserve recovery confirmation' }), 'RECOVER')
+    await waitFor(() => expect(button).toBeEnabled())
+    await user.click(button)
     await waitFor(() => expect(recoverReserve).toHaveBeenCalledExactlyOnceWith(42, 100, 'a'.repeat(64)))
   })
 
