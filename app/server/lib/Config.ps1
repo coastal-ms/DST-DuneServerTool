@@ -111,6 +111,9 @@ function Read-DuneConfig {
 }
 
 function Get-DuneInstallationMode {
+    # Standalone tools and isolated test runtimes may not have a Windows profile
+    # or an explicit config. They retain the pre-existing full-mode behavior.
+    if (-not $env:APPDATA -and -not $script:DuneConfigFile) { return 'full' }
     $raw = Read-DuneConfigRaw
     if ([string]$raw['InstallationMode'] -eq 'solo') { return 'solo' }
     return 'full'

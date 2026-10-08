@@ -8,6 +8,22 @@
 }
 
 Describe 'Solo installation configuration and isolation' {
+    BeforeEach { $script:DuneConfigFile = Join-Path $TestDrive 'installation.config' }
+    AfterEach { $script:DuneConfigFile = $null }
+    It 'retains full mode in an uninitialized runtime without a Windows profile' {
+        $previousAppData = $env:APPDATA
+        $previousConfig = $script:DuneConfigFile
+        try {
+            $env:APPDATA = $null
+            $script:DuneConfigFile = $null
+            Mock Read-DuneConfigRaw { throw 'No config context exists' }
+            Get-DuneInstallationMode | Should -Be 'full'
+            Assert-MockCalled Read-DuneConfigRaw -Times 0 -Exactly
+        } finally {
+            $env:APPDATA = $previousAppData
+            $script:DuneConfigFile = $previousConfig
+        }
+    }
     It 'keeps existing installations in full mode' {
         Mock Read-DuneConfigRaw { [ordered]@{ SteamPath='existing' } }
         Get-DuneInstallationMode | Should -Be 'full'
