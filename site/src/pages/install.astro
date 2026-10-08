@@ -13,7 +13,7 @@ const base = import.meta.env.BASE_URL;
   <PageHeader
     eyebrow="Install"
     title="Quick install"
-    intro="One Windows installer for an existing Self-Hosted server, a fresh local or LAN-hosted VM, or host-local Solo Mode."
+    intro="Choose Solo only or Self-Hosted + Solo in one Windows installer. Solo needs no server setup or VM."
   />
 
   <section class="mx-auto max-w-3xl px-6 pb-12">
@@ -38,7 +38,9 @@ const base = import.meta.env.BASE_URL;
             >2</span
           >
           <div>
-            Double-click. The installer walks you through it — one UAC
+            Double-click and choose <strong>Solo only</strong> or
+            <strong>Self-Hosted + Solo</strong>. Solo skips server setup;
+            both options share the same Solo tools. There is one UAC
             prompt, then a Start Menu shortcut. The default installation folder is{" "}
             <span class="font-mono text-dune-muted"
               >C:\Program Files\Dune Server\</span
@@ -52,7 +54,8 @@ const base = import.meta.env.BASE_URL;
           >
           <div>
             Launch from <strong>Start Menu → Dune Server</strong>. The first
-            launch opens the Setup Wizard, which asks whether you already have
+            launch opens Solo Mode for a Solo-only installation. For
+            Self-Hosted + Solo, the Setup Wizard asks whether you already have
             a Dune server, then walks you through a fresh install, a
             connection to an existing VM / SSH key, or{" "}
             <strong>Hyper-V over LAN</strong> to manage (and optionally
