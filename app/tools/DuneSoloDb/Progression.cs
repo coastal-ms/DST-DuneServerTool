@@ -135,7 +135,7 @@ internal static partial class Program
                     Rollback(connection);
                     throw;
                 }
-            });
+            }, requireGameClosed: true);
     }
 
     private static object CompleteFindTheFremen(
@@ -298,7 +298,7 @@ internal static partial class Program
                     Rollback(connection);
                     throw;
                 }
-            });
+            }, requireGameClosed: true);
     }
 
     private static object EnableAllSkills(

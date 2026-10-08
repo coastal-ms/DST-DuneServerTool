@@ -39,6 +39,7 @@ import {
   setSoloCurrencies,
   setSoloProgressionPoints,
   maxSoloSpecializations,
+  unlockSoloMainQuest,
   type SoloBackup,
   type SoloBackupsResponse,
   type SoloConsoleSettingsResponse,
@@ -538,6 +539,7 @@ export function SoloMode() {
   const [skillPointsDraft, setSkillPointsDraft] = useState(0)
   const [intelDraft, setIntelDraft] = useState(0)
   const [journeyAction, setJourneyAction] = useState<'fremen' | 'npe'>('fremen')
+  const [mainQuest, setMainQuest] = useState('DA_MQ_ANewBeginning')
   const initializedFromStatus = useRef(false)
 
   useEffect(() => {
@@ -2180,9 +2182,25 @@ export function SoloMode() {
               } finally { setBusy(null) }
             }}>Export Solo diagnostics</button>
           </div>
+          <div className="card p-5">
+            <h3 className="font-semibold mb-2">Journey unlocks</h3>
+            <p className="text-sm text-text-muted mb-3">Unlock a main quest in the selected Solo save. Close the game first; each action retains a backup.</p>
+            <label htmlFor="solo-main-quest" className="text-sm">Main quest</label>
+            <select id="solo-main-quest" className={`${SOLO_INPUT_CLASS} mt-1 mb-3`} value={mainQuest} onChange={event => setMainQuest(event.target.value)} disabled={!canMutateActiveProfile || gameRunning || !!busy}>
+              <option value="DA_MQ_ANewBeginning">A New Beginning</option>
+              <option value="DA_MQ_FindTheFremen">Find the Fremen</option>
+              <option value="DA_MQ_AssassinsHandbook">Assassin’s Handbook</option>
+              <option value="DA_MQ_TheGreatConvention">The Great Convention</option>
+              <option value="DA_MQ_TheGreatConventionPt2">The Great Convention (Pt. 2)</option>
+            </select>
+            <button className={`btn-primary ${SOLO_DISABLED_PRIMARY_CLASS}`} disabled={!canMutateActiveProfile || gameRunning || !!busy} onClick={() => void runProgressionAction('main-quest', 'Unlock Solo main quest', token => unlockSoloMainQuest(mainQuest, token))}>
+              {busy === 'progression:main-quest' ? 'Applying...' : 'Unlock main quest'}
+            </button>
+          </div>
           <SoloSpecializationEditor
-            key={activeProfileToken}
+            key={`${activeProfileToken}:${inspection?.progression.specializations.map(track => `${track.trackType}:${track.level}`).join(',')}`}
             tracks={inspection?.progression.specializations ?? []}
+            legacyAdapter={status?.legacyAdapter}
             disabled={!canMutateActiveProfile || gameRunning || !!busy}
             onSet={(track, level) => void runProgressionAction('set-specialization', `Set ${track} to level ${level} (existing rewards stay unlocked; journey triggers are not replayed)`, token => setSoloSpecialization(track, level, token))}
             onResetRewards={track => void runProgressionAction('reset-specialization-rewards', `Reset ${track} reward claims so they can be purchased again in-game. Keep its level and XP. Remove its claimed skill-point bonus from unspent points; respec first if needed. No journey objectives are completed by this action`, token => resetSoloSpecializationRewards(track, token))}
@@ -2366,20 +2384,27 @@ function ProgressionActionCard({
   )
 }
 
-export function SoloSpecializationEditor({ tracks, disabled, onSet, onResetRewards }: {
+export function SoloSpecializationEditor({ tracks, legacyAdapter = false, disabled, onSet, onResetRewards }: {
   tracks: Array<{ trackType: number; level: number }>
+  legacyAdapter?: boolean
   disabled: boolean
   onSet: (track: string, level: number) => void
   onResetRewards?: (track: string) => void
 }) {
   const [levels, setLevels] = useState<Record<string, string>>({})
-  const names = ['Combat', 'Crafting', 'Exploration', 'Gathering', 'Sabotage']
+  const tracksByName = [
+    { name: 'Combat', id: legacyAdapter ? 0 : 4 },
+    { name: 'Crafting', id: 1 },
+    { name: 'Exploration', id: legacyAdapter ? 2 : 3 },
+    { name: 'Gathering', id: legacyAdapter ? 3 : 2 },
+    { name: 'Sabotage', id: legacyAdapter ? 4 : 5 },
+  ]
   return <div className="card p-5">
     <h3 className="font-semibold mb-2">Specialization levels</h3>
     <p className="text-sm text-text-muted mb-3">Set an individual track from 0 to 100, including lowering a maxed track. Existing rewards and skill points are preserved. This does not replay journey objectives or grant missing cosmetic unlocks.</p>
     <p className="text-sm text-text-muted mb-3">To unlock a reward again for a journey, use Reset rewards for that track, set its level high enough using Set level, then buy the required reward in-game. Reset rewards keeps level and XP, clears reward claims, and removes their unspent skill-point bonus. Respec skills first if those points are spent. Max specializations grants the rewards again, so use Set level during recovery.</p>
-    <div className="space-y-3">{names.map((name, index) => {
-      const current = tracks.find(track => track.trackType === index)?.level ?? 0
+    <div className="space-y-3">{tracksByName.map(({ name, id }) => {
+      const current = tracks.find(track => track.trackType === id)?.level ?? 0
       const value = levels[name] ?? String(Math.floor(current))
       const valid = /^\d+$/.test(value) && Number(value) >= 0 && Number(value) <= 100
       return <div key={name} className="flex flex-wrap items-center gap-3">

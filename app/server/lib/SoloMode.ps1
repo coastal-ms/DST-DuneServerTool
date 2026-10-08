@@ -378,7 +378,7 @@ function Assert-DuneSoloGameClosed {
 
 function Invoke-DuneSoloHelper {
     param(
-        [Parameter(Mandatory)][ValidateSet('inspect','diagnostics','set-specialization','reset-specialization-rewards','backup','restore','grant-items','delete-item','import-blueprint','list-blueprints','export-blueprint','set-currencies','fill-water','set-weapon-ammo','max-augment-attributes','max-specializations','complete-fremen','complete-npe','enable-skills','set-progression-points')][string]$Command,
+        [Parameter(Mandatory)][ValidateSet('inspect','diagnostics','set-specialization','reset-specialization-rewards','backup','restore','grant-items','delete-item','import-blueprint','list-blueprints','export-blueprint','set-currencies','fill-water','set-weapon-ammo','max-augment-attributes','max-specializations','complete-fremen','complete-npe','enable-skills','set-progression-points','unlock-main-quest')][string]$Command,
         [Parameter(Mandatory)][hashtable]$Arguments
     )
 
@@ -447,6 +447,26 @@ function Invoke-DuneSoloProgressionAction {
         $arguments['skills'] = Get-DuneSoloDataFilePath -Name 'dune-skills-catalog.json'
     }
     return Invoke-DuneSoloHelper -Command $Action -Arguments $arguments
+}
+
+function Unlock-DuneSoloMainQuest {
+    param([Parameter(Mandatory)][string]$Quest, [string]$Confirm)
+    Assert-DuneSoloSupportedPlatform
+    if ($Confirm -ne 'UNLOCK SOLO MAIN QUEST') { throw 'Confirm the Solo Journey unlock before continuing.' }
+    Assert-DuneSoloGameClosed
+    $profile = Get-DuneSoloProfile
+    Assert-DuneSoloProgressionAdapter -Profile $profile
+    $adapter = Get-DuneSoloAdapterDescriptor -DbPath $profile.dbPath
+    $safetyDir = Join-Path (Get-DuneSoloProfileBackupRoot -DbPath $profile.dbPath) 'pre-progression'
+    New-Item -ItemType Directory -Path $safetyDir -Force | Out-Null
+    $stamp = (Get-Date).ToUniversalTime().ToString('yyyyMMdd-HHmmssfff')
+    Invoke-DuneSoloHelper -Command 'unlock-main-quest' -Arguments @{
+        input = $profile.dbPath
+        'safety-backup' = Join-Path $safetyDir "game-before-main-quest-$stamp.db"
+        adapter = $adapter.manifestPath
+        tags = Get-DuneSoloDataFilePath -Name 'dune-tags.json'
+        quest = $Quest
+    }
 }
 
 function Set-DuneSoloProgressionPoints {

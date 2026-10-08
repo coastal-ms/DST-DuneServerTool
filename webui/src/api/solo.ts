@@ -518,6 +518,13 @@ interface SoloProgressionResult {
   inspection: SoloInspection
 }
 
+export function unlockSoloMainQuest(quest: string, expectedProfileToken: string): Promise<SoloProgressionResult> {
+  return api('/api/solo/progression/main-quest/unlock', {
+    method: 'POST',
+    body: JSON.stringify({ quest, expectedProfileToken, confirm: 'UNLOCK SOLO MAIN QUEST' }),
+  })
+}
+
 export function maxSoloSpecializations(expectedProfileToken: string): Promise<SoloProgressionResult> {
   return api('/api/solo/progression/specializations/max', {
     method: 'POST',

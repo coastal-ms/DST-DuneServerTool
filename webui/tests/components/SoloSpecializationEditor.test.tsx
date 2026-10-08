@@ -1,9 +1,31 @@
 // @vitest-environment jsdom
-import { render, screen, fireEvent } from '@testing-library/react'
-import { describe, expect, it, vi } from 'vitest'
+import { cleanup, render, screen, fireEvent } from '@testing-library/react'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { SoloSpecializationEditor } from '../../src/pages/SoloMode'
 
 describe('Solo specialization level editor', () => {
+  afterEach(cleanup)
+  it('retains the Legacy adapter track mapping', () => {
+    render(<SoloSpecializationEditor legacyAdapter tracks={[0, 1, 2, 3, 4].map(trackType => ({ trackType, level: trackType + 10 }))} disabled={false} onSet={vi.fn()} />)
+    for (const [index, name] of ['Combat', 'Crafting', 'Exploration', 'Gathering', 'Sabotage'].entries()) {
+      expect((screen.getByLabelText(new RegExp(name)) as HTMLInputElement).value).toBe(String(index + 10))
+    }
+  })
+  it('shows the Retail track IDs correctly and refreshes all five after maxing', () => {
+    const props = { disabled: false, onSet: vi.fn() }
+    const { rerender } = render(<SoloSpecializationEditor {...props} tracks={[
+      { trackType: 1, level: 11 }, { trackType: 2, level: 22 },
+      { trackType: 3, level: 33 }, { trackType: 4, level: 44 },
+      { trackType: 5, level: 55 },
+    ]} />)
+    for (const [name, value] of [['Combat', '44'], ['Crafting', '11'], ['Exploration', '33'], ['Gathering', '22'], ['Sabotage', '55']]) {
+      expect((screen.getByLabelText(new RegExp(name)) as HTMLInputElement).value).toBe(value)
+    }
+    rerender(<SoloSpecializationEditor {...props} tracks={[1, 2, 3, 4, 5].map(trackType => ({ trackType, level: 100 }))} />)
+    for (const name of ['Combat', 'Crafting', 'Exploration', 'Gathering', 'Sabotage']) {
+      expect((screen.getByLabelText(new RegExp(name)) as HTMLInputElement).value).toBe('100')
+    }
+  })
   it('lets an existing maxed track be lowered while explaining preserved rewards', () => {
     const onSet = vi.fn()
     const onResetRewards = vi.fn()

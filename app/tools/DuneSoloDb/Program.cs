@@ -128,6 +128,10 @@ internal static partial class Program
                 "max-augment-attributes" => MaxAugmentAttributes(
                     Require(options, "input"),
                     Require(options, "safety-backup")),
+                "unlock-main-quest" => UnlockMainQuest(
+                    Require(options, "input"), Require(options, "safety-backup"),
+                    Require(options, "adapter"), Require(options, "tags"),
+                    RequireValue(options, "quest")),
                 "max-specializations" => MaxSpecializations(
                     Require(options, "input"),
                     Require(options, "safety-backup"),
@@ -2346,6 +2350,24 @@ internal static partial class Program
                   ]
                 }
                 """);
+            var journeyTagsPath = Path.Combine(root, "journey-tags.json");
+            // Use the same node-to-tag shape as the shipped catalog.
+            File.WriteAllText(journeyTagsPath,
+                """{"journey_node_tags":{"DA_MQ_ANewBeginning":["Journey.MainQuest.SelfTest"]}}""");
+            var questBackup = Path.Combine(root, "safety", "before-main-quest.db");
+            var questBefore = File.ReadAllBytes(target);
+            UnlockMainQuest(target, questBackup, adapterPath, journeyTagsPath, "DA_MQ_ANewBeginning");
+            if (!File.ReadAllBytes(questBackup).SequenceEqual(questBefore))
+                throw new InvalidOperationException("Main quest backup did not retain the original save.");
+            var questStable = SHA256.HashData(File.ReadAllBytes(target));
+            foreach (var unsupportedQuest in new[] { "DA_MQ_Unknown", "DA_MQ_TheGreatConvention" })
+            {
+                var questRejected = false;
+                try { UnlockMainQuest(target, Path.Combine(root, "safety", "rejected-main-quest.db"), adapterPath, journeyTagsPath, unsupportedQuest); }
+                catch (Exception ex) when (ex is ArgumentException or InvalidDataException) { questRejected = true; }
+                if (!questRejected || !SHA256.HashData(File.ReadAllBytes(target)).SequenceEqual(questStable))
+                    throw new InvalidOperationException("Unsupported or absent main quest did not fail closed.");
+            }
             MaxSpecializations(
                 target,
                 Path.Combine(root, "safety", "before-spec.db"),
@@ -2589,6 +2611,7 @@ internal static partial class Program
                     "truncated-blueprint-leaves-target-unchanged",
                     "offline-currency-write-with-safety-backup",
                     "offline-water-container-fills-with-safety-backups",
+                    "offline-main-quest-unlock-with-backup-and-absent-quest-rejection",
                     "offline-specialization-max-with-rewards",
                     "offline-specialization-lowering-preserves-rewards-and-backup",
                     "retail-all-five-track-targets-preserve-other-tracks",

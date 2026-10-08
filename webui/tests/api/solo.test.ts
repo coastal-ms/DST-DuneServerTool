@@ -36,6 +36,11 @@ function last(): FetchCall {
 }
 
 describe('Solo Mode API contracts', () => {
+  it('targets the selected main quest with the offline confirmation and profile token', async () => {
+    await solo.unlockSoloMainQuest('DA_MQ_AssassinsHandbook', 'profile-token')
+    expect(last()).toEqual({ url: '/api/solo/progression/main-quest/unlock', method: 'POST',
+      body: { quest: 'DA_MQ_AssassinsHandbook', expectedProfileToken: 'profile-token', confirm: 'UNLOCK SOLO MAIN QUEST' } })
+  })
   it('discovers profiles before connecting a selected root', async () => {
     await solo.discoverSolo('C:\\Solo\\Saved')
     expect(last()).toEqual({
