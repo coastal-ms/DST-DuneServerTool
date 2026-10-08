@@ -13,6 +13,12 @@ here cover everything those tags shipped.
 
 ## [Unreleased]
 
+## [16.0.1] - 2026-10-07
+
+### Fixed
+- Check for the required PowerShell 7 runtime before installing or upgrading either Solo or Self-Hosted mode, leaving the existing installation intact when it is missing.
+- Direct missing-runtime guidance to PowerShell in the Microsoft Store and record the startup failure in the log.
+
 ## [16.0.0] - 2026-10-07
 
 ### Added

@@ -16,7 +16,7 @@
 ;                 -> NOT touched by install or uninstall (preserves user config)
 
 #define MyAppName        "Dune Server Tool"
-#define MyAppVersion "16.0.0"
+#define MyAppVersion "16.0.1"
 #ifndef MyAppNumericVersion
 #define MyAppCoreVersion Copy(MyAppVersion, 1, Pos("-", MyAppVersion + "-") - 1)
 #define MyAppNumericVersion MyAppCoreVersion + (Len(MyAppCoreVersion) - Len(StringChange(MyAppCoreVersion, ".", "")) == 2 ? ".0" : "")
@@ -792,12 +792,39 @@ end;
 
 // PrepareToInstall fires right before the file-copy phase. Returning
 // an empty string lets setup proceed; a non-empty string aborts with
-// that message. We always proceed (an upgrade-uninstall failure is
-// logged but not fatal - ignoreversion will still overwrite the
+// that message. Prerequisite failures stop before any upgrade changes; an
+// upgrade-uninstall failure is logged but not fatal - ignoreversion overwrites
 // active files; only orphans will linger).
 function PrepareToInstall(var NeedsRestart: Boolean): String;
+var
+  probe, probeArgs: string;
+  probeExitCode: Integer;
 begin
   NeedsRestart := False;
+
+  // Required by both installation modes. Check before stopping or removing
+  // the existing installation; silent setup returns the same actionable error.
+  probe := '$p = (Get-Command pwsh.exe -ErrorAction SilentlyContinue).Source; ' +
+    'if (-not $p) { foreach ($candidate in @(' +
+    '''' + EscapePowerShellSingleQuoted(ExpandConstant('{pf64}')) + '\PowerShell\7\pwsh.exe'', ' +
+    '''' + EscapePowerShellSingleQuoted(ExpandConstant('{pf32}')) + '\PowerShell\7\pwsh.exe'', ' +
+    '''' + EscapePowerShellSingleQuoted(ExpandConstant('{localappdata}')) + '\Microsoft\PowerShell\7\pwsh.exe'')) ' +
+    '{ if (Test-Path -LiteralPath $candidate) { $p = $candidate; break } } }; ' +
+    'if ($p) { exit 0 }; exit 1';
+  probeArgs := '-NoLogo -NoProfile -NonInteractive -Command "' + probe + '"';
+  if not Exec(ExpandConstant('{sys}\WindowsPowerShell\v1.0\powershell.exe'),
+    probeArgs, '', SW_HIDE, ewWaitUntilTerminated, probeExitCode) then
+  begin
+    Result := 'Setup could not check for PowerShell 7. No installation changes were made. Please retry setup.';
+    Exit;
+  end;
+  if probeExitCode <> 0 then
+  begin
+    Result := 'PowerShell 7 is required for both Solo and Self-Hosted installations. ' +
+      'Install PowerShell from the Microsoft Store, then retry setup: ' +
+      'https://apps.microsoft.com/detail/9MZ1SNWT0N5D';
+    Exit;
+  end;
 
   PriorBridgeHash := '';
   PriorBridgeInstallerHash := '';

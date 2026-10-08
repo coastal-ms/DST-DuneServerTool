@@ -166,7 +166,7 @@ public static extern bool IsIconic(System.IntPtr hWnd);
 Write-DuneStartupLog 'Console presentation initialized'
 
 # Version (one of the 5 sync'd constants; see persistent-notes.md)
-$script:DuneToolVersion = '16.0.0'
+$script:DuneToolVersion = '16.0.1'
 # Artifact identity defaults for source/dev runs. Build-Exe.ps1 replaces these
 # four declarations only in its generated compilation input, so the resulting
 # executable carries immutable identity without changing tracked version stamps.
@@ -551,7 +551,8 @@ try {
     )) { if (Test-Path $p) { $script:PwshExe = $p; break } }
 }
 if (-not $script:PwshExe) {
-    Show-DuneMessage 'pwsh.exe (PowerShell 7) not found. Install from https://aka.ms/PowerShell-Release' 'Dune Server' 'Error'
+    Write-DuneStartupLog 'Startup blocked: PowerShell 7 was not found.'
+    Show-DuneMessage 'PowerShell 7 is required. Install PowerShell from the Microsoft Store, then reopen DST: https://apps.microsoft.com/detail/9MZ1SNWT0N5D' 'Dune Server' 'Error'
     exit 1
 }
 
