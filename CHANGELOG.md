@@ -13,8 +13,17 @@ here cover everything those tags shipped.
 
 ## [Unreleased]
 
+## [16.0.2] - 2026-10-08
+
 ### Added
 - Add Solo client Engine.ini controls for vehicle recovery time limit, durability damage multiplier, relocation, recovery chassis durability reduction fraction, and recovery currency base cost. Coastal tested values 1, 0.01, enabled, 0.001, and 100 respectively. Writes require the game closed, retain a backup, and verify the selected values.
+
+### Fixed
+- Refresh Dashboard web interface links every minute so a VM Starting response clears after the VM and battlegroup become ready. Prevent overlapping requests and stop polling when leaving the page.
+- Allow individual Solo cosmetic grants even when a saved record or held token exists, and show saved or held entries by default in Self-Hosted mode. Saved records do not establish that the game accepts a cosmetic.
+
+### Changed
+- Point website links to duneservertool.com. The website refreshes on stable releases and includes Solo installation guidance, Webmail and email contact links.
 
 ## [16.0.1] - 2026-10-07
 
