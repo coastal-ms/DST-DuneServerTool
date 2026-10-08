@@ -2,6 +2,7 @@
 import Base from "../layouts/Base.astro";
 import PageHeader from "../components/PageHeader.astro";
 import DownloadButton from "../components/DownloadButton.astro";
+import Screenshot from "../components/Screenshot.astro";
 
 const base = import.meta.env.BASE_URL;
 ---
@@ -31,6 +32,7 @@ const base = import.meta.env.BASE_URL;
         <li>Launch Dune: Awakening Solo once to create a save, then close the game.</li>
         <li>Open DST, connect your supported Retail Solo save, and follow its validation guidance. Save edits require the game to be closed and retain backups.</li>
       </ol>
+      <Screenshot src={`${base}screenshots/solo-v16-installer.png`} alt="DST v16 installer Choose your DST setup page with Solo only selected and Self-Hosted + Solo available" caption="The v16 installer lets you choose Solo only. Both installation modes include Solo tools." width={606} height={472} />
       <p class="text-dune-muted leading-relaxed mt-4">
         Managing a server too? Choose <strong class="text-dune-text">Self-Hosted + Solo</strong>.
         Both choices include the same Solo tools. Reinstalls and silent updates preserve
