@@ -1,4 +1,4 @@
 User-agent: *
 Allow: /
 
-Sitemap: https://coastal-ms.github.io/DST-DuneServerTool/sitemap-index.xml
+Sitemap: https://duneservertool.com/sitemap-index.xml

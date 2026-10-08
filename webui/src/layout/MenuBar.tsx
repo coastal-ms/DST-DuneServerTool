@@ -395,7 +395,7 @@ export function MenuBar({ sidebarCollapsed, onToggleSidebar, sidebarAvailable = 
               <Icon name="ExternalLink" size={11} className="text-text-dim mt-1" />
             </a>
             <a
-              href="https://coastal-ms.github.io/DST-DuneServerTool/remote"
+              href="https://duneservertool.com/remote"
               target="_blank"
               rel="noopener noreferrer"
               onClick={() => setOpen(null)}
@@ -570,7 +570,7 @@ export function MenuBar({ sidebarCollapsed, onToggleSidebar, sidebarAvailable = 
         <Icon name="ExternalLink" size={11} className="text-text-dim" />
       </a>
       <a
-        href="https://coastal-ms.github.io/DST-DuneServerTool/"
+        href="https://duneservertool.com/"
         target="_blank"
         rel="noopener noreferrer"
         onMouseEnter={() => { if (open !== null) setOpen(null) }}

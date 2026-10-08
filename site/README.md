@@ -1,6 +1,6 @@
 # DST Site
 
-Marketing + docs site for the Dune Server Tool. Built with **Astro 7 + React-free islands + Tailwind v4**, designed to deploy as a static site to GitHub Pages (or anywhere that serves a folder of HTML).
+Marketing + docs site for the Dune Server Tool. Built with **Astro 7 + React-free islands + Tailwind v4**, deployed as a static site to duneservertool.com.
 
 This site lives inside the main `DST-DuneServerTool` repo so that:
 
@@ -17,7 +17,7 @@ npm ci
 npm run dev
 ```
 
-Then open <http://localhost:4321/DST-DuneServerTool/> (the `/DST-DuneServerTool/` base path matches the eventual GitHub Pages URL; set `SITE_BASE=/` in env if you switch to a custom domain).
+Then open <http://localhost:4321/>.
 
 The `predev` and `prebuild` hooks copy canonical `../docs/img/*.png` into
 `public/screenshots/` (gitignored) and generate full-size and 800px WebP variants
@@ -85,8 +85,8 @@ npm run preview
 
 | Env var       | Default                                  | Purpose                                                            |
 | ------------- | ---------------------------------------- | ------------------------------------------------------------------ |
-| `SITE_URL`    | `https://coastal-ms.github.io`           | Origin used for canonical URLs and OG tags.                        |
-| `SITE_BASE`   | `/DST-DuneServerTool/`                   | Path prefix (matches the project-pages URL). Set to `/` on apex.   |
+| `SITE_URL`    | `https://duneservertool.com`           | Origin used for canonical URLs and OG tags.                        |
+| `SITE_BASE`   | `/`                   | Path prefix (matches the project-pages URL). Set to `/` on apex.   |
 | `GITHUB_TOKEN`| _(none)_                                 | Optional — raises the GitHub API rate limit during the release fetch. |
 
 ## Pages
@@ -145,12 +145,16 @@ site/
 
 ## Deployment
 
-`.github/workflows/deploy-site.yml` builds and publishes the site to GitHub
-Pages when a site file, `CHANGELOG.md`, or a screenshot changes on `main`.
-It can also be run manually from the Actions tab. The workflow installs locked
-dependencies, builds `site/dist/`, uploads the Pages artifact, and deploys it to
-<https://coastal-ms.github.io/DST-DuneServerTool/>.
+`.github/workflows/deploy-hosting.yml` rebuilds the website on relevant main
+pushes, stable release publication, and manual runs, then uploads `site/dist/`
+to https://duneservertool.com. Installer files remain on GitHub Releases.
+Test prereleases and silent mirrors do not deploy.
 
-```powershell
-npm run build
-```
+The `website` environment requires `WEBSITE_HOST`, `WEBSITE_PORT`,
+`WEBSITE_USER`, `WEBSITE_ROOT`, `WEBSITE_SSH_KEY`, and `WEBSITE_KNOWN_HOSTS`
+secrets. Use a dedicated deployment key and a verified host key. Assets upload
+before HTML; older assets remain available for cached pages. Failed uploads
+fail the workflow, and release runs verify the live installer link.
+
+`.github/workflows/deploy-site.yml` publishes route redirects on GitHub Pages
+so existing bookmarks continue to the primary website.

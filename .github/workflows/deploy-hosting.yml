@@ -1,0 +1,46 @@
+name: Update duneservertool.com
+on:
+  push:
+    branches: [main]
+    paths: ['site/**', 'CHANGELOG.md', 'docs/img/**', '.github/workflows/deploy-hosting.yml']
+  release:
+    types: [published]
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: hosting-${{ github.event_name == 'release' && github.event.release.prerelease }}
+  cancel-in-progress: false
+jobs:
+  deploy:
+    if: github.event_name != 'release' || !github.event.release.prerelease
+    runs-on: ubuntu-latest
+    environment: website
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: site/package-lock.json
+      - run: npm ci
+        working-directory: site
+      - name: Build current website with stable release information
+        working-directory: site
+        env:
+          SITE_URL: https://duneservertool.com
+          SITE_BASE: /
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: npm run build
+      - name: Deploy and verify website
+        env:
+          WEBSITE_HOST: ${{ secrets.WEBSITE_HOST }}
+          WEBSITE_PORT: ${{ secrets.WEBSITE_PORT }}
+          WEBSITE_USER: ${{ secrets.WEBSITE_USER }}
+          WEBSITE_ROOT: ${{ secrets.WEBSITE_ROOT }}
+          WEBSITE_SSH_KEY: ${{ secrets.WEBSITE_SSH_KEY }}
+          WEBSITE_KNOWN_HOSTS: ${{ secrets.WEBSITE_KNOWN_HOSTS }}
+          EXPECTED_RELEASE: ${{ github.event_name == 'release' && github.event.release.tag_name || '' }}
+        run: bash site/scripts/deploy-hosting.sh

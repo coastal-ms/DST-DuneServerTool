@@ -1,6 +1,6 @@
-name: Deploy site to GitHub Pages
+name: Redirect old GitHub Pages website
 
-# Builds site/ with Astro and publishes it to GitHub Pages.
+# Publishes redirects from the former marketing website to duneservertool.com.
 # Final URL: https://coastal-ms.github.io/DST-DuneServerTool/
 #
 # Triggers:
@@ -55,21 +55,13 @@ jobs:
           cache: "npm"
           cache-dependency-path: site/package-lock.json
 
-      - name: Install dependencies
-        working-directory: site
-        run: npm ci
-
-      - name: Build site
-        working-directory: site
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          DST_RELEASE_EVENT: ${{ github.event_name == 'release' && toJSON(github.event.release) || '' }}
-        run: npm run build
+      - name: Build redirects to the primary website
+        run: node site/scripts/build-redirects.mjs
 
       - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@v3
         with:
-          path: site/dist
+          path: redirect-dist
 
   deploy:
     needs: build

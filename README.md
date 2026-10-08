@@ -9,8 +9,8 @@ Solo saves.
 [![License: Apache 2.0](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](LICENSE)
 [![Latest release](https://img.shields.io/github/v/release/coastal-ms/DST-DuneServerTool?sort=semver)](https://github.com/coastal-ms/DST-DuneServerTool/releases/latest)
 
-**[Website and feature tour](https://coastal-ms.github.io/DST-DuneServerTool/) ·
-[Install guide](https://coastal-ms.github.io/DST-DuneServerTool/install) ·
+**[Website and feature tour](https://duneservertool.com/) ·
+[Install guide](https://duneservertool.com/install) ·
 [Changelog](CHANGELOG.md) ·
 [Discord](https://discord.gg/tj2x7cywSC)**
 
@@ -434,7 +434,7 @@ role or character link signs out its existing sessions.
 - For Solo Mode: a supported local Dune Solo save. No VM is required.
 
 Full setup, remote access, Hyper-V-over-LAN, and path guidance:
-**[Install guide](https://coastal-ms.github.io/DST-DuneServerTool/install)**.
+**[Install guide](https://duneservertool.com/install)**.
 
 ## Local paths
 
@@ -450,7 +450,7 @@ Full setup, remote access, Hyper-V-over-LAN, and path guidance:
 - Questions and community help: [DST Discord](https://discord.gg/tj2x7cywSC)
 - Reproducible bugs: [open an issue](https://github.com/coastal-ms/DST-DuneServerTool/issues/new/choose)
 - Stable and named test builds: [GitHub Releases](https://github.com/coastal-ms/DST-DuneServerTool/releases)
-- Active test guidance: [testing page](https://coastal-ms.github.io/DST-DuneServerTool/testing)
+- Active test guidance: [testing page](https://duneservertool.com/testing)
 - Full release history: [CHANGELOG.md](CHANGELOG.md)
 
 Diagnostics are available from **Help -> Export diagnostics**. Attach the
