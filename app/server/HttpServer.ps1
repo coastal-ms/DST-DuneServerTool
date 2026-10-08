@@ -1134,6 +1134,10 @@ function Invoke-DuneContext {
             $res.OutputStream.Close()
             return
         }
+        if ((Get-Command Test-DuneSoloInstallation -ErrorAction SilentlyContinue) -and (Test-DuneSoloInstallation)) {
+            Write-DuneError -Response $res -Status 409 -Message 'Dedicated-server connections require the Self-Hosted + Solo installation.'
+            return
+        }
         foreach ($r in $script:DuneWsRoutes) {
             $m = $r.Regex.Match($rawPath)
             if ($m.Success) {
@@ -1266,7 +1270,7 @@ function Invoke-DuneContext {
                     $routeParams['remoteEmail'] = $auth.email
                     $routeParams['remoteRole']  = $auth.role
                     Add-DuneRouteContractContext -Route $r -RouteParams $routeParams -Principal $remotePrincipal -RequestId $requestId
-                    if ((Get-Command Test-DuneSoloInstallation -ErrorAction SilentlyContinue) -and (Test-DuneSoloServerApiPath -Path $rawPath) -and (Test-DuneSoloInstallation)) {
+                    if ((Get-Command Test-DuneSoloInstallation -ErrorAction SilentlyContinue) -and (Test-DuneSoloServerApiPath -Path $rawPath -Method $method) -and (Test-DuneSoloInstallation)) {
                         Write-DuneError -Response $res -Status 409 -Message 'Dedicated-server tools require the Self-Hosted + Solo installation.'
                         return
                     }
@@ -1420,7 +1424,7 @@ function Invoke-DuneContext {
                     $routeParams['portalAccountRole'] = [string]$portalSessionAuth.account.role
                 }
                 Add-DuneRouteContractContext -Route $r -RouteParams $routeParams -Principal $principal -RequestId $requestId
-                if ((Get-Command Test-DuneSoloInstallation -ErrorAction SilentlyContinue) -and (Test-DuneSoloServerApiPath -Path $rawPath) -and (Test-DuneSoloInstallation)) {
+                if ((Get-Command Test-DuneSoloInstallation -ErrorAction SilentlyContinue) -and (Test-DuneSoloServerApiPath -Path $rawPath -Method $method) -and (Test-DuneSoloInstallation)) {
                     Write-DuneError -Response $res -Status 409 -Message 'This feature requires a Self-Hosted + Solo installation.'
                     return
                 }

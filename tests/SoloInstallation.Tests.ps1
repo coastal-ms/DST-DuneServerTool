@@ -42,4 +42,15 @@ Describe 'Solo installation configuration and isolation' {
         { Invoke-V6Ssh -Ip '192.0.2.1' -Cmd 'echo unexpected' } | Should -Throw '*Solo-only*'
         Assert-MockCalled Get-V6SshKeyPath -Times 0 -Exactly
     }
+    It 'permits Solo writes and shared catalogs while rejecting server and future APIs' {
+        Test-DuneSoloServerApiPath -Path '/api/solo/items/grant' -Method POST | Should -BeFalse
+        Test-DuneSoloServerApiPath -Path '/api/catalog/items' | Should -BeFalse
+        Test-DuneSoloServerApiPath -Path '/api/gameplay/augments/catalog' | Should -BeFalse
+        Test-DuneSoloServerApiPath -Path '/api/config' -Method PUT | Should -BeFalse
+        Test-DuneSoloServerApiPath -Path '/api/gameplay/players/give-item' -Method POST | Should -BeTrue
+        Test-DuneSoloServerApiPath -Path '/api/config/open-battlegroup-bat' -Method POST | Should -BeTrue
+        Test-DuneSoloServerApiPath -Path '/api/catalog/items' -Method POST | Should -BeTrue
+        Test-DuneSoloServerApiPath -Path '/api/future-server-feature' | Should -BeTrue
+        Test-DuneSoloServerApiPath -Path '/ws/terminal' | Should -BeTrue
+    }
 }
