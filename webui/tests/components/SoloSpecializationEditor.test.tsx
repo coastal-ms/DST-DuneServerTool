@@ -1,10 +1,16 @@
 // @vitest-environment jsdom
 import { cleanup, render, screen, fireEvent } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { SoloSpecializationEditor } from '../../src/pages/SoloMode'
+import { countMaxSoloSpecializations, SoloSpecializationEditor } from '../../src/pages/SoloMode'
 
 describe('Solo specialization level editor', () => {
   afterEach(cleanup)
+  it('does not count old or unknown rows as a missing Retail specialization', () => {
+    const oldRows = [0, 1, 2, 3, 4].map(trackType => ({ trackType, level: 100 }))
+    expect(countMaxSoloSpecializations(oldRows, false)).toBe(4)
+    expect(countMaxSoloSpecializations(oldRows, true)).toBe(5)
+    expect(countMaxSoloSpecializations([...oldRows, { trackType: 5, level: 100 }, { trackType: 99, level: 100 }], false)).toBe(5)
+  })
   it('retains the Legacy adapter track mapping', () => {
     render(<SoloSpecializationEditor legacyAdapter tracks={[0, 1, 2, 3, 4].map(trackType => ({ trackType, level: trackType + 10 }))} disabled={false} onSet={vi.fn()} />)
     for (const [index, name] of ['Combat', 'Crafting', 'Exploration', 'Gathering', 'Sabotage'].entries()) {

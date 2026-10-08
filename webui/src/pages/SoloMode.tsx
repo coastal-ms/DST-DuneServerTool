@@ -2216,7 +2216,7 @@ export function SoloMode() {
               icon="Medal"
               title="Max specializations"
               description="Set all five tracks to level 100, grant all 205 rewards, and reconcile the 54 specialization skill points idempotently."
-              status={`${inspection?.progression.specializations.filter(track => track.level >= 100).length ?? 0}/5 tracks at 100 · ${inspection?.progression.purchasedRewards ?? 0}/205 unlocked rewards`}
+              status={`${countMaxSoloSpecializations(inspection?.progression.specializations ?? [], status?.legacyAdapter ?? false)}/5 tracks at 100 · ${inspection?.progression.purchasedRewards ?? 0}/205 unlocked rewards`}
               busy={busy === 'progression:specializations'}
               disabled={!canMutateActiveProfile || gameRunning}
               onRun={() => void runProgressionAction(
@@ -2384,6 +2384,22 @@ function ProgressionActionCard({
   )
 }
 
+function soloSpecializationTracks(legacyAdapter: boolean) {
+  return [
+    { name: 'Combat', id: legacyAdapter ? 0 : 4 },
+    { name: 'Crafting', id: 1 },
+    { name: 'Exploration', id: legacyAdapter ? 2 : 3 },
+    { name: 'Gathering', id: legacyAdapter ? 3 : 2 },
+    { name: 'Sabotage', id: legacyAdapter ? 4 : 5 },
+  ]
+}
+
+export function countMaxSoloSpecializations(tracks: Array<{ trackType: number; level: number }>, legacyAdapter: boolean) {
+  return soloSpecializationTracks(legacyAdapter).filter(({ id }) =>
+    tracks.some(track => track.trackType === id && track.level >= 100),
+  ).length
+}
+
 export function SoloSpecializationEditor({ tracks, legacyAdapter = false, disabled, onSet, onResetRewards }: {
   tracks: Array<{ trackType: number; level: number }>
   legacyAdapter?: boolean
@@ -2392,13 +2408,7 @@ export function SoloSpecializationEditor({ tracks, legacyAdapter = false, disabl
   onResetRewards?: (track: string) => void
 }) {
   const [levels, setLevels] = useState<Record<string, string>>({})
-  const tracksByName = [
-    { name: 'Combat', id: legacyAdapter ? 0 : 4 },
-    { name: 'Crafting', id: 1 },
-    { name: 'Exploration', id: legacyAdapter ? 2 : 3 },
-    { name: 'Gathering', id: legacyAdapter ? 3 : 2 },
-    { name: 'Sabotage', id: legacyAdapter ? 4 : 5 },
-  ]
+  const tracksByName = soloSpecializationTracks(legacyAdapter)
   return <div className="card p-5">
     <h3 className="font-semibold mb-2">Specialization levels</h3>
     <p className="text-sm text-text-muted mb-3">Set an individual track from 0 to 100, including lowering a maxed track. Existing rewards and skill points are preserved. This does not replay journey objectives or grant missing cosmetic unlocks.</p>
