@@ -6,7 +6,7 @@ BeforeAll {
         "EscapePowerShellSingleQuoted\(ExpandConstant\('(.*?)'\)\)", {
             param($match)
             # Exercise a user profile containing an apostrophe.
-            $path = if ($match.Groups[1].Value -eq '{localappdata}') { "C:\Users\O'Connor\AppData\Local" } else { 'C:\Program Files' }
+            $path = if ($match.Groups[1].Value -eq '{localappdata}') { "C:\Users\user-with-apostrophe'\AppData\Local" } else { 'C:\Program Files' }
             "'" + $path.Replace("'", "''''") + "'"
         })
     $probe = ([regex]::Matches($expression, "'(?:''|[^'])*'") | ForEach-Object {
@@ -28,7 +28,7 @@ Describe 'Installer PowerShell prerequisite before upgrade changes' {
         Invoke-PrerequisiteProbe 'function Get-Command { return @{Source="C:\PowerShell\pwsh.exe"} }; function Test-Path { throw "Unexpected fallback" }' | Should -Be 0
     }
     It 'accepts the user-local fallback with an apostrophe in the profile path' {
-        Invoke-PrerequisiteProbe 'function Get-Command { return $null }; function Test-Path { param($LiteralPath) return $LiteralPath -eq "C:\Users\O''Connor\AppData\Local\Microsoft\PowerShell\7\pwsh.exe" }' | Should -Be 0
+        Invoke-PrerequisiteProbe 'function Get-Command { return $null }; function Test-Path { param($LiteralPath) return $LiteralPath -eq "C:\Users\user-with-apostrophe''\AppData\Local\Microsoft\PowerShell\7\pwsh.exe" }' | Should -Be 0
     }
     It 'checks before stopping the app or uninstalling, for both install modes' {
         $prepare = $installer.Substring($installer.IndexOf('function PrepareToInstall'),
