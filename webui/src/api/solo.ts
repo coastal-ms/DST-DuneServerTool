@@ -184,7 +184,7 @@ export interface SoloSettingsResponse {
 }
 
 export interface SoloConsoleSetting extends SoloSetting {
-  type: 'bool01' | 'int'
+  type: 'bool01' | 'int' | 'float'
   default: string
   min: number | null
   max: number | null

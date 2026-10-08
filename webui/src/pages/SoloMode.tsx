@@ -1507,8 +1507,8 @@ export function SoloMode() {
                   <div className="space-y-4">
                     <div className="rounded border border-warning/30 bg-warning/5 p-3 text-xs text-text-muted">
                       Writes only <span className="font-mono">Config\Windows\Engine.ini</span> under the
-                      connected Retail Solo root. Sun Exposure, Maximum Vehicles Per Player and Shield
-                      Drops While Shooting are confirmed in Retail Solo.
+                      connected Retail Solo root. Vehicle recovery and durability values were tested
+                      by Coastal in Solo. Unset vehicle controls do not change the file.
                     </div>
                     <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
                       {consoleSettingsState.data.entries.map(entry => (
@@ -1534,6 +1534,7 @@ export function SoloMode() {
                           ) : (
                             <input
                               type="number"
+                              step={entry.type === 'float' ? 'any' : 1}
                               min={entry.min ?? undefined}
                               max={entry.max ?? undefined}
                               className={`${SOLO_INPUT_CLASS} mt-2 font-mono`}
