@@ -13,6 +13,15 @@ here cover everything those tags shipped.
 
 ## [Unreleased]
 
+## [16.0.0] - 2026-10-07
+
+### Added
+- Choose Solo only or Self-Hosted + Solo during installation. Solo setup opens local save tools without dedicated-server setup pages, server navigation, VM discovery, port checks or server background jobs.
+
+### Changed
+- Preserve the selected installation mode and existing configuration during reinstalls and silent updates. Existing installations keep Self-Hosted + Solo; switching from Solo to Self-Hosted offers the server setup pages.
+- Keep Solo's Classic interface focused on local save tools and shared settings.
+
 ## [15.2.9] - 2026-10-07
 
 ### Fixed
