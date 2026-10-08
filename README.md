@@ -14,7 +14,12 @@ Solo saves.
 [Changelog](CHANGELOG.md) ·
 [Discord](https://discord.gg/tj2x7cywSC)**
 
-Current stable release: **v15.2.3**
+Current stable release: **v16.0.0**
+
+Choose **Solo only** or **Self-Hosted + Solo** during installation. Solo only
+opens local save tools in the Classic interface without server setup or server
+background services. Both options share the same Solo tools; your installation
+choice and existing configuration are preserved during updates.
 
 A targeted live database contract check against Dune: Awakening 1.5.3.5 on
 September 30, 2026 confirmed that all 61 tables and 25 functions referenced by DST
@@ -48,6 +53,7 @@ guarded controls in one native Windows app.
 - Edit typed Solo and confirmed Engine settings.
 - Manage items, packages, vehicle kits, cosmetics, currencies, and fillables.
 - Max augments and run verified specialization, Find the Fremen, and skill actions.
+- Unlock the five main quests through Journey unlocks, with retained backups.
 
 Solo mutations require Dune to be closed. DST retains the current save, writes
 atomically, verifies the result, and rolls back automatically on failure.
