@@ -421,6 +421,8 @@ export function SoloCosmeticGrantCard({
   const chosen = matches.find(entry => entry.template === selected)
   const controlsDisabled = disabled || busy
   const owned = new Set((ownership?.owned ?? []).map(id => id.toLowerCase()))
+  const pending = new Set((ownership?.pending ?? []).map(id => id.toLowerCase()))
+  const saved = new Set((ownership?.unlocked ?? []).map(id => id.toLowerCase()))
   const bulkGroups: Array<[SoloUnlockKind, string, CosmeticEntry[]]> = [
     ['building-sets', 'All Building Sets', getBuildingSetCosmetics(catalog ?? [])],
     ['armor', 'All Armor Skins', getSkinCosmetics(catalog ?? [], 'armor')],
@@ -481,10 +483,11 @@ export function SoloCosmeticGrantCard({
             ))}
           </select>
           {chosen && <p className="text-[11px] font-mono text-text-dim truncate mt-2">{chosen.template}</p>}
-          {chosen && owned.has(chosen.template.toLowerCase()) && <p className="text-xs text-text-muted mt-2">Already saved or held in inventory.</p>}
+          {chosen && pending.has(chosen.template.toLowerCase()) && <p className="text-xs text-text-muted mt-2">Unlock token already held in inventory. You can grant another token.</p>}
+          {chosen && !pending.has(chosen.template.toLowerCase()) && saved.has(chosen.template.toLowerCase()) && <p className="text-xs text-text-muted mt-2">Unlock record saved; in-game usability is unverified. You can grant another token if the game still reports it locked.</p>}
           <button
             className={`btn-primary w-full mt-4 justify-center ${SOLO_DISABLED_PRIMARY_CLASS}`}
-            disabled={controlsDisabled || !chosen || owned.has(chosen.template.toLowerCase())}
+            disabled={controlsDisabled || !chosen}
             onClick={() => {
               if (chosen) void onGrant(chosen.template, chosen.name)
             }}
