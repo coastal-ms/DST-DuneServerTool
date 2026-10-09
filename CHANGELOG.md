@@ -13,6 +13,15 @@ here cover everything those tags shipped.
 
 ## [Unreleased]
 
+## [16.1.1] - Unreleased
+
+### Added
+- Add a Solo instant blueprint build control with backup and restoration of the prior configuration.
+- Add a Clear displayed list button for Public IP diagnostic map rows. Clearing only hides the displayed rows; warnings and verdicts remain visible, and Run check restores the latest results.
+
+### Changed
+- Clarify Funcom cosmetic licensing in Solo and self-hosted grant controls while retaining the existing grant options.
+
 ## [16.1.0] - 2026-10-09
 
 ### Added
