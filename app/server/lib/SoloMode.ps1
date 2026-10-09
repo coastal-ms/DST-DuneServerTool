@@ -1,4 +1,5 @@
 . (Join-Path $PSScriptRoot 'SoloCosmetics.ps1')
+. (Join-Path $PSScriptRoot 'SoloBlueprintSettings.ps1')
 $script:DuneSoloSection = '/Script/DuneSandbox.UserServerCustomSettings'
 $script:DuneSoloSettingKeys = @(
     'DifficultyLevel',

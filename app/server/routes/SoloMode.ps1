@@ -14,6 +14,30 @@ Register-DuneRoute -Method POST -Path '/api/solo/grant-unlocks' -LocalOnly -Hand
     }
 }
 
+Register-DuneRoute -Method GET -Path '/api/solo/blueprint-settings' -LocalOnly -Handler {
+    param($req, $res, $routeParams, $body)
+    try { Write-DuneJson -Response $res -Body (Read-DuneSoloBlueprintSettings) }
+    catch { Write-DuneError -Response $res -Status 500 -Message $_.Exception.Message }
+}
+
+Register-DuneRoute -Method PUT -Path '/api/solo/blueprint-settings' -LocalOnly -Handler {
+    param($req, $res, $routeParams, $body)
+    try {
+        $enabled = Get-DuneSoloBodyField -Body $body -Name 'enabled'
+        if ($enabled -isnot [bool]) { throw 'Choose whether to enable instant blueprint building.' }
+        $token = [string](Get-DuneSoloBodyField -Body $body -Name 'expectedProfileToken' -Default '')
+        $confirm = [string](Get-DuneSoloBodyField -Body $body -Name 'confirm' -Default '')
+        $result = Invoke-WithDuneLock -Name 'solo-profile-data' -Script {
+            Assert-DuneSoloExpectedProfile -ExpectedProfileToken $token
+            Set-DuneSoloBlueprintSettings -Enabled $enabled -Confirm $confirm
+        }
+        Write-DuneJson -Response $res -Body $result
+    } catch {
+        $status = if ($_.Exception.Message -like '*still running*' -or $_.Exception.Message -like '*changed*') { 409 } else { 400 }
+        Write-DuneError -Response $res -Status $status -Message $_.Exception.Message
+    }
+}
+
 function Get-DuneSoloBodyField {
     param($Body, [Parameter(Mandatory)][string]$Name, $Default = $null)
     if ($Body -is [hashtable] -and $Body.ContainsKey($Name)) { return $Body[$Name] }

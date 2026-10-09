@@ -4,6 +4,28 @@ BeforeAll {
 }
 
 Describe 'Solo Mode route registration' {
+    It 'keeps blueprint settings local-only and blocks stale profiles before writing' {
+        $result = & {
+            function Register-DuneRoute {
+                param($Method, $Path, [switch]$LocalOnly, $Handler)
+                [pscustomobject]@{ method=$Method; path=$Path; localOnly=[bool]$LocalOnly; handler=$Handler }
+            }
+            $routes = @(. $script:RouteFile) | Where-Object path -eq '/api/solo/blueprint-settings'
+            $script:blueprintCalled = $false
+            $script:blueprintStatus = 0
+            function Invoke-WithDuneLock { param($Name, $Script); & $Script }
+            function Assert-DuneSoloExpectedProfile { throw 'Solo profile changed in another window.' }
+            function Set-DuneSoloBlueprintSettings { $script:blueprintCalled = $true }
+            function Write-DuneJson {}
+            function Write-DuneError { param($Response, $Status, $Message); $script:blueprintStatus=$Status }
+            & ($routes | Where-Object method -eq 'PUT').handler $null $null $null @{enabled=$true;expectedProfileToken='stale';confirm='APPLY SOLO BLUEPRINT SETTINGS'}
+            [pscustomobject]@{count=@($routes).Count;localOnly=@($routes | Where-Object { -not $_.localOnly }).Count;called=$script:blueprintCalled;status=$script:blueprintStatus}
+        }
+        $result.count | Should -Be 2
+        $result.localOnly | Should -Be 0
+        $result.called | Should -BeFalse
+        $result.status | Should -Be 409
+    }
     It 'rejects a stale profile before any main quest write' {
         $result = & {
             function Register-DuneRoute {
