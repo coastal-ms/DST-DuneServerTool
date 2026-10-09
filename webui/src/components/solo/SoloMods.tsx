@@ -66,7 +66,8 @@ export function SoloMods() {
         <button className="btn-secondary" disabled={busy} onClick={() => void run('launch', { withMods: false })}>Launch Normally</button>
         {state?.session != null && <button className="btn-secondary" disabled={busy} onClick={() => void run('restore')}>Restore normal launch</button>}
       </div>
-      <p className="text-xs text-text-muted">Solo only. Normal launch bypasses the mod runtime. DST makes no guarantees that any mod will or will not work and does not provide mod troubleshooting. Mods are supplied and maintained by their authors.</p>
+      <p className="text-xs text-text-muted">Solo only. Normal launch bypasses the mod runtime. DST supports its mod-loading framework only. We make no guarantees that any individual mod will or will not work, and DST does not provide individual mod troubleshooting. Contact the mod author or discuss issues with the community.</p>
+      <a className="text-xs text-accent-bright underline" href="https://discord.com/channels/1517599283757453333/1558246888967245957" target="_blank" rel="noopener noreferrer">Community mod discussion</a>
       {(error || state?.launchError) && <p role="alert" className="text-danger whitespace-pre-wrap text-sm">{error || state?.launchError}</p>}
       {state?.runtimeLog && <details><summary className="cursor-pointer text-sm">Loader log</summary><pre className="text-xs whitespace-pre-wrap max-h-64 overflow-auto mt-2">{state.runtimeLog}</pre></details>}
     </div>
