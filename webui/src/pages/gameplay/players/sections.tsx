@@ -9,6 +9,7 @@
 
 import { useCallback, useEffect, useId, useMemo, useState, type ReactElement, type ReactNode } from 'react'
 import { Icon } from '../../../components/Icon'
+import { COSMETIC_LICENSE_NOTICE } from '../../../util/cosmeticEntitlements'
 import { ItemPicker } from '../../../components/ItemPicker'
 import { AugmentPicker } from '../../../components/AugmentPicker'
 import { TagPicker } from '../../../components/TagPicker'
@@ -1525,7 +1526,7 @@ function GrantCosmeticForm({ busy, playerName, accountId, onGrant }: {
     <div className="space-y-3">
       <p className="text-[11px] text-text-dim">Delivers the unlock item to {playerName}'s inventory (online: instant; offline: next login). Check in-game whether the item activates the unlock.</p>
       <div className="rounded-lg bg-warning/10 border border-warning/40 p-3 text-warning text-xs leading-relaxed">
-        <p>Some entries require an account entitlement. Delivering a token or finding a saved unlock record does not confirm in-game usability or grant account ownership.</p>
+        <p>{COSMETIC_LICENSE_NOTICE} Delivering a token or finding a saved unlock record does not confirm in-game usability or grant account ownership.</p>
         <p className="mt-2">
           Developer, test, placeholder, and Polar entries are experimental. Some have no working unlock action or are missing from retail game assets, so they may remain ordinary inventory items and do nothing. Some developer unlock items appear to register only when added to the inventory while the player is offline, then processed on next login. PowerTester is a Funcom account permission that private servers cannot grant; enabling <span className="font-mono">dw.PlayerProgressionUnlockEnabled</span> does not provide it.
         </p>
@@ -1727,6 +1728,7 @@ function GrantUnlockTokensForm({ busy, playerName, accountId, kind, playerOnline
       <div className="rounded-lg bg-warning/10 border border-warning/40 p-3 text-warning text-xs leading-relaxed">
         Online required. Dune processes supported tokens after delivery{bulkUnlocks ? '; larger batches can take several minutes' : ', usually about a minute'}. DST skips persisted unlocks and tokens still in the player's inventory. Held tokens are not unlocked; some have no working research action. Forced overflow drops excess tokens beside the player; pick up any overflow before running this action again.
       </div>
+      <p className="text-xs text-text-muted">{COSMETIC_LICENSE_NOTICE}</p>
       {buildingSets && <div className="text-xs text-text-dim">Includes building sets, individual pieces and decor. Crafting stations, developer patents and entries without an item form are excluded. Some sets may not unlock because of Funcom's game-side limitations. Delivery does not guarantee activation or account entitlement.</div>}
       {skins && <div className="text-xs text-text-dim">Includes {kind === 'armor' ? 'armor, suits, masks and helmets' : kind === 'vehicle' ? 'vehicle appearances' : kind === 'dyes' ? 'all catalog dyes' : 'weapon appearances'} from the cosmetic catalog. Some entries may not unlock because of Funcom's game-side limitations. Delivery does not guarantee activation. Unlocks apply to this private server character, not account purchases.</div>}
       {ownershipWarning && <div className="text-xs text-warning">{ownershipWarning}</div>}

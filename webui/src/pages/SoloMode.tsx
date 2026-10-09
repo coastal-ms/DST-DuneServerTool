@@ -73,6 +73,7 @@ import {
 } from '../api/gameplay'
 import { pickLocalFolder } from '../util/pathPicker'
 import { soloSaveFolder } from '../util/soloSaveFolder'
+import { COSMETIC_LICENSE_NOTICE } from '../util/cosmeticEntitlements'
 
 type Tab = 'overview' | 'settings' | 'backups' | 'character' | 'inventory' | 'progression'
 const TABS: Array<{ id: Tab; label: string; icon: string }> = [
@@ -443,7 +444,8 @@ export function SoloCosmeticGrantCard({
         Delivers unlock tokens to the Solo backpack for processing on next login. Bulk grants use available slots; log in, exit, and repeat for remaining tokens.
       </p>
       <div className="rounded border border-warning/30 bg-warning/5 p-3 mb-4 text-xs text-text-muted">
-        {SOLO_COSMETIC_ENTITLEMENT_WARNING} Saved unlocks do not guarantee in-game usability. Bulk grants skip saved unlocks and held tokens; new tokens are processed on next login.
+        <p>{COSMETIC_LICENSE_NOTICE}</p>
+        <p className="mt-2">{SOLO_COSMETIC_ENTITLEMENT_WARNING} Saved unlocks do not guarantee in-game usability. Bulk grants skip saved unlocks and held tokens; new tokens are processed on next login.</p>
       </div>
       {catalogError ? (
         <div className="text-xs text-danger">Cosmetics catalog failed to load: {catalogError}</div>
