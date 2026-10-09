@@ -1,3 +1,4 @@
+import { api } from '../api/client'
 import { useSoloInstallation } from '../hooks/useInstallationMode'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
@@ -60,6 +61,25 @@ export function MenuBar({ sidebarCollapsed, onToggleSidebar, sidebarAvailable = 
   // null = not loaded yet / route unavailable on older backends.
   const [consoleState, setConsoleState] = useState<ConsoleState | null>(null)
   const [consoleBusy, setConsoleBusy] = useState(false)
+  const [skipIntro, setSkipIntro] = useState<boolean | null>(null)
+  const [launchPreferenceBusy, setLaunchPreferenceBusy] = useState(false)
+  const [launchPreferenceError, setLaunchPreferenceError] = useState('')
+  useEffect(() => {
+    if (!local) return
+    void api<{skipIntro: boolean}>('/api/game/launch-preferences')
+      .then(value => setSkipIntro(value.skipIntro)).catch(() => setSkipIntro(null))
+  }, [local, open])
+  const toggleSkipIntro = async () => {
+    setLaunchPreferenceBusy(true)
+    setLaunchPreferenceError('')
+    try {
+      const value = await api<{skipIntro: boolean}>('/api/game/launch-preferences', {
+        method: 'POST', body: JSON.stringify({skipIntro: !skipIntro}),
+      })
+      setSkipIntro(value.skipIntro)
+    } catch (error) { setLaunchPreferenceError(error instanceof Error ? error.message : String(error)) }
+    finally { setLaunchPreferenceBusy(false) }
+  }
 
   // Diagnostics-bundle result, surfaced so the user always learns where the
   // ZIP landed (Desktop vs. %APPDATA% fallback) or why it couldn't be built —
@@ -443,6 +463,16 @@ export function MenuBar({ sidebarCollapsed, onToggleSidebar, sidebarAvailable = 
                 </span>
               </button>
             )}
+            {local && skipIntro !== null && (
+              <button type="button" role="menuitemcheckbox" aria-checked={skipIntro}
+                disabled={launchPreferenceBusy} onClick={() => { void toggleSkipIntro() }}
+                className="w-full flex items-start gap-2 px-2.5 py-1.5 rounded text-sm text-text hover:bg-surface-2 text-left disabled:opacity-60">
+                <Icon name={skipIntro ? 'CheckSquare' : 'Square'} size={14} className="mt-0.5" />
+                <span><span className="block">Skip intro / splash screens</span>
+                  <span className="block text-[11px] text-text-dim">Applies to every Dune launch from DST</span></span>
+              </button>
+            )}
+            {launchPreferenceError && <p role="alert" className="px-2.5 text-xs text-danger">{launchPreferenceError}</p>}
             {local && autostart && autostart.available && (
               <button
                 type="button"

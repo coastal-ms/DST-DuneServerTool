@@ -13,6 +13,20 @@ here cover everything those tags shipped.
 
 ## [Unreleased]
 
+## [16.1.0] - 2026-10-09
+
+### Added
+- Add Solo mod ZIP installation, enabled mod selection, Open Mods Folder for editing mod INIs, and separate Launch with Mods / Launch Normally controls. Mods live in the Dune Server Tool Mods folder. Declared missing dependencies and conflicts are displayed, with runtime errors available in the loader log.
+- Add Help → Skip intro / splash screens, saved independently of mods and applied to every Dune launch from DST.
+
+### Fixed
+- Write the enabled-mod list without a byte-order mark so the first mod loads when the installed Windows PowerShell host generates it.
+- Make the Mods folder editable by the installing Windows user so mod INIs can be saved in a normal editor under Program Files.
+
+### Changed
+- Ignore launcher and UE4SS version declarations so mods can load without warnings or rewriting their manifests. Actual missing mod dependencies and load errors remain visible.
+- Mod launches use a verified upstream UE4SS runtime and restore previous game launch files after exit. Normal launches bypass that runtime. Mods remain supplied and maintained by their authors.
+
 ## [16.0.2] - 2026-10-08
 
 ### Added

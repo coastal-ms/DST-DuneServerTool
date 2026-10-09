@@ -3,6 +3,7 @@ import { Icon } from '../components/Icon'
 import { PageHeader } from '../components/PageHeader'
 import { CollapsibleCard } from '../components/CollapsibleCard'
 import { ItemPicker } from '../components/ItemPicker'
+import { SoloMods } from '../components/solo/SoloMods'
 import { AugmentPicker } from '../components/AugmentPicker'
 import {
   SoloInventoryExplorer,
@@ -1437,6 +1438,7 @@ export function SoloMode() {
         ))}
       </div>
 
+      <SoloMods />
       {tab === 'overview' && (
         <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
           <div className="card p-5">

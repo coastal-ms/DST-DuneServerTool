@@ -16,7 +16,7 @@
 ;                 -> NOT touched by install or uninstall (preserves user config)
 
 #define MyAppName        "Dune Server Tool"
-#define MyAppVersion "16.0.2"
+#define MyAppVersion "16.1.0"
 #ifndef MyAppNumericVersion
 #define MyAppCoreVersion Copy(MyAppVersion, 1, Pos("-", MyAppVersion + "-") - 1)
 #define MyAppNumericVersion MyAppCoreVersion + (Len(MyAppCoreVersion) - Len(StringChange(MyAppCoreVersion, ".", "")) == 2 ? ".0" : "")
@@ -645,10 +645,22 @@ end;
 
 procedure CurStepChanged(CurStep: TSetupStep);
 var
-  dest, oldMode, newMode, portMode: string;
+  dest, oldMode, newMode, portMode, modsPath, modEditor: string;
+  permissionResult: Integer;
 begin
   if CurStep = ssPostInstall then
   begin
+    modsPath := ExpandConstant('{app}\Mods');
+    if not ForceDirectories(modsPath) then
+      RaiseException('Could not create the Mods folder.');
+    modEditor := GetEnv('USERDOMAIN') + '\' + GetUserNameString;
+    if not Exec(ExpandConstant('{sys}\icacls.exe'),
+      '"' + modsPath + '" /grant "' + modEditor + ':(OI)(CI)M" /T',
+      '', SW_HIDE, ewWaitUntilTerminated, permissionResult) then
+      RaiseException('Could not make the Mods folder editable.');
+    if permissionResult <> 0 then
+      RaiseException('Could not set Mods folder permissions.');
+
     if not SkipConfigPages then
       WriteDuneConfig()
     else

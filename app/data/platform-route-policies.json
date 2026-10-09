@@ -1,6 +1,7 @@
 {
   "schemaVersion": 1,
   "writeLifecycleBySource": {
+    "SoloMods.ps1": "reversible-write",
     "Autostart.ps1": "reversible-write",
     "BackupMirror.ps1": "reversible-write",
     "BackupSchedule.ps1": "reversible-write",
@@ -185,6 +186,7 @@
     { "source": "Setup.ps1", "capabilityId": "settings.setup", "routeCount": 14, "sha256": "955be1424b4c624c8a92e0e9ba82b2978dcdebccb6740a5626c92532608edeeb" },
     { "source": "Shutdown.ps1", "capabilityId": "host.lifecycle", "routeCount": 1, "sha256": "35a9d26192452ee7131cb3541e69cfcd242208f7db855c47e3a4998194797f4f" },
     { "source": "Sietch.ps1", "capabilityId": "operation.topology", "routeCount": 2, "sha256": "c8d97b8e6b93456bbb9eb3eb8a3a77cde95186a15891d5c8e135790e65b73ad6" },
+    {"source": "SoloMods.ps1", "capabilityId": "host.solo", "routeCount": 9, "sha256": "af457230acac3a3fa25661a4884dd16108bd0b904769e1418250acf576ac698a"},
     { "source": "SoloMode.ps1", "capabilityId": "host.solo", "routeCount": 31, "sha256": "7003a9bf603478fae73d4325aea4ecf724234e4e85174ad09254a8424f02e5af" },
     { "source": "Status.ps1", "capabilityId": "platform.status", "routeCount": 3, "sha256": "d6cccf669f2d527afb82558161f0a8219345bd12240ddff6964ef0632d5cd56b" },
     { "source": "System.ps1", "capabilityId": "operation.health", "routeCount": 5, "sha256": "2840b487061a7fedff813099e99340c35828a620a1f7bdd703101a0a3fde5396" },
