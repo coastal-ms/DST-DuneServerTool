@@ -645,10 +645,22 @@ end;
 
 procedure CurStepChanged(CurStep: TSetupStep);
 var
-  dest, oldMode, newMode, portMode: string;
+  dest, oldMode, newMode, portMode, modsPath, modEditor: string;
+  permissionResult: Integer;
 begin
   if CurStep = ssPostInstall then
   begin
+    modsPath := ExpandConstant('{app}\Mods');
+    if not ForceDirectories(modsPath) then
+      RaiseException('Could not create the Mods folder.');
+    modEditor := GetEnv('USERDOMAIN') + '\' + GetUserNameString;
+    if not Exec(ExpandConstant('{sys}\icacls.exe'),
+      '"' + modsPath + '" /grant "' + modEditor + ':(OI)(CI)M" /T',
+      '', SW_HIDE, ewWaitUntilTerminated, permissionResult) then
+      RaiseException('Could not make the Mods folder editable.');
+    if permissionResult <> 0 then
+      RaiseException('Could not set Mods folder permissions.');
+
     if not SkipConfigPages then
       WriteDuneConfig()
     else
