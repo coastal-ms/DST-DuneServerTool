@@ -38,7 +38,12 @@ export function SoloMods() {
       if (!pick.cancelled && pick.path) await run('import', { path: pick.path })
     } catch (e) { setError(e instanceof Error ? e.message : String(e)) }
   }
-  return <CollapsibleCard id="solo-mods" title="Solo mods" icon="Package" subtitle="Install your downloaded mods. Dependencies and mod errors are shown here; mod settings stay in their INI files.">
+  return <CollapsibleCard id="solo-mods" title="Solo mods" icon="Package" subtitle="Install your downloaded mods. Dependencies and mod errors are shown here; mod settings stay in their INI files." headerClassName="px-5 py-4 flex-wrap" headerRight={
+    <div className="flex flex-wrap gap-2">
+      <button className="btn-primary" disabled={busy} onClick={() => void run('launch', { withMods: true })}>Launch with Mods</button>
+      <button className="btn-secondary" disabled={busy} onClick={() => void run('launch', { withMods: false })}>Launch Normally</button>
+    </div>
+  }>
     <div className="space-y-3">
       <div className="flex flex-wrap gap-2">
         <button className="btn-secondary" disabled={busy} onClick={() => void install()}>Install mod ZIP</button>
@@ -61,11 +66,7 @@ export function SoloMods() {
         {mod.errors.map((message, i) => <p className="text-danger text-sm mt-1" key={i}>{message}</p>)}
       </div>)}
       {state && !state.mods.length && <p className="text-sm text-text-muted">No mods installed.</p>}
-      <div className="flex flex-wrap gap-2">
-        <button className="btn-primary" disabled={busy} onClick={() => void run('launch', { withMods: true })}>Launch with Mods</button>
-        <button className="btn-secondary" disabled={busy} onClick={() => void run('launch', { withMods: false })}>Launch Normally</button>
-        {state?.session != null && <button className="btn-secondary" disabled={busy} onClick={() => void run('restore')}>Restore normal launch</button>}
-      </div>
+      {state?.session != null && <button className="btn-secondary" disabled={busy} onClick={() => void run('restore')}>Restore normal launch</button>}
       <p className="text-xs text-text-muted">Solo only. Normal launch bypasses the mod runtime. DST supports its mod-loading framework only. We make no guarantees that any individual mod will or will not work, and DST does not provide individual mod troubleshooting. Contact the mod author or discuss issues with the community.</p>
       <a className="text-xs text-accent-bright underline" href="https://discord.com/channels/1517599283757453333/1558246888967245957" target="_blank" rel="noopener noreferrer">Solo mod discussion</a>
       {(error || state?.launchError) && <p role="alert" className="text-danger whitespace-pre-wrap text-sm">{error || state?.launchError}</p>}

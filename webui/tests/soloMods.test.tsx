@@ -14,11 +14,14 @@ describe('Solo mod controls', () => {
     expect(screen.getByText(/We make no guarantees.*does not provide individual mod troubleshooting/)).toBeInTheDocument()
     expect(screen.queryByText('Declares WPS Launcher')).not.toBeInTheDocument()
     expect(screen.getByText(/Missing or disabled dependency/)).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', {name: /Solo mods/}))
+    expect(screen.queryByText('Example')).not.toBeInTheDocument()
     fireEvent.click(screen.getByRole('button', {name: 'Launch Normally'}))
     await waitFor(() => expect(api).toHaveBeenCalledWith('/api/solo/mods/launch', {method:'POST',body:JSON.stringify({withMods:false})}))
     await waitFor(() => expect(screen.getByRole('button', {name:'Launch with Mods'})).toBeEnabled())
     fireEvent.click(screen.getByRole('button', {name: 'Launch with Mods'}))
     await waitFor(() => expect(api).toHaveBeenCalledWith('/api/solo/mods/launch', {method:'POST',body:JSON.stringify({withMods:true})}))
+    expect(screen.getByRole('button', {name: /Solo mods/})).toHaveAttribute('aria-expanded', 'false')
   })
   it('imports the selected ZIP and preserves visible loader errors', async () => {
     vi.mocked(api).mockImplementation(async path => {
