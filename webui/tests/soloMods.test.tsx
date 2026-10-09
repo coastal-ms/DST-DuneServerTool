@@ -11,6 +11,7 @@ describe('Solo mod controls', () => {
   it('shows dependency errors and keeps normal and modded launches separate', async () => {
     render(<SoloMods />)
     await screen.findByText('Example')
+    expect(screen.getByText(/DST makes no guarantees.*does not provide mod troubleshooting/)).toBeInTheDocument()
     expect(screen.queryByText('Declares WPS Launcher')).not.toBeInTheDocument()
     expect(screen.getByText(/Missing or disabled dependency/)).toBeInTheDocument()
     fireEvent.click(screen.getByRole('button', {name: 'Launch Normally'}))
