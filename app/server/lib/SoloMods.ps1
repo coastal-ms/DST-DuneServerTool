@@ -34,8 +34,8 @@ function Get-DuneSoloMods {
                 $meta = Read-DuneModJson (Join-Path $folder.FullName 'mod.json') @{}
                 $enabled = $false
                 if ($state.PSObject.Properties.Name -contains $folder.Name) { $enabled = [bool]$state.($folder.Name) }
-                $mods += [pscustomobject]@{ folder=$folder.Name; id=$(if($meta.id){[string]$meta.id}else{$folder.Name}); name=$(if($meta.name){[string]$meta.name}else{$folder.Name}); version=[string]$meta.version; enabled=$enabled; requires=@($meta.requires); loadAfter=@($meta.loadAfter); loadBefore=@($meta.loadBefore); conflicts=@($meta.conflicts); errors=@() }
-            } catch { $mods += [pscustomobject]@{folder=$folder.Name;id=$folder.Name;name=$folder.Name;version='';enabled=$false;requires=@();loadAfter=@();loadBefore=@();conflicts=@();errors=@('Invalid mod.json: '+$_.Exception.Message)} }
+                $mods += [pscustomobject]@{ folder=$folder.Name; id=$(if($meta.id){[string]$meta.id}else{$folder.Name}); name=$(if($meta.name){[string]$meta.name}else{$folder.Name}); version=[string]$meta.version; enabled=$enabled; requires=@($meta.requires); loadAfter=@($meta.loadAfter); loadBefore=@($meta.loadBefore); conflicts=@($meta.conflicts); warnings=@(); errors=@() }
+            } catch { $mods += [pscustomobject]@{folder=$folder.Name;id=$folder.Name;name=$folder.Name;version='';enabled=$false;requires=@();loadAfter=@();loadBefore=@();conflicts=@();warnings=@();errors=@('Invalid mod.json: '+$_.Exception.Message)} }
         }
     }
     foreach ($mod in $mods) {
@@ -46,18 +46,18 @@ function Get-DuneSoloMods {
             $id = if($req -is [string]){$req}else{[string]$req.id}
             if ($id -eq 'ue4ss') {
                 $actual='3.0.1-1164-g5e627997'
-                if($req.version -and $req.version -ne $actual){$mod.errors += "Requires UE4SS $($req.version); installed runtime is $actual"}
+                if($req.version -and $req.version -ne $actual){$mod.warnings += "Requires UE4SS $($req.version); installed runtime is $actual"}
                 foreach($bound in @('minVersion','maxVersion')){
                     if(-not $req.$bound){continue}
                     try {
                         $current=[version]($actual -replace '-g.*$','' -replace '-','.')
                         $required=[version]([string]$req.$bound -replace '-g.*$','' -replace '-','.')
-                        if(($bound -eq 'minVersion' -and $current -lt $required) -or ($bound -eq 'maxVersion' -and $current -gt $required)){$mod.errors += "Requires UE4SS $bound $($req.$bound); installed runtime is $actual"}
-                    } catch {$mod.errors += "Cannot verify required UE4SS version $($req.$bound)"}
+                        if(($bound -eq 'minVersion' -and $current -lt $required) -or ($bound -eq 'maxVersion' -and $current -gt $required)){$mod.warnings += "Requires UE4SS $bound $($req.$bound); installed runtime is $actual"}
+                    } catch {$mod.warnings += "Cannot verify required UE4SS version $($req.$bound)"}
                 }
                 continue
             }
-            if ($id -eq 'wps-launcher') { $mod.errors += 'Requires WPS Launcher; this package declares a different loader.'; continue }
+            if ($id -eq 'wps-launcher') { $mod.warnings += 'Declares WPS Launcher. DST will attempt to load it; any required WPS services must be supplied by the mod dependencies.'; continue }
             $found = @($mods | Where-Object { $_.id -eq $id -and $_.enabled })
             if ($found.Count -ne 1) { $mod.errors += "Missing or disabled dependency: $id"; continue }
             if($req.version -and $found[0].version -ne $req.version){$mod.errors += "Requires $id version $($req.version)"}

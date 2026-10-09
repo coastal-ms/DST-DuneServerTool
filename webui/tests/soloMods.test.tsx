@@ -4,13 +4,14 @@ import { api } from '../src/api/client'
 import { SoloMods } from '../src/components/solo/SoloMods'
 vi.mock('../src/api/client', () => ({api: vi.fn()}))
 vi.mock('../src/util/pathPicker', () => ({pickLocalFolder: vi.fn()}))
-const state = {mods: [{folder: 'Example', id: 'Example', name: 'Example', version: '1.0', enabled: false, errors: ['Missing or disabled dependency: Framework']}], folder: 'C:/DST/Mods', gamePath: 'C:/Dune', skipIntro: false, runtimeReady: true, session: null}
+const state = {mods: [{folder: 'Example', id: 'Example', name: 'Example', version: '1.0', enabled: false, warnings: ['Declares WPS Launcher'], errors: ['Missing or disabled dependency: Framework']}], folder: 'C:/DST/Mods', gamePath: 'C:/Dune', skipIntro: false, runtimeReady: true, session: null}
 beforeEach(() => { vi.mocked(api).mockImplementation(async () => state) })
 afterEach(() => { cleanup(); vi.clearAllMocks(); localStorage.clear() })
 describe('Solo mod controls', () => {
   it('shows dependency errors and keeps normal and modded launches separate', async () => {
     render(<SoloMods />)
     await screen.findByText('Example')
+    expect(screen.getByText('Declares WPS Launcher')).toBeInTheDocument()
     expect(screen.getByText(/Missing or disabled dependency/)).toBeInTheDocument()
     fireEvent.click(screen.getByRole('button', {name: 'Launch Normally'}))
     await waitFor(() => expect(api).toHaveBeenCalledWith('/api/solo/mods/launch', {method:'POST',body:JSON.stringify({withMods:false})}))

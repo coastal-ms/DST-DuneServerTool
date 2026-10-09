@@ -3,7 +3,7 @@ import { api } from '../../api/client'
 import { CollapsibleCard } from '../CollapsibleCard'
 import { pickLocalFolder } from '../../util/pathPicker'
 
-interface Mod { folder: string; id: string; name: string; version: string; enabled: boolean; errors: string[] }
+interface Mod { folder: string; id: string; name: string; version: string; enabled: boolean; warnings?: string[]; errors: string[] }
 interface State { mods: Mod[]; folder: string; gamePath: string; skipIntro: boolean; runtimeReady: boolean; session: unknown; launchError?: string; runtimeLog?: string }
 
 export function SoloMods() {
@@ -58,6 +58,7 @@ export function SoloMods() {
           <input type="checkbox" checked={mod.enabled} disabled={busy} onChange={e => void save(state.mods.map(m => m.folder === mod.folder ? { ...m, enabled: e.target.checked } : m))} />
           <span>{mod.name} {mod.version && <span className="text-text-muted">{mod.version}</span>}</span>
         </label>
+        {mod.warnings?.map((message, i) => <p className="text-warning text-sm mt-1" key={i}>{message}</p>)}
         {mod.errors.map((message, i) => <p className="text-danger text-sm mt-1" key={i}>{message}</p>)}
       </div>)}
       {state && !state.mods.length && <p className="text-sm text-text-muted">No mods installed.</p>}

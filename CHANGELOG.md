@@ -20,6 +20,7 @@ here cover everything those tags shipped.
 - Add Help → Skip intro / splash screens, saved independently of mods and applied to every Dune launch from DST.
 
 ### Changed
+- Show launcher and UE4SS version declarations as advisory warnings so mods can be tested without rewriting their manifests.
 - Mod launches use a verified upstream UE4SS runtime and restore previous game launch files after exit. Normal launches bypass that runtime. Mods remain supplied and maintained by their authors.
 
 ## [16.0.2] - 2026-10-08
