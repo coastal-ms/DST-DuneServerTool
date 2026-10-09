@@ -71,3 +71,28 @@ describe('PublicIpCard host route option', () => {
     })
   })
 })
+
+it('clears displayed maps without API writes and restores them on the next check', async () => {
+  const previous = vi.mocked(api).getMockImplementation()!
+  vi.mocked(api).mockImplementation(async (path, init) => {
+    if (path === '/api/public-ip/p34') return {
+      verdict: 'servers-not-ready', summary: 'A map is not ready.', serversReady: false,
+      maps: [{ map: 'Hagga Basin', serverId: 'old-instance', ip: '203.0.113.10', port: 7777, ready: false, alive: false }],
+    }
+    return previous(path, init)
+  })
+  const user = userEvent.setup()
+  render(<PublicIpCard />)
+  await screen.findByRole('checkbox', { name: /enable same-pc/i })
+  await user.click(screen.getByRole('button', { name: /run check/i }))
+  await screen.findByText('Hagga Basin')
+  const callsBeforeClear = vi.mocked(api).mock.calls.length
+  await user.click(screen.getByRole('button', { name: /clear displayed list/i }))
+  expect(screen.queryByText('Hagga Basin')).not.toBeInTheDocument()
+  expect(screen.queryByText(/Hagga Basin → UDP/)).not.toBeInTheDocument()
+  expect(screen.getByText('A map is not ready.')).toBeInTheDocument()
+  expect(vi.mocked(api).mock.calls).toHaveLength(callsBeforeClear)
+  await user.click(screen.getByRole('button', { name: /run check/i }))
+  await screen.findByText('Hagga Basin')
+  expect(screen.getByText('A map is not ready.')).toBeInTheDocument()
+})
