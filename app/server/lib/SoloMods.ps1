@@ -44,20 +44,7 @@ function Get-DuneSoloMods {
             if (-not $req) { continue }
             if($req.optional){continue}
             $id = if($req -is [string]){$req}else{[string]$req.id}
-            if ($id -eq 'ue4ss') {
-                $actual='3.0.1-1164-g5e627997'
-                if($req.version -and $req.version -ne $actual){$mod.warnings += "Requires UE4SS $($req.version); installed runtime is $actual"}
-                foreach($bound in @('minVersion','maxVersion')){
-                    if(-not $req.$bound){continue}
-                    try {
-                        $current=[version]($actual -replace '-g.*$','' -replace '-','.')
-                        $required=[version]([string]$req.$bound -replace '-g.*$','' -replace '-','.')
-                        if(($bound -eq 'minVersion' -and $current -lt $required) -or ($bound -eq 'maxVersion' -and $current -gt $required)){$mod.warnings += "Requires UE4SS $bound $($req.$bound); installed runtime is $actual"}
-                    } catch {$mod.warnings += "Cannot verify required UE4SS version $($req.$bound)"}
-                }
-                continue
-            }
-            if ($id -eq 'wps-launcher') { $mod.warnings += 'Declares WPS Launcher. DST will attempt to load it; any required WPS services must be supplied by the mod dependencies.'; continue }
+            if ($id -in @('ue4ss','wps-launcher')) { continue }
             $found = @($mods | Where-Object { $_.id -eq $id -and $_.enabled })
             if ($found.Count -ne 1) { $mod.errors += "Missing or disabled dependency: $id"; continue }
             if($req.version -and $found[0].version -ne $req.version){$mod.errors += "Requires $id version $($req.version)"}

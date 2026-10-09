@@ -24,7 +24,7 @@ here cover everything those tags shipped.
 - Make the Mods folder editable by the installing Windows user so mod INIs can be saved in a normal editor under Program Files.
 
 ### Changed
-- Show launcher and UE4SS version declarations as advisory warnings so mods can be tested without rewriting their manifests.
+- Ignore launcher and UE4SS version declarations so mods can load without warnings or rewriting their manifests. Actual missing mod dependencies and load errors remain visible.
 - Mod launches use a verified upstream UE4SS runtime and restore previous game launch files after exit. Normal launches bypass that runtime. Mods remain supplied and maintained by their authors.
 
 ## [16.0.2] - 2026-10-08

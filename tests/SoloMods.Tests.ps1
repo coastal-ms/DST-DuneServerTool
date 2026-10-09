@@ -72,12 +72,12 @@ BeforeEach {
         $result=Set-DuneSoloModSelection @{mods=@(@{folder='A';enabled=$true},@{folder='B';enabled=$true});gamePath=''}
         ($result.mods | Where-Object id -eq A).errors.Count | Should -Be 0
     }
-    It 'reports launcher and runtime pins as nonblocking warnings without rewriting manifests' {
+    It 'ignores launcher and runtime declarations without rewriting manifests' {
         $metadata='{"id":"VehicleSpeed","requires":[{"id":"wps-launcher"},{"id":"ue4ss","maxVersion":"3.0.1-1140-gf58e8f84"}]}'
         Import-DuneSoloMod (New-ModZip 'advisory' @{'VehicleSpeed/mod.json'=$metadata;'VehicleSpeed/Scripts/main.lua'='print(1)'}) | Out-Null
         $result=Set-DuneSoloModSelection @{mods=@(@{folder='VehicleSpeed';enabled=$true});gamePath=''}
         $result.mods[0].errors.Count | Should -Be 0
-        $result.mods[0].warnings.Count | Should -Be 2
+        $result.mods[0].warnings.Count | Should -Be 0
         Get-Content (Join-Path $script:DuneSoloModsRoot 'VehicleSpeed/mod.json') -Raw | Should -Be $metadata
     }
     It 'restores pre-existing launch files and removes only owned additions' {
