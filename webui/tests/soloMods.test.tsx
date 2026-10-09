@@ -10,6 +10,8 @@ afterEach(() => { cleanup(); vi.clearAllMocks(); localStorage.clear() })
 describe('Solo mod controls', () => {
   it('shows dependency errors and keeps normal and modded launches separate', async () => {
     render(<SoloMods />)
+    expect(screen.getByRole('button', {name: /Solo mods/})).toHaveAttribute('aria-expanded', 'false')
+    fireEvent.click(screen.getByRole('button', {name: /Solo mods/}))
     await screen.findByText('Example')
     expect(screen.getByText(/We make no guarantees.*does not provide individual mod troubleshooting/)).toBeInTheDocument()
     expect(screen.queryByText('Declares WPS Launcher')).not.toBeInTheDocument()
@@ -30,6 +32,7 @@ describe('Solo mod controls', () => {
       return state
     })
     render(<SoloMods />)
+    fireEvent.click(screen.getByRole('button', {name: /Solo mods/}))
     await screen.findByText('Example')
     fireEvent.click(screen.getByRole('button', {name:'Install mod ZIP'}))
     await screen.findByRole('alert')

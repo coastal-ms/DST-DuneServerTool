@@ -38,7 +38,7 @@ export function SoloMods() {
       if (!pick.cancelled && pick.path) await run('import', { path: pick.path })
     } catch (e) { setError(e instanceof Error ? e.message : String(e)) }
   }
-  return <CollapsibleCard id="solo-mods" title="Solo mods" icon="Package" subtitle="Install your downloaded mods. Dependencies and mod errors are shown here; mod settings stay in their INI files." headerClassName="px-5 py-4 flex-wrap" headerRight={
+  return <CollapsibleCard id="solo-mods" title="Solo mods" icon="Package" defaultOpen={false} subtitle="Install your downloaded mods. Dependencies and mod errors are shown here; mod settings stay in their INI files." headerClassName="px-5 py-4 flex-wrap" headerRight={
     <div className="flex flex-wrap gap-2">
       <button className="btn-primary" disabled={busy} onClick={() => void run('launch', { withMods: true })}>Launch with Mods</button>
       <button className="btn-secondary" disabled={busy} onClick={() => void run('launch', { withMods: false })}>Launch Normally</button>
