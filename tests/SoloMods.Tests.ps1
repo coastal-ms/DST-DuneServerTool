@@ -36,6 +36,15 @@ BeforeEach {
         Set-DuneGameLaunchPreferences @{skipIntro=$false} | Out-Null
         (Get-DuneSoloMods).skipIntro | Should -BeFalse
     }
+    It 'writes a BOM-free loader list so the first enabled mod can load on PS5' {
+        $path=Join-Path $script:DuneSoloLoaderRoot 'mods.txt'
+        New-Item -ItemType Directory -Path $script:DuneSoloLoaderRoot -Force | Out-Null
+        Write-DuneSoloModLoadList -Path $path -Mods @(@{folder='DuneVehicleSpeed'},@{folder='Other'})
+        $bytes=[IO.File]::ReadAllBytes($path)
+        $bytes[0] | Should -Be 68
+        [Text.Encoding]::UTF8.GetString($bytes) | Should -Match '^DuneVehicleSpeed : 1'
+        Get-Content $path | Should -HaveCount 2
+    }
     It 'imports nested packages while preserving the INI and Content directory' {
         $zip=New-ModZip 'nested' @{'Launcher/Mods/Test/Scripts/main.lua'='print(1)';'Launcher/Mods/Test/mod.ini'='speed=2';'Launcher/Mods/Test/Content/data.txt'='data'}
         $result=Import-DuneSoloMod $zip

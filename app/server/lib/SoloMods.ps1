@@ -185,8 +185,8 @@ function Start-DuneSoloModGame([bool]$WithMods) {
     $text=[regex]::Replace($text,'(?m)^ModsFolderPath\s*=.*$',('ModsFolderPath = '+$script:DuneSoloModsRoot))
     $modsTxt=Join-Path $sessionRoot 'mods.txt'
     $text=[regex]::Replace($text,'(?m)^ControllingModsTxt\s*=.*$',('ControllingModsTxt = '+$modsTxt))
-    $text | Set-Content $ini -Encoding utf8
-    @($ordered | ForEach-Object {"$($_.folder) : 1"}) | Set-Content $modsTxt -Encoding utf8
+    [IO.File]::WriteAllText($ini, $text, [Text.UTF8Encoding]::new($false))
+    Write-DuneSoloModLoadList -Path $modsTxt -Mods $ordered
     $records=@()
     foreach($file in @('dwmapi.dll','UE4SS.dll')){
         $dest=Join-Path $bin $file
@@ -235,4 +235,11 @@ function Set-DuneGameLaunchPreferences($Body) {
     New-Item -ItemType Directory -Path $script:DuneSoloLoaderRoot -Force | Out-Null
     @{skipIntro=[bool]$Body.skipIntro} | ConvertTo-Json | Set-Content (Join-Path $script:DuneSoloLoaderRoot 'launch-preferences.json') -Encoding utf8
     return Get-DuneGameLaunchPreferences
+}
+
+function Write-DuneSoloModLoadList([string]$Path, $Mods) {
+    # UE4SS treats a UTF-8 BOM as part of the first mod name. PS 5.1 UTF8
+    # Set-Content adds one, so use an explicit BOM-free encoding on all hosts.
+    [string[]]$lines=@($Mods | ForEach-Object {"$($_.folder) : 1"})
+    [IO.File]::WriteAllLines($Path, $lines, [Text.UTF8Encoding]::new($false))
 }

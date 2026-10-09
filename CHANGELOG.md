@@ -20,6 +20,7 @@ here cover everything those tags shipped.
 - Add Help → Skip intro / splash screens, saved independently of mods and applied to every Dune launch from DST.
 
 ### Fixed
+- Write the enabled-mod list without a byte-order mark so the first mod loads when the installed Windows PowerShell host generates it.
 - Make the Mods folder editable by the installing Windows user so mod INIs can be saved in a normal editor under Program Files.
 
 ### Changed
