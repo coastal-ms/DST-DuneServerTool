@@ -60,7 +60,7 @@ export function SoloMods() {
     <div className="flex flex-wrap gap-2 w-full">
       <label className="block w-full rounded border border-accent/40 bg-accent/5 p-3 text-sm">Dune installation folder
         <div className="flex flex-wrap gap-2 mt-1">
-          <input className="input flex-1 min-w-0" value={gamePath} onChange={e => setGamePath(e.target.value)} placeholder="Select your Dune Awakening installation folder" />
+          <input className="flex-1 min-w-0 px-3 py-2 rounded-lg bg-surface-2 border border-border text-text text-sm focus:outline-none focus:ring-2 focus:ring-ibad focus:border-ibad/50" value={gamePath} onChange={e => setGamePath(e.target.value)} placeholder="Select your Dune Awakening installation folder" />
           <button className="btn-secondary" disabled={busy} onClick={() => void pickGame()}>Browse</button>
           <button className="btn-secondary" disabled={busy} onClick={() => void save()}>Save</button>
         </div>
@@ -68,10 +68,10 @@ export function SoloMods() {
       </label>
       <label className="block w-full text-sm">Launch Arguments
         <div className="flex flex-wrap gap-2 mt-1">
-          <input className="input flex-1 min-w-0" value={soloArguments} maxLength={8192} onChange={e => setSoloArguments(e.target.value)} placeholder="Optional command line arguments" />
+          <input className="flex-1 min-w-0 px-3 py-2 rounded-lg bg-surface-2 border border-border text-text text-sm focus:outline-none focus:ring-2 focus:ring-ibad focus:border-ibad/50" value={soloArguments} maxLength={8192} onChange={e => setSoloArguments(e.target.value)} placeholder="Optional command line arguments" />
           <button className="btn-secondary" disabled={busy} onClick={() => void saveArguments()}>Save arguments</button>
         </div>
-        <span className="block text-xs text-text-muted mt-2">Used by both Solo launch buttons in DST. Click Save arguments after editing.</span>
+        <span className="block text-xs text-text-muted mt-2">Type your arguments in the box, then click Save arguments. Used by both Solo launch buttons in DST.</span>
       </label>
       {(error || state?.launchError) && <p role="alert" className="text-danger whitespace-pre-wrap text-sm w-full">{error || state?.launchError}</p>}
       <button className="btn-primary" disabled={busy} onClick={() => void run('launch', { withMods: true })}>Launch with Mods</button>
