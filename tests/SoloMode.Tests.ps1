@@ -346,6 +346,95 @@ Describe 'Solo Mode write gates and settings backups' {
         (Test-Path -LiteralPath $result.backupPath) | Should -BeTrue
     }
 
+    It 'writes landclaim segments to native settings and Game.ini while preserving other controls' {
+        $layout = New-TestSoloLayout
+        Save-DuneSoloState -DataRoot $layout.root -DbPath $layout.db | Out-Null
+        Mock Get-DuneSoloGameProcesses { @() }
+        $game = Join-Path $layout.config 'Game.ini'
+        [IO.File]::WriteAllText($game, "[/Script/DuneSandbox.BuildingSettings]`r`nm_MaxNumLandclaimSegments=10`r`nm_MaxNumLandclaimSegments=9`r`nm_bBuildingRestrictionLimitsEnabled=True`r`nm_DefaultBuildAndFillTimeInSeconds=0`r`n[Other]`r`nKeep=Yes`r`n", [Text.UTF8Encoding]::new($true))
+        $engine = Join-Path $layout.config 'Engine.ini'
+        [IO.File]::WriteAllText($engine, "[ConsoleVariables]`r`nVehicle.MaxVehiclesPerPlayer=20`r`n")
+        $engineBefore = [IO.File]::ReadAllBytes($engine)
+        $result = Set-DuneSoloSettings -Settings @{ MaxLandclaimSegments = '20'; GatheringAmount = '2.5' } -Confirm 'APPLY SOLO SETTINGS'
+        $result.ok | Should -BeTrue
+        ($result.settings.entries | Where-Object key -eq 'MaxLandclaimSegments').needsApply | Should -BeFalse
+        [IO.File]::ReadAllText((Join-Path $layout.config 'ServerCustomSettings.ini')) | Should -Match 'MaxLandclaimSegments=20'
+        $text = [IO.File]::ReadAllText($game)
+        ([regex]::Matches($text, '(?m)^m_MaxNumLandclaimSegments=')).Count | Should -Be 1
+        $text | Should -Match 'm_MaxNumLandclaimSegments=20'
+        $text | Should -Match 'm_bBuildingRestrictionLimitsEnabled=True'
+        $text | Should -Match 'm_DefaultBuildAndFillTimeInSeconds=0'
+        $text | Should -Match 'Keep=Yes'
+        [IO.File]::ReadAllBytes($game)[0] | Should -Be 0xEF
+        [Convert]::ToBase64String([IO.File]::ReadAllBytes($engine)) | Should -Be ([Convert]::ToBase64String($engineBefore))
+        $result.backupPaths.Count | Should -Be 1
+    }
+
+    It 'creates the required Game.ini building section on first landclaim apply' {
+        $layout = New-TestSoloLayout
+        Save-DuneSoloState -DataRoot $layout.root -DbPath $layout.db | Out-Null
+        Mock Get-DuneSoloGameProcesses { @() }
+        Set-DuneSoloSettings -Settings @{ MaxLandclaimSegments = '18' } -Confirm 'APPLY SOLO SETTINGS' | Out-Null
+        [IO.File]::ReadAllText((Join-Path $layout.config 'Game.ini')) | Should -Match '\[/Script/DuneSandbox.BuildingSettings\]\s+m_MaxNumLandclaimSegments=18'
+    }
+
+    It 'flags an existing native landclaim value for apply until the required override matches' {
+        $layout = New-TestSoloLayout
+        Save-DuneSoloState -DataRoot $layout.root -DbPath $layout.db | Out-Null
+        $native = Join-Path $layout.config 'ServerCustomSettings.ini'
+        [IO.File]::WriteAllText($native, "[/Script/DuneSandbox.UserServerCustomSettings]`nMaxLandclaimSegments=20`n")
+        (Read-DuneSoloSettings -Path $native).entries | Where-Object key -eq 'MaxLandclaimSegments' | Select-Object -ExpandProperty needsApply | Should -BeTrue
+        [IO.File]::WriteAllText((Join-Path $layout.config 'Game.ini'), "[/Script/DuneSandbox.BuildingSettings]`nm_MaxNumLandclaimSegments=20`n")
+        (Read-DuneSoloSettings -Path $native).entries | Where-Object key -eq 'MaxLandclaimSegments' | Select-Object -ExpandProperty needsApply | Should -BeFalse
+    }
+
+    It 'rejects malformed UTF-8 Game.ini without changing either original file' {
+        $layout = New-TestSoloLayout
+        Save-DuneSoloState -DataRoot $layout.root -DbPath $layout.db | Out-Null
+        Mock Get-DuneSoloGameProcesses { @() }
+        $native = Join-Path $layout.config 'ServerCustomSettings.ini'
+        $game = Join-Path $layout.config 'Game.ini'
+        [IO.File]::WriteAllText($native, "[/Script/DuneSandbox.UserServerCustomSettings]`nMaxLandclaimSegments=10`n")
+        [IO.File]::WriteAllBytes($game, [byte[]](91,79,116,104,101,114,93,10,75,101,121,61,0xC3,0x28))
+        $nativeBefore = [Convert]::ToBase64String([IO.File]::ReadAllBytes($native))
+        $gameBefore = [Convert]::ToBase64String([IO.File]::ReadAllBytes($game))
+        { Set-DuneSoloSettings -Settings @{ MaxLandclaimSegments = '20' } -Confirm 'APPLY SOLO SETTINGS' } | Should -Throw
+        [Convert]::ToBase64String([IO.File]::ReadAllBytes($native)) | Should -BeExactly $nativeBefore
+        [Convert]::ToBase64String([IO.File]::ReadAllBytes($game)) | Should -BeExactly $gameBefore
+    }
+
+    It 'reads the shared client landclaim override and synchronizes native settings without reverting it' {
+        $layout = New-TestSoloLayout
+        Save-DuneSoloState -DataRoot $layout.root -DbPath $layout.db | Out-Null
+        Mock Get-DuneSoloGameProcesses { @() }
+        $native = Join-Path $layout.config 'ServerCustomSettings.ini'
+        $game = Join-Path $layout.config 'Game.ini'
+        [IO.File]::WriteAllText($native, "[/Script/DuneSandbox.UserServerCustomSettings]`nMaxLandclaimSegments=24`n")
+        [IO.File]::WriteAllText($game, "[/Script/DuneSandbox.BuildingSettings]`nm_MaxNumLandclaimSegments=23`n[Other]`nKeep=Yes`n")
+        $entry = (Read-DuneSoloSettings -Path $native).entries | Where-Object key -eq 'MaxLandclaimSegments'
+        $entry.value | Should -Be '23'
+        $entry.needsApply | Should -BeTrue
+        $result = Set-DuneSoloSettings -Settings @{ MaxLandclaimSegments = $entry.value } -Confirm 'APPLY SOLO SETTINGS'
+        ($result.settings.entries | Where-Object key -eq 'MaxLandclaimSegments').value | Should -Be '23'
+        ($result.settings.entries | Where-Object key -eq 'MaxLandclaimSegments').needsApply | Should -BeFalse
+        [IO.File]::ReadAllText($native) | Should -Match 'MaxLandclaimSegments=23'
+        [IO.File]::ReadAllText($game) | Should -Match 'm_MaxNumLandclaimSegments=23'
+        [IO.File]::ReadAllText($game) | Should -Match 'Keep=Yes'
+    }
+
+    It 'rolls native settings back when the required Game.ini write fails' {
+        $layout = New-TestSoloLayout
+        Save-DuneSoloState -DataRoot $layout.root -DbPath $layout.db | Out-Null
+        Mock Get-DuneSoloGameProcesses { @() }
+        $native = Join-Path $layout.config 'ServerCustomSettings.ini'
+        $original = "[/Script/DuneSandbox.UserServerCustomSettings]`r`nMaxLandclaimSegments=10`r`nFuture=Keep`r`n"
+        [IO.File]::WriteAllText($native, $original)
+        Mock Write-DuneSoloBlueprintFile { throw 'Injected Game.ini failure' }
+        { Set-DuneSoloSettings -Settings @{ MaxLandclaimSegments = '20' } -Confirm 'APPLY SOLO SETTINGS' } | Should -Throw '*Injected Game.ini failure*'
+        [IO.File]::ReadAllText($native) | Should -BeExactly $original
+        Test-Path -LiteralPath (Join-Path $layout.config 'Game.ini') | Should -BeFalse
+    }
+
     It 'rejects unsupported setting injection' {
         $layout = New-TestSoloLayout
         Save-DuneSoloState -DataRoot $layout.root -DbPath $layout.db | Out-Null

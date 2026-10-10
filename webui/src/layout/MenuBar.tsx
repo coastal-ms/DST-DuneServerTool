@@ -89,7 +89,7 @@ export function MenuBar({ sidebarCollapsed, onToggleSidebar, sidebarAvailable = 
   >(null)
 
   const refreshAutostart = useCallback(async () => {
-    if (!local || soloOnly) return
+    if (!local) return
     try {
       const s = await getAutostartState()
       setAutostart(s)
@@ -98,18 +98,18 @@ export function MenuBar({ sidebarCollapsed, onToggleSidebar, sidebarAvailable = 
       // no toast, no scary error, the feature simply isn't there.
       setAutostart(null)
     }
-  }, [local, soloOnly])
+  }, [local])
 
   useEffect(() => { void refreshAutostart() }, [refreshAutostart])
 
   const refreshService = useCallback(async () => {
-    if (!local || soloOnly) return
+    if (!local) return
     try {
       setService(await getServiceModeState())
     } catch {
       setService(null)
     }
-  }, [local, soloOnly])
+  }, [local])
 
   useEffect(() => { void refreshService() }, [refreshService])
 
@@ -117,14 +117,14 @@ export function MenuBar({ sidebarCollapsed, onToggleSidebar, sidebarAvailable = 
   // tracks the real window state even if the user minimized / restored it
   // outside the app (e.g. via the taskbar).
   const refreshConsole = useCallback(async () => {
-    if (!local || soloOnly) return
+    if (!local) return
     try {
       const s = await getConsoleState()
       setConsoleState(s)
     } catch {
       setConsoleState(null)
     }
-  }, [local, soloOnly])
+  }, [local])
 
   useEffect(() => { void refreshConsole() }, [refreshConsole])
   useEffect(() => { if (open === 'help') void refreshConsole() }, [open, refreshConsole])
@@ -447,7 +447,7 @@ export function MenuBar({ sidebarCollapsed, onToggleSidebar, sidebarAvailable = 
                 </span>
               </button>
             )}
-            {canAccessOwnerSurfaces && !soloOnly && (
+            {canAccessOwnerSurfaces && (
               <button
                 type="button"
                 onClick={onCreateDiagnosticsPackage}
@@ -490,10 +490,10 @@ export function MenuBar({ sidebarCollapsed, onToggleSidebar, sidebarAvailable = 
                   <span className="block">Run at Windows startup</span>
                   <span className="block text-[11px] text-text-dim">
                     {autostart.enabled
-                      ? 'Enabled — server keeps running when you close this window'
+                      ? 'Enabled — DST keeps running when you close this window'
                       : service?.enabled
                         ? 'Disabled — closing removes DST; background service stays online'
-                        : 'Disabled — closing this window stops the server'}
+                        : soloOnly ? 'Disabled — closing this window stops DST' : 'Disabled — closing this window stops the server'}
                   </span>
                 </span>
                 {autostart.enabled && (
@@ -535,7 +535,7 @@ export function MenuBar({ sidebarCollapsed, onToggleSidebar, sidebarAvailable = 
                 className="w-full flex items-start gap-2 px-2.5 py-1.5 rounded text-sm text-text-muted hover:text-text hover:bg-surface-2 transition-colors text-left disabled:opacity-60 disabled:cursor-wait"
                 title={
                   consoleState.visible && !consoleState.minimized
-                    ? 'Hide the backend PowerShell console window. The server keeps running — log output still goes to dune-server.log.'
+                    ? 'Hide the backend PowerShell console window. DST keeps running — log output still goes to dune-server.log.'
                     : 'Bring the backend PowerShell console window to the foreground so you can watch the server work in real time.'
                 }
               >
@@ -551,7 +551,7 @@ export function MenuBar({ sidebarCollapsed, onToggleSidebar, sidebarAvailable = 
                       ? (consoleState.minimized
                           ? 'Currently minimized — click to restore to a visible window'
                           : 'Currently visible — click to hide')
-                      : 'Currently hidden — click to reveal the live server output'}
+                      : 'Currently hidden — click to reveal the live DST output'}
                   </span>
                 </span>
               </button>

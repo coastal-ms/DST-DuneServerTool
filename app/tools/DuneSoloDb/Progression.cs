@@ -13,7 +13,7 @@ internal static partial class Program
         string keystonePath)
     {
         var adapter = ReadSoloAdapter(adapterPath);
-        AssertProgressionSchema(input, adapter);
+        AssertProgressionAdapter(input, adapter);
         var keystones = ReadKeystones(keystonePath);
         return RunProgressionMutation(
             input,
@@ -191,7 +191,7 @@ internal static partial class Program
         string adapterPath)
     {
         var adapter = ReadSoloAdapter(adapterPath);
-        AssertProgressionSchema(input, adapter);
+        AssertProgressionAdapter(input, adapter);
         return RunProgressionMutation(
             input,
             safetyBackup,
@@ -355,7 +355,7 @@ internal static partial class Program
         string skillsPath)
     {
         var adapter = ReadSoloAdapter(adapterPath);
-        AssertProgressionSchema(input, adapter);
+        AssertProgressionAdapter(input, adapter);
         var catalog = ReadSkillCatalog(skillsPath);
         var included = catalog
             .Where(key => !adapter.SkillExcludes.Contains(key))
@@ -480,7 +480,7 @@ internal static partial class Program
         string adapterPath)
     {
         var adapter = ReadSoloAdapter(adapterPath);
-        AssertProgressionSchema(input, adapter);
+        AssertProgressionAdapter(input, adapter);
         return RunProgressionMutation(
             input,
             safetyBackup,
@@ -615,7 +615,7 @@ internal static partial class Program
         long intel)
     {
         var adapter = ReadSoloAdapter(adapterPath);
-        AssertProgressionSchema(input, adapter);
+        AssertProgressionAdapter(input, adapter);
         return RunProgressionMutation(
             input,
             safetyBackup,
@@ -733,16 +733,14 @@ internal static partial class Program
         }
     }
 
-    private static void AssertProgressionSchema(
+    private static void AssertProgressionAdapter(
         string input,
         SoloAdapter adapter)
     {
-        var inspection = InspectPath(input);
-        if (!adapter.SchemaFingerprints.Contains(inspection.SchemaFingerprint))
-        {
-            throw new InvalidDataException(
-                $"Solo progression adapter schema mismatch: expected one of {string.Join(", ", adapter.SchemaFingerprints.Order())}, found {inspection.SchemaFingerprint}.");
-        }
+        // Validate the wrapper and save health, not a whole-database hash.
+        // Required SQL/JSON fields are checked by the operation on its private
+        // working copy before any replacement of the original save.
+        EnsureWritableInspection(InspectBytes(ReadStable(input), input, adapter: adapter));
     }
 
     private static ProgressionSummary ReadProgressionSummary(

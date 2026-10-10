@@ -173,6 +173,7 @@ export interface SoloSetting {
   key: string
   value: string
   present: boolean
+  needsApply?: boolean
 }
 
 export interface SoloSettingsResponse {

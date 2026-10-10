@@ -2547,27 +2547,55 @@ internal static partial class Program
                 File.ReadAllText(adapterPath).Replace(
                     selfTestFingerprint,
                     new string('0', 64)));
-            var schemaTargetBefore = SHA256.HashData(File.ReadAllBytes(target));
+            // A stale baseline hash must not block a compatible save or write.
+            InspectPath(target, adapterPath: badAdapterPath);
+            EnableAllSkills(target, Path.Combine(root, "safety", "different-hash.db"), badAdapterPath, skillsPath);
+
+            var divergentSqlite = Path.Combine(root, "divergent.sqlite");
+            File.WriteAllBytes(divergentSqlite, Unwrap(File.ReadAllBytes(target)).SqliteBytes);
+            using (var connection = OpenWritable(divergentSqlite))
+            {
+                ExecuteNonQuery(connection, "CREATE TABLE unrelated_future_data (id INTEGER PRIMARY KEY, value TEXT); INSERT INTO unrelated_future_data VALUES (1, 'keep'); ALTER TABLE player_state ADD COLUMN unrelated_future_value TEXT DEFAULT 'preserve';");
+            }
+            var divergentSave = Path.Combine(root, "divergent.db");
+            WrapSqlite(divergentSqlite, divergentSave);
+            var divergentInspection = InspectPath(divergentSave, adapterPath: adapterPath);
+            if (divergentInspection.SchemaFingerprint == selfTestFingerprint)
+                throw new InvalidOperationException("Schema variation fixture did not change the fingerprint.");
+            SetProgressionPoints(divergentSave, Path.Combine(root, "safety", "divergent.db"), adapterPath, 123, 456);
+            var divergentResult = InspectPath(divergentSave).Progression;
+            if (divergentResult.UnspentSkillPoints != 123 || divergentResult.Intel != 456)
+                throw new InvalidOperationException("Compatible schema variation prevented progression editing.");
+            File.WriteAllBytes(divergentSqlite, Unwrap(File.ReadAllBytes(divergentSave)).SqliteBytes);
+            using (var connection = OpenWritable(divergentSqlite))
+            {
+                if (ScalarString(connection, "SELECT value FROM unrelated_future_data;") != "keep"
+                    || ScalarString(connection, "SELECT unrelated_future_value FROM player_state;") != "preserve")
+                    throw new InvalidOperationException("Progression editing changed unrelated data.");
+                ExecuteNonQuery(connection, "ALTER TABLE specialization_tracks RENAME COLUMN xp_amount TO incompatible_xp;");
+            }
+            WrapSqlite(divergentSqlite, divergentSave);
+            var schemaTargetBefore = SHA256.HashData(File.ReadAllBytes(divergentSave));
             var schemaRejected = false;
             try
             {
-                EnableAllSkills(
-                    target,
+                MaxSpecializations(
+                    divergentSave,
                     Path.Combine(root, "safety", "bad-schema.db"),
-                    badAdapterPath,
-                    skillsPath);
+                    adapterPath,
+                    keystonePath);
             }
-            catch (InvalidDataException)
+            catch (SqliteException)
             {
                 schemaRejected = true;
             }
             if (!schemaRejected
                 || !CryptographicOperations.FixedTimeEquals(
                     schemaTargetBefore,
-                    SHA256.HashData(File.ReadAllBytes(target))))
+                    SHA256.HashData(File.ReadAllBytes(divergentSave))))
             {
                 throw new InvalidOperationException(
-                    "Progression schema mismatch did not fail closed.");
+                    "Missing required progression column did not fail without changing the save.");
             }
 
             using (var connection = new SqliteConnection(new SqliteConnectionStringBuilder
@@ -2656,7 +2684,9 @@ internal static partial class Program
                     "offline-enable-all-skills-preserves-unknowns",
                     "offline-exact-progression-points",
                     "progression-compatible-schema-accepted",
-                    "progression-schema-mismatch-fails-closed",
+                    "unrelated-schema-changes-allow-inspection-and-verified-write",
+                    "unrelated-schema-data-preserved",
+                    "missing-required-column-leaves-save-unchanged",
                     "invalid-restore-leaves-target-unchanged"
                 }
             };
@@ -2943,11 +2973,10 @@ internal static partial class Program
 
         var schemaFingerprint = Convert.ToHexString(
             SHA256.HashData(Encoding.UTF8.GetBytes(schema.ToString()))).ToLowerInvariant();
-        if (adapter is not null && !adapter.SchemaFingerprints.Contains(schemaFingerprint))
-        {
-            throw new InvalidDataException(
-                $"Solo adapter '{adapter.Id}' schema mismatch: expected one of {string.Join(", ", adapter.SchemaFingerprints.Order())}, found {schemaFingerprint}.");
-        }
+        // Keep the whole-database fingerprint for diagnostics. Unrelated game
+        // tables/columns are not a compatibility contract for DST operations.
+        // Queries and mutation verification validate the fields each operation
+        // actually uses; mutations run on a temporary database before restore.
 
         return new Inspection(
             Ok: true,

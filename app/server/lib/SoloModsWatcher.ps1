@@ -7,7 +7,8 @@ if(-not(Test-Path -LiteralPath $journal)){return}
 try {
     if(-not $RestoreOnly){
         . (Join-Path $PSScriptRoot 'SoloMods.ps1')
-        $process=Start-Process -FilePath $GameExe -WorkingDirectory (Split-Path $GameExe) -ArgumentList (Get-DuneSoloLaunchArguments -SkipIntro:$SkipIntro -RuntimeDll $RuntimeDll) -PassThru
+        $launchSession=Get-Content -LiteralPath $journal -Raw | ConvertFrom-Json
+        $process=Start-Process -FilePath $GameExe -WorkingDirectory (Split-Path $GameExe) -ArgumentList (Get-DuneSoloLaunchArguments -SkipIntro:$SkipIntro -RuntimeDll $RuntimeDll -ExtraArguments ([string]$launchSession.soloArguments)) -PassThru
         $process.WaitForExit()
         while(Get-Process -Name DuneSandbox,DuneSandbox-Win64-Shipping -ErrorAction SilentlyContinue){Start-Sleep -Seconds 2}
     } elseif(Get-Process -Name DuneSandbox,DuneSandbox-Win64-Shipping -ErrorAction SilentlyContinue){throw 'Close Dune before restoring its launch files.'}

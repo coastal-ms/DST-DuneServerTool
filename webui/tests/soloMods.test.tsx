@@ -8,6 +8,16 @@ const state = {mods: [{folder: 'Example', id: 'Example', name: 'Example', versio
 beforeEach(() => { vi.mocked(api).mockImplementation(async () => state) })
 afterEach(() => { cleanup(); vi.clearAllMocks(); localStorage.clear() })
 describe('Solo mod controls', () => {
+  it('loads and saves Launch Arguments while the mod list is collapsed', async () => {
+    vi.mocked(api).mockImplementation(async () => ({...state, soloArguments:'-log'}))
+    render(<SoloMods />)
+    const input = await screen.findByPlaceholderText('Optional command line arguments')
+    await waitFor(() => expect(input).toHaveValue('-log'))
+    expect(screen.getByText('Launch Arguments')).toBeVisible()
+    fireEvent.change(input, {target:{value:'-example="two words"'}})
+    fireEvent.click(screen.getByRole('button', {name:'Save arguments'}))
+    await waitFor(() => expect(api).toHaveBeenCalledWith('/api/game/launch-preferences', {method:'POST',body:JSON.stringify({soloArguments:'-example="two words"'})}))
+  })
   it('keeps the installation folder and launch errors visible when collapsed', async () => {
     vi.mocked(api).mockImplementation(async path => {
       if (path === '/api/solo/mods/launch') throw new Error('Select the Dune Awakening installation folder in Solo mods and save it before launching.')
