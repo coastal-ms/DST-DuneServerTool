@@ -147,6 +147,7 @@ function Start-DuneSoloModGame([bool]$WithMods) {
     Assert-DuneSoloGameClosed
     $status=Get-DuneSoloMods
     if($status.session){throw 'A previous mod session needs restoration. Use Restore normal launch first.'}
+    if([string]::IsNullOrWhiteSpace($status.gamePath)){throw 'Select the Dune Awakening installation folder in Solo mods and save it before launching.'}
     $bin=Join-Path $status.gamePath 'DuneSandbox\Binaries\Win64'
     $exe=Join-Path $bin 'DuneSandbox-Win64-Shipping.exe'
     if(-not(Test-Path -LiteralPath $exe)){throw 'Select the Dune Awakening installation folder.'}
