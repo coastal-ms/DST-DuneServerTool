@@ -44,7 +44,8 @@ BeforeAll {
             2 = @{ track = 'Combat'; level = 63; name = 'DA_CombatKeystone_SkillPoint'; cost = 20 }
             3 = @{ track = 'Crafting'; level = 20; name = 'Crafting'; cost = 5 }
             4 = @{ track = 'Combat'; level = 50; name = 'Combat fifty'; cost = 15 }
-            82 = @{ track = 'Crafting'; level = 52; name = 'Crafting_CraftingKeystone_FragmentUpgrade52'; cost = 20 }
+            82 = @{ track = 'Crafting'; level = 52; name = 'Crafting_CraftingKeystone_FragmentUpgrade52'; cost = 20; recipes = @(@{ id = 'T6SchematicFragmentQL2_Recipe'; quality = 0; uses = 0 }) }
+            175 = @{ track = 'Sabotage'; level = 40; name = 'DA_SabotageKeystone_ExtraLootOnCorpses2_Major'; cost = 15; player_tags = @('Character.Keystone.Sabotage.BonusLootEnemies') }
         }
     }
     function global:Test-DunePlayerOfflineByController {
@@ -64,6 +65,50 @@ AfterAll {
 }
 
 Describe 'Invoke-DunePlayerApplySpecLevel (apply specialization rewards)' -Tag 'Players' {
+    It 'Max grants rewards and their effects, not just track XP' {
+        $result = Invoke-DunePlayerGrantMaxSpec -Ip '1.2.3.4' -ControllerId 555 -TrackType 'Sabotage'
+        $result.ok | Should -BeTrue
+        $script:lastWriteSql | Should -Match '100::real'
+        $script:lastWriteSql | Should -Match 'ARRAY\[175\]::smallint\[\]'
+        $script:lastWriteSql | Should -Match 'INSERT INTO dune.player_tags'
+    }
+
+    It 'loads all three verified loot effects from the shipped catalog' {
+        $catalog = Get-Content (Join-Path $PSScriptRoot '../app/data/dune-keystones.json') -Raw | ConvertFrom-Json
+        @($catalog.'83'.player_tags) | Should -Contain 'Character.Keystone.Exploration.BonusShipLoot'
+        @($catalog.'91'.player_tags) | Should -Contain 'Character.Keystone.Exploration.BonusLoot'
+        @($catalog.'175'.player_tags) | Should -Contain 'Character.Keystone.Sabotage.BonusLootEnemies'
+    }
+
+    It 'clears only catalogued specialization effects when all rewards are reset' {
+        $result = Invoke-DunePlayerResetAllKeystones -Ip '1.2.3.4' -ControllerId 555
+        $result.ok | Should -BeTrue
+        $script:lastWriteSql | Should -Match 'DELETE FROM dune.player_tags tags'
+        $script:lastWriteSql | Should -Match 'tags.character_id = ps.id'
+        $script:lastWriteSql | Should -Match 'tags.tag = effect.tag'
+        $script:lastWriteSql | Should -Not -Match 'LIKE'
+        $script:lastWriteSql | Should -Match '^BEGIN;'
+        $script:lastWriteSql | Should -Match 'COMMIT;$'
+    }
+
+    It 'rejects granting all rewards while the player is online without writing character state' {
+        $script:playerOffline = $false
+        $result = Invoke-DunePlayerGrantAllKeystones -Ip '1.2.3.4' -ControllerId 555
+        $result.ok | Should -BeFalse
+        $script:writeCount | Should -Be 0
+    }
+
+    It 'repairs effects from existing purchased rewards using the character rather than controller as tag owner' {
+        $result = Invoke-DunePlayerApplySpecLevel -Ip '1.2.3.4' -ControllerId 555 -TrackType 'Sabotage' -Level 100
+        $result.ok | Should -BeTrue
+        $script:lastWriteSql | Should -Match 'INSERT INTO dune.player_tags\(character_id, tag\)'
+        $script:lastWriteSql | Should -Match 'SELECT ps.id, effect.tag'
+        $script:lastWriteSql | Should -Match 'claim.player_id = ps.player_controller_id'
+        $script:lastWriteSql | Should -Match "175, 'Character.Keystone.Sabotage.BonusLootEnemies'"
+        $script:lastWriteSql | Should -Match 'ON CONFLICT DO NOTHING'
+        $script:lastWriteSql | Should -Not -Match 'DELETE FROM dune.player_tags'
+    }
+
     BeforeEach {
         $script:lastWriteSql  = $null
         $script:lastSelectSql = $null
@@ -146,15 +191,17 @@ Describe 'Invoke-DunePlayerApplySpecLevel (apply specialization rewards)' -Tag '
         $script:writeCount | Should -Be 0
     }
 
-    It 'leaves Pattern Upgrading for the live in-game purchase path' {
+    It 'grants Pattern Upgrading and reconciles recipes without replacing existing recipes' {
         $r = Invoke-DunePlayerApplySpecLevel -Ip '1.2.3.4' -ControllerId 555 -TrackType 'Crafting' -Level 100
 
         $r.ok | Should -BeTrue
-        $r.rewards_applied | Should -Be 1
-        $r.pattern_upgrading_manual_purchase | Should -BeTrue
-        $r.message | Should -Match 'intentionally left unclaimed'
-        $script:lastWriteSql | Should -Match 'ARRAY\[3\]::smallint\[\]'
-        $script:lastWriteSql | Should -Not -Match 'ARRAY\[[^\]]*\b82\b'
+        $r.rewards_applied | Should -Be 2
+        $r.pattern_upgrading_manual_purchase | Should -BeFalse
+        $script:lastWriteSql | Should -Match 'ARRAY\[3,82\]::smallint\[\]'
+        $script:lastWriteSql | Should -Match 'T6SchematicFragmentQL2_Recipe'
+        $script:lastWriteSql | Should -Match 'WHERE NOT EXISTS'
+        $script:lastWriteSql | Should -Match 'missing.recipes'
+        $script:lastWriteSql | Should -Match 'm_QualityLevel'
     }
 }
 

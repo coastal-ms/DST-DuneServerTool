@@ -58,6 +58,53 @@ internal static partial class Program
                             """,
                             ("$player", identity.ControllerId),
                             ("$reward", reward.Key));
+                        foreach (var tag in reward.Value.PlayerTags)
+                        {
+                            ExecuteNonQuery(connection,
+                                "INSERT INTO player_tags(character_id,tag) VALUES($character,$tag) ON CONFLICT(character_id,tag) DO NOTHING;",
+                                ("$character", identity.CharacterId), ("$tag", tag));
+                            if (ScalarLong(connection,
+                                "SELECT COUNT(*) FROM player_tags WHERE character_id=$character AND tag=$tag;",
+                                ("$character", identity.CharacterId), ("$tag", tag)) != 1)
+                                throw new InvalidDataException("Specialization effect tag verification failed.");
+                        }
+                    }
+
+                    var recipeRules = keystones.Values.SelectMany(rule => rule.Recipes).ToArray();
+                    if (recipeRules.Length > 0)
+                    {
+                        var properties = ReadActorProperties(connection, identity.PawnId);
+                        var library = properties["CraftingRecipesLibraryActorComponent"] as JsonObject
+                            ?? throw new InvalidDataException("Crafting recipe library is unavailable; no specialization changes were saved.");
+                        var recipes = library["m_KnownItemRecipes"] as JsonArray;
+                        if (recipes is null)
+                        {
+                            if (library.ContainsKey("m_KnownItemRecipes"))
+                                throw new InvalidDataException("Crafting recipe library has an unsupported shape.");
+                            recipes = new JsonArray();
+                            library["m_KnownItemRecipes"] = recipes;
+                        }
+                        foreach (var rule in recipeRules)
+                        {
+                            if (recipes.OfType<JsonObject>().Any(recipe =>
+                                recipe["BaseRecipeId"]?["Name"]?.GetValue<string>() == rule.Id
+                                && GetInt(recipe, "m_QualityLevel") == rule.Quality)) continue;
+                            recipes.Add(new JsonObject {
+                                ["BaseRecipeId"] = new JsonObject { ["Name"] = rule.Id },
+                                ["m_QualityLevel"] = rule.Quality,
+                                ["m_bIsNew"] = false,
+                                ["m_NumberOfRecipeUses"] = rule.Uses,
+                                ["m_bIsLimitedUseRecipe"] = rule.Uses > 0,
+                                ["m_Source"] = "SchematicPickup"
+                            });
+                        }
+                        WriteActorProperties(connection, identity.PawnId, properties);
+                        var verified = ReadActorProperties(connection, identity.PawnId)
+                            ["CraftingRecipesLibraryActorComponent"]?["m_KnownItemRecipes"] as JsonArray;
+                        if (verified is null || recipeRules.Any(rule => !verified.OfType<JsonObject>().Any(recipe =>
+                            recipe["BaseRecipeId"]?["Name"]?.GetValue<string>() == rule.Id
+                            && GetInt(recipe, "m_QualityLevel") == rule.Quality)))
+                            throw new InvalidDataException("Specialization recipe verification failed.");
                     }
 
                     var components = ReadFglComponents(connection, identity.EntityId);
@@ -1243,7 +1290,16 @@ internal static partial class Program
             result[int.Parse(property.Name)] = new KeystoneRule(
                 Track: value.GetProperty("track").GetString() ?? "",
                 Level: value.GetProperty("level").GetInt32(),
-                Name: value.GetProperty("name").GetString() ?? "");
+                Name: value.GetProperty("name").GetString() ?? "",
+                PlayerTags: value.TryGetProperty("player_tags", out var tags)
+                    ? tags.EnumerateArray().Select(tag => tag.GetString()
+                        ?? throw new InvalidDataException("Invalid specialization effect tag.")).ToArray()
+                    : Array.Empty<string>(),
+                Recipes: value.TryGetProperty("recipes", out var recipes)
+                    ? recipes.EnumerateArray().Select(recipe => new SpecializationRecipe(
+                        recipe.GetProperty("id").GetString() ?? throw new InvalidDataException("Invalid specialization recipe ID."),
+                        recipe.GetProperty("quality").GetInt32(), recipe.GetProperty("uses").GetInt32())).ToArray()
+                    : Array.Empty<SpecializationRecipe>());
         }
         return result;
     }
@@ -1280,7 +1336,11 @@ internal static partial class Program
     private sealed record KeystoneRule(
         string Track,
         int Level,
-        string Name);
+        string Name,
+        IReadOnlyList<string> PlayerTags,
+        IReadOnlyList<SpecializationRecipe> Recipes);
+
+    private sealed record SpecializationRecipe(string Id, int Quality, int Uses);
 
     private sealed record SoloIdentity(
         long CharacterId,

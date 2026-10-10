@@ -265,7 +265,7 @@ export function SpecsSection({ player, canWrite, demo, refreshKey, flash, onChan
                 }}
                 onApplyLevel={(level) => {
                   const patternNote = name === 'Crafting' && level >= 52
-                    ? '\n\nPattern Upgrading will be left unclaimed. The player must purchase it in-game after logging in so the Grade 2-5 schematic recipes are created.'
+                    ? '\n\nPattern Upgrading includes the Grade 2–5 schematic-pattern recipes.'
                     : ''
                   if (window.confirm(`Set ${name} to level ${level} and apply every ${name} specialization reward available through that level for ${player.name}?\n\nThe player must be fully offline because skill-point rewards update character state. Existing rewards are preserved. Rewards above level ${level} are not removed. The change appears in-game after a full re-login.${patternNote}`)) {
                     void run(() => applySpecLevel(player.controller_id, name, level), 'Apply level')

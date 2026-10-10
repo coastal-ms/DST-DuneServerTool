@@ -1090,7 +1090,7 @@ internal static partial class Program
                     INSERT INTO actors (id, class, properties) VALUES (
                         10,
                         'PlayerPawn',
-                        jsonb('{"TechKnowledgePlayerComponent":{"m_TechKnowledgePoints":0,"m_TechKnowledge":{"m_TechKnowledgeData":[]}},"KeystonePlayerComponent":{"m_PurchasedKeystoneIDs":[]}}')
+                        jsonb('{"CraftingRecipesLibraryActorComponent":{"m_KnownItemRecipes":[{"BaseRecipeId":{"Name":"ExistingRecipe"},"m_QualityLevel":2,"m_NumberOfRecipeUses":7,"m_bIsLimitedUseRecipe":true}]},"TechKnowledgePlayerComponent":{"m_TechKnowledgePoints":0,"m_TechKnowledge":{"m_TechKnowledgeData":[]}},"KeystonePlayerComponent":{"m_PurchasedKeystoneIDs":[]}}')
                     );
                     INSERT INTO actors (id, class, properties) VALUES (
                         20,
@@ -2333,7 +2333,7 @@ internal static partial class Program
                 """
                 {
                   "1":{"track":"Combat","level":1,"name":"DA_CombatKeystone_SkillPoint_Major"},
-                  "2":{"track":"Crafting","level":1,"name":"DA_CraftingKeystone_Test"}
+                  "2":{"track":"Crafting","level":1,"name":"DA_CraftingKeystone_Test","player_tags":["Character.Keystone.SelfTest.Effect"],"recipes":[{"id":"GrantedRecipe","quality":0,"uses":0}]}
                 }
                 """);
             var skillsPath = Path.Combine(root, "skills.json");
@@ -2393,6 +2393,32 @@ internal static partial class Program
                 321,
                 654);
             var progressionInspection = InspectPath(target, adapterPath: adapterPath);
+            // Diagnostics include only safe progression tags, so assert the
+            // effect using a read-only unwrapped snapshot instead.
+            bool HasTestEffect()
+            {
+                var snapshot = Path.Combine(root, "effect-check.sqlite");
+                File.WriteAllBytes(snapshot, Unwrap(File.ReadAllBytes(target)).SqliteBytes);
+                using var check = OpenWritable(snapshot);
+                return ScalarLong(check, "SELECT COUNT(*) FROM player_tags WHERE character_id=1 AND tag='Character.Keystone.SelfTest.Effect';") == 1;
+            }
+            if (!HasTestEffect())
+                throw new InvalidOperationException("Max marked the reward purchased without its effect tag.");
+            void VerifyTestRecipes()
+            {
+                var snapshot = Path.Combine(root, "recipe-check.sqlite");
+                File.WriteAllBytes(snapshot, Unwrap(File.ReadAllBytes(target)).SqliteBytes);
+                using var check = OpenWritable(snapshot);
+                var recipes = ReadActorProperties(check, 10)["CraftingRecipesLibraryActorComponent"]?["m_KnownItemRecipes"] as JsonArray;
+                if (recipes?.Count != 2
+                    || recipes[0]?["BaseRecipeId"]?["Name"]?.GetValue<string>() != "ExistingRecipe"
+                    || GetInt(recipes[0] as JsonObject, "m_NumberOfRecipeUses") != 7
+                    || recipes[1]?["BaseRecipeId"]?["Name"]?.GetValue<string>() != "GrantedRecipe"
+                    || GetInt(recipes[1] as JsonObject, "m_NumberOfRecipeUses") != 0
+                    || recipes[1]?["m_bIsLimitedUseRecipe"]?.GetValue<bool>() != false)
+                    throw new InvalidOperationException("Max recipe grant changed an existing recipe or failed to grant unlimited use.");
+            }
+            VerifyTestRecipes();
             if (progressionInspection.Progression.Specializations.Length != 5
                 || progressionInspection.Progression.PurchasedRewards != 2
                 || progressionInspection.Progression.FremenNodesComplete != 2
@@ -2463,6 +2489,8 @@ internal static partial class Program
             var rewardsBefore = InspectPath(target).Progression;
             var rewardResetBackup = Path.Combine(root, "safety", "before-crafting-reward-reset.db");
             ResetSpecializationRewards(target, rewardResetBackup, adapterPath, keystonePath, "Crafting");
+            if (HasTestEffect())
+                throw new InvalidOperationException("Reward reset left its effect tag behind.");
             var rewardsAfter = InspectPath(target).Progression;
             if (rewardsAfter.PurchasedRewards != rewardsBefore.PurchasedRewards - 1
                 || rewardsAfter.KeystoneBonusSkillPoints != rewardsBefore.KeystoneBonusSkillPoints
@@ -2487,6 +2515,7 @@ internal static partial class Program
                 || afterCombatReset.PurchasedRewards != 1)
                 throw new InvalidOperationException("Skill-point reward reset did not reconcile its bonus.");
             MaxSpecializations(target, Path.Combine(root, "safety", "before-regrant.db"), adapterPath, keystonePath);
+            VerifyTestRecipes();
             var afterRegrant = InspectPath(target).Progression;
             if (afterRegrant.KeystoneBonusSkillPoints != beforeCombatReset.KeystoneBonusSkillPoints
                 || afterRegrant.UnspentSkillPoints != beforeCombatReset.UnspentSkillPoints)
