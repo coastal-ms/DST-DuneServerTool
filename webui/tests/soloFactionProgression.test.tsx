@@ -30,7 +30,7 @@ describe('Solo faction controls', () => {
   })
   it.each(['', '-1', '12475', '1.5'])('blocks invalid reputation %s', amount => {
     render(<SoloFactionProgression disabled={false} onRun={vi.fn()} />)
-    fireEvent.change(screen.getByLabelText('Faction reputation amount (0–12,474)'), { target: { value: amount } })
+    fireEvent.change(screen.getByLabelText('Faction reputation / XP amount (0–12,474)'), { target: { value: amount } })
     expect((screen.getByRole('button', { name: 'Add reputation' }) as HTMLButtonElement).disabled).toBe(true)
   })
   it('disables every write for a running game or unvalidated profile', () => {

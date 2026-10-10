@@ -13,6 +13,11 @@ here cover everything those tags shipped.
 
 ## [Unreleased]
 
+## [16.2.0] - 2026-10-10
+
+### Added
+- Solo Atreides and Harkonnen Chapter 3 Start and Rank 19 Eligible unlock presets, faction reputation/XP edits, and separate character XP controls. Save changes require the game closed and retain a backup.
+
 ## [16.1.5] - 2026-10-10
 
 ### Fixed

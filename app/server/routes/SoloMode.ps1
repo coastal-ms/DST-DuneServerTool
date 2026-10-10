@@ -589,6 +589,26 @@ Register-DuneRoute -Method PUT -Path '/api/solo/progression/specializations' -Lo
     }
 }
 
+Register-DuneRoute -Method PUT -Path '/api/solo/progression/character-xp' -LocalOnly -Handler {
+    param($req, $res, $routeParams, $body)
+    try {
+        $action = [string](Get-DuneSoloBodyField -Body $body -Name 'action' -Default '')
+        $amount = 0L
+        $rawAmount = Get-DuneSoloBodyField -Body $body -Name 'amount' -Default -1
+        if (-not [long]::TryParse([Convert]::ToString($rawAmount, [Globalization.CultureInfo]::InvariantCulture), [Globalization.NumberStyles]::Integer, [Globalization.CultureInfo]::InvariantCulture, [ref]$amount)) { throw 'Character XP must be a whole number.' }
+        $confirm = [string](Get-DuneSoloBodyField -Body $body -Name 'confirm' -Default '')
+        $token = [string](Get-DuneSoloBodyField -Body $body -Name 'expectedProfileToken' -Default '')
+        $result = Invoke-WithDuneLock -Name 'solo-profile-data' -Script {
+            Assert-DuneSoloExpectedProfile -ExpectedProfileToken $token
+            Set-DuneSoloCharacterXp -Action $action -Amount $amount -Confirm $confirm
+        }
+        Write-DuneJson -Response $res -Body $result
+    } catch {
+        $status = if ($_.Exception.Message -like '*still running*' -or $_.Exception.Message -like '*changed in another window*') { 409 } else { 400 }
+        Write-DuneError -Response $res -Status $status -Message $_.Exception.Message
+    }
+}
+
 Register-DuneRoute -Method POST -Path '/api/solo/progression/specializations/reset-rewards' -LocalOnly -Handler {
     param($req, $res, $routeParams, $body)
     try {

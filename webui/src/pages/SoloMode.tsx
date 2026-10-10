@@ -5,6 +5,7 @@ import { CollapsibleCard } from '../components/CollapsibleCard'
 import { ItemPicker } from '../components/ItemPicker'
 import { SoloMods } from '../components/solo/SoloMods'
 import { SoloFactionProgression } from '../components/solo/SoloFactionProgression'
+import { SoloCharacterXp } from '../components/solo/SoloCharacterXp'
 import { AugmentPicker } from '../components/AugmentPicker'
 import {
   SoloInventoryExplorer,
@@ -43,6 +44,7 @@ import {
   setSoloCurrencies,
   setSoloProgressionPoints,
   setSoloFactionProgression,
+  setSoloCharacterXp,
   maxSoloSpecializations,
   unlockSoloMainQuest,
   type SoloBackup,
@@ -2228,6 +2230,9 @@ export function SoloMode() {
         <div className="space-y-4">
           <SoloFactionProgression disabled={!canMutateActiveProfile || gameRunning || !!busy}
             onRun={(faction, action, amount) => void runProgressionAction('faction', 'Solo faction change', token => setSoloFactionProgression(faction, action, amount, token))} />
+          <SoloCharacterXp disabled={!canMutateActiveProfile || gameRunning || !!busy}
+            currentXp={inspection?.progression.characterXp}
+            onRun={(action, amount) => void runProgressionAction('character-xp', 'Solo character XP change', token => setSoloCharacterXp(action, amount, token))} />
           <div className="card p-5">
             <h3 className="font-semibold mb-2">Solo diagnostics</h3>
             <p className="text-sm text-text-muted mb-3">Export a read-only report of save integrity, specializations, journey conditions and progression unlock flags for support. Account IDs, character names, inventory and local paths are excluded. Close the game first, then review the downloaded report before sharing it.</p>

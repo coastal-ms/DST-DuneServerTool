@@ -10,7 +10,7 @@ internal static partial class Program
         if (action is not ("ch3_start" or "rank19_eligible" or "add-reputation" or "set-reputation")) throw new ArgumentException("Choose a valid faction action.");
         if (amount < 0 || amount > 12474) throw new ArgumentException("Reputation must be between 0 and 12474.");
         var unlock = action is "ch3_start" or "rank19_eligible";
-        AssertProgressionSchema(input, ReadSoloAdapter(adapterPath));
+        AssertProgressionAdapter(input, ReadSoloAdapter(adapterPath));
         using var catalog = JsonDocument.Parse(File.ReadAllText(catalogPath));
         var nodes = new List<string>();
         if (unlock) {
@@ -53,6 +53,7 @@ internal static partial class Program
                     tags.AddRange(Enumerable.Range(0,6).Select(t => $"Faction.{name}.Tier{t}"));
                     if (action=="rank19_eligible") tags.Add("Journey.LandsraadContractsUnlocked");
                     foreach (var tag in tags) ExecuteNonQuery(db,"INSERT INTO player_tags(character_id,tag) VALUES($c,$t) ON CONFLICT DO NOTHING;",("$c",player.CharacterId),("$t",tag));
+                    foreach (var tag in tags) if (ScalarLong(db, "SELECT COUNT(*) FROM player_tags WHERE character_id=$c AND tag=$t;", ("$c",player.CharacterId),("$t",tag)) != 1) throw new InvalidDataException("Faction tag verification failed.");
                     foreach (var node in nodes) if (ScalarLong(db,"SELECT COUNT(*) FROM journey_story_node WHERE character_id=$c AND story_node_id=$n AND json(complete_condition_state)='true' AND json(reveal_condition_state)='true';",("$c",player.CharacterId),("$n",node)) != 1) throw new InvalidDataException("Faction journey verification failed.");
                     if (ScalarLong(db,"SELECT faction_id FROM player_faction WHERE actor_id=$p;",("$p",player.ControllerId)) != id) throw new InvalidDataException("Faction alignment verification failed.");
                 }

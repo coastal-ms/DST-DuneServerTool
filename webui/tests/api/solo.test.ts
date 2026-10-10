@@ -36,6 +36,11 @@ function last(): FetchCall {
 }
 
 describe('Solo Mode API contracts', () => {
+  it('sends character XP separately from faction progression with a selected-profile guard', async () => {
+    await solo.setSoloCharacterXp('set', 100000, 'profile-token')
+    expect(last()).toEqual({ url: '/api/solo/progression/character-xp', method: 'PUT',
+      body: { action: 'set', amount: 100000, expectedProfileToken: 'profile-token', confirm: 'SET SOLO CHARACTER XP' } })
+  })
   it('targets the selected main quest with the offline confirmation and profile token', async () => {
     await solo.unlockSoloMainQuest('DA_MQ_AssassinsHandbook', 'profile-token')
     expect(last()).toEqual({ url: '/api/solo/progression/main-quest/unlock', method: 'POST',

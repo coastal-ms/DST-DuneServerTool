@@ -872,7 +872,8 @@ internal static partial class Program
                 TotalSkillPoints: GetInt(level, "TotalSkillPoints"),
                 UnspentSkillPoints: GetInt(level, "UnspentSkillPoints"),
                 KeystoneBonusSkillPoints: GetInt(level, "KeystoneBonusSkillPoints"),
-                Intel: intel);
+                Intel: intel,
+                CharacterXp: level["TotalXPEarned"] is JsonValue savedXp && savedXp.TryGetValue<long>(out var characterXp) ? characterXp : null);
         }
         catch
         {
@@ -1366,7 +1367,8 @@ internal static partial class Program
         int TotalSkillPoints,
         int UnspentSkillPoints,
         int KeystoneBonusSkillPoints,
-        int Intel)
+        int Intel,
+        long? CharacterXp = null)
     {
         public static ProgressionSummary Empty { get; } = new(
             Array.Empty<SpecializationStatus>(),

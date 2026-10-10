@@ -61,6 +61,7 @@ export interface SoloProgressionSummary {
   unspentSkillPoints: number
   keystoneBonusSkillPoints: number
   intel: number
+  characterXp?: number | null
 }
 
 export interface SoloFillableItem {
@@ -517,6 +518,13 @@ interface SoloProgressionResult {
   safetyBackup: string
   details: Record<string, unknown>
   inspection: SoloInspection
+}
+
+export function setSoloCharacterXp(action: 'add' | 'set', amount: number, expectedProfileToken: string): Promise<SoloProgressionResult> {
+  return api('/api/solo/progression/character-xp', {
+    method: 'PUT',
+    body: JSON.stringify({ action, amount, expectedProfileToken, confirm: 'SET SOLO CHARACTER XP' }),
+  })
 }
 
 export function unlockSoloMainQuest(quest: string, expectedProfileToken: string): Promise<SoloProgressionResult> {

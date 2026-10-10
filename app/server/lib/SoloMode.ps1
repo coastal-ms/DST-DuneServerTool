@@ -1,4 +1,4 @@
-. (Join-Path $PSScriptRoot 'SoloCosmetics.ps1')
+﻿. (Join-Path $PSScriptRoot 'SoloCosmetics.ps1')
 . (Join-Path $PSScriptRoot 'SoloBlueprintSettings.ps1')
 $script:DuneSoloSection = '/Script/DuneSandbox.UserServerCustomSettings'
 $script:DuneSoloSettingKeys = @(
@@ -404,7 +404,7 @@ function Assert-DuneSoloGameClosed {
 
 function Invoke-DuneSoloHelper {
     param(
-        [Parameter(Mandatory)][ValidateSet('inspect','diagnostics','faction-progression','set-specialization','reset-specialization-rewards','backup','restore','grant-items','delete-item','import-blueprint','list-blueprints','export-blueprint','set-currencies','fill-water','set-weapon-ammo','max-augment-attributes','max-specializations','complete-fremen','complete-npe','enable-skills','set-progression-points','unlock-main-quest')][string]$Command,
+        [Parameter(Mandatory)][ValidateSet('inspect','diagnostics','character-xp','faction-progression','set-specialization','reset-specialization-rewards','backup','restore','grant-items','delete-item','import-blueprint','list-blueprints','export-blueprint','set-currencies','fill-water','set-weapon-ammo','max-augment-attributes','max-specializations','complete-fremen','complete-npe','enable-skills','set-progression-points','unlock-main-quest')][string]$Command,
         [Parameter(Mandatory)][hashtable]$Arguments
     )
 
@@ -1903,6 +1903,22 @@ function Set-DuneSoloFactionProgression {
     New-Item -ItemType Directory -Path $safetyDir -Force | Out-Null
     $safety = Join-Path $safetyDir ('game-before-faction-' + (Get-Date).ToUniversalTime().ToString('yyyyMMdd-HHmmssfff') + '.db')
     return Invoke-DuneSoloHelper -Command 'faction-progression' -Arguments @{ input = $profile.dbPath; 'safety-backup' = $safety; adapter = $adapter.manifestPath; nodes = (Get-DuneSoloDataFilePath -Name 'dune-progression-nodes.json'); faction = $Faction; action = $Action; amount = $Amount }
+}
+
+function Set-DuneSoloCharacterXp {
+    param([string]$Action, [long]$Amount, [string]$Confirm)
+    Assert-DuneSoloSupportedPlatform
+    if ($Confirm -ne 'SET SOLO CHARACTER XP') { throw 'Confirm the Solo character XP change before continuing.' }
+    if ($Action -notin @('add','set')) { throw 'Choose Add or Set character XP.' }
+    if ($Amount -lt 0 -or $Amount -gt 344440) { throw 'Character XP must be between 0 and 344440.' }
+    Assert-DuneSoloGameClosed
+    $profile = Get-DuneSoloProfile
+    Assert-DuneSoloProgressionAdapter -Profile $profile
+    $adapter = Get-DuneSoloAdapterDescriptor -DbPath $profile.dbPath
+    $safetyDir = Join-Path (Get-DuneSoloProfileBackupRoot -DbPath $profile.dbPath) 'pre-progression'
+    New-Item -ItemType Directory -Path $safetyDir -Force | Out-Null
+    $safety = Join-Path $safetyDir ('game-before-character-xp-' + (Get-Date).ToUniversalTime().ToString('yyyyMMdd-HHmmssfff') + '.db')
+    return Invoke-DuneSoloHelper -Command 'character-xp' -Arguments @{ input = $profile.dbPath; 'safety-backup' = $safety; adapter = $adapter.manifestPath; levels = (Get-DuneSoloDataFilePath -Name 'character-xp-levels.json'); action = $Action; amount = $Amount }
 }
 
 function Set-DuneSoloSpecialization {
