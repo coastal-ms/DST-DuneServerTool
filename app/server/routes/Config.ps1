@@ -160,14 +160,16 @@ Register-DuneRoute -Method POST -Path '/api/config/strip-ssh-passphrase' -Handle
         # console prompt. Only the private key file is rewritten; the .pub (and thus
         # the key authorized on the VM) is unchanged.
         #
-        # The new passphrase MUST be spelled `'""'` (single-quoted double-quotes),
-        # not `''`. Under Windows PowerShell 5.1 — the runtime DuneServer.exe uses —
-        # a bare empty-string argument is dropped entirely when invoking a native
-        # exe, so ssh-keygen would see `-N -f <path>`, swallow `-f` as the new
-        # passphrase, and choke on the leftover path with "Too many arguments"
-        # (the passphrase was never removed). `'""'` survives as a literal empty
-        # string that OpenSSH's ssh-keygen unquotes to "". Verified on PS 5.1.
-        $out  = & ssh-keygen -p -P $passphrase -N '""' -f $keyPath 2>&1
+        # PS 5.1/Legacy drops bare empty arguments and removes embedded quotes.
+        # Modern native argument passing preserves both, so literal quote pairs
+        # would accidentally become the NEW passphrase instead of an empty one.
+        $emptyPassphrase = if ($PSVersionTable.PSVersion -ge [version]'7.3' -and $PSNativeCommandArgumentPassing -ne 'Legacy') { '' } else { '""' }
+        $oldPassphraseArgument = if ($PSVersionTable.PSVersion -ge [version]'7.3' -and $PSNativeCommandArgumentPassing -ne 'Legacy') {
+            $passphrase
+        } else {
+            $passphrase.Replace('"', '\"')
+        }
+        $out = & ssh-keygen -p -P $oldPassphraseArgument -N $emptyPassphrase -f $keyPath 2>&1
         $code = $LASTEXITCODE
         $text = ($out | Out-String).Trim()
 

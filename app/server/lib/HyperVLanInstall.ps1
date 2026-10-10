@@ -277,7 +277,9 @@ function Initialize-DuneLanGuest {
     if (-not (Test-Path -LiteralPath $key)) {
         $keyDir = Split-Path -Parent $key
         if ($keyDir -and -not (Test-Path $keyDir)) { New-Item -ItemType Directory -Force -Path $keyDir | Out-Null }
-        & ssh-keygen -t ed25519 -f $key -N '""' -q -C "dst-lan@$($env:COMPUTERNAME)" 2>&1 | Out-Null
+        # Preserve an empty passphrase under both legacy and modern native argument passing.
+        $emptyPassphrase = if ($PSVersionTable.PSVersion -ge [version]'7.3' -and $PSNativeCommandArgumentPassing -ne 'Legacy') { '' } else { '""' }
+        & ssh-keygen -t ed25519 -f $key -N $emptyPassphrase -q -C "dst-lan@$($env:COMPUTERNAME)" 2>&1 | Out-Null
         if (-not (Test-Path -LiteralPath $key)) { return @{ ok = $false; error = 'Could not generate an SSH key on this PC.' } }
     }
 

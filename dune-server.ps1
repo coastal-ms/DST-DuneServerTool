@@ -2553,7 +2553,9 @@ while ($true) {
             }
             if (Test-Path -LiteralPath "$keyPath.pub") { Remove-Item -LiteralPath "$keyPath.pub" -Force }
             Write-Host "  Generating new SSH key at $keyPath ..." -ForegroundColor Yellow
-            & ssh-keygen -t ed25519 -f $keyPath -N '""' -q -C "dst@$($env:COMPUTERNAME)" 2>&1 | Out-Null
+            # Preserve an empty passphrase under both legacy and modern native argument passing.
+            $emptyPassphrase = if ($PSVersionTable.PSVersion -ge [version]'7.3' -and $PSNativeCommandArgumentPassing -ne 'Legacy') { '' } else { '""' }
+            & ssh-keygen -t ed25519 -f $keyPath -N $emptyPassphrase -q -C "dst@$($env:COMPUTERNAME)" 2>&1 | Out-Null
             if (-not (Test-Path -LiteralPath $keyPath)) {
                 Write-Host "  FATAL: Could not generate SSH key." -ForegroundColor Red
                 Write-Host ""; continue

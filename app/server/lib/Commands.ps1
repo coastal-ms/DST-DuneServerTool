@@ -19,7 +19,7 @@ $script:DuneCommands = @(
     @{ Section='VM'; Key='d';  Name='startup';         Label='Start All';          Mode='Console'; Requires='exists';  DisabledWhen='bg-running';  Desc='Power on VM, start battlegroup, wait for maps Ready' }
     @{ Section='VM'; Key='e';  Name='shutdown';        Label='Stop All';           Mode='Console'; Requires='running'; Desc='Stop the battlegroup (if running) and power off the VM' }
     @{ Section='VM'; Key='f';  Name='reboot';          Label='Reboot All';         Mode='Console'; Requires='running'; Desc='Stop battlegroup, reboot VM, start battlegroup' }
-    @{ Section='VM'; Key='g';  Name='rotate-ssh-key';  Mode='Console'; Requires='running'; Desc='Generate a new SSH key and authorize it on the VM' }
+    @{ Section='VM'; Key='g';  Name='rotate-ssh-key';  Label='Generate SSH key'; Mode='Console'; Requires='running'; Desc='Generate a new SSH key and authorize it on the VM' }
     @{ Section='VM'; Key='h';  Name='change-password'; Mode='Console'; Requires='running'; Desc="Change the password of the 'dune' user on the VM" }
     @{ Section='VM'; Key='i';  Name='change-vm-ip';    Mode='Console'; Requires='running'; Desc="Change the VM's IP address or how it gets one (DHCP/static)" }
 
