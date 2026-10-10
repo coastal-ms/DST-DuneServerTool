@@ -15,6 +15,9 @@ here cover everything those tags shipped.
 
 ## [16.1.1] - 2026-10-09
 
+### Fixed
+- Remove a false port-forwarding diagnosis based on historical login failures appearing on one map. Connection checks continue to verify advertised addresses and map readiness.
+
 ### Added
 - Add Move Up / Move Down controls for a saved Solo mod load order, applied from top to bottom on mod launches.
 - Add Nexus Mods download guidance and a link to Dune: Awakening mods.
