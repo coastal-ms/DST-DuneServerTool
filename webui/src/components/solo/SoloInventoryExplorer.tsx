@@ -148,7 +148,7 @@ export function SoloInventoryExplorer({
             Current inventory
           </h2>
           <p className="mt-1 text-sm text-text-muted">
-            Browse or remove items from the Backpack, Bank Storage, and supported built storage. The game must be fully closed before deletion.
+            Browse items in the Backpack, worn equipment, equipped weapons and tools, Bank Storage, and supported built storage. Unequip equipment before deleting it. The game must be fully closed before deletion.
           </p>
         </div>
         <span className="pill border-info/40 bg-info/10 text-info">
@@ -242,7 +242,9 @@ export function SoloInventoryExplorer({
                       <p className="truncate font-medium text-text">{location.destinationLabel}</p>
                       <p className="text-xs text-text-muted">Item {occurrence.itemId} · quality {occurrence.quality} · stack x{occurrence.stackSize}</p>
                     </div>
-                    <div className="flex shrink-0 items-end gap-2">
+                    {location.destinationKind === 'equipment' ? (
+                      <span className="text-xs text-text-muted">Unequip to delete</span>
+                    ) : <div className="flex shrink-0 items-end gap-2">
                       <label className="text-xs font-medium text-text-muted">
                         Delete quantity
                         <input
@@ -269,7 +271,7 @@ export function SoloInventoryExplorer({
                       >
                         <Icon name={busyItemId === occurrence.itemId ? 'LoaderCircle' : 'Trash2'} size={15} className={busyItemId === occurrence.itemId ? 'animate-spin' : undefined} />
                       </button>
-                    </div>
+                    </div>}
                   </li>
                 )
               }))}

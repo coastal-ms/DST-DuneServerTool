@@ -9,6 +9,21 @@ import {
 } from '../src/components/solo/SoloInventoryExplorer'
 
 describe('Solo inventory explorer', () => {
+  it('shows worn equipment with its location and requires unequipping before deletion', () => {
+    const onDelete = vi.fn()
+    render(createElement(SoloInventoryExplorer, {
+      items: [{ inventoryId: 2, destinationKey: 'inventory:2', destinationLabel: 'Worn equipment',
+        destinationKind: 'equipment', templateId: 'Armor', displayName: 'Worn Armor',
+        totalQuantity: 1, occurrenceCount: 1, minQuality: 0, maxQuality: 0,
+        occurrences: [{ itemId: 20, stackSize: 1, quality: 0, templateId: 'Armor' }] }],
+      inventories: [], connected: true, disabled: false, busyItemId: null, onDelete,
+    }))
+    fireEvent.click(screen.getByText('Worn Armor'))
+    expect(screen.getByText('Unequip to delete')).toBeInTheDocument()
+    expect(screen.queryByTitle('Delete item')).not.toBeInTheDocument()
+    expect(screen.getAllByText('Worn equipment').length).toBeGreaterThan(0)
+    expect(onDelete).not.toHaveBeenCalled()
+  })
   it('groups matching templates across Solo inventory locations', () => {
     const items = [
       {

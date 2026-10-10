@@ -18,6 +18,9 @@ here cover everything those tags shipped.
 ### Added
 - Solo Atreides and Harkonnen Chapter 3 Start and Rank 19 Eligible unlock presets, faction reputation/XP edits, and separate character XP controls. Save changes require the game closed and retain a backup.
 
+### Fixed
+- Solo ranged-ammo editing includes unloaded ranged weapons whose ammo data has not yet been saved. The inventory browser now includes worn equipment and equipped weapons and tools.
+
 ## [16.1.5] - 2026-10-10
 
 ### Fixed

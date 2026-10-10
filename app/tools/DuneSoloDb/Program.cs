@@ -183,7 +183,7 @@ internal static partial class Program
         string catalogPath,
         bool requireGameClosed = true)
     {
-        if (ammo > 2_000_000_000)
+        if (ammo < 0 || ammo > 2_000_000_000)
         {
             throw new InvalidDataException("Ammo must be between 0 and 2000000000.");
         }
@@ -221,43 +221,41 @@ internal static partial class Program
                     lookup.CommandText = """
                         SELECT items.template_id,
                                items.inventory_id,
-                               inventories.actor_id
+                               inventories.actor_id,
+                               json(items.stats)
                         FROM items
                         JOIN inventories ON inventories.id = items.inventory_id
                         WHERE items.id = $item
-                          AND json_valid(items.stats)
-                          AND json_type(items.stats, '$.FWeaponItemStats[1].CurrentAmmo')
-                              IN ('integer', 'real');
+                          AND json_valid(items.stats);
                         """;
                     lookup.Parameters.AddWithValue("$item", itemId);
                     using var lookupReader = lookup.ExecuteReader();
                     if (!lookupReader.Read())
                     {
                         throw new InvalidDataException(
-                            "The selected ranged weapon no longer has an editable CurrentAmmo value.");
+                            "The selected item is missing or has invalid saved stats. Refresh and try again.");
                     }
                     templateId = lookupReader.GetString(0);
                     var inventoryId = lookupReader.GetInt64(1);
                     var actorId = lookupReader.IsDBNull(2) ? 0 : lookupReader.GetInt64(2);
+                    var originalStats = lookupReader.GetString(3);
                     lookupReader.Close();
                     if (!supportedInventories.Contains(inventoryId) && actorId != pawnId)
                     {
                         throw new InvalidDataException(
                             "The selected ranged weapon is not in a supported Solo inventory.");
                     }
+                    if (!TryReadWeaponAmmo(originalStats, templateId, catalog, out _))
+                        throw new InvalidDataException("The selected item is not an editable ranged weapon. Refresh and try again.");
                     var affected = ExecuteNonQuery(
                         connection,
                         """
                         UPDATE items
-                        SET stats = json_set(
-                                stats,
-                                '$.FWeaponItemStats[1].CurrentAmmo',
-                                $ammo
-                            ),
+                        SET stats = json($stats),
                             is_new = 1
                         WHERE id = $item;
                         """,
-                        ("$ammo", ammo),
+                        ("$stats", WithWeaponAmmo(originalStats, ammo)),
                         ("$item", itemId));
                     if (affected != 1)
                     {
@@ -2298,6 +2296,7 @@ internal static partial class Program
                   }
                 }
                 """.Replace("__SCHEMA_FINGERPRINT__", selfTestFingerprint));
+            SelfTestAmmoEquipment(root, target, catalogPath);
             SelfTestCharacterXp(root, target, adapterPath);
             var beforeNpe = InspectPath(target, adapterPath: adapterPath).Progression;
             if (beforeNpe.NpeNodesTotal != 2 || beforeNpe.NpeNodesComplete != 0)
@@ -2661,6 +2660,9 @@ internal static partial class Program
                     "bank-storage-destination-discovery",
                     "solo-inventory-grouped-read-model",
                     "offline-weapon-ammo-update-with-safety-backup",
+                    "all-ranged-categories-and-unloaded-ammo-initialization",
+                    "worn-equipment-display-without-writable-destination-expansion",
+                    "invalid-ammo-stats-and-non-weapons-rejected-without-writes",
                     "offline-partial-and-full-item-deletion-with-safety-backups",
                     "retained-backup",
                     "atomic-restore-with-safety-backup",
@@ -2918,11 +2920,14 @@ internal static partial class Program
         var inventories = hasPlayerState
             ? ReadInventoryDestinations(connection, catalog)
             : Array.Empty<InventoryDestination>();
+        var displayInventories = hasPlayerState
+            ? inventories.Concat(ReadCharacterEquipment(connection)).ToArray()
+            : inventories;
         var inventoryItems = hasPlayerState
-            ? ReadInventoryItemGroups(connection, inventories, catalog)
+            ? ReadInventoryItemGroups(connection, displayInventories, catalog)
             : Array.Empty<InventoryItemGroup>();
         var rangedWeapons = hasPlayerState
-            ? ReadRangedWeapons(connection, inventories, catalog)
+            ? ReadRangedWeapons(connection, displayInventories, catalog)
             : Array.Empty<RangedWeapon>();
         var hasCurrencies = ScalarLong(
             connection,
@@ -3234,7 +3239,11 @@ internal static partial class Program
                 var displayName = result.TryGetValue(property.Name, out var existing)
                     ? existing.DisplayName
                     : property.Name;
-                result[property.Name] = new CatalogRule(stackMax, volume, hasVolume, displayName);
+                var category = value.TryGetProperty("category", out var categoryElement)
+                    ? categoryElement.GetString() ?? string.Empty : string.Empty;
+                var schematic = value.TryGetProperty("is_schematic", out var schematicElement)
+                    && schematicElement.ValueKind == JsonValueKind.True;
+                result[property.Name] = new CatalogRule(stackMax, volume, hasVolume, displayName, category, schematic);
             }
         }
         foreach (var (templateId, stackMax) in KnownStackLimits)
@@ -3482,18 +3491,13 @@ internal static partial class Program
         command.CommandText = """
             SELECT items.id,
                    items.template_id,
-                   CAST(json_extract(
-                       items.stats,
-                       '$.FWeaponItemStats[1].CurrentAmmo'
-                   ) AS INTEGER),
+                   json(items.stats),
                    inventories.id,
                    inventories.actor_id,
                    inventories.inventory_type
             FROM items
             JOIN inventories ON inventories.id = items.inventory_id
             WHERE json_valid(items.stats)
-              AND json_type(items.stats, '$.FWeaponItemStats[1].CurrentAmmo')
-                  IN ('integer', 'real')
             ORDER BY LOWER(items.template_id), items.id;
             """;
         using var reader = command.ExecuteReader();
@@ -3507,6 +3511,8 @@ internal static partial class Program
                 continue;
             }
             var templateId = reader.GetString(1);
+            if (!TryReadWeaponAmmo(reader.GetString(2), templateId, catalog, out var ammo))
+                continue;
             var displayName = catalog is not null
                 && catalog.TryGetValue(templateId, out var rule)
                 ? rule.DisplayName
@@ -3521,7 +3527,7 @@ internal static partial class Program
                 DestinationLabel: destinationLabel,
                 TemplateId: templateId,
                 DisplayName: displayName,
-                CurrentAmmo: reader.GetInt64(2)));
+                CurrentAmmo: ammo));
         }
         return results.ToArray();
     }
@@ -3696,7 +3702,9 @@ internal static partial class Program
         int StackMax,
         double Volume,
         bool HasVolume,
-        string DisplayName);
+        string DisplayName,
+        string Category = "",
+        bool IsSchematic = false);
 
     private sealed record CurrencyBalances(
         long Solari,

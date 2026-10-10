@@ -87,7 +87,7 @@ export interface SoloInventoryItemGroup {
   inventoryId: number
   destinationKey: string
   destinationLabel: string
-  destinationKind: SoloInventoryDestination['kind']
+  destinationKind: SoloInventoryDestination['kind'] | 'equipment'
   templateId: string
   displayName: string
   totalQuantity: number
