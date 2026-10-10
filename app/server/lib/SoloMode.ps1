@@ -404,7 +404,7 @@ function Assert-DuneSoloGameClosed {
 
 function Invoke-DuneSoloHelper {
     param(
-        [Parameter(Mandatory)][ValidateSet('inspect','diagnostics','set-specialization','reset-specialization-rewards','backup','restore','grant-items','delete-item','import-blueprint','list-blueprints','export-blueprint','set-currencies','fill-water','set-weapon-ammo','max-augment-attributes','max-specializations','complete-fremen','complete-npe','enable-skills','set-progression-points','unlock-main-quest')][string]$Command,
+        [Parameter(Mandatory)][ValidateSet('inspect','diagnostics','faction-progression','set-specialization','reset-specialization-rewards','backup','restore','grant-items','delete-item','import-blueprint','list-blueprints','export-blueprint','set-currencies','fill-water','set-weapon-ammo','max-augment-attributes','max-specializations','complete-fremen','complete-npe','enable-skills','set-progression-points','unlock-main-quest')][string]$Command,
         [Parameter(Mandatory)][hashtable]$Arguments
     )
 
@@ -1792,6 +1792,23 @@ function Export-DuneSoloDiagnostics {
     Add-Member -InputObject $result.report -NotePropertyName dstVersion -NotePropertyValue $script:DuneToolVersion -Force
     Add-Member -InputObject $result.report -NotePropertyName channel -NotePropertyValue $profile.channel -Force
     return @{ ok = $true; filename = ('DST-Solo-Diagnostics-' + (Get-Date).ToUniversalTime().ToString('yyyyMMdd-HHmmss') + '.json'); report = $result.report }
+}
+
+function Set-DuneSoloFactionProgression {
+    param([string]$Faction, [string]$Action, [long]$Amount, [string]$Confirm)
+    Assert-DuneSoloSupportedPlatform
+    if ($Confirm -ne 'SET SOLO FACTION PROGRESSION') { throw 'Confirm the Solo faction change before continuing.' }
+    if ($Faction -notin @('atreides','harkonnen')) { throw 'Choose Atreides or Harkonnen.' }
+    if ($Action -notin @('ch3_start','rank19_eligible','add-reputation','set-reputation')) { throw 'Choose a valid faction action.' }
+    if ($Amount -lt 0 -or $Amount -gt 12474) { throw 'Reputation must be between 0 and 12474.' }
+    Assert-DuneSoloGameClosed
+    $profile = Get-DuneSoloProfile
+    Assert-DuneSoloProgressionAdapter -Profile $profile
+    $adapter = Get-DuneSoloAdapterDescriptor -DbPath $profile.dbPath
+    $safetyDir = Join-Path (Get-DuneSoloProfileBackupRoot -DbPath $profile.dbPath) 'pre-progression'
+    New-Item -ItemType Directory -Path $safetyDir -Force | Out-Null
+    $safety = Join-Path $safetyDir ('game-before-faction-' + (Get-Date).ToUniversalTime().ToString('yyyyMMdd-HHmmssfff') + '.db')
+    return Invoke-DuneSoloHelper -Command 'faction-progression' -Arguments @{ input = $profile.dbPath; 'safety-backup' = $safety; adapter = $adapter.manifestPath; nodes = (Get-DuneSoloDataFilePath -Name 'dune-progression-nodes.json'); faction = $Faction; action = $Action; amount = $Amount }
 }
 
 function Set-DuneSoloSpecialization {

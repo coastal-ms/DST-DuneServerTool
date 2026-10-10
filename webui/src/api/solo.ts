@@ -565,6 +565,13 @@ export function enableSoloAllSkills(expectedProfileToken: string): Promise<SoloP
   })
 }
 
+export function setSoloFactionProgression(faction: string, action: string, amount: number, expectedProfileToken: string): Promise<SoloProgressionResult> {
+  return api('/api/solo/progression/faction', {
+    method: 'POST',
+    body: JSON.stringify({ faction, action, amount, expectedProfileToken, confirm: 'SET SOLO FACTION PROGRESSION' }),
+  })
+}
+
 export function setSoloProgressionPoints(
   skillPoints: number,
   intel: number,
