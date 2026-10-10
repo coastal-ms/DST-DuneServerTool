@@ -1,4 +1,4 @@
-﻿$soloModAppRoot = if($script:AppDir){$script:AppDir}else{[IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..\..'))}
+$soloModAppRoot = if($script:AppDir){$script:AppDir}else{[IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..\..'))}
 $script:DuneSoloModsRoot = Join-Path $soloModAppRoot 'Mods'
 $script:DuneSoloLoaderRoot = Join-Path $soloModAppRoot 'ModLoader'
 
@@ -38,7 +38,9 @@ function Get-DuneSoloMods {
             } catch { $mods += [pscustomobject]@{folder=$folder.Name;id=$folder.Name;name=$folder.Name;version='';enabled=$false;requires=@();loadAfter=@();loadBefore=@();conflicts=@();warnings=@();errors=@('Invalid mod.json: '+$_.Exception.Message)} }
         }
     }
-    $savedOrder = @(Read-DuneModJson (Join-Path $script:DuneSoloLoaderRoot 'order.json') @())
+    # PS5 emits a JSON array as one pipeline object; assign before normalizing.
+    $savedOrder = Read-DuneModJson (Join-Path $script:DuneSoloLoaderRoot 'order.json') @()
+    $savedOrder = @($savedOrder)
     $positions = @{}
     for ($i = 0; $i -lt $savedOrder.Count; $i++) { $positions[[string]$savedOrder[$i]] = $i }
     $mods = @($mods | Sort-Object @{Expression={if ($positions.ContainsKey($_.folder)) { $positions[$_.folder] } else { [int]::MaxValue }}}, folder)

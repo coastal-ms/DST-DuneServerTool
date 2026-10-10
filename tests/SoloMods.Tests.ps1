@@ -1,4 +1,5 @@
-﻿BeforeAll {
+BeforeAll {
+    Add-Type -AssemblyName System.IO.Compression.FileSystem, System.IO.Compression
     . "$PSScriptRoot\_TestHelpers.ps1"
     Import-DstLib 'SoloMods.ps1'
     function global:Assert-DuneSoloGameClosed {}

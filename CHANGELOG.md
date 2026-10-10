@@ -16,6 +16,7 @@ here cover everything those tags shipped.
 ## [16.1.1] - 2026-10-09
 
 ### Fixed
+- Fix Solo mod Move Up / Move Down order persistence under Windows PowerShell 5.1.
 - Remove a false port-forwarding diagnosis based on historical login failures appearing on one map. Connection checks continue to verify advertised addresses and map readiness.
 
 ### Added
