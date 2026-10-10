@@ -46,7 +46,7 @@ export function SoloMods() {
       if (!pick.cancelled && pick.path) await run('import', { path: pick.path })
     } catch (e) { setError(e instanceof Error ? e.message : String(e)) }
   }
-  return <CollapsibleCard id="solo-mods" title="Solo mods" icon="Package" defaultOpen={false} subtitle="Download mods from Nexus Mods or another source, then install your downloaded ZIP. Mod settings stay in their INI files." headerClassName="px-5 py-4 flex-wrap" headerRight={
+  return <CollapsibleCard id="solo-mods" title="Solo mods" icon="Package" defaultOpen={false} subtitle="Download mods from Nexus Mods or another source, then install your downloaded ZIP. Mod settings stay in their INI files." headerClassName="px-5 py-4 flex-wrap [&>div]:w-full" headerRight={
     <div className="flex flex-wrap gap-2 w-full">
       <label className="block w-full rounded border border-accent/40 bg-accent/5 p-3 text-sm">Dune installation folder
         <div className="flex flex-wrap gap-2 mt-1">
