@@ -1003,7 +1003,7 @@ function Get-DuneSoloRuntime {
 }
 
 function Read-DuneSoloSettings {
-    param([string]$Path = '')
+    param([string]$Path = '', [switch]$NativeValues)
 
     Assert-DuneSoloSupportedPlatform
     if (-not $Path) { $Path = [string](Get-DuneSoloProfile).settingsPath }
@@ -1022,6 +1022,8 @@ function Read-DuneSoloSettings {
     }
     $gamePath = Join-Path (Split-Path -Parent $Path) 'Game.ini'
     $landclaimOverrides = @()
+    $settingsProfile = Get-DuneSoloProfile
+    $retailOverrides = $settingsProfile.dbPath -and (Get-DuneSoloAdapterDescriptor -DbPath $settingsProfile.dbPath).channel -eq 'FLS_retail'
     if (Test-Path -LiteralPath $gamePath -PathType Leaf) {
         $inside = $false
         $landclaimOverrides = @(foreach ($line in [IO.File]::ReadAllLines($gamePath)) {
@@ -1030,12 +1032,15 @@ function Read-DuneSoloSettings {
         })
     }
     $entries = foreach ($key in $script:DuneSoloSettingKeys) {
+        $sharedLandclaim = -not $NativeValues -and $retailOverrides -and $key -eq 'MaxLandclaimSegments' -and $landclaimOverrides.Count -gt 0
+        $effectiveValue = if ($sharedLandclaim) { [string]$landclaimOverrides[-1] }
+            elseif ($values.ContainsKey($key)) { [string]$values[$key] } else { '' }
         [pscustomobject]@{
             key = $key
-            value = if ($values.ContainsKey($key)) { [string]$values[$key] } else { '' }
-            present = $values.ContainsKey($key)
-            needsApply = ($key -eq 'MaxLandclaimSegments' -and $values.ContainsKey($key) -and
-                ($landclaimOverrides.Count -ne 1 -or $landclaimOverrides[0] -ne [string]$values[$key]))
+            value = $effectiveValue
+            present = ($values.ContainsKey($key) -or $sharedLandclaim)
+            needsApply = ($retailOverrides -and $key -eq 'MaxLandclaimSegments' -and $effectiveValue -ne '' -and
+                ($landclaimOverrides.Count -ne 1 -or -not $values.ContainsKey($key) -or $effectiveValue -ne [string]$values[$key]))
         }
     }
     return @{
@@ -1098,7 +1103,8 @@ function Set-DuneSoloSettings {
     # Native settings remain authoritative for their named controls. Landclaim
     # segments additionally require the client's BuildingSettings override.
     $gamePath = ''
-    if ($normalized.ContainsKey('MaxLandclaimSegments')) {
+    if ($normalized.ContainsKey('MaxLandclaimSegments') -and
+        (Get-DuneSoloAdapterDescriptor -DbPath $profile.dbPath).channel -eq 'FLS_retail') {
         if ([int64]$normalized['MaxLandclaimSegments'] -lt 1) { throw 'MaxLandclaimSegments must be at least 1.' }
         $enginePath = @(Get-DuneSoloEnginePaths -Profile $profile)[0]
         $gamePath = Join-Path (Split-Path -Parent $enginePath) 'Game.ini'
@@ -1183,7 +1189,7 @@ function Set-DuneSoloSettings {
         } else {
             Move-Item -LiteralPath $temp -Destination $path
         }
-        $verified = Read-DuneSoloSettings -Path $path
+        $verified = Read-DuneSoloSettings -Path $path -NativeValues
         foreach ($entry in $verified.entries) {
             if ($normalized.ContainsKey($entry.key) -and ([string]$normalized[$entry.key] -ne [string]$entry.value)) {
                 throw "Solo setting verification failed for $($entry.key)."
@@ -1193,7 +1199,10 @@ function Set-DuneSoloSettings {
         if ($gamePath) {
             $gameBackup = Set-DuneSoloLandclaimOverride -Path $gamePath -Value $normalized['MaxLandclaimSegments']
             foreach ($entry in $verified.entries) {
-                if ($entry.key -eq 'MaxLandclaimSegments') { $entry.needsApply = $false }
+                if ($entry.key -eq 'MaxLandclaimSegments') {
+                    $entry.value = $normalized['MaxLandclaimSegments']
+                    $entry.needsApply = $false
+                }
             }
         }
         Remove-Item -LiteralPath $replaceBackup -Force -ErrorAction SilentlyContinue
@@ -1237,7 +1246,17 @@ function Set-DuneSoloLandclaimOverride {
     $section = '/Script/DuneSandbox.BuildingSettings'
     $key = 'm_MaxNumLandclaimSegments'
     $existed = Test-Path -LiteralPath $Path -PathType Leaf
-    $lines = if ($existed) { [IO.File]::ReadAllLines($Path) } else { @() }
+    $bom = $false
+    $lines = @()
+    if ($existed) {
+        $bytes = [IO.File]::ReadAllBytes($Path)
+        if ($bytes.Length -ge 2 -and (($bytes[0] -eq 255 -and $bytes[1] -eq 254) -or ($bytes[0] -eq 254 -and $bytes[1] -eq 255))) {
+            throw 'Solo Game.ini must use UTF-8 encoding.'
+        }
+        $text = (New-Object Text.UTF8Encoding($false, $true)).GetString($bytes).TrimStart([char]0xFEFF)
+        $bom = $bytes.Length -ge 3 -and $bytes[0] -eq 0xEF -and $bytes[1] -eq 0xBB -and $bytes[2] -eq 0xBF
+        $lines = $text -split '\r\n|\n|\r'
+    }
     $result = New-Object System.Collections.Generic.List[string]
     $inside = $false
     $written = $false
@@ -1255,14 +1274,8 @@ function Set-DuneSoloLandclaimOverride {
         if (-not $inside) { $result.Add(''); $result.Add("[$section]") }
         $result.Add("$key=$Value")
     }
-    $bom = $false
     $backup = ''
     if ($existed) {
-        $bytes = [IO.File]::ReadAllBytes($Path)
-        if ($bytes.Length -ge 2 -and (($bytes[0] -eq 255 -and $bytes[1] -eq 254) -or ($bytes[0] -eq 254 -and $bytes[1] -eq 255))) {
-            throw 'Solo Game.ini must use UTF-8 encoding.'
-        }
-        $bom = $bytes.Length -ge 3 -and $bytes[0] -eq 0xEF -and $bytes[1] -eq 0xBB -and $bytes[2] -eq 0xBF
         $backupRoot = Join-Path (Get-DuneSoloBackupRoot) 'settings'
         New-Item -ItemType Directory -Path $backupRoot -Force | Out-Null
         $backup = Join-Path $backupRoot "Game-$([guid]::NewGuid().ToString('N')).ini"

@@ -1306,7 +1306,10 @@ export function SoloMode() {
         actions={
           <button
             className="btn-secondary"
-            onClick={() => void Promise.all([statusState.refresh(), runtimeState.refresh()])}
+            onClick={() => void Promise.all([
+              statusState.refresh(), runtimeState.refresh(), settingsState.refresh(),
+              consoleSettingsState.refresh(), blueprintSettingsState.refresh(),
+            ])}
             disabled={statusState.loading}
           >
             <Icon name="RefreshCw" size={14} className={statusState.loading ? 'animate-spin' : ''} />

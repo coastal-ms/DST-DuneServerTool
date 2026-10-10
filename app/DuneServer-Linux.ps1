@@ -169,7 +169,7 @@ if (-not $script:MainScript) {
 # ---------- Tool version (kept in sync with DuneServer.ps1) -------------------
 # Mirrored manually for the scaffold. Build-Installer's version-sync check
 # does NOT currently know about this file — see LINUX-PORT-STATUS.md.
-$script:DuneToolVersion = '12.0.24'
+$script:DuneToolVersion = '16.1.4'
 
 # ---------- Load server + routes ----------------------------------------------
 $script:DunePlatformRuntime = 'linux'
