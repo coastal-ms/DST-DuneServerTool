@@ -19,6 +19,7 @@ here cover everything those tags shipped.
 - Save extra Launch Arguments for both Solo launch buttons in DST.
 
 ### Fixed
+- Restore Help's Skip intro / splash screens control in Solo-only installations by allowing shared launch preferences to load and save.
 - Allow Solo connection and progression edits when unrelated save tables or columns change. Retain schema fingerprints for diagnostics and keep wrapper, integrity, required-data and write verification checks.
 - Apply Solo Max Landclaim Segments to both native settings and the required Game.ini building override, preserving other settings and rolling back the native write if Game.ini cannot be updated.
 - Read the shared Game.ini landclaim value used by self-hosted client settings, and reload INI controls when Solo Refresh is clicked so manual edits are reflected.

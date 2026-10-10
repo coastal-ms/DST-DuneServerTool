@@ -129,6 +129,7 @@ function Test-DuneSoloServerApiPath {
     # route families stay unavailable until deliberately reviewed for Solo use.
     if ($Path -notmatch '^/(?:api|ws)/') { return $false }
     if ($Path -match '^/api/(?:solo|update|portal)(?:/|$)') { return $false }
+    if ($Path -eq '/api/game/launch-preferences' -and $Method -in @('GET','POST')) { return $false }
     if ($Path -eq '/api/config' -and $Method -in @('GET','PUT')) { return $false }
     if ($Method -eq 'GET' -and $Path -in @(
         '/api/installation', '/api/status', '/api/portal-auth/status',
