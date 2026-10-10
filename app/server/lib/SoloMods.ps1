@@ -38,6 +38,10 @@ function Get-DuneSoloMods {
             } catch { $mods += [pscustomobject]@{folder=$folder.Name;id=$folder.Name;name=$folder.Name;version='';enabled=$false;requires=@();loadAfter=@();loadBefore=@();conflicts=@();warnings=@();errors=@('Invalid mod.json: '+$_.Exception.Message)} }
         }
     }
+    $savedOrder = @(Read-DuneModJson (Join-Path $script:DuneSoloLoaderRoot 'order.json') @())
+    $positions = @{}
+    for ($i = 0; $i -lt $savedOrder.Count; $i++) { $positions[[string]$savedOrder[$i]] = $i }
+    $mods = @($mods | Sort-Object @{Expression={if ($positions.ContainsKey($_.folder)) { $positions[$_.folder] } else { [int]::MaxValue }}}, folder)
     foreach ($mod in $mods) {
         if (-not $mod.enabled) { continue }
         foreach ($req in $mod.requires) {
@@ -75,6 +79,7 @@ function Set-DuneSoloModSelection($Body) {
     New-Item -ItemType Directory -Path $script:DuneSoloLoaderRoot -Force | Out-Null
     $state = @{}
     foreach ($item in @($Body.mods)) { $state[[string]$item.folder] = [bool]$item.enabled }
+    ConvertTo-Json -InputObject @($Body.mods | ForEach-Object { [string]$_.folder }) | Set-Content (Join-Path $script:DuneSoloLoaderRoot 'order.json') -Encoding utf8
     $state | ConvertTo-Json | Set-Content (Join-Path $script:DuneSoloLoaderRoot 'selection.json') -Encoding utf8
     @{ gamePath=[string]$Body.gamePath } | ConvertTo-Json | Set-Content (Join-Path $script:DuneSoloLoaderRoot 'settings.json') -Encoding utf8
     return Get-DuneSoloMods
@@ -151,18 +156,8 @@ function Start-DuneSoloModGame([bool]$WithMods) {
         $folder=Join-Path $script:DuneSoloModsRoot $mod.folder
         if(-not(Test-Path (Join-Path $folder 'Scripts\main.lua')) -and -not(Test-Path (Join-Path $folder 'dlls\main.dll'))){throw "$($mod.name): this runtime supports Lua and UE4SS native mods. This package has no loadable entry point."}
     }
-    # Topological ordering uses declared requirements only; never installs or repairs dependencies.
-    $ordered=@();$remaining=@($selected)
-    while($remaining.Count){
-        $ready=@($remaining | Where-Object {
-            $m=$_
-            $before=@($m.requires | Where-Object {-not $_.optional} | ForEach-Object {if($_ -is [string]){$_}else{$_.id}})+@($m.loadAfter)
-            $waiting=@($remaining | Where-Object {$before -contains $_.id -or $_.loadBefore -contains $m.id})
-            $waiting.Count -eq 0
-        })
-        if(-not $ready.Count){throw 'Dependency cycle in enabled mods.'}
-        $ordered += $ready; $remaining=@($remaining | Where-Object {$ready.folder -notcontains $_.folder})
-    }
+    # Respect the user's saved load order; authors and users manage ordering requirements.
+    $ordered = @($selected)
     $sessionRoot=Join-Path $script:DuneSoloLoaderRoot ('Session-'+[guid]::NewGuid().ToString('N'))
     New-Item -ItemType Directory -Path $sessionRoot -Force | Out-Null
     $runtime=Join-Path $sessionRoot 'ue4ss'

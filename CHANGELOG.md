@@ -13,9 +13,11 @@ here cover everything those tags shipped.
 
 ## [Unreleased]
 
-## [16.1.1] - Unreleased
+## [16.1.1] - 2026-10-09
 
 ### Added
+- Add Move Up / Move Down controls for a saved Solo mod load order, applied from top to bottom on mod launches.
+- Add Nexus Mods download guidance and a link to Dune: Awakening mods.
 - Add a Solo instant blueprint build control with backup and restoration of the prior configuration.
 - Add a Clear displayed list button for Public IP diagnostic map rows. Clearing only hides the displayed rows; warnings and verdicts remain visible, and Run check restores the latest results.
 
