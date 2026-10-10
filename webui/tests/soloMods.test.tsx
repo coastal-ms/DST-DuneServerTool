@@ -8,6 +8,18 @@ const state = {mods: [{folder: 'Example', id: 'Example', name: 'Example', versio
 beforeEach(() => { vi.mocked(api).mockImplementation(async () => state) })
 afterEach(() => { cleanup(); vi.clearAllMocks(); localStorage.clear() })
 describe('Solo mod controls', () => {
+  it('keeps the installation folder and launch errors visible when collapsed', async () => {
+    vi.mocked(api).mockImplementation(async path => {
+      if (path === '/api/solo/mods/launch') throw new Error('Select the Dune Awakening installation folder in Solo mods and save it before launching.')
+      return {...state, gamePath:''}
+    })
+    render(<SoloMods />)
+    expect(screen.getByRole('button', {name:/Solo mods/})).toHaveAttribute('aria-expanded', 'false')
+    expect(screen.getByPlaceholderText('Select your Dune Awakening installation folder')).toBeVisible()
+    fireEvent.click(screen.getByRole('button', {name:'Launch with Mods'}))
+    expect(await screen.findByRole('alert')).toHaveTextContent('installation folder')
+    expect(screen.getByRole('button', {name:'Browse'})).toBeVisible()
+  })
   it('requires confirmation before deleting a mod and allows cancellation', async () => {
     render(<SoloMods />)
     fireEvent.click(screen.getByRole('button', {name:/Solo mods/}))

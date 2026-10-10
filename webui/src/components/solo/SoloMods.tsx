@@ -47,7 +47,16 @@ export function SoloMods() {
     } catch (e) { setError(e instanceof Error ? e.message : String(e)) }
   }
   return <CollapsibleCard id="solo-mods" title="Solo mods" icon="Package" defaultOpen={false} subtitle="Download mods from Nexus Mods or another source, then install your downloaded ZIP. Mod settings stay in their INI files." headerClassName="px-5 py-4 flex-wrap" headerRight={
-    <div className="flex flex-wrap gap-2">
+    <div className="flex flex-wrap gap-2 w-full">
+      <label className="block w-full rounded border border-accent/40 bg-accent/5 p-3 text-sm">Dune installation folder
+        <div className="flex flex-wrap gap-2 mt-1">
+          <input className="input flex-1 min-w-0" value={gamePath} onChange={e => setGamePath(e.target.value)} placeholder="Select your Dune Awakening installation folder" />
+          <button className="btn-secondary" disabled={busy} onClick={() => void pickGame()}>Browse</button>
+          <button className="btn-secondary" disabled={busy} onClick={() => void save()}>Save</button>
+        </div>
+        <span className="block text-xs text-text-muted mt-2">Required for both launch options. Browse saves the folder; if you type it, click Save.</span>
+      </label>
+      {(error || state?.launchError) && <p role="alert" className="text-danger whitespace-pre-wrap text-sm w-full">{error || state?.launchError}</p>}
       <button className="btn-primary" disabled={busy} onClick={() => void run('launch', { withMods: true })}>Launch with Mods</button>
       <button className="btn-secondary" disabled={busy} onClick={() => void run('launch', { withMods: false })}>Launch Normally</button>
     </div>
@@ -61,13 +70,6 @@ export function SoloMods() {
         <button className="btn-secondary" disabled={busy} onClick={() => void refresh().catch(e => setError(String(e)))}>Refresh</button>
         {!state?.runtimeReady && <button className="btn-secondary" disabled={busy} onClick={() => void run('runtime')}>Install mod runtime</button>}
       </div>
-      <label className="block text-sm">Dune installation
-        <div className="flex gap-2 mt-1">
-          <input className="input flex-1" value={gamePath} onChange={e => setGamePath(e.target.value)} placeholder="Dune Awakening folder" />
-          <button className="btn-secondary" disabled={busy} onClick={() => void pickGame()}>Browse</button>
-          <button className="btn-secondary" disabled={busy} onClick={() => void save()}>Save</button>
-        </div>
-      </label>
       {state && state.mods.length > 1 && <p className="text-sm text-text-muted">Mods load from top to bottom. Follow the mod author's load order instructions.</p>}
       {state?.mods.map((mod, index) => <div key={mod.folder} className="border border-border rounded p-3">
         <div className="flex items-center justify-between gap-3">
@@ -87,7 +89,6 @@ export function SoloMods() {
       {state?.session != null && <button className="btn-secondary" disabled={busy} onClick={() => void run('restore')}>Restore normal launch</button>}
       <p className="text-xs text-text-muted">Solo only. Normal launch bypasses the mod runtime. DST supports its mod-loading framework only. We make no guarantees that any individual mod will or will not work, and DST does not provide individual mod troubleshooting. Contact the mod author or discuss issues with the community.</p>
       <a className="text-xs text-accent-bright underline" href="https://discord.com/channels/1517599283757453333/1558246888967245957" target="_blank" rel="noopener noreferrer">Solo mod discussion</a>
-      {(error || state?.launchError) && <p role="alert" className="text-danger whitespace-pre-wrap text-sm">{error || state?.launchError}</p>}
       {state?.runtimeLog && <details><summary className="cursor-pointer text-sm">Loader log</summary><pre className="text-xs whitespace-pre-wrap max-h-64 overflow-auto mt-2">{state.runtimeLog}</pre></details>}
     </div>
   </CollapsibleCard>
