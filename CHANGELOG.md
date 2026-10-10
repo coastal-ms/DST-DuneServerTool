@@ -13,6 +13,12 @@ here cover everything those tags shipped.
 
 ## [Unreleased]
 
+## [16.1.5] - 2026-10-10
+
+### Fixed
+- Generate SSH keys without an accidental passphrase under PowerShell 7, including Hyper-V LAN setup. Keep passphrase removal and encryption checks compatible with Windows PowerShell 5.1 and Legacy argument passing.
+- Label the SSH-key command as Generate SSH key.
+
 ## [16.1.4] - 2026-10-10
 
 ### Added

@@ -13,18 +13,18 @@ $script:DuneBattlegroupSnapshotCacheKey = '__cache:status-bg-snapshot'
 # unencrypted key (exit 0) and fails with an "incorrect passphrase" error for an
 # encrypted one — this works for both PEM and modern OpenSSH key formats.
 #
-# The empty passphrase MUST be spelled `'""'` (single-quoted double-quotes), not
-# `''`. Under Windows PowerShell 5.1 — the runtime DuneServer.exe uses — a bare
-# empty-string argument is dropped when invoking a native exe, so ssh-keygen would
-# see `-P -f <path>`, swallow `-f` as the passphrase, and fail every key with
-# "Too many arguments" — making this helper return $null (undetermined) for BOTH
-# encrypted and plain keys. `'""'` survives as a literal empty string. Verified
-# on PS 5.1.
+# Windows PowerShell 5.1/Legacy needs a quoted empty argument because it drops
+# bare empty strings. Modern PowerShell preserves empty strings and literal
+# quotes, so it must receive an actual empty string instead.
 function Test-DuneSshKeyEncrypted {
     param([string]$KeyPath)
     if (-not $KeyPath -or -not (Test-Path -LiteralPath $KeyPath)) { return $null }
     try {
-        $out  = & ssh-keygen -y -P '""' -f $KeyPath 2>&1
+        # PS 5.1 represents native stderr as error records. Inspect the exit
+        # code even when the caller uses Stop; an encrypted key is expected.
+        $ErrorActionPreference = 'Continue'
+        $emptyPassphrase = if ($PSVersionTable.PSVersion -ge [version]'7.3' -and $PSNativeCommandArgumentPassing -ne 'Legacy') { '' } else { '""' }
+        $out  = & ssh-keygen -y -P $emptyPassphrase -f $KeyPath 2>&1
         $code = $LASTEXITCODE
         if ($code -eq 0) { return $false }
         $text = ($out | Out-String)
