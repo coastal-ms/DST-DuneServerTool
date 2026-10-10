@@ -8,6 +8,18 @@ const state = {mods: [{folder: 'Example', id: 'Example', name: 'Example', versio
 beforeEach(() => { vi.mocked(api).mockImplementation(async () => state) })
 afterEach(() => { cleanup(); vi.clearAllMocks(); localStorage.clear() })
 describe('Solo mod controls', () => {
+  it('requires confirmation before deleting a mod and allows cancellation', async () => {
+    render(<SoloMods />)
+    fireEvent.click(screen.getByRole('button', {name:/Solo mods/}))
+    await screen.findByText('Example')
+    fireEvent.click(screen.getByRole('button', {name:'Delete Example'}))
+    expect(screen.getByRole('alertdialog')).toHaveTextContent('INI settings')
+    fireEvent.click(screen.getByRole('button', {name:'Cancel'}))
+    expect(api).not.toHaveBeenCalledWith('/api/solo/mods/delete', expect.anything())
+    fireEvent.click(screen.getByRole('button', {name:'Delete Example'}))
+    fireEvent.click(screen.getByRole('button', {name:'Delete mod'}))
+    await waitFor(() => expect(api).toHaveBeenCalledWith('/api/solo/mods/delete', {method:'POST',body:JSON.stringify({folder:'Example'})}))
+  })
   it('saves the moved order and disables moves at the list boundaries', async () => {
     const other = {...state.mods[0], folder:'Other', id:'Other', name:'Other', enabled:true, errors:[]}
     vi.mocked(api).mockImplementation(async () => ({...state, mods:[state.mods[0], other]}))

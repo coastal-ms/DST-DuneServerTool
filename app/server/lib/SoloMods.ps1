@@ -26,6 +26,8 @@ function Expand-DuneModZip([string]$Path, [string]$Destination) {
 }
 
 function Get-DuneSoloMods {
+    $gameRunning = $false
+    if (Get-Command Get-DuneSoloGameProcesses -ErrorAction SilentlyContinue) { $gameRunning = @((Get-DuneSoloGameProcesses)).Count -gt 0 }
     $state = Read-DuneModJson (Join-Path $script:DuneSoloLoaderRoot 'selection.json') @{}
     $mods = @()
     if (Test-Path -LiteralPath $script:DuneSoloModsRoot) {
@@ -73,7 +75,7 @@ function Get-DuneSoloMods {
     $logPath=Join-Path $script:DuneSoloLoaderRoot 'last-runtime.log'
     if($session -and $session.logPath -and (Test-Path $session.logPath)){$logPath=$session.logPath}
     $runtimeLog=if(Test-Path $logPath){(Get-Content $logPath -Tail 80) -join "`n"}else{''}
-    return @{ mods=$mods; folder=$script:DuneSoloModsRoot; gamePath=[string]$settings.gamePath; skipIntro=[bool](Get-DuneGameLaunchPreferences).skipIntro; runtimeReady=(Test-Path (Join-Path $script:DuneSoloLoaderRoot 'Runtime\ue4ss\UE4SS.dll')); session=$session; launchError=$launchError; runtimeLog=$runtimeLog }
+    return @{ gameRunning=$gameRunning; mods=$mods; folder=$script:DuneSoloModsRoot; gamePath=[string]$settings.gamePath; skipIntro=[bool](Get-DuneGameLaunchPreferences).skipIntro; runtimeReady=(Test-Path (Join-Path $script:DuneSoloLoaderRoot 'Runtime\ue4ss\UE4SS.dll')); session=$session; launchError=$launchError; runtimeLog=$runtimeLog }
 }
 
 function Set-DuneSoloModSelection($Body) {
@@ -226,4 +228,19 @@ function Write-DuneSoloModLoadList([string]$Path, $Mods) {
     # Set-Content adds one, so use an explicit BOM-free encoding on all hosts.
     [string[]]$lines=@($Mods | ForEach-Object {"$($_.folder) : 1"})
     [IO.File]::WriteAllLines($Path, $lines, [Text.UTF8Encoding]::new($false))
+}
+
+function Remove-DuneSoloMod([string]$Folder) {
+    Assert-DuneSoloGameClosed
+    if (-not $Folder -or $Folder -in @('.', '..') -or $Folder.IndexOfAny([IO.Path]::GetInvalidFileNameChars()) -ge 0 -or $Folder.Contains('/') -or $Folder.Contains('\')) { throw 'Select a valid installed mod folder.' }
+    $root = [IO.Path]::GetFullPath($script:DuneSoloModsRoot).TrimEnd('\', '/')
+    $target = [IO.Path]::GetFullPath((Join-Path $root $Folder))
+    if ([IO.Path]::GetDirectoryName($target) -ne $root) { throw 'Mod folder must be inside the Mods directory.' }
+    $item = Get-Item -LiteralPath $target -ErrorAction Stop
+    if (-not $item.PSIsContainer) { throw 'Select an installed mod folder.' }
+    if (($item.Attributes -band [IO.FileAttributes]::ReparsePoint) -or @(Get-ChildItem -LiteralPath $target -Recurse -Force | Where-Object { $_.Attributes -band [IO.FileAttributes]::ReparsePoint }).Count) { throw 'Cannot delete a mod folder containing linked files or directories.' }
+    $current = Get-DuneSoloMods
+    $remaining = @($current.mods | Where-Object { $_.folder -ne $Folder })
+    Remove-Item -LiteralPath $target -Recurse -Force -ErrorAction Stop
+    return Set-DuneSoloModSelection @{mods=$remaining;gamePath=$current.gamePath}
 }

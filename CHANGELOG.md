@@ -20,6 +20,7 @@ here cover everything those tags shipped.
 - Remove a false port-forwarding diagnosis based on historical login failures appearing on one map. Connection checks continue to verify advertised addresses and map readiness.
 
 ### Added
+- Add confirmed deletion of an installed Solo mod and its INI settings from its card.
 - Add Move Up / Move Down controls for a saved Solo mod load order, applied from top to bottom on mod launches.
 - Add Nexus Mods download guidance and a link to Dune: Awakening mods.
 - Add a Solo instant blueprint build control with backup and restoration of the prior configuration.

@@ -13,6 +13,24 @@ BeforeAll {
 }
 AfterAll { if($script:ModTestRoot.StartsWith([IO.Path]::GetTempPath())){Remove-Item -LiteralPath $script:ModTestRoot -Recurse -Force} }
 Describe 'Solo mod import and dependencies' {
+    It 'deletes only the selected mod and removes it from saved order' {
+        Import-DuneSoloMod (New-ModZip 'delete' @{'Alpha/Scripts/main.lua'='print(1)';'Alpha/mod.ini'='speed=2';'Zulu/Scripts/main.lua'='print(2)'}) | Out-Null
+        Set-DuneSoloModSelection @{mods=@(@{folder='Zulu';enabled=$true},@{folder='Alpha';enabled=$true});gamePath='C:\Dune'} | Out-Null
+        Remove-DuneSoloMod 'Alpha' | Out-Null
+        Test-Path (Join-Path $script:DuneSoloModsRoot 'Alpha') | Should -BeFalse
+        Test-Path (Join-Path $script:DuneSoloModsRoot 'Zulu/Scripts/main.lua') | Should -BeTrue
+        @((Get-DuneSoloMods).mods.folder) | Should -Be @('Zulu')
+        (Get-DuneSoloMods).mods[0].enabled | Should -BeTrue
+        (Get-Content (Join-Path $script:DuneSoloLoaderRoot 'order.json') -Raw | ConvertFrom-Json) | Should -Be @('Zulu')
+    }
+    It 'rejects paths outside the mod folder and deletion while the game is running' {
+        { Remove-DuneSoloMod '..' } | Should -Throw
+        { Remove-DuneSoloMod '../Other' } | Should -Throw
+        Import-DuneSoloMod (New-ModZip 'running' @{'Alpha/Scripts/main.lua'='print(1)'}) | Out-Null
+        Mock Assert-DuneSoloGameClosed { throw 'Close Dune first' }
+        { Remove-DuneSoloMod 'Alpha' } | Should -Throw '*Close Dune first*'
+        Test-Path (Join-Path $script:DuneSoloModsRoot 'Alpha') | Should -BeTrue
+    }
     It 'skips intros for normal and modded launches without requiring a mod' {
         $normal=@(Get-DuneSoloLaunchArguments -SkipIntro)
         $normal | Should -Contain '-nosplash'

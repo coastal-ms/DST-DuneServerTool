@@ -1,4 +1,4 @@
-﻿Register-DuneRoute -Method GET -Path '/api/solo/mods' -LocalOnly -Handler {
+Register-DuneRoute -Method GET -Path '/api/solo/mods' -LocalOnly -Handler {
     param($req,$res,$routeParams,$body)
     try { Write-DuneJson -Response $res -Body (Get-DuneSoloMods) } catch { Write-DuneError -Response $res -Status 400 -Message $_.Exception.Message }
 }
@@ -58,6 +58,14 @@ Register-DuneRoute -Method POST -Path '/api/game/launch-preferences' -LocalOnly 
     param($req,$res,$routeParams,$body)
     try {
         $result=Invoke-WithDuneLock -Name 'game-launch-preferences' -Script { Set-DuneGameLaunchPreferences $body }
+        Write-DuneJson -Response $res -Body $result
+    } catch { Write-DuneError -Response $res -Status 400 -Message $_.Exception.Message }
+}
+
+Register-DuneRoute -Method POST -Path '/api/solo/mods/delete' -LocalOnly -Handler {
+    param($req,$res,$routeParams,$body)
+    try {
+        $result=Invoke-WithDuneLock -Name 'solo-mods' -Script { Remove-DuneSoloMod ([string]$body.folder) }
         Write-DuneJson -Response $res -Body $result
     } catch { Write-DuneError -Response $res -Status 400 -Message $_.Exception.Message }
 }
