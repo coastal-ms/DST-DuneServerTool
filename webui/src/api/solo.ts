@@ -587,6 +587,23 @@ export function exportSoloDiagnostics(expectedProfileToken: string): Promise<{
   return api(`/api/solo/diagnostics?expectedProfileToken=${encodeURIComponent(expectedProfileToken)}`)
 }
 
+export interface SoloBlueprintSettings {
+  ok: boolean
+  supported: boolean
+  enabled: boolean
+  canRestore: boolean
+  conflict: boolean
+}
+
+export function saveSoloBlueprintSettings(enabled: boolean, expectedProfileToken: string): Promise<{
+  ok: boolean; settings: SoloBlueprintSettings; backupPath: string
+}> {
+  return api('/api/solo/blueprint-settings', {
+    method: 'PUT',
+    body: JSON.stringify({ enabled, expectedProfileToken, confirm: 'APPLY SOLO BLUEPRINT SETTINGS' }),
+  })
+}
+
 export function setSoloSpecialization(track: string, level: number, expectedProfileToken: string): Promise<SoloProgressionResult> {
   return api('/api/solo/progression/specializations', {
     method: 'PUT',

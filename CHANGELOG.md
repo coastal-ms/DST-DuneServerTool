@@ -13,6 +13,22 @@ here cover everything those tags shipped.
 
 ## [Unreleased]
 
+## [16.1.1] - 2026-10-09
+
+### Fixed
+- Fix Solo mod Move Up / Move Down order persistence under Windows PowerShell 5.1.
+- Remove a false port-forwarding diagnosis based on historical login failures appearing on one map. Connection checks continue to verify advertised addresses and map readiness.
+
+### Added
+- Add confirmed deletion of an installed Solo mod and its INI settings from its card.
+- Add Move Up / Move Down controls for a saved Solo mod load order, applied from top to bottom on mod launches.
+- Add Nexus Mods download guidance and a link to Dune: Awakening mods.
+- Add a Solo instant blueprint build control with backup and restoration of the prior configuration.
+- Add a Clear displayed list button for Public IP diagnostic map rows. Clearing only hides the displayed rows; warnings and verdicts remain visible, and Run check restores the latest results.
+
+### Changed
+- Clarify Funcom cosmetic licensing in Solo and self-hosted grant controls while retaining the existing grant options.
+
 ## [16.1.0] - 2026-10-09
 
 ### Added

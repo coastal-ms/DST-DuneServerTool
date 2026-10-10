@@ -128,6 +128,7 @@ export function PublicIpCard() {
   const pollRef = useRef<number | null>(null)
   const fixingP34 = useRef(false)
   const [p34, setP34] = useState<P34Diagnostic | null>(null)
+  const [mapListCleared, setMapListCleared] = useState(false)
   const [p34Loading, setP34Loading] = useState(false)
   const [p34Error, setP34Error] = useState<string | null>(null)
 
@@ -179,6 +180,7 @@ export function PublicIpCard() {
     try {
       const r = await api<P34Diagnostic>('/api/public-ip/p34')
       setP34(r)
+      setMapListCleared(false)
     } catch (e) {
       setP34Error(e instanceof Error ? e.message : String(e))
     } finally {
@@ -458,6 +460,17 @@ export function PublicIpCard() {
             )}
 
             {p34.maps && p34.maps.length > 0 && (
+              <div className="flex items-center justify-between gap-3 text-sm">
+                {mapListCleared ? (
+                  <p className="text-text-dim" role="status">Map list cleared. Run check to show the latest list.</p>
+                ) : (
+                  <button type="button" className="btn-secondary" onClick={() => setMapListCleared(true)} disabled={p34Loading}>
+                    Clear displayed list
+                  </button>
+                )}
+              </div>
+            )}
+            {!mapListCleared && p34.maps && p34.maps.length > 0 && (
               <div className="border border-border rounded-lg overflow-hidden text-sm">
                 <div className="grid grid-cols-[1fr_auto_auto] gap-x-3 px-3 py-1.5 bg-surface-2 text-xs uppercase tracking-wide text-text-dim">
                   <span>Map</span>
@@ -492,7 +505,7 @@ export function PublicIpCard() {
               </div>
             )}
 
-            {p34.maps && p34.maps.length > 0 && (
+            {!mapListCleared && p34.maps && p34.maps.length > 0 && (
               <div className="rounded-lg border border-border bg-surface-2/40 p-3 text-sm space-y-2">
                 <div className="flex items-center gap-2 font-medium">
                   <Icon name="Network" size={14} className="text-text-muted" />

@@ -1020,62 +1020,36 @@ exit 0
     }
 }
 
-Describe 'P34: collapsed port-forward range (2G2 on login)' {
-    # Signature taken verbatim from a real field case (2026-08-02): every
-    # external port forwarded to one internal port, so all logins landed on the
-    # Overmap pod while the director had granted Hagga on 7778.
-    It 'flags a collapse when every login lands on one pod and Funcom rejects them' {
-        $probe = @"
-POD=sh-abc-sg-overmap-pod-2 LOGIN=2 FAIL=2
-POD=sh-abc-sg-survival-1-pod-1 LOGIN=0 FAIL=0
-"@
-        $r = Get-DuneP34LoginDistribution -ProbeOutput $probe
-        $r.collapsed | Should -BeTrue
-        $r.failures  | Should -Be 2
-        @($r.pods).Count | Should -Be 1
-        @($r.pods)[0] | Should -Be 'sh-abc-sg-overmap-pod-2'
-    }
 
-    It 'does not flag a healthy server whose logins spread across maps' {
-        $probe = @"
-POD=sh-abc-sg-overmap-pod-2 LOGIN=5 FAIL=0
-POD=sh-abc-sg-survival-1-pod-1 LOGIN=3 FAIL=0
-"@
-        (Get-DuneP34LoginDistribution -ProbeOutput $probe).collapsed | Should -BeFalse
+Describe 'P34 advertised-address diagnostic' {
+    BeforeAll {
+        Import-DstLib 'Database.ps1'
+        function global:Get-DuneDbContext { }
+        function global:Invoke-DuneSqlRaw { param($Ip, $Sql, [switch]$Csv, $TimeoutSec) }
+        function global:Invoke-V6Ssh { param($Ip, $Cmd, $TimeoutSec) }
     }
-
-    It 'does not flag when everyone is simply on one map and nothing is failing' {
-        # Legitimate: one map is busy, the other is empty. No refusals, no fault.
-        $probe = @"
-POD=sh-abc-sg-overmap-pod-2 LOGIN=7 FAIL=0
-POD=sh-abc-sg-survival-1-pod-1 LOGIN=0 FAIL=0
-"@
-        (Get-DuneP34LoginDistribution -ProbeOutput $probe).collapsed | Should -BeFalse
+    BeforeEach {
+        Mock Get-DuneDbContext { @{ ok = $true; ip = '192.168.23.219' } }
+        Mock Read-DuneConfig { @{ PublicIpMode = 'auto' } }
+        Mock Invoke-V6Ssh {
+            if ($Cmd -match 'flowtype=Login') { return 'POD=sh-test-sg-survival-1-pod-1 LOGIN=2 FAIL=2' }
+            return 'PUB=50.123.67.198', 'EXT=50.123.67.198', 'DC=50.123.67.198'
+        }
+        Mock Invoke-DuneSqlRaw {
+            return "map,server_id,ip,game_port,igw_ip,igw_port,ready,alive`nDeepDesert_1,dd,50.123.67.198,7779,192.168.23.219,7890,t,t`nOvermap,om,50.123.67.198,7777,192.168.23.219,7888,t,t`nSurvival_1,hb,50.123.67.198,7778,192.168.23.219,7889,t,t"
+        }
     }
-
-    It 'does not flag when failures exist but logins are still reaching several maps' {
-        # Login failures alone are not a collapsed range - they could be the
-        # already-known zone-transfer cause of 2G2.
-        $probe = @"
-POD=sh-abc-sg-overmap-pod-2 LOGIN=4 FAIL=1
-POD=sh-abc-sg-survival-1-pod-1 LOGIN=2 FAIL=1
-"@
-        (Get-DuneP34LoginDistribution -ProbeOutput $probe).collapsed | Should -BeFalse
+    It 'does not diagnose a router fault from historical login failures on one map' {
+        $result = Get-DuneP34Diagnostic
+        $result.verdict | Should -Be 'healthy'
+        @($result.maps).Count | Should -Be 3
+        $result.summary | Should -Not -Match 'single port|2G2|every connection'
+        Should -Invoke Invoke-V6Ssh -Times 0 -ParameterFilter { $Cmd -match 'flowtype=Login' }
     }
-
-    It 'stays silent on an idle server with no logins at all' {
-        $probe = @"
-POD=sh-abc-sg-overmap-pod-2 LOGIN=0 FAIL=0
-POD=sh-abc-sg-survival-1-pod-1 LOGIN=0 FAIL=0
-"@
-        $r = Get-DuneP34LoginDistribution -ProbeOutput $probe
-        $r.collapsed | Should -BeFalse
-        @($r.pods).Count | Should -Be 0
-    }
-
-    It 'returns a safe empty result when the probe produced nothing' {
-        $r = Get-DuneP34LoginDistribution -ProbeOutput ''
-        $r.collapsed | Should -BeFalse
-        $r.failures  | Should -Be 0
+    It 'still identifies an actual advertised public IP mismatch' {
+        Mock Invoke-V6Ssh { 'PUB=50.123.67.199', 'EXT=50.123.67.198', 'DC=50.123.67.198' }
+        $result = Get-DuneP34Diagnostic
+        $result.verdict | Should -Be 'stale-ip'
+        $result.staleFarmIp | Should -BeTrue
     }
 }

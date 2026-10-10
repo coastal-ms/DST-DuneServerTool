@@ -1,4 +1,5 @@
-﻿BeforeAll {
+BeforeAll {
+    Add-Type -AssemblyName System.IO.Compression.FileSystem, System.IO.Compression
     . "$PSScriptRoot\_TestHelpers.ps1"
     Import-DstLib 'SoloMods.ps1'
     function global:Assert-DuneSoloGameClosed {}
@@ -12,6 +13,24 @@
 }
 AfterAll { if($script:ModTestRoot.StartsWith([IO.Path]::GetTempPath())){Remove-Item -LiteralPath $script:ModTestRoot -Recurse -Force} }
 Describe 'Solo mod import and dependencies' {
+    It 'deletes only the selected mod and removes it from saved order' {
+        Import-DuneSoloMod (New-ModZip 'delete' @{'Alpha/Scripts/main.lua'='print(1)';'Alpha/mod.ini'='speed=2';'Zulu/Scripts/main.lua'='print(2)'}) | Out-Null
+        Set-DuneSoloModSelection @{mods=@(@{folder='Zulu';enabled=$true},@{folder='Alpha';enabled=$true});gamePath='C:\Dune'} | Out-Null
+        Remove-DuneSoloMod 'Alpha' | Out-Null
+        Test-Path (Join-Path $script:DuneSoloModsRoot 'Alpha') | Should -BeFalse
+        Test-Path (Join-Path $script:DuneSoloModsRoot 'Zulu/Scripts/main.lua') | Should -BeTrue
+        @((Get-DuneSoloMods).mods.folder) | Should -Be @('Zulu')
+        (Get-DuneSoloMods).mods[0].enabled | Should -BeTrue
+        (Get-Content (Join-Path $script:DuneSoloLoaderRoot 'order.json') -Raw | ConvertFrom-Json) | Should -Be @('Zulu')
+    }
+    It 'rejects paths outside the mod folder and deletion while the game is running' {
+        { Remove-DuneSoloMod '..' } | Should -Throw
+        { Remove-DuneSoloMod '../Other' } | Should -Throw
+        Import-DuneSoloMod (New-ModZip 'running' @{'Alpha/Scripts/main.lua'='print(1)'}) | Out-Null
+        Mock Assert-DuneSoloGameClosed { throw 'Close Dune first' }
+        { Remove-DuneSoloMod 'Alpha' } | Should -Throw '*Close Dune first*'
+        Test-Path (Join-Path $script:DuneSoloModsRoot 'Alpha') | Should -BeTrue
+    }
     It 'skips intros for normal and modded launches without requiring a mod' {
         $normal=@(Get-DuneSoloLaunchArguments -SkipIntro)
         $normal | Should -Contain '-nosplash'
@@ -44,6 +63,22 @@ BeforeEach {
         $bytes[0] | Should -Be 68
         [Text.Encoding]::UTF8.GetString($bytes) | Should -Match '^DuneVehicleSpeed : 1'
         Get-Content $path | Should -HaveCount 2
+    }
+    It 'persists user order across refresh and imports without changing enabled selections' {
+        Import-DuneSoloMod (New-ModZip 'order' @{'Alpha/Scripts/main.lua'='print(1)';'Zulu/Scripts/main.lua'='print(2)'}) | Out-Null
+        Set-DuneSoloModSelection @{mods=@(@{folder='Zulu';enabled=$true},@{folder='Alpha';enabled=$false});gamePath='C:\Dune'} | Out-Null
+        $result=Get-DuneSoloMods
+        @($result.mods.folder) | Should -Be @('Zulu','Alpha')
+        $result.mods[0].enabled | Should -BeTrue
+        $result.mods[1].enabled | Should -BeFalse
+        Import-DuneSoloMod (New-ModZip 'new-order' @{'Beta/Scripts/main.lua'='print(3)'}) | Out-Null
+        @((Get-DuneSoloMods).mods.folder) | Should -Be @('Zulu','Alpha','Beta')
+        $path=Join-Path $script:DuneSoloLoaderRoot 'ordered.txt'
+        Write-DuneSoloModLoadList -Path $path -Mods @((Get-DuneSoloMods).mods | Where-Object enabled)
+        Get-Content $path | Should -Be 'Zulu : 1'
+        Set-DuneSoloModSelection @{mods=@(@{folder='Zulu';enabled=$true},@{folder='Alpha';enabled=$true});gamePath='C:\Dune'} | Out-Null
+        Write-DuneSoloModLoadList -Path $path -Mods @((Get-DuneSoloMods).mods | Where-Object enabled)
+        @(Get-Content $path) | Should -Be @('Zulu : 1','Alpha : 1')
     }
     It 'imports nested packages while preserving the INI and Content directory' {
         $zip=New-ModZip 'nested' @{'Launcher/Mods/Test/Scripts/main.lua'='print(1)';'Launcher/Mods/Test/mod.ini'='speed=2';'Launcher/Mods/Test/Content/data.txt'='data'}

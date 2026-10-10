@@ -1,16 +1,18 @@
 import { useEffect, useState } from 'react'
 import { api } from '../../api/client'
+import { ConfirmationModal } from '../ConfirmationModal'
 import { CollapsibleCard } from '../CollapsibleCard'
 import { pickLocalFolder } from '../../util/pathPicker'
 
 interface Mod { folder: string; id: string; name: string; version: string; enabled: boolean; warnings?: string[]; errors: string[] }
-interface State { mods: Mod[]; folder: string; gamePath: string; skipIntro: boolean; runtimeReady: boolean; session: unknown; launchError?: string; runtimeLog?: string }
+interface State { gameRunning?: boolean; mods: Mod[]; folder: string; gamePath: string; skipIntro: boolean; runtimeReady: boolean; session: unknown; launchError?: string; runtimeLog?: string }
 
 export function SoloMods() {
   const [state, setState] = useState<State | null>(null)
   const [gamePath, setGamePath] = useState('')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
+  const [deleting, setDeleting] = useState<Mod | null>(null)
   const refresh = async () => {
     const result = await api<State>('/api/solo/mods')
     setState(result)
@@ -26,6 +28,12 @@ export function SoloMods() {
     finally { setBusy(false) }
   }
   const save = (mods = state?.mods ?? [], path = gamePath) => run('selection', { mods, gamePath: path })
+  const move = (index: number, direction: number) => {
+    if (!state || index + direction < 0 || index + direction >= state.mods.length) return
+    const mods = [...state.mods]
+    ;[mods[index], mods[index + direction]] = [mods[index + direction], mods[index]]
+    void save(mods)
+  }
   const pickGame = async () => {
     const path = await pickLocalFolder({ initialPath: gamePath, description: 'Select Dune Awakening installation' })
     if (path) await save(state?.mods, path)
@@ -38,13 +46,15 @@ export function SoloMods() {
       if (!pick.cancelled && pick.path) await run('import', { path: pick.path })
     } catch (e) { setError(e instanceof Error ? e.message : String(e)) }
   }
-  return <CollapsibleCard id="solo-mods" title="Solo mods" icon="Package" defaultOpen={false} subtitle="Install your downloaded mods. Dependencies and mod errors are shown here; mod settings stay in their INI files." headerClassName="px-5 py-4 flex-wrap" headerRight={
+  return <CollapsibleCard id="solo-mods" title="Solo mods" icon="Package" defaultOpen={false} subtitle="Download mods from Nexus Mods or another source, then install your downloaded ZIP. Mod settings stay in their INI files." headerClassName="px-5 py-4 flex-wrap" headerRight={
     <div className="flex flex-wrap gap-2">
       <button className="btn-primary" disabled={busy} onClick={() => void run('launch', { withMods: true })}>Launch with Mods</button>
       <button className="btn-secondary" disabled={busy} onClick={() => void run('launch', { withMods: false })}>Launch Normally</button>
     </div>
   }>
     <div className="space-y-3">
+      {deleting && <ConfirmationModal title={`Delete ${deleting.name}?`} description="This permanently removes the mod folder and its INI settings. You can reinstall the mod from its ZIP." confirmLabel="Delete mod" onCancel={() => setDeleting(null)} onConfirm={() => { const folder = deleting.folder; setDeleting(null); void run('delete', { folder }) }} />}
+      <a className="text-sm text-accent-bright underline" href="https://www.nexusmods.com/duneawakening" target="_blank" rel="noopener noreferrer">Browse Dune: Awakening mods on Nexus Mods</a>
       <div className="flex flex-wrap gap-2">
         <button className="btn-secondary" disabled={busy} onClick={() => void install()}>Install mod ZIP</button>
         <button className="btn-secondary" disabled={busy} onClick={() => void run('open')}>Open Mods Folder</button>
@@ -58,11 +68,19 @@ export function SoloMods() {
           <button className="btn-secondary" disabled={busy} onClick={() => void save()}>Save</button>
         </div>
       </label>
-      {state?.mods.map(mod => <div key={mod.folder} className="border border-border rounded p-3">
+      {state && state.mods.length > 1 && <p className="text-sm text-text-muted">Mods load from top to bottom. Follow the mod author's load order instructions.</p>}
+      {state?.mods.map((mod, index) => <div key={mod.folder} className="border border-border rounded p-3">
+        <div className="flex items-center justify-between gap-3">
         <label className="flex items-center gap-2">
           <input type="checkbox" checked={mod.enabled} disabled={busy} onChange={e => void save(state.mods.map(m => m.folder === mod.folder ? { ...m, enabled: e.target.checked } : m))} />
           <span>{mod.name} {mod.version && <span className="text-text-muted">{mod.version}</span>}</span>
         </label>
+        <button className="btn-secondary" aria-label={`Delete ${mod.name}`} disabled={busy || state.gameRunning} onClick={() => setDeleting(mod)}>Delete</button>
+        </div>
+        <div className="flex gap-2 mt-2">
+          <button className="btn-secondary" aria-label={`Move ${mod.name} up`} disabled={busy || index === 0} onClick={() => move(index, -1)}>Move Up</button>
+          <button className="btn-secondary" aria-label={`Move ${mod.name} down`} disabled={busy || index === state.mods.length - 1} onClick={() => move(index, 1)}>Move Down</button>
+        </div>
         {mod.errors.map((message, i) => <p className="text-danger text-sm mt-1" key={i}>{message}</p>)}
       </div>)}
       {state && !state.mods.length && <p className="text-sm text-text-muted">No mods installed.</p>}

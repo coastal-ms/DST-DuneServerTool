@@ -35,6 +35,8 @@ import {
   maxSoloAugmentAttributes,
   restoreSoloBackup,
   saveSoloConsoleSettings,
+  saveSoloBlueprintSettings,
+  type SoloBlueprintSettings,
   saveSoloSettings,
   setSoloWeaponAmmo,
   setSoloCurrencies,
@@ -71,6 +73,7 @@ import {
 } from '../api/gameplay'
 import { pickLocalFolder } from '../util/pathPicker'
 import { soloSaveFolder } from '../util/soloSaveFolder'
+import { COSMETIC_LICENSE_NOTICE } from '../util/cosmeticEntitlements'
 
 type Tab = 'overview' | 'settings' | 'backups' | 'character' | 'inventory' | 'progression'
 const TABS: Array<{ id: Tab; label: string; icon: string }> = [
@@ -441,7 +444,8 @@ export function SoloCosmeticGrantCard({
         Delivers unlock tokens to the Solo backpack for processing on next login. Bulk grants use available slots; log in, exit, and repeat for remaining tokens.
       </p>
       <div className="rounded border border-warning/30 bg-warning/5 p-3 mb-4 text-xs text-text-muted">
-        {SOLO_COSMETIC_ENTITLEMENT_WARNING} Saved unlocks do not guarantee in-game usability. Bulk grants skip saved unlocks and held tokens; new tokens are processed on next login.
+        <p>{COSMETIC_LICENSE_NOTICE}</p>
+        <p className="mt-2">{SOLO_COSMETIC_ENTITLEMENT_WARNING} Saved unlocks do not guarantee in-game usability. Bulk grants skip saved unlocks and held tokens; new tokens are processed on next login.</p>
       </div>
       {catalogError ? (
         <div className="text-xs text-danger">Cosmetics catalog failed to load: {catalogError}</div>
@@ -514,6 +518,10 @@ export function SoloMode() {
     { enabled: connected },
   )
   const backupsState = useApi<SoloBackupsResponse>('/api/solo/backups', { enabled: connected })
+  const blueprintSettingsState = useApi<SoloBlueprintSettings>(
+    `/api/solo/blueprint-settings?expectedProfileToken=${encodeURIComponent(activeProfileToken)}`,
+    { enabled: connected },
+  )
   const blueprintsState = useApi<{ ok: boolean; profileToken: string; blueprints: SoloSavedBlueprint[] }>(
     `/api/solo/blueprints?expectedProfileToken=${encodeURIComponent(activeProfileToken)}`,
     { enabled: connected && Boolean(activeProfileToken) },
@@ -684,6 +692,7 @@ export function SoloMode() {
       await runtimeState.refresh()
       await settingsState.refresh()
       await consoleSettingsState.refresh()
+      await blueprintSettingsState.refresh()
       await backupsState.refresh()
     } catch (error) {
       setNotice({ kind: 'err', text: error instanceof Error ? error.message : String(error) })
@@ -765,6 +774,22 @@ export function SoloMode() {
     } finally {
       setBusy(null)
     }
+  }
+
+  const changeBlueprintSettings = async (enabled: boolean) => {
+    if (!selectionMatchesActive || gameRunning) {
+      setNotice({ kind: 'err', text: 'Connect the selected Solo profile and close Dune: Awakening before changing blueprint settings.' })
+      return
+    }
+    setBusy('blueprint-settings')
+    setNotice(null)
+    try {
+      await saveSoloBlueprintSettings(enabled, activeProfileToken)
+      setNotice({ kind: 'ok', text: enabled ? 'Instant blueprint build settings saved and verified.' : 'Previous blueprint build settings restored and verified.' })
+      await Promise.all([blueprintSettingsState.refresh(), runtimeState.refresh()])
+    } catch (error) {
+      setNotice({ kind: 'err', text: error instanceof Error ? error.message : String(error) })
+    } finally { setBusy(null) }
   }
 
   const createBackup = async () => {
@@ -1490,6 +1515,28 @@ export function SoloMode() {
             <div className="card p-5 text-sm text-text-muted">Loading Solo settings...</div>
           ) : (
             <>
+              <CollapsibleCard id="solo-settings-blueprint-build" title="Blueprint building" icon="Wrench">
+                {blueprintSettingsState.error ? (
+                  <div className="text-sm text-danger">
+                    {blueprintSettingsState.error}
+                    <button className="btn-secondary ml-3" onClick={() => void blueprintSettingsState.refresh()}>Retry</button>
+                  </div>
+                ) : !blueprintSettingsState.data ? (
+                  <div className="text-sm text-text-muted">Loading blueprint settings...</div>
+                ) : !blueprintSettingsState.data.supported ? (
+                  <div className="text-sm text-text-muted">These controls require a verified Retail Solo profile.</div>
+                ) : (
+                  <div className="space-y-3">
+                    <p className="text-sm text-text-muted">Set blueprint piece build timers to zero. Your previous settings are saved for restoration. Close Dune: Awakening before making changes.</p>
+                    <div className="text-sm">Instant build settings: {blueprintSettingsState.data.enabled ? 'Enabled' : 'Not enabled'}</div>
+                    {blueprintSettingsState.data.conflict && <p className="text-sm text-warning">Blueprint settings changed outside DST. Your previous settings remain saved. Refresh after restoring the instant-build values.</p>}
+                    <button className="btn-primary" disabled={!!busy || gameRunning || !selectionMatchesActive || blueprintSettingsState.data.conflict}
+                      onClick={() => void changeBlueprintSettings(!blueprintSettingsState.data?.canRestore)}>
+                      {busy === 'blueprint-settings' ? 'Saving...' : blueprintSettingsState.data.canRestore ? 'Restore previous settings' : 'Enable instant build'}
+                    </button>
+                  </div>
+                )}
+              </CollapsibleCard>
               <CollapsibleCard id="solo-settings-retail-engine" title="Retail Engine settings" icon="Gauge">
                 {consoleSettingsState.error ? (
                   <div className="rounded border border-danger/30 bg-danger/5 p-3 text-sm text-danger">

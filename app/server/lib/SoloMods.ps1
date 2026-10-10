@@ -1,4 +1,4 @@
-﻿$soloModAppRoot = if($script:AppDir){$script:AppDir}else{[IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..\..'))}
+$soloModAppRoot = if($script:AppDir){$script:AppDir}else{[IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..\..'))}
 $script:DuneSoloModsRoot = Join-Path $soloModAppRoot 'Mods'
 $script:DuneSoloLoaderRoot = Join-Path $soloModAppRoot 'ModLoader'
 
@@ -26,6 +26,8 @@ function Expand-DuneModZip([string]$Path, [string]$Destination) {
 }
 
 function Get-DuneSoloMods {
+    $gameRunning = $false
+    if (Get-Command Get-DuneSoloGameProcesses -ErrorAction SilentlyContinue) { $gameRunning = @((Get-DuneSoloGameProcesses)).Count -gt 0 }
     $state = Read-DuneModJson (Join-Path $script:DuneSoloLoaderRoot 'selection.json') @{}
     $mods = @()
     if (Test-Path -LiteralPath $script:DuneSoloModsRoot) {
@@ -38,6 +40,12 @@ function Get-DuneSoloMods {
             } catch { $mods += [pscustomobject]@{folder=$folder.Name;id=$folder.Name;name=$folder.Name;version='';enabled=$false;requires=@();loadAfter=@();loadBefore=@();conflicts=@();warnings=@();errors=@('Invalid mod.json: '+$_.Exception.Message)} }
         }
     }
+    # PS5 emits a JSON array as one pipeline object; assign before normalizing.
+    $savedOrder = Read-DuneModJson (Join-Path $script:DuneSoloLoaderRoot 'order.json') @()
+    $savedOrder = @($savedOrder)
+    $positions = @{}
+    for ($i = 0; $i -lt $savedOrder.Count; $i++) { $positions[[string]$savedOrder[$i]] = $i }
+    $mods = @($mods | Sort-Object @{Expression={if ($positions.ContainsKey($_.folder)) { $positions[$_.folder] } else { [int]::MaxValue }}}, folder)
     foreach ($mod in $mods) {
         if (-not $mod.enabled) { continue }
         foreach ($req in $mod.requires) {
@@ -67,7 +75,7 @@ function Get-DuneSoloMods {
     $logPath=Join-Path $script:DuneSoloLoaderRoot 'last-runtime.log'
     if($session -and $session.logPath -and (Test-Path $session.logPath)){$logPath=$session.logPath}
     $runtimeLog=if(Test-Path $logPath){(Get-Content $logPath -Tail 80) -join "`n"}else{''}
-    return @{ mods=$mods; folder=$script:DuneSoloModsRoot; gamePath=[string]$settings.gamePath; skipIntro=[bool](Get-DuneGameLaunchPreferences).skipIntro; runtimeReady=(Test-Path (Join-Path $script:DuneSoloLoaderRoot 'Runtime\ue4ss\UE4SS.dll')); session=$session; launchError=$launchError; runtimeLog=$runtimeLog }
+    return @{ gameRunning=$gameRunning; mods=$mods; folder=$script:DuneSoloModsRoot; gamePath=[string]$settings.gamePath; skipIntro=[bool](Get-DuneGameLaunchPreferences).skipIntro; runtimeReady=(Test-Path (Join-Path $script:DuneSoloLoaderRoot 'Runtime\ue4ss\UE4SS.dll')); session=$session; launchError=$launchError; runtimeLog=$runtimeLog }
 }
 
 function Set-DuneSoloModSelection($Body) {
@@ -75,6 +83,7 @@ function Set-DuneSoloModSelection($Body) {
     New-Item -ItemType Directory -Path $script:DuneSoloLoaderRoot -Force | Out-Null
     $state = @{}
     foreach ($item in @($Body.mods)) { $state[[string]$item.folder] = [bool]$item.enabled }
+    ConvertTo-Json -InputObject @($Body.mods | ForEach-Object { [string]$_.folder }) | Set-Content (Join-Path $script:DuneSoloLoaderRoot 'order.json') -Encoding utf8
     $state | ConvertTo-Json | Set-Content (Join-Path $script:DuneSoloLoaderRoot 'selection.json') -Encoding utf8
     @{ gamePath=[string]$Body.gamePath } | ConvertTo-Json | Set-Content (Join-Path $script:DuneSoloLoaderRoot 'settings.json') -Encoding utf8
     return Get-DuneSoloMods
@@ -151,18 +160,8 @@ function Start-DuneSoloModGame([bool]$WithMods) {
         $folder=Join-Path $script:DuneSoloModsRoot $mod.folder
         if(-not(Test-Path (Join-Path $folder 'Scripts\main.lua')) -and -not(Test-Path (Join-Path $folder 'dlls\main.dll'))){throw "$($mod.name): this runtime supports Lua and UE4SS native mods. This package has no loadable entry point."}
     }
-    # Topological ordering uses declared requirements only; never installs or repairs dependencies.
-    $ordered=@();$remaining=@($selected)
-    while($remaining.Count){
-        $ready=@($remaining | Where-Object {
-            $m=$_
-            $before=@($m.requires | Where-Object {-not $_.optional} | ForEach-Object {if($_ -is [string]){$_}else{$_.id}})+@($m.loadAfter)
-            $waiting=@($remaining | Where-Object {$before -contains $_.id -or $_.loadBefore -contains $m.id})
-            $waiting.Count -eq 0
-        })
-        if(-not $ready.Count){throw 'Dependency cycle in enabled mods.'}
-        $ordered += $ready; $remaining=@($remaining | Where-Object {$ready.folder -notcontains $_.folder})
-    }
+    # Respect the user's saved load order; authors and users manage ordering requirements.
+    $ordered = @($selected)
     $sessionRoot=Join-Path $script:DuneSoloLoaderRoot ('Session-'+[guid]::NewGuid().ToString('N'))
     New-Item -ItemType Directory -Path $sessionRoot -Force | Out-Null
     $runtime=Join-Path $sessionRoot 'ue4ss'
@@ -229,4 +228,19 @@ function Write-DuneSoloModLoadList([string]$Path, $Mods) {
     # Set-Content adds one, so use an explicit BOM-free encoding on all hosts.
     [string[]]$lines=@($Mods | ForEach-Object {"$($_.folder) : 1"})
     [IO.File]::WriteAllLines($Path, $lines, [Text.UTF8Encoding]::new($false))
+}
+
+function Remove-DuneSoloMod([string]$Folder) {
+    Assert-DuneSoloGameClosed
+    if (-not $Folder -or $Folder -in @('.', '..') -or $Folder.IndexOfAny([IO.Path]::GetInvalidFileNameChars()) -ge 0 -or $Folder.Contains('/') -or $Folder.Contains('\')) { throw 'Select a valid installed mod folder.' }
+    $root = [IO.Path]::GetFullPath($script:DuneSoloModsRoot).TrimEnd('\', '/')
+    $target = [IO.Path]::GetFullPath((Join-Path $root $Folder))
+    if ([IO.Path]::GetDirectoryName($target) -ne $root) { throw 'Mod folder must be inside the Mods directory.' }
+    $item = Get-Item -LiteralPath $target -ErrorAction Stop
+    if (-not $item.PSIsContainer) { throw 'Select an installed mod folder.' }
+    if (($item.Attributes -band [IO.FileAttributes]::ReparsePoint) -or @(Get-ChildItem -LiteralPath $target -Recurse -Force | Where-Object { $_.Attributes -band [IO.FileAttributes]::ReparsePoint }).Count) { throw 'Cannot delete a mod folder containing linked files or directories.' }
+    $current = Get-DuneSoloMods
+    $remaining = @($current.mods | Where-Object { $_.folder -ne $Folder })
+    Remove-Item -LiteralPath $target -Recurse -Force -ErrorAction Stop
+    return Set-DuneSoloModSelection @{mods=$remaining;gamePath=$current.gamePath}
 }

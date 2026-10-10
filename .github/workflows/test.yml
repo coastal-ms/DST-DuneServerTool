@@ -154,6 +154,13 @@ jobs:
           'PGDATABASE=dst_inventory' | Out-File $env:GITHUB_ENV -Append -Encoding utf8
           "PGPASSWORD=$rolePassword" | Out-File $env:GITHUB_ENV -Append -Encoding utf8
 
+      - name: Verify Solo mods under Windows PowerShell 5.1
+        shell: pwsh
+        run: |
+          $env:DST_PESTER_MODULE = (Get-Module -ListAvailable Pester | Sort-Object Version -Descending | Select-Object -First 1).Path
+          powershell.exe -NoProfile -Command 'Import-Module $env:DST_PESTER_MODULE; $result = Invoke-Pester -Path tests/SoloMods.Tests.ps1 -PassThru -Output Detailed; if ($result.FailedCount -gt 0) { exit 1 }'
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
       - name: Run Pester suite
         shell: pwsh
         run: |
