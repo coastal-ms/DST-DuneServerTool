@@ -39,6 +39,8 @@ function _Load-DuneKeystoneCatalog {
                 name  = [string]$v.name
                 level = [int]$v.level
                 cost  = [int]$v.cost
+                player_tags = @($v.player_tags | Where-Object { $_ } | ForEach-Object { [string]$_ })
+                recipes = @($v.recipes | Where-Object { $_ } | ForEach-Object { @{ id = [string]$_.id; quality = [int]$_.quality; uses = [int]$_.uses } })
             }
         }
     } catch {}

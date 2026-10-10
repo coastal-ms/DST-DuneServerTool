@@ -13,6 +13,14 @@ here cover everything those tags shipped.
 
 ## [Unreleased]
 
+## [16.1.3] - 2026-10-10
+
+### Fixed
+- Apply Sabotage corpse-loot and Exploration loot-effect tags when granting specialization rewards in Solo and self-hosted servers, including repairs to rewards already marked purchased.
+- Grant Pattern Upgrading's Grade 2–5 schematic-pattern recipes alongside its specialization reward.
+- Make self-hosted Max grant the track's available rewards and reconcile their skill-point bonuses.
+- Clear specialization loot-effect tags when resetting the corresponding rewards, and include them in Solo progression diagnostics.
+
 ## [16.1.2] - 2026-10-09
 
 ### Fixed

@@ -258,31 +258,82 @@ function Get-DuneSpecSkillPointBonus {
 
 $script:DunePatternUpgradingKeystoneId = 82
 
-# Set one specialization level and purchase every reward in that track whose
-# unlock level is at or below the target. Existing rewards are preserved, so
-# applying a lower level never removes rewards already earned or granted.
-function Invoke-DunePlayerApplySpecLevel {
-    param([string]$Ip, [long]$ControllerId, [string]$TrackType, [int]$Level)
-    $offline = Test-DunePlayerOfflineByController -Ip $Ip -ControllerId $ControllerId -RequireExistingPlayerState
-    if (-not $offline.ok) { return @{ ok = $false; error = $offline.reason } }
+# Purchase claims do not materialize AddPlayerTag reward effects. Resolve the
+# character through player_state: specialization claims use the controller ID.
+function Get-DuneSpecEffectTagSql {
+    param([long]$ControllerId, $Catalog, [switch]$Reset)
+    $rows = @($Catalog.GetEnumerator() | ForEach-Object {
+        $rewardId = [int]$_.Key
+        foreach ($tag in @($_.Value.player_tags)) {
+            if ($tag) { "($rewardId, '$(ConvertTo-DuneSqlString ([string]$tag))')" }
+        }
+    })
+    if ($rows.Count -eq 0) { return '' }
+    if ($Reset) {
+        return @"
+DELETE FROM dune.player_tags tags
+USING dune.player_state ps, (VALUES $($rows -join ',')) AS effect(reward_id, tag)
+WHERE tags.character_id = ps.id
+  AND ps.player_controller_id = $ControllerId::bigint
+  AND tags.tag = effect.tag;
+"@
+    }
+    return @"
+INSERT INTO dune.player_tags(character_id, tag)
+SELECT ps.id, effect.tag
+FROM dune.player_state ps
+JOIN dune.purchased_specialization_keystones claim
+  ON claim.player_id = ps.player_controller_id
+JOIN (VALUES $($rows -join ',')) AS effect(reward_id, tag)
+  ON effect.reward_id = claim.keystone_id
+WHERE ps.player_controller_id = $ControllerId::bigint
+ON CONFLICT DO NOTHING;
+"@
+}
 
-    $safeTrack = ConvertTo-DuneSqlString $TrackType
-    $values = Get-DuneSpecLevelWriteValues -Level $Level
-    $newLevel = [int]$values.level
-    $newXp = [int]$values.xp
-    $newLevelSql = Format-DuneFloatForSql ([double]$newLevel)
-
-    $catalog = Get-DuneKeystoneCatalog
-    $ids = @(
-        $catalog.GetEnumerator() |
-            Where-Object {
-                ([string]$_.Value.track).Equals($TrackType, [System.StringComparison]::OrdinalIgnoreCase) -and
-                ([int]$_.Value.level -le $newLevel) -and
-                ([int]$_.Key -ne $script:DunePatternUpgradingKeystoneId)
-            } |
-            ForEach-Object { [int]$_.Key } |
-            Sort-Object
+function Get-DuneSpecRecipeSql {
+    param([long]$ControllerId, $Catalog)
+    $rows = @($Catalog.GetEnumerator() | ForEach-Object {
+        $rewardId = [int]$_.Key
+        foreach ($recipe in @($_.Value.recipes)) {
+            if ($recipe) {
+                $entry = @{ BaseRecipeId = @{ Name = [string]$recipe.id }; m_QualityLevel = [int]$recipe.quality;
+                    m_bIsNew = $false; m_NumberOfRecipeUses = [int]$recipe.uses;
+                    m_bIsLimitedUseRecipe = ([int]$recipe.uses -gt 0); m_Source = 'SchematicPickup' }
+                $json = ConvertTo-DuneSqlString ($entry | ConvertTo-Json -Depth 5 -Compress)
+                "($rewardId, '$json'::jsonb)"
+            }
+        }
+    })
+    if ($rows.Count -eq 0) { return '' }
+    return @"
+WITH required AS (
+    SELECT ps.player_pawn_id AS pawn, effect.recipe
+    FROM dune.player_state ps
+    JOIN dune.purchased_specialization_keystones claim ON claim.player_id = ps.player_controller_id
+    JOIN (VALUES $($rows -join ',')) AS effect(reward_id, recipe) ON effect.reward_id = claim.keystone_id
+    WHERE ps.player_controller_id = $ControllerId::bigint
+), missing AS (
+    SELECT required.pawn, jsonb_agg(required.recipe) AS recipes
+    FROM required JOIN dune.actors a ON a.id = required.pawn
+    WHERE NOT EXISTS (
+        SELECT 1 FROM jsonb_array_elements(COALESCE(
+            a.properties #> '{CraftingRecipesLibraryActorComponent,m_KnownItemRecipes}', '[]'::jsonb)) known
+        WHERE known #>> '{BaseRecipeId,Name}' = required.recipe #>> '{BaseRecipeId,Name}'
+          AND COALESCE((known->>'m_QualityLevel')::int, 0) = (required.recipe->>'m_QualityLevel')::int
     )
+    GROUP BY required.pawn
+)
+UPDATE dune.actors a
+SET properties = jsonb_set(a.properties, '{CraftingRecipesLibraryActorComponent}',
+    jsonb_set(COALESCE(a.properties->'CraftingRecipesLibraryActorComponent', '{}'::jsonb),
+        '{m_KnownItemRecipes}', COALESCE(a.properties #> '{CraftingRecipesLibraryActorComponent,m_KnownItemRecipes}', '[]'::jsonb) || missing.recipes, true), true)
+FROM missing WHERE a.id = missing.pawn;
+"@
+}
+
+function Get-DuneSpecBonusSql {
+    param([long]$ControllerId, $catalog)
     $skillPointBonusCases = @(
         $catalog.GetEnumerator() |
             Sort-Object { [int]$_.Key } |
@@ -292,21 +343,9 @@ function Invoke-DunePlayerApplySpecLevel {
             }
     )
 
-    $sql = [System.Text.StringBuilder]::new()
-    [void]$sql.AppendLine('BEGIN;')
-    [void]$sql.AppendLine("SELECT dune.set_specialization_xp_and_level($ControllerId::bigint, '$safeTrack'::dune.specializationtracktype, $newXp::integer, $newLevelSql::real);")
-    if ($ids.Count -gt 0) {
-        $idList = $ids -join ','
-        [void]$sql.AppendLine(@"
-INSERT INTO dune.purchased_specialization_keystones (player_id, keystone_id)
-SELECT $ControllerId::bigint, id
-FROM unnest(ARRAY[$idList]::smallint[]) AS id
-ON CONFLICT DO NOTHING;
-"@)
-    }
-    if ($skillPointBonusCases.Count -gt 0) {
-        $bonusCaseSql = $skillPointBonusCases -join ' '
-        [void]$sql.AppendLine(@"
+    if ($skillPointBonusCases.Count -eq 0) { return '' }
+    $bonusCaseSql = $skillPointBonusCases -join ' '
+    return @"
 WITH specialization_bonus AS (
     SELECT COALESCE(SUM(CASE psk.keystone_id $bonusCaseSql ELSE 0 END), 0)::int AS amount
     FROM dune.purchased_specialization_keystones psk
@@ -366,23 +405,60 @@ SET components = jsonb_set(
 FROM target_state target, expected_bonus expected
 WHERE fe.entity_id = target.entity_id
   AND expected.amount > target.current_bonus;
+"@
+}
+
+# Set one specialization level and purchase every reward in that track whose
+# unlock level is at or below the target. Existing rewards are preserved, so
+# applying a lower level never removes rewards already earned or granted.
+function Invoke-DunePlayerApplySpecLevel {
+    param([string]$Ip, [long]$ControllerId, [string]$TrackType, [int]$Level)
+    $offline = Test-DunePlayerOfflineByController -Ip $Ip -ControllerId $ControllerId -RequireExistingPlayerState
+    if (-not $offline.ok) { return @{ ok = $false; error = $offline.reason } }
+
+    $safeTrack = ConvertTo-DuneSqlString $TrackType
+    $values = Get-DuneSpecLevelWriteValues -Level $Level
+    $newLevel = [int]$values.level
+    $newXp = [int]$values.xp
+    $newLevelSql = Format-DuneFloatForSql ([double]$newLevel)
+
+    $catalog = Get-DuneKeystoneCatalog
+    $ids = @(
+        $catalog.GetEnumerator() |
+            Where-Object {
+                ([string]$_.Value.track).Equals($TrackType, [System.StringComparison]::OrdinalIgnoreCase) -and
+                ([int]$_.Value.level -le $newLevel)
+            } |
+            ForEach-Object { [int]$_.Key } |
+            Sort-Object
+    )
+
+    $sql = [System.Text.StringBuilder]::new()
+    [void]$sql.AppendLine('BEGIN;')
+    [void]$sql.AppendLine("SELECT dune.set_specialization_xp_and_level($ControllerId::bigint, '$safeTrack'::dune.specializationtracktype, $newXp::integer, $newLevelSql::real);")
+    if ($ids.Count -gt 0) {
+        $idList = $ids -join ','
+        [void]$sql.AppendLine(@"
+INSERT INTO dune.purchased_specialization_keystones (player_id, keystone_id)
+SELECT $ControllerId::bigint, id
+FROM unnest(ARRAY[$idList]::smallint[]) AS id
+ON CONFLICT DO NOTHING;
 "@)
     }
+    [void]$sql.AppendLine((Get-DuneSpecBonusSql -ControllerId $ControllerId -catalog $catalog))
+    [void]$sql.AppendLine((Get-DuneSpecEffectTagSql -ControllerId $ControllerId -Catalog $catalog))
+    [void]$sql.AppendLine((Get-DuneSpecRecipeSql -ControllerId $ControllerId -Catalog $catalog))
     [void]$sql.AppendLine('COMMIT;')
 
     $res = Invoke-DuneSqlQuery -Ip $Ip -Sql $sql.ToString() -ReadOnly $false -MaxRows 1 -TimeoutSec 30
     if (-not $res.ok) { return @{ ok = $false; error = $res.error } }
-    $patternUpgradingManual = $TrackType.Equals('Crafting', [System.StringComparison]::OrdinalIgnoreCase) -and $newLevel -ge 52
     $message = "Set '$TrackType' to level $newLevel and applied $($ids.Count) available specialization reward(s). Existing rewards were preserved. Full re-login required."
-    if ($patternUpgradingManual) {
-        $message += ' Pattern Upgrading was intentionally left unclaimed; purchase it in-game so its Grade 2-5 schematic recipes are created.'
-    }
     return @{
         ok = $true
         message = $message
         rewards_applied = $ids.Count
         skill_points_reconciled = $true
-        pattern_upgrading_manual_purchase = $patternUpgradingManual
+        pattern_upgrading_manual_purchase = $false
         level = $newLevel
     }
 }
@@ -1134,14 +1210,10 @@ function Get-DunePlayerSpecsFullLive {
     }
 }
 
-# Grant max — set xp=44182 level=100 for one track. Uses dune.set_specialization_xp_and_level.
+# Max uses the same reward and effect reconciliation as Apply level.
 function Invoke-DunePlayerGrantMaxSpec {
     param([string]$Ip, [long]$ControllerId, [string]$TrackType)
-    $safeTrack = ConvertTo-DuneSqlString $TrackType
-    $sql = "SELECT dune.set_specialization_xp_and_level($ControllerId::bigint, '$safeTrack'::dune.specializationtracktype, $($script:DuneSpecXpMax)::integer, $($script:DuneSpecLevelMax)::real);"
-    $res = Invoke-DuneSqlQuery -Ip $Ip -Sql $sql -ReadOnly $false -MaxRows 1 -TimeoutSec 30
-    if (-not $res.ok) { return @{ ok = $false; error = $res.error } }
-    return @{ ok = $true; message = "Granted max XP for '$TrackType' (xp=$($script:DuneSpecXpMax), level=$($script:DuneSpecLevelMax))." }
+    return Invoke-DunePlayerApplySpecLevel -Ip $Ip -ControllerId $ControllerId -TrackType $TrackType -Level 100
 }
 
 # Reset one track — DELETE the row (keyed by controller id).
@@ -1157,9 +1229,13 @@ function Invoke-DunePlayerResetSpec {
 # Reset ALL spec tracks (and ALL keystones) — runs both reset functions (keyed by controller id).
 function Invoke-DunePlayerResetAllSpecs {
     param([string]$Ip, [long]$ControllerId)
+    $effectSql = Get-DuneSpecEffectTagSql -ControllerId $ControllerId -Catalog (Get-DuneKeystoneCatalog) -Reset
     $sql = @"
+BEGIN;
 SELECT dune.reset_specialization_tracks($ControllerId::bigint);
 SELECT dune.reset_specialization_keystones($ControllerId::bigint);
+$effectSql
+COMMIT;
 "@
     $res = Invoke-DuneSqlQuery -Ip $Ip -Sql $sql -ReadOnly $false -MaxRows 1 -TimeoutSec 30
     if (-not $res.ok) { return @{ ok = $false; error = $res.error } }
@@ -1169,11 +1245,21 @@ SELECT dune.reset_specialization_keystones($ControllerId::bigint);
 # Grant all keystones — uses controller id (per the reference implementation's insertAllPurchasedKeystones).
 function Invoke-DunePlayerGrantAllKeystones {
     param([string]$Ip, [long]$ControllerId)
+    $offline = Test-DunePlayerOfflineByController -Ip $Ip -ControllerId $ControllerId -RequireExistingPlayerState
+    if (-not $offline.ok) { return @{ ok = $false; error = $offline.reason } }
     $max = $script:DuneKeystoneMax
+    $effectSql = Get-DuneSpecEffectTagSql -ControllerId $ControllerId -Catalog (Get-DuneKeystoneCatalog)
+    $bonusSql = Get-DuneSpecBonusSql -ControllerId $ControllerId -catalog (Get-DuneKeystoneCatalog)
+    $recipeSql = Get-DuneSpecRecipeSql -ControllerId $ControllerId -Catalog (Get-DuneKeystoneCatalog)
     $sql = @"
+BEGIN;
 INSERT INTO dune.purchased_specialization_keystones (player_id, keystone_id)
 SELECT $ControllerId::bigint, generate_series(1, $max)
 ON CONFLICT DO NOTHING;
+$effectSql
+$recipeSql
+$bonusSql
+COMMIT;
 "@
     $res = Invoke-DuneSqlQuery -Ip $Ip -Sql $sql -ReadOnly $false -MaxRows 1 -TimeoutSec 30
     if (-not $res.ok) { return @{ ok = $false; error = $res.error } }
@@ -1183,7 +1269,8 @@ ON CONFLICT DO NOTHING;
 # Reset all keystones — dune.reset_specialization_keystones (keyed by controller id).
 function Invoke-DunePlayerResetAllKeystones {
     param([string]$Ip, [long]$ControllerId)
-    $sql = "SELECT dune.reset_specialization_keystones($ControllerId::bigint);"
+    $effectSql = Get-DuneSpecEffectTagSql -ControllerId $ControllerId -Catalog (Get-DuneKeystoneCatalog) -Reset
+    $sql = "BEGIN; SELECT dune.reset_specialization_keystones($ControllerId::bigint); $effectSql COMMIT;"
     $res = Invoke-DuneSqlQuery -Ip $Ip -Sql $sql -ReadOnly $false -MaxRows 1 -TimeoutSec 30
     if (-not $res.ok) { return @{ ok = $false; error = $res.error } }
     return @{ ok = $true; message = "Reset all keystones for controller $ControllerId." }

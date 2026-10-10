@@ -489,13 +489,20 @@
     "track": "Crafting",
     "level": 52,
     "name": "DA_CraftingKeystone_FragmentUpgrade_Major",
-    "cost": 20
+    "cost": 20,
+    "recipes": [
+      {"id": "T6SchematicFragmentQL2_Recipe", "quality": 0, "uses": 0},
+      {"id": "T6SchematicFragmentQL3_Recipe", "quality": 0, "uses": 0},
+      {"id": "T6SchematicFragmentQL4_Recipe", "quality": 0, "uses": 0},
+      {"id": "T6SchematicFragmentQL5_Recipe", "quality": 0, "uses": 0}
+    ]
   },
   "83": {
     "track": "Exploration",
     "level": 10,
     "name": "DA_ExplorationKeystone_CrashedShipBonusLoot",
-    "cost": 2
+    "cost": 2,
+    "player_tags": ["Character.Keystone.Exploration.BonusShipLoot"]
   },
   "84": {
     "track": "Exploration",
@@ -543,7 +550,8 @@
     "track": "Exploration",
     "level": 40,
     "name": "DA_ExplorationKeystone_LootPoolAlterations_Major",
-    "cost": 15
+    "cost": 15,
+    "player_tags": ["Character.Keystone.Exploration.BonusLoot"]
   },
   "92": {
     "track": "Exploration",
@@ -1047,7 +1055,8 @@
     "track": "Sabotage",
     "level": 40,
     "name": "DA_SabotageKeystone_ExtraLootOnCorpses2_Major",
-    "cost": 15
+    "cost": 15,
+    "player_tags": ["Character.Keystone.Sabotage.BonusLootEnemies"]
   },
   "176": {
     "track": "Sabotage",
