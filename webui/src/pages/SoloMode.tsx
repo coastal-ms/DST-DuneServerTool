@@ -53,6 +53,7 @@ import {
   type SoloProfile,
   type SoloRuntime,
   type SoloSavedBlueprint,
+  type SoloSetting,
   type SoloSettingsResponse,
   type SoloStatus,
 } from '../api/solo'
@@ -179,6 +180,16 @@ const SOLO_SELECT_SETTINGS: Record<string, SoloSettingOption[]> = {
     { value: 'NeverAllowOtherPlayers', label: 'Never allow other players' },
     { value: 'AlwaysAllowOtherPlayers', label: 'Always allow other players' },
   ],
+}
+
+export function getPendingSoloSettingChanges(entries: SoloSetting[], draft: Record<string, string>): Record<string, string> {
+  const changed: Record<string, string> = {}
+  for (const entry of entries) {
+    if (SOLO_READ_ONLY_SETTINGS.has(entry.key) || SOLO_HIDDEN_SETTINGS.has(entry.key)) continue
+    const next = draft[entry.key] ?? ''
+    if (next !== entry.value || (entry.needsApply && next !== '')) changed[entry.key] = next
+  }
+  return changed
 }
 
 export function getSoloSettingControl(key: string): SoloSettingControl {
@@ -624,13 +635,7 @@ export function SoloMode() {
     [settingsState.data],
   )
   const changedSettings = useMemo(() => {
-    const changed: Record<string, string> = {}
-    for (const entry of settingsState.data?.entries ?? []) {
-      if (SOLO_READ_ONLY_SETTINGS.has(entry.key) || SOLO_HIDDEN_SETTINGS.has(entry.key)) continue
-      const next = draft[entry.key] ?? ''
-      if (next !== entry.value) changed[entry.key] = next
-    }
-    return changed
+    return getPendingSoloSettingChanges(settingsState.data?.entries ?? [], draft)
   }, [draft, settingsState.data])
   const changedConsoleSettings = useMemo(() => {
     const changed: Record<string, string> = {}
@@ -1683,7 +1688,7 @@ export function SoloMode() {
                 <div className="text-xs text-text-muted">
                   {gameRunning
                     ? 'Close Dune: Awakening before applying settings.'
-                    : `${Object.keys(changedSettings).length} changed setting(s). Apply creates a retained INI backup and verifies each change.`}
+                    : `${Object.keys(changedSettings).length} setting(s) need applying. Apply retains INI backups and verifies the required writes.`}
                 </div>
                 <button
                   className={`btn-primary shrink-0 ${SOLO_DISABLED_PRIMARY_CLASS}`}

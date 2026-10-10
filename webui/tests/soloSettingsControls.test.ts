@@ -1,11 +1,17 @@
 import { describe, expect, it } from 'vitest'
 import {
   getSoloSettingControl,
+  getPendingSoloSettingChanges,
   isSoloSettingVisible,
   validateSoloSettingChanges,
 } from '../src/pages/SoloMode'
 
 describe('Solo Mode setting controls', () => {
+  it('allows repairing a missing required override without changing the saved value', () => {
+    const entries = [{ key: 'MaxLandclaimSegments', value: '20', present: true, needsApply: true }]
+    expect(getPendingSoloSettingChanges(entries, { MaxLandclaimSegments: '20' })).toEqual({ MaxLandclaimSegments: '20' })
+    expect(getPendingSoloSettingChanges([{ ...entries[0], needsApply: false }], { MaxLandclaimSegments: '20' })).toEqual({})
+  })
   it('uses buttons for boolean settings', () => {
     expect(getSoloSettingControl('bAllowSandstorms')).toEqual({ type: 'boolean' })
     expect(getSoloSettingControl('bLandsraadDisableDecreeRerollLimit')).toEqual({ type: 'boolean' })

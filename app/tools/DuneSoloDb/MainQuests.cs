@@ -20,7 +20,7 @@ internal static partial class Program
         if (quest == "DA_MQ_FindTheFremen")
             return CompleteFindTheFremen(input, safetyBackup, adapterPath);
         var adapter = ReadSoloAdapter(adapterPath);
-        AssertProgressionSchema(input, adapter);
+        AssertProgressionAdapter(input, adapter);
         using var catalog = JsonDocument.Parse(File.ReadAllText(tagsPath));
         var tags = catalog.RootElement.GetProperty("journey_node_tags").EnumerateObject()
             .Where(p => p.Name == quest || p.Name.StartsWith(quest + ".", StringComparison.Ordinal))

@@ -75,7 +75,7 @@ internal static partial class Program
         string adapterPath, string keystonePath, string track)
     {
         var adapter = ReadSoloAdapter(adapterPath);
-        AssertProgressionSchema(input, adapter);
+        AssertProgressionAdapter(input, adapter);
         var match = adapter.Tracks.FirstOrDefault(pair => pair.Key.Equals(track, StringComparison.OrdinalIgnoreCase));
         if (match.Key is null) throw new ArgumentException("Choose a valid specialization.");
         var catalog = ReadKeystones(keystonePath);
@@ -154,7 +154,7 @@ internal static partial class Program
         string adapterPath, string track, long level)
     {
         var adapter = ReadSoloAdapter(adapterPath);
-        AssertProgressionSchema(input, adapter);
+        AssertProgressionAdapter(input, adapter);
         var match = adapter.Tracks.FirstOrDefault(pair => pair.Key.Equals(track, StringComparison.OrdinalIgnoreCase));
         if (match.Key is null || level < 0 || level > adapter.MaxLevel)
             throw new ArgumentException("Choose a valid specialization and a level from 0 to 100.");
