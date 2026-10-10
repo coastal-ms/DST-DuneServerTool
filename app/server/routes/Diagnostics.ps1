@@ -393,6 +393,7 @@ function New-DstDiagnosticBundle {
 
     $warnings = New-Object System.Collections.Generic.List[string]
     $included = New-Object System.Collections.Generic.List[hashtable]
+    $soloOnly = (Get-Command Test-DuneSoloInstallation -ErrorAction SilentlyContinue) -and (Test-DuneSoloInstallation)
 
     # 1) Pick the on-disk destination ----------------------------------------
     $destInfo = Get-DstDesktopPath
@@ -425,6 +426,7 @@ function New-DstDiagnosticBundle {
     # 3) env.txt -------------------------------------------------------------
     $envInfo = [System.Collections.Generic.List[string]]::new()
     $envInfo.Add("Tool version       : v$script:DuneToolVersion")
+    $envInfo.Add("Solo-only install  : $([bool]$soloOnly)")
     $envInfo.Add("PowerShell         : $($PSVersionTable.PSVersion) ($($PSVersionTable.PSEdition))")
     $envInfo.Add("OS                 : Windows $([System.Environment]::OSVersion.Version)")
     $envInfo.Add("WebView2 runtime   : $(Get-DstWebView2Version)")
@@ -551,7 +553,7 @@ function New-DstDiagnosticBundle {
     # only be diagnosed from the ACTUAL on-disk UserGame.ini / UserEngine.ini,
     # so pull a redacted copy when the VM is reachable. Never fatal — an absent
     # or unreachable VM is a warning and the rest of the bundle still builds.
-    if ((Get-Command Get-DuneGameConfigContext -ErrorAction SilentlyContinue) -and
+    if (-not $soloOnly -and (Get-Command Get-DuneGameConfigContext -ErrorAction SilentlyContinue) -and
         (Get-Command Get-DuneGameConfig -ErrorAction SilentlyContinue)) {
         try {
             $ctx = Get-DuneGameConfigContext
@@ -583,7 +585,7 @@ function New-DstDiagnosticBundle {
             $warnings.Add("Game config INI snapshot failed: $($_.Exception.Message)")
         }
     } else {
-        $warnings.Add('Game config helpers not loaded — INI snapshot skipped.')
+        if (-not $soloOnly) { $warnings.Add('Game config helpers not loaded — INI snapshot skipped.') }
     }
 
     # 6b2) Local player-client INI snapshot ----------------------------------
@@ -768,7 +770,7 @@ function New-DstDiagnosticBundle {
     # swap and retained build images, and collects db-layer pod logs. Log
     # capture still skips the transient dump/backup pods.
     # Best-effort over SSH; never fatal.
-    if (Get-Command Invoke-V6Ssh -ErrorAction SilentlyContinue) {
+    if (-not $soloOnly -and (Get-Command Invoke-V6Ssh -ErrorAction SilentlyContinue)) {
         $podCtxIp = $null
         foreach ($getter in 'Get-DuneGameConfigContext', 'Get-DuneDbContext') {
             if (Get-Command $getter -ErrorAction SilentlyContinue) {
@@ -860,7 +862,7 @@ done
             $warnings.Add('Game-server pod logs skipped: VM not reachable.')
         }
     } else {
-        $warnings.Add('Game-server pod logs skipped: SSH helper not loaded.')
+        if (-not $soloOnly) { $warnings.Add('Game-server pod logs skipped: SSH helper not loaded.') }
     }
 
     # 6c-4) VM memory-pressure probe (OOMKilled operators / DB, free -h) -----
@@ -873,7 +875,7 @@ done
     # `free -h`) so a future log export leads with the memory finding instead
     # of burying it. Best-effort over SSH; never fatal.
     $memFinding = $null
-    if (Get-Command Get-DuneVmMemoryPressure -ErrorAction SilentlyContinue) {
+    if (-not $soloOnly -and (Get-Command Get-DuneVmMemoryPressure -ErrorAction SilentlyContinue)) {
         try {
             $memFinding = Get-DuneVmMemoryPressure -Force
             $memLines = [System.Collections.Generic.List[string]]::new()
@@ -994,13 +996,13 @@ done
             $warnings.Add("VM memory-pressure probe failed: $($_.Exception.Message)")
         }
     } else {
-        $warnings.Add('VM memory-pressure helper not loaded - probe skipped.')
+        if (-not $soloOnly) { $warnings.Add('VM memory-pressure helper not loaded - probe skipped.') }
     }
 
     # 6d) Maps cache health --------------------------------------------------
     # Cache integrity, schema fingerprints, and source timing are sufficient
     # for support. Cached rows and coordinates never enter the public bundle.
-    if ((Get-Command Get-DunePlatformSnapshot -ErrorAction SilentlyContinue) -and
+    if (-not $soloOnly -and (Get-Command Get-DunePlatformSnapshot -ErrorAction SilentlyContinue) -and
         (Get-Command Get-DuneMapsCacheHealth -ErrorAction SilentlyContinue) -and
         (Get-Command Invoke-DunePlatformHelper -ErrorAction SilentlyContinue)) {
         try {
@@ -1014,7 +1016,7 @@ done
             $warnings.Add("Maps platform health snapshot failed: $($_.Exception.Message)")
         }
     } else {
-        $warnings.Add('Maps platform helpers not loaded - cache health snapshot skipped.')
+        if (-not $soloOnly) { $warnings.Add('Maps platform helpers not loaded - cache health snapshot skipped.') }
     }
 
     # 6e) Gameplay Admin read-path probe ------------------------------------
@@ -1025,7 +1027,7 @@ done
     # uses and record COUNTS ONLY (never player names, account ids, or any
     # other PII) so triage can tell "no rows" from "rows but no detail" at a
     # glance. Best-effort: an unreachable DB is a warning, not fatal.
-    if ((Get-Command Get-DuneDbContext -ErrorAction SilentlyContinue) -and
+    if (-not $soloOnly -and (Get-Command Get-DuneDbContext -ErrorAction SilentlyContinue) -and
         (Get-Command Get-DunePlayersLive -ErrorAction SilentlyContinue) -and
         (Get-Command Get-DuneBasesLive -ErrorAction SilentlyContinue)) {
         try {
@@ -1088,14 +1090,14 @@ done
             $warnings.Add("Gameplay read-path probe failed: $($_.Exception.Message)")
         }
     } else {
-        $warnings.Add('Gameplay read helpers not loaded - read-path probe skipped.')
+        if (-not $soloOnly) { $warnings.Add('Gameplay read helpers not loaded - read-path probe skipped.') }
     }
 
     # 6f) Shared Inventory Explorer read-path probe --------------------------
     # Handled inventory database failures are returned to the UI and are not
     # written to dune-server.log. Exercise the same read-only projection with a
     # one-row bound per supported source, recording no rows or identifiers.
-    if ((Get-Command Get-DuneDbContext -ErrorAction SilentlyContinue) -and
+    if (-not $soloOnly -and (Get-Command Get-DuneDbContext -ErrorAction SilentlyContinue) -and
         (Get-Command Invoke-DuneInventorySearchLive -ErrorAction SilentlyContinue)) {
         try {
             $inventoryProbe = [System.Collections.Generic.List[string]]::new()
@@ -1131,7 +1133,7 @@ done
             $warnings.Add("Inventory Explorer read-path probe failed: $($_.Exception.Message)")
         }
     } else {
-        $warnings.Add('Inventory Explorer helpers not loaded - read-path probe skipped.')
+        if (-not $soloOnly) { $warnings.Add('Inventory Explorer helpers not loaded - read-path probe skipped.') }
     }
 
     # 7) Manifest ------------------------------------------------------------

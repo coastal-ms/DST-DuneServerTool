@@ -28,3 +28,19 @@ it('exposes and saves Skip intro in Help for a Solo-only installation', async ()
   await waitFor(() => expect(toggle).toHaveAttribute('aria-checked', 'true'))
   expect(api).toHaveBeenCalledWith('/api/game/launch-preferences', {method:'POST',body:JSON.stringify({skipIntro:true})})
 })
+
+it('exposes shared diagnostics, startup, service and console controls in Solo-only Help', async () => {
+  vi.mocked(api).mockImplementation(async path => {
+    if (path === '/api/game/launch-preferences') return {skipIntro:false}
+    if (path === '/api/autostart' || path === '/api/service-mode') return {available:true,enabled:false}
+    if (path === '/api/console') return {available:true,visible:false,minimized:false}
+    throw new Error('Unexpected server request')
+  })
+  render(<BrowserRouter><MenuBar sidebarCollapsed={false} onToggleSidebar={vi.fn()} /></BrowserRouter>)
+  fireEvent.click(screen.getByRole('button', {name:'Help'}))
+  expect(await screen.findByRole('button', {name:/Run at Windows startup/})).toBeEnabled()
+  expect(await screen.findByRole('button', {name:/Keep serving while DST is closed/})).toBeEnabled()
+  expect(screen.getByRole('button', {name:/Create Diagnostics Package/})).toBeEnabled()
+  fireEvent.click(await screen.findByRole('button', {name:/Show backend console/}))
+  await waitFor(() => expect(api).toHaveBeenCalledWith('/api/console', {method:'POST',body:JSON.stringify({visible:true})}))
+})

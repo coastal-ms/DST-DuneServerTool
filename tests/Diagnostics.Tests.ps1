@@ -8,6 +8,53 @@ BeforeAll {
     Import-DstRoute 'Diagnostics.ps1'
 }
 
+Describe 'Solo diagnostics bundle' {
+    BeforeAll {
+        Import-DstLib 'Config.ps1'
+        Import-DstLib 'GameConfig.ps1'
+        Import-DstLib 'Database.ps1'
+        Import-DstLib 'VmMemoryPressure.ps1'
+        Import-DstLib 'SoloMode.ps1'
+    }
+    It 'collects local and Solo evidence without probing a dedicated server' {
+        $savedEnv=@{}
+        $savedAppDir=$script:AppDir
+        foreach($name in @('TEMP','APPDATA','LOCALAPPDATA','ProgramData')) {
+            $savedEnv[$name]=[Environment]::GetEnvironmentVariable($name)
+            $root=Join-Path $TestDrive $name
+            New-Item -ItemType Directory -Path $root -Force | Out-Null
+            [Environment]::SetEnvironmentVariable($name,$root)
+        }
+        $script:AppDir=Join-Path $TestDrive 'App'
+        New-Item -ItemType Directory -Path $script:AppDir -Force | Out-Null
+        Mock Test-DuneSoloInstallation { $true }
+        Mock Read-DuneConfigRaw { @{InstallationMode='solo'} }
+        Mock Get-DuneConfigPath { Join-Path $TestDrive 'missing.config' }
+        Mock Get-DstDesktopPath { @{path=$TestDrive;fallback=$false} }
+        Mock Get-DstWebView2Version { 'test' }
+        Mock Get-DuneGameConfigClient { @{ok=$false;message='No client INIs in fixture'} }
+        Mock Get-DuneSoloStatus { @{supported=$true;platform='Windows';connected=$false;gameRunning=$false;helperAvailable=$true;processes=@()} }
+        Mock Get-DuneGameConfigContext { throw 'Dedicated-server context must not be queried' }
+        Mock Get-DuneDbContext { throw 'Dedicated-server database must not be queried' }
+        Mock Get-DuneVmMemoryPressure { throw 'Dedicated-server VM must not be queried' }
+        Mock Start-Process {}
+        try {
+            $bundle=New-DstDiagnosticBundle
+            $bundle.ok | Should -BeTrue
+            $contents=Join-Path $TestDrive 'bundle-contents'
+            Expand-Archive -LiteralPath $bundle.path -DestinationPath $contents
+            Test-Path (Join-Path $contents 'env.txt') | Should -BeTrue
+            Get-Content (Join-Path $contents 'solo-mode.txt') -Raw | Should -Match 'Supported\s+: True'
+            Should -Invoke Get-DuneGameConfigContext -Times 0 -Exactly
+            Should -Invoke Get-DuneDbContext -Times 0 -Exactly
+            Should -Invoke Get-DuneVmMemoryPressure -Times 0 -Exactly
+        } finally {
+            foreach($name in $savedEnv.Keys){[Environment]::SetEnvironmentVariable($name,$savedEnv[$name])}
+            $script:AppDir=$savedAppDir
+        }
+    }
+}
+
 Describe 'Get-DstBackendLogFiles' -Tag 'Pure' {
     It 'includes the active backend log and rollover rather than only launcher transcripts' {
         $root = Join-Path $TestDrive 'local'
