@@ -13,6 +13,53 @@ BeforeAll {
 }
 AfterAll { if($script:ModTestRoot.StartsWith([IO.Path]::GetTempPath())){Remove-Item -LiteralPath $script:ModTestRoot -Recurse -Force} }
 Describe 'Solo mod import and dependencies' {
+    It 'preserves quoted custom arguments in normal and modded launch arguments' {
+        $extra='-example="two words" -another=3'
+        foreach($runtime in @('', 'C:\runtime\UE4SS.dll')) {
+            $args=@(Get-DuneSoloLaunchArguments -ExtraArguments $extra -RuntimeDll $runtime)
+            $args[0] | Should -Be '-nobattleye'
+            $args[-1] | Should -Be $extra
+        }
+    }
+    It 'saves Solo arguments independently of the shared skip intro preference' {
+        Set-DuneGameLaunchPreferences @{skipIntro=$true} | Out-Null
+        Set-DuneGameLaunchPreferences @{soloArguments='-example="two words"'} | Out-Null
+        (Get-DuneGameLaunchPreferences).skipIntro | Should -BeTrue
+        (Get-DuneSoloMods).soloArguments | Should -Be '-example="two words"'
+        Set-DuneGameLaunchPreferences @{skipIntro=$false} | Out-Null
+        (Get-DuneGameLaunchPreferences).soloArguments | Should -Be '-example="two words"'
+        Set-DuneGameLaunchPreferences @{soloArguments=''} | Out-Null
+        (Get-DuneGameLaunchPreferences).soloArguments | Should -Be ''
+    }
+    It 'rejects multiline arguments without replacing saved preferences' {
+        Set-DuneGameLaunchPreferences @{soloArguments='-log'} | Out-Null
+        { Set-DuneGameLaunchPreferences @{soloArguments="-log`n-other"} } | Should -Throw '*single line*'
+        (Get-DuneGameLaunchPreferences).soloArguments | Should -Be '-log'
+    }
+    It 'passes saved arguments to the game executable during normal Solo launch' {
+        $game=Join-Path $script:ModTestRoot 'Game'
+        $bin=Join-Path $game 'DuneSandbox/Binaries/Win64'
+        New-Item -ItemType Directory -Path $bin -Force | Out-Null
+        New-Item -ItemType File -Path (Join-Path $bin 'DuneSandbox-Win64-Shipping.exe') -Force | Out-Null
+        Set-DuneSoloModSelection @{mods=@();gamePath=$game} | Out-Null
+        Set-DuneGameLaunchPreferences @{soloArguments='-example="two words"'} | Out-Null
+        Mock Start-Process {}
+        Start-DuneSoloModGame $false | Out-Null
+        Should -Invoke Start-Process -Times 1 -Exactly -ParameterFilter {
+            $FilePath.EndsWith('DuneSandbox-Win64-Shipping.exe') -and $ArgumentList[-1] -eq '-example="two words"'
+        }
+    }
+    It 'passes journaled arguments directly to the modded game executable' {
+        $root=$script:DuneSoloLoaderRoot
+        New-Item -ItemType Directory -Path $root -Force | Out-Null
+        @{files=@();soloArguments='-example="two words"'} | ConvertTo-Json | Set-Content (Join-Path $root 'session.json')
+        Mock Start-Process { $process=New-Object PSObject; $process | Add-Member ScriptMethod WaitForExit {}; return $process }
+        Mock Get-Process {}
+        & "$PSScriptRoot/../app/server/lib/SoloModsWatcher.ps1" -LoaderRoot $root -GameExe 'C:\Game\Dune.exe' -RuntimeDll 'C:\runtime\UE4SS.dll'
+        Should -Invoke Start-Process -Times 1 -Exactly -ParameterFilter {
+            $FilePath -eq 'C:\Game\Dune.exe' -and $ArgumentList[-1] -eq '-example="two words"' -and $ArgumentList -contains '--ue4ss-path'
+        }
+    }
     It 'rejects a missing installation folder before either launch can touch runtime files' -ForEach @(
         @{ WithMods=$true; GamePath='' }
         @{ WithMods=$false; GamePath='' }

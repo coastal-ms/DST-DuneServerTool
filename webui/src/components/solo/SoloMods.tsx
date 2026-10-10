@@ -5,11 +5,12 @@ import { CollapsibleCard } from '../CollapsibleCard'
 import { pickLocalFolder } from '../../util/pathPicker'
 
 interface Mod { folder: string; id: string; name: string; version: string; enabled: boolean; warnings?: string[]; errors: string[] }
-interface State { gameRunning?: boolean; mods: Mod[]; folder: string; gamePath: string; skipIntro: boolean; runtimeReady: boolean; session: unknown; launchError?: string; runtimeLog?: string }
+interface State { gameRunning?: boolean; mods: Mod[]; folder: string; gamePath: string; skipIntro: boolean; soloArguments?: string; runtimeReady: boolean; session: unknown; launchError?: string; runtimeLog?: string }
 
 export function SoloMods() {
   const [state, setState] = useState<State | null>(null)
   const [gamePath, setGamePath] = useState('')
+  const [soloArguments, setSoloArguments] = useState('')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
   const [deleting, setDeleting] = useState<Mod | null>(null)
@@ -17,6 +18,7 @@ export function SoloMods() {
     const result = await api<State>('/api/solo/mods')
     setState(result)
     setGamePath(result.gamePath)
+    setSoloArguments(result.soloArguments ?? '')
   }
   useEffect(() => { void refresh().catch(e => setError(String(e))) }, [])
   const run = async (action: string, body: unknown = {}) => {
@@ -28,6 +30,14 @@ export function SoloMods() {
     finally { setBusy(false) }
   }
   const save = (mods = state?.mods ?? [], path = gamePath) => run('selection', { mods, gamePath: path })
+  const saveArguments = async () => {
+    setBusy(true); setError('')
+    try {
+      await api('/api/game/launch-preferences', { method: 'POST', body: JSON.stringify({ soloArguments }) })
+      await refresh()
+    } catch (e) { setError(e instanceof Error ? e.message : String(e)) }
+    finally { setBusy(false) }
+  }
   const move = (index: number, direction: number) => {
     if (!state || index + direction < 0 || index + direction >= state.mods.length) return
     const mods = [...state.mods]
@@ -55,6 +65,13 @@ export function SoloMods() {
           <button className="btn-secondary" disabled={busy} onClick={() => void save()}>Save</button>
         </div>
         <span className="block text-xs text-text-muted mt-2">Required for both launch options. Browse saves the folder; if you type it, click Save.</span>
+      </label>
+      <label className="block w-full text-sm">Launch Arguments
+        <div className="flex flex-wrap gap-2 mt-1">
+          <input className="input flex-1 min-w-0" value={soloArguments} maxLength={8192} onChange={e => setSoloArguments(e.target.value)} placeholder="Optional command line arguments" />
+          <button className="btn-secondary" disabled={busy} onClick={() => void saveArguments()}>Save arguments</button>
+        </div>
+        <span className="block text-xs text-text-muted mt-2">Used by both Solo launch buttons in DST. Click Save arguments after editing.</span>
       </label>
       {(error || state?.launchError) && <p role="alert" className="text-danger whitespace-pre-wrap text-sm w-full">{error || state?.launchError}</p>}
       <button className="btn-primary" disabled={busy} onClick={() => void run('launch', { withMods: true })}>Launch with Mods</button>

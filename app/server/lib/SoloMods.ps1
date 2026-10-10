@@ -75,7 +75,8 @@ function Get-DuneSoloMods {
     $logPath=Join-Path $script:DuneSoloLoaderRoot 'last-runtime.log'
     if($session -and $session.logPath -and (Test-Path $session.logPath)){$logPath=$session.logPath}
     $runtimeLog=if(Test-Path $logPath){(Get-Content $logPath -Tail 80) -join "`n"}else{''}
-    return @{ gameRunning=$gameRunning; mods=$mods; folder=$script:DuneSoloModsRoot; gamePath=[string]$settings.gamePath; skipIntro=[bool](Get-DuneGameLaunchPreferences).skipIntro; runtimeReady=(Test-Path (Join-Path $script:DuneSoloLoaderRoot 'Runtime\ue4ss\UE4SS.dll')); session=$session; launchError=$launchError; runtimeLog=$runtimeLog }
+    $preferences=Get-DuneGameLaunchPreferences
+    return @{ gameRunning=$gameRunning; mods=$mods; folder=$script:DuneSoloModsRoot; gamePath=[string]$settings.gamePath; skipIntro=[bool]$preferences.skipIntro; soloArguments=[string]$preferences.soloArguments; runtimeReady=(Test-Path (Join-Path $script:DuneSoloLoaderRoot 'Runtime\ue4ss\UE4SS.dll')); session=$session; launchError=$launchError; runtimeLog=$runtimeLog }
 }
 
 function Set-DuneSoloModSelection($Body) {
@@ -146,12 +147,13 @@ function Install-DuneSoloModRuntime {
 function Start-DuneSoloModGame([bool]$WithMods) {
     Assert-DuneSoloGameClosed
     $status=Get-DuneSoloMods
+    Assert-DuneSoloLaunchArguments $status.soloArguments
     if($status.session){throw 'A previous mod session needs restoration. Use Restore normal launch first.'}
     if([string]::IsNullOrWhiteSpace($status.gamePath)){throw 'Select the Dune Awakening installation folder in Solo mods and save it before launching.'}
     $bin=Join-Path $status.gamePath 'DuneSandbox\Binaries\Win64'
     $exe=Join-Path $bin 'DuneSandbox-Win64-Shipping.exe'
     if(-not(Test-Path -LiteralPath $exe)){throw 'Select the Dune Awakening installation folder.'}
-    if(-not $WithMods){Start-Process -FilePath $exe -WorkingDirectory $bin -ArgumentList (Get-DuneSoloLaunchArguments -SkipIntro $status.skipIntro);return @{ok=$true}}
+    if(-not $WithMods){Start-Process -FilePath $exe -WorkingDirectory $bin -ArgumentList (Get-DuneSoloLaunchArguments -SkipIntro $status.skipIntro -ExtraArguments $status.soloArguments);return @{ok=$true}}
     if(-not $status.runtimeReady){throw 'Install the mod runtime first.'}
     $selected=@($status.mods | Where-Object enabled)
     if(-not $selected.Count){throw 'Enable at least one mod.'}
@@ -182,7 +184,7 @@ function Start-DuneSoloModGame([bool]$WithMods) {
         $source=if($file -eq 'dwmapi.dll'){Join-Path $script:DuneSoloLoaderRoot 'Runtime\dwmapi.dll'}else{Join-Path $runtime 'UE4SS.dll'}
         $records += @{path=$dest;backup=$backup;hash=(Get-FileHash $source).Hash;installed=$false;restored=$false}
     }
-    $session=@{files=$records;root=$sessionRoot;state='prepared';logPath=(Join-Path $runtime 'UE4SS.log')}
+    $session=@{files=$records;root=$sessionRoot;state='prepared';logPath=(Join-Path $runtime 'UE4SS.log');soloArguments=$status.soloArguments}
     $session | ConvertTo-Json -Depth 6 | Set-Content (Join-Path $script:DuneSoloLoaderRoot 'session.json') -Encoding utf8
     try {
         foreach($record in $records){
@@ -202,11 +204,17 @@ function Start-DuneSoloModGame([bool]$WithMods) {
     } catch { Restore-DuneSoloModSession;throw }
 }
 
-function Get-DuneSoloLaunchArguments([switch]$SkipIntro, [string]$RuntimeDll='') {
+function Get-DuneSoloLaunchArguments([switch]$SkipIntro, [string]$RuntimeDll='', [string]$ExtraArguments='') {
+    Assert-DuneSoloLaunchArguments $ExtraArguments
     $arguments=@('-nobattleye')
     if($RuntimeDll){$arguments+=@('--ue4ss-path',('"'+$RuntimeDll+'"'))}else{$arguments+='--disable-ue4ss'}
     if($SkipIntro){$arguments+=@('-nosplash','-nostartupscreen')}
+    if($ExtraArguments.Trim()){$arguments+=$ExtraArguments.Trim()}
     return $arguments
+}
+
+function Assert-DuneSoloLaunchArguments([string]$Arguments) {
+    if($Arguments.Length -gt 8192 -or $Arguments -match '[\x00-\x1F]') { throw 'Launch arguments must be a single line of up to 8192 characters.' }
 }
 
 function Restore-DuneSoloModSession {
@@ -216,11 +224,17 @@ function Restore-DuneSoloModSession {
 }
 
 function Get-DuneGameLaunchPreferences {
-    return Read-DuneModJson (Join-Path $script:DuneSoloLoaderRoot 'launch-preferences.json') @{skipIntro=$false}
+    return Read-DuneModJson (Join-Path $script:DuneSoloLoaderRoot 'launch-preferences.json') @{skipIntro=$false;soloArguments=''}
 }
 function Set-DuneGameLaunchPreferences($Body) {
+    $current=Get-DuneGameLaunchPreferences
+    $skipIntro=[bool]$current.skipIntro
+    $soloArguments=[string]$current.soloArguments
+    if($Body.Contains('skipIntro')){$skipIntro=[bool]$Body.skipIntro}
+    if($Body.Contains('soloArguments')){$soloArguments=[string]$Body.soloArguments}
+    Assert-DuneSoloLaunchArguments $soloArguments
     New-Item -ItemType Directory -Path $script:DuneSoloLoaderRoot -Force | Out-Null
-    @{skipIntro=[bool]$Body.skipIntro} | ConvertTo-Json | Set-Content (Join-Path $script:DuneSoloLoaderRoot 'launch-preferences.json') -Encoding utf8
+    @{skipIntro=$skipIntro;soloArguments=$soloArguments} | ConvertTo-Json | Set-Content (Join-Path $script:DuneSoloLoaderRoot 'launch-preferences.json') -Encoding utf8
     return Get-DuneGameLaunchPreferences
 }
 
