@@ -13,6 +13,12 @@ here cover everything those tags shipped.
 
 ## [Unreleased]
 
+## [16.1.2] - 2026-10-09
+
+### Fixed
+- Explain when the Dune installation folder has not been saved before a Solo launch.
+- Keep the Solo mod installation-folder controls and launch errors visible while the mod list is collapsed.
+
 ## [16.1.1] - 2026-10-09
 
 ### Fixed

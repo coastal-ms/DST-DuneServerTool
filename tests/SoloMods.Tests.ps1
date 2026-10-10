@@ -13,6 +13,17 @@ BeforeAll {
 }
 AfterAll { if($script:ModTestRoot.StartsWith([IO.Path]::GetTempPath())){Remove-Item -LiteralPath $script:ModTestRoot -Recurse -Force} }
 Describe 'Solo mod import and dependencies' {
+    It 'rejects a missing installation folder before either launch can touch runtime files' -ForEach @(
+        @{ WithMods=$true; GamePath='' }
+        @{ WithMods=$false; GamePath='' }
+        @{ WithMods=$true; GamePath='   ' }
+        @{ WithMods=$false; GamePath='   ' }
+    ) {
+        Set-DuneSoloModSelection @{mods=@();gamePath=$GamePath} | Out-Null
+        { Start-DuneSoloModGame $WithMods } | Should -Throw '*installation folder in Solo mods and save it*'
+        Test-Path (Join-Path $script:DuneSoloLoaderRoot 'session.json') | Should -BeFalse
+        @(Get-ChildItem -LiteralPath $script:DuneSoloLoaderRoot -Directory -Filter 'Session-*').Count | Should -Be 0
+    }
     It 'deletes only the selected mod and removes it from saved order' {
         Import-DuneSoloMod (New-ModZip 'delete' @{'Alpha/Scripts/main.lua'='print(1)';'Alpha/mod.ini'='speed=2';'Zulu/Scripts/main.lua'='print(2)'}) | Out-Null
         Set-DuneSoloModSelection @{mods=@(@{folder='Zulu';enabled=$true},@{folder='Alpha';enabled=$true});gamePath='C:\Dune'} | Out-Null
