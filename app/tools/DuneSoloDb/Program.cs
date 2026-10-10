@@ -62,6 +62,9 @@ internal static partial class Program
             object result = command switch
             {
                 "diagnostics" => ExportDiagnostics(Require(options, "input")),
+                "faction-progression" => SetFactionProgression(Require(options,"input"), Require(options,"safety-backup"),
+                    Require(options,"adapter"), Require(options,"nodes"), RequireValue(options,"faction"),
+                    RequireValue(options,"action"), ParseBalance(RequireValue(options,"amount"),"Faction reputation")),
                 "reset-specialization-rewards" => ResetSpecializationRewards(
                     Require(options, "input"), Require(options, "safety-backup"),
                     Require(options, "adapter"), Require(options, "keystones"), RequireValue(options, "track")),

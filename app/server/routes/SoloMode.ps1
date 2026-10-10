@@ -548,6 +548,27 @@ Register-DuneRoute -Method GET -Path '/api/solo/diagnostics' -LocalOnly -Handler
     }
 }
 
+Register-DuneRoute -Method POST -Path '/api/solo/progression/faction' -LocalOnly -Handler {
+    param($req, $res, $routeParams, $body)
+    try {
+        $faction = [string](Get-DuneSoloBodyField -Body $body -Name 'faction' -Default '')
+        $action = [string](Get-DuneSoloBodyField -Body $body -Name 'action' -Default '')
+        $rawAmount = Get-DuneSoloBodyField -Body $body -Name 'amount' -Default 0
+        $amount = 0L
+        if (-not [long]::TryParse([Convert]::ToString($rawAmount, [Globalization.CultureInfo]::InvariantCulture), [Globalization.NumberStyles]::Integer, [Globalization.CultureInfo]::InvariantCulture, [ref]$amount)) { throw 'Reputation must be a whole number.' }
+        $confirm = [string](Get-DuneSoloBodyField -Body $body -Name 'confirm' -Default '')
+        $token = [string](Get-DuneSoloBodyField -Body $body -Name 'expectedProfileToken' -Default '')
+        $result = Invoke-WithDuneLock -Name 'solo-profile-data' -Script {
+            Assert-DuneSoloExpectedProfile -ExpectedProfileToken $token
+            Set-DuneSoloFactionProgression -Faction $faction -Action $action -Amount $amount -Confirm $confirm
+        }
+        Write-DuneJson -Response $res -Body $result
+    } catch {
+        $status = if ($_.Exception.Message -like '*still running*' -or $_.Exception.Message -like '*changed in another window*') { 409 } else { 400 }
+        Write-DuneError -Response $res -Status $status -Message $_.Exception.Message
+    }
+}
+
 Register-DuneRoute -Method PUT -Path '/api/solo/progression/specializations' -LocalOnly -Handler {
     param($req, $res, $routeParams, $body)
     try {
