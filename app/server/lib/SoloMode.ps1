@@ -1,5 +1,6 @@
 ﻿. (Join-Path $PSScriptRoot 'SoloCosmetics.ps1')
 . (Join-Path $PSScriptRoot 'SoloBlueprintSettings.ps1')
+. (Join-Path $PSScriptRoot 'SoloXbox.ps1')
 $script:DuneSoloSection = '/Script/DuneSandbox.UserServerCustomSettings'
 $script:DuneSoloSettingKeys = @(
     'DifficultyLevel',
@@ -199,9 +200,12 @@ function Get-DuneSoloAdapterDescriptor {
 
     $profileDir = Split-Path -Parent ([IO.Path]::GetFullPath($DbPath))
     $channel = [IO.Path]::GetFileName((Split-Path -Parent $profileDir))
+    $xbox = Get-DuneSoloXboxBlob -Path $DbPath
+    if ($xbox) { $channel = 'Xbox' }
     $manifestName = switch ($channel) {
         'FLS_retail' { 'solo-retail-v1.json' }
         'FLS_beta' { 'solo-legacy-v1.json' }
+        'Xbox' { 'solo-retail-v1.json' }
         default { '' }
     }
     if (-not $manifestName) {
@@ -221,7 +225,7 @@ function Get-DuneSoloAdapterDescriptor {
         id = [string]$manifest.id
         channel = $channel
         manifestPath = $manifestPath
-        capabilities = @($manifest.capabilities | ForEach-Object { [string]$_ })
+        capabilities = if ($xbox) { @('backup') } else { @($manifest.capabilities | ForEach-Object { [string]$_ }) }
         supported = $true
         legacy = ($channel -eq 'FLS_beta')
     }
@@ -330,6 +334,7 @@ function Find-DuneSoloProfiles {
 
     $root = [IO.Path]::GetFullPath($DataRoot)
     if (-not (Test-Path -LiteralPath $root -PathType Container)) { return @() }
+    if ([IO.Path]::GetFileName($root) -eq 'wgs') { return @(Find-DuneSoloXboxProfiles -DataRoot $root) }
 
     $searchRoot = Join-Path $root 'Cloud\PlayerClientStorage'
     if (-not (Test-Path -LiteralPath $searchRoot -PathType Container)) {
@@ -343,6 +348,8 @@ function Find-DuneSoloProfiles {
         $adapter = Get-DuneSoloAdapterDescriptor -DbPath $file.FullName
         [pscustomobject]@{
             id = [IO.Path]::GetFileName($profileDir)
+            platform = 'steam'
+            dataRoot = $DataRoot
             channel = [IO.Path]::GetFileName($channelDir)
             adapter = [string]$adapter.id
             legacy = [bool]$adapter.legacy
@@ -357,11 +364,24 @@ function Find-DuneSoloProfiles {
 }
 
 function Get-DuneSoloDiscovery {
-    param([Parameter(Mandatory)][string]$SelectedPath)
+    param([string]$SelectedPath = '', [ValidateSet('auto','steam','xbox')][string]$Platform = 'auto')
 
     Assert-DuneSoloSupportedPlatform
+    if (-not $SelectedPath.Trim()) {
+        $roots = @()
+        if ($Platform -ne 'xbox') { $roots += Get-DuneSoloDefaultDataRoot }
+        if ($Platform -ne 'steam') { $roots += @(Get-DuneSoloXboxRoots) }
+        $profiles = @($roots | ForEach-Object { Find-DuneSoloProfiles -DataRoot $_ })
+        $suggested = if ($profiles.Count -eq 1) { [string]$profiles[0].dbPath } else { '' }
+        return @{ ok = $true; dataRoot = if ($roots.Count -eq 1) { $roots[0] } else { '' }; settingsPath = ''; profiles = $profiles; suggestedDbPath = $suggested }
+    }
     $selectedFull = [IO.Path]::GetFullPath($SelectedPath)
     $dataRoot = Resolve-DuneSoloDataRoot -SelectedPath $selectedFull
+    $ancestor = $selectedFull
+    for ($i = 0; $i -lt 5 -and $ancestor; $i++) {
+        if ([IO.Path]::GetFileName($ancestor) -eq 'wgs') { $dataRoot = $ancestor; break }
+        $ancestor = Split-Path -Parent $ancestor
+    }
     $profiles = @(Find-DuneSoloProfiles -DataRoot $dataRoot)
     $directDb = Join-Path $selectedFull 'game.db'
     $suggestedDb = ''
@@ -382,7 +402,7 @@ function Get-DuneSoloDiscovery {
 }
 
 function Get-DuneSoloGameProcesses {
-    $names = @('DuneSandbox', 'DuneSandbox_BE', 'DuneSandbox-Win64-Shipping')
+    $names = @('DuneSandbox', 'DuneSandbox_BE', 'DuneSandbox-Win64-Shipping', 'DuneSandbox-WinGDK-Shipping', 'AppDuneAwakeningShipping')
     $found = @()
     foreach ($name in $names) {
         try {
@@ -409,6 +429,14 @@ function Invoke-DuneSoloHelper {
     )
 
     $helper = Get-DuneSoloHelperPath
+    foreach ($key in @('input','target')) {
+        if ($Arguments[$key] -and (Get-DuneSoloXboxBlob -Path ([string]$Arguments[$key]))) {
+            if ($Command -notin @('inspect','diagnostics','backup','list-blueprints','export-blueprint')) {
+                throw 'Xbox save editing is not enabled until the WGS write and synchronization test passes. No save data was changed.'
+            }
+            if ($Command -eq 'backup') { Backup-DuneSoloXboxAccount -Blob (Get-DuneSoloXboxBlob -Path $Arguments[$key]) | Out-Null }
+        }
+    }
     if (-not $helper) {
         throw 'DuneSoloDb.exe is unavailable. Rebuild or reinstall DST with Solo Mode support.'
     }
@@ -853,6 +881,11 @@ function Get-DuneSoloProfile {
     $dataRoot = if ($state.dataRoot) { [string]$state.dataRoot } else { Get-DuneSoloDefaultDataRoot }
     $profiles = @(Find-DuneSoloProfiles -DataRoot $dataRoot)
     $dbPath = if ($state.dbPath) { [string]$state.dbPath } else { '' }
+    if ($dbPath -and [IO.Path]::GetFileName($dataRoot) -eq 'wgs') {
+        $container = Split-Path -Parent $dbPath
+        $current = @($profiles | Where-Object { (Split-Path -Parent $_.dbPath) -ieq $container })
+        if ($current.Count -eq 1) { $dbPath = [string]$current[0].dbPath }
+    }
     if ($dbPath -and -not (Test-DuneSoloPathWithinRoot -Path $dbPath -Root $dataRoot)) {
         throw 'Saved Solo database path is outside the configured data root.'
     }
@@ -892,6 +925,8 @@ function Connect-DuneSoloProfile {
     }
     if ($DbPath) {
         $DbPath = [IO.Path]::GetFullPath($DbPath)
+        $xbox = Get-DuneSoloXboxBlob -Path $DbPath
+        if ($xbox) { $dataRoot = Split-Path -Parent $xbox.account }
         if (-not (Test-DuneSoloPathWithinRoot -Path $DbPath -Root $dataRoot)) {
             throw 'Selected Solo database is outside the chosen data root.'
         }

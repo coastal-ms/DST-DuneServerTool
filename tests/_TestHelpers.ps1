@@ -12,6 +12,7 @@ function Get-DstRepoRoot { return $script:DstRepoRoot }
 # the `BeforeAll` that called this helper).
 function Import-DstLib {
     param([Parameter(Mandatory)][string] $RelativePath)
+    if ($RelativePath -eq 'SoloMode.ps1') { Import-DstLib 'SoloXbox.ps1' }
     $full = Join-Path (Get-DstRepoRoot) (Join-Path 'app\server\lib' $RelativePath)
     if (-not (Test-Path $full)) { throw "Missing lib: $RelativePath ($full)" }
 

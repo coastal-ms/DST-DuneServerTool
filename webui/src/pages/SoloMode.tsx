@@ -546,6 +546,7 @@ export function SoloMode() {
   const [dataRoot, setDataRoot] = useState('')
   const [selectedDb, setSelectedDb] = useState('')
   const [discoveredProfiles, setDiscoveredProfiles] = useState<SoloProfile[]>([])
+  const [savePlatform, setSavePlatform] = useState<'auto' | 'steam' | 'xbox'>('auto')
   const [draft, setDraft] = useState<Record<string, string>>({})
   const [consoleDraft, setConsoleDraft] = useState<Record<string, string>>({})
   const [busy, setBusy] = useState<string | null>(null)
@@ -653,8 +654,8 @@ export function SoloMode() {
   }, [consoleDraft, consoleSettingsState.data])
 
   const scanPath = async (path: string) => {
-    const discovery = await discoverSolo(path)
-    setDataRoot(discovery.dataRoot)
+    const discovery = await discoverSolo(path, savePlatform)
+    setDataRoot(discovery.dataRoot || discovery.profiles.find(p => p.dbPath === discovery.suggestedDbPath)?.dataRoot || '')
     setDiscoveredProfiles(discovery.profiles)
     setSelectedDb(discovery.suggestedDbPath)
     return discovery
@@ -716,7 +717,7 @@ export function SoloMode() {
   const selectionMatchesActive = connected
     && normalizeWindowsPath(dataRoot) === normalizeWindowsPath(statusState.data?.dataRoot ?? '')
     && normalizeWindowsPath(selectedDb) === normalizeWindowsPath(statusState.data?.dbPath ?? '')
-  const canMutateActiveProfile = selectionMatchesActive && busy === null
+  const canMutateActiveProfile = selectionMatchesActive && busy === null && statusState.data?.channel !== 'Xbox'
   const blueprintsMatchActiveProfile = blueprintsState.data?.profileToken === activeProfileToken
   const savedBlueprints = blueprintsMatchActiveProfile ? blueprintsState.data?.blueprints ?? [] : []
 
@@ -1419,12 +1420,32 @@ export function SoloMode() {
         id="solo-connection"
         title="Solo save connection"
         icon="FolderCog"
-        subtitle="Choose the Steam account folder containing the Solo save you want to edit."
+        subtitle="Find a Steam or Xbox app / Microsoft Store PC Solo save."
         summary={connected ? 'Connected' : 'Not connected'}
       >
         <div className="space-y-3">
+          <div className="flex gap-2 items-end">
+            <label className="block flex-1">
+              <span className="text-xs text-text-muted">Game platform</span>
+              <select className={`${SOLO_INPUT_CLASS} mt-1`} value={savePlatform} onChange={event => {
+                setSavePlatform(event.target.value as 'auto' | 'steam' | 'xbox')
+                setDataRoot(''); setSelectedDb(''); setDiscoveredProfiles([])
+              }}>
+                <option value="auto">Auto — Steam and Xbox PC</option>
+                <option value="steam">Steam</option>
+                <option value="xbox">Xbox app / Microsoft Store PC</option>
+              </select>
+            </label>
+            <button type="button" className="btn-secondary" disabled={busy !== null} onClick={() => {
+              setBusy('discover')
+              void scanPath('').then(result => setNotice({ kind: 'ok', text: `Found ${result.profiles.length} Solo saves. Select a save and connect.` }))
+                .catch(error => setNotice({ kind: 'err', text: error instanceof Error ? error.message : String(error) }))
+                .finally(() => setBusy(null))
+            }}>Find saves automatically</button>
+          </div>
+          {status?.channel === 'Xbox' && <p className="text-xs text-text-muted">Xbox preview: inspection and backups are available. Save edits and settings remain disabled until the Xbox save synchronization test passes.</p>}
           <label className="block">
-            <span className="text-xs text-text-muted">Solo save folder (Steam account)</span>
+            <span className="text-xs text-text-muted">Solo save folder</span>
             <div className="flex gap-2 mt-1">
               <input
                 className={`${SOLO_INPUT_CLASS} font-mono text-xs flex-1`}
@@ -1442,19 +1463,23 @@ export function SoloMode() {
             </div>
           </label>
 
-          {discoveredProfiles.length > 1 && (
+          {discoveredProfiles.length > 0 && (
             <label className="block">
-              <span className="text-xs text-text-muted">Steam account / Solo profile</span>
+              <span className="text-xs text-text-muted">Account / Solo profile</span>
               <select
                 className={`${SOLO_INPUT_CLASS} mt-1`}
                 style={{ colorScheme: 'inherit' }}
                 value={selectedDb}
-                onChange={event => setSelectedDb(event.target.value)}
+                onChange={event => {
+                  setSelectedDb(event.target.value)
+                  const profile = discoveredProfiles.find(p => p.dbPath === event.target.value)
+                  if (profile?.dataRoot) setDataRoot(profile.dataRoot)
+                }}
               >
                 <option value="">Choose one save...</option>
                 {discoveredProfiles.map(profile => (
                   <option key={profile.dbPath} value={profile.dbPath}>
-                    {profile.channel === 'FLS_retail' ? 'Retail' : 'Legacy'} / {profile.id}
+                    {profile.platform === 'xbox' ? 'Xbox PC' : profile.channel === 'FLS_retail' ? 'Steam Retail' : 'Steam Legacy'} / {profile.id}
                   </option>
                 ))}
               </select>
@@ -1495,7 +1520,7 @@ export function SoloMode() {
           <div className="card p-5">
             <div className="flex items-center justify-between gap-3 mb-4">
               <h2 className="font-semibold flex items-center gap-2"><Icon name="Activity" size={16} /> Runtime safety</h2>
-              <StatusPill ok={!gameRunning}>{gameRunning ? 'Game running - writes locked' : 'Game closed - writes available'}</StatusPill>
+              <StatusPill ok={!gameRunning}>{gameRunning ? 'Game running - writes locked' : status?.channel === 'Xbox' ? 'Xbox preview - inspection and backup' : 'Game closed - writes available'}</StatusPill>
             </div>
             <dl className="grid grid-cols-[9rem_1fr] gap-x-3 gap-y-2 text-sm">
               <dt className="text-text-muted">Adapter</dt><dd className="font-mono">{status?.adapter ?? 'retail-auto'}</dd>

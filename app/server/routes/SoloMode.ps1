@@ -67,11 +67,8 @@ Register-DuneRoute -Method POST -Path '/api/solo/discover' -LocalOnly -Handler {
     param($req, $res, $routeParams, $body)
     try {
         $path = [string](Get-DuneSoloBodyField -Body $body -Name 'path' -Default '')
-        if (-not $path.Trim()) {
-            Write-DuneError -Response $res -Status 400 -Message 'Select a Solo data folder.'
-            return
-        }
-        Write-DuneJson -Response $res -Body (Get-DuneSoloDiscovery -SelectedPath $path.Trim())
+        $platform = [string](Get-DuneSoloBodyField -Body $body -Name 'platform' -Default 'auto')
+        Write-DuneJson -Response $res -Body (Get-DuneSoloDiscovery -SelectedPath $path.Trim() -Platform $platform)
     } catch {
         Write-DuneError -Response $res -Status 400 -Message $_.Exception.Message
     }

@@ -1,0 +1,75 @@
+BeforeAll {
+    . "$PSScriptRoot\_TestHelpers.ps1"
+    Import-DstLib 'SoloMode.ps1'
+    function New-XboxFixture {
+        param([string]$Root)
+        $account = Join-Path $Root 'account'
+        $container = Join-Path $account 'container'
+        New-Item -ItemType Directory -Path $container -Force | Out-Null
+        [IO.File]::WriteAllBytes((Join-Path $account 'containers.index'), [byte[]](1))
+        $bytes = New-Object byte[] 328
+        [BitConverter]::GetBytes([uint32]4).CopyTo($bytes, 0)
+        [BitConverter]::GetBytes([uint32]2).CopyTo($bytes, 4)
+        $paths = @()
+        for ($i = 0; $i -lt 2; $i++) {
+            $name = @('game_prepatch.db','game.db')[$i]
+            $guid = [guid]::NewGuid()
+            $offset = 8 + 160 * $i
+            [Text.Encoding]::Unicode.GetBytes($name).CopyTo($bytes, $offset)
+            $guid.ToByteArray().CopyTo($bytes, $offset + 128)
+            $guid.ToByteArray().CopyTo($bytes, $offset + 144)
+            $path = Join-Path $container $guid.ToString('N').ToUpperInvariant()
+            [IO.File]::WriteAllBytes($path, [byte[]](1, 2, 3))
+            $paths += $path
+        }
+        $metadata = Join-Path $container 'container.2'
+        [IO.File]::WriteAllBytes($metadata, $bytes)
+        return @{ root = $Root; account = $account; metadata = $metadata; game = $paths[1]; old = $paths[0] }
+    }
+}
+
+Describe 'Xbox Solo named blob discovery' {
+    BeforeEach { $script:layout = New-XboxFixture -Root (Join-Path (Join-Path $TestDrive ([guid]::NewGuid().ToString('N'))) 'wgs') }
+    It 'selects game.db explicitly, never the prepatch blob' {
+        $profiles = @(Find-DuneSoloXboxProfiles -DataRoot $layout.root)
+        $profiles.Count | Should -Be 1
+        $profiles[0].dbPath | Should -Be $layout.game
+        $profiles[0].platform | Should -Be 'xbox'
+    }
+    It 'rejects missing current payloads' {
+        Remove-Item -LiteralPath $layout.game
+        { Find-DuneSoloXboxProfiles -DataRoot $layout.root } | Should -Throw '*missing*'
+    }
+    It 'rejects ambiguous metadata revisions' {
+        Copy-Item -LiteralPath $layout.metadata -Destination ($layout.metadata + '.old')
+        { Find-DuneSoloXboxProfiles -DataRoot $layout.root } | Should -Throw '*multiple metadata*'
+    }
+    It 'rejects truncated metadata' {
+        [IO.File]::WriteAllBytes($layout.metadata, [byte[]](4,0,0,0,2,0,0,0))
+        { Read-DuneSoloXboxContainer -Path $layout.metadata } | Should -Throw '*length*'
+    }
+    It 'rejects pending local/cloud identity transitions' {
+        $bytes = [IO.File]::ReadAllBytes($layout.metadata)
+        [guid]::NewGuid().ToByteArray().CopyTo($bytes, 152)
+        [IO.File]::WriteAllBytes($layout.metadata, $bytes)
+        { Read-DuneSoloXboxContainer -Path $layout.metadata } | Should -Throw '*transition*'
+    }
+    It 'refuses an arbitrary blob in a valid container' {
+        { Get-DuneSoloXboxBlob -Path $layout.old } | Should -Throw '*not the current*'
+    }
+    It 'blocks save mutation before invoking the database helper' {
+        Mock Get-DuneSoloHelperPath { 'unused.exe' }
+        { Invoke-DuneSoloHelper -Command 'set-currencies' -Arguments @{ input = $layout.game } } | Should -Throw '*not enabled*'
+        [IO.File]::ReadAllBytes($layout.game) | Should -Be ([byte[]](1,2,3))
+    }
+    It 'backs up the complete account, including metadata and prepatch blobs' {
+        Mock Assert-DuneSoloGameClosed {}
+        Mock Get-DuneSoloBackupRoot { Join-Path $TestDrive 'backups' }
+        $backup = Backup-DuneSoloXboxAccount -Blob (Get-DuneSoloXboxBlob -Path $layout.game)
+        $manifest = @(Get-Content (Join-Path $backup 'dst-backup-manifest.json') -Raw | ConvertFrom-Json)
+        $manifest.Count | Should -Be 4
+        foreach ($entry in $manifest) {
+            (Get-FileHash (Join-Path $backup $entry.path)).Hash | Should -Be $entry.sha256
+        }
+    }
+}
