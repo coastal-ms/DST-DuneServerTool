@@ -149,7 +149,7 @@ export function Database() {
         'DEEP DESERT SAFETY: before taking a backup intended for restore, have every character return from Deep Desert and log out. ' +
         'A restored snapshot captured while a character was in Deep Desert may leave that character without carried items.\n\n' +
         'Take a fresh backup first if you have not. The battlegroup must be stopped.\n\n' +
-        'CROSS-VM / CROSS-BATTLEGROUP MIGRATION: a full backup can carry characters, inventories, progression, and bases to a different VM or battlegroup. Follow the migration guide on the Database page exactly, keep the old VM and original backup, and verify every character before decommissioning either one.\n\n' +
+        'CROSS-VM / CROSS-BATTLEGROUP MIGRATION: character recovery after Funcom\'s September 2026 database changes is unverified. Restored world data does not prove character access. The July 2026 test used different battlegroups on the same PC and Hyper-V installation, with the old VM still available. Keep the old VM and original backup, and verify every character before decommissioning either one.\n\n' +
         'Type RESTORE to continue:',
       )
       if (typed == null) return
@@ -540,7 +540,7 @@ export function Database() {
           title="Restore Backup"
           icon="Upload"
           tone="ibad"
-          description="Full destructive restore — REPLACES the entire BG database with a previously taken backup. All players, bases, inventories, storage, blueprints, and the market roll back to that snapshot; everything since is permanently lost. Funcom's `battlegroup import` handles the restore lifecycle for ordinary rollbacks. Full backups can also migrate characters, inventories, progression, and bases to a different VM or battlegroup when the migration guide below is followed. This cannot be undone."
+          description="Full destructive restore — REPLACES the entire BG database with a previously taken backup. All players, bases, inventories, storage, blueprints, and the market roll back to that snapshot; everything since is permanently lost. Funcom's `battlegroup import` handles the restore lifecycle for ordinary rollbacks. Cross-battlegroup character recovery after Funcom's September 2026 database changes is unverified; restoring world data does not establish character access. Read the migration guidance below and preserve the old VM and original backup. This cannot be undone."
           hint={
             !vmRunning ? 'VM must be running to restore a backup.'
             : 'Choose the backup file in the console window. Funcom will print a "should be stopped" advisory; type `yes` to proceed — the import stops the BG on its own, swaps the DB, and the game recovers automatically.'
@@ -727,7 +727,13 @@ export function Database() {
         bodyClassName="px-5 pb-5"
       >
         <p className="text-xs text-text-dim mb-4">
-          Live-verified procedure for moving a complete database backup to a different VM or battlegroup. Characters can carry over with their inventory, progression, and bases; account-specific data problems can still prevent an individual character from loading.
+          Cross-battlegroup character recovery after Funcom&apos;s September 2026 database changes is unverified.
+          Restored world data does not establish that characters can log in with their inventory and progression.
+          The July 2026 test succeeded between different battlegroups on the same PC and Hyper-V installation,
+          with the old VM still available. It predates those database changes and does not verify recovery after
+          a fresh Windows/Hyper-V installation or onto another computer. FLS identity and account-character
+          linkage may affect character access; their current migration behavior has not been confirmed.
+          The steps below document the historical procedure, not a guarantee of current character recovery.
         </p>
 
         <ol className="list-decimal pl-5 space-y-2 text-xs text-text-muted">
