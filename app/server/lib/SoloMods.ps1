@@ -272,7 +272,7 @@ function New-DuneSoloModShortcut {
     $shortcut.Arguments = '-NoProfile -NonInteractive -WindowStyle Hidden -ExecutionPolicy Bypass -File "' + $launcher + '"'
     $shortcut.WorkingDirectory = $root
     $shortcut.Description = 'Launch Dune with enabled Solo mods and saved launch settings.'
-    $shortcut.IconLocation = (Join-Path $root 'assets\icon.ico') + ',0'
+    $shortcut.IconLocation = (Join-Path $root 'assets\solo-mods.ico') + ',0'
     $shortcut.Save()
     return @{ok=$true;path=$path}
 }

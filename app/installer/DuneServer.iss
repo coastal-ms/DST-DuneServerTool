@@ -90,6 +90,7 @@ Source: "..\..\dune-server.ps1"; DestDir: "{app}"; Flags: ignoreversion
 
 ; Standalone icon for shortcuts that point at the .ps1 etc.
 Source: "..\assets\icon.ico"; DestDir: "{app}\assets"; Flags: ignoreversion
+Source: "..\assets\solo-mods.ico"; DestDir: "{app}\assets"; Flags: ignoreversion
 
 ; v6.1 web portal: HTTP server + WebSocket router + route handlers
 ; (dot-sourced by app\DuneServer.ps1 at startup)
