@@ -1541,8 +1541,8 @@ export function SoloMode() {
                   <div className="space-y-3">
                     <p className="text-sm text-text-muted">Set blueprint piece build timers to zero. Your previous settings are saved for restoration. Close Dune: Awakening before making changes.</p>
                     <div className="text-sm">Instant build settings: {blueprintSettingsState.data.enabled ? 'Enabled' : 'Not enabled'}</div>
-                    {blueprintSettingsState.data.conflict && <p className="text-sm text-warning">Blueprint settings changed outside DST. Your previous settings remain saved. Refresh after restoring the instant-build values.</p>}
-                    <button className="btn-primary" disabled={!!busy || gameRunning || !selectionMatchesActive || blueprintSettingsState.data.conflict}
+                    {blueprintSettingsState.data.conflict && <p className="text-sm text-warning">Blueprint settings changed outside DST. Restore previous settings will restore the saved blueprint timers and preserve unrelated settings. The current file is backed up first.</p>}
+                    <button className="btn-primary" disabled={!!busy || gameRunning || !selectionMatchesActive}
                       onClick={() => void changeBlueprintSettings(!blueprintSettingsState.data?.canRestore)}>
                       {busy === 'blueprint-settings' ? 'Saving...' : blueprintSettingsState.data.canRestore ? 'Restore previous settings' : 'Enable instant build'}
                     </button>

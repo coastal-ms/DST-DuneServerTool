@@ -13,6 +13,12 @@ here cover everything those tags shipped.
 
 ## [Unreleased]
 
+## [16.2.2] - 2026-10-10
+
+### Fixed
+- Solo blueprint settings can restore saved timers after manual changes or deleted settings, preserving unrelated settings and backing up the current file.
+- Instant blueprint building changes only hold times, leaving the two general build timers untouched. Existing restoration records retain recovery of the previous three settings.
+
 ## [16.2.1] - 2026-10-10
 
 ### Changed

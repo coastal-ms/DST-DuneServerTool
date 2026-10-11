@@ -1,9 +1,8 @@
 $script:DuneSoloBlueprintSection = '/Script/DuneSandbox.BuildingSettings'
 $script:DuneSoloBlueprintValues = [ordered]@{
-    m_DefaultBuildAndFillTimeInSeconds = '0.000000'
-    m_BuildAndFillStartThresholdTimerInSeconds = '0.000000'
     m_BuildableBuildAndFillHoldTimes = '((Short, 0.000000),(Medium, 0.00000),(Long, 0.0000000),(VeryLong, 0.0000000))'
 }
+$script:DuneSoloBlueprintLegacyKeys = @('m_DefaultBuildAndFillTimeInSeconds', 'm_BuildAndFillStartThresholdTimerInSeconds')
 
 function Get-DuneSoloBlueprintPaths {
     $profile = Get-DuneSoloProfile
@@ -15,13 +14,13 @@ function Get-DuneSoloBlueprintPaths {
 }
 
 function Get-DuneSoloBlueprintLines {
-    param([string]$Text)
+    param([string]$Text, [string[]]$Keys = @(@($script:DuneSoloBlueprintValues.Keys) + $script:DuneSoloBlueprintLegacyKeys))
     $inside = $false
     foreach ($line in ($Text -split '\r?\n')) {
         if ($line -match '^\s*\[(.+)\]\s*$') {
             $inside = $Matches[1] -eq $script:DuneSoloBlueprintSection
         } elseif ($inside -and $line -match '^\s*([^;#][^=]*?)\s*=(.*)$') {
-            if ($script:DuneSoloBlueprintValues.Contains($Matches[1].Trim())) { $line }
+            if ($Keys -contains $Matches[1].Trim()) { $line }
         }
     }
 }
@@ -43,14 +42,15 @@ function Read-DuneSoloBlueprintSettings {
     Assert-DuneSoloNoReparsePath -Path $paths.state
     $text = if (Test-Path -LiteralPath $paths.path) { [IO.File]::ReadAllText($paths.path) } else { '' }
     $lines = @(Get-DuneSoloBlueprintLines -Text $text)
-    $enabled = $lines.Count -eq $script:DuneSoloBlueprintValues.Count
+    $enabled = @(Get-DuneSoloBlueprintLines -Text $text -Keys @($script:DuneSoloBlueprintValues.Keys)).Count -eq $script:DuneSoloBlueprintValues.Count
     foreach ($key in $script:DuneSoloBlueprintValues.Keys) {
         if (@($lines | Where-Object { $_ -ceq "$key=$($script:DuneSoloBlueprintValues[$key])" }).Count -ne 1) { $enabled = $false }
     }
     $snapshot = if (Test-Path -LiteralPath $paths.state) { Get-Content -LiteralPath $paths.state -Raw | ConvertFrom-Json } else { $null }
-    if ($snapshot -and ($snapshot.version -ne 1 -or $snapshot.path -ne $paths.path)) { throw 'Invalid Solo blueprint restoration record. The configuration was not changed.' }
+    if ($snapshot -and ($snapshot.version -notin @(1, 2) -or $snapshot.path -ne $paths.path)) { throw 'Invalid Solo blueprint restoration record. The configuration was not changed.' }
+    if ($snapshot.version -eq 2) { $lines = @(Get-DuneSoloBlueprintLines -Text $text -Keys @($script:DuneSoloBlueprintValues.Keys)) }
     foreach ($line in @($snapshot.originalLines)) {
-        if ($null -ne $line -and ($line -match '[\r\n]' -or $line -notmatch '^\s*([^;#][^=]*?)\s*=' -or -not $script:DuneSoloBlueprintValues.Contains($Matches[1].Trim()))) {
+        if ($null -ne $line -and ($line -match '[\r\n]' -or $line -notmatch '^\s*([^;#][^=]*?)\s*=' -or (@($script:DuneSoloBlueprintValues.Keys) + $script:DuneSoloBlueprintLegacyKeys) -notcontains $Matches[1].Trim())) {
             throw 'Invalid Solo blueprint restoration values. The configuration was not changed.'
         }
     }
@@ -90,7 +90,8 @@ function Set-DuneSoloBlueprintSettings {
     Assert-DuneSoloGameClosed
     $status = Read-DuneSoloBlueprintSettings
     if (-not $status.supported) { throw 'Blueprint settings require a verified Retail Solo profile.' }
-    if ($status.conflict) { throw 'Blueprint settings changed outside DST. Restore the recorded instant-build values before continuing; your previous settings remain saved.' }
+    # A restoration record is sufficient to restore our owned keys even after
+    # manual edits or deletion. Back up the current file and preserve other keys.
     if (($Enabled -and $status.canRestore) -or (-not $Enabled -and -not $status.canRestore)) { return @{ ok = $true; settings = $status; backupPath = '' } }
     $paths = Get-DuneSoloBlueprintPaths
     $text = if (Test-Path -LiteralPath $paths.path) { [IO.File]::ReadAllText($paths.path) } else { '' }
@@ -102,7 +103,10 @@ function Set-DuneSoloBlueprintSettings {
         $null = (New-Object Text.UTF8Encoding($false, $true)).GetString($bytes)
         $bom = $bytes.Length -ge 3 -and $bytes[0] -eq 239 -and $bytes[1] -eq 187 -and $bytes[2] -eq 191
     }
-    $original = @(Get-DuneSoloBlueprintLines -Text $text)
+    $record = if ($status.canRestore) { Get-Content -LiteralPath $paths.state -Raw | ConvertFrom-Json } else { $null }
+    $ownedKeys = @($script:DuneSoloBlueprintValues.Keys)
+    if (-not $Enabled -and $record.version -eq 1) { $ownedKeys += $script:DuneSoloBlueprintLegacyKeys }
+    $original = @(Get-DuneSoloBlueprintLines -Text $text -Keys $ownedKeys)
     $replacement = if ($Enabled) { @($script:DuneSoloBlueprintValues.Keys | ForEach-Object { "$_=$($script:DuneSoloBlueprintValues[$_])" }) }
         else { @((Get-Content -LiteralPath $paths.state -Raw | ConvertFrom-Json).originalLines) }
     $newline = if ($text.Contains("`r`n")) { "`r`n" } else { "`n" }
@@ -115,7 +119,7 @@ function Set-DuneSoloBlueprintSettings {
             $result.Add($line)
             if ($inside -and -not $written) { foreach ($entry in $replacement) { $result.Add([string]$entry) }; $written = $true }
         } elseif ($inside -and $line -match '^\s*([^;#][^=]*?)\s*=') {
-            if (-not $script:DuneSoloBlueprintValues.Contains($Matches[1].Trim())) { $result.Add($line) }
+            if ($ownedKeys -notcontains $Matches[1].Trim()) { $result.Add($line) }
         } else { $result.Add($line) }
     }
     if (-not $written -and $replacement.Count -gt 0) {
@@ -130,7 +134,7 @@ function Set-DuneSoloBlueprintSettings {
     if (Test-Path -LiteralPath $paths.path) { Copy-Item -LiteralPath $paths.path -Destination $backup -ErrorAction Stop } else { $backup = '' }
     # Persist restoration before changing Game.ini. A crash cannot lose original values.
     if ($Enabled) {
-        $snapshot = @{ version = 1; path = $paths.path; originalLines = $original; backupPath = $backup }
+        $snapshot = @{ version = 2; path = $paths.path; originalLines = $original; backupPath = $backup }
         Write-DuneSoloBlueprintFile -Path $paths.state -Text ($snapshot | ConvertTo-Json -Depth 5) -Bom $false
     }
     try {

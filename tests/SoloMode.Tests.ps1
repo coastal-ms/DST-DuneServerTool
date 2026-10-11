@@ -1,4 +1,4 @@
-BeforeAll {
+﻿BeforeAll {
     . "$PSScriptRoot\_TestHelpers.ps1"
     $script:OriginalAppData = $env:APPDATA
     $script:OriginalLocalAppData = $env:LOCALAPPDATA
@@ -56,9 +56,9 @@ Describe 'Solo blueprint timer restoration' {
         $restored.settings.canRestore | Should -BeFalse
         $lines = @(Get-DuneSoloBlueprintLines -Text ([IO.File]::ReadAllText($script:blueprintIni)))
         $lines.Count | Should -Be 3
-        $lines[0] | Should -BeExactly ' m_DefaultBuildAndFillTimeInSeconds = 2.50'
-        $lines[1] | Should -BeExactly 'm_BuildableBuildAndFillHoldTimes=((Short, 3),(Long, 5))'
-        $lines[2] | Should -BeExactly 'm_DefaultBuildAndFillTimeInSeconds=4'
+        $lines | Should -Contain ' m_DefaultBuildAndFillTimeInSeconds = 2.50'
+        $lines | Should -Contain 'm_BuildableBuildAndFillHoldTimes=((Short, 3),(Long, 5))'
+        $lines | Should -Contain 'm_DefaultBuildAndFillTimeInSeconds=4'
         $text = [IO.File]::ReadAllText($script:blueprintIni)
         $text | Should -Match 'NewKey=Later'
         $text | Should -Match 'FutureKey=Keep'
@@ -81,13 +81,51 @@ Describe 'Solo blueprint timer restoration' {
         Test-Path -LiteralPath $script:blueprintIni | Should -BeFalse
     }
 
-    It 'blocks overwriting externally changed timers and retains original restoration evidence' {
+    It 'restores saved timers after external edits and backs up those edits' {
         Set-DuneSoloBlueprintSettings -Enabled $true -Confirm 'APPLY SOLO BLUEPRINT SETTINGS' | Out-Null
-        $text = [IO.File]::ReadAllText($script:blueprintIni).Replace('m_DefaultBuildAndFillTimeInSeconds=0.000000','m_DefaultBuildAndFillTimeInSeconds=7')
+        $text = [IO.File]::ReadAllText($script:blueprintIni).Replace('m_BuildableBuildAndFillHoldTimes=', 'm_BuildableBuildAndFillHoldTimes=changed')
         [IO.File]::WriteAllText($script:blueprintIni, $text)
-        { Set-DuneSoloBlueprintSettings -Enabled $false -Confirm 'APPLY SOLO BLUEPRINT SETTINGS' } | Should -Throw '*changed outside DST*'
-        [IO.File]::ReadAllText($script:blueprintIni) | Should -BeExactly $text
-        (Read-DuneSoloBlueprintSettings).canRestore | Should -BeTrue
+        $restored = Set-DuneSoloBlueprintSettings -Enabled $false -Confirm 'APPLY SOLO BLUEPRINT SETTINGS'
+        [IO.File]::ReadAllText($restored.backupPath) | Should -BeExactly $text
+        [IO.File]::ReadAllText($script:blueprintIni) | Should -Not -Match 'm_DefaultBuildAndFillTimeInSeconds='
+        (Read-DuneSoloBlueprintSettings).canRestore | Should -BeFalse
+        Set-DuneSoloBlueprintSettings -Enabled $true -Confirm 'APPLY SOLO BLUEPRINT SETTINGS' | Out-Null
+        (Read-DuneSoloBlueprintSettings).enabled | Should -BeTrue
+    }
+
+    It 'restores original timers when managed keys were deleted and preserves unrelated edits' {
+        [IO.File]::WriteAllText($script:blueprintIni, "[/Script/DuneSandbox.BuildingSettings]`nm_BuildableBuildAndFillHoldTimes=((Short, 12))`nOtherSetting=before`n")
+        Set-DuneSoloBlueprintSettings -Enabled $true -Confirm 'APPLY SOLO BLUEPRINT SETTINGS' | Out-Null
+        [IO.File]::WriteAllText($script:blueprintIni, "[/Script/DuneSandbox.BuildingSettings]`nOtherSetting=after`n[Unrelated]`nKeep=1`n")
+        Set-DuneSoloBlueprintSettings -Enabled $false -Confirm 'APPLY SOLO BLUEPRINT SETTINGS' | Out-Null
+        $text = [IO.File]::ReadAllText($script:blueprintIni)
+        $text | Should -Match ([regex]::Escape('m_BuildableBuildAndFillHoldTimes=((Short, 12))'))
+        $text | Should -Match 'OtherSetting=after'
+        $text | Should -Match 'Keep=1'
+        (Read-DuneSoloBlueprintSettings).canRestore | Should -BeFalse
+    }
+
+    It 'recreates deleted Game.ini with the saved original blueprint timers' {
+        [IO.File]::WriteAllText($script:blueprintIni, "[/Script/DuneSandbox.BuildingSettings]`nm_BuildableBuildAndFillHoldTimes=((Short, 12))`n")
+        Set-DuneSoloBlueprintSettings -Enabled $true -Confirm 'APPLY SOLO BLUEPRINT SETTINGS' | Out-Null
+        Remove-Item -LiteralPath $script:blueprintIni
+        Set-DuneSoloBlueprintSettings -Enabled $false -Confirm 'APPLY SOLO BLUEPRINT SETTINGS' | Out-Null
+        [IO.File]::ReadAllText($script:blueprintIni) | Should -Match ([regex]::Escape('m_BuildableBuildAndFillHoldTimes=((Short, 12))'))
+        (Read-DuneSoloBlueprintSettings).canRestore | Should -BeFalse
+    }
+
+    It 'restores legacy three-key snapshots and enables only hold times afterward' {
+        $paths = Get-DuneSoloBlueprintPaths
+        New-Item -ItemType Directory (Split-Path -Parent $paths.state) -Force | Out-Null
+        @{ version = 1; path = $paths.path; originalLines = @('m_DefaultBuildAndFillTimeInSeconds=12', 'm_BuildAndFillStartThresholdTimerInSeconds=3') } | ConvertTo-Json | Set-Content $paths.state
+        [IO.File]::WriteAllText($script:blueprintIni, "[/Script/DuneSandbox.BuildingSettings]`nm_DefaultBuildAndFillTimeInSeconds=0`nm_BuildAndFillStartThresholdTimerInSeconds=0`nOther=keep`n")
+        Set-DuneSoloBlueprintSettings -Enabled $false -Confirm 'APPLY SOLO BLUEPRINT SETTINGS' | Out-Null
+        Set-DuneSoloBlueprintSettings -Enabled $true -Confirm 'APPLY SOLO BLUEPRINT SETTINGS' | Out-Null
+        $text = [IO.File]::ReadAllText($script:blueprintIni)
+        $text | Should -Match 'm_DefaultBuildAndFillTimeInSeconds=12'
+        $text | Should -Match 'm_BuildAndFillStartThresholdTimerInSeconds=3'
+        $text | Should -Match 'Other=keep'
+        (Read-DuneSoloBlueprintSettings).enabled | Should -BeTrue
     }
 
     It 'preserves the file when atomic replacement fails and clears the unused snapshot' {
