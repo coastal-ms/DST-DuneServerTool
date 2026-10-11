@@ -1,4 +1,8 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, type ReactNode } from 'react'
+import { DndContext, DragOverlay, PointerSensor, KeyboardSensor, useSensor, useSensors, closestCorners, type DragEndEvent } from '@dnd-kit/core'
+import { SortableContext, arrayMove, sortableKeyboardCoordinates, useSortable, verticalListSortingStrategy } from '@dnd-kit/sortable'
+import { CSS } from '@dnd-kit/utilities'
+import { Icon } from '../Icon'
 import { api } from '../../api/client'
 import { ConfirmationModal } from '../ConfirmationModal'
 import { CollapsibleCard } from '../CollapsibleCard'
@@ -6,6 +10,18 @@ import { pickLocalFolder } from '../../util/pathPicker'
 
 interface Mod { folder: string; id: string; name: string; version: string; enabled: boolean; warnings?: string[]; errors: string[] }
 interface State { gameRunning?: boolean; mods: Mod[]; folder: string; gamePath: string; skipIntro: boolean; soloArguments?: string; runtimeReady: boolean; session: unknown; launchError?: string; runtimeLog?: string }
+
+function SortableMod({ mod, disabled, children }: { mod: Mod; disabled: boolean; children: ReactNode }) {
+  const { attributes, listeners, setNodeRef, setActivatorNodeRef, transform, transition, isDragging } = useSortable({ id: mod.folder, disabled })
+  return <div ref={setNodeRef} style={{ transform: CSS.Transform.toString(transform), transition, opacity: isDragging ? 0.35 : undefined }} className="border border-border rounded p-3 flex items-start gap-3">
+    <button ref={setActivatorNodeRef} type="button" aria-label={`Reorder ${mod.name}`} title="Drag to reorder"
+      {...attributes} {...listeners} disabled={disabled}
+      className="shrink-0 -ml-1 flex items-center justify-center w-6 text-text-dim hover:text-accent cursor-grab active:cursor-grabbing focus:outline-none focus:text-accent touch-none disabled:opacity-40 disabled:cursor-default">
+      <Icon name="GripVertical" size={14} />
+    </button>
+    <div className="flex-1 min-w-0">{children}</div>
+  </div>
+}
 
 export function SoloMods() {
   const [state, setState] = useState<State | null>(null)
@@ -16,6 +32,10 @@ export function SoloMods() {
   const [error, setError] = useState('')
   const [notice, setNotice] = useState('')
   const [deleting, setDeleting] = useState<Mod | null>(null)
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
+    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
+  )
   const refresh = async () => {
     const result = await api<State>('/api/solo/mods')
     setState(result)
@@ -47,15 +67,14 @@ export function SoloMods() {
     ;[mods[index], mods[index + direction]] = [mods[index + direction], mods[index]]
     void save(mods)
   }
-  const dropMod = (target: string) => {
-    if (!state || busy || state.gameRunning || !dragged || dragged === target) return
-    const mods = [...state.mods]
-    const from = mods.findIndex(mod => mod.folder === dragged)
-    const to = mods.findIndex(mod => mod.folder === target)
+  const dropMod = ({ active, over }: DragEndEvent) => {
     setDragged(null)
+    if (!state || busy || state.gameRunning || !over || active.id === over.id) return
+    const from = state.mods.findIndex(mod => mod.folder === active.id)
+    const to = state.mods.findIndex(mod => mod.folder === over.id)
     if (from < 0 || to < 0) return
-    const [mod] = mods.splice(from, 1)
-    mods.splice(to, 0, mod)
+    const mods = arrayMove(state.mods, from, to)
+    setState({ ...state, mods })
     void save(mods)
   }
   const pickGame = async () => {
@@ -104,9 +123,10 @@ export function SoloMods() {
         {!state?.runtimeReady && <button className="btn-secondary" disabled={busy} onClick={() => void run('runtime')}>Install mod runtime</button>}
       </div>
       {state && state.mods.length > 1 && <p className="text-sm text-text-muted">Mods load from top to bottom. Follow the mod author's load order instructions.</p>}
-      {state?.mods.map((mod, index) => <div key={mod.folder} className="border border-border rounded p-3"
-        onDragOver={event => { if (dragged && !busy && !state.gameRunning) event.preventDefault() }}
-        onDrop={event => { event.preventDefault(); dropMod(mod.folder) }}>
+      <DndContext sensors={sensors} collisionDetection={closestCorners}
+        onDragStart={({ active }) => setDragged(String(active.id))} onDragEnd={dropMod} onDragCancel={() => setDragged(null)}>
+      <SortableContext items={state?.mods.map(mod => mod.folder) ?? []} strategy={verticalListSortingStrategy}>
+      {state?.mods.map((mod, index) => <SortableMod key={mod.folder} mod={mod} disabled={busy || !!state.gameRunning}>
         <div className="flex items-center justify-between gap-3">
         <label className="flex items-center gap-2">
           <input type="checkbox" checked={mod.enabled} disabled={busy} onChange={e => void save(state.mods.map(m => m.folder === mod.folder ? { ...m, enabled: e.target.checked } : m))} />
@@ -115,15 +135,14 @@ export function SoloMods() {
         <button className="btn-secondary" aria-label={`Delete ${mod.name}`} disabled={busy || state.gameRunning} onClick={() => setDeleting(mod)}>Delete</button>
         </div>
         <div className="flex gap-2 mt-2">
-          <button className="btn-secondary cursor-grab" aria-label={`Drag ${mod.name} to reorder`}
-            draggable={!busy && !state.gameRunning} disabled={busy || state.gameRunning}
-            onDragStart={event => { event.dataTransfer.setData('text/plain', mod.folder); event.dataTransfer.effectAllowed = 'move'; setDragged(mod.folder) }}
-            onDragEnd={() => setDragged(null)}>Drag to reorder</button>
           <button className="btn-secondary" aria-label={`Move ${mod.name} up`} disabled={busy || index === 0} onClick={() => move(index, -1)}>Move Up</button>
           <button className="btn-secondary" aria-label={`Move ${mod.name} down`} disabled={busy || index === state.mods.length - 1} onClick={() => move(index, 1)}>Move Down</button>
         </div>
         {mod.errors.map((message, i) => <p className="text-danger text-sm mt-1" key={i}>{message}</p>)}
-      </div>)}
+      </SortableMod>)}
+      </SortableContext>
+      <DragOverlay>{dragged && <div className="border border-border rounded p-3 bg-surface shadow-lg flex items-center gap-3"><Icon name="GripVertical" size={14} />{state?.mods.find(mod => mod.folder === dragged)?.name}</div>}</DragOverlay>
+      </DndContext>
       {state && !state.mods.length && <p className="text-sm text-text-muted">No mods installed.</p>}
       {state?.session != null && <button className="btn-secondary" disabled={busy} onClick={() => void run('restore')}>Restore normal launch</button>}
       <p className="text-xs text-text-muted">Solo only. Normal launch bypasses the mod runtime. DST supports its mod-loading framework only. We make no guarantees that any individual mod will or will not work, and DST does not provide individual mod troubleshooting. Contact the mod author or discuss issues with the community.</p>

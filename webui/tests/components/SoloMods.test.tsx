@@ -6,14 +6,23 @@ const request = vi.hoisted(() => vi.fn())
 vi.mock('../../src/api/client', () => ({ api: request }))
 vi.mock('../../src/components/CollapsibleCard', () => ({ CollapsibleCard: ({ children, headerRight }: { children: React.ReactNode; headerRight: React.ReactNode }) => <div>{headerRight}{children}</div> }))
 const mods = ['First', 'Second', 'Third'].map(name => ({ folder: name, id: name, name, version: '', enabled: true, errors: [] }))
-afterEach(() => { cleanup(); vi.resetAllMocks() })
+afterEach(() => { cleanup(); vi.resetAllMocks(); vi.restoreAllMocks() })
 describe('Solo mod shortcuts and ordering', () => {
   it('persists the dropped order with enabled flags intact', async () => {
     request.mockResolvedValue({ mods, gamePath: 'C:/Dune', soloArguments: '', runtimeReady: true, session: null })
     render(<SoloMods />)
-    const drag = await screen.findByRole('button', { name: 'Drag Third to reorder' })
-    fireEvent.dragStart(drag, { dataTransfer: { setData: vi.fn(), effectAllowed: '' } })
-    fireEvent.drop(screen.getByRole('button', { name: 'Drag First to reorder' }).parentElement!.parentElement!)
+    const drag = await screen.findByRole('button', { name: 'Reorder Third' })
+    vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockImplementation(function (this: HTMLElement) {
+      const label = this.querySelector('button[aria-label^="Reorder"]')?.getAttribute('aria-label')
+      const index = label ? ['Reorder First', 'Reorder Second', 'Reorder Third'].indexOf(label) : 0
+      return { x: 0, y: index * 100, top: index * 100, bottom: index * 100 + 80, left: 0, right: 400, width: 400, height: 80, toJSON: () => ({}) }
+    })
+    drag.focus()
+    fireEvent.keyDown(drag, { code: 'Space' })
+    await new Promise(resolve => setTimeout(resolve, 20))
+    fireEvent.keyDown(document, { code: 'ArrowUp' })
+    fireEvent.keyDown(document, { code: 'ArrowUp' })
+    fireEvent.keyDown(document, { code: 'Space' })
     await waitFor(() => expect(request).toHaveBeenCalledWith('/api/solo/mods/selection', expect.anything()))
     const call = request.mock.calls.find(call => call[0] === '/api/solo/mods/selection')!
     const saved = JSON.parse(call[1].body).mods
