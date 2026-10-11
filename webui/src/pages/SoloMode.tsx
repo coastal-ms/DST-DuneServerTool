@@ -81,10 +81,11 @@ import { pickLocalFolder } from '../util/pathPicker'
 import { soloSaveFolder } from '../util/soloSaveFolder'
 import { COSMETIC_LICENSE_NOTICE } from '../util/cosmeticEntitlements'
 
-type Tab = 'overview' | 'settings' | 'backups' | 'character' | 'inventory' | 'progression'
+type Tab = 'overview' | 'settings' | 'mods' | 'backups' | 'character' | 'inventory' | 'progression'
 const TABS: Array<{ id: Tab; label: string; icon: string }> = [
   { id: 'overview', label: 'Overview', icon: 'LayoutGrid' },
   { id: 'settings', label: 'Settings', icon: 'SlidersHorizontal' },
+  { id: 'mods', label: 'Solo mods', icon: 'Package' },
   { id: 'backups', label: 'Backups', icon: 'ArchiveRestore' },
   { id: 'character', label: 'Character', icon: 'UserRound' },
   { id: 'inventory', label: 'Inventory', icon: 'Package' },
@@ -1488,7 +1489,7 @@ export function SoloMode() {
         ))}
       </div>
 
-      <SoloMods />
+      {tab === 'mods' && <SoloMods />}
       {tab === 'overview' && (
         <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
           <div className="card p-5">
