@@ -95,3 +95,71 @@ function Backup-DuneSoloXboxAccount {
     $manifest | ConvertTo-Json -Depth 4 | Set-Content -LiteralPath (Join-Path $destination 'dst-backup-manifest.json') -Encoding utf8
     return $destination
 }
+
+# The product's Xbox mutation capabilities remain disabled until live acceptance.
+# Preparation always mutates a private copy. Commit is used by the separately
+# authorized acceptance test and subsequently by the common mutation boundary.
+function New-DuneSoloXboxMutation {
+    param([Parameter(Mandatory)][string]$Command, [Parameter(Mandatory)][hashtable]$Arguments)
+    Assert-DuneSoloGameClosed
+    if ($Command -in @('inspect','diagnostics','backup','list-blueprints','export-blueprint')) { throw 'Use the read-only helper for this command.' }
+    $source = if ($Command -eq 'restore') { [string]$Arguments.target } else { [string]$Arguments.input }
+    $blob = Get-DuneSoloXboxBlob -Path $source
+    if (-not $blob) { throw 'Xbox mutation requires the exact current game.db blob.' }
+    $index = Join-Path $blob.account 'containers.index'
+    $sourceHash = (Get-FileHash -LiteralPath $source -Algorithm SHA256).Hash
+    $indexHash = (Get-FileHash -LiteralPath $index -Algorithm SHA256).Hash
+    $metadataHash = (Get-FileHash -LiteralPath $blob.metadata -Algorithm SHA256).Hash
+    $backup = Backup-DuneSoloXboxAccount -Blob $blob
+    $work = Join-Path (Get-DuneSoloBackupRoot) ('xbox-staging\' + [guid]::NewGuid().ToString('N'))
+    New-Item -ItemType Directory -Path $work -Force | Out-Null
+    $candidate = Join-Path $work 'game.db'
+    [IO.File]::Copy($source, $candidate, $false)
+    if ((Get-FileHash -LiteralPath $candidate).Hash -ne $sourceHash) { throw 'Xbox save changed during preparation.' }
+    $staged = $Arguments.Clone()
+    $staged['safety-backup'] = Join-Path $work 'before.db'
+    if ($Command -eq 'restore') { $staged.target = $candidate } else { $staged.input = $candidate }
+    $result = Invoke-DuneSoloHelper -Command $Command -Arguments $staged
+    $inspection = Invoke-DuneSoloHelper -Command inspect -Arguments @{
+        input = $candidate; adapter = Get-DuneSoloDataFilePath -Name 'solo-retail-v1.json'
+    }
+    if ($inspection.integrity -ne 'ok' -or $inspection.characterCount -ne 1) { throw 'Prepared Xbox save failed integrity or character validation.' }
+    $prepared = @{
+        source = $source; sourceSha256 = $sourceHash; candidate = $candidate
+        candidateSha256 = (Get-FileHash -LiteralPath $candidate).Hash
+        index = $index; indexSha256 = $indexHash; metadata = $blob.metadata; metadataSha256 = $metadataHash
+        backup = $backup; result = $result; inspection = $inspection
+    }
+    $prepared | ConvertTo-Json -Depth 30 | Set-Content -LiteralPath (Join-Path $work 'prepared.json') -Encoding utf8
+    return $prepared
+}
+
+function Commit-DuneSoloXboxMutation {
+    param([Parameter(Mandatory)][hashtable]$Prepared)
+    Assert-DuneSoloGameClosed
+    $blob = Get-DuneSoloXboxBlob -Path $Prepared.source
+    if (-not $blob -or $blob.metadata -ine $Prepared.metadata -or (Join-Path $blob.account 'containers.index') -ine $Prepared.index) { throw 'Xbox save identity changed; nothing was written.' }
+    foreach ($pair in @(@('source','sourceSha256'), @('candidate','candidateSha256'), @('index','indexSha256'), @('metadata','metadataSha256'))) {
+        if ((Get-FileHash -LiteralPath $Prepared[$pair[0]] -Algorithm SHA256).Hash -ne $Prepared[$pair[1]]) { throw 'Xbox save or prepared data changed; nothing was written.' }
+    }
+    $temp = Join-Path $blob.container ('dst-write-' + [guid]::NewGuid().ToString('N') + '.tmp')
+    $previous = "$temp.previous"
+    $replaced = $false
+    try {
+        [IO.File]::Copy($Prepared.candidate, $temp, $false)
+        Assert-DuneSoloGameClosed
+        # Check immediately before replacement, after staging the bytes.
+        foreach ($pair in @(@('source','sourceSha256'), @('index','indexSha256'), @('metadata','metadataSha256'))) {
+            if ((Get-FileHash -LiteralPath $Prepared[$pair[0]]).Hash -ne $Prepared[$pair[1]]) { throw 'Xbox save changed before replacement; nothing was written.' }
+        }
+        [IO.File]::Replace($temp, $Prepared.source, $previous)
+        $replaced = $true
+        if ((Get-FileHash -LiteralPath $Prepared.source).Hash -ne $Prepared.candidateSha256) { throw 'Xbox replacement verification failed.' }
+        return @{ ok = $true; path = $Prepared.source; containerBackup = $Prepared.backup; inspection = $Prepared.inspection }
+    } catch {
+        if ($replaced -and (Test-Path -LiteralPath $previous)) { [IO.File]::Replace($previous, $Prepared.source, $null) }
+        throw
+    } finally {
+        foreach ($file in @($temp, $previous)) { if (Test-Path -LiteralPath $file) { Remove-Item -LiteralPath $file -Force } }
+    }
+}

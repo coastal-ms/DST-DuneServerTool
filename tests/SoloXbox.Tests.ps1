@@ -72,4 +72,40 @@ Describe 'Xbox Solo named blob discovery' {
             (Get-FileHash (Join-Path $backup $entry.path)).Hash | Should -Be $entry.sha256
         }
     }
+    It 'refuses a prepared write when game.db changes' {
+        Mock Assert-DuneSoloGameClosed {}
+        $prepared = @{ source = $layout.game; sourceSha256 = (Get-FileHash $layout.game).Hash
+            index = Join-Path $layout.account 'containers.index'; metadata = $layout.metadata }
+        [IO.File]::WriteAllBytes($layout.game, [byte[]](9,8,7))
+        { Commit-DuneSoloXboxMutation -Prepared $prepared } | Should -Throw '*changed*'
+        [IO.File]::ReadAllBytes($layout.game) | Should -Be ([byte[]](9,8,7))
+    }
+    It 'refuses a prepared write if the current blob identity rotates' {
+        Mock Assert-DuneSoloGameClosed {}
+        $prepared = @{ source = $layout.game }
+        $bytes = [IO.File]::ReadAllBytes($layout.metadata)
+        $guid = [guid]::NewGuid()
+        $guid.ToByteArray().CopyTo($bytes, 296)
+        $guid.ToByteArray().CopyTo($bytes, 312)
+        [IO.File]::WriteAllBytes($layout.metadata, $bytes)
+        { Commit-DuneSoloXboxMutation -Prepared $prepared } | Should -Throw '*not the current*'
+        [IO.File]::ReadAllBytes($layout.game) | Should -Be ([byte[]](1,2,3))
+    }
+    It 'refuses a commit when the game is running' {
+        Mock Assert-DuneSoloGameClosed { throw 'Game running' }
+        { Commit-DuneSoloXboxMutation -Prepared @{ source = $layout.game } } | Should -Throw '*Game running*'
+    }
+    It 'refuses a prepared write when account metadata changes' {
+        Mock Assert-DuneSoloGameClosed {}
+        $candidate = Join-Path $TestDrive 'candidate.db'
+        [IO.File]::WriteAllBytes($candidate, [byte[]](7,8,9))
+        $index = Join-Path $layout.account 'containers.index'
+        $prepared = @{ source = $layout.game; sourceSha256 = (Get-FileHash $layout.game).Hash
+            candidate = $candidate; candidateSha256 = (Get-FileHash $candidate).Hash
+            index = $index; indexSha256 = (Get-FileHash $index).Hash
+            metadata = $layout.metadata; metadataSha256 = (Get-FileHash $layout.metadata).Hash }
+        [IO.File]::WriteAllBytes($index, [byte[]](6))
+        { Commit-DuneSoloXboxMutation -Prepared $prepared } | Should -Throw '*changed*'
+        [IO.File]::ReadAllBytes($layout.game) | Should -Be ([byte[]](1,2,3))
+    }
 }
