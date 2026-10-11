@@ -72,6 +72,15 @@ Describe 'Xbox Solo named blob discovery' {
             (Get-FileHash (Join-Path $backup $entry.path)).Hash | Should -Be $entry.sha256
         }
     }
+    It 'includes hidden account files in the verified backup' {
+        Mock Assert-DuneSoloGameClosed {}
+        Mock Get-DuneSoloBackupRoot { Join-Path $TestDrive 'backups' }
+        $hidden = Join-Path $layout.account 'hidden-state'
+        [IO.File]::WriteAllBytes($hidden, [byte[]](4,5,6))
+        [IO.File]::SetAttributes($hidden, [IO.FileAttributes]::Hidden)
+        $backup = Backup-DuneSoloXboxAccount -Blob (Get-DuneSoloXboxBlob -Path $layout.game)
+        (Get-FileHash (Join-Path $backup 'hidden-state')).Hash | Should -Be (Get-FileHash $hidden).Hash
+    }
     It 'refuses a prepared write when game.db changes' {
         Mock Assert-DuneSoloGameClosed {}
         $prepared = @{ source = $layout.game; sourceSha256 = (Get-FileHash $layout.game).Hash

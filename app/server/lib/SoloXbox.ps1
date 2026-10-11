@@ -69,7 +69,7 @@ function Backup-DuneSoloXboxAccount {
     Assert-DuneSoloGameClosed
     $destination = Join-Path (Get-DuneSoloBackupRoot) ('xbox-containers\' + [guid]::NewGuid().ToString('N'))
     New-Item -ItemType Directory -Path $destination -Force | Out-Null
-    $files = @(Get-ChildItem -LiteralPath $Blob.account -File -Recurse -ErrorAction Stop)
+    $files = @(Get-ChildItem -LiteralPath $Blob.account -File -Recurse -Force -ErrorAction Stop)
     $manifest = foreach ($file in $files) {
         $ancestor = $file.FullName
         while ($ancestor) {
@@ -87,7 +87,7 @@ function Backup-DuneSoloXboxAccount {
             (Get-FileHash -LiteralPath $file.FullName -Algorithm SHA256).Hash -ne $before) { throw 'Xbox save changed during backup; no save data was written.' }
         [ordered]@{ path = $relative; sha256 = $before }
     }
-    $after = @(Get-ChildItem -LiteralPath $Blob.account -File -Recurse -ErrorAction Stop)
+    $after = @(Get-ChildItem -LiteralPath $Blob.account -File -Recurse -Force -ErrorAction Stop)
     if ($after.Count -ne $files.Count) { throw 'Xbox account changed during backup; no save data was written.' }
     foreach ($entry in $manifest) {
         if ((Get-FileHash -LiteralPath (Join-Path $Blob.account $entry.path) -Algorithm SHA256).Hash -ne $entry.sha256) { throw 'Xbox account changed during backup; no save data was written.' }
