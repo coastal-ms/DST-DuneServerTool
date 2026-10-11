@@ -399,9 +399,14 @@ export function Sidebar({ collapsed, onExpand }: Props) {
           rel="noopener noreferrer"
           title="Buy Me a Coffee"
           aria-label="Buy Me a Coffee"
-          className="flex min-h-8 items-center gap-2 rounded-md text-text-muted hover:text-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+          className={
+            `${collapsed
+              ? 'w-full flex items-center justify-center h-8 rounded-md border border-border text-text-dim hover:text-text hover:bg-surface-2/60 transition-colors'
+              : 'w-full flex items-center justify-center gap-1.5 px-2 py-1.5 rounded-md border border-border text-text-muted hover:text-text hover:bg-surface-2/60 transition-colors uppercase tracking-widest'
+            } focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent`
+          }
         >
-          <Icon name="Coffee" size={16} />
+          <Icon name="Coffee" size={collapsed ? 14 : 11} />
           {!collapsed && <span>Buy Me a Coffee</span>}
         </a>
         {!customizing && (

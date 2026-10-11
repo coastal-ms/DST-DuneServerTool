@@ -118,8 +118,8 @@ export default function SpatialFrame({ children, onDetails, tools = false, dashb
         <footer className="spatial-bottom">
           <div className="flex flex-col gap-2 self-start">
             <a href="https://buymeacoffee.com/coastal_dst" target="_blank" rel="noopener noreferrer"
-              className="flex min-h-8 items-center gap-2 text-xs text-text-muted hover:text-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent">
-              <Icon name="Coffee" size={16} /><span>Buy Me a Coffee</span>
+              className="flex min-h-8 items-center justify-center gap-1.5 rounded-md border border-border px-2 py-1.5 text-[10px] uppercase tracking-widest text-text-muted transition-colors hover:bg-surface-2/60 hover:text-text focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent">
+              <Icon name="Coffee" size={11} /><span>Buy Me a Coffee</span>
             </a>
             {!dashboard && !soloOnly && <div className="spatial-infrastructure"><span>VM <b>{status ? status.vm.running ? 'Running' : status.vm.state || 'Unknown' : 'Unknown'}</b></span><span>Database <b>{status?.bg?.info?.database || 'Unknown'}</b></span></div>}
           </div>
