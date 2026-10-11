@@ -1,4 +1,5 @@
 import { useEffect, useState, type ReactNode } from 'react'
+import { createPortal } from 'react-dom'
 import { DndContext, DragOverlay, PointerSensor, KeyboardSensor, useSensor, useSensors, closestCorners, type DragEndEvent } from '@dnd-kit/core'
 import { SortableContext, arrayMove, sortableKeyboardCoordinates, useSortable, verticalListSortingStrategy } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
@@ -141,7 +142,7 @@ export function SoloMods() {
         {mod.errors.map((message, i) => <p className="text-danger text-sm mt-1" key={i}>{message}</p>)}
       </SortableMod>)}
       </SortableContext>
-      <DragOverlay>{dragged && <div className="border border-border rounded p-3 bg-surface shadow-lg flex items-center gap-3"><Icon name="GripVertical" size={14} />{state?.mods.find(mod => mod.folder === dragged)?.name}</div>}</DragOverlay>
+      {createPortal(<DragOverlay>{dragged && <div className="border border-border rounded p-3 bg-surface shadow-lg flex items-center gap-3"><Icon name="GripVertical" size={14} />{state?.mods.find(mod => mod.folder === dragged)?.name}</div>}</DragOverlay>, document.body)}
       </DndContext>
       {state && !state.mods.length && <p className="text-sm text-text-muted">No mods installed.</p>}
       {state?.session != null && <button className="btn-secondary" disabled={busy} onClick={() => void run('restore')}>Restore normal launch</button>}
