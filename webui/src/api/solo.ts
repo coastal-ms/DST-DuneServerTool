@@ -232,7 +232,7 @@ export function getSoloRuntime(): Promise<SoloRuntime> {
 export function discoverSolo(path: string, platform: 'auto' | 'steam' | 'xbox' = 'auto'): Promise<SoloDiscovery> {
   return api<SoloDiscovery>('/api/solo/discover', {
     method: 'POST',
-    body: JSON.stringify({ path, platform }),
+    body: JSON.stringify({ path, ...(platform === 'auto' ? {} : { platform }) }),
   })
 }
 

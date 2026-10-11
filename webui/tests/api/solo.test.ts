@@ -55,6 +55,11 @@ describe('Solo Mode API contracts', () => {
     })
   })
 
+  it('requests automatic discovery for the selected Xbox platform', async () => {
+    await solo.discoverSolo('', 'xbox')
+    expect(last()).toEqual({ url: '/api/solo/discover', method: 'POST', body: { path: '', platform: 'xbox' } })
+  })
+
   it('connects a selected data root and optional profile', async () => {
     await solo.connectSolo('C:\\Solo\\Saved', 'C:\\Solo\\Saved\\Cloud\\game.db')
     expect(last()).toEqual({
