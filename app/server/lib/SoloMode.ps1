@@ -404,7 +404,7 @@ function Assert-DuneSoloGameClosed {
 
 function Invoke-DuneSoloHelper {
     param(
-        [Parameter(Mandatory)][ValidateSet('inspect','diagnostics','character-xp','faction-progression','set-specialization','reset-specialization-rewards','backup','restore','grant-items','delete-item','import-blueprint','list-blueprints','export-blueprint','set-currencies','fill-water','set-weapon-ammo','max-augment-attributes','max-specializations','complete-fremen','complete-npe','enable-skills','set-progression-points','unlock-main-quest')][string]$Command,
+        [Parameter(Mandatory)][ValidateSet('inspect','diagnostics','character-xp','faction-progression','set-specialization','reset-specialization-rewards','backup','restore','grant-items','delete-item','import-blueprint','list-blueprints','export-blueprint','set-currencies','fill-water','set-weapon-ammo','repair-equipment','max-augment-attributes','max-specializations','complete-fremen','complete-npe','enable-skills','set-progression-points','unlock-main-quest')][string]$Command,
         [Parameter(Mandatory)][hashtable]$Arguments
     )
 
@@ -1948,4 +1948,18 @@ function Reset-DuneSoloSpecializationRewards {
     New-Item -ItemType Directory -Path $safetyDir -Force | Out-Null
     $safety = Join-Path $safetyDir ('game-before-reset-specialization-rewards-' + (Get-Date).ToUniversalTime().ToString('yyyyMMdd-HHmmssfff') + '.db')
     return Invoke-DuneSoloHelper -Command 'reset-specialization-rewards' -Arguments @{ input = $profile.dbPath; 'safety-backup' = $safety; adapter = $adapter.manifestPath; keystones = (Get-DuneSoloDataFilePath -Name 'dune-keystones.json'); track = $Track }
+}
+
+function Repair-DuneSoloEquipment {
+    param([string]$Confirm, [string]$Destination = 'carried')
+    Assert-DuneSoloSupportedPlatform
+    if ($Confirm -ne 'REPAIR SOLO EQUIPMENT') { throw 'Confirm the offline equipment repair.' }
+    Assert-DuneSoloGameClosed
+    $profile = Get-DuneSoloProfile
+    if (-not $profile.dbPath -or -not (Test-Path -LiteralPath $profile.dbPath -PathType Leaf)) { throw 'Connect a valid Solo save before repairing equipment.' }
+    Assert-DuneSoloAdapterCapability -Profile $profile -Capability 'equipment-repair' | Out-Null
+    $dir = Join-Path (Get-DuneSoloProfileBackupRoot -DbPath $profile.dbPath) 'pre-repair'
+    New-Item -ItemType Directory -Path $dir -Force | Out-Null
+    $backup = Join-Path $dir ('game-before-repair-' + (Get-Date).ToUniversalTime().ToString('yyyyMMdd-HHmmssfff') + '.db')
+    Invoke-DuneSoloHelper -Command 'repair-equipment' -Arguments @{destination=$Destination;input=$profile.dbPath;'safety-backup'=$backup;catalog=Get-DuneSoloGameplayCatalogPath}
 }

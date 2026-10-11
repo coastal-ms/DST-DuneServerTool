@@ -41,6 +41,7 @@ import {
   type SoloBlueprintSettings,
   saveSoloSettings,
   setSoloWeaponAmmo,
+  repairSoloEquipment,
   setSoloCurrencies,
   setSoloProgressionPoints,
   setSoloFactionProgression,
@@ -1177,6 +1178,18 @@ export function SoloMode() {
     }
   }
 
+  const [repairContainer, setRepairContainer] = useState('')
+  const repairEquipment = async (destination = 'carried') => {
+    if (!canMutateActiveProfile || gameRunning || busy !== null) return
+    setBusy('repair-equipment'); setNotice(null)
+    try {
+      const result = await repairSoloEquipment(statusState.data?.profileToken ?? '', destination)
+      setNotice({kind: 'ok', text: `Repaired ${result.repaired} equipment item(s).${result.safetyBackup ? ` Backup: ${result.safetyBackup}` : ''}`})
+      await Promise.all([statusState.refresh(), runtimeState.refresh(), backupsState.refresh()])
+    } catch (error) { setNotice({kind: 'err', text: error instanceof Error ? error.message : String(error)}) }
+    finally { setBusy(null) }
+  }
+
   const setWeaponAmmo = async (itemId: number, label: string, ammo: number) => {
     if (!selectionMatchesActive) {
       setNotice({ kind: 'err', text: 'Connect and validate the selected Solo profile before changing weapon ammo.' })
@@ -1907,6 +1920,15 @@ export function SoloMode() {
       )}
       {tab === 'inventory' && (
         <div className="space-y-4">
+          <button className="btn-secondary" disabled={!canMutateActiveProfile || gameRunning || busy !== null} onClick={() => void repairEquipment()}>Repair all carried equipment</button>
+          <div className="flex flex-wrap gap-2 items-center">
+            <label htmlFor="solo-repair-container">Repair a storage container</label>
+            <select id="solo-repair-container" value={repairContainer} disabled={!canMutateActiveProfile || gameRunning || busy !== null} onChange={event => setRepairContainer(event.target.value)}>
+              <option value="">Select a container</option>
+              {(inspection?.inventories ?? []).filter(inv => inv.kind === 'storage' || inv.kind === 'developer-storage').map(inv => <option key={inv.key} value={inv.key}>{inv.label} ({inv.itemRows} items)</option>)}
+            </select>
+            <button className="btn-secondary" disabled={!repairContainer || !canMutateActiveProfile || gameRunning || busy !== null} onClick={() => void repairEquipment(repairContainer)}>Repair contents</button>
+          </div>
           <SoloInventoryExplorer
             items={inspection?.inventoryItems ?? []}
             inventories={inspection?.inventories ?? []}

@@ -13,6 +13,13 @@ here cover everything those tags shipped.
 
 ## [Unreleased]
 
+## [16.3.0] - 2026-10-11
+
+### Added
+- Create a desktop shortcut from Solo mods to launch enabled mods with saved load order and launch options. The shortcut opens DST when needed and uses the existing launch-file restoration workflow.
+- Drag Solo mods to reorder them; saved order applies to subsequent launches. Move Up and Move Down remain available.
+- Repair carried and worn Solo equipment, or repair equipment in one selected built storage container. Requires the game closed and creates a backup before changes; unrelated item data and other containers are preserved.
+
 ## [16.2.2] - 2026-10-10
 
 ### Fixed

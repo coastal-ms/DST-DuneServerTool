@@ -11,8 +11,10 @@ export function SoloMods() {
   const [state, setState] = useState<State | null>(null)
   const [gamePath, setGamePath] = useState('')
   const [soloArguments, setSoloArguments] = useState('')
+  const [dragged, setDragged] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
+  const [notice, setNotice] = useState('')
   const [deleting, setDeleting] = useState<Mod | null>(null)
   const refresh = async () => {
     const result = await api<State>('/api/solo/mods')
@@ -22,10 +24,11 @@ export function SoloMods() {
   }
   useEffect(() => { void refresh().catch(e => setError(String(e))) }, [])
   const run = async (action: string, body: unknown = {}) => {
-    setBusy(true); setError('')
+    setBusy(true); setError(''); setNotice('')
     try {
       await api(`/api/solo/mods/${action}`, { method: 'POST', body: JSON.stringify(body) })
       await refresh()
+      if (action === 'shortcut') setNotice('Desktop shortcut created.')
     } catch (e) { setError(e instanceof Error ? e.message : String(e)) }
     finally { setBusy(false) }
   }
@@ -42,6 +45,17 @@ export function SoloMods() {
     if (!state || index + direction < 0 || index + direction >= state.mods.length) return
     const mods = [...state.mods]
     ;[mods[index], mods[index + direction]] = [mods[index + direction], mods[index]]
+    void save(mods)
+  }
+  const dropMod = (target: string) => {
+    if (!state || busy || state.gameRunning || !dragged || dragged === target) return
+    const mods = [...state.mods]
+    const from = mods.findIndex(mod => mod.folder === dragged)
+    const to = mods.findIndex(mod => mod.folder === target)
+    setDragged(null)
+    if (from < 0 || to < 0) return
+    const [mod] = mods.splice(from, 1)
+    mods.splice(to, 0, mod)
     void save(mods)
   }
   const pickGame = async () => {
@@ -73,9 +87,11 @@ export function SoloMods() {
         </div>
         <span className="block text-xs text-text-muted mt-2">Type your arguments in the box, then click Save arguments. Used by both Solo launch buttons in DST.</span>
       </label>
+      {notice && <p role="status" className="text-sm w-full">{notice}</p>}
       {(error || state?.launchError) && <p role="alert" className="text-danger whitespace-pre-wrap text-sm w-full">{error || state?.launchError}</p>}
       <button className="btn-primary" disabled={busy} onClick={() => void run('launch', { withMods: true })}>Launch with Mods</button>
       <button className="btn-secondary" disabled={busy} onClick={() => void run('launch', { withMods: false })}>Launch Normally</button>
+      <button className="btn-secondary" disabled={busy} onClick={() => void run('shortcut')}>Create desktop shortcut</button>
     </div>
   }>
     <div className="space-y-3">
@@ -88,7 +104,9 @@ export function SoloMods() {
         {!state?.runtimeReady && <button className="btn-secondary" disabled={busy} onClick={() => void run('runtime')}>Install mod runtime</button>}
       </div>
       {state && state.mods.length > 1 && <p className="text-sm text-text-muted">Mods load from top to bottom. Follow the mod author's load order instructions.</p>}
-      {state?.mods.map((mod, index) => <div key={mod.folder} className="border border-border rounded p-3">
+      {state?.mods.map((mod, index) => <div key={mod.folder} className="border border-border rounded p-3"
+        onDragOver={event => { if (dragged && !busy && !state.gameRunning) event.preventDefault() }}
+        onDrop={event => { event.preventDefault(); dropMod(mod.folder) }}>
         <div className="flex items-center justify-between gap-3">
         <label className="flex items-center gap-2">
           <input type="checkbox" checked={mod.enabled} disabled={busy} onChange={e => void save(state.mods.map(m => m.folder === mod.folder ? { ...m, enabled: e.target.checked } : m))} />
@@ -97,6 +115,10 @@ export function SoloMods() {
         <button className="btn-secondary" aria-label={`Delete ${mod.name}`} disabled={busy || state.gameRunning} onClick={() => setDeleting(mod)}>Delete</button>
         </div>
         <div className="flex gap-2 mt-2">
+          <button className="btn-secondary cursor-grab" aria-label={`Drag ${mod.name} to reorder`}
+            draggable={!busy && !state.gameRunning} disabled={busy || state.gameRunning}
+            onDragStart={event => { event.dataTransfer.setData('text/plain', mod.folder); event.dataTransfer.effectAllowed = 'move'; setDragged(mod.folder) }}
+            onDragEnd={() => setDragged(null)}>Drag to reorder</button>
           <button className="btn-secondary" aria-label={`Move ${mod.name} up`} disabled={busy || index === 0} onClick={() => move(index, -1)}>Move Up</button>
           <button className="btn-secondary" aria-label={`Move ${mod.name} down`} disabled={busy || index === state.mods.length - 1} onClick={() => move(index, 1)}>Move Down</button>
         </div>

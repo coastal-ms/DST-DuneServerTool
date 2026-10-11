@@ -1,4 +1,4 @@
-Register-DuneRoute -Method POST -Path '/api/solo/grant-unlocks' -LocalOnly -Handler {
+﻿Register-DuneRoute -Method POST -Path '/api/solo/grant-unlocks' -LocalOnly -Handler {
     param($req, $res, $routeParams, $body)
     try {
         $kind = [string](Get-DuneSoloBodyField -Body $body -Name 'kind' -Default '')
@@ -622,6 +622,22 @@ Register-DuneRoute -Method POST -Path '/api/solo/progression/specializations/res
         Write-DuneJson -Response $res -Body $result
     } catch {
         $status = if ($_.Exception.Message -like '*still running*' -or $_.Exception.Message -like '*changed in another window*') { 409 } else { 400 }
+        Write-DuneError -Response $res -Status $status -Message $_.Exception.Message
+    }
+}
+
+Register-DuneRoute -Method POST -Path '/api/solo/items/repair-equipment' -LocalOnly -Handler {
+    param($req,$res,$routeParams,$body)
+    try {
+        $token = [string](Get-DuneSoloBodyField -Body $body -Name 'expectedProfileToken' -Default '')
+        $confirm = [string](Get-DuneSoloBodyField -Body $body -Name 'confirm' -Default '')
+        $result = Invoke-WithDuneLock -Name 'solo-profile-data' -Script {
+            Assert-DuneSoloExpectedProfile -ExpectedProfileToken $token
+            Repair-DuneSoloEquipment -Confirm $confirm -Destination ([string](Get-DuneSoloBodyField -Body $body -Name 'destination' -Default 'carried'))
+        }
+        Write-DuneJson -Response $res -Body $result
+    } catch {
+        $status = if ($_.Exception.Message -like '*still running*' -or $_.Exception.Message -like '*changed in another window*') {409} else {400}
         Write-DuneError -Response $res -Status $status -Message $_.Exception.Message
     }
 }

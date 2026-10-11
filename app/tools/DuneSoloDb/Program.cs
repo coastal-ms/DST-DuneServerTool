@@ -125,6 +125,7 @@ internal static partial class Program
                     Require(options, "safety-backup"),
                     ParseItemId(RequireValue(options, "item-id"), "Solo item id"),
                     Require(options, "adapter")),
+                "repair-equipment" => RepairEquipment(Require(options, "input"), Require(options, "safety-backup"), Require(options, "catalog"), RequireValue(options, "destination")),
                 "set-weapon-ammo" => SetWeaponAmmo(
                     Require(options, "input"),
                     Require(options, "safety-backup"),
@@ -1611,6 +1612,7 @@ internal static partial class Program
                 throw new InvalidOperationException(
                     "Pre-augmented ranged grant stats did not preserve augments and loaded ammo.");
             }
+            TestEquipmentRepair(source, catalogPath, root);
             var catalog = ReadCatalog(catalogPath);
             if (catalog["RepairTool5"].Volume != 10d
                 || catalog["TreadwheelHull_6"].Volume != 15d
@@ -2660,6 +2662,7 @@ internal static partial class Program
                     "bank-storage-destination-discovery",
                     "solo-inventory-grouped-read-model",
                     "offline-weapon-ammo-update-with-safety-backup",
+                    "selected-container-equipment-repair-preserves-stats-backup-and-idempotence",
                     "all-ranged-categories-and-unloaded-ammo-initialization",
                     "worn-equipment-display-without-writable-destination-expansion",
                     "invalid-ammo-stats-and-non-weapons-rejected-without-writes",

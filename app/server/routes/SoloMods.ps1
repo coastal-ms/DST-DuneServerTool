@@ -69,3 +69,11 @@ Register-DuneRoute -Method POST -Path '/api/solo/mods/delete' -LocalOnly -Handle
         Write-DuneJson -Response $res -Body $result
     } catch { Write-DuneError -Response $res -Status 400 -Message $_.Exception.Message }
 }
+
+Register-DuneRoute -Method POST -Path '/api/solo/mods/shortcut' -LocalOnly -Handler {
+    param($req,$res,$routeParams,$body)
+    try {
+        $result=Invoke-WithDuneLock -Name 'solo-mods' -Script { New-DuneSoloModShortcut }
+        Write-DuneJson -Response $res -Body $result
+    } catch { Write-DuneError -Response $res -Status 400 -Message $_.Exception.Message }
+}

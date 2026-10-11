@@ -633,3 +633,7 @@ export function resetSoloSpecializationRewards(track: string, expectedProfileTok
     body: JSON.stringify({ track, expectedProfileToken, confirm: 'RESET SOLO SPECIALIZATION REWARDS' }),
   })
 }
+
+export function repairSoloEquipment(expectedProfileToken: string, destination = 'carried'): Promise<{ok: boolean; repaired: number; safetyBackup: string; inspection: SoloInspection}> {
+  return api('/api/solo/items/repair-equipment', {method: 'POST', body: JSON.stringify({expectedProfileToken, destination, confirm: 'REPAIR SOLO EQUIPMENT'})})
+}

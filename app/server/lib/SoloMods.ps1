@@ -1,4 +1,4 @@
-$soloModAppRoot = if($script:AppDir){$script:AppDir}else{[IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..\..'))}
+﻿$soloModAppRoot = if($script:AppDir){$script:AppDir}else{[IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..\..'))}
 $script:DuneSoloModsRoot = Join-Path $soloModAppRoot 'Mods'
 $script:DuneSoloLoaderRoot = Join-Path $soloModAppRoot 'ModLoader'
 
@@ -258,4 +258,21 @@ function Remove-DuneSoloMod([string]$Folder) {
     $remaining = @($current.mods | Where-Object { $_.folder -ne $Folder })
     Remove-Item -LiteralPath $target -Recurse -Force -ErrorAction Stop
     return Set-DuneSoloModSelection @{mods=$remaining;gamePath=$current.gamePath}
+}
+
+function New-DuneSoloModShortcut {
+    $root = if ($script:AppDir) {$script:AppDir} else {[IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..\..'))}
+    $launcher = Join-Path $PSScriptRoot 'LaunchSoloMods.ps1'
+    $desktop = [Environment]::GetFolderPath('Desktop')
+    if (-not $desktop -or -not (Test-Path -LiteralPath $launcher)) { throw 'Desktop or mod launcher is unavailable.' }
+    $shell = New-Object -ComObject WScript.Shell
+    $path = Join-Path $desktop 'Dune - Launch with mods.lnk'
+    $shortcut = $shell.CreateShortcut($path)
+    $shortcut.TargetPath = Join-Path $env:SystemRoot 'System32\WindowsPowerShell\v1.0\powershell.exe'
+    $shortcut.Arguments = '-NoProfile -NonInteractive -WindowStyle Hidden -ExecutionPolicy Bypass -File "' + $launcher + '"'
+    $shortcut.WorkingDirectory = $root
+    $shortcut.Description = 'Launch Dune with enabled Solo mods and saved launch settings.'
+    $shortcut.IconLocation = (Join-Path $root 'assets\icon.ico') + ',0'
+    $shortcut.Save()
+    return @{ok=$true;path=$path}
 }
