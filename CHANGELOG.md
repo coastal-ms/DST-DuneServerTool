@@ -13,6 +13,11 @@ here cover everything those tags shipped.
 
 ## [Unreleased]
 
+## [16.2.1] - 2026-10-10
+
+### Changed
+- Framework adjustment.
+
 ## [16.2.0] - 2026-10-10
 
 ### Added

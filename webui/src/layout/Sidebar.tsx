@@ -393,6 +393,17 @@ export function Sidebar({ collapsed, onExpand }: Props) {
           collapsed ? 'px-1.5 py-2' : 'px-4 py-3'
         } border-t border-border text-[10px] text-text-dim space-y-2`}
       >
+        <a
+          href="https://buymeacoffee.com/coastal_dst"
+          target="_blank"
+          rel="noopener noreferrer"
+          title="Buy Me a Coffee"
+          aria-label="Buy Me a Coffee"
+          className="flex min-h-8 items-center gap-2 rounded-md text-text-muted hover:text-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+        >
+          <Icon name="Coffee" size={16} />
+          {!collapsed && <span>Buy Me a Coffee</span>}
+        </a>
         {!customizing && (
           <button
             type="button"

@@ -38,7 +38,7 @@ describe('sidebar hotfix links', () => {
     renderSidebar(false)
 
     expect(screen.getByRole('link', { name: 'DST Credits' })).toHaveAttribute('href', '/sponsors')
-    expect(screen.queryByRole('link', { name: /coffee|donat/i })).not.toBeInTheDocument()
+    expect(screen.getByRole('link', { name: 'Buy Me a Coffee' })).toHaveAttribute('href', 'https://buymeacoffee.com/coastal_dst')
     expect(screen.queryByRole('link', { name: 'PowerShell' })).not.toBeInTheDocument()
     expect(screen.getAllByText('Thank you Hawk_I5')).toHaveLength(1)
     expect(screen.queryByText('Decker (@decker177)')).not.toBeInTheDocument()
@@ -49,6 +49,7 @@ describe('sidebar hotfix links', () => {
     renderSidebar(true)
 
     expect(screen.getByTitle('DST Credits')).toHaveAttribute('href', '/sponsors')
+    expect(screen.getByRole('link', { name: 'Buy Me a Coffee' })).toHaveAttribute('href', 'https://buymeacoffee.com/coastal_dst')
   })
 
   it('shows one active DD Atlas link for the static atlas URL', () => {
