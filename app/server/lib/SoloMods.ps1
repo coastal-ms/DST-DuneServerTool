@@ -262,7 +262,7 @@ function Remove-DuneSoloMod([string]$Folder) {
 
 function New-DuneSoloModShortcut {
     $root = if ($script:AppDir) {$script:AppDir} else {[IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..\..'))}
-    $launcher = Join-Path $PSScriptRoot 'LaunchSoloMods.ps1'
+    $launcher = Join-Path $PSScriptRoot '../tools/LaunchSoloMods.ps1'
     $desktop = [Environment]::GetFolderPath('Desktop')
     if (-not $desktop -or -not (Test-Path -LiteralPath $launcher)) { throw 'Desktop or mod launcher is unavailable.' }
     $shell = New-Object -ComObject WScript.Shell

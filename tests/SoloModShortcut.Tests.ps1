@@ -1,5 +1,5 @@
 BeforeAll {
-    $script:Launcher = Join-Path $PSScriptRoot '../app/server/lib/LaunchSoloMods.ps1'
+    $script:Launcher = Join-Path $PSScriptRoot '../app/server/tools/LaunchSoloMods.ps1'
     $script:OriginalLocalApp = $env:LOCALAPPDATA
 }
 Describe 'Desktop mod shortcut launch' {
@@ -11,6 +11,7 @@ BeforeEach {
     Mock Start-Sleep {}
     Mock Add-Type {}
 }
+
 AfterEach { $env:LOCALAPPDATA = $script:OriginalLocalApp }
     It 'uses the current local token and requests a modded launch' {
         Mock Invoke-RestMethod {
@@ -44,5 +45,19 @@ AfterEach { $env:LOCALAPPDATA = $script:OriginalLocalApp }
         $result.EnabledMods | Should -Be 1
         Should -Invoke Start-Process -Times 0
         Should -Invoke Invoke-RestMethod -Times 0 -ParameterFilter { $Method -eq 'Post' }
+    }
+}
+
+Describe 'Mod launcher startup isolation' {
+    It 'keeps the standalone launcher outside automatically executed server modules' {
+        $server = Join-Path $PSScriptRoot '../app/server'
+        $startupFiles = @(
+            Get-ChildItem (Join-Path $server 'lib') -Filter '*.ps1'
+            Get-ChildItem (Join-Path $server 'routes') -Filter '*.ps1'
+        )
+        $startupFiles.Name | Should -Not -Contain 'LaunchSoloMods.ps1'
+        Test-Path (Join-Path $server 'tools/LaunchSoloMods.ps1') | Should -BeTrue
+        $installer = Get-Content (Join-Path $PSScriptRoot '../app/installer/DuneServer.iss') -Raw
+        $installer | Should -Match 'Type: filesandordirs; Name: "\{app\}\\server"'
     }
 }
