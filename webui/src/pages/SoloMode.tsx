@@ -2233,7 +2233,7 @@ export function SoloMode() {
               { id: 'MercenaryLightArmorSet', label: 'Mercenary Light Armor Set' },
             ].map(choice => <button key={choice.id} className="btn-primary mt-4" disabled={!canMutateActiveProfile || gameRunning || !!busy}
               onClick={async () => {
-                if (!window.confirm(`Grant the reviewed ${choice.label}? A safety backup will be created.`)) return
+                if (!window.confirm(`Grant the reviewed ${choice.label}? A safety backup will be created.\n\n${COSMETIC_LICENSE_NOTICE}`)) return
                 setBusy('reviewed-customization')
                 setNotice(null)
                 try {
