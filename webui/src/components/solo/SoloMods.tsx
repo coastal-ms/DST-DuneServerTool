@@ -121,6 +121,12 @@ export function SoloMods({ connectionToken = '' }: { connectionToken?: string })
   }>
     <div className="space-y-3">
       <p className="text-sm text-text-muted">Launching with mods, including through the desktop shortcut, disables BattlEye for that game session.</p>
+      {platform === 'xbox' && (
+        <p className="rounded border border-warning/30 bg-warning/5 p-3 text-sm text-text-muted">
+          Xbox app / Game Pass mods require a version updated by the mod author for Game Pass.
+          Check the author&apos;s compatibility notes before installing; DST&apos;s Xbox support does not make Steam-only mods compatible.
+        </p>
+      )}
       {deleting && <ConfirmationModal title={`Delete ${deleting.name}?`} description="This permanently removes the mod folder and its INI settings. You can reinstall the mod from its ZIP." confirmLabel="Delete mod" onCancel={() => setDeleting(null)} onConfirm={() => { const folder = deleting.folder; setDeleting(null); void run('delete', { folder }) }} />}
       <a className="text-sm text-accent-bright underline" href="https://www.nexusmods.com/duneawakening" target="_blank" rel="noopener noreferrer">Browse Dune: Awakening mods on Nexus Mods</a>
       <div className="flex flex-wrap gap-2">
