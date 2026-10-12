@@ -120,6 +120,7 @@ export function SoloMods({ connectionToken = '' }: { connectionToken?: string })
     </div>
   }>
     <div className="space-y-3">
+      <p className="text-sm text-text-muted">Launching with mods, including through the desktop shortcut, disables BattlEye for that game session.</p>
       {deleting && <ConfirmationModal title={`Delete ${deleting.name}?`} description="This permanently removes the mod folder and its INI settings. You can reinstall the mod from its ZIP." confirmLabel="Delete mod" onCancel={() => setDeleting(null)} onConfirm={() => { const folder = deleting.folder; setDeleting(null); void run('delete', { folder }) }} />}
       <a className="text-sm text-accent-bright underline" href="https://www.nexusmods.com/duneawakening" target="_blank" rel="noopener noreferrer">Browse Dune: Awakening mods on Nexus Mods</a>
       <div className="flex flex-wrap gap-2">
