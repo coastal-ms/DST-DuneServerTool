@@ -33,6 +33,7 @@ import {
   resetSoloSpecializationRewards,
   grantSoloItems,
   grantSoloUnlocks,
+  grantSoloReviewedCustomization,
   type SoloUnlockKind,
   type SoloCosmeticOwnership,
   importSoloBlueprint,
@@ -2226,6 +2227,21 @@ export function SoloMode() {
                 Import blueprint
               </button>
             </div>
+
+            <button className="btn-primary mt-4" disabled={!canMutateActiveProfile || gameRunning || !!busy}
+              onClick={async () => {
+                if (!window.confirm('Grant the reviewed House Imota Garment Swatch? A safety backup will be created.')) return
+                setBusy('reviewed-customization')
+                setNotice(null)
+                try {
+                  await grantSoloReviewedCustomization(statusState.data?.profileToken ?? '')
+                  setNotice({ kind: 'ok', text: 'Reviewed swatch saved. Open the game and check the customization menu; gameplay effect is unverified.' })
+                  await Promise.all([statusState.refresh(), backupsState.refresh()])
+                } catch (error) { setNotice({ kind: 'err', text: error instanceof Error ? error.message : String(error) }) }
+                finally { setBusy(null) }
+              }}>
+              House Imota Garment Swatch (experimental)
+            </button>
 
             <SoloCosmeticGrantCard
               busy={busy === 'give-items'}

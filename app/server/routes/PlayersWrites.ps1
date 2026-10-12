@@ -723,3 +723,18 @@ Register-DuneRoute -Method POST -Path '/api/gameplay/players/update-tags' -Handl
         Write-DuneError -Response $res -Status 500 -Message "Update tags failed: $($_.Exception.Message)"
     }
 }
+Register-DuneRoute -Method POST -Path '/api/gameplay/players/reviewed-customization' -Handler {
+    param($req, $res, $routeParams, $body)
+    try {
+        $pawn = Get-DuneBodyInt -Body $body -Name 'pawn_id'
+        $controller = Get-DuneBodyInt -Body $body -Name 'controller_id'
+        $account = Get-DuneBodyInt -Body $body -Name 'account_id'
+        $id = [string](Get-DuneBodyValue -Body $body -Name 'customizationId')
+        if ([string](Get-DuneBodyValue -Body $body -Name 'confirm') -cne 'GRANT REVIEWED CUSTOMIZATION') { throw 'Confirm the selected customization.' }
+        $null = Get-DuneReviewedCustomization -CustomizationId $id
+        Invoke-DunePlayerWriteRoute -Response $res -Action {
+            param($ip)
+            Invoke-DunePlayerReviewedCustomization -Ip $ip -PawnId $pawn -ControllerId $controller -AccountId $account -CustomizationId $id
+        }
+    } catch { Write-DuneError -Response $res -Status 400 -Message $_.Exception.Message }
+}

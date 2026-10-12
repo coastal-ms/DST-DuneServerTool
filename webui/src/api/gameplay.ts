@@ -2766,3 +2766,8 @@ export function saveWelcomeBack(patch: {
     body: JSON.stringify(patch),
   })
 }
+export function grantReviewedCustomization(pawn_id: number, controller_id: number, account_id: number) {
+  return api<WriteResult>('/api/gameplay/players/reviewed-customization', {
+    method: 'POST', body: JSON.stringify({ pawn_id, controller_id, account_id, customizationId: 'StillSCharDyepackImota', confirm: 'GRANT REVIEWED CUSTOMIZATION' }),
+  })
+}

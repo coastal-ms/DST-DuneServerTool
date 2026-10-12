@@ -30,7 +30,7 @@ import {
   setFactionTier, setSkillPoints,
   setStarterClass, spawnVehicle, teleportToPlayer, teleportToLocation, setRespawn, getTeleportDestinations, getPlayers, updatePlayerTags, wipeCodex, resetFaction, snapshotBuilds, getFreshStartSnapshots, restoreBuilds, grantAllSkills,
   chatWhisper, isValidTemplateId, getItemCatalog, getCosmeticsCatalog, getPlayerOwnedCosmetics, filterCosmeticsCatalog, getHouseSwatchCosmetics, type CosmeticEntry,
-  parseTcnoPackageText, grantHouseSwatches, grantBuildingSets, getBuildingSetCosmetics, grantSkins, getSkinCosmetics, type HouseSwatchKind,
+  grantReviewedCustomization, parseTcnoPackageText, grantHouseSwatches, grantBuildingSets, getBuildingSetCosmetics, grantSkins, getSkinCosmetics, type HouseSwatchKind,
   giveItems, getItemPackages, saveItemPackage, deleteItemPackage,
   getLandsraadOverview, getLandsraadPlayerContributions, setLandsraadContribution,
   getPlayerJourneyNodes, completeJourneyNode, resetJourneyNode,
@@ -645,6 +645,10 @@ interface ActionDef {
 }
 
 const ACTIONS: ActionDef[] = [
+  { id: 'reviewed-customization', group: 'Items', label: 'House Imota Garment Swatch', icon: 'Palette', offlineOnly: true, experimental: true,
+    rowNote: 'Grant the reviewed ordinary vendor swatch directly. A safety backup is created; existing unlocks are preserved.',
+    confirm: p => `Grant House Imota Garment Swatch to ${p.name}?`,
+    run: p => grantReviewedCustomization(p.id, p.controller_id, p.account_id) },
   // ----- Currency -----
   { id: 'give-solari', group: 'Currency', label: 'Give Solari', icon: 'Coins', balance: 'solari',
     fields: [{ key: 'amount', label: 'Amount', type: 'number', placeholder: '10000' }],

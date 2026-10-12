@@ -13,6 +13,9 @@ here cover everything those tags shipped.
 
 ## [Unreleased]
 
+### Added
+- Experimental selective House Imota Garment Swatch grant in self-hosted Players actions and Solo. Only the exact naturally acquired customization ID is accepted; writes require a verified backup and an offline character or closed Solo game. Gameplay acceptance remains pending.
+
 ## [16.4.1.1] - 2026-10-12
 
 ### Fixed

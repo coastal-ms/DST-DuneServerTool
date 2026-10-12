@@ -1,0 +1,12 @@
+{
+  "schemaVersion": 1,
+  "entries": [
+    {
+      "id": "StillSCharDyepackImota",
+      "label": "House Imota Garment Swatch",
+      "acquisition": "Purchase and use the garment swatch from the Landsraad cosmetic vendor for 500 Solaris.",
+      "source": "https://duneawakening.com/news/dune-awakening-chapter-3-patch-notes/",
+      "mappingEvidence": "Verified before/after Solo acquisition on 2026-10-12: this exact customization ID was added; no existing customization IDs were removed."
+    }
+  ]
+}

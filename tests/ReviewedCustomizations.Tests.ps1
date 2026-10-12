@@ -1,0 +1,58 @@
+BeforeAll {
+    . "$PSScriptRoot\_TestHelpers.ps1"
+    Import-DstLib 'Database.ps1'
+    Import-DstLib 'Gameplay.ps1'
+    Import-DstLib 'GameplayPlayers.ps1'
+    Import-DstLib 'PlayersAdmin.ps1'
+    Import-DstLib 'SoloMode.ps1'
+    Import-DstLib 'SoloCosmetics.ps1'
+    function global:Get-DuneVehicleHostScope { throw 'Mock required.' }
+    function global:Invoke-DuneVerifiedSafetyBackup { throw 'Mock required.' }
+}
+AfterAll {
+    Remove-Item function:global:Get-DuneVehicleHostScope -ErrorAction SilentlyContinue
+    Remove-Item function:global:Invoke-DuneVerifiedSafetyBackup -ErrorAction SilentlyContinue
+}
+Describe 'Reviewed ordinary customizations' {
+    It 'accepts only exact evidence-backed IDs' {
+        (Get-DuneReviewedCustomization StillSCharDyepackImota).label | Should -Be 'House Imota Garment Swatch'
+        foreach ($id in @('stillschardyepackimota','MTX_StillSCharDyepackImota','MTX_Atre_Troopship_Relief_Placeable','Unknown')) {
+            { Get-DuneReviewedCustomization $id } | Should -Throw
+        }
+    }
+    It 'requires all identities and verifies offline state inside the transaction' {
+        { Get-DuneReviewedCustomizationSql 0 2 3 StillSCharDyepackImota } | Should -Throw
+        $sql = Get-DuneReviewedCustomizationSql 1 2 3 StillSCharDyepackImota
+        $sql | Should -Match "online_status::text='Offline' FOR UPDATE"
+        $sql | Should -Match 'player_pawn_id=1::bigint AND player_controller_id=2::bigint'
+        $sql | Should -Match 'account_id=3::bigint'
+        $sql | Should -Match 'IF NOT EXISTS'
+        $sql | Should -Match 'Customization verification failed'
+    }
+    BeforeEach {
+        Mock Get-DuneVehicleHostScope { @{key='fixture'} }
+        Mock Test-DunePlayerOffline { @{ok=$true} }
+        Mock Invoke-DuneVerifiedSafetyBackup { @{ok=$true;path='backup';database_scope='fixture'} }
+        Mock Invoke-DuneSqlQuery { @{ok=$true;rows=@()} }
+    }
+    It 'does not back up or write an unknown selection' {
+        { Invoke-DunePlayerReviewedCustomization fixture 1 2 3 Unknown } | Should -Throw
+        Should -Invoke Invoke-DuneVerifiedSafetyBackup -Times 0
+        Should -Invoke Invoke-DuneSqlQuery -Times 0
+    }
+    It 'does not write after backup failure' {
+        Mock Invoke-DuneVerifiedSafetyBackup { @{ok=$false;error='backup failed'} }
+        (Invoke-DunePlayerReviewedCustomization fixture 1 2 3 StillSCharDyepackImota).ok | Should -BeFalse
+        Should -Invoke Invoke-DuneSqlQuery -Times 0
+    }
+    It 'does not write when backup belongs to another database' {
+        Mock Invoke-DuneVerifiedSafetyBackup { @{ok=$true;path='backup';database_scope='other'} }
+        (Invoke-DunePlayerReviewedCustomization fixture 1 2 3 StillSCharDyepackImota).ok | Should -BeFalse
+        Should -Invoke Invoke-DuneSqlQuery -Times 0
+    }
+    It 'does not create a backup while player is online or unknown' {
+        Mock Test-DunePlayerOffline { @{ok=$false} }
+        (Invoke-DunePlayerReviewedCustomization fixture 1 2 3 StillSCharDyepackImota).ok | Should -BeFalse
+        Should -Invoke Invoke-DuneVerifiedSafetyBackup -Times 0
+    }
+}

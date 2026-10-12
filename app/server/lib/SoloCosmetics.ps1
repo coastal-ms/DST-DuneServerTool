@@ -12,6 +12,94 @@
     return @{ available=$true; owned=@($owned | Sort-Object); unlocked=@($unlocked | Sort-Object); pending=@($raw.pending); error='' }
 }
 
+function Get-DuneReviewedCustomization {
+    param([string]$CustomizationId)
+    $catalog = Get-Content -LiteralPath (Get-DuneSoloDataFilePath -Name 'legitimate-customizations.json') -Raw | ConvertFrom-Json
+    $matches = @($catalog.entries | Where-Object { [string]$_.id -ceq $CustomizationId })
+    if ($catalog.schemaVersion -ne 1 -or $matches.Count -ne 1 -or -not $matches[0].acquisition -or -not $matches[0].mappingEvidence) {
+        throw 'Choose an exact reviewed ordinary gameplay customization.'
+    }
+    return $matches[0]
+}
+
+function Invoke-DuneSoloReviewedCustomization {
+    param([string]$CustomizationId)
+    $null = Get-DuneReviewedCustomization -CustomizationId $CustomizationId
+    Assert-DuneSoloSupportedPlatform
+    Assert-DuneSoloGameClosed
+    $profile = Get-DuneSoloProfile
+    if (-not $profile.dbPath) { throw 'Connect and validate a Solo save first.' }
+    Assert-DuneSoloProgressionAdapter -Profile $profile
+    $adapter = Get-DuneSoloAdapterDescriptor -DbPath $profile.dbPath
+    $directory = Join-Path (Get-DuneSoloProfileBackupRoot -DbPath $profile.dbPath) 'pre-progression'
+    return Invoke-DuneSoloHelper -Command 'grant-legitimate-customization' -Arguments @{
+        input=$profile.dbPath; adapter=$adapter.manifestPath
+        'safety-backup'=(Join-Path $directory ("game-before-customization-{0}.db" -f [guid]::NewGuid().ToString('N')))
+        'reviewed-catalog'=(Get-DuneSoloDataFilePath -Name 'legitimate-customizations.json')
+        'customization-id'=$CustomizationId
+    }
+}
+
+function Get-DuneReviewedCustomizationSql {
+    param([long]$PawnId, [long]$ControllerId, [long]$AccountId, [string]$CustomizationId)
+    $null = Get-DuneReviewedCustomization -CustomizationId $CustomizationId
+    if ($PawnId -le 0 -or $ControllerId -le 0 -or $AccountId -le 0) { throw 'A current character identity is required.' }
+    $safeId = ConvertTo-DuneSqlString $CustomizationId
+    return @'
+BEGIN;
+SET LOCAL lock_timeout='5s';
+SET LOCAL statement_timeout='30s';
+CREATE TEMP TABLE dst_customization_result(added integer) ON COMMIT DROP;
+DO $dst$
+DECLARE
+    props jsonb;
+    unlocks jsonb;
+    changed integer := 0;
+BEGIN
+    PERFORM pg_advisory_xact_lock(__CONTROLLER__::bigint);
+    PERFORM 1 FROM dune.encrypted_player_state
+      WHERE player_pawn_id=__PAWN__::bigint AND player_controller_id=__CONTROLLER__::bigint
+        AND account_id=__ACCOUNT__::bigint AND online_status::text='Offline' FOR UPDATE;
+    IF NOT FOUND THEN RAISE EXCEPTION 'The matching character must be fully Offline.'; END IF;
+    SELECT properties INTO STRICT props FROM dune.actors WHERE id=__PAWN__::bigint FOR UPDATE;
+    unlocks := props #> '{CustomizationLibraryActorComponent,m_UnlockedCustomizationSerializableList,m_UnlockedCustomizationIds}';
+    IF jsonb_typeof(unlocks) IS DISTINCT FROM 'array' THEN RAISE EXCEPTION 'Unsupported customization library.'; END IF;
+    IF EXISTS (SELECT 1 FROM jsonb_array_elements(unlocks) e WHERE jsonb_typeof(e) IS DISTINCT FROM 'object'
+        OR jsonb_typeof(e->'m_CustomizationId') IS DISTINCT FROM 'string') THEN RAISE EXCEPTION 'Unsupported customization entry.'; END IF;
+    IF NOT EXISTS (SELECT 1 FROM jsonb_array_elements(unlocks) e WHERE e->>'m_CustomizationId'='__ID__') THEN
+        unlocks := unlocks || jsonb_build_array(jsonb_build_object('m_CustomizationId','__ID__'));
+        props := jsonb_set(props,'{CustomizationLibraryActorComponent,m_UnlockedCustomizationSerializableList,m_UnlockedCustomizationIds}',unlocks,false);
+        UPDATE dune.actors SET properties=props WHERE id=__PAWN__::bigint;
+        changed := 1;
+    END IF;
+    IF (SELECT properties FROM dune.actors WHERE id=__PAWN__::bigint) IS DISTINCT FROM props THEN
+        RAISE EXCEPTION 'Customization verification failed.';
+    END IF;
+    INSERT INTO dst_customization_result VALUES(changed);
+END
+$dst$;
+SELECT added::text AS added FROM dst_customization_result;
+COMMIT;
+'@.Replace('__PAWN__',[string]$PawnId).Replace('__CONTROLLER__',[string]$ControllerId).Replace('__ACCOUNT__',[string]$AccountId).Replace('__ID__',$safeId)
+}
+
+function Invoke-DunePlayerReviewedCustomization {
+    param([string]$Ip, [long]$PawnId, [long]$ControllerId, [long]$AccountId, [string]$CustomizationId)
+    $sql = Get-DuneReviewedCustomizationSql -PawnId $PawnId -ControllerId $ControllerId -AccountId $AccountId -CustomizationId $CustomizationId
+    $scope = Get-DuneVehicleHostScope -Ip $Ip
+    $offline = Test-DunePlayerOffline -Ip $Ip -PawnId $PawnId
+    if (-not $offline.ok) { return @{ok=$false;error='The selected character must be fully Offline.'} }
+    $backup = Invoke-DuneVerifiedSafetyBackup -Ip $Ip -StemPrefix 'dst-reviewed-customization' -ProofLabel 'DST_REVIEWED_CUSTOMIZATION_BACKUP'
+    if (-not $backup.ok) { return @{ok=$false;error=$backup.error} }
+    $current = Get-DuneVehicleHostScope -Ip $Ip
+    if ($backup.database_scope -cne $scope.key -or $current.key -cne $scope.key) { return @{ok=$false;error='Database changed during backup; no unlock attempted.'} }
+    $write = Invoke-DuneSqlQuery -Ip $Ip -Sql $sql -ReadOnly $false -MaxRows 1 -TimeoutSec 45
+    if (-not $write.ok) { return @{ok=$false;error=$write.error} }
+    $rows = ConvertTo-DuneRowMaps -Result $write
+    if ($rows.Count -ne 1) { return @{ok=$false;error='Refresh ownership before retrying; the result could not be read.'} }
+    return @{ok=$true;added=[int]$rows[0]['added'];safetyBackup=$backup.path;message='Reviewed customization saved. Log in and check the customization menu.'}
+}
+
 function Invoke-DuneSoloGrantUnlocks {
     param([ValidateSet('building-sets','armor','weapon','vehicle','dyes','house','placeables')][string]$Kind)
     Assert-DuneSoloSupportedPlatform

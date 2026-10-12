@@ -433,7 +433,7 @@ function Assert-DuneSoloGameClosed {
 
 function Invoke-DuneSoloHelper {
     param(
-        [Parameter(Mandatory)][ValidateSet('inspect','diagnostics','character-xp','faction-progression','set-specialization','reset-specialization-rewards','backup','restore','grant-items','delete-item','import-blueprint','list-blueprints','export-blueprint','set-currencies','fill-water','set-weapon-ammo','repair-equipment','max-augment-attributes','max-specializations','complete-fremen','complete-npe','enable-skills','set-progression-points','unlock-main-quest','unlock-trainer','unlock-testing-stations')][string]$Command,
+        [Parameter(Mandatory)][ValidateSet('inspect','diagnostics','character-xp','faction-progression','set-specialization','reset-specialization-rewards','backup','restore','grant-items','delete-item','import-blueprint','list-blueprints','export-blueprint','set-currencies','fill-water','set-weapon-ammo','repair-equipment','max-augment-attributes','max-specializations','complete-fremen','complete-npe','enable-skills','set-progression-points','unlock-main-quest','unlock-trainer','unlock-testing-stations','grant-legitimate-customization')][string]$Command,
         [Parameter(Mandatory)][hashtable]$Arguments
     )
 

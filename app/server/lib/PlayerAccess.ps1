@@ -51,6 +51,7 @@ function Get-DunePlayerRoutePolicy {
         if ($action -in @('give-scrip','give-faction-rep','set-faction-tier','progression-unlock','progression-reverse','award-intel')) { return 'actor_id' }
         if ($action -in @('set-skill-points','clean-inventory','reset-progression','set-skill-module','give-item-live','kick')) { return 'actor_id' }
         if ($action -in @('delete-item','repair-item','set-item-durability','set-item-water','set-item-stack')) { return 'item_id' }
+        if ($action -eq 'reviewed-customization') { return 'pawn_id,controller_id,account_id' }
         if ($action -eq 'set-weapon-ammo') { return 'pawn_id,item_id' }
         if ($action -in @('reserve-recovery','reserve-recovery/rollback')) { return 'pawn_id,controller_id' }
     }

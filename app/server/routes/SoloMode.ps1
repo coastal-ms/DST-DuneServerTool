@@ -672,3 +672,19 @@ Register-DuneRoute -Method POST -Path '/api/solo/items/repair-equipment' -LocalO
         Write-DuneError -Response $res -Status $status -Message $_.Exception.Message
     }
 }
+Register-DuneRoute -Method POST -Path '/api/solo/reviewed-customization' -LocalOnly -Handler {
+    param($req, $res, $routeParams, $body)
+    try {
+        $id = [string](Get-DuneSoloBodyField -Body $body -Name 'customizationId' -Default '')
+        $token = [string](Get-DuneSoloBodyField -Body $body -Name 'expectedProfileToken' -Default '')
+        if ([string](Get-DuneSoloBodyField -Body $body -Name 'confirm' -Default '') -cne 'GRANT REVIEWED CUSTOMIZATION') { throw 'Confirm the selected customization.' }
+        $result = Invoke-WithDuneLock -Name 'solo-profile-data' -Script {
+            Assert-DuneSoloExpectedProfile -ExpectedProfileToken $token
+            Invoke-DuneSoloReviewedCustomization -CustomizationId $id
+        }
+        Write-DuneJson -Response $res -Body $result
+    } catch {
+        $status = if ($_.Exception.Message -like '*still running*' -or $_.Exception.Message -like '*active Solo save changed*') {409} else {400}
+        Write-DuneError -Response $res -Status $status -Message $_.Exception.Message
+    }
+}

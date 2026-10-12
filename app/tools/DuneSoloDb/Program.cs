@@ -61,6 +61,9 @@ internal static partial class Program
             var command = RequireValue(options, "command").ToLowerInvariant();
             object result = command switch
             {
+                "grant-legitimate-customization" => GrantLegitimateCustomization(Require(options, "input"),
+                    Require(options, "safety-backup"), Require(options, "adapter"), Require(options, "reviewed-catalog"),
+                    RequireValue(options, "customization-id")),
                 "character-xp" => ChangeCharacterXp(Require(options, "input"), Require(options, "safety-backup"),
                     Require(options, "adapter"), Require(options, "levels"), RequireValue(options, "action"),
                     ParseBalance(RequireValue(options, "amount"), "Character XP")),
@@ -1062,6 +1065,7 @@ internal static partial class Program
     private static object SelfTest(string? retailAdapterPath = null)
     {
         SelfTestCosmeticOwnership();
+        SelfTestLegitimateCustomizations();
         var root = Path.Combine(Path.GetTempPath(), $"dune-solo-self-test-{Guid.NewGuid():N}");
         Directory.CreateDirectory(root);
         try
