@@ -13,6 +13,12 @@ here cover everything those tags shipped.
 
 ## [Unreleased]
 
+## [16.4.1.1] - 2026-10-12
+
+### Fixed
+- Correct LAN Server Overview VM discovery on workgroup Hyper-V hosts when the Settings connection Test succeeds but the remote PowerShell session is denied. Use the saved host credentials for the compatible Hyper-V query and retain successful status caching.
+
+
 ## [16.4.1] - 2026-10-12
 
 ### Added
