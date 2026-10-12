@@ -42,9 +42,11 @@ function Invoke-DuneSoloReviewedCustomization {
 
 function Get-DuneReviewedCustomizationSql {
     param([long]$PawnId, [long]$ControllerId, [long]$AccountId, [string]$CustomizationId)
-    $null = Get-DuneReviewedCustomization -CustomizationId $CustomizationId
+    $entry = Get-DuneReviewedCustomization -CustomizationId $CustomizationId
     if ($PawnId -le 0 -or $ControllerId -le 0 -or $AccountId -le 0) { throw 'A current character identity is required.' }
-    $safeId = ConvertTo-DuneSqlString $CustomizationId
+    $ids = if ($entry.PSObject.Properties.Name -contains 'customizationIds') { @($entry.customizationIds) } else { @([string]$entry.id) }
+    if ($ids.Count -eq 0 -or @($ids | Where-Object { $_ -isnot [string] -or [string]::IsNullOrWhiteSpace($_) }).Count -or @($ids | Select-Object -Unique).Count -ne $ids.Count) { throw 'Invalid reviewed customization mapping.' }
+    $safeIds = ($ids | ForEach-Object { "'$(ConvertTo-DuneSqlString $_)'" }) -join ','
     return @'
 BEGIN;
 SET LOCAL lock_timeout='5s';
@@ -55,6 +57,7 @@ DECLARE
     props jsonb;
     unlocks jsonb;
     changed integer := 0;
+    selected_id text;
 BEGIN
     PERFORM pg_advisory_xact_lock(__CONTROLLER__::bigint);
     PERFORM 1 FROM dune.encrypted_player_state
@@ -66,11 +69,15 @@ BEGIN
     IF jsonb_typeof(unlocks) IS DISTINCT FROM 'array' THEN RAISE EXCEPTION 'Unsupported customization library.'; END IF;
     IF EXISTS (SELECT 1 FROM jsonb_array_elements(unlocks) e WHERE jsonb_typeof(e) IS DISTINCT FROM 'object'
         OR jsonb_typeof(e->'m_CustomizationId') IS DISTINCT FROM 'string') THEN RAISE EXCEPTION 'Unsupported customization entry.'; END IF;
-    IF NOT EXISTS (SELECT 1 FROM jsonb_array_elements(unlocks) e WHERE e->>'m_CustomizationId'='__ID__') THEN
-        unlocks := unlocks || jsonb_build_array(jsonb_build_object('m_CustomizationId','__ID__'));
+    FOREACH selected_id IN ARRAY ARRAY[__IDS__]::text[] LOOP
+      IF NOT EXISTS (SELECT 1 FROM jsonb_array_elements(unlocks) e WHERE e->>'m_CustomizationId'=selected_id) THEN
+        unlocks := unlocks || jsonb_build_array(jsonb_build_object('m_CustomizationId',selected_id));
+        changed := changed + 1;
+      END IF;
+    END LOOP;
+    IF changed > 0 THEN
         props := jsonb_set(props,'{CustomizationLibraryActorComponent,m_UnlockedCustomizationSerializableList,m_UnlockedCustomizationIds}',unlocks,false);
         UPDATE dune.actors SET properties=props WHERE id=__PAWN__::bigint;
-        changed := 1;
     END IF;
     IF (SELECT properties FROM dune.actors WHERE id=__PAWN__::bigint) IS DISTINCT FROM props THEN
         RAISE EXCEPTION 'Customization verification failed.';
@@ -80,7 +87,7 @@ END
 $dst$;
 SELECT added::text AS added FROM dst_customization_result;
 COMMIT;
-'@.Replace('__PAWN__',[string]$PawnId).Replace('__CONTROLLER__',[string]$ControllerId).Replace('__ACCOUNT__',[string]$AccountId).Replace('__ID__',$safeId)
+'@.Replace('__PAWN__',[string]$PawnId).Replace('__CONTROLLER__',[string]$ControllerId).Replace('__ACCOUNT__',[string]$AccountId).Replace('__IDS__',$safeIds)
 }
 
 function Invoke-DunePlayerReviewedCustomization {

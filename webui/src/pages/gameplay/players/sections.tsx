@@ -645,6 +645,10 @@ interface ActionDef {
 }
 
 const ACTIONS: ActionDef[] = [
+  { id: 'reviewed-mercenary-armor', group: 'Items', label: 'Mercenary Light Armor Set', icon: 'Palette', offlineOnly: true, experimental: true,
+    rowNote: 'Grant all five reviewed ordinary vendor armor appearances together. A safety backup is created; existing unlocks are preserved.',
+    confirm: p => `Grant Mercenary Light Armor Set to ${p.name}?`,
+    run: p => grantReviewedCustomization(p.id, p.controller_id, p.account_id, 'MercenaryLightArmorSet') },
   { id: 'reviewed-customization', group: 'Items', label: 'House Imota Garment Swatch', icon: 'Palette', offlineOnly: true, experimental: true,
     rowNote: 'Grant the reviewed ordinary vendor swatch directly. A safety backup is created; existing unlocks are preserved.',
     confirm: p => `Grant House Imota Garment Swatch to ${p.name}?`,

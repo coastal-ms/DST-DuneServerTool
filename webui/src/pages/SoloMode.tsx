@@ -2228,20 +2228,23 @@ export function SoloMode() {
               </button>
             </div>
 
-            <button className="btn-primary mt-4" disabled={!canMutateActiveProfile || gameRunning || !!busy}
+            {[
+              { id: 'StillSCharDyepackImota', label: 'House Imota Garment Swatch' },
+              { id: 'MercenaryLightArmorSet', label: 'Mercenary Light Armor Set' },
+            ].map(choice => <button key={choice.id} className="btn-primary mt-4" disabled={!canMutateActiveProfile || gameRunning || !!busy}
               onClick={async () => {
-                if (!window.confirm('Grant the reviewed House Imota Garment Swatch? A safety backup will be created.')) return
+                if (!window.confirm(`Grant the reviewed ${choice.label}? A safety backup will be created.`)) return
                 setBusy('reviewed-customization')
                 setNotice(null)
                 try {
-                  await grantSoloReviewedCustomization(statusState.data?.profileToken ?? '')
-                  setNotice({ kind: 'ok', text: 'Reviewed swatch saved. Open the game and check the customization menu; gameplay effect is unverified.' })
+                  await grantSoloReviewedCustomization(statusState.data?.profileToken ?? '', choice.id)
+                  setNotice({ kind: 'ok', text: `${choice.label} saved. Open the game and check the customization menu; direct-grant gameplay effect is unverified.` })
                   await Promise.all([statusState.refresh(), backupsState.refresh()])
                 } catch (error) { setNotice({ kind: 'err', text: error instanceof Error ? error.message : String(error) }) }
                 finally { setBusy(null) }
               }}>
-              House Imota Garment Swatch (experimental)
-            </button>
+              {choice.label} (experimental)
+            </button>)}
 
             <SoloCosmeticGrantCard
               busy={busy === 'give-items'}

@@ -14,7 +14,7 @@ here cover everything those tags shipped.
 ## [Unreleased]
 
 ### Added
-- Experimental selective House Imota Garment Swatch grant in self-hosted Players actions and Solo. Only the exact naturally acquired customization ID is accepted; writes require a verified backup and an offline character or closed Solo game. Gameplay acceptance remains pending.
+- Experimental selective House Imota Garment Swatch and Mercenary Light Armor Set grants in self-hosted Players actions and Solo. Only exact naturally mapped customization IDs are accepted; all five armor appearances are saved together. Writes require a verified backup and an offline character or closed Solo game. Direct-grant gameplay acceptance remains pending.
 
 ## [16.4.1.1] - 2026-10-12
 

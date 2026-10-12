@@ -44,6 +44,15 @@ SELECT properties->'Other' = '{"keep":7}'::jsonb
 '@
         $verified.Output.Trim() | Should -Be 't'
     }
+    It 'adds all five armor appearances atomically and repeats without duplicates' {
+        $sql=Get-DuneReviewedCustomizationSql 1 2 3 MercenaryLightArmorSet
+        $first=Invoke-ReviewedFixture $sql
+        $first.ExitCode | Should -Be 0 -Because $first.Error
+        $first.Output.Trim() | Should -Be '5'
+        (Invoke-ReviewedFixture $sql).Output.Trim() | Should -Be '0'
+        $read=Invoke-ReviewedFixture "SELECT jsonb_array_length(properties #> '{CustomizationLibraryActorComponent,m_UnlockedCustomizationSerializableList,m_UnlockedCustomizationIds}'),properties->'Other' FROM dune.actors;"
+        $read.Output.Trim() | Should -Be '6|{"keep": 7}'
+    }
     It 'rejects changed identity or Online state without updating the actor' {
         (Invoke-ReviewedFixture "UPDATE dune.encrypted_player_state SET online_status='Online';").ExitCode | Should -Be 0
         (Invoke-ReviewedFixture (Get-DuneReviewedCustomizationSql 1 2 3 StillSCharDyepackImota)).ExitCode | Should -Not -Be 0

@@ -7,6 +7,13 @@
       "acquisition": "Purchase and use the garment swatch from the Landsraad cosmetic vendor for 500 Solaris.",
       "source": "https://duneawakening.com/news/dune-awakening-chapter-3-patch-notes/",
       "mappingEvidence": "Verified before/after Solo acquisition on 2026-10-12: this exact customization ID was added; no existing customization IDs were removed."
+    },
+    {
+      "id": "MercenaryLightArmorSet",
+      "label": "Mercenary Light Armor Set Variant",
+      "customizationIds": ["MercLight_T5_Helmet_MeshVariant", "MercLight_T5_Top_MeshVariant", "MercLight_T5_Gloves_MeshVariant", "MercLight_T5_Bottom_MeshVariant", "MercLight_T5_Boots_MeshVariant"],
+      "acquisition": "Purchase and activate the ordinary faction vendor's Mercenary Light Armor Set Variant using in-game currency.",
+      "mappingEvidence": "Verified before/after natural Solo acquisition on 2026-10-12: exactly these five customization IDs were added, with no existing IDs removed; gameplay displayed all five unlock notifications."
     }
   ]
 }

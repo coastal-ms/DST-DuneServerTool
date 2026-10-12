@@ -11,6 +11,14 @@ reviewed catalog records the acquisition and mapping evidence. Unknown IDs,
 case variants and prefixed aliases are rejected. Paid, DLC, preorder,
 promotional and other restricted items must not be added to this catalog.
 
+The second reviewed entry is Mercenary Light Armor Set Variant. Normal vendor
+purchase and activation added exactly five `MercLight_T5_*_MeshVariant` IDs
+(helmet, top, gloves, bottom and boots), with five matching gameplay unlock
+notifications and no removed IDs. The single selection saves all five IDs in
+one transaction and one backup. The product helper's private pre-acquisition
+copy matches the naturally acquired customization list exactly; repeating the
+set grant adds zero IDs. Real PostgreSQL fixtures verify the grouped write too.
+
 Solo uses the validated retail adapter, an expected-profile token, the shared
 profile write lock, closed-game checks and the helper's verified backup and
 replacement pipeline. Self-hosted writes require a verified database backup,

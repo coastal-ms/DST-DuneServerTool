@@ -22,7 +22,7 @@ internal static partial class Program
         } catch (InvalidDataException) { }
     }
 
-    private static string RequireLegitimateCustomization(string catalogPath, string id)
+    private static string[] RequireLegitimateCustomization(string catalogPath, string id)
     {
         var catalog = JsonNode.Parse(File.ReadAllText(catalogPath)) as JsonObject
             ?? throw new InvalidDataException("Invalid reviewed customization catalog.");
@@ -33,7 +33,12 @@ internal static partial class Program
         if (matches.Length != 1 || string.IsNullOrWhiteSpace(matches[0]["acquisition"]?.GetValue<string>())
             || string.IsNullOrWhiteSpace(matches[0]["mappingEvidence"]?.GetValue<string>()))
             throw new ArgumentException("Choose an exact reviewed ordinary gameplay customization.");
-        return id;
+        var ids = matches[0]["customizationIds"] is JsonArray mapped
+            ? mapped.Select(e => e!.GetValue<string>()).ToArray() : [id];
+        if (ids.Length == 0 || ids.Any(string.IsNullOrWhiteSpace)
+            || ids.Distinct(StringComparer.Ordinal).Count() != ids.Length)
+            throw new InvalidDataException("Invalid reviewed customization mapping.");
+        return ids;
     }
 
     private static bool AppendLegitimateCustomization(JsonObject properties, string id)
@@ -52,7 +57,7 @@ internal static partial class Program
     private static object GrantLegitimateCustomization(string input, string backup, string adapterPath,
         string catalogPath, string id)
     {
-        id = RequireLegitimateCustomization(catalogPath, id);
+        var ids = RequireLegitimateCustomization(catalogPath, id);
         AssertProgressionAdapter(input, ReadSoloAdapter(adapterPath));
         return RunProgressionMutation(input, backup, "grant-legitimate-customization", path => {
             using var db = OpenWritable(path);
@@ -60,13 +65,15 @@ internal static partial class Program
             try {
                 var player = ReadIdentity(db);
                 var properties = ReadActorProperties(db, player.PawnId);
-                var added = AppendLegitimateCustomization(properties, id);
-                if (added) WriteActorProperties(db, player.PawnId, properties);
+                var added = 0;
+                foreach (var mappedId in ids)
+                    if (AppendLegitimateCustomization(properties, mappedId)) added++;
+                if (added > 0) WriteActorProperties(db, player.PawnId, properties);
                 var verified = ReadActorProperties(db, player.PawnId);
                 if (!JsonNode.DeepEquals(properties, verified))
                     throw new InvalidDataException("Customization readback failed.");
                 ExecuteNonQuery(db, "COMMIT;");
-                return new { ok = true, added = added ? 1 : 0, customizationId = id,
+                return new { ok = true, added, customizationId = id,
                     message = "Reviewed customization saved. Open the game and check the customization menu." };
             } catch { ExecuteNonQuery(db, "ROLLBACK;"); throw; }
         }, requireGameClosed: true);
