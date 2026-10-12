@@ -26,6 +26,7 @@ import {
   completeSoloNpe,
   enableSoloAllSkills,
   unlockSoloTrainer,
+  unlockSoloTestingStations,
   exportSoloBlueprint,
   exportSoloDiagnostics,
   setSoloSpecialization,
@@ -574,6 +575,7 @@ export function SoloMode() {
   const [journeyAction, setJourneyAction] = useState<'fremen' | 'npe'>('fremen')
   const [mainQuest, setMainQuest] = useState('DA_MQ_ANewBeginning')
   const [trainerJob, setTrainerJob] = useState('Swordmaster')
+  const [testingStation, setTestingStation] = useState('all')
   const initializedFromStatus = useRef(false)
 
   useEffect(() => {
@@ -1266,6 +1268,9 @@ export function SoloMode() {
       setNotice({ kind: 'err', text: 'Close Dune: Awakening completely before changing Solo progression.' })
       return
     }
+    if (key === 'testing-stations' && !window.confirm(
+      'Unlock the selected Testing Station difficulties? DST will back up the save and record completion progress. Choose your difficulty in-game; faction requirements still apply.',
+    )) return
     if (key === 'reset-specialization-rewards' && !window.confirm(
       `${label}?\n\n`
       + 'This action retains the current game.db, writes one transaction, verifies progression semantics and SQLite integrity, then replaces the save atomically.',
@@ -2404,6 +2409,23 @@ export function SoloMode() {
                 {busy === `progression:${journeyAction}`
                   ? 'Applying...'
                   : journeyAction === 'npe' ? 'Complete NPE' : 'Complete Find the Fremen'}
+              </button>
+            </div>
+            <div className="card p-5 flex flex-col">
+              <h2 className="font-semibold">Testing Stations</h2>
+              <p className="text-sm text-text-muted mt-1 mb-3">Unlock selectable difficulties by recording completion progress. Choose your difficulty in-game; faction requirements still apply. Existing higher progress is preserved. Close Dune before applying.</p>
+              <label htmlFor="solo-testing-station" className="text-sm">Station</label>
+              <select id="solo-testing-station" className={`${SOLO_INPUT_CLASS} mt-1 mb-3`} value={testingStation} onChange={event => setTestingStation(event.target.value)} disabled={!canMutateActiveProfile || gameRunning || !!busy}>
+                <option value="all">All six stations</option>
+                <option value="DA_Dgn_024_Darkness">Station 24 — Darkness</option>
+                <option value="DA_Dgn_089_Radiation">Station 89 — Radiation</option>
+                <option value="DA_Dgn_136_Fire">Station 136 — Fire</option>
+                <option value="DA_Dgn_152_Electric">Station 152 — Electric</option>
+                <option value="DA_Dgn_195_Poison">Station 195 — Poison</option>
+                <option value="DA_Dgn_Pit">The Quarry</option>
+              </select>
+              <button className={`btn-primary ${SOLO_DISABLED_PRIMARY_CLASS}`} disabled={!canMutateActiveProfile || gameRunning || !!busy} onClick={() => void runProgressionAction('testing-stations', 'Unlock Solo Testing Stations', token => unlockSoloTestingStations(testingStation, token))}>
+                {busy === 'progression:testing-stations' ? 'Applying...' : 'Unlock difficulties'}
               </button>
             </div>
             <div className="card p-5 flex flex-col">

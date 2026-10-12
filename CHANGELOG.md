@@ -13,8 +13,14 @@ here cover everything those tags shipped.
 
 ## [Unreleased]
 
+## [16.4.1] - 2026-10-12
+
+### Added
+- Solo Testing Stations: choose one station or all six and unlock selectable difficulties with a retained save backup. The game still applies faction requirements, and existing higher completion progress is preserved.
+
 ### Fixed
 - Share external port-check results across HTTP workers, refresh automatically after six hours, and let manual Refresh force a new check. Retain the last confirmed result when an automatic check is inconclusive, and allow slower external observers more time to report.
+- Clarify that cross-battlegroup character recovery guidance is historical and has not been verified for the current game.
 
 ## [16.4.0] - 2026-10-11
 

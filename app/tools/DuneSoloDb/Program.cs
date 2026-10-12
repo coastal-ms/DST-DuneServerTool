@@ -139,6 +139,9 @@ internal static partial class Program
                     Require(options, "input"), Require(options, "safety-backup"),
                     Require(options, "adapter"), Require(options, "tags"),
                     RequireValue(options, "quest")),
+                "unlock-testing-stations" => UnlockTestingStations(
+                    Require(options, "input"), Require(options, "safety-backup"),
+                    Require(options, "adapter"), RequireValue(options, "station")),
                 "unlock-trainer" => UnlockTrainer(
                     Require(options, "input"), Require(options, "safety-backup"),
                     Require(options, "adapter"), Require(options, "tags"), RequireValue(options, "job")),
@@ -2363,6 +2366,7 @@ internal static partial class Program
                 """);
             var journeyTagsPath = Path.Combine(root, "journey-tags.json");
             SelfTestTrainers(root, target, adapterPath, skillsPath);
+            SelfTestTestingStations(root, target, adapterPath);
             // Use the same node-to-tag shape as the shipped catalog.
             File.WriteAllText(journeyTagsPath,
                 """{"journey_node_tags":{"DA_MQ_ANewBeginning":["Journey.MainQuest.SelfTest"]}}""");
@@ -2686,6 +2690,7 @@ internal static partial class Program
                     "offline-water-container-fills-with-safety-backups",
                     "offline-main-quest-unlock-with-backup-and-absent-quest-rejection",
                     "offline-trainer-unlock-preserves-skills-and-other-contracts-with-backup",
+                    "offline-all-six-testing-stations-preserve-higher-progress-repeat-backup-and-restore",
                     "offline-specialization-max-with-rewards",
                     "offline-specialization-lowering-preserves-rewards-and-backup",
                     "retail-all-five-track-targets-preserve-other-tracks",

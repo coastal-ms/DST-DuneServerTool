@@ -536,6 +536,13 @@ export function unlockSoloMainQuest(quest: string, expectedProfileToken: string)
   })
 }
 
+export function unlockSoloTestingStations(station: string, expectedProfileToken: string): Promise<SoloProgressionResult> {
+  return api('/api/solo/progression/testing-stations/unlock', {
+    method: 'POST',
+    body: JSON.stringify({ station, expectedProfileToken, confirm: 'UNLOCK SOLO TESTING STATIONS' }),
+  })
+}
+
 export function unlockSoloTrainer(job: string, expectedProfileToken: string): Promise<SoloProgressionResult> {
   return api('/api/solo/progression/trainer/unlock', {
     method: 'POST',
