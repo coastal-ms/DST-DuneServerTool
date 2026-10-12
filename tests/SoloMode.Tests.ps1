@@ -563,12 +563,15 @@ Describe 'Solo Mode write gates and settings backups' {
 
         $before = Read-DuneSoloConsoleSettings
         $before.supported | Should -BeTrue
+        ($before.entries | Where-Object key -eq 'dw.EnableBuildablePlacementAlwaysFilled').value |
+            Should -Be ''
         ($before.entries | Where-Object key -eq 'Hydration.SunExposureEnabled').value |
             Should -Be '1'
 
         $result = Set-DuneSoloConsoleSettings -Settings @{
             'Hydration.SunExposureEnabled' = '0'
             'Vehicle.MaxVehiclesPerPlayer' = '20'
+            'dw.EnableBuildablePlacementAlwaysFilled' = '1'
             'Dune.DisableShieldOnShooting' = '0'
             'Vehicle.RecoveryTimeLimit' = '1'
             'dw.VehicleDurabilityDamageMultiplier' = '0.01'
@@ -589,6 +592,7 @@ Describe 'Solo Mode write gates and settings backups' {
         @([regex]::Matches($written, '(?m)^Hydration\.SunExposureEnabled=0\r?$')).Count |
             Should -Be 1
         $written | Should -Match '(?m)^Vehicle\.MaxVehiclesPerPlayer=20\r?$'
+        $written | Should -Match '(?m)^dw\.EnableBuildablePlacementAlwaysFilled=1\r?$'
         $written | Should -Match '(?m)^Dune\.DisableShieldOnShooting=0\r?$'
         $written | Should -Match '(?m)^Vehicle\.RecoveryTimeLimit=1\r?$'
         $written | Should -Match '(?m)^dw\.VehicleDurabilityDamageMultiplier=0\.01\r?$'

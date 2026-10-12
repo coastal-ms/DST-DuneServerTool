@@ -1627,7 +1627,20 @@ export function SoloMode() {
                               {entry.status}
                             </span>
                           </span>
-                          {entry.type === 'bool01' ? (
+                          {entry.key === 'dw.EnableBuildablePlacementAlwaysFilled' ? (
+                            <label className="flex items-center gap-2 mt-2 text-sm">
+                              <input
+                                type="checkbox"
+                                checked={(consoleDraft[entry.key] ?? entry.value) === '1'}
+                                disabled={!canMutateActiveProfile || gameRunning}
+                                onChange={event => setConsoleDraft(current => ({
+                                  ...current,
+                                  [entry.key]: event.target.checked ? '1' : '0',
+                                }))}
+                              />
+                              Skip hologram placement
+                            </label>
+                          ) : entry.type === 'bool01' ? (
                             <SoloBooleanControl
                               value={consoleDraft[entry.key] ?? entry.value}
                               on="1"

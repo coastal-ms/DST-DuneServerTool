@@ -72,6 +72,14 @@ $script:DuneSoloSelectSettingOptions = @{
 $script:DuneSoloConsoleSection = 'ConsoleVariables'
 $script:DuneSoloConsoleSettings = @(
     [ordered]@{
+        key = 'dw.EnableBuildablePlacementAlwaysFilled'
+        type = 'bool01'
+        default = ''
+        label = 'Skip hologram placement'
+        help = 'Place filled buildables instead of holograms. Independent of Instant build; leave unchecked to keep hologram placement. Unset leaves the file unchanged.'
+        status = 'Available'
+    },
+    [ordered]@{
         key = 'Hydration.SunExposureEnabled'
         type = 'bool01'
         default = '1'
