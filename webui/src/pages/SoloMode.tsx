@@ -1575,7 +1575,7 @@ export function SoloMode() {
                 ) : !blueprintSettingsState.data ? (
                   <div className="text-sm text-text-muted">Loading blueprint settings...</div>
                 ) : !blueprintSettingsState.data.supported ? (
-                  <div className="text-sm text-text-muted">These controls require a verified Retail Solo profile.</div>
+                  <div className="text-sm text-text-muted">{status?.channel === 'Xbox' ? 'Xbox settings are unavailable in this preview while save synchronization is being tested.' : 'These controls require a verified Retail Solo profile.'}</div>
                 ) : (
                   <div className="space-y-3">
                     <p className="text-sm text-text-muted">Set blueprint piece build timers to zero. Your previous settings are saved for restoration. Close Dune: Awakening before making changes.</p>
@@ -1604,7 +1604,7 @@ export function SoloMode() {
                   <div className="text-sm text-text-muted">Loading Retail Engine.ini settings...</div>
                 ) : !consoleSettingsState.data.supported ? (
                   <div className="rounded border border-warning/30 bg-warning/5 p-3 text-sm text-text-muted">
-                    These controls require a verified Retail <span className="font-mono">FLS_retail</span> profile.
+                    {status?.channel === 'Xbox' ? 'Xbox Engine settings are unavailable in this preview while platform configuration support is being verified.' : <>These controls require a verified Retail <span className="font-mono">FLS_retail</span> profile.</>}
                   </div>
                 ) : (
                   <div className="space-y-4">
@@ -1768,7 +1768,7 @@ export function SoloMode() {
                 <Icon name={busy === 'delete-selected' ? 'LoaderCircle' : 'Trash2'} size={14} className={busy === 'delete-selected' ? 'animate-spin' : ''} />
                 Delete selected ({selectedBackupPaths.size})
               </button>
-              <button className={`btn-primary ${SOLO_DISABLED_PRIMARY_CLASS}`} onClick={() => void createBackup()} disabled={!canMutateActiveProfile}>
+              <button className={`btn-primary ${SOLO_DISABLED_PRIMARY_CLASS}`} onClick={() => void createBackup()} disabled={!selectionMatchesActive || busy !== null || gameRunning}>
                 <Icon name={busy === 'backup' ? 'LoaderCircle' : 'Archive'} size={14} className={busy === 'backup' ? 'animate-spin' : ''} />
                 Create backup
               </button>
