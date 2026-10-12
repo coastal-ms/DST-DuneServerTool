@@ -14,6 +14,7 @@ $script:DuneSoloSettingKeys = @(
     'LootRespawnSpeed',
     'FuelBurnTimeMultiplier',
     'InventoryVolumeMultiplier',
+    'PlayerInventoryStartingSize',
     'PlayerDamageToPlayer',
     'PlayerDamageToNPC',
     'PlayerDamageToVehicle',
@@ -62,7 +63,7 @@ $script:DuneSoloBooleanSettingKeys = @(
     'bBuildingInfiniteStability',
     'bLandsraadDisableDecreeRerollLimit'
 )
-$script:DuneSoloIntegerSettingKeys = @('FiefdomLimit', 'MaxLandclaimSegments')
+$script:DuneSoloIntegerSettingKeys = @('FiefdomLimit', 'MaxLandclaimSegments', 'PlayerInventoryStartingSize')
 $script:DuneSoloSelectSettingOptions = @{
     DropEquipmentOnDeath = @('Default', 'None', 'Backpack', 'All')
     SandwormConsequences = @('Default', 'None', 'Backpack', 'All')
@@ -1071,6 +1072,18 @@ function Read-DuneSoloSettings {
         })
     }
     $entries = foreach ($key in $script:DuneSoloSettingKeys) {
+        if ($key -eq 'PlayerInventoryStartingSize') {
+            $inventoryValue = ''
+            $insideInventory = $false
+            if (Test-Path -LiteralPath $gamePath -PathType Leaf) {
+                foreach ($line in [IO.File]::ReadAllLines($gamePath)) {
+                    if ($line -match '^\s*\[(.+)\]\s*$') { $insideInventory = $Matches[1] -eq '/Script/DuneSandbox.InventorySystemSettings' }
+                    elseif ($insideInventory -and $line -match '^\s*PlayerInventoryStartingSize\s*=(.*)$') { $inventoryValue = $Matches[1].Trim() }
+                }
+            }
+            [pscustomobject]@{ key = $key; value = $inventoryValue; present = ($inventoryValue -ne ''); needsApply = $false }
+            continue
+        }
         $sharedLandclaim = -not $NativeValues -and $retailOverrides -and $key -eq 'MaxLandclaimSegments' -and $landclaimOverrides.Count -gt 0
         $effectiveValue = if ($sharedLandclaim) { [string]$landclaimOverrides[-1] }
             elseif ($values.ContainsKey($key)) { [string]$values[$key] } else { '' }
@@ -1138,6 +1151,18 @@ function Set-DuneSoloSettings {
         $normalized[$name] = $trimmed
     }
     if ($normalized.Count -eq 0) { throw 'No Solo settings were provided.' }
+    if ($normalized.ContainsKey('PlayerInventoryStartingSize')) {
+        $slots = [string]$normalized['PlayerInventoryStartingSize']
+        if ([int64]$slots -lt 1 -or [int64]$slots -gt [int]::MaxValue) { throw 'PlayerInventoryStartingSize must be a positive 32-bit whole number.' }
+        $inventoryPath = Join-Path (Split-Path -Parent (@(Get-DuneSoloEnginePaths -Profile $profile)[0])) 'Game.ini'
+        Assert-DuneSoloConfigPath -Path $inventoryPath
+        $normalized.Remove('PlayerInventoryStartingSize')
+        $otherResult = if ($normalized.Count) { Set-DuneSoloSettings -Settings $normalized -Confirm $Confirm } else { $null }
+        $inventoryBackup = Set-DuneSoloLandclaimOverride -Path $inventoryPath -Value $slots -Section '/Script/DuneSandbox.InventorySystemSettings' -Key 'PlayerInventoryStartingSize'
+        $settings = Read-DuneSoloSettings
+        if ([string](@($settings.entries | Where-Object key -eq 'PlayerInventoryStartingSize')[0].value) -ne $slots) { throw 'Inventory Game.ini verification failed.' }
+        return @{ ok = $true; settings = $settings; backupPath = $inventoryBackup; paths = @($otherResult.paths) + @($inventoryPath); backupPaths = @($otherResult.backupPaths) + @($inventoryBackup | Where-Object { $_ }) }
+    }
 
     # Native settings remain authoritative for their named controls. Landclaim
     # segments additionally require the client's BuildingSettings override.
@@ -1281,9 +1306,11 @@ function Assert-DuneSoloConfigPath {
 }
 
 function Set-DuneSoloLandclaimOverride {
-    param([Parameter(Mandatory)][string]$Path, [Parameter(Mandatory)][string]$Value)
-    $section = '/Script/DuneSandbox.BuildingSettings'
-    $key = 'm_MaxNumLandclaimSegments'
+    param([Parameter(Mandatory)][string]$Path, [Parameter(Mandatory)][string]$Value,
+        [ValidateSet('/Script/DuneSandbox.BuildingSettings','/Script/DuneSandbox.InventorySystemSettings')][string]$Section = '/Script/DuneSandbox.BuildingSettings',
+        [ValidateSet('m_MaxNumLandclaimSegments','PlayerInventoryStartingSize')][string]$Key = 'm_MaxNumLandclaimSegments')
+    $parent = Split-Path -Parent $Path
+    if (-not (Test-Path -LiteralPath $parent)) { New-Item -ItemType Directory -Path $parent -Force | Out-Null }
     $existed = Test-Path -LiteralPath $Path -PathType Leaf
     $bom = $false
     $lines = @()

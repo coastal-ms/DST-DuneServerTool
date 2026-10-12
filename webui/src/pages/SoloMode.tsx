@@ -166,6 +166,7 @@ const SOLO_BOOLEAN_SETTINGS = new Set([
 const SOLO_INTEGER_SETTINGS = new Set([
   'FiefdomLimit',
   'MaxLandclaimSegments',
+  'PlayerInventoryStartingSize',
 ])
 
 const SOLO_SELECT_SETTINGS: Record<string, SoloSettingOption[]> = {
@@ -278,7 +279,7 @@ const SETTING_GROUPS: Array<{ title: string; keys: string[] }> = [
       'DifficultyLevel', 'GatheringAmount', 'CraftingCost',
       'WaterExtractionRate', 'CraftingTimeMultiplier', 'BuildingCostMultiplier',
       'ResourceRespawnSpeed', 'LootRespawnSpeed', 'FuelBurnTimeMultiplier',
-      'InventoryVolumeMultiplier',
+      'InventoryVolumeMultiplier', 'PlayerInventoryStartingSize',
     ],
   },
   {

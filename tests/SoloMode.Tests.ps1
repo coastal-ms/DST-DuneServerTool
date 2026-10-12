@@ -342,11 +342,11 @@ Describe 'Solo Mode profile discovery and persistence' {
 Describe 'Solo Mode write gates and settings backups' {
     BeforeEach { Reset-TestSoloState }
 
-    It 'reports all 48 native settings even when the INI is absent' {
+    It 'reports all 49 settings even when the INI is absent' {
         $layout = New-TestSoloLayout
         Save-DuneSoloState -DataRoot $layout.root -DbPath $layout.db | Out-Null
         $settings = Read-DuneSoloSettings
-        $settings.entries.Count | Should -Be 48
+        $settings.entries.Count | Should -Be 49
         @($settings.entries | Where-Object present).Count | Should -Be 0
     }
 
@@ -355,6 +355,24 @@ Describe 'Solo Mode write gates and settings backups' {
         Save-DuneSoloState -DataRoot $layout.root -DbPath $layout.db | Out-Null
         { Set-DuneSoloSettings -Settings @{ GatheringAmount = '2.0' } -Confirm 'yes' } |
             Should -Throw '*APPLY SOLO SETTINGS*'
+    }
+    It 'writes inventory slots only to Game.ini and preserves unrelated content' {
+        $layout = New-TestSoloLayout
+        Save-DuneSoloState -DataRoot $layout.root -DbPath $layout.db | Out-Null
+        Mock Get-DuneSoloGameProcesses { @() }
+        $game = Join-Path $layout.config 'Game.ini'
+        [IO.File]::WriteAllText($game, "[/Script/DuneSandbox.InventorySystemSettings]`r`nPlayerInventoryStartingSize=35`r`nPlayerInventoryStartingSize=40`r`nKeepInventory=Yes`r`n[Other]`r`nKeep=Yes`r`n")
+        $before = [IO.File]::ReadAllText($game)
+        $result = Set-DuneSoloSettings -Settings @{ PlayerInventoryStartingSize = '100' } -Confirm 'APPLY SOLO SETTINGS'
+        [IO.File]::ReadAllText($result.backupPath) | Should -Be $before
+        $text = [IO.File]::ReadAllText($game)
+        ([regex]::Matches($text, '(?m)^PlayerInventoryStartingSize=')).Count | Should -Be 1
+        $text | Should -Match 'PlayerInventoryStartingSize=100'
+        $text | Should -Match 'KeepInventory=Yes'
+        $text | Should -Match 'Keep=Yes'
+        (Test-Path (Join-Path $layout.config 'ServerCustomSettings.ini')) | Should -BeFalse
+        ($result.settings.entries | Where-Object key -eq 'PlayerInventoryStartingSize').value | Should -Be '100'
+        { Set-DuneSoloSettings -Settings @{ PlayerInventoryStartingSize = '0' } -Confirm 'APPLY SOLO SETTINGS' } | Should -Throw '*positive*'
     }
 
     It 'blocks settings writes while a Dune process is running' {
