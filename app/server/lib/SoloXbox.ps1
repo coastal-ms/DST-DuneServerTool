@@ -23,7 +23,7 @@ function Read-DuneSoloXboxContainer {
         $localId = [guid]::new([byte[]]$bytes[($offset + 128)..($offset + 143)]).ToString('N').ToUpperInvariant()
         $cloudId = [guid]::new([byte[]]$bytes[($offset + 144)..($offset + 159)]).ToString('N').ToUpperInvariant()
         # Divergent identities indicate a pending storage transition: do not guess.
-        if ($localId -ne $cloudId) { throw 'Xbox save has a pending container transition. Launch and close the game to finish synchronization.' }
+        if ($localId -ne $cloudId) { throw 'Xbox save is still updating (pending container transition). Wait 10 seconds, then click Connect and validate again.' }
         [pscustomobject]@{ name = $name; path = Join-Path (Split-Path -Parent $Path) $localId }
     }
 }
@@ -33,7 +33,7 @@ function Find-DuneSoloXboxProfiles {
     if (-not (Test-Path -LiteralPath $DataRoot -PathType Container)) { return @() }
     $metadata = @(Get-ChildItem -LiteralPath $DataRoot -Filter 'container.*' -File -Recurse -ErrorAction Stop)
     foreach ($group in ($metadata | Group-Object DirectoryName)) {
-        if ($group.Count -ne 1) { throw 'Xbox container has multiple metadata revisions. Launch and close the game before scanning.' }
+        if ($group.Count -ne 1) { throw 'Xbox save is still updating (multiple metadata revisions). Wait 10 seconds, then click Connect and validate again.' }
         $file = $group.Group[0]
         $blobs = @(Read-DuneSoloXboxContainer -Path $file.FullName)
         $game = @($blobs | Where-Object name -CEQ 'game.db')
