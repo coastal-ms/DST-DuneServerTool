@@ -326,7 +326,7 @@ Describe 'Solo Mode profile discovery and persistence' {
         (Read-DuneSoloState).dbPath | Should -Be $secondDb
         (Read-DuneSoloState).dataRoot | Should -Be $layout.root
         { Assert-DuneSoloExpectedProfile -ExpectedProfileToken $firstToken } |
-            Should -Throw '*changed in another window*'
+            Should -Throw '*active Solo save changed*'
     }
 
     It 'rejects a saved database path outside its configured root' {
@@ -1098,7 +1098,7 @@ Describe 'Solo Mode route security metadata' {
             & $Script
         }
         Mock Assert-DuneSoloExpectedProfile {
-            throw 'The selected Solo profile changed in another window. Refresh and try again.'
+            throw 'The selected Solo profile active Solo save changed. Refresh and try again.'
         }
         Mock Export-DuneSoloBlueprint {}
         . (Join-Path (Get-DstRepoRoot) 'app\server\routes\SoloMode.ps1')
@@ -1111,7 +1111,7 @@ Describe 'Solo Mode route security metadata' {
         & $script:CapturedSoloRouteHandlers['/api/solo/blueprints/export'] $request $response $null $null
 
         $response.Status | Should -Be 409
-        $response.Message | Should -Match 'changed in another window'
+        $response.Message | Should -Match 'active Solo save changed'
         Assert-MockCalled Export-DuneSoloBlueprint -Times 0 -Exactly
     }
 
@@ -1204,7 +1204,7 @@ Describe 'Solo Mode backup profile isolation' {
         $token = Get-DuneSoloProfileToken -DbPath $layout.db
         { Assert-DuneSoloExpectedProfile -ExpectedProfileToken $token } | Should -Not -Throw
         { Assert-DuneSoloExpectedProfile -ExpectedProfileToken ('0' * 64) } |
-            Should -Throw '*changed in another window*'
+            Should -Throw '*active Solo save changed*'
     }
 
     It 'keeps blueprint list and export behind the same stale-profile guard' {

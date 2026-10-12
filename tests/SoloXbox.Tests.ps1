@@ -57,6 +57,18 @@ Describe 'Xbox Solo named blob discovery' {
     It 'refuses an arbitrary blob in a valid container' {
         { Get-DuneSoloXboxBlob -Path $layout.old } | Should -Throw '*not the current*'
     }
+    It 'reconnects a rotated game blob only within its original container' {
+        $bytes = [IO.File]::ReadAllBytes($layout.metadata)
+        $next = [guid]::NewGuid()
+        $next.ToByteArray().CopyTo($bytes, 296)
+        $next.ToByteArray().CopyTo($bytes, 312)
+        $nextPath = Join-Path (Split-Path -Parent $layout.game) $next.ToString('N').ToUpperInvariant()
+        [IO.File]::WriteAllBytes($nextPath, [byte[]](1,2,3))
+        [IO.File]::WriteAllBytes($layout.metadata, $bytes)
+        (Get-DuneSoloXboxBlob -Path $layout.game -ResolveCurrentGame).dbPath | Should -Be $nextPath
+        { Get-DuneSoloXboxBlob -Path $layout.game } | Should -Throw '*not the current*'
+        { Get-DuneSoloXboxBlob -Path $layout.old -ResolveCurrentGame } | Should -Throw '*not the current*'
+    }
     It 'targets Xbox WinGDK configuration outside the WGS account' {
         Mock Get-DuneSoloDefaultDataRoot { Join-Path $TestDrive 'Saved' }
         Mock Read-DuneSoloState { @{ dataRoot = $layout.root; dbPath = $layout.game } }

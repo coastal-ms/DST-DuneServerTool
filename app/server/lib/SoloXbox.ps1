@@ -52,16 +52,22 @@ function Find-DuneSoloXboxProfiles {
 }
 
 function Get-DuneSoloXboxBlob {
-    param([Parameter(Mandatory)][string]$Path)
+    param([Parameter(Mandatory)][string]$Path, [switch]$ResolveCurrentGame)
     $dir = Split-Path -Parent ([IO.Path]::GetFullPath($Path))
     $metadata = @(Get-ChildItem -LiteralPath $dir -File -Filter 'container.*' -ErrorAction SilentlyContinue)
     if ($metadata.Count -eq 0) { return $null }
     if ($metadata.Count -ne 1) { throw 'Ambiguous Xbox container metadata.' }
-    $games = @(Read-DuneSoloXboxContainer -Path $metadata[0].FullName | Where-Object name -CEQ 'game.db')
-    if ($games.Count -ne 1 -or $games[0].path -ine [IO.Path]::GetFullPath($Path)) { throw 'Selected Xbox blob is not the current game.db.' }
+    $blobs = @(Read-DuneSoloXboxContainer -Path $metadata[0].FullName)
+    $games = @($blobs | Where-Object name -CEQ 'game.db')
+    if ($games.Count -ne 1) { throw 'Xbox save connection is not ready. Wait for saving or cloud sync to finish, then click Connect and validate.' }
+    if ($games[0].path -ine [IO.Path]::GetFullPath($Path)) {
+        if (-not $ResolveCurrentGame -or @($blobs | Where-Object path -IEQ ([IO.Path]::GetFullPath($Path))).Count -gt 0 -or [IO.Path]::GetFileName($Path) -notmatch '^[A-Fa-f0-9]{32}$') {
+            throw 'Selected Xbox blob is not the current game.db. Wait for Xbox sync to finish, then find saves again and click Connect and validate.'
+        }
+    }
     $account = Split-Path -Parent $dir
     if (-not (Test-Path -LiteralPath (Join-Path $account 'containers.index'))) { throw 'Xbox account index is missing.' }
-    return @{ account = $account; container = $dir; metadata = $metadata[0].FullName }
+    return @{ account = $account; container = $dir; metadata = $metadata[0].FullName; dbPath = $games[0].path }
 }
 
 function Backup-DuneSoloXboxAccount {

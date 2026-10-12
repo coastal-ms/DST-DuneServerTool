@@ -951,8 +951,11 @@ function Connect-DuneSoloProfile {
     }
     if ($DbPath) {
         $DbPath = [IO.Path]::GetFullPath($DbPath)
-        $xbox = Get-DuneSoloXboxBlob -Path $DbPath
-        if ($xbox) { $dataRoot = Split-Path -Parent $xbox.account }
+        $xbox = Get-DuneSoloXboxBlob -Path $DbPath -ResolveCurrentGame
+        if ($xbox) {
+            $DbPath = $xbox.dbPath
+            $dataRoot = Split-Path -Parent $xbox.account
+        }
         if (-not (Test-DuneSoloPathWithinRoot -Path $DbPath -Root $dataRoot)) {
             throw 'Selected Solo database is outside the chosen data root.'
         }
@@ -1738,7 +1741,7 @@ function Assert-DuneSoloExpectedProfile {
     }
     $actual = Get-DuneSoloProfileToken -DbPath $profile.dbPath
     if ($actual -ne $ExpectedProfileToken.Trim().ToLowerInvariant()) {
-        throw 'The active Solo profile changed in another window. Refresh Solo Mode before writing.'
+        throw 'The active Solo save changed since this page loaded. Xbox saving or cloud sync can change the save-file connection. Close Dune, wait for sync to finish, then click Connect and validate for your intended save and retry. This request made no changes.'
     }
 }
 
