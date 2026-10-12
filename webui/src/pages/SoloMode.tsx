@@ -717,7 +717,7 @@ export function SoloMode() {
   const selectionMatchesActive = connected
     && normalizeWindowsPath(dataRoot) === normalizeWindowsPath(statusState.data?.dataRoot ?? '')
     && normalizeWindowsPath(selectedDb) === normalizeWindowsPath(statusState.data?.dbPath ?? '')
-  const canMutateActiveProfile = selectionMatchesActive && busy === null && statusState.data?.channel !== 'Xbox'
+  const canMutateActiveProfile = selectionMatchesActive && busy === null
   const blueprintsMatchActiveProfile = blueprintsState.data?.profileToken === activeProfileToken
   const savedBlueprints = blueprintsMatchActiveProfile ? blueprintsState.data?.blueprints ?? [] : []
 
@@ -1443,7 +1443,7 @@ export function SoloMode() {
                 .finally(() => setBusy(null))
             }}>Find saves automatically</button>
           </div>
-          {status?.channel === 'Xbox' && <p className="text-xs text-text-muted">Xbox preview: inspection and backups are available. Save edits and settings remain disabled until the Xbox save synchronization test passes.</p>}
+          {status?.channel === 'Xbox' && <p className="text-xs text-text-muted">Xbox save edits retain a complete WGS account backup and validate a staged copy before replacing the current save. Settings use Config\WinGDK. Close Dune before writing.</p>}
           <label className="block">
             <span className="text-xs text-text-muted">Solo save folder</span>
             <div className="flex gap-2 mt-1">
@@ -1520,7 +1520,7 @@ export function SoloMode() {
           <div className="card p-5">
             <div className="flex items-center justify-between gap-3 mb-4">
               <h2 className="font-semibold flex items-center gap-2"><Icon name="Activity" size={16} /> Runtime safety</h2>
-              <StatusPill ok={!gameRunning}>{gameRunning ? 'Game running - writes locked' : status?.channel === 'Xbox' ? 'Xbox preview - inspection and backup' : 'Game closed - writes available'}</StatusPill>
+              <StatusPill ok={!gameRunning}>{gameRunning ? 'Game running - writes locked' : 'Game closed - writes available'}</StatusPill>
             </div>
             <dl className="grid grid-cols-[9rem_1fr] gap-x-3 gap-y-2 text-sm">
               <dt className="text-text-muted">Adapter</dt><dd className="font-mono">{status?.adapter ?? 'retail-auto'}</dd>
@@ -1609,8 +1609,8 @@ export function SoloMode() {
                 ) : (
                   <div className="space-y-4">
                     <div className="rounded border border-warning/30 bg-warning/5 p-3 text-xs text-text-muted">
-                      Writes only <span className="font-mono">Config\Windows\Engine.ini</span> under the
-                      connected Retail Solo root. Vehicle recovery and durability values were tested
+                      Writes only <span className="font-mono">{status?.channel === 'Xbox' ? 'Config\\WinGDK\\Engine.ini' : 'Config\\Windows\\Engine.ini'}</span> under the
+                      game settings directory. Vehicle recovery and durability values were tested
                       by Coastal in Solo. Unset vehicle controls do not change the file.
                     </div>
                     <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">

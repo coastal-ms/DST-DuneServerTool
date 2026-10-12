@@ -57,9 +57,21 @@ Describe 'Xbox Solo named blob discovery' {
     It 'refuses an arbitrary blob in a valid container' {
         { Get-DuneSoloXboxBlob -Path $layout.old } | Should -Throw '*not the current*'
     }
-    It 'blocks save mutation before invoking the database helper' {
+    It 'targets Xbox WinGDK configuration outside the WGS account' {
+        Mock Get-DuneSoloDefaultDataRoot { Join-Path $TestDrive 'Saved' }
+        Mock Read-DuneSoloState { @{ dataRoot = $layout.root; dbPath = $layout.game } }
+        $profile = Get-DuneSoloProfile
+        $profile.settingsPath | Should -Be (Join-Path $TestDrive 'Saved\Config\WinGDK\ServerCustomSettings.ini')
+        @(Get-DuneSoloEnginePaths -Profile $profile)[0] | Should -Be (Join-Path $TestDrive 'Saved\Config\WinGDK\Engine.ini')
+    }
+    It 'routes save mutation through staged validation and guarded commit' {
         Mock Get-DuneSoloHelperPath { 'unused.exe' }
-        { Invoke-DuneSoloHelper -Command 'set-currencies' -Arguments @{ input = $layout.game } } | Should -Throw '*not enabled*'
+        Mock New-DuneSoloXboxMutation { @{ result = [pscustomobject]@{ ok = $true } } }
+        Mock Commit-DuneSoloXboxMutation { @{ containerBackup = 'verified-account-backup' } }
+        $result = Invoke-DuneSoloHelper -Command 'set-currencies' -Arguments @{ input = $layout.game }
+        $result.containerBackup | Should -Be 'verified-account-backup'
+        Should -Invoke New-DuneSoloXboxMutation -Times 1 -Exactly
+        Should -Invoke Commit-DuneSoloXboxMutation -Times 1 -Exactly
         [IO.File]::ReadAllBytes($layout.game) | Should -Be ([byte[]](1,2,3))
     }
     It 'backs up the complete account, including metadata and prepatch blobs' {

@@ -28,7 +28,7 @@ function Get-DuneSoloBlueprintLines {
 function Read-DuneSoloBlueprintSettings {
     Assert-DuneSoloSupportedPlatform
     $profile = Get-DuneSoloProfile
-    if (-not $profile.dbPath -or (Split-Path -Leaf (Split-Path -Parent (Split-Path -Parent $profile.dbPath))) -ne 'FLS_retail') {
+    if (-not $profile.dbPath -or (Get-DuneSoloAdapterDescriptor -DbPath $profile.dbPath).channel -notin @('FLS_retail','Xbox')) {
         return @{ ok = $true; supported = $false; enabled = $false; canRestore = $false; conflict = $false }
     }
     $paths = Get-DuneSoloBlueprintPaths

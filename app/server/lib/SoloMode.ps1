@@ -225,7 +225,7 @@ function Get-DuneSoloAdapterDescriptor {
         id = [string]$manifest.id
         channel = $channel
         manifestPath = $manifestPath
-        capabilities = if ($xbox) { @('backup') } else { @($manifest.capabilities | ForEach-Object { [string]$_ }) }
+        capabilities = @($manifest.capabilities | ForEach-Object { [string]$_ })
         supported = $true
         legacy = ($channel -eq 'FLS_beta')
     }
@@ -432,7 +432,11 @@ function Invoke-DuneSoloHelper {
     foreach ($key in @('input','target')) {
         if ($Arguments[$key] -and (Get-DuneSoloXboxBlob -Path ([string]$Arguments[$key]))) {
             if ($Command -notin @('inspect','diagnostics','backup','list-blueprints','export-blueprint')) {
-                throw 'Xbox save editing is not enabled until the WGS write and synchronization test passes. No save data was changed.'
+                $prepared = New-DuneSoloXboxMutation -Command $Command -Arguments $Arguments
+                $committed = Commit-DuneSoloXboxMutation -Prepared $prepared
+                $result = $prepared.result
+                $result | Add-Member -NotePropertyName containerBackup -NotePropertyValue $committed.containerBackup -Force
+                return $result
             }
             if ($Command -eq 'backup') { Backup-DuneSoloXboxAccount -Blob (Get-DuneSoloXboxBlob -Path $Arguments[$key]) | Out-Null }
         }
@@ -898,7 +902,7 @@ function Get-DuneSoloProfile {
         }
     }
     $adapter = if ($dbPath) { Get-DuneSoloAdapterDescriptor -DbPath $dbPath } else { $null }
-    $settingsPath = Join-Path $dataRoot 'Config\Windows\ServerCustomSettings.ini'
+    $settingsPath = if ($adapter -and $adapter.channel -eq 'Xbox') { Join-Path (Get-DuneSoloDefaultDataRoot) 'Config\WinGDK\ServerCustomSettings.ini' } else { Join-Path $dataRoot 'Config\Windows\ServerCustomSettings.ini' }
     return @{
         dataRoot = $dataRoot
         dbPath = $dbPath
@@ -1058,7 +1062,7 @@ function Read-DuneSoloSettings {
     $gamePath = Join-Path (Split-Path -Parent $Path) 'Game.ini'
     $landclaimOverrides = @()
     $settingsProfile = Get-DuneSoloProfile
-    $retailOverrides = $settingsProfile.dbPath -and (Get-DuneSoloAdapterDescriptor -DbPath $settingsProfile.dbPath).channel -eq 'FLS_retail'
+    $retailOverrides = $settingsProfile.dbPath -and (Get-DuneSoloAdapterDescriptor -DbPath $settingsProfile.dbPath).channel -in @('FLS_retail','Xbox')
     if (Test-Path -LiteralPath $gamePath -PathType Leaf) {
         $inside = $false
         $landclaimOverrides = @(foreach ($line in [IO.File]::ReadAllLines($gamePath)) {
@@ -1139,7 +1143,7 @@ function Set-DuneSoloSettings {
     # segments additionally require the client's BuildingSettings override.
     $gamePath = ''
     if ($normalized.ContainsKey('MaxLandclaimSegments') -and
-        (Get-DuneSoloAdapterDescriptor -DbPath $profile.dbPath).channel -eq 'FLS_retail') {
+        (Get-DuneSoloAdapterDescriptor -DbPath $profile.dbPath).channel -in @('FLS_retail','Xbox')) {
         if ([int64]$normalized['MaxLandclaimSegments'] -lt 1) { throw 'MaxLandclaimSegments must be at least 1.' }
         $enginePath = @(Get-DuneSoloEnginePaths -Profile $profile)[0]
         $gamePath = Join-Path (Split-Path -Parent $enginePath) 'Game.ini'
@@ -1323,9 +1327,10 @@ function Set-DuneSoloLandclaimOverride {
 function Get-DuneSoloEnginePaths {
     param([Parameter(Mandatory)][hashtable]$Profile)
     $adapter = Get-DuneSoloAdapterDescriptor -DbPath ([string]$Profile.dbPath)
-    if ($adapter.channel -ne 'FLS_retail') {
+    if ($adapter.channel -notin @('FLS_retail','Xbox')) {
         throw "Solo Engine settings require the supported Retail adapter; found '$($adapter.channel)'."
     }
+    if ($adapter.channel -eq 'Xbox') { return @((Join-Path (Get-DuneSoloDefaultDataRoot) 'Config\WinGDK\Engine.ini')) }
     return @(
         (Join-Path ([string]$Profile.dataRoot) 'Config\Windows\Engine.ini')
     )
@@ -1346,8 +1351,8 @@ function Read-DuneSoloConsoleSettings {
     Assert-DuneSoloSupportedPlatform
     $profile = Get-DuneSoloProfile
     $profileDir = if ($profile.dbPath) { Split-Path -Parent ([string]$profile.dbPath) } else { '' }
-    $channel = if ($profileDir) { [IO.Path]::GetFileName((Split-Path -Parent $profileDir)) } else { '' }
-    if ($channel -ne 'FLS_retail') {
+    $channel = if ($profileDir) { (Get-DuneSoloAdapterDescriptor -DbPath $profile.dbPath).channel } else { '' }
+    if ($channel -notin @('FLS_retail','Xbox')) {
         return @{
             ok = $true
             supported = $false
