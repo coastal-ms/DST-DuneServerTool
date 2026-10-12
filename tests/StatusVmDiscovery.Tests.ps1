@@ -73,6 +73,39 @@ Describe 'Get-DuneVmStatus batched LAN discovery' {
         $r.error | Should -Match 'Host unavailable'
     }
 
+    It 'discovers a workgroup VM when the PowerShell endpoint denies the saved credential' {
+        Mock Invoke-Command { throw 'Access is denied' }
+        Mock Get-VM { [pscustomobject]@{ State='Running'; Uptime=[timespan]::FromSeconds(300) } }
+        Mock Get-VMNetworkAdapter { [pscustomobject]@{ IPAddresses=@('10.10.10.42') } }
+
+        $r = Get-DuneVmStatus
+        $r.exists | Should -BeTrue
+        $r.running | Should -BeTrue
+        $r.ip | Should -Be '10.10.10.42'
+        Should -Invoke Get-VM -Times 1 -ParameterFilter {
+            $ComputerName -eq '192.168.1.50' -and $Credential -eq $script:fakeCred -and $Name -eq 'dune-awakening'
+        }
+        Should -Invoke Get-VMNetworkAdapter -Times 1 -ParameterFilter {
+            $ComputerName -eq '192.168.1.50' -and $Credential -eq $script:fakeCred -and $VMName -eq 'dune-awakening'
+        }
+        Get-DuneVmStatus | Out-Null
+        Should -Invoke Invoke-Command -Times 1
+        Should -Invoke Get-VM -Times 1
+    }
+
+    It 'does not cache a partial fallback when adapter discovery fails' {
+        Mock Invoke-Command { throw 'Access is denied' }
+        Mock Get-VM { [pscustomobject]@{ State='Running'; Uptime=[timespan]::FromSeconds(300) } }
+        Mock Get-VMNetworkAdapter { throw 'Adapter query failed' }
+
+        $r = Get-DuneVmStatus
+        $r.running | Should -BeFalse
+        $r.error | Should -Match 'Access is denied'
+        $r.error | Should -Match 'Adapter query failed'
+        Get-DuneVmStatus | Out-Null
+        Should -Invoke Get-VMNetworkAdapter -Times 2
+    }
+
     It 'resolves the discovered guest IPv4 into the status result' {
         $r = Get-DuneVmStatus
         $r.exists | Should -BeTrue

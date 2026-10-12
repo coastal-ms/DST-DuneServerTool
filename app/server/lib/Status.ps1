@@ -80,12 +80,26 @@ function Get-DuneLanVmSnapshot {
     $refresh = {
         $cached = & $read
         if ($null -ne $cached) { return $cached }
-        $snapshot = Invoke-Command -ComputerName $HyperV.ComputerName -Credential $HyperV.Credential -ArgumentList $script:DuneVmName -ScriptBlock {
-            param($name)
-            $vm = Get-VM -Name $name -ErrorAction Stop
-            $addresses = @((Get-VMNetworkAdapter -VMName $name -ErrorAction Stop).IPAddresses)
-            @{ State=[string]$vm.State; UptimeSeconds=[int]$vm.Uptime.TotalSeconds; IPAddresses=$addresses }
-        } -ErrorAction Stop
+        try {
+            $snapshot = Invoke-Command -ComputerName $HyperV.ComputerName -Credential $HyperV.Credential -ArgumentList $script:DuneVmName -ScriptBlock {
+                param($name)
+                $vm = Get-VM -Name $name -ErrorAction Stop
+                $addresses = @((Get-VMNetworkAdapter -VMName $name -ErrorAction Stop).IPAddresses)
+                @{ State=[string]$vm.State; UptimeSeconds=[int]$vm.Uptime.TotalSeconds; IPAddresses=$addresses }
+            } -ErrorAction Stop
+        } catch {
+            # A workgroup host can accept Hyper-V's credentialed CIM calls while
+            # denying a PowerShell remoting endpoint. Match the connection Test
+            # without requiring broader delegation or changing host policy.
+            $sessionError = $_.Exception.Message
+            try {
+                $vm = Get-VM -Name $script:DuneVmName @HyperV -ErrorAction Stop
+                $addresses = @((Get-VMNetworkAdapter -VMName $script:DuneVmName @HyperV -ErrorAction Stop).IPAddresses)
+                $snapshot = @{ State=[string]$vm.State; UptimeSeconds=[int]$vm.Uptime.TotalSeconds; IPAddresses=$addresses }
+            } catch {
+                throw "LAN VM discovery failed. PowerShell session: $sessionError. Hyper-V query: $($_.Exception.Message)"
+            }
+        }
         [Threading.Monitor]::Enter($table.SyncRoot)
         try { $table[$key] = @{ Snapshot=$snapshot; Fetched=[datetime]::UtcNow } }
         finally { [Threading.Monitor]::Exit($table.SyncRoot) }
