@@ -13,6 +13,9 @@ here cover everything those tags shipped.
 
 ## [Unreleased]
 
+### Fixed
+- Share external port-check results across HTTP workers, refresh automatically after six hours, and let manual Refresh force a new check. Retain the last confirmed result when an automatic check is inconclusive, and allow slower external observers more time to report.
+
 ## [16.4.0] - 2026-10-11
 
 ### Added

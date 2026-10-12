@@ -1,17 +1,20 @@
 ﻿# Ports — external TCP port checks; UDP is marked as skipped.
-# Per-launch cache with 5 minute TTL so the dashboard auto-refresh repaints
+# Per-launch cache with 6 hour TTL so the dashboard auto-refresh repaints
 # from cache and only re-fetches on TTL expiry.
 
 $script:DunePortCheckCache    = $null
 $script:DunePortCheckPubIp    = $null
 $script:DunePortCheckFetched  = [datetime]::MinValue
-$script:DunePortCheckTtlSecs  = 300
+$script:DunePortCheckTtlSecs  = 21600
 
 # Invalidate the cached port-check results so the next status call re-evaluates
 # from scratch. Called after a config save changes the port-check settings
 # (mode / URL template / UDP visibility) so the change takes effect immediately
 # instead of after the 5-minute TTL.
 function Reset-DunePortCheckCache {
+    if ($script:DuneApiLockTable) {
+        $script:DuneApiLockTable.Remove('ports.snapshot')
+    }
     $script:DunePortCheckCache   = $null
     $script:DunePortCheckPubIp   = $null
     $script:DunePortCheckFetched = [datetime]::MinValue
@@ -74,8 +77,10 @@ function Test-DunePortCheckHost {
         if ($nodes.Count -eq 0) { return 'unknown' }
 
         $requestId = [uri]::EscapeDataString("$($start.request_id)")
-        for ($attempt = 1; $attempt -le 3; $attempt++) {
-            if ($attempt -gt 1) { Start-Sleep -Milliseconds 750 }
+        # External nodes complete asynchronously. A pending result is not a
+        # verdict; allow slower observers time to report before returning unknown.
+        for ($attempt = 1; $attempt -le 10; $attempt++) {
+            if ($attempt -gt 1) { Start-Sleep -Milliseconds 1000 }
             $resultResponse = Invoke-WebRequest `
                 -Uri "https://check-host.net/check-result/$requestId" `
                 -UseBasicParsing -TimeoutSec 8 -ErrorAction Stop -Headers $headers
@@ -135,6 +140,35 @@ function Test-DunePortCustom {
 
 function Get-DunePortStatus {
     param([switch]$Force)
+    $table = $script:DuneApiLockTable
+    if (-not $table) { return Get-DunePortStatusCore -Force:$Force }
+    # Share one result across HTTP workers and serialize checks so simultaneous
+    # status refreshes cannot dispatch duplicate external probes.
+    [System.Threading.Monitor]::Enter($table.SyncRoot)
+    try {
+        if (-not $table.ContainsKey('ports.gate')) { $table['ports.gate'] = [object]::new() }
+        $gate = $table['ports.gate']
+    } finally { [System.Threading.Monitor]::Exit($table.SyncRoot) }
+    [System.Threading.Monitor]::Enter($gate)
+    try {
+        $entry = $table['ports.snapshot']
+        $script:DunePortCheckCache = if ($entry) { $entry.Results } else { $null }
+        $script:DunePortCheckPubIp = if ($entry) { $entry.PublicIp } else { $null }
+        $script:DunePortCheckFetched = if ($entry) { $entry.Fetched } else { [datetime]::MinValue }
+        $status = Get-DunePortStatusCore -Force:$Force
+        if ($script:DunePortCheckCache) {
+            $table['ports.snapshot'] = @{
+                Results = $script:DunePortCheckCache
+                PublicIp = $script:DunePortCheckPubIp
+                Fetched = $script:DunePortCheckFetched
+            }
+        }
+        return $status
+    } finally { [System.Threading.Monitor]::Exit($gate) }
+}
+
+function Get-DunePortStatusCore {
+    param([switch]$Force)
     if ((Get-Command Test-DuneSoloInstallation -ErrorAction SilentlyContinue) -and (Test-DuneSoloInstallation)) { return $null }
     $cfg  = Read-DuneConfig
     $mode = if ($cfg.PortCheckMode) { $cfg.PortCheckMode } else { 'builtin' }
@@ -163,9 +197,10 @@ function Get-DunePortStatus {
     if ($mode -eq 'custom' -and -not $hasCustomUrl) { $effectiveMode = 'builtin' }
 
     $now   = Get-Date
+    $cacheTtl = $script:DunePortCheckTtlSecs
     if (-not $Force.IsPresent -and
         $script:DunePortCheckCache -and
-        (($now - $script:DunePortCheckFetched).TotalSeconds -lt $script:DunePortCheckTtlSecs)) {
+        (($now - $script:DunePortCheckFetched).TotalSeconds -lt $cacheTtl)) {
         return @{
             mode      = $mode
             publicIp  = $script:DunePortCheckPubIp
@@ -205,6 +240,15 @@ function Get-DunePortStatus {
         $detail = if ($status -eq 'unknown') {
             'Public reachability could not be verified because the external checker was unavailable or returned no verdict.'
         } else { $null }
+        if ($status -eq 'unknown' -and -not $Force.IsPresent -and $pubIp -eq $script:DunePortCheckPubIp) {
+            $previous = @($script:DunePortCheckCache | Where-Object {
+                $_.port -eq $p.Port -and $_.protocol -eq $p.Protocol -and $_.status -in @('open','closed')
+            }) | Select-Object -First 1
+            if ($previous) {
+                $status = $previous.status
+                $detail = 'Last confirmed result retained; the automatic check could not verify reachability. Use Refresh to run a new check.'
+            }
+        }
         $results += @{ port = $p.Port; protocol = $p.Protocol; label = $p.Label; status = $status; detail = $detail }
     }
     $script:DunePortCheckCache   = $results

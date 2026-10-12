@@ -107,8 +107,89 @@ Describe 'Check-Host TCP transport' {
             return @{ Content = '{"us1.node.check-host.net":null,"de1.node.check-host.net":null,"pt1.node.check-host.net":null}' }
         }
         Test-DunePortCheckHost -PublicIp '192.0.2.1' -Port 31982 | Should -Be 'unknown'
-        Assert-MockCalled Invoke-WebRequest -Times 3 -ParameterFilter { $Uri -like 'https://check-host.net/check-result/*' }
+        Assert-MockCalled Invoke-WebRequest -Times 10 -ParameterFilter { $Uri -like 'https://check-host.net/check-result/*' }
     }
+
+    It 'accepts a delayed observer instead of caching its initial pending results' {
+        $script:portResultReads = 0
+        Mock Invoke-WebRequest {
+            param($Uri)
+            if ($Uri -like 'https://check-host.net/check-tcp*') { return @{ Content = $script:checkHostStartJson } }
+            $script:portResultReads++
+            if ($script:portResultReads -le 3) {
+                return @{ Content = '{"us1.node.check-host.net":null,"de1.node.check-host.net":null,"pt1.node.check-host.net":null}' }
+            }
+            return @{ Content = '{"us1.node.check-host.net":[{"time":0.03,"address":"192.0.2.1"}],"de1.node.check-host.net":null,"pt1.node.check-host.net":null}' }
+        }
+        Test-DunePortCheckHost -PublicIp '192.0.2.1' -Port 31982 | Should -Be 'open'
+    }
+}
+
+Describe 'Inconclusive port cache recovery' {
+    BeforeAll {
+        function global:Read-DuneConfig { @{ PortCheckMode = 'builtin' } }
+    }
+    BeforeEach {
+        Reset-DunePortCheckCache
+        Mock Get-DunePublicIp { '192.0.2.1' }
+        Mock Test-DunePortBuiltin { 'unknown' }
+        $script:portTestNow = Get-Date
+        Mock Get-Date { $script:portTestNow }
+    }
+    It 'does not retry an inconclusive result on back-to-back health refreshes' {
+        Get-DunePortStatus | Out-Null
+        $script:portTestNow = $script:portTestNow.AddSeconds(20)
+        (Get-DunePortStatus).cached | Should -BeTrue
+        $script:portTestNow = $script:portTestNow.AddSeconds(11)
+        (Get-DunePortStatus).cached | Should -BeTrue
+        Assert-MockCalled Get-DunePublicIp -Times 1
+    }
+    It 'keeps a confirmed result cached for six hours across automatic refreshes' {
+        Mock Test-DunePortBuiltin { 'open' }
+        Get-DunePortStatus | Out-Null
+        $script:portTestNow = $script:portTestNow.AddHours(5).AddMinutes(59)
+        (Get-DunePortStatus).cached | Should -BeTrue
+        Assert-MockCalled Get-DunePublicIp -Times 1
+    }
+    It 'refreshes a confirmed result when the six-hour interval expires' {
+        Mock Test-DunePortBuiltin { 'open' }
+        Get-DunePortStatus | Out-Null
+        $script:portTestNow = $script:portTestNow.AddHours(6)
+        (Get-DunePortStatus).cached | Should -BeFalse
+        Assert-MockCalled Get-DunePublicIp -Times 2
+    }
+    It 'allows a manual forced refresh before the cache expires' {
+        Mock Test-DunePortBuiltin { 'open' }
+        Get-DunePortStatus | Out-Null
+        $script:portTestNow = $script:portTestNow.AddSeconds(10)
+        (Get-DunePortStatus -Force).cached | Should -BeFalse
+        Assert-MockCalled Get-DunePublicIp -Times 2
+    }
+    It 'retains the last confirmed result when an automatic observer check fails' {
+        Mock Test-DunePortBuiltin { 'open' }
+        Get-DunePortStatus | Out-Null
+        Mock Test-DunePortBuiltin { 'unknown' }
+        $script:portTestNow = $script:portTestNow.AddHours(6)
+        $result = Get-DunePortStatus
+        $result.results[0].status | Should -Be 'open'
+        $result.results[0].detail | Should -Match 'Last confirmed'
+        (Get-DunePortStatus -Force).results[0].status | Should -Be 'unknown'
+    }
+    It 'shares the cache across HTTP worker state and clears it on settings changes' {
+        $global:DuneApiLockTable = [hashtable]::Synchronized(@{})
+        try {
+            Mock Test-DunePortBuiltin { 'open' }
+            Get-DunePortStatus | Out-Null
+            $global:DunePortCheckCache = $null
+            $global:DunePortCheckFetched = [datetime]::MinValue
+            (Get-DunePortStatus).cached | Should -BeTrue
+            Assert-MockCalled Get-DunePublicIp -Times 1
+            Reset-DunePortCheckCache
+            (Get-DunePortStatus).cached | Should -BeFalse
+            Assert-MockCalled Get-DunePublicIp -Times 2
+        } finally { $global:DuneApiLockTable = $null }
+    }
+    AfterAll { Remove-Item function:global:Read-DuneConfig }
 }
 
 Describe 'Built-in port checker behavior' {
