@@ -189,6 +189,36 @@ Describe 'Inconclusive port cache recovery' {
             Assert-MockCalled Get-DunePublicIp -Times 2
         } finally { $global:DuneApiLockTable = $null }
     }
+    It 'serializes settings invalidation after an in-flight worker snapshot' {
+        $table = [hashtable]::Synchronized(@{})
+        $gate = [object]::new()
+        $table['ports.gate'] = $gate
+        $started = [Threading.ManualResetEventSlim]::new($false)
+        $worker = [PowerShell]::Create()
+        $held = $false
+        try {
+            [Threading.Monitor]::Enter($gate); $held = $true
+            $null = $worker.AddScript({
+                param($table,$started,$definition)
+                $script:DuneApiLockTable = $table
+                Set-Item function:Reset-DunePortCheckCache ([scriptblock]::Create($definition))
+                $started.Set()
+                Reset-DunePortCheckCache
+            }).AddArgument($table).AddArgument($started).AddArgument((Get-Command Reset-DunePortCheckCache).Definition)
+            $pending = $worker.BeginInvoke()
+            $started.Wait(5000) | Should -BeTrue
+            $pending.AsyncWaitHandle.WaitOne(100) | Should -BeFalse
+            $table['ports.snapshot'] = @{ Results=@('stale'); Fetched=[datetime]::UtcNow }
+            [Threading.Monitor]::Exit($gate); $held = $false
+            $pending.AsyncWaitHandle.WaitOne(5000) | Should -BeTrue
+            $null = $worker.EndInvoke($pending)
+            $worker.HadErrors | Should -BeFalse
+            $table.ContainsKey('ports.snapshot') | Should -BeFalse
+        } finally {
+            if ($held) { [Threading.Monitor]::Exit($gate) }
+            $worker.Dispose(); $started.Dispose()
+        }
+    }
     AfterAll { Remove-Item function:global:Read-DuneConfig }
 }
 

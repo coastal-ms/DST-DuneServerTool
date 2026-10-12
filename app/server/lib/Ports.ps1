@@ -10,10 +10,23 @@ $script:DunePortCheckTtlSecs  = 21600
 # Invalidate the cached port-check results so the next status call re-evaluates
 # from scratch. Called after a config save changes the port-check settings
 # (mode / URL template / UDP visibility) so the change takes effect immediately
-# instead of after the 5-minute TTL.
+# instead of after the six-hour TTL.
 function Reset-DunePortCheckCache {
-    if ($script:DuneApiLockTable) {
-        $script:DuneApiLockTable.Remove('ports.snapshot')
+    $table = $script:DuneApiLockTable
+    if ($table) {
+        [System.Threading.Monitor]::Enter($table.SyncRoot)
+        try {
+            if (-not $table.ContainsKey('ports.gate')) { $table['ports.gate'] = [object]::new() }
+            $gate = $table['ports.gate']
+        } finally { [System.Threading.Monitor]::Exit($table.SyncRoot) }
+        [System.Threading.Monitor]::Enter($gate)
+        try {
+            $table.Remove('ports.snapshot')
+            $script:DunePortCheckCache = $null
+            $script:DunePortCheckPubIp = $null
+            $script:DunePortCheckFetched = [datetime]::MinValue
+        } finally { [System.Threading.Monitor]::Exit($gate) }
+        return
     }
     $script:DunePortCheckCache   = $null
     $script:DunePortCheckPubIp   = $null

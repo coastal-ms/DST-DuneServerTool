@@ -3,6 +3,15 @@ BeforeAll {
     $script:RouteFile = Join-Path (Get-DstRepoRoot) 'app\server\routes\SoloMode.ps1'
 }
 Describe 'Solo Testing Station write guards' {
+    It 'dispatches the unlock command through the real Solo launcher validation' {
+        {
+            & {
+                . (Join-Path (Get-DstRepoRoot) 'app\server\lib\SoloMode.ps1')
+                function Get-DuneSoloHelperPath { throw 'Validated command reached helper lookup.' }
+                Invoke-DuneSoloHelper -Command 'unlock-testing-stations' -Arguments @{}
+            }
+        } | Should -Throw '*Validated command reached helper lookup*'
+    }
     It 'keeps station writes local and rejects a stale profile before mutation' {
         $result = & {
             function Register-DuneRoute { param($Method,$Path,[switch]$LocalOnly,$Handler); [pscustomobject]@{path=$Path;localOnly=[bool]$LocalOnly;handler=$Handler} }
