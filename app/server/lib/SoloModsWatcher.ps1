@@ -10,8 +10,8 @@ try {
         $launchSession=Get-Content -LiteralPath $journal -Raw | ConvertFrom-Json
         $process=Start-Process -FilePath $GameExe -WorkingDirectory (Split-Path $GameExe) -ArgumentList (Get-DuneSoloLaunchArguments -SkipIntro:$SkipIntro -RuntimeDll $RuntimeDll -ExtraArguments ([string]$launchSession.soloArguments)) -PassThru
         $process.WaitForExit()
-        while(Get-Process -Name DuneSandbox,DuneSandbox-Win64-Shipping -ErrorAction SilentlyContinue){Start-Sleep -Seconds 2}
-    } elseif(Get-Process -Name DuneSandbox,DuneSandbox-Win64-Shipping -ErrorAction SilentlyContinue){throw 'Close Dune before restoring its launch files.'}
+        while(Get-Process -Name DuneSandbox,DuneSandbox_BE,DuneSandbox-Win64-Shipping,DuneSandbox-WinGDK-Shipping,AppDuneAwakeningShipping -ErrorAction SilentlyContinue){Start-Sleep -Seconds 2}
+    } elseif(Get-Process -Name DuneSandbox,DuneSandbox_BE,DuneSandbox-Win64-Shipping,DuneSandbox-WinGDK-Shipping,AppDuneAwakeningShipping -ErrorAction SilentlyContinue){throw 'Close Dune before restoring its launch files.'}
     $session=Get-Content -LiteralPath $journal -Raw | ConvertFrom-Json
     if($session.logPath -and (Test-Path $session.logPath)){Copy-Item -LiteralPath $session.logPath -Destination (Join-Path $LoaderRoot 'last-runtime.log') -Force}
     foreach($record in $session.files){

@@ -1,4 +1,4 @@
-﻿$soloModAppRoot = if($script:AppDir){$script:AppDir}else{[IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..\..'))}
+$soloModAppRoot = if($script:AppDir){$script:AppDir}else{[IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..\..'))}
 $script:DuneSoloModsRoot = Join-Path $soloModAppRoot 'Mods'
 $script:DuneSoloLoaderRoot = Join-Path $soloModAppRoot 'ModLoader'
 
@@ -23,6 +23,14 @@ function Expand-DuneModZip([string]$Path, [string]$Destination) {
         }
         [IO.Compression.ZipFile]::ExtractToDirectory($Path, $Destination)
     } finally { $archive.Dispose() }
+}
+
+function Find-DuneSoloXboxInstallation {
+    foreach ($package in @(Get-AppxPackage -Name FuncomOsloAS.ProjectSeabass -ErrorAction SilentlyContinue | Sort-Object Version -Descending)) {
+        $root = [string]$package.InstallLocation
+        if ($root -and (Test-Path -LiteralPath (Join-Path $root 'DuneSandbox\Binaries\WinGDK\DuneSandbox-WinGDK-Shipping.exe'))) { return $root }
+    }
+    return ''
 }
 
 function Get-DuneSoloMods {
@@ -76,17 +84,28 @@ function Get-DuneSoloMods {
     if($session -and $session.logPath -and (Test-Path $session.logPath)){$logPath=$session.logPath}
     $runtimeLog=if(Test-Path $logPath){(Get-Content $logPath -Tail 80) -join "`n"}else{''}
     $preferences=Get-DuneGameLaunchPreferences
-    return @{ gameRunning=$gameRunning; mods=$mods; folder=$script:DuneSoloModsRoot; gamePath=[string]$settings.gamePath; skipIntro=[bool]$preferences.skipIntro; soloArguments=[string]$preferences.soloArguments; runtimeReady=(Test-Path (Join-Path $script:DuneSoloLoaderRoot 'Runtime\ue4ss\UE4SS.dll')); session=$session; launchError=$launchError; runtimeLog=$runtimeLog }
+    $platform = if ($settings.platform -eq 'xbox') { 'xbox' } else { 'steam' }
+    if ($platform -eq 'xbox' -and -not $settings.gamePath) { $settings = @{ gamePath=(Find-DuneSoloXboxInstallation) } }
+    return @{ platform=$platform; gameRunning=$gameRunning; mods=$mods; folder=$script:DuneSoloModsRoot; gamePath=[string]$settings.gamePath; skipIntro=[bool]$preferences.skipIntro; soloArguments=[string]$preferences.soloArguments; runtimeReady=(Test-Path (Join-Path $script:DuneSoloLoaderRoot 'Runtime\ue4ss\UE4SS.dll')); session=$session; launchError=$launchError; runtimeLog=$runtimeLog }
 }
 
 function Set-DuneSoloModSelection($Body) {
     Assert-DuneSoloGameClosed
+    $settings = Read-DuneModJson (Join-Path $script:DuneSoloLoaderRoot 'settings.json') @{}
+    $platform = if ($Body.platform) { [string]$Body.platform } elseif ($settings.platform) { [string]$settings.platform } else { 'steam' }
+    if ($platform -notin @('steam','xbox')) { throw 'Choose Steam or Xbox PC.' }
+    $oldPlatform = if ($settings.platform -eq 'xbox') { 'xbox' } else { 'steam' }
+    $paths = @{ steam=[string]$settings.steamPath; xbox=[string]$settings.xboxPath }
+    if ($settings.gamePath) { $paths[$oldPlatform] = [string]$settings.gamePath }
+    $path = [string]$Body.gamePath
+    if ($platform -ne $oldPlatform -and -not $path) { $path = $paths[$platform] }
+    $paths[$platform] = $path
     New-Item -ItemType Directory -Path $script:DuneSoloLoaderRoot -Force | Out-Null
     $state = @{}
     foreach ($item in @($Body.mods)) { $state[[string]$item.folder] = [bool]$item.enabled }
     ConvertTo-Json -InputObject @($Body.mods | ForEach-Object { [string]$_.folder }) | Set-Content (Join-Path $script:DuneSoloLoaderRoot 'order.json') -Encoding utf8
     $state | ConvertTo-Json | Set-Content (Join-Path $script:DuneSoloLoaderRoot 'selection.json') -Encoding utf8
-    @{ gamePath=[string]$Body.gamePath } | ConvertTo-Json | Set-Content (Join-Path $script:DuneSoloLoaderRoot 'settings.json') -Encoding utf8
+    @{ gamePath=$path; platform=$platform; steamPath=$paths.steam; xboxPath=$paths.xbox } | ConvertTo-Json | Set-Content (Join-Path $script:DuneSoloLoaderRoot 'settings.json') -Encoding utf8
     return Get-DuneSoloMods
 }
 
@@ -150,8 +169,9 @@ function Start-DuneSoloModGame([bool]$WithMods) {
     Assert-DuneSoloLaunchArguments $status.soloArguments
     if($status.session){throw 'A previous mod session needs restoration. Use Restore normal launch first.'}
     if([string]::IsNullOrWhiteSpace($status.gamePath)){throw 'Select the Dune Awakening installation folder in Solo mods and save it before launching.'}
-    $bin=Join-Path $status.gamePath 'DuneSandbox\Binaries\Win64'
-    $exe=Join-Path $bin 'DuneSandbox-Win64-Shipping.exe'
+    $target = if ($status.platform -eq 'xbox') { 'WinGDK' } else { 'Win64' }
+    $bin=Join-Path $status.gamePath ('DuneSandbox\Binaries\'+$target)
+    $exe=Join-Path $bin ('DuneSandbox-'+$target+'-Shipping.exe')
     if(-not(Test-Path -LiteralPath $exe)){throw 'Select the Dune Awakening installation folder.'}
     if(-not $WithMods){Start-Process -FilePath $exe -WorkingDirectory $bin -ArgumentList (Get-DuneSoloLaunchArguments -SkipIntro $status.skipIntro -ExtraArguments $status.soloArguments);return @{ok=$true}}
     if(-not $status.runtimeReady){throw 'Install the mod runtime first.'}

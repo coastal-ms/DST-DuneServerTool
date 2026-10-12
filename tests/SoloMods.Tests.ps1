@@ -13,6 +13,38 @@ BeforeAll {
 }
 AfterAll { if($script:ModTestRoot.StartsWith([IO.Path]::GetTempPath())){Remove-Item -LiteralPath $script:ModTestRoot -Recurse -Force} }
 Describe 'Solo mod import and dependencies' {
+    It 'discovers the registered Xbox installation only when its executable exists' {
+        $root=Join-Path $script:ModTestRoot 'RegisteredXbox'
+        $bin=Join-Path $root 'DuneSandbox/Binaries/WinGDK'
+        New-Item -ItemType Directory -Path $bin -Force | Out-Null
+        Mock Get-AppxPackage { @([pscustomobject]@{InstallLocation=$root;Version='2.0.11.0'}) }
+        Find-DuneSoloXboxInstallation | Should -Be ''
+        New-Item -ItemType File -Path (Join-Path $bin 'DuneSandbox-WinGDK-Shipping.exe') -Force | Out-Null
+        Find-DuneSoloXboxInstallation | Should -Be $root
+    }
+    It 'detects Xbox without replacing Steam paths or changing mod selection' {
+        Mock Find-DuneSoloXboxInstallation { 'C:\Xbox\Dune' }
+        $mods=@(@{folder='Alpha';enabled=$true},@{folder='Beta';enabled=$false})
+        Set-DuneSoloModSelection @{mods=$mods;gamePath='C:\Steam\Dune';platform='steam'} | Out-Null
+        $xbox=Set-DuneSoloModSelection @{mods=$mods;gamePath='';platform='xbox'}
+        $xbox.gamePath | Should -Be 'C:\Xbox\Dune'
+        $xbox.platform | Should -Be 'xbox'
+        $steam=Set-DuneSoloModSelection @{mods=$mods;gamePath='';platform='steam'}
+        $steam.gamePath | Should -Be 'C:\Steam\Dune'
+        $selection=Get-Content (Join-Path $script:DuneSoloLoaderRoot 'selection.json') -Raw | ConvertFrom-Json
+        $selection.Alpha | Should -BeTrue
+        $selection.Beta | Should -BeFalse
+    }
+    It 'launches the Xbox executable and never the Steam executable' {
+        $game=Join-Path $script:ModTestRoot 'XboxGame'
+        $bin=Join-Path $game 'DuneSandbox/Binaries/WinGDK'
+        New-Item -ItemType Directory -Path $bin -Force | Out-Null
+        New-Item -ItemType File -Path (Join-Path $bin 'DuneSandbox-WinGDK-Shipping.exe') -Force | Out-Null
+        Set-DuneSoloModSelection @{mods=@();gamePath=$game;platform='xbox'} | Out-Null
+        Mock Start-Process {}
+        Start-DuneSoloModGame $false | Out-Null
+        Should -Invoke Start-Process -Times 1 -Exactly -ParameterFilter { $FilePath.EndsWith('DuneSandbox-WinGDK-Shipping.exe') }
+    }
     It 'preserves quoted custom arguments in normal and modded launch arguments' {
         $extra='-example="two words" -another=3'
         foreach($runtime in @('', 'C:\runtime\UE4SS.dll')) {
@@ -174,6 +206,7 @@ BeforeEach {
         Get-Content (Join-Path $script:DuneSoloModsRoot 'VehicleSpeed/mod.json') -Raw | Should -Be $metadata
     }
     It 'restores pre-existing launch files and removes only owned additions' {
+        Mock Get-Process {}
         $root=$script:DuneSoloLoaderRoot;New-Item -ItemType Directory -Path $root -Force | Out-Null
         $path=Join-Path $root 'proxy';$backup=Join-Path $root 'original';'new'|Set-Content $path;'old'|Set-Content $backup
         $owned=Join-Path $root 'owned';'owned'|Set-Content $owned
@@ -184,6 +217,7 @@ BeforeEach {
         Test-Path (Join-Path $root 'session.json') | Should -BeFalse
     }
     It 'preserves an externally changed launch file and retains recovery evidence' {
+        Mock Get-Process {}
         $root=$script:DuneSoloLoaderRoot;New-Item -ItemType Directory -Path $root -Force | Out-Null
         $path=Join-Path $root 'proxy';'external'|Set-Content $path
         @{files=@(@{path=$path;backup='absent';hash='different';installed=$true;restored=$false})} | ConvertTo-Json -Depth 5 | Set-Content (Join-Path $root 'session.json')

@@ -27,6 +27,7 @@ function SortableMod({ mod, disabled, children }: { mod: Mod; disabled: boolean;
 export function SoloMods() {
   const [state, setState] = useState<State | null>(null)
   const [gamePath, setGamePath] = useState('')
+  const [platform, setPlatform] = useState('steam')
   const [soloArguments, setSoloArguments] = useState('')
   const [dragged, setDragged] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
@@ -41,6 +42,7 @@ export function SoloMods() {
     const result = await api<State>('/api/solo/mods')
     setState(result)
     setGamePath(result.gamePath)
+    setPlatform((result as State & { platform?: string }).platform ?? 'steam')
     setSoloArguments(result.soloArguments ?? '')
   }
   useEffect(() => { void refresh().catch(e => setError(String(e))) }, [])
@@ -53,7 +55,7 @@ export function SoloMods() {
     } catch (e) { setError(e instanceof Error ? e.message : String(e)) }
     finally { setBusy(false) }
   }
-  const save = (mods = state?.mods ?? [], path = gamePath) => run('selection', { mods, gamePath: path })
+  const save = (mods = state?.mods ?? [], path = gamePath) => run('selection', { mods, gamePath: path, platform })
   const saveArguments = async () => {
     setBusy(true); setError('')
     try {
@@ -93,12 +95,15 @@ export function SoloMods() {
   return <CollapsibleCard id="solo-mods" title="Solo mods" icon="Package" defaultOpen={false} subtitle="Download mods from Nexus Mods or another source, then install your downloaded ZIP. Mod settings stay in their INI files." headerClassName="px-5 py-4 flex-wrap [&>div]:w-full" headerRight={
     <div className="flex flex-wrap gap-2 w-full">
       <label className="block w-full rounded border border-accent/40 bg-accent/5 p-3 text-sm">Dune installation folder
+        <select aria-label="Mod installation platform" className="input mt-2" value={platform} disabled={busy || state?.gameRunning} onChange={e => void run('selection', { mods: state?.mods ?? [], platform: e.target.value, gamePath: '' })}>
+          <option value="steam">Steam</option><option value="xbox">Xbox PC</option>
+        </select>
         <div className="flex flex-wrap gap-2 mt-1">
           <input className="flex-1 min-w-0 px-3 py-2 rounded-lg bg-surface-2 border border-border text-text text-sm focus:outline-none focus:ring-2 focus:ring-ibad focus:border-ibad/50" value={gamePath} onChange={e => setGamePath(e.target.value)} placeholder="Select your Dune Awakening installation folder" />
           <button className="btn-secondary" disabled={busy} onClick={() => void pickGame()}>Browse</button>
           <button className="btn-secondary" disabled={busy} onClick={() => void save()}>Save</button>
         </div>
-        <span className="block text-xs text-text-muted mt-2">Required for both launch options. Browse saves the folder; if you type it, click Save.</span>
+        <span className="block text-xs text-text-muted mt-2">Xbox PC detects the installed game automatically. Browse saves a manual folder; if you type it, click Save.</span>
       </label>
       <label className="block w-full text-sm">Launch Arguments
         <div className="flex flex-wrap gap-2 mt-1">

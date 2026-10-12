@@ -52,7 +52,7 @@ describe('Solo mod controls', () => {
     expect(screen.getByRole('button', {name:'Move Example up'})).toBeDisabled()
     expect(screen.getByRole('button', {name:'Move Other down'})).toBeDisabled()
     fireEvent.click(screen.getByRole('button', {name:'Move Other up'}))
-    await waitFor(() => expect(api).toHaveBeenCalledWith('/api/solo/mods/selection', {method:'POST',body:JSON.stringify({mods:[other,state.mods[0]],gamePath:state.gamePath})}))
+    await waitFor(() => expect(api).toHaveBeenCalledWith('/api/solo/mods/selection', {method:'POST',body:JSON.stringify({mods:[other,state.mods[0]],gamePath:state.gamePath,platform:'steam'})}))
   })
   it('shows dependency errors and keeps normal and modded launches separate', async () => {
     render(<SoloMods />)
