@@ -42,7 +42,7 @@ Describe 'Xbox Solo named blob discovery' {
     }
     It 'rejects ambiguous metadata revisions' {
         Copy-Item -LiteralPath $layout.metadata -Destination ($layout.metadata + '.old')
-        { Find-DuneSoloXboxProfiles -DataRoot $layout.root } | Should -Throw '*multiple metadata*'
+        { Find-DuneSoloXboxProfiles -DataRoot $layout.root } | Should -Throw '*still updating*'
     }
     It 'rejects truncated metadata' {
         [IO.File]::WriteAllBytes($layout.metadata, [byte[]](4,0,0,0,2,0,0,0))
@@ -52,7 +52,7 @@ Describe 'Xbox Solo named blob discovery' {
         $bytes = [IO.File]::ReadAllBytes($layout.metadata)
         [guid]::NewGuid().ToByteArray().CopyTo($bytes, 152)
         [IO.File]::WriteAllBytes($layout.metadata, $bytes)
-        { Read-DuneSoloXboxContainer -Path $layout.metadata } | Should -Throw '*transition*'
+        { Read-DuneSoloXboxContainer -Path $layout.metadata } | Should -Throw '*still updating*'
     }
     It 'refuses an arbitrary blob in a valid container' {
         { Get-DuneSoloXboxBlob -Path $layout.old } | Should -Throw '*not the current*'
