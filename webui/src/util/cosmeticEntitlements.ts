@@ -1,2 +1,2 @@
 export const COSMETIC_LICENSE_NOTICE =
-  'Cosmetic grants apply only to your Solo save or self-hosted server character. They do not carry over to official/public servers or create account ownership. Cosmetics requiring a license remain subject to the appropriate official Funcom license or entitlement. DST cannot grant those licenses or entitlements, so a saved unlock or delivered token may not make the cosmetic usable.'
+  'These are character unlocks for the selected Solo or self-hosted character, not account unlocks or purchases. DST does not grant official Funcom licenses or account entitlements. A saved unlock or delivered token may not make every cosmetic usable in-game.'

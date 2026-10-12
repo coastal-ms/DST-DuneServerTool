@@ -357,7 +357,7 @@ function StatusPill({ ok, children }: { ok: boolean; children: React.ReactNode }
 }
 
 export const SOLO_COSMETIC_ENTITLEMENT_WARNING =
-  'Grants apply only to this Solo save. They do not create Funcom account ownership or unlock content on official servers.'
+  'Grants apply only to this Solo character. They do not create Funcom account ownership.'
 
 export function groupSoloCosmetics(
   catalog: CosmeticEntry[],
