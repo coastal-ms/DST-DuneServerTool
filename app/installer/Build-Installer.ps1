@@ -26,6 +26,16 @@ param(
 $ErrorActionPreference = 'Stop'
 
 $appRoot    = Split-Path -Parent $PSScriptRoot                          # ...\app
+$runtimePins = @{
+    'runtime.zip' = '3C72142A383E25E9F9553AC9E4D5677AA572E98CB369CAC57200EFB2E381E603'
+    'configs.zip' = '1B2420B7DEB237CD680D27306EADF26628699D992A322C89A963D80F580C9B78'
+}
+foreach ($name in $runtimePins.Keys) {
+    $archive = Join-Path $appRoot ('resources\solo-mod-runtime\' + $name)
+    if (-not (Test-Path -LiteralPath $archive) -or (Get-FileHash -LiteralPath $archive).Hash -ne $runtimePins[$name]) {
+        throw "Bundled Solo mod runtime archive is missing or has an unexpected checksum: $name"
+    }
+}
 $repoRoot   = Split-Path -Parent $appRoot                               # ...\<repo>
 $webuiDir   = Join-Path $repoRoot 'webui'
 $webuiDist  = Join-Path $webuiDir 'dist'

@@ -1,6 +1,7 @@
 $soloModAppRoot = if($script:AppDir){$script:AppDir}else{[IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..\..'))}
 $script:DuneSoloModsRoot = Join-Path $soloModAppRoot 'Mods'
 $script:DuneSoloLoaderRoot = Join-Path $soloModAppRoot 'ModLoader'
+$script:DuneSoloRuntimeAssets = Join-Path $soloModAppRoot 'resources\solo-mod-runtime'
 
 function Read-DuneModJson([string]$Path, $Default) {
     if (Test-Path -LiteralPath $Path) { return Get-Content -LiteralPath $Path -Raw | ConvertFrom-Json }
@@ -147,24 +148,23 @@ function Install-DuneSoloModRuntime {
     Assert-DuneSoloGameClosed
     $root=$script:DuneSoloLoaderRoot
     if(Test-Path (Join-Path $root 'Runtime')){throw 'Runtime already installed.'}
+    $zip=Join-Path $script:DuneSoloRuntimeAssets 'runtime.zip'
+    $configs=Join-Path $script:DuneSoloRuntimeAssets 'configs.zip'
+    if(-not (Test-Path -LiteralPath $zip) -or -not (Test-Path -LiteralPath $configs)){throw 'Bundled mod runtime is missing. Reinstall DST to restore it.'}
+    if((Get-FileHash -LiteralPath $zip).Hash -ne '3C72142A383E25E9F9553AC9E4D5677AA572E98CB369CAC57200EFB2E381E603'){throw 'Bundled mod runtime checksum mismatch. Reinstall DST to restore it.'}
+    if((Get-FileHash -LiteralPath $configs).Hash -ne '1B2420B7DEB237CD680D27306EADF26628699D992A322C89A963D80F580C9B78'){throw 'Bundled Dune configuration checksum mismatch. Reinstall DST to restore it.'}
     New-Item -ItemType Directory -Path $root -Force | Out-Null
-    $release=Invoke-RestMethod 'https://api.github.com/repos/UE4SS-RE/RE-UE4SS/releases/tags/experimental-latest'
-    $asset=@($release.assets | Where-Object name -eq 'UE4SS_v3.0.1-1164-g5e627997.zip')
-    if($asset.Count -ne 1){throw 'Tested upstream runtime is no longer available. Runtime was not changed.'}
-    $zip=Join-Path $root 'runtime.zip'
-    Invoke-WebRequest $asset[0].browser_download_url -OutFile $zip
-    if((Get-FileHash $zip).Hash -ne '3C72142A383E25E9F9553AC9E4D5677AA572E98CB369CAC57200EFB2E381E603'){throw 'Runtime download checksum mismatch.'}
-    $configs=Join-Path $root 'configs.zip'
-    $configAsset=$release.assets | Where-Object name -eq 'zCustomGameConfigs.zip'
-    Invoke-WebRequest $configAsset.browser_download_url -OutFile $configs
-    if((Get-FileHash $configs).Hash -ne '1B2420B7DEB237CD680D27306EADF26628699D992A322C89A963D80F580C9B78'){throw 'Dune configuration checksum mismatch.'}
     $stage=Join-Path $root ('Runtime-'+[guid]::NewGuid().ToString('N'))
-    Expand-DuneModZip $zip $stage
     $configStage=Join-Path $root ('Configs-'+[guid]::NewGuid().ToString('N'))
-    Expand-DuneModZip $configs $configStage
-    Copy-Item (Join-Path $configStage 'DuneAwakening\*.ini') (Join-Path $stage 'ue4ss') -Force
-    if(Test-Path (Join-Path $root 'Runtime')){throw 'Runtime already installed.'}
-    Move-Item -LiteralPath $stage -Destination (Join-Path $root 'Runtime')
+    try {
+        Expand-DuneModZip $zip $stage
+        Expand-DuneModZip $configs $configStage
+        Copy-Item (Join-Path $configStage 'DuneAwakening\*.ini') (Join-Path $stage 'ue4ss') -Force
+        if(Test-Path (Join-Path $root 'Runtime')){throw 'Runtime already installed.'}
+        Move-Item -LiteralPath $stage -Destination (Join-Path $root 'Runtime')
+    } finally {
+        foreach($temporary in @($stage,$configStage)){if(Test-Path -LiteralPath $temporary){Remove-Item -LiteralPath $temporary -Recurse -Force}}
+    }
     return Get-DuneSoloMods
 }
 

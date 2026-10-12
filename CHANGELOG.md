@@ -23,6 +23,7 @@ here cover everything those tags shipped.
 ### Changed
 - Connect and validate selects the matching Steam or Xbox mod installation folder and refreshes rotated Xbox save connections.
 - Mod launch controls explain that BattlEye is disabled for the session.
+- The tested mod runtime is bundled for installation without depending on changing upstream downloads.
 
 ## [16.3.0] - 2026-10-11
 

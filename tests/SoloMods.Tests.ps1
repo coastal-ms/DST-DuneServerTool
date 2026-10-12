@@ -1,4 +1,4 @@
-BeforeAll {
+﻿BeforeAll {
     Add-Type -AssemblyName System.IO.Compression.FileSystem, System.IO.Compression
     . "$PSScriptRoot\_TestHelpers.ps1"
     Import-DstLib 'SoloMods.ps1'
@@ -147,7 +147,38 @@ BeforeEach {
     $script:DuneSoloModsRoot=Join-Path $case 'Mods'
     $script:DuneSoloLoaderRoot=Join-Path $case 'Loader'
     New-Item -ItemType Directory -Path $script:ModTestRoot,$case -Force | Out-Null
+    $script:DuneSoloRuntimeAssets=Join-Path (Get-DstRepoRoot) 'app/resources/solo-mod-runtime'
 }
+
+    It 'installs the tested bundled runtime without network access' {
+        Mock Invoke-RestMethod { throw 'Unexpected network request' }
+        Mock Invoke-WebRequest { throw 'Unexpected network request' }
+        $selection=Join-Path $script:DuneSoloLoaderRoot 'selection.json'
+        New-Item -ItemType Directory -Path $script:DuneSoloLoaderRoot -Force | Out-Null
+        Set-Content $selection '{"Kept":true}'
+        Install-DuneSoloModRuntime | Out-Null
+        Test-Path (Join-Path $script:DuneSoloLoaderRoot 'Runtime/ue4ss/UE4SS.dll') | Should -BeTrue
+        $archive=[IO.Compression.ZipFile]::OpenRead((Join-Path $script:DuneSoloRuntimeAssets 'configs.zip'))
+        try {
+            $reader=[IO.StreamReader]::new($archive.GetEntry('DuneAwakening/UE4SS-settings.ini').Open())
+            try { $expected=$reader.ReadToEnd() } finally { $reader.Dispose() }
+            (Get-Content (Join-Path $script:DuneSoloLoaderRoot 'Runtime/ue4ss/UE4SS-settings.ini') -Raw) | Should -Be $expected
+        } finally { $archive.Dispose() }
+        (Get-Content $selection -Raw).Trim() | Should -Be '{"Kept":true}'
+        @(Get-ChildItem $script:DuneSoloLoaderRoot -Directory -Filter 'Configs-*').Count | Should -Be 0
+        Should -Invoke Invoke-RestMethod -Times 0
+        Should -Invoke Invoke-WebRequest -Times 0
+        { Install-DuneSoloModRuntime } | Should -Throw '*already installed*'
+    }
+
+    It 'rejects corrupt bundled archives before creating a runtime' {
+        $script:DuneSoloRuntimeAssets=Join-Path $case 'BrokenAssets'
+        New-Item -ItemType Directory $script:DuneSoloRuntimeAssets | Out-Null
+        Set-Content (Join-Path $script:DuneSoloRuntimeAssets 'runtime.zip') 'corrupt'
+        Copy-Item (Join-Path (Get-DstRepoRoot) 'app/resources/solo-mod-runtime/configs.zip') $script:DuneSoloRuntimeAssets
+        { Install-DuneSoloModRuntime } | Should -Throw '*checksum mismatch*'
+        Test-Path $script:DuneSoloLoaderRoot | Should -BeFalse
+    }
 
     It 'keeps the global launch preference when mod selections change' {
         Set-DuneGameLaunchPreferences @{skipIntro=$true} | Out-Null

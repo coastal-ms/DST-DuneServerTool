@@ -115,6 +115,7 @@ Source: "..\..\webui\dist\*"; DestDir: "{app}\webui\dist"; Flags: ignoreversion 
 ; (Existing VMs that had the boot script + cron installed by v11.0.1/v11.0.2
 ; keep working harmlessly until rebuilt.)
 Source: "..\resources\remote-scripts\*"; DestDir: "{app}\resources\remote-scripts"; Flags: ignoreversion recursesubdirs
+Source: "..\resources\solo-mod-runtime\*"; DestDir: "{app}\resources\solo-mod-runtime"; Flags: ignoreversion
 
 ; v6.1.24: Drop-in preflight checker users can run when something goes wrong.
 ; DunePreflight.bat is the entry point (right-click -> Run as administrator),
