@@ -13,6 +13,17 @@ here cover everything those tags shipped.
 
 ## [Unreleased]
 
+## [16.4.0] - 2026-10-11
+
+### Added
+- Xbox app / Microsoft Store PC support for Solo save discovery, backups, editing, settings and mod launching.
+- Individual Solo trainer unlocks; Enable all skills also unlocks all five trainers.
+- PlayerInventoryStartingSize in Solo settings and a separate Skip hologram placement checkbox.
+
+### Changed
+- Connect and validate selects the matching Steam or Xbox mod installation folder and refreshes rotated Xbox save connections.
+- Mod launch controls explain that BattlEye is disabled for the session.
+
 ## [16.3.0] - 2026-10-11
 
 ### Added
