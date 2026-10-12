@@ -425,7 +425,7 @@ function Assert-DuneSoloGameClosed {
 
 function Invoke-DuneSoloHelper {
     param(
-        [Parameter(Mandatory)][ValidateSet('inspect','diagnostics','character-xp','faction-progression','set-specialization','reset-specialization-rewards','backup','restore','grant-items','delete-item','import-blueprint','list-blueprints','export-blueprint','set-currencies','fill-water','set-weapon-ammo','repair-equipment','max-augment-attributes','max-specializations','complete-fremen','complete-npe','enable-skills','set-progression-points','unlock-main-quest')][string]$Command,
+        [Parameter(Mandatory)][ValidateSet('inspect','diagnostics','character-xp','faction-progression','set-specialization','reset-specialization-rewards','backup','restore','grant-items','delete-item','import-blueprint','list-blueprints','export-blueprint','set-currencies','fill-water','set-weapon-ammo','repair-equipment','max-augment-attributes','max-specializations','complete-fremen','complete-npe','enable-skills','set-progression-points','unlock-main-quest','unlock-trainer')][string]$Command,
         [Parameter(Mandatory)][hashtable]$Arguments
     )
 
@@ -504,6 +504,7 @@ function Invoke-DuneSoloProgressionAction {
         $arguments['keystones'] = Get-DuneSoloDataFilePath -Name 'dune-keystones.json'
     } elseif ($Action -eq 'enable-skills') {
         $arguments['skills'] = Get-DuneSoloDataFilePath -Name 'dune-skills-catalog.json'
+        $arguments['tags'] = Get-DuneSoloDataFilePath -Name 'dune-tags.json'
     }
     return Invoke-DuneSoloHelper -Command $Action -Arguments $arguments
 }
@@ -525,6 +526,26 @@ function Unlock-DuneSoloMainQuest {
         adapter = $adapter.manifestPath
         tags = Get-DuneSoloDataFilePath -Name 'dune-tags.json'
         quest = $Quest
+    }
+}
+
+function Unlock-DuneSoloTrainer {
+    param([Parameter(Mandatory)][ValidateSet('Swordmaster','Trooper','Mentat','BeneGesserit','Planetologist')][string]$Job, [string]$Confirm)
+    Assert-DuneSoloSupportedPlatform
+    if ($Confirm -ne 'UNLOCK SOLO TRAINER') { throw 'Confirm the Solo trainer unlock before continuing.' }
+    Assert-DuneSoloGameClosed
+    $profile = Get-DuneSoloProfile
+    Assert-DuneSoloProgressionAdapter -Profile $profile
+    $adapter = Get-DuneSoloAdapterDescriptor -DbPath $profile.dbPath
+    $safetyDir = Join-Path (Get-DuneSoloProfileBackupRoot -DbPath $profile.dbPath) 'pre-progression'
+    New-Item -ItemType Directory -Path $safetyDir -Force | Out-Null
+    $stamp = (Get-Date).ToUniversalTime().ToString('yyyyMMdd-HHmmssfff')
+    Invoke-DuneSoloHelper -Command 'unlock-trainer' -Arguments @{
+        input = $profile.dbPath
+        'safety-backup' = Join-Path $safetyDir "game-before-trainer-$stamp.db"
+        adapter = $adapter.manifestPath
+        tags = Get-DuneSoloDataFilePath -Name 'dune-tags.json'
+        job = $Job
     }
 }
 

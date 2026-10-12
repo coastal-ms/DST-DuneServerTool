@@ -25,6 +25,7 @@ import {
   completeSoloFindTheFremen,
   completeSoloNpe,
   enableSoloAllSkills,
+  unlockSoloTrainer,
   exportSoloBlueprint,
   exportSoloDiagnostics,
   setSoloSpecialization,
@@ -572,6 +573,7 @@ export function SoloMode() {
   const [intelDraft, setIntelDraft] = useState(0)
   const [journeyAction, setJourneyAction] = useState<'fremen' | 'npe'>('fremen')
   const [mainQuest, setMainQuest] = useState('DA_MQ_ANewBeginning')
+  const [trainerJob, setTrainerJob] = useState('Swordmaster')
   const initializedFromStatus = useRef(false)
 
   useEffect(() => {
@@ -2391,10 +2393,21 @@ export function SoloMode() {
                   : journeyAction === 'npe' ? 'Complete NPE' : 'Complete Find the Fremen'}
               </button>
             </div>
+            <div className="card p-5 flex flex-col">
+              <h2 className="font-semibold">Unlock Trainers</h2>
+              <p className="text-sm text-text-muted mt-1 mb-3">Complete the selected trainer's contracts and apply their reward tags and skill-tree unlocks. Takes effect next launch.</p>
+              <label htmlFor="solo-trainer" className="text-sm">Trainer</label>
+              <select id="solo-trainer" className={`${SOLO_INPUT_CLASS} mt-1 mb-3`} value={trainerJob} onChange={event => setTrainerJob(event.target.value)} disabled={!canMutateActiveProfile || gameRunning || !!busy}>
+                <option value="Swordmaster">Swordmaster</option><option value="Trooper">Trooper</option><option value="Mentat">Mentat</option><option value="BeneGesserit">Bene Gesserit</option><option value="Planetologist">Planetologist</option>
+              </select>
+              <button className={`btn-primary ${SOLO_DISABLED_PRIMARY_CLASS}`} disabled={!canMutateActiveProfile || gameRunning || !!busy} onClick={() => void runProgressionAction('trainer', 'Unlock Solo trainer', token => unlockSoloTrainer(trainerJob, token))}>
+                {busy === 'progression:trainer' ? 'Applying...' : 'Unlock trainer'}
+              </button>
+            </div>
             <ProgressionActionCard
               icon="Sparkles"
               title="Enable all skills"
-              description="Raise 143 approved skills to value 7, leave Bindu Sprint and Voice Ignore learnable, preserve unknown Solo keys, keep at least 20 unspent points, and raise Intel to 100."
+              description="Unlock all five trainers and raise 143 approved skills to value 7. Leave Bindu Sprint and Voice Ignore learnable, preserve unknown Solo keys, keep at least 20 unspent points, and raise Intel to 100."
               status={`${inspection?.progression.skillsAtSeven ?? 0}/143 enabled · ${inspection?.progression.unspentSkillPoints ?? 0} unspent · ${inspection?.progression.intel ?? 0} Intel`}
               busy={busy === 'progression:skills'}
               disabled={!canMutateActiveProfile || gameRunning}

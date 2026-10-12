@@ -422,6 +422,23 @@ Register-DuneRoute -Method POST -Path '/api/solo/progression/main-quest/unlock' 
     }
 }
 
+Register-DuneRoute -Method POST -Path '/api/solo/progression/trainer/unlock' -LocalOnly -Handler {
+    param($req, $res, $routeParams, $body)
+    try {
+        $job = [string](Get-DuneSoloBodyField -Body $body -Name 'job' -Default '')
+        $confirm = [string](Get-DuneSoloBodyField -Body $body -Name 'confirm' -Default '')
+        $token = [string](Get-DuneSoloBodyField -Body $body -Name 'expectedProfileToken' -Default '')
+        $result = Invoke-WithDuneLock -Name 'solo-profile-data' -Script {
+            Assert-DuneSoloExpectedProfile -ExpectedProfileToken $token
+            Unlock-DuneSoloTrainer -Job $job -Confirm $confirm
+        }
+        Write-DuneJson -Response $res -Body $result
+    } catch {
+        $status = if ($_.Exception.Message -like '*still running*' -or $_.Exception.Message -like '*changed in another window*') { 409 } else { 400 }
+        Write-DuneError -Response $res -Status $status -Message $_.Exception.Message
+    }
+}
+
 Register-DuneRoute -Method POST -Path '/api/solo/progression/specializations/max' -LocalOnly -Handler {
     param($req, $res, $routeParams, $body)
     try {

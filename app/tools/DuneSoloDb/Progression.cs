@@ -348,7 +348,7 @@ internal static partial class Program
             }, requireGameClosed: true);
     }
 
-    private static object EnableAllSkills(
+    private static object EnableAllSkillsCore(
         string input,
         string safetyBackup,
         string adapterPath,

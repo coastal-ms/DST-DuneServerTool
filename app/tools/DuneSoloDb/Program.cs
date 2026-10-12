@@ -139,6 +139,9 @@ internal static partial class Program
                     Require(options, "input"), Require(options, "safety-backup"),
                     Require(options, "adapter"), Require(options, "tags"),
                     RequireValue(options, "quest")),
+                "unlock-trainer" => UnlockTrainer(
+                    Require(options, "input"), Require(options, "safety-backup"),
+                    Require(options, "adapter"), Require(options, "tags"), RequireValue(options, "job")),
                 "max-specializations" => MaxSpecializations(
                     Require(options, "input"),
                     Require(options, "safety-backup"),
@@ -156,7 +159,7 @@ internal static partial class Program
                     Require(options, "input"),
                     Require(options, "safety-backup"),
                     Require(options, "adapter"),
-                    Require(options, "skills")),
+                    Require(options, "skills"), Require(options, "tags")),
                 "set-progression-points" => SetProgressionPoints(
                     Require(options, "input"),
                     Require(options, "safety-backup"),
@@ -2359,6 +2362,7 @@ internal static partial class Program
                 }
                 """);
             var journeyTagsPath = Path.Combine(root, "journey-tags.json");
+            SelfTestTrainers(root, target, adapterPath, skillsPath);
             // Use the same node-to-tag shape as the shipped catalog.
             File.WriteAllText(journeyTagsPath,
                 """{"journey_node_tags":{"DA_MQ_ANewBeginning":["Journey.MainQuest.SelfTest"]}}""");
@@ -2681,6 +2685,7 @@ internal static partial class Program
                     "offline-currency-write-with-safety-backup",
                     "offline-water-container-fills-with-safety-backups",
                     "offline-main-quest-unlock-with-backup-and-absent-quest-rejection",
+                    "offline-trainer-unlock-preserves-skills-and-other-contracts-with-backup",
                     "offline-specialization-max-with-rewards",
                     "offline-specialization-lowering-preserves-rewards-and-backup",
                     "retail-all-five-track-targets-preserve-other-tracks",

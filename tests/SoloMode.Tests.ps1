@@ -978,6 +978,27 @@ Describe 'Solo Mode write gates and settings backups' {
         Assert-MockCalled Invoke-DuneSoloHelper -Times 0
     }
 
+    It 'builds a trainer unlock with the selected save and retained backup' {
+        $layout = New-TestSoloLayout
+        Save-DuneSoloState -DataRoot $layout.root -DbPath $layout.db | Out-Null
+        Mock Get-DuneSoloGameProcesses { @() }
+        Mock Invoke-DuneSoloHelper { @{ ok = $true } }
+        (Unlock-DuneSoloTrainer -Job 'Mentat' -Confirm 'UNLOCK SOLO TRAINER').ok | Should -BeTrue
+        Assert-MockCalled Invoke-DuneSoloHelper -Times 1 -ParameterFilter {
+            $Command -eq 'unlock-trainer' -and $Arguments.input -eq $layout.db -and
+            $Arguments.job -eq 'Mentat' -and
+            $Arguments.tags -like '*dune-tags.json' -and
+            $Arguments['safety-backup'] -like '*pre-progression*'
+        }
+    }
+
+    It 'rejects a trainer unlock while the game is running' {
+        Mock Get-DuneSoloGameProcesses { @(@{name='DuneSandbox';pid=42}) }
+        Mock Invoke-DuneSoloHelper { throw 'Must not run' }
+        { Unlock-DuneSoloTrainer -Job 'Mentat' -Confirm 'UNLOCK SOLO TRAINER' } | Should -Throw '*still running*'
+        Assert-MockCalled Invoke-DuneSoloHelper -Times 0
+    }
+
     It 'builds each Retail progression command with a retained backup' {
         $layout = New-TestSoloLayout
         Save-DuneSoloState -DataRoot $layout.root -DbPath $layout.db | Out-Null
