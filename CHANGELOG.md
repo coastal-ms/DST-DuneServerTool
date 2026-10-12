@@ -14,7 +14,9 @@ here cover everything those tags shipped.
 ## [Unreleased]
 
 ### Added
-- Experimental selective House Imota Garment Swatch and Mercenary Light Armor Set grants in self-hosted Players actions and Solo. Only exact naturally mapped customization IDs are accepted; all five armor appearances are saved together. Writes require a verified backup and an offline character or closed Solo game. Direct-grant gameplay acceptance remains pending.
+- Experimental selective House Imota Garment Swatch and Mercenary Light Armor Set grants in self-hosted Players actions and Solo. Only exact naturally mapped customization IDs are accepted; all five armor appearances are saved together. Writes require a verified backup and an offline character or closed Solo game. All five armor appearances passed controlled Solo gameplay verification; self-hosted gameplay acceptance remains pending.
+- Experimental direct character grants for 311 observed swatches and 401 observed gear appearances, available in both Solo and self-hosted Players actions. Existing unlocks are preserved. These save grants do not create account purchases or entitlements; individual in-game availability remains experimental.
+- Experimental direct grant of 717 observed schematic recipe entries in Solo and self-hosted. Existing recipes and remaining uses are preserved; this adds crafting recipes rather than physical inventory items.
 
 ## [16.4.1.1] - 2026-10-12
 

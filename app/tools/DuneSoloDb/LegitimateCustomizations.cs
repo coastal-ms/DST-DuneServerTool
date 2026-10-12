@@ -22,7 +22,7 @@ internal static partial class Program
         } catch (InvalidDataException) { }
     }
 
-    private static string[] RequireLegitimateCustomization(string catalogPath, string id)
+    private static (string[] Ids, JsonArray? Recipes) RequireLegitimateCustomization(string catalogPath, string id)
     {
         var catalog = JsonNode.Parse(File.ReadAllText(catalogPath)) as JsonObject
             ?? throw new InvalidDataException("Invalid reviewed customization catalog.");
@@ -32,13 +32,32 @@ internal static partial class Program
             string.Equals(e["id"]?.GetValue<string>(), id, StringComparison.Ordinal)).ToArray();
         if (matches.Length != 1 || string.IsNullOrWhiteSpace(matches[0]["acquisition"]?.GetValue<string>())
             || string.IsNullOrWhiteSpace(matches[0]["mappingEvidence"]?.GetValue<string>()))
-            throw new ArgumentException("Choose an exact reviewed ordinary gameplay customization.");
+            throw new ArgumentException("Choose an exact supported character customization selection.");
+        if (matches[0]["recipeEntries"] is JsonArray recipes)
+        {
+            var keys = new HashSet<(string, int)>();
+            if (recipes.Count == 0) throw new InvalidDataException("Empty recipe selection.");
+            foreach (var node in recipes)
+            {
+                if (node is not JsonObject recipe
+                    || string.IsNullOrWhiteSpace(recipe["BaseRecipeId"]?["Name"]?.GetValue<string>())
+                    || recipe["m_QualityLevel"]?.GetValue<int>() is not int quality || quality < 0 || quality > 5
+                    || recipe["m_NumberOfRecipeUses"]?.GetValue<int>() is not int uses || uses < -1
+                    || recipe["m_bIsLimitedUseRecipe"] is not JsonValue
+                    || recipe["m_Source"]?.GetValue<string>() != "SchematicPickup"
+                    || !keys.Add((recipe["BaseRecipeId"]!["Name"]!.GetValue<string>(), quality)))
+                    throw new InvalidDataException("Invalid reviewed recipe mapping.");
+                if (uses == -1 && recipe["m_bIsLimitedUseRecipe"]!.GetValue<bool>())
+                    throw new InvalidDataException("Unlimited recipe sentinel conflicts with limited-use flag.");
+            }
+            return ([], recipes);
+        }
         var ids = matches[0]["customizationIds"] is JsonArray mapped
             ? mapped.Select(e => e!.GetValue<string>()).ToArray() : [id];
         if (ids.Length == 0 || ids.Any(string.IsNullOrWhiteSpace)
             || ids.Distinct(StringComparer.Ordinal).Count() != ids.Length)
             throw new InvalidDataException("Invalid reviewed customization mapping.");
-        return ids;
+        return (ids, null);
     }
 
     private static bool AppendLegitimateCustomization(JsonObject properties, string id)
@@ -57,7 +76,7 @@ internal static partial class Program
     private static object GrantLegitimateCustomization(string input, string backup, string adapterPath,
         string catalogPath, string id)
     {
-        var ids = RequireLegitimateCustomization(catalogPath, id);
+        var selection = RequireLegitimateCustomization(catalogPath, id);
         AssertProgressionAdapter(input, ReadSoloAdapter(adapterPath));
         return RunProgressionMutation(input, backup, "grant-legitimate-customization", path => {
             using var db = OpenWritable(path);
@@ -66,15 +85,35 @@ internal static partial class Program
                 var player = ReadIdentity(db);
                 var properties = ReadActorProperties(db, player.PawnId);
                 var added = 0;
-                foreach (var mappedId in ids)
+                foreach (var mappedId in selection.Ids)
                     if (AppendLegitimateCustomization(properties, mappedId)) added++;
+                if (selection.Recipes is not null)
+                {
+                    var known = properties["CraftingRecipesLibraryActorComponent"]?["m_KnownItemRecipes"] as JsonArray
+                        ?? throw new InvalidDataException("Unsupported crafting recipe library.");
+                    if (known.Any(node => node is not JsonObject
+                        || node["BaseRecipeId"]?["Name"] is not JsonValue
+                        || node["m_QualityLevel"] is not JsonValue))
+                        throw new InvalidDataException("Unsupported existing recipe entry.");
+                    foreach (var recipe in selection.Recipes)
+                    {
+                        var name = recipe!["BaseRecipeId"]!["Name"]!.GetValue<string>();
+                        var quality = recipe["m_QualityLevel"]!.GetValue<int>();
+                        if (known.Any(node => node!["BaseRecipeId"]!["Name"]!.GetValue<string>() == name
+                            && node["m_QualityLevel"]!.GetValue<int>() == quality)) continue;
+                        known.Add(recipe.DeepClone());
+                        added++;
+                    }
+                }
                 if (added > 0) WriteActorProperties(db, player.PawnId, properties);
                 var verified = ReadActorProperties(db, player.PawnId);
                 if (!JsonNode.DeepEquals(properties, verified))
                     throw new InvalidDataException("Customization readback failed.");
                 ExecuteNonQuery(db, "COMMIT;");
                 return new { ok = true, added, customizationId = id,
-                    message = "Reviewed customization saved. Open the game and check the customization menu." };
+                    message = selection.Recipes is null
+                        ? "Character customization IDs saved. Open the game and check the customization menu."
+                        : "Schematic recipe entries saved. Open the game and check crafting; existing recipe uses were preserved." };
             } catch { ExecuteNonQuery(db, "ROLLBACK;"); throw; }
         }, requireGameClosed: true);
     }

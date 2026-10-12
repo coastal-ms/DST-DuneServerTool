@@ -14,6 +14,18 @@ AfterAll {
     Remove-Item function:global:Invoke-DuneVerifiedSafetyBackup -ErrorAction SilentlyContinue
 }
 Describe 'Reviewed ordinary customizations' {
+    It 'rejects malformed recipe mappings and a conflicting unlimited sentinel' {
+        foreach ($kind in @('blank','string-quality','limited-sentinel','duplicate')) {
+            $entry = [pscustomobject]@{BaseRecipeId=[pscustomobject]@{Name='FixtureRecipe'}; m_QualityLevel=0; m_NumberOfRecipeUses=-1; m_bIsLimitedUseRecipe=$false; m_Source='SchematicPickup'}
+            switch ($kind) {
+                'blank' { $entry.BaseRecipeId.Name='' }
+                'string-quality' { $entry.m_QualityLevel='0' }
+                'limited-sentinel' { $entry.m_bIsLimitedUseRecipe=$true }
+            }
+            $entries = if ($kind -eq 'duplicate') { @($entry,$entry) } else { @($entry) }
+            { Get-DuneReviewedRecipeSql 1 2 3 $entries } | Should -Throw
+        }
+    }
     It 'accepts only exact evidence-backed IDs' {
         (Get-DuneReviewedCustomization StillSCharDyepackImota).label | Should -Be 'House Imota Garment Swatch'
         foreach ($id in @('stillschardyepackimota','MTX_StillSCharDyepackImota','MTX_Atre_Troopship_Relief_Placeable','Unknown')) {

@@ -2231,14 +2231,17 @@ export function SoloMode() {
             {[
               { id: 'StillSCharDyepackImota', label: 'House Imota Garment Swatch' },
               { id: 'MercenaryLightArmorSet', label: 'Mercenary Light Armor Set' },
+              { id: 'ObservedCharacterSwatches', label: 'Character Swatches (311)' },
+              { id: 'ObservedGearAppearances', label: 'Gear Appearances (401)' },
+              { id: 'ObservedSchematicRecipes', label: 'Schematic Recipes (717)' },
             ].map(choice => <button key={choice.id} className="btn-primary mt-4" disabled={!canMutateActiveProfile || gameRunning || !!busy}
               onClick={async () => {
-                if (!window.confirm(`Grant the reviewed ${choice.label}? A safety backup will be created.\n\n${COSMETIC_LICENSE_NOTICE}`)) return
+                if (!window.confirm(`Grant the reviewed ${choice.label}? A safety backup will be created.${choice.id === 'ObservedSchematicRecipes' ? ' This saves crafting recipes directly, not inventory items. Existing recipe uses are preserved.' : ''}\n\n${COSMETIC_LICENSE_NOTICE}`)) return
                 setBusy('reviewed-customization')
                 setNotice(null)
                 try {
                   await grantSoloReviewedCustomization(statusState.data?.profileToken ?? '', choice.id)
-                  setNotice({ kind: 'ok', text: `${choice.label} saved. Open the game and check the customization menu; direct-grant gameplay effect is unverified.` })
+                  setNotice({ kind: 'ok', text: `${choice.label} saved. ${choice.id === 'ObservedSchematicRecipes' ? 'Open the game and check your crafting recipes. Existing recipe uses were preserved.' : 'Open the game and select the appearance or swatch in the customization menu.'}` })
                   await Promise.all([statusState.refresh(), backupsState.refresh()])
                 } catch (error) { setNotice({ kind: 'err', text: error instanceof Error ? error.message : String(error) }) }
                 finally { setBusy(null) }

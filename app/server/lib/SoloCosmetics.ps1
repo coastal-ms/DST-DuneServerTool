@@ -17,7 +17,7 @@ function Get-DuneReviewedCustomization {
     $catalog = Get-Content -LiteralPath (Get-DuneSoloDataFilePath -Name 'legitimate-customizations.json') -Raw | ConvertFrom-Json
     $matches = @($catalog.entries | Where-Object { [string]$_.id -ceq $CustomizationId })
     if ($catalog.schemaVersion -ne 1 -or $matches.Count -ne 1 -or -not $matches[0].acquisition -or -not $matches[0].mappingEvidence) {
-        throw 'Choose an exact reviewed ordinary gameplay customization.'
+        throw 'Choose an exact supported character customization selection.'
     }
     return $matches[0]
 }
@@ -44,6 +44,9 @@ function Get-DuneReviewedCustomizationSql {
     param([long]$PawnId, [long]$ControllerId, [long]$AccountId, [string]$CustomizationId)
     $entry = Get-DuneReviewedCustomization -CustomizationId $CustomizationId
     if ($PawnId -le 0 -or $ControllerId -le 0 -or $AccountId -le 0) { throw 'A current character identity is required.' }
+    if ($entry.PSObject.Properties.Name -contains 'recipeEntries') {
+        return Get-DuneReviewedRecipeSql -PawnId $PawnId -ControllerId $ControllerId -AccountId $AccountId -Entries @($entry.recipeEntries)
+    }
     $ids = if ($entry.PSObject.Properties.Name -contains 'customizationIds') { @($entry.customizationIds) } else { @([string]$entry.id) }
     if ($ids.Count -eq 0 -or @($ids | Where-Object { $_ -isnot [string] -or [string]::IsNullOrWhiteSpace($_) }).Count -or @($ids | Select-Object -Unique).Count -ne $ids.Count) { throw 'Invalid reviewed customization mapping.' }
     $safeIds = ($ids | ForEach-Object { "'$(ConvertTo-DuneSqlString $_)'" }) -join ','
@@ -90,6 +93,61 @@ COMMIT;
 '@.Replace('__PAWN__',[string]$PawnId).Replace('__CONTROLLER__',[string]$ControllerId).Replace('__ACCOUNT__',[string]$AccountId).Replace('__IDS__',$safeIds)
 }
 
+function Get-DuneReviewedRecipeSql {
+    param([long]$PawnId, [long]$ControllerId, [long]$AccountId, [object[]]$Entries)
+    $keys = [Collections.Generic.HashSet[string]]::new([StringComparer]::Ordinal)
+    if (-not $Entries.Count) { throw 'Empty reviewed recipe selection.' }
+    foreach ($entry in $Entries) {
+        if ([string]::IsNullOrWhiteSpace([string]$entry.BaseRecipeId.Name) -or
+            ($entry.m_QualityLevel -isnot [long] -and $entry.m_QualityLevel -isnot [int]) -or
+            $entry.m_QualityLevel -lt 0 -or $entry.m_QualityLevel -gt 5 -or
+            ($entry.m_NumberOfRecipeUses -isnot [long] -and $entry.m_NumberOfRecipeUses -isnot [int]) -or
+            $entry.m_NumberOfRecipeUses -lt -1 -or $entry.m_bIsLimitedUseRecipe -isnot [bool] -or
+            ($entry.m_NumberOfRecipeUses -eq -1 -and $entry.m_bIsLimitedUseRecipe) -or
+            $entry.m_Source -cne 'SchematicPickup' -or
+            -not $keys.Add("$($entry.BaseRecipeId.Name)|$($entry.m_QualityLevel)")) { throw 'Invalid reviewed recipe mapping.' }
+    }
+    $json = ConvertTo-DuneSqlString (ConvertTo-Json -InputObject @($Entries) -Depth 8 -Compress)
+    return @'
+BEGIN;
+SET LOCAL lock_timeout='5s';
+SET LOCAL statement_timeout='30s';
+CREATE TEMP TABLE dst_customization_result(added integer) ON COMMIT DROP;
+DO $dst$
+DECLARE props jsonb; known jsonb; selected jsonb; changed integer := 0;
+BEGIN
+    PERFORM pg_advisory_xact_lock(__CONTROLLER__::bigint);
+    PERFORM 1 FROM dune.encrypted_player_state WHERE player_pawn_id=__PAWN__::bigint
+        AND player_controller_id=__CONTROLLER__::bigint AND account_id=__ACCOUNT__::bigint
+        AND online_status::text='Offline' FOR UPDATE;
+    IF NOT FOUND THEN RAISE EXCEPTION 'The matching character must be fully Offline.'; END IF;
+    SELECT properties INTO STRICT props FROM dune.actors WHERE id=__PAWN__::bigint FOR UPDATE;
+    known := props #> '{CraftingRecipesLibraryActorComponent,m_KnownItemRecipes}';
+    IF jsonb_typeof(known) IS DISTINCT FROM 'array' THEN RAISE EXCEPTION 'Unsupported crafting recipe library.'; END IF;
+    IF EXISTS (SELECT 1 FROM jsonb_array_elements(known) e WHERE jsonb_typeof(e) IS DISTINCT FROM 'object'
+        OR jsonb_typeof(e #> '{BaseRecipeId,Name}') IS DISTINCT FROM 'string'
+        OR jsonb_typeof(e->'m_QualityLevel') IS DISTINCT FROM 'number') THEN RAISE EXCEPTION 'Unsupported existing recipe entry.'; END IF;
+    FOR selected IN SELECT value FROM jsonb_array_elements('__RECIPES__'::jsonb) LOOP
+        IF NOT EXISTS (SELECT 1 FROM jsonb_array_elements(known) e
+            WHERE e #>> '{BaseRecipeId,Name}'=selected #>> '{BaseRecipeId,Name}'
+              AND e->'m_QualityLevel'=selected->'m_QualityLevel') THEN
+            known := known || jsonb_build_array(selected);
+            changed := changed + 1;
+        END IF;
+    END LOOP;
+    IF changed > 0 THEN
+        props := jsonb_set(props,'{CraftingRecipesLibraryActorComponent,m_KnownItemRecipes}',known,false);
+        UPDATE dune.actors SET properties=props WHERE id=__PAWN__::bigint;
+    END IF;
+    IF (SELECT properties FROM dune.actors WHERE id=__PAWN__::bigint) IS DISTINCT FROM props THEN RAISE EXCEPTION 'Recipe readback failed.'; END IF;
+    INSERT INTO dst_customization_result VALUES(changed);
+END
+$dst$;
+SELECT added::text AS added FROM dst_customization_result;
+COMMIT;
+'@.Replace('__PAWN__',[string]$PawnId).Replace('__CONTROLLER__',[string]$ControllerId).Replace('__ACCOUNT__',[string]$AccountId).Replace('__RECIPES__',$json)
+}
+
 function Invoke-DunePlayerReviewedCustomization {
     param([string]$Ip, [long]$PawnId, [long]$ControllerId, [long]$AccountId, [string]$CustomizationId)
     $sql = Get-DuneReviewedCustomizationSql -PawnId $PawnId -ControllerId $ControllerId -AccountId $AccountId -CustomizationId $CustomizationId
@@ -104,7 +162,9 @@ function Invoke-DunePlayerReviewedCustomization {
     if (-not $write.ok) { return @{ok=$false;error=$write.error} }
     $rows = ConvertTo-DuneRowMaps -Result $write
     if ($rows.Count -ne 1) { return @{ok=$false;error='Refresh ownership before retrying; the result could not be read.'} }
-    return @{ok=$true;added=[int]$rows[0]['added'];safetyBackup=$backup.path;message='Reviewed customization saved. Log in and check the customization menu.'}
+    $entry = Get-DuneReviewedCustomization -CustomizationId $CustomizationId
+    $message = if ($entry.PSObject.Properties.Name -contains 'recipeEntries') { 'Schematic recipe entries saved. Log in and check crafting; existing recipe uses were preserved.' } else { 'Character customization IDs saved. Log in and check the customization menu.' }
+    return @{ok=$true;added=[int]$rows[0]['added'];safetyBackup=$backup.path;message=$message}
 }
 
 function Invoke-DuneSoloGrantUnlocks {

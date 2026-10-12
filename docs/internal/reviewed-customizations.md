@@ -1,15 +1,17 @@
-# Reviewed ordinary customizations
+# Character customization and recipe grants
 
-The experimental control adds one exact character customization ID directly to
-the existing customization library. It is available in self-hosted Players
-actions (Items) and Solo (Items). It does not replace existing token grants.
+Experimental selections append exact mapped character customization IDs or
+known crafting recipes. They are available in self-hosted Players actions
+(Items) and Solo (Items). Existing token and physical item grants remain.
 
 The initial reviewed entry is House Imota Garment Swatch,
 `StillSCharDyepackImota`. Natural purchase and use of the 500-Solaris vendor item
 produced exactly this added ID in a before/after Solo save comparison. The
 reviewed catalog records the acquisition and mapping evidence. Unknown IDs,
-case variants and prefixed aliases are rejected. Paid, DLC, preorder,
-promotional and other restricted items must not be added to this catalog.
+case variants and prefixed aliases are rejected. The expanded observed groups
+may contain historically restricted IDs; their presence in a character save
+does not establish account ownership or in-game availability. Account license
+and entitlement checks are not modified.
 
 The second reviewed entry is Mercenary Light Armor Set Variant. Normal vendor
 purchase and activation added exactly five `MercLight_T5_*_MeshVariant` IDs
@@ -32,9 +34,36 @@ pre-acquisition Solo copy, duplicate handling, rejection without mutation,
 route/profile/confirmation guards, backup failures and real disposable
 PostgreSQL transactions. The production web UI build and targeted lint pass.
 
-These checks prove storage behavior, not game acceptance of a newly granted
-customization. The current live Solo save already owns Imota through normal
-gameplay, so a duplicate grant is not a meaningful new-unlock gameplay test.
-Keep this experimental until a controlled unowned ordinary customization can
-be checked in-game. Broader catalog entries require their own acquisition
-mapping and eligibility evidence. No blanket Wand-style unlock is exposed.
+Controlled Solo gameplay verification passed for all five Mercenary Light
+appearances: each was selectable and rendered after the helper granted the
+IDs to a pre-purchase copy, without buying the set again. The latest earned
+save was restored afterward. Self-hosted gameplay acceptance remains pending;
+the PostgreSQL fixture verifies transaction and storage behavior only.
+
+The subsequent combined Wand test added 638 customization IDs to the 149-ID
+baseline, removing none. The existing helper reproduced the resulting exact
+787-ID set on an isolated copy; only the actors table changed. This is save
+parity evidence, not proof that every entry is functional or licensed. The
+catalog now also exposes experimental grouped selections for 311 observed
+swatches and 401 observed gear appearances, equally in Solo and self-hosted
+Players actions. These groups use exact stored IDs, not fuzzy runtime matching.
+The remaining 75 entries are deferred: vehicle appearances, buildables,
+explicit test/placeholder entries, or IDs whose category is not established.
+Swatches include the observed vehicle dye palettes, but do not grant vehicle
+mesh appearances. The groupings use ID names for classification and still need
+gameplay acceptance beyond the naturally verified Mercenary set.
+
+The combined test also added 717 new recipe name/quality pairs to the pawn's
+`CraftingRecipesLibraryActorComponent.m_KnownItemRecipes`. Coastal selected
+direct recipe grants rather than physical item delivery. The experimental
+Schematic Recipes selection appends those exact entries, including observed
+use counts and limited-use flags; a matching existing recipe remains untouched.
+The unlimited `-1` use sentinel is accepted only with a false limited-use flag.
+It does not require storage capacity or grant physical items. Repeated grants
+add zero entries. Wrapped Solo copies and real PostgreSQL fixtures verify this
+behavior, including preservation of an existing recipe's remaining uses.
+
+Seventeen additional physical schematic rows also persisted in a special
+inventory omitted by DST's regular inspection. They are not part of this
+direct-recipe selection. Both Wand controls were active and ordinary gameplay
+also changed the save; the complete table delta must never be replayed.

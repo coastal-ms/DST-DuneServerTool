@@ -29,6 +29,36 @@ INSERT INTO dune.actors VALUES(1,'{"Other":{"keep":7},"CustomizationLibraryActor
     AfterEach {
         if ($script:ownsSchema) { (Invoke-ReviewedFixture 'DROP SCHEMA dune CASCADE;').ExitCode | Should -Be 0 }
     }
+    It 'preserves existing recipe uses while adding missing name and quality pairs' {
+        $entry = Get-DuneReviewedCustomization ObservedSchematicRecipes
+        $existing = $entry.recipeEntries[0] | ConvertTo-Json -Depth 6 | ConvertFrom-Json
+        $existing.m_NumberOfRecipeUses = 99
+        $seed = ConvertTo-DuneSqlString ($existing | ConvertTo-Json -Depth 6 -Compress)
+        (Invoke-ReviewedFixture "UPDATE dune.actors SET properties=jsonb_set(properties,'{CraftingRecipesLibraryActorComponent}',jsonb_build_object('m_KnownItemRecipes',jsonb_build_array('$seed'::jsonb))); ").ExitCode | Should -Be 0
+        $sql = Get-DuneReviewedCustomizationSql 1 2 3 ObservedSchematicRecipes
+        $first = Invoke-ReviewedFixture $sql
+        $first.ExitCode | Should -Be 0 -Because $first.Error
+        [int]$first.Output.Trim() | Should -Be ($entry.recipeEntries.Count - 1)
+        $repeat = Invoke-ReviewedFixture $sql
+        $repeat.ExitCode | Should -Be 0 -Because $repeat.Error
+        $repeat.Output.Trim() | Should -Be '0'
+        $uses = Invoke-ReviewedFixture "SELECT properties #>> '{CraftingRecipesLibraryActorComponent,m_KnownItemRecipes,0,m_NumberOfRecipeUses}' FROM dune.actors WHERE id=1;"
+        $uses.Output.Trim() | Should -Be '99'
+    }
+    It 'applies both observed bulk selections atomically and preserves existing entries' {
+        foreach ($selection in @('ObservedCharacterSwatches','ObservedGearAppearances')) {
+            $entry = Get-DuneReviewedCustomization $selection
+            $sql = Get-DuneReviewedCustomizationSql 1 2 3 $selection
+            $first = Invoke-ReviewedFixture $sql
+            $first.ExitCode | Should -Be 0 -Because $first.Error
+            [int]$first.Output.Trim() | Should -Be $entry.customizationIds.Count
+            $repeat = Invoke-ReviewedFixture $sql
+            $repeat.ExitCode | Should -Be 0 -Because $repeat.Error
+            $repeat.Output.Trim() | Should -Be '0'
+        }
+        $verify = Invoke-ReviewedFixture "SELECT (properties->'Other'->>'keep')::int FROM dune.actors WHERE id=1;"
+        $verify.Output.Trim() | Should -Be '7'
+    }
     It 'adds only the reviewed ID, preserves other state and repeats idempotently' {
         $sql=Get-DuneReviewedCustomizationSql 1 2 3 StillSCharDyepackImota
         $first=Invoke-ReviewedFixture $sql
