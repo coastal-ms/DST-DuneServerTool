@@ -956,6 +956,10 @@ function Connect-DuneSoloProfile {
         adapter = $adapter.manifestPath
     }
     Save-DuneSoloState -DataRoot $dataRoot -DbPath $DbPath -Adapter $adapter.id | Out-Null
+    if ($script:DuneSoloLoaderRoot -and (Get-Command Set-DuneSoloModPlatform -ErrorAction SilentlyContinue)) {
+        $modPlatform = if ($adapter.channel -eq 'Xbox') { 'xbox' } else { 'steam' }
+        Set-DuneSoloModPlatform -Platform $modPlatform
+    }
     return Get-DuneSoloStatus
 }
 

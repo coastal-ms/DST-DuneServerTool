@@ -89,23 +89,28 @@ function Get-DuneSoloMods {
     return @{ platform=$platform; gameRunning=$gameRunning; mods=$mods; folder=$script:DuneSoloModsRoot; gamePath=[string]$settings.gamePath; skipIntro=[bool]$preferences.skipIntro; soloArguments=[string]$preferences.soloArguments; runtimeReady=(Test-Path (Join-Path $script:DuneSoloLoaderRoot 'Runtime\ue4ss\UE4SS.dll')); session=$session; launchError=$launchError; runtimeLog=$runtimeLog }
 }
 
-function Set-DuneSoloModSelection($Body) {
-    Assert-DuneSoloGameClosed
+function Set-DuneSoloModPlatform([string]$Platform, [string]$GamePath='') {
     $settings = Read-DuneModJson (Join-Path $script:DuneSoloLoaderRoot 'settings.json') @{}
-    $platform = if ($Body.platform) { [string]$Body.platform } elseif ($settings.platform) { [string]$settings.platform } else { 'steam' }
+    $platform = if ($Platform) { $Platform } elseif ($settings.platform) { [string]$settings.platform } else { 'steam' }
     if ($platform -notin @('steam','xbox')) { throw 'Choose Steam or Xbox PC.' }
     $oldPlatform = if ($settings.platform -eq 'xbox') { 'xbox' } else { 'steam' }
     $paths = @{ steam=[string]$settings.steamPath; xbox=[string]$settings.xboxPath }
     if ($settings.gamePath) { $paths[$oldPlatform] = [string]$settings.gamePath }
-    $path = [string]$Body.gamePath
+    $path = $GamePath
+    if (-not $PSBoundParameters.ContainsKey('GamePath') -and $platform -eq $oldPlatform) { $path = [string]$settings.gamePath }
     if ($platform -ne $oldPlatform -and -not $path) { $path = $paths[$platform] }
     $paths[$platform] = $path
     New-Item -ItemType Directory -Path $script:DuneSoloLoaderRoot -Force | Out-Null
+    @{ gamePath=$path; platform=$platform; steamPath=$paths.steam; xboxPath=$paths.xbox } | ConvertTo-Json | Set-Content (Join-Path $script:DuneSoloLoaderRoot 'settings.json') -Encoding utf8
+}
+
+function Set-DuneSoloModSelection($Body) {
+    Assert-DuneSoloGameClosed
+    Set-DuneSoloModPlatform -Platform ([string]$Body.platform) -GamePath ([string]$Body.gamePath)
     $state = @{}
     foreach ($item in @($Body.mods)) { $state[[string]$item.folder] = [bool]$item.enabled }
     ConvertTo-Json -InputObject @($Body.mods | ForEach-Object { [string]$_.folder }) | Set-Content (Join-Path $script:DuneSoloLoaderRoot 'order.json') -Encoding utf8
     $state | ConvertTo-Json | Set-Content (Join-Path $script:DuneSoloLoaderRoot 'selection.json') -Encoding utf8
-    @{ gamePath=$path; platform=$platform; steamPath=$paths.steam; xboxPath=$paths.xbox } | ConvertTo-Json | Set-Content (Join-Path $script:DuneSoloLoaderRoot 'settings.json') -Encoding utf8
     return Get-DuneSoloMods
 }
 

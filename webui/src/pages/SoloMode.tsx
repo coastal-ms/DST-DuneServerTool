@@ -530,6 +530,7 @@ export function SoloMode() {
   const runtimeState = useApi<SoloRuntime>('/api/solo/runtime', { intervalMs: 3000 })
   const connected = statusState.data?.connected === true
   const activeProfileToken = statusState.data?.profileToken ?? ''
+  const [connectionRevision, setConnectionRevision] = useState(0)
   const settingsState = useApi<SoloSettingsResponse>('/api/solo/settings', { enabled: connected })
   const consoleSettingsState = useApi<SoloConsoleSettingsResponse>(
     '/api/solo/console-settings',
@@ -697,6 +698,7 @@ export function SoloMode() {
         return
       }
       const result = await connectSolo(discovery.dataRoot, dbPath)
+      setConnectionRevision(value => value + 1)
       setDataRoot(result.dataRoot)
       setSelectedDb(result.dbPath)
       setDiscoveredProfiles(result.profiles)
@@ -1515,7 +1517,7 @@ export function SoloMode() {
         ))}
       </div>
 
-      {tab === 'mods' && <SoloMods />}
+      {tab === 'mods' && <SoloMods connectionToken={`${activeProfileToken}:${connectionRevision}`} />}
       {tab === 'overview' && (
         <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
           <div className="card p-5">

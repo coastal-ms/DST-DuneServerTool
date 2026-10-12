@@ -24,7 +24,7 @@ function SortableMod({ mod, disabled, children }: { mod: Mod; disabled: boolean;
   </div>
 }
 
-export function SoloMods() {
+export function SoloMods({ connectionToken = '' }: { connectionToken?: string }) {
   const [state, setState] = useState<State | null>(null)
   const [gamePath, setGamePath] = useState('')
   const [platform, setPlatform] = useState('steam')
@@ -45,7 +45,7 @@ export function SoloMods() {
     setPlatform((result as State & { platform?: string }).platform ?? 'steam')
     setSoloArguments(result.soloArguments ?? '')
   }
-  useEffect(() => { void refresh().catch(e => setError(String(e))) }, [])
+  useEffect(() => { void refresh().catch(e => setError(String(e))) }, [connectionToken])
   const run = async (action: string, body: unknown = {}) => {
     setBusy(true); setError(''); setNotice('')
     try {

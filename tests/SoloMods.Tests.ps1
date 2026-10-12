@@ -13,6 +13,17 @@ BeforeAll {
 }
 AfterAll { if($script:ModTestRoot.StartsWith([IO.Path]::GetTempPath())){Remove-Item -LiteralPath $script:ModTestRoot -Recurse -Force} }
 Describe 'Solo mod import and dependencies' {
+    It 'switches connected platforms without touching mod selections and recalls both folders' {
+        Set-DuneSoloModSelection @{mods=@(@{folder='Kept';enabled=$true});platform='steam';gamePath='C:\Steam\Dune'} | Out-Null
+        Set-DuneSoloModPlatform -Platform xbox -GamePath 'C:\Xbox\Dune'
+        Set-DuneSoloModPlatform -Platform steam
+        (Get-DuneSoloMods).gamePath | Should -Be 'C:\Steam\Dune'
+        Set-DuneSoloModPlatform -Platform xbox
+        (Get-DuneSoloMods).gamePath | Should -Be 'C:\Xbox\Dune'
+        Set-DuneSoloModPlatform -Platform xbox
+        (Get-DuneSoloMods).gamePath | Should -Be 'C:\Xbox\Dune'
+        (Get-Content (Join-Path $script:DuneSoloLoaderRoot 'selection.json') -Raw | ConvertFrom-Json).Kept | Should -BeTrue
+    }
     It 'discovers the registered Xbox installation only when its executable exists' {
         $root=Join-Path $script:ModTestRoot 'RegisteredXbox'
         $bin=Join-Path $root 'DuneSandbox/Binaries/WinGDK'
