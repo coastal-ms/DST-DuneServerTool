@@ -10,7 +10,7 @@ Describe 'Solo faction write guards' {
             $script:called=$false; $script:status=0
             function Get-DuneSoloBodyField { param($Body,$Name,$Default); if($Body.ContainsKey($Name)){$Body[$Name]}else{$Default} }
             function Invoke-WithDuneLock { param($Name,$Script); & $Script }
-            function Assert-DuneSoloExpectedProfile { throw 'Solo profile changed in another window.' }
+            function Assert-DuneSoloExpectedProfile { throw 'The active Solo save changed since this page loaded.' }
             function Set-DuneSoloFactionProgression { $script:called=$true }
             function Write-DuneJson {}
             function Write-DuneError { param($Response,$Status,$Message); $script:status=$Status }

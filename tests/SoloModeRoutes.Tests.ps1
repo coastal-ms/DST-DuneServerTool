@@ -14,7 +14,7 @@ Describe 'Solo Mode route registration' {
             $script:blueprintCalled = $false
             $script:blueprintStatus = 0
             function Invoke-WithDuneLock { param($Name, $Script); & $Script }
-            function Assert-DuneSoloExpectedProfile { throw 'Solo profile changed in another window.' }
+            function Assert-DuneSoloExpectedProfile { throw 'The active Solo save changed since this page loaded.' }
             function Set-DuneSoloBlueprintSettings { $script:blueprintCalled = $true }
             function Write-DuneJson {}
             function Write-DuneError { param($Response, $Status, $Message); $script:blueprintStatus=$Status }
@@ -36,7 +36,7 @@ Describe 'Solo Mode route registration' {
             $script:questCalled = $false
             $script:questStatus = 0
             function Invoke-WithDuneLock { param($Name, $Script); & $Script }
-            function Assert-DuneSoloExpectedProfile { throw 'Solo profile changed in another window.' }
+            function Assert-DuneSoloExpectedProfile { throw 'The active Solo save changed since this page loaded.' }
             function Unlock-DuneSoloMainQuest { $script:questCalled = $true }
             function Write-DuneJson {}
             function Write-DuneError { param($Response, $Status, $Message); $script:questStatus=$Status }
@@ -57,7 +57,7 @@ Describe 'Solo Mode route registration' {
             $script:bulkCalled = $false
             $script:bulkError = $null
             function Invoke-WithDuneLock { param($Name, $Script); & $Script }
-            function Assert-DuneSoloExpectedProfile { throw 'Solo profile changed in another window.' }
+            function Assert-DuneSoloExpectedProfile { throw 'The active Solo save changed since this page loaded.' }
             function Invoke-DuneSoloGrantUnlocks { $script:bulkCalled = $true }
             function Write-DuneJson {}
             function Write-DuneError { param($Response, $Status, $Message); $script:bulkError=$Status }
@@ -101,7 +101,7 @@ Describe 'Solo Mode route registration' {
             function Reset-DuneSoloSpecializationRewards { $script:specializationCalled = $true }
             function Invoke-WithDuneLock { param($Name, $Script); & $Script }
             function Assert-DuneSoloExpectedProfile {
-                if ($stale) { throw 'Solo profile changed in another window.' }
+                if ($stale) { throw 'The active Solo save changed since this page loaded.' }
             }
             function Write-DuneJson {}
             function Write-DuneError {
