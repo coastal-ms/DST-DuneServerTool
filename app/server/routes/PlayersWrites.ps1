@@ -6,6 +6,25 @@
 # §3 — Items / inventory
 # ---------------------------------------------------------------------------
 
+Register-DuneRoute -Method POST -Path '/api/gameplay/players/unlock-testing-stations' -Handler {
+    param($req, $res, $routeParams, $body)
+    try {
+        $pawn = Get-DuneBodyInt -Body $body -Name 'pawn_id'
+        $controller = Get-DuneBodyInt -Body $body -Name 'controller_id'
+        $account = Get-DuneBodyInt -Body $body -Name 'account_id'
+        $station = [string](Get-DuneBodyValue -Body $body -Name 'station')
+        $confirm = [string](Get-DuneBodyValue -Body $body -Name 'confirm')
+        if ($null -eq $pawn -or $pawn -le 0 -or $null -eq $controller -or $controller -le 0 -or $null -eq $account -or $account -le 0 -or $confirm -cne 'UNLOCK TESTING STATIONS') {
+            Write-DuneError -Response $res -Status 400 -Message 'Confirm the unlock for a current selected character.'; return
+        }
+        $null = @(Get-DuneTestingStationSelection -Station $station)
+        Invoke-DunePlayerWriteRoute -Response $res -Action {
+            param($ip)
+            Invoke-DunePlayerUnlockTestingStations -Ip $ip -PawnId $pawn -ControllerId $controller -AccountId $account -Station $station
+        }
+    } catch { Write-DuneError -Response $res -Status 400 -Message $_.Exception.Message }
+}
+
 # POST /api/gameplay/players/give-items  { pawn_id, items:[{template,qty,quality}], allow_overflow? }
 Register-DuneRoute -Method POST -Path '/api/gameplay/players/give-items' -Handler {
     param($req, $res, $routeParams, $body)

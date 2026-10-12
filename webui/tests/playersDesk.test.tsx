@@ -1,14 +1,14 @@
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { PlayersTab } from '../src/pages/gameplay/PlayersTab'
-import { getPlayers, getPlayerSummary, getPlayerStats, giveSolari, deleteAccount, type Player } from '../src/api/gameplay'
+import { getPlayers, getPlayerSummary, getPlayerStats, giveSolari, deleteAccount, unlockTestingStations, type Player } from '../src/api/gameplay'
 import { COMMAND_DECK_KEY } from '../src/hooks/useCommandDeck'
 
 vi.mock('../src/pages/gameplay/players/coriolis', () => ({ CoriolisAdmin: () => <div>Existing lifecycle controls</div> }))
 vi.mock('../src/pages/gameplay/players/base-water', () => ({ BaseWaterAdmin: () => <div>Existing water controls</div> }))
 vi.mock('../src/api/gameplay', async importOriginal => ({
   ...await importOriginal<typeof import('../src/api/gameplay')>(),
-  getPlayers: vi.fn(), getPlayerSummary: vi.fn(), getPlayerStats: vi.fn(), giveSolari: vi.fn(), deleteAccount: vi.fn(),
+  getPlayers: vi.fn(), getPlayerSummary: vi.fn(), getPlayerStats: vi.fn(), giveSolari: vi.fn(), deleteAccount: vi.fn(), unlockTestingStations: vi.fn(),
 }))
 const players: Player[] = [
   { id: 41, account_id: 51, controller_id: 61, name: 'Aster', class: 'Mentat', map: 'Survival_1', faction_id: 1, faction_name: 'Atreides', online_status: 'Offline' },
@@ -51,6 +51,20 @@ function submitAction(name: string) {
 }
 
 describe('Contextual Players desk', () => {
+  it('offers all six or one Testing Station and targets the selected self-hosted character after confirmation', async () => {
+    vi.spyOn(window, 'confirm').mockReturnValue(true)
+    vi.mocked(unlockTestingStations).mockResolvedValue({ok: true, message: 'Unlocked.'})
+    await openActions()
+    chooseCategory('Progression')
+    chooseAction(/^Testing Stations/)
+    const choice = screen.getByRole('combobox', {name: 'Station'})
+    expect(within(choice).getAllByRole('option')).toHaveLength(7)
+    expect(choice).toHaveValue('all')
+    fireEvent.change(choice, {target: {value: 'DA_Dgn_136_Fire'}})
+    submitAction('Testing Stations')
+    await waitFor(() => expect(unlockTestingStations).toHaveBeenCalledExactlyOnceWith(41, 61, 51, 'DA_Dgn_136_Fire'))
+    expect(window.confirm).toHaveBeenCalledWith(expect.stringContaining('Aster'))
+  })
   it('keeps directory and dossier distinct, with full section access and explicit filter state', async () => {
     render(<PlayersTab />)
     fireEvent.click(await screen.findByRole('button', { name: 'Inspect Aster (41)' }))

@@ -39,7 +39,7 @@ Describe 'Player route authorization' {
         foreach ($path in @('/api/commands/execute','/api/bg/stop','/api/remote/maps/deepdesert/start',
             '/api/maps/{key}/stop','/api/maps/restart-pods','/api/maps/fix-partitions',
             '/api/map-spinup/{map}','/api/gameplay/players/cheat-script','/api/gameplay/chat/whisper',
-            '/api/gameplay/vehicles/spawn','/api/gameplay/players/fresh-start/restore',
+            '/api/gameplay/vehicles/spawn','/api/gameplay/players/fresh-start/restore','/api/gameplay/players/unlock-testing-stations',
             '/api/remote-access/portal-accounts','/api/future-character-write','/api/db/query')) {
             Get-DunePlayerRoutePolicy POST $path | Should -BeNullOrEmpty
         }

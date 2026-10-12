@@ -2528,6 +2528,11 @@ export function unlockTrainer(accountId: number, job: string) {
     method: 'POST', body: JSON.stringify({ account_id: accountId, job }),
   })
 }
+export function unlockTestingStations(pawnId: number, controllerId: number, accountId: number, station: string) {
+  return api<WriteResult>('/api/gameplay/players/unlock-testing-stations', {
+    method: 'POST', body: JSON.stringify({ pawn_id: pawnId, controller_id: controllerId, account_id: accountId, station, confirm: 'UNLOCK TESTING STATIONS' }),
+  })
+}
 export function resetTrainerSkills(accountId: number, job: string) {
   return api<WriteResult>('/api/gameplay/players/reset-job-skills', {
     method: 'POST', body: JSON.stringify({ account_id: accountId, job }),

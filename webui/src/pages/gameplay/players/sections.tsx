@@ -34,7 +34,7 @@ import {
   giveItems, getItemPackages, saveItemPackage, deleteItemPackage,
   getLandsraadOverview, getLandsraadPlayerContributions, setLandsraadContribution,
   getPlayerJourneyNodes, completeJourneyNode, resetJourneyNode,
-  getTrainerCatalog, getTrainerStatus, unlockTrainer, resetTrainerSkills,
+  getTrainerCatalog, getTrainerStatus, unlockTrainer, resetTrainerSkills, unlockTestingStations,
   getMainQuestCatalog, unlockMainQuest,
   getContracts, completeContract,
   getVehicleKitCatalog,
@@ -56,7 +56,7 @@ import { usePortalAccess } from '../../../auth/portalAccess'
 // These controls administer the server/world or other identities, rather than
 // the linked character. The backend independently denies their endpoints.
 const PLAYER_HIDDEN_ACTIONS = new Set(['spawn-vehicle', 'funcom-spawn-vehicle', 'refuel-vehicle',
-  'teleport', 'whisper', 'cheat-script', 'dev-scripts', 'fresh-start'])
+  'teleport', 'whisper', 'cheat-script', 'dev-scripts', 'fresh-start', 'unlock-testing-stations'])
 
 type Flash = (msg: string, kind?: 'ok' | 'err' | 'info') => void
 
@@ -689,6 +689,19 @@ const ACTIONS: ActionDef[] = [
   { id: 'unlock-trainers', group: 'Progression', label: 'Unlock Trainers', icon: 'GraduationCap', custom: 'unlock-trainers',
     rowNote: 'Complete a skill-trainer quest line + grant its skill tree — separated by trainer',
     run: () => Promise.resolve({ message: '' }) },
+  { id: 'unlock-testing-stations', group: 'Progression', label: 'Testing Stations', icon: 'Milestone', offlineOnly: true,
+    rowNote: 'Unlock selectable difficulties for one station or all six. Fresh backup; existing higher progress preserved. Faction requirements still apply.',
+    fields: [{ key: 'station', label: 'Station', type: 'select', options: [
+      { value: 'all', label: 'All six stations' },
+      { value: 'DA_Dgn_024_Darkness', label: 'Station 24 — Darkness' },
+      { value: 'DA_Dgn_089_Radiation', label: 'Station 89 — Radiation' },
+      { value: 'DA_Dgn_136_Fire', label: 'Station 136 — Fire' },
+      { value: 'DA_Dgn_152_Electric', label: 'Station 152 — Electric' },
+      { value: 'DA_Dgn_195_Poison', label: 'Station 195 — Poison' },
+      { value: 'DA_Dgn_Pit', label: 'The Quarry' },
+    ] }],
+    confirm: p => `Unlock the selected Testing Station difficulties for ${p.name}? DST will verify a fresh backup and record completion progress. The character must be fully offline. Choose difficulty in-game; faction requirements still apply.`,
+    run: (p, v) => unlockTestingStations(p.id, p.controller_id, p.account_id, v.station || 'all') },
   { id: 'unlock-main-quest', group: 'Progression', label: 'Unlock Main Quest', icon: 'Flag', custom: 'unlock-mainquest',
     rowNote: 'Complete an entire main-quest story line',
     run: () => Promise.resolve({ message: '' }) },
