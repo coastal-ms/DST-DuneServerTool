@@ -2,6 +2,7 @@ BeforeAll {
     . "$PSScriptRoot\_TestHelpers.ps1"
     Import-DstLib 'Database.ps1'
     Import-DstLib 'Gameplay.ps1'
+    Import-DstLib 'PlayersRead.ps1'
     Import-DstLib 'GameplayPlayers.ps1'
     Import-DstLib 'PlayersAdmin.ps1'
     Import-DstLib 'SoloMode.ps1'
@@ -14,6 +15,16 @@ AfterAll {
     Remove-Item function:global:Invoke-DuneVerifiedSafetyBackup -ErrorAction SilentlyContinue
 }
 Describe 'Reviewed ordinary customizations' {
+    It 'counts exact saved Solo swatches, gear appearances and recipe quality pairs' {
+        Mock Add-DuneCosmeticCatalogOwnership {}
+        $swatch = (Get-DuneReviewedCustomization ObservedCharacterSwatches).customizationIds[0]
+        $gear = (Get-DuneReviewedCustomization ObservedGearAppearances).customizationIds[0]
+        $recipe = (Get-DuneReviewedCustomization ObservedSchematicRecipes).recipeEntries[0]
+        $ownership = Get-DuneSoloCosmeticOwnership @{cosmetics=@{available=$true;unlocked=@();pending=@();customizations=@($swatch,$gear);recipeKeys=@("$($recipe.BaseRecipeId.Name)|$($recipe.m_QualityLevel)")}}
+        $ownership.reviewedCounts.ObservedCharacterSwatches.remaining | Should -Be 310
+        $ownership.reviewedCounts.ObservedGearAppearances.remaining | Should -Be 400
+        $ownership.reviewedCounts.ObservedSchematicRecipes.remaining | Should -Be 716
+    }
     It 'rejects malformed recipe mappings and a conflicting unlimited sentinel' {
         foreach ($kind in @('blank','string-quality','limited-sentinel','duplicate')) {
             $entry = [pscustomobject]@{BaseRecipeId=[pscustomobject]@{Name='FixtureRecipe'}; m_QualityLevel=0; m_NumberOfRecipeUses=-1; m_bIsLimitedUseRecipe=$false; m_Source='SchematicPickup'}

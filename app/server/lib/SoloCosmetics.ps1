@@ -9,7 +9,15 @@
     Add-DuneCosmeticCatalogOwnership -Owned $unlocked -CustomizationIds @($raw.customizations)
     $owned = [Collections.Generic.HashSet[string]]::new($unlocked, [StringComparer]::OrdinalIgnoreCase)
     foreach ($id in @($raw.pending)) { if ($id) { [void]$owned.Add([string]$id) } }
-    return @{ available=$true; owned=@($owned | Sort-Object); unlocked=@($unlocked | Sort-Object); pending=@($raw.pending); error='' }
+    $counts = @{}
+    foreach ($selection in @('ObservedCharacterSwatches','ObservedGearAppearances','ObservedSchematicRecipes')) {
+        $entry = Get-DuneReviewedCustomization $selection
+        $keys = if ($selection -eq 'ObservedSchematicRecipes') { @($entry.recipeEntries | ForEach-Object { "$($_.BaseRecipeId.Name)|$($_.m_QualityLevel)" }) } else { @($entry.customizationIds) }
+        $existing = if ($selection -eq 'ObservedSchematicRecipes') { @($raw.recipeKeys) } else { @($raw.customizations) }
+        $present = @($keys | Where-Object { $existing -ccontains $_ }).Count
+        if ($selection -ne 'ObservedSchematicRecipes' -or $null -ne $raw.recipeKeys) { $counts[$selection] = @{total=$keys.Count;owned=$present;remaining=$keys.Count-$present} }
+    }
+    return @{ available=$true; owned=@($owned | Sort-Object); unlocked=@($unlocked | Sort-Object); pending=@($raw.pending); reviewedCounts=$counts; error='' }
 }
 
 function Get-DuneReviewedCustomization {

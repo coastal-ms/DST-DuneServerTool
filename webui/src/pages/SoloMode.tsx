@@ -2245,6 +2245,9 @@ export function SoloMode() {
                 finally { setBusy(null) }
               }}>
               {choice.label} (experimental)
+              <span className="block text-xs font-normal">{statusState.data?.cosmeticOwnership?.reviewedCounts?.[choice.id]
+                ? `${statusState.data.cosmeticOwnership.reviewedCounts[choice.id].owned}/${statusState.data.cosmeticOwnership.reviewedCounts[choice.id].total} owned · ${statusState.data.cosmeticOwnership.reviewedCounts[choice.id].remaining} remaining`
+                : 'Character counts unavailable'}</span>
             </button>)}
 
             <SoloCosmeticGrantCard

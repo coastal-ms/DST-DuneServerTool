@@ -5,7 +5,7 @@ namespace DuneSoloDb;
 
 internal static partial class Program
 {
-    private sealed record CosmeticOwnership(bool Available, string[] Unlocked, string[] Customizations, string[] Pending, string Error);
+    private sealed record CosmeticOwnership(bool Available, string[] Unlocked, string[] Customizations, string[] Pending, string Error, string[]? RecipeKeys = null);
 
     private static void SelfTestCosmeticOwnership()
     {
@@ -66,7 +66,8 @@ internal static partial class Program
                 .Where(value => !string.IsNullOrWhiteSpace(value)).Cast<string>().ToArray() ?? [];
             foreach (var id in ids) unlocked.Add(id);
             return new(true, unlocked.Order().ToArray(), ids,
-                inventoryItems.Where(item => item.TotalQuantity > 0).Select(item => item.TemplateId).Distinct(StringComparer.OrdinalIgnoreCase).Order().ToArray(), "");
+                inventoryItems.Where(item => item.TotalQuantity > 0).Select(item => item.TemplateId).Distinct(StringComparer.OrdinalIgnoreCase).Order().ToArray(), "",
+                (properties["CraftingRecipesLibraryActorComponent"]?["m_KnownItemRecipes"] as JsonArray)?.Select(recipe => recipe?["BaseRecipeId"]?["Name"]?.GetValue<string>() + "|" + recipe?["m_QualityLevel"]?.GetValue<int>()).ToArray());
         }
         catch (Exception error) when (error is SqliteException or InvalidOperationException or System.Text.Json.JsonException or InvalidDataException)
         {

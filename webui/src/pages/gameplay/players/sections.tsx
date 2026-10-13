@@ -30,7 +30,7 @@ import {
   setFactionTier, setSkillPoints,
   setStarterClass, spawnVehicle, teleportToPlayer, teleportToLocation, setRespawn, getTeleportDestinations, getPlayers, updatePlayerTags, wipeCodex, resetFaction, snapshotBuilds, getFreshStartSnapshots, restoreBuilds, grantAllSkills,
   chatWhisper, isValidTemplateId, getItemCatalog, getCosmeticsCatalog, getPlayerOwnedCosmetics, filterCosmeticsCatalog, getHouseSwatchCosmetics, type CosmeticEntry,
-  grantReviewedCustomization, parseTcnoPackageText, grantHouseSwatches, grantBuildingSets, getBuildingSetCosmetics, grantSkins, getSkinCosmetics, type HouseSwatchKind,
+  grantReviewedCustomization, getReviewedGrantCounts, parseTcnoPackageText, grantHouseSwatches, grantBuildingSets, getBuildingSetCosmetics, grantSkins, getSkinCosmetics, type HouseSwatchKind,
   giveItems, getItemPackages, saveItemPackage, deleteItemPackage,
   getLandsraadOverview, getLandsraadPlayerContributions, setLandsraadContribution,
   getPlayerJourneyNodes, completeJourneyNode, resetJourneyNode,
@@ -1058,6 +1058,20 @@ function ActionRow({ def, player, busy, stats, open, danger, onToggle, runAction
   runAction: (def: ActionDef, exec: () => Promise<{ message: string }>) => Promise<boolean>
 }) {
   const disabled = busy
+  const [grantCounts, setGrantCounts] = useState<{total: number; owned: number; remaining: number} | null>(null)
+  const [grantCountsLoading, setGrantCountsLoading] = useState(false)
+  const selection = ({'observed-character-swatches':'ObservedCharacterSwatches','observed-gear-appearances':'ObservedGearAppearances','observed-schematic-recipes':'ObservedSchematicRecipes'} as Record<string,string>)[def.id]
+  useEffect(() => {
+    if (!selection || busy) return
+    let current = true
+    setGrantCounts(null)
+    setGrantCountsLoading(true)
+    getReviewedGrantCounts(player.id, player.controller_id, player.account_id, selection)
+      .then(counts => { if (current) setGrantCounts(counts) })
+      .catch(() => { if (current) setGrantCounts(null) })
+      .finally(() => { if (current) setGrantCountsLoading(false) })
+    return () => { current = false }
+  }, [selection, player.id, player.controller_id, player.account_id, busy])
   // Read-only "current balance" note shown above currency actions.
   const balanceNote = (() => {
     if (!def.balance || !stats) return null
@@ -1083,6 +1097,7 @@ function ActionRow({ def, player, busy, stats, open, danger, onToggle, runAction
         <Icon name={def.icon} size={14} className={`shrink-0 ${danger ? 'text-error' : 'text-text-dim'}`} />
         <span className="flex-1 min-w-0 flex flex-col gap-1.5">
           <span className="font-medium break-words">{def.label}</span>
+          {selection && <span className="text-xs text-text-muted">{grantCounts ? `${grantCounts.owned}/${grantCounts.total} owned · ${grantCounts.remaining} remaining` : grantCountsLoading ? 'Checking character unlocks…' : 'Character counts unavailable'}</span>}
           <span className="flex flex-wrap gap-1.5">
         {def.experimental && (
           <span className="text-[10px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded bg-accent/20 text-accent border border-accent/50 shrink-0" title="Experimental — may not take effect in-game">EXPERIMENTAL</span>

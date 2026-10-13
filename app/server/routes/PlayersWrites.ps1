@@ -730,6 +730,17 @@ Register-DuneRoute -Method POST -Path '/api/gameplay/players/reviewed-customizat
         $controller = Get-DuneBodyInt -Body $body -Name 'controller_id'
         $account = Get-DuneBodyInt -Body $body -Name 'account_id'
         $id = [string](Get-DuneBodyValue -Body $body -Name 'customizationId')
+        if ((Get-DuneBodyValue -Body $body -Name 'checkOnly') -eq $true) {
+            $statusSql = Get-DuneReviewedGrantStatusSql $pawn $controller $account $id
+            Invoke-DunePlayerWriteRoute -Response $res -Action {
+                param($ip)
+                $result = Invoke-DuneSqlQuery -Ip $ip -Sql $statusSql -ReadOnly $true -MaxRows 1 -TimeoutSec 30 -Bulk
+                $rows = ConvertTo-DuneRowMaps -Result $result
+                if (-not $result.ok -or $rows.Count -ne 1) { return @{ok=$false;error='Character grant counts are unavailable.'} }
+                return @{ok=$true;total=[int]$rows[0]['total'];owned=[int]$rows[0]['owned'];remaining=([int]$rows[0]['total']-[int]$rows[0]['owned'])}
+            }
+            return
+        }
         if ([string](Get-DuneBodyValue -Body $body -Name 'confirm') -cne 'GRANT REVIEWED CUSTOMIZATION') { throw 'Confirm the selected customization.' }
         $null = Get-DuneReviewedCustomization -CustomizationId $id
         Invoke-DunePlayerWriteRoute -Response $res -Action {

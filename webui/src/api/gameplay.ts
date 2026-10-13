@@ -2771,3 +2771,8 @@ export function grantReviewedCustomization(pawn_id: number, controller_id: numbe
     method: 'POST', body: JSON.stringify({ pawn_id, controller_id, account_id, customizationId, confirm: 'GRANT REVIEWED CUSTOMIZATION' }),
   })
 }
+export function getReviewedGrantCounts(pawn_id: number, controller_id: number, account_id: number, customizationId: string) {
+  return api<{total: number; owned: number; remaining: number}>('/api/gameplay/players/reviewed-customization', {
+    method: 'POST', body: JSON.stringify({pawn_id, controller_id, account_id, customizationId, checkOnly: true}),
+  })
+}
