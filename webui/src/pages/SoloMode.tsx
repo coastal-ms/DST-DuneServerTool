@@ -1511,7 +1511,7 @@ export function SoloMode() {
         </div>
       </CollapsibleCard>
 
-      <div className="flex items-center gap-1 mb-5 border-b border-border overflow-x-auto">
+      <div className="flex items-center gap-1 mb-5 border-b border-border overflow-x-auto overflow-y-hidden">
         {TABS.map(item => (
           <button
             key={item.id}
