@@ -35,7 +35,7 @@
 param(
     # Product/file version. A prerelease suffix defaults artifact identity to
     # prerelease; stable product stamps can use -Prerelease for a test artifact.
-    [string]$Version = '16.4.1.1',
+    [string]$Version = '16.4.2-preview1',
     [string]$BuildCommit = '',
     [string]$BuildTag = '',
     [switch]$Prerelease,
