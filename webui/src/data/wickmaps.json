@@ -3424,29 +3424,30 @@
   },
   {
    "seed": 10,
-   "confidence": "LOW(2 of 6 shared)",
-   "reliability": "low",
-   "note": "Weakest assignment in the set: matched only 2 of the 6 large-spice sectors on record for this seed, and its POI layout is near-identical to seed 5. The seed NUMBER is unverified; the layout itself is a real capture.",
-   "capturedUtc": "20251105050233",
+   "confidence": "CONFIRMED",
+   "reliability": "high",
+   "note": "Corrected from the Standard reference map for 13–20 October 2026; replaces the unsupported archived layout assignment.",
+   "capturedUtc": "20261013000000",
    "image": "dd_seed_10.png",
    "imageSha256Short": null,
    "largeSpiceSectors": [
-    "F7",
-    "I2",
-    "I5",
+    "F8",
+    "G1",
+    "H4",
+    "I3",
     "I9"
    ],
-   "poiCount": 59,
+   "poiCount": 49,
    "legend": [
     {
      "type": "cave",
      "label": "Cave",
-     "count": 25
+     "count": 11
     },
     {
      "type": "wreck",
      "label": "Wreck",
-     "count": 13
+     "count": 16
     },
     {
      "type": "testing-station",
@@ -3456,7 +3457,7 @@
     {
      "type": "large-spice-field",
      "label": "Large Spice Field",
-     "count": 4
+     "count": 5
     },
     {
      "type": "taxi-service",
@@ -3476,26 +3477,26 @@
    ],
    "pois": [
     {
-     "sector": "I2",
-     "subx": 2,
-     "suby": 1,
+     "sector": "I1",
+     "subx": 4,
+     "suby": 3,
+     "type": "wreck"
+    },
+    {
+     "sector": "I3",
+     "subx": 1,
+     "suby": 3,
      "type": "large-spice-field"
     },
     {
-     "sector": "I2",
-     "subx": 2,
+     "sector": "I4",
+     "subx": 4,
      "suby": 3,
      "type": "titanium"
     },
     {
-     "sector": "I5",
-     "subx": 2,
-     "suby": 3,
-     "type": "large-spice-field"
-    },
-    {
-     "sector": "I7",
-     "subx": 4,
+     "sector": "I8",
+     "subx": 3,
      "suby": 3,
      "type": "cave"
     },
@@ -3506,152 +3507,122 @@
      "type": "large-spice-field"
     },
     {
-     "sector": "H1",
-     "subx": 4,
-     "suby": 1,
-     "type": "cave"
-    },
-    {
      "sector": "H2",
-     "subx": 4,
+     "subx": 2,
      "suby": 1,
      "type": "stravidium"
     },
     {
-     "sector": "H5",
-     "subx": 3,
-     "suby": 2,
-     "type": "cave"
-    },
-    {
-     "sector": "H6",
-     "subx": 1,
-     "suby": 0,
-     "type": "titanium"
-    },
-    {
-     "sector": "H6",
+     "sector": "H4",
      "subx": 2,
-     "suby": 0,
-     "type": "stravidium"
-    },
-    {
-     "sector": "H8",
-     "subx": 3,
-     "suby": 1,
-     "type": "cave"
-    },
-    {
-     "sector": "G2",
-     "subx": 3,
-     "suby": 0,
-     "type": "cave"
-    },
-    {
-     "sector": "G3",
-     "subx": 1,
-     "suby": 1,
-     "type": "testing-station"
-    },
-    {
-     "sector": "G4",
-     "subx": 3,
-     "suby": 0,
-     "type": "testing-station"
-    },
-    {
-     "sector": "G6",
-     "subx": 2,
-     "suby": 0,
-     "type": "cave"
-    },
-    {
-     "sector": "G8",
-     "subx": 3,
-     "suby": 0,
-     "type": "cave"
-    },
-    {
-     "sector": "G9",
-     "subx": 2,
-     "suby": 0,
-     "type": "cave"
-    },
-    {
-     "sector": "F2",
-     "subx": 3,
-     "suby": 3,
-     "type": "cave"
-    },
-    {
-     "sector": "F5",
-     "subx": 1,
-     "suby": 3,
-     "type": "cave"
-    },
-    {
-     "sector": "F6",
-     "subx": 1,
-     "suby": 3,
-     "type": "testing-station"
-    },
-    {
-     "sector": "F7",
-     "subx": 4,
      "suby": 2,
      "type": "large-spice-field"
     },
     {
-     "sector": "E2",
+     "sector": "H6",
+     "subx": 2,
+     "suby": 1,
+     "type": "wreck"
+    },
+    {
+     "sector": "H7",
+     "subx": 4,
+     "suby": 2,
+     "type": "testing-station"
+    },
+    {
+     "sector": "G1",
+     "subx": 2,
+     "suby": 1,
+     "type": "large-spice-field"
+    },
+    {
+     "sector": "G2",
+     "subx": 2,
+     "suby": 1,
+     "type": "stravidium"
+    },
+    {
+     "sector": "G3",
      "subx": 3,
-     "suby": 0,
+     "suby": 2,
      "type": "cave"
     },
     {
-     "sector": "E3",
-     "subx": 1,
+     "sector": "G5",
+     "subx": 3,
      "suby": 1,
      "type": "cave"
     },
     {
-     "sector": "E4",
+     "sector": "G5",
+     "subx": 3,
+     "suby": 2,
+     "type": "cave"
+    },
+    {
+     "sector": "G8",
+     "subx": 2,
+     "suby": 1,
+     "type": "titanium"
+    },
+    {
+     "sector": "F2",
+     "subx": 2,
+     "suby": 2,
+     "type": "wreck"
+    },
+    {
+     "sector": "F4",
      "subx": 4,
-     "suby": 0,
+     "suby": 3,
+     "type": "wreck"
+    },
+    {
+     "sector": "F6",
+     "subx": 2,
+     "suby": 2,
+     "type": "testing-station"
+    },
+    {
+     "sector": "F8",
+     "subx": 2,
+     "suby": 3,
+     "type": "large-spice-field"
+    },
+    {
+     "sector": "F9",
+     "subx": 3,
+     "suby": 1,
+     "type": "cave"
+    },
+    {
+     "sector": "E6",
+     "subx": 2,
+     "suby": 3,
      "type": "cave"
     },
     {
      "sector": "E8",
      "subx": 3,
-     "suby": 2,
+     "suby": 1,
      "type": "cave"
     },
     {
-     "sector": "D2",
+     "sector": "D3",
      "subx": 2,
-     "suby": 0,
-     "type": "wreck"
+     "suby": 1,
+     "type": "cave"
     },
     {
-     "sector": "D3",
-     "subx": 1,
+     "sector": "D4",
+     "subx": 3,
      "suby": 1,
      "type": "testing-station"
     },
     {
-     "sector": "D5",
-     "subx": 1,
-     "suby": 0,
-     "type": "cave"
-    },
-    {
-     "sector": "D5",
-     "subx": 3,
-     "suby": 0,
-     "type": "cave"
-    },
-    {
-     "sector": "D6",
-     "subx": 1,
+     "sector": "D7",
+     "subx": 4,
      "suby": 1,
      "type": "wreck"
     },
@@ -3669,51 +3640,21 @@
     },
     {
      "sector": "C2",
-     "subx": 1,
+     "subx": 3,
+     "suby": 3,
+     "type": "testing-station"
+    },
+    {
+     "sector": "C6",
+     "subx": 2,
+     "suby": 2,
+     "type": "cave"
+    },
+    {
+     "sector": "B5",
+     "subx": 2,
      "suby": 1,
-     "type": "cave"
-    },
-    {
-     "sector": "C2",
-     "subx": 2,
-     "suby": 2,
-     "type": "cave"
-    },
-    {
-     "sector": "C3",
-     "subx": 2,
-     "suby": 3,
-     "type": "cave"
-    },
-    {
-     "sector": "C4",
-     "subx": 4,
-     "suby": 3,
      "type": "wreck"
-    },
-    {
-     "sector": "C7",
-     "subx": 4,
-     "suby": 3,
-     "type": "cave"
-    },
-    {
-     "sector": "C8",
-     "subx": 2,
-     "suby": 2,
-     "type": "cave"
-    },
-    {
-     "sector": "C8",
-     "subx": 4,
-     "suby": 2,
-     "type": "cave"
-    },
-    {
-     "sector": "C8",
-     "subx": 2,
-     "suby": 3,
-     "type": "cave"
     },
     {
      "sector": "A1",

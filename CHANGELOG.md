@@ -13,6 +13,11 @@ here cover everything those tags shipped.
 
 ## [Unreleased]
 
+## [16.4.2.1] - 2026-10-12
+
+### Fixed
+- Correct DD Seed Maps layout 10 using the current Standard reference, replacing the unsupported archived assignment. Other seed layouts are unchanged.
+
 ## [16.4.2] - 2026-10-12
 
 ### Fixed

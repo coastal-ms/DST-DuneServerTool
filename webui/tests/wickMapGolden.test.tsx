@@ -39,7 +39,7 @@ describe('Deep Desert atlas golden fixture', () => {
       { seed: 7, poiCount: 30, largeSpiceSectors: ['E5', 'H2', 'H8'], reliability: 'low' },
       { seed: 8, poiCount: 58, largeSpiceSectors: ['F1', 'F4', 'F8', 'I7'], reliability: 'high' },
       { seed: 9, poiCount: 45, largeSpiceSectors: ['F1', 'F6', 'F8', 'I1', 'I9'], reliability: 'medium' },
-      { seed: 10, poiCount: 59, largeSpiceSectors: ['F7', 'I2', 'I5', 'I9'], reliability: 'low' },
+      { seed: 10, poiCount: 49, largeSpiceSectors: ['F8', 'G1', 'H4', 'I3', 'I9'], reliability: 'high' },
       { seed: 11, poiCount: 46, largeSpiceSectors: ['F1', 'F5', 'H9', 'I2', 'I4', 'I7'], reliability: 'high' },
     ])
 
@@ -55,7 +55,23 @@ describe('Deep Desert atlas golden fixture', () => {
       pois: seed.pois,
     })))
     expect(createHash('sha256').update(canonical).digest('hex'))
-      .toBe('ea9ec7da47f213478ee57102828b06924cb5ad17fd3b62d2ac9dfbbc84775c2b')
+      .toBe('b21bf968ae6c2f965113a3c822331a0d797935afa9f82c01de932cfecb259fbc')
+  })
+
+  it('uses the corrected Standard layout for seed 10 without substituting the Solo map or seed 5', () => {
+    const seed = data.seeds.find(s => s.seed === 10)!
+    expect(seed.pois).toEqual(expect.arrayContaining([
+      { sector: 'I1', subx: 4, suby: 3, type: 'wreck' },
+      { sector: 'H2', subx: 2, suby: 1, type: 'stravidium' },
+      { sector: 'G8', subx: 2, suby: 1, type: 'titanium' },
+      { sector: 'F8', subx: 2, suby: 3, type: 'large-spice-field' },
+      { sector: 'D7', subx: 4, suby: 1, type: 'wreck' },
+    ]))
+    expect(seed.legend.reduce((count, entry) => count + entry.count, 0)).toBe(seed.pois.length)
+    expect(seed.pois.filter(p => p.type === 'large-spice-field').map(p => p.sector).sort())
+      .toEqual(['F8', 'G1', 'H4', 'I3', 'I9'])
+    expect(seed.pois).not.toEqual(data.seeds.find(s => s.seed === 5)!.pois)
+    expect(seed.pois).not.toEqual(data.seeds.find(s => s.seed === 11)!.pois)
   })
 
   it('keeps every marker visible by default with attribution and keyboard/touch-accessible detail', async () => {
