@@ -291,12 +291,12 @@
       },
       {
         "seed": 10,
-        "poiCount": 59,
-        "largeSpiceSectors": ["F7", "I2", "I5", "I9"],
-        "confidence": "LOW(2 of 6 shared)",
-        "reliability": "low",
-        "legend": [["cave", "Cave", 25], ["wreck", "Wreck", 13], ["testing-station", "Testing Station", 10], ["large-spice-field", "Large Spice Field", 4], ["taxi-service", "Taxi", 3], ["titanium", "Titanium", 2], ["stravidium", "Stravidium", 2]],
-        "markersSha256": "b7278f8bd9ddd499c773baf6551bbfe6cc5595e7f33c1c67a5d397bf0e7e2d1a"
+        "poiCount": 49,
+        "largeSpiceSectors": ["F8", "G1", "H4", "I3", "I9"],
+        "confidence": "CONFIRMED",
+        "reliability": "high",
+        "legend": [["cave", "Cave", 11], ["wreck", "Wreck", 16], ["testing-station", "Testing Station", 10], ["large-spice-field", "Large Spice Field", 5], ["taxi-service", "Taxi", 3], ["titanium", "Titanium", 2], ["stravidium", "Stravidium", 2]],
+        "markersSha256": "66ad37d871840a5ef95bf2729aa31de86175cd45b4d358f3108773a6c1a304c3"
       },
       {
         "seed": 11,

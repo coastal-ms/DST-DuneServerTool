@@ -6,6 +6,7 @@ import { ItemPicker } from '../components/ItemPicker'
 import { SoloMods } from '../components/solo/SoloMods'
 import { SoloFactionProgression } from '../components/solo/SoloFactionProgression'
 import { SoloCharacterXp } from '../components/solo/SoloCharacterXp'
+import { WickMaps } from './WickMaps'
 import { AugmentPicker } from '../components/AugmentPicker'
 import {
   SoloInventoryExplorer,
@@ -84,7 +85,7 @@ import { pickLocalFolder } from '../util/pathPicker'
 import { soloSaveFolder } from '../util/soloSaveFolder'
 import { COSMETIC_LICENSE_NOTICE } from '../util/cosmeticEntitlements'
 
-type Tab = 'overview' | 'settings' | 'mods' | 'backups' | 'character' | 'inventory' | 'progression'
+type Tab = 'overview' | 'settings' | 'mods' | 'backups' | 'character' | 'inventory' | 'progression' | 'dd-map'
 const TABS: Array<{ id: Tab; label: string; icon: string }> = [
   { id: 'overview', label: 'Overview', icon: 'LayoutGrid' },
   { id: 'settings', label: 'Settings', icon: 'SlidersHorizontal' },
@@ -93,6 +94,7 @@ const TABS: Array<{ id: Tab; label: string; icon: string }> = [
   { id: 'character', label: 'Character', icon: 'UserRound' },
   { id: 'inventory', label: 'Inventory', icon: 'Package' },
   { id: 'progression', label: 'Progression', icon: 'ChartNoAxesCombined' },
+  { id: 'dd-map', label: 'DD Map', icon: 'Map' },
 ]
 
 export const SOLO_FIRST_USE_STEPS = [
@@ -1526,6 +1528,7 @@ export function SoloMode() {
       </div>
 
       {tab === 'mods' && <SoloMods connectionToken={`${activeProfileToken}:${connectionRevision}`} />}
+      {tab === 'dd-map' && <WickMaps embedded solo />}
       {tab === 'overview' && (
         <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
           <div className="card p-5">

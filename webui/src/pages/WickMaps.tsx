@@ -79,8 +79,8 @@ const RELIABILITY: Record<SeedEntry['reliability'], { label: string; cls: string
   low: { label: 'Low confidence', cls: 'text-warning border-warning/50', icon: 'AlertTriangle' },
 }
 
-export function WickMaps({ embedded = false }: { embedded?: boolean }) {
-  const [seed, setSeed] = useState<number>(PAYLOAD.availableSeeds[0] ?? 0)
+export function WickMaps({ embedded = false, solo = false }: { embedded?: boolean; solo?: boolean }) {
+  const [seed, setSeed] = useState<number>(solo ? 11 : PAYLOAD.availableSeeds[0] ?? 0)
   const [currentSeed, setCurrentSeed] = useState<number | null>(null)
   const [seedSource, setSeedSource] = useState<WickMapSeedSource | null>(null)
   const [liveErr, setLiveErr] = useState<string | null>(null)
@@ -96,6 +96,7 @@ export function WickMaps({ embedded = false }: { embedded?: boolean }) {
   // so the source is checked first - showing a stand-in seed and calling it live
   // would be worse than admitting the seed is unknown.
   useEffect(() => {
+    if (solo) return
     let alive = true
     Promise.all([
       getCoriolisSeeds(),
@@ -132,11 +133,11 @@ export function WickMaps({ embedded = false }: { embedded?: boolean }) {
       })
       .catch(e => { if (alive) setLiveErr(e instanceof Error ? e.message : String(e)) })
     return () => { alive = false }
-  }, [])
+  }, [solo])
 
   const entry = useMemo(
-    () => PAYLOAD.seeds.find(s => s.seed === seed) ?? PAYLOAD.seeds[0],
-    [seed],
+    () => PAYLOAD.seeds.find(s => s.seed === (solo ? 11 : seed)) ?? PAYLOAD.seeds[0],
+    [seed, solo],
   )
 
   const toggleType = (t: string) =>
@@ -161,9 +162,9 @@ export function WickMaps({ embedded = false }: { embedded?: boolean }) {
     <div className="flex flex-col gap-4">
       {!embedded && (
         <PageHeader
-          title="DD Seed Maps"
+          title={solo ? 'Solo DD Map' : 'DD Seed Maps'}
           icon="Map"
-          description="Deep Desert point-of-interest layouts for each of the 12 Coriolis world seeds."
+          description={solo ? 'Single Player Deep Desert reference map.' : 'Deep Desert point-of-interest layouts for each of the 12 Coriolis world seeds.'}
         />
       )}
 
@@ -174,7 +175,7 @@ export function WickMaps({ embedded = false }: { embedded?: boolean }) {
         <div className="card p-4 overflow-hidden">
           <div className="flex items-center justify-between gap-2 mb-3 flex-wrap">
             <div className="flex items-baseline gap-3">
-              <h2 className="text-sm font-semibold text-text">World Seed {entry.seed}</h2>
+              <h2 className="text-sm font-semibold text-text">{solo ? 'Solo Deep Desert' : `World Seed ${entry.seed}`}</h2>
               <span className="text-xs text-text-dim">
                 {visible.length} of {entry.poiCount} POIs
               </span>
@@ -336,6 +337,12 @@ export function WickMaps({ embedded = false }: { embedded?: boolean }) {
         {/* ---------------------------------------------------------------- */}
         <div className="flex flex-col gap-4">
           {/* Seed selector */}
+          {solo ? (
+            <div className="card p-4 text-sm text-text-dim">
+              <div className="text-xs font-semibold uppercase tracking-widest text-accent mb-3">Single Player</div>
+              <p>The Single Player reference layout matches Seed 11. Use the legend to show or hide locations.</p>
+            </div>
+          ) : (
           <div className="card p-4">
             <div className="text-xs font-semibold uppercase tracking-widest text-accent mb-3">
               World Seed
@@ -403,6 +410,7 @@ export function WickMaps({ embedded = false }: { embedded?: boolean }) {
               )}
             </div>
           </div>
+          )}
 
           {/* Legend / filter */}
           <div className="card p-4">
@@ -448,7 +456,7 @@ export function WickMaps({ embedded = false }: { embedded?: boolean }) {
           {/* Per-seed detail */}
           <div className="card p-4 text-xs text-text-dim flex flex-col gap-2">
             <div className="text-xs font-semibold uppercase tracking-widest text-accent mb-1">
-              Seed {entry.seed} detail
+              {solo ? 'Solo map detail' : `Seed ${entry.seed} detail`}
             </div>
             <div className="flex justify-between gap-3">
               <span>Large spice fields</span>

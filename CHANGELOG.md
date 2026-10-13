@@ -15,6 +15,9 @@ here cover everything those tags shipped.
 
 ## [16.4.2.1] - 2026-10-12
 
+### Added
+- DD Map tab beside Progression in Solo Mode, showing the Single Player reference layout with location details and legend filters.
+
 ### Fixed
 - Correct DD Seed Maps layout 10 using the current Standard reference, replacing the unsupported archived assignment. Other seed layouts are unchanged.
 
