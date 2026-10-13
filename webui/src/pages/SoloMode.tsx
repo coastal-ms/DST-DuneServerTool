@@ -2229,8 +2229,6 @@ export function SoloMode() {
             </div>
 
             {[
-              { id: 'StillSCharDyepackImota', label: 'House Imota Garment Swatch' },
-              { id: 'MercenaryLightArmorSet', label: 'Mercenary Light Armor Set' },
               { id: 'ObservedCharacterSwatches', label: 'Character Swatches (311)' },
               { id: 'ObservedGearAppearances', label: 'Gear Appearances (401)' },
               { id: 'ObservedSchematicRecipes', label: 'Schematic Recipes (717)' },
