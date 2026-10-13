@@ -223,15 +223,23 @@ function Invoke-DuneVerifiedSafetyBackup {
     )
     $scope = Get-DuneVehicleHostScope -Ip $Ip
     $stem = $StemPrefix + '-' + [guid]::NewGuid().ToString('N')
+    if (-not (Get-Command New-DuneBackupVerifyScript -ErrorAction SilentlyContinue)) {
+        . (Join-Path $PSScriptRoot 'BackupVerify.ps1')
+    }
+    $dbPort = 15432
+    if (Get-Command Get-V6DbPort -ErrorAction SilentlyContinue) { $dbPort = Get-V6DbPort }
+    $verification = New-DuneBackupVerifyScript -DbPort $dbPort
     $script = @'
 set -euo pipefail
-/home/dune/.dune/bin/battlegroup backup '__STEM__'
-mapfile -t files < <(find '/funcom/artifacts/database-dumps/__WORLD__' -maxdepth 1 -type f \( -name '__STEM__' -o -name '__STEM__.backup' \))
-[ "${#files[@]}" -eq 1 ]
-bytes=$(stat -c %s -- "${files[0]}")
+_bk=$(/home/dune/.dune/bin/battlegroup backup '__STEM__' 2>&1)
+printf '%s\n' "$_bk"
+__VERIFY__
+[ "$(basename "$_bf")" = '__STEM__.backup' ]
+[ "$(basename "$(dirname "$_bf")")" = '__WORLD__' ]
+bytes=$(sudo stat -c %s -- "$_bf")
 [ "$bytes" -gt 1024 ]
-printf '\n__PROOF__=%s|%s\n' "${files[0]}" "$bytes"
-'@.Replace('__STEM__', $stem).Replace('__WORLD__', $scope.world).Replace('__PROOF__', $ProofLabel)
+printf '\n__PROOF__=%s|%s\n' "$_bf" "$bytes"
+'@.Replace('__STEM__', $stem).Replace('__WORLD__', $scope.world).Replace('__PROOF__', $ProofLabel).Replace('__VERIFY__', $verification)
     $backup = Invoke-DuneBackupShell -Ip $Ip -Script $script -TimeoutSec 900
     $proof = if ($backup) {
         [regex]::Matches([string]$backup.out, "(?m)^$([regex]::Escape($ProofLabel))=([^\r\n|]+)\|([0-9]+)\r?$")

@@ -439,20 +439,20 @@ export function Sidebar({ collapsed, onExpand }: Props) {
           </NavLink>
         )}
         {!collapsed && (
-          <div className="flex items-center justify-between">
-            <span className="flex items-center gap-1.5">
-              {version ? fmtToolVersion(version) : '—'}
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <span className="flex flex-wrap items-center gap-1.5">
+              <span className="whitespace-nowrap">{version ? fmtToolVersion(version) : '—'}</span>
               {testBuild && (
                 <NavLink
                   to="/settings"
                   title={`${testBuild.title}. Click to open Settings, switch to Stable, and install the released build.`}
-                  className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] font-semibold uppercase tracking-wider border border-warning/40 bg-warning/10 text-warning hover:bg-warning/20 transition-colors"
+                  className="inline-flex shrink-0 whitespace-nowrap items-center gap-1 px-1.5 py-0.5 rounded text-[9px] font-semibold uppercase tracking-wider border border-warning/40 bg-warning/10 text-warning hover:bg-warning/20 transition-colors"
                 >
                   <Icon name="FlaskConical" size={9} /> {testBuild.compactLabel}
                 </NavLink>
               )}
             </span>
-            <span className="font-mono">coastal-ms</span>
+            <span className="font-mono whitespace-nowrap">coastal-ms</span>
           </div>
         )}
       </div>
