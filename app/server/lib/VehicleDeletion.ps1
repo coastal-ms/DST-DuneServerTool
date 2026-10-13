@@ -1,4 +1,4 @@
-# Safe vehicle deletion queue. Deletions are only applied inside an explicit
+﻿# Safe vehicle deletion queue. Deletions are only applied inside an explicit
 # backup -> battlegroup stop -> database mutation -> battlegroup start window.
 
 $script:DuneVehicleDeletionStateFile = $null
@@ -231,7 +231,7 @@ function Invoke-DuneVerifiedSafetyBackup {
     $verification = New-DuneBackupVerifyScript -DbPort $dbPort
     $script = @'
 set -euo pipefail
-_bk=$(/home/dune/.dune/bin/battlegroup backup '__STEM__' 2>&1)
+_bk=$(/home/dune/.dune/bin/battlegroup backup '__STEM__.backup' 2>&1)
 printf '%s\n' "$_bk"
 __VERIFY__
 [ "$(basename "$_bf")" = '__STEM__.backup' ]
