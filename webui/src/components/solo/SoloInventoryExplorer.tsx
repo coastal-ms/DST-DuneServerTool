@@ -10,6 +10,7 @@ import { Icon } from '../Icon'
 import { InventorySlot } from '../inventory/InventorySlot'
 import { DataState } from '../platform/DataState'
 import { DetailPanel } from '../platform/DetailPanel'
+import { CollapsibleCard } from '../CollapsibleCard'
 
 const emptyMetadata = {
   category: '',
@@ -106,7 +107,7 @@ export function SoloInventoryExplorer({
 }) {
   const [query, setQuery] = useState('')
   const [sort, setSort] = useState<'name' | 'quantity'>('name')
-  const [destinationKey, setDestinationKey] = useState('')
+  const [chosenDestinationKey, setDestinationKey] = useState<string | null>(null)
   const [visibleCount, setVisibleCount] = useState(100)
   const [selected, setSelected] = useState<SharedInventoryGroup | null>(null)
   const [deleteQuantities, setDeleteQuantities] = useState<Record<number, string>>({})
@@ -114,6 +115,17 @@ export function SoloInventoryExplorer({
     () => buildSoloInventoryLocations(items, inventories),
     [inventories, items],
   )
+  const backpackKey = inventories.find(inventory => inventory.kind === 'backpack')?.key
+    ?? items.find(item => item.destinationKind === 'backpack')?.destinationKey
+    ?? locations[0]?.key
+    ?? ''
+  const destinationKey = chosenDestinationKey ?? backpackKey
+
+  useEffect(() => {
+    if (chosenDestinationKey && !locations.some(location => location.key === chosenDestinationKey)) {
+      setDestinationKey(null)
+    }
+  }, [chosenDestinationKey, locations])
   const groups = useMemo(() => {
     const needle = query.trim().toLowerCase()
     const visibleItems = filterSoloInventoryItemsByLocation(items, destinationKey)
@@ -140,21 +152,18 @@ export function SoloInventoryExplorer({
   }, [groups])
 
   return (
-    <section className="card p-5" aria-labelledby="solo-current-inventory-title">
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <h2 id="solo-current-inventory-title" className="flex items-center gap-2 font-semibold">
-            <Icon name="PackageSearch" size={16} />
-            Current inventory
-          </h2>
-          <p className="mt-1 text-sm text-text-muted">
-            Browse items in the Backpack, worn equipment, equipped weapons and tools, Bank Storage, and supported built storage. Unequip equipment before deleting it. The game must be fully closed before deletion.
-          </p>
-        </div>
+    <CollapsibleCard
+      id="solo-current-inventory"
+      title="Current inventory"
+      icon="PackageSearch"
+      subtitle="Browse items in the Backpack, worn equipment, equipped weapons and tools, Bank Storage, and supported built storage. Unequip equipment before deleting it. The game must be fully closed before deletion."
+      headerRight={
         <span className="pill border-info/40 bg-info/10 text-info">
           {groups.length} item type{groups.length === 1 ? '' : 's'}
         </span>
-      </div>
+      }
+      className="mb-0"
+    >
 
       {connected && items.length > 0 && (
         <>
@@ -279,7 +288,7 @@ export function SoloInventoryExplorer({
           </div>
         )}
       </DetailPanel>
-    </section>
+    </CollapsibleCard>
   )
 }
 

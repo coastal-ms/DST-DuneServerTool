@@ -1,6 +1,6 @@
 import { createElement } from 'react'
-import { fireEvent, render, screen } from '@testing-library/react'
-import { describe, expect, it, vi } from 'vitest'
+import { cleanup, fireEvent, render, screen } from '@testing-library/react'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
   buildSoloInventoryLocations,
   buildSoloInventoryGroups,
@@ -8,7 +8,49 @@ import {
   SoloInventoryExplorer,
 } from '../src/components/solo/SoloInventoryExplorer'
 
+afterEach(() => { cleanup(); localStorage.clear() })
+
 describe('Solo inventory explorer', () => {
+  it('starts on Backpack, preserves an explicit All locations selection, and remembers a rolled-up card', () => {
+    const backpack = { inventoryId: 1, destinationKey: 'inventory:1', destinationLabel: 'Backpack',
+      destinationKind: 'backpack', templateId: 'Fiber', displayName: 'Backpack Fiber',
+      totalQuantity: 10, occurrenceCount: 1, minQuality: 0, maxQuality: 0 }
+    const storage = { ...backpack, inventoryId: 2, destinationKey: 'inventory:2',
+      destinationLabel: 'Bank Storage', destinationKind: 'bank', templateId: 'Copper', displayName: 'Bank Copper' }
+    const props = { items: [storage, backpack], inventories: [], connected: true,
+      disabled: false, busyItemId: null, onDelete: vi.fn() }
+    const view = render(createElement(SoloInventoryExplorer, props))
+    expect(screen.getByLabelText('Inventory location')).toHaveValue('inventory:1')
+    expect(screen.getByText('Backpack Fiber')).toBeInTheDocument()
+    expect(screen.queryByText('Bank Copper')).not.toBeInTheDocument()
+    fireEvent.change(screen.getByLabelText('Inventory location'), { target: { value: '' } })
+    view.rerender(createElement(SoloInventoryExplorer, { ...props, items: [...props.items] }))
+    expect(screen.getByLabelText('Inventory location')).toHaveValue('')
+    expect(screen.getByText('Bank Copper')).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: /Current inventory/ }))
+    expect(screen.queryByLabelText('Inventory location')).not.toBeInTheDocument()
+    expect(localStorage.getItem('dst.card.solo-current-inventory')).toBe('0')
+    view.unmount()
+    render(createElement(SoloInventoryExplorer, props))
+    expect(screen.getByRole('button', { name: /Current inventory/ })).toHaveAttribute('aria-expanded', 'false')
+    fireEvent.click(screen.getByRole('button', { name: /Current inventory/ }))
+    expect(screen.getByLabelText('Inventory location')).toHaveValue('inventory:1')
+  })
+
+  it('keeps an empty Backpack selected when other storage contains items', () => {
+    render(createElement(SoloInventoryExplorer, {
+      items: [{ inventoryId: 2, destinationKey: 'inventory:2', destinationLabel: 'Bank Storage',
+        destinationKind: 'bank', templateId: 'Copper', displayName: 'Stored Copper',
+        totalQuantity: 10, occurrenceCount: 1, minQuality: 0, maxQuality: 0 }],
+      inventories: [{ id: 1, key: 'inventory:1', label: 'Backpack', kind: 'backpack',
+        itemRows: 0, maxItemCount: 60, maxItemVolume: 100, usedVolume: 0 }],
+      connected: true, disabled: false, busyItemId: null, onDelete: vi.fn(),
+    }))
+    expect(screen.getByLabelText('Inventory location')).toHaveValue('inventory:1')
+    expect(screen.queryByText('Stored Copper')).not.toBeInTheDocument()
+    expect(screen.getByText('No matching Solo inventory items')).toBeInTheDocument()
+  })
+
   it('shows worn equipment with its location and requires unequipping before deletion', () => {
     const onDelete = vi.fn()
     render(createElement(SoloInventoryExplorer, {
