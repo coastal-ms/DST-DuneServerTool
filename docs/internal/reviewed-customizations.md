@@ -70,7 +70,11 @@ changes were installed. Although the Wand save also changed research states,
 this acceptance demonstrates they are unnecessary for this tested recipe.
 DST's recipe grant therefore preserves research state and research points.
 The latest full save was restored afterward and its original hash verified.
-Broader swatch/gear gameplay acceptance and self-hosted gameplay remain pending.
+The same pre-Wand test also confirmed House Kenola garment swatches and an
+Atreides Deserter Light appearance selectable after DST's grouped grants.
+These representative checks establish Solo gameplay acceptance for each bulk
+selection; they do not prove every stored ID is functional. Self-hosted
+gameplay acceptance remains pending, with transaction behavior fixture-tested.
 
 Seventeen additional physical schematic rows also persisted in a special
 inventory omitted by DST's regular inspection. They are not part of this
