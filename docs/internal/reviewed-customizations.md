@@ -23,7 +23,7 @@ set grant adds zero IDs. Real PostgreSQL fixtures verify the grouped write too.
 
 Solo uses the validated retail adapter, an expected-profile token, the shared
 profile write lock, closed-game checks and the helper's verified backup and
-replacement pipeline. Self-hosted writes require a verified database backup,
+replacement pipeline. Self-hosted grants recommend a backup in the confirmation and require
 an unchanged database scope, and all three current character identities. The
 transaction locks and rechecks the exact Offline player and actor before
 appending. Both paths preserve existing entries and unrelated properties;

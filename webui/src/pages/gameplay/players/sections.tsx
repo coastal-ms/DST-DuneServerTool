@@ -647,15 +647,15 @@ interface ActionDef {
 const ACTIONS: ActionDef[] = [
   { id: 'observed-schematic-recipes', group: 'Items', label: 'Schematic Recipes (717)', icon: 'BookOpen', offlineOnly: true, experimental: true,
     rowNote: 'Grant observed crafting recipe entries directly. Existing recipes and remaining uses are preserved; this does not deliver inventory items.',
-    confirm: p => `Grant 717 observed schematic recipe entries to ${p.name}? Existing recipe uses will be preserved and a safety backup created. Check crafting in-game after login.\n\n${COSMETIC_LICENSE_NOTICE}`,
+    confirm: p => `Grant 717 observed schematic recipe entries to ${p.name}? Existing recipe uses will be preserved. A backup is recommended before granting. Check crafting in-game after login.\n\n${COSMETIC_LICENSE_NOTICE}`,
     run: p => grantReviewedCustomization(p.id, p.controller_id, p.account_id, 'ObservedSchematicRecipes') },
   { id: 'observed-character-swatches', group: 'Items', label: 'Character Swatches (311)', icon: 'Palette', offlineOnly: true, experimental: true,
     rowNote: 'Save the observed swatch IDs directly to this character. Existing unlocks are preserved; individual in-game availability varies.',
-    confirm: p => `Grant 311 character swatch IDs to ${p.name}? A safety backup will be created.\n\n${COSMETIC_LICENSE_NOTICE}`,
+    confirm: p => `Grant 311 character swatch IDs to ${p.name}? A backup is recommended before granting.\n\n${COSMETIC_LICENSE_NOTICE}`,
     run: p => grantReviewedCustomization(p.id, p.controller_id, p.account_id, 'ObservedCharacterSwatches') },
   { id: 'observed-gear-appearances', group: 'Items', label: 'Gear Appearances (401)', icon: 'Palette', offlineOnly: true, experimental: true,
     rowNote: 'Save the observed armor and weapon appearance IDs directly to this character. Individual in-game availability varies.',
-    confirm: p => `Grant 401 gear appearance IDs to ${p.name}? A safety backup will be created.\n\n${COSMETIC_LICENSE_NOTICE}`,
+    confirm: p => `Grant 401 gear appearance IDs to ${p.name}? A backup is recommended before granting.\n\n${COSMETIC_LICENSE_NOTICE}`,
     run: p => grantReviewedCustomization(p.id, p.controller_id, p.account_id, 'ObservedGearAppearances') },
   // ----- Currency -----
   { id: 'give-solari', group: 'Currency', label: 'Give Solari', icon: 'Coins', balance: 'solari',

@@ -154,17 +154,15 @@ function Invoke-DunePlayerReviewedCustomization {
     $scope = Get-DuneVehicleHostScope -Ip $Ip
     $offline = Test-DunePlayerOffline -Ip $Ip -PawnId $PawnId
     if (-not $offline.ok) { return @{ok=$false;error='The selected character must be fully Offline.'} }
-    $backup = Invoke-DuneVerifiedSafetyBackup -Ip $Ip -StemPrefix 'dst-reviewed-customization' -ProofLabel 'DST_REVIEWED_CUSTOMIZATION_BACKUP'
-    if (-not $backup.ok) { return @{ok=$false;error=$backup.error} }
     $current = Get-DuneVehicleHostScope -Ip $Ip
-    if ($backup.database_scope -cne $scope.key -or $current.key -cne $scope.key) { return @{ok=$false;error='Database changed during backup; no unlock attempted.'} }
+    if ($current.key -cne $scope.key) { return @{ok=$false;error='Database changed before the grant; no unlock attempted.'} }
     $write = Invoke-DuneSqlQuery -Ip $Ip -Sql $sql -ReadOnly $false -MaxRows 1 -TimeoutSec 45
     if (-not $write.ok) { return @{ok=$false;error=$write.error} }
     $rows = ConvertTo-DuneRowMaps -Result $write
     if ($rows.Count -ne 1) { return @{ok=$false;error='Refresh ownership before retrying; the result could not be read.'} }
     $entry = Get-DuneReviewedCustomization -CustomizationId $CustomizationId
     $message = if ($entry.PSObject.Properties.Name -contains 'recipeEntries') { 'Schematic recipe entries saved. Log in and check crafting; existing recipe uses were preserved.' } else { 'Character customization IDs saved. Log in and check the customization menu.' }
-    return @{ok=$true;added=[int]$rows[0]['added'];safetyBackup=$backup.path;message=$message}
+    return @{ok=$true;added=[int]$rows[0]['added'];message=$message}
 }
 
 function Invoke-DuneSoloGrantUnlocks {

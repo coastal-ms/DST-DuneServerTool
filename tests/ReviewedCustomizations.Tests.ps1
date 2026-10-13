@@ -52,13 +52,15 @@ Describe 'Reviewed ordinary customizations' {
         Should -Invoke Invoke-DuneVerifiedSafetyBackup -Times 0
         Should -Invoke Invoke-DuneSqlQuery -Times 0
     }
-    It 'does not write after backup failure' {
+    It 'attempts the offline grant without depending on a backup' {
         Mock Invoke-DuneVerifiedSafetyBackup { @{ok=$false;error='backup failed'} }
         (Invoke-DunePlayerReviewedCustomization fixture 1 2 3 StillSCharDyepackImota).ok | Should -BeFalse
-        Should -Invoke Invoke-DuneSqlQuery -Times 0
+        Should -Invoke Invoke-DuneVerifiedSafetyBackup -Times 0
+        Should -Invoke Invoke-DuneSqlQuery -Times 1
     }
-    It 'does not write when backup belongs to another database' {
-        Mock Invoke-DuneVerifiedSafetyBackup { @{ok=$true;path='backup';database_scope='other'} }
+    It 'does not write when the selected database changes' {
+        $script:scopeReads = 0
+        Mock Get-DuneVehicleHostScope { $script:scopeReads++; @{key=$(if ($script:scopeReads -eq 1) {'fixture'} else {'other'})} }
         (Invoke-DunePlayerReviewedCustomization fixture 1 2 3 StillSCharDyepackImota).ok | Should -BeFalse
         Should -Invoke Invoke-DuneSqlQuery -Times 0
     }
