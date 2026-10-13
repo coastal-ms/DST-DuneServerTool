@@ -729,10 +729,9 @@ procedure StopRunningDuneServer();
 var
   resultCode: Integer;
 begin
-  Exec('taskkill.exe', '/F /IM DuneServer.exe /T',
+  Exec('taskkill.exe', '/F /IM DuneServer.exe',
        '', SW_HIDE, ewWaitUntilTerminated, resultCode);
-  // pwsh / powershell.exe spawned by the old app run under the user's
-  // session and exit on their own once the parent EXE is gone.
+  // Do not kill descendants: Dune and its mod cleanup watcher must survive upgrades.
 end;
 
 function UninstallPreviousVersion(): Boolean;

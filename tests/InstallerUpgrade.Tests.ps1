@@ -75,3 +75,11 @@ Describe 'Installer legacy autostart preservation' -Tag 'Pure' {
         $capture | Should -Match 'Result := True;\s*LegacyAutostartBackupPresent := False;'
     }
 }
+
+Describe 'Installer preserves launched games' {
+    It 'stops only the DST backend without terminating its process tree' {
+        $installer = Get-Content (Join-Path (Get-DstRepoRoot) 'app/installer/DuneServer.iss') -Raw
+        $installer | Should -Match "'/F /IM DuneServer.exe'"
+        $installer | Should -Not -Match "'/F /IM DuneServer.exe /T'"
+    }
+}
