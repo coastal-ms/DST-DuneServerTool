@@ -156,7 +156,7 @@ function Invoke-DunePlayerReviewedCustomization {
     if (-not $offline.ok) { return @{ok=$false;error='The selected character must be fully Offline.'} }
     $current = Get-DuneVehicleHostScope -Ip $Ip
     if ($current.key -cne $scope.key) { return @{ok=$false;error='Database changed before the grant; no unlock attempted.'} }
-    $write = Invoke-DuneSqlQuery -Ip $Ip -Sql $sql -ReadOnly $false -MaxRows 1 -TimeoutSec 45
+    $write = Invoke-DuneSqlQuery -Ip $Ip -Sql $sql -ReadOnly $false -MaxRows 1 -TimeoutSec 120 -Bulk
     if (-not $write.ok) { return @{ok=$false;error=$write.error} }
     $rows = ConvertTo-DuneRowMaps -Result $write
     if ($rows.Count -ne 1) { return @{ok=$false;error='Refresh ownership before retrying; the result could not be read.'} }

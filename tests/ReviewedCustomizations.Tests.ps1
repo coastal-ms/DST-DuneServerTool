@@ -56,7 +56,7 @@ Describe 'Reviewed ordinary customizations' {
         Mock Invoke-DuneVerifiedSafetyBackup { @{ok=$false;error='backup failed'} }
         (Invoke-DunePlayerReviewedCustomization fixture 1 2 3 StillSCharDyepackImota).ok | Should -BeFalse
         Should -Invoke Invoke-DuneVerifiedSafetyBackup -Times 0
-        Should -Invoke Invoke-DuneSqlQuery -Times 1
+        Should -Invoke Invoke-DuneSqlQuery -Times 1 -ParameterFilter { $Bulk -and $TimeoutSec -eq 120 }
     }
     It 'does not write when the selected database changes' {
         $script:scopeReads = 0
