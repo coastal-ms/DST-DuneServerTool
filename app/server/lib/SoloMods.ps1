@@ -172,7 +172,11 @@ function Start-DuneSoloModGame([bool]$WithMods) {
     Assert-DuneSoloGameClosed
     $status=Get-DuneSoloMods
     Assert-DuneSoloLaunchArguments $status.soloArguments
-    if($status.session){throw 'A previous mod session needs restoration. Use Restore normal launch first.'}
+    if($status.session){
+        Restore-DuneSoloModSession
+        $status=Get-DuneSoloMods
+        if($status.session){throw 'The previous mod session could not be restored automatically.'}
+    }
     if([string]::IsNullOrWhiteSpace($status.gamePath)){throw 'Select the Dune Awakening installation folder in Solo mods and save it before launching.'}
     $target = if ($status.platform -eq 'xbox') { 'WinGDK' } else { 'Win64' }
     $bin=Join-Path $status.gamePath ('DuneSandbox\Binaries\'+$target)
@@ -245,6 +249,7 @@ function Assert-DuneSoloLaunchArguments([string]$Arguments) {
 function Restore-DuneSoloModSession {
     Assert-DuneSoloGameClosed
     & (Join-Path $PSScriptRoot 'SoloModsWatcher.ps1') -LoaderRoot $script:DuneSoloLoaderRoot -RestoreOnly
+    Remove-Item -LiteralPath (Join-Path $script:DuneSoloLoaderRoot 'launch-error.txt') -ErrorAction SilentlyContinue
     return Get-DuneSoloMods
 }
 

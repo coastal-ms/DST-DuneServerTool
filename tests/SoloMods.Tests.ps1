@@ -103,6 +103,32 @@ Describe 'Solo mod import and dependencies' {
             $FilePath -eq 'C:\Game\Dune.exe' -and $ArgumentList[-1] -eq '-example="two words"' -and $ArgumentList -contains '--ue4ss-path'
         }
     }
+    It 'automatically restores a leftover session and continues normal launch' {
+        $game=Join-Path $script:ModTestRoot 'RecoveredGame'
+        $bin=Join-Path $game 'DuneSandbox/Binaries/Win64'
+        New-Item -ItemType Directory -Path $bin -Force | Out-Null
+        New-Item -ItemType File -Path (Join-Path $bin 'DuneSandbox-Win64-Shipping.exe') -Force | Out-Null
+        Set-DuneSoloModSelection @{mods=@();gamePath=$game} | Out-Null
+        @{files=@()} | ConvertTo-Json | Set-Content (Join-Path $script:DuneSoloLoaderRoot 'session.json')
+        Mock Get-Process {}
+        Mock Start-Process {}
+        Start-DuneSoloModGame $false | Out-Null
+        Test-Path (Join-Path $script:DuneSoloLoaderRoot 'session.json') | Should -BeFalse
+        Should -Invoke Start-Process -Times 1 -Exactly
+    }
+    It 'clears leftover restoration state before checking mod runtime requirements' {
+        $game=Join-Path $script:ModTestRoot 'RecoveredModGame'
+        $bin=Join-Path $game 'DuneSandbox/Binaries/Win64'
+        New-Item -ItemType Directory -Path $bin -Force | Out-Null
+        New-Item -ItemType File -Path (Join-Path $bin 'DuneSandbox-Win64-Shipping.exe') -Force | Out-Null
+        Set-DuneSoloModSelection @{mods=@();gamePath=$game} | Out-Null
+        @{files=@()} | ConvertTo-Json | Set-Content (Join-Path $script:DuneSoloLoaderRoot 'session.json')
+        Set-Content (Join-Path $script:DuneSoloLoaderRoot 'launch-error.txt') 'Old launch error'
+        Mock Get-Process {}
+        { Start-DuneSoloModGame $true } | Should -Throw '*Install the mod runtime first*'
+        Test-Path (Join-Path $script:DuneSoloLoaderRoot 'session.json') | Should -BeFalse
+        Test-Path (Join-Path $script:DuneSoloLoaderRoot 'launch-error.txt') | Should -BeFalse
+    }
     It 'rejects a missing installation folder before either launch can touch runtime files' -ForEach @(
         @{ WithMods=$true; GamePath='' }
         @{ WithMods=$false; GamePath='' }

@@ -15,6 +15,9 @@ here cover everything those tags shipped.
 
 ## [16.4.2] - 2026-10-12
 
+### Fixed
+- Solo launch automatically restores an interrupted mod session before starting normally or with mods, and clears stale launch errors after recovery.
+
 ### Added
 - Experimental selective House Imota Garment Swatch and Mercenary Light Armor Set grants in self-hosted Players actions and Solo. Only exact naturally mapped customization IDs are accepted; all five armor appearances are saved together. Self-hosted grants recommend a backup and require an offline character; Solo keeps its automatic backup and closed-game checks. All five armor appearances passed controlled Solo gameplay verification; self-hosted gameplay acceptance remains pending.
 - Experimental direct character grants for 311 observed swatches and 401 observed gear appearances, available in both Solo and self-hosted Players actions. Existing unlocks are preserved. These save grants do not create account purchases or entitlements; individual in-game availability remains experimental.
