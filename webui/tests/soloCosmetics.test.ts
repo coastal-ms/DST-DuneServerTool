@@ -33,7 +33,7 @@ describe('Solo cosmetic grants', () => {
   })
 
   it('states that grants do not create account ownership', () => {
-    expect(SOLO_COSMETIC_ENTITLEMENT_WARNING).toContain('only to this Solo save')
+    expect(SOLO_COSMETIC_ENTITLEMENT_WARNING).toContain('only to this Solo character')
     expect(SOLO_COSMETIC_ENTITLEMENT_WARNING).toContain('do not create Funcom account ownership')
   })
 

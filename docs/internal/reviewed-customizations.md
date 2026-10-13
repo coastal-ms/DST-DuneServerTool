@@ -63,6 +63,15 @@ It does not require storage capacity or grant physical items. Repeated grants
 add zero entries. Wrapped Solo copies and real PostgreSQL fixtures verify this
 behavior, including preservation of an existing recipe's remaining uses.
 
+Solo gameplay verification confirmed Leech's Maw selectable at the Advanced
+Weapons Fabricator with 100 uses after the direct recipe-only grant to the
+pre-Wand baseline. The original test save was used: no paired research-state
+changes were installed. Although the Wand save also changed research states,
+this acceptance demonstrates they are unnecessary for this tested recipe.
+DST's recipe grant therefore preserves research state and research points.
+The latest full save was restored afterward and its original hash verified.
+Broader swatch/gear gameplay acceptance and self-hosted gameplay remain pending.
+
 Seventeen additional physical schematic rows also persisted in a special
 inventory omitted by DST's regular inspection. They are not part of this
 direct-recipe selection. Both Wand controls were active and ordinary gameplay
