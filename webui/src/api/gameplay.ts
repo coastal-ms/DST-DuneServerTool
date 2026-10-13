@@ -2772,7 +2772,11 @@ export function grantReviewedCustomization(pawn_id: number, controller_id: numbe
   })
 }
 export function getReviewedGrantCounts(pawn_id: number, controller_id: number, account_id: number, customizationId: string) {
-  return api<{total: number; owned: number; remaining: number}>('/api/gameplay/players/reviewed-customization', {
+  return api<{result: {total: number; owned: number; remaining: number}}>('/api/gameplay/players/reviewed-customization', {
     method: 'POST', body: JSON.stringify({pawn_id, controller_id, account_id, customizationId, checkOnly: true}),
+  }).then(response => {
+    const counts = response.result
+    if (!counts || ![counts.total, counts.owned, counts.remaining].every(Number.isFinite)) throw new Error('Character counts unavailable')
+    return counts
   })
 }
