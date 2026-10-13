@@ -1081,7 +1081,9 @@ function ActionRow({ def, player, busy, stats, open, danger, onToggle, runAction
         onClick={onToggle}
         title={def.liveOnly ? 'Requires player to be online' : def.offlineOnly ? 'Requires player to be offline — the game caches this value in memory while online and overwrites it on logout' : undefined}>
         <Icon name={def.icon} size={14} className={`shrink-0 ${danger ? 'text-error' : 'text-text-dim'}`} />
-        <span className="flex-1 min-w-0 font-medium">{def.label}</span>
+        <span className="flex-1 min-w-0 flex flex-col gap-1.5">
+          <span className="font-medium break-words">{def.label}</span>
+          <span className="flex flex-wrap gap-1.5">
         {def.experimental && (
           <span className="text-[10px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded bg-accent/20 text-accent border border-accent/50 shrink-0" title="Experimental — may not take effect in-game">EXPERIMENTAL</span>
         )}
@@ -1091,6 +1093,8 @@ function ActionRow({ def, player, busy, stats, open, danger, onToggle, runAction
         {def.offlineOnly && (
           <span className="text-[10px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded bg-info/20 text-info border border-info/50 shrink-0">OFFLINE REQ'D</span>
         )}
+          </span>
+        </span>
         <Icon name={open ? 'ChevronDown' : 'ChevronRight'} size={14} className="shrink-0 text-text-dim" />
       </button>
       {open && (
