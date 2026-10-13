@@ -69,4 +69,19 @@ Describe 'Reviewed ordinary customizations' {
         (Invoke-DunePlayerReviewedCustomization fixture 1 2 3 StillSCharDyepackImota).ok | Should -BeFalse
         Should -Invoke Invoke-DuneVerifiedSafetyBackup -Times 0
     }
+    It 'confirms saved grants after a lost write response without replaying the write' {
+        Mock Invoke-DuneSqlQuery { if ($ReadOnly) { @{ok=$true;kind='status'} } else { @{ok=$false;error='timeout'} } }
+        Mock ConvertTo-DuneRowMaps { ,@(@{total='311';owned='311'}) }
+        $result = Invoke-DunePlayerReviewedCustomization fixture 1 2 3 ObservedCharacterSwatches
+        $result.ok | Should -BeTrue
+        $result.message | Should -Match 'No retry is needed'
+        Should -Invoke Invoke-DuneSqlQuery -Times 1 -ParameterFilter { -not $ReadOnly }
+    }
+    It 'reports missing grants rather than claiming success after a timeout' {
+        Mock Invoke-DuneSqlQuery { if ($ReadOnly) { @{ok=$true} } else { @{ok=$false;error='timeout'} } }
+        Mock ConvertTo-DuneRowMaps { ,@(@{total='311';owned='10'}) }
+        $result = Invoke-DunePlayerReviewedCustomization fixture 1 2 3 ObservedCharacterSwatches
+        $result.ok | Should -BeFalse
+        $result.error | Should -Match '301 remain'
+    }
 }

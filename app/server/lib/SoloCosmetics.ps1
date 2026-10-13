@@ -148,6 +148,22 @@ COMMIT;
 '@.Replace('__PAWN__',[string]$PawnId).Replace('__CONTROLLER__',[string]$ControllerId).Replace('__ACCOUNT__',[string]$AccountId).Replace('__RECIPES__',$json)
 }
 
+function Get-DuneReviewedGrantStatusSql {
+    param([long]$PawnId, [long]$ControllerId, [long]$AccountId, [string]$CustomizationId)
+    $entry = Get-DuneReviewedCustomization $CustomizationId
+    if ($entry.PSObject.Properties.Name -contains 'recipeEntries') {
+        $selected = ConvertTo-DuneSqlString (ConvertTo-Json -InputObject @($entry.recipeEntries) -Depth 8 -Compress)
+        $owned = "a.properties #> '{CraftingRecipesLibraryActorComponent,m_KnownItemRecipes}'"
+        $match = "o #>> '{BaseRecipeId,Name}'=s #>> '{BaseRecipeId,Name}' AND o->'m_QualityLevel'=s->'m_QualityLevel'"
+    } else {
+        $ids = if ($entry.PSObject.Properties.Name -contains 'customizationIds') { @($entry.customizationIds) } else { @([string]$entry.id) }
+        $selected = ConvertTo-DuneSqlString (ConvertTo-Json -InputObject @($ids) -Compress)
+        $owned = "a.properties #> '{CustomizationLibraryActorComponent,m_UnlockedCustomizationSerializableList,m_UnlockedCustomizationIds}'"
+        $match = "o->>'m_CustomizationId'=s #>> '{}'"
+    }
+    return "SELECT count(*)::text AS total, count(*) FILTER (WHERE EXISTS (SELECT 1 FROM jsonb_array_elements($owned) o WHERE $match))::text AS owned FROM dune.actors a JOIN dune.encrypted_player_state p ON p.player_pawn_id=a.id CROSS JOIN jsonb_array_elements('$selected'::jsonb) s WHERE a.id=$PawnId AND p.player_controller_id=$ControllerId AND p.account_id=$AccountId GROUP BY a.id;"
+}
+
 function Invoke-DunePlayerReviewedCustomization {
     param([string]$Ip, [long]$PawnId, [long]$ControllerId, [long]$AccountId, [string]$CustomizationId)
     $sql = Get-DuneReviewedCustomizationSql -PawnId $PawnId -ControllerId $ControllerId -AccountId $AccountId -CustomizationId $CustomizationId
@@ -157,12 +173,22 @@ function Invoke-DunePlayerReviewedCustomization {
     $current = Get-DuneVehicleHostScope -Ip $Ip
     if ($current.key -cne $scope.key) { return @{ok=$false;error='Database changed before the grant; no unlock attempted.'} }
     $write = Invoke-DuneSqlQuery -Ip $Ip -Sql $sql -ReadOnly $false -MaxRows 1 -TimeoutSec 120 -Bulk
-    if (-not $write.ok) { return @{ok=$false;error=$write.error} }
-    $rows = ConvertTo-DuneRowMaps -Result $write
-    if ($rows.Count -ne 1) { return @{ok=$false;error='Refresh ownership before retrying; the result could not be read.'} }
-    $entry = Get-DuneReviewedCustomization -CustomizationId $CustomizationId
-    $message = if ($entry.PSObject.Properties.Name -contains 'recipeEntries') { 'Schematic recipe entries saved. Log in and check crafting; existing recipe uses were preserved.' } else { 'Character customization IDs saved. Log in and check the customization menu.' }
-    return @{ok=$true;added=[int]$rows[0]['added'];message=$message}
+    $statusSql = Get-DuneReviewedGrantStatusSql $PawnId $ControllerId $AccountId $CustomizationId
+    $check = Invoke-DuneSqlQuery -Ip $Ip -Sql $statusSql -ReadOnly $true -MaxRows 1 -TimeoutSec 30 -Bulk
+    $verified = @(); if ($check.ok) { $verified = ConvertTo-DuneRowMaps -Result $check }
+    if ($verified.Count -ne 1 -or -not $verified[0].ContainsKey('total') -or -not $verified[0].ContainsKey('owned')) {
+        return @{ok=$false;error='Grant completion could not be verified. Refresh and retry; existing unlocks will be preserved.'}
+    }
+    $total = [int]$verified[0]['total']
+    $owned = [int]$verified[0]['owned']
+    if ($owned -ne $total) {
+        return @{ok=$false;error="$owned of $total grants are saved; $($total-$owned) remain. Retry to add the missing entries; existing unlocks are preserved.";total=$total;owned=$owned}
+    }
+    $rows = @(); if ($write.ok) { $rows = ConvertTo-DuneRowMaps -Result $write }
+    $message = if ($rows.Count -eq 1) {
+        "$([int]$rows[0]['added']) added; $($total-[int]$rows[0]['added']) already unlocked. Verified $owned of $total saved."
+    } else { "Verified $owned of $total saved after the connection ended. No retry is needed." }
+    return @{ok=$true;total=$total;owned=$owned;message=$message}
 }
 
 function Invoke-DuneSoloGrantUnlocks {
