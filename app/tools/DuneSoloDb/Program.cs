@@ -774,7 +774,8 @@ internal static partial class Program
                         """
                         UPDATE items
                         SET stats = json_set(
-                            stats,
+                            CASE WHEN json_type(stats, '$.FFillableItemStats[1]') = 'object' THEN stats
+                            ELSE json_set(stats, '$.FFillableItemStats', json('[[],{}]')) END,
                             '$.FFillableItemStats[1].CurrentAmount',
                             $capacity
                         ),
@@ -1305,7 +1306,7 @@ internal static partial class Program
                         'HighCapacityLiterjon_06',
                         0,
                         0,
-                        '{"FItemStackAndDurabilityStats":[[],{}],"FFillableItemStats":[[],{"CurrentAmount":0.0}]}',
+                        '{"FItemStackAndDurabilityStats":[[],{}]}',
                         0
                     );
                     INSERT INTO items VALUES (
@@ -3399,7 +3400,6 @@ internal static partial class Program
             FROM items
             JOIN inventories ON inventories.id = items.inventory_id
             WHERE inventories.actor_id = $pawn
-              AND json_type(items.stats, '$.FFillableItemStats[1]') = 'object'
               AND (
                   lower(items.template_id) LIKE '%literjon%'
                   OR lower(items.template_id) LIKE '%dewpack%'

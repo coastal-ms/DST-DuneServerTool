@@ -1941,7 +1941,7 @@ export function SoloMode() {
             </div>
             {(inspection?.fillables.length ?? 0) === 0 ? (
               <p className="text-sm text-text-muted">
-                No supported carried water container was found. Put a Literjon, Dewpack, or Decajon in the character inventory, exit fully, then Refresh.
+                No refillable water container was found in the connected character inventory. After adding a Literjon, Dewpack, or Decajon, click Refresh.
               </p>
             ) : (
               <div className="space-y-2">
