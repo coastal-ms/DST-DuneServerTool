@@ -173,7 +173,9 @@ Register-DuneRoute -Method POST -Path '/api/commands/run/{name}' -Handler {
                 Write-DuneError -Response $res -Status $ctx.status -Message $ctx.message
                 return
             }
-            $r = Invoke-DuneBattlegroupRestart -Ip $ctx.ip
+            $r = Invoke-WithDuneLock -Name 'retail-startup-sync' -Script {
+                Invoke-DuneBattlegroupRestart -Ip $ctx.ip -ApplyInis:($name -eq 'apply-inis')
+            }
             if (-not $r.ok) {
                 Write-DuneError -Response $res -Status 502 -Message $r.message
                 return

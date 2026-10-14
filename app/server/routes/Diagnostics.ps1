@@ -1140,6 +1140,13 @@ done
     $manLines = [System.Collections.Generic.List[string]]::new()
     $manLines.Add("Dune Server Tool diagnostic bundle")
     $manLines.Add("Generated $(Get-Date -Format 'o') by v$script:DuneToolVersion")
+    try {
+        $configurationMode = Get-DuneRetailStartupSyncPreference
+        $modePath = Join-Path $stageDir 'configuration-management.json'
+        $configurationMode | ConvertTo-Json -Depth 10 | Set-Content -LiteralPath $modePath -Encoding UTF8
+        $included.Add(@{name='configuration-management.json';bytes=(Get-Item -LiteralPath $modePath).Length})
+        $manLines.Add("DST configuration management (Solo and self-hosted): enabled=$($configurationMode.enabled); injectionsApplied=$($configurationMode.injectionsApplied)")
+    } catch { $manLines.Add('DST configuration management: state unavailable') }
     $manLines.Add('')
     try {
         $portalAuth = Get-DunePortalDiagnosticState

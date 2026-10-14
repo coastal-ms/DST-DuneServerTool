@@ -8,6 +8,7 @@ import { SoloRegisTanks } from '../components/solo/SoloRegisTanks'
 import { SoloFactionProgression } from '../components/solo/SoloFactionProgression'
 import { SoloCharacterXp } from '../components/solo/SoloCharacterXp'
 import { WickMaps } from './WickMaps'
+import { StartupSettingsSync } from './gameconfig/StartupSettingsSync'
 import { AugmentPicker } from '../components/AugmentPicker'
 import {
   SoloInventoryExplorer,
@@ -1777,6 +1778,8 @@ export function SoloMode() {
           )}
         </div>
       )}
+
+      {tab === 'settings' && <StartupSettingsSync />}
 
       {tab === 'backups' && (
         <div className="card p-5">

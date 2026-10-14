@@ -2537,6 +2537,25 @@ function Get-DuneGameConfigTextSha256 {
 function Resolve-DuneGameConfigPaths {
     param([string]$Ip, [switch]$Force)
 
+    if ((Get-Command Test-DuneConfigurationInjectionEnabled -ErrorAction SilentlyContinue) -and
+        -not (Test-DuneConfigurationInjectionEnabled)) {
+        # Manual management reads the existing source without migrations,
+        # repairs, or authority-marker writes.
+        $exists = ((Invoke-V6Ssh -Ip $Ip -Cmd "sudo test -f '$script:DuneGameConfigTplGamePath' && sudo test -f '$script:DuneGameConfigTplEnginePath' && echo yes") -join '').Trim()
+        if ($exists -eq 'yes') {
+            return @{game=$script:DuneGameConfigTplGamePath; engine=$script:DuneGameConfigTplEnginePath; source='self-managed'; authoritative=$true}
+        }
+        $dirs = @(Invoke-V6Ssh -Ip $Ip -Cmd "sudo bash -c 'ls -t $($script:DuneGameConfigLiveGlobDir)/UserGame.ini 2>/dev/null | xargs -r -n1 dirname'")
+        foreach ($dir in $dirs) {
+            $dir = "$dir".Trim()
+            if ($dir -and $dir -notmatch "['`r`n]") {
+                $exists = ((Invoke-V6Ssh -Ip $Ip -Cmd "sudo test -f '$dir/UserEngine.ini' && echo yes") -join '').Trim()
+                if ($exists -eq 'yes') {return @{game="$dir/UserGame.ini"; engine="$dir/UserEngine.ini"; source='self-managed'; authoritative=$true}}
+            }
+        }
+        throw 'Existing UserGame.ini/UserEngine.ini files were not found. Manual management did not create or modify them.'
+    }
+
     # Funcom's Retail updater creates setup/config with stock defaults even when
     # the battlegroup already has an administrator's established User*.ini files.
     # Carry only non-default DST-managed values onto those installed defaults
@@ -2827,6 +2846,8 @@ function Set-DuneStartupConsoleVariableOverrides {
         [Parameter(Mandatory)][string]$Ip,
         [hashtable]$Values = @{}
     )
+    if ((Get-Command Test-DuneConfigurationInjectionEnabled -ErrorAction SilentlyContinue) -and
+        -not (Test-DuneConfigurationInjectionEnabled)) { return @{Success=$true; skipped=$true} }
     if (-not (Get-Command Set-V6ConsoleVariableOverrides -ErrorAction SilentlyContinue)) {
         throw 'Battlegroup helper unavailable (K8s.ps1 not loaded).'
     }

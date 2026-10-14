@@ -26,7 +26,24 @@ Register-DuneRoute -Method PUT -Path '/api/gameconfig/retail-startup-sync' -Loca
         return
     }
     try {
-        $result=Invoke-WithDuneLock -Name 'retail-startup-sync' -Script {Set-DuneRetailStartupSyncPreference -Enabled $body.enabled}
+        $result=Invoke-WithDuneLock -Name 'retail-startup-sync' -Script {
+            $pending = $false
+            $cleanupError = ''
+            if (-not $body.enabled) {
+                # Persist the opt-out before remote cleanup. A transport failure
+                # must not leave automatic writers active after partial cleanup.
+                $null = Set-DuneRetailStartupSyncPreference -Enabled $false -CleanupPending
+                $ctx = Get-DuneGameConfigContext
+                if ($ctx.ok) {
+                    try { $null = Remove-DuneManagedSettingsYamlInjections -Ip $ctx.ip }
+                    catch { $pending=$true; $cleanupError=$_.Exception.Message }
+                }
+                else { $pending = $true }
+            }
+            $saved = Set-DuneRetailStartupSyncPreference -Enabled $body.enabled -CleanupPending:$pending
+            if ($cleanupError) { $saved.cleanupError = $cleanupError }
+            $saved
+        }
         Write-DuneJson -Response $res -Body $result
     } catch {Write-DuneError -Response $res -Status 400 -Message $_.Exception.Message}
 }

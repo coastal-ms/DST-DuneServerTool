@@ -18,7 +18,7 @@ here cover everything those tags shipped.
 ### Added
 - Regis Tanks for Steam Solo and self-hosted Hagga: support is prepared automatically during ordinary DST Solo launch or battlegroup start; grant Dart or Flamethrower variants separately when wanted. Both variants passed driving, weapon and reload persistence checks. Support is limited to the verified game builds; pink weapon effects, missing audio and misleading module labels remain known limitations.
 - Server INI backup download and cleanup in Server Settings: download selected backups as a ZIP, then explicitly delete unchanged selected backups while preserving active configuration files.
-- A startup settings synchronization checkbox, enabled by default. Disabling it skips DST's automatic startup sync; manual settings saves remain available.
+- Shared Solo and self-hosted configuration management checkbox at the bottom of Settings. Opting out preserves all INI content and blocks automatic configuration repair/synchronization, clears DST-owned YAML settings injections, and records the mode in diagnostics. Re-enabling requires explicit Apply INIs before injections resume; explicit saves remain INI-only until then.
 
 ### Changed
 - Solo inventory defaults to Backpack and supports collapsing the inventory card. All locations remains selectable.

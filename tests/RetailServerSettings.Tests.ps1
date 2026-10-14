@@ -27,6 +27,21 @@ Describe 'Server Settings startup synchronization preference' {
         (Set-DuneRetailStartupSyncPreference -Enabled $false).enabled | Should -BeFalse
         (Get-DuneRetailStartupSyncPreference).enabled | Should -BeFalse
         (Set-DuneRetailStartupSyncPreference -Enabled $true).enabled | Should -BeTrue
+        (Get-DuneRetailStartupSyncPreference).injectionsApplied | Should -BeFalse
+        Test-DuneConfigurationInjectionEnabled | Should -BeFalse
+        Set-DuneRetailStartupSyncPreference -Enabled $true -Applied | Out-Null
+        Test-DuneConfigurationInjectionEnabled | Should -BeTrue
+    }
+    It 'records pending cleanup for a disconnected server without enabling writers' {
+        Set-DuneRetailStartupSyncPreference -Enabled $false -CleanupPending | Out-Null
+        $state = Get-DuneRetailStartupSyncPreference
+        $state.cleanupPending | Should -BeTrue
+        $state.scope | Should -Be 'Solo and self-hosted'
+        Test-DuneConfigurationInjectionEnabled | Should -BeFalse
+    }
+    It 'honors an existing enabled preference without an injection-state field' {
+        '{"enabled":true}' | Set-Content -LiteralPath $script:RetailSyncPreferenceTestPath
+        Test-DuneConfigurationInjectionEnabled | Should -BeTrue
     }
     It 'skips every remote read and write when startup synchronization is disabled' {
         Set-DuneRetailStartupSyncPreference -Enabled $false | Out-Null

@@ -818,7 +818,16 @@ rc=`$?; echo __DST_EXIT__:`$rc
 }
 
 function Invoke-DuneBattlegroupRestart {
-    param([string]$Ip)
+    param([string]$Ip, [switch]$ApplyInis)
+
+    $explicitApply = $ApplyInis -and (Get-Command Get-DuneRetailStartupSyncPreference -ErrorAction SilentlyContinue) -and (Get-DuneRetailStartupSyncPreference).enabled
+    $script:DuneConfigurationExplicitApply = [bool]$explicitApply
+    try {
+    $inject = -not (Get-Command Test-DuneConfigurationInjectionEnabled -ErrorAction SilentlyContinue) -or (Test-DuneConfigurationInjectionEnabled)
+    if ($Ip -and $explicitApply) {
+        try { $null = Sync-DuneRetailServerSettingsForStartup -Ip $Ip }
+        catch { return @{ok=$false;message="Settings YAML restoration failed; Apply INIs remains pending. $($_.Exception.Message)"} }
+    }
 
     # Restarting the BG cycles game state, so an in-flight seed or list-tick from
     # a prior run is moot; leaving the flag set would block fresh runs afterwards.
@@ -831,7 +840,7 @@ function Invoke-DuneBattlegroupRestart {
     # closed here prevents a restart that claims to apply settings but actually
     # boots an older PVC copy.
     $iniDeploy = $null
-    if ($Ip) {
+    if ($Ip -and $inject) {
         try { $iniDeploy = Invoke-DuneDeployInstalledUserSettings -Ip $Ip }
         catch { $iniDeploy = @{ ok=$false; error=$_.Exception.Message } }
         if (-not $iniDeploy.ok) {
@@ -849,12 +858,15 @@ function Invoke-DuneBattlegroupRestart {
     # values and no stale command can outrank the file. Best-effort: a failure
     # here must not block the restart the user asked for.
     $startupApply = $null
-    if ($Ip -and (Get-Command Sync-DuneStartupConsoleVariableOverrides -ErrorAction SilentlyContinue)) {
+    if ($Ip -and $inject -and (Get-Command Sync-DuneStartupConsoleVariableOverrides -ErrorAction SilentlyContinue)) {
         try { $startupApply = Sync-DuneStartupConsoleVariableOverrides -Ip $Ip }
         catch { $startupApply = @{ ok = $false; error = $_.Exception.Message } }
     }
 
     $result = Invoke-DuneCommandExternal -Name 'restart'
+    if ($explicitApply -and $iniDeploy.ok -and (-not $startupApply -or $startupApply.Success -or $startupApply.ok)) {
+        $null = Set-DuneRetailStartupSyncPreference -Enabled $true -Applied
+    }
     $message = 'Battlegroup restart launched - watch Server Health; it takes a couple of minutes to come back.'
     if ($startupApply -is [hashtable] -and $startupApply.ContainsKey('ok') -and -not $startupApply['ok']) {
         # Never report a clean apply when the startup commands were not rebuilt:
@@ -869,6 +881,7 @@ function Invoke-DuneBattlegroupRestart {
         startupApply = $startupApply
         message      = $message
     }
+    } finally { $script:DuneConfigurationExplicitApply = $false }
 }
 
 function Restart-DuneGameServerPodsRolling {

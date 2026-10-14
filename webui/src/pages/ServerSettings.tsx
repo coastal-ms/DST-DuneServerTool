@@ -247,7 +247,6 @@ export function ServerSettings() {
           <Icon name="CheckCircle2" size={14} /> {stopMessage}
         </div>
       )}
-      <div className="mb-4"><StartupSettingsSync onBusyChange={setSyncPreferenceBusy} /></div>
       <ServerIniBackups vmRunning={vmRunning} />
       <RegisTankSetup vmRunning={vmRunning} stopped={fullyStopped} onBusyChange={setTankSetupBusy} />
       <OfficialRetailServerSettingsCard
@@ -255,6 +254,7 @@ export function ServerSettings() {
         statusRefreshKey={settingsRefreshKey}
         onActionStateChange={handleSettingsActionStateChange}
       />
+      <div className="mt-4"><StartupSettingsSync onBusyChange={setSyncPreferenceBusy} /></div>
     </>
   )
 }
