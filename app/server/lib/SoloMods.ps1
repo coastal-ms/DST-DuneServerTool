@@ -140,8 +140,12 @@ function Get-DuneSoloMods {
     $runtimeLog=if(Test-Path $logPath){(Get-Content $logPath -Tail 80) -join "`n"}else{''}
     $preferences=Get-DuneGameLaunchPreferences
     $platform = if ($settings.platform -eq 'xbox') { 'xbox' } else { 'steam' }
-    if ($platform -eq 'xbox' -and -not $settings.gamePath) { $settings = @{ gamePath=(Find-DuneSoloXboxInstallation) } }
-    return @{ platform=$platform; gameRunning=$gameRunning; mods=$mods; folder=$script:DuneSoloModsRoot; gamePath=[string]$settings.gamePath; skipIntro=[bool]$preferences.skipIntro; soloArguments=[string]$preferences.soloArguments; runtimeReady=(Test-DuneSoloModRuntime); session=$session; launchError=$launchError; runtimeLog=$runtimeLog }
+    $gamePath = [string]$settings.gamePath
+    if ($platform -eq 'xbox' -and (-not $gamePath -or -not (Test-Path -LiteralPath (Join-Path $gamePath 'DuneSandbox\Binaries\WinGDK\DuneSandbox-WinGDK-Shipping.exe') -PathType Leaf))) {
+        $detected = Find-DuneSoloXboxInstallation
+        if ($detected) { $gamePath = $detected }
+    }
+    return @{ platform=$platform; gameRunning=$gameRunning; mods=$mods; folder=$script:DuneSoloModsRoot; gamePath=$gamePath; skipIntro=[bool]$preferences.skipIntro; soloArguments=[string]$preferences.soloArguments; runtimeReady=(Test-DuneSoloModRuntime); session=$session; launchError=$launchError; runtimeLog=$runtimeLog }
 }
 
 function Open-DuneSoloModsFolder {

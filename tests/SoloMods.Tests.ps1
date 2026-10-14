@@ -97,6 +97,7 @@ Describe 'Solo mod import and dependencies' {
         Test-Path (Join-Path $script:DuneSoloModsRoot 'dst-regis-tanks/Scripts/dst-launch-platform.txt') | Should -BeFalse
     }
     It 'switches connected platforms without touching mod selections and recalls both folders' {
+        Mock Find-DuneSoloXboxInstallation { '' }
         Set-DuneSoloModSelection @{mods=@(@{folder='Kept';enabled=$true});platform='steam';gamePath='C:\Steam\Dune'} | Out-Null
         Set-DuneSoloModPlatform -Platform xbox -GamePath 'C:\Xbox\Dune'
         Set-DuneSoloModPlatform -Platform steam
@@ -139,6 +140,24 @@ Describe 'Solo mod import and dependencies' {
         Start-DuneSoloModGame $false | Out-Null
         Should -Invoke Start-Process -Times 1 -Exactly -ParameterFilter { $ArgumentList -join ' ' -match 'DuneSandbox-WinGDK-Shipping.exe' }
         (Get-DuneSoloMods).session.tankSupport | Should -BeTrue
+    }
+    It 'recovers an obsolete Xbox package folder while retaining valid manual installations and selections' {
+        $current=Join-Path $script:ModTestRoot 'XboxUpdated'
+        $manual=Join-Path $script:ModTestRoot 'XboxManual'
+        foreach($root in @($current,$manual)) {
+            $bin=Join-Path $root 'DuneSandbox/Binaries/WinGDK'
+            New-Item -ItemType Directory -Path $bin -Force | Out-Null
+            New-Item -ItemType File -Path (Join-Path $bin 'DuneSandbox-WinGDK-Shipping.exe') | Out-Null
+        }
+        Mock Find-DuneSoloXboxInstallation { $current }
+        Set-DuneSoloModSelection @{mods=@(@{folder='Kept';enabled=$true});platform='steam';gamePath='C:\Steam\Dune'} | Out-Null
+        Set-DuneSoloModPlatform -Platform xbox -GamePath (Join-Path $script:ModTestRoot 'XboxRemoved')
+        (Get-DuneSoloMods).gamePath | Should -Be $current
+        (Get-Content (Join-Path $script:DuneSoloLoaderRoot 'selection.json') -Raw | ConvertFrom-Json).Kept | Should -BeTrue
+        Set-DuneSoloModPlatform -Platform xbox -GamePath $manual
+        (Get-DuneSoloMods).gamePath | Should -Be $manual
+        Set-DuneSoloModPlatform -Platform steam
+        (Get-DuneSoloMods).gamePath | Should -Be 'C:\Steam\Dune'
     }
     It 'preserves quoted custom arguments in normal and modded launch arguments' {
         $extra='-example="two words" -another=3'
