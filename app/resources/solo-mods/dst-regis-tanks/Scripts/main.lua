@@ -1,12 +1,11 @@
 -- Solo Regis Tanks. Reflected contracts only; no executable/file patches.
 local PREFIX = "[DSTRegisTanks] "
 local script_path = debug.getinfo(1, "S").source:match("^@(.+[/\\])")
-local MANIFEST
+local PLATFORM
 if script_path then
-    local context = io.open(script_path .. "dst-steam-manifest.txt", "r")
-    if context then MANIFEST = context:read("*l"); context:close() end
+    local context = io.open(script_path .. "dst-launch-platform.txt", "r")
+    if context then PLATFORM = context:read("*l"); context:close() end
 end
-local BUILD = "25789117"
 local TANK = "/Game/Dune/Systems/Vehicles/Blueprints/GroundVehicles/BP_Tank_CHOAM.BP_Tank_CHOAM_C"
 local MODULES = "/Game/Dune/Systems/Vehicles/Modules/DT_Tank_Modules.DT_Tank_Modules"
 local TEMPLATES = "/Game/Dune/Systems/Vehicles/DT_VehicleTemplates.DT_VehicleTemplates"
@@ -62,13 +61,8 @@ local function params(class, wanted)
     end
     error("Required function unavailable: " .. wanted)
 end
-local function current_build()
-    if not MANIFEST then error("Launch Regis Tanks through DST Solo mods.") end
-    local file = io.open(MANIFEST, "r")
-    if not file then error("Cannot verify the Steam client build.") end
-    local body = file:read("*a"); file:close()
-    local id = body:match('"buildid"%s+"(%d+)"')
-    if id ~= BUILD then error("This private trial requires Steam build " .. BUILD .. "; detected " .. tostring(id)) end
+local function verify_launch_context()
+    if PLATFORM ~= "steam" and PLATFORM ~= "xbox" then error("Launch Regis Tanks through DST Solo.") end
 end
 local function standalone(pawn)
     -- Dune's Solo session is not necessarily Unreal NM_Standalone.
@@ -280,7 +274,7 @@ local function audit_remaining_contracts()
     if problems > 0 then error("Remaining preflight checks failed; all failures recorded, no spawn attempted.") end
 end
 local function prepare_compatibility(context)
-    current_build()
+    verify_launch_context()
     if not standalone(context) then error("Tank load is outside verified Solo; no changes made.") end
     if enabled then return end
     if preparing then error("Tank compatibility initialization is already in progress.") end
@@ -329,7 +323,7 @@ local function spawn(preset)
     pending = true
     local previously_enabled = enabled
     local ok, err = pcall(function()
-        current_build()
+        verify_launch_context()
         local pc = controller()
         local manager = cheat_manager(pc)
         verify_preset()
@@ -356,7 +350,7 @@ NotifyOnNewObject("/Script/DuneSandbox.DuneTankVehicle", function(object)
     local ok, err = pcall(function()
         if valid(object) and valid(object:GetClass()) and object:GetClass():GetFullName() == "BlueprintGeneratedClass " .. TANK then
             -- Reapply compatibility before native BeginPlay for a saved actor.
-            -- A fresh exact-build and game-declared Solo check gates preparation.
+            -- Game-declared Solo and reflected contract checks precede preparation.
             prepare_compatibility(object)
             object.m_bIsDeprecated = false
             if object.m_bIsDeprecated ~= false then error("Loaded Tank deprecation readback failed.") end

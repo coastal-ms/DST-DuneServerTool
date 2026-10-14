@@ -13,7 +13,7 @@
     "dst-regis-tanks-probe"
   ],
   "warnings": [
-    "Steam Solo only. Grant Dart or Flamethrower using DST's Solo Inventory buttons. One of each per launch.",
+    "Steam and Xbox PC Solo. Grant Dart or Flamethrower using DST's Solo Inventory buttons. One of each per launch.",
     "Tank support is included automatically in supported DST Solo launches.",
     "Known issues: pink Dart firing effect, missing audio and misleading tread/PSU module labels."
   ]

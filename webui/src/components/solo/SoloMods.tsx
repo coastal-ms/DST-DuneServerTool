@@ -142,7 +142,7 @@ export function SoloMods({ connectionToken = '' }: { connectionToken?: string })
     </div>
   }>
     <div className="space-y-3">
-      <p className="text-sm text-text-muted">Supported Steam Solo launches include built-in Tank support and disable BattlEye for that session. Launch with Mods also loads your enabled mods; Xbox mod launches disable BattlEye too.</p>
+      <p className="text-sm text-text-muted">Steam and Xbox PC Solo launches include built-in Tank support and disable BattlEye for that session. Launch with Mods also loads your enabled mods; Xbox mod launches disable BattlEye too.</p>
       {platform === 'xbox' && (
         <p className="rounded border border-warning/30 bg-warning/5 p-3 text-sm text-text-muted">
           Xbox app / Game Pass mods require a version updated by the mod author for Game Pass.

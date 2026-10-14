@@ -27,18 +27,16 @@ Describe 'Solo mod import and dependencies' {
     It 'rejects unsupported variants before queuing a game command' {
         {Grant-DuneSoloRegisTank -Preset 'OtherVehicle'} | Should -Throw '*Select Dart*'
     }
-    It 'includes built-in Tanks in normal Solo launch and preserves optional mod selections' -ForEach @(@{WithMods=$false;Expected=1},@{WithMods=$true;Expected=2}) {
+    It 'includes built-in Tanks in normal Solo launch and preserves optional mod selections' -ForEach @(@{WithMods=$false;Expected=1;Platform='steam';Target='Win64'},@{WithMods=$true;Expected=2;Platform='steam';Target='Win64'},@{WithMods=$false;Expected=1;Platform='xbox';Target='WinGDK'},@{WithMods=$true;Expected=2;Platform='xbox';Target='WinGDK'}) {
         $script:DuneBundledSoloModsRoot=Join-Path (Get-DstRepoRoot) 'app/resources/solo-mods'
         $library=Join-Path $script:ModTestRoot ([guid]::NewGuid().ToString('N')+'/steamapps')
         $game=Join-Path $library 'common/DuneAwakening'
-        $bin=Join-Path $game 'DuneSandbox/Binaries/Win64'
+        $bin=Join-Path $game ('DuneSandbox/Binaries/'+$Target)
         New-Item -ItemType Directory -Path $bin -Force | Out-Null
-        $exe=Join-Path $bin 'DuneSandbox-Win64-Shipping.exe'
+        $exe=Join-Path $bin ('DuneSandbox-'+$Target+'-Shipping.exe')
         New-Item -ItemType File -Path $exe | Out-Null
-        '"buildid" "25789117"' | Set-Content (Join-Path $library 'appmanifest_1172710.acf')
         Import-DuneSoloMod (New-ModZip ([guid]::NewGuid().ToString('N')) @{'UserMod/Scripts/main.lua'='print(1)'}) | Out-Null
-        Set-DuneSoloModSelection @{mods=@(@{folder='UserMod';enabled=$true});gamePath=$game;platform='steam'} | Out-Null
-        Mock Get-FileHash { @{Hash='B9A77E7A178CFA8D88D65743BCBB04EF9D45E13539DB0BBD148E172BDA86A9E9'} } -ParameterFilter { $LiteralPath -eq $exe }
+        Set-DuneSoloModSelection @{mods=@(@{folder='UserMod';enabled=$true});gamePath=$game;platform=$Platform} | Out-Null
         Mock Start-Process {}
         $statePath = Join-Path (Split-Path -Parent $script:DuneSoloModsRoot) 'State/active-mods.txt'
         if ($WithMods) {
@@ -83,22 +81,20 @@ Describe 'Solo mod import and dependencies' {
         { Install-DuneRegisTanksMod } | Should -Throw '*Close Dune*'
         Test-Path (Join-Path $script:DuneSoloModsRoot 'dst-regis-tanks') | Should -BeFalse
     }
-    It 'writes launch context for a supported Steam library outside the default installation' {
+    It 'writes storefront-neutral launch context without requiring a Steam manifest' -ForEach @(@{Platform='steam';Target='Win64'},@{Platform='xbox';Target='WinGDK'}) {
         $script:DuneBundledSoloModsRoot=Join-Path (Get-DstRepoRoot) 'app/resources/solo-mods'
         Install-DuneRegisTanksMod | Out-Null
-        $library=Join-Path $script:ModTestRoot 'Custom Library/steamapps'
-        $game=Join-Path $library 'common/DuneAwakening'
-        New-Item -ItemType Directory -Path $game -Force | Out-Null
-        '"buildid" "25789117"' | Set-Content (Join-Path $library 'appmanifest_1172710.acf')
-        Mock Get-FileHash { @{Hash='B9A77E7A178CFA8D88D65743BCBB04EF9D45E13539DB0BBD148E172BDA86A9E9'} }
-        Set-DuneRegisTanksLaunchContext -GamePath $game -Platform steam
-        Get-Content (Join-Path $script:DuneSoloModsRoot 'dst-regis-tanks/Scripts/dst-steam-manifest.txt') | Should -Be (Join-Path $library 'appmanifest_1172710.acf')
+        $game=Join-Path $script:ModTestRoot ([guid]::NewGuid().ToString('N'))
+        $bin=Join-Path $game ('DuneSandbox/Binaries/'+$Target)
+        New-Item -ItemType Directory -Path $bin -Force | Out-Null
+        New-Item -ItemType File -Path (Join-Path $bin ('DuneSandbox-'+$Target+'-Shipping.exe')) | Out-Null
+        Set-DuneRegisTanksLaunchContext -GamePath $game -Platform $Platform
+        Get-Content (Join-Path $script:DuneSoloModsRoot 'dst-regis-tanks/Scripts/dst-launch-platform.txt') | Should -Be $Platform
     }
-    It 'blocks Xbox and changed executables before writing tank launch context' {
-        { Set-DuneRegisTanksLaunchContext -GamePath 'C:/OtherGame' -Platform xbox } | Should -Throw '*Steam Solo only*'
-        Mock Get-FileHash { @{Hash='CHANGED'} }
-        { Set-DuneRegisTanksLaunchContext -GamePath 'C:/OtherGame' -Platform steam } | Should -Throw '*does not support this game build*'
-        Test-Path (Join-Path $script:DuneSoloModsRoot 'dst-regis-tanks/Scripts/dst-steam-manifest.txt') | Should -BeFalse
+    It 'rejects absent installations and unknown platforms before writing context' {
+        { Set-DuneRegisTanksLaunchContext -GamePath 'C:/MissingGame' -Platform xbox } | Should -Throw '*Select a Steam or Xbox PC*'
+        Test-DuneSoloRegisTankBuild -GamePath 'C:/MissingGame' -Platform other | Should -BeFalse
+        Test-Path (Join-Path $script:DuneSoloModsRoot 'dst-regis-tanks/Scripts/dst-launch-platform.txt') | Should -BeFalse
     }
     It 'switches connected platforms without touching mod selections and recalls both folders' {
         Set-DuneSoloModSelection @{mods=@(@{folder='Kept';enabled=$true});platform='steam';gamePath='C:\Steam\Dune'} | Out-Null
@@ -141,7 +137,8 @@ Describe 'Solo mod import and dependencies' {
         Set-DuneSoloModSelection @{mods=@();gamePath=$game;platform='xbox'} | Out-Null
         Mock Start-Process {}
         Start-DuneSoloModGame $false | Out-Null
-        Should -Invoke Start-Process -Times 1 -Exactly -ParameterFilter { $FilePath.EndsWith('DuneSandbox-WinGDK-Shipping.exe') }
+        Should -Invoke Start-Process -Times 1 -Exactly -ParameterFilter { $ArgumentList -join ' ' -match 'DuneSandbox-WinGDK-Shipping.exe' }
+        (Get-DuneSoloMods).session.tankSupport | Should -BeTrue
     }
     It 'preserves quoted custom arguments in normal and modded launch arguments' {
         $extra='-example="two words" -another=3'
@@ -167,6 +164,7 @@ Describe 'Solo mod import and dependencies' {
         (Get-DuneGameLaunchPreferences).soloArguments | Should -Be '-log'
     }
     It 'passes saved arguments to the game executable during normal Solo launch' {
+        Mock Test-DuneSoloRegisTankBuild { $false }
         $game=Join-Path $script:ModTestRoot 'Game'
         $bin=Join-Path $game 'DuneSandbox/Binaries/Win64'
         New-Item -ItemType Directory -Path $bin -Force | Out-Null
@@ -191,6 +189,7 @@ Describe 'Solo mod import and dependencies' {
         }
     }
     It 'automatically restores a leftover session and continues normal launch' {
+        Mock Test-DuneSoloRegisTankBuild { $false }
         $game=Join-Path $script:ModTestRoot 'RecoveredGame'
         $bin=Join-Path $game 'DuneSandbox/Binaries/Win64'
         New-Item -ItemType Directory -Path $bin -Force | Out-Null
@@ -204,6 +203,7 @@ Describe 'Solo mod import and dependencies' {
         Should -Invoke Start-Process -Times 1 -Exactly
     }
     It 'clears leftover restoration state before checking mod runtime requirements' {
+        Mock Test-DuneSoloRegisTankBuild { $false }
         $game=Join-Path $script:ModTestRoot 'RecoveredModGame'
         $bin=Join-Path $game 'DuneSandbox/Binaries/Win64'
         New-Item -ItemType Directory -Path $bin -Force | Out-Null

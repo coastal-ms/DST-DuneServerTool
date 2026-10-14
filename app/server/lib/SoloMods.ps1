@@ -16,31 +16,24 @@ function Install-DuneRegisTanksMod {
 }
 
 function Set-DuneRegisTanksLaunchContext([string]$GamePath,[string]$Platform) {
-    if($Platform -ne 'steam'){throw 'Regis Tanks currently supports Steam Solo only.'}
-    $exe=Join-Path $GamePath 'DuneSandbox\Binaries\Win64\DuneSandbox-Win64-Shipping.exe'
-    if((Get-FileHash -LiteralPath $exe -Algorithm SHA256).Hash -ne 'B9A77E7A178CFA8D88D65743BCBB04EF9D45E13539DB0BBD148E172BDA86A9E9'){throw 'Regis Tanks does not support this game build. Disable it to launch other mods.'}
-    $manifest=[IO.Path]::GetFullPath((Join-Path $GamePath '..\..\appmanifest_1172710.acf'))
-    if(-not(Test-Path -LiteralPath $manifest) -or (Get-Content -LiteralPath $manifest -Raw) -notmatch '"buildid"\s+"25789117"'){throw 'Regis Tanks requires the supported Steam game build.'}
-    $context=Join-Path $script:DuneSoloModsRoot 'dst-regis-tanks\Scripts\dst-steam-manifest.txt'
-    [IO.File]::WriteAllText($context,$manifest,[Text.UTF8Encoding]::new($false))
+    if (-not (Test-DuneSoloRegisTankBuild -GamePath $GamePath -Platform $Platform)) { throw 'Select a Steam or Xbox PC Dune installation before launching Tanks.' }
+    $context=Join-Path $script:DuneSoloModsRoot 'dst-regis-tanks\Scripts\dst-launch-platform.txt'
+    [IO.File]::WriteAllText($context,$Platform,[Text.UTF8Encoding]::new($false))
 }
 
 function Test-DuneSoloRegisTankBuild([string]$GamePath, [string]$Platform) {
-    if ($Platform -ne 'steam' -or -not $GamePath) { return $false }
-    $exe = Join-Path $GamePath 'DuneSandbox\Binaries\Win64\DuneSandbox-Win64-Shipping.exe'
-    $manifest = [IO.Path]::GetFullPath((Join-Path $GamePath '..\..\appmanifest_1172710.acf'))
-    return (Test-Path -LiteralPath $exe) -and (Test-Path -LiteralPath $manifest) -and
-        ((Get-Content -LiteralPath $manifest -Raw) -match '"buildid"\s+"25789117"') -and
-        ((Get-FileHash -LiteralPath $exe).Hash -eq 'B9A77E7A178CFA8D88D65743BCBB04EF9D45E13539DB0BBD148E172BDA86A9E9')
+    if ($Platform -notin @('steam','xbox') -or -not $GamePath) { return $false }
+    $target = if ($Platform -eq 'xbox') { 'WinGDK' } else { 'Win64' }
+    $exe = Join-Path $GamePath ('DuneSandbox\Binaries\'+$target+'\DuneSandbox-'+$target+'-Shipping.exe')
+    # Tank compatibility is checked against reflected game contracts in Lua,
+    # before any changes or spawn. Storefront identity is not a compatibility test.
+    return Test-Path -LiteralPath $exe -PathType Leaf
 }
 
 function Enable-DuneSoloRegisTanks {
     Assert-DuneSoloGameClosed
     $state = Get-DuneSoloMods
-    if ($state.platform -ne 'steam' -or -not $state.gamePath) { throw 'Select your Steam game folder in Solo mods first.' }
-    # Validate the installed game before importing or changing any selection.
-    $exe = Join-Path $state.gamePath 'DuneSandbox\Binaries\Win64\DuneSandbox-Win64-Shipping.exe'
-    if (-not (Test-Path -LiteralPath $exe) -or (Get-FileHash -LiteralPath $exe).Hash -ne 'B9A77E7A178CFA8D88D65743BCBB04EF9D45E13539DB0BBD148E172BDA86A9E9') { throw 'Regis Tanks does not support this game build.' }
+    if (-not (Test-DuneSoloRegisTankBuild -GamePath $state.gamePath -Platform $state.platform)) { throw 'Select your Steam or Xbox PC game folder in Solo mods first.' }
     if (-not $state.runtimeReady) { Install-DuneSoloModRuntime | Out-Null }
     if (-not @($state.mods | Where-Object id -eq 'dst-regis-tanks').Count) { Install-DuneRegisTanksMod | Out-Null }
     # Built-in support follows the installed DST version. Optional user mods
