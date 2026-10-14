@@ -2249,7 +2249,7 @@ export function SoloMode() {
                 } catch (error) { setNotice({ kind: 'err', text: error instanceof Error ? error.message : String(error) }) }
                 finally { setBusy(null) }
               }}>
-              {choice.label} (experimental)
+              Grant All {choice.label} (experimental)
               <span className="block text-xs font-normal">{statusState.data?.cosmeticOwnership?.reviewedCounts?.[choice.id]
                 ? `${statusState.data.cosmeticOwnership.reviewedCounts[choice.id].owned}/${statusState.data.cosmeticOwnership.reviewedCounts[choice.id].total} owned · ${statusState.data.cosmeticOwnership.reviewedCounts[choice.id].remaining} remaining`
                 : 'Character counts unavailable'}</span>
