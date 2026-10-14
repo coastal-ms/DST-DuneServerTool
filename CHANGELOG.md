@@ -19,6 +19,7 @@ here cover everything those tags shipped.
 - Label the three reviewed character collection buttons Grant All in Solo and self-hosted Players actions. New limited-use schematic grants provide one use per recipe, with vehicle locomotion counts sized for one vehicle; existing recipes and remaining uses are preserved.
 
 ### Fixed
+- Include built-in Solo Tank support for Xbox PC / Game Pass launches using the same game-reflected compatibility checks as Steam, and restore launch files without relying on the background host's hash cmdlet.
 - Keep Solo mod runtime installation visible while collapsed, offer runtime repair, and report installation results while preserving saves and installed mods.
 - Open the Solo Mods folder through the desktop window when the backend runs as a service, and show loading, completion and errors when refreshing the mod list.
 
