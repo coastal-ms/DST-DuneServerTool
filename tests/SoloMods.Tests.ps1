@@ -161,6 +161,16 @@ Describe 'Solo mod import and dependencies' {
         (Get-DuneSoloMods).gamePath | Should -Be 'C:\Xbox\Dune'
         (Get-Content (Join-Path $script:DuneSoloLoaderRoot 'selection.json') -Raw | ConvertFrom-Json).Kept | Should -BeTrue
     }
+    It 'shows the accessible Xbox folder behind a registered package junction' {
+        $content=Join-Path $script:ModTestRoot 'XboxReadableContent'
+        $registered=Join-Path $script:ModTestRoot 'XboxPackageJunction'
+        New-Item -ItemType Directory -Path (Join-Path $content 'DuneSandbox/Binaries/WinGDK') -Force | Out-Null
+        Set-Content (Join-Path $content 'DuneSandbox/Binaries/WinGDK/DuneSandbox-WinGDK-Shipping.exe') 'test executable'
+        New-Item -ItemType Junction -Path $registered -Target $content | Out-Null
+        Mock Get-AppxPackage { @([pscustomobject]@{InstallLocation=$registered;Version='2.0.12.0'}) }
+        try { Find-DuneSoloXboxInstallation | Should -Be $content }
+        finally { [IO.Directory]::Delete($registered) }
+    }
     It 'discovers the registered Xbox installation only when its executable exists' {
         $root=Join-Path $script:ModTestRoot 'RegisteredXbox'
         $bin=Join-Path $root 'DuneSandbox/Binaries/WinGDK'

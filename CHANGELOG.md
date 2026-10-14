@@ -23,7 +23,7 @@ here cover everything those tags shipped.
 - Fill compatible existing item stacks before creating new stacks in Solo and self-hosted offline player and storage grants. Restore Welding Wire and ammunition stack metadata and count available stack space when checking inventory slots.
 - Use the previous bundled UE4SS runtime as the compatibility default for optional mods, with the newer runtime available by explicit opt-in and automatic fallback after a confirmed initialization failure. Preserve both runtimes, installed mods and settings. Optional mod requirements do not affect built-in Tank-only launches.
 - Include built-in Solo Tank support for Xbox PC / Game Pass launches using the same game-reflected compatibility checks as Steam, and restore launch files without relying on the background host's hash cmdlet.
-- Rediscover the installed Xbox PC game when an update removes its previously saved package folder, preserving valid manual paths and mod selections.
+- Rediscover the installed Xbox PC game when an update removes its previously saved package folder and show the accessible XboxGames folder when its registered package path is a junction, preserving valid manual paths and mod selections.
 - Keep Solo mod runtime installation visible while collapsed, offer runtime repair, and report installation results while preserving saves and installed mods.
 - Open the Solo Mods folder through the desktop window when the backend runs as a service, and show loading, completion and errors when refreshing the mod list.
 

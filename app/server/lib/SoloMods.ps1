@@ -99,10 +99,21 @@ function Expand-DuneModZip([string]$Path, [string]$Destination) {
     } finally { $archive.Dispose() }
 }
 
+function Resolve-DuneSoloXboxPackageFolder([string]$Path) {
+    $folder=Get-Item -LiteralPath $Path -Force -ErrorAction SilentlyContinue
+    if ($folder -and $folder.LinkType -eq 'Junction') {
+        $target=[string](@($folder.Target)[0])
+        if ($target -match '^[A-Za-z]:\\' -and (Test-Path -LiteralPath (Join-Path $target 'DuneSandbox\Binaries\WinGDK\DuneSandbox-WinGDK-Shipping.exe') -PathType Leaf)) {
+            return $target.TrimEnd('\')
+        }
+    }
+    return $Path
+}
+
 function Find-DuneSoloXboxInstallation {
     foreach ($package in @(Get-AppxPackage -Name FuncomOsloAS.ProjectSeabass -ErrorAction SilentlyContinue | Sort-Object Version -Descending)) {
         $root = [string]$package.InstallLocation
-        if ($root -and (Test-Path -LiteralPath (Join-Path $root 'DuneSandbox\Binaries\WinGDK\DuneSandbox-WinGDK-Shipping.exe'))) { return $root }
+        if ($root -and (Test-Path -LiteralPath (Join-Path $root 'DuneSandbox\Binaries\WinGDK\DuneSandbox-WinGDK-Shipping.exe'))) { return Resolve-DuneSoloXboxPackageFolder $root }
     }
     return ''
 }
@@ -169,6 +180,9 @@ function Get-DuneSoloMods {
     $preferences=Get-DuneGameLaunchPreferences
     $platform = if ($settings.platform -eq 'xbox') { 'xbox' } else { 'steam' }
     $gamePath = [string]$settings.gamePath
+    if ($platform -eq 'xbox' -and $gamePath.StartsWith((Join-Path $env:ProgramFiles 'WindowsApps')+'\',[StringComparison]::OrdinalIgnoreCase)) {
+        $gamePath=Resolve-DuneSoloXboxPackageFolder $gamePath
+    }
     if ($platform -eq 'xbox' -and (-not $gamePath -or -not (Test-Path -LiteralPath (Join-Path $gamePath 'DuneSandbox\Binaries\WinGDK\DuneSandbox-WinGDK-Shipping.exe') -PathType Leaf))) {
         $detected = Find-DuneSoloXboxInstallation
         if ($detected) { $gamePath = $detected }
