@@ -1,6 +1,7 @@
 Tested UE4SS runtime and game configurations distributed under the included MIT license.
 Source: https://github.com/UE4SS-RE/RE-UE4SS/releases/tag/experimental-latest
 Runtime: UE4SS_v3.0.1-1164-g5e627997.zip (stored unchanged as runtime.zip)
+Previous runtime: UE4SS_v3.0.1-1140-gf58e8f84.zip (stored unchanged as runtime-1140.zip). Selected automatically for mods declaring that runtime or after a confirmed current-runtime initialization failure; installed separately to preserve existing runtime files and mod configuration.
 SHA256: 3C72142A383E25E9F9553AC9E4D5677AA572E98CB369CAC57200EFB2E381E603
 Configurations: zCustomGameConfigs.zip (stored unchanged as configs.zip)
 SHA256: 1B2420B7DEB237CD680D27306EADF26628699D992A322C89A963D80F580C9B78

@@ -19,7 +19,14 @@ try {
         while(Get-Process -Name DuneSandbox,DuneSandbox_BE,DuneSandbox-Win64-Shipping,DuneSandbox-WinGDK-Shipping,AppDuneAwakeningShipping -ErrorAction SilentlyContinue){Start-Sleep -Seconds 2}
     } elseif(Get-Process -Name DuneSandbox,DuneSandbox_BE,DuneSandbox-Win64-Shipping,DuneSandbox-WinGDK-Shipping,AppDuneAwakeningShipping -ErrorAction SilentlyContinue){throw 'Close Dune before restoring its launch files.'}
     $session=Get-Content -LiteralPath $journal -Raw | ConvertFrom-Json
-    if($session.logPath -and (Test-Path $session.logPath)){Copy-Item -LiteralPath $session.logPath -Destination (Join-Path $LoaderRoot 'last-runtime.log') -Force}
+    if($session.logPath -and (Test-Path $session.logPath)){
+        Copy-Item -LiteralPath $session.logPath -Destination (Join-Path $LoaderRoot 'last-runtime.log') -Force
+        if (-not $RestoreOnly -and $session.runtimeVersion -eq '3.0.1-1164-g5e627997' -and
+            (Test-DuneSoloRuntimeStartupFailure ([IO.File]::ReadAllText($session.logPath)))) {
+            @{version='3.0.1-1140-gf58e8f84';reason='Current runtime failed initialization; use previous runtime for the next launch.'} |
+                ConvertTo-Json | Set-Content -LiteralPath (Join-Path $LoaderRoot 'runtime-fallback.json') -Encoding utf8
+        }
+    }
     foreach($record in $session.files){
         if(-not $record.installed -or $record.restored){continue}
         if(Test-Path -LiteralPath $record.path){if((Get-DuneSoloWatcherHash $record.path) -ne $record.hash){throw "Launch file changed outside DST; preserved: $($record.path)"}}

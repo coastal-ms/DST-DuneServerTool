@@ -13,6 +13,36 @@
 }
 AfterAll { if($script:ModTestRoot.StartsWith([IO.Path]::GetTempPath())){Remove-Item -LiteralPath $script:ModTestRoot -Recurse -Force} }
 Describe 'Solo mod import and dependencies' {
+    It 'uses the previous runtime for declared dependencies without replacing the current runtime or mod settings' {
+        Install-DuneSoloModRuntime | Out-Null
+        $currentHash=(Get-FileHash (Join-Path $script:DuneSoloLoaderRoot 'Runtime/ue4ss/UE4SS.dll')).Hash
+        Import-DuneSoloMod (New-ModZip ([guid]::NewGuid().ToString('N')) @{
+            'Legacy/Scripts/main.lua'='print(1)'
+            'Legacy/mod.json'='{"id":"Legacy","requires":[{"id":"ue4ss","version":"3.0.1-1140-gf58e8f84"}]}'
+            'Legacy/custom.ini'='user setting'
+        }) | Out-Null
+        Set-DuneSoloModSelection @{mods=@(@{folder='Legacy';enabled=$true});platform='steam';gamePath='C:/SteamGame'} | Out-Null
+        (Get-DuneSoloMods).runtimeVersion | Should -Be '3.0.1-1140-gf58e8f84'
+        Install-DuneSoloModRuntime | Out-Null
+        (Get-DuneSoloMods).runtimeReady | Should -BeTrue
+        (Get-FileHash (Join-Path $script:DuneSoloLoaderRoot 'Runtime/ue4ss/UE4SS.dll')).Hash | Should -Be $currentHash
+        Get-Content (Join-Path $script:DuneSoloModsRoot 'Legacy/custom.ini') | Should -Be 'user setting'
+        (Get-Content (Join-Path $script:DuneSoloLoaderRoot 'selection.json') -Raw | ConvertFrom-Json).Legacy | Should -BeTrue
+        $state=Get-DuneSoloMods
+        Set-DuneSoloLaunchRuntime $state $false | Out-Null
+        $state.runtimeVersion | Should -Be '3.0.1-1164-g5e627997'
+        Set-DuneSoloLaunchRuntime $state $true | Out-Null
+        $state.runtimeVersion | Should -Be '3.0.1-1140-gf58e8f84'
+    }
+    It 'selects automatic fallback after confirmed initialization failure but ignores optional scans and mod errors' {
+        Test-DuneSoloRuntimeStartupFailure 'UE4SS initialization failed: missing engine function' | Should -BeTrue
+        Test-DuneSoloRuntimeStartupFailure 'Failed to find ConsoleManagerSingleton' | Should -BeFalse
+        Test-DuneSoloRuntimeStartupFailure 'Mod NBSCore error: menu missing' | Should -BeFalse
+        Test-DuneSoloRuntimeStartupFailure "UE4SS initialization failed`nEvent loop start" | Should -BeFalse
+        New-Item -ItemType Directory -Path $script:DuneSoloLoaderRoot -Force | Out-Null
+        @{version='3.0.1-1140-gf58e8f84'} | ConvertTo-Json | Set-Content (Join-Path $script:DuneSoloLoaderRoot 'runtime-fallback.json')
+        (Get-DuneSoloMods).runtimeVersion | Should -Be '3.0.1-1140-gf58e8f84'
+    }
     It 'sends a button grant to the current session and waits for matching game acknowledgement' {
         $script:TankCommandTestRoot=Join-Path $script:DuneSoloLoaderRoot ('Session-'+[guid]::NewGuid().ToString('N'))
         New-Item -ItemType Directory -Path $script:TankCommandTestRoot -Force | Out-Null

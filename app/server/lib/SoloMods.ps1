@@ -4,6 +4,33 @@ $script:DuneSoloLoaderRoot = Join-Path $soloModAppRoot 'ModLoader'
 $script:DuneSoloRuntimeAssets = Join-Path $soloModAppRoot 'resources\solo-mod-runtime'
 $script:DuneBundledSoloModsRoot = Join-Path $soloModAppRoot 'resources\solo-mods'
 
+function Get-DuneSoloRuntimeProfile($Mods) {
+    $legacy = $false
+    foreach ($mod in @($Mods | Where-Object enabled)) {
+        foreach ($requirement in @($mod.requires)) {
+            if ($requirement.id -eq 'ue4ss' -and $requirement.version -eq '3.0.1-1140-gf58e8f84') { $legacy = $true }
+        }
+    }
+    $fallback=Read-DuneModJson (Join-Path $script:DuneSoloLoaderRoot 'runtime-fallback.json') @{}
+    if ($fallback.version -eq '3.0.1-1140-gf58e8f84') { $legacy=$true }
+    if ($legacy) { return @{version='3.0.1-1140-gf58e8f84';folder='Runtime-1140';archive='runtime-1140.zip';hash='B954F036B10E9ABB0C0C41599311AB1ACCC53E30515AEED7E48EE22C5B3B1280'} }
+    return @{version='3.0.1-1164-g5e627997';folder='Runtime';archive='runtime.zip';hash='3C72142A383E25E9F9553AC9E4D5677AA572E98CB369CAC57200EFB2E381E603'}
+}
+
+function Test-DuneSoloRuntimeStartupFailure([string]$Log) {
+    # Optional scans and individual mod errors are not runtime startup failures.
+    return $Log -notmatch 'Event loop start' -and $Log -match '(?im)(UE4SS.*(?:initialization failed|fatal error)|(?:fatal error|failed to initialize).*UE4SS)'
+}
+
+function Set-DuneSoloLaunchRuntime($State,[bool]$WithMods) {
+    $selected=if($WithMods){$State.mods}else{@($State.mods | Where-Object id -eq 'dst-regis-tanks')}
+    $profile=Get-DuneSoloRuntimeProfile $selected
+    $State.runtimeVersion=$profile.version
+    $State.runtimePath=Join-Path $script:DuneSoloLoaderRoot $profile.folder
+    $State.runtimeReady=Test-DuneSoloModRuntime -Path $State.runtimePath
+    return $profile
+}
+
 function Install-DuneRegisTanksMod {
     Assert-DuneSoloGameClosed
     $source=Join-Path $script:DuneBundledSoloModsRoot 'dst-regis-tanks'
@@ -31,10 +58,12 @@ function Test-DuneSoloRegisTankBuild([string]$GamePath, [string]$Platform) {
 }
 
 function Enable-DuneSoloRegisTanks {
+    param([bool]$WithMods=$true)
     Assert-DuneSoloGameClosed
     $state = Get-DuneSoloMods
     if (-not (Test-DuneSoloRegisTankBuild -GamePath $state.gamePath -Platform $state.platform)) { throw 'Select your Steam or Xbox PC game folder in Solo mods first.' }
-    if (-not $state.runtimeReady) { Install-DuneSoloModRuntime | Out-Null }
+    $profile=Set-DuneSoloLaunchRuntime $state $WithMods
+    if (-not $state.runtimeReady) { Install-DuneSoloModRuntime -Profile $profile | Out-Null }
     if (-not @($state.mods | Where-Object id -eq 'dst-regis-tanks').Count) { Install-DuneRegisTanksMod | Out-Null }
     # Built-in support follows the installed DST version. Optional user mods
     # and custom settings are not replaced.
@@ -145,7 +174,9 @@ function Get-DuneSoloMods {
         $detected = Find-DuneSoloXboxInstallation
         if ($detected) { $gamePath = $detected }
     }
-    return @{ platform=$platform; gameRunning=$gameRunning; mods=$mods; folder=$script:DuneSoloModsRoot; gamePath=$gamePath; skipIntro=[bool]$preferences.skipIntro; soloArguments=[string]$preferences.soloArguments; runtimeReady=(Test-DuneSoloModRuntime); session=$session; launchError=$launchError; runtimeLog=$runtimeLog }
+    $profile=Get-DuneSoloRuntimeProfile $mods
+    $runtimePath=Join-Path $script:DuneSoloLoaderRoot $profile.folder
+    return @{ runtimeVersion=$profile.version;runtimePath=$runtimePath;platform=$platform; gameRunning=$gameRunning; mods=$mods; folder=$script:DuneSoloModsRoot; gamePath=$gamePath; skipIntro=[bool]$preferences.skipIntro; soloArguments=[string]$preferences.soloArguments; runtimeReady=(Test-DuneSoloModRuntime -Path $runtimePath); session=$session; launchError=$launchError; runtimeLog=$runtimeLog }
 }
 
 function Open-DuneSoloModsFolder {
@@ -216,13 +247,15 @@ function Import-DuneSoloMod([string]$Path) {
 }
 
 function Install-DuneSoloModRuntime {
+    param($Profile=$null)
     Assert-DuneSoloGameClosed
     $root=[IO.Path]::GetFullPath($script:DuneSoloLoaderRoot).TrimEnd('\','/')
-    $runtime = Join-Path $root 'Runtime'
-    $zip=Join-Path $script:DuneSoloRuntimeAssets 'runtime.zip'
+    $profile=if($Profile){$Profile}else{Get-DuneSoloRuntimeProfile (Get-DuneSoloMods).mods}
+    $runtime = Join-Path $root $profile.folder
+    $zip=Join-Path $script:DuneSoloRuntimeAssets $profile.archive
     $configs=Join-Path $script:DuneSoloRuntimeAssets 'configs.zip'
     if(-not (Test-Path -LiteralPath $zip) -or -not (Test-Path -LiteralPath $configs)){throw 'Bundled mod runtime is missing. Reinstall DST to restore it.'}
-    if((Get-FileHash -LiteralPath $zip).Hash -ne '3C72142A383E25E9F9553AC9E4D5677AA572E98CB369CAC57200EFB2E381E603'){throw 'Bundled mod runtime checksum mismatch. Reinstall DST to restore it.'}
+    if((Get-FileHash -LiteralPath $zip).Hash -ne $profile.hash){throw 'Bundled mod runtime checksum mismatch. Reinstall DST to restore it.'}
     if((Get-FileHash -LiteralPath $configs).Hash -ne '1B2420B7DEB237CD680D27306EADF26628699D992A322C89A963D80F580C9B78'){throw 'Bundled Dune configuration checksum mismatch. Reinstall DST to restore it.'}
     New-Item -ItemType Directory -Path $root -Force | Out-Null
     $stage=Join-Path $root ('Runtime-'+[guid]::NewGuid().ToString('N'))
@@ -268,7 +301,8 @@ function Start-DuneSoloModGame([bool]$WithMods) {
     $exe=Join-Path $bin ('DuneSandbox-'+$target+'-Shipping.exe')
     if(-not(Test-Path -LiteralPath $exe)){throw 'Select the Dune Awakening installation folder.'}
     $tankSupport = Test-DuneSoloRegisTankBuild -GamePath $status.gamePath -Platform $status.platform
-    if ($tankSupport) { $status = Enable-DuneSoloRegisTanks }
+    if ($tankSupport) { $status = Enable-DuneSoloRegisTanks -WithMods $WithMods }
+    $null=Set-DuneSoloLaunchRuntime $status $WithMods
     if(-not $WithMods -and -not $tankSupport){Start-Process -FilePath $exe -WorkingDirectory $bin -ArgumentList (Get-DuneSoloLaunchArguments -SkipIntro $status.skipIntro -ExtraArguments $status.soloArguments);return @{ok=$true}}
     if(-not $status.runtimeReady){throw 'Install the mod runtime first.'}
     $selected=@($status.mods | Where-Object { $_.enabled -and (($WithMods -and $_.id -ne 'dst-regis-tanks') -or ($tankSupport -and $_.id -eq 'dst-regis-tanks')) })
@@ -291,7 +325,7 @@ function Start-DuneSoloModGame([bool]$WithMods) {
     if ($tankSupport) {
         [IO.File]::WriteAllText((Join-Path $script:DuneSoloModsRoot 'dst-regis-tanks\Scripts\dst-command-root.txt'), $sessionRoot, [Text.UTF8Encoding]::new($false))
     }
-    Copy-Item (Join-Path $script:DuneSoloLoaderRoot 'Runtime\ue4ss') $runtime -Recurse
+    Copy-Item (Join-Path $status.runtimePath 'ue4ss') $runtime -Recurse
     $ini=Join-Path $runtime 'UE4SS-settings.ini'
     $text=Get-Content $ini -Raw
     $text=[regex]::Replace($text,'(?m)^ModsFolderPath\s*=.*$',('ModsFolderPath = '+$script:DuneSoloModsRoot))
@@ -304,7 +338,7 @@ function Start-DuneSoloModGame([bool]$WithMods) {
         $dest=Join-Path $bin $file
         $backup=Join-Path $sessionRoot ($file+'.original')
         if(Test-Path $dest){Copy-Item -LiteralPath $dest -Destination $backup}
-        $source=if($file -eq 'dwmapi.dll'){Join-Path $script:DuneSoloLoaderRoot 'Runtime\dwmapi.dll'}else{Join-Path $runtime 'UE4SS.dll'}
+        $source=if($file -eq 'dwmapi.dll'){Join-Path $status.runtimePath 'dwmapi.dll'}else{Join-Path $runtime 'UE4SS.dll'}
         $records += @{path=$dest;backup=$backup;hash=(Get-FileHash $source).Hash;installed=$false;restored=$false}
     }
     # Some mods discover their peers through the launcher layout rather than
@@ -323,11 +357,11 @@ function Start-DuneSoloModGame([bool]$WithMods) {
         if (Test-Path -LiteralPath $dest) {Copy-Item -LiteralPath $dest -Destination $backup}
         $records += @{path=$dest;backup=$backup;source=$compatList;hash=(Get-FileHash -LiteralPath $compatList).Hash;installed=$false;restored=$false}
     }
-    $session=@{files=$records;root=$sessionRoot;tankSupport=$tankSupport;state='prepared';logPath=(Join-Path $runtime 'UE4SS.log');soloArguments=$status.soloArguments}
+    $session=@{runtimeVersion=$status.runtimeVersion;files=$records;root=$sessionRoot;tankSupport=$tankSupport;state='prepared';logPath=(Join-Path $runtime 'UE4SS.log');soloArguments=$status.soloArguments}
     $session | ConvertTo-Json -Depth 6 | Set-Content (Join-Path $script:DuneSoloLoaderRoot 'session.json') -Encoding utf8
     try {
         foreach($record in $records){
-            $source=if($record.source){$record.source}elseif($record.path.EndsWith('dwmapi.dll')){Join-Path $script:DuneSoloLoaderRoot 'Runtime\dwmapi.dll'}else{Join-Path $runtime 'UE4SS.dll'}
+            $source=if($record.source){$record.source}elseif($record.path.EndsWith('dwmapi.dll')){Join-Path $status.runtimePath 'dwmapi.dll'}else{Join-Path $runtime 'UE4SS.dll'}
             # Journal intent before writing so an interrupted copy remains recoverable.
             $record.installed=$true
             $session | ConvertTo-Json -Depth 6 | Set-Content (Join-Path $script:DuneSoloLoaderRoot 'session.json') -Encoding utf8
