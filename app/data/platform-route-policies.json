@@ -2,6 +2,8 @@
   "schemaVersion": 1,
   "writeLifecycleBySource": {
     "SoloMods.ps1": "reversible-write",
+    "RegisTanks.ps1": "transactional-write",
+    "ServerIniBackups.ps1": "transactional-write",
     "Autostart.ps1": "reversible-write",
     "BackupMirror.ps1": "reversible-write",
     "BackupSchedule.ps1": "reversible-write",
@@ -51,6 +53,8 @@
     "WorldRestart.ps1": "destructive"
   },
   "routeLifecycleOverrides": {
+    "http POST /api/gameconfig/ini-backups/download": "read",
+    "http POST /api/gameconfig/ini-backups/delete": "destructive",
     "http PUT /api/commands/layout": "reversible-write",
     "http POST /api/commands/layout/reset": "reversible-write",
     "http PUT /api/config": "reversible-write",
@@ -87,6 +91,8 @@
     ,"http DELETE /api/gameplay/vehicles/deletions/{id}": "reversible-write"
   },
   "routeCapabilityOverrides": {
+    "http POST /api/gameplay/vehicles/regis-tanks": "player.manage",
+    "http POST /api/gameconfig/ini-backups/delete": "operation.data-protection.destructive",
     "http GET /api/installation": "platform.capabilities",
     "http GET /api/v1/maps/catalog": "map.live-cache",
     "http GET /api/v1/maps/deep-desert": "map.live-cache",
@@ -141,6 +147,8 @@
     "ws CONNECT /ws/terminal": "host.powershell.execute"
   },
   "groups": [
+    {"source":"RegisTanks.ps1","capabilityId":"settings.game-server","routeCount":4,"sha256":"d4501a5bfba582aa8dabbbf09f6efcbbc2a2ec373e0e3fc9123466fe8323e92d"},
+    {"source":"ServerIniBackups.ps1","capabilityId":"settings.game-server","routeCount":3,"sha256":"b0cc4165abd226d3c1484658180c0fcf7b7e1c8f15ee9bd29f57228d058ec1aa"},
     {"source": "PlayerPortal.ps1", "capabilityId": "platform.status", "routeCount": 1, "sha256": "13b7b6c67fa733839a522b53a6a79d1f6b3287286e83959f0227568d1ff55e9c"},
     { "source": "Autostart.ps1", "capabilityId": "host.autostart", "routeCount": 2, "sha256": "e77701cf6bd2dec5c71b06145ec9e4bbe99c5ae1008ec887e636939ad0fc2f0c" },
     { "source": "BackupMirror.ps1", "capabilityId": "operation.data-protection", "routeCount": 4, "sha256": "f62b29ee7598d65958bfb93fdcf5e1b9978d05ca1f7c722a0ba817a319f31694" },
@@ -159,7 +167,7 @@
     { "source": "Diagnostics.ps1", "capabilityId": "operation.telemetry", "routeCount": 5, "sha256": "e590c47d747f8b1d05b5b362ad69ce2ae7f5d22fca5ba9089950b6fdc9b657d1" },
     { "source": "DuneAdminCache.ps1", "capabilityId": "platform.status", "routeCount": 2, "sha256": "b1f6e2c598167428954ab14e7176a7947a83a3990e2fffd4ccba80f3ece8adc2" },
     { "source": "FlsToken.ps1", "capabilityId": "settings.connectivity", "routeCount": 3, "sha256": "5dbda64c9121b306d6d6f3487aef4e6f630a73beba73d0067baa14373237f2bb" },
-    { "source": "GameConfig.ps1", "capabilityId": "settings.game-server", "routeCount": 30, "sha256": "d76ce080894133fedad6219ac16585d8c9400d0738c76bf86c4e8cbd2fa93aa7" },
+    {"source":"GameConfig.ps1","capabilityId":"settings.game-server","routeCount":32,"sha256":"6147924db5ed5a1df6145da0fa2f51426a98d36c4a2b392583c53e8d65f5f0a1"},
     { "source": "Gameplay.ps1", "capabilityId": "economy.market", "routeCount": 22, "sha256": "757d3fd58fe70e88c5ccc91b9549e8f9a121b9137c1a2c16cd574c271c46e258" },
     { "source": "GameplayPlayers.ps1", "capabilityId": "player.manage", "routeCount": 32, "sha256": "273a4061bd3f23dc40ee3094c186f7df7cf94dd2ce169a63876d9d966cef5378" },
     { "source": "GameplayWorld.ps1", "capabilityId": "base.manage", "routeCount": 13, "sha256": "4c6dcb579d2a5fab1ef37a5fb84d399e493ea079e14994cdc56bbafaa56f9fc6" },
@@ -186,7 +194,7 @@
     { "source": "Setup.ps1", "capabilityId": "settings.setup", "routeCount": 14, "sha256": "955be1424b4c624c8a92e0e9ba82b2978dcdebccb6740a5626c92532608edeeb" },
     { "source": "Shutdown.ps1", "capabilityId": "host.lifecycle", "routeCount": 1, "sha256": "35a9d26192452ee7131cb3541e69cfcd242208f7db855c47e3a4998194797f4f" },
     { "source": "Sietch.ps1", "capabilityId": "operation.topology", "routeCount": 2, "sha256": "c8d97b8e6b93456bbb9eb3eb8a3a77cde95186a15891d5c8e135790e65b73ad6" },
-    {"source": "SoloMods.ps1", "capabilityId": "host.solo", "routeCount": 11, "sha256": "9d44fc32cfd42cd2b895b577d5e12592e3a864f6c4e976e41068725f43962554"},
+    {"source":"SoloMods.ps1","capabilityId":"host.solo","routeCount":13,"sha256":"5d2021e730922c1b8f24ca0006dc349728cd649240388a889ae214f2bd6e9b78"},
     { "source": "SoloMode.ps1", "capabilityId": "host.solo", "routeCount": 39, "sha256": "da2f305d1673815a6f396f6109cc42ade49844f4e9046e16695b1a57d7ebb1b0" },
     { "source": "Status.ps1", "capabilityId": "platform.status", "routeCount": 3, "sha256": "d6cccf669f2d527afb82558161f0a8219345bd12240ddff6964ef0632d5cd56b" },
     { "source": "System.ps1", "capabilityId": "operation.health", "routeCount": 5, "sha256": "2840b487061a7fedff813099e99340c35828a620a1f7bdd703101a0a3fde5396" },
