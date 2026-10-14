@@ -4,10 +4,22 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { SoloMods } from '../../src/components/solo/SoloMods'
 const request = vi.hoisted(() => vi.fn())
 vi.mock('../../src/api/client', () => ({ api: request }))
-vi.mock('../../src/components/CollapsibleCard', () => ({ CollapsibleCard: ({ children, headerRight }: { children: React.ReactNode; headerRight: React.ReactNode }) => <div>{headerRight}{children}</div> }))
+vi.mock('../../src/components/CollapsibleCard', () => ({ CollapsibleCard: ({ children, headerRight }: { children: React.ReactNode; headerRight: React.ReactNode }) => <div><div data-testid="card-header">{headerRight}</div>{children}</div> }))
 const mods = ['First', 'Second', 'Third'].map(name => ({ folder: name, id: name, name, version: '', enabled: true, errors: [] }))
 afterEach(() => { cleanup(); vi.resetAllMocks(); vi.restoreAllMocks() })
 describe('Solo mod shortcuts and ordering', () => {
+  it('keeps runtime repair in the card header and reports install errors', async () => {
+    request.mockResolvedValue({ mods: [], gamePath: 'C:/Dune', runtimeReady: true, session: null })
+    render(<SoloMods />)
+    const repair = await screen.findByRole('button', { name: 'Repair mod runtime' })
+    expect(screen.getByTestId('card-header')).toContainElement(repair)
+    request.mockRejectedValueOnce(new Error('Runtime extraction failed'))
+    fireEvent.click(repair)
+    expect(await screen.findByRole('alert')).toHaveTextContent('Runtime extraction failed')
+    expect(repair).toBeEnabled()
+    fireEvent.click(repair)
+    expect(await screen.findByText('Mod runtime installed and verified. Saves, installed mods and mod selections were kept.')).toBeInTheDocument()
+  })
   it('keeps built-in tank support out of the selectable mod list and uses ordinary Solo launch', async () => {
     request.mockResolvedValue({ mods: [{ ...mods[0], id: 'dst-regis-tanks', name: 'Regis Tanks' }], gamePath: 'C:/Dune', runtimeReady: true, session: null })
     render(<SoloMods />)

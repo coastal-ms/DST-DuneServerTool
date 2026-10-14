@@ -53,6 +53,7 @@ export function SoloMods({ connectionToken = '' }: { connectionToken?: string })
       await refresh()
       if (action === 'shortcut') setNotice('Desktop shortcut created.')
       if (action === 'restore') setNotice('Launch files reset. Normal launch restored; saves and installed mods were kept.')
+      if (action === 'runtime') setNotice('Mod runtime installed and verified. Saves, installed mods and mod selections were kept.')
     } catch (e) { setError(e instanceof Error ? e.message : String(e)) }
     finally { setBusy(false) }
   }
@@ -119,6 +120,7 @@ export function SoloMods({ connectionToken = '' }: { connectionToken?: string })
       <button className="btn-primary" disabled={busy} onClick={() => void run('launch', { withMods: false })}>Launch Solo</button>
       <button className="btn-secondary" disabled={busy} title="Close Dune first. Restore original launch files and remove DST session DLLs; saves and installed mods are kept." onClick={() => void run('restore')}>Reset launch files</button>
       <button className="btn-secondary" disabled={busy} onClick={() => void run('shortcut')}>Create desktop shortcut</button>
+      <button className="btn-secondary" disabled={busy || !state || state.gameRunning} onClick={() => void run('runtime')}>{state?.runtimeReady ? 'Repair mod runtime' : 'Install mod runtime'}</button>
     </div>
   }>
     <div className="space-y-3">
@@ -135,7 +137,6 @@ export function SoloMods({ connectionToken = '' }: { connectionToken?: string })
         <button className="btn-secondary" disabled={busy} onClick={() => void install()}>Install mod ZIP</button>
         <button className="btn-secondary" disabled={busy} onClick={() => void run('open')}>Open Mods Folder</button>
         <button className="btn-secondary" disabled={busy} onClick={() => void refresh().catch(e => setError(String(e)))}>Refresh</button>
-        {!state?.runtimeReady && <button className="btn-secondary" disabled={busy} onClick={() => void run('runtime')}>Install mod runtime</button>}
       </div>
       {state && state.mods.length > 1 && <p className="text-sm text-text-muted">Mods load from top to bottom. Follow the mod author's load order instructions.</p>}
       <DndContext sensors={sensors} collisionDetection={closestCorners}

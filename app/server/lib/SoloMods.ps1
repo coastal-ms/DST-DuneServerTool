@@ -1,4 +1,4 @@
-$soloModAppRoot = if($script:AppDir){$script:AppDir}else{[IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..\..'))}
+﻿$soloModAppRoot = if($script:AppDir){$script:AppDir}else{[IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..\..'))}
 $script:DuneSoloModsRoot = Join-Path $soloModAppRoot 'Mods'
 $script:DuneSoloLoaderRoot = Join-Path $soloModAppRoot 'ModLoader'
 $script:DuneSoloRuntimeAssets = Join-Path $soloModAppRoot 'resources\solo-mod-runtime'
@@ -86,6 +86,15 @@ function Find-DuneSoloXboxInstallation {
     return ''
 }
 
+function Test-DuneSoloModRuntime {
+    param([string]$Path = (Join-Path $script:DuneSoloLoaderRoot 'Runtime'))
+    foreach ($relative in @('dwmapi.dll','ue4ss\UE4SS.dll','ue4ss\UE4SS-settings.ini')) {
+        $file = Join-Path $Path $relative
+        if (-not (Test-Path -LiteralPath $file -PathType Leaf) -or (Get-Item -LiteralPath $file).Length -le 0) { return $false }
+    }
+    return $true
+}
+
 function Get-DuneSoloMods {
     $gameRunning = $false
     if (Get-Command Get-DuneSoloGameProcesses -ErrorAction SilentlyContinue) { $gameRunning = @((Get-DuneSoloGameProcesses)).Count -gt 0 }
@@ -139,7 +148,7 @@ function Get-DuneSoloMods {
     $preferences=Get-DuneGameLaunchPreferences
     $platform = if ($settings.platform -eq 'xbox') { 'xbox' } else { 'steam' }
     if ($platform -eq 'xbox' -and -not $settings.gamePath) { $settings = @{ gamePath=(Find-DuneSoloXboxInstallation) } }
-    return @{ platform=$platform; gameRunning=$gameRunning; mods=$mods; folder=$script:DuneSoloModsRoot; gamePath=[string]$settings.gamePath; skipIntro=[bool]$preferences.skipIntro; soloArguments=[string]$preferences.soloArguments; runtimeReady=(Test-Path (Join-Path $script:DuneSoloLoaderRoot 'Runtime\ue4ss\UE4SS.dll')); session=$session; launchError=$launchError; runtimeLog=$runtimeLog }
+    return @{ platform=$platform; gameRunning=$gameRunning; mods=$mods; folder=$script:DuneSoloModsRoot; gamePath=[string]$settings.gamePath; skipIntro=[bool]$preferences.skipIntro; soloArguments=[string]$preferences.soloArguments; runtimeReady=(Test-DuneSoloModRuntime); session=$session; launchError=$launchError; runtimeLog=$runtimeLog }
 }
 
 function Set-DuneSoloModPlatform([string]$Platform, [string]$GamePath='') {
@@ -198,8 +207,8 @@ function Import-DuneSoloMod([string]$Path) {
 
 function Install-DuneSoloModRuntime {
     Assert-DuneSoloGameClosed
-    $root=$script:DuneSoloLoaderRoot
-    if(Test-Path (Join-Path $root 'Runtime')){throw 'Runtime already installed.'}
+    $root=[IO.Path]::GetFullPath($script:DuneSoloLoaderRoot).TrimEnd('\','/')
+    $runtime = Join-Path $root 'Runtime'
     $zip=Join-Path $script:DuneSoloRuntimeAssets 'runtime.zip'
     $configs=Join-Path $script:DuneSoloRuntimeAssets 'configs.zip'
     if(-not (Test-Path -LiteralPath $zip) -or -not (Test-Path -LiteralPath $configs)){throw 'Bundled mod runtime is missing. Reinstall DST to restore it.'}
@@ -208,12 +217,26 @@ function Install-DuneSoloModRuntime {
     New-Item -ItemType Directory -Path $root -Force | Out-Null
     $stage=Join-Path $root ('Runtime-'+[guid]::NewGuid().ToString('N'))
     $configStage=Join-Path $root ('Configs-'+[guid]::NewGuid().ToString('N'))
+    $previous = Join-Path $root ('Runtime-before-repair-'+[guid]::NewGuid().ToString('N'))
+    foreach ($target in @($runtime,$stage,$configStage,$previous)) {
+        if ([IO.Path]::GetDirectoryName([IO.Path]::GetFullPath($target)) -cne $root) { throw 'Runtime staging path is outside the loader directory.' }
+    }
+    $replaced = $false
     try {
         Expand-DuneModZip $zip $stage
         Expand-DuneModZip $configs $configStage
-        Copy-Item (Join-Path $configStage 'DuneAwakening\*.ini') (Join-Path $stage 'ue4ss') -Force
-        if(Test-Path (Join-Path $root 'Runtime')){throw 'Runtime already installed.'}
-        Move-Item -LiteralPath $stage -Destination (Join-Path $root 'Runtime')
+        Copy-Item (Join-Path $configStage 'DuneAwakening\*.ini') (Join-Path $stage 'ue4ss') -Force -ErrorAction Stop
+        if (-not (Test-DuneSoloModRuntime -Path $stage)) { throw 'Bundled mod runtime extraction is incomplete; existing runtime was preserved.' }
+        if (Test-Path -LiteralPath $runtime) {
+            if ((Get-Item -LiteralPath $runtime).Attributes -band [IO.FileAttributes]::ReparsePoint) { throw 'Runtime directory cannot be a linked directory.' }
+            Move-Item -LiteralPath $runtime -Destination $previous -ErrorAction Stop
+            $replaced = $true
+        }
+        try { Move-Item -LiteralPath $stage -Destination $runtime -ErrorAction Stop }
+        catch {
+            if ($replaced) { Move-Item -LiteralPath $previous -Destination $runtime -ErrorAction Stop }
+            throw
+        }
     } finally {
         foreach($temporary in @($stage,$configStage)){if(Test-Path -LiteralPath $temporary){Remove-Item -LiteralPath $temporary -Recurse -Force}}
     }

@@ -281,7 +281,33 @@ BeforeEach {
         @(Get-ChildItem $script:DuneSoloLoaderRoot -Directory -Filter 'Configs-*').Count | Should -Be 0
         Should -Invoke Invoke-RestMethod -Times 0
         Should -Invoke Invoke-WebRequest -Times 0
-        { Install-DuneSoloModRuntime } | Should -Throw '*already installed*'
+        Install-DuneSoloModRuntime | Out-Null
+        (Get-DuneSoloMods).runtimeReady | Should -BeTrue
+        @(Get-ChildItem $script:DuneSoloLoaderRoot -Directory -Filter 'Runtime-before-repair-*').Count | Should -Be 1
+        (Get-Content $selection -Raw).Trim() | Should -Be '{"Kept":true}'
+    }
+
+    It 'repairs a partial runtime without replacing installed mods or selections' {
+        Install-DuneSoloModRuntime | Out-Null
+        Remove-Item -LiteralPath (Join-Path $script:DuneSoloLoaderRoot 'Runtime/dwmapi.dll')
+        (Get-DuneSoloMods).runtimeReady | Should -BeFalse
+        New-Item -ItemType Directory -Path (Join-Path $script:DuneSoloModsRoot 'Kept/Scripts') -Force | Out-Null
+        Set-Content (Join-Path $script:DuneSoloModsRoot 'Kept/Scripts/main.lua') 'kept mod'
+        Set-Content (Join-Path $script:DuneSoloLoaderRoot 'selection.json') '{"Kept":true}'
+        Install-DuneSoloModRuntime | Out-Null
+        (Get-DuneSoloMods).runtimeReady | Should -BeTrue
+        (Get-Content (Join-Path $script:DuneSoloModsRoot 'Kept/Scripts/main.lua') -Raw).Trim() | Should -Be 'kept mod'
+        (Get-Content (Join-Path $script:DuneSoloLoaderRoot 'selection.json') -Raw).Trim() | Should -Be '{"Kept":true}'
+    }
+
+    It 'preserves the current runtime if publishing the staged replacement fails' {
+        Install-DuneSoloModRuntime | Out-Null
+        $runtimePath=Join-Path $script:DuneSoloLoaderRoot 'Runtime'
+        Set-Content (Join-Path $runtimePath 'preserved.txt') 'previous runtime'
+        Mock Move-Item { throw 'Simulated replacement failure' } -ParameterFilter { $LiteralPath -like '*Runtime-*' -and $LiteralPath -notlike '*Runtime-before-repair-*' -and $Destination -eq $runtimePath }
+        { Install-DuneSoloModRuntime } | Should -Throw '*Simulated replacement failure*'
+        (Get-Content (Join-Path $runtimePath 'preserved.txt') -Raw).Trim() | Should -Be 'previous runtime'
+        (Get-DuneSoloMods).runtimeReady | Should -BeTrue
     }
 
     It 'rejects corrupt bundled archives before creating a runtime' {
