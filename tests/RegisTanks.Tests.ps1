@@ -1,10 +1,10 @@
 BeforeAll {
     . (Join-Path $PSScriptRoot '_TestHelpers.ps1')
     Import-DstLib 'RegisTanks.ps1'
+    Import-DstLib 'Gameplay.ps1'
     function global:Resolve-DuneRetailServerSettingsTarget { param($Ip) }
     function global:Invoke-V6Ssh { param($Ip,$Cmd,$TimeoutSec) }
     function global:Invoke-DuneSqlQuery { param($Ip,$Sql,$ReadOnly,$MaxRows,$TimeoutSec) }
-    function global:ConvertTo-DuneRowMaps { param($Result) $Result.rows }
     function global:Invoke-DuneVehicleSpawnLive { param($Ip,$ActorId,$VehicleId,$ActorClass,$TemplateName,$Persistent) }
     $script:TankBinary = '/home/dune/server/DuneSandbox/Binaries/Linux/DuneSandboxServer-Linux-Shipping'
     $script:TankOverlay = '/home/dune/server/DuneSandbox/Content/Paks/pakchunk999-DSTRegisTank-2147284-LinuxServer_P'
@@ -12,7 +12,7 @@ BeforeAll {
 Describe 'Native Regis Tank controls' {
     BeforeEach {
         Mock Resolve-DuneRetailServerSettingsTarget { @{available=$true;namespace='test-bg'} }
-        Mock Invoke-DuneSqlQuery { @{ok=$true;rows=@(@{map='HaggaBasin'})} }
+        Mock Invoke-DuneSqlQuery { @{ok=$true;columns=@('map');rows=@(,@('HaggaBasin'))} }
         Mock Invoke-V6Ssh {
             if ($Cmd -like '*get pods*') { '{"items":[{"metadata":{"name":"test-sg-survival-1-pod-2"},"status":{"phase":"Running","conditions":[{"type":"Ready","status":"True"}]}}]}' }
             else { @("240b4bb378a93b70134fa685fc467bc2ae94fd40d81da2feea0f987758bc9126  $script:TankBinary", "75e7144577253917f6da7312ef5e585b12fb728226a22b0938323751a6b555cd  $script:TankOverlay.pak", "13011a68170df5a9320782691768b0b0bd568610bc682ec1979e979de534c01e  $script:TankOverlay.ucas", "12781c923dcace79204bfecaf0ff4ea49c41ec6a07e68fe81fd3feb96767ced5  $script:TankOverlay.utoc") }
@@ -27,12 +27,12 @@ Describe 'Native Regis Tank controls' {
         (Get-DuneRegisTankSupport -Ip test -ActorId 544).enabled | Should -BeFalse
     }
     It 'does not probe or grant on a different player map' {
-        Mock Invoke-DuneSqlQuery { @{ok=$true;rows=@(@{map='DeepDesert'})} }
+        Mock Invoke-DuneSqlQuery { @{ok=$true;columns=@('map');rows=@(,@('DeepDesert'))} }
         (Get-DuneRegisTankSupport -Ip test -ActorId 544).enabled | Should -BeFalse
         Should -Invoke Invoke-V6Ssh -Times 0
     }
     It 'blocks offline players before compatibility probing' {
-        Mock Invoke-DuneSqlQuery { @{ok=$true;rows=@()} }
+        Mock Invoke-DuneSqlQuery { @{ok=$true;columns=@('map');rows=@()} }
         (Get-DuneRegisTankSupport -Ip test -ActorId 544).enabled | Should -BeFalse
         Should -Invoke Invoke-V6Ssh -Times 0
     }

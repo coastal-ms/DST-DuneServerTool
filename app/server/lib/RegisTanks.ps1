@@ -9,7 +9,7 @@ function Get-DuneRegisTankSupport {
     if ($ActorId -gt 0) {
         $lookup = Invoke-DuneSqlQuery -Ip $Ip -ReadOnly $true -MaxRows 1 -TimeoutSec 10 -Sql "SELECT a.map FROM dune.player_state ps JOIN dune.actors a ON a.id=ps.player_pawn_id WHERE ps.player_pawn_id=${ActorId}::bigint AND ps.online_status::text='Online';"
         if (-not $lookup.ok) { return @{ enabled = $false; message = 'Could not verify the online player.' } }
-        $rows = @(ConvertTo-DuneRowMaps -Result $lookup)
+        $rows = ConvertTo-DuneRowMaps -Result $lookup
         if ($rows.Count -ne 1) { return @{ enabled = $false; message = 'Log into Hagga before granting a Tank.' } }
         $map = [string]$rows[0]['map']
     }
