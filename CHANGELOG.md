@@ -17,9 +17,10 @@ here cover everything those tags shipped.
 
 ### Changed
 - Label the three reviewed character collection buttons Grant All in Solo and self-hosted Players actions. New limited-use schematic grants provide one use per recipe, with vehicle locomotion counts sized for one vehicle; existing recipes and remaining uses are preserved.
-- Add one saved newer-runtime checkbox for mod launches, showing the selected UE4SS version, automatic fallback and declared version mismatches. Built-in Tank-only launches keep their existing runtime behavior.
+- Add a saved UE4SS runtime dropdown for mod launches, defaulting to 1140 with 1164 as an optional choice, and show the selected version, automatic fallback and declared version mismatches. Built-in Tank-only launches keep their existing runtime behavior.
 
 ### Fixed
+- Correct the Slaver Stillsuit Gloves display name.
 - Fill compatible existing item stacks before creating new stacks in Solo and self-hosted offline player and storage grants. Restore Welding Wire and ammunition stack metadata and count available stack space when checking inventory slots.
 - Use the previous bundled UE4SS runtime as the compatibility default for optional mods, with the newer runtime available by explicit opt-in and automatic fallback after a confirmed initialization failure. Preserve both runtimes, installed mods and settings. Optional mod requirements do not affect built-in Tank-only launches.
 - Include built-in Solo Tank support for Xbox PC / Game Pass launches using the same game-reflected compatibility checks as Steam, and restore launch files without relying on the background host's hash cmdlet.

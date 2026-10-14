@@ -4,16 +4,26 @@ $script:DuneSoloLoaderRoot = Join-Path $soloModAppRoot 'ModLoader'
 $script:DuneSoloRuntimeAssets = Join-Path $soloModAppRoot 'resources\solo-mod-runtime'
 $script:DuneBundledSoloModsRoot = Join-Path $soloModAppRoot 'resources\solo-mods'
 
+function Get-DuneSoloRuntimeProfiles {
+    # Add verified bundled releases here; keep existing entries for saved choices.
+    return @(
+        @{version='3.0.1-1140-gf58e8f84';label='1140 — default';folder='Runtime-1140';archive='runtime-1140.zip';hash='B954F036B10E9ABB0C0C41599311AB1ACCC53E30515AEED7E48EE22C5B3B1280'},
+        @{version='3.0.1-1164-g5e627997';label='1164 — newer, optional';folder='Runtime';archive='runtime.zip';hash='3C72142A383E25E9F9553AC9E4D5677AA572E98CB369CAC57200EFB2E381E603'}
+    )
+}
+
 function Get-DuneSoloRuntimeProfile($Mods, [switch]$TankOnly) {
     # Compatibility baseline for optional mods is the previous bundled runtime.
     # The newer runtime requires the user's explicit opt-in, not a mod declaration.
     $legacy = -not $TankOnly
     $choice=Read-DuneModJson (Join-Path $script:DuneSoloLoaderRoot 'runtime-choice.json') @{}
     if (-not $TankOnly -and $null -ne $choice.useNewerRuntime) { $legacy=-not [bool]$choice.useNewerRuntime }
+    $version=if($legacy){'3.0.1-1140-gf58e8f84'}else{'3.0.1-1164-g5e627997'}
+    $profiles=@(Get-DuneSoloRuntimeProfiles)
+    if (-not $TankOnly -and $choice.version -and @($profiles | Where-Object version -eq $choice.version).Count -eq 1) {$version=[string]$choice.version}
     $fallback=Read-DuneModJson (Join-Path $script:DuneSoloLoaderRoot 'runtime-fallback.json') @{}
-    if ($fallback.version -eq '3.0.1-1140-gf58e8f84') { $legacy=$true }
-    if ($legacy) { return @{version='3.0.1-1140-gf58e8f84';folder='Runtime-1140';archive='runtime-1140.zip';hash='B954F036B10E9ABB0C0C41599311AB1ACCC53E30515AEED7E48EE22C5B3B1280'} }
-    return @{version='3.0.1-1164-g5e627997';folder='Runtime';archive='runtime.zip';hash='3C72142A383E25E9F9553AC9E4D5677AA572E98CB369CAC57200EFB2E381E603'}
+    if ($fallback.version -eq '3.0.1-1140-gf58e8f84') { $version=[string]$fallback.version }
+    return @($profiles | Where-Object version -eq $version)[0]
 }
 
 function Test-DuneSoloRuntimeStartupFailure([string]$Log) {
@@ -192,8 +202,9 @@ function Get-DuneSoloMods {
     $choice=Read-DuneModJson (Join-Path $script:DuneSoloLoaderRoot 'runtime-choice.json') @{}
     $fallback=Read-DuneModJson (Join-Path $script:DuneSoloLoaderRoot 'runtime-fallback.json') @{}
     $useNewer=if($null -ne $choice.useNewerRuntime){[bool]$choice.useNewerRuntime}else{$profile.folder -eq 'Runtime'}
+    $preference=if($choice.version){[string]$choice.version}elseif($useNewer){'3.0.1-1164-g5e627997'}else{'3.0.1-1140-gf58e8f84'}
     $runtimeWarnings=@(foreach($mod in @($mods | Where-Object enabled)){foreach($req in @($mod.requires)){if($req.id -eq 'ue4ss' -and $req.version -and $req.version -ne $profile.version){"$($mod.name) declares UE4SS $($req.version); selected runtime is $($profile.version)."}}})
-    return @{ useNewerRuntime=$useNewer;runtimeFallback=($fallback.version -eq '3.0.1-1140-gf58e8f84');runtimeWarnings=$runtimeWarnings;runtimeVersion=$profile.version;runtimePath=$runtimePath;platform=$platform; gameRunning=$gameRunning; mods=$mods; folder=$script:DuneSoloModsRoot; gamePath=$gamePath; skipIntro=[bool]$preferences.skipIntro; soloArguments=[string]$preferences.soloArguments; runtimeReady=(Test-DuneSoloModRuntime -Path $runtimePath); session=$session; launchError=$launchError; runtimeLog=$runtimeLog }
+    return @{ runtimeVersions=@(Get-DuneSoloRuntimeProfiles | ForEach-Object {@{version=$_.version;label=$_.label}});runtimePreferenceVersion=$preference;useNewerRuntime=$useNewer;runtimeFallback=($fallback.version -eq '3.0.1-1140-gf58e8f84');runtimeWarnings=$runtimeWarnings;runtimeVersion=$profile.version;runtimePath=$runtimePath;platform=$platform; gameRunning=$gameRunning; mods=$mods; folder=$script:DuneSoloModsRoot; gamePath=$gamePath; skipIntro=[bool]$preferences.skipIntro; soloArguments=[string]$preferences.soloArguments; runtimeReady=(Test-DuneSoloModRuntime -Path $runtimePath); session=$session; launchError=$launchError; runtimeLog=$runtimeLog }
 }
 
 function Open-DuneSoloModsFolder {
@@ -226,9 +237,11 @@ function Set-DuneSoloModPlatform([string]$Platform, [string]$GamePath='') {
 
 function Set-DuneSoloModSelection($Body) {
     Assert-DuneSoloGameClosed
+    if ($Body.runtimeVersion -and @((Get-DuneSoloRuntimeProfiles) | Where-Object version -eq $Body.runtimeVersion).Count -ne 1) {throw 'Select a bundled UE4SS runtime.'}
     Set-DuneSoloModPlatform -Platform ([string]$Body.platform) -GamePath ([string]$Body.gamePath)
-    if ($null -ne $Body.useNewerRuntime) {
-        @{useNewerRuntime=[bool]$Body.useNewerRuntime} | ConvertTo-Json | Set-Content (Join-Path $script:DuneSoloLoaderRoot 'runtime-choice.json') -Encoding utf8
+    if ($Body.runtimeVersion -or $null -ne $Body.useNewerRuntime) {
+        $version=if($Body.runtimeVersion){[string]$Body.runtimeVersion}elseif($Body.useNewerRuntime){'3.0.1-1164-g5e627997'}else{'3.0.1-1140-gf58e8f84'}
+        @{version=$version;useNewerRuntime=($version -ne '3.0.1-1140-gf58e8f84')} | ConvertTo-Json | Set-Content (Join-Path $script:DuneSoloLoaderRoot 'runtime-choice.json') -Encoding utf8
         $fallbackPath=Join-Path $script:DuneSoloLoaderRoot 'runtime-fallback.json'
         if(Test-Path -LiteralPath $fallbackPath){Remove-Item -LiteralPath $fallbackPath}
     }

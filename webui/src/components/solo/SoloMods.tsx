@@ -11,7 +11,7 @@ import { pickLocalFolder } from '../../util/pathPicker'
 import { isShellHost, openShellFolder } from '../../util/shellBridge'
 
 interface Mod { folder: string; id: string; name: string; version: string; enabled: boolean; warnings?: string[]; errors: string[] }
-interface State { useNewerRuntime?: boolean; runtimeVersion?: string; runtimeFallback?: boolean; runtimeWarnings?: string[]; gameRunning?: boolean; mods: Mod[]; folder: string; gamePath: string; skipIntro: boolean; soloArguments?: string; runtimeReady: boolean; session: { runtimeVersion?: string } | null; launchError?: string; runtimeLog?: string }
+interface State { runtimeVersions?: {version: string; label: string}[]; runtimePreferenceVersion?: string; useNewerRuntime?: boolean; runtimeVersion?: string; runtimeFallback?: boolean; runtimeWarnings?: string[]; gameRunning?: boolean; mods: Mod[]; folder: string; gamePath: string; skipIntro: boolean; soloArguments?: string; runtimeReady: boolean; session: { runtimeVersion?: string } | null; launchError?: string; runtimeLog?: string }
 
 function SortableMod({ mod, disabled, children }: { mod: Mod; disabled: boolean; children: ReactNode }) {
   const { attributes, listeners, setNodeRef, setActivatorNodeRef, transform, transition, isDragging } = useSortable({ id: mod.folder, disabled })
@@ -144,12 +144,14 @@ export function SoloMods({ connectionToken = '' }: { connectionToken?: string })
     <div className="space-y-3">
       <p className="text-sm text-text-muted">Steam and Xbox PC Solo launches include built-in Tank support and disable BattlEye for that session. Launch with Mods also loads your enabled mods; Xbox mod launches disable BattlEye too.</p>
       <label className="flex items-center gap-2 text-sm">
-        <input type="checkbox" checked={state?.useNewerRuntime ?? false} disabled={busy || !state || state.gameRunning} onChange={e => void run('selection', { mods: state?.mods ?? [], gamePath, platform, useNewerRuntime: e.target.checked })} />
-        Use newer UE4SS runtime
+        UE4SS runtime
+        <select value={state?.runtimePreferenceVersion ?? state?.runtimeVersion ?? ''} disabled={busy || !state || state.gameRunning} onChange={e => void run('selection', { mods: state?.mods ?? [], gamePath, platform, runtimeVersion: e.target.value })}>
+          {state?.runtimeVersions?.map(runtime => <option key={runtime.version} value={runtime.version}>{runtime.label}</option>)}
+        </select>
       </label>
-      <p className="text-sm text-text-muted">For Launch with Mods: checked uses bundled 1164; unchecked uses previous 1140. Built-in Tanks use Launch Solo without optional mods.</p>
+      <p className="text-sm text-text-muted">For Launch with Mods. DST defaults to 1140; select 1164 if you want the newer bundled runtime. Built-in Tanks use Launch Solo without optional mods.</p>
       {state?.runtimeVersion && <p role="status" className="text-sm text-text-muted">Selected for next mod launch: UE4SS {state.runtimeVersion}.{state.gameRunning && state.session?.runtimeVersion ? ` Current session: UE4SS ${state.session.runtimeVersion}.` : ''} Runtime loading does not confirm that every mod works.</p>}
-      {state?.runtimeFallback && <p className="text-sm text-warning">The newer runtime failed to initialize. DST selected previous runtime 1140 for the next launch. Change the checkbox to retry your chosen version.</p>}
+      {state?.runtimeFallback && <p className="text-sm text-warning">The newer runtime failed to initialize. DST selected previous runtime 1140 for the next launch. Select a runtime again to retry your chosen version.</p>}
       {state?.runtimeWarnings?.map(message => <p className="text-sm text-warning" key={message}>{message}</p>)}
       {platform === 'xbox' && (
         <p className="rounded border border-warning/30 bg-warning/5 p-3 text-sm text-text-muted">

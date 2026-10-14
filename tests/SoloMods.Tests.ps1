@@ -13,6 +13,19 @@
 }
 AfterAll { if($script:ModTestRoot.StartsWith([IO.Path]::GetTempPath())){Remove-Item -LiteralPath $script:ModTestRoot -Recurse -Force} }
 Describe 'Solo mod import and dependencies' {
+    It 'lists bundled runtime versions and preserves a saved selection when another entry is added' {
+        $body=@{mods=@();platform='steam';gamePath='C:/Game';runtimeVersion='3.0.1-1164-g5e627997'}
+        $state=Set-DuneSoloModSelection $body
+        $state.runtimeVersions.Count | Should -Be 2
+        $state.runtimePreferenceVersion | Should -Be $body.runtimeVersion
+        $profiles=@(Get-DuneSoloRuntimeProfiles)+@(@{version='future-test';label='Future';folder='Future';archive='future.zip';hash='test'})
+        Mock Get-DuneSoloRuntimeProfiles {return $profiles}
+        (Get-DuneSoloMods).runtimeVersions.Count | Should -Be 3
+        (Get-DuneSoloMods).runtimeVersion | Should -Be $body.runtimeVersion
+        (Set-DuneSoloModSelection @{mods=@();platform='steam';gamePath='C:/Game';runtimeVersion='future-test'}).runtimeVersion | Should -Be 'future-test'
+        {Set-DuneSoloModSelection @{mods=@();runtimeVersion='unbundled'}} | Should -Throw '*bundled UE4SS*'
+        (Get-DuneSoloMods).runtimePreferenceVersion | Should -Be 'future-test'
+    }
     It 'defaults to the previous runtime even if an enabled mod declares the newer build' {
         $mods=@([pscustomobject]@{enabled=$true;requires=@(@{id='ue4ss';version='3.0.1-1164-g5e627997'})})
         (Get-DuneSoloRuntimeProfile $mods).version | Should -Be '3.0.1-1140-gf58e8f84'

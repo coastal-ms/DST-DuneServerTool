@@ -21,7 +21,7 @@ try {
     $session=Get-Content -LiteralPath $journal -Raw | ConvertFrom-Json
     if($session.logPath -and (Test-Path $session.logPath)){
         Copy-Item -LiteralPath $session.logPath -Destination (Join-Path $LoaderRoot 'last-runtime.log') -Force
-        if (-not $RestoreOnly -and $session.runtimeVersion -eq '3.0.1-1164-g5e627997' -and
+        if (-not $RestoreOnly -and $session.runtimeVersion -and $session.runtimeVersion -ne '3.0.1-1140-gf58e8f84' -and
             (Test-DuneSoloRuntimeStartupFailure ([IO.File]::ReadAllText($session.logPath)))) {
             @{version='3.0.1-1140-gf58e8f84';reason='Current runtime failed initialization; use previous runtime for the next launch.'} |
                 ConvertTo-Json | Set-Content -LiteralPath (Join-Path $LoaderRoot 'runtime-fallback.json') -Encoding utf8
