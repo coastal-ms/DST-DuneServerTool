@@ -1,4 +1,4 @@
-using System.Buffers.Binary;
+﻿using System.Buffers.Binary;
 using System.IO.Compression;
 using System.Security.Cryptography;
 using System.Text;
@@ -20,11 +20,11 @@ internal static partial class Program
     private static readonly IReadOnlyDictionary<string, int> KnownStackLimits =
         new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase)
         {
-            ["Ammo"] = 500,
-            ["HeavyAmmo"] = 500,
-            ["InfantryRocketAmmo"] = 500,
-            ["Napalm"] = 500,
-            ["RocketAmmo"] = 500,
+            ["Ammo"] = 1000,
+            ["HeavyAmmo"] = 1000,
+            ["InfantryRocketAmmo"] = 250,
+            ["Napalm"] = 1000,
+            ["RocketAmmo"] = 250,
             ["SolarisCoin"] = int.MaxValue,
             ["AntiRadiationPill"] = 20
         };
@@ -920,7 +920,8 @@ internal static partial class Program
                             WHERE inventory_id = $inventory
                               AND template_id = $template
                               AND quality_level = $quality
-                              AND stack_size < $stackMax
+                              AND stack_size BETWEEN 0 AND $stackMax - 1
+                              AND json_type(COALESCE(stats, '{}'), '$.FAugmentedItemStats') IS NULL
                             ORDER BY position_index, id;
                             """;
                         existingCommand.Parameters.AddWithValue("$inventory", destination.Id);
@@ -1549,7 +1550,7 @@ internal static partial class Program
                 """
                 {"destination":"inventory:2","items":[
                   {"templateId":"TestResource","quantity":12,"quality":0},
-                  {"templateId":"HeavyAmmo","quantity":501,"quality":0},
+                  {"templateId":"HeavyAmmo","quantity":1001,"quality":0},
                   {"templateId":"AntiRadiationPill","quantity":21,"quality":0}
                 ]}
                 """);
@@ -1571,6 +1572,7 @@ internal static partial class Program
                   },
                   "items":{
                     "TestResource":{"stack_max":10,"volume":1.0},
+                    "WeldingMaterial":{"stack_max":500,"volume":0.01},
                     "BuggyKnownParts":{"stack_max":1,"volume":110.0}
                   }
                 }
@@ -1728,7 +1730,7 @@ internal static partial class Program
                 """
                 {"destination":"inventory:2","items":[
                   {"templateId":"TestResource","quantity":12,"quality":0},
-                  {"templateId":"HeavyAmmo","quantity":501,"quality":0},
+                  {"templateId":"HeavyAmmo","quantity":1001,"quality":0},
                   {"templateId":"AntiRadiationPill","quantity":21,"quality":0}
                 ]}
                 """);
@@ -1774,12 +1776,37 @@ internal static partial class Program
                 var pillMax = ScalarLong(
                     connection,
                     "SELECT COALESCE(MAX(stack_size), 0) FROM items WHERE template_id = 'AntiRadiationPill';");
-                if (heavyQuantity != 501 || heavyRows != 2 || heavyMax != 500
+                if (heavyQuantity != 1001 || heavyRows != 2 || heavyMax != 1000
                     || pillQuantity != 21 || pillRows != 2 || pillMax != 20)
                 {
                     throw new InvalidOperationException(
                         "Picker-only stack-limit fallbacks were not applied correctly.");
                 }
+            }
+
+            File.WriteAllText(planPath, """
+                {"destination":"inventory:2","items":[
+                  {"templateId":"TestResource","quantity":13,"quality":0},
+                  {"templateId":"TestResource","quantity":7,"quality":1},
+                  {"templateId":"WeldingMaterial","quantity":450,"quality":0}
+                ]}
+                """);
+            GrantItems(target, Path.Combine(root,"safety","before-stack-fill.db"),planPath,catalogPath);
+            File.WriteAllText(planPath, """
+                {"destination":"inventory:2","items":[{"templateId":"WeldingMaterial","quantity":100,"quality":0}]}
+                """);
+            GrantItems(target, Path.Combine(root,"safety","before-stack-overflow.db"),planPath,catalogPath);
+            File.WriteAllBytes(grantedSqlite, Unwrap(ReadStable(target)).SqliteBytes);
+            using (var connection = new SqliteConnection(new SqliteConnectionStringBuilder {DataSource=grantedSqlite,Mode=SqliteOpenMode.ReadOnly,Pooling=false}.ToString()))
+            {
+                connection.Open();
+                if (ScalarLong(connection,"SELECT COUNT(*) FROM items WHERE template_id='TestResource' AND quality_level=0;") != 3
+                    || ScalarLong(connection,"SELECT SUM(stack_size) FROM items WHERE template_id='TestResource' AND quality_level=0;") != 25
+                    || ScalarLong(connection,"SELECT SUM(stack_size) FROM items WHERE template_id='TestResource' AND quality_level=1;") != 7
+                    || ScalarLong(connection,"SELECT COUNT(*) FROM items WHERE template_id='WeldingMaterial';") != 2
+                    || ScalarLong(connection,"SELECT MAX(stack_size) FROM items WHERE template_id='WeldingMaterial';") != 500
+                    || ScalarLong(connection,"SELECT SUM(stack_size) FROM items WHERE template_id='WeldingMaterial';") != 550)
+                    throw new InvalidOperationException("Stack grants failed to fill existing stacks, split overflow or preserve quality.");
             }
 
             File.WriteAllText(
@@ -3266,11 +3293,14 @@ internal static partial class Program
         }
         foreach (var (templateId, stackMax) in KnownStackLimits)
         {
-            if (result.TryGetValue(templateId, out var rule))
+            if (result.TryGetValue(templateId, out var rule)
+                && (!document.RootElement.TryGetProperty("items", out var catalogItems)
+                    || !catalogItems.TryGetProperty(templateId, out var catalogItem)
+                    || !catalogItem.TryGetProperty("stack_max", out _)))
             {
                 result[templateId] = rule with
                 {
-                    StackMax = Math.Max(rule.StackMax, stackMax)
+                    StackMax = stackMax
                 };
             }
         }

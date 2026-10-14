@@ -1,4 +1,4 @@
-# Tests pure helper behavior in PlayersRmq.ps1.
+﻿# Tests pure helper behavior in PlayersRmq.ps1.
 
 BeforeAll {
     . (Join-Path $PSScriptRoot '_TestHelpers.ps1')
@@ -7,6 +7,20 @@ BeforeAll {
 }
 
 Describe 'Resolve-DuneStackMax' -Tag 'Pure' {
+    It 'honors restored stack metadata for wire and ammunition' {
+        Resolve-DuneStackMax -Ip fixture -Template WeldingMaterial | Should -Be 500
+        Resolve-DuneStackMax -Ip fixture -Template RocketAmmo | Should -Be 250
+        Resolve-DuneStackMax -Ip fixture -Template Napalm | Should -Be 1000
+    }
+    It 'uses existing stack room before demanding another inventory slot' -ForEach @(@{Quantity=50;Fits=$true},@{Quantity=51;Fits=$false}) {
+        $script:stackCapacityQueries=0
+        Mock Invoke-DuneSqlQuery {
+            $script:stackCapacityQueries++
+            if($script:stackCapacityQueries -eq 1){return @{ok=$true;columns=@('inv_id','max_slots','max_vol');rows=@(,@('1','1','-1'))}}
+            return @{ok=$true;columns=@('t','ss','quality','augmented','vov');rows=@(,@('WeldingMaterial','450','0','false','-1'))}
+        }
+        (Test-DuneInventoryCapacity -Ip fixture -PawnId 10 -Template WeldingMaterial -Quantity $Quantity).ok | Should -Be $Fits
+    }
     BeforeEach {
         function global:Invoke-DuneSqlQuery {
             return @{ ok = $true; rows = @(@{ s = '0' }) }
@@ -22,8 +36,8 @@ Describe 'Resolve-DuneStackMax' -Tag 'Pure' {
         Resolve-DuneStackMax -Ip '1.2.3.4' -Template 'CopperBar' -Quality 0 | Should -Be 500
     }
 
-    It 'treats Light Darts as one stack per 500 items' {
-        Resolve-DuneStackMax -Ip '1.2.3.4' -Template 'Ammo' -Quality 0 | Should -Be 500
+    It 'treats Light Darts as one stack per 1000 items' {
+        Resolve-DuneStackMax -Ip '1.2.3.4' -Template 'Ammo' -Quality 0 | Should -Be 1000
     }
 
     It 'treats Iodine Pills as one stack per 20 items' {

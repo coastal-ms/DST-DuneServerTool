@@ -31,12 +31,12 @@ function Resolve-DuneItemVolume {
 # Picker-only ammo templates are absent from gameplay-item-data.json, so they
 # have no catalogued stack_max even though the game stacks them.
 $script:DuneKnownStackableItemLimits = @{
-    Ammo              = 500
+    Ammo              = 1000
     AntiRadiationPill = 20
-    HeavyAmmo         = 500
-    InfantryRocketAmmo = 500
-    Napalm            = 500
-    RocketAmmo        = 500
+    HeavyAmmo         = 1000
+    InfantryRocketAmmo = 250
+    Napalm            = 1000
+    RocketAmmo        = 250
     SolarisCoin       = [int]::MaxValue
 }
 
@@ -74,7 +74,8 @@ function Test-DuneInventoryCapacity {
         [Parameter(Mandatory)] [long]   $PawnId,
         [Parameter(Mandatory)] [string] $Template,
         [int]  $Quantity = 1,
-        [long] $Quality  = 0
+        [long] $Quality  = 0,
+        [bool] $AllowExistingStack = $true
     )
     if ($Quantity -lt 1) { $Quantity = 1 }
 
@@ -98,7 +99,7 @@ LIMIT 1;
     if (-not $hasSlotCap -and -not $hasVolumeCap) { return @{ ok = $true } }
 
     # Tally current usage: one row = one slot; volume = per-item volume x stack_size.
-    $itemsSql = "SELECT template_id AS t, stack_size::text AS ss, COALESCE(volume_override, -1)::text AS vov FROM dune.items WHERE inventory_id = $invId::bigint;"
+    $itemsSql = "SELECT template_id AS t, stack_size::text AS ss, COALESCE(quality_level,0)::text AS quality, (COALESCE(stats,'{}'::jsonb) ? 'FAugmentedItemStats')::text AS augmented, COALESCE(volume_override, -1)::text AS vov FROM dune.items WHERE inventory_id = $invId::bigint;"
     $ir = Invoke-DuneSqlQuery -Ip $Ip -Sql $itemsSql -ReadOnly $true -MaxRows 100000 -TimeoutSec 15
     if (-not $ir.ok) { return @{ ok = $true; note = 'item scan failed; game server will validate.' } }
     $imaps = ConvertTo-DuneRowMaps -Result $ir
@@ -140,7 +141,15 @@ LIMIT 1;
     if ($hasSlotCap) {
         $stackMax = Resolve-DuneStackMax -Ip $Ip -Template $Template -Quality $Quality
         if ($stackMax -lt 1) { $stackMax = 1 }
-        $newStacks = [int][Math]::Ceiling($Quantity / [double]$stackMax)
+        $stackRoom = 0L
+        if ($AllowExistingStack -and $stackMax -gt 1) {
+            foreach ($item in $imaps) {
+                if ([string]$item['t'] -ieq $Template -and (ConvertTo-DuneInt $item['quality']) -eq $Quality -and [string]$item['augmented'] -ine 'true') {
+                    $stackRoom += [Math]::Max(0L,$stackMax-(ConvertTo-DuneInt $item['ss']))
+                }
+            }
+        }
+        $newStacks = [int][Math]::Ceiling([Math]::Max(0L,$Quantity-$stackRoom) / [double]$stackMax)
         $freeSlots = $maxSlots - $usedSlots
         if ($freeSlots -lt $newStacks) {
             return @{ ok = $false; error = "Inventory full: need $newStacks free slot(s), have $freeSlots." }

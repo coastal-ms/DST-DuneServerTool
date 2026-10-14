@@ -811,6 +811,60 @@ SELECT item_id, before_ammo, after_ammo FROM updated;
 # stamp acquisition_time with the current epoch — the game treats acquisition_time=0
 # (1970) items as fully decayed and drops them on load, so an offline give would
 # vanish on the player's next login.
+function Get-DuneStackedItemGrantSql {
+    param([string]$InventoryQuery,[string]$Template,[long]$Qty,[long]$Quality,[string]$StatsJson,[long]$StackMax,[bool]$AllowExisting=$true)
+    if ($Qty -lt 1 -or $StackMax -lt 1) { throw 'Grant quantity and stack limit must be positive.' }
+    $safeTmpl=ConvertTo-DuneSqlString $Template
+    $safeStats=ConvertTo-DuneSqlString $StatsJson
+    $merge=if($AllowExisting -and $StackMax -gt 1){'TRUE'}else{'FALSE'}
+    return @"
+WITH inv AS MATERIALIZED (
+    $InventoryQuery
+),
+existing AS MATERIALIZED (
+    SELECT i.id, i.stack_size, $StackMax::bigint-i.stack_size AS room,
+           COALESCE(SUM($StackMax::bigint-i.stack_size) OVER (ORDER BY i.position_index,i.id ROWS BETWEEN UNBOUNDED PRECEDING AND 1 PRECEDING),0) AS prior_room
+    FROM dune.items i,inv
+    WHERE i.inventory_id=inv.id AND i.template_id='$safeTmpl'
+      AND COALESCE(i.quality_level,0)=$Quality::bigint AND $merge
+      AND i.stack_size BETWEEN 0 AND $StackMax::bigint-1
+      AND NOT (COALESCE(i.stats,'{}'::jsonb) ? 'FAugmentedItemStats')
+),
+allocation AS MATERIALIZED (
+    SELECT id,LEAST(room,GREATEST(0,$Qty::bigint-prior_room))::bigint AS added FROM existing
+),
+remaining AS MATERIALIZED (
+    SELECT GREATEST(0,$Qty::bigint-COALESCE(SUM(added),0))::bigint AS qty FROM allocation
+),
+capacity AS MATERIALIZED (
+    SELECT inv.id,inv.maxc,COUNT(i.id)::bigint AS cnt,
+           COALESCE(MAX(i.position_index),-1)::bigint AS last_pos,
+           (remaining.qty+$StackMax::bigint-1)/$StackMax::bigint AS new_stacks
+    FROM inv CROSS JOIN remaining LEFT JOIN dune.items i ON i.inventory_id=inv.id
+    GROUP BY inv.id,inv.maxc,remaining.qty
+),
+allowed AS MATERIALIZED (
+    SELECT * FROM capacity WHERE maxc<=0 OR cnt+new_stacks<=maxc
+),
+upd AS (
+    UPDATE dune.items i SET stack_size=i.stack_size+a.added
+    FROM allocation a,allowed WHERE i.id=a.id AND a.added>0
+    RETURNING i.id, i.stats
+),
+ins AS (
+    INSERT INTO dune.items (inventory_id,stack_size,position_index,template_id,quality_level,acquisition_time,stats)
+    SELECT allowed.id,LEAST($StackMax::bigint,remaining.qty-(n-1)*$StackMax::bigint),
+           allowed.last_pos+n,'$safeTmpl',$Quality::bigint,EXTRACT(EPOCH FROM now())::bigint,'$safeStats'::jsonb
+    FROM allowed CROSS JOIN remaining CROSS JOIN LATERAL generate_series(1::bigint,allowed.new_stacks) AS n
+    RETURNING id, stats
+),
+chosen AS (SELECT id AS item_id,stats FROM upd UNION ALL SELECT id AS item_id,stats FROM ins)
+SELECT (SELECT item_id FROM chosen ORDER BY item_id LIMIT 1) AS item_id,
+       COALESCE((SELECT bool_and(stats='$safeStats'::jsonb)::text FROM chosen),'false') AS stats_match,
+       capacity.cnt,capacity.maxc FROM capacity;
+"@
+}
+
 function Invoke-DunePlayerGiveItem {
     param(
         [string]$Ip,
@@ -827,53 +881,15 @@ function Invoke-DunePlayerGiveItem {
     }
     # Gate on inventory space (volume + slots), same guard as the live path, so a
     # give only proceeds when it fits — online or offline.
-    $cap = Test-DuneInventoryCapacity -Ip $Ip -PawnId $PawnId -Template $Template -Quantity ([int]$Qty) -Quality $Quality
+    $cap = Test-DuneInventoryCapacity -Ip $Ip -PawnId $PawnId -Template $Template -Quantity ([int]$Qty) -Quality $Quality -AllowExistingStack (@($Augments).Count -eq 0)
     if (-not $cap.ok) { return $cap }
-    $safeTmpl = ConvertTo-DuneSqlString $Template
     try {
-        $statsJson = ConvertTo-DuneSqlString (Get-DuneGiveItemStatsJson -TemplateId $Template -Augments $Augments)
+        $statsJson = Get-DuneGiveItemStatsJson -TemplateId $Template -Augments $Augments
     } catch {
         return @{ ok = $false; error = $_.Exception.Message }
     }
-    $allowExistingStack = if (@($Augments).Count -gt 0) { 'FALSE' } else { 'TRUE' }
-    $sql = @"
-WITH inv AS (
-    SELECT id FROM dune.inventories
-    WHERE actor_id = $PawnId::bigint AND inventory_type = 0
-    ORDER BY id LIMIT 1
-),
-existing AS (
-    SELECT i.id FROM dune.items i, inv
-    WHERE i.inventory_id = inv.id
-      AND i.template_id = '$safeTmpl'
-      AND COALESCE(i.quality_level, 0) = $Quality::bigint
-      AND $allowExistingStack
-    ORDER BY i.id LIMIT 1
-),
-upd AS (
-    UPDATE dune.items SET stack_size = stack_size + $Qty::bigint
-    WHERE id = (SELECT id FROM existing)
-    RETURNING id, stats
-),
-ins AS (
-    INSERT INTO dune.items (inventory_id, stack_size, position_index, template_id, quality_level, acquisition_time, stats)
-    SELECT inv.id, $Qty::bigint,
-        (SELECT COALESCE(MAX(position_index), -1) + 1 FROM dune.items WHERE inventory_id = inv.id),
-        '$safeTmpl', $Quality::bigint, EXTRACT(EPOCH FROM now())::bigint, '$statsJson'::jsonb
-    FROM inv
-    WHERE NOT EXISTS (SELECT 1 FROM existing)
-    RETURNING id, stats
-),
-chosen AS (
-    SELECT id AS item_id, stats FROM upd
-    UNION ALL
-    SELECT id AS item_id, stats FROM ins
-    LIMIT 1
-)
-SELECT chosen.item_id,
-       (chosen.stats = '$statsJson'::jsonb)::text AS stats_match
-FROM chosen;
-"@
+    $stackMax=if(@($Augments).Count -gt 0){1L}else{[long](Resolve-DuneStackMax -Ip $Ip -Template $Template -Quality $Quality)}
+    $sql=Get-DuneStackedItemGrantSql -InventoryQuery "SELECT id,COALESCE(max_item_count,0) AS maxc FROM dune.inventories WHERE actor_id=$PawnId::bigint AND inventory_type=0 ORDER BY id LIMIT 1 FOR UPDATE" -Template $Template -Qty $Qty -Quality $Quality -StatsJson $statsJson -StackMax $stackMax -AllowExisting (@($Augments).Count -eq 0)
     $res = Invoke-DuneSqlQuery -Ip $Ip -Sql $sql -ReadOnly $false -MaxRows 1 -TimeoutSec 30
     if (-not $res.ok) { return @{ ok = $false; error = $res.error } }
     $maps = ConvertTo-DuneRowMaps -Result $res

@@ -762,37 +762,11 @@ function Invoke-DuneStorageGiveItem {
     $tv = Test-DuneValidGiveTemplate -TemplateId $Template
     if (-not $tv.ok) { return @{ ok = $false; error = $tv.error } }
     if ($Qty -le 0) { $Qty = 1 }
-    $safeTmpl = ConvertTo-DuneSqlString $Template
-    $statsJson = ConvertTo-DuneSqlString (Get-DuneGiveItemStatsJson -TemplateId $Template)
     # acquisition_time must be the current epoch: the game treats acquisition_time=0
     # (1970) items as fully decayed and drops them from the container on zone load,
     # so they show in DST but never appear in-game even after a restart.
-    $sql = @"
-WITH inv AS (
-    SELECT id, COALESCE(max_item_count, 0) AS maxc
-    FROM dune.inventories
-    WHERE actor_id = $ContainerId::bigint
-    ORDER BY id LIMIT 1
-),
-cur AS (
-    SELECT inv.id AS inv_id, inv.maxc, COUNT(i.id) AS cnt
-    FROM inv LEFT JOIN dune.items i ON i.inventory_id = inv.id
-    GROUP BY inv.id, inv.maxc
-),
-ins AS (
-    INSERT INTO dune.items (inventory_id, template_id, stack_size, quality_level, position_index, acquisition_time, stats)
-    SELECT cur.inv_id, '$safeTmpl', $Qty::bigint, $Quality::bigint,
-           COALESCE((SELECT MAX(position_index) + 1 FROM dune.items WHERE inventory_id = cur.inv_id), 0),
-           EXTRACT(EPOCH FROM now())::bigint,
-           '$statsJson'::jsonb
-    FROM cur
-    WHERE cur.maxc = 0 OR cur.cnt < cur.maxc
-    RETURNING id
-)
-SELECT (SELECT id FROM ins)  AS item_id,
-       (SELECT cnt FROM cur)  AS cnt,
-       (SELECT maxc FROM cur) AS maxc;
-"@
+    $stackMax=Resolve-DuneStackMax -Ip $Ip -Template $Template -Quality $Quality
+    $sql=Get-DuneStackedItemGrantSql -InventoryQuery "SELECT id,COALESCE(max_item_count,0) AS maxc FROM dune.inventories WHERE actor_id=$ContainerId::bigint ORDER BY id LIMIT 1 FOR UPDATE" -Template $Template -Qty $Qty -Quality $Quality -StatsJson (Get-DuneGiveItemStatsJson -TemplateId $Template) -StackMax $stackMax
     $res = Invoke-DuneSqlQuery -Ip $Ip -Sql $sql -ReadOnly $false -MaxRows 1 -TimeoutSec 30
     if (-not $res.ok) { return @{ ok = $false; error = $res.error } }
     $maps = ConvertTo-DuneRowMaps -Result $res
