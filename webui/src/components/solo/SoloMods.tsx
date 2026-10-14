@@ -8,6 +8,7 @@ import { api } from '../../api/client'
 import { ConfirmationModal } from '../ConfirmationModal'
 import { CollapsibleCard } from '../CollapsibleCard'
 import { pickLocalFolder } from '../../util/pathPicker'
+import { isShellHost, openShellFolder } from '../../util/shellBridge'
 
 interface Mod { folder: string; id: string; name: string; version: string; enabled: boolean; warnings?: string[]; errors: string[] }
 interface State { gameRunning?: boolean; mods: Mod[]; folder: string; gamePath: string; skipIntro: boolean; soloArguments?: string; runtimeReady: boolean; session: unknown; launchError?: string; runtimeLog?: string }
@@ -31,6 +32,7 @@ export function SoloMods({ connectionToken = '' }: { connectionToken?: string })
   const [soloArguments, setSoloArguments] = useState('')
   const [dragged, setDragged] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
+  const [refreshing, setRefreshing] = useState(false)
   const [error, setError] = useState('')
   const [notice, setNotice] = useState('')
   const [deleting, setDeleting] = useState<Mod | null>(null)
@@ -58,6 +60,22 @@ export function SoloMods({ connectionToken = '' }: { connectionToken?: string })
     finally { setBusy(false) }
   }
   const save = (mods = state?.mods ?? [], path = gamePath) => run('selection', { mods, gamePath: path, platform })
+  const refreshMods = async () => {
+    setBusy(true); setRefreshing(true); setError(''); setNotice('')
+    try { await refresh(); setNotice('Mod list refreshed.') }
+    catch (e) { setError(e instanceof Error ? e.message : String(e)) }
+    finally { setRefreshing(false); setBusy(false) }
+  }
+  const openModsFolder = async () => {
+    setBusy(true); setError(''); setNotice('')
+    try {
+      const desktop = isShellHost()
+      const result = await api<{ path: string }>('/api/solo/mods/open', { method: 'POST', body: JSON.stringify({ desktop }) })
+      if (desktop) await openShellFolder(result.path)
+      setNotice('Mods folder opening in File Explorer.')
+    } catch (e) { setError(e instanceof Error ? e.message : String(e)) }
+    finally { setBusy(false) }
+  }
   const saveArguments = async () => {
     setBusy(true); setError('')
     try {
@@ -135,8 +153,11 @@ export function SoloMods({ connectionToken = '' }: { connectionToken?: string })
       <a className="text-sm text-accent-bright underline" href="https://www.nexusmods.com/duneawakening" target="_blank" rel="noopener noreferrer">Browse Dune: Awakening mods on Nexus Mods</a>
       <div className="flex flex-wrap gap-2">
         <button className="btn-secondary" disabled={busy} onClick={() => void install()}>Install mod ZIP</button>
-        <button className="btn-secondary" disabled={busy} onClick={() => void run('open')}>Open Mods Folder</button>
-        <button className="btn-secondary" disabled={busy} onClick={() => void refresh().catch(e => setError(String(e)))}>Refresh</button>
+        <button className="btn-secondary" disabled={busy} onClick={() => void openModsFolder()}>Open Mods Folder</button>
+        <button className="btn-secondary" disabled={busy} aria-busy={refreshing} onClick={() => void refreshMods()}>
+          <Icon name={refreshing ? 'LoaderCircle' : 'RefreshCw'} size={14} className={refreshing ? 'animate-spin' : ''} />
+          {refreshing ? 'Refreshing…' : 'Refresh'}
+        </button>
       </div>
       {state && state.mods.length > 1 && <p className="text-sm text-text-muted">Mods load from top to bottom. Follow the mod author's load order instructions.</p>}
       <DndContext sensors={sensors} collisionDetection={closestCorners}

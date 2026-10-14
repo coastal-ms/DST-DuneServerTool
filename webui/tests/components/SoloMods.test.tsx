@@ -3,11 +3,44 @@ import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/re
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { SoloMods } from '../../src/components/solo/SoloMods'
 const request = vi.hoisted(() => vi.fn())
+const shell = vi.hoisted(() => ({ isShellHost: vi.fn(), openShellFolder: vi.fn() }))
 vi.mock('../../src/api/client', () => ({ api: request }))
+vi.mock('../../src/util/shellBridge', () => shell)
 vi.mock('../../src/components/CollapsibleCard', () => ({ CollapsibleCard: ({ children, headerRight }: { children: React.ReactNode; headerRight: React.ReactNode }) => <div><div data-testid="card-header">{headerRight}</div>{children}</div> }))
 const mods = ['First', 'Second', 'Third'].map(name => ({ folder: name, id: name, name, version: '', enabled: true, errors: [] }))
 afterEach(() => { cleanup(); vi.resetAllMocks(); vi.restoreAllMocks() })
 describe('Solo mod shortcuts and ordering', () => {
+  it('shows refresh progress, prevents repeat clicks and reports completion', async () => {
+    const state = { mods: [], gamePath: 'C:/Dune', runtimeReady: true, session: null }
+    request.mockResolvedValue(state)
+    render(<SoloMods />)
+    await screen.findByRole('button', { name: 'Repair mod runtime' })
+    let complete!: (value: typeof state) => void
+    request.mockReturnValueOnce(new Promise(resolve => { complete = resolve }))
+    fireEvent.click(screen.getByRole('button', { name: 'Refresh' }))
+    expect(screen.getByRole('button', { name: 'Refreshing…' })).toBeDisabled()
+    expect(screen.getByRole('button', { name: 'Refreshing…' })).toHaveAttribute('aria-busy', 'true')
+    complete(state)
+    expect(await screen.findByText('Mod list refreshed.')).toBeInTheDocument()
+    request.mockRejectedValueOnce(new Error('Cannot read mod list'))
+    fireEvent.click(screen.getByRole('button', { name: 'Refresh' }))
+    expect(await screen.findByRole('alert')).toHaveTextContent('Cannot read mod list')
+    expect(screen.getByRole('button', { name: 'Refresh' })).toBeEnabled()
+  })
+  it('opens the backend Mods path through the desktop shell and surfaces shell failure', async () => {
+    const state = { mods: [], gamePath: 'C:/Dune', runtimeReady: true, session: null }
+    request.mockResolvedValue(state)
+    shell.isShellHost.mockReturnValue(true)
+    render(<SoloMods />)
+    await screen.findByRole('button', { name: 'Repair mod runtime' })
+    request.mockResolvedValueOnce({ path: 'C:/DST/Mods' })
+    shell.openShellFolder.mockRejectedValueOnce(new Error('Explorer could not start'))
+    fireEvent.click(screen.getByRole('button', { name: 'Open Mods Folder' }))
+    expect(await screen.findByRole('alert')).toHaveTextContent('Explorer could not start')
+    expect(request).toHaveBeenCalledWith('/api/solo/mods/open', { method: 'POST', body: JSON.stringify({ desktop: true }) })
+    expect(shell.openShellFolder).toHaveBeenCalledWith('C:/DST/Mods')
+    expect(screen.queryByText('Mods folder opening in File Explorer.')).not.toBeInTheDocument()
+  })
   it('keeps runtime repair in the card header and reports install errors', async () => {
     request.mockResolvedValue({ mods: [], gamePath: 'C:/Dune', runtimeReady: true, session: null })
     render(<SoloMods />)

@@ -62,7 +62,7 @@ Register-DuneRoute -Method POST -Path '/api/solo/mods/restore' -LocalOnly -Handl
 Register-DuneRoute -Method POST -Path '/api/solo/mods/open' -LocalOnly -Handler {
     param($req,$res,$routeParams,$body)
     try {
-        $result=Invoke-WithDuneLock -Name 'solo-mods' -Script { New-Item -ItemType Directory -Path $script:DuneSoloModsRoot -Force | Out-Null; Start-Process explorer.exe -ArgumentList ('"'+$script:DuneSoloModsRoot+'"'); @{ok=$true} }
+        $result=Invoke-WithDuneLock -Name 'solo-mods' -Script { Open-DuneSoloModsFolder -Desktop:($body.desktop -eq $true) }
         Write-DuneJson -Response $res -Body $result
     } catch { Write-DuneError -Response $res -Status 400 -Message $_.Exception.Message }
 }

@@ -151,6 +151,19 @@ function Get-DuneSoloMods {
     return @{ platform=$platform; gameRunning=$gameRunning; mods=$mods; folder=$script:DuneSoloModsRoot; gamePath=[string]$settings.gamePath; skipIntro=[bool]$preferences.skipIntro; soloArguments=[string]$preferences.soloArguments; runtimeReady=(Test-DuneSoloModRuntime); session=$session; launchError=$launchError; runtimeLog=$runtimeLog }
 }
 
+function Open-DuneSoloModsFolder {
+    param([switch]$Desktop)
+    $path = [IO.Path]::GetFullPath($script:DuneSoloModsRoot)
+    New-Item -ItemType Directory -Path $path -Force -ErrorAction Stop | Out-Null
+    if (-not $Desktop) {
+        if ([Diagnostics.Process]::GetCurrentProcess().SessionId -eq 0) {
+            throw "Open Mods Folder requires the DST desktop window when the backend runs as a service. Folder: $path"
+        }
+        Start-Process -FilePath 'explorer.exe' -ArgumentList ('"'+$path+'"') -ErrorAction Stop | Out-Null
+    }
+    return @{ok=$true;path=$path}
+}
+
 function Set-DuneSoloModPlatform([string]$Platform, [string]$GamePath='') {
     $settings = Read-DuneModJson (Join-Path $script:DuneSoloLoaderRoot 'settings.json') @{}
     $platform = if ($Platform) { $Platform } elseif ($settings.platform) { [string]$settings.platform } else { 'steam' }

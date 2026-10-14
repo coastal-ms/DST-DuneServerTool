@@ -732,6 +732,33 @@ internal sealed class MainForm : Form
             return;
         }
 
+        if (string.Equals(messageType, "folder.open", StringComparison.Ordinal))
+        {
+            try
+            {
+                if (!Uri.TryCreate(_targetUrl, UriKind.Absolute, out var portal) || !portal.IsLoopback)
+                    throw new InvalidOperationException("Local folders can be opened only from the host portal.");
+                string? path = GetStringProperty(message, "path");
+                if (string.IsNullOrWhiteSpace(path) || !Path.IsPathFullyQualified(path) || path.StartsWith(@"\\"))
+                    throw new InvalidDataException("Choose an existing local folder.");
+                path = Path.GetFullPath(path);
+                if (!Directory.Exists(path)) throw new DirectoryNotFoundException("The folder does not exist.");
+                var start = new ProcessStartInfo
+                {
+                    FileName = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.Windows), "explorer.exe"),
+                    UseShellExecute = true,
+                };
+                start.ArgumentList.Add(path);
+                Process.Start(start);
+                PostShellResponse(requestId, "folder.open.result", true);
+            }
+            catch (Exception ex)
+            {
+                PostShellResponse(requestId, "folder.open.result", false, ex.Message);
+            }
+            return;
+        }
+
         if (string.Equals(messageType, "shell.restart", StringComparison.Ordinal))
         {
             PostShellResponse(requestId, "shell.restart.result", true);

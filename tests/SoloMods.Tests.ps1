@@ -287,6 +287,26 @@ BeforeEach {
         (Get-Content $selection -Raw).Trim() | Should -Be '{"Kept":true}'
     }
 
+    It 'returns the actual Mods folder for the desktop shell without starting service-session Explorer' {
+        Mock Start-Process { throw 'Backend must not start Explorer for a desktop request' }
+        $result = Open-DuneSoloModsFolder -Desktop
+        $result.ok | Should -BeTrue
+        $result.path | Should -Be ([IO.Path]::GetFullPath($script:DuneSoloModsRoot))
+        Test-Path -LiteralPath $result.path -PathType Container | Should -BeTrue
+        Should -Invoke Start-Process -Times 0
+    }
+
+    It 'does not claim a visible Explorer window from a service session' {
+        Mock Start-Process {}
+        if ([Diagnostics.Process]::GetCurrentProcess().SessionId -eq 0) {
+            { Open-DuneSoloModsFolder } | Should -Throw '*DST desktop window*'
+            Should -Invoke Start-Process -Times 0
+        } else {
+            (Open-DuneSoloModsFolder).ok | Should -BeTrue
+            Should -Invoke Start-Process -Times 1
+        }
+    }
+
     It 'repairs a partial runtime without replacing installed mods or selections' {
         Install-DuneSoloModRuntime | Out-Null
         Remove-Item -LiteralPath (Join-Path $script:DuneSoloLoaderRoot 'Runtime/dwmapi.dll')

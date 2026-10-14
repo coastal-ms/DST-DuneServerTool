@@ -98,3 +98,7 @@ export async function setShellPreferences(
 export async function restartShell(): Promise<void> {
   await requestShell<ShellResponse>('shell.restart')
 }
+
+export async function openShellFolder(path: string): Promise<void> {
+  await requestShell<ShellResponse>('folder.open', { path })
+}
