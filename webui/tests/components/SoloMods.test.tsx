@@ -8,17 +8,12 @@ vi.mock('../../src/components/CollapsibleCard', () => ({ CollapsibleCard: ({ chi
 const mods = ['First', 'Second', 'Third'].map(name => ({ folder: name, id: name, name, version: '', enabled: true, errors: [] }))
 afterEach(() => { cleanup(); vi.resetAllMocks(); vi.restoreAllMocks() })
 describe('Solo mod shortcuts and ordering', () => {
-  it('installs bundled tanks without enabling or launching them', async () => {
-    request.mockResolvedValue({ mods: [], gamePath: 'C:/Dune', runtimeReady: true, session: null })
+  it('keeps built-in tank support out of the selectable mod list and uses ordinary Solo launch', async () => {
+    request.mockResolvedValue({ mods: [{ ...mods[0], id: 'dst-regis-tanks', name: 'Regis Tanks' }], gamePath: 'C:/Dune', runtimeReady: true, session: null })
     render(<SoloMods />)
-    fireEvent.click(await screen.findByRole('button', { name: 'Install Regis Tanks' }))
-    await waitFor(() => expect(request).toHaveBeenCalledWith('/api/solo/mods/regis-tanks', expect.objectContaining({ method: 'POST' })))
-    expect(request.mock.calls.some(call => call[0] === '/api/solo/mods/launch' || call[0] === '/api/solo/mods/selection')).toBe(false)
-  })
-  it('shows tank controls and limitations and hides the install button once installed', async () => {
-    request.mockResolvedValue({ mods: [{ ...mods[0], id: 'dst-regis-tanks', warnings: ['F8: Dart; F9: Flamethrower. Keep enabled for saved tanks.'] }], gamePath: 'C:/Dune', runtimeReady: true, session: null })
-    render(<SoloMods />)
-    expect(await screen.findByText('F8: Dart; F9: Flamethrower. Keep enabled for saved tanks.')).toBeInTheDocument()
+    fireEvent.click(await screen.findByRole('button', { name: 'Launch Solo' }))
+    await waitFor(() => expect(request).toHaveBeenCalledWith('/api/solo/mods/launch', expect.objectContaining({ body: JSON.stringify({ withMods: false }) })))
+    expect(screen.queryByText('Regis Tanks')).not.toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'Install Regis Tanks' })).not.toBeInTheDocument()
   })
   it('persists the dropped order with enabled flags intact', async () => {

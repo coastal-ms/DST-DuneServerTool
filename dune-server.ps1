@@ -1313,8 +1313,10 @@ function Sync-DuneRetailSettingsBeforeStart {
         . (Join-Path $Root 'lib\Db-Postgres.ps1')
         . (Join-Path $Root 'lib\K8s.ps1')
         . (Join-Path $Root 'server\lib\RetailServerSettings.ps1')
+        . (Join-Path $Root 'server\lib\RegisTanksBuild.ps1')
+        . (Join-Path $Root 'server\lib\RegisTanksActivation.ps1')
+        $script:AppDir = $Root
         $script:V6SshKeyCache = $KeyPath
-        if(-not(Get-DuneRetailStartupSyncPreference).enabled){return}
         $deadline = [DateTime]::UtcNow.AddSeconds(90)
         do {
             $target = Resolve-DuneRetailServerSettingsTarget -Ip $VmIp
@@ -1322,7 +1324,10 @@ function Sync-DuneRetailSettingsBeforeStart {
             if ([DateTime]::UtcNow -ge $deadline) { throw 'Game pods have not stopped. Server Settings were not synchronized and the battlegroup was not started.' }
             Start-Sleep -Seconds 2
         } while ($true)
-        $null = Sync-DuneRetailServerSettingsForStartup -Ip $VmIp
+        if ((Get-DuneRetailStartupSyncPreference).enabled) {
+            $null = Sync-DuneRetailServerSettingsForStartup -Ip $VmIp
+        }
+        $null = Initialize-DuneRegisTanksForStartup -Ip $VmIp
     } $retailRoot $Ip $sshKey
 }
 

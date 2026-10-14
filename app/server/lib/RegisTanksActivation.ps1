@@ -1,11 +1,14 @@
 function Get-DuneRegisTankDeployment {
-    param([string]$Ip)
+    param([string]$Ip, [switch]$AllowUnsupportedMap)
     $bg = Get-V6Battlegroup -Ip $Ip
     Assert-DuneRetailKubernetesName -Value ([string]$bg.Ns) -Label namespace
     Assert-DuneRetailKubernetesName -Value ([string]$bg.Name) -Label battlegroup
     $sets = @($bg.Bg.spec.serverGroup.template.spec.sets)
     $indices = @(for($i=0; $i -lt $sets.Count; $i++) { if($sets[$i].map -ceq 'Survival_1') { $i } })
-    if ($indices.Count -ne 1) { throw 'Regis Tanks require one configured Hagga server group.' }
+    if ($indices.Count -ne 1) {
+        if ($AllowUnsupportedMap) { return @{bg=$bg;supported=$false;managed=$false;image=''} }
+        throw 'Regis Tanks require one configured Hagga server group.'
+    }
     $image = [string]$sets[$indices[0]].image
     $supported = $image -cin @('registry.funcom.com/funcom/self-hosting/seabass-server:2147284-0-shipping','localhost/dst-regis-tanks:2147284-1','localhost/dst-regis-tanks:2147284-native-trial1')
     return @{ bg=$bg; index=$indices[0]; image=$image; supported=$supported; managed=($image -clike 'localhost/dst-regis-tanks:2147284-*') }
@@ -54,8 +57,16 @@ function Set-DuneRegisTankCompatibility {
     return @{ok=$true;enabled=$Enabled;message=if($Enabled){'Regis Tank compatibility enabled. Start the battlegroup to apply it.'}else{'Official server image restored. Start the battlegroup to apply it.'}}
 }
 
+function Initialize-DuneRegisTanksForStartup {
+    param([string]$Ip)
+    $deployment = Get-DuneRegisTankDeployment -Ip $Ip -AllowUnsupportedMap
+    if (-not $deployment.supported) { return @{ok=$true;supported=$false} }
+    if ($deployment.managed) { return @{ok=$true;supported=$true;enabled=$true} }
+    return Set-DuneRegisTankCompatibility -Ip $Ip -Enabled $true
+}
+
 function Assert-DuneRegisTankUpdateAllowed {
     param([string]$Ip)
     $deployment = Get-DuneRegisTankDeployment -Ip $Ip
-    if ($deployment.image -clike 'localhost/dst-regis-tanks:*') { throw 'Disable Regis Tank compatibility before updating the server. Support is specific to the current server build.' }
+    if ($deployment.image -clike 'localhost/dst-regis-tanks:*') { throw 'This server update needs qualified Tank compatibility for the new build. Saved Tanks require the current compatibility image.' }
 }

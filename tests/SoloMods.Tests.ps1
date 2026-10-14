@@ -13,6 +13,27 @@
 }
 AfterAll { if($script:ModTestRoot.StartsWith([IO.Path]::GetTempPath())){Remove-Item -LiteralPath $script:ModTestRoot -Recurse -Force} }
 Describe 'Solo mod import and dependencies' {
+    It 'includes built-in Tanks in normal Solo launch and preserves optional mod selections' -ForEach @(@{WithMods=$false;Expected=1},@{WithMods=$true;Expected=2}) {
+        $script:DuneBundledSoloModsRoot=Join-Path (Get-DstRepoRoot) 'app/resources/solo-mods'
+        $library=Join-Path $script:ModTestRoot ([guid]::NewGuid().ToString('N')+'/steamapps')
+        $game=Join-Path $library 'common/DuneAwakening'
+        $bin=Join-Path $game 'DuneSandbox/Binaries/Win64'
+        New-Item -ItemType Directory -Path $bin -Force | Out-Null
+        $exe=Join-Path $bin 'DuneSandbox-Win64-Shipping.exe'
+        New-Item -ItemType File -Path $exe | Out-Null
+        '"buildid" "25789117"' | Set-Content (Join-Path $library 'appmanifest_1172710.acf')
+        Import-DuneSoloMod (New-ModZip ([guid]::NewGuid().ToString('N')) @{'UserMod/Scripts/main.lua'='print(1)'}) | Out-Null
+        Set-DuneSoloModSelection @{mods=@(@{folder='UserMod';enabled=$true});gamePath=$game;platform='steam'} | Out-Null
+        Mock Get-FileHash { @{Hash='B9A77E7A178CFA8D88D65743BCBB04EF9D45E13539DB0BBD148E172BDA86A9E9'} } -ParameterFilter { $LiteralPath -eq $exe }
+        Mock Start-Process {}
+        Start-DuneSoloModGame $WithMods | Out-Null
+        $status=Get-DuneSoloMods
+        $list=@(Get-Content (Join-Path $status.session.root 'mods.txt'))
+        $list.Count | Should -Be $Expected
+        $list | Should -Contain 'dst-regis-tanks : 1'
+        @($status.mods | Where-Object id -eq 'UserMod')[0].enabled | Should -BeTrue
+        if (-not $WithMods) { $list | Should -Not -Contain 'UserMod : 1' }
+    }
     It 'installs bundled tanks disabled and preserves an existing installation' {
         $script:DuneBundledSoloModsRoot=Join-Path (Get-DstRepoRoot) 'app/resources/solo-mods'
         $result=Install-DuneRegisTanksMod

@@ -1528,7 +1528,7 @@ export function SoloMode() {
         ))}
       </div>
 
-      {tab === 'mods' && <><SoloRegisTanks connectionToken={`${activeProfileToken}:${connectionRevision}`} /><SoloMods connectionToken={`${activeProfileToken}:${connectionRevision}`} /></>}
+      {tab === 'mods' && <SoloMods connectionToken={`${activeProfileToken}:${connectionRevision}`} />}
       {tab === 'dd-map' && <WickMaps embedded solo />}
       {tab === 'overview' && (
         <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
@@ -1974,6 +1974,7 @@ export function SoloMode() {
       )}
       {tab === 'inventory' && (
         <div className="space-y-4">
+          <SoloRegisTanks connectionToken={`${activeProfileToken}:${connectionRevision}`} />
           <button className="btn-secondary" disabled={!canMutateActiveProfile || gameRunning || busy !== null} onClick={() => void repairEquipment()}>Repair all carried equipment</button>
           <div className="flex flex-wrap gap-2 items-center">
             <label htmlFor="solo-repair-container">Repair a storage container</label>

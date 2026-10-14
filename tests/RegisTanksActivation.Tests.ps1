@@ -57,9 +57,26 @@ Describe 'Regis Tank activation and rollback' {
         { Set-DuneRegisTankCompatibility -Ip test -Enabled $true } | Should -Throw '*does not match*'
         Should -Invoke New-DuneRegisTankServerImage -Times 0
     }
+    It 'automatically prepares support on the official build and skips an already managed image' {
+        Initialize-DuneRegisTanksForStartup -Ip test | Out-Null
+        Should -Invoke New-DuneRegisTankServerImage -Times 1
+        Initialize-DuneRegisTanksForStartup -Ip test | Out-Null
+        Should -Invoke New-DuneRegisTankServerImage -Times 1
+    }
+    It 'does not replace unsupported or unrelated custom images during startup' {
+        $script:Image='custom/game:other'
+        (Initialize-DuneRegisTanksForStartup -Ip test).supported | Should -BeFalse
+        Should -Invoke New-DuneRegisTankServerImage -Times 0
+        Should -Invoke Invoke-DuneRegisTankShell -Times 0
+    }
+    It 'leaves battlegroups without Hagga available to start normally' {
+        Mock Get-V6Battlegroup { @{Ns='test-bg';Name='test-world';Bg=@{spec=@{serverGroup=@{template=@{spec=@{sets=@(@{map='Overmap';image='untouched'})}}}}}} }
+        (Initialize-DuneRegisTanksForStartup -Ip test).supported | Should -BeFalse
+        Should -Invoke New-DuneRegisTankServerImage -Times 0
+    }
     It 'blocks an update while a native Tank image is selected' {
         $script:Image='localhost/dst-regis-tanks:2147284-1'
-        { Assert-DuneRegisTankUpdateAllowed -Ip test } | Should -Throw '*Disable*'
+        { Assert-DuneRegisTankUpdateAllowed -Ip test } | Should -Throw '*qualified*'
         $script:Image='registry.funcom.com/funcom/self-hosting/seabass-server:2147284-0-shipping'
         { Assert-DuneRegisTankUpdateAllowed -Ip test } | Should -Not -Throw
     }

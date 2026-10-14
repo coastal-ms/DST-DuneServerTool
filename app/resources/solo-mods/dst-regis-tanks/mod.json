@@ -14,7 +14,7 @@
   ],
   "warnings": [
     "Steam Solo only. F8: Dart tank; F9: Flamethrower tank. One of each per launch.",
-    "Keep Regis Tanks enabled when loading a save containing these tanks.",
+    "Tank support is included automatically in supported DST Solo launches.",
     "Known issues: pink Dart firing effect, missing audio and misleading tread/PSU module labels."
   ]
 }

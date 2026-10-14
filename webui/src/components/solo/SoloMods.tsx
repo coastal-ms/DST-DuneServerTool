@@ -40,7 +40,7 @@ export function SoloMods({ connectionToken = '' }: { connectionToken?: string })
   )
   const refresh = async () => {
     const result = await api<State>('/api/solo/mods')
-    setState(result)
+    setState({ ...result, mods: result.mods.filter(mod => mod.id !== 'dst-regis-tanks') })
     setGamePath(result.gamePath)
     setPlatform((result as State & { platform?: string }).platform ?? 'steam')
     setSoloArguments(result.soloArguments ?? '')
@@ -115,14 +115,14 @@ export function SoloMods({ connectionToken = '' }: { connectionToken?: string })
       </label>
       {notice && <p role="status" className="text-sm w-full">{notice}</p>}
       {(error || state?.launchError) && <p role="alert" className="text-danger whitespace-pre-wrap text-sm w-full">{error || state?.launchError}</p>}
-      <button className="btn-primary" disabled={busy} onClick={() => void run('launch', { withMods: true })}>Launch with Mods</button>
-      <button className="btn-secondary" disabled={busy} onClick={() => void run('launch', { withMods: false })}>Launch Normally</button>
+      <button className="btn-secondary" disabled={busy} onClick={() => void run('launch', { withMods: true })}>Launch with Mods</button>
+      <button className="btn-primary" disabled={busy} onClick={() => void run('launch', { withMods: false })}>Launch Solo</button>
       <button className="btn-secondary" disabled={busy} title="Close Dune first. Restore original launch files and remove DST session DLLs; saves and installed mods are kept." onClick={() => void run('restore')}>Reset launch files</button>
       <button className="btn-secondary" disabled={busy} onClick={() => void run('shortcut')}>Create desktop shortcut</button>
     </div>
   }>
     <div className="space-y-3">
-      <p className="text-sm text-text-muted">Launching with mods, including through the desktop shortcut, disables BattlEye for that game session.</p>
+      <p className="text-sm text-text-muted">Supported Steam Solo launches include built-in Tank support and disable BattlEye for that session. Launch with Mods also loads your enabled mods; Xbox mod launches disable BattlEye too.</p>
       {platform === 'xbox' && (
         <p className="rounded border border-warning/30 bg-warning/5 p-3 text-sm text-text-muted">
           Xbox app / Game Pass mods require a version updated by the mod author for Game Pass.
@@ -132,7 +132,6 @@ export function SoloMods({ connectionToken = '' }: { connectionToken?: string })
       {deleting && <ConfirmationModal title={`Delete ${deleting.name}?`} description="This permanently removes the mod folder and its INI settings. You can reinstall the mod from its ZIP." confirmLabel="Delete mod" onCancel={() => setDeleting(null)} onConfirm={() => { const folder = deleting.folder; setDeleting(null); void run('delete', { folder }) }} />}
       <a className="text-sm text-accent-bright underline" href="https://www.nexusmods.com/duneawakening" target="_blank" rel="noopener noreferrer">Browse Dune: Awakening mods on Nexus Mods</a>
       <div className="flex flex-wrap gap-2">
-        {!state?.mods.some(mod => mod.id === 'dst-regis-tanks') && <button className="btn-secondary" disabled={busy || state?.gameRunning || platform !== 'steam'} onClick={() => void run('regis-tanks')}>Install Regis Tanks</button>}
         <button className="btn-secondary" disabled={busy} onClick={() => void install()}>Install mod ZIP</button>
         <button className="btn-secondary" disabled={busy} onClick={() => void run('open')}>Open Mods Folder</button>
         <button className="btn-secondary" disabled={busy} onClick={() => void refresh().catch(e => setError(String(e)))}>Refresh</button>

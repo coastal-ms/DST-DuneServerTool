@@ -25,6 +25,15 @@ function Set-DuneRegisTanksLaunchContext([string]$GamePath,[string]$Platform) {
     [IO.File]::WriteAllText($context,$manifest,[Text.UTF8Encoding]::new($false))
 }
 
+function Test-DuneSoloRegisTankBuild([string]$GamePath, [string]$Platform) {
+    if ($Platform -ne 'steam' -or -not $GamePath) { return $false }
+    $exe = Join-Path $GamePath 'DuneSandbox\Binaries\Win64\DuneSandbox-Win64-Shipping.exe'
+    $manifest = [IO.Path]::GetFullPath((Join-Path $GamePath '..\..\appmanifest_1172710.acf'))
+    return (Test-Path -LiteralPath $exe) -and (Test-Path -LiteralPath $manifest) -and
+        ((Get-Content -LiteralPath $manifest -Raw) -match '"buildid"\s+"25789117"') -and
+        ((Get-FileHash -LiteralPath $exe).Hash -eq 'B9A77E7A178CFA8D88D65743BCBB04EF9D45E13539DB0BBD148E172BDA86A9E9')
+}
+
 function Enable-DuneSoloRegisTanks {
     Assert-DuneSoloGameClosed
     $state = Get-DuneSoloMods
@@ -36,7 +45,7 @@ function Enable-DuneSoloRegisTanks {
     if (-not @($state.mods | Where-Object id -eq 'dst-regis-tanks').Count) { Install-DuneRegisTanksMod | Out-Null }
     $state = Get-DuneSoloMods
     $mods = @($state.mods | ForEach-Object {
-        @{folder=$_.folder;enabled=if($_.id -eq 'dst-regis-tanks'){$true}else{[bool]$_.enabled}}
+        @{folder=$_.folder;enabled=if($_.id -eq 'dst-regis-tanks'){$true}elseif($_.id -in @('dst-regis-tanks-trial','dst-regis-tanks-dart-trial','dst-regis-tanks-persistence-trial','dst-regis-tanks-fire-persistence-trial','dst-regis-tanks-probe')){$false}else{[bool]$_.enabled}}
     })
     return Set-DuneSoloModSelection @{mods=$mods;platform=$state.platform;gamePath=$state.gamePath}
 }
@@ -220,9 +229,11 @@ function Start-DuneSoloModGame([bool]$WithMods) {
     $bin=Join-Path $status.gamePath ('DuneSandbox\Binaries\'+$target)
     $exe=Join-Path $bin ('DuneSandbox-'+$target+'-Shipping.exe')
     if(-not(Test-Path -LiteralPath $exe)){throw 'Select the Dune Awakening installation folder.'}
-    if(-not $WithMods){Start-Process -FilePath $exe -WorkingDirectory $bin -ArgumentList (Get-DuneSoloLaunchArguments -SkipIntro $status.skipIntro -ExtraArguments $status.soloArguments);return @{ok=$true}}
+    $tankSupport = Test-DuneSoloRegisTankBuild -GamePath $status.gamePath -Platform $status.platform
+    if ($tankSupport) { $status = Enable-DuneSoloRegisTanks }
+    if(-not $WithMods -and -not $tankSupport){Start-Process -FilePath $exe -WorkingDirectory $bin -ArgumentList (Get-DuneSoloLaunchArguments -SkipIntro $status.skipIntro -ExtraArguments $status.soloArguments);return @{ok=$true}}
     if(-not $status.runtimeReady){throw 'Install the mod runtime first.'}
-    $selected=@($status.mods | Where-Object enabled)
+    $selected=@($status.mods | Where-Object { $_.enabled -and (($WithMods -and $_.id -ne 'dst-regis-tanks') -or ($tankSupport -and $_.id -eq 'dst-regis-tanks')) })
     if(-not $selected.Count){throw 'Enable at least one mod.'}
     $errors=@($selected | ForEach-Object {$name=$_.name; $_.errors | ForEach-Object {"${name}: $_"}})
     if($errors.Count){throw ($errors -join "`n")}

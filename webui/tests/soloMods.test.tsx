@@ -64,7 +64,7 @@ describe('Solo mod controls', () => {
     expect(screen.getByText(/Missing or disabled dependency/)).toBeInTheDocument()
     fireEvent.click(screen.getByRole('button', {name: /Solo mods/}))
     expect(screen.queryByText('Example')).not.toBeInTheDocument()
-    fireEvent.click(screen.getByRole('button', {name: 'Launch Normally'}))
+    fireEvent.click(screen.getByRole('button', {name: 'Launch Solo'}))
     await waitFor(() => expect(api).toHaveBeenCalledWith('/api/solo/mods/launch', {method:'POST',body:JSON.stringify({withMods:false})}))
     await waitFor(() => expect(screen.getByRole('button', {name:'Launch with Mods'})).toBeEnabled())
     fireEvent.click(screen.getByRole('button', {name: 'Launch with Mods'}))
