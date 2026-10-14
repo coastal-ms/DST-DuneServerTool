@@ -412,6 +412,9 @@ BeforeEach {
         $path=Join-Path $root 'proxy';$backup=Join-Path $root 'original';'new'|Set-Content $path;'old'|Set-Content $backup
         $owned=Join-Path $root 'owned';'owned'|Set-Content $owned
         @{files=@(@{path=$path;backup=$backup;hash=(Get-FileHash $path).Hash;installed=$true;restored=$false},@{path=$owned;backup=(Join-Path $root 'absent');hash=(Get-FileHash $owned).Hash;installed=$true;restored=$false})} | ConvertTo-Json -Depth 5 | Set-Content (Join-Path $root 'session.json')
+        # The background Windows PowerShell watcher must restore even when
+        # its host cannot resolve the Get-FileHash cmdlet.
+        Mock Get-FileHash { throw 'Get-FileHash unavailable in watcher host' }
         & "$PSScriptRoot/../app/server/lib/SoloModsWatcher.ps1" -LoaderRoot $root -RestoreOnly
         Get-Content $path | Should -Be 'old'
         Test-Path $owned | Should -BeFalse
