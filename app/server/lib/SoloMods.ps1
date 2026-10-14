@@ -412,8 +412,27 @@ function Start-DuneSoloModGame([bool]$WithMods) {
     } catch { Restore-DuneSoloModSession;throw }
 }
 
+function Get-DuneSoloTankStatus {
+    $ready=$false
+    try {
+        $session=Read-DuneModJson (Join-Path $script:DuneSoloLoaderRoot 'session.json') $null
+        if($session -and $session.tankSupport -and $session.root -and @(Get-Process -Name DuneSandbox-Win64-Shipping,DuneSandbox-WinGDK-Shipping,AppDuneAwakeningShipping -ErrorAction SilentlyContinue).Count -gt 0){
+            $root=[IO.Path]::GetFullPath([string]$session.root)
+            if([IO.Path]::GetDirectoryName($root) -eq [IO.Path]::GetFullPath($script:DuneSoloLoaderRoot).TrimEnd('\','/') -and -not ((Get-Item -LiteralPath $root).Attributes -band [IO.FileAttributes]::ReparsePoint)){
+                $file=Get-Item -LiteralPath (Join-Path $root 'tank-world-ready.txt') -ErrorAction SilentlyContinue
+                if($file -and $file.Length -le 16 -and -not ($file.Attributes -band [IO.FileAttributes]::ReparsePoint)){
+                    $age=([DateTime]::UtcNow-$file.LastWriteTimeUtc).TotalSeconds
+                    $ready=($age -ge 0 -and $age -le 4 -and [IO.File]::ReadAllText($file.FullName) -ceq 'ready')
+                }
+            }
+        }
+    } catch { $ready=$false }
+    return @{worldReady=$ready}
+}
+
 function Grant-DuneSoloRegisTank([string]$Preset) {
     if ($Preset -cnotin @('T6_CombatDart','T6_CombatFire')) {throw 'Select Dart or Flamethrower Tank.'}
+    if(-not (Get-DuneSoloTankStatus).worldReady){throw 'Enter your Solo world before granting a Tank.'}
     $session = Read-DuneModJson (Join-Path $script:DuneSoloLoaderRoot 'session.json') $null
     if (-not $session -or -not $session.tankSupport) {throw 'Launch supported Solo through DST before granting a Tank.'}
     $root = [IO.Path]::GetFullPath([string]$session.root)

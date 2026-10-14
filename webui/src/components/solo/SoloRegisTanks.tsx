@@ -1,10 +1,25 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { api } from '../../api/client'
 
 export function SoloRegisTanks(_props: { connectionToken: string }) {
   const [busy, setBusy] = useState(false)
   const [message, setMessage] = useState('')
   const [error, setError] = useState('')
+  const [worldReady, setWorldReady] = useState(false)
+  useEffect(() => {
+    let active = true
+    let timer: ReturnType<typeof setTimeout>
+    setWorldReady(false)
+    const refresh = async () => {
+      try {
+        const status = await api<{worldReady: boolean}>('/api/solo/mods/regis-tanks/status')
+        if (active) setWorldReady(status.worldReady === true)
+      } catch { if (active) setWorldReady(false) }
+      finally { if (active) timer = setTimeout(() => void refresh(), 1000) }
+    }
+    void refresh()
+    return () => { active = false; clearTimeout(timer) }
+  }, [_props.connectionToken])
   const grant = async (preset: 'T6_CombatDart' | 'T6_CombatFire') => {
     setBusy(true); setMessage(''); setError('')
     try {
@@ -18,8 +33,8 @@ export function SoloRegisTanks(_props: { connectionToken: string }) {
     <p className="text-xs text-text-muted">Tank support is included automatically when you launch Steam or Xbox PC Solo from DST. No separate Tank launch or enable switch is needed.</p>
     <p className="text-sm">Enter your Solo world and stand on foot in open ground before granting. One of each per launch.</p>
     <div className="flex flex-wrap gap-2">
-      <button type="button" className="btn-primary" disabled={busy} onClick={() => void grant('T6_CombatDart')}>Grant Dart Tank</button>
-      <button type="button" className="btn-primary" disabled={busy} onClick={() => void grant('T6_CombatFire')}>Grant Flamethrower Tank</button>
+      <button type="button" className="btn-primary" disabled={busy || !worldReady} onClick={() => void grant('T6_CombatDart')}>Grant Dart Tank</button>
+      <button type="button" className="btn-primary" disabled={busy || !worldReady} onClick={() => void grant('T6_CombatFire')}>Grant Flamethrower Tank</button>
     </div>
     {message && <p role="status" className="text-sm">{message}</p>}
     {error && <p role="alert" className="text-sm text-danger">{error}</p>}

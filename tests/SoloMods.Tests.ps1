@@ -13,6 +13,25 @@
 }
 AfterAll { if($script:ModTestRoot.StartsWith([IO.Path]::GetTempPath())){Remove-Item -LiteralPath $script:ModTestRoot -Recurse -Force} }
 Describe 'Solo mod import and dependencies' {
+    It 'requires a fresh in-world heartbeat from the current running Tank session' {
+        Mock Get-Process { [pscustomobject]@{Id=42} }
+        $root=Join-Path $script:DuneSoloLoaderRoot 'Session-readiness'
+        New-Item -ItemType Directory -Path $root -Force | Out-Null
+        @{root=$root;tankSupport=$true} | ConvertTo-Json | Set-Content (Join-Path $script:DuneSoloLoaderRoot 'session.json')
+        (Get-DuneSoloTankStatus).worldReady | Should -BeFalse
+        {Grant-DuneSoloRegisTank T6_CombatDart} | Should -Throw '*Enter your Solo world*'
+        Test-Path (Join-Path $root 'tank-request.txt') | Should -BeFalse
+        $file=Join-Path $root 'tank-world-ready.txt'
+        Set-Content -LiteralPath $file -Value 'ready' -NoNewline
+        (Get-DuneSoloTankStatus).worldReady | Should -BeTrue
+        (Get-Item -LiteralPath $file).LastWriteTimeUtc=[DateTime]::UtcNow.AddSeconds(-10)
+        (Get-DuneSoloTankStatus).worldReady | Should -BeFalse
+        Set-Content -LiteralPath $file -Value 'loading' -NoNewline
+        (Get-DuneSoloTankStatus).worldReady | Should -BeFalse
+        Set-Content -LiteralPath $file -Value 'ready' -NoNewline
+        Mock Get-Process {}
+        (Get-DuneSoloTankStatus).worldReady | Should -BeFalse
+    }
     It 'lists bundled runtime versions and preserves a saved selection when another entry is added' {
         $body=@{mods=@();platform='steam';gamePath='C:/Game';runtimeVersion='3.0.1-1164-g5e627997'}
         $state=Set-DuneSoloModSelection $body
@@ -80,6 +99,7 @@ Describe 'Solo mod import and dependencies' {
         (Get-DuneSoloMods).runtimeVersion | Should -Be '3.0.1-1140-gf58e8f84'
     }
     It 'sends a button grant to the current session and waits for matching game acknowledgement' {
+        Mock Get-DuneSoloTankStatus { @{worldReady=$true} }
         $script:TankCommandTestRoot=Join-Path $script:DuneSoloLoaderRoot ('Session-'+[guid]::NewGuid().ToString('N'))
         New-Item -ItemType Directory -Path $script:TankCommandTestRoot -Force | Out-Null
         @{root=$script:TankCommandTestRoot;tankSupport=$true} | ConvertTo-Json | Set-Content (Join-Path $script:DuneSoloLoaderRoot 'session.json')

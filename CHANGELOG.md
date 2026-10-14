@@ -21,6 +21,7 @@ here cover everything those tags shipped.
 - Add a saved UE4SS runtime dropdown for mod launches, defaulting to 1140 with 1164 as an optional choice, and show the selected version, automatic fallback and declared version mismatches. Built-in Tank-only launches keep their existing runtime behavior.
 
 ### Fixed
+- Keep Solo Tank grant buttons disabled until the current Solo world is loaded, and reject grants without a fresh in-world runtime signal.
 - Correct the Slaver Stillsuit Gloves display name.
 - Fill compatible existing item stacks before creating new stacks in Solo and self-hosted offline player and storage grants. Restore Welding Wire and ammunition stack metadata and count available stack space when checking inventory slots.
 - Use the previous bundled UE4SS runtime as the compatibility default for optional mods, with the newer runtime available by explicit opt-in and automatic fallback after a confirmed initialization failure. Preserve both runtimes, installed mods and settings. Optional mod requirements do not affect built-in Tank-only launches.

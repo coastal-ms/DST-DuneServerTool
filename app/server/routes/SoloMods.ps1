@@ -10,6 +10,11 @@ Register-DuneRoute -Method POST -Path '/api/solo/mods/import' -LocalOnly -Handle
     } catch { Write-DuneError -Response $res -Status 400 -Message $_.Exception.Message }
 }
 
+Register-DuneRoute -Method GET -Path '/api/solo/mods/regis-tanks/status' -LocalOnly -Handler {
+    param($req,$res,$routeParams,$body)
+    Write-DuneJson -Response $res -Body (Get-DuneSoloTankStatus)
+}
+
 Register-DuneRoute -Method POST -Path '/api/solo/mods/regis-tanks' -LocalOnly -Handler {
     param($req,$res,$routeParams,$body)
     try {

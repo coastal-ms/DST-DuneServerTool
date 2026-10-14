@@ -64,12 +64,12 @@ end
 local function verify_launch_context()
     if PLATFORM ~= "steam" and PLATFORM ~= "xbox" then error("Launch Regis Tanks through DST Solo.") end
 end
-local function standalone(pawn)
+local function standalone(pawn, quiet)
     -- Dune's Solo session is not necessarily Unreal NM_Standalone.
     -- Require the game's own explicit Solo flag, not server authority alone.
     local library = find("/Script/DuneSandbox.Default__GUIBlueprintLibrary")
     local contract = params(library:GetClass(), "IsSoloPlay")
-    log("SOLO_PLAY_CONTRACT " .. contract)
+    if not quiet then log("SOLO_PLAY_CONTRACT " .. contract) end
     local result
     if contract == "WorldContextObject:ObjectProperty,ReturnValue:BoolProperty" then
         result = library:IsSoloPlay(pawn)
@@ -78,18 +78,18 @@ local function standalone(pawn)
     else
         error("Unrecognized IsSoloPlay contract: " .. contract .. "; no spawn attempted.")
     end
-    log("SOLO_PLAY_RESULT " .. tostring(result))
+    if not quiet then log("SOLO_PLAY_RESULT " .. tostring(result)) end
     return result == true
 end
-local function controller()
+local function controller(quiet)
     local matches = {}
     for _, pc in ipairs(FindAllOf("DunePlayerController") or {}) do
         if valid(pc) then
             local contract = params(pc:GetClass(), "K2_GetPawn")
-            log("PAWN_GETTER_CONTRACT " .. contract)
+            if not quiet then log("PAWN_GETTER_CONTRACT " .. contract) end
             if contract ~= "ReturnValue:ObjectProperty" then error("Pawn getter signature changed; no spawn attempted.") end
             local pawn = pc:K2_GetPawn()
-            if valid(pawn) and standalone(pawn) then matches[#matches + 1] = pc end
+            if valid(pawn) and standalone(pawn, quiet) then matches[#matches + 1] = pc end
         end
     end
     if #matches ~= 1 then error("Load your Solo world on foot. Exactly one player in a verified Dune Solo session is required.") end
@@ -364,8 +364,24 @@ if script_path then
     local context = io.open(script_path .. "dst-command-root.txt", "r")
     if context then command_root = context:read("*l"); context:close() end
 end
+local readiness_controller
 local function poll_grants()
     if command_root then
+        ExecuteInGameThread(function()
+            local ready = pcall(function()
+                verify_launch_context()
+                if not valid(readiness_controller) then readiness_controller = controller(true) end
+                local pawn = readiness_controller:K2_GetPawn()
+                if not valid(pawn) or not standalone(pawn, true) then error("Solo world is not loaded") end
+            end)
+            local temp = command_root .. "\\tank-world-ready.tmp"
+            local file = io.open(temp, "w")
+            if file then
+                file:write(ready and "ready" or "loading"); file:close()
+                os.remove(command_root .. "\\tank-world-ready.txt")
+                os.rename(temp, command_root .. "\\tank-world-ready.txt")
+            end
+        end)
         local request_path = command_root .. "\\tank-request.txt"
         local request = io.open(request_path, "r")
         if request then
