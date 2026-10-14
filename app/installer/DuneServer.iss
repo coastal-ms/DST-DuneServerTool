@@ -16,7 +16,7 @@
 ;                 -> NOT touched by install or uninstall (preserves user config)
 
 #define MyAppName        "Dune Server Tool"
-#define MyAppVersion "16.4.2.1"
+#define MyAppVersion "16.5.0"
 #ifndef MyAppNumericVersion
 #define MyAppCoreVersion Copy(MyAppVersion, 1, Pos("-", MyAppVersion + "-") - 1)
 #define MyAppNumericVersion MyAppCoreVersion + (Len(MyAppCoreVersion) - Len(StringChange(MyAppCoreVersion, ".", "")) == 2 ? ".0" : "")
@@ -79,6 +79,8 @@ Source: "..\desktop\DuneShell\bin\Release\net10.0-windows\win-x64\publish\DuneSh
 ; Host-local Solo Mode helper: validates Funcom's wrapped SQLite save format,
 ; creates retained backups, and performs verified atomic restores.
 Source: "..\tools\DuneSoloDb\bin\Release\net10.0-windows\win-x64\publish\DuneSoloDb.exe"; DestDir: "{app}\tools\solo"; Flags: ignoreversion
+Source: "..\tools\DuneRegisTanks\bin\Release\net10.0-windows\win-x64\publish\DuneRegisTanks.exe"; DestDir: "{app}\tools\tanks"; Flags: ignoreversion
+Source: "..\resources\regis-tanks\*"; DestDir: "{app}\resources\regis-tanks"; Flags: ignoreversion recursesubdirs
 
 ; Bounded one-shot platform derived-cache helper. It owns typed SQLite operations
 ; and exits after every startup hydration, generation replace, or health task.
@@ -116,6 +118,7 @@ Source: "..\..\webui\dist\*"; DestDir: "{app}\webui\dist"; Flags: ignoreversion 
 ; keep working harmlessly until rebuilt.)
 Source: "..\resources\remote-scripts\*"; DestDir: "{app}\resources\remote-scripts"; Flags: ignoreversion recursesubdirs
 Source: "..\resources\solo-mod-runtime\*"; DestDir: "{app}\resources\solo-mod-runtime"; Flags: ignoreversion
+Source: "..\resources\solo-mods\*"; DestDir: "{app}\resources\solo-mods"; Flags: ignoreversion recursesubdirs
 
 ; v6.1.24: Drop-in preflight checker users can run when something goes wrong.
 ; DunePreflight.bat is the entry point (right-click -> Run as administrator),

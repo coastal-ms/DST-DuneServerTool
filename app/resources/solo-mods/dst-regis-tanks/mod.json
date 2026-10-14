@@ -1,0 +1,20 @@
+{
+  "id": "dst-regis-tanks",
+  "name": "Regis Tanks",
+  "version": "1.0.0",
+  "requires": [],
+  "loadBefore": [],
+  "loadAfter": [],
+  "conflicts": [
+    "dst-regis-tanks-trial",
+    "dst-regis-tanks-dart-trial",
+    "dst-regis-tanks-persistence-trial",
+    "dst-regis-tanks-fire-persistence-trial",
+    "dst-regis-tanks-probe"
+  ],
+  "warnings": [
+    "Steam Solo only. F8: Dart tank; F9: Flamethrower tank. One of each per launch.",
+    "Keep Regis Tanks enabled when loading a save containing these tanks.",
+    "Known issues: pink Dart firing effect, missing audio and misleading tread/PSU module labels."
+  ]
+}

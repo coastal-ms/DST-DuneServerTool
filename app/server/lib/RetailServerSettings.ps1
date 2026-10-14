@@ -2,6 +2,29 @@ $script:DuneRetailServerSettingsSection = '/Script/DuneSandbox.UserServerCustomS
 $script:DuneRetailServerSettingsFileBrowserPath = '/srv/UserSettings/UserServerCustomSettings.ini'
 $script:DuneRetailServerSettingsGamePath = '/home/dune/server/DuneSandbox/Saved/Config/LinuxServer/ServerCustomSettings.ini'
 
+function Get-DuneRetailStartupSyncPreferencePath {
+    Join-Path (Join-Path $env:APPDATA 'DuneServer') 'retail-startup-sync.json'
+}
+
+function Get-DuneRetailStartupSyncPreference {
+    $path=Get-DuneRetailStartupSyncPreferencePath
+    if(-not(Test-Path -LiteralPath $path)){return @{enabled=$true}}
+    $preference=Get-Content -LiteralPath $path -Raw | ConvertFrom-Json
+    if($preference.enabled -isnot [bool]){throw 'Server Settings startup synchronization preference is invalid.'}
+    return @{enabled=[bool]$preference.enabled}
+}
+
+function Set-DuneRetailStartupSyncPreference([bool]$Enabled) {
+    $path=Get-DuneRetailStartupSyncPreferencePath
+    New-Item -ItemType Directory -Path (Split-Path -Parent $path) -Force | Out-Null
+    $temp=$path+'.'+[guid]::NewGuid().ToString('N')+'.tmp'
+    try {
+        [IO.File]::WriteAllText($temp,(@{enabled=$Enabled}|ConvertTo-Json -Compress),[Text.UTF8Encoding]::new($false))
+        Move-Item -LiteralPath $temp -Destination $path -Force
+    } finally {if(Test-Path -LiteralPath $temp){Remove-Item -LiteralPath $temp -Force}}
+    return Get-DuneRetailStartupSyncPreference
+}
+
 $script:DuneRetailServerSettingGroups = [ordered]@{
     'World and economy' = @(
         'DifficultyLevel', 'PVPMode', 'GatheringAmount', 'CraftingCost',
@@ -816,18 +839,25 @@ function Set-DuneRetailServerSettings {
     $fileExisted = $current.fileExists -ne $false
     $runtime = Get-DuneRetailServerSettingsRuntimeSnapshot -Ip $Ip -Target $target
     if (-not $runtime.available) { throw 'The Linux runtime settings could not be inspected. No settings were changed.' }
-    $backup = Backup-DuneRetailServerSettingsContent -Ip $Ip -Target $target -Raw $fileRaw
+    $writeFile = (-not $SynchronizeOnly -or $current.needsMigration) -and
+        (-not $fileExisted -or $fileRevision -cne $updatedRevision)
+    # Preserve content only when this transaction actually replaces it.
+    # Startup synchronization must not accumulate identical canonical backups.
+    $backup = @{}
+    if ($writeFile -and $fileExisted) {
+        $backup = Backup-DuneRetailServerSettingsContent -Ip $Ip -Target $target -Raw $fileRaw
+    }
     $operatorRaw = [string]$target.upstreamContent
-    if ($target.upstreamConfigured -and $operatorRaw -cne $fileRaw) {
+    if ($target.upstreamConfigured -and $operatorRaw -cne $updated -and
+        (-not $backup.path -or $operatorRaw -cne $fileRaw)) {
         $operatorBackupTarget = Copy-DuneRetailServerSettingsMap -Value $target
         $operatorBackupTarget.path = "$($target.path).operator"
         $backup.operator = Backup-DuneRetailServerSettingsContent -Ip $Ip -Target $operatorBackupTarget -Raw $operatorRaw
     }
     $writeRuntime = -not $runtime.fileExists -or [string]$runtime.revision -cne $updatedRevision
-    if ($writeRuntime) {
+    if ($writeRuntime -and $runtime.fileExists) {
         $backup.runtime = Backup-DuneRetailServerSettingsContent -Ip $Ip -Target $runtime.target -Raw ([string]$runtime.raw)
     }
-    $writeFile = -not $SynchronizeOnly -or $current.needsMigration
     if ($writeFile) {
         Write-DuneRetailServerSettingsFile -Ip $Ip -Target $target -Content $updated `
             -ExpectedRevision $fileRevision -ExpectedExists $fileExisted
@@ -933,6 +963,7 @@ function Set-DuneRetailServerSettings {
 
 function Sync-DuneRetailServerSettingsForStartup {
     param([Parameter(Mandatory)][string]$Ip)
+    if(-not(Get-DuneRetailStartupSyncPreference).enabled){return @{ok=$true;skipped=$true;disabled=$true}}
     $snapshot = Get-DuneRetailServerSettingsSnapshot -Ip $Ip
     if (-not $snapshot.available) { throw [string]$snapshot.reason }
     if (-not $snapshot.fileExists -and -not $snapshot.needsMigration) {

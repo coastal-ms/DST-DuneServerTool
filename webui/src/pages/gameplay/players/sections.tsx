@@ -8,6 +8,8 @@
 // re-fetch when `refreshKey` changes.
 
 import { useCallback, useEffect, useId, useMemo, useState, type ReactElement, type ReactNode } from 'react'
+import { RegisTankControls } from './RegisTankControls'
+import { api } from '../../../api/client'
 import { Icon } from '../../../components/Icon'
 import { COSMETIC_LICENSE_NOTICE } from '../../../util/cosmeticEntitlements'
 import { ItemPicker } from '../../../components/ItemPicker'
@@ -55,7 +57,7 @@ import { usePortalAccess } from '../../../auth/portalAccess'
 
 // These controls administer the server/world or other identities, rather than
 // the linked character. The backend independently denies their endpoints.
-const PLAYER_HIDDEN_ACTIONS = new Set(['spawn-vehicle', 'funcom-spawn-vehicle', 'refuel-vehicle',
+const PLAYER_HIDDEN_ACTIONS = new Set(['regis-tanks', 'spawn-vehicle', 'funcom-spawn-vehicle', 'refuel-vehicle',
   'teleport', 'whisper', 'cheat-script', 'dev-scripts', 'fresh-start', 'unlock-testing-stations'])
 
 type Flash = (msg: string, kind?: 'ok' | 'err' | 'info') => void
@@ -636,7 +638,7 @@ interface ActionDef {
   offlineOnly?: boolean   // requires player to be offline (DB write the game caches in memory)
   experimental?: boolean  // unverified — may not take effect in-game; shown with an EXPERIMENTAL badge
   fields?: ActionField[]
-  custom?: 'give-item' | 'grant-reward' | 'whisper' | 'spawn-vehicle' | 'funcom-spawn-vehicle' | 'quick-presets' | 'vehicle-kit' | 'give-package' | 'cheat-scripts' | 'dev-scripts' | 'unlock-trainers' | 'unlock-mainquest' | 'complete-contract' | 'progression-unlock' | 'refuel-vehicle' | 'starter-class' | 'teleport-player' | 'teleport-location' | 'set-respawn' | 'reset-faction' | 'grant-cosmetic' | 'grant-house-swatches' | 'grant-buildable-swatches' | 'grant-building-sets' | 'grant-armor-skins' | 'grant-weapon-skins' | 'grant-vehicle-skins' | 'grant-all-dyes' | 'fresh-start'
+  custom?: 'regis-tanks' | 'give-item' | 'grant-reward' | 'whisper' | 'spawn-vehicle' | 'funcom-spawn-vehicle' | 'quick-presets' | 'vehicle-kit' | 'give-package' | 'cheat-scripts' | 'dev-scripts' | 'unlock-trainers' | 'unlock-mainquest' | 'complete-contract' | 'progression-unlock' | 'refuel-vehicle' | 'starter-class' | 'teleport-player' | 'teleport-location' | 'set-respawn' | 'reset-faction' | 'grant-cosmetic' | 'grant-house-swatches' | 'grant-buildable-swatches' | 'grant-building-sets' | 'grant-armor-skins' | 'grant-weapon-skins' | 'grant-vehicle-skins' | 'grant-all-dyes' | 'fresh-start'
   balance?: 'solari' | 'scrip' | 'intel'  // show the player's current balance read-only above the form
   confirm?: (p: Player) => string  // confirm message; if returns '' no prompt
   doubleConfirm?: boolean // also requires a typed "i acknowledge" prompt inside run()
@@ -645,6 +647,8 @@ interface ActionDef {
 }
 
 const ACTIONS: ActionDef[] = [
+  { id: 'regis-tanks', group: 'Vehicle', label: 'Regis Tanks', icon: 'Truck', liveOnly: true, custom: 'regis-tanks',
+    run: () => Promise.resolve({ message: '' }) },
   { id: 'observed-schematic-recipes', group: 'Items', label: 'Schematic Recipes (717)', icon: 'BookOpen', offlineOnly: true, experimental: true,
     rowNote: 'Grant observed crafting recipe entries directly. Existing recipes and remaining uses are preserved; this does not deliver inventory items.',
     confirm: p => `Grant 717 observed schematic recipe entries to ${p.name}? Existing recipe uses will be preserved. A backup is recommended before granting. Check crafting in-game after login.\n\n${COSMETIC_LICENSE_NOTICE}`,
@@ -1134,6 +1138,11 @@ function ActionRow({ def, player, busy, stats, open, danger, onToggle, runAction
           ) : def.custom === 'whisper' ? (
             <WhisperForm busy={busy}
               onSubmit={msg => runAction(def, () => chatWhisper(String(player.id), msg))} />
+          ) : def.custom === 'regis-tanks' ? (
+            <RegisTankControls actorId={player.id} online={(player.online_status || '').toLowerCase() === 'online'} busy={busy}
+              onGrant={template => runAction(def, () => api<{ message: string }>('/api/gameplay/vehicles/regis-tanks', {
+                method: 'POST', body: JSON.stringify({ actor_id: player.id, template_name: template }),
+              }))} />
           ) : def.custom === 'funcom-spawn-vehicle' ? (
             <FuncomSpawnVehicleForm busy={busy}
               onSubmit={(vehicle, templateName, persistent) => runAction(def, () =>

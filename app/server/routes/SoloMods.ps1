@@ -10,6 +10,20 @@ Register-DuneRoute -Method POST -Path '/api/solo/mods/import' -LocalOnly -Handle
     } catch { Write-DuneError -Response $res -Status 400 -Message $_.Exception.Message }
 }
 
+Register-DuneRoute -Method POST -Path '/api/solo/mods/regis-tanks' -LocalOnly -Handler {
+    param($req,$res,$routeParams,$body)
+    try {
+        $result=Invoke-WithDuneLock -Name 'solo-mods' -Script { Install-DuneRegisTanksMod }
+        Write-DuneJson -Response $res -Body $result
+    } catch { Write-DuneError -Response $res -Status 400 -Message $_.Exception.Message }
+}
+
+Register-DuneRoute -Method POST -Path '/api/solo/mods/regis-tanks/enable' -LocalOnly -Handler {
+    param($req,$res,$routeParams,$body)
+    try { Write-DuneJson -Response $res -Body (Invoke-WithDuneLock -Name 'solo-mods' -Script { Enable-DuneSoloRegisTanks }) }
+    catch { Write-DuneError -Response $res -Status 400 -Message $_.Exception.Message }
+}
+
 Register-DuneRoute -Method POST -Path '/api/solo/mods/selection' -LocalOnly -Handler {
     param($req,$res,$routeParams,$body)
     try {

@@ -13,6 +13,39 @@
 }
 AfterAll { if($script:ModTestRoot.StartsWith([IO.Path]::GetTempPath())){Remove-Item -LiteralPath $script:ModTestRoot -Recurse -Force} }
 Describe 'Solo mod import and dependencies' {
+    It 'installs bundled tanks disabled and preserves an existing installation' {
+        $script:DuneBundledSoloModsRoot=Join-Path (Get-DstRepoRoot) 'app/resources/solo-mods'
+        $result=Install-DuneRegisTanksMod
+        $tank=@($result.mods | Where-Object id -eq 'dst-regis-tanks')[0]
+        $tank.enabled | Should -BeFalse
+        $tank.warnings.Count | Should -BeGreaterThan 0
+        $settings=Join-Path $script:DuneSoloModsRoot 'dst-regis-tanks/custom.ini'
+        'kept' | Set-Content $settings
+        { Install-DuneRegisTanksMod } | Should -Throw '*already installed*'
+        Get-Content $settings | Should -Be 'kept'
+    }
+    It 'blocks tank installation while Dune is running' {
+        Mock Assert-DuneSoloGameClosed { throw 'Close Dune first' }
+        { Install-DuneRegisTanksMod } | Should -Throw '*Close Dune*'
+        Test-Path (Join-Path $script:DuneSoloModsRoot 'dst-regis-tanks') | Should -BeFalse
+    }
+    It 'writes launch context for a supported Steam library outside the default installation' {
+        $script:DuneBundledSoloModsRoot=Join-Path (Get-DstRepoRoot) 'app/resources/solo-mods'
+        Install-DuneRegisTanksMod | Out-Null
+        $library=Join-Path $script:ModTestRoot 'Custom Library/steamapps'
+        $game=Join-Path $library 'common/DuneAwakening'
+        New-Item -ItemType Directory -Path $game -Force | Out-Null
+        '"buildid" "25789117"' | Set-Content (Join-Path $library 'appmanifest_1172710.acf')
+        Mock Get-FileHash { @{Hash='B9A77E7A178CFA8D88D65743BCBB04EF9D45E13539DB0BBD148E172BDA86A9E9'} }
+        Set-DuneRegisTanksLaunchContext -GamePath $game -Platform steam
+        Get-Content (Join-Path $script:DuneSoloModsRoot 'dst-regis-tanks/Scripts/dst-steam-manifest.txt') | Should -Be (Join-Path $library 'appmanifest_1172710.acf')
+    }
+    It 'blocks Xbox and changed executables before writing tank launch context' {
+        { Set-DuneRegisTanksLaunchContext -GamePath 'C:/OtherGame' -Platform xbox } | Should -Throw '*Steam Solo only*'
+        Mock Get-FileHash { @{Hash='CHANGED'} }
+        { Set-DuneRegisTanksLaunchContext -GamePath 'C:/OtherGame' -Platform steam } | Should -Throw '*does not support this game build*'
+        Test-Path (Join-Path $script:DuneSoloModsRoot 'dst-regis-tanks/Scripts/dst-steam-manifest.txt') | Should -BeFalse
+    }
     It 'switches connected platforms without touching mod selections and recalls both folders' {
         Set-DuneSoloModSelection @{mods=@(@{folder='Kept';enabled=$true});platform='steam';gamePath='C:\Steam\Dune'} | Out-Null
         Set-DuneSoloModPlatform -Platform xbox -GamePath 'C:\Xbox\Dune'

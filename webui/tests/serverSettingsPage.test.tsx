@@ -16,6 +16,10 @@ const state = vi.hoisted(() => ({
   forceRefresh: vi.fn(async () => {}),
 }))
 
+vi.mock('../src/pages/gameconfig/StartupSettingsSync', () => ({ StartupSettingsSync: () => null }))
+vi.mock('../src/pages/gameconfig/RegisTankSetup', () => ({ RegisTankSetup: () => null }))
+vi.mock('../src/pages/gameconfig/ServerIniBackups', () => ({ ServerIniBackups: () => null }))
+
 vi.mock('../src/hooks/useStatus', () => ({
   useStatus: () => ({ status: state.status, forceRefresh: state.forceRefresh }),
 }))

@@ -1,0 +1,5 @@
+The five Tank item-identity substitutions are derived from RedBlink's MIT-licensed
+Regis Tanks experimental source at v1.4.48. The complete MIT notice is included.
+Source: https://github.com/Red-Blink/dune-awakening-selfhost-docker/tree/v1.4.48/patches/experimental-tanks
+The Windows runtime implementation is independently written for DST Solo mods.
+No third-party compiled patches or Funcom game assets are included.

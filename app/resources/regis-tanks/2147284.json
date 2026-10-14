@@ -1,0 +1,68 @@
+{
+  "schema": 1,
+  "build": "2147284",
+  "baseImage": "registry.funcom.com/funcom/self-hosting/seabass-server:2147284-0-shipping",
+  "baseDigest": "sha256:6ff0becf7943829bb767a57b7fa72048737612a51ea428172b8ebb45d374e948",
+  "cleanExecutableSha256": "c04524c353ec9657759e95235ae93fb76f1ccde8838f6c5a59bc1ef4e1305522",
+  "patchedExecutableSha256": "240b4bb378a93b70134fa685fc467bc2ae94fd40d81da2feea0f987758bc9126",
+  "sites": [
+    [
+      234084274,
+      "488d3de792ffffe832fd0302",
+      "909090909090909090909090"
+    ],
+    [
+      262213312,
+      "0f8512010000",
+      "90e912010000"
+    ],
+    [
+      265655809,
+      "0f849d010000",
+      "e99e01000090"
+    ],
+    [
+      262139072,
+      "4d8b4c24e8",
+      "e9a9ab0d05"
+    ],
+    [
+      265657406,
+      "488b8568ffffff",
+      "e954fcd7049090"
+    ],
+    [
+      265680052,
+      "488b4008488945b8",
+      "e90aa4d704909090"
+    ],
+    [
+      346920985,
+      "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+      "505152803d6e2494020074424489d189c8c1e8103d002000007333488d1585249402488b54c2684885d274220fb7c9488d144af60201751666813a0001720f8b42020d202020203d74616e6beb0383c8015a5958c39c4152458b5424f8e89effffff750d415a9d4531c99090e93b54f2fa415a9d4d8b4c24e8e92e54f2fa9c4152458b1424e876ffffff750f415a9d31c09090909090e9910328fb415a9d488b8568ffffffe9820328fb9c41524d89eae84bffffff7510415a9d31c09090488945b8e9dc5b28fb415a9d488b4008488945b8e9cc5b28fb"
+    ]
+  ],
+  "stockFiles": {
+    "DuneSandbox/Content/Dune/Systems/Vehicles/Blueprints/GroundVehicles/BP_Tank_CHOAM.uasset": "7dbc415b35bf77e2f8416cc440206a719daea87d2d316918a395274f5aa0df33",
+    "DuneSandbox/Content/Dune/Systems/Vehicles/Blueprints/GroundVehicles/BP_Tank_CHOAM.uexp": "9096d82f662916ad071c2b686795b33ba4b62655d6df452abec8f491079eeb55",
+    "DuneSandbox/Content/Dune/Systems/Vehicles/Modules/DT_Tank_Modules.uasset": "bbe59d62379684445d2c19274f653ae1c59c1f9bb0a212a3c92d75cc4b3a8ecf",
+    "DuneSandbox/Content/Dune/Systems/Vehicles/Modules/DT_Tank_Modules.uexp": "d8d8301cc634b18b51c2b0cff744367c9e44c5a21d65212a9a8f3711aa2cde87"
+  },
+  "tools": [
+    {
+      "name": "retoc.tar.xz",
+      "url": "https://github.com/trumank/retoc/releases/download/v0.1.5/retoc_cli-x86_64-unknown-linux-gnu.tar.xz",
+      "sha256": "3c309a4aea0c6d0a5c6ee31b1d1b32768eb86ac67e3a1890d677eabe6ce26b36"
+    },
+    {
+      "name": "UAssetGUI.exe",
+      "url": "https://github.com/atenfyr/UAssetGUI/releases/download/v1.1.0/UAssetGUI.exe",
+      "sha256": "b7d75c0893f1a60e565853ae638bc21f2416cd12c2d9d854e297abb87ceb3263"
+    },
+    {
+      "name": "liboo2corelinux64.so.9",
+      "url": "https://github.com/WorkingRobot/OodleUE/raw/refs/heads/main/Engine/Source/Programs/Shared/EpicGames.Oodle/Sdk/2.9.10/linux/lib/liboo2corelinux64.so.9",
+      "sha256": "ed7e98f70be1254a80644efd3ae442ff61f854a2fe9debb0b978b95289884e9c"
+    }
+  ]
+}

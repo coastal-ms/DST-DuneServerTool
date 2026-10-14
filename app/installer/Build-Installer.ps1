@@ -13,6 +13,7 @@ param(
     [switch]$SkipWebBuild,
     [switch]$SkipShellBuild,
     [switch]$SkipSoloBuild,
+    [switch]$SkipRegisBuild,
     [switch]$SkipPlatformBuild,
     [switch]$SkipVersionCheck,
     # Artifact/release-channel identity is independent of stable product stamps.
@@ -45,6 +46,8 @@ $outDir     = Join-Path $appRoot 'installer\output'
 $installer  = Join-Path $outDir 'DuneServerSetup.exe'
 $soloProj   = Join-Path $appRoot 'tools\DuneSoloDb\DuneSoloDb.csproj'
 $soloExe    = Join-Path $appRoot 'tools\DuneSoloDb\bin\Release\net10.0-windows\win-x64\publish\DuneSoloDb.exe'
+$regisProj  = Join-Path $appRoot 'tools\DuneRegisTanks\DuneRegisTanks.csproj'
+$regisExe   = Join-Path $appRoot 'tools\DuneRegisTanks\bin\Release\net10.0-windows\win-x64\publish\DuneRegisTanks.exe'
 $platformProj = Join-Path $appRoot 'tools\DunePlatformStore\DunePlatformStore.csproj'
 $platformExe = Join-Path $appRoot 'tools\DunePlatformStore\bin\Release\net10.0-windows\win-x64\publish\DunePlatformStore.exe'
 $buildHelpers = Join-Path $appRoot 'build\BuildHelpers.ps1'
@@ -318,6 +321,15 @@ if (-not $SkipSoloBuild) {
     if ($LASTEXITCODE -ne 0) { throw "DuneSoloDb self-test failed (exit $LASTEXITCODE)" }
     Write-Host ""
 }
+if (-not $SkipRegisBuild) {
+    if (-not (Get-Command dotnet -ErrorAction SilentlyContinue)) { throw 'Install .NET 10 SDK to build Regis Tank support.' }
+    & dotnet publish $regisProj -c Release
+    if ($LASTEXITCODE -ne 0) { throw 'Regis Tank helper publish failed.' }
+    & $regisExe --self-test
+    if ($LASTEXITCODE -ne 0) { throw 'Regis Tank helper self-test failed.' }
+}
+if (-not (Test-Path -LiteralPath $regisExe)) { throw 'Regis Tank helper executable is missing.' }
+
 if (-not (Test-Path $soloExe)) {
     throw "DuneSoloDb.exe not found at $soloExe - run 'dotnet publish' for DuneSoloDb (or omit -SkipSoloBuild)"
 }

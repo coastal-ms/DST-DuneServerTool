@@ -339,6 +339,13 @@ function Invoke-DuneVehicleSpawnLive {
     if (-not $Persistent) {
         return @{ ok = $false; error = 'Persistent must be enabled so DST can assign and verify vehicle ownership.' }
     }
+    if ($VehicleId -eq 'Tank') {
+        if ($ActorId -le 0 -or $ActorClass -cne '/Game/Dune/Systems/Vehicles/Blueprints/GroundVehicles/BP_Tank_CHOAM.BP_Tank_CHOAM_C' -or $TemplateName -cnotin @('T6_CombatDart','T6_CombatFire')) {
+            return @{ ok = $false; error = 'Select an online player and a supported Regis Tank variant.' }
+        }
+        $tankSupport = Get-DuneRegisTankSupport -Ip $Ip -ActorId $ActorId
+        if (-not $tankSupport.enabled) { return @{ ok = $false; error = $tankSupport.message } }
+    }
     $controllerId = 0L
 
     # Funcom's command expects an open spawn point rather than the pawn's exact

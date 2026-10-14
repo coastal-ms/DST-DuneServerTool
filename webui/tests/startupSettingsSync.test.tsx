@@ -1,0 +1,41 @@
+import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { afterEach, expect, it, vi } from 'vitest'
+import { StartupSettingsSync } from '../src/pages/gameconfig/StartupSettingsSync'
+
+const request = vi.hoisted(() => vi.fn())
+vi.mock('../src/api/client', () => ({ api: request }))
+afterEach(() => { cleanup(); vi.resetAllMocks() })
+
+it('leaves synchronization enabled by default and persists opt-out without a server write', async () => {
+  request.mockResolvedValueOnce({ enabled: true }).mockResolvedValueOnce({ enabled: false })
+  const busy = vi.fn()
+  render(<StartupSettingsSync onBusyChange={busy} />)
+  const toggle = screen.getByRole('checkbox', { name: 'Disable automatic Server Settings synchronization at startup' })
+  await waitFor(() => expect(toggle).toBeEnabled())
+  expect(toggle).not.toBeChecked()
+  fireEvent.click(toggle)
+  await waitFor(() => expect(toggle).toBeChecked())
+  expect(request).toHaveBeenLastCalledWith('/api/gameconfig/retail-startup-sync', { method: 'PUT', body: JSON.stringify({ enabled: false }) })
+  expect(busy.mock.calls).toEqual([[true], [false]])
+  expect(request.mock.calls.every(([path]) => path === '/api/gameconfig/retail-startup-sync')).toBe(true)
+})
+
+it('loads the saved disabled preference and lets the user turn synchronization back on', async () => {
+  request.mockResolvedValueOnce({ enabled: false }).mockResolvedValueOnce({ enabled: true })
+  render(<StartupSettingsSync />)
+  const toggle = screen.getByRole('checkbox')
+  await waitFor(() => expect(toggle).toBeChecked())
+  fireEvent.click(toggle)
+  await waitFor(() => expect(toggle).not.toBeChecked())
+  expect(request).toHaveBeenLastCalledWith('/api/gameconfig/retail-startup-sync', { method: 'PUT', body: JSON.stringify({ enabled: true }) })
+})
+
+it('keeps the confirmed preference when saving fails', async () => {
+  request.mockResolvedValueOnce({ enabled: true }).mockRejectedValueOnce(new Error('Save failed'))
+  render(<StartupSettingsSync />)
+  const toggle = screen.getByRole('checkbox')
+  await waitFor(() => expect(toggle).toBeEnabled())
+  fireEvent.click(toggle)
+  expect(await screen.findByRole('alert')).toHaveTextContent('Save failed')
+  expect(toggle).not.toBeChecked()
+})

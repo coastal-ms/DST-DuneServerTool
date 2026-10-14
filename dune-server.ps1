@@ -21,7 +21,7 @@ param(
 # Wraps the original battlegroup.ps1 menu and adds extra tools
 # ============================================================
 
-$script:ToolVersion = "16.4.2.1"
+$script:ToolVersion = "16.5.0"
 
 # Cold-boot readiness budgets (seconds). A fresh battlegroup's FIRST boot can
 # take 10-30 min: k3s + funcom-operators initialize, metrics-server restarts a
@@ -1314,6 +1314,7 @@ function Sync-DuneRetailSettingsBeforeStart {
         . (Join-Path $Root 'lib\K8s.ps1')
         . (Join-Path $Root 'server\lib\RetailServerSettings.ps1')
         $script:V6SshKeyCache = $KeyPath
+        if(-not(Get-DuneRetailStartupSyncPreference).enabled){return}
         $deadline = [DateTime]::UtcNow.AddSeconds(90)
         do {
             $target = Resolve-DuneRetailServerSettingsTarget -Ip $VmIp

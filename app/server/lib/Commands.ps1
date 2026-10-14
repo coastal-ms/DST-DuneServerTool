@@ -449,6 +449,12 @@ function Invoke-DuneCommandExternal {
     $cmd = Get-DuneCommandByName -Name $Name
     if (-not $cmd) { throw "Unknown command: $Name" }
 
+    if ($cmd.Name -eq 'update' -and (Get-Command Assert-DuneRegisTankUpdateAllowed -ErrorAction SilentlyContinue)) {
+        $ctx = Get-DuneDbContext
+        if (-not $ctx.ok) { throw $ctx.message }
+        Assert-DuneRegisTankUpdateAllowed -Ip $ctx.ip
+    }
+
     $argList = @(
         '-NoProfile'
         '-ExecutionPolicy','Bypass'

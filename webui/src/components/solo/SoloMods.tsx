@@ -132,6 +132,7 @@ export function SoloMods({ connectionToken = '' }: { connectionToken?: string })
       {deleting && <ConfirmationModal title={`Delete ${deleting.name}?`} description="This permanently removes the mod folder and its INI settings. You can reinstall the mod from its ZIP." confirmLabel="Delete mod" onCancel={() => setDeleting(null)} onConfirm={() => { const folder = deleting.folder; setDeleting(null); void run('delete', { folder }) }} />}
       <a className="text-sm text-accent-bright underline" href="https://www.nexusmods.com/duneawakening" target="_blank" rel="noopener noreferrer">Browse Dune: Awakening mods on Nexus Mods</a>
       <div className="flex flex-wrap gap-2">
+        {!state?.mods.some(mod => mod.id === 'dst-regis-tanks') && <button className="btn-secondary" disabled={busy || state?.gameRunning || platform !== 'steam'} onClick={() => void run('regis-tanks')}>Install Regis Tanks</button>}
         <button className="btn-secondary" disabled={busy} onClick={() => void install()}>Install mod ZIP</button>
         <button className="btn-secondary" disabled={busy} onClick={() => void run('open')}>Open Mods Folder</button>
         <button className="btn-secondary" disabled={busy} onClick={() => void refresh().catch(e => setError(String(e)))}>Refresh</button>
@@ -154,6 +155,7 @@ export function SoloMods({ connectionToken = '' }: { connectionToken?: string })
           <button className="btn-secondary" aria-label={`Move ${mod.name} down`} disabled={busy || index === state.mods.length - 1} onClick={() => move(index, 1)}>Move Down</button>
         </div>
         {mod.errors.map((message, i) => <p className="text-danger text-sm mt-1" key={i}>{message}</p>)}
+        {mod.id === 'dst-regis-tanks' && mod.warnings?.map((message, i) => <p className="text-text-muted text-sm mt-1" key={`warning-${i}`}>{message}</p>)}
       </SortableMod>)}
       </SortableContext>
       {createPortal(<DragOverlay>{dragged && <div className="border border-border rounded p-3 bg-surface shadow-lg flex items-center gap-3"><Icon name="GripVertical" size={14} />{state?.mods.find(mod => mod.folder === dragged)?.name}</div>}</DragOverlay>, document.body)}

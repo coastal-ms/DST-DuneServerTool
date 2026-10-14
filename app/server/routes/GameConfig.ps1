@@ -13,6 +13,24 @@ Register-DuneRoute -Method GET -Path '/api/gameconfig/schema' -Handler {
 
 # Server Settings use the persistent Linux UserSettings file. Existing YAML is
 # retained until a backed-up migration completes; it can also be read as a draft.
+Register-DuneRoute -Method GET -Path '/api/gameconfig/retail-startup-sync' -LocalOnly -Handler {
+    param($req,$res,$routeParams,$body)
+    try {Write-DuneJson -Response $res -Body (Get-DuneRetailStartupSyncPreference)}
+    catch {Write-DuneError -Response $res -Status 400 -Message $_.Exception.Message}
+}
+
+Register-DuneRoute -Method PUT -Path '/api/gameconfig/retail-startup-sync' -LocalOnly -Handler {
+    param($req,$res,$routeParams,$body)
+    if(-not($body -is [hashtable]) -or $body.enabled -isnot [bool]){
+        Write-DuneError -Response $res -Status 400 -Message 'enabled must be a boolean.'
+        return
+    }
+    try {
+        $result=Invoke-WithDuneLock -Name 'retail-startup-sync' -Script {Set-DuneRetailStartupSyncPreference -Enabled $body.enabled}
+        Write-DuneJson -Response $res -Body $result
+    } catch {Write-DuneError -Response $res -Status 400 -Message $_.Exception.Message}
+}
+
 Register-DuneRoute -Method GET -Path '/api/gameconfig/retail-server-settings' -Handler {
     param($req, $res, $routeParams, $body)
     $ctx = Get-DuneGameConfigContext

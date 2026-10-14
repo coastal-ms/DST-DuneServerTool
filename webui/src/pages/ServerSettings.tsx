@@ -4,6 +4,9 @@ import { Icon } from '../components/Icon'
 import { PageHeader } from '../components/PageHeader'
 import { useStatus } from '../hooks/useStatus'
 import { OfficialRetailServerSettingsCard } from './gameconfig/OfficialRetailServerSettingsCard'
+import { StartupSettingsSync } from './gameconfig/StartupSettingsSync'
+import { ServerIniBackups } from './gameconfig/ServerIniBackups'
+import { RegisTankSetup } from './gameconfig/RegisTankSetup'
 
 type LaunchResult = {
   ok: boolean
@@ -19,6 +22,8 @@ export function ServerSettings() {
   const [launchingStart, setLaunchingStart] = useState(false)
   const [startRequested, setStartRequested] = useState(false)
   const [settingsBusy, setSettingsBusy] = useState(true)
+  const [syncPreferenceBusy, setSyncPreferenceBusy] = useState(false)
+  const [tankSetupBusy, setTankSetupBusy] = useState(false)
   const [settingsIdleKey, setSettingsIdleKey] = useState<string | null>(null)
   const [stopRequested, setStopRequested] = useState(false)
   const [stopError, setStopError] = useState<string | null>(null)
@@ -32,6 +37,8 @@ export function ServerSettings() {
   const settingsRefreshKey = `${bgState}:${serverPodCount ?? 'unknown'}`
   const canStart = settingsIdleKey === settingsRefreshKey
     && !settingsBusy
+    && !syncPreferenceBusy
+    && !tankSetupBusy
     && !launchingStop
     && !launchingStart
     && !startRequested
@@ -213,7 +220,7 @@ export function ServerSettings() {
             className="btn-primary"
             disabled={!canStart}
             onClick={() => void startBattlegroup()}
-            title={settingsBusy
+            title={settingsBusy || syncPreferenceBusy
               ? 'Wait for the current settings action to finish'
               : 'Start the battlegroup using DST’s existing start command'}
           >
@@ -240,6 +247,9 @@ export function ServerSettings() {
           <Icon name="CheckCircle2" size={14} /> {stopMessage}
         </div>
       )}
+      <div className="mb-4"><StartupSettingsSync onBusyChange={setSyncPreferenceBusy} /></div>
+      <ServerIniBackups vmRunning={vmRunning} />
+      <RegisTankSetup vmRunning={vmRunning} stopped={fullyStopped} onBusyChange={setTankSetupBusy} />
       <OfficialRetailServerSettingsCard
         vmRunning={vmRunning}
         statusRefreshKey={settingsRefreshKey}

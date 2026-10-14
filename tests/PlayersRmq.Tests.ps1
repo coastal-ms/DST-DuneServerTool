@@ -174,8 +174,9 @@ Describe 'Invoke-DuneVehicleSpawnLive' -Tag 'Pure' {
     }
 
     It 'resolves the current transform and sends the vehicle to that location' {
+        function global:Get-DuneRegisTankSupport { param($Ip,$ActorId); @{enabled=$true} }
         $r = Invoke-DuneVehicleSpawnLive -Ip '1.2.3.4' -ActorId 42 `
-            -VehicleId 'Tank' -ActorClass '/Game/Test/BP_Tank.BP_Tank_C' `
+            -VehicleId 'Tank' -ActorClass '/Game/Dune/Systems/Vehicles/Blueprints/GroundVehicles/BP_Tank_CHOAM.BP_Tank_CHOAM_C' `
             -TemplateName 'T6_CombatFire' -Persistent $true -VerificationDelaySeconds 0
 
         $r.ok | Should -BeTrue
@@ -194,10 +195,11 @@ Describe 'Invoke-DuneVehicleSpawnLive' -Tag 'Pure' {
     }
 
     It 'fails when Funcom removes the vehicle after accepting the command' {
+        function global:Get-DuneRegisTankSupport { param($Ip,$ActorId); @{enabled=$true} }
         $script:spawnSurvives = $false
 
         $r = Invoke-DuneVehicleSpawnLive -Ip '1.2.3.4' -ActorId 42 `
-            -VehicleId 'Tank' -ActorClass '/Game/Test/BP_Tank.BP_Tank_C' `
+            -VehicleId 'Tank' -ActorClass '/Game/Dune/Systems/Vehicles/Blueprints/GroundVehicles/BP_Tank_CHOAM.BP_Tank_CHOAM_C' `
             -TemplateName 'T6_CombatFire' -Persistent $true -VerificationDelaySeconds 0
 
         $r.ok | Should -BeFalse

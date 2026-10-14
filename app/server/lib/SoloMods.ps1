@@ -2,6 +2,44 @@ $soloModAppRoot = if($script:AppDir){$script:AppDir}else{[IO.Path]::GetFullPath(
 $script:DuneSoloModsRoot = Join-Path $soloModAppRoot 'Mods'
 $script:DuneSoloLoaderRoot = Join-Path $soloModAppRoot 'ModLoader'
 $script:DuneSoloRuntimeAssets = Join-Path $soloModAppRoot 'resources\solo-mod-runtime'
+$script:DuneBundledSoloModsRoot = Join-Path $soloModAppRoot 'resources\solo-mods'
+
+function Install-DuneRegisTanksMod {
+    Assert-DuneSoloGameClosed
+    $source=Join-Path $script:DuneBundledSoloModsRoot 'dst-regis-tanks'
+    $destination=Join-Path $script:DuneSoloModsRoot 'dst-regis-tanks'
+    if(-not(Test-Path -LiteralPath (Join-Path $source 'Scripts\main.lua'))){throw 'Bundled Regis Tanks mod is missing. Reinstall DST.'}
+    if(Test-Path -LiteralPath $destination){throw 'Regis Tanks is already installed. Existing files were preserved.'}
+    New-Item -ItemType Directory -Path $script:DuneSoloModsRoot -Force | Out-Null
+    Copy-Item -LiteralPath $source -Destination $destination -Recurse -ErrorAction Stop
+    return Get-DuneSoloMods
+}
+
+function Set-DuneRegisTanksLaunchContext([string]$GamePath,[string]$Platform) {
+    if($Platform -ne 'steam'){throw 'Regis Tanks currently supports Steam Solo only.'}
+    $exe=Join-Path $GamePath 'DuneSandbox\Binaries\Win64\DuneSandbox-Win64-Shipping.exe'
+    if((Get-FileHash -LiteralPath $exe -Algorithm SHA256).Hash -ne 'B9A77E7A178CFA8D88D65743BCBB04EF9D45E13539DB0BBD148E172BDA86A9E9'){throw 'Regis Tanks does not support this game build. Disable it to launch other mods.'}
+    $manifest=[IO.Path]::GetFullPath((Join-Path $GamePath '..\..\appmanifest_1172710.acf'))
+    if(-not(Test-Path -LiteralPath $manifest) -or (Get-Content -LiteralPath $manifest -Raw) -notmatch '"buildid"\s+"25789117"'){throw 'Regis Tanks requires the supported Steam game build.'}
+    $context=Join-Path $script:DuneSoloModsRoot 'dst-regis-tanks\Scripts\dst-steam-manifest.txt'
+    [IO.File]::WriteAllText($context,$manifest,[Text.UTF8Encoding]::new($false))
+}
+
+function Enable-DuneSoloRegisTanks {
+    Assert-DuneSoloGameClosed
+    $state = Get-DuneSoloMods
+    if ($state.platform -ne 'steam' -or -not $state.gamePath) { throw 'Select your Steam game folder in Solo mods first.' }
+    # Validate the installed game before importing or changing any selection.
+    $exe = Join-Path $state.gamePath 'DuneSandbox\Binaries\Win64\DuneSandbox-Win64-Shipping.exe'
+    if (-not (Test-Path -LiteralPath $exe) -or (Get-FileHash -LiteralPath $exe).Hash -ne 'B9A77E7A178CFA8D88D65743BCBB04EF9D45E13539DB0BBD148E172BDA86A9E9') { throw 'Regis Tanks does not support this game build.' }
+    if (-not $state.runtimeReady) { Install-DuneSoloModRuntime | Out-Null }
+    if (-not @($state.mods | Where-Object id -eq 'dst-regis-tanks').Count) { Install-DuneRegisTanksMod | Out-Null }
+    $state = Get-DuneSoloMods
+    $mods = @($state.mods | ForEach-Object {
+        @{folder=$_.folder;enabled=if($_.id -eq 'dst-regis-tanks'){$true}else{[bool]$_.enabled}}
+    })
+    return Set-DuneSoloModSelection @{mods=$mods;platform=$state.platform;gamePath=$state.gamePath}
+}
 
 function Read-DuneModJson([string]$Path, $Default) {
     if (Test-Path -LiteralPath $Path) { return Get-Content -LiteralPath $Path -Raw | ConvertFrom-Json }
@@ -45,7 +83,7 @@ function Get-DuneSoloMods {
                 $meta = Read-DuneModJson (Join-Path $folder.FullName 'mod.json') @{}
                 $enabled = $false
                 if ($state.PSObject.Properties.Name -contains $folder.Name) { $enabled = [bool]$state.($folder.Name) }
-                $mods += [pscustomobject]@{ folder=$folder.Name; id=$(if($meta.id){[string]$meta.id}else{$folder.Name}); name=$(if($meta.name){[string]$meta.name}else{$folder.Name}); version=[string]$meta.version; enabled=$enabled; requires=@($meta.requires); loadAfter=@($meta.loadAfter); loadBefore=@($meta.loadBefore); conflicts=@($meta.conflicts); warnings=@(); errors=@() }
+                $mods += [pscustomobject]@{ folder=$folder.Name; id=$(if($meta.id){[string]$meta.id}else{$folder.Name}); name=$(if($meta.name){[string]$meta.name}else{$folder.Name}); version=[string]$meta.version; enabled=$enabled; requires=@($meta.requires); loadAfter=@($meta.loadAfter); loadBefore=@($meta.loadBefore); conflicts=@($meta.conflicts); warnings=@($meta.warnings | Where-Object { $_ }); errors=@() }
             } catch { $mods += [pscustomobject]@{folder=$folder.Name;id=$folder.Name;name=$folder.Name;version='';enabled=$false;requires=@();loadAfter=@();loadBefore=@();conflicts=@();warnings=@();errors=@('Invalid mod.json: '+$_.Exception.Message)} }
         }
     }
@@ -190,6 +228,10 @@ function Start-DuneSoloModGame([bool]$WithMods) {
     if($errors.Count){throw ($errors -join "`n")}
     foreach($mod in $selected){
         $folder=Join-Path $script:DuneSoloModsRoot $mod.folder
+        if($mod.id -eq 'dst-regis-tanks'){
+            if($mod.folder -ne 'dst-regis-tanks'){throw 'Regis Tanks must use its bundled folder identifier.'}
+            Set-DuneRegisTanksLaunchContext -GamePath $status.gamePath -Platform $status.platform
+        }
         if(-not(Test-Path (Join-Path $folder 'Scripts\main.lua')) -and -not(Test-Path (Join-Path $folder 'dlls\main.dll'))){throw "$($mod.name): this runtime supports Lua and UE4SS native mods. This package has no loadable entry point."}
     }
     # Respect the user's saved load order; authors and users manage ordering requirements.
