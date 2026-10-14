@@ -149,7 +149,7 @@ export function SoloMods({ connectionToken = '' }: { connectionToken?: string })
           {state?.runtimeVersions?.map(runtime => <option key={runtime.version} value={runtime.version}>{runtime.label}</option>)}
         </select>
       </label>
-      <p className="text-sm text-text-muted">For Launch with Mods. DST defaults to 1140; select 1164 if you want the newer bundled runtime. Built-in Tanks use Launch Solo without optional mods.</p>
+      <p className="text-sm text-text-muted">For Launch with Mods. DST defaults to 1140; select 1164 if you want the newer bundled runtime.</p>
       {state?.runtimeVersion && <p role="status" className="text-sm text-text-muted">Selected for next mod launch: UE4SS {state.runtimeVersion}.{state.gameRunning && state.session?.runtimeVersion ? ` Current session: UE4SS ${state.session.runtimeVersion}.` : ''} Runtime loading does not confirm that every mod works.</p>}
       {state?.runtimeFallback && <p className="text-sm text-warning">The newer runtime failed to initialize. DST selected previous runtime 1140 for the next launch. Select a runtime again to retry your chosen version.</p>}
       {state?.runtimeWarnings?.map(message => <p className="text-sm text-warning" key={message}>{message}</p>)}
