@@ -13,6 +13,15 @@ here cover everything those tags shipped.
 
 ## [Unreleased]
 
+## [16.5.0.1] - 2026-10-14
+
+### Changed
+- Label the three reviewed character collection buttons Grant All in Solo and self-hosted Players actions.
+
+### Fixed
+- Keep Solo mod runtime installation visible while collapsed, offer runtime repair, and report installation results while preserving saves and installed mods.
+- Open the Solo Mods folder through the desktop window when the backend runs as a service, and show loading, completion and errors when refreshing the mod list.
+
 ## [16.5.0] - 2026-10-13
 
 ### Added
