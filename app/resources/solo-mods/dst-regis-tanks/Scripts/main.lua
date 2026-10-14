@@ -325,7 +325,7 @@ local function prepare_compatibility(context)
     log("PERSISTENCE_COMPATIBILITY_READY")
 end
 local function spawn(preset)
-    if used[preset] or pending then log("One grant per variant per launch. Reload Solo to grant another."); return end
+    if used[preset] or pending then return false, "One grant per variant per launch. Reload Solo to grant another." end
     pending = true
     local previously_enabled = enabled
     local ok, err = pcall(function()
@@ -347,8 +347,9 @@ local function spawn(preset)
     end)
     if not ok then if not previously_enabled then restore() end; log("GRANT_ERROR " .. tostring(err)) end
     pending = false
+    return ok, err
 end
-log("TRIAL_LOADED v1.0.0: Solo-only; F8 grants Dart, F9 grants Flamethrower. Saved Tanks require this mod on reload.")
+log("LOADED: Solo-only; grant Dart or Flamethrower using DST buttons. Saved Tanks require this support on reload.")
 log("No server operations, executable patches, cooked-asset installs or direct save writes.")
 NotifyOnNewObject("/Script/DuneSandbox.DuneTankVehicle", function(object)
     if preparing then return end
@@ -364,5 +365,34 @@ NotifyOnNewObject("/Script/DuneSandbox.DuneTankVehicle", function(object)
     end)
     if not ok then log("TANK_CONSTRUCTION_ERROR " .. tostring(err)) end
 end)
-RegisterKeyBind(Key.F8, function() ExecuteInGameThread(function() spawn("T6_CombatDart") end) end)
-RegisterKeyBind(Key.F9, function() ExecuteInGameThread(function() spawn("T6_CombatFire") end) end)
+local command_root
+if script_path then
+    local context = io.open(script_path .. "dst-command-root.txt", "r")
+    if context then command_root = context:read("*l"); context:close() end
+end
+local function poll_grants()
+    if command_root then
+        local request_path = command_root .. "\\tank-request.txt"
+        local request = io.open(request_path, "r")
+        if request then
+            local text = request:read("*a"); request:close()
+            local id, preset = text:match("^([0-9a-f]+)|([%w_]+)$")
+            if id and #id == 32 and (preset == "T6_CombatDart" or preset == "T6_CombatFire") then
+                os.remove(request_path)
+                ExecuteInGameThread(function()
+                    local ok, err = spawn(preset)
+                    local temp = command_root .. "\\tank-response.tmp"
+                    local response = io.open(temp, "w")
+                    if response then
+                        response:write(id .. "|" .. (ok and "ok" or "error") .. "|" .. tostring(err or "Grant requested"):gsub("[|\r\n]", " "))
+                        response:close()
+                        os.remove(command_root .. "\\tank-response.txt")
+                        os.rename(temp, command_root .. "\\tank-response.txt")
+                    end
+                end)
+            end
+        end
+    end
+    ExecuteWithDelay(500, poll_grants)
+end
+ExecuteWithDelay(500, poll_grants)

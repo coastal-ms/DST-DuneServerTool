@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { api } from '../../api/client'
+import { ConfirmationModal } from '../../components/ConfirmationModal'
 
 export function StartupSettingsSync({ onBusyChange }: { onBusyChange?: (busy: boolean) => void }) {
   const [enabled, setEnabled] = useState(true)
@@ -8,6 +9,7 @@ export function StartupSettingsSync({ onBusyChange }: { onBusyChange?: (busy: bo
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
+  const [confirmDisable, setConfirmDisable] = useState(false)
   useEffect(() => {
     let cancelled = false
     void api<{ enabled: boolean; injectionsApplied?: boolean; cleanupPending?: boolean }>('/api/gameconfig/retail-startup-sync')
@@ -31,7 +33,7 @@ export function StartupSettingsSync({ onBusyChange }: { onBusyChange?: (busy: bo
   }
   return <div className="rounded-lg border border-border bg-surface p-4">
     <label className="flex items-center gap-2 text-sm">
-      <input type="checkbox" checked={enabled} disabled={loading || saving} onChange={e => void save(e.target.checked)} />
+      <input type="checkbox" checked={enabled} disabled={loading || saving} onChange={e => e.target.checked ? void save(true) : setConfirmDisable(true)} />
       Let DST manage server configuration
     </label>
     <p className="mt-2 text-xs text-text-muted">Applies to Solo and self-hosted. Turning this off leaves INI files untouched and removes DST settings injections from YAML. Explicit saves write INIs only.</p>
@@ -39,5 +41,6 @@ export function StartupSettingsSync({ onBusyChange }: { onBusyChange?: (busy: bo
     {cleanupPending && <p role="status" className="mt-2 text-xs text-warning">Server unavailable: YAML cleanup is pending and will run before its next DST start. INIs remain untouched.</p>}
     {enabled && !applied && <p role="status" className="mt-2 text-xs text-text-muted">Use Apply INIs to restore DST injections. Until then, saves write INIs only.</p>}
     {error && <p role="alert" className="mt-2 text-sm text-danger">{error}</p>}
+    {confirmDisable && <ConfirmationModal title="Disable DST configuration management?" description="This removes DST settings injections from YAML and leaves all INI blocks and values intact. You assume responsibility for manual changes and resulting problems. Re-enabling requires Apply INIs to restore injections." confirmLabel="Disable management" onCancel={() => setConfirmDisable(false)} onConfirm={() => { setConfirmDisable(false); void save(false) }} />}
   </div>
 }

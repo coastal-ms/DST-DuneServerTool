@@ -798,6 +798,18 @@ Describe 'Official Retail operator configuration preservation' -Tag 'GameConfig'
         }
     }
 
+    It 'stages explicit restart YAML without overwriting the running game runtime INI' {
+        Mock Get-DuneRetailServerSettingsSnapshot {
+            @{available=$true;fileExists=$true;fileAuthority=$true;raw=$script:OperatorSource;fileRaw=$script:OperatorSource;revision=Get-DuneRetailServerSettingsTextSha256 -Value $script:OperatorSource;
+                target=@{namespace='funcom-test';battlegroup='retail-test';pod='retail-test-fb-deploy-abc';path='/srv/UserSettings/UserServerCustomSettings.ini';resourceVersion='100';stopped=$false;serverPodCount=2}}
+        }
+        Mock Get-DuneRetailServerSettingsRuntimeSnapshot {
+            @{available=$true;fileExists=$true;raw='runtime stays';revision='old';target=@{path='/srv/Config/LinuxServer/ServerCustomSettings.ini'}}
+        }
+        (Set-DuneRetailServerSettings -Ip '192.0.2.10' -Updates @{} -ExpectedRevision (Get-DuneRetailServerSettingsTextSha256 -Value $script:OperatorSource) -SynchronizeOnly -StageForRestart).ok | Should -BeTrue
+        Should -Invoke Write-DuneRetailServerSettingsFile -Times 0
+        Should -Invoke Invoke-V6Ssh -Times 1 -ParameterFilter {$Cmd -like '*kubectl patch battlegroup*'}
+    }
     It 'migrates the entire existing YAML file before marking Linux file authority' {
         $script:OperatorSource = "; existing YAML`n[$script:RetailSection]`nDifficultyLevel=Custom`nPVPMode=Full`nCraftingCost=0.500000`nFutureKey=keep`n"
         $disk = "[$script:RetailSection]`nDifficultyLevel=Medium`nCraftingCost=1.000000`n"

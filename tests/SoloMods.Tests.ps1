@@ -13,6 +13,20 @@
 }
 AfterAll { if($script:ModTestRoot.StartsWith([IO.Path]::GetTempPath())){Remove-Item -LiteralPath $script:ModTestRoot -Recurse -Force} }
 Describe 'Solo mod import and dependencies' {
+    It 'sends a button grant to the current session and waits for matching game acknowledgement' {
+        $script:TankCommandTestRoot=Join-Path $script:DuneSoloLoaderRoot ('Session-'+[guid]::NewGuid().ToString('N'))
+        New-Item -ItemType Directory -Path $script:TankCommandTestRoot -Force | Out-Null
+        @{root=$script:TankCommandTestRoot;tankSupport=$true} | ConvertTo-Json | Set-Content (Join-Path $script:DuneSoloLoaderRoot 'session.json')
+        Mock Start-Sleep {
+            $request=[IO.File]::ReadAllText((Join-Path $script:TankCommandTestRoot 'tank-request.txt')).Split('|')
+            $request[1] | Should -Be 'T6_CombatDart'
+            [IO.File]::WriteAllText((Join-Path $script:TankCommandTestRoot 'tank-response.txt'),($request[0]+'|ok|Grant requested'))
+        }
+        (Grant-DuneSoloRegisTank -Preset 'T6_CombatDart').ok | Should -BeTrue
+    }
+    It 'rejects unsupported variants before queuing a game command' {
+        {Grant-DuneSoloRegisTank -Preset 'OtherVehicle'} | Should -Throw '*Select Dart*'
+    }
     It 'includes built-in Tanks in normal Solo launch and preserves optional mod selections' -ForEach @(@{WithMods=$false;Expected=1},@{WithMods=$true;Expected=2}) {
         $script:DuneBundledSoloModsRoot=Join-Path (Get-DstRepoRoot) 'app/resources/solo-mods'
         $library=Join-Path $script:ModTestRoot ([guid]::NewGuid().ToString('N')+'/steamapps')
@@ -26,6 +40,12 @@ Describe 'Solo mod import and dependencies' {
         Set-DuneSoloModSelection @{mods=@(@{folder='UserMod';enabled=$true});gamePath=$game;platform='steam'} | Out-Null
         Mock Get-FileHash { @{Hash='B9A77E7A178CFA8D88D65743BCBB04EF9D45E13539DB0BBD148E172BDA86A9E9'} } -ParameterFilter { $LiteralPath -eq $exe }
         Mock Start-Process {}
+        $statePath = Join-Path (Split-Path -Parent $script:DuneSoloModsRoot) 'State/active-mods.txt'
+        if ($WithMods) {
+            New-Item -ItemType Directory -Path (Split-Path -Parent $statePath) -Force | Out-Null
+            [IO.File]::WriteAllText($statePath, 'prior-state-list')
+            [IO.File]::WriteAllText((Join-Path $script:DuneSoloModsRoot 'mods.txt'), 'prior-mod-list')
+        }
         Start-DuneSoloModGame $WithMods | Out-Null
         $status=Get-DuneSoloMods
         $list=@(Get-Content (Join-Path $status.session.root 'mods.txt'))
@@ -33,6 +53,19 @@ Describe 'Solo mod import and dependencies' {
         $list | Should -Contain 'dst-regis-tanks : 1'
         @($status.mods | Where-Object id -eq 'UserMod')[0].enabled | Should -BeTrue
         if (-not $WithMods) { $list | Should -Not -Contain 'UserMod : 1' }
+        $compat = @(Get-Content (Join-Path $script:DuneSoloModsRoot 'mods.txt'))
+        $compat | Should -Contain 'dst-regis-tanks : 1'
+        $compat | Should -Contain ('UserMod : '+[int]$WithMods)
+        @(Get-Content (Join-Path (Split-Path -Parent $script:DuneSoloModsRoot) 'State/active-mods.txt')) | Should -Be $compat
+        Mock Get-Process {}
+        & (Join-Path (Get-DstRepoRoot) 'app/server/lib/SoloModsWatcher.ps1') -LoaderRoot $script:DuneSoloLoaderRoot -RestoreOnly
+        if ($WithMods) {
+            [IO.File]::ReadAllText($statePath) | Should -BeExactly 'prior-state-list'
+            [IO.File]::ReadAllText((Join-Path $script:DuneSoloModsRoot 'mods.txt')) | Should -BeExactly 'prior-mod-list'
+        } else {
+            Test-Path -LiteralPath $statePath | Should -BeFalse
+            Test-Path -LiteralPath (Join-Path $script:DuneSoloModsRoot 'mods.txt') | Should -BeFalse
+        }
     }
     It 'installs bundled tanks disabled and preserves an existing installation' {
         $script:DuneBundledSoloModsRoot=Join-Path (Get-DstRepoRoot) 'app/resources/solo-mods'

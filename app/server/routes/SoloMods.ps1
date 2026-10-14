@@ -13,7 +13,10 @@ Register-DuneRoute -Method POST -Path '/api/solo/mods/import' -LocalOnly -Handle
 Register-DuneRoute -Method POST -Path '/api/solo/mods/regis-tanks' -LocalOnly -Handler {
     param($req,$res,$routeParams,$body)
     try {
-        $result=Invoke-WithDuneLock -Name 'solo-mods' -Script { Install-DuneRegisTanksMod }
+        $result=Invoke-WithDuneLock -Name 'solo-mods' -Script {
+            if ($body -is [hashtable] -and $body.ContainsKey('preset')) { Grant-DuneSoloRegisTank -Preset ([string]$body.preset) }
+            else { Install-DuneRegisTanksMod }
+        }
         Write-DuneJson -Response $res -Body $result
     } catch { Write-DuneError -Response $res -Status 400 -Message $_.Exception.Message }
 }

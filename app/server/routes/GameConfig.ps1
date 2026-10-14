@@ -462,7 +462,9 @@ Register-DuneRoute -Method POST -Path '/api/gameconfig/reload-pods' -Handler {
     try {
         # Invoke-DuneBattlegroupRestart rebuilds the startup console variables from
         # the current INI before restarting, so no separate sync is needed here.
-        $r = Invoke-DuneBattlegroupRestart -Ip $ctx.ip
+        $r = Invoke-WithDuneLock -Name 'retail-startup-sync' -Script {
+            Invoke-DuneBattlegroupRestart -Ip $ctx.ip -ApplyInis
+        }
         if (-not $r.ok) {
             Write-DuneError -Response $res -Status 502 -Message $r.message
             return

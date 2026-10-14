@@ -825,7 +825,7 @@ function Invoke-DuneBattlegroupRestart {
     try {
     $inject = -not (Get-Command Test-DuneConfigurationInjectionEnabled -ErrorAction SilentlyContinue) -or (Test-DuneConfigurationInjectionEnabled)
     if ($Ip -and $explicitApply) {
-        try { $null = Sync-DuneRetailServerSettingsForStartup -Ip $Ip }
+        try { $null = Sync-DuneRetailServerSettingsForStartup -Ip $Ip -StageForRestart }
         catch { return @{ok=$false;message="Settings YAML restoration failed; Apply INIs remains pending. $($_.Exception.Message)"} }
     }
 
@@ -861,6 +861,10 @@ function Invoke-DuneBattlegroupRestart {
     if ($Ip -and $inject -and (Get-Command Sync-DuneStartupConsoleVariableOverrides -ErrorAction SilentlyContinue)) {
         try { $startupApply = Sync-DuneStartupConsoleVariableOverrides -Ip $Ip }
         catch { $startupApply = @{ ok = $false; error = $_.Exception.Message } }
+    }
+
+    if ($explicitApply -and ($null -eq $startupApply -or ($startupApply.ok -eq $false) -or ($startupApply.Success -eq $false))) {
+        return @{ok=$false;message="Startup YAML restoration failed; Apply INIs remains pending. $($startupApply.error)";startupApply=$startupApply}
     }
 
     $result = Invoke-DuneCommandExternal -Name 'restart'

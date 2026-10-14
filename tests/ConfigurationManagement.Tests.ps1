@@ -10,6 +10,10 @@ BeforeAll {
 }
 
 Describe 'Self-managed configuration preserves INIs and avoids automatic writes' {
+    It 'routes the Game Config Apply INIs button through explicit restoration' {
+        $route=Get-Content (Join-Path (Get-DstRepoRoot) 'app/server/routes/GameConfig.ps1') -Raw
+        $route.Substring($route.IndexOf("Register-DuneRoute -Method POST -Path '/api/gameconfig/reload-pods'")) | Should -Match 'Invoke-DuneBattlegroupRestart -Ip \$ctx.ip -ApplyInis'
+    }
     BeforeEach {
         Mock Get-DuneRetailStartupSyncPreference { @{enabled=$false;injectionsApplied=$false} }
         Mock Invoke-V6Ssh { 'yes' }
@@ -33,6 +37,17 @@ Describe 'Self-managed configuration preserves INIs and avoids automatic writes'
         (Invoke-DuneBattlegroupRestart -Ip '192.0.2.10').ok | Should -BeTrue
         Should -Invoke Invoke-DuneDeployInstalledUserSettings -Times 0
         Should -Invoke Invoke-V6Ssh -Times 0
+    }
+    It 'restores injections only through explicit Apply INIs and records completion' {
+        Mock Get-DuneRetailStartupSyncPreference { @{enabled=$true;injectionsApplied=$false} }
+        Mock Sync-DuneRetailServerSettingsForStartup { @{ok=$true} }
+        Mock Invoke-DuneDeployInstalledUserSettings { @{ok=$true} }
+        Mock Sync-DuneStartupConsoleVariableOverrides { @{Success=$true} }
+        Mock Set-DuneRetailStartupSyncPreference { @{enabled=$true;injectionsApplied=$true} }
+        (Invoke-DuneBattlegroupRestart -Ip '192.0.2.10' -ApplyInis).ok | Should -BeTrue
+        Should -Invoke Sync-DuneRetailServerSettingsForStartup -Times 1 -ParameterFilter {$StageForRestart}
+        Should -Invoke Sync-DuneStartupConsoleVariableOverrides -Times 1
+        Should -Invoke Set-DuneRetailStartupSyncPreference -Times 1 -ParameterFilter {$Enabled -and $Applied}
     }
     It 'clears only DST startup YAML names without INI writes' {
         Mock Set-V6ConsoleVariableOverrides { @{Success=$true} }

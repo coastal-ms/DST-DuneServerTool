@@ -1,6 +1,7 @@
 import { useSoloInstallation } from '../hooks/useInstallationMode'
 import { useState, useEffect, type FormEvent } from 'react'
 import { PageHeader } from '../components/PageHeader'
+import { StartupSettingsSync } from './gameconfig/StartupSettingsSync'
 import { Icon } from '../components/Icon'
 import { api } from '../api/client'
 import type { ConfigResponse } from '../api/types'
@@ -954,6 +955,7 @@ export function Settings() {
 
       </>}
       {!soloOnly && <SectionErrorBoundary name="Mobile App Pairing"><BrowserAccessCard /></SectionErrorBoundary>}
+      <div className="mt-4"><StartupSettingsSync /></div>
     </>
   )
 }

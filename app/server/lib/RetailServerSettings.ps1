@@ -798,14 +798,15 @@ function Set-DuneRetailServerSettings {
         [Parameter(Mandatory)][AllowEmptyCollection()][hashtable]$Updates,
         [Parameter(Mandatory)][string]$ExpectedRevision,
         [string]$ImportOperatorRevision,
-        [switch]$SynchronizeOnly
+        [switch]$SynchronizeOnly,
+        [switch]$StageForRestart
     )
     $current = Get-DuneRetailServerSettingsSnapshot -Ip $Ip
     if (-not $current.available) { throw [InvalidOperationException]::new([string]$current.reason) }
     if (-not $ExpectedRevision -or $ExpectedRevision -cne [string]$current.revision) {
         throw [InvalidOperationException]::new('Retail Server Settings changed since they were loaded. Refresh and review the current values before saving.')
     }
-    if (-not $current.target.stopped -or [int]$current.target.serverPodCount -ne 0) {
+    if (-not $StageForRestart -and (-not $current.target.stopped -or [int]$current.target.serverPodCount -ne 0)) {
         throw [InvalidOperationException]::new('Stop the battlegroup fully before saving Official Retail Server Settings.')
     }
 
@@ -901,7 +902,11 @@ function Set-DuneRetailServerSettings {
         $operatorBackupTarget.path = "$($target.path).operator"
         $backup.operator = Backup-DuneRetailServerSettingsContent -Ip $Ip -Target $operatorBackupTarget -Raw $operatorRaw
     }
-    $writeRuntime = -not $runtime.fileExists -or [string]$runtime.revision -cne $updatedRevision
+    # Explicit Apply INIs already authorizes a restart. Stage the operator
+    # content now, but never replace a running game's runtime INI. The stopped
+    # startup transaction performs that write before the next start.
+    $writeRuntime = (-not $StageForRestart -or ($target.stopped -and [int]$target.serverPodCount -eq 0)) -and
+        (-not $runtime.fileExists -or [string]$runtime.revision -cne $updatedRevision)
     if ($writeRuntime -and $runtime.fileExists) {
         $backup.runtime = Backup-DuneRetailServerSettingsContent -Ip $Ip -Target $runtime.target -Raw ([string]$runtime.raw)
     }
@@ -1009,7 +1014,7 @@ function Set-DuneRetailServerSettings {
 }
 
 function Sync-DuneRetailServerSettingsForStartup {
-    param([Parameter(Mandatory)][string]$Ip)
+    param([Parameter(Mandatory)][string]$Ip, [switch]$StageForRestart)
     if(-not(Test-DuneConfigurationInjectionEnabled)){return @{ok=$true;skipped=$true;disabled=$true}}
     $snapshot = Get-DuneRetailServerSettingsSnapshot -Ip $Ip
     if (-not $snapshot.available) { throw [string]$snapshot.reason }
@@ -1024,7 +1029,7 @@ function Sync-DuneRetailServerSettingsForStartup {
         }
     }
     return Set-DuneRetailServerSettings -Ip $Ip -Updates @{} `
-        -ExpectedRevision $snapshot.revision -SynchronizeOnly
+        -ExpectedRevision $snapshot.revision -SynchronizeOnly -StageForRestart:$StageForRestart
 }
 
 function Select-DuneRetailServerSettingsAuthority {
