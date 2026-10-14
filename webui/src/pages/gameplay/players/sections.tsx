@@ -1031,11 +1031,13 @@ export function ActionsSection({ player, canWrite, demo, flash, onChanged, onFlu
               {group === 'Danger' && <Icon name="AlertTriangle" size={11} className="text-error" />}
               {group}
             </div>
-            <div className="space-y-1.5">
+            <div className="player-manage-grid">
               {acts.map(a => (
-                <ActionRow key={a.id} def={a} player={player} busy={busy} stats={stats}
+                <div key={a.id} data-expanded={openId === a.id ? 'true' : undefined}>
+                <ActionRow def={a} player={player} busy={busy} stats={stats}
                   open={openId === a.id} danger={group === 'Danger'}
                   onToggle={() => openAction(a.id)} runAction={runAction} />
+                </div>
               ))}
             </div>
           </div>
