@@ -13,6 +13,24 @@
 }
 AfterAll { if($script:ModTestRoot.StartsWith([IO.Path]::GetTempPath())){Remove-Item -LiteralPath $script:ModTestRoot -Recurse -Force} }
 Describe 'Solo mod import and dependencies' {
+    It 'persists explicit runtime choice without changing Tank-only launch or hiding a declared mismatch' {
+        Import-DuneSoloMod (New-ModZip ([guid]::NewGuid().ToString('N')) @{
+            'LegacyChoice/Scripts/main.lua'='print(1)'
+            'LegacyChoice/mod.json'='{"id":"LegacyChoice","requires":[{"id":"ue4ss","version":"3.0.1-1140-gf58e8f84"}]}'
+        }) | Out-Null
+        $body=@{mods=@(@{folder='LegacyChoice';enabled=$true});platform='steam';gamePath='C:/SteamGame';useNewerRuntime=$true}
+        $state=Set-DuneSoloModSelection $body
+        $state.runtimeVersion | Should -Be '3.0.1-1164-g5e627997'
+        $state.runtimeWarnings.Count | Should -Be 1
+        $body.useNewerRuntime=$false
+        $state=Set-DuneSoloModSelection $body
+        $state.runtimeVersion | Should -Be '3.0.1-1140-gf58e8f84'
+        $state.runtimeWarnings.Count | Should -Be 0
+        Set-DuneSoloLaunchRuntime $state $false | Out-Null
+        $state.runtimeVersion | Should -Be '3.0.1-1164-g5e627997'
+        Set-DuneSoloModSelection @{mods=$body.mods;platform='steam';gamePath='C:/AnotherGame'} | Out-Null
+        (Get-DuneSoloMods).useNewerRuntime | Should -BeFalse
+    }
     It 'uses the previous runtime for declared dependencies without replacing the current runtime or mod settings' {
         Install-DuneSoloModRuntime | Out-Null
         $currentHash=(Get-FileHash (Join-Path $script:DuneSoloLoaderRoot 'Runtime/ue4ss/UE4SS.dll')).Hash

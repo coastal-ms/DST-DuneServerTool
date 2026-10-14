@@ -10,6 +10,17 @@ vi.mock('../../src/components/CollapsibleCard', () => ({ CollapsibleCard: ({ chi
 const mods = ['First', 'Second', 'Third'].map(name => ({ folder: name, id: name, name, version: '', enabled: true, errors: [] }))
 afterEach(() => { cleanup(); vi.resetAllMocks(); vi.restoreAllMocks() })
 describe('Solo mod shortcuts and ordering', () => {
+  it('shows actual runtime and fallback separately from the saved checkbox choice', async () => {
+    request.mockResolvedValue({mods, gamePath:'C:/Dune', runtimeReady:true, useNewerRuntime:true, runtimeVersion:'3.0.1-1140-gf58e8f84', runtimeFallback:true, runtimeWarnings:['First declares UE4SS 1164; selected runtime is 1140.'], session:null})
+    render(<SoloMods />)
+    const choice=await screen.findByRole('checkbox', {name:'Use newer UE4SS runtime'})
+    expect(choice).toBeChecked()
+    expect(screen.getByText(/Selected for next mod launch:/)).toHaveTextContent('Selected for next mod launch: UE4SS 3.0.1-1140-gf58e8f84')
+    expect(screen.getByText(/newer runtime failed to initialize/)).toBeInTheDocument()
+    expect(screen.getByText(/First declares UE4SS/)).toBeInTheDocument()
+    fireEvent.click(choice)
+    await waitFor(()=>expect(request).toHaveBeenCalledWith('/api/solo/mods/selection',expect.objectContaining({body:JSON.stringify({mods,gamePath:'C:/Dune',platform:'steam',useNewerRuntime:false})})))
+  })
   it('shows refresh progress, prevents repeat clicks and reports completion', async () => {
     const state = { mods: [], gamePath: 'C:/Dune', runtimeReady: true, session: null }
     request.mockResolvedValue(state)

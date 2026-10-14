@@ -4,13 +4,15 @@ $script:DuneSoloLoaderRoot = Join-Path $soloModAppRoot 'ModLoader'
 $script:DuneSoloRuntimeAssets = Join-Path $soloModAppRoot 'resources\solo-mod-runtime'
 $script:DuneBundledSoloModsRoot = Join-Path $soloModAppRoot 'resources\solo-mods'
 
-function Get-DuneSoloRuntimeProfile($Mods) {
+function Get-DuneSoloRuntimeProfile($Mods, [switch]$TankOnly) {
     $legacy = $false
     foreach ($mod in @($Mods | Where-Object enabled)) {
         foreach ($requirement in @($mod.requires)) {
             if ($requirement.id -eq 'ue4ss' -and $requirement.version -eq '3.0.1-1140-gf58e8f84') { $legacy = $true }
         }
     }
+    $choice=Read-DuneModJson (Join-Path $script:DuneSoloLoaderRoot 'runtime-choice.json') @{}
+    if (-not $TankOnly -and $null -ne $choice.useNewerRuntime) { $legacy=-not [bool]$choice.useNewerRuntime }
     $fallback=Read-DuneModJson (Join-Path $script:DuneSoloLoaderRoot 'runtime-fallback.json') @{}
     if ($fallback.version -eq '3.0.1-1140-gf58e8f84') { $legacy=$true }
     if ($legacy) { return @{version='3.0.1-1140-gf58e8f84';folder='Runtime-1140';archive='runtime-1140.zip';hash='B954F036B10E9ABB0C0C41599311AB1ACCC53E30515AEED7E48EE22C5B3B1280'} }
@@ -24,7 +26,7 @@ function Test-DuneSoloRuntimeStartupFailure([string]$Log) {
 
 function Set-DuneSoloLaunchRuntime($State,[bool]$WithMods) {
     $selected=if($WithMods){$State.mods}else{@($State.mods | Where-Object id -eq 'dst-regis-tanks')}
-    $profile=Get-DuneSoloRuntimeProfile $selected
+    $profile=Get-DuneSoloRuntimeProfile $selected -TankOnly:(-not $WithMods)
     $State.runtimeVersion=$profile.version
     $State.runtimePath=Join-Path $script:DuneSoloLoaderRoot $profile.folder
     $State.runtimeReady=Test-DuneSoloModRuntime -Path $State.runtimePath
@@ -176,7 +178,11 @@ function Get-DuneSoloMods {
     }
     $profile=Get-DuneSoloRuntimeProfile $mods
     $runtimePath=Join-Path $script:DuneSoloLoaderRoot $profile.folder
-    return @{ runtimeVersion=$profile.version;runtimePath=$runtimePath;platform=$platform; gameRunning=$gameRunning; mods=$mods; folder=$script:DuneSoloModsRoot; gamePath=$gamePath; skipIntro=[bool]$preferences.skipIntro; soloArguments=[string]$preferences.soloArguments; runtimeReady=(Test-DuneSoloModRuntime -Path $runtimePath); session=$session; launchError=$launchError; runtimeLog=$runtimeLog }
+    $choice=Read-DuneModJson (Join-Path $script:DuneSoloLoaderRoot 'runtime-choice.json') @{}
+    $fallback=Read-DuneModJson (Join-Path $script:DuneSoloLoaderRoot 'runtime-fallback.json') @{}
+    $useNewer=if($null -ne $choice.useNewerRuntime){[bool]$choice.useNewerRuntime}else{$profile.folder -eq 'Runtime'}
+    $runtimeWarnings=@(foreach($mod in @($mods | Where-Object enabled)){foreach($req in @($mod.requires)){if($req.id -eq 'ue4ss' -and $req.version -and $req.version -ne $profile.version){"$($mod.name) declares UE4SS $($req.version); selected runtime is $($profile.version)."}}})
+    return @{ useNewerRuntime=$useNewer;runtimeFallback=($fallback.version -eq '3.0.1-1140-gf58e8f84');runtimeWarnings=$runtimeWarnings;runtimeVersion=$profile.version;runtimePath=$runtimePath;platform=$platform; gameRunning=$gameRunning; mods=$mods; folder=$script:DuneSoloModsRoot; gamePath=$gamePath; skipIntro=[bool]$preferences.skipIntro; soloArguments=[string]$preferences.soloArguments; runtimeReady=(Test-DuneSoloModRuntime -Path $runtimePath); session=$session; launchError=$launchError; runtimeLog=$runtimeLog }
 }
 
 function Open-DuneSoloModsFolder {
@@ -210,6 +216,11 @@ function Set-DuneSoloModPlatform([string]$Platform, [string]$GamePath='') {
 function Set-DuneSoloModSelection($Body) {
     Assert-DuneSoloGameClosed
     Set-DuneSoloModPlatform -Platform ([string]$Body.platform) -GamePath ([string]$Body.gamePath)
+    if ($null -ne $Body.useNewerRuntime) {
+        @{useNewerRuntime=[bool]$Body.useNewerRuntime} | ConvertTo-Json | Set-Content (Join-Path $script:DuneSoloLoaderRoot 'runtime-choice.json') -Encoding utf8
+        $fallbackPath=Join-Path $script:DuneSoloLoaderRoot 'runtime-fallback.json'
+        if(Test-Path -LiteralPath $fallbackPath){Remove-Item -LiteralPath $fallbackPath}
+    }
     $state = @{}
     foreach ($item in @($Body.mods)) { $state[[string]$item.folder] = [bool]$item.enabled }
     ConvertTo-Json -InputObject @($Body.mods | ForEach-Object { [string]$_.folder }) | Set-Content (Join-Path $script:DuneSoloLoaderRoot 'order.json') -Encoding utf8

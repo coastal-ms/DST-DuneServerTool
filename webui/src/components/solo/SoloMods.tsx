@@ -11,7 +11,7 @@ import { pickLocalFolder } from '../../util/pathPicker'
 import { isShellHost, openShellFolder } from '../../util/shellBridge'
 
 interface Mod { folder: string; id: string; name: string; version: string; enabled: boolean; warnings?: string[]; errors: string[] }
-interface State { gameRunning?: boolean; mods: Mod[]; folder: string; gamePath: string; skipIntro: boolean; soloArguments?: string; runtimeReady: boolean; session: unknown; launchError?: string; runtimeLog?: string }
+interface State { useNewerRuntime?: boolean; runtimeVersion?: string; runtimeFallback?: boolean; runtimeWarnings?: string[]; gameRunning?: boolean; mods: Mod[]; folder: string; gamePath: string; skipIntro: boolean; soloArguments?: string; runtimeReady: boolean; session: { runtimeVersion?: string } | null; launchError?: string; runtimeLog?: string }
 
 function SortableMod({ mod, disabled, children }: { mod: Mod; disabled: boolean; children: ReactNode }) {
   const { attributes, listeners, setNodeRef, setActivatorNodeRef, transform, transition, isDragging } = useSortable({ id: mod.folder, disabled })
@@ -143,6 +143,14 @@ export function SoloMods({ connectionToken = '' }: { connectionToken?: string })
   }>
     <div className="space-y-3">
       <p className="text-sm text-text-muted">Steam and Xbox PC Solo launches include built-in Tank support and disable BattlEye for that session. Launch with Mods also loads your enabled mods; Xbox mod launches disable BattlEye too.</p>
+      <label className="flex items-center gap-2 text-sm">
+        <input type="checkbox" checked={state?.useNewerRuntime ?? false} disabled={busy || !state || state.gameRunning} onChange={e => void run('selection', { mods: state?.mods ?? [], gamePath, platform, useNewerRuntime: e.target.checked })} />
+        Use newer UE4SS runtime
+      </label>
+      <p className="text-sm text-text-muted">For Launch with Mods: checked uses bundled 1164; unchecked uses previous 1140. Built-in Tanks use Launch Solo without optional mods.</p>
+      {state?.runtimeVersion && <p role="status" className="text-sm text-text-muted">Selected for next mod launch: UE4SS {state.runtimeVersion}.{state.gameRunning && state.session?.runtimeVersion ? ` Current session: UE4SS ${state.session.runtimeVersion}.` : ''} Runtime loading does not confirm that every mod works.</p>}
+      {state?.runtimeFallback && <p className="text-sm text-warning">The newer runtime failed to initialize. DST selected previous runtime 1140 for the next launch. Change the checkbox to retry your chosen version.</p>}
+      {state?.runtimeWarnings?.map(message => <p className="text-sm text-warning" key={message}>{message}</p>)}
       {platform === 'xbox' && (
         <p className="rounded border border-warning/30 bg-warning/5 p-3 text-sm text-text-muted">
           Xbox app / Game Pass mods require a version updated by the mod author for Game Pass.
@@ -183,7 +191,7 @@ export function SoloMods({ connectionToken = '' }: { connectionToken?: string })
       </DndContext>
       {state && !state.mods.length && <p className="text-sm text-text-muted">No mods installed.</p>}
       
-      <p className="text-xs text-text-muted">Solo only. Normal launch bypasses the mod runtime. DST supports its mod-loading framework only. We make no guarantees that any individual mod will or will not work, and DST does not provide individual mod troubleshooting. Contact the mod author or discuss issues with the community.</p>
+      <p className="text-xs text-text-muted">Solo only. Launch Solo includes built-in Tank support; Launch with Mods also loads enabled mods. DST supports its mod-loading framework only. We make no guarantees that any individual mod will or will not work, and DST does not provide individual mod troubleshooting. Contact the mod author or discuss issues with the community.</p>
       <a className="text-xs text-accent-bright underline" href="https://discord.com/channels/1517599283757453333/1558246888967245957" target="_blank" rel="noopener noreferrer">Solo mod discussion</a>
       {state?.runtimeLog && <details><summary className="cursor-pointer text-sm">Loader log</summary><pre className="text-xs whitespace-pre-wrap max-h-64 overflow-auto mt-2">{state.runtimeLog}</pre></details>}
     </div>

@@ -17,6 +17,7 @@ here cover everything those tags shipped.
 
 ### Changed
 - Label the three reviewed character collection buttons Grant All in Solo and self-hosted Players actions. New limited-use schematic grants provide one use per recipe, with vehicle locomotion counts sized for one vehicle; existing recipes and remaining uses are preserved.
+- Add one saved newer-runtime checkbox for mod launches, showing the selected UE4SS version, automatic fallback and declared version mismatches. Built-in Tank-only launches keep their existing runtime behavior.
 
 ### Fixed
 - Fill compatible existing item stacks before creating new stacks in Solo and self-hosted offline player and storage grants. Restore Welding Wire and ammunition stack metadata and count available stack space when checking inventory slots.
