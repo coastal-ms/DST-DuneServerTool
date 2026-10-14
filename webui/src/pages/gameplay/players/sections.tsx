@@ -2883,7 +2883,16 @@ function ItemsActionBlock({ player, canWrite, flash, onChanged, onFlush }: {
   const [openId, setOpenId] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
 
-  const acts = useMemo(() => ACTIONS.filter(a => a.group === ITEMS_GROUP && (!isPlayer || !PLAYER_HIDDEN_ACTIONS.has(a.id))), [isPlayer])
+  const acts = useMemo(() => {
+    const first = ['give-item', 'give-vehicle-kit', 'give-package', 'grant-cosmetic', 'repair-gear', 'max-augment-attributes']
+    const rank = (action: ActionDef) => {
+      const priority = first.indexOf(action.id)
+      if (priority >= 0) return priority
+      return action.experimental ? 8 : action.liveOnly ? 7 : 6
+    }
+    return ACTIONS.filter(a => a.group === ITEMS_GROUP && (!isPlayer || !PLAYER_HIDDEN_ACTIONS.has(a.id)))
+      .sort((a, b) => rank(a) - rank(b))
+  }, [isPlayer])
 
   if (!canWrite || acts.length === 0) return null
 
@@ -2913,13 +2922,18 @@ function ItemsActionBlock({ player, canWrite, flash, onChanged, onFlush }: {
   }
 
   return (
-    <div className="player-manage-grid mb-2">
-      {acts.map(a => (
+    <div className="space-y-3 mb-2">
+      {[0, 1, 2].map(tier => {
+        const items = acts.filter(action => (action.experimental ? 2 : action.liveOnly ? 1 : 0) === tier)
+        return items.length > 0 && <div key={tier} className="player-manage-grid player-items-grid">
+      {items.map(a => (
         <div key={a.id} data-expanded={openId === a.id ? 'true' : undefined}>
           <ActionRow def={a} player={player} busy={busy} stats={null}
             open={openId === a.id} onToggle={() => openAction(a.id)} runAction={runAction} />
         </div>
       ))}
+        </div>
+      })}
     </div>
   )
 }

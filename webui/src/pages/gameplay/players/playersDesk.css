@@ -49,6 +49,9 @@
 .player-snapshot-account dd { margin-top:4px; font-size:12px; font-variant-numeric:tabular-nums; }
 .player-manage-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(min(18rem,100%),1fr)); align-items:start; gap:8px; }
 .player-manage-grid > [data-expanded="true"] { grid-column:1/-1; }
+.player-items-grid { align-items:stretch; }
+.player-items-grid > div > .card { height:100%; }
+.player-items-grid > div:not([data-expanded="true"]) > .card > button { height:100%; }
 .player-inventory-actions > summary { display:flex; align-items:center; gap:8px; width:fit-content; min-height:36px; padding:7px 10px; border:1px solid var(--portal-rule,var(--color-border)); margin:6px 0 10px; cursor:pointer; font-size:12px; background:var(--color-surface); }
 .player-inventory-actions > summary::after { content:'+'; margin-left:16px; }
 .player-inventory-actions[open] > summary::after { content:'-'; }
