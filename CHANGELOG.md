@@ -16,7 +16,7 @@ here cover everything those tags shipped.
 ## [16.5.0.1] - 2026-10-14
 
 ### Changed
-- Order Manage Player item actions with common grants and repairs first, live-required actions next, and experimental Grant All actions last; align card heights within each group.
+- Order Manage Player item actions with common grants and repairs first, live-required actions next, and experimental Grant All actions last; align card heights within each group. Place Solo Grant All actions directly below Grant Cosmetic / Building Set.
 - Label the three reviewed character collection buttons Grant All in Solo and self-hosted Players actions. New limited-use schematic grants provide one use per recipe, with vehicle locomotion counts sized for one vehicle; existing recipes and remaining uses are preserved.
 - Add a saved UE4SS runtime dropdown for mod launches, defaulting to 1140 with 1164 as an optional choice, and show the selected version, automatic fallback and declared version mismatches. Built-in Tank-only launches keep their existing runtime behavior.
 

@@ -2233,28 +2233,6 @@ export function SoloMode() {
               </button>
             </div>
 
-            {[
-              { id: 'ObservedCharacterSwatches', label: 'Character Swatches (311)' },
-              { id: 'ObservedGearAppearances', label: 'Gear Appearances (401)' },
-              { id: 'ObservedSchematicRecipes', label: 'Schematic Recipes (717)' },
-            ].map(choice => <button key={choice.id} className="btn-primary mt-4" disabled={!canMutateActiveProfile || gameRunning || !!busy}
-              onClick={async () => {
-                if (!window.confirm(`Grant the reviewed ${choice.label}? A safety backup will be created.${choice.id === 'ObservedSchematicRecipes' ? ' This saves crafting recipes directly, not inventory items. Existing recipe uses are preserved.' : ''}\n\n${COSMETIC_LICENSE_NOTICE}`)) return
-                setBusy('reviewed-customization')
-                setNotice(null)
-                try {
-                  await grantSoloReviewedCustomization(statusState.data?.profileToken ?? '', choice.id)
-                  setNotice({ kind: 'ok', text: `${choice.label} saved. ${choice.id === 'ObservedSchematicRecipes' ? 'Open the game and check your crafting recipes. Existing recipe uses were preserved.' : 'Open the game and select the appearance or swatch in the customization menu.'}` })
-                  await Promise.all([statusState.refresh(), backupsState.refresh()])
-                } catch (error) { setNotice({ kind: 'err', text: error instanceof Error ? error.message : String(error) }) }
-                finally { setBusy(null) }
-              }}>
-              Grant All {choice.label} (experimental)
-              <span className="block text-xs font-normal">{statusState.data?.cosmeticOwnership?.reviewedCounts?.[choice.id]
-                ? `${statusState.data.cosmeticOwnership.reviewedCounts[choice.id].owned}/${statusState.data.cosmeticOwnership.reviewedCounts[choice.id].total} owned · ${statusState.data.cosmeticOwnership.reviewedCounts[choice.id].remaining} remaining`
-                : 'Character counts unavailable'}</span>
-            </button>)}
-
             <SoloCosmeticGrantCard
               busy={busy === 'give-items'}
               ownership={statusState.data?.cosmeticOwnership}
@@ -2284,6 +2262,30 @@ export function SoloMode() {
                 )
               }}
             />
+
+            <div className="grid grid-cols-1 xl:grid-cols-3 gap-3 xl:col-span-2">
+            {[
+              { id: 'ObservedCharacterSwatches', label: 'Character Swatches (311)' },
+              { id: 'ObservedGearAppearances', label: 'Gear Appearances (401)' },
+              { id: 'ObservedSchematicRecipes', label: 'Schematic Recipes (717)' },
+            ].map(choice => <button key={choice.id} className="btn-primary w-full flex-col gap-1 py-3 justify-center text-center whitespace-normal" disabled={!canMutateActiveProfile || gameRunning || !!busy}
+              onClick={async () => {
+                if (!window.confirm(`Grant the reviewed ${choice.label}? A safety backup will be created.${choice.id === 'ObservedSchematicRecipes' ? ' This saves crafting recipes directly, not inventory items. Existing recipe uses are preserved.' : ''}\n\n${COSMETIC_LICENSE_NOTICE}`)) return
+                setBusy('reviewed-customization')
+                setNotice(null)
+                try {
+                  await grantSoloReviewedCustomization(statusState.data?.profileToken ?? '', choice.id)
+                  setNotice({ kind: 'ok', text: `${choice.label} saved. ${choice.id === 'ObservedSchematicRecipes' ? 'Open the game and check your crafting recipes. Existing recipe uses were preserved.' : 'Open the game and select the appearance or swatch in the customization menu.'}` })
+                  await Promise.all([statusState.refresh(), backupsState.refresh()])
+                } catch (error) { setNotice({ kind: 'err', text: error instanceof Error ? error.message : String(error) }) }
+                finally { setBusy(null) }
+              }}>
+              Grant All {choice.label} (experimental)
+              <span className="block text-xs font-normal">{statusState.data?.cosmeticOwnership?.reviewedCounts?.[choice.id]
+                ? `${statusState.data.cosmeticOwnership.reviewedCounts[choice.id].owned}/${statusState.data.cosmeticOwnership.reviewedCounts[choice.id].total} owned · ${statusState.data.cosmeticOwnership.reviewedCounts[choice.id].remaining} remaining`
+                : 'Character counts unavailable'}</span>
+            </button>)}
+            </div>
 
             <div className="card p-5 xl:col-span-2">
               <h3 className="font-semibold mb-1">Max Augment Attributes</h3>
