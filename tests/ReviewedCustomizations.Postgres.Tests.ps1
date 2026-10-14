@@ -44,6 +44,13 @@ INSERT INTO dune.actors VALUES(1,'{"Other":{"keep":7},"CustomizationLibraryActor
         $repeat.Output.Trim() | Should -Be '0'
         $uses = Invoke-ReviewedFixture "SELECT properties #>> '{CraftingRecipesLibraryActorComponent,m_KnownItemRecipes,0,m_NumberOfRecipeUses}' FROM dune.actors WHERE id=1;"
         $uses.Output.Trim() | Should -Be '99'
+        $counts = Invoke-ReviewedFixture @'
+SELECT min((r->>'m_NumberOfRecipeUses')::int),max((r->>'m_NumberOfRecipeUses')::int)
+FROM dune.actors a CROSS JOIN jsonb_array_elements(a.properties #> '{CraftingRecipesLibraryActorComponent,m_KnownItemRecipes}') WITH ORDINALITY t(r,ordinal)
+WHERE (r->>'m_bIsLimitedUseRecipe')::boolean
+AND ordinal > 1;
+'@
+        $counts.Output.Trim() | Should -Be '1|8'
     }
     It 'applies both observed bulk selections atomically and preserves existing entries' {
         foreach ($selection in @('ObservedCharacterSwatches','ObservedGearAppearances')) {

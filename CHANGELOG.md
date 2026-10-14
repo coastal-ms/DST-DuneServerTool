@@ -16,7 +16,7 @@ here cover everything those tags shipped.
 ## [16.5.0.1] - 2026-10-14
 
 ### Changed
-- Label the three reviewed character collection buttons Grant All in Solo and self-hosted Players actions.
+- Label the three reviewed character collection buttons Grant All in Solo and self-hosted Players actions. New limited-use schematic grants provide one use per recipe, with vehicle locomotion counts sized for one vehicle; existing recipes and remaining uses are preserved.
 
 ### Fixed
 - Keep Solo mod runtime installation visible while collapsed, offer runtime repair, and report installation results while preserving saves and installed mods.

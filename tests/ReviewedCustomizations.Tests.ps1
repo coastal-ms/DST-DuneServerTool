@@ -15,6 +15,21 @@ AfterAll {
     Remove-Item function:global:Invoke-DuneVerifiedSafetyBackup -ErrorAction SilentlyContinue
 }
 Describe 'Reviewed ordinary customizations' {
+    It 'grants one limited schematic use except the modules needed for a vehicle kit' {
+        $recipes = (Get-DuneReviewedCustomization ObservedSchematicRecipes).recipeEntries
+        $kits = Get-Content (Join-Path (Get-DstRepoRoot) 'app/data/vehicle-kits.json') -Raw | ConvertFrom-Json
+        foreach ($recipe in $recipes) {
+            if (-not $recipe.m_bIsLimitedUseRecipe) { continue }
+            $name = [string]$recipe.BaseRecipeId.Name
+            if ($name -match '^(OrnithopterLight|OrnithopterMedium|OrnithopterTransport|Sandcrawler)Locomotion_') {
+                $vehicle = $kits.vehicles | Where-Object id -eq $Matches[1]
+                $module = @($vehicle.qty.PSObject.Properties | Where-Object Name -match 'Locomotion')[0]
+                $recipe.m_NumberOfRecipeUses | Should -Be $module.Value -Because "$name should craft one complete vehicle's locomotion modules"
+            } else {
+                $recipe.m_NumberOfRecipeUses | Should -Be 1 -Because "$name should receive one limited schematic use"
+            }
+        }
+    }
     It 'counts exact saved Solo swatches, gear appearances and recipe quality pairs' {
         Mock Add-DuneCosmeticCatalogOwnership {}
         $swatch = (Get-DuneReviewedCustomization ObservedCharacterSwatches).customizationIds[0]
