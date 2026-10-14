@@ -411,7 +411,9 @@ LIMIT 1;
     $safeActorClass = $ActorClass -replace "'", "''"
     $permissionRepaired = $false
     if ($controllerId -gt 0) {
-        for ($attempt = 0; $attempt -lt 10; $attempt++) {
+        # Initial vehicle persistence can lag the accepted live command. Keep
+        # observing/repairing the same grant; never send another spawn command.
+        for ($attempt = 0; $attempt -lt 30; $attempt++) {
             Start-Sleep -Seconds 1
             $repairSql = @"
 WITH candidate AS (
@@ -438,7 +440,8 @@ permission_row AS (
     JOIN dune.actors a ON a.id = c.id
     ON CONFLICT (actor_id) DO NOTHING
     RETURNING actor_id
-)
+),
+owner_row AS (
 INSERT INTO dune.permission_actor_rank(permission_actor_id, player_id, rank)
 SELECT c.id, $controllerId::bigint, 1
 FROM candidate c
@@ -448,7 +451,13 @@ WHERE NOT EXISTS (
     WHERE existing.permission_actor_id = c.id
       AND existing.player_id = $controllerId::bigint
 )
-RETURNING permission_actor_id;
+RETURNING permission_actor_id
+)
+SELECT c.id AS permission_actor_id
+FROM candidate c
+WHERE EXISTS (SELECT 1 FROM owner_row inserted WHERE inserted.permission_actor_id=c.id)
+   OR EXISTS (SELECT 1 FROM dune.permission_actor_rank existing
+              WHERE existing.permission_actor_id=c.id AND existing.player_id=$controllerId::bigint AND existing.rank=1);
 "@
             $repair = Invoke-DuneSqlQuery -Ip $Ip -Sql $repairSql -ReadOnly $false -MaxRows 1 -TimeoutSec 15
             if ($repair.ok) {
@@ -488,8 +497,11 @@ LIMIT 1;
     $res['permission_repaired'] = $permissionRepaired
     $res['vehicle_survived'] = $vehicleSurvived
     if (-not $vehicleSurvived) {
-        $res['ok'] = $false
-        $res['error'] = "Funcom accepted the $VehicleId command, but the vehicle did not survive with a valid actor and owner permission."
+        # Absence from a bounded database observation is not proof the live
+        # vehicle was removed. Preserve command acceptance without claiming
+        # verified ownership, and avoid encouraging a duplicate grant.
+        $res['verification_pending'] = $true
+        $res['message'] = "Funcom accepted the $VehicleId command; database and owner verification is still pending. Check the vehicle in game before granting another."
         return $res
     }
     $res['message'] = "Spawned $VehicleId for $($r.fls_id) and verified rank-1 owner permission."

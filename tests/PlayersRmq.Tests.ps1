@@ -194,7 +194,7 @@ Describe 'Invoke-DuneVehicleSpawnLive' -Tag 'Pure' {
         $r.vehicle_survived | Should -BeTrue
     }
 
-    It 'fails when Funcom removes the vehicle after accepting the command' {
+    It 'reports accepted but unverified when the database observation cannot confirm the vehicle' {
         function global:Get-DuneRegisTankSupport { param($Ip,$ActorId); @{enabled=$true} }
         $script:spawnSurvives = $false
 
@@ -202,10 +202,32 @@ Describe 'Invoke-DuneVehicleSpawnLive' -Tag 'Pure' {
             -VehicleId 'Tank' -ActorClass '/Game/Dune/Systems/Vehicles/Blueprints/GroundVehicles/BP_Tank_CHOAM.BP_Tank_CHOAM_C' `
             -TemplateName 'T6_CombatFire' -Persistent $true -VerificationDelaySeconds 0
 
-        $r.ok | Should -BeFalse
+        $r.ok | Should -BeTrue
         $r.permission_repaired | Should -BeTrue
         $r.vehicle_survived | Should -BeFalse
-        $r.error | Should -Match 'did not survive'
+        $r.verification_pending | Should -BeTrue
+        $r.message | Should -Match 'before granting another'
+    }
+    It 'waits past the old ten-poll window without issuing a second spawn' {
+        function global:Get-DuneRegisTankSupport { param($Ip,$ActorId); @{enabled=$true} }
+        $script:delayedRepairCount=0
+        function global:Invoke-DuneSqlQuery {
+            param($Ip,$Sql,$ReadOnly,$MaxRows,$TimeoutSec)
+            if ($Sql -match 'WITH candidate AS') {
+                $script:delayedRepairCount++
+                if ($script:delayedRepairCount -lt 12) {return @{ok=$true;columns=@('permission_actor_id');rows=@()}}
+                return @{ok=$true;columns=@('permission_actor_id');rows=@(,@('8001'))}
+            }
+            if ($Sql -match 'AS controller_id') {return @{ok=$true;columns=@('controller_id','x','y','z','qx','qy','qz','qw');rows=@(,@('99','10.5','20.25','30.75','0','0','0','1'))}}
+            if ($Sql -match 'AS max_id') {return @{ok=$true;columns=@('max_id');rows=@(,@('8000'))}}
+            return @{ok=$true;columns=@('vehicle_id');rows=@(,@('8001'))}
+        }
+        Mock Start-Sleep {}
+        $result=Invoke-DuneVehicleSpawnLive -Ip '1.2.3.4' -ActorId 42 -VehicleId 'Tank' -ActorClass '/Game/Dune/Systems/Vehicles/Blueprints/GroundVehicles/BP_Tank_CHOAM.BP_Tank_CHOAM_C' -TemplateName 'T6_CombatDart' -Persistent $true -VerificationDelaySeconds 0
+        $result.ok | Should -BeTrue
+        $result.vehicle_survived | Should -BeTrue
+        $script:delayedRepairCount | Should -Be 12
+        $script:spawnArgs.TemplateName | Should -Be 'T6_CombatDart'
     }
 
     It 'rejects transient spawns because they cannot receive durable ownership' {
