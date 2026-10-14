@@ -5,3 +5,6 @@
 # Exact reviewed false positive in the Solo-grants catalog refresh: adjacent
 # Ixian Secret and Kaitain Bow emote display names, not a credential.
 cde1682044d6de1e9aaa7d07b40a7dd5bb2a8fc5:app/data/gameplay-item-data.json:generic-api-key:1
+# Same reviewed catalog-name false positive: adjacent Ixian Secret / Kaitain
+# Bow emotes were already in the catalog. This commit restores six item rules.
+93113097ec326824927738d8ea07dc5f450bb21c:app/data/gameplay-item-data.json:generic-api-key:1
