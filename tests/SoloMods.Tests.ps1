@@ -13,6 +13,11 @@
 }
 AfterAll { if($script:ModTestRoot.StartsWith([IO.Path]::GetTempPath())){Remove-Item -LiteralPath $script:ModTestRoot -Recurse -Force} }
 Describe 'Solo mod import and dependencies' {
+    It 'defaults to the previous runtime even if an enabled mod declares the newer build' {
+        $mods=@([pscustomobject]@{enabled=$true;requires=@(@{id='ue4ss';version='3.0.1-1164-g5e627997'})})
+        (Get-DuneSoloRuntimeProfile $mods).version | Should -Be '3.0.1-1140-gf58e8f84'
+        (Get-DuneSoloMods).useNewerRuntime | Should -BeFalse
+    }
     It 'persists explicit runtime choice without changing Tank-only launch or hiding a declared mismatch' {
         Import-DuneSoloMod (New-ModZip ([guid]::NewGuid().ToString('N')) @{
             'LegacyChoice/Scripts/main.lua'='print(1)'
@@ -32,7 +37,7 @@ Describe 'Solo mod import and dependencies' {
         (Get-DuneSoloMods).useNewerRuntime | Should -BeFalse
     }
     It 'uses the previous runtime for declared dependencies without replacing the current runtime or mod settings' {
-        Install-DuneSoloModRuntime | Out-Null
+        Install-DuneSoloModRuntime -Profile (Get-DuneSoloRuntimeProfile @() -TankOnly) | Out-Null
         $currentHash=(Get-FileHash (Join-Path $script:DuneSoloLoaderRoot 'Runtime/ue4ss/UE4SS.dll')).Hash
         Import-DuneSoloMod (New-ModZip ([guid]::NewGuid().ToString('N')) @{
             'Legacy/Scripts/main.lua'='print(1)'
@@ -337,12 +342,12 @@ BeforeEach {
         New-Item -ItemType Directory -Path $script:DuneSoloLoaderRoot -Force | Out-Null
         Set-Content $selection '{"Kept":true}'
         Install-DuneSoloModRuntime | Out-Null
-        Test-Path (Join-Path $script:DuneSoloLoaderRoot 'Runtime/ue4ss/UE4SS.dll') | Should -BeTrue
+        Test-Path (Join-Path $script:DuneSoloLoaderRoot 'Runtime-1140/ue4ss/UE4SS.dll') | Should -BeTrue
         $archive=[IO.Compression.ZipFile]::OpenRead((Join-Path $script:DuneSoloRuntimeAssets 'configs.zip'))
         try {
             $reader=[IO.StreamReader]::new($archive.GetEntry('DuneAwakening/UE4SS-settings.ini').Open())
             try { $expected=$reader.ReadToEnd() } finally { $reader.Dispose() }
-            (Get-Content (Join-Path $script:DuneSoloLoaderRoot 'Runtime/ue4ss/UE4SS-settings.ini') -Raw) | Should -Be $expected
+            (Get-Content (Join-Path $script:DuneSoloLoaderRoot 'Runtime-1140/ue4ss/UE4SS-settings.ini') -Raw) | Should -Be $expected
         } finally { $archive.Dispose() }
         (Get-Content $selection -Raw).Trim() | Should -Be '{"Kept":true}'
         @(Get-ChildItem $script:DuneSoloLoaderRoot -Directory -Filter 'Configs-*').Count | Should -Be 0
@@ -376,7 +381,7 @@ BeforeEach {
 
     It 'repairs a partial runtime without replacing installed mods or selections' {
         Install-DuneSoloModRuntime | Out-Null
-        Remove-Item -LiteralPath (Join-Path $script:DuneSoloLoaderRoot 'Runtime/dwmapi.dll')
+        Remove-Item -LiteralPath (Join-Path $script:DuneSoloLoaderRoot 'Runtime-1140/dwmapi.dll')
         (Get-DuneSoloMods).runtimeReady | Should -BeFalse
         New-Item -ItemType Directory -Path (Join-Path $script:DuneSoloModsRoot 'Kept/Scripts') -Force | Out-Null
         Set-Content (Join-Path $script:DuneSoloModsRoot 'Kept/Scripts/main.lua') 'kept mod'
@@ -389,7 +394,7 @@ BeforeEach {
 
     It 'preserves the current runtime if publishing the staged replacement fails' {
         Install-DuneSoloModRuntime | Out-Null
-        $runtimePath=Join-Path $script:DuneSoloLoaderRoot 'Runtime'
+        $runtimePath=Join-Path $script:DuneSoloLoaderRoot 'Runtime-1140'
         Set-Content (Join-Path $runtimePath 'preserved.txt') 'previous runtime'
         Mock Move-Item { throw 'Simulated replacement failure' } -ParameterFilter { $LiteralPath -like '*Runtime-*' -and $LiteralPath -notlike '*Runtime-before-repair-*' -and $Destination -eq $runtimePath }
         { Install-DuneSoloModRuntime } | Should -Throw '*Simulated replacement failure*'
@@ -400,7 +405,7 @@ BeforeEach {
     It 'rejects corrupt bundled archives before creating a runtime' {
         $script:DuneSoloRuntimeAssets=Join-Path $case 'BrokenAssets'
         New-Item -ItemType Directory $script:DuneSoloRuntimeAssets | Out-Null
-        Set-Content (Join-Path $script:DuneSoloRuntimeAssets 'runtime.zip') 'corrupt'
+        Set-Content (Join-Path $script:DuneSoloRuntimeAssets 'runtime-1140.zip') 'corrupt'
         Copy-Item (Join-Path (Get-DstRepoRoot) 'app/resources/solo-mod-runtime/configs.zip') $script:DuneSoloRuntimeAssets
         { Install-DuneSoloModRuntime } | Should -Throw '*checksum mismatch*'
         Test-Path $script:DuneSoloLoaderRoot | Should -BeFalse

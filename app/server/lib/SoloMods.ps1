@@ -5,12 +5,9 @@ $script:DuneSoloRuntimeAssets = Join-Path $soloModAppRoot 'resources\solo-mod-ru
 $script:DuneBundledSoloModsRoot = Join-Path $soloModAppRoot 'resources\solo-mods'
 
 function Get-DuneSoloRuntimeProfile($Mods, [switch]$TankOnly) {
-    $legacy = $false
-    foreach ($mod in @($Mods | Where-Object enabled)) {
-        foreach ($requirement in @($mod.requires)) {
-            if ($requirement.id -eq 'ue4ss' -and $requirement.version -eq '3.0.1-1140-gf58e8f84') { $legacy = $true }
-        }
-    }
+    # Compatibility baseline for optional mods is the previous bundled runtime.
+    # The newer runtime requires the user's explicit opt-in, not a mod declaration.
+    $legacy = -not $TankOnly
     $choice=Read-DuneModJson (Join-Path $script:DuneSoloLoaderRoot 'runtime-choice.json') @{}
     if (-not $TankOnly -and $null -ne $choice.useNewerRuntime) { $legacy=-not [bool]$choice.useNewerRuntime }
     $fallback=Read-DuneModJson (Join-Path $script:DuneSoloLoaderRoot 'runtime-fallback.json') @{}
