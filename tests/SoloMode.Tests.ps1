@@ -574,9 +574,9 @@ Describe 'Solo Mode write gates and settings backups' {
             'dw.EnableBuildablePlacementAlwaysFilled' = '1'
             'Dune.DisableShieldOnShooting' = '0'
             'Vehicle.RecoveryTimeLimit' = '1'
-            'dw.VehicleDurabilityDamageMultiplier' = '0.01'
+            'dw.VehicleDurabilityDamageMultiplier' = '0.010000'
             'Vehicle.RelocationEnabled' = '1'
-            'Vehicle.RecoveryChassisDurabilityReductionFraction' = '0.001'
+            'Vehicle.RecoveryChassisDurabilityReductionFraction' = '0.001000'
             'Vehicle.RecoveryCurrencyBaseCost' = '100'
         } -Confirm 'APPLY SOLO CONSOLE SETTINGS'
 
@@ -595,9 +595,9 @@ Describe 'Solo Mode write gates and settings backups' {
         $written | Should -Match '(?m)^dw\.EnableBuildablePlacementAlwaysFilled=1\r?$'
         $written | Should -Match '(?m)^Dune\.DisableShieldOnShooting=0\r?$'
         $written | Should -Match '(?m)^Vehicle\.RecoveryTimeLimit=1\r?$'
-        $written | Should -Match '(?m)^dw\.VehicleDurabilityDamageMultiplier=0\.01\r?$'
+        $written | Should -Match '(?m)^dw\.VehicleDurabilityDamageMultiplier=0\.010000\r?$'
         $written | Should -Match '(?m)^Vehicle\.RelocationEnabled=1\r?$'
-        $written | Should -Match '(?m)^Vehicle\.RecoveryChassisDurabilityReductionFraction=0\.001\r?$'
+        $written | Should -Match '(?m)^Vehicle\.RecoveryChassisDurabilityReductionFraction=0\.001000\r?$'
         $written | Should -Match '(?m)^Vehicle\.RecoveryCurrencyBaseCost=100\r?$'
         $clientWritten | Should -Match '(?m)^Client\.FutureKey=KeepMe\r?$'
         $clientWritten.Trim() | Should -Be ((@(

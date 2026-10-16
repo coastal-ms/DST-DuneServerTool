@@ -1532,7 +1532,8 @@ function Set-DuneSoloConsoleSettings {
                 $number -lt [double]$field.min -or $number -gt [double]$field.max) {
                 throw "$key must be a finite number between $($field.min) and $($field.max)."
             }
-            $value = $number.ToString('R', [Globalization.CultureInfo]::InvariantCulture)
+            # Validate numerically without replacing the user's decimal text;
+            # trailing zeroes and existing precision must survive an apply.
         }
         $normalized[$key] = $value
     }

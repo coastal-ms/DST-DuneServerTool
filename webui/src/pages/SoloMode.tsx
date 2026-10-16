@@ -10,6 +10,7 @@ import { SoloFactionProgression } from '../components/solo/SoloFactionProgressio
 import { SoloCharacterXp } from '../components/solo/SoloCharacterXp'
 import { CodexOwnership } from '../components/CodexOwnership'
 import { SoloJourneyCompletion } from '../components/solo/SoloJourneyCompletion'
+import { SoloNumericSettingInput } from '../components/solo/SoloNumericSettingInput'
 import { WickMaps } from './WickMaps'
 import { AugmentPicker } from '../components/AugmentPicker'
 import {
@@ -1666,16 +1667,18 @@ export function SoloMode() {
                               }))}
                             />
                           ) : (
-                            <input
-                              type="number"
+                            <SoloNumericSettingInput
+                              aria-label={entry.label}
+                              integer={entry.type === 'int'}
+                              precisionSource={entry.value}
                               step={entry.type === 'float' ? 'any' : 1}
                               min={entry.min ?? undefined}
                               max={entry.max ?? undefined}
                               className={`${SOLO_INPUT_CLASS} mt-2 font-mono`}
                               value={consoleDraft[entry.key] ?? entry.value}
-                              onChange={event => setConsoleDraft(current => ({
+                              onValueChange={value => setConsoleDraft(current => ({
                                 ...current,
-                                [entry.key]: event.target.value,
+                                [entry.key]: value,
                               }))}
                               disabled={!canMutateActiveProfile || gameRunning}
                             />
@@ -1743,11 +1746,22 @@ export function SoloMode() {
                                 <option key={option.value} value={option.value}>{option.label}</option>
                               ))}
                             </select>
+                          ) : control.type === 'number' ? (
+                            <SoloNumericSettingInput
+                              id={inputId}
+                              integer={control.step === 1}
+                              precisionSource={settingsByKey.get(key)?.value ?? value}
+                              step={control.step}
+                              className={`${SOLO_INPUT_CLASS} mt-1 font-mono text-xs`}
+                              value={value}
+                              onValueChange={update}
+                              placeholder={settingsByKey.get(key)?.present ? '' : 'Not currently written'}
+                              disabled={disabled}
+                            />
                           ) : (
                             <input
                               id={inputId}
-                              type={control.type === 'number' ? 'number' : 'text'}
-                              step={control.type === 'number' ? control.step : undefined}
+                              type="text"
                               className={`${SOLO_INPUT_CLASS} mt-1 font-mono text-xs`}
                               value={value}
                               onChange={event => update(event.target.value)}

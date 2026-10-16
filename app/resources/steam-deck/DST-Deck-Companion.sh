@@ -1,5 +1,5 @@
 #!/bin/sh
-# Source SHA256: 64502193f4c1be6223f196ce4bdac84bbbd9a9e02deb197bb621c217f07e1d0a
+# Source SHA256: 3160281c4441cb8d78b732fb3feb3518738fb4c10c3cacb6bf4327f163b5b012
 # Experimental DST Deck Companion; pair with your own DST PC.
 exec /usr/bin/python3 - <<'DST_DECK_COMPANION_PYTHON'
 """Private key-only SSH owned by the logged-in Deck user; no system changes."""

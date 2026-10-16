@@ -39,6 +39,7 @@ Official server settings sliders now use a 0–10 convenience range, with 0.1 st
 - Framework Adjustments.
 
 ### Fixed
+- Adjust focused Solo fractional settings by 0.1 per wheel step, preserving trailing zeroes and decimal precision in the controls and Engine.ini writes.
 - Default Start afterward on in managed settings reviews, including when the battlegroup is already stopped. Leaving it stopped remains an explicit choice.
 - Display the fresh result from manual status refresh, prevent older polls from replacing it, and invalidate port status when the battlegroup changes state.
 - Check public TCP reachability through CanYouSeeMe and PortCheckTool before falling back to Check-Host. Keep checker failures and timeouts separate from a confirmed closed port, recheck Closed results after one minute, and share the same built-in policy with the command-line tool.
