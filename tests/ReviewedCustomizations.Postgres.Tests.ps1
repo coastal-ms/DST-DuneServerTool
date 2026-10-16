@@ -51,6 +51,13 @@ WHERE (r->>'m_bIsLimitedUseRecipe')::boolean
 AND ordinal > 1;
 '@
         $counts.Output.Trim() | Should -Be '1|8'
+        $repeatable = Invoke-ReviewedFixture @'
+SELECT count(*),count(*) FILTER (WHERE (r->>'m_NumberOfRecipeUses')::int NOT IN (0,-1))
+FROM dune.actors a CROSS JOIN jsonb_array_elements(a.properties #> '{CraftingRecipesLibraryActorComponent,m_KnownItemRecipes}') r
+WHERE NOT (r->>'m_bIsLimitedUseRecipe')::boolean;
+'@
+        $repeatable.ExitCode | Should -Be 0 -Because $repeatable.Error
+        $repeatable.Output.Trim() | Should -Be '236|0'
     }
     It 'applies both observed bulk selections atomically and preserves existing entries' {
         foreach ($selection in @('ObservedCharacterSwatches','ObservedGearAppearances')) {

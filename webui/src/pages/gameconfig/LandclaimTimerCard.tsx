@@ -12,6 +12,7 @@ import { Icon } from '../../components/Icon'
 import { CollapsibleCard } from '../../components/CollapsibleCard'
 import { IniShareModal } from '../../components/IniShareModal'
 import { ApiError } from '../../api/client'
+import { ConfirmationModal } from '../../components/ConfirmationModal'
 import { getLandclaimTimer, saveLandclaimTimer } from '../../api/gameconfig'
 import type { LandclaimTimerState } from '../../api/types'
 
@@ -29,6 +30,7 @@ export function LandclaimTimerCard({ vmRunning }: Props) {
   const [warning, setWarning] = useState<string | null>(null)
   const [ok, setOk] = useState<string | null>(null)
   const [showBlock, setShowBlock] = useState(false)
+  const [reviewOpen, setReviewOpen] = useState(false)
 
   const seed = useCallback((s: LandclaimTimerState) => {
     // Prefer the server's live view; fall back to the local client file when the
@@ -114,7 +116,7 @@ export function LandclaimTimerCard({ vmRunning }: Props) {
           type="button"
           className="btn-secondary shrink-0"
           onClick={() => void load()}
-          disabled={loading || saving}
+          disabled={loading || saving || dirty}
           title="Reload current values"
         >
           <Icon name={loading ? 'Loader2' : 'RotateCcw'} size={14} className={loading ? 'animate-spin' : ''} /> Refresh
@@ -154,7 +156,7 @@ export function LandclaimTimerCard({ vmRunning }: Props) {
       <div className="card p-3 mt-3 border-border bg-surface-2/40 text-xs text-text-muted flex items-start gap-2">
         <Icon name="Info" size={14} className="mt-0.5 shrink-0 text-accent-bright" />
         <div className="leading-relaxed">
-          Applies to both the server <span className="font-mono">UserGame.ini</span> and this PC&apos;s client
+          Applies to both the server <span className="font-mono">UserGame.ini</span> and the DST host PC&apos;s client
           <span className="font-mono"> Game.ini</span> (when the client config folder is set). Connecting players
           need the same client value for the change to take effect on their end — share your DST-managed
           <span className="font-mono"> Game.ini</span> block. Disabling restores the game&apos;s default schedule.
@@ -183,9 +185,9 @@ export function LandclaimTimerCard({ vmRunning }: Props) {
       )}
 
       <div className="mt-3 flex items-center gap-2">
-        <button type="button" className="btn-primary" onClick={() => void apply()} disabled={!canApply}>
+        <button type="button" className="btn-primary" onClick={() => setReviewOpen(true)} disabled={!canApply}>
           <Icon name={saving ? 'Loader2' : 'Check'} size={14} className={saving ? 'animate-spin' : ''} />
-          {saving ? 'Applying…' : enabled ? 'Apply' : 'Clear & restore default'}
+          {saving ? 'Applying…' : enabled ? 'Review timer changes' : 'Review restore defaults'}
         </button>
         {state?.clientBlock && (
           <button type="button" className="btn-secondary" onClick={() => setShowBlock(true)}>
@@ -220,6 +222,7 @@ export function LandclaimTimerCard({ vmRunning }: Props) {
           onClose={() => setShowBlock(false)}
         />
       )}
+      {reviewOpen && <ConfirmationModal title="Review land-claim timer" description={`This ${enabled ? `sets a ${trimmed}-second timer` : 'restores the default schedule'} in the server UserGame.ini and the DST host PC’s player Game.ini when its folder is available. Other players need their own matching value. This action is separate from the server-settings field review; deploy the server file with Review & Apply afterward.`} confirmLabel="Save server & host PC" onCancel={() => setReviewOpen(false)} onConfirm={() => { setReviewOpen(false); void apply() }} />}
     </CollapsibleCard>
   )
 }

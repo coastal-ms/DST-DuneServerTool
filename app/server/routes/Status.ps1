@@ -14,7 +14,7 @@ Register-DuneRoute -Method GET -Path '/api/status' -Handler {
         try { $bg = Get-DuneBattlegroupSnapshot -VmStatus $vm } catch { $bg = @{ available=$false; reason=$_.Exception.Message } }
     }
     $ports = $null
-    try { $ports = Get-DunePortStatus } catch { $ports = $null }
+    try { $ports = Get-DunePortStatus -BattlegroupState $bg.state } catch { $ports = $null }
     $serverName = ''
     if ($bg -and $bg.title) {
         $serverName = [string]$bg.title
@@ -56,7 +56,7 @@ Register-DuneRoute -Method POST -Path '/api/status/refresh' -Handler {
         try { $bg = Get-DuneBattlegroupSnapshot -Force -VmStatus $vm } catch { $bg = @{ available=$false; reason=$_.Exception.Message } }
     }
     $ports = $null
-    try { $ports = Get-DunePortStatus -Force } catch { $ports = $null }
+    try { $ports = Get-DunePortStatus -Force -BattlegroupState $bg.state } catch { $ports = $null }
     $serverName = ''
     if ($bg -and $bg.title) {
         $serverName = [string]$bg.title

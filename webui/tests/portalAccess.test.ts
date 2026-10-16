@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { NAV_ITEMS, getVisibleGroupLabel } from '../src/nav'
 import { resolvePortalAccess } from '../src/auth/portalAccess'
 import { canAccessCommand } from '../src/auth/commandAccess'
+import { LEGACY_ROUTE_MANIFEST } from '../src/platform/routes'
 
 describe('Browser Portal role access', () => {
   it('gives remote Owners full portal access except host-only Setup', () => {
@@ -42,10 +43,11 @@ describe('Browser Portal role access', () => {
   })
 
   it('marks sensitive pages Owner-only and Setup host-only', () => {
-    for (const path of ['/gameconfig', '/experimental', '/database', '/sietches', '/settings']) {
+    for (const path of ['/server-settings', '/experimental', '/database', '/sietches', '/settings']) {
       expect(NAV_ITEMS.find(item => item.to === path)?.ownerOnly).toBe(true)
     }
     expect(NAV_ITEMS.find(item => item.to === '/setup')?.localOnly).toBe(true)
+    for (const path of ['/server-settings', '/gameconfig']) expect(LEGACY_ROUTE_MANIFEST.find(route => route.path === path)?.access).toBe('owner')
   })
 
   it('labels server and gameplay domains explicitly', () => {

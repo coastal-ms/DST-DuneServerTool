@@ -30,6 +30,7 @@ export function SectionJumpNav({ containerRef }: { containerRef: RefObject<HTMLE
 
     const collect = () => {
       const next = Array.from(container.querySelectorAll<HTMLElement>('[data-section-nav-id]'))
+        .filter(element => !element.closest('[hidden]'))
         .map(element => ({
           id: element.dataset.sectionNavId ?? '',
           label: element.dataset.sectionNavLabel ?? '',
@@ -46,7 +47,7 @@ export function SectionJumpNav({ containerRef }: { containerRef: RefObject<HTMLE
 
     collect()
     const observer = new MutationObserver(collect)
-    observer.observe(container, { childList: true, subtree: true })
+    observer.observe(container, { childList: true, subtree: true, attributes: true, attributeFilter: ['hidden'] })
     return () => observer.disconnect()
   }, [containerRef, pathname])
 
@@ -63,6 +64,7 @@ export function SectionJumpNav({ containerRef }: { containerRef: RefObject<HTMLE
 
   const registeredElements = () =>
     Array.from(containerRef.current?.querySelectorAll<HTMLElement>('[data-section-nav-id]') ?? [])
+      .filter(element => !element.closest('[hidden]'))
 
   const collapseSections = (exceptId = '') => {
     const target = registeredElements().find(section => section.dataset.sectionNavId === exceptId)

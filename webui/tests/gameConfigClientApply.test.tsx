@@ -1,4 +1,4 @@
-import { cleanup, render, screen, waitFor, within } from '@testing-library/react'
+import { act, cleanup, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { GameConfig } from '../src/pages/GameConfig'
@@ -7,7 +7,9 @@ import {
   getGameConfig,
   getGameConfigClient,
   getGameConfigSchema,
+  saveGameConfig,
 } from '../src/api/gameconfig'
+import { SettingsApplyContext, type SettingsDraft } from '../src/pages/gameconfig/settingsApplyContext'
 import type {
   GameConfigCategory,
   GameConfigClientInfo,
@@ -132,6 +134,64 @@ afterEach(() => {
 })
 
 describe('Game Config advanced client compatibility action', () => {
+  it('leaves absent overrides blank and writes a default only after its own button is clicked', async () => {
+    const user = userEvent.setup()
+    vi.mocked(getGameConfigSchema).mockResolvedValue({ schema: [{ category: 'Mining', fields: [
+      { file: 'engine', section: 'ConsoleVariables', key: 'Dune.GlobalMiningOutputMultiplier', label: 'Global Mining Multiplier', type: 'float', default: '1.0' },
+      { file: 'engine', section: 'ConsoleVariables', key: 'UnknownDefault', label: 'No Known Default', type: 'float' },
+    ] }] })
+    vi.mocked(getGameConfig).mockResolvedValue({ ...config, engine: fileBundle('engine', {}) })
+    const drafts = new Map<string, SettingsDraft>()
+    const controller = { register: (id: string, draft: SettingsDraft | null) => { if (draft) drafts.set(id, draft); else drafts.delete(id) }, review: vi.fn(), locked: false }
+    vi.mocked(saveGameConfig).mockResolvedValue({ ok: true, applied: 1, source: 'installed', game: config.game, engine: fileBundle('engine', { 'ConsoleVariables||Dune.GlobalMiningOutputMultiplier': '1.0' }) })
+    render(<SettingsApplyContext.Provider value={controller}><GameConfig embedded /></SettingsApplyContext.Provider>)
+    const categoryToggle = (await screen.findByText('Mining')).closest('button')!
+    if (categoryToggle.getAttribute('aria-expanded') === 'false') await user.click(categoryToggle)
+    const buttons = screen.getAllByRole('button', { name: 'Default' })
+    expect(screen.getAllByRole('spinbutton').every(input => (input as HTMLInputElement).value === '')).toBe(true)
+    expect(drafts.get('advanced')!.changes).toEqual([])
+    expect(buttons[1]).toBeDisabled()
+    await user.click(buttons[0])
+    expect(drafts.get('advanced')!.changes).toEqual([expect.objectContaining({ label: 'Global Mining Multiplier', after: '1.0' })])
+    await act(async () => { await drafts.get('advanced')!.apply() })
+    expect(saveGameConfig).toHaveBeenCalledExactlyOnceWith({ 'Dune.GlobalMiningOutputMultiplier': '1.0' })
+    expect(applyGameConfigClient).not.toHaveBeenCalled()
+  })
+  it('reviews a cleared server value as removal and never applies it to local player files', async () => {
+    const user = userEvent.setup()
+    const drafts = new Map<string, SettingsDraft>()
+    const controller = { register: (id: string, draft: SettingsDraft | null) => { if (draft) drafts.set(id, draft); else drafts.delete(id) }, review: vi.fn(), locked: false }
+    vi.mocked(saveGameConfig).mockResolvedValue({ ok: true, applied: 1, source: 'installed', game: config.game, engine: config.engine })
+    render(<SettingsApplyContext.Provider value={controller}><GameConfig embedded /></SettingsApplyContext.Provider>)
+    await user.clear(await screen.findByDisplayValue('70'))
+    const draft = drafts.get('advanced')!
+    expect(draft.changes).toEqual([expect.objectContaining({ before: '70', after: 'Remove from server file' })])
+    await draft.validate!()
+    await act(async () => { await draft.apply() })
+    expect(saveGameConfig).toHaveBeenCalledExactlyOnceWith({ PlayerInventoryStartingSize: '' })
+    expect(applyGameConfigClient).not.toHaveBeenCalled()
+  })
+  it('registers a server draft for shared review and saves only its changed key without touching player files', async () => {
+    const user = userEvent.setup()
+    const drafts = new Map<string, SettingsDraft>()
+    const controller = { register: (id: string, draft: SettingsDraft | null) => { if (draft) drafts.set(id, draft); else drafts.delete(id) }, review: vi.fn(), locked: false }
+    vi.mocked(saveGameConfig).mockResolvedValue({ ok: true, applied: 1, source: 'installed', game: config.game, engine: config.engine })
+    render(<SettingsApplyContext.Provider value={controller}><GameConfig embedded /></SettingsApplyContext.Provider>)
+    const input = await screen.findByDisplayValue('70')
+    await user.clear(input); await user.type(input, '85')
+    await user.click(screen.getByRole('button', { name: 'Review & Apply' }))
+    expect(controller.review).toHaveBeenCalledOnce()
+    expect(saveGameConfig).not.toHaveBeenCalled()
+    const draft = drafts.get('advanced')!
+    expect(draft.changes).toEqual([expect.objectContaining({ label: 'Starting Inventory Slots', before: '70', after: '85', target: expect.stringContaining('Server · UserGame.ini') })])
+    vi.mocked(getGameConfig).mockResolvedValueOnce({ ...config, game: { ...config.game, raw: 'manual edit' } })
+    await expect(draft.validate!()).rejects.toThrow('changed outside this form')
+    expect(saveGameConfig).not.toHaveBeenCalled()
+    await draft.validate!()
+    await act(async () => { await draft.apply() })
+    expect(saveGameConfig).toHaveBeenCalledExactlyOnceWith({ PlayerInventoryStartingSize: '85' })
+    expect(applyGameConfigClient).not.toHaveBeenCalled()
+  })
   it('reviews and applies a customized landclaim segment limit without enabling unrelated client fields', async () => {
     const user = userEvent.setup()
     const section = '/Script/DuneSandbox.BuildingSettings'

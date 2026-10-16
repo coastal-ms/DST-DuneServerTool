@@ -33,7 +33,7 @@ export function TimeOfDayLockPanel({ vmRunning }: { vmRunning: boolean }) {
     const confirmed = window.confirm(
       `Stage candidate ${candidate}?\n\n`
       + 'DST will first verify a server Game.ini backup, then write the candidate m_StartTime and disable the cycle. '
-      + 'Nothing takes effect until Apply INIs & restart. DST will not modify client files.',
+      + 'Nothing takes effect until Apply server settings. DST will not modify client files.',
     )
     if (!confirmed) return
     setBusy('stage')
@@ -52,7 +52,7 @@ export function TimeOfDayLockPanel({ vmRunning }: { vmRunning: boolean }) {
   async function restore() {
     const confirmed = window.confirm(
       'Restore normal cycle?\n\nDST will verify a fresh server Game.ini backup, remove both DST-managed twilight overrides, '
-      + 'and restore shipped default semantics. Apply INIs & restart is still required.',
+      + 'and restore shipped default semantics. Apply server settings is still required.',
     )
     if (!confirmed) return
     setBusy('restore')
@@ -116,7 +116,7 @@ export function TimeOfDayLockPanel({ vmRunning }: { vmRunning: boolean }) {
           <h3 className="font-medium text-warning">Client and restart behavior</h3>
           <p className="mt-2 text-text-muted">
             DST does not modify client INIs because client behavior for <code>m_StartTime</code> is unverified.
-            The first test is server-only. Both stage and restore require <strong>Apply INIs &amp; restart</strong>.
+            The first test is server-only. Both stage and restore require <strong>Apply server settings</strong>.
           </p>
           <p className="mt-2 text-text-muted">
             The action does not claim simulation safety. It exists to produce the evidence needed for that decision.

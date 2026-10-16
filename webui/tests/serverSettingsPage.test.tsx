@@ -16,6 +16,7 @@ const state = vi.hoisted(() => ({
   forceRefresh: vi.fn(async () => {}),
 }))
 
+vi.mock('../src/pages/GameConfig', () => ({ GameConfig: () => null }))
 vi.mock('../src/pages/gameconfig/StartupSettingsSync', () => ({ StartupSettingsSync: () => null }))
 vi.mock('../src/pages/gameconfig/RegisTankSetup', () => ({ RegisTankSetup: () => null }))
 vi.mock('../src/pages/gameconfig/ServerIniBackups', () => ({ ServerIniBackups: () => null }))
@@ -72,6 +73,7 @@ afterEach(() => {
 describe('Server Settings page', () => {
   it('keeps both Console command controls visible with the current battlegroup state', () => {
     render(<ServerSettings />)
+    fireEvent.click(screen.getByRole('button', { name: 'Management & recovery' }))
 
     expect(screen.getByRole('heading', { name: 'Server Settings' })).toBeInTheDocument()
     expect(screen.getByText(/ServerCustomSettings\.ini/)).toBeInTheDocument()
@@ -90,6 +92,7 @@ describe('Server Settings page', () => {
       playerNames: ['Test player'],
     }))
     render(<ServerSettings />)
+    fireEvent.click(screen.getByRole('button', { name: 'Management & recovery' }))
 
     fireEvent.click(screen.getByRole('button', { name: 'Stop Battlegroup' }))
     expect(await screen.findByRole('button', { name: 'Launching stop…' })).toBeDisabled()
@@ -107,6 +110,7 @@ describe('Server Settings page', () => {
   it('reports launch errors and allows a retry', async () => {
     vi.mocked(api).mockRejectedValueOnce(new Error('console unavailable'))
     render(<ServerSettings />)
+    fireEvent.click(screen.getByRole('button', { name: 'Management & recovery' }))
 
     fireEvent.click(screen.getByRole('button', { name: 'Stop Battlegroup' }))
 
@@ -127,6 +131,7 @@ describe('Server Settings page', () => {
       .mockReturnValueOnce(fullyStoppedRefresh)
 
     const view = render(<ServerSettings />)
+    fireEvent.click(screen.getByRole('button', { name: 'Management & recovery' }))
     fireEvent.click(screen.getByRole('button', { name: 'Stop Battlegroup' }))
     await act(async () => {})
     expect(state.forceRefresh).toHaveBeenCalledOnce()
@@ -141,6 +146,7 @@ describe('Server Settings page', () => {
       bg: { state: 'stopped', gameServers: [{ map: 'Arrakeen' }] },
     }
     view.rerender(<ServerSettings />)
+    fireEvent.click(screen.getByRole('button', { name: 'Management & recovery' }))
     await act(async () => { rejectStoppedWithPod(new Error('status temporarily unavailable')) })
     expect(screen.getByRole('button', { name: 'Stopping battlegroup…' })).toBeDisabled()
     expect(screen.getByTestId('retail-settings-card')).toHaveTextContent('stopped:1')
@@ -160,11 +166,12 @@ describe('Server Settings page', () => {
       bg: { state: 'stopped', gameServers: [] },
     }
     view.rerender(<ServerSettings />)
+    fireEvent.click(screen.getByRole('button', { name: 'Management & recovery' }))
     await act(async () => { resolveFullyStopped() })
 
     expect(screen.getByRole('button', { name: 'Start Battlegroup' })).toBeEnabled()
     expect(screen.getByTestId('retail-settings-card')).toHaveTextContent('stopped:0')
-    expect(screen.getByRole('status')).toHaveTextContent('settings are now unlocked')
+    expect(screen.getByRole('status')).toHaveTextContent('settings can now be saved')
     expect(vi.getTimerCount()).toBe(0)
     await act(async () => { vi.advanceTimersByTime(5000) })
     expect(state.forceRefresh).toHaveBeenCalledTimes(3)
@@ -176,6 +183,7 @@ describe('Server Settings page', () => {
       bg: { state: 'stopped', gameServers: [] },
     }
     const view = render(<ServerSettings />)
+    fireEvent.click(screen.getByRole('button', { name: 'Management & recovery' }))
 
     const start = await screen.findByRole('button', { name: 'Start Battlegroup' })
     await waitFor(() => expect(start).toBeEnabled())
@@ -193,7 +201,8 @@ describe('Server Settings page', () => {
       bg: { state: 'running', gameServers: [{ map: 'Arrakeen' }] },
     }
     view.rerender(<ServerSettings />)
-    expect(await screen.findByRole('status')).toHaveTextContent('settings are now active')
+    fireEvent.click(screen.getByRole('button', { name: 'Management & recovery' }))
+    expect(await screen.findByRole('status')).toHaveTextContent('reports running')
     expect(screen.getByRole('button', { name: 'Stop Battlegroup' })).toBeEnabled()
   })
 
@@ -204,6 +213,7 @@ describe('Server Settings page', () => {
     }
     vi.mocked(api).mockRejectedValueOnce(new Error('start unavailable'))
     render(<ServerSettings />)
+    fireEvent.click(screen.getByRole('button', { name: 'Management & recovery' }))
 
     const start = await screen.findByRole('button', { name: 'Start Battlegroup' })
     await waitFor(() => expect(start).toBeEnabled())
@@ -220,7 +230,8 @@ describe('Server Settings page', () => {
       bg: { state: 'stopped', gameServers: [] },
     }
     const view = render(<ServerSettings />)
-    fireEvent.click(screen.getByRole('button', { name: 'Mark settings busy' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Management & recovery' }))
+    fireEvent.click(screen.getByText('Mark settings busy'))
     expect(screen.getByRole('button', { name: 'Start Battlegroup' })).toBeDisabled()
 
     fireEvent.click(screen.getByRole('button', { name: 'Start Battlegroup' }))
@@ -231,7 +242,8 @@ describe('Server Settings page', () => {
       bg: { state: 'running', gameServers: [{ map: 'Arrakeen' }] },
     }
     view.rerender(<ServerSettings />)
-    expect(screen.getByRole('button', { name: 'Start Battlegroup' })).toBeEnabled()
+    fireEvent.click(screen.getByRole('button', { name: 'Management & recovery' }))
+    expect(screen.getByRole('button', { name: 'Start Battlegroup' })).toBeDisabled()
     expect(screen.getByRole('button', { name: 'Stop Battlegroup' })).toBeEnabled()
   })
 })

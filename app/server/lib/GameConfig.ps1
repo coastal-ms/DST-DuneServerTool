@@ -254,7 +254,7 @@ function Invoke-DuneTwilightLockStage {
         backup = $gameBackup[0].backup
         restartRequired = $true
         clientApplied = $false
-        message = 'Candidate staged on the server. Apply INIs & restart to begin the field experiment.'
+        message = 'Candidate staged on the server. Apply server settings to begin the field experiment.'
     }
 }
 
@@ -290,7 +290,7 @@ function Invoke-DuneTwilightLockRestore {
         backup = $gameBackup[0].backup
         restartRequired = $true
         clientApplied = $false
-        message = 'DST-managed twilight overrides removed. Apply INIs & restart to restore the shipped normal cycle.'
+        message = 'DST-managed twilight overrides removed. Apply server settings to restore the shipped normal cycle.'
     }
 }
 
@@ -430,7 +430,7 @@ $script:DuneGameConfigSchema = @(
 
     # --- Storm Cycle ---
     @{ Section=$script:DuneGcSecCoriolis; Key='m_CycleDurationInDays'; File='game'; Type='int'; Min=1; Unit='days'; Default='7'; Label='Coriolis Cycle Length'; Help='In-game days between Coriolis storm / season events. Also needs client-side apply.'; ClientApply=$true; Category='Storm Cycle' }
-    @{ Section=$script:DuneGcSecCoriolis; Key='m_CycleStartHour'; File='game'; Type='int'; Min=0; Max=23; Default='5'; Label='Weekly Server Reset Time (Coriolis)'; Help='Whole-hour GMT/UTC start time for the weekly Coriolis cycle. DST shows the matching current browser-local time while storing the GMT hour required by the game. Because the game stores fixed GMT, the local time shifts when daylight saving changes. Use Apply INIs & restart after saving.'; ClientApply=$true; Category='Storm Cycle' }
+    @{ Section=$script:DuneGcSecCoriolis; Key='m_CycleStartHour'; File='game'; Type='int'; Min=0; Max=23; Default='5'; Label='Weekly Server Reset Time (Coriolis)'; Help='Whole-hour GMT/UTC start time for the weekly Coriolis cycle. DST shows the matching current browser-local time while storing the GMT hour required by the game. Because the game stores fixed GMT, the local time shifts when daylight saving changes. Use Apply server settings after saving.'; ClientApply=$true; Category='Storm Cycle' }
     @{ Section=$script:DuneGcSecStorm; Key='m_bCoriolisAutoSpawnEnabled'; File='game'; Type='bool'; Default='True'; Label='Coriolis Auto-Spawn'; Help='Whether Coriolis storms spawn automatically. Also needs client-side apply.'; ClientApply=$true; Category='Storm Cycle' }
     @{ Section=$script:DuneGcSecCoriolis; Key='m_bIsDbWipeEnabled'; File='game'; Type='bool'; Default='True'; Label='Database Wipe on Season End'; Help='Wipe the database when the season ends. Also needs client-side apply.'; ClientApply=$true; Category='Storm Cycle' }
     @{ Section=$script:DuneGcSecCoriolis; Key='m_bShouldRestartServerOnCycleEnd'; File='game'; Type='bool'; Default='True'; Label='Restart Server on Cycle End'; Help='Whether the dedicated server restarts itself when a Coriolis cycle (season) ends. Also needs client-side apply.'; ClientApply=$true; Category='Storm Cycle' }
@@ -473,10 +473,10 @@ $script:DuneGameConfigSchema = @(
     @{ Section=$script:DuneGcSecSpiceAddict; Key='m_bIsSpiceVisionEnabled'; File='game'; Type='bool'; Default='True'; Label='Spice Vision Enabled'; Help='Whether spice vision effects are active. Also needs client-side apply.'; ClientApply=$true; Category='Spice' }
 
     # --- Deep Desert startup caps (members of SpiceHarvestingSystem m_PerMapSystemSettings) ---
-    @{ Section=$script:DuneGcSecSpice; Key='DST.SpiceStartup.DeepDesert.Small.Max'; File='game'; Type='int'; Min=0; Max=60; Default='60'; Label='Deep Desert Small Fields at Startup'; Help='Caps both active and primed Small fields after Apply INIs & restart. Maximum 60 matches Funcom''s current default. This is a ceiling, not a forced count; a map layout may provide fewer fields.'; SpiceMap='DeepDesert_1'; SpiceFieldType='Small'; SpiceLimit='Both'; ClientStructKey='m_PerMapSystemSettings'; ClientApply=$true; Category='Spice' }
-    @{ Section=$script:DuneGcSecSpice; Key='DST.SpiceStartup.DeepDesert.Medium.Max'; File='game'; Type='int'; Min=0; Max=12; Default='12'; Label='Deep Desert Medium Fields at Startup'; Help='Caps both active and primed Medium fields after Apply INIs & restart. Maximum 12 matches Funcom''s current default. This is a ceiling, not a forced count; a map layout may provide fewer fields.'; SpiceMap='DeepDesert_1'; SpiceFieldType='Medium'; SpiceLimit='Both'; ClientStructKey='m_PerMapSystemSettings'; ClientApply=$true; Category='Spice' }
-    @{ Section=$script:DuneGcSecSpice; Key='DST.SpiceStartup.DeepDesert.Large.Max'; File='game'; Type='int'; Min=0; Max=6; Default='1'; Label='Deep Desert Large Fields at Startup'; Help='Caps both active and primed Large fields after Apply INIs & restart. Maximum 6 covers the largest known layouts; untouched settings retain Funcom''s default of 1.'; SpiceMap='DeepDesert_1'; SpiceFieldType='Large'; SpiceLimit='Both'; ClientStructKey='m_PerMapSystemSettings'; ClientApply=$true; Category='Spice' }
-    @{ Section=$script:DuneGcSecSpice; Key='DST.SpiceStartup.Hagga.Small.Max'; File='game'; Type='int'; Min=0; Max=5; Default='5'; Label='Hagga Small Fields at Startup'; Help='Caps both active and primed Small fields after Apply INIs & restart. Maximum 5 matches Funcom''s current default; it does not create fields beyond what Hagga can place.'; SpiceMap='Survival_1'; SpiceFieldType='Small'; SpiceLimit='Both'; ClientStructKey='m_PerMapSystemSettings'; ClientApply=$true; Category='Spice' }
+    @{ Section=$script:DuneGcSecSpice; Key='DST.SpiceStartup.DeepDesert.Small.Max'; File='game'; Type='int'; Min=0; Max=60; Default='60'; Label='Deep Desert Small Fields at Startup'; Help='Caps both active and primed Small fields after Apply server settings. Maximum 60 matches Funcom''s current default. This is a ceiling, not a forced count; a map layout may provide fewer fields.'; SpiceMap='DeepDesert_1'; SpiceFieldType='Small'; SpiceLimit='Both'; ClientStructKey='m_PerMapSystemSettings'; ClientApply=$true; Category='Spice' }
+    @{ Section=$script:DuneGcSecSpice; Key='DST.SpiceStartup.DeepDesert.Medium.Max'; File='game'; Type='int'; Min=0; Max=12; Default='12'; Label='Deep Desert Medium Fields at Startup'; Help='Caps both active and primed Medium fields after Apply server settings. Maximum 12 matches Funcom''s current default. This is a ceiling, not a forced count; a map layout may provide fewer fields.'; SpiceMap='DeepDesert_1'; SpiceFieldType='Medium'; SpiceLimit='Both'; ClientStructKey='m_PerMapSystemSettings'; ClientApply=$true; Category='Spice' }
+    @{ Section=$script:DuneGcSecSpice; Key='DST.SpiceStartup.DeepDesert.Large.Max'; File='game'; Type='int'; Min=0; Max=6; Default='1'; Label='Deep Desert Large Fields at Startup'; Help='Caps both active and primed Large fields after Apply server settings. Maximum 6 covers the largest known layouts; untouched settings retain Funcom''s default of 1.'; SpiceMap='DeepDesert_1'; SpiceFieldType='Large'; SpiceLimit='Both'; ClientStructKey='m_PerMapSystemSettings'; ClientApply=$true; Category='Spice' }
+    @{ Section=$script:DuneGcSecSpice; Key='DST.SpiceStartup.Hagga.Small.Max'; File='game'; Type='int'; Min=0; Max=5; Default='5'; Label='Hagga Small Fields at Startup'; Help='Caps both active and primed Small fields after Apply server settings. Maximum 5 matches Funcom''s current default; it does not create fields beyond what Hagga can place.'; SpiceMap='Survival_1'; SpiceFieldType='Small'; SpiceLimit='Both'; ClientStructKey='m_PerMapSystemSettings'; ClientApply=$true; Category='Spice' }
 
     # --- Taxation ---
     @{ Section=$script:DuneGcSecTaxation; Key='m_bTaxationEnabled'; File='game'; Type='bool'; Default='False'; Label='Taxation Enabled'; Help='Whether the taxation system is active. Also needs client-side apply.'; ClientApply=$true; Category='Taxation' }
@@ -1930,8 +1930,9 @@ function ConvertTo-DuneIniManaged {
         $hasScalarValue = $u.Contains('value')
         $isArrayOnly = (($hasArrayLines -or $hasArrayRemove) -and -not $hasScalarValue)
         if (-not $isArrayOnly) {
-            if ($u['remove']) {
-                # Reset-to-default: strip the key so the default is implied, not written.
+            if ($u['remove'] -or ($hasScalarValue -and [string]::IsNullOrWhiteSpace("$($u.value)"))) {
+                # A cleared input deletes the assignment, never Key= or Key="".
+                # Explicit internal remove operations also strip the key.
                 Remove-DuneScalarFromBody -Body $entry.body -Key $key
             } else {
                 $fmt = Format-DuneIniValue -Key $key -Value $u.value -QuotedKeys $QuotedKeys
@@ -2562,23 +2563,8 @@ function Resolve-DuneGameConfigPaths {
     # before declaring the directory authoritative. The v1 migration copied one
     # whole PVC file, so repair it from the clean pre-import backup.
     #
-    # BUG FIXED 2026-09-22: a Steam/Funcom update silently overwrites this
-    # installed template (proven live: the 2026-09-22 patch rewrote it at
-    # 14:45 UTC, dropping the SpiceHarvestingSystem section entirely) without
-    # touching the v2 marker file. The marker's mere presence used to be
-    # treated as permanent proof the template was still authoritative, so DST
-    # kept reading and displaying the freshly-blanked template - including a
-    # player's actual customized values reverting to Funcom's stock numbers in
-    # the UI - while the live running server, unaffected, kept using its own
-    # real settings the whole time. The marker now also records the sha256 of
-    # the game/engine files at migration time; a mismatch here means
-    # something external (an update) touched the template since our last
-    # write, and the state is reported 'stale' rather than 'ready' so the
-    # carry-forward migration below runs again against the freshly-updated
-    # template. An old-format marker (written before this fix, containing no
-    # hash lines) always compares as stale on first check, which correctly
-    # self-heals any install that was already sitting on a silently-stale
-    # template when this fix landed.
+    # Hashes record the last DST write. A mismatch may be a deliberate manual
+    # change or deletion, so it never authorizes read-time restoration from PVC.
     $installedState = ((Invoke-V6Ssh -Ip $Ip -Cmd @"
 sudo bash -c '
 GAME="$script:DuneGameConfigTplGamePath"
@@ -2604,7 +2590,12 @@ if test -f "`$GAME" && test -f "`$ENGINE"; then
 fi
 '
 "@) -join '').Trim()
-    if ($installedState -eq 'ready') {
+    # A valid v2 authority marker establishes ownership, not immutable contents.
+    # An external edit (including deletion) must be read as it stands. A hash
+    # mismatch alone cannot distinguish an administrator from a game update;
+    # replaying an old PVC here silently undoes manual edits and A/B removals.
+    # Keep legacy adoption/repair separate; normal saves re-stamp the hashes.
+    if ($installedState -in @('ready', 'stale')) {
         return @{
             game   = $script:DuneGameConfigTplGamePath
             engine = $script:DuneGameConfigTplEnginePath
@@ -2615,11 +2606,9 @@ fi
     $dirs = @(
         Invoke-V6Ssh -Ip $Ip -Cmd "sudo bash -c 'ls -t $($script:DuneGameConfigLiveGlobDir)/UserGame.ini 2>/dev/null | xargs -r -n1 dirname'"
     ) | ForEach-Object { "$_".Trim() } | Where-Object { $_ } | Select-Object -Unique
-    if ($installedState -in @('uninitialized', 'repair-v1', 'stale')) {
-        # 'stale' behaves exactly like 'uninitialized' here: the current
-        # template IS the freshly-updated Funcom defaults (an update just
-        # overwrote it), so it is the correct merge base - unlike 'repair-v1',
-        # which specifically needs the pre-v1-migration backup instead.
+    if ($installedState -in @('uninitialized', 'repair-v1')) {
+        # Initial adoption merges into installed defaults. Only repair-v1 uses
+        # the pre-v1-migration backup; established authority never reaches here.
         $baseGamePath = $script:DuneGameConfigTplGamePath
         $baseEnginePath = $script:DuneGameConfigTplEnginePath
         if ($installedState -eq 'repair-v1') {
@@ -2722,22 +2711,6 @@ fi
                 source              = 'installed-uninitialized'
                 authoritative       = $false
                 needsInitialization = $true
-            }
-        }
-        # 'stale' with nothing to carry forward means the battlegroup was never
-        # customized beyond Funcom's defaults in the first place - the freshly
-        # updated template genuinely IS the correct, fully authoritative
-        # config, not an uninitialized one. Do not raise the "Initialize Game
-        # Config" banner for this case; just re-stamp the marker so the next
-        # read is a quiet 'ready' instead of re-running this check every time.
-        if ($installedState -eq 'stale' -and -not $hadAmbiguousCandidate -and -not $hadManagedCandidate) {
-            $reGameHash = Get-DuneGameConfigTextSha256 -Value $installedGame
-            $reEngineHash = Get-DuneGameConfigTextSha256 -Value $installedEngine
-            Invoke-V6Ssh -Ip $Ip -Cmd "printf 'live-imported-v2\n$reGameHash\n$reEngineHash\n' | sudo tee '$script:DuneGameConfigAuthorityMarker' > /dev/null" -TimeoutSec 15 | Out-Null
-            return @{
-                game   = $baseGamePath
-                engine = $baseEnginePath
-                source = 'installed'
             }
         }
         throw 'Installed User*.ini defaults are not initialized and no prior DST-managed battlegroup overrides could be migrated. Deployment is blocked.'
@@ -2873,7 +2846,7 @@ function Sync-DuneStartupConsoleVariableOverrides {
         if ($cleanupOnly.ContainsKey($key)) { continue }
         if ($config.engine.effectiveByKey.ContainsKey($key)) {
             $candidate = "$($config.engine.effectiveByKey[$key])".Trim()
-            if (-not (Test-DuneGameConfigValueIsDefault -Key $key -Value $candidate)) {
+            if ($candidate) {
                 $values[$key] = $candidate
             }
         }
@@ -3188,7 +3161,10 @@ function Convert-DuneStructUpdates {
                 $structGroups[$gid] = @{ section = $sm.section; structKey = $sm.structKey; file = "$($u.file)"; members = (New-Object 'System.Collections.Generic.List[object]') }
             }
             $val = if ($u['remove']) { $sm.default } else { "$($u.value)" }
-            $structGroups[$gid].members.Add(@{ key = $k; value = $val })
+            $structGroups[$gid].members.Add(@{
+                key = $k; value = $val
+                clear = $u.Contains('value') -and [string]::IsNullOrWhiteSpace("$($u.value)")
+            })
         } else {
             $flat.Add($u)
         }
@@ -3224,8 +3200,18 @@ function Convert-DuneStructUpdates {
                 $blob = if ($g.section -eq $script:DuneGcSecLandsraad) { Merge-DuneLandsraadLegacyStruct -DefaultsBlob $seed -LegacyBlob $blob } else { $healed }
             }
         }
-        foreach ($m in $g.members) { $blob = Set-DuneStructScalarMember -Blob $blob -Key $m.key -Value $m.value }
-        $flat.Add(@{ file = $g.file; section = $g.section; key = $g.structKey; value = $blob })
+        foreach ($m in $g.members) {
+            if ($m.clear) {
+                # Clear only this member, preserving sibling customizations.
+                # Default is a nonempty explicit value and follows the set path.
+                $members = Get-DuneStructTopLevelMembers -Blob $blob
+                $members.Remove($m.key)
+                $blob = '(' + (($members.Keys | Sort-Object | ForEach-Object { $members[$_] }) -join ',') + ')'
+            } else {
+                $blob = Set-DuneStructScalarMember -Blob $blob -Key $m.key -Value $m.value
+            }
+        }
+        $flat.Add(@{ file = $g.file; section = $g.section; key = $g.structKey; value = $blob; remove = ($blob -eq '()') })
     }
     return $flat.ToArray()
 }
@@ -3265,6 +3251,9 @@ function Convert-DuneSpicefieldUpdates {
         if (-not $fieldMap.ContainsKey($key)) {
             $flat.Add($update)
             continue
+        }
+        if ($update.Contains('value') -and [string]::IsNullOrWhiteSpace("$($update.value)")) {
+            throw "$key is part of a shared per-map structure, not a standalone INI entry. Clear the parent structure in the server file to remove it; no default was substituted."
         }
         $field = $fieldMap[$key]
         $state = Get-DuneSpicefieldLimitsFromBlob -Blob $blob -MapId $field.mapId `
@@ -3570,9 +3559,9 @@ function Set-DuneDeepDesertPvp {
     $state.ok = $true
     $state.pendingApply = $true
     $state.message = if ($Enabled) {
-        "Saved Deep Desert PvP for partition(s) $($requested -join ', '). Use Apply INIs & restart to deploy the selection safely; it is not active yet."
+        "Saved Deep Desert PvP for partition(s) $($requested -join ', '). Use Apply server settings to deploy the selection safely; it is not active yet."
     } else {
-        'Saved Deep Desert partition PvP as disabled. Use Apply INIs & restart to deploy the change safely; it is not active yet.'
+        'Saved Deep Desert partition PvP as disabled. Use Apply server settings to deploy the change safely; it is not active yet.'
     }
     return $state
 }
@@ -3895,7 +3884,7 @@ function Get-DuneGameConfigCatalog {
         foreach ($k in $s.keys) {
             $defVal = "$($k.value)"
             $eff = $userGame["$($s.name)||$($k.key)"]
-            $current = if ($null -ne $eff -and "$eff" -ne '') { "$eff" } else { $defVal }
+            $current = if ($null -ne $eff) { "$eff" } elseif ($k.isArray) { $defVal } else { '' }
             $isOverridden = ($null -ne $eff -and "$eff" -ne '' -and "$eff" -ne $defVal)
             if ($isOverridden) { $overridden++ }
             $keys.Add(@{
@@ -3924,7 +3913,7 @@ function Get-DuneGameConfigCatalog {
         foreach ($k in $s.keys) {
             $defVal = "$($k.value)"
             $eff = $userEngine["$($s.name)||$($k.key)"]
-            $current = if ($null -ne $eff -and "$eff" -ne '') { "$eff" } else { $defVal }
+            $current = if ($null -ne $eff) { "$eff" } elseif ($k.isArray) { $defVal } else { '' }
             $isOverridden = ($null -ne $eff -and "$eff" -ne '' -and "$eff" -ne $defVal)
             if ($isOverridden) { $overridden++ }
             $keys.Add(@{

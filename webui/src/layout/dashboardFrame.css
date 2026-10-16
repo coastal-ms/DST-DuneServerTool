@@ -51,6 +51,12 @@
   max-width: 100%;
 }
 
+.spatial-dashboard-frame .spatial-footer-info {
+  grid-row: 2;
+  justify-self: center;
+  margin-top: 4px;
+}
+
 .spatial-dashboard-frame .spatial-dock-slot > .spatial-dock {
   position: static;
   transform: none;

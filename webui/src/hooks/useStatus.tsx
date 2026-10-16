@@ -74,7 +74,11 @@ export function StatusProvider({ children }: { children: ReactNode }) {
     loading:  !soloOnly && s.loading,
     error:    soloOnly ? null : s.error,
     refresh:  s.refresh,
-    forceRefresh: async () => { if (soloOnly) return; await api<StatusSnapshot>('/api/status/refresh', { method: 'POST' }); await s.refresh() },
+    forceRefresh: async () => {
+      if (soloOnly) return
+      const fresh = await api<StatusSnapshot>('/api/status/refresh', { method: 'POST' })
+      s.replaceData(fresh)
+    },
   }
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>
 }

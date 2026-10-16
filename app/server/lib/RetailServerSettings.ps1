@@ -8,7 +8,7 @@ function Get-DuneRetailStartupSyncPreferencePath {
 
 function Get-DuneRetailStartupSyncPreference {
     $path=Get-DuneRetailStartupSyncPreferencePath
-    if(-not(Test-Path -LiteralPath $path)){return @{enabled=$true; injectionsApplied=$true; scope='Solo and self-hosted'}}
+    if(-not(Test-Path -LiteralPath $path)){return @{enabled=$true; injectionsApplied=$true; scope='Self-hosted battlegroup'}}
     $preference=Get-Content -LiteralPath $path -Raw | ConvertFrom-Json
     if($preference.enabled -isnot [bool]){throw 'Server Settings startup synchronization preference is invalid.'}
     foreach ($field in @('injectionsApplied','cleanupPending')) {
@@ -16,7 +16,7 @@ function Get-DuneRetailStartupSyncPreference {
     }
     $applied = if ($null -ne $preference.PSObject.Properties['injectionsApplied']) { [bool]$preference.injectionsApplied } else { [bool]$preference.enabled }
     $pending = if ($null -ne $preference.PSObject.Properties['cleanupPending']) { [bool]$preference.cleanupPending } else { -not $preference.enabled }
-    return @{enabled=[bool]$preference.enabled; injectionsApplied=$applied; cleanupPending=$pending; scope='Solo and self-hosted'; changedAt=$preference.changedAt}
+    return @{enabled=[bool]$preference.enabled; injectionsApplied=$applied; cleanupPending=$pending; scope='Self-hosted battlegroup'; changedAt=$preference.changedAt}
 }
 
 function Test-DuneConfigurationInjectionEnabled {
@@ -633,6 +633,10 @@ function ConvertTo-DuneRetailServerSettingsUpdatedRaw {
         if (-not $definition -or (-not $definition.editable -and -not $defaultUpdate)) {
             throw "Retail setting $key is not editable."
         }
+        if ([string]::IsNullOrWhiteSpace($value)) {
+            $normalized[$key] = $null
+            continue
+        }
         if (-not (Test-DuneRetailServerSettingValue -Definition $definition -Value $value)) {
             throw "Retail setting $key has an invalid $($definition.type) value."
         }
@@ -659,11 +663,16 @@ function ConvertTo-DuneRetailServerSettingsUpdatedRaw {
             $key = $Matches[2].Trim()
             $valueParts = Split-DuneRetailServerSettingValue -Content $Matches[3]
             if ($normalized.ContainsKey($key)) {
-                $parts[$index] = "$prefix$($valueParts.leading)$($normalized[$key])$($valueParts.trailing)"
+                if ($null -eq $normalized[$key]) {
+                    $parts[$index] = ''
+                    if ($index + 1 -lt $parts.Length) { $parts[$index + 1] = '' }
+                } else {
+                    $parts[$index] = "$prefix$($valueParts.leading)$($normalized[$key])$($valueParts.trailing)"
+                }
             }
         }
     }
-    $missing = @($normalized.Keys | Where-Object { -not $present.ContainsKey($_) } | Sort-Object)
+    $missing = @($normalized.Keys | Where-Object { $null -ne $normalized[$_] -and -not $present.ContainsKey($_) } | Sort-Object)
     if ($missing.Count -gt 0) {
         $newline = if ($Raw -match '\r\n|\n|\r') { $Matches[0] } else { "`n" }
         $additions = ($missing | ForEach-Object { "$_=$($normalized[$_])" }) -join $newline

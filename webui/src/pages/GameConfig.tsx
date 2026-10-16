@@ -48,6 +48,7 @@ import { LandclaimTimerCard } from './gameconfig/LandclaimTimerCard'
 import { DeepDesertPvpCard } from './gameconfig/DeepDesertPvpCard'
 import { BaseBackupGuardPanel } from './gameconfig/BaseBackupGuardPanel'
 import { isLocalViewer } from '../util/viewer'
+import { useSettingsDraft } from './gameconfig/settingsApplyContext'
 
 export const EXPERIMENTAL_BLOCKED_DEFAULT_TARGETS = new Set([
   'game||/script/dunesandbox.timeofdaysettings||m_starttime',
@@ -288,10 +289,10 @@ export function buildCategoryClientBlocks(
   return { entries: buildClientShareEntries(items, cfg), count, hasClientFields }
 }
 
-// The value an input should hold: the live override when present, otherwise the default.
+// Show the actual override. An absent entry stays empty until the user enters
+// a value or explicitly clicks this setting's Default button.
 function currentValue(data: GameConfigResponse | null, field: GameConfigField): string {
-  const lv = liveValue(data, field)
-  return lv !== '' ? lv : fieldDefault(field)
+  return liveValue(data, field)
 }
 
 // Numeric-aware, case-insensitive equality so 4 vs 4.0 and True vs true don't
@@ -372,7 +373,7 @@ function groupExperimental(cats: GameConfigCategory[]): GameConfigCategory[] {
     .map(([category, fields]) => ({ category, fields }))
 }
 
-export function GameConfig({ mode = 'standard' }: { mode?: 'standard' | 'experimental' } = {}) {
+export function GameConfig({ mode = 'standard', embedded = false, section = 'advanced' }: { mode?: 'standard' | 'experimental'; embedded?: boolean; section?: 'advanced' | 'client' | 'tools' } = {}) {
   const contextual = useCommandDeck()
   const Guidance = contextual ? 'details' : 'div'
   const experimentalPage = mode === 'experimental'
@@ -384,6 +385,8 @@ export function GameConfig({ mode = 'standard' }: { mode?: 'standard' | 'experim
   const [cfg, setCfg] = useState<GameConfigResponse | null>(null)
   const [values, setValues] = useState<Record<string, string>>({})
   const [originals, setOriginals] = useState<Record<string, string>>({})
+  const unsavedDraft = useRef(false)
+  unsavedDraft.current = Object.keys(values).some(key => values[key] !== originals[key])
   const [loadState, setLoadState] = useState<LoadState>('idle')
   const [loadError, setLoadError] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
@@ -605,8 +608,7 @@ export function GameConfig({ mode = 'standard' }: { mode?: 'standard' | 'experim
     setSandwormModalOpen(false)
   }, [])
 
-  // Seed editable values: live override when present, otherwise the funcom default,
-  // so every field is populated even before (or without) a live battlegroup.
+  // Seed only actual saved entries; defaults remain a separate explicit action.
   const seedValues = useCallback((cats: GameConfigCategory[], data: GameConfigResponse | null) => {
     const out: Record<string, string> = {}
     for (const cat of cats ?? []) {
@@ -643,6 +645,10 @@ export function GameConfig({ mode = 'standard' }: { mode?: 'standard' | 'experim
   }, [schema, seedValues])
 
   useEffect(() => {
+    if (unsavedDraft.current) {
+      if (!vmRunning) setLoadError('Server unavailable. Your unsaved draft is retained; reconnect before applying.')
+      return
+    }
     void (async () => {
       let s = schema
       if (!s) {
@@ -960,10 +966,9 @@ export function GameConfig({ mode = 'standard' }: { mode?: 'standard' | 'experim
       .filter(cat => cat.fields.length > 0)
   }, [visibleSchema, search, experimentalPage, experimentalSearchActive, selectedExperimentalGroup, experimentalFilteredFields, experimentalPageIndex])
 
-  async function onSubmit(e: FormEvent) {
-    e.preventDefault()
+  async function saveDraft(fromReview = false) {
     if (dirtyKeys.length === 0) return
-    if (experimentalStartupDirtyKeys.length > 0) {
+    if (experimentalStartupDirtyKeys.length > 0 && !fromReview) {
       const count = experimentalStartupDirtyKeys.length
       const engineStatus = clientInfo?.engineEnabled
         ? 'Client Engine.ini management is currently ON.'
@@ -971,8 +976,8 @@ export function GameConfig({ mode = 'standard' }: { mode?: 'standard' | 'experim
       const ok = confirmRoutineAction(
         `Save ${count} Experimental setting${count === 1 ? '' : 's'}?\n\n`
         + (experimentalPage
-            ? 'These are written to the server UserGame.ini or UserEngine.ini as labeled. Nothing on the server changes until you restart the battlegroup — use “Apply INIs & restart” in the bar at the bottom of this page. Saving on its own does not disconnect anyone.\n\n'
-            : 'These are written to the server UserEngine.ini. Nothing on the server changes until you restart the battlegroup — use “Apply INIs & restart”. Saving on its own does not disconnect anyone.\n\n')
+            ? 'These are written to the server UserGame.ini or UserEngine.ini as labeled. Nothing on the server changes until you restart the battlegroup — use “Apply server settings” in the bar at the bottom of this page. Saving on its own does not disconnect anyone.\n\n'
+            : 'These are written to the server UserEngine.ini. Nothing on the server changes until you restart the battlegroup — use “Apply server settings”. Saving on its own does not disconnect anyone.\n\n')
         + 'Only controls explicitly marked Client are known to read a local Engine.ini value. '
         + 'Unknown-scope Lab controls stay server-side so field tests are not contaminated by an unnecessary client override.\n\n'
         + `${engineStatus} Turn it on under “Your client config” at the top of this page to let DST manage those values.`,
@@ -995,8 +1000,8 @@ export function GameConfig({ mode = 'standard' }: { mode?: 'standard' | 'experim
       let msg = `Saved ${n} change${n === 1 ? '' : 's'} into the DST-managed block. Tip: use “Backup settings” to snapshot before big changes — DST no longer auto-backs-up on every save.`
       if (experimentalStartupDirtyKeys.length > 0) {
         msg += experimentalPage
-          ? ' Saved to the labeled server INI only — use “Apply INIs & restart” in the bar at the bottom of this page to put these into effect.'
-          : ' Saved to the server INI only — restart the battlegroup with “Apply INIs & restart” to put these into effect.'
+          ? ' Saved to the labeled server INI only — use “Apply server settings” in the bar at the bottom of this page to put these into effect.'
+          : ' Saved to the server INI only — restart the battlegroup with “Apply server settings” to put these into effect.'
       }
       // If m_TaskGoalAmount was in this save, DST also rewrote the current
       // Landsraad term's goal_amount for every House row — surface the result.
@@ -1017,9 +1022,44 @@ export function GameConfig({ mode = 'standard' }: { mode?: 'standard' | 'experim
     } catch (err) {
       setSavedMsg(null)
       setSaveError(err instanceof Error ? err.message : String(err))
+      if (fromReview) throw err
     } finally {
       setSaving(false)
     }
+  }
+
+  const applyController = useSettingsDraft('advanced', {
+    ready: vmRunning && loadState === 'ready' && !!cfg?.available && !cfg.needsInitialization && !saving,
+    changes: dirtyKeys.map(key => {
+      const field = schemaWithLoadedExperimental.flatMap(category => category.fields).find(field => field.key === key)
+      return {
+        label: field?.label ?? key, before: originals[key] ?? '', after: values[key]?.trim() ? values[key] : 'Remove from server file',
+        target: `Server · ${field?.file === 'engine' ? 'UserEngine.ini' : 'UserGame.ini'} · ${key === 'm_TaskGoalAmount' ? 'also updates current Landsraad goals on save' : 'after start/restart'}${field?.consoleVar ? ' · startup command' : ''}`,
+      }
+    }),
+    validate: async () => {
+      for (const key of dirtyKeys) {
+        const field = schemaWithLoadedExperimental.flatMap(category => category.fields).find(field => field.key === key)
+        const value = values[key]?.trim() ?? ''
+        if (!field || !value || !['int', 'float'].includes(field.type)) continue
+        const number = Number(value)
+        if (!Number.isFinite(number) || (field.type === 'int' && !Number.isInteger(number))
+          || (field.min !== undefined && number < field.min) || (field.max !== undefined && number > field.max)) {
+          throw new Error(`${field.label}: enter a valid ${field.type === 'int' ? 'whole number' : 'number'} within the displayed limits before applying.`)
+        }
+      }
+      const current = await getGameConfig()
+      if (!current.available || current.source !== cfg?.source || current.game.raw !== cfg.game.raw || current.engine.raw !== cfg.engine.raw) {
+        throw new Error('Advanced server settings changed outside this form. Refresh and review them before applying; your draft is still here.')
+      }
+    },
+    apply: () => saveDraft(true),
+  })
+
+  function onSubmit(e: FormEvent) {
+    e.preventDefault()
+    if (applyController) applyController.review()
+    else void saveDraft()
   }
 
   async function onInitializeGameConfig() {
@@ -1051,8 +1091,8 @@ export function GameConfig({ mode = 'standard' }: { mode?: 'standard' | 'experim
   async function onReloadPods() {
     if (dirtyKeys.length > 0 || reloadingPods) return
     const ok = window.confirm(
-      'Apply the saved INI files by restarting every running game-server pod one at a time?\n\n'
-      + 'Players on each map will disconnect when that map restarts. Database, director, operator, and other infrastructure pods are not touched. Each replacement must become Ready before the next map restarts.',
+      'Deploy the saved server settings and restart the battlegroup?\n\n'
+      + 'All maps restart together and connected players disconnect. Player PC configuration is separate and will not be changed.',
     )
     if (!ok) return
     setReloadingPods(true)
@@ -1079,6 +1119,8 @@ export function GameConfig({ mode = 'standard' }: { mode?: 'standard' | 'experim
   const sourcePresentation = cfg && (
     cfg.source === 'installed'
       ? { className: 'pill-success', title: 'Values from the authoritative installed INI files.', icon: 'CircleCheck' as const, label: 'Authoritative' }
+      : cfg.source === 'self-managed'
+        ? { className: 'pill-info', title: 'Manual configuration management is selected; explicit saves change files only.', icon: 'Info' as const, label: 'Manual management' }
       : cfg.source === 'legacy-live'
         ? { className: 'pill-success', title: 'Values from the live battlegroup INI files on an older Funcom installation.', icon: 'CircleCheck' as const, label: 'Live' }
         : cfg.source === 'live'
@@ -1101,11 +1143,12 @@ export function GameConfig({ mode = 'standard' }: { mode?: 'standard' | 'experim
 
   return (
     <>
-      <PageHeader
+      <div hidden={embedded && section !== 'advanced'}>
+      {!embedded && <PageHeader
         title={experimentalPage ? 'Experimental Lab' : 'Game Config'}
         icon={experimentalPage ? 'FlaskConical' : 'Sliders'}
         description={experimentalPage
-          ? 'Complete recovered CVar and live default-INI catalog. Curated DST controls are excluded; saved overrides apply on the next DST battlegroup restart.'
+          ? 'Complete recovered CVar and live default-INI catalog. Clear an edited scalar value to remove its server-file entry on save. Zero is a value. Saved overrides apply on the next battlegroup restart; local player INIs require a separate approved apply.'
           : 'UserGame.ini + UserEngine.ini editor. Edits are tracked in a DST-managed block written to the live battlegroup.'}
         actions={
           <div className="gameconfig-header-actions flex items-center gap-2">
@@ -1120,7 +1163,7 @@ export function GameConfig({ mode = 'standard' }: { mode?: 'standard' | 'experim
                 : 'Rebuild the server startup values from the INIs and restart the battlegroup so every map reloads with the current settings'}
             >
               <Icon name={reloadingPods ? 'Loader2' : 'RefreshCw'} size={14} className={reloadingPods ? 'animate-spin' : ''} />
-              {reloadingPods ? 'Restarting battlegroup…' : 'Apply INIs & restart'}
+              {reloadingPods ? 'Restarting battlegroup…' : 'Apply server settings'}
             </button>
             {experimentalPage && (
               <Link to="/gameconfig" className="btn-secondary" title="Back to the settings we stand behind">
@@ -1159,17 +1202,17 @@ export function GameConfig({ mode = 'standard' }: { mode?: 'standard' | 'experim
             </button>
           </div>
         }
-      />
+      />}
 
       {/* Backup / risk reminder. On the Experimental page this is also the single
           page-level warning — the per-card copy is suppressed there, otherwise it
           would repeat on every themed card. */}
-      <Guidance className={'gameconfig-guidance card p-4 mb-4 text-sm flex items-start gap-3 ' + (experimentalPage ? 'border-warning/40 bg-warning/5' : 'border-ibad/40 bg-ibad/5')}>
+      {!embedded && <Guidance className={'gameconfig-guidance card p-4 mb-4 text-sm flex items-start gap-3 ' + (experimentalPage ? 'border-warning/40 bg-warning/5' : 'border-ibad/40 bg-ibad/5')}>
         {contextual && <summary>
           <strong>Back up before editing. </strong>
           {experimentalPage
-            ? 'Recovered controls are unconfirmed: crashes, disconnects, state corruption and performance loss are possible. Change one setting at a time; save, then Apply INIs & restart.'
-            : 'Saving writes to the installed authoritative INIs; Apply INIs & restart pushes them to the battlegroup.'}
+            ? 'Recovered controls are unconfirmed: crashes, disconnects, state corruption and performance loss are possible. Change one setting at a time; save, then Apply server settings.'
+            : 'Saving writes to the installed authoritative INIs; Apply server settings pushes them to the battlegroup.'}
           <span> Safety &amp; player config</span>
         </summary>}
         <Icon name="FlaskConical" size={18} className={'mt-0.5 shrink-0 ' + (experimentalPage ? 'text-warning' : 'text-ibad')} />
@@ -1184,7 +1227,7 @@ export function GameConfig({ mode = 'standard' }: { mode?: 'standard' | 'experim
                 <span className="text-text font-medium">Back up first and change one setting at a time.</span>
               </p>
               <p className="text-xs text-warning/90 leading-relaxed mt-1.5">
-                Saving here changes nothing on a running server — use “Apply INIs &amp; restart” in the bar at the
+                Saving here changes nothing on a running server — use “Apply server settings” in the bar at the
                 bottom of this page, or the same command on the Commands page. Critical and high-risk controls can crash,
                 disconnect, corrupt state, or sharply reduce performance. Client behavior is unknown unless a control is explicitly
                 marked Client.
@@ -1199,7 +1242,7 @@ export function GameConfig({ mode = 'standard' }: { mode?: 'standard' | 'experim
                 you have a restore point — backups are saved on the server next to each file and can be restored via the File Browser.
               </p>
               <p className="text-xs text-warning/90 leading-relaxed mt-1.5">
-                Some settings are read only when a game pod starts. Use “Apply INIs &amp; restart” after saving to do a clean battlegroup restart so every map reloads with the new values.
+                Some settings are read only when a game pod starts. Use “Apply server settings” after saving to do a clean battlegroup restart so every map reloads with the new values.
               </p>
             </>
           )}
@@ -1228,7 +1271,7 @@ export function GameConfig({ mode = 'standard' }: { mode?: 'standard' | 'experim
             View backups
           </button>
         </div>
-      </Guidance>
+      </Guidance>}
 
       {backupMsg && (
         <div className="card p-3 mb-4 border-success/40 bg-success/10 text-success text-sm flex items-center gap-2">
@@ -1253,14 +1296,14 @@ export function GameConfig({ mode = 'standard' }: { mode?: 'standard' | 'experim
       {/* How it works. On the Experimental page this is also where the user is
           told to go back to Game Config to apply — that path rebuilds the server
           startup values from the INI, which is what makes these take effect. */}
-      {!contextual && (experimentalPage ? (
+      {!embedded && !contextual && (experimentalPage ? (
         <div className="card p-3 mb-4 border-border bg-surface-2/40 text-xs text-text-muted flex items-start gap-2">
           <Icon name="Info" size={14} className="mt-0.5 shrink-0 text-accent-bright" />
           <div>
             These are written to the labeled server <span className="font-mono text-text">UserGame.ini</span> or{' '}
             <span className="font-mono text-text">UserEngine.ini</span> when you save.
             Nothing changes on a running server until the battlegroup restarts — use{' '}
-            <strong className="text-text">Apply INIs &amp; restart</strong> in the bar at the bottom of this page, or the same command
+            <strong className="text-text">Apply server settings</strong> in the bar at the bottom of this page, or the same command
             on the Commands page.
           </div>
         </div>
@@ -1276,7 +1319,10 @@ export function GameConfig({ mode = 'standard' }: { mode?: 'standard' | 'experim
       ))}
 
       {cfg && <AdvancedIniBrowser cfg={cfg} />}
+      </div>
 
+      <div hidden={embedded && section !== 'client'}>
+      {!localViewer && <p className="card p-4 text-sm text-text-muted">Player compatibility applies to each player’s own PC. Open DST locally to review that PC’s files. Applying server settings does not change player files.</p>}
       {localViewer && (
         <>
           {/* Local client config (this PC) */}
@@ -1284,10 +1330,11 @@ export function GameConfig({ mode = 'standard' }: { mode?: 'standard' | 'experim
             id="gameconfig.clientConfig"
             icon="MonitorSmartphone"
             iconClassName="text-accent-bright shrink-0"
-            title="Optional local client overrides (this PC)"
+            title="Player compatibility · this PC only"
             titleClassName="text-sm font-semibold text-text"
             className="mb-4 border-border"
-            headerClassName="px-4 pt-4 pb-2"
+            headerClassName="flex-wrap px-4 pt-4 pb-2"
+            headerRightClassName="flex w-full flex-wrap items-center gap-2"
             bodyClassName="px-4 pb-4"
             headerRight={
               <>
@@ -1329,11 +1376,12 @@ export function GameConfig({ mode = 'standard' }: { mode?: 'standard' | 'experim
             }
           >
             <p className="text-xs text-text-muted mb-3">
-              Funcom&apos;s in-game Custom Settings deployment remains authoritative for supported settings. DST can
-              optionally mirror a small, field-proven set of advanced Retail values that are still evaluated locally into
-              this PC&apos;s <span className="font-mono">Game.ini</span>. Managing{' '}
-              <span className="font-mono">Engine.ini</span> is a separate opt-in because client console-variable overrides
-              can materially change gameplay.
+              This edits the game-client files on this PC, separately from the selected server&apos;s files.
+              They are shared across this game installation, not saved per server. DST offers a reviewed set of local{' '}
+              <span className="font-mono">Game.ini</span> compatibility values. Managing{' '}
+              <span className="font-mono">Engine.ini</span> is a separate opt-in: some of its settings are evaluated by
+              the client independently and can affect play on your own DST server or other servers. Do not assume a
+              server value always overrides a local Engine.ini value.
             </p>
             <label className="mb-3 flex items-start gap-3 rounded-lg border border-warning/30 bg-warning/5 p-3 cursor-pointer select-none">
               <input
@@ -1356,7 +1404,10 @@ export function GameConfig({ mode = 'standard' }: { mode?: 'standard' | 'experim
               </span>
             </label>
             <div className="mb-3 rounded-lg border border-border bg-surface-2/40 p-3 text-xs text-text-muted">
-              <strong className="text-text">Review compatibility overrides from the action bar below.</strong>{' '}
+              <button type="button" className="btn-secondary mb-2" disabled={clientBusy || enabledClientApplyItems.length === 0}
+                onClick={() => setClientReview({ mode: 'server', items: enabledClientApplyItems.map(item => ({ ...item })) })}>
+                Review player-PC changes
+              </button>{' '}
               Only customized, non-default advanced settings outside Funcom&apos;s normal synchronized surface and backed
               by direct current-Retail evidence are offered. Game.ini values can apply without the Engine.ini opt-in.
               {clientApplyItems.some(item => item.file === 'engine') && clientInfo?.engineEnabled !== true
@@ -1450,7 +1501,8 @@ export function GameConfig({ mode = 'standard' }: { mode?: 'standard' | 'experim
           )}
         </>
       )}
-
+      </div>
+      <div hidden={embedded && section !== 'advanced'}>
       {/* Status / error banners */}
       {cfg?.needsInitialization && loadState === 'ready' && (
         <div className="card p-4 mb-4 border-accent/30 bg-accent/5 text-text-muted text-sm flex items-start gap-2 justify-between">
@@ -1492,6 +1544,14 @@ export function GameConfig({ mode = 'standard' }: { mode?: 'standard' | 'experim
           </button>
         </div>
       )}
+      {embedded && <p className="mb-4 text-sm text-text-muted">Advanced server controls apply to the battlegroup. Each control names its file and intended effect. Clear a scalar value to remove its entry from the server file when you apply; zero remains a value. Local player INIs change only through a separately approved local apply. Existing values stay in place until you review changes; gameplay effects can vary with game updates.</p>}
+      {embedded && <div className="mb-4 flex flex-wrap items-center gap-2">
+        {sourcePill}
+        <button type="button" className="btn-secondary" disabled={!vmRunning || saving || loadState === 'loading' || dirtyKeys.length > 0} onClick={() => void loadAll()}>Refresh advanced values</button>
+        <button type="button" className="btn-secondary" disabled={!vmRunning || backing || saving} onClick={() => void onBackup()}>Back up advanced settings</button>
+        <button type="button" className="btn-secondary" disabled={!vmRunning || saving} onClick={() => void onViewBackups()}>View advanced backups</button>
+        {dirtyKeys.length > 0 && <span className="text-xs text-text-muted">Discard the draft before refreshing outside edits.</span>}
+      </div>}
       {saveError ? (
         <ViewportNotice kind="err" text={saveError} onDismiss={() => setSaveError(null)} />
       ) : savedMsg ? (
@@ -1649,10 +1709,10 @@ export function GameConfig({ mode = 'standard' }: { mode?: 'standard' | 'experim
                 {/* Not an INI field, but it belongs with the base backup
                     settings: allowing the tool in the Deep Desert without this
                     means a stored base is recyclable-only after every reset. */}
-                {!experimentalPage && cat.category === 'BaseBackUp' && (
+                {!embedded && !experimentalPage && cat.category === 'BaseBackUp' && (
                   <BaseBackupGuardPanel vmRunning={vmRunning} />
                 )}
-                {!experimentalPage && cat.category === 'Time of Day' && (
+                {!embedded && !experimentalPage && cat.category === 'Time of Day' && (
                   <TimeOfDayLockPanel vmRunning={vmRunning} />
                 )}
               </CategoryCard>
@@ -1662,7 +1722,7 @@ export function GameConfig({ mode = 'standard' }: { mode?: 'standard' | 'experim
               <div className="card p-6 text-text-muted text-sm">No settings match “{search}”.</div>
             )}
 
-            {!experimentalPage && (
+            {!embedded && !experimentalPage && (
               <>
                 <DeepDesertPvpCard vmRunning={vmRunning} />
 
@@ -1679,8 +1739,8 @@ export function GameConfig({ mode = 'standard' }: { mode?: 'standard' | 'experim
             )}
           </div>
 
-          <div className="gameconfig-savebar sticky bottom-0 mt-6 -mx-6 px-6 py-3 bg-surface/95 border-t border-border backdrop-blur-sm flex items-center justify-between">
-            <div className="text-xs text-text-muted flex items-center gap-4">
+          <div className="gameconfig-savebar sticky bottom-0 mt-6 -mx-6 px-6 py-3 bg-surface/95 border-t border-border backdrop-blur-sm flex flex-wrap gap-3 items-center justify-between">
+            <div className="min-w-0 text-xs text-text-muted flex flex-wrap items-center gap-4">
               {cfg && (
                 <>
                   <span className="font-mono truncate max-w-xs" title={cfg.game.path}>game: {cfg.game.path}</span>
@@ -1697,7 +1757,7 @@ export function GameConfig({ mode = 'standard' }: { mode?: 'standard' | 'experim
               >
                 <Icon name="ArrowUp" size={14} /> Top
               </button>
-              <button
+              {!applyController && <button
                 type="button"
                 onClick={() => void onReloadPods()}
                 disabled={!vmRunning || reloadingPods || saving || dirtyKeys.length > 0 || loadState !== 'ready'}
@@ -1707,9 +1767,9 @@ export function GameConfig({ mode = 'standard' }: { mode?: 'standard' | 'experim
                   : 'Rebuild the server startup values from the INIs and restart the battlegroup so every map reloads with the current settings'}
               >
                 <Icon name={reloadingPods ? 'Loader2' : 'RefreshCw'} size={14} className={reloadingPods ? 'animate-spin' : ''} />
-                {reloadingPods ? 'Restarting battlegroup…' : 'Apply INIs & restart'}
-              </button>
-              {localViewer && (
+                {reloadingPods ? 'Restarting battlegroup…' : 'Apply server settings'}
+              </button>}
+              {localViewer && !applyController && (
                 <button
                   type="button"
                   onClick={() => setClientReview({ mode: 'server', items: enabledClientApplyItems.map(item => ({ ...item })) })}
@@ -1740,12 +1800,20 @@ export function GameConfig({ mode = 'standard' }: { mode?: 'standard' | 'experim
                 className="btn-primary"
               >
                 <Icon name={saving ? 'Loader2' : 'Save'} size={15} className={saving ? 'animate-spin' : ''} />
-                {saving ? 'Saving…' : 'Save'}
+                {saving ? 'Saving…' : applyController ? 'Review & Apply' : 'Save'}
               </button>
             </div>
           </div>
         </form>
       )}
+      </div>
+      {embedded && <div hidden={section !== 'tools'}>
+        <p className="card mb-4 p-4 text-sm text-text-muted">These tools have their own actions because their targets differ from ordinary field drafts. Save partition choices while maps are running, then use Review & Apply to deploy the saved server configuration. The land-claim timer also targets the DST host PC; base protection changes database cleanup immediately.</p>
+        <DeepDesertPvpCard vmRunning={vmRunning} />
+        <LandclaimTimerCard vmRunning={vmRunning} />
+        <section className="card mb-4 p-4"><h2 className="text-sm font-semibold">Base-backup protection · server database · immediate</h2><BaseBackupGuardPanel vmRunning={vmRunning} /></section>
+        <TimeOfDayLockPanel vmRunning={vmRunning} />
+      </div>}
 
       <SandwormConfirmModal
         open={sandwormModalOpen}
@@ -2039,7 +2107,7 @@ function CategoryCard({
                 <Icon name="FlaskConical" size={14} /> Test settings
               </div>
               <p>
-                These CVars are written to the battlegroup&apos;s <span className="font-mono text-text">UserEngine.ini</span> under <span className="font-mono text-text">[ConsoleVariables]</span>. Saving changes nothing on a running server: the values are applied to the game servers when the battlegroup restarts, so use <strong className="text-text">Apply INIs &amp; restart</strong> to put them into effect. The explicit client-config tools remain available for optional local edits.
+                These CVars are written to the battlegroup&apos;s <span className="font-mono text-text">UserEngine.ini</span> under <span className="font-mono text-text">[ConsoleVariables]</span>. Saving changes nothing on a running server: the values are applied to the game servers when the battlegroup restarts, so use <strong className="text-text">Apply server settings</strong> to put them into effect. The explicit client-config tools remain available for optional local edits.
               </p>
               <p className="mt-1.5">
                 Experimental Lab includes recovered Dune and Unreal Engine controls that are not already surfaced by DST. Risk badges identify known crash, persistence, networking, performance, and diagnostic hazards; they do not make lower-risk controls field-confirmed. Back up first and change one setting at a time.
@@ -2108,7 +2176,8 @@ function FieldRow({ field, value, onChange, disabled, isDirty, isSet, isCustom, 
   // Whether the current input already equals the Funcom default (numeric/bool
   // aware), so the reset button can be disabled when there's nothing to reset.
   const atDefault = valuesEqual(value, defaultValue)
-  const resetToDefault = () => { if (!disabled && !atDefault) onChange(defaultValue) }
+  const hasDefault = defaultValue.trim() !== ''
+  const resetToDefault = () => { if (!disabled && hasDefault && !atDefault) onChange(defaultValue) }
 
   return (
     <div className={fixedHeight ? 'h-32 overflow-hidden' : wide ? 'md:col-span-2' : ''}>
@@ -2120,9 +2189,16 @@ function FieldRow({ field, value, onChange, disabled, isDirty, isSet, isCustom, 
         <span className="flex items-center gap-1 shrink-0">
           <button
             type="button"
+            onClick={() => onChange('')}
+            disabled={disabled || value.trim() === ''}
+            title="Remove this entry from the server INI on apply; local player files are not included"
+            className="text-[9px] font-semibold uppercase tracking-wider px-1.5 py-0.5 rounded bg-surface-2 text-text-muted hover:text-text disabled:opacity-40"
+          >Clear</button>
+          <button
+            type="button"
             onClick={resetToDefault}
-            disabled={disabled || atDefault}
-            title={atDefault ? 'Already at the Funcom default' : `Reset to default (${formatDefaultDisplay(field, defaultValue)}) — removes the key from the INI on save`}
+            disabled={disabled || !hasDefault || atDefault}
+            title={!hasDefault ? 'No Funcom default is available; nothing will be added' : atDefault ? 'Already at the Funcom default' : `Set to Funcom default (${formatDefaultDisplay(field, defaultValue)}) — writes this value to the server INI on apply`}
             className="text-[9px] font-semibold uppercase tracking-wider px-1.5 py-0.5 rounded bg-surface-2 text-text-muted hover:text-text hover:bg-surface-3 disabled:opacity-40 disabled:cursor-not-allowed inline-flex items-center gap-1"
           >
             <Icon name="RotateCcw" size={10} /> Default
@@ -2133,7 +2209,7 @@ function FieldRow({ field, value, onChange, disabled, isDirty, isSet, isCustom, 
             </span>
           )}
           {field.consoleVar && (
-            <span className="text-[9px] font-semibold uppercase tracking-wider px-1.5 py-0.5 rounded bg-surface-2 text-text-muted" title="Console variable — saving alone changes nothing on a running server. It takes effect when the battlegroup restarts and rebuilds its startup command: use “Apply INIs & restart” in the bar at the bottom of this page. DST also offers to mirror console variables into this PC’s client Engine.ini; some are client-enforced and need every player to carry a matching value.">
+            <span className="text-[9px] font-semibold uppercase tracking-wider px-1.5 py-0.5 rounded bg-surface-2 text-text-muted" title="Console variable — saving alone changes nothing on a running server. It takes effect when the battlegroup restarts and rebuilds its startup command: use “Apply server settings” in the bar at the bottom of this page. DST also offers to mirror console variables into this PC’s client Engine.ini; some are client-enforced and need every player to carry a matching value.">
               CVar
             </span>
           )}
@@ -2154,9 +2230,9 @@ function FieldRow({ field, value, onChange, disabled, isDirty, isSet, isCustom, 
               {field.risk}
             </span>
           )}
-          {field.clientApply && !field.consoleVar && (
-            <span className="text-[9px] font-semibold uppercase tracking-wider px-1.5 py-0.5 rounded bg-surface-2 text-text-muted" title="Client-enforced — each player also needs a matching (or equal/higher) value in their own client INI before this takes full effect. Use “Player config” to get the exact lines to hand out.">
-              Client
+          {RETAIL_CLIENT_COMPATIBILITY_TARGETS.has(`${field.file}||${field.key}`.toLowerCase()) && (
+            <span className="text-[9px] font-semibold uppercase tracking-wider px-1.5 py-0.5 rounded bg-surface-2 text-text-muted" title="This control edits the server file. A separate player-PC copy is available under Player compatibility. Server apply does not change any player’s files.">
+              PC copy available
             </span>
           )}
           {isCustom ? (
@@ -2175,6 +2251,7 @@ function FieldRow({ field, value, onChange, disabled, isDirty, isSet, isCustom, 
           <span className="text-[10px] font-mono text-text-dim uppercase tracking-wider">{field.file}</span>
         </span>
       </label>
+      <div className="mb-1.5 text-[10px] text-text-dim">Server · {field.file === 'engine' ? 'UserEngine.ini' : 'UserGame.ini'}{field.consoleVar ? ' · startup command on restart' : ' · deploy on start/restart'}</div>
 
       {/* When this field overrides the default, show the uneditable default beneath the name. */}
       {isCustom && (
@@ -2235,6 +2312,9 @@ function FieldRow({ field, value, onChange, disabled, isDirty, isSet, isCustom, 
           <span className="text-[10px] font-mono text-text-dim ml-auto truncate" title={`${field.section} / ${field.key}`}>{field.key}</span>
         )}
       </div>
+      {['Dune.GlobalMiningOutputMultiplier', 'Dune.GlobalVehicleMiningOutputMultiplier'].includes(field.key) && (
+        <p className="mt-2 text-xs text-text-muted">Server file only. Overlaps Gathering Amount in Official server controls. DST preserves both values separately; their in-game precedence has not been verified. This is not a player-PC setting.</p>
+      )}
     </div>
   )
 }
@@ -2869,6 +2949,10 @@ function DefaultsKeyRow({
         {arrayIsDirty && !arrayIsDeleted && <span className="px-1 rounded bg-success/15 text-success font-semibold uppercase">edited</span>}
         {!isDirty && !arrayIsDirty && k.overridden && <span className="px-1 rounded bg-accent/15 text-accent-bright font-semibold uppercase">overridden</span>}
         <span className="truncate">default: {k.default || <span className="text-text-dim/60">∅</span>}</span>
+        {!isArray && <>
+          <button type="button" className="btn-ghost px-1 text-[10px]" onClick={() => onChange('')} disabled={!displayed.trim()} title="Remove this scalar entry from the server INI on save">Clear</button>
+          <button type="button" className="btn-ghost px-1 text-[10px]" onClick={() => onChange(k.default)} disabled={!k.default.trim() || displayed === k.default} title={k.default.trim() ? 'Write this Funcom default to the server INI on save' : 'No Funcom default is available; nothing will be added'}>Default</button>
+        </>}
       </div>
     </div>
   )
@@ -3137,7 +3221,8 @@ function ClientApplyReviewModal({
           <p className="text-xs text-text-muted">
             Game.ini compatibility values do not require Engine.ini management. Engine.ini entries appear here only after
             that separate opt-in is enabled. Existing destination files are backed up before an atomic, verified write.
-            This changes this PC only; other players must review and apply their own matching values.
+            This changes this PC only and is not limited to the selected server. The game may read these local values
+            when joining other servers; other players' files and server-controlled settings are unchanged.
           </p>
         </div>
 

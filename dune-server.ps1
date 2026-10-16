@@ -258,7 +258,7 @@ function Run-Setup {
     Write-Host "   each time it launches, and display a color-coded status in the menu header." -ForegroundColor Gray
     Write-Host ""
     Write-Host "   Options:" -ForegroundColor Gray
-    Write-Host "     1. Built-in   - Use Check-Host for multi-node TCP checks (no UDP support)" -ForegroundColor Gray
+    Write-Host "     1. Built-in   - CanYouSeeMe, PortCheckTool, then Check-Host (TCP only)" -ForegroundColor Gray
     Write-Host "     2. Custom URL - Provide your own service (supports UDP if your service does)" -ForegroundColor Gray
     Write-Host "     3. Disabled   - Skip port checks entirely" -ForegroundColor Gray
     Write-Host ""
@@ -287,7 +287,7 @@ function Run-Setup {
         $defaultPortCheck = if ($existing.PortCheckUrlTemplate) { $existing.PortCheckUrlTemplate } else { "" }
         $portCheckUrlTemplate = Ask -Label "Custom URL template" -Default $defaultPortCheck
         if (-not $portCheckUrlTemplate) {
-            Write-Warning "No URL provided. Falling back to built-in (Check-Host)."
+            Write-Warning "No URL provided. Falling back to built-in TCP observers."
             $portCheckMode = 'builtin'
         }
     }
@@ -514,40 +514,21 @@ function Get-PublicIp {
     return $null
 }
 
-# Built-in multi-node TCP check via Check-Host. UDP is not supported by any free public
-# service (no handshake => can't distinguish "closed" from "no application reply").
+# Share the same external-observer policy as the web backend.
 function Test-PortOpen-Builtin {
     param([string]$PublicIp, [int]$Port, [string]$Protocol)
     if ($Protocol -ne 'TCP') { return 'udp-skip' }
-    try {
-        $headers = @{ Accept = 'application/json'; 'User-Agent' = 'DuneServerTool/port-check' }
-        $target = [uri]::EscapeDataString("${PublicIp}:$Port")
-        $start = (Invoke-WebRequest -Uri "https://check-host.net/check-tcp?host=$target&max_nodes=3" `
-            -UseBasicParsing -TimeoutSec 8 -ErrorAction Stop -Headers $headers).Content | ConvertFrom-Json
-        if ($start.ok -ne 1 -or -not $start.request_id -or -not $start.nodes) { return 'unknown' }
-        $nodes = @($start.nodes.PSObject.Properties.Name)
-        if ($nodes.Count -eq 0) { return 'unknown' }
-        $requestId = [uri]::EscapeDataString("$($start.request_id)")
-        for ($attempt = 1; $attempt -le 3; $attempt++) {
-            if ($attempt -gt 1) { Start-Sleep -Milliseconds 750 }
-            $result = (Invoke-WebRequest -Uri "https://check-host.net/check-result/$requestId" `
-                -UseBasicParsing -TimeoutSec 8 -ErrorAction Stop -Headers $headers).Content | ConvertFrom-Json
-            $successes = 0
-            $failures = 0
-            foreach ($node in $nodes) {
-                $property = $result.PSObject.Properties[$node]
-                if (-not $property -or $null -eq $property.Value) { continue }
-                $entry = @($property.Value)[0]
-                if ($entry -and $entry.address -and $null -ne $entry.time) { $successes++ }
-                elseif ($entry -and $entry.error) { $failures++ }
-            }
-            if ($successes -gt 0) { return 'open' }
-            if ($failures -eq $nodes.Count) { return 'closed' }
+    foreach ($candidate in @(
+        (Join-Path $scriptDir 'server\lib\Ports.ps1')
+        (Join-Path $scriptDir 'app\server\lib\Ports.ps1')
+    )) {
+        if (Test-Path -LiteralPath $candidate) {
+            . $candidate
+            return Test-DunePortBuiltin -PublicIp $PublicIp -Port $Port -Protocol $Protocol
         }
-    } catch {}
+    }
     return 'unknown'
 }
-
 function Test-PortOpen-Custom {
     param([string]$Template, [string]$PublicIp, [int]$Port, [string]$Protocol)
     if (-not $Template -or -not $PublicIp) { return 'unknown' }

@@ -18,6 +18,7 @@ const TASK_COPY: Record<string, { description: string; keywords: string }> = {
   '/map?view=atlas': { description: 'Open the static Deep Desert atlas.', keywords: 'deep desert atlas map' },
   '/gameplay': { description: 'Open all gameplay administration views.', keywords: 'storage blueprints market landsraad' },
   '/gameconfig': { description: 'Review and edit server configuration.', keywords: 'ini settings' },
+  '/server-settings': { description: 'Review official and advanced server changes, their targets, and application.', keywords: 'gameconfig ini yaml settings compatibility overrides apply configuration' },
   '/broadcasts': { description: 'Send a message through the existing broadcast tools.', keywords: 'message announcement' },
   '/solo': { description: 'Work with local Retail Solo saves and inventory.', keywords: 'retail solo single player' },
   '/settings': { description: 'Configure DST, connections, and remote access.', keywords: 'appearance theme remote accounts updates' },

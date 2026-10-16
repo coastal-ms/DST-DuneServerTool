@@ -46,7 +46,7 @@ const FIELDS: {
     help: 'Used for desktop shortcut creation.' },
   { key: 'PortCheckMode',label: 'Port-check mode', placeholder: 'builtin',
     type: 'select',
-    help: 'builtin = Check-Host multi-node TCP check · checkhost = same documented API · canyouseeme = legacy alternate provider · custom = your own URL · disabled = off' },
+    help: 'builtin = CanYouSeeMe, PortCheckTool, then Check-Host (TCP only) · checkhost = Check-Host only · canyouseeme = CanYouSeeMe only · custom = your own URL · disabled = off' },
   { key: 'PortCheckUrlTemplate', label: 'Port-check URL template',
     placeholder: 'https://example.com/check?ip={ip}&port={port}&protocol={protocol}',
     help: 'Used when mode is "custom". Tokens: {ip} {port} {protocol}',
@@ -812,7 +812,7 @@ export function Settings() {
                 className="w-full px-3 py-2 rounded-lg bg-surface-2 border border-border text-text focus:outline-none focus:ring-2 focus:ring-ibad focus:border-ibad/50"
               >
                 <option value="">(default: builtin)</option>
-                <option value="builtin">builtin — Check-Host multi-node API (TCP only)</option>
+                <option value="builtin">builtin — automatic external observers (TCP only)</option>
                 <option value="checkhost">check-host.net — documented multi-node API (TCP only)</option>
                 <option value="canyouseeme">canyouseeme.org — alternate provider (TCP only)</option>
                 <option value="custom">custom — your own URL template</option>
@@ -955,7 +955,7 @@ export function Settings() {
 
       </>}
       {!soloOnly && <SectionErrorBoundary name="Mobile App Pairing"><BrowserAccessCard /></SectionErrorBoundary>}
-      <div className="mt-4"><StartupSettingsSync /></div>
+      {!soloOnly && <div className="mt-4"><StartupSettingsSync /></div>}
     </>
   )
 }

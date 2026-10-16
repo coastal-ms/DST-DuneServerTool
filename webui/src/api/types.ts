@@ -200,7 +200,7 @@ export type GameConfigFileBundle = {
 
 export type GameConfigResponse = {
   available: boolean
-  source: 'installed' | 'installed-uninitialized' | 'legacy-live' | 'live' | 'template' | 'cache'
+  source: 'installed' | 'installed-uninitialized' | 'legacy-live' | 'live' | 'template' | 'cache' | 'self-managed'
   authoritative?: boolean
   needsInitialization?: boolean
   game: GameConfigFileBundle
@@ -476,7 +476,7 @@ export type GameConfigClientApplyResult = {
 export type GameConfigSaveResponse = {
   ok: boolean
   applied: number
-  source: 'live' | 'template' | 'cache'
+  source: GameConfigResponse['source']
   game: GameConfigFileBundle
   engine: GameConfigFileBundle
   clientApply?: GameConfigClientApply

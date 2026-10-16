@@ -10,7 +10,7 @@ import { COMMAND_DECK_KEY, setCommandDeck } from '../../src/hooks/useCommandDeck
 const scrollIntoView = vi.fn()
 const nestedClick = vi.fn()
 
-function Fixture() {
+function Fixture({ hideBeta = false }: { hideBeta?: boolean } = {}) {
   const ref = useRef<HTMLElement | null>(null)
   return (
     <BrowserRouter>
@@ -20,7 +20,7 @@ function Fixture() {
           <p>Alpha body</p>
           <button type="button" aria-expanded="false" onClick={nestedClick}>Nested disclosure</button>
         </CollapsibleCard>
-        <CollapsibleCard id="test.beta" title="Beta" defaultOpen={false}><p>Beta body</p></CollapsibleCard>
+        <div hidden={hideBeta}><CollapsibleCard id="test.beta" title="Beta" defaultOpen={false}><p>Beta body</p></CollapsibleCard></div>
       </main>
     </BrowserRouter>
   )
@@ -68,6 +68,16 @@ describe('SectionJumpNav', () => {
 
     await user.click(screen.getByRole('button', { name: 'Collapse all sections' }))
     expect(screen.queryByText('Alpha body')).not.toBeInTheDocument()
+  })
+  it('removes hidden tab sections and collects them again when their tab becomes visible', async () => {
+    const view = render(<Fixture />)
+    const select = await screen.findByRole('combobox', { name: 'Jump to section' })
+    expect(within(select).getByRole('option', { name: 'Beta' })).toBeInTheDocument()
+    view.rerender(<Fixture hideBeta />)
+    await waitFor(() => expect(screen.queryByRole('combobox', { name: 'Jump to section' })).not.toBeInTheDocument())
+    view.rerender(<Fixture />)
+    const restored = await screen.findByRole('combobox', { name: 'Jump to section' })
+    expect(within(restored).getByRole('option', { name: 'Beta' })).toBeInTheDocument()
   })
   it('exposes focused section buttons in the new workspace without dispatching nested actions', async () => {
     localStorage.setItem(COMMAND_DECK_KEY, '1')

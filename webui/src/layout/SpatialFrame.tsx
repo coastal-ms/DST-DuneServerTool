@@ -18,7 +18,7 @@ import './floatingDock.css'
 import './dashboardFrame.css'
 import './portalWorkspace.css'
 
-const DOCK = ['/', '/map?view=atlas', '/solo', '/players', '/bases', '/vehicles', '/economy', '/commands', '/database']
+const DOCK = ['/', '/map?view=atlas', '/solo', '/players', '/bases', '/vehicles', '/economy', '/commands', '/database', '/server-settings']
 const NEUTRAL_PALETTES = new Set(['world-control', 'daylight', 'signal'])
 
 function isActiveDockDestination(destination: string, pathname: string, search: string) {
@@ -116,9 +116,9 @@ export default function SpatialFrame({ children, onDetails, tools = false, dashb
           {children}
         </div>
         <footer className="spatial-bottom">
-          <div className="flex flex-col gap-2 self-start">
+          <div className="spatial-footer-info">
             <a href="https://buymeacoffee.com/coastal_dst" target="_blank" rel="noopener noreferrer"
-              className="flex min-h-8 items-center justify-center gap-1.5 rounded-md border border-border px-2 py-1.5 text-[10px] uppercase tracking-widest text-text-muted transition-colors hover:bg-surface-2/60 hover:text-text focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent">
+              className="spatial-support-link">
               <Icon name="Coffee" size={11} /><span>Buy Me a Coffee</span>
             </a>
             {!dashboard && !soloOnly && <div className="spatial-infrastructure"><span>VM <b>{status ? status.vm.running ? 'Running' : status.vm.state || 'Unknown' : 'Unknown'}</b></span><span>Database <b>{status?.bg?.info?.database || 'Unknown'}</b></span></div>}

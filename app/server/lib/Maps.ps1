@@ -818,14 +818,21 @@ rc=`$?; echo __DST_EXIT__:`$rc
 }
 
 function Invoke-DuneBattlegroupRestart {
-    param([string]$Ip, [switch]$ApplyInis)
+    param([string]$Ip, [switch]$ApplyInis, [switch]$StartStopped)
+
+    if ($StartStopped) {
+        $target = Resolve-DuneRetailServerSettingsTarget -Ip $Ip
+        if (-not $target.available -or -not $target.stopped -or [int]$target.serverPodCount -ne 0) {
+            return @{ok=$false;message='The battlegroup must be fully stopped with no game-server pods before applying and starting settings.'}
+        }
+    }
 
     $explicitApply = $ApplyInis -and (Get-Command Get-DuneRetailStartupSyncPreference -ErrorAction SilentlyContinue) -and (Get-DuneRetailStartupSyncPreference).enabled
     $script:DuneConfigurationExplicitApply = [bool]$explicitApply
     try {
     $inject = -not (Get-Command Test-DuneConfigurationInjectionEnabled -ErrorAction SilentlyContinue) -or (Test-DuneConfigurationInjectionEnabled)
     if ($Ip -and $explicitApply) {
-        try { $null = Sync-DuneRetailServerSettingsForStartup -Ip $Ip -StageForRestart }
+        try { $null = Sync-DuneRetailServerSettingsForStartup -Ip $Ip -StageForRestart:(-not $StartStopped) }
         catch { return @{ok=$false;message="Settings YAML restoration failed; Apply INIs remains pending. $($_.Exception.Message)"} }
     }
 
@@ -867,11 +874,11 @@ function Invoke-DuneBattlegroupRestart {
         return @{ok=$false;message="Startup YAML restoration failed; Apply INIs remains pending. $($startupApply.error)";startupApply=$startupApply}
     }
 
-    $result = Invoke-DuneCommandExternal -Name 'restart'
+    $result = Invoke-DuneCommandExternal -Name $(if ($StartStopped) { 'start' } else { 'restart' })
     if ($explicitApply -and $iniDeploy.ok -and (-not $startupApply -or $startupApply.Success -or $startupApply.ok)) {
         $null = Set-DuneRetailStartupSyncPreference -Enabled $true -Applied
     }
-    $message = 'Battlegroup restart launched - watch Server Health; it takes a couple of minutes to come back.'
+    $message = if ($StartStopped) { 'Saved server settings deployed; battlegroup start launched.' } else { 'Battlegroup restart launched - watch Server Health; it takes a couple of minutes to come back.' }
     if ($startupApply -is [hashtable] -and $startupApply.ContainsKey('ok') -and -not $startupApply['ok']) {
         # Never report a clean apply when the startup commands were not rebuilt:
         # the restart still happens, but the user's console variables will not be

@@ -13,7 +13,7 @@ Register-DuneRoute -Method GET -Path '/api/gameconfig/schema' -Handler {
 
 # Server Settings use the persistent Linux UserSettings file. Existing YAML is
 # retained until a backed-up migration completes; it can also be read as a draft.
-Register-DuneRoute -Method GET -Path '/api/gameconfig/retail-startup-sync' -LocalOnly -Handler {
+Register-DuneRoute -Method GET -Path '/api/gameconfig/retail-startup-sync' -Handler {
     param($req,$res,$routeParams,$body)
     try {Write-DuneJson -Response $res -Body (Get-DuneRetailStartupSyncPreference)}
     catch {Write-DuneError -Response $res -Status 400 -Message $_.Exception.Message}
@@ -358,7 +358,8 @@ Register-DuneRoute -Method PUT -Path '/api/gameconfig' -Handler {
                 Write-DuneError -Response $res -Status 400 -Message 'Raw scalar INI values must be one physical line without control characters.'
                 return
             }
-            $rm = (Test-DuneGameConfigValueIsDefault -Key $key -Value $rawValue)
+            $rm = ($u.remove -eq $true) -or [string]::IsNullOrWhiteSpace($rawValue)
+            if ($u.remove -eq $true) { $rawValue = '' }
             $structured.Add(@{ file = $file; section = $sec; key = $key; value = $rawValue; remove = $rm })
         }
     } else {
@@ -366,13 +367,11 @@ Register-DuneRoute -Method PUT -Path '/api/gameconfig' -Handler {
         $keys = if ($updates -is [hashtable]) { $updates.Keys } else { $updates.PSObject.Properties.Name }
         foreach ($k in $keys) {
             $v = if ($updates -is [hashtable]) { $updates[$k] } else { $updates.$k }
-            $isAdvanced = $false
             if (-not $schemaMap.ContainsKey($k)) {
                 if (-not (Test-DuneAdvancedCvarKey -Key $k)) { continue }
                 $schemaMap[$k] = @{ file = 'engine'; section = $script:DuneGcSecConsole }
-                $isAdvanced = $true
             }
-            $rm = if ($isAdvanced) { [string]::IsNullOrWhiteSpace("$v") } else { Test-DuneGameConfigValueIsDefault -Key $k -Value "$v" }
+            $rm = [string]::IsNullOrWhiteSpace("$v")
             $structured.Add(@{ file = $schemaMap[$k].file; section = $schemaMap[$k].section; key = $k; value = "$v"; remove = $rm })
         }
     }
@@ -408,7 +407,7 @@ Register-DuneRoute -Method PUT -Path '/api/gameconfig' -Handler {
         # note to the response instead of failing the whole INI save.
         $landsraadApply = $null
         $goalUpdate = $structured | Where-Object { $_.key -eq 'm_TaskGoalAmount' } | Select-Object -Last 1
-        if ($goalUpdate) {
+        if ($goalUpdate -and -not [string]::IsNullOrWhiteSpace("$($goalUpdate.value)")) {
             try {
                 $goalVal = 0L
                 $dbl = 0.0
@@ -463,7 +462,7 @@ Register-DuneRoute -Method POST -Path '/api/gameconfig/reload-pods' -Handler {
         # Invoke-DuneBattlegroupRestart rebuilds the startup console variables from
         # the current INI before restarting, so no separate sync is needed here.
         $r = Invoke-WithDuneLock -Name 'retail-startup-sync' -Script {
-            Invoke-DuneBattlegroupRestart -Ip $ctx.ip -ApplyInis
+            Invoke-DuneBattlegroupRestart -Ip $ctx.ip -ApplyInis -StartStopped:($body -and $body.startStopped -eq $true)
         }
         if (-not $r.ok) {
             Write-DuneError -Response $res -Status 502 -Message $r.message
@@ -471,7 +470,7 @@ Register-DuneRoute -Method POST -Path '/api/gameconfig/reload-pods' -Handler {
         }
         Write-DuneJson -Response $res -Body @{
             ok      = $true
-            message = 'Battlegroup restart underway - every map reloads together. Watch Server Health; it takes a couple of minutes to come back.'
+            message = $r.message
         }
     } catch {
         Write-DuneError -Response $res -Status 502 -Message "Battlegroup restart failed: $($_.Exception.Message)"

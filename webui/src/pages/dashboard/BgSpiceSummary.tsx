@@ -294,7 +294,7 @@ export function BgSpiceSummary({ enabled }: Props) {
               const title      = isBusy ? 'Saving…'
                                  : onCooldown ? `Wait ${cdSecs}s before clicking again`
                                  : r.globalSpawning
-                                   ? `${r.isSpawningActive ? 'Spawning ENABLED' : 'Spawning DISABLED'} — Funcom master switch; applies after Apply INIs & restart`
+                                   ? `${r.isSpawningActive ? 'Spawning ENABLED' : 'Spawning DISABLED'} — Funcom master switch; applies after Apply server settings`
                                    : r.isSpawningActive ? 'Spawning ENABLED — click to disable'
                                                          : 'Spawning DISABLED — click to enable'
               return (

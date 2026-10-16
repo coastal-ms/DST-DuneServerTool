@@ -56,6 +56,35 @@ Describe 'Self-managed configuration preserves INIs and avoids automatic writes'
         Should -Invoke Set-V6ConsoleVariableOverrides -Times 1 -ParameterFilter {$Names.Count -eq 0 -and $Values.Count -eq 0 -and $ManagedNames.Count -gt 0}
         Should -Invoke Invoke-V6Ssh -Times 0
     }
+    It 'deploys before starting a fully stopped battlegroup without a second restart' {
+        Mock Get-DuneRetailStartupSyncPreference { @{enabled=$true;injectionsApplied=$false} }
+        Mock Resolve-DuneRetailServerSettingsTarget { @{available=$true;stopped=$true;serverPodCount=0} }
+        Mock Sync-DuneRetailServerSettingsForStartup { @{ok=$true} }
+        Mock Invoke-DuneDeployInstalledUserSettings { @{ok=$true} }
+        Mock Sync-DuneStartupConsoleVariableOverrides { @{Success=$true} }
+        Mock Set-DuneRetailStartupSyncPreference { @{enabled=$true;injectionsApplied=$true} }
+        (Invoke-DuneBattlegroupRestart -Ip '192.0.2.10' -ApplyInis -StartStopped).ok | Should -BeTrue
+        Should -Invoke Sync-DuneRetailServerSettingsForStartup -Times 1 -ParameterFilter { -not $StageForRestart }
+        Should -Invoke Invoke-DuneDeployInstalledUserSettings -Times 1
+        Should -Invoke Invoke-DuneCommandExternal -Times 1 -ParameterFilter { $Name -eq 'start' }
+        Should -Invoke Invoke-DuneCommandExternal -Times 0 -ParameterFilter { $Name -eq 'restart' }
+    }
+    It 'refuses the stopped-start path while even one game-server pod remains' {
+        Mock Resolve-DuneRetailServerSettingsTarget { @{available=$true;stopped=$true;serverPodCount=1} }
+        (Invoke-DuneBattlegroupRestart -Ip '192.0.2.10' -ApplyInis -StartStopped).ok | Should -BeFalse
+        Should -Invoke Invoke-DuneCommandExternal -Times 0
+        Should -Invoke Invoke-DuneDeployInstalledUserSettings -Times 0
+    }
+    It 'does not start or mark application complete if deployment fails' {
+        Mock Get-DuneRetailStartupSyncPreference { @{enabled=$true;injectionsApplied=$false} }
+        Mock Resolve-DuneRetailServerSettingsTarget { @{available=$true;stopped=$true;serverPodCount=0} }
+        Mock Sync-DuneRetailServerSettingsForStartup { @{ok=$true} }
+        Mock Invoke-DuneDeployInstalledUserSettings { @{ok=$false;error='copy failed'} }
+        Mock Set-DuneRetailStartupSyncPreference { throw 'Must not mark applied' }
+        (Invoke-DuneBattlegroupRestart -Ip '192.0.2.10' -ApplyInis -StartStopped).ok | Should -BeFalse
+        Should -Invoke Invoke-DuneCommandExternal -Times 0
+        Should -Invoke Set-DuneRetailStartupSyncPreference -Times 0
+    }
     It 'removes only the owned YAML file entry and verifies readback without changing INIs' {
         Mock Set-V6ConsoleVariableOverrides { @{Success=$true} }
         Mock Get-DuneRetailServerSettingsSnapshot { @{available=$true;fileAuthority=$true;target=@{upstreamConfigured=$true;upstreamFileName='ServerCustomSettings.ini';namespace='test';battlegroup='bg'}} }

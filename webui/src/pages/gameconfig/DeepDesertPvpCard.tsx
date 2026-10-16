@@ -79,7 +79,7 @@ export function DeepDesertPvpCard({ vmRunning }: Props) {
     try {
       const next = await saveDeepDesertPvp(enabled, [...selected])
       seed(next)
-      setOk(next.message ?? 'Deep Desert PvP selection saved. Use Apply INIs & restart to deploy it.')
+      setOk(next.message ?? 'Deep Desert PvP selection saved. Use Apply server settings to deploy it.')
     } catch (e) {
       setErr(e instanceof Error ? e.message : String(e))
     } finally {

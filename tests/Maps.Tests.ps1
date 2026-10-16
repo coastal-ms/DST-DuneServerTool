@@ -89,7 +89,7 @@ Describe 'Apply INIs is available as a command' {
         $cmd.Mode | Should -Be 'InApp'
         $cmd.Requires | Should -Be 'running'
         $cmd.DisabledWhen | Should -Be 'bg-stopped'
-        $cmd.Label | Should -Be 'Apply INIs & Restart'
+        $cmd.Label | Should -Be 'Apply Server Settings & Restart'
     }
 
     It 'does not collide with another command key or name' {

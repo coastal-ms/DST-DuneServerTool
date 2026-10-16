@@ -9,7 +9,7 @@ body:
         ## What this tracker is for
 
         This issue tracker is for **bugs in this tool's code** — the desktop
-        app (Server Health, Commands, PowerShell, Game Config, Gameplay Admin,
+        app (Server Health, Commands, PowerShell, Server Settings, Gameplay Admin,
         Maps — DD Atlas / Live state / Lifecycle, Vehicles, Shared Inventory Explorer,
         Solo Mode, Database, Sietches, Sponsors & Credits, Settings, Setup
         Wizard), the PowerShell script (`dune-server.ps1`), the `.bat`
@@ -57,7 +57,7 @@ body:
           a yellow message under it (SSH key / connection diagnostics).
         - The **Setup Wizard / preflight** "SSH key authorized on VM" check
           fails, or any other preflight check is wrong.
-        - **Game Config**, **Database** (backup / restore / SQL editor /
+        - **Server Settings**, **Database** (backup / restore / SQL editor /
           backup schedule), **Map SpinUp**, **Settings Public IP / DDNS**,
           **Gameplay Admin**, **Solo Mode**, a button, page, the top menu bar, or the embedded
           PowerShell pane misbehaves.

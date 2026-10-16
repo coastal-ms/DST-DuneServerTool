@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react'
 import { useApi } from '../hooks/useApi'
 import { api } from '../api/client'
+import { CollapsibleCard } from './CollapsibleCard'
 
 export interface CodexFragment {
   id: string
@@ -65,13 +66,14 @@ export function CodexOwnership({ path, profileToken, grant }: {
     } catch (error) { setGrantError(error instanceof Error ? error.message : String(error)) }
     finally { setGranting(false) }
   }
-  return <div className="space-y-4">
-    <div className="flex items-center justify-between gap-3">
-      <h3 className="font-semibold">Codex</h3>
+  return <CollapsibleCard id={profileToken === undefined ? 'players.codex' : 'solo.codex'} title="Codex"
+    className="mb-0" bodyClassName="px-5 pb-5 space-y-4"
+    summary={data ? `${data.owned}/${data.total} owned` : undefined}
+    headerRight={
       <button className="btn-secondary" disabled={state.loading || granting} onClick={() => { setSelected([]); void state.refresh() }}>
         {state.loading ? 'Reading…' : 'Refresh'}
       </button>
-    </div>
+    }>
     {error && <p role="alert" className="text-sm text-red-400">{error}</p>}
     {grantError && <p role="alert" className="text-sm text-red-400">{grantError}</p>}
     {message && <p role="status" className="text-sm text-emerald-400">{message}</p>}
@@ -110,5 +112,5 @@ export function CodexOwnership({ path, profileToken, grant }: {
         {grant.disabled && <p className="text-xs text-text-muted">{grant.reason}</p>}
       </div>}
     </>}
-  </div>
+  </CollapsibleCard>
 }

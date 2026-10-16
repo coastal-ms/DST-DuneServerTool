@@ -4,13 +4,37 @@ import { api } from '../src/api/client'
 import { CodexOwnership } from '../src/components/CodexOwnership'
 
 vi.mock('../src/api/client', () => ({ api: vi.fn() }))
-afterEach(() => { cleanup(); vi.resetAllMocks(); vi.restoreAllMocks() })
+afterEach(() => { cleanup(); localStorage.clear(); vi.resetAllMocks(); vi.restoreAllMocks() })
 const data = { ok: true, owned: 1, missing: 1, total: 2, profileToken: 'one', fragments: [
   { id: 'imperium', category: 'The Known Universe', entryId: 'i', entry: 'The Imperium', fragment: 'Lesson from the Count', owned: true, revealed: true },
   { id: 'water', category: 'The War for Arrakis', entryId: 'w', entry: 'The Water Shippers', fragment: 'Harkonnen Dossier: The Water Shippers', owned: false, revealed: true },
 ] }
 
 describe('Codex ownership', () => {
+  it.each([
+    ['/api/solo/codex', 'one', 'solo.codex'],
+    ['/api/gameplay/players/codex?account_id=1', undefined, 'players.codex'],
+  ])('rolls up %s while preserving filters and selected fragments', async (path, profileToken, key) => {
+    vi.mocked(api).mockResolvedValue(data)
+    const props = { path, profileToken, grant: { path: path + '/grant', body: {}, disabled: false, reason: '' } }
+    const view = render(<CodexOwnership {...props} />)
+    fireEvent.click(await screen.findByRole('checkbox'))
+    fireEvent.change(screen.getByLabelText('Search codex'), { target: { value: 'water' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Codex' }))
+    expect(screen.queryByLabelText('Search codex')).not.toBeInTheDocument()
+    expect(localStorage.getItem('dst.card.' + key)).toBe('0')
+    fireEvent.click(screen.getByRole('button', { name: /Codex/ }))
+    expect(screen.getByLabelText('Search codex')).toHaveValue('water')
+    expect(screen.getByRole('checkbox')).toBeChecked()
+    expect(screen.getByRole('button', { name: 'Grant selected (1)' })).toBeEnabled()
+    fireEvent.click(screen.getByRole('button', { name: 'Codex' }))
+    view.unmount()
+    render(<CodexOwnership {...props} />)
+    expect(screen.getByRole('button', { name: /Codex/ })).toHaveAttribute('aria-expanded', 'false')
+    expect(screen.queryByLabelText('Search codex')).not.toBeInTheDocument()
+    expect(vi.mocked(api).mock.calls.every(([, options]) => options?.method !== 'POST')).toBe(true)
+  })
+
   it('shows fragment counts and filters missing lore without offering writes', async () => {
     vi.mocked(api).mockResolvedValue(data)
     render(<CodexOwnership path="/api/solo/codex" profileToken="one" />)

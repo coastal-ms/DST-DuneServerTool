@@ -9,6 +9,7 @@ import { SoloRegisTanks } from '../components/solo/SoloRegisTanks'
 import { SoloFactionProgression } from '../components/solo/SoloFactionProgression'
 import { SoloCharacterXp } from '../components/solo/SoloCharacterXp'
 import { CodexOwnership } from '../components/CodexOwnership'
+import { SoloJourneyCompletion } from '../components/solo/SoloJourneyCompletion'
 import { WickMaps } from './WickMaps'
 import { AugmentPicker } from '../components/AugmentPicker'
 import {
@@ -579,8 +580,6 @@ export function SoloMode() {
   const [scripDraft, setScripDraft] = useState(0)
   const [skillPointsDraft, setSkillPointsDraft] = useState(0)
   const [intelDraft, setIntelDraft] = useState(0)
-  const [journeyAction, setJourneyAction] = useState<'fremen' | 'npe'>('fremen')
-  const [mainQuest, setMainQuest] = useState('DA_MQ_ANewBeginning')
   const [trainerJob, setTrainerJob] = useState('Swordmaster')
   const [testingStation, setTestingStation] = useState('all')
   const initializedFromStatus = useRef(false)
@@ -2336,7 +2335,7 @@ export function SoloMode() {
       )}
       {tab === 'progression' && (
         <div className="space-y-4">
-          {activeProfileToken && selectionMatchesActive && <div className="card p-5">
+          {activeProfileToken && selectionMatchesActive && <div>
             <CodexOwnership key={activeProfileToken} profileToken={activeProfileToken}
               grant={{ path: '/api/solo/codex/grant', body: { expectedProfileToken: activeProfileToken },
                 disabled: !canMutateActiveProfile || gameRunning, reason: 'Close Dune before granting codex fragments.' }}
@@ -2366,21 +2365,6 @@ export function SoloMode() {
               } finally { setBusy(null) }
             }}>Export Solo diagnostics</button>
           </div>
-          <div className="card p-5">
-            <h3 className="font-semibold mb-2">Journey unlocks</h3>
-            <p className="text-sm text-text-muted mb-3">Unlock a main quest in the selected Solo save. Close the game first; each action retains a backup.</p>
-            <label htmlFor="solo-main-quest" className="text-sm">Main quest</label>
-            <select id="solo-main-quest" className={`${SOLO_INPUT_CLASS} mt-1 mb-3`} value={mainQuest} onChange={event => setMainQuest(event.target.value)} disabled={!canMutateActiveProfile || gameRunning || !!busy}>
-              <option value="DA_MQ_ANewBeginning">A New Beginning</option>
-              <option value="DA_MQ_FindTheFremen">Find the Fremen</option>
-              <option value="DA_MQ_AssassinsHandbook">Assassin’s Handbook</option>
-              <option value="DA_MQ_TheGreatConvention">The Great Convention</option>
-              <option value="DA_MQ_TheGreatConventionPt2">The Great Convention (Pt. 2)</option>
-            </select>
-            <button className={`btn-primary ${SOLO_DISABLED_PRIMARY_CLASS}`} disabled={!canMutateActiveProfile || gameRunning || !!busy} onClick={() => void runProgressionAction('main-quest', 'Unlock Solo main quest', token => unlockSoloMainQuest(mainQuest, token))}>
-              {busy === 'progression:main-quest' ? 'Applying...' : 'Unlock main quest'}
-            </button>
-          </div>
           <SoloSpecializationEditor
             key={`${activeProfileToken}:${inspection?.progression.specializations.map(track => `${track.trackType}:${track.level}`).join(',')}`}
             tracks={inspection?.progression.specializations ?? []}
@@ -2409,51 +2393,13 @@ export function SoloMode() {
                 maxSoloSpecializations,
               )}
             />
-            <div className="card p-5 flex flex-col">
-              <div className="w-9 h-9 rounded-lg bg-accent/10 border border-accent/25 flex items-center justify-center text-accent-bright mb-3">
-                <Icon name="Route" size={17} />
-              </div>
-              <h2 className="font-semibold">Journey completion</h2>
-              <p className="text-sm text-text-muted mt-1">
-                Choose a progression path. Each selection keeps its own retained backup and verifies the resulting save.
-              </p>
-              <label className="mt-4">
-                <span className="text-xs text-text-muted">Progression path</span>
-                <select
-                  className={`${SOLO_INPUT_CLASS} mt-1`}
-                  value={journeyAction}
-                  onChange={event => setJourneyAction(event.target.value === 'npe' ? 'npe' : 'fremen')}
-                  disabled={!canMutateActiveProfile || gameRunning}
-                >
-                  <option value="fremen">Complete Find the Fremen</option>
-                  <option value="npe">Complete NPE</option>
-                </select>
-              </label>
-              <p className="text-xs text-text-muted mt-3 flex-1">
-                {journeyAction === 'npe'
-                  ? 'Complete the exact 140-node Solo tutorial catalog and apply the NPE completion tag, including the four Base Backup Tool objectives.'
-                  : 'Complete all 59 verified nodes, add 14 reward tags and five Fremkit recipes, then enable Prescience and the third ability slot.'}
-              </p>
-              <div className="rounded border border-border bg-surface-2/50 px-3 py-2 text-xs text-text-muted mt-4">
-                {journeyAction === 'npe'
-                  ? `${inspection?.progression.npeNodesComplete ?? 0}/${inspection?.progression.npeNodesTotal ?? 0} nodes · completion tag ${inspection?.progression.npeTagPresent ? 'present' : 'missing'}`
-                  : `${inspection?.progression.fremenNodesComplete ?? 0}/${inspection?.progression.fremenNodesTotal ?? 0} nodes · Prescience ${inspection?.progression.spiceSystemStatus === 'FullyEnabled' ? 'enabled' : 'locked'}`}
-              </div>
-              <button
-                className={`btn-primary w-full justify-center mt-4 ${SOLO_DISABLED_PRIMARY_CLASS}`}
-                disabled={!canMutateActiveProfile || gameRunning}
-                onClick={() => void runProgressionAction(
-                  journeyAction,
-                  journeyAction === 'npe' ? 'Complete Solo NPE' : 'Complete Find the Fremen',
-                  journeyAction === 'npe' ? completeSoloNpe : completeSoloFindTheFremen,
-                )}
-              >
-                <Icon name={busy === `progression:${journeyAction}` ? 'LoaderCircle' : 'Play'} size={14} className={busy === `progression:${journeyAction}` ? 'animate-spin' : ''} />
-                {busy === `progression:${journeyAction}`
-                  ? 'Applying...'
-                  : journeyAction === 'npe' ? 'Complete NPE' : 'Complete Find the Fremen'}
-              </button>
-            </div>
+            <SoloJourneyCompletion disabled={!canMutateActiveProfile || gameRunning || !!busy}
+              busy={busy === 'progression:journey'} progression={inspection?.progression}
+              onRun={quest => void runProgressionAction('journey',
+                quest === 'npe' ? 'Complete Solo tutorial (NPE)' : 'Complete Solo main quest',
+                quest === 'npe' ? completeSoloNpe
+                  : quest === 'DA_MQ_FindTheFremen' ? completeSoloFindTheFremen
+                    : token => unlockSoloMainQuest(quest, token))} />
             <div className="card p-5 flex flex-col">
               <h2 className="font-semibold">Testing Stations</h2>
               <p className="text-sm text-text-muted mt-1 mb-3">Unlock selectable difficulties by recording completion progress. Choose your difficulty in-game; faction requirements still apply. Existing higher progress is preserved. Close Dune before applying.</p>

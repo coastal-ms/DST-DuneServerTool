@@ -11,6 +11,7 @@ export type AsyncState<T> = {
   loading: boolean
   error: string | null
   refresh: () => Promise<void>
+  replaceData: (value: T) => void
 }
 
 export function useApi<T>(path: string, opts: Options = {}): AsyncState<T> {
@@ -98,5 +99,14 @@ export function useApi<T>(path: string, opts: Options = {}): AsyncState<T> {
     }
   }, [fetchOnce, intervalMs, enabled])
 
-  return { data, loading, error, refresh: fetchOnce }
+  const replaceData = useCallback((value: T) => {
+    if (!mountedRef.current || !enabledRef.current) return
+    // A forced result supersedes any older poll still in flight.
+    ++requestVersionRef.current
+    setData(value)
+    setError(null)
+    setLoading(false)
+  }, [])
+
+  return { data, loading, error, refresh: fetchOnce, replaceData }
 }

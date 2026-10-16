@@ -11,14 +11,26 @@ const state: LandclaimTimerState = {
 }
 afterEach(() => { cleanup(); vi.clearAllMocks(); localStorage.clear() })
 describe('Land claim timer client retry', () => {
+  it('names both targets and cancels without writing either file', async () => {
+    vi.mocked(getLandclaimTimer).mockResolvedValue(state)
+    render(<LandclaimTimerCard vmRunning />)
+    const review = await screen.findByRole('button', { name: 'Review timer changes' })
+    await waitFor(() => expect(review).toBeEnabled())
+    fireEvent.click(review)
+    expect(screen.getByRole('alertdialog')).toHaveTextContent('server UserGame.ini and the DST host PC’s player Game.ini')
+    fireEvent.click(screen.getByRole('button', { name: 'Cancel' }))
+    expect(saveLandclaimTimer).not.toHaveBeenCalled()
+    expect(screen.getByRole('spinbutton')).toHaveValue(1)
+  })
   it('retries a skipped client write while the server already matches, and reports the skip', async () => {
     vi.mocked(getLandclaimTimer).mockResolvedValue(state)
     vi.mocked(saveLandclaimTimer).mockResolvedValue({ ...state, ok: true, enabled: true, seconds: '1',
       result: { ok: true, server: { ok: true, applied: true }, client: { ok: false, applied: false, reason: 'Game is running.' } } })
     render(<LandclaimTimerCard vmRunning />)
-    const apply = await screen.findByRole('button', { name: 'Apply', exact: true })
+    const apply = await screen.findByRole('button', { name: 'Review timer changes', exact: true })
     await waitFor(() => expect(apply).toBeEnabled())
     fireEvent.click(apply)
+    fireEvent.click(screen.getByRole('button', { name: 'Save server & host PC' }))
     expect(await screen.findByText(/Client Game.ini was not updated: Game is running/)).toBeInTheDocument()
     expect(screen.getByRole('status')).toHaveClass('text-warning')
     expect(apply).toBeEnabled()
@@ -27,6 +39,7 @@ describe('Land claim timer client retry', () => {
       client: { ...state.client, enabled: true, seconds: '1', formattedOk: true },
       result: { ok: true, server: { ok: true, applied: true }, client: { ok: true, applied: true } } })
     fireEvent.click(apply)
+    fireEvent.click(screen.getByRole('button', { name: 'Save server & host PC' }))
     await waitFor(() => expect(apply).toBeDisabled())
     expect(screen.queryByRole('status')).not.toBeInTheDocument()
     expect(screen.getByText(/client Game.ini updated/)).toBeInTheDocument()
@@ -41,16 +54,17 @@ describe('Land claim timer client retry', () => {
       client: { ...state.client, enabled: false, seconds: '', formattedOk: false },
       result: { ok: true, server: { ok: true, applied: true }, client: { ok: true, applied: true } } })
     render(<LandclaimTimerCard vmRunning />)
-    const clear = await screen.findByRole('button', { name: 'Clear & restore default' })
+    const clear = await screen.findByRole('button', { name: 'Review restore defaults' })
     await waitFor(() => expect(clear).toBeEnabled())
     fireEvent.click(clear)
+    fireEvent.click(screen.getByRole('button', { name: 'Save server & host PC' }))
     await waitFor(() => expect(clear).toBeDisabled())
     expect(saveLandclaimTimer).toHaveBeenCalledWith(false, '')
   })
   it('does not offer a client-only retry when the client folder is unavailable', async () => {
     vi.mocked(getLandclaimTimer).mockResolvedValue({ ...state, client: { ...state.client, exists: false, dirExists: false } })
     render(<LandclaimTimerCard vmRunning />)
-    const apply = await screen.findByRole('button', { name: 'Apply', exact: true })
+    const apply = await screen.findByRole('button', { name: 'Review timer changes', exact: true })
     await screen.findByRole('spinbutton')
     expect(apply).toBeDisabled()
     expect(saveLandclaimTimer).not.toHaveBeenCalled()
@@ -58,7 +72,7 @@ describe('Land claim timer client retry', () => {
   it('offers re-apply when matching timer values have incomplete client formatting', async () => {
     vi.mocked(getLandclaimTimer).mockResolvedValue({ ...state, client: { ...state.client, enabled: true, seconds: '1', formattedOk: false } })
     render(<LandclaimTimerCard vmRunning />)
-    await waitFor(() => expect(screen.getByRole('button', { name: 'Apply', exact: true })).toBeEnabled())
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Review timer changes', exact: true })).toBeEnabled())
   })
   it.each(['server', 'client'] as const)('allows clearing residual lines in the disabled %s but keeps clean defaults idle', async target => {
     const disabled = { ...state,
@@ -69,9 +83,10 @@ describe('Land claim timer client retry', () => {
     vi.mocked(saveLandclaimTimer).mockResolvedValue({ ...disabled, ok: true, enabled: false, seconds: '',
       result: { ok: true, server: { ok: true, applied: true }, client: { ok: true, applied: true } } })
     render(<LandclaimTimerCard vmRunning />)
-    const clear = await screen.findByRole('button', { name: 'Clear & restore default' })
+    const clear = await screen.findByRole('button', { name: 'Review restore defaults' })
     await waitFor(() => expect(clear).toBeEnabled())
     fireEvent.click(clear)
+    fireEvent.click(screen.getByRole('button', { name: 'Save server & host PC' }))
     await waitFor(() => expect(clear).toBeDisabled())
     expect(saveLandclaimTimer).toHaveBeenCalledWith(false, '')
   })
@@ -82,8 +97,8 @@ describe('Land claim timer client retry', () => {
     fireEvent.click(screen.getByRole('checkbox'))
     expect(screen.getByRole('spinbutton')).toHaveValue(null)
     expect(screen.getByRole('spinbutton')).not.toHaveAttribute('placeholder')
-    expect(screen.getByRole('button', { name: 'Apply', exact: true })).toBeDisabled()
+    expect(screen.getByRole('button', { name: 'Review timer changes', exact: true })).toBeDisabled()
     fireEvent.change(screen.getByRole('spinbutton'), { target: { value: '1' } })
-    expect(screen.getByRole('button', { name: 'Apply', exact: true })).toBeEnabled()
+    expect(screen.getByRole('button', { name: 'Review timer changes', exact: true })).toBeEnabled()
   })
 })

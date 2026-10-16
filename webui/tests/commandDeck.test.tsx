@@ -4,6 +4,7 @@ import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
 import '@testing-library/jest-dom/vitest'
 import type { StatusSnapshot } from '../src/api/types'
 import { getDeckDestinations, searchDeck } from '../src/layout/commandDeckModel'
+import { isNavItemActive } from '../src/nav'
 import { COMMAND_DECK_KEY, setCommandDeck, useCommandDeck } from '../src/hooks/useCommandDeck'
 import CommandDeckHome from '../src/pages/workspaces/CommandDeckHome'
 import CommandDeck from '../src/layout/CommandDeck'
@@ -35,7 +36,7 @@ describe('Command Deck destinations', () => {
     const admin = getDeckDestinations({ local: false, windows: true, canAccessOwnerSurfaces: false })
     expect(admin.some(item => item.to === '/players')).toBe(true)
     expect(admin.some(item => item.to === '/map?view=atlas')).toBe(true)
-    for (const route of ['/database', '/settings', '/experimental', '/gameconfig', '/terminal', '/solo', '/setup']) {
+    for (const route of ['/database', '/settings', '/experimental', '/server-settings', '/gameconfig', '/terminal', '/solo', '/setup']) {
       expect(admin.some(item => item.to === route)).toBe(false)
     }
     const linuxOwner = getDeckDestinations({ local: true, windows: false, canAccessOwnerSurfaces: true })
@@ -51,6 +52,9 @@ describe('Command Deck destinations', () => {
     expect(searchDeck(routes, 'shared teleport destinations').map(item => item.to)).toEqual(['/players'])
     expect(searchDeck(routes, 'backup').map(item => item.to)).toEqual(['/database'])
     expect(searchDeck(routes, 'nonexistent')).toEqual([])
+    const settings = searchDeck(routes, 'gameconfig ini')
+    expect(settings.map(item => item.to)).toEqual(['/server-settings'])
+    expect(isNavItemActive(settings[0], '/gameconfig')).toBe(true)
     expect(new Set(routes.map(item => item.to)).size).toBe(routes.length)
   })
 })

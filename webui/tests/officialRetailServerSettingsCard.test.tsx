@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import type { RetailServerSetting } from '../src/api/types'
+import { SettingsApplyContext, type SettingsDraft } from '../src/pages/gameconfig/settingsApplyContext'
 import {
   OfficialRetailServerSettingsCard,
   RETAIL_SETTING_GUIDANCE,
@@ -17,6 +18,44 @@ afterEach(() => {
 })
 
 describe('Official Retail Server Settings card', () => {
+  it('accepts a cleared number as server-file removal and sends only that key', async () => {
+    const fetchMock = vi.fn<typeof fetch>(async () => new Response(JSON.stringify({
+      applied: 1, backup: { path: '/fixture/settings.backup' },
+      available: true, revision: 'original', target: { stopped: true, serverPodCount: 0 }, malformedLines: [],
+      settings: [{ key: 'GatheringAmount', present: true, label: 'Gathering amount', value: '1', displayValue: '1', group: 'Resources', type: 'float', editable: true, supported: true, valid: true, options: [] }],
+    })))
+    vi.stubGlobal('fetch', fetchMock)
+    const drafts = new Map<string, SettingsDraft>()
+    const controller = { register: (id: string, draft: SettingsDraft | null) => { if (draft) drafts.set(id, draft) }, review: vi.fn(), locked: false }
+    render(<SettingsApplyContext.Provider value={controller}><OfficialRetailServerSettingsCard vmRunning /></SettingsApplyContext.Provider>)
+    fireEvent.change(await screen.findByRole('spinbutton', { name: 'Gathering amount exact value' }), { target: { value: '' } })
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument()
+    const draft = drafts.get('official')!
+    expect(draft.changes).toEqual([expect.objectContaining({ before: '1', after: 'Remove from server file' })])
+    await draft.apply()
+    await waitFor(() => expect(fetchMock.mock.calls.some(([, init]) => (init as RequestInit | undefined)?.method === 'PUT')).toBe(true))
+    const put = fetchMock.mock.calls.find(([, init]) => (init as RequestInit | undefined)?.method === 'PUT')!
+    expect(JSON.parse((put[1] as RequestInit).body as string)).toEqual({revision:'original',updates:{GatheringAmount:''}})
+  })
+  it('retains an editable draft across status changes in the unified settings page', async () => {
+    const fetchMock = vi.fn(async () => new Response(JSON.stringify({
+      available: true, revision: 'original', target: { stopped: false, serverPodCount: 2 }, malformedLines: [],
+      settings: [{ key: 'GatheringAmount', label: 'Gathering amount', value: '1', displayValue: '1', group: 'Resources', type: 'float', editable: true, supported: true, valid: true, options: [] }],
+    })))
+    vi.stubGlobal('fetch', fetchMock)
+    const controller = { register: vi.fn(), review: vi.fn(), locked: false }
+    const view = render(<SettingsApplyContext.Provider value={controller}><OfficialRetailServerSettingsCard vmRunning statusRefreshKey="running:2" /></SettingsApplyContext.Provider>)
+    const input = await screen.findByRole('spinbutton', { name: 'Gathering amount exact value' })
+    expect(input).toBeEnabled()
+    fireEvent.change(input, { target: { value: '2.75' } })
+    view.rerender(<SettingsApplyContext.Provider value={controller}><OfficialRetailServerSettingsCard vmRunning statusRefreshKey="stopped:0" /></SettingsApplyContext.Provider>)
+    expect(input).toHaveValue(2.75)
+    expect(fetchMock).toHaveBeenCalledOnce()
+    expect(screen.getByRole('button', { name: 'Refresh' })).toBeDisabled()
+    fireEvent.click(screen.getByRole('button', { name: 'Review & Apply (1)' }))
+    expect(controller.review).toHaveBeenCalledOnce()
+    expect(fetchMock.mock.calls.some(([, init]) => (init as RequestInit | undefined)?.method === 'PUT')).toBe(false)
+  })
   const absentCatalogue = (): RetailServerSetting[] => Object.entries(RETAIL_SETTING_GUIDANCE).map(([key, guidance]) => ({
     key,
     present: false,
@@ -155,6 +194,7 @@ describe('Official Retail Server Settings card', () => {
     fireEvent.change(building, { target: { value: '2' } })
     expect(screen.getByRole('spinbutton', { name: 'FiefdomLimit exact value' })).toHaveValue(7)
     expect(screen.getByRole('button', { name: 'Save (1)' })).toBeEnabled()
+    fireEvent.click(screen.getByRole('button', { name: 'Discard draft' }))
     fireEvent.click(screen.getByRole('button', { name: 'Refresh' }))
     await waitFor(() => expect(building).toHaveValue(null))
     expect(screen.getByRole('button', { name: 'Save' })).toBeDisabled()
@@ -580,19 +620,19 @@ describe('Official Retail Server Settings card', () => {
     render(<OfficialRetailServerSettingsCard vmRunning />)
 
     const intSlider = await screen.findByRole('slider', {
-      name: 'Maximum Sub-Fief Amount slider, range 0 to 25',
+      name: 'Maximum Sub-Fief Amount slider, range 0 to 10',
     })
     const floatSlider = screen.getByRole('slider', {
-      name: 'Building Piece Limit slider, range 0.1 to 25',
+      name: 'Building Piece Limit slider, range 0 to 10',
     })
     const intInput = screen.getByRole('spinbutton', { name: 'Maximum Sub-Fief Amount exact value' })
     const floatInput = screen.getByRole('spinbutton', { name: 'Building Piece Limit exact value' })
 
     expect(intSlider).toHaveAttribute('min', '0')
-    expect(intSlider).toHaveAttribute('max', '25')
+    expect(intSlider).toHaveAttribute('max', '10')
     expect(intSlider).toHaveAttribute('step', '1')
-    expect(floatSlider).toHaveAttribute('min', '0.1')
-    expect(floatSlider).toHaveAttribute('max', '25')
+    expect(floatSlider).toHaveAttribute('min', '0')
+    expect(floatSlider).toHaveAttribute('max', '10')
     expect(floatSlider).toHaveAttribute('step', '0.1')
     expect(intInput).not.toHaveAttribute('min')
     expect(intInput).not.toHaveAttribute('max')
@@ -608,10 +648,21 @@ describe('Official Retail Server Settings card', () => {
     expect(floatSlider).toHaveValue('1.1')
     fireEvent.change(floatInput, { target: { value: '2.75' } })
     expect(floatSlider).toHaveValue('2.75')
+    fireEvent.focus(floatInput)
+    floatInput.focus()
+    expect(fireEvent.wheel(floatInput, { deltaY: -120, cancelable: true })).toBe(false)
+    expect(floatInput).toHaveValue(2.85)
+    fireEvent.wheel(floatInput, { deltaY: 120, cancelable: true })
+    expect(floatInput).toHaveValue(2.75)
+    expect(fireEvent.wheel(floatInput, { deltaY: -120, ctrlKey: true, cancelable: true })).toBe(true)
+    expect(floatInput).toHaveValue(2.75)
+    floatInput.blur()
+    expect(fireEvent.wheel(floatInput, { deltaY: -120, cancelable: true })).toBe(true)
+    expect(floatInput).toHaveValue(2.75)
     expect(screen.getByRole('button', { name: 'Save (2)' })).toBeEnabled()
   })
 
-  it('preserves an exact value above 25 until the operator moves the saturated slider', async () => {
+  it('preserves an exact value above 10 until the operator moves the saturated slider', async () => {
     vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify({
       available: true,
       readOnly: false,
@@ -640,17 +691,17 @@ describe('Official Retail Server Settings card', () => {
     render(<OfficialRetailServerSettingsCard vmRunning />)
 
     const slider = await screen.findByRole('slider', {
-      name: 'Maximum Sub-Fief Amount slider, range 0 to 25',
+      name: 'Maximum Sub-Fief Amount slider, range 0 to 10',
     })
     const input = screen.getByRole('spinbutton', { name: 'Maximum Sub-Fief Amount exact value' })
-    expect(slider).toHaveValue('25')
-    expect(slider).toHaveAttribute('aria-valuetext', '25, slider maximum; exact value 40 is preserved')
+    expect(slider).toHaveValue('10')
+    expect(slider).toHaveAttribute('aria-valuetext', '10, slider maximum; exact value 40 is preserved')
     expect(input).toHaveValue(40)
-    expect(screen.getByText('25 / 25 max')).toBeInTheDocument()
+    expect(screen.getByText('10 / 10 max')).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Save' })).toBeDisabled()
 
-    fireEvent.change(slider, { target: { value: '24' } })
-    expect(input).toHaveValue(24)
+    fireEvent.change(slider, { target: { value: '9' } })
+    expect(input).toHaveValue(9)
     expect(screen.getByRole('button', { name: 'Save (1)' })).toBeEnabled()
   })
 
@@ -697,8 +748,8 @@ describe('Official Retail Server Settings card', () => {
     render(<OfficialRetailServerSettingsCard vmRunning />)
 
     const input = await screen.findByRole('spinbutton', { name: 'Building Decay Rate exact value' })
-    const slider = screen.getByRole('slider', { name: 'Building Decay Rate slider, range 0.1 to 25' })
-    const measurement = screen.getByText('0.576037 / 25')
+    const slider = screen.getByRole('slider', { name: 'Building Decay Rate slider, range 0 to 10' })
+    const measurement = screen.getByText('0.576037 / 10')
     expect(input).toHaveValue(0.576037)
     expect(input).toHaveAttribute('title', expect.stringContaining('Exact value 0.576037'))
     expect(slider).toHaveAttribute('aria-valuetext', '0.576037')
@@ -714,8 +765,8 @@ describe('Official Retail Server Settings card', () => {
     expect(input).toHaveAttribute('value', '30.1234567')
     fireEvent.blur(input)
     expect(input).toHaveValue(30.123457)
-    expect(slider).toHaveValue('25')
-    expect(screen.getByText('25 / 25 max')).toHaveClass('whitespace-nowrap')
+    expect(slider).toHaveValue('10')
+    expect(screen.getByText('10 / 10 max')).toHaveClass('whitespace-nowrap')
 
     fireEvent.change(slider, { target: { value: '0.1' } })
     expect(input).toHaveAttribute('value', '0.100000')
@@ -761,7 +812,7 @@ describe('Official Retail Server Settings card', () => {
     render(<OfficialRetailServerSettingsCard vmRunning />)
 
     expect(await screen.findByRole('slider', {
-      name: 'Maximum Sub-Fief Amount slider, range 0 to 25',
+      name: 'Maximum Sub-Fief Amount slider, range 0 to 10',
     })).toBeDisabled()
     expect(screen.getByRole('spinbutton', { name: 'Maximum Sub-Fief Amount exact value' })).toBeDisabled()
   })
@@ -849,7 +900,7 @@ describe('Official Retail Server Settings card', () => {
     expect(floatInput).toHaveValue(2)
     expect(intInput).toHaveValue(5)
     expect(intInput).toHaveAttribute('step', '1')
-    expect(screen.getByRole('slider', { name: 'Maximum Sub-Fief Amount slider, range 0 to 25' })).toHaveAttribute('step', '1')
+    expect(screen.getByRole('slider', { name: 'Maximum Sub-Fief Amount slider, range 0 to 10' })).toHaveAttribute('step', '1')
 
     fireEvent.click(defaultButton)
 
@@ -861,6 +912,7 @@ describe('Official Retail Server Settings card', () => {
     expect(fetchMock).toHaveBeenCalledOnce()
     expect(fetchMock.mock.calls.some(([, init]) => init?.method === 'PUT')).toBe(false)
 
+    fireEvent.click(screen.getByRole('button', { name: 'Discard draft' }))
     fireEvent.click(screen.getByRole('button', { name: 'Refresh' }))
     await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2))
     expect(floatInput).toHaveAttribute('value', '2.000000')

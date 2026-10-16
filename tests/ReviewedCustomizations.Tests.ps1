@@ -15,6 +15,14 @@ AfterAll {
     Remove-Item function:global:Invoke-DuneVerifiedSafetyBackup -ErrorAction SilentlyContinue
 }
 Describe 'Reviewed ordinary customizations' {
+    It 'does not attach finite charge counts to repeatable recipe unlocks' {
+        $recipes = (Get-DuneReviewedCustomization ObservedSchematicRecipes).recipeEntries
+        $repeatable = @($recipes | Where-Object { -not $_.m_bIsLimitedUseRecipe })
+        $repeatable.Count | Should -Be 236
+        foreach ($recipe in $repeatable) {
+            $recipe.m_NumberOfRecipeUses | Should -BeIn @(0,-1) -Because "$($recipe.BaseRecipeId.Name) is a repeatable unlock, not a bundle of charges"
+        }
+    }
     It 'grants one limited schematic use except the modules needed for a vehicle kit' {
         $recipes = (Get-DuneReviewedCustomization ObservedSchematicRecipes).recipeEntries
         $kits = Get-Content (Join-Path (Get-DstRepoRoot) 'app/data/vehicle-kits.json') -Raw | ConvertFrom-Json

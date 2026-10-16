@@ -49,6 +49,7 @@ type Props = {
   summary?: ReactNode
   /** Always-visible header content to the right of the toggle (may contain buttons). */
   headerRight?: ReactNode
+  headerRightClassName?: string
   defaultOpen?: boolean
   className?: string
   titleClassName?: string
@@ -68,6 +69,7 @@ export function CollapsibleCard({
   subtitle,
   summary,
   headerRight,
+  headerRightClassName,
   defaultOpen = true,
   className,
   titleClassName,
@@ -115,7 +117,7 @@ export function CollapsibleCard({
             </span>
           )}
         </button>
-        {headerRight && <div className="shrink-0 flex items-center gap-2">{headerRight}</div>}
+        {headerRight && <div className={headerRightClassName ?? 'shrink-0 flex items-center gap-2'}>{headerRight}</div>}
       </div>
 
       {open && <div className={bodyClassName ?? 'px-5 pb-5'}>{children}</div>}

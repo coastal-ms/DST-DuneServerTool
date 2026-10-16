@@ -17,6 +17,23 @@ FutureRetailKey=27
 "@
 }
 
+Describe 'Clearing official server-file values' {
+    It 'removes the full assignment including duplicates and leaves untouched bytes intact' {
+        $raw = "[$script:RetailSection]`r`nGatheringAmount=1.0 ; test`r`nFutureRetailKey=27`r`nGatheringAmount=0.5`r`n[Other]`r`nGatheringAmount=9`r`n"
+        $out = ConvertTo-DuneRetailServerSettingsUpdatedRaw -Raw $raw -Updates @{GatheringAmount='  '}
+        $out | Should -Be "[$script:RetailSection]`r`nFutureRetailKey=27`r`n[Other]`r`nGatheringAmount=9`r`n"
+        $again = ConvertTo-DuneRetailServerSettingsUpdatedRaw -Raw $out -Updates @{FiefdomLimit='4'}
+        ($again -split '\[Other\]')[0] | Should -Not -Match 'GatheringAmount\s*='
+    }
+
+    It 'does not create a blank entry when clearing an already absent key, but preserves zero' {
+        $out = ConvertTo-DuneRetailServerSettingsUpdatedRaw -Raw $script:RetailRaw -Updates @{GatheringAmount=''}
+        $out | Should -Be $script:RetailRaw
+        $zero = ConvertTo-DuneRetailServerSettingsUpdatedRaw -Raw $script:RetailRaw -Updates @{GatheringAmount='0'}
+        $zero | Should -Match '(?m)^GatheringAmount=0\r?$'
+    }
+}
+
 Describe 'Server Settings startup synchronization preference' {
     BeforeEach {
         $script:RetailSyncPreferenceTestPath=Join-Path $TestDrive ([guid]::NewGuid().ToString('N')+'.json')
@@ -36,7 +53,7 @@ Describe 'Server Settings startup synchronization preference' {
         Set-DuneRetailStartupSyncPreference -Enabled $false -CleanupPending | Out-Null
         $state = Get-DuneRetailStartupSyncPreference
         $state.cleanupPending | Should -BeTrue
-        $state.scope | Should -Be 'Solo and self-hosted'
+        $state.scope | Should -Be 'Self-hosted battlegroup'
         Test-DuneConfigurationInjectionEnabled | Should -BeFalse
     }
     It 'honors an existing enabled preference without an injection-state field' {

@@ -6,12 +6,35 @@
   z-index: auto;
 }
 
-.spatial-bottom > .spatial-infrastructure {
+.spatial-bottom > .spatial-footer-info {
   grid-column: 1;
   grid-row: 1;
   justify-self: start;
   min-width: 0;
   overflow-wrap: anywhere;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+}
+
+.spatial-support-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  width: max-content;
+  max-width: 100%;
+  padding: 2px 0;
+  color: var(--space-muted);
+  font-size: calc(10px * var(--dst-font-scale, 1));
+  line-height: 1.4;
+  text-decoration: none;
+}
+
+.spatial-support-link:hover {
+  color: var(--space-ink);
+  text-decoration: underline;
+  text-underline-offset: 3px;
 }
 
 .spatial-bottom > .spatial-system-label {
@@ -74,7 +97,7 @@
     grid-template-columns: minmax(0, 1fr);
   }
 
-  .spatial-bottom > .spatial-infrastructure {
+  .spatial-bottom > .spatial-footer-info {
     grid-row: 2;
     flex-wrap: wrap;
   }

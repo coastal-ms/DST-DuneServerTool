@@ -3,8 +3,19 @@ import { afterEach, expect, it, vi } from 'vitest'
 import { StartupSettingsSync } from '../src/pages/gameconfig/StartupSettingsSync'
 
 const request = vi.hoisted(() => vi.fn())
+const viewer = vi.hoisted(() => ({ local: true }))
 vi.mock('../src/api/client', () => ({ api: request }))
-afterEach(() => { cleanup(); vi.resetAllMocks() })
+vi.mock('../src/util/viewer', () => ({ isLocalViewer: () => viewer.local }))
+afterEach(() => { cleanup(); vi.resetAllMocks(); viewer.local = true })
+
+it('shows remote owners the saved mode without allowing a remote preference write', async () => {
+  viewer.local = false
+  request.mockResolvedValueOnce({ enabled: false })
+  render(<StartupSettingsSync />)
+  await screen.findByText('Change management mode from DST on the host PC.')
+  expect(screen.getByRole('checkbox')).toBeDisabled()
+  expect(request).toHaveBeenCalledExactlyOnceWith('/api/gameconfig/retail-startup-sync')
+})
 
 it('cancels opt-out without changing the checkbox or writing configuration', async () => {
   request.mockResolvedValueOnce({enabled:true})
@@ -31,7 +42,7 @@ it('defaults to DST management and shows the responsibility notice after opt-out
   fireEvent.click(screen.getByRole('button', { name: 'Disable management' }))
   await waitFor(() => expect(toggle).not.toBeChecked())
   expect(screen.getByRole('note')).toHaveTextContent('You assume responsibility')
-  expect(screen.getByText(/Applies to Solo and self-hosted/)).toBeInTheDocument()
+  expect(screen.getByText(/Applies to the self-hosted battlegroup/)).toBeInTheDocument()
   expect(request).toHaveBeenLastCalledWith('/api/gameconfig/retail-startup-sync', { method: 'PUT', body: JSON.stringify({ enabled: false }) })
   expect(busy.mock.calls).toEqual([[true], [false]])
   expect(request.mock.calls.every(([path]) => path === '/api/gameconfig/retail-startup-sync')).toBe(true)
@@ -45,7 +56,7 @@ it('loads the saved disabled preference and lets the user turn synchronization b
   expect(toggle).not.toBeChecked()
   fireEvent.click(toggle)
   await waitFor(() => expect(toggle).toBeChecked())
-  expect(screen.getByRole('status')).toHaveTextContent('Use Apply INIs')
+  expect(screen.getByRole('status')).toHaveTextContent('Use Review & Apply')
   expect(request).toHaveBeenLastCalledWith('/api/gameconfig/retail-startup-sync', { method: 'PUT', body: JSON.stringify({ enabled: true }) })
 })
 

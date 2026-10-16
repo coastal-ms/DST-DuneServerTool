@@ -1,4 +1,4 @@
-﻿# Tests the pure INI-writer engine in GameConfig.ps1, focused on the
+# Tests the pure INI-writer engine in GameConfig.ps1, focused on the
 # managed-block writer's guarantee that any section name appears EXACTLY ONCE
 # in the output. Regression coverage for the v12.0.13 duplicate-header bug where
 # DST's managed override was silently ignored by UE5 (first-header / last-key
@@ -105,7 +105,7 @@ m_bShouldForceEnablePvpOnAllPartitions=True
 
         $state.ok | Should -BeTrue
         $state.pendingApply | Should -BeTrue
-        $state.message | Should -Match 'Apply INIs & restart'
+        $state.message | Should -Match 'Apply server settings'
         $state.message | Should -Match 'not active yet'
         Should -Invoke Save-DuneGameConfigLocked -Times 1 -Exactly
         Should -Invoke Invoke-DuneDeployInstalledUserSettings -Times 0 -Exactly
@@ -1515,7 +1515,7 @@ Describe 'DuneGameConfigSchema: forced Coriolis world seed' -Tag 'GameConfig' {
             $help | Should -Match 'GMT/UTC'
             $help | Should -Match 'browser-local'
             $help | Should -Match 'daylight saving'
-            $help | Should -Match 'Apply INIs & restart'
+            $help | Should -Match 'Apply server settings'
         }
     }
 
@@ -2750,7 +2750,7 @@ Describe 'GameConfig: spicefield startup defaults' -Tag 'GameConfig' {
     # SpiceHarvestingSystem section entirely, while the marker file was
     # untouched and still claimed 'ready'.
 
-    It 're-migrates when the template was overwritten since the marker was written (hash mismatch = stale, not ready)' {
+    It 'respects changed authoritative files instead of treating a hash mismatch as permission to replay a PVC' {
         Mock Invoke-V6Ssh {
             param([string]$Ip, [string]$Cmd, [string]$StdinData)
             if ($Cmd -match '__DST_AUTH__:migrated') { return '__DST_AUTH__:migrated' }
@@ -2768,13 +2768,13 @@ Describe 'GameConfig: spicefield startup defaults' -Tag 'GameConfig' {
 
         $paths = Resolve-DuneGameConfigPaths -Ip '192.0.2.1'
 
-        # 'stale' takes the same merge-base path as 'uninitialized' (the
-        # current, freshly-overwritten template IS the correct Funcom
-        # baseline to merge onto), not the 'repair-v1' backup path.
+        # A hash cannot tell an administrator edit from an upstream overwrite.
+        # Read the established authority as-is; do not silently replay old values.
         $paths.source | Should -Be 'installed'
-        $paths.migrated | Should -BeTrue
+        $paths.migrated | Should -BeNullOrEmpty
         $paths.game | Should -Be '/home/dune/.dune/download/scripts/setup/config/UserGame.ini'
         Should -Invoke Invoke-V6Ssh -ParameterFilter { $Cmd -match 'pre-live-import-\*' } -Times 0
+        Should -Invoke Invoke-V6Ssh -ParameterFilter { $Cmd -match 'tee |install |ls -t' } -Times 0
     }
 
     It 'writes the current template file hashes into the marker on migration, so a later untouched read reports ready' {
@@ -2800,7 +2800,7 @@ Describe 'GameConfig: spicefield startup defaults' -Tag 'GameConfig' {
         ($script:writes[0] -split '\\n').Count | Should -BeGreaterOrEqual 3
     }
 
-    It 're-stamps the marker as ready (no Initialize-Game-Config banner) when a stale template has nothing to carry forward' {
+    It 'keeps established authority readable without writing even when its hashes changed' {
         Mock Invoke-V6Ssh {
             param([string]$Ip, [string]$Cmd)
             if ($Cmd -match 'if test -f') { return 'stale' }
@@ -2813,7 +2813,7 @@ Describe 'GameConfig: spicefield startup defaults' -Tag 'GameConfig' {
         $paths.source | Should -Be 'installed'
         $paths.authoritative | Should -Not -Be $false
         $paths.needsInitialization | Should -BeNullOrEmpty
-        Should -Invoke Invoke-V6Ssh -ParameterFilter { $Cmd -match "printf 'live-imported-v2" } -Times 1
+        Should -Invoke Invoke-V6Ssh -ParameterFilter { $Cmd -match "printf 'live-imported-v2" } -Times 0
     }
 
     It 'fetches current complete defaults before migrating Spice from a sparse installed baseline' {

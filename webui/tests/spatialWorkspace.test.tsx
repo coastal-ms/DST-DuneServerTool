@@ -509,8 +509,17 @@ describe('Spatial object workspace', () => {
     fireEvent.click(screen.getByRole('button', { name: 'All tools' }))
     expect(screen.queryByRole('link', { name: /^Database/ })).not.toBeInTheDocument()
     expect(screen.queryByRole('link', { name: /^Settings/ })).not.toBeInTheDocument()
+    expect(screen.queryByRole('link', { name: /^Server Settings/ })).not.toBeInTheDocument()
     fireEvent.change(screen.getByRole('textbox', { name: 'Search DST tools' }), { target: { value: 'ammo' } })
     expect(screen.getByRole('link', { name: /Players.*Inspect/ })).toHaveAttribute('href', '/players')
+  })
+  it('opens the server INI controls directly from the Command Deck dock for an owner', () => {
+    state.owner = true
+    state.local = true
+    render(<SpatialFrame tools><p>Tools</p></SpatialFrame>)
+    const dock = screen.getByRole('navigation', { name: 'Workspace dock' })
+    expect(within(dock).getByRole('link', { name: 'Server Settings' })).toHaveAttribute('href', '/server-settings')
+    expect(within(dock).queryByRole('link', { name: 'Settings', exact: true })).not.toBeInTheDocument()
   })
   it('creates and disposes the renderer on explicit enable/disable', async () => {
     const nodes = spatialNodes(state.status!.bg!.gameServers!, value => value)

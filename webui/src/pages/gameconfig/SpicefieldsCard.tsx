@@ -268,7 +268,7 @@ export function SpicefieldsCard({ vmRunning }: Props) {
         <Icon name="Info" size={13} className="mt-0.5 shrink-0" />
         <span>
           DST writes Funcom's <strong>UserGame.ini</strong> settings. Use
-          <strong> Apply INIs &amp; restart</strong> after saving. Active field counts
+          <strong> Apply server settings</strong> after saving. Active field counts
           by size are unavailable because current field state does not identify size.
         </span>
       </div>
@@ -379,8 +379,8 @@ export function SpicefieldsCard({ vmRunning }: Props) {
                             toggleCdMs > 0
                               ? `Rate-limited — wait ${toggleCdSec}s before toggling again`
                               : (d.isSpawningActive
-                                  ? 'Disable the Funcom master switch; applies after Apply INIs & restart'
-                                  : 'Enable the Funcom master switch; applies after Apply INIs & restart')
+                                  ? 'Disable the Funcom master switch; applies after Apply server settings'
+                                  : 'Enable the Funcom master switch; applies after Apply server settings')
                           }
                         >
                           <input
