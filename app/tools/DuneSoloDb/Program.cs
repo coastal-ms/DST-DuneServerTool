@@ -68,6 +68,8 @@ internal static partial class Program
                     Require(options, "adapter"), Require(options, "levels"), RequireValue(options, "action"),
                     ParseBalance(RequireValue(options, "amount"), "Character XP")),
                 "diagnostics" => ExportDiagnostics(Require(options, "input")),
+                "codex" => ReadCodex(Require(options, "input")),
+                "grant-codex" => GrantCodex(Require(options, "input"), Require(options, "safety-backup"), Require(options, "catalog"), Require(options, "selection")),
                 "faction-progression" => SetFactionProgression(Require(options,"input"), Require(options,"safety-backup"),
                     Require(options,"adapter"), Require(options,"nodes"), RequireValue(options,"faction"),
                     RequireValue(options,"action"), ParseBalance(RequireValue(options,"amount"),"Faction reputation")),

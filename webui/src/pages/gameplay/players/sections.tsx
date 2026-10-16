@@ -9,6 +9,7 @@
 
 import { useCallback, useEffect, useId, useMemo, useState, type ReactElement, type ReactNode } from 'react'
 import { RegisTankControls } from './RegisTankControls'
+import { CodexOwnership } from '../../../components/CodexOwnership'
 import { api } from '../../../api/client'
 import { Icon } from '../../../components/Icon'
 import { COSMETIC_LICENSE_NOTICE } from '../../../util/cosmeticEntitlements'
@@ -638,7 +639,7 @@ interface ActionDef {
   offlineOnly?: boolean   // requires player to be offline (DB write the game caches in memory)
   experimental?: boolean  // unverified — may not take effect in-game; shown with an EXPERIMENTAL badge
   fields?: ActionField[]
-  custom?: 'regis-tanks' | 'give-item' | 'grant-reward' | 'whisper' | 'spawn-vehicle' | 'funcom-spawn-vehicle' | 'quick-presets' | 'vehicle-kit' | 'give-package' | 'cheat-scripts' | 'dev-scripts' | 'unlock-trainers' | 'unlock-mainquest' | 'complete-contract' | 'progression-unlock' | 'refuel-vehicle' | 'starter-class' | 'teleport-player' | 'teleport-location' | 'set-respawn' | 'reset-faction' | 'grant-cosmetic' | 'grant-house-swatches' | 'grant-buildable-swatches' | 'grant-building-sets' | 'grant-armor-skins' | 'grant-weapon-skins' | 'grant-vehicle-skins' | 'grant-all-dyes' | 'fresh-start'
+  custom?: 'codex' | 'regis-tanks' | 'give-item' | 'grant-reward' | 'whisper' | 'spawn-vehicle' | 'funcom-spawn-vehicle' | 'quick-presets' | 'vehicle-kit' | 'give-package' | 'cheat-scripts' | 'dev-scripts' | 'unlock-trainers' | 'unlock-mainquest' | 'complete-contract' | 'progression-unlock' | 'refuel-vehicle' | 'starter-class' | 'teleport-player' | 'teleport-location' | 'set-respawn' | 'reset-faction' | 'grant-cosmetic' | 'grant-house-swatches' | 'grant-buildable-swatches' | 'grant-building-sets' | 'grant-armor-skins' | 'grant-weapon-skins' | 'grant-vehicle-skins' | 'grant-all-dyes' | 'fresh-start'
   balance?: 'solari' | 'scrip' | 'intel'  // show the player's current balance read-only above the form
   confirm?: (p: Player) => string  // confirm message; if returns '' no prompt
   doubleConfirm?: boolean // also requires a typed "i acknowledge" prompt inside run()
@@ -724,6 +725,8 @@ const ACTIONS: ActionDef[] = [
   { id: 'complete-contract', group: 'Progression', label: 'Complete Contract', icon: 'Check', custom: 'complete-contract', offlineOnly: true,
     rowNote: 'Force-complete a stuck / in-flight contract — writes its completion tags and dismisses the active contract item',
     run: () => Promise.resolve({ message: '' }) },
+  { id: 'codex', group: 'Progression', label: 'Codex', icon: 'BookOpen', custom: 'codex',
+    rowNote: 'View owned and missing lore fragments.', run: () => Promise.resolve({ message: '' }) },
   { id: 'reset-progression', group: 'Progression', label: 'Reset Progression (live)', icon: 'RotateCcw', liveOnly: true,
     rowNote: 'Single confirmation required',
     confirm: p => `Reset ALL progression for ${p.name}? Cannot be undone.\n\n` +
@@ -1237,6 +1240,10 @@ function ActionRow({ def, player, busy, stats, open, danger, onToggle, runAction
               })} />
           ) : def.custom === 'fresh-start' ? (
             <FreshStartForm busy={busy} player={player} runAction={runAction} />
+          ) : def.custom === 'codex' ? (
+            <CodexOwnership key={player.account_id} path={`/api/gameplay/players/codex?account_id=${player.account_id}`}
+              grant={{ path: '/api/gameplay/players/codex/grant', body: { account_id: player.account_id },
+                disabled: busy || player.online_status !== 'Offline', reason: 'The character must be fully Offline before granting codex fragments.' }} />
           ) : def.custom === 'give-package' ? (
             <GivePackageForm busy={busy} playerName={player.name}
               onGive={(items, pkgName, overflow) => runAction(def, async () => {

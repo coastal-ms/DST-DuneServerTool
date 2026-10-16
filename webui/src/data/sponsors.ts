@@ -25,4 +25,5 @@ export const SUPPORTER_CREDITS: readonly SupporterCredit[] = [
   { displayName: 'Ed O.', thanks: 'Your presence strengthens the whole community. The strongest sietches are built together.' },
   { displayName: 'Carl D. Holland', thanks: 'Your enthusiasm keeps the spice flowing for DST.' },
   { displayName: 'Wenzel32 (@Wenzel32)', thanks: 'Thank you for being part of the DST community. Your presence makes the journey richer.' },
+  { displayName: 'Saraba (@saraba)', thanks: 'Your kindness brings warmth to the sietch. Thank you for standing with us.' },
 ]

@@ -58,6 +58,22 @@ Register-DuneRoute -Method GET -Path '/api/gameplay/players/journey' -Handler {
 }
 
 # GET /api/gameplay/players/cosmetics-owned?account_id=<id>
+Register-DuneRoute -Method GET -Path '/api/gameplay/players/codex' -Handler {
+    param($req, $res, $routeParams, $body)
+    try {
+        $aid = 0L
+        [void][Int64]::TryParse((Get-DuneQ $req 'account_id'), [ref]$aid)
+        if ($aid -le 0) { Write-DuneError -Response $res -Status 400 -Message 'account_id is required.'; return }
+        Invoke-DunePlayerReadRoute -Response $res -Request $req `
+            -LiveBlock { param($ip) Get-DunePlayerCodexLive -Ip $ip -AccountId $aid } `
+            -DemoBlock { @{ ok = $true; fragments = @(); total = 0; owned = 0; missing = 0 } } `
+            -PayloadKey 'fragments'
+    } catch {
+        Write-DuneError -Response $res -Status 500 -Message $_.Exception.Message
+    }
+}
+
+# GET /api/gameplay/players/cosmetics-owned?account_id=<id>
 Register-DuneRoute -Method GET -Path '/api/gameplay/players/cosmetics-owned' -Handler {
     param($req, $res, $routeParams, $body)
     try {

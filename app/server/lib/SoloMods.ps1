@@ -4,6 +4,33 @@ $script:DuneSoloLoaderRoot = Join-Path $soloModAppRoot 'ModLoader'
 $script:DuneSoloRuntimeAssets = Join-Path $soloModAppRoot 'resources\solo-mod-runtime'
 $script:DuneBundledSoloModsRoot = Join-Path $soloModAppRoot 'resources\solo-mods'
 
+function Import-DuneSoloModUpload {
+    param([string]$Filename, [string]$Base64)
+    Assert-DuneSoloGameClosed
+    $limit = 16MB
+    if ([string]::IsNullOrWhiteSpace($Filename) -or $Filename.Length -gt 180 -or
+        $Filename -match '[\\/:*?"<>|\x00-\x1f]' -or
+        [IO.Path]::GetExtension($Filename) -ine '.zip' -or
+        $Filename -match '^(CON|PRN|AUX|NUL|COM[1-9]|LPT[1-9])\.' -or
+        [string]::IsNullOrEmpty($Base64) -or $Base64.Length -gt 22369624) {
+        throw 'Drop one ZIP up to 16 MB, or use Install mod ZIP for larger files.'
+    }
+    try { $bytes = [Convert]::FromBase64String($Base64) }
+    catch { throw 'The dropped ZIP could not be read. Try Install mod ZIP instead.' }
+    if ($bytes.Length -eq 0 -or $bytes.Length -gt $limit) { throw 'Drop one ZIP up to 16 MB, or use Install mod ZIP for larger files.' }
+    $tempRoot = [IO.Path]::GetFullPath([IO.Path]::GetTempPath()).TrimEnd('\','/')
+    $stage = Join-Path $tempRoot ('dst-mod-upload-' + [guid]::NewGuid().ToString('N'))
+    if ([IO.Path]::GetDirectoryName([IO.Path]::GetFullPath($stage)) -cne $tempRoot) { throw 'Invalid mod upload staging location.' }
+    New-Item -ItemType Directory -Path $stage -ErrorAction Stop | Out-Null
+    try {
+        $zip = Join-Path $stage $Filename
+        [IO.File]::WriteAllBytes($zip, $bytes)
+        return Import-DuneSoloMod -Path $zip
+    } finally {
+        if (Test-Path -LiteralPath $stage) { Remove-Item -LiteralPath $stage -Recurse -Force }
+    }
+}
+
 function Get-DuneSoloRuntimeProfiles {
     # Add verified bundled releases here; keep existing entries for saved choices.
     return @(
@@ -205,6 +232,26 @@ function Get-DuneSoloMods {
     $preference=if($choice.version){[string]$choice.version}elseif($useNewer){'3.0.1-1164-g5e627997'}else{'3.0.1-1140-gf58e8f84'}
     $runtimeWarnings=@(foreach($mod in @($mods | Where-Object enabled)){foreach($req in @($mod.requires)){if($req.id -eq 'ue4ss' -and $req.version -and $req.version -ne $profile.version){"$($mod.name) declares UE4SS $($req.version); selected runtime is $($profile.version)."}}})
     return @{ runtimeVersions=@(Get-DuneSoloRuntimeProfiles | ForEach-Object {@{version=$_.version;label=$_.label}});runtimePreferenceVersion=$preference;useNewerRuntime=$useNewer;runtimeFallback=($fallback.version -eq '3.0.1-1140-gf58e8f84');runtimeWarnings=$runtimeWarnings;runtimeVersion=$profile.version;runtimePath=$runtimePath;platform=$platform; gameRunning=$gameRunning; mods=$mods; folder=$script:DuneSoloModsRoot; gamePath=$gamePath; skipIntro=[bool]$preferences.skipIntro; soloArguments=[string]$preferences.soloArguments; runtimeReady=(Test-DuneSoloModRuntime -Path $runtimePath); session=$session; launchError=$launchError; runtimeLog=$runtimeLog }
+}
+
+function Get-DuneSoloRuntimeLog {
+    $loader=[IO.Path]::GetFullPath($script:DuneSoloLoaderRoot)
+    $path=Join-Path $loader 'last-runtime.log'
+    $session=Read-DuneModJson (Join-Path $loader 'session.json') $null
+    if ($session -and $session.root) {
+        $root=[IO.Path]::GetFullPath([string]$session.root)
+        if ([IO.Path]::GetDirectoryName($root) -ne $loader -or [IO.Path]::GetFileName($root) -notlike 'Session-*') { throw 'Invalid Solo log session.' }
+        foreach($dir in @($root,(Join-Path $root 'ue4ss'))) {
+            if ((Test-Path -LiteralPath $dir) -and ((Get-Item -LiteralPath $dir).Attributes -band [IO.FileAttributes]::ReparsePoint)) { throw 'Invalid Solo log folder.' }
+        }
+        $current=Join-Path $root 'ue4ss\UE4SS.log'
+        if (Test-Path -LiteralPath $current -PathType Leaf) { $path=$current }
+    }
+    if (-not (Test-Path -LiteralPath $path -PathType Leaf)) { return @{available=$false;content='';name='UE4SS.log'} }
+    $file=Get-Item -LiteralPath $path
+    if ($file.Attributes -band [IO.FileAttributes]::ReparsePoint) { throw 'Invalid Solo log file.' }
+    if ($file.Length -gt 16MB) { throw "The UE4SS log is too large to display. File: $path" }
+    return @{available=$true;content=[IO.File]::ReadAllText($path);name='UE4SS.log'}
 }
 
 function Open-DuneSoloModsFolder {

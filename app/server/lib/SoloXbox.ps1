@@ -108,7 +108,7 @@ function Backup-DuneSoloXboxAccount {
 function New-DuneSoloXboxMutation {
     param([Parameter(Mandatory)][string]$Command, [Parameter(Mandatory)][hashtable]$Arguments)
     Assert-DuneSoloGameClosed
-    if ($Command -in @('inspect','diagnostics','backup','list-blueprints','export-blueprint')) { throw 'Use the read-only helper for this command.' }
+    if ($Command -in @('inspect','diagnostics','codex','backup','list-blueprints','export-blueprint')) { throw 'Use the read-only helper for this command.' }
     $source = if ($Command -eq 'restore') { [string]$Arguments.target } else { [string]$Arguments.input }
     $blob = Get-DuneSoloXboxBlob -Path $source
     if (-not $blob) { throw 'Xbox mutation requires the exact current game.db blob.' }

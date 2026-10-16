@@ -5,7 +5,12 @@ Register-DuneRoute -Method GET -Path '/api/solo/mods' -LocalOnly -Handler {
 Register-DuneRoute -Method POST -Path '/api/solo/mods/import' -LocalOnly -Handler {
     param($req,$res,$routeParams,$body)
     try {
-        $result=Invoke-WithDuneLock -Name 'solo-mods' -Script { Import-DuneSoloMod ([string]$body.path) }
+        $result=Invoke-WithDuneLock -Name 'solo-mods' -Script {
+            if ($null -ne $body.base64 -or $null -ne $body.filename) {
+                if ($body.path) { throw 'Choose one ZIP import source.' }
+                Import-DuneSoloModUpload -Filename ([string]$body.filename) -Base64 ([string]$body.base64)
+            } else { Import-DuneSoloMod ([string]$body.path) }
+        }
         Write-DuneJson -Response $res -Body $result
     } catch { Write-DuneError -Response $res -Status 400 -Message $_.Exception.Message }
 }
@@ -98,4 +103,9 @@ Register-DuneRoute -Method POST -Path '/api/solo/mods/shortcut' -LocalOnly -Hand
         $result=Invoke-WithDuneLock -Name 'solo-mods' -Script { New-DuneSoloModShortcut }
         Write-DuneJson -Response $res -Body $result
     } catch { Write-DuneError -Response $res -Status 400 -Message $_.Exception.Message }
+}
+Register-DuneRoute -Method GET -Path '/api/solo/mods/log' -LocalOnly -Handler {
+    param($req,$res,$routeParams,$body)
+    try { Write-DuneJson -Response $res -Body (Get-DuneSoloRuntimeLog) }
+    catch { Write-DuneError -Response $res -Status 400 -Message $_.Exception.Message }
 }

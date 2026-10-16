@@ -13,6 +13,39 @@
 }
 AfterAll { if($script:ModTestRoot.StartsWith([IO.Path]::GetTempPath())){Remove-Item -LiteralPath $script:ModTestRoot -Recurse -Force} }
 Describe 'Solo mod import and dependencies' {
+    It 'imports an uploaded ZIP through the same validator and preserves existing mod INIs' {
+        $zip=New-ModZip 'upload-example' @{'Uploaded/Scripts/main.lua'='print(1)';'Uploaded/custom.ini'='keep=yes'}
+        $payload=[Convert]::ToBase64String([IO.File]::ReadAllBytes($zip))
+        Import-DuneSoloModUpload -Filename 'uploaded.zip' -Base64 $payload | Out-Null
+        Get-Content (Join-Path $script:DuneSoloModsRoot 'Uploaded/custom.ini') | Should -Be 'keep=yes'
+        {Import-DuneSoloModUpload -Filename 'uploaded.zip' -Base64 $payload} | Should -Throw '*Already installed*'
+        Get-Content (Join-Path $script:DuneSoloModsRoot 'Uploaded/custom.ini') | Should -Be 'keep=yes'
+    }
+    It 'rejects uploaded paths, non-ZIP names, corrupt data and unsafe archives' {
+        foreach($name in @('../escape.zip','C:\escape.zip','bad.txt','CON.zip')) {
+            {Import-DuneSoloModUpload -Filename $name -Base64 'YWJj'} | Should -Throw '*Drop one ZIP*'
+        }
+        {Import-DuneSoloModUpload -Filename 'bad.zip' -Base64 'not-base64!'} | Should -Throw '*could not be read*'
+        $zip=New-ModZip 'unsafe-upload' @{'../escape.txt'='unsafe'}
+        {Import-DuneSoloModUpload -Filename 'bad.zip' -Base64 ([Convert]::ToBase64String([IO.File]::ReadAllBytes($zip)))} | Should -Throw '*unsafe*'
+    }
+    It 'returns the full current UE4SS log and the saved log after session exit' {
+        (Get-DuneSoloRuntimeLog).available | Should -BeFalse
+        $root=Join-Path $script:DuneSoloLoaderRoot 'Session-logtest'
+        New-Item -ItemType Directory -Path (Join-Path $root 'ue4ss') -Force | Out-Null
+        @{root=$root;logPath='C:\unrelated-file.txt'} | ConvertTo-Json | Set-Content (Join-Path $script:DuneSoloLoaderRoot 'session.json')
+        $text=(1..150 | ForEach-Object {"mod line $_"}) -join "`n"
+        [IO.File]::WriteAllText((Join-Path $root 'ue4ss\UE4SS.log'),$text)
+        (Get-DuneSoloRuntimeLog).content | Should -BeExactly $text
+        Remove-Item (Join-Path $script:DuneSoloLoaderRoot 'session.json')
+        [IO.File]::WriteAllText((Join-Path $script:DuneSoloLoaderRoot 'last-runtime.log'),'saved log')
+        (Get-DuneSoloRuntimeLog).content | Should -BeExactly 'saved log'
+    }
+    It 'rejects a log session outside the Solo loader folder' {
+        New-Item -ItemType Directory -Path $script:DuneSoloLoaderRoot -Force | Out-Null
+        @{root=$script:ModTestRoot} | ConvertTo-Json | Set-Content (Join-Path $script:DuneSoloLoaderRoot 'session.json')
+        {Get-DuneSoloRuntimeLog} | Should -Throw '*Invalid Solo log session*'
+    }
     It 'requires a fresh in-world heartbeat from the current running Tank session' {
         Mock Get-Process { [pscustomobject]@{Id=42} }
         $root=Join-Path $script:DuneSoloLoaderRoot 'Session-readiness'

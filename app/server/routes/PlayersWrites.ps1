@@ -6,6 +6,22 @@
 # §3 — Items / inventory
 # ---------------------------------------------------------------------------
 
+Register-DuneRoute -Method POST -Path '/api/gameplay/players/codex/grant' -Handler {
+    param($req, $res, $routeParams, $body)
+    try {
+        $account = Get-DuneBodyInt -Body $body -Name 'account_id'
+        $ids = @(Get-DuneBodyValue -Body $body -Name 'ids')
+        $confirm = [string](Get-DuneBodyValue -Body $body -Name 'confirm')
+        if ($null -eq $account -or $account -le 0) { throw 'A current character account is required.' }
+        $null = Get-DuneCodexSelection -Ids $ids
+        Invoke-WithDuneLock -Name 'codex-grants' -Script {
+            Invoke-DunePlayerWriteRoute -Response $res -Action {
+                param($ip) Invoke-DunePlayerCodexGrant -Ip $ip -AccountId $account -Ids $ids -Confirm $confirm
+            }
+        }
+    } catch { Write-DuneError -Response $res -Status 400 -Message $_.Exception.Message }
+}
+
 Register-DuneRoute -Method POST -Path '/api/gameplay/players/unlock-testing-stations' -Handler {
     param($req, $res, $routeParams, $body)
     try {

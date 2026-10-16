@@ -154,11 +154,11 @@ jobs:
           'PGDATABASE=dst_inventory' | Out-File $env:GITHUB_ENV -Append -Encoding utf8
           "PGPASSWORD=$rolePassword" | Out-File $env:GITHUB_ENV -Append -Encoding utf8
 
-      - name: Verify Solo mods under Windows PowerShell 5.1
+      - name: Verify Solo mods and Deck transfers under Windows PowerShell 5.1
         shell: pwsh
         run: |
           $env:DST_PESTER_MODULE = (Get-Module -ListAvailable Pester | Sort-Object Version -Descending | Select-Object -First 1).Path
-          powershell.exe -NoProfile -Command 'Import-Module $env:DST_PESTER_MODULE; $result = Invoke-Pester -Path tests/SoloMods.Tests.ps1 -PassThru -Output Detailed; if ($result.FailedCount -gt 0) { exit 1 }'
+          powershell.exe -NoProfile -Command 'Import-Module $env:DST_PESTER_MODULE; $result = Invoke-Pester -Path tests/SoloMods.Tests.ps1,tests/SoloDeck.Tests.ps1,tests/SoloDeckMods.Tests.ps1 -PassThru -Output Detailed; if ($result.FailedCount -gt 0) { exit 1 }'
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
       - name: Run Pester suite
@@ -246,6 +246,15 @@ jobs:
       - name: Run Vitest
         working-directory: webui
         run: npm test
+
+  deck-companion:
+    name: SteamOS companion
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Verify companion packaging and Linux file operations
+        run: python3 -B -m unittest discover -s tests -p test_deck_companion.py -v
 
   solo-helper:
     name: Solo database helper

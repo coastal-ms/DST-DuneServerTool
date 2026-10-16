@@ -31,11 +31,30 @@ export function SoloMods({ connectionToken = '' }: { connectionToken?: string })
   const [platform, setPlatform] = useState('steam')
   const [soloArguments, setSoloArguments] = useState('')
   const [dragged, setDragged] = useState<string | null>(null)
+  const [fileOver, setFileOver] = useState(false)
   const [busy, setBusy] = useState(false)
   const [refreshing, setRefreshing] = useState(false)
   const [error, setError] = useState('')
   const [notice, setNotice] = useState('')
   const [deleting, setDeleting] = useState<Mod | null>(null)
+  const [log, setLog] = useState<{ available: boolean; content: string } | null>(null)
+  const [logLoading, setLogLoading] = useState(false)
+  const viewLog = async () => {
+    setLogLoading(true)
+    setError('')
+    try { setLog(await api<{ available: boolean; content: string }>('/api/solo/mods/log')) }
+    catch (err) { setError(err instanceof Error ? err.message : String(err)) }
+    finally { setLogLoading(false) }
+  }
+  const downloadLog = () => {
+    if (!log?.available) return
+    const url = URL.createObjectURL(new Blob([log.content], { type: 'text/plain;charset=utf-8' }))
+    const link = document.createElement('a')
+    link.href = url
+    link.download = 'UE4SS.log'
+    link.click()
+    setTimeout(() => URL.revokeObjectURL(url), 1000)
+  }
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
     useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
@@ -112,6 +131,28 @@ export function SoloMods({ connectionToken = '' }: { connectionToken?: string })
       if (!pick.cancelled && pick.path) await run('import', { path: pick.path })
     } catch (e) { setError(e instanceof Error ? e.message : String(e)) }
   }
+  const importDroppedZip = async (files: FileList) => {
+    setFileOver(false)
+    if (busy || !state || state.gameRunning) return
+    const file = files[0]
+    if (files.length !== 1 || !file || !/\.zip$/i.test(file.name) || file.size === 0 || file.size > 16 * 1024 * 1024) {
+      setError('Drop one ZIP up to 16 MB, or use Install mod ZIP for larger files.')
+      return
+    }
+    setBusy(true); setError(''); setNotice('')
+    try {
+      const base64 = await new Promise<string>((resolve, reject) => {
+        const reader = new FileReader()
+        reader.onerror = () => reject(new Error('The ZIP could not be read. Try Install mod ZIP instead.'))
+        reader.onload = () => resolve(String(reader.result).split(',')[1] ?? '')
+        reader.readAsDataURL(file)
+      })
+      await api('/api/solo/mods/import', { method: 'POST', body: JSON.stringify({ filename: file.name, base64 }) })
+      await refresh()
+      setNotice(`${file.name} installed.`)
+    } catch (e) { setError(e instanceof Error ? e.message : String(e)) }
+    finally { setBusy(false) }
+  }
   return <CollapsibleCard id="solo-mods" title="Solo mods" icon="Package" defaultOpen={false} subtitle="Download mods from Nexus Mods or another source, then install your downloaded ZIP. Mod settings stay in their INI files." headerClassName="px-5 py-4 flex-wrap [&>div]:w-full" headerRight={
     <div className="flex flex-wrap gap-2 w-full">
       <label className="block w-full rounded border border-accent/40 bg-accent/5 p-3 text-sm">Dune installation folder
@@ -159,9 +200,17 @@ export function SoloMods({ connectionToken = '' }: { connectionToken?: string })
       )}
       {deleting && <ConfirmationModal title={`Delete ${deleting.name}?`} description="This permanently removes the mod folder and its INI settings. You can reinstall the mod from its ZIP." confirmLabel="Delete mod" onCancel={() => setDeleting(null)} onConfirm={() => { const folder = deleting.folder; setDeleting(null); void run('delete', { folder }) }} />}
       <a className="text-sm text-accent-bright underline" href="https://www.nexusmods.com/duneawakening" target="_blank" rel="noopener noreferrer">Browse Dune: Awakening mods on Nexus Mods</a>
+      <div role="region" aria-label="Drop a mod ZIP" aria-disabled={busy || !state || state.gameRunning}
+        className={`rounded-lg border-2 border-dashed p-4 text-center text-sm ${fileOver ? 'border-accent bg-accent/10' : 'border-border text-text-muted'}`}
+        onDragOver={e => { if (Array.from(e.dataTransfer.types).includes('Files')) { e.preventDefault(); e.dataTransfer.dropEffect = busy || !state || state.gameRunning ? 'none' : 'copy'; setFileOver(!busy && !!state && !state.gameRunning) } }}
+        onDragLeave={e => { if (!e.currentTarget.contains(e.relatedTarget as Node | null)) setFileOver(false) }}
+        onDrop={e => { if (Array.from(e.dataTransfer.types).includes('Files')) { e.preventDefault(); void importDroppedZip(e.dataTransfer.files) } }}>
+        {state?.gameRunning ? 'Close Dune before installing a mod ZIP.' : busy ? 'Working…' : 'Drop a mod ZIP here to install · up to 16 MB'}
+      </div>
       <div className="flex flex-wrap gap-2">
         <button className="btn-secondary" disabled={busy} onClick={() => void install()}>Install mod ZIP</button>
         <button className="btn-secondary" disabled={busy} onClick={() => void openModsFolder()}>Open Mods Folder</button>
+        <button className="btn-secondary" disabled={logLoading} onClick={() => void viewLog()}>{logLoading ? 'Loading log…' : 'View UE4SS Log'}</button>
         <button className="btn-secondary" disabled={busy} aria-busy={refreshing} onClick={() => void refreshMods()}>
           <Icon name={refreshing ? 'LoaderCircle' : 'RefreshCw'} size={14} className={refreshing ? 'animate-spin' : ''} />
           {refreshing ? 'Refreshing…' : 'Refresh'}
@@ -193,7 +242,9 @@ export function SoloMods({ connectionToken = '' }: { connectionToken?: string })
       
       <p className="text-xs text-text-muted">Solo only. Launch Solo includes built-in Tank support; Launch with Mods also loads enabled mods. DST supports its mod-loading framework only. We make no guarantees that any individual mod will or will not work, and DST does not provide individual mod troubleshooting. Contact the mod author or discuss issues with the community.</p>
       <a className="text-xs text-accent-bright underline" href="https://discord.com/channels/1517599283757453333/1558246888967245957" target="_blank" rel="noopener noreferrer">Solo mod discussion</a>
-      {state?.runtimeLog && <details><summary className="cursor-pointer text-sm">Loader log</summary><pre className="text-xs whitespace-pre-wrap max-h-64 overflow-auto mt-2">{state.runtimeLog}</pre></details>}
+      {log && <ConfirmationModal title="UE4SS Log" description={log.available ? 'Current or most recent Solo launch.' : 'No log yet. Launch Solo from DST, then check here.'} confirmLabel="Close" onCancel={() => setLog(null)} onConfirm={() => setLog(null)}>
+        {log.available && <><pre className="text-xs whitespace-pre-wrap break-words max-h-96 overflow-auto">{log.content || 'The log is empty.'}</pre><button className="btn-secondary mt-3" onClick={downloadLog}>Download UE4SS.log</button></>}
+      </ConfirmationModal>}
     </div>
   </CollapsibleCard>
 }

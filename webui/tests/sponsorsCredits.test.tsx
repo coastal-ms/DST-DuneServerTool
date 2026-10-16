@@ -46,6 +46,7 @@ const EXPECTED_CREDIT_NAMES = [
   'Ed O.',
   'Carl D. Holland',
   'Wenzel32 (@Wenzel32)',
+  'Saraba (@saraba)',
 ] as const
 
 afterEach(() => {
@@ -56,8 +57,8 @@ afterEach(() => {
 describe('DST Credits', () => {
   it('uses the typed source as the complete, unique public credit list', () => {
     expect(SUPPORTER_CREDITS.map(credit => credit.displayName)).toEqual(EXPECTED_CREDIT_NAMES)
-    expect(new Set(SUPPORTER_CREDITS.map(credit => credit.displayName)).size).toBe(21)
-    expect(new Set(SUPPORTER_CREDITS.map(credit => credit.thanks)).size).toBe(21)
+    expect(new Set(SUPPORTER_CREDITS.map(credit => credit.displayName)).size).toBe(22)
+    expect(new Set(SUPPORTER_CREDITS.map(credit => credit.thanks)).size).toBe(22)
     expect(SUPPORTER_CREDITS.every(credit => credit.thanks.startsWith('Thank') || credit.thanks.startsWith('You') || credit.thanks.startsWith('Your'))).toBe(true)
   })
 
@@ -74,7 +75,7 @@ describe('DST Credits', () => {
         "These personal thank-you notes are written by Duke, DST's AI admin—not by Coastal. 🙂",
       ),
     ).toBeInTheDocument()
-    expect(within(credits).getAllByRole('listitem')).toHaveLength(21)
+    expect(within(credits).getAllByRole('listitem')).toHaveLength(22)
     expect(within(credits).getAllByText('— Duke', { exact: true })).toHaveLength(SUPPORTER_CREDITS.length)
     for (const name of EXPECTED_CREDIT_NAMES) {
       expect(within(credits).getAllByText(name, { exact: true })).toHaveLength(1)

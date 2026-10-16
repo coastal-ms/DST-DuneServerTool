@@ -45,6 +45,32 @@ function Get-DuneSoloBodyField {
     return $Default
 }
 
+Register-DuneRoute -Method GET -Path '/api/solo/codex' -LocalOnly -Handler {
+    param($req, $res, $routeParams, $body)
+    try {
+        $result = Invoke-WithDuneLock -Name 'solo-profile-data' -Script { Get-DuneSoloCodex }
+        Write-DuneJson -Response $res -Body $result
+    } catch {
+        Write-DuneError -Response $res -Status 400 -Message $_.Exception.Message
+    }
+}
+
+Register-DuneRoute -Method POST -Path '/api/solo/codex/grant' -LocalOnly -Handler {
+    param($req, $res, $routeParams, $body)
+    try {
+        $ids = @(Get-DuneSoloBodyField -Body $body -Name 'ids')
+        $token = [string](Get-DuneSoloBodyField -Body $body -Name 'expectedProfileToken')
+        $confirm = [string](Get-DuneSoloBodyField -Body $body -Name 'confirm')
+        $result = Invoke-WithDuneLock -Name 'solo-profile-data' -Script {
+            Assert-DuneSoloExpectedProfile -ExpectedProfileToken $token
+            Invoke-DuneSoloCodexGrant -Ids $ids -Confirm $confirm
+        }
+        Write-DuneJson -Response $res -Body $result
+    } catch {
+        Write-DuneError -Response $res -Status 400 -Message $_.Exception.Message
+    }
+}
+
 Register-DuneRoute -Method GET -Path '/api/solo/status' -LocalOnly -Handler {
     param($req, $res, $routeParams, $body)
     try {

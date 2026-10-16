@@ -4,9 +4,11 @@ import { PageHeader } from '../components/PageHeader'
 import { CollapsibleCard } from '../components/CollapsibleCard'
 import { ItemPicker } from '../components/ItemPicker'
 import { SoloMods } from '../components/solo/SoloMods'
+import { SoloDeck } from '../components/solo/SoloDeck'
 import { SoloRegisTanks } from '../components/solo/SoloRegisTanks'
 import { SoloFactionProgression } from '../components/solo/SoloFactionProgression'
 import { SoloCharacterXp } from '../components/solo/SoloCharacterXp'
+import { CodexOwnership } from '../components/CodexOwnership'
 import { WickMaps } from './WickMaps'
 import { AugmentPicker } from '../components/AugmentPicker'
 import {
@@ -86,7 +88,7 @@ import { pickLocalFolder } from '../util/pathPicker'
 import { soloSaveFolder } from '../util/soloSaveFolder'
 import { COSMETIC_LICENSE_NOTICE } from '../util/cosmeticEntitlements'
 
-type Tab = 'overview' | 'settings' | 'mods' | 'backups' | 'character' | 'inventory' | 'progression' | 'dd-map'
+type Tab = 'overview' | 'settings' | 'mods' | 'backups' | 'character' | 'inventory' | 'progression' | 'dd-map' | 'steam-deck'
 const TABS: Array<{ id: Tab; label: string; icon: string }> = [
   { id: 'overview', label: 'Overview', icon: 'LayoutGrid' },
   { id: 'settings', label: 'Settings', icon: 'SlidersHorizontal' },
@@ -96,6 +98,7 @@ const TABS: Array<{ id: Tab; label: string; icon: string }> = [
   { id: 'inventory', label: 'Inventory', icon: 'Package' },
   { id: 'progression', label: 'Progression', icon: 'ChartNoAxesCombined' },
   { id: 'dd-map', label: 'DD Map', icon: 'Map' },
+  { id: 'steam-deck', label: 'Steam Deck', icon: 'Gamepad2' },
 ]
 
 export const SOLO_FIRST_USE_STEPS = [
@@ -1530,6 +1533,7 @@ export function SoloMode() {
 
       {tab === 'mods' && <SoloMods connectionToken={`${activeProfileToken}:${connectionRevision}`} />}
       {tab === 'dd-map' && <WickMaps embedded solo />}
+      {tab === 'steam-deck' && <SoloDeck />}
       {tab === 'overview' && (
         <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
           <div className="card p-5">
@@ -2192,6 +2196,9 @@ export function SoloMode() {
               <h3 className="font-semibold mb-1 flex items-center gap-2">
                 <Icon name="ScrollText" size={15} /> Import Base Blueprint
               </h3>
+              <a className="btn-secondary inline-flex items-center gap-2 mb-3" href="https://dune.layout.tools/" target="_blank" rel="noopener noreferrer">
+                <Icon name="ExternalLink" size={15} /> Blueprint Designer
+              </a>
               <p className="text-xs text-text-muted mb-4">
                 Import a portable DST blueprint into the connected Retail Solo save. DST retains the current save and verifies the result.
               </p>
@@ -2329,6 +2336,12 @@ export function SoloMode() {
       )}
       {tab === 'progression' && (
         <div className="space-y-4">
+          {activeProfileToken && selectionMatchesActive && <div className="card p-5">
+            <CodexOwnership key={activeProfileToken} profileToken={activeProfileToken}
+              grant={{ path: '/api/solo/codex/grant', body: { expectedProfileToken: activeProfileToken },
+                disabled: !canMutateActiveProfile || gameRunning, reason: 'Close Dune before granting codex fragments.' }}
+              path={`/api/solo/codex?profile=${encodeURIComponent(activeProfileToken)}`} />
+          </div>}
           <SoloFactionProgression disabled={!canMutateActiveProfile || gameRunning || !!busy}
             onRun={(faction, action, amount) => void runProgressionAction('faction', 'Solo faction change', token => setSoloFactionProgression(faction, action, amount, token))} />
           <SoloCharacterXp disabled={!canMutateActiveProfile || gameRunning || !!busy}

@@ -26,6 +26,7 @@ function Get-DunePlayerRoutePolicy {
             '/api/gameplay/players/tags' { return 'account' }
             '/api/gameplay/players/events' { return 'account' }
             '/api/gameplay/players/journey' { return 'account_id' }
+            '/api/gameplay/players/codex' { return 'account_id' }
             '/api/gameplay/players/cosmetics-owned' { return 'account_id' }
             '/api/gameplay/players/export' { return 'account_id' }
             '/api/gameplay/players/trainer-status' { return 'account_id' }
@@ -39,6 +40,7 @@ function Get-DunePlayerRoutePolicy {
         $action = $Path -replace '^/api/gameplay/players/', ''
         if ($Path -ne "/api/gameplay/players/$action") { return '' }
         if ($action -in @('rename','tags','update-tags','teleport-to-location','set-respawn',
+            'codex/grant',
             'faction/reset','progression/apply-preset','journey/complete','journey/reset','journey/wipe',
             'contract/complete','contracts/complete','contracts/reverse','unlock-trainer','unlock-main-quest',
             'grant-job-skills','reset-job-skills','set-starter-class','delete-tutorials','wipe-codex',

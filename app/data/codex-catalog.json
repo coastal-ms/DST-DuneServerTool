@@ -1,0 +1,1661 @@
+{
+  "format": 1,
+  "fragments": [
+    {
+      "id": "DA_Dunipedia_KnownUniverse.Imperium.ImperiumFragment1Title.ImperiumFragment1Content",
+      "category": "The Known Universe",
+      "entryId": "DA_Dunipedia_KnownUniverse.Imperium",
+      "entry": "The Imperium",
+      "fragment": "Lesson from the Count Santiago Argosaz to his son",
+      "ancestors": [
+        "DA_Dunipedia_KnownUniverse",
+        "DA_Dunipedia_KnownUniverse.Imperium",
+        "DA_Dunipedia_KnownUniverse.Imperium.ImperiumFragment1Title"
+      ]
+    },
+    {
+      "id": "DA_Dunipedia_KnownUniverse.Imperium.ImperiumFragment2Title.ImperiumFragment2Content",
+      "category": "The Known Universe",
+      "entryId": "DA_Dunipedia_KnownUniverse.Imperium",
+      "entry": "The Imperium",
+      "fragment": "Letter from the Princess Irulan to Margot Fenring",
+      "ancestors": [
+        "DA_Dunipedia_KnownUniverse",
+        "DA_Dunipedia_KnownUniverse.Imperium",
+        "DA_Dunipedia_KnownUniverse.Imperium.ImperiumFragment2Title"
+      ]
+    },
+    {
+      "id": "DA_Dunipedia_KnownUniverse.The Landsraad.LandsraadFragment1Title.LandsraadFragment1Content",
+      "category": "The Known Universe",
+      "entryId": "DA_Dunipedia_KnownUniverse.The Landsraad",
+      "entry": "The Landsraad",
+      "fragment": "The Balance of Powers – Princess Irulan",
+      "ancestors": [
+        "DA_Dunipedia_KnownUniverse",
+        "DA_Dunipedia_KnownUniverse.The Landsraad",
+        "DA_Dunipedia_KnownUniverse.The Landsraad.LandsraadFragment1Title"
+      ]
+    },
+    {
+      "id": "DA_Dunipedia_KnownUniverse.The Landsraad.LandsraadFragment2Title.LandsraadFragment2Content",
+      "category": "The Known Universe",
+      "entryId": "DA_Dunipedia_KnownUniverse.The Landsraad",
+      "entry": "The Landsraad",
+      "fragment": "On Conflict Resolution in the Imperium – Princess Irulan",
+      "ancestors": [
+        "DA_Dunipedia_KnownUniverse",
+        "DA_Dunipedia_KnownUniverse.The Landsraad",
+        "DA_Dunipedia_KnownUniverse.The Landsraad.LandsraadFragment2Title"
+      ]
+    },
+    {
+      "id": "DA_Dunipedia_KnownUniverse.The Landsraad.LandsraadFragment3Title.LandsraadFragment3Content",
+      "category": "The Known Universe",
+      "entryId": "DA_Dunipedia_KnownUniverse.The Landsraad",
+      "entry": "The Landsraad",
+      "fragment": "Melange, Politics and Power – Princess Irulan",
+      "ancestors": [
+        "DA_Dunipedia_KnownUniverse",
+        "DA_Dunipedia_KnownUniverse.The Landsraad",
+        "DA_Dunipedia_KnownUniverse.The Landsraad.LandsraadFragment3Title"
+      ]
+    },
+    {
+      "id": "DA_Dunipedia_KnownUniverse.The Landsraad.LandsraadFragment4Title.LandsraadFragment4Content",
+      "category": "The Known Universe",
+      "entryId": "DA_Dunipedia_KnownUniverse.The Landsraad",
+      "entry": "The Landsraad",
+      "fragment": "The Ceremony of the Snoopers – Princess Irulan",
+      "ancestors": [
+        "DA_Dunipedia_KnownUniverse",
+        "DA_Dunipedia_KnownUniverse.The Landsraad",
+        "DA_Dunipedia_KnownUniverse.The Landsraad.LandsraadFragment4Title"
+      ]
+    },
+    {
+      "id": "DA_Dunipedia_KnownUniverse.TheSpacingGuild.TheSpacingGuildFragment1Title.TheSpacingGuildFragment1Content",
+      "category": "The Known Universe",
+      "entryId": "DA_Dunipedia_KnownUniverse.TheSpacingGuild",
+      "entry": "The Spacing Guild",
+      "fragment": "A Short History of the Spacing Guild – Docent Varda Panagos",
+      "ancestors": [
+        "DA_Dunipedia_KnownUniverse",
+        "DA_Dunipedia_KnownUniverse.TheSpacingGuild",
+        "DA_Dunipedia_KnownUniverse.TheSpacingGuild.TheSpacingGuildFragment1Title"
+      ]
+    },
+    {
+      "id": "DA_Dunipedia_KnownUniverse.TheSpacingGuild.TheSpacingGuildFragment2Title.TheSpacingGuildFragment2Content",
+      "category": "The Known Universe",
+      "entryId": "DA_Dunipedia_KnownUniverse.TheSpacingGuild",
+      "entry": "The Spacing Guild",
+      "fragment": "A letter from Elara Tuek to her father",
+      "ancestors": [
+        "DA_Dunipedia_KnownUniverse",
+        "DA_Dunipedia_KnownUniverse.TheSpacingGuild",
+        "DA_Dunipedia_KnownUniverse.TheSpacingGuild.TheSpacingGuildFragment2Title"
+      ]
+    },
+    {
+      "id": "DA_Dunipedia_KnownUniverse.CHOAM.CHOAMFragment1Title.CHOAMFragment1Content",
+      "category": "The Known Universe",
+      "entryId": "DA_Dunipedia_KnownUniverse.CHOAM",
+      "entry": "CHOAM",
+      "fragment": "Corporate Warrior, A CHOAM Guide to Dominance – H.H. Pritaker Penthawaly",
+      "ancestors": [
+        "DA_Dunipedia_KnownUniverse",
+        "DA_Dunipedia_KnownUniverse.CHOAM",
+        "DA_Dunipedia_KnownUniverse.CHOAM.CHOAMFragment1Title"
+      ]
+    },
+    {
+      "id": "DA_Dunipedia_KnownUniverse.TheGreatSchools.TheGreatSchoolsFragment1Title.TheGreatSchoolsFragment1Content",
+      "category": "The Known Universe",
+      "entryId": "DA_Dunipedia_KnownUniverse.TheGreatSchools",
+      "entry": "The Great Schools",
+      "fragment": "Docent Glax Othn — Introduction to Intergalactic Affairs",
+      "ancestors": [
+        "DA_Dunipedia_KnownUniverse",
+        "DA_Dunipedia_KnownUniverse.TheGreatSchools",
+        "DA_Dunipedia_KnownUniverse.TheGreatSchools.TheGreatSchoolsFragment1Title"
+      ]
+    },
+    {
+      "id": "DA_Dunipedia_KnownUniverse.TheGreatSchools.TheGreatSchoolsFragment2Title.TheGreatSchoolsFragment2Content",
+      "category": "The Known Universe",
+      "entryId": "DA_Dunipedia_KnownUniverse.TheGreatSchools",
+      "entry": "The Great Schools",
+      "fragment": "Duncan Idaho on the Swordmaster School",
+      "ancestors": [
+        "DA_Dunipedia_KnownUniverse",
+        "DA_Dunipedia_KnownUniverse.TheGreatSchools",
+        "DA_Dunipedia_KnownUniverse.TheGreatSchools.TheGreatSchoolsFragment2Title"
+      ]
+    },
+    {
+      "id": "DA_Dunipedia_KnownUniverse.TheGreatSchools.TheGreatSchoolsFragment3Title.TheGreatSchoolsFragment3Content",
+      "category": "The Known Universe",
+      "entryId": "DA_Dunipedia_KnownUniverse.TheGreatSchools",
+      "entry": "The Great Schools",
+      "fragment": "Piter De Vries on the Mentat School",
+      "ancestors": [
+        "DA_Dunipedia_KnownUniverse",
+        "DA_Dunipedia_KnownUniverse.TheGreatSchools",
+        "DA_Dunipedia_KnownUniverse.TheGreatSchools.TheGreatSchoolsFragment3Title"
+      ]
+    },
+    {
+      "id": "DA_Dunipedia_KnownUniverse.TheGreatSchools.TheGreatSchoolsFragment4Title.TheGreatSchoolsFragment4Content",
+      "category": "The Known Universe",
+      "entryId": "DA_Dunipedia_KnownUniverse.TheGreatSchools",
+      "entry": "The Great Schools",
+      "fragment": "Draft for a cancelled lecture by Dr. Yueh on the Suk Medical School",
+      "ancestors": [
+        "DA_Dunipedia_KnownUniverse",
+        "DA_Dunipedia_KnownUniverse.TheGreatSchools",
+        "DA_Dunipedia_KnownUniverse.TheGreatSchools.TheGreatSchoolsFragment4Title"
+      ]
+    },
+    {
+      "id": "DA_Dunipedia_KnownUniverse.The Bene Gesserit.Bene Gesserit frag 1 Title.Bene Gesserit Frag 1 Content",
+      "category": "The Known Universe",
+      "entryId": "DA_Dunipedia_KnownUniverse.The Bene Gesserit",
+      "entry": "The Bene Gesserit",
+      "fragment": "From the Journal of Ariste Atreides",
+      "ancestors": [
+        "DA_Dunipedia_KnownUniverse",
+        "DA_Dunipedia_KnownUniverse.The Bene Gesserit",
+        "DA_Dunipedia_KnownUniverse.The Bene Gesserit.Bene Gesserit frag 1 Title"
+      ]
+    },
+    {
+      "id": "DA_Dunipedia_KnownUniverse.The Bene Gesserit. Bene Gesserit Frag 2 Title.TheBeneGessiritFragment2Content",
+      "category": "The Known Universe",
+      "entryId": "DA_Dunipedia_KnownUniverse.The Bene Gesserit",
+      "entry": "The Bene Gesserit",
+      "fragment": "A Letter to an angry daughter",
+      "ancestors": [
+        "DA_Dunipedia_KnownUniverse",
+        "DA_Dunipedia_KnownUniverse.The Bene Gesserit",
+        "DA_Dunipedia_KnownUniverse.The Bene Gesserit. Bene Gesserit Frag 2 Title"
+      ]
+    },
+    {
+      "id": "DA_Dunipedia_KnownUniverse.The Bene Gesserit.TheBeneGessiritFragment3Title.TheBeneGessiritFragment3Content",
+      "category": "The Known Universe",
+      "entryId": "DA_Dunipedia_KnownUniverse.The Bene Gesserit",
+      "entry": "The Bene Gesserit",
+      "fragment": "A secret distrans report from Margot Fenring",
+      "ancestors": [
+        "DA_Dunipedia_KnownUniverse",
+        "DA_Dunipedia_KnownUniverse.The Bene Gesserit",
+        "DA_Dunipedia_KnownUniverse.The Bene Gesserit.TheBeneGessiritFragment3Title"
+      ]
+    },
+    {
+      "id": "DA_Dunipedia_KnownUniverse.The Bene Gesserit.BeneGessiritFragment4Title.BeneGessiritFragment4Content",
+      "category": "The Known Universe",
+      "entryId": "DA_Dunipedia_KnownUniverse.The Bene Gesserit",
+      "entry": "The Bene Gesserit",
+      "fragment": "Bene Gesserit Archive Entry 7712.44 — Private Historical Commentary by R.M. G.H. Mohiam",
+      "ancestors": [
+        "DA_Dunipedia_KnownUniverse",
+        "DA_Dunipedia_KnownUniverse.The Bene Gesserit",
+        "DA_Dunipedia_KnownUniverse.The Bene Gesserit.BeneGessiritFragment4Title"
+      ]
+    },
+    {
+      "id": "DA_Dunipedia_KnownUniverse.TheBeneTleilax.TheBeneTleilaxFragment1Title.TheBeneTleilaxFragment1Content",
+      "category": "The Known Universe",
+      "entryId": "DA_Dunipedia_KnownUniverse.TheBeneTleilax",
+      "entry": "The Bene Tleilax",
+      "fragment": "Excerpt from the Curriculum of the Bene Gesserit",
+      "ancestors": [
+        "DA_Dunipedia_KnownUniverse",
+        "DA_Dunipedia_KnownUniverse.TheBeneTleilax",
+        "DA_Dunipedia_KnownUniverse.TheBeneTleilax.TheBeneTleilaxFragment1Title"
+      ]
+    },
+    {
+      "id": "DA_Dunipedia_KnownUniverse.TheButlerianJihad.TheButlerianJihadFragment1Title.TheButlerianJihadFragment1Content",
+      "category": "The Known Universe",
+      "entryId": "DA_Dunipedia_KnownUniverse.TheButlerianJihad",
+      "entry": "The Butlerian Jihad",
+      "fragment": "Letter from Guil Venard, Mentat of House Taligari",
+      "ancestors": [
+        "DA_Dunipedia_KnownUniverse",
+        "DA_Dunipedia_KnownUniverse.TheButlerianJihad",
+        "DA_Dunipedia_KnownUniverse.TheButlerianJihad.TheButlerianJihadFragment1Title"
+      ]
+    },
+    {
+      "id": "DA_Dunipedia_KnownUniverse.TheButlerianJihad.TheButlerianJihadFragment2Title.TheButlerianJihadFragment2Content",
+      "category": "The Known Universe",
+      "entryId": "DA_Dunipedia_KnownUniverse.TheButlerianJihad",
+      "entry": "The Butlerian Jihad",
+      "fragment": "Shadows of the Machine: Reflections on the Pre-Jihad Era - Docent Isolde Merin, Senior Lecturer, Department of Technological Anthropology, Wallach Consortium Institute",
+      "ancestors": [
+        "DA_Dunipedia_KnownUniverse",
+        "DA_Dunipedia_KnownUniverse.TheButlerianJihad",
+        "DA_Dunipedia_KnownUniverse.TheButlerianJihad.TheButlerianJihadFragment2Title"
+      ]
+    },
+    {
+      "id": "DA_Dunipedia_KnownUniverse.TheRiseOfHouseAtreides.TheRiseOfHouseAtreidesFragment1Title.1TheRiseOfHouseAtreidesFragment1Content",
+      "category": "The Known Universe",
+      "entryId": "DA_Dunipedia_KnownUniverse.TheRiseOfHouseAtreides",
+      "entry": "The Rise of House Atreides",
+      "fragment": "Diary of Ashra Kaif, attaché to the Landsraad Council",
+      "ancestors": [
+        "DA_Dunipedia_KnownUniverse",
+        "DA_Dunipedia_KnownUniverse.TheRiseOfHouseAtreides",
+        "DA_Dunipedia_KnownUniverse.TheRiseOfHouseAtreides.TheRiseOfHouseAtreidesFragment1Title"
+      ]
+    },
+    {
+      "id": "DA_Dunipedia_KnownUniverse.TheRiseOfHouseAtreides.TheRiseOfHouseAtreidesFragment2Title.1TheRiseOfHouseAtreidesFragment2Content",
+      "category": "The Known Universe",
+      "entryId": "DA_Dunipedia_KnownUniverse.TheRiseOfHouseAtreides",
+      "entry": "The Rise of House Atreides",
+      "fragment": "Intercepted anonymous report to the Sisterhood",
+      "ancestors": [
+        "DA_Dunipedia_KnownUniverse",
+        "DA_Dunipedia_KnownUniverse.TheRiseOfHouseAtreides",
+        "DA_Dunipedia_KnownUniverse.TheRiseOfHouseAtreides.TheRiseOfHouseAtreidesFragment2Title"
+      ]
+    },
+    {
+      "id": "DA_Dunipedia_KnownUniverse.TheRiseOfHouseAtreides.TheRiseOfHouseAtreidesFragment3Title.TheRiseOfHouseAtreidesFragment3Content",
+      "category": "The Known Universe",
+      "entryId": "DA_Dunipedia_KnownUniverse.TheRiseOfHouseAtreides",
+      "entry": "The Rise of House Atreides",
+      "fragment": "Blood-stained note found on an unnamed corpse in the O'odham",
+      "ancestors": [
+        "DA_Dunipedia_KnownUniverse",
+        "DA_Dunipedia_KnownUniverse.TheRiseOfHouseAtreides",
+        "DA_Dunipedia_KnownUniverse.TheRiseOfHouseAtreides.TheRiseOfHouseAtreidesFragment3Title"
+      ]
+    },
+    {
+      "id": "DA_Dunipedia_KnownUniverse.TheWarOfAssassins.TheWarOfAssassinsFragment1Title.TheWarOfAssassinsFragment1Content",
+      "category": "The Known Universe",
+      "entryId": "DA_Dunipedia_KnownUniverse.TheWarOfAssassins",
+      "entry": "The War of Assassins",
+      "fragment": "Duke Leto reflecting on the Battle of Arrakeen",
+      "ancestors": [
+        "DA_Dunipedia_KnownUniverse",
+        "DA_Dunipedia_KnownUniverse.TheWarOfAssassins",
+        "DA_Dunipedia_KnownUniverse.TheWarOfAssassins.TheWarOfAssassinsFragment1Title"
+      ]
+    },
+    {
+      "id": "DA_Dunipedia_KnownUniverse.TheWarOfAssassins.TheWarOfAssassinsFragment2Title.TheWarOfAssassinsFragment2Content",
+      "category": "The Known Universe",
+      "entryId": "DA_Dunipedia_KnownUniverse.TheWarOfAssassins",
+      "entry": "The War of Assassins",
+      "fragment": "A letter from Hasimir Fenring to Lady Margot Fenring",
+      "ancestors": [
+        "DA_Dunipedia_KnownUniverse",
+        "DA_Dunipedia_KnownUniverse.TheWarOfAssassins",
+        "DA_Dunipedia_KnownUniverse.TheWarOfAssassins.TheWarOfAssassinsFragment2Title"
+      ]
+    },
+    {
+      "id": "DA_Dunipedia_KnownUniverse.TheWarOfAssassins.TheWarOfAssassinsFragment3Title.TheWarOfAssassinsFragment3Content",
+      "category": "The Known Universe",
+      "entryId": "DA_Dunipedia_KnownUniverse.TheWarOfAssassins",
+      "entry": "The War of Assassins",
+      "fragment": "Message from Feyd-Rautha Harkonnen to his brother",
+      "ancestors": [
+        "DA_Dunipedia_KnownUniverse",
+        "DA_Dunipedia_KnownUniverse.TheWarOfAssassins",
+        "DA_Dunipedia_KnownUniverse.TheWarOfAssassins.TheWarOfAssassinsFragment3Title"
+      ]
+    },
+    {
+      "id": "DA_Dunipedia_KnownUniverse.The Arrakeen Epidemic.TheArrakeenEpidemicFragment1Title.TheArrakeenEpidemicFragment1Content",
+      "category": "The Known Universe",
+      "entryId": "DA_Dunipedia_KnownUniverse.The Arrakeen Epidemic",
+      "entry": "The Arrakeen Epidemic",
+      "fragment": "Transcript of a Recording Found in a Puddle of Gore",
+      "ancestors": [
+        "DA_Dunipedia_KnownUniverse",
+        "DA_Dunipedia_KnownUniverse.The Arrakeen Epidemic",
+        "DA_Dunipedia_KnownUniverse.The Arrakeen Epidemic.TheArrakeenEpidemicFragment1Title"
+      ]
+    },
+    {
+      "id": "DA_Dunipedia_KnownUniverse.The Arrakeen Epidemic.TheArrakeenEpidemicFragment2Title.TheArrakeenEpidemicFragment2Content",
+      "category": "The Known Universe",
+      "entryId": "DA_Dunipedia_KnownUniverse.The Arrakeen Epidemic",
+      "entry": "The Arrakeen Epidemic",
+      "fragment": "Note Left by Captain Tighe Skorda",
+      "ancestors": [
+        "DA_Dunipedia_KnownUniverse",
+        "DA_Dunipedia_KnownUniverse.The Arrakeen Epidemic",
+        "DA_Dunipedia_KnownUniverse.The Arrakeen Epidemic.TheArrakeenEpidemicFragment2Title"
+      ]
+    },
+    {
+      "id": "DA_Dunipedia_KnownUniverse.The Ghola Lab.TheGholaPlot_Title.TheGholaPlot_Content",
+      "category": "The Known Universe",
+      "entryId": "DA_Dunipedia_KnownUniverse.The Ghola Lab",
+      "entry": "The Ghola Experiments",
+      "fragment": "Excerpt from the Curriculum of the Bene Gesserit",
+      "ancestors": [
+        "DA_Dunipedia_KnownUniverse",
+        "DA_Dunipedia_KnownUniverse.The Ghola Lab",
+        "DA_Dunipedia_KnownUniverse.The Ghola Lab.TheGholaPlot_Title"
+      ]
+    },
+    {
+      "id": "DA_Dunipedia_KnownUniverse.The Ghola Lab.TheGholaPlot2Title.TheGholaPlot2Fragment",
+      "category": "The Known Universe",
+      "entryId": "DA_Dunipedia_KnownUniverse.The Ghola Lab",
+      "entry": "The Ghola Experiments",
+      "fragment": "Tleilaxu Log — Mnemonic Experiment Q337",
+      "ancestors": [
+        "DA_Dunipedia_KnownUniverse",
+        "DA_Dunipedia_KnownUniverse.The Ghola Lab",
+        "DA_Dunipedia_KnownUniverse.The Ghola Lab.TheGholaPlot2Title"
+      ]
+    },
+    {
+      "id": "DA_Dunipedia_Landmarks.Arrakis.ArrakisFragment1Title.ArrakisFragment1Content",
+      "category": "Landmarks",
+      "entryId": "DA_Dunipedia_Landmarks.Arrakis",
+      "entry": "Arrakis",
+      "fragment": " A Patron of the Anvil After Several Spiced Beers",
+      "ancestors": [
+        "DA_Dunipedia_Landmarks",
+        "DA_Dunipedia_Landmarks.Arrakis",
+        "DA_Dunipedia_Landmarks.Arrakis.ArrakisFragment1Title"
+      ]
+    },
+    {
+      "id": "DA_Dunipedia_Landmarks.Arrakis.ArrakisFragment2Title.ArrakisFragment2Content",
+      "category": "Landmarks",
+      "entryId": "DA_Dunipedia_Landmarks.Arrakis",
+      "entry": "Arrakis",
+      "fragment": "From the Personal Notes of Piter de Vries",
+      "ancestors": [
+        "DA_Dunipedia_Landmarks",
+        "DA_Dunipedia_Landmarks.Arrakis",
+        "DA_Dunipedia_Landmarks.Arrakis.ArrakisFragment2Title"
+      ]
+    },
+    {
+      "id": "DA_Dunipedia_Landmarks.Arrakeen.ArrakeenFragment1Title.ArrakeenFragment1Content",
+      "category": "Landmarks",
+      "entryId": "DA_Dunipedia_Landmarks.Arrakeen",
+      "entry": "Arrakeen",
+      "fragment": "From the Security Reports of Thufir Hawat",
+      "ancestors": [
+        "DA_Dunipedia_Landmarks",
+        "DA_Dunipedia_Landmarks.Arrakeen",
+        "DA_Dunipedia_Landmarks.Arrakeen.ArrakeenFragment1Title"
+      ]
+    },
+    {
+      "id": "DA_Dunipedia_Landmarks.HarkoVillage.HarkoVillageFragment1Title.HarkoVillageFragment1Content",
+      "category": "Landmarks",
+      "entryId": "DA_Dunipedia_Landmarks.HarkoVillage",
+      "entry": "Harko Village",
+      "fragment": "Report to House Richese",
+      "ancestors": [
+        "DA_Dunipedia_Landmarks",
+        "DA_Dunipedia_Landmarks.HarkoVillage",
+        "DA_Dunipedia_Landmarks.HarkoVillage.HarkoVillageFragment1Title"
+      ]
+    },
+    {
+      "id": "DA_Dunipedia_Landmarks.Neo-Carthag.Neo-CarthagFragment1Title.Neo-CarthagFragment1Content",
+      "category": "Landmarks",
+      "entryId": "DA_Dunipedia_Landmarks.Neo-Carthag",
+      "entry": "Neo-Carthag",
+      "fragment": "Letter from Amadi Ikeni",
+      "ancestors": [
+        "DA_Dunipedia_Landmarks",
+        "DA_Dunipedia_Landmarks.Neo-Carthag",
+        "DA_Dunipedia_Landmarks.Neo-Carthag.Neo-CarthagFragment1Title"
+      ]
+    },
+    {
+      "id": "DA_Dunipedia_Landmarks.FallenLight.FallenLightFragment1Title.FallenLightFragment1Content",
+      "category": "Landmarks",
+      "entryId": "DA_Dunipedia_Landmarks.FallenLight",
+      "entry": "Fallen Light",
+      "fragment": "Journal Entry, Anonymous Free Trader",
+      "ancestors": [
+        "DA_Dunipedia_Landmarks",
+        "DA_Dunipedia_Landmarks.FallenLight",
+        "DA_Dunipedia_Landmarks.FallenLight.FallenLightFragment1Title"
+      ]
+    },
+    {
+      "id": "DA_Dunipedia_Landmarks.HaggaBasinSouth.HaggaBasinSouthFragment1Title.HaggaBasinSouthFragment1Content",
+      "category": "Landmarks",
+      "entryId": "DA_Dunipedia_Landmarks.HaggaBasinSouth",
+      "entry": "Hagga Basin South",
+      "fragment": "Report from a Harkonnen Scout",
+      "ancestors": [
+        "DA_Dunipedia_Landmarks",
+        "DA_Dunipedia_Landmarks.HaggaBasinSouth",
+        "DA_Dunipedia_Landmarks.HaggaBasinSouth.HaggaBasinSouthFragment1Title"
+      ]
+    },
+    {
+      "id": "DA_Dunipedia_Landmarks.VermiliusGap.VermiliusGapFragment1Title.VermiliusGapFragment1Content",
+      "category": "Landmarks",
+      "entryId": "DA_Dunipedia_Landmarks.VermiliusGap",
+      "entry": "Vermillius Gap",
+      "fragment": "Overheard Conversation Between Members of the Kirab",
+      "ancestors": [
+        "DA_Dunipedia_Landmarks",
+        "DA_Dunipedia_Landmarks.VermiliusGap",
+        "DA_Dunipedia_Landmarks.VermiliusGap.VermiliusGapFragment1Title"
+      ]
+    },
+    {
+      "id": "DA_Dunipedia_Landmarks.VermiliusGap.VermiliusGapFragment2Title.VermiliusGapFragment2Content",
+      "category": "Landmarks",
+      "entryId": "DA_Dunipedia_Landmarks.VermiliusGap",
+      "entry": "Vermillius Gap",
+      "fragment": "From the Journal of Ariste Atreides",
+      "ancestors": [
+        "DA_Dunipedia_Landmarks",
+        "DA_Dunipedia_Landmarks.VermiliusGap",
+        "DA_Dunipedia_Landmarks.VermiliusGap.VermiliusGapFragment2Title"
+      ]
+    },
+    {
+      "id": "DA_Dunipedia_Landmarks.HaggaRift.HaggaRiftFragment1Title.HaggaRiftFragment1Content",
+      "category": "Landmarks",
+      "entryId": "DA_Dunipedia_Landmarks.HaggaRift",
+      "entry": "Hagga Rift",
+      "fragment": "Note Found On the Dried Cadaver of an Atreides Deserter",
+      "ancestors": [
+        "DA_Dunipedia_Landmarks",
+        "DA_Dunipedia_Landmarks.HaggaRift",
+        "DA_Dunipedia_Landmarks.HaggaRift.HaggaRiftFragment1Title"
+      ]
+    },
+    {
+      "id": "DA_Dunipedia_Landmarks.JabalEifrit.JabalEifritFragment1Title.JabalEifritFragment1Content",
+      "category": "Landmarks",
+      "entryId": "DA_Dunipedia_Landmarks.JabalEifrit",
+      "entry": "Jabal Eifrit",
+      "fragment": "Excerpt from the Report of Sabine Halil",
+      "ancestors": [
+        "DA_Dunipedia_Landmarks",
+        "DA_Dunipedia_Landmarks.JabalEifrit",
+        "DA_Dunipedia_Landmarks.JabalEifrit.JabalEifritFragment1Title"
+      ]
+    },
+    {
+      "id": "DA_Dunipedia_Landmarks.JabalEifrit.JabalEifritFragment2Title.JabalEifritFragment2Content",
+      "category": "Landmarks",
+      "entryId": "DA_Dunipedia_Landmarks.JabalEifrit",
+      "entry": "Jabal Eifrit",
+      "fragment": "From the Journal of Ariste Atreides",
+      "ancestors": [
+        "DA_Dunipedia_Landmarks",
+        "DA_Dunipedia_Landmarks.JabalEifrit",
+        "DA_Dunipedia_Landmarks.JabalEifrit.JabalEifritFragment2Title"
+      ]
+    },
+    {
+      "id": "DA_Dunipedia_Landmarks.ShieldWall.ShieldWallFragment1TItle.ShieldWallFragment1Content",
+      "category": "Landmarks",
+      "entryId": "DA_Dunipedia_Landmarks.ShieldWall",
+      "entry": "Shield Wall",
+      "fragment": "From the Notes of Thufir Hawat",
+      "ancestors": [
+        "DA_Dunipedia_Landmarks",
+        "DA_Dunipedia_Landmarks.ShieldWall",
+        "DA_Dunipedia_Landmarks.ShieldWall.ShieldWallFragment1TItle"
+      ]
+    },
+    {
+      "id": "DA_Dunipedia_Landmarks.ShieldWall.ShieldWallFragment2Title.ShieldWallFragment2Content",
+      "category": "Landmarks",
+      "entryId": "DA_Dunipedia_Landmarks.ShieldWall",
+      "entry": "Shield Wall",
+      "fragment": "Excerpt from a Letter to Lady Jessica from the Sisterhood",
+      "ancestors": [
+        "DA_Dunipedia_Landmarks",
+        "DA_Dunipedia_Landmarks.ShieldWall",
+        "DA_Dunipedia_Landmarks.ShieldWall.ShieldWallFragment2Title"
+      ]
+    },
+    {
+      "id": "DA_Dunipedia_Landmarks.Oodham.OodhamFragment1Title.OodhamFragment1Content",
+      "category": "Landmarks",
+      "entryId": "DA_Dunipedia_Landmarks.Oodham",
+      "entry": "O’odham",
+      "fragment": "From the Field Notes of Derek Chinara",
+      "ancestors": [
+        "DA_Dunipedia_Landmarks",
+        "DA_Dunipedia_Landmarks.Oodham",
+        "DA_Dunipedia_Landmarks.Oodham.OodhamFragment1Title"
+      ]
+    },
+    {
+      "id": "DA_Dunipedia_Landmarks.Oodham.OodhamFragment2Title.OodhamFragment2Content",
+      "category": "Landmarks",
+      "entryId": "DA_Dunipedia_Landmarks.Oodham",
+      "entry": "O’odham",
+      "fragment": "Report to Piter de Vries from an Undercover Agent",
+      "ancestors": [
+        "DA_Dunipedia_Landmarks",
+        "DA_Dunipedia_Landmarks.Oodham",
+        "DA_Dunipedia_Landmarks.Oodham.OodhamFragment2Title"
+      ]
+    },
+    {
+      "id": "DA_Dunipedia_Landmarks.TheSheol.TheSheolFragment1Title.TheSheolFragment1Content",
+      "category": "Landmarks",
+      "entryId": "DA_Dunipedia_Landmarks.TheSheol",
+      "entry": "Sheol",
+      "fragment": "Final Interview With Lars Wren, Smuggler",
+      "ancestors": [
+        "DA_Dunipedia_Landmarks",
+        "DA_Dunipedia_Landmarks.TheSheol",
+        "DA_Dunipedia_Landmarks.TheSheol.TheSheolFragment1Title"
+      ]
+    },
+    {
+      "id": "DA_Dunipedia_Landmarks.DeepDesert.DeepDesertFragment1Title.DeepDesertFragment1Content",
+      "category": "Landmarks",
+      "entryId": "DA_Dunipedia_Landmarks.DeepDesert",
+      "entry": "Deep Desert",
+      "fragment": "Transcript Excerpt From the Interrogation of a Kirab Fighter",
+      "ancestors": [
+        "DA_Dunipedia_Landmarks",
+        "DA_Dunipedia_Landmarks.DeepDesert",
+        "DA_Dunipedia_Landmarks.DeepDesert.DeepDesertFragment1Title"
+      ]
+    },
+    {
+      "id": "DA_Dunipedia_Landmarks.ImperialTestingStations.ImperialTestingStationsFragment1Title.ImperialTestingStationsFragment1Content",
+      "category": "Landmarks",
+      "entryId": "DA_Dunipedia_Landmarks.ImperialTestingStations",
+      "entry": "Imperial Testing Stations",
+      "fragment": "Excerpt from Interview of Agatha Haight by Thufir Hawat",
+      "ancestors": [
+        "DA_Dunipedia_Landmarks",
+        "DA_Dunipedia_Landmarks.ImperialTestingStations",
+        "DA_Dunipedia_Landmarks.ImperialTestingStations.ImperialTestingStationsFragment1Title"
+      ]
+    },
+    {
+      "id": "DA_Dunipedia_Landmarks.Zanovar.ZanovarFragment1Title.ZanovarFragment1Content",
+      "category": "Landmarks",
+      "entryId": "DA_Dunipedia_Landmarks.Zanovar",
+      "entry": "Zanovar",
+      "fragment": "Combat Action Report",
+      "ancestors": [
+        "DA_Dunipedia_Landmarks",
+        "DA_Dunipedia_Landmarks.Zanovar",
+        "DA_Dunipedia_Landmarks.Zanovar.ZanovarFragment1Title"
+      ]
+    },
+    {
+      "id": "DA_Dunipedia_ManualOfTheFriendlyDesert.Planetology.PlanetologyFragment1Title.PlanetologyFragment1Content",
+      "category": "Manual of the Friendly Desert",
+      "entryId": "DA_Dunipedia_ManualOfTheFriendlyDesert.Planetology",
+      "entry": "PLANETOLOGY",
+      "fragment": "A lecture by Pardot Kynes to the Fremen",
+      "ancestors": [
+        "DA_Dunipedia_ManualOfTheFriendlyDesert",
+        "DA_Dunipedia_ManualOfTheFriendlyDesert.Planetology",
+        "DA_Dunipedia_ManualOfTheFriendlyDesert.Planetology.PlanetologyFragment1Title"
+      ]
+    },
+    {
+      "id": "DA_Dunipedia_ManualOfTheFriendlyDesert.Planetology.PlanetologyFragment2Title.PlanetologyFragment2Content",
+      "category": "Manual of the Friendly Desert",
+      "entryId": "DA_Dunipedia_ManualOfTheFriendlyDesert.Planetology",
+      "entry": "PLANETOLOGY",
+      "fragment": "From the field notes of Derek Chinara",
+      "ancestors": [
+        "DA_Dunipedia_ManualOfTheFriendlyDesert",
+        "DA_Dunipedia_ManualOfTheFriendlyDesert.Planetology",
+        "DA_Dunipedia_ManualOfTheFriendlyDesert.Planetology.PlanetologyFragment2Title"
+      ]
+    },
+    {
+      "id": "DA_Dunipedia_ManualOfTheFriendlyDesert.Planetology.PlanetologyFragment3Title.PlanetologyFragment3Content",
+      "category": "Manual of the Friendly Desert",
+      "entryId": "DA_Dunipedia_ManualOfTheFriendlyDesert.Planetology",
+      "entry": "PLANETOLOGY",
+      "fragment": "Lecture from the Imperial Academy, given by Ons Habidu, Imperial Planetologist",
+      "ancestors": [
+        "DA_Dunipedia_ManualOfTheFriendlyDesert",
+        "DA_Dunipedia_ManualOfTheFriendlyDesert.Planetology",
+        "DA_Dunipedia_ManualOfTheFriendlyDesert.Planetology.PlanetologyFragment3Title"
+      ]
+    },
+    {
+      "id": "DA_Dunipedia_ManualOfTheFriendlyDesert.Worms.WormsFragment1Title.WormsFragment1Content",
+      "category": "Manual of the Friendly Desert",
+      "entryId": "DA_Dunipedia_ManualOfTheFriendlyDesert.Worms",
+      "entry": "WORMS",
+      "fragment": "Letter From a Young Noble Who Never Returned",
+      "ancestors": [
+        "DA_Dunipedia_ManualOfTheFriendlyDesert",
+        "DA_Dunipedia_ManualOfTheFriendlyDesert.Worms",
+        "DA_Dunipedia_ManualOfTheFriendlyDesert.Worms.WormsFragment1Title"
+      ]
+    },
+    {
+      "id": "DA_Dunipedia_ManualOfTheFriendlyDesert.Worms.WormsFragment2Title.WormsFragment2Content",
+      "category": "Manual of the Friendly Desert",
+      "entryId": "DA_Dunipedia_ManualOfTheFriendlyDesert.Worms",
+      "entry": "WORMS",
+      "fragment": "Excerpt From the Oral Histories of Arrakis",
+      "ancestors": [
+        "DA_Dunipedia_ManualOfTheFriendlyDesert",
+        "DA_Dunipedia_ManualOfTheFriendlyDesert.Worms",
+        "DA_Dunipedia_ManualOfTheFriendlyDesert.Worms.WormsFragment2Title"
+      ]
+    },
+    {
+      "id": "DA_Dunipedia_ManualOfTheFriendlyDesert.Spice.SpiceFragment1Title.SpiceFragment1Content",
+      "category": "Manual of the Friendly Desert",
+      "entryId": "DA_Dunipedia_ManualOfTheFriendlyDesert.Spice",
+      "entry": "SPICE",
+      "fragment": "Conversation With a Smuggler: Spice as Currency",
+      "ancestors": [
+        "DA_Dunipedia_ManualOfTheFriendlyDesert",
+        "DA_Dunipedia_ManualOfTheFriendlyDesert.Spice",
+        "DA_Dunipedia_ManualOfTheFriendlyDesert.Spice.SpiceFragment1Title"
+      ]
+    },
+    {
+      "id": "DA_Dunipedia_ManualOfTheFriendlyDesert.Spice.SpiceFragment2Title.SpiceFragment2Content",
+      "category": "Manual of the Friendly Desert",
+      "entryId": "DA_Dunipedia_ManualOfTheFriendlyDesert.Spice",
+      "entry": "SPICE",
+      "fragment": "The Gift of Spice Blows — Bandit Notes",
+      "ancestors": [
+        "DA_Dunipedia_ManualOfTheFriendlyDesert",
+        "DA_Dunipedia_ManualOfTheFriendlyDesert.Spice",
+        "DA_Dunipedia_ManualOfTheFriendlyDesert.Spice.SpiceFragment2Title"
+      ]
+    },
+    {
+      "id": "DA_Dunipedia_ManualOfTheFriendlyDesert.Spice.SpiceFragment3Title.SpiceFragment3Content",
+      "category": "Manual of the Friendly Desert",
+      "entryId": "DA_Dunipedia_ManualOfTheFriendlyDesert.Spice",
+      "entry": "SPICE",
+      "fragment": "A conversation with a former slaver",
+      "ancestors": [
+        "DA_Dunipedia_ManualOfTheFriendlyDesert",
+        "DA_Dunipedia_ManualOfTheFriendlyDesert.Spice",
+        "DA_Dunipedia_ManualOfTheFriendlyDesert.Spice.SpiceFragment3Title"
+      ]
+    },
+    {
+      "id": "DA_Dunipedia_ManualOfTheFriendlyDesert.Storms.StormsFragment1Title.StormsFragment1Content",
+      "category": "Manual of the Friendly Desert",
+      "entryId": "DA_Dunipedia_ManualOfTheFriendlyDesert.Storms",
+      "entry": "STORMS",
+      "fragment": "Sandstorms: Overheard at the Anvil Tradepost",
+      "ancestors": [
+        "DA_Dunipedia_ManualOfTheFriendlyDesert",
+        "DA_Dunipedia_ManualOfTheFriendlyDesert.Storms",
+        "DA_Dunipedia_ManualOfTheFriendlyDesert.Storms.StormsFragment1Title"
+      ]
+    },
+    {
+      "id": "DA_Dunipedia_ManualOfTheFriendlyDesert.Storms.StormsFragment2Title.StormsFragment2Content",
+      "category": "Manual of the Friendly Desert",
+      "entryId": "DA_Dunipedia_ManualOfTheFriendlyDesert.Storms",
+      "entry": "STORMS",
+      "fragment": "Coriolis Storms: Final Moments of the Transport Ship Agamemnon",
+      "ancestors": [
+        "DA_Dunipedia_ManualOfTheFriendlyDesert",
+        "DA_Dunipedia_ManualOfTheFriendlyDesert.Storms",
+        "DA_Dunipedia_ManualOfTheFriendlyDesert.Storms.StormsFragment2Title"
+      ]
+    },
+    {
+      "id": "DA_Dunipedia_ManualOfTheFriendlyDesert.Dunes.DunesFragment1Title.DunesFragment1Content",
+      "category": "Manual of the Friendly Desert",
+      "entryId": "DA_Dunipedia_ManualOfTheFriendlyDesert.Dunes",
+      "entry": "DUNES",
+      "fragment": "Confession of a Desert Bandit",
+      "ancestors": [
+        "DA_Dunipedia_ManualOfTheFriendlyDesert",
+        "DA_Dunipedia_ManualOfTheFriendlyDesert.Dunes",
+        "DA_Dunipedia_ManualOfTheFriendlyDesert.Dunes.DunesFragment1Title"
+      ]
+    },
+    {
+      "id": "DA_Dunipedia_ManualOfTheFriendlyDesert.Dunes.DunesFragment2Title.DunesFragment2Content",
+      "category": "Manual of the Friendly Desert",
+      "entryId": "DA_Dunipedia_ManualOfTheFriendlyDesert.Dunes",
+      "entry": "DUNES",
+      "fragment": "Report from a Merchant",
+      "ancestors": [
+        "DA_Dunipedia_ManualOfTheFriendlyDesert",
+        "DA_Dunipedia_ManualOfTheFriendlyDesert.Dunes",
+        "DA_Dunipedia_ManualOfTheFriendlyDesert.Dunes.DunesFragment2Title"
+      ]
+    },
+    {
+      "id": "DA_Dunipedia_ManualOfTheFriendlyDesert.Dunes.DunesFragment3Title.DunesFragment3Content",
+      "category": "Manual of the Friendly Desert",
+      "entryId": "DA_Dunipedia_ManualOfTheFriendlyDesert.Dunes",
+      "entry": "DUNES",
+      "fragment": "Drunken Banter of a Duneman",
+      "ancestors": [
+        "DA_Dunipedia_ManualOfTheFriendlyDesert",
+        "DA_Dunipedia_ManualOfTheFriendlyDesert.Dunes",
+        "DA_Dunipedia_ManualOfTheFriendlyDesert.Dunes.DunesFragment3Title"
+      ]
+    },
+    {
+      "id": "DA_Dunipedia_ManualOfTheFriendlyDesert.Dunes.DunesFragment4Title.DunesFragment4Content",
+      "category": "Manual of the Friendly Desert",
+      "entryId": "DA_Dunipedia_ManualOfTheFriendlyDesert.Dunes",
+      "entry": "DUNES",
+      "fragment": "From the Journal of Ariste Atreides",
+      "ancestors": [
+        "DA_Dunipedia_ManualOfTheFriendlyDesert",
+        "DA_Dunipedia_ManualOfTheFriendlyDesert.Dunes",
+        "DA_Dunipedia_ManualOfTheFriendlyDesert.Dunes.DunesFragment4Title"
+      ]
+    },
+    {
+      "id": "DA_Dunipedia_ManualOfTheFriendlyDesert.FloraAndFauna.FloraAndFaunaFragment1Title.FloraAndFaunaFragment1Content",
+      "category": "Manual of the Friendly Desert",
+      "entryId": "DA_Dunipedia_ManualOfTheFriendlyDesert.FloraAndFauna",
+      "entry": "FLORA AND FAUNA",
+      "fragment": "MUAD'DIB: FROM THE JOURNAL OF ARISTE ATREIDES",
+      "ancestors": [
+        "DA_Dunipedia_ManualOfTheFriendlyDesert",
+        "DA_Dunipedia_ManualOfTheFriendlyDesert.FloraAndFauna",
+        "DA_Dunipedia_ManualOfTheFriendlyDesert.FloraAndFauna.FloraAndFaunaFragment1Title"
+      ]
+    },
+    {
+      "id": "DA_Dunipedia_ManualOfTheFriendlyDesert.FloraAndFauna.FloraAndFaunaFragment2Title.FloraAndFaunaFragment2Content",
+      "category": "Manual of the Friendly Desert",
+      "entryId": "DA_Dunipedia_ManualOfTheFriendlyDesert.FloraAndFauna",
+      "entry": "FLORA AND FAUNA",
+      "fragment": "PLANTS: A RANT BY A DRUNKEN DUNE MAN",
+      "ancestors": [
+        "DA_Dunipedia_ManualOfTheFriendlyDesert",
+        "DA_Dunipedia_ManualOfTheFriendlyDesert.FloraAndFauna",
+        "DA_Dunipedia_ManualOfTheFriendlyDesert.FloraAndFauna.FloraAndFaunaFragment2Title"
+      ]
+    },
+    {
+      "id": "DA_Dunipedia_ManualOfTheFriendlyDesert.FloraAndFauna.FloraAndFaunaFragment3Title.FloraAndFaunaFragment3Content",
+      "category": "Manual of the Friendly Desert",
+      "entryId": "DA_Dunipedia_ManualOfTheFriendlyDesert.FloraAndFauna",
+      "entry": "FLORA AND FAUNA",
+      "fragment": "DESERT HAWK: NOTE FOUND ON A PICKED-CLEAN SKELETON",
+      "ancestors": [
+        "DA_Dunipedia_ManualOfTheFriendlyDesert",
+        "DA_Dunipedia_ManualOfTheFriendlyDesert.FloraAndFauna",
+        "DA_Dunipedia_ManualOfTheFriendlyDesert.FloraAndFauna.FloraAndFaunaFragment3Title"
+      ]
+    },
+    {
+      "id": "DA_Dunipedia_ManualOfTheFriendlyDesert.FloraAndFauna.FloraAndFaunaFragment4Title.FloraAndFaunaFragment4Content",
+      "category": "Manual of the Friendly Desert",
+      "entryId": "DA_Dunipedia_ManualOfTheFriendlyDesert.FloraAndFauna",
+      "entry": "FLORA AND FAUNA",
+      "fragment": "DESERT BAT: FROM THE PERSONAL NOTES OF PITER DE VRIES",
+      "ancestors": [
+        "DA_Dunipedia_ManualOfTheFriendlyDesert",
+        "DA_Dunipedia_ManualOfTheFriendlyDesert.FloraAndFauna",
+        "DA_Dunipedia_ManualOfTheFriendlyDesert.FloraAndFauna.FloraAndFaunaFragment4Title"
+      ]
+    },
+    {
+      "id": "DA_Dunipedia_ManualOfTheFriendlyDesert.FloraAndFauna.FloraAndFaunaFragment5Title.FloraAndFaunaFragment5Content",
+      "category": "Manual of the Friendly Desert",
+      "entryId": "DA_Dunipedia_ManualOfTheFriendlyDesert.FloraAndFauna",
+      "entry": "FLORA AND FAUNA",
+      "fragment": "INVASIVE CACTI: FROM THE FIELD NOTES OF DEREK CHINARA",
+      "ancestors": [
+        "DA_Dunipedia_ManualOfTheFriendlyDesert",
+        "DA_Dunipedia_ManualOfTheFriendlyDesert.FloraAndFauna",
+        "DA_Dunipedia_ManualOfTheFriendlyDesert.FloraAndFauna.FloraAndFaunaFragment5Title"
+      ]
+    },
+    {
+      "id": "DA_Dunipedia_ManualOfTheFriendlyDesert.Fremkit.FremkitFragment1Title.FremkitFragment1Content",
+      "category": "Manual of the Friendly Desert",
+      "entryId": "DA_Dunipedia_ManualOfTheFriendlyDesert.Fremkit",
+      "entry": "FREMKIT",
+      "fragment": "PARACOMPASS — Definition from Imperial Archives, Commentary from Count Fenring",
+      "ancestors": [
+        "DA_Dunipedia_ManualOfTheFriendlyDesert",
+        "DA_Dunipedia_ManualOfTheFriendlyDesert.Fremkit",
+        "DA_Dunipedia_ManualOfTheFriendlyDesert.Fremkit.FremkitFragment1Title"
+      ]
+    },
+    {
+      "id": "DA_Dunipedia_ManualOfTheFriendlyDesert.Fremkit.FremkitFragment2Title.FremkitFragment2Content",
+      "category": "Manual of the Friendly Desert",
+      "entryId": "DA_Dunipedia_ManualOfTheFriendlyDesert.Fremkit",
+      "entry": "FREMKIT",
+      "fragment": "SINKCHART — Definition from Imperial Archives, Commentary from Count Fenring",
+      "ancestors": [
+        "DA_Dunipedia_ManualOfTheFriendlyDesert",
+        "DA_Dunipedia_ManualOfTheFriendlyDesert.Fremkit",
+        "DA_Dunipedia_ManualOfTheFriendlyDesert.Fremkit.FremkitFragment2Title"
+      ]
+    },
+    {
+      "id": "DA_Dunipedia_ManualOfTheFriendlyDesert.Fremkit.FremkitFragment3Title.FremkitFragment3Content",
+      "category": "Manual of the Friendly Desert",
+      "entryId": "DA_Dunipedia_ManualOfTheFriendlyDesert.Fremkit",
+      "entry": "FREMKIT",
+      "fragment": "STILLSUIT — Definition from Imperial Archives, Commentary from Count Fenring",
+      "ancestors": [
+        "DA_Dunipedia_ManualOfTheFriendlyDesert",
+        "DA_Dunipedia_ManualOfTheFriendlyDesert.Fremkit",
+        "DA_Dunipedia_ManualOfTheFriendlyDesert.Fremkit.FremkitFragment3Title"
+      ]
+    },
+    {
+      "id": "DA_Dunipedia_ManualOfTheFriendlyDesert.Fremkit.FremkitFragment4Title.FremkitFragment4Content",
+      "category": "Manual of the Friendly Desert",
+      "entryId": "DA_Dunipedia_ManualOfTheFriendlyDesert.Fremkit",
+      "entry": "FREMKIT",
+      "fragment": "STATIC COMPACTOR — Definition from Imperial Archives, Commentary from Count Fenring",
+      "ancestors": [
+        "DA_Dunipedia_ManualOfTheFriendlyDesert",
+        "DA_Dunipedia_ManualOfTheFriendlyDesert.Fremkit",
+        "DA_Dunipedia_ManualOfTheFriendlyDesert.Fremkit.FremkitFragment4Title"
+      ]
+    },
+    {
+      "id": "DA_Dunipedia_ManualOfTheFriendlyDesert.Fremkit.FremkitFragment5Title.FremkitFragment5Content",
+      "category": "Manual of the Friendly Desert",
+      "entryId": "DA_Dunipedia_ManualOfTheFriendlyDesert.Fremkit",
+      "entry": "FREMKIT",
+      "fragment": "CRYSKNIFE — Definition from Imperial Archives, Commentary from Count Fenring",
+      "ancestors": [
+        "DA_Dunipedia_ManualOfTheFriendlyDesert",
+        "DA_Dunipedia_ManualOfTheFriendlyDesert.Fremkit",
+        "DA_Dunipedia_ManualOfTheFriendlyDesert.Fremkit.FremkitFragment5Title"
+      ]
+    },
+    {
+      "id": "DA_Dunipedia_ManualOfTheFriendlyDesert.Fremkit.FremkitFragment6Title.FremkitFragment6Content",
+      "category": "Manual of the Friendly Desert",
+      "entryId": "DA_Dunipedia_ManualOfTheFriendlyDesert.Fremkit",
+      "entry": "FREMKIT",
+      "fragment": "THUMPER — Definition from Imperial Archives, Commentary from Count Fenring",
+      "ancestors": [
+        "DA_Dunipedia_ManualOfTheFriendlyDesert",
+        "DA_Dunipedia_ManualOfTheFriendlyDesert.Fremkit",
+        "DA_Dunipedia_ManualOfTheFriendlyDesert.Fremkit.FremkitFragment6Title"
+      ]
+    },
+    {
+      "id": "DA_Dunipedia_ManualOfTheFriendlyDesert.Fremkit.FremkitFragment7Title.FremkitFragment7Content",
+      "category": "Manual of the Friendly Desert",
+      "entryId": "DA_Dunipedia_ManualOfTheFriendlyDesert.Fremkit",
+      "entry": "FREMKIT",
+      "fragment": "STILLTENT — Definition from Imperial Archives, Commentary from Count Fenring",
+      "ancestors": [
+        "DA_Dunipedia_ManualOfTheFriendlyDesert",
+        "DA_Dunipedia_ManualOfTheFriendlyDesert.Fremkit",
+        "DA_Dunipedia_ManualOfTheFriendlyDesert.Fremkit.FremkitFragment7Title"
+      ]
+    },
+    {
+      "id": "DA_Dunipedia_ManualOfTheFriendlyDesert.Fremkit.FremkitFragment8Title.FremkitFragment8Content",
+      "category": "Manual of the Friendly Desert",
+      "entryId": "DA_Dunipedia_ManualOfTheFriendlyDesert.Fremkit",
+      "entry": "FREMKIT",
+      "fragment": "DEATHSTILL — Definition from Imperial Archives, Commentary from Count Fenring",
+      "ancestors": [
+        "DA_Dunipedia_ManualOfTheFriendlyDesert",
+        "DA_Dunipedia_ManualOfTheFriendlyDesert.Fremkit",
+        "DA_Dunipedia_ManualOfTheFriendlyDesert.Fremkit.FremkitFragment8Title"
+      ]
+    },
+    {
+      "id": "DA_Dunipedia_WarForArrakis.House Atreides.HouseAtreidesFragment1Title.HouseAtreidesFragment1Desc",
+      "category": "The War for Arrakis",
+      "entryId": "DA_Dunipedia_WarForArrakis.House Atreides",
+      "entry": "House Atreides ",
+      "fragment": "From an Atreides Recruitment Pamphlet",
+      "ancestors": [
+        "DA_Dunipedia_WarForArrakis",
+        "DA_Dunipedia_WarForArrakis.House Atreides",
+        "DA_Dunipedia_WarForArrakis.House Atreides.HouseAtreidesFragment1Title"
+      ]
+    },
+    {
+      "id": "DA_Dunipedia_WarForArrakis.House Atreides.HouseAtreidesFragment2Title.HouseAtreidesFragment2Desc",
+      "category": "The War for Arrakis",
+      "entryId": "DA_Dunipedia_WarForArrakis.House Atreides",
+      "entry": "House Atreides ",
+      "fragment": "From the Journal of Lieutenant Anton Tolliver",
+      "ancestors": [
+        "DA_Dunipedia_WarForArrakis",
+        "DA_Dunipedia_WarForArrakis.House Atreides",
+        "DA_Dunipedia_WarForArrakis.House Atreides.HouseAtreidesFragment2Title"
+      ]
+    },
+    {
+      "id": "DA_Dunipedia_WarForArrakis.House Atreides.HouseAtreidesFragment3Title.HouseAtreidesFragment3Desc",
+      "category": "The War for Arrakis",
+      "entryId": "DA_Dunipedia_WarForArrakis.House Atreides",
+      "entry": "House Atreides ",
+      "fragment": "A Letter from Duke Leto to Lady Jessica",
+      "ancestors": [
+        "DA_Dunipedia_WarForArrakis",
+        "DA_Dunipedia_WarForArrakis.House Atreides",
+        "DA_Dunipedia_WarForArrakis.House Atreides.HouseAtreidesFragment3Title"
+      ]
+    },
+    {
+      "id": "DA_Dunipedia_WarForArrakis.House Harkonnen.HouseHarkonnenFragment1Title.HouseHarkonnenFragment1Desc",
+      "category": "The War for Arrakis",
+      "entryId": "DA_Dunipedia_WarForArrakis.House Harkonnen",
+      "entry": "House Harkonnen",
+      "fragment": "From a Harkonnen Recruitment Pamphlet",
+      "ancestors": [
+        "DA_Dunipedia_WarForArrakis",
+        "DA_Dunipedia_WarForArrakis.House Harkonnen",
+        "DA_Dunipedia_WarForArrakis.House Harkonnen.HouseHarkonnenFragment1Title"
+      ]
+    },
+    {
+      "id": "DA_Dunipedia_WarForArrakis.House Harkonnen.HouseHarkonnenFragment2Title.HouseHarkonnenFragment2Desc",
+      "category": "The War for Arrakis",
+      "entryId": "DA_Dunipedia_WarForArrakis.House Harkonnen",
+      "entry": "House Harkonnen",
+      "fragment": "Public Broadcast on Giedi Prime",
+      "ancestors": [
+        "DA_Dunipedia_WarForArrakis",
+        "DA_Dunipedia_WarForArrakis.House Harkonnen",
+        "DA_Dunipedia_WarForArrakis.House Harkonnen.HouseHarkonnenFragment2Title"
+      ]
+    },
+    {
+      "id": "DA_Dunipedia_WarForArrakis.House Harkonnen.HouseHarkonnenFragment3Title.HouseHarkonnenFragment3Desc",
+      "category": "The War for Arrakis",
+      "entryId": "DA_Dunipedia_WarForArrakis.House Harkonnen",
+      "entry": "House Harkonnen",
+      "fragment": "From the Personal Notes of Piter de Vries",
+      "ancestors": [
+        "DA_Dunipedia_WarForArrakis",
+        "DA_Dunipedia_WarForArrakis.House Harkonnen",
+        "DA_Dunipedia_WarForArrakis.House Harkonnen.HouseHarkonnenFragment3Title"
+      ]
+    },
+    {
+      "id": "DA_Dunipedia_WarForArrakis.TheSmugglers.TheSmugglersFragment1Title.TheSmugglersFragment1Content",
+      "category": "The War for Arrakis",
+      "entryId": "DA_Dunipedia_WarForArrakis.TheSmugglers",
+      "entry": "The Smugglers",
+      "fragment": "Advice From a Senior Smuggler",
+      "ancestors": [
+        "DA_Dunipedia_WarForArrakis",
+        "DA_Dunipedia_WarForArrakis.TheSmugglers",
+        "DA_Dunipedia_WarForArrakis.TheSmugglers.TheSmugglersFragment1Title"
+      ]
+    },
+    {
+      "id": "DA_Dunipedia_WarForArrakis.TheSmugglers.TheSmugglersFragment2Title.TheSmugglersFragment2Content",
+      "category": "The War for Arrakis",
+      "entryId": "DA_Dunipedia_WarForArrakis.TheSmugglers",
+      "entry": "The Smugglers",
+      "fragment": "Interrogation Transcript— Ress Duran, Smuggler Captain (Arsunt Imperial Detention Facility)  ",
+      "ancestors": [
+        "DA_Dunipedia_WarForArrakis",
+        "DA_Dunipedia_WarForArrakis.TheSmugglers",
+        "DA_Dunipedia_WarForArrakis.TheSmugglers.TheSmugglersFragment2Title"
+      ]
+    },
+    {
+      "id": "DA_Dunipedia_WarForArrakis.The Fremen.The Fremen frag 1 Title.The Fremen frag 1 desc",
+      "category": "The War for Arrakis",
+      "entryId": "DA_Dunipedia_WarForArrakis.The Fremen",
+      "entry": "The Fremen",
+      "fragment": "Overheard in a Tradepost in the Hagga Basin",
+      "ancestors": [
+        "DA_Dunipedia_WarForArrakis",
+        "DA_Dunipedia_WarForArrakis.The Fremen",
+        "DA_Dunipedia_WarForArrakis.The Fremen.The Fremen frag 1 Title"
+      ]
+    },
+    {
+      "id": "DA_Dunipedia_WarForArrakis.The Fremen.The Fremen frag 2 Title.The Fremen frag 2 desc",
+      "category": "The War for Arrakis",
+      "entryId": "DA_Dunipedia_WarForArrakis.The Fremen",
+      "entry": "The Fremen",
+      "fragment": "Excerpt from “The Zensunni Schism: A History” by Princess Irulan",
+      "ancestors": [
+        "DA_Dunipedia_WarForArrakis",
+        "DA_Dunipedia_WarForArrakis.The Fremen",
+        "DA_Dunipedia_WarForArrakis.The Fremen.The Fremen frag 2 Title"
+      ]
+    },
+    {
+      "id": "DA_Dunipedia_WarForArrakis.The Fremen.The Fremen frag 3 Title.The Fremen frag 3 desc",
+      "category": "The War for Arrakis",
+      "entryId": "DA_Dunipedia_WarForArrakis.The Fremen",
+      "entry": "The Fremen",
+      "fragment": "Submitted to the Sisterhood for consideration by Ariste Atreides",
+      "ancestors": [
+        "DA_Dunipedia_WarForArrakis",
+        "DA_Dunipedia_WarForArrakis.The Fremen",
+        "DA_Dunipedia_WarForArrakis.The Fremen.The Fremen frag 3 Title"
+      ]
+    },
+    {
+      "id": "DA_Dunipedia_WarForArrakis.Sandflies.SandfliesFragment1Title.SandfliesFragment1Content",
+      "category": "The War for Arrakis",
+      "entryId": "DA_Dunipedia_WarForArrakis.Sandflies",
+      "entry": "The Sandflies",
+      "fragment": "Excerpt From the “Dune-Watch Network” Communinet Show",
+      "ancestors": [
+        "DA_Dunipedia_WarForArrakis",
+        "DA_Dunipedia_WarForArrakis.Sandflies",
+        "DA_Dunipedia_WarForArrakis.Sandflies.SandfliesFragment1Title"
+      ]
+    },
+    {
+      "id": "DA_Dunipedia_WarForArrakis.Sandflies.SandfliesFragment2Title.SandfliesFragment2Content",
+      "category": "The War for Arrakis",
+      "entryId": "DA_Dunipedia_WarForArrakis.Sandflies",
+      "entry": "The Sandflies",
+      "fragment": "Secret Recording of an Undercover Agent (since vanished)",
+      "ancestors": [
+        "DA_Dunipedia_WarForArrakis",
+        "DA_Dunipedia_WarForArrakis.Sandflies",
+        "DA_Dunipedia_WarForArrakis.Sandflies.SandfliesFragment2Title"
+      ]
+    },
+    {
+      "id": "DA_Dunipedia_WarForArrakis.The Sardaukar.TheSardaukarFragment1Title.TheSardaukarFragment1Content",
+      "category": "The War for Arrakis",
+      "entryId": "DA_Dunipedia_WarForArrakis.The Sardaukar",
+      "entry": "The Sardaukar",
+      "fragment": "A note from Zantara",
+      "ancestors": [
+        "DA_Dunipedia_WarForArrakis",
+        "DA_Dunipedia_WarForArrakis.The Sardaukar",
+        "DA_Dunipedia_WarForArrakis.The Sardaukar.TheSardaukarFragment1Title"
+      ]
+    },
+    {
+      "id": "DA_Dunipedia_WarForArrakis.The Sardaukar.TheSardaukarFragment2Title.TheSardaukarFragment2Content",
+      "category": "The War for Arrakis",
+      "entryId": "DA_Dunipedia_WarForArrakis.The Sardaukar",
+      "entry": "The Sardaukar",
+      "fragment": "A Report from Count Fenring to the Emperor ",
+      "ancestors": [
+        "DA_Dunipedia_WarForArrakis",
+        "DA_Dunipedia_WarForArrakis.The Sardaukar",
+        "DA_Dunipedia_WarForArrakis.The Sardaukar.TheSardaukarFragment2Title"
+      ]
+    },
+    {
+      "id": "DA_Dunipedia_WarForArrakis.The Sardaukar.TheSardaukarFragment3Title.TheSardaukarFragment3Content",
+      "category": "The War for Arrakis",
+      "entryId": "DA_Dunipedia_WarForArrakis.The Sardaukar",
+      "entry": "The Sardaukar",
+      "fragment": "Lamentatio Ultima, Stanza 413",
+      "ancestors": [
+        "DA_Dunipedia_WarForArrakis",
+        "DA_Dunipedia_WarForArrakis.The Sardaukar",
+        "DA_Dunipedia_WarForArrakis.The Sardaukar.TheSardaukarFragment3Title"
+      ]
+    },
+    {
+      "id": "DA_Dunipedia_WarForArrakis.Maas Kharet.MaasKharetFragment1Title.MaasKharetFragment1Content",
+      "category": "The War for Arrakis",
+      "entryId": "DA_Dunipedia_WarForArrakis.Maas Kharet",
+      "entry": "Maas Kharet",
+      "fragment": "From the Journal of Ariste Atreides",
+      "ancestors": [
+        "DA_Dunipedia_WarForArrakis",
+        "DA_Dunipedia_WarForArrakis.Maas Kharet",
+        "DA_Dunipedia_WarForArrakis.Maas Kharet.MaasKharetFragment1Title"
+      ]
+    },
+    {
+      "id": "DA_Dunipedia_WarForArrakis.Maas Kharet.MaasKharetFragment2Title.MaasKharetFragment2Content",
+      "category": "The War for Arrakis",
+      "entryId": "DA_Dunipedia_WarForArrakis.Maas Kharet",
+      "entry": "Maas Kharet",
+      "fragment": "Recording of a Maas Kharet Sermon by an Undercover Agent of Piter de Vries",
+      "ancestors": [
+        "DA_Dunipedia_WarForArrakis",
+        "DA_Dunipedia_WarForArrakis.Maas Kharet",
+        "DA_Dunipedia_WarForArrakis.Maas Kharet.MaasKharetFragment2Title"
+      ]
+    },
+    {
+      "id": "DA_Dunipedia_WarForArrakis.Maas Kharet.MaasKharetFragment3Title.MaasKharetFragmentContent",
+      "category": "The War for Arrakis",
+      "entryId": "DA_Dunipedia_WarForArrakis.Maas Kharet",
+      "entry": "Maas Kharet",
+      "fragment": "From the Secret Writings of Nahla",
+      "ancestors": [
+        "DA_Dunipedia_WarForArrakis",
+        "DA_Dunipedia_WarForArrakis.Maas Kharet",
+        "DA_Dunipedia_WarForArrakis.Maas Kharet.MaasKharetFragment3Title"
+      ]
+    },
+    {
+      "id": "DA_Dunipedia_WarForArrakis.Bandits.BanditsFragment1Title.BanditsFragment1Content",
+      "category": "The War for Arrakis",
+      "entryId": "DA_Dunipedia_WarForArrakis.Bandits",
+      "entry": "Bandits",
+      "fragment": "A Young Lord's Guide to Arrakis — Chapter XXIV: Know Your Enemy: Scavengers",
+      "ancestors": [
+        "DA_Dunipedia_WarForArrakis",
+        "DA_Dunipedia_WarForArrakis.Bandits",
+        "DA_Dunipedia_WarForArrakis.Bandits.BanditsFragment1Title"
+      ]
+    },
+    {
+      "id": "DA_Dunipedia_WarForArrakis.Bandits.BanditsFragment2Title.BanditsFragment2Content",
+      "category": "The War for Arrakis",
+      "entryId": "DA_Dunipedia_WarForArrakis.Bandits",
+      "entry": "Bandits",
+      "fragment": "A Young Lord's Guide to Arrakis — Chapter XXIV: Know Your Enemy: The Kirab",
+      "ancestors": [
+        "DA_Dunipedia_WarForArrakis",
+        "DA_Dunipedia_WarForArrakis.Bandits",
+        "DA_Dunipedia_WarForArrakis.Bandits.BanditsFragment2Title"
+      ]
+    },
+    {
+      "id": "DA_Dunipedia_WarForArrakis.Bandits.BanditsFragment3Title.BanditsFragment3Content",
+      "category": "The War for Arrakis",
+      "entryId": "DA_Dunipedia_WarForArrakis.Bandits",
+      "entry": "Bandits",
+      "fragment": "A Young Lord's Guide to Arrakis — Chapter XXIV: Know Your Enemy: Slavers",
+      "ancestors": [
+        "DA_Dunipedia_WarForArrakis",
+        "DA_Dunipedia_WarForArrakis.Bandits",
+        "DA_Dunipedia_WarForArrakis.Bandits.BanditsFragment3Title"
+      ]
+    },
+    {
+      "id": "DA_Dunipedia_WarForArrakis.Bandits.BanditsFragment4Title.BanditsFragment4Content",
+      "category": "The War for Arrakis",
+      "entryId": "DA_Dunipedia_WarForArrakis.Bandits",
+      "entry": "Bandits",
+      "fragment": "A Young Lord's Guide to Arrakis — Chapter XXIV: Know Your Enemy: Deserters",
+      "ancestors": [
+        "DA_Dunipedia_WarForArrakis",
+        "DA_Dunipedia_WarForArrakis.Bandits",
+        "DA_Dunipedia_WarForArrakis.Bandits.BanditsFragment4Title"
+      ]
+    },
+    {
+      "id": "DA_Dunipedia_WarForArrakis.The Sleeper.TheSleeperFragment1Title.TheSleeperFragment1Content",
+      "category": "The War for Arrakis",
+      "entryId": "DA_Dunipedia_WarForArrakis.The Sleeper",
+      "entry": "The Sleeper",
+      "fragment": "Partial transcript from interrogation of captive from Sietch Tabr",
+      "ancestors": [
+        "DA_Dunipedia_WarForArrakis",
+        "DA_Dunipedia_WarForArrakis.The Sleeper",
+        "DA_Dunipedia_WarForArrakis.The Sleeper.TheSleeperFragment1Title"
+      ]
+    },
+    {
+      "id": "DA_Dunipedia_WarForArrakis.The Sleeper.TheSleeperFragment2Title.TheSleeperFragment2Content",
+      "category": "The War for Arrakis",
+      "entryId": "DA_Dunipedia_WarForArrakis.The Sleeper",
+      "entry": "The Sleeper",
+      "fragment": "Letter from the Fremen Naib Stilgar to Zantara the Lion",
+      "ancestors": [
+        "DA_Dunipedia_WarForArrakis",
+        "DA_Dunipedia_WarForArrakis.The Sleeper",
+        "DA_Dunipedia_WarForArrakis.The Sleeper.TheSleeperFragment2Title"
+      ]
+    },
+    {
+      "id": "DA_Dunipedia_WarForArrakis.The Sleeper.TheSleeperFragment3Title.TheSleeperFragment3Content",
+      "category": "The War for Arrakis",
+      "entryId": "DA_Dunipedia_WarForArrakis.The Sleeper",
+      "entry": "The Sleeper",
+      "fragment": "Recovered from a private shigawire recording found Beneath Old Carthag",
+      "ancestors": [
+        "DA_Dunipedia_WarForArrakis",
+        "DA_Dunipedia_WarForArrakis.The Sleeper",
+        "DA_Dunipedia_WarForArrakis.The Sleeper.TheSleeperFragment3Title"
+      ]
+    },
+    {
+      "id": "DA_Dunipedia_WarForArrakis.The Sleeper.TheSleeperFragment4Title.TheSleeperFragment4Content",
+      "category": "The War for Arrakis",
+      "entryId": "DA_Dunipedia_WarForArrakis.The Sleeper",
+      "entry": "The Sleeper",
+      "fragment": "Fenring’s Notes — The Sleeper",
+      "ancestors": [
+        "DA_Dunipedia_WarForArrakis",
+        "DA_Dunipedia_WarForArrakis.The Sleeper",
+        "DA_Dunipedia_WarForArrakis.The Sleeper.TheSleeperFragment4Title"
+      ]
+    },
+    {
+      "id": "DA_Dunipedia_WarForArrakis.Count Hasimir Fenring.CountHasimirFenringFragment1Title.CountHasimirFenringFragment1Content",
+      "category": "The War for Arrakis",
+      "entryId": "DA_Dunipedia_WarForArrakis.Count Hasimir Fenring",
+      "entry": "Count Hasimir Fenring",
+      "fragment": "Irulan Corrino: Unpublished Notes — Annotation 46671.03 (L’Institut de Kaitain Archives)",
+      "ancestors": [
+        "DA_Dunipedia_WarForArrakis",
+        "DA_Dunipedia_WarForArrakis.Count Hasimir Fenring",
+        "DA_Dunipedia_WarForArrakis.Count Hasimir Fenring.CountHasimirFenringFragment1Title"
+      ]
+    },
+    {
+      "id": "DA_Dunipedia_WarForArrakis.Count Hasimir Fenring.CountHasimirFenringFragment2Title.CountHasimirFenringFragment2Content",
+      "category": "The War for Arrakis",
+      "entryId": "DA_Dunipedia_WarForArrakis.Count Hasimir Fenring",
+      "entry": "Count Hasimir Fenring",
+      "fragment": "A secret communique from Piter De Vries to Baron Vladimir Harkonnen",
+      "ancestors": [
+        "DA_Dunipedia_WarForArrakis",
+        "DA_Dunipedia_WarForArrakis.Count Hasimir Fenring",
+        "DA_Dunipedia_WarForArrakis.Count Hasimir Fenring.CountHasimirFenringFragment2Title"
+      ]
+    },
+    {
+      "id": "DA_Dunipedia_WarForArrakis.​Duke Leto Atreides I.Duke Leto Atreides I_Frag1_Title.Duke Leto Atreides I_Frag1_Desc",
+      "category": "The War for Arrakis",
+      "entryId": "DA_Dunipedia_WarForArrakis.​Duke Leto Atreides I",
+      "entry": "Duke Leto Atreides",
+      "fragment": "Letter from Duke Leto Atreides to Military Tribunal",
+      "ancestors": [
+        "DA_Dunipedia_WarForArrakis",
+        "DA_Dunipedia_WarForArrakis.​Duke Leto Atreides I",
+        "DA_Dunipedia_WarForArrakis.​Duke Leto Atreides I.Duke Leto Atreides I_Frag1_Title"
+      ]
+    },
+    {
+      "id": "DA_Dunipedia_WarForArrakis.​Duke Leto Atreides I.Duke Leto Atreides II_Frag2_Title.Duke Leto Atreides II_Frag2_Desc",
+      "category": "The War for Arrakis",
+      "entryId": "DA_Dunipedia_WarForArrakis.​Duke Leto Atreides I",
+      "entry": "Duke Leto Atreides",
+      "fragment": "From the Journal of Ariste Atreides",
+      "ancestors": [
+        "DA_Dunipedia_WarForArrakis",
+        "DA_Dunipedia_WarForArrakis.​Duke Leto Atreides I",
+        "DA_Dunipedia_WarForArrakis.​Duke Leto Atreides I.Duke Leto Atreides II_Frag2_Title"
+      ]
+    },
+    {
+      "id": "DA_Dunipedia_WarForArrakis.​Duke Leto Atreides I.DukeLetoAtreides_Frag3_Title.DukeLetoAtreides_Frag3_Desc",
+      "category": "The War for Arrakis",
+      "entryId": "DA_Dunipedia_WarForArrakis.​Duke Leto Atreides I",
+      "entry": "Duke Leto Atreides",
+      "fragment": "After Action Report: On the Wages of Conscience (Recorded by Thufir Hawat)",
+      "ancestors": [
+        "DA_Dunipedia_WarForArrakis",
+        "DA_Dunipedia_WarForArrakis.​Duke Leto Atreides I",
+        "DA_Dunipedia_WarForArrakis.​Duke Leto Atreides I.DukeLetoAtreides_Frag3_Title"
+      ]
+    },
+    {
+      "id": "DA_Dunipedia_WarForArrakis.Ariste Atreides.Ariste Atreides_Frag1Title.Ariste Atreides_Frag1Desc",
+      "category": "The War for Arrakis",
+      "entryId": "DA_Dunipedia_WarForArrakis.Ariste Atreides",
+      "entry": "Ariste Atreides",
+      "fragment": "From the Journal of Lady Jessica",
+      "ancestors": [
+        "DA_Dunipedia_WarForArrakis",
+        "DA_Dunipedia_WarForArrakis.Ariste Atreides",
+        "DA_Dunipedia_WarForArrakis.Ariste Atreides.Ariste Atreides_Frag1Title"
+      ]
+    },
+    {
+      "id": "DA_Dunipedia_WarForArrakis.Ariste Atreides.Ariste Atreides_Frag2Title.Ariste Atreides_Frag2Desc",
+      "category": "The War for Arrakis",
+      "entryId": "DA_Dunipedia_WarForArrakis.Ariste Atreides",
+      "entry": "Ariste Atreides",
+      "fragment": "Gossip Between Atreides Servants",
+      "ancestors": [
+        "DA_Dunipedia_WarForArrakis",
+        "DA_Dunipedia_WarForArrakis.Ariste Atreides",
+        "DA_Dunipedia_WarForArrakis.Ariste Atreides.Ariste Atreides_Frag2Title"
+      ]
+    },
+    {
+      "id": "DA_Dunipedia_WarForArrakis.Ariste Atreides.Ariste Atreides_Frag3Title.Ariste Atreides_Frag3Desc",
+      "category": "The War for Arrakis",
+      "entryId": "DA_Dunipedia_WarForArrakis.Ariste Atreides",
+      "entry": "Ariste Atreides",
+      "fragment": "From the Journal of Ariste Atreides",
+      "ancestors": [
+        "DA_Dunipedia_WarForArrakis",
+        "DA_Dunipedia_WarForArrakis.Ariste Atreides",
+        "DA_Dunipedia_WarForArrakis.Ariste Atreides.Ariste Atreides_Frag3Title"
+      ]
+    },
+    {
+      "id": "DA_Dunipedia_WarForArrakis.Thufir Hawat.Thufir Hawat_Frag 1_Title.Thufir Hawat_Frag1_Desc",
+      "category": "The War for Arrakis",
+      "entryId": "DA_Dunipedia_WarForArrakis.Thufir Hawat",
+      "entry": "Thufir Hawat",
+      "fragment": "From the Personal Notes of Piter de Vries",
+      "ancestors": [
+        "DA_Dunipedia_WarForArrakis",
+        "DA_Dunipedia_WarForArrakis.Thufir Hawat",
+        "DA_Dunipedia_WarForArrakis.Thufir Hawat.Thufir Hawat_Frag 1_Title"
+      ]
+    },
+    {
+      "id": "DA_Dunipedia_WarForArrakis.Thufir Hawat.Thufir Hawat_Frag 2_Title.Thufir Hawat_Frag 2_Desc",
+      "category": "The War for Arrakis",
+      "entryId": "DA_Dunipedia_WarForArrakis.Thufir Hawat",
+      "entry": "Thufir Hawat",
+      "fragment": "From the Personal Notes of Thufir Hawat",
+      "ancestors": [
+        "DA_Dunipedia_WarForArrakis",
+        "DA_Dunipedia_WarForArrakis.Thufir Hawat",
+        "DA_Dunipedia_WarForArrakis.Thufir Hawat.Thufir Hawat_Frag 2_Title"
+      ]
+    },
+    {
+      "id": "DA_Dunipedia_WarForArrakis.Gurney Halleck.GurneyHalleckFragment1Title.GurneyHalleckFragment1Content",
+      "category": "The War for Arrakis",
+      "entryId": "DA_Dunipedia_WarForArrakis.Gurney Halleck",
+      "entry": "Gurney Halleck",
+      "fragment": "From the Field Journal of Folklorist Sebastian Shepherd",
+      "ancestors": [
+        "DA_Dunipedia_WarForArrakis",
+        "DA_Dunipedia_WarForArrakis.Gurney Halleck",
+        "DA_Dunipedia_WarForArrakis.Gurney Halleck.GurneyHalleckFragment1Title"
+      ]
+    },
+    {
+      "id": "DA_Dunipedia_WarForArrakis.Duncan Idaho.Duncan Idaho frag1 Title.Duncan Idaho frag1 desc",
+      "category": "The War for Arrakis",
+      "entryId": "DA_Dunipedia_WarForArrakis.Duncan Idaho",
+      "entry": "Duncan Idaho",
+      "fragment": "A Letter from an Atreides Soldier",
+      "ancestors": [
+        "DA_Dunipedia_WarForArrakis",
+        "DA_Dunipedia_WarForArrakis.Duncan Idaho",
+        "DA_Dunipedia_WarForArrakis.Duncan Idaho.Duncan Idaho frag1 Title"
+      ]
+    },
+    {
+      "id": "DA_Dunipedia_WarForArrakis.Baron Vladimir Harkonnen.BaronVladimirHarkonnenFragment1Title.BaronVladimirHarkonnenFragment1Content",
+      "category": "The War for Arrakis",
+      "entryId": "DA_Dunipedia_WarForArrakis.Baron Vladimir Harkonnen",
+      "entry": "Baron Vladimir Harkonnen",
+      "fragment": "Recorded Confession of Cupbearer Mikko (later found strangled)",
+      "ancestors": [
+        "DA_Dunipedia_WarForArrakis",
+        "DA_Dunipedia_WarForArrakis.Baron Vladimir Harkonnen",
+        "DA_Dunipedia_WarForArrakis.Baron Vladimir Harkonnen.BaronVladimirHarkonnenFragment1Title"
+      ]
+    },
+    {
+      "id": "DA_Dunipedia_WarForArrakis.Feyd Rautha Harkonnen.FeydRauthaHarkonnenFragment1Title.FeydRauthaHarkonnenFragment1Content",
+      "category": "The War for Arrakis",
+      "entryId": "DA_Dunipedia_WarForArrakis.Feyd Rautha Harkonnen",
+      "entry": "Feyd Rautha Harkonnen",
+      "fragment": "Interview With a Gladiatorial Audience Member",
+      "ancestors": [
+        "DA_Dunipedia_WarForArrakis",
+        "DA_Dunipedia_WarForArrakis.Feyd Rautha Harkonnen",
+        "DA_Dunipedia_WarForArrakis.Feyd Rautha Harkonnen.FeydRauthaHarkonnenFragment1Title"
+      ]
+    },
+    {
+      "id": "DA_Dunipedia_WarForArrakis.Feyd Rautha Harkonnen.FeydRauthaHarkonnenFragment2Title.FeydRauthaHarkonnenFragment2Content",
+      "category": "The War for Arrakis",
+      "entryId": "DA_Dunipedia_WarForArrakis.Feyd Rautha Harkonnen",
+      "entry": "Feyd Rautha Harkonnen",
+      "fragment": "Transcript from a Hidden Recording Device",
+      "ancestors": [
+        "DA_Dunipedia_WarForArrakis",
+        "DA_Dunipedia_WarForArrakis.Feyd Rautha Harkonnen",
+        "DA_Dunipedia_WarForArrakis.Feyd Rautha Harkonnen.FeydRauthaHarkonnenFragment2Title"
+      ]
+    },
+    {
+      "id": "DA_Dunipedia_WarForArrakis.Glossu Rabban Harkonnen.GlossuRabbanHarkonnenFragment1Title.GlossuRabbanHarkonnenFragment1Content",
+      "category": "The War for Arrakis",
+      "entryId": "DA_Dunipedia_WarForArrakis.Glossu Rabban Harkonnen",
+      "entry": "Glossu Rabban Harkonnen",
+      "fragment": "Teleprompter Script",
+      "ancestors": [
+        "DA_Dunipedia_WarForArrakis",
+        "DA_Dunipedia_WarForArrakis.Glossu Rabban Harkonnen",
+        "DA_Dunipedia_WarForArrakis.Glossu Rabban Harkonnen.GlossuRabbanHarkonnenFragment1Title"
+      ]
+    },
+    {
+      "id": "DA_Dunipedia_WarForArrakis.Glossu Rabban Harkonnen.GlossuRabbanHarkonnenFragment2Title.GlossuRabbanHarkonnenFragment2Content",
+      "category": "The War for Arrakis",
+      "entryId": "DA_Dunipedia_WarForArrakis.Glossu Rabban Harkonnen",
+      "entry": "Glossu Rabban Harkonnen",
+      "fragment": "Overheard Conversation at a Harko Village Tavern",
+      "ancestors": [
+        "DA_Dunipedia_WarForArrakis",
+        "DA_Dunipedia_WarForArrakis.Glossu Rabban Harkonnen",
+        "DA_Dunipedia_WarForArrakis.Glossu Rabban Harkonnen.GlossuRabbanHarkonnenFragment2Title"
+      ]
+    },
+    {
+      "id": "DA_Dunipedia_WarForArrakis.Glossu Rabban Harkonnen.GlossuRabbanHarkonnenFragment3Title.GlossuRabbanHarkonnenFragment3Content",
+      "category": "The War for Arrakis",
+      "entryId": "DA_Dunipedia_WarForArrakis.Glossu Rabban Harkonnen",
+      "entry": "Glossu Rabban Harkonnen",
+      "fragment": "\"The Instrument and the Lesson\" From the reflections of Piter de Vries",
+      "ancestors": [
+        "DA_Dunipedia_WarForArrakis",
+        "DA_Dunipedia_WarForArrakis.Glossu Rabban Harkonnen",
+        "DA_Dunipedia_WarForArrakis.Glossu Rabban Harkonnen.GlossuRabbanHarkonnenFragment3Title"
+      ]
+    },
+    {
+      "id": "DA_Dunipedia_WarForArrakis.Piter De Vries Harkonnen.Piter De Vries Frag 1 Title.Piter De Vries Frag 1 Desc",
+      "category": "The War for Arrakis",
+      "entryId": "DA_Dunipedia_WarForArrakis.Piter De Vries Harkonnen",
+      "entry": "Piter De Vries",
+      "fragment": "Lab Notes of Abrax the Shaper, Tleilaxu Master",
+      "ancestors": [
+        "DA_Dunipedia_WarForArrakis",
+        "DA_Dunipedia_WarForArrakis.Piter De Vries Harkonnen",
+        "DA_Dunipedia_WarForArrakis.Piter De Vries Harkonnen.Piter De Vries Frag 1 Title"
+      ]
+    },
+    {
+      "id": "DA_Dunipedia_WarForArrakis.Piter De Vries Harkonnen.Piter De Vries Frag 2 Title.Piter De Vries Frag 2 Desc",
+      "category": "The War for Arrakis",
+      "entryId": "DA_Dunipedia_WarForArrakis.Piter De Vries Harkonnen",
+      "entry": "Piter De Vries",
+      "fragment": "From the Personal Notes of Piter de Vries",
+      "ancestors": [
+        "DA_Dunipedia_WarForArrakis",
+        "DA_Dunipedia_WarForArrakis.Piter De Vries Harkonnen",
+        "DA_Dunipedia_WarForArrakis.Piter De Vries Harkonnen.Piter De Vries Frag 2 Title"
+      ]
+    },
+    {
+      "id": "DA_Dunipedia_WarForArrakis.Zantara.Zantara Frag1 Title.Zantara Frag1 Desc",
+      "category": "The War for Arrakis",
+      "entryId": "DA_Dunipedia_WarForArrakis.Zantara",
+      "entry": "Zantara",
+      "fragment": "Fragment recovered from a crashed Ornithopter - potentially planted misinformation",
+      "ancestors": [
+        "DA_Dunipedia_WarForArrakis",
+        "DA_Dunipedia_WarForArrakis.Zantara",
+        "DA_Dunipedia_WarForArrakis.Zantara.Zantara Frag1 Title"
+      ]
+    },
+    {
+      "id": "DA_Dunipedia_WarForArrakis.Zantara.Zantara Frag2 Title.Zantara Frag 2 Desc",
+      "category": "The War for Arrakis",
+      "entryId": "DA_Dunipedia_WarForArrakis.Zantara",
+      "entry": "Zantara",
+      "fragment": "Text from a wanted poster for Zantara",
+      "ancestors": [
+        "DA_Dunipedia_WarForArrakis",
+        "DA_Dunipedia_WarForArrakis.Zantara",
+        "DA_Dunipedia_WarForArrakis.Zantara.Zantara Frag2 Title"
+      ]
+    },
+    {
+      "id": "DA_Dunipedia_WarForArrakis.Zantara.Zantara Frag3 Title.Zantara Frag3 Desc",
+      "category": "The War for Arrakis",
+      "entryId": "DA_Dunipedia_WarForArrakis.Zantara",
+      "entry": "Zantara",
+      "fragment": "A letter from Lady Tessia Vernius intercepted by [redacted 25. 64. 92. 140. 145. 159. 160]",
+      "ancestors": [
+        "DA_Dunipedia_WarForArrakis",
+        "DA_Dunipedia_WarForArrakis.Zantara",
+        "DA_Dunipedia_WarForArrakis.Zantara.Zantara Frag3 Title"
+      ]
+    },
+    {
+      "id": "DA_Dunipedia_WarForArrakis.The Kynes.The Kynes - Pardot Kynes.The Kynes - Pardot Kynes desc",
+      "category": "The War for Arrakis",
+      "entryId": "DA_Dunipedia_WarForArrakis.The Kynes",
+      "entry": "The Kynes",
+      "fragment": "Letter from Derek Chinara to his advisor at the Imperial Academy of Planetary Ecology",
+      "ancestors": [
+        "DA_Dunipedia_WarForArrakis",
+        "DA_Dunipedia_WarForArrakis.The Kynes",
+        "DA_Dunipedia_WarForArrakis.The Kynes.The Kynes - Pardot Kynes"
+      ]
+    },
+    {
+      "id": "DA_Dunipedia_WarForArrakis.The Kynes.The Kynes - Liet Kynes P1.The Kynes - Liet Kynes P1 desc",
+      "category": "The War for Arrakis",
+      "entryId": "DA_Dunipedia_WarForArrakis.The Kynes",
+      "entry": "The Kynes",
+      "fragment": "Discovered among the notes of Liet-Kynes",
+      "ancestors": [
+        "DA_Dunipedia_WarForArrakis",
+        "DA_Dunipedia_WarForArrakis.The Kynes",
+        "DA_Dunipedia_WarForArrakis.The Kynes.The Kynes - Liet Kynes P1"
+      ]
+    },
+    {
+      "id": "DA_Dunipedia_WarForArrakis.The Kynes.The Kynes - Liet Kynes P2.The Kynes - Liet Kynes P2 desc",
+      "category": "The War for Arrakis",
+      "entryId": "DA_Dunipedia_WarForArrakis.The Kynes",
+      "entry": "The Kynes",
+      "fragment": "Derek Chinara’s Notes on Liet-Kynes",
+      "ancestors": [
+        "DA_Dunipedia_WarForArrakis",
+        "DA_Dunipedia_WarForArrakis.The Kynes",
+        "DA_Dunipedia_WarForArrakis.The Kynes.The Kynes - Liet Kynes P2"
+      ]
+    },
+    {
+      "id": "DA_Dunipedia_WarForArrakis.Lady Margot Fenring.Lady Margot Fenring_frag1_Title.Lady Margot Fenring_frag1_Desc",
+      "category": "The War for Arrakis",
+      "entryId": "DA_Dunipedia_WarForArrakis.Lady Margot Fenring",
+      "entry": "Lady Margot Fenring",
+      "fragment": "A communique from Kwisatz Mother Anirul to Mother Superior Harishka",
+      "ancestors": [
+        "DA_Dunipedia_WarForArrakis",
+        "DA_Dunipedia_WarForArrakis.Lady Margot Fenring",
+        "DA_Dunipedia_WarForArrakis.Lady Margot Fenring.Lady Margot Fenring_frag1_Title"
+      ]
+    },
+    {
+      "id": "DA_Dunipedia_WarForArrakis.Lady Jessica.Frag1Title.Frag1Content",
+      "category": "The War for Arrakis",
+      "entryId": "DA_Dunipedia_WarForArrakis.Lady Jessica",
+      "entry": "Lady Jessica",
+      "fragment": "Bene Gesserit Archive Entry 7724.17 — Private Strategic Reflection, R.M. Anirul Sadow Tonkin",
+      "ancestors": [
+        "DA_Dunipedia_WarForArrakis",
+        "DA_Dunipedia_WarForArrakis.Lady Jessica",
+        "DA_Dunipedia_WarForArrakis.Lady Jessica.Frag1Title"
+      ]
+    },
+    {
+      "id": "DA_Dunipedia_WarForArrakis.EsmarTuek.EsmarTuekFrag1Title.EsmarTuekFrag1Content",
+      "category": "The War for Arrakis",
+      "entryId": "DA_Dunipedia_WarForArrakis.EsmarTuek",
+      "entry": "Esmar Tuek",
+      "fragment": "Appendix IV: On Esmar Tuek—Node, Not Kingpin (Confidential Mentat Annotation — Thufir Hawat)  ",
+      "ancestors": [
+        "DA_Dunipedia_WarForArrakis",
+        "DA_Dunipedia_WarForArrakis.EsmarTuek",
+        "DA_Dunipedia_WarForArrakis.EsmarTuek.EsmarTuekFrag1Title"
+      ]
+    },
+    {
+      "id": "DA_Dunipedia_WarForArrakis.TheWaterShippers.WaterShipperFrag1Title.WaterShipperFrag1Content",
+      "category": "The War for Arrakis",
+      "entryId": "DA_Dunipedia_WarForArrakis.TheWaterShippers",
+      "entry": "The Water Shippers",
+      "fragment": "Harkonnen Dossier: The Water Shippers",
+      "ancestors": [
+        "DA_Dunipedia_WarForArrakis",
+        "DA_Dunipedia_WarForArrakis.TheWaterShippers",
+        "DA_Dunipedia_WarForArrakis.TheWaterShippers.WaterShipperFrag1Title"
+      ]
+    },
+    {
+      "id": "DA_Dunipedia_WarForArrakis.Scytale.ScytaleFrag1Title.ScytaleFrag1Content",
+      "category": "The War for Arrakis",
+      "entryId": "DA_Dunipedia_WarForArrakis.Scytale",
+      "entry": "Scytale",
+      "fragment": "From the Recorded Journal of Scytale",
+      "ancestors": [
+        "DA_Dunipedia_WarForArrakis",
+        "DA_Dunipedia_WarForArrakis.Scytale",
+        "DA_Dunipedia_WarForArrakis.Scytale.ScytaleFrag1Title"
+      ]
+    },
+    {
+      "id": "DA_Dunipedia_WarForArrakis.Stilgar.StilgarFrag1Title.StilgarFrag1Content",
+      "category": "The War for Arrakis",
+      "entryId": "DA_Dunipedia_WarForArrakis.Stilgar",
+      "entry": "Stilgar Ben Fifrawi",
+      "fragment": "From the Journal of Pardot Kynes",
+      "ancestors": [
+        "DA_Dunipedia_WarForArrakis",
+        "DA_Dunipedia_WarForArrakis.Stilgar",
+        "DA_Dunipedia_WarForArrakis.Stilgar.StilgarFrag1Title"
+      ]
+    },
+    {
+      "id": "DA_Dunipedia_WarForArrakis.EmperorShaddamIV.ShaddamFrag1Title.ShaddamFrag1Content",
+      "category": "The War for Arrakis",
+      "entryId": "DA_Dunipedia_WarForArrakis.EmperorShaddamIV",
+      "entry": "Padishah Emperor Shaddam Corrino IV",
+      "fragment": "Private Letter from Elrood IX to Chaola Fenring",
+      "ancestors": [
+        "DA_Dunipedia_WarForArrakis",
+        "DA_Dunipedia_WarForArrakis.EmperorShaddamIV",
+        "DA_Dunipedia_WarForArrakis.EmperorShaddamIV.ShaddamFrag1Title"
+      ]
+    },
+    {
+      "id": "DA_Dunipedia_WarForArrakis.TyrosReffa.TyrosReffaFrag1Title.TyrosReffaFrag1Content",
+      "category": "The War for Arrakis",
+      "entryId": "DA_Dunipedia_WarForArrakis.TyrosReffa",
+      "entry": "Tyros Reffa",
+      "fragment": "Private Letter from Elrood IX to Glax Othn",
+      "ancestors": [
+        "DA_Dunipedia_WarForArrakis",
+        "DA_Dunipedia_WarForArrakis.TyrosReffa",
+        "DA_Dunipedia_WarForArrakis.TyrosReffa.TyrosReffaFrag1Title"
+      ]
+    }
+  ]
+}

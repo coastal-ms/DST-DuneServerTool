@@ -13,6 +13,20 @@ here cover everything those tags shipped.
 
 ## [Unreleased]
 
+## [16.5.1] - 2026-10-15
+
+Initially available through the test channel as `16.5.1-test1`.
+
+### Added
+- Experimental Steam Deck support for stock SteamOS in a dedicated Solo tab: companion download and encrypted pairing, one-way managed settings sync, enabled mods and load order sync, and a separate modded Steam launcher. Save edits and grants stay in PC Solo DST and travel through Steam Cloud.
+- Read Codex ownership and grant selected Codex entries in Solo and self-hosted character tools. Reveal selected paths without completing their quest dependencies.
+- View and download the complete Solo UE4SS log.
+- Drop a mod ZIP into the Solo mod card to install it, using the existing archive validation and preserving installed mods and INI settings. Larger ZIPs can use the file picker.
+- Open Blueprint Designer from Solo's base blueprint import card.
+
+### Changed
+- Framework Adjustments.
+
 ## [16.5.0.1] - 2026-10-14
 
 ### Changed

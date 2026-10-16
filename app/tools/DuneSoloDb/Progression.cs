@@ -706,7 +706,7 @@ internal static partial class Program
             var mutated = Path.Combine(root, "game.db");
             WrapSqlite(sqlitePath, mutated);
             EnsureWritableInspection(InspectPath(mutated));
-            Restore(mutated, input, safetyBackup, requireGameClosed: requireGameClosed);
+            Restore(mutated, input, safetyBackup, expectedTargetBytes: original, requireGameClosed: requireGameClosed);
             return new
             {
                 ok = true,

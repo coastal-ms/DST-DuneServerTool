@@ -15,6 +15,20 @@ vi.mock('../src/api/maps', () => ({ getMapState: vi.fn() }))
 
 afterEach(() => { cleanup(); vi.clearAllMocks() })
 
+it('keeps Deck setup in its own tab immediately after the Solo map', () => {
+  render(<SoloMode />)
+  const map = screen.getByRole('button', { name: 'DD Map', exact: true })
+  const deck = screen.getByRole('button', { name: 'Steam Deck', exact: true })
+  expect(map.nextElementSibling).toBe(deck)
+  expect(screen.queryByText('Solo device')).not.toBeInTheDocument()
+  expect(screen.queryByRole('heading', { name: 'Steam Deck', exact: true })).not.toBeInTheDocument()
+  fireEvent.click(deck)
+  expect(screen.getByRole('heading', { name: 'Steam Deck', exact: true })).toBeInTheDocument()
+  expect(screen.queryByText('Solo Deep Desert')).not.toBeInTheDocument()
+  fireEvent.click(screen.getByRole('button', { name: 'Overview', exact: true }))
+  expect(screen.queryByRole('heading', { name: 'Steam Deck', exact: true })).not.toBeInTheDocument()
+})
+
 it('opens the Solo reference map beside Progression without a connected save or self-hosted seed lookup', () => {
   render(<SoloMode />)
   const progression = screen.getByRole('button', { name: 'Progression', exact: true })

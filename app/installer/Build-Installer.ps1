@@ -125,6 +125,25 @@ if ($BuildTag) {
 Write-Host "Build identity: prerelease=$([bool]$Prerelease), tag=$(if ($BuildTag) { $BuildTag } else { '(manual)' }), commit=$BuildCommit" -ForegroundColor Cyan
 Write-Host ''
 
+# Verify the generated Linux helper before compiling the installer. No Python
+# installation is required here; regeneration is a developer build-time action.
+$deckInputs = @('scripts/build-deck-companion.py','app/server/lib/SoloMode.ps1') + @(
+    'deck_helper.py','settings_writer.py','settings_batch.py','deck_mods.py','deck_modlaunch.py','deck_ssh.py','companion.py'
+    | ForEach-Object { 'app/resources/steam-deck/' + $_ }
+)
+$deckCanonical = New-Object Text.StringBuilder
+foreach ($deckInput in $deckInputs) {
+    $deckSource = [IO.File]::ReadAllText((Join-Path $repoRoot $deckInput)).Replace("`r`n","`n").Replace("`r","`n")
+    [void]$deckCanonical.Append($deckInput).Append([char]0).Append($deckSource).Append([char]0)
+}
+$deckHashAlgorithm = [Security.Cryptography.SHA256]::Create()
+try { $deckFingerprint = [BitConverter]::ToString($deckHashAlgorithm.ComputeHash([Text.Encoding]::UTF8.GetBytes($deckCanonical.ToString()))).Replace('-','').ToLowerInvariant() }
+finally { $deckHashAlgorithm.Dispose() }
+$deckArtifact = [IO.File]::ReadAllText((Join-Path $appRoot 'resources/steam-deck/DST-Deck-Companion.sh'))
+if ($deckArtifact -notmatch ('(?m)^# Source SHA256: ' + $deckFingerprint + '$')) {
+    throw 'The Deck companion is stale. Regenerate it with scripts/build-deck-companion.py before building the installer.'
+}
+
 # ---------------------------------------------------------------------------
 # Pre-flight: version-stamp sync check.
 #

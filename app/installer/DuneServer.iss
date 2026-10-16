@@ -16,7 +16,7 @@
 ;                 -> NOT touched by install or uninstall (preserves user config)
 
 #define MyAppName        "Dune Server Tool"
-#define MyAppVersion "16.5.0.1"
+#define MyAppVersion "16.5.1"
 #ifndef MyAppNumericVersion
 #define MyAppCoreVersion Copy(MyAppVersion, 1, Pos("-", MyAppVersion + "-") - 1)
 #define MyAppNumericVersion MyAppCoreVersion + (Len(MyAppCoreVersion) - Len(StringChange(MyAppCoreVersion, ".", "")) == 2 ? ".0" : "")
@@ -119,6 +119,8 @@ Source: "..\..\webui\dist\*"; DestDir: "{app}\webui\dist"; Flags: ignoreversion 
 Source: "..\resources\remote-scripts\*"; DestDir: "{app}\resources\remote-scripts"; Flags: ignoreversion recursesubdirs
 Source: "..\resources\solo-mod-runtime\*"; DestDir: "{app}\resources\solo-mod-runtime"; Flags: ignoreversion
 Source: "..\resources\solo-mods\*"; DestDir: "{app}\resources\solo-mods"; Flags: ignoreversion recursesubdirs
+Source: "..\resources\steam-deck\DST-Deck-Companion.sh"; DestDir: "{app}\resources\steam-deck"; Flags: ignoreversion
+Source: "..\resources\steam-deck\PairingBridge.ps1"; DestDir: "{app}\resources\steam-deck"; Flags: ignoreversion
 
 ; v6.1.24: Drop-in preflight checker users can run when something goes wrong.
 ; DunePreflight.bat is the entry point (right-click -> Run as administrator),
