@@ -82,6 +82,22 @@ function Test-DuneGameConfigRawTextSafe {
     return $null -ne $Value -and $Value.IndexOf([char]0) -lt 0 -and $Value -notmatch '[\r\n]'
 }
 
+function Assert-DuneLabPathsUnchanged {
+    param([string]$Raw, [object[]]$Updates)
+    $sections = @(ConvertTo-DuneIniSectionsApi -Raw $Raw)
+    foreach ($u in $Updates) {
+        $values = @("$($u.value)") + @($u.arrayLines)
+        foreach ($section in $sections) {
+            if ($section.name -ne $u.section) { continue }
+            $values += @($section.keys | Where-Object { $_.key -eq $u.key } | ForEach-Object { "$($_.value)" })
+        }
+        if ("$($u.key)" -match '(path|directory|folder|datatable|assetreference)(name)?$' -or
+            (($values -join ' ') -match '[\\/]')) {
+            throw "Path-related Lab row $($u.key) is read-only; existing file entries were preserved."
+        }
+    }
+}
+
 function Test-DuneGameConfigArrayLineMatchesKey {
     param(
         [string]$Line,
@@ -376,7 +392,7 @@ $script:DuneGameConfigSchema = @(
     @{ Section=$script:DuneGcSecGame; Key='m_PlayerStartingWater'; File='game'; Type='float'; Min=0; Default='100.0'; Label='Player Starting Water'; Help='Water amount when a player spawns. Also needs client-side apply.'; ClientApply=$true; Category='Survival' }
     @{ Section=$script:DuneGcSecOnline; Key='m_DefaultReconnectGracePeriodSeconds'; File='game'; Type='int'; Min=0; Unit='sec'; Default='300'; Label='Reconnect Grace Period'; Help="Seconds a player's corpse persists after disconnect. Also needs client-side apply."; ClientApply=$true; Category='Survival' }
     @{ Section=$script:DuneGcSecDurab; Key='m_ItemDurabilityLossMultiplier'; File='game'; Type='float'; Min=0; Max=10; Default='1.0'; Label='Item Durability Loss Multiplier'; Help='Scales durability loss for all items. 0 = off. Also needs client-side apply.'; ClientApply=$true; Category='Survival' }
-    @{ Section=$script:DuneGcSecDurab; Key='UpdateRateInSeconds'; File='game'; Type='float'; Min=0; Max=10; Unit='sec'; Default='1.0'; Label='Item Decay Rate'; Help='Deterioration tick rate. 0 = off, 1-10 typical. Also needs client-side apply.'; ClientApply=$true; Category='Survival' }
+    @{ Section=$script:DuneGcSecDurab; Key='UpdateRateInSeconds'; File='game'; Type='float'; Min=0; Max=10; Unit='sec'; Default='1.0'; Label='Item Decay Update Interval'; Help='Seconds between item-deterioration updates. Higher positive values mean a longer interval between updates; lower positive values mean a shorter interval. Zero behavior has not been field-verified. Also needs client-side apply.'; ClientApply=$true; Category='Survival' }
     @{ Section=$script:DuneGcSecRespawn; Key='m_bCrossMapRespawnDropItems'; File='game'; Type='bool'; Default='True'; Label='Drop Items on Cross-Map Respawn'; Help='Whether items are dropped when a player respawns on a different map. Also needs client-side apply.'; ClientApply=$true; Category='Survival' }
 
     # --- Hydration ---
@@ -400,8 +416,8 @@ $script:DuneGameConfigSchema = @(
     @{ Section=$script:DuneGcSecConsole; Key='SecurityZones.PvpResourceMultiplier'; File='engine'; Type='float'; Min=0; Default='1.0'; Label='PvP Resource Multiplier'; Help='Resource yield multiplier inside PvP zones.'; Startup=$true; Category='Resources & Economy' }
 
     # --- Crafting ---
-    @{ Section=$script:DuneGcSecCrafting; Key='m_RepairCostWeight'; File='game'; Type='float'; Min=0; Default='1.0'; Label='Repair Cost Weight'; Help='Scales repair costs. Also needs client-side apply.'; ClientApply=$true; Category='Crafting' }
-    @{ Section=$script:DuneGcSecCrafting; Key='m_RecyclerOutputWeight'; File='game'; Type='float'; Min=0; Default='1.0'; Label='Recycler Output Weight'; Help='Scales recycler output. Also needs client-side apply.'; ClientApply=$true; Category='Crafting' }
+    @{ Section=$script:DuneGcSecCrafting; Key='m_RepairCostWeight'; File='game'; Type='float'; Min=0; Default='0.500000'; Label='Repair Cost Weight'; Help='Scales repair costs. Also needs client-side apply.'; ClientApply=$true; Category='Crafting' }
+    @{ Section=$script:DuneGcSecCrafting; Key='m_RecyclerOutputWeight'; File='game'; Type='float'; Min=0; Default='0.250000'; Label='Recycler Output Weight'; Help='Scales recycler output. Also needs client-side apply.'; ClientApply=$true; Category='Crafting' }
     @{ Section=$script:DuneGcSecTechKnowledge; Key='m_bRevealItemOnDistributedToCharacter'; File='game'; Type='bool'; Default='False'; Label='Reveal Distributed Research Items (Experimental)'; Help='When enabled, asks the game to reveal research items distributed directly to a character, including admin-granted developer blueprints and schematics. Unconfirmed: this may make hidden entries visible, but it cannot reconstruct missing schematic research-cost metadata. Restart the battlegroup, then grant a fresh copy for testing. Also needs client-side apply.'; ClientApply=$true; Category='Crafting' }
 
     # --- Building ---
@@ -487,7 +503,7 @@ $script:DuneGameConfigSchema = @(
     @{ Section=$script:DuneGcSecConsole; Key='Sandworm.SandwormDangerZonesEnabled'; File='engine'; Type='boolLower'; Default='true'; Label='Sandworm Danger Zones'; Help='Enable danger zones where the sandworm can attack.'; Startup=$true; Category='Sandworm' }
     @{ Section=$script:DuneGcSecConsole; Key='Vehicle.SandwormCollisionInteraction'; File='engine'; Type='boolLower'; Default='true'; Label='Sandworm Pushes Vehicles'; Help='Sandworm can push / damage vehicles.'; Startup=$true; Category='Sandworm' }
     @{ Section=$script:DuneGcSecConsole; Key='Vehicle.SandwormInvulnerabilitySecondsOnExit'; File='engine'; Type='float'; Min=0; Unit='sec'; Default='5.0'; Label='Invulnerability on Vehicle Exit'; Help='Seconds of sandworm invulnerability after exiting a vehicle.'; Startup=$true; Category='Sandworm' }
-    @{ Section=$script:DuneGcSecConsole; Key='Vehicle.SandwormInvulnerabilitySecondsOnServerRestart'; File='engine'; Type='float'; Min=0; Unit='sec'; Default='60.0'; Label='Invulnerability on Server Restart'; Help='Seconds of sandworm invulnerability after a server restart.'; Startup=$true; Category='Sandworm' }
+    @{ Section=$script:DuneGcSecConsole; Key='Vehicle.SandwormInvulnerabilitySecondsOnServerRestart'; File='engine'; Type='float'; Min=0; Unit='sec'; Default='300'; Label='Invulnerability on Server Restart'; Help='Seconds of sandworm invulnerability after a server restart.'; Startup=$true; Category='Sandworm' }
     @{ Section=$script:DuneGcSecSandworm; Key='WormDetectionDistance'; File='game'; Type='float'; Min=0; Default='5000.0'; Label='Worm Detection Distance'; Help='Distance at which worms detect players. Also needs client-side apply.'; ClientApply=$true; Category='Sandworm' }
     @{ Section=$script:DuneGcSecSandworm; Key='m_MinWormSpawnInternal'; File='game'; Type='float'; Min=0; Unit='sec'; Default='300.0'; Label='Min Worm Spawn Interval'; Help='Minimum seconds between worm spawns. Also needs client-side apply.'; ClientApply=$true; Category='Sandworm' }
     @{ Section=$script:DuneGcSecHazards; Key='m_SandwormQuicksandSpeedModifier'; File='game'; Type='float'; Min=0; Default='0.25'; Label='Quicksand Speed Modifier'; Help='Movement speed multiplier in quicksand. Also needs client-side apply.'; ClientApply=$true; Category='Sandworm' }
@@ -523,7 +539,7 @@ $script:DuneGameConfigSchema = @(
     @{ Section=$script:DuneGcSecConsole; Key='dw.VehiclePowerConsumptionMultiplier'; File='engine'; Type='float'; Min=0; Default='1.0'; Label='Vehicle Power Consumption'; Help='Scales vehicle power use. 0 = no consumption, 1 = normal, 2 = double. Applied through INI and Hagga startup command for local testing.'; Category='Experimental' }
     @{ Section=$script:DuneGcSecConsole; Key='dw.VehicleCanOverHeat'; File='engine'; Type='bool01'; Default='1'; Label='Vehicles Can Overheat'; Help='Whether vehicles can overheat. 0 = disabled, 1 = enabled. Applied through INI and Hagga startup command for local testing.'; Category='Experimental' }
     @{ Section=$script:DuneGcSecConsole; Key='dw.VehicleAbandonedDecayAllowed'; File='engine'; Type='bool01'; Label='Abandoned Vehicle Decay'; Help='Allows abandoned vehicles to decay over time. 0 disables decay. Compiled default was not recovered.'; Category='Experimental' }
-    @{ Section=$script:DuneGcSecConsole; Key='dw.VehicleAbandonedDecayTimeMultiplier'; File='engine'; Type='float'; Default='1.0'; Label='Abandoned Vehicle Decay Speed'; Help='Scales abandoned-vehicle decay speed. Values above 1 should decay faster; 1 is shipping behavior.'; Category='Experimental' }
+    @{ Section=$script:DuneGcSecConsole; Key='dw.VehicleAbandonedDecayTimeMultiplier'; File='engine'; Type='float'; Default='1.0'; Label='Abandoned Vehicle Decay Multiplier'; Help='Funcom: "Speed up abandoned decay application for testing purposes. Setting this value to 1.0 make system work like in shipping build". The direction of higher or lower values has not been field-verified.'; Category='Experimental' }
     @{ Section=$script:DuneGcSecConsole; Key='Vehicle.DisassemblySpeedMultiplier'; File='engine'; Type='float'; Default='1.0'; Label='Vehicle Disassembly Speed'; Help='Scales vehicle disassembly speed. Not yet field-verified.'; Category='Experimental' }
     @{ Section=$script:DuneGcSecConsole; Key='Vehicle.RecoveryChassisDurabilityReductionFraction'; File='engine'; Type='float'; Default='0.150000006'; Label='Recovery Chassis Durability Reduction'; Help='Fraction of maximum chassis durability lost during recovery. Set 0 for no durability loss; use 0.15 for 15 percent.'; Status='Confirmed'; Startup=$true; Category='Vehicles' }
     @{ Section=$script:DuneGcSecConsole; Key='Vehicle.RecoveryCurrencyBaseCost'; File='engine'; Type='int'; Min=0; Default='2500'; Label='Vehicle Recovery Base Cost'; Help='Base currency cost to recover a vehicle before vehicle-specific multipliers.'; Status='Confirmed'; Startup=$true; Category='Vehicles' }
@@ -1436,7 +1452,7 @@ function Set-DuneIniValuesInPlace {
 # not caller input, selects the destination file. Both files use the same
 # managed-block writer and preserve unrelated user settings.
 function Save-DuneGameConfigClient {
-    param([object[]]$Updates, [string]$Dir = '', [string]$DefaultsRaw = '')
+    param([object[]]$Updates, [string]$Dir = '', [string]$DefaultsRaw = '', [switch]$ReviewedRaw)
     if (-not $Updates -or $Updates.Count -eq 0) { throw 'No updates supplied.' }
 
     $allowed = @{}
@@ -1448,6 +1464,31 @@ function Save-DuneGameConfigClient {
     }
     $clean = New-Object 'System.Collections.Generic.List[object]'
     foreach ($u in $Updates) {
+        if ($ReviewedRaw) {
+            $file = "$($u.file)"; $section = "$($u.section)"; $key = "$($u.key)"
+            if ($file -notin @('game','engine') -or -not $section.Trim() -or
+                $section -match '[\[\]]' -or $key -notmatch '^[^=;+\-\[\]\s][^=;\[\]]*$' -or
+                -not (Test-DuneGameConfigRawTextSafe $section) -or
+                -not (Test-DuneGameConfigRawTextSafe $key) -or
+                (Test-DuneGameConfigRawTargetBlocked -File $file -Section $section -Key $key)) {
+                throw 'Invalid or blocked local INI target.'
+            }
+            if ($u.ContainsKey('arrayLines')) {
+                $lines = @($u.arrayLines)
+                foreach ($line in $lines) {
+                    if (-not (Test-DuneGameConfigRawTextSafe "$line") -or
+                        -not (Test-DuneGameConfigArrayLineMatchesKey -Line "$line" -Key $key)) {
+                        throw 'Invalid local INI array entry.'
+                    }
+                }
+                $clean.Add(@{file=$file;section=$section;key=$key;arrayLines=$lines;arrayRemove=($lines.Count -eq 0)})
+            } else {
+                $value = "$($u.value)"
+                if (-not (Test-DuneGameConfigRawTextSafe $value)) { throw 'Invalid local INI scalar value.' }
+                $clean.Add(@{file=$file;section=$section;key=$key;value=$value;remove=[string]::IsNullOrWhiteSpace($value)})
+            }
+            continue
+        }
         $k = "$($u.key)"
         if (-not $allowed.ContainsKey($k)) { continue }
         $f = $allowed[$k]
@@ -1479,7 +1520,9 @@ function Save-DuneGameConfigClient {
             $created = $false
         }
 
-        if ($file -eq 'game') {
+        if ($ReviewedRaw) { Assert-DuneLabPathsUnchanged -Raw $existing -Updates $fileUpdates.ToArray() }
+
+        if ($file -eq 'game' -and -not $ReviewedRaw) {
             foreach ($dk in $script:DuneGameConfigDeprecatedManagedKeys) {
                 if ($existing -match ('(?m)^\s*' + [regex]::Escape($dk) + '\s*=')) {
                     $deprecated = @{ file = 'game'; section = $script:DuneGcSecGame; key = $dk; value = ''; remove = $true }
@@ -3891,6 +3934,7 @@ function Get-DuneGameConfigCatalog {
                 key        = $k.key
                 default    = $defVal
                 current    = $current
+                hasOverride = ($null -ne $eff)
                 overridden = [bool]$isOverridden
                 isArray    = [bool]$k.isArray
                 prefix     = "$($k.prefix)"
@@ -3920,6 +3964,7 @@ function Get-DuneGameConfigCatalog {
                 key        = $k.key
                 default    = $defVal
                 current    = $current
+                hasOverride = ($null -ne $eff)
                 overridden = [bool]$isOverridden
                 isArray    = [bool]$k.isArray
                 prefix     = "$($k.prefix)"

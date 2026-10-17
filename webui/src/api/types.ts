@@ -367,6 +367,7 @@ export type GameConfigDefaultKey = {
   key: string
   default: string
   current: string
+  hasOverride?: boolean
   overridden: boolean
   isArray: boolean
   prefix?: '+' | '-' | ''

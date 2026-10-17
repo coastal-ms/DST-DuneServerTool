@@ -662,6 +662,30 @@ describe('Official Retail Server Settings card', () => {
     expect(screen.getByRole('button', { name: 'Save (2)' })).toBeEnabled()
   })
 
+  it('keeps saved values while using the documented crafting range and an uncapped backup window', async () => {
+    const settings: RetailServerSetting[] = [
+      { key: 'CraftingTimeMultiplier', label: 'Crafting time', value: '12.300000', displayValue: '12.300000', group: 'Settings', type: 'float', options: [], supported: true, valid: true, editable: true },
+      { key: 'BaseBackupToolTimeRestriction', label: 'Base Backup Window (hours)', value: '10.000000', displayValue: '10.000000', group: 'Settings', type: 'float', options: [], supported: true, valid: true, editable: true },
+    ]
+    vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify({
+      available: true, revision: 'current', target: { stopped: true, serverPodCount: 0 }, settings, malformedLines: [],
+    }))))
+    render(<OfficialRetailServerSettingsCard vmRunning />)
+    const crafting = await screen.findByRole('spinbutton', { name: 'Crafting time exact value' })
+    const backup = screen.getByRole('spinbutton', { name: 'Base Backup Window (hours) exact value' })
+    expect(crafting).toHaveValue(12.3)
+    expect(backup).toHaveValue(10)
+    const slider = screen.getByRole('slider', { name: 'Crafting time slider, range 0 to 5' })
+    expect(slider).toHaveValue('5')
+    expect(screen.getAllByRole('slider')).toHaveLength(1)
+    expect(screen.getByRole('button', { name: 'Save' })).toBeDisabled()
+    fireEvent.change(backup, { target: { value: '40.250000' } })
+    expect(backup).toHaveValue(40.25)
+    fireEvent.click(screen.getByRole('button', { name: 'Default Settings' }))
+    expect(backup).toHaveAttribute('value', '16.000000')
+    expect(crafting).toHaveAttribute('value', '1.000000')
+  })
+
   it('preserves an exact value above 10 until the operator moves the saturated slider', async () => {
     vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify({
       available: true,

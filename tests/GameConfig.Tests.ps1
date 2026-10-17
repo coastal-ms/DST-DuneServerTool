@@ -1886,7 +1886,7 @@ Describe 'DuneGameConfigSchema: CraftingSettings fields' -Tag 'GameConfig' {
             $fields[$k].Section | Should -Be $script:SecCrafting
             $fields[$k].File | Should -Be 'game'
             $fields[$k].Type | Should -Be 'float'
-            $fields[$k].Default | Should -Be '1.0'
+            $fields[$k].Default | Should -Be (@{m_RepairCostWeight='0.500000';m_RecyclerOutputWeight='0.250000'}[$k])
             $fields[$k].ClientApply | Should -BeTrue
         }
     }
@@ -3630,5 +3630,47 @@ m_MaxNumLandclaimSegments=10
 
     It 'client block generator returns empty string when no seconds (disabled)' {
         Get-DuneLandclaimClientBlock -Seconds '' | Should -Be ''
+    }
+}
+
+Describe 'Reviewed raw Lab local saves' {
+    BeforeEach {
+        Mock Test-DuneGameClientRunning { $false }
+        Mock Get-DuneGameConfigClientEngineEnabled { $false }
+    }
+    It 'writes selected raw settings, preserves asset paths and unrelated data, and removes only an explicitly cleared entry' {
+        $dir = Join-Path $TestDrive 'lab-reviewed'
+        [void](New-Item -ItemType Directory -Path $dir)
+        $path = Join-Path $dir 'Game.ini'
+        $original = "[/Script/DuneSandbox.BuildingSettings]`r`nm_DoorDataTable=/Game/Dune/Data/Doors.Doors`r`nm_TimeToAutomaticallyCloseDoor=10`r`nm_ZAxisDoorMaxBuffer=900.000000`r`n[Audio]`r`nVolume=0.8`r`n"
+        [IO.File]::WriteAllText($path, $original)
+        $result = Save-DuneGameConfigClient -Dir $dir -ReviewedRaw -Updates @(
+            @{file='game';section='/Script/DuneSandbox.BuildingSettings';key='m_TimeToAutomaticallyCloseDoor';value='3'},
+            @{file='game';section='/Script/DuneSandbox.BuildingSettings';key='m_ZAxisDoorMaxBuffer';value=''},
+            @{file='engine';section='ConsoleVariables';key='Dune.GlobalMiningOutputMultiplier';value='1.000000'}
+        )
+        $raw = [IO.File]::ReadAllText($path)
+        $raw | Should -Match 'm_DoorDataTable=/Game/Dune/Data/Doors.Doors'
+        $raw | Should -Match 'Volume=0.8'
+        $raw | Should -Match 'm_TimeToAutomaticallyCloseDoor=3'
+        $raw | Should -Not -Match 'm_ZAxisDoorMaxBuffer='
+        [IO.File]::ReadAllText($result.files.game.backup) | Should -BeExactly $original
+        [IO.File]::ReadAllText((Join-Path $dir 'Engine.ini')) | Should -Match 'Dune.GlobalMiningOutputMultiplier=1.000000'
+    }
+    It 'makes no local changes while the game is running' {
+        Mock Test-DuneGameClientRunning { $true }
+        $dir = Join-Path $TestDrive 'lab-running'
+        [void](New-Item -ItemType Directory -Path $dir)
+        { Save-DuneGameConfigClient -Dir $dir -ReviewedRaw -Updates @(@{file='game';section='Building';key='DoorTime';value='3'}) } | Should -Throw '*Close Dune*'
+        @(Get-ChildItem $dir).Count | Should -Be 0
+    }
+}
+
+Describe 'Lab path preservation' {
+    It 'rejects path edits and deletions before writing any destination' {
+        $raw = "[Building]`nm_DoorDataTable=/Game/Dune/Doors.Doors`n"
+        { Assert-DuneLabPathsUnchanged -Raw $raw -Updates @(@{section='Building';key='m_DoorDataTable';value=''}) } | Should -Throw '*read-only*'
+        { Assert-DuneLabPathsUnchanged -Raw $raw -Updates @(@{section='Building';key='Other';value='C:\Game'}) } | Should -Throw '*read-only*'
+        { Assert-DuneLabPathsUnchanged -Raw $raw -Updates @(@{section='Building';key='DoorTime';value='3'}) } | Should -Not -Throw
     }
 }

@@ -157,9 +157,15 @@ export function saveGameConfigRaw(updates: GameConfigRawUpdate[]) {
   return withOnlinePlayerGuard(force =>
     api<GameConfigSaveResponse>(`/api/gameconfig${fq(force)}`, {
       method: 'PUT',
-      body: JSON.stringify({ updates }),
+      body: JSON.stringify({ updates, lab: true }),
     }),
   )
+}
+
+export function saveLabLocal(updates: GameConfigRawUpdate[]) {
+  return api<GameConfigClientApplyResult>('/api/gameconfig/client/lab', {
+    method: 'PUT', body: JSON.stringify({ approved: true, updates }),
+  })
 }
 
 export function backupGameConfig() {

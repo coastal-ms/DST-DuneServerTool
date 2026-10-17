@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { Icon } from '../components/Icon'
+import { RESPAWN_SETTING_GUIDANCE } from '../util/respawnSettingGuidance'
 import { PageHeader } from '../components/PageHeader'
 import { CollapsibleCard } from '../components/CollapsibleCard'
 import { ItemPicker } from '../components/ItemPicker'
@@ -1712,12 +1713,14 @@ export function SoloMode() {
                       const control = getSoloSettingControl(key)
                       const disabled = SOLO_READ_ONLY_SETTINGS.has(key)
                       const inputId = `solo-setting-${key}`
+                      const guidance = RESPAWN_SETTING_GUIDANCE[key]
                       const update = (next: string) => setDraft(current => ({ ...current, [key]: next }))
                       return (
                         <div key={key} className="block">
                           <label htmlFor={control.type === 'boolean' ? undefined : inputId} className="text-xs text-text-muted">
-                            {key}{disabled ? ' (set in game)' : ''}
+                            {guidance?.label ?? key}{disabled ? ' (set in game)' : ''}
                           </label>
+                          {guidance && <p className="mt-1 text-xs text-text-dim"><span className="font-mono">{key}</span> — {guidance.effect}</p>}
                           {control.type === 'boolean' ? (
                             <SoloBooleanControl
                               value={value}

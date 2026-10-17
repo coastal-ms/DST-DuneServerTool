@@ -7,12 +7,24 @@ BeforeAll {
     function Register-DuneRoute {
         param($Method, $Path, $Handler, [switch]$LocalOnly)
         if ($Method -eq 'PUT' -and $Path -eq '/api/gameconfig') { $script:ClearRouteHandler = $Handler }
+        if ($Method -eq 'PUT' -and $Path -eq '/api/gameconfig/client/lab') { $script:LabLocalHandler = $Handler; $script:LabLocalOnly = $LocalOnly }
     }
     function Get-DuneGameConfigContext { @{ ok=$true; ip='192.0.2.1' } }
     function Test-DunePlayerGuard { param($Req,$Res,$Ip) $true }
     function Write-DuneJson { param($Response,$Body) }
     function Write-DuneError { param($Response,$Status,$Message) throw $Message }
     . (Join-Path (Get-DstRepoRoot) 'app/server/routes/GameConfig.ps1')
+}
+
+Describe 'Lab local destination approval' {
+    BeforeEach { Mock Save-DuneGameConfigClient { @{ok=$true} } }
+    It 'requires the local-only route and explicit approval before writing player files' {
+        $script:LabLocalOnly | Should -BeTrue
+        { & $script:LabLocalHandler $null $null @{} @{updates=@(@{file='game';section='Building';key='DoorTime';value='3'})} } | Should -Throw '*approve*'
+        Should -Invoke Save-DuneGameConfigClient -Times 0
+        & $script:LabLocalHandler $null $null @{} @{approved=$true;updates=@(@{file='game';section='Building';key='DoorTime';value='3'})}
+        Should -Invoke Save-DuneGameConfigClient -Times 1 -ParameterFilter { $ReviewedRaw -and $Updates[0].key -eq 'DoorTime' }
+    }
 }
 
 Describe 'Clearing server INI scalar overrides' {

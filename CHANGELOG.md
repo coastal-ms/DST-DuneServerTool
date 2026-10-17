@@ -21,6 +21,14 @@ Server settings and Experimental Lab scalar overrides now follow the saved serve
 
 Official server settings sliders now use a 0–10 convenience range, with 0.1 steps for fractional settings and compact readouts. Wheel adjustments change focused fractional controls by 0.1; unfocused controls leave scrolling alone. Exact entry preserves values above the slider range.
 
+Experimental Lab saves now review local Solo/player files and self-hosted server files as separate destinations. Local changes require explicit approval, preserve unrelated entries, and back up existing files; Apply server settings deploys the saved server copy separately. Path-related rows are read-only, preserving saved paths and showing inherited Funcom defaults without creating overrides.
+
+Solo and self-hosted distinguish Resource Respawn Speed (higher is faster) from Loot Respawn Time (higher is slower), retaining the original game keys. Water extraction guidance identifies conflicting source descriptions. The base-backup default is 16 hours when defaults are explicitly selected; saved values remain unchanged. Crafting time uses a 0–5 convenience slider, and the base-backup window uses direct entry in hours.
+
+Documented defaults for repair cost, recycler output and vehicle sandworm protection after a server restart match the installed 1.5.3.7 game defaults; existing overrides remain unchanged.
+
+Item decay guidance distinguishes the update interval in seconds from decay speed. Abandoned-vehicle decay no longer guesses the effect of higher values.
+
 ### Added
 - Experimental Steam Deck support for stock SteamOS in a dedicated Solo tab: companion download and encrypted pairing, one-way managed settings sync, enabled mods and load order sync, and a separate modded Steam launcher. Save edits and grants stay in PC Solo DST and travel through Steam Cloud.
 - Read Codex ownership and grant selected Codex entries in Solo and self-hosted character tools. Reveal selected paths without completing their quest dependencies.

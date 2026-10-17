@@ -4,6 +4,7 @@ import { CollapsibleCard } from '../../components/CollapsibleCard'
 import { Icon } from '../../components/Icon'
 import { getRetailServerSettings, saveRetailServerSettings } from '../../api/gameconfig'
 import type { RetailServerSetting, RetailServerSettingsResponse } from '../../api/types'
+import { RESPAWN_SETTING_GUIDANCE } from '../../util/respawnSettingGuidance'
 
 const INTEGER_SLIDER_MIN = 0
 const FLOAT_SLIDER_MIN = 0
@@ -15,17 +16,19 @@ type RetailSettingGuidance = {
   effect: string
 }
 
-// Patch 1.5 defaults from Red-Blink/dune-awakening-selfhost-docker at acc3d43c.
+// Patch 1.5 default values from Red-Blink/dune-awakening-selfhost-docker at acc3d43c.
+// Reviewed against CubeCoders AMPTemplates aa716232 (including its newer 16-hour backup default).
+// Effect descriptions are DST guidance, not verbatim Funcom documentation.
 export const RETAIL_SETTING_GUIDANCE: Record<string, RetailSettingGuidance> = {
   DifficultyLevel: { defaultValue: 'Custom', effect: 'DST supports only Custom mode for managed server settings. Difficulty Level is not adjustable here. Other presets can override these values and must be configured manually outside DST.' },
   PVPMode: { defaultValue: 'Limited', effect: 'Controls where and under which rules player-versus-player combat is allowed.' },
   GatheringAmount: { defaultValue: '1.000000', effect: 'Higher values yield more resources per gathering action; lower values yield less. The server template identifies this as overlapping the Advanced hand-mining and vehicle-mining multipliers. These are all server settings; different values are not reconciled automatically, and their in-game precedence has not been verified.' },
   CraftingCost: { defaultValue: '1.000000', effect: 'Higher values require more crafting materials; lower values require fewer materials.' },
-  WaterExtractionRate: { defaultValue: '1.000000', effect: 'Higher values extract water faster; lower values extract it slower.' },
+  WaterExtractionRate: { defaultValue: '1.000000', effect: 'Scales water extraction. Current AMP guidance says higher values extract faster; older Funcom configuration comments say the opposite. Direction has not been verified in-game.' },
   CraftingTimeMultiplier: { defaultValue: '1.000000', effect: 'Higher values make crafting take longer; lower values make it faster.' },
   BuildingCostMultiplier: { defaultValue: '1.000000', effect: 'Higher values require more building materials; lower values require fewer materials.' },
-  ResourceRespawnSpeed: { defaultValue: '1.000000', effect: 'Higher values make world resources return faster; lower values make them return slower.' },
-  LootRespawnSpeed: { defaultValue: '1.000000', effect: 'Higher values make loot return faster; lower values make it return slower.' },
+  ResourceRespawnSpeed: { defaultValue: '1.000000', effect: RESPAWN_SETTING_GUIDANCE.ResourceRespawnSpeed.effect },
+  LootRespawnSpeed: { defaultValue: '1.000000', effect: RESPAWN_SETTING_GUIDANCE.LootRespawnSpeed.effect },
   FuelBurnTimeMultiplier: { defaultValue: '1.000000', effect: 'Higher values make fuel last longer; lower values shorten its burn time.' },
   InventoryVolumeMultiplier: { defaultValue: '1.000000', effect: 'Higher values increase inventory capacity; lower values reduce it.' },
   PlayerDamageToPlayer: { defaultValue: '1.000000', effect: 'Higher values increase player damage to other players; lower values reduce it.' },
@@ -43,7 +46,7 @@ export const RETAIL_SETTING_GUIDANCE: Record<string, RetailSettingGuidance> = {
   GatheringXp: { defaultValue: '1.000000', effect: 'Higher values increase gathering XP gains; lower values slow gathering progression.' },
   MissionXp: { defaultValue: '1.000000', effect: 'Higher values increase mission XP rewards; lower values slow mission progression.' },
   ItemDurabilityDrainMultiplier: { defaultValue: '1.000000', effect: 'Higher values wear items faster; lower values make equipment last longer.' },
-  bEnableItemMaxDurabilityLoss: { defaultValue: 'True', effect: 'Enabled allows items to lose maximum durability; disabled preserves their maximum.' },
+  bEnableItemMaxDurabilityLoss: { defaultValue: 'True', effect: 'Enabled allows repairs to reduce an item\'s maximum durability; disabled preserves its maximum.' },
   PlayerShieldDamageAbsorptionMultiplier: { defaultValue: '1.000000', effect: 'Higher values increase damage absorbed by player shields; lower values reduce shield absorption.' },
   NPCShieldDamageAbsorptionMultiplier: { defaultValue: '1.000000', effect: 'Higher values increase damage absorbed by NPC shields; lower values reduce shield absorption.' },
   HeatBuildupRate: { defaultValue: '1.000000', effect: 'Higher values build heat faster; lower values make heat exposure more forgiving.' },
@@ -59,7 +62,7 @@ export const RETAIL_SETTING_GUIDANCE: Record<string, RetailSettingGuidance> = {
   FiefdomLimit: { defaultValue: '3', effect: 'Higher values allow more sub-fiefs; lower values allow fewer.' },
   BuildingPieceLimitMultiplier: { defaultValue: '1.000000', effect: 'Higher values allow more building pieces; lower values allow fewer.' },
   bBuildingInfiniteStability: { defaultValue: 'False', effect: 'Enabled enforces building stability limits; disabled gives buildings infinite stability.' },
-  BaseBackupToolTimeRestriction: { defaultValue: '10.000000', effect: 'Controls the time restriction applied to the base backup tool.' },
+  BaseBackupToolTimeRestriction: { defaultValue: '16.000000', effect: 'Window in hours after a base was built or last backed up during which its sub-fief console can still be backed up. Higher values allow a longer window. This is not a cooldown between backups.' },
   LandsraadContributionMultiplier: { defaultValue: '1.000000', effect: 'Higher values increase Landsraad contribution gains; lower values reduce them.' },
   LandsraadSpecializationXpMultiplier: { defaultValue: '1.000000', effect: 'Higher values increase Landsraad specialization XP; lower values reduce it.' },
   LandsraadFactionStandingMultiplier: { defaultValue: '1.000000', effect: 'Higher values increase Landsraad faction standing gains; lower values reduce them.' },
@@ -109,7 +112,8 @@ function NumericSettingControl({
   onCommit: () => void
 }) {
   const sliderMin = setting.type === 'float' ? FLOAT_SLIDER_MIN : INTEGER_SLIDER_MIN
-  const sliderMax = NUMERIC_SLIDER_MAX
+  const sliderMax = setting.key === 'CraftingTimeMultiplier' ? 5 : NUMERIC_SLIDER_MAX
+  const showSlider = setting.key !== 'BaseBackupToolTimeRestriction'
   const parsedValue = Number(value)
   const sourceValue = Number(setting.value)
   const sliderSource = Number.isFinite(parsedValue)
@@ -148,7 +152,7 @@ function NumericSettingControl({
 
   return (
     <div ref={controls} className="flex w-full min-w-0 flex-wrap items-center justify-end gap-2">
-      {setting.valid && value.trim() !== '' && (
+      {showSlider && setting.valid && value.trim() !== '' && (
         <div className="flex min-w-0 flex-[1_1_220px] items-center gap-2">
           <input
             aria-label={`${setting.label} slider, range ${rangeDescription}`}
@@ -192,7 +196,7 @@ function NumericSettingControl({
         onChange={event => onChange(event.target.value)}
         onBlur={onCommit}
         disabled={disabled}
-        title={`Exact value ${value}. Values outside the slider's ${rangeDescription} convenience range remain unchanged.`}
+        title={showSlider ? `Exact value ${value}. Values outside the slider's ${rangeDescription} convenience range remain unchanged.` : 'Backup window in hours. No documented maximum; existing values are preserved.'}
         className="w-28 max-w-full shrink-0 border border-border bg-surface px-2 py-1 text-right font-mono text-xs tabular-nums text-text focus:outline-none focus:ring-2 focus:ring-ibad disabled:cursor-not-allowed disabled:opacity-60"
       />
     </div>

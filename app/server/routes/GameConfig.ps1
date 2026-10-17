@@ -390,6 +390,12 @@ Register-DuneRoute -Method PUT -Path '/api/gameconfig' -Handler {
     }
 
     try {
+        if ($body.lab -eq $true) {
+            $before = Get-DuneGameConfig -Ip $ctx.ip
+            foreach ($file in @('game','engine')) {
+                Assert-DuneLabPathsUnchanged -Raw "$($before[$file].raw)" -Updates @($structured | Where-Object { $_.file -eq $file })
+            }
+        }
         Save-DuneGameConfigLocked -Ip $ctx.ip -Updates $structured.ToArray()
         # Console variables are staged, never applied here. The values live in
         # UserEngine.ini; the matching startup commands are rebuilt from that file
@@ -690,6 +696,22 @@ Register-DuneRoute -Method PUT -Path '/api/gameconfig/client/engine' -LocalOnly 
         }
     } catch {
         Write-DuneError -Response $res -Status 500 -Message "Updating client Engine.ini permission failed: $($_.Exception.Message)"
+    }
+}
+
+# The Lab's explicit destination review authorizes these exact raw targets,
+# including controls outside the curated client-compatibility schema.
+Register-DuneRoute -Method PUT -Path '/api/gameconfig/client/lab' -LocalOnly -Handler {
+    param($req, $res, $routeParams, $body)
+    if (-not ($body -is [hashtable]) -or $body.approved -ne $true) {
+        Write-DuneError -Response $res -Status 400 -Message 'Review and approve the local Lab file changes before saving.'
+        return
+    }
+    try {
+        $result = Save-DuneGameConfigClient -Updates @($body.updates) -ReviewedRaw
+        Write-DuneJson -Response $res -Body $result
+    } catch {
+        Write-DuneError -Response $res -Status 400 -Message "Local Lab save failed: $($_.Exception.Message)"
     }
 }
 

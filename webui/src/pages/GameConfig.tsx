@@ -49,6 +49,7 @@ import { DeepDesertPvpCard } from './gameconfig/DeepDesertPvpCard'
 import { BaseBackupGuardPanel } from './gameconfig/BaseBackupGuardPanel'
 import { isLocalViewer } from '../util/viewer'
 import { useSettingsDraft } from './gameconfig/settingsApplyContext'
+import { LabSaveReview } from './gameconfig/LabSaveReview'
 
 export const EXPERIMENTAL_BLOCKED_DEFAULT_TARGETS = new Set([
   'game||/script/dunesandbox.timeofdaysettings||m_starttime',
@@ -390,6 +391,7 @@ export function GameConfig({ mode = 'standard', embedded = false, section = 'adv
   const [loadState, setLoadState] = useState<LoadState>('idle')
   const [loadError, setLoadError] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
+  const [labReview, setLabReview] = useState<GameConfigRawUpdate[] | null>(null)
   const [saveError, setSaveError] = useState<string | null>(null)
   const [savedMsg, setSavedMsg] = useState<string | null>(null)
   const [reloadingPods, setReloadingPods] = useState(false)
@@ -968,6 +970,15 @@ export function GameConfig({ mode = 'standard', embedded = false, section = 'adv
 
   async function saveDraft(fromReview = false) {
     if (dirtyKeys.length === 0) return
+    if (experimentalPage && !fromReview) {
+      const fields = schemaWithLoadedExperimental.flatMap(category => category.fields)
+      setLabReview(dirtyKeys.map(key => {
+        const field = fields.find(field => field.key === key)
+        if (!field) throw new Error(`Reload the Lab catalog before saving ${key}.`)
+        return { file: field.file, section: field.section, key, value: values[key] ?? '' }
+      }))
+      return
+    }
     if (experimentalStartupDirtyKeys.length > 0 && !fromReview) {
       const count = experimentalStartupDirtyKeys.length
       const engineStatus = clientInfo?.engineEnabled
@@ -1733,6 +1744,7 @@ export function GameConfig({ mode = 'standard', embedded = false, section = 'adv
             {experimentalPage && (
               <DefaultsCatalogBrowser
                 vmRunning={vmRunning}
+                serverPaths={{ game: cfg?.game.path ?? '', engine: cfg?.engine.path ?? '' }}
                 onSaved={() => void loadAll()}
                 excludedTargets={surfacedIniTargets}
               />
@@ -1821,6 +1833,10 @@ export function GameConfig({ mode = 'standard', embedded = false, section = 'adv
         onConfirm={confirmSandwormEnable}
       />
 
+      {labReview && <LabSaveReview updates={labReview} serverAvailable={vmRunning} serverPaths={{ game: cfg?.game.path ?? '', engine: cfg?.engine.path ?? '' }} onServerSave={() => saveGameConfigRaw(labReview)}
+        onCancel={() => setLabReview(null)} onDone={message => {
+          setLabReview(null); void loadAll().then(() => setSavedMsg(message))
+        }} />}
       {clientReview && (
         <ClientApplyReviewModal
           items={clientReview.items}
@@ -2163,6 +2179,12 @@ export function formatCoriolisCycleStartHour(utcHour: number, timezoneOffsetMinu
 }
 
 function FieldRow({ field, value, onChange, disabled, isDirty, isSet, isCustom, defaultValue, managed, fixedHeight = false }: FieldRowProps) {
+  if (/[\\/]/.test(`${defaultValue} ${value}`) || /(path|directory|folder|datatable|assetreference)(name)?$/i.test(field.key)) {
+    return <div className="space-y-1">
+      <label className="text-sm font-medium">{field.label} <span className="text-xs text-text-muted">Read-only path — preserved</span></label>
+      <input readOnly className="w-full p-2 rounded border border-border bg-surface-2 font-mono text-xs" value={value || defaultValue} title={value || defaultValue} aria-label={`${field.label} (read-only path)`} />
+    </div>
+  }
   const inputBase =
     'w-full px-3 py-2 rounded-lg bg-surface-2 border border-border text-text text-sm ' +
     'placeholder:text-text-dim focus:outline-none focus:ring-2 focus:ring-ibad focus:border-ibad/50 ' +
@@ -2354,11 +2376,12 @@ function BoolToggle({ on, off, value, disabled, onChange }: { on: string; off: s
 // -----------------------------------------------------------------------------
 
 function DefaultsCatalogBrowser({
-  vmRunning, onSaved, excludedTargets,
+  vmRunning, onSaved, excludedTargets, serverPaths,
 }: {
   vmRunning: boolean
   onSaved: () => void
   excludedTargets?: Set<string>
+  serverPaths?: { game: string; engine: string }
 }) {
   const { open, setOpen } = useCardCollapse('gameconfig.defaultsCatalog', false)
   const [data, setData] = useState<GameConfigDefaultsResponse | null>(null)
@@ -2379,6 +2402,7 @@ function DefaultsCatalogBrowser({
   // discard a pending edit.
   const [arrayExpanded, setArrayExpanded] = useState<Set<string>>(() => new Set())
   const [saving, setSaving] = useState(false)
+  const [review, setReview] = useState<GameConfigRawUpdate[] | null>(null)
   const [saveErr, setSaveErr] = useState<string | null>(null)
   const [savedMsg, setSavedMsg] = useState<string | null>(null)
 
@@ -2435,11 +2459,11 @@ function DefaultsCatalogBrowser({
     })
   }
 
-  const setEdit = (sectionName: string, key: string, value: string, original: string) => {
+  const setEdit = (sectionName: string, key: string, value: string, original: string, force = false) => {
     setEdits(prev => {
       const next = new Map(prev)
       const id = `${sectionName}||${key}`
-      if (value === original) next.delete(id)
+      if (value === original && !force) next.delete(id)
       else next.set(id, value)
       return next
     })
@@ -2551,12 +2575,7 @@ function DefaultsCatalogBrowser({
       }
 
       if (updates.length === 0) return
-      await saveGameConfigRaw(updates)
-      setSavedMsg(`Saved ${updates.length} change${updates.length === 1 ? '' : 's'}.`)
-      setEdits(new Map())
-      setArrayEdits(new Map())
-      await load(false)
-      onSaved()
+      setReview(updates)
     } catch (e) {
       setSaveErr(e instanceof Error ? e.message : String(e))
     } finally {
@@ -2582,6 +2601,11 @@ function DefaultsCatalogBrowser({
         </span>
       </button>
 
+      {review && <LabSaveReview updates={review} serverAvailable={vmRunning} serverPaths={serverPaths} onServerSave={() => saveGameConfigRaw(review)}
+        onCancel={() => setReview(null)} onDone={message => {
+          setReview(null); setSavedMsg(message); setEdits(new Map()); setArrayEdits(new Map())
+          void load(false); onSaved()
+        }} />}
       {open && (
         <div className="mt-4 space-y-3">
           {!vmRunning && (
@@ -2665,7 +2689,7 @@ function DefaultsCatalogBrowser({
                     onToggle={() => toggleSection(s.name)}
                     editsCount={sectionEditCount(s.name)}
                     getEdit={(key) => edits.get(`${s.name}||${key}`)}
-                    onEdit={(key, value, original) => setEdit(s.name, key, value, original)}
+                    onEdit={(key, value, original, force) => setEdit(s.name, key, value, original, force)}
                     getArrayEdit={(key, idx) => getArrayEdit(s.name, key, idx)}
                     onArrayEdit={(key, idx, value, original) => setArrayEdit(s.name, key, idx, value, original)}
                     isArrayRowExpanded={(key, idx) => isArrayRowExpanded(s.name, key, idx)}
@@ -2696,7 +2720,7 @@ function DefaultsCatalogBrowser({
                   <button
                     type="button"
                     onClick={() => void onSave()}
-                    disabled={dirtyCount === 0 || saving || !vmRunning}
+                    disabled={dirtyCount === 0 || saving || (!vmRunning && !isLocalViewer())}
                     className="btn-primary"
                   >
                     <Icon name={saving ? 'Loader2' : 'Save'} size={14} className={saving ? 'animate-spin' : ''} />
@@ -2721,7 +2745,7 @@ function DefaultsSectionCard({
   onToggle: () => void
   editsCount: number
   getEdit: (key: string) => string | undefined
-  onEdit: (key: string, value: string, original: string) => void
+  onEdit: (key: string, value: string, original: string, force?: boolean) => void
   getArrayEdit: (key: string, idx: number) => string | undefined
   onArrayEdit: (key: string, idx: number, value: string, original: string) => void
   isArrayRowExpanded: (key: string, idx: number) => boolean
@@ -2781,7 +2805,7 @@ function DefaultsSectionCard({
               k={k}
               rowIdx={idx}
               pending={getEdit(k.key)}
-              onChange={(v) => onEdit(k.key, v, k.current)}
+              onChange={(v, force) => onEdit(k.key, v, k.current, force)}
               arrayPending={getArrayEdit(k.key, idx)}
               onArrayChange={(v) => onArrayEdit(k.key, idx, v, k.current)}
               expanded={isArrayRowExpanded(k.key, idx)}
@@ -2794,14 +2818,14 @@ function DefaultsSectionCard({
   )
 }
 
-function DefaultsKeyRow({
+export function DefaultsKeyRow({
   k, rowIdx, pending, onChange,
   arrayPending, onArrayChange, expanded, onToggleExpand,
 }: {
   k: GameConfigDefaultKey
   rowIdx: number
   pending: string | undefined
-  onChange: (v: string) => void
+  onChange: (v: string, force?: boolean) => void
   arrayPending: string | undefined
   onArrayChange: (v: string) => void
   expanded: boolean
@@ -2810,6 +2834,7 @@ function DefaultsKeyRow({
   const displayed = pending ?? k.current
   const isDirty = pending !== undefined
   const isArray = k.isArray
+  const pathReference = /[\\/]/.test(`${k.default} ${k.current}`) || /(path|directory|folder|datatable|assetreference)(name)?$/i.test(k.key)
   // For array rows the effective value tracks arrayPending, and dirty state
   // includes cleared entries (delete-a-row).
   const arrayDisplayed = arrayPending !== undefined ? arrayPending : k.current
@@ -2821,7 +2846,11 @@ function DefaultsKeyRow({
     'focus:outline-none focus:ring-2 focus:ring-accent/40 disabled:opacity-60'
 
   let control: ReactElement
-  if (isArray) {
+  if (pathReference) {
+    control = <input type="text" readOnly value={k.current || k.default} className={inputCls}
+      aria-label={`${k.key} (read-only path)`}
+      title={`${k.current || k.default} (${k.hasOverride ? 'saved override; preserved' : 'Funcom default; inherited'})`} />
+  } else if (isArray) {
     // Array (+/-) rows: single-line preview with an expand toggle. Expanded
     // view shows a multi-line textarea (Unreal struct syntax can be long)
     // plus Reset-this-entry and Delete-this-entry actions. On save, the
@@ -2922,6 +2951,7 @@ function DefaultsKeyRow({
         <input
           type="text"
           value={displayed}
+          placeholder={!displayed && k.hasOverride === false ? 'No override — uses Funcom default' : undefined}
           onChange={e => onChange(e.target.value)}
           className={inputCls}
         />
@@ -2948,9 +2978,12 @@ function DefaultsKeyRow({
         {arrayIsDeleted && <span className="px-1 rounded bg-danger/15 text-danger font-semibold uppercase">delete</span>}
         {arrayIsDirty && !arrayIsDeleted && <span className="px-1 rounded bg-success/15 text-success font-semibold uppercase">edited</span>}
         {!isDirty && !arrayIsDirty && k.overridden && <span className="px-1 rounded bg-accent/15 text-accent-bright font-semibold uppercase">overridden</span>}
+        {!isArray && !isDirty && k.hasOverride === false && <span>No override</span>}
+        {!isArray && !isDirty && k.hasOverride === true && !displayed.trim() && <span className="text-warning">Empty override — Clear to inherit</span>}
         <span className="truncate">default: {k.default || <span className="text-text-dim/60">∅</span>}</span>
-        {!isArray && <>
-          <button type="button" className="btn-ghost px-1 text-[10px]" onClick={() => onChange('')} disabled={!displayed.trim()} title="Remove this scalar entry from the server INI on save">Clear</button>
+        {pathReference && <span>Read-only path — preserved</span>}
+        {!isArray && !pathReference && <>
+          <button type="button" className="btn-ghost px-1 text-[10px]" onClick={() => onChange('', true)} disabled={!displayed.trim() && !(k.hasOverride && !isDirty)} title="Remove this scalar override from the selected INI files on save">Clear</button>
           <button type="button" className="btn-ghost px-1 text-[10px]" onClick={() => onChange(k.default)} disabled={!k.default.trim() || displayed === k.default} title={k.default.trim() ? 'Write this Funcom default to the server INI on save' : 'No Funcom default is available; nothing will be added'}>Default</button>
         </>}
       </div>
