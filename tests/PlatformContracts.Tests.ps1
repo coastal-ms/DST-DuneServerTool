@@ -1,4 +1,4 @@
-BeforeAll {
+﻿BeforeAll {
     . "$PSScriptRoot\_TestHelpers.ps1"
     . (Join-Path (Get-DstRepoRoot) 'app\server\HttpServer.ps1')
     Import-DstLib 'ApiContract.ps1'
@@ -171,7 +171,7 @@ Describe 'Complete route classification' {
     It 'classifies the exact registered HTTP and WebSocket inventory' {
         $records = @(Get-PlatformRouteRecords)
         $manifest = Get-DuneRoutePolicyManifest
-        $records.Count | Should -Be 430
+        $records.Count | Should -Be 436
         $sources = @($records.SourceFile | Sort-Object -Unique)
         @($manifest.groups.source | Sort-Object) | Should -Be $sources
 
@@ -246,7 +246,7 @@ Describe 'Complete route classification' {
         @($script:DuneRoutes | Where-Object Path -eq '/api/server/name').Classification.capabilityId |
             Should -Be 'settings.game-server'
         $mapReadRoutes = @($script:DuneRoutes | Where-Object {
-            $_.Path -like '/api/v1/maps/*'
+            $_.Path -like '/api/v1/maps/*' -and $_.SourceFile -eq 'Maps.ps1'
         })
         $mapReadRoutes.Count | Should -Be 3
         @($mapReadRoutes | Where-Object {
@@ -254,6 +254,16 @@ Describe 'Complete route classification' {
             $_.Classification.lifecycle -ne 'read' -or
             $_.Classification.currentAccess -ne 'owner-admin'
         }).Count | Should -Be 0
+        $atlasRoutes = @($script:DuneRoutes | Where-Object SourceFile -eq 'Atlas.ps1')
+        $atlasRoutes.Count | Should -Be 4
+        foreach ($atlasRoute in $atlasRoutes) {
+            $atlasRoute.Classification.capabilityId | Should -Be 'map.observer'
+            $atlasRoute.Classification.currentAccess | Should -Be 'owner-admin'
+            $atlasRoute.LocalOnly | Should -BeFalse
+            (Test-DuneRoutePrincipalAccess -Route $atlasRoute -Principal @{type='portal-account';role='admin'}) | Should -BeTrue
+            (Test-DuneRoutePrincipalAccess -Route $atlasRoute -Principal @{type='portal-account';role='member'}) | Should -BeFalse
+            (Test-DuneRoutePrincipalAccess -Route $atlasRoute -Principal @{type='linked-player'}) | Should -BeFalse
+        }
         $mapView = @((Get-DuneCapabilityRegistry).capabilities | Where-Object id -eq 'map.view')[0]
         $mapLiveCache = @((Get-DuneCapabilityRegistry).capabilities | Where-Object id -eq 'map.live-cache')[0]
         @($mapView.allowedPrincipals | Sort-Object) | Should -Be @('admin','local-host','owner')
@@ -339,7 +349,7 @@ $result = @{
         $LASTEXITCODE | Should -Be 0 -Because ($output -join [Environment]::NewLine)
         $resultLine = @($output | Where-Object { [string]$_ -like 'ROUTE_RESULT:*' })[-1]
         $result = ([string]$resultLine).Substring('ROUTE_RESULT:'.Length) | ConvertFrom-Json
-        $result.total | Should -Be 430
+        $result.total | Should -Be 436
         $result.unclassified | Should -Be 0
         $result.incompatible | Should -Be 0
         $result.podsCleanup | Should -Be 1

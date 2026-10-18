@@ -1,6 +1,6 @@
 import { useSoloInstallation } from '../hooks/useInstallationMode'
 import { lazy, Suspense, useRef, type ReactNode } from 'react'
-import { useLocation } from '../router'
+import { useLocation, useSearch } from '../router'
 import { MenuBar } from './MenuBar'
 import { StatusBar } from './StatusBar'
 import { UpdateBanner } from '../components/UpdateBanner'
@@ -27,6 +27,8 @@ export function AppShell({ children }: { children: ReactNode }) {
   const classicSidebar = useSidebarCollapsed()
   const deckSidebar = useSidebarCollapsed('dst.deck.sidebar.collapsed', true)
   const { pathname } = useLocation()
+  const search = useSearch()
+  const liveMap = pathname === '/map' && new URLSearchParams(search).get('view') === 'live'
   const immersive = IMMERSIVE_ROUTES.has(pathname)
   const preferredCommandDeck = useCommandDeck()
   const commandDeck = preferredCommandDeck && !soloOnly
@@ -63,7 +65,7 @@ export function AppShell({ children }: { children: ReactNode }) {
           <main ref={mainRef} data-app-scroll-container={commandDeck && !spatialHome ? undefined : ''}
             data-app-scroll-host={commandDeck && !spatialHome ? '' : undefined}
             className={`flex-1 min-h-0 min-w-0 max-w-full overflow-x-hidden ${commandDeck && !spatialHome ? 'overflow-y-hidden' : 'overflow-y-auto'} overscroll-y-contain`}>
-            <div className={commandDeck ? 'w-full min-w-0' : 'w-full min-w-0 max-w-7xl mx-auto px-3 pt-4 pb-[max(1rem,env(safe-area-inset-bottom))] sm:px-4 md:px-6 md:py-6'}>
+            <div className={commandDeck ? 'w-full min-w-0' : `w-full min-w-0 ${pathname === '/map' ? 'max-w-none' : 'max-w-7xl mx-auto'} px-3 ${liveMap ? 'py-2' : 'pt-4 pb-[max(1rem,env(safe-area-inset-bottom))] md:py-6'} sm:px-4 md:px-6`}>
               {commandDeck && !spatialHome
                 ? <Suspense fallback={<div role="status" className="p-6">Opening workspace...</div>}>
                     <SpatialFrame tools>

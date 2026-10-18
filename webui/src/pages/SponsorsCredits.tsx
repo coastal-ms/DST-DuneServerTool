@@ -51,6 +51,17 @@ export function SponsorsCredits() {
           ))}
         </ul>
       </section>
+
+      <section aria-labelledby="special-thanks-title" className="border-t border-border py-7 sm:py-9">
+        <h2 id="special-thanks-title" className="text-lg font-semibold text-text">
+          Special Thanks to
+        </h2>
+        <p className="mt-2 text-sm leading-6 text-text-muted">
+          <strong className="text-text">Wick</strong> (<span className="font-mono">@.arturiuss</span>)
+          {' '}for the 12 seed layouts, and <strong className="text-text">DrkShrk</strong>
+          {' '}(<span className="font-mono">@drkshrk</span>) for the seed-0 spice pool.
+        </p>
+      </section>
     </div>
   )
 }

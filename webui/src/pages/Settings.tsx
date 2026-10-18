@@ -17,6 +17,7 @@ import { HyperVLifecycleCard } from './settings/HyperVLifecycleCard'
 import { BrowserAccessCard } from './settings/BrowserAccessCard'
 import { FlsTokenCard } from './settings/FlsTokenCard'
 import { FreshStartSnapshotsCard } from './settings/FreshStartSnapshotsCard'
+import { IniBackupsCard } from './settings/IniBackupsCard'
 import { InstallLocationCard } from './settings/InstallLocationCard'
 import { ShellPreferencesCard } from './settings/ShellPreferencesCard'
 import { SectionErrorBoundary } from '../components/SectionErrorBoundary'
@@ -705,6 +706,7 @@ export function Settings() {
       </SectionErrorBoundary>
 
       <SectionErrorBoundary name="Dune Server Tool installation"><InstallLocationCard /></SectionErrorBoundary>
+      <SectionErrorBoundary name="INI backups"><IniBackupsCard /></SectionErrorBoundary>
 
       <SectionErrorBoundary name="Appearance"><AppearanceCard /></SectionErrorBoundary>
 

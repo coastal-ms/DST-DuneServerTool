@@ -276,7 +276,7 @@ export function ServerSettings({ initialSection = 'official' }: { initialSection
       <PageHeader
         title="Server Settings"
         icon="ServerCog"
-        description="Official and advanced server controls, with one review of changes and where they apply. Player-PC compatibility is separate."
+        description="Official and advanced server controls, with one review of changes and where they apply. Review identifies each destination before writing."
       />
       <div className="card mb-4 p-4">
         <p className="mb-3 text-sm text-text-muted">Official controls affect all players through ServerCustomSettings.ini. Advanced controls use server Game/Engine settings and startup commands where needed. Existing values and manual configuration are preserved; the game determines each control’s actual effect.</p>
@@ -290,7 +290,7 @@ export function ServerSettings({ initialSection = 'official' }: { initialSection
           <p className="mt-1 text-xs text-text-muted">Writes this PC's game-client files, not the selected server's files. The same files are used on your DST server and other servers. Some Engine.ini settings are evaluated by each player's client independently, so server values do not always win. The effect depends on the setting; other players' files are unchanged.</p>
         </> : section === 'official' || section === 'advanced' ? <>
           <strong>Selected server's files</strong>
-          <p className="mt-1 text-xs text-text-muted">These controls configure the DST server you are managing and can affect everyone connected to it. Review & Apply writes the server configuration while the battlegroup is stopped. It does not edit the game-client files on this PC or any player's PC.</p>
+          <p className="mt-1 text-xs text-text-muted">These controls configure the DST server you are managing and can affect everyone connected to it. Review & Apply writes the server configuration while the battlegroup is stopped. The review identifies any required compatibility entries also written to this PC. Other players’ files stay unchanged.</p>
         </> : <>
           <strong>{section === 'tools' ? 'Targets vary by tool' : 'Selected server management'}</strong>
           <p className="mt-1 text-xs text-text-muted">Read each action's target before applying it. Specialized tools identify whether they change server files, the DST host PC, or the server database. These actions are separate from player game-client compatibility files.</p>
@@ -298,7 +298,7 @@ export function ServerSettings({ initialSection = 'official' }: { initialSection
       </div>
       <div role="region" aria-label="Settings actions" className="sticky top-16 z-20 mb-4 flex flex-wrap items-center gap-3 rounded-lg border border-border bg-base/95 p-3 shadow-lg backdrop-blur-sm">
           <button className="btn-primary" type="button" disabled={!vmRunning || !summary.ready || applying || reviewOpen || launchingStart || launchingStop || stopRequested || startRequested || tankSetupBusy} onClick={() => void review()}>{applying ? 'Applying settings…' : 'Review & Apply'}{summary.changes.length > 0 ? ` (${summary.changes.length})` : ''}</button>
-          <span className="text-xs text-text-muted">Review exact changes, server stop, and whether to start afterward. Local player files are never included.</span>
+          <span className="text-xs text-text-muted">Review exact changes, server stop, and whether to start afterward. Required local compatibility entries are identified in the review; intentional differences can be kept.</span>
           {stopError && (
             <div className="flex w-full min-w-0 items-start gap-2 rounded-lg border border-danger/40 bg-danger/10 p-3 text-sm text-danger" role="alert">
               <Icon name="AlertCircle" size={14} className="mt-0.5 shrink-0" /><span className="min-w-0 break-words">{stopError}</span>

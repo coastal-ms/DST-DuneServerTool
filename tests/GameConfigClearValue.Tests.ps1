@@ -17,7 +17,10 @@ BeforeAll {
 }
 
 Describe 'Lab local destination approval' {
-    BeforeEach { Mock Save-DuneGameConfigClient { @{ok=$true} } }
+    BeforeEach {
+        Mock Save-DuneGameConfigClient { @{ok=$true;applied=1} }
+        Mock Get-DuneGameConfigClient { @{game=@{effective=@{'Manual||Chosen'='2';'Manual||Unselected'='7'}};engine=@{effective=@{}}} }
+    }
     It 'requires the local-only route and explicit approval before writing player files' {
         $script:LabLocalOnly | Should -BeTrue
         { & $script:LabLocalHandler $null $null @{} @{updates=@(@{file='game';section='Building';key='DoorTime';value='3'})} } | Should -Throw '*approve*'
@@ -27,8 +30,22 @@ Describe 'Lab local destination approval' {
     }
 }
 
+Describe 'Single winner comparison response' {
+    It 'returns the complete local snapshot after writing only the chosen target' {
+        Mock Save-DuneGameConfigClient { @{ok=$true;applied=1} }
+        Mock Get-DuneGameConfigClient { @{game=@{effective=@{'Manual||Chosen'='2';'Manual||Unselected'='7'}};engine=@{effective=@{}}} }
+        Mock Write-DuneJson { $script:ComparisonResponse=$Body }
+        & $script:LabLocalHandler $null $null @{} @{approved=$true;updates=@(@{file='game';section='Manual';key='Chosen';value='2'})}
+        Should -Invoke Save-DuneGameConfigClient -Times 1 -Exactly -ParameterFilter { $ReviewedRaw -and $Updates.Count -eq 1 -and $Updates[0].key -eq 'Chosen' }
+        $script:ComparisonResponse.applied | Should -Be 1
+        $script:ComparisonResponse.client.game.effective['Manual||Chosen'] | Should -Be '2'
+        $script:ComparisonResponse.client.game.effective['Manual||Unselected'] | Should -Be '7'
+    }
+}
+
 Describe 'Clearing server INI scalar overrides' {
     BeforeEach {
+        Mock Resolve-DunePersistentGameConfigPaths { $null }
         $script:SavedClearUpdates = @()
         Mock Save-DuneGameConfigLocked { $script:SavedClearUpdates = $Updates }
         Mock Get-DuneGameConfig { @{source='installed';game=@{};engine=@{}} }

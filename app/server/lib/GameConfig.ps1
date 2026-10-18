@@ -1,10 +1,9 @@
 ﻿# GameConfig lib - section-aware visual editor for UserGame.ini + UserEngine.ini.
 #
-# Reads and writes Funcom's installed User*.ini source directory under
-# /home/dune/.dune/download/scripts/setup/config/. Retail's self-deploy command
-# copies those authoritative files into the battlegroup PVC. DST therefore edits
-# the installed source and pushes it outward before a restart instead of letting
-# a generated pod copy become the source of truth.
+# Reads and writes the active battlegroup's persistent UserSettings files, the
+# same files exposed by Funcom File Browser. Setup templates are a fallback
+# before a persistent server configuration exists, never a restart-time
+# replacement for the administrator's current server files.
 #
 # WRITE MODEL (DST-managed block):
 #   UE5 reads these files top-to-bottom with last-key-wins semantics. DST owns a
@@ -127,7 +126,7 @@ function Get-DuneTwilightLockExperiment {
         candidates = @($script:DuneTwilightCandidates)
         clientApply = [ordered]@{
             available = $false
-            reason = 'm_StartTime client behavior is unverified, so DST will not write a client override.'
+            reason = 'Time of day changes apply to the server INI.'
         }
         restartRequired = $true
         minimumObservationMinutes = 30
@@ -243,7 +242,7 @@ function Invoke-DuneTwilightLockStage {
     $backup = Backup-DuneGameConfig -Ip $Ip -ResolvedPaths $paths
     $gameBackup = @($backup.files | Where-Object file -eq 'game' | Select-Object -First 1)
     if ($gameBackup.Count -ne 1 -or -not $gameBackup[0].ok) {
-        throw 'Twilight experiment was not staged because the server Game.ini backup could not be verified.'
+        throw 'Time of day was not changed because the server Game.ini backup could not be verified.'
     }
     Save-DuneGameConfigLocked -Ip $Ip -ResolvedPaths $paths -Updates @(
         @{
@@ -270,7 +269,7 @@ function Invoke-DuneTwilightLockStage {
         backup = $gameBackup[0].backup
         restartRequired = $true
         clientApplied = $false
-        message = 'Candidate staged on the server. Apply server settings to begin the field experiment.'
+        message = 'Time of day saved. Apply server settings to use the selected phase.'
     }
 }
 
@@ -392,7 +391,7 @@ $script:DuneGameConfigSchema = @(
     @{ Section=$script:DuneGcSecGame; Key='m_PlayerStartingWater'; File='game'; Type='float'; Min=0; Default='100.0'; Label='Player Starting Water'; Help='Water amount when a player spawns. Also needs client-side apply.'; ClientApply=$true; Category='Survival' }
     @{ Section=$script:DuneGcSecOnline; Key='m_DefaultReconnectGracePeriodSeconds'; File='game'; Type='int'; Min=0; Unit='sec'; Default='300'; Label='Reconnect Grace Period'; Help="Seconds a player's corpse persists after disconnect. Also needs client-side apply."; ClientApply=$true; Category='Survival' }
     @{ Section=$script:DuneGcSecDurab; Key='m_ItemDurabilityLossMultiplier'; File='game'; Type='float'; Min=0; Max=10; Default='1.0'; Label='Item Durability Loss Multiplier'; Help='Scales durability loss for all items. 0 = off. Also needs client-side apply.'; ClientApply=$true; Category='Survival' }
-    @{ Section=$script:DuneGcSecDurab; Key='UpdateRateInSeconds'; File='game'; Type='float'; Min=0; Max=10; Unit='sec'; Default='1.0'; Label='Item Decay Update Interval'; Help='Seconds between item-deterioration updates. Higher positive values mean a longer interval between updates; lower positive values mean a shorter interval. Zero behavior has not been field-verified. Also needs client-side apply.'; ClientApply=$true; Category='Survival' }
+    @{ Section=$script:DuneGcSecDurab; Key='UpdateRateInSeconds'; File='game'; Type='float'; Min=0; Max=10; Unit='sec'; Default='1.0'; Label='Item Decay Update Interval'; Help='Seconds between item-deterioration updates. Higher positive values mean a longer interval between updates; lower positive values mean a shorter interval. Also needs client-side apply.'; ClientApply=$true; Category='Survival' }
     @{ Section=$script:DuneGcSecRespawn; Key='m_bCrossMapRespawnDropItems'; File='game'; Type='bool'; Default='True'; Label='Drop Items on Cross-Map Respawn'; Help='Whether items are dropped when a player respawns on a different map. Also needs client-side apply.'; ClientApply=$true; Category='Survival' }
 
     # --- Hydration ---
@@ -401,7 +400,7 @@ $script:DuneGameConfigSchema = @(
     # the server alone and needs no client-side apply. Reported working by a
     # community tester; the compiled default was not recovered, but sun exposure
     # is active in shipping gameplay.
-    @{ Section=$script:DuneGcSecConsole; Key='Hydration.SunExposureEnabled'; File='engine'; Type='bool01'; Default='1'; Label='Sun Exposure Enabled'; Help='Whether players take sun-exposure water drain. 0 disables sun exposure; field-reported working. Server-side only - no client apply needed.'; Startup=$true; Category='Hydration' }
+    @{ Section=$script:DuneGcSecConsole; Key='Hydration.SunExposureEnabled'; File='engine'; Type='bool01'; Default='1'; Label='Sun Exposure Enabled'; Help='Whether players take sun-exposure water drain. 0 disables sun exposure; field-reported working. DST also mirrors an explicit change to this PC when reviewing this setting through DST.'; ClientApply=$true; Startup=$true; Category='Hydration' }
     @{ Section=$script:DuneGcSecHydration; Key='m_BiomeTierUpdateRateSeconds'; File='game'; Type='float'; Min=0; Unit='sec'; Default='2.5'; Label='Biome Tier Update Rate'; Help='How often (seconds) the biome hydration tier is re-evaluated. Also needs client-side apply.'; ClientApply=$true; Category='Hydration' }
 
     # --- Loot & Death (DuneSandboxGameModeBase) ---
@@ -418,7 +417,7 @@ $script:DuneGameConfigSchema = @(
     # --- Crafting ---
     @{ Section=$script:DuneGcSecCrafting; Key='m_RepairCostWeight'; File='game'; Type='float'; Min=0; Default='0.500000'; Label='Repair Cost Weight'; Help='Scales repair costs. Also needs client-side apply.'; ClientApply=$true; Category='Crafting' }
     @{ Section=$script:DuneGcSecCrafting; Key='m_RecyclerOutputWeight'; File='game'; Type='float'; Min=0; Default='0.250000'; Label='Recycler Output Weight'; Help='Scales recycler output. Also needs client-side apply.'; ClientApply=$true; Category='Crafting' }
-    @{ Section=$script:DuneGcSecTechKnowledge; Key='m_bRevealItemOnDistributedToCharacter'; File='game'; Type='bool'; Default='False'; Label='Reveal Distributed Research Items (Experimental)'; Help='When enabled, asks the game to reveal research items distributed directly to a character, including admin-granted developer blueprints and schematics. Unconfirmed: this may make hidden entries visible, but it cannot reconstruct missing schematic research-cost metadata. Restart the battlegroup, then grant a fresh copy for testing. Also needs client-side apply.'; ClientApply=$true; Category='Crafting' }
+    @{ Section=$script:DuneGcSecTechKnowledge; Key='m_bRevealItemOnDistributedToCharacter'; File='game'; Type='bool'; Default='False'; Label='Reveal Distributed Research Items (Experimental)'; Help='When enabled, asks the game to reveal research items distributed directly to a character, including admin-granted developer blueprints and schematics. It cannot reconstruct missing schematic research-cost metadata. Restart the battlegroup after changing this setting. Also needs client-side apply.'; ClientApply=$true; Category='Crafting' }
 
     # --- Building ---
     @{ Section=$script:DuneGcSecBuilding; Key='m_MaxNumLandclaimSegments'; File='game'; Type='int'; Min=1; Default='6'; Label='Max Landclaim Segments'; Help='Maximum territory claim segments. Also needs client-side apply.'; ClientApply=$true; Category='Building' }
@@ -455,7 +454,7 @@ $script:DuneGameConfigSchema = @(
     @{ Section=$script:DuneGcSecConsole; Key='Sandstorm.Treasure.Enabled'; File='engine'; Type='bool01'; Default='1'; Label='Sandstorm Treasure Spawns'; Help='Spawn treasure during sandstorms.'; Startup=$true; Category='Storm Cycle' }
     @{ Section=$script:DuneGcSecStorm; Key='m_bCoriolisDoesDamage'; File='game'; Type='bool'; Default='False'; Label='Coriolis Storm Does Damage'; Help='Whether being caught in a Coriolis storm damages players. Also needs client-side apply.'; ClientApply=$true; Category='Storm Cycle' }
     @{ Section=$script:DuneGcSecStorm; Key='m_bSandStormDebrisEnabled'; File='game'; Type='bool'; Default='True'; Label='Sandstorm Debris'; Help='Whether sandstorms spawn flying debris. Also needs client-side apply.'; ClientApply=$true; Category='Storm Cycle' }
-    @{ Section=$script:DuneGcSecTimeOfDay; Key='m_bTimeOfDayEnabled'; File='game'; Type='bool'; Default='True'; Label='Time of Day Cycle'; Help='Whether the day/night cycle advances. Use the field-verified phase controls below to lock Sunset, Twilight, darker night, or peak Dew Harvest time. Longer simulation-safety testing is still in progress. Also needs client-side apply.'; ClientApply=$true; Category='Time of Day' }
+    @{ Section=$script:DuneGcSecTimeOfDay; Key='m_bTimeOfDayEnabled'; File='game'; Type='bool'; Default='True'; Label='Time of Day Cycle'; Help='Whether the day/night cycle advances. Use the phase controls below to lock Sunset, Twilight, darker night, or peak Dew Harvest time. Also needs client-side apply.'; ClientApply=$true; Category='Time of Day' }
 
     # --- Landsraad (scalar members of [LandsraadSettings] Data=(...)) ---
     @{ Section=$script:DuneGcSecLandsraad; StructKey=$script:DuneGcLandsraadStructKey; Key='m_TaskGoalAmount'; File='game'; Type='float'; Min=0; Default='70000'; Label='Task Goal Amount'; Help='Contribution target for each House task before it completes. Funcom default is 70000. DST also applies the new goal to the currently-running term''s live House rows (dune.landsraad_tasks.goal_amount) so the change takes effect immediately.'; ClientApply=$true; Category='Landsraad' }
@@ -465,8 +464,8 @@ $script:DuneGameConfigSchema = @(
     @{ Section=$script:DuneGcSecLandsraad; StructKey=$script:DuneGcLandsraadStructKey; Key='m_ControlPointsPerCycle'; File='game'; Type='int'; Min=0; Default='2'; Label='Control Points per Cycle'; Help='Territory control points awarded per cycle.'; ClientApply=$true; Category='Landsraad' }
     @{ Section=$script:DuneGcSecLandsraad; StructKey=$script:DuneGcLandsraadStructKey; Key='m_bIsPlayerVotingEnabled'; File='game'; Type='bool'; Default='True'; Label='Player Voting Enabled'; Help='Whether players can vote on Landsraad decrees.'; ClientApply=$true; Category='Landsraad' }
     @{ Section=$script:DuneGcSecLandsraad; StructKey=$script:DuneGcLandsraadStructKey; Key='m_bIsTerritoryControlEnabled'; File='game'; Type='bool'; Default='True'; Label='Territory Control Enabled'; Help='Whether the territory-control mechanic is active.'; ClientApply=$true; Category='Landsraad' }
-    @{ Section=$script:DuneGcSecLandsraad; StructKey=$script:DuneGcLandsraadStructKey; Key='m_VotingPeriodDurationInSec'; File='game'; Type='float'; Min=0; Unit='sec'; Default='118500.0'; Label='Legacy Voting Period Duration'; Help='Legacy / unconfirmed member retained so existing server and rollback values remain visible and editable. Current Funcom builds use Landsraad Voting Period Duration below. DST does not copy or delete either value automatically.'; ClientApply=$true; Category='Landsraad' }
-    @{ Section=$script:DuneGcSecLandsraad; StructKey=$script:DuneGcLandsraadStructKey; Key='m_VotingPeriodStartBeforeCoriolisCycleInSec'; File='game'; Type='float'; Min=0; Unit='sec'; Default='118800.0'; Label='Legacy Voting Starts Before Cycle'; Help='Legacy / unconfirmed member retained for existing servers and rollback. Current Funcom builds do not expose a one-to-one replacement, so DST preserves this value without mapping or deleting it.'; ClientApply=$true; Category='Landsraad' }
+    @{ Section=$script:DuneGcSecLandsraad; StructKey=$script:DuneGcLandsraadStructKey; Key='m_VotingPeriodDurationInSec'; File='game'; Type='float'; Min=0; Unit='sec'; Default='118500.0'; Label='Legacy Voting Period Duration'; Help='Legacy member retained so existing server and rollback values remain visible and editable. Current Funcom builds use Landsraad Voting Period Duration below. DST does not copy or delete either value automatically.'; ClientApply=$true; Category='Landsraad' }
+    @{ Section=$script:DuneGcSecLandsraad; StructKey=$script:DuneGcLandsraadStructKey; Key='m_VotingPeriodStartBeforeCoriolisCycleInSec'; File='game'; Type='float'; Min=0; Unit='sec'; Default='118800.0'; Label='Legacy Voting Starts Before Cycle'; Help='Legacy member retained for existing servers and rollback. Current Funcom builds do not expose a one-to-one replacement, so DST preserves this value without mapping or deleting it.'; ClientApply=$true; Category='Landsraad' }
     @{ Section=$script:DuneGcSecLandsraad; StructKey=$script:DuneGcLandsraadStructKey; Key='m_LandsraadVotingPeriodDurationInSec'; File='game'; Type='int'; Min=0; Unit='sec'; Default='118500'; Label='Voting Period Duration'; Help='Length of the Landsraad voting window. Applies when the game schedules the next voting period.'; ClientApply=$true; Category='Landsraad' }
     @{ Section=$script:DuneGcSecLandsraad; StructKey=$script:DuneGcLandsraadStructKey; Key='m_LandsraadCycleDurationInSeconds'; File='game'; Type='int'; Min=1; Unit='sec'; Default='604800'; Label='Landsraad Cycle Duration'; Help='Length of a Landsraad term. Changing this setting does not immediately shorten the term already in progress.'; ClientApply=$true; Category='Landsraad' }
     @{ Section=$script:DuneGcSecLandsraad; StructKey=$script:DuneGcLandsraadStructKey; Key='m_LandsraadSuspendedPeriodDurationInSeconds'; File='game'; Type='int'; Min=0; Unit='sec'; Default='300'; Label='Suspended Period Duration'; Help='Gap between the end of one Landsraad term and the start of the next.'; ClientApply=$true; Category='Landsraad' }
@@ -516,7 +515,7 @@ $script:DuneGameConfigSchema = @(
     @{ Section=$script:DuneGcSecContracts; Key='m_bIsEnabled'; File='game'; Type='bool'; Default='True'; Label='Contracts Enabled'; Help='Master toggle for the contracts subsystem. Also needs client-side apply.'; ClientApply=$true; Category='Encounters' }
 
     # --- Vehicles (engine cvars) ---
-    @{ Section=$script:DuneGcSecConsole; Key='dw.VehicleDurabilityDamageMultiplier'; File='engine'; Type='float'; Min=0; Max=10; Default='1.0'; Label='Vehicle Durability Damage'; Help='Funcom: "Vehicle Durability Damage multiplier." Field testing found that 0 does not disable ordinary use wear or welding/repair-station permanent durability loss; exact damage scope remains unconfirmed.'; Startup=$true; Category='Experimental' }
+    @{ Section=$script:DuneGcSecConsole; Key='dw.VehicleDurabilityDamageMultiplier'; File='engine'; Type='float'; Min=0; Max=10; Default='1.0'; Label='Vehicle Durability Damage'; Help='Funcom: "Vehicle Durability Damage multiplier." Setting 0 does not disable ordinary use wear or permanent durability loss during welding or repair-station use.'; Startup=$true; Category='Experimental' }
 
     # --- Experimental binary-discovered engine cvars ---
     # These registered controls and their compiled help/defaults were decoded
@@ -525,42 +524,42 @@ $script:DuneGameConfigSchema = @(
     # compiled defaults stay unset rather than presenting an invented default.
     # Hazard.DehydrationZonesEnabled is intentionally excluded because its
     # compiled Funcom help explicitly warns that enabling it crashes clients.
-    @{ Section=$script:DuneGcSecConsole; Key='Dune.GiveDoubleDifficultyLoot'; File='engine'; Type='bool01'; Default='0'; Label='Double Difficulty Loot'; Help='Give double loot when encounter difficulty is above 0. Field-confirmed with dungeon loot.'; Status='Confirmed'; Startup=$true; Category='Loot & Death' }
+    @{ Section=$script:DuneGcSecConsole; Key='Dune.GiveDoubleDifficultyLoot'; File='engine'; Type='bool01'; Default='0'; Label='Double Difficulty Loot'; Help='Give double loot when encounter difficulty is above 0.'; Status='Confirmed'; Startup=$true; Category='Loot & Death' }
     # Field testing established that INI-only application did not take effect,
     # while applying the same value through the Survival pod's ExecCmds did.
     # Existing generator fuel reflected the new duration after restart.
-    @{ Section=$script:DuneGcSecConsole; Key='dw.FuelBurningMultiplier'; File='engine'; Type='float'; Default='1.0'; Label='Fuel Burning Duration'; Help='Scales how long all fuel burns. DST applies the value in UserEngine.ini and the Hagga server startup command because INI-only application did not take effect in field testing. Restart the battlegroup to apply it; existing generator fuel updates after restart.'; Status='Confirmed'; Startup=$true; Category='Building' }
-    @{ Section=$script:DuneGcSecConsole; Key='Abilities.RespecCooldownTotalDurationSeconds'; File='engine'; Type='int'; Min=0; Unit='sec'; Default='172800'; Label='Ability Respec Cooldown'; Help='Total ability-respec cooldown in seconds. Compiled default is 172800 (2 days); 0 may remove the cooldown but has not been field-verified.'; Category='Experimental' }
-    @{ Section=$script:DuneGcSecConsole; Key='dw.LandsraadMissionRewardMultiplierFactionXP'; File='engine'; Type='float'; Min=0; Default='1.0'; Label='Landsraad Faction XP'; Help='Scales Faction XP from Landsraad missions. Field-confirmed at 10; mission preview may still show the base reward.'; Status='Confirmed'; Startup=$true; Category='Landsraad' }
-    @{ Section=$script:DuneGcSecConsole; Key='dw.LandsraadMissionRewardMultiplierHouseCredit'; File='engine'; Type='float'; Min=0; Default='1.0'; Label='Landsraad House Credit'; Help='Scales House Credit from Landsraad missions. Field-confirmed at 10; mission preview may still show the base reward.'; Status='Confirmed'; Startup=$true; Category='Landsraad' }
-    @{ Section=$script:DuneGcSecConsole; Key='dw.LandsraadMissionRewardMultiplierSpecializationXP'; File='engine'; Type='float'; Min=0; Default='1.0'; Label='Landsraad Specialization XP'; Help='Scales Specialization XP from Landsraad missions. Field-confirmed at 10; mission preview may still show the base reward.'; Status='Confirmed'; Startup=$true; Category='Landsraad' }
-    @{ Section=$script:DuneGcSecConsole; Key='dw.VehicleHeatMultiplier'; File='engine'; Type='float'; Min=0; Default='1.0'; Label='Vehicle Heat Multiplier'; Help='Scales vehicle heat generation. 0 = no heat, 1 = normal, 2 = double. Applied through INI and Hagga startup command for local testing.'; Category='Experimental' }
-    @{ Section=$script:DuneGcSecConsole; Key='dw.VehicleHeatInterpolationSpeed'; File='engine'; Type='float'; Min=0; Default='1.0'; Label='Vehicle Heat Interpolation Speed'; Help='Speeds up or slows down vehicle heat interpolation. Applied through INI and Hagga startup command for local testing.'; Category='Experimental' }
-    @{ Section=$script:DuneGcSecConsole; Key='dw.VehiclePowerConsumptionMultiplier'; File='engine'; Type='float'; Min=0; Default='1.0'; Label='Vehicle Power Consumption'; Help='Scales vehicle power use. 0 = no consumption, 1 = normal, 2 = double. Applied through INI and Hagga startup command for local testing.'; Category='Experimental' }
-    @{ Section=$script:DuneGcSecConsole; Key='dw.VehicleCanOverHeat'; File='engine'; Type='bool01'; Default='1'; Label='Vehicles Can Overheat'; Help='Whether vehicles can overheat. 0 = disabled, 1 = enabled. Applied through INI and Hagga startup command for local testing.'; Category='Experimental' }
-    @{ Section=$script:DuneGcSecConsole; Key='dw.VehicleAbandonedDecayAllowed'; File='engine'; Type='bool01'; Label='Abandoned Vehicle Decay'; Help='Allows abandoned vehicles to decay over time. 0 disables decay. Compiled default was not recovered.'; Category='Experimental' }
-    @{ Section=$script:DuneGcSecConsole; Key='dw.VehicleAbandonedDecayTimeMultiplier'; File='engine'; Type='float'; Default='1.0'; Label='Abandoned Vehicle Decay Multiplier'; Help='Funcom: "Speed up abandoned decay application for testing purposes. Setting this value to 1.0 make system work like in shipping build". The direction of higher or lower values has not been field-verified.'; Category='Experimental' }
-    @{ Section=$script:DuneGcSecConsole; Key='Vehicle.DisassemblySpeedMultiplier'; File='engine'; Type='float'; Default='1.0'; Label='Vehicle Disassembly Speed'; Help='Scales vehicle disassembly speed. Not yet field-verified.'; Category='Experimental' }
+    @{ Section=$script:DuneGcSecConsole; Key='dw.FuelBurningMultiplier'; File='engine'; Type='float'; Default='1.0'; Label='Fuel Burning Duration'; Help='Scales how long all fuel burns. Restart the battlegroup to apply it; existing generator fuel updates after restart.'; Status='Confirmed'; Startup=$true; Category='Building' }
+    @{ Section=$script:DuneGcSecConsole; Key='Abilities.RespecCooldownTotalDurationSeconds'; File='engine'; Type='int'; Min=0; Unit='sec'; Default='172800'; Label='Ability Respec Cooldown'; Help='Total ability-respec cooldown in seconds. Compiled default is 172800 (2 days).'; Category='Experimental' }
+    @{ Section=$script:DuneGcSecConsole; Key='dw.LandsraadMissionRewardMultiplierFactionXP'; File='engine'; Type='float'; Min=0; Default='1.0'; Label='Landsraad Faction XP'; Help='Scales Faction XP from Landsraad missions. Mission preview may still show the base reward.'; Status='Confirmed'; Startup=$true; Category='Landsraad' }
+    @{ Section=$script:DuneGcSecConsole; Key='dw.LandsraadMissionRewardMultiplierHouseCredit'; File='engine'; Type='float'; Min=0; Default='1.0'; Label='Landsraad House Credit'; Help='Scales House Credit from Landsraad missions. Mission preview may still show the base reward.'; Status='Confirmed'; Startup=$true; Category='Landsraad' }
+    @{ Section=$script:DuneGcSecConsole; Key='dw.LandsraadMissionRewardMultiplierSpecializationXP'; File='engine'; Type='float'; Min=0; Default='1.0'; Label='Landsraad Specialization XP'; Help='Scales Specialization XP from Landsraad missions. Mission preview may still show the base reward.'; Status='Confirmed'; Startup=$true; Category='Landsraad' }
+    @{ Section=$script:DuneGcSecConsole; Key='dw.VehicleHeatMultiplier'; File='engine'; Type='float'; Min=0; Default='1.0'; Label='Vehicle Heat Multiplier'; Help='Scales vehicle heat generation. 0 = no heat, 1 = normal, 2 = double. Restart the battlegroup to apply.'; Category='Experimental' }
+    @{ Section=$script:DuneGcSecConsole; Key='dw.VehicleHeatInterpolationSpeed'; File='engine'; Type='float'; Min=0; Default='1.0'; Label='Vehicle Heat Interpolation Speed'; Help='Speeds up or slows down vehicle heat interpolation. Restart the battlegroup to apply.'; Category='Experimental' }
+    @{ Section=$script:DuneGcSecConsole; Key='dw.VehiclePowerConsumptionMultiplier'; File='engine'; Type='float'; Min=0; Default='1.0'; Label='Vehicle Power Consumption'; Help='Scales vehicle power use. 0 = no consumption, 1 = normal, 2 = double. Restart the battlegroup to apply.'; Category='Experimental' }
+    @{ Section=$script:DuneGcSecConsole; Key='dw.VehicleCanOverHeat'; File='engine'; Type='bool01'; Default='1'; Label='Vehicles Can Overheat'; Help='Whether vehicles can overheat. 0 = disabled, 1 = enabled. Restart the battlegroup to apply.'; Category='Experimental' }
+    @{ Section=$script:DuneGcSecConsole; Key='dw.VehicleAbandonedDecayAllowed'; File='engine'; Type='bool01'; Label='Abandoned Vehicle Decay'; Help='Allows abandoned vehicles to decay over time. 0 disables decay.'; Category='Experimental' }
+    @{ Section=$script:DuneGcSecConsole; Key='dw.VehicleAbandonedDecayTimeMultiplier'; File='engine'; Type='float'; Default='1.0'; Label='Abandoned Vehicle Decay Multiplier'; Help='Funcom: "Speed up abandoned decay application for testing purposes. Setting this value to 1.0 make system work like in shipping build".'; Category='Experimental' }
+    @{ Section=$script:DuneGcSecConsole; Key='Vehicle.DisassemblySpeedMultiplier'; File='engine'; Type='float'; Default='1.0'; Label='Vehicle Disassembly Speed'; Help='Scales vehicle disassembly speed.'; Category='Experimental' }
     @{ Section=$script:DuneGcSecConsole; Key='Vehicle.RecoveryChassisDurabilityReductionFraction'; File='engine'; Type='float'; Default='0.150000006'; Label='Recovery Chassis Durability Reduction'; Help='Fraction of maximum chassis durability lost during recovery. Set 0 for no durability loss; use 0.15 for 15 percent.'; Status='Confirmed'; Startup=$true; Category='Vehicles' }
     @{ Section=$script:DuneGcSecConsole; Key='Vehicle.RecoveryCurrencyBaseCost'; File='engine'; Type='int'; Min=0; Default='2500'; Label='Vehicle Recovery Base Cost'; Help='Base currency cost to recover a vehicle before vehicle-specific multipliers.'; Status='Confirmed'; Startup=$true; Category='Vehicles' }
-    @{ Section=$script:DuneGcSecConsole; Key='Vehicle.RecoveryTimeLimit'; File='engine'; Type='int'; Min=0; Unit='sec'; Label='Vehicle Recovery Time Limit'; Help='Seconds a destroyed vehicle remains available for recovery. Compiled default was not recovered.'; Category='Experimental' }
-    @{ Section=$script:DuneGcSecConsole; Key='Vehicle.MaxActiveVehicles'; File='engine'; Type='int'; Min=-1; Default='-1'; Label='Maximum Active Vehicles'; Help='Rejects attempts to enter vehicle seats after this active-vehicle limit. -1 = unlimited. Applied through INI and Hagga startup command for local testing.'; Category='Experimental' }
-    @{ Section=$script:DuneGcSecConsole; Key='Vehicle.MaxVehicles'; File='engine'; Type='int'; Min=-1; Default='-1'; Label='Maximum Vehicles'; Help='Rejects vehicle assembly or recovery after this total-vehicle limit. -1 = unlimited. Applied through INI and Hagga startup command for local testing.'; Category='Experimental' }
-    @{ Section=$script:DuneGcSecConsole; Key='Vehicle.MaxVehiclesForSpawner'; File='engine'; Type='int'; Min=0; Default='400'; Label='Maximum Spawned Vehicles'; Help='Stops vehicle spawners after this many vehicles exist. Applied through INI and Hagga startup command for local testing.'; Category='Experimental' }
-    @{ Section=$script:DuneGcSecConsole; Key='Vehicle.MaxVehiclesPerPlayer'; File='engine'; Type='int'; Min=0; Default='10'; Label='Maximum Vehicles Per Player'; Help='Limits vehicles each player may spawn or claim. 0 = unlimited. DST applies it in UserEngine.ini and the Hagga server startup command. Field-confirmed: the limit is client-enforced, so every player also needs an equal or higher value in their own client Engine.ini before the raised cap shows in game.'; Status='Confirmed'; Startup=$true; Category='Vehicles' }
-    @{ Section=$script:DuneGcSecConsole; Key='Vehicle.MaxVehiclesWarning'; File='engine'; Type='int'; Min=0; Label='Vehicle Count Warning Threshold'; Help='Vehicle count at which the amount notification becomes a warning. Applied through INI and Hagga startup command for local testing.'; Category='Experimental' }
+    @{ Section=$script:DuneGcSecConsole; Key='Vehicle.RecoveryTimeLimit'; File='engine'; Type='int'; Min=0; Unit='sec'; Label='Vehicle Recovery Time Limit'; Help='Seconds a destroyed vehicle remains available for recovery.'; Category='Experimental' }
+    @{ Section=$script:DuneGcSecConsole; Key='Vehicle.MaxActiveVehicles'; File='engine'; Type='int'; Min=-1; Default='-1'; Label='Maximum Active Vehicles'; Help='Rejects attempts to enter vehicle seats after this active-vehicle limit. -1 = unlimited. Restart the battlegroup to apply.'; Category='Experimental' }
+    @{ Section=$script:DuneGcSecConsole; Key='Vehicle.MaxVehicles'; File='engine'; Type='int'; Min=-1; Default='-1'; Label='Maximum Vehicles'; Help='Rejects vehicle assembly or recovery after this total-vehicle limit. -1 = unlimited. Restart the battlegroup to apply.'; Category='Experimental' }
+    @{ Section=$script:DuneGcSecConsole; Key='Vehicle.MaxVehiclesForSpawner'; File='engine'; Type='int'; Min=0; Default='400'; Label='Maximum Spawned Vehicles'; Help='Stops vehicle spawners after this many vehicles exist. Restart the battlegroup to apply.'; Category='Experimental' }
+    @{ Section=$script:DuneGcSecConsole; Key='Vehicle.MaxVehiclesPerPlayer'; File='engine'; Type='int'; Min=0; Default='10'; Label='Maximum Vehicles Per Player'; Help='Limits vehicles each player may spawn or claim. 0 = unlimited. DST applies it in UserEngine.ini and the Hagga server startup command. The limit is client-enforced, so every player also needs an equal or higher value in their own client Engine.ini before the raised cap shows in game.'; Status='Confirmed'; Startup=$true; Category='Vehicles' }
+    @{ Section=$script:DuneGcSecConsole; Key='Vehicle.MaxVehiclesWarning'; File='engine'; Type='int'; Min=0; Label='Vehicle Count Warning Threshold'; Help='Vehicle count at which the amount notification becomes a warning. Restart the battlegroup to apply.'; Category='Experimental' }
     @{ Section=$script:DuneGcSecConsole; Key='Vehicle.CharacterHitDamageModifier'; File='engine'; Type='float'; Min=0; Default='1.0'; Label='Vehicle Impact Character Damage'; Help='Scales damage dealt to characters by vehicle impacts. 0 should disable impact damage.'; Category='Experimental' }
-    @{ Section=$script:DuneGcSecConsole; Key='Vehicle.DamagePlayerOnVehicleCollision'; File='engine'; Type='bool01'; Label='Vehicle Collision Damages Players'; Help='Whether vehicle collisions damage players. Compiled default was not recovered.'; Category='Experimental' }
+    @{ Section=$script:DuneGcSecConsole; Key='Vehicle.DamagePlayerOnVehicleCollision'; File='engine'; Type='bool01'; Label='Vehicle Collision Damages Players'; Help='Whether vehicle collisions damage players.'; Category='Experimental' }
     @{ Section=$script:DuneGcSecConsole; Key='Player.IsThrowOffPlayerFromVehicleActive'; File='engine'; Type='bool01'; Default='1'; Label='Throw Players Off Moving Vehicles'; Help='Whether players standing on moving vehicles are thrown off. Funcom help states 1 is the default.'; Category='Experimental' }
     @{ Section=$script:DuneGcSecConsole; Key='Player.ThrowOffPlayerFromVehicleVelocityMultiplier'; File='engine'; Type='float'; Min=0; Default='3'; Label='Vehicle Throw-Off Force'; Help='Velocity multiplier used to calculate force when throwing a player off a moving vehicle.'; Category='Experimental' }
     @{ Section=$script:DuneGcSecConsole; Key='Player.ThrowOffPlayerFromVehicleVelocityThreshold'; File='engine'; Type='float'; Min=0; Default='2000'; Label='Vehicle Throw-Off Speed Threshold'; Help='Vehicle velocity that starts throwing off standing players. Binary value is 2000 although compiled help mentions 500.'; Category='Experimental' }
-    @{ Section=$script:DuneGcSecConsole; Key='Vehicle.SandwormInvulnerabilityOnExitInAir'; File='engine'; Type='bool01'; Label='Worm Protection on Mid-Air Exit'; Help='Grants short sandworm invulnerability when the pilot exits a vehicle in mid-air. Compiled default was not recovered.'; Category='Experimental' }
-    @{ Section=$script:DuneGcSecConsole; Key='Vehicle.SandwormInvulnerabilityOnLeavingGame'; File='engine'; Type='bool01'; Label='Worm Protection on Disconnect'; Help='Grants short sandworm invulnerability when the pilot disconnects. Compiled default was not recovered.'; Category='Experimental' }
+    @{ Section=$script:DuneGcSecConsole; Key='Vehicle.SandwormInvulnerabilityOnExitInAir'; File='engine'; Type='bool01'; Label='Worm Protection on Mid-Air Exit'; Help='Grants short sandworm invulnerability when the pilot exits a vehicle in mid-air.'; Category='Experimental' }
+    @{ Section=$script:DuneGcSecConsole; Key='Vehicle.SandwormInvulnerabilityOnLeavingGame'; File='engine'; Type='bool01'; Label='Worm Protection on Disconnect'; Help='Grants short sandworm invulnerability when the pilot disconnects.'; Category='Experimental' }
     @{ Section=$script:DuneGcSecConsole; Key='Sandworm.SandwormAttackDifficultyGroup'; File='engine'; Type='select'; Default='-1'; Options=@(@{V='-1';L='Default / unspecified'},@{V='0';L='Easy'},@{V='1';L='Medium'},@{V='2';L='Hard'},@{V='3';L='Death'}); Label='Sandworm Attack Difficulty'; Help='Forces the difficulty group used when selecting a sandworm attack.'; Category='Experimental' }
-    @{ Section=$script:DuneGcSecConsole; Key='SandwormSubsystem.DelayedRestartSeconds'; File='engine'; Type='float'; Min=0; Unit='sec'; Default='600'; Label='Sandworm Delayed Restart'; Help='Delays sandworm spawning after restart. Funcom help states a default of 600 seconds; binary default was not recovered.'; Category='Experimental' }
+    @{ Section=$script:DuneGcSecConsole; Key='SandwormSubsystem.DelayedRestartSeconds'; File='engine'; Type='float'; Min=0; Unit='sec'; Default='600'; Label='Sandworm Delayed Restart'; Help='Delays sandworm spawning after restart. Funcom help states a default of 600 seconds.'; Category='Experimental' }
     @{ Section=$script:DuneGcSecConsole; Key='SpiceHarvesting.dune.SpawnCraterRocksAfterBloom'; File='engine'; Type='bool01'; Default='0'; Label='Spawn Crater Rocks After Bloom'; Help='Spawns and distributes crater rocks after a spice bloom. Binary default is 0 although compiled help labels 1 as default.'; Category='Experimental' }
     @{ Section=$script:DuneGcSecConsole; Key='dw.MitigateAllDamageToBuildables'; File='engine'; Type='bool01'; Label='Mitigate All Buildable Damage'; Help='Enables mitigation for all damage to buildables. Exact mitigation behavior and compiled default are unknown.'; Category='Experimental' }
-    @{ Section=$script:DuneGcSecConsole; Key='dw.EnableOutsideBuildablesToAffectShelter'; File='engine'; Type='bool01'; Label='Outside Buildables Affect Shelter'; Help='Allows buildables outside a structure to affect its shelter calculation. Compiled default was not recovered.'; Category='Experimental' }
+    @{ Section=$script:DuneGcSecConsole; Key='dw.EnableOutsideBuildablesToAffectShelter'; File='engine'; Type='bool01'; Label='Outside Buildables Affect Shelter'; Help='Allows buildables outside a structure to affect its shelter calculation.'; Category='Experimental' }
     @{ Section=$script:DuneGcSecConsole; Key='dw.BuildingShelterThresholdOverride'; File='engine'; Type='float'; Min=-1; Max=1; Default='-1'; Label='Building Shelter Threshold Override'; Help='Overrides the building shelter threshold from 0 to 1. Any negative value disables the override.'; Category='Experimental' }
     @{ Section=$script:DuneGcSecConsole; Key='dw.SandBuildUpPlaceableShelteredTargetValueOverride'; File='engine'; Type='float'; Default='-1'; Label='Sheltered Sand Buildup Target'; Help='Overrides target sand buildup for sheltered placeables. Valid range and disable behavior are undocumented.'; Category='Experimental' }
     @{ Section=$script:DuneGcSecConsole; Key='dw.SandBuildUpPlaceableUnShelteredTargetValueOverride'; File='engine'; Type='float'; Default='-1'; Label='Unsheltered Sand Buildup Target'; Help='Overrides target sand buildup for unsheltered placeables. Valid range and disable behavior are undocumented.'; Category='Experimental' }
@@ -568,7 +567,7 @@ $script:DuneGameConfigSchema = @(
     @{ Section=$script:DuneGcSecConsole; Key='Dac.HealingDurationReductionByDamageMultiplier'; File='engine'; Type='float'; Min=-1; Max=1; Label='Damage Healing-Duration Reduction'; Help='Reduces healing-over-time after taking damage: -1 = no override, 0 to 1 = partial through complete removal. Compiled default is unknown.'; Category='Experimental' }
     @{ Section=$script:DuneGcSecConsole; Key='NPC.AttackLimitOverride'; File='engine'; Type='int'; Default='0'; Label='NPC Attack Limit Override'; Help='When above 0, limits NPCs attacking the same target. Also requires NPC.EnableNpcAttackLimits, which is not exposed here.'; Category='Experimental' }
     @{ Section=$script:DuneGcSecConsole; Key='JourneyStory.Instance.Cap'; File='engine'; Type='int'; Min=-1; Default='-1'; Label='Journey Story Instance Cap'; Help='Maximum instances players may occupy per instance type. -1 = unlimited.'; Category='Experimental' }
-    @{ Section=$script:DuneGcSecConsole; Key='SafeZone.EnableScale'; File='engine'; Type='bool01'; Label='Enable Safe-Zone Scaling'; Help='Enables the safe-zone scale override. Compiled default was not recovered.'; Category='Experimental' }
+    @{ Section=$script:DuneGcSecConsole; Key='SafeZone.EnableScale'; File='engine'; Type='bool01'; Label='Enable Safe-Zone Scaling'; Help='Enables the safe-zone scale override.'; Category='Experimental' }
     @{ Section=$script:DuneGcSecConsole; Key='SafeZone.Scale'; File='engine'; Type='float'; Default='1.0'; Label='Safe-Zone Scale'; Help='Scales safe-zone geometry. May alter PvP boundaries and world behavior; test cautiously.'; Category='Experimental' }
 
     # --- Second decode pass (build 2051294-0-shipping) ---
@@ -586,20 +585,20 @@ $script:DuneGameConfigSchema = @(
     # inventing one.
 
     # Fills gaps in controls DST already exposes.
-    @{ Section=$script:DuneGcSecConsole; Key='NPC.EnableNpcAttackLimits'; File='engine'; Type='bool01'; Label='Enable NPC Attack Limits'; Help='Funcom: "If set to 1, NPCs will utilize the attack limit curve when determining if they can attack a target". NPC Attack Limit Override above has no effect unless this is on. Compiled default was not recovered.'; Category='Experimental' }
-    @{ Section=$script:DuneGcSecConsole; Key='dw.FuelsBurningDuration'; File='engine'; Type='float'; Min=0; Unit='sec'; Label='Fuel Burn Time (seconds)'; Help='Funcom: "Time in seconds that every fuel consumed by the fuel powered generator will take to burn". An absolute time, unlike Fuel Burning Duration which is a multiplier. Field-confirmed. Setting both at once is still untested — use one or the other. Compiled default was not recovered.'; Status='Confirmed'; Startup=$true; Category='Building' }
+    @{ Section=$script:DuneGcSecConsole; Key='NPC.EnableNpcAttackLimits'; File='engine'; Type='bool01'; Label='Enable NPC Attack Limits'; Help='Funcom: "If set to 1, NPCs will utilize the attack limit curve when determining if they can attack a target". NPC Attack Limit Override above has no effect unless this is on.'; Category='Experimental' }
+    @{ Section=$script:DuneGcSecConsole; Key='dw.FuelsBurningDuration'; File='engine'; Type='float'; Min=0; Unit='sec'; Label='Fuel Burn Time (seconds)'; Help='Funcom: "Time in seconds that every fuel consumed by the fuel powered generator will take to burn". An absolute time, unlike Fuel Burning Duration which is a multiplier.'; Status='Confirmed'; Startup=$true; Category='Building' }
     @{ Section=$script:DuneGcSecConsole; Key='dw.PlaceableShelterThresholdOverride'; File='engine'; Type='float'; Min=-1; Max=1; Default='-1'; Label='Placeable Shelter Threshold Override'; Help='Funcom: "The threshold value override for the placeable shelter, from 0 to 1. Negative value means it is disabled". Counterpart to Building Shelter Threshold Override.'; Category='Experimental' }
 
     # Survival and server ruleset.
-    @{ Section=$script:DuneGcSecConsole; Key='Deathstill.ConversionTimeOverride'; File='engine'; Type='float'; Min=0; Unit='sec'; Label='Deathstill Conversion Time'; Help='Overrides how long a deathstill takes to process a body, in seconds. Field-confirmed; restart the battlegroup to apply it. Compiled default was not recovered.'; Status='Confirmed'; Startup=$true; Category='Survival' }
-    @{ Section=$script:DuneGcSecConsole; Key='Dac.DisablePvpDamage'; File='engine'; Type='bool01'; Label='Disable PvP Damage'; Help='Funcom: "If true, pvp damage will be disabled. Pve/Evp damage will always work regardless". Server-wide, unlike the per-partition Deep Desert PvP setting. Compiled default was not recovered.'; Category='Experimental' }
-    @{ Section=$script:DuneGcSecConsole; Key='dw.EnableShelterSystem'; File='engine'; Type='bool01'; Label='Shelter System'; Help='Funcom: "Enable and disable the shelter system". Disabling it removes sandstorm shelter requirements entirely; expect wide-reaching effects. Compiled default was not recovered.'; Category='Experimental' }
+    @{ Section=$script:DuneGcSecConsole; Key='Deathstill.ConversionTimeOverride'; File='engine'; Type='float'; Min=0; Unit='sec'; Label='Deathstill Conversion Time'; Help='Overrides how long a deathstill takes to process a body, in seconds. Restart the battlegroup to apply it.'; Status='Confirmed'; Startup=$true; Category='Survival' }
+    @{ Section=$script:DuneGcSecConsole; Key='Dac.DisablePvpDamage'; File='engine'; Type='bool01'; Label='Disable PvP Damage'; Help='Funcom: "If true, pvp damage will be disabled. Pve/Evp damage will always work regardless". Server-wide, unlike the per-partition Deep Desert PvP setting.'; Category='Experimental' }
+    @{ Section=$script:DuneGcSecConsole; Key='dw.EnableShelterSystem'; File='engine'; Type='bool01'; Label='Shelter System'; Help='Funcom: "Enable and disable the shelter system". Disabling it removes sandstorm shelter requirements entirely; expect wide-reaching effects.'; Category='Experimental' }
 
     # Base backup tool.
-    @{ Section=$script:DuneGcSecConsole; Key='dw.bBaseBackupToolBackupEnabled'; File='engine'; Type='bool01'; Label='Base Backup Tool - Backups'; Help='Funcom: "If the base backup tool should be enabled or disabled". Compiled default was not recovered.'; Category='Experimental' }
-    @{ Section=$script:DuneGcSecConsole; Key='dw.bBaseBackupToolPlacementEnabled'; File='engine'; Type='bool01'; Label='Base Backup Tool - Placement'; Help='Funcom: "If the base backup tool should be enabled or disabled" - the placement half, letting you allow backups while blocking blueprint placement. Compiled default was not recovered.'; Category='Experimental' }
-    @{ Section=$script:DuneGcSecConsole; Key='dw.bBaseBackupToolRecycleEnabled'; File='engine'; Type='bool01'; Label='Base Backup Tool - Recycle'; Help='Funcom: "If the base backup tool recycle should be enabled or disabled". Compiled default was not recovered.'; Category='Experimental' }
-    @{ Section=$script:DuneGcSecConsole; Key='dw.OverrideBaseBackupToolTimeRestrictionInSeconds'; File='engine'; Type='int'; Min=0; Unit='sec'; Label='Base Backup Time Restriction Override'; Help='Funcom: "Override the base backup tool time restriction". The game also has a UserGame.ini setting for the same restriction that DST does not surface; if both are set, which one wins is untested. Compiled default was not recovered.'; Category='Experimental' }
+    @{ Section=$script:DuneGcSecConsole; Key='dw.bBaseBackupToolBackupEnabled'; File='engine'; Type='bool01'; Label='Base Backup Tool - Backups'; Help='Funcom: "If the base backup tool should be enabled or disabled".'; Category='Experimental' }
+    @{ Section=$script:DuneGcSecConsole; Key='dw.bBaseBackupToolPlacementEnabled'; File='engine'; Type='bool01'; Label='Base Backup Tool - Placement'; Help='Funcom: "If the base backup tool should be enabled or disabled" - the placement half, letting you allow backups while blocking blueprint placement.'; Category='Experimental' }
+    @{ Section=$script:DuneGcSecConsole; Key='dw.bBaseBackupToolRecycleEnabled'; File='engine'; Type='bool01'; Label='Base Backup Tool - Recycle'; Help='Funcom: "If the base backup tool recycle should be enabled or disabled".'; Category='Experimental' }
+    @{ Section=$script:DuneGcSecConsole; Key='dw.OverrideBaseBackupToolTimeRestrictionInSeconds'; File='engine'; Type='int'; Min=0; Unit='sec'; Label='Base Backup Time Restriction Override'; Help='Funcom: "Override the base backup tool time restriction".'; Category='Experimental' }
 
     # Landsraad.
     @{ Section=$script:DuneGcSecConsole; Key='Landsraad.ControlPointCaptureProgressTarget'; File='engine'; Type='float'; Min=0; Default='100'; Label='Control Point Capture Target'; Help='Funcom: "Set a custom ProgressTarget for all Landsraad ControlPoints, 100 being the Default". Lower values make control points quicker to capture, which suits small or solo servers.'; Category='Experimental' }
@@ -608,13 +607,13 @@ $script:DuneGameConfigSchema = @(
     @{ Section=$script:DuneGcSecConsole; Key='Sandworm.SandwormEnrageThreshold'; File='engine'; Type='int'; Min=-1; Default='-1'; Label='Worm Enrage Threshold'; Help='Funcom: "The amount of attacks that the worm will do before enraging. -1 = not specified."'; Category='Experimental' }
     @{ Section=$script:DuneGcSecConsole; Key='Sandworm.SandwormTargetChangeThreshold'; File='engine'; Type='int'; Min=0; Default='0'; Label='Worm Target Change Threshold'; Help='Funcom: "The amount of attacks that the worm will do before switching target. 0 = not specified."'; Category='Experimental' }
     @{ Section=$script:DuneGcSecConsole; Key='Sandworm.SandwormTargetDropThreshold'; File='engine'; Type='int'; Min=0; Default='0'; Label='Worm Target Drop Threshold'; Help='Funcom: "The amount of attacks that the worm will do before dropping its target and adding it to the ignore list. 0 = not specified."'; Category='Experimental' }
-    @{ Section=$script:DuneGcSecConsole; Key='Sandworm.ThreatWarning.DefaultDistance'; File='engine'; Type='float'; Min=0; Label='Worm Threat Warning Distance'; Help='Funcom: "Distance for when the sandworm threat warning will appear on normal maps". Compiled default was not recovered.'; Category='Experimental' }
-    @{ Section=$script:DuneGcSecConsole; Key='Sandworm.ThreatWarning.DeepDesertDistance'; File='engine'; Type='float'; Min=0; Label='Worm Threat Warning Distance (Deep Desert)'; Help='Funcom: "Distance for when the sandworm threat warning will appear on deep desert maps". Compiled default was not recovered.'; Category='Experimental' }
+    @{ Section=$script:DuneGcSecConsole; Key='Sandworm.ThreatWarning.DefaultDistance'; File='engine'; Type='float'; Min=0; Label='Worm Threat Warning Distance'; Help='Funcom: "Distance for when the sandworm threat warning will appear on normal maps".'; Category='Experimental' }
+    @{ Section=$script:DuneGcSecConsole; Key='Sandworm.ThreatWarning.DeepDesertDistance'; File='engine'; Type='float'; Min=0; Label='Worm Threat Warning Distance (Deep Desert)'; Help='Funcom: "Distance for when the sandworm threat warning will appear on deep desert maps".'; Category='Experimental' }
 
     # Vehicles.
-    @{ Section=$script:DuneGcSecConsole; Key='Vehicle.RecoveryEnabled'; File='engine'; Type='bool01'; Label='Vehicle Recovery'; Help='Funcom: "Enables vehicle recovery. If enabled, vehicles will not be deleted but kept in database for recovery via backup tool". Compiled default was not recovered.'; Category='Experimental' }
+    @{ Section=$script:DuneGcSecConsole; Key='Vehicle.RecoveryEnabled'; File='engine'; Type='bool01'; Label='Vehicle Recovery'; Help='Funcom: "Enables vehicle recovery. If enabled, vehicles will not be deleted but kept in database for recovery via backup tool".'; Category='Experimental' }
     @{ Section=$script:DuneGcSecConsole; Key='Vehicle.BackupTool.Enabled'; File='engine'; Type='bool01'; Default='1'; Label='Vehicle Backup Tool'; Help='Funcom: "If false player wont be able to backup or restore vehicles and an onscreen notification will be shown if they try."'; Category='Experimental' }
-    @{ Section=$script:DuneGcSecConsole; Key='Vehicle.WreckedStateDespawnDuration'; File='engine'; Type='float'; Min=0; Unit='sec'; Label='Vehicle Wreck Despawn Time'; Help='Funcom: "The duration in seconds until a vehicle is despawned when in wrecked state". Compiled default was not recovered.'; Category='Experimental' }
+    @{ Section=$script:DuneGcSecConsole; Key='Vehicle.WreckedStateDespawnDuration'; File='engine'; Type='float'; Min=0; Unit='sec'; Label='Vehicle Wreck Despawn Time'; Help='Funcom: "The duration in seconds until a vehicle is despawned when in wrecked state".'; Category='Experimental' }
     @{ Section=$script:DuneGcSecConsole; Key='Vehicle.AmmoBlocksBackup'; File='engine'; Type='bool01'; Default='0'; Label='Ammo Blocks Vehicle Backup'; Help='Funcom: "Set whether ammo can remain in the vehicle ammo inventory when backing it up". 0 makes players empty ammo first.'; Category='Experimental' }
 
     # Server instance. Bgd.* is deliberately server-only: it is not mirrored to a
@@ -643,12 +642,12 @@ $script:DuneGameConfigSchema = @(
     @{ Section=$script:DuneGcSecConsole; Key='Dac.EnableNearDeathDamageMitigation'; File='engine'; Type='bool01'; Label='Near-Death Damage Mitigation'; Help='Funcom: "If true, enable damage mitigation based on remaining health". Softens incoming damage as health drops.'; Category='Experimental 2' }
     @{ Section=$script:DuneGcSecConsole; Key='Dac.EnableKnockbackDurationDamageScaling'; File='engine'; Type='bool01'; Label='Stagger Damage Scaling'; Help='Funcom: "If true, damage can be increased based on how long the target has been in stagger state".'; Category='Experimental 2' }
     @{ Section=$script:DuneGcSecConsole; Key='Dac.ShieldBreakWhileAirborne'; File='engine'; Type='bool01'; Label='Shield Break While Airborne'; Help='Funcom: "Apply shield break stagger type when character is airborne".'; Category='Experimental 2' }
-    @{ Section=$script:DuneGcSecConsole; Key='Dune.DisableShieldOnShooting'; File='engine'; Type='bool01'; Default='1'; Label='Shield Drops While Shooting'; Help='Funcom: "Toggles if the shield should go down w". Funcom''s help text is truncated in the Retail binary. Field-confirmed as client-evaluated: disabling it keeps a player''s shield raised only when that player also applies 0 to their local Engine.ini.'; Status='Confirmed'; Startup=$true; Category='PvP & Security' }
+    @{ Section=$script:DuneGcSecConsole; Key='Dune.DisableShieldOnShooting'; File='engine'; Type='bool01'; Default='1'; Label='Shield Drops While Shooting'; Help='Controls whether shooting lowers the shield. Disabling it keeps a player''s shield raised when that player also applies 0 to their local Engine.ini.'; Status='Confirmed'; Startup=$true; Category='PvP & Security' }
     @{ Section=$script:DuneGcSecConsole; Key='Abilities.HoltzmanShield.UsePowerWhenDisabled'; File='engine'; Type='bool01'; Default='0'; Label='Shield Uses Power When Disabled'; Help='Funcom: "0 (Default): off, 1 : on - When on shield will use power even if it''s disabled by ADS".'; Category='Experimental 2' }
     @{ Section=$script:DuneGcSecConsole; Key='Abilities.AllowRepsecOutsideLandclaim'; File='engine'; Type='bool01'; Label='Respec Outside Land Claim'; Help='Funcom: "Allow players to repsec outside landclaim or socialhub". Funcom''s spelling is preserved in the key name.'; Category='Experimental 2' }
     @{ Section=$script:DuneGcSecConsole; Key='Dune.LootNpcDroppedOnCorpseEnabled'; File='engine'; Type='bool01'; Label='NPC Loot On Corpses'; Help='Funcom: "Allows the client to enable or disable NPC loot dropped on NPC corpses". Controls where NPC loot lands, not whether NPCs drop loot - that is NPCs Drop Loot on Death under Loot & Death.'; Category='Experimental 2' }
     @{ Section=$script:DuneGcSecConsole; Key='Dune.LootNpcDroppedOnContainerEnabled'; File='engine'; Type='bool01'; Label='NPC Loot In Containers'; Help='Funcom: "Allows the client to enable or disable NPC loot dropped on loot containers". Companion to NPC Loot On Corpses; both describe placement, not whether loot drops.'; Category='Experimental 2' }
-    @{ Section=$script:DuneGcSecConsole; Key='Loot.ShouldAlwaysRegeneratePerPlayerLoot'; File='engine'; Type='bool01'; Label='Regenerate Per-Player Loot'; Help='Funcom: "Should per player loot be regenerated each time player interact with loot container". Field-confirmed. Enabling this can make a single container farmable indefinitely.'; Status='Confirmed'; Startup=$true; Category='Loot & Death' }
+    @{ Section=$script:DuneGcSecConsole; Key='Loot.ShouldAlwaysRegeneratePerPlayerLoot'; File='engine'; Type='bool01'; Label='Regenerate Per-Player Loot'; Help='Funcom: "Should per player loot be regenerated each time player interact with loot container". Enabling this can make a single container farmable indefinitely.'; Status='Confirmed'; Startup=$true; Category='Loot & Death' }
     @{ Section=$script:DuneGcSecConsole; Key='Inventory.GiveDefaultInventory.Enabled'; File='engine'; Type='bool01'; Default='1'; Label='Give Default Inventory On Respawn'; Help='Funcom: "If false player wont be given default inventory on respawn. (default=true)".'; Category='Experimental 2' }
     @{ Section=$script:DuneGcSecConsole; Key='dw.Inventory.Item.Event.Enabled'; File='engine'; Type='bool01'; Default='1'; Label='Event Items Enabled'; Help='Funcom: "Are items which are only available from events enabled: 1 = enabled (default); 0 = disabled".'; Category='Experimental 2' }
     @{ Section=$script:DuneGcSecConsole; Key='dw.Inventory.Item.Quest.Enabled'; File='engine'; Type='bool01'; Default='1'; Label='Quest Items Enabled'; Help='Funcom: "Are quest items which can be only looted and delivered enabled; 1: enabled (default); 0: disabled;".'; Category='Experimental 2' }
@@ -998,10 +997,8 @@ function Get-DuneExperimentalGroup {
 }
 
 # -----------------------------------------------------------------------------
-# The installed INI pair becomes authoritative after DST safely imports an
-# existing battlegroup configuration. Older Funcom installations without that
-# source directory fall back to live INIs inside the battlegroup PVC; those
-# paths are resolved on every read/write because the PVC hash is unique.
+# Prefer the active File Browser claim on every read/write. The installed-source
+# adoption below remains only for installations without a persistent claim.
 # -----------------------------------------------------------------------------
 $script:DuneGameConfigLiveGlobDir    = '/var/lib/rancher/k3s/storage/*/Saved/UserSettings'
 $script:DuneGameConfigTplGamePath    = '/home/dune/.dune/download/scripts/setup/config/UserGame.ini'
@@ -1275,7 +1272,7 @@ function Get-DuneGameConfigLegacyMigration {
                 section = "$($field.Section)"
                 key = "$($field.Key)"
                 label = "$($field.Label)"
-                reason = 'No direct current-Retail evidence that this setting is still evaluated from the local client INI.'
+                reason = 'Client-side apply is unavailable for this setting.'
             })
             continue
         }
@@ -1451,6 +1448,21 @@ function Set-DuneIniValuesInPlace {
 # Apply client-apply updates to LOCAL Game.ini / Engine.ini. Schema metadata,
 # not caller input, selects the destination file. Both files use the same
 # managed-block writer and preserve unrelated user settings.
+function Get-DuneGameConfigClientBackupRoot {
+    $root = if ($script:AppDir) { $script:AppDir } else { Split-Path (Split-Path $PSScriptRoot -Parent) -Parent }
+    return (Join-Path $root 'DST\INI Backups')
+}
+
+function Get-DuneGameConfigClientBackupDirectory {
+    param([string]$Path)
+    $sha = [Security.Cryptography.SHA256]::Create()
+    try {
+        $identity = [IO.Path]::GetFullPath($Path).ToLowerInvariant()
+        $hash = [BitConverter]::ToString($sha.ComputeHash([Text.Encoding]::UTF8.GetBytes($identity))).Replace('-','').Substring(0,16).ToLowerInvariant()
+    } finally { $sha.Dispose() }
+    return (Join-Path (Get-DuneGameConfigClientBackupRoot) $hash)
+}
+
 function Save-DuneGameConfigClient {
     param([object[]]$Updates, [string]$Dir = '', [string]$DefaultsRaw = '', [switch]$ReviewedRaw)
     if (-not $Updates -or $Updates.Count -eq 0) { throw 'No updates supplied.' }
@@ -1522,29 +1534,39 @@ function Save-DuneGameConfigClient {
 
         if ($ReviewedRaw) { Assert-DuneLabPathsUnchanged -Raw $existing -Updates $fileUpdates.ToArray() }
 
-        if ($file -eq 'game' -and -not $ReviewedRaw) {
-            foreach ($dk in $script:DuneGameConfigDeprecatedManagedKeys) {
-                if ($existing -match ('(?m)^\s*' + [regex]::Escape($dk) + '\s*=')) {
-                    $deprecated = @{ file = 'game'; section = $script:DuneGcSecGame; key = $dk; value = ''; remove = $true }
-                    $fileUpdates.Add($deprecated)
-                    $clean.Add($deprecated)
-                }
-            }
-        }
-
         $defaultsForFile = if ($file -eq 'game') { $DefaultsRaw } else { '' }
         $folded = Convert-DuneSpicefieldUpdates -Raw $existing -Updates $fileUpdates.ToArray() -DefaultsRaw $defaultsForFile
         $folded = Convert-DuneStructUpdates -Raw $existing -Updates $folded -DefaultsRaw $defaultsForFile
+        $effective = Get-DuneIniEffective -Raw $existing
+        $changed = $false
+        foreach ($update in $folded) {
+            if ($update.ContainsKey('arrayLines') -or $update.arrayRemove) { $changed = $true; break }
+            $target = "$($update.section)||$($update.key)"
+            $remove = $update.remove -or [string]::IsNullOrWhiteSpace("$($update.value)")
+            if (($remove -and $effective.ContainsKey($target)) -or
+                (-not $remove -and (-not $effective.ContainsKey($target) -or "$($effective[$target])" -cne "$($update.value)"))) {
+                $changed = $true; break
+            }
+        }
+        if (-not $changed) { continue }
         $new = ConvertTo-DuneIniManaged -Raw $existing -Updates $folded -QuotedKeys $quoted
         $new = $new -replace "`r?`n", "`r`n"
         $plans.Add(@{ file = $file; path = $path; created = $created; raw = $new; applied = $fileUpdates.Count })
     }
 
+    if ($plans.Count -eq 0) {
+        return @{ok=$true;path=(Get-DuneGameConfigClientFilePath -Dir $Dir -File 'game');paths=@{game=(Get-DuneGameConfigClientFilePath -Dir $Dir -File 'game');engine=(Get-DuneGameConfigClientFilePath -Dir $Dir -File 'engine')};files=@{};backup='';backups=@{};created=$false;applied=0;items=@()}
+    }
     $stamp = [datetime]::UtcNow.ToString('yyyyMMddTHHmmssfffZ')
     $prepared = New-Object 'System.Collections.Generic.List[object]'
     foreach ($plan in $plans) {
         $tempPath = "$($plan.path).dst-tmp-$([guid]::NewGuid().ToString('N'))"
-        $backupPath = if ($plan.created) { '' } else { "$($plan.path).dst-backup-$stamp" }
+        $backupPath = ''
+        if (-not $plan.created) {
+            $backupDir = Get-DuneGameConfigClientBackupDirectory -Path $plan.path
+            [void][IO.Directory]::CreateDirectory($backupDir)
+            $backupPath = Join-Path $backupDir ("$([IO.Path]::GetFileName($plan.path)).dst-backup-$stamp-$([guid]::NewGuid().ToString('N'))")
+        }
         [IO.File]::WriteAllText($tempPath, $plan.raw, (New-Object System.Text.UTF8Encoding($false)))
         if ([IO.File]::ReadAllText($tempPath) -cne $plan.raw) {
             Remove-Item -LiteralPath $tempPath -Force -ErrorAction SilentlyContinue
@@ -1558,6 +1580,7 @@ function Save-DuneGameConfigClient {
             created = $plan.created
             raw = $plan.raw
             applied = $plan.applied
+            swapPath = "$($plan.path).dst-swap-$([guid]::NewGuid().ToString('N'))"
         })
     }
 
@@ -1567,12 +1590,20 @@ function Save-DuneGameConfigClient {
             if ($plan.created) {
                 [IO.File]::Move($plan.tempPath, $plan.path)
             } else {
-                [IO.File]::Replace($plan.tempPath, $plan.path, $plan.backup, $true)
+                # Recovery storage can be on a different volume. Verify the
+                # retained copy first, then atomically replace beside the INI.
+                [IO.File]::Copy($plan.path, $plan.backup, $false)
+                if ((Get-FileHash -LiteralPath $plan.path -Algorithm SHA256).Hash -ne
+                    (Get-FileHash -LiteralPath $plan.backup -Algorithm SHA256).Hash) {
+                    throw "Client backup verification failed: $($plan.path)"
+                }
+                [IO.File]::WriteAllText("$($plan.backup).json", (@{sourcePath=$plan.path;backupPath=$plan.backup;createdAt=[datetime]::UtcNow.ToString('o')} | ConvertTo-Json -Compress), [Text.UTF8Encoding]::new($false))
+                [IO.File]::Replace($plan.tempPath, $plan.path, $plan.swapPath, $true)
             }
+            $committed.Add($plan)
             if ([IO.File]::ReadAllText($plan.path) -cne $plan.raw) {
                 throw "Client config readback verification failed: $($plan.path)"
             }
-            $committed.Add($plan)
         }
     } catch {
         for ($i = $committed.Count - 1; $i -ge 0; $i--) {
@@ -1586,6 +1617,9 @@ function Save-DuneGameConfigClient {
         throw
     } finally {
         foreach ($plan in $prepared) {
+            if ($plan.swapPath -and (Test-Path -LiteralPath $plan.swapPath -PathType Leaf)) {
+                Remove-Item -LiteralPath $plan.swapPath -Force -ErrorAction SilentlyContinue
+            }
             if (Test-Path -LiteralPath $plan.tempPath -PathType Leaf) {
                 Remove-Item -LiteralPath $plan.tempPath -Force -ErrorAction SilentlyContinue
             }
@@ -2044,7 +2078,7 @@ function ConvertTo-DuneIniManaged {
         $out.Add('')
         $out.Add($script:DstManagedBegin)
         $out.Add('; Managed by DST - Dune Server Tool. UE5 reads top-to-bottom with last-key-wins,')
-        $out.Add('; so values in this block override anything above. Do not hand-edit.')
+        $out.Add('; so values in this block override anything above. Manual edits are read on refresh.')
         $out.Add('; Last write: ' + ([DateTime]::UtcNow.ToString('yyyy-MM-ddTHH:mm:ssZ')))
         $out.Add(';')
         foreach ($s in $sorted) {
@@ -2578,8 +2612,41 @@ function Get-DuneGameConfigTextSha256 {
     }
 }
 
+function Resolve-DunePersistentGameConfigPaths {
+    param([Parameter(Mandatory)][string]$Ip)
+
+    if (-not (Get-Command Resolve-DuneRetailServerSettingsTarget -ErrorAction SilentlyContinue)) { return $null }
+    $target = Resolve-DuneRetailServerSettingsTarget -Ip $Ip
+    if (-not $target.available) { return $null }
+    Assert-DuneRetailKubernetesName -Value $target.namespace -Label 'namespace'
+    Assert-DuneRetailKubernetesName -Value $target.persistentVolumeClaim -Label 'persistent-volume claim'
+    # Resolve the active File Browser claim, never the newest directory in a
+    # glob: another battlegroup's stored files must not become this one's INIs.
+    $cmd = @"
+set -eu
+volume=`$(sudo kubectl get pvc -n '$($target.namespace)' '$($target.persistentVolumeClaim)' -o jsonpath='{.spec.volumeName}')
+sudo kubectl get pv "`$volume" -o jsonpath='{.spec.hostPath.path}{.spec.local.path}'
+"@
+    $root = ((Invoke-V6Ssh -Ip $Ip -Cmd $cmd -TimeoutSec 30) -join '').Trim()
+    if ($root -notmatch '^/var/lib/rancher/k3s/storage/[A-Za-z0-9_.-]+$') {
+        throw 'The active File Browser settings volume could not be verified. No setup INIs were substituted.'
+    }
+    $directory = "$root/Saved/UserSettings"
+    $exists = ((Invoke-V6Ssh -Ip $Ip -Cmd "sudo test -f '$directory/UserGame.ini' && sudo test -f '$directory/UserEngine.ini' && echo __DST_USER_INIS__" -TimeoutSec 30) -join '').Trim()
+    if ($exists -ne '__DST_USER_INIS__') {
+        throw 'The active server UserGame.ini/UserEngine.ini files could not be read. No setup INIs were substituted.'
+    }
+    return @{game="$directory/UserGame.ini";engine="$directory/UserEngine.ini";source='live';authoritative=$true}
+}
+
 function Resolve-DuneGameConfigPaths {
     param([string]$Ip, [switch]$Force)
+
+    # The administrator-facing File Browser edits these persistent server files.
+    # Read and save the same files, including manual removals and whitespace.
+    # Installed setup templates are only a fallback before a live claim exists.
+    $persistent = Resolve-DunePersistentGameConfigPaths -Ip $Ip
+    if ($persistent) { return $persistent }
 
     if ((Get-Command Test-DuneConfigurationInjectionEnabled -ErrorAction SilentlyContinue) -and
         -not (Test-DuneConfigurationInjectionEnabled)) {
@@ -2602,9 +2669,8 @@ function Resolve-DuneGameConfigPaths {
 
     # Funcom's Retail updater creates setup/config with stock defaults even when
     # the battlegroup already has an administrator's established User*.ini files.
-    # Carry only non-default DST-managed values onto those installed defaults
-    # before declaring the directory authoritative. The v1 migration copied one
-    # whole PVC file, so repair it from the clean pre-import backup.
+    # Existing files are read as-is. Marker history never authorizes adoption,
+    # migration, repair, or a settings gate on installation/opening.
     #
     # Hashes record the last DST write. A mismatch may be a deliberate manual
     # change or deletion, so it never authorizes read-time restoration from PVC.
@@ -2646,119 +2712,9 @@ fi
         }
     }
 
-    $dirs = @(
+    $dirs = @(@(
         Invoke-V6Ssh -Ip $Ip -Cmd "sudo bash -c 'ls -t $($script:DuneGameConfigLiveGlobDir)/UserGame.ini 2>/dev/null | xargs -r -n1 dirname'"
-    ) | ForEach-Object { "$_".Trim() } | Where-Object { $_ } | Select-Object -Unique
-    if ($installedState -in @('uninitialized', 'repair-v1')) {
-        # Initial adoption merges into installed defaults. Only repair-v1 uses
-        # the pre-v1-migration backup; established authority never reaches here.
-        $baseGamePath = $script:DuneGameConfigTplGamePath
-        $baseEnginePath = $script:DuneGameConfigTplEnginePath
-        if ($installedState -eq 'repair-v1') {
-            $baseGamePath = ((Invoke-V6Ssh -Ip $Ip -Cmd "sudo bash -c 'ls -t $script:DuneGameConfigTplGamePath.pre-live-import-* 2>/dev/null | head -1'") -join '').Trim()
-            if ($baseGamePath) {
-                $suffix = $baseGamePath.Substring($script:DuneGameConfigTplGamePath.Length)
-                $baseEnginePath = "$script:DuneGameConfigTplEnginePath$suffix"
-            }
-        }
-        $installedGame = (Invoke-V6Ssh -Ip $Ip -Cmd "sudo cat '$baseGamePath' 2>/dev/null") -join "`n"
-        $installedEngine = (Invoke-V6Ssh -Ip $Ip -Cmd "sudo cat '$baseEnginePath' 2>/dev/null") -join "`n"
-        if ([string]::IsNullOrWhiteSpace($installedGame) -or [string]::IsNullOrWhiteSpace($installedEngine)) {
-            throw 'The clean installed User*.ini defaults could not be read. Deployment is blocked.'
-        }
-        # Track whether ANY live directory looked ambiguous (malformed) or carried
-        # prior DST-managed content, even if it produced zero migration updates.
-        # Only a battlegroup with NEITHER — the genuine "nothing to carry" case —
-        # is safe to fall back to a non-authoritative installed-defaults read.
-        $hadAmbiguousCandidate = $false
-        $hadManagedCandidate = $false
-        foreach ($dir in $dirs) {
-            $g = "$dir/UserGame.ini"
-            $e = "$dir/UserEngine.ini"
-            $gameRaw = (Invoke-V6Ssh -Ip $Ip -Cmd "sudo cat '$g' 2>/dev/null") -join "`n"
-            $engineRaw = (Invoke-V6Ssh -Ip $Ip -Cmd "sudo cat '$e' 2>/dev/null") -join "`n"
-            $gameDoc = ConvertFrom-DuneIniDoc -Raw $gameRaw
-            $engineDoc = ConvertFrom-DuneIniDoc -Raw $engineRaw
-            if ($gameDoc.malformed -or $engineDoc.malformed) {
-                $hadAmbiguousCandidate = $true
-                continue
-            }
-            if (-not $gameDoc.hadManaged -and -not $engineDoc.hadManaged) {
-                continue
-            }
-            $hadManagedCandidate = $true
-            $managedGame = Get-DuneGameConfigManagedRaw -Raw $gameRaw
-            $managedEngine = Get-DuneGameConfigManagedRaw -Raw $engineRaw
-            $updates = @(Get-DuneGameConfigMigrationUpdates -GameRaw $managedGame -EngineRaw $managedEngine)
-            if ($updates.Count -eq 0) { continue }
-
-            # UserGame.ini need not contain the full Spice struct. Read the
-            # current vendor defaults rather than manufacturing a partial one.
-            $spiceFields = Get-DuneSchemaSpicefieldFieldMap
-            $hasSpiceUpdates = @($updates | Where-Object { $_.file -eq 'game' -and $spiceFields.ContainsKey("$($_.key)") }).Count -gt 0
-            $migrationDefaults = $installedGame
-            if ($hasSpiceUpdates) {
-                # Always use the current vendor defaults. An installed Spice
-                # struct may be present but incomplete, and must never become
-                # the basis for a partial migrated override.
-                $migrationDefaults = (Get-DuneGameConfigDefaults -Ip $Ip -Force).game
-            }
-            $mergedGame = Merge-DuneGameConfigMigrationValues -BaseRaw $installedGame -Updates $updates -File 'game' -DefaultsRaw $migrationDefaults
-            $mergedEngine = Merge-DuneGameConfigMigrationValues -BaseRaw $installedEngine -Updates $updates -File 'engine'
-            $stamp = [DateTime]::UtcNow.ToString('yyyyMMddHHmmss')
-            $installedDir = $script:DuneGameConfigTplGamePath -replace '/[^/]+$', ''
-            $gameTmp = "$installedDir/.dst-UserGame.ini.$stamp.tmp"
-            $engineTmp = "$installedDir/.dst-UserEngine.ini.$stamp.tmp"
-            $gameB64 = [Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes($mergedGame))
-            $engineB64 = [Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes($mergedEngine))
-            Invoke-V6Ssh -Ip $Ip -Cmd "base64 -d | sudo tee '$gameTmp' > /dev/null" -StdinData $gameB64 -TimeoutSec 30 | Out-Null
-            Invoke-V6Ssh -Ip $Ip -Cmd "base64 -d | sudo tee '$engineTmp' > /dev/null" -StdinData $engineB64 -TimeoutSec 30 | Out-Null
-
-            $gameHash = Get-DuneGameConfigTextSha256 -Value $mergedGame
-            $engineHash = Get-DuneGameConfigTextSha256 -Value $mergedEngine
-            $migrateCmd = "set -e; " +
-                "echo '$gameHash  $gameTmp' | sha256sum -c - >/dev/null; " +
-                "echo '$engineHash  $engineTmp' | sha256sum -c - >/dev/null; " +
-                "sudo cp '$script:DuneGameConfigTplGamePath' '$script:DuneGameConfigTplGamePath.pre-v2-migration-attempt-$stamp'; " +
-                "sudo cp '$script:DuneGameConfigTplEnginePath' '$script:DuneGameConfigTplEnginePath.pre-v2-migration-attempt-$stamp'; " +
-                "sudo install -o dune -g dune -m 0664 '$gameTmp' '$script:DuneGameConfigTplGamePath'; " +
-                "sudo install -o dune -g dune -m 0664 '$engineTmp' '$script:DuneGameConfigTplEnginePath'; " +
-                "sudo rm -f '$gameTmp' '$engineTmp'; " +
-                "echo '$gameHash  $script:DuneGameConfigTplGamePath' | sha256sum -c - >/dev/null; " +
-                "echo '$engineHash  $script:DuneGameConfigTplEnginePath' | sha256sum -c - >/dev/null; " +
-                "printf 'live-imported-v2\n$gameHash\n$engineHash\n' | sudo tee '$script:DuneGameConfigAuthorityMarker' > /dev/null; " +
-                "echo __DST_AUTH__:migrated"
-            $migrated = ((Invoke-V6Ssh -Ip $Ip -Cmd $migrateCmd -TimeoutSec 30) -join "`n").Trim()
-            if ($migrated -notmatch '(?m)^__DST_AUTH__:migrated$') {
-                throw 'DST could not safely migrate the existing battlegroup INI overrides. Installed defaults were not deployed.'
-            }
-            return @{
-                game         = $script:DuneGameConfigTplGamePath
-                engine       = $script:DuneGameConfigTplEnginePath
-                source       = 'installed'
-                migrated     = $true
-                migratedFrom = $dir
-                migratedKeys = $updates.Count
-            }
-        }
-        # Field defect (Jess, v15.1.1): a genuinely fresh battlegroup has neither
-        # authority marker NOR any prior DST-managed candidate to carry — every
-        # live directory (if any) was vanilla Funcom defaults. Reads can safely
-        # fall back to the installed defaults as non-authoritative; nothing is
-        # written here. Malformed or prior-managed candidates stay blocked below
-        # exactly as before (never invent a faithful carry).
-        if ($installedState -eq 'uninitialized' -and -not $hadAmbiguousCandidate -and -not $hadManagedCandidate) {
-            return @{
-                game                = $baseGamePath
-                engine              = $baseEnginePath
-                source              = 'installed-uninitialized'
-                authoritative       = $false
-                needsInitialization = $true
-            }
-        }
-        throw 'Installed User*.ini defaults are not initialized and no prior DST-managed battlegroup overrides could be migrated. Deployment is blocked.'
-    }
-
+    ) | ForEach-Object { "$_".Trim() } | Where-Object { $_ } | Select-Object -Unique)
     if ($dirs.Count -gt 0) {
         $dir = $dirs[0]
         $g = "$dir/UserGame.ini"
@@ -2769,6 +2725,11 @@ fi
             # ship the installed source directory yet.
             return @{ game = $g; engine = $e; source = 'legacy-live' }
         }
+    }
+    if ($installedState -in @('uninitialized', 'repair-v1')) {
+        # Installation/reads never adopt, repair, or merge settings. Existing
+        # files are usable as they stand; marker history is not an edit gate.
+        return @{game=$script:DuneGameConfigTplGamePath;engine=$script:DuneGameConfigTplEnginePath;source='installed';authoritative=$true}
     }
     throw 'No authoritative installed UserGame.ini/UserEngine.ini files were found.'
 }
@@ -3350,8 +3311,8 @@ function Convert-DuneSpicefieldUpdates {
 }
 
 # Save structured updates. $Updates = array of @{ file; section; key; value }.
-# Does NOT auto-backup — backups are manual (Backup settings button) to avoid
-# cluttering the server PVC with a .dstbak per save.
+# Production callers use Save-DuneGameConfigLocked to verify pre-write backups.
+# This inner writer only changes the explicitly supplied entries.
 function Save-DuneGameConfig {
     param(
         [string]$Ip,
@@ -3425,7 +3386,7 @@ function Save-DuneGameConfig {
         # command echo back the sha256 of what it actually wrote and compare
         # that against the local hash before trusting the write happened; this
         # also feeds the marker re-stamp below without a separate read.
-        $writeResult = ((Invoke-V6Ssh -Ip $Ip -Cmd "base64 -d | sudo tee '$path' > /dev/null && sha256sum '$path' | cut -d' ' -f1" -StdinData $b64 -TimeoutSec 30) -join "`n").Trim()
+        $writeResult = ((Invoke-V6Ssh -Ip $Ip -Cmd "base64 -d | sudo tee '$path' > /dev/null && sudo sha256sum '$path' | cut -d' ' -f1" -StdinData $b64 -TimeoutSec 30) -join "`n").Trim()
         if ($writeResult -ne $expectedHash) {
             throw "Game Config write verification failed for '$path': expected sha256=$expectedHash, remote reported '$writeResult'."
         }
@@ -3456,7 +3417,7 @@ function Save-DuneGameConfig {
         $engineHash = Get-DuneGameConfigTextSha256 -Value $engineContent
         # Same silent-failure risk as the content write above: verify the
         # marker actually landed rather than trusting empty stdout as success.
-        $stampCmd = "printf 'live-imported-v2\n$gameHash\n$engineHash\n' | sudo tee '$script:DuneGameConfigAuthorityMarker' > /dev/null && sha256sum '$script:DuneGameConfigAuthorityMarker' | cut -d' ' -f1"
+        $stampCmd = "printf 'live-imported-v2\n$gameHash\n$engineHash\n' | sudo tee '$script:DuneGameConfigAuthorityMarker' > /dev/null && sudo sha256sum '$script:DuneGameConfigAuthorityMarker' | cut -d' ' -f1"
         $expectedMarkerHash = Get-DuneGameConfigTextSha256 -Value "live-imported-v2`n$gameHash`n$engineHash`n"
         $stampResult = ((Invoke-V6Ssh -Ip $Ip -Cmd $stampCmd -TimeoutSec 15) -join "`n").Trim()
         if ($stampResult -ne $expectedMarkerHash) {
@@ -3472,7 +3433,24 @@ function Save-DuneGameConfigLocked {
         [hashtable]$ResolvedPaths
     )
     Invoke-WithDuneLock -Name 'gameconfig-ini' -Script {
-        Save-DuneGameConfig -Ip $Ip -Updates $Updates -ResolvedPaths $ResolvedPaths
+        if (-not $Updates -or $Updates.Count -eq 0) { return }
+        $paths = if ($ResolvedPaths) { $ResolvedPaths } else { Resolve-DuneGameConfigPaths -Ip $Ip }
+        if ($paths.ContainsKey('authoritative') -and -not $paths.authoritative) {
+            throw 'Game Config has not been initialized on this battlegroup yet. Initialize Game Config before saving.'
+        }
+        # Preserve every destination before the first settings write. Verify
+        # byte equality with privileged access; failure leaves settings intact.
+        $stamp = (Get-Date).ToString('yyyyMMddHHmmssfff')
+        foreach ($file in @('game','engine')) {
+            if (-not @($Updates | Where-Object { $_.file -eq $file }).Count) { continue }
+            $path = [string]$paths[$file]
+            $backup = "$path.dstbak-$stamp"
+            $verified = ((Invoke-V6Ssh -Ip $Ip -Cmd "sudo cp -p '$path' '$backup' && sudo cmp -s '$path' '$backup' && printf DST_BACKUP_OK" -TimeoutSec 30) -join '').Trim()
+            if ($verified -ne 'DST_BACKUP_OK') {
+                throw "Could not verify a pre-save backup for '$path'. No settings were written."
+            }
+        }
+        Save-DuneGameConfig -Ip $Ip -Updates $Updates -ResolvedPaths $paths
     } | Out-Null
 }
 

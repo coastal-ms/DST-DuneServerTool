@@ -24,3 +24,9 @@ packaging/linux/systemd/*.service        text eol=lf
 packaging/linux/debian/control           text eol=lf
 packaging/linux/debian/postinst          text eol=lf
 packaging/linux/debian/prerm             text eol=lf
+
+# Atlas hashes exact source bytes before staging its runtime on Windows.
+app/tools/DuneAtlas/**                   text eol=lf
+
+# Raster marker art must retain its binary bytes under the Atlas runtime rule.
+app/tools/DuneAtlas/icons/*.png           -text

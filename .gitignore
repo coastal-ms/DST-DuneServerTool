@@ -53,3 +53,7 @@ testResults.xml
 # Staged cloudflared binary (downloaded/copied at build time, not committed)
 app/installer/vendor/
 /redirect-dist/
+
+# Atlas imports create bytecode locally; runtime packages contain source only.
+app/tools/DuneAtlas/**/__pycache__/
+app/tools/DuneAtlas/__pycache__/

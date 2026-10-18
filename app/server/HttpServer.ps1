@@ -165,6 +165,7 @@ function Test-DunePortalOwnerOnlyPath {
 
 function Test-DunePortalOwnerOrAdminPath {
     param([string]$Path, [string]$Method = 'GET')
+    if ($Path.StartsWith('/api/v1/maps/atlas/')) { return $true }
     return (
         $Method -eq 'GET' -and
         (

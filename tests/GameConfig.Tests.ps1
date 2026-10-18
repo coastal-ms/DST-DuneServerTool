@@ -46,6 +46,7 @@ BeforeAll {
 }
 
 Describe 'Deep Desert per-partition PvP' -Tag 'GameConfig' {
+    BeforeEach { Mock Get-DuneGameConfigClientBackupRoot { Join-Path $TestDrive 'retained-client-backups' } }
     BeforeAll {
         function Invoke-DuneDeployInstalledUserSettings { param([string]$Ip) }
         function Restart-DuneMapPods { param([string]$Key) }
@@ -149,6 +150,7 @@ m_bShouldForceEnablePvpOnAllPartitions=True
 }
 
 Describe 'Fuel burning startup override' -Tag 'GameConfig' {
+    BeforeEach { Mock Get-DuneGameConfigClientBackupRoot { Join-Path $TestDrive 'retained-client-backups' } }
     It 'leaves a server that sets no console variables completely untouched' {
         # Most servers never open the Experimental lists. A battlegroup restart
         # still rebuilds startup arguments from the INI, so this must not rewrite
@@ -616,6 +618,7 @@ Describe 'Fuel burning startup override' -Tag 'GameConfig' {
 }
 
 Describe 'ConvertTo-DuneIniManaged: duplicate-section de-dup' -Tag 'GameConfig' {
+    BeforeEach { Mock Get-DuneGameConfigClientBackupRoot { Join-Path $TestDrive 'retained-client-backups' } }
 
     It 'collapses a pre-existing duplicate NON-target header to exactly one' {
         $raw = @"
@@ -711,6 +714,7 @@ $managedEnd
 }
 
 Describe 'ConvertTo-DuneIniManaged: non-duplicate round-trip' -Tag 'GameConfig' {
+    BeforeEach { Mock Get-DuneGameConfigClientBackupRoot { Join-Path $TestDrive 'retained-client-backups' } }
 
     It 'leaves a normal single-occurrence body section structurally intact (no managed block when nothing changes)' {
         $raw = @"
@@ -729,6 +733,7 @@ KeyA=1
 }
 
 Describe 'Set-DuneIniValuesInPlace: client-file duplicate-key collapse' -Tag 'GameConfig' {
+    BeforeEach { Mock Get-DuneGameConfigClientBackupRoot { Join-Path $TestDrive 'retained-client-backups' } }
 
     # Regression for the v12.0.16 report: the client Game.ini carried the same
     # scalar key TWICE in one section (e.g. PlayerInventoryStartingSize=100 then
@@ -782,6 +787,7 @@ PlayerInventoryStartingSize=145
 }
 
 Describe 'DuneGameConfigSchema: only proven m_Global*Multiplier keys remain' -Tag 'GameConfig' {
+    BeforeEach { Mock Get-DuneGameConfigClientBackupRoot { Join-Path $TestDrive 'retained-client-backups' } }
 
     # 2026-06-15: live in-game testing proved m_GlobalDamageToNpcsMultiplier and
     # m_GlobalXPMultiplier are NO-OPS via UserGame.ini on self-hosted (UE parses
@@ -809,6 +815,7 @@ Describe 'DuneGameConfigSchema: only proven m_Global*Multiplier keys remain' -Ta
 }
 
 Describe 'DuneGameConfigSchema: experimental binary CVars' -Tag 'GameConfig' {
+    BeforeEach { Mock Get-DuneGameConfigClientBackupRoot { Join-Path $TestDrive 'retained-client-backups' } }
     BeforeAll {
         $script:ExperimentalKeys = @(
             'Abilities.RespecCooldownTotalDurationSeconds'
@@ -1475,6 +1482,7 @@ $script:DstManagedEnd
 # (read / write / default / reset / client apply) rather than a bespoke UI.
 # ---------------------------------------------------------------------------
 Describe 'DuneGameConfigSchema: forced Coriolis world seed' -Tag 'GameConfig' {
+    BeforeEach { Mock Get-DuneGameConfigClientBackupRoot { Join-Path $TestDrive 'retained-client-backups' } }
 
     It 'exposes m_ForcedCoriolisWorldSeed as a CoriolisSubsystem game setting' {
         $fields = @{}
@@ -1492,6 +1500,7 @@ Describe 'DuneGameConfigSchema: forced Coriolis world seed' -Tag 'GameConfig' {
     }
 
     Describe 'DuneGameConfigSchema: Coriolis cycle start hour' -Tag 'GameConfig' {
+    BeforeEach { Mock Get-DuneGameConfigClientBackupRoot { Join-Path $TestDrive 'retained-client-backups' } }
         It 'exposes the GMT start hour through the normal bounded game-setting path' {
             $fields = @{}
             foreach ($f in $script:DuneGameConfigSchema) { $fields[$f.Key] = $f }
@@ -1565,6 +1574,7 @@ Describe 'DuneGameConfigSchema: forced Coriolis world seed' -Tag 'GameConfig' {
 }
 
 Describe 'DuneGameConfigSchema: experimental twilight evidence gate' -Tag 'GameConfig' {
+    BeforeEach { Mock Get-DuneGameConfigClientBackupRoot { Join-Path $TestDrive 'retained-client-backups' } }
     BeforeAll {
         function Invoke-V6Ssh { param($Ip, $Cmd) throw 'Unexpected unmocked twilight SSH call.' }
     }
@@ -1588,8 +1598,8 @@ Describe 'DuneGameConfigSchema: experimental twilight evidence gate' -Tag 'GameC
         $start.Count | Should -Be 0
         $cycle.Count | Should -Be 1
         $cycle[0].Category | Should -Be 'Time of Day'
-        $cycle[0].Help | Should -Match '(?i)field-verified phase controls'
-        $cycle[0].Help | Should -Match '(?i)simulation-safety testing is still in progress'
+        $cycle[0].Help | Should -Match '(?i)use the phase controls'
+        $cycle[0].Help | Should -Not -Match '(?i)simulation-safety|field-verified'
     }
 
     It 'keeps the schema free of invented phase and visual-lock writes' {
@@ -1618,7 +1628,7 @@ Describe 'DuneGameConfigSchema: experimental twilight evidence gate' -Tag 'GameC
 
         $route = Get-Content (Join-Path (Get-DstRepoRoot) 'app\server\routes\GameConfig.ps1') -Raw
         $route | Should -Match 'Test-DuneGameConfigRawTargetBlocked'
-        $route | Should -Match 'evidence-only and cannot be written by DST'
+        $route | Should -Match 'Use the Time of day phase controls to change m_StartTime'
     }
 
     It 'rejects raw array lines that do not match their submitted key' {
@@ -1877,6 +1887,7 @@ m_bTimeOfDayEnabled=False
 }
 
 Describe 'DuneGameConfigSchema: CraftingSettings fields' -Tag 'GameConfig' {
+    BeforeEach { Mock Get-DuneGameConfigClientBackupRoot { Join-Path $TestDrive 'retained-client-backups' } }
     It 'exposes repair and recycler weights as server-and-client game settings' {
         $fields = @{}
         foreach ($f in $script:DuneGameConfigSchema) { $fields[$f.Key] = $f }
@@ -2004,6 +2015,7 @@ ResolutionScale=100
 }
 
 Describe 'GameConfig: client-apply flag covers local gameplay settings' -Tag 'GameConfig' {
+    BeforeEach { Mock Get-DuneGameConfigClientBackupRoot { Join-Path $TestDrive 'retained-client-backups' } }
 
     # Settings written to the server's Game.ini are also read by the client, so
     # each one has to be offered for client-side apply. Gameplay console variables
@@ -2036,7 +2048,7 @@ Describe 'GameConfig: client-apply flag covers local gameplay settings' -Tag 'Ga
         $notice.paths.game | Should -Match 'Game\.ini$'
     }
 
-    It 'offers Maximum Vehicles Per Player and Shield Drops While Shooting as proven client-read settings' {
+    It 'offers proven client-read settings and the explicitly mirrored hydration control' {
         # Console variables reach the server through the startup command, not any
         # INI, so a client copy is only meaningful for the ones the client
         # evaluates itself. Flagging the rest is not harmless: it tells players to
@@ -2046,7 +2058,7 @@ Describe 'GameConfig: client-apply flag covers local gameplay settings' -Tag 'Ga
             Where-Object { $_.File -eq 'engine' -and $_.Section -eq $script:DuneGcSecConsole })
 
         $flagged = @($gameplayEngine | Where-Object { $_.ClientApply } | ForEach-Object { $_.Key })
-        @($flagged | Sort-Object) | Should -Be @($script:DuneClientEvaluatedConsoleVariables | Sort-Object)
+        @($flagged | Sort-Object) | Should -Be @(($script:DuneClientEvaluatedConsoleVariables + @('Hydration.SunExposureEnabled')) | Sort-Object)
 
         # Both controls have client-side field evidence: the displayed vehicle
         # cap and shield behavior follow each Retail player's local values.
@@ -2073,21 +2085,14 @@ Describe 'GameConfig: client-apply flag covers local gameplay settings' -Tag 'Ga
         Test-DuneGameConfigValueIsDefault -Key 'Dune.DisableShieldOnShooting' -Value '0' | Should -BeFalse
     }
 
-    It 'only queues a deprecated key for removal when the file actually contains it' {
-        # Regression: every deprecated key used to be queued unconditionally, so
-        # saving one setting reported "removed 18 keys" against a file that held
-        # none of them. The scrub must be driven by the file's real contents.
-        $src = (Get-Command Save-DuneGameConfigClient).ScriptBlock.ToString()
-        $deprecatedLoop = [regex]::Match(
-            $src,
-            '(?s)foreach \(\$dk in \$script:DuneGameConfigDeprecatedManagedKeys\).*?\n\s*\}'
-        ).Value
-        $deprecatedLoop | Should -Not -BeNullOrEmpty
-        $deprecatedLoop | Should -Match '\$existing -match'
+    It 'does not remove unrelated deprecated entries while saving a selected setting' {
+        (Get-Command Save-DuneGameConfigClient).ScriptBlock.ToString() | Should -Not -Match 'foreach \(\$dk in \$script:DuneGameConfigDeprecatedManagedKeys\)'
     }
+
 }
 
 Describe 'GameConfig: Engine.ini opt-in setting' -Tag 'GameConfig' {
+    BeforeEach { Mock Get-DuneGameConfigClientBackupRoot { Join-Path $TestDrive 'retained-client-backups' } }
     It 'is persisted by config and defaults to disabled' {
         $script:DuneConfigKeys | Should -Contain 'ClientEngineIniEnabled'
         Mock Read-DuneConfig { [ordered]@{ ClientEngineIniEnabled = '' } }
@@ -2194,6 +2199,7 @@ Describe 'GameConfig: Engine.ini opt-in setting' -Tag 'GameConfig' {
 }
 
 Describe 'GameConfig: local client Game.ini and Engine.ini' -Tag 'GameConfig' {
+    BeforeEach { Mock Get-DuneGameConfigClientBackupRoot { Join-Path $TestDrive 'retained-client-backups' } }
 
     BeforeEach {
         Mock Get-DuneGameConfigClientEngineEnabled { $true }
@@ -2456,6 +2462,7 @@ Abilities.RespecCooldownTotalDurationSeconds=0
 }
 
 Describe 'GameConfig: reset-to-default removes the key from the INI' -Tag 'GameConfig' {
+    BeforeEach { Mock Get-DuneGameConfigClientBackupRoot { Join-Path $TestDrive 'retained-client-backups' } }
 
     It 'ConvertTo-DuneIniManaged drops a managed scalar when remove=$true' {
         $raw = @"
@@ -2521,6 +2528,7 @@ PlayerInventoryStartingVolumeCapacity=300.0
 }
 
 Describe 'GameConfig: single-section-per-key consistency' -Tag 'GameConfig' {
+    BeforeEach { Mock Get-DuneGameConfigClientBackupRoot { Join-Path $TestDrive 'retained-client-backups' } }
 
     It 'consolidates a key that exists in two managed sections into the one being written' {
         $secA = '/Script/DuneSandbox.DuneGameMode'
@@ -2604,6 +2612,7 @@ Describe 'GameConfig: single-section-per-key consistency' -Tag 'GameConfig' {
 }
 
 Describe 'GameConfig: UE struct-member engine (LandsraadSettings Data blob)' -Tag 'GameConfig' {
+    BeforeEach { Mock Get-DuneGameConfigClientBackupRoot { Join-Path $TestDrive 'retained-client-backups' } }
 
     BeforeAll {
         # Real-shape blob: flat scalars mixed with nested members (messages, curve,
@@ -2656,6 +2665,10 @@ Describe 'GameConfig: UE struct-member engine (LandsraadSettings Data blob)' -Ta
 }
 
 Describe 'GameConfig: spicefield startup defaults' -Tag 'GameConfig' {
+    BeforeEach { Mock Get-DuneGameConfigClientBackupRoot { Join-Path $TestDrive 'retained-client-backups' } }
+    # These fixtures exercise the pre-claim/older-installation fallback. Active
+    # File Browser claim discovery is covered by its own restart regression.
+    BeforeEach { Mock Resolve-DunePersistentGameConfigPaths { $null } }
     BeforeAll {
         function Invoke-V6Ssh { param([string]$Ip, [string]$Cmd) }
         $script:SpiceSection = '/Script/DuneSandbox.SpiceHarvestingSystem'
@@ -2777,29 +2790,6 @@ Describe 'GameConfig: spicefield startup defaults' -Tag 'GameConfig' {
         Should -Invoke Invoke-V6Ssh -ParameterFilter { $Cmd -match 'tee |install |ls -t' } -Times 0
     }
 
-    It 'writes the current template file hashes into the marker on migration, so a later untouched read reports ready' {
-        $script:writes = @()
-        Mock Invoke-V6Ssh {
-            param([string]$Ip, [string]$Cmd, [string]$StdinData)
-            if ($Cmd -match "printf 'live-imported-v2") { $script:writes += $Cmd }
-            if ($Cmd -match '__DST_AUTH__:migrated') { return '__DST_AUTH__:migrated' }
-            if ($Cmd -match 'if test -f') { return 'uninitialized' }
-            if ($Cmd -match 'ls -t') { return '/srv/managed' }
-            if ($Cmd -match "cat '/srv/managed/UserGame.ini'") {
-                return "$script:DstManagedBegin`n[$script:DuneGcSecGame]`nm_PlayerStartingWater=250`n$script:DstManagedEnd"
-            }
-            if ($Cmd -match 'sudo cat') { return '[ConsoleVariables]' }
-        }
-
-        Resolve-DuneGameConfigPaths -Ip '192.0.2.1' | Out-Null
-
-        $script:writes.Count | Should -Be 1
-        # The marker command must carry two hash lines after the literal
-        # 'live-imported-v2' line - a marker with no hashes is exactly the
-        # old-format case that must always compare as stale, never ready.
-        ($script:writes[0] -split '\\n').Count | Should -BeGreaterOrEqual 3
-    }
-
     It 'keeps established authority readable without writing even when its hashes changed' {
         Mock Invoke-V6Ssh {
             param([string]$Ip, [string]$Cmd)
@@ -2814,270 +2804,6 @@ Describe 'GameConfig: spicefield startup defaults' -Tag 'GameConfig' {
         $paths.authoritative | Should -Not -Be $false
         $paths.needsInitialization | Should -BeNullOrEmpty
         Should -Invoke Invoke-V6Ssh -ParameterFilter { $Cmd -match "printf 'live-imported-v2" } -Times 0
-    }
-
-    It 'fetches current complete defaults before migrating Spice from a sparse installed baseline' {
-        Mock Get-DuneGameConfigDefaults { @{ game = $script:SpiceDefaultsRaw } }
-        Mock Invoke-V6Ssh {
-            param($Ip, $Cmd, $StdinData)
-            if ($Cmd -match '__DST_AUTH__:migrated') { return '__DST_AUTH__:migrated' }
-            if ($Cmd -match 'if test -f') { return 'uninitialized' }
-            if ($Cmd -match 'ls -t') { return '/srv/managed' }
-            if ($Cmd -match "cat '/srv/managed/UserGame.ini'") {
-                return "$script:DstManagedBegin`n$script:SpiceUserRaw`n$script:DstManagedEnd"
-            }
-            if ($Cmd -match 'sudo cat') { return "[Other]`nKeepMe=42" }
-        }
-
-        $paths = Resolve-DuneGameConfigPaths -Ip '192.0.2.1'
-
-        $paths.migrated | Should -BeTrue
-        Should -Invoke Get-DuneGameConfigDefaults -Times 1 -Exactly -ParameterFilter { $Force -and $Ip -eq '192.0.2.1' }
-    }
-
-    It 'fetches complete defaults when the installed Spice struct is present but incomplete' {
-        Mock Get-DuneGameConfigDefaults { @{ game = $script:SpiceDefaultsRaw } }
-        Mock Invoke-V6Ssh {
-            param($Ip, $Cmd, $StdinData)
-            if ($Cmd -match '__DST_AUTH__:migrated') { return '__DST_AUTH__:migrated' }
-            if ($Cmd -match 'if test -f') { return 'uninitialized' }
-            if ($Cmd -match 'ls -t') { return '/srv/managed' }
-            if ($Cmd -match "cat '/srv/managed/UserGame.ini'") {
-                $partialSpice = $script:SpiceUserRaw.Replace($script:SpiceOverride, 'm_PerMapSystemSettings=(("DeepDesert_1", (m_SpiceFieldTypeSettings=(((Name="Small"), (MaxGloballyPrimed=60,MaxGloballyActive=60))))))')
-                return "$script:DstManagedBegin`n$partialSpice`n$script:DstManagedEnd"
-            }
-            if ($Cmd -match 'sudo cat') { return "[Other]`nKeepMe=42" }
-        }
-
-        $paths = Resolve-DuneGameConfigPaths -Ip '192.0.2.1'
-
-        $paths.migrated | Should -BeTrue
-        Should -Invoke Get-DuneGameConfigDefaults -Times 1 -Exactly -ParameterFilter { $Force -and $Ip -eq '192.0.2.1' }
-    }
-
-    It 'does not write migration files if current Spice defaults cannot be read' {
-        Mock Get-DuneGameConfigDefaults { throw 'defaults read failed' }
-        Mock Invoke-V6Ssh {
-            param($Ip, $Cmd, $StdinData)
-            if ($Cmd -match 'if test -f') { return 'uninitialized' }
-            if ($Cmd -match 'ls -t') { return '/srv/managed' }
-            if ($Cmd -match "cat '/srv/managed/UserGame.ini'") {
-                return "$script:DstManagedBegin`n$script:SpiceUserRaw`n$script:DstManagedEnd"
-            }
-            if ($Cmd -match 'sudo cat') { return "[Other]`nKeepMe=42" }
-        }
-
-        { Resolve-DuneGameConfigPaths -Ip '192.0.2.1' } | Should -Throw '*defaults read failed*'
-        Should -Invoke Invoke-V6Ssh -Times 0 -Exactly -ParameterFilter { $Cmd -match 'sudo tee|sudo install|sudo cp' }
-    }
-
-    It 'migrates prior managed overrides onto installed Funcom defaults' {
-        $oldGame = @"
-[$script:DuneGcSecGame]
-m_InventoryWeightMultiplier=0.25
-$script:DstManagedBegin
-[$script:SecInventory]
-PlayerInventoryStartingSize=80
-PlayerInventoryStartingVolumeCapacity=350
-[$script:SecBuilding]
-m_BaseBackupToolMapRestriction=((Name="HaggaBasin"), (Name="DeepDesert"))
-m_bBuildingRestrictionLimitsEnabled=False
-$script:DstManagedEnd
-"@
-        $installedGame = @"
-[$script:SecInventory]
-PlayerInventoryStartingSize=35
-PlayerInventoryStartingVolumeCapacity=175
-RetailAddedInventoryDefault=42
-[$script:SecBuilding]
-m_BaseBackupToolMapRestriction=((Name="HaggaBasin"))
-m_bBuildingRestrictionLimitsEnabled=True
-RetailAddedBuildingDefault=True
-"@
-        $script:writes = @()
-        Mock Invoke-V6Ssh {
-            param([string]$Ip, [string]$Cmd, [string]$StdinData)
-            if ($Cmd -match '__DST_AUTH__:migrated') { return '__DST_AUTH__:migrated' }
-            if ($Cmd -match 'if test -f') { return 'repair-v1' }
-            if ($Cmd -match 'pre-live-import-\*') { return '/home/dune/.dune/download/scripts/setup/config/UserGame.ini.pre-live-import-20260917120000' }
-            if ($Cmd -match 'ls -t') { return @('/srv/new-defaults', '/srv/old-managed') }
-            if ($Cmd -match "cat '/home/dune/.dune/download/scripts/setup/config/UserGame.ini.pre-live-import-") { return $installedGame }
-            if ($Cmd -match "cat '/home/dune/.dune/download/scripts/setup/config/UserEngine.ini.pre-live-import-") { return '[ConsoleVariables]' }
-            if ($Cmd -match "cat '/srv/new-defaults/") { return '[Unmanaged]' }
-            if ($Cmd -match "cat '/srv/old-managed/UserGame.ini'") { return $oldGame }
-            if ($Cmd -match "cat '/srv/old-managed/UserEngine.ini'") { return '[ConsoleVariables]' }
-            if ($StdinData) {
-                $script:writes += [Text.Encoding]::UTF8.GetString([Convert]::FromBase64String($StdinData))
-            }
-        }
-        $paths = Resolve-DuneGameConfigPaths -Ip '192.0.2.1'
-
-        $paths.source | Should -Be 'installed'
-        $paths.migrated | Should -BeTrue
-        $paths.migratedFrom | Should -Be '/srv/old-managed'
-        $paths.migratedKeys | Should -Be 4
-        $paths.game | Should -Be '/home/dune/.dune/download/scripts/setup/config/UserGame.ini'
-        $paths.engine | Should -Be '/home/dune/.dune/download/scripts/setup/config/UserEngine.ini'
-        $merged = @($script:writes | Where-Object { $_ -match 'PlayerInventoryStartingSize' })[0]
-        $merged | Should -Match 'PlayerInventoryStartingSize=80'
-        $merged | Should -Match 'PlayerInventoryStartingVolumeCapacity=350'
-        $merged | Should -Match 'm_BaseBackupToolMapRestriction=\(\(Name="HaggaBasin"\), \(Name="DeepDesert"\)\)'
-        $merged | Should -Match 'm_bBuildingRestrictionLimitsEnabled=False'
-        $merged | Should -Match 'RetailAddedInventoryDefault=42'
-        $merged | Should -Match 'RetailAddedBuildingDefault=True'
-        $merged | Should -Not -Match 'm_InventoryWeightMultiplier'
-        Should -Invoke Invoke-V6Ssh -Times 1 -ParameterFilter {
-            $Cmd -match 'sha256sum -c' -and
-            $Cmd -match '__DST_AUTH__:migrated' -and
-            $Cmd -match 'pre-v2-migration-attempt-' -and
-            $Cmd -notmatch "cp '[^']+' '[^']+\.pre-live-import-"
-        }
-    }
-
-    It 'keeps the clean v1 repair baseline isolated across a failed v2 retry' {
-        $oldGame = @"
-$script:DstManagedBegin
-[$script:SecInventory]
-PlayerInventoryStartingSize=80
-$script:DstManagedEnd
-"@
-        $installedGame = @"
-[$script:SecInventory]
-PlayerInventoryStartingSize=35
-"@
-        $script:migrationCommands = @()
-        $script:migrationAttempt = 0
-        Mock Invoke-V6Ssh {
-            param([string]$Ip, [string]$Cmd, [string]$StdinData)
-            if ($Cmd -match '__DST_AUTH__:migrated') {
-                $script:migrationCommands += $Cmd
-                $script:migrationAttempt++
-                if ($script:migrationAttempt -eq 1) { return 'migration failed' }
-                return '__DST_AUTH__:migrated'
-            }
-            if ($Cmd -match 'if test -f') { return 'repair-v1' }
-            if ($Cmd -match 'pre-live-import-\*') {
-                return '/home/dune/.dune/download/scripts/setup/config/UserGame.ini.pre-live-import-clean'
-            }
-            if ($Cmd -match 'ls -t') { return '/srv/old-managed' }
-            if ($Cmd -match "cat '/home/dune/.dune/download/scripts/setup/config/UserGame.ini.pre-live-import-clean'") { return $installedGame }
-            if ($Cmd -match "cat '/home/dune/.dune/download/scripts/setup/config/UserEngine.ini.pre-live-import-clean'") { return '[ConsoleVariables]' }
-            if ($Cmd -match "cat '/srv/old-managed/UserGame.ini'") { return $oldGame }
-            if ($Cmd -match "cat '/srv/old-managed/UserEngine.ini'") { return '[ConsoleVariables]' }
-        }
-
-        { Resolve-DuneGameConfigPaths -Ip '192.0.2.1' } |
-            Should -Throw '*could not safely migrate*'
-        $paths = Resolve-DuneGameConfigPaths -Ip '192.0.2.1'
-
-        $paths.migrated | Should -BeTrue
-        $script:migrationCommands.Count | Should -Be 2
-        foreach ($command in $script:migrationCommands) {
-            $command | Should -Match 'pre-v2-migration-attempt-'
-            $command | Should -Not -Match "cp '[^']+' '[^']+\.pre-live-import-"
-        }
-        Should -Invoke Invoke-V6Ssh -Times 2 -ParameterFilter { $Cmd -match 'pre-live-import-\*' }
-    }
-
-    It 'blocks installed defaults when no existing battlegroup configuration can be imported' {
-        Mock Invoke-V6Ssh {
-            param([string]$Ip, [string]$Cmd)
-            if ($Cmd -match 'DuneGameConfigAuthorityMarker|dst-live-settings-imported') { return 'uninitialized' }
-            return ''
-        }
-
-        { Resolve-DuneGameConfigPaths -Ip '192.0.2.1' } |
-            Should -Throw '*Deployment is blocked*'
-    }
-
-    # --- Field defect fix (Jess, v15.1.1): installed-uninitialized read fallback ---
-
-    It 'returns the installed defaults as a non-authoritative read for the exact Jess v15.1.1 field defect, with zero writes' {
-        $script:writes = @()
-        Mock Invoke-V6Ssh {
-            param([string]$Ip, [string]$Cmd, [string]$StdinData)
-            if ($Cmd -match 'DuneGameConfigAuthorityMarker|dst-live-settings-imported') { return 'uninitialized' }
-            if ($Cmd -match 'ls -t') { return @() }
-            if ($Cmd -match 'sudo cat') { return '[ConsoleVariables]' }
-            if ($StdinData) { $script:writes += $StdinData }
-        }
-
-        $paths = Resolve-DuneGameConfigPaths -Ip '192.0.2.1'
-
-        $paths.source | Should -Be 'installed-uninitialized'
-        $paths.authoritative | Should -BeFalse
-        $paths.needsInitialization | Should -BeTrue
-        $paths.game | Should -Be $script:DuneGameConfigTplGamePath
-        $paths.engine | Should -Be $script:DuneGameConfigTplEnginePath
-        $script:writes.Count | Should -Be 0
-        Should -Invoke Invoke-V6Ssh -Times 0 -ParameterFilter { $Cmd -match 'tee|sha256sum -c|install -o dune' }
-    }
-
-    It 'propagates non-authoritative/needsInitialization through Get-DuneGameConfig with zero writes' {
-        $script:writes = @()
-        Mock Invoke-V6Ssh {
-            param([string]$Ip, [string]$Cmd, [string]$StdinData)
-            if ($Cmd -match 'DuneGameConfigAuthorityMarker|dst-live-settings-imported') { return 'uninitialized' }
-            if ($Cmd -match 'ls -t') { return @() }
-            if ($Cmd -match 'sudo cat') { return '[ConsoleVariables]' }
-            if ($StdinData) { $script:writes += $StdinData }
-        }
-
-        $cfg = Get-DuneGameConfig -Ip '192.0.2.1'
-
-        $cfg.source | Should -Be 'installed-uninitialized'
-        $cfg.authoritative | Should -BeFalse
-        $cfg.needsInitialization | Should -BeTrue
-        $cfg.game.path | Should -Be $script:DuneGameConfigTplGamePath
-        $script:writes.Count | Should -Be 0
-    }
-
-    It 'treats a live directory with no DST-managed content as safe to fall back to installed defaults' {
-        Mock Invoke-V6Ssh {
-            param([string]$Ip, [string]$Cmd)
-            if ($Cmd -match 'DuneGameConfigAuthorityMarker|dst-live-settings-imported') { return 'uninitialized' }
-            if ($Cmd -match 'ls -t') { return '/srv/vanilla' }
-            return '[ConsoleVariables]'
-        }
-
-        $paths = Resolve-DuneGameConfigPaths -Ip '192.0.2.1'
-
-        $paths.source | Should -Be 'installed-uninitialized'
-        $paths.needsInitialization | Should -BeTrue
-    }
-
-    It 'keeps a prior-managed candidate blocked even when it produces zero migration updates' {
-        $managedButNoOp = @"
-$script:DstManagedBegin
-[ConsoleVariables]
-$script:DstManagedEnd
-"@
-        Mock Invoke-V6Ssh {
-            param([string]$Ip, [string]$Cmd)
-            if ($Cmd -match 'DuneGameConfigAuthorityMarker|dst-live-settings-imported') { return 'uninitialized' }
-            if ($Cmd -match 'ls -t') { return '/srv/old-managed' }
-            if ($Cmd -match "cat '/srv/old-managed/UserGame.ini'") { return $managedButNoOp }
-            return '[ConsoleVariables]'
-        }
-
-        { Resolve-DuneGameConfigPaths -Ip '192.0.2.1' } | Should -Throw '*Deployment is blocked*'
-    }
-
-    It 'keeps a malformed live candidate blocked rather than falling back to installed defaults' {
-        $malformedGame = @"
-$script:DstManagedBegin
-[ConsoleVariables]
-dw.FuelBurningMultiplier=10
-"@
-        Mock Invoke-V6Ssh {
-            param([string]$Ip, [string]$Cmd)
-            if ($Cmd -match 'DuneGameConfigAuthorityMarker|dst-live-settings-imported') { return 'uninitialized' }
-            if ($Cmd -match 'ls -t') { return '/srv/broken' }
-            if ($Cmd -match "cat '/srv/broken/UserGame.ini'") { return $malformedGame }
-            return '[ConsoleVariables]'
-        }
-
-        { Resolve-DuneGameConfigPaths -Ip '192.0.2.1' } | Should -Throw '*Deployment is blocked*'
     }
 
     It 'refuses to save Game Config while it is uninitialized (installed-uninitialized)' {
@@ -3104,6 +2830,25 @@ dw.FuelBurningMultiplier=10
         Mock Invoke-V6Ssh {}
         { Initialize-DuneGameConfigAuthority -Ip '192.0.2.1' -Confirmed $false } | Should -Throw '*confirmation is required*'
         Should -Invoke Invoke-V6Ssh -Times 0
+    }
+
+    It 'verifies persistent INI writes with the same privilege used to read and write them' {
+        $paths = @{game='/restricted/UserGame.ini';engine='/restricted/UserEngine.ini';source='live';authoritative=$true}
+        Mock Invoke-V6Ssh {
+            param($Ip, $Cmd, $TimeoutSec, $StdinData)
+            if ($Cmd -match '^sudo cat') { return '[Manual]' }
+            if ($Cmd -match 'base64 -d \| sudo tee') {
+                # The PVC directory permits privileged access only. An ordinary
+                # hash read returns no stdout even after a successful write.
+                if ($Cmd -notmatch '&& sudo sha256sum') { return '' }
+                return Get-DuneGameConfigTextSha256 -Value ([Text.Encoding]::UTF8.GetString([Convert]::FromBase64String($StdinData)))
+            }
+        }
+        { Save-DuneGameConfig -Ip '192.0.2.1' -ResolvedPaths $paths -Updates @(
+            @{file='game';section='Manual';key='Keep';value='135'},
+            @{file='engine';section='Manual';key='Cost';value='10'}
+        ) } | Should -Not -Throw
+        Should -Invoke Invoke-V6Ssh -Times 2 -ParameterFilter { $Cmd -match '&& sudo sha256sum' }
     }
 
     It 'BUG FIXED 2026-09-22: re-stamps the v2 authority marker hash after saving to the installed template, so the next read is not falsely stale' {
@@ -3141,6 +2886,7 @@ dw.FuelBurningMultiplier=10
 
         $script:stampedCmd | Should -Not -BeNullOrEmpty
         $script:stampedCmd | Should -Match 'live-imported-v2'
+        $script:stampedCmd | Should -Match '&& sudo sha256sum'
         $script:stampedCmd | Should -Match ([regex]::Escape($script:DuneGameConfigAuthorityMarker))
         # Marker must carry two fresh, non-empty hash lines (game + untouched
         # engine, re-read since this save only wrote game).
@@ -3205,30 +2951,6 @@ dw.FuelBurningMultiplier=10
             Should -Not -Throw
     }
 
-    It 'initializes Game Config by writing only the v2 authority marker, never UserGame.ini/UserEngine.ini' {
-        $script:writes = @()
-        Mock Invoke-V6Ssh {
-            param([string]$Ip, [string]$Cmd)
-            if ($Cmd -match 'sudo tee') { $script:writes += $Cmd; return '__DST_AUTH__:initialized' }
-            if ($Cmd -match 'echo ready') { return 'uninitialized' }
-            if ($Cmd -match 'ls -t') { return @() }
-            if ($Cmd -match 'echo yes \|\| echo no') { return 'yes' }
-            if ($Cmd -match 'sudo cat') { return '[ConsoleVariables]' }
-            return ''
-        }
-
-        $result = Initialize-DuneGameConfigAuthority -Ip '192.0.2.1' -Confirmed $true
-
-        $result.ok | Should -BeTrue
-        $result.initialized | Should -BeTrue
-        $result.source | Should -Be 'installed'
-        $result.authoritative | Should -BeTrue
-        $result.needsInitialization | Should -BeFalse
-        $script:writes.Count | Should -Be 1
-        $script:writes[0] | Should -Match ([regex]::Escape($script:DuneGameConfigAuthorityMarker))
-        $script:writes[0] | Should -Not -Match 'UserGame\.ini|UserEngine\.ini'
-    }
-
     It 'reports already-initialized without writing when another admin initialized concurrently (race safety)' {
         Mock Invoke-V6Ssh {
             param([string]$Ip, [string]$Cmd)
@@ -3242,23 +2964,6 @@ dw.FuelBurningMultiplier=10
         $result.alreadyInitialized | Should -BeTrue
         $result.source | Should -Be 'installed'
         Should -Invoke Invoke-V6Ssh -Times 0 -ParameterFilter { $Cmd -match 'sudo tee' }
-    }
-
-    It 'refuses to initialize when the recheck finds a prior-managed candidate now exists (race safety)' {
-        $managedButNoOp = @"
-$script:DstManagedBegin
-[ConsoleVariables]
-$script:DstManagedEnd
-"@
-        Mock Invoke-V6Ssh {
-            param([string]$Ip, [string]$Cmd)
-            if ($Cmd -match 'DuneGameConfigAuthorityMarker|dst-live-settings-imported') { return 'uninitialized' }
-            if ($Cmd -match 'ls -t') { return '/srv/appeared' }
-            if ($Cmd -match "cat '/srv/appeared/UserGame.ini'") { return $managedButNoOp }
-            return '[ConsoleVariables]'
-        }
-
-        { Initialize-DuneGameConfigAuthority -Ip '192.0.2.1' -Confirmed $true } | Should -Throw '*Deployment is blocked*'
     }
 
     It 'reads as fully authoritative immediately after Initialize-DuneGameConfigAuthority completes' {
@@ -3440,6 +3145,7 @@ $script:DstManagedEnd
 }
 
 Describe 'GameConfig: Landsraad struct fields integrate with read + save' -Tag 'GameConfig' {
+    BeforeEach { Mock Get-DuneGameConfigClientBackupRoot { Join-Path $TestDrive 'retained-client-backups' } }
 
     BeforeAll {
         $script:LsRaw = "[/Script/DuneSandbox.LandsraadSettings]`n" +
@@ -3558,6 +3264,7 @@ Describe 'GameConfig: Landsraad struct fields integrate with read + save' -Tag '
 }
 
 Describe 'Land-claim (staking unit) extension timer' -Tag 'GameConfig' {
+    BeforeEach { Mock Get-DuneGameConfigClientBackupRoot { Join-Path $TestDrive 'retained-client-backups' } }
 
     It 'distinguishes residual timer lines from clean defaults without calling them enabled' {
         foreach ($line in @('m_StakingUnitExtensionDefaultTimes=5', '-m_StakingUnitVerticalExtensionDefaultTimes=60.000000')) {
@@ -3634,9 +3341,26 @@ m_MaxNumLandclaimSegments=10
 }
 
 Describe 'Reviewed raw Lab local saves' {
+    BeforeEach { Mock Get-DuneGameConfigClientBackupRoot { Join-Path $TestDrive 'retained-client-backups' } }
     BeforeEach {
         Mock Test-DuneGameClientRunning { $false }
         Mock Get-DuneGameConfigClientEngineEnabled { $false }
+    }
+    It 'changes one winner while preserving seventeen unrelated local values and the other file' {
+        $dir = Join-Path $TestDrive 'one-winner'
+        [void](New-Item -ItemType Directory -Path $dir)
+        $game = Join-Path $dir 'Game.ini'
+        $engine = Join-Path $dir 'Engine.ini'
+        $lines = @('[Manual]') + @(0..17 | ForEach-Object { "Difference$_=0" })
+        [IO.File]::WriteAllText($game, ($lines -join "`r`n"))
+        [IO.File]::WriteAllText($engine, "[ConsoleVariables]`r`nUnrelated=7`r`n")
+        $beforeEngine = [IO.File]::ReadAllText($engine)
+        $result = Save-DuneGameConfigClient -Dir $dir -ReviewedRaw -Updates @(@{file='game';section='Manual';key='Difference0';value='1'})
+        $after = Get-DuneIniEffective -Raw ([IO.File]::ReadAllText($game))
+        $result.applied | Should -Be 1
+        $after['Manual||Difference0'] | Should -Be '1'
+        foreach ($index in 1..17) { $after["Manual||Difference$index"] | Should -Be '0' }
+        [IO.File]::ReadAllText($engine) | Should -BeExactly $beforeEngine
     }
     It 'writes selected raw settings, preserves asset paths and unrelated data, and removes only an explicitly cleared entry' {
         $dir = Join-Path $TestDrive 'lab-reviewed'
@@ -3667,10 +3391,106 @@ Describe 'Reviewed raw Lab local saves' {
 }
 
 Describe 'Lab path preservation' {
+    BeforeEach { Mock Get-DuneGameConfigClientBackupRoot { Join-Path $TestDrive 'retained-client-backups' } }
     It 'rejects path edits and deletions before writing any destination' {
         $raw = "[Building]`nm_DoorDataTable=/Game/Dune/Doors.Doors`n"
         { Assert-DuneLabPathsUnchanged -Raw $raw -Updates @(@{section='Building';key='m_DoorDataTable';value=''}) } | Should -Throw '*read-only*'
         { Assert-DuneLabPathsUnchanged -Raw $raw -Updates @(@{section='Building';key='Other';value='C:\Game'}) } | Should -Throw '*read-only*'
         { Assert-DuneLabPathsUnchanged -Raw $raw -Updates @(@{section='Building';key='DoorTime';value='3'}) } | Should -Not -Throw
+    }
+}
+
+
+Describe 'Verified pre-write settings recovery copies' {
+    BeforeEach { Mock Get-DuneGameConfigClientBackupRoot { Join-Path $TestDrive 'retained-client-backups' } }
+    BeforeAll {
+        function Invoke-WithDuneLock { param($Name, $Script) & $Script }
+        function Invoke-V6Ssh { param($Ip, $Cmd, $TimeoutSec, $StdinData) }
+    }
+    BeforeEach {
+        Mock Invoke-WithDuneLock { & $Script }
+        Mock Save-DuneGameConfig {}
+    }
+    It 'backs up all selected destinations before writing settings' {
+        Mock Invoke-V6Ssh { 'DST_BACKUP_OK' }
+        Save-DuneGameConfigLocked -Ip '192.0.2.1' -ResolvedPaths @{game='/restricted/UserGame.ini';engine='/restricted/UserEngine.ini';authoritative=$true} -Updates @(
+            @{file='game';section='Manual';key='A';value='1'}, @{file='engine';section='ConsoleVariables';key='B';value='0'})
+        Should -Invoke Invoke-V6Ssh -Times 2 -ParameterFilter { $Cmd -match 'sudo cp -p.*sudo cmp -s' }
+        Should -Invoke Save-DuneGameConfig -Times 1
+    }
+    It 'does not write either settings file if a backup cannot be verified' {
+        Mock Invoke-V6Ssh { if ($Cmd -match 'UserGame.ini') { 'DST_BACKUP_OK' } else { '' } }
+        { Save-DuneGameConfigLocked -Ip '192.0.2.1' -ResolvedPaths @{game='/restricted/UserGame.ini';engine='/restricted/UserEngine.ini';authoritative=$true} -Updates @(
+            @{file='game';section='Manual';key='A';value='1'}, @{file='engine';section='ConsoleVariables';key='B';value='0'}) } | Should -Throw '*No settings were written*'
+        Should -Invoke Save-DuneGameConfig -Times 0
+    }
+}
+
+
+Describe 'Opening existing configurations preserves them without adoption or migration gates' {
+    BeforeEach { Mock Get-DuneGameConfigClientBackupRoot { Join-Path $TestDrive 'retained-client-backups' } }
+    BeforeAll {
+        function Invoke-V6Ssh { param($Ip, $Cmd, $TimeoutSec, $StdinData) }
+        function Test-DuneConfigurationInjectionEnabled { $true }
+    }
+    BeforeEach {
+        Mock Resolve-DunePersistentGameConfigPaths { $null }
+        Mock Test-DuneConfigurationInjectionEnabled { $true }
+    }
+    It 'reads existing setup files in <state> without rewriting settings or requiring initialization' -ForEach @(
+        @{state='ready'}, @{state='stale'}, @{state='uninitialized'}, @{state='repair-v1'}
+    ) {
+        Mock Invoke-V6Ssh {
+            if ($Cmd -match 'MARKER=') { return $state }
+            if ($Cmd -match 'ls -t') { return @() }
+            throw "Unexpected operation on opening settings: $Cmd"
+        }
+        $paths = Resolve-DuneGameConfigPaths -Ip '192.0.2.1'
+        $paths.source | Should -Be 'installed'
+        $paths.needsInitialization | Should -Not -BeTrue
+        $paths.game | Should -Be $script:DuneGameConfigTplGamePath
+        Should -Invoke Invoke-V6Ssh -Times 0 -ParameterFilter { $Cmd -match 'sudo (tee|cp|mv|rm)|base64 -d' }
+    }
+    It 'uses existing legacy live files without migrating their values or consulting defaults' {
+        Mock Invoke-V6Ssh {
+            if ($Cmd -match 'MARKER=') { return 'uninitialized' }
+            if ($Cmd -match 'ls -t') { return '/existing/UserSettings' }
+            if ($Cmd -match 'test -f') { return 'ok' }
+            throw "Unexpected operation on opening settings: $Cmd"
+        }
+        $paths = Resolve-DuneGameConfigPaths -Ip '192.0.2.1'
+        $paths.game | Should -Be '/existing/UserSettings/UserGame.ini'
+        $paths.source | Should -Be 'legacy-live'
+        Should -Invoke Invoke-V6Ssh -Times 0 -ParameterFilter { $Cmd -match 'sudo (tee|cp|mv|rm)|base64 -d' }
+    }
+}
+
+
+Describe 'Client INI backup housekeeping' {
+    BeforeEach { Mock Get-DuneGameConfigClientBackupRoot { Join-Path $TestDrive 'retained-client-backups' } }
+    BeforeEach { Mock Test-DuneGameClientRunning { $false }; Mock Get-DuneGameConfigClientEngineEnabled { $true } }
+    It 'does not rewrite a matching value or create a recovery copy' {
+        $dir = Join-Path $TestDrive 'unchanged-client'
+        [void][IO.Directory]::CreateDirectory($dir)
+        $path = Join-Path $dir 'Engine.ini'
+        $raw = "[ConsoleVariables]`r`n; keep this formatting`r`nHydration.SunExposureEnabled=0`r`n"
+        [IO.File]::WriteAllText($path, $raw)
+        $result = Save-DuneGameConfigClient -Dir $dir -ReviewedRaw -Updates @(@{file='engine';section='ConsoleVariables';key='Hydration.SunExposureEnabled';value='0'})
+        $result.applied | Should -Be 0
+        [IO.File]::ReadAllText($path) | Should -BeExactly $raw
+        @(Get-ChildItem -LiteralPath $dir -Recurse -File).Count | Should -Be 1
+    }
+    It 'keeps a verified recovery copy outside the game folder with source metadata' {
+        $dir = Join-Path $TestDrive 'changed-client'
+        [void][IO.Directory]::CreateDirectory($dir)
+        $path = Join-Path $dir 'Engine.ini'
+        $raw = "[ConsoleVariables]`r`nHydration.SunExposureEnabled=0`r`n"
+        [IO.File]::WriteAllText($path, $raw)
+        $result = Save-DuneGameConfigClient -Dir $dir -ReviewedRaw -Updates @(@{file='engine';section='ConsoleVariables';key='Hydration.SunExposureEnabled';value='1'})
+        [IO.Path]::GetDirectoryName($result.backups.engine) | Should -Be (Get-DuneGameConfigClientBackupDirectory -Path $path)
+        $result.backups.engine | Should -Not -BeLike "$dir*"
+        (Get-Content -LiteralPath "$($result.backups.engine).json" -Raw | ConvertFrom-Json).sourcePath | Should -Be $path
+        [IO.File]::ReadAllText($result.backups.engine) | Should -BeExactly $raw
+        @(Get-ChildItem -LiteralPath $dir -File).Count | Should -Be 1
     }
 }

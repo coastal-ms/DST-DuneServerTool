@@ -23,6 +23,7 @@ internal sealed class MainForm : Form
     private const int SW_RESTORE = 9;
 
     private readonly WebView2 _web = new();
+    private readonly HashSet<AtlasMapForm> _atlasPopouts = new();
     private readonly Label _status = new();
 
     private readonly string? _initialUrl;
@@ -92,6 +93,10 @@ internal sealed class MainForm : Form
         // just the WebView and a transient status label — no MenuStrip.
         BuildWebView();
         BuildStatus();
+        FormClosed += (_, _) =>
+        {
+            foreach (var popup in _atlasPopouts.ToArray()) popup.Close();
+        };
 
         Load += async (_, _) => await InitializeAsync();
     }
@@ -528,7 +533,7 @@ internal sealed class MainForm : Form
             CloseWhenFinished(operation, new object());
     }
 
-    private void OnNewWindowRequested(object? sender, CoreWebView2NewWindowRequestedEventArgs e)
+    private async void OnNewWindowRequested(object? sender, CoreWebView2NewWindowRequestedEventArgs e)
     {
         // window.open / target=_blank routing:
         //   * Same-origin as the portal's own URL (loopback + same port) -> keep
@@ -540,6 +545,29 @@ internal sealed class MainForm : Form
         //     shell off the portal instead.
         e.Handled = true;
         if (!Uri.TryCreate(e.Uri, UriKind.Absolute, out var u)) return;
+
+        if (Uri.TryCreate(_targetUrl, UriKind.Absolute, out var atlasPortal) &&
+            AtlasPopupPolicy.IsAtlasPopup(atlasPortal, u))
+        {
+            var deferral = e.GetDeferral();
+            AtlasMapForm? popup = null;
+            try
+            {
+                popup = new AtlasMapForm(OpenExternal);
+                _atlasPopouts.Add(popup);
+                popup.FormClosed += (_, _) => _atlasPopouts.Remove(popup);
+                popup.Show();
+                await popup.InitializeAsync(_web.CoreWebView2.Environment);
+                e.NewWindow = popup.Core;
+            }
+            catch (Exception ex)
+            {
+                popup?.Close();
+                AppendDiagnosticLine($"[atlas-popout] {ex.GetType().Name}: {ex.Message}");
+            }
+            finally { deferral.Complete(); }
+            return;
+        }
 
         bool keepInShell = false;
         if (u.IsLoopback &&

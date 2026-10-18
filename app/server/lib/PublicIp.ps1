@@ -1381,7 +1381,7 @@ echo "BGIP_VERIFY_DONE"
             } elseif ($extOk -and $aliasOk -and $bgHealthy) {
                 $detail = if ($verdict -eq 'closed') {
                     "External observers reported TCP ${target}:31982 closed. Check the router's TCP 31982 forwarding to this VM."
-                } else { "External TCP verification is unavailable; outside reachability remains unverified." }
+                } else { "External TCP check unavailable. Check reachability from another network." }
                 $steps[$steps.Count - 1] = New-DunePublicIpStepResult 'verify' 'Verify external IP + RabbitMQ port' 'warning' "$detail Server network and battlegroup reconciliation succeeded." $rawVerify
             } else {
                 throw "Server reconciliation is incomplete. Node ExternalIP=$extIp; external TCP result=$verdict. Retry Server Health after startup."

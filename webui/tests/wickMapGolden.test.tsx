@@ -74,13 +74,13 @@ describe('Deep Desert atlas golden fixture', () => {
     expect(seed.pois).not.toEqual(data.seeds.find(s => s.seed === 11)!.pois)
   })
 
-  it('keeps every marker visible by default with attribution and keyboard/touch-accessible detail', async () => {
+  it('keeps every marker visible by default with keyboard/touch-accessible detail', async () => {
     const user = userEvent.setup()
     render(<WickMaps embedded />)
 
     expect(screen.getByText('40 of 40 POIs')).toBeInTheDocument()
-    expect(screen.getByText('Wick')).toBeInTheDocument()
-    expect(screen.getByText('DrkShrk')).toBeInTheDocument()
+    expect(screen.queryByText('Source')).not.toBeInTheDocument()
+    expect(screen.queryByText('DrkShrk')).not.toBeInTheDocument()
 
     const marker = screen.getAllByRole('button', { name: / — [A-I][1-9]$/ })[0]
     marker.focus()

@@ -1,6 +1,7 @@
 {
   "schemaVersion": 1,
   "writeLifecycleBySource": {
+    "Atlas.ps1": "reversible-write",
     "SoloDeck.ps1": "transactional-write",
     "SoloMods.ps1": "reversible-write",
     "RegisTanks.ps1": "transactional-write",
@@ -148,6 +149,7 @@
     "ws CONNECT /ws/terminal": "host.powershell.execute"
   },
   "groups": [
+    {"source": "Atlas.ps1", "capabilityId": "map.observer", "routeCount": 4, "sha256": "e6c5c95b2c67d97cba40e9cc7c4563bf1759221514a8626e6db9906c409045e9"},
     {"source":"RegisTanks.ps1","capabilityId":"settings.game-server","routeCount":4,"sha256":"d4501a5bfba582aa8dabbbf09f6efcbbc2a2ec373e0e3fc9123466fe8323e92d"},
     {"source":"ServerIniBackups.ps1","capabilityId":"settings.game-server","routeCount":3,"sha256":"b0cc4165abd226d3c1484658180c0fcf7b7e1c8f15ee9bd29f57228d058ec1aa"},
     {"source": "PlayerPortal.ps1", "capabilityId": "platform.status", "routeCount": 1, "sha256": "13b7b6c67fa733839a522b53a6a79d1f6b3287286e83959f0227568d1ff55e9c"},
@@ -168,7 +170,7 @@
     { "source": "Diagnostics.ps1", "capabilityId": "operation.telemetry", "routeCount": 5, "sha256": "e590c47d747f8b1d05b5b362ad69ce2ae7f5d22fca5ba9089950b6fdc9b657d1" },
     { "source": "DuneAdminCache.ps1", "capabilityId": "platform.status", "routeCount": 2, "sha256": "b1f6e2c598167428954ab14e7176a7947a83a3990e2fffd4ccba80f3ece8adc2" },
     { "source": "FlsToken.ps1", "capabilityId": "settings.connectivity", "routeCount": 3, "sha256": "5dbda64c9121b306d6d6f3487aef4e6f630a73beba73d0067baa14373237f2bb" },
-    {"source":"GameConfig.ps1","capabilityId":"settings.game-server","routeCount":33,"sha256":"611ff2eb693ed401c8663eba6df67ac3122816830da2a845ea213ebb89b28774"},
+    {"source":"GameConfig.ps1","capabilityId":"settings.game-server","routeCount":35,"sha256":"fa81ef7f5ee6157115466ed77aef91c8e1f14b3c89cfc2890a30132933f22c9d"},
     { "source": "Gameplay.ps1", "capabilityId": "economy.market", "routeCount": 22, "sha256": "757d3fd58fe70e88c5ccc91b9549e8f9a121b9137c1a2c16cd574c271c46e258" },
     { "source": "GameplayPlayers.ps1", "capabilityId": "player.manage", "routeCount": 32, "sha256": "273a4061bd3f23dc40ee3094c186f7df7cf94dd2ce169a63876d9d966cef5378" },
     { "source": "GameplayWorld.ps1", "capabilityId": "base.manage", "routeCount": 13, "sha256": "4c6dcb579d2a5fab1ef37a5fb84d399e493ea079e14994cdc56bbafaa56f9fc6" },

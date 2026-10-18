@@ -49,6 +49,13 @@ export function hasUsableToken(): boolean {
   return false
 }
 
+/** Same-origin navigations cannot attach the API header; account cookies also work. */
+export function authenticatedApiNavigation(path: string): string {
+  if (!path.startsWith('/api/') || path.includes('?') || path.includes('#')) throw new Error('Invalid API navigation')
+  const token = getToken()
+  return token ? `${path}?t=${encodeURIComponent(token)}` : path
+}
+
 export class ApiError extends Error {
   status: number
   body?: unknown

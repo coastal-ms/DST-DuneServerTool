@@ -44,7 +44,7 @@ describe('Experimental twilight lock field-test harness', () => {
 
     render(<TimeOfDayLockPanel vmRunning />)
 
-    await waitFor(() => expect(screen.getByLabelText('Candidate phase value')).toHaveValue('4.0'))
+    await waitFor(() => expect(screen.getByLabelText('Time of day phase')).toHaveValue('4.0'))
     expect(screen.getByText(/Installed UserGame.ini: m_StartTime=4.0; m_bTimeOfDayEnabled=False/)).toBeInTheDocument()
   })
 
@@ -61,8 +61,8 @@ describe('Experimental twilight lock field-test harness', () => {
 
     render(<TimeOfDayLockPanel vmRunning />)
 
-    await waitFor(() => expect(screen.getByLabelText('Candidate phase value')).toHaveValue(''))
-    expect(screen.getByRole('button', { name: 'Back up & stage candidate' })).toBeDisabled()
+    await waitFor(() => expect(screen.getByLabelText('Time of day phase')).toHaveValue(''))
+    expect(screen.getByRole('button', { name: 'Set time of day' })).toBeDisabled()
   })
 
   it('stages only bounded candidates after confirmation and explains the experiment', async () => {
@@ -94,10 +94,10 @@ describe('Experimental twilight lock field-test harness', () => {
     })
     render(<TimeOfDayLockPanel vmRunning />)
 
-    expect(await screen.findByText('Field-verified phases')).toBeInTheDocument()
-    expect(screen.getByText(/Live testing verified sunset, twilight/)).toBeInTheDocument()
-    expect(screen.getByText(/DST does not modify client INIs/)).toBeInTheDocument()
-    expect(screen.getByText(/crafting timers continue/)).toBeInTheDocument()
+    expect(await screen.findByText('Hold the server at the selected time of day.')).toBeInTheDocument()
+    expect(screen.queryByText(/Field-verified|simulation-safety|minute checklist/)).not.toBeInTheDocument()
+    expect(screen.getByText(/Changes apply to the server INI/)).toBeInTheDocument()
+    expect(screen.getByText(/Apply server settings after saving/)).toBeInTheDocument()
     expect(screen.getAllByRole('option').map(option => option.getAttribute('value'))).toEqual([
       '',
       '18.0',
@@ -106,8 +106,8 @@ describe('Experimental twilight lock field-test harness', () => {
       '21.0',
       '4.0',
     ])
-    await user.selectOptions(screen.getByLabelText('Candidate phase value'), '18.0')
-    await user.click(screen.getByRole('button', { name: 'Back up & stage candidate' }))
+    await user.selectOptions(screen.getByLabelText('Time of day phase'), '18.0')
+    await user.click(screen.getByRole('button', { name: 'Set time of day' }))
 
     expect(api.stage).toHaveBeenCalledWith('18.0')
     expect(await screen.findByText(/Candidate staged/)).toBeInTheDocument()
@@ -134,7 +134,7 @@ describe('Experimental twilight lock field-test harness', () => {
       message: 'Normal cycle restored.',
     })
     render(<TimeOfDayLockPanel vmRunning />)
-    await screen.findByText('Field-verified phases')
+    await screen.findByText('Hold the server at the selected time of day.')
 
     await user.click(screen.getByRole('button', { name: 'Restore normal cycle' }))
 
@@ -153,7 +153,7 @@ describe('Experimental twilight lock field-test harness', () => {
       minimumObservationMinutes: 30,
     })
     render(<TimeOfDayLockPanel vmRunning={false} />)
-    await waitFor(() => expect(screen.getByRole('button', { name: 'Back up & stage candidate' })).toBeDisabled())
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Set time of day' })).toBeDisabled())
     expect(screen.getByText(/Start the server VM/)).toBeInTheDocument()
     expect(EXPERIMENTAL_BLOCKED_DEFAULT_TARGETS).toContain(
       'game||/script/dunesandbox.timeofdaysettings||m_starttime',

@@ -23,6 +23,7 @@ export function GameplayAdminShell({
   const search = useSearch()
   const hash = useHash()
   const active = activeSection ?? resolveGameplaySection(pathname, search)
+  const liveMap = active === 'map' && new URLSearchParams(search).get('view') === 'live'
 
   useEffect(() => {
     rememberGameplayDestination(`${pathname}${search ? `?${search}` : ''}${hash}`)
@@ -51,7 +52,7 @@ export function GameplayAdminShell({
 
   return (
     <div className="min-w-0 max-w-full" data-gameplay-admin-shell>
-      {(!contextual || active === 'overview') && <div className="mb-4 flex min-w-0 items-center gap-3 border-b border-border pb-3">
+      {!liveMap && (!contextual || active === 'overview') && <div className="mb-4 flex min-w-0 items-center gap-3 border-b border-border pb-3">
         <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-accent/25 bg-accent/10 text-accent-bright">
           <Icon name="Gamepad2" size={20} />
         </span>
@@ -60,14 +61,14 @@ export function GameplayAdminShell({
             ? <h1 className="text-xl font-semibold text-text">Gameplay Admin</h1>
             : <div className="text-sm font-semibold uppercase tracking-wider text-accent-bright">Gameplay Admin</div>}
           <p className="text-sm text-text-muted">
-            In-world players, bases, vehicles, maps, and economy
+            In-world players, bases, vehicles, and economy
           </p>
         </div>
       </div>}
 
       <nav
         aria-label="Gameplay Admin sections"
-        className="-mx-3 mb-5 max-w-full overflow-x-auto overscroll-x-contain border-b border-border px-3 touch-pan-x [scrollbar-width:none] sm:mx-0 sm:px-0 [&::-webkit-scrollbar]:hidden"
+        className={`${liveMap ? 'mb-2' : 'mb-5'} -mx-3 max-w-full overflow-x-auto overscroll-x-contain border-b border-border px-3 touch-pan-x [scrollbar-width:none] sm:mx-0 sm:px-0 [&::-webkit-scrollbar]:hidden`}
       >
         <div className="flex min-w-max items-center gap-1">
           {GAMEPLAY_DESTINATIONS.map(destination => {

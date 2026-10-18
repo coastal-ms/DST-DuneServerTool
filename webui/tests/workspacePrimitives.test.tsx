@@ -137,7 +137,7 @@ describe('workspace presentation primitives', () => {
     expect(navigation.firstElementChild).toHaveClass('min-w-max')
     expect(container.querySelector('aside')).toBeNull()
     expect(screen.getByRole('link', { name: 'Players' })).toHaveAttribute('aria-current', 'page')
-    expect(screen.getByRole('link', { name: 'Map' })).toHaveAttribute('href', '/map')
+    expect(screen.queryByRole('link', { name: 'Map' })).not.toBeInTheDocument()
     expect(screen.getByRole('link', { name: 'Economy' })).toHaveAttribute('href', '/economy')
     expect(screen.getAllByRole('link').filter(link => link.hasAttribute('aria-current'))).toHaveLength(1)
     for (const link of screen.getAllByRole('link')) expect(link).toHaveClass('min-h-11')

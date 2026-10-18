@@ -32,7 +32,7 @@ describe('SoloCosmeticGrantCard', () => {
     expect(screen.getByRole('button', { name: 'All Dyes (0 missing)' })).toBeDisabled()
     await user.selectOptions(screen.getByRole('combobox'), 'ChoamSet')
     expect(screen.getByRole('button', { name: 'Grant unlock' })).toBeEnabled()
-    expect(screen.getByText(/Unlock record saved; in-game usability is unverified/)).toBeInTheDocument()
+    expect(screen.getByText(/Unlock record saved./)).toBeInTheDocument()
     await user.selectOptions(screen.getByRole('combobox'), 'Dye')
     expect(screen.getByRole('button', { name: 'Grant unlock' })).toBeEnabled()
     expect(screen.getByText(/Unlock token already held in inventory/)).toBeInTheDocument()

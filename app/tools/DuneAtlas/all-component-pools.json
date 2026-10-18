@@ -1,0 +1,2007 @@
+[
+  {
+    "name": "_ZTV14TComponentPoolI24TSpatialHashMapComponentIL13ESpatialGroup28EEE",
+    "value": 359534080,
+    "size": 1208
+  },
+  {
+    "name": "_ZTV14TComponentPoolI29FTotemProximityCheckComponentE",
+    "value": 365060424,
+    "size": 1208
+  },
+  {
+    "name": "_ZTV14TComponentPoolI14TStatGroupDataI18FContractItemStatsEE",
+    "value": 363736616,
+    "size": 1208
+  },
+  {
+    "name": "_ZTV14TComponentPoolI31FRotationLinkedToOwnerComponentE",
+    "value": 364714688,
+    "size": 1208
+  },
+  {
+    "name": "_ZTV14TComponentPoolI24FGameItemsGiverComponentE",
+    "value": 364198416,
+    "size": 1208
+  },
+  {
+    "name": "_ZTV14TComponentPoolI22FSoundEmitterComponentE",
+    "value": 361189840,
+    "size": 1208
+  },
+  {
+    "name": "_ZTV14TComponentPoolI17TSpatialComponentIL13ESpatialGroup7EEE",
+    "value": 359517816,
+    "size": 1208
+  },
+  {
+    "name": "_ZTV14TComponentPoolI25FFacingDirectionComponentE",
+    "value": 364104512,
+    "size": 1208
+  },
+  {
+    "name": "_ZTV14TComponentPoolI24FStaticFireModeComponentE",
+    "value": 364140936,
+    "size": 1208
+  },
+  {
+    "name": "_ZTV14TComponentPoolI14TStatGroupDataI19FBuildableItemStatsEE",
+    "value": 363514712,
+    "size": 1208
+  },
+  {
+    "name": "_ZTV14TComponentPoolI23FItemInventoryComponentE",
+    "value": 374780648,
+    "size": 1208
+  },
+  {
+    "name": "_ZTV14TComponentPoolI22FRequestInstallNavGridE",
+    "value": 364703080,
+    "size": 1208
+  },
+  {
+    "name": "_ZTV14TComponentPoolIN8AISensor20FNoiseEventComponentEE",
+    "value": 366139776,
+    "size": 1208
+  },
+  {
+    "name": "_ZTV14TComponentPoolI32FRadialScannerSingletonComponentE",
+    "value": 364696872,
+    "size": 1208
+  },
+  {
+    "name": "_ZTV14TComponentPoolI17TSpatialComponentIL13ESpatialGroup10EEE",
+    "value": 359512416,
+    "size": 1208
+  },
+  {
+    "name": "_ZTV14TComponentPoolI17FDynamicNavConfigE",
+    "value": 364051608,
+    "size": 1208
+  },
+  {
+    "name": "_ZTV14TComponentPoolI14TStatGroupDataI20FMultiSchematicStatsEE",
+    "value": 370244880,
+    "size": 1208
+  },
+  {
+    "name": "_ZTV14TComponentPoolI21FPopupWidgetComponentE",
+    "value": 368520848,
+    "size": 1208
+  },
+  {
+    "name": "_ZTV14TComponentPoolI25FCharacterLayoutComponentE",
+    "value": 363653416,
+    "size": 1208
+  },
+  {
+    "name": "_ZTV14TComponentPoolI28FPentashieldAndDoorComponentE",
+    "value": 364563968,
+    "size": 1208
+  },
+  {
+    "name": "_ZTV14TComponentPoolI23FFlyingVehicleComponentE",
+    "value": 364147296,
+    "size": 1208
+  },
+  {
+    "name": "_ZTV14TComponentPoolI24TSpatialHashMapComponentIL13ESpatialGroup1EEE",
+    "value": 359582872,
+    "size": 1208
+  },
+  {
+    "name": "_ZTV14TComponentPoolI34FElodStatCounterSingletonComponentE",
+    "value": 364065584,
+    "size": 1208
+  },
+  {
+    "name": "_ZTV14TComponentPoolI14TStatGroupDataI22FClothingColdnessStatsEE",
+    "value": 363689320,
+    "size": 1208
+  },
+  {
+    "name": "_ZTV14TComponentPoolI20FSplineAreaComponentE",
+    "value": 361200560,
+    "size": 1208
+  },
+  {
+    "name": "_ZTV14TComponentPoolI34FDelayedCommuninetMessageComponentE",
+    "value": 363892080,
+    "size": 1208
+  },
+  {
+    "name": "_ZTV14TComponentPoolI21FWeaponEquipComponentE",
+    "value": 365242496,
+    "size": 1208
+  },
+  {
+    "name": "_ZTV14TComponentPoolI17TSpatialComponentIL13ESpatialGroup24EEE",
+    "value": 359487216,
+    "size": 1208
+  },
+  {
+    "name": "_ZTV14TComponentPoolI34FPlaceableEmulatedWorkingComponentE",
+    "value": 364600104,
+    "size": 1208
+  },
+  {
+    "name": "_ZTV14TComponentPoolI17TSpatialComponentIL13ESpatialGroup16EEE",
+    "value": 359501616,
+    "size": 1208
+  },
+  {
+    "name": "_ZTV14TComponentPoolI14TStatGroupDataI11FDrinkStatsEE",
+    "value": 363946008,
+    "size": 1208
+  },
+  {
+    "name": "_ZTV14TComponentPoolIN22FFglSchedulerFrameBaseI27FAudioAmbientActorSchedulerE19FSingletonComponentEE",
+    "value": 361185280,
+    "size": 1208
+  },
+  {
+    "name": "_ZTV14TComponentPoolI18FPositionComponentE",
+    "value": 364649136,
+    "size": 1208
+  },
+  {
+    "name": "_ZTV14TComponentPoolI24TSpatialHashMapComponentIL13ESpatialGroup7EEE",
+    "value": 359572072,
+    "size": 1208
+  },
+  {
+    "name": "_ZTV14TComponentPoolI29FSandStormDamageableComponentE",
+    "value": 364718856,
+    "size": 1208
+  },
+  {
+    "name": "_ZTV14TComponentPoolI29FAudioBiomeSingletonComponentE",
+    "value": 363419664,
+    "size": 1208
+  },
+  {
+    "name": "_ZTV14TComponentPoolI30FDeferredAbilityEquipComponentE",
+    "value": 363888152,
+    "size": 1208
+  },
+  {
+    "name": "_ZTV14TComponentPoolI28FDamageImmunityHitsComponentE",
+    "value": 369612256,
+    "size": 1208
+  },
+  {
+    "name": "_ZTV14TComponentPoolI38FGadgetAbilityShortcutsActionComponentE",
+    "value": 364194576,
+    "size": 1208
+  },
+  {
+    "name": "_ZTV14TComponentPoolI31FPlayerControllerAudioComponentE",
+    "value": 364641064,
+    "size": 1208
+  },
+  {
+    "name": "_ZTV14TComponentPoolI16FVendorComponentE",
+    "value": 365231248,
+    "size": 1208
+  },
+  {
+    "name": "_ZTV14TComponentPoolI25FAggroControllerComponentE",
+    "value": 363370128,
+    "size": 1208
+  },
+  {
+    "name": "_ZTV14TComponentPoolI22FCameraSystemComponentE",
+    "value": 363608368,
+    "size": 1208
+  },
+  {
+    "name": "_ZTV14TComponentPoolI14TStatGroupDataI23FAugmentStaticItemStatsEE",
+    "value": 363468736,
+    "size": 1208
+  },
+  {
+    "name": "_ZTV14TComponentPoolI28FCircuitElementBaseComponentE",
+    "value": 363687280,
+    "size": 1208
+  },
+  {
+    "name": "_ZTV14TComponentPoolI24FWeaponOwnerADSComponentE",
+    "value": 365297472,
+    "size": 1208
+  },
+  {
+    "name": "_ZTV14TComponentPoolI16FShieldComponentE",
+    "value": 364839560,
+    "size": 1208
+  },
+  {
+    "name": "_ZTV14TComponentPoolI25FDownedCharacterComponentE",
+    "value": 363938688,
+    "size": 1208
+  },
+  {
+    "name": "_ZTV14TComponentPoolI24TSpatialHashMapComponentIL13ESpatialGroup21EEE",
+    "value": 359546872,
+    "size": 1208
+  },
+  {
+    "name": "_ZTV14TComponentPoolI29FAudioEventSubtitlesComponentE",
+    "value": 361162840,
+    "size": 1208
+  },
+  {
+    "name": "_ZTV14TComponentPoolI38FDamageableActorComponentInitComponentE",
+    "value": 363874928,
+    "size": 1208
+  },
+  {
+    "name": "_ZTV14TComponentPoolI29FVehicleInputHistoryComponentE",
+    "value": 365147280,
+    "size": 1208
+  },
+  {
+    "name": "_ZTV14TComponentPoolI24TSpatialHashMapComponentIL13ESpatialGroup13EEE",
+    "value": 359561272,
+    "size": 1208
+  },
+  {
+    "name": "_ZTV14TComponentPoolI14TStatGroupDataI19FContainerItemStatsEE",
+    "value": 363730320,
+    "size": 1208
+  },
+  {
+    "name": "_ZTV14TComponentPoolI28FReferenceItemStatsComponentE",
+    "value": 374782688,
+    "size": 1208
+  },
+  {
+    "name": "_ZTV14TComponentPoolI36FAudioAmbientRulesSingletonComponentE",
+    "value": 361150408,
+    "size": 1208
+  },
+  {
+    "name": "_ZTV14TComponentPoolI24FTotemLandclaimComponentE",
+    "value": 365058384,
+    "size": 1208
+  },
+  {
+    "name": "_ZTV14TComponentPoolI24FDeathAndDefeatComponentE",
+    "value": 363885544,
+    "size": 1208
+  },
+  {
+    "name": "_ZTV14TComponentPoolI17TSpatialComponentIL13ESpatialGroup0EEE",
+    "value": 359530416,
+    "size": 1208
+  },
+  {
+    "name": "_ZTV14TComponentPoolI24FCharacterStateComponentE",
+    "value": 363656744,
+    "size": 1208
+  },
+  {
+    "name": "_ZTV14TComponentPoolI14TStatGroupDataI16FWeaponItemStatsEE",
+    "value": 365256296,
+    "size": 1208
+  },
+  {
+    "name": "_ZTV14TComponentPoolI24TSpatialHashMapComponentIL13ESpatialGroup27EEE",
+    "value": 359535944,
+    "size": 1208
+  },
+  {
+    "name": "_ZTV14TComponentPoolI35FInteractionInputSingletonComponentE",
+    "value": 364314352,
+    "size": 1208
+  },
+  {
+    "name": "_ZTV14TComponentPoolI24TSpatialHashMapComponentIL13ESpatialGroup19EEE",
+    "value": 359550472,
+    "size": 1208
+  },
+  {
+    "name": "_ZTV14TComponentPoolI14TStatGroupDataI19FAugmentedItemStatsEE",
+    "value": 363432232,
+    "size": 1208
+  },
+  {
+    "name": "_ZTV14TComponentPoolI20FHazardZoneComponentE",
+    "value": 364256464,
+    "size": 1208
+  },
+  {
+    "name": "_ZTV14TComponentPoolI25FTotemBuildablesComponentE",
+    "value": 365048456,
+    "size": 1208
+  },
+  {
+    "name": "_ZTV14TComponentPoolI29FBloodWaterExtractorComponentE",
+    "value": 363484184,
+    "size": 1208
+  },
+  {
+    "name": "_ZTV14TComponentPoolI16FTurretComponentE",
+    "value": 365086288,
+    "size": 1208
+  },
+  {
+    "name": "_ZTV14TComponentPoolI25FThreatTerritoryComponentE",
+    "value": 375906168,
+    "size": 1208
+  },
+  {
+    "name": "_ZTV14TComponentPoolI17TSpatialComponentIL13ESpatialGroup6EEE",
+    "value": 359519616,
+    "size": 1208
+  },
+  {
+    "name": "_ZTV14TComponentPoolI14TStatGroupDataI17FAugmentItemStatsEE",
+    "value": 363434752,
+    "size": 1208
+  },
+  {
+    "name": "_ZTV14TComponentPoolIN33FAudioObjectAudibleRangeScheduler19FSingletonComponentEE",
+    "value": 361259936,
+    "size": 1208
+  },
+  {
+    "name": "_ZTV14TComponentPoolI26FPlayerCommuninetComponentE",
+    "value": 364638896,
+    "size": 1208
+  },
+  {
+    "name": "_ZTV14TComponentPoolI24FTimeOfDayLightComponentE",
+    "value": 365015768,
+    "size": 1208
+  },
+  {
+    "name": "_ZTV14TComponentPoolI15FArmorComponentE",
+    "value": 363414600,
+    "size": 1208
+  },
+  {
+    "name": "_ZTV14TComponentPoolI43FCharacterDurabilityLossAttributesComponentE",
+    "value": 363649576,
+    "size": 1208
+  },
+  {
+    "name": "_ZTV14TComponentPoolI14TStatGroupDataI16FShieldItemStatsEE",
+    "value": 364842080,
+    "size": 1208
+  },
+  {
+    "name": "_ZTV14TComponentPoolI38FAudioSortedRequestsSingletonComponentE",
+    "value": 361179160,
+    "size": 1208
+  },
+  {
+    "name": "_ZTV14TComponentPoolI35FImmediatePhysicsTransformComponentE",
+    "value": 364305064,
+    "size": 1208
+  },
+  {
+    "name": "_ZTV14TComponentPoolI14TStatGroupDataI15FEmoteItemStatsEE",
+    "value": 364067384,
+    "size": 1208
+  },
+  {
+    "name": "_ZTV14TComponentPoolI28FWeaponSwapFireModeComponentE",
+    "value": 365246096,
+    "size": 1208
+  },
+  {
+    "name": "_ZTV14TComponentPoolI24FDamageImmunityComponentE",
+    "value": 369610456,
+    "size": 1208
+  },
+  {
+    "name": "_ZTV14TComponentPoolIN22FFglSchedulerFrameBaseI24FAudioOcclusionSchedulerE19FSchedulerComponentEE",
+    "value": 361268184,
+    "size": 1208
+  },
+  {
+    "name": "_ZTV14TComponentPoolI28FSpatialAudioVolumeComponentE",
+    "value": 361191880,
+    "size": 1208
+  },
+  {
+    "name": "_ZTV14TComponentPoolI24TSpatialHashMapComponentIL13ESpatialGroup0EEE",
+    "value": 359584672,
+    "size": 1208
+  },
+  {
+    "name": "_ZTV14TComponentPoolI22FShelterTimerComponentE",
+    "value": 364837760,
+    "size": 1208
+  },
+  {
+    "name": "_ZTV14TComponentPoolI23FVehicleDriverComponentE",
+    "value": 365133392,
+    "size": 1208
+  },
+  {
+    "name": "_ZTV14TComponentPoolI17TSpatialComponentIL13ESpatialGroup23EEE",
+    "value": 359489016,
+    "size": 1208
+  },
+  {
+    "name": "_ZTV14TComponentPoolI28FBiomeDataSingletonComponentE",
+    "value": 363475784,
+    "size": 1208
+  },
+  {
+    "name": "_ZTV14TComponentPoolI17TSpatialComponentIL13ESpatialGroup15EEE",
+    "value": 359503416,
+    "size": 1208
+  },
+  {
+    "name": "_ZTV14TComponentPoolI29FAudioRtpcNpcCounterComponentE",
+    "value": 363423744,
+    "size": 1208
+  },
+  {
+    "name": "_ZTV14TComponentPoolI28FAimAssistSingletonComponentE",
+    "value": 363372736,
+    "size": 1208
+  },
+  {
+    "name": "_ZTV14TComponentPoolI29FHydrationEnabledTagComponentE",
+    "value": 364263632,
+    "size": 1208
+  },
+  {
+    "name": "_ZTV14TComponentPoolI35FDeferredItemDeteriorationComponentE",
+    "value": 364360160,
+    "size": 1208
+  },
+  {
+    "name": "_ZTV14TComponentPoolI28FPlaceableStormDataComponentE",
+    "value": 364602712,
+    "size": 1208
+  },
+  {
+    "name": "_ZTV14TComponentPoolI27FSecurityZoneTimerComponentE",
+    "value": 364780040,
+    "size": 1208
+  },
+  {
+    "name": "_ZTV14TComponentPoolI24TSpatialHashMapComponentIL13ESpatialGroup6EEE",
+    "value": 359573872,
+    "size": 1208
+  },
+  {
+    "name": "_ZTV14TComponentPoolI17FNavGridComponentE",
+    "value": 364484280,
+    "size": 1208
+  },
+  {
+    "name": "_ZTV14TComponentPoolI18FBuildingComponentE",
+    "value": 363563504,
+    "size": 1208
+  },
+  {
+    "name": "_ZTV14TComponentPoolI22FWaterStorageComponentE",
+    "value": 365238656,
+    "size": 1208
+  },
+  {
+    "name": "_ZTV14TComponentPoolI17TSpatialComponentIL13ESpatialGroup29EEE",
+    "value": 359478152,
+    "size": 1208
+  },
+  {
+    "name": "_ZTV14TComponentPoolI24FSpiceAddictionComponentE",
+    "value": 364892440,
+    "size": 1208
+  },
+  {
+    "name": "_ZTV14TComponentPoolI36FClientCommuninetActionDataComponentE",
+    "value": 363701760,
+    "size": 1208
+  },
+  {
+    "name": "_ZTV14TComponentPoolI29FOvermapPawnMovementComponentE",
+    "value": 375386648,
+    "size": 1208
+  },
+  {
+    "name": "_ZTV14TComponentPoolI45FFBiomeAssignmentProcessor_SingletonComponentE",
+    "value": 376377488,
+    "size": 1208
+  },
+  {
+    "name": "_ZTV14TComponentPoolI14TStatGroupDataI19FDeteriorationStatsEE",
+    "value": 363895776,
+    "size": 1208
+  },
+  {
+    "name": "_ZTV14TComponentPoolI31FImmediatePhysicsChildComponentE",
+    "value": 364303264,
+    "size": 1208
+  },
+  {
+    "name": "_ZTV14TComponentPoolI20FProjectileComponentE",
+    "value": 364655976,
+    "size": 1208
+  },
+  {
+    "name": "_ZTV14TComponentPoolI16FHazardComponentE",
+    "value": 364252144,
+    "size": 1208
+  },
+  {
+    "name": "_ZTV14TComponentPoolI42FElodInvokerSpatialIndexSingletonComponentE",
+    "value": 364061984,
+    "size": 1208
+  },
+  {
+    "name": "_ZTV14TComponentPoolI27FWeaponOwnerReloadComponentE",
+    "value": 365288472,
+    "size": 1208
+  },
+  {
+    "name": "_ZTV14TComponentPoolI24TSpatialHashMapComponentIL13ESpatialGroup20EEE",
+    "value": 359548672,
+    "size": 1208
+  },
+  {
+    "name": "_ZTV14TComponentPoolI39FVehicleModuleStatsPersistenceComponentE",
+    "value": 365183624,
+    "size": 1208
+  },
+  {
+    "name": "_ZTV14TComponentPoolI24TSpatialHashMapComponentIL13ESpatialGroup12EEE",
+    "value": 359563072,
+    "size": 1208
+  },
+  {
+    "name": "_ZTV14TComponentPoolI14TStatGroupDataI19FSolidFuelItemStatsEE",
+    "value": 364888872,
+    "size": 1208
+  },
+  {
+    "name": "_ZTV14TComponentPoolI20FAmmoSourceComponentE",
+    "value": 363384584,
+    "size": 1208
+  },
+  {
+    "name": "_ZTV14TComponentPoolI29FBuildingModuleOwnerComponentE",
+    "value": 363570192,
+    "size": 1208
+  },
+  {
+    "name": "_ZTV14TComponentPoolI34FWeaponOwnerEquipFavoriteComponentE",
+    "value": 365295672,
+    "size": 1208
+  },
+  {
+    "name": "_ZTV14TComponentPoolI14TStatGroupDataI29FVehicleModuleDurabilityStatsEE",
+    "value": 365180536,
+    "size": 1208
+  },
+  {
+    "name": "_ZTV14TComponentPoolI14TStatGroupDataI16FSinkchartsStatsEE",
+    "value": 364847384,
+    "size": 1208
+  },
+  {
+    "name": "_ZTV14TComponentPoolI40FInstancedHarvestablesSingletonComponentE",
+    "value": 364309616,
+    "size": 1208
+  },
+  {
+    "name": "_ZTV14TComponentPoolI19FHitResultComponentE",
+    "value": 364259704,
+    "size": 1208
+  },
+  {
+    "name": "_ZTV14TComponentPoolI22FWeaponReloadComponentE",
+    "value": 365247896,
+    "size": 1208
+  },
+  {
+    "name": "_ZTV14TComponentPoolI24TSpatialHashMapComponentIL13ESpatialGroup26EEE",
+    "value": 359537744,
+    "size": 1208
+  },
+  {
+    "name": "_ZTV14TComponentPoolIN22FFglSchedulerFrameBaseI27FAudioAmbientActorSchedulerE19FSchedulerComponentEE",
+    "value": 361187080,
+    "size": 1208
+  },
+  {
+    "name": "_ZTV14TComponentPoolI24TSpatialHashMapComponentIL13ESpatialGroup18EEE",
+    "value": 359552272,
+    "size": 1208
+  },
+  {
+    "name": "_ZTV14TComponentPoolI19FBuildableComponentE",
+    "value": 363510728,
+    "size": 1208
+  },
+  {
+    "name": "_ZTV14TComponentPoolI14TStatGroupDataI23FCustomizationItemStatsEE",
+    "value": 363831648,
+    "size": 1208
+  },
+  {
+    "name": "_ZTV14TComponentPoolI34FOrnithopterEffectsDriverComponentE",
+    "value": 364526296,
+    "size": 1208
+  },
+  {
+    "name": "_ZTV14TComponentPoolI35FLongRangeScannerSingletonComponentE",
+    "value": 364434200,
+    "size": 1208
+  },
+  {
+    "name": "_ZTV14TComponentPoolI14TStatGroupDataI24FContractRewardItemStatsEE",
+    "value": 363764616,
+    "size": 1208
+  },
+  {
+    "name": "_ZTV14TComponentPoolI50FDatabaseVehicleModuleOperationsSingletonComponentE",
+    "value": 363883744,
+    "size": 1208
+  },
+  {
+    "name": "_ZTV14TComponentPoolI39FElodInvokerRemoveSpatialIndexComponentE",
+    "value": 364060184,
+    "size": 1208
+  },
+  {
+    "name": "_ZTV14TComponentPoolI17TSpatialComponentIL13ESpatialGroup5EEE",
+    "value": 359521416,
+    "size": 1208
+  },
+  {
+    "name": "_ZTV14TComponentPoolI31FVehiclePowerTelemetryComponentE",
+    "value": 365187552,
+    "size": 1208
+  },
+  {
+    "name": "_ZTV14TComponentPoolI22FGameItemBuffComponentE",
+    "value": 364196376,
+    "size": 1208
+  },
+  {
+    "name": "_ZTV14TComponentPoolI21FWindShelterComponentE",
+    "value": 365306616,
+    "size": 1208
+  },
+  {
+    "name": "_ZTV14TComponentPoolI28FVehicleClientErrorComponentE",
+    "value": 365126704,
+    "size": 1208
+  },
+  {
+    "name": "_ZTV14TComponentPoolI17FGmeUserComponentE",
+    "value": 377075376,
+    "size": 1208
+  },
+  {
+    "name": "_ZTV14TComponentPoolI30FCharacterPostProcessComponentE",
+    "value": 363616096,
+    "size": 1208
+  },
+  {
+    "name": "_ZTV14TComponentPoolI30FTrainingModuleSetterComponentE",
+    "value": 375586024,
+    "size": 1208
+  },
+  {
+    "name": "_ZTV14TComponentPoolI30FFuelPoweredPlaceableComponentE",
+    "value": 364154400,
+    "size": 1208
+  },
+  {
+    "name": "_ZTV14TComponentPoolI20FFlyBySoundComponentE",
+    "value": 364145256,
+    "size": 1208
+  },
+  {
+    "name": "_ZTV14TComponentPoolI17TSpatialComponentIL13ESpatialGroup22EEE",
+    "value": 359490816,
+    "size": 1208
+  },
+  {
+    "name": "_ZTV14TComponentPoolI24FVehicleLoadoutComponentE",
+    "value": 365149080,
+    "size": 1208
+  },
+  {
+    "name": "_ZTV14TComponentPoolI17TSpatialComponentIL13ESpatialGroup14EEE",
+    "value": 359505216,
+    "size": 1208
+  },
+  {
+    "name": "_ZTV14TComponentPoolI37FDamageableActorAddMaxHealthComponentE",
+    "value": 363876728,
+    "size": 1208
+  },
+  {
+    "name": "_ZTV14TComponentPoolI31FAudioTriggeredEmitterComponentE",
+    "value": 361183240,
+    "size": 1208
+  },
+  {
+    "name": "_ZTV14TComponentPoolIN22FFglSchedulerFrameBaseI32FGenerateWaterInCircuitSchedulerE19FSingletonComponentEE",
+    "value": 367079144,
+    "size": 1208
+  },
+  {
+    "name": "_ZTV14TComponentPoolI21FPersistenceComponentE",
+    "value": 364107360,
+    "size": 1208
+  },
+  {
+    "name": "_ZTV14TComponentPoolI31FDamageVisualLogConfigComponentE",
+    "value": 369361568,
+    "size": 1208
+  },
+  {
+    "name": "_ZTV14TComponentPoolI24TSpatialHashMapComponentIL13ESpatialGroup5EEE",
+    "value": 359575672,
+    "size": 1208
+  },
+  {
+    "name": "_ZTV14TComponentPoolI23FAimAssistAreaComponentE",
+    "value": 363374536,
+    "size": 1208
+  },
+  {
+    "name": "_ZTV14TComponentPoolIN8AISensor27FPerceptionTargetsComponentEE",
+    "value": 366137976,
+    "size": 1208
+  },
+  {
+    "name": "_ZTV14TComponentPoolI15FWheelComponentE",
+    "value": 365302536,
+    "size": 1208
+  },
+  {
+    "name": "_ZTV14TComponentPoolI18FXPBufferComponentE",
+    "value": 375582424,
+    "size": 1208
+  },
+  {
+    "name": "_ZTV14TComponentPoolI17TSpatialComponentIL13ESpatialGroup28EEE",
+    "value": 359480016,
+    "size": 1208
+  },
+  {
+    "name": "_ZTV14TComponentPoolI9FFireModeE",
+    "value": 364142736,
+    "size": 1208
+  },
+  {
+    "name": "_ZTV14TComponentPoolI24FWheeledVehicleComponentE",
+    "value": 365304576,
+    "size": 1208
+  },
+  {
+    "name": "_ZTV14TComponentPoolI27FSkillSpiceChangedComponentE",
+    "value": 375589624,
+    "size": 1208
+  },
+  {
+    "name": "_ZTV14TComponentPoolI19FAimOffsetComponentE",
+    "value": 363380504,
+    "size": 1208
+  },
+  {
+    "name": "_ZTV14TComponentPoolI43FItemDeteriorationGameThreadUpdateComponentE",
+    "value": 364356320,
+    "size": 1208
+  },
+  {
+    "name": "_ZTV14TComponentPoolI25FAimAssistTargetComponentE",
+    "value": 363378136,
+    "size": 1208
+  },
+  {
+    "name": "_ZTV14TComponentPoolI38FCritterSpawnExecuteSingletonComponentE",
+    "value": 363826912,
+    "size": 1208
+  },
+  {
+    "name": "_ZTV14TComponentPoolI32FAudioPlayerBaseEmitterComponentE",
+    "value": 363421704,
+    "size": 1208
+  },
+  {
+    "name": "_ZTV14TComponentPoolI14TStatGroupDataI15FWeaponModStatsEE",
+    "value": 365281936,
+    "size": 1208
+  },
+  {
+    "name": "_ZTV14TComponentPoolI31FProximityChatOutgoingComponentE",
+    "value": 364659576,
+    "size": 1208
+  },
+  {
+    "name": "_ZTV14TComponentPoolI27FServerVerifyMeleeComponentE",
+    "value": 364475016,
+    "size": 1208
+  },
+  {
+    "name": "_ZTV14TComponentPoolI28FUpdateFillableItemComponentE",
+    "value": 365088984,
+    "size": 1208
+  },
+  {
+    "name": "_ZTV14TComponentPoolI24TSpatialHashMapComponentIL13ESpatialGroup11EEE",
+    "value": 359564872,
+    "size": 1208
+  },
+  {
+    "name": "_ZTV14TComponentPoolI35FCommuninetMessageOverrideComponentE",
+    "value": 363704040,
+    "size": 1208
+  },
+  {
+    "name": "_ZTV14TComponentPoolI20FThreatScoreSettingsE",
+    "value": 365013488,
+    "size": 1208
+  },
+  {
+    "name": "_ZTV14TComponentPoolI21FElodInvokerComponentE",
+    "value": 364058384,
+    "size": 1208
+  },
+  {
+    "name": "_ZTV14TComponentPoolI21FPowerSourceComponentE",
+    "value": 364095784,
+    "size": 1208
+  },
+  {
+    "name": "_ZTV14TComponentPoolI36FVehicleEnteredWreckedStateComponentE",
+    "value": 365137232,
+    "size": 1208
+  },
+  {
+    "name": "_ZTV14TComponentPoolI19FCharacterComponentE",
+    "value": 363618136,
+    "size": 1208
+  },
+  {
+    "name": "_ZTV14TComponentPoolI19FPlaceableComponentE",
+    "value": 364597408,
+    "size": 1208
+  },
+  {
+    "name": "_ZTV14TComponentPoolI23FCutterayPulseComponentE",
+    "value": 363872432,
+    "size": 1208
+  },
+  {
+    "name": "_ZTV14TComponentPoolI29FVerifyProjectileHitComponentE",
+    "value": 364657776,
+    "size": 1208
+  },
+  {
+    "name": "_ZTV14TComponentPoolI25FCharacterSprintComponentE",
+    "value": 363614296,
+    "size": 1208
+  },
+  {
+    "name": "_ZTV14TComponentPoolI27FVehicleProtectionComponentE",
+    "value": 365190160,
+    "size": 1208
+  },
+  {
+    "name": "_ZTV14TComponentPoolI24TSpatialHashMapComponentIL13ESpatialGroup25EEE",
+    "value": 359539608,
+    "size": 1208
+  },
+  {
+    "name": "_ZTV14TComponentPoolI38FTotemCircuitWaterPendingRecalculationE",
+    "value": 365053496,
+    "size": 1208
+  },
+  {
+    "name": "_ZTV14TComponentPoolI26FDynamicEncounterComponentE",
+    "value": 364047768,
+    "size": 1208
+  },
+  {
+    "name": "_ZTV14TComponentPoolI24TSpatialHashMapComponentIL13ESpatialGroup17EEE",
+    "value": 359554072,
+    "size": 1208
+  },
+  {
+    "name": "_ZTV14TComponentPoolI21FBiomeGlobalComponentE",
+    "value": 363477824,
+    "size": 1208
+  },
+  {
+    "name": "_ZTV14TComponentPoolI25FKnowledgePickupComponentE",
+    "value": 364399288,
+    "size": 1208
+  },
+  {
+    "name": "_ZTV14TComponentPoolI50FSecurityZoneTickTimerProcessor_SingletonComponentE",
+    "value": 369686336,
+    "size": 1208
+  },
+  {
+    "name": "_ZTV14TComponentPoolI14TStatGroupDataI21FMeleeWeaponItemStatsEE",
+    "value": 364480624,
+    "size": 1208
+  },
+  {
+    "name": "_ZTV14TComponentPoolI15FTotemComponentE",
+    "value": 365055776,
+    "size": 1208
+  },
+  {
+    "name": "_ZTV14TComponentPoolI27FProximityRelevantComponentE",
+    "value": 364665456,
+    "size": 1208
+  },
+  {
+    "name": "_ZTV14TComponentPoolI24FAISpawnManagerComponentE",
+    "value": 363382544,
+    "size": 1208
+  },
+  {
+    "name": "_ZTV14TComponentPoolI20FCheckpointComponentE",
+    "value": 364709888,
+    "size": 1208
+  },
+  {
+    "name": "_ZTV14TComponentPoolI17TSpatialComponentIL13ESpatialGroup4EEE",
+    "value": 359523216,
+    "size": 1208
+  },
+  {
+    "name": "_ZTV14TComponentPoolI28FWeaponActiveSwitchComponentE",
+    "value": 365244296,
+    "size": 1208
+  },
+  {
+    "name": "_ZTV14TComponentPoolI34FPentashieldAndDoorAccessComponentE",
+    "value": 364561928,
+    "size": 1208
+  },
+  {
+    "name": "_ZTV14TComponentPoolI14FDoorComponentE",
+    "value": 363936320,
+    "size": 1208
+  },
+  {
+    "name": "_ZTV14TComponentPoolI30FOnReferenceItemAddedComponentE",
+    "value": 374784488,
+    "size": 1208
+  },
+  {
+    "name": "_ZTV14TComponentPoolI20FScanEffectComponentE",
+    "value": 364771296,
+    "size": 1208
+  },
+  {
+    "name": "_ZTV14TComponentPoolI22FScannableFglComponentE",
+    "value": 364773424,
+    "size": 1208
+  },
+  {
+    "name": "_ZTV14TComponentPoolIN33FAudioObjectAudibleRangeScheduler19FSchedulerComponentEE",
+    "value": 361261736,
+    "size": 1208
+  },
+  {
+    "name": "_ZTV14TComponentPoolI31FCombatWindowTelemetryComponentE",
+    "value": 363696728,
+    "size": 1208
+  },
+  {
+    "name": "_ZTV14TComponentPoolI26FServerVerifyShotComponentE",
+    "value": 365240696,
+    "size": 1208
+  },
+  {
+    "name": "_ZTV14TComponentPoolI27FAudioObjectFollowComponentE",
+    "value": 361168960,
+    "size": 1208
+  },
+  {
+    "name": "_ZTV14TComponentPoolI14TStatGroupDataI18FFillableItemStatsEE",
+    "value": 364109160,
+    "size": 1208
+  },
+  {
+    "name": "_ZTV14TComponentPoolI37FAudioAmbientActorStaticMeshComponentE",
+    "value": 361154008,
+    "size": 1208
+  },
+  {
+    "name": "_ZTV14TComponentPoolI25FHazardSingletonComponentE",
+    "value": 364254184,
+    "size": 1208
+  },
+  {
+    "name": "_ZTV14TComponentPoolI30FAudioSystemSingletonComponentE",
+    "value": 361181200,
+    "size": 1208
+  },
+  {
+    "name": "_ZTV14TComponentPoolI27FProximitySettingsComponentE",
+    "value": 364667256,
+    "size": 1208
+  },
+  {
+    "name": "_ZTV14TComponentPoolI27FAudioAmbientActorComponentE",
+    "value": 361152208,
+    "size": 1208
+  },
+  {
+    "name": "_ZTV14TComponentPoolI26FMapMarkerZoneTagComponentE",
+    "value": 364441384,
+    "size": 1208
+  },
+  {
+    "name": "_ZTV14TComponentPoolI23FDrawDebugLineComponentE",
+    "value": 363940728,
+    "size": 1208
+  },
+  {
+    "name": "_ZTV14TComponentPoolI17TSpatialComponentIL13ESpatialGroup21EEE",
+    "value": 359492616,
+    "size": 1208
+  },
+  {
+    "name": "_ZTV14TComponentPoolI24FBuildingMasterComponentE",
+    "value": 363566112,
+    "size": 1208
+  },
+  {
+    "name": "_ZTV14TComponentPoolI17TSpatialComponentIL13ESpatialGroup13EEE",
+    "value": 359507016,
+    "size": 1208
+  },
+  {
+    "name": "_ZTV14TComponentPoolI30FVehicleServerMetricsComponentE",
+    "value": 365196128,
+    "size": 1208
+  },
+  {
+    "name": "_ZTV14TComponentPoolI29FPowerCircuitElementComponentE",
+    "value": 364653456,
+    "size": 1208
+  },
+  {
+    "name": "_ZTV14TComponentPoolIN22FFglSchedulerFrameBaseI41FPlaceableLongRangeProxiesServerSchedulerE19FSingletonComponentEE",
+    "value": 367507368,
+    "size": 1208
+  },
+  {
+    "name": "_ZTV14TComponentPoolI24TSpatialHashMapComponentIL13ESpatialGroup4EEE",
+    "value": 359577472,
+    "size": 1208
+  },
+  {
+    "name": "_ZTV14TComponentPoolI30FVehicleEffectsDriverComponentE",
+    "value": 365135192,
+    "size": 1208
+  },
+  {
+    "name": "_ZTV14TComponentPoolI24FStaticLocationComponentE",
+    "value": 364930440,
+    "size": 1208
+  },
+  {
+    "name": "_ZTV14TComponentPoolI17TSpatialComponentIL13ESpatialGroup27EEE",
+    "value": 359481816,
+    "size": 1208
+  },
+  {
+    "name": "_ZTV14TComponentPoolI24FBuildingModuleComponentE",
+    "value": 363568152,
+    "size": 1208
+  },
+  {
+    "name": "_ZTV14TComponentPoolI17TSpatialComponentIL13ESpatialGroup19EEE",
+    "value": 359496216,
+    "size": 1208
+  },
+  {
+    "name": "_ZTV14TComponentPoolI18CRadialScanRequestE",
+    "value": 364698672,
+    "size": 1208
+  },
+  {
+    "name": "_ZTV14TComponentPoolI29FBuildingSizeChangedComponentE",
+    "value": 363604048,
+    "size": 1208
+  },
+  {
+    "name": "_ZTV14TComponentPoolI28FCraftingSimulationComponentE",
+    "value": 363822024,
+    "size": 1208
+  },
+  {
+    "name": "_ZTV14TComponentPoolI37FBuildingPhysicsSignificanceComponentE",
+    "value": 363572232,
+    "size": 1208
+  },
+  {
+    "name": "_ZTV14TComponentPoolI22FDeferredScanComponentE",
+    "value": 363889952,
+    "size": 1208
+  },
+  {
+    "name": "_ZTV14TComponentPoolI27FAudioObjectReverbComponentE",
+    "value": 361173040,
+    "size": 1208
+  },
+  {
+    "name": "_ZTV14TComponentPoolI24FShelterMetricsComponentE",
+    "value": 364833680,
+    "size": 1208
+  },
+  {
+    "name": "_ZTV14TComponentPoolI27FCommuninetMessageComponentE",
+    "value": 363699960,
+    "size": 1208
+  },
+  {
+    "name": "_ZTV14TComponentPoolI28FWeaponOwnerHolsterComponentE",
+    "value": 365292072,
+    "size": 1208
+  },
+  {
+    "name": "_ZTV14TComponentPoolI24TSpatialHashMapComponentIL13ESpatialGroup10EEE",
+    "value": 359566672,
+    "size": 1208
+  },
+  {
+    "name": "_ZTV14TComponentPoolI25FSkillPerkSetterComponentE",
+    "value": 375587824,
+    "size": 1208
+  },
+  {
+    "name": "_ZTV14TComponentPoolI27FDynamicWeaponDataComponentE",
+    "value": 364053888,
+    "size": 1208
+  },
+  {
+    "name": "_ZTV14TComponentPoolI29FEncounterInstigatorComponentE",
+    "value": 364092368,
+    "size": 1208
+  },
+  {
+    "name": "_ZTV14TComponentPoolI22FNPCWeaponAimComponentE",
+    "value": 364520176,
+    "size": 1208
+  },
+  {
+    "name": "_ZTV14TComponentPoolI30FAudioObjectOcclusionComponentE",
+    "value": 361171000,
+    "size": 1208
+  },
+  {
+    "name": "_ZTV14TComponentPoolI24FDynamicNavGeneralConfigE",
+    "value": 364049808,
+    "size": 1208
+  },
+  {
+    "name": "_ZTV14TComponentPoolI29FCharacterFloorCheckComponentE",
+    "value": 363651616,
+    "size": 1208
+  },
+  {
+    "name": "_ZTV14TComponentPoolI39FHydrationStatusEffectsTrackerComponentE",
+    "value": 364266000,
+    "size": 1208
+  },
+  {
+    "name": "_ZTV14TComponentPoolI24TSpatialHashMapComponentIL13ESpatialGroup24EEE",
+    "value": 359541408,
+    "size": 1208
+  },
+  {
+    "name": "_ZTV14TComponentPoolI26FOrnithopterStateComponentE",
+    "value": 364555480,
+    "size": 1208
+  },
+  {
+    "name": "_ZTV14TComponentPoolI24TSpatialHashMapComponentIL13ESpatialGroup16EEE",
+    "value": 359555872,
+    "size": 1208
+  },
+  {
+    "name": "_ZTV14TComponentPoolI26FImmediatePhysicsComponentE",
+    "value": 376840336,
+    "size": 1208
+  },
+  {
+    "name": "_ZTV14TComponentPoolI25FGrid2DSingletonComponentE",
+    "value": 364207560,
+    "size": 1208
+  },
+  {
+    "name": "_ZTV14TComponentPoolI19FWeaponVFXComponentE",
+    "value": 365251496,
+    "size": 1208
+  },
+  {
+    "name": "_ZTV14TComponentPoolI21FVehicleSeatComponentE",
+    "value": 365194328,
+    "size": 1208
+  },
+  {
+    "name": "_ZTV14TComponentPoolI23FGEPersistenceComponentE",
+    "value": 364201680,
+    "size": 1208
+  },
+  {
+    "name": "_ZTV14TComponentPoolI27FVehicleForceSleepComponentE",
+    "value": 365139032,
+    "size": 1208
+  },
+  {
+    "name": "_ZTV14TComponentPoolI15FOwnerComponentE",
+    "value": 359588328,
+    "size": 1208
+  },
+  {
+    "name": "_ZTV14TComponentPoolI17TSpatialComponentIL13ESpatialGroup3EEE",
+    "value": 359525016,
+    "size": 1208
+  },
+  {
+    "name": "_ZTV14TComponentPoolI14TStatGroupDataI18FVehiclePowerStatsEE",
+    "value": 365185752,
+    "size": 1208
+  },
+  {
+    "name": "_ZTV14TComponentPoolI20FWeaponBeamComponentE",
+    "value": 365249696,
+    "size": 1208
+  },
+  {
+    "name": "_ZTV14TComponentPoolI22FItemCraftingComponentE",
+    "value": 369270264,
+    "size": 1208
+  },
+  {
+    "name": "_ZTV14TComponentPoolIN22FFglSchedulerFrameBaseI21FAudioReverbSchedulerE19FSingletonComponentEE",
+    "value": 361250800,
+    "size": 1208
+  },
+  {
+    "name": "_ZTV14TComponentPoolI28FAudioWindSingletonComponentE",
+    "value": 363430192,
+    "size": 1208
+  },
+  {
+    "name": "_ZTV14TComponentPoolI29FWeaponHolsterSetterComponentE",
+    "value": 365299272,
+    "size": 1208
+  },
+  {
+    "name": "_ZTV14TComponentPoolI34FAudioTotemPlaceablesInfoComponentE",
+    "value": 363428152,
+    "size": 1208
+  },
+  {
+    "name": "_ZTV14TComponentPoolI30FAudioConcurrencyRuleComponentE",
+    "value": 361158760,
+    "size": 1208
+  },
+  {
+    "name": "_ZTV14TComponentPoolI24FWaterGeneratorComponentE",
+    "value": 365236616,
+    "size": 1208
+  },
+  {
+    "name": "_ZTV14TComponentPoolI28FDroneFlyingVehicleComponentE",
+    "value": 376974696,
+    "size": 1208
+  },
+  {
+    "name": "_ZTV14TComponentPoolI17TSpatialComponentIL13ESpatialGroup9EEE",
+    "value": 359514216,
+    "size": 1208
+  },
+  {
+    "name": "_ZTV14TComponentPoolI31FOrnithopterLasgunFireComponentE",
+    "value": 364553680,
+    "size": 1208
+  },
+  {
+    "name": "_ZTV14TComponentPoolI53FItemDecayedMaxDeteriorationGameThreadUpdateComponentE",
+    "value": 364354280,
+    "size": 1208
+  },
+  {
+    "name": "_ZTV14TComponentPoolI28FInventoryReferenceComponentE",
+    "value": 364351432,
+    "size": 1208
+  },
+  {
+    "name": "_ZTV14TComponentPoolI19FGameItemStaticDataE",
+    "value": 374778128,
+    "size": 1208
+  },
+  {
+    "name": "_ZTV14TComponentPoolI14TStatGroupDataI20FEquippableItemStatsEE",
+    "value": 364097584,
+    "size": 1208
+  },
+  {
+    "name": "_ZTV14TComponentPoolI25FDrawDebugSphereComponentE",
+    "value": 363942768,
+    "size": 1208
+  },
+  {
+    "name": "_ZTV14TComponentPoolI17TSpatialComponentIL13ESpatialGroup20EEE",
+    "value": 359494416,
+    "size": 1208
+  },
+  {
+    "name": "_ZTV14TComponentPoolI27FBuildingStreamingComponentE",
+    "value": 363606088,
+    "size": 1208
+  },
+  {
+    "name": "_ZTV14TComponentPoolI15FOnHitComponentE",
+    "value": 364102384,
+    "size": 1208
+  },
+  {
+    "name": "_ZTV14TComponentPoolI18FRequestGenNavGridE",
+    "value": 364701040,
+    "size": 1208
+  },
+  {
+    "name": "_ZTV14TComponentPoolI17TSpatialComponentIL13ESpatialGroup12EEE",
+    "value": 359508816,
+    "size": 1208
+  },
+  {
+    "name": "_ZTV14TComponentPoolI14FBuildableInfoE",
+    "value": 367329960,
+    "size": 1208
+  },
+  {
+    "name": "_ZTV14TComponentPoolI14TStatGroupDataI14FCooldownStatsEE",
+    "value": 363782728,
+    "size": 1208
+  },
+  {
+    "name": "_ZTV14TComponentPoolI25FVehicleWeaponModuleStatsE",
+    "value": 365228312,
+    "size": 1208
+  },
+  {
+    "name": "_ZTV14TComponentPoolI38FTotemCircuitPowerPendingRecalculationE",
+    "value": 365051216,
+    "size": 1208
+  },
+  {
+    "name": "_ZTV14TComponentPoolI31FPlayerCommuninetAudioComponentE",
+    "value": 364636728,
+    "size": 1208
+  },
+  {
+    "name": "_ZTV14TComponentPoolI24TSpatialHashMapComponentIL13ESpatialGroup3EEE",
+    "value": 359579272,
+    "size": 1208
+  },
+  {
+    "name": "_ZTV14TComponentPoolI24FVehicleHarnessComponentE",
+    "value": 365141072,
+    "size": 1208
+  },
+  {
+    "name": "_ZTV14TComponentPoolIN22FFglSchedulerFrameBaseI32FGenerateWaterInCircuitSchedulerE19FSchedulerComponentEE",
+    "value": 367080944,
+    "size": 1208
+  },
+  {
+    "name": "_ZTV14TComponentPoolI33FItemCraftingNotSleepingComponentE",
+    "value": 369272064,
+    "size": 1208
+  },
+  {
+    "name": "_ZTV14TComponentPoolI17TSpatialComponentIL13ESpatialGroup26EEE",
+    "value": 359483616,
+    "size": 1208
+  },
+  {
+    "name": "_ZTV14TComponentPoolI36FImmediatePhysicsSimulationComponentE",
+    "value": 374417032,
+    "size": 1208
+  },
+  {
+    "name": "_ZTV14TComponentPoolI17TSpatialComponentIL13ESpatialGroup18EEE",
+    "value": 359498016,
+    "size": 1208
+  },
+  {
+    "name": "_ZTV14TComponentPoolI22FVehicleInputComponentE",
+    "value": 365143680,
+    "size": 1208
+  },
+  {
+    "name": "_ZTV14TComponentPoolI28FDelayedMeleeAttackComponentE",
+    "value": 364476816,
+    "size": 1208
+  },
+  {
+    "name": "_ZTV14TComponentPoolI22FShelterDebugComponentE",
+    "value": 364831400,
+    "size": 1208
+  },
+  {
+    "name": "_ZTV14TComponentPoolI14TStatGroupDataI27FBuildingBlueprintItemStatsEE",
+    "value": 363560416,
+    "size": 1208
+  },
+  {
+    "name": "_ZTV14TComponentPoolI14TStatGroupDataI25FUsageLimitationItemStatsEE",
+    "value": 365091504,
+    "size": 1208
+  },
+  {
+    "name": "_ZTV14TComponentPoolI24TSpatialHashMapComponentIL13ESpatialGroup9EEE",
+    "value": 359568472,
+    "size": 1208
+  },
+  {
+    "name": "_ZTV14TComponentPoolI14FTeamComponentE",
+    "value": 364973752,
+    "size": 1208
+  },
+  {
+    "name": "_ZTV14TComponentPoolI14TStatGroupDataI19FCustomizationStatsEE",
+    "value": 363870152,
+    "size": 1208
+  },
+  {
+    "name": "_ZTV14TComponentPoolI20FDamageableComponentE",
+    "value": 363878528,
+    "size": 1208
+  },
+  {
+    "name": "_ZTV14TComponentPoolI28FVehicleClientInputComponentE",
+    "value": 365128504,
+    "size": 1208
+  },
+  {
+    "name": "_ZTV14TComponentPoolI18FRotationComponentE",
+    "value": 364712648,
+    "size": 1208
+  },
+  {
+    "name": "_ZTV14TComponentPoolI26FWeaponOwnerEquipComponentE",
+    "value": 365284872,
+    "size": 1208
+  },
+  {
+    "name": "_ZTV14TComponentPoolI23FNPCWeaponFireComponentE",
+    "value": 364518376,
+    "size": 1208
+  },
+  {
+    "name": "_ZTV14TComponentPoolI35FVehicleCachedGASAttributeComponentE",
+    "value": 365124904,
+    "size": 1208
+  },
+  {
+    "name": "_ZTV14TComponentPoolI28FVehicleQueuedInputComponentE",
+    "value": 365192200,
+    "size": 1208
+  },
+  {
+    "name": "_ZTV14TComponentPoolI17FHydrateComponentE",
+    "value": 364261504,
+    "size": 1208
+  },
+  {
+    "name": "_ZTV14TComponentPoolI27FGameItemGuiAssetsComponentE",
+    "value": 374789512,
+    "size": 1208
+  },
+  {
+    "name": "_ZTV14TComponentPoolI24FCheckpointZoneComponentE",
+    "value": 364708088,
+    "size": 1208
+  },
+  {
+    "name": "_ZTV14TComponentPoolI14FElodComponentE",
+    "value": 364056344,
+    "size": 1208
+  },
+  {
+    "name": "_ZTV14TComponentPoolI32FOnReferenceItemRemovedComponentE",
+    "value": 374786288,
+    "size": 1208
+  },
+  {
+    "name": "_ZTV14TComponentPoolI15FLevelComponentE",
+    "value": 375591424,
+    "size": 1208
+  },
+  {
+    "name": "_ZTV14TComponentPoolI20FScanResultComponentE",
+    "value": 364776536,
+    "size": 1208
+  },
+  {
+    "name": "_ZTV14TComponentPoolI21FThreatScoreComponentE",
+    "value": 365011448,
+    "size": 1208
+  },
+  {
+    "name": "_ZTV14TComponentPoolI24TSpatialHashMapComponentIL13ESpatialGroup23EEE",
+    "value": 359543208,
+    "size": 1208
+  },
+  {
+    "name": "_ZTV14TComponentPoolI19FBiomeDataComponentE",
+    "value": 363473744,
+    "size": 1208
+  },
+  {
+    "name": "_ZTV14TComponentPoolI30FBiomeWeatherModifierComponentE",
+    "value": 363482144,
+    "size": 1208
+  },
+  {
+    "name": "_ZTV14TComponentPoolI33FInventoryCircuitElementComponentE",
+    "value": 364349392,
+    "size": 1208
+  },
+  {
+    "name": "_ZTV14TComponentPoolI24TSpatialHashMapComponentIL13ESpatialGroup15EEE",
+    "value": 359557672,
+    "size": 1208
+  },
+  {
+    "name": "_ZTV14TComponentPoolI29FOnSwapFireModeEventComponentE",
+    "value": 364522216,
+    "size": 1208
+  },
+  {
+    "name": "_ZTV14TComponentPoolI28FPlaceableWorkStateComponentE",
+    "value": 364604992,
+    "size": 1208
+  },
+  {
+    "name": "_ZTV14TComponentPoolI17TSpatialComponentIL13ESpatialGroup2EEE",
+    "value": 359526816,
+    "size": 1208
+  },
+  {
+    "name": "_ZTV14TComponentPoolI32FBuildableStabilizationComponentE",
+    "value": 363521784,
+    "size": 1208
+  },
+  {
+    "name": "_ZTV14TComponentPoolI29FPlayerDialogueStateComponentE",
+    "value": 364644904,
+    "size": 1208
+  },
+  {
+    "name": "_ZTV14TComponentPoolI46FWeaponOwnerDelayUpdateCharacterStateComponentE",
+    "value": 365293872,
+    "size": 1208
+  },
+  {
+    "name": "_ZTV14TComponentPoolIN6AICore18FNPCOwnerComponentEE",
+    "value": 368074552,
+    "size": 1208
+  },
+  {
+    "name": "_ZTV14TComponentPoolI24TSpatialHashMapComponentIL13ESpatialGroup29EEE",
+    "value": 359532216,
+    "size": 1208
+  },
+  {
+    "name": "_ZTV14TComponentPoolI26FShelterSchedulerComponentE",
+    "value": 364835720,
+    "size": 1208
+  },
+  {
+    "name": "_ZTV14TComponentPoolI19FWeaponModComponentE",
+    "value": 369619232,
+    "size": 1208
+  },
+  {
+    "name": "_ZTV14TComponentPoolI19FSandStormComponentE",
+    "value": 364716816,
+    "size": 1208
+  },
+  {
+    "name": "_ZTV14TComponentPoolI26FPlayerControllerComponentE",
+    "value": 364643104,
+    "size": 1208
+  },
+  {
+    "name": "_ZTV14TComponentPoolI27FAimAssistSettingsComponentE",
+    "value": 363376336,
+    "size": 1208
+  },
+  {
+    "name": "_ZTV14TComponentPoolI17TSpatialComponentIL13ESpatialGroup8EEE",
+    "value": 359516016,
+    "size": 1208
+  },
+  {
+    "name": "_ZTV14TComponentPoolI26FSandStormOverlapComponentE",
+    "value": 364722336,
+    "size": 1208
+  },
+  {
+    "name": "_ZTV14TComponentPoolI14TStatGroupDataI25FVehicleWeaponModuleStatsEE",
+    "value": 365226512,
+    "size": 1208
+  },
+  {
+    "name": "_ZTV14TComponentPoolI25FStaticEncounterComponentE",
+    "value": 364928400,
+    "size": 1208
+  },
+  {
+    "name": "_ZTV14TComponentPoolI17TSpatialComponentIL13ESpatialGroup11EEE",
+    "value": 359510616,
+    "size": 1208
+  },
+  {
+    "name": "_ZTV14TComponentPoolI38FInteractionFeedbackSingletonComponentE",
+    "value": 364312552,
+    "size": 1208
+  },
+  {
+    "name": "_ZTV14TComponentPoolIN22FFglSchedulerFrameBaseI24FAudioOcclusionSchedulerE19FSingletonComponentEE",
+    "value": 361266384,
+    "size": 1208
+  },
+  {
+    "name": "_ZTV14TComponentPoolI31FSimulatedVehicleInputComponentE",
+    "value": 365145480,
+    "size": 1208
+  },
+  {
+    "name": "_ZTV14TComponentPoolI14TStatGroupDataI19FFuelContainerStatsEE",
+    "value": 364149992,
+    "size": 1208
+  },
+  {
+    "name": "_ZTV14TComponentPoolI24FAudioShelteredComponentE",
+    "value": 363425784,
+    "size": 1208
+  },
+  {
+    "name": "_ZTV14TComponentPoolI14TStatGroupDataI20FVehicleAbilityStatsEE",
+    "value": 365094440,
+    "size": 1208
+  },
+  {
+    "name": "_ZTV14TComponentPoolI26FStaticWeaponDataComponentE",
+    "value": 369615032,
+    "size": 1208
+  },
+  {
+    "name": "_ZTV14TComponentPoolI31FProximityChatIncomingComponentE",
+    "value": 364661376,
+    "size": 1208
+  },
+  {
+    "name": "_ZTV14TComponentPoolI24TSpatialHashMapComponentIL13ESpatialGroup2EEE",
+    "value": 359581072,
+    "size": 1208
+  },
+  {
+    "name": "_ZTV14TComponentPoolI22FCurrentBiomeComponentE",
+    "value": 363829040,
+    "size": 1208
+  },
+  {
+    "name": "_ZTV14TComponentPoolI14TStatGroupDataI23FClothingHydrationStatsEE",
+    "value": 363693640,
+    "size": 1208
+  },
+  {
+    "name": "_ZTV14TComponentPoolI37FBiomeWeatherHelperSingletonComponentE",
+    "value": 363480104,
+    "size": 1208
+  },
+  {
+    "name": "_ZTV14TComponentPoolI22FShortCircuitComponentE",
+    "value": 364844688,
+    "size": 1208
+  },
+  {
+    "name": "_ZTV14TComponentPoolI24FMapMarkerZonesComponentE",
+    "value": 364439584,
+    "size": 1208
+  },
+  {
+    "name": "_ZTV14TComponentPoolI26FAccessColorStateComponentE",
+    "value": 363367760,
+    "size": 1208
+  },
+  {
+    "name": "_ZTV14TComponentPoolI22FVehicleBoostComponentE",
+    "value": 365122296,
+    "size": 1208
+  },
+  {
+    "name": "_ZTV14TComponentPoolI14TStatGroupDataI26FSocialEquippableItemStatsEE",
+    "value": 364099384,
+    "size": 1208
+  },
+  {
+    "name": "_ZTV14TComponentPoolIN22FFglSchedulerFrameBaseI41FPlaceableLongRangeProxiesServerSchedulerE19FSchedulerComponentEE",
+    "value": 367509168,
+    "size": 1208
+  },
+  {
+    "name": "_ZTV14TComponentPoolI39FAudioAmbientActorMeshInstanceComponentE",
+    "value": 361155808,
+    "size": 1208
+  },
+  {
+    "name": "_ZTV14TComponentPoolI23FVehicleModuleComponentE",
+    "value": 365154536,
+    "size": 1208
+  },
+  {
+    "name": "_ZTV14TComponentPoolI20FChildOwnerComponentE",
+    "value": 359590128,
+    "size": 1208
+  },
+  {
+    "name": "_ZTV14TComponentPoolI17TSpatialComponentIL13ESpatialGroup25EEE",
+    "value": 359485416,
+    "size": 1208
+  },
+  {
+    "name": "_ZTV14TComponentPoolI34FCritterSpawningSingletonComponentE",
+    "value": 363825112,
+    "size": 1208
+  },
+  {
+    "name": "_ZTV14TComponentPoolI19FFuelContainerStatsE",
+    "value": 364151792,
+    "size": 1208
+  },
+  {
+    "name": "_ZTV14TComponentPoolI21FSkillBufferComponentE",
+    "value": 375584224,
+    "size": 1208
+  },
+  {
+    "name": "_ZTV14TComponentPoolI16FBoundsComponentE",
+    "value": 363486704,
+    "size": 1208
+  },
+  {
+    "name": "_ZTV14TComponentPoolI17TSpatialComponentIL13ESpatialGroup17EEE",
+    "value": 359499816,
+    "size": 1208
+  },
+  {
+    "name": "_ZTV14TComponentPoolI16FWeaponComponentE",
+    "value": 365254496,
+    "size": 1208
+  },
+  {
+    "name": "_ZTV14TComponentPoolI42FAudioObjectAudibleRangeCallbacksComponentE",
+    "value": 361166680,
+    "size": 1208
+  },
+  {
+    "name": "_ZTV14TComponentPoolI25FWeaponOwnerFireComponentE",
+    "value": 365290272,
+    "size": 1208
+  },
+  {
+    "name": "_ZTV14TComponentPoolI27FNetworkDependencyComponentE",
+    "value": 364486080,
+    "size": 1208
+  },
+  {
+    "name": "_ZTV14TComponentPoolIN22FFglSchedulerFrameBaseI21FAudioReverbSchedulerE19FSchedulerComponentEE",
+    "value": 361252600,
+    "size": 1208
+  },
+  {
+    "name": "_ZTV14TComponentPoolI24TSpatialHashMapComponentIL13ESpatialGroup8EEE",
+    "value": 359570272,
+    "size": 1208
+  },
+  {
+    "name": "_ZTV14TComponentPoolI14TStatGroupDataI28FItemStackAndDurabilityStatsEE",
+    "value": 364358360,
+    "size": 1208
+  },
+  {
+    "name": "_ZTV14TComponentPoolI35FAudioEnvironmentSingletonComponentE",
+    "value": 361160800,
+    "size": 1208
+  },
+  {
+    "name": "_ZTV14TComponentPoolI26FInventoryAbilityComponentE",
+    "value": 364347592,
+    "size": 1208
+  },
+  {
+    "name": "_ZTV14TComponentPoolI26FAudioSceneVolumeComponentE",
+    "value": 361177120,
+    "size": 1208
+  },
+  {
+    "name": "_ZTV14TComponentPoolI33FAudioObjectAudibleRangeComponentE",
+    "value": 361164880,
+    "size": 1208
+  },
+  {
+    "name": "_ZTV14TComponentPoolI27FOrnithopterConfigComponentE",
+    "value": 364524256,
+    "size": 1208
+  },
+  {
+    "name": "_ZTV14TComponentPoolI21FGrid2DIndexComponentE",
+    "value": 364203960,
+    "size": 1208
+  },
+  {
+    "name": "_ZTV14TComponentPoolI14TStatGroupDataI17FAbilityItemStatsEE",
+    "value": 363365152,
+    "size": 1208
+  },
+  {
+    "name": "_ZTV14TComponentPoolI28FBuildableOwnershipComponentE",
+    "value": 363519088,
+    "size": 1208
+  },
+  {
+    "name": "_ZTV14TComponentPoolI43FClothingDehydrationModifierChangeComponentE",
+    "value": 363691600,
+    "size": 1208
+  },
+  {
+    "name": "_ZTV14TComponentPoolI21FStakingUnitComponentE",
+    "value": 364925880,
+    "size": 1208
+  },
+  {
+    "name": "_ZTV14TComponentPoolI22FAudioRequestComponentE",
+    "value": 361175080,
+    "size": 1208
+  },
+  {
+    "name": "_ZTV14TComponentPoolI14TStatGroupDataI25FVehicleShieldModuleStatsEE",
+    "value": 365198168,
+    "size": 1208
+  },
+  {
+    "name": "_ZTV14TComponentPoolI24FAbilityUIEventComponentE",
+    "value": 365683232,
+    "size": 1208
+  },
+  {
+    "name": "_ZTV14TComponentPoolI35FServerCommuninetSingletonComponentE",
+    "value": 364781840,
+    "size": 1208
+  },
+  {
+    "name": "_ZTV14TComponentPoolI23FGrid2DRemovalComponentE",
+    "value": 364205760,
+    "size": 1208
+  },
+  {
+    "name": "_ZTV14TComponentPoolI26FHarvesterVehicleComponentE",
+    "value": 364250104,
+    "size": 1208
+  },
+  {
+    "name": "_ZTV14TComponentPoolI24TSpatialHashMapComponentIL13ESpatialGroup22EEE",
+    "value": 359545072,
+    "size": 1208
+  },
+  {
+    "name": "_ZTV14TComponentPoolI31FPositionLinkedToOwnerComponentE",
+    "value": 364651176,
+    "size": 1208
+  },
+  {
+    "name": "_ZTV14TComponentPoolI19FStatGroupContainerE",
+    "value": 357905336,
+    "size": 1208
+  },
+  {
+    "name": "_ZTV14TComponentPoolI16FHealthComponentE",
+    "value": 363880328,
+    "size": 1208
+  },
+  {
+    "name": "_ZTV14TComponentPoolI17FVehicleComponentE",
+    "value": 365130872,
+    "size": 1208
+  },
+  {
+    "name": "_ZTV14TComponentPoolI24TSpatialHashMapComponentIL13ESpatialGroup14EEE",
+    "value": 359559472,
+    "size": 1208
+  },
+  {
+    "name": "_ZTV14TComponentPoolI27FAudioAkGameObjectComponentE",
+    "value": 361198392,
+    "size": 1208
+  },
+  {
+    "name": "_ZTV14TComponentPoolI27FElodQueryActorLosComponentE",
+    "value": 364063784,
+    "size": 1208
+  },
+  {
+    "name": "_ZTV14TComponentPoolI25FWeaponReferenceComponentE",
+    "value": 365286672,
+    "size": 1208
+  },
+  {
+    "name": "_ZTV14TComponentPoolI14TStatGroupDataI15FArmorItemStatsEE",
+    "value": 363416640,
+    "size": 1208
+  },
+  {
+    "name": "_ZTV14TComponentPoolI29FWaterCircuitElementComponentE",
+    "value": 365234576,
+    "size": 1208
+  },
+  {
+    "name": "_ZTV14TComponentPoolI22FFuelTransferComponentE",
+    "value": 364156440,
+    "size": 1208
+  },
+  {
+    "name": "_ZTV14TComponentPoolI28FHarvestableFoliageComponentE",
+    "value": 364247824,
+    "size": 1208
+  },
+  {
+    "name": "_ZTV14TComponentPoolI28FProximitySingletonComponentE",
+    "value": 364663656,
+    "size": 1208
+  },
+  {
+    "name": "_ZTV14TComponentPoolI40FVehicleLoadoutOperationsSystemComponentE",
+    "value": 365150880,
+    "size": 1208
+  },
+  {
+    "name": "_ZTV14TComponentPoolI17TSpatialComponentIL13ESpatialGroup1EEE",
+    "value": 359528616,
+    "size": 1208
+  },
+  {
+    "name": "_ZTV14TComponentPoolI17FShelterComponentE",
+    "value": 364829360,
+    "size": 1208
+  }
+]

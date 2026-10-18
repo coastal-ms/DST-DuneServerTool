@@ -57,6 +57,7 @@ describe('Map workspace capability gating', () => {
     expect(await screen.findByText('Live state fixture')).toBeInTheDocument()
     expect(screen.getByRole('link', { name: 'Live state' })).toBeInTheDocument()
     expect(liveRender).toHaveBeenCalledOnce()
+    expect(screen.queryByRole('heading', { name: 'Map' })).not.toBeInTheDocument()
   })
 
   it('hides Live State and preserves bookmark state while redirecting to Atlas', async () => {

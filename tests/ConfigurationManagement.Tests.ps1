@@ -20,7 +20,8 @@ Describe 'Self-managed configuration preserves INIs and avoids automatic writes'
         Mock Invoke-DuneCommandExternal { @{ok=$true} }
         Mock Invoke-DuneDeployInstalledUserSettings { throw 'Must not deploy INIs' }
     }
-    It 'resolves existing INIs without migrations or marker writes' {
+    It 'uses existing setup files without writes when there is no active persistent settings claim' {
+        Mock Resolve-DunePersistentGameConfigPaths { $null }
         $paths = Resolve-DuneGameConfigPaths -Ip '192.0.2.10'
         $paths.source | Should -Be 'self-managed'
         Should -Invoke Invoke-V6Ssh -Times 1 -Exactly

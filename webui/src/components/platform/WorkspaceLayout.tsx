@@ -17,27 +17,29 @@ export function WorkspaceLayout({
   tabs = [],
   activeTab,
   actions,
+  compact = false,
   children,
 }: {
   workspace: WorkspaceDefinition
   tabs?: readonly WorkspaceTab[]
   activeTab?: string
   actions?: ReactNode
+  compact?: boolean
   children: ReactNode
 }) {
   const contextual = useCommandDeck()
   return (
     <div className="min-w-0" data-workspace={workspace.id}>
-      <PageHeader
+      {!compact && <PageHeader
         title={workspace.label}
         icon={workspace.icon}
         description={workspace.purpose}
         actions={actions}
-      />
+      />}
       {tabs.length > 0 && (
         <nav
           aria-label={`${workspace.label} workspace views`}
-          className={contextual ? 'portal-workspace-tabs' : '-mx-3 mb-5 overflow-x-auto overscroll-x-contain border-b border-border px-3 touch-pan-x [scrollbar-width:none] sm:mx-0 sm:px-0 [&::-webkit-scrollbar]:hidden'}
+          className={contextual ? 'portal-workspace-tabs' : `${compact ? 'mb-2' : 'mb-5'} -mx-3 overflow-x-auto overscroll-x-contain border-b border-border px-3 touch-pan-x [scrollbar-width:none] sm:mx-0 sm:px-0 [&::-webkit-scrollbar]:hidden`}
         >
           <div className="flex min-w-max items-center gap-1">
             {tabs.map(tab => {

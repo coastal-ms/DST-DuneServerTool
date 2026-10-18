@@ -1,4 +1,4 @@
-# Changelog
+﻿# Changelog
 
 All notable changes to this project will be documented in this file.
 
@@ -13,7 +13,33 @@ here cover everything those tags shipped.
 
 ## [Unreleased]
 
+Game Config now reads and edits the active persistent INIs exposed by Funcom File Browser. Battlegroup restart preserves those files instead of copying setup templates over manual changes and deletions. Related local game INI differences are advisory: review either direction explicitly, or keep them separate. Live Atlas uses the full available workspace width, supports expanding the map, and keeps expanded base markers within the viewport.
+
+Live Atlas cancels active observation processes when Stop live is pressed, including their child helpers, instead of waiting for long resource scans to time out. Stored, recovering and travelling vehicles are excluded from deployed vehicle map markers.
+
+Live Atlas restores its verified read-only observation helpers after a server reboot and shows when live layers are waiting for a world to start or recover.
+
+Advanced settings and Experimental Lab can clear an already-empty server INI assignment such as `SafeZone.EnableScale=`. Clear now stages removal even when the displayed value is blank, preserving explicit zero values and unrelated manual settings. Refresh rereads manual server edits and deletions without restoring defaults.
+
 ## [16.5.1] - 2026-10-16
+
+- Make DD Atlas a standalone sidebar workspace, removing the duplicate Gameplay Admin navigation and map headers.
+- Limit simultaneous Atlas collection jobs, add recovery time after slow reads, and run observation helpers at lower priority. Avoid redrawing unchanged map responses.
+
+- Track Hagga worms, resources and observed storms with the same guarded live readers as Deep Desert, keeping region data separate.
+- Match Atlas controls to the selected DST theme and slightly enlarge large spice fields and worms.
+- Keep optional gathering discovery from delaying a ready snapshot; clear old refresh errors when live collection starts. Restrict collector timing changes to the local owner and describe intervals as targets rather than guaranteed real time.
+
+- Store local INI recovery copies under DST/INI Backups in the install folder, with the location and an Open folder action in Settings. Unchanged saves leave the file untouched and create no extra copy.
+- Preserve existing INIs on installation and reads, without automatic legacy migration or initialization gates. Compare INIs is an explicit action; field edits identify required destinations and allow intentional local differences to stay separate.
+- Verify recovery copies of every selected server INI before writing settings; stop before settings writes if a recovery copy cannot be verified.
+- Offer Save to local, Local to server and remembered Skip for each INI difference; show changed values again after a previous Skip.
+- Include manual scalar INI entries in optional server/local comparisons, with an exact single-entry review for settings outside the control list.
+- Verify server INI saves with privileged file access so restricted persistent directories do not report a successful write as failed.
+- Keep unselected server/local INI differences visible after a single winner is applied, and ignore equivalent numeric formatting.
+
+- Reclaim Live state height by removing repeated workspace headings while retaining navigation.
+- Bound Atlas snapshot refreshes, allow cancellation, reuse current gathering discovery, and keep marker icons within the visible map viewport.
 
 Initially available through the test channel as `16.5.1-test1`.
 

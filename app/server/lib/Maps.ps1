@@ -792,6 +792,12 @@ function Invoke-DuneDeployInstalledUserSettings {
     } catch {
         return @{ ok=$false; error=$_.Exception.Message }
     }
+    if ("$($authority.source)" -in @('live', 'legacy-live')) {
+        # The settings editor and Funcom File Browser already address the
+        # persistent server files. Copying setup templates here resurrects
+        # deleted assignments and formatting at every battlegroup restart.
+        return @{ ok=$true; skipped=$true; source=$authority.source; reason='Persistent server INIs are already in place.' }
+    }
     if ("$($authority.source)" -ne 'installed') {
         return @{ ok=$false; error='The installed INIs are not verified authoritative; the battlegroup was not changed.' }
     }
@@ -842,10 +848,9 @@ function Invoke-DuneBattlegroupRestart {
         try { Clear-DuneBotStaleRunFlags } catch {}
     }
 
-    # Retail's installed setup/config directory is authoritative. Push it to the
-    # battlegroup before rebuilding startup arguments or restarting. Failing
-    # closed here prevents a restart that claims to apply settings but actually
-    # boots an older PVC copy.
+    # Validate the current server files before rebuilding startup arguments.
+    # Established File Browser/PVC files remain in place; setup templates are
+    # deployed only when no persistent server settings source exists yet.
     $iniDeploy = $null
     if ($Ip -and $inject) {
         try { $iniDeploy = Invoke-DuneDeployInstalledUserSettings -Ip $Ip }

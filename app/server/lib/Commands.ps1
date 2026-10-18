@@ -25,8 +25,8 @@ $script:DuneCommands = @(
 
     @{ Section='Battlegroup'; Key='2';  Name='start';                    Label='Start BG Only';   Mode='Console'; Requires='running'; DisabledWhen='bg-running';  Desc='Start the selected battlegroup' }
     @{ Section='Battlegroup'; Key='3';  Name='restart';                  Label='Restart BG Only'; Mode='Console'; Requires='running'; DisabledWhen='bg-stopped';  Desc='Restart the selected battlegroup' }
-    # Keep the legacy command ID for callers. Both restart paths deploy saved
-    # values; explicit apply also restores management after an opt-in.
+    # Keep the legacy command ID for callers. Restarts retain the current server
+    # INIs; explicit apply also restores management after an opt-in.
     @{ Section='Battlegroup'; Key='22'; Name='apply-inis';               Label='Apply Server Settings & Restart'; Mode='InApp'; Requires='running'; DisabledWhen='bg-stopped'; Desc='Deploy saved server settings and startup commands, then restart every map together. Player-PC files are separate.' }
     @{ Section='Battlegroup'; Key='4';  Name='stop';                     Label='Stop BG Only';    Mode='Console'; Requires='running'; DisabledWhen='bg-stopped';  Desc='Stop the selected battlegroup' }
     @{ Section='Battlegroup'; Key='5';  Name='update';                   Mode='Console'; Requires='running'; Desc='Check for new versions and apply them' }

@@ -43,7 +43,7 @@ export const LEGACY_NAV_ITEMS: readonly NavItem[] = [
   { to: '/pods',        label: 'Pods',          icon: 'Boxes',           group: 'overview', legacy: true },
   { to: '/operations',  label: 'Operations',    icon: 'Activity',        group: 'overview', workspaceId: 'operations' },
   { to: '/commands',    label: 'Commands',     icon: 'Zap',             group: 'terminal', legacy: true },
-  { to: '/map?view=atlas', label: 'DD Atlas', icon: 'Map',              group: 'database', legacy: true },
+  { to: '/map?view=atlas', label: 'DD Atlas', icon: 'Map',              group: 'database', legacy: true, activePaths: ['/map'] },
   { to: '/terminal',    label: 'PowerShell',   icon: 'SquareTerminal',  group: 'terminal', localOnly: true, sidebarHidden: true, legacy: true },
   { to: '/server-settings', label: 'Server Settings', icon: 'ServerCog', group: 'terminal', ownerOnly: true, legacy: true, activePaths: ['/server-settings', '/gameconfig'] },
   { to: '/experimental', label: 'Experimental Lab', icon: 'FlaskConical', group: 'terminal', ownerOnly: true, legacy: true },

@@ -170,15 +170,30 @@ describe('router compatibility layer', () => {
     }
   })
 
+  it('does not restore the standalone map as a Gameplay Admin destination', () => {
+    expect(normalizeGameplayDestination('/map?view=live')).toBeNull()
+    expect(normalizeGameplayDestination('/gameplay?view=map')).toBeNull()
+  })
+
+  it('redirects old Gameplay Admin map bookmarks to the standalone map', async () => {
+    window.history.replaceState(null, '', '/gameplay?view=map')
+    render(<BrowserRouter><Routes>
+      <Route path="/gameplay" element={<GameplayEnvironment />} />
+      <Route path="/map" element={<div>Standalone map</div>} />
+    </Routes></BrowserRouter>)
+    expect(await screen.findByText('Standalone map')).toBeInTheDocument()
+    expect(screen.queryByRole('navigation', { name: 'Gameplay Admin sections' })).not.toBeInTheDocument()
+  })
+
   it('stores only normalized same-origin Gameplay Admin targets', () => {
     const storage = { setItem: vi.fn() }
     rememberGameplayDestination(
-      `${window.location.origin}/map?view=atlas#seed-detail`,
+      `${window.location.origin}/players?view=profiles#seed-detail`,
       storage,
     )
     expect(storage.setItem).toHaveBeenCalledWith(
       'dst.gameplay.lastDestination',
-      '/map?view=atlas#seed-detail',
+      '/players?view=profiles#seed-detail',
     )
 
     storage.setItem.mockClear()
@@ -187,10 +202,10 @@ describe('router compatibility layer', () => {
   })
 
   it('persists a direct gameplay hash and restores it through the Gameplay Admin gateway', async () => {
-    window.history.replaceState(null, '', '/map?view=atlas#seed-detail')
+    window.history.replaceState(null, '', '/players?view=profiles#seed-detail')
     const direct = render(
       <BrowserRouter>
-        <GameplayAdminShell activeSection="map">
+        <GameplayAdminShell activeSection="players">
           <div>Map content</div>
         </GameplayAdminShell>
       </BrowserRouter>,
@@ -198,7 +213,7 @@ describe('router compatibility layer', () => {
 
     await waitFor(() => {
       expect(localStorage.getItem('dst.gameplay.lastDestination')).toBe(
-        '/map?view=atlas#seed-detail',
+        '/players?view=profiles#seed-detail',
       )
     })
     direct.unmount()
@@ -208,14 +223,14 @@ describe('router compatibility layer', () => {
       <BrowserRouter>
         <Routes>
           <Route path="/gameplay" element={<GameplayEnvironment />} />
-          <Route path="/map" element={<div>Restored map</div>} />
+          <Route path="/players" element={<div>Restored players</div>} />
         </Routes>
       </BrowserRouter>,
     )
 
-    expect(await screen.findByText('Restored map')).toBeInTheDocument()
-    expect(window.location.pathname).toBe('/map')
-    expect(window.location.search).toBe('?view=atlas')
+    expect(await screen.findByText('Restored players')).toBeInTheDocument()
+    expect(window.location.pathname).toBe('/players')
+    expect(window.location.search).toBe('?view=profiles')
     expect(window.location.hash).toBe('#seed-detail')
   })
 
@@ -235,10 +250,10 @@ describe('router compatibility layer', () => {
   })
 
   it('updates the persisted gameplay destination when only the hash changes', async () => {
-    window.history.replaceState(null, '', '/map?view=atlas#seed-one')
+    window.history.replaceState(null, '', '/players?view=profiles#seed-one')
     render(
       <BrowserRouter>
-        <GameplayAdminShell activeSection="map">
+        <GameplayAdminShell activeSection="players">
           <div>Map content</div>
         </GameplayAdminShell>
       </BrowserRouter>,
@@ -247,7 +262,7 @@ describe('router compatibility layer', () => {
     window.location.hash = '#seed-two'
     await waitFor(() => {
       expect(localStorage.getItem('dst.gameplay.lastDestination')).toBe(
-        '/map?view=atlas#seed-two',
+        '/players?view=profiles#seed-two',
       )
     })
   })

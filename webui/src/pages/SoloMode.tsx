@@ -519,7 +519,7 @@ export function SoloCosmeticGrantCard({
           </select>
           {chosen && <p className="text-[11px] font-mono text-text-dim truncate mt-2">{chosen.template}</p>}
           {chosen && pending.has(chosen.template.toLowerCase()) && <p className="text-xs text-text-muted mt-2">Unlock token already held in inventory. You can grant another token.</p>}
-          {chosen && !pending.has(chosen.template.toLowerCase()) && saved.has(chosen.template.toLowerCase()) && <p className="text-xs text-text-muted mt-2">Unlock record saved; in-game usability is unverified. You can grant another token if the game still reports it locked.</p>}
+          {chosen && !pending.has(chosen.template.toLowerCase()) && saved.has(chosen.template.toLowerCase()) && <p className="text-xs text-text-muted mt-2">Unlock record saved. You can grant another token if the game still reports it locked.</p>}
           <button
             className={`btn-primary w-full mt-4 justify-center ${SOLO_DISABLED_PRIMARY_CLASS}`}
             disabled={controlsDisabled || !chosen}
@@ -1630,17 +1630,13 @@ export function SoloMode() {
                   <div className="space-y-4">
                     <div className="rounded border border-warning/30 bg-warning/5 p-3 text-xs text-text-muted">
                       Writes only <span className="font-mono">{status?.channel === 'Xbox' ? 'Config\\WinGDK\\Engine.ini' : 'Config\\Windows\\Engine.ini'}</span> under the
-                      game settings directory. Vehicle recovery and durability values were tested
-                      by Coastal in Solo. Unset vehicle controls do not change the file.
+                      game settings directory. Unset vehicle controls do not change the file.
                     </div>
                     <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
                       {consoleSettingsState.data.entries.map(entry => (
                         <div key={entry.key} className="block rounded border border-border bg-surface-2/40 p-3">
                           <span className="flex items-center justify-between gap-2 text-xs text-text-muted">
                             <span>{entry.label}</span>
-                            <span className={entry.status === 'Confirmed' ? 'text-success' : 'text-warning'}>
-                              {entry.status}
-                            </span>
                           </span>
                           {entry.key === 'dw.EnableBuildablePlacementAlwaysFilled' ? (
                             <label className="flex items-center gap-2 mt-2 text-sm">
@@ -2264,7 +2260,7 @@ export function SoloMode() {
                 setNotice(null)
                 try {
                   const result = await grantSoloUnlocks(kind, statusState.data?.profileToken ?? '')
-                  setNotice({ kind: 'ok', text: `${label}: ${result.submitted} tokens saved for next login; ${result.skipped} already saved or held.${result.remaining ? ` ${result.remaining} remain: log in to process tokens, exit, and grant again after freeing backpack slots.` : ''} In-game activation remains unconfirmed.${result.safetyBackup ? ` Previous save retained at ${result.safetyBackup}` : ''}` })
+                  setNotice({ kind: 'ok', text: `${label}: ${result.submitted} tokens saved for next login; ${result.skipped} already saved or held.${result.remaining ? ` ${result.remaining} remain: log in to process tokens, exit, and grant again after freeing backpack slots.` : ''}${result.safetyBackup ? ` Previous save retained at ${result.safetyBackup}` : ''}` })
                   await Promise.all([statusState.refresh(), runtimeState.refresh(), backupsState.refresh()])
                 } catch (error) {
                   setNotice({ kind: 'err', text: error instanceof Error ? error.message : String(error) })

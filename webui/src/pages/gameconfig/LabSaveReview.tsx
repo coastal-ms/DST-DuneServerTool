@@ -3,7 +3,8 @@ import { getGameConfigClient, saveLabLocal } from '../../api/gameconfig'
 import type { GameConfigClientInfo, GameConfigRawUpdate } from '../../api/types'
 import { isLocalViewer } from '../../util/viewer'
 
-export function LabSaveReview({ updates, serverPaths, serverAvailable = true, onServerSave, onDone, onCancel }: {
+export function LabSaveReview({ updates, serverPaths, serverAvailable = true, serverOnly = false, onServerSave, onDone, onCancel }: {
+  serverOnly?: boolean
   updates: GameConfigRawUpdate[]
   serverPaths?: { game: string; engine: string }
   serverAvailable?: boolean
@@ -14,7 +15,7 @@ export function LabSaveReview({ updates, serverPaths, serverAvailable = true, on
   const localViewer = isLocalViewer()
   const [client, setClient] = useState<GameConfigClientInfo | null>(null)
   const [localError, setLocalError] = useState('')
-  const [local, setLocal] = useState(localViewer)
+  const [local, setLocal] = useState(localViewer && !serverOnly)
   const [server, setServer] = useState(serverAvailable)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
@@ -57,7 +58,7 @@ export function LabSaveReview({ updates, serverPaths, serverAvailable = true, on
     <section role="dialog" aria-modal="true" aria-labelledby="lab-save-title" className="card p-5 w-full max-w-2xl max-h-[85vh] overflow-y-auto space-y-4">
       <h2 id="lab-save-title" className="text-lg font-semibold">Review Lab save destinations</h2>
       <p className="text-sm text-text-muted">Choose where to save these exact changes. Local files affect Solo and this PC’s player. Server files affect the self-hosted server after Apply server settings. A verified file write does not prove an in-game effect.</p>
-      <label className="flex gap-2"><input type="checkbox" checked={local} disabled={!localViewer || busy || localSaved} onChange={e => setLocal(e.target.checked)} />
+      <label className="flex gap-2"><input type="checkbox" checked={local} disabled={serverOnly || !localViewer || busy || localSaved} onChange={e => setLocal(e.target.checked)} />
         Save to this PC’s local Solo/player files {localSaved && '(saved)'}</label>
       {localViewer ? <div className="text-xs text-text-muted break-all">
         {client ? [...new Set(updates.map(u => u.file))].map(file => <div key={file}>{file === 'engine' ? client.engine.path : (client.game ?? client).path}</div>) : localError || 'Reading local file locations…'}

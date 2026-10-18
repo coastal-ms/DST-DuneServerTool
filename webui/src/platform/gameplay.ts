@@ -15,7 +15,6 @@ export type GameplayDestination = {
 
 export const GAMEPLAY_DESTINATIONS: readonly GameplayDestination[] = [
   { id: 'overview', label: 'Overview', to: '/gameplay?view=overview', icon: 'LayoutGrid' },
-  { id: 'map', label: 'Map', to: '/map', icon: 'Map' },
   { id: 'players', label: 'Players', to: '/players', icon: 'Users' },
   { id: 'bases', label: 'Bases', to: '/bases', icon: 'Castle' },
   { id: 'vehicles', label: 'Vehicles', to: '/vehicles', icon: 'Truck' },
@@ -24,7 +23,6 @@ export const GAMEPLAY_DESTINATIONS: readonly GameplayDestination[] = [
 
 export const GAMEPLAY_PATHS = [
   '/gameplay',
-  '/map',
   '/players',
   '/bases',
   '/vehicles',
@@ -75,7 +73,7 @@ export function normalizeGameplayDestination(value: string, origin = currentOrig
     if (target.pathname === '/gameplay') {
       const view = target.searchParams.get('view')
       if (view === null) target.searchParams.set('view', 'overview')
-      else if (!Object.hasOwn(LEGACY_VIEW_SECTIONS, view)) return null
+      else if (view === 'map' || !Object.hasOwn(LEGACY_VIEW_SECTIONS, view)) return null
     }
 
     return `${target.pathname}${target.search}${target.hash}`

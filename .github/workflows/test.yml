@@ -7,7 +7,7 @@ name: Tests
 #   * the Vitest webui suite under webui/tests/           -> job `vitest`
 #
 # Triggered on:
-#   - pull_request to any branch: ALWAYS (no path filter). Same rationale as
+#   - ready pull_request to any branch (no path filter). Same rationale as
 #     lint.yml -- if these ever become required status checks, a path filter
 #     would make PRs that don't touch the filtered paths wait forever on a
 #     check that never runs. The jobs are cheap when there's nothing to test.
@@ -24,9 +24,16 @@ on:
       - 'webui/**'
       - '.github/workflows/test.yml'
   pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+
+# Draft PRs run no jobs. Ready PRs validate each new head; superseded runs stop.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
 
 jobs:
   pester:
+    if: ${{ github.event_name != 'pull_request' || github.event.pull_request.draft == false }}
     name: PowerShell (Pester)
     runs-on: windows-latest
     steps:
@@ -226,6 +233,7 @@ jobs:
           if-no-files-found: ignore
 
   vitest:
+    if: ${{ github.event_name != 'pull_request' || github.event.pull_request.draft == false }}
     name: WebUI (Vitest)
     runs-on: ubuntu-latest
     steps:
@@ -248,6 +256,7 @@ jobs:
         run: npm test
 
   deck-companion:
+    if: ${{ github.event_name != 'pull_request' || github.event.pull_request.draft == false }}
     name: SteamOS companion
     runs-on: ubuntu-latest
     steps:
@@ -257,6 +266,7 @@ jobs:
         run: python3 -B -m unittest discover -s tests -p test_deck_companion.py -v
 
   solo-helper:
+    if: ${{ github.event_name != 'pull_request' || github.event.pull_request.draft == false }}
     name: Solo database helper
     runs-on: windows-latest
     steps:

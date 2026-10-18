@@ -320,7 +320,7 @@ Register-DuneRoute -Method PUT -Path '/api/gameconfig' -Handler {
             }
             if (-not $sec -or -not $file) { continue }
             if (Test-DuneGameConfigRawTargetBlocked -File $file -Section $sec -Key $key) {
-                Write-DuneError -Response $res -Status 400 -Message "The unverified TimeOfDaySettings m_StartTime candidate is evidence-only and cannot be written by DST."
+                Write-DuneError -Response $res -Status 400 -Message "Use the Time of day phase controls to change m_StartTime."
                 return
             }
             # Array-entry payload: rebuild the full set of +/-key= lines for
@@ -709,6 +709,8 @@ Register-DuneRoute -Method PUT -Path '/api/gameconfig/client/lab' -LocalOnly -Ha
     }
     try {
         $result = Save-DuneGameConfigClient -Updates @($body.updates) -ReviewedRaw
+        # Keep the comparison populated with every unselected local entry.
+        $result['client'] = Get-DuneGameConfigClient
         Write-DuneJson -Response $res -Body $result
     } catch {
         Write-DuneError -Response $res -Status 400 -Message "Local Lab save failed: $($_.Exception.Message)"
@@ -1144,4 +1146,20 @@ Register-DuneRoute -Method PUT -Path '/api/gameconfig/landclaim-timer' -Handler 
     } catch {
         Write-DuneError -Response $res -Status 500 -Message "Land-claim timer save failed: $($_.Exception.Message)"
     }
+}
+
+
+# Read-only location query; opening Explorer is an explicit host-local action.
+Register-DuneRoute -Method GET -Path '/api/gameconfig/backup-folder' -LocalOnly -Handler {
+    param($req,$res,$routeParams,$body)
+    Write-DuneJson -Response $res -Body @{path=(Get-DuneGameConfigClientBackupRoot)}
+}
+Register-DuneRoute -Method POST -Path '/api/gameconfig/backup-folder/open' -LocalOnly -Handler {
+    param($req,$res,$routeParams,$body)
+    try {
+        $path = Get-DuneGameConfigClientBackupRoot
+        [void][IO.Directory]::CreateDirectory($path)
+        Start-Process -FilePath 'explorer.exe' -ArgumentList "`"$path`"" | Out-Null
+        Write-DuneJson -Response $res -Body @{ok=$true;path=$path}
+    } catch { Write-DuneError -Response $res -Status 400 -Message $_.Exception.Message }
 }

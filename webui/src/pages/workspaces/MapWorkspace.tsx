@@ -45,6 +45,7 @@ export default function MapWorkspace() {
         workspace={getWorkspace('map')}
         tabs={STATIC_TABS}
         activeTab="atlas"
+        compact
       >
         <div className="flex min-w-0 flex-col gap-4">
           <LiveMapPreviewDisclosure />
@@ -59,6 +60,7 @@ export default function MapWorkspace() {
         workspace={getWorkspace('map')}
         tabs={STATIC_TABS}
         activeTab="atlas"
+        compact
       >
         <div className="flex min-w-0 flex-col gap-4">
           <LiveMapPreviewDisclosure />
@@ -86,6 +88,7 @@ export default function MapWorkspace() {
       workspace={getWorkspace('map')}
       tabs={tabs}
       activeTab={view}
+      compact
       actions={
         view === 'atlas'
           ? <FreshnessBadge state="fresh" label="Shipped static atlas" />

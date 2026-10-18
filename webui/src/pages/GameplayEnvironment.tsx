@@ -10,7 +10,6 @@ const MarketBotTab = lazy(() => import('./gameplay/MarketBotTab').then(module =>
 const PlayersWorkspace = lazy(() => import('./workspaces/PlayersWorkspace'))
 const BasesWorkspace = lazy(() => import('./workspaces/BasesWorkspace'))
 const VehiclesWorkspace = lazy(() => import('./workspaces/VehiclesWorkspace'))
-const MapWorkspace = lazy(() => import('./workspaces/MapWorkspace'))
 const EconomyWorkspace = lazy(() => import('./workspaces/EconomyWorkspace'))
 const StorageTab = lazy(() => import('./gameplay/StorageTab').then(module => ({ default: module.StorageTab })))
 const BlueprintsTab = lazy(() => import('./gameplay/BlueprintsTab').then(module => ({ default: module.BlueprintsTab })))
@@ -40,6 +39,8 @@ export function GameplayEnvironment({ initialTab = 'overview' }: { initialTab?: 
     navigate(`/gameplay?view=${next}`)
   }
 
+  if (tab === 'map') return <Navigate to="/map" replace />
+
   if (!requestedView && initialTab === 'overview') {
     const stored = readLastGameplayDestination()
     if (stored !== '/gameplay?view=overview') {
@@ -51,7 +52,6 @@ export function GameplayEnvironment({ initialTab = 'overview' }: { initialTab?: 
     <GameplayAdminShell activeSection={resolveGameplaySection('/gameplay', search)}>
       <Suspense fallback={<DataState state="loading" title="Loading Gameplay Admin view…" />}>
         {tab === 'overview' && <OverviewTab onOpenTab={openTab} />}
-        {tab === 'map' && <MapWorkspace />}
         {tab === 'market' && <MarketTab />}
         {tab === 'marketbot' && <MarketBotTab />}
         {tab === 'players' && <PlayersWorkspace />}

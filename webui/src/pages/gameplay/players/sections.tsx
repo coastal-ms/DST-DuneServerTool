@@ -826,8 +826,8 @@ const ACTIONS: ActionDef[] = [
     confirm: p => `Give vehicle parts to ${p.name}'s inventory? They'll need to assemble at a Vehicle Assembly. Works online or offline.`,
     run: () => Promise.resolve({ message: '' }) },
   { id: 'funcom-spawn-vehicle', group: 'Vehicle', label: 'Funcom Spawn Vehicle', icon: 'CarFront', custom: 'funcom-spawn-vehicle', liveOnly: true, experimental: true,
-    rowNote: 'Sends Funcom’s persistent SpawnVehicleAt command and assigns owner permission. Unconfirmed; create a fresh backup before testing.',
-    confirm: p => `Send Funcom's unconfirmed live vehicle-spawn command at ${p.name}?\n\nThe player must be online and a fresh backup must exist before testing.`,
+    rowNote: 'Sends the vehicle-spawn command at the online player and assigns owner permission.',
+    confirm: p => `Spawn a vehicle at ${p.name}?\n\nThe player must be online and a fresh backup must exist.`,
     run: () => Promise.resolve({ message: '' }) },
   { id: 'refuel-vehicle', group: 'Vehicle', label: 'Refuel Vehicle', icon: 'Fuel', custom: 'refuel-vehicle',
     run: () => Promise.resolve({ message: '' }) },
@@ -1600,7 +1600,7 @@ function GrantCosmeticForm({ busy, playerName, accountId, onGrant }: {
         <option value="">Select a cosmetic or building set… ({matches.length})</option>
         {groups.map(([g, items]) => (
           <optgroup key={g} label={`${g} (${items.length})`}>
-            {items.map(e => <option key={e.template} value={e.template}>{e.name}{e.bulk_exclusion ? ' — Excluded from bulk' : unlocked.has(e.template.toLowerCase()) ? ' — Saved record, usability unverified' : pending.has(e.template.toLowerCase()) ? ' — Token held, unlock unconfirmed' : ''}</option>)}
+            {items.map(e => <option key={e.template} value={e.template}>{e.name}{e.bulk_exclusion ? ' — Excluded from bulk' : unlocked.has(e.template.toLowerCase()) ? ' — Unlock record saved' : pending.has(e.template.toLowerCase()) ? ' — Token held' : ''}</option>)}
           </optgroup>
         ))}
       </select>
@@ -1700,7 +1700,7 @@ function GrantUnlockTokensForm({ busy, playerName, accountId, kind, playerOnline
         setManualRefreshing(false)
         setRefreshFeedback({ error: true, message: 'Status refresh timed out. Counts were not updated. Try again.' })
       } else {
-        setOwnershipWarning('Some unlocks remain unconfirmed. Use Refresh unlock status after the game processes the tokens; check held tokens and overflow before granting again.')
+        setOwnershipWarning('Unlocks are still processing. Use Refresh unlock status; check held tokens and overflow before granting again.')
       }
     }, timeoutMs)
     const refreshOwnership = async () => {
@@ -1730,7 +1730,7 @@ function GrantUnlockTokensForm({ busy, playerName, accountId, kind, playerOnline
         }
         if (bulkUnlocks && Date.now() >= deadline) {
           setActivationQueued(false)
-          setOwnershipWarning(`Some ${buildingSets ? 'building sets' : 'skins'} remain unconfirmed. Check unlocks, inventory and dropped tokens before retrying; Funcom may not activate every unlock.`)
+          setOwnershipWarning(`Some ${buildingSets ? 'building sets' : 'skins'} are still processing. Check unlocks, inventory and dropped tokens before retrying.`)
           return
         }
         timer = setTimeout(() => void refreshOwnership(), 2000)
@@ -1788,7 +1788,7 @@ function GrantUnlockTokensForm({ busy, playerName, accountId, kind, playerOnline
         <div className="max-h-60 overflow-y-auto space-y-2">
           {filterCosmeticsCatalog(browseEntries, catalogFilter).map(e => {
             const id = e.template.toLowerCase()
-            const status = unlocked.has(id) ? 'Unlocked on character' : pending.has(id) ? 'Token held — unlock unconfirmed' : submittedTokens.has(id) ? 'Request submitted — unlock unconfirmed' : 'Unlock not detected'
+            const status = unlocked.has(id) ? 'Unlocked on character' : pending.has(id) ? 'Token held' : submittedTokens.has(id) ? 'Request submitted' : 'Unlock not detected'
             return <div key={e.template} className="border-b border-border pb-2"><div>{e.name}</div><div>{status}{e.bulk_exclusion ? ` · ${e.bulk_exclusion}` : buildingSets && !e.bulk_building_set ? ' · Excluded from bulk delivery' : ''}</div></div>
           })}
         </div>

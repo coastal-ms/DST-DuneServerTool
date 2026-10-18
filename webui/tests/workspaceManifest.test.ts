@@ -31,7 +31,7 @@ describe('workspace manifest', () => {
       expect(workspace.load).toBeTypeOf('function')
       expect(workspace.purpose.length).toBeGreaterThan(10)
       expect(workspace.responsivePattern.length).toBeGreaterThan(10)
-      expect(['server-management', 'gameplay-admin']).toContain(workspace.domain)
+      expect(['server-management', 'server-data', 'gameplay-admin']).toContain(workspace.domain)
     }
   })
 
@@ -140,18 +140,19 @@ describe('workspace manifest', () => {
     expect(gameplay).toBeDefined()
     expect(atlas).toBeDefined()
     expect(isNavItemActive(gameplay!, '/map', 'view=lifecycle')).toBe(false)
-    expect(isNavItemActive(atlas!, '/map', 'view=lifecycle')).toBe(false)
+    expect(isNavItemActive(atlas!, '/map', 'view=lifecycle')).toBe(true)
     expect(isNavItemActive(gameplay!, '/map', 'view=atlas')).toBe(false)
     expect(isNavItemActive(atlas!, '/map', 'view=atlas')).toBe(true)
   })
 
   it('defines one compact Gameplay Admin destination set and singular route state', () => {
     expect(GAMEPLAY_DESTINATIONS.map(item => item.label)).toEqual([
-      'Overview', 'Map', 'Players', 'Bases', 'Vehicles', 'Economy',
+      'Overview', 'Players', 'Bases', 'Vehicles', 'Economy',
     ])
     expect(GAMEPLAY_PATHS).toEqual([
-      '/gameplay', '/map', '/players', '/bases', '/vehicles', '/economy',
+      '/gameplay', '/players', '/bases', '/vehicles', '/economy',
     ])
+    expect(WORKSPACE_MANIFEST.find(w => w.id === 'map')?.domain).toBe('server-data')
     expect(resolveGameplaySection('/players')).toBe('players')
     expect(resolveGameplaySection('/gameplay', 'view=storage')).toBe('players')
     expect(resolveGameplaySection('/gameplay', 'view=marketbot')).toBe('economy')

@@ -1,0 +1,55 @@
+{
+  "schemaVersion": 1,
+  "capturedAt": "2026-10-17T22:38:56.243994+00:00",
+  "scope": "Names only. Own live positions; community names from Method current rotation match all four sectors and our Layout10 seed catalog. Game localization remains generic. No guides or loot data imported.",
+  "stations": [
+    {
+      "layout": 10,
+      "map": "DeepDesert",
+      "sector": "C2",
+      "name": "The Forgotten Cells",
+      "nameKind": "community",
+      "x": -822655.999853595,
+      "y": 615616.0002398549,
+      "matchRadiusCm": 100,
+      "source": "https://www.method.gg/dune-awakening/deep-desert-companion",
+      "referencePeriod": "13-20 October 2026"
+    },
+    {
+      "layout": 10,
+      "map": "DeepDesert",
+      "sector": "H7",
+      "name": "The Control Room",
+      "nameKind": "community",
+      "x": 619456.0,
+      "y": -818816.0000088245,
+      "matchRadiusCm": 100,
+      "source": "https://www.method.gg/dune-awakening/deep-desert-companion",
+      "referencePeriod": "13-20 October 2026"
+    },
+    {
+      "layout": 10,
+      "map": "DeepDesert",
+      "sector": "F6",
+      "name": "The Museum",
+      "nameKind": "community",
+      "x": 191724.95889872225,
+      "y": -303512.97873988556,
+      "matchRadiusCm": 100,
+      "source": "https://www.method.gg/dune-awakening/deep-desert-companion",
+      "referencePeriod": "13-20 October 2026"
+    },
+    {
+      "layout": 10,
+      "map": "DeepDesert",
+      "sector": "D4",
+      "name": "The Furnace",
+      "nameKind": "community",
+      "x": -310816.00035978225,
+      "y": 193344.00021960738,
+      "matchRadiusCm": 100,
+      "source": "https://www.method.gg/dune-awakening/deep-desert-companion",
+      "referencePeriod": "13-20 October 2026"
+    }
+  ]
+}
