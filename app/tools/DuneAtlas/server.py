@@ -381,7 +381,7 @@ class Handler(BaseHTTPRequestHandler):
             except ValueError:return self.send_error(400,'Invalid map selections')
             self.send_response(200);self.send_header('Content-Type','application/json');self.send_header('Content-Length',str(len(body)));self.send_header('Cache-Control','no-store');self.end_headers();self.wfile.write(body);return
         if url.path not in ('/live/start','/live/stop','/refresh'):return self.send_error(404)
-        if self.headers.get('X-DST-Atlas-Timing')=='remote':return self.send_error(403,'Only the local host can control map collection')
+        if self.headers.get('X-DST-Atlas-Timing')=='remote' and url.path!='/live/start':return self.send_error(403,'Only the local host can stop or refresh map collection')
         with control:
             if url.path=='/live/start':
                 if state['stopping'] or (active_jobs-{'gathering'}) and not live_enabled:return self.send_error(409,'Map collection is stopping')
@@ -427,7 +427,7 @@ class Handler(BaseHTTPRequestHandler):
                 body=marker_icon_body
             mime='application/json'
         elif url.path=='/state':
-            with lock:body=json.dumps({**state,'canControlTiming':self.headers.get('X-DST-Atlas-Timing')!='remote','canControlCollection':self.headers.get('X-DST-Atlas-Timing')!='remote'}).encode()
+            with lock:body=json.dumps({**state,'canControlTiming':self.headers.get('X-DST-Atlas-Timing')!='remote','canControlCollection':self.headers.get('X-DST-Atlas-Timing')!='remote','canStartCollection':True}).encode()
             mime='application/json'
         elif url.path in ['/gathering','/gathering/HaggaBasin']:
             try:body=json.dumps(gathering_metadata('HaggaBasin' if url.path.endswith('/HaggaBasin') else 'DeepDesert')).encode()

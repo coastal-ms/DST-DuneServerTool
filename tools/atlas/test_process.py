@@ -243,8 +243,18 @@ class ProcessTests(unittest.TestCase):
                 self.assertEqual(service.state['refreshSeconds'],3)
                 self.assertEqual(request('preferences', prefs)['refreshSeconds'],1)
                 self.assertEqual(request('preferences', {**prefs,'refreshSeconds':60}, 'remote')['refreshSeconds'],1)
-                request('live/start', {})
+                self.assertTrue(request('state', access='remote')['canStartCollection'])
+                self.assertFalse(request('state', access='remote')['canControlCollection'])
+                request('live/start', {}, 'remote')
                 self.assertTrue(service.state['live'])
+                started = service.state['liveStartedAt']
+                request('live/start', {}, 'remote')
+                self.assertEqual(service.state['liveStartedAt'], started)
+                for action in ['live/stop', 'refresh']:
+                    with self.assertRaises(urllib.error.HTTPError) as denied:
+                        request(action, {}, 'remote')
+                    self.assertEqual(denied.exception.code, 403)
+                    self.assertTrue(service.state['live'])
                 request('live/stop', {})
             finally:
                 release.set(); service.stop.set(); observer.cancel()

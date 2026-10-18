@@ -1,8 +1,8 @@
 {
   "schemaVersion": 1,
   "files": {
-    "server.py": "8ca1905d82e8fffc88a153c63dd8b9089650acd9d0721477e73259e27ecd4e66",
-    "index.html": "055ea4f83fb50d7ba727a9e8a3f94c10f5e35a9eedfd52b12f7ed67e4e8efbab",
+    "server.py": "22e0a6554b3c01249bccd48b736a2fc1eda92de7dcd31c55fe0e0e0c81717dd5",
+    "index.html": "f4f1f43f79a958558363913a63d950a40a9b2aee580f0e7a6ba97b6f3c77649e",
     "atlas_preferences.py": "b3516ed4931ba2ca2b17f2e69a18da278d65eaff73bdd0ccbfc6fe0b3a3eb412",
     "atlas_runtime.py": "93f7897a29eb077c5aa9c2b911fe7aacdb19494610cba562ce994f019046d7c9",
     "ensure-poi-discovery.py": "074aa0eeb384d08559d42e0a41bc81b7636b877365134d3f434c9b8992bc4e67",
