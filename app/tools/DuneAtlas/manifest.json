@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "files": {
     "server.py": "8ca1905d82e8fffc88a153c63dd8b9089650acd9d0721477e73259e27ecd4e66",
-    "index.html": "ca6f408d478d8d819f795f92a91774186f430df566637174219a2e8e354dbea0",
+    "index.html": "055ea4f83fb50d7ba727a9e8a3f94c10f5e35a9eedfd52b12f7ed67e4e8efbab",
     "atlas_preferences.py": "b3516ed4931ba2ca2b17f2e69a18da278d65eaff73bdd0ccbfc6fe0b3a3eb412",
     "atlas_runtime.py": "93f7897a29eb077c5aa9c2b911fe7aacdb19494610cba562ce994f019046d7c9",
     "ensure-poi-discovery.py": "074aa0eeb384d08559d42e0a41bc81b7636b877365134d3f434c9b8992bc4e67",
@@ -28,7 +28,7 @@
     "read-poi-names.py": "c85b6f5b92032deff50450c9d26155432c639dc114e78db38532ee30b37bd326",
     "find-poi-sources.py": "8a23b86c30fe7ce88aeccc89a5e6b7abdf3c1f0511d581f2c11945eac66b633d",
     "read-gathering-instances.py": "62cad40a63eb5a0b739148b3db6207446357ca72f528e6909fa47ae312e410a5",
-    "publish-gathering.py": "5427ac8dda53b74a1b706fcade0d988baf2a4ee3628c5a04f28e0ef7363b2558",
+    "publish-gathering.py": "e36710b19c6051ffca711491c859bafc5b078f6536cebd6acaafb7e752a53c10",
     "saved-pois.py": "f42ba447b2df0cdf1c203fd3a22c14ef0ad493ad6d82be5d38c4cb877efb008f",
     "wreck-sites.py": "6602ec95c092c5ee956476083ff7e7614f971e077b125cea0cdb87a872c4ff4f",
     "find-wreck-actors.py": "bef11fb89ebd2037f65b37746d1708fcb8abd82912de3395f9854090ecdb23eb",
@@ -43,7 +43,7 @@
     "hagga/read-all-static-markers.py": "4dbbfb958e8f497510d5a54f1f16308a02903f6d71f77229115bd132aa4b5924",
     "hagga/find-poi-sources.py": "8a23b86c30fe7ce88aeccc89a5e6b7abdf3c1f0511d581f2c11945eac66b633d",
     "hagga/read-gathering-instances.py": "62cad40a63eb5a0b739148b3db6207446357ca72f528e6909fa47ae312e410a5",
-    "hagga/publish-gathering.py": "3850f1ecbde1b05ca3e261f95faecade9e90b5baa6ad7de680d06fcae0a4f8e9",
+    "hagga/publish-gathering.py": "e36710b19c6051ffca711491c859bafc5b078f6536cebd6acaafb7e752a53c10",
     "hagga/wreck-sites.py": "6602ec95c092c5ee956476083ff7e7614f971e077b125cea0cdb87a872c4ff4f",
     "hagga/find-wreck-actors.py": "bef11fb89ebd2037f65b37746d1708fcb8abd82912de3395f9854090ecdb23eb",
     "native-symbols.json": "b74ae493ec3e8910cf2c7223952f97a37ba2a9c3c58619e13b2ea12f6268b205",
@@ -81,7 +81,7 @@
     "reader-bulk.b64": "8c523a4cc4c37ded66b36e829b38248200214415d078afc0df5fe52c3194d091",
     "atlas_process.py": "a6b7a3f2db0f797bc0976dc7468a5e61498dd96797c1361dc77d2b010161c1b0",
     "icons/cargo-container.png": "62911e166eb2d965f1c5d09d3b7a2de390fb307f38748f5361134a8500cc37fd",
-    "atlas_gathering.py": "b9b1dffb812a8b28f1150e3f9f1084de7873562b584aa66bdeccb93363a6d7cb",
+    "atlas_gathering.py": "b019c82265bd353e68241857594fc5d64261585bcb09f3d65a31f09540acc4cd",
     "atlas_storm_timing.py": "30a8cb09975915e16040e674202034c33444fad51c87f54080f23ceee7b7bdbb"
   },
   "bootstrapContexts": {

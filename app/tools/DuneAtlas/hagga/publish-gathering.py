@@ -5,17 +5,17 @@ r=Path(__file__).resolve().parent;saved_spec=importlib.util.spec_from_file_locat
 if source['pid']!=ctx['pid'] or str(source['startTime'])!=str(ctx['startTime']):raise ValueError('Gathering capture belongs to another process')
 def classify(name):
  pickup='_Pickup' in name
+ if pickup or any(plant in name for plant in ('BurroBush','SietchStone')):return None
  for family,ore in [('Stravidium','StravidiumOre'),('Titanium','TitaniumOre'),('Azurite','AzuriteOre'),('Bauxite','BauxiteOre'),('Basalt','BasaltOre'),('Rhyolite','RhyoliteOre'),('Magnetite','MagnetiteOre'),('Dolomite','DolomiteRock'),('Erythrite','ErythriteOre')]:
-  if family in name:return family+'Pickup' if pickup else ore
- if 'ScrapMetal' in name or 'ScrapElectronics' in name:return 'ScrapMetalPart' if pickup else 'ScrapMetalWreckage'
- if 'ImpureFuel' in name:return 'FuelCellPart' if pickup else 'FuelCellWreckage'
- if 'Jasmium' in name:return 'JasmiumPickup' if pickup else 'JasmiumOre'
- if 'SietchStone' in name:return 'SietchStone'
+  if family in name:return ore
+ if 'ScrapMetal' in name or 'ScrapElectronics' in name:return 'ScrapMetalWreckage'
+ if 'ImpureFuel' in name:return 'FuelCellWreckage'
+ if 'Jasmium' in name:return 'JasmiumOre'
  if 'Saguaro' in name:return 'SaguaroPlant'
- if 'BurroBush' in name:return 'BrittleBush'
  if 'Primrose' in name:return 'PrimroseField'
  if 'Cistanche' in name:return 'CistanchePlant'
  return None
+
 groups=collections.defaultdict(list);unknown=collections.Counter();seen=set()
 for p in source['items']:
  t=classify(p['actorName']);loc=p['location'];xyz=[loc[k] for k in ['x','y','z']]

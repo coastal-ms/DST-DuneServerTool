@@ -8,14 +8,16 @@ import atlas_gathering,atlas_process
 
 class SchedulingTests(unittest.TestCase):
  def test_pickups_and_brittlebush_are_not_collected_even_from_old_preferences(self):
-  for name in ('BP_Titanium_Pickup_C','BP_Stravidium_Pickup_C','BP_BurroBush_C','BP_ScrapMetal_Pickup_C','BP_ImpureFuel_Pickup_C'):
+  for name in ('BP_Titanium_Pickup_C','BP_Stravidium_Pickup_C','BP_BurroBush_C','BP_ScrapMetal_Pickup_C','BP_ImpureFuel_Pickup_C','BP_SietchStone_C'):
    self.assertIsNone(atlas_gathering.classify(name),name)
   self.assertEqual(atlas_gathering.classify('BP_TitaniumOre_C'),'TitaniumOre')
-  q=atlas_gathering.Queue({'region':'DeepDesert','layers':['poi:resource:TitaniumPickup','poi:resource:BrittleBush']})
+  self.assertEqual(atlas_gathering.classify('BP_Primrose_C'),'PrimroseField')
+  self.assertEqual(atlas_gathering.classify('BP_Cistanche_C'),'CistanchePlant')
+  q=atlas_gathering.Queue({'region':'DeepDesert','layers':['poi:resource:TitaniumPickup','poi:resource:BrittleBush','poi:resource:SietchStone']})
   self.assertEqual(q.selected,set())
   seen=set()
   while (key:=q.next()) is not None:seen.add(key[1]);q.finish(key)
-  self.assertFalse(any('Pickup' in kind or kind in ('BrittleBush','ScrapMetalPart','FuelCellPart') for kind in seen))
+  self.assertFalse(any('Pickup' in kind or kind in ('BrittleBush','ScrapMetalPart','FuelCellPart','SietchStone') for kind in seen))
 
  def test_saved_selection_first_then_new_selection_is_p0(self):
   now=[1000];q=atlas_gathering.Queue({'region':'HaggaBasin','layers':['poi:resource:StravidiumOre']},clock=lambda:now[0])
