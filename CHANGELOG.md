@@ -13,6 +13,12 @@ here cover everything those tags shipped.
 
 ## [Unreleased]
 
+## [16.5.0.2] - 2026-10-19
+
+### Fixed
+- Allow game server updates when Regis Tank compatibility is enabled.
+- Correct the Landsraad minimum-term setting and remove obsolete advanced controls for Dune Awakening 1.5.15.0.
+
 ## [16.5.0.1] - 2026-10-14
 
 ### Changed
