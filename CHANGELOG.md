@@ -13,6 +13,8 @@ here cover everything those tags shipped.
 
 ## [Unreleased]
 
+Name worm 50 Hawk on the live map.
+
 Bundle a private runtime for live maps so they open without a separate Python installation, including PCs using Microsoft Store Python.
 
 Keep installed vehicle-module repair values separate from inventory item durability, and restore missing developer and building-grant catalog entries.
