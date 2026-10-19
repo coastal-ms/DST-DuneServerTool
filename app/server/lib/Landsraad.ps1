@@ -52,7 +52,7 @@ $script:DuneLandsraadIniKeys = @(
     @{ Key='m_VotingPeriodDurationInSec';      Label='Legacy Voting Period (sec)';  Help='Legacy member retained for existing servers and rollback.' }
     @{ Key='m_VotingPeriodStartBeforeCoriolisCycleInSec'; Label='Legacy Voting Starts Before Cycle (sec)'; Help='Legacy member retained without automatic mapping.' }
     @{ Key='m_LandsraadVotingPeriodDurationInSec'; Label='Voting Period (sec)';     Help='Length of the Landsraad voting window.' }
-    @{ Key='m_LandsraadCycleDurationInSeconds'; Label='Landsraad Cycle (sec)';      Help='Length of a Landsraad term.' }
+    @{ Key='LandsraadMinimumTermDurationInSeconds'; Label='Minimum Landsraad Term (sec)'; Help='Minimum term duration, not a fixed cycle length.' }
     @{ Key='m_LandsraadSuspendedPeriodDurationInSeconds'; Label='Suspended Period (sec)'; Help='Gap between Landsraad terms.' }
     @{ Key='m_LandsraadContractsMaxActiveAmount'; Label='Max Active Contracts';     Help='Maximum simultaneously-active Landsraad contracts.' }
     @{ Key='m_bIsPlayerVotingEnabled';         Label='Player Voting Enabled';       Help='Whether players can vote on decrees.' }

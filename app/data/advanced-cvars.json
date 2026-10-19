@@ -5830,56 +5830,6 @@
     "status": "Unconfirmed"
   },
   {
-    "key": "Bake.Duration.Total.Seconds",
-    "label": "Bake.Duration.Total.Seconds",
-    "help": "",
-    "group": "Other engine",
-    "risk": "experimental",
-    "source": "Engine",
-    "scope": "Unknown",
-    "status": "Unconfirmed"
-  },
-  {
-    "key": "Bake.Duration.WriteToGutter.Seconds",
-    "label": "Bake.Duration.WriteToGutter.Seconds",
-    "help": "",
-    "group": "Other engine",
-    "risk": "experimental",
-    "source": "Engine",
-    "scope": "Unknown",
-    "status": "Unconfirmed"
-  },
-  {
-    "key": "Bake.Duration.WriteToImage.Seconds",
-    "label": "Bake.Duration.WriteToImage.Seconds",
-    "help": "",
-    "group": "Other engine",
-    "risk": "experimental",
-    "source": "Engine",
-    "scope": "Unknown",
-    "status": "Unconfirmed"
-  },
-  {
-    "key": "Bake.Stats.NumGutterPixels",
-    "label": "Bake.Stats.NumGutterPixels",
-    "help": "",
-    "group": "Other engine",
-    "risk": "experimental",
-    "source": "Engine",
-    "scope": "Unknown",
-    "status": "Unconfirmed"
-  },
-  {
-    "key": "Bake.Stats.NumSamplePixels",
-    "label": "Bake.Stats.NumSamplePixels",
-    "help": "",
-    "group": "Other engine",
-    "risk": "experimental",
-    "source": "Engine",
-    "scope": "Unknown",
-    "status": "Unconfirmed"
-  },
-  {
     "key": "ban.ClientForceBlockedDemoTimerExpiredBlocked",
     "label": "ban.ClientForceBlockedDemoTimerExpiredBlocked",
     "help": "Simulates a Ban like you're a Demo client which exceeded allowed play time. Requires reconnecting so that login flow is run.",
@@ -20740,16 +20690,6 @@
     "status": "Unconfirmed"
   },
   {
-    "key": "geometry.MeshSceneAdapter.SingleThreaded",
-    "label": "geometry.MeshSceneAdapter.SingleThreaded",
-    "help": "Determines whether or not to use multi-threading in MeshSceneAdapter.",
-    "group": "Other engine",
-    "risk": "high",
-    "source": "Engine",
-    "scope": "Unknown",
-    "status": "Unconfirmed"
-  },
-  {
     "key": "GeometryCache.Codec.Debug",
     "label": "GeometryCache.Codec.Debug",
     "help": "Enables debug logging for the codec.",
@@ -24550,26 +24490,6 @@
     "status": "Unconfirmed"
   },
   {
-    "key": "Input.DetailMesh.NumMeshes",
-    "label": "Input.DetailMesh.NumMeshes",
-    "help": "",
-    "group": "Other engine",
-    "risk": "experimental",
-    "source": "Engine",
-    "scope": "Unknown",
-    "status": "Unconfirmed"
-  },
-  {
-    "key": "Input.DetailMesh.NumTriangles",
-    "label": "Input.DetailMesh.NumTriangles",
-    "help": "",
-    "group": "Other engine",
-    "risk": "experimental",
-    "source": "Engine",
-    "scope": "Unknown",
-    "status": "Unconfirmed"
-  },
-  {
     "key": "input.DisableHaptics",
     "label": "input.DisableHaptics",
     "help": "If greater than zero, no haptic feedback is processed.",
@@ -24620,49 +24540,9 @@
     "status": "Unconfirmed"
   },
   {
-    "key": "Input.RenderCapture.NumMeshes",
-    "label": "Input.RenderCapture.NumMeshes",
-    "help": "",
-    "group": "Other engine",
-    "risk": "experimental",
-    "source": "Engine",
-    "scope": "Unknown",
-    "status": "Unconfirmed"
-  },
-  {
-    "key": "Input.RenderCapture.NumTriangles",
-    "label": "Input.RenderCapture.NumTriangles",
-    "help": "",
-    "group": "Other engine",
-    "risk": "experimental",
-    "source": "Engine",
-    "scope": "Unknown",
-    "status": "Unconfirmed"
-  },
-  {
     "key": "Input.ShouldAlwaysEvaluateForceFeedbackDuration",
     "label": "Input.ShouldAlwaysEvaluateForceFeedbackDuration",
     "help": "Should the duration of a force feedback effect be evaluated every time it is called?",
-    "group": "Other engine",
-    "risk": "experimental",
-    "source": "Engine",
-    "scope": "Unknown",
-    "status": "Unconfirmed"
-  },
-  {
-    "key": "Input.TargetMesh.NumTriangles",
-    "label": "Input.TargetMesh.NumTriangles",
-    "help": "",
-    "group": "Other engine",
-    "risk": "experimental",
-    "source": "Engine",
-    "scope": "Unknown",
-    "status": "Unconfirmed"
-  },
-  {
-    "key": "Input.TargetMesh.NumVertices",
-    "label": "Input.TargetMesh.NumVertices",
-    "help": "",
     "group": "Other engine",
     "risk": "experimental",
     "source": "Engine",
@@ -31043,46 +30923,6 @@
     "key": "Mobile.EnableUITextScaling",
     "label": "Mobile.EnableUITextScaling",
     "help": "Enables Mobile UI Text Scaling",
-    "group": "Other engine",
-    "risk": "experimental",
-    "source": "Engine",
-    "scope": "Unknown",
-    "status": "Unconfirmed"
-  },
-  {
-    "key": "modeling.EnableVolumeSnapping",
-    "label": "modeling.EnableVolumeSnapping",
-    "help": "Enable snapping to volumes",
-    "group": "Other engine",
-    "risk": "experimental",
-    "source": "Engine",
-    "scope": "Unknown",
-    "status": "Unconfirmed"
-  },
-  {
-    "key": "modeling.PolyEdit.EdgeLimit",
-    "label": "modeling.PolyEdit.EdgeLimit",
-    "help": "Maximal number of edges that PolyEd and TriEd support. Meshes that would require more than this number of edges to be rendered in PolyEd or TriEd force the tools to be disabled to avoid hanging the editor.",
-    "group": "Other engine",
-    "risk": "diagnostic",
-    "source": "Engine",
-    "scope": "Unknown",
-    "status": "Unconfirmed"
-  },
-  {
-    "key": "modeling.Selection.FullHoverHighlights",
-    "label": "modeling.Selection.FullHoverHighlights",
-    "help": "Use full selection hover highlights instead of simplified highlights",
-    "group": "Other engine",
-    "risk": "experimental",
-    "source": "Engine",
-    "scope": "Unknown",
-    "status": "Unconfirmed"
-  },
-  {
-    "key": "modeling.WorldRenderCapture.VTWarmupFrames",
-    "label": "modeling.WorldRenderCapture.VTWarmupFrames",
-    "help": "Number of frames to render before each capture in order to warmup the VT.",
     "group": "Other engine",
     "risk": "experimental",
     "source": "Engine",
@@ -40970,56 +40810,6 @@
     "status": "Unconfirmed"
   },
   {
-    "key": "Settings.AmbientOcclusion.BiasAngle",
-    "label": "Settings.AmbientOcclusion.BiasAngle",
-    "help": "",
-    "group": "UI & client",
-    "risk": "experimental",
-    "source": "Engine",
-    "scope": "Unknown",
-    "status": "Unconfirmed"
-  },
-  {
-    "key": "Settings.AmbientOcclusion.Enabled",
-    "label": "Settings.AmbientOcclusion.Enabled",
-    "help": "",
-    "group": "UI & client",
-    "risk": "experimental",
-    "source": "Engine",
-    "scope": "Unknown",
-    "status": "Unconfirmed"
-  },
-  {
-    "key": "Settings.AmbientOcclusion.MaxDistance",
-    "label": "Settings.AmbientOcclusion.MaxDistance",
-    "help": "",
-    "group": "UI & client",
-    "risk": "experimental",
-    "source": "Engine",
-    "scope": "Unknown",
-    "status": "Unconfirmed"
-  },
-  {
-    "key": "Settings.AmbientOcclusion.OcclusionRays",
-    "label": "Settings.AmbientOcclusion.OcclusionRays",
-    "help": "",
-    "group": "UI & client",
-    "risk": "experimental",
-    "source": "Engine",
-    "scope": "Unknown",
-    "status": "Unconfirmed"
-  },
-  {
-    "key": "Settings.AmbientOcclusion.SpreadAngle",
-    "label": "Settings.AmbientOcclusion.SpreadAngle",
-    "help": "",
-    "group": "UI & client",
-    "risk": "experimental",
-    "source": "Engine",
-    "scope": "Unknown",
-    "status": "Unconfirmed"
-  },
-  {
     "key": "Settings.Audio",
     "label": "Settings.Audio",
     "help": "ForceShowFullHUDLevel",
@@ -41033,46 +40823,6 @@
     "key": "Settings.Battlegroups",
     "label": "Settings.Battlegroups",
     "help": "ForceShowFullHUDLevel",
-    "group": "UI & client",
-    "risk": "experimental",
-    "source": "Engine",
-    "scope": "Unknown",
-    "status": "Unconfirmed"
-  },
-  {
-    "key": "Settings.BentNormal.Enabled",
-    "label": "Settings.BentNormal.Enabled",
-    "help": "",
-    "group": "UI & client",
-    "risk": "experimental",
-    "source": "Engine",
-    "scope": "Unknown",
-    "status": "Unconfirmed"
-  },
-  {
-    "key": "Settings.BentNormal.MaxDistance",
-    "label": "Settings.BentNormal.MaxDistance",
-    "help": "",
-    "group": "UI & client",
-    "risk": "experimental",
-    "source": "Engine",
-    "scope": "Unknown",
-    "status": "Unconfirmed"
-  },
-  {
-    "key": "Settings.BentNormal.OcclusionRays",
-    "label": "Settings.BentNormal.OcclusionRays",
-    "help": "",
-    "group": "UI & client",
-    "risk": "experimental",
-    "source": "Engine",
-    "scope": "Unknown",
-    "status": "Unconfirmed"
-  },
-  {
-    "key": "Settings.BentNormal.SpreadAngle",
-    "label": "Settings.BentNormal.SpreadAngle",
-    "help": "",
     "group": "UI & client",
     "risk": "experimental",
     "source": "Engine",
@@ -41103,76 +40853,6 @@
     "key": "Settings.Chat",
     "label": "Settings.Chat",
     "help": "ForceShowFullHUDLevel",
-    "group": "UI & client",
-    "risk": "experimental",
-    "source": "Engine",
-    "scope": "Unknown",
-    "status": "Unconfirmed"
-  },
-  {
-    "key": "Settings.Curvature.ClampMode",
-    "label": "Settings.Curvature.ClampMode",
-    "help": "",
-    "group": "UI & client",
-    "risk": "experimental",
-    "source": "Engine",
-    "scope": "Unknown",
-    "status": "Unconfirmed"
-  },
-  {
-    "key": "Settings.Curvature.ColorMode",
-    "label": "Settings.Curvature.ColorMode",
-    "help": "",
-    "group": "UI & client",
-    "risk": "experimental",
-    "source": "Engine",
-    "scope": "Unknown",
-    "status": "Unconfirmed"
-  },
-  {
-    "key": "Settings.Curvature.CurvatureType",
-    "label": "Settings.Curvature.CurvatureType",
-    "help": "",
-    "group": "UI & client",
-    "risk": "experimental",
-    "source": "Engine",
-    "scope": "Unknown",
-    "status": "Unconfirmed"
-  },
-  {
-    "key": "Settings.Curvature.Enabled",
-    "label": "Settings.Curvature.Enabled",
-    "help": "",
-    "group": "UI & client",
-    "risk": "experimental",
-    "source": "Engine",
-    "scope": "Unknown",
-    "status": "Unconfirmed"
-  },
-  {
-    "key": "Settings.Curvature.MinRangeMultiplier",
-    "label": "Settings.Curvature.MinRangeMultiplier",
-    "help": "",
-    "group": "UI & client",
-    "risk": "experimental",
-    "source": "Engine",
-    "scope": "Unknown",
-    "status": "Unconfirmed"
-  },
-  {
-    "key": "Settings.Curvature.RangeMultiplier",
-    "label": "Settings.Curvature.RangeMultiplier",
-    "help": "",
-    "group": "UI & client",
-    "risk": "experimental",
-    "source": "Engine",
-    "scope": "Unknown",
-    "status": "Unconfirmed"
-  },
-  {
-    "key": "Settings.FaceNormal.Enabled",
-    "label": "Settings.FaceNormal.Enabled",
-    "help": "",
     "group": "UI & client",
     "risk": "experimental",
     "source": "Engine",
@@ -41250,26 +40930,6 @@
     "status": "Unconfirmed"
   },
   {
-    "key": "Settings.Image.Height",
-    "label": "Settings.Image.Height",
-    "help": "",
-    "group": "UI & client",
-    "risk": "experimental",
-    "source": "Engine",
-    "scope": "Unknown",
-    "status": "Unconfirmed"
-  },
-  {
-    "key": "Settings.Image.Width",
-    "label": "Settings.Image.Width",
-    "help": "",
-    "group": "UI & client",
-    "risk": "experimental",
-    "source": "Engine",
-    "scope": "Unknown",
-    "status": "Unconfirmed"
-  },
-  {
     "key": "Settings.Input",
     "label": "Settings.Input",
     "help": "ForceShowFullHUDLevel",
@@ -41290,58 +40950,8 @@
     "status": "Unconfirmed"
   },
   {
-    "key": "Settings.MaterialID.Enabled",
-    "label": "Settings.MaterialID.Enabled",
-    "help": "",
-    "group": "UI & client",
-    "risk": "experimental",
-    "source": "Engine",
-    "scope": "Unknown",
-    "status": "Unconfirmed"
-  },
-  {
-    "key": "Settings.MultiTexture.Enabled",
-    "label": "Settings.MultiTexture.Enabled",
-    "help": "",
-    "group": "UI & client",
-    "risk": "experimental",
-    "source": "Engine",
-    "scope": "Unknown",
-    "status": "Unconfirmed"
-  },
-  {
-    "key": "Settings.ObjectSpaceNormal.Enabled",
-    "label": "Settings.ObjectSpaceNormal.Enabled",
-    "help": "",
-    "group": "UI & client",
-    "risk": "experimental",
-    "source": "Engine",
-    "scope": "Unknown",
-    "status": "Unconfirmed"
-  },
-  {
-    "key": "Settings.Output.Type",
-    "label": "Settings.Output.Type",
-    "help": "PerChannel",
-    "group": "UI & client",
-    "risk": "experimental",
-    "source": "Engine",
-    "scope": "Unknown",
-    "status": "Unconfirmed"
-  },
-  {
     "key": "Settings.PatchNotes",
     "label": "Settings.PatchNotes",
-    "help": "",
-    "group": "UI & client",
-    "risk": "experimental",
-    "source": "Engine",
-    "scope": "Unknown",
-    "status": "Unconfirmed"
-  },
-  {
-    "key": "Settings.Position.Enabled",
-    "label": "Settings.Position.Enabled",
     "help": "",
     "group": "UI & client",
     "risk": "experimental",
@@ -41360,26 +40970,6 @@
     "status": "Unconfirmed"
   },
   {
-    "key": "Settings.ProjectionDistance",
-    "label": "Settings.ProjectionDistance",
-    "help": "",
-    "group": "UI & client",
-    "risk": "experimental",
-    "source": "Engine",
-    "scope": "Unknown",
-    "status": "Unconfirmed"
-  },
-  {
-    "key": "Settings.ProjectionInWorldSpace",
-    "label": "Settings.ProjectionInWorldSpace",
-    "help": "",
-    "group": "UI & client",
-    "risk": "experimental",
-    "source": "Engine",
-    "scope": "Unknown",
-    "status": "Unconfirmed"
-  },
-  {
     "key": "Settings.RadialWheel",
     "label": "Settings.RadialWheel",
     "help": "ForceShowFullHUDLevel",
@@ -41390,208 +40980,8 @@
     "status": "Unconfirmed"
   },
   {
-    "key": "Settings.RenderCapture.BaseColorMap.Enabled",
-    "label": "Settings.RenderCapture.BaseColorMap.Enabled",
-    "help": "",
-    "group": "UI & client",
-    "risk": "experimental",
-    "source": "Engine",
-    "scope": "Unknown",
-    "status": "Unconfirmed"
-  },
-  {
-    "key": "Settings.RenderCapture.CaptureFieldOfView",
-    "label": "Settings.RenderCapture.CaptureFieldOfView",
-    "help": "",
-    "group": "UI & client",
-    "risk": "experimental",
-    "source": "Engine",
-    "scope": "Unknown",
-    "status": "Unconfirmed"
-  },
-  {
-    "key": "Settings.RenderCapture.EmissiveMap.Enabled",
-    "label": "Settings.RenderCapture.EmissiveMap.Enabled",
-    "help": "",
-    "group": "UI & client",
-    "risk": "experimental",
-    "source": "Engine",
-    "scope": "Unknown",
-    "status": "Unconfirmed"
-  },
-  {
-    "key": "Settings.RenderCapture.Image.Height",
-    "label": "Settings.RenderCapture.Image.Height",
-    "help": "",
-    "group": "UI & client",
-    "risk": "experimental",
-    "source": "Engine",
-    "scope": "Unknown",
-    "status": "Unconfirmed"
-  },
-  {
-    "key": "Settings.RenderCapture.Image.Width",
-    "label": "Settings.RenderCapture.Image.Width",
-    "help": "",
-    "group": "UI & client",
-    "risk": "experimental",
-    "source": "Engine",
-    "scope": "Unknown",
-    "status": "Unconfirmed"
-  },
-  {
-    "key": "Settings.RenderCapture.MetallicMap.Enabled",
-    "label": "Settings.RenderCapture.MetallicMap.Enabled",
-    "help": "",
-    "group": "UI & client",
-    "risk": "experimental",
-    "source": "Engine",
-    "scope": "Unknown",
-    "status": "Unconfirmed"
-  },
-  {
-    "key": "Settings.RenderCapture.NearPlaneDistance",
-    "label": "Settings.RenderCapture.NearPlaneDistance",
-    "help": "",
-    "group": "UI & client",
-    "risk": "experimental",
-    "source": "Engine",
-    "scope": "Unknown",
-    "status": "Unconfirmed"
-  },
-  {
-    "key": "Settings.RenderCapture.NormalMap.Enabled",
-    "label": "Settings.RenderCapture.NormalMap.Enabled",
-    "help": "",
-    "group": "UI & client",
-    "risk": "experimental",
-    "source": "Engine",
-    "scope": "Unknown",
-    "status": "Unconfirmed"
-  },
-  {
-    "key": "Settings.RenderCapture.OpacityMap.Enabled",
-    "label": "Settings.RenderCapture.OpacityMap.Enabled",
-    "help": "",
-    "group": "UI & client",
-    "risk": "experimental",
-    "source": "Engine",
-    "scope": "Unknown",
-    "status": "Unconfirmed"
-  },
-  {
-    "key": "Settings.RenderCapture.PackedMRSMap.Enabled",
-    "label": "Settings.RenderCapture.PackedMRSMap.Enabled",
-    "help": "",
-    "group": "UI & client",
-    "risk": "experimental",
-    "source": "Engine",
-    "scope": "Unknown",
-    "status": "Unconfirmed"
-  },
-  {
-    "key": "Settings.RenderCapture.RoughnessMap.Enabled",
-    "label": "Settings.RenderCapture.RoughnessMap.Enabled",
-    "help": "",
-    "group": "UI & client",
-    "risk": "experimental",
-    "source": "Engine",
-    "scope": "Unknown",
-    "status": "Unconfirmed"
-  },
-  {
-    "key": "Settings.RenderCapture.SpecularMap.Enabled",
-    "label": "Settings.RenderCapture.SpecularMap.Enabled",
-    "help": "",
-    "group": "UI & client",
-    "risk": "experimental",
-    "source": "Engine",
-    "scope": "Unknown",
-    "status": "Unconfirmed"
-  },
-  {
-    "key": "Settings.RenderCapture.SubsurfaceColorMap.Enabled",
-    "label": "Settings.RenderCapture.SubsurfaceColorMap.Enabled",
-    "help": "",
-    "group": "UI & client",
-    "risk": "experimental",
-    "source": "Engine",
-    "scope": "Unknown",
-    "status": "Unconfirmed"
-  },
-  {
-    "key": "Settings.SamplesPerPixel",
-    "label": "Settings.SamplesPerPixel",
-    "help": "",
-    "group": "UI & client",
-    "risk": "experimental",
-    "source": "Engine",
-    "scope": "Unknown",
-    "status": "Unconfirmed"
-  },
-  {
     "key": "Settings.ShaderCompilationVersion",
     "label": "Settings.ShaderCompilationVersion",
-    "help": "",
-    "group": "UI & client",
-    "risk": "experimental",
-    "source": "Engine",
-    "scope": "Unknown",
-    "status": "Unconfirmed"
-  },
-  {
-    "key": "Settings.Split.NormalSeams",
-    "label": "Settings.Split.NormalSeams",
-    "help": "",
-    "group": "UI & client",
-    "risk": "experimental",
-    "source": "Engine",
-    "scope": "Unknown",
-    "status": "Unconfirmed"
-  },
-  {
-    "key": "Settings.Split.UVSeams",
-    "label": "Settings.Split.UVSeams",
-    "help": "",
-    "group": "UI & client",
-    "risk": "experimental",
-    "source": "Engine",
-    "scope": "Unknown",
-    "status": "Unconfirmed"
-  },
-  {
-    "key": "Settings.TangentSpaceNormal.Enabled",
-    "label": "Settings.TangentSpaceNormal.Enabled",
-    "help": "",
-    "group": "UI & client",
-    "risk": "experimental",
-    "source": "Engine",
-    "scope": "Unknown",
-    "status": "Unconfirmed"
-  },
-  {
-    "key": "Settings.TargetUVLayer",
-    "label": "Settings.TargetUVLayer",
-    "help": "",
-    "group": "UI & client",
-    "risk": "experimental",
-    "source": "Engine",
-    "scope": "Unknown",
-    "status": "Unconfirmed"
-  },
-  {
-    "key": "Settings.Texture.Enabled",
-    "label": "Settings.Texture.Enabled",
-    "help": "",
-    "group": "UI & client",
-    "risk": "experimental",
-    "source": "Engine",
-    "scope": "Unknown",
-    "status": "Unconfirmed"
-  },
-  {
-    "key": "Settings.VertexColor.Enabled",
-    "label": "Settings.VertexColor.Enabled",
     "help": "",
     "group": "UI & client",
     "risk": "experimental",
@@ -46915,16 +46305,6 @@
     "help": "Adjust thread priority per-task so that higher priority tasks running on background threads can't be preempted as easily. Helps a lot under high load.",
     "group": "Runtime & memory",
     "risk": "high",
-    "source": "Engine",
-    "scope": "Unknown",
-    "status": "Unconfirmed"
-  },
-  {
-    "key": "tb.EnableAsyncLoadCancelling",
-    "label": "tb.EnableAsyncLoadCancelling",
-    "help": "Enable terrain blocks async loading cancelling.",
-    "group": "Other engine",
-    "risk": "experimental",
     "source": "Engine",
     "scope": "Unknown",
     "status": "Unconfirmed"
