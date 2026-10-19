@@ -3191,7 +3191,8 @@ Describe 'GameConfig: Landsraad struct fields integrate with read + save' -Tag '
             ForEach-Object { $_.Key })
 
         $landsraadKeys | Should -Contain 'm_LandsraadVotingPeriodDurationInSec'
-        $landsraadKeys | Should -Contain 'm_LandsraadCycleDurationInSeconds'
+        $landsraadKeys | Should -Contain 'LandsraadMinimumTermDurationInSeconds'
+        $landsraadKeys | Should -Not -Contain 'm_LandsraadCycleDurationInSeconds'
         $landsraadKeys | Should -Contain 'm_LandsraadSuspendedPeriodDurationInSeconds'
         $landsraadKeys | Should -Contain 'm_VotingPeriodDurationInSec'
         $landsraadKeys | Should -Contain 'm_VotingPeriodStartBeforeCoriolisCycleInSec'

@@ -1283,8 +1283,27 @@ function Invoke-OnDemandPartitionClear {
     Write-Host "  Done — on-demand maps will spawn for the next player." -ForegroundColor Green
 }
 
+function Sync-DuneTankUpdateImage {
+    param([Parameter(Mandatory)][string]$Ip)
+    $root = @($scriptDir, (Join-Path $scriptDir 'app')) | Where-Object {
+        Test-Path -LiteralPath (Join-Path $_ 'server\lib\RegisTanksActivation.ps1')
+    } | Select-Object -First 1
+    if (-not $root) { throw 'Server update support library is missing. Reinstall DST.' }
+    & {
+        param($Root, $VmIp, $KeyPath)
+        . (Join-Path $Root 'lib\Db-Postgres.ps1')
+        . (Join-Path $Root 'lib\K8s.ps1')
+        . (Join-Path $Root 'server\lib\RetailServerSettings.ps1')
+        . (Join-Path $Root 'server\lib\RegisTanksBuild.ps1')
+        . (Join-Path $Root 'server\lib\RegisTanksActivation.ps1')
+        $script:V6SshKeyCache = $KeyPath
+        $null = Sync-DuneRegisTankServerUpdate -Ip $VmIp
+    } $root $Ip $sshKey
+}
+
 function Sync-DuneRetailSettingsBeforeStart {
     param([Parameter(Mandatory)][string]$Ip)
+    Sync-DuneTankUpdateImage -Ip $Ip
     $retailRoot = @($scriptDir, (Join-Path $scriptDir 'app')) | Where-Object {
         Test-Path -LiteralPath (Join-Path $_ 'server\lib\RetailServerSettings.ps1')
     } | Select-Object -First 1
@@ -2869,6 +2888,7 @@ fi
     $dispatchCommand = if ($cmdName -eq 'restart') { 'start' } else { $cmdName }
     ssh -t -o StrictHostKeyChecking=no -o LogLevel=QUIET -i "$sshKey" "$sshUser@$ip" "$bgBinPath $dispatchCommand"
     $bgFallbackExit = $LASTEXITCODE
+    if ($bgFallbackExit -eq 0 -and $cmdName -eq 'update') { Sync-DuneTankUpdateImage -Ip $ip }
 
     # Battlegroup commands (status/start/restart/stop) can change observable
     # port state, so invalidate the cached external port-check results to

@@ -267,8 +267,18 @@ function Get-DuneBattlegroupSnapshot {
             if ($cached -ne $null) { return $cached }
         }
 
+        $previousEntry = Get-DuneBattlegroupSnapshotCacheEntry
+        $previous = if ($previousEntry) { $previousEntry.Snapshot } else { $null }
         $snapshot = Get-DuneBattlegroupSnapshotFresh -VmStatus $VmStatus
         Set-DuneBattlegroupSnapshotCacheEntry -Snapshot $snapshot
+        # The shared snapshot lock makes this one check per observed start,
+        # including a BG started outside DST. Status stays responsive while the
+        # existing background checker reconciles the persisted update badge.
+        if ($snapshot.available -and $snapshot.state -in @('starting', 'running') -and
+            (-not $previous -or -not $previous.available -or $previous.state -notin @('starting', 'running')) -and
+            $script:AppDir -and (Get-Command Start-DuneFuncomUpdateCheckAsync -ErrorAction SilentlyContinue)) {
+            try { [void](Start-DuneFuncomUpdateCheckAsync -ServerDir (Join-Path $script:AppDir 'server')) } catch {}
+        }
         return $snapshot
     }
 

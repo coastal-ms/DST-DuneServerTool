@@ -1,6 +1,7 @@
 import sys
 from pathlib import Path
 sys.path.insert(0,str(Path(__file__).resolve().parent.parent if Path(__file__).resolve().parent.name=="hagga" else Path(__file__).resolve().parent))
+import atlas_builds
 import atlas_process
 """Discover event actors from fresh process mappings, read only and build guarded."""
 from pathlib import Path
@@ -14,7 +15,7 @@ def remote(command,output,input=None):
  if result.returncode:raise RuntimeError('Event discovery failed: '+result.stderr[-300:])
  return (R/output).read_text()
 guard=f'test "$(cut -d " " -f22 /proc/{pid}/stat)" = "{start}" || exit 73\n'
-layout=remote(guard+f'sudo cat /proc/{pid}/maps','poi-source-process-layout.txt');syms=json.loads((R/'all-native-vtables.json').read_text());names=['_ZTV25UServerMapMarkerComponent','_ZTV24UCartographyMapSubsystem','_ZTV30AHarvestableInstancedMeshActor','_ZTV20AResourceNodeSpawner'];needles=[c['exeBase']+next(s['value'] for s in syms if s['name']==n)+16 for n in names];records=[]
+layout=remote(guard+f'sudo cat /proc/{pid}/maps','poi-source-process-layout.txt');syms=atlas_builds.symbol_rows(R,c['sha256'],'all-native-vtables.json');names=['_ZTV25UServerMapMarkerComponent','_ZTV24UCartographyMapSubsystem','_ZTV30AHarvestableInstancedMeshActor','_ZTV20AResourceNodeSpawner'];needles=[c['exeBase']+next(s['value'] for s in syms if s['name']==n)+16 for n in names];records=[]
 for line in layout.splitlines():
  match=re.match(r'([0-9a-f]+)-([0-9a-f]+) rw.p .*',line)
  if not match or '/home/dune/server/' in line:continue

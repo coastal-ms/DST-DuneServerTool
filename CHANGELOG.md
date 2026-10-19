@@ -1,4 +1,4 @@
-﻿# Changelog
+# Changelog
 
 All notable changes to this project will be documented in this file.
 
@@ -12,6 +12,12 @@ on GitHub still exist for each individual release; the consolidated entries
 here cover everything those tags shipped.
 
 ## [Unreleased]
+
+Refresh the server-update badge automatically when the battlegroup starts. Clear stale notices when the installed server is current and keep the last known status if a version check fails.
+
+Restore DD Atlas live observations for the Dune Awakening 1.5.15.0 server build, including position, gathering, vehicle and point-of-interest discovery.
+
+Correct the Landsraad minimum-term setting and remove obsolete advanced controls for Dune Awakening 1.5.15.0.
 
 Game Config now reads and edits the active persistent INIs exposed by Funcom File Browser. Battlegroup restart preserves those files instead of copying setup templates over manual changes and deletions. Related local game INI differences are advisory: review either direction explicitly, or keep them separate. Live Atlas uses the full available workspace width, supports expanding the map, and keeps expanded base markers within the viewport.
 
@@ -77,6 +83,20 @@ Item decay guidance distinguishes the update interval in seconds from decay spee
 - Default Start afterward on in managed settings reviews, including when the battlegroup is already stopped. Leaving it stopped remains an explicit choice.
 - Display the fresh result from manual status refresh, prevent older polls from replacing it, and invalidate port status when the battlegroup changes state.
 - Check public TCP reachability through CanYouSeeMe and PortCheckTool before falling back to Check-Host. Keep checker failures and timeouts separate from a confirmed closed port, recheck Closed results after one minute, and share the same built-in policy with the command-line tool.
+
+## [16.5.0.2] - 2026-10-19
+
+### Fixed
+
+- Allow game server updates when Tank compatibility is enabled.
+- Move Hagga to the updated official server build after an update, preventing mismatched map versions. Tank compatibility is disabled when moving to a newer unsupported build.
+- Correct the Landsraad minimum-term control for Dune Awakening 1.5.15.0 and remove obsolete advanced controls while preserving existing INI values.
+
+### Dune Awakening 1.5.15.0 compatibility
+
+We checked the full DST CVar catalog against the updated game and server files. All identified changes have been handled and cross-checked, including entries removed by Funcom. Existing saved overrides are preserved.
+
+We cannot confirm every CVar's in-game functionality. Controls removed by Funcom are no longer supported, and we will not troubleshoot those removed controls. We will investigate and update DST if other issues arising from this patch are found.
 
 ## [16.5.0.1] - 2026-10-14
 

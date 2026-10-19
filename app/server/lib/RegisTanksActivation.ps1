@@ -1,4 +1,4 @@
-function Get-DuneRegisTankDeployment {
+﻿function Get-DuneRegisTankDeployment {
     param([string]$Ip, [switch]$AllowUnsupportedMap)
     $bg = Get-V6Battlegroup -Ip $Ip
     Assert-DuneRetailKubernetesName -Value ([string]$bg.Ns) -Label namespace
@@ -65,8 +65,35 @@ function Initialize-DuneRegisTanksForStartup {
     return Set-DuneRegisTankCompatibility -Ip $Ip -Enabled $true
 }
 
-function Assert-DuneRegisTankUpdateAllowed {
+function Sync-DuneRegisTankServerUpdate {
     param([string]$Ip)
-    $deployment = Get-DuneRegisTankDeployment -Ip $Ip
-    if ($deployment.image -clike 'localhost/dst-regis-tanks:*') { throw 'This server update needs qualified Tank compatibility for the new build. Saved Tanks require the current compatibility image.' }
+    $deployment = Get-DuneRegisTankDeployment -Ip $Ip -AllowUnsupportedMap
+    if ($deployment.image -cnotmatch '^localhost/dst-regis-tanks:([0-9]+)-(?:1|native-trial1)$') { return @{changed=$false} }
+    $tankBuild = [long]$Matches[1]
+    $official = @($deployment.bg.Bg.spec.serverGroup.template.spec.sets | ForEach-Object {
+        if ($_.image -cmatch '^registry\.funcom\.com/funcom/self-hosting/seabass-server:([0-9]+)-0-shipping$') {
+            [long]$Matches[1]
+        }
+    } | Sort-Object -Unique)
+    if ($official.Count -ne 1 -or $official[0] -le $tankBuild) { return @{changed=$false} }
+    $target = Resolve-DuneRetailServerSettingsTarget -Ip $Ip
+    if (-not $target.available -or -not $target.stopped -or $target.serverPodCount -ne 0) {
+        throw 'Stop the battlegroup completely to finish applying the updated server image to Hagga.'
+    }
+    $desired = 'registry.funcom.com/funcom/self-hosting/seabass-server:' + $official[0] + '-0-shipping'
+    $path = '/spec/serverGroup/template/spec/sets/' + $deployment.index + '/image'
+    $patch = @(
+        @{op='test';path='/metadata/resourceVersion';value=[string]$deployment.bg.Bg.metadata.resourceVersion},
+        @{op='test';path='/spec/stop';value=$true},
+        @{op='test';path=('/spec/serverGroup/template/spec/sets/' + $deployment.index + '/map');value='Survival_1'},
+        @{op='test';path=$path;value=$deployment.image},
+        @{op='replace';path=$path;value=$desired}
+    ) | ConvertTo-Json -Depth 8 -Compress
+    $encoded = [Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes($patch))
+    Write-Warning 'Applying the current official server build to Hagga. Tank compatibility is disabled for this build; saved Tanks may be affected.'
+    $command = "p=`"`$(printf %s '$encoded' | base64 -d)`"; sudo -n /usr/local/bin/k3s kubectl -n '$($deployment.bg.Ns)' patch battlegroup '$($deployment.bg.Name)' --type=json -p `"`$p`""
+    Invoke-DuneRegisTankShell -Ip $Ip -Script $command | Out-Null
+    $after = Get-DuneRegisTankDeployment -Ip $Ip -AllowUnsupportedMap
+    if ($after.image -cne $desired) { throw 'Updated Hagga server image readback failed.' }
+    return @{changed=$true;image=$desired}
 }

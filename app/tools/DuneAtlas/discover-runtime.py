@@ -1,11 +1,11 @@
 import sys
 from pathlib import Path
 sys.path.insert(0,str(Path(__file__).resolve().parent.parent if Path(__file__).resolve().parent.name=="hagga" else Path(__file__).resolve().parent))
+import atlas_builds
 import atlas_process
 from pathlib import Path
 import subprocess,json,re,struct,base64,importlib.util
 R=Path(__file__).resolve().parent
-EXPECTED='c04524c353ec9657759e95235ae93fb76f1ccde8838f6c5a59bc1ef4e1305522'
 def remote(command,output,input=None):
  cmd=R/'discovery-command.sh';cmd.write_text(command,encoding='utf-8')
  args=['pwsh','-NoProfile','-File',str(R/'remote.ps1'),'-CommandFile',str(cmd),'-OutputFile',str(R/output)]
@@ -23,10 +23,12 @@ done
 identity=re.search(r'^PID (\d+)',layout,re.M)
 if not identity:raise RuntimeError('Deep Desert server is not running yet')
 pid=int(identity[1]);start=re.search(r'^START (\d+)',layout,re.M)[1]
-if EXPECTED not in layout:raise RuntimeError('Unrecognized server build; native collector remains unavailable')
+digest=re.search(r'^([0-9a-f]{64})\s+',layout,re.M)
+if not digest:raise RuntimeError('Server executable identity unavailable')
+build=atlas_builds.profile(R,digest[1]);EXPECTED=digest[1]
 base=int(next(line.split('-')[0] for line in layout.splitlines() if '/home/dune/server/' in line and ' r-xp ' in line),16)
-old=json.loads((R/'runtime-context.json').read_text());pooloffset=old['namePoolTable']-old['exeBase']
-syms=json.loads((R/'native-symbols.json').read_text());names=['_ZTV17USandStormManager','_ZTV18USandwormSubsystem','_ZTV23UResourceFieldSubsystem','_ZTV13ASandwormPawn','_ZTV18USandStormSettings'];needles={n:base+next(s['value'] for s in syms if s['name']==n)+16 for n in names};records=[]
+pooloffset=build['namePoolTableOffset']
+syms=build['symbols'];names=['_ZTV17USandStormManager','_ZTV18USandwormSubsystem','_ZTV23UResourceFieldSubsystem','_ZTV13ASandwormPawn','_ZTV18USandStormSettings'];needles={n:base+syms[n]+16 for n in names};records=[]
 for line in layout.splitlines():
  match=re.match(r'([0-9a-f]+)-([0-9a-f]+) rw.p .*',line)
  if not match or '/home/dune/server/' in line:continue

@@ -490,7 +490,10 @@ echo "SRC=$SRC"
     } catch {
         return @{ ok = $false; status = 502; message = "Update check failed: $($_.Exception.Message)"; available = $false; checkedAt = $checkedAt }
     }
-    $out = if ($r) { [string]$r.out } else { '' }
+    if (-not $r -or $r.rc -ne 0) {
+        return @{ ok = $false; status = 502; message = 'Update check could not read the VM build information.'; available = $false; checkedAt = $checkedAt }
+    }
+    $out = [string]$r.out
     $installed = ''
     $latest = ''
     $source = ''
@@ -522,7 +525,7 @@ echo "SRC=$SRC"
         message        = $message
     }
 
-    if ($Persist) {
+    if ($Persist -and $ok) {
         try {
             $state = Get-DuneRestartSchedule
             $state.updateAvailable = $available
@@ -1103,7 +1106,7 @@ function Start-DuneFuncomUpdateCheckAsync {
     $script:DuneFuncomCheckPowerShell = $null
     $script:DuneFuncomCheckRunspace   = $null
     try {
-        $iss = New-DuneSchedulerInitialSessionState -ServerDir $ServerDir
+        $iss = New-DuneSchedulerInitialSessionState -ServerDir $ServerDir -DeferLibraryLoad
         $rs = [runspacefactory]::CreateRunspace($iss)
         $rs.Name = 'DuneFuncomUpdateCheck'
         $rs.ApartmentState = 'MTA'
@@ -1111,6 +1114,7 @@ function Start-DuneFuncomUpdateCheckAsync {
         $ps = [powershell]::Create()
         $ps.Runspace = $rs
         [void]$ps.AddScript({
+            foreach ($startupScript in $DuneSchedulerStartupScripts) { . $startupScript }
             if ($DuneSchedulerLogPath -and (Get-Command Set-DuneLogPath -ErrorAction SilentlyContinue)) {
                 try { Set-DuneLogPath -Path $DuneSchedulerLogPath } catch {}
             }

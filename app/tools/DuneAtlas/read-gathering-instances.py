@@ -1,6 +1,7 @@
 from pathlib import Path
 import os,sys
 sys.path.insert(0,str(Path(__file__).resolve().parent.parent if Path(__file__).resolve().parent.name=="hagga" else Path(__file__).resolve().parent))
+import atlas_builds
 from atlas_gathering import classify
 import json,struct,importlib.util,math,datetime,collections
 r=Path(__file__).resolve().parent;saved_spec=importlib.util.spec_from_file_location('saved_pois',(r.parent if r.name=='hagga' else r)/'saved-pois.py');saved_pois=importlib.util.module_from_spec(saved_spec);saved_spec.loader.exec_module(saved_pois);startedAt=datetime.datetime.now(datetime.timezone.utc).isoformat();sp=importlib.util.spec_from_file_location('bounded',r/'bounded-memory.py');mod=importlib.util.module_from_spec(sp);sp.loader.exec_module(mod);reader=mod.Reader();ctx=reader.context
@@ -35,7 +36,7 @@ for v,h in zip(sites,heads):
   if n:harvest.append((v,ptr,n))
 print('Reading harvestable component lists',len(harvest),flush=True);arrays=reader.read([(ptr,n*8) for v,ptr,n in harvest])
 for (v,ptr,n),b in zip(harvest,arrays):nodes.extend((v,component) for component in struct.unpack('<'+'Q'*n,b) if component)
-unique=list(dict.fromkeys(ptr for v,ptr in nodes));print('Reading mesh components',len(unique),flush=True);buffers=reader.read([(ptr,1920) for ptr in unique]);components={};records=[];symbols=json.loads((r/'all-native-vtables.json').read_text());allowed={ctx['exeBase']+v['value']+16 for v in symbols if v['name'] in ['_ZTV41UHierarchicalInstancedStaticMeshComponent','_ZTV34UHarvestableInstancedMeshComponent','_ZTV36UFoliageInstancedStaticMeshComponent','_ZTV29UInstancedStaticMeshComponent','_ZTV18UResourceComponent']};byPtr={ptr:b for ptr,b in zip(unique,buffers)}
+unique=list(dict.fromkeys(ptr for v,ptr in nodes));print('Reading mesh components',len(unique),flush=True);buffers=reader.read([(ptr,1920) for ptr in unique]);components={};records=[];symbols=atlas_builds.symbol_rows(r,ctx['sha256'],'all-native-vtables.json');allowed={ctx['exeBase']+v['value']+16 for v in symbols if v['name'] in ['_ZTV41UHierarchicalInstancedStaticMeshComponent','_ZTV34UHarvestableInstancedMeshComponent','_ZTV36UFoliageInstancedStaticMeshComponent','_ZTV29UInstancedStaticMeshComponent','_ZTV18UResourceComponent']};byPtr={ptr:b for ptr,b in zip(unique,buffers)}
 (r/'gathering-component-stage.json').write_text(json.dumps({'context':ctx,'nodes':nodes,'unique':unique,'capturedAt':datetime.datetime.now(datetime.timezone.utc).isoformat()}));(r/'gathering-component-stage.bin').write_bytes(b''.join(buffers));excluded=collections.Counter()
 def scene(b):
  p=struct.unpack_from('<3d',b,456);rot=struct.unpack_from('<3d',b,480);scale=struct.unpack_from('<3d',b,504)

@@ -74,10 +74,50 @@ Describe 'Regis Tank activation and rollback' {
         (Initialize-DuneRegisTanksForStartup -Ip test).supported | Should -BeFalse
         Should -Invoke New-DuneRegisTankServerImage -Times 0
     }
-    It 'blocks an update while a native Tank image is selected' {
+}
+
+Describe 'Tank images follow official server upgrades' {
+    BeforeEach {
         $script:Image='localhost/dst-regis-tanks:2147284-1'
-        { Assert-DuneRegisTankUpdateAllowed -Ip test } | Should -Throw '*qualified*'
-        $script:Image='registry.funcom.com/funcom/self-hosting/seabass-server:2147284-0-shipping'
-        { Assert-DuneRegisTankUpdateAllowed -Ip test } | Should -Not -Throw
+        $script:Official='registry.funcom.com/funcom/self-hosting/seabass-server:2156652-0-shipping'
+        $script:CapturedPatch=$null
+        Mock Get-V6Battlegroup { @{Ns='test-bg';Name='test-world';Bg=@{metadata=@{resourceVersion='17'};spec=@{stop=$true;serverGroup=@{template=@{spec=@{sets=@(@{map='Survival_1';image=$script:Image},@{map='Overmap';image=$script:Official})}}}}}} }
+        Mock Resolve-DuneRetailServerSettingsTarget { @{available=$true;stopped=$true;serverPodCount=0} }
+        Mock Invoke-DuneRegisTankShell {
+            $match=[regex]::Match($Script,"printf %s '([^']+)'")
+            $script:CapturedPatch=[Text.Encoding]::UTF8.GetString([Convert]::FromBase64String($match.Groups[1].Value)) | ConvertFrom-Json
+            $script:Image=@($script:CapturedPatch | Where-Object op -eq replace)[0].value
+            ''
+        }
+    }
+    It 'moves only Hagga to the updated official image with compare-and-swap guards' {
+        (Sync-DuneRegisTankServerUpdate -Ip test).changed | Should -BeTrue
+        $script:Image | Should -Be $script:Official
+        @($script:CapturedPatch | Where-Object op -eq replace).Count | Should -Be 1
+        @($script:CapturedPatch | Where-Object op -eq replace)[0].path | Should -Be '/spec/serverGroup/template/spec/sets/0/image'
+        @($script:CapturedPatch | Where-Object op -eq test).Count | Should -Be 4
+    }
+    It 'also transitions the legacy native trial image' {
+        $script:Image='localhost/dst-regis-tanks:2147284-native-trial1'
+        (Sync-DuneRegisTankServerUpdate -Ip test).changed | Should -BeTrue
+    }
+    It 'preserves Tank compatibility while official maps remain on the same build' {
+        $script:Official='registry.funcom.com/funcom/self-hosting/seabass-server:2147284-0-shipping'
+        (Sync-DuneRegisTankServerUpdate -Ip test).changed | Should -BeFalse
+        Should -Invoke Invoke-DuneRegisTankShell -Times 0
+    }
+    It 'does not alter unrelated custom images' {
+        $script:Image='custom/example:latest'
+        (Sync-DuneRegisTankServerUpdate -Ip test).changed | Should -BeFalse
+        Should -Invoke Invoke-DuneRegisTankShell -Times 0
+    }
+    It 'does not change an image while game pods are still present' {
+        Mock Resolve-DuneRetailServerSettingsTarget { @{available=$true;stopped=$true;serverPodCount=1} }
+        { Sync-DuneRegisTankServerUpdate -Ip test } | Should -Throw '*Stop the battlegroup completely*'
+        Should -Invoke Invoke-DuneRegisTankShell -Times 0
+    }
+    It 'detects a failed image readback' {
+        Mock Invoke-DuneRegisTankShell { '' }
+        { Sync-DuneRegisTankServerUpdate -Ip test } | Should -Throw '*readback failed*'
     }
 }

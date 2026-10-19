@@ -6,10 +6,8 @@ import atlas_process
 from pathlib import Path
 import json,subprocess,sys,hashlib,os
 
-BUILDS={
- 'c04524c353ec9657759e95235ae93fb76f1ccde8838f6c5a59bc1ef4e1305522',
- '240b4bb378a93b70134fa685fc467bc2ae94fd40d81da2feea0f987758bc9126',
-}
+from atlas_builds import BUILDS
+
 STAGES=('find-poi-actors.py','find-static-marker-actors.py','read-all-static-markers.py')
 FILES=('poi-actor-cache.json','static-marker-actor-cache.json','native-static-marker-sites.json')
 
