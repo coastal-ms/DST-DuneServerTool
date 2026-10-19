@@ -538,6 +538,53 @@ BeforeEach {
         {Import-DuneSoloMod $zip} | Should -Throw '*Already installed*'
         Get-Content (Join-Path $script:DuneSoloModsRoot 'Test/mod.ini') | Should -Be 'custom'
     }
+    It 'requests overwrite confirmation without changing any mod in a mixed package' {
+        Import-DuneSoloMod (New-ModZip 'preview-old' @{'Test/Scripts/main.lua'='old';'Test/mod.ini'='custom'}) | Out-Null
+        $zip=New-ModZip 'preview-new' @{'Test/Scripts/main.lua'='new';'Test/mod.ini'='default';'Other/Scripts/main.lua'='other'}
+        $result=Import-DuneSoloMod $zip -CheckOverwrite
+        $result.overwriteRequired | Should -BeTrue
+        $result.mods | Should -Contain 'Test'
+        $result.archiveHash | Should -Be (Get-FileHash $zip).Hash
+        Get-Content (Join-Path $script:DuneSoloModsRoot 'Test/mod.ini') | Should -Be 'custom'
+        Test-Path (Join-Path $script:DuneSoloModsRoot 'Other') | Should -BeFalse
+    }
+    It 'replaces confirmed uploaded mods and preserves enabled selections and load order' {
+        Import-DuneSoloMod (New-ModZip 'replace-old' @{'Test/Scripts/main.lua'='old';'Test/mod.ini'='custom';'Test/obsolete.txt'='old'}) | Out-Null
+        Set-DuneSoloModSelection @{mods=@(@{folder='Test';enabled=$true});gamePath=''} | Out-Null
+        $selection=Get-Content (Join-Path $script:DuneSoloLoaderRoot 'selection.json') -Raw
+        $order=Get-Content (Join-Path $script:DuneSoloLoaderRoot 'order.json') -Raw
+        $zip=New-ModZip 'replace-new' @{'Test/Scripts/main.lua'='new';'Test/mod.ini'='default'}
+        $base64=[Convert]::ToBase64String([IO.File]::ReadAllBytes($zip))
+        $preview=Import-DuneSoloModUpload -Filename 'update.zip' -Base64 $base64 -CheckOverwrite
+        Import-DuneSoloModUpload -Filename 'update.zip' -Base64 $base64 -Overwrite -ExpectedHash $preview.archiveHash | Out-Null
+        Get-Content (Join-Path $script:DuneSoloModsRoot 'Test/mod.ini') | Should -Be 'default'
+        Get-Content (Join-Path $script:DuneSoloModsRoot 'Test/Scripts/main.lua') | Should -Be 'new'
+        Test-Path (Join-Path $script:DuneSoloModsRoot 'Test/obsolete.txt') | Should -BeFalse
+        Get-Content (Join-Path $script:DuneSoloLoaderRoot 'selection.json') -Raw | Should -BeExactly $selection
+        Get-Content (Join-Path $script:DuneSoloLoaderRoot 'order.json') -Raw | Should -BeExactly $order
+    }
+    It 'rejects an overwrite if the archive changed after confirmation' {
+        Import-DuneSoloMod (New-ModZip 'hash-old' @{'Test/Scripts/main.lua'='old'}) | Out-Null
+        $zip=New-ModZip 'hash-new' @{'Test/Scripts/main.lua'='new'}
+        {Import-DuneSoloMod $zip -Overwrite -ExpectedHash ('0'*64)} | Should -Throw '*ZIP changed*'
+        Get-Content (Join-Path $script:DuneSoloModsRoot 'Test/Scripts/main.lua') | Should -Be 'old'
+    }
+    It 'replaces a flat archive without copying recovery files into the mod' {
+        Import-DuneSoloMod (New-ModZip 'flat-old' @{'Scripts/main.lua'='old';'mod.json'='{"id":"Flat"}';'custom.ini'='old'}) | Out-Null
+        $zip=New-ModZip 'flat-new' @{'Scripts/main.lua'='new';'mod.json'='{"id":"Flat"}'}
+        Import-DuneSoloMod $zip -Overwrite -ExpectedHash (Get-FileHash $zip).Hash | Out-Null
+        Get-Content (Join-Path $script:DuneSoloModsRoot 'Flat/Scripts/main.lua') | Should -Be 'new'
+        Test-Path (Join-Path $script:DuneSoloModsRoot 'Flat/custom.ini') | Should -BeFalse
+        @(Get-ChildItem (Join-Path $script:DuneSoloModsRoot 'Flat') -Filter 'Previous-*').Count | Should -Be 0
+    }
+    It 'rolls back all replaced folders when copying a later mod fails' {
+        Import-DuneSoloMod (New-ModZip 'rollback-old' @{'A/Scripts/main.lua'='old A';'B/Scripts/main.lua'='old B'}) | Out-Null
+        $zip=New-ModZip 'rollback-new' @{'A/Scripts/main.lua'='new A';'B/Scripts/main.lua'='new B'}
+        Mock Copy-Item {throw 'Simulated mod copy failure'} -ParameterFilter {$Destination -eq (Join-Path $script:DuneSoloModsRoot 'B')}
+        {Import-DuneSoloMod $zip -Overwrite -ExpectedHash (Get-FileHash $zip).Hash} | Should -Throw '*Simulated mod copy failure*'
+        Get-Content (Join-Path $script:DuneSoloModsRoot 'A/Scripts/main.lua') | Should -Be 'old A'
+        Get-Content (Join-Path $script:DuneSoloModsRoot 'B/Scripts/main.lua') | Should -Be 'old B'
+    }
     It 'reports missing declared dependencies, then clears the error when enabled' {
         $zip=New-ModZip 'deps' @{'A/Scripts/main.lua'='print(1)';'A/mod.json'='{"id":"A","requires":[{"id":"B","minVersion":"1.0"}]}';'B/Scripts/main.lua'='print(2)';'B/mod.json'='{"id":"B","version":"1.1"}'}
         Import-DuneSoloMod $zip | Out-Null

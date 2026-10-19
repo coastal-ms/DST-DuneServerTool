@@ -7,6 +7,7 @@ import {
   deleteInventoryItem,
   deleteStorageItem,
   renameStorage,
+  repairStorageContents,
   setItemStack,
   setStorageItemStack,
   type InventoryEntityType,
@@ -201,6 +202,7 @@ export function SharedInventoryExplorer({
   const [renameMessage, setRenameMessage] = useState('')
   const [inventoryMutationMessage, setInventoryMutationMessage] = useState('')
   const [inventoryMutationError, setInventoryMutationError] = useState('')
+  const [repairLoading, setRepairLoading] = useState(false)
   const [loadedIdentity, setLoadedIdentity] = useState('')
   const requestVersion = useRef(0)
   const renameRequestVersion = useRef(0)
@@ -414,6 +416,22 @@ export function SharedInventoryExplorer({
         </label>
         <button type="submit" className="btn-primary min-h-11" disabled={loading || loadingMore}><Icon name="Search" size={15} />Search</button>
         <button type="button" className="btn-secondary min-h-11" disabled={loading || loadingMore} onClick={() => { void refresh() }}><Icon name="RefreshCw" size={14} />Refresh</button>
+        {canManageBases && current?.data.mode === 'live' && renameTarget && (
+          <button type="button" className="btn-secondary min-h-11" disabled={loading || loadingMore || repairLoading || renameLoading}
+            onClick={async () => {
+              const version = renameRequestVersion.current
+              setRepairLoading(true); setInventoryMutationError(''); setInventoryMutationMessage('')
+              try {
+                const result = await repairStorageContents(renameTarget.id)
+                if (version !== renameRequestVersion.current) return
+                setInventoryMutationMessage(result.message || 'Storage contents repaired.')
+                await mutationRefresh.current()
+              } catch (reason) { if (version === renameRequestVersion.current) setInventoryMutationError(errorMessage(reason)) }
+              finally { setRepairLoading(false) }
+            }}>
+            <Icon name="Wrench" size={14} />Repair all contents
+          </button>
+        )}
         {canManageBases && current?.data.mode === 'live' && renameTarget && (
           <button
             type="button"
@@ -871,7 +889,7 @@ function OccurrencePanel({
                   </div>
                   <dl className="mt-2 grid grid-cols-2 gap-x-4 gap-y-1 text-xs sm:grid-cols-4">
                     <div><dt className="text-text-dim">Quality</dt><dd>{item.quality}</dd></div>
-                    <div><dt className="text-text-dim">Durability</dt><dd>{valueOrNotReported(item.durability)} / {valueOrNotReported(item.maxDurability)}</dd></div>
+                    <div><dt className="text-text-dim">Durability</dt><dd>{valueOrNotReported(item.durability)} / {item.maxDurability && item.maxDurability !== 'N/A' ? item.maxDurability : (item.metadata.baseMaxDurability ?? 0) > 0 ? <span title="Base maximum from the game item definition; the save omits this value.">{item.metadata.baseMaxDurability} (base)</span> : 'Not reported'}</dd></div>
                     <div><dt className="text-text-dim">Item</dt><dd>{item.id}</dd></div>
                     <div><dt className="text-text-dim">Inventory</dt><dd>{item.entity.inventoryType}</dd></div>
                   </dl>

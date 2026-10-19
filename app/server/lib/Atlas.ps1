@@ -1,5 +1,5 @@
 # Local map UI host. Opening it starts an idle snapshot service, never live reads.
-# Game observation begins only through the map's Refresh or Start live controls.
+# Opening the map restores its saved Live choice; Stop live persists until Start live.
 
 function Resolve-DuneAtlasAppDirectory {
     param([Parameter(Mandatory)][string]$Root)
@@ -59,6 +59,32 @@ function Get-DuneAtlasReadySession {
     } catch { return $null }
 }
 
+function Initialize-DuneAtlasPython {
+    param([string]$SourceRoot, [string]$RuntimeRoot)
+    $sourcePython = Join-Path $SourceRoot 'python'
+    # Source checkouts may use a developer interpreter. Installers always bundle one.
+    if (-not (Test-Path -LiteralPath $sourcePython -PathType Container)) { return }
+    $definition = [IO.File]::ReadAllText((Join-Path $RuntimeRoot 'python-runtime.json')) | ConvertFrom-Json
+    if ($definition.schemaVersion -ne 1 -or -not $definition.files) { throw 'Invalid Atlas Python package.' }
+    $targetPython = Join-Path $RuntimeRoot 'python'
+    [void][IO.Directory]::CreateDirectory($targetPython)
+    foreach ($property in $definition.files.PSObject.Properties) {
+        $name = [string]$property.Name
+        if ($name -notmatch '^[A-Za-z0-9_][A-Za-z0-9_.-]*$' -or $name.Contains('..')) { throw 'Unsafe Atlas Python package path.' }
+        $source = Join-Path $sourcePython $name
+        if (-not (Test-Path -LiteralPath $source -PathType Leaf) -or
+            (Get-FileHash -LiteralPath $source -Algorithm SHA256).Hash -ne [string]$property.Value) {
+            throw 'Atlas Python package verification failed.'
+        }
+        $target = Join-Path $targetPython $name
+        if (-not (Test-Path -LiteralPath $target -PathType Leaf) -or
+            (Get-FileHash -LiteralPath $target -Algorithm SHA256).Hash -ne [string]$property.Value) {
+            Copy-Item -LiteralPath $source -Destination $target -Force
+        }
+    }
+    if (-not (Test-Path -LiteralPath (Join-Path $targetPython 'python.exe') -PathType Leaf)) { throw 'Atlas Python executable is unavailable.' }
+}
+
 function Initialize-DuneAtlasRuntime {
     param(
         [Parameter(Mandatory)][string]$AppRoot,
@@ -97,6 +123,7 @@ function Initialize-DuneAtlasRuntime {
             Copy-Item -LiteralPath (Join-Path $runtimeRoot $bootstrap.Name.Replace('/', '\')) -Destination $target
         }
     }
+    Initialize-DuneAtlasPython -SourceRoot $sourceRoot -RuntimeRoot $runtimeRoot
     return $runtimeRoot
 }
 
@@ -209,6 +236,8 @@ function Start-DuneAtlasSession {
     $python = Get-DuneAtlasPython -AppRoot $AppRoot
     if (-not $python) { return @{ available=$false; reasonCode='runtime-unavailable' } }
     $runtimeRoot = Initialize-DuneAtlasRuntime -AppRoot $AppRoot -DataRoot $DataRoot
+    $privatePython = Join-Path $runtimeRoot 'python\python.exe'
+    if (Test-Path -LiteralPath $privatePython -PathType Leaf) { $python = $privatePython }
     $existing = Get-DuneAtlasReadySession -RuntimeRoot $runtimeRoot
     if ($existing) { return $existing }
     # A slow health response does not prove that the owned host has stopped.

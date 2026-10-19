@@ -303,14 +303,15 @@ Describe 'Shared Inventory Explorer read model' -Tag 'Pure' {
     }
 
     It 'projects names-only catalog entries with null sortable metadata' {
-        $templateId = 'HarkSandbike_MeshCustomization'
-        $metadata = Get-DuneInventoryCatalogMetadataJson | ConvertFrom-Json
-        $entry = $metadata.PSObject.Properties[$templateId.ToLowerInvariant()].Value
-
-        $entry.name | Should -Be (Get-DuneGameplayItemName -TemplateId $templateId)
-        $entry.name | Should -Not -Be $templateId
-        $entry.tier | Should -BeNullOrEmpty
-        $entry.volume | Should -BeNullOrEmpty
+        $templateId = 'NamesOnlyFixture'
+        $script:DuneGameplayItemNames[$templateId] = 'Names-only fixture'
+        try {
+            $metadata = Get-DuneInventoryCatalogMetadataJson | ConvertFrom-Json
+            $entry = $metadata.PSObject.Properties[$templateId.ToLowerInvariant()].Value
+            $entry.name | Should -Be 'Names-only fixture'
+            $entry.tier | Should -BeNullOrEmpty
+            $entry.volume | Should -BeNullOrEmpty
+        } finally { $script:DuneGameplayItemNames.Remove($templateId) }
     }
 
     It 'validates entity types and supports exact demo scopes' {

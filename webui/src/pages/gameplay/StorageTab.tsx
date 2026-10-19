@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Icon } from '../../components/Icon'
 import { ItemPicker } from '../../components/ItemPicker'
 import {
-  getStorage, getStorageItems, giveItemsToStorage, deleteStorageItem, renameStorage, setStorageItemStack, isValidTemplateId,
+  getStorage, getStorageItems, giveItemsToStorage, deleteStorageItem, renameStorage, repairStorageContents, setStorageItemStack, isValidTemplateId,
   type StorageContainer, type InventoryItem, type DataSource, type StorageGiveItemInput,
 } from '../../api/gameplay'
 import { GivePackageForm } from './players/sections'
@@ -191,6 +191,15 @@ function ContainerDetail({ container, demo, onClose, onChanged, onRenamed }: {
     }
   }
 
+  const handleRepairAll = async () => {
+    setBusy(true); setError(null); setFlash(null)
+    try {
+      const result = await repairStorageContents(container.id)
+      afterWrite(result.message || 'Storage contents repaired.')
+    } catch (e) { setError(e instanceof Error ? e.message : String(e)) }
+    finally { setBusy(false) }
+  }
+
   const handleAdd = async (staged: StorageGiveItemInput[]) => {
     setBusy(true); setError(null); setFlash(null)
     try {
@@ -313,6 +322,9 @@ function ContainerDetail({ container, demo, onClose, onChanged, onRenamed }: {
         {canWrite ? (
           <>
             <div className="flex flex-wrap gap-2 mb-2">
+              <button className="btn-secondary" disabled={busy || loading || items.length === 0} onClick={() => void handleRepairAll()}>
+                <Icon name="Wrench" size={14} /> Repair all contents
+              </button>
               <button className="btn-primary" disabled={busy} onClick={() => { setShowAdd(s => !s); setShowPackage(false) }}>
                 <Icon name="PackagePlus" size={14} /> Add Items
               </button>

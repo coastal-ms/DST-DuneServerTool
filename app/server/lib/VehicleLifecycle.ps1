@@ -71,21 +71,14 @@ function Get-DuneVehicleModuleDefaultDurability {
     param([string]$TemplateId)
     $defaults = Get-DuneVehicleModuleDurabilityDefaults
     if ($defaults.ContainsKey($TemplateId)) { return [double]$defaults[$TemplateId] }
-    $rule = Get-DuneGameplayItemRule -TemplateId $TemplateId
-    return [double]$rule.max_durability
+    # Installed modules use CDT_BaseVehicleModules, not the inventory item's cap.
+    return 0.0
 }
 
 function Get-DuneVehicleModuleRepairDefaults {
     $combined = @{}
     foreach ($entry in (Get-DuneVehicleModuleDurabilityDefaults).GetEnumerator()) {
         $combined[[string]$entry.Key] = [double]$entry.Value
-    }
-    Initialize-DuneGameplayItemData
-    foreach ($templateId in $script:DuneGameplayItemRules.Keys) {
-        $rule = $script:DuneGameplayItemRules[$templateId]
-        if ([string]$rule.category -like 'items/vehicles/*' -and [double]$rule.max_durability -gt 0) {
-            $combined[[string]$templateId] = [double]$rule.max_durability
-        }
     }
     return $combined
 }

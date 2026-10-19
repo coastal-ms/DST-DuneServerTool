@@ -1,0 +1,257 @@
+{
+  "seed": 11,
+  "pois": [
+    {
+      "sector": "I1",
+      "subx": 4,
+      "suby": 3,
+      "type": "testing-station",
+      "name": "Testing Station (I1) - The Forgotten Cells"
+    },
+    {
+      "sector": "I5",
+      "subx": 3,
+      "suby": 3,
+      "type": "wreck",
+      "name": "Wreck (I5) - The Walkway"
+    },
+    {
+      "sector": "H4",
+      "subx": 3,
+      "suby": 1,
+      "type": "cave",
+      "name": "Small Chest Cave"
+    },
+    {
+      "sector": "H8",
+      "subx": 2,
+      "suby": 2,
+      "type": "testing-station",
+      "name": "Testing Station (H8) - The Water Plant"
+    },
+    {
+      "sector": "G3",
+      "subx": 2,
+      "suby": 1,
+      "type": "cave",
+      "name": "Loot Cave (G3)"
+    },
+    {
+      "sector": "G7",
+      "subx": 4,
+      "suby": 1,
+      "type": "cave",
+      "name": "Small Chest Cave"
+    },
+    {
+      "sector": "F1",
+      "subx": 4,
+      "suby": 1,
+      "type": "cave",
+      "name": "Small Chest Cave"
+    },
+    {
+      "sector": "F4",
+      "subx": 3,
+      "suby": 3,
+      "type": "testing-station",
+      "name": "Testing Station (F4) - The Spice Silo"
+    },
+    {
+      "sector": "F7",
+      "subx": 3,
+      "suby": 3,
+      "type": "wreck",
+      "name": "Wreck (F7) - The Walkway"
+    },
+    {
+      "sector": "E3",
+      "subx": 2,
+      "suby": 2,
+      "type": "wreck",
+      "name": "Wreck (E3) - The Walkway"
+    },
+    {
+      "sector": "E8",
+      "subx": 2,
+      "suby": 2,
+      "type": "testing-station",
+      "name": "Testing Station (E8) - Mannequin Manor"
+    },
+    {
+      "sector": "D6",
+      "subx": 2,
+      "suby": 1,
+      "type": "wreck",
+      "name": "Wreck (D6) - The Walkway"
+    },
+    {
+      "sector": "D8",
+      "subx": 3,
+      "suby": 2,
+      "type": "cave",
+      "name": "Loot Cave (D8)"
+    },
+    {
+      "sector": "C2",
+      "subx": 3,
+      "suby": 3,
+      "type": "cave",
+      "name": "Small Chest Cave"
+    },
+    {
+      "sector": "C5",
+      "subx": 3,
+      "suby": 3,
+      "type": "cave",
+      "name": "Small Chest Cave"
+    },
+    {
+      "sector": "C8",
+      "subx": 1,
+      "suby": 2,
+      "type": "cave",
+      "name": "Small Chest Cave"
+    },
+    {
+      "sector": "B5",
+      "subx": 3,
+      "suby": 0,
+      "type": "cave",
+      "name": "Small Chest Cave"
+    },
+    {
+      "sector": "A1",
+      "subx": 3,
+      "suby": 1,
+      "type": "wreck",
+      "name": "Wreck of the Eumenes (A1)"
+    },
+    {
+      "sector": "A1",
+      "subx": 2,
+      "suby": 2,
+      "type": "wreck",
+      "name": "Wreck of the Hicetas (A1)"
+    },
+    {
+      "sector": "A2",
+      "subx": 1,
+      "suby": 1,
+      "type": "taxi-service",
+      "name": "Fast Travel Taxi"
+    },
+    {
+      "sector": "A2",
+      "subx": 2,
+      "suby": 1,
+      "type": "testing-station",
+      "name": "Imperial Testing Station 37 (A2)"
+    },
+    {
+      "sector": "A2",
+      "subx": 3,
+      "suby": 2,
+      "type": "wreck",
+      "name": "Wreck of the Hyperbatas (A2)"
+    },
+    {
+      "sector": "A3",
+      "subx": 3,
+      "suby": 1,
+      "type": "wreck",
+      "name": "Wreck of the Archidamas III (A3)"
+    },
+    {
+      "sector": "A3",
+      "subx": 2,
+      "suby": 2,
+      "type": "testing-station",
+      "name": "Imperial Testing Station 185 (A3)"
+    },
+    {
+      "sector": "A3",
+      "subx": 4,
+      "suby": 2,
+      "type": "wreck",
+      "name": "Wreck of the Cycliadas (A3)"
+    },
+    {
+      "sector": "A4",
+      "subx": 4,
+      "suby": 1,
+      "type": "testing-station",
+      "name": "Imperial Testing Station 148 (A4)"
+    },
+    {
+      "sector": "A4",
+      "subx": 3,
+      "suby": 2,
+      "type": "wreck",
+      "name": "Wreck of the Dioedas (A4)"
+    },
+    {
+      "sector": "A5",
+      "subx": 2,
+      "suby": 0,
+      "type": "taxi-service",
+      "name": "Fast Travel Taxi"
+    },
+    {
+      "sector": "A5",
+      "subx": 2,
+      "suby": 1,
+      "type": "wreck",
+      "name": "Wreck of the Xenophon (A5)"
+    },
+    {
+      "sector": "A5",
+      "subx": 3,
+      "suby": 2,
+      "type": "testing-station",
+      "name": "Imperial Testing Station 93 (A5)"
+    },
+    {
+      "sector": "A7",
+      "subx": 2,
+      "suby": 0,
+      "type": "wreck",
+      "name": "Wreck of the Proxenus (A7)"
+    },
+    {
+      "sector": "A8",
+      "subx": 2,
+      "suby": 0,
+      "type": "taxi-service",
+      "name": "Fast Travel Taxi"
+    },
+    {
+      "sector": "A8",
+      "subx": 3,
+      "suby": 0,
+      "type": "testing-station",
+      "name": "Imperial Testing Station 186 (A8)"
+    },
+    {
+      "sector": "A9",
+      "subx": 2,
+      "suby": 1,
+      "type": "wreck",
+      "name": "Wreck of the Orsippus (A9)"
+    },
+    {
+      "sector": "A9",
+      "subx": 1,
+      "suby": 2,
+      "type": "testing-station",
+      "name": "Imperial Testing Station 217 (A9)"
+    },
+    {
+      "sector": "A9",
+      "subx": 3,
+      "suby": 2,
+      "type": "wreck",
+      "name": "Wreck of the Stasanor (A9)"
+    }
+  ]
+}

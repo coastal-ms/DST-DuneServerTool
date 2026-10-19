@@ -8,6 +8,43 @@ const state = {mods: [{folder: 'Example', id: 'Example', name: 'Example', versio
 beforeEach(() => { vi.mocked(api).mockImplementation(async () => state) })
 afterEach(() => { cleanup(); vi.clearAllMocks(); localStorage.clear() })
 describe('Solo mod controls', () => {
+  it('warns before overwriting a dropped mod and leaves it untouched on cancel', async () => {
+    vi.mocked(api).mockImplementation(async path => path === '/api/solo/mods/import' ? {overwriteRequired:true,mods:['Example'],archiveHash:'zip-hash'} : state)
+    render(<SoloMods />)
+    fireEvent.click(screen.getByRole('button', {name:/Solo mods/}))
+    await screen.findByText('Example')
+    fireEvent.drop(screen.getByRole('region',{name:'Drop a mod ZIP'}),{dataTransfer:{types:['Files'],files:[new File(['update'],'Example.zip')]}})
+    const dialog=await screen.findByRole('alertdialog')
+    expect(dialog).toHaveTextContent('custom settings or files in those folders will be lost')
+    fireEvent.click(screen.getByRole('button',{name:'Cancel'}))
+    expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument()
+    expect(vi.mocked(api).mock.calls.filter(([path])=>path==='/api/solo/mods/import')).toHaveLength(1)
+  })
+  it('retries the same dropped ZIP with explicit approval and its fingerprint', async () => {
+    let imports=0
+    vi.mocked(api).mockImplementation(async path => path === '/api/solo/mods/import' && ++imports===1 ? {overwriteRequired:true,mods:['Example'],archiveHash:'zip-hash'} : state)
+    render(<SoloMods />)
+    fireEvent.click(screen.getByRole('button',{name:/Solo mods/}))
+    await screen.findByText('Example')
+    fireEvent.drop(screen.getByRole('region',{name:'Drop a mod ZIP'}),{dataTransfer:{types:['Files'],files:[new File(['update'],'Example.zip')]}})
+    fireEvent.click(await screen.findByRole('button',{name:'Overwrite mods'}))
+    await screen.findByText('Example.zip installed.')
+    expect(api).toHaveBeenCalledWith('/api/solo/mods/import',{method:'POST',body:JSON.stringify({filename:'Example.zip',base64:btoa('update'),overwrite:true,archiveHash:'zip-hash'})})
+  })
+  it('also confirms updates selected through Install mod ZIP', async () => {
+    vi.mocked(api).mockImplementation(async (path, options) => {
+      if(path==='/api/browse-path') return {cancelled:false,path:'C:/Downloads/update.zip'}
+      if(path==='/api/solo/mods/import' && !JSON.parse(String(options?.body)).overwrite) return {overwriteRequired:true,mods:['Example'],archiveHash:'path-hash'}
+      return state
+    })
+    render(<SoloMods />)
+    fireEvent.click(screen.getByRole('button',{name:/Solo mods/}))
+    await screen.findByText('Example')
+    fireEvent.click(screen.getByRole('button',{name:'Install mod ZIP'}))
+    fireEvent.click(await screen.findByRole('button',{name:'Overwrite mods'}))
+    await screen.findByText('Mod ZIP installed.')
+    expect(api).toHaveBeenCalledWith('/api/solo/mods/import',{method:'POST',body:JSON.stringify({path:'C:/Downloads/update.zip',overwrite:true,archiveHash:'path-hash'})})
+  })
   it('imports a dropped ZIP using its contents and refreshes the mod list', async () => {
     render(<SoloMods />)
     fireEvent.click(screen.getByRole('button', { name: /Solo mods/ }))

@@ -4,7 +4,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { AtlasLiveState } from '../src/pages/workspaces/AtlasLiveState'
 const { openAtlasSession } = vi.hoisted(() => ({ openAtlasSession: vi.fn() }))
 vi.mock('../src/api/atlas', () => ({ openAtlasSession }))
-afterEach(() => { cleanup(); vi.resetAllMocks() })
+afterEach(() => { cleanup(); vi.useRealTimers(); vi.resetAllMocks() })
 describe('Atlas Live State hosting', () => {
   it('shows only loading while the service request is pending', () => {
     openAtlasSession.mockReturnValue(new Promise(() => {}))
@@ -42,5 +42,24 @@ describe('Atlas Live State hosting', () => {
     view.unmount()
     await act(async () => { finish({ available: true, url: '/api/v1/maps/atlas/view' }) })
     expect(screen.queryByTitle('Own-server live atlas')).not.toBeInTheDocument()
+  })
+  it('automatically reconnects after service interruption without requiring Retry', async () => {
+    vi.useFakeTimers()
+    openAtlasSession.mockRejectedValueOnce(new Error('restarting')).mockResolvedValueOnce({available:true,url:'/api/v1/maps/atlas/view'})
+    render(<AtlasLiveState />)
+    await act(async()=>{})
+    expect(screen.getByText('Live map unavailable')).toBeInTheDocument()
+    await act(async()=>{await vi.advanceTimersByTimeAsync(5000)})
+    expect(screen.getByTitle('Own-server live atlas')).toBeInTheDocument()
+    expect(openAtlasSession).toHaveBeenCalledTimes(2)
+  })
+  it('cancels automatic reconnect when leaving the map', async () => {
+    vi.useFakeTimers()
+    openAtlasSession.mockRejectedValue(new Error('restarting'))
+    const view=render(<AtlasLiveState />)
+    await act(async()=>{})
+    view.unmount()
+    await act(async()=>{await vi.advanceTimersByTimeAsync(10000)})
+    expect(openAtlasSession).toHaveBeenCalledTimes(1)
   })
 })

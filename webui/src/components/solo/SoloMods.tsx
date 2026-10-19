@@ -11,6 +11,8 @@ import { pickLocalFolder } from '../../util/pathPicker'
 import { isShellHost, openShellFolder } from '../../util/shellBridge'
 
 interface Mod { folder: string; id: string; name: string; version: string; enabled: boolean; warnings?: string[]; errors: string[] }
+type ModImport = { path: string } | { filename: string; base64: string }
+interface OverwriteRequest { body: ModImport; mods: string[]; archiveHash: string }
 interface State { runtimeVersions?: {version: string; label: string}[]; runtimePreferenceVersion?: string; useNewerRuntime?: boolean; runtimeVersion?: string; runtimeFallback?: boolean; runtimeWarnings?: string[]; gameRunning?: boolean; mods: Mod[]; folder: string; gamePath: string; skipIntro: boolean; soloArguments?: string; runtimeReady: boolean; session: { runtimeVersion?: string } | null; launchError?: string; runtimeLog?: string }
 
 function SortableMod({ mod, disabled, children }: { mod: Mod; disabled: boolean; children: ReactNode }) {
@@ -37,6 +39,7 @@ export function SoloMods({ connectionToken = '' }: { connectionToken?: string })
   const [error, setError] = useState('')
   const [notice, setNotice] = useState('')
   const [deleting, setDeleting] = useState<Mod | null>(null)
+  const [overwrite, setOverwrite] = useState<OverwriteRequest | null>(null)
   const [log, setLog] = useState<{ available: boolean; content: string } | null>(null)
   const [logLoading, setLogLoading] = useState(false)
   const viewLog = async () => {
@@ -128,8 +131,23 @@ export function SoloMods({ connectionToken = '' }: { connectionToken?: string })
       const pick = await api<{ cancelled: boolean; path: string }>('/api/browse-path', {
         method: 'POST', body: JSON.stringify({ mode: 'file', title: 'Install mod ZIP', filter: 'Mod ZIP (*.zip)|*.zip' }),
       })
-      if (!pick.cancelled && pick.path) await run('import', { path: pick.path })
+      if (!pick.cancelled && pick.path) await importMod({ path: pick.path })
     } catch (e) { setError(e instanceof Error ? e.message : String(e)) }
+  }
+  const importMod = async (body: ModImport, archiveHash?: string) => {
+    setBusy(true); setError(''); setNotice('')
+    try {
+      const result = await api<{ overwriteRequired?: boolean; mods?: string[]; archiveHash?: string }>('/api/solo/mods/import', {
+        method: 'POST', body: JSON.stringify(archiveHash ? { ...body, overwrite: true, archiveHash } : body),
+      })
+      if (result.overwriteRequired && result.mods && result.archiveHash) {
+        setOverwrite({ body, mods: result.mods, archiveHash: result.archiveHash })
+        return
+      }
+      await refresh()
+      setNotice(`${'filename' in body ? body.filename : 'Mod ZIP'} installed.`)
+    } catch (e) { setError(e instanceof Error ? e.message : String(e)) }
+    finally { setBusy(false) }
   }
   const importDroppedZip = async (files: FileList) => {
     setFileOver(false)
@@ -147,9 +165,7 @@ export function SoloMods({ connectionToken = '' }: { connectionToken?: string })
         reader.onload = () => resolve(String(reader.result).split(',')[1] ?? '')
         reader.readAsDataURL(file)
       })
-      await api('/api/solo/mods/import', { method: 'POST', body: JSON.stringify({ filename: file.name, base64 }) })
-      await refresh()
-      setNotice(`${file.name} installed.`)
+      await importMod({ filename: file.name, base64 })
     } catch (e) { setError(e instanceof Error ? e.message : String(e)) }
     finally { setBusy(false) }
   }
@@ -199,6 +215,7 @@ export function SoloMods({ connectionToken = '' }: { connectionToken?: string })
         </p>
       )}
       {deleting && <ConfirmationModal title={`Delete ${deleting.name}?`} description="This permanently removes the mod folder and its INI settings. You can reinstall the mod from its ZIP." confirmLabel="Delete mod" onCancel={() => setDeleting(null)} onConfirm={() => { const folder = deleting.folder; setDeleting(null); void run('delete', { folder }) }} />}
+      {overwrite && <ConfirmationModal title="Overwrite installed mods?" description={`Replace ${overwrite.mods.join(', ')} with the files from this ZIP? This replaces the mod folders, including control files and INI settings. Any custom settings or files in those folders will be lost. Mod enabled selections and load order are kept.`} confirmLabel="Overwrite mods" onCancel={() => setOverwrite(null)} onConfirm={() => { const pending = overwrite; setOverwrite(null); void importMod(pending.body, pending.archiveHash) }} />}
       <a className="text-sm text-accent-bright underline" href="https://www.nexusmods.com/duneawakening" target="_blank" rel="noopener noreferrer">Browse Dune: Awakening mods on Nexus Mods</a>
       <div role="region" aria-label="Drop a mod ZIP" aria-disabled={busy || !state || state.gameRunning}
         className={`rounded-lg border-2 border-dashed p-4 text-center text-sm ${fileOver ? 'border-accent bg-accent/10' : 'border-border text-text-muted'}`}

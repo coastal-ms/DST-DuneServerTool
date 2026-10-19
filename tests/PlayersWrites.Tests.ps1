@@ -147,12 +147,13 @@ Describe 'Resolve-DuneRepairDurabilityTarget' -Tag 'Pure' {
     It 'keeps no-current empty durability blocks untouched' {
         Resolve-DuneRepairDurabilityTarget -CatalogMax 0 -ItemMax 0 -ItemCurrent 0 -ItemDecayedMax 0 -HasCurrent $false | Should -Be 0
     }
-    It 'repairs current-only zero or low durability items to 100' {
-        Resolve-DuneRepairDurabilityTarget -CatalogMax 0 -ItemMax 0 -ItemCurrent 0 -ItemDecayedMax 0 -HasCurrent $true | Should -Be 100
-        Resolve-DuneRepairDurabilityTarget -CatalogMax 0 -ItemMax 0 -ItemCurrent 50 -ItemDecayedMax 0 -HasCurrent $true | Should -Be 100
+    It 'does not invent a maximum from only a current durability value' {
+        Resolve-DuneRepairDurabilityTarget -CatalogMax 0 -ItemMax 0 -ItemCurrent 0 -ItemDecayedMax 0 -HasCurrent $true | Should -Be 0
+        Resolve-DuneRepairDurabilityTarget -CatalogMax 0 -ItemMax 0 -ItemCurrent 50 -ItemDecayedMax 0 -HasCurrent $true | Should -Be 0
     }
-    It 'rounds current-only values between 100 and 200 up to 200' {
-        Resolve-DuneRepairDurabilityTarget -CatalogMax 0 -ItemMax 0 -ItemCurrent 150 -ItemDecayedMax 0 -HasCurrent $true | Should -Be 200
+    It 'preserves an exact known maximum without rounding to an invented cap' {
+        Resolve-DuneRepairDurabilityTarget -CatalogMax 150 -ItemMax 0 -ItemCurrent 50 -ItemDecayedMax 0 -HasCurrent $true | Should -Be 150
+        Resolve-DuneRepairDurabilityTarget -CatalogMax 0 -CatalogKnown $true -ItemMax 0 -ItemCurrent 0 -ItemDecayedMax 100 -HasCurrent $true | Should -Be 0
     }
     It 'preserves known higher catalog or item caps' {
         Resolve-DuneRepairDurabilityTarget -CatalogMax 400 -ItemMax 0 -ItemCurrent 50 -ItemDecayedMax 0 -HasCurrent $true | Should -Be 400

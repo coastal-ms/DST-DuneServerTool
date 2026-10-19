@@ -267,6 +267,7 @@ function ConvertTo-DuneInventoryItem {
             volume = [double]$rule.volume
             vendorPrice = [int]$rule.vendor_price
             isGradeable = [bool]$rule.is_gradeable
+            baseMaxDurability = [Math]::Max(0, [double]$rule.max_durability)
         }
         entity = [ordered]@{
             type = $entityType
@@ -774,6 +775,7 @@ function ConvertTo-DuneInventoryCacheInput {
             volume = if ($hasRule -and $null -ne $rule.volume) { [double]$rule.volume } else { $null }
             vendorPrice = [long]$Item.metadata.vendorPrice
             isGradeable = [bool]$Item.metadata.isGradeable
+            baseMaxDurability = [Math]::Max(0, [double]$rule.max_durability)
         }
         inventoryId = [long]$Item.entity.inventoryId
         inventoryType = [int]$Item.entity.inventoryType

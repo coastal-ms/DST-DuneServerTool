@@ -114,7 +114,15 @@ function Invoke-DuneInventoryOccurrenceCachePage {
             cursorSource = 'cache'
             generation = [string]$result.generation
             freshness = ConvertTo-DuneInventoryCacheFreshness -Result $result
-            items = @($result.data.items)
+            items = @(foreach ($item in @($result.data.items)) {
+                if ($item.templateId -and $item.metadata) {
+                    $rule = Get-DuneGameplayItemRule -TemplateId ([string]$item.templateId)
+                    $maximum = [Math]::Max(0, [double]$rule.max_durability)
+                    if ($item.metadata -is [System.Collections.IDictionary]) { $item.metadata['baseMaxDurability'] = $maximum }
+                    else { $item.metadata | Add-Member -NotePropertyName baseMaxDurability -NotePropertyValue $maximum -Force }
+                }
+                $item
+            })
             players = @($result.data.players)
             locations = @($result.data.locations)
             selectedPlayerValid = [bool]$result.data.selectedPlayerValid

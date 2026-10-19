@@ -266,6 +266,10 @@ jobs:
         run: python3 -B -m unittest discover -s tests -p test_deck_companion.py -v
       - name: Verify Atlas server build profiles
         run: python3 -B -m unittest discover -s tests -p test_atlas_builds.py -v
+      - name: Verify Atlas Live recovery
+        run: python3 -B -m unittest discover -s tools/atlas -p test_live.py -v
+      - name: Verify current game item catalog coverage
+        run: python3 -B -m unittest discover -s tests -p test_item_catalog_coverage.py -v
 
   solo-helper:
     if: ${{ github.event_name != 'pull_request' || github.event.pull_request.draft == false }}

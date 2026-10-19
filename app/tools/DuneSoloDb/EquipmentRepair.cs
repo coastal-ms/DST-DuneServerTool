@@ -32,6 +32,9 @@ internal static partial class Program
                     inventoryId = selected.Id;
                 }
                 using var rules = JsonDocument.Parse(File.ReadAllText(catalogPath));
+                var durabilityRules = new Dictionary<string, JsonElement>(StringComparer.OrdinalIgnoreCase);
+                if (rules.RootElement.TryGetProperty("items", out var definitions))
+                    foreach (var definition in definitions.EnumerateObject()) durabilityRules[definition.Name] = definition.Value;
                 using (var command = connection.CreateCommand())
                 {
                     command.CommandText = inventoryId == 0
@@ -45,16 +48,28 @@ internal static partial class Program
                         var stats = JsonNode.Parse(reader.GetString(2)) as JsonObject ?? throw new InvalidDataException("Invalid equipment stats.");
                         if (stats["FItemStackAndDurabilityStats"] is not JsonArray pair || pair.Count != 2 || pair[1] is not JsonObject durability) continue;
                         var maximum = 0.0;
-                        if (rules.RootElement.TryGetProperty("items", out var items) && items.TryGetProperty(reader.GetString(1), out var rule) && rule.TryGetProperty("max_durability", out var cap)) maximum = cap.GetDouble();
-                        foreach (var key in new[] { "MaxDurability", "CurrentDurability", "DecayedMaxDurability" })
+                        var known = false;
+                        if (durabilityRules.TryGetValue(reader.GetString(1), out var rule))
+                        {
+                            if (rule.TryGetProperty("max_durability", out var cap)) maximum = cap.GetDouble();
+                            known = rule.TryGetProperty("durability_known", out var flag) && flag.ValueKind == JsonValueKind.True;
+                        }
+                        var storedMaximum = durability["MaxDurability"]?.GetValue<double>() ?? 0;
+                        if (known && maximum <= 0 && storedMaximum <= 0) continue;
+                        foreach (var key in new[] { "MaxDurability", "DecayedMaxDurability" })
                         {
                             if (durability[key] is null) continue;
                             var value = durability[key]!.GetValue<double>();
                             if (!double.IsFinite(value) || value < 0) throw new InvalidDataException("Invalid equipment durability.");
                             maximum = Math.Max(maximum, value);
                         }
-                        if (maximum <= 0 && durability["CurrentDurability"] is null) continue;
-                        maximum = maximum < 100 ? 100 : maximum < 200 && maximum > 100 ? 200 : maximum;
+                        if (maximum <= 0) continue;
+                        if (durability["CurrentDurability"] is JsonValue current)
+                        {
+                            var value = current.GetValue<double>();
+                            if (!double.IsFinite(value) || value < 0) throw new InvalidDataException("Invalid equipment durability.");
+                            maximum = Math.Max(maximum, value);
+                        }
                         if (!double.IsFinite(maximum)) throw new InvalidDataException("Invalid equipment durability cap.");
                         var changed = false;
                         foreach (var key in new[] { "MaxDurability", "CurrentDurability", "DecayedMaxDurability" })
@@ -89,6 +104,13 @@ internal static partial class Program
     }
     private static void TestEquipmentRepair(string source, string catalogPath, string root)
     {
+        var repairCatalog = JsonNode.Parse(File.ReadAllText(catalogPath))!.AsObject();
+        var repairRules = repairCatalog["items"]!.AsObject();
+        repairRules["FullStabilizationBelt"] = JsonNode.Parse("""{"max_durability":100,"durability_known":true}""");
+        repairRules["PortableLight"] = JsonNode.Parse("""{"max_durability":100,"durability_known":true}""");
+        repairRules["HealthPack_Channeled_2"] = JsonNode.Parse("""{"max_durability":0,"durability_known":true}""");
+        catalogPath = Path.Combine(root, "repair-catalog.json");
+        File.WriteAllText(catalogPath, repairCatalog.ToJsonString());
         var sqlite = Path.Combine(root, "repair-test.sqlite");
         File.WriteAllBytes(sqlite, Unwrap(File.ReadAllBytes(source)).SqliteBytes);
         long storage;
@@ -98,6 +120,13 @@ internal static partial class Program
             storage = ReadInventoryDestinations(connection).First(value => value.Kind == "developer-storage").Id;
             ExecuteNonQuery(connection, "INSERT INTO items(id,inventory_id,stack_size,position_index,template_id,stats,quality_level) VALUES(9000,$inventory,1,0,'TestSword',$stats,0);",
                 ("$inventory", storage), ("$stats", "{\"FItemStackAndDurabilityStats\":[[],{\"CurrentDurability\":1,\"MaxDurability\":250,\"DecayedMaxDurability\":200}],\"keep\":7}"));
+            foreach (var (id, template, json) in new[] {
+                (9001, "FullStabilizationBelt", """{"FItemStackAndDurabilityStats":[[],{"CurrentDurability":28.669025,"DecayedMaxDurability":56.992908}],"keep":7}"""),
+                (9002, "HealthPack_Channeled_2", """{"FItemStackAndDurabilityStats":[[],{"CurrentDurability":0,"DecayedMaxDurability":100}],"keep":7}"""),
+                (9003, "CustomSword", """{"FItemStackAndDurabilityStats":[[],{"CurrentDurability":10,"MaxDurability":150,"DecayedMaxDurability":140}],"keep":7}"""),
+                (9004, "portablelight", """{"FItemStackAndDurabilityStats":[[],{"CurrentDurability":0}],"keep":7}"""),
+                (9005, "UnknownNoCap", """{"FItemStackAndDurabilityStats":[[],{"CurrentDurability":15}],"keep":7}""") })
+                ExecuteNonQuery(connection, "INSERT INTO items(id,inventory_id,stack_size,position_index,template_id,stats,quality_level) VALUES($id,$inventory,1,0,$template,$stats,0);", ("$id", id), ("$inventory", storage), ("$template", template), ("$stats", json));
         }
         var target = Path.Combine(root, "repair-test.db");
         WrapSqlite(sqlite, target);
@@ -114,6 +143,11 @@ internal static partial class Program
             connection.Open();
             var stats = JsonNode.Parse(ScalarString(connection, "SELECT json(stats) FROM items WHERE id=9000;"))!;
             if (stats["keep"]!.GetValue<int>() != 7 || stats["FItemStackAndDurabilityStats"]![1]!["CurrentDurability"]!.GetValue<double>() != 250) throw new InvalidOperationException("Repair stats preservation failed.");
+            foreach (var (id, expected) in new[] { (9001,100.0), (9002,0.0), (9003,150.0), (9004,100.0), (9005,15.0) })
+            {
+                var item = JsonNode.Parse(ScalarString(connection, $"SELECT json(stats) FROM items WHERE id={id};"))!;
+                if (item["FItemStackAndDurabilityStats"]![1]!["CurrentDurability"]!.GetValue<double>() != expected || item["keep"]!.GetValue<int>() != 7) throw new InvalidOperationException($"Repair cap coverage failed for {id}.");
+            }
         }
         var rejected = false;
         try { RepairEquipment(target, backup, catalogPath, "inventory:999999", requireGameClosed: false); } catch (InvalidDataException) { rejected = true; }

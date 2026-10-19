@@ -13,6 +13,18 @@ here cover everything those tags shipped.
 
 ## [Unreleased]
 
+Bundle a private runtime for live maps so they open without a separate Python installation, including PCs using Microsoft Store Python.
+
+Keep installed vehicle-module repair values separate from inventory item durability, and restore missing developer and building-grant catalog entries.
+
+Refresh item definitions from the current game files across self-host and Solo. Restore missing equipment durability caps, show the base maximum when a saved item omits it, and fix selected-box repairs incorrectly reporting no repairable items.
+
+Keep map Live collection enabled across DST updates and restarts, and resume reads as worlds return. Stop live stays off until Start live is selected again.
+
+Repair all equipment in a selected self-host storage box, leaving other containers and non-equipment items unchanged.
+
+Allow mod ZIP updates to replace installed mods after confirmation. Warn that replacing mod folders resets their custom control files and settings, while keeping enabled selections and load order.
+
 Refresh the server-update badge automatically when the battlegroup starts. Clear stale notices when the installed server is current and keep the last known status if a version check fails.
 
 Restore DD Atlas live observations for the Dune Awakening 1.5.15.0 server build, including position, gathering, vehicle and point-of-interest discovery.

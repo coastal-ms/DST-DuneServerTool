@@ -637,7 +637,7 @@ WHERE inv.actor_id = $PawnId::bigint
         $iDec = [double]([string]$r['d'])
         $cMax = Get-DuneItemCatalogMaxDurability -TemplateId $tmpl
         $hasCur = ConvertTo-DuneBool $r['has_c']
-        $target = Resolve-DuneRepairDurabilityTarget -CatalogMax $cMax -ItemMax $iMax -ItemCurrent $iCur -ItemDecayedMax $iDec -HasCurrent $hasCur
+        $target = Resolve-DuneRepairDurabilityTarget -CatalogMax $cMax -CatalogKnown ([bool](Get-DuneGameplayItemRule -TemplateId $tmpl).durability_known) -ItemMax $iMax -ItemCurrent $iCur -ItemDecayedMax $iDec -HasCurrent $hasCur
         if ($target -gt 0) {
             $iid  = [long]$r['id']
             $tval = Format-DuneFloatForSql -Value $target
@@ -842,7 +842,7 @@ WHERE inv.actor_id = $PawnId::bigint
         $iDec = [double]([string]$r['d'])
         $cMax = Get-DuneItemCatalogMaxDurability -TemplateId $tmpl
         $hasCur = ConvertTo-DuneBool $r['has_c']
-        $target = Resolve-DuneRepairDurabilityTarget -CatalogMax $cMax -ItemMax $iMax -ItemCurrent $iCur -ItemDecayedMax $iDec -HasCurrent $hasCur
+        $target = Resolve-DuneRepairDurabilityTarget -CatalogMax $cMax -CatalogKnown ([bool](Get-DuneGameplayItemRule -TemplateId $tmpl).durability_known) -ItemMax $iMax -ItemCurrent $iCur -ItemDecayedMax $iDec -HasCurrent $hasCur
         if ($target -gt 0) {
             $iid  = [long]$r['id']
             $tval = Format-DuneFloatForSql -Value $target

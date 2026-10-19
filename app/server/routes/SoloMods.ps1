@@ -8,8 +8,8 @@ Register-DuneRoute -Method POST -Path '/api/solo/mods/import' -LocalOnly -Handle
         $result=Invoke-WithDuneLock -Name 'solo-mods' -Script {
             if ($null -ne $body.base64 -or $null -ne $body.filename) {
                 if ($body.path) { throw 'Choose one ZIP import source.' }
-                Import-DuneSoloModUpload -Filename ([string]$body.filename) -Base64 ([string]$body.base64)
-            } else { Import-DuneSoloMod ([string]$body.path) }
+                Import-DuneSoloModUpload -Filename ([string]$body.filename) -Base64 ([string]$body.base64) -CheckOverwrite -Overwrite:($body.overwrite -is [bool] -and $body.overwrite) -ExpectedHash ([string]$body.archiveHash)
+            } else { Import-DuneSoloMod -Path ([string]$body.path) -CheckOverwrite -Overwrite:($body.overwrite -is [bool] -and $body.overwrite) -ExpectedHash ([string]$body.archiveHash) }
         }
         Write-DuneJson -Response $res -Body $result
     } catch { Write-DuneError -Response $res -Status 400 -Message $_.Exception.Message }

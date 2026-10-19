@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "files": {
-    "server.py": "22e0a6554b3c01249bccd48b736a2fc1eda92de7dcd31c55fe0e0e0c81717dd5",
+    "server.py": "028e58651f03f60d9c49728e54b2c570aeca901c4cd09a34252de19abc8277a4",
     "index.html": "f4f1f43f79a958558363913a63d950a40a9b2aee580f0e7a6ba97b6f3c77649e",
     "atlas_preferences.py": "b3516ed4931ba2ca2b17f2e69a18da278d65eaff73bdd0ccbfc6fe0b3a3eb412",
     "atlas_runtime.py": "93f7897a29eb077c5aa9c2b911fe7aacdb19494610cba562ce994f019046d7c9",
@@ -84,7 +84,9 @@
     "atlas_gathering.py": "b019c82265bd353e68241857594fc5d64261585bcb09f3d65a31f09540acc4cd",
     "atlas_storm_timing.py": "30a8cb09975915e16040e674202034c33444fad51c87f54080f23ceee7b7bdbb",
     "atlas_builds.py": "c79163f72f30326b77b5cd9619751f3bfe6fddf70f3ba742cccdac374767c5e4",
-    "build-2156652.json": "a5a5788f0200ed614cfa2204baaa0b585272368f338b1162f968caf12d94a926"
+    "build-2156652.json": "a5a5788f0200ed614cfa2204baaa0b585272368f338b1162f968caf12d94a926",
+    "atlas_live.py": "626d219f58f9907f9c72d9d5d01efa3bdbf6afec64ad38870294b4084e7b3e74",
+    "python-runtime.json": "8a1c2b14d02b9f3cf74ffb25eb27913be13281f7ab48c2742d60626d5c658fc8"
   },
   "bootstrapContexts": {
     "bootstrap-context.json": "runtime-context.json",
@@ -96,5 +98,5 @@
   ],
   "externalRuntime": "Python 3.10+ and PowerShell; Linux O_RDONLY helpers must be installed",
   "nativeWrites": false,
-  "automaticLive": false
+  "automaticLive": true
 }

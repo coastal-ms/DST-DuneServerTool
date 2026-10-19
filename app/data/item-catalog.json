@@ -1,10 +1,11 @@
 {
   "_meta": {
-    "total": 2751,
-    "source": "awakening.wiki",
+    "total": 3606,
+    "source": "Existing catalog supplemented with current game CDT_BaseItems",
     "scraped": "2026-05-20",
     "gradeable": 378,
-    "supplemented": "gameplay-item-data.json (including developer items, blueprints, and schematics)"
+    "supplemented": "gameplay-item-data.json (including developer items, blueprints, and schematics)",
+    "gameBuild": "2156652-0-shipping"
   },
   "items": {
     "SMG_Unique_LargeMag_06": {
@@ -11766,6 +11767,3426 @@
     "D_ContractWrappedPackage": {
       "name": "Wrapped Package",
       "category": "Contract Items"
+    },
+    "D_AdvancedStillsuit": {
+      "name": "XX_NOTUSED_Advanced Stillsuit",
+      "category": "Developer - Internal"
+    },
+    "D_Combat_Choam_Light01_Boots": {
+      "name": "NU CHOAM Scout Boots",
+      "category": "Developer - Internal"
+    },
+    "D_Combat_Choam_Light01_Bottom": {
+      "name": "NU CHOAM Scout Bottom",
+      "category": "Developer - Internal"
+    },
+    "D_Combat_Choam_Light01_Gloves": {
+      "name": "NU CHOAM Scout Gloves",
+      "category": "Developer - Internal"
+    },
+    "D_Combat_Choam_Light01_Helmet": {
+      "name": "NU CHOAM Scout Helmet",
+      "category": "Developer - Internal"
+    },
+    "D_Combat_Choam_Light01_Top": {
+      "name": "NU CHOAM Scout Top",
+      "category": "Developer - Internal"
+    },
+    "D_Combat_Nati_FremenExile04_Boots": {
+      "name": "Fremen Exile Boots",
+      "category": "Developer - Internal"
+    },
+    "D_Combat_Nati_FremenExile04_Bottom": {
+      "name": "XX_NOTUSED_Fremen Exile Breeches",
+      "category": "Developer - Internal"
+    },
+    "D_Combat_Nati_FremenExile04_Gloves": {
+      "name": "Fremen Exile Gloves",
+      "category": "Developer - Internal"
+    },
+    "D_Combat_Nati_FremenExile04_Helmet": {
+      "name": "Fremen Exile Hood",
+      "category": "Developer - Internal"
+    },
+    "D_Combat_Nati_FremenExile04_Top": {
+      "name": "Fremen Exile Cuirass",
+      "category": "Developer - Internal"
+    },
+    "D_Combat_Neut_BanditHeavy04_Shell": {
+      "name": "Bandit Heavy Shell",
+      "category": "Developer - Internal"
+    },
+    "D_SimpleStillsuit": {
+      "name": "XX_NOTUSED_Simple Stillsuit",
+      "category": "Developer - Internal"
+    },
+    "D_Social_Atre_Casual03_Gloves": {
+      "name": "XX_NOTUSED_Caladan Casual Gloves",
+      "category": "Developer - Internal"
+    },
+    "D_Social_Atre_Casual03_Hat": {
+      "name": "XX_NOTUSED_Caladan Casual Hat",
+      "category": "Developer - Internal"
+    },
+    "D_Social_Choam_ImperialCasual03_Boots": {
+      "name": "Imperial Casual Shoes",
+      "category": "Developer - Internal"
+    },
+    "D_Social_Choam_ImperialCasual03_Bottom": {
+      "name": "Imperial Casual Pants",
+      "category": "Developer - Internal"
+    },
+    "D_Social_Choam_ImperialCasual03_Gloves": {
+      "name": "Imperial Casual Gloves",
+      "category": "Developer - Internal"
+    },
+    "D_Social_Choam_ImperialCasual03_Top": {
+      "name": "Imperial Casual Shirt",
+      "category": "Developer - Internal"
+    },
+    "D_Social_Choam_Jumpsuit01_Top": {
+      "name": "XX_NOTUSED_CHOAM Jumpsuit",
+      "category": "Developer - Internal"
+    },
+    "D_Social_Choam_Prison01_Headdress": {
+      "name": "XX_NOTUSED_Prison Uniform Hood",
+      "category": "Developer - Internal"
+    },
+    "D_Social_Hark_Formal01_Headdress": {
+      "name": "XX_NOTUSED_Hark Formal Headdress",
+      "category": "Developer - Internal"
+    },
+    "D_Social_Hark_Formal01_Top": {
+      "name": "XX_NOTUSED_Hark Formal Dress",
+      "category": "Developer - Internal"
+    },
+    "D_Social_Hark_GiediCasual03_Gloves": {
+      "name": "XX_NOTUSED_Giedi Casual Gloves",
+      "category": "Developer - Internal"
+    },
+    "D_Social_Nati_01_Bottom": {
+      "name": "XX_NOTUSED_Windsack Legs",
+      "category": "Developer - Internal"
+    },
+    "D_Social_Nati_01_Gloves": {
+      "name": "XX_NOTUSED_Windsack Hands",
+      "category": "Developer - Internal"
+    },
+    "D_Social_Nati_01_Headdress": {
+      "name": "XX_NOTUSED_Windsack Head",
+      "category": "Developer - Internal"
+    },
+    "D_Social_Nati_01_Shoes": {
+      "name": "XX_NOTUSED_Windsack Feet",
+      "category": "Developer - Internal"
+    },
+    "D_Social_Nati_01_Top": {
+      "name": "XX_NOTUSED_Windsack Chest",
+      "category": "Developer - Internal"
+    },
+    "D_Social_Nati_02_Shoes": {
+      "name": "XX_NOTUSED_Arrakis Sandal Boots",
+      "category": "Developer - Internal"
+    },
+    "D_Social_Nati_02_Top": {
+      "name": "XX_NOTUSED_Arrakis Crop Jacket",
+      "category": "Developer - Internal"
+    },
+    "D_Social_Nati_03_Bottom": {
+      "name": "XX_NOTUSED_Arrakis Leggings 03",
+      "category": "Developer - Internal"
+    },
+    "D_Social_Nati_03_Headwrap": {
+      "name": "XX_NOTUSED_Arrakis Headwrap 03",
+      "category": "Developer - Internal"
+    },
+    "D_Social_Nati_03_Shoes": {
+      "name": "XX_NOTUSED_Arrakis Shoes 03",
+      "category": "Developer - Internal"
+    },
+    "D_Social_Nati_03_Top": {
+      "name": "XX_NOTUSED_Arrakis Top 03",
+      "category": "Developer - Internal"
+    },
+    "D_Social_Nati_04_Bottom": {
+      "name": "XX_NOTUSED_Arrakis Leggings 04",
+      "category": "Developer - Internal"
+    },
+    "D_Social_Nati_04_Headwrap": {
+      "name": "XX_NOTUSED_Arrakis Headwrap 04",
+      "category": "Developer - Internal"
+    },
+    "D_Social_Nati_04_Shoes": {
+      "name": "XX_NOTUSED_Arrakis Shoes 04",
+      "category": "Developer - Internal"
+    },
+    "D_Social_Nati_04_Top": {
+      "name": "XX_NOTUSED_Arrakis Top 04",
+      "category": "Developer - Internal"
+    },
+    "D_Social_Nati_ArrakeenCommoner02_Boots": {
+      "name": "Arrakeen Commoner Shoes",
+      "category": "Developer - Internal"
+    },
+    "D_Social_Nati_ArrakeenCommoner02_Bottom": {
+      "name": "Arrakeen Commoner Pants",
+      "category": "Developer - Internal"
+    },
+    "D_Social_Nati_ArrakeenCommoner02_Gloves": {
+      "name": "Arrakeen Commoner Gloves",
+      "category": "Developer - Internal"
+    },
+    "D_Social_Nati_ArrakeenCommoner02_Helmet": {
+      "name": "Arrakeen Commoner Hat",
+      "category": "Developer - Internal"
+    },
+    "D_Social_Nati_ArrakeenCommoner02_Top": {
+      "name": "Arrakeen Commoner Shirt",
+      "category": "Developer - Internal"
+    },
+    "D_Social_Nati_DesertVagabond01_Boots": {
+      "name": "Desert Vagabond Shoes",
+      "category": "Developer - Internal"
+    },
+    "D_Social_Nati_DesertVagabond01_Bottom": {
+      "name": "Desert Vagabond Breeches",
+      "category": "Developer - Internal"
+    },
+    "D_Social_Nati_DesertVagabond01_Gloves": {
+      "name": "Desert Vagabond Gloves",
+      "category": "Developer - Internal"
+    },
+    "D_Social_Nati_DesertVagabond01_Helmet": {
+      "name": "Desert Vagabond Hood",
+      "category": "Developer - Internal"
+    },
+    "D_Social_Nati_DesertVagabond01_Top": {
+      "name": "Desert Vagabond Robe",
+      "category": "Developer - Internal"
+    },
+    "D_Social_Nati_HarkoCommoner02_Boots": {
+      "name": "Harko Commoner Shoes",
+      "category": "Developer - Internal"
+    },
+    "D_Social_Nati_HarkoCommoner02_Bottom": {
+      "name": "Harko Commoner Pants",
+      "category": "Developer - Internal"
+    },
+    "D_Social_Nati_HarkoCommoner02_Gloves": {
+      "name": "Harko Commoner Gloves",
+      "category": "Developer - Internal"
+    },
+    "D_Social_Nati_HarkoCommoner02_Helmet": {
+      "name": "Harko Commoner Hat",
+      "category": "Developer - Internal"
+    },
+    "D_Social_Nati_HarkoCommoner02_Top": {
+      "name": "Harko Commoner Shirt",
+      "category": "Developer - Internal"
+    },
+    "D_Social_Nati_SpiceMiner01_Fullbody": {
+      "name": "XX_NOTUSED_Arrakis Spice Miner",
+      "category": "Developer - Internal"
+    },
+    "D_Social_Nati_WindsackCommoner02_Boots": {
+      "name": "Windsack Commoner Shoes",
+      "category": "Developer - Internal"
+    },
+    "D_Social_Nati_WindsackCommoner02_Bottom": {
+      "name": "Windsack Commoner Pants",
+      "category": "Developer - Internal"
+    },
+    "D_Social_Nati_WindsackCommoner02_Gloves": {
+      "name": "XX_NOTUSED_Wind Com Gloves",
+      "category": "Developer - Internal"
+    },
+    "D_Social_Nati_WindsackCommoner02_Helmet": {
+      "name": "Windsack Commoner Hat",
+      "category": "Developer - Internal"
+    },
+    "D_Social_Nati_WindsackCommoner02_Top": {
+      "name": "Windsack Commoner Robe",
+      "category": "Developer - Internal"
+    },
+    "D_Social_Neut_SpiceTraderFinery04_Boots": {
+      "name": "Spice Trader Finery Shoes",
+      "category": "Developer - Internal"
+    },
+    "D_Social_Neut_SpiceTraderFinery04_Bottom": {
+      "name": "Spice Trader Finery Breeches",
+      "category": "Developer - Internal"
+    },
+    "D_Social_Neut_SpiceTraderFinery04_Gloves": {
+      "name": "Spice Trader Finery Shoes",
+      "category": "Developer - Internal"
+    },
+    "D_Social_Neut_SpiceTraderFinery04_Helmet": {
+      "name": "Spice Trader Finery Hat",
+      "category": "Developer - Internal"
+    },
+    "D_Social_Neut_SpiceTraderFinery04_Top": {
+      "name": "Spice Trader Finery Coat",
+      "category": "Developer - Internal"
+    },
+    "D_Social_Neut_Trader01_Bottom": {
+      "name": "XX_NOTUSED_Arrakis Trader Pants",
+      "category": "Developer - Internal"
+    },
+    "D_Social_Neut_Trader01_Hat": {
+      "name": "XX_NOTUSED_Arrakis Trader Hood",
+      "category": "Developer - Internal"
+    },
+    "D_Social_Neut_Trader01_Shoes": {
+      "name": "XX_NOTUSED_Arrakis Trader Shoes",
+      "category": "Developer - Internal"
+    },
+    "D_Social_Neut_Trader01_Top": {
+      "name": "XX_NOTUSED_Arrakis Trader Top",
+      "category": "Developer - Internal"
+    },
+    "D_Social_Smug_Caparison05_Boots": {
+      "name": "Smuggler Caparison Boots",
+      "category": "Developer - Internal"
+    },
+    "D_Social_Smug_Caparison05_Bottom": {
+      "name": "Smuggler Caparison Pants",
+      "category": "Developer - Internal"
+    },
+    "D_Social_Smug_Caparison05_Gloves": {
+      "name": "Smuggler Caparison Gloves",
+      "category": "Developer - Internal"
+    },
+    "D_Social_Smug_Caparison05_Top": {
+      "name": "Smuggler Caparison Coat",
+      "category": "Developer - Internal"
+    },
+    "D_Social_SpaceG_Tax01_Bottom": {
+      "name": "XX_NOTUSED_Guild Tax Off Pants",
+      "category": "Developer - Internal"
+    },
+    "D_Social_SpaceG_Tax01_Shoes": {
+      "name": "XX_NOTUSED_Guild Tax Off Shoes",
+      "category": "Developer - Internal"
+    },
+    "D_Social_SpaceG_Tax01_Top": {
+      "name": "XX_NOTUSED_Guild Tax Off Robe",
+      "category": "Developer - Internal"
+    },
+    "D_Stillsuit_Broken_Boots": {
+      "name": "XX_NOTUSED_Prison Uniform Boots",
+      "category": "Developer - Internal"
+    },
+    "D_Stillsuit_Broken_Gloves": {
+      "name": "XX_NOTUSED_Prison Uniform Gloves",
+      "category": "Developer - Internal"
+    },
+    "D_Stillsuit_Broken_Hood": {
+      "name": "XX_NOTUSED_Prison Uniform Hood",
+      "category": "Developer - Internal"
+    },
+    "D_Stillsuit_Broken_Top": {
+      "name": "XX_NOTUSED_Prison Uniform",
+      "category": "Developer - Internal"
+    },
+    "D_Stillsuit_Hark_01_Body": {
+      "name": "XX_NOTUSED_Harkonnen Stillsuit",
+      "category": "Developer - Internal"
+    },
+    "D_Stillsuit_Hark_01_Gloves": {
+      "name": "XX_NOTUSED_Hark Still Gloves",
+      "category": "Developer - Internal"
+    },
+    "D_Stillsuit_Hark_01_Helmet": {
+      "name": "XX_NOTUSED_Hark Still Helmet",
+      "category": "Developer - Internal"
+    },
+    "D_Stillsuit_Hark_01_Shoes": {
+      "name": "XX_NOTUSED_Hark Still Shoes",
+      "category": "Developer - Internal"
+    },
+    "D_Stillsuit_Nati": {
+      "name": "XX_NOTUSED_Native Stillsuit",
+      "category": "Developer - Internal"
+    },
+    "D_Stillsuit_Nati_01_Body": {
+      "name": "XX_NOTUSED_Native Stillsuit",
+      "category": "Developer - Internal"
+    },
+    "D_Stillsuit_Nati_01_Gloves": {
+      "name": "XX_NOTUSED_Native Still Gloves",
+      "category": "Developer - Internal"
+    },
+    "D_Stillsuit_Nati_01_Mask": {
+      "name": "XX_NOTUSED_Native Still Mask",
+      "category": "Developer - Internal"
+    },
+    "D_Stillsuit_Nati_01_Shoes": {
+      "name": "XX_NOTUSED_Native Still Shoes",
+      "category": "Developer - Internal"
+    },
+    "D_Stillsuit_Nati_05_Body": {
+      "name": "NOTUSED_Stillsuit_Nati_05_Body",
+      "category": "Developer - Internal"
+    },
+    "D_Stillsuit_Nati_05_Gloves": {
+      "name": "NOTUSED_Stillsuit_Nati_05_Gloves",
+      "category": "Developer - Internal"
+    },
+    "D_Stillsuit_Nati_05_Mask": {
+      "name": "NOTUSED_Stillsuit_Nati_05_Mask",
+      "category": "Developer - Internal"
+    },
+    "D_Stillsuit_Nati_05_Shoes": {
+      "name": "NOTUSED_Stillsuit_Nati_05_Shoes",
+      "category": "Developer - Internal"
+    },
+    "D_Stillsuit_Nati_06_Body": {
+      "name": "NOTUSED_Stillsuit_Nati_06_Body",
+      "category": "Developer - Internal"
+    },
+    "D_Stillsuit_Nati_06_Gloves": {
+      "name": "NOTUSED_Stillsuit_Nati_06_Gloves",
+      "category": "Developer - Internal"
+    },
+    "D_Stillsuit_Nati_06_Mask": {
+      "name": "NOTUSED_Stillsuit_Nati_06_Mask",
+      "category": "Developer - Internal"
+    },
+    "D_Stillsuit_Nati_06_Shoes": {
+      "name": "NOTUSED_Stillsuit_Nati_06_Shoes",
+      "category": "Developer - Internal"
+    },
+    "D_Stillsuit_Nati_07_Body": {
+      "name": "NOTUSED_Stillsuit_Nati_07_Body",
+      "category": "Developer - Internal"
+    },
+    "D_Stillsuit_Nati_07_Gloves": {
+      "name": "NOTUSED_Stillsuit_Nati_07_Gloves",
+      "category": "Developer - Internal"
+    },
+    "D_Stillsuit_Nati_07_Mask": {
+      "name": "NOTUSED_Stillsuit_Nati_07_Mask",
+      "category": "Developer - Internal"
+    },
+    "D_Stillsuit_Nati_07_Shoes": {
+      "name": "NOTUSED_Stillsuit_Nati_07_Shoes",
+      "category": "Developer - Internal"
+    },
+    "D_Stillsuit_Nati_08_Body": {
+      "name": "NOTUSED_Stillsuit_Nati_08_Body",
+      "category": "Developer - Internal"
+    },
+    "D_Stillsuit_Nati_08_Gloves": {
+      "name": "NOTUSED_Stillsuit_Nati_08_Gloves",
+      "category": "Developer - Internal"
+    },
+    "D_Stillsuit_Nati_08_Mask": {
+      "name": "NOTUSED_Stillsuit_Nati_08_Mask",
+      "category": "Developer - Internal"
+    },
+    "D_Stillsuit_Nati_08_Shoes": {
+      "name": "NOTUSED_Stillsuit_Nati_08_Shoes",
+      "category": "Developer - Internal"
+    },
+    "D_Stillsuit_Nati_Arrakeen05_Body": {
+      "name": "Arrakeen Stillsuit Body",
+      "category": "Developer - Internal"
+    },
+    "D_Stillsuit_Nati_Arrakeen05_Gloves": {
+      "name": "Arrakeen Stillsuit Gloves",
+      "category": "Developer - Internal"
+    },
+    "D_Stillsuit_Nati_Arrakeen05_Mask": {
+      "name": "Arrakeen Stillsuit Hood",
+      "category": "Developer - Internal"
+    },
+    "D_Stillsuit_Nati_Arrakeen05_Shoes": {
+      "name": "Arrakeen Stillsuit Boots",
+      "category": "Developer - Internal"
+    },
+    "D_Stillsuit_Neut_Patchy02_Boots": {
+      "name": "Crude Stillsuit Boots",
+      "category": "Developer - Internal"
+    },
+    "D_Stillsuit_Neut_Patchy02_Gloves": {
+      "name": "Crude Stillsuit Gloves",
+      "category": "Developer - Internal"
+    },
+    "D_Stillsuit_Neut_Patchy02_Mask": {
+      "name": "Crude Stillsuit Hood",
+      "category": "Developer - Internal"
+    },
+    "D_Stillsuit_Neut_Patchy02_Top": {
+      "name": "Crude Stillsuit Body",
+      "category": "Developer - Internal"
+    },
+    "D_Stillsuit_Smug": {
+      "name": "XX_NOTUSED_Smuggler Stillsuit",
+      "category": "Developer - Internal"
+    },
+    "D_Utility_Choam_RadiationSuit03_Boots": {
+      "name": "XX_NOTUSED_Radiation Suit Boots",
+      "category": "Developer - Internal"
+    },
+    "D_Utility_Choam_RadiationSuit03_Gloves": {
+      "name": "XX_NOTUSED_Radiation Suit Gloves",
+      "category": "Developer - Internal"
+    },
+    "D_Utility_Choam_ThopterSuit04_Boots": {
+      "name": "Thopter G-Suit Boots",
+      "category": "Developer - Internal"
+    },
+    "D_Utility_Choam_ThopterSuit04_Bottom": {
+      "name": "Thopter G-Suit Pants",
+      "category": "Developer - Internal"
+    },
+    "D_Utility_Choam_ThopterSuit04_Gloves": {
+      "name": "Thopter G-Suit Gloves",
+      "category": "Developer - Internal"
+    },
+    "D_Utility_Choam_ThopterSuit04_Helmet": {
+      "name": "Thopter G-Suit Helmet",
+      "category": "Developer - Internal"
+    },
+    "D_Utility_Choam_ThopterSuit04_Top": {
+      "name": "Thopter G-Suit Jacket",
+      "category": "Developer - Internal"
+    },
+    "D_Utility_Nati_BasicDuneMan03_Boots": {
+      "name": "XX_NOTUSED_Basic Dune Man Boots",
+      "category": "Developer - Internal"
+    },
+    "D_Utility_Nati_BasicDuneMan03_Bottom": {
+      "name": "XX_NOTUSED_Basic Dune Man Workpants",
+      "category": "Developer - Internal"
+    },
+    "D_Utility_Nati_BasicDuneMan03_Gloves": {
+      "name": "XX_NOTUSED_Basic Dune Man Sleeves",
+      "category": "Developer - Internal"
+    },
+    "D_Utility_Nati_BasicDuneMan03_Helmet": {
+      "name": "XX_NOTUSED_Basic Dune Man Mask",
+      "category": "Developer - Internal"
+    },
+    "D_Utility_Nati_BasicDuneMan03_Top": {
+      "name": "XX_NOTUSED_Basic Dune Man Jacket",
+      "category": "Developer - Internal"
+    },
+    "D_Utility_Neut_MinerDenim01_Boots": {
+      "name": "Miner Boots",
+      "category": "Developer - Internal"
+    },
+    "D_Utility_Neut_MinerDenim01_Bottom": {
+      "name": "Miner Pants",
+      "category": "Developer - Internal"
+    },
+    "D_Utility_Neut_MinerDenim01_Gloves": {
+      "name": "Miner Gloves",
+      "category": "Developer - Internal"
+    },
+    "D_Utility_Neut_MinerDenim01_Helmet": {
+      "name": "Miner Hard Hat",
+      "category": "Developer - Internal"
+    },
+    "D_Utility_Neut_MinerDenim01_Top": {
+      "name": "Miner Jacket",
+      "category": "Developer - Internal"
+    },
+    "D_Utility_Neut_PaddedRags01_Boots": {
+      "name": "Padded Rags Shoes",
+      "category": "Developer - Internal"
+    },
+    "D_Utility_Neut_PaddedRags01_Bottom": {
+      "name": "Padded Rags Breeches",
+      "category": "Developer - Internal"
+    },
+    "D_Utility_Neut_PaddedRags01_Gloves": {
+      "name": "Padded Rags Gloves",
+      "category": "Developer - Internal"
+    },
+    "D_Utility_Neut_PaddedRags01_Helmet": {
+      "name": "Padded Rags Hood",
+      "category": "Developer - Internal"
+    },
+    "D_Utility_Neut_PaddedRags01_Top": {
+      "name": "Padded Rags Robe",
+      "category": "Developer - Internal"
+    },
+    "D_Utility_Neut_RusticCraftsman03_Boots": {
+      "name": "Rustic Craftsman Boots",
+      "category": "Developer - Internal"
+    },
+    "D_Utility_Neut_RusticCraftsman03_Bottom": {
+      "name": "Rustic Craftsman Pants",
+      "category": "Developer - Internal"
+    },
+    "D_Utility_Neut_RusticCraftsman03_Gloves": {
+      "name": "Rustic Craftsman Smithgloves",
+      "category": "Developer - Internal"
+    },
+    "D_Utility_Neut_RusticCraftsman03_Helmet": {
+      "name": "Rustic Craftsman Mask",
+      "category": "Developer - Internal"
+    },
+    "D_Utility_Neut_RusticCraftsman03_Top": {
+      "name": "Rustic Craftsman Apron",
+      "category": "Developer - Internal"
+    },
+    "D_Combat_Atre_Heavy01_Boots": {
+      "name": "XX_NOTUSED_Atreides Heavy Boots",
+      "category": "Developer - Internal"
+    },
+    "D_Combat_Hark_Heavy05_Boots": {
+      "name": "Harkonnen Heavy Boots",
+      "category": "Developer - Internal"
+    },
+    "D_Combat_Neut_BanditHeavy04_Boots": {
+      "name": "Bandit Heavy Boots",
+      "category": "Developer - Internal"
+    },
+    "D_Combat_Neut_HarkonnenDeserter02_Boots": {
+      "name": "XX_NOTUSED_Harkonnen Traitor Boots",
+      "category": "Developer - Internal"
+    },
+    "D_Combat_Smug_Assault05_Boots": {
+      "name": "Smuggler Assault Boots",
+      "category": "Developer - Internal"
+    },
+    "D_Combat_Smug_Pathfinder02_Boots": {
+      "name": "Smuggler Pathfinder Boots",
+      "category": "Developer - Internal"
+    },
+    "D_Combat_Atre_Heavy01_Gloves": {
+      "name": "XX_NOTUSED_Atreides Heavy Gloves",
+      "category": "Developer - Internal"
+    },
+    "D_Combat_Choam_Assault03_Gloves": {
+      "name": "CHOAM Assault Gloves",
+      "category": "Developer - Internal"
+    },
+    "D_Combat_Hark_Heavy05_Gloves": {
+      "name": "Harkonnen Heavy Gloves",
+      "category": "Developer - Internal"
+    },
+    "D_Combat_Neut_BanditHeavy04_Gloves": {
+      "name": "Bandit Heavy Gauntlets",
+      "category": "Developer - Internal"
+    },
+    "D_Combat_Neut_HarkonnenDeserter02_Gloves": {
+      "name": "XX_NOTUSED_Harkonnen Traitor Gauntlets",
+      "category": "Developer - Internal"
+    },
+    "D_Combat_Smug_Assault05_Gloves": {
+      "name": "Smuggler Assault Gauntlets",
+      "category": "Developer - Internal"
+    },
+    "D_Combat_Smug_Pathfinder02_Gloves": {
+      "name": "Smuggler Pathfinder Gloves",
+      "category": "Developer - Internal"
+    },
+    "D_Combat_Atre_Heavy01_Helmet": {
+      "name": "XX_NOTUSED_Atreides Heavy Helmet",
+      "category": "Developer - Internal"
+    },
+    "D_Combat_Hark_Heavy05_Helmet": {
+      "name": "Harkonnen Heavy Helmet",
+      "category": "Developer - Internal"
+    },
+    "D_Combat_Neut_HarkonnenDeserter02_Helmet": {
+      "name": "XX_NOTUSED_Harkonnen Traitor Helmet",
+      "category": "Developer - Internal"
+    },
+    "D_Combat_Smug_Assault05_Helmet": {
+      "name": "Smuggler Assault Helmet",
+      "category": "Developer - Internal"
+    },
+    "D_Combat_Smug_Pathfinder02_Helmet": {
+      "name": "Smuggler Pathfinder Helmet",
+      "category": "Developer - Internal"
+    },
+    "D_Combat_Minotaur_Mask": {
+      "name": "D_Combat_Minotaur_Mask",
+      "category": "Developer - Internal"
+    },
+    "D_Combat_Atre_Heavy01_Bottom": {
+      "name": "XX_NOTUSED_Atreides Heavy Pants",
+      "category": "Developer - Internal"
+    },
+    "D_Combat_Choam_Assault03_Bottom": {
+      "name": "CHOAM Assault Pants",
+      "category": "Developer - Internal"
+    },
+    "D_Combat_Hark_Heavy05_Bottom": {
+      "name": "Harkonnen Heavy Legs",
+      "category": "Developer - Internal"
+    },
+    "D_Combat_Neut_HarkonnenDeserter02_Bottom": {
+      "name": "XX_NOTUSED_Harkonnen Traitor Pants",
+      "category": "Developer - Internal"
+    },
+    "D_Combat_Smug_Assault05_Bottom": {
+      "name": "Smuggler Assault Pants",
+      "category": "Developer - Internal"
+    },
+    "D_Combat_Smug_Pathfinder02_Bottom": {
+      "name": "Smuggler Pathfinder Legs",
+      "category": "Developer - Internal"
+    },
+    "D_Combat_Atre_Heavy01_Top": {
+      "name": "XX_NOTUSED_Atreides Heavy Chest",
+      "category": "Developer - Internal"
+    },
+    "D_Combat_Hark_Heavy05_Top": {
+      "name": "Harkonnen Heavy Chest",
+      "category": "Developer - Internal"
+    },
+    "D_Combat_Neut_HarkonnenDeserter02_Top": {
+      "name": "XX_NOTUSED_Harkonnen Traitor Chestp.",
+      "category": "Developer - Internal"
+    },
+    "D_Combat_Smug_Assault05_Top": {
+      "name": "Smuggler Assault Chestpiece",
+      "category": "Developer - Internal"
+    },
+    "D_Combat_Smug_Pathfinder02_Top": {
+      "name": "Smuggler Pathfinder Chest",
+      "category": "Developer - Internal"
+    },
+    "D_Combat_Atre_Med01_Boots": {
+      "name": "Atreides Heavy Boots",
+      "category": "Developer - Internal"
+    },
+    "D_Combat_Atre_Scout05_Shoes": {
+      "name": "Atreides Scout Boots",
+      "category": "Developer - Internal"
+    },
+    "D_Combat_Hark_Med01_Boots": {
+      "name": "Harkonnen Assault Boots",
+      "category": "Developer - Internal"
+    },
+    "D_Combat_Hark_Scout05_Boots": {
+      "name": "Harkonnen Scout Boots",
+      "category": "Developer - Internal"
+    },
+    "D_Combat_Neut_SmugglerDeserter02_Boots": {
+      "name": "Smuggler Renegade Boots",
+      "category": "Developer - Internal"
+    },
+    "D_Combat_Smug_Scout05_Boots": {
+      "name": "Smuggler Scout Boots",
+      "category": "Developer - Internal"
+    },
+    "D_Combat_Atre_Med01_Gloves": {
+      "name": "Atreides Heavy Gloves",
+      "category": "Developer - Internal"
+    },
+    "D_Combat_Atre_Scout05_Gloves": {
+      "name": "Atreides Scout Gloves",
+      "category": "Developer - Internal"
+    },
+    "D_Combat_Hark_Med01_Gloves": {
+      "name": "Harkonnen Assault Gloves",
+      "category": "Developer - Internal"
+    },
+    "D_Combat_Hark_Scout05_Gloves": {
+      "name": "Harkonnen Scout Gauntlets",
+      "category": "Developer - Internal"
+    },
+    "D_Combat_Neut_SmugglerDeserter02_Gloves": {
+      "name": "Smuggler Renegade Gauntlets",
+      "category": "Developer - Internal"
+    },
+    "D_Combat_Smug_Scout05_Gloves": {
+      "name": "Smuggler Scout Gauntlets",
+      "category": "Developer - Internal"
+    },
+    "D_Combat_Atre_Med01_Helmet": {
+      "name": "Atreides Heavy Helmet",
+      "category": "Developer - Internal"
+    },
+    "D_Combat_Atre_Scout05_Helmet": {
+      "name": "Atreides Scout Helmet",
+      "category": "Developer - Internal"
+    },
+    "D_Combat_Hark_Med01_Helmet": {
+      "name": "Harkonnen Assault Helmet",
+      "category": "Developer - Internal"
+    },
+    "D_Combat_Hark_Scout05_Helmet": {
+      "name": "Harkonnen Scout Helmet",
+      "category": "Developer - Internal"
+    },
+    "D_Combat_Neut_SmugglerDeserter02_Helmet": {
+      "name": "Smuggler Renegade Hood",
+      "category": "Developer - Internal"
+    },
+    "D_Combat_Smug_Scout05_Helmet": {
+      "name": "Smuggler Scout Helmet",
+      "category": "Developer - Internal"
+    },
+    "Combat_Atre_Med01_Bottom": {
+      "name": "Atreides Heavy Pants",
+      "category": "Garments"
+    },
+    "D_Combat_Atre_Scout05_Bottom": {
+      "name": "Atreides Scout Pants",
+      "category": "Developer - Internal"
+    },
+    "D_Combat_Hark_Med01_Bottom": {
+      "name": "Harkonnen Assault Pants",
+      "category": "Developer - Internal"
+    },
+    "D_Combat_Hark_Scout05_Bottom": {
+      "name": "Harkonnen Scout Pants",
+      "category": "Developer - Internal"
+    },
+    "D_Combat_Neut_SmugglerDeserter02_Bottom": {
+      "name": "Smuggler Renegade Pants",
+      "category": "Developer - Internal"
+    },
+    "D_Combat_Smug_Scout05_Bottom": {
+      "name": "Smuggler Scout Pants",
+      "category": "Developer - Internal"
+    },
+    "Combat_Atre_Med01_Top": {
+      "name": "Atreides Heavy Chestpiece",
+      "category": "Garments"
+    },
+    "D_Combat_Atre_Scout05_Top": {
+      "name": "Atreides Scout Chestpiece",
+      "category": "Developer - Internal"
+    },
+    "D_Combat_Hark_Med01_Top": {
+      "name": "Harkonnen Assault Chestpiece",
+      "category": "Developer - Internal"
+    },
+    "Combat_Hark_Scout05_Top": {
+      "name": "Harkonnen Scout Chestpiece",
+      "category": "Garments"
+    },
+    "D_Combat_Neut_SmugglerDeserter02_Top": {
+      "name": "Smuggler Renegade Chestpiece",
+      "category": "Developer - Internal"
+    },
+    "D_Combat_Smug_Scout05_Top": {
+      "name": "Smuggler Scout Chestpiece",
+      "category": "Developer - Internal"
+    },
+    "D_Combat_Choam_MaulaGladiator01_Boots": {
+      "name": "Maula Gladiator Sandals",
+      "category": "Developer - Internal"
+    },
+    "D_Combat_Choam_MaulaGladiator01_Gloves": {
+      "name": "Maula Gladiator Gauntlets",
+      "category": "Developer - Internal"
+    },
+    "D_Combat_Choam_MaulaGladiator01_Helmet": {
+      "name": "Maula Gladiator Helmet",
+      "category": "Developer - Internal"
+    },
+    "D_Combat_Choam_MaulaGladiator01_Bottom": {
+      "name": "Maula Gladiator Breeches",
+      "category": "Developer - Internal"
+    },
+    "D_Combat_Choam_MaulaGladiator01_Top": {
+      "name": "Maula Gladiator Cuirass",
+      "category": "Developer - Internal"
+    },
+    "D_Social_Atre_MilitaryUniform_Top_L1": {
+      "name": "Atreides Recruit Jacket",
+      "category": "Developer - Internal"
+    },
+    "D_Social_Atre_MilitaryUniform_Top_L2": {
+      "name": "Atreides Soldier Jacket",
+      "category": "Developer - Internal"
+    },
+    "D_Social_Atre_MilitaryUniform_Top_L3": {
+      "name": "Atreides Officer Jacket",
+      "category": "Developer - Internal"
+    },
+    "D_Social_Hark_MilitaryUniform_Top_L2": {
+      "name": "Harkonnen Soldier Jacket",
+      "category": "Developer - Internal"
+    },
+    "D_Social_Neut_ArrakeenFormals_Top": {
+      "name": "Arrakeen Formal Top",
+      "category": "Developer - Internal"
+    },
+    "D_Social_Neut_ArrakeenFormals_Bottom": {
+      "name": "Arrakeen Formal Pants",
+      "category": "Developer - Internal"
+    },
+    "D_Social_Neut_ArrakeenFormals_Boots": {
+      "name": "Arrakeen Formal Shoes",
+      "category": "Developer - Internal"
+    },
+    "D_Combat_Light_Unique_RedScorpion_Helmet": {
+      "name": "Red Scorpion's Helmet",
+      "category": "Developer - Internal"
+    },
+    "D_Combat_Light_Unique_RedScorpion_Top": {
+      "name": "Red Scorpion's Chestpiece",
+      "category": "Developer - Internal"
+    },
+    "D_Combat_Light_Unique_RedScorpion_Gloves": {
+      "name": "Red Scorpion's Gloves",
+      "category": "Developer - Internal"
+    },
+    "D_Combat_Light_Unique_RedScorpion_Bottom": {
+      "name": "Red Scorpion's Trousers",
+      "category": "Developer - Internal"
+    },
+    "D_Combat_Light_Unique_RedScorpion_Boots": {
+      "name": "Red Scorpion's Boots",
+      "category": "Developer - Internal"
+    },
+    "Social_Smug_Formal01_Boots": {
+      "name": "Master Operative of the Dunes Boots",
+      "category": "Developer - Internal"
+    },
+    "Social_Smug_Formal01_Bottom": {
+      "name": "Master Operative of the Dunes Trousers",
+      "category": "Developer - Internal"
+    },
+    "Social_Smug_Formal01_Gloves": {
+      "name": "Master Operative of the Dunes Gloves",
+      "category": "Developer - Internal"
+    },
+    "Social_Smug_Formal01_Top": {
+      "name": "Master Operative of the Dunes Jacket",
+      "category": "Developer - Internal"
+    },
+    "Dew": {
+      "name": "Dew",
+      "category": "Consumables"
+    },
+    "BasePack_Copper": {
+      "name": "Basic Building Materials",
+      "category": "Consumables"
+    },
+    "BasePack_Iron": {
+      "name": "Standard Building Materials",
+      "category": "Consumables"
+    },
+    "BasePack_Steel": {
+      "name": "Specialized Building Materials",
+      "category": "Consumables"
+    },
+    "Consumable_Buff_PoisonStackIncrease": {
+      "name": "Experimental Toxin-Absorption Pills",
+      "category": "Consumables"
+    },
+    "HeatConsumable": {
+      "name": "PH_Simple Heat Pack",
+      "category": "Consumables"
+    },
+    "B1C4_Unique_Consumable": {
+      "name": "XX_CUT",
+      "category": "Consumables"
+    },
+    "B1C4_Unique_Consumable_T2": {
+      "name": "PH_Advanced Heat Pack",
+      "category": "Consumables"
+    },
+    "B1C4_ThermalNeutralizer": {
+      "name": "PH_B1C4 Thermal Neutralizer NAME",
+      "category": "Consumables"
+    },
+    "Halloween_Consumable": {
+      "name": "Vial of Pestilent Mien",
+      "category": "Consumables"
+    },
+    "Dash": {
+      "name": "Dash",
+      "category": "Tools"
+    },
+    "SuspensorGrenade_Reduction": {
+      "name": "Anti-gravity Field",
+      "category": "Developer - Internal"
+    },
+    "HunterSeeker": {
+      "name": "Hunter-Seeker",
+      "category": "Developer - Internal"
+    },
+    "SuspensorBlast": {
+      "name": "Suspensor Blast",
+      "category": "Developer - Internal"
+    },
+    "SuspensorGrenade_Amplification": {
+      "name": "Gravity Field",
+      "category": "Developer - Internal"
+    },
+    "SuspensorWall": {
+      "name": "Shield Wall",
+      "category": "Developer - Internal"
+    },
+    "D_PlaceableMine_Remote": {
+      "name": "Explosive Mine",
+      "category": "Developer - Internal"
+    },
+    "MagneticAttractor": {
+      "name": "Attractor Field",
+      "category": "Developer - Internal"
+    },
+    "Riposte_Injure": {
+      "name": "Retaliate",
+      "category": "Developer - Internal"
+    },
+    "Riposte_Break": {
+      "name": "Foil",
+      "category": "Developer - Internal"
+    },
+    "PlaceableMine_Suspensor_Amplification": {
+      "name": "Gravity Mine",
+      "category": "Developer - Internal"
+    },
+    "PlaceableMine_Suspensor_Reduction": {
+      "name": "Anti-gravity Mine",
+      "category": "Developer - Internal"
+    },
+    "D_GameplayEffectReplication_TEST": {
+      "name": "D_GameplayEffectReplication_TEST",
+      "category": "Developer - Internal"
+    },
+    "KneeCharge_Starter": {
+      "name": "Knee Charge",
+      "category": "Developer - Internal"
+    },
+    "Deflection_Slow": {
+      "name": "Deflection",
+      "category": "Developer - Internal"
+    },
+    "BattlefieldCalculation": {
+      "name": "Battlefield Calculation",
+      "category": "Developer - Internal"
+    },
+    "SardaukarPull_Short": {
+      "name": "Shigawire Claw",
+      "category": "Developer - Internal"
+    },
+    "CapsuleLauncher_Poison": {
+      "name": "Poison Capsule",
+      "category": "Developer - Internal"
+    },
+    "FragGrenade_TimedFuse": {
+      "name": "Explosive Grenade",
+      "category": "Developer - Internal"
+    },
+    "Hypersprint_FastSpeed": {
+      "name": "Bindu Sprint",
+      "category": "Developer - Internal"
+    },
+    "Compel_LongRange": {
+      "name": "Compel",
+      "category": "Developer - Internal"
+    },
+    "BlindSpot": {
+      "name": "Ignore",
+      "category": "Developer - Internal"
+    },
+    "WeirdingStep": {
+      "name": "Weirding Step",
+      "category": "Developer - Internal"
+    },
+    "HoltzmanCollapseGrenade": {
+      "name": "Collapse Grenade",
+      "category": "Developer - Internal"
+    },
+    "SolidoDecoyStationary": {
+      "name": "Solido Decoy",
+      "category": "Developer - Internal"
+    },
+    "PoisonMine": {
+      "name": "Poison Mine",
+      "category": "Developer - Internal"
+    },
+    "SuspensorDisc": {
+      "name": "Suspensor Pad",
+      "category": "Developer - Internal"
+    },
+    "LitanyAgainstFear": {
+      "name": "Litany Against Fear",
+      "category": "Developer - Internal"
+    },
+    "NerveStrike": {
+      "name": "Prana-Bindu Strikes",
+      "category": "Developer - Internal"
+    },
+    "PortableGenerator": {
+      "name": "Source of Power",
+      "category": "Developer - Internal"
+    },
+    "EnergyCapsule": {
+      "name": "Energy Capsule",
+      "category": "Developer - Internal"
+    },
+    "BattleCry": {
+      "name": "Inspiration",
+      "category": "Developer - Internal"
+    },
+    "StunnerDart": {
+      "name": "Stunner",
+      "category": "Developer - Internal"
+    },
+    "D_GrenadePoison": {
+      "name": "LOC_Poison Grenade",
+      "category": "Developer - Internal"
+    },
+    "VoiceStop": {
+      "name": "Stop",
+      "category": "Developer - Internal"
+    },
+    "Whirlwind": {
+      "name": "Eye of the Storm",
+      "category": "Developer - Internal"
+    },
+    "CripplingStrike": {
+      "name": "Crippling Strike",
+      "category": "Developer - Internal"
+    },
+    "D_TurretSeeker": {
+      "name": "The Sentinel",
+      "category": "Developer - Internal"
+    },
+    "AssaultSeeker": {
+      "name": "Assault Seeker",
+      "category": "Developer - Internal"
+    },
+    "SuspensorPad": {
+      "name": "Suspensor Pad",
+      "category": "Developer - Internal"
+    },
+    "TurretMine": {
+      "name": "The Sentinel",
+      "category": "Developer - Internal"
+    },
+    "D_SuspensorSeeker_Throw": {
+      "name": "LOC_Suspensor Seeker: Throw",
+      "category": "Developer - Internal"
+    },
+    "D_BannerAtreides": {
+      "name": "XX_NOTUSED Atreides Wall Banner",
+      "category": "Developer - Internal"
+    },
+    "D_BannerHarkonnen": {
+      "name": "XX_NOTUSED Harkonnen Wall Banner",
+      "category": "Developer - Internal"
+    },
+    "D_BannerSmuggler": {
+      "name": "XX_NOTUSED Smuggler Wall Banner",
+      "category": "Developer - Internal"
+    },
+    "D_BunkBed": {
+      "name": "XX_NOTUSED Basic Bunk",
+      "category": "Developer - Internal"
+    },
+    "D_CeilingGlowglobe": {
+      "name": "XX_NOTUSED ceiling glowglobe",
+      "category": "Developer - Internal"
+    },
+    "D_Chair1": {
+      "name": "XX_NOTUSED Side Chair",
+      "category": "Developer - Internal"
+    },
+    "D_Chair2": {
+      "name": "XX_NOTUSED Plasteel Chair",
+      "category": "Developer - Internal"
+    },
+    "D_Chair3": {
+      "name": "XX_NOTUSED Lounge Chair",
+      "category": "Developer - Internal"
+    },
+    "D_Chest": {
+      "name": "XX_NOTUSED Small Chest",
+      "category": "Developer - Internal"
+    },
+    "D_ChoamOutpostCeilingLamp_1": {
+      "name": "XX_NOTUSED CHOAM Ceiling Lamp",
+      "category": "Developer - Internal"
+    },
+    "D_ChoamOutpostFloorLamp_1": {
+      "name": "XX_NOTUSED CHOAM Floor Lamp",
+      "category": "Developer - Internal"
+    },
+    "D_ChoamOutpostWallLamp_1": {
+      "name": "XX_NOTUSED CHOAM Wall Lamp",
+      "category": "Developer - Internal"
+    },
+    "D_ConstructionFabricator": {
+      "name": "XX_NOTUSED Construction Fab",
+      "category": "Developer - Internal"
+    },
+    "D_Fabricator": {
+      "name": "XX_NOTUSED Fabricator",
+      "category": "Developer - Internal"
+    },
+    "D_FabricatorCore_Improved": {
+      "name": "XX_NOTUSED Advanced Servok",
+      "category": "Developer - Internal"
+    },
+    "D_Generator": {
+      "name": "XX_NOTUSED Fuel Generator",
+      "category": "Developer - Internal"
+    },
+    "D_Glowglobe": {
+      "name": "XX_NOTUSED Floor Glowglobe",
+      "category": "Developer - Internal"
+    },
+    "D_HarkonnenOutpostWallLamp_1": {
+      "name": "XX_NOTUSED Hark Sconce Light",
+      "category": "Developer - Internal"
+    },
+    "D_HarkonnenOutpostWallLamp_2": {
+      "name": "XX_NOTUSED Harkonnen Wall Lamp",
+      "category": "Developer - Internal"
+    },
+    "D_HarkonnenOutpostWallLamp_3": {
+      "name": "XX_NOTUSED Hark Wall Lamp 3",
+      "category": "Developer - Internal"
+    },
+    "D_MediumOreRefinery": {
+      "name": "XX_NOTUSED Medium Ore Refinery",
+      "category": "Developer - Internal"
+    },
+    "D_MediumStorageContainer": {
+      "name": "XX_NOTUSED Medium Chest",
+      "category": "Developer - Internal"
+    },
+    "D_ModdingStation": {
+      "name": "XX_NOTUSED Modification Station",
+      "category": "Developer - Internal"
+    },
+    "D_MotionSensor": {
+      "name": "XX_NOTUSED Sensor Array",
+      "category": "Developer - Internal"
+    },
+    "D_OutpostChair_1": {
+      "name": "XX_NOTUSED Sofa Chair",
+      "category": "Developer - Internal"
+    },
+    "D_OutpostTable_1": {
+      "name": "XX_NOTUSED Dining Table",
+      "category": "Developer - Internal"
+    },
+    "D_OutpostTable_2": {
+      "name": "XX_NOTUSED Console Table",
+      "category": "Developer - Internal"
+    },
+    "D_OutpostTable_3": {
+      "name": "XX_NOTUSED Outpost Table 3",
+      "category": "Developer - Internal"
+    },
+    "D_PentashieldCeiling": {
+      "name": "XX_NOTUSED Pentashield Ceiling",
+      "category": "Developer - Internal"
+    },
+    "D_PentashieldWall": {
+      "name": "XX_NOTUSED Pentashield Wall",
+      "category": "Developer - Internal"
+    },
+    "D_PlantPot_Medium": {
+      "name": "XX_NOTUSED Medium Plant Pot",
+      "category": "Developer - Internal"
+    },
+    "D_PlantPot_Small": {
+      "name": "XX_NOTUSED Small Plant Pot",
+      "category": "Developer - Internal"
+    },
+    "D_PortableFabricator": {
+      "name": "XX_NOTUSED Portable Fabricator",
+      "category": "Developer - Internal"
+    },
+    "D_RepairStation": {
+      "name": "XX_NOTUSED Repair Station",
+      "category": "Developer - Internal"
+    },
+    "D_ResourceRefinery": {
+      "name": "XX_NOTUSED Resource Refinery",
+      "category": "Developer - Internal"
+    },
+    "D_SmallChemicalRefinery": {
+      "name": "XX_NOTUSED Small Chem Refinery",
+      "category": "Developer - Internal"
+    },
+    "D_SmallOreRefinery": {
+      "name": "XX_NOTUSED Small Ore Refinery",
+      "category": "Developer - Internal"
+    },
+    "D_SpiceBarrel": {
+      "name": "XX_NOTUSED Spice Barrel",
+      "category": "Developer - Internal"
+    },
+    "D_SpiceCoffeeSet": {
+      "name": "XX_NOTUSED Spice Coffee Set",
+      "category": "Developer - Internal"
+    },
+    "D_SpiceRefinery": {
+      "name": "XX_NOTUSED Small Spice Refinery",
+      "category": "Developer - Internal"
+    },
+    "Stilltent": {
+      "name": "Stilltent",
+      "category": "Weapons"
+    },
+    "D_SurvivalFabricator": {
+      "name": "XX_NOTUSED Survival Fabricator",
+      "category": "Developer - Internal"
+    },
+    "D_Table": {
+      "name": "XX_NOTUSED Plasteel Table",
+      "category": "Developer - Internal"
+    },
+    "D_Totem": {
+      "name": "XX_NOTUSED Sub-fief Console",
+      "category": "Developer - Internal"
+    },
+    "D_TotemTemporary": {
+      "name": "XX_NOTUSED Temp Sub-fief Console",
+      "category": "Developer - Internal"
+    },
+    "UniqueThumper_02": {
+      "name": "Wormsong Echo",
+      "category": "Weapons"
+    },
+    "UniqueThumper_03": {
+      "name": "Song of Shai-Hulud",
+      "category": "Weapons"
+    },
+    "D_VehiclesFabricator": {
+      "name": "XX_NOTUSED Vehicle Parts Fab",
+      "category": "Developer - Internal"
+    },
+    "D_WallGlowglobe": {
+      "name": "XX_NOTUSED Wall Glowglobe",
+      "category": "Developer - Internal"
+    },
+    "D_WaterCistern": {
+      "name": "XX_NOTUSED Small Cistern",
+      "category": "Developer - Internal"
+    },
+    "D_WaterTank": {
+      "name": "XX_NOTUSED Water Tank",
+      "category": "Developer - Internal"
+    },
+    "D_WeaponsFabricator": {
+      "name": "XX_NOTUSED Weapon Fabricator",
+      "category": "Developer - Internal"
+    },
+    "D_WearablesFabricator": {
+      "name": "XX_NOTUSED Garment Fabricator",
+      "category": "Developer - Internal"
+    },
+    "D_Windtrap": {
+      "name": "XX_NOTUSED Windtrap",
+      "category": "Developer - Internal"
+    },
+    "D_WindTurbineDirectional": {
+      "name": "XX_NOTUSED Dir. Wind Turbine",
+      "category": "Developer - Internal"
+    },
+    "D_WindTurbineOmnidirectional": {
+      "name": "XX_NOTUSEDOmni Wind Turbine",
+      "category": "Developer - Internal"
+    },
+    "Heatsource": {
+      "name": "Heatsource",
+      "category": "Building"
+    },
+    "MissionariaProtectivaDoc3": {
+      "name": "On Witches",
+      "category": "Resources"
+    },
+    "WeldingMaterial3": {
+      "name": "Steel Welding Wire",
+      "category": "Resources"
+    },
+    "WeldingMaterial5": {
+      "name": "Duraluminum Welding Wire",
+      "category": "Resources"
+    },
+    "T4ShieldWallComponent": {
+      "name": "Dart-grooved Barrel",
+      "category": "Resources"
+    },
+    "ShigawireGarotte": {
+      "name": "Shigawire Garotte",
+      "category": "Resources"
+    },
+    "EventRaiderToken": {
+      "name": "Raider Token",
+      "category": "Resources"
+    },
+    "EventEliteRaiderToken": {
+      "name": "Elite Raider Token",
+      "category": "Resources"
+    },
+    "ExperimentalWindTurbineComponent": {
+      "name": "Experimental Wind Turbine Component",
+      "category": "Resources"
+    },
+    "HalloweenInfectedItem": {
+      "name": "Infected Eyeball",
+      "category": "Resources"
+    },
+    "HalloweenIrradiatedItem": {
+      "name": "Mutated Brain Tissue",
+      "category": "Resources"
+    },
+    "HalloweenSuperItem1": {
+      "name": "HalloweenSuperItem1",
+      "category": "Resources"
+    },
+    "HalloweenSuperItem2": {
+      "name": "HalloweenSuperItem2",
+      "category": "Resources"
+    },
+    "HalloweenCoin": {
+      "name": "Blood Marks",
+      "category": "Resources"
+    },
+    "D_AluminiumBarSchematic": {
+      "name": "XX_NOTUSED_Aluminium Bar",
+      "category": "Developer - Internal"
+    },
+    "D_BuggyBoost_4_Schematic": {
+      "name": "XX_NOTUSED_BuggyBoost_4",
+      "category": "Developer - Internal"
+    },
+    "D_BuggyBoost_5_Schematic": {
+      "name": "XX_NOTUSED_BuggyBoost_5",
+      "category": "Developer - Internal"
+    },
+    "D_BuggyBoost_6_Schematic": {
+      "name": "XX_NOTUSED_BuggyBoost_6",
+      "category": "Developer - Internal"
+    },
+    "D_BuggyChassis_4_Schematic": {
+      "name": "XX_NOTUSED_BuggyChassis_4",
+      "category": "Developer - Internal"
+    },
+    "D_BuggyChassis_5_Schematic": {
+      "name": "XX_NOTUSED_BuggyChassis_5",
+      "category": "Developer - Internal"
+    },
+    "D_BuggyChassis_6_Schematic": {
+      "name": "XX_NOTUSED_BuggyChassis_6",
+      "category": "Developer - Internal"
+    },
+    "D_BuggyEngine_4_Schematic": {
+      "name": "XX_NOTUSED_BuggyEngine_4",
+      "category": "Developer - Internal"
+    },
+    "D_BuggyEngine_5_Schematic": {
+      "name": "XX_NOTUSED_BuggyEngine_5",
+      "category": "Developer - Internal"
+    },
+    "D_BuggyEngine_6_Schematic": {
+      "name": "XX_NOTUSED_BuggyEngine_6",
+      "category": "Developer - Internal"
+    },
+    "D_BuggyGenerator_4_Schematic": {
+      "name": "XX_NOTUSED_BuggyGenerator_4",
+      "category": "Developer - Internal"
+    },
+    "D_BuggyGenerator_5_Schematic": {
+      "name": "XX_NOTUSED_BuggyGenerator_5",
+      "category": "Developer - Internal"
+    },
+    "D_BuggyGenerator_6_Schematic": {
+      "name": "XX_NOTUSED_BuggyGenerator_6",
+      "category": "Developer - Internal"
+    },
+    "D_BuggyHullBack_4_Schematic": {
+      "name": "XX_NOTUSED_BuggyHullBack_4",
+      "category": "Developer - Internal"
+    },
+    "D_BuggyHullBack_5_Schematic": {
+      "name": "XX_NOTUSED_BuggyHullBack_5",
+      "category": "Developer - Internal"
+    },
+    "D_BuggyHullBack_6_Schematic": {
+      "name": "XX_NOTUSED_BuggyHullBack_6",
+      "category": "Developer - Internal"
+    },
+    "D_BuggyHullBackExtra_4_Schematic": {
+      "name": "XX_NOTUSED_BuggyHullBackExtra_4",
+      "category": "Developer - Internal"
+    },
+    "D_BuggyHullBackExtra_5_Schematic": {
+      "name": "XX_NOTUSED_BuggyHullBackExtra_5",
+      "category": "Developer - Internal"
+    },
+    "D_BuggyHullBackExtra_6_Schematic": {
+      "name": "XX_NOTUSED_BuggyHullBackExtra_6",
+      "category": "Developer - Internal"
+    },
+    "D_BuggyHullFront_4_Schematic": {
+      "name": "XX_NOTUSED_BuggyHullFront_4",
+      "category": "Developer - Internal"
+    },
+    "D_BuggyHullFront_5_Schematic": {
+      "name": "XX_NOTUSED_BuggyHullFront_5",
+      "category": "Developer - Internal"
+    },
+    "D_BuggyHullFront_6_Schematic": {
+      "name": "XX_NOTUSED_BuggyHullFront_6",
+      "category": "Developer - Internal"
+    },
+    "D_BuggyInventory_4_Schematic": {
+      "name": "XX_NOTUSED_BuggyInventory_4",
+      "category": "Developer - Internal"
+    },
+    "D_BuggyInventory_5_Schematic": {
+      "name": "XX_NOTUSED_BuggyInventory_5",
+      "category": "Developer - Internal"
+    },
+    "D_BuggyInventory_6_Schematic": {
+      "name": "XX_NOTUSED_BuggyInventory_6",
+      "category": "Developer - Internal"
+    },
+    "D_BuggyLauncher_6_Schematic": {
+      "name": "XX_NOTUSED_BuggyLauncher_6",
+      "category": "Developer - Internal"
+    },
+    "D_BuggyLocomotion_4_Schematic": {
+      "name": "XX_NOTUSED_BuggyLocomotion_4",
+      "category": "Developer - Internal"
+    },
+    "D_BuggyLocomotion_5_Schematic": {
+      "name": "XX_NOTUSED_BuggyLocomotion_5",
+      "category": "Developer - Internal"
+    },
+    "D_BuggyLocomotion_6_Schematic": {
+      "name": "XX_NOTUSED_BuggyLocomotion_6",
+      "category": "Developer - Internal"
+    },
+    "D_BuggyMining_4_Schematic": {
+      "name": "XX_NOTUSED_Buggy Mining_4",
+      "category": "Developer - Internal"
+    },
+    "D_BuggyMining_5_Schematic": {
+      "name": "XX_NOTUSED_Buggy Mining_5",
+      "category": "Developer - Internal"
+    },
+    "D_BuggyMining_6_Schematic": {
+      "name": "XX_NOTUSED_Buggy Mining_6",
+      "category": "Developer - Internal"
+    },
+    "ChoamStaticCompactorSchematic": {
+      "name": "Static Compactor",
+      "category": "Schematics"
+    },
+    "D_DesertSurvivalHandbookSet": {
+      "name": "XX_NOTUSED_Desert Survival Handbook",
+      "category": "Developer - Internal"
+    },
+    "D_DuraluminiumBarSchematic": {
+      "name": "XX_NOTUSED_Duraluminium Bar",
+      "category": "Developer - Internal"
+    },
+    "HealthPackSchematic": {
+      "name": "Healkit",
+      "category": "Schematics"
+    },
+    "D_LargeAluminiumBar_Schematic": {
+      "name": "XX_NOTUSED_LargeAluminium",
+      "category": "Developer - Internal"
+    },
+    "D_LargeCopperBar_Schematic": {
+      "name": "XX_NOTUSED_Large_Copper",
+      "category": "Developer - Internal"
+    },
+    "D_LargeDuraluminiumBar_Schematic": {
+      "name": "XX_NOTUSED_Large_Duraluminum",
+      "category": "Developer - Internal"
+    },
+    "D_LargeIronBar_Schematic": {
+      "name": "XX_NOTUSED_Large_Iron",
+      "category": "Developer - Internal"
+    },
+    "D_LargePlastone_Schematic": {
+      "name": "XX_NOTUSED_Large_Plastone",
+      "category": "Developer - Internal"
+    },
+    "D_LargeSteelBar_Schematic": {
+      "name": "XX_NOTUSED_Large_Steel",
+      "category": "Developer - Internal"
+    },
+    "D_LightOrnithopterBlueprint": {
+      "name": "XX_NOTUSED_Scout Ornithopter",
+      "category": "Developer - Internal"
+    },
+    "ManualOfTheFriendlyDesertSchematic": {
+      "name": "Manual of the Friendly Desert",
+      "category": "Schematics"
+    },
+    "NPE_ScrapMetalKnife_Schematic": {
+      "name": "Manual of the Friendly Desert",
+      "category": "Schematics"
+    },
+    "D_Medium_WindTurbineLubricant1_Schematic": {
+      "name": "XX_NOTUSED_Medium_WindTurbineLubricant1_Schematic",
+      "category": "Developer - Internal"
+    },
+    "D_Medium_WindTurbineLubricant2_Schematic": {
+      "name": "XX_NOTUSED_Medium_WindTurbineLubricant2_Schematic",
+      "category": "Developer - Internal"
+    },
+    "MiningTool_1h_StandardSchematic": {
+      "name": "Cutteray",
+      "category": "Schematics"
+    },
+    "D_OrnithopterLightGearsBlueprint": {
+      "name": "XX_NOTUSEDThopter Gears",
+      "category": "Developer - Internal"
+    },
+    "D_OrnithopterLightSet": {
+      "name": "XX_NOTUSED_Ornithopter",
+      "category": "Developer - Internal"
+    },
+    "D_OrnithopterLightTurbinesVultureBlueprint": {
+      "name": "XX_NOTUSED_Thopter Vulture Turbine",
+      "category": "Developer - Internal"
+    },
+    "D_PortableFabricatorSchematic": {
+      "name": "XX_NOTUSED_Portable Item Fab",
+      "category": "Developer - Internal"
+    },
+    "D_PortableLight_Schematic": {
+      "name": "XX_NOTUSED_PortableLight",
+      "category": "Developer - Internal"
+    },
+    "D_RadiationSuit5Schematic": {
+      "name": "XX_NOTUSED_T5 Radiation Suit",
+      "category": "Developer - Internal"
+    },
+    "D_RadiationSuit6Schematic": {
+      "name": "XX_NOTUSED_T6 Radiation Suit",
+      "category": "Developer - Internal"
+    },
+    "D_RefinedSpiceSchematic": {
+      "name": "XX_NOTUSED_Refined Spice",
+      "category": "Developer - Internal"
+    },
+    "D_RepairKitSchematic": {
+      "name": "XX_NOTUSED_Repair Kit",
+      "category": "Developer - Internal"
+    },
+    "D_SandbikeBoost_3_Schematic": {
+      "name": "XX_NOTUSED_SandbikeBoost_3",
+      "category": "Developer - Internal"
+    },
+    "D_SandbikeBoost_4_Schematic": {
+      "name": "XX_NOTUSED_SandbikeBoost_4",
+      "category": "Developer - Internal"
+    },
+    "D_SandbikeBoost_5_Schematic": {
+      "name": "XX_NOTUSED_SandbikeBoost_5",
+      "category": "Developer - Internal"
+    },
+    "D_SandbikeBoost_6_Schematic": {
+      "name": "XX_NOTUSED_SandbikeBoost_6",
+      "category": "Developer - Internal"
+    },
+    "D_SandbikeChassis_2_Schematic": {
+      "name": "XX_NOTUSED_SandbikeChassis_2",
+      "category": "Developer - Internal"
+    },
+    "D_SandbikeChassis_3_Schematic": {
+      "name": "XX_NOTUSED_SandbikeChassis_3",
+      "category": "Developer - Internal"
+    },
+    "D_SandbikeChassis_4_Schematic": {
+      "name": "XX_NOTUSED_SandbikeChassis_4",
+      "category": "Developer - Internal"
+    },
+    "D_SandbikeChassis_5_Schematic": {
+      "name": "XX_NOTUSED_SandbikeChassis_5",
+      "category": "Developer - Internal"
+    },
+    "D_SandbikeChassis_6_Schematic": {
+      "name": "XX_NOTUSED_SandbikeChassis_6",
+      "category": "Developer - Internal"
+    },
+    "D_SandbikeEngine_2_Schematic": {
+      "name": "XX_NOTUSED_SandbikeEngine_2",
+      "category": "Developer - Internal"
+    },
+    "D_SandbikeEngine_3_Schematic": {
+      "name": "XX_NOTUSED_SandbikeEngine_3",
+      "category": "Developer - Internal"
+    },
+    "D_SandbikeEngine_4_Schematic": {
+      "name": "XX_NOTUSED_SandbikeEngine_4",
+      "category": "Developer - Internal"
+    },
+    "D_SandbikeEngine_5_Schematic": {
+      "name": "XX_NOTUSED_SandbikeEngine_5",
+      "category": "Developer - Internal"
+    },
+    "D_SandbikeEngine_6_Schematic": {
+      "name": "XX_NOTUSED_SandbikeEngine_6",
+      "category": "Developer - Internal"
+    },
+    "D_SandbikeGenerator_2_Schematic": {
+      "name": "XX_NOTUSED_SandbikeGenerator_2",
+      "category": "Developer - Internal"
+    },
+    "D_SandbikeGenerator_3_Schematic": {
+      "name": "XX_NOTUSED_SandbikeGenerator_3",
+      "category": "Developer - Internal"
+    },
+    "D_SandbikeGenerator_4_Schematic": {
+      "name": "XX_NOTUSED_SandbikeGenerator_4",
+      "category": "Developer - Internal"
+    },
+    "D_SandbikeGenerator_5_Schematic": {
+      "name": "XX_NOTUSED_SandbikeGenerator_5",
+      "category": "Developer - Internal"
+    },
+    "D_SandbikeGenerator_6_Schematic": {
+      "name": "XX_NOTUSED_SandbikeGenerator_6",
+      "category": "Developer - Internal"
+    },
+    "D_SandbikeHull_2_Schematic": {
+      "name": "XX_NOTUSED_SandbikeHull_2",
+      "category": "Developer - Internal"
+    },
+    "D_SandbikeHull_3_Schematic": {
+      "name": "XX_NOTUSED_SandbikeHull_3",
+      "category": "Developer - Internal"
+    },
+    "D_SandbikeHull_4_Schematic": {
+      "name": "XX_NOTUSED_SandbikeHull_4",
+      "category": "Developer - Internal"
+    },
+    "D_SandbikeHull_5_Schematic": {
+      "name": "XX_NOTUSED_SandbikeHull_5",
+      "category": "Developer - Internal"
+    },
+    "D_SandbikeHull_6_Schematic": {
+      "name": "XX_NOTUSED_SandbikeHull_6",
+      "category": "Developer - Internal"
+    },
+    "D_SandbikeLocomotion_2_Schematic": {
+      "name": "XX_NOTUSED_SandbikeLocomotion_2",
+      "category": "Developer - Internal"
+    },
+    "D_SandbikeLocomotion_3_Schematic": {
+      "name": "XX_NOTUSED_SandbikeLocomotion_3",
+      "category": "Developer - Internal"
+    },
+    "D_SandbikeLocomotion_4_Schematic": {
+      "name": "XX_NOTUSED_SandbikeLocomotion_4",
+      "category": "Developer - Internal"
+    },
+    "D_SandbikeLocomotion_5_Schematic": {
+      "name": "XX_NOTUSED_SandbikeLocomotion_5",
+      "category": "Developer - Internal"
+    },
+    "D_SandbikeLocomotion_6_Schematic": {
+      "name": "XX_NOTUSED_SandbikeLocomotion_6",
+      "category": "Developer - Internal"
+    },
+    "D_SandbikePassengerSeatSchematic": {
+      "name": "XX_NOTUSED_Sandbike Passenger Seat",
+      "category": "Developer - Internal"
+    },
+    "D_Small_WindTurbineLubricant1_Schematic": {
+      "name": "XX_NOTUSED_Small_WindTurbineLubricant1_Schematic",
+      "category": "Developer - Internal"
+    },
+    "D_Small_WindTurbineLubricant2_Schematic": {
+      "name": "XX_NOTUSED_Small_WindTurbineLubricant2_Schematic",
+      "category": "Developer - Internal"
+    },
+    "D_SmugglerBuggyBody_Schematic": {
+      "name": "XX_NOTUSED_Dune Buggy Body",
+      "category": "Developer - Internal"
+    },
+    "D_SmugglerBuggyChassis_Schematic": {
+      "name": "XX_NOTUSED_Dune Buggy Chassis",
+      "category": "Developer - Internal"
+    },
+    "D_SmugglerBuggyEngine_Schematic": {
+      "name": "XX_NOTUSED_Dune Buggy Engine",
+      "category": "Developer - Internal"
+    },
+    "D_SpicedFuelCell_Schematic": {
+      "name": "XX_NOTUSED_SpiceFuelCell_Schematic",
+      "category": "Developer - Internal"
+    },
+    "StilltentSchematic": {
+      "name": "Stilltent",
+      "category": "Schematics"
+    },
+    "D_T1_Consumables_Dewpack_Schematic": {
+      "name": "XX_NOTUSED_Dewpack",
+      "category": "Developer - Internal"
+    },
+    "T1_UtilityClothing_LeakyStillsuit_Schematic": {
+      "name": "Damaged Stillsuit",
+      "category": "Schematics"
+    },
+    "D_T2_Combat_Choam_Heavy02_Boots_Schematic": {
+      "name": "XX_NOTUSED_T2 Heavy Armor Boots",
+      "category": "Developer - Internal"
+    },
+    "D_T2_Combat_Choam_Heavy02_Bottom_Schematic": {
+      "name": "XX_NOTUSED_T2 Heavy Armor Bottom",
+      "category": "Developer - Internal"
+    },
+    "D_T2_Combat_Choam_Heavy02_Gloves_Schematic": {
+      "name": "XX_NOTUSED_T2 Heavy Armor Gloves",
+      "category": "Developer - Internal"
+    },
+    "D_T2_Combat_Choam_Heavy02_Helmet_Schematic": {
+      "name": "XX_NOTUSED_T2 Heavy Armor Helmet",
+      "category": "Developer - Internal"
+    },
+    "D_T2_Combat_Choam_Heavy02_Top_Schematic": {
+      "name": "XX_NOTUSED_T2 Heavy Armor Top",
+      "category": "Developer - Internal"
+    },
+    "D_T2_Combat_Choam_Light02_Boots_Schematic": {
+      "name": "XX_NOTUSED_T2 Light Armor Boots",
+      "category": "Developer - Internal"
+    },
+    "D_T2_Combat_Choam_Light02_Bottom_Schematic": {
+      "name": "XX_NOTUSED_T2 Light Armor Bottom",
+      "category": "Developer - Internal"
+    },
+    "D_T2_Combat_Choam_Light02_Gloves_Schematic": {
+      "name": "XX_NOTUSED_T2 Light Armor Gloves",
+      "category": "Developer - Internal"
+    },
+    "D_T2_Combat_Choam_Light02_Helmet_Schematic": {
+      "name": "XX_NOTUSED_T2 Light Armor Helmet",
+      "category": "Developer - Internal"
+    },
+    "D_T2_Combat_Choam_Light02_Top_Schematic": {
+      "name": "XX_NOTUSED_T2 Light Armor Top",
+      "category": "Developer - Internal"
+    },
+    "T2_MiscEquipment_PowerPack_Schematic": {
+      "name": "Improvised Power Pack",
+      "category": "Schematics"
+    },
+    "D_T2_Stillsuit_ChoamBoots_Schematic": {
+      "name": "XX_NOTUSED_T2Stillsuit Boots",
+      "category": "Developer - Internal"
+    },
+    "D_T2_Stillsuit_ChoamGloves_Schematic": {
+      "name": "XX_NOTUSED_T2 Stillsuit Gloves",
+      "category": "Developer - Internal"
+    },
+    "D_T2_Stillsuit_ChoamMask_Schematic": {
+      "name": "XX_NOTUSED_T2 Stillsuit Mask",
+      "category": "Developer - Internal"
+    },
+    "D_T2_Stillsuit_ChoamTop_Schematic": {
+      "name": "XX_NOTUSED_T2 Stillsuit Top",
+      "category": "Developer - Internal"
+    },
+    "D_T2_Vehicle(Air)_SandbikeEngine_Schematic": {
+      "name": "XX_NOTUSED_Sandbike Engine",
+      "category": "Developer - Internal"
+    },
+    "D_T3_Combat_Choam_Heavy03_Boots_Schematic": {
+      "name": "XX_NOTUSED_T3 Heavy Armor Boots",
+      "category": "Developer - Internal"
+    },
+    "D_T3_Combat_Choam_Heavy03_Bottom_Schematic": {
+      "name": "XX_NOTUSED_T3 Heavy Armor Bottom",
+      "category": "Developer - Internal"
+    },
+    "D_T3_Combat_Choam_Heavy03_Gloves_Schematic": {
+      "name": "XX_NOTUSED_T3 Heavy Armor Gloves",
+      "category": "Developer - Internal"
+    },
+    "D_T3_Combat_Choam_Heavy03_Helmet_Schematic": {
+      "name": "XX_NOTUSED_T3 Heavy Armor Helmet",
+      "category": "Developer - Internal"
+    },
+    "D_T3_Combat_Choam_Heavy03_Top_Schematic": {
+      "name": "XX_NOTUSED_T3 Heavy Armor Top",
+      "category": "Developer - Internal"
+    },
+    "D_T3_Combat_Choam_Light03_Boots_Schematic": {
+      "name": "XX_NOTUSED_T3 Light Armor Boots",
+      "category": "Developer - Internal"
+    },
+    "D_T3_Combat_Choam_Light03_Bottom_Schematic": {
+      "name": "XX_NOTUSED_T3 Light Armor Bottom",
+      "category": "Developer - Internal"
+    },
+    "D_T3_Combat_Choam_Light03_Gloves_Schematic": {
+      "name": "XX_NOTUSED_T3 Light Armor Gloves",
+      "category": "Developer - Internal"
+    },
+    "D_T3_Combat_Choam_Light03_Helmet_Schematic": {
+      "name": "XX_NOTUSED_T3 Light Armor Helmet",
+      "category": "Developer - Internal"
+    },
+    "D_T3_Combat_Choam_Light03_Top_Schematic": {
+      "name": "XX_NOTUSED_T3 Light Armor Top",
+      "category": "Developer - Internal"
+    },
+    "D_T3_Decoration_Banners_Schematic": {
+      "name": "XX_NOTUSED_Banners",
+      "category": "Developer - Internal"
+    },
+    "D_T3_Structure_Atreides_Banner_Standing_Schematic": {
+      "name": "XX_NOTUSED_Atreides_Banner_Standing",
+      "category": "Developer - Internal"
+    },
+    "D_T3_Structure_Choam_Banner_Standing_Schematic": {
+      "name": "XX_NOTUSED_Choam_Banner_Standing",
+      "category": "Developer - Internal"
+    },
+    "D_T3_Structure_Choam_Banner_Wall_Schematic": {
+      "name": "XX_NOTUSED_Choam_Banner_Wall",
+      "category": "Developer - Internal"
+    },
+    "D_T3_Structure_Harkonnen_Banner_Standing_Schematic": {
+      "name": "XX_NOTUSED_Harkonnen_Banner_Standing",
+      "category": "Developer - Internal"
+    },
+    "D_T3_Structure_Harkonnen_Banner_Wall_Schematic": {
+      "name": "XX_NOTUSEDHarkonnen Wall Banner",
+      "category": "Developer - Internal"
+    },
+    "D_T3_Structure_MediumStorageContainer_Schematic": {
+      "name": "XX_NOTUSED_Medium Storage",
+      "category": "Developer - Internal"
+    },
+    "D_T3_Structure_SmallSpiceRefinery_Schematic": {
+      "name": "XX_NOTUSED_Small Spice Refinery",
+      "category": "Developer - Internal"
+    },
+    "D_T3_Structure_Smuggler_Banner_Standing_Schematic": {
+      "name": "XX_NOTUSED_Smuggler_Banner_Standing",
+      "category": "Developer - Internal"
+    },
+    "D_T3_Structure_Smuggler_Banner_Wall_Schematic": {
+      "name": "XX_NOTUSED_Smuggler Wall Banner",
+      "category": "Developer - Internal"
+    },
+    "D_T3_Structure_WeaponModdingStation_Schematic": {
+      "name": "XX_NOTUSED_WeaponModdingStation",
+      "category": "Developer - Internal"
+    },
+    "D_T3_StructureComponent_Schematic": {
+      "name": "XX_NOTUSED_Structure Component",
+      "category": "Developer - Internal"
+    },
+    "D_T3_Vehicle(Ground)_SmugglerBuggy_Set_Schematic": {
+      "name": "XX_NOTUSED_Dune Buggy",
+      "category": "Developer - Internal"
+    },
+    "D_T3_WeaponToolComponent_Schematic": {
+      "name": "XX_NOTUSED_Weapon Tool Component",
+      "category": "Developer - Internal"
+    },
+    "D_T4_ArmorComponent_Schematic": {
+      "name": "XX_NOTUSED_Armor Component",
+      "category": "Developer - Internal"
+    },
+    "D_T4_Combat_Choam_Heavy04_Boots_Schematic": {
+      "name": "XX_NOTUSED_T4 Heavy Armor Boots",
+      "category": "Developer - Internal"
+    },
+    "D_T4_Combat_Choam_Heavy04_Bottom_Schematic": {
+      "name": "XX_NOTUSED_T4 Heavy Armor Bottom",
+      "category": "Developer - Internal"
+    },
+    "D_T4_Combat_Choam_Heavy04_Gloves_Schematic": {
+      "name": "XX_NOTUSED_T4 Heavy Armor Gloves",
+      "category": "Developer - Internal"
+    },
+    "D_T4_Combat_Choam_Heavy04_Helmet_Schematic": {
+      "name": "XX_NOTUSED_T4 Heavy Armor Helmet",
+      "category": "Developer - Internal"
+    },
+    "D_T4_Combat_Choam_Heavy04_Top_Schematic": {
+      "name": "XX_NOTUSED_T4 Heavy Armor Top",
+      "category": "Developer - Internal"
+    },
+    "D_T4_Consumable_MistTubeHeal3_Schematic": {
+      "name": "XX_NOTUSED_MistTubeHeal3",
+      "category": "Developer - Internal"
+    },
+    "D_T4_Decoration_BunkBed_Schematic": {
+      "name": "XX_NOTUSED_Basic Bunk",
+      "category": "Developer - Internal"
+    },
+    "D_T4_Decoration_Furniture_Schematic": {
+      "name": "XX_NOTUSED_Outpost Furniture",
+      "category": "Developer - Internal"
+    },
+    "D_T4_Decoration_OutpostChair_Schematic": {
+      "name": "XX_NOTUSED_Sofa Chair",
+      "category": "Developer - Internal"
+    },
+    "D_T4_Decoration_OutpostSuspensorlamps_Schematic": {
+      "name": "XX_NOTUSED_Outpost Lamp Set",
+      "category": "Developer - Internal"
+    },
+    "D_T4_Gadget_SuffocationGrenade1_Schematic": {
+      "name": "XX_NOTUSED_SuffocationGrenade1",
+      "category": "Developer - Internal"
+    },
+    "D_T4_Gadget_SuspensorWall2_Schematic": {
+      "name": "XX_NOTUSED_SuspensorWall2",
+      "category": "Developer - Internal"
+    },
+    "D_T4_Stillsuit_ChoamBoots_Schematic": {
+      "name": "XX_NOTUSED_T4 Stillsuit Boots",
+      "category": "Developer - Internal"
+    },
+    "D_T4_Stillsuit_ChoamGloves_Schematic": {
+      "name": "XX_NOTUSED_T4 Stillsuit Gloves",
+      "category": "Developer - Internal"
+    },
+    "D_T4_Stillsuit_ChoamMask_Schematic": {
+      "name": "XX_NOTUSED_T4 Stillsuit Mask",
+      "category": "Developer - Internal"
+    },
+    "D_T4_Stillsuit_ChoamTop_Schematic": {
+      "name": "XX_NOTUSED_T4 Stillsuit Top",
+      "category": "Developer - Internal"
+    },
+    "D_T4_Structure_OutpostBuilding_Schematic": {
+      "name": "XX_NOTUSED_OutpostBuilding",
+      "category": "Developer - Internal"
+    },
+    "D_T4_Structure_OutpostSuspensorLampCeiling_Schematic": {
+      "name": "XX_NOTUSED_OutpostLampCeiling",
+      "category": "Developer - Internal"
+    },
+    "D_T4_Structure_OutpostSuspensorLampFloor_Schematic": {
+      "name": "XX_NOTUSED_OutpostLampFloor",
+      "category": "Developer - Internal"
+    },
+    "D_T4_Structure_OutpostSuspensorLampWall_Schematic": {
+      "name": "XX_NOTUSED_OutpostLampWall",
+      "category": "Developer - Internal"
+    },
+    "D_T4_Structure_PentashieldCeiling_Schematic": {
+      "name": "XX_NOTUSED_Pentashield Ceiling",
+      "category": "Developer - Internal"
+    },
+    "D_T4_Structure_PentashieldPrudenceDoor_Schematic": {
+      "name": "XX_NOTUSED_PentashieldPrudenceDoor",
+      "category": "Developer - Internal"
+    },
+    "D_T4_Structure_PentashieldWall_Schematic": {
+      "name": "XX_NOTUSED_Pentashield Wall",
+      "category": "Developer - Internal"
+    },
+    "D_T4_Structure_SpiceBarrel_Schematic": {
+      "name": "XX_NOTUSED_Spice Barrel",
+      "category": "Developer - Internal"
+    },
+    "D_T4_Structure_StakingunitVertical_Schematic": {
+      "name": "D_T4_Structure_StakingunitVertical_Schematic",
+      "category": "Developer - Internal"
+    },
+    "T4_Structure_Thumper1_Schematic": {
+      "name": "Thumper",
+      "category": "Schematics"
+    },
+    "D_T4_Structure_Toolsmoddingstation_Schematic": {
+      "name": "XX_NOTUSED_Tools modding station",
+      "category": "Developer - Internal"
+    },
+    "D_T4_Structure_Turret_Schematic": {
+      "name": "XX_NOTUSED Heavy Turret",
+      "category": "Developer - Internal"
+    },
+    "D_T4_StructureComponent_Schematic": {
+      "name": "XX_NOTUSED_Structure Component",
+      "category": "Developer - Internal"
+    },
+    "D_T4_Vehicle(Air)_OrnithopterInventory_Schematic": {
+      "name": "XX_NOTUSED_Ornithopter Storage Unit",
+      "category": "Developer - Internal"
+    },
+    "D_T4_Vehicle(Air)_SandcrawlerEngine_Schematic": {
+      "name": "XX_NOTUSED_Sandcrawler Engine",
+      "category": "Developer - Internal"
+    },
+    "D_T4_Vehicle(Air)_SandcrawlerPowerSupplyUnit_Schematic": {
+      "name": "XX_NOTUSED_Sandcrawler PSU",
+      "category": "Developer - Internal"
+    },
+    "D_T4_VehicleComponent_Schematic": {
+      "name": "XX_NOTUSED_Vehicl eComponent",
+      "category": "Developer - Internal"
+    },
+    "D_T4_WeaponComponent_Schematic": {
+      "name": "XX_NOTUSED_Weapon Component",
+      "category": "Developer - Internal"
+    },
+    "D_T5_AtreidesWearComponent_Schematic": {
+      "name": "XX_NOTUSED_Atreides Wear Component",
+      "category": "Developer - Internal"
+    },
+    "D_T5_Combat_Choam_Light05_Boots_Schematic": {
+      "name": "XX_NOTUSED_T5 Light Armor Boots",
+      "category": "Developer - Internal"
+    },
+    "D_T5_Combat_Choam_Light05_Bottom_Schematic": {
+      "name": "XX_NOTUSED_T5 Light Armor Bottom",
+      "category": "Developer - Internal"
+    },
+    "D_T5_Combat_Choam_Light05_Gloves_Schematic": {
+      "name": "XX_NOTUSED_T5 Light Armor Gloves",
+      "category": "Developer - Internal"
+    },
+    "D_T5_Combat_Choam_Light05_Helmet_Schematic": {
+      "name": "XX_NOTUSED_T5 Light Armor Helmet",
+      "category": "Developer - Internal"
+    },
+    "D_T5_Combat_Choam_Light05_Top_Schematic": {
+      "name": "XX_NOTUSED_T5 Light Armor Top",
+      "category": "Developer - Internal"
+    },
+    "D_T5_CrawlerComponent_Schematic": {
+      "name": "XX_NOTUSED_Crawler Component",
+      "category": "Developer - Internal"
+    },
+    "D_T5_Gadget_RemoteMine3_Schematic": {
+      "name": "XX_NOTUSED_RemoteMine3",
+      "category": "Developer - Internal"
+    },
+    "D_T5_Gadget_SuffocationGrenade2_Schematic": {
+      "name": "XX_NOTUSED_SuffocationGrenade2",
+      "category": "Developer - Internal"
+    },
+    "D_T5_Gadget_SuspensorGrenade2_Schematic": {
+      "name": "XX_NOTUSED_SuspensorGrenade2",
+      "category": "Developer - Internal"
+    },
+    "D_T5_Gadget_SuspensorWall3_Schematic": {
+      "name": "XX_NOTUSED_SuspensorWall3",
+      "category": "Developer - Internal"
+    },
+    "D_T5_HarkonnenWearComponent_Schematic": {
+      "name": "XX_NOTUSED_Harkonnen Wear Component",
+      "category": "Developer - Internal"
+    },
+    "D_T5_MeleeWeaponComponent_Schematic": {
+      "name": "XX_NOTUSED_Melee Weapon Component",
+      "category": "Developer - Internal"
+    },
+    "D_T5_MiscClothingComponent_Schematic": {
+      "name": "XX_NOTUSED_Misc Clothing Component",
+      "category": "Developer - Internal"
+    },
+    "D_T5_ModComponent_Schematic": {
+      "name": "XX_NOTUSED_Mod Component",
+      "category": "Developer - Internal"
+    },
+    "D_T5_RangedWeaponComponent_Schematic": {
+      "name": "XX_NOTUSED_Ranged Weapon Component",
+      "category": "Developer - Internal"
+    },
+    "D_T5_SmugglerWearComponent_Schematic": {
+      "name": "XX_NOTUSED_Smuggler Wear Component",
+      "category": "Developer - Internal"
+    },
+    "D_T5_SpiceComponent_Schematic": {
+      "name": "XX_NOTUSED_Spice Component",
+      "category": "Developer - Internal"
+    },
+    "D_T5_Stillsuit_ChoamBoots_Schematic": {
+      "name": "XX_NOTUSED_T5Stillsuit Boots",
+      "category": "Developer - Internal"
+    },
+    "D_T5_Stillsuit_ChoamGloves_Schematic": {
+      "name": "XX_NOTUSED_T5 Stillsuit Gloves",
+      "category": "Developer - Internal"
+    },
+    "D_T5_Stillsuit_ChoamMask_Schematic": {
+      "name": "XX_NOTUSED_T5 Stillsuit Mask",
+      "category": "Developer - Internal"
+    },
+    "D_T5_Stillsuit_ChoamTop_Schematic": {
+      "name": "XX_NOTUSED_T5 Stillsuit Top",
+      "category": "Developer - Internal"
+    },
+    "D_T5_Structure_ArmorModdingStation_Schematic": {
+      "name": "XX_NOTUSED_Wearables Mod Station",
+      "category": "Developer - Internal"
+    },
+    "D_T5_Structure_FuelGenerator_Schematic": {
+      "name": "XX_NOTUSED_Fuel Generator Schematic",
+      "category": "Developer - Internal"
+    },
+    "D_T5_Structure_LargeStorageContainer_Schematic": {
+      "name": "XX_NOTUSED_LargeStorageContainer",
+      "category": "Developer - Internal"
+    },
+    "D_T5_Structure_MediumChemicalRefinery_Schematic": {
+      "name": "XX_NOTUSED_Med Chem Refinery",
+      "category": "Developer - Internal"
+    },
+    "D_T5_Structure_MediumCistern_Schematic": {
+      "name": "XX_NOTUSED_MediumCistern",
+      "category": "Developer - Internal"
+    },
+    "D_T5_Structure_MediumOreRefinery_Schematic": {
+      "name": "XX_NOTUSED_Medium Ore Refinery",
+      "category": "Developer - Internal"
+    },
+    "D_T5_Structure_OmnidirectionalWindTrap_Schematic": {
+      "name": "XX_NOTUSED_OmniWindTrap",
+      "category": "Developer - Internal"
+    },
+    "D_T5_StructureComponent_Schematic": {
+      "name": "XX_NOTUSED_Structure Component",
+      "category": "Developer - Internal"
+    },
+    "D_T5_TankComponent_Schematic": {
+      "name": "XX_NOTUSED_Tank Component",
+      "category": "Developer - Internal"
+    },
+    "D_T5_ThopterComponent_Schematic": {
+      "name": "XX_NOTUSED_Thopter Component",
+      "category": "Developer - Internal"
+    },
+    "D_T5_ToolComponent_Schematic": {
+      "name": "XX_NOTUSED_Tool Component",
+      "category": "Developer - Internal"
+    },
+    "D_T6_AtreLMG5_Schematic": {
+      "name": "XX_NOTUSEDt6 lmg",
+      "category": "Developer - Internal"
+    },
+    "D_T6_AtreSmg6_Schematic": {
+      "name": "XX_NOTUSEDT6 smg",
+      "category": "Developer - Internal"
+    },
+    "D_T6_Bloodsack_T6_Schematic": {
+      "name": "XX_NOTUSEDT6 blood tank",
+      "category": "Developer - Internal"
+    },
+    "D_T6_BodyFluidExtractor_2h_tier6_Schematic": {
+      "name": "XX_NOTUSEDT6 2h exsang tool",
+      "category": "Developer - Internal"
+    },
+    "D_T6_ChoamSda7_Schematic": {
+      "name": "XX_NOTUSEDT6 Maula Pistol",
+      "category": "Developer - Internal"
+    },
+    "D_T6_CHOAMSword_3_Schematic": {
+      "name": "XX_NOTUSEDt6 sword",
+      "category": "Developer - Internal"
+    },
+    "D_T6_Combat_Choam_Heavy06_Boots_Schematic": {
+      "name": "XX_NOTUSEDT6 Heavy Armor Boots",
+      "category": "Developer - Internal"
+    },
+    "D_T6_Combat_Choam_Heavy06_Bottom_Schematic": {
+      "name": "XX_NOTUSEDT6 Heavy Armor Bottom",
+      "category": "Developer - Internal"
+    },
+    "D_T6_Combat_Choam_Heavy06_Gloves_Schematic": {
+      "name": "XX_NOTUSEDT6 Heavy Armor Gloves",
+      "category": "Developer - Internal"
+    },
+    "D_T6_Combat_Choam_Heavy06_Helmet_Schematic": {
+      "name": "XX_NOTUSEDT6 Heavy Armor Helmet",
+      "category": "Developer - Internal"
+    },
+    "D_T6_Combat_Choam_Heavy06_Top_Schematic": {
+      "name": "XX_NOTUSEDT6 Heavy Armor Top",
+      "category": "Developer - Internal"
+    },
+    "D_T6_Combat_Choam_Light06_Boots_Schematic": {
+      "name": "XX_NOTUSEDT6 Light Armor Boots",
+      "category": "Developer - Internal"
+    },
+    "D_T6_Combat_Choam_Light06_Bottom_Schematic": {
+      "name": "XX_NOTUSEDT6 Light Armor Bottom",
+      "category": "Developer - Internal"
+    },
+    "D_T6_Combat_Choam_Light06_Gloves_Schematic": {
+      "name": "XX_NOTUSEDT6 Light Armor Gloves",
+      "category": "Developer - Internal"
+    },
+    "D_T6_Combat_Choam_Light06_Helmet_Schematic": {
+      "name": "XX_NOTUSEDT6 Light Armor Helmet",
+      "category": "Developer - Internal"
+    },
+    "D_T6_Combat_Choam_Light06_Top_Schematic": {
+      "name": "XX_NOTUSEDT6 Light Armor Top",
+      "category": "Developer - Internal"
+    },
+    "D_T6_DewReaper_1h_Tier6_Schematic": {
+      "name": "XX_NOTUSEDT6 1h dew reaper",
+      "category": "Developer - Internal"
+    },
+    "D_T6_DewReaper_2h_Tier6_Schematic": {
+      "name": "XX_NOTUSEDT6 2h dew reaper",
+      "category": "Developer - Internal"
+    },
+    "D_T6_Dirk_3_Schematic": {
+      "name": "XX_NOTUSEDt6 dirk",
+      "category": "Developer - Internal"
+    },
+    "D_T6_HarkAr7_Schematic": {
+      "name": "XX_NOTUSEDt6 battle rifle",
+      "category": "Developer - Internal"
+    },
+    "D_T6_HarkHeavyPistol5_Schematic": {
+      "name": "XX_NOTUSEDt6 heavy pistol",
+      "category": "Developer - Internal"
+    },
+    "D_T6_HealthPack_Channeled_4_Schematic": {
+      "name": "XX_NOTUSEDT6 heal kit",
+      "category": "Developer - Internal"
+    },
+    "D_T6_HoltzmanShieldActiveDrain2_Schematic": {
+      "name": "XX_NOTUSEDT6 player shield T5",
+      "category": "Developer - Internal"
+    },
+    "D_T6_HoltzmanShieldActiveDrain3_Schematic": {
+      "name": "XX_NOTUSEDT6 player shield T6",
+      "category": "Developer - Internal"
+    },
+    "D_T6_Kindjal_4_Schematic": {
+      "name": "XX_NOTUSEDt6 kindjal",
+      "category": "Developer - Internal"
+    },
+    "D_T6_LargeSpice_Schematic": {
+      "name": "XX_NOTUSED_largespice",
+      "category": "Developer - Internal"
+    },
+    "D_T6_Literjon_T6_Schematic": {
+      "name": "XX_NOTUSEDT6 literjon",
+      "category": "Developer - Internal"
+    },
+    "D_T6_MiningTool_2h_Advanced_Schematic": {
+      "name": "XX_NOTUSEDT6 cutteray",
+      "category": "Developer - Internal"
+    },
+    "D_T6_PowerPack4_Schematic": {
+      "name": "XX_NOTUSEDT6 power pack",
+      "category": "Developer - Internal"
+    },
+    "D_T6_Rapier_3_Schematic": {
+      "name": "XX_NOTUSEDt6 rapier",
+      "category": "Developer - Internal"
+    },
+    "D_T6_RocketAmmoSchematic": {
+      "name": "XX_NOTUSEDRockets",
+      "category": "Developer - Internal"
+    },
+    "D_T6_RocketLauncher_2_Schematic": {
+      "name": "XX_NOTUSEDt6 rocket launcher",
+      "category": "Developer - Internal"
+    },
+    "D_T6_Scattergun_Prototype3_Schematic": {
+      "name": "XX_NOTUSEDt6 scattergun",
+      "category": "Developer - Internal"
+    },
+    "D_T6_SmugDmr6_Schematic": {
+      "name": "XX_NOTUSEDt6 dmr",
+      "category": "Developer - Internal"
+    },
+    "D_T6_SmugShot5_Schematic": {
+      "name": "XX_NOTUSEDt6 shotgun",
+      "category": "Developer - Internal"
+    },
+    "D_T6_SpiceAddictionConsumable_T6_Schematic": {
+      "name": "XX_NOTUSEDT6 spice food",
+      "category": "Developer - Internal"
+    },
+    "D_T6_StaticCompactorTier6_Schematic": {
+      "name": "XX_NOTUSEDT6 static compactor",
+      "category": "Developer - Internal"
+    },
+    "D_T6_Stillsuit_ChoamBoots_Schematic": {
+      "name": "XX_NOTUSEDT6Stillsuit Boots",
+      "category": "Developer - Internal"
+    },
+    "D_T6_Stillsuit_ChoamGloves_Schematic": {
+      "name": "XX_NOTUSEDT6 Stillsuit Gloves",
+      "category": "Developer - Internal"
+    },
+    "D_T6_Stillsuit_ChoamMask_Schematic": {
+      "name": "XX_NOTUSEDT6 Stillsuit Mask",
+      "category": "Developer - Internal"
+    },
+    "D_T6_Stillsuit_ChoamTop_Schematic": {
+      "name": "XX_NOTUSEDT6 Stillsuit Top",
+      "category": "Developer - Internal"
+    },
+    "D_T6_T6RefinedResourceA_Schematic": {
+      "name": "XX_NOTUSED_T6A",
+      "category": "Developer - Internal"
+    },
+    "D_T6_T6RefinedResourceB_Schematic": {
+      "name": "XX_NOTUSED_T6B",
+      "category": "Developer - Internal"
+    },
+    "D_T6TankChoamBody_Schematic": {
+      "name": "XX_NOTUSED_Tank_Body",
+      "category": "Developer - Internal"
+    },
+    "D_TableSchematic": {
+      "name": "XX_NOTUSED_Plasteel Table",
+      "category": "Developer - Internal"
+    },
+    "D_TankEngine_Schematic": {
+      "name": "XX_NOTUSED_TankEngineEngine",
+      "category": "Developer - Internal"
+    },
+    "D_Thumper1Schematic": {
+      "name": "XX_NOTUSED_Thumper",
+      "category": "Developer - Internal"
+    },
+    "D_TotemSchematic": {
+      "name": "XX_NOTUSED_Sub-fief Console",
+      "category": "Developer - Internal"
+    },
+    "D_TransportOrniEngine_Schematic": {
+      "name": "XX_NOTUSED_TransportOrniEngine",
+      "category": "Developer - Internal"
+    },
+    "D_TurretSchematic": {
+      "name": "XX_NOTUSED_Turret",
+      "category": "Developer - Internal"
+    },
+    "D_VehicleCraftingStationBlueprint": {
+      "name": "XX_NOTUSED_Vehicle Assembly",
+      "category": "Developer - Internal"
+    },
+    "D_VehiclesFabricator_Schematic": {
+      "name": "XX_NOTUSED_Vehicle Parts Fab",
+      "category": "Developer - Internal"
+    },
+    "D_WallGlowglobeSchematic": {
+      "name": "XX_NOTUSED_Wall Glowglobe",
+      "category": "Developer - Internal"
+    },
+    "D_WaterCisternSchematic": {
+      "name": "XX_NOTUSED_Water Cistern",
+      "category": "Developer - Internal"
+    },
+    "D_WaterTankSchematic": {
+      "name": "XX_NOTUSED_Water Tank Blueprint",
+      "category": "Developer - Internal"
+    },
+    "D_WeaponsFabricator_Schematic": {
+      "name": "XX_NOTUSED_Weapon Fabricator",
+      "category": "Developer - Internal"
+    },
+    "D_WearablesFabricator_Schematic": {
+      "name": "XX_NOTUSEDGarment Fabricator",
+      "category": "Developer - Internal"
+    },
+    "D_WindTrapFilter1_Schematic": {
+      "name": "XX_NOTUSEDWindTrapFilter1_Schematic",
+      "category": "Developer - Internal"
+    },
+    "D_WindTrapFilter2_Schematic": {
+      "name": "XX_NOTUSED_WindTrapFilter2_Schematic",
+      "category": "Developer - Internal"
+    },
+    "D_WindTrapFilter3_Schematic": {
+      "name": "XX_NOTUSED_WindTrapFilter3_Schematic",
+      "category": "Developer - Internal"
+    },
+    "D_WindTrapFilter4_Schematic": {
+      "name": "XX_NOTUSED_WindTrapFilter4_Schematic",
+      "category": "Developer - Internal"
+    },
+    "D_WindtrapSchematic": {
+      "name": "XX_NOTUSED_Windtrap",
+      "category": "Developer - Internal"
+    },
+    "D_WindTurbineDirectionalSchematic": {
+      "name": "XX_NOTUSED_Wind Turbine Directional",
+      "category": "Developer - Internal"
+    },
+    "D_WindTurbineOmnidirectionalSchematic": {
+      "name": "XX_NOTUSED_Wind Turbine Omnidirectional",
+      "category": "Developer - Internal"
+    },
+    "D_T1_PowerPack5_Schematic": {
+      "name": "XX_NOTUSED_T1_PowerPack5_Schematic",
+      "category": "Developer - Internal"
+    },
+    "D_T3_PowerPack6_Schematic": {
+      "name": "XX_NOTUSED_T3_PowerPack6_Schematic",
+      "category": "Developer - Internal"
+    },
+    "D_T5_PowerPack7_Schematic": {
+      "name": "XX_NOTUSED_T5_PowerPack7_Schematic",
+      "category": "Developer - Internal"
+    },
+    "UniqueThumper_02_Schematic": {
+      "name": "Clapper Mk2",
+      "category": "Schematics"
+    },
+    "Stilltent_Unique_01_Schematic": {
+      "name": "Double-sealed Stilltent",
+      "category": "Schematics"
+    },
+    "TankEngine_Unique_Accelerate_06_Schematic": {
+      "name": "Regis High-torque Tank Engine",
+      "category": "Developer - Internal"
+    },
+    "TankDart_Unique_DmgIncrease_06_Schematic": {
+      "name": "High-pressure Tank Dart Turret",
+      "category": "Developer - Internal"
+    },
+    "TankHull_Unique_ArmorIncrease_06_Schematic": {
+      "name": "Plated Tank Body Hull",
+      "category": "Developer - Internal"
+    },
+    "UniqueThumper_03_Schematic": {
+      "name": "Clapper Mk3",
+      "category": "Schematics"
+    },
+    "UniqueSword_05_Damasteel_Schematic": {
+      "name": "Damasteel Sword",
+      "category": "Schematics"
+    },
+    "Combat_Heavy_Unique_Swordmaster_Schematic": {
+      "name": "Swordmaster Light Armor Set Schematic",
+      "category": "Schematics"
+    },
+    "Combat_Light_Unique_BeneGeserit_Schematic": {
+      "name": "Bene Gesserit Light Armor Set Schematic",
+      "category": "Schematics"
+    },
+    "Combat_Light_Unique_Mentat_Schematic": {
+      "name": "Mentat Light Armor Set Schematic",
+      "category": "Schematics"
+    },
+    "Combat_Heavy_Unique_Trooper_Schematic": {
+      "name": "Trooper Heavy Armor Set Schematic",
+      "category": "Schematics"
+    },
+    "Stillsuit_Unique_Planetologist_Schematic": {
+      "name": "Planetologist Light Armor Set Schematic",
+      "category": "Schematics"
+    },
+    "Crysknife_Schematic": {
+      "name": "Unfixed Crysknife Schematic",
+      "category": "Schematics"
+    },
+    "TreadwheelChassis_4_Schematic": {
+      "name": "Treadwheel Chassis Mk4",
+      "category": "Schematics"
+    },
+    "TreadwheelGenerator_4_Schematic": {
+      "name": "Treadwheel PSU Mk4",
+      "category": "Schematics"
+    },
+    "TreadwheelEngine_4_Schematic": {
+      "name": "Treadwheel Engine Mk4",
+      "category": "Schematics"
+    },
+    "TreadwheelLocomotion_4_Schematic": {
+      "name": "Treadwheel Tread Mk4",
+      "category": "Schematics"
+    },
+    "TreadwheelHull_4_Schematic": {
+      "name": "Treadwheel Hull Mk4",
+      "category": "Schematics"
+    },
+    "TreadwheelPassenger_1_Schematic": {
+      "name": "Treadwheel Passenger Mk1",
+      "category": "Schematics"
+    },
+    "TreadwheelBoost_4_Schematic": {
+      "name": "Treadwheel Boost Mk4",
+      "category": "Schematics"
+    },
+    "TreadwheelInventory_2_Schematic": {
+      "name": "Treadwheel Inventory Mk2",
+      "category": "Schematics"
+    },
+    "TreadwheelScanner_2_Schematic": {
+      "name": "Treadwheel Scanner Mk2",
+      "category": "Schematics"
+    },
+    "Consumable_Buff_PoisonStackIncrease_Schematic": {
+      "name": "Experimental Toxin-Absorption Pills",
+      "category": "Schematics"
+    },
+    "QualityLevelTest_Schematic": {
+      "name": "NA_Quality Test Schematic",
+      "category": "Schematics"
+    },
+    "DualBlades_1_Schematic": {
+      "name": "Adept Dual Blades",
+      "category": "Schematics"
+    },
+    "DualBlades_2_Schematic": {
+      "name": "Regis Dual Blades",
+      "category": "Schematics"
+    },
+    "Contract_LandsraadPowerpackComponent_Schematic": {
+      "name": "Experimental Power Pack Component",
+      "category": "Schematics"
+    },
+    "Contract_LandsraadSurveillanceSensor_Schematic": {
+      "name": "Surveillance Sensor Schematic",
+      "category": "Schematics"
+    },
+    "Contract_LandsraadPowerGenerator_Schematic": {
+      "name": "Contract_LandsraadPowerGenerator_Schematic",
+      "category": "Schematics"
+    },
+    "Contract_LandsraadExperimentalWindTurbineComponent_Schematic": {
+      "name": "Experimental Wind Turbine Schematic",
+      "category": "Schematics"
+    },
+    "Contract_LandsraadSealedRecorder_Schematic": {
+      "name": "Sealed Recorder Schematic",
+      "category": "Schematics"
+    },
+    "Contract_LandsraadIxianSurveillanceDevice_Schematic": {
+      "name": "Ixian Transeye Schematic",
+      "category": "Schematics"
+    },
+    "T6SchematicFragmentQL2_Schematic": {
+      "name": "NA_QL 2 Schematic Frament",
+      "category": "Schematics"
+    },
+    "T6SchematicFragmentQL3_Schematic": {
+      "name": "NA_QL 3 Schematic Frament",
+      "category": "Schematics"
+    },
+    "T6SchematicFragmentQL4_Schematic": {
+      "name": "NA_QL 4 Schematic Frament",
+      "category": "Schematics"
+    },
+    "T6SchematicFragmentQL5_Schematic": {
+      "name": "NA_QL 5 Schematic Frament",
+      "category": "Schematics"
+    },
+    "T6_Augment_Damage2_Schematic": {
+      "name": "House Heavy Caliber Upgrade",
+      "category": "Schematics"
+    },
+    "Contract_LandsraadPhaseDancersSolidoDissembler_Schematic": {
+      "name": "SCHEMATIC_CONTRACT_LANDSRAADPHASEDANCERSSOLIDODISSEMBLER_SCHEMATIC_NAME",
+      "category": "Schematics"
+    },
+    "Contract_LandsraadConvergence_Triangulator_Schematic": {
+      "name": "Ixian Triangulator Schematic",
+      "category": "Schematics"
+    },
+    "Contract_LandsraadTerrainRecorder_Schematic": {
+      "name": "PH_Terrain Recorder Schematic",
+      "category": "Schematics"
+    },
+    "Contract_LandsraadMinefieldSurveyor_Schematic": {
+      "name": "PH_Minefield Surveyor Schematic",
+      "category": "Schematics"
+    },
+    "Contract_LandsraadRareMetalsExtractor_Schematic": {
+      "name": "Yafeng Ore Extractor Prototype",
+      "category": "Schematics"
+    },
+    "BoostAbility": {
+      "name": "XX_Ornithopter Booster ability",
+      "category": "Vehicle Modules"
+    },
+    "BoostOneShotAbility": {
+      "name": "XX_Sandbike Boost Ability",
+      "category": "Vehicle Modules"
+    },
+    "BuggyGenerator_7": {
+      "name": "Buggy PSU Mk7",
+      "category": "Vehicle Modules"
+    },
+    "D_VehicleShieldAbility": {
+      "name": "D_VehicleShieldAbility",
+      "category": "Developer - Internal"
+    },
+    "MOrnithopterLasgunAbility": {
+      "name": "XX_Ornithopter Lasgun",
+      "category": "Vehicle Modules"
+    },
+    "MOrnithopterRocketsAbility": {
+      "name": "XX_Ornithopter Rocket Ability_",
+      "category": "Vehicle Modules"
+    },
+    "OrnithopterDashAbility": {
+      "name": "XX_Thopter Dash Ability",
+      "category": "Vehicle Modules"
+    },
+    "OrnithopterHarnessAbility": {
+      "name": "XX_Thopter Harness",
+      "category": "Vehicle Modules"
+    },
+    "OrnithopterLasgunAbility": {
+      "name": "XX_Ornithopter Lasgun",
+      "category": "Vehicle Modules"
+    },
+    "OrnithopterRocketsAbility": {
+      "name": "XX_Ornithopter Rocket Ability",
+      "category": "Vehicle Modules"
+    },
+    "OrnithopterScannerDirectionalAbility": {
+      "name": "XX_Orni scanner cone ability",
+      "category": "Vehicle Modules"
+    },
+    "OrnithopterScannerOmniAbility": {
+      "name": "XX_Orni scanner omni ability",
+      "category": "Vehicle Modules"
+    },
+    "OrnithopterTransportBoostAbility": {
+      "name": "XX_Transp Ornithopter Boost Abi",
+      "category": "Vehicle Modules"
+    },
+    "OrnithopterVultureAbility": {
+      "name": "XX_Thopter Vulture",
+      "category": "Vehicle Modules"
+    },
+    "SandbikeGenerator_7": {
+      "name": "Sandbike PSU Mk7",
+      "category": "Vehicle Modules"
+    },
+    "SandbikeScannerDirectionalAbility": {
+      "name": "XX_Orni scanner omni ability",
+      "category": "Vehicle Modules"
+    },
+    "SandcrawlerSpiceHeader_Unique_YieldIncrease_6": {
+      "name": "Upgraded Regis Spice Header",
+      "category": "Vehicle Modules"
+    },
+    "SeekerChassis": {
+      "name": "Seeker Chassis",
+      "category": "Vehicle Modules"
+    },
+    "SeekerDashAbility": {
+      "name": "XX_Seeker Dash ability",
+      "category": "Vehicle Modules"
+    },
+    "TankBoost_6": {
+      "name": "[DEPRECATED] Regis Tank Turbo Boost",
+      "category": "Developer - Internal"
+    },
+    "TankChassis_6": {
+      "name": "[DEPRECATED] Regis Tank Chassis",
+      "category": "Developer - Internal"
+    },
+    "TankDart_6": {
+      "name": "[DEPRECATED] Regis Tank Dart Gun",
+      "category": "Developer - Internal"
+    },
+    "TankEngine_6": {
+      "name": "[DEPRECATED] Regis Tank Engine",
+      "category": "Developer - Internal"
+    },
+    "TankFire_6": {
+      "name": "[DEPRECATED] Regis Tank Flamethrower",
+      "category": "Developer - Internal"
+    },
+    "TankHull_6": {
+      "name": "[DEPRECATED] Regis Tank Hull",
+      "category": "Developer - Internal"
+    },
+    "TankHullFront_6": {
+      "name": "[DEPRECATED] Regis Tank Cockpit",
+      "category": "Developer - Internal"
+    },
+    "TankInventory_6": {
+      "name": "[DEPRECATED] Regis Tank Inventory",
+      "category": "Developer - Internal"
+    },
+    "ThrusterAbility": {
+      "name": "XX_Sandbike Boost Ability",
+      "category": "Vehicle Modules"
+    },
+    "VehicleHarvestingAbility": {
+      "name": "XX_Vehicle Harvesting",
+      "category": "Vehicle Modules"
+    },
+    "SardaukarBlade": {
+      "name": "Sardaukar Blade",
+      "category": "Weapons"
+    },
+    "Rifle_Long_T3_NPC": {
+      "name": "XX_NPC Explosive Spitdart Rifle",
+      "category": "Weapons"
+    },
+    "Rapier_2": {
+      "name": "Atreides Rapier Mark III",
+      "category": "Weapons"
+    },
+    "D_MiningTool_1h_Basic": {
+      "name": "XX_NOTUSED_Basic Cutterray",
+      "category": "Developer - Internal"
+    },
+    "Heavy_Flamethrower_T2_NPC": {
+      "name": "Scorchbolt",
+      "category": "Weapons"
+    },
+    "HarkHeavyPistol1": {
+      "name": "Rafiq Snubnose Pistol",
+      "category": "Weapons"
+    },
+    "HarkAr1": {
+      "name": "NOTUSED_BR",
+      "category": "Weapons"
+    },
+    "Dirk_2": {
+      "name": "Dirk Mark III",
+      "category": "Weapons"
+    },
+    "AtreSmg1": {
+      "name": "NOTUSED_SMG",
+      "category": "Weapons"
+    },
+    "AtreLMG2": {
+      "name": "Atreides LMG MK I",
+      "category": "Weapons"
+    },
+    "AtreLMG1": {
+      "name": "Atreides LMG",
+      "category": "Weapons"
+    },
+    "Rifle_Long_T4_Explosive_NPC": {
+      "name": "WEAPON_RIFLE_LONG_T4_NPC_NAME",
+      "category": "Weapons"
+    },
+    "Hook_NPC_01": {
+      "name": "NPC Glutton's Hook",
+      "category": "Weapons"
+    },
+    "Fireballer_1": {
+      "name": "Pyrocket",
+      "category": "Developer - Internal"
+    },
+    "HandHeldTorch_Story_TheBloodline": {
+      "name": "Glowtube",
+      "category": "Weapons"
+    },
+    "HandHeldTorch_Story_TheBloodline_NPC": {
+      "name": "XXWEAPON_HANDHELDTORCH_STORY_THEBLOODLINE_NPC_NAME",
+      "category": "Weapons"
+    },
+    "Raider_Kindjal": {
+      "name": "Raider Kindjal",
+      "category": "Weapons"
+    },
+    "Raider_Scattergun": {
+      "name": "Raider Scattergun",
+      "category": "Weapons"
+    },
+    "Raider_LMG": {
+      "name": "Raider LMG",
+      "category": "Weapons"
+    },
+    "Sandflies_Flamethrower_NPC": {
+      "name": "NA_WEAPON_GAROTI_SCORCHBOLT_FLAMEGUN_NAME",
+      "category": "Weapons"
+    },
+    "Sardaukar_Dagger_NPC": {
+      "name": "XX_Sardaukar Dagger NPC",
+      "category": "Weapons"
+    },
+    "Fenring_Rapier_NPC": {
+      "name": "XX_NPC Weapon",
+      "category": "Weapons"
+    },
+    "D_TestContract": {
+      "name": "Test Contract",
+      "category": "Developer - Internal"
+    },
+    "D_nh66q": {
+      "name": "Water Production Records",
+      "category": "Developer - Internal"
+    },
+    "D_ytdqg": {
+      "name": "Tradepost Delivery",
+      "category": "Developer - Internal"
+    },
+    "D_w6dn1": {
+      "name": "Elacca Ash",
+      "category": "Developer - Internal"
+    },
+    "D_rq8um": {
+      "name": "Semuta Notes",
+      "category": "Developer - Internal"
+    },
+    "ContractItem": {
+      "name": "ContractItem",
+      "category": "Contract Items"
+    },
+    "ucoza": {
+      "name": "The Red Scorpion",
+      "category": "Contract Items"
+    },
+    "ContractRewardItem": {
+      "name": "ContractRewardItem",
+      "category": "Contract Items"
+    },
+    "ContractKaraValkServoControl2": {
+      "name": "Servo-Stim Transmitter",
+      "category": "Contract Items"
+    },
+    "ContractSeronVarlinSwordHilt": {
+      "name": "Seron's Sword Hilt",
+      "category": "Contract Items"
+    },
+    "ContractSeronVarlinTleilaxuEyes": {
+      "name": "Tleilaxu Eyes",
+      "category": "Contract Items"
+    },
+    "ContractSeronVarlinGinazWrit": {
+      "name": "ContractSeronVarlinGinazWrit",
+      "category": "Contract Items"
+    },
+    "D_ContractPlanetologist2Report": {
+      "name": "Report on Testing Station No. 197",
+      "category": "Developer - Internal"
+    },
+    "RecustomizationFunnelSparePartsContainer": {
+      "name": "Container of Parts",
+      "category": "Contract Items"
+    },
+    "EventChoamCargo": {
+      "name": "CHOAM Cargo",
+      "category": "Developer - Internal"
+    },
+    "RecustomizationFunnelImportPermit": {
+      "name": "Arrakeen Import Permit",
+      "category": "Contract Items"
+    },
+    "JourneyCarthagSchematics": {
+      "name": "Old Carthag schematics",
+      "category": "Contract Items"
+    },
+    "JourneyBlackmailLetter": {
+      "name": "Blackmail Letter from Phaedra",
+      "category": "Contract Items"
+    },
+    "ContractScandalIntelPackage": {
+      "name": "Compromising Materials",
+      "category": "Contract Items"
+    },
+    "JourneyValetLocationNote": {
+      "name": "Note to the valet",
+      "category": "Contract Items"
+    },
+    "JourneyBlackMarketTraderNote": {
+      "name": "Black market trade receipt",
+      "category": "Contract Items"
+    },
+    "JourneyManifestPiece1": {
+      "name": "A torn page from a manifest",
+      "category": "Contract Items"
+    },
+    "JourneyManifestPiece2": {
+      "name": "Top part of a torn manifest",
+      "category": "Contract Items"
+    },
+    "JourneyBanquetGuestList": {
+      "name": "Banquet Guest List",
+      "category": "Contract Items"
+    },
+    "JourneyValetCrypticNote": {
+      "name": "Cryptic note",
+      "category": "Contract Items"
+    },
+    "SheolScanLog": {
+      "name": "Radiation Scan Logs",
+      "category": "Contract Items"
+    },
+    "ScannerAnalysis": {
+      "name": "Scanner Analysis Results",
+      "category": "Contract Items"
+    },
+    "ShipmentofJunk": {
+      "name": "Shipment of Junk",
+      "category": "Contract Items"
+    },
+    "RadioactivecratePinnacleStation": {
+      "name": "Crate of Irradiated Materials",
+      "category": "Contract Items"
+    },
+    "RadioactivecrateCrossroads": {
+      "name": "Crate of Irradiated Materials",
+      "category": "Contract Items"
+    },
+    "RadioactivecrateAnvil": {
+      "name": "Crate of Irradiated Materials",
+      "category": "Contract Items"
+    },
+    "ContractBanquetTailoringMaterials": {
+      "name": "Tailor Materials",
+      "category": "Contract Items"
+    },
+    "ContractBanquetFakeBrandyCrate": {
+      "name": "Fake Crate of Caladanian Brandy",
+      "category": "Contract Items"
+    },
+    "ContractBanquetCaladanianBrandyCrate": {
+      "name": "Crate of Caladanian Brandy",
+      "category": "Contract Items"
+    },
+    "JourneyPoisonSnooper": {
+      "name": "Poison snooper",
+      "category": "Contract Items"
+    },
+    "JourneyBarPoisonReport": {
+      "name": "Poison report from Osten's book",
+      "category": "Contract Items"
+    },
+    "JourneyApartmentPoisonedMask": {
+      "name": "Poison report from Phaedra's mask",
+      "category": "Contract Items"
+    },
+    "MaybePoisonVial": {
+      "name": "Sinister-Looking Vial",
+      "category": "Contract Items"
+    },
+    "JourneyBanquetEarring": {
+      "name": "Earring",
+      "category": "Contract Items"
+    },
+    "JourneyBanquetMonogrammedHandkerchief": {
+      "name": "Monogrammed handkerchief",
+      "category": "Contract Items"
+    },
+    "ContractMarketManipulationMessage": {
+      "name": "Threatening Message",
+      "category": "Contract Items"
+    },
+    "ContractMarketManipulationParasites": {
+      "name": "Container with parasite husks",
+      "category": "Contract Items"
+    },
+    "ContractMarketManipulationMeatPoison": {
+      "name": "Chaumas",
+      "category": "Contract Items"
+    },
+    "JourneyArchivesToken": {
+      "name": "Ariste's Token",
+      "category": "Contract Items"
+    },
+    "JourneyRadiationCoreMap": {
+      "name": "Hastily drawn map",
+      "category": "Contract Items"
+    },
+    "JourneyRadiationCore": {
+      "name": "Radiation core",
+      "category": "Contract Items"
+    },
+    "JourneyElaccaShipmentInfoMap": {
+      "name": "PH_Elacca shipment map",
+      "category": "Contract Items"
+    },
+    "JourneyElaccaShipment": {
+      "name": "Elacca shipment",
+      "category": "Contract Items"
+    },
+    "JourneyUnconsciousSuboid": {
+      "name": "Unconscious suboid",
+      "category": "Contract Items"
+    },
+    "JourneyUnconsciousGhola": {
+      "name": "Dormant Ghola abomination",
+      "category": "Contract Items"
+    },
+    "LandsraadNavigationLog": {
+      "name": "\"Navigation Shigawire Logs\"",
+      "category": "Contract Items"
+    },
+    "LandsraadEngineeringLog": {
+      "name": "\"Engineering Shigawire Logs\"",
+      "category": "Contract Items"
+    },
+    "LandsraadRadiationSample1": {
+      "name": "Radiation sample",
+      "category": "Contract Items"
+    },
+    "LandsraadRadiationSample2": {
+      "name": "Radiation sample",
+      "category": "Contract Items"
+    },
+    "LandsraadRadiationSample3": {
+      "name": "Radiation sample",
+      "category": "Contract Items"
+    },
+    "LandsraadWaterContainer": {
+      "name": "Water container",
+      "category": "Contract Items"
+    },
+    "LandsraadGeneratorComponent1": {
+      "name": "Generator Core",
+      "category": "Contract Items"
+    },
+    "LandsraadGeneratorComponent2": {
+      "name": "Generator Housing",
+      "category": "Contract Items"
+    },
+    "LandsraadMiningLaser": {
+      "name": "First Component",
+      "category": "Contract Items"
+    },
+    "LandsraadSurveillanceSensor": {
+      "name": "Surveillance Sensor",
+      "category": "Contract Items"
+    },
+    "LandsraadPowerGenerator": {
+      "name": "Power Generator",
+      "category": "Contract Items"
+    },
+    "LandsraadSecretCargoContainer": {
+      "name": "Specialized cargo container",
+      "category": "Contract Items"
+    },
+    "LandsraadSecretCargoManifest": {
+      "name": "Cargo manifest",
+      "category": "Contract Items"
+    },
+    "LandsraadSecretPassengerManifest": {
+      "name": "Passenger manifest",
+      "category": "Contract Items"
+    },
+    "LandsraadIrradiatedLiquid": {
+      "name": "Irradiated Liquid",
+      "category": "Contract Items"
+    },
+    "LandsraadPowerpackComponent": {
+      "name": "Experimental Power Pack",
+      "category": "Contract Items"
+    },
+    "LandsraadPoisonResearchData1": {
+      "name": "Lab research data",
+      "category": "Contract Items"
+    },
+    "LandsraadPoisonResearchData2": {
+      "name": "Second lab research data",
+      "category": "Contract Items"
+    },
+    "LandsraadPoisonResearchData3": {
+      "name": "Common room research data",
+      "category": "Contract Items"
+    },
+    "LandsraadPoisonResearchData4": {
+      "name": "LandsraadPoisonResearchData4",
+      "category": "Contract Items"
+    },
+    "LandsraadPoisonSample": {
+      "name": "Plant sample",
+      "category": "Contract Items"
+    },
+    "LandsraadDarknessAnalyzedBlood": {
+      "name": "Blood test result",
+      "category": "Contract Items"
+    },
+    "LandsraadElectricalExperimentalWindTurbineGenerator": {
+      "name": "Experimental wind turbine generator",
+      "category": "Contract Items"
+    },
+    "LandsraadSealedRecorder": {
+      "name": "Sealed Recorder",
+      "category": "Contract Items"
+    },
+    "LandsraadDeserterTrainingSword": {
+      "name": "Deserter training Sword",
+      "category": "Contract Items"
+    },
+    "LandsraadDeserterCutteray": {
+      "name": "Deserter cutteray",
+      "category": "Contract Items"
+    },
+    "LandsraadMysteriousNote": {
+      "name": "Mysterious note",
+      "category": "Contract Items"
+    },
+    "LandsraadHagalCrystal": {
+      "name": "Pristine Opafire gem",
+      "category": "Contract Items"
+    },
+    "LandsraadSensorCalibrationPack": {
+      "name": "Sensor calibration pack",
+      "category": "Contract Items"
+    },
+    "LandsraadIxianSurveillanceDevice": {
+      "name": "Ixian Transeye",
+      "category": "Contract Items"
+    },
+    "LandsraadCactiResearch": {
+      "name": "Cactus research notes",
+      "category": "Contract Items"
+    },
+    "LandsraadPoisonCactiSample": {
+      "name": "Poison Cactus sample",
+      "category": "Contract Items"
+    },
+    "LandsraadBloodCactiSample": {
+      "name": "Blood Cactus Sample",
+      "category": "Contract Items"
+    },
+    "LandsraadRadiatedCactiSample": {
+      "name": "Irradiated Cactus sample",
+      "category": "Contract Items"
+    },
+    "LandsraadRadiationSample4": {
+      "name": "Radiation sample",
+      "category": "Contract Items"
+    },
+    "LandsraadDarknessMedicalEquipment1": {
+      "name": "Medical equipment",
+      "category": "Contract Items"
+    },
+    "LandsraadDarknessMedicalEquipment2": {
+      "name": "LandsraadDarknessMedicalEquipment2",
+      "category": "Contract Items"
+    },
+    "LandsraadDarknessExtractedBlood": {
+      "name": "Extracted blood",
+      "category": "Contract Items"
+    },
+    "LandsraadMiningLaser2": {
+      "name": "Second Component",
+      "category": "Contract Items"
+    },
+    "LandsraadMiningLaser3": {
+      "name": "Third Component",
+      "category": "Contract Items"
+    },
+    "LandsraadMiningLaser4": {
+      "name": "Fourth Component",
+      "category": "Contract Items"
+    },
+    "LandsraadMiningLaser5": {
+      "name": "Fifth Component",
+      "category": "Contract Items"
+    },
+    "LandsraadMiningLaser6": {
+      "name": "Sixth Component",
+      "category": "Contract Items"
+    },
+    "LandsraadTreasureNote": {
+      "name": "Deserter camp note",
+      "category": "Contract Items"
+    },
+    "LandsraadDeserterHead1": {
+      "name": "Ironstorm",
+      "category": "Contract Items"
+    },
+    "LandsraadDeserterHead2": {
+      "name": "Ifrit",
+      "category": "Contract Items"
+    },
+    "LandsraadFremenFindsArtifact1": {
+      "name": "The first Fremen artifact",
+      "category": "Contract Items"
+    },
+    "LandsraadFremenFindsArtifact2": {
+      "name": "The second Fremen artifact",
+      "category": "Contract Items"
+    },
+    "LandsraadFremenFindsArtifact3": {
+      "name": "The third Fremen artifact",
+      "category": "Contract Items"
+    },
+    "LandsraadElectricalExperimentalWindTurbineComponent": {
+      "name": "Electrical Wind Turbine component",
+      "category": "Contract Items"
+    },
+    "LandsraadGhostsOfTsimpoCisternNote": {
+      "name": "Blood-soaked orders",
+      "category": "Contract Items"
+    },
+    "LandsraadSurveyingTsimpoProbes": {
+      "name": "Modified Survey Probes",
+      "category": "Contract Items"
+    },
+    "LandsraadPhasedancersTriDProjectionLens": {
+      "name": "Tri-D Projection Lens",
+      "category": "Contract Items"
+    },
+    "LandsraadPhasedancersSolidoDissembler": {
+      "name": "Solido Dissembler",
+      "category": "Contract Items"
+    },
+    "LandsraadSurveyingTsimpoSpiceCache": {
+      "name": "Spice Cache",
+      "category": "Contract Items"
+    },
+    "LandsraadWatershipperlog1": {
+      "name": "PH_Watershipper Log",
+      "category": "Contract Items"
+    },
+    "LandsraadWatershipperlog2": {
+      "name": "PH_Missing Watershipper Log",
+      "category": "Contract Items"
+    },
+    "LandsraadIceCoreSample": {
+      "name": "PH_Ice Core Sample",
+      "category": "Contract Items"
+    },
+    "LandsraadTerrainRecorder": {
+      "name": "PH_Terrain Recorder",
+      "category": "Contract Items"
+    },
+    "LandsraadMinefieldSurveyor": {
+      "name": "PH_Minefield Surveyor",
+      "category": "Contract Items"
+    },
+    "LandsraadBalanceofTradePuzzleSolution1": {
+      "name": "PH_Vault Glacial Ice Requirement",
+      "category": "Contract Items"
+    },
+    "LandsraadBalanceofTradePuzzleSolution2": {
+      "name": "PH_Vault pipes activation order",
+      "category": "Contract Items"
+    },
+    "PCContractLuvennesBody": {
+      "name": "PCContractLuvennesBody",
+      "category": "Contract Items"
+    },
+    "LandsraadEnvironmentalControlStimCrate": {
+      "name": "PH_Sealed crate with stims",
+      "category": "Contract Items"
+    },
+    "LandsraadEnvironmentalControlStimBlueprint": {
+      "name": "PH_Stim Blueprint",
+      "category": "Contract Items"
+    },
+    "LandsraadRareMetalsMineralExtractorFrame": {
+      "name": "Ore Extractor Frame",
+      "category": "Contract Items"
+    },
+    "LandsraadRareMetalsInductionCoils": {
+      "name": "Induction Coil",
+      "category": "Contract Items"
+    },
+    "LandsraadRareMetalsExtractor": {
+      "name": "Ore Extractor Prototype",
+      "category": "Contract Items"
+    },
+    "LandsraadRareMetalsRareMinerals": {
+      "name": "Rare minerals",
+      "category": "Contract Items"
+    },
+    "LandsraadIdentifyingTag": {
+      "name": "Identifier Tag",
+      "category": "Contract Items"
+    },
+    "LandsraadTriangulator": {
+      "name": "LandsraadTriangulator",
+      "category": "Contract Items"
+    },
+    "LandsraadWatchingTheRunSurveillanceSensor": {
+      "name": "Surveillance Sensor",
+      "category": "Contract Items"
+    },
+    "LandsraadTerminalVelocityExperimentalEngine": {
+      "name": "Experimental Sandbike Engine",
+      "category": "Contract Items"
+    },
+    "LandsraadConvergenceTriangulator": {
+      "name": "Ixian Triangulator",
+      "category": "Contract Items"
+    },
+    "LandsraadConvergenceRelic": {
+      "name": "Fremen Relic",
+      "category": "Contract Items"
+    },
+    "LandsraadSampleRecoveryFirstSample": {
+      "name": "Sandworm Scale",
+      "category": "Contract Items"
+    },
+    "LandsraadSampleRecoverySecondSample": {
+      "name": "Sandworm Neural Filament",
+      "category": "Contract Items"
+    },
+    "LandsraadSampleRecoveryThirdSample": {
+      "name": "Sandworm Mouth Ligament",
+      "category": "Contract Items"
+    },
+    "LandsraadSampleRecoveryFinalSample": {
+      "name": "Sandworm Resonance Organ",
+      "category": "Contract Items"
+    },
+    "PlanetologistFunnelReport": {
+      "name": "Report on Derek Chinara",
+      "category": "Contract Items"
+    },
+    "ContractPaybackDrotsJournal": {
+      "name": "Drot's Journal",
+      "category": "Contract Items"
+    },
+    "Halloween_Week1Funnel": {
+      "name": "CONTRACT_TROUT_LEATHER_DELIVERY_NAME",
+      "category": "Contract Items"
+    },
+    "Halloween_Week1Cargo": {
+      "name": "Lost Shipment",
+      "category": "Contract Items"
+    },
+    "Halloween_Mutated1Contract": {
+      "name": "Halloween_Mutated1Contract",
+      "category": "Contract Items"
+    },
+    "Halloween_Mutated2Contract": {
+      "name": "Halloween_Mutated2Contract",
+      "category": "Contract Items"
+    },
+    "Halloween_CaptainsBlood": {
+      "name": "Patient Zero Biological Sample",
+      "category": "Contract Items"
+    },
+    "ReferenceItem": {
+      "name": "XX_Reference Item",
+      "category": "Developer - Internal"
+    },
+    "WeakDamageAugment": {
+      "name": "RESOURCE_ALUMINUM_INGOT_NAME",
+      "category": "Developer - Internal"
+    },
+    "WeakArmorAugment": {
+      "name": "RESOURCE_COPPER_ORE_NAME",
+      "category": "Developer - Internal"
+    },
+    "testaugment": {
+      "name": "NA_test name",
+      "category": "Developer - Internal"
+    },
+    "D_ChoamSet": {
+      "name": "D_ChoamSet",
+      "category": "Developer - Internal"
+    },
+    "D_Atreides_Movie_Patent": {
+      "name": "D_Atreides_Movie_Patent",
+      "category": "Developer - Internal"
+    },
+    "D_LandingPadSet_Patent": {
+      "name": "D_LandingPadSet_Patent",
+      "category": "Developer - Internal"
+    },
+    "D_Neut_Gunner_Patent": {
+      "name": "D_Neut_Gunner_Patent",
+      "category": "Developer - Internal"
+    },
+    "D_Neut_KaitainHolographicGarden_Patent": {
+      "name": "D_Neut_KaitainHolographicGarden_Patent",
+      "category": "Developer - Internal"
+    },
+    "D_Neut_JailSet_Patent": {
+      "name": "D_Neut_JailSet_Patent",
+      "category": "Developer - Internal"
+    },
+    "D_Neut_Statues_Patent": {
+      "name": "D_Neut_Statues_Patent",
+      "category": "Developer - Internal"
     }
   }
 }

@@ -61,6 +61,7 @@ function Initialize-DuneGameplayItemData {
                     rarity            = [string]$v.rarity
                     icon              = [string]$v.icon
                     max_durability    = if ($null -ne $v.max_durability) { [double]$v.max_durability } else { 0.0 }
+                    durability_known  = [bool]$v.durability_known
                     stack_max         = if ($null -ne $v.stack_max) { [int]$v.stack_max } else { 0 }
                     volume            = if ($null -ne $v.volume) { [double]$v.volume } else { 0.0 }
                     vendor_price      = if ($null -ne $v.vendor_price) { [int]$v.vendor_price } else { 0 }
@@ -85,7 +86,7 @@ function Get-DuneGameplayItemRule {
     if ($script:DuneGameplayItemRules.ContainsKey($TemplateId)) {
         return $script:DuneGameplayItemRules[$TemplateId]
     }
-    return @{ name = ''; category = ''; tier = 0; rarity = ''; icon = ''; max_durability = 0.0 }
+    return @{ name = ''; category = ''; tier = 0; rarity = ''; icon = ''; max_durability = 0.0; durability_known = $false }
 }
 
 function Get-DuneGameplayItemName {

@@ -150,6 +150,7 @@ class ProcessTests(unittest.TestCase):
     def test_snapshot_deadline_cancels_stalled_discovery_and_allows_retry(self):
         root = Path(__file__).resolve().parents[2] / 'app/tools/DuneAtlas'
         with tempfile.TemporaryDirectory() as folder:
+            (Path(folder)/'live-v1.json').write_text('{"enabled":false}')
             shutil.copyfile(root / 'server.py', Path(folder) / 'server.py')
             with patch.dict(os.environ, {'DST_ATLAS_APP_ROOT': folder,
                                        'DST_ATLAS_SNAPSHOT_ROOT': folder,
@@ -208,6 +209,7 @@ class ProcessTests(unittest.TestCase):
     def test_optional_discovery_does_not_hold_snapshot_and_remote_cannot_change_timing(self):
         root = Path(__file__).resolve().parents[2] / 'app/tools/DuneAtlas'
         with tempfile.TemporaryDirectory() as folder:
+            (Path(folder)/'live-v1.json').write_text('{"enabled":false}')
             shutil.copyfile(root / 'server.py', Path(folder) / 'server.py')
             with patch.dict(os.environ, {'DST_ATLAS_APP_ROOT': folder,
                     'DST_ATLAS_SNAPSHOT_ROOT': folder, 'DST_ATLAS_PREFERENCES_ROOT': folder}):

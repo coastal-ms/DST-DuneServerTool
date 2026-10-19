@@ -57,3 +57,4 @@ app/installer/vendor/
 # Atlas imports create bytecode locally; runtime packages contain source only.
 app/tools/DuneAtlas/**/__pycache__/
 app/tools/DuneAtlas/__pycache__/
+tools/atlas/__pycache__/

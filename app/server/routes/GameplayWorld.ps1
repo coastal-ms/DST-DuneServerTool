@@ -182,6 +182,16 @@ Register-DuneRoute -Method GET -Path '/api/gameplay/bases/export' -Handler {
 # only become visible to other players after a server zone restart.
 # ---------------------------------------------------------------------------
 
+# POST /api/gameplay/storage/repair-all  { container_id }
+Register-DuneRoute -Method POST -Path '/api/gameplay/storage/repair-all' -Handler {
+    param($req, $res, $routeParams, $body)
+    try {
+        $cid = Get-DuneBodyInt -Body $body -Name 'container_id'
+        if ($null -eq $cid -or $cid -le 0) { Write-DuneError -Response $res -Status 400 -Message 'container_id is required.'; return }
+        Invoke-DunePlayerWriteRoute -Response $res -Action { param($ip) Invoke-DuneStorageRepairAll -Ip $ip -ContainerId $cid }
+    } catch { Write-DuneError -Response $res -Status 500 -Message "Storage repair failed: $($_.Exception.Message)" }
+}
+
 # POST /api/gameplay/storage/rename  { container_id, name }
 Register-DuneRoute -Method POST -Path '/api/gameplay/storage/rename' -Handler {
     param($req, $res, $routeParams, $body)

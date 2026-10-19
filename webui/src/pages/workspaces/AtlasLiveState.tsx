@@ -10,16 +10,18 @@ export function AtlasLiveState() {
   const [attempt, setAttempt] = useState(0)
   useEffect(() => {
     let active = true
+    let retry: ReturnType<typeof setTimeout> | undefined
+    const recover = () => { if (active) retry = setTimeout(() => setAttempt(value => value + 1), 5000) }
     setError(null)
     void openAtlasSession().then(session => {
       if (!active) return
       const next = session.available ? getAtlasEmbedUrl(session.url) : null
       if (next) setUrl(next)
-      else setError(session.reasonCode === 'startup-pending'
+      else { setError(session.reasonCode === 'startup-pending'
         ? 'The map service is still starting. Please retry shortly.'
-        : 'The map service is unavailable. Make sure the DST service is running.')
-    }).catch(() => { if (active) setError('Could not reach the map service. Please retry.') })
-    return () => { active = false }
+        : 'The map service is unavailable. Make sure the DST service is running.'); recover() }
+    }).catch(() => { if (active) { setError('Could not reach the map service. Please retry.'); recover() } })
+    return () => { active = false; clearTimeout(retry) }
   }, [attempt])
   return url ? <LocalAtlasPreview url={url} /> : <DataState
     state={error ? 'unavailable' : 'loading'}

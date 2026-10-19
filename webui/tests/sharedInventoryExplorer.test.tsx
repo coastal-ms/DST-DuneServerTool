@@ -1,5 +1,5 @@
 import React from 'react'
-import { act, cleanup, render, screen, waitFor, within } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { SharedInventoryExplorer } from '../src/components/inventory/SharedInventoryExplorer'
@@ -15,6 +15,7 @@ const capabilityState = vi.hoisted(() => ({
 const inventoryApi = vi.hoisted(() => vi.fn())
 const occurrenceApi = vi.hoisted(() => vi.fn())
 const renameStorageApi = vi.hoisted(() => vi.fn())
+const repairStorageApi = vi.hoisted(() => vi.fn())
 const deleteInventoryItemApi = vi.hoisted(() => vi.fn())
 const deleteStorageItemApi = vi.hoisted(() => vi.fn())
 const setItemStackApi = vi.hoisted(() => vi.fn())
@@ -42,6 +43,7 @@ vi.mock('../src/api/gameplay', async importOriginal => {
     getSharedInventory: inventoryApi,
     getSharedInventoryOccurrences: occurrenceApi,
     renameStorage: renameStorageApi,
+    repairStorageContents: repairStorageApi,
     deleteInventoryItem: deleteInventoryItemApi,
     deleteStorageItem: deleteStorageItemApi,
     setItemStack: setItemStackApi,
@@ -145,6 +147,7 @@ beforeEach(() => {
   occurrenceApi.mockResolvedValue(occurrenceFixture)
   itemIconResolver.mockResolvedValue('https://cdn-hosted.gaming.tools/dune/images/dune/items/copper.webp')
   renameStorageApi.mockResolvedValue({ ok: true, message: "Renamed storage container to 'Ore Vault'." })
+  repairStorageApi.mockResolvedValue({ok:true,message:'Repaired equipment in this box. Restart the server zone.'})
   deleteInventoryItemApi.mockResolvedValue({ ok: true, message: 'Deleted player item.' })
   deleteStorageItemApi.mockResolvedValue({ ok: true, message: 'Deleted storage item.' })
   setItemStackApi.mockResolvedValue({ ok: true, message: 'Updated player stack.' })
@@ -158,6 +161,7 @@ afterEach(() => {
   occurrenceApi.mockReset()
   itemIconResolver.mockReset()
   renameStorageApi.mockReset()
+  repairStorageApi.mockReset()
   deleteInventoryItemApi.mockReset()
   deleteStorageItemApi.mockReset()
   setItemStackApi.mockReset()
@@ -166,6 +170,13 @@ afterEach(() => {
 })
 
 describe('Shared Inventory Explorer grouped catalog', () => {
+  it('shows a catalog base maximum when the saved item omits its maximum', async () => {
+    occurrenceApi.mockResolvedValue({...occurrenceFixture,data:{...occurrenceFixture.data,items:[{...occurrence,durability:'28.669025',maxDurability:'N/A',metadata:{...metadata,baseMaxDurability:100}}]}})
+    renderExplorer()
+    fireEvent.click(await screen.findByRole('button',{name:/Copper, total quantity/}))
+    expect(await screen.findByText('100 (base)')).toBeInTheDocument()
+    expect(screen.getByText('100 (base)')).toHaveAttribute('title','Base maximum from the game item definition; the save omits this value.')
+  })
   it('accepts a vehicle scope but never offers cargo mutation controls to an administrator', async () => {
     window.history.replaceState(null, '', '/vehicles?view=cargo&scope_type=vehicle&scope_id=70001')
     occurrenceApi.mockResolvedValue({ ...occurrenceFixture, data: { ...occurrenceFixture.data, items: [{ ...occurrence, entity: { ...occurrence.entity, type: 'vehicle', id: 70001, label: 'Scout', inventoryType: 0, workspacePath: '/vehicles?view=cargo&scope_type=vehicle&scope_id=70001' } }] } })
@@ -259,6 +270,23 @@ describe('Shared Inventory Explorer grouped catalog', () => {
     await waitFor(() => expect(renameStorageApi).toHaveBeenCalledWith(50001, 'Ore Vault'))
     expect(await screen.findByRole('option', { name: 'Ore Vault - Coastal' })).toBeInTheDocument()
     expect(screen.getByText("Renamed storage container to 'Ore Vault'.")).toBeInTheDocument()
+  })
+
+  it('repairs only the selected box and refreshes inventory', async () => {
+    const user=userEvent.setup()
+    window.history.replaceState(null,'','/economy?view=inventory&scope_type=storage&scope_id=50001')
+    renderExplorer()
+    await user.click(await screen.findByRole('button',{name:'Repair all contents'}))
+    await waitFor(()=>expect(repairStorageApi).toHaveBeenCalledWith(50001))
+    expect(await screen.findByText('Repaired equipment in this box. Restart the server zone.')).toBeInTheDocument()
+    expect(inventoryApi.mock.calls.length).toBeGreaterThan(1)
+  })
+
+  it('does not offer box repair without a selected storage location', async () => {
+    renderExplorer()
+    await screen.findByText('Copper')
+    expect(screen.queryByRole('button',{name:'Repair all contents'})).not.toBeInTheDocument()
+    expect(repairStorageApi).not.toHaveBeenCalled()
   })
 
   it('fails closed for a malformed player deep link', async () => {

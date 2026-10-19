@@ -6,6 +6,7 @@ import datetime, json, subprocess, threading, time, secrets, urllib.parse, re, g
 from collections import deque
 import atlas_gathering
 import atlas_preferences
+import atlas_live
 import atlas_runtime
 import atlas_assets
 import atlas_lifecycle
@@ -219,7 +220,9 @@ def restore_gathering_data():
 restore_gathering_data()
 
 control=threading.Condition()
-live_enabled=False
+live_enabled=atlas_live.load(PREFERENCES_ROOT)
+state['live']=live_enabled
+if live_enabled:state['liveStartedAt']=datetime.datetime.now(datetime.timezone.utc).isoformat()
 refresh_generation=0
 refresh_required=set()
 refresh_background=set()
@@ -385,6 +388,8 @@ class Handler(BaseHTTPRequestHandler):
         with control:
             if url.path=='/live/start':
                 if state['stopping'] or (active_jobs-{'gathering'}) and not live_enabled:return self.send_error(409,'Map collection is stopping')
+                try:atlas_live.save(PREFERENCES_ROOT,True)
+                except OSError:return self.send_error(500,'Could not save the Live preference. Please retry.')
                 atlas_process.reset()
                 if not live_enabled:
                     # A new Live session bypasses the previous scan's idle cooldown.
@@ -394,6 +399,8 @@ class Handler(BaseHTTPRequestHandler):
                 live_enabled=True
                 with lock:state.update(live=True,stopping=False,refreshError=None)
             elif url.path=='/live/stop':
+                try:atlas_live.save(PREFERENCES_ROOT,False)
+                except OSError:return self.send_error(500,'Could not save the Live preference. Please retry.')
                 live_enabled=False
                 refresh_required=set()
                 refresh_background=set()

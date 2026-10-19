@@ -1,0 +1,13 @@
+{
+  "id": "dst-solo-live-map",
+  "name": "Solo Live Map",
+  "version": "0.1.0",
+  "description": "Local Deep Desert live map for Steam Solo.",
+  "requires": [],
+  "conflicts": [
+    "dst-solo-dd-probe"
+  ],
+  "loadBefore": [],
+  "loadAfter": [],
+  "warnings": []
+}

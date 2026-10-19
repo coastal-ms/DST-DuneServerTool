@@ -206,6 +206,14 @@ Describe 'Vehicle module repair' {
         Get-DuneVehicleModuleDefaultDurability 'SandbikeEngine_6' | Should -Be 1000
     }
 
+    It 'keeps installed-module caps separate from inventory item durability' {
+        (Get-DuneGameplayItemRule 'SandbikeEngine_6').max_durability | Should -Be 100
+        (Get-DuneVehicleModuleRepairDefaults)['SandbikeEngine_6'] | Should -Be 1000
+        (Get-DuneVehicleModuleRepairDefaults).ContainsKey('FullStabilizationBelt') | Should -BeFalse
+        Mock Get-DuneGameplayItemRule { @{max_durability=100} }
+        Get-DuneVehicleModuleDefaultDurability 'UnknownModule' | Should -Be 0
+    }
+
     It 'uses one catalog-backed database statement for every repairable module' {
         $script:repairQueries = @()
         Mock Get-DuneVehicleModuleRepairDefaults {

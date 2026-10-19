@@ -25,6 +25,7 @@ export interface InventoryItemMetadata {
   volume: number
   vendorPrice: number
   isGradeable: boolean
+  baseMaxDurability?: number
 }
 
 export interface SharedInventoryItem {
@@ -1407,6 +1408,12 @@ export function setStorageItemStack(itemId: number, stackSize: number, expectedS
 export function renameStorage(containerId: number, name: string) {
   return api<WriteResult>('/api/gameplay/storage/rename', {
     method: 'POST', body: JSON.stringify({ container_id: containerId, name }),
+  })
+}
+
+export function repairStorageContents(containerId: number) {
+  return api<WriteResult>('/api/gameplay/storage/repair-all', {
+    method: 'POST', body: JSON.stringify({ container_id: containerId }),
   })
 }
 

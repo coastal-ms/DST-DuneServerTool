@@ -559,23 +559,23 @@ function Resolve-DuneRepairDurabilityTarget {
         [double]$ItemMax,
         [double]$ItemCurrent,
         [double]$ItemDecayedMax,
-        [bool]$HasCurrent = $false
+        [bool]$HasCurrent = $false,
+        [bool]$CatalogKnown = $false
     )
-    $target = [Math]::Max([Math]::Max([Math]::Max($CatalogMax, $ItemMax), $ItemCurrent), $ItemDecayedMax)
-    if ($target -le 0 -and -not $HasCurrent) { return 0.0 }
-    if ($target -lt 100) { return 100.0 }
-    if ($target -gt 100 -and $target -lt 200) { return 200.0 }
-    return $target
+    if ($CatalogKnown -and $CatalogMax -le 0 -and $ItemMax -le 0) { return 0.0 }
+    $cap = [Math]::Max([Math]::Max($CatalogMax, $ItemMax), $ItemDecayedMax)
+    if ($cap -le 0) { return 0.0 }
+    return [Math]::Max($cap, $ItemCurrent)
 }
 
 # Repair item (repair-item): set MaxDurability/CurrentDurability/DecayedMaxDurability
 # to GREATEST(catalog.max_durability, item.MaxDurability, item.CurrentDurability,
 # item.DecayedMaxDurability). The catalog (gameplay-item-data.json) carries the
-# factory-spec cap; the item's own three fields can be higher because of per-player
+# factory-spec cap; the item's own fields can be higher because of per-player
 # stat/perk bonuses (decay only lowers Current + DecayedMax, never Max). Taking
 # the GREATEST of all four guarantees repair never lowers an already-buffed cap
 # and never leaves a buggy item below its catalog spec. Catalog miss => fall back
-# to GREATEST of the item's three fields, same behaviour as v12.0.7-12.0.24.
+# to a saved Max/DecayedMax cap; current durability alone is not a maximum.
 function Invoke-DunePlayerRepairItem {
     param([string]$Ip, [long]$ItemId)
     if ($ItemId -le 0) { return @{ ok = $false; error = 'item_id is required.' } }
@@ -592,7 +592,7 @@ WHERE id = $ItemId::bigint
 "@
     $info = Invoke-DuneSqlQuery -Ip $Ip -Sql $infoSql -ReadOnly $true -MaxRows 1 -TimeoutSec 30
     if (-not $info.ok) { return @{ ok = $false; error = "repair item: $($info.error)" } }
-    $rows = @(ConvertTo-DuneRowMaps -Result $info)
+    $rows = ConvertTo-DuneRowMaps -Result $info
     if ($rows.Count -eq 0) {
         return @{ ok = $true; message = "Item $ItemId has no durability block — nothing to repair." }
     }
@@ -602,7 +602,7 @@ WHERE id = $ItemId::bigint
     $itemDec = [double]([string]$rows[0]['d'])
     $catMax  = Get-DuneItemCatalogMaxDurability -TemplateId $tmpl
     $hasCur  = ConvertTo-DuneBool $rows[0]['has_c']
-    $target  = Resolve-DuneRepairDurabilityTarget -CatalogMax $catMax -ItemMax $itemMax -ItemCurrent $itemCur -ItemDecayedMax $itemDec -HasCurrent $hasCur
+    $target  = Resolve-DuneRepairDurabilityTarget -CatalogMax $catMax -CatalogKnown ([bool](Get-DuneGameplayItemRule -TemplateId $tmpl).durability_known) -ItemMax $itemMax -ItemCurrent $itemCur -ItemDecayedMax $itemDec -HasCurrent $hasCur
     if ($target -le 0) {
         return @{ ok = $true; message = "Item $ItemId has no usable durability value — left untouched." }
     }

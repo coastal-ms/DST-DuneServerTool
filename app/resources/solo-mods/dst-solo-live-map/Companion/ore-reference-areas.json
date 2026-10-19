@@ -1,0 +1,29 @@
+{
+  "seed": 11,
+  "areas": [
+    {
+      "sector": "G4",
+      "subx": 3,
+      "suby": 1,
+      "type": "titanium"
+    },
+    {
+      "sector": "G6",
+      "subx": 2,
+      "suby": 1,
+      "type": "stravidium"
+    },
+    {
+      "sector": "F4",
+      "subx": 2,
+      "suby": 3,
+      "type": "stravidium"
+    },
+    {
+      "sector": "F6",
+      "subx": 2,
+      "suby": 2,
+      "type": "titanium"
+    }
+  ]
+}

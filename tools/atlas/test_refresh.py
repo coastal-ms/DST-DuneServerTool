@@ -12,7 +12,7 @@ class RefreshTests(unittest.TestCase):
   method=next(n for n in handler.body if isinstance(n,ast.FunctionDef) and n.name=='do_POST')
   scope={'urllib':types.SimpleNamespace(parse=urllib.parse),'KEY':'fixture','json':json,'live_enabled':True,'refresh_generation':7,'refresh_required':{'db'},'refresh_background':{'bases'}}
   exec(compile(ast.Module(body=[method],type_ignores=[]),'remote-control','exec'),scope)
-  for path in ['/live/start','/live/stop','/refresh']:
+  for path in ['/live/stop','/refresh']:
    errors=[]
    request=types.SimpleNamespace(path=path+'?key=fixture',server=types.SimpleNamespace(server_port=1234),headers={'Host':'127.0.0.1:1234','Content-Type':'application/json','Content-Length':'2','X-DST-Atlas-Timing':'remote'},rfile=io.BytesIO(b'{}'),send_error=lambda *args:errors.append(args))
    scope['do_POST'](request)

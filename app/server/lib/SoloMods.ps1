@@ -5,7 +5,7 @@ $script:DuneSoloRuntimeAssets = Join-Path $soloModAppRoot 'resources\solo-mod-ru
 $script:DuneBundledSoloModsRoot = Join-Path $soloModAppRoot 'resources\solo-mods'
 
 function Import-DuneSoloModUpload {
-    param([string]$Filename, [string]$Base64)
+    param([string]$Filename, [string]$Base64, [switch]$CheckOverwrite, [switch]$Overwrite, [string]$ExpectedHash)
     Assert-DuneSoloGameClosed
     $limit = 16MB
     if ([string]::IsNullOrWhiteSpace($Filename) -or $Filename.Length -gt 180 -or
@@ -25,7 +25,7 @@ function Import-DuneSoloModUpload {
     try {
         $zip = Join-Path $stage $Filename
         [IO.File]::WriteAllBytes($zip, $bytes)
-        return Import-DuneSoloMod -Path $zip
+        return Import-DuneSoloMod -Path $zip -CheckOverwrite:$CheckOverwrite -Overwrite:$Overwrite -ExpectedHash $ExpectedHash
     } finally {
         if (Test-Path -LiteralPath $stage) { Remove-Item -LiteralPath $stage -Recurse -Force }
     }
@@ -299,33 +299,67 @@ function Set-DuneSoloModSelection($Body) {
     return Get-DuneSoloMods
 }
 
-function Import-DuneSoloMod([string]$Path) {
+function Import-DuneSoloMod {
+    param([string]$Path, [switch]$CheckOverwrite, [switch]$Overwrite, [string]$ExpectedHash)
     Assert-DuneSoloGameClosed
     if ([IO.Path]::GetExtension($Path) -ne '.zip') { throw 'Select a mod ZIP.' }
+    $archiveHash = (Get-FileHash -LiteralPath $Path -Algorithm SHA256).Hash
+    if ($Overwrite -and ($ExpectedHash -cne $archiveHash)) { throw 'The mod ZIP changed. Import it again and review the overwrite confirmation.' }
+    $modsRoot = [IO.Path]::GetFullPath($script:DuneSoloModsRoot).TrimEnd('\','/')
+    $loaderRoot = [IO.Path]::GetFullPath($script:DuneSoloLoaderRoot).TrimEnd('\','/')
     New-Item -ItemType Directory -Path $script:DuneSoloModsRoot -Force | Out-Null
-    $stage = Join-Path $script:DuneSoloLoaderRoot ('Import-'+[guid]::NewGuid().ToString('N'))
+    $stage = [IO.Path]::GetFullPath((Join-Path $loaderRoot ('Import-'+[guid]::NewGuid().ToString('N'))))
+    if ([IO.Path]::GetDirectoryName($stage) -ine $loaderRoot) { throw 'Invalid mod import staging location.' }
     New-Item -ItemType Directory -Path $stage -Force | Out-Null
+    $keepStage=$false
     try {
-        Expand-DuneModZip $Path $stage
-        $roots = @(Get-ChildItem -LiteralPath $stage -Directory -Recurse | Where-Object { (Test-Path (Join-Path $_.FullName 'Scripts\main.lua')) -or (Test-Path (Join-Path $_.FullName 'dlls\main.dll')) -or (Test-Path (Join-Path $_.FullName 'mod.json')) })
-        if ((Test-Path (Join-Path $stage 'Scripts\main.lua')) -or (Test-Path (Join-Path $stage 'mod.json')) -or (Test-Path (Join-Path $stage 'dlls\main.dll'))) { $roots = @((Get-Item $stage)) }
+        $package = Join-Path $stage 'Package'
+        New-Item -ItemType Directory -Path $package | Out-Null
+        Expand-DuneModZip $Path $package
+        $roots = @(Get-ChildItem -LiteralPath $package -Directory -Recurse | Where-Object { (Test-Path (Join-Path $_.FullName 'Scripts\main.lua')) -or (Test-Path (Join-Path $_.FullName 'dlls\main.dll')) -or (Test-Path (Join-Path $_.FullName 'mod.json')) })
+        if ((Test-Path (Join-Path $package 'Scripts\main.lua')) -or (Test-Path (Join-Path $package 'mod.json')) -or (Test-Path (Join-Path $package 'dlls\main.dll'))) { $roots = @((Get-Item $package)) }
         $roots = @($roots | Where-Object { $candidate=$_.FullName; -not @($roots | Where-Object { $candidate.StartsWith($_.FullName+'\',[StringComparison]::OrdinalIgnoreCase) }).Count })
         if (-not $roots.Count) { throw 'No supported mod folder found. Expected mod.json, Scripts/main.lua, or dlls/main.dll.' }
         $plans = @()
         foreach ($root in $roots) {
             $meta = Read-DuneModJson (Join-Path $root.FullName 'mod.json') @{}
-            $name = if($meta.id){[string]$meta.id}elseif($root.FullName -eq $stage){[IO.Path]::GetFileNameWithoutExtension($Path)}else{$root.Name}
+            $name = if($meta.id){[string]$meta.id}elseif($root.FullName -eq $package){[IO.Path]::GetFileNameWithoutExtension($Path)}else{$root.Name}
             if ($name -notmatch '^[a-zA-Z0-9][a-zA-Z0-9_. -]{0,100}$' -or $name.EndsWith('.') -or $name.EndsWith(' ')) { throw 'Mod has an unsupported folder identifier.' }
-            $dest = Join-Path $script:DuneSoloModsRoot $name
-            if (Test-Path -LiteralPath $dest) { throw "Already installed: $name. Existing files and INIs were preserved." }
+            $dest = [IO.Path]::GetFullPath((Join-Path $modsRoot $name))
+            if ([IO.Path]::GetDirectoryName($dest) -ine $modsRoot) { throw 'Invalid mod destination.' }
+            if (Test-Path -LiteralPath $dest) {
+                $linked = @((Get-Item -LiteralPath $dest -Force)) + @(Get-ChildItem -LiteralPath $dest -Recurse -Force)
+                if (@($linked | Where-Object { $_.Attributes -band [IO.FileAttributes]::ReparsePoint }).Count) { throw 'Cannot replace a mod containing linked files or folders.' }
+                if (-not $Overwrite -and -not $CheckOverwrite) { throw "Already installed: $name. Existing files and INIs were preserved." }
+            }
             if (@($plans | Where-Object destination -eq $dest).Count) { throw 'ZIP contains duplicate mod IDs.' }
-            $plans += @{source=$root.FullName;destination=$dest}
+            $plans += @{source=$root.FullName;destination=$dest;name=$name;backup=''}
         }
+        $existing = @($plans | Where-Object { Test-Path -LiteralPath $_.destination } | ForEach-Object { $_.name })
+        if ($existing.Count -and -not $Overwrite) { return @{overwriteRequired=$true;mods=$existing;archiveHash=$archiveHash} }
         $installed=@()
-        try { foreach($plan in $plans){ $installed += $plan.destination; Copy-Item -LiteralPath $plan.source -Destination $plan.destination -Recurse -ErrorAction Stop } }
-        catch { foreach($dest in $installed){Remove-Item -LiteralPath $dest -Recurse -Force}; throw }
+        try {
+            foreach($plan in $plans){
+                if(Test-Path -LiteralPath $plan.destination){
+                    $backup=Join-Path $stage ('Previous-'+[guid]::NewGuid().ToString('N'))
+                    Move-Item -LiteralPath $plan.destination -Destination $backup -ErrorAction Stop
+                    $plan.backup=$backup
+                }
+                $installed += $plan
+                Copy-Item -LiteralPath $plan.source -Destination $plan.destination -Recurse -ErrorAction Stop
+            }
+        } catch {
+            $failure=$_
+            try {
+                foreach($plan in $installed){
+                    if(Test-Path -LiteralPath $plan.destination){Remove-Item -LiteralPath $plan.destination -Recurse -Force -ErrorAction Stop}
+                    if($plan.backup){Move-Item -LiteralPath $plan.backup -Destination $plan.destination -ErrorAction Stop}
+                }
+            } catch { $keepStage=$true; throw "Mod import recovery could not finish. Original files remain in $stage. $($_.Exception.Message)" }
+            throw $failure
+        }
         return Get-DuneSoloMods
-    } finally { if(Test-Path -LiteralPath $stage){Remove-Item -LiteralPath $stage -Recurse -Force} }
+    } finally { if(-not $keepStage -and (Test-Path -LiteralPath $stage)){Remove-Item -LiteralPath $stage -Recurse -Force} }
 }
 
 function Install-DuneSoloModRuntime {
@@ -391,6 +425,11 @@ function Start-DuneSoloModGame([bool]$WithMods) {
     if(-not $selected.Count){throw 'Enable at least one mod.'}
     $errors=@($selected | ForEach-Object {$name=$_.name; $_.errors | ForEach-Object {"${name}: $_"}})
     if($errors.Count){throw ($errors -join "`n")}
+    if (@($selected | Where-Object { $_.id -eq 'dst-solo-live-map' }).Count) {
+        if ($status.platform -ne 'steam') { throw 'Solo Live Map currently supports Steam Solo.' }
+        if (@($selected | Where-Object { $_.id -eq 'dst-solo-live-map' -and $_.folder -ne 'dst-solo-live-map' }).Count) { throw 'Solo Live Map must use its bundled folder identifier.' }
+        Start-DuneSoloLiveMapCompanion
+    }
     foreach($mod in $selected){
         $folder=Join-Path $script:DuneSoloModsRoot $mod.folder
         if($mod.id -eq 'dst-regis-tanks'){
