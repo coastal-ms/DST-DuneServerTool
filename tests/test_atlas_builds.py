@@ -13,6 +13,26 @@ spec.loader.exec_module(builds)
 
 
 class AtlasBuildProfiles(unittest.TestCase):
+    def test_verified_builds_skip_elf_discovery_even_with_a_runtime(self):
+        sys.path.insert(0, str(ROOT))
+        import atlas_elf
+        with patch.object(atlas_elf, 'inspect', side_effect=AssertionError('unexpected ELF discovery')):
+            for digest in builds.BUNDLED_PROFILES:
+                for folder in (ROOT, ROOT / 'hagga'):
+                    value = builds.profile(folder, digest, runtime={})
+                    self.assertEqual(value['sha256'], digest)
+                    self.assertIn('_ZTV13ASandwormPawn', value['symbols'])
+
+    def test_updated_official_and_tank_builds_use_verified_matching_addresses(self):
+        recipe = json.loads((ROOT.parents[1] / 'resources/regis-tanks/2160922.json').read_text())
+        self.assertIn(builds.UPDATE_TANK_BUILD, json.dumps(recipe))
+        stock = builds.profile(ROOT, builds.UPDATE_BUILD)
+        tank = builds.profile(ROOT / 'hagga', builds.UPDATE_TANK_BUILD)
+        self.assertEqual(stock['symbols'], tank['symbols'])
+        self.assertEqual(stock['namePoolTableOffset'], tank['namePoolTableOffset'])
+        self.assertEqual(builds.symbol_rows(ROOT, builds.UPDATE_BUILD, 'all-native-vtables.json'),
+                         builds.symbol_rows(ROOT / 'hagga', builds.UPDATE_TANK_BUILD, 'all-native-vtables.json'))
+
     def test_unlisted_executable_is_discovered_and_reused_without_a_release_entry(self):
         sys.path.insert(0, str(ROOT))
         import atlas_elf
@@ -83,7 +103,7 @@ class AtlasBuildProfiles(unittest.TestCase):
     def test_new_profile_is_in_the_verified_runtime_package(self):
         import hashlib
         manifest = json.loads((ROOT / 'manifest.json').read_text())
-        for name in ('atlas_builds.py', 'build-2156652.json', 'discover-runtime.py',
+        for name in ('atlas_builds.py', 'build-2156652.json', 'build-2160922.json', 'discover-runtime.py',
                      'hagga/discover-runtime.py', 'find-event-actors.py', 'ensure-poi-discovery.py'):
             self.assertEqual(manifest['files'][name], hashlib.sha256((ROOT / name).read_bytes()).hexdigest())
 

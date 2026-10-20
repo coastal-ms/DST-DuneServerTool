@@ -13,6 +13,10 @@ here cover everything those tags shipped.
 
 ## [Unreleased]
 
+## [16.5.3] - 2026-10-20
+
+Restore faster Live Maps startup after the latest game update for both official and Tank-enabled servers. Keep moving positions updating while resource layers load.
+
 ## [16.5.2] - 2026-10-20
 
 Fix server updates leaving Hagga on an older Tank-enabled build. Complete applied updates when Funcom reports existing command links during cleanup and wait for all maps to stop before changing images.

@@ -11,7 +11,13 @@ LEGACY_BUILDS = {
 CURRENT_BUILD = 'e62fa7fd8697d8fd2108be97dee6b16ab8c30d07dd0d80d5765c095264e6a114'
 TANK_BUILD = '3e8966850e911826f4e5339dea5b3830a71e037acc9b0ed400bc9f0e21e6e318'
 CURRENT_BUILDS = {CURRENT_BUILD, TANK_BUILD}
-BUILDS = LEGACY_BUILDS | CURRENT_BUILDS
+UPDATE_BUILD = 'c7c935767b169c0e9a3ebceb3b8af26e43254d5104a77edea88b76d5fe1840d2'
+UPDATE_TANK_BUILD = 'e10c49bd69e3ae8e3eccce3049326d04c4c0e750f767587749429a95ae7f574b'
+BUNDLED_PROFILES = {CURRENT_BUILD: ('build-2156652.json', CURRENT_BUILD),
+                    TANK_BUILD: ('build-2156652.json', CURRENT_BUILD),
+                    UPDATE_BUILD: ('build-2160922.json', UPDATE_BUILD),
+                    UPDATE_TANK_BUILD: ('build-2160922.json', UPDATE_BUILD)}
+BUILDS = LEGACY_BUILDS | set(BUNDLED_PROFILES)
 
 
 def profile_cache(root, digest):
@@ -27,6 +33,15 @@ def profile(root, digest, runtime=None):
     shared = root.parent if root.name == 'hagga' else root
     if not re.fullmatch('[0-9a-f]{64}', digest):
         raise ValueError('Missing server executable identity')
+    if digest in BUNDLED_PROFILES:
+        filename, expected = BUNDLED_PROFILES[digest]
+        value = json.loads((shared / filename).read_text())
+        if value['sha256'] != expected:
+            raise ValueError('Atlas build profile identity mismatch')
+        # Exact executable hashes select verified addresses. Snapshot readers
+        # still validate the current process, class names and object identities.
+        value['sha256'] = digest
+        return value
     cache = profile_cache(root, digest)
     if cache.is_file():
         value = json.loads(cache.read_text())
@@ -39,14 +54,6 @@ def profile(root, digest, runtime=None):
         temp.write_text(json.dumps(value))
         temp.replace(cache)
         return value
-    if digest in CURRENT_BUILDS:
-        value = json.loads((shared / 'build-2156652.json').read_text())
-        if value['sha256'] != CURRENT_BUILD:
-            raise ValueError('Atlas build profile identity mismatch')
-        # The guarded Tank recipe changes seven instruction sites, not ELF
-        # sections or the recorded symbol/name-pool addresses.
-        value['sha256'] = digest
-        return value
     if digest not in LEGACY_BUILDS:
         raise ValueError('Server layout has not been discovered yet')
     return {
@@ -57,7 +64,7 @@ def profile(root, digest, runtime=None):
 
 
 def symbol_rows(root, digest, legacy_table):
-    if digest in CURRENT_BUILDS or profile_cache(root, digest).is_file():
+    if digest in BUNDLED_PROFILES or profile_cache(root, digest).is_file():
         return [{'name': name, 'value': value} for name, value in profile(root, digest)['symbols'].items()]
     if digest not in LEGACY_BUILDS:
         raise ValueError('Server layout has not been discovered yet')
