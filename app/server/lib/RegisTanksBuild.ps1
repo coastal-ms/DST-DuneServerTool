@@ -8,7 +8,8 @@ function Get-DuneRegisTankCacheRoot {
 }
 
 function Get-DuneRegisTankRecipe {
-    $path = Join-Path (Get-DuneRegisTankAppRoot) 'resources\regis-tanks\2147284.json'
+    param([ValidateSet('2147284','2156652')][string]$Build = '2147284')
+    $path = Join-Path (Get-DuneRegisTankAppRoot) "resources\regis-tanks\$Build.json"
     return Get-Content -LiteralPath $path -Raw | ConvertFrom-Json
 }
 
@@ -34,9 +35,9 @@ function Send-DuneRegisTankFile {
 }
 
 function New-DuneRegisTankServerImage {
-    param([string]$Ip)
-    $recipe = Get-DuneRegisTankRecipe
-    if ($recipe.schema -ne 1 -or $recipe.build -cne '2147284' -or $recipe.baseImage -cne 'registry.funcom.com/funcom/self-hosting/seabass-server:2147284-0-shipping' -or $recipe.baseDigest -cnotmatch '^sha256:[a-f0-9]{64}$' -or $recipe.cleanExecutableSha256 -cnotmatch '^[a-f0-9]{64}$' -or $recipe.patchedExecutableSha256 -cnotmatch '^[a-f0-9]{64}$') { throw 'Unsupported Tank compatibility recipe.' }
+    param([string]$Ip, [ValidateSet('2147284','2156652')][string]$Build = '2147284')
+    $recipe = Get-DuneRegisTankRecipe -Build $Build
+    if ($recipe.schema -ne 1 -or $recipe.build -cne $Build -or $recipe.baseImage -cne "registry.funcom.com/funcom/self-hosting/seabass-server:$Build-0-shipping" -or $recipe.baseDigest -cnotmatch '^sha256:[a-f0-9]{64}$' -or $recipe.cleanExecutableSha256 -cnotmatch '^[a-f0-9]{64}$' -or $recipe.patchedExecutableSha256 -cnotmatch '^[a-f0-9]{64}$') { throw 'Unsupported Tank compatibility recipe.' }
     $cache = Get-DuneRegisTankCacheRoot
     New-Item -ItemType Directory -Path $cache -Force | Out-Null
     foreach ($tool in $recipe.tools) {
@@ -174,7 +175,7 @@ function Complete-DuneRegisTankServerImage {
     $manifestFile = Join-Path $job 'manifest.json'
     [IO.File]::WriteAllText($manifestFile,($Manifest | ConvertTo-Json -Depth 60 -Compress),[Text.UTF8Encoding]::new($false))
     $manifestHash = (Get-FileHash -LiteralPath $manifestFile).Hash.ToLowerInvariant()
-    $tag = 'localhost/dst-regis-tanks:2147284-1'
+    $tag = "localhost/dst-regis-tanks:$($Recipe.build)-1"
     $index = @{schemaVersion=2;manifests=@(@{mediaType=$Manifest.mediaType;digest="sha256:$manifestHash";size=(Get-Item -LiteralPath $manifestFile).Length;annotations=@{'org.opencontainers.image.ref.name'=$tag};platform=@{os='linux';architecture='amd64'}})}
     $indexFile = Join-Path $job 'index.json'
     [IO.File]::WriteAllText($indexFile,($index | ConvertTo-Json -Depth 20 -Compress),[Text.UTF8Encoding]::new($false))
@@ -189,10 +190,10 @@ cp '__WORK__/layer.tar.gz' '__WORK__/oci/blobs/sha256/__LAYER__'
 tar -cf '__WORK__/image.oci.tar' -C '__WORK__/oci' oci-layout index.json blobs
 sudo -n /usr/local/bin/k3s ctr -n k8s.io images import --no-unpack '__WORK__/image.oci.tar'
 for part in db-utils bg-director gateway rabbitmq text-router; do
-  sudo -n /usr/local/bin/k3s ctr -n k8s.io images tag --force "registry.funcom.com/funcom/self-hosting/seabass-server-$part:2147284-0-shipping" "localhost/dst-regis-tanks-$part:2147284-1"
+  sudo -n /usr/local/bin/k3s ctr -n k8s.io images tag --force "registry.funcom.com/funcom/self-hosting/seabass-server-$part:__BUILD__-0-shipping" "localhost/dst-regis-tanks-$part:__BUILD__-1"
 done
 sudo -n /usr/local/bin/k3s ctr -n k8s.io run --rm '__TAG__' '__JOB__-verify' sha256sum /home/dune/server/DuneSandbox/Binaries/Linux/DuneSandboxServer-Linux-Shipping
-'@.Replace('__WORK__',$Work).Replace('__CONFIG__',$configHash).Replace('__MANIFEST__',$manifestHash).Replace('__LAYER__',$compressed).Replace('__TAG__',$tag).Replace('__JOB__',($Work -split '/')[-1])
+'@.Replace('__WORK__',$Work).Replace('__CONFIG__',$configHash).Replace('__MANIFEST__',$manifestHash).Replace('__LAYER__',$compressed).Replace('__TAG__',$tag).Replace('__JOB__',($Work -split '/')[-1]).Replace('__BUILD__',[string]$Recipe.build)
     $verified = Invoke-DuneRegisTankShell -Ip $Ip -Script $import
     if ($verified -cnotmatch $Recipe.patchedExecutableSha256) { throw 'Prepared native image failed verification.' }
     $report = @{tag=$tag;manifestDigest="sha256:$manifestHash";baseDigest=$Recipe.baseDigest;build=$Recipe.build;verified=$true;work=$Work}

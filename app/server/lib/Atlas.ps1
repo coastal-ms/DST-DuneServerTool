@@ -25,7 +25,56 @@ function Get-DuneAtlasPython {
             return [IO.Path]::GetFullPath($candidate)
         }
     }
-    return $null
+    return Get-DuneAtlasManagedPython -SourceRoot (Join-Path $AppRoot 'tools\DuneAtlas')
+}
+
+function Get-DuneAtlasManagedPython {
+    param([Parameter(Mandatory)][string]$SourceRoot)
+    $manifestPath = Join-Path $SourceRoot 'python-runtime.json'
+    if (-not (Test-Path -LiteralPath $manifestPath -PathType Leaf)) { return $null }
+    $definition = [IO.File]::ReadAllText($manifestPath) | ConvertFrom-Json
+    if ($definition.version -notmatch '^\d+\.\d+\.\d+$' -or $definition.architecture -ne 'amd64') { throw 'Invalid map Python runtime definition.' }
+    $cache = Join-Path $env:LOCALAPPDATA ('DuneServer\runtime-cache\python-' + $definition.version + '-amd64')
+    $target = Join-Path $cache 'python.exe'
+    $valid = $true
+    foreach ($property in $definition.files.PSObject.Properties) {
+        if ($property.Name -notmatch '^[A-Za-z0-9_][A-Za-z0-9_.-]*$' -or $property.Name.Contains('..')) { throw 'Unsafe Python runtime path.' }
+        $file = Join-Path $cache $property.Name
+        if (-not (Test-Path -LiteralPath $file -PathType Leaf) -or (Get-FileHash -LiteralPath $file).Hash -ne [string]$property.Value) { $valid=$false; break }
+    }
+    if ($valid -and (Test-Path -LiteralPath $target -PathType Leaf)) { return $target }
+    $parent = Split-Path -Parent $cache
+    [void][IO.Directory]::CreateDirectory($parent)
+    $work = Join-Path $parent ('download-' + [guid]::NewGuid().ToString('N'))
+    [void][IO.Directory]::CreateDirectory($work)
+    $archive = Join-Path $work 'python.zip'
+    $downloaded = $false
+    foreach ($url in @($definition.url, $definition.fallbackUrl) | Where-Object { $_ }) {
+        try {
+            $uri = [uri]$url
+            if ($uri.Scheme -ne 'https' -or $uri.Host -notin @('github.com','www.python.org')) { throw 'Invalid Python download source.' }
+            Invoke-WebRequest -Uri $uri -OutFile $archive -UseBasicParsing -TimeoutSec 120 -ErrorAction Stop
+            if ((Get-FileHash -LiteralPath $archive).Hash -ne $definition.archiveSha256) { throw 'Python download did not match the runtime package.' }
+            $downloaded = $true
+            break
+        } catch { $downloadError = $_.Exception.Message }
+    }
+    if (-not $downloaded) { throw ('Map Python download failed. Open the map to retry. ' + $downloadError) }
+    $expanded = Join-Path $work 'python'
+    Expand-Archive -LiteralPath $archive -DestinationPath $expanded -Force
+    [IO.File]::WriteAllText((Join-Path $expanded 'python314._pth'), "python314.zip`n.`n..`n", [Text.Encoding]::ASCII)
+    foreach ($property in $definition.files.PSObject.Properties) {
+        $name = [string]$property.Name
+        if ($name -notmatch '^[A-Za-z0-9_][A-Za-z0-9_.-]*$' -or $name.Contains('..')) { throw 'Unsafe Python runtime path.' }
+        $file = Join-Path $expanded $name
+        if (-not (Test-Path -LiteralPath $file -PathType Leaf) -or (Get-FileHash -LiteralPath $file).Hash -ne [string]$property.Value) { throw 'Downloaded Python runtime is incomplete.' }
+    }
+    [void][IO.Directory]::CreateDirectory($cache)
+    foreach ($property in $definition.files.PSObject.Properties) {
+        Copy-Item -LiteralPath (Join-Path $expanded $property.Name) -Destination (Join-Path $cache $property.Name) -Force
+    }
+    # Keep the verified download for optional offline reuse; no machine install.
+    return $target
 }
 
 function ConvertTo-DuneAtlasSessionUrl {
@@ -62,8 +111,11 @@ function Get-DuneAtlasReadySession {
 function Initialize-DuneAtlasPython {
     param([string]$SourceRoot, [string]$RuntimeRoot)
     $sourcePython = Join-Path $SourceRoot 'python'
-    # Source checkouts may use a developer interpreter. Installers always bundle one.
-    if (-not (Test-Path -LiteralPath $sourcePython -PathType Container)) { return }
+    if (-not (Test-Path -LiteralPath $sourcePython -PathType Container)) {
+        $managed = Get-DuneAtlasManagedPython -SourceRoot $SourceRoot
+        if (-not $managed) { return }
+        $sourcePython = Split-Path -Parent $managed
+    }
     $definition = [IO.File]::ReadAllText((Join-Path $RuntimeRoot 'python-runtime.json')) | ConvertFrom-Json
     if ($definition.schemaVersion -ne 1 -or -not $definition.files) { throw 'Invalid Atlas Python package.' }
     $targetPython = Join-Path $RuntimeRoot 'python'
@@ -257,6 +309,7 @@ function Start-DuneAtlasSession {
     $startInfo.EnvironmentVariables['DST_ATLAS_SNAPSHOT_ROOT'] = Join-Path $DataRoot 'snapshots'
     $startInfo.EnvironmentVariables['DST_ATLAS_PREFERENCES_ROOT'] = Join-Path $DataRoot 'settings'
     $startInfo.EnvironmentVariables['DST_ATLAS_ASSET_ROOT'] = Join-Path $DataRoot 'assets\icons'
+    $startInfo.EnvironmentVariables['DST_ATLAS_PROFILE_ROOT'] = Join-Path $DataRoot 'profiles'
     $startInfo.EnvironmentVariables['PYTHONUTF8'] = '1'
     $hostProcess = [Diagnostics.Process]::GetCurrentProcess()
     try {

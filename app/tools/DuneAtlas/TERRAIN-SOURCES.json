@@ -1,0 +1,124 @@
+{
+  "copyright": "Game artwork \u00a9 Funcom",
+  "source": "Deep Desert terrain extracted and rendered locally from installed game assets. Static Hagga background supplied by Coastal for free use; bundled locally.",
+  "game_build": "25936403",
+  "files": [
+    {
+      "file": "dd-layout-0.webp",
+      "sha256": "bd7e95e060c297701eea54a09ecbdf7a51c5430709da7a4a3b3e5f2b0cfe61fd",
+      "source": "Funcom BP_WorldMap_Meshes_DeepDesert_Layout_0, base layout and referenced UIMap meshes",
+      "dimensions": [
+        4096,
+        4096
+      ]
+    },
+    {
+      "file": "dd-layout-1.webp",
+      "sha256": "8fec0ff974733fc67abbf2b671a0c575d7c28f6ad1d0e9a2dc45975539191962",
+      "source": "Funcom BP_WorldMap_Meshes_DeepDesert_Layout_1, base layout and referenced UIMap meshes",
+      "dimensions": [
+        4096,
+        4096
+      ]
+    },
+    {
+      "file": "dd-layout-2.webp",
+      "sha256": "2015b36fd4b00c132f55f46b5b616eb9a37b9a5075a5d1e58d5254c7bb259699",
+      "source": "Funcom BP_WorldMap_Meshes_DeepDesert_Layout_2, base layout and referenced UIMap meshes",
+      "dimensions": [
+        4096,
+        4096
+      ]
+    },
+    {
+      "file": "dd-layout-3.webp",
+      "sha256": "8bbc7a046304949c0e278ea9878d90901ff54a2dede8953f1362b9f4b7616978",
+      "source": "Funcom BP_WorldMap_Meshes_DeepDesert_Layout_3, base layout and referenced UIMap meshes",
+      "dimensions": [
+        4096,
+        4096
+      ]
+    },
+    {
+      "file": "dd-layout-4.webp",
+      "sha256": "29b9f838b27d6f99538dd9de4661ccc277c6f702aa8af4e133e92721fcadf1c0",
+      "source": "Funcom BP_WorldMap_Meshes_DeepDesert_Layout_4, base layout and referenced UIMap meshes",
+      "dimensions": [
+        4096,
+        4096
+      ]
+    },
+    {
+      "file": "dd-layout-5.webp",
+      "sha256": "28012578081e40b011c63a2eb8e759a701159b8e5913e0cd92e0d98e74dafed7",
+      "source": "Funcom BP_WorldMap_Meshes_DeepDesert_Layout_5, base layout and referenced UIMap meshes",
+      "dimensions": [
+        4096,
+        4096
+      ]
+    },
+    {
+      "file": "dd-layout-6.webp",
+      "sha256": "00af231f0858b46149009a9159d79da0b40baca11ce154b991cbf0975aeb56a8",
+      "source": "Funcom BP_WorldMap_Meshes_DeepDesert_Layout_6, base layout and referenced UIMap meshes",
+      "dimensions": [
+        4096,
+        4096
+      ]
+    },
+    {
+      "file": "dd-layout-7.webp",
+      "sha256": "c9628fed52a7fa75966335af37762c056c0e4283a90600e6b5abb5b99df1eabb",
+      "source": "Funcom BP_WorldMap_Meshes_DeepDesert_Layout_7, base layout and referenced UIMap meshes",
+      "dimensions": [
+        4096,
+        4096
+      ]
+    },
+    {
+      "file": "dd-layout-8.webp",
+      "sha256": "2f3926fd6b18546ff6c8b08809232a5f9509a5a5c298aade20dd957f7333dbcf",
+      "source": "Funcom BP_WorldMap_Meshes_DeepDesert_Layout_8, base layout and referenced UIMap meshes",
+      "dimensions": [
+        4096,
+        4096
+      ]
+    },
+    {
+      "file": "dd-layout-9.webp",
+      "sha256": "459c5cad8268f925dd9b3c5638ab200b2cb902338e23107c1058e78d29f35bd3",
+      "source": "Funcom BP_WorldMap_Meshes_DeepDesert_Layout_9, base layout and referenced UIMap meshes",
+      "dimensions": [
+        4096,
+        4096
+      ]
+    },
+    {
+      "file": "dd-layout-10.webp",
+      "sha256": "203a5a697bfb16656d71b9deba1f094349622fa59acecc266860a587e5df54b9",
+      "source": "Funcom BP_WorldMap_Meshes_DeepDesert_Layout_10, base layout and referenced UIMap meshes",
+      "dimensions": [
+        4096,
+        4096
+      ]
+    },
+    {
+      "file": "dd-layout-11.webp",
+      "sha256": "085beb53ab8edf2338452db64effecaf2fa2192eb686535389d315f7c7c084ab",
+      "source": "Funcom BP_WorldMap_Meshes_DeepDesert_Layout_11, base layout and referenced UIMap meshes",
+      "dimensions": [
+        4096,
+        4096
+      ]
+    },
+    {
+      "file": "hagga-background-v1.webp",
+      "sha256": "732e148bab17becbed94e86c530552a4c9a8711f59327671450a7167b3d0f5b7",
+      "source": "Coastal-supplied HAGGABASINFREEUSE.png; static background",
+      "dimensions": [
+        1920,
+        1920
+      ]
+    }
+  ]
+}

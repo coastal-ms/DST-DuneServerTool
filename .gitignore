@@ -58,3 +58,6 @@ app/installer/vendor/
 app/tools/DuneAtlas/**/__pycache__/
 app/tools/DuneAtlas/__pycache__/
 tools/atlas/__pycache__/
+
+# Generated from the pinned Monaco npm package for offline installer assets.
+/webui/public/vendor/monaco/

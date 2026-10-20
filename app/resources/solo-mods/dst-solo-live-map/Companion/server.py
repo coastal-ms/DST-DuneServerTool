@@ -14,11 +14,14 @@ import sqlite3
 import zlib
 import threading
 import time
+import sys
+
+ROOT = Path(__file__).resolve().parent
+sys.path.insert(0, str(ROOT))
 
 import atlas_assets
 import vehicle_fuel
 
-ROOT = Path(__file__).resolve().parent
 KINDS = {'spice', 'ore', 'crash', 'storm', 'vehicle', 'worm'}
 TRAIL_SECONDS = 600
 
@@ -239,6 +242,13 @@ class MapState:
             return visible_state(self.saved, 'Live')
 
 
+def terrain_path(preferred, assets):
+    # Solo's permanent Deep Desert uses layout 11. Keep an existing override.
+    if preferred.is_file():
+        return preferred
+    return atlas_assets.icon_path('dd-layout-11.webp', assets, ROOT / 'icons')
+
+
 def serve(args):
     args.data.mkdir(parents=True, exist_ok=True)
     prepare_native_build()
@@ -277,8 +287,12 @@ def serve(args):
                 body, mime = json.dumps({'launchId': args.launch, 'pid': os.getpid()}).encode(), 'application/json'
             elif url.path == '/icons':
                 body, mime = icon_body, 'application/json'
-            elif url.path == '/terrain.webp' and args.terrain.is_file():
-                body, mime = args.terrain.read_bytes(), 'image/webp'
+            elif url.path == '/terrain.webp':
+                terrain = terrain_path(args.terrain, args.assets)
+                if terrain is None:
+                    self.send_error(404)
+                    return
+                body, mime = terrain.read_bytes(), 'image/webp'
             else:
                 self.send_error(404)
                 return

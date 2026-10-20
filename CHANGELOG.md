@@ -13,9 +13,15 @@ here cover everything those tags shipped.
 
 ## [Unreleased]
 
-Name worm 50 Hawk on the live map.
+## [16.5.1] - 2026-10-19
 
-Bundle a private runtime for live maps so they open without a separate Python installation, including PCs using Microsoft Store Python.
+Download the private map Python runtime automatically when needed instead of including it in the installer, and include the full map icon set for clean installations.
+
+Include game-sourced terrain backgrounds for self-host and Solo live maps, with automatic Deep Desert layout selection and no terrain download. Discover the running server layout automatically for live readings after game updates, including Tank-enabled servers.
+
+Speed up console commands for LAN Hyper-V hosts and show VM connection progress immediately, with connection timeouts and clearer failures.
+
+Restore self-host Regis Tank compatibility for Dune Awakening server build 2156652, preserving the matching official server image for rollback.
 
 Keep installed vehicle-module repair values separate from inventory item durability, and restore missing developer and building-grant catalog entries.
 
@@ -41,8 +47,6 @@ Live Atlas restores its verified read-only observation helpers after a server re
 
 Advanced settings and Experimental Lab can clear an already-empty server INI assignment such as `SafeZone.EnableScale=`. Clear now stages removal even when the displayed value is blank, preserving explicit zero values and unrelated manual settings. Refresh rereads manual server edits and deletions without restoring defaults.
 
-## [16.5.1] - 2026-10-16
-
 - Make DD Atlas a standalone sidebar workspace, removing the duplicate Gameplay Admin navigation and map headers.
 - Limit simultaneous Atlas collection jobs, add recovery time after slow reads, and run observation helpers at lower priority. Avoid redrawing unchanged map responses.
 
@@ -61,13 +65,11 @@ Advanced settings and Experimental Lab can clear an already-empty server INI ass
 - Reclaim Live state height by removing repeated workspace headings while retaining navigation.
 - Bound Atlas snapshot refreshes, allow cancellation, reuse current gathering discovery, and keep marker icons within the visible map viewport.
 
-Initially available through the test channel as `16.5.1-test1`.
-
 Server settings and Experimental Lab scalar overrides now follow the saved server files: unset entries remain blank, entering a value writes it, and clearing a value removes the entire assignment on apply. Each setting's Default button writes its available Funcom default; no default is invented when none is known. Refreshing established server INIs respects manual changes instead of replaying older deployed values after a hash change. Local player INIs remain a separate, optional approved apply.
 
 Official server settings sliders now use a 0–10 convenience range, with 0.1 steps for fractional settings and compact readouts. Wheel adjustments change focused fractional controls by 0.1; unfocused controls leave scrolling alone. Exact entry preserves values above the slider range.
 
-Experimental Lab saves now review local Solo/player files and self-hosted server files as separate destinations. Local changes require explicit approval, preserve unrelated entries, and back up existing files; Apply server settings deploys the saved server copy separately. Path-related rows are read-only, preserving saved paths and showing inherited Funcom defaults without creating overrides.
+Experimental Lab saves now review local Solo/player files and self-hosted server files as separate destinations. Local changes require explicit confirmation, preserve unrelated entries, and back up existing files; Apply server settings deploys the saved server copy separately. Path-related rows are read-only, preserving saved paths and showing inherited Funcom defaults without creating overrides.
 
 Solo and self-hosted distinguish Resource Respawn Speed (higher is faster) from Loot Respawn Time (higher is slower), retaining the original game keys. Water extraction guidance identifies conflicting source descriptions. The base-backup default is 16 hours when defaults are explicitly selected; saved values remain unchanged. Crafting time uses a 0–5 convenience slider, and the base-backup window uses direct entry in hours.
 
@@ -111,6 +113,13 @@ Item decay guidance distinguishes the update interval in seconds from decay spee
 We checked the full DST CVar catalog against the updated game and server files. All identified changes have been handled and cross-checked, including entries removed by Funcom. Existing saved overrides are preserved.
 
 We cannot confirm every CVar's in-game functionality. Controls removed by Funcom are no longer supported, and we will not troubleshoot those removed controls. We will investigate and update DST if other issues arising from this patch are found.
+
+## [16.5.0.2] - 2026-10-19
+
+### Fixed
+- Allow game server updates when Regis Tank compatibility is enabled.
+- Correct the Landsraad minimum-term setting and remove obsolete advanced controls for Dune Awakening 1.5.15.0.
+
 
 ## [16.5.0.1] - 2026-10-14
 

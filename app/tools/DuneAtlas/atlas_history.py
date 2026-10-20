@@ -2,6 +2,21 @@
 import datetime,json,math
 from pathlib import Path
 
+def compact(frames):
+    """Keep the last two observed passes per map without dense reads evicting one."""
+    passes={}
+    for frame in frames:
+        for storm in frame.get('storms',[]):
+            key=(frame.get('map','DeepDesert'),frame.get('pid'),str(frame.get('startTime')),str(storm.get('id')))
+            passes.setdefault(key,[]).append({**frame,'storms':[storm]})
+    selected=[]
+    for region in ('DeepDesert','HaggaBasin'):
+        groups=sorted((v for k,v in passes.items() if k[0]==region),key=lambda v:v[-1]['capturedAt'])[-2:]
+        for group in groups:
+            if len(group)>125:group=[group[round(i*(len(group)-1)/124)] for i in range(125)]
+            selected.extend(group)
+    return sorted(selected,key=lambda f:f['capturedAt'])
+
 def load(root,legacy_roots=()):
     frames={};profiles={}
     for folder in [*legacy_roots,Path(root)]:
@@ -29,12 +44,12 @@ def load(root,legacy_roots=()):
                 if not all(len(s['location'])==3 and all(math.isfinite(n) for n in s['location']) for s in frame['storms']):continue
                 frames[(frame['capturedAt'],str(frame['pid']),str(frame['startTime']))]=frame
             except (KeyError,TypeError,ValueError):continue
-    result=[frames[k] for k in sorted(frames)][-500:]
+    result=compact([frames[k] for k in sorted(frames)])
     keys={str(f['pid'])+':'+str(f['startTime'])+':'+str(s['id']) for f in result for s in f['storms']}
     return result,{k:v for k,v in profiles.items() if k in keys}
 
 def save(root,frames,profiles):
     root=Path(root);root.mkdir(parents=True,exist_ok=True)
     temp=root/'storm-history-v1.tmp'
-    temp.write_text(json.dumps({'frames':list(frames)[-500:],'profiles':profiles}),encoding='utf-8')
+    temp.write_text(json.dumps({'frames':compact(frames),'profiles':profiles}),encoding='utf-8')
     temp.replace(root/'storm-history-v1.json')

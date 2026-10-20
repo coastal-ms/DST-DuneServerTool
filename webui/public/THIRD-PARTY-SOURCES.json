@@ -1,0 +1,715 @@
+[
+  {
+    "name": "@dnd-kit/accessibility",
+    "version": "3.1.1",
+    "license": "MIT",
+    "packageSource": "https://registry.npmjs.org/@dnd-kit/accessibility/-/accessibility-3.1.1.tgz",
+    "repository": {
+      "type": "git",
+      "url": "git+https://github.com/clauderic/dnd-kit.git",
+      "directory": "packages/accessibility"
+    },
+    "notices": [
+      "LICENSE"
+    ]
+  },
+  {
+    "name": "@dnd-kit/core",
+    "version": "6.3.1",
+    "license": "MIT",
+    "packageSource": "https://registry.npmjs.org/@dnd-kit/core/-/core-6.3.1.tgz",
+    "repository": {
+      "type": "git",
+      "url": "git+https://github.com/clauderic/dnd-kit.git",
+      "directory": "packages/core"
+    },
+    "notices": [
+      "LICENSE"
+    ]
+  },
+  {
+    "name": "@dnd-kit/sortable",
+    "version": "10.0.0",
+    "license": "MIT",
+    "packageSource": "https://registry.npmjs.org/@dnd-kit/sortable/-/sortable-10.0.0.tgz",
+    "repository": {
+      "type": "git",
+      "url": "git+https://github.com/clauderic/dnd-kit.git",
+      "directory": "packages/sortable"
+    },
+    "notices": [
+      "LICENSE"
+    ]
+  },
+  {
+    "name": "@dnd-kit/utilities",
+    "version": "3.2.2",
+    "license": "MIT",
+    "packageSource": "https://registry.npmjs.org/@dnd-kit/utilities/-/utilities-3.2.2.tgz",
+    "repository": {
+      "type": "git",
+      "url": "git+https://github.com/clauderic/dnd-kit.git",
+      "directory": "packages/utilities"
+    },
+    "notices": [
+      "LICENSE"
+    ]
+  },
+  {
+    "name": "@jridgewell/gen-mapping",
+    "version": "0.3.13",
+    "license": "MIT",
+    "packageSource": "https://registry.npmjs.org/@jridgewell/gen-mapping/-/gen-mapping-0.3.13.tgz",
+    "repository": {
+      "type": "git",
+      "url": "git+https://github.com/jridgewell/sourcemaps.git",
+      "directory": "packages/gen-mapping"
+    },
+    "notices": [
+      "LICENSE"
+    ]
+  },
+  {
+    "name": "@jridgewell/remapping",
+    "version": "2.3.5",
+    "license": "MIT",
+    "packageSource": "https://registry.npmjs.org/@jridgewell/remapping/-/remapping-2.3.5.tgz",
+    "repository": {
+      "type": "git",
+      "url": "git+https://github.com/jridgewell/sourcemaps.git",
+      "directory": "packages/remapping"
+    },
+    "notices": [
+      "LICENSE"
+    ]
+  },
+  {
+    "name": "@jridgewell/resolve-uri",
+    "version": "3.1.2",
+    "license": "MIT",
+    "packageSource": "https://registry.npmjs.org/@jridgewell/resolve-uri/-/resolve-uri-3.1.2.tgz",
+    "repository": "https://github.com/jridgewell/resolve-uri",
+    "notices": [
+      "LICENSE"
+    ]
+  },
+  {
+    "name": "@jridgewell/sourcemap-codec",
+    "version": "1.5.5",
+    "license": "MIT",
+    "packageSource": "https://registry.npmjs.org/@jridgewell/sourcemap-codec/-/sourcemap-codec-1.5.5.tgz",
+    "repository": {
+      "type": "git",
+      "url": "git+https://github.com/jridgewell/sourcemaps.git",
+      "directory": "packages/sourcemap-codec"
+    },
+    "notices": [
+      "LICENSE"
+    ]
+  },
+  {
+    "name": "@jridgewell/trace-mapping",
+    "version": "0.3.31",
+    "license": "MIT",
+    "packageSource": "https://registry.npmjs.org/@jridgewell/trace-mapping/-/trace-mapping-0.3.31.tgz",
+    "repository": {
+      "type": "git",
+      "url": "git+https://github.com/jridgewell/sourcemaps.git",
+      "directory": "packages/trace-mapping"
+    },
+    "notices": [
+      "LICENSE"
+    ]
+  },
+  {
+    "name": "@monaco-editor/loader",
+    "version": "1.7.0",
+    "license": "MIT",
+    "packageSource": "https://registry.npmjs.org/@monaco-editor/loader/-/loader-1.7.0.tgz",
+    "repository": {
+      "type": "git",
+      "url": "git+https://github.com/suren-atoyan/monaco-loader.git"
+    },
+    "notices": [
+      "LICENSE"
+    ]
+  },
+  {
+    "name": "@monaco-editor/react",
+    "version": "4.7.0",
+    "license": "MIT",
+    "packageSource": "https://registry.npmjs.org/@monaco-editor/react/-/react-4.7.0.tgz",
+    "repository": {
+      "type": "git",
+      "url": "git+https://github.com/suren-atoyan/monaco-react.git"
+    },
+    "notices": [
+      "LICENSE"
+    ]
+  },
+  {
+    "name": "@oxc-project/types",
+    "version": "0.144.0",
+    "license": "MIT",
+    "packageSource": "https://registry.npmjs.org/@oxc-project/types/-/types-0.144.0.tgz",
+    "repository": {
+      "type": "git",
+      "url": "git+https://github.com/oxc-project/oxc.git",
+      "directory": "npm/oxc-types"
+    },
+    "notices": [
+      "LICENSE"
+    ]
+  },
+  {
+    "name": "@rolldown/binding-win32-x64-msvc",
+    "version": "1.2.4",
+    "license": "MIT",
+    "packageSource": "https://registry.npmjs.org/@rolldown/binding-win32-x64-msvc/-/binding-win32-x64-msvc-1.2.4.tgz",
+    "repository": {
+      "type": "git",
+      "url": "git+https://github.com/rolldown/rolldown.git",
+      "directory": "packages/rolldown"
+    },
+    "notices": []
+  },
+  {
+    "name": "@rolldown/pluginutils",
+    "version": "1.0.1",
+    "license": "MIT",
+    "packageSource": "https://registry.npmjs.org/@rolldown/pluginutils/-/pluginutils-1.0.1.tgz",
+    "repository": {
+      "type": "git",
+      "url": "git+https://github.com/rolldown/plugins.git",
+      "directory": "packages/pluginutils"
+    },
+    "notices": [
+      "LICENSE"
+    ]
+  },
+  {
+    "name": "@tailwindcss/node",
+    "version": "4.3.3",
+    "license": "MIT",
+    "packageSource": "https://registry.npmjs.org/@tailwindcss/node/-/node-4.3.3.tgz",
+    "repository": {
+      "type": "git",
+      "url": "https://github.com/tailwindlabs/tailwindcss.git",
+      "directory": "packages/@tailwindcss-node"
+    },
+    "notices": [
+      "LICENSE"
+    ]
+  },
+  {
+    "name": "@tailwindcss/oxide",
+    "version": "4.3.3",
+    "license": "MIT",
+    "packageSource": "https://registry.npmjs.org/@tailwindcss/oxide/-/oxide-4.3.3.tgz",
+    "repository": {
+      "type": "git",
+      "url": "git+https://github.com/tailwindlabs/tailwindcss.git",
+      "directory": "crates/node"
+    },
+    "notices": [
+      "LICENSE"
+    ]
+  },
+  {
+    "name": "@tailwindcss/oxide-win32-x64-msvc",
+    "version": "4.3.3",
+    "license": "MIT",
+    "packageSource": "https://registry.npmjs.org/@tailwindcss/oxide-win32-x64-msvc/-/oxide-win32-x64-msvc-4.3.3.tgz",
+    "repository": {
+      "type": "git",
+      "url": "git+https://github.com/tailwindlabs/tailwindcss.git",
+      "directory": "crates/node/npm/win32-x64-msvc"
+    },
+    "notices": [
+      "LICENSE"
+    ]
+  },
+  {
+    "name": "@tailwindcss/vite",
+    "version": "4.3.3",
+    "license": "MIT",
+    "packageSource": "https://registry.npmjs.org/@tailwindcss/vite/-/vite-4.3.3.tgz",
+    "repository": {
+      "type": "git",
+      "url": "https://github.com/tailwindlabs/tailwindcss.git",
+      "directory": "packages/@tailwindcss-vite"
+    },
+    "notices": [
+      "LICENSE"
+    ]
+  },
+  {
+    "name": "@types/trusted-types",
+    "version": "2.0.7",
+    "license": "MIT",
+    "packageSource": "https://registry.npmjs.org/@types/trusted-types/-/trusted-types-2.0.7.tgz",
+    "repository": {
+      "type": "git",
+      "url": "https://github.com/DefinitelyTyped/DefinitelyTyped.git",
+      "directory": "types/trusted-types"
+    },
+    "notices": [
+      "LICENSE"
+    ]
+  },
+  {
+    "name": "@xterm/addon-fit",
+    "version": "0.11.0",
+    "license": "MIT",
+    "packageSource": "https://registry.npmjs.org/@xterm/addon-fit/-/addon-fit-0.11.0.tgz",
+    "repository": "https://github.com/xtermjs/xterm.js/tree/master/addons/addon-fit",
+    "notices": [
+      "LICENSE"
+    ]
+  },
+  {
+    "name": "@xterm/xterm",
+    "version": "6.0.0",
+    "license": "MIT",
+    "packageSource": "https://registry.npmjs.org/@xterm/xterm/-/xterm-6.0.0.tgz",
+    "repository": "https://github.com/xtermjs/xterm.js",
+    "notices": [
+      "LICENSE"
+    ]
+  },
+  {
+    "name": "detect-libc",
+    "version": "2.1.2",
+    "license": "Apache-2.0",
+    "packageSource": "https://registry.npmjs.org/detect-libc/-/detect-libc-2.1.2.tgz",
+    "repository": {
+      "type": "git",
+      "url": "git://github.com/lovell/detect-libc.git"
+    },
+    "notices": [
+      "LICENSE"
+    ]
+  },
+  {
+    "name": "dompurify",
+    "version": "3.4.16",
+    "license": "(MPL-2.0 OR Apache-2.0)",
+    "packageSource": "https://registry.npmjs.org/dompurify/-/dompurify-3.4.16.tgz",
+    "repository": {
+      "type": "git",
+      "url": "git://github.com/cure53/DOMPurify.git"
+    },
+    "notices": [
+      "LICENSE"
+    ]
+  },
+  {
+    "name": "enhanced-resolve",
+    "version": "5.24.5",
+    "license": "MIT",
+    "packageSource": "https://registry.npmjs.org/enhanced-resolve/-/enhanced-resolve-5.24.5.tgz",
+    "repository": {
+      "type": "git",
+      "url": "git+https://github.com/webpack/enhanced-resolve.git"
+    },
+    "notices": [
+      "LICENSE"
+    ]
+  },
+  {
+    "name": "fdir",
+    "version": "6.5.0",
+    "license": "MIT",
+    "packageSource": "https://registry.npmjs.org/fdir/-/fdir-6.5.0.tgz",
+    "repository": {
+      "type": "git",
+      "url": "git+https://github.com/thecodrr/fdir.git"
+    },
+    "notices": [
+      "LICENSE"
+    ]
+  },
+  {
+    "name": "graceful-fs",
+    "version": "4.2.11",
+    "license": "ISC",
+    "packageSource": "https://registry.npmjs.org/graceful-fs/-/graceful-fs-4.2.11.tgz",
+    "repository": {
+      "type": "git",
+      "url": "https://github.com/isaacs/node-graceful-fs"
+    },
+    "notices": [
+      "LICENSE"
+    ]
+  },
+  {
+    "name": "jiti",
+    "version": "2.7.0",
+    "license": "MIT",
+    "packageSource": "https://registry.npmjs.org/jiti/-/jiti-2.7.0.tgz",
+    "repository": "unjs/jiti",
+    "notices": [
+      "LICENSE"
+    ]
+  },
+  {
+    "name": "lightningcss",
+    "version": "1.32.0",
+    "license": "MPL-2.0",
+    "packageSource": "https://registry.npmjs.org/lightningcss/-/lightningcss-1.32.0.tgz",
+    "repository": {
+      "type": "git",
+      "url": "https://github.com/parcel-bundler/lightningcss.git"
+    },
+    "notices": [
+      "LICENSE"
+    ]
+  },
+  {
+    "name": "lightningcss-win32-x64-msvc",
+    "version": "1.32.0",
+    "license": "MPL-2.0",
+    "packageSource": "https://registry.npmjs.org/lightningcss-win32-x64-msvc/-/lightningcss-win32-x64-msvc-1.32.0.tgz",
+    "repository": {
+      "type": "git",
+      "url": "https://github.com/parcel-bundler/lightningcss.git"
+    },
+    "notices": [
+      "LICENSE"
+    ]
+  },
+  {
+    "name": "lucide-react",
+    "version": "1.31.0",
+    "license": "ISC",
+    "packageSource": "https://registry.npmjs.org/lucide-react/-/lucide-react-1.31.0.tgz",
+    "repository": {
+      "type": "git",
+      "url": "https://github.com/lucide-icons/lucide.git",
+      "directory": "packages/lucide-react"
+    },
+    "notices": [
+      "LICENSE"
+    ]
+  },
+  {
+    "name": "magic-string",
+    "version": "0.30.21",
+    "license": "MIT",
+    "packageSource": "https://registry.npmjs.org/magic-string/-/magic-string-0.30.21.tgz",
+    "repository": {
+      "type": "git",
+      "url": "git+https://github.com/Rich-Harris/magic-string.git"
+    },
+    "notices": [
+      "LICENSE"
+    ]
+  },
+  {
+    "name": "marked",
+    "version": "14.0.0",
+    "license": "MIT",
+    "packageSource": "https://registry.npmjs.org/marked/-/marked-14.0.0.tgz",
+    "repository": "git://github.com/markedjs/marked.git",
+    "notices": [
+      "LICENSE.md"
+    ]
+  },
+  {
+    "name": "mitt",
+    "version": "3.0.1",
+    "license": "MIT",
+    "packageSource": "https://registry.npmjs.org/mitt/-/mitt-3.0.1.tgz",
+    "repository": "developit/mitt",
+    "notices": [
+      "LICENSE"
+    ]
+  },
+  {
+    "name": "monaco-editor",
+    "version": "0.55.1",
+    "license": "MIT",
+    "packageSource": "https://registry.npmjs.org/monaco-editor/-/monaco-editor-0.55.1.tgz",
+    "repository": {
+      "type": "git",
+      "url": "https://github.com/microsoft/monaco-editor"
+    },
+    "notices": [
+      "LICENSE",
+      "ThirdPartyNotices.txt"
+    ]
+  },
+  {
+    "name": "nanoid",
+    "version": "3.3.18",
+    "license": "MIT",
+    "packageSource": "https://registry.npmjs.org/nanoid/-/nanoid-3.3.18.tgz",
+    "repository": "ai/nanoid",
+    "notices": [
+      "LICENSE"
+    ]
+  },
+  {
+    "name": "picocolors",
+    "version": "1.1.1",
+    "license": "ISC",
+    "packageSource": "https://registry.npmjs.org/picocolors/-/picocolors-1.1.1.tgz",
+    "repository": "alexeyraspopov/picocolors",
+    "notices": [
+      "LICENSE"
+    ]
+  },
+  {
+    "name": "picomatch",
+    "version": "4.0.5",
+    "license": "MIT",
+    "packageSource": "https://registry.npmjs.org/picomatch/-/picomatch-4.0.5.tgz",
+    "repository": "micromatch/picomatch",
+    "notices": [
+      "LICENSE"
+    ]
+  },
+  {
+    "name": "postcss",
+    "version": "8.5.23",
+    "license": "MIT",
+    "packageSource": "https://registry.npmjs.org/postcss/-/postcss-8.5.23.tgz",
+    "repository": "postcss/postcss",
+    "notices": [
+      "LICENSE"
+    ]
+  },
+  {
+    "name": "qrcode.react",
+    "version": "4.2.0",
+    "license": "ISC",
+    "packageSource": "https://registry.npmjs.org/qrcode.react/-/qrcode.react-4.2.0.tgz",
+    "repository": {
+      "type": "git",
+      "url": "https://github.com/zpao/qrcode.react.git"
+    },
+    "notices": [
+      "LICENSE"
+    ]
+  },
+  {
+    "name": "react",
+    "version": "19.2.8",
+    "license": "MIT",
+    "packageSource": "https://registry.npmjs.org/react/-/react-19.2.8.tgz",
+    "repository": {
+      "type": "git",
+      "url": "https://github.com/react/react.git",
+      "directory": "packages/react"
+    },
+    "notices": [
+      "LICENSE"
+    ]
+  },
+  {
+    "name": "react-dom",
+    "version": "19.2.8",
+    "license": "MIT",
+    "packageSource": "https://registry.npmjs.org/react-dom/-/react-dom-19.2.8.tgz",
+    "repository": {
+      "type": "git",
+      "url": "https://github.com/react/react.git",
+      "directory": "packages/react-dom"
+    },
+    "notices": [
+      "LICENSE"
+    ]
+  },
+  {
+    "name": "regexparam",
+    "version": "3.0.0",
+    "license": "MIT",
+    "packageSource": "https://registry.npmjs.org/regexparam/-/regexparam-3.0.0.tgz",
+    "repository": "lukeed/regexparam",
+    "notices": [
+      "license"
+    ]
+  },
+  {
+    "name": "rolldown",
+    "version": "1.2.4",
+    "license": "MIT",
+    "packageSource": "https://registry.npmjs.org/rolldown/-/rolldown-1.2.4.tgz",
+    "repository": {
+      "type": "git",
+      "url": "git+https://github.com/rolldown/rolldown.git",
+      "directory": "packages/rolldown"
+    },
+    "notices": [
+      "LICENSE"
+    ]
+  },
+  {
+    "name": "scheduler",
+    "version": "0.27.0",
+    "license": "MIT",
+    "packageSource": "https://registry.npmjs.org/scheduler/-/scheduler-0.27.0.tgz",
+    "repository": {
+      "type": "git",
+      "url": "https://github.com/facebook/react.git",
+      "directory": "packages/scheduler"
+    },
+    "notices": [
+      "LICENSE"
+    ]
+  },
+  {
+    "name": "source-map-js",
+    "version": "1.2.2",
+    "license": "BSD-3-Clause",
+    "packageSource": "https://registry.npmjs.org/source-map-js/-/source-map-js-1.2.2.tgz",
+    "repository": "7rulnik/source-map-js",
+    "notices": [
+      "LICENSE"
+    ]
+  },
+  {
+    "name": "state-local",
+    "version": "1.0.7",
+    "license": "MIT",
+    "packageSource": "https://registry.npmjs.org/state-local/-/state-local-1.0.7.tgz",
+    "repository": {
+      "type": "git",
+      "url": "git+https://github.com/suren-atoyan/state-local"
+    },
+    "notices": [
+      "LICENSE"
+    ]
+  },
+  {
+    "name": "tailwindcss",
+    "version": "4.3.3",
+    "license": "MIT",
+    "packageSource": "https://registry.npmjs.org/tailwindcss/-/tailwindcss-4.3.3.tgz",
+    "repository": {
+      "type": "git",
+      "url": "https://github.com/tailwindlabs/tailwindcss.git",
+      "directory": "packages/tailwindcss"
+    },
+    "notices": [
+      "LICENSE"
+    ]
+  },
+  {
+    "name": "tapable",
+    "version": "2.3.3",
+    "license": "MIT",
+    "packageSource": "https://registry.npmjs.org/tapable/-/tapable-2.3.3.tgz",
+    "repository": {
+      "type": "git",
+      "url": "http://github.com/webpack/tapable.git"
+    },
+    "notices": [
+      "LICENSE"
+    ]
+  },
+  {
+    "name": "three",
+    "version": "0.185.1",
+    "license": "MIT",
+    "packageSource": "https://registry.npmjs.org/three/-/three-0.185.1.tgz",
+    "repository": {
+      "type": "git",
+      "url": "https://github.com/mrdoob/three.js"
+    },
+    "notices": [
+      "LICENSE"
+    ]
+  },
+  {
+    "name": "tinyglobby",
+    "version": "0.2.17",
+    "license": "MIT",
+    "packageSource": "https://registry.npmjs.org/tinyglobby/-/tinyglobby-0.2.17.tgz",
+    "repository": {
+      "type": "git",
+      "url": "git+https://github.com/SuperchupuDev/tinyglobby.git"
+    },
+    "notices": [
+      "LICENSE"
+    ]
+  },
+  {
+    "name": "tslib",
+    "version": "2.8.1",
+    "license": "0BSD",
+    "packageSource": "https://registry.npmjs.org/tslib/-/tslib-2.8.1.tgz",
+    "repository": {
+      "type": "git",
+      "url": "https://github.com/Microsoft/tslib.git"
+    },
+    "notices": [
+      "LICENSE.txt"
+    ]
+  },
+  {
+    "name": "use-sync-external-store",
+    "version": "1.6.0",
+    "license": "MIT",
+    "packageSource": "https://registry.npmjs.org/use-sync-external-store/-/use-sync-external-store-1.6.0.tgz",
+    "repository": {
+      "type": "git",
+      "url": "https://github.com/facebook/react.git",
+      "directory": "packages/use-sync-external-store"
+    },
+    "notices": [
+      "LICENSE"
+    ]
+  },
+  {
+    "name": "vite",
+    "version": "8.2.1",
+    "license": "MIT",
+    "packageSource": "https://registry.npmjs.org/vite/-/vite-8.2.1.tgz",
+    "repository": {
+      "type": "git",
+      "url": "git+https://github.com/vitejs/vite.git",
+      "directory": "packages/vite"
+    },
+    "notices": [
+      "LICENSE.md"
+    ]
+  },
+  {
+    "name": "lightningcss",
+    "version": "1.33.0",
+    "license": "MPL-2.0",
+    "packageSource": "https://registry.npmjs.org/lightningcss/-/lightningcss-1.33.0.tgz",
+    "repository": {
+      "type": "git",
+      "url": "https://github.com/parcel-bundler/lightningcss.git"
+    },
+    "notices": [
+      "LICENSE"
+    ]
+  },
+  {
+    "name": "lightningcss-win32-x64-msvc",
+    "version": "1.33.0",
+    "license": "MPL-2.0",
+    "packageSource": "https://registry.npmjs.org/lightningcss-win32-x64-msvc/-/lightningcss-win32-x64-msvc-1.33.0.tgz",
+    "repository": {
+      "type": "git",
+      "url": "https://github.com/parcel-bundler/lightningcss.git"
+    },
+    "notices": [
+      "LICENSE"
+    ]
+  },
+  {
+    "name": "wouter",
+    "version": "3.10.0",
+    "license": "Unlicense",
+    "packageSource": "https://registry.npmjs.org/wouter/-/wouter-3.10.0.tgz",
+    "repository": {
+      "type": "git",
+      "url": "git+https://github.com/molefrog/wouter.git"
+    },
+    "notices": []
+  }
+]

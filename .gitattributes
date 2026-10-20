@@ -30,3 +30,9 @@ app/tools/DuneAtlas/**                   text eol=lf
 
 # Raster marker art must retain its binary bytes under the Atlas runtime rule.
 app/tools/DuneAtlas/icons/*.png           -text
+
+# Terrain backgrounds are binary assets in both map adapters.
+app/tools/DuneAtlas/icons/*.webp         -text
+app/resources/solo-mods/dst-solo-live-map/Companion/icons/*.webp -text
+
+webui/public/item-icons/*.webp           -text

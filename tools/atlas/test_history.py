@@ -16,5 +16,17 @@ class HistoryTests(unittest.TestCase):
    base=datetime.datetime(2026,10,17,tzinfo=datetime.timezone.utc)
    frames=[{'pid':1,'startTime':2,'capturedAt':(base+datetime.timedelta(seconds=n)).isoformat(),'storms':[{'id':'s','location':[1,2,3]}]} for n in range(510)]
    frames.append({'pid':1,'startTime':2,'capturedAt':base.isoformat(),'storms':[{'id':'s','location':[float('nan'),2,3]}]})
-   history.save(folder,frames,{});loaded,_=history.load(folder,[folder]);self.assertEqual(len(loaded),499)
+   history.save(folder,frames,{});loaded,_=history.load(folder,[folder]);self.assertLessEqual(len(loaded),125)
+   self.assertTrue(loaded);self.assertTrue(all(f['storms'][0]['location']==[1,2,3] for f in loaded))
+ def test_dense_current_pass_keeps_previous_pass_for_each_map(self):
+  base=datetime.datetime(2026,10,17,tzinfo=datetime.timezone.utc)
+  frames=[]
+  for region in ('DeepDesert','HaggaBasin'):
+   for storm in range(3):
+    for n in range(200):
+     frames.append({'map':region,'pid':1,'startTime':2,'capturedAt':(base+datetime.timedelta(seconds=storm*4000+n)).isoformat(),'storms':[{'id':str(storm),'location':[1,2,3]}]})
+  retained=history.compact(frames)
+  self.assertEqual(len(retained),500)
+  for region in ('DeepDesert','HaggaBasin'):
+   self.assertEqual({s['id'] for f in retained if f['map']==region for s in f['storms']},{'1','2'})
 if __name__=='__main__':unittest.main()

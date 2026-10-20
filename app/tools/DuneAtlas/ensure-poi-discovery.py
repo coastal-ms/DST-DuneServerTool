@@ -4,9 +4,7 @@ sys.path.insert(0,str(Path(__file__).resolve().parent.parent if Path(__file__).r
 import atlas_process
 """Rebuild process-bound POI discovery on a fresh runtime or process change."""
 from pathlib import Path
-import json,subprocess,sys,hashlib,os
-
-from atlas_builds import BUILDS
+import json,subprocess,sys,hashlib,os,re
 
 STAGES=('find-poi-actors.py','find-static-marker-actors.py','read-all-static-markers.py')
 FILES=('poi-actor-cache.json','static-marker-actor-cache.json','native-static-marker-sites.json')
@@ -15,7 +13,7 @@ def digests(root):return {name:hashlib.sha256((root/name).read_bytes()).hexdiges
 
 def context(root):
  value=json.loads((root/'runtime-context.json').read_text(encoding='utf-8-sig'))
- if not isinstance(value.get('pid'),int) or value['pid']<=0 or not str(value.get('startTime','')).isdigit() or value.get('sha256') not in BUILDS:
+ if not isinstance(value.get('pid'),int) or value['pid']<=0 or not str(value.get('startTime','')).isdigit() or not re.fullmatch('[0-9a-f]{64}',str(value.get('sha256',''))):
   raise ValueError('Waiting for a verified runtime identity')
  return value
 

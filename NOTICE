@@ -39,3 +39,15 @@ Forks, contributions, and personal modifications are welcome.
 Republishing this software or any derivative as your own work, without
 attribution to the original author, is a violation of the Apache License 2.0
 notice-preservation clause (Section 4) and the trademark clause (Section 6).
+
+THIRD-PARTY MATERIALS
+Game artwork © Funcom Oslo AS.
+Funcom: https://www.funcom.com/
+Fan-use policy: https://www.funcom.com/legal/
+DST's software license covers its original software, not third-party materials.
+Funcom and Epic Games retain all rights to their respective artwork and
+proprietary materials. DST claims no ownership of those materials and grants
+no permission to reuse them. Other included components
+and artwork retain their respective licenses, copyright notices and terms.
+The installer includes component notices in webui/dist/THIRD-PARTY-NOTICES.txt,
+map art records, and the bundled mod licenses.

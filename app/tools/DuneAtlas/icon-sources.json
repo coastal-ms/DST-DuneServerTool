@@ -21,5 +21,6 @@
     "spice-marker.svg",
     "flour-sand.svg"
   ],
-  "fallbacks": "Local game-art cache is preferred. Missing game images use the bundled vectors; no terrain or game images are distributed."
+  "fallbacks": "Bundled game and vehicle art is available on clean installations. Existing local images are preferred; vectors remain a fallback.",
+  "artSources": "ART-SOURCES.json"
 }

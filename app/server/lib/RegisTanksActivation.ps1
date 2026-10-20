@@ -10,8 +10,11 @@
         throw 'Regis Tanks require one configured Hagga server group.'
     }
     $image = [string]$sets[$indices[0]].image
-    $supported = $image -cin @('registry.funcom.com/funcom/self-hosting/seabass-server:2147284-0-shipping','localhost/dst-regis-tanks:2147284-1','localhost/dst-regis-tanks:2147284-native-trial1')
-    return @{ bg=$bg; index=$indices[0]; image=$image; supported=$supported; managed=($image -clike 'localhost/dst-regis-tanks:2147284-*') }
+    $build = ''
+    $managed = $false
+    if ($image -cmatch '^registry\.funcom\.com/funcom/self-hosting/seabass-server:(2147284|2156652)-0-shipping$') { $build = $Matches[1] }
+    elseif ($image -cmatch '^localhost/dst-regis-tanks:(2147284|2156652)-(?:1|native-trial1)$') { $build = $Matches[1]; $managed = $true }
+    return @{ bg=$bg; index=$indices[0]; image=$image; build=$build; supported=([bool]$build); managed=$managed }
 }
 
 function Set-DuneRegisTankCompatibility {
@@ -20,25 +23,27 @@ function Set-DuneRegisTankCompatibility {
     if (-not $target.available -or -not $target.stopped -or $target.serverPodCount -ne 0) { throw 'Stop the battlegroup completely before changing Tank compatibility.' }
     $deployment = Get-DuneRegisTankDeployment -Ip $Ip
     if (-not $deployment.supported) { throw 'This server build or existing custom image is not supported by Regis Tanks. Nothing was changed.' }
+    $officialImage = "registry.funcom.com/funcom/self-hosting/seabass-server:$($deployment.build)-0-shipping"
+    $enabledImage = "localhost/dst-regis-tanks:$($deployment.build)-1"
     $statePath = "/home/dune/.dst-regis-tanks/state-$($deployment.bg.Name).json"
     $state = $null
     $saved = Invoke-DuneRegisTankShell -Ip $Ip -Script "if [ -f '$statePath' ] && [ ! -L '$statePath' ]; then cat '$statePath'; fi"
     if ($saved) {
         $state = $saved | ConvertFrom-Json
-        if ($state.namespace -cne $deployment.bg.Ns -or $state.battlegroup -cne $deployment.bg.Name -or $state.originalImage -cne 'registry.funcom.com/funcom/self-hosting/seabass-server:2147284-0-shipping') { throw 'Tank rollback state does not match the selected battlegroup.' }
+        if ($state.namespace -cne $deployment.bg.Ns -or $state.battlegroup -cne $deployment.bg.Name -or $state.originalImage -cnotmatch '^registry\.funcom\.com/funcom/self-hosting/seabass-server:(2147284|2156652)-0-shipping$') { throw 'Tank rollback state does not match the selected battlegroup.' }
     }
     if (-not $Enabled -and -not $deployment.managed) { return @{ok=$true;enabled=$false;message='Regis Tank compatibility is already disabled.'} }
     if ($Enabled) {
-        $prepared = New-DuneRegisTankServerImage -Ip $Ip
-        if (-not $prepared.verified -or $prepared.tag -cne 'localhost/dst-regis-tanks:2147284-1') { throw 'Prepared Tank image is not verified.' }
+        $prepared = New-DuneRegisTankServerImage -Ip $Ip -Build $deployment.build
+        if (-not $prepared.verified -or $prepared.tag -cne $enabledImage) { throw 'Prepared Tank image is not verified.' }
         $desired = [string]$prepared.tag
     } else {
         # Native rollback leaves database rows intact, but unmodified Funcom
         # code may not retain deprecated Tanks on the next start.
         if (-not $AcknowledgeStoredTanks) { throw 'Acknowledge that saved Tanks require compatibility before disabling it.' }
-        $desired = 'registry.funcom.com/funcom/self-hosting/seabass-server:2147284-0-shipping'
+        $desired = $officialImage
     }
-    $state = @{namespace=$deployment.bg.Ns;battlegroup=$deployment.bg.Name;originalImage='registry.funcom.com/funcom/self-hosting/seabass-server:2147284-0-shipping';enabledImage='localhost/dst-regis-tanks:2147284-1';previousImage=$deployment.image;previousResourceVersion=[string]$deployment.bg.Bg.metadata.resourceVersion}
+    $state = @{namespace=$deployment.bg.Ns;battlegroup=$deployment.bg.Name;originalImage=$officialImage;enabledImage=$enabledImage;previousImage=$deployment.image;previousResourceVersion=[string]$deployment.bg.Bg.metadata.resourceVersion}
     $state64 = [Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes(($state | ConvertTo-Json -Depth 8 -Compress)))
     Invoke-DuneRegisTankShell -Ip $Ip -Script "[ ! -L /home/dune/.dst-regis-tanks ] && mkdir -p /home/dune/.dst-regis-tanks && printf %s '$state64' | base64 -d > '$statePath.pending' && mv '$statePath.pending' '$statePath'" | Out-Null
     $path = "/spec/serverGroup/template/spec/sets/$($deployment.index)/image"

@@ -1,25 +1,54 @@
 """Exact executable identities for read-only Atlas discovery."""
 from pathlib import Path
 import json
+import re
+import os
 
 LEGACY_BUILDS = {
     'c04524c353ec9657759e95235ae93fb76f1ccde8838f6c5a59bc1ef4e1305522',
     '240b4bb378a93b70134fa685fc467bc2ae94fd40d81da2feea0f987758bc9126',
 }
 CURRENT_BUILD = 'e62fa7fd8697d8fd2108be97dee6b16ab8c30d07dd0d80d5765c095264e6a114'
-BUILDS = LEGACY_BUILDS | {CURRENT_BUILD}
+TANK_BUILD = '3e8966850e911826f4e5339dea5b3830a71e037acc9b0ed400bc9f0e21e6e318'
+CURRENT_BUILDS = {CURRENT_BUILD, TANK_BUILD}
+BUILDS = LEGACY_BUILDS | CURRENT_BUILDS
 
 
-def profile(root, digest):
+def profile_cache(root, digest):
     root = Path(root)
     shared = root.parent if root.name == 'hagga' else root
-    if digest == CURRENT_BUILD:
+    folder = Path(os.environ.get('DST_ATLAS_PROFILE_ROOT', str(shared)))
+    folder.mkdir(parents=True, exist_ok=True)
+    return folder / ('server-profile-' + digest + '.json')
+
+
+def profile(root, digest, runtime=None):
+    root = Path(root)
+    shared = root.parent if root.name == 'hagga' else root
+    if not re.fullmatch('[0-9a-f]{64}', digest):
+        raise ValueError('Missing server executable identity')
+    cache = profile_cache(root, digest)
+    if cache.is_file():
+        value = json.loads(cache.read_text())
+        if value.get('sha256') == digest and value.get('discoveredFrom') == 'running-elf-and-name-pool':
+            return value
+    if runtime is not None:
+        import atlas_elf
+        value = atlas_elf.inspect(digest, cache_dir=cache.parent, **runtime)
+        temp = cache.with_name(cache.name + '.' + str(os.getpid()) + '.tmp')
+        temp.write_text(json.dumps(value))
+        temp.replace(cache)
+        return value
+    if digest in CURRENT_BUILDS:
         value = json.loads((shared / 'build-2156652.json').read_text())
-        if value['sha256'] != digest:
+        if value['sha256'] != CURRENT_BUILD:
             raise ValueError('Atlas build profile identity mismatch')
+        # The guarded Tank recipe changes seven instruction sites, not ELF
+        # sections or the recorded symbol/name-pool addresses.
+        value['sha256'] = digest
         return value
     if digest not in LEGACY_BUILDS:
-        raise ValueError('Unrecognized server build; native collector remains unavailable')
+        raise ValueError('Server layout has not been discovered yet')
     return {
         'sha256': digest,
         'namePoolTableOffset': 390184232,
@@ -28,10 +57,10 @@ def profile(root, digest):
 
 
 def symbol_rows(root, digest, legacy_table):
-    if digest == CURRENT_BUILD:
+    if digest in CURRENT_BUILDS or profile_cache(root, digest).is_file():
         return [{'name': name, 'value': value} for name, value in profile(root, digest)['symbols'].items()]
     if digest not in LEGACY_BUILDS:
-        raise ValueError('Unrecognized server build; native collector remains unavailable')
+        raise ValueError('Server layout has not been discovered yet')
     if legacy_table not in ('all-native-vtables.json', 'all-component-pools.json'):
         raise ValueError('Unknown Atlas symbol table')
     return json.loads((Path(root) / legacy_table).read_text())
