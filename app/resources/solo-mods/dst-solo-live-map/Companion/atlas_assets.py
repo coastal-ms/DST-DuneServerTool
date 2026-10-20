@@ -1,5 +1,11 @@
 """Prefer local game art; use bundled vectors when that art is unavailable."""
 from pathlib import Path
+import re
+
+
+def is_terrain(name):
+    return bool(re.fullmatch(r'dd-layout-(\d|1[01])\.webp', name) or name == 'hagga-background-v1.webp')
+
 
 FALLBACKS = {
     'game-cave.png': 'mountain.svg', 'game-lab.png': 'radar.svg',
@@ -30,6 +36,10 @@ def icon_path(name, asset_root, bundled_root):
     # The HTTP route also validates names; keep this helper safe on its own.
     if Path(name).name != name or '/' in name or '\\' in name:
         return None
+    # Packaged game terrain takes precedence over legacy downloaded cache entries.
+    if is_terrain(name):
+        path = Path(bundled_root) / name
+        return path if path.is_file() else None
     for root, candidate in ((asset_root, name), (bundled_root, name),
                             (bundled_root, FALLBACKS.get(name))):
         if candidate:

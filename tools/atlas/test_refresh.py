@@ -53,7 +53,7 @@ class RefreshTests(unittest.TestCase):
  def test_marker_bundle_contains_fallbacks_without_terrain(self):
   with tempfile.TemporaryDirectory() as folder:
    icons=assets.marker_icons(folder,ROOT/'icons')
-   self.assertIn('game-lab.png',icons);self.assertTrue(icons['game-lab.png'].startswith('data:image/svg+xml;base64,'))
+   self.assertIn('game-lab.png',icons);self.assertTrue(icons['game-lab.png'].startswith('data:image/png;base64,'))
    self.assertTrue(all('layout' not in name and '..' not in name for name in icons))
 
  def test_transient_read_errors_keep_last_timestamped_observations(self):

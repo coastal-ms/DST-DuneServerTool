@@ -145,7 +145,7 @@ function deferred<T>() {
 beforeEach(() => {
   inventoryApi.mockResolvedValue(fixture)
   occurrenceApi.mockResolvedValue(occurrenceFixture)
-  itemIconResolver.mockResolvedValue('https://cdn-hosted.gaming.tools/dune/images/dune/items/copper.webp')
+  itemIconResolver.mockResolvedValue('/item-icons/fixture-copper.webp')
   renameStorageApi.mockResolvedValue({ ok: true, message: "Renamed storage container to 'Ore Vault'." })
   repairStorageApi.mockResolvedValue({ok:true,message:'Repaired equipment in this box. Restart the server zone.'})
   deleteInventoryItemApi.mockResolvedValue({ ok: true, message: 'Deleted player item.' })

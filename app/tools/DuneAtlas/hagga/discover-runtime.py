@@ -25,8 +25,8 @@ if not identity:raise RuntimeError('Hagga server is not running yet')
 pid=int(identity[1]);start=re.search(r'^START (\d+)',layout,re.M)[1]
 digest=re.search(r'^([0-9a-f]{64})\s+',layout,re.M)
 if not digest:raise RuntimeError('Server executable identity unavailable')
-build=atlas_builds.profile(R,digest[1]);EXPECTED=digest[1]
 base=int(next(line.split('-')[0] for line in layout.splitlines() if '/home/dune/server/' in line and ' r-xp ' in line),16)
+build=atlas_builds.profile(R,digest[1],runtime={'pid':pid,'started':start,'base':base,'maps':layout,'remote':remote});EXPECTED=digest[1]
 pooloffset=build['namePoolTableOffset']
 syms=build['symbols'];names=['_ZTV17USandStormManager','_ZTV18USandwormSubsystem','_ZTV23UResourceFieldSubsystem','_ZTV13ASandwormPawn','_ZTV18USandStormSettings'];needles={n:base+syms[n]+16 for n in names};records=[]
 for line in layout.splitlines():

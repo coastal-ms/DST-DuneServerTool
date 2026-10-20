@@ -10,6 +10,23 @@ function fixture() {
     stormHistory: [{ map: 'DeepDesert', pid: 11, startTime: '22', capturedAt: '2026-10-18T09:15:00Z', storms: [{ total: 900, remaining: 300 }] }] }
 }
 describe('storm timing guide', () => {
+  it('keeps map controls and timing labels as valid original Unicode', () => {
+    expect(html).toContain('☷ Layers')
+    expect(html).toContain('↗ Pop out')
+    expect(html).toContain('Next storm ≈ ')
+    expect(html).toContain('Recorded storm trails')
+    expect(html).not.toMatch(/Â|â€|â†|â˜/)
+    expect(html).not.toContain('Storm pass · ')
+  })
+  it('shows the latest two server-recorded starts after a collection gap', () => {
+    const current: any = fixture()
+    current.stormHistory = []
+    current.native.stormSchedule.recentSpawnAts = ['2026-10-18T08:10:00Z', '2026-10-18T09:10:00Z']
+    current.native.stormSchedule.lastSpawnAt = '2026-10-18T09:10:00Z'
+    const result = guide(current, 'DeepDesert', now)
+    expect(result.recentStarts).toEqual([Date.parse('2026-10-18T09:10:00Z'), Date.parse('2026-10-18T08:10:00Z')])
+    expect(result.latestAt).toBe(Date.parse('2026-10-18T10:15:00Z'))
+  })
   it('uses the observed start and current spawn range for a time window', () => {
     const result = guide(fixture(), 'DeepDesert', now)
     expect(result.lastStartedAt).toBe(Date.parse('2026-10-18T09:05:00Z'))

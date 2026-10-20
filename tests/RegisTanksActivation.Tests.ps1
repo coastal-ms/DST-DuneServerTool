@@ -5,7 +5,7 @@ BeforeAll {
     function global:Assert-DuneRetailKubernetesName { param($Value,$Label) }
     function global:Resolve-DuneRetailServerSettingsTarget { param($Ip) }
     function global:Invoke-DuneRegisTankShell { param($Ip,$Script) }
-    function global:New-DuneRegisTankServerImage { param($Ip) }
+    function global:New-DuneRegisTankServerImage { param($Ip,$Build) }
 }
 Describe 'Regis Tank activation and rollback' {
     BeforeEach {
@@ -56,6 +56,31 @@ Describe 'Regis Tank activation and rollback' {
         Mock Invoke-DuneRegisTankShell { '{"namespace":"different","battlegroup":"different","originalImage":"other"}' }
         { Set-DuneRegisTankCompatibility -Ip test -Enabled $true } | Should -Throw '*does not match*'
         Should -Invoke New-DuneRegisTankServerImage -Times 0
+    }
+    It 'prepares the current patch without downgrading its official rollback image' {
+        $script:Image='registry.funcom.com/funcom/self-hosting/seabass-server:2156652-0-shipping'
+        Mock New-DuneRegisTankServerImage { @{verified=$true;tag='localhost/dst-regis-tanks:2156652-1'} }
+        Mock Invoke-DuneRegisTankShell {
+            $script:Scripts += $Script
+            if ($Script -like '*--patch-file*') { $script:Image='localhost/dst-regis-tanks:2156652-1' }
+            elseif ($Script.StartsWith('if [ -f')) { return '{"namespace":"test-bg","battlegroup":"test-world","originalImage":"registry.funcom.com/funcom/self-hosting/seabass-server:2147284-0-shipping"}' }
+            ''
+        }
+        (Set-DuneRegisTankCompatibility -Ip test -Enabled $true).enabled | Should -BeTrue
+        Should -Invoke New-DuneRegisTankServerImage -Times 1 -ParameterFilter { $Build -ceq '2156652' }
+        $saved = $script:Scripts | Where-Object { $_ -like '*state-test-world.json.pending*' }
+        $encoded = [regex]::Match($saved,"printf %s '([^']+)'").Groups[1].Value
+        $state = [Text.Encoding]::UTF8.GetString([Convert]::FromBase64String($encoded)) | ConvertFrom-Json
+        $state.originalImage | Should -Be 'registry.funcom.com/funcom/self-hosting/seabass-server:2156652-0-shipping'
+    }
+    It 'restores the matching current official build when disabling current Tanks' {
+        $script:Image='localhost/dst-regis-tanks:2156652-1'
+        Mock Invoke-DuneRegisTankShell {
+            if ($Script -like '*--patch-file*') { $script:Image='registry.funcom.com/funcom/self-hosting/seabass-server:2156652-0-shipping' }
+            ''
+        }
+        (Set-DuneRegisTankCompatibility -Ip test -Enabled $false -AcknowledgeStoredTanks).enabled | Should -BeFalse
+        $script:Image | Should -Be 'registry.funcom.com/funcom/self-hosting/seabass-server:2156652-0-shipping'
     }
     It 'automatically prepares support on the official build and skips an already managed image' {
         Initialize-DuneRegisTanksForStartup -Ip test | Out-Null

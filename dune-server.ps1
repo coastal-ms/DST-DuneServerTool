@@ -695,7 +695,11 @@ function Test-DuneCliVmIp {
 }
 
 function Resolve-DuneCliVmIp {
-    $ip = (Get-VMNetworkAdapter -VMName $vmName @hvSplat).IPAddresses |
+    param([AllowEmptyCollection()][string[]]$Addresses)
+    if (-not $PSBoundParameters.ContainsKey('Addresses')) {
+        $Addresses = @((Get-VMNetworkAdapter -VMName $vmName @hvSplat).IPAddresses)
+    }
+    $ip = $Addresses |
           Where-Object { $_ -match '^\d+\.\d+\.\d+\.\d+$' } |
           Select-Object -First 1
     if ($ip) { return [string]$ip }
@@ -716,8 +720,47 @@ function Resolve-DuneCliVmIp {
     return $fallback
 }
 
+function Get-DuneCliLanVmSnapshot {
+    param([string]$Name, [hashtable]$HyperV)
+    if ($HyperV.Credential -isnot [System.Management.Automation.PSCredential]) {
+        throw 'The saved Hyper-V host credential is unavailable. Check Hyper-V over LAN in Settings. The command was not sent.'
+    }
+    try {
+        $option = New-PSSessionOption -OpenTimeout 8000 -OperationTimeout 8000
+        return Invoke-Command -ComputerName $HyperV.ComputerName -Credential $HyperV.Credential -SessionOption $option -ArgumentList $Name -ScriptBlock {
+            param($name)
+            $vm = Get-VM -Name $name -ErrorAction SilentlyContinue
+            $addresses = if ($vm -and $vm.State -eq 'Running') { @((Get-VMNetworkAdapter -VMName $name -ErrorAction Stop).IPAddresses) } else { @() }
+            @{ Exists=[bool]$vm; State=$(if($vm){[string]$vm.State}else{'Missing'}); IPAddresses=$addresses }
+        } -ErrorAction Stop
+    } catch {
+        $remoteError = $_.Exception.Message
+        $session = $null
+        try {
+            # Preserve hosts that allow Hyper-V CIM but deny PowerShell remoting.
+            # An explicit session supplies a timeout instead of unbounded discovery.
+            $option = New-CimSessionOption -Protocol Dcom
+            $session = New-CimSession -ComputerName $HyperV.ComputerName -Credential $HyperV.Credential -SessionOption $option -OperationTimeoutSec 8 -ErrorAction Stop
+            $vm = Get-VM -Name $Name -CimSession $session -ErrorAction Stop
+            $addresses = if ($vm.State -eq 'Running') { @((Get-VMNetworkAdapter -VMName $Name -CimSession $session -ErrorAction Stop).IPAddresses) } else { @() }
+            return @{ Exists=[bool]$vm; State=[string]$vm.State; IPAddresses=$addresses }
+        } catch {
+            throw "Could not discover the VM on the Hyper-V host. PowerShell connection: $remoteError. Hyper-V query: $($_.Exception.Message). The command was not sent."
+        } finally {
+            if ($session) { Remove-CimSession -CimSession $session -ErrorAction SilentlyContinue }
+        }
+    }
+}
+
 function Get-VmInfo {
-    $vm = Get-VM -Name $vmName @hvSplat -ErrorAction SilentlyContinue
+    param([hashtable]$HyperV = $hvSplat, [string]$Name = $vmName)
+    if ($HyperV.ComputerName) {
+        $snapshot = Get-DuneCliLanVmSnapshot -Name $Name -HyperV $HyperV
+        $running = $snapshot.Exists -and $snapshot.State -eq 'Running'
+        $ip = if ($running) { Resolve-DuneCliVmIp -Addresses @($snapshot.IPAddresses) } else { $null }
+        return @{ Exists=[bool]$snapshot.Exists; State=$snapshot.State; Running=$running; Ip=$ip }
+    }
+    $vm = Get-VM -Name $Name @HyperV -ErrorAction SilentlyContinue
     $exists  = [bool]$vm
     $state   = if ($exists) { $vm.State } else { 'Missing' }
     $running = $exists -and $vm.State -eq 'Running'
@@ -1670,6 +1713,10 @@ while ($true) {
     if ($Cmd -and $cmdHasRun) { break }
     if ($Cmd) { $cmdHasRun = $true }
 
+    if ($Cmd) {
+        $where = if ($hvComputer) { "Hyper-V host $hvComputer" } else { 'this PC' }
+        Write-Host "Checking VM on $where before '$Cmd'..." -ForegroundColor Cyan
+    }
     $info = Get-VmInfo
 
     # Build entries list

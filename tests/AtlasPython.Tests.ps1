@@ -4,6 +4,28 @@ BeforeAll {
 }
 
 Describe 'Private Atlas interpreter staging' {
+    It 'downloads on first use and reuses its private cache offline' {
+        $sourceRoot = Join-Path $TestDrive 'download-source'
+        $cacheRoot = Join-Path $TestDrive 'new-user'
+        New-Item -ItemType Directory -Path $sourceRoot -Force | Out-Null
+        $fixture = Join-Path $TestDrive 'archive-source'
+        New-Item -ItemType Directory -Path $fixture -Force | Out-Null
+        [IO.File]::WriteAllText((Join-Path $fixture 'python.exe'), 'test runtime')
+        $archive = Join-Path $TestDrive 'runtime.zip'
+        Compress-Archive -LiteralPath (Join-Path $fixture 'python.exe') -DestinationPath $archive
+        @{schemaVersion=1;version='3.14.8';architecture='amd64';url='https://www.python.org/test.zip';archiveSha256=(Get-FileHash $archive).Hash;files=@{'python.exe'=(Get-FileHash (Join-Path $fixture 'python.exe')).Hash}} |
+            ConvertTo-Json -Depth 5 | Set-Content (Join-Path $sourceRoot 'python-runtime.json')
+        $script:AtlasPythonFixtureArchive=$archive
+        Mock Invoke-WebRequest { Copy-Item -LiteralPath $script:AtlasPythonFixtureArchive -Destination $OutFile }
+        $savedLocal=$env:LOCALAPPDATA
+        try {
+            $env:LOCALAPPDATA=$cacheRoot
+            $first=Get-DuneAtlasManagedPython -SourceRoot $sourceRoot
+            Test-Path -LiteralPath $first | Should -BeTrue
+            Get-DuneAtlasManagedPython -SourceRoot $sourceRoot | Should -BeExactly $first
+            Should -Invoke Invoke-WebRequest -Times 1 -Exactly
+        } finally {$env:LOCALAPPDATA=$savedLocal}
+    }
     BeforeEach {
         $source = Join-Path $TestDrive ([guid]::NewGuid().ToString())
         $runtime = Join-Path $TestDrive ([guid]::NewGuid().ToString())

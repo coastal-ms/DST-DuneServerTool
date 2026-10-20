@@ -58,7 +58,7 @@ def collect_native(root,run=execute):
  root=Path(root)
  atlas_readers.ensure(root)
  if not run(root,'snapshot-native.py',120):
-  if not run(root,'discover-runtime.py',80) or not run(root,'snapshot-native.py',120):
+  if not run(root,'discover-runtime.py',300) or not run(root,'snapshot-native.py',120):
    raise RuntimeError('Native observation unavailable for this server build or process')
  value=json.loads((root/'native-snapshot-current.json').read_text())
  context=json.loads((root/'runtime-context.json').read_text())

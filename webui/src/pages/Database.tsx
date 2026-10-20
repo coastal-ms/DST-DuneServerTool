@@ -40,7 +40,9 @@ import type {
   BackupHistory,
   BackupDumpPodList,
 } from '../api/types'
-import Editor, { type OnMount } from '@monaco-editor/react'
+import Editor, { loader, type OnMount } from '@monaco-editor/react'
+
+loader.config({ paths: { vs: '/vendor/monaco/vs' } })
 
 type CmdLaunch = { ok: boolean; name: string; pid?: number; mode: string }
 type FixMapsResult = { ok: boolean; output?: string; logTail?: string; message?: string }

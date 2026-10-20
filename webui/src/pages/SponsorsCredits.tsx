@@ -62,6 +62,25 @@ export function SponsorsCredits() {
           {' '}(<span className="font-mono">@drkshrk</span>) for the seed-0 spice pool.
         </p>
       </section>
+
+      <section aria-labelledby="map-art-title" className="border-t border-border py-7 sm:py-9">
+        <h2 id="map-art-title" className="text-lg font-semibold text-text">Map Artwork</h2>
+        <p className="mt-2 text-sm leading-6 text-text-muted">
+          Game artwork © Funcom Oslo AS.{' '}
+          <a href="https://www.funcom.com/" target="_blank" rel="noopener noreferrer" className="text-accent hover:underline">Funcom</a>{' '}·{' '}
+          <a href="https://www.funcom.com/legal/" target="_blank" rel="noopener noreferrer" className="text-accent hover:underline">Fan-use policy</a>.
+        </p>
+        <p className="mt-2 text-sm leading-6 text-text-muted">
+          Funcom and Epic Games retain all rights to their respective artwork and proprietary materials. DST claims no ownership of those materials and grants no permission to reuse them. Vehicle artwork from{' '}
+          <a href="https://awakening.wiki/Vehicles/sv" target="_blank" rel="noopener noreferrer" className="text-accent hover:underline">Awakening Wiki</a>,{' '}
+          used under{' '}
+          <a href="https://creativecommons.org/licenses/by-nc-sa/4.0/" target="_blank" rel="noopener noreferrer" className="text-accent hover:underline">CC BY-NC-SA 4.0</a>.
+        </p>
+      </section>
+      <section aria-labelledby="component-licenses-title" className="border-t border-border py-7 sm:py-9">
+        <h2 id="component-licenses-title" className="text-lg font-semibold text-text">Open-source Components</h2>
+        <a href="/THIRD-PARTY-NOTICES.txt" target="_blank" rel="noopener noreferrer" className="mt-2 inline-block text-sm text-accent hover:underline">Component licenses and copyright notices</a>
+      </section>
     </div>
   )
 }

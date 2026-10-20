@@ -53,11 +53,14 @@ class ReaderTests(unittest.TestCase):
             (root / 'runtime-context.json').write_text(json.dumps({'pid': 22, 'startTime': 'new'}))
             (root / 'native-snapshot-current.json').write_text(json.dumps({'pid': 22, 'startTime': 'new'}))
             calls = []
+            budgets = []
             def run(root, name, timeout):
                 calls.append(name)
+                budgets.append(timeout)
                 return len(calls) != 1
             self.assertEqual(runtime.collect_native(root, run)['pid'], 22)
             self.assertEqual(calls, ['snapshot-native.py', 'discover-runtime.py', 'snapshot-native.py'])
+            self.assertEqual(budgets, [120, 300, 120])
             (root / 'native-snapshot-current.json').write_text(json.dumps({'pid': 21, 'startTime': 'old'}))
             with self.assertRaisesRegex(RuntimeError, 'another process'):
                 runtime.collect_native(root, lambda *args: True)

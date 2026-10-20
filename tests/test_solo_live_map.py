@@ -16,6 +16,18 @@ spec.loader.exec_module(server)
 
 
 class SoloMapTests(unittest.TestCase):
+    def test_clean_solo_terrain_uses_permanent_layout_and_preserves_override(self):
+        with tempfile.TemporaryDirectory() as folder:
+            root = Path(folder)
+            preferred = root / 'terrain.webp'
+            cached = root / 'dd-layout-11.webp'
+            with patch.object(server.atlas_assets, 'icon_path', return_value=cached) as fetch:
+                self.assertEqual(server.terrain_path(preferred, root), cached)
+                fetch.assert_called_once_with('dd-layout-11.webp', root, server.ROOT / 'icons')
+            preferred.write_bytes(b'operator background')
+            with patch.object(server.atlas_assets, 'icon_path', side_effect=AssertionError('No replacement')):
+                self.assertEqual(server.terrain_path(preferred, root), preferred)
+
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory()
         self.root = Path(self.temp.name)

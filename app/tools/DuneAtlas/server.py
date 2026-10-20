@@ -32,7 +32,7 @@ except Exception:
 legacy_roots=[ROOT]
 if ROOT.parent.name=='runtimes':legacy_roots+=sorted(ROOT.parent.iterdir())[:32]
 history_frames,storm_profiles=atlas_history.load(SNAPSHOT_ROOT,legacy_roots)
-storm_history=deque(history_frames,maxlen=500)
+storm_history=deque(history_frames,maxlen=501)
 state['stormHistory']=list(storm_history)
 state['stormProfiles']=storm_profiles
 try:state['baseModels']=json.loads((ROOT/'base-models-current.json').read_text())
@@ -103,6 +103,8 @@ def collect_worms_once(region="DeepDesert"):
             observed={'map':region,'pid':feed['pid'],'startTime':feed.get('startTime'),'capturedAt':feed['capturedAt'],'storms':feed['storms']}
             with lock:
                 storm_history.append(observed)
+                retained=atlas_history.compact(storm_history)
+                storm_history.clear();storm_history.extend(retained)
                 atlas_history.save(SNAPSHOT_ROOT,storm_history,storm_profiles)
         with lock:state.update({feed_key:feed,error_key:None,"stormHistory":list(storm_history)})
     except atlas_process.Cancelled:

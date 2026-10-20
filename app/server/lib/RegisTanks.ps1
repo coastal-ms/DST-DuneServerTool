@@ -32,11 +32,19 @@ function Get-DuneRegisTankSupport {
     $quoted = @($expected.Keys | Sort-Object | ForEach-Object { "'$_'" }) -join ' '
     $hashes = Invoke-V6Ssh -Ip $Ip -Cmd "sudo kubectl -n '$($target.namespace)' exec '$($pod.metadata.name)' -- sha256sum $quoted" -TimeoutSec 30
     $matched = @{}
+    $supportedBinaries = @{
+        '240b4bb378a93b70134fa685fc467bc2ae94fd40d81da2feea0f987758bc9126' = '2147284'
+        '3e8966850e911826f4e5339dea5b3830a71e037acc9b0ed400bc9f0e21e6e318' = '2156652'
+    }
+    $build = ''
     foreach ($line in $hashes) {
-        if ("$line" -match '^([a-f0-9]{64})\s+(.+)$' -and $expected.ContainsKey($matches[2]) -and $expected[$matches[2]] -ceq $matches[1]) { $matched[$matches[2]] = $true }
+        if ("$line" -notmatch '^([a-f0-9]{64})\s+(.+)$') { continue }
+        $digest = $matches[1]; $path = $matches[2]
+        if ($path -ceq $binary -and $supportedBinaries.ContainsKey($digest)) { $matched[$path] = $true; $build = $supportedBinaries[$digest] }
+        elseif ($path -cne $binary -and $expected.ContainsKey($path) -and $expected[$path] -ceq $digest) { $matched[$path] = $true }
     }
     if ($matched.Count -ne $expected.Count) { return @{ enabled = $false; message = 'Regis Tank compatibility is not enabled for this server build.' } }
-    return @{ enabled = $true; build = '2147284'; map = $map; message = 'Regis Tank compatibility is enabled.' }
+    return @{ enabled = $true; build = $build; map = $map; message = 'Regis Tank compatibility is enabled.' }
 }
 
 function Invoke-DuneRegisTankGrant {

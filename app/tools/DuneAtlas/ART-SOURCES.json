@@ -1,0 +1,238 @@
+{
+  "gameArtCopyright": "Funcom Oslo AS",
+  "vehicleArtSource": "https://awakening.wiki/Vehicles/sv",
+  "vehicleArtLicense": "https://creativecommons.org/licenses/by-nc-sa/4.0/",
+  "files": [
+    {
+      "file": "game-azurite.png",
+      "sha256": "809207355e3c1ef5314f23208edf62dae9714ce20a1cacec968c07ed5c9e1522",
+      "copyright": "Game art © Funcom"
+    },
+    {
+      "file": "game-basalt.png",
+      "sha256": "e55b72f8c32646085b1c8cace33502adc689eaee56023bcf9449c6cd3445c97e",
+      "copyright": "Game art © Funcom"
+    },
+    {
+      "file": "game-bauxite.png",
+      "sha256": "945899e174815822bf1e98439e248301719a534d1d77a17e7de377e55e1e6d66",
+      "copyright": "Game art © Funcom"
+    },
+    {
+      "file": "game-bene.png",
+      "sha256": "b48ff1e46d6c1b0f373e0a210b58a4052afc972a1145b36318fc7f8230fcf71a",
+      "copyright": "Game art © Funcom"
+    },
+    {
+      "file": "game-cave.png",
+      "sha256": "e62458510225c00f84769b3c696bcc55c5152d0c3215204a9450d97add02e89d",
+      "copyright": "Game art © Funcom"
+    },
+    {
+      "file": "game-contact.png",
+      "sha256": "417f9a03928d88fdf7d6c1f3c38e21d5d72ee4a04e12357077b68ba584d870f4",
+      "copyright": "Game art © Funcom"
+    },
+    {
+      "file": "game-dolomite.png",
+      "sha256": "47884068d9be30332162c4f491cecddd29bdf23b3f1a3576e972341e3aaa5f09",
+      "copyright": "Game art © Funcom"
+    },
+    {
+      "file": "game-drumsand.png",
+      "sha256": "19a3ff7dd49edc829d54e1eebfc564a3f2abe0fda861e621b4d771b28af8288f",
+      "copyright": "Game art © Funcom"
+    },
+    {
+      "file": "game-encounter.png",
+      "sha256": "1bf8ba964003bdad5d41ddb123f39f5ed3d0ab9bc09fb11a83c26b4f22d7e0d3",
+      "copyright": "Game art © Funcom"
+    },
+    {
+      "file": "game-enemy.png",
+      "sha256": "90703942a44a962e342c9af4a410961ddfae350c5e43a9f5772447f6e5e9b9ce",
+      "copyright": "Game art © Funcom"
+    },
+    {
+      "file": "game-erythrite.png",
+      "sha256": "821f76fd2fd06d0ceb225f3d60c53d40f81cea465aedc098915e6d2dce223e49",
+      "copyright": "Game art © Funcom"
+    },
+    {
+      "file": "game-fuel.png",
+      "sha256": "0f7ec9e1723ae6e30a25c2e3fa1925bd33ca470408b248a133e502313c223c84",
+      "copyright": "Game art © Funcom"
+    },
+    {
+      "file": "game-intel.png",
+      "sha256": "beab8559936beda89813c74ac299882754f7d7d70ed3c1426fb51f1da8a2be5c",
+      "copyright": "Game art © Funcom"
+    },
+    {
+      "file": "game-jasmium.png",
+      "sha256": "9f0dadf84cb0cd019619727d6c994014ff9fea7f97a161203c1e77ed359e41b1",
+      "copyright": "Game art © Funcom"
+    },
+    {
+      "file": "game-lab.png",
+      "sha256": "6d92d38024e9bd7f68a6847b974ce2b96258b713c993828b4c4db215f45f4b1b",
+      "copyright": "Game art © Funcom"
+    },
+    {
+      "file": "game-landmark.png",
+      "sha256": "c4478f581bf17442dad7443a1961b5ca5e6029ed79ad9a4ceead72fa947a604d",
+      "copyright": "Game art © Funcom"
+    },
+    {
+      "file": "game-magnetite.png",
+      "sha256": "e801d352db60513ae7cefeac52c8e64278bd40d689d315f874e5d999443686e7",
+      "copyright": "Game art © Funcom"
+    },
+    {
+      "file": "game-mentat.png",
+      "sha256": "b53e40f12b212ab80e42967ffdc41087935d460adddd5f703e0ca36184a29041",
+      "copyright": "Game art © Funcom"
+    },
+    {
+      "file": "game-ore.png",
+      "sha256": "e801d352db60513ae7cefeac52c8e64278bd40d689d315f874e5d999443686e7",
+      "copyright": "Game art © Funcom"
+    },
+    {
+      "file": "game-planetologist.png",
+      "sha256": "1929c1c6fa39682de77788564934a9b0eb2d225dfdec6f432f3e5d197a3dec1c",
+      "copyright": "Game art © Funcom"
+    },
+    {
+      "file": "game-plant.png",
+      "sha256": "a637f1575b7bed070dcd85bc1b1afd97f842c44bb4aa99f4d22fda81b01aa753",
+      "copyright": "Game art © Funcom"
+    },
+    {
+      "file": "game-quicksand.png",
+      "sha256": "0bcfb7294a86ffc4a90b4cde53f8b3cc1af6a7f7310f534a669a7e7a0e3dba23",
+      "copyright": "Game art © Funcom"
+    },
+    {
+      "file": "game-rhyolite.png",
+      "sha256": "b85df551ad4b83bcc2f8f4283b37782623284e958272d8ebf53898eb0c1daa24",
+      "copyright": "Game art © Funcom"
+    },
+    {
+      "file": "game-saguaro.png",
+      "sha256": "0d28479ba955db4393c40649023d8e6575828ba50511de04ce4677a62ce1e8cf",
+      "copyright": "Game art © Funcom"
+    },
+    {
+      "file": "game-scrap.png",
+      "sha256": "cb5a52509b2c7c86a594ff697f503918e206d65b9e8af22f0daf06f3491fed31",
+      "copyright": "Game art © Funcom"
+    },
+    {
+      "file": "game-sietch.png",
+      "sha256": "8bc0989ba8c23be2c2f9462d5d118326d09c587961cd9e37fbd4cf742b2f8a65",
+      "copyright": "Game art © Funcom"
+    },
+    {
+      "file": "game-stravidium.png",
+      "sha256": "f7dac81e459fe8d07c537cf59c189044089fb449aeffcf53230d95fbbb9e0d47",
+      "copyright": "Game art © Funcom"
+    },
+    {
+      "file": "game-survey.png",
+      "sha256": "beab8559936beda89813c74ac299882754f7d7d70ed3c1426fb51f1da8a2be5c",
+      "copyright": "Game art © Funcom"
+    },
+    {
+      "file": "game-swordmaster.png",
+      "sha256": "fd021de6be339f3bfea9ac73e50a3c8fcd6806340f12a0852a1db882f6042b33",
+      "copyright": "Game art © Funcom"
+    },
+    {
+      "file": "game-taxi.png",
+      "sha256": "b8f9ed40bb9e8620258c95942fe35b82268f01c693404717b19571a6e72fabf3",
+      "copyright": "Game art © Funcom"
+    },
+    {
+      "file": "game-titanium.png",
+      "sha256": "43c2e5f7ee52968ac94dc631e603acd8e1cdaf9bf188af958a8a7cd55ee07f65",
+      "copyright": "Game art © Funcom"
+    },
+    {
+      "file": "game-trade.png",
+      "sha256": "b4a8a91e03b7d38f098e5cc702978aca5e4fc25f17a0b76e85f155cc265cfdc9",
+      "copyright": "Game art © Funcom"
+    },
+    {
+      "file": "game-trainer.png",
+      "sha256": "dd74186d11ff2c9dca9a30f9f9d82939ff8cb0b0beed5d494359126d8435c5d3",
+      "copyright": "Game art © Funcom"
+    },
+    {
+      "file": "game-wreck.png",
+      "sha256": "93e1e8502ebe3a6f9a310aa0016f670e4ad3b2594ebbcd938b66f7c89743aa72",
+      "copyright": "Game art © Funcom"
+    },
+    {
+      "file": "live-worm.png",
+      "sha256": "1ff0df57aa8138d72cb64d076f208cc772ba311c21e3d3da25962b910abed29b",
+      "copyright": "Game art © Funcom"
+    },
+    {
+      "file": "vehicle-assault.png",
+      "sha256": "84425c3d9cb712ddeb476ea2c571aa6a99213c90d6bcc67ed5f832ab905028b6",
+      "copyright": "Game art © Funcom",
+      "source": "https://media.awakening.wiki/wiki/3/32/T_UI_IconVehCHOrniMediumR_D.png",
+      "license": "CC BY-NC-SA 4.0",
+      "modified": false
+    },
+    {
+      "file": "vehicle-buggy.png",
+      "sha256": "d028025b88a2effbc9fd64f002da8d83793d439ebcefb7151b87fd1578d785e0",
+      "copyright": "Game art © Funcom",
+      "source": "https://media.awakening.wiki/wiki/f/f4/T_UI_IconVehCHBuggyR_D.png",
+      "license": "CC BY-NC-SA 4.0",
+      "modified": false
+    },
+    {
+      "file": "vehicle-carrier.png",
+      "sha256": "390969e40cdaca013e35c8813341967cc7bbf1e3eac90050ae72b3695655fdb1",
+      "copyright": "Game art © Funcom",
+      "source": "https://media.awakening.wiki/wiki/d/d3/T_UI_IconVehCHOrniTransportR_D.png",
+      "license": "CC BY-NC-SA 4.0",
+      "modified": false
+    },
+    {
+      "file": "vehicle-sandbike.png",
+      "sha256": "4349456756c42fb4987f2396d9a94a277d3c4680d54e3312a09bc2aeef9d8350",
+      "copyright": "Game art © Funcom",
+      "source": "https://media.awakening.wiki/wiki/9/92/T_UI_IconVehCHSandBikeR_D.png",
+      "license": "CC BY-NC-SA 4.0",
+      "modified": false
+    },
+    {
+      "file": "vehicle-sandcrawler.png",
+      "sha256": "44b6c94c4cbdac2ecec9abbe81d921ccc2be700b3aea318dc345cdbd9f70bac6",
+      "copyright": "Game art © Funcom",
+      "source": "https://media.awakening.wiki/wiki/0/0b/T_UI_IconVehCHSandCrawlerR_D.png",
+      "license": "CC BY-NC-SA 4.0",
+      "modified": false
+    },
+    {
+      "file": "vehicle-scout.png",
+      "sha256": "9f1faf6c3f57b733457543814a482beefecb4a9f20dc346e63d4aa1faa522537",
+      "copyright": "Game art © Funcom",
+      "source": "https://media.awakening.wiki/wiki/c/c1/T_UI_IconVehCHOrniLightR_D.png",
+      "license": "CC BY-NC-SA 4.0",
+      "modified": false
+    },
+    {
+      "file": "vehicle-treadwheel.png",
+      "sha256": "4f421ab7df0d2561d6650d6bf548ad943b8968da11e29908d1f30e095174ef26",
+      "copyright": "Game art © Funcom",
+      "source": "https://media.awakening.wiki/wiki/c/c5/T_UI_IconVehOETreadwheelR_D.png",
+      "license": "CC BY-NC-SA 4.0",
+      "modified": false
+    }
+  ]
+}

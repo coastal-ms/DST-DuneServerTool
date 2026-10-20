@@ -9,6 +9,11 @@ def line(stamp,region='DeepDesert',prefix=''):
  return f'[{text}][543][939][8]{prefix}LogSandStormManager: Log: Requested a Sandstorm auto-spawn on [{region}] Server 8 Dimension 0'
 
 class StormTimingTests(unittest.TestCase):
+ def test_returns_two_distinct_starts_in_time_order(self):
+  now=datetime.datetime(2026,10,18,10,tzinfo=UTC)
+  stamps=[now-datetime.timedelta(minutes=n) for n in (130,70,10)]
+  text='PROCESSSTART '+str(now.timestamp()-14400)+'\n'+'\n'.join(line(t) for t in stamps+[stamps[-1]])
+  self.assertEqual(timing.parse_starts(text,'DeepDesert',now),[t.isoformat() for t in stamps[-2:]])
  def test_selects_latest_automatic_spawn_for_this_world(self):
   now=datetime.datetime(2026,10,18,10,tzinfo=UTC);start=now.timestamp()-7200
   older=now-datetime.timedelta(minutes=50);latest=now-datetime.timedelta(minutes=10)
