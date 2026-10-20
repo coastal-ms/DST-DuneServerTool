@@ -37,7 +37,7 @@ describe('Browser Portal role access', () => {
   it('gives Players no server-command access', () => {
     expect(resolvePortalAccess(false, true, 'player').isPlayer).toBe(true)
     expect(resolvePortalAccess(false, true, 'player').canAccessOwnerSurfaces).toBe(false)
-    for (const command of ['start', 'restart', 'startup', 'apply-inis', 'update', 'reboot']) {
+    for (const command of ['start', 'restart', 'startup', 'apply-inis', 'update', 'update-with-tanks', 'reboot']) {
       expect(canAccessCommand(command, false, 'player')).toBe(false)
     }
   })
@@ -59,6 +59,9 @@ describe('Browser Portal role access', () => {
     expect(canAccessCommand('update', false, 'owner')).toBe(true)
     expect(canAccessCommand('update', false, 'admin')).toBe(false)
     expect(canAccessCommand('update', false, null)).toBe(false)
+    expect(canAccessCommand('update-with-tanks', false, 'owner')).toBe(true)
+    expect(canAccessCommand('update-with-tanks', false, 'admin')).toBe(false)
+    expect(canAccessCommand('update-with-tanks', false, null)).toBe(false)
     expect(canAccessCommand('restart', false, 'admin')).toBe(true)
   })
 })

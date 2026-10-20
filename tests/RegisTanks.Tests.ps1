@@ -1,4 +1,4 @@
-BeforeAll {
+﻿BeforeAll {
     . (Join-Path $PSScriptRoot '_TestHelpers.ps1')
     Import-DstLib 'RegisTanks.ps1'
     Import-DstLib 'Gameplay.ps1'
@@ -26,13 +26,16 @@ Describe 'Native Regis Tank controls' {
         Mock Invoke-V6Ssh { @("240b4bb378a93b70134fa685fc467bc2ae94fd40d81da2feea0f987758bc9126  $script:TankBinary", "240b4bb378a93b70134fa685fc467bc2ae94fd40d81da2feea0f987758bc9126  $script:TankBinary") } -ParameterFilter { $Cmd -like '*sha256sum*' }
         (Get-DuneRegisTankSupport -Ip test -ActorId 544).enabled | Should -BeFalse
     }
-    It 'recognizes the current patched executable only with the complete unchanged overlay' {
+    It 'recognizes patched builds only with the complete unchanged overlay' -ForEach @(
+        @{Hash='3e8966850e911826f4e5339dea5b3830a71e037acc9b0ed400bc9f0e21e6e318';Build='2156652'},
+        @{Hash='e10c49bd69e3ae8e3eccce3049326d04c4c0e750f767587749429a95ae7f574b';Build='2160922'}
+    ) {
         Mock Invoke-V6Ssh {
-            @("3e8966850e911826f4e5339dea5b3830a71e037acc9b0ed400bc9f0e21e6e318  $script:TankBinary", "75e7144577253917f6da7312ef5e585b12fb728226a22b0938323751a6b555cd  $script:TankOverlay.pak", "13011a68170df5a9320782691768b0b0bd568610bc682ec1979e979de534c01e  $script:TankOverlay.ucas", "12781c923dcace79204bfecaf0ff4ea49c41ec6a07e68fe81fd3feb96767ced5  $script:TankOverlay.utoc")
+            @("$Hash  $script:TankBinary", "75e7144577253917f6da7312ef5e585b12fb728226a22b0938323751a6b555cd  $script:TankOverlay.pak", "13011a68170df5a9320782691768b0b0bd568610bc682ec1979e979de534c01e  $script:TankOverlay.ucas", "12781c923dcace79204bfecaf0ff4ea49c41ec6a07e68fe81fd3feb96767ced5  $script:TankOverlay.utoc")
         } -ParameterFilter { $Cmd -like '*sha256sum*' }
         $support=Get-DuneRegisTankSupport -Ip test -ActorId 544
         $support.enabled | Should -BeTrue
-        $support.build | Should -Be '2156652'
+        $support.build | Should -Be $Build
     }
     It 'does not probe or grant on a different player map' {
         Mock Invoke-DuneSqlQuery { @{ok=$true;columns=@('map');rows=@(,@('DeepDesert'))} }

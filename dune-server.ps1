@@ -21,7 +21,7 @@ param(
 # Wraps the original battlegroup.ps1 menu and adds extra tools
 # ============================================================
 
-$script:ToolVersion = "16.5.1"
+$script:ToolVersion = "16.5.2"
 
 # Cold-boot readiness budgets (seconds). A fresh battlegroup's FIRST boot can
 # take 10-30 min: k3s + funcom-operators initialize, metrics-server restarts a
@@ -1327,26 +1327,29 @@ function Invoke-OnDemandPartitionClear {
 }
 
 function Sync-DuneTankUpdateImage {
-    param([Parameter(Mandatory)][string]$Ip)
+    param([Parameter(Mandatory)][string]$Ip, [Nullable[int]]$UpdateExitCode, [string[]]$UpdateOutput, [switch]$BeforeUpdate, [scriptblock]$TankUpdate)
+    $completeUpdate = $PSBoundParameters.ContainsKey('UpdateExitCode')
     $root = @($scriptDir, (Join-Path $scriptDir 'app')) | Where-Object {
         Test-Path -LiteralPath (Join-Path $_ 'server\lib\RegisTanksActivation.ps1')
     } | Select-Object -First 1
     if (-not $root) { throw 'Server update support library is missing. Reinstall DST.' }
     & {
-        param($Root, $VmIp, $KeyPath)
+        param($Root, $VmIp, $KeyPath, $CompleteUpdate, $ExitCode, $OutputLines, $Preflight, $Updater)
         . (Join-Path $Root 'lib\Db-Postgres.ps1')
         . (Join-Path $Root 'lib\K8s.ps1')
         . (Join-Path $Root 'server\lib\RetailServerSettings.ps1')
         . (Join-Path $Root 'server\lib\RegisTanksBuild.ps1')
         . (Join-Path $Root 'server\lib\RegisTanksActivation.ps1')
         $script:V6SshKeyCache = $KeyPath
-        $null = Sync-DuneRegisTankServerUpdate -Ip $VmIp
-    } $root $Ip $sshKey
+        if ($Updater) { $result = Invoke-DuneRegisTankPreservingUpdate -Ip $VmIp -Update $Updater; Write-Host $result.message }
+        elseif ($Preflight) { Prepare-DuneRegisTankServerUpdate -Ip $VmIp }
+        elseif ($CompleteUpdate) { $null = Complete-DuneRegisTankServerUpdate -Ip $VmIp -UpdateExitCode $ExitCode -UpdateOutput $OutputLines }
+        else { $null = Sync-DuneRegisTankServerUpdate -Ip $VmIp }
+    } $root $Ip $sshKey $completeUpdate $UpdateExitCode $UpdateOutput ([bool]$BeforeUpdate) $TankUpdate
 }
 
 function Sync-DuneRetailSettingsBeforeStart {
     param([Parameter(Mandatory)][string]$Ip)
-    Sync-DuneTankUpdateImage -Ip $Ip
     $retailRoot = @($scriptDir, (Join-Path $scriptDir 'app')) | Where-Object {
         Test-Path -LiteralPath (Join-Path $_ 'server\lib\RetailServerSettings.ps1')
     } | Select-Object -First 1
@@ -1361,13 +1364,14 @@ function Sync-DuneRetailSettingsBeforeStart {
         . (Join-Path $Root 'server\lib\RegisTanksActivation.ps1')
         $script:AppDir = $Root
         $script:V6SshKeyCache = $KeyPath
-        $deadline = [DateTime]::UtcNow.AddSeconds(90)
+        $deadline = [DateTime]::UtcNow.AddSeconds(300)
         do {
             $target = Resolve-DuneRetailServerSettingsTarget -Ip $VmIp
             if (-not $target.available -or -not $target.stopped -or $target.serverPodCount -eq 0) { break }
             if ([DateTime]::UtcNow -ge $deadline) { throw 'Game pods have not stopped. Server Settings were not synchronized and the battlegroup was not started.' }
             Start-Sleep -Seconds 2
         } while ($true)
+        $null = Sync-DuneRegisTankServerUpdate -Ip $VmIp
         $management = Get-DuneRetailStartupSyncPreference
         if (-not $management.enabled -and $management.cleanupPending) {
             $null = Remove-DuneManagedSettingsYamlInjections -Ip $VmIp
@@ -1375,7 +1379,6 @@ function Sync-DuneRetailSettingsBeforeStart {
         }
         if (Test-DuneConfigurationInjectionEnabled) {
             $null = Sync-DuneRetailServerSettingsForStartup -Ip $VmIp
-            $null = Initialize-DuneRegisTanksForStartup -Ip $VmIp
         }
     } $retailRoot $Ip $sshKey
 }
@@ -1606,6 +1609,7 @@ $bgCommands = @(
     [pscustomobject]@{ Key = "3";  SubSection = $null;          Name = "restart";                   Label = "Restart BG Only"; Desc = "Restarts the selected battlegroup" }
     [pscustomobject]@{ Key = "4";  SubSection = $null;          Name = "stop";                      Label = "Stop BG Only";    Desc = "Stops the selected battlegroup" }
     [pscustomobject]@{ Key = "5";  SubSection = $null;          Name = "update";                    Desc = "Checks for new versions and applies them" }
+    [pscustomobject]@{ Key = "23"; SubSection = $null; Name = "update-with-tanks"; Label = "Update with Tank support"; Desc = "Update the server and restore Tank support before restarting" }
     [pscustomobject]@{ Key = "6";  SubSection = $null;          Name = "edit";                      Desc = "Edit the battlegroup with the utilities interface" }
     [pscustomobject]@{ Key = "7";  SubSection = $null;          Name = "edit-advanced";             Label = "Edit Director";   Desc = "(Advanced) Manually edit battlegroup directly with YAML" }
     [pscustomobject]@{ Key = "21"; SubSection = $null;          Name = "change-battlegroup-ip";     Label = "Change Player IP"; Desc = "Change the IP that players connect to" }
@@ -2904,7 +2908,8 @@ while ($true) {
     # calls). Found live on Panta's v15.1.5 dump 2026-09-20: the CRLF fix
     # (#849) got the cleanup line actually RUNNING for the first time, which
     # is what surfaced this pre-existing permission gap.
-    if ($cmdName -eq 'update') {
+    if ($cmdName -in @('update','update-with-tanks')) {
+        if ($cmdName -eq 'update') { Sync-DuneTankUpdateImage -Ip $ip -BeforeUpdate }
         $SteamCmdAppId = '4754530'  # Dune: Awakening Dedicated Server
         $preflight = @"
 if [ -d /home/dune/.dune/download/steamapps/downloading/$SteamCmdAppId ] || [ -d /home/dune/.dune/download/steamapps/temp ]; then
@@ -2921,6 +2926,16 @@ fi
         ssh -o BatchMode=yes -o StrictHostKeyChecking=no -o LogLevel=QUIET -i "$sshKey" "$sshUser@$ip" $preflight
     }
 
+    if ($cmdName -eq 'update-with-tanks') {
+        $tankUpdater = {
+            ssh -t -o StrictHostKeyChecking=no -o LogLevel=QUIET -i "$sshKey" "$sshUser@$ip" "$bgBinPath update" | Tee-Object -Variable tankOutput | Out-Host
+            return @{exitCode=$LASTEXITCODE;output=@($tankOutput)}
+        }.GetNewClosure()
+        Sync-DuneTankUpdateImage -Ip $ip -TankUpdate $tankUpdater
+        if ($Cmd) { break }
+        continue
+    }
+
     if ($cmdName -eq 'start' -or $cmdName -eq 'restart') {
         # Refresh monitoring before issuing start/restart, not after readiness.
         Invoke-DuneHyperVGuestRecoveryInstall -Ip $ip -Phase "pre-$cmdName"
@@ -2933,9 +2948,14 @@ fi
     }
 
     $dispatchCommand = if ($cmdName -eq 'restart') { 'start' } else { $cmdName }
-    ssh -t -o StrictHostKeyChecking=no -o LogLevel=QUIET -i "$sshKey" "$sshUser@$ip" "$bgBinPath $dispatchCommand"
-    $bgFallbackExit = $LASTEXITCODE
-    if ($bgFallbackExit -eq 0 -and $cmdName -eq 'update') { Sync-DuneTankUpdateImage -Ip $ip }
+    if ($cmdName -eq 'update') {
+        ssh -t -o StrictHostKeyChecking=no -o LogLevel=QUIET -i "$sshKey" "$sshUser@$ip" "$bgBinPath $dispatchCommand" | Tee-Object -Variable bgUpdateOutput | Out-Host
+        $bgFallbackExit = $LASTEXITCODE
+        Sync-DuneTankUpdateImage -Ip $ip -UpdateExitCode $bgFallbackExit -UpdateOutput @($bgUpdateOutput)
+    } else {
+        ssh -t -o StrictHostKeyChecking=no -o LogLevel=QUIET -i "$sshKey" "$sshUser@$ip" "$bgBinPath $dispatchCommand"
+        $bgFallbackExit = $LASTEXITCODE
+    }
 
     # Battlegroup commands (status/start/restart/stop) can change observable
     # port state, so invalidate the cached external port-check results to

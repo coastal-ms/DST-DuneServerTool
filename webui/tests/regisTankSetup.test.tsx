@@ -1,19 +1,72 @@
-import { cleanup, render, screen } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, expect, it, vi } from 'vitest'
 import { RegisTankSetup } from '../src/pages/gameconfig/RegisTankSetup'
-const request=vi.hoisted(() => vi.fn())
-vi.mock('../src/api/client',()=>({api:request}))
-afterEach(()=>{cleanup();vi.resetAllMocks()})
-it('reports automatic startup support without mutation controls',async()=>{
- request.mockResolvedValue({enabled:false,supported:true})
- render(<RegisTankSetup vmRunning stopped />)
- expect(await screen.findByText('Tank support will be prepared at the next battlegroup start.')).toBeInTheDocument()
- expect(screen.queryByRole('button')).not.toBeInTheDocument()
- expect(request.mock.calls).toEqual([['/api/gameconfig/regis-tanks']])
+const request = vi.hoisted(() => vi.fn())
+vi.mock('../src/api/client', () => ({ api: request, PlayerGuardCancelledError: class extends Error {}, withOnlinePlayerGuard: (run: (force: boolean) => unknown) => run(false) }))
+afterEach(() => { cleanup(); vi.restoreAllMocks(); vi.resetAllMocks() })
+
+it('loads disabled without preparing support and enables only on explicit choice', async () => {
+  request.mockResolvedValueOnce({ enabled: false, supported: true }).mockResolvedValueOnce({ ok: true }).mockResolvedValueOnce({ enabled: true, supported: true })
+  const busy = vi.fn()
+  render(<RegisTankSetup vmRunning stopped onBusyChange={busy} />)
+  const enable = await screen.findByRole('button', { name: 'Enable Tank support' })
+  expect(request.mock.calls).toEqual([['/api/gameconfig/regis-tanks']])
+  fireEvent.click(enable)
+  await screen.findByRole('button', { name: 'Disable Tank support' })
+  expect(request.mock.calls[1]).toEqual(['/api/gameconfig/regis-tanks', { method: 'PUT', body: JSON.stringify({ enabled: true, acknowledgeStoredTanks: false }) }])
+  expect(busy.mock.calls).toEqual([[true], [false]])
 })
-it('reports unsupported builds without requesting activation',async()=>{
- request.mockResolvedValue({enabled:false,supported:false})
- render(<RegisTankSetup vmRunning stopped />)
- expect(await screen.findByText('Tank support is unavailable for this server build.')).toBeInTheDocument()
- expect(request).toHaveBeenCalledOnce()
+it('requires acknowledgement before disabling support and sends the explicit disable choice', async () => {
+  request.mockResolvedValueOnce({ enabled: true, supported: true }).mockResolvedValueOnce({ ok: true }).mockResolvedValueOnce({ enabled: false, supported: true })
+  const confirm = vi.spyOn(window, 'confirm').mockReturnValueOnce(false).mockReturnValueOnce(true)
+  render(<RegisTankSetup vmRunning stopped />)
+  fireEvent.click(await screen.findByRole('button', { name: 'Disable Tank support' }))
+  expect(request).toHaveBeenCalledTimes(1)
+  fireEvent.click(screen.getByRole('button', { name: 'Disable Tank support' }))
+  await screen.findByRole('button', { name: 'Enable Tank support' })
+  expect(confirm).toHaveBeenCalledTimes(2)
+  expect(JSON.parse(request.mock.calls[1][1].body)).toEqual({ enabled: false, acknowledgeStoredTanks: true })
+})
+it('keeps unsupported builds available for normal use without preparing Tanks', async () => {
+  request.mockResolvedValue({ enabled: false, supported: false })
+  render(<RegisTankSetup vmRunning stopped />)
+  expect(await screen.findByRole('button', { name: 'Enable Tank support' })).toBeDisabled()
+  expect(screen.getByText('Tank support is unavailable for this server build.')).toBeInTheDocument()
+  expect(request).toHaveBeenCalledOnce()
+})
+it('prevents changing a running battlegroup', async () => {
+  request.mockResolvedValue({ enabled: false, supported: true })
+  render(<RegisTankSetup vmRunning stopped={false} />)
+  expect(await screen.findByRole('button', { name: 'Enable Tank support' })).toBeDisabled()
+  expect(request).toHaveBeenCalledOnce()
+})
+it('reports activation failure and releases the busy state', async () => {
+  request.mockResolvedValueOnce({ enabled: false, supported: true }).mockRejectedValueOnce(new Error('Preparation failed'))
+  const busy = vi.fn()
+  render(<RegisTankSetup vmRunning stopped onBusyChange={busy} />)
+  fireEvent.click(await screen.findByRole('button', { name: 'Enable Tank support' }))
+  await waitFor(() => expect(screen.getByRole('alert')).toHaveTextContent('Preparation failed'))
+  expect(screen.getByRole('button', { name: 'Enable Tank support' })).toBeEnabled()
+  expect(busy.mock.calls).toEqual([[true], [false]])
+})
+
+it('shows inherited automatic support as off with the saved-Tank migration warning', async () => {
+  request.mockResolvedValue({ enabled: false, supported: true, legacyPending: true })
+  render(<RegisTankSetup vmRunning stopped />)
+  expect(await screen.findByRole('button', { name: 'Enable Tank support' })).toBeEnabled()
+  expect(screen.getByRole('alert')).toHaveTextContent('Previous automatic Tank support is now off')
+  expect(screen.getByText(/Starting the official server with Tank support disabled/)).toBeInTheDocument()
+  expect(request).toHaveBeenCalledOnce()
+})
+
+it('launches the distinct Tank update command only after confirmation', async () => {
+  request.mockResolvedValueOnce({ enabled: true, supported: true }).mockResolvedValue({ ok: true })
+  const confirm = vi.spyOn(window, 'confirm').mockReturnValueOnce(false).mockReturnValueOnce(true)
+  render(<RegisTankSetup vmRunning stopped={false} />)
+  fireEvent.click(await screen.findByRole('button', { name: 'Update with Tank support' }))
+  expect(request).toHaveBeenCalledOnce()
+  fireEvent.click(screen.getByRole('button', { name: 'Update with Tank support' }))
+  await screen.findByRole('status')
+  expect(request.mock.calls[1]).toEqual(['/api/commands/run/update-with-tanks', { method: 'POST' }])
+  expect(confirm).toHaveBeenCalledTimes(2)
 })

@@ -122,7 +122,7 @@ Register-DuneRoute -Method POST -Path '/api/commands/run/{name}' -Handler {
     $remoteAllowedCommands = @('startup', 'start', 'restart', 'start-vm', 'reboot', 'apply-inis')
     $isRemote = -not (Test-DuneLocalOnlyRequest -Request $req)
     $portalRole = [string]$routeParams.portalAccountRole
-    $ownerUpdate = ($portalRole -eq 'owner' -and $name -eq 'update')
+    $ownerUpdate = ($portalRole -eq 'owner' -and $name -in @('update','update-with-tanks'))
     if ($isRemote -and ($name -notin $remoteAllowedCommands) -and -not $ownerUpdate) {
         Write-DuneError -Response $res -Status 403 -Message "Command '$name' is not available remotely."
         return
@@ -144,6 +144,7 @@ Register-DuneRoute -Method POST -Path '/api/commands/run/{name}' -Handler {
         stop = 'stopping the battlegroup'
         'apply-inis' = 'applying INI settings and restarting the battlegroup'
         update = 'updating the battlegroup'
+        'update-with-tanks' = 'updating the battlegroup with Tank support'
         import = 'importing a database backup'
         'change-vm-ip' = 'changing the VM network configuration'
         'change-battlegroup-ip' = 'changing the battlegroup player IP'

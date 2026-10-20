@@ -10,5 +10,5 @@ export function canAccessCommand(
   if (role === 'player') return false
   return localViewer ||
     REMOTE_ALLOWED.has(commandName) ||
-    (role === 'owner' && commandName === 'update')
+    (role === 'owner' && ['update', 'update-with-tanks'].includes(commandName))
 }

@@ -113,7 +113,18 @@ Describe 'HTTP local-only request enforcement' {
         $routes = Get-Content (Join-Path (Get-DstRepoRoot) 'app\server\routes\Commands.ps1') -Raw
         $routes | Should -Match '\$isRemote = -not \(Test-DuneLocalOnlyRequest -Request \$req\)'
         $routes | Should -Not -Match '\$isTunneled'
-        $routes | Should -Match "\`$portalRole -eq 'owner' -and \`$name -eq 'update'"
+        $ast = [Management.Automation.Language.Parser]::ParseInput($routes, [ref]$null, [ref]$null)
+        $ownerRule = $ast.Find({ param($node)
+            $node -is [Management.Automation.Language.AssignmentStatementAst] -and $node.Left.Extent.Text -eq '$ownerUpdate'
+        }, $true)
+        $ownerRule | Should -Not -BeNullOrEmpty
+        foreach ($portalRole in @('owner','admin','player','')) {
+            foreach ($name in @('update','update-with-tanks','import','stop-vm')) {
+                $actual = Invoke-Expression $ownerRule.Right.Extent.Text
+                $expected = $portalRole -eq 'owner' -and $name -in @('update','update-with-tanks')
+                $actual | Should -Be $expected -Because "remote role '$portalRole' requested '$name'"
+            }
+        }
         $server = Get-Content (Join-Path (Get-DstRepoRoot) 'app\server\HttpServer.ps1') -Raw
         $server | Should -Match "\`$routeParams\['portalAccountRole'\]"
     }

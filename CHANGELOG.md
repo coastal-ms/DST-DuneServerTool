@@ -13,6 +13,16 @@ here cover everything those tags shipped.
 
 ## [Unreleased]
 
+## [16.5.2] - 2026-10-20
+
+Fix server updates leaving Hagga on an older Tank-enabled build. Complete applied updates when Funcom reports existing command links during cleanup and wait for all maps to stop before changing images.
+
+Make self-hosted Regis Tank support off by default, including previous automatic activation. Users who want Tanks must explicitly enable support in Server Settings before the next server start or update. Other users return to the official server image without Tank preparation.
+
+Tanks use a custom server image outside Funcom's normal update path. Disable Tank support before server updates, then re-enable it only when DST supports the new build. Starting the official server with Tank support disabled can remove saved Tanks. Tank compatibility for server build 2160922 is included.
+
+Add Update with Tank support in Server Settings and Commands. It stops the battlegroup, disables support, updates the server, and restores Tank support before resuming. If compatibility cannot be restored, the battlegroup stays stopped.
+
 ## [16.5.1] - 2026-10-19
 
 Download the private map Python runtime automatically when needed instead of including it in the installer, and include the full map icon set for clean installations.

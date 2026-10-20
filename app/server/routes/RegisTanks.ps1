@@ -12,7 +12,7 @@ Register-DuneRoute -Method GET -Path '/api/gameconfig/regis-tanks' -Handler {
     if (-not $ctx.ok) { Write-DuneError -Response $res -Status $ctx.status -Message $ctx.message; return }
     try {
         $deployment = Get-DuneRegisTankDeployment -Ip $ctx.ip
-        Write-DuneJson -Response $res -Body @{enabled=$deployment.managed;supported=$deployment.supported}
+        Write-DuneJson -Response $res -Body @{enabled=($deployment.managed -and $deployment.optedIn);supported=$deployment.supported;legacyPending=($deployment.managed -and -not $deployment.optedIn)}
     } catch { Write-DuneError -Response $res -Status 503 -Message $_.Exception.Message }
 }
 

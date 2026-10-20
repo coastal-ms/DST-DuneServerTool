@@ -1,4 +1,4 @@
-# Native server compatibility is generated locally from the owner's game files.
+﻿# Native server compatibility is generated locally from the owner's game files.
 # A version label alone is not enough: grants require the accepted executable
 # and all three generated compatibility files on the exact player's map.
 function Get-DuneRegisTankSupport {
@@ -35,6 +35,7 @@ function Get-DuneRegisTankSupport {
     $supportedBinaries = @{
         '240b4bb378a93b70134fa685fc467bc2ae94fd40d81da2feea0f987758bc9126' = '2147284'
         '3e8966850e911826f4e5339dea5b3830a71e037acc9b0ed400bc9f0e21e6e318' = '2156652'
+        'e10c49bd69e3ae8e3eccce3049326d04c4c0e750f767587749429a95ae7f574b' = '2160922'
     }
     $build = ''
     foreach ($line in $hashes) {

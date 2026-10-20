@@ -1,4 +1,4 @@
-function Get-DuneRegisTankAppRoot {
+﻿function Get-DuneRegisTankAppRoot {
     if ($script:AppDir) { return $script:AppDir }
     return [IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..\..'))
 }
@@ -8,13 +8,14 @@ function Get-DuneRegisTankCacheRoot {
 }
 
 function Get-DuneRegisTankRecipe {
-    param([ValidateSet('2147284','2156652')][string]$Build = '2147284')
+    param([ValidateSet('2147284','2156652','2160922')][string]$Build = '2147284')
     $path = Join-Path (Get-DuneRegisTankAppRoot) "resources\regis-tanks\$Build.json"
     return Get-Content -LiteralPath $path -Raw | ConvertFrom-Json
 }
 
 function Invoke-DuneRegisTankShell {
     param([string]$Ip, [string]$Script, [int]$TimeoutSec = 120)
+    $Script = $Script -replace "`r", ''
     $payload = [Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes("set -euo pipefail`n$Script`nprintf '\n__DST_REGIS_OK__\n'`n"))
     # ctr utilities inherit stdin. Run the decoded script from a temporary file
     # so a utility cannot consume the remaining commands or success marker.
@@ -35,7 +36,7 @@ function Send-DuneRegisTankFile {
 }
 
 function New-DuneRegisTankServerImage {
-    param([string]$Ip, [ValidateSet('2147284','2156652')][string]$Build = '2147284')
+    param([string]$Ip, [ValidateSet('2147284','2156652','2160922')][string]$Build = '2147284')
     $recipe = Get-DuneRegisTankRecipe -Build $Build
     if ($recipe.schema -ne 1 -or $recipe.build -cne $Build -or $recipe.baseImage -cne "registry.funcom.com/funcom/self-hosting/seabass-server:$Build-0-shipping" -or $recipe.baseDigest -cnotmatch '^sha256:[a-f0-9]{64}$' -or $recipe.cleanExecutableSha256 -cnotmatch '^[a-f0-9]{64}$' -or $recipe.patchedExecutableSha256 -cnotmatch '^[a-f0-9]{64}$') { throw 'Unsupported Tank compatibility recipe.' }
     $cache = Get-DuneRegisTankCacheRoot
@@ -91,7 +92,7 @@ cp /home/dune/server/DuneSandbox/Binaries/Linux/DuneSandboxServer-Linux-Shipping
 /work/retoc to-legacy /home/dune/server/DuneSandbox/Content/Paks /work/stock --filter DT_Tank_Modules --no-shaders --no-parallel
 /work/retoc to-legacy /home/dune/server/DuneSandbox/Content/Paks /work/stock --filter BP_Tank_CHOAM --no-shaders --no-parallel
 '@.Replace('__CLEAN__',[string]$recipe.cleanExecutableSha256)
-    $script64 = [Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes($extract))
+    $script64 = [Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes(($extract -replace "`r", '')))
     Invoke-DuneRegisTankShell -Ip $Ip -Script "$utility '$job-extract' bash -c 'echo $script64 | base64 -d | bash'" | Out-Null
     $patch = "cp '$work/source.bin' '$work/patched.bin'`n"
     foreach ($site in $recipe.sites) {

@@ -2,7 +2,7 @@ import type { Command } from '../../api/types'
 
 export const COMMAND_CATEGORIES = [
   { id: 'battlegroup', label: 'Battlegroup', icon: 'Activity', description: 'Start, stop, update, and maintain the game servers.',
-    commands: ['start', 'restart', 'stop', 'update', 'fix-on-demand-maps'] },
+    commands: ['start', 'restart', 'stop', 'update', 'update-with-tanks', 'fix-on-demand-maps'] },
   { id: 'vm', label: 'VM & Power', icon: 'HardDrive', description: 'VM setup, power, and memory. All-server actions also affect the battlegroup.',
     commands: ['initial-setup', 'start-vm', 'stop-vm', 'startup', 'shutdown', 'reboot', 'enable-experimental-swap'] },
   { id: 'configuration', label: 'Configuration', icon: 'Settings', description: 'Apply saved server settings or open advanced configuration tools.',
