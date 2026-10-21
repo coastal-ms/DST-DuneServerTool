@@ -18,8 +18,8 @@ export function IniBackupsCard() {
   }
   return <section className="card mb-4 p-4 space-y-3" aria-label="INI backups">
     <h2 className="font-semibold">INI backups</h2>
-    <p className="text-sm text-text-muted">This PC’s INI recovery copies are kept in DST’s install folder, separate from the game files. Unchanged files do not create another backup.</p>
-    {local ? <><div className="text-sm font-mono break-all">{path || 'Reading backup location…'}</div>
+    <p className="text-sm text-text-muted">This PC’s INI recovery copies are kept separately from the game files. Unchanged files do not create another backup.</p>
+    {local ? <><div className="text-sm font-mono break-all">{path || (error ? 'Backup location unavailable' : 'Reading backup location…')}</div>
       <button type="button" className="btn-secondary" disabled={!path || busy} onClick={() => void open()}>{busy ? 'Opening…' : 'Open folder'}</button></>
       : <p className="text-sm text-text-muted">Open DST on the host PC to view this folder.</p>}
     {error && <p role="alert" className="text-sm text-danger">{error}</p>}

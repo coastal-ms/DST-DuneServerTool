@@ -1152,12 +1152,13 @@ Register-DuneRoute -Method PUT -Path '/api/gameconfig/landclaim-timer' -Handler 
 # Read-only location query; opening Explorer is an explicit host-local action.
 Register-DuneRoute -Method GET -Path '/api/gameconfig/backup-folder' -LocalOnly -Handler {
     param($req,$res,$routeParams,$body)
-    Write-DuneJson -Response $res -Body @{path=(Get-DuneGameConfigClientBackupRoot)}
+    $path = if (Test-DuneSoloInstallation) { Join-Path (Get-DuneSoloBackupRoot) 'settings' } else { Get-DuneGameConfigClientBackupRoot }
+    Write-DuneJson -Response $res -Body @{path=$path}
 }
 Register-DuneRoute -Method POST -Path '/api/gameconfig/backup-folder/open' -LocalOnly -Handler {
     param($req,$res,$routeParams,$body)
     try {
-        $path = Get-DuneGameConfigClientBackupRoot
+        $path = if (Test-DuneSoloInstallation) { Join-Path (Get-DuneSoloBackupRoot) 'settings' } else { Get-DuneGameConfigClientBackupRoot }
         [void][IO.Directory]::CreateDirectory($path)
         Start-Process -FilePath 'explorer.exe' -ArgumentList "`"$path`"" | Out-Null
         Write-DuneJson -Response $res -Body @{ok=$true;path=$path}

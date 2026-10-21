@@ -74,7 +74,7 @@ function fmtCaptured(ts: string): string {
   return `${ts.slice(0, 4)}-${ts.slice(4, 6)}-${ts.slice(6, 8)}`
 }
 
-export function WickMaps({ embedded = false, solo = false }: { embedded?: boolean; solo?: boolean }) {
+export function WickMaps({ embedded = false, solo = false, compact = false }: { embedded?: boolean; solo?: boolean; compact?: boolean }) {
   const [seed, setSeed] = useState<number>(solo ? 11 : PAYLOAD.availableSeeds[0] ?? 0)
   const [currentSeed, setCurrentSeed] = useState<number | null>(null)
   const [seedSource, setSeedSource] = useState<WickMapSeedSource | null>(null)
@@ -163,7 +163,7 @@ export function WickMaps({ embedded = false, solo = false }: { embedded?: boolea
         />
       )}
 
-      <div className="grid grid-cols-1 xl:grid-cols-[minmax(0,1fr)_340px] gap-4 items-stretch">
+      <div className={compact ? "grid grid-cols-1 gap-3" : "grid grid-cols-1 xl:grid-cols-[minmax(0,1fr)_340px] gap-4 items-stretch"}>
         {/* ---------------------------------------------------------------- */}
         {/* Map                                                              */}
         {/* ---------------------------------------------------------------- */}
@@ -184,7 +184,7 @@ export function WickMaps({ embedded = false, solo = false }: { embedded?: boolea
               className="h-auto max-w-full rounded-lg select-none"
               style={{
                 background: '#4a3220',
-                width: 'min(100%, calc(100dvh - 19rem))',
+                width: compact ? 'min(100%, calc(100dvh - 11rem))' : 'min(100%, calc(100dvh - 19rem))',
               }}
               role="img"
               aria-label={`Deep Desert point-of-interest map for world seed ${entry.seed}`}
@@ -325,7 +325,7 @@ export function WickMaps({ embedded = false, solo = false }: { embedded?: boolea
         {/* ---------------------------------------------------------------- */}
         {/* Side rail                                                        */}
         {/* ---------------------------------------------------------------- */}
-        <div className="flex flex-col gap-4">
+        <div className={compact ? "hidden" : "flex flex-col gap-4"}>
           {/* Seed selector */}
           {solo ? (
             <div className="card p-4 text-sm text-text-dim">

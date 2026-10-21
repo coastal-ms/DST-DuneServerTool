@@ -102,7 +102,7 @@ Write-Host "Compiling DuneServer.exe (v$Version; prerelease=$([bool]$Prerelease)
 
 # Critical flags (v6.1.7):
 #   -noConsole=$false : console-subsystem EXE so child kubectl/ssh/etc. inherit
-#                       a console (no per-child window-flash). Script minimizes
+#                       a console (no per-child window-flash). Script hides
 #                       its own console at startup so it never visually intrudes.
 #   -STA              : required for System.Windows.Forms.MessageBox
 #   -iconFile         : taskbar / file explorer icon (also used for the EXE)

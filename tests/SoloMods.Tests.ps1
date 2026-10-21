@@ -215,6 +215,26 @@ Describe 'Solo mod import and dependencies' {
         Test-DuneSoloRegisTankBuild -GamePath 'C:/MissingGame' -Platform other | Should -BeFalse
         Test-Path (Join-Path $script:DuneSoloModsRoot 'dst-regis-tanks/Scripts/dst-launch-platform.txt') | Should -BeFalse
     }
+    It 'discovers Steam from a library manifest only when the game executable exists' {
+        $library = Join-Path $TestDrive 'SteamLibrary'
+        $apps = Join-Path $library 'steamapps'
+        New-Item -ItemType Directory -Path $apps -Force | Out-Null
+        Set-Content (Join-Path $apps 'appmanifest_1172710.acf') '"appid" "1172710" "installdir" "DuneAwakening"'
+        Find-DuneSoloSteamInstallation -Libraries @($library) | Should -Be ''
+        $game = Join-Path $apps 'common\DuneAwakening'
+        $bin = Join-Path $game 'DuneSandbox\Binaries\Win64'
+        New-Item -ItemType Directory -Path $bin -Force | Out-Null
+        Set-Content (Join-Path $bin 'DuneSandbox-Win64-Shipping.exe') 'fixture'
+        Find-DuneSoloSteamInstallation -Libraries @($library) | Should -Be $game
+    }
+    It 'fills an empty Steam mod folder without overwriting a saved choice' {
+        Mock Find-DuneSoloSteamInstallation { 'D:\SteamLibrary\DuneAwakening' } -ParameterFilter { -not $Libraries }
+        Set-DuneSoloModPlatform -Platform steam -GamePath ''
+        (Get-DuneSoloMods).gamePath | Should -Be 'D:\SteamLibrary\DuneAwakening'
+        Set-DuneSoloModPlatform -Platform steam -GamePath 'E:\MyGame'
+        (Get-DuneSoloMods).gamePath | Should -Be 'E:\MyGame'
+        Should -Invoke Find-DuneSoloSteamInstallation -Times 1 -Exactly
+    }
     It 'switches connected platforms without touching mod selections and recalls both folders' {
         Mock Find-DuneSoloXboxInstallation { '' }
         Set-DuneSoloModSelection @{mods=@(@{folder='Kept';enabled=$true});platform='steam';gamePath='C:\Steam\Dune'} | Out-Null
@@ -404,6 +424,8 @@ Describe 'Solo mod import and dependencies' {
         @(Get-DuneSoloLaunchArguments) | Should -Not -Contain '-nosplash'
     }
 BeforeEach {
+    Mock Find-DuneSoloSteamInstallation { '' } -ParameterFilter { -not $Libraries }
+    Mock Start-Process {}
     $case=Join-Path $script:ModTestRoot ([guid]::NewGuid().ToString('N'))
     $script:DuneSoloModsRoot=Join-Path $case 'Mods'
     $script:DuneSoloLoaderRoot=Join-Path $case 'Loader'

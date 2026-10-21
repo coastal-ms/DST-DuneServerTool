@@ -748,11 +748,13 @@ internal sealed class MainForm : Form
                     _changingWidgetMode = true;
                     try
                     {
-                        MinimumSize = new Size(360, 240);
+                        bool soloMap = message.TryGetProperty("layout", out var layout) && layout.GetString() == "solo-map";
+                        MinimumSize = soloMap ? new Size(740, 780) : new Size(360, 240);
                         WindowState = FormWindowState.Normal;
                         // Discard legacy placement inherited from the management frame.
                         Rectangle target = WidgetWindowPlacement.Resolve(_widgetBounds, _widgetRestoreBounds.Value);
-                        target = ClampToVisible(target, new Size(740, 285));
+                        if (soloMap) target.Size = new Size(Math.Max(target.Width, 740), Math.Max(target.Height, 780));
+                        target = ClampToVisible(target, soloMap ? new Size(740, 780) : new Size(740, 285));
                         Bounds = target;
                         _widgetBounds = target;
                         _restoreBounds = target;

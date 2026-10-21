@@ -14,3 +14,11 @@ it('shows the install backup directory without opening it until requested', asyn
   await userEvent.click(screen.getByRole('button', { name: 'Open folder' }))
   await waitFor(() => expect(api).toHaveBeenCalledWith('/api/gameconfig/backup-folder/open', { method: 'POST' }))
 })
+
+it('replaces the loading message when the backup location request fails', async () => {
+  vi.mocked(api).mockRejectedValue(new Error('Unavailable'))
+  render(<IniBackupsCard />)
+  expect(await screen.findByRole('alert')).toHaveTextContent('Unavailable')
+  expect(screen.queryByText('Reading backup location…')).not.toBeInTheDocument()
+  expect(screen.getByRole('button', { name: 'Open folder' })).toBeDisabled()
+})

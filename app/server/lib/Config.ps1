@@ -134,13 +134,13 @@ function Test-DuneSoloServerApiPath {
     if ($Path -eq '/api/config' -and $Method -in @('GET','PUT')) { return $false }
     if ($Method -eq 'GET' -and $Path -in @(
         '/api/installation', '/api/status', '/api/portal-auth/status',
-        '/api/system/install-location', '/api/v1/capabilities',
+        '/api/system/install-location', '/api/v1/capabilities', '/api/gameconfig/backup-folder',
         '/api/catalog/items', '/api/catalog/cosmetics', '/api/catalog/vehicle-kits',
         '/api/catalog/character-defs', '/api/gameplay/augments/catalog',
         '/api/gameplay/tags/catalog'
     )) { return $false }
     if ($Method -eq 'POST' -and $Path -in @(
-        '/api/browse-path', '/api/system/install-location/open',
+        '/api/browse-path', '/api/system/install-location/open', '/api/gameconfig/backup-folder/open',
         '/api/status/refresh', '/api/portal-auth/logout', '/api/shutdown'
     )) { return $false }
     return $true

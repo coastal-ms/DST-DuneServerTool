@@ -217,12 +217,12 @@ function Show-DuneConsolePresencePrompt {
         $form.ClientSize = New-Object System.Drawing.Size(460, 180)
 
         $lbl = New-Object System.Windows.Forms.Label
-        $lbl.Text = "While the app window is open, how should the Dune Server console behave?`r`n`r`nClosing the app window always shuts the server down. You can change this after the next update."
+        $lbl.Text = "Keep the backend console hidden or add a system tray icon. Use Help to show the backend console when needed."
         $lbl.SetBounds(16, 14, 428, 80)
         $form.Controls.Add($lbl)
 
         $btnMin = New-Object System.Windows.Forms.Button
-        $btnMin.Text = 'Minimize to taskbar'
+        $btnMin.Text = 'Hide backend console'
         $btnMin.SetBounds(20, 120, 200, 40)
         $btnMin.DialogResult = [System.Windows.Forms.DialogResult]::No
         $form.Controls.Add($btnMin)
@@ -508,7 +508,7 @@ function Start-DuneConsoleLifecycle {
                     [void]$native::ShowWindow($hwnd, 7)   # SW_SHOWMINNOACTIVE (tray failed)
                 }
             } else {
-                [void]$native::ShowWindow($hwnd, 7)       # SW_SHOWMINNOACTIVE
+                [void]$native::ShowWindow($hwnd, 0)       # SW_HIDE; Help can reveal it explicitly
             }
         }
     } catch {

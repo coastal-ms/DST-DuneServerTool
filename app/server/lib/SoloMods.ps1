@@ -147,8 +147,41 @@ function Resolve-DuneSoloXboxPackageFolder([string]$Path) {
     return $Path
 }
 
+function Find-DuneSoloSteamInstallation {
+    param([string[]]$Libraries)
+    if (-not $PSBoundParameters.ContainsKey('Libraries')) {
+        $roots = @()
+        foreach ($key in @('HKCU:\Software\Valve\Steam','HKLM:\SOFTWARE\WOW6432Node\Valve\Steam','HKLM:\SOFTWARE\Valve\Steam')) {
+            $record = Get-ItemProperty -LiteralPath $key -ErrorAction SilentlyContinue
+            if ($record.SteamPath) { $roots += [string]$record.SteamPath }
+            if ($record.InstallPath) { $roots += [string]$record.InstallPath }
+        }
+        if (${env:ProgramFiles(x86)}) { $roots += Join-Path ${env:ProgramFiles(x86)} 'Steam' }
+        $Libraries = @($roots)
+        foreach ($root in @($roots | Select-Object -Unique)) {
+            $vdf = Join-Path $root 'steamapps\libraryfolders.vdf'
+            if (Test-Path -LiteralPath $vdf -PathType Leaf) {
+                foreach ($match in [regex]::Matches([IO.File]::ReadAllText($vdf), '"path"\s+"([^"]+)"')) {
+                    $Libraries += $match.Groups[1].Value.Replace('\\','\')
+                }
+            }
+        }
+    }
+    foreach ($library in @($Libraries | Where-Object { $_ } | Select-Object -Unique)) {
+        $manifest = Join-Path $library 'steamapps\appmanifest_1172710.acf'
+        if (-not (Test-Path -LiteralPath $manifest -PathType Leaf)) { continue }
+        $text = [IO.File]::ReadAllText($manifest)
+        if ($text -notmatch '"installdir"\s+"([^"\\/]+)"' -or $Matches[1] -in @('.','..')) { continue }
+        $game = Join-Path $library ('steamapps\common\'+$Matches[1])
+        if (Test-Path -LiteralPath (Join-Path $game 'DuneSandbox\Binaries\Win64\DuneSandbox-Win64-Shipping.exe') -PathType Leaf) { return $game }
+    }
+    return ''
+}
+
 function Find-DuneSoloXboxInstallation {
-    foreach ($package in @(Get-AppxPackage -Name FuncomOsloAS.ProjectSeabass -ErrorAction SilentlyContinue | Sort-Object Version -Descending)) {
+    $packages = @(Get-AppxPackage -Name FuncomOsloAS.ProjectSeabass -ErrorAction SilentlyContinue)
+    if (-not $packages.Count) { $packages = @(Get-AppxPackage -AllUsers -Name FuncomOsloAS.ProjectSeabass -ErrorAction SilentlyContinue) }
+    foreach ($package in @($packages | Sort-Object Version -Descending)) {
         $root = [string]$package.InstallLocation
         if ($root -and (Test-Path -LiteralPath (Join-Path $root 'DuneSandbox\Binaries\WinGDK\DuneSandbox-WinGDK-Shipping.exe'))) { return Resolve-DuneSoloXboxPackageFolder $root }
     }
@@ -217,6 +250,7 @@ function Get-DuneSoloMods {
     $preferences=Get-DuneGameLaunchPreferences
     $platform = if ($settings.platform -eq 'xbox') { 'xbox' } else { 'steam' }
     $gamePath = [string]$settings.gamePath
+    if ($platform -eq 'steam' -and -not $gamePath) { $gamePath = Find-DuneSoloSteamInstallation }
     if ($platform -eq 'xbox' -and $gamePath.StartsWith((Join-Path $env:ProgramFiles 'WindowsApps')+'\',[StringComparison]::OrdinalIgnoreCase)) {
         $gamePath=Resolve-DuneSoloXboxPackageFolder $gamePath
     }

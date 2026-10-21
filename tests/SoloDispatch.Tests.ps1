@@ -1,4 +1,4 @@
-BeforeAll {
+﻿BeforeAll {
     . "$PSScriptRoot\_TestHelpers.ps1"
     . (Join-Path (Get-DstRepoRoot) 'app/server/HttpServer.ps1')
     Import-DstLib 'Config.ps1'
@@ -13,6 +13,9 @@ Describe 'Solo dispatch isolation' {
         }
         Test-DuneSoloServerApiPath -Path '/api/game/launch-preferences' -Method 'DELETE' | Should -BeTrue
         Test-DuneSoloServerApiPath -Path '/api/game/other' -Method 'POST' | Should -BeTrue
+        Test-DuneSoloServerApiPath -Path '/api/gameconfig' -Method 'PUT' | Should -BeTrue
+        Test-DuneSoloServerApiPath -Path '/api/gameconfig/backup-folder' -Method 'POST' | Should -BeTrue
+        Test-DuneSoloServerApiPath -Path '/api/gameconfig/backup-folder/open' -Method 'GET' | Should -BeTrue
     }
     It 'allows shared Help controls while keeping VM diagnostics restricted' {
         foreach($path in @('/api/autostart','/api/service-mode','/api/console')) {
@@ -39,7 +42,8 @@ Describe 'Solo dispatch isolation' {
         @{Method='GET';Path='/api/autostart'},@{Method='POST';Path='/api/autostart'},
         @{Method='GET';Path='/api/service-mode'},@{Method='POST';Path='/api/service-mode'},
         @{Method='GET';Path='/api/console'},@{Method='POST';Path='/api/console'},
-        @{Method='POST';Path='/api/diagnostics/bundle'}
+        @{Method='POST';Path='/api/diagnostics/bundle'},
+        @{Method='GET';Path='/api/gameconfig/backup-folder'},@{Method='POST';Path='/api/gameconfig/backup-folder/open'}
     ) {
         param($Method,$Path)
         $request = [pscustomobject]@{

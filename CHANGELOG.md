@@ -15,6 +15,8 @@ here cover everything those tags shipped.
 
 ## [16.5.4] - 2026-10-20
 
+Make Solo INI backup controls available, hide the backend console, detect Steam and Xbox game installations on the Mods page, and add a Solo seed-map widget with a Live Map launcher and a minimum size that keeps POIs readable.
+
 Add Widget mode: a compact, movable game-status window with an Open full DST control. Keep map pop-outs and remote management available while the local window is compact. Show current map status without duplicate retired instances. Remember Widget window size and position independently of the full window.
 
 Keep inventory under each player's record, with Backpack & bank, Storage containers and item tools. Browse 28 inventory items per page, with emotes and contract entries loaded separately on demand, load only the selected player's items, and repair the selected container in place. Consolidate older inventory tabs into the player screen. Remember the Load images choice across inventory sections, with compact image-free lists showing 100 items per page. Reuse visited inventory pages and item details, and open containers directly in the correct player record. Keep expanded durability editors in sync after repair or refresh, expose backpack-and-equipped repair in Inventory, and give the actual map-restart path after container repair.
