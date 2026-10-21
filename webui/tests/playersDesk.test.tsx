@@ -151,3 +151,18 @@ describe('Contextual Players desk', () => {
     await act(async () => {})
   })
 })
+
+it('honors a container link when the Players page is already mounted', async () => {
+  window.history.replaceState(null, '', '/players')
+  render(<PlayersTab />)
+  fireEvent.click(await screen.findByRole('button', {name: 'Inspect Aster (41)'}))
+  await screen.findByRole('region', {name: 'Character snapshot'})
+  act(() => {
+    window.history.pushState(null, '', '/players?player_id=42&section=inventory&scope_type=storage&scope_id=50001&location_type=storage&location_id=50001')
+    window.dispatchEvent(new PopStateEvent('popstate'))
+  })
+  await waitFor(() => expect(within(screen.getByRole('navigation', {name: 'Player sections'})).getByRole('button', {name: 'Inventory', exact: true})).toHaveAttribute('aria-pressed', 'true'))
+  expect(within(screen.getByRole('region', {name: 'Player dossier'})).getByRole('heading', {name: 'Beryl'})).toBeInTheDocument()
+  expect(screen.getByRole('tab', {name: 'Storage containers'})).toHaveClass('btn-primary')
+  window.history.replaceState(null, '', '/players')
+})

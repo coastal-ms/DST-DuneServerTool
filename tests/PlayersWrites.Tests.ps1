@@ -1289,3 +1289,23 @@ Describe 'Invoke-DunePlayerGrantSkins <Kind>' -ForEach @(@{Kind='armor'},@{Kind=
         $script:batchCalls | Should -Be 1
     }
 }
+
+Describe 'Player item editor pagination' -Tag 'Pure' {
+    BeforeEach {
+        $script:detailQueries = @()
+        function global:Invoke-DuneSqlQuery {
+            param($Ip, $Sql, $ReadOnly, $MaxRows, $TimeoutSec)
+            $script:detailQueries += $Sql
+            return @{ ok = $true; columns = @('id'); rows = @() }
+        }
+    }
+    AfterEach { Remove-Item function:global:Invoke-DuneSqlQuery -ErrorAction SilentlyContinue }
+    It 'limits the selected player SQL to one page and a lookahead row' {
+        $result = Get-DunePlayerDetailLive -Ip '127.0.0.1' -PawnId 20001 -ControllerId 30001 -InventoryOffset 28
+        $result.ok | Should -BeTrue
+        $script:detailQueries[0] | Should -Match 'inv.actor_id = 20001::bigint'
+        $script:detailQueries[0] | Should -Match 'ORDER BY i.template_id, i.id'
+        $script:detailQueries[0] | Should -Match 'LIMIT 29 OFFSET 28'
+        $script:detailQueries[0] | Should -Match "AND \(i.template_id !~\* 'Emote\|\^\(D_\)\?Contract'"
+    }
+}

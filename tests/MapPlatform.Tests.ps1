@@ -713,6 +713,7 @@ Describe 'Maps v1 cached API contracts' -Tag 'MapPlatform' {
         $entrypoint | Should -Match 'Get-DunePlatformSnapshotState'
         $startup.IndexOf('Initialize-DunePlatformCache') | Should -BeGreaterThan $startup.IndexOf('$HttpReady.Wait')
         $startup.IndexOf('Start-DuneMapsPlatformStartupRefresh') | Should -BeGreaterThan $startup.IndexOf('Initialize-DunePlatformCache')
+        $startup | Should -Not -Match 'Start-DuneInventoryCacheStartupRefresh'
         (Get-Command Start-DuneMapsPlatformStartupRefresh).Definition | Should -Match 'MapsRefreshRunner'
         (Get-Command Start-DuneMapsPlatformStartupRefresh).Definition | Should -Match 'CancellationTokenSource'
         (Get-Command Start-DuneMapsPlatformStartupRefresh).Definition | Should -Match 'DuneLog\.ps1'

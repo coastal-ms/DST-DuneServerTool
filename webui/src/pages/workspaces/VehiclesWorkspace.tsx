@@ -3,6 +3,7 @@ import { ApiError } from '../../api/client'
 import {
   deleteVehicles,
   getVehicleFleet,
+  getInventoryPlayers,
   getVehicleIntegrity,
   repairVehicle,
   saveVehicleNames,
@@ -52,6 +53,9 @@ function vehicleNameError(name: string) {
 }
 
 function VehicleFleetWorkspace() {
+  const [fleetPlayer, setFleetPlayer] = useState('')
+  const [playerChoices, setPlayerChoices] = useState<{id: number; name: string}[]>([])
+  const fleetRequest = useRef(0)
   const [vehicles, setVehicles] = useState<VehicleFleetRow[] | null>(null)
   const [source, setSource] = useState<DataSource | null>(null)
   const [search, setSearch] = useState('')
@@ -75,11 +79,14 @@ function VehicleFleetWorkspace() {
   const [renameWarningUntil, setRenameWarningUntil] = useState(0)
 
   const load = useCallback(async () => {
+    const request = ++fleetRequest.current
+    if (!fleetPlayer) { setVehicles(null); return }
     setError('')
     setUnavailable(false)
     setRefreshing(true)
     try {
-      const fleet = await getVehicleFleet()
+      const fleet = await getVehicleFleet(fleetPlayer === 'all' ? undefined : Number(fleetPlayer))
+      if (request !== fleetRequest.current) return
       setVehicles(fleet.vehicles ?? [])
       setSource(fleet.source)
       setObservedAt(fleet.observed_at)
@@ -90,6 +97,7 @@ function VehicleFleetWorkspace() {
       setReadFailed(false)
       return fleet
     } catch (loadError: unknown) {
+      if (request !== fleetRequest.current) return
       setReadFailed(true)
       const missingRoute = loadError instanceof ApiError
         && (loadError.status === 404 || loadError.message.includes('No route for'))
@@ -100,9 +108,15 @@ function VehicleFleetWorkspace() {
       }
       return null
     } finally {
-      setNow(Date.now())
-      setRefreshing(false)
+      if (request === fleetRequest.current) { setNow(Date.now()); setRefreshing(false) }
     }
+  }, [fleetPlayer])
+
+  useEffect(() => {
+    let active = true
+    getInventoryPlayers().then(r => { if (active) setPlayerChoices(r.players) })
+      .catch(e => { if (active) setError(errorMessage(e)) })
+    return () => { active = false }
   }, [])
 
   useEffect(() => { void load() }, [load])
@@ -145,7 +159,7 @@ function VehicleFleetWorkspace() {
     }
   }, [deleteTargets, load])
 
-  const loading = vehicles === null
+  const loading = vehicles === null && !!fleetPlayer
   const selectedVehicle = vehicles?.find(vehicle => vehicle.id === selectedId)
   const activeVehicles = vehicles?.filter(vehicle => !isRecoveryRecord(vehicle)) ?? []
   const matchingVehicles = vehicles?.filter(vehicle => `${vehicleLabel(vehicle)} ${vehicle.subtype ?? ''} ${vehicle.owners ?? ''} ${vehicle.permissions?.map(permission => permission.character_name).join(' ') ?? ''} ${vehicle.map ?? ''} ${vehicle.id}`.toLowerCase().includes(search.trim().toLowerCase())) ?? []
@@ -270,6 +284,17 @@ function VehicleFleetWorkspace() {
         title="Vehicle fleet"
         description="Persisted game-database fleet with guarded name editing, repair, cargo inspection, and removal. In-memory gameplay may be newer than the last database save."
       >
+        <label className="mb-4 block text-sm font-medium">Player
+          <select aria-label="Fleet player" className="input mt-1 min-h-11 w-full" value={fleetPlayer} disabled={busy !== null} onChange={e => {
+            ++fleetRequest.current
+            setFleetPlayer(e.target.value); setVehicles(null); setSelectedId(null); setSelectedForDeletion(new Set()); setDeleteTargets([]); setEditingNames(false); setNameDrafts({}); setError('')
+          }}>
+            <option value="">Select Player for Vehicle Fleet</option>
+            {playerChoices.map(p => <option key={p.id} value={p.id}>{p.name || 'Unnamed player'}</option>)}
+            <option value="all">All vehicles</option>
+          </select>
+        </label>
+        {!fleetPlayer && <DataState state="empty" title="Select Player for Vehicle Fleet" />}
         {loading && !error && <DataState state="loading" title="Loading vehicle fleet" />}
         {!selectedVehicle && operationFeedback}
         {!loading && vehicles && (

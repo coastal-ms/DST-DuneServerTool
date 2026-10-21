@@ -104,7 +104,7 @@ function Get-DuneAtlasReadySession {
         if (-not $url) { return $null }
         $healthUrl = $url.Replace('/?key=', '/state?key=')
         $health = Invoke-RestMethod -Uri $healthUrl -Method Get -TimeoutSec 2 -ErrorAction Stop
-        return [ordered]@{ available = $true; url = $url; mode = $(if ($health.live) { 'live' } else { 'snapshot' }) }
+        return [ordered]@{ available = $true; url = $url; mode = $(if ($health.live) { 'live' } else { 'snapshot' }); processId = $processId; creationTicks = $process.CreationDate.ToUniversalTime().Ticks.ToString() }
     } catch { return $null }
 }
 
@@ -211,7 +211,21 @@ function Get-DuneAtlasSession {
     if ($cache -and $cache.appDir -eq [string]$script:AppDir -and $cache.expires -gt [DateTime]::UtcNow) {
         return $cache.session
     }
-    $session = Invoke-WithDuneLock -Name 'atlas-service' -Script { Start-DuneAtlasSession }
+    $session = Invoke-WithDuneLock -Name 'atlas-service' -Script {
+        # The package was verified before this exact host was accepted. A
+        # running host needs an identity check, not another full package hash.
+        # A dead/replaced host or failed proxy still takes the verified startup
+        # path; PID reuse alone must never count as the same host.
+        if ($cache -and $cache.appDir -eq [string]$script:AppDir -and $cache.session.processId -gt 0 -and $cache.session.creationTicks) {
+            try {
+                $process = Get-CimInstance Win32_Process -Filter "ProcessId=$($cache.session.processId)" -ErrorAction Stop
+                if ($process -and $process.CreationDate.ToUniversalTime().Ticks.ToString() -eq [string]$cache.session.creationTicks) {
+                    return $cache.session
+                }
+            } catch {}
+        }
+        Start-DuneAtlasSession
+    }
     if ($session.available) {
         $script:DuneAtlasSessionCache = @{ appDir=[string]$script:AppDir; session=$session; expires=[DateTime]::UtcNow.AddSeconds(30) }
     }

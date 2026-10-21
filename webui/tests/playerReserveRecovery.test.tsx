@@ -6,7 +6,7 @@ import {
   getPlayerDetail, getReserveRecovery, recoverReserve, rollbackReserve,
   type Player, type ReserveRecoveryPreview,
 } from '../src/api/gameplay'
-import { InventorySection } from '../src/pages/gameplay/players/sections'
+import { PlayerItemToolsSection as InventorySection } from '../src/pages/gameplay/players/sections'
 
 vi.mock('../src/api/gameplay', async importOriginal => ({
   ...await importOriginal<typeof import('../src/api/gameplay')>(),

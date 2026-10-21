@@ -315,14 +315,14 @@ export function Dashboard() {
         </div>
         <div className="card card-hover p-4 flex flex-col">
           <div className="flex items-center justify-between">
-            <span className="text-xs uppercase tracking-wider text-text-dim">Gameplay Admin</span>
-            <Icon name="Gamepad2" size={16} className="text-accent" />
+            <span className="text-xs uppercase tracking-wider text-text-dim">Live Maps</span>
+            <Icon name="Map" size={16} className="text-accent" />
           </div>
           <p className="text-sm text-text-muted mt-2 flex-1">
-            Native market, exchange, and bot tools — full gameplay administration, right here in one console.
+            View live map activity and server observations.
           </p>
-          <button className="btn-primary mt-3 self-start shrink-0" onClick={() => navigate('/gameplay')}>
-            <Icon name="ArrowRight" size={15} /> Open Gameplay Admin
+          <button className="btn-primary mt-3 self-start shrink-0" onClick={() => navigate('/map?view=live')}>
+            <Icon name="ArrowRight" size={15} /> Open Live Maps
           </button>
         </div>
       </section>

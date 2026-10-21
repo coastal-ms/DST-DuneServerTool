@@ -1074,7 +1074,7 @@ LIMIT $limit
     $baseline  = [Math]::Max(1, [int]$cfg.over_market_baseline)
     $metaByTemplate = @{}
     $followMedianMap = @{}
-    if ($guardOn) {
+    if ($guardOn -and $rows.Count -gt 0) {
         try {
             # Mirror the list side's candidate build so the reference map covers
             # the full catalog (mask cache + seed_from_catalog), not just the
@@ -1213,12 +1213,12 @@ COMMIT;
 
     # Persist runtime state for status reporting.
     $state = Read-DuneBotState
-    $state = @{
-        last_buy_tick = (Get-Date).ToUniversalTime().ToString('o')
-        last_result   = @{ candidates = $summary.candidates; rolled = $summary.rolled; won = $summary.won; purchased = $summary.purchased; blocked = $summary.blocked; errors = $summary.errors; dryRun = $summary.dryRun }
-        error_count   = ([int]$state.error_count + [int]$summary.errors)
-        last_error    = [string]$summary.message
-    }
+    # Keep the independent listing/mask timers and pending work. Replacing the
+    # state here makes every buy tick trigger a full listing pass as well.
+    $state.last_buy_tick = (Get-Date).ToUniversalTime().ToString('o')
+    $state.last_result = @{ candidates = $summary.candidates; rolled = $summary.rolled; won = $summary.won; purchased = $summary.purchased; blocked = $summary.blocked; errors = $summary.errors; dryRun = $summary.dryRun }
+    $state.error_count = ([int]$state.error_count + [int]$summary.errors)
+    $state.last_error = [string]$summary.message
     Save-DuneBotState -State $state
 
     return $summary

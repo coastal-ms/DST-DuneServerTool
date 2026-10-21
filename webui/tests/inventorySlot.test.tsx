@@ -5,8 +5,9 @@ import { describe, expect, it, vi } from 'vitest'
 import type { SharedInventoryGroup } from '../src/api/gameplay'
 import { InventorySlot } from '../src/components/inventory/InventorySlot'
 
+const iconMount = vi.hoisted(() => vi.fn())
 vi.mock('../src/components/inventory/InventoryItemIcon', () => ({
-  InventoryItemIcon: () => <span aria-hidden="true" />,
+  InventoryItemIcon: () => { iconMount(); return <span aria-hidden="true" /> },
 }))
 
 function group(name: string): SharedInventoryGroup {
@@ -61,4 +62,14 @@ describe('InventorySlot preview coordination', () => {
       expect(within(screen.getByRole('tooltip')).getByText('Focused item')).toBeInTheDocument()
     })
   })
+})
+
+it('renders a selectable text row without mounting any image component', () => {
+  iconMount.mockClear()
+  const select = vi.fn()
+  const item = group('Text item')
+  render(<InventorySlot item={item} showImages={false} onSelect={select} />)
+  fireEvent.click(screen.getByRole('button', {name: /Text item/}))
+  expect(select).toHaveBeenCalledWith(item)
+  expect(iconMount).not.toHaveBeenCalled()
 })

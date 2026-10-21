@@ -186,7 +186,10 @@ Describe 'DunePlatformStore production helper' {
                [DateTime]::UtcNow -lt $deadline) {
             Start-Sleep -Milliseconds 50
         }
-        @(Get-Process -Name DunePlatformStore -ErrorAction SilentlyContinue).Count | Should -Be 0
+        # A running installed DST may launch its own cache helper concurrently.
+        # Only children owned by this test process are possible leaked helpers.
+        @(Get-CimInstance Win32_Process -Filter "Name='DunePlatformStore.exe' AND ParentProcessId=$PID").Count |
+            Should -Be 0
     }
 
     It 'replaces and queries a typed inventory generation through the production wrapper' {
@@ -663,6 +666,17 @@ Describe 'Platform cache snapshot and refresh coordination' {
         $definition = (Get-Command Get-DunePlatformSnapshot).Definition
         $definition | Should -Not -Match 'Invoke-DunePlatformHelper'
         $definition | Should -Not -Match 'Invoke-DunePlatformSourceRead'
+    }
+
+    It 'shares the complete inventory refresh across overlapping page visits' {
+        Mock Invoke-DuneInventoryCacheRefreshCore {
+            @{ ok=$true; generation='shared-visit'; rowCount=10 }
+        }
+        $first = Invoke-DuneInventoryCacheRefresh
+        $second = Invoke-DuneInventoryCacheRefresh
+        $first.generation | Should -Be 'shared-visit'
+        $second.generation | Should -Be 'shared-visit'
+        Should -Invoke Invoke-DuneInventoryCacheRefreshCore -Times 1 -Exactly
     }
 
     It 'refreshes the inventory cache from a bounded read and records a five-minute TTL' {

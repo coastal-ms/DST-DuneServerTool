@@ -1,5 +1,6 @@
 import { lazy, Suspense, useEffect, type ReactNode } from 'react'
-import { Routes, Route, Navigate } from './router'
+import { Routes, Route, Navigate, useLocation } from './router'
+import WidgetMode from './pages/WidgetMode'
 import { AppShell } from './layout/AppShell'
 import { PageStub } from './pages/PageStub'
 import { StatusProvider } from './hooks/useStatus'
@@ -52,6 +53,7 @@ function canAccessRoute(
 }
 
 function InstalledApp() {
+  const { pathname } = useLocation()
   const soloOnly = useSoloInstallation()
   const { canAccessOwnerSurfaces, canAccessSetup } = usePortalAccess()
 
@@ -63,6 +65,9 @@ function InstalledApp() {
   }, [])
 
   if (soloOnly && !isLocalViewer()) return <p>Solo Mode is available on the PC where DST is installed.</p>
+  // Widget mode belongs to this viewer only. The backend stays available to
+  // authenticated remote sessions, which drive their own on-demand work.
+  if (pathname === '/widget' && isLocalViewer()) return <WidgetMode soloOnly={soloOnly} />
 
   return (
     <StatusProvider>

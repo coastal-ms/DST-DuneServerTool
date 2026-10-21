@@ -58,8 +58,8 @@ describe('inventory workspace embedding', () => {
     view.unmount()
     window.history.replaceState(null, '', '/players?view=inventory')
     const inventory = render(<BrowserRouter><PlayersWorkspace /></BrowserRouter>)
-    expect(screen.getByText('Inventory fixture: player')).toBeInTheDocument()
-    expect(screen.getByRole('link', { name: 'Inventory' })).toHaveAttribute('aria-current', 'page')
+    expect(screen.getByText('Player admin fixture')).toBeInTheDocument()
+    expect(screen.queryByRole('link', { name: 'Inventory' })).not.toBeInTheDocument()
 
     inventory.unmount()
     window.history.replaceState(null, '', '/players?view=community')
@@ -72,8 +72,8 @@ describe('inventory workspace embedding', () => {
   it('limits the Bases inventory view to proven storage containers', () => {
     window.history.replaceState(null, '', '/bases?view=inventory')
     render(<BrowserRouter><BasesWorkspace /></BrowserRouter>)
-    expect(screen.getByText('Inventory fixture: storage')).toBeInTheDocument()
-    expect(screen.getByRole('link', { name: 'Storage inventory' })).toHaveAttribute('aria-current', 'page')
+    expect(window.location.pathname).toBe('/players')
+    expect(new URLSearchParams(window.location.search).get('section')).toBe('inventory')
   })
 
   it('makes the existing Blueprints tools discoverable from Bases', () => {
@@ -81,7 +81,7 @@ describe('inventory workspace embedding', () => {
     const view = render(<BrowserRouter><BasesWorkspace /></BrowserRouter>)
     expect(screen.getByText('Bases fixture')).toBeInTheDocument()
     expect(screen.getByRole('link', { name: 'Blueprints' })).toHaveAttribute('href', '/bases?view=blueprints')
-    expect(screen.getByRole('link', { name: 'Storage inventory' })).toHaveAttribute('href', '/bases?view=inventory')
+    expect(screen.queryByRole('link', { name: 'Storage inventory' })).not.toBeInTheDocument()
 
     view.unmount()
     window.history.replaceState(null, '', '/bases?view=blueprints')
@@ -107,7 +107,8 @@ describe('inventory workspace embedding', () => {
   it('offers the combined proven inventory projection from Economy', () => {
     window.history.replaceState(null, '', '/economy?view=inventory')
     render(<BrowserRouter><EconomyWorkspace /></BrowserRouter>)
-    expect(screen.getByText('Inventory fixture: player,storage')).toBeInTheDocument()
-    expect(screen.getByRole('link', { name: 'Inventory' })).toHaveAttribute('aria-current', 'page')
+    expect(window.location.pathname).toBe('/players')
+    expect(new URLSearchParams(window.location.search).get('section')).toBe('inventory')
+    expect(screen.queryByRole('link', { name: 'Inventory' })).not.toBeInTheDocument()
   })
 })

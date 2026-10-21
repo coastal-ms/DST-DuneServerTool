@@ -4,6 +4,7 @@
 // Reads /api/gameplay/players for the list + /api/gameplay/players/summary
 // for the server overview. Each section component owns its own data fetch.
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useSearch } from '../../router'
 import { Icon } from '../../components/Icon'
 import {
   getPlayers, getPlayerSummary,
@@ -25,6 +26,8 @@ const isOnline = (s: string) => s.toLowerCase().includes('online')
 
 export function PlayersTab() {
   const contextual = useCommandDeck()
+  const routeSearch = useSearch()
+  const routeParams = new URLSearchParams(routeSearch)
   const [players, setPlayers]   = useState<Player[]>([])
   const [source, setSource]     = useState<DataSource>('demo')
   const [liveError, setLive]    = useState<string | undefined>()
@@ -38,12 +41,19 @@ export function PlayersTab() {
   const [gmNoticeDismissed, setGmNoticeDismissed] = useState<boolean>(() => {
     try { return localStorage.getItem('dst.players.gmNoticeDismissed') === '1' } catch { return false }
   })
-  const [selectedId, setSel]    = useState<number | null>(null)
-  const [section, setSection]   = useState<SectionId>('stats')
+  const [selectedId, setSel]    = useState<number | null>(() => Number(routeParams.get('player_id')) || null)
+  const [section, setSection]   = useState<SectionId>(() => routeParams.get('section') === 'inventory' || routeParams.get('view') === 'inventory' ? 'inventory' : 'stats')
   const [directoryOpen, setDirectoryOpen] = useState(false)
   const [flash, setFlash]       = useState<{ msg: string; kind: 'ok' | 'err' | 'info' } | null>(null)
   const [refreshKey, setRefresh] = useState(0)
   const [summary, setSummary]   = useState<PlayerSummaryResponse | null>(null)
+
+  useEffect(() => {
+    const params = new URLSearchParams(routeSearch)
+    const player = Number(params.get('player_id'))
+    if (Number.isSafeInteger(player) && player > 0) setSel(player)
+    if (params.get('section') === 'inventory' || params.get('view') === 'inventory') setSection('inventory')
+  }, [routeSearch])
 
   const loadList = useCallback(async () => {
     setLoading(true); setError(null)

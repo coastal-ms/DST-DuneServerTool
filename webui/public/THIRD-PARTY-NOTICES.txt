@@ -2993,9 +2993,9 @@ SOFTWARE.
 
 
 ========================================================================
-vite 8.2.1
+vite 8.2.4
 License: MIT
-Source package: https://registry.npmjs.org/vite/-/vite-8.2.1.tgz
+Source package: https://registry.npmjs.org/vite/-/vite-8.2.4.tgz
 
 --- LICENSE.md ---
 # Vite core license

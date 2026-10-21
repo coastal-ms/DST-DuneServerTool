@@ -1,3 +1,20 @@
+Register-DuneRoute -Method GET -Path '/api/v1/inventory/players' -Handler {
+    param($req, $res, $routeParams, $body)
+    try {
+        $ctx = Get-DuneDbContext
+        if (-not $ctx.ok) { throw $ctx.message }
+        $result = Invoke-DuneSqlQuery -Ip $ctx.ip -ReadOnly $true -MaxRows 10000 -TimeoutSec 30 -Sql @'
+SELECT player_pawn_id AS id, COALESCE(character_name, '') AS name
+FROM dune.player_state WHERE player_pawn_id > 0 ORDER BY character_name, player_pawn_id;
+'@
+        if (-not $result.ok) { throw $result.error }
+        $players = @(foreach ($row in (ConvertTo-DuneRowMaps -Result $result)) {
+            @{ id = ConvertTo-DuneInt $row['id']; name = [string]$row['name'] }
+        })
+        Write-DuneJson -Response $res -Body @{ players = $players }
+    } catch { Write-DuneError -Response $res -Status 503 -Message "Player list unavailable: $($_.Exception.Message)" }
+}
+
 # POST /api/v1/inventory/refresh
 # Refreshes the derived read model immediately, then returns the new generation.
 Register-DuneRoute -Method POST -Path '/api/v1/inventory/refresh' -Handler {

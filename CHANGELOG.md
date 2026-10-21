@@ -13,6 +13,22 @@ here cover everything those tags shipped.
 
 ## [Unreleased]
 
+## [16.5.4] - 2026-10-20
+
+Add Widget mode: a compact, movable game-status window with an Open full DST control. Keep map pop-outs and remote management available while the local window is compact. Show current map status without duplicate retired instances. Remember Widget window size and position independently of the full window.
+
+Keep inventory under each player's record, with Backpack & bank, Storage containers and item tools. Browse 28 inventory items per page, with emotes and contract entries loaded separately on demand, load only the selected player's items, and repair the selected container in place. Consolidate older inventory tabs into the player screen. Remember the Load images choice across inventory sections, with compact image-free lists showing 100 items per page. Reuse visited inventory pages and item details, and open containers directly in the correct player record. Keep expanded durability editors in sync after repair or refresh, expose backpack-and-equipped repair in Inventory, and give the actual map-restart path after container repair.
+
+Open Vehicle Fleet with a player selector and load the selected player's fleet, with an explicit All vehicles option for server-wide management.
+
+Pause background map reads when no map viewers remain, preserving the saved Live setting. Remember Solo Live Map layer selections when the window is reopened, including when all layers are turned off.
+
+Use compact Online and Offline requirement labels with consistent player action cards.
+
+Replace the redundant Gameplay Admin dashboard shortcut with Open Live Maps.
+
+Reduce backend CPU use when processing large database results and keeping Live Maps open. Keep market listing refreshes on their configured schedule and skip unused price checks when no player orders exist.
+
 ## [16.5.3] - 2026-10-20
 
 Restore faster Live Maps startup after the latest game update for both official and Tank-enabled servers. Keep moving positions updating while resource layers load.

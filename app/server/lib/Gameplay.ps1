@@ -339,17 +339,17 @@ function Get-DuneSchematicCategory {
 # ----------------------------------------------------------------------------
 function ConvertTo-DuneRowMaps {
     param($Result)
-    $maps = @()
-    if (-not $Result -or -not $Result.ok -or -not $Result.columns) { return ,$maps }
+    $maps = [Collections.Generic.List[object]]::new()
+    if (-not $Result -or -not $Result.ok -or -not $Result.columns) { return ,@() }
     $cols = @($Result.columns)
     foreach ($row in @($Result.rows)) {
         $m = @{}
         for ($i = 0; $i -lt $cols.Count; $i++) {
             $m[[string]$cols[$i]] = if ($i -lt $row.Length) { $row[$i] } else { $null }
         }
-        $maps += ,$m
+        $maps.Add($m)
     }
-    return ,$maps
+    return ,$maps.ToArray()
 }
 
 function ConvertTo-DuneInt {

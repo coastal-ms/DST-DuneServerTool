@@ -789,7 +789,7 @@ function Write-DuneFile {
     $Response.ContentType = Get-DuneMimeType $Path
 
     # Cache hashed assets aggressively, anything else not at all.
-    if ($Path -match '\\assets\\.+\-[A-Za-z0-9_-]{6,}\.(?:js|css|woff2?|png|jpg|svg)$') {
+    if ($Path -match '\\assets\\.+\-[A-Za-z0-9_-]{6,}\.(?:js|css|woff2?|png|jpg|svg)$' -or $Path -match '[\\/]item-icons[\\/][a-f0-9]{20}\.webp$') {
         $Response.Headers['Cache-Control'] = 'public, max-age=31536000, immutable'
     } else {
         $Response.Headers['Cache-Control'] = 'no-cache'

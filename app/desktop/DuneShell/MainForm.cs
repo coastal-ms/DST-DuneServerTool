@@ -51,6 +51,10 @@ internal sealed class MainForm : Form
     private bool _closeRequestedByPortal;
     private FormWindowState _restoreState = FormWindowState.Normal;
     private Rectangle _restoreBounds;
+    private Rectangle? _widgetRestoreBounds;
+    private Rectangle? _widgetBounds = WidgetWindowPlacement.Load(WidgetStateFile);
+    private FormWindowState _widgetRestoreState;
+    private bool _changingWidgetMode;
 
     public MainForm(string? initialUrl, bool useWaitFile)
     {
@@ -69,6 +73,7 @@ internal sealed class MainForm : Form
         BuildTrayIcon();
 
         Resize += OnResizeToTray;
+        ResizeEnd += (_, _) => SaveWidgetBounds();
 
         FormClosing += (_, e) =>
         {
@@ -726,6 +731,49 @@ internal sealed class MainForm : Form
         if (string.Equals(messageType, "preferences.get", StringComparison.Ordinal))
         {
             PostPreferencesResult(requestId, true);
+            return;
+        }
+
+        if (string.Equals(messageType, "widget.set", StringComparison.Ordinal))
+        {
+            try
+            {
+                if (!message.TryGetProperty("enabled", out var enabled) ||
+                    enabled.ValueKind is not (System.Text.Json.JsonValueKind.True or System.Text.Json.JsonValueKind.False))
+                    throw new InvalidDataException("Widget mode requires enabled.");
+                if (enabled.GetBoolean() && _widgetRestoreBounds is null)
+                {
+                    _widgetRestoreState = WindowState;
+                    _widgetRestoreBounds = WindowState == FormWindowState.Normal ? Bounds : RestoreBounds;
+                    _changingWidgetMode = true;
+                    try
+                    {
+                        MinimumSize = new Size(360, 240);
+                        WindowState = FormWindowState.Normal;
+                        // Discard legacy placement inherited from the management frame.
+                        Rectangle target = WidgetWindowPlacement.Resolve(_widgetBounds, _widgetRestoreBounds.Value);
+                        target = ClampToVisible(target, new Size(740, 285));
+                        Bounds = target;
+                        _widgetBounds = target;
+                        _restoreBounds = target;
+                    }
+                    finally { _changingWidgetMode = false; }
+                    Text = "DST — Widget";
+                }
+                else if (!enabled.GetBoolean() && _widgetRestoreBounds is Rectangle original)
+                {
+                    SaveWidgetBounds();
+                    // End Widget ownership before restoring management geometry.
+                    _widgetRestoreBounds = null;
+                    MinimumSize = new Size(960, 600);
+                    Bounds = original;
+                    WindowState = _widgetRestoreState;
+                    Text = "Dune Server Tool";
+                    SaveWindowState();
+                }
+                PostShellResponse(requestId, "widget.set.result", true);
+            }
+            catch (Exception ex) { PostShellResponse(requestId, "widget.set.result", false, ex.Message); }
             return;
         }
 
@@ -1411,15 +1459,29 @@ internal sealed class MainForm : Form
         }
     }
 
+    private static string WidgetStateFile => Path.Combine(
+        Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+        "DuneServer", "shell-widget.json");
+
+    private void SaveWidgetBounds()
+    {
+        if (_widgetRestoreBounds is null || _changingWidgetMode || !Visible || WindowState != FormWindowState.Normal) return;
+        Rectangle bounds = Bounds;
+        if (bounds.Width < 360 || bounds.Height < 240) return;
+        _widgetBounds = ClampToVisible(bounds, new Size(740, 245));
+        WidgetWindowPlacement.Save(WidgetStateFile, _widgetBounds.Value);
+    }
+
     private void SaveWindowState()
     {
+        SaveWidgetBounds();
         try
         {
             // Persist the *normal* bounds even when maximized/minimized so the
             // restored size is sensible, plus a flag to reopen maximized.
-            Rectangle b = Visible
+            Rectangle b = _widgetRestoreBounds ?? (Visible
                 ? (WindowState == FormWindowState.Normal ? Bounds : RestoreBounds)
-                : _restoreBounds;
+                : _restoreBounds);
             b = ClampToVisible(b, new Size(2000, 1300));
             var st = new WinState
             {
@@ -1427,7 +1489,7 @@ internal sealed class MainForm : Form
                 Y = b.Y,
                 W = b.Width,
                 H = b.Height,
-                Max = WindowState == FormWindowState.Maximized,
+                Max = (_widgetRestoreBounds is null ? WindowState : _widgetRestoreState) == FormWindowState.Maximized,
                 MinTray = _minimizeToTray
             };
             string dir = Path.GetDirectoryName(WindowStateFile)!;

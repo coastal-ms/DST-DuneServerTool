@@ -73,7 +73,7 @@ class ProcessTests(unittest.TestCase):
                                        'DST_ATLAS_PREFERENCES_ROOT': folder}):
                 spec = importlib.util.spec_from_file_location('stop_fixture', Path(folder) / 'server.py')
                 service = importlib.util.module_from_spec(spec)
-                spec.loader.exec_module(service)
+                spec.loader.exec_module(service); service.touch_viewer()
             http = service.ThreadingHTTPServer(('127.0.0.1', 0), service.Handler)
             http_thread = threading.Thread(target=http.serve_forever)
             http_thread.start()
@@ -122,7 +122,7 @@ class ProcessTests(unittest.TestCase):
             shutil.copyfile(root / 'server.py', Path(folder) / 'server.py')
             with patch.dict(os.environ, {'DST_ATLAS_APP_ROOT': folder, 'DST_ATLAS_SNAPSHOT_ROOT': folder, 'DST_ATLAS_PREFERENCES_ROOT': folder}):
                 spec = importlib.util.spec_from_file_location('resume_fixture', Path(folder) / 'server.py')
-                service = importlib.util.module_from_spec(spec); spec.loader.exec_module(service)
+                service = importlib.util.module_from_spec(spec); spec.loader.exec_module(service); service.touch_viewer()
             service.job_period = lambda name: 60
             service.capture_static_files = lambda: None
             http = service.ThreadingHTTPServer(('127.0.0.1', 0), service.Handler)
@@ -157,7 +157,7 @@ class ProcessTests(unittest.TestCase):
                                        'DST_ATLAS_PREFERENCES_ROOT': folder}):
                 spec = importlib.util.spec_from_file_location('refresh_fixture', Path(folder) / 'server.py')
                 service = importlib.util.module_from_spec(spec)
-                spec.loader.exec_module(service)
+                spec.loader.exec_module(service); service.touch_viewer()
             service.SNAPSHOT_TIMEOUT = .6
             http = service.ThreadingHTTPServer(('127.0.0.1', 0), service.Handler)
             http_thread = threading.Thread(target=http.serve_forever)
@@ -214,7 +214,7 @@ class ProcessTests(unittest.TestCase):
             with patch.dict(os.environ, {'DST_ATLAS_APP_ROOT': folder,
                     'DST_ATLAS_SNAPSHOT_ROOT': folder, 'DST_ATLAS_PREFERENCES_ROOT': folder}):
                 spec = importlib.util.spec_from_file_location('optional_fixture', Path(folder) / 'server.py')
-                service = importlib.util.module_from_spec(spec); spec.loader.exec_module(service)
+                service = importlib.util.module_from_spec(spec); spec.loader.exec_module(service); service.touch_viewer()
             http = service.ThreadingHTTPServer(('127.0.0.1', 0), service.Handler)
             thread = threading.Thread(target=http.serve_forever); thread.start()
             began = threading.Event(); release = threading.Event(); workers = []
@@ -271,7 +271,7 @@ class ProcessTests(unittest.TestCase):
             with patch.dict(os.environ,{'DST_ATLAS_APP_ROOT':folder,'DST_ATLAS_SNAPSHOT_ROOT':folder,
                     'DST_ATLAS_PREFERENCES_ROOT':folder}):
                 spec=importlib.util.spec_from_file_location('budget_fixture',Path(folder)/'server.py')
-                service=importlib.util.module_from_spec(spec);spec.loader.exec_module(service)
+                service=importlib.util.module_from_spec(spec);spec.loader.exec_module(service); service.touch_viewer()
             service.live_enabled=True;service.job_period=lambda name:.01
             counts={'active':0,'peak':0};starts={};ends={};guard=threading.Lock();workers=[]
             def observe(name):

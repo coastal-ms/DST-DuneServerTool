@@ -437,6 +437,17 @@ INSERT INTO dune.player_markers VALUES (42);
         $integrity.modules[1].current_durability | Should -BeNullOrEmpty
     }
 
+    It 'filters fleet records by the selected pawn through controller permissions' {
+        $owner = Get-DuneVehicleFleetLive -Ip fixture -PlayerId 100
+        $owner.ok | Should -BeTrue -Because $owner.error
+        @($owner.vehicles).Count | Should -Be 1
+        $owner.vehicles[0].id | Should -Be 42
+        $shared = Get-DuneVehicleFleetLive -Ip fixture -PlayerId 110
+        $shared.ok | Should -BeTrue -Because $shared.error
+        @($shared.vehicles).Count | Should -Be 1
+        @( (Get-DuneVehicleFleetLive -Ip fixture -PlayerId 999).vehicles ).Count | Should -Be 0
+    }
+
     It 'renames an exact active vehicle and rejects stale expected names' {
         [void](Invoke-TestVehicleSql -Sql 'DELETE FROM dune.recovered_vehicles WHERE vehicle_id = 42; DELETE FROM dune.backup_vehicles WHERE vehicle_id = 42;')
         $renamed = Invoke-DuneVehicleRenameBatch -Ip fixture -DatabaseScope $script:scopeKey -Changes @(

@@ -24,6 +24,39 @@ import vehicle_fuel
 
 KINDS = {'spice', 'ore', 'crash', 'storm', 'vehicle', 'worm'}
 TRAIL_SECONDS = 600
+MAP_LAYERS = ('spice-large', 'spice-medium', 'spice-small', 'ore-titanium',
+              'ore-stravidium', 'ore', 'wreck', 'crash', 'storm', 'storm-history',
+              'vehicle', 'worm', 'ref-testing-station', 'ref-cave', 'ref-taxi-service')
+
+
+class MapPreferences:
+    def __init__(self, data):
+        self.path = data / 'preferences.json'
+        self.lock = threading.Lock()
+
+    @staticmethod
+    def validate(value):
+        if (not isinstance(value, dict) or value.get('schema') != 1
+                or not isinstance(value.get('layers'), list)
+                or len(value['layers']) > 100
+                or any(not isinstance(layer, str) for layer in value['layers'])):
+            raise ValueError('Invalid map preferences')
+        return {'schema': 1, 'layers': [layer for layer in MAP_LAYERS if layer in value['layers']]}
+
+    def load(self):
+        with self.lock:
+            try:
+                if self.path.stat().st_size > 4096:
+                    return None
+                return self.validate(json.loads(self.path.read_text(encoding='utf-8')))
+            except (OSError, ValueError):
+                return None
+
+    def save(self, value):
+        preferences = self.validate(value)
+        with self.lock:
+            atomic_json(self.path, preferences)
+        return preferences
 
 
 def spice_size(item):
@@ -249,10 +282,9 @@ def terrain_path(preferred, assets):
     return atlas_assets.icon_path('dd-layout-11.webp', assets, ROOT / 'icons')
 
 
-def serve(args):
-    args.data.mkdir(parents=True, exist_ok=True)
-    prepare_native_build()
+def create_server(args):
     state = MapState(args.data, args.launch)
+    preferences = MapPreferences(args.data)
     key = secrets.token_urlsafe(32)
     port = 0
     previous = MapState.read(args.data / 'ready.json')
@@ -273,6 +305,31 @@ def serve(args):
         def log_message(self, *_):
             pass
 
+        def do_POST(self):
+            url = urlparse(self.path)
+            host = f'127.0.0.1:{self.server.server_port}'
+            supplied = parse_qs(url.query).get('key', [''])[0]
+            if (self.headers.get('Host') != host or not hmac.compare_digest(supplied, key)
+                    or self.headers.get('Origin') not in (None, 'http://' + host)):
+                self.send_error(403)
+                return
+            if url.path != '/preferences':
+                self.send_error(404)
+                return
+            try:
+                length = int(self.headers.get('Content-Length', '0'))
+                if not 0 < length <= 4096 or self.headers.get_content_type() != 'application/json':
+                    raise ValueError('Invalid request')
+                value = json.loads(self.rfile.read(length))
+                body = json.dumps(preferences.save(value)).encode()
+            except (ValueError, UnicodeError):
+                self.send_error(400)
+                return
+            except OSError:
+                self.send_error(500)
+                return
+            self.respond(body, 'application/json')
+
         def do_GET(self):
             url = urlparse(self.path)
             supplied = parse_qs(url.query).get('key', [''])[0]
@@ -281,6 +338,8 @@ def serve(args):
                 return
             if url.path == '/':
                 body, mime = (ROOT / 'index.html').read_bytes(), 'text/html; charset=utf-8'
+            elif url.path == '/preferences':
+                body, mime = json.dumps(preferences.load()).encode(), 'application/json'
             elif url.path == '/state':
                 body, mime = json.dumps(state.snapshot()).encode(), 'application/json'
             elif url.path == '/health':
@@ -296,6 +355,9 @@ def serve(args):
             else:
                 self.send_error(404)
                 return
+            self.respond(body, mime)
+
+        def respond(self, body, mime):
             self.send_response(200)
             self.send_header('Content-Type', mime)
             self.send_header('Cache-Control', 'no-store')
@@ -305,7 +367,13 @@ def serve(args):
             self.end_headers()
             self.wfile.write(body)
 
-    server = ThreadingHTTPServer(('127.0.0.1', port), Handler)
+    return ThreadingHTTPServer(('127.0.0.1', port), Handler), key
+
+
+def serve(args):
+    args.data.mkdir(parents=True, exist_ok=True)
+    prepare_native_build()
+    server, key = create_server(args)
     atomic_json(args.data / 'ready.json', {'pid': os.getpid(), 'launchId': args.launch,
                 'url': f'http://127.0.0.1:{server.server_port}/?key={key}'})
     server.serve_forever()

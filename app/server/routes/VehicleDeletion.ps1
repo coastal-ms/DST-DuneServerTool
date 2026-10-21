@@ -3,9 +3,11 @@
 Register-DuneRoute -Method GET -Path '/api/gameplay/vehicles' -Handler {
     param($req, $res, $routeParams, $body)
     try {
+        $player = Resolve-DuneInventoryPlayerId -HasPlayerId (Test-DuneInventoryQueryParameterPresent -Request $req -Name 'player_id') -Value (Get-DuneQ $req 'player_id')
+        if (-not $player.ok) { Write-DuneError -Response $res -Status 400 -Message $player.error; return }
         $ctx = Get-DuneDbContext
         if (-not $ctx.ok) { Write-DuneError -Response $res -Status 503 -Message $ctx.message; return }
-        $result = Get-DuneVehicleFleetLive -Ip $ctx.ip
+        $result = Get-DuneVehicleFleetLive -Ip $ctx.ip -PlayerId ([long]$player.playerId)
         if (-not $result.ok) { Write-DuneError -Response $res -Status 503 -Message $result.error; return }
         Write-DuneJson -Response $res -Body @{
             vehicles = @($result.vehicles); total = $result.total; source = 'live'

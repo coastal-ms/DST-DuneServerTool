@@ -1,10 +1,13 @@
 """Companion acceptance checks with isolated local feeds and copied saves."""
+import http.client
 import importlib.util
 import json
 from pathlib import Path
 import sys
 import tempfile
 import time
+import threading
+from types import SimpleNamespace
 import unittest
 from unittest.mock import patch
 
@@ -201,6 +204,77 @@ class SoloMapTests(unittest.TestCase):
             result = self.state.snapshot()
             self.assertEqual(len(result['tracks']), 1)
             self.assertEqual([p['x'] for p in result['tracks'][0]['points']], [10, 5000])
+
+
+class SoloMapPreferencesTests(unittest.TestCase):
+    def setUp(self):
+        self.temp = tempfile.TemporaryDirectory()
+        self.root = Path(self.temp.name)
+        self.preferences = server.MapPreferences(self.root)
+
+    def tearDown(self):
+        self.temp.cleanup()
+
+    def test_missing_or_malformed_preferences_keep_first_open_defaults(self):
+        self.assertIsNone(self.preferences.load())
+        for value in ('{broken', '[]', '{"schema":1,"layers":null}',
+                      '{"schema":2,"layers":[]}', '{"schema":1,"layers":[false]}'):
+            self.preferences.path.write_text(value, encoding='utf-8')
+            self.assertIsNone(self.preferences.load())
+
+    def test_selected_layers_and_all_off_survive_new_companion_instances(self):
+        for layers in (['storm', 'vehicle'], []):
+            self.preferences.save({'schema': 1, 'layers': layers})
+            self.assertEqual(server.MapPreferences(self.root).load(), {'schema': 1, 'layers': layers})
+        other = self.root / 'other-save'
+        other.mkdir()
+        self.assertIsNone(server.MapPreferences(other).load())
+
+    def test_only_known_unique_layers_are_saved_and_invalid_writes_preserve_choices(self):
+        expected = {'schema': 1, 'layers': ['vehicle']}
+        self.assertEqual(self.preferences.save({'schema': 1, 'layers': ['vehicle', 'unknown', 'vehicle']}), expected)
+        with self.assertRaises(ValueError):
+            self.preferences.save({'schema': 1, 'layers': 'storm'})
+        self.assertEqual(self.preferences.load(), expected)
+        self.assertEqual(sorted(p.name for p in self.root.iterdir()), ['preferences.json'])
+
+    def test_authenticated_http_preferences_are_durable_and_reject_foreign_requests(self):
+        args = SimpleNamespace(data=self.root, launch='fixture', assets=self.root, terrain=self.root / 'terrain.webp')
+        with patch.object(server.atlas_assets, 'marker_icons', return_value={}):
+            httpd, key = server.create_server(args)
+        thread = threading.Thread(target=httpd.serve_forever, kwargs={'poll_interval': .01}, daemon=True)
+        thread.start()
+        port = httpd.server_port
+
+        def request(method, path, value=None, **headers):
+            connection = http.client.HTTPConnection('127.0.0.1', port, timeout=5)
+            try:
+                body = json.dumps(value) if value is not None else None
+                connection.request(method, path, body, {'Content-Type': 'application/json', **headers})
+                response = connection.getresponse()
+                return response.status, response.read()
+            finally:
+                connection.close()
+
+        try:
+            path = '/preferences?key=' + key
+            self.assertEqual(request('GET', path), (200, b'null'))
+            value = {'schema': 1, 'layers': []}
+            status, body = request('POST', path, value, Origin=f'http://127.0.0.1:{port}')
+            self.assertEqual(status, 200)
+            self.assertEqual(json.loads(body), value)
+            self.assertEqual(json.loads(request('GET', path)[1]), value)
+            self.assertEqual(request('POST', '/preferences?key=wrong', value)[0], 403)
+            self.assertEqual(request('POST', path, value, Origin='https://foreign.example')[0], 403)
+            self.assertEqual(request('POST', path, value, Host='foreign.example')[0], 403)
+            self.assertEqual(request('GET', '/preferences?key=wrong')[0], 403)
+            self.assertEqual(request('POST', path, {'schema': 1, 'layers': None})[0], 400)
+            self.assertEqual(request('POST', path, {'schema': 1, 'layers': ['x' * 5000]})[0], 400)
+            self.assertEqual(self.preferences.load(), value)
+        finally:
+            httpd.shutdown()
+            thread.join(timeout=5)
+            httpd.server_close()
 
 
 if __name__ == '__main__':

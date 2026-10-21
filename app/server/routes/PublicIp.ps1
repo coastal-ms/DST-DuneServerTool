@@ -1,5 +1,11 @@
 # Public IP / DDNS Settings API.
 
+Register-DuneRoute -Method GET -Path '/api/widget/status' -Handler {
+    param($req, $res, $routeParams, $body)
+    try { Write-DuneJson -Response $res -Body (Get-DuneWidgetStatus) }
+    catch { Write-DuneError -Response $res -Status 503 -Message 'Map status unavailable.' }
+}
+
 function Get-DunePublicIpBodyValue {
     param($Body, [string]$Name, [object]$Default = $null)
     if (-not $Body) { return $Default }

@@ -1,4 +1,4 @@
-BeforeAll {
+﻿BeforeAll {
     . (Join-Path $PSScriptRoot '_TestHelpers.ps1')
     Import-DstLib 'Gameplay.ps1'
     Import-DstLib 'GameplayPlayers.ps1'
@@ -28,7 +28,9 @@ Describe 'Selected storage box repair' {
         $result=Invoke-DuneStorageRepairAll -Ip 'test' -ContainerId 123
         $result.ok | Should -BeTrue
         $result.repaired | Should -Be 1
-        $result.message | Should -Match 'Restart the server zone'
+        $result.message | Should -Match 'DD Atlas > Lifecycle'
+        $result.message | Should -Match 'Restart Hagga or Restart Deep Desert'
+        $result.message | Should -Match 'Players on that map will be disconnected'
         $script:repairLookup | Should -Match 'p.id = 123::bigint'
         $script:repairLookup | Should -Match 'inv.inventory_type = 4'
         $script:repairLookup | Should -Match 'is_hologram = false'

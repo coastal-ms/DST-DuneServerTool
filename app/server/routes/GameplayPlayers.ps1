@@ -65,13 +65,21 @@ Register-DuneRoute -Method GET -Path '/api/gameplay/players/detail' -Handler {
         [void][Int64]::TryParse((Get-DuneQ $req 'controller'), [ref]$controller)
         if ($pawn -le 0) { Write-DuneError -Response $res -Status 400 -Message 'pawn id is required.'; return }
 
+        $inventoryKind = Get-DuneQ $req 'inventory_kind'
+        if (-not $inventoryKind) { $inventoryKind = 'item' }
+        if ($inventoryKind -notin @('item','emote','contract')) { Write-DuneError -Response $res -Status 400 -Message 'inventory_kind must be item, emote or contract.'; return }
+        $inventoryOffset = -1
+        $offsetValue = Get-DuneQ $req 'inventory_offset'
+        if ($offsetValue) {
+            if (-not [int]::TryParse($offsetValue, [ref]$inventoryOffset) -or $inventoryOffset -lt 0) { Write-DuneError -Response $res -Status 400 -Message 'inventory_offset must be a non-negative integer.'; return }
+        }
         $source = 'demo'
         $detail = $null
         $liveError = $null
         if (-not (Test-DuneDemoRequested $req)) {
             $ctx = Get-DuneDbContext
             if ($ctx.ok) {
-                $live = Get-DunePlayerDetailLive -Ip $ctx.ip -PawnId $pawn -ControllerId $controller
+                $live = Get-DunePlayerDetailLive -Ip $ctx.ip -PawnId $pawn -ControllerId $controller -InventoryOffset $inventoryOffset -InventoryKind $inventoryKind
                 if ($live.ok) { $detail = $live; $source = 'live' }
                 else { $liveError = $live.error }
             } else { $liveError = $ctx.message }
@@ -82,6 +90,12 @@ Register-DuneRoute -Method GET -Path '/api/gameplay/players/detail' -Handler {
             specs     = @($detail.specs)
             currency  = @($detail.currency)
             source    = $source
+        }
+        if ($inventoryOffset -ge 0) {
+            $pageItems = @($detail.inventory)
+            if ($source -eq 'demo') { $pageItems = @($pageItems | Where-Object { (Get-DuneItemKind -TemplateId ([string]$_.template_id)) -eq $inventoryKind } | Select-Object -Skip $inventoryOffset -First 29) }
+            $out['inventory_has_more'] = $pageItems.Count -gt 28
+            $out['inventory'] = @($pageItems | Select-Object -First 28)
         }
         if ($liveError) { $out['liveError'] = $liveError }
         Write-DuneJson -Response $res -Body $out

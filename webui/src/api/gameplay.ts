@@ -514,6 +514,10 @@ export function refreshSharedInventory() {
   })
 }
 
+export function getInventoryPlayers() {
+  return api<{ players: { id: number; name: string }[] }>('/api/v1/inventory/players')
+}
+
 export function getSharedInventoryOccurrences(query: SharedInventoryOccurrencesQuery) {
   return api<SharedInventoryOccurrencesResponse>(
     `/api/v1/inventory/items/occurrences${qs({
@@ -762,6 +766,7 @@ export interface CurrencyBalance {
 }
 
 export interface PlayerDetailResponse {
+  inventory_has_more?: boolean
   inventory: InventoryItem[]
   specs: SpecTrack[]
   currency: CurrencyBalance[]
@@ -779,9 +784,9 @@ export function getPlayers(demo?: boolean) {
   return api<PlayersResponse>(`/api/gameplay/players${qs({ demo: demo ? 1 : undefined })}`)
 }
 
-export function getPlayerDetail(pawnId: number, controllerId: number, demo?: boolean) {
+export function getPlayerDetail(pawnId: number, controllerId: number, demo?: boolean, inventoryOffset?: number, inventoryKind: 'item' | 'emote' | 'contract' = 'item') {
   return api<PlayerDetailResponse>(`/api/gameplay/players/detail${qs({
-    pawn: pawnId, controller: controllerId, demo: demo ? 1 : undefined,
+    pawn: pawnId, controller: controllerId, demo: demo ? 1 : undefined, inventory_offset: inventoryOffset, inventory_kind: inventoryOffset === undefined ? undefined : inventoryKind,
   })}`)
 }
 
@@ -2155,8 +2160,8 @@ export interface VehicleDeletionQueue {
   last_error?: string
 }
 
-export function getVehicleFleet() {
-  return api<{ vehicles: VehicleFleetRow[]; total: number; source: DataSource; observed_at?: string; stale_after_seconds?: number; database_scope?: string }>('/api/gameplay/vehicles')
+export function getVehicleFleet(playerId?: number) {
+  return api<{ vehicles: VehicleFleetRow[]; total: number; source: DataSource; observed_at?: string; stale_after_seconds?: number; database_scope?: string }>(`/api/gameplay/vehicles${qs({ player_id: playerId })}`)
 }
 
 export function getVehicleIntegrity(vehicleId: number) {

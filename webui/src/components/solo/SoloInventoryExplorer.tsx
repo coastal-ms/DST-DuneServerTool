@@ -7,6 +7,7 @@ import type {
   SoloRangedWeapon,
 } from '../../api/solo'
 import { Icon } from '../Icon'
+import { useInventoryImages } from '../inventory/useInventoryImages'
 import { InventorySlot } from '../inventory/InventorySlot'
 import { DataState } from '../platform/DataState'
 import { DetailPanel } from '../platform/DetailPanel'
@@ -105,6 +106,7 @@ export function SoloInventoryExplorer({
     quantity: number,
   ) => void
 }) {
+  const [loadImages, setLoadImages] = useInventoryImages()
   const [query, setQuery] = useState('')
   const [sort, setSort] = useState<'name' | 'quantity'>('name')
   const [chosenDestinationKey, setDestinationKey] = useState<string | null>(null)
@@ -203,15 +205,18 @@ export function SoloInventoryExplorer({
               </select>
             </label>
           </div>
+          <label className="mt-3 flex min-h-11 items-center gap-2 text-sm">
+            <input type="checkbox" checked={loadImages} onChange={event => setLoadImages(event.target.checked)} />Load images
+          </label>
           {groups.length === 0 ? (
             <div className="mt-4">
               <DataState state="empty" title="No matching Solo inventory items" message="Try another item, template, or location." />
             </div>
           ) : (
-            <ul className="mt-4 grid min-w-0 grid-cols-[repeat(auto-fill,minmax(min(6.5rem,100%),1fr))] gap-2.5" aria-label="Solo inventory results">
+            <ul className={loadImages ? "mt-4 grid min-w-0 grid-cols-[repeat(auto-fill,minmax(min(6.5rem,100%),1fr))] gap-2.5" : "mt-4 grid min-w-0 grid-cols-1 gap-1.5"} aria-label="Solo inventory results">
               {visibleGroups.map(group => (
                 <li key={group.groupKey} className="min-w-0">
-                  <InventorySlot item={group} onSelect={setSelected} />
+                  <InventorySlot item={group} showImages={loadImages} onSelect={setSelected} />
                 </li>
               ))}
             </ul>

@@ -95,8 +95,11 @@ function ConvertTo-DuneVehicleNumber {
 }
 
 function Get-DuneVehicleFleetLive {
-    param([string]$Ip, [long]$VehicleId = 0)
+    param([string]$Ip, [long]$VehicleId = 0, [long]$PlayerId = 0)
     $filter = if ($VehicleId -gt 0) { "AND a.id = $VehicleId::bigint" } else { '' }
+    if ($PlayerId -gt 0) {
+        $filter += " AND EXISTS (SELECT 1 FROM dune.permission_actor_rank selected_rank JOIN dune.player_state selected_player ON selected_player.player_controller_id = selected_rank.player_id WHERE selected_rank.permission_actor_id = a.id AND selected_player.player_pawn_id = $PlayerId)"
+    }
     $hostScope = Get-DuneVehicleHostScope -Ip $Ip
     $revisionSql = Get-DuneVehicleTargetRevisionSql -DatabaseScope $hostScope.key
     $sql = @"

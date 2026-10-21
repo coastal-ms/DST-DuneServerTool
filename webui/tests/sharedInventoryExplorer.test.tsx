@@ -13,6 +13,8 @@ const capabilityState = vi.hoisted(() => ({
   refresh: vi.fn(),
 }))
 const inventoryApi = vi.hoisted(() => vi.fn())
+const refreshInventoryApi = vi.hoisted(() => vi.fn())
+const playerListApi = vi.hoisted(() => vi.fn())
 const occurrenceApi = vi.hoisted(() => vi.fn())
 const renameStorageApi = vi.hoisted(() => vi.fn())
 const repairStorageApi = vi.hoisted(() => vi.fn())
@@ -41,6 +43,8 @@ vi.mock('../src/api/gameplay', async importOriginal => {
   return {
     ...actual,
     getSharedInventory: inventoryApi,
+    refreshSharedInventory: refreshInventoryApi,
+    getInventoryPlayers: playerListApi,
     getSharedInventoryOccurrences: occurrenceApi,
     renameStorage: renameStorageApi,
     repairStorageContents: repairStorageApi,
@@ -143,6 +147,9 @@ function deferred<T>() {
 }
 
 beforeEach(() => {
+  window.history.replaceState(null, '', '/economy?view=inventory&player_id=20001')
+  playerListApi.mockResolvedValue({ players })
+  refreshInventoryApi.mockResolvedValue({ ok: true, generation: 'visit', rowCount: 1 })
   inventoryApi.mockResolvedValue(fixture)
   occurrenceApi.mockResolvedValue(occurrenceFixture)
   itemIconResolver.mockResolvedValue('/item-icons/fixture-copper.webp')
@@ -158,6 +165,8 @@ afterEach(() => {
   cleanup()
   vi.restoreAllMocks()
   inventoryApi.mockReset()
+  refreshInventoryApi.mockReset()
+  playerListApi.mockReset()
   occurrenceApi.mockReset()
   itemIconResolver.mockReset()
   renameStorageApi.mockReset()
@@ -170,6 +179,41 @@ afterEach(() => {
 })
 
 describe('Shared Inventory Explorer grouped catalog', () => {
+  it('loads only the player list until a player is selected, never a full refresh', async () => {
+    window.history.replaceState(null, '', '/economy?view=inventory')
+    renderExplorer()
+    await screen.findByRole('option', { name: 'Select Player for Inventory' })
+    await waitFor(() => expect(playerListApi).toHaveBeenCalledTimes(1))
+    expect(inventoryApi).not.toHaveBeenCalled()
+    expect(refreshInventoryApi).not.toHaveBeenCalled()
+    await userEvent.setup().selectOptions(screen.getByRole('combobox', { name: 'Player' }), '20001')
+    await screen.findByRole('button', { name: /Copper, total quantity/ })
+    expect(inventoryApi).toHaveBeenCalledWith(expect.objectContaining({ playerId: 20001 }))
+    fireEvent.click(screen.getByRole('button', { name: 'Refresh inventory' }))
+    await waitFor(() => expect(inventoryApi).toHaveBeenCalledTimes(2))
+    expect(refreshInventoryApi).not.toHaveBeenCalled()
+  })
+
+  it('keeps page requests at 28 entries and replaces the visible page', async () => {
+    inventoryApi.mockResolvedValueOnce({ ...fixture, page: { limit: 28, nextCursor: 'page-two', truncated: true } })
+    inventoryApi.mockResolvedValueOnce({ ...fixture, data: { ...fixture.data, groups: [] }, page: { limit: 28, nextCursor: null, truncated: false } })
+    renderExplorer()
+    await screen.findByRole('button', { name: /Copper, total quantity/ })
+    expect(inventoryApi).toHaveBeenLastCalledWith(expect.objectContaining({ limit: 28, playerId: 20001 }))
+    fireEvent.click(screen.getByRole('button', { name: 'Next' }))
+    await waitFor(() => expect(inventoryApi).toHaveBeenLastCalledWith(expect.objectContaining({ limit: 28, cursor: 'page-two' })))
+    await screen.findByText('No matching inventory items')
+    expect(screen.queryByRole('button', { name: /Copper, total quantity/ })).not.toBeInTheDocument()
+  })
+
+  it('retries a selected player read without launching a server-wide refresh', async () => {
+    inventoryApi.mockRejectedValueOnce(new Error('Player read failed'))
+    renderExplorer()
+    await screen.findByText('Player read failed')
+    fireEvent.click(screen.getByRole('button', { name: 'Refresh inventory' }))
+    await screen.findByRole('button', { name: /Copper, total quantity/ })
+    expect(refreshInventoryApi).not.toHaveBeenCalled()
+  })
   it('shows a catalog base maximum when the saved item omits its maximum', async () => {
     occurrenceApi.mockResolvedValue({...occurrenceFixture,data:{...occurrenceFixture.data,items:[{...occurrence,durability:'28.669025',maxDurability:'N/A',metadata:{...metadata,baseMaxDurability:100}}]}})
     renderExplorer()
@@ -192,15 +236,15 @@ describe('Shared Inventory Explorer grouped catalog', () => {
     expect(deleteInventoryItemApi).not.toHaveBeenCalled()
     expect(deleteStorageItemApi).not.toHaveBeenCalled()
   })
-  it('defaults to all players and locations and renders one aggregate slot', async () => {
+  it('loads the selected player and retains location browsing', async () => {
     renderExplorer()
     const slot = await screen.findByRole('button', { name: /Copper, total quantity 30, 3 occurrences across 3 locations, quality 0-2/ })
     expect(slot).toBeInTheDocument()
-    expect(screen.getByRole('combobox', { name: 'Player' })).toHaveValue('')
+    expect(screen.getByRole('combobox', { name: 'Player' })).toHaveValue('20001')
     expect(screen.getByRole('combobox', { name: 'Location' })).toHaveValue('')
     expect(screen.getByText('3 loc')).toBeInTheDocument()
-    expect(screen.getByRole('option', { name: 'Bank Storage - Coastal' })).toBeInTheDocument()
-    expect(inventoryApi).toHaveBeenCalledWith(expect.objectContaining({ playerId: undefined, locationId: undefined, sort: 'name-asc' }))
+    expect(screen.getByRole('option', { name: 'Bank Storage' })).toBeInTheDocument()
+    expect(inventoryApi).toHaveBeenCalledWith(expect.objectContaining({ playerId: 20001, locationId: undefined, sort: 'name-asc' }))
   })
 
   it('surfaces malformed grouped rows instead of rendering a phantom slot', async () => {
@@ -229,8 +273,8 @@ describe('Shared Inventory Explorer grouped catalog', () => {
     await screen.findByText('Copper')
     expect(screen.getByRole('option', { name: 'Coastal (1)' })).toBeInTheDocument()
     expect(screen.getByRole('option', { name: 'Coastal (2)' })).toBeInTheDocument()
-    expect(screen.getByRole('option', { name: 'Copper box - Coastal (1)' })).toBeInTheDocument()
-    expect(screen.getByRole('option', { name: 'Copper box - Coastal (2)' })).toBeInTheDocument()
+    expect(screen.getByRole('option', { name: 'Copper box (1)' })).toBeInTheDocument()
+    expect(screen.getByRole('option', { name: 'Copper box (2)' })).toBeInTheDocument()
     expect(screen.queryByText('50001')).not.toBeInTheDocument()
   })
 
@@ -238,7 +282,7 @@ describe('Shared Inventory Explorer grouped catalog', () => {
     const user = userEvent.setup()
     window.history.replaceState(null, '', '/economy?view=inventory&location_type=storage&location_id=50001')
     renderExplorer()
-    await screen.findByText('Copper')
+    await screen.findByRole('option', { name: 'Select Player for Inventory' })
     await user.selectOptions(screen.getByRole('combobox', { name: 'Player' }), '20001')
     expect(window.location.search).toContain('player_id=20001')
     expect(window.location.search).not.toContain('location_id')
@@ -276,17 +320,31 @@ describe('Shared Inventory Explorer grouped catalog', () => {
     const user=userEvent.setup()
     window.history.replaceState(null,'','/economy?view=inventory&scope_type=storage&scope_id=50001')
     renderExplorer()
-    await user.click(await screen.findByRole('button',{name:'Repair all contents'}))
+    await user.click(await screen.findByRole('button',{name:'Repair items in Copper box'}))
     await waitFor(()=>expect(repairStorageApi).toHaveBeenCalledWith(50001))
     expect(await screen.findByText('Repaired equipment in this box. Restart the server zone.')).toBeInTheDocument()
     expect(inventoryApi.mock.calls.length).toBeGreaterThan(1)
   })
 
-  it('does not offer box repair without a selected storage location', async () => {
+  it('keeps container repair visible but disabled until a storage location is selected', async () => {
     renderExplorer()
     await screen.findByText('Copper')
-    expect(screen.queryByRole('button',{name:'Repair all contents'})).not.toBeInTheDocument()
+    expect(screen.getByRole('button',{name:'Repair container items'})).toBeDisabled()
     expect(repairStorageApi).not.toHaveBeenCalled()
+  })
+
+  it('names the storage selector and the exact repair target in the player inventory', async () => {
+    const user = userEvent.setup()
+    render(<BrowserRouter><SharedInventoryExplorer entityTypes={['storage']} selectedPlayer={{id:20001,name:'Coastal'}} /></BrowserRouter>)
+    await screen.findByText('Copper')
+    expect(screen.getByRole('button', {name:'Repair container items'})).toBeDisabled()
+    expect(screen.getByRole('searchbox', {name:'Search inventory'})).toHaveClass('border', 'bg-surface-2')
+    await user.selectOptions(screen.getByRole('combobox', {name:'Storage container'}), 'storage:50001')
+    const repair = await screen.findByRole('button', {name:'Repair items in Copper box'})
+    await waitFor(() => expect(repair).toBeEnabled())
+    await user.click(repair)
+    await waitFor(() => expect(repairStorageApi).toHaveBeenCalledWith(50001))
+    expect(screen.getByText('Page 1 · Showing 1 item type')).toBeInTheDocument()
   })
 
   it('fails closed for a malformed player deep link', async () => {
@@ -316,7 +374,7 @@ describe('Shared Inventory Explorer grouped catalog', () => {
     expect(await screen.findByText('No matching inventory items')).toBeInTheDocument()
     expect(screen.queryByText('Location does not match this player')).not.toBeInTheDocument()
     expect(screen.getByRole('combobox', { name: 'Player' })).toHaveValue('20001')
-    expect(screen.getByRole('option', { name: 'Coastal' })).toBeInTheDocument()
+    expect(screen.getByRole('option', { name: 'Coastal (1)' })).toBeInTheDocument()
     expect(screen.getByRole('combobox', { name: 'Location' })).toHaveValue('storage:50001')
     expect(screen.getByRole('option', { name: 'Copper box' })).toBeInTheDocument()
 
@@ -329,7 +387,7 @@ describe('Shared Inventory Explorer grouped catalog', () => {
     const user = userEvent.setup()
     window.history.replaceState(null, '', '/economy?view=inventory&player_id=20001&location_type=storage&location_id=50001')
     renderExplorer()
-    await user.click(await screen.findByRole('button', { name: /Copper/ }))
+    await user.click(await screen.findByRole('button', { name: /Copper, total quantity/ }))
     expect(await screen.findByRole('dialog', { name: 'Copper' })).toBeInTheDocument()
     await waitFor(() => expect(occurrenceApi).toHaveBeenCalledWith(expect.objectContaining({
       templateId: 'Copper', playerId: 20001, locationType: 'storage', locationId: 50001, sort: 'player-asc',
@@ -350,7 +408,7 @@ describe('Shared Inventory Explorer grouped catalog', () => {
     })
     const user = userEvent.setup()
     renderExplorer()
-    await user.click(await screen.findByRole('button', { name: /Copper/ }))
+    await user.click(await screen.findByRole('button', { name: /Copper, total quantity/ }))
     await screen.findByRole('list', { name: 'Item occurrences' })
 
     await user.click(screen.getByRole('checkbox', { name: 'Select all loaded occurrences' }))
@@ -375,7 +433,7 @@ describe('Shared Inventory Explorer grouped catalog', () => {
     deleteInventoryItemApi.mockRejectedValue(new Error('Player item delete was rejected.'))
     const user = userEvent.setup()
     renderExplorer()
-    await user.click(await screen.findByRole('button', { name: /Copper/ }))
+    await user.click(await screen.findByRole('button', { name: /Copper, total quantity/ }))
     await screen.findByRole('list', { name: 'Item occurrences' })
 
     await user.click(screen.getByRole('checkbox', { name: 'Select all loaded occurrences' }))
@@ -392,7 +450,7 @@ describe('Shared Inventory Explorer grouped catalog', () => {
       .mockResolvedValue({ ...fixture, data: { ...fixture.data, groups: [] } })
     const user = userEvent.setup()
     renderExplorer()
-    await user.click(await screen.findByRole('button', { name: /Copper/ }))
+    await user.click(await screen.findByRole('button', { name: /Copper, total quantity/ }))
     await user.click(await screen.findByRole('button', { name: 'Delete Copper from Copper box' }))
 
     expect(await screen.findByText('Removed 10 items from 1 occurrence.')).toBeInTheDocument()
@@ -403,7 +461,7 @@ describe('Shared Inventory Explorer grouped catalog', () => {
     const confirm = vi.spyOn(window, 'confirm').mockReturnValue(true)
     const user = userEvent.setup()
     renderExplorer()
-    await user.click(await screen.findByRole('button', { name: /Copper/ }))
+    await user.click(await screen.findByRole('button', { name: /Copper, total quantity/ }))
     const quantity = await screen.findByRole('spinbutton', { name: 'Delete quantity for Copper in Copper box' })
     await user.clear(quantity)
     await user.type(quantity, '4')
@@ -425,7 +483,7 @@ describe('Shared Inventory Explorer grouped catalog', () => {
     })
     const user = userEvent.setup()
     renderExplorer()
-    await user.click(await screen.findByRole('button', { name: /Copper/ }))
+    await user.click(await screen.findByRole('button', { name: /Copper, total quantity/ }))
     expect(await screen.findByText(/malformed item occurrence/)).toBeInTheDocument()
     expect(screen.queryByRole('list', { name: 'Item occurrences' })).not.toBeInTheDocument()
   })
@@ -438,7 +496,7 @@ describe('Shared Inventory Explorer grouped catalog', () => {
       data: { ...occurrenceFixture.data, playerId: 20001, items: [], players: [], locations: [] },
     })
     renderExplorer()
-    await user.click(await screen.findByRole('button', { name: /Copper/ }))
+    await user.click(await screen.findByRole('button', { name: /Copper, total quantity/ }))
     expect(await screen.findByText('No matching occurrences')).toBeInTheDocument()
     expect(screen.getByRole('combobox', { name: 'Occurrence player' })).toHaveValue('20001')
     expect(screen.getByRole('combobox', { name: 'Occurrence location' })).toHaveValue('storage:50001')
@@ -450,7 +508,7 @@ describe('Shared Inventory Explorer grouped catalog', () => {
     const user = userEvent.setup()
     itemIconResolver.mockResolvedValue(null)
     renderExplorer()
-    await user.click(await screen.findByRole('button', { name: /Copper/ }))
+    await user.click(await screen.findByRole('button', { name: /Copper, total quantity/ }))
     await screen.findByRole('dialog', { name: 'Copper' })
     await waitFor(() => expect(itemIconResolver).toHaveBeenCalledWith('Copper'))
     expect(screen.queryByRole('link', { name: 'View on dune.gaming.tools' })).not.toBeInTheDocument()
@@ -464,8 +522,9 @@ describe('Shared Inventory Explorer grouped catalog', () => {
       data: { ...fixture.data, groups: [{ ...copperGroup, groupKey: 'iron', templateId: 'Iron', displayName: 'Iron' }] },
     })
     renderExplorer()
+    await waitFor(() => expect(inventoryApi).toHaveBeenCalledTimes(1))
     act(() => {
-      window.history.pushState(null, '', '/economy?view=inventory&q=iron')
+      window.history.pushState(null, '', '/economy?view=inventory&player_id=20001&q=iron')
       window.dispatchEvent(new PopStateEvent('popstate'))
     })
     expect(await screen.findByText('Iron')).toBeInTheDocument()
@@ -479,4 +538,32 @@ describe('Shared Inventory Explorer grouped catalog', () => {
     expect(screen.getByText('Invalid inventory scope')).toBeInTheDocument()
     expect(inventoryApi).not.toHaveBeenCalled()
   })
+})
+
+it('remembers image-free lists across inventory sections and requests100 rows', async () => {
+  localStorage.removeItem('dst.inventory.loadImages')
+  try {
+    const first = renderExplorer()
+    await screen.findByRole('checkbox', {name: 'Load images'})
+    fireEvent.click(screen.getByRole('checkbox', {name: 'Load images'}))
+    await waitFor(() => expect(inventoryApi).toHaveBeenLastCalledWith(expect.objectContaining({limit: 100})))
+    expect(screen.getByRole('checkbox', {name: 'Load images'})).not.toBeChecked()
+    first.unmount()
+    render(<BrowserRouter><SharedInventoryExplorer entityTypes={['storage']} /></BrowserRouter>)
+    expect(screen.getByRole('checkbox', {name: 'Load images'})).not.toBeChecked()
+    await waitFor(() => expect(inventoryApi).toHaveBeenLastCalledWith(expect.objectContaining({types: ['storage'], limit: 100})))
+    fireEvent.click(screen.getByRole('checkbox', {name: 'Load images'}))
+    await waitFor(() => expect(inventoryApi).toHaveBeenLastCalledWith(expect.objectContaining({limit: 28})))
+  } finally { localStorage.removeItem('dst.inventory.loadImages') }
+})
+
+it('names the scoped player and links directly to the selected storage container', async () => {
+  window.history.replaceState(null, '', '/players?player_id=20001&section=inventory&scope_type=storage&scope_id=50001')
+  render(<BrowserRouter><SharedInventoryExplorer entityTypes={['storage']} selectedPlayer={{id: 20001, name: 'Coastal'}} /></BrowserRouter>)
+  await waitFor(() => expect(inventoryApi).toHaveBeenCalled())
+  expect(screen.queryByText(/Scoped to.*actor/)).not.toBeInTheDocument()
+  expect(screen.getAllByRole('status').some(node => node.textContent === 'Coastal')).toBe(true)
+  fireEvent.click(await screen.findByRole('button', {name: /Copper, total quantity/}))
+  const link = await screen.findByRole('link', {name: 'Open container'})
+  expect(link).toHaveAttribute('href', '/players?player_id=20001&section=inventory&scope_type=storage&scope_id=50001&location_type=storage&location_id=50001')
 })

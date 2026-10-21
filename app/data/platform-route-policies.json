@@ -94,6 +94,7 @@
     ,"http DELETE /api/gameplay/vehicles/deletions/{id}": "reversible-write"
   },
   "routeCapabilityOverrides": {
+    "http GET /api/widget/status": "platform.status",
     "http POST /api/gameplay/vehicles/regis-tanks": "player.manage",
     "http POST /api/gameconfig/ini-backups/delete": "operation.data-protection.destructive",
     "http GET /api/installation": "platform.capabilities",
@@ -176,7 +177,7 @@
     { "source": "Gameplay.ps1", "capabilityId": "economy.market", "routeCount": 22, "sha256": "757d3fd58fe70e88c5ccc91b9549e8f9a121b9137c1a2c16cd574c271c46e258" },
     { "source": "GameplayPlayers.ps1", "capabilityId": "player.manage", "routeCount": 32, "sha256": "273a4061bd3f23dc40ee3094c186f7df7cf94dd2ce169a63876d9d966cef5378" },
     { "source": "GameplayWorld.ps1", "capabilityId": "base.manage", "routeCount": 14, "sha256": "0261a3b4ba38355214349a9e1a67a6fe48d97a7848dcbb9894edf73c6ef69b0b" },
-    { "source": "Inventory.ps1", "capabilityId": "inventory.read", "routeCount": 4, "sha256": "3e8a38114c67450782febd31b7f42339be467aca11b741283c8ae3d09ebe44d9" },
+    {"source": "Inventory.ps1", "capabilityId": "inventory.read", "routeCount": 5, "sha256": "8911f3f36375b6b09ba1a47a5b92db6bfbb8d94b602a0efdcfe227f1daad6570"},
     { "source": "ItemPackages.ps1", "capabilityId": "player.inventory", "routeCount": 3, "sha256": "ed3aac4a943d300002f7aecacb8ecf04619917ee7aa549cde0068e1853e01cf9" },
     { "source": "Landsraad.ps1", "capabilityId": "economy.governance", "routeCount": 9, "sha256": "e78c0dfe1b1f969d781db180f8c73eb3439de9779dd62fde7a8879925ac762f0" },
     { "source": "Links.ps1", "capabilityId": "platform.status", "routeCount": 1, "sha256": "175305c4d511463c37a3c0c2484bf7178044f72d42fe444c2eec1733ef876a47" },
@@ -192,7 +193,7 @@
     { "source": "Pods.ps1", "capabilityId": "operation.runtime", "routeCount": 3, "sha256": "86b85eb9a8fbc348525424496d562dd79589f8bf2b68feee0c096004bbdad749" },
     { "source": "Portal.ps1", "capabilityId": "platform.access", "routeCount": 4, "sha256": "5157a5616533c8ef9d71d691c9a01811ab69e87cdf6ce09ea60796bbc4cd260d" },
     { "source": "PortalAuth.ps1", "capabilityId": "platform.access", "routeCount": 13, "sha256": "35a10866afe87089d19960d895826b58b66d783cbc1d95078d62fb90bce56e6b" },
-    { "source": "PublicIp.ps1", "capabilityId": "settings.connectivity", "routeCount": 9, "sha256": "e4d36b9e6f9a1d8151b978b834d5e2f1c20231c10cb1715caae9180bbb03623b" },
+    {"source": "PublicIp.ps1", "capabilityId": "settings.connectivity", "routeCount": 10, "sha256": "3f72624e2a564560cc8d9ccf0cc7fcb0cdb5c1082680b62c0a759d5e20ceed89"},
     { "source": "Remote.ps1", "capabilityId": "operation.remote-compat", "routeCount": 6, "sha256": "b0e586ee5b903ad17abe41f3c7389650783eb284cc1f7516c0ced09f3b4ad7bc" },
     { "source": "RestartSchedule.ps1", "capabilityId": "operation.maintenance", "routeCount": 4, "sha256": "377236ac8359ec7828642c234f07c127e9e2f7c4930b77eadcf0ab19f0201568" },
     { "source": "ServiceMode.ps1", "capabilityId": "operation.runtime", "routeCount": 2, "sha256": "5d5217dd5fca38e176da024ad005d571995b7e3430707609350656942b2fe3b9" },

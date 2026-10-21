@@ -41,7 +41,7 @@ class SchedulingTests(unittest.TestCase):
   with tempfile.TemporaryDirectory() as folder:
    shutil.copyfile(ROOT/'server.py',Path(folder)/'server.py')
    with patch.dict(os.environ,{'DST_ATLAS_APP_ROOT':folder,'DST_ATLAS_SNAPSHOT_ROOT':folder,'DST_ATLAS_PREFERENCES_ROOT':folder}):
-    spec=importlib.util.spec_from_file_location('scheduler_fixture',Path(folder)/'server.py');service=importlib.util.module_from_spec(spec);spec.loader.exec_module(service)
+    spec=importlib.util.spec_from_file_location('scheduler_fixture',Path(folder)/'server.py');service=importlib.util.module_from_spec(spec);spec.loader.exec_module(service); service.touch_viewer()
    service.live_enabled=True;service.job_period=lambda name:.02
    began=threading.Event();release=threading.Event();counts={};workers=[]
    def scan():began.set();release.wait(3)

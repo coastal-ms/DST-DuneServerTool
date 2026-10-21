@@ -98,7 +98,10 @@ function Invoke-DuneMapsPlatformRefreshLoop {
         [scriptblock]$NextDelay
     )
 
-    if (-not $Refresh) { $Refresh = { Invoke-DuneMapsPlatformRefresh } }
+    if (-not $Refresh) { $Refresh = {
+        $demand = (Get-DunePlatformCoordinationTable)['maps:viewer-until']
+        if ($demand -and $demand -gt [DateTime]::UtcNow) { Invoke-DuneMapsPlatformRefresh }
+    } }
     if (-not $NextDelay) { $NextDelay = { Get-DuneMapsScheduledRefreshDelaySec } }
     if ($InitialDelaySec -gt 0 -and $CancellationToken.WaitHandle.WaitOne(
         [int][Math]::Ceiling($InitialDelaySec * 1000)

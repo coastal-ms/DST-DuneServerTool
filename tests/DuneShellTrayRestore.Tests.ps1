@@ -59,10 +59,10 @@ Describe 'DuneShell tray window restoration' {
     It 'does not persist hidden sentinel coordinates' {
         $save = $script:MainForm.IndexOf('private void SaveWindowState()')
         $visibleBounds = $script:MainForm.IndexOf(
-            'Rectangle b = Visible',
+            'Rectangle b = _widgetRestoreBounds ?? (Visible',
             $save
         )
-        $cachedBounds = $script:MainForm.IndexOf(': _restoreBounds;', $visibleBounds)
+        $cachedBounds = $script:MainForm.IndexOf(': _restoreBounds);', $visibleBounds)
 
         $visibleBounds | Should -BeGreaterThan $save
         $cachedBounds | Should -BeGreaterThan $visibleBounds

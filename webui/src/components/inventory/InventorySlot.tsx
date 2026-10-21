@@ -6,8 +6,10 @@ import { InventoryItemIcon } from './InventoryItemIcon'
 export function InventorySlot({
   item,
   onSelect,
+  showImages = true,
 }: {
   item: SharedInventoryGroup
+  showImages?: boolean
   onSelect: (item: SharedInventoryGroup) => void
 }) {
   const buttonRef = useRef<HTMLButtonElement | null>(null)
@@ -17,7 +19,7 @@ export function InventorySlot({
   const [hoverSuppressed, setHoverSuppressed] = useState(false)
   const [focused, setFocused] = useState(false)
   const [position, setPosition] = useState({ left: 8, top: 8 })
-  const showInfo = (hovered || focused) && !hoverSuppressed
+  const showInfo = showImages && (hovered || focused) && !hoverSuppressed
   const name = item.displayName || item.templateId
   const quality = item.quality.mixed ? `${item.quality.min}-${item.quality.max}` : String(item.quality.max)
 
@@ -38,6 +40,7 @@ export function InventorySlot({
   }, [])
 
   useEffect(() => {
+    if (!showImages) return
     const handleFocusIn = (event: FocusEvent) => {
       const target = event.target
       if (!(target instanceof Element) || !target.closest('[data-inventory-slot]')) return
@@ -52,7 +55,7 @@ export function InventorySlot({
       document.removeEventListener('focusin', handleFocusIn)
       document.removeEventListener('inventory-slot-hover', handleSlotHover)
     }
-  }, [tooltipId])
+  }, [tooltipId, showImages])
 
   useLayoutEffect(() => {
     if (!showInfo) return
@@ -69,6 +72,17 @@ export function InventorySlot({
       window.removeEventListener('scroll', placeInfoCard, true)
     }
   }, [placeInfoCard, showInfo])
+
+  if (!showImages) return (
+    <button type="button" onClick={() => onSelect(item)}
+      aria-label={`${name}, total quantity ${item.totalQuantity}, ${item.occurrenceCount} occurrences across ${item.locationCount} locations, quality ${quality}`}
+      className="flex min-h-11 w-full items-center gap-3 rounded-lg border border-border bg-surface px-3 py-2 text-left hover:bg-surface-2 focus-visible:ring-2 focus-visible:ring-ibad">
+      <span className="min-w-0 flex-1 break-words text-sm font-semibold">{name}</span>
+      <span className="shrink-0 text-xs text-info">Q{quality}</span>
+      <span className="shrink-0 text-xs text-text-muted">{item.locationCount} loc</span>
+      <span className="shrink-0 text-sm text-accent">×{item.totalQuantity}</span>
+    </button>
+  )
 
   return (
     <>

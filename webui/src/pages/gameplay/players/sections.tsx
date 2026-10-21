@@ -1,3 +1,4 @@
+import { useSearch } from '../../../router'
 // v11.5.6 — Player section panels. One component per section nav entry
 // (Stats / Specs / Tags / History / Inventory / Actions). All sections take
 // a common props shape: the selected player + a `canWrite` flag (live DB)
@@ -13,6 +14,7 @@ import { CodexOwnership } from '../../../components/CodexOwnership'
 import { api } from '../../../api/client'
 import { Icon } from '../../../components/Icon'
 import { COSMETIC_LICENSE_NOTICE } from '../../../util/cosmeticEntitlements'
+import { SharedInventoryExplorer } from '../../../components/inventory/SharedInventoryExplorer'
 import { ItemPicker } from '../../../components/ItemPicker'
 import { AugmentPicker } from '../../../components/AugmentPicker'
 import { TagPicker } from '../../../components/TagPicker'
@@ -800,7 +802,7 @@ const ACTIONS: ActionDef[] = [
   { id: 'grant-buildable-swatches', group: 'Items', label: 'Buildable House Swatches', icon: 'PaintBucket', custom: 'grant-buildable-swatches', liveOnly: true,
     rowNote: 'Online required. Delivers only the Buildables/Placeables House Swatch tokens through the live game.',
     run: () => Promise.resolve({ message: '' }) },
-  { id: 'repair-gear', group: 'Items', label: 'Repair All Items', icon: 'Wrench',
+  { id: 'repair-gear', group: 'Items', label: 'Repair backpack & worn items', icon: 'Wrench',
     run: p => repairGear(p.id) },
   { id: 'repair-orphaned-building-pieces', group: 'Items', label: 'Repair Orphaned Building Pieces', icon: 'Wrench',
     rowNote: 'Fixes a 2026-09-22 Funcom patch bug: old Gunner/Sentinel building-set pieces can crash the construction tool. Only affects characters that unlocked that set before the patch. Player must be offline.',
@@ -1021,7 +1023,7 @@ export function ActionsSection({ player, canWrite, demo, flash, onChanged, onFlu
     <div className="space-y-4">
       {!hasLiveSession && (
         <div className="card p-2.5 text-xs text-text-muted border-l-2 border-warning flex items-center gap-2">
-          <Icon name="WifiOff" size={12} /> Player is offline — actions marked "LIVE REQ'D" need the player online (RMQ + an online or mid-logout player) to take effect.
+          <Icon name="WifiOff" size={12} /> Player is offline. Actions marked "Online" require an active player session.
         </div>
       )}
 
@@ -1099,26 +1101,26 @@ function ActionRow({ def, player, busy, stats, open, danger, onToggle, runAction
     <div className="card overflow-hidden">
       <button type="button"
         aria-expanded={open}
-        className={`w-full flex items-center gap-2.5 px-3 py-2 text-left text-sm transition-colors ${disabled ? 'opacity-50 cursor-not-allowed' : 'hover:bg-surface-2'} ${danger ? 'text-error' : 'text-text'}`}
+        className={`w-full min-h-14 flex items-center gap-2.5 px-3 py-2 text-left text-sm transition-colors ${disabled ? 'opacity-50 cursor-not-allowed' : 'hover:bg-surface-2'} ${danger ? 'text-error' : 'text-text'}`}
         disabled={disabled}
         onClick={onToggle}
         title={def.liveOnly ? 'Requires player to be online' : def.offlineOnly ? 'Requires player to be offline — the game caches this value in memory while online and overwrites it on logout' : undefined}>
         <Icon name={def.icon} size={14} className={`shrink-0 ${danger ? 'text-error' : 'text-text-dim'}`} />
-        <span className="flex-1 min-w-0 flex flex-col gap-1.5">
+        <span className="flex-1 min-w-0">
           <span className="font-medium break-words">{def.label}</span>
-          {selection && <span className="text-xs text-text-muted">{grantCounts ? `${grantCounts.owned}/${grantCounts.total} owned · ${grantCounts.remaining} remaining` : grantCountsLoading ? 'Checking character unlocks…' : 'Character counts unavailable'}</span>}
-          <span className="flex flex-wrap gap-1.5">
+          {selection && <span className="block text-xs text-text-muted">{grantCounts ? `${grantCounts.owned}/${grantCounts.total} owned · ${grantCounts.remaining} remaining` : grantCountsLoading ? 'Checking character unlocks…' : 'Character counts unavailable'}</span>}
+        </span>
+          <span className="inline-flex shrink-0 items-center gap-2 text-[10px] font-medium text-text-muted">
         {def.experimental && (
-          <span className="text-[10px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded bg-accent/20 text-accent border border-accent/50 shrink-0" title="Experimental — may not take effect in-game">EXPERIMENTAL</span>
+          <span className="text-accent" title="Experimental — may not take effect in-game">Experimental</span>
         )}
         {def.liveOnly && (
-          <span className="text-[10px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded bg-warning/20 text-warning border border-warning/50 shrink-0">LIVE REQ'D</span>
+          <span title="Requires player online">Online</span>
         )}
         {def.offlineOnly && (
-          <span className="text-[10px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded bg-info/20 text-info border border-info/50 shrink-0">OFFLINE REQ'D</span>
+          <span title="Requires player offline">Offline</span>
         )}
           </span>
-        </span>
         <Icon name={open ? 'ChevronDown' : 'ChevronRight'} size={14} className="shrink-0 text-text-dim" />
       </button>
       {open && (
@@ -2965,8 +2967,50 @@ export function ManagePlayerSection({ player, canWrite, flash, onChanged, onFlus
 import { getPlayerDetail, type InventoryItem, type PlayerDetailResponse } from '../../../api/gameplay'
 import { qualityClass } from '../shared'
 
-export function InventorySection({ player, canWrite, demo, refreshKey, flash, onChanged, onFlush }: SectionProps) {
+export function InventorySection(props: SectionProps) {
+  const [repairing, setRepairing] = useState(false)
+  const [repairRevision, setRepairRevision] = useState(0)
+  const online = (props.player.online_status || '').toLowerCase() === 'online'
+  const [view, setView] = useState<'items' | 'storage' | 'tools'>(() => new URLSearchParams(window.location.search).get('scope_type') === 'storage' || new URLSearchParams(window.location.search).get('location_type') === 'storage' ? 'storage' : 'items')
+  const inventorySearch = useSearch()
+  useEffect(() => {
+    const params = new URLSearchParams(inventorySearch)
+    if (params.get('scope_type') === 'storage' || params.get('location_type') === 'storage') setView('storage')
+  }, [inventorySearch])
+  const selectedPlayer = useMemo(() => ({ id: props.player.id, name: props.player.name }), [props.player.id, props.player.name])
+  return <div className="space-y-4">
+    <div role="tablist" aria-label="Player inventory" className="flex flex-wrap gap-2">
+      {([['items', 'Backpack & bank'], ['storage', 'Storage containers'], ['tools', 'Item tools']] as const).map(([id, label]) =>
+        <button key={id} role="tab" aria-selected={view === id} className={view === id ? 'btn-primary' : 'btn-secondary'} onClick={() => {
+          const url = new URL(window.location.href)
+          for (const key of ['scope_type', 'scope_id', 'location_type', 'location_id', 'q']) url.searchParams.delete(key)
+          window.history.replaceState(null, '', url)
+          window.dispatchEvent(new PopStateEvent('popstate'))
+          setView(id)
+        }}>{label}</button>)}
+    </div>
+    {view !== 'storage' && props.canWrite && !props.demo && <div className="flex flex-wrap items-center gap-3">
+      <button type="button" className="btn-secondary" disabled={repairing || online}
+        title={online ? 'Player must be offline before repairing backpack and equipped gear.' : 'Repairs this player’s backpack, equipped armor and equipped weapons only.'}
+        onClick={async () => {
+          setRepairing(true)
+          try {
+            const result = await repairGear(props.player.id)
+            props.flash(result.message, 'ok'); setRepairRevision(value => value + 1); props.onChanged()
+          } catch(reason) { props.flash(reason instanceof Error ? reason.message : String(reason), 'err') }
+          finally { setRepairing(false) }
+        }}><Icon name="Wrench" size={14} />{repairing ? 'Repairing…' : 'Repair backpack & worn items'}</button>
+      <span className="text-xs text-text-dim">Backpack and equipped gear only. Player must be offline.</span>
+    </div>}
+    {view === 'tools' ? <PlayerItemToolsSection key={props.player.id} {...props} refreshKey={props.refreshKey + repairRevision} /> : <SharedInventoryExplorer key={`${props.player.id}:${view}`}
+      selectedPlayer={selectedPlayer} demoMode={props.demo} refreshKey={props.refreshKey + repairRevision} entityTypes={view === 'storage' ? ['storage'] : ['player']}
+      title={view === 'storage' ? 'Storage containers' : 'Backpack & bank'} />}
+  </div>
+}
+
+export function PlayerItemToolsSection({ player, canWrite, demo, refreshKey, flash, onChanged, onFlush }: SectionProps) {
   const contextual = useCommandDeck()
+  const [inventoryPage, setInventoryPage] = useState(0)
   const [detail, setDetail] = useState<PlayerDetailResponse | null>(null)
   const [loading, setLoading] = useState(true)
   const [err, setErr] = useState<string | null>(null)
@@ -2979,12 +3023,12 @@ export function InventorySection({ player, canWrite, demo, refreshKey, flash, on
   useEffect(() => {
     let alive = true
     setLoading(true); setErr(null)
-    getPlayerDetail(player.id, player.controller_id, demo)
+    getPlayerDetail(player.id, player.controller_id, demo, inventoryPage * 28, 'item')
       .then(r => { if (alive) setDetail(r) })
       .catch(e => { if (alive) setErr(e instanceof Error ? e.message : String(e)) })
       .finally(() => { if (alive) setLoading(false) })
     return () => { alive = false }
-  }, [player.id, player.controller_id, demo, refreshKey, tick])
+  }, [player.id, player.controller_id, demo, refreshKey, tick, inventoryPage])
 
   useEffect(() => {
     let alive = true
@@ -3034,6 +3078,11 @@ export function InventorySection({ player, canWrite, demo, refreshKey, flash, on
   return (
     <div className="space-y-4">
       {!contextual && <div className="flex items-center justify-end">{refreshButton}</div>}
+      <div className="flex items-center gap-3" aria-label="Item editor pages">
+        <button className="btn-secondary" disabled={loading || inventoryPage === 0} onClick={() => setInventoryPage(page => page - 1)}>Previous</button>
+        <span>Page {inventoryPage + 1} · Showing {groups.gear.length} inventory {groups.gear.length === 1 ? 'item' : 'items'}</span>
+        <button className="btn-secondary" disabled={loading || !detail?.inventory_has_more} onClick={() => setInventoryPage(page => page + 1)}>Next</button>
+      </div>
       {!demo && <ReserveRecoveryCard
         preview={reserve}
         error={reserveErr}
@@ -3046,12 +3095,47 @@ export function InventorySection({ player, canWrite, demo, refreshKey, flash, on
         playerId={player.id}
         toolbar={contextual ? refreshButton : undefined}
         canWrite={canWrite} busy={busy} run={run} isOnline={isOnline} />
-      <ItemList title={`Emotes (${fmtNum(groups.emotes.length)})`} icon="Smile" items={groups.emotes} collapsed
-        playerId={player.id} canWrite={canWrite} busy={busy} run={run} isOnline={isOnline} />
-      <ItemList title={`Contract items (${fmtNum(groups.contracts.length)})`} icon="FileText" items={groups.contracts} collapsed
-        playerId={player.id} canWrite={canWrite} busy={busy} run={run} isOnline={isOnline} />
+      <AuxiliaryInventoryList key={`${player.id}:emote`} kind="emote" player={player} demo={demo} refreshKey={`${refreshKey}:${tick}`}
+        canWrite={canWrite} busy={busy} run={run} isOnline={isOnline} />
+      <AuxiliaryInventoryList key={`${player.id}:contract`} kind="contract" player={player} demo={demo} refreshKey={`${refreshKey}:${tick}`}
+        canWrite={canWrite} busy={busy} run={run} isOnline={isOnline} />
     </div>
   )
+}
+
+function AuxiliaryInventoryList({kind, player, demo, refreshKey, canWrite, busy, run, isOnline}: {
+  kind: 'emote' | 'contract'; player: Player; demo: boolean; refreshKey: string; canWrite: boolean; busy: boolean; isOnline: boolean
+  run: (fn: () => Promise<{message:string}>, label:string) => Promise<boolean>
+}) {
+  const [open,setOpen] = useState(false)
+  const [page,setPage] = useState(0)
+  const [detail,setDetail] = useState<PlayerDetailResponse | null>(null)
+  const [loading,setLoading] = useState(false)
+  const [error,setError] = useState('')
+  useEffect(() => {
+    if (!open) return
+    let alive = true
+    setLoading(true); setError(''); setDetail(null)
+    getPlayerDetail(player.id,player.controller_id,demo,page * 28,kind)
+      .then(value => { if(alive) setDetail(value) })
+      .catch(reason => { if(alive) setError(reason instanceof Error ? reason.message : String(reason)) })
+      .finally(() => { if(alive) setLoading(false) })
+    return () => { alive = false }
+  },[open,player.id,player.controller_id,demo,page,kind,refreshKey])
+  const items = (detail?.inventory ?? []).filter(item => item.kind === kind)
+  const title = kind === 'emote' ? 'Emotes' : 'Contract items'
+  return <ItemList title={`${title}${detail ? ` (${items.length})` : ''}`} icon={kind === 'emote' ? 'Smile' : 'FileText'}
+    items={items} playerId={player.id} canWrite={canWrite} busy={busy} run={run} isOnline={isOnline}
+    expanded={open} onToggle={() => setOpen(value => !value)}
+    extra={<div className="space-y-2 mb-2">
+      {loading && <Loading label={`Loading ${title.toLowerCase()}…`} />}
+      {error && <ErrorBox msg={error} />}
+      {detail && <div className="flex items-center gap-3 text-xs">
+        <button className="btn-secondary" disabled={loading || page === 0} onClick={() => setPage(value => value - 1)}>Previous {title.toLowerCase()}</button>
+        <span>Page {page + 1}</span>
+        <button className="btn-secondary" disabled={loading || !detail.inventory_has_more} onClick={() => setPage(value => value + 1)}>Next {title.toLowerCase()}</button>
+      </div>}
+    </div>} />
 }
 
 function ReserveRecoveryCard({ preview, error, canWrite, busy, player, run }: {
@@ -3143,20 +3227,23 @@ function ReserveRecoveryCard({ preview, error, canWrite, busy, player, run }: {
   )
 }
 
-function ItemList({ title, icon, items, playerId, canWrite, busy, run, collapsed, extra, isOnline, toolbar }: {
+function ItemList({ title, icon, items, playerId, canWrite, busy, run, collapsed, extra, isOnline, toolbar, expanded, onToggle }: {
   title: string; icon: string; items: InventoryItem[]; canWrite: boolean; busy: boolean
   playerId: number
   run: (fn: () => Promise<{ message: string }>, label: string) => Promise<boolean>
   collapsed?: boolean
+  expanded?: boolean
+  onToggle?: () => void
   extra?: React.ReactNode
   toolbar?: React.ReactNode
   isOnline: boolean
 }) {
   const contextual = useCommandDeck()
-  const [open, setOpen] = useState(!collapsed)
+  const [localOpen, setOpen] = useState(!collapsed)
+  const open = expanded ?? localOpen
   const [editingId, setEditingId] = useState<number | null>(null)
   if (collapsed && items.length === 0) return null
-  const heading = <button type="button" onClick={() => setOpen(o => !o)} aria-expanded={open}
+  const heading = <button type="button" onClick={() => { if (onToggle) onToggle(); else setOpen(o => !o) }} aria-expanded={open}
         className="flex w-full items-center gap-2 text-xs uppercase tracking-wider text-text-dim hover:text-text mb-2">
         <Icon name={open ? 'ChevronDown' : 'ChevronRight'} size={13} />
         <Icon name={icon} size={13} />
@@ -3249,7 +3336,7 @@ function ItemList({ title, icon, items, playerId, canWrite, busy, run, collapsed
                         <AmmoEditor item={it} playerId={playerId} busy={busy} run={run} isOnline={isOnline} onClose={() => setEditingId(null)} />
                       )}
                       {it.durability !== 'N/A' && (
-                        <DurabilityEditor item={it} busy={busy} run={run} isOnline={isOnline} onClose={() => setEditingId(null)} />
+                        <DurabilityEditor key={`${it.id}:${it.durability}:${it.max_durability}`} item={it} busy={busy} run={run} isOnline={isOnline} onClose={() => setEditingId(null)} />
                       )}
                       {hasWater && (
                         <WaterEditor item={it} busy={busy} run={run} onClose={() => setEditingId(null)} />

@@ -236,7 +236,7 @@ END `$repair`$;
 "@
     $write = Invoke-DuneSqlQuery -Ip $Ip -Sql $sql -ReadOnly $false -MaxRows 1 -TimeoutSec 60 -Bulk
     if (-not $write.ok) { return @{ok=$false;error=$write.error} }
-    return @{ok=$true;repaired=$values.Count;message="Repaired $($values.Count) item(s) in this storage box. Restart the server zone for repairs to appear in-game."}
+    return @{ok=$true;repaired=$values.Count;message="Repaired $($values.Count) item(s) in this storage box. To reload repairs in-game, open DD Atlas > Lifecycle and restart the map containing this box (Restart Hagga or Restart Deep Desert). Players on that map will be disconnected."}
 }
 
 function Invoke-DuneStorageRename {

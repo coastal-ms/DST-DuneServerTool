@@ -663,9 +663,9 @@
   },
   {
     "name": "vite",
-    "version": "8.2.1",
+    "version": "8.2.4",
     "license": "MIT",
-    "packageSource": "https://registry.npmjs.org/vite/-/vite-8.2.1.tgz",
+    "packageSource": "https://registry.npmjs.org/vite/-/vite-8.2.4.tgz",
     "repository": {
       "type": "git",
       "url": "git+https://github.com/vitejs/vite.git",

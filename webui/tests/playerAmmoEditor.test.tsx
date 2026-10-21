@@ -2,7 +2,7 @@ import React from 'react'
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { getPlayerDetail, getReserveRecovery, setWeaponAmmo, type Player } from '../src/api/gameplay'
-import { InventorySection } from '../src/pages/gameplay/players/sections'
+import { PlayerItemToolsSection as InventorySection } from '../src/pages/gameplay/players/sections'
 import { COMMAND_DECK_KEY } from '../src/hooks/useCommandDeck'
 
 vi.mock('../src/api/gameplay', async importOriginal => ({

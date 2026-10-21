@@ -69,6 +69,17 @@ Describe 'Inventory production router integration' {
         . (Join-Path (Get-DstRepoRoot) 'app\server\routes\Inventory.ps1')
     }
 
+    It 'lists players without reading inventories or refreshing the server-wide cache' {
+        Mock Get-DuneDbContext { @{ok=$true;ip='fixture'} }
+        Mock Invoke-DuneInventoryCacheRefresh { throw 'No inventory work is allowed for the picker.' }
+        Mock Invoke-DuneSqlQuery { @{ok=$true;columns=@('id','name');rows=@(,@('544','Aster'))} }
+        $result = Invoke-InventoryRouteRequest -Path '/api/v1/inventory/players' -Query @{}
+        $result.response.StatusCode | Should -Be 200 -Because $result.raw
+        $result.body.players[0].id | Should -Be 544
+        Should -Invoke Invoke-DuneSqlQuery -Times 1 -ParameterFilter { $ReadOnly -eq $true -and $Sql -match 'FROM dune.player_state' -and $Sql -notmatch 'dune.items|dune.inventories' }
+        Should -Invoke Invoke-DuneInventoryCacheRefresh -Times 0 -Exactly
+    }
+
     Describe 'Inventory PostgreSQL CSV conversion contract' {
         It 'returns zero rows for header-only and explicit zero-row output' {
             foreach ($raw in @("BEGIN`ngroup_key,template_id,total_quantity`nROLLBACK")) {

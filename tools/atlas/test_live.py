@@ -40,6 +40,32 @@ def action(value, path):
 
 
 class LiveIntentTests(unittest.TestCase):
+    def test_live_waits_for_viewer_and_pauses_after_viewer_expires(self):
+        with tempfile.TemporaryDirectory() as folder:
+            value=service(Path(folder)/'bundle',Path(folder)/'settings')
+            value.job_period=lambda name:.01
+            reads=[]; observed=threading.Event()
+            def observe():
+                reads.append(1)
+                with value.control:value.viewer_until=0
+                observed.set()
+            worker=threading.Thread(target=value.collection_worker,args=('db',observe))
+            worker.start()
+            try:
+                self.assertFalse(observed.wait(.4))
+                value.touch_viewer()
+                self.assertTrue(observed.wait(2))
+                time.sleep(.4)
+                self.assertEqual(len(reads),1)
+                self.assertTrue(value.live_enabled)
+                observed.clear();value.touch_viewer()
+                self.assertTrue(observed.wait(2))
+                self.assertEqual(len(reads),2)
+            finally:
+                value.stop.set()
+                with value.control:value.control.notify_all()
+                worker.join(3)
+
     def test_live_defaults_on_without_changing_other_preferences(self):
         with tempfile.TemporaryDirectory() as folder:
             self.assertTrue(atlas_live.load(folder))
@@ -69,6 +95,7 @@ class LiveIntentTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as folder:
             value=service(Path(folder)/'bundle',Path(folder)/'settings')
             value.job_period=lambda name:.01
+            value.touch_viewer()
             attempts=[]; recovered=threading.Event()
             def observe():
                 attempts.append(1)

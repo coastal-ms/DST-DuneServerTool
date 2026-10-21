@@ -144,6 +144,18 @@ function Invoke-DuneInventoryOccurrenceCachePage {
 function Invoke-DuneInventoryCacheRefresh {
     param([int]$TimeoutSec = 120)
 
+    # Page visits and explicit refreshes share the complete refresh, not just
+    # its database query. Simultaneous clients must not repeat item projection
+    # and cache replacement after waiting for the same source read.
+    return Invoke-DunePlatformSingleFlight -Key 'inventory:page-refresh' `
+        -TimeoutSec $TimeoutSec -ResultReuseSec 1 -Script {
+            Invoke-DuneInventoryCacheRefreshCore -TimeoutSec $TimeoutSec
+        }
+}
+
+function Invoke-DuneInventoryCacheRefreshCore {
+    param([int]$TimeoutSec = 120)
+
     $sourceKey = 'inventory.snapshot'
     Assert-DunePlatformBackoffReady -SourceKey $sourceKey
     $startedAt = [DateTime]::UtcNow

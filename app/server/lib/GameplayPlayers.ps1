@@ -113,9 +113,27 @@ function Get-DunePlayersLive {
     return @{ ok = $true; players = $players }
 }
 
+function Get-DunePlayerInventoryKindSql {
+    param([ValidateSet('item','emote','contract')][string]$Kind = 'item')
+    Initialize-DuneGameplayItemData
+    $exceptions = @($script:DuneGameplayItemRules.Keys | Where-Object {
+        $_ -match 'Emote|^(D_)?Contract' -and $script:DuneGameplayItemRules[$_].category
+    } | ForEach-Object { "'$(ConvertTo-DuneSqlString ([string]$_).ToLowerInvariant())'" })
+    $knownItem = if ($exceptions.Count) { "lower(i.template_id) IN ($($exceptions -join ','))" } else { 'false' }
+    switch ($Kind) {
+        'emote' { return "(i.template_id ~* 'Emote' AND NOT ($knownItem))" }
+        'contract' { return "(i.template_id ~* '^(D_)?Contract' AND i.template_id !~* 'Emote' AND NOT ($knownItem))" }
+        default { return "(i.template_id !~* 'Emote|^(D_)?Contract' OR ($knownItem))" }
+    }
+}
+
 function Get-DunePlayerDetailLive {
-    param([string]$Ip, [long]$PawnId, [long]$ControllerId)
+    param([string]$Ip, [long]$PawnId, [long]$ControllerId, [int]$InventoryOffset = -1, [ValidateSet('item','emote','contract')][string]$InventoryKind = 'item')
     $invSql  = [string]::Format($script:DunePlayerInventorySql, $PawnId)
+    if ($InventoryOffset -ge 0) {
+        $kindSql = Get-DunePlayerInventoryKindSql -Kind $InventoryKind
+        $invSql = $invSql.Replace('ORDER BY i.template_id', "AND $kindSql`nORDER BY i.template_id, i.id") + "`nLIMIT 29 OFFSET $InventoryOffset"
+    }
     $specSql = [string]::Format($script:DunePlayerSpecsSql, $ControllerId)
     $curSql  = [string]::Format($script:DunePlayerCurrencySql, $ControllerId)
 

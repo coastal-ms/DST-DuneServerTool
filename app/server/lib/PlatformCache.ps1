@@ -384,14 +384,10 @@ function Start-DunePlatformCacheStartup {
                 } catch {
                     Write-DuneLog "Maps platform startup refresh could not be scheduled: $($_.Exception.Message)" 'WARN'
                 }
-                $CancellationToken.ThrowIfCancellationRequested()
-                try {
-                    [void](Start-DuneInventoryCacheStartupRefresh -ServerDir $ServerDir -AppDir $AppDir)
-                } catch {
-                    Write-DuneLog "Inventory cache startup refresh could not be scheduled: $($_.Exception.Message)" 'WARN'
-                }
-                # Own both refresh workers until shutdown, including headless
-                # runs where no browser ever sends a request.
+                # Inventory is refreshed only by an inventory page visit or
+                # explicit refresh request. Headless uptime must not trigger
+                # full inventory reads and item projection every minute.
+                # Own the map refresh worker until shutdown.
                 [void]$CancellationToken.WaitHandle.WaitOne()
             } catch {
                 if (-not $CancellationToken.IsCancellationRequested) {

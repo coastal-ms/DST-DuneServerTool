@@ -368,6 +368,34 @@ function Resolve-DunePublicIpDiagnosticTarget {
 # this same Settings card, which rewrites the battlegroup CR + K3s ExternalIP
 # and restarts the servers so they re-register farm_state with the right IP.
 # ----------------------------------------------------------------------------
+function Get-DuneWidgetStatus {
+    # One narrow game-state read shared by all widget viewers. No diagnostics,
+    # inventory projection or autonomous refresh worker.
+    Invoke-DunePlatformSingleFlight -Key 'widget:status' -ResultReuseSec 15 -TimeoutSec 15 -Script {
+        $ctx = Get-DuneDbContext
+        if (-not $ctx.ok) { throw $ctx.message }
+        $csv = Invoke-DuneSqlRaw -Ip $ctx.ip -Sql 'SELECT map, ready, alive, server_id IN (SELECT * FROM dune.active_server_ids) AS is_current FROM dune.farm_state ORDER BY map;' -Csv -TimeoutSec 10
+        if (Test-DunePsqlError -Output $csv) { throw (Get-DunePsqlErrorMessage -Output $csv) }
+        $rows = @($csv -split "`r?`n" | Where-Object { $_ -ne '' } | ConvertFrom-Csv)
+        $maps = @(foreach ($group in ($rows | Group-Object map)) {
+            $current = @($group.Group | Where-Object { [string]$_.is_current -eq 't' })
+            if (-not $current.Count) {
+                # Retired instances are history, not additional live maps. Keep
+                # core-map outages visible even when their DB session is gone.
+                if ($group.Name -in @('DeepDesert_1', 'Overmap', 'Survival_1')) {
+                    @{ map = [string]$group.Name; ready = $false; alive = $false }
+                }
+                continue
+            }
+            # Prefer a healthy current instance, without combining readiness
+            # from one server with liveness from a different server.
+            $chosen = $current | Sort-Object @{ Expression = { [string]$_.alive -eq 't' }; Descending = $true }, @{ Expression = { [string]$_.ready -eq 't' }; Descending = $true } | Select-Object -First 1
+            @{ map = [string]$group.Name; ready = ([string]$chosen.ready -eq 't'); alive = ([string]$chosen.alive -eq 't') }
+        })
+        return @{ observedAt = [DateTime]::UtcNow.ToString('o'); maps = $maps }
+    }
+}
+
 function Get-DuneP34Diagnostic {
     $result = [ordered]@{
         ok             = $false
