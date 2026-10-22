@@ -1,7 +1,8 @@
 import { useState } from 'react'
-import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { ServerSettings } from '../src/pages/ServerSettings'
+import { clearSettingsApplyResult, useSettingsApplyOperation } from '../src/hooks/useSettingsApplyOperation'
 import { useSettingsDraft } from '../src/pages/gameconfig/settingsApplyContext'
 
 const state = vi.hoisted(() => ({
@@ -35,6 +36,7 @@ function Draft({ id }: { id: string }) {
 }
 
 beforeEach(() => {
+  clearSettingsApplyResult()
   state.managed = true; state.stopped = false; state.outsideEdit = false; state.fail = ''; state.events = []
   state.api.mockReset().mockImplementation(async (path: string, options?: RequestInit) => {
     if (path === '/api/gameconfig/retail-startup-sync') return { enabled: state.managed }
@@ -135,4 +137,71 @@ it('defaults to starting saved settings even when there are no drafts', async ()
   expect(within(dialog).getByRole('checkbox')).toBeChecked()
   fireEvent.click(within(dialog).getByRole('button', { name: 'Save & start battlegroup' }))
   await waitFor(() => expect(state.events).toEqual(['deploy:start']))
+})
+
+function ApplyObserver() {
+  const state = useSettingsApplyOperation()
+  return <output data-testid="apply-observer">{JSON.stringify(state)}</output>
+}
+
+it('finishes the approved saves and restart after navigating away while stop is pending', async () => {
+  let releaseStop!: () => void
+  const stopped = new Promise<void>(resolve => { releaseStop = resolve })
+  const original = state.api.getMockImplementation()!
+  state.api.mockImplementation(async (path: string, options?: RequestInit) => {
+    if (path.startsWith('/api/commands/run/stop')) await stopped
+    return original(path, options)
+  })
+  const settings = render(<ServerSettings />)
+  const dialog = await editBothAndReview()
+  fireEvent.click(within(dialog).getByRole('button', { name: 'Save & start battlegroup' }))
+  await waitFor(() => expect(state.api).toHaveBeenCalledWith('/api/commands/run/stop', expect.anything()))
+  // A later form render must not replace the values the user already approved.
+  fireEvent.change(screen.getByLabelText('advanced value'), { target: { value: 'not approved' } })
+  settings.unmount()
+  render(<ApplyObserver />)
+  expect(screen.getByTestId('apply-observer')).toHaveTextContent('"running":true')
+  await act(async () => { releaseStop() })
+  await waitFor(() => expect(state.events).toEqual(['stop', 'save:official:official draft', 'save:advanced:advanced draft', 'deploy:start']), { timeout: 4000 })
+  await waitFor(() => expect(screen.getByTestId('apply-observer')).toHaveTextContent('"running":false'))
+  expect(screen.getByTestId('apply-observer')).toHaveTextContent('Start launched')
+})
+
+it('keeps the second mounted settings page locked while the original apply continues', async () => {
+  let releaseStop!: () => void
+  const stopped = new Promise<void>(resolve => { releaseStop = resolve })
+  const original = state.api.getMockImplementation()!
+  state.api.mockImplementation(async (path: string, options?: RequestInit) => {
+    if (path.startsWith('/api/commands/run/stop')) await stopped
+    return original(path, options)
+  })
+  const settings = render(<ServerSettings />)
+  const dialog = await editBothAndReview()
+  fireEvent.click(within(dialog).getByRole('button', { name: 'Save & start battlegroup' }))
+  await waitFor(() => expect(state.api).toHaveBeenCalledWith('/api/commands/run/stop', expect.anything()))
+  settings.unmount()
+  render(<ServerSettings />)
+  expect(screen.getByRole('button', { name: /Applying settings/ })).toBeDisabled()
+  await act(async () => { releaseStop() })
+  await waitFor(() => expect(state.events).toEqual(['stop', 'save:official:official draft', 'save:advanced:advanced draft', 'deploy:start']), { timeout: 4000 })
+})
+
+it('reports a save failure after navigation and does not restart', async () => {
+  state.fail = 'advanced'
+  let releaseStop!: () => void
+  const stopped = new Promise<void>(resolve => { releaseStop = resolve })
+  const original = state.api.getMockImplementation()!
+  state.api.mockImplementation(async (path: string, options?: RequestInit) => {
+    if (path.startsWith('/api/commands/run/stop')) await stopped
+    return original(path, options)
+  })
+  const settings = render(<ServerSettings />)
+  const dialog = await editBothAndReview()
+  fireEvent.click(within(dialog).getByRole('button', { name: 'Save & start battlegroup' }))
+  await waitFor(() => expect(state.api).toHaveBeenCalledWith('/api/commands/run/stop', expect.anything()))
+  settings.unmount()
+  render(<ApplyObserver />)
+  await act(async () => { releaseStop() })
+  await waitFor(() => expect(screen.getByTestId('apply-observer')).toHaveTextContent('Already saved: official'), { timeout: 4000 })
+  expect(state.events).toEqual(['stop', 'save:official:official draft', 'save:advanced:advanced draft'])
 })

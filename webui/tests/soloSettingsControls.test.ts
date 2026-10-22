@@ -13,6 +13,9 @@ describe('Solo Mode setting controls', () => {
     expect(getPendingSoloSettingChanges([{ ...entries[0], needsApply: false }], { MaxLandclaimSegments: '20' })).toEqual({})
   })
   it('uses buttons for boolean settings', () => {
+    expect(getSoloSettingControl('m_bAreSecurityZonesEnabled')).toEqual({ type: 'boolean' })
+    expect(validateSoloSettingChanges({ m_bAreSecurityZonesEnabled: 'False' })).toBeNull()
+    expect(validateSoloSettingChanges({ m_bAreSecurityZonesEnabled: 'invalid' })).toContain('enabled or disabled')
     expect(getSoloSettingControl('bAllowSandstorms')).toEqual({ type: 'boolean' })
     expect(getSoloSettingControl('bLandsraadDisableDecreeRerollLimit')).toEqual({ type: 'boolean' })
   })

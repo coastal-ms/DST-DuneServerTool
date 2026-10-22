@@ -13,6 +13,12 @@ here cover everything those tags shipped.
 
 ## [Unreleased]
 
+## [16.5.6] - 2026-10-22
+
+- Keep approved server settings changes and the selected restart running when navigating between DST pages. Show progress and failures across pages.
+- Fix Time of day loading from the active server INI and add missing time-of-day entries directly from its panel.
+- Add a Solo security zones setting to disable or restore Kanly restrictions through the selected profile's Game.ini.
+
 ## [16.5.5] - 2026-10-22
 
 Restore Update with Tank support for Dune: Awakening 1.5.15.2.

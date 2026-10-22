@@ -342,11 +342,11 @@ Describe 'Solo Mode profile discovery and persistence' {
 Describe 'Solo Mode write gates and settings backups' {
     BeforeEach { Reset-TestSoloState }
 
-    It 'reports all 49 settings even when the INI is absent' {
+    It 'reports all 50 settings even when the INI is absent' {
         $layout = New-TestSoloLayout
         Save-DuneSoloState -DataRoot $layout.root -DbPath $layout.db | Out-Null
         $settings = Read-DuneSoloSettings
-        $settings.entries.Count | Should -Be 49
+        $settings.entries.Count | Should -Be 50
         @($settings.entries | Where-Object present).Count | Should -Be 0
     }
 
@@ -373,6 +373,27 @@ Describe 'Solo Mode write gates and settings backups' {
         (Test-Path (Join-Path $layout.config 'ServerCustomSettings.ini')) | Should -BeFalse
         ($result.settings.entries | Where-Object key -eq 'PlayerInventoryStartingSize').value | Should -Be '100'
         { Set-DuneSoloSettings -Settings @{ PlayerInventoryStartingSize = '0' } -Confirm 'APPLY SOLO SETTINGS' } | Should -Throw '*positive*'
+    }
+
+    It 'writes security zones only to the selected Solo Game.ini and preserves other settings' {
+        $layout = New-TestSoloLayout
+        Save-DuneSoloState -DataRoot $layout.root -DbPath $layout.db | Out-Null
+        Mock Get-DuneSoloGameProcesses { @() }
+        $game = Join-Path $layout.config 'Game.ini'
+        [IO.File]::WriteAllText($game, "[/Script/DuneSandbox.SecurityZonesSubsystem]`nKeep=Yes`nm_bAreSecurityZonesEnabled=True`nm_bAreSecurityZonesEnabled=True`n[Other]`nKeepOther=Yes`n")
+        $before = [IO.File]::ReadAllText($game)
+        $result = Set-DuneSoloSettings -Settings @{ m_bAreSecurityZonesEnabled = 'False' } -Confirm 'APPLY SOLO SETTINGS'
+        [IO.File]::ReadAllText($result.backupPath) | Should -Be $before
+        $text = [IO.File]::ReadAllText($game)
+        ([regex]::Matches($text, '(?m)^m_bAreSecurityZonesEnabled=')).Count | Should -Be 1
+        $text | Should -Match 'm_bAreSecurityZonesEnabled=False'
+        $text | Should -Match 'Keep=Yes'
+        $text | Should -Match 'KeepOther=Yes'
+        (Test-Path (Join-Path $layout.config 'ServerCustomSettings.ini')) | Should -BeFalse
+        ($result.settings.entries | Where-Object key -eq 'm_bAreSecurityZonesEnabled').value | Should -Be 'False'
+        $enabled = Set-DuneSoloSettings -Settings @{ m_bAreSecurityZonesEnabled = 'True' } -Confirm 'APPLY SOLO SETTINGS'
+        ($enabled.settings.entries | Where-Object key -eq 'm_bAreSecurityZonesEnabled').value | Should -Be 'True'
+        { Set-DuneSoloSettings -Settings @{ m_bAreSecurityZonesEnabled = 'invalid' } -Confirm 'APPLY SOLO SETTINGS' } | Should -Throw '*True or False*'
     }
 
     It 'blocks settings writes while a Dune process is running' {

@@ -13,6 +13,9 @@ export function TimeOfDayLockPanel({ vmRunning }: { vmRunning: boolean }) {
   const [busy, setBusy] = useState<'stage' | 'restore' | null>(null)
   const [message, setMessage] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const missingEntries = config !== null && (
+    config.current.startTime === null || config.current.timeOfDayEnabled === null
+  )
 
   useEffect(() => {
     let cancelled = false
@@ -41,6 +44,10 @@ export function TimeOfDayLockPanel({ vmRunning }: { vmRunning: boolean }) {
     setMessage(null)
     try {
       const result = await stageTimeOfDayPhase(candidate)
+      setConfig(previous => previous ? {
+        ...previous,
+        current: { startTime: candidate, timeOfDayEnabled: 'False', candidate },
+      } : previous)
       setMessage(`${result.message} Backup: ${result.backup}`)
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : String(reason))
@@ -60,6 +67,10 @@ export function TimeOfDayLockPanel({ vmRunning }: { vmRunning: boolean }) {
     setMessage(null)
     try {
       const result = await restoreTimeOfDayCycle()
+      setConfig(previous => previous ? {
+        ...previous,
+        current: { startTime: null, timeOfDayEnabled: null, candidate: null },
+      } : previous)
       setMessage(`${result.message} Backup: ${result.backup}`)
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : String(reason))
@@ -93,7 +104,7 @@ export function TimeOfDayLockPanel({ vmRunning }: { vmRunning: boolean }) {
           </label>
           {config && (
             <p className="mt-2 text-xs text-text-muted">
-              Installed UserGame.ini: m_StartTime={config.current.startTime ?? 'not set'}; m_bTimeOfDayEnabled={config.current.timeOfDayEnabled ?? 'not set'}.
+              Server UserGame.ini: m_StartTime={config.current.startTime ?? 'not set'}; m_bTimeOfDayEnabled={config.current.timeOfDayEnabled ?? 'not set'}.
             </p>
           )}
           <select
@@ -108,6 +119,12 @@ export function TimeOfDayLockPanel({ vmRunning }: { vmRunning: boolean }) {
               <option key={option.value} value={option.value}>{option.label}</option>
             ))}
           </select>
+          {missingEntries && (
+            <p className="mt-2 text-sm text-text-muted">
+              Select a phase, then use Add time of day settings to add the required entries to the server INI here.
+              DST backs up the file first and preserves other settings.
+            </p>
+          )}
         </div>
         <div className="rounded-lg border border-warning/30 bg-warning/5 p-3 text-sm">
           <h3 className="font-medium text-warning">Client and restart behavior</h3>
@@ -131,7 +148,7 @@ export function TimeOfDayLockPanel({ vmRunning }: { vmRunning: boolean }) {
           onClick={() => { void stage() }}
         >
           <Icon name={busy === 'stage' ? 'Loader2' : 'Sunset'} size={14} className={busy === 'stage' ? 'animate-spin' : undefined} />
-          {busy === 'stage' ? 'Staging…' : 'Set time of day'}
+          {busy === 'stage' ? 'Saving…' : missingEntries ? 'Add time of day settings' : 'Set time of day'}
         </button>
         <button
           type="button"

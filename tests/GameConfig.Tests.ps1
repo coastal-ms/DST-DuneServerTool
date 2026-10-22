@@ -1769,6 +1769,17 @@ m_bTimeOfDayEnabled=False
         Assert-MockCalled Invoke-V6Ssh -Times 1
     }
 
+    It 'accepts the authoritative active File Browser INI for time of day' {
+        $script:TwilightLivePaths = @{
+            source = 'live'
+            authoritative = $true
+            game = '/var/lib/rancher/k3s/storage/pvc-active/Saved/UserSettings/UserGame.ini'
+            engine = '/var/lib/rancher/k3s/storage/pvc-active/Saved/UserSettings/UserEngine.ini'
+        }
+        $result = Resolve-DuneTwilightLiveGameConfigTarget -Ip '192.0.2.1'
+        $result.game | Should -Be $script:TwilightLivePaths.game
+    }
+
     It 'refuses a generated live PVC copy before backup or mutation' {
         Mock Resolve-DuneGameConfigPaths {
             @{

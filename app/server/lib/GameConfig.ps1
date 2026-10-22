@@ -154,7 +154,10 @@ function Resolve-DuneTwilightLiveGameConfigTarget {
     param([Parameter(Mandatory)][string]$Ip)
     $paths = Resolve-DuneGameConfigPaths -Ip $Ip
     $installedGamePattern = '^/home/dune/\.dune/download/scripts/setup/config/UserGame\.ini$'
-    if ("$($paths.source)" -ne 'installed' -or "$($paths.game)" -notmatch $installedGamePattern) {
+    $persistentGamePattern = '^/var/lib/rancher/k3s/storage/[A-Za-z0-9_.-]+/Saved/UserSettings/UserGame\.ini$'
+    $installed = "$($paths.source)" -eq 'installed' -and "$($paths.game)" -match $installedGamePattern
+    $persistent = "$($paths.source)" -eq 'live' -and $paths.authoritative -eq $true -and "$($paths.game)" -match $persistentGamePattern
+    if (-not ($installed -or $persistent)) {
         throw 'Twilight experiment requires the installed authoritative UserGame.ini.'
     }
     return $paths

@@ -15,6 +15,7 @@ import { COMPATIBILITY_REDIRECTS, LEGACY_ROUTE_MANIFEST, type RouteAccess } from
 import { GameplayAdminShell } from './components/platform/GameplayAdminShell'
 import type { GameplaySectionId } from './platform/gameplay'
 import { InstallationProvider, isSoloDestination, useSoloInstallation } from './hooks/useInstallationMode'
+import { SettingsApplyProgress } from './components/SettingsApplyProgress'
 
 const WORKSPACE_ROUTES = WORKSPACE_MANIFEST.map(workspace => ({
   ...workspace,
@@ -67,7 +68,7 @@ function InstalledApp() {
   if (soloOnly && !isLocalViewer()) return <p>Solo Mode is available on the PC where DST is installed.</p>
   // Widget mode belongs to this viewer only. The backend stays available to
   // authenticated remote sessions, which drive their own on-demand work.
-  if (pathname === '/widget' && isLocalViewer()) return <WidgetMode soloOnly={soloOnly} />
+  if (pathname === '/widget' && isLocalViewer()) return <><SettingsApplyProgress /><WidgetMode soloOnly={soloOnly} /></>
 
   return (
     <StatusProvider>

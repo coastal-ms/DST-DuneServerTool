@@ -28,6 +28,18 @@ afterEach(() => {
 })
 
 describe('Experimental twilight lock field-test harness', () => {
+  it('adds missing entries from the panel and updates the saved state', async () => {
+    vi.spyOn(window, 'confirm').mockReturnValue(true)
+    api.getExperiment.mockResolvedValue({ available: true, candidates: [{ value: '18.0', label: 'Sunset' }], current: { startTime: null, timeOfDayEnabled: null, candidate: null } })
+    api.stage.mockResolvedValue({ message: 'Saved', backup: '/fixture/backup.ini' })
+    render(<TimeOfDayLockPanel vmRunning />)
+    const phase = await screen.findByLabelText('Time of day phase')
+    await userEvent.selectOptions(phase, '18.0')
+    await userEvent.click(screen.getByRole('button', { name: 'Add time of day settings' }))
+    await waitFor(() => expect(api.stage).toHaveBeenCalledWith('18.0'))
+    await screen.findByText(/Server UserGame.ini: m_StartTime=18.0; m_bTimeOfDayEnabled=False/)
+    expect(screen.getByRole('button', { name: 'Set time of day' })).toBeEnabled()
+  })
   it('initializes to the installed dew-harvest phase instead of the first candidate', async () => {
     api.getExperiment.mockResolvedValue({
       available: true,
@@ -45,7 +57,7 @@ describe('Experimental twilight lock field-test harness', () => {
     render(<TimeOfDayLockPanel vmRunning />)
 
     await waitFor(() => expect(screen.getByLabelText('Time of day phase')).toHaveValue('4.0'))
-    expect(screen.getByText(/Installed UserGame.ini: m_StartTime=4.0; m_bTimeOfDayEnabled=False/)).toBeInTheDocument()
+    expect(screen.getByText(/Server UserGame.ini: m_StartTime=4.0; m_bTimeOfDayEnabled=False/)).toBeInTheDocument()
   })
 
   it('leaves staging unselected when the installed phase is outside verified candidates', async () => {

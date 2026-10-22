@@ -11,6 +11,7 @@ import { StartupSettingsSync } from './gameconfig/StartupSettingsSync'
 import { ConfirmationModal } from '../components/ConfirmationModal'
 import { SettingsApplyContext, type SettingsDraft } from './gameconfig/settingsApplyContext'
 import type { StatusSnapshot } from '../api/types'
+import { clearSettingsApplyResult, runSettingsApply, useSettingsApplyOperation } from '../hooks/useSettingsApplyOperation'
 
 type LaunchResult = {
   ok: boolean
@@ -30,19 +31,19 @@ export function ServerSettings({ initialSection = 'official' }: { initialSection
   const [settingsBusy, setSettingsBusy] = useState(true)
   const [tankSetupBusy, setTankSetupBusy] = useState(false)
   const [stopRequested, setStopRequested] = useState(false)
-  const [stopError, setStopError] = useState<string | null>(null)
-  const [stopMessage, setStopMessage] = useState<string | null>(null)
+  const [localStopError, setStopError] = useState<string | null>(null)
+  const [localStopMessage, setStopMessage] = useState<string | null>(null)
   const [section, setSection] = useState<'official' | 'advanced' | 'client' | 'tools' | 'maintenance'>(initialSection)
   const drafts = useRef(new Map<string, SettingsDraft>())
   const [summary, setSummary] = useState<{ changes: SettingsDraft['changes']; ready: boolean }>({ changes: [], ready: false })
   const [reviewOpen, setReviewOpen] = useState(false)
-  const [applying, setApplying] = useState(false)
-  const applyingRef = useRef(false)
+  const applyOperation = useSettingsApplyOperation()
+  const applying = applyOperation.running
+  const stopError = applyOperation.error ?? localStopError
+  const stopMessage = applyOperation.message ?? localStopMessage
   const reviewingRef = useRef(false)
   const [managed, setManaged] = useState<boolean | null>(null)
   const [startAfterApply, setStartAfterApply] = useState(false)
-  const operation = useRef<AbortController | null>(null)
-  useEffect(() => () => operation.current?.abort(), [])
   const register = useCallback((id: string, draft: SettingsDraft | null) => {
     if (draft) drafts.current.set(id, draft)
     else drafts.current.delete(id)
@@ -53,8 +54,9 @@ export function ServerSettings({ initialSection = 'official' }: { initialSection
   }, [])
 
   const review = async () => {
-    if (applyingRef.current || reviewingRef.current) return
+    if (applying || reviewingRef.current) return
     reviewingRef.current = true
+    clearSettingsApplyResult()
     setStopError(null)
     try {
       const preference = await api<{ enabled: boolean }>('/api/gameconfig/retail-startup-sync')
@@ -67,64 +69,58 @@ export function ServerSettings({ initialSection = 'official' }: { initialSection
   }
 
   const applyReviewed = async () => {
-    if (applyingRef.current || !summary.ready || managed === null) return
-    applyingRef.current = true
-    const controller = new AbortController()
-    operation.current = controller
-    setApplying(true); setReviewOpen(false); setStopError(null); setStopMessage(null)
-    const selected = [...drafts.current.entries()].filter(([, draft]) => draft.changes.length > 0)
-    const saved: string[] = []
-    let stoppedForApply = false
-    let writesAttempted = false
-    try {
-      const preference = await api<{ enabled: boolean }>('/api/gameconfig/retail-startup-sync', { signal: controller.signal })
-      if (preference.enabled !== managed) throw new Error('Configuration management changed. Review the apply plan again.')
-      for (const [, draft] of selected) await draft.validate?.()
-      let current = await api<StatusSnapshot>('/api/status/refresh', { method: 'POST', signal: controller.signal })
-      if (!current.vm?.running || !['running', 'stopped'].includes(current.bg?.state ?? '')) throw new Error('Wait until the battlegroup is running or fully stopped, then review again.')
-      if (current.bg?.state !== 'stopped' || current.bg.gameServers?.length !== 0) {
-        await withOnlinePlayerGuard(force => api(`/api/commands/run/stop${force ? '?force=true' : ''}`, { method: 'POST', signal: controller.signal }))
-        stoppedForApply = true
-        setStopMessage('Stopping the battlegroup before saving the reviewed changes…')
-        const deadline = Date.now() + 180_000
-        while (current.bg?.state !== 'stopped' || current.bg.gameServers?.length !== 0) {
-          if (Date.now() > deadline) throw new Error('Timed out waiting for every server pod to stop. No settings were saved. Check Server Health before retrying.')
-          await new Promise<void>((resolve, reject) => {
-            const timer = window.setTimeout(() => { controller.signal.removeEventListener('abort', abort); resolve() }, 1000)
-            const abort = () => { window.clearTimeout(timer); reject(new Error('Settings apply cancelled. Check Server Health before retrying.')) }
-            controller.signal.addEventListener('abort', abort, { once: true })
-            if (controller.signal.aborted) abort()
-          })
-          current = await api<StatusSnapshot>('/api/status/refresh', { method: 'POST', signal: controller.signal })
-          if (!current.vm?.running) throw new Error('The server became unavailable. No further settings were saved.')
+    if (applying || !summary.ready || managed === null) return
+    setReviewOpen(false); setStopError(null); setStopMessage(null)
+    const selected = [...drafts.current.entries()]
+      .filter(([, draft]) => draft.changes.length > 0)
+      .map(([id, draft]) => [id, draft.snapshot?.() ?? draft] as const)
+    await runSettingsApply(async update => {
+      const saved: string[] = []
+      let stoppedForApply = false
+      let writesAttempted = false
+      try {
+        const preference = await api<{ enabled: boolean }>('/api/gameconfig/retail-startup-sync')
+        if (preference.enabled !== managed) throw new Error('Configuration management changed. Review the apply plan again.')
+        for (const [, draft] of selected) await draft.validate?.()
+        let current = await api<StatusSnapshot>('/api/status/refresh', { method: 'POST' })
+        if (!current.vm?.running || !['running', 'stopped'].includes(current.bg?.state ?? '')) throw new Error('Wait until the battlegroup is running or fully stopped, then review again.')
+        if (current.bg?.state !== 'stopped' || current.bg.gameServers?.length !== 0) {
+          await withOnlinePlayerGuard(force => api(`/api/commands/run/stop${force ? '?force=true' : ''}`, { method: 'POST' }))
+          stoppedForApply = true
+          update({ message: 'Stopping the battlegroup before saving the reviewed changes…' })
+          const deadline = Date.now() + 180_000
+          while (current.bg?.state !== 'stopped' || current.bg.gameServers?.length !== 0) {
+            if (Date.now() > deadline) throw new Error('Timed out waiting for every server pod to stop. No settings were saved. Check Server Health before retrying.')
+            await new Promise<void>(resolve => window.setTimeout(resolve, 1000))
+            current = await api<StatusSnapshot>('/api/status/refresh', { method: 'POST' })
+            if (!current.vm?.running) throw new Error('The server became unavailable. No further settings were saved.')
+          }
         }
-      }
-      // Recheck the files after stopping, before the first write. Never replace a
-      // manual edit with an older form snapshot.
-      for (const [, draft] of selected) await draft.validate?.()
-      for (const [id, draft] of selected) {
-        if (controller.signal.aborted) throw new Error('Settings apply cancelled.')
-        writesAttempted = true
-        await draft.apply(); saved.push(id)
-      }
-      if (controller.signal.aborted) throw new Error('Settings apply cancelled before deployment.')
-      if (managed && startAfterApply) {
-        const result = await withOnlinePlayerGuard(force => api<{ message: string }>(`/api/gameconfig/reload-pods${force ? '?force=true' : ''}`, {
-          method: 'POST', body: JSON.stringify({ startStopped: true }), signal: controller.signal,
-        }))
-        setStopMessage(`${saved.length ? 'Reviewed settings saved. ' : ''}${result.message} Check Server Health for readiness.`)
+        // Recheck the files after stopping, before the first write. Never replace a
+        // manual edit with an older form snapshot.
+        for (const [, draft] of selected) await draft.validate?.()
+        for (const [id, draft] of selected) {
+          update({ message: `Saving reviewed ${id} settings…` })
+          writesAttempted = true
+          await draft.apply(); saved.push(id)
+        }
+        if (managed && startAfterApply) {
+          update({ message: 'Settings saved. Applying configuration and starting the battlegroup…' })
+          const result = await withOnlinePlayerGuard(force => api<{ message: string }>(`/api/gameconfig/reload-pods${force ? '?force=true' : ''}`, {
+            method: 'POST', body: JSON.stringify({ startStopped: true }),
+          }))
+        update({ message: `${saved.length ? 'Reviewed settings saved. ' : ''}${result.message} Check Server Health for readiness.` })
       } else {
-        setStopMessage(managed
+        update({ message: managed
           ? 'Reviewed settings saved. The battlegroup remains stopped; use Review & Apply with Start afterward when ready.'
-          : 'Settings saved to files only. DST management is off; deployment remains under your manual control. The battlegroup remains stopped.')
+          : 'Settings saved to files only. DST management is off; deployment remains under your manual control. The battlegroup remains stopped.' })
       }
-      try { await forceRefresh() } catch { setStopError('The apply sequence finished, but status refresh failed. Check Server Health for readiness.') }
+      try { await forceRefresh() } catch { update({ error: 'The apply sequence finished, but status refresh failed. Check Server Health for readiness.' }) }
     } catch (e) {
-      if (e instanceof PlayerGuardCancelledError) setStopMessage(saved.length ? 'Reviewed changes saved; server start was cancelled. The battlegroup remains stopped.' : 'Apply cancelled. No settings were saved.')
-      else { setStopMessage(null); setStopError(`${e instanceof Error ? e.message : String(e)}${saved.length ? ` Already saved: ${saved.join(', ')}.` : ''}${writesAttempted ? ' Some file writes may have completed. Remaining drafts are retained; the battlegroup was not started. Refresh affected files before retrying.' : stoppedForApply ? ' The stop command was sent; no settings were saved. Check Server Health.' : ''}`) }
-    } finally {
-      operation.current = null; applyingRef.current = false; setApplying(false)
+      if (e instanceof PlayerGuardCancelledError) update({ message: saved.length ? 'Reviewed changes saved; server start was cancelled. The battlegroup remains stopped.' : 'Apply cancelled. No settings were saved.' })
+      else { update({ message: null, error: `${e instanceof Error ? e.message : String(e)}${saved.length ? ` Already saved: ${saved.join(', ')}.` : ''}${writesAttempted ? ' Some file writes may have completed. The battlegroup was not started. Refresh affected files and review the remaining changes before retrying.' : stoppedForApply ? ' The stop command was sent; no settings were saved. Check Server Health.' : ''}` }) }
     }
+    })
   }
   const stopRefreshInFlight = useRef(false)
   const vmRunning = status?.vm?.running === true
@@ -211,6 +207,7 @@ export function ServerSettings({ initialSection = 'official' }: { initialSection
 
   const stopBattlegroup = async () => {
     if (!canStop) return
+    clearSettingsApplyResult()
     setLaunchingStop(true)
     setStopError(null)
     setStopMessage(null)
@@ -238,6 +235,7 @@ export function ServerSettings({ initialSection = 'official' }: { initialSection
 
   const startBattlegroup = async () => {
     if (!canStart) return
+    clearSettingsApplyResult()
     setLaunchingStart(true)
     setStopError(null)
     setStopMessage(null)

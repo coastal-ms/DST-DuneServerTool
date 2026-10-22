@@ -6,6 +6,7 @@ export type SettingsDraft = {
   ready: boolean
   apply: () => Promise<void>
   validate?: () => Promise<void>
+  snapshot?: () => SettingsDraft
 }
 export type SettingsApplyController = {
   register: (id: string, draft: SettingsDraft | null) => void
@@ -30,6 +31,7 @@ export function useSettingsDraft(id: string, draft: SettingsDraft) {
       changes, ready,
       apply: () => latest.current.apply(),
       validate: () => latest.current.validate?.() ?? Promise.resolve(),
+      snapshot: () => latest.current,
     })
   }, [id, register, signature])
   useEffect(() => () => register?.(id, null), [id, register])

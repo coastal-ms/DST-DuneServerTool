@@ -11,6 +11,7 @@ import { SectionJumpNav } from '../components/SectionJumpNav'
 import { OnlinePlayerGuardModal } from '../components/OnlinePlayerGuardModal'
 import { useCommandDeck } from '../hooks/useCommandDeck'
 import { useDocumentFontScale, useFontScale } from '../hooks/useFontScale'
+import { SettingsApplyProgress } from '../components/SettingsApplyProgress'
 
 const Sidebar = lazy(() => import('./Sidebar').then(module => ({ default: module.Sidebar })))
 const SpatialFrame = lazy(() => import('./SpatialFrame'))
@@ -55,6 +56,7 @@ export function AppShell({ children }: { children: ReactNode }) {
       <DecoupleNoticeModal />
       <OnlinePlayerGuardModal />
       <MenuBar sidebarCollapsed={collapsed} onToggleSidebar={toggle} sidebarAvailable={!commandDeck} />
+      {canAccessOwnerSurfaces && <SettingsApplyProgress />}
       <div className="flex-1 flex overflow-hidden min-h-0">
         {!commandDeck && <Suspense fallback={<div className="hidden md:block w-20 shrink-0" aria-label="Loading navigation" />}>
           <Sidebar collapsed={collapsed} onExpand={() => setCollapsed(false)} />

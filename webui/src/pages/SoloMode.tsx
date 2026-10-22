@@ -167,6 +167,7 @@ export type SoloSettingControl =
   | { type: 'text' }
 
 const SOLO_BOOLEAN_SETTINGS = new Set([
+  'm_bAreSecurityZonesEnabled',
   'bEnableItemMaxDurabilityLoss',
   'bAllowDynamicBuildingDamage',
   'bAllowSandstorms',
@@ -317,6 +318,7 @@ const SETTING_GROUPS: Array<{ title: string; keys: string[] }> = [
   {
     title: 'World threats and building',
     keys: [
+      'm_bAreSecurityZonesEnabled',
       'bAllowDynamicBuildingDamage', 'bAllowSandstorms', 'bAllowSandworms',
       'SandwormConsequences', 'bIsBuildingRestrictionsEnabled', 'FiefdomLimit',
       'BuildingPieceLimitMultiplier', 'MaxLandclaimSegments',
@@ -1713,7 +1715,9 @@ export function SoloMode() {
                       const control = getSoloSettingControl(key)
                       const disabled = SOLO_READ_ONLY_SETTINGS.has(key)
                       const inputId = `solo-setting-${key}`
-                      const guidance = RESPAWN_SETTING_GUIDANCE[key]
+                      const guidance = key === 'm_bAreSecurityZonesEnabled'
+                        ? { label: 'Enable security zones', effect: 'Disable to remove Kanly security-zone restrictions in Solo, including tool restrictions in cities. Saved to this profile’s Game.ini. Re-enable to restore security zones.' }
+                        : RESPAWN_SETTING_GUIDANCE[key]
                       const update = (next: string) => setDraft(current => ({ ...current, [key]: next }))
                       return (
                         <div key={key} className="block">
@@ -1727,7 +1731,7 @@ export function SoloMode() {
                               on="True"
                               off="False"
                               disabled={disabled}
-                              label={key}
+                              label={guidance?.label ?? key}
                               onChange={update}
                             />
                           ) : control.type === 'select' ? (
