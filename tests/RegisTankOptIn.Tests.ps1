@@ -38,7 +38,7 @@ Describe 'Explicit Tank opt-in migration and preserving updates' {
             $script:UpdaterCalls++
             if (-not $script:Stopped -or $script:Pods -or $script:Image -clike 'localhost/*') { throw 'Updater ran before stopped official-image transition' }
             $script:Actions+='update'
-            $script:Image='registry.funcom.com/funcom/self-hosting/seabass-server:2160922-0-shipping'
+            $script:Image='registry.funcom.com/funcom/self-hosting/seabass-server:2162777-0-shipping'
             $script:Official=$script:Image
             @{exitCode=0;output=@()}
         }
@@ -84,7 +84,7 @@ Describe 'Explicit Tank opt-in migration and preserving updates' {
         $result=Invoke-DuneRegisTankPreservingUpdate -Ip test -Update $script:Updater
         $result.restarted | Should -BeTrue
         $script:Actions -join ',' | Should -Be 'stop,disable,update,enable,start'
-        $script:Image | Should -Be 'localhost/dst-regis-tanks:2160922-1'
+        $script:Image | Should -Be 'localhost/dst-regis-tanks:2162777-1'
         $script:UpdaterCalls | Should -Be 1
     }
     It 'preserves an already stopped battlegroup after a Tank update' {

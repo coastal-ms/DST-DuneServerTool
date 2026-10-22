@@ -12,8 +12,8 @@
     $image = [string]$sets[$indices[0]].image
     $build = ''
     $managed = $false
-    if ($image -cmatch '^registry\.funcom\.com/funcom/self-hosting/seabass-server:(2147284|2156652|2160922)-0-shipping$') { $build = $Matches[1] }
-    elseif ($image -cmatch '^localhost/dst-regis-tanks:(2147284|2156652|2160922)-(?:1|native-trial1)$') { $build = $Matches[1]; $managed = $true }
+    if ($image -cmatch '^registry\.funcom\.com/funcom/self-hosting/seabass-server:(2147284|2156652|2160922|2162777)-0-shipping$') { $build = $Matches[1] }
+    elseif ($image -cmatch '^localhost/dst-regis-tanks:(2147284|2156652|2160922|2162777)-(?:1|native-trial1)$') { $build = $Matches[1]; $managed = $true }
     $optedIn = $bg.Bg.metadata.annotations.'dst.duneservertool.com/tank-opt-in' -ceq 'v1'
     return @{ bg=$bg; index=$indices[0]; image=$image; build=$build; supported=([bool]$build); managed=$managed; optedIn=$optedIn }
 }
@@ -40,7 +40,7 @@ function Set-DuneRegisTankCompatibility {
     $saved = Invoke-DuneRegisTankShell -Ip $Ip -Script "if [ -f '$statePath' ] && [ ! -L '$statePath' ]; then cat '$statePath'; fi"
     if ($saved) {
         $state = $saved | ConvertFrom-Json
-        if ($state.namespace -cne $deployment.bg.Ns -or $state.battlegroup -cne $deployment.bg.Name -or $state.originalImage -cnotmatch '^registry\.funcom\.com/funcom/self-hosting/seabass-server:(2147284|2156652|2160922)-0-shipping$') { throw 'Tank rollback state does not match the selected battlegroup.' }
+        if ($state.namespace -cne $deployment.bg.Ns -or $state.battlegroup -cne $deployment.bg.Name -or $state.originalImage -cnotmatch '^registry\.funcom\.com/funcom/self-hosting/seabass-server:(2147284|2156652|2160922|2162777)-0-shipping$') { throw 'Tank rollback state does not match the selected battlegroup.' }
     }
     if (-not $Enabled -and -not $deployment.managed) { return @{ok=$true;enabled=$false;message='Regis Tank compatibility is already disabled.'} }
     if ($Enabled) {
@@ -173,7 +173,7 @@ function Sync-DuneRegisTankServerUpdate {
     if (-not $target.available -or -not $target.stopped -or $target.serverPodCount -ne 0) {
         throw 'Stop the battlegroup completely to finish applying the updated server image to Hagga.'
     }
-    if ([string]$official[0] -cnotin @('2147284','2156652','2160922')) { throw 'Tank support is not available for the updated build. Existing Tank data has not been changed. Update DST for compatibility, or explicitly disable Tank support before starting the official server.' }
+    if ([string]$official[0] -cnotin @('2147284','2156652','2160922','2162777')) { throw 'Tank support is not available for the updated build. Existing Tank data has not been changed. Update DST for compatibility, or explicitly disable Tank support before starting the official server.' }
     $prepared = New-DuneRegisTankServerImage -Ip $Ip -Build ([string]$official[0])
     $desired = 'localhost/dst-regis-tanks:' + $official[0] + '-1'
     if (-not $prepared.verified -or $prepared.tag -cne $desired) { throw 'Updated Tank image is not verified. Nothing was changed.' }
@@ -223,7 +223,7 @@ function Complete-DuneRegisTankServerUpdate {
     if ($deployment.image -cnotmatch '^localhost/dst-regis-tanks:([0-9]+)-(?:1|native-trial1)$') { return @{ok=$true;changed=$false} }
     $tankBuild = [long]$Matches[1]
     if ($official.Count -ne 1 -or $official[0] -le $tankBuild) { return @{ok=$true;changed=$false} }
-    if ([string]$official[0] -cnotin @('2147284','2156652','2160922')) { throw 'Tank support is not available for the updated build. Existing Tank data has not been changed. Update DST for compatibility, or explicitly disable Tank support before starting the official server.' }
+    if ([string]$official[0] -cnotin @('2147284','2156652','2160922','2162777')) { throw 'Tank support is not available for the updated build. Existing Tank data has not been changed. Update DST for compatibility, or explicitly disable Tank support before starting the official server.' }
     $officialImage = 'registry.funcom.com/funcom/self-hosting/seabass-server:' + $official[0] + '-0-shipping'
     $desired = 'localhost/dst-regis-tanks:' + $official[0] + '-1'
     $target = Resolve-DuneRetailServerSettingsTarget -Ip $Ip

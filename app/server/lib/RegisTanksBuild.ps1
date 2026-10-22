@@ -8,7 +8,7 @@ function Get-DuneRegisTankCacheRoot {
 }
 
 function Get-DuneRegisTankRecipe {
-    param([ValidateSet('2147284','2156652','2160922')][string]$Build = '2147284')
+    param([ValidateSet('2147284','2156652','2160922','2162777')][string]$Build = '2147284')
     $path = Join-Path (Get-DuneRegisTankAppRoot) "resources\regis-tanks\$Build.json"
     return Get-Content -LiteralPath $path -Raw | ConvertFrom-Json
 }
@@ -36,7 +36,7 @@ function Send-DuneRegisTankFile {
 }
 
 function New-DuneRegisTankServerImage {
-    param([string]$Ip, [ValidateSet('2147284','2156652','2160922')][string]$Build = '2147284')
+    param([string]$Ip, [ValidateSet('2147284','2156652','2160922','2162777')][string]$Build = '2147284')
     $recipe = Get-DuneRegisTankRecipe -Build $Build
     if ($recipe.schema -ne 1 -or $recipe.build -cne $Build -or $recipe.baseImage -cne "registry.funcom.com/funcom/self-hosting/seabass-server:$Build-0-shipping" -or $recipe.baseDigest -cnotmatch '^sha256:[a-f0-9]{64}$' -or $recipe.cleanExecutableSha256 -cnotmatch '^[a-f0-9]{64}$' -or $recipe.patchedExecutableSha256 -cnotmatch '^[a-f0-9]{64}$') { throw 'Unsupported Tank compatibility recipe.' }
     $cache = Get-DuneRegisTankCacheRoot

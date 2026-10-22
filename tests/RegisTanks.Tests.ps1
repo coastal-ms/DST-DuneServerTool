@@ -28,7 +28,8 @@ Describe 'Native Regis Tank controls' {
     }
     It 'recognizes patched builds only with the complete unchanged overlay' -ForEach @(
         @{Hash='3e8966850e911826f4e5339dea5b3830a71e037acc9b0ed400bc9f0e21e6e318';Build='2156652'},
-        @{Hash='e10c49bd69e3ae8e3eccce3049326d04c4c0e750f767587749429a95ae7f574b';Build='2160922'}
+        @{Hash='e10c49bd69e3ae8e3eccce3049326d04c4c0e750f767587749429a95ae7f574b';Build='2160922'},
+        @{Hash='ec9da025ccb45ce4ec50b3f24efbbe4eeda320ffd028d364f4ebb6eaac54c444';Build='2162777'}
     ) {
         Mock Invoke-V6Ssh {
             @("$Hash  $script:TankBinary", "75e7144577253917f6da7312ef5e585b12fb728226a22b0938323751a6b555cd  $script:TankOverlay.pak", "13011a68170df5a9320782691768b0b0bd568610bc682ec1979e979de534c01e  $script:TankOverlay.ucas", "12781c923dcace79204bfecaf0ff4ea49c41ec6a07e68fe81fd3feb96767ced5  $script:TankOverlay.utoc")

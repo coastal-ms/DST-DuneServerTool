@@ -13,6 +13,10 @@ here cover everything those tags shipped.
 
 ## [Unreleased]
 
+## [16.5.5] - 2026-10-22
+
+Restore Update with Tank support for Dune: Awakening 1.5.15.2.
+
 ## [16.5.4] - 2026-10-20
 
 Make Solo INI backup controls available, hide the backend console, detect Steam and Xbox game installations on the Mods page, and add a Solo seed-map widget with a Live Map launcher and a minimum size that keeps POIs readable.
