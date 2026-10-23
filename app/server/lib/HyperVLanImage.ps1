@@ -29,7 +29,8 @@ function Get-DuneLanSteamLibraries {
 }
 
 function Wait-DuneLanLocalImage {
-    param([int]$TimeoutSeconds = 1800)
+    param([int]$TimeoutSeconds = 1800, [scriptblock]$CancelCheck)
+    if ($CancelCheck) { & $CancelCheck }
     $root = Find-DuneLanImage -Libraries (Get-DuneLanSteamLibraries)
     if ($root) { return $root }
     # Steam handles sign-in and download approval in its own UI; DST never asks
@@ -37,6 +38,7 @@ function Wait-DuneLanLocalImage {
     Start-Process 'steam://install/4754530' -ErrorAction Stop | Out-Null
     $deadline = (Get-Date).AddSeconds($TimeoutSeconds)
     do {
+        if ($CancelCheck) { & $CancelCheck }
         Start-Sleep -Seconds 3
         $root = Find-DuneLanImage -Libraries (Get-DuneLanSteamLibraries)
         if ($root) { return $root }
@@ -45,11 +47,13 @@ function Wait-DuneLanLocalImage {
 }
 
 function Copy-DuneLanImage {
-    param($Session, [string]$ImageRoot, [string]$DestDrive)
+    param($Session, [string]$ImageRoot, [string]$DestDrive, [scriptblock]$CancelCheck, [ref]$RecordedStage)
+    if ($CancelCheck) { & $CancelCheck }
     if ($DestDrive -notmatch '^[A-Za-z]:$') { throw 'Select a destination drive.' }
     # A fresh directory isolates retries and never modifies the Steam source or
     # a previously staged image. Only VM files are transferred, never tool logs.
     $destination = "$DestDrive\DuneServerStage\$([guid]::NewGuid().ToString('N'))"
+    if ($RecordedStage) { $RecordedStage.Value = $destination }
     $files = @()
     foreach ($folder in @('Virtual Machines', 'Virtual Hard Disks')) {
         $files += @(Get-ChildItem -LiteralPath (Join-Path $ImageRoot $folder) -File |
@@ -62,8 +66,10 @@ function Copy-DuneLanImage {
         New-Item -ItemType Directory -Path "$root\Virtual Machines", "$root\Virtual Hard Disks" -ErrorAction Stop | Out-Null
     } -ErrorAction Stop
     foreach ($file in $files) {
+        if ($CancelCheck) { & $CancelCheck }
         Copy-Item -LiteralPath $file.source -Destination "$destination\$($file.relative)" -ToSession $Session -ErrorAction Stop
     }
+    if ($CancelCheck) { & $CancelCheck }
     $verified = Invoke-Command -Session $Session -ArgumentList $destination, $files -ScriptBlock {
         param($root, $manifest)
         foreach ($file in $manifest) {

@@ -41,6 +41,25 @@ Describe 'ConvertTo-DuneAugmentSelections optional input' -Tag 'Pure' {
 }
 
 Describe 'Get-DuneGiveItemStatsJson' -Tag 'Pure' {
+    It 'initializes a granted shotgun with editable empty ammo' {
+        $stats=Get-DuneGiveItemStatsJson -TemplateId 'SmugShot5' | ConvertFrom-Json
+        $stats.FWeaponItemStats[1].CurrentAmmo | Should -Be 0
+        $stats.FCustomizationStats | Should -Not -BeNullOrEmpty
+    }
+
+    It 'initializes an empty water container with its actual capacity' {
+        $stats=Get-DuneGiveItemStatsJson -TemplateId 'Decajon' | ConvertFrom-Json
+        $stats.FFillableItemStats[1].CurrentAmount | Should -Be 0
+        $stats.FFillableItemStats[1].MaxAmount | Should -Be 10000
+        $stats.FFillableItemStats[1].FillableType | Should -Be 'Water'
+    }
+
+    It 'preserves existing ammo and unrelated stats when adding missing defaults' {
+        $stats=Add-DuneItemStatDefaults -TemplateId 'SmugShot5' -StatsJson '{"FWeaponItemStats":[[],{"CurrentAmmo":23}],"FCustomizationStats":[[],{"color":7}]}' | ConvertFrom-Json
+        $stats.FWeaponItemStats[1].CurrentAmmo | Should -Be 23
+        $stats.FCustomizationStats[1].color | Should -Be 7
+    }
+
     BeforeAll {
         $script:stackable = '{"FItemStackAndDurabilityStats":[[],{"DecayedMaxDurability":0.0}]}'
         $script:equipment = '{"FCustomizationStats":[[],{}],"FItemStackAndDurabilityStats":[[],{}]}'

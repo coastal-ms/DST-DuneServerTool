@@ -93,7 +93,10 @@ export function Settings() {
   const [dbSuggestedPort, setDbSuggestedPort] = useState<number | null>(null)
 
   async function onOpenBattlegroupBat() {
-    if (!window.confirm('Open Funcom\'s original battlegroup.bat?\n\nThis launches the battlegroup.bat in the root of your Steam install folder in an ELEVATED (administrator) window. Approve the Windows UAC prompt if it appears.')) return
+    const lan = values.VmHostMode?.toLowerCase() === 'lan'
+    if (!window.confirm(lan
+      ? 'Open the Funcom server console for your remote VM?\n\nThe console connects using the configured SSH key and offers Funcom status, start, stop, restart, update and editing actions.'
+      : 'Open Funcom\'s original battlegroup.bat?\n\nThis launches the battlegroup.bat in the root of your Steam install folder in an ELEVATED (administrator) window. Approve the Windows UAC prompt if it appears.')) return
     setOpeningBat(true)
     setBatMsg(null)
     setError(null)
@@ -827,11 +830,11 @@ export function Settings() {
                     type="button"
                     onClick={() => void onOpenBattlegroupBat()}
                     disabled={openingBat}
-                    title="Open Funcom's battlegroup.bat (in the Steam install root) in an elevated window"
+                    title={values.VmHostMode?.toLowerCase() === 'lan' ? 'Open Funcom management for the remote VM' : "Open Funcom's battlegroup.bat (in the Steam install root) in an elevated window"}
                     className="btn-secondary mb-2"
                   >
                     <Icon name={openingBat ? 'Loader2' : 'SquareTerminal'} size={15} className={openingBat ? 'animate-spin' : ''} />
-                    {openingBat ? 'Opening…' : 'Funcom BattleGroup.bat'}
+                    {openingBat ? 'Opening…' : values.VmHostMode?.toLowerCase() === 'lan' ? 'Funcom server console (LAN)' : 'Funcom BattleGroup.bat'}
                   </button>
                 )}
                 <div className="flex items-stretch gap-2">

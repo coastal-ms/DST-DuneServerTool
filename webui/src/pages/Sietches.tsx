@@ -124,7 +124,7 @@ export function Sietches() {
     setApplying(true); setMessage(null); setError(null)
     try {
       const r = await setSietchConfig(count, applyNames ? names.slice(0, count) : [], applyNames)
-      setMessage(r.message ?? 'Applied. Battlegroup restarting — watch Server Health.')
+      setMessage(r.message ?? 'Applied. Battlegroup restarting — watch Server Overview.')
       setTimeout(() => { void refresh() }, 4000)
     } catch (e) {
       setError(e instanceof ApiError ? e.message : String(e))
@@ -268,7 +268,7 @@ export function Sietches() {
               <Icon name={applying ? 'Loader2' : 'Check'} size={14} className={applying ? 'animate-spin' : ''} />
               {applying ? 'Applying…' : 'Apply & clean-restart'}
             </button>
-            <p className="text-xs text-text-dim mt-2">DST applies the change and performs a clean battlegroup restart (~2–3 min). Watch Server Health for the shards to come back.</p>
+            <p className="text-xs text-text-dim mt-2">DST applies the change and performs a clean battlegroup restart (~2–3 min). Watch Server Overview for the shards to come back.</p>
           </section>
         </>
       )}

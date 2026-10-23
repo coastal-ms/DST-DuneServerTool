@@ -204,6 +204,22 @@ Register-DuneRoute -Method POST -Path '/api/config/open-battlegroup-bat' -Handle
     param($req, $res, $routeParams, $body)
 
     $cfg   = Read-DuneConfigRaw
+    if ((Get-DuneVmHostMode) -eq 'lan') {
+        try {
+            $vm = Get-DuneVmStatus
+            if (-not $vm.running -or -not $vm.ip) { throw 'Start the remote VM before opening its Funcom console.' }
+            $runtimeCfg = Read-DuneConfig
+            $plan = Get-DuneFuncomLanConsoleLaunch -Ip $vm.ip -KeyPath ([string]$runtimeCfg.SshKey)
+            $launch = Start-DuneVisibleElevated -FilePath $plan.FilePath -ArgumentList $plan.ArgumentList
+            Write-DuneJson -Response $res -Body @{
+                ok=$true; pid=$launch.pid; via=$launch.via; target=$vm.ip
+                message="Opened the Funcom server console for the remote VM at $($vm.ip)."
+            }
+        } catch {
+            Write-DuneError -Response $res -Status 500 -Message "Could not open the remote Funcom console: $($_.Exception.Message)"
+        }
+        return
+    }
     $steam = if ($cfg -and $cfg.SteamPath) { [string]$cfg.SteamPath } else { '' }
     if (-not $steam) {
         Write-DuneError -Response $res -Status 400 -Message 'Steam install path is not set. Set it in Settings first.'

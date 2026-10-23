@@ -708,7 +708,17 @@ Register-DuneRoute -Method PUT -Path '/api/gameconfig/client/lab' -LocalOnly -Ha
         return
     }
     try {
-        $result = Save-DuneGameConfigClient -Updates @($body.updates) -ReviewedRaw
+        $updates = @($body.updates)
+        $defaultsRaw = ''
+        if ((Test-DuneUpdatesHaveStructMember -Updates $updates) -or
+            (Test-DuneUpdatesHaveSpicefieldMember -Updates $updates)) {
+            $ctx = Get-DuneGameConfigContext
+            if (-not $ctx.ok) { throw 'The selected server is unavailable. No local Lab settings were saved.' }
+            $defaultsRaw = [string](Get-DuneGameConfigDefaults -Ip $ctx.ip).game
+        }
+        $validateOnly = $body.validateOnly -eq $true
+        $result = Save-DuneGameConfigClient -Updates $updates -ReviewedRaw -DefaultsRaw $defaultsRaw -ValidateOnly:$validateOnly
+        if ($validateOnly) { Write-DuneJson -Response $res -Body $result; return }
         # Keep the comparison populated with every unselected local entry.
         $result['client'] = Get-DuneGameConfigClient
         Write-DuneJson -Response $res -Body $result

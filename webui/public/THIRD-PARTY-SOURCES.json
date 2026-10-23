@@ -292,9 +292,9 @@
   },
   {
     "name": "dompurify",
-    "version": "3.4.16",
+    "version": "3.4.17",
     "license": "(MPL-2.0 OR Apache-2.0)",
-    "packageSource": "https://registry.npmjs.org/dompurify/-/dompurify-3.4.16.tgz",
+    "packageSource": "https://registry.npmjs.org/dompurify/-/dompurify-3.4.17.tgz",
     "repository": {
       "type": "git",
       "url": "git://github.com/cure53/DOMPurify.git"

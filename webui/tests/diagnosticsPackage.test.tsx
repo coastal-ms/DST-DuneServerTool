@@ -112,6 +112,15 @@ function Crash(): never {
 }
 
 describe('error-boundary support guidance', () => {
+  it('offers a page reload for a failed module download instead of retrying the cached render', () => {
+    vi.spyOn(console, 'error').mockImplementation(() => undefined)
+    function FailedModule(): never { throw new Error('Failed to fetch dynamically imported module: /assets/MapWorkspace-old.js') }
+    render(<PageErrorBoundary pageName="Map"><FailedModule /></PageErrorBoundary>)
+    expect(screen.getByText('Map could not load')).toBeInTheDocument()
+    expect(screen.getByRole('button', {name:'Reload page'})).toBeInTheDocument()
+    expect(screen.queryByRole('button', {name:'Retry render'})).not.toBeInTheDocument()
+    expect(screen.getByText(/does not indicate that your game server stopped/)).toBeInTheDocument()
+  })
   it('directs page and section failures to the diagnostics package and Discord', () => {
     vi.spyOn(console, 'error').mockImplementation(() => undefined)
     const page = render(

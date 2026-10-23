@@ -22,6 +22,7 @@ import { ApiError } from '../api/client'
 import { getMapSpinUp, setMapPartySharing, setMapSpinUp, type SpinUpMap, type SpinUpMissingSection, type SpinUpNotStartedSection } from '../api/mapSpinUp'
 import { fixOnDemandPartitions, getMapState, restartMapPods, type MapState } from '../api/maps'
 import { confirmRoutineAction } from '../hooks/useReducedRoutineUi'
+import { RemoteMapQr } from './workspaces/RemoteMapQr'
 
 // Map SpinUp section names → on-demand map keys that expose a live, schedulable
 // pod state via GET /api/maps/{key}. Only these three report whether a pod is
@@ -413,7 +414,9 @@ export function MapSpinUp({ embedded = false }: { embedded?: boolean }) {
         />
       )}
 
-      <div className="mb-4 grid grid-cols-1 min-[360px]:grid-cols-2 gap-2 sm:flex sm:flex-wrap sm:items-center sm:justify-center sm:gap-3">
+      <div className="mb-4 flex flex-wrap items-start gap-3">
+        <RemoteMapQr />
+        <div className="grid min-w-0 flex-1 grid-cols-1 min-[360px]:grid-cols-2 gap-2 sm:flex sm:flex-wrap sm:items-center sm:justify-center sm:gap-3">
         <button
           className="btn-secondary min-h-11 w-full justify-center sm:w-auto"
           onClick={() => { void onRestartPods('survival', 'Hagga (Survival_1)') }}
@@ -432,6 +435,7 @@ export function MapSpinUp({ embedded = false }: { embedded?: boolean }) {
           <Icon name={restartBusy === 'deepdesert' ? 'Loader2' : 'RotateCcw'} size={15} className={restartBusy === 'deepdesert' ? 'animate-spin' : ''} />
           {restartBusy === 'deepdesert' ? 'Restarting…' : 'Restart Deep Desert'}
         </button>
+        </div>
       </div>
 
       <div className="mb-4 rounded-lg border border-warning/60 bg-warning/15 px-3 py-3 sm:px-4 flex items-start gap-3">

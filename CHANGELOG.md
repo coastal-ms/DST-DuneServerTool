@@ -13,6 +13,28 @@ here cover everything those tags shipped.
 
 ## [Unreleased]
 
+## [16.5.7] - 2026-10-22
+
+- Restore the choice of automatic or fixed VM addresses during Hyper-V over LAN setup.
+- Fix SSH key installation and prevent interrupted installations from showing stale progress or locking setup.
+- Add cancellation, resume and removal controls for unfinished LAN installations.
+- Verify the requested world name before reporting setup complete.
+- Correct setup port guidance and make Finish open Server Overview.
+- Retry inconclusive port checks promptly and show manual refresh progress and errors.
+- Read battlegroup phases correctly when server names contain spaces.
+- Read complete defaults from the installed server image while stopped, and validate required local compatibility writes before shutdown.
+- Show settings Apply progress through shutdown, saving, startup and game-server readiness without waiting for public port checks.
+- Correct trainer unlock status on fresh characters and keep player-action results clear of controls.
+- Open a usable Funcom management console for the selected LAN-hosted VM from Settings.
+- Restore ammo and water editing for granted items with missing stat components, and add per-container refill.
+- Retry interrupted LAN battlegroup reads when loading server settings.
+- Show first live-position loading separately from failed readings, and offer page reload for failed page-code downloads.
+- Add a compact map QR beside Lifecycle restart controls for remote phone and tablet access.
+- Make embedded map Expand fill the viewing window when browser fullscreen is unavailable.
+- Keep the screen awake while the expanded map is visible on supported browsers.
+- Use the full tablet viewport for expanded maps, with layers overlaid and duplicate restore controls removed.
+- Pause unattended maps after one hour, with Resume live map and Keep this map live controls. Other viewers continue independently.
+
 ## [16.5.6] - 2026-10-22
 
 - Keep approved server settings changes and the selected restart running when navigating between DST pages. Show progress and failures across pages.

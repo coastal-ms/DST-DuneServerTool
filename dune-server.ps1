@@ -21,7 +21,7 @@ param(
 # Wraps the original battlegroup.ps1 menu and adds extra tools
 # ============================================================
 
-$script:ToolVersion = "16.5.6"
+$script:ToolVersion = "16.5.7"
 
 # Cold-boot readiness budgets (seconds). A fresh battlegroup's FIRST boot can
 # take 10-30 min: k3s + funcom-operators initialize, metrics-server restarts a
@@ -1466,6 +1466,21 @@ function Invoke-DuneCliSshPayload {
     }
 }
 
+function Sync-DuneBattlegroupPhaseReader {
+    param([Parameter(Mandatory)][string]$Ip)
+    $local = @(
+        (Join-Path $scriptDir 'resources/remote-scripts/reconcile-battlegroup-phase.sh')
+        (Join-Path $scriptDir 'app/resources/remote-scripts/reconcile-battlegroup-phase.sh')
+    ) | Where-Object { Test-Path -LiteralPath $_ } | Select-Object -First 1
+    if (-not $local) { throw 'The bundled battlegroup phase compatibility script is missing.' }
+    $raw = [IO.File]::ReadAllText($local) -replace "`r", ''
+    $payload = [Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes($raw))
+    $result = Invoke-DuneCliSshPayload -Ip $Ip -RemoteCommand 'base64 -d | sudo -n sh' -StdinData $payload -TimeoutSec 20
+    if ($result.Exit -ne 0 -or $result.Stdout -notmatch 'DUNE_BATTLEGROUP_PHASE_OK') {
+        throw "Battlegroup phase compatibility check failed: $($result.Stderr) $($result.Stdout)"
+    }
+}
+
 function Invoke-DuneHyperVGuestRecoveryInstall {
     param(
         [Parameter(Mandatory)][string]$Ip,
@@ -2153,6 +2168,7 @@ while ($true) {
         Write-Host "[3/4] Starting battlegroup...$bgHint" -ForegroundColor Cyan
         $t_bg = Get-Date
         Sync-DuneRetailSettingsBeforeStart -Ip $ip
+        Sync-DuneBattlegroupPhaseReader -Ip $ip
         ssh -t -o StrictHostKeyChecking=no -o LogLevel=QUIET -i "$sshKey" "$sshUser@$ip" "$bgBinPath start"
         $bgStartExit = $LASTEXITCODE
         Save-PhaseTiming 'battlegroup-start' ([int]((Get-Date) - $t_bg).TotalSeconds)
@@ -2246,6 +2262,7 @@ while ($true) {
         if (-not (Test-DuneBattlegroupHasPods -Ip $ip -SshUser $sshUser -SshKey $sshKey)) {
             Write-Host "  Battlegroup not running (no game/infra pods) - skipping stop." -ForegroundColor DarkGray
         } else {
+            Sync-DuneBattlegroupPhaseReader -Ip $ip
             ssh -t -o StrictHostKeyChecking=no -o LogLevel=QUIET -i "$sshKey" "$sshUser@$ip" "$bgBinPath stop"
             if ($LASTEXITCODE -ne 0) {
                 Write-Warning "battlegroup stop returned exit code $LASTEXITCODE. Aborting reboot."
@@ -2475,6 +2492,7 @@ while ($true) {
         Write-Host "[3/3] Starting battlegroup...$bgHint" -ForegroundColor Cyan
         $t_bg = Get-Date
         Sync-DuneRetailSettingsBeforeStart -Ip $ip
+        Sync-DuneBattlegroupPhaseReader -Ip $ip
         ssh -t -o StrictHostKeyChecking=no -o LogLevel=QUIET -i "$sshKey" "$sshUser@$ip" "$bgBinPath start"
         $bgStartExit = $LASTEXITCODE
         Save-PhaseTiming 'battlegroup-start' ([int]((Get-Date) - $t_bg).TotalSeconds)
@@ -2526,6 +2544,7 @@ while ($true) {
         if (-not (Test-DuneBattlegroupHasPods -Ip $ip -SshUser $sshUser -SshKey $sshKey)) {
             Write-Host "  Battlegroup not running (no game/infra pods) - skipping stop." -ForegroundColor DarkGray
         } else {
+            Sync-DuneBattlegroupPhaseReader -Ip $ip
             ssh -t -o StrictHostKeyChecking=no -o LogLevel=QUIET -i "$sshKey" "$sshUser@$ip" "$bgBinPath stop"
             if ($LASTEXITCODE -ne 0) {
                 Write-Warning "battlegroup stop returned exit code $LASTEXITCODE."
@@ -2927,6 +2946,7 @@ fi
     }
 
     if ($cmdName -eq 'update-with-tanks') {
+        Sync-DuneBattlegroupPhaseReader -Ip $ip
         $tankUpdater = {
             ssh -t -o StrictHostKeyChecking=no -o LogLevel=QUIET -i "$sshKey" "$sshUser@$ip" "$bgBinPath update" | Tee-Object -Variable tankOutput | Out-Host
             return @{exitCode=$LASTEXITCODE;output=@($tankOutput)}
@@ -2941,12 +2961,14 @@ fi
         Invoke-DuneHyperVGuestRecoveryInstall -Ip $ip -Phase "pre-$cmdName"
         Invoke-DuneDnatWatchdogInstall -Ip $ip -Phase "pre-$cmdName"
         if ($cmdName -eq 'restart') {
+            Sync-DuneBattlegroupPhaseReader -Ip $ip
             ssh -t -o StrictHostKeyChecking=no -o LogLevel=QUIET -i "$sshKey" "$sshUser@$ip" "$bgBinPath stop"
             if ($LASTEXITCODE -ne 0) { throw 'Battlegroup stop failed. Server Settings were not synchronized.' }
         }
         Sync-DuneRetailSettingsBeforeStart -Ip $ip
     }
 
+    if ($cmdName -in @('start', 'stop', 'restart', 'update')) { Sync-DuneBattlegroupPhaseReader -Ip $ip }
     $dispatchCommand = if ($cmdName -eq 'restart') { 'start' } else { $cmdName }
     if ($cmdName -eq 'update') {
         ssh -t -o StrictHostKeyChecking=no -o LogLevel=QUIET -i "$sshKey" "$sshUser@$ip" "$bgBinPath $dispatchCommand" | Tee-Object -Variable bgUpdateOutput | Out-Host

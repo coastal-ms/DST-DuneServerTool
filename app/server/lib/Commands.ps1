@@ -360,6 +360,35 @@ function Test-DuneCanShowWindowDirectly {
     }
 }
 
+function Get-DuneFuncomLanConsoleLaunch {
+    param([Parameter(Mandatory)][string]$Ip, [Parameter(Mandatory)][string]$KeyPath)
+    $address = $null
+    if (-not [System.Net.IPAddress]::TryParse($Ip, [ref]$address)) { throw 'The remote VM address is unavailable.' }
+    if (-not (Test-Path -LiteralPath $KeyPath -PathType Leaf)) { throw 'The configured SSH key was not found.' }
+    $data = [Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes((@{ip=$Ip;key=$KeyPath} | ConvertTo-Json -Compress)))
+    $console = @'
+$target = [Text.Encoding]::UTF8.GetString([Convert]::FromBase64String('__TARGET__')) | ConvertFrom-Json
+$actions = @{'1'='status';'2'='start';'3'='stop';'4'='restart';'5'='update';'6'='edit';'7'='edit-advanced';'8'='logs-export'}
+while ($true) {
+    Write-Host "`nFuncom server console - $($target.ip)"
+    Write-Host '1 Status   2 Start   3 Stop   4 Restart'
+    Write-Host '5 Update   6 Edit    7 Advanced edit   8 Export logs   0 Close'
+    $choice = Read-Host 'Choose an action'
+    if ($choice -eq '0') { break }
+    if (-not $actions.ContainsKey($choice)) { continue }
+    $remote = '/home/dune/.dune/bin/battlegroup ' + $actions[$choice]
+    & ssh -t -o ServerAliveInterval=15 -o ServerAliveCountMax=3 -o ConnectTimeout=10 -i $target.key ('dune@' + $target.ip) $remote
+    if ($LASTEXITCODE) { Write-Host "Funcom command exited with code $LASTEXITCODE. Check the output above." -ForegroundColor Yellow }
+}
+'@
+    $console = $console.Replace('__TARGET__', $data)
+    $pwsh = if ($script:PwshExe) { $script:PwshExe } else { (Get-Command pwsh -ErrorAction Stop).Source }
+    return @{
+        FilePath = $pwsh
+        ArgumentList = @('-NoLogo','-NoProfile','-EncodedCommand',[Convert]::ToBase64String([Text.Encoding]::Unicode.GetBytes($console)))
+    }
+}
+
 function Start-DuneVisibleElevated {
     param(
         [Parameter(Mandatory)][string]$FilePath,

@@ -3,6 +3,7 @@ BeforeAll {
     Import-DstLib 'Config.ps1'
     Import-DstLib 'HyperVLanImage.ps1'
     Import-DstLib 'HyperVLanInstall.ps1'
+    Import-DstLib 'HyperVLanGuest.ps1'
     # Isolate the transport boundary without opening a live PSSession. The real
     # remote verification script still runs against fixture files below.
     function global:Invoke-Command { param($Session, $ArgumentList, $ScriptBlock, $ComputerName, $Credential, $ErrorAction) }
@@ -78,7 +79,7 @@ Describe 'World setup validation before import' {
         Mock Copy-DuneLanImage { throw 'VM image transfer verification failed.' }
         Mock Invoke-Command { throw 'Import must not run' }
         Mock Initialize-DuneLanGuest { throw 'Bootstrap must not run' }
-        Invoke-DuneHyperVLanInstall -HostIp '192.0.2.1' -DestDrive 'D:' -MemoryGB 20 -SwitchName 'test' -WorldName 'World' -Region 3 -ServerToken $token
+        Invoke-DuneHyperVLanInstall -HostIp '192.0.2.1' -DestDrive 'D:' -MemoryGB 20 -SwitchName 'test' -WorldName 'World' -Region 3 -ServerToken $token -Network @{mode='dhcp'}
         $lastState.phase | Should -Be 'error'
         $lastState.error | Should -Match 'verification failed'
         ($lastState | ConvertTo-Json -Depth 8) | Should -Not -Match ([regex]::Escape($token))

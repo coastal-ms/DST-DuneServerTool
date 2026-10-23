@@ -787,9 +787,9 @@ Source package: https://registry.npmjs.org/detect-libc/-/detect-libc-2.1.2.tgz
 
 
 ========================================================================
-dompurify 3.4.16
+dompurify 3.4.17
 License: (MPL-2.0 OR Apache-2.0)
-Source package: https://registry.npmjs.org/dompurify/-/dompurify-3.4.16.tgz
+Source package: https://registry.npmjs.org/dompurify/-/dompurify-3.4.17.tgz
 
 --- LICENSE ---
 

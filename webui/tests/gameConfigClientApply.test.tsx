@@ -668,13 +668,17 @@ it.each([{ skip: false, failure: false }, { skip: true, failure: false }, { skip
   await user.clear(input); await user.type(input, '1')
   if (skip) await user.click(await screen.findByRole('button', { name: 'Skip difference ' + key }))
   if (failure) {
-    await act(async () => { await expect(drafts.get('advanced')!.apply()).rejects.toThrow('Local save failed') })
+    await act(async () => { await expect(drafts.get('advanced')!.validate!()).rejects.toThrow('Local save failed') })
     expect(saveGameConfig).not.toHaveBeenCalled()
     return
   }
+  await act(async () => { await drafts.get('advanced')!.validate!() })
   await act(async () => { await drafts.get('advanced')!.apply() })
   expect(saveGameConfig).toHaveBeenCalledExactlyOnceWith({ [key]: '1' })
   if (skip) expect(saveLabLocal).not.toHaveBeenCalled()
-  else expect(saveLabLocal).toHaveBeenCalledExactlyOnceWith([{ file: 'engine', section, key, value: '1' }])
+  else expect(vi.mocked(saveLabLocal).mock.calls).toEqual([
+    [[{ file: 'engine', section, key, value: '1' }], true],
+    [[{ file: 'engine', section, key, value: '1' }]],
+  ])
   expect(screen.queryByRole('region', { name: 'Server and local INI differences' })).not.toBeInTheDocument()
 })

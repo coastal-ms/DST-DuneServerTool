@@ -34,3 +34,26 @@ it('publishes the manual forced response immediately and rejects an older poll c
   expect(request.mock.calls.filter(([path]) => path === '/api/status')).toHaveLength(1)
   expect(JSON.parse(localStorage.getItem('dst.status.last.v1')!).status.ports.results[0].status).toBe('open')
 })
+
+it('shows manual refresh progress, coalesces repeat clicks and surfaces failures without waiting for a poll', async () => {
+  let rejectRefresh!: (error: Error) => void
+  const snapshot = {ts: new Date().toISOString(), vm: {running:true}, ports:{results:[{port:31982,status:'unknown'}]}}
+  request.mockImplementation((path: string) => path === '/api/status'
+    ? Promise.resolve(snapshot)
+    : new Promise((_resolve, reject) => { rejectRefresh = reject }))
+  function Consumer() {
+    const status = useStatus()
+    return <><button onClick={() => void status.forceRefresh()}>Check now</button>
+      <output>{status.loading ? 'Checking' : 'Idle'}</output>
+      {status.error && <p role="alert">{status.error}</p>}</>
+  }
+  render(<StatusProvider><Consumer /></StatusProvider>)
+  await screen.findByText('Idle')
+  fireEvent.click(screen.getByRole('button', {name:'Check now'}))
+  fireEvent.click(screen.getByRole('button', {name:'Check now'}))
+  expect(screen.getByText('Checking')).toBeInTheDocument()
+  expect(request.mock.calls.filter(([path]) => path === '/api/status/refresh')).toHaveLength(1)
+  await act(async () => { rejectRefresh(new Error('Connection interrupted')) })
+  expect(screen.getByRole('alert')).toHaveTextContent('Status refresh failed: Connection interrupted')
+  expect(screen.getByText('Idle')).toBeInTheDocument()
+})

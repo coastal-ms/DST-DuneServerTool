@@ -162,9 +162,9 @@ export function saveGameConfigRaw(updates: GameConfigRawUpdate[]) {
   )
 }
 
-export function saveLabLocal(updates: GameConfigRawUpdate[]) {
+export function saveLabLocal(updates: GameConfigRawUpdate[], validateOnly = false) {
   return api<GameConfigClientApplyResult>('/api/gameconfig/client/lab', {
-    method: 'PUT', body: JSON.stringify({ approved: true, updates }),
+    method: 'PUT', body: JSON.stringify({ approved: true, updates, validateOnly }),
   })
 }
 

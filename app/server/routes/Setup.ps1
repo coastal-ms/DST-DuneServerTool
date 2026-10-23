@@ -20,6 +20,7 @@ Register-DuneRoute -Method GET -Path '/api/setup/hyperv-lan' -LocalOnly -Handler
         Write-DuneJson -Response $res -Body @{
             mode   = (Get-DuneVmHostMode)
             hostIp = (Get-DuneHyperVHostIp)
+            previousVmIp = [string](Read-DuneConfig).LastKnownVmIp
         }
     } catch {
         Write-DuneError -Response $res -Status 500 -Message $_.Exception.Message
@@ -198,7 +199,10 @@ Register-DuneRoute -Method POST -Path '/api/setup/hyperv-lan/install' -LocalOnly
         $replace = $false; if ($body.Contains('replaceExisting')) { $replace = [bool]$body['replaceExisting'] }
         if (-not $hostIp) { Write-DuneError -Response $res -Status 400 -Message 'A Hyper-V host IP is required.'; return }
         if (-not $drive -or -not $switch -or $memGB -lt 1) { Write-DuneError -Response $res -Status 400 -Message 'Destination drive, external switch, and a memory size (GB) are required.'; return }
-        $r = Start-DuneHyperVLanInstallAsync -HostIp $hostIp -User $user -Password $pass -DestDrive $drive -MemoryGB $memGB -SwitchName $switch -VmPassword $vmPass -ReplaceExisting $replace -WorldName ([string]$body['worldName']) -Region ([int]$body['region']) -ServerToken ([string]$body['serverToken'])
+        $network = @{}
+        foreach ($field in @('mode','address','prefix','gateway','dns')) { $network[$field] = [string]$body['network'][$field] }
+        $resume = $body.Contains('resume') -and [bool]$body['resume']
+        $r = Start-DuneHyperVLanInstallAsync -HostIp $hostIp -User $user -Password $pass -DestDrive $drive -MemoryGB $memGB -SwitchName $switch -VmPassword $vmPass -ReplaceExisting $replace -WorldName ([string]$body['worldName']) -Region ([int]$body['region']) -ServerToken ([string]$body['serverToken']) -Network $network -Resume $resume
         if (-not $r.ok) { Write-DuneError -Response $res -Status 409 -Message $r.error; return }
         Write-DuneJson -Response $res -Body $r
     } catch {
@@ -207,6 +211,20 @@ Register-DuneRoute -Method POST -Path '/api/setup/hyperv-lan/install' -LocalOnly
 }
 
 # Poll remote-install progress (phase, per-step status, guest IP, error).
+Register-DuneRoute -Method POST -Path '/api/setup/hyperv-lan/install/remove' -LocalOnly -Handler {
+    param($req, $res, $routeParams, $body)
+    try {
+        $result = Remove-DuneHyperVLanAttempt -HostIp ([string]$body['hostIp']) -User ([string]$body['user']) -Password ([string]$body['password']) -Confirmed ([bool]$body['confirmed'])
+        Write-DuneJson -Response $res -Body $result
+    } catch { Write-DuneError -Response $res -Status 400 -Message $_.Exception.Message }
+}
+
+Register-DuneRoute -Method POST -Path '/api/setup/hyperv-lan/install/cancel' -LocalOnly -Handler {
+    param($req, $res, $routeParams, $body)
+    try { Write-DuneJson -Response $res -Body (Request-DuneHyperVLanInstallCancel) }
+    catch { Write-DuneError -Response $res -Status 500 -Message $_.Exception.Message }
+}
+
 Register-DuneRoute -Method GET -Path '/api/setup/hyperv-lan/install/status' -LocalOnly -Handler {
     param($req, $res, $routeParams, $body)
     try {

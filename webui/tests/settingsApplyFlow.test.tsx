@@ -129,14 +129,19 @@ it('leaves a managed battlegroup stopped when the user deliberately unchecks sta
   expect(await screen.findByRole('status')).toHaveTextContent('remains stopped')
 })
 
-it('defaults to starting saved settings even when there are no drafts', async () => {
-  state.stopped = true
+it.each([true, false])('deploys saved timer settings without new drafts (stopped: %s)', async stopped => {
+  state.stopped = stopped
   render(<ServerSettings />)
   fireEvent.click(screen.getByRole('button', { name: /Review & Apply/ }))
   const dialog = await screen.findByRole('alertdialog')
+  expect(dialog).toHaveTextContent('Apply saved server settings')
+  expect(dialog).toHaveTextContent('including changes saved by specialized controls such as the land-claim timer')
   expect(within(dialog).getByRole('checkbox')).toBeChecked()
-  fireEvent.click(within(dialog).getByRole('button', { name: 'Save & start battlegroup' }))
-  await waitFor(() => expect(state.events).toEqual(['deploy:start']))
+  fireEvent.click(within(dialog).getByRole('button', { name: 'Apply saved settings & start battlegroup' }))
+  await waitFor(() => expect(state.events).toEqual(stopped ? ['deploy:start'] : ['stop', 'deploy:start']), { timeout: 4000 })
+  const checks = state.api.mock.calls.filter(([path]) => path === '/api/status/refresh')
+  expect(checks.length).toBeGreaterThan(0)
+  for (const [, options] of checks) expect(JSON.parse(options.body)).toEqual({ lifecycleOnly: true })
 })
 
 function ApplyObserver() {

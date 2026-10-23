@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useState, type ReactNode } from 'react'
+import { createContext, useContext, useEffect, useRef, useState, type ReactNode } from 'react'
 import { useApi } from './useApi'
 import type { StatusSnapshot } from '../api/types'
 import { api } from '../api/client'
@@ -62,7 +62,16 @@ export function writeCachedStatus(
 export function StatusProvider({ children }: { children: ReactNode }) {
   const refreshPreset = useHealthRefreshPreset()
   const soloOnly = useSoloInstallation()
-  const s = useApi<StatusSnapshot>('/api/status', { intervalMs: refreshPreset.statusIntervalMs, enabled: !soloOnly })
+  const [mapViewerPaused, setMapViewerPaused] = useState(false)
+  useEffect(() => {
+    const receive = (event: Event) => { setMapViewerPaused((event as CustomEvent).detail === true) }
+    window.addEventListener('dst-map-viewer-paused', receive)
+    return () => window.removeEventListener('dst-map-viewer-paused', receive)
+  }, [])
+  const s = useApi<StatusSnapshot>('/api/status', { intervalMs: refreshPreset.statusIntervalMs, enabled: !soloOnly && !mapViewerPaused })
+  const [forcing, setForcing] = useState(false)
+  const [forceError, setForceError] = useState<string | null>(null)
+  const forcedRequest = useRef<Promise<void> | null>(null)
   const [cachedStatus] = useState<StatusSnapshot | null>(() => readCachedStatus())
 
   useEffect(() => {
@@ -71,13 +80,25 @@ export function StatusProvider({ children }: { children: ReactNode }) {
 
   const value: StatusCtx = {
     status:   soloOnly ? null : s.data ?? cachedStatus,
-    loading:  !soloOnly && s.loading,
-    error:    soloOnly ? null : s.error,
+    loading:  !soloOnly && (s.loading || forcing),
+    error:    soloOnly ? null : forceError ?? s.error,
     refresh:  s.refresh,
     forceRefresh: async () => {
       if (soloOnly) return
-      const fresh = await api<StatusSnapshot>('/api/status/refresh', { method: 'POST' })
-      s.replaceData(fresh)
+      if (forcedRequest.current) return forcedRequest.current
+      setForcing(true); setForceError(null)
+      const pending = (async () => {
+        try {
+          const fresh = await api<StatusSnapshot>('/api/status/refresh', { method: 'POST' })
+          s.replaceData(fresh)
+        } catch (e) {
+          setForceError(`Status refresh failed: ${e instanceof Error ? e.message : String(e)}`)
+        } finally {
+          setForcing(false); forcedRequest.current = null
+        }
+      })()
+      forcedRequest.current = pending
+      return pending
     },
   }
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>
@@ -87,4 +108,9 @@ export function useStatus(): StatusCtx {
   const v = useContext(Ctx)
   if (!v) throw new Error('useStatus must be used within <StatusProvider>')
   return v
+}
+
+// Progress also appears in the widget, outside the full server-status provider.
+export function useStatusSnapshot(): StatusSnapshot | null {
+  return useContext(Ctx)?.status ?? null
 }

@@ -62,12 +62,15 @@ SELECT i.id, i.template_id, i.stack_size, COALESCE(i.quality_level, 0) AS qualit
        COALESCE((i.stats->'FItemStackAndDurabilityStats'->1->>'MaxDurability'), 'N/A')     AS max_durability,
        COALESCE((i.stats->'FFillableItemStats'->1->>'CurrentAmount'), 'N/A')               AS water_amount,
        COALESCE((i.stats->'FFillableItemStats'->1->>'FillableType'), '')                   AS water_type,
+       i.stats->'FFillableItemStats'->1->>'MaxAmount' AS water_capacity,
        CASE
            WHEN jsonb_typeof(i.stats->'FWeaponItemStats') = 'array'
             AND jsonb_typeof(i.stats->'FWeaponItemStats'->1) = 'object'
                THEN COALESCE(i.stats->'FWeaponItemStats'->1->>'CurrentAmmo', '0')
            ELSE 'N/A'
-       END                                                                                AS current_ammo
+       END                                                                                AS current_ammo,
+       NOT (i.stats ? 'FWeaponItemStats') AS weapon_stats_missing,
+       NOT (i.stats ? 'FFillableItemStats') AS water_stats_missing
 FROM dune.items i
 JOIN dune.inventories inv ON i.inventory_id = inv.id
 WHERE inv.actor_id = {0}::bigint
@@ -147,6 +150,13 @@ function Get-DunePlayerDetailLive {
     $inventory = @()
     foreach ($r in (ConvertTo-DuneRowMaps -Result $invRes)) {
         $tmpl = [string]$r['template_id']
+        $defaults = Get-DuneItemStatDefaults -TemplateId $tmpl
+        $ammo = [string]$r['current_ammo']
+        $water = [string]$r['water_amount']
+        $waterType = [string]$r['water_type']
+        if ((Test-DuneTruthy $r['weapon_stats_missing']) -and $defaults.FWeaponItemStats) { $ammo='0' }
+        if ((Test-DuneTruthy $r['water_stats_missing']) -and $defaults.FFillableItemStats) { $water='0';$waterType='Water' }
+        if ($waterType -eq 'None' -and $defaults.FFillableItemStats) { $waterType='Water' }
         $inventory += [ordered]@{
             id             = (ConvertTo-DuneInt $r['id'])
             template_id    = $tmpl
@@ -159,9 +169,10 @@ function Get-DunePlayerDetailLive {
             is_reserve     = (Test-DuneTruthy $r['is_reserve'])
             durability     = [string]$r['durability']
             max_durability = [string]$r['max_durability']
-            water_amount   = [string]$r['water_amount']
-            water_type     = [string]$r['water_type']
-            current_ammo   = [string]$r['current_ammo']
+            water_amount   = $water
+            water_type     = $waterType
+            water_capacity = $(if($r['water_capacity'] -match '^\d+(\.\d+)?$'){[double]$r['water_capacity']}elseif($defaults.FFillableItemStats){[double]$defaults.FFillableItemStats[1].MaxAmount}else{0})
+            current_ammo   = $ammo
         }
     }
     $specs = @()
@@ -687,9 +698,9 @@ RETURNING i.id::text AS item_id;
 
 # Per-item water editor. Writes FFillableItemStats[1].CurrentAmount verbatim for
 # any item carrying that block (water canteens/literjons + stillsuit hydration).
-# Capacity is cooked into the item template, NOT stored per-item, so there is no
-# max field to write — only the current amount. Rejects negatives, NaN and
-# infinities. Items without the fillable block are left untouched (no-op).
+# Known water containers missing their component are initialized from the
+# bundled game table on explicit save. Existing unrelated stats are retained.
+# Rejects negatives, NaN and infinities; other fluid types are not converted.
 # IMPORTANT: the map pod caches inventory in RAM and flushes it back to Postgres
 # on its periodic save tick, so a value written here will NOT appear in-game (and
 # may be overwritten) until that map's pod / the battlegroup is restarted. The UI
@@ -702,21 +713,27 @@ function Invoke-DunePlayerSetItemWater {
     }
     if ($Amount -lt 0) { return @{ ok = $false; error = 'amount must be >= 0.' } }
     $wv = Format-DuneFloatForSql -Value $Amount
+    $waterDefaults = Get-DuneItemStatDefaultsSql -Block FFillableItemStats
 
     $sql = @"
 UPDATE dune.items i
-SET stats = jsonb_set(i.stats,
+SET stats = jsonb_set(
+        jsonb_set(jsonb_set(i.stats, '{FFillableItemStats}',
+            COALESCE(i.stats->'FFillableItemStats', $waterDefaults -> lower(i.template_id)), true),
+            '{FFillableItemStats,1,FillableType}', '"Water"'::jsonb, true),
         '{FFillableItemStats,1,CurrentAmount}', to_jsonb($wv::float8), true)
 WHERE i.id = $ItemId::bigint
-  AND i.stats ? 'FFillableItemStats'
-  AND i.stats->'FFillableItemStats'->1->>'FillableType' = 'Water'
+  AND ((i.stats->'FFillableItemStats'->1->>'FillableType' = 'Water')
+       OR ($waterDefaults ? lower(i.template_id)
+           AND (NOT (i.stats ? 'FFillableItemStats')
+                OR i.stats->'FFillableItemStats'->1->>'FillableType' = 'None')))
 RETURNING i.id::text AS item_id;
 "@
-    $res = Invoke-DuneSqlQuery -Ip $Ip -Sql $sql -ReadOnly $false -MaxRows 1 -TimeoutSec 30
+    $res = Invoke-DuneSqlQuery -Ip $Ip -Sql $sql -ReadOnly $false -MaxRows 1 -TimeoutSec 30 -Bulk
     if (-not $res.ok) { return @{ ok = $false; error = $res.error } }
     $affected = @(ConvertTo-DuneRowMaps -Result $res).Count
     if ($affected -eq 0) {
-        return @{ ok = $true; message = "Item $ItemId is not a water container — nothing changed." }
+        return @{ ok = $false; error = "Item $ItemId is not a supported water container or no longer exists. Refresh the inventory." }
     }
     return @{ ok = $true; message = "Set item $ItemId water to $wv. Restart the map pod / battlegroup for it to take effect in-game." }
 }
@@ -782,25 +799,29 @@ function Invoke-DunePlayerSetWeaponAmmo {
 
     $off = Test-DunePlayerOffline -Ip $Ip -PawnId $PawnId -RequireVerifiedStatus
     if (-not $off.ok) { return @{ ok = $false; error = "Player must be offline before changing loaded weapon ammo. $($off.reason)" } }
+    $weaponDefaults = Get-DuneItemStatDefaultsSql -Block FWeaponItemStats
 
     $sql = @"
 WITH target AS (
     SELECT i.id,
-           COALESCE(i.stats->'FWeaponItemStats'->1->>'CurrentAmmo', '0') AS before_ammo
+           COALESCE(i.stats->'FWeaponItemStats'->1->>'CurrentAmmo', '0') AS before_ammo,
+           COALESCE(i.stats->'FWeaponItemStats', $weaponDefaults -> lower(i.template_id)) AS weapon_stats
     FROM dune.items i
     JOIN dune.inventories inv ON inv.id = i.inventory_id
     WHERE inv.actor_id = $PawnId::bigint
       AND i.id = $ItemId::bigint
-      AND i.stats ? 'FWeaponItemStats'
-      AND jsonb_typeof(i.stats->'FWeaponItemStats') = 'array'
-      AND jsonb_array_length(i.stats->'FWeaponItemStats') > 1
-      AND jsonb_typeof(i.stats->'FWeaponItemStats'->1) = 'object'
+      AND ((jsonb_typeof(i.stats->'FWeaponItemStats') = 'array'
+            AND jsonb_array_length(i.stats->'FWeaponItemStats') > 1
+            AND jsonb_typeof(i.stats->'FWeaponItemStats'->1) = 'object')
+           OR (NOT (i.stats ? 'FWeaponItemStats') AND $weaponDefaults ? lower(i.template_id)))
       AND COALESCE(i.stats->'FWeaponItemStats'->1->>'CurrentAmmo', '0') ~ '^[0-9]+$'
     FOR UPDATE
 ),
 updated AS (
     UPDATE dune.items i
-    SET stats = jsonb_set(i.stats, '{FWeaponItemStats,1,CurrentAmmo}', to_jsonb($Ammo::bigint), true)
+    SET stats = CASE WHEN i.stats ? 'FWeaponItemStats'
+        THEN jsonb_set(i.stats, '{FWeaponItemStats,1,CurrentAmmo}', to_jsonb($Ammo::bigint), true)
+        ELSE jsonb_set(i.stats, '{FWeaponItemStats}', jsonb_set(t.weapon_stats, '{1,CurrentAmmo}', to_jsonb($Ammo::bigint), true), true) END
     FROM target t
     WHERE i.id = t.id
       AND t.before_ammo::bigint = $ExpectedAmmo::bigint
@@ -808,7 +829,7 @@ updated AS (
 )
 SELECT item_id, before_ammo, after_ammo FROM updated;
 "@
-    $res = Invoke-DuneSqlQuery -Ip $Ip -Sql $sql -ReadOnly $false -MaxRows 1 -TimeoutSec 30
+    $res = Invoke-DuneSqlQuery -Ip $Ip -Sql $sql -ReadOnly $false -MaxRows 1 -TimeoutSec 30 -Bulk
     if (-not $res.ok) { return @{ ok = $false; error = $res.error } }
     $rows = ConvertTo-DuneRowMaps -Result $res
     if (@($rows).Count -eq 0) {
@@ -1504,26 +1525,35 @@ function Invoke-DunePlayerFillWater {
     if ($PawnId -le 0) { return @{ ok = $false; error = 'pawn_id (actor id) is required.' } }
     $tmplCsv = ($script:DuneWaterFillableTemplates | ForEach-Object { "'" + $_ + "'" }) -join ','
     $invCsv  = ($script:DuneWaterFillableInventoryTypes -join ',')
+    $waterDefaults = Get-DuneItemStatDefaultsSql -Block FFillableItemStats
     $sql = @"
-WITH upd AS (
-    UPDATE dune.items i
-    SET stats = jsonb_set(
-        i.stats,
-        '{FFillableItemStats,1,CurrentAmount}',
-        (i.stats->'FFillableItemStats'->1->'MaxAmount')
-    )
-    FROM dune.inventories inv
+WITH targets AS (
+    SELECT i.id,
+           COALESCE(i.stats->'FFillableItemStats', $waterDefaults -> lower(i.template_id)) AS fillable,
+           COALESCE(NULLIF(i.stats->'FFillableItemStats'->1->'MaxAmount', '0'::jsonb),
+                    $waterDefaults -> lower(i.template_id) -> 1 -> 'MaxAmount') AS capacity
+    FROM dune.items i JOIN dune.inventories inv ON inv.id=i.inventory_id
     WHERE inv.actor_id = $PawnId::bigint
       AND inv.inventory_type = ANY(ARRAY[$invCsv]::int[])
-      AND i.inventory_id = inv.id
       AND lower(i.template_id) = ANY(ARRAY[$tmplCsv]::text[])
-      AND i.stats ? 'FFillableItemStats'
-      AND (i.stats->'FFillableItemStats'->1->'MaxAmount') IS NOT NULL
+      AND (NOT (i.stats ? 'FFillableItemStats')
+           OR i.stats->'FFillableItemStats'->1->>'FillableType' IN ('Water','None'))
+), upd AS (
+    UPDATE dune.items i
+    SET stats = jsonb_set(
+        jsonb_set(jsonb_set(jsonb_set(i.stats, '{FFillableItemStats}', t.fillable, true),
+            '{FFillableItemStats,1,FillableType}', '"Water"'::jsonb, true),
+            '{FFillableItemStats,1,MaxAmount}', t.capacity, true),
+        '{FFillableItemStats,1,CurrentAmount}',
+        t.capacity, true
+    )
+    FROM targets t
+    WHERE i.id=t.id AND t.capacity IS NOT NULL AND t.fillable IS NOT NULL
     RETURNING i.id
 )
 SELECT COUNT(*)::bigint AS refilled FROM upd;
 "@
-    $res = Invoke-DuneSqlQuery -Ip $Ip -Sql $sql -ReadOnly $false -MaxRows 1 -TimeoutSec 30
+    $res = Invoke-DuneSqlQuery -Ip $Ip -Sql $sql -ReadOnly $false -MaxRows 1 -TimeoutSec 30 -Bulk
     if (-not $res.ok) { return @{ ok = $false; error = $res.error } }
     $maps = ConvertTo-DuneRowMaps -Result $res
     $count = 0

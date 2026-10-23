@@ -386,7 +386,7 @@ $script:DuneGameConfigSchema = @(
 
     # --- Network (engine URL) ---
     @{ Section=$script:DuneGcSecUrl; Key='Port'; File='engine'; Type='int'; Min=1024; Max=65535; Default='7777'; Label='Game Port (starting)'; Help='Starting player port; each server uses the next free port.'; Category='Network' }
-    @{ Section=$script:DuneGcSecUrl; Key='IGWPort'; File='engine'; Type='int'; Min=1024; Max=65535; Default='7780'; Label='IGW Port (starting)'; Help='Starting inter-server port; must not overlap the game port range.'; Category='Network' }
+    @{ Section=$script:DuneGcSecUrl; Key='IGWPort'; File='engine'; Type='int'; Min=1024; Max=65535; Default='7888'; Label='IGW Port (starting)'; Help='Starting inter-server port; must not overlap the game port range.'; Category='Network' }
 
     # --- Survival ---
     @{ Section=$script:DuneGcSecGame; Key='m_WaterConsumptionRate'; File='game'; Type='float'; Min=0; Default='1.0'; Label='Water Consumption Rate'; Help='How quickly players consume water. Also needs client-side apply.'; ClientApply=$true; Category='Survival' }
@@ -1467,7 +1467,7 @@ function Get-DuneGameConfigClientBackupDirectory {
 }
 
 function Save-DuneGameConfigClient {
-    param([object[]]$Updates, [string]$Dir = '', [string]$DefaultsRaw = '', [switch]$ReviewedRaw)
+    param([object[]]$Updates, [string]$Dir = '', [string]$DefaultsRaw = '', [switch]$ReviewedRaw, [switch]$ValidateOnly)
     if (-not $Updates -or $Updates.Count -eq 0) { throw 'No updates supplied.' }
 
     $allowed = @{}
@@ -1556,6 +1556,8 @@ function Save-DuneGameConfigClient {
         $new = $new -replace "`r?`n", "`r`n"
         $plans.Add(@{ file = $file; path = $path; created = $created; raw = $new; applied = $fileUpdates.Count })
     }
+
+    if ($ValidateOnly) { return @{ ok=$true; validated=$true; filesPlanned=$plans.Count } }
 
     if ($plans.Count -eq 0) {
         return @{ok=$true;path=(Get-DuneGameConfigClientFilePath -Dir $Dir -File 'game');paths=@{game=(Get-DuneGameConfigClientFilePath -Dir $Dir -File 'game');engine=(Get-DuneGameConfigClientFilePath -Dir $Dir -File 'engine')};files=@{};backup='';backups=@{};created=$false;applied=0;items=@()}
@@ -3789,7 +3791,18 @@ $script:DuneGameConfigDefaultsSource = $null  # ns + pod + timestamp
 
 function Get-DuneGameConfigDefaults {
     param([string]$Ip, [switch]$Force)
-    if (-not $Force -and $script:DuneGameConfigDefaultsGame -and $script:DuneGameConfigDefaultsEngine) {
+    # Defaults remain available across HTTP workers during a reviewed stop/save.
+    $table = $script:DuneApiLockTable
+    $cacheKey = "gameconfig.defaults:$Ip"
+    if (-not $Force -and $table -and $table.ContainsKey($cacheKey)) {
+        $snapshot = $table[$cacheKey]
+        if (([datetime]::UtcNow - $snapshot.fetched).TotalMinutes -lt 10) {
+            return @{ game=$snapshot.game; engine=$snapshot.engine; source=$snapshot.source; cached=$true }
+        }
+    }
+    if (-not $Force -and $script:DuneGameConfigDefaultsIp -eq $Ip -and
+        $script:DuneGameConfigDefaultsGame -and $script:DuneGameConfigDefaultsEngine -and
+        ([datetime]::UtcNow - $script:DuneGameConfigDefaultsFetched).TotalMinutes -lt 10) {
         return @{
             game   = $script:DuneGameConfigDefaultsGame
             engine = $script:DuneGameConfigDefaultsEngine
@@ -3798,26 +3811,43 @@ function Get-DuneGameConfigDefaults {
         }
     }
 
-    # Single SSH round-trip: discover ns + a Running sg-* pod, then cat both
-    # files between unmistakable sentinels so we can split the output cleanly.
+    # Read from a running game pod, or mount its configured installed image
+    # read-only when stopped. Neither path starts game pods or changes INIs.
     $bash = @'
 set -e
-NS=$(sudo kubectl get pods -A --no-headers 2>/dev/null | awk '/-sg-/ && / Running /{print $1; exit}')
-if [ -z "$NS" ]; then echo "__NOPOD__"; exit 0; fi
+NS=$(sudo kubectl get battlegroups -A -o jsonpath='{.items[0].metadata.namespace}' 2>/dev/null)
+if [ -z "$NS" ]; then echo "__READFAIL_SOURCE__"; exit 0; fi
 POD=$(sudo kubectl get pods -n "$NS" --no-headers 2>/dev/null | awk '/-sg-/ && / Running /{print $1; exit}')
-if [ -z "$POD" ]; then echo "__NOPOD__"; exit 0; fi
-echo "===META==="
-echo "NS=$NS"
-echo "POD=$POD"
-echo "===GAME==="
-sudo kubectl exec -n "$NS" "$POD" -- cat /home/dune/server/DuneSandbox/Config/DefaultGame.ini 2>/dev/null || echo "__READFAIL_GAME__"
-echo "===ENGINE==="
-sudo kubectl exec -n "$NS" "$POD" -- cat /home/dune/server/DuneSandbox/Config/DefaultEngine.ini 2>/dev/null || echo "__READFAIL_ENGINE__"
-echo "===END==="
+ROOT=
+cleanup() {
+  if [ -n "$ROOT" ]; then
+    sudo k3s ctr -n k8s.io images unmount "$ROOT" >/dev/null 2>&1 || true
+    rmdir "$ROOT" 2>/dev/null || true
+  fi
+}
+trap cleanup EXIT HUP INT TERM
+GAME=
+ENGINE=
+if [ -n "$POD" ]; then
+  GAME=$(sudo kubectl exec -n "$NS" "$POD" -- cat /home/dune/server/DuneSandbox/Config/DefaultGame.ini 2>/dev/null) || GAME=
+  ENGINE=$(sudo kubectl exec -n "$NS" "$POD" -- cat /home/dune/server/DuneSandbox/Config/DefaultEngine.ini 2>/dev/null) || ENGINE=
+fi
+if [ -z "$GAME" ] || [ -z "$ENGINE" ]; then
+  IMAGES=$(sudo kubectl get battlegroups -n "$NS" -o jsonpath='{.items[0].spec.serverGroup.template.spec.sets[0].image}')
+  if [ -z "$IMAGES" ]; then echo "__READFAIL_SOURCE__"; exit 0; fi
+  ROOT=$(mktemp -d /tmp/dst-defaults.XXXXXX)
+  # ctr mounts image files read-only by default. No game container is started.
+  if ! sudo k3s ctr -n k8s.io images mount "$IMAGES" "$ROOT" >/dev/null 2>&1; then echo "__READFAIL_SOURCE__"; exit 0; fi
+  GAME=$(sudo cat "$ROOT/home/dune/server/DuneSandbox/Config/DefaultGame.ini" 2>/dev/null) || GAME=
+  ENGINE=$(sudo cat "$ROOT/home/dune/server/DuneSandbox/Config/DefaultEngine.ini" 2>/dev/null) || ENGINE=
+  POD="image:$IMAGES"
+fi
+if [ -z "$GAME" ] || [ -z "$ENGINE" ]; then echo "__READFAIL_SOURCE__"; exit 0; fi
+printf '%s\n' '===META===' "NS=$NS" "POD=$POD" '===GAME===' "$GAME" '===ENGINE===' "$ENGINE" '===END==='
 '@
     $raw = (Invoke-V6Ssh -Ip $Ip -Cmd $bash -TimeoutSec 60) -join "`n"
-    if ($raw -match '__NOPOD__') {
-        throw 'No running game-server (sg-*) pod found. Start the battlegroup and try again.'
+    if ($raw -match '__READFAIL_SOURCE__') {
+        throw 'The selected server image defaults could not be read. No settings were changed.'
     }
 
     $idxMeta   = $raw.IndexOf("===META===")
@@ -3849,6 +3879,15 @@ echo "===END==="
         ns       = $ns
         pod      = $pod
         fetchedAt = (Get-Date).ToString('o')
+    }
+
+    $script:DuneGameConfigDefaultsIp = $Ip
+    $script:DuneGameConfigDefaultsFetched = [datetime]::UtcNow
+    if ($table) {
+        $table[$cacheKey] = @{
+            game=$script:DuneGameConfigDefaultsGame; engine=$script:DuneGameConfigDefaultsEngine
+            source=$script:DuneGameConfigDefaultsSource; fetched=$script:DuneGameConfigDefaultsFetched
+        }
     }
 
     return @{

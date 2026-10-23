@@ -16,7 +16,9 @@ Register-DuneRoute -Method GET -Path '/api/status' -Handler {
     $ports = $null
     try { $ports = Get-DunePortStatus -BattlegroupState $bg.state } catch { $ports = $null }
     $serverName = ''
-    if ($bg -and $bg.title) {
+    if ((Get-Command Test-DuneHyperVLanSetupPending -ErrorAction SilentlyContinue) -and (Test-DuneHyperVLanSetupPending)) {
+        $serverName = ''
+    } elseif ($bg -and $bg.title) {
         $serverName = [string]$bg.title
     } elseif ($vm.running -and (Get-Command Get-DuneServerName -ErrorAction SilentlyContinue)) {
         try { $serverName = Get-DuneServerName -CachedOnly } catch { $serverName = '' }
@@ -50,17 +52,23 @@ function Get-DuneFuncomUpdateBadge {
 # POST /api/status/refresh — force re-check (ports + everything)
 Register-DuneRoute -Method POST -Path '/api/status/refresh' -Handler {
     param($req, $res, $routeParams, $body)
+    # Apply needs the remote VM/BG state, not slow public port observers.
+    $lifecycleOnly = $body -and $body.lifecycleOnly -eq $true
     $vm = Get-DuneVmStatus
     $bg = $null
     if ($vm.running) {
         try { $bg = Get-DuneBattlegroupSnapshot -Force -VmStatus $vm } catch { $bg = @{ available=$false; reason=$_.Exception.Message } }
     }
     $ports = $null
-    try { $ports = Get-DunePortStatus -Force -BattlegroupState $bg.state } catch { $ports = $null }
+    if (-not $lifecycleOnly) {
+        try { $ports = Get-DunePortStatus -Force -BattlegroupState $bg.state } catch { $ports = $null }
+    }
     $serverName = ''
-    if ($bg -and $bg.title) {
+    if ((Get-Command Test-DuneHyperVLanSetupPending -ErrorAction SilentlyContinue) -and (Test-DuneHyperVLanSetupPending)) {
+        $serverName = ''
+    } elseif ($bg -and $bg.title) {
         $serverName = [string]$bg.title
-    } elseif ($vm.running -and (Get-Command Get-DuneServerName -ErrorAction SilentlyContinue)) {
+    } elseif (-not $lifecycleOnly -and $vm.running -and (Get-Command Get-DuneServerName -ErrorAction SilentlyContinue)) {
         try { $serverName = Get-DuneServerName -Force } catch { $serverName = '' }
     }
     Write-DuneJson -Response $res -Body @{

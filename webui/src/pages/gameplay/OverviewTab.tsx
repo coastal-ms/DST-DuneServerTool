@@ -37,12 +37,12 @@ const FEATURES: Feature[] = [
     desc: 'Edit server gameplay settings and rules — already first-class in Dune Server Tool.',
   },
   {
-    name: 'Logs & Console', icon: 'Terminal', status: 'native', route: '/', routeLabel: 'Open Server Health',
-    desc: 'Stream pod logs and export battlegroup / operator logs. Available from Server Health and the PowerShell console.',
+    name: 'Logs & Console', icon: 'Terminal', status: 'native', route: '/', routeLabel: 'Open Server Overview',
+    desc: 'Stream pod logs and export battlegroup / operator logs. Available from Server Overview and the PowerShell console.',
   },
   {
     name: 'Battlegroup control', icon: 'Server', status: 'native', route: '/commands', routeLabel: 'Open Commands',
-    desc: 'Start / stop / update the battlegroup and run maintenance commands — handled by the Commands and Server Health pages.',
+    desc: 'Start / stop / update the battlegroup and run maintenance commands — handled by the Commands and Server Overview pages.',
   },
   {
     name: 'Players', icon: 'Users', status: 'live', tab: 'players',

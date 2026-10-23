@@ -45,19 +45,22 @@ export class PageErrorBoundary extends Component<Props, State> {
   render(): ReactNode {
     const { error, componentStack } = this.state
     if (!error) return this.props.children
+    const moduleLoadFailed = /Failed to fetch dynamically imported module|error loading dynamically imported module|Importing a module script failed|Loading chunk .+ failed/i.test(error.message || '')
 
     return (
       <div className="p-6">
         <div className="card p-5 border-danger/40 bg-danger/5">
           <div className="text-sm font-semibold uppercase tracking-wider text-danger mb-2">
-            {this.props.pageName} crashed
+            {this.props.pageName} {moduleLoadFailed ? 'could not load' : 'crashed'}
           </div>
-          <p className="text-sm text-text mb-3">
+          {moduleLoadFailed ? <p className="text-sm text-text mb-3">
+            The browser could not download this page’s code. Reload the page to fetch the current version. This does not indicate that your game server stopped.
+          </p> : <p className="text-sm text-text mb-3">
             The page hit an unhandled error and was prevented from rendering. The full stack has been
             written to <span className="font-mono">%APPDATA%\DuneServer\webview2-debug.log</span>; please
             create a ZIP from <strong>Help → Create Diagnostics Package</strong> and attach it in your
             DST Discord support thread.
-          </p>
+          </p>}
 
           <div className="mb-3">
             <div className="text-xs font-medium text-text-muted mb-1">Error</div>
@@ -89,10 +92,10 @@ export class PageErrorBoundary extends Component<Props, State> {
           )}
 
           <div className="flex items-center gap-2">
-            <button type="button" className="btn-primary" onClick={this.handleRetry}>
+            {!moduleLoadFailed && <button type="button" className="btn-primary" onClick={this.handleRetry}>
               Retry render
-            </button>
-            <button type="button" className="btn-secondary" onClick={() => window.location.reload()}>
+            </button>}
+            <button type="button" className={moduleLoadFailed ? 'btn-primary' : 'btn-secondary'} onClick={() => window.location.reload()}>
               Reload page
             </button>
           </div>

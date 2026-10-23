@@ -161,7 +161,7 @@ NS=$(sudo kubectl get ns --no-headers -o custom-columns=N:.metadata.name 2>/dev/
 if [ -z "$NS" ]; then echo "__CTX none"; exit 0; fi
 WORLD=${NS#funcom-seabass-}
 HOSTID=$(echo "$WORLD" | sed -E 's/^sh-([0-9a-f]+)-.*/\1/')
-PHASE=$(sudo kubectl get battlegroup "$WORLD" -n "$NS" --no-headers 2>/dev/null | awk '{print $3}')
+PHASE=$(sudo kubectl get battlegroup "$WORLD" -n "$NS" -o jsonpath='{.status.phase}' 2>/dev/null)
 echo "__CTX ns=$NS world=$WORLD hostid=$HOSTID phase=$PHASE"
 '@
     try {

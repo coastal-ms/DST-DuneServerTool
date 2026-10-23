@@ -749,6 +749,7 @@ export interface InventoryItem {
   water_amount: string
   water_type: string
   current_ammo?: string
+  water_capacity?: number
   inventory_id?: number
   inventory_type?: number
   is_reserve?: boolean

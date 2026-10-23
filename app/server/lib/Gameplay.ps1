@@ -266,13 +266,38 @@ function Get-DuneHouseSwatchCatalog {
 # stack_max comes from gameplay-item-data.json; the dead Test-DuneIsEquipmentCategory
 # heuristic is NOT used (its prefix list is never initialized). Returns a bare
 # JSON literal (no SQL quoting) — the value is one of two fixed constants.
+function Get-DuneItemStatDefaults {
+    param([string]$TemplateId)
+    if (-not $script:DuneItemStatDefaults) {
+        $path=Join-Path $PSScriptRoot '../../data/item-stat-defaults.json'
+        $script:DuneItemStatDefaults=(Get-Content -LiteralPath $path -Raw | ConvertFrom-Json).items
+    }
+    if (-not $TemplateId) { return $null }
+    $entry=$script:DuneItemStatDefaults.PSObject.Properties[$TemplateId.ToLowerInvariant()]
+    if($entry){return $entry.Value}
+    return $null
+}
+
+function Get-DuneItemStatDefaultsSql {
+    param([ValidateSet('FWeaponItemStats','FFillableItemStats')][string]$Block)
+    $null=Get-DuneItemStatDefaults -TemplateId ''
+    $map=[ordered]@{}
+    foreach($item in $script:DuneItemStatDefaults.PSObject.Properties) {
+        $entry=$item.Value.PSObject.Properties[$Block]
+        if($entry){$map[$item.Name]=$entry.Value}
+    }
+    $json=($map | ConvertTo-Json -Depth 10 -Compress).Replace("'","''")
+    return "'$json'::jsonb"
+}
+
 function Get-DuneGiveItemStatsJson {
     param(
         [string]$TemplateId,
         $Augments = @()
     )
     if (@($Augments).Count -gt 0) {
-        return New-DuneAugmentedItemStatsJson -TemplateId $TemplateId -Augments $Augments
+        $augmented=New-DuneAugmentedItemStatsJson -TemplateId $TemplateId -Augments $Augments
+        return Add-DuneItemStatDefaults -TemplateId $TemplateId -StatsJson $augmented
     }
     $stackMax = 0
     if ($TemplateId -and (Get-Command Get-DuneGameplayItemRule -ErrorAction SilentlyContinue)) {
@@ -284,7 +309,18 @@ function Get-DuneGiveItemStatsJson {
     if ($stackMax -gt 1) {
         return '{"FItemStackAndDurabilityStats":[[],{"DecayedMaxDurability":0.0}]}'
     }
-    return '{"FCustomizationStats":[[],{}],"FItemStackAndDurabilityStats":[[],{}]}'
+    return Add-DuneItemStatDefaults -TemplateId $TemplateId -StatsJson '{"FCustomizationStats":[[],{}],"FItemStackAndDurabilityStats":[[],{}]}'
+}
+
+function Add-DuneItemStatDefaults {
+    param([string]$TemplateId,[string]$StatsJson)
+    $defaults=Get-DuneItemStatDefaults -TemplateId $TemplateId
+    if(-not $defaults){return $StatsJson}
+    $stats=$StatsJson | ConvertFrom-Json
+    foreach($block in $defaults.PSObject.Properties){
+        if(-not $stats.PSObject.Properties[$block.Name]){$stats | Add-Member -NotePropertyName $block.Name -NotePropertyValue $block.Value}
+    }
+    return ($stats | ConvertTo-Json -Depth 12 -Compress)
 }
 
 # Validate a give-item template id before it reaches an INSERT. The game's

@@ -197,7 +197,7 @@ function Test-DuneAtlasPendingProcess {
 
 function Test-DuneAtlasProxyPath {
     param([string]$Method, [string]$Path)
-    if ($Method -eq 'POST') { return $Path -in @('/preferences','/refresh','/live/start','/live/stop') }
+    if ($Method -eq 'POST') { return $Path -in @('/preferences','/refresh','/live/start','/live/stop','/viewer') }
     return ($Method -eq 'GET' -and ($Path -in @('/','/state','/preferences','/marker-icons','/pois','/gathering','/gathering/HaggaBasin') -or
         $Path -cmatch '^/gathering/(DeepDesert|HaggaBasin)/[A-Za-z]+$' -or
         $Path -cmatch '^/bases/[0-9]{1,20}\.(svg|json)$' -or
@@ -256,6 +256,10 @@ function Invoke-DuneAtlasProxy {
         # Derive permission from the authenticated transport, never a browser header.
         $timingAccess = if (Test-DuneLocalOnlyRequest -Request $Request) { 'local' } else { 'remote' }
         [void]$message.Headers.TryAddWithoutValidation('X-DST-Atlas-Timing', $timingAccess)
+        $viewer = [string]$Request.Headers['X-DST-Atlas-Viewer']
+        if ($viewer -cmatch '^[A-Za-z0-9_-]{16,80}$') {
+            [void]$message.Headers.TryAddWithoutValidation('X-DST-Atlas-Viewer', $viewer)
+        }
         if ($Method -eq 'GET') {
             $match = ''; $encoding = ''
             try { $match=[string]$Request.Headers['If-None-Match']; $encoding=[string]$Request.Headers['Accept-Encoding'] } catch {}

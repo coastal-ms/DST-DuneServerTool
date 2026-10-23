@@ -1,5 +1,6 @@
 ﻿# Ports — external TCP port checks; UDP is marked as skipped.
-# Cache confirmed open and inconclusive checks for six hours. Retry a closed
+# Cache confirmed open checks for six hours. Retry an inconclusive check on
+# the next status poll (at least ten seconds apart). Retry a closed
 # result after one minute so a stopped/restarting server can recover its badge.
 
 $script:DunePortCheckCache    = $null
@@ -252,6 +253,9 @@ function Get-DunePortStatusCore {
     }
     $now   = Get-Date
     $cacheTtl = $script:DunePortCheckTtlSecs
+    if (@($script:DunePortCheckCache | Where-Object { $_.status -eq 'unknown' }).Count -gt 0) {
+        $cacheTtl = [Math]::Min($cacheTtl, 10)
+    }
     if (@($script:DunePortCheckCache | Where-Object { $_.status -eq 'closed' }).Count -gt 0) {
         $cacheTtl = [Math]::Min($cacheTtl, 60)
     }

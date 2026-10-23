@@ -1,0 +1,1655 @@
+{
+  "source": {
+    "tables": {
+      "DT_ItemTableFillables": "09E94130FD4B55C590DE033DFE43F64CB923F555DC3E79503FD8D554CD348B11",
+      "CDT_BaseItems": "E57FAF3707DA33E1176D7FD18AA95625E96748F10764C71B912A7DC9F27BE079"
+    },
+    "gameBuild": "2162777-0-shipping"
+  },
+  "items": {
+    "uniquesmg3": {
+      "FWeaponItemStats": [
+        [],
+        {
+          "CurrentAmmo": 0
+        }
+      ]
+    },
+    "uniquesmg2": {
+      "FWeaponItemStats": [
+        [],
+        {
+          "CurrentAmmo": 0
+        }
+      ]
+    },
+    "uniquesmg1": {
+      "FWeaponItemStats": [
+        [],
+        {
+          "CurrentAmmo": 0
+        }
+      ]
+    },
+    "uniquesda6": {
+      "FWeaponItemStats": [
+        [],
+        {
+          "CurrentAmmo": 0
+        }
+      ]
+    },
+    "uniquesda5": {
+      "FWeaponItemStats": [
+        [],
+        {
+          "CurrentAmmo": 0
+        }
+      ]
+    },
+    "uniquesda4": {
+      "FWeaponItemStats": [
+        [],
+        {
+          "CurrentAmmo": 0
+        }
+      ]
+    },
+    "uniquesda3": {
+      "FWeaponItemStats": [
+        [],
+        {
+          "CurrentAmmo": 0
+        }
+      ]
+    },
+    "uniquesda2": {
+      "FWeaponItemStats": [
+        [],
+        {
+          "CurrentAmmo": 0
+        }
+      ]
+    },
+    "uniquesda1": {
+      "FWeaponItemStats": [
+        [],
+        {
+          "CurrentAmmo": 0
+        }
+      ]
+    },
+    "uniquesda_doubleshot_06": {
+      "FWeaponItemStats": [
+        [],
+        {
+          "CurrentAmmo": 0
+        }
+      ]
+    },
+    "uniquesda_doubleshot_05": {
+      "FWeaponItemStats": [
+        [],
+        {
+          "CurrentAmmo": 0
+        }
+      ]
+    },
+    "uniquesda_doubleshot_04": {
+      "FWeaponItemStats": [
+        [],
+        {
+          "CurrentAmmo": 0
+        }
+      ]
+    },
+    "uniquescattergun5": {
+      "FWeaponItemStats": [
+        [],
+        {
+          "CurrentAmmo": 0
+        }
+      ]
+    },
+    "uniquescattergun4": {
+      "FWeaponItemStats": [
+        [],
+        {
+          "CurrentAmmo": 0
+        }
+      ]
+    },
+    "uniquescattergun3": {
+      "FWeaponItemStats": [
+        [],
+        {
+          "CurrentAmmo": 0
+        }
+      ]
+    },
+    "uniquescattergun2": {
+      "FWeaponItemStats": [
+        [],
+        {
+          "CurrentAmmo": 0
+        }
+      ]
+    },
+    "uniquescattergun1": {
+      "FWeaponItemStats": [
+        [],
+        {
+          "CurrentAmmo": 0
+        }
+      ]
+    },
+    "uniquescattergun_fire_06": {
+      "FWeaponItemStats": [
+        [],
+        {
+          "CurrentAmmo": 0
+        }
+      ]
+    },
+    "uniquescattergun_fire_05": {
+      "FWeaponItemStats": [
+        [],
+        {
+          "CurrentAmmo": 0
+        }
+      ]
+    },
+    "uniquescattergun_fire_04": {
+      "FWeaponItemStats": [
+        [],
+        {
+          "CurrentAmmo": 0
+        }
+      ]
+    },
+    "uniqueflamethrower_02": {
+      "FWeaponItemStats": [
+        [],
+        {
+          "CurrentAmmo": 0
+        }
+      ]
+    },
+    "uniqueflamethrower": {
+      "FWeaponItemStats": [
+        [],
+        {
+          "CurrentAmmo": 0
+        }
+      ]
+    },
+    "uniquear4": {
+      "FWeaponItemStats": [
+        [],
+        {
+          "CurrentAmmo": 0
+        }
+      ]
+    },
+    "uniquear3": {
+      "FWeaponItemStats": [
+        [],
+        {
+          "CurrentAmmo": 0
+        }
+      ]
+    },
+    "uniquear2": {
+      "FWeaponItemStats": [
+        [],
+        {
+          "CurrentAmmo": 0
+        }
+      ]
+    },
+    "uniquear1": {
+      "FWeaponItemStats": [
+        [],
+        {
+          "CurrentAmmo": 0
+        }
+      ]
+    },
+    "uniquear_burst_06": {
+      "FWeaponItemStats": [
+        [],
+        {
+          "CurrentAmmo": 0
+        }
+      ]
+    },
+    "uniquear_burst_05": {
+      "FWeaponItemStats": [
+        [],
+        {
+          "CurrentAmmo": 0
+        }
+      ]
+    },
+    "uniquear_burst_04": {
+      "FWeaponItemStats": [
+        [],
+        {
+          "CurrentAmmo": 0
+        }
+      ]
+    },
+    "uniquear_burst_03": {
+      "FWeaponItemStats": [
+        [],
+        {
+          "CurrentAmmo": 0
+        }
+      ]
+    },
+    "uniquear_burst_02": {
+      "FWeaponItemStats": [
+        [],
+        {
+          "CurrentAmmo": 0
+        }
+      ]
+    },
+    "uniquear_burst_01": {
+      "FWeaponItemStats": [
+        [],
+        {
+          "CurrentAmmo": 0
+        }
+      ]
+    },
+    "smugshot5": {
+      "FWeaponItemStats": [
+        [],
+        {
+          "CurrentAmmo": 0
+        }
+      ]
+    },
+    "smugshot4": {
+      "FWeaponItemStats": [
+        [],
+        {
+          "CurrentAmmo": 0
+        }
+      ]
+    },
+    "smugshot3": {
+      "FWeaponItemStats": [
+        [],
+        {
+          "CurrentAmmo": 0
+        }
+      ]
+    },
+    "smugdmr6": {
+      "FWeaponItemStats": [
+        [],
+        {
+          "CurrentAmmo": 0
+        }
+      ]
+    },
+    "smugdmr5": {
+      "FWeaponItemStats": [
+        [],
+        {
+          "CurrentAmmo": 0
+        }
+      ]
+    },
+    "smugdmr4": {
+      "FWeaponItemStats": [
+        [],
+        {
+          "CurrentAmmo": 0
+        }
+      ]
+    },
+    "smugdmr3": {
+      "FWeaponItemStats": [
+        [],
+        {
+          "CurrentAmmo": 0
+        }
+      ]
+    },
+    "smg_unique_largemag_06": {
+      "FWeaponItemStats": [
+        [],
+        {
+          "CurrentAmmo": 0
+        }
+      ]
+    },
+    "smg_unique_largemag_05": {
+      "FWeaponItemStats": [
+        [],
+        {
+          "CurrentAmmo": 0
+        }
+      ]
+    },
+    "smg_unique_largemag_04": {
+      "FWeaponItemStats": [
+        [],
+        {
+          "CurrentAmmo": 0
+        }
+      ]
+    },
+    "smg_unique_largemag_03": {
+      "FWeaponItemStats": [
+        [],
+        {
+          "CurrentAmmo": 0
+        }
+      ]
+    },
+    "smg_unique_largemag_02": {
+      "FWeaponItemStats": [
+        [],
+        {
+          "CurrentAmmo": 0
+        }
+      ]
+    },
+    "shotgun_unique_explosive_06": {
+      "FWeaponItemStats": [
+        [],
+        {
+          "CurrentAmmo": 0
+        }
+      ]
+    },
+    "shotgun_unique_explosive_05": {
+      "FWeaponItemStats": [
+        [],
+        {
+          "CurrentAmmo": 0
+        }
+      ]
+    },
+    "shotgun_unique_explosive_04": {
+      "FWeaponItemStats": [
+        [],
+        {
+          "CurrentAmmo": 0
+        }
+      ]
+    },
+    "shotgun_unique_blood_06": {
+      "FWeaponItemStats": [
+        [],
+        {
+          "CurrentAmmo": 0
+        }
+      ]
+    },
+    "scattergun_prototype3": {
+      "FWeaponItemStats": [
+        [],
+        {
+          "CurrentAmmo": 0
+        }
+      ]
+    },
+    "scattergun_prototype2": {
+      "FWeaponItemStats": [
+        [],
+        {
+          "CurrentAmmo": 0
+        }
+      ]
+    },
+    "scattergun_prototype1": {
+      "FWeaponItemStats": [
+        [],
+        {
+          "CurrentAmmo": 0
+        }
+      ]
+    },
+    "scattergun_prototype0": {
+      "FWeaponItemStats": [
+        [],
+        {
+          "CurrentAmmo": 0
+        }
+      ]
+    },
+    "scattergun_prototype": {
+      "FWeaponItemStats": [
+        [],
+        {
+          "CurrentAmmo": 0
+        }
+      ]
+    },
+    "rocketlauncher_unique_homing_06": {
+      "FWeaponItemStats": [
+        [],
+        {
+          "CurrentAmmo": 0
+        }
+      ]
+    },
+    "rocketlauncher_2": {
+      "FWeaponItemStats": [
+        [],
+        {
+          "CurrentAmmo": 0
+        }
+      ]
+    },
+    "longrifle_unique_poison_06": {
+      "FWeaponItemStats": [
+        [],
+        {
+          "CurrentAmmo": 0
+        }
+      ]
+    },
+    "longrifle_unique_poison_05": {
+      "FWeaponItemStats": [
+        [],
+        {
+          "CurrentAmmo": 0
+        }
+      ]
+    },
+    "longrifle_unique_poison_04": {
+      "FWeaponItemStats": [
+        [],
+        {
+          "CurrentAmmo": 0
+        }
+      ]
+    },
+    "longrifle_unique_poison_03": {
+      "FWeaponItemStats": [
+        [],
+        {
+          "CurrentAmmo": 0
+        }
+      ]
+    },
+    "longrifle_unique_largemag_06": {
+      "FWeaponItemStats": [
+        [],
+        {
+          "CurrentAmmo": 0
+        }
+      ]
+    },
+    "longrifle_unique_largemag_05": {
+      "FWeaponItemStats": [
+        [],
+        {
+          "CurrentAmmo": 0
+        }
+      ]
+    },
+    "lmg_unique_rapidfire_06": {
+      "FWeaponItemStats": [
+        [],
+        {
+          "CurrentAmmo": 0
+        }
+      ]
+    },
+    "lmg_unique_rapidfire_05": {
+      "FWeaponItemStats": [
+        [],
+        {
+          "CurrentAmmo": 0
+        }
+      ]
+    },
+    "lmg_unique_rapidfire_04": {
+      "FWeaponItemStats": [
+        [],
+        {
+          "CurrentAmmo": 0
+        }
+      ]
+    },
+    "lmg_unique_power_06": {
+      "FWeaponItemStats": [
+        [],
+        {
+          "CurrentAmmo": 0
+        }
+      ]
+    },
+    "heavypistol_unique_headshot_06": {
+      "FWeaponItemStats": [
+        [],
+        {
+          "CurrentAmmo": 0
+        }
+      ]
+    },
+    "heavypistol_unique_headshot_05": {
+      "FWeaponItemStats": [
+        [],
+        {
+          "CurrentAmmo": 0
+        }
+      ]
+    },
+    "heavypistol_unique_bleed_06": {
+      "FWeaponItemStats": [
+        [],
+        {
+          "CurrentAmmo": 0
+        }
+      ]
+    },
+    "heavypistol_unique_bleed_05": {
+      "FWeaponItemStats": [
+        [],
+        {
+          "CurrentAmmo": 0
+        }
+      ]
+    },
+    "heavypistol_unique_bleed_04": {
+      "FWeaponItemStats": [
+        [],
+        {
+          "CurrentAmmo": 0
+        }
+      ]
+    },
+    "heavypistol_unique_bleed_03": {
+      "FWeaponItemStats": [
+        [],
+        {
+          "CurrentAmmo": 0
+        }
+      ]
+    },
+    "harkheavypistol5": {
+      "FWeaponItemStats": [
+        [],
+        {
+          "CurrentAmmo": 0
+        }
+      ]
+    },
+    "harkheavypistol4": {
+      "FWeaponItemStats": [
+        [],
+        {
+          "CurrentAmmo": 0
+        }
+      ]
+    },
+    "harkheavypistol3": {
+      "FWeaponItemStats": [
+        [],
+        {
+          "CurrentAmmo": 0
+        }
+      ]
+    },
+    "harkheavypistol2": {
+      "FWeaponItemStats": [
+        [],
+        {
+          "CurrentAmmo": 0
+        }
+      ]
+    },
+    "harkar7": {
+      "FWeaponItemStats": [
+        [],
+        {
+          "CurrentAmmo": 0
+        }
+      ]
+    },
+    "harkar6": {
+      "FWeaponItemStats": [
+        [],
+        {
+          "CurrentAmmo": 0
+        }
+      ]
+    },
+    "harkar5": {
+      "FWeaponItemStats": [
+        [],
+        {
+          "CurrentAmmo": 0
+        }
+      ]
+    },
+    "harkar4": {
+      "FWeaponItemStats": [
+        [],
+        {
+          "CurrentAmmo": 0
+        }
+      ]
+    },
+    "harkar3": {
+      "FWeaponItemStats": [
+        [],
+        {
+          "CurrentAmmo": 0
+        }
+      ]
+    },
+    "harkar2": {
+      "FWeaponItemStats": [
+        [],
+        {
+          "CurrentAmmo": 0
+        }
+      ]
+    },
+    "flamethrower_prototype_2": {
+      "FWeaponItemStats": [
+        [],
+        {
+          "CurrentAmmo": 0
+        }
+      ]
+    },
+    "flamethrower_prototype": {
+      "FWeaponItemStats": [
+        [],
+        {
+          "CurrentAmmo": 0
+        }
+      ]
+    },
+    "choamsda7": {
+      "FWeaponItemStats": [
+        [],
+        {
+          "CurrentAmmo": 0
+        }
+      ]
+    },
+    "choamsda6": {
+      "FWeaponItemStats": [
+        [],
+        {
+          "CurrentAmmo": 0
+        }
+      ]
+    },
+    "choamsda5": {
+      "FWeaponItemStats": [
+        [],
+        {
+          "CurrentAmmo": 0
+        }
+      ]
+    },
+    "choamsda4": {
+      "FWeaponItemStats": [
+        [],
+        {
+          "CurrentAmmo": 0
+        }
+      ]
+    },
+    "choamsda3": {
+      "FWeaponItemStats": [
+        [],
+        {
+          "CurrentAmmo": 0
+        }
+      ]
+    },
+    "choamsda2": {
+      "FWeaponItemStats": [
+        [],
+        {
+          "CurrentAmmo": 0
+        }
+      ]
+    },
+    "choamsda1": {
+      "FWeaponItemStats": [
+        [],
+        {
+          "CurrentAmmo": 0
+        }
+      ]
+    },
+    "choamlg2": {
+      "FWeaponItemStats": [
+        [],
+        {
+          "CurrentAmmo": 0
+        }
+      ]
+    },
+    "choamlg1": {
+      "FWeaponItemStats": [
+        [],
+        {
+          "CurrentAmmo": 0
+        }
+      ]
+    },
+    "atresmg6": {
+      "FWeaponItemStats": [
+        [],
+        {
+          "CurrentAmmo": 0
+        }
+      ]
+    },
+    "atresmg5": {
+      "FWeaponItemStats": [
+        [],
+        {
+          "CurrentAmmo": 0
+        }
+      ]
+    },
+    "atresmg4": {
+      "FWeaponItemStats": [
+        [],
+        {
+          "CurrentAmmo": 0
+        }
+      ]
+    },
+    "atresmg3": {
+      "FWeaponItemStats": [
+        [],
+        {
+          "CurrentAmmo": 0
+        }
+      ]
+    },
+    "atresmg2": {
+      "FWeaponItemStats": [
+        [],
+        {
+          "CurrentAmmo": 0
+        }
+      ]
+    },
+    "atrelmg5": {
+      "FWeaponItemStats": [
+        [],
+        {
+          "CurrentAmmo": 0
+        }
+      ]
+    },
+    "atrelmg4": {
+      "FWeaponItemStats": [
+        [],
+        {
+          "CurrentAmmo": 0
+        }
+      ]
+    },
+    "atrelmg3": {
+      "FWeaponItemStats": [
+        [],
+        {
+          "CurrentAmmo": 0
+        }
+      ]
+    },
+    "choamflamethrower_t4": {
+      "FWeaponItemStats": [
+        [],
+        {
+          "CurrentAmmo": 0
+        }
+      ]
+    },
+    "hark_ar_t4_poison": {
+      "FWeaponItemStats": [
+        [],
+        {
+          "CurrentAmmo": 0
+        }
+      ]
+    },
+    "uniquesda_story_ari": {
+      "FWeaponItemStats": [
+        [],
+        {
+          "CurrentAmmo": 0
+        }
+      ]
+    },
+    "shotgun_unique_largemag_06": {
+      "FWeaponItemStats": [
+        [],
+        {
+          "CurrentAmmo": 0
+        }
+      ]
+    },
+    "fireballer_2": {
+      "FWeaponItemStats": [
+        [],
+        {
+          "CurrentAmmo": 0
+        }
+      ]
+    },
+    "fireballer_3": {
+      "FWeaponItemStats": [
+        [],
+        {
+          "CurrentAmmo": 0
+        }
+      ]
+    },
+    "rocketlauncher_3": {
+      "FWeaponItemStats": [
+        [],
+        {
+          "CurrentAmmo": 0
+        }
+      ]
+    },
+    "rocketlauncher_1": {
+      "FWeaponItemStats": [
+        [],
+        {
+          "CurrentAmmo": 0
+        }
+      ]
+    },
+    "uniquear6_electric": {
+      "FWeaponItemStats": [
+        [],
+        {
+          "CurrentAmmo": 0
+        }
+      ]
+    },
+    "fireballer_npc": {
+      "FWeaponItemStats": [
+        [],
+        {
+          "CurrentAmmo": 0
+        }
+      ]
+    },
+    "atrelmgradiationnpc": {
+      "FWeaponItemStats": [
+        [],
+        {
+          "CurrentAmmo": 0
+        }
+      ]
+    },
+    "scattergun_prototype_radiationnpc": {
+      "FWeaponItemStats": [
+        [],
+        {
+          "CurrentAmmo": 0
+        }
+      ]
+    },
+    "uniquear_burst_radiationnpc": {
+      "FWeaponItemStats": [
+        [],
+        {
+          "CurrentAmmo": 0
+        }
+      ]
+    },
+    "harkheavypistolnpc": {
+      "FWeaponItemStats": [
+        [],
+        {
+          "CurrentAmmo": 0
+        }
+      ]
+    },
+    "smugdmrparanpc": {
+      "FWeaponItemStats": [
+        [],
+        {
+          "CurrentAmmo": 0
+        }
+      ]
+    },
+    "scattergunelitenpc": {
+      "FWeaponItemStats": [
+        [],
+        {
+          "CurrentAmmo": 0
+        }
+      ]
+    },
+    "smugshotelitenpc": {
+      "FWeaponItemStats": [
+        [],
+        {
+          "CurrentAmmo": 0
+        }
+      ]
+    },
+    "harkarelitenpc": {
+      "FWeaponItemStats": [
+        [],
+        {
+          "CurrentAmmo": 0
+        }
+      ]
+    },
+    "b1c4_unique_harkar2": {
+      "FWeaponItemStats": [
+        [],
+        {
+          "CurrentAmmo": 0
+        }
+      ]
+    },
+    "b1c4_unique_lmg2": {
+      "FWeaponItemStats": [
+        [],
+        {
+          "CurrentAmmo": 0
+        }
+      ]
+    },
+    "b1c4_unique_smugdmr1": {
+      "FWeaponItemStats": [
+        [],
+        {
+          "CurrentAmmo": 0
+        }
+      ]
+    },
+    "b1c4_npcweapon_cryo_karpov": {
+      "FWeaponItemStats": [
+        [],
+        {
+          "CurrentAmmo": 0
+        }
+      ]
+    },
+    "b1c4_npcweapon_cryo_spitdart": {
+      "FWeaponItemStats": [
+        [],
+        {
+          "CurrentAmmo": 0
+        }
+      ]
+    },
+    "b1c4_npcweapon_cryo_maulapistol": {
+      "FWeaponItemStats": [
+        [],
+        {
+          "CurrentAmmo": 0
+        }
+      ]
+    },
+    "b1c4_npcweapon_cryo_heavypistol": {
+      "FWeaponItemStats": [
+        [],
+        {
+          "CurrentAmmo": 0
+        }
+      ]
+    },
+    "b1c4_npcweapon_cryo_smg": {
+      "FWeaponItemStats": [
+        [],
+        {
+          "CurrentAmmo": 0
+        }
+      ]
+    },
+    "b1c4_npcweapon_cryo_lmg": {
+      "FWeaponItemStats": [
+        [],
+        {
+          "CurrentAmmo": 0
+        }
+      ]
+    },
+    "b1c4_npcweapon_cryo_shotgun": {
+      "FWeaponItemStats": [
+        [],
+        {
+          "CurrentAmmo": 0
+        }
+      ]
+    },
+    "b1c4_npcweapon_cryo_scattergun": {
+      "FWeaponItemStats": [
+        [],
+        {
+          "CurrentAmmo": 0
+        }
+      ]
+    },
+    "b1c4_taligaripistol": {
+      "FWeaponItemStats": [
+        [],
+        {
+          "CurrentAmmo": 0
+        }
+      ]
+    },
+    "b1c4_unique_heavypistol2": {
+      "FWeaponItemStats": [
+        [],
+        {
+          "CurrentAmmo": 0
+        }
+      ]
+    },
+    "b1c4_unique_smg2": {
+      "FWeaponItemStats": [
+        [],
+        {
+          "CurrentAmmo": 0
+        }
+      ]
+    },
+    "literjon": {
+      "FFillableItemStats": [
+        [],
+        {
+          "FillableType": "Water",
+          "MaxAmount": 1000,
+          "bIsContainer": true,
+          "FillableTypeRestriction": "Water",
+          "CurrentAmount": 0
+        }
+      ]
+    },
+    "dewpack": {
+      "FFillableItemStats": [
+        [],
+        {
+          "FillableType": "Water",
+          "MaxAmount": 250,
+          "bIsContainer": true,
+          "FillableTypeRestriction": "Water",
+          "CurrentAmount": 0
+        }
+      ]
+    },
+    "highcapacityliterjon": {
+      "FFillableItemStats": [
+        [],
+        {
+          "FillableType": "Water",
+          "MaxAmount": 1500,
+          "bIsContainer": true,
+          "FillableTypeRestriction": "Water",
+          "CurrentAmount": 0
+        }
+      ]
+    },
+    "literjon_03": {
+      "FFillableItemStats": [
+        [],
+        {
+          "FillableType": "Water",
+          "MaxAmount": 1100,
+          "bIsContainer": true,
+          "FillableTypeRestriction": "Water",
+          "CurrentAmount": 0
+        }
+      ]
+    },
+    "literjon_04": {
+      "FFillableItemStats": [
+        [],
+        {
+          "FillableType": "Water",
+          "MaxAmount": 1200,
+          "bIsContainer": true,
+          "FillableTypeRestriction": "Water",
+          "CurrentAmount": 0
+        }
+      ]
+    },
+    "literjon_05": {
+      "FFillableItemStats": [
+        [],
+        {
+          "FillableType": "Water",
+          "MaxAmount": 1300,
+          "bIsContainer": true,
+          "FillableTypeRestriction": "Water",
+          "CurrentAmount": 0
+        }
+      ]
+    },
+    "literjon_06": {
+      "FFillableItemStats": [
+        [],
+        {
+          "FillableType": "Water",
+          "MaxAmount": 1400,
+          "bIsContainer": true,
+          "FillableTypeRestriction": "Water",
+          "CurrentAmount": 0
+        }
+      ]
+    },
+    "literjon_07": {
+      "FFillableItemStats": [
+        [],
+        {
+          "FillableType": "Water",
+          "MaxAmount": 1500,
+          "bIsContainer": true,
+          "FillableTypeRestriction": "Water",
+          "CurrentAmount": 0
+        }
+      ]
+    },
+    "literjon_08": {
+      "FFillableItemStats": [
+        [],
+        {
+          "FillableType": "Water",
+          "MaxAmount": 1600,
+          "bIsContainer": true,
+          "FillableTypeRestriction": "Water",
+          "CurrentAmount": 0
+        }
+      ]
+    },
+    "literjon_09": {
+      "FFillableItemStats": [
+        [],
+        {
+          "FillableType": "Water",
+          "MaxAmount": 1700,
+          "bIsContainer": true,
+          "FillableTypeRestriction": "Water",
+          "CurrentAmount": 0
+        }
+      ]
+    },
+    "simplestillsuit": {
+      "FFillableItemStats": [
+        [],
+        {
+          "FillableType": "Water",
+          "MaxAmount": 500,
+          "bIsContainer": false,
+          "FillableTypeRestriction": "Water",
+          "CurrentAmount": 0
+        }
+      ]
+    },
+    "advancedstillsuit": {
+      "FFillableItemStats": [
+        [],
+        {
+          "FillableType": "Water",
+          "MaxAmount": 500,
+          "bIsContainer": false,
+          "FillableTypeRestriction": "Water",
+          "CurrentAmount": 0
+        }
+      ]
+    },
+    "stillsuit_neut_leaking01_top": {
+      "FFillableItemStats": [
+        [],
+        {
+          "FillableType": "Water",
+          "MaxAmount": 500,
+          "bIsContainer": false,
+          "FillableTypeRestriction": "Water",
+          "CurrentAmount": 0
+        }
+      ]
+    },
+    "stillsuit_neut_patchy02_top": {
+      "FFillableItemStats": [
+        [],
+        {
+          "FillableType": "Water",
+          "MaxAmount": 500,
+          "bIsContainer": false,
+          "FillableTypeRestriction": "Water",
+          "CurrentAmount": 0
+        }
+      ]
+    },
+    "stillsuit_choam_01_top": {
+      "FFillableItemStats": [
+        [],
+        {
+          "FillableType": "Water",
+          "MaxAmount": 500,
+          "bIsContainer": false,
+          "FillableTypeRestriction": "Water",
+          "CurrentAmount": 0
+        }
+      ]
+    },
+    "stillsuit_nati_arrakeen05_body": {
+      "FFillableItemStats": [
+        [],
+        {
+          "FillableType": "Water",
+          "MaxAmount": 500,
+          "bIsContainer": false,
+          "FillableTypeRestriction": "Water",
+          "CurrentAmount": 0
+        }
+      ]
+    },
+    "stillsuit_nati_05_body": {
+      "FFillableItemStats": [
+        [],
+        {
+          "FillableType": "Water",
+          "MaxAmount": 500,
+          "bIsContainer": false,
+          "FillableTypeRestriction": "Water",
+          "CurrentAmount": 0
+        }
+      ]
+    },
+    "stillsuit_nati_06_body": {
+      "FFillableItemStats": [
+        [],
+        {
+          "FillableType": "Water",
+          "MaxAmount": 500,
+          "bIsContainer": false,
+          "FillableTypeRestriction": "Water",
+          "CurrentAmount": 0
+        }
+      ]
+    },
+    "stillsuit_nati_07_body": {
+      "FFillableItemStats": [
+        [],
+        {
+          "FillableType": "Water",
+          "MaxAmount": 500,
+          "bIsContainer": false,
+          "FillableTypeRestriction": "Water",
+          "CurrentAmount": 0
+        }
+      ]
+    },
+    "stillsuit_nati_08_body": {
+      "FFillableItemStats": [
+        [],
+        {
+          "FillableType": "Water",
+          "MaxAmount": 500,
+          "bIsContainer": false,
+          "FillableTypeRestriction": "Water",
+          "CurrentAmount": 0
+        }
+      ]
+    },
+    "combat_nati_fremenexile04_top": {
+      "FFillableItemStats": [
+        [],
+        {
+          "FillableType": "Water",
+          "MaxAmount": 500,
+          "bIsContainer": false,
+          "FillableTypeRestriction": "Water",
+          "CurrentAmount": 0
+        }
+      ]
+    },
+    "waterpack_consumable": {
+      "FFillableItemStats": [
+        [],
+        {
+          "FillableType": "Water",
+          "MaxAmount": 100,
+          "bIsContainer": false,
+          "FillableTypeRestriction": "Water",
+          "CurrentAmount": 0
+        }
+      ]
+    },
+    "decajon": {
+      "FFillableItemStats": [
+        [],
+        {
+          "FillableType": "Water",
+          "MaxAmount": 10000,
+          "bIsContainer": true,
+          "FillableTypeRestriction": "Water",
+          "CurrentAmount": 0
+        }
+      ]
+    },
+    "literjon_t6": {
+      "FFillableItemStats": [
+        [],
+        {
+          "FillableType": "Water",
+          "MaxAmount": 20000,
+          "bIsContainer": true,
+          "FillableTypeRestriction": "Water",
+          "CurrentAmount": 0
+        }
+      ]
+    },
+    "stillsuit_choam_06_top": {
+      "FFillableItemStats": [
+        [],
+        {
+          "FillableType": "Water",
+          "MaxAmount": 500,
+          "bIsContainer": false,
+          "FillableTypeRestriction": "Water",
+          "CurrentAmount": 0
+        }
+      ]
+    },
+    "stillsuit_choam_02_top": {
+      "FFillableItemStats": [
+        [],
+        {
+          "FillableType": "Water",
+          "MaxAmount": 500,
+          "bIsContainer": false,
+          "FillableTypeRestriction": "Water",
+          "CurrentAmount": 0
+        }
+      ]
+    },
+    "stillsuit_choam_05_top": {
+      "FFillableItemStats": [
+        [],
+        {
+          "FillableType": "Water",
+          "MaxAmount": 500,
+          "bIsContainer": false,
+          "FillableTypeRestriction": "Water",
+          "CurrentAmount": 0
+        }
+      ]
+    },
+    "stillsuit_choam_04_top": {
+      "FFillableItemStats": [
+        [],
+        {
+          "FillableType": "Water",
+          "MaxAmount": 500,
+          "bIsContainer": false,
+          "FillableTypeRestriction": "Water",
+          "CurrentAmount": 0
+        }
+      ]
+    },
+    "highcapacityliterjon_02": {
+      "FFillableItemStats": [
+        [],
+        {
+          "FillableType": "Water",
+          "MaxAmount": 1750,
+          "bIsContainer": true,
+          "FillableTypeRestriction": "Water",
+          "CurrentAmount": 0
+        }
+      ]
+    },
+    "highcapacityliterjon_03": {
+      "FFillableItemStats": [
+        [],
+        {
+          "FillableType": "Water",
+          "MaxAmount": 2000,
+          "bIsContainer": true,
+          "FillableTypeRestriction": "Water",
+          "CurrentAmount": 0
+        }
+      ]
+    },
+    "highcapacityliterjon_04": {
+      "FFillableItemStats": [
+        [],
+        {
+          "FillableType": "Water",
+          "MaxAmount": 2250,
+          "bIsContainer": true,
+          "FillableTypeRestriction": "Water",
+          "CurrentAmount": 0
+        }
+      ]
+    },
+    "highcapacityliterjon_05": {
+      "FFillableItemStats": [
+        [],
+        {
+          "FillableType": "Water",
+          "MaxAmount": 2500,
+          "bIsContainer": true,
+          "FillableTypeRestriction": "Water",
+          "CurrentAmount": 0
+        }
+      ]
+    },
+    "highcapacityliterjon_06": {
+      "FFillableItemStats": [
+        [],
+        {
+          "FillableType": "Water",
+          "MaxAmount": 3000,
+          "bIsContainer": true,
+          "FillableTypeRestriction": "Water",
+          "CurrentAmount": 0
+        }
+      ]
+    },
+    "stillsuit_unique_armored_01_top": {
+      "FFillableItemStats": [
+        [],
+        {
+          "FillableType": "Water",
+          "MaxAmount": 500,
+          "bIsContainer": false,
+          "FillableTypeRestriction": "Water",
+          "CurrentAmount": 0
+        }
+      ]
+    },
+    "stillsuit_unique_armored_02_top": {
+      "FFillableItemStats": [
+        [],
+        {
+          "FillableType": "Water",
+          "MaxAmount": 500,
+          "bIsContainer": false,
+          "FillableTypeRestriction": "Water",
+          "CurrentAmount": 0
+        }
+      ]
+    },
+    "stillsuit_unique_armored_03_top": {
+      "FFillableItemStats": [
+        [],
+        {
+          "FillableType": "Water",
+          "MaxAmount": 500,
+          "bIsContainer": false,
+          "FillableTypeRestriction": "Water",
+          "CurrentAmount": 0
+        }
+      ]
+    },
+    "stillsuit_unique_armored_04_top": {
+      "FFillableItemStats": [
+        [],
+        {
+          "FillableType": "Water",
+          "MaxAmount": 500,
+          "bIsContainer": false,
+          "FillableTypeRestriction": "Water",
+          "CurrentAmount": 0
+        }
+      ]
+    },
+    "stillsuit_unique_armored_05_top": {
+      "FFillableItemStats": [
+        [],
+        {
+          "FillableType": "Water",
+          "MaxAmount": 500,
+          "bIsContainer": false,
+          "FillableTypeRestriction": "Water",
+          "CurrentAmount": 0
+        }
+      ]
+    },
+    "stillsuit_unique_armored_06_top": {
+      "FFillableItemStats": [
+        [],
+        {
+          "FillableType": "Water",
+          "MaxAmount": 500,
+          "bIsContainer": false,
+          "FillableTypeRestriction": "Water",
+          "CurrentAmount": 0
+        }
+      ]
+    },
+    "stillsuit_unique_efficient_04_top": {
+      "FFillableItemStats": [
+        [],
+        {
+          "FillableType": "Water",
+          "MaxAmount": 500,
+          "bIsContainer": false,
+          "FillableTypeRestriction": "Water",
+          "CurrentAmount": 0
+        }
+      ]
+    },
+    "stillsuit_unique_efficient_05_top": {
+      "FFillableItemStats": [
+        [],
+        {
+          "FillableType": "Water",
+          "MaxAmount": 500,
+          "bIsContainer": false,
+          "FillableTypeRestriction": "Water",
+          "CurrentAmount": 0
+        }
+      ]
+    },
+    "stillsuit_unique_efficient_06_top": {
+      "FFillableItemStats": [
+        [],
+        {
+          "FillableType": "Water",
+          "MaxAmount": 500,
+          "bIsContainer": false,
+          "FillableTypeRestriction": "Water",
+          "CurrentAmount": 0
+        }
+      ]
+    },
+    "stillsuit_unique_highcapacity_06_top": {
+      "FFillableItemStats": [
+        [],
+        {
+          "FillableType": "Water",
+          "MaxAmount": 1500,
+          "bIsContainer": false,
+          "FillableTypeRestriction": "Water",
+          "CurrentAmount": 0
+        }
+      ]
+    },
+    "stillsuit_choam_unique_dashed02_top": {
+      "FFillableItemStats": [
+        [],
+        {
+          "FillableType": "Water",
+          "MaxAmount": 500,
+          "bIsContainer": false,
+          "FillableTypeRestriction": "Water",
+          "CurrentAmount": 0
+        }
+      ]
+    },
+    "stillsuit_choam_unique_dashed03_top": {
+      "FFillableItemStats": [
+        [],
+        {
+          "FillableType": "Water",
+          "MaxAmount": 500,
+          "bIsContainer": false,
+          "FillableTypeRestriction": "Water",
+          "CurrentAmount": 0
+        }
+      ]
+    },
+    "stillsuit_choam_unique_dashed04_top": {
+      "FFillableItemStats": [
+        [],
+        {
+          "FillableType": "Water",
+          "MaxAmount": 500,
+          "bIsContainer": false,
+          "FillableTypeRestriction": "Water",
+          "CurrentAmount": 0
+        }
+      ]
+    },
+    "stillsuit_choam_unique_dashed05_top": {
+      "FFillableItemStats": [
+        [],
+        {
+          "FillableType": "Water",
+          "MaxAmount": 500,
+          "bIsContainer": false,
+          "FillableTypeRestriction": "Water",
+          "CurrentAmount": 0
+        }
+      ]
+    },
+    "stillsuit_choam_unique_dashed06_top": {
+      "FFillableItemStats": [
+        [],
+        {
+          "FillableType": "Water",
+          "MaxAmount": 500,
+          "bIsContainer": false,
+          "FillableTypeRestriction": "Water",
+          "CurrentAmount": 0
+        }
+      ]
+    },
+    "stillsuit_unique_thermalsuit_06_top": {
+      "FFillableItemStats": [
+        [],
+        {
+          "FillableType": "Water",
+          "MaxAmount": 500,
+          "bIsContainer": false,
+          "FillableTypeRestriction": "Water",
+          "CurrentAmount": 0
+        }
+      ]
+    }
+  }
+}

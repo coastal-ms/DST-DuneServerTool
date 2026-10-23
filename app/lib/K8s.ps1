@@ -8,29 +8,26 @@ function Get-V6Battlegroup {
     [CmdletBinding()]
     param([Parameter(Mandatory)][string]$Ip)
 
-    # Single round-trip: find namespace + name + dump the CRD JSON.
-    $cmd = @'
-NS=$(sudo kubectl get battlegroups -A --no-headers -o custom-columns=':metadata.namespace' 2>/dev/null | head -1 | tr -d ' ')
-NAME=$(sudo kubectl get battlegroups -A --no-headers -o custom-columns=':metadata.name' 2>/dev/null | head -1 | tr -d ' ')
-if [ -z "$NS" ] || [ -z "$NAME" ]; then echo "__NOBG__"; exit 0; fi
-echo "===BG_META==="
-echo "$NS"
-echo "$NAME"
-echo "===BG_JSON==="
-sudo kubectl get battlegroup -n "$NS" "$NAME" -o json 2>/dev/null
-'@
-    $raw = Invoke-V6Ssh -Ip $Ip -Cmd $cmd -TimeoutSec 30
-    $text = ($raw -join "`n")
-    if ($text -match '__NOBG__') { throw "No battlegroup CRD found on the VM." }
-    $parts = $text -split '===BG_JSON==='
-    if ($parts.Count -lt 2) { throw "Unexpected kubectl response." }
-    $metaLines = ($parts[0] -split "`n") | Where-Object { $_ -and ($_ -notmatch '===BG_META===') }
-    $ns   = $metaLines[0].Trim()
-    $name = $metaLines[1].Trim()
-    $json = $parts[1].Trim()
-    if ([string]::IsNullOrWhiteSpace($json)) { throw "Empty battlegroup JSON." }
-    $bg = $json | ConvertFrom-Json -ErrorAction Stop
-    return @{ Ns = $ns; Name = $name; Bg = $bg }
+    # One cluster read keeps metadata and the resource in the same snapshot.
+    # Retry an interrupted read once; never use partial transport output.
+    for ($attempt=0; $attempt -lt 2; $attempt++) {
+        try {
+            $raw=Invoke-V6Ssh -Ip $Ip -Cmd 'sudo kubectl get battlegroups -A -o json' -TimeoutSec 30
+            $list=($raw -join "`n") | ConvertFrom-Json -ErrorAction Stop
+            $items=@($list.items)
+            if($items.Count -eq 0){throw 'No battlegroup CRD found on the VM.'}
+            $bg=$items[0]
+            $ns=[string]$bg.metadata.namespace
+            $name=[string]$bg.metadata.name
+            if(-not $ns -or -not $name){throw 'Missing battlegroup metadata.'}
+            return @{Ns=$ns;Name=$name;Bg=$bg}
+        } catch {
+            if($attempt -eq 1){
+                if($_.Exception.Message -eq 'No battlegroup CRD found on the VM.'){throw}
+                throw 'Could not read battlegroup data from the VM after two attempts. No settings were changed.'
+            }
+        }
+    }
 }
 
 function Get-V6SietchList {

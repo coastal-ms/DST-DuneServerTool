@@ -243,7 +243,7 @@ function VehicleFleetWorkspace() {
   }
   const renameWarningBanner = showRenameWarning ? (
     <div className="mb-3 rounded-lg border-2 border-warning bg-warning/15 px-4 py-3 text-sm text-text" role="status">
-      <strong className="text-warning">Battlegroup restart required:</strong> Saving vehicle-name changes writes every edited name as one exact database batch, then immediately launches one battlegroup restart so the committed names persist. Keep all players offline until Server Health reports the battlegroup is back.
+      <strong className="text-warning">Battlegroup restart required:</strong> Saving vehicle-name changes writes every edited name as one exact database batch, then immediately launches one battlegroup restart so the committed names persist. Keep all players offline until Server Overview reports the battlegroup is back.
     </div>
   ) : null
 

@@ -397,7 +397,7 @@ export function ScheduledRestarts() {
                   <div className="flex items-start gap-2 mt-1 pt-2 border-t border-border/50 text-[11px] text-text-dim">
                     <Icon name="Info" size={13} className="mt-0.5 flex-none text-text-muted" />
                     <span>
-                      Online / Offline / Restarting are detected while the Dune Server Tool is running, and only for the server it manages. Starting, stopping, or restarting the battlegroup directly on the VM (via <code>battlegroup.bat</code>) — or any change made while DST is closed — won't be detected. Use DST's own Server Health commands and Scheduled Restarts so these fire reliably.
+                      Online / Offline / Restarting are detected while the Dune Server Tool is running, and only for the server it manages. Starting, stopping, or restarting the battlegroup directly on the VM (via <code>battlegroup.bat</code>) — or any change made while DST is closed — won't be detected. Use DST's own Server Overview commands and Scheduled Restarts so these fire reliably.
                     </span>
                   </div>
                 </div>

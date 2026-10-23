@@ -3,6 +3,7 @@ import { Link } from '../router'
 import { PageHeader } from '../components/PageHeader'
 import { Icon } from '../components/Icon'
 import { api, ApiError } from '../api/client'
+import { cancelHyperVLanInstall, removeHyperVLanAttempt } from '../api/setup'
 import { getPreflight, getSetupConfig, getHyperVLan, saveHyperVLan, testHyperVLan, getHyperVLanCredential, saveHyperVLanCredential, getHyperVLanHostResources, startHyperVLanInstall, getHyperVLanInstallStatus, type PreflightResult, type SetupConfigSummary, type HyperVLanTest, type HyperVLanHostResources, type HyperVLanInstallStatus } from '../api/setup'
 
 // The wizard branches on a single up-front question: does the operator already
@@ -121,9 +122,11 @@ export function SetupWizard() {
               {current < steps.length && (
                 <button className="btn-ghost" onClick={skip}>Skip step</button>
               )}
-              <button className="btn-primary" onClick={goNext}>
-                {current >= steps.length ? 'Finish' : (<>Next <Icon name="ArrowRight" size={14} /></>)}
-              </button>
+              {current >= steps.length ? (
+                <Link to="/" className="btn-primary">Finish</Link>
+              ) : (
+                <button className="btn-primary" onClick={goNext}>Next <Icon name="ArrowRight" size={14} /></button>
+              )}
             </div>
           </div>
         </>
@@ -179,7 +182,7 @@ function BranchChooser({ onPick }: { onPick: (m: SetupMode) => void }) {
           </div>
           <p className="text-sm text-text-dim">
             The VM runs on a <strong>separate Hyper-V host</strong> on your network (e.g. a headless server).
-            DST runs on this PC and manages that host over the LAN. The VM must already be installed there.
+            DST runs on this PC and manages that host over the LAN. Install a new VM in the wizard or connect to an existing one.
           </p>
         </button>
       </div>
@@ -634,8 +637,8 @@ function StepConnectLan() {
           <span className="font-medium text-warning">Prerequisite:</span> the host's Hyper-V PowerShell Remoting
           (WinRM) must be reachable from this PC (in a workgroup: the host trusted from this PC via
           <span className="font-mono"> TrustedHosts</span>). DST uses an explicit administrator credential for that
-          host below — it does not need to match the Windows account DST itself runs as. The VM must already be
-          installed on that host and named <span className="font-mono">dune-awakening</span>.
+          host below — it does not need to match the Windows account DST itself runs as. The next step can install
+          a new VM, or use an existing VM named <span className="font-mono">dune-awakening</span>.
         </div>
       </div>
 
@@ -750,6 +753,7 @@ function StepInstallLan() {
   const [user, setUser] = useState('')
   const [password, setPassword] = useState('')
   const [savedCredUser, setSavedCredUser] = useState<string | null>(null)
+  const [changeCredential, setChangeCredential] = useState(false)
   const [res, setRes] = useState<HyperVLanHostResources | null>(null)
   const [checking, setChecking] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -762,15 +766,21 @@ function StepInstallLan() {
   const [worldName, setWorldName] = useState('')
   const [region, setRegion] = useState(3)
   const [serverToken, setServerToken] = useState('')
+  const [networkMode, setNetworkMode] = useState('')
+  const [vmAddress, setVmAddress] = useState('')
+  const [vmPrefix, setVmPrefix] = useState('24')
+  const [vmGateway, setVmGateway] = useState('')
+  const [vmDns, setVmDns] = useState('1.1.1.1')
 
   const [status, setStatus] = useState<HyperVLanInstallStatus | null>(null)
   const [installing, setInstalling] = useState(false)
   const [elapsed, setElapsed] = useState(0)
+  const [cancelling, setCancelling] = useState(false)
 
   useEffect(() => {
     void (async () => {
       let ip = ''
-      try { const s = await getHyperVLan(); ip = s.hostIp ?? ''; setHostIp(ip) } catch { /* set in prior step */ }
+      try { const s = await getHyperVLan(); ip = s.hostIp ?? ''; setHostIp(ip); setVmAddress(s.previousVmIp ?? '') } catch { /* set in prior step */ }
       // The Hyper-V host step already collected + saved a credential for this
       // host; reuse it here instead of asking again. The fields below stay
       // available in case a different (e.g. install-only) credential is
@@ -782,7 +792,7 @@ function StepInstallLan() {
       // If an install is already running (e.g. page reopened), resume polling.
       try {
         const st = await getHyperVLanInstallStatus()
-        if (st && st.running) { setStatus(st); setInstalling(true) }
+        if (st?.running) { setStatus(st); setInstalling(true); if (st.worldName) setWorldName(st.worldName); if (st.region) setRegion(st.region) }
       } catch { /* none */ }
     })()
   }, [])
@@ -814,6 +824,7 @@ function StepInstallLan() {
 
   const check = useCallback(async () => {
     if (!hostIp.trim()) { setError('Set the Hyper-V host IP in the previous step first.'); return }
+    if (!!user.trim() !== !!password) { setError('Enter both the host administrator username and password, or leave both blank to use the saved credential.'); return }
     if (!savedCredUser && !user.trim()) { setError("Enter the host's administrator username."); return }
     if (/^(HOST|COMPUTERNAME|COMPUTER-NAME|MACHINE|SERVERNAME)\\/i.test(user.trim())) {
       setError(`"${user.trim()}" looks like the example text. The part before the backslash is a placeholder for your host's own computer name — replace both parts, e.g. ${hostIp.trim()}\\Administrator.`)
@@ -828,8 +839,14 @@ function StepInstallLan() {
       const r = await getHyperVLanHostResources(hostIp.trim(), user.trim() || undefined, password || undefined)
       setRes(r)
       if (r.ok) {
+        // Only show a previous attempt after the host confirms its VM still exists.
+        const previous = r.canResume ? await getHyperVLanInstallStatus() : null
+        setStatus(previous)
+        if (previous?.worldName) setWorldName(previous.worldName)
+        if (previous?.region) setRegion(previous.region)
         if (r.drives && r.drives[0]) setDestDrive(r.drives[0].drive)
         if (r.switches && r.switches[0]) setSwitchName(r.switches[0])
+        if (r.canResume) { setDestDrive(r.attemptDrive ?? ''); setSwitchName('resume') }
       } else {
         setError(r.error ?? 'Could not read the host.')
       }
@@ -841,6 +858,8 @@ function StepInstallLan() {
   }, [hostIp, user, password, savedCredUser])
 
   const install = useCallback(async () => {
+    if (!networkMode) { setError('Choose automatic (DHCP) or a fixed VM IP address.'); return }
+    if (!worldName.trim() || !serverToken.trim()) { setError('Enter the world name and self-hosted server token.'); return }
     if (!destDrive) { setError('Pick a destination drive.'); return }
     if (!switchName) { setError('Pick an external switch (create one on the host if the list is empty).'); return }
     if (memoryGB < 1) { setError('Enter a memory size in GB.'); return }
@@ -849,6 +868,8 @@ function StepInstallLan() {
       const r = await startHyperVLanInstall({
         hostIp: hostIp.trim(), user: user.trim() || undefined, password: password || undefined,
         destDrive, memoryGB, switchName, vmPassword, worldName, region, serverToken, replaceExisting: false,
+        network: { mode: networkMode, address: vmAddress.trim(), prefix: vmPrefix, gateway: vmGateway.trim(), dns: vmDns.trim() },
+        resume: !!res?.canResume,
       })
       if (!r.ok) { setError(r.error ?? 'Could not start the install.'); return }
       setInstalling(true)
@@ -856,11 +877,12 @@ function StepInstallLan() {
     } catch (e) {
       setError(e instanceof ApiError ? e.message : String(e))
     }
-  }, [hostIp, user, password, destDrive, switchName, memoryGB, vmPassword, worldName, region, serverToken])
+  }, [hostIp, user, password, destDrive, switchName, memoryGB, vmPassword, worldName, region, serverToken, networkMode, vmAddress, vmPrefix, vmGateway, vmDns, res?.canResume])
 
   const done = status && !status.running && status.phase === 'done'
   const failed = status && !status.running && status.phase === 'error'
-  const noSwitches = res?.ok && (res.switches?.length ?? 0) === 0
+  const cancelled = status && !status.running && status.phase === 'cancelled'
+  const noSwitches = res?.ok && !res.canResume && (res.switches?.length ?? 0) === 0
 
   return (
     <>
@@ -873,24 +895,26 @@ function StepInstallLan() {
       </div>
 
       {/* Credentials + probe */}
-      {savedCredUser && (
-        <p className="text-xs text-text-dim mb-2">
-          Using the saved credential for <span className="font-mono text-text">{savedCredUser}</span> from the previous
-          step unless you enter a different one below.
-        </p>
+      {savedCredUser && !changeCredential ? (
+        <div className="rounded-lg border border-border bg-surface-2 p-3 mb-3 flex items-center justify-between gap-3">
+          <div className="text-sm">Host: <span className="font-mono">{hostIp}</span><br />Saved administrator: <span className="font-mono">{savedCredUser}</span></div>
+          <button type="button" className="btn-secondary" disabled={installing} onClick={() => { setChangeCredential(true); setUser(savedCredUser); setRes(null); if (!installing) setStatus(null) }}>Change credential</button>
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-3">
+          <label className="flex flex-col gap-1 text-sm">
+            Host administrator username
+            <input type="text" value={user} onChange={e => { setUser(e.target.value); setRes(null); setStatus(null) }} disabled={installing} spellCheck={false}
+              className="px-3 py-2 rounded-lg bg-surface-2 border border-border text-text text-sm" />
+          </label>
+          <label className="flex flex-col gap-1 text-sm">
+            Host administrator password
+            <input type="password" value={password} onChange={e => { setPassword(e.target.value); setRes(null); setStatus(null) }} disabled={installing}
+              className="px-3 py-2 rounded-lg bg-surface-2 border border-border text-text text-sm" />
+          </label>
+          {savedCredUser && <button type="button" className="btn-secondary" disabled={installing} onClick={() => { setChangeCredential(false); setUser(''); setPassword(''); setRes(null); setStatus(null) }}>Use saved credential</button>}
+        </div>
       )}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-3">
-        <label className="flex flex-col gap-1 text-sm">
-          <span className="font-medium">Host administrator username {savedCredUser && <span className="text-text-dim font-normal">(optional)</span>}</span>
-          <input type="text" value={user} onChange={e => setUser(e.target.value)} disabled={installing} spellCheck={false}
-            placeholder={savedCredUser ?? (hostIp.trim() ? `${hostIp.trim()}\\Administrator` : 'e.g. MYHOST\\Administrator')} className="px-3 py-2 rounded-lg bg-surface-2 border border-border text-text text-sm" />
-        </label>
-        <label className="flex flex-col gap-1 text-sm">
-          <span className="font-medium">Host administrator password {savedCredUser && <span className="text-text-dim font-normal">(optional)</span>}</span>
-          <input type="password" value={password} onChange={e => setPassword(e.target.value)} disabled={installing}
-            className="px-3 py-2 rounded-lg bg-surface-2 border border-border text-text text-sm" />
-        </label>
-      </div>
       <div className="flex flex-wrap gap-2 mb-3">
         <button type="button" className="btn-secondary" onClick={() => void check()} disabled={checking || installing}>
           <Icon name={checking ? 'Loader2' : 'Search'} size={14} className={checking ? 'animate-spin' : ''} />
@@ -900,15 +924,16 @@ function StepInstallLan() {
 
       {error && <p className="text-xs text-danger break-words mb-3">{error}</p>}
 
-      {res?.ok && res.vmExists && !installing && (
+      {res?.ok && res.vmExists && !res.canResume && !installing && (
         <div className="rounded-lg border border-success/40 bg-success/10 p-3 text-sm text-success flex items-start gap-2">
           <Icon name="CircleCheck" size={16} className="mt-0.5 shrink-0" />
           <span>A <span className="font-mono">dune-awakening</span> VM already exists on this host — nothing to install. Continue to the next step; it's managed over the LAN.</span>
         </div>
       )}
 
-      {res?.ok && !res.vmExists && !done && (
+      {res?.ok && (!res.vmExists || res.canResume) && !done && (
         <div className="space-y-3">
+          {res.canResume && <p className="text-sm text-warning">This VM was created by an unfinished installation. Resume its setup without copying or importing it again.</p>}
           <label className="flex flex-col gap-1 text-sm">
             World name
             <input value={worldName} onChange={e => setWorldName(e.target.value)} disabled={installing} maxLength={50} className="px-3 py-2 rounded-lg bg-surface-2 border border-border" />
@@ -924,6 +949,22 @@ function StepInstallLan() {
             <input type="password" autoComplete="off" value={serverToken} onChange={e => setServerToken(e.target.value)} disabled={installing} className="px-3 py-2 rounded-lg bg-surface-2 border border-border" />
             <span className="text-xs text-text-dim">From your Dune account page. Used only for this setup; never saved in DST configuration.</span>
           </label>
+          <label className="flex flex-col gap-1 text-sm">
+            VM IP address setup
+            <select value={networkMode} onChange={e => setNetworkMode(e.target.value)} disabled={installing} className="px-3 py-2 rounded-lg bg-surface-2 border border-border">
+              <option value="">Choose how the VM gets its address</option>
+              <option value="dhcp">Automatic (DHCP)</option>
+              <option value="static">Fixed IP address (static)</option>
+            </select>
+          </label>
+          {networkMode === 'dhcp' && <p className="text-xs text-text-dim">For port forwarding, reserve this VM's address in your router so it stays the same.</p>}
+          {networkMode === 'static' && <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+            <label className="flex flex-col gap-1 text-sm">VM IP address<input value={vmAddress} onChange={e => setVmAddress(e.target.value)} disabled={installing} className="px-3 py-2 rounded-lg bg-surface-2 border border-border" /></label>
+            <label className="flex flex-col gap-1 text-sm">Subnet prefix<input type="number" min={1} max={30} value={vmPrefix} onChange={e => setVmPrefix(e.target.value)} disabled={installing} className="px-3 py-2 rounded-lg bg-surface-2 border border-border" /></label>
+            <label className="flex flex-col gap-1 text-sm">Router / default gateway<input aria-describedby="lan-gateway-help" value={vmGateway} onChange={e => setVmGateway(e.target.value)} disabled={installing} className="px-3 py-2 rounded-lg bg-surface-2 border border-border" /><span id="lan-gateway-help" className="text-xs text-text-dim">The LAN IP address of your router. The VM uses it to reach the internet.</span></label>
+            <label className="flex flex-col gap-1 text-sm">DNS server<input value={vmDns} onChange={e => setVmDns(e.target.value)} disabled={installing} className="px-3 py-2 rounded-lg bg-surface-2 border border-border" /></label>
+            <p className="text-xs text-text-dim md:col-span-2">Use the address targeted by your existing port forwards, and make sure another device is not using it.</p>
+          </div>}
 
           {noSwitches && (
             <div className="rounded-lg border border-warning/40 bg-warning/10 p-3 text-xs text-text-dim">
@@ -961,25 +1002,32 @@ function StepInstallLan() {
           </div>
           <button type="button" className="btn-primary" onClick={() => void install()} disabled={installing || noSwitches}>
             <Icon name={installing ? 'Loader2' : 'HardDriveDownload'} size={14} className={installing ? 'animate-spin' : ''} />
-            {installing ? 'Installing…' : 'Install VM on host'}
+            {installing ? 'Installing…' : res.canResume ? 'Resume setup' : 'Install VM on host'}
           </button>
         </div>
       )}
 
       {/* Progress */}
-      {status && (installing || done || failed) && (
+      {status && (installing || done || failed || cancelled) && (
         <div className="mt-4 rounded-lg border border-border bg-surface-2 p-3 space-y-2">
           <div className="flex items-center gap-2 text-sm font-medium">
             {done ? <Icon name="CircleCheck" size={16} className="text-success" />
-              : failed ? <Icon name="CircleX" size={16} className="text-danger" />
+              : failed || cancelled ? <Icon name="CircleX" size={16} className={cancelled ? 'text-text-dim' : 'text-danger'} />
               : <Icon name="Loader2" size={16} className="animate-spin text-info" />}
-            {done ? 'Install complete' : failed ? 'Install failed' : `Installing… ${Math.floor(elapsed / 60)}m ${(elapsed % 60).toString().padStart(2, '0')}s`}
+            {done ? 'Install complete' : cancelled ? 'Installation cancelled' : failed ? 'Install failed' : `Installing… ${Math.floor(elapsed / 60)}m ${(elapsed % 60).toString().padStart(2, '0')}s`}
           </div>
           {installing && (
             <div className="text-xs text-text-dim">
-              The image download and battlegroup setup can take <strong>several minutes</strong>. Safe to leave this open — it runs on the server.
+              {status.cancelRequested ? 'Cancellation requested. Waiting for the current operation to finish; no further installation stages will start.' : 'Setup continues if you leave this page. Keep DST open until it finishes.'}
             </div>
           )}
+          {installing && <button type="button" className="btn-secondary" disabled={cancelling || status.cancelRequested} onClick={() => {
+            setCancelling(true)
+            void cancelHyperVLanInstall().then(async () => {
+              const next = await getHyperVLanInstallStatus()
+              setStatus(next); setInstalling(next.running)
+            }).catch(e => setError(e instanceof ApiError ? e.message : String(e))).finally(() => setCancelling(false))
+          }}>{status.cancelRequested ? 'Cancelling…' : 'Cancel installation'}</button>}
           <ul className="space-y-1">
             {(status.steps ?? []).map(s => (
               <li key={s.id} className="flex items-start gap-2 text-xs">
@@ -994,6 +1042,17 @@ function StepInstallLan() {
           </ul>
           {done && <p className="text-xs text-success">VM installed at {status.ip} and DST is now managing it over the LAN. Continue to finish setup.</p>}
           {failed && <p className="text-xs text-danger break-words">{status.error}</p>}
+          {cancelled && <p className="text-xs text-text-dim break-words">{status.error}</p>}
+          {(failed || cancelled) && (status.vmId || status.stageRoot) && <div className="space-y-2">
+            <p className="text-xs text-text-dim">Files and any VM already created have been kept. Check host to resume setup, or remove this attempt to start fresh.</p>
+            <button type="button" className="btn-secondary" disabled={checking} onClick={() => {
+              if (!window.confirm('Remove the VM and staging files created by this unfinished installation? This permanently deletes that VM and its data.')) return
+              setChecking(true); setError(null)
+              void removeHyperVLanAttempt(hostIp, user || undefined, password || undefined).then(async () => {
+                setStatus(null); setRes(null)
+              }).catch(e => setError(e instanceof ApiError ? e.message : String(e))).finally(() => setChecking(false))
+            }}>Remove this attempt</button>
+          </div>}
         </div>
       )}
     </>
@@ -1066,10 +1125,10 @@ function Step5Networking() {
         If players will connect over the public internet, forward these ports on your router:
       </p>
       <dl className="grid grid-cols-[200px_1fr] gap-y-2 text-sm mb-3">
-        <dt className="text-text-dim">Game port</dt>
-        <dd className="font-mono">7777/UDP → VM IP</dd>
-        <dt className="text-text-dim">Query port</dt>
-        <dd className="font-mono">27015/UDP → VM IP (optional)</dd>
+        <dt className="text-text-dim">Game ports</dt>
+        <dd className="font-mono">7777-7810/UDP to VM LAN IP</dd>
+        <dt className="text-text-dim">Login port</dt>
+        <dd className="font-mono">31982/TCP to VM LAN IP</dd>
         <dt className="text-text-dim">SSH (admin only)</dt>
         <dd className="font-mono">Leave closed; reach via LAN or VPN</dd>
       </dl>
@@ -1086,11 +1145,11 @@ function Step6Finalize() {
     <>
       <SectionHeader title="You're done!" subtitle="Setup is complete." />
       <p className="text-sm text-text mb-4">
-        Head to <Link to="/" className="text-accent hover:underline">Server Health</Link> to start
+        Head to <Link to="/" className="text-accent hover:underline">Server Overview</Link> to start
         the battlegroup with one click, or jump straight to a specific area:
       </p>
       <ul className="text-sm text-text-dim space-y-2">
-        <li><Link to="/" className="text-accent hover:underline">Server Health</Link> — start/stop the battlegroup, view logs</li>
+        <li><Link to="/" className="text-accent hover:underline">Server Overview</Link> — start/stop the battlegroup, view logs</li>
         <li><Link to="/database" className="text-accent hover:underline">Database</Link> — schedule backups, run SQL</li>
         <li><Link to="/settings" className="text-accent hover:underline">Settings</Link> — rotate SSH key, change password</li>
       </ul>

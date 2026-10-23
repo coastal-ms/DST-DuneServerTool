@@ -275,7 +275,7 @@ export function Dashboard() {
   return (
     <>
       <PageHeader
-        title="Server Health"
+        title="Server Overview"
         icon="LayoutDashboard"
         description="Live VM, battlegroup, and port status."
         actions={<HealthRefreshControl />}

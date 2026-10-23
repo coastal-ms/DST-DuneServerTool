@@ -1181,6 +1181,7 @@ export function GameConfig({ mode = 'standard', embedded = false, section = 'adv
           throw new Error(`${field.label}: enter a valid ${field.type === 'int' ? 'whole number' : 'number'} within the displayed limits before applying.`)
         }
       }
+      if (propagationItems.length > 0) await saveLabLocal(propagationItems, true)
       const current = await getGameConfig()
       if (!current.available || current.source !== cfg?.source || current.game.raw !== cfg.game.raw || current.engine.raw !== cfg.engine.raw) {
         throw new Error('Advanced server settings changed outside this form. Refresh and review them before applying; your draft is still here.')

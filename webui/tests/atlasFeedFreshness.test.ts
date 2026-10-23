@@ -40,4 +40,15 @@ describe('map update status', () => {
       expect(freshness(current, 'DeepDesert', now).positions.text).toBe('Positions · ' + text + ' ago')
     }
   })
+  it('distinguishes a slow first position read from a failed read without hiding its age', () => {
+    const current: any = fixture(); current.liveStartedAt = stamp(95)
+    const result = freshness(current, 'DeepDesert', now)
+    expect(result.loadingPositions).toBe(true)
+    expect(result.loadingSeconds).toBe(95)
+    expect(result.positions.text).toBe('Positions · 3h 55m ago')
+    current.wormError = 'Read failed'
+    expect(freshness(current, 'DeepDesert', now).loadingPositions).toBe(false)
+    current.wormError = null; current.wormFeed.capturedAt = stamp(2)
+    expect(freshness(current, 'DeepDesert', now).loadingPositions).toBe(false)
+  })
 })

@@ -3571,7 +3571,11 @@ function WaterEditor({ item, busy, run, onClose }: {
             className="w-full font-mono text-sm bg-surface-2 border border-border rounded px-2 py-1"
           />
         </label>
-        <div className="flex items-center justify-end">
+        <div className="flex items-center justify-end gap-2">
+          {!!item.water_capacity && item.water_capacity > 0 && <button type="button" className="btn-secondary text-xs" disabled={busy}
+            onClick={() => { void (async () => { if (await run(() => setItemWater(item.id, item.water_capacity!), 'Refill')) onClose() })() }}>
+            <Icon name="Droplet" size={12} /> Refill
+          </button>}
           <button
             type="button"
             className="btn-primary text-xs"

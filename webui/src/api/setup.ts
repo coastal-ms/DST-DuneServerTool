@@ -37,7 +37,7 @@ export function getSetupConfig() { return api<SetupConfigSummary>('/api/setup/co
 // Hyper-V over LAN — manage a VM that lives on a separate Hyper-V host on the
 // local network. 'mode' is the routing toggle: 'lan' points every Hyper-V call
 // at hostIp; 'local' restores the default local-VM behavior.
-export interface HyperVLanSettings { mode: 'local' | 'lan'; hostIp: string }
+export interface HyperVLanSettings { mode: 'local' | 'lan'; hostIp: string; previousVmIp?: string }
 export interface HyperVLanTest { ok: boolean; vmFound: boolean; reason: string }
 
 export function getHyperVLan() { return api<HyperVLanSettings>('/api/setup/hyperv-lan') }
@@ -141,10 +141,17 @@ export interface HyperVLanHostResources {
   allDrives?: HyperVLanDrive[]
   switches?: string[]
   vmExists?: boolean
+  canResume?: boolean
+  attemptDrive?: string
   hostRamGB?: number
 }
 export interface HyperVLanInstallStep { id: string; label: string; status: string; detail: string }
 export interface HyperVLanInstallStatus {
+  vmId?: string
+  stageRoot?: string
+  worldName?: string
+  region?: number
+  cancelRequested?: boolean
   running: boolean
   phase: string
   steps: HyperVLanInstallStep[]
@@ -152,6 +159,8 @@ export interface HyperVLanInstallStatus {
   error: string
 }
 export interface HyperVLanInstallRequest {
+  network: { mode: string; address: string; prefix: string; gateway: string; dns: string }
+  resume: boolean
   worldName: string
   region: number
   serverToken: string
@@ -179,4 +188,12 @@ export function startHyperVLanInstall(req: HyperVLanInstallRequest) {
 }
 export function getHyperVLanInstallStatus() {
   return api<HyperVLanInstallStatus>('/api/setup/hyperv-lan/install/status')
+}
+
+export function cancelHyperVLanInstall() {
+  return api<{ ok: boolean; running: boolean; cancelRequested?: boolean }>('/api/setup/hyperv-lan/install/cancel', { method: 'POST' })
+}
+
+export function removeHyperVLanAttempt(hostIp: string, user?: string, password?: string) {
+  return api<{ ok: boolean }>('/api/setup/hyperv-lan/install/remove', { method: 'POST', body: JSON.stringify({hostIp, user, password, confirmed: true}) })
 }

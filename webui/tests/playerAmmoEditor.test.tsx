@@ -1,7 +1,7 @@
 import React from 'react'
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { getPlayerDetail, getReserveRecovery, setWeaponAmmo, type Player } from '../src/api/gameplay'
+import { getPlayerDetail, getReserveRecovery, setWeaponAmmo, setItemWater, type Player } from '../src/api/gameplay'
 import { PlayerItemToolsSection as InventorySection } from '../src/pages/gameplay/players/sections'
 import { COMMAND_DECK_KEY } from '../src/hooks/useCommandDeck'
 
@@ -10,6 +10,7 @@ vi.mock('../src/api/gameplay', async importOriginal => ({
   getPlayerDetail: vi.fn(),
   getReserveRecovery: vi.fn(),
   setWeaponAmmo: vi.fn(),
+  setItemWater: vi.fn(),
 }))
 
 const player: Player = {
@@ -54,6 +55,20 @@ async function openEditor(online = false) {
 }
 
 describe('player loaded-ammo editor', () => {
+  it('refills a newly granted water container to its table capacity', async () => {
+    vi.mocked(getPlayerDetail).mockResolvedValue({source:'live',specs:[],currency:[],inventory:[{
+      id:9002,template_id:'Decajon',name:'Decaliterjon',stack_size:1,quality:0,
+      durability:'100',max_durability:'100',water_amount:'0',water_type:'Water',water_capacity:10000,current_ammo:'N/A',
+    }]})
+    vi.mocked(setItemWater).mockResolvedValue({ok:true,message:'Refilled.'})
+    render(<InventorySection player={player} canWrite demo={false} refreshKey={0} flash={vi.fn()} onChanged={vi.fn()} />)
+    fireEvent.click(await screen.findByText('Decaliterjon'))
+    expect(screen.getByRole('spinbutton', {name:'Water amount (Water)'})).toHaveValue(0)
+    fireEvent.click(screen.getByRole('button',{name:'Refill'}))
+    await waitFor(()=>expect(setItemWater).toHaveBeenCalledExactlyOnceWith(9002,10000))
+    expect(setWeaponAmmo).not.toHaveBeenCalled()
+  })
+
   it.each([
     ['250', 250], ['0', 0], ['2000000000', 2000000000],
     ['1e3', 1000], ['2e9', 2000000000],

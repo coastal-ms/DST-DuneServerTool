@@ -7,6 +7,7 @@ from collections import deque
 import atlas_gathering
 import atlas_preferences
 import atlas_live
+import atlas_viewers
 import atlas_runtime
 import atlas_assets
 import atlas_lifecycle
@@ -223,12 +224,11 @@ restore_gathering_data()
 
 control=threading.Condition()
 live_enabled=atlas_live.load(PREFERENCES_ROOT)
-viewer_until=0
+viewers=atlas_viewers.Leases()
 
-def touch_viewer():
-    global viewer_until
+def touch_viewer(viewer='legacy'):
     with control:
-        viewer_until=time.monotonic()+30
+        viewers.touch(viewer)
         control.notify_all()
 state['live']=live_enabled
 if live_enabled:state['liveStartedAt']=datetime.datetime.now(datetime.timezone.utc).isoformat()
@@ -311,7 +311,10 @@ def collection_worker(name,observe):
         with control:
             generation=refresh_generation
             requested=name in (refresh_required|refresh_background) and completed.get(name,0)<generation
-            ready=live_enabled and time.monotonic()<viewer_until and (name in urgent_jobs or last_finished is None or time.monotonic()-last_finished>=max(job_period(name),cooldown))
+            watching=viewers.active()
+            if not watching and not state['refreshing'] and not any(completed.get(job,0)<refresh_generation for job in refresh_background):
+                for job in active_jobs:atlas_process.cancel_job(job)
+            ready=live_enabled and watching and (name in urgent_jobs or last_finished is None or time.monotonic()-last_finished>=max(job_period(name),cooldown))
             dependency='haggaNative' if name=='haggaPositions' else 'native'
             if requested and name in ('positions','haggaPositions','pois','gathering') and (completed.get(dependency,0)<generation or completed.get('db',0)<generation):ready=False;requested=False
             if requested and name in refresh_background and any(completed.get(k,0)<generation for k in refresh_required):
@@ -373,6 +376,16 @@ class Handler(BaseHTTPRequestHandler):
             payload=json.loads(self.rfile.read(length))
             if not isinstance(payload,dict):raise ValueError()
         except Exception:return self.send_error(400)
+        if url.path=='/viewer':
+            viewer=self.headers.get('X-DST-Atlas-Viewer','')
+            if not re.fullmatch(r'[A-Za-z0-9_-]{16,80}',viewer) or payload.get('active') is not False:return self.send_error(400)
+            with control:
+                viewers.release(viewer)
+                if not viewers.active() and not state['refreshing'] and not any(completed.get(job,0)<refresh_generation for job in refresh_background):
+                    for job in active_jobs:atlas_process.cancel_job(job)
+                control.notify_all()
+            body=b'{}'
+            self.send_response(200);self.send_header('Content-Type','application/json');self.send_header('Content-Length',str(len(body)));self.end_headers();self.wfile.write(body);return
         if url.path=='/preferences':
             try:
                 with control:
@@ -444,7 +457,9 @@ class Handler(BaseHTTPRequestHandler):
                 body=marker_icon_body
             mime='application/json'
         elif url.path=='/state':
-            touch_viewer()
+            viewer=self.headers.get('X-DST-Atlas-Viewer','legacy')
+            if viewer!='legacy' and not re.fullmatch(r'[A-Za-z0-9_-]{16,80}',viewer):return self.send_error(400)
+            touch_viewer(viewer)
             with lock:body=json.dumps({**state,'canControlTiming':self.headers.get('X-DST-Atlas-Timing')!='remote','canControlCollection':self.headers.get('X-DST-Atlas-Timing')!='remote','canStartCollection':True}).encode()
             mime='application/json'
         elif url.path in ['/gathering','/gathering/HaggaBasin']:

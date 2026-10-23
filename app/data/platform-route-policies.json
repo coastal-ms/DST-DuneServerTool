@@ -56,6 +56,8 @@
     "WorldRestart.ps1": "destructive"
   },
   "routeLifecycleOverrides": {
+    "http POST /api/setup/hyperv-lan/install/remove": "destructive",
+    "http POST /api/setup/hyperv-lan/install/cancel": "reversible-write",
     "http POST /api/gameconfig/ini-backups/download": "read",
     "http POST /api/gameconfig/ini-backups/delete": "destructive",
     "http PUT /api/commands/layout": "reversible-write",
@@ -94,6 +96,7 @@
     ,"http DELETE /api/gameplay/vehicles/deletions/{id}": "reversible-write"
   },
   "routeCapabilityOverrides": {
+    "http POST /api/setup/hyperv-lan/install/remove": "settings.setup.destructive",
     "http GET /api/widget/status": "platform.status",
     "http POST /api/gameplay/vehicles/regis-tanks": "player.manage",
     "http POST /api/gameconfig/ini-backups/delete": "operation.data-protection.destructive",
@@ -197,7 +200,7 @@
     { "source": "Remote.ps1", "capabilityId": "operation.remote-compat", "routeCount": 6, "sha256": "b0e586ee5b903ad17abe41f3c7389650783eb284cc1f7516c0ced09f3b4ad7bc" },
     { "source": "RestartSchedule.ps1", "capabilityId": "operation.maintenance", "routeCount": 4, "sha256": "377236ac8359ec7828642c234f07c127e9e2f7c4930b77eadcf0ab19f0201568" },
     { "source": "ServiceMode.ps1", "capabilityId": "operation.runtime", "routeCount": 2, "sha256": "5d5217dd5fca38e176da024ad005d571995b7e3430707609350656942b2fe3b9" },
-    { "source": "Setup.ps1", "capabilityId": "settings.setup", "routeCount": 14, "sha256": "955be1424b4c624c8a92e0e9ba82b2978dcdebccb6740a5626c92532608edeeb" },
+    { "source": "Setup.ps1", "capabilityId": "settings.setup", "routeCount": 16, "sha256": "358dd70816b27e2da4d9e9dcf97e0509aa6394dee67e4dbe8c4114ea81f0977e" },
     { "source": "Shutdown.ps1", "capabilityId": "host.lifecycle", "routeCount": 1, "sha256": "35a9d26192452ee7131cb3541e69cfcd242208f7db855c47e3a4998194797f4f" },
     { "source": "Sietch.ps1", "capabilityId": "operation.topology", "routeCount": 2, "sha256": "c8d97b8e6b93456bbb9eb3eb8a3a77cde95186a15891d5c8e135790e65b73ad6" },
     { "source": "SoloLiveMap.ps1", "capabilityId": "host.solo", "routeCount": 2, "sha256": "8ff718cccd77c1728a4ca377579107c568070c9721313cf857bb393245c22fc3" },

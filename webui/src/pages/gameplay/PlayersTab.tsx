@@ -318,10 +318,10 @@ export function PlayersTab() {
           {flash && (
             <div
               role="status"
-              className={`player-action-notice fixed bottom-4 right-4 z-50 max-w-sm card p-3 text-xs flex items-start gap-2 shadow-lg break-words border-l-2 ${flash.kind === 'ok' ? 'text-success border-success' : flash.kind === 'info' ? 'text-text-muted border-border' : 'text-danger border-danger'}`}
+              className={`player-action-notice mb-3 w-full min-w-0 card p-3 text-xs flex items-start gap-2 break-words border-l-2 ${flash.kind === 'ok' ? 'text-success border-success' : flash.kind === 'info' ? 'text-text-muted border-border' : 'text-danger border-danger'}`}
             >
               <Icon name={flash.kind === 'ok' ? 'CheckCircle2' : flash.kind === 'info' ? 'Info' : 'AlertCircle'} size={14} className="mt-0.5 shrink-0" />
-              <span>{flash.msg}</span>
+              <span className="min-w-0 flex-1">{flash.msg}</span>
               <button type="button" aria-label="Dismiss action result" onClick={() => setFlash(null)}><Icon name="X" size={14} /></button>
             </div>
           )}

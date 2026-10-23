@@ -48,7 +48,8 @@ def io_slot(args, env):
     acquired=False
     try:
         while not acquired:
-            if _cancelled.is_set():raise Cancelled("Map collection stopped")
+            settings=getattr(_local,"settings",None)
+            if _cancelled.is_set() or settings and settings[2].is_set():raise Cancelled("Map collection stopped")
             waiting.write_text(str(time.time()))
             try:streak=int((folder/'core-streak').read_text())
             except (OSError,ValueError):streak=0

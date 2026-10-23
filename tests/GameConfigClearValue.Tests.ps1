@@ -21,6 +21,14 @@ Describe 'Lab local destination approval' {
         Mock Save-DuneGameConfigClient { @{ok=$true;applied=1} }
         Mock Get-DuneGameConfigClient { @{game=@{effective=@{'Manual||Chosen'='2';'Manual||Unselected'='7'}};engine=@{effective=@{}}} }
     }
+    It 'supplies complete defaults to read-only Lab preflight without fetching a client save result' {
+        Mock Get-DuneGameConfigDefaults { @{game='complete verified defaults'} }
+        & $script:LabLocalHandler $null $null @{} @{approved=$true;validateOnly=$true;updates=@(
+            @{file='game';section=$script:DuneGcSecSpice;key='DST.SpiceStartup.DeepDesert.Large.Max';value='2'}
+        )}
+        Should -Invoke Save-DuneGameConfigClient -Times 1 -Exactly -ParameterFilter { $ValidateOnly -and $ReviewedRaw -and $DefaultsRaw -eq 'complete verified defaults' }
+        Should -Invoke Get-DuneGameConfigClient -Times 0
+    }
     It 'requires the local-only route and explicit approval before writing player files' {
         $script:LabLocalOnly | Should -BeTrue
         { & $script:LabLocalHandler $null $null @{} @{updates=@(@{file='game';section='Building';key='DoorTime';value='3'})} } | Should -Throw '*approve*'

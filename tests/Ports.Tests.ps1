@@ -206,13 +206,16 @@ Describe 'Inconclusive port cache recovery' {
         $script:portTestNow = Get-Date
         Mock Get-Date { $script:portTestNow }
     }
-    It 'does not retry an inconclusive result on back-to-back health refreshes' {
+    It 'rechecks an inconclusive result on the next ten-second status poll' {
         Get-DunePortStatus | Out-Null
-        $script:portTestNow = $script:portTestNow.AddSeconds(20)
+        $script:portTestNow = $script:portTestNow.AddSeconds(9)
         (Get-DunePortStatus).cached | Should -BeTrue
-        $script:portTestNow = $script:portTestNow.AddSeconds(11)
-        (Get-DunePortStatus).cached | Should -BeTrue
-        Assert-MockCalled Get-DunePublicIp -Times 1
+        Mock Test-DunePortBuiltin { 'open' }
+        $script:portTestNow = $script:portTestNow.AddSeconds(1)
+        $result = Get-DunePortStatus
+        $result.cached | Should -BeFalse
+        $result.results[0].status | Should -Be 'open'
+        Assert-MockCalled Get-DunePublicIp -Times 2
     }
     It 'keeps a confirmed result cached for six hours across automatic refreshes' {
         Mock Test-DunePortBuiltin { 'open' }

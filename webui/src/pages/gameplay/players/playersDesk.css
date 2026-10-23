@@ -66,7 +66,7 @@
 .players-desk .player-item-editors > div { min-width:0; border-radius:0; }
 .players-desk .player-item-editors :is(input,button) { min-height:36px; }
 .players-desk .player-item-editors :is(.player-item-durability,.player-item-water) { grid-column:1/-1; }
-.spatial-tool-portal .player-action-notice { bottom:84px; max-width:calc(100vw - 32px); }
+.spatial-tool-portal .player-action-notice { max-width:100%; }
 .players-desk :is(button,input,select,summary):focus-visible { outline:2px solid var(--portal-selection,var(--color-ibad)); outline-offset:-2px; }
 .player-change-directory,.player-directory-close { display:none; }
 @media(max-width:1100px) { .players-desk-body { grid-template-columns:210px minmax(0,1fr); gap:12px; } }

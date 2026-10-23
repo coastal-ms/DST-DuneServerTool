@@ -848,23 +848,25 @@ function Get-DunePlayerTrainerStatusLive {
     $pawnID = Get-DunePlayerPawnFromAccount -Ip $Ip -AccountId $AccountId
     if ($pawnID -le 0) { return (& $build @{} '' $false) }
 
-    # Pull every ModuleData key + the starter skill-tree tag in one read.
+    # Fresh pawns contain zero-point ModuleData placeholders. Read the investment
+    # as well as the tag; presence alone does not mean a skill was learned.
     $sql = @"
-SELECT 'module'::text AS kind, jsonb_object_keys(md) AS val
+SELECT 'module'::text AS kind, entry.key AS val,
+       entry.value->>'SkillPointsSpent' AS points
 FROM (
     SELECT fe.components->'FLevelComponent'->1->'ModuleData' AS md
     FROM dune.fgl_entities fe
     JOIN dune.actor_fgl_entities afe ON afe.entity_id = fe.entity_id
     WHERE afe.actor_id = $pawnID::bigint AND afe.slot_name = 'DuneCharacter'
     LIMIT 1
-) s
+) s CROSS JOIN LATERAL jsonb_each(COALESCE(md, '{}'::jsonb)) entry
 WHERE md IS NOT NULL
 UNION ALL
 SELECT 'starter'::text AS kind,
        CASE jsonb_typeof(fe.components->'FLevelComponent'->1->'StarterSkillTreeTag')
            WHEN 'object' THEN fe.components->'FLevelComponent'->1->'StarterSkillTreeTag'->>'TagName'
            WHEN 'string' THEN fe.components->'FLevelComponent'->1->>'StarterSkillTreeTag'
-       END AS val
+       END AS val, NULL::text AS points
 FROM dune.fgl_entities fe
 JOIN dune.actor_fgl_entities afe ON afe.entity_id = fe.entity_id
 WHERE afe.actor_id = $pawnID::bigint AND afe.slot_name = 'DuneCharacter';
@@ -882,6 +884,8 @@ WHERE afe.actor_id = $pawnID::bigint AND afe.slot_name = 'DuneCharacter';
         $val = [string]$row['val']
         if ($kind -eq 'starter') { if ($val) { $starterTag = $val }; continue }
         if (-not $val) { continue }
+        $points = 0L
+        if (-not [long]::TryParse([string]$row['points'], [ref]$points) -or $points -le 0) { continue }
         $m = [regex]::Match($val, '"([^"]+)"')
         $tag = if ($m.Success) { $m.Groups[1].Value } else { $val }
         $owned[$tag] = $true

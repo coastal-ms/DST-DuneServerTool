@@ -29,7 +29,8 @@ param(
 
 $ErrorActionPreference = 'Stop'
 $steps = [System.Collections.Generic.List[string]]::new()
-function Fail($msg) { return @{ ok=$false; ip=''; state='Failed'; error=$msg; steps=$steps.ToArray() } }
+$createdVm = $null
+function Fail($msg) { return @{ ok=$false; ip=''; vmId=if ($createdVm) { [string]$createdVm.Id } else { '' }; state='Failed'; error=$msg; steps=$steps.ToArray() } }
 
 try {
     # --- Preconditions -----------------------------------------------------
@@ -90,7 +91,7 @@ try {
         }
         $steps.Add('Resolved network-adapter compatibility (will reconnect to chosen switch).')
     }
-    Import-VM -CompatibilityReport $compat -ErrorAction Stop | Out-Null
+    $createdVm = Import-VM -CompatibilityReport $compat -ErrorAction Stop
     $steps.Add('Imported VM.')
 
     # --- Attach to existing switch ----------------------------------------
@@ -121,7 +122,7 @@ try {
     if (-not $ip) { return (Fail 'VM imported and started, but it did not acquire an IPv4 address within 180s. Check the external switch reaches your LAN DHCP.') }
     $steps.Add("VM acquired IP: $ip")
 
-    return @{ ok=$true; ip="$ip"; state='Running'; error=''; steps=$steps.ToArray() }
+    return @{ ok=$true; ip="$ip"; vmId=[string](Get-VM -Name 'dune-awakening' -ErrorAction Stop).Id; state='Running'; error=''; steps=$steps.ToArray() }
 }
 catch {
     return (Fail $_.Exception.Message)

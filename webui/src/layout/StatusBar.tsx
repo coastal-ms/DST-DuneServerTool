@@ -46,7 +46,7 @@ const BG_STYLES: Record<BgState | 'unknown', { cls: string; label: string }> = {
 
 export function StatusBar() {
   const { canAccessOwnerSurfaces } = usePortalAccess()
-  const { status, loading, forceRefresh } = useStatus()
+  const { status, loading, error, forceRefresh } = useStatus()
   const { data: upd } = useUpdateCheck()
   const testBuild = getTestBuildIdentity(upd)
   const vm    = status?.vm ?? null
@@ -118,10 +118,12 @@ export function StatusBar() {
           <Icon name="Activity" size={11} />
           <span className="hidden min-[360px]:inline">BG · </span>{bg.label}
         </span>
+        {error && <span role="alert" className="text-xs text-danger truncate" title={error}>{error}</span>}
         <button
           className="btn-ghost h-11 w-11 justify-center p-0"
           onClick={() => { void forceRefresh() }}
-          title="Refresh status"
+          title={loading ? 'Refreshing status...' : 'Refresh status now'}
+          aria-label={loading ? 'Refreshing status' : 'Refresh status now'}
           disabled={loading}
         >
           <Icon name="RefreshCw" size={15} className={loading ? 'animate-spin' : ''} />

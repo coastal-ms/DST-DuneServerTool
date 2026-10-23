@@ -47,7 +47,7 @@ class LiveIntentTests(unittest.TestCase):
             reads=[]; observed=threading.Event()
             def observe():
                 reads.append(1)
-                with value.control:value.viewer_until=0
+                with value.control:value.viewers.release('legacy')
                 observed.set()
             worker=threading.Thread(target=value.collection_worker,args=('db',observe))
             worker.start()
@@ -65,6 +65,28 @@ class LiveIntentTests(unittest.TestCase):
                 value.stop.set()
                 with value.control:value.control.notify_all()
                 worker.join(3)
+
+    def test_viewer_release_keeps_peers_and_cancels_only_after_last_viewer(self):
+        with tempfile.TemporaryDirectory() as folder:
+            value=service(Path(folder)/'bundle',Path(folder)/'settings')
+            first='tablet-viewer-0001';second='desktop-viewer-0002'
+            value.touch_viewer(first);value.touch_viewer(second)
+            value.active_jobs.add('db')
+            statuses=[]
+            def release(viewer):
+                request=types.SimpleNamespace(path='/viewer?key='+value.KEY,server=types.SimpleNamespace(server_port=1234),
+                    headers={'Host':'127.0.0.1:1234','Content-Type':'application/json','Content-Length':'16','X-DST-Atlas-Viewer':viewer},
+                    rfile=io.BytesIO(b'{"active":false}'),wfile=io.BytesIO(),send_error=lambda code,*args:statuses.append(code),
+                    send_response=lambda code:statuses.append(code),send_header=lambda *args:None,end_headers=lambda:None)
+                value.Handler.do_POST(request)
+            with patch.object(value.atlas_process,'cancel_job') as cancel:
+                release(first)
+                self.assertEqual(statuses[-1],200);cancel.assert_not_called()
+                release(second)
+                self.assertEqual(statuses[-1],200);cancel.assert_called_once_with('db')
+                self.assertTrue(value.live_enabled)
+                value.touch_viewer(first)
+                self.assertTrue(value.viewers.active())
 
     def test_live_defaults_on_without_changing_other_preferences(self):
         with tempfile.TemporaryDirectory() as folder:
