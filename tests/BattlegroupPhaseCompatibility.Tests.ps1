@@ -16,11 +16,20 @@ bgname=world
 BATTLEGROUP_PREFIX=namespace-
 phase=$(sudo kubectl get battlegroup "$bgname" -n "$BATTLEGROUP_PREFIX$bgname" --no-headers 2>/dev/null | awk '{print $3}')
 printf '%s\n' "$phase"
+wait_for_battlegroup_stopped() {
+        local timeout=90 elapsed=0 phase
+        while [ "$elapsed" -lt "$timeout" ]; do
+                phase=$(sudo kubectl get battlegroup "$bgname" -n "$BATTLEGROUP_PREFIX$bgname" -o jsonpath='{.status.phase}' 2>/dev/null)
+                if [ "$phase" = Stopped ]; then return 0; fi
+                elapsed=$((elapsed + 5))
+        done
+        printf 'WARNING: battlegroup %s did not report %s within %ss' "$bgname" Stopped "$timeout" >&2
+}
 SCRIPT
 sudo() { "$@"; }
 kubectl() {
   case "$*" in
-    *jsonpath*) printf '%s' Stopped ;;
+    *jsonpath*) printf '%s' "${FIXTURE_PHASE:-Stopped}" ;;
     *) printf '%s\n' 'world DST Official Stopped' ;;
   esac
 }
@@ -31,6 +40,13 @@ __PATCH__
 )
 reconcile
 test "$(bash "$fixture")" = Stopped
+grep -q 'local timeout=360' "$fixture"
+test "$(grep -c 'return 1' "$fixture")" -eq 1
+bash -c '. "$1" >/dev/null; wait_for_battlegroup_stopped' fixture "$fixture"
+if FIXTURE_PHASE=Reconciling bash -c '. "$1" >/dev/null; wait_for_battlegroup_stopped' fixture "$fixture"; then
+    echo 'Stop timeout incorrectly returned success' >&2
+    exit 1
+fi
 reconcile
 test "$(bash "$fixture")" = Stopped
 test "$(find "$(dirname "$fixture")" -maxdepth 1 -name "$(basename "$fixture").dst-before-phase-*" | wc -l)" -eq 1

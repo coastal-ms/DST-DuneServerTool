@@ -60,7 +60,7 @@ Describe 'One-shot command orchestration' -Tag 'Commands' {
             $script:entry | Should -Match '\$vmCommands\s*=\s*@\([\s\S]*Name\s*=\s*"stop-vm"'
 
             $commandsLib = Get-Content (Join-Path $PSScriptRoot '..\app\server\lib\Commands.ps1') -Raw
-            $commandsLib | Should -Match ([regex]::Escape("if (`$cmd.Mode -eq 'Console' -or `$cmd.Name -eq 'stop-vm')"))
+            $commandsLib | Should -Match ([regex]::Escape("`$argList += '-PauseOnExit'"))
         }
 
         It 'blocks shells and browser admin surfaces during maintenance' {

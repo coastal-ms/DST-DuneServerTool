@@ -95,22 +95,12 @@ export function BrowserAccessCard() {
     <CollapsibleCard
       id="settings.mobileApp"
       icon="Smartphone"
-      title="Remote Device Access"
+      title="Remote Access"
       titleClassName="card-title"
       className=""
       headerClassName="card-header"
       bodyClassName="card-body"
     >
-        <div className="card p-3 border-warning/40 bg-warning/10 text-sm" style={{ marginBottom: '1rem' }} role="status">
-          <div className="flex items-center gap-2 text-warning" style={{ fontWeight: 600 }}>
-            <Icon name="TriangleAlert" size={16} /> Native mobile apps have been retired
-          </div>
-          <p className="mt-2 text-text-muted">
-            The separate iOS and Android companion apps are no longer supported. Use the Browser Portal link or
-            QR code below in Safari or Chrome. Tailscale remote access and this
-            responsive portal remain supported.
-          </p>
-        </div>
 
         {/* Secure remote access via Tailscale Funnel. */}
         <div className="card p-3" style={{ marginBottom: '1rem' }}>

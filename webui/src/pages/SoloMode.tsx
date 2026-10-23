@@ -5,6 +5,7 @@ import { PageHeader } from '../components/PageHeader'
 import { CollapsibleCard } from '../components/CollapsibleCard'
 import { ItemPicker } from '../components/ItemPicker'
 import { SoloMods } from '../components/solo/SoloMods'
+import { OfficialServerCard } from '../components/solo/OfficialServerCard'
 import { SoloLiveMap } from '../components/solo/SoloLiveMap'
 import { SoloDeck } from '../components/solo/SoloDeck'
 import { SoloRegisTanks } from '../components/solo/SoloRegisTanks'
@@ -1358,18 +1359,6 @@ export function SoloMode() {
         }
       />
 
-      <div className="rounded-lg border border-sky-400/30 bg-sky-400/5 px-4 py-3 mb-5 text-sm">
-        <div className="flex items-start gap-2">
-          <Icon name="FlaskConical" size={16} className="text-sky-400 mt-0.5 shrink-0" />
-          <div>
-            <div className="font-medium text-sky-300">Retail Solo adapter</div>
-            <p className="text-text-muted mt-0.5">
-              DST targets the released Retail Solo wrapper-v1 save with guarded offline writes, retained backups, and post-write verification.
-            </p>
-          </div>
-        </div>
-      </div>
-
       {notice && (
         <ViewportNotice
           kind={notice.kind}
@@ -1386,6 +1375,19 @@ export function SoloMode() {
           </span>
         </div>
       )}
+
+      <CollapsibleCard id="solo-setup" title="Solo setup" icon="FolderCog" summary={connected ? 'Connected' : 'Not connected'}>
+      <div className="rounded-lg border border-sky-400/30 bg-sky-400/5 px-4 py-3 mb-5 text-sm">
+        <div className="flex items-start gap-2">
+          <Icon name="FlaskConical" size={16} className="text-sky-400 mt-0.5 shrink-0" />
+          <div>
+            <div className="font-medium text-sky-300">Retail Solo adapter</div>
+            <p className="text-text-muted mt-0.5">
+              DST targets the released Retail Solo wrapper-v1 save with guarded offline writes, retained backups, and post-write verification.
+            </p>
+          </div>
+        </div>
+      </div>
 
       <CollapsibleCard
         id="solo-first-use"
@@ -1519,6 +1521,8 @@ export function SoloMode() {
         </div>
       </CollapsibleCard>
 
+      </CollapsibleCard>
+
       <div className="flex items-center gap-1 mb-5 border-b border-border overflow-x-auto overflow-y-hidden">
         {TABS.map(item => (
           <button
@@ -1578,6 +1582,7 @@ export function SoloMode() {
               <p className="text-sm text-text-muted">{status?.inspectionError || 'Connect a Solo save to inspect it.'}</p>
             )}
           </div>
+          <OfficialServerCard />
         </div>
       )}
 

@@ -198,8 +198,14 @@ Describe 'Get-DuneBackupSchedule self-heals a stale pre-fix installed block' -Ta
         Should -Invoke Set-DuneBackupSchedule -Times 1
     }
 
-    It 'migrates the historical v3 fixture with its original retention and protects custom edits' {
+    It 'migrates historical v3 with empty-archive fix <EmptyArchiveFix> and protects retention and custom edits' -ForEach @(
+        @{ EmptyArchiveFix = $false }
+        @{ EmptyArchiveFix = $true }
+    ) {
         $lines = (Get-Content -Raw -LiteralPath (Join-Path $PSScriptRoot 'fixtures/backup-schedule-v3-before-empty-archive-fix.cron')).TrimEnd("`r", "`n")
+        if ($EmptyArchiveFix) {
+            $lines = $lines.Replace('then sudo mv -n "$_dt" "$_bf" || _ok=0;', 'then if sudo test -e "$_bf" && ! sudo test -s "$_bf"; then sudo mv "$_dt" "$_bf" || _ok=0; else sudo mv -n "$_dt" "$_bf" || _ok=0; fi;')
+        }
         $oldText = New-DstShellSectionsOutput -CrontabText $lines
         $healedText = New-DstShellSectionsOutput -CrontabText (New-DuneBackupBlock -Preset Hourly -KeepLast 12 -KeepLastPods 7 -KeepDaysPods 0).TrimEnd("`n")
         $script:reads = 0

@@ -18,12 +18,14 @@ _dst_archive_readable() {
 };
 sudo mkdir -p "$_dir" || _ok=0;
 if [ "$_ok" = 1 ] && ! sudo test -s "$_bf.yaml"; then
+echo '[dst] battlegroup spec was not saved; recovering the matching YAML now...';
 _yt=$(sudo mktemp "$_dir/.dst-spec-XXXXXX") || _ok=0;
 if [ "$_ok" = 1 ]; then
 if sudo sh -c 'kubectl get battlegroup "$1" -n "$2" -o yaml > "$3"' sh "$_bg" "$_ns" "$_yt" && sudo test -s "$_yt"; then sudo mv "$_yt" "$_bf.yaml" || _ok=0; else _ok=0; sudo rm -f "$_yt"; fi;
 fi;
 fi;
 if [ "$_ok" = 1 ] && ! sudo test -s "$_bf"; then
+echo '[dst] database archive was not saved; creating and verifying a recovery dump now...';
 _dt=$(sudo mktemp "$_dir/.dst-dump-XXXXXX") || _ok=0;
 if [ "$_ok" = 1 ]; then
 if sudo sh -c 'timeout 600 kubectl exec -n "$1" "$2" -- pg_dump -U dune -d dune -p __DBPORT__ -F custom --no-owner > "$3"' sh "$_ns" "$_pn" "$_dt" && sudo test -s "$_dt" && _dst_archive_readable "$_dt"; then

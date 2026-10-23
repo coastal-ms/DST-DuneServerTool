@@ -13,6 +13,14 @@ here cover everything those tags shipped.
 
 ## [Unreleased]
 
+## [16.5.8] - 2026-10-23
+
+- Keep the selected fixed VM address after Hyper-V over LAN setup.
+- Report battlegroup shutdown progress and failures accurately, and keep map startup and stopping status visible.
+- Keep command console results visible until the window is closed.
+- Add collapsible tool configuration and Solo setup sections, simplify Remote Access, and clarify backup recovery output.
+- Welcome Solo players to DST Official with server highlights, player portal access, joining guidance and Discord access.
+
 ## [16.5.7] - 2026-10-22
 
 - Restore the choice of automatic or fixed VM addresses during Hyper-V over LAN setup.

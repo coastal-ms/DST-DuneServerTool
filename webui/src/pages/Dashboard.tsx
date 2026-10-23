@@ -158,7 +158,7 @@ function survivalHeartbeat(servers: BgGameServer[], loading: boolean): {
     return { cls: 'text-success', label: 'Ready', beating: true }
   }
   const phase = (sv.phase ?? '').toLowerCase()
-  if (/(start|pending|reconcil|creating|init|progress|updating|provision|scaling|waiting)/.test(phase)) {
+  if (/(start|pending|reconcil|creating|init|progress|updating|provision|scaling|waiting|landscape|physics)/.test(phase)) {
     return { cls: 'text-warning', label: 'Starting', beating: true }
   }
   return { cls: 'text-danger', label: 'Not Ready', beating: true }
@@ -178,12 +178,6 @@ function HeartbeatSensor({ servers, loading }: { servers: BgGameServer[]; loadin
         <span className="text-[13px] uppercase tracking-wider text-text-dim">Game Ready State</span>
         <span className={`text-[15px] font-medium ml-auto ${hb.cls}`}>{hb.label}</span>
       </div>
-      {hb.label !== 'Ready' && hb.label !== 'No signal' && (
-        <p className="mt-2 text-xs text-text-dim">
-          Map stuck Pending/Starting with Hyper-V Dynamic Memory? Check VM Startup/Minimum RAM.
-          If already raised, fully shut down and start the VM; Restart can retain old guest/kubelet capacity.
-        </p>
-      )}
     </div>
   )
 }
@@ -355,17 +349,15 @@ export function Dashboard() {
             </div>
           }
         >
-          {!bgReady ? (
+          {!bgInfo ? (
             <p className="text-sm text-text-dim italic">
-              {status?.bg?.reason || 'Battlegroup is not running.'}
+              {status?.bg?.reason || 'Battlegroup status is unavailable.'}
             </p>
-          ) : !bgInfo ? (
-            <p className="text-sm text-text-dim italic">No battlegroup info yet.</p>
           ) : (
             <dl className="grid grid-cols-[110px_1fr] gap-x-3 gap-y-1 text-sm leading-snug">
               <dt className="text-text-dim" title="Survival_1 game-server phase. This is the login-facing battlegroup status signal.">BG Status</dt>
               <dd className={healthClass(survivalPhase)} title={`Survival_1 phase: ${survivalPhase || 'unknown'}`}>
-                {survivalPhase || '—'}
+                {survivalPhase || bgInfo.status || '—'}
               </dd>
               <dt className="text-text-dim">Database</dt>
               <dd className={healthClass(bgInfo.database)}>{bgInfo.database || '—'}</dd>
@@ -420,10 +412,8 @@ export function Dashboard() {
             </div>
           }
         >
-          {!bgReady ? (
-            <p className="text-sm text-text-dim italic">Battlegroup must be running.</p>
-          ) : gameServers.length === 0 ? (
-            <p className="text-sm text-text-dim italic">No game servers reported.</p>
+          {gameServers.length === 0 ? (
+            <p className="text-sm text-text-dim italic">{status?.bg?.reason || 'No game servers reported.'}</p>
           ) : (
             <GameServerList servers={gameServers} />
           )}

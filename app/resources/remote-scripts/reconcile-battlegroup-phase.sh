@@ -13,6 +13,18 @@ awk '
     changed++
     next
   }
+  /^[[:space:]]*local timeout=90 elapsed=0 phase$/ {
+    print "        local timeout=360 elapsed=0 phase"
+    next
+  }
+  /WARNING: battlegroup %s did not report %s within %ss/ {
+    print
+    if (getline following) {
+      if (following !~ /^[[:space:]]*return 1[[:space:]]*$/) print "        return 1"
+      print following
+    } else print "        return 1"
+    next
+  }
   { print }
   END { if (changed > 1) exit 42 }
 ' "$target" > "$temp"

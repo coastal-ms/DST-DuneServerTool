@@ -413,6 +413,13 @@ function Get-DuneBattlegroupSnapshotFresh {
         # display doesn't get worse than before.
         if ($bgJsonInfo) {
             $result.info = $bgJsonInfo.info
+            $result.state = $bgJsonInfo.state
+            $result.reason = $bgJsonInfo.reason
+            $survival = @($result.gameServers | Where-Object { $_.map -match '(?i)survival[_-]?1|hagga' } | Select-Object -First 1)
+            if ($result.state -eq 'running' -and $survival.Count -gt 0 -and [string]$survival[0].ready -notmatch '^(?i:true|ready|yes|ok)$') {
+                $result.state = 'starting'
+                $result.reason = "Hagga is not ready (phase: $($survival[0].phase))."
+            }
             if ($bgJsonInfo.name -and -not $result.name) { $result.name = $bgJsonInfo.name }
             if ($bgJsonInfo.title) { $result.title = $bgJsonInfo.title }
             # Funcom's `battlegroup status` script awk-parses a positional row,
@@ -558,6 +565,13 @@ function ConvertFrom-DuneBgJsonStatus {
         $title = [string]$item.metadata.annotations.'igw.funcom.com/battlegroup-title'
     }
     return @{
+        state = if ($item.spec.stop -and $status.phase -ne 'Stopped') { 'stopping' }
+                elseif ($status.phase -eq 'Stopped') { 'stopped' }
+                elseif ($status.phase -match 'Fail|Error') { 'unknown' }
+                else { 'running' }
+        reason = if ($item.spec.stop -and $status.phase -ne 'Stopped') { 'Stop requested; waiting for battlegroup shutdown to finish.' }
+                 elseif ($status.phase -eq 'Stopped') { 'Battlegroup stopped.' }
+                 else { '' }
         info = @{
             status   = if ($status.phase) { [string]$status.phase } else { '' }
             database = if ($dbPhase)  { [string]$dbPhase }  else { '' }
@@ -804,7 +818,8 @@ function Get-BgStateFromStatusText {
     param([string]$Text)
     if (-not $Text) { return 'unknown' }
 
-    # Stopped signals (check first — unambiguous)
+    # A missing server table does not override a shutdown still in progress.
+    if ($Text -match '(?im)\b(Stopping|Reconciling Stopping)\b') { return 'stopping' }
     if ($Text -match '(?im)No resources found in .* namespace') { return 'stopped' }
     if ($Text -match '(?im)\bSTATUS\s*:\s*Stopped\b')           { return 'stopped' }
     if ($Text -match '(?im)^\s*Stopped\b\s*$')                  { return 'stopped' }

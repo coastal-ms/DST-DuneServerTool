@@ -77,6 +77,23 @@ function Invoke-DuneLanKeyCommand {
     return @{ ok=($LASTEXITCODE -eq 0); output=($output | Out-String) }
 }
 
+function Get-DuneLanStopDhcpScript {
+    # Alpine BusyBox matches argv[0] (/sbin/udhcpc), so -x udhcpc misses it.
+    # Match only the eth0 client, including its absolute executable path.
+    return @'
+dhcp_pattern="^([^ ]*/)?udhcpc( .* )?-i eth0( |$)"
+pkill -TERM -f "$dhcp_pattern" 2>/dev/null || true
+for attempt in 1 2 3 4 5; do
+    if ! pgrep -f "$dhcp_pattern" >/dev/null; then break; fi
+    sleep 1
+done
+if pgrep -f "$dhcp_pattern" >/dev/null; then
+    echo "The eth0 DHCP client did not stop" >&2
+    exit 1
+fi
+'@
+}
+
 function Set-DuneLanGuestNetwork {
     param([string]$GuestIp, [string]$Key, [hashtable]$Network, [string]$VmId)
     Assert-DuneLanNetwork $Network
@@ -88,21 +105,41 @@ function Set-DuneLanGuestNetwork {
     $interfaces = "auto lo`niface lo inet loopback`n`nauto eth0`niface eth0 inet static`n    address $address/$prefix`n    gateway $gateway`n"
     $b64 = [Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes($interfaces))
     $marker = '/tmp/dst-network-' + [guid]::NewGuid().ToString('N')
+    $stopDhcp = Get-DuneLanStopDhcpScript
+    $apply = ConvertTo-DuneLanShellCommand @"
+set -e
+sleep 2
+$stopDhcp
+ip addr flush dev eth0
+rc-service networking restart
+touch $marker.applied
+"@
+    $rollback = ConvertTo-DuneLanShellCommand @"
+set -e
+sleep 90
+if [ ! -f $marker.ok ]; then
+    cp $marker.interfaces /etc/network/interfaces
+    cp $marker.resolv /etc/resolv.conf
+    $stopDhcp
+    ip addr flush dev eth0
+    rc-service networking restart
+fi
+"@
     $script = @"
 set -e
 sudo -n cp /etc/network/interfaces $marker.interfaces
 sudo -n cp /etc/resolv.conf $marker.resolv
 echo $b64 | base64 -d | sudo -n tee /etc/network/interfaces >/dev/null
 printf 'nameserver $dns\n' | sudo -n tee /etc/resolv.conf >/dev/null
-nohup sudo -n sh -c 'sleep 90; if [ ! -f $marker.ok ]; then cp $marker.interfaces /etc/network/interfaces; cp $marker.resolv /etc/resolv.conf; pkill -x udhcpc 2>/dev/null; ip addr flush dev eth0; rc-service networking restart; fi' </dev/null >/dev/null 2>&1 &
-nohup sudo -n sh -c 'sleep 2; pkill -x udhcpc 2>/dev/null; ip addr flush dev eth0; rc-service networking restart' </dev/null >/dev/null 2>&1 &
+nohup sudo -n sh -c '$rollback' </dev/null >$marker.rollback.log 2>&1 &
+nohup sudo -n sh -c '$apply' </dev/null >$marker.apply.log 2>&1 &
 echo APPLY_OK
 "@
     $result = Invoke-DuneLanKeyCommand $GuestIp $Key (ConvertTo-DuneLanShellCommand $script) -HostKeyAlias $hostAlias
     if (-not $result.ok -or $result.output -notmatch 'APPLY_OK') { throw 'Could not apply the selected VM network settings. The existing VM is preserved.' }
     Start-Sleep -Seconds 5
     for ($attempt=0; $attempt -lt 3; $attempt++) {
-        $check = Invoke-DuneLanKeyCommand $address $Key "sudo -n touch $marker.ok && echo NETWORK_OK" -HostKeyAlias $hostAlias
+        $check = Invoke-DuneLanKeyCommand $address $Key "sudo -n test -f $marker.applied && ! sudo -n pgrep -f '^([^ ]*/)?udhcpc( .* )?-i eth0( |$)' >/dev/null && sudo -n touch $marker.ok && echo NETWORK_OK" -HostKeyAlias $hostAlias
         if ($check.ok -and $check.output -match 'NETWORK_OK') {
             if ($hostAlias) { Register-DuneLanVerifiedHost -GuestIp $address -HostKeyAlias $hostAlias }
             return $address

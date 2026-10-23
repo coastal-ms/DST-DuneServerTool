@@ -786,11 +786,10 @@ export function Settings() {
            ever matched Funcom's own backup/restore operation manifests, never
            dune-admin's real client-side cache. Backend route + lib retained. --- */}
 
+      <CollapsibleCard id="settings.configuration" title="Tool configuration" icon="Settings" bodyClassName="px-6 pb-6">
       <form
         onSubmit={onSubmit}
-        className="card p-6 space-y-5"
-        data-section-nav-id="settings.configuration"
-        data-section-nav-label="Tool configuration"
+        className="space-y-5"
       >
         {FIELDS.filter(f => !f.showWhen || f.showWhen(values)).map(f => (
           <div key={f.key} className="settings-config-field" data-field-key={f.key}>
@@ -957,6 +956,7 @@ export function Settings() {
           </button>
         </div>
       </form>
+      </CollapsibleCard>
 
       </>}
       {!soloOnly && <SectionErrorBoundary name="Mobile App Pairing"><BrowserAccessCard /></SectionErrorBoundary>}

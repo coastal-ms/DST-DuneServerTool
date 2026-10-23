@@ -560,7 +560,17 @@ sudo crontab -l 2>&1 || true
                         $replacement = 'if sudo test -e "$_bf" && ! sudo test -s "$_bf"; then sudo mv "$_dt" "$_bf" || _ok=0; else sudo mv -n "$_dt" "$_bf" || _ok=0; fi;'
                         $legacyBeforeEmptyArchiveFix = $legacyInner.Replace($replacement, 'sudo mv -n "$_dt" "$_bf" || _ok=0;')
                     }
-                    if ($legacyInner -eq $parsed.block.raw -or ($null -ne $legacyBeforeEmptyArchiveFix -and $legacyBeforeEmptyArchiveFix -eq $parsed.block.raw)) {
+                    $knownLegacyBlocks = @($legacyInner)
+                    if ($null -ne $legacyBeforeEmptyArchiveFix) { $knownLegacyBlocks += $legacyBeforeEmptyArchiveFix }
+                    if ($parsed.block.cmdVersion -eq 3) {
+                        # Recovery progress messages were added after v3 shipped.
+                        # Derive exact historical renderings from our generated
+                        # candidates; never strip text from the installed block.
+                        $knownLegacyBlocks += @($knownLegacyBlocks | ForEach-Object {
+                            $_.Replace("echo '[dst] battlegroup spec was not saved; recovering the matching YAML now...'; ", '').Replace("echo '[dst] database archive was not saved; creating and verifying a recovery dump now...'; ", '')
+                        })
+                    }
+                    if ($parsed.block.raw -in $knownLegacyBlocks) {
                         $reconciled = Set-DuneBackupSchedule -Ip $Ip -Preset $preset -KeepLast $keepLast -KeepLastPods $keepLastPods -KeepDaysPods $keepDaysPods
                         if ($reconciled.ok) {
                             return Get-DuneBackupSchedule -Ip $Ip -SkipReconcile

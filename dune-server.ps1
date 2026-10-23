@@ -21,7 +21,7 @@ param(
 # Wraps the original battlegroup.ps1 menu and adds extra tools
 # ============================================================
 
-$script:ToolVersion = "16.5.7"
+$script:ToolVersion = "16.5.8"
 
 # Cold-boot readiness budgets (seconds). A fresh battlegroup's FIRST boot can
 # take 10-30 min: k3s + funcom-operators initialize, metrics-server restarts a
@@ -66,7 +66,7 @@ function Invoke-DunePauseBeforeClose {
     try { if ([Console]::IsInputRedirected) { return } } catch {}
     try {
         Write-Host ""
-        Write-Host "Press any key to close this window..." -ForegroundColor Cyan
+        Write-Host "Okay to close this window. Press any key to close..." -ForegroundColor Cyan
         $null = $Host.UI.RawUI.ReadKey('NoEcho,IncludeKeyDown')
     } catch {
         try { Read-Host "Press Enter to close this window" | Out-Null } catch {}
@@ -902,30 +902,6 @@ function Confirm-NoPlayersOnline {
     return ($proceed -eq "YES")
 }
 
-# Funcom's `battlegroup stop` waits for the BG CRD to report phase "Stopped" by
-# positionally parsing `kubectl get battlegroup --no-headers` (awk '{print $3}').
-# When the server title (spec.title) contains spaces, the title spans multiple
-# whitespace tokens and shifts the real PHASE column right, so Funcom reads a
-# title token as the phase, never matches "Stopped", and prints a cosmetic
-# "did not report Stopped within 90s" WARNING after its 90s timeout. The stop
-# still succeeds -- DST verifies that separately via the pod-termination check.
-# This note reassures the operator when their title would trigger the warning.
-# (Same root cause as the v12.16.1 Dashboard BG-Info fix, but inside Funcom's
-# stop script, which DST calls and must not modify.)
-function Show-DuneFuncomStopWarningNote {
-    param([string]$Ip, [string]$SshUser, [string]$SshKey)
-    try {
-        $title = ssh -o BatchMode=yes -o StrictHostKeyChecking=no -o LogLevel=QUIET -i "$SshKey" "$SshUser@$Ip" `
-            "sudo k3s kubectl get battlegroups -A --no-headers -o custom-columns=T:.spec.title 2>/dev/null | head -1"
-        $title = ($title | Out-String).Trim()
-        if ($title -and ($title -match '\s')) {
-            Write-Host "  Note: any Funcom 'battlegroup ... did not report Stopped within 90s' warning above is" -ForegroundColor DarkGray
-            Write-Host "        cosmetic -- Funcom's stop script mis-reads the phase because your server title" -ForegroundColor DarkGray
-            Write-Host "        ('$title') contains spaces. DST confirmed the actual stop above (pods terminated)." -ForegroundColor DarkGray
-        }
-    } catch {}
-}
-
 # Count active battlegroup pods. Terminal pod objects can remain in Kubernetes
 # indefinitely (especially Evicted bgd pods), so presence alone does not mean
 # shutdown work remains.
@@ -935,9 +911,10 @@ function Get-DuneActiveBattlegroupPodCount {
         [Parameter(Mandatory)] [string] $SshUser,
         [Parameter(Mandatory)] [string] $SshKey
     )
-    $remote = "sudo k3s kubectl get pods -A --no-headers -o custom-columns=NAME:.metadata.name,PHASE:.status.phase 2>/dev/null | awk '`$1 ~ /(-sg-|-mq-|-sgw-|-tr-|-bgd-)/ && `$2 != `"Succeeded`" && `$2 != `"Failed`" { count++ } END { print count+0 }'"
+    $remote = "pods=`$(sudo k3s kubectl get pods -A --no-headers -o custom-columns=NAME:.metadata.name,PHASE:.status.phase) || exit 1; printf '%s\n' `"`$pods`" | awk '`$1 ~ /(-sg-|-mq-|-sgw-|-tr-|-bgd-)/ && `$2 != `"Succeeded`" && `$2 != `"Failed`" { count++ } END { print count+0 }'"
     $raw = ssh -o BatchMode=yes -o StrictHostKeyChecking=no -o LogLevel=QUIET -i "$SshKey" "$SshUser@$Ip" `
         $remote
+    if ($LASTEXITCODE -ne 0) { return $null }
     $text = ($raw | Out-String).Trim()
     $count = 0
     if (-not [int]::TryParse($text, [ref]$count)) { return $null }
@@ -2278,10 +2255,8 @@ while ($true) {
         $maxWaitSec = 360
         $finalCount = $null
         while ($true) {
-            $remainRaw = ssh -o BatchMode=yes -o StrictHostKeyChecking=no -o LogLevel=QUIET -i "$sshKey" "$sshUser@$ip" `
-                "sudo k3s kubectl get pods -A --no-headers 2>/dev/null | grep -E '(-sg-|-mq-|-sgw-|-tr-|-bgd-)' | wc -l"
-            $remain = ($remainRaw -replace '\D','')
-            if (-not $remain) { $remain = '0' }
+            $remain = Get-DuneActiveBattlegroupPodCount -Ip $ip -SshUser $sshUser -SshKey $sshKey
+            if ($null -eq $remain) { throw 'Could not verify battlegroup shutdown. VM restart aborted.' }
             $elapsed = [int]((Get-Date) - $waitStart).TotalSeconds
             if ($remain -eq '0') {
                 $finalCount = 0; break
@@ -2299,9 +2274,9 @@ while ($true) {
         if ($finalCount -eq 0) {
             Save-PhaseTiming 'pods-terminate' $elapsed
             Complete-WaitCounter -Message "All game/infra pods terminated after $(Format-Duration $elapsed)."
-            Show-DuneFuncomStopWarningNote -Ip $ip -SshUser $sshUser -SshKey $sshKey
+
         } else {
-            Complete-WaitCounter -Message "$finalCount pod(s) still present after $(Format-Duration $elapsed). Proceeding with VM restart anyway." -Color Yellow
+            throw "$finalCount pod(s) still terminating after $(Format-Duration $elapsed). VM restart aborted."
         }
 
         # ---- Step 2: VM restart ----
@@ -2504,7 +2479,8 @@ while ($true) {
         Save-PhaseTiming 'total-reboot' $totalSec
         $estTotal = Format-PhaseEstimate 'total-reboot'
         Write-Host ""
-        Write-Host "=== Reboot complete in $(Format-Duration $totalSec) ===" -ForegroundColor Green
+        if ($bgStartExit -ne 0) { throw "VM restarted, but battlegroup start failed (exit $bgStartExit)." }
+        Write-Host "=== VM restarted; battlegroup start accepted in $(Format-Duration $totalSec) ===" -ForegroundColor Green
         if ($estTotal) { Write-Host "  $estTotal" -ForegroundColor DarkGray }
         Write-Host "Pods may take another 1-2 min to all reach Healthy. Check with 'status'." -ForegroundColor DarkGray
 
@@ -2577,11 +2553,11 @@ while ($true) {
         if ($finalCount -eq 0) {
             Save-PhaseTiming 'pods-terminate' $elapsed
             Complete-WaitCounter -Message "All game/infra pods terminated after $(Format-Duration $elapsed)."
-            Show-DuneFuncomStopWarningNote -Ip $ip -SshUser $sshUser -SshKey $sshKey
+
         } elseif ($finalCount -lt 0) {
-            Complete-WaitCounter -Message "Could not determine whether game/infra pods terminated after $(Format-Duration $elapsed). Proceeding with VM shutdown anyway." -Color Yellow
+            throw "Could not verify game/infra pod shutdown after $(Format-Duration $elapsed). VM shutdown aborted."
         } else {
-            Complete-WaitCounter -Message "$finalCount pod(s) still present after $(Format-Duration $elapsed). Proceeding with VM shutdown anyway." -Color Yellow
+            throw "$finalCount pod(s) still terminating after $(Format-Duration $elapsed). VM shutdown aborted."
         }
 
         # ---- Step 2: power off VM ----

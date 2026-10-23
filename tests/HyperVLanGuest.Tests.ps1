@@ -31,6 +31,17 @@ Describe 'LAN network validation before any VM import' {
         Set-DuneLanGuestNetwork '192.168.23.92' 'key' @{mode='static';address='192.168.23.219';prefix='24';gateway='192.168.23.1';dns='1.1.1.1'} -VmId 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa' | Should -Be '192.168.23.219'
         Should -Invoke Invoke-DuneLanKeyCommand -Times 1 -ParameterFilter { $GuestIp -eq '192.168.23.219' -and $Command -match 'touch.*\.ok' -and $HostKeyAlias -eq 'dst-lan-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa' }
         Should -Invoke Register-DuneLanVerifiedHost -Times 1 -ParameterFilter { $GuestIp -eq '192.168.23.219' }
+        Should -Invoke Invoke-DuneLanKeyCommand -Times 1 -ParameterFilter { $GuestIp -eq '192.168.23.219' -and $Command -match 'test -f .*\.applied && ! sudo -n pgrep -f' }
+    }
+    It 'does not confirm the address or trust it when DHCP remains or application is incomplete' {
+        Mock Start-Sleep {}
+        Mock Invoke-DuneLanKeyCommand {
+            if ($GuestIp -eq '192.168.23.92') { return @{ok=$true;output='APPLY_OK'} }
+            return @{ok=$false;output=''}
+        }
+        Mock Register-DuneLanVerifiedHost {}
+        { Set-DuneLanGuestNetwork '192.168.23.92' 'key' @{mode='static';address='192.168.23.219';prefix='24';gateway='192.168.23.1';dns='1.1.1.1'} } | Should -Throw '*restored automatically*'
+        Should -Invoke Register-DuneLanVerifiedHost -Times 0
     }
 }
 Describe 'Verified replacement VM host trust' {

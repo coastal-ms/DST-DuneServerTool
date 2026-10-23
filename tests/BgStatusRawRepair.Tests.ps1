@@ -26,6 +26,18 @@ BeforeAll {
 }
 
 Describe 'Stopped battlegroup Game Servers table' {
+    It 'keeps stopping ahead of an empty server table' {
+        Get-BgStateFromStatusText "Reconciling Stopping`nNo resources found in world namespace." | Should -Be 'stopping'
+    }
+    It 'uses the requested stop and structured phase independently of server rows' {
+        foreach ($phase in @('Healthy','Reconciling','Stopped')) {
+            $json = @{items=@(@{spec=@{stop=$true};status=@{phase=$phase}})} | ConvertTo-Json -Depth 6
+            $r = ConvertFrom-DuneBgJsonStatus $json
+            $expected = if ($phase -eq 'Stopped') {'stopped'} else {'stopping'}
+            $r.state | Should -Be $expected
+            $r.reason | Should -Not -BeNullOrEmpty
+        }
+    }
     It 'reports zero servers for the kubectl empty-table notice' {
         $text = @'
 Battlegroup: sh-example
