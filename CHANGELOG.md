@@ -13,6 +13,19 @@ here cover everything those tags shipped.
 
 ## [Unreleased]
 
+## [16.6.0] - 2026-10-23
+
+- Organize player management into Overview, Items, Progression, Activity and Advanced, with shared tool search and a focused layout for player-only accounts.
+- Restore player activity and linked inventory access, preview missing recipe and appearance grants, and improve button feedback and contract item labels.
+- Move Live Map collection and processing to an optional VM helper while retaining the embedded map and existing DST access.
+- Add helper installation, resource consent, repair and removal controls; preserve map history across helper updates.
+- Keep map markers stable across refreshes, improve expanded details and tablet marker selection, and enlarge small spice markers.
+- Show active Hagga shipwreck encounters and retain the last two completed storm trails.
+- Show Live Map loading progress and keep snapshot controls in sync with active collection.
+- Save map layer selections separately for each user and combine active viewers' resource collection priorities.
+- Hide unclaimed world vehicles from the map vehicle layer.
+- Unify cosmetic and appearance search with individually selectable gear appearances and character swatches from the batch grant catalog.
+
 ## [16.5.8] - 2026-10-23
 
 - Keep the selected fixed VM address after Hyper-V over LAN setup.

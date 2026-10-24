@@ -15,6 +15,19 @@ const catalog: CosmeticEntry[] = [
 afterEach(cleanup)
 
 describe('SoloCosmeticGrantCard', () => {
+  it('finds individual batch appearances by name and forwards their character grant method', async () => {
+    const user = userEvent.setup(), onGrant = vi.fn(async () => {})
+    const entry: CosmeticEntry = {template:'appearance:B1C3_Shaman_Raider_Top',name:'Habiliments of the Hidden Hand Top',group:'Gear Appearances',grant_method:'character',customization_id:'appearance:B1C3_Shaman_Raider_Top'}
+    render(<SoloCosmeticGrantCard busy={false} disabled={false} loadCatalog={async () => [entry,...catalog]} onGrant={onGrant} />)
+    await screen.findByRole('combobox')
+    await user.type(screen.getByRole('textbox'),'hidden hand')
+    await user.selectOptions(screen.getByRole('combobox'),entry.template)
+    expect(screen.getByText(/Saves this appearance directly/)).toBeInTheDocument()
+    expect(screen.queryByText(/another token/)).not.toBeInTheDocument()
+    await user.click(screen.getByRole('button',{name:'Grant unlock'}))
+    expect(onGrant).toHaveBeenCalledWith(entry.template,entry.name,entry)
+  })
+
   it('uses the shared curated bulk catalog and skips saved and held tokens', async () => {
     const user = userEvent.setup()
     const onBulkGrant = vi.fn(async () => {})

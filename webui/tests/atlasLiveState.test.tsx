@@ -3,9 +3,15 @@ import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { AtlasLiveState } from '../src/pages/workspaces/AtlasLiveState'
 const { openAtlasSession } = vi.hoisted(() => ({ openAtlasSession: vi.fn() }))
-vi.mock('../src/api/atlas', () => ({ openAtlasSession }))
+vi.mock('../src/api/atlas', async importOriginal => ({ ...await importOriginal<typeof import('../src/api/atlas')>(), openAtlasSession }))
 afterEach(() => { cleanup(); vi.useRealTimers(); vi.resetAllMocks() })
 describe('Atlas Live State hosting', () => {
+  it('keeps a VM-hosted map embedded on the existing authenticated origin', async () => {
+    openAtlasSession.mockResolvedValue({ available: true, hosting: 'vm', url: '/api/v1/maps/atlas/view?t=existing' })
+    render(<AtlasLiveState />)
+    expect(await screen.findByTitle('Own-server live atlas')).toHaveAttribute('src','/api/v1/maps/atlas/view?t=existing&embedded=1')
+    expect(screen.queryByRole('link',{name:'Open Live Map'})).not.toBeInTheDocument()
+  })
   it('shows only loading while the service request is pending', () => {
     openAtlasSession.mockReturnValue(new Promise(() => {}))
     render(<AtlasLiveState />)

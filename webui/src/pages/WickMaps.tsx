@@ -154,7 +154,7 @@ export function WickMaps({ embedded = false, solo = false, compact = false }: { 
 
 
   return (
-    <div className="flex flex-col gap-3 xl:h-0 xl:min-h-full">
+    <div className={`flex flex-col gap-3${embedded ? '' : ' xl:h-0 xl:min-h-full'}`}>
       {!embedded && (
         <PageHeader
           title={solo ? 'Solo DD Map' : 'DD Seed Maps'}

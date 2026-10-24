@@ -15,7 +15,8 @@ export default function PlayersWorkspace() {
     ? requestedView
     : 'admin'
   return (
-    <WorkspaceLayout workspace={getWorkspace('players')} tabs={TABS} activeTab={view}>
+    <WorkspaceLayout workspace={getWorkspace('players')} tabs={TABS} activeTab={view} compact>
+      <h1 className="sr-only">Players</h1>
       {view === 'community'
           ? <PlayersCommunity />
           : <PlayersTab />}

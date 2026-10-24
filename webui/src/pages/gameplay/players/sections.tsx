@@ -52,6 +52,7 @@ import {
   type VehicleTemplate, type VehicleKitCatalog,
   type ContractRow,
   type ReserveRecoveryPreview,
+  type ReviewedGrantPreview,
 } from '../../../api/gameplay'
 import { fmtNum, fmtSolari } from '../shared'
 import { useCommandDeck } from '../../../hooks/useCommandDeck'
@@ -65,7 +66,9 @@ const PLAYER_HIDDEN_ACTIONS = new Set(['regis-tanks', 'spawn-vehicle', 'funcom-s
 
 type Flash = (msg: string, kind?: 'ok' | 'err' | 'info') => void
 
-interface SectionProps {
+export interface SectionProps {
+  onOpenTool?: (id: string) => void
+  onWorking?: (label: string | null) => void
   player: Player
   canWrite: boolean
   demo: boolean
@@ -84,8 +87,8 @@ interface SectionProps {
 // Stats — per-player snapshot. Shows currency, faction, last seen, account
 // numbers. Read-only here; mutations live in Actions.
 // ---------------------------------------------------------------------------
-export function StatsSection({ player, demo, refreshKey }: SectionProps) {
-  const contextual = useCommandDeck()
+export function StatsSection({ player, demo, refreshKey, onOpenTool }: SectionProps) {
+  const contextual = true
   const [stats, setStats] = useState<PlayerStats | null>(null)
   const [loading, setLoading] = useState(true)
   const [err, setErr] = useState<string | null>(null)
@@ -107,14 +110,15 @@ export function StatsSection({ player, demo, refreshKey }: SectionProps) {
   if (contextual) return <section className="player-snapshot" aria-label="Character snapshot">
     <h3>Character snapshot</h3>
     <dl className="player-snapshot-balances">
-      <div><dt>Solari</dt><dd>{fmtSolari(stats.solaris)}</dd></div>
+      <div><dt>Solari</dt><dd>{fmtSolari(stats.solaris)}{onOpenTool && <button className="btn-secondary" onClick={() => onOpenTool('give-solari')}>Adjust</button>}</dd></div>
+      <div><dt>Scrip</dt><dd>{stats.scrip == null ? 'Unavailable' : fmtNum(stats.scrip)}{onOpenTool && <button className="btn-secondary" onClick={() => onOpenTool('give-scrip')}>Adjust</button>}</dd></div>
       <div><dt>Total currency</dt><dd>{fmtNum(stats.total_currency)}</dd></div>
       <div><dt>Faction</dt><dd>{stats.faction_name || 'Unaligned'}</dd></div>
       <div><dt>Status</dt><dd>{stats.online_status}</dd></div>
     </dl>
     <div className="player-snapshot-columns">
       <section><h4>Identity</h4><dl>
-        <div><dt>Character</dt><dd>{stats.character_name || '(unnamed)'}</dd></div>
+        <div><dt>Character</dt><dd>{stats.character_name || '(unnamed)'}{onOpenTool && <button className="btn-secondary" onClick={() => onOpenTool('rename')}>Rename</button>}</dd></div>
         <div><dt>Class</dt><dd>{stats.class || 'Not reported'}</dd></div>
         <div><dt>Map</dt><dd>{stats.map || 'Not reported'}</dd></div>
         <div><dt>Last seen</dt><dd>{fmtTs(stats.last_seen)}</dd></div>
@@ -571,11 +575,14 @@ export function HistorySection({ player, demo, refreshKey }: SectionProps) {
     return () => { alive = false }
   }, [player.account_id, demo, refreshKey, limit])
 
+  if (err) return <ErrorBox msg={err} />
+  if (unsupported) return <EmptyBox msg="Player activity is unavailable on this server." />
+
   return (
     <div className="space-y-3">
       <div className="flex items-center justify-between">
         <div className="text-xs text-text-dim">{fmtNum(events.length)} event(s)</div>
-        <select value={limit} onChange={e => setLimit(Number(e.target.value))}
+        <select aria-label="Activity history limit" value={limit} onChange={e => setLimit(Number(e.target.value))}
           className="px-2 py-1 rounded-md bg-surface-2 border border-border text-text text-xs">
           <option value={25}>Last 25</option>
           <option value={50}>Last 50</option>
@@ -583,13 +590,6 @@ export function HistorySection({ player, demo, refreshKey }: SectionProps) {
           <option value={250}>Last 250</option>
         </select>
       </div>
-
-      {err && <ErrorBox msg={err} />}
-      {unsupported && (
-        <div className="card p-3 text-xs text-text-muted border-l-2 border-warning">
-          <code className="text-text">dune.event_log</code> is unavailable on this server — history feature offline.
-        </div>
-      )}
 
       {loading && events.length === 0 ? (
         <Loading label="Loading events…" />
@@ -606,19 +606,36 @@ export function HistorySection({ player, demo, refreshKey }: SectionProps) {
 
 function EventRow({ ev }: { ev: PlayerEvent }) {
   const [open, setOpen] = useState(false)
+  let metadata: Record<string, unknown> = {}
+  try {
+    const parsed: unknown = JSON.parse(ev.meta)
+    if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) metadata = parsed as Record<string, unknown>
+  } catch { /* An event can still be shown without optional details. */ }
+  const number = (key: string) => {
+    const value = metadata[key]
+    return (typeof value === 'number' || (typeof value === 'string' && /^-?\d+(\.\d+)?$/.test(value))) && Number.isFinite(Number(value)) ? Number(value) : undefined
+  }
+  const delta = number('solaris_delta'), balance = number('solaris_balance')
+  const title = ev.event_type === 'update_solaris'
+    ? delta === undefined || delta === 0 ? 'Solari balance updated' : `${fmtNum(Math.abs(delta))} Solari ${delta < 0 ? 'removed' : 'added'}`
+    : ({login:'Logged in',logout:'Logged out'} as Record<string, string>)[ev.event_type] ?? 'Player activity recorded'
+  const details = [
+    ...(balance !== undefined ? [['Balance', fmtSolari(balance)]] : []),
+    ...(typeof metadata.map === 'string' ? [['Location', metadata.map.replace(/([a-z])([A-Z])/g, '$1 $2').replaceAll('_', ' ')]] : []),
+  ]
   return (
     <div className="card p-2.5 text-sm">
       <button type="button" onClick={() => setOpen(o => !o)} className="w-full flex items-center justify-between gap-2 text-left">
         <span className="flex items-center gap-2 min-w-0">
           <Icon name={open ? 'ChevronDown' : 'ChevronRight'} size={12} className="text-text-dim shrink-0" />
-          <span className="text-text font-medium truncate">{ev.event_type || 'event'}</span>
+          <span className="text-text font-medium truncate">{title}</span>
         </span>
         <span className="text-[11px] text-text-dim font-mono shrink-0">{fmtTs(ev.ts)}</span>
       </button>
       {open && (
-        <pre className="mt-2 p-2 bg-surface-2 rounded-md text-[11px] text-text-muted overflow-x-auto font-mono">
-{prettyMeta(ev.meta)}
-        </pre>
+        <div className="mt-2 p-3 bg-surface-2 rounded-md text-sm">
+          {details.length ? <dl className="space-y-2">{details.map(([label, value]) => <div key={label} className="flex flex-wrap justify-between gap-3"><dt className="text-text-muted">{label}</dt><dd>{value}</dd></div>)}</dl> : <p className="text-text-muted">No additional details were recorded.</p>}
+        </div>
       )}
     </div>
   )
@@ -823,7 +840,7 @@ const ACTIONS: ActionDef[] = [
     run: p => cleanPlayerInventory({ actor_id: p.id }) },
 
   // ----- Vehicle -----
-  { id: 'spawn-vehicle', group: 'Vehicle', label: 'Spawn Vehicle', icon: 'Car', custom: 'spawn-vehicle',
+  { id: 'spawn-vehicle', group: 'Vehicle', label: 'Give vehicle assembly parts', icon: 'Car', custom: 'spawn-vehicle',
     rowNote: 'Hands unassembled Mk6 parts — assemble at a Vehicle Assembly. Works online or offline',
     confirm: p => `Give vehicle parts to ${p.name}'s inventory? They'll need to assemble at a Vehicle Assembly. Works online or offline.`,
     run: () => Promise.resolve({ message: '' }) },
@@ -910,6 +927,13 @@ const ACTIONS: ActionDef[] = [
     } },
 ]
 
+export function getPlayerActionTools(isPlayer: boolean) {
+  return ACTIONS.filter(action => !isPlayer || !PLAYER_HIDDEN_ACTIONS.has(action.id)).map(action => ({
+    id: action.id, label: action.id === 'spawn-vehicle' ? 'Give vehicle assembly parts' : action.label,
+    group: action.group, note: action.rowNote ?? '', onlineOnly: !!action.liveOnly, offlineOnly: !!action.offlineOnly,
+  }))
+}
+
 // 'Items' is rendered inside the Inventory section (between the inventory
 // title and the items list), not in the Actions section.
 const GROUP_ORDER: ActionGroup[] = ['Live', 'Currency', 'Progression', 'Vehicle', 'Identity', 'Danger']
@@ -923,10 +947,10 @@ const ACTION_CATEGORIES = [
 ] as const
 const ITEMS_GROUP: ActionGroup = 'Items'
 
-export function ActionsSection({ player, canWrite, demo, flash, onChanged, onFlush }: SectionProps) {
+export function ActionsSection({ player, canWrite, demo, flash, onChanged, onFlush, onWorking, actionIds, initialAction }: SectionProps & { actionIds?: readonly string[]; initialAction?: string }) {
   const { isPlayer } = usePortalAccess()
   const contextual = useCommandDeck()
-  const [openId, setOpenId] = useState<string | null>(null)
+  const [openId, setOpenId] = useState<string | null>(initialAction ?? null)
   const [busy, setBusy] = useState(false)
   const [actionCategory, setActionCategory] = useState('Live')
   // Current balances for read-only context on the Give Solari/Scrip/Intel rows,
@@ -957,6 +981,7 @@ export function ActionsSection({ player, canWrite, demo, flash, onChanged, onFlu
       if (msg && !window.confirm(msg)) return false
     }
     setBusy(true)
+    onWorking?.(def.label)
     try {
       const r = await exec()
       const requestOnly = ['grant-cosmetic', 'grant-house-swatches', 'grant-buildable-swatches', 'grant-building-sets', 'grant-armor-skins', 'grant-weapon-skins', 'grant-vehicle-skins', 'grant-all-dyes'].includes(def.custom || '')
@@ -969,6 +994,7 @@ export function ActionsSection({ player, canWrite, demo, flash, onChanged, onFlu
       return false
     } finally {
       setBusy(false)
+      onWorking?.(null)
     }
   }
 
@@ -982,11 +1008,11 @@ export function ActionsSection({ player, canWrite, demo, flash, onChanged, onFlu
     for (const a of ACTIONS) {
       if (isPlayer && PLAYER_HIDDEN_ACTIONS.has(a.id)) continue
       // Items is rendered inside InventorySection — skip here.
-      if (a.group === ITEMS_GROUP) continue
+      if (actionIds ? !actionIds.includes(a.id) : a.group === ITEMS_GROUP) continue
       map[a.group].push(a)
     }
     return map
-  }, [isPlayer])
+  }, [isPlayer, actionIds])
 
   if (!canWrite) {
     return (
@@ -995,6 +1021,11 @@ export function ActionsSection({ player, canWrite, demo, flash, onChanged, onFlu
       </div>
     )
   }
+
+  if (actionIds) return <section aria-label="Player tools" className="space-y-3">
+    {Object.values(grouped).flat().map(action => <ActionRow key={action.id} def={action} player={player} busy={busy} stats={stats}
+      open={openId === action.id} danger={action.group === 'Danger'} onToggle={() => openAction(action.id)} runAction={runAction} />)}
+  </section>
 
   if (contextual) return (
     <CommandCategoryPages
@@ -1058,6 +1089,37 @@ export function ActionsSection({ player, canWrite, demo, flash, onChanged, onFlu
 // directly beneath it. Replaces the older wrap-of-buttons layout so the panel
 // reads as a vertical list rather than a wall of buttons.
 // ---------------------------------------------------------------------------
+export function ReviewedGrantReview({ counts, loading, busy, offline, label, onRetry, onGrant }: {
+  counts: ReviewedGrantPreview | null; loading: boolean; busy: boolean; offline: boolean; label: string
+  onRetry: () => void; onGrant: () => void
+}) {
+  const [query, setQuery] = useState('')
+  const [filter, setFilter] = useState('missing')
+  const [page, setPage] = useState(0)
+  const entries = counts?.entries ?? []
+  const previewReady = !!counts && entries.length === counts.total && entries.every(entry => typeof entry.id === 'string' && typeof entry.owned === 'boolean')
+  const matches = entries.filter(entry => (filter === 'all' || (filter === 'owned' ? entry.owned : !entry.owned)) && entry.id.toLowerCase().includes(query.toLowerCase()))
+  const maxPage = Math.max(0, Math.ceil(matches.length / 25) - 1), currentPage = Math.min(page, maxPage)
+  return <div className="space-y-3" aria-label="Grant preview">
+    {loading ? <p role="status">Checking saved unlocks…</p> : !previewReady ? <p role="status">Could not load the grant preview. <button className="btn-secondary" disabled={busy} onClick={onRetry}>Retry preview</button></p> : <>
+      <p>{counts.owned} already owned · <strong>{counts.remaining} missing</strong> · {counts.total} total</p>
+      <p className="text-sm text-text-muted">Only missing entries will be added. Existing entries and their remaining uses are preserved.</p>
+      <div className="flex flex-wrap gap-2">
+        <input className="input min-w-0 flex-1" aria-label="Search grant entries" placeholder="Find an entry…" value={query} onChange={event => { setQuery(event.target.value); setPage(0) }} />
+        <select className="input" aria-label="Grant entry filter" value={filter} onChange={event => { setFilter(event.target.value); setPage(0) }}>
+          <option value="missing">Missing</option><option value="owned">Already owned</option><option value="all">All entries</option>
+        </select>
+      </div>
+      <div className="space-y-2">{matches.slice(currentPage * 25, currentPage * 25 + 25).map(entry => <div key={`${entry.id}:${entry.quality ?? ''}`} className="border-b border-border py-2 break-words text-sm">
+        <span>{entry.id}</span><small className="block text-text-muted">{entry.owned ? 'Already owned — preserved' : 'Will be added'}{entry.quality !== undefined ? ` · Quality ${entry.quality}` : ''}{Number.isFinite(entry.uses) && typeof entry.limited === 'boolean' ? entry.limited ? ` · ${entry.uses} uses` : ' · No use limit' : ''}</small>
+      </div>)}{!matches.length && <p className="text-sm text-text-muted">No entries match this filter.</p>}</div>
+      {matches.length > 25 && <div className="flex flex-wrap items-center gap-3"><button className="btn-secondary" disabled={currentPage === 0} onClick={() => setPage(currentPage - 1)}>Previous</button><span>Page {currentPage + 1} of {maxPage + 1}</span><button className="btn-secondary" disabled={currentPage === maxPage} onClick={() => setPage(currentPage + 1)}>Next</button></div>}
+    </>}
+    {!offline && <p className="text-sm text-text-muted">Log out of the game and wait for your character to be Offline before granting.</p>}
+    <button className="btn-primary" disabled={busy || loading || !previewReady || !offline || !counts?.remaining} onClick={onGrant}>{busy ? 'Granting…' : label}</button>
+  </div>
+}
+
 function ActionRow({ def, player, busy, stats, open, danger, onToggle, runAction }: {
   def: ActionDef
   player: Player
@@ -1069,8 +1131,9 @@ function ActionRow({ def, player, busy, stats, open, danger, onToggle, runAction
   runAction: (def: ActionDef, exec: () => Promise<{ message: string }>) => Promise<boolean>
 }) {
   const disabled = busy
-  const [grantCounts, setGrantCounts] = useState<{total: number; owned: number; remaining: number} | null>(null)
+  const [grantCounts, setGrantCounts] = useState<ReviewedGrantPreview | null>(null)
   const [grantCountsLoading, setGrantCountsLoading] = useState(false)
+  const [countAttempt, setCountAttempt] = useState(0)
   const selection = ({'observed-character-swatches':'ObservedCharacterSwatches','observed-gear-appearances':'ObservedGearAppearances','observed-schematic-recipes':'ObservedSchematicRecipes'} as Record<string,string>)[def.id]
   useEffect(() => {
     if (!selection || busy) return
@@ -1082,13 +1145,13 @@ function ActionRow({ def, player, busy, stats, open, danger, onToggle, runAction
       .catch(() => { if (current) setGrantCounts(null) })
       .finally(() => { if (current) setGrantCountsLoading(false) })
     return () => { current = false }
-  }, [selection, player.id, player.controller_id, player.account_id, busy])
+  }, [selection, player.id, player.controller_id, player.account_id, busy, countAttempt])
   // Read-only "current balance" note shown above currency actions.
   const balanceNote = (() => {
     if (!def.balance || !stats) return null
     let label = '', value = ''
     if (def.balance === 'solari') { label = 'Current Solari'; value = fmtSolari(stats.solaris) }
-    else if (def.balance === 'scrip') { label = 'Current Scrip'; value = fmtNum(stats.scrip ?? 0) }
+    else if (def.balance === 'scrip') { label = 'Current Scrip'; value = stats.scrip == null ? 'Unavailable' : fmtNum(stats.scrip) }
     else if (def.balance === 'intel') { label = 'Current Intel'; value = `${fmtNum(stats.intel ?? 0)}${stats.intel_max ? ` / ${fmtNum(stats.intel_max)}` : ''}` }
     return (
       <div className="flex items-center justify-between rounded-lg bg-surface-2 border border-border/50 px-3 py-2 mb-2 text-sm">
@@ -1128,7 +1191,9 @@ function ActionRow({ def, player, busy, stats, open, danger, onToggle, runAction
           {def.rowNote && (
             <div className="text-xs text-text-dim italic mb-3 leading-relaxed">{def.rowNote}</div>
           )}
-          {def.custom === 'give-item' ? (
+          {selection ? <ReviewedGrantReview counts={grantCounts} loading={grantCountsLoading} busy={busy}
+            offline={player.online_status.toLowerCase() === 'offline'} label={def.label}
+            onRetry={() => setCountAttempt(value => value + 1)} onGrant={() => { void runAction(def, () => def.run(player, {})) }} /> : def.custom === 'give-item' ? (
             <GiveItemForm busy={busy} submitLabel={def.label}
               playerOnline={['online', 'loggingout'].includes((player.online_status || '').toLowerCase())}
               onSubmit={(tpl, qty, qual, overflow, augments) =>
@@ -1254,11 +1319,13 @@ function ActionRow({ def, player, busy, stats, open, danger, onToggle, runAction
                 return { message: `Package "${pkgName}": ${r.message}` }
               })} />
           ) : def.custom === 'grant-cosmetic' ? (
-            <GrantCosmeticForm busy={busy} playerName={player.name} accountId={player.account_id}
-              onGrant={async (tpl, label) => {
+            <GrantCosmeticForm busy={busy} playerName={player.name} accountId={player.account_id} playerOnline={(player.online_status || '').toLowerCase() !== 'offline'}
+              onGrant={async (tpl, label, entry) => {
                 let succeeded = false
                 await runAction(def, async () => {
-                  const r = await giveItem(player.id, tpl, 1, 0, true)
+                  const r = entry?.grant_method === 'character'
+                    ? await grantReviewedCustomization(player.id, player.controller_id, player.account_id, entry.customization_id || tpl)
+                    : await giveItem(player.id, tpl, 1, 0, true)
                   succeeded = true
                   return { message: r.message || `Granted "${label}" to ${player.name}.` }
                 })
@@ -1510,11 +1577,12 @@ function DestinationForm({ busy, submitLabel, icon, note, onSubmit }: {
 // swatches, vehicle skins) and delivers the chosen template via the normal
 // give-item path so the player unlocks the appearance. Loads the catalog on
 // mount; filters by name/template; groups results by type.
-function GrantCosmeticForm({ busy, playerName, accountId, onGrant }: {
+export function GrantCosmeticForm({ busy, playerName, accountId, playerOnline, onGrant }: {
   busy: boolean
   playerName: string
   accountId: number
-  onGrant: (template: string, label: string) => Promise<boolean>
+  playerOnline: boolean
+  onGrant: (template: string, label: string, entry: CosmeticEntry) => Promise<boolean>
 }) {
   const [catalog, setCatalog] = useState<CosmeticEntry[] | null>(null)
   const [err, setErr] = useState<string | null>(null)
@@ -1575,7 +1643,7 @@ function GrantCosmeticForm({ busy, playerName, accountId, onGrant }: {
 
   return (
     <div className="space-y-3">
-      <p className="text-[11px] text-text-dim">Delivers the unlock item to {playerName}'s inventory (online: instant; offline: next login). Check in-game whether the item activates the unlock.</p>
+      <p className="text-[11px] text-text-dim">Search character appearances and unlock items for {playerName}. Character appearances are saved while offline; unlock items go to inventory.</p>
       <div className="rounded-lg bg-warning/10 border border-warning/40 p-3 text-warning text-xs leading-relaxed">
         <p>{COSMETIC_LICENSE_NOTICE} Delivering a token or finding a saved unlock record does not confirm in-game usability or grant account ownership.</p>
         <p className="mt-2">
@@ -1607,11 +1675,12 @@ function GrantCosmeticForm({ busy, playerName, accountId, onGrant }: {
         ))}
       </select>
       {chosen && <p className="text-[11px] font-mono text-text-dim truncate">{chosen.template}</p>}
+      {chosen?.grant_method === 'character' && <p className="text-xs text-text-dim">Saves this appearance to the character. The player must be fully offline.</p>}
       {chosen?.bulk_exclusion && <p className="text-xs text-warning">{chosen.bulk_exclusion}</p>}
-      <button className="btn-primary w-full" disabled={busy || !sel}
+      <button className="btn-primary w-full" disabled={busy || !sel || (chosen?.grant_method === 'character' && playerOnline)}
         onClick={async () => {
           if (!chosen) return
-          if (await onGrant(chosen.template, chosen.name)) {
+          if (await onGrant(chosen.template, chosen.name, chosen)) {
             try {
               const ownership = await getPlayerOwnedCosmetics(accountId)
               setOwned(new Set((ownership.owned || []).map(id => id.toLowerCase())))
@@ -2964,23 +3033,23 @@ export function ManagePlayerSection({ player, canWrite, flash, onChanged, onFlus
 // Inventory — re-uses the existing detail endpoint via the section pattern.
 // Repair + delete per item; sub-sections for emotes & contract items.
 // ---------------------------------------------------------------------------
-import { getPlayerDetail, type InventoryItem, type PlayerDetailResponse } from '../../../api/gameplay'
+import { getPlayerDetail, getSharedInventory, type InventoryItem, type PlayerDetailResponse } from '../../../api/gameplay'
 import { qualityClass } from '../shared'
 
-export function InventorySection(props: SectionProps) {
+export function InventorySection(props: SectionProps & { initialView?: 'bank' | 'storage' | 'tools'; embedded?: boolean }) {
   const [repairing, setRepairing] = useState(false)
   const [repairRevision, setRepairRevision] = useState(0)
   const online = (props.player.online_status || '').toLowerCase() === 'online'
-  const [view, setView] = useState<'items' | 'storage' | 'tools'>(() => new URLSearchParams(window.location.search).get('scope_type') === 'storage' || new URLSearchParams(window.location.search).get('location_type') === 'storage' ? 'storage' : 'items')
+  const [view, setView] = useState<'bank' | 'storage' | 'tools'>(() => props.initialView ?? (new URLSearchParams(window.location.search).get('scope_type') === 'storage' || new URLSearchParams(window.location.search).get('location_type') === 'storage' ? 'storage' : 'tools'))
   const inventorySearch = useSearch()
   useEffect(() => {
     const params = new URLSearchParams(inventorySearch)
-    if (params.get('scope_type') === 'storage' || params.get('location_type') === 'storage') setView('storage')
-  }, [inventorySearch])
+    if (!props.embedded && (params.get('scope_type') === 'storage' || params.get('location_type') === 'storage')) setView('storage')
+  }, [inventorySearch, props.embedded])
   const selectedPlayer = useMemo(() => ({ id: props.player.id, name: props.player.name }), [props.player.id, props.player.name])
   return <div className="space-y-4">
-    <div role="tablist" aria-label="Player inventory" className="flex flex-wrap gap-2">
-      {([['items', 'Backpack & bank'], ['storage', 'Storage containers'], ['tools', 'Item tools']] as const).map(([id, label]) =>
+    {!props.embedded && <div role="tablist" aria-label="Player inventory" className="flex flex-wrap gap-2">
+      {([['tools', 'Character Inventory'], ['storage', 'Storage containers'], ['bank', 'Bank']] as const).map(([id, label]) =>
         <button key={id} role="tab" aria-selected={view === id} className={view === id ? 'btn-primary' : 'btn-secondary'} onClick={() => {
           const url = new URL(window.location.href)
           for (const key of ['scope_type', 'scope_id', 'location_type', 'location_id', 'q']) url.searchParams.delete(key)
@@ -2988,8 +3057,8 @@ export function InventorySection(props: SectionProps) {
           window.dispatchEvent(new PopStateEvent('popstate'))
           setView(id)
         }}>{label}</button>)}
-    </div>
-    {view !== 'storage' && props.canWrite && !props.demo && <div className="flex flex-wrap items-center gap-3">
+    </div>}
+    {!props.embedded && view !== 'storage' && props.canWrite && !props.demo && <div className="flex flex-wrap items-center gap-3">
       <button type="button" className="btn-secondary" disabled={repairing || online}
         title={online ? 'Player must be offline before repairing backpack and equipped gear.' : 'Repairs this player’s backpack, equipped armor and equipped weapons only.'}
         onClick={async () => {
@@ -3002,13 +3071,37 @@ export function InventorySection(props: SectionProps) {
         }}><Icon name="Wrench" size={14} />{repairing ? 'Repairing…' : 'Repair backpack & worn items'}</button>
       <span className="text-xs text-text-dim">Backpack and equipped gear only. Player must be offline.</span>
     </div>}
-    {view === 'tools' ? <PlayerItemToolsSection key={props.player.id} {...props} refreshKey={props.refreshKey + repairRevision} /> : <SharedInventoryExplorer key={`${props.player.id}:${view}`}
-      selectedPlayer={selectedPlayer} demoMode={props.demo} refreshKey={props.refreshKey + repairRevision} entityTypes={view === 'storage' ? ['storage'] : ['player']}
-      title={view === 'storage' ? 'Storage containers' : 'Backpack & bank'} />}
+    {view === 'tools' ? <PlayerItemToolsSection key={props.player.id} {...props} refreshKey={props.refreshKey + repairRevision} /> : view === 'bank' ? <PlayerBankSection key={props.player.id} {...props} /> : <SharedInventoryExplorer key={`${props.player.id}:${view}`}
+      selectedPlayer={selectedPlayer} demoMode={props.demo} refreshKey={props.refreshKey + repairRevision} entityTypes={['storage']}
+      title="Storage containers" />}
   </div>
 }
 
-export function PlayerItemToolsSection({ player, canWrite, demo, refreshKey, flash, onChanged, onFlush }: SectionProps) {
+function PlayerBankSection({ player, demo, refreshKey }: SectionProps) {
+  const [bankId, setBankId] = useState<number | null>(null)
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState('')
+  const [attempt, setAttempt] = useState(0)
+  const selectedPlayer = useMemo(() => ({id: player.id, name: player.name}), [player.id, player.name])
+  useEffect(() => {
+    let current = true
+    setLoading(true); setError(''); setBankId(null)
+    // The scoped inventory facets include empty banks. This label is generated
+    // by the backend only for inventory_type 30, never from a player-entered name.
+    getSharedInventory({types:['player'], playerId:player.id, limit:1, demo})
+      .then(result => { if (current) setBankId(result.data.locations.find(location => location.type === 'player' && location.playerId === player.id && location.label === 'Bank Storage')?.id ?? null) })
+      .catch(reason => { if (current) setError(reason instanceof Error ? reason.message : String(reason)) })
+      .finally(() => { if (current) setLoading(false) })
+    return () => { current = false }
+  }, [player.id, demo, refreshKey, attempt])
+  if (loading) return <Loading label="Loading bank…" />
+  if (error) return <div><ErrorBox msg={error} /><button className="btn-secondary" onClick={() => setAttempt(value => value + 1)}>Retry bank</button></div>
+  if (!bankId) return <EmptyBox msg="No bank inventory was found for this character." />
+  return <SharedInventoryExplorer entityTypes={['player']} selectedPlayer={selectedPlayer} demoMode={demo} refreshKey={refreshKey}
+    title="Bank" description="Inspect and manage this character’s bank contents." fixedLocation={{type:'player', id:bankId}} />
+}
+
+export function PlayerItemToolsSection({ player, canWrite, demo, refreshKey, flash, onChanged, onFlush, onWorking }: SectionProps) {
   const contextual = useCommandDeck()
   const [inventoryPage, setInventoryPage] = useState(0)
   const [detail, setDetail] = useState<PlayerDetailResponse | null>(null)
@@ -3054,6 +3147,7 @@ export function PlayerItemToolsSection({ player, canWrite, demo, refreshKey, fla
   // (with their entered values intact) when a save fails.
   const run = async (fn: () => Promise<{ message: string }>, label: string): Promise<boolean> => {
     setBusy(true)
+    onWorking?.(label)
     try {
       const r = await fn()
       flash(r.message || `${label} done.`, 'ok')
@@ -3065,6 +3159,7 @@ export function PlayerItemToolsSection({ player, canWrite, demo, refreshKey, fla
       return false
     } finally {
       setBusy(false)
+      onWorking?.(null)
     }
   }
 
@@ -3239,6 +3334,8 @@ function ItemList({ title, icon, items, playerId, canWrite, busy, run, collapsed
   isOnline: boolean
 }) {
   const contextual = useCommandDeck()
+  const { isPlayer } = usePortalAccess()
+  const [deletingId, setDeletingId] = useState<number | null>(null)
   const [localOpen, setOpen] = useState(!collapsed)
   const open = expanded ?? localOpen
   const [editingId, setEditingId] = useState<number | null>(null)
@@ -3322,9 +3419,9 @@ function ItemList({ title, icon, items, playerId, canWrite, busy, run, collapsed
                             <Icon name="Wrench" size={13} />
                           </button>
                         )}
-                        <button className="text-danger/80 hover:text-danger" title={it.is_reserve ? 'Reserve items cannot be deleted directly; use guarded Recover Reserve' : 'Delete item'} disabled={busy || it.is_reserve}
-                          onClick={() => void run(() => deleteInventoryItem(it.id, it.stack_size), 'Delete')}>
-                          <Icon name="Trash2" size={13} />
+                        <button className="text-danger/80 hover:text-danger" aria-label={`Delete ${it.name || it.template_id}`} title={it.is_reserve ? 'Reserve items cannot be deleted directly; use guarded Recover Reserve' : isPlayer && isOnline ? 'Log out of the game before deleting saved inventory items' : 'Delete item'} disabled={busy || it.is_reserve || (isPlayer && isOnline)}
+                          onClick={async () => { setDeletingId(it.id); try { await run(() => deleteInventoryItem(it.id, it.stack_size), `Delete ${it.name || it.template_id}`) } finally { setDeletingId(null) } }}>
+                          <Icon name={deletingId === it.id ? 'Loader2' : 'Trash2'} size={13} className={deletingId === it.id ? 'animate-spin motion-reduce:animate-none' : ''} />
                         </button>
                       </span>
                     )}
@@ -3826,18 +3923,6 @@ function fmtTs(ts: string | undefined): string {
   const d = new Date(ts)
   if (Number.isNaN(d.getTime())) return ts
   return d.toLocaleString()
-}
-
-// Pretty-print event meta JSON, falling back to the raw string when it
-// can't be parsed (older event_log rows have free-form meta).
-function prettyMeta(meta: string): string {
-  if (!meta) return '{}'
-  try {
-    const o = JSON.parse(meta)
-    return JSON.stringify(o, null, 2)
-  } catch {
-    return meta
-  }
 }
 
 // ---------------------------------------------------------------------------

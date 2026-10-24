@@ -3,7 +3,7 @@ import datetime,json,math
 from pathlib import Path
 
 def compact(frames):
-    """Keep the last two observed passes per map without dense reads evicting one."""
+    """Keep the last three observed passes per map without dense reads evicting one."""
     passes={}
     for frame in frames:
         for storm in frame.get('storms',[]):
@@ -11,7 +11,7 @@ def compact(frames):
             passes.setdefault(key,[]).append({**frame,'storms':[storm]})
     selected=[]
     for region in ('DeepDesert','HaggaBasin'):
-        groups=sorted((v for k,v in passes.items() if k[0]==region),key=lambda v:v[-1]['capturedAt'])[-2:]
+        groups=sorted((v for k,v in passes.items() if k[0]==region),key=lambda v:v[-1]['capturedAt'])[-3:]
         for group in groups:
             if len(group)>125:group=[group[round(i*(len(group)-1)/124)] for i in range(125)]
             selected.extend(group)
@@ -42,7 +42,7 @@ def load(root,legacy_roots=()):
                 datetime.datetime.fromisoformat(frame['capturedAt'])
                 if not isinstance(frame['pid'],int) or not isinstance(frame['storms'],list):continue
                 if not all(len(s['location'])==3 and all(math.isfinite(n) for n in s['location']) for s in frame['storms']):continue
-                frames[(frame['capturedAt'],str(frame['pid']),str(frame['startTime']))]=frame
+                frames[(frame.get('map','DeepDesert'),frame['capturedAt'],str(frame['pid']),str(frame['startTime']),tuple(str(s.get('id')) for s in frame['storms']))]=frame
             except (KeyError,TypeError,ValueError):continue
     result=compact([frames[k] for k in sorted(frames)])
     keys={str(f['pid'])+':'+str(f['startTime'])+':'+str(s['id']) for f in result for s in f['storms']}

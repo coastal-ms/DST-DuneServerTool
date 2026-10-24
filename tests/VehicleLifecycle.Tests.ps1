@@ -640,8 +640,15 @@ INSERT INTO dune.inventories (id, actor_id, inventory_type, vehicle_module_id) V
             (Get-DuneVehicleFleetLive -Ip fixture -VehicleId 42).total | Should -Be 1
         } finally {
             if ($backendPid -gt 0) { [void](Invoke-TestVehicleSql -Sql "SELECT pg_terminate_backend($backendPid);") }
-            if (-not $process.HasExited) { Stop-Process -Id $process.Id }
-            $process.Dispose()
+            try {
+                # Terminating the database backend normally exits psql too.
+                # Wait for that exit instead of racing a PID-based stop.
+                if (-not $process.WaitForExit(5000)) {
+                    try { $process.Kill() }
+                    catch [InvalidOperationException] { if (-not $process.HasExited) { throw } }
+                    if (-not $process.WaitForExit(5000)) { throw 'Fixture session process did not exit.' }
+                }
+            } finally { $process.Dispose() }
         }
     }
 

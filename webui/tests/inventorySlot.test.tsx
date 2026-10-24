@@ -1,11 +1,12 @@
 import React from 'react'
-import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { SharedInventoryGroup } from '../src/api/gameplay'
 import { InventorySlot } from '../src/components/inventory/InventorySlot'
 
 const iconMount = vi.hoisted(() => vi.fn())
+afterEach(() => {cleanup();vi.clearAllMocks()})
 vi.mock('../src/components/inventory/InventoryItemIcon', () => ({
   InventoryItemIcon: () => { iconMount(); return <span aria-hidden="true" /> },
 }))
@@ -33,7 +34,7 @@ function group(name: string): SharedInventoryGroup {
 }
 
 describe('InventorySlot preview coordination', () => {
-  it('shows only the hovered preview while another slot remains focused', async () => {
+  it('closes the hovered preview without restoring another focused item', async () => {
     const user = userEvent.setup()
     render(
       <>
@@ -58,9 +59,32 @@ describe('InventorySlot preview coordination', () => {
 
     fireEvent.mouseLeave(hovered)
     await waitFor(() => {
-      expect(screen.getAllByRole('tooltip')).toHaveLength(1)
-      expect(within(screen.getByRole('tooltip')).getByText('Focused item')).toBeInTheDocument()
+      expect(screen.queryByRole('tooltip')).not.toBeInTheDocument()
     })
+    await user.tab()
+    expect(hovered).toHaveFocus()
+    expect(within(screen.getByRole('tooltip')).getByText('Hovered item')).toBeInTheDocument()
+  })
+  it('dismisses previews when scrolling or moving the pointer outside the item', async () => {
+    render(<InventorySlot item={group('Preview item')} onSelect={vi.fn()} />)
+    const item=screen.getByRole('button',{name:/Preview item/})
+    fireEvent.mouseEnter(item)
+    expect(screen.getByRole('tooltip')).toBeInTheDocument()
+    fireEvent.scroll(window)
+    expect(screen.queryByRole('tooltip')).not.toBeInTheDocument()
+    fireEvent.mouseEnter(item)
+    expect(screen.getByRole('tooltip')).toBeInTheDocument()
+    fireEvent.pointerMove(document.body)
+    expect(screen.queryByRole('tooltip')).not.toBeInTheDocument()
+  })
+  it('supports dismissing a keyboard preview with Escape', async () => {
+    const user=userEvent.setup()
+    render(<InventorySlot item={group('Keyboard item')} onSelect={vi.fn()} />)
+    await user.tab()
+    expect(screen.getByRole('tooltip')).toBeInTheDocument()
+    await user.keyboard('{Escape}')
+    expect(screen.queryByRole('tooltip')).not.toBeInTheDocument()
+    expect(screen.getByRole('button',{name:/Keyboard item/})).toHaveFocus()
   })
 })
 

@@ -1,6 +1,10 @@
 @import "tailwindcss";
 @import "./theme/signal.css";
 
+/* Immediate pointer/touch feedback while an action's own pending state starts. */
+#root button:enabled:active { filter:brightness(1.18); box-shadow:inset 0 0 0 2px var(--color-accent); transform:translateY(1px); }
+@media(prefers-reduced-motion:reduce){#root button:enabled:active { transform:none; }}
+
 @theme {
   /* Eyes of Ibad — Dune Server brand palette */
   --color-base: #0c0a09;

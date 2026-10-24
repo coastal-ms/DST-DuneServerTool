@@ -1,0 +1,10 @@
+{
+  "schemaVersion": 1,
+  "files": {
+    "collector.py": "264f05fe5a8e3187cd4e8add05ae421ab3e0e9fd30b5e3c846fd97600aca482a",
+    "local_pwsh.py": "c110b64c62ba2675daefe91531ff5cad2e8fa04372b06820491e3d6c0bdfee12",
+    "manage.py": "b71a62747ff1ba692ac8b485d988bd35d4daad1474fcf69d446b3cdcc267a764",
+    "package.py": "887460bf80314ab136baf4328311ff6537b5195c8aa4cd159becdba7f83b7628",
+    "Setup.ps1": "11ee37a90666d1c8759b3b1ae19f511e02c178cfbbdb8634ae1cc6aa05a3fe50"
+  }
+}

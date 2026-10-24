@@ -20,13 +20,13 @@ def read_sites(root,m,region,origin,span,attempt=0):
  if data['pid']!=m.PID or str(data['startTime'])!=str(m.context['startTime']):raise ValueError('Wreck source identity changed')
  actors=[v for v in data['actors'] if v['type']=='_ZTV17ADynamicEncounter']
  if len(actors)>1000:raise ValueError('Unexpected encounter count')
- m.cache.clear();raws=m.read_many([(v['address'],1128) for v in actors]);candidates=[]
+ m.cache.clear();raws=m.read_many([(v['address'],1376) for v in actors]);candidates=[]
  for actor,b in zip(actors,raws):
   if struct.unpack_from('<Q',b)[0]!=actor['vtable'] or struct.unpack_from('<I',b,8)[0]&0x18030:continue
-  ni=struct.unpack_from('<I',b,24)[0];asset=struct.unpack_from('<I',b,1104)[0];scene=struct.unpack_from('<Q',b,568)[0]
+  ni=struct.unpack_from('<I',b,24)[0];asset=struct.unpack_from('<I',b,1352 if region=='HaggaBasin' else 1104)[0];scene=struct.unpack_from('<Q',b,568)[0]
   if not ni or ni>>16>=len(m.blocks) or asset>>16>=len(m.blocks) or not 0x10000<scene<0x800000000000:continue
   candidates.append((actor,ni,asset,scene,struct.unpack_from('<q',b,200)[0]))
- m.cache.clear();m.read_many([(m.blocks[i],131072) for i in {n>>16 for a,ni,asset,scene,eid in candidates for n in [ni,asset]}]);named=[(a,scene,m.name(asset),eid) for a,ni,asset,scene,eid in candidates if m.name(ni)=='BP_DE_Dsrt_C' and region=='DeepDesert' and m.name(asset)=='DA_DE_120_SmallShipWreck_DeepDesert_01']
+ m.cache.clear();m.read_many([(m.blocks[i],131072) for i in {n>>16 for a,ni,asset,scene,eid in candidates for n in [ni,asset]}]);named=[(a,scene,m.name(asset),eid) for a,ni,asset,scene,eid in candidates if m.name(ni)=='BP_DE_Dsrt_C' and m.name(asset)==('DE_Tn_SmallShipwreck_01' if region=='HaggaBasin' else 'DA_DE_120_SmallShipWreck_DeepDesert_01')]
  lifetimes={};timerObservedAt=None
  if named:
   poolFile=root/'dynamic-encounter-pool-cache.json'

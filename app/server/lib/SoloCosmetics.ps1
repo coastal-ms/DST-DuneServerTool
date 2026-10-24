@@ -23,6 +23,12 @@
 function Get-DuneReviewedCustomization {
     param([string]$CustomizationId)
     $catalog = Get-Content -LiteralPath (Get-DuneSoloDataFilePath -Name 'legitimate-customizations.json') -Raw | ConvertFrom-Json
+    if ($CustomizationId.StartsWith('appearance:', [StringComparison]::Ordinal)) {
+        $raw = $CustomizationId.Substring(11)
+        $parents = @($catalog.entries | Where-Object { @('ObservedGearAppearances','ObservedCharacterSwatches') -ccontains [string]$_.id } | Where-Object { @($_.customizationIds) -ccontains $raw })
+        if ($catalog.schemaVersion -ne 1 -or $parents.Count -ne 1 -or -not $parents[0].acquisition -or -not $parents[0].mappingEvidence) { throw 'Choose an exact supported character appearance.' }
+        return [pscustomobject]@{id=$CustomizationId;label=$raw;customizationIds=@($raw);acquisition=$parents[0].acquisition;mappingEvidence=$parents[0].mappingEvidence}
+    }
     $matches = @($catalog.entries | Where-Object { [string]$_.id -ceq $CustomizationId })
     if ($catalog.schemaVersion -ne 1 -or $matches.Count -ne 1 -or -not $matches[0].acquisition -or -not $matches[0].mappingEvidence) {
         throw 'Choose an exact supported character customization selection.'
@@ -163,13 +169,16 @@ function Get-DuneReviewedGrantStatusSql {
         $selected = ConvertTo-DuneSqlString (ConvertTo-Json -InputObject @($entry.recipeEntries) -Depth 8 -Compress)
         $owned = "a.properties #> '{CraftingRecipesLibraryActorComponent,m_KnownItemRecipes}'"
         $match = "o #>> '{BaseRecipeId,Name}'=s #>> '{BaseRecipeId,Name}' AND o->'m_QualityLevel'=s->'m_QualityLevel'"
+        $detail = "jsonb_build_object('id',s #>> '{BaseRecipeId,Name}','quality',s->'m_QualityLevel','uses',CASE WHEN EXISTS (SELECT 1 FROM jsonb_array_elements(`$owned) o WHERE `$match) THEN (SELECT o->'m_NumberOfRecipeUses' FROM jsonb_array_elements(`$owned) o WHERE `$match LIMIT 1) ELSE s->'m_NumberOfRecipeUses' END,'limited',CASE WHEN EXISTS (SELECT 1 FROM jsonb_array_elements(`$owned) o WHERE `$match) THEN (SELECT o->'m_bIsLimitedUseRecipe' FROM jsonb_array_elements(`$owned) o WHERE `$match LIMIT 1) ELSE s->'m_bIsLimitedUseRecipe' END,'owned',EXISTS (SELECT 1 FROM jsonb_array_elements(`$owned) o WHERE `$match))"
     } else {
         $ids = if ($entry.PSObject.Properties.Name -contains 'customizationIds') { @($entry.customizationIds) } else { @([string]$entry.id) }
         $selected = ConvertTo-DuneSqlString (ConvertTo-Json -InputObject @($ids) -Compress)
         $owned = "a.properties #> '{CustomizationLibraryActorComponent,m_UnlockedCustomizationSerializableList,m_UnlockedCustomizationIds}'"
         $match = "o->>'m_CustomizationId'=s #>> '{}'"
+        $detail = "jsonb_build_object('id',s #>> '{}','owned',EXISTS (SELECT 1 FROM jsonb_array_elements(`$owned) o WHERE `$match))"
     }
-    return "SELECT count(*)::text AS total, count(*) FILTER (WHERE EXISTS (SELECT 1 FROM jsonb_array_elements($owned) o WHERE $match))::text AS owned FROM dune.actors a JOIN dune.encrypted_player_state p ON p.player_pawn_id=a.id CROSS JOIN jsonb_array_elements('$selected'::jsonb) s WHERE a.id=$PawnId AND p.player_controller_id=$ControllerId AND p.account_id=$AccountId GROUP BY a.id;"
+    $detail = $detail.Replace('$owned', $owned).Replace('$match', $match)
+    return "SELECT count(*)::text AS total, count(*) FILTER (WHERE EXISTS (SELECT 1 FROM jsonb_array_elements($owned) o WHERE $match))::text AS owned, jsonb_agg($detail)::text AS entries_json FROM dune.actors a JOIN dune.encrypted_player_state p ON p.player_pawn_id=a.id CROSS JOIN jsonb_array_elements('$selected'::jsonb) s WHERE a.id=$PawnId AND p.player_controller_id=$ControllerId AND p.account_id=$AccountId GROUP BY a.id;"
 }
 
 function Invoke-DunePlayerReviewedCustomization {

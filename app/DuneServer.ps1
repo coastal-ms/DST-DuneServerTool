@@ -166,7 +166,7 @@ public static extern bool IsWindowVisible(System.IntPtr hWnd);
 Write-DuneStartupLog 'Console presentation initialized'
 
 # Version (one of the 5 sync'd constants; see persistent-notes.md)
-$script:DuneToolVersion = '16.5.8'
+$script:DuneToolVersion = '16.6.0'
 # Artifact identity defaults for source/dev runs. Build-Exe.ps1 replaces these
 # four declarations only in its generated compilation input, so the resulting
 # executable carries immutable identity without changing tracked version stamps.
@@ -598,6 +598,9 @@ if (Test-Path $libDir) {
     Get-ChildItem -Path $libDir -Filter '*.ps1' | ForEach-Object { . $_.FullName }
 }
 Write-DuneStartupLog 'Library modules loaded'
+if (-not (Test-DuneSoloInstallation) -and (Get-Command Resume-DuneVmMapSetup -ErrorAction SilentlyContinue)) {
+    Resume-DuneVmMapSetup
+}
 
 # API workers capture this object once. Background hydration publishes into it
 # after HTTP acceptance starts; readers report cache-loading until then.

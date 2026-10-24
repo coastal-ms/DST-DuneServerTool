@@ -3,6 +3,7 @@
     Import-DstLib 'PlayerAccess.ps1'
     Import-DstLib 'RequestPrincipal.ps1'
     Import-DstLib 'Capabilities.ps1'
+    Import-DstLib 'PlatformRuntime.ps1'
     . (Join-Path (Get-DstRepoRoot) 'app\server\HttpServer.ps1')
     . (Join-Path (Get-DstRepoRoot) 'app\server\routes\GameplayPlayers.ps1')
     function Get-DuneDbContext { @{ ok=$true; ip='fixture' } }
@@ -29,6 +30,8 @@ Describe 'Player route authorization' {
         foreach ($entry in @(
             @('GET','/api/player-portal/status'), @('GET','/api/v1/maps/deep-desert'),
             @('GET','/api/maps/{key}'), @('POST','/api/maps/{key}/start'),
+            @('POST','/api/v1/maps/atlas/session'), @('GET','/api/v1/maps/atlas/view'),
+            @('GET','/api/v1/maps/atlas/resource'), @('POST','/api/v1/maps/atlas/resource'),
             @('GET','/api/catalog/items'), @('POST','/api/portal-auth/change-password')
         )) {
             $route=[pscustomobject]@{ Method=$entry[0]; Path=$entry[1]; LocalOnly=$false }
@@ -43,7 +46,7 @@ Describe 'Player route authorization' {
             '/api/remote-access/portal-accounts','/api/future-character-write','/api/db/query')) {
             Get-DunePlayerRoutePolicy POST $path | Should -BeNullOrEmpty
         }
-        Get-DunePlayerRoutePolicy GET '/api/v1/inventory/items' | Should -BeNullOrEmpty
+        Get-DunePlayerRoutePolicy GET '/api/v1/inventory/players' | Should -BeNullOrEmpty
         Get-DunePlayerRoutePolicy GET '/api/gameplay/players/online' | Should -BeNullOrEmpty
         Get-DunePlayerRoutePolicy CONNECT '/ws/console' | Should -BeNullOrEmpty
         Test-DuneRoutePrincipalAccess ([pscustomobject]@{ Method='GET'; Path='/api/catalog/items'; LocalOnly=$true }) @{ type='linked-player' } | Should -BeFalse
@@ -149,4 +152,36 @@ Describe 'Bulk building set Player portal ownership' {
         Invoke-PlayerCheck $f @{pawn_id=21;account_id=11;kind='weapon';fls_id='other'} | Should -BeFalse
     }
 
+}
+
+Describe 'Linked inventory and read-only grant previews' {
+    It 'requires the linked pawn and excludes missing, foreign or global inventory requests' {
+        foreach($path in @('/api/v1/inventory/items','/api/v1/inventory/items/occurrences','/api/v1/inventory/items/{templateId}/occurrences')) {
+            $f=New-PlayerFixture GET $path @{player_id='21';types='player,storage'}
+            Invoke-PlayerCheck $f $null | Should -BeTrue
+            $f.request.QueryString.player_id='22'
+            Invoke-PlayerCheck $f $null | Should -BeFalse
+            $f.request.QueryString.Remove('player_id')
+            Invoke-PlayerCheck $f $null | Should -BeFalse
+            $f.request.QueryString=@{player_id='21';types='vehicle'}
+            Invoke-PlayerCheck $f $null | Should -BeFalse
+            $f.request.QueryString=@{player_id='21';types='player';demo='1'}
+            Invoke-PlayerCheck $f $null | Should -BeFalse
+        }
+    }
+    It 'allows owned preview reads online but never grants or foreign identity overrides' {
+        Mock Get-DunePlayersLive { @{ok=$true;players=@(@{account_id=11;id=21;controller_id=31;online_status='Online'})} }
+        $f=New-PlayerFixture POST '/api/gameplay/players/reviewed-customization'
+        Invoke-PlayerCheck $f @{pawn_id=21;controller_id=31;account_id=11;checkOnly=$true} | Should -BeTrue
+        Invoke-PlayerCheck $f @{pawn_id=21;controller_id=31;account_id=12;checkOnly=$true} | Should -BeFalse
+        Invoke-PlayerCheck $f @{pawn_id=21;controller_id=31;account_id=11;checkOnly=$false} | Should -BeFalse
+        Invoke-PlayerCheck $f @{pawn_id=21;controller_id=31;account_id=11;confirm='GRANT REVIEWED CUSTOMIZATION'} | Should -BeFalse
+    }
+    It 'advertises scoped inventory without global player or base administration' {
+        $ids=@(Get-DuneCapabilitiesForPrincipal @{type='linked-player';role='player'} | ForEach-Object id)
+        $ids | Should -Contain 'inventory.read'
+        $ids | Should -Contain 'player.manage.self'
+        $ids | Should -Not -Contain 'player.manage.destructive'
+        $ids | Should -Not -Contain 'base.manage'
+    }
 }

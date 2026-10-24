@@ -433,7 +433,7 @@ export function SoloCosmeticGrantCard({
   busy: boolean
   disabled: boolean
   loadCatalog?: () => Promise<CosmeticEntry[]>
-  onGrant: (templateId: string, label: string) => Promise<void>
+  onGrant: (templateId: string, label: string, entry?: CosmeticEntry) => Promise<void>
   onBulkGrant?: (kind: SoloUnlockKind, label: string) => Promise<void>
   ownership?: SoloCosmeticOwnership
 }) {
@@ -475,7 +475,7 @@ export function SoloCosmeticGrantCard({
     <div className="card p-5 xl:col-span-2">
       <h3 className="font-semibold mb-1">Grant Cosmetic / Building Set</h3>
       <p className="text-xs text-text-muted mb-4">
-        Delivers unlock tokens to the Solo backpack for processing on next login. Bulk grants use available slots; log in, exit, and repeat for remaining tokens.
+        Search character appearances and unlock items together. Character appearances are saved directly; unlock items go to the Solo backpack.
       </p>
       <div className="rounded border border-warning/30 bg-warning/5 p-3 mb-4 text-xs text-text-muted">
         <p>{COSMETIC_LICENSE_NOTICE}</p>
@@ -522,13 +522,14 @@ export function SoloCosmeticGrantCard({
             ))}
           </select>
           {chosen && <p className="text-[11px] font-mono text-text-dim truncate mt-2">{chosen.template}</p>}
-          {chosen && pending.has(chosen.template.toLowerCase()) && <p className="text-xs text-text-muted mt-2">Unlock token already held in inventory. You can grant another token.</p>}
-          {chosen && !pending.has(chosen.template.toLowerCase()) && saved.has(chosen.template.toLowerCase()) && <p className="text-xs text-text-muted mt-2">Unlock record saved. You can grant another token if the game still reports it locked.</p>}
+          {chosen?.grant_method === 'character' && <p className="text-xs text-text-muted mt-2">Saves this appearance directly to the Solo character.</p>}
+          {chosen && !chosen.grant_method && pending.has(chosen.template.toLowerCase()) && <p className="text-xs text-text-muted mt-2">Unlock token already held in inventory. You can grant another token.</p>}
+          {chosen && !chosen.grant_method && !pending.has(chosen.template.toLowerCase()) && saved.has(chosen.template.toLowerCase()) && <p className="text-xs text-text-muted mt-2">Unlock record saved. You can grant another token if the game still reports it locked.</p>}
           <button
             className={`btn-primary w-full mt-4 justify-center ${SOLO_DISABLED_PRIMARY_CLASS}`}
             disabled={controlsDisabled || !chosen}
             onClick={() => {
-              if (chosen) void onGrant(chosen.template, chosen.name)
+              if (chosen) void (chosen.grant_method === 'character' ? onGrant(chosen.template, chosen.name, chosen) : onGrant(chosen.template, chosen.name))
             }}
           >
             <Icon name={busy ? 'LoaderCircle' : 'Shirt'} size={14} className={busy ? 'animate-spin' : ''} />
@@ -2281,7 +2282,17 @@ export function SoloMode() {
                 || gameRunning
                 || !inspection?.inventories.some(inventory => inventory.kind === 'backpack')
               }
-              onGrant={async (templateId, label) => {
+              onGrant={async (templateId, label, entry) => {
+                if (entry?.grant_method === 'character') {
+                  setBusy('give-items'); setNotice(null)
+                  try {
+                    await grantSoloReviewedCustomization(statusState.data?.profileToken ?? '', entry.customization_id || templateId)
+                    setNotice({kind:'ok',text:`${label} saved to this character.`})
+                    await Promise.all([statusState.refresh(), backupsState.refresh()])
+                  } catch (error) { setNotice({kind:'err',text:error instanceof Error ? error.message : String(error)}) }
+                  finally { setBusy(null) }
+                  return
+                }
                 const grant = buildSoloCosmeticGrant(templateId, inspection?.inventories ?? [])
                 await giveSoloItems(
                   grant.items,

@@ -28,3 +28,17 @@ it('skips a hidden viewer without disabling future visible paints',()=> {
   draw();frame()
   expect(paint).toHaveBeenCalledOnce()
 })
+
+
+it('preserves the canvas backing store through refreshes and resizes only when needed',()=>{
+ const resizeSource=html.slice(html.indexOf('function resizeMapCanvas('),html.indexOf('let drawFrame='))
+ const resize=new Function(resizeSource+';return resizeMapCanvas')()
+ let width=0,height=0,resets=0
+ const target={get width(){return width},set width(v){width=v;resets++},get height(){return height},set height(v){height=v;resets++}}
+ resize(target,1400,900,1)
+ expect(resets).toBe(2)
+ for(let i=0;i<20;i++)resize(target,1400,900,1)
+ expect(resets).toBe(2)
+ resize(target,1400,900,2)
+ expect(width).toBe(2800);expect(height).toBe(1800);expect(resets).toBe(4)
+})
