@@ -342,11 +342,11 @@ Describe 'Solo Mode profile discovery and persistence' {
 Describe 'Solo Mode write gates and settings backups' {
     BeforeEach { Reset-TestSoloState }
 
-    It 'reports all 50 settings even when the INI is absent' {
+    It 'reports all 51 settings even when the INI is absent' {
         $layout = New-TestSoloLayout
         Save-DuneSoloState -DataRoot $layout.root -DbPath $layout.db | Out-Null
         $settings = Read-DuneSoloSettings
-        $settings.entries.Count | Should -Be 50
+        $settings.entries.Count | Should -Be 51
         @($settings.entries | Where-Object present).Count | Should -Be 0
     }
 
@@ -394,6 +394,28 @@ Describe 'Solo Mode write gates and settings backups' {
         $enabled = Set-DuneSoloSettings -Settings @{ m_bAreSecurityZonesEnabled = 'True' } -Confirm 'APPLY SOLO SETTINGS'
         ($enabled.settings.entries | Where-Object key -eq 'm_bAreSecurityZonesEnabled').value | Should -Be 'True'
         { Set-DuneSoloSettings -Settings @{ m_bAreSecurityZonesEnabled = 'invalid' } -Confirm 'APPLY SOLO SETTINGS' } | Should -Throw '*True or False*'
+    }
+
+    It 'writes the spice yield ratio to Game.ini with backup and preserves unrelated values' {
+        $layout = New-TestSoloLayout
+        Save-DuneSoloState -DataRoot $layout.root -DbPath $layout.db | Out-Null
+        Mock Get-DuneSoloGameProcesses { @() }
+        $game = Join-Path $layout.config 'Game.ini'
+        $original = "[/Script/DuneSandbox.SpiceHarvestingSystem]`nKeep=Yes`nm_NodeValueToSpiceResourceRatio=10`nm_NodeValueToSpiceResourceRatio=20`n[Other]`nKeepOther=Yes`n"
+        [IO.File]::WriteAllText($game, $original)
+        $result = Set-DuneSoloSettings -Settings @{ m_NodeValueToSpiceResourceRatio = '5.000000' } -Confirm 'APPLY SOLO SETTINGS'
+        [IO.File]::ReadAllText($result.backupPath) | Should -BeExactly $original
+        $text = [IO.File]::ReadAllText($game)
+        ([regex]::Matches($text, '(?m)^m_NodeValueToSpiceResourceRatio=')).Count | Should -Be 1
+        $text | Should -Match 'm_NodeValueToSpiceResourceRatio=5.000000'
+        $text | Should -Match 'Keep=Yes'
+        $text | Should -Match 'KeepOther=Yes'
+        ($result.settings.entries | Where-Object key -eq 'm_NodeValueToSpiceResourceRatio').value | Should -Be '5.000000'
+        (Test-Path (Join-Path $layout.config 'ServerCustomSettings.ini')) | Should -BeFalse
+        foreach ($value in @('0', '-1', '1e309')) {
+            { Set-DuneSoloSettings -Settings @{ m_NodeValueToSpiceResourceRatio = $value } -Confirm 'APPLY SOLO SETTINGS' } | Should -Throw
+        }
+        [IO.File]::ReadAllText($game) | Should -BeExactly $text
     }
 
     It 'blocks settings writes while a Dune process is running' {

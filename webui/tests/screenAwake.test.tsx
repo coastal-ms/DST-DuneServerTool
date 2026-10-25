@@ -11,9 +11,9 @@ function sentinel() {
 }
 let visible:DocumentVisibilityState='visible'
 beforeEach(()=> { visible='visible';vi.spyOn(document,'visibilityState','get').mockImplementation(()=>visible) })
-afterEach(()=> { cleanup();delete (navigator as unknown as {wakeLock?:unknown}).wakeLock;vi.restoreAllMocks() })
-describe('expanded map screen wake lock',()=> {
-  it('requests only while expanded and releases on restore',async()=> {
+afterEach(()=> { cleanup();delete (navigator as unknown as {wakeLock?:unknown}).wakeLock;vi.restoreAllMocks();vi.useRealTimers() })
+describe('visible map screen wake lock',()=> {
+  it('requests while enabled and releases when the viewer pauses or closes',async()=> {
     const lock=sentinel(),request=vi.fn().mockResolvedValue(lock)
     Object.defineProperty(navigator,'wakeLock',{configurable:true,value:{request}})
     const view=render(<Fixture enabled={false}/>)
@@ -55,13 +55,53 @@ describe('expanded map screen wake lock',()=> {
     expect(await screen.findByText('unavailable')).toBeInTheDocument()
     expect(request).toHaveBeenCalledOnce()
   })
-  it('shows when the device releases a lock automatically',async()=> {
-    const lock=sentinel(),request=vi.fn().mockResolvedValue(lock)
+  it('recovers one automatic release without repeatedly fighting device power policy',async()=> {
+    vi.useFakeTimers()
+    const first=sentinel(),second=sentinel(),request=vi.fn().mockResolvedValueOnce(first).mockResolvedValueOnce(second)
+    Object.defineProperty(navigator,'wakeLock',{configurable:true,value:{request}})
+    render(<Fixture />)
+    await act(async()=>{})
+    act(()=>first.dispatchEvent(new Event('release')))
+    expect(screen.getByText('unavailable')).toBeInTheDocument()
+    await act(async()=>{await vi.advanceTimersByTimeAsync(250)})
+    expect(request).toHaveBeenCalledTimes(2)
+    expect(screen.getByText('active')).toBeInTheDocument()
+    act(()=>second.dispatchEvent(new Event('release')))
+    await act(async()=>{await vi.advanceTimersByTimeAsync(10000)})
+    expect(request).toHaveBeenCalledTimes(2)
+    expect(screen.getByText('unavailable')).toBeInTheDocument()
+  })
+  it('retries a refused request after interaction and cleans up late requests across pagehide',async()=> {
+    let resolve!:(value:unknown)=>void
+    const lock=sentinel(),request=vi.fn().mockRejectedValueOnce(new Error('Gesture needed')).mockImplementationOnce(()=>new Promise(r=>{resolve=r}))
+    Object.defineProperty(navigator,'wakeLock',{configurable:true,value:{request}})
+    render(<Fixture />)
+    await screen.findByText('unavailable')
+    act(()=>window.dispatchEvent(new Event('dst-screen-awake-retry')))
+    expect(request).toHaveBeenCalledTimes(2)
+    act(()=>window.dispatchEvent(new Event('pagehide')))
+    await act(async()=>{resolve(lock)})
+    expect(lock.release).toHaveBeenCalledOnce()
+  })
+  it('renews from an explicit gesture but does not churn a held lock on ordinary map activity',async()=> {
+    const first=sentinel(),second=sentinel(),request=vi.fn().mockResolvedValueOnce(first).mockResolvedValueOnce(second)
     Object.defineProperty(navigator,'wakeLock',{configurable:true,value:{request}})
     render(<Fixture />)
     await screen.findByText('active')
-    act(()=>lock.dispatchEvent(new Event('release')))
-    expect(screen.getByText('unavailable')).toBeInTheDocument()
+    act(()=>window.dispatchEvent(new Event('dst-screen-awake-activity')))
     expect(request).toHaveBeenCalledOnce()
+    act(()=>window.dispatchEvent(new Event('dst-screen-awake-retry')))
+    expect(first.release).toHaveBeenCalledOnce()
+    await waitFor(()=>expect(request).toHaveBeenCalledTimes(2))
+    await screen.findByText('active')
+  })
+  it('replaces a released sentinel on return even if its release event was missed',async()=> {
+    const first=sentinel(),second=sentinel(),request=vi.fn().mockResolvedValueOnce(first).mockResolvedValueOnce(second)
+    Object.defineProperty(navigator,'wakeLock',{configurable:true,value:{request}})
+    render(<Fixture />)
+    await screen.findByText('active')
+    Object.defineProperty(first,'released',{value:true})
+    act(()=>window.dispatchEvent(new Event('focus')))
+    await waitFor(()=>expect(request).toHaveBeenCalledTimes(2))
   })
 })

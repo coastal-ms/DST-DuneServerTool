@@ -1,4 +1,4 @@
-﻿using System.Buffers.Binary;
+using System.Buffers.Binary;
 using System.IO.Compression;
 using System.Security.Cryptography;
 using System.Text;
@@ -29,18 +29,15 @@ internal static partial class Program
             ["AntiRadiationPill"] = 20
         };
 
-    // These templates are missing volume metadata from the extracted gameplay
-    // catalog. The torch and Treadwheel hull use adjacent-item values so the
-    // four vehicle kits known to fit the stock 175-volume backpack remain
-    // grantable. The two unverified Sandcrawler modules stay deliberately
-    // oversized so an uncertain large kit fails closed.
+    // Supply catalog-aligned volumes when a reduced catalog omits vehicle modules.
+    // Missing metadata must not manufacture an oversized item to block a grant.
     private static readonly IReadOnlyDictionary<string, double> KnownVolumeFallbacks =
         new Dictionary<string, double>(StringComparer.OrdinalIgnoreCase)
         {
-            ["RepairTool5"] = 10d,
-            ["TreadwheelHull_6"] = 15d,
-            ["SandcrawlerSpiceContainer_Unique_Capacity_6"] = 1000d,
-            ["SandcrawlerSpiceHeader_6"] = 1000d
+            ["RepairTool5"] = 1d,
+            ["TreadwheelHull_6"] = 8d,
+            ["SandcrawlerSpiceContainer_Unique_Capacity_6"] = 30d,
+            ["SandcrawlerSpiceHeader_6"] = 30d
         };
 
     private static readonly IReadOnlyDictionary<string, string> SoloStorageLabels =
@@ -967,11 +964,13 @@ internal static partial class Program
                             + $"but only {Math.Max(0, destination.MaxItemCount - currentRows)} remain.");
                     }
                     var addedVolume = rule.Volume * item.Quantity;
-                    if (destination.MaxItemVolume > 0
+                    if (!plan.ModdedStorageCapacity && destination.MaxItemVolume > 0
                         && currentVolume + addedVolume > destination.MaxItemVolume + 0.0001)
                     {
                         throw new InvalidDataException(
-                            $"{destination.Label} does not have enough item volume capacity.");
+                            $"{destination.Label} does not have enough item volume capacity: needs {currentVolume + addedVolume:0.##} total volume, "
+                            + $"but its saved capacity is {destination.MaxItemVolume:0.##}. "
+                            + "If a mod increases this capacity in game, enable Modded storage capacity.");
                     }
 
                     foreach (var chunk in chunks)
@@ -1629,15 +1628,30 @@ internal static partial class Program
             }
             TestEquipmentRepair(source, catalogPath, root);
             var catalog = ReadCatalog(catalogPath);
-            if (catalog["RepairTool5"].Volume != 10d
-                || catalog["TreadwheelHull_6"].Volume != 15d
-                || catalog["SandcrawlerSpiceHeader_6"].Volume != 1000d
+            if (catalog["RepairTool5"].Volume != 1d
+                || catalog["TreadwheelHull_6"].Volume != 8d
+                || catalog["SandcrawlerSpiceHeader_6"].Volume != 30d
                 || InspectPath(target, catalogPath).InventoryItems.All(value =>
                     value.DisplayName != "High Capacity Literjon Mk6"))
             {
                 throw new InvalidOperationException(
                     "Vehicle-kit volume fallbacks were not applied correctly.");
             }
+            var explicitVolumeCatalogPath = Path.Combine(root, "explicit-volume-catalog.json");
+            File.WriteAllText(explicitVolumeCatalogPath,
+                """
+                {"names":{"RepairTool5":"Torch","TreadwheelHull_6":"Hull"},"items":{
+                  "RepairTool5":{"stack_max":9,"volume":0},
+                  "TreadwheelHull_6":{"stack_max":3,"volume":2.5}
+                }}
+                """);
+            var explicitVolumeCatalog = ReadCatalog(explicitVolumeCatalogPath);
+            if (explicitVolumeCatalog["RepairTool5"].Volume != 0
+                || explicitVolumeCatalog["RepairTool5"].StackMax != 9
+                || explicitVolumeCatalog["TreadwheelHull_6"].Volume != 2.5
+                || explicitVolumeCatalog["TreadwheelHull_6"].StackMax != 3)
+                throw new InvalidOperationException("Vehicle fallbacks overwrote explicit catalog metadata.");
+
             var ammoSafety = Path.Combine(root, "safety", "before-ammo.db");
             SetWeaponAmmo(target, ammoSafety, 106, 250, catalogPath, requireGameClosed: false);
             var ammoInspection = InspectPath(target, catalogPath);
@@ -1915,7 +1929,7 @@ internal static partial class Program
                 planPath,
                 """
                 {"destination":"inventory:1","items":[
-                  {"templateId":"SandcrawlerSpiceHeader_6","quantity":1,"quality":0}
+                  {"templateId":"SandcrawlerSpiceHeader_6","quantity":10,"quality":0}
                 ]}
                 """);
             var oversizedRejected = false;
@@ -1936,8 +1950,22 @@ internal static partial class Program
                 || !File.ReadAllBytes(target).SequenceEqual(beforeOversizedGrant))
             {
                 throw new InvalidOperationException(
-                    "Oversized unknown vehicle part did not fail closed.");
+                    "Over-capacity grant did not preserve the original save.");
             }
+
+            // Explicit modded capacity bypasses volume only on an isolated save copy.
+            var moddedTarget = Path.Combine(root, "modded-capacity.db");
+            File.Copy(target, moddedTarget);
+            File.WriteAllText(planPath,
+                """
+                {"destination":"inventory:1","moddedStorageCapacity":true,"items":[
+                  {"templateId":"SandcrawlerSpiceHeader_6","quantity":10,"quality":0}
+                ]}
+                """);
+            var moddedSafety = Path.Combine(root, "safety", "before-modded-capacity.db");
+            GrantItems(moddedTarget, moddedSafety, planPath, catalogPath);
+            if (!File.Exists(moddedSafety))
+                throw new InvalidOperationException("Modded-capacity grant did not retain its safety backup.");
 
             using (var oneBasedIdsDocument = JsonDocument.Parse(
                        """[{"instance_id":1},{"instance_id":4}]"""))
@@ -3254,7 +3282,9 @@ internal static partial class Program
         {
             throw new InvalidDataException("Grant between 1 and 200 item templates per operation.");
         }
-        return new GrantPlan(destination, items);
+        return new GrantPlan(destination, items,
+            root.TryGetProperty("moddedStorageCapacity", out var moddedCapacity)
+                && moddedCapacity.ValueKind == JsonValueKind.True);
     }
 
     private static IReadOnlyDictionary<string, CatalogRule> ReadCatalog(string path)
@@ -3308,9 +3338,9 @@ internal static partial class Program
         }
         foreach (var (templateId, volume) in KnownVolumeFallbacks)
         {
-            if (result.ContainsKey(templateId))
+            if (result.TryGetValue(templateId, out var existingRule) && !existingRule.HasVolume)
             {
-                result[templateId] = result[templateId] with
+                result[templateId] = existingRule with
                 {
                     StackMax = 1,
                     Volume = volume,
@@ -3779,5 +3809,6 @@ internal static partial class Program
 
     private sealed record GrantPlan(
         string Destination,
-        IReadOnlyList<GrantItem> Items);
+        IReadOnlyList<GrantItem> Items,
+        bool ModdedStorageCapacity = false);
 }

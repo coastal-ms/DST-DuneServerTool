@@ -1,4 +1,4 @@
-# Local map UI host. Opening it starts an idle snapshot service, never live reads.
+﻿# Local map UI host. Opening it starts an idle snapshot service, never live reads.
 # Opening the map restores its saved Live choice; Stop live persists until Start live.
 
 function Resolve-DuneAtlasAppDirectory {
@@ -260,6 +260,7 @@ function Invoke-DuneAtlasProxy {
         Write-DuneError -Response $Response -Status 404 -Message 'Unknown map resource.'
         return
     }
+    $playerView = [string]$Principal.type -eq 'linked-player'
     $handler = $null; $client = $null; $message = $null; $upstream = $null
     try {
         $session = Get-DuneAtlasSession
@@ -298,7 +299,7 @@ function Invoke-DuneAtlasProxy {
             $match = ''; $encoding = ''
             try { $match=[string]$Request.Headers['If-None-Match']; $encoding=[string]$Request.Headers['Accept-Encoding'] } catch {}
             if ($match) { [void]$message.Headers.TryAddWithoutValidation('If-None-Match', $match) }
-            if ($encoding -match '(?i)(^|[,\s])gzip([,;\s]|$)') {
+            if (-not $playerView -and $encoding -match '(?i)(^|[,\s])gzip([,;\s]|$)') {
                 [void]$message.Headers.TryAddWithoutValidation('Accept-Encoding', 'gzip')
             }
         }
@@ -313,6 +314,17 @@ function Invoke-DuneAtlasProxy {
             Stop-DuneVmMapRelay
         }
         $bytes = $upstream.Content.ReadAsByteArrayAsync().GetAwaiter().GetResult()
+        $playerGzip = $false
+        if ($playerView -and [string]$upstream.Content.Headers.ContentType -match 'application/json') {
+            $json = Protect-DunePlayerResponseJson -Json ([Text.Encoding]::UTF8.GetString($bytes))
+            $bytes = [Text.Encoding]::UTF8.GetBytes($json)
+            # Filter before compression: never send a multi-megabyte plain JSON
+            # snapshot over the remote connection to preserve address privacy.
+            if ($bytes.Length -gt 1024 -and [string]$Request.Headers['Accept-Encoding'] -match '(?i)(^|[,\s])gzip([,;\s]|$)') {
+                $bytes = Compress-DunePlayerMapJson -Bytes $bytes
+                $playerGzip = $true
+            }
+        }
         $Response.StatusCode = [int]$upstream.StatusCode
         if ($upstream.Content.Headers.ContentType) { $Response.ContentType = [string]$upstream.Content.Headers.ContentType }
         $Response.Headers['Cache-Control'] = 'no-store'
@@ -320,7 +332,7 @@ function Invoke-DuneAtlasProxy {
         $Response.Headers['X-Content-Type-Options'] = 'nosniff'
         $Response.Headers['Vary'] = 'Accept-Encoding'
         if ($upstream.Headers.ETag) { $Response.Headers['ETag'] = $upstream.Headers.ETag.ToString() }
-        if ('gzip' -in @($upstream.Content.Headers.ContentEncoding)) { $Response.Headers['Content-Encoding'] = 'gzip' }
+        if ($playerGzip -or 'gzip' -in @($upstream.Content.Headers.ContentEncoding)) { $Response.Headers['Content-Encoding'] = 'gzip' }
         $Response.ContentLength64 = $bytes.Length
         if ($bytes.Length -gt 0) { $Response.OutputStream.Write($bytes,0,$bytes.Length) }
         $Response.OutputStream.Close()

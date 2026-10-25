@@ -32,10 +32,12 @@ def settings_schema():
     console_block = source.split('$script:DuneSoloConsoleSettings = @(', 1)[1].split('\nfunction ', 1)[0]
     schema = {
         'ServerCustomSettings.ini': {
-            '/Script/DuneSandbox.UserServerCustomSettings': re.findall(r"'([^']+)'", key_match[1]),
+            '/Script/DuneSandbox.UserServerCustomSettings': [key for key in re.findall(r"'([^']+)'", key_match[1])
+                if key != 'm_NodeValueToSpiceResourceRatio'],
         },
         'Engine.ini': {'ConsoleVariables': re.findall(r"key\s*=\s*'([^']+)'", console_block)},
         'Game.ini': {
+            '/Script/DuneSandbox.SpiceHarvestingSystem': ['m_NodeValueToSpiceResourceRatio'],
             '/Script/DuneSandbox.InventorySystemSettings': ['PlayerInventoryStartingSize'],
             '/Script/DuneSandbox.BuildingSettings': ['m_MaxNumLandclaimSegments', 'm_BuildableBuildAndFillHoldTimes'],
         },

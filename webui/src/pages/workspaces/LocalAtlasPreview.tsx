@@ -39,7 +39,7 @@ export function LocalAtlasPreview({ url }: { url: string }) {
   const [height, setHeight] = useState<number | null>(null)
   const [expanded, setExpanded] = useState(false)
   const [viewerPaused, setViewerPaused] = useState(false)
-  const awake = useScreenAwake(expanded && !viewerPaused)
+  const awake = useScreenAwake(!viewerPaused)
   useEffect(() => {
     window.dispatchEvent(new CustomEvent('dst-map-viewer-paused', {detail:viewerPaused}))
     return () => { window.dispatchEvent(new CustomEvent('dst-map-viewer-paused', {detail:false})) }
@@ -51,6 +51,7 @@ export function LocalAtlasPreview({ url }: { url: string }) {
       if (event.data?.type === 'dst-atlas-toggle-expand') setExpanded(value => !value)
       if (event.data?.type === 'dst-atlas-collapse') setExpanded(false)
       if (event.data?.type === 'dst-atlas-viewer-paused' && typeof event.data.paused === 'boolean') setViewerPaused(event.data.paused)
+      if (event.data?.type === 'dst-atlas-viewer-activity') window.dispatchEvent(new Event('dst-screen-awake-activity'))
     }
     window.addEventListener('message', receive)
     return () => window.removeEventListener('message', receive)
@@ -100,10 +101,13 @@ export function LocalAtlasPreview({ url }: { url: string }) {
   }, [])
   return (
     <div data-map-expanded={expanded} className={expanded ? 'fixed inset-0 z-[65000] flex flex-col bg-base' : ''}>
-      {expanded && <div className="absolute right-2 top-2 z-10 flex flex-col items-end gap-1">
-        <span role="status" className="text-xs text-text-muted">{viewerPaused ? 'Live map paused' : awake === 'active' ? 'Screen stays awake' : awake === 'unavailable' ? 'Screen keep-awake unavailable' : 'Keeping screen awake…'}</span>
-        <button type="button" className="btn-secondary text-sm" onClick={() => setExpanded(false)}>Restore map</button>
-      </div>}
+      <div className={expanded ? 'absolute right-2 top-2 z-10 flex flex-col items-end gap-1' : 'mb-1 flex items-center justify-end gap-2'}>
+        <div className="flex items-center gap-2">
+        <span role="status" className="text-xs text-text-muted">{viewerPaused ? 'Live map paused' : awake === 'active' ? 'Screen keep-awake active' : awake === 'unavailable' ? 'Screen keep-awake unavailable' : 'Keeping screen awake…'}</span>
+        {!viewerPaused && <button type="button" disabled={awake === 'requesting'} className="btn-secondary text-sm" onClick={() => window.dispatchEvent(new Event('dst-screen-awake-retry'))}>{awake === 'unavailable' ? 'Retry keep-awake' : 'Keep screen awake'}</button>}
+        </div>
+        {expanded && <button type="button" className="btn-secondary text-sm" onClick={() => setExpanded(false)}>Restore map</button>}
+      </div>
       <iframe
       ref={frame}
       onLoad={syncTheme}

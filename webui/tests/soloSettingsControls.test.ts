@@ -45,6 +45,14 @@ describe('Solo Mode setting controls', () => {
     expect(getSoloSettingControl('GatheringAmount')).toEqual({ type: 'number', step: 'any' })
   })
 
+  it('accepts positive spice ratios and rejects zero, negative, or non-finite values', () => {
+    expect(getSoloSettingControl('m_NodeValueToSpiceResourceRatio')).toEqual({ type: 'number', step: 'any' })
+    expect(validateSoloSettingChanges({ m_NodeValueToSpiceResourceRatio: '5.0' })).toBeNull()
+    for (const value of ['0', '-1', 'Infinity']) {
+      expect(validateSoloSettingChanges({ m_NodeValueToSpiceResourceRatio: value })).not.toBeNull()
+    }
+  })
+
   it('keeps game-controlled fields as text', () => {
     expect(getSoloSettingControl('DifficultyLevel')).toEqual({ type: 'text' })
   })

@@ -33,7 +33,7 @@ param(
 
 $ErrorActionPreference = 'Stop'
 Set-StrictMode -Version Latest
-$script:ExpectedBridgeVersion = '2.0.0'
+$script:ExpectedBridgeVersion = '2.0.1'
 $script:ExpectedBridgeProtocol = '2'
 
 function ConvertFrom-DuneWindowsCommandLine {

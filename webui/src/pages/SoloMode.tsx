@@ -236,6 +236,7 @@ export function validateSoloSettingChanges(settings: Record<string, string>): st
       const valid = control.step === 1
         ? /^-?\d+$/.test(value)
         : /^-?(?:\d+(?:\.\d*)?|\.\d+)$/.test(value)
+      if (key === 'm_NodeValueToSpiceResourceRatio' && (!Number.isFinite(Number(value)) || Number(value) <= 0)) return 'Spice harvest ratio must be greater than zero.'
       if (!valid) return `${key} must be ${control.step === 1 ? 'a whole number' : 'a number'}.`
     }
   }
@@ -291,7 +292,7 @@ const SETTING_GROUPS: Array<{ title: string; keys: string[] }> = [
   {
     title: 'World and economy',
     keys: [
-      'DifficultyLevel', 'GatheringAmount', 'CraftingCost',
+      'DifficultyLevel', 'GatheringAmount', 'm_NodeValueToSpiceResourceRatio', 'CraftingCost',
       'WaterExtractionRate', 'CraftingTimeMultiplier', 'BuildingCostMultiplier',
       'ResourceRespawnSpeed', 'LootRespawnSpeed', 'FuelBurnTimeMultiplier',
       'InventoryVolumeMultiplier', 'PlayerInventoryStartingSize',
@@ -577,6 +578,7 @@ export function SoloMode() {
   const [itemQuality, setItemQuality] = useState(0)
   const [itemAugments, setItemAugments] = useState<AugmentSelection[]>([])
   const [inventoryDestination, setInventoryDestination] = useState('')
+  const [moddedStorageCapacity, setModdedStorageCapacity] = useState(false)
   const [vehicleKits, setVehicleKits] = useState<VehicleKitCatalog | null>(null)
   const [vehicleKitId, setVehicleKitId] = useState('')
   const [blueprint, setBlueprint] = useState<BlueprintFile | null>(null)
@@ -954,6 +956,7 @@ export function SoloMode() {
         destination,
         items,
         statusState.data?.profileToken ?? '',
+        moddedStorageCapacity,
       )
       setNotice({
         kind: 'ok',
@@ -1721,7 +1724,9 @@ export function SoloMode() {
                       const control = getSoloSettingControl(key)
                       const disabled = SOLO_READ_ONLY_SETTINGS.has(key)
                       const inputId = `solo-setting-${key}`
-                      const guidance = key === 'm_bAreSecurityZonesEnabled'
+                      const guidance = key === 'm_NodeValueToSpiceResourceRatio'
+                        ? { label: 'Spice harvest yield: lower gives more', effect: 'Default ratio: 10. Lower values give more spice; higher values give less. Try 5 for increased yield or 20 for reduced yield. This is a conversion ratio, not a direct multiplier; exact scaling needs an in-game comparison. Saved to Game.ini. Apply with the game closed, then relaunch.' }
+                        : key === 'm_bAreSecurityZonesEnabled'
                         ? { label: 'Enable security zones', effect: 'Disable to remove Kanly security-zone restrictions in Solo, including tool restrictions in cities. Saved to this profile’s Game.ini. Re-enable to restore security zones.' }
                         : RESPAWN_SETTING_GUIDANCE[key]
                       const update = (next: string) => setDraft(current => ({ ...current, [key]: next }))
@@ -2066,11 +2071,19 @@ export function SoloMode() {
                   ))}
                 </select>
                 <p className="text-xs text-text-dim mt-1">
-                  DST checks current rows against slot capacity and calculates used volume from item metadata plus DB overrides before every grant.
+                  DST checks free slots before every grant. Volume limits are also checked unless you enable modded storage capacity below.
                 </p>
               </label>
             )}
           </div>
+
+          <label className="flex items-start gap-2 text-sm mb-4">
+            <input type="checkbox" checked={moddedStorageCapacity} disabled={busy !== null}
+              onChange={event => setModdedStorageCapacity(event.target.checked)} />
+            <span>Modded storage capacity  -  skip volume limit checks
+              <span className="block text-xs text-text-dim">Use when a mod changes backpack, bank, or storage volume in game. Saved capacities may not reflect the mod. Free-slot checks still apply.</span>
+            </span>
+          </label>
 
           <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
             <div className="card p-5">

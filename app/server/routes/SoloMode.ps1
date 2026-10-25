@@ -267,11 +267,12 @@ Register-DuneRoute -Method POST -Path '/api/solo/items/grant' -LocalOnly -Handle
         $destination = [string](Get-DuneSoloBodyField -Body $body -Name 'destination' -Default '')
         $confirm = [string](Get-DuneSoloBodyField -Body $body -Name 'confirm' -Default '')
         $expectedProfileToken = [string](Get-DuneSoloBodyField -Body $body -Name 'expectedProfileToken' -Default '')
+        $moddedStorageCapacity = (Get-DuneSoloBodyField -Body $body -Name 'moddedStorageCapacity' -Default $false) -eq $true
         $rawItems = Get-DuneSoloBodyField -Body $body -Name 'items'
         $items = if ($null -eq $rawItems) { @() } else { @($rawItems) }
         $result = Invoke-WithDuneLock -Name 'solo-profile-data' -Script {
             Assert-DuneSoloExpectedProfile -ExpectedProfileToken $expectedProfileToken
-            Invoke-DuneSoloGiveItems -Destination $destination -Items $items -Confirm $confirm
+            Invoke-DuneSoloGiveItems -Destination $destination -Items $items -Confirm $confirm -ModdedStorageCapacity $moddedStorageCapacity
         }
         Write-DuneJson -Response $res -Body $result
     } catch {

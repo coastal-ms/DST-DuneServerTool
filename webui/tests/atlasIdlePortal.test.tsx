@@ -14,7 +14,10 @@ it('releases expanded wake lock and pauses only this portal polling until resume
  const frame=screen.getByTitle('Own-server live atlas') as HTMLIFrameElement
  const send=(data:object,source:Window|null=frame.contentWindow)=>fireEvent(window,new MessageEvent('message',{origin:window.location.origin,source,data}))
  await act(async()=>{})
+ expect(mocks.awake).toHaveBeenLastCalledWith(true)
  send({type:'dst-atlas-toggle-expand'});expect(mocks.awake).toHaveBeenLastCalledWith(true)
+ send({type:'dst-atlas-collapse'});expect(mocks.awake).toHaveBeenLastCalledWith(true)
+ send({type:'dst-atlas-toggle-expand'})
  send({type:'dst-atlas-viewer-paused',paused:true},window)
  expect(mocks.awake).toHaveBeenLastCalledWith(true)
  send({type:'dst-atlas-viewer-paused',paused:true})

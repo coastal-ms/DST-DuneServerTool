@@ -755,6 +755,9 @@ function Write-DuneJson {
     $Response.ContentType = 'application/json; charset=utf-8'
     $Response.Headers['Cache-Control'] = 'no-store'
     $json  = if ($null -eq $Body) { 'null' } else { $Body | ConvertTo-Json -Depth 12 -Compress }
+    if ($Response.PSObject.Properties['DunePlayerResponse'] -and $Response.DunePlayerResponse) {
+        $json = Protect-DunePlayerResponseJson -Json $json
+    }
     $bytes = [System.Text.Encoding]::UTF8.GetBytes($json)
     $Response.ContentLength64 = $bytes.Length
     $Response.OutputStream.Write($bytes, 0, $bytes.Length)

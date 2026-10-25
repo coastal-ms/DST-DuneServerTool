@@ -13,6 +13,22 @@ here cover everything those tags shipped.
 
 ## [Unreleased]
 
+## [16.6.1] - 2026-10-25
+
+- Keep embedded and popped-out Live Maps eligible for screen keep-awake.
+- Recover released screen wake locks and offer a direct keep-awake retry without leaving the map.
+- Clarify opening scanned iPad Live Maps in Safari for screen keep-awake.
+- Preserve mobile keyboard punctuation and Unicode in broadcasts, and report failed sends correctly.
+- Prevent false bridge warnings when checking Remote Access through the Browser Portal.
+- Keep bridge diagnostics and repair controls on the host PC rather than showing them to remote portal users.
+- Use more of the tablet map panel, zoom around the pointer, and keep dragged maps within reach.
+- Improve remote map loading and keep sign-in, sign-out and other page requests responsive.
+- Add Solo spice-harvest yield control and clarify in Solo and self-host settings that lower ratios give more spice.
+- Use catalog item volumes without replacing them with inflated fallback values, and allow Solo grants to use modded storage capacities.
+- Show complete experimental setting names and copy exact command names or configured INI entries.
+- Follow redirects when verifying the website installer link after deployment.
+- Label the Solo map as Deep Desert Live Map.
+
 ## [16.6.0] - 2026-10-23
 
 - Organize player management into Overview, Items, Progression, Activity and Advanced, with shared tool search and a focused layout for player-only accounts.

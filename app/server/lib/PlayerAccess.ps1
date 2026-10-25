@@ -86,6 +86,8 @@ function Test-DunePlayerRequestAccess {
     param($Request, $Response, [hashtable]$RouteParams, $Body)
     $principal = $RouteParams.requestPrincipal
     if ([string]$principal.type -ne 'linked-player') { return $true }
+    # Response-local metadata cannot bleed between pooled requests or roles.
+    $Response | Add-Member -NotePropertyName DunePlayerResponse -NotePropertyValue $true -Force
     $path = [string]$Request.Url.AbsolutePath
     # Use the registered template injected by the dispatcher, not body/query.
     $policy = Get-DunePlayerRoutePolicy -Method ([string]$Request.HttpMethod) -Path ([string]$RouteParams.registeredPath)
@@ -150,4 +152,30 @@ function Test-DunePlayerRequestAccess {
         Write-DuneError -Response $Response -Status 403 -Message $_.Exception.Message
         return $false
     }
+}
+
+function Protect-DunePlayerResponseJson {
+    param([string]$Json)
+    # Cover addresses in nested map metadata and diagnostic/error text as well
+    # as ordinary ip fields. Preserve coordinates, item IDs and JSON structure.
+    $ipv4 = '(?<![A-Za-z0-9.])(?:[0-9]{1,3}\.){3}[0-9]{1,3}(?![A-Za-z0-9.])'
+    $ipv6 = '(?<![A-Za-z0-9:])(?:[A-Fa-f0-9]{0,4}:){2,}[A-Fa-f0-9:.]+(?:%[A-Za-z0-9]+)?'
+    $redact = [Text.RegularExpressions.MatchEvaluator]{
+        param($match)
+        $address = $null
+        if ([Net.IPAddress]::TryParse($match.Value, [ref]$address)) { return '[address hidden]' }
+        return $match.Value
+    }
+    $result = [regex]::Replace($Json, $ipv4, $redact)
+    return [regex]::Replace($result, $ipv6, $redact)
+}
+
+function Compress-DunePlayerMapJson {
+    param([byte[]]$Bytes)
+    $buffer = [IO.MemoryStream]::new()
+    try {
+        $gzip = [IO.Compression.GZipStream]::new($buffer, [IO.Compression.CompressionLevel]::Fastest, $true)
+        try { $gzip.Write($Bytes, 0, $Bytes.Length) } finally { $gzip.Dispose() }
+        return ,$buffer.ToArray()
+    } finally { $buffer.Dispose() }
 }
