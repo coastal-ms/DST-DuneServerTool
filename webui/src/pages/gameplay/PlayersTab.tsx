@@ -3,7 +3,7 @@
 //
 // Reads /api/gameplay/players for the list + /api/gameplay/players/summary
 // for the server overview. Each section component owns its own data fetch.
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { useSearch } from '../../router'
 import { Icon } from '../../components/Icon'
 import {
@@ -12,11 +12,11 @@ import {
 } from '../../api/gameplay'
 import { fmtNum, SourceBadge, StatCard, DemoNotice } from './shared'
 import {
-  SECTIONS, SECTION_COMPONENTS, type SectionId,
+  SECTION_COMPONENTS, type SectionId,
 } from './players/sections'
 import { CoriolisAdmin } from './players/coriolis'
 import { BaseWaterAdmin } from './players/base-water'
-import { useCommandDeck } from '../../hooks/useCommandDeck'
+import { PlayerManagement } from './players/PlayerManagement'
 import { mapLabel } from '../../util/mapLabel'
 import './players/playersDesk.css'
 
@@ -24,8 +24,34 @@ type OnlineFilter = '' | 'online' | 'offline'
 
 const isOnline = (s: string) => s.toLowerCase().includes('online')
 
+function setPlayerLocation(id: number | null) {
+  const url = new URL(window.location.href)
+  if (id) url.searchParams.set('player_id', String(id))
+  else url.searchParams.delete('player_id')
+  for (const key of ['scope_type', 'scope_id', 'location_type', 'location_id', 'q']) url.searchParams.delete(key)
+  window.history.replaceState(null, '', url)
+  window.dispatchEvent(new PopStateEvent('popstate'))
+}
+
 export function PlayersTab() {
-  const contextual = useCommandDeck()
+  const workspace = useRef<HTMLDivElement>(null)
+  useLayoutEffect(() => {
+    const frame = workspace.current
+    if (!frame) return
+    const host = frame.closest<HTMLElement>('[data-app-scroll-container], [data-app-scroll-host], .spatial-tool-scroll')
+    const update = () => {
+      const bottom = Math.min(window.visualViewport?.height ?? window.innerHeight, host?.getBoundingClientRect().bottom ?? window.innerHeight)
+      const top = Math.max(frame.getBoundingClientRect().top, host?.getBoundingClientRect().top ?? 0)
+      if (bottom > top) frame.style.setProperty('--player-workspace-height', `${Math.max(240, bottom - top - 8)}px`)
+    }
+    const observer = typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(update)
+    if (host) observer?.observe(host)
+    window.addEventListener('resize', update)
+    window.visualViewport?.addEventListener('resize', update)
+    update()
+    return () => { observer?.disconnect(); window.removeEventListener('resize', update); window.visualViewport?.removeEventListener('resize', update) }
+  }, [])
+  const contextual = true
   const routeSearch = useSearch()
   const routeParams = new URLSearchParams(routeSearch)
   const [players, setPlayers]   = useState<Player[]>([])
@@ -42,7 +68,8 @@ export function PlayersTab() {
     try { return localStorage.getItem('dst.players.gmNoticeDismissed') === '1' } catch { return false }
   })
   const [selectedId, setSel]    = useState<number | null>(() => Number(routeParams.get('player_id')) || null)
-  const [section, setSection]   = useState<SectionId>(() => routeParams.get('section') === 'inventory' || routeParams.get('view') === 'inventory' ? 'inventory' : 'stats')
+  const requestedSection = routeParams.get('section') ?? routeParams.get('view') ?? 'stats'
+  const section: SectionId = requestedSection in SECTION_COMPONENTS ? requestedSection as SectionId : 'stats'
   const [directoryOpen, setDirectoryOpen] = useState(false)
   const [flash, setFlash]       = useState<{ msg: string; kind: 'ok' | 'err' | 'info' } | null>(null)
   const [refreshKey, setRefresh] = useState(0)
@@ -52,7 +79,7 @@ export function PlayersTab() {
     const params = new URLSearchParams(routeSearch)
     const player = Number(params.get('player_id'))
     if (Number.isSafeInteger(player) && player > 0) setSel(player)
-    if (params.get('section') === 'inventory' || params.get('view') === 'inventory') setSection('inventory')
+
   }, [routeSearch])
 
   const loadList = useCallback(async () => {
@@ -95,6 +122,7 @@ export function PlayersTab() {
       const tag = t?.tagName
       if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || t?.isContentEditable || t?.closest('dialog,[role="dialog"]')) return
       setSel(null)
+      setPlayerLocation(null)
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
@@ -179,7 +207,6 @@ export function PlayersTab() {
   }, [refresh])
   const forceRefresh = useCallback(() => { pendingRefresh.current = false; refresh() }, [refresh])
 
-  const SectionComponent = SECTION_COMPONENTS[section]
 
   const rosterControls = <div className={contextual ? 'player-directory-controls' : 'card p-3 mb-4 flex flex-wrap items-center gap-2'}>
     <div className="relative flex-1 min-w-0">
@@ -205,17 +232,10 @@ export function PlayersTab() {
     </div>
     {!contextual && <SourceBadge source={source} />}
   </div>
-  const sectionNavigation = <nav aria-label="Player sections" className={contextual ? 'player-section-nav' : 'card p-0 overflow-hidden'}>
-    {!contextual && <div className="px-3 py-2 border-b border-border text-[11px] uppercase tracking-wider text-text-dim">Sections</div>}
-    {SECTIONS.map(item => <button key={item.id} type="button" aria-pressed={section === item.id}
-      onClick={() => { flushRefresh(); setSection(item.id) }}
-      className={contextual ? undefined : `w-full flex items-center gap-2 px-3 py-2 text-sm text-left border-b border-border/30 last:border-b-0 hover:bg-surface-2 ${section === item.id ? 'bg-surface-2 text-accent-bright border-l-2 border-l-accent' : 'text-text'}`}>
-      <Icon name={item.icon} size={15} /><span>{item.label}</span>
-    </button>)}
-  </nav>
+
 
   return (
-    <div className={contextual ? 'players-desk' : undefined} data-player-selected={contextual && !!selected} data-directory-open={directoryOpen}>
+    <div ref={workspace} className={contextual ? 'players-desk player-admin-workspace' : undefined} data-player-selected={contextual && !!selected} data-directory-open={directoryOpen}>
       {/* Top-of-tab stat cards */}
       {!contextual && <section className="grid grid-cols-2 md:grid-cols-3 gap-3 mb-4">
         <StatCard label="Players"    value={fmtNum(visiblePlayers.length)}                                                icon="Users" />
@@ -292,9 +312,9 @@ export function PlayersTab() {
                 <div className="px-3 py-6 text-center text-text-dim text-sm">No players match.</div>
               ) : (
                 filtered.map(p => (
-                  <button key={p.id} type="button" onClick={() => { flushRefresh(); setSel(cur => cur === p.id ? null : p.id); setDirectoryOpen(false) }}
+                  <button key={p.id} type="button" onClick={() => { setDirectoryOpen(false); if (selectedId === p.id) return; flushRefresh(); setSel(p.id); setPlayerLocation(p.id) }}
                     aria-pressed={selectedId === p.id} aria-label={`Inspect ${p.name || 'Unnamed player'} (${p.id})`}
-                    title={selectedId === p.id ? 'Click again to close and return to Server Overview' : undefined}
+                    title={selectedId === p.id ? 'Selected player' : undefined}
                     className={contextual ? 'player-directory-row' : `w-full flex items-center justify-between gap-2 px-3 py-2 text-left border-b border-border/30 hover:bg-surface-2 ${selectedId === p.id ? 'bg-surface-2 border-l-2 border-l-accent' : ''}`}>
                     <span className="min-w-0 flex-1">
                       <div className="text-sm text-text truncate">{p.name || <span className="italic text-text-dim">Unnamed</span>}</div>
@@ -310,7 +330,7 @@ export function PlayersTab() {
           </div>
 
           {/* Section nav (only when a player is selected) */}
-          {selected && !contextual && sectionNavigation}
+
         </aside>
 
         {/* Right pane */}
@@ -327,12 +347,12 @@ export function PlayersTab() {
           )}
           {selected ? (
             <div className={contextual ? 'player-dossier-stack' : 'space-y-3'}>
-              <PlayerHeader player={selected} contextual={contextual} onChoosePlayer={() => setDirectoryOpen(true)} onClose={() => { flushRefresh(); setSel(null) }} />
-              {contextual && sectionNavigation}
+              <PlayerHeader player={selected} contextual={contextual} onChoosePlayer={() => setDirectoryOpen(true)} onClose={() => { flushRefresh(); setSel(null); setPlayerLocation(null) }} />
+
               {contextual && !filtered.some(player => player.id === selected.id) && <p className="player-filter-notice">This player is outside the current directory filter. Their dossier remains open.</p>}
               <div className={contextual ? 'player-dossier-content' : undefined}>
-              <SectionComponent
-                key={contextual ? selected.id : undefined}
+              <PlayerManagement initialSection={section}
+                key={section}
                 player={selected}
                 canWrite={source === 'live' && !error}
                 demo={source === 'demo'}
@@ -366,6 +386,7 @@ export function PlayersTab() {
 
 function PlayerHeader({ player, onClose, onChoosePlayer, contextual = false }: { player: Player; onClose: () => void; onChoosePlayer?: () => void; contextual?: boolean }) {
   if (contextual) return <header className="player-dossier-header">
+    <span className="player-character-avatar"><Icon name="User" size={26} /></span>
     <div className="player-dossier-identity">
       <h2>{player.name || 'Unnamed player'}</h2>
       <span data-online={isOnline(player.online_status)}><Icon name={isOnline(player.online_status) ? 'Wifi' : 'WifiOff'} size={14} />{player.online_status || 'Unknown'}</span>

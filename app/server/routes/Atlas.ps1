@@ -15,15 +15,15 @@ Register-DuneRoute -Method POST -Path '/api/v1/maps/atlas/session' -Handler {
 
 Register-DuneRoute -Method GET -Path '/api/v1/maps/atlas/view' -Handler {
     param($req, $res, $routeParams, $body)
-    Invoke-DuneAtlasProxy -Request $req -Response $res -Path '/' -Method GET
+    Invoke-DuneAtlasProxy -Request $req -Response $res -Path '/' -Method GET -Principal (Get-DuneRouteRequestPrincipal $routeParams)
 }
 
 Register-DuneRoute -Method GET -Path '/api/v1/maps/atlas/resource' -Handler {
     param($req, $res, $routeParams, $body)
-    Invoke-DuneAtlasProxy -Request $req -Response $res -Path ([string]$req.QueryString['path']) -Method GET
+    Invoke-DuneAtlasProxy -Request $req -Response $res -Path ([string]$req.QueryString['path']) -Method GET -Principal (Get-DuneRouteRequestPrincipal $routeParams)
 }
 
 Register-DuneRoute -Method POST -Path '/api/v1/maps/atlas/resource' -Handler {
     param($req, $res, $routeParams, $body)
-    Invoke-DuneAtlasProxy -Request $req -Response $res -Path ([string]$req.QueryString['path']) -Method POST -Body $body
+    Invoke-DuneAtlasProxy -Request $req -Response $res -Path ([string]$req.QueryString['path']) -Method POST -Body $body -Principal (Get-DuneRouteRequestPrincipal $routeParams)
 }

@@ -119,3 +119,33 @@ Describe 'Reviewed ordinary customizations' {
         $result.error | Should -Match '301 remain'
     }
 }
+
+Describe 'Unified individual appearance catalog' {
+    It 'exposes every batch appearance and swatch through the same individual search catalog' {
+        $catalog = Get-DuneCosmeticsCatalog
+        $individual = @($catalog.templates | Where-Object { $_.grant_method -eq 'character' })
+        $gear = @(Get-DuneReviewedCustomization 'ObservedGearAppearances').customizationIds
+        $swatches = @(Get-DuneReviewedCustomization 'ObservedCharacterSwatches').customizationIds
+        $expected = @(@($gear) + @($swatches) | Sort-Object -Unique)
+        @($individual.customization_ids | Sort-Object -Unique).Count | Should -Be $expected.Count
+        foreach ($id in $expected) { @($individual | Where-Object { $_.template -ceq ('appearance:' + $id) }).Count | Should -Be 1 }
+        ($individual | Where-Object template -EQ 'appearance:B1C3_Shaman_Raider_Top').name | Should -BeLike '*Hidden Hand*'
+        ($individual | Where-Object template -EQ 'appearance:AgentX_Stillsuit_Torso').name | Should -BeLike '*Awakened*'
+    }
+    It 'selects exactly one batch ID and rejects unknown or differently cased IDs' {
+        $entry = Get-DuneReviewedCustomization 'appearance:AgentX_Stillsuit_Torso'
+        @($entry.customizationIds).Count | Should -Be 1
+        $entry.customizationIds[0] | Should -BeExactly 'AgentX_Stillsuit_Torso'
+        foreach ($id in @('appearance:Unknown','appearance:agentx_stillsuit_torso','appearance:ObservedGearAppearances')) { { Get-DuneReviewedCustomization $id } | Should -Throw }
+        $sql = Get-DuneReviewedCustomizationSql 1 2 3 'appearance:B1C3_Shaman_Raider_Top'
+        $sql | Should -Match 'B1C3_Shaman_Raider_Top'
+        $sql | Should -Not -Match 'B1C3_Shaman_Raider_Boots'
+        $sql | Should -Match 'Offline'
+    }
+    It 'recognizes exact per-character ownership without granting a whole set' {
+        $owned = [Collections.Generic.HashSet[string]]::new([StringComparer]::OrdinalIgnoreCase)
+        Add-DuneCosmeticCatalogOwnership -Owned $owned -CustomizationIds @('B1C3_Shaman_Raider_Top')
+        $owned.Contains('appearance:B1C3_Shaman_Raider_Top') | Should -BeTrue
+        $owned.Contains('appearance:B1C3_Shaman_Raider_Boots') | Should -BeFalse
+    }
+}

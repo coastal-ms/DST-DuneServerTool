@@ -69,8 +69,33 @@
 .spatial-tool-portal .player-action-notice { max-width:100%; }
 .players-desk :is(button,input,select,summary):focus-visible { outline:2px solid var(--portal-selection,var(--color-ibad)); outline-offset:-2px; }
 .player-change-directory,.player-directory-close { display:none; }
+.player-admin-workspace { display:flex; flex-direction:column; height:var(--player-workspace-height,65vh); min-height:0; }
+.player-admin-workspace > .players-desk-body { flex:1; min-height:0; }
+.player-admin-workspace .player-directory { display:flex; flex-direction:column; height:100%; min-height:0; }
+.player-admin-workspace .player-directory-heading,.player-admin-workspace .player-directory-controls { flex-shrink:0; }
+.player-admin-workspace .player-directory-list { flex:1; min-height:0; display:flex; flex-direction:column; }
+.player-admin-workspace .player-directory-results { flex:1; min-height:0; max-height:none; overflow:auto; }
+.player-admin-workspace .player-dossier { height:100%; min-height:0; overflow:auto; }
+.player-admin-workspace .player-dossier-stack { height:100%; min-height:0; }
+.player-admin-workspace .player-dossier-content { flex:1; min-height:0; display:flex; }
+.player-admin-workspace .player-management { flex:1; min-height:0; display:flex; flex-direction:column; }
+.player-admin-workspace .player-management > :not(.player-management-content) { flex-shrink:0; }
+.player-admin-workspace .player-management-content { flex:1; min-height:0; overflow:auto; overscroll-behavior:contain; scrollbar-gutter:stable; }
+.player-admin-workspace .player-tool-search { margin:6px 0 8px; gap:6px; }
+.player-admin-workspace .player-home-nav,.player-admin-workspace .player-view-nav { margin-bottom:8px; }
+.player-admin-workspace .player-home-nav { padding-bottom:8px; }
+.players-desk.player-admin-workspace .player-dossier-header { padding:8px 10px; gap:10px; flex-shrink:0; }
+.player-admin-workspace .player-dossier-header .player-character-avatar { width:36px; height:36px; border-radius:8px 2px; }
+.player-admin-workspace .player-dossier-identity h2 { font-size:18px; }
 @media(max-width:1100px) { .players-desk-body { grid-template-columns:210px minmax(0,1fr); gap:12px; } }
 @media(max-width:767px) {
+  .player-admin-workspace .player-home-nav,.player-admin-workspace .player-view-nav { flex-wrap:nowrap; overflow-x:auto; }
+  .player-admin-workspace .player-home-nav button,.player-admin-workspace .player-view-nav button { flex:none; white-space:nowrap; }
+  .player-admin-workspace[data-player-selected="false"] { height:auto; }
+  .player-admin-workspace[data-player-selected="false"] > .players-desk-body { overflow:visible; }
+  .player-admin-workspace[data-player-selected="false"] :is(.player-directory,.player-dossier) { height:auto; }
+  .player-admin-workspace > .players-desk-body { overflow:hidden; }
+  .player-admin-workspace .player-directory { margin-bottom:0; }
   .players-desk-body { display:block; }
   .player-directory { border-right:0; padding-right:0; border-bottom:1px solid var(--color-border); margin-bottom:10px; }
   .players-desk .player-directory-results { max-height:225px; }

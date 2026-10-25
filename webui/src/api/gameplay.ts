@@ -1128,7 +1128,7 @@ export interface PlayerStats {
   total_currency: number
   faction_reps?: { faction_id: number; faction_name: string; reputation: number }[]
   faction_rep_cap?: number
-  scrip?: number
+  scrip?: number | null
   intel?: number
   intel_max?: number
 }
@@ -1533,7 +1533,7 @@ export function getItemCatalog(): Promise<CatalogItem[]> {
 // by GET /api/catalog/cosmetics (from gameplay-item-data names). These aren't in
 // the standard item catalog; granting one delivers it via the normal give-item
 // path so the player unlocks the appearance.
-export interface CosmeticEntry { template: string; name: string; group: string; bulk_building_set?: boolean; bulk_exclusion?: string }
+export interface CosmeticEntry { template: string; name: string; group: string; bulk_building_set?: boolean; bulk_exclusion?: string; grant_method?: 'character'; customization_id?: string; customization_ids?: string[] }
 interface CosmeticsResponse { templates?: CosmeticEntry[]; total?: number }
 let _cosmeticsCache: CosmeticEntry[] | null = null
 let _cosmeticsPromise: Promise<CosmeticEntry[]> | null = null
@@ -2784,8 +2784,10 @@ export function grantReviewedCustomization(pawn_id: number, controller_id: numbe
     method: 'POST', body: JSON.stringify({ pawn_id, controller_id, account_id, customizationId, confirm: 'GRANT REVIEWED CUSTOMIZATION' }),
   })
 }
+export interface ReviewedGrantEntry { id: string; owned: boolean; quality?: number; uses?: number | null; limited?: boolean }
+export interface ReviewedGrantPreview { total: number; owned: number; remaining: number; entries: ReviewedGrantEntry[] }
 export function getReviewedGrantCounts(pawn_id: number, controller_id: number, account_id: number, customizationId: string) {
-  return api<{result: {total: number; owned: number; remaining: number}}>('/api/gameplay/players/reviewed-customization', {
+  return api<{result: ReviewedGrantPreview}>('/api/gameplay/players/reviewed-customization', {
     method: 'POST', body: JSON.stringify({pawn_id, controller_id, account_id, customizationId, checkOnly: true}),
   }).then(response => {
     const counts = response.result

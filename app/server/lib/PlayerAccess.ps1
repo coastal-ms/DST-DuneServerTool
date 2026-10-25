@@ -6,6 +6,7 @@ function Get-DunePlayerRoutePolicy {
     if ($Method -eq 'GET' -and $Path -in @(
         '/api/portal-auth/status','/api/v1/capabilities','/api/v1/platform/status',
         '/api/player-portal/status','/api/v1/maps/catalog','/api/v1/maps/deep-desert',
+        '/api/v1/maps/atlas/view','/api/v1/maps/atlas/resource',
         '/api/v1/maps/deep-desert/layers/{layer}', '/api/maps/{key}',
         '/api/catalog/items','/api/catalog/cosmetics','/api/catalog/vehicle-kits',
         '/api/catalog/character-defs','/api/gameplay/augments/catalog',
@@ -15,7 +16,8 @@ function Get-DunePlayerRoutePolicy {
         '/api/gameplay/players/trainers','/api/gameplay/players/main-quests',
         '/api/gameplay/players/teleport-destinations'
     )) { return 'shared' }
-    if ($Method -eq 'POST' -and $Path -in @('/api/portal-auth/logout','/api/portal-auth/change-password','/api/maps/{key}/start')) { return 'shared' }
+    if ($Method -eq 'POST' -and $Path -in @('/api/portal-auth/logout','/api/portal-auth/change-password','/api/maps/{key}/start',
+        '/api/v1/maps/atlas/session','/api/v1/maps/atlas/resource')) { return 'shared' }
     if ($Method -eq 'GET') {
         switch ($Path) {
             '/api/gameplay/players' { return 'directory' }
@@ -25,6 +27,9 @@ function Get-DunePlayerRoutePolicy {
             '/api/gameplay/players/specs' { return 'pawn,controller' }
             '/api/gameplay/players/tags' { return 'account' }
             '/api/gameplay/players/events' { return 'account' }
+            '/api/v1/inventory/items' { return 'inventory' }
+            '/api/v1/inventory/items/occurrences' { return 'inventory' }
+            '/api/v1/inventory/items/{templateId}/occurrences' { return 'inventory' }
             '/api/gameplay/players/journey' { return 'account_id' }
             '/api/gameplay/players/codex' { return 'account_id' }
             '/api/gameplay/players/cosmetics-owned' { return 'account_id' }
@@ -93,10 +98,21 @@ function Test-DunePlayerRequestAccess {
         $RouteParams['linkedPlayer'] = $player
         if ($policy -eq 'directory') { return $true }
         $isRead = [string]$Request.HttpMethod -eq 'GET'
+        if ($policy -eq 'inventory') {
+            $requestedPlayer = 0L
+            if (-not [long]::TryParse([string](Get-DuneQ $Request 'player_id'), [ref]$requestedPlayer) -or
+                $requestedPlayer -ne [long]$player.id) { throw 'Select your linked character to view inventory.' }
+            $types = [string](Get-DuneQ $Request 'types')
+            if (-not $types -or @($types -split ',' | Where-Object { $_ -notin @('player','storage') }).Count) {
+                throw 'Player accounts can view only their own backpack, bank and storage.'
+            }
+            return $true
+        }
         $liveActions = @('give-item','give-items','grant-house-swatches','award-char-xp','fill-water',
             'set-skill-points','clean-inventory','reset-progression','set-skill-module','give-item-live','kick','set-weapon-ammo')
         $action = $path -replace '^/api/gameplay/players/', ''
-        if (-not $isRead -and $action -notin $liveActions -and [string]$player.online_status -ne 'Offline') {
+        $grantCountRead = $action -eq 'reviewed-customization' -and (Get-DuneBodyValue $Body 'checkOnly') -eq $true
+        if (-not $isRead -and -not $grantCountRead -and $action -notin $liveActions -and [string]$player.online_status -ne 'Offline') {
             throw 'Log out of the game and wait for your character to be Offline before editing saved data.'
         }
         $expected = @{

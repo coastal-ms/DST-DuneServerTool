@@ -46,6 +46,7 @@ $exePath    = Join-Path $appRoot 'build\output\DuneServer.exe'
 $outDir     = Join-Path $appRoot 'installer\output'
 $installer  = Join-Path $outDir 'DuneServerSetup.exe'
 & (Join-Path $PSScriptRoot 'Prepare-AtlasPython.ps1')
+& (Join-Path $PSScriptRoot 'Test-VmMapHelperPackage.ps1')
 $soloProj   = Join-Path $appRoot 'tools\DuneSoloDb\DuneSoloDb.csproj'
 $soloExe    = Join-Path $appRoot 'tools\DuneSoloDb\bin\Release\net10.0-windows\win-x64\publish\DuneSoloDb.exe'
 $regisProj  = Join-Path $appRoot 'tools\DuneRegisTanks\DuneRegisTanks.csproj'

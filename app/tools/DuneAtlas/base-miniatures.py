@@ -1,6 +1,6 @@
 """Render original schematic base miniatures from saved building transforms; no game meshes."""
 from pathlib import Path
-import json,math,collections,datetime,html,os
+import json,math,collections,datetime,html,os,hashlib
 R=Path(__file__).resolve().parent
 
 def qrotate(p,q):
@@ -57,10 +57,10 @@ def build(source,output_root=R):
   if p['owner'] in owners and 'totem' not in p['type'].lower():models[owners[p['owner']]]['placeables'].append(p)
  out={};folder=output_root/'bases';folder.mkdir(exist_ok=True)
  for bid,m in models.items():
-  extent=None
+  extent=None;art_version=None
   if m['pieces'] or m['placeables']:
-   svg,extent=miniature(m['pieces'],m['placeables']);target=folder/(bid+'.svg');tmp=target.with_suffix('.tmp');tmp.write_text(svg,encoding='utf-8');tmp.replace(target)
-  types=collections.Counter(p[3] for p in m['pieces']);place=collections.Counter(p['type'] for p in m['placeables']);out[bid]={k:v for k,v in m.items() if k not in ['pieces','placeables']};out[bid].update(pieceCount=len(m['pieces']),placeableCount=len(m['placeables']),buildingCount=len(set(p[0] for p in m['pieces'])),types=types,placeableTypes=place,approximateExtentMeters=extent,schematic=True)
+   svg,extent=miniature(m['pieces'],m['placeables']);art_version=hashlib.sha256(svg.encode()).hexdigest()[:20];target=folder/(bid+'.svg');tmp=target.with_suffix('.tmp');tmp.write_text(svg,encoding='utf-8');tmp.replace(target)
+  types=collections.Counter(p[3] for p in m['pieces']);place=collections.Counter(p['type'] for p in m['placeables']);out[bid]={k:v for k,v in m.items() if k not in ['pieces','placeables']};out[bid].update(artVersion=art_version,pieceCount=len(m['pieces']),placeableCount=len(m['placeables']),buildingCount=len(set(p[0] for p in m['pieces'])),types=types,placeableTypes=place,approximateExtentMeters=extent,schematic=True)
   data_target=folder/(bid+'.json');data_tmp=data_target.with_suffix('.json.tmp');data_tmp.write_text(json.dumps({**m,**out[bid],'observedAt':source['observedAt']}),encoding='utf-8');data_tmp.replace(data_target)
  value={'observedAt':source['observedAt'],'readOnly':True,'models':out,'geometryNote':'Saved positions and full quaternion rotations. Schematic shapes and dimensions; game meshes unavailable. Nominal foundation spacing512cm observed in234 nearest pairs; shape bounds remain approximate.'};p=output_root/'base-models-current.json';tmp=p.with_suffix('.tmp');tmp.write_text(json.dumps(value),encoding='utf-8');tmp.replace(p);return value
 if __name__=='__main__':

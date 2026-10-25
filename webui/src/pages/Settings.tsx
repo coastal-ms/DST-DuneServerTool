@@ -15,6 +15,7 @@ import { ServerBrowserPingCard } from './settings/ServerBrowserPingCard'
 import { HyperVLanCard } from './settings/HyperVLanCard'
 import { HyperVLifecycleCard } from './settings/HyperVLifecycleCard'
 import { BrowserAccessCard } from './settings/BrowserAccessCard'
+import { VmMapHelperCard } from './settings/VmMapHelperCard'
 import { FlsTokenCard } from './settings/FlsTokenCard'
 import { FreshStartSnapshotsCard } from './settings/FreshStartSnapshotsCard'
 import { IniBackupsCard } from './settings/IniBackupsCard'
@@ -960,6 +961,7 @@ export function Settings() {
 
       </>}
       {!soloOnly && <SectionErrorBoundary name="Mobile App Pairing"><BrowserAccessCard /></SectionErrorBoundary>}
+      {!soloOnly && <SectionErrorBoundary name="VM-hosted Live Map"><VmMapHelperCard /></SectionErrorBoundary>}
       {!soloOnly && <div className="mt-4"><StartupSettingsSync /></div>}
     </>
   )

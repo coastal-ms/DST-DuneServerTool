@@ -5,6 +5,7 @@ export interface AtlasSession {
   url?: string
   mode?: 'snapshot' | 'live'
   reasonCode?: string
+  hosting?: 'vm'
 }
 
 /** Starts only the idle local map host; observations remain opt-in. */

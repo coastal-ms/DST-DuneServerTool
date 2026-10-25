@@ -325,6 +325,16 @@ ORDER BY total DESC, currency_id;
     return $null
 }
 
+function Get-DuneScripCurrencySqlExpression {
+    param([string]$Ip)
+    if (-not (Test-V6LegacySolarisFunctionAvailable -Ip $Ip)) {
+        return Get-V6HouseCreditSqlExpression -Ip $Ip
+    }
+    $currencyId = Resolve-DuneScripCurrencyId -Ip $Ip
+    if ($null -eq $currencyId) { return $null }
+    return "$([int]$currencyId)::smallint"
+}
+
 function Invoke-DunePlayerGiveScrip {
     param([string]$Ip, [long]$ActorId, [long]$Delta, [int]$CurrencyIdOverride = 0)
     if ($ActorId -le 0) { return @{ ok = $false; error = 'actor_id is required.' } }

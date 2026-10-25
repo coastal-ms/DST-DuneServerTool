@@ -179,6 +179,80 @@ afterEach(() => {
 })
 
 describe('Shared Inventory Explorer grouped catalog', () => {
+  it('shows a clear storage restart notice and separates stack editing from deletion', async () => {
+    occurrenceApi.mockResolvedValue({...occurrenceFixture,data:{...occurrenceFixture.data,items:[{...occurrence,quality:0,durability:'N/A',maxDurability:'N/A'}]}})
+    renderExplorer()
+    fireEvent.click(await screen.findByRole('button',{name:/Copper, total quantity/}))
+    expect(await screen.findByRole('note',{name:'Storage edit restart requirement'})).toHaveTextContent('BG restart required')
+    const panel=screen.getByRole('dialog',{name:'Copper'})
+    expect(within(panel).getByRole('spinbutton',{name:'Stack quantity for Copper in Copper box'})).toHaveValue(10)
+    expect(within(panel).getByRole('spinbutton',{name:'Delete quantity for Copper in Copper box'})).toHaveValue(10)
+    expect(within(panel).queryByText('Quality',{exact:true})).not.toBeInTheDocument()
+    expect(within(panel).queryByText('Durability',{exact:true})).not.toBeInTheDocument()
+  })
+  it('saves a storage stack with its expected quantity and confirms the restart requirement', async () => {
+    const confirm=vi.spyOn(window,'confirm').mockReturnValue(true)
+    setStorageItemStackApi.mockImplementationOnce(async()=>{
+      occurrenceApi.mockResolvedValue({...occurrenceFixture,data:{...occurrenceFixture.data,items:[{...occurrence,quantity:15}]}})
+      return {ok:true,message:'Updated.'}
+    })
+    renderExplorer()
+    fireEvent.click(await screen.findByRole('button',{name:/Copper, total quantity/}))
+    fireEvent.change(await screen.findByRole('spinbutton',{name:'Stack quantity for Copper in Copper box'}),{target:{value:'15'}})
+    fireEvent.click(screen.getByRole('button',{name:'Save stack quantity for Copper in Copper box'}))
+    await waitFor(()=>expect(setStorageItemStackApi).toHaveBeenCalledExactlyOnceWith(42,15,10))
+    expect(confirm).toHaveBeenCalledWith(expect.stringContaining('BG restart required'))
+    expect(await screen.findByText(/Stack quantity changed from 10 to 15/)).toBeInTheDocument()
+    expect(deleteStorageItemApi).not.toHaveBeenCalled()
+    expect(setItemStackApi).not.toHaveBeenCalled()
+  })
+  it('keeps an entered quantity when the backend rejects a stale stack', async () => {
+    vi.spyOn(window,'confirm').mockReturnValue(true)
+    setStorageItemStackApi.mockRejectedValueOnce(new Error('Item quantity changed. Refresh and try again.'))
+    renderExplorer()
+    fireEvent.click(await screen.findByRole('button',{name:/Copper, total quantity/}))
+    const input=await screen.findByRole('spinbutton',{name:'Stack quantity for Copper in Copper box'})
+    fireEvent.change(input,{target:{value:'15'}})
+    fireEvent.click(screen.getByRole('button',{name:'Save stack quantity for Copper in Copper box'}))
+    expect(await screen.findByText('Item quantity changed. Refresh and try again.')).toBeInTheDocument()
+    expect(input).toHaveValue(15)
+    expect(screen.getByRole('button',{name:'Save stack quantity for Copper in Copper box'})).toBeEnabled()
+  })
+  it('rejects a fractional stack quantity before confirmation or a write', async () => {
+    const confirm=vi.spyOn(window,'confirm')
+    renderExplorer()
+    fireEvent.click(await screen.findByRole('button',{name:/Copper, total quantity/}))
+    fireEvent.change(await screen.findByRole('spinbutton',{name:'Stack quantity for Copper in Copper box'}),{target:{value:'1.5'}})
+    fireEvent.click(screen.getByRole('button',{name:'Save stack quantity for Copper in Copper box'}))
+    expect(await screen.findByText('Stack quantity must be a whole number of at least 1.')).toBeInTheDocument()
+    expect(confirm).not.toHaveBeenCalled()
+    expect(setStorageItemStackApi).not.toHaveBeenCalled()
+  })
+  it('keeps bank catalog and occurrence reads fixed to the bank location', async () => {
+    render(<BrowserRouter><SharedInventoryExplorer selectedPlayer={{id:20001,name:'Coastal'}} entityTypes={['player']} fixedLocation={{type:'player',id:60011}} title="Bank" /></BrowserRouter>)
+    fireEvent.click(await screen.findByRole('button',{name:/Copper, total quantity/}))
+    await screen.findByRole('dialog',{name:'Copper'})
+    await waitFor(()=>expect(occurrenceApi).toHaveBeenCalled())
+    expect(screen.queryByRole('combobox',{name:'Location',exact:true})).not.toBeInTheDocument()
+    expect(screen.getByRole('combobox',{name:'Occurrence location'})).toBeDisabled()
+    expect(screen.getByRole('combobox',{name:'Occurrence player'})).toBeDisabled()
+    for (const [query] of inventoryApi.mock.calls) expect(query).toMatchObject({playerId:20001,locationType:'player',locationId:60011})
+    for (const [query] of occurrenceApi.mock.calls) expect(query).toMatchObject({playerId:20001,locationType:'player',locationId:60011})
+  })
+  it('preserves the open occurrence and draft quantity across unrelated parent updates', async () => {
+    const element = () => <BrowserRouter><SharedInventoryExplorer selectedPlayer={{id:20001,name:'Coastal'}} entityTypes={['player','storage']} /></BrowserRouter>
+    const view = render(element())
+    fireEvent.click(await screen.findByRole('button', {name:/Copper, total quantity/}))
+    const quantity = await screen.findByRole('spinbutton', {name:'Delete quantity for Copper in Copper box'})
+    fireEvent.change(quantity, {target:{value:'4'}})
+    const reads = inventoryApi.mock.calls.length, detailReads = occurrenceApi.mock.calls.length
+    for (let update=0; update<3; update++) await act(async () => { view.rerender(element()) })
+    expect(screen.getByRole('dialog',{name:'Copper'})).toBeInTheDocument()
+    expect(screen.getByRole('spinbutton',{name:'Delete quantity for Copper in Copper box'})).toBe(quantity)
+    expect(quantity).toHaveValue(4)
+    expect(inventoryApi).toHaveBeenCalledTimes(reads)
+    expect(occurrenceApi).toHaveBeenCalledTimes(detailReads)
+  })
   it('loads only the player list until a player is selected, never a full refresh', async () => {
     window.history.replaceState(null, '', '/economy?view=inventory')
     renderExplorer()
@@ -419,7 +493,7 @@ describe('Shared Inventory Explorer grouped catalog', () => {
       expect(deleteInventoryItemApi).toHaveBeenCalledWith(43, 4)
     })
     expect(confirm).toHaveBeenCalledWith(expect.stringContaining('2 selected occurrences'))
-    expect(await screen.findByText('Removed 14 items from 2 occurrences.')).toBeInTheDocument()
+    expect(await screen.findByText(/Removed 14 items from 2 occurrences\..*server zone restarts/)).toBeInTheDocument()
     confirm.mockRestore()
   })
 
@@ -439,7 +513,7 @@ describe('Shared Inventory Explorer grouped catalog', () => {
     await user.click(screen.getByRole('checkbox', { name: 'Select all loaded occurrences' }))
     await user.click(screen.getByRole('button', { name: 'Delete selected (2)' }))
 
-    expect(await screen.findByText('Removed 10 items from 1 occurrence.')).toBeInTheDocument()
+    expect(await screen.findByText(/Removed 10 items from 1 occurrence\..*server zone restarts/)).toBeInTheDocument()
     expect(screen.getByText(/1 updated; 1 failed.*Player item delete was rejected/)).toBeInTheDocument()
   })
 
@@ -453,7 +527,7 @@ describe('Shared Inventory Explorer grouped catalog', () => {
     await user.click(await screen.findByRole('button', { name: /Copper, total quantity/ }))
     await user.click(await screen.findByRole('button', { name: 'Delete Copper from Copper box' }))
 
-    expect(await screen.findByText('Removed 10 items from 1 occurrence.')).toBeInTheDocument()
+    expect(await screen.findByText(/Removed 10 items from 1 occurrence\..*server zone restarts/)).toBeInTheDocument()
     await waitFor(() => expect(screen.queryByRole('dialog', { name: 'Copper' })).not.toBeInTheDocument())
   })
 
