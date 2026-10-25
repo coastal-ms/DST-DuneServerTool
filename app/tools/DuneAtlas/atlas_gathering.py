@@ -18,9 +18,11 @@ class Queue:
     def __init__(self,preferences=None,clock=time.monotonic):
         self.clock=clock;self.lock=threading.RLock();self.selected=set();self.finished={};self.retry={};self.sequence={};self.serial=0;self.region='DeepDesert';self.update(preferences or {})
     def update(self,preferences):
+        self.update_many([preferences])
+    def update_many(self,preferences):
         with self.lock:
-            self.region=preferences.get('region','DeepDesert')
-            self.selected={(self.region,v.split(':')[-1]) for v in preferences.get('layers',[]) if v.startswith('poi:resource:') and v.split(':')[-1] in KINDS}
+            self.region=min((p.get('region','DeepDesert') for p in preferences),default='DeepDesert')
+            self.selected={(p.get('region','DeepDesert'),v.split(':')[-1]) for p in preferences for v in p.get('layers',[]) if v.startswith('poi:resource:') and v.split(':')[-1] in KINDS}
             for key in sorted(self.selected):
                 if key not in self.sequence:self.sequence[key]=self.serial;self.serial+=1
     def next(self):

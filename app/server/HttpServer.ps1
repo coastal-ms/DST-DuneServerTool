@@ -1381,7 +1381,9 @@ function Invoke-DuneContext {
         }
         if ((Test-DunePortalOwnerOrAdminPath -Path $rawPath -Method $method) -and
             -not ($portalSessionAuth.ok -and $portalSessionAuth.account.role -eq 'player' -and
-                $method -eq 'GET' -and $rawPath.StartsWith('/api/v1/maps/')) -and
+                (($method -eq 'GET' -and ($rawPath.StartsWith('/api/v1/maps/') -or
+                    $rawPath -eq '/api/v1/inventory/items' -or $rawPath.StartsWith('/api/v1/inventory/items/'))) -or
+                 ($method -eq 'POST' -and $rawPath -in @('/api/v1/maps/atlas/session','/api/v1/maps/atlas/resource')))) -and
             -not (Test-DunePortalOwnerOrAdminAccess `
                 -AccountMode $accountMode `
                 -IsLocalRequest $isLocalRequest `

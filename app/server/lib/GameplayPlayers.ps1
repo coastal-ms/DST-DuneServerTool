@@ -51,6 +51,7 @@ ORDER BY ps.account_id
 # Inventory for one pawn actor id ($1).
 $script:DunePlayerInventorySql = @'
 SELECT i.id, i.template_id, i.stack_size, COALESCE(i.quality_level, 0) AS quality_level,
+       COALESCE(i.stats #>> '{{FContractItemStats,1,ContractName,Name}}', '') AS contract_name,
        inv.id AS inventory_id, inv.inventory_type,
        (inv.inventory_type = 33 AND EXISTS (
            SELECT 1
@@ -74,6 +75,7 @@ SELECT i.id, i.template_id, i.stack_size, COALESCE(i.quality_level, 0) AS qualit
 FROM dune.items i
 JOIN dune.inventories inv ON i.inventory_id = inv.id
 WHERE inv.actor_id = {0}::bigint
+  AND inv.inventory_type IS DISTINCT FROM 30
 ORDER BY i.template_id
 '@
 
@@ -160,7 +162,7 @@ function Get-DunePlayerDetailLive {
         $inventory += [ordered]@{
             id             = (ConvertTo-DuneInt $r['id'])
             template_id    = $tmpl
-            name           = (Get-DuneGameplayItemName -TemplateId $tmpl)
+            name           = $(if ($r['contract_name']) { ([string]$r['contract_name']).Replace('_',' ') -creplace '(?<=[a-z])(?=[A-Z])', ' ' } else { Get-DuneGameplayItemName -TemplateId $tmpl })
             kind           = (Get-DuneItemKind -TemplateId $tmpl)
             stack_size     = (ConvertTo-DuneInt $r['stack_size'])
             quality        = (ConvertTo-DuneInt $r['quality_level'])
@@ -1173,12 +1175,12 @@ ORDER BY pfr.faction_id;
 
     # Scrip (Landsraad Scrip) balance — shown read-only beside the Give Scrip
     # action so admins see the current standing without guessing.
-    $scrip = 0
+    $scrip = $null
     if ($cid -gt 0) {
         try {
-            $scripId = Resolve-DuneScripCurrencyId -Ip $Ip
-            if ($null -ne $scripId) {
-                $scSql = "SELECT COALESCE(balance, 0) AS bal FROM dune.player_virtual_currency_balances WHERE player_controller_id = $cid::bigint AND currency_id = $([int]$scripId)::smallint LIMIT 1;"
+            $scripCurrencySql = Get-DuneScripCurrencySqlExpression -Ip $Ip
+            if ($null -ne $scripCurrencySql) {
+                $scSql = "SELECT COALESCE((SELECT balance FROM dune.player_virtual_currency_balances WHERE player_controller_id = $cid::bigint AND currency_id = $scripCurrencySql LIMIT 1), 0) AS bal;"
                 $sc = Invoke-DuneSqlQuery -Ip $Ip -Sql $scSql -ReadOnly $true -MaxRows 1 -TimeoutSec 15
                 if ($sc.ok) {
                     $scm = ConvertTo-DuneRowMaps -Result $sc
@@ -1413,13 +1415,13 @@ function Invoke-DunePlayerUpdateTags {
 $script:DunePlayerEventsSql = @'
 SELECT
     el.id,
-    COALESCE(to_char(el.created_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS"Z"'), '') AS ts,
-    COALESCE(el.event_type::text, '')   AS event_type,
+    COALESCE(to_char(el.event_time AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS"Z"'), '') AS ts,
+    COALESCE(el.message::text, '')   AS event_type,
     COALESCE(el.meta::text, '{{}}')        AS meta_json
 FROM dune.event_log el
 JOIN dune.accounts ac ON ac."user" = el.meta->>'fls_id'
 WHERE ac.id = {0}::bigint
-ORDER BY el.created_at DESC
+ORDER BY el.event_time DESC, el.id DESC
 LIMIT {1};
 '@
 

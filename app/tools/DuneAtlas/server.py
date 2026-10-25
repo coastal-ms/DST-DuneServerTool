@@ -33,7 +33,7 @@ except Exception:
 legacy_roots=[ROOT]
 if ROOT.parent.name=='runtimes':legacy_roots+=sorted(ROOT.parent.iterdir())[:32]
 history_frames,storm_profiles=atlas_history.load(SNAPSHOT_ROOT,legacy_roots)
-storm_history=deque(history_frames,maxlen=501)
+storm_history=deque(history_frames,maxlen=751)
 state['stormHistory']=list(storm_history)
 state['stormProfiles']=storm_profiles
 try:state['baseModels']=json.loads((ROOT/'base-models-current.json').read_text())
@@ -226,9 +226,16 @@ control=threading.Condition()
 live_enabled=atlas_live.load(PREFERENCES_ROOT)
 viewers=atlas_viewers.Leases()
 
-def touch_viewer(viewer='legacy'):
+def sync_viewer_demand():
+    previous=set(gathering_queue.selected)
+    gathering_queue.update_many(viewers.selections())
+    if gathering_queue.selected-previous:
+        urgent_jobs.add('gathering');waiting_jobs['gathering']=0
+
+def touch_viewer(viewer='legacy',preferences=None):
     with control:
-        viewers.touch(viewer)
+        viewers.touch(viewer,preferences)
+        sync_viewer_demand()
         control.notify_all()
 state['live']=live_enabled
 if live_enabled:state['liveStartedAt']=datetime.datetime.now(datetime.timezone.utc).isoformat()
@@ -243,7 +250,7 @@ MAX_ACTIVE_JOBS=3
 JOB_PERIODS={'db':10,'native':15,'positions':3,'haggaNative':15,'haggaPositions':3,'bases':60,'pois':60,'gathering':900}
 saved_preferences=atlas_preferences.load(PREFERENCES_ROOT) or {}
 state['refreshSeconds']=saved_preferences.get('refreshSeconds',3)
-gathering_queue=atlas_gathering.Queue(saved_preferences)
+gathering_queue=atlas_gathering.Queue()
 if gathering_queue.selected:
     urgent_jobs.add('gathering');waiting_jobs['gathering']=0
 for region,folder in [('DeepDesert',ROOT),('HaggaBasin',ROOT/'hagga')]:
@@ -312,6 +319,7 @@ def collection_worker(name,observe):
             generation=refresh_generation
             requested=name in (refresh_required|refresh_background) and completed.get(name,0)<generation
             watching=viewers.active()
+            sync_viewer_demand()
             if not watching and not state['refreshing'] and not any(completed.get(job,0)<refresh_generation for job in refresh_background):
                 for job in active_jobs:atlas_process.cancel_job(job)
             ready=live_enabled and watching and (name in urgent_jobs or last_finished is None or time.monotonic()-last_finished>=max(job_period(name),cooldown))
@@ -364,6 +372,16 @@ class Handler(BaseHTTPRequestHandler):
         try:super().handle_one_request()
         except (BrokenPipeError,ConnectionResetError,ConnectionAbortedError):self.close_connection=True
 
+    def preference_user(self):
+        user=self.headers.get('X-DST-Atlas-User','remote-legacy' if self.headers.get('X-DST-Atlas-Timing')=='remote' else 'local-host')
+        if not re.fullmatch(r'[a-z0-9-]{8,100}',user):raise ValueError('Invalid preference identity')
+        return user
+
+    def preference_viewer(self,user):
+        viewer=self.headers.get('X-DST-Atlas-Viewer','legacy')
+        if viewer!='legacy' and not re.fullmatch(r'[A-Za-z0-9_-]{16,80}',viewer):raise ValueError('Invalid viewer')
+        return user+':'+viewer
+
     def do_POST(self):
         global live_enabled,refresh_generation,refresh_required,refresh_background
         url=urllib.parse.urlsplit(self.path);host=self.headers.get('Host')
@@ -376,11 +394,15 @@ class Handler(BaseHTTPRequestHandler):
             payload=json.loads(self.rfile.read(length))
             if not isinstance(payload,dict):raise ValueError()
         except Exception:return self.send_error(400)
+        if self.headers.get('X-DST-Atlas-Timing')=='remote' and url.path in ('/live/stop','/refresh'):return self.send_error(403,'Only the local host can stop or refresh map collection')
+        try:user=Handler.preference_user(self);viewer=Handler.preference_viewer(self,user)
+        except ValueError:return self.send_error(400)
         if url.path=='/viewer':
             viewer=self.headers.get('X-DST-Atlas-Viewer','')
             if not re.fullmatch(r'[A-Za-z0-9_-]{16,80}',viewer) or payload.get('active') is not False:return self.send_error(400)
             with control:
-                viewers.release(viewer)
+                viewers.release(Handler.preference_viewer(self,user))
+                sync_viewer_demand()
                 if not viewers.active() and not state['refreshing'] and not any(completed.get(job,0)<refresh_generation for job in refresh_background):
                     for job in active_jobs:atlas_process.cancel_job(job)
                 control.notify_all()
@@ -391,23 +413,22 @@ class Handler(BaseHTTPRequestHandler):
                 with control:
                     if self.headers.get('X-DST-Atlas-Timing')=='remote':
                         payload['refreshSeconds']=state.get('refreshSeconds',3)
-                    previous=atlas_preferences.load(PREFERENCES_ROOT) or {}
-                    preferences=atlas_preferences.save(PREFERENCES_ROOT,payload)
+                    previous=atlas_preferences.load_user(PREFERENCES_ROOT,user) or {}
+                    preferences=atlas_preferences.save_user(PREFERENCES_ROOT,user,payload)
+                    if user=='local-host':atlas_preferences.save(PREFERENCES_ROOT,preferences)
                     with lock:state['refreshSeconds']=preferences['refreshSeconds']
-                    old_selected=set(gathering_queue.selected)
-                    gathering_queue.update(preferences)
+                    if self.headers.get('X-DST-Atlas-Viewer'):touch_viewer(viewer,preferences)
                     added=set(preferences['layers'])-set(previous.get('layers',[]))
-                    target='gathering' if gathering_queue.selected-old_selected else 'pois' if any(v.startswith('poi:') for v in added) else None
+                    target='pois' if any(v.startswith('poi:') and not v.startswith('poi:resource:') for v in added) else None
                     if target:
                         urgent_jobs.add(target);waiting_jobs[target]=0
-                        for job in active_jobs & {'gathering','pois'}:atlas_process.cancel_job(job)
                     control.notify_all()
                 body=json.dumps(preferences).encode()
             except ValueError:return self.send_error(400,'Invalid map selections')
             self.send_response(200);self.send_header('Content-Type','application/json');self.send_header('Content-Length',str(len(body)));self.send_header('Cache-Control','no-store');self.end_headers();self.wfile.write(body);return
         if url.path not in ('/live/start','/live/stop','/refresh'):return self.send_error(404)
         if self.headers.get('X-DST-Atlas-Timing')=='remote' and url.path!='/live/start':return self.send_error(403,'Only the local host can stop or refresh map collection')
-        touch_viewer()
+        touch_viewer(viewer,atlas_preferences.load_user(PREFERENCES_ROOT,user))
         with control:
             if url.path=='/live/start':
                 if state['stopping'] or (active_jobs-{'gathering'}) and not live_enabled:return self.send_error(409,'Map collection is stopping')
@@ -449,18 +470,26 @@ class Handler(BaseHTTPRequestHandler):
         if self.headers.get('Host') not in (f'127.0.0.1:{self.server.server_port}',f'localhost:{self.server.server_port}'):
             return self.send_error(403)
         if urllib.parse.parse_qs(url.query).get('key')!=[KEY]:return self.send_error(403)
+        try:user=Handler.preference_user(self);viewer=Handler.preference_viewer(self,user)
+        except ValueError:return self.send_error(400)
         if url.path=='/preferences':
-            body=json.dumps(atlas_preferences.load(PREFERENCES_ROOT)).encode();mime='application/json'
+            preferences=atlas_preferences.load_user(PREFERENCES_ROOT,user)
+            if preferences:preferences={**preferences,'refreshSeconds':state['refreshSeconds']}
+            body=json.dumps(preferences).encode();mime='application/json'
         elif url.path=='/marker-icons':
             with marker_icon_lock:
                 if marker_icon_body is None:marker_icon_body=json.dumps(atlas_assets.marker_icons(ASSET_ROOT,ROOT/'icons')).encode()
                 body=marker_icon_body
             mime='application/json'
+        elif url.path=='/collection-status':
+            # Settings can inspect collection without creating viewer demand.
+            with lock:body=json.dumps({key:state.get(key) for key in ('live','refreshing','stopping','activity','refreshSeconds','refreshError')}).encode()
+            mime='application/json'
         elif url.path=='/state':
-            viewer=self.headers.get('X-DST-Atlas-Viewer','legacy')
-            if viewer!='legacy' and not re.fullmatch(r'[A-Za-z0-9_-]{16,80}',viewer):return self.send_error(400)
-            touch_viewer(viewer)
-            with lock:body=json.dumps({**state,'canControlTiming':self.headers.get('X-DST-Atlas-Timing')!='remote','canControlCollection':self.headers.get('X-DST-Atlas-Timing')!='remote','canStartCollection':True}).encode()
+            with control:
+                preferences=None if viewer in viewers.preferences else atlas_preferences.load_user(PREFERENCES_ROOT,user)
+                touch_viewer(viewer,preferences)
+            with lock:body=json.dumps({**state,'preferenceScope':user,'canControlTiming':self.headers.get('X-DST-Atlas-Timing')!='remote','canControlCollection':self.headers.get('X-DST-Atlas-Timing')!='remote','canStartCollection':True}).encode()
             mime='application/json'
         elif url.path in ['/gathering','/gathering/HaggaBasin']:
             try:body=json.dumps(gathering_metadata('HaggaBasin' if url.path.endswith('/HaggaBasin') else 'DeepDesert')).encode()

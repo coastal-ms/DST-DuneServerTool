@@ -214,6 +214,11 @@ function Add-DuneCosmeticCatalogOwnership {
     }
     $byKey = @{}
     foreach ($entry in @($catalog.templates)) {
+        if ($entry.grant_method -eq 'character') {
+            $required = @($entry.customization_ids)
+            if ($required.Count -gt 0 -and @($required | Where-Object { -not $persisted.Contains([string]$_) }).Count -eq 0) { [void]$Owned.Add([string]$entry.template) }
+            continue
+        }
         # Explicit set aliases require every slot, never just one matching slot.
         if ($aliases.PSObject.Properties.Name -contains [string]$entry.template) { continue }
         foreach ($source in @([string]$entry.template, [string]$entry.name)) {
@@ -470,7 +475,8 @@ ORDER BY ps.online_status DESC, ps.last_avatar_activity DESC;
 function Get-DunePlayerFactionsLive {
     param([string]$Ip)
     $scripId = Resolve-DuneScripCurrencyId -Ip $Ip
-    if ($null -eq $scripId) { $scripId = -1 }
+    $scripCurrencySql = Get-DuneScripCurrencySqlExpression -Ip $Ip
+    if ($null -eq $scripCurrencySql) { return @{ ok = $false; error = 'Could not resolve the Scrip currency on this server.' } }
     $sql = @"
 SELECT pfr.actor_id::text AS aid,
        pfr.faction_id::int AS fid,
@@ -481,7 +487,7 @@ FROM dune.player_faction_reputation pfr
 JOIN dune.factions f ON f.id = pfr.faction_id
 LEFT JOIN dune.player_virtual_currency_balances vcb
     ON vcb.player_controller_id = pfr.actor_id
-   AND vcb.currency_id = $scripId::smallint
+   AND vcb.currency_id = $scripCurrencySql
 ORDER BY pfr.actor_id, pfr.faction_id;
 "@
     $r = Invoke-DuneSqlQuery -Ip $Ip -Sql $sql -ReadOnly $true -MaxRows 5000 -TimeoutSec 20

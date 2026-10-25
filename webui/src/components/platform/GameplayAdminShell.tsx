@@ -52,7 +52,7 @@ export function GameplayAdminShell({
 
   return (
     <div className="min-w-0 max-w-full" data-gameplay-admin-shell>
-      {!liveMap && (!contextual || active === 'overview') && <div className="mb-4 flex min-w-0 items-center gap-3 border-b border-border pb-3">
+      {!liveMap && active !== 'players' && (!contextual || active === 'overview') && <div className="mb-4 flex min-w-0 items-center gap-3 border-b border-border pb-3">
         <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-accent/25 bg-accent/10 text-accent-bright">
           <Icon name="Gamepad2" size={20} />
         </span>
@@ -68,7 +68,7 @@ export function GameplayAdminShell({
 
       <nav
         aria-label="Gameplay Admin sections"
-        className={`${liveMap ? 'mb-2' : 'mb-5'} -mx-3 max-w-full overflow-x-auto overscroll-x-contain border-b border-border px-3 touch-pan-x [scrollbar-width:none] sm:mx-0 sm:px-0 [&::-webkit-scrollbar]:hidden`}
+        className={`${liveMap || active === 'players' ? 'mb-2' : 'mb-5'} -mx-3 max-w-full overflow-x-auto overscroll-x-contain border-b border-border px-3 touch-pan-x [scrollbar-width:none] sm:mx-0 sm:px-0 [&::-webkit-scrollbar]:hidden`}
       >
         <div className="flex min-w-max items-center gap-1">
           {GAMEPLAY_DESTINATIONS.map(destination => {

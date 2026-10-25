@@ -172,6 +172,32 @@ function Get-DuneCosmeticGrantMetadata {
     return $script:DuneCosmeticGrantMetadata
 }
 
+function Get-DuneCharacterAppearanceCatalog {
+    $path = Join-Path $PSScriptRoot '..\..\data\legitimate-customizations.json'
+    $catalog = [IO.File]::ReadAllText($path, [Text.Encoding]::UTF8) | ConvertFrom-Json
+    if ($catalog.schemaVersion -ne 1) { throw 'Unsupported character appearance catalog.' }
+    $seen = [Collections.Generic.HashSet[string]]::new([StringComparer]::Ordinal)
+    foreach ($batch in @($catalog.entries | Where-Object { $_.id -in @('ObservedGearAppearances','ObservedCharacterSwatches') })) {
+        if (-not $batch.acquisition -or -not $batch.mappingEvidence) { throw 'Character appearance mapping is unavailable.' }
+        foreach ($id in @($batch.customizationIds)) {
+            if (-not $seen.Add([string]$id)) { continue }
+            $stem = [string]$id; $suffix = ''
+            while ($stem -and -not $script:DuneGameplayItemNames.ContainsKey($stem)) {
+                $split = $stem.LastIndexOf('_')
+                if ($split -lt 0) { break }
+                $suffix = $stem.Substring($split + 1) + ' ' + $suffix
+                $stem = $stem.Substring(0,$split)
+            }
+            $name = if ($script:DuneGameplayItemNames.ContainsKey($stem)) { ([string]$script:DuneGameplayItemNames[$stem] + ' ' + $suffix).Trim() } else { ([string]$id -creplace '([a-z])([A-Z])','$1 $2') -replace '_',' ' }
+            @{
+                template='appearance:' + $id; name=$name
+                group=$(if ($batch.id -eq 'ObservedGearAppearances') { 'Gear Appearances' } else { 'Character Swatches' })
+                grant_method='character'; customization_id='appearance:' + $id; customization_ids=@([string]$id)
+            }
+        }
+    }
+}
+
 function Get-DuneCosmeticsCatalog {
     Initialize-DuneGameplayItemData
     Initialize-DuneBuildingSets
@@ -209,6 +235,7 @@ function Get-DuneCosmeticsCatalog {
         $out += @{ template = [string]$id; name = [string]$script:DuneBuildingSetLabels[$id]; group = Get-DuneBuildingSetGroup -Id $id }
     }
     $out = @($out | Where-Object { $_.group -notlike 'Building Sets - *' -or $_.template -eq 'Developer_Storage_Container_Patent' -or $script:DuneBuildingSetIds.Contains([string]$_.template) })
+    $out += @(Get-DuneCharacterAppearanceCatalog)
     foreach ($entry in $out) {
         $entry.bulk_exclusion = if ($entry.template -eq 'Developer_Storage_Container_Patent') {
             'Developer storage is an individual-grant exception; excluded from All Building Sets.'

@@ -26,7 +26,14 @@ class HistoryTests(unittest.TestCase):
     for n in range(200):
      frames.append({'map':region,'pid':1,'startTime':2,'capturedAt':(base+datetime.timedelta(seconds=storm*4000+n)).isoformat(),'storms':[{'id':str(storm),'location':[1,2,3]}]})
   retained=history.compact(frames)
-  self.assertEqual(len(retained),500)
+  self.assertEqual(len(retained),750)
   for region in ('DeepDesert','HaggaBasin'):
-   self.assertEqual({s['id'] for f in retained if f['map']==region for s in f['storms']},{'1','2'})
+   self.assertEqual({s['id'] for f in retained if f['map']==region for s in f['storms']},{'0','1','2'})
+ def test_roundtrip_preserves_maps_and_storms_with_identical_timestamps(self):
+  with tempfile.TemporaryDirectory() as folder:
+   frames=[{'map':region,'pid':1,'startTime':2,'capturedAt':'2026-10-24T06:00:00+00:00','storms':[{'id':storm,'location':[1,2,3]}]} for region in ('DeepDesert','HaggaBasin') for storm in ('one','two')]
+   history.save(folder,frames,{})
+   loaded,_=history.load(folder)
+   self.assertEqual(len(loaded),4)
+   self.assertEqual({(f['map'],f['storms'][0]['id']) for f in loaded},{(f['map'],f['storms'][0]['id']) for f in frames})
 if __name__=='__main__':unittest.main()

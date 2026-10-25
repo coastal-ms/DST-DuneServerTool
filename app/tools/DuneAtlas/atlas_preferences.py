@@ -1,5 +1,5 @@
 """Bounded, versioned user selections; contains no game or connection state."""
-import json,re,os,threading
+import json,re,os,threading,hashlib
 from pathlib import Path
 
 _lock=threading.Lock()
@@ -33,3 +33,16 @@ def save(root,value):
   temp=path.with_name('preferences-v1.'+str(os.getpid())+'.tmp')
   temp.write_text(json.dumps(value,ensure_ascii=True),encoding='utf-8');temp.replace(path)
  return value
+
+def user_root(root,user):
+ if not isinstance(user,str) or not re.fullmatch(r'[a-z0-9-]{8,100}',user):raise ValueError('Invalid preference identity')
+ return Path(root)/'viewer-preferences'/hashlib.sha256(user.encode()).hexdigest()
+
+def load_user(root,user):
+ value=load(user_root(root,user))
+ # Only local DST can inherit the former shared preferences.
+ return value if value is not None else load(root) if user=='local-host' else None
+
+def save_user(root,user,value):
+ folder=user_root(root,user);folder.mkdir(parents=True,exist_ok=True)
+ return save(folder,value)

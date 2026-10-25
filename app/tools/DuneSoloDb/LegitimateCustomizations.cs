@@ -6,6 +6,21 @@ internal static partial class Program
 {
     private static void SelfTestLegitimateCustomizations()
     {
+        var catalogFile = Path.Combine(Path.GetTempPath(), "dst-appearance-selftest-" + Guid.NewGuid().ToString("N") + ".json");
+        try {
+            File.WriteAllText(catalogFile, """
+                {"schemaVersion":1,"entries":[{"id":"ObservedGearAppearances","acquisition":"observed","mappingEvidence":"verified","customizationIds":["B1C3_Shaman_Raider_Top","AgentX_Stillsuit_Torso"]}]}
+                """);
+            foreach (var id in new[] { "B1C3_Shaman_Raider_Top", "AgentX_Stillsuit_Torso" }) {
+                var selected = RequireLegitimateCustomization(catalogFile, "appearance:" + id);
+                if (selected.Ids.Length != 1 || selected.Ids[0] != id || selected.Recipes is not null)
+                    throw new InvalidDataException("Individual appearance selection must match its batch ID exactly.");
+            }
+            foreach (var id in new[] { "appearance:Unknown", "appearance:agentx_stillsuit_torso", "appearance:ObservedGearAppearances" }) {
+                try { RequireLegitimateCustomization(catalogFile, id); throw new InvalidDataException("Unlisted appearance was accepted."); }
+                catch (ArgumentException) { }
+            }
+        } finally { File.Delete(catalogFile); }
         var original = JsonNode.Parse("""
             {"Other":{"keep":7},"CustomizationLibraryActorComponent":{"other":"preserved","m_UnlockedCustomizationSerializableList":{"metadata":12,"m_UnlockedCustomizationIds":[{"m_CustomizationId":"Existing","extra":true}]}}}
             """)!.AsObject();
@@ -28,6 +43,17 @@ internal static partial class Program
             ?? throw new InvalidDataException("Invalid reviewed customization catalog.");
         if (catalog["schemaVersion"]?.GetValue<int>() != 1 || catalog["entries"] is not JsonArray entries)
             throw new InvalidDataException("Unsupported reviewed customization catalog.");
+        if (id.StartsWith("appearance:", StringComparison.Ordinal))
+        {
+            var raw = id[11..];
+            var parents = entries.OfType<JsonObject>().Where(e =>
+                e["id"]?.GetValue<string>() is "ObservedGearAppearances" or "ObservedCharacterSwatches"
+                && e["customizationIds"] is JsonArray ids && ids.Any(v => v?.GetValue<string>() == raw)).ToArray();
+            if (parents.Length != 1 || string.IsNullOrWhiteSpace(parents[0]["acquisition"]?.GetValue<string>())
+                || string.IsNullOrWhiteSpace(parents[0]["mappingEvidence"]?.GetValue<string>()))
+                throw new ArgumentException("Choose an exact supported character appearance.");
+            return ([raw], null);
+        }
         var matches = entries.OfType<JsonObject>().Where(e =>
             string.Equals(e["id"]?.GetValue<string>(), id, StringComparison.Ordinal)).ToArray();
         if (matches.Length != 1 || string.IsNullOrWhiteSpace(matches[0]["acquisition"]?.GetValue<string>())

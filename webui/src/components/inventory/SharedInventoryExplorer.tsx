@@ -150,13 +150,14 @@ function duplicateOrdinals<T>(items: T[], labelOf: (item: T) => string, keyOf: (
 }
 
 export function SharedInventoryExplorer({
-  entityTypes,
+  entityTypes: requestedEntityTypes,
   title = 'Inventory',
   description = 'Inspect items and manage the selected inventory.',
   unavailableReason,
   selectedPlayer,
   demoMode,
   refreshKey = 0,
+  fixedLocation,
 }: {
   entityTypes: InventoryEntityType[]
   demoMode?: boolean
@@ -165,7 +166,12 @@ export function SharedInventoryExplorer({
   title?: string
   description?: string
   unavailableReason?: string
+  fixedLocation?: { type: InventoryEntityType; id: number }
 }) {
+  // Parent status updates can pass a new array with the same inventory scope.
+  // Keep request dependencies stable unless the scope values actually change.
+  const entityTypesKey = JSON.stringify(requestedEntityTypes)
+  const entityTypes = useMemo(() => JSON.parse(entityTypesKey) as InventoryEntityType[], [entityTypesKey])
   const search = useSearch()
   const params = useMemo(() => new URLSearchParams(search), [search])
   const requestedScopeType = params.get('scope_type')
@@ -188,10 +194,10 @@ export function SharedInventoryExplorer({
     ? 'The requested player ID must be a positive integer.'
     : ''
   const requestedLocationType = params.get('location_type')
-  const locationType = !fixedVehicleScope && (requestedLocationType === 'player' || requestedLocationType === 'storage' || requestedLocationType === 'vehicle')
-    ? requestedLocationType : undefined
-  const locationId = fixedVehicleScope ? undefined : parsePositiveId(params.get('location_id'))
-  const locationError = !fixedVehicleScope && (
+  const locationType = fixedLocation?.type ?? (!fixedVehicleScope && (requestedLocationType === 'player' || requestedLocationType === 'storage' || requestedLocationType === 'vehicle')
+    ? requestedLocationType : undefined)
+  const locationId = fixedLocation?.id ?? (fixedVehicleScope ? undefined : parsePositiveId(params.get('location_id')))
+  const locationError = !fixedLocation && !fixedVehicleScope && (
     params.has('location_type') !== params.has('location_id')
     || (params.has('location_type') && (!locationType || !locationId))
   )
@@ -231,7 +237,7 @@ export function SharedInventoryExplorer({
   const capabilityReady = capabilities.data !== null
   const canReadInventory = capabilities.hasCapability('inventory.read')
   const canManageBases = capabilities.hasCapability('base.manage')
-  const canDeletePlayerItems = capabilities.hasCapability('player.manage.destructive')
+  const canDeletePlayerItems = capabilities.hasCapability('player.manage.destructive') || capabilities.hasCapability('player.manage.self')
   const canDeleteStorageItems = capabilities.hasCapability('base.manage.destructive')
   const requestIdentity = JSON.stringify({
     query: query.trim(), entityTypes, scopeType, scopeId, playerId, locationType, locationId, sort, pageSize,
@@ -407,7 +413,7 @@ export function SharedInventoryExplorer({
           if (draftQuery === query) void load()
           else setUrlFilters({ q: draftQuery.trim() || undefined })
         }}>
-        {!fixedVehicleScope && <div className="flex basis-full min-w-0 flex-wrap items-end gap-3 rounded-xl border border-border bg-surface-1 p-3">
+        {!fixedVehicleScope && !fixedLocation && <div className="flex basis-full min-w-0 flex-wrap items-end gap-3 rounded-xl border border-border bg-surface-1 p-3">
           {!selectedPlayer && <label className="min-w-0 flex-[1_1_14rem] text-xs font-medium text-text-muted">
             Player
             <select aria-label="Player" className={inventoryFieldClass} value={playerId ?? ''}
@@ -582,6 +588,7 @@ export function SharedInventoryExplorer({
         locations={current?.data.locations ?? []}
         initialPlayerId={playerId}
         initialLocation={locationType && locationId ? { type: locationType, id: locationId } : undefined}
+        lockLocation={Boolean(fixedLocation)}
         entityTypes={entityTypes}
         scopeType={scopeType}
         scopeId={scopeId}
@@ -601,7 +608,7 @@ export function SharedInventoryExplorer({
 
 function OccurrencePanel({
   pageSize, readSession, group, players, locations, initialPlayerId, initialLocation, entityTypes, scopeType, scopeId, demo,
-  canDeletePlayerItems, canDeleteStorageItems, onInventoryChanged, onDeleteResult, onClose,
+  canDeletePlayerItems, canDeleteStorageItems, onInventoryChanged, onDeleteResult, onClose, lockLocation,
 }: {
   pageSize: number
   readSession: InventoryReadSession
@@ -614,6 +621,7 @@ function OccurrencePanel({
   scopeType?: InventoryEntityType
   scopeId?: number
   demo: boolean
+  lockLocation?: boolean
   canDeletePlayerItems: boolean
   canDeleteStorageItems: boolean
   onInventoryChanged: () => Promise<void>
@@ -632,6 +640,8 @@ function OccurrencePanel({
   const [selectedItemKeys, setSelectedItemKeys] = useState<Set<string>>(new Set())
   const [deleteQuantities, setDeleteQuantities] = useState<Record<string, string>>({})
   const [deleteBusy, setDeleteBusy] = useState(false)
+  const [stackQuantities, setStackQuantities] = useState<Record<string, string>>({})
+  const [stackBusy, setStackBusy] = useState<string | null>(null)
   const [verifiedDetailsUrl, setVerifiedDetailsUrl] = useState<string | null>(null)
   const version = useRef(0)
   const groupTemplateId = group?.templateId
@@ -653,6 +663,30 @@ function OccurrencePanel({
   )
   const deletableItems = items.filter(canDelete)
   const selectedItems = deletableItems.filter(item => selectedItemKeys.has(inventoryItemKey(item)))
+  const mutationBusy = deleteBusy || stackBusy !== null
+  const setStackQuantity = async (item: SharedInventoryItem) => {
+    const key = inventoryItemKey(item)
+    const quantity = Number(stackQuantities[key] ?? item.quantity)
+    if (!Number.isSafeInteger(quantity) || quantity < 1) {
+      onDeleteResult('', 'Stack quantity must be a whole number of at least 1.')
+      return
+    }
+    if (quantity === item.quantity || mutationBusy || !canDelete(item)) return
+    if (!window.confirm(`Change ${item.displayName} in ${item.entity.label || entityTypeLabel(item.entity.type)} from ${item.quantity} to ${quantity} items?${item.entity.type === 'storage' ? '\n\nBG restart required for storage changes to appear in-game. A running map can overwrite saved edits.' : ''}`)) return
+    setStackBusy(key); setError('')
+    try {
+      const result = item.entity.type === 'player'
+        ? await setItemStack(item.id, quantity, item.quantity)
+        : await setStorageItemStack(item.id, quantity, item.quantity)
+      if (!result.ok) throw new Error(result.message || 'The stack update was rejected.')
+      setItems(current => current.map(row => inventoryItemKey(row) === key ? {...row, quantity} : row))
+      setStackQuantities(current => { const next = {...current}; delete next[key]; return next })
+      setDeleteQuantities(current => { const next = {...current}; delete next[key]; return next })
+      onDeleteResult(`Stack quantity changed from ${item.quantity} to ${quantity}.${item.entity.type === 'storage' ? ' Storage changes appear in-game after the server zone restarts.' : ' Player changes require a relog or map restart and may be overwritten while the player is online.'}`, '')
+      await onInventoryChanged()
+    } catch (reason) { onDeleteResult('', errorMessage(reason)) }
+    finally { setStackBusy(null) }
+  }
 
   const deleteItems = async (targets: SharedInventoryItem[]) => {
     if (targets.length === 0) return
@@ -673,9 +707,11 @@ function OccurrencePanel({
     const baseMessage = targets.length === 1
       ? `Delete ${quantity} of ${targets[0].displayName} (stack x${targets[0].quantity}) from ${targets[0].entity.label || entityTypeLabel(targets[0].entity.type)}? This cannot be undone.`
       : `Delete ${quantity} total items across ${targets.length} selected occurrences? Any full stacks will be removed. This cannot be undone.`
+    const storageMessage = targets.some(item => item.entity.type === 'storage')
+      ? `${baseMessage}\n\nBG restart required for storage changes to appear in-game. A running map can overwrite saved edits.` : baseMessage
     const message = targets.some(item => item.entity.type === 'player')
-      ? `${baseMessage}\n\nReserve rows cannot be deleted or reduced here. DST will reject them because remaining Reserve contents can become hidden and keep base recycling blocked.`
-      : baseMessage
+      ? `${storageMessage}\n\nReserve rows cannot be deleted or reduced here. DST will reject them because remaining Reserve contents can become hidden and keep base recycling blocked.`
+      : storageMessage
     if (!window.confirm(message)) return
 
     setDeleteBusy(true)
@@ -729,7 +765,7 @@ function OccurrencePanel({
     if (partialEntityTypes.has('player')) {
       successMessage += ' Player changes require a relog or map restart and may be overwritten while the player is online.'
     }
-    if (partialEntityTypes.has('storage')) {
+    if (targets.some(item => item.entity.type === 'storage' && updated.has(inventoryItemKey(item)))) {
       successMessage += ' Storage changes appear in-game after the server zone restarts.'
     }
     const failureMessage = failures.length > 0
@@ -796,6 +832,7 @@ function OccurrencePanel({
   useEffect(() => {
     setSelectedItemKeys(new Set())
     setDeleteQuantities({})
+    setStackQuantities({})
   }, [group?.groupKey])
   useEffect(() => {
     version.current += 1
@@ -829,7 +866,7 @@ function OccurrencePanel({
           <p className="mb-4 break-all font-mono text-xs text-text-muted">{group.templateId}</p>
           <div className="mb-4 grid grid-cols-1 gap-3 sm:grid-cols-3">
             <label className="text-sm font-medium text-text">Player
-              <select aria-label="Occurrence player" className="input mt-1 min-h-11 w-full" value={playerId ?? ''} onChange={event => {
+              <select disabled={lockLocation} aria-label="Occurrence player" className="input mt-1 min-h-11 w-full" value={playerId ?? ''} onChange={event => {
                 setPlayerId(parsePositiveId(event.target.value))
                 setLocation(undefined)
               }}>
@@ -841,7 +878,7 @@ function OccurrencePanel({
               </select>
             </label>
             <label className="text-sm font-medium text-text">Location
-              <select aria-label="Occurrence location" className="input mt-1 min-h-11 w-full" value={locationValue(location)} onChange={event => {
+              <select disabled={lockLocation} aria-label="Occurrence location" className="input mt-1 min-h-11 w-full" value={locationValue(location)} onChange={event => {
                 const [type, id] = event.target.value.split(':')
                 setLocation(type && id ? { type: type as InventoryEntityType, id: Number(id) } : undefined)
               }}>
@@ -867,7 +904,7 @@ function OccurrencePanel({
                       type="checkbox"
                       aria-label="Select all loaded occurrences"
                       checked={selectedItems.length === deletableItems.length}
-                      disabled={deleteBusy}
+                      disabled={mutationBusy}
                       onChange={event => setSelectedItemKeys(current => {
                         const next = new Set(current)
                         deletableItems.forEach(item => event.target.checked ? next.add(inventoryItemKey(item)) : next.delete(inventoryItemKey(item)))
@@ -876,12 +913,16 @@ function OccurrencePanel({
                     />
                     Select all loaded
                   </label>
-                  <button type="button" className="btn-danger min-h-11" disabled={deleteBusy || selectedItems.length === 0} onClick={() => { void deleteItems(selectedItems) }}>
+                  <button type="button" className="btn-danger min-h-11" disabled={mutationBusy || selectedItems.length === 0} onClick={() => { void deleteItems(selectedItems) }}>
                     <Icon name={deleteBusy ? 'Loader2' : 'Trash2'} size={14} className={deleteBusy ? 'animate-spin' : undefined} />
                     {deleteBusy ? 'Deleting...' : `Delete selected (${selectedItems.length})`}
                   </button>
                 </div>
               )}
+              {items.some(item => item.entity.type === 'storage') && <div className="mb-4 rounded-lg border border-warning/60 bg-surface-2 p-3 text-sm" role="note" aria-label="Storage edit restart requirement">
+                <p className="font-semibold text-warning">BG restart required for storage edits</p>
+                <p className="mt-1 text-text-muted">These changes are not applied live. Restart the battlegroup after editing for them to appear in-game. A running map can overwrite saved edits.</p>
+              </div>}
               <ul className="divide-y divide-border" aria-label="Item occurrences">
               {items.map(item => (
                 <li key={`${item.entity.type}:${item.id}`} className="py-3 first:pt-0">
@@ -893,7 +934,7 @@ function OccurrencePanel({
                           className="mt-1"
                           aria-label={`Select ${item.displayName} in ${item.entity.label || entityTypeLabel(item.entity.type)}`}
                           checked={selectedItemKeys.has(inventoryItemKey(item))}
-                          disabled={deleteBusy}
+                          disabled={mutationBusy}
                           onChange={event => setSelectedItemKeys(current => {
                             const next = new Set(current)
                             if (event.target.checked) next.add(inventoryItemKey(item))
@@ -907,20 +948,37 @@ function OccurrencePanel({
                       <p className="mt-0.5 truncate text-xs text-text-muted">{item.player?.name || item.entity.owner || 'Owner not proven'} · {item.entity.map || 'Map not reported'}</p>
                       </div>
                     </div>
-                    <div className="flex shrink-0 items-center gap-2">
+                    <span className="shrink-0 font-semibold text-text">{item.quantity.toLocaleString()} items</span>
+                  </div>
+                  {canDelete(item) && item.kind === 'item' && (item.quantity > 1 || item.metadata.stackMaximum > 1) && <div className="mt-3 flex flex-wrap items-end gap-3 rounded-lg border border-border bg-surface-2 p-3">
+                    <label className="block text-sm font-semibold text-text">
+                      Stack quantity
+                      <input type="number" className={`block ${inventoryFieldClass} max-w-40 font-semibold`} min={1} step={1} inputMode="numeric"
+                        aria-label={`Stack quantity for ${item.displayName} in ${item.entity.label || entityTypeLabel(item.entity.type)}`}
+                        value={stackQuantities[inventoryItemKey(item)] ?? String(item.quantity)} disabled={mutationBusy}
+                        onChange={event => setStackQuantities(current => ({...current, [inventoryItemKey(item)]:event.target.value}))} />
+                    </label>
+                    <button type="button" className="btn-secondary mt-2 min-h-11" disabled={mutationBusy || (stackQuantities[inventoryItemKey(item)] ?? String(item.quantity)) === String(item.quantity)}
+                      onClick={() => { void setStackQuantity(item) }} aria-label={`Save stack quantity for ${item.displayName} in ${item.entity.label || entityTypeLabel(item.entity.type)}`}>
+                      <Icon name={stackBusy === inventoryItemKey(item) ? 'Loader2' : 'Save'} size={14} className={stackBusy === inventoryItemKey(item) ? 'animate-spin' : undefined} />
+                      {stackBusy === inventoryItemKey(item) ? 'Saving…' : 'Save quantity'}
+                    </button>
+                    <p className="w-full text-xs text-text-muted">Sets the number of items in this stack.</p>
+                  </div>}
+                    <div className={canDelete(item) ? 'mt-3 flex flex-wrap items-end gap-3 rounded-lg border border-danger/50 bg-surface-2 p-3' : 'hidden'}>
                       {canDelete(item) && (
-                        <label className="text-xs font-medium text-text-muted">
-                          Delete quantity
+                        <label className="text-sm font-semibold text-text">
+                          Quantity to delete
                           <input
                             type="number"
-                            className="input mt-1 h-9 w-20 text-right font-semibold text-accent-bright"
+                            className={`block ${inventoryFieldClass} max-w-40 border-danger/60 font-semibold`}
                             aria-label={`Delete quantity for ${item.displayName} in ${item.entity.label || entityTypeLabel(item.entity.type)}`}
                             min={item.quantity === 0 ? 0 : 1}
                             max={item.quantity}
                             step={1}
                             inputMode="numeric"
                             value={deleteQuantities[inventoryItemKey(item)] ?? String(item.quantity)}
-                            disabled={deleteBusy}
+                            disabled={mutationBusy}
                             onChange={event => setDeleteQuantities(current => ({
                               ...current,
                               [inventoryItemKey(item)]: event.target.value,
@@ -928,26 +986,24 @@ function OccurrencePanel({
                           />
                         </label>
                       )}
-                      {!canDelete(item) && <span className="font-semibold text-accent-bright">x{item.quantity}</span>}
                       {canDelete(item) && (
                         <button
                           type="button"
-                          className="btn-icon min-h-11 min-w-11 text-danger"
+                          className="btn-danger min-h-11"
                           aria-label={`Delete ${item.displayName} from ${item.entity.label || entityTypeLabel(item.entity.type)}`}
-                          disabled={deleteBusy}
+                          disabled={mutationBusy}
                           onClick={() => { void deleteItems([item]) }}
                         >
                           <Icon name="Trash2" size={15} />
+                          Delete items
                         </button>
                       )}
                     </div>
-                  </div>
                   <dl className="mt-2 grid grid-cols-2 gap-x-4 gap-y-1 text-xs sm:grid-cols-4">
-                    <div><dt className="text-text-dim">Quality</dt><dd>{item.quality}</dd></div>
-                    <div><dt className="text-text-dim">Durability</dt><dd>{valueOrNotReported(item.durability)} / {item.maxDurability && item.maxDurability !== 'N/A' ? item.maxDurability : (item.metadata.baseMaxDurability ?? 0) > 0 ? <span title="Base maximum from the game item definition; the save omits this value.">{item.metadata.baseMaxDurability} (base)</span> : 'Not reported'}</dd></div>
-                    <div><dt className="text-text-dim">Item</dt><dd>{item.id}</dd></div>
-                    <div><dt className="text-text-dim">Inventory</dt><dd>{item.entity.inventoryType}</dd></div>
+                    {item.metadata.isGradeable && <div><dt className="text-text-dim">Quality</dt><dd>{item.quality}</dd></div>}
+                    {((item.durability && item.durability !== 'N/A') || (item.metadata.baseMaxDurability ?? 0) > 0) && <div><dt className="text-text-dim">Durability</dt><dd>{valueOrNotReported(item.durability)} / {item.maxDurability && item.maxDurability !== 'N/A' ? item.maxDurability : (item.metadata.baseMaxDurability ?? 0) > 0 ? <span title="Base maximum from the game item definition; the save omits this value.">{item.metadata.baseMaxDurability} (base)</span> : 'Not reported'}</dd></div>}
                   </dl>
+                  <details className="mt-3 text-xs text-text-muted"><summary className="cursor-pointer">Technical details</summary><dl className="mt-2 grid grid-cols-2 gap-2"><div><dt>Item ID</dt><dd>{item.id}</dd></div><div><dt>Inventory type</dt><dd>{item.entity.inventoryType}</dd></div></dl></details>
                   <Link className="mt-2 inline-flex text-xs font-semibold text-info hover:text-ibad" to={item.entity.type === 'storage' && (item.player?.id || playerId)
                     ? `/players?player_id=${item.player?.id || playerId}&section=inventory&scope_type=storage&scope_id=${item.entity.id}&location_type=storage&location_id=${item.entity.id}${demo ? '&demo=1' : ''}`
                     : item.entity.workspacePath}>Open {item.entity.type === 'player' ? 'player' : item.entity.type === 'vehicle' ? 'vehicle cargo' : 'container'}</Link>

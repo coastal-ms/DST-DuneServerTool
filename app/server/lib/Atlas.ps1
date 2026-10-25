@@ -205,6 +205,11 @@ function Test-DuneAtlasProxyPath {
 }
 
 function Get-DuneAtlasSession {
+    if (Get-Command Get-DuneVmMapState -ErrorAction SilentlyContinue) {
+        $vm=Get-DuneVmMapState
+        if ($vm.enabled) { return Get-DuneVmMapRelaySession }
+        return @{available=$false;reasonCode='helper-not-enabled'}
+    }
     # Each API worker reuses its verified host briefly. Checking and hashing the
     # entire package for every icon stalls Windows PowerShell's request queue.
     $cache = Get-Variable -Name DuneAtlasSessionCache -Scope Script -ValueOnly -ErrorAction SilentlyContinue
@@ -232,8 +237,25 @@ function Get-DuneAtlasSession {
     return $session
 }
 
+function Get-DuneAtlasPreferenceIdentity {
+    param($Request, $Principal, [bool]$Local)
+    if ($Local) { return 'local-host' }
+    if ($Principal.account.id) {
+        $identity='account:'+[string]$Principal.account.id
+    } else {
+        $browser=''
+        try { $browser=[string]$Request.Cookies['dst-atlas-browser'].Value } catch {}
+        if ($browser -cnotmatch '^[a-f0-9]{32}$') { $browser=[string]$Request.Headers['X-DST-Atlas-Viewer'] }
+        if ($browser -cnotmatch '^[A-Za-z0-9_-]{16,80}$') { throw 'Map browser identity is unavailable.' }
+        $identity='browser:'+$browser
+    }
+    $sha=[Security.Cryptography.SHA256]::Create()
+    try { return 'user-'+([BitConverter]::ToString($sha.ComputeHash([Text.Encoding]::UTF8.GetBytes($identity)))).Replace('-','').ToLowerInvariant() }
+    finally { $sha.Dispose() }
+}
+
 function Invoke-DuneAtlasProxy {
-    param($Request, $Response, [string]$Path, [string]$Method, $Body)
+    param($Request, $Response, [string]$Path, [string]$Method, $Body, $Principal)
     if (-not (Test-DuneAtlasProxyPath -Method $Method -Path $Path)) {
         Write-DuneError -Response $Response -Status 404 -Message 'Unknown map resource.'
         return
@@ -253,9 +275,21 @@ function Invoke-DuneAtlasProxy {
         $client = [Net.Http.HttpClient]::new($handler)
         $client.Timeout = [TimeSpan]::FromSeconds(15)
         $message = [Net.Http.HttpRequestMessage]::new([Net.Http.HttpMethod]::new($Method), $target)
+        if ($session.hosting -eq 'vm') { $message.Headers.Host='127.0.0.1:18446' }
         # Derive permission from the authenticated transport, never a browser header.
         $timingAccess = if (Test-DuneLocalOnlyRequest -Request $Request) { 'local' } else { 'remote' }
         [void]$message.Headers.TryAddWithoutValidation('X-DST-Atlas-Timing', $timingAccess)
+        # Account identity comes from the dispatch principal, never client headers.
+        # The browser cookie is only a preference fallback for legacy token access.
+        if ($Path -ne '/') {
+            $preferenceIdentity=Get-DuneAtlasPreferenceIdentity -Request $Request -Principal $Principal -Local ($timingAccess -eq 'local')
+            $expectedScope=[string]$Request.Headers['X-DST-Atlas-Scope']
+            if ($Method -eq 'POST' -and $Path -eq '/preferences' -and $expectedScope -and $expectedScope -cne $preferenceIdentity) {
+                Write-DuneError -Response $Response -Status 409 -Message 'The map account changed. Reload the map before saving selections.'
+                return
+            }
+            [void]$message.Headers.TryAddWithoutValidation('X-DST-Atlas-User', $preferenceIdentity)
+        }
         $viewer = [string]$Request.Headers['X-DST-Atlas-Viewer']
         if ($viewer -cmatch '^[A-Za-z0-9_-]{16,80}$') {
             [void]$message.Headers.TryAddWithoutValidation('X-DST-Atlas-Viewer', $viewer)
@@ -274,6 +308,10 @@ function Invoke-DuneAtlasProxy {
             $message.Content = [Net.Http.StringContent]::new($json,[Text.Encoding]::UTF8,'application/json')
         }
         $upstream = $client.SendAsync($message).GetAwaiter().GetResult()
+        if ([int]$upstream.StatusCode -eq 403 -and (Get-Command Stop-DuneVmMapRelay -ErrorAction SilentlyContinue)) {
+            # A VM restart rotates the internal key; reconnect on the next read.
+            Stop-DuneVmMapRelay
+        }
         $bytes = $upstream.Content.ReadAsByteArrayAsync().GetAwaiter().GetResult()
         $Response.StatusCode = [int]$upstream.StatusCode
         if ($upstream.Content.Headers.ContentType) { $Response.ContentType = [string]$upstream.Content.Headers.ContentType }
@@ -288,6 +326,7 @@ function Invoke-DuneAtlasProxy {
         $Response.OutputStream.Close()
     } catch {
         $script:DuneAtlasSessionCache = $null
+        if (Get-Command Stop-DuneVmMapRelay -ErrorAction SilentlyContinue) { Stop-DuneVmMapRelay }
         Write-DuneError -Response $Response -Status 503 -Message 'Map host unavailable.'
     }
     finally {

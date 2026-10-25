@@ -1,6 +1,7 @@
 """Live intent survives service/bundle recovery; only explicit controls change it."""
 import importlib.util
 import io
+import json
 import os
 import shutil
 import sys
@@ -40,6 +41,20 @@ def action(value, path):
 
 
 class LiveIntentTests(unittest.TestCase):
+    def test_settings_status_reports_inflight_work_without_starting_viewer_demand(self):
+        with tempfile.TemporaryDirectory() as folder:
+            value=service(Path(folder)/'bundle',Path(folder)/'settings')
+            value.state.update(live=False,refreshing=True,stopping=False,activity=['native'],refreshSeconds=3)
+            request=types.SimpleNamespace(path='/collection-status?key='+value.KEY,server=types.SimpleNamespace(server_port=1234),
+                headers={'Host':'127.0.0.1:1234'},wfile=io.BytesIO(),send_error=lambda *args: self.fail(str(args)),
+                send_response=lambda *args: None,send_header=lambda *args: None,end_headers=lambda: None)
+            with patch.object(value,'touch_viewer') as touch:
+                value.Handler.do_GET(request)
+                touch.assert_not_called()
+            result=json.loads(request.wfile.getvalue())
+            self.assertTrue(result['refreshing'])
+            self.assertEqual(result['activity'],['native'])
+
     def test_live_waits_for_viewer_and_pauses_after_viewer_expires(self):
         with tempfile.TemporaryDirectory() as folder:
             value=service(Path(folder)/'bundle',Path(folder)/'settings')
@@ -70,7 +85,7 @@ class LiveIntentTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as folder:
             value=service(Path(folder)/'bundle',Path(folder)/'settings')
             first='tablet-viewer-0001';second='desktop-viewer-0002'
-            value.touch_viewer(first);value.touch_viewer(second)
+            value.touch_viewer('local-host:'+first);value.touch_viewer('local-host:'+second)
             value.active_jobs.add('db')
             statuses=[]
             def release(viewer):

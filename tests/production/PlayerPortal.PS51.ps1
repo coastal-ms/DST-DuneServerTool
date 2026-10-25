@@ -1,4 +1,4 @@
-# Isolated production dispatcher/pool seam. No game, VM or installed DST writes.
+﻿# Isolated production dispatcher/pool seam. No game, VM or installed DST writes.
 $ErrorActionPreference = 'Stop'
 $repo = Split-Path (Split-Path $PSScriptRoot -Parent) -Parent
 $priorAppData = $env:APPDATA
@@ -42,13 +42,25 @@ function Get-DuneBodyValue { param($Body,$Name) if($Body -is [Collections.IDicti
     Register-DuneRoute GET '/api/v1/maps/deep-desert' -Handler {
         param($req,$res,$routeParams,$body) Write-DuneJson $res @{ map=$true }
     }
+    Register-DuneRoute POST '/api/v1/maps/atlas/session' -Handler {
+        param($req,$res,$routeParams,$body) Write-DuneJson $res @{ available=$true; url='/api/v1/maps/atlas/view' }
+    }
+    Register-DuneRoute GET '/api/v1/maps/atlas/view' -Handler {
+        param($req,$res,$routeParams,$body) Write-DuneJson $res @{ atlas=$true }
+    }
+    Register-DuneRoute POST '/api/v1/maps/atlas/resource' -Handler {
+        param($req,$res,$routeParams,$body) Write-DuneJson $res @{ preferences=$true }
+    }
+    Register-DuneRoute GET '/api/v1/inventory/items' -Handler {
+        param($req,$res,$routeParams,$body) Write-DuneJson $res @{ ownInventory=$true; linkedId=$routeParams.linkedPlayer.id }
+    }
     $created = New-DunePortalAccount -Username 'seam-player' -Role player -GameCharacterId '11'
     $issued = Set-DunePortalPassword -AccountId $created.account.id -CurrentPassword $created.oneTimePassword -NewPassword 'fixture replacement password'
     $store = Get-DunePortalAccountStore
     $store.accountLoginEnabled = $true
     Save-DunePortalAccountStore $store
     function Invoke-PlayerSeamRequest {
-        param([string]$Path,$Body,[string]$Method='POST')
+        param([string]$Path,$Body,[string]$Method='POST',[hashtable]$Query=@{})
         $raw = if($null -ne $Body){$Body | ConvertTo-Json -Compress}else{''}
         $bytes=[Text.Encoding]::UTF8.GetBytes($raw)
         $inputStream=New-Object IO.MemoryStream
@@ -58,7 +70,7 @@ function Get-DuneBodyValue { param($Body,$Name) if($Body -is [Collections.IDicti
             Headers=@{Host='portal.example.test';Origin='https://portal.example.test';'X-Forwarded-For'='192.0.2.1';'X-Dune-Token'='fixture-launch-token'}
             Cookies=@{dune_portal_session=[pscustomobject]@{Value=$issued.token}}
             RemoteEndPoint=[pscustomobject]@{Address=[Net.IPAddress]::Loopback}
-            QueryString=@{};HasEntityBody=($bytes.Length -gt 0);ContentLength64=$bytes.Length
+            QueryString=$Query;HasEntityBody=($bytes.Length -gt 0);ContentLength64=$bytes.Length
             ContentType='application/json';ContentEncoding=[Text.Encoding]::UTF8;InputStream=$inputStream
         }
         $res=[pscustomobject]@{StatusCode=0;ContentType='';ContentLength64=0;Headers=@{};OutputStream=(New-Object IO.MemoryStream)}
@@ -81,6 +93,20 @@ function Get-DuneBodyValue { param($Body,$Name) if($Body -is [Collections.IDicti
         Assert-PlayerSeam ($command.status -eq 403) 'Player reached server commands.'
         $map=Invoke-PlayerSeamRequest '/api/v1/maps/deep-desert' $null GET
         Assert-PlayerSeam ($map.status -eq 200) 'Player map read was rejected.'
+        $atlas=Invoke-PlayerSeamRequest '/api/v1/maps/atlas/session' @{}
+        Assert-PlayerSeam ($atlas.status -eq 200 -and $atlas.body.available) ("Player live-map session was rejected: " + ($atlas | ConvertTo-Json -Compress -Depth 6))
+        $atlasView=Invoke-PlayerSeamRequest '/api/v1/maps/atlas/view' $null GET
+        Assert-PlayerSeam ($atlasView.status -eq 200) 'Player live-map iframe was rejected.'
+        $atlasPreferences=Invoke-PlayerSeamRequest '/api/v1/maps/atlas/resource' @{enabled=@()}
+        Assert-PlayerSeam ($atlasPreferences.status -eq 200) 'Player map preferences were rejected.'
+        $inventory=Invoke-PlayerSeamRequest '/api/v1/inventory/items' $null GET @{player_id='21';types='player,storage'}
+        Assert-PlayerSeam ($inventory.status -eq 200 -and $inventory.body.linkedId -eq 21) 'Own inventory rejected.'
+        $foreignInventory=Invoke-PlayerSeamRequest '/api/v1/inventory/items' $null GET @{player_id='22';types='player'}
+        Assert-PlayerSeam ($foreignInventory.status -eq 403) 'Foreign inventory allowed.'
+        $globalInventory=Invoke-PlayerSeamRequest '/api/v1/inventory/items' $null GET @{types='player'}
+        Assert-PlayerSeam ($globalInventory.status -eq 403) 'Global inventory allowed.'
+        $vehicleInventory=Invoke-PlayerSeamRequest '/api/v1/inventory/items' $null GET @{player_id='21';types='vehicle'}
+        Assert-PlayerSeam ($vehicleInventory.status -eq 403) 'Global vehicle cargo allowed.'
         $warm=Invoke-PlayerSeamRequest '/api/maps/deepdesert/start' @{}
         Assert-PlayerSeam ($warm.status -eq 200) 'Player warming was rejected.'
         $stop=Invoke-PlayerSeamRequest '/api/maps/deepdesert/stop' @{}

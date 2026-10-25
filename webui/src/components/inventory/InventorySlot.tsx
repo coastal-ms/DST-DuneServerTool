@@ -14,6 +14,7 @@ export function InventorySlot({
 }) {
   const buttonRef = useRef<HTMLButtonElement | null>(null)
   const tooltipRef = useRef<HTMLDivElement | null>(null)
+  const keyboardNavigation = useRef(false)
   const tooltipId = useId()
   const [hovered, setHovered] = useState(false)
   const [hoverSuppressed, setHoverSuppressed] = useState(false)
@@ -49,27 +50,42 @@ export function InventorySlot({
     const handleSlotHover = (event: Event) => {
       setHoverSuppressed((event as CustomEvent<string>).detail !== tooltipId)
     }
+    const handleKey = (event: KeyboardEvent) => { if (event.key === 'Tab') keyboardNavigation.current = true }
+    const handlePointer = () => { keyboardNavigation.current = false }
     document.addEventListener('focusin', handleFocusIn)
     document.addEventListener('inventory-slot-hover', handleSlotHover)
+    document.addEventListener('keydown', handleKey, true)
+    document.addEventListener('pointerdown', handlePointer, true)
     return () => {
       document.removeEventListener('focusin', handleFocusIn)
       document.removeEventListener('inventory-slot-hover', handleSlotHover)
+      document.removeEventListener('keydown', handleKey, true)
+      document.removeEventListener('pointerdown', handlePointer, true)
     }
   }, [tooltipId, showImages])
 
   useLayoutEffect(() => {
     if (!showInfo) return
+    const dismiss = () => { setHovered(false); setFocused(false); setHoverSuppressed(true) }
+    const leaveItem = (event: PointerEvent) => {
+      if (event.target instanceof Node && !buttonRef.current?.contains(event.target)) dismiss()
+    }
+    const escape = (event: KeyboardEvent) => { if (event.key === 'Escape') { event.preventDefault(); dismiss() } }
     placeInfoCard()
     const resizeObserver = typeof ResizeObserver === 'undefined'
       ? null
       : new ResizeObserver(placeInfoCard)
     if (tooltipRef.current) resizeObserver?.observe(tooltipRef.current)
     window.addEventListener('resize', placeInfoCard)
-    window.addEventListener('scroll', placeInfoCard, true)
+    window.addEventListener('scroll', dismiss, true)
+    document.addEventListener('pointermove', leaveItem)
+    document.addEventListener('keydown', escape)
     return () => {
       resizeObserver?.disconnect()
       window.removeEventListener('resize', placeInfoCard)
-      window.removeEventListener('scroll', placeInfoCard, true)
+      window.removeEventListener('scroll', dismiss, true)
+      document.removeEventListener('pointermove', leaveItem)
+      document.removeEventListener('keydown', escape)
     }
   }, [placeInfoCard, showInfo])
 
@@ -101,14 +117,11 @@ export function InventorySlot({
         }}
         onMouseLeave={() => {
           setHovered(false)
-          const focusedSlot = document.activeElement instanceof HTMLElement
-            ? document.activeElement.closest<HTMLElement>('[data-inventory-preview-id]')
-            : null
-          document.dispatchEvent(new CustomEvent('inventory-slot-hover', {
-            detail: focusedSlot?.dataset.inventoryPreviewId ?? '',
-          }))
+          setFocused(false)
+          document.dispatchEvent(new CustomEvent('inventory-slot-hover', { detail: '' }))
         }}
         onFocus={() => {
+          if (!keyboardNavigation.current) return
           document.dispatchEvent(new CustomEvent('inventory-slot-hover', { detail: tooltipId }))
           setHoverSuppressed(false)
           setFocused(true)
