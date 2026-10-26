@@ -41,6 +41,7 @@ function Get-DunePlayerRoutePolicy {
             '/api/gameplay/players/player-ids' { return 'actor_id' }
         }
     }
+    if ($Method -eq 'POST' -and $Path -eq '/api/gameplay/blueprints/import') { return 'player_id' }
     if ($Method -eq 'POST') {
         $action = $Path -replace '^/api/gameplay/players/', ''
         if ($Path -ne "/api/gameplay/players/$action") { return '' }
@@ -123,6 +124,7 @@ function Test-DunePlayerRequestAccess {
             controller = $player.controller_id; controller_id = $player.controller_id
             player_id = $player.controller_id; actor_id = $player.id
         }
+        if ($path -eq '/api/gameplay/blueprints/import') { $expected.player_id = $player.id }
         if ($path -match '/(give-scrip|give-faction-rep|set-faction-tier|progression-unlock|progression-reverse|award-intel)$') {
             $expected.actor_id = $player.controller_id
         }

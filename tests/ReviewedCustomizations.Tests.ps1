@@ -111,6 +111,40 @@ Describe 'Reviewed ordinary customizations' {
         $result.message | Should -Match 'No retry is needed'
         Should -Invoke Invoke-DuneSqlQuery -Times 1 -ParameterFilter { -not $ReadOnly }
     }
+    It 'keeps command status tags out of both grant result streams' {
+        foreach ($selection in @('ObservedCharacterSwatches','ObservedSchematicRecipes')) {
+            $sql = Get-DuneReviewedCustomizationSql 1 2 3 $selection
+            $sql | Should -Match '^\\set QUIET on'
+            $sql | Should -Match 'SELECT added::text AS added'
+        }
+    }
+    It 'reports the actual newly added count from the grant result' {
+        Mock Invoke-DuneSqlQuery {
+            if ($ReadOnly) { @{ok=$true;columns=@('total','owned');rows=,@('311','311')} }
+            else { ConvertFrom-DunePsqlCsv -Output "added`n301`n" -MaxRows 1 }
+        }
+        $result = Invoke-DunePlayerReviewedCustomization fixture 1 2 3 ObservedCharacterSwatches
+        $result.ok | Should -BeTrue
+        $result.message | Should -Be '301 added; 10 already unlocked. Verified 311 of 311 saved.'
+    }
+    It 'does not invent zero added when the write result contains command tags instead of a count' {
+        Mock Invoke-DuneSqlQuery {
+            if ($ReadOnly) { @{ok=$true;columns=@('total','owned');rows=,@('311','311')} }
+            else { ConvertFrom-DunePsqlCsv -Output "BEGIN`nSET`nCREATE TABLE`nDO`nadded`n311`nCOMMIT`n" -MaxRows 1 }
+        }
+        $result = Invoke-DunePlayerReviewedCustomization fixture 1 2 3 ObservedCharacterSwatches
+        $result.ok | Should -BeTrue
+        $result.message | Should -Not -Match '0 added|already unlocked'
+        $result.message | Should -Match 'newly added count is unavailable.*No retry is needed'
+    }
+    It 'distinguishes a real zero-add repeat from a missing result' {
+        Mock Invoke-DuneSqlQuery {
+            if ($ReadOnly) { @{ok=$true;columns=@('total','owned');rows=,@('311','311')} }
+            else { ConvertFrom-DunePsqlCsv -Output "added`n0`n" -MaxRows 1 }
+        }
+        $result = Invoke-DunePlayerReviewedCustomization fixture 1 2 3 ObservedCharacterSwatches
+        $result.message | Should -Be 'All 311 entries were already unlocked. Verified 311 of 311 saved.'
+    }
     It 'reports missing grants rather than claiming success after a timeout' {
         Mock Invoke-DuneSqlQuery { if ($ReadOnly) { @{ok=$true} } else { @{ok=$false;error='timeout'} } }
         Mock ConvertTo-DuneRowMaps { ,@(@{total='311';owned='10'}) }

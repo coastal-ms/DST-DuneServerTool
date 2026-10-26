@@ -65,6 +65,7 @@ function Get-DuneReviewedCustomizationSql {
     if ($ids.Count -eq 0 -or @($ids | Where-Object { $_ -isnot [string] -or [string]::IsNullOrWhiteSpace($_) }).Count -or @($ids | Select-Object -Unique).Count -ne $ids.Count) { throw 'Invalid reviewed customization mapping.' }
     $safeIds = ($ids | ForEach-Object { "'$(ConvertTo-DuneSqlString $_)'" }) -join ','
     return @'
+\set QUIET on
 BEGIN;
 SET LOCAL lock_timeout='5s';
 SET LOCAL statement_timeout='30s';
@@ -123,6 +124,7 @@ function Get-DuneReviewedRecipeSql {
     }
     $json = ConvertTo-DuneSqlString (ConvertTo-Json -InputObject @($Entries) -Depth 8 -Compress)
     return @'
+\set QUIET on
 BEGIN;
 SET LOCAL lock_timeout='5s';
 SET LOCAL statement_timeout='30s';
@@ -202,9 +204,13 @@ function Invoke-DunePlayerReviewedCustomization {
         return @{ok=$false;error="$owned of $total grants are saved; $($total-$owned) remain. Retry to add the missing entries; existing unlocks are preserved.";total=$total;owned=$owned}
     }
     $rows = @(); if ($write.ok) { $rows = ConvertTo-DuneRowMaps -Result $write }
-    $message = if ($rows.Count -eq 1) {
-        "$([int]$rows[0]['added']) added; $($total-[int]$rows[0]['added']) already unlocked. Verified $owned of $total saved."
-    } else { "Verified $owned of $total saved after the connection ended. No retry is needed." }
+    $added = 0
+    $hasAddedCount = $rows.Count -eq 1 -and $rows[0].ContainsKey('added') -and
+        [int]::TryParse([string]$rows[0]['added'], [ref]$added) -and $added -ge 0 -and $added -le $total
+    $message = if ($hasAddedCount) {
+        if ($added -eq 0) { "All $total entries were already unlocked. Verified $owned of $total saved." }
+        else { "$added added; $($total-$added) already unlocked. Verified $owned of $total saved." }
+    } else { "Verified $owned of $total saved. The newly added count is unavailable. No retry is needed." }
     return @{ok=$true;total=$total;owned=$owned;message=$message}
 }
 

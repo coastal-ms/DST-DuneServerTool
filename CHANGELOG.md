@@ -15,6 +15,10 @@ here cover everything those tags shipped.
 
 ## [16.6.2] - 2026-10-25
 
+- Add blueprint imports to the player portal and accept base layouts downloaded from Live Maps.
+
+- Report the correct number of newly added character unlocks after a successful grant.
+
 - Fix player portal unlock packages switching between online and offline requirements, and prevent blank pages when checking saved unlocks.
 
 - Fix Hyper-V over LAN connections to workgroup hosts using saved host credentials.

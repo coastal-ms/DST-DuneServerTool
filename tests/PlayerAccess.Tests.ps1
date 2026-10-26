@@ -195,3 +195,24 @@ Describe 'Linked inventory and read-only grant previews' {
         $ids | Should -Not -Contain 'base.manage'
     }
 }
+
+Describe 'Player blueprint imports' {
+    It 'allows only an offline linked pawn as the import destination' {
+        $f=New-PlayerFixture POST '/api/gameplay/blueprints/import'
+        Invoke-PlayerCheck $f @{player_id=21;blueprint=@{instances=@()}} | Should -BeTrue
+        Invoke-PlayerCheck $f @{player_id=22;blueprint=@{instances=@()}} | Should -BeFalse
+        Invoke-PlayerCheck $f @{player_id=31;blueprint=@{instances=@()}} | Should -BeFalse
+        Invoke-PlayerCheck $f @{player_id=21;account_id=12;blueprint=@{instances=@()}} | Should -BeFalse
+        Invoke-PlayerCheck $f @{blueprint=@{instances=@()}} | Should -BeFalse
+        foreach ($status in @('Online','LoggingOut','Unknown')) {
+            Mock Get-DunePlayersLive { @{ok=$true;players=@(@{account_id=11;id=21;controller_id=31;online_status=$status})} }
+            Invoke-PlayerCheck $f @{player_id=21;blueprint=@{instances=@()}} | Should -BeFalse
+        }
+    }
+    It 'does not expose blueprint directories or other base operations' {
+        foreach($path in @('/api/gameplay/blueprints','/api/gameplay/blueprints/export','/api/gameplay/bases/export')) {
+            Get-DunePlayerRoutePolicy GET $path | Should -BeNullOrEmpty
+        }
+        Test-DuneRoutePrincipalAccess ([pscustomobject]@{Method='POST';Path='/api/gameplay/blueprints/import';LocalOnly=$false}) @{type='linked-player'} | Should -BeTrue
+    }
+}
