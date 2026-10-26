@@ -18,6 +18,7 @@ Describe 'Get-DuneVmStatus batched LAN discovery' {
         function global:Get-DuneHyperVSplat { @{ ComputerName = '192.168.1.50'; Credential = $script:fakeCred } }
 
         Mock Invoke-Command { @{ State='Running'; UptimeSeconds=300; IPAddresses=@('10.10.10.42') } }
+        Mock ConvertTo-DuneHyperVCimSplat { $HyperV }
         Mock Get-VM { throw 'Repeated CIM call' }
         Mock Get-VMNetworkAdapter { throw 'Repeated CIM call' }
         Mock -CommandName Set-DuneLastKnownVmIp -MockWith { $true }

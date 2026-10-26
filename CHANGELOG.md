@@ -13,6 +13,10 @@ here cover everything those tags shipped.
 
 ## [Unreleased]
 
+## [16.6.4] - 2026-10-26
+
+- Preserve the original saved-credential Hyper-V over LAN connection and use explicit Negotiate as a fallback for hosts that need it.
+
 ## [16.6.3] - 2026-10-26
 
 - Add Delete all for the selected Solo inventory item, with the full quantity and stack count shown before confirmation.
