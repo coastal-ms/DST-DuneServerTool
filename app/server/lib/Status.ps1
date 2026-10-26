@@ -81,7 +81,7 @@ function Get-DuneLanVmSnapshot {
         $cached = & $read
         if ($null -ne $cached) { return $cached }
         try {
-            $snapshot = Invoke-Command -ComputerName $HyperV.ComputerName -Credential $HyperV.Credential -ArgumentList $script:DuneVmName -ScriptBlock {
+            $snapshot = Invoke-Command -ComputerName $HyperV.ComputerName -Credential $HyperV.Credential -Authentication Negotiate -ArgumentList $script:DuneVmName -ScriptBlock {
                 param($name)
                 $vm = Get-VM -Name $name -ErrorAction Stop
                 $addresses = @((Get-VMNetworkAdapter -VMName $name -ErrorAction Stop).IPAddresses)
@@ -93,8 +93,9 @@ function Get-DuneLanVmSnapshot {
             # without requiring broader delegation or changing host policy.
             $sessionError = $_.Exception.Message
             try {
-                $vm = Get-VM -Name $script:DuneVmName @HyperV -ErrorAction Stop
-                $addresses = @((Get-VMNetworkAdapter -VMName $script:DuneVmName @HyperV -ErrorAction Stop).IPAddresses)
+                $query = ConvertTo-DuneHyperVCimSplat -HyperV $HyperV
+                $vm = Get-VM -Name $script:DuneVmName @query -ErrorAction Stop
+                $addresses = @((Get-VMNetworkAdapter -VMName $script:DuneVmName @query -ErrorAction Stop).IPAddresses)
                 $snapshot = @{ State=[string]$vm.State; UptimeSeconds=[int]$vm.Uptime.TotalSeconds; IPAddresses=$addresses }
             } catch {
                 throw "LAN VM discovery failed. PowerShell session: $sessionError. Hyper-V query: $($_.Exception.Message)"

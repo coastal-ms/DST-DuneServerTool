@@ -68,6 +68,37 @@ function Get-DuneHyperVSplat {
 #   3. Neither - fails fast with an actionable "enter a credential" reason
 #      instead of silently trying the current Windows identity (the original
 #      bug: that identity is routinely wrong for a separate LAN host).
+# Hyper-V's implicit ComputerName/Credential path can reject workgroup hosts
+# that accept the same credential through an explicit Negotiate CIM session.
+function New-DuneHyperVCimSession {
+    param([Parameter(Mandatory)][string]$ComputerName,
+          [Parameter(Mandatory)][pscredential]$Credential)
+    New-CimSession -ComputerName $ComputerName -Credential $Credential `
+        -Authentication Negotiate -OperationTimeoutSec 20 -ErrorAction Stop
+}
+
+function ConvertTo-DuneHyperVCimSplat {
+    param([Parameter(Mandatory)][AllowEmptyCollection()][hashtable]$HyperV)
+    if (-not $HyperV.ComputerName) { return $HyperV }
+    # One session per API runspace, never shared across threads. Replace it
+    # when credentials/host change or its short reuse window expires.
+    $entry = $script:DuneHyperVCimSessionCache
+    $matches = $entry -and $entry.HostName -eq $HyperV.ComputerName -and
+        $entry.Credential.UserName -ceq $HyperV.Credential.UserName -and
+        $entry.Credential.GetNetworkCredential().Password -ceq $HyperV.Credential.GetNetworkCredential().Password -and
+        ([datetime]::UtcNow - $entry.Created).TotalSeconds -lt 60
+    if (-not $matches) {
+        if ($entry) { Remove-CimSession -CimSession $entry.Session -ErrorAction SilentlyContinue }
+        $script:DuneHyperVCimSessionCache = $null
+        $session = New-DuneHyperVCimSession -ComputerName $HyperV.ComputerName -Credential $HyperV.Credential
+        $script:DuneHyperVCimSessionCache = @{
+            HostName=$HyperV.ComputerName; Credential=$HyperV.Credential
+            Session=$session; Created=[datetime]::UtcNow
+        }
+    }
+    return @{ CimSession = $script:DuneHyperVCimSessionCache.Session }
+}
+
 function Test-DuneHyperVLanCredentialInput {
     # Pure, local validation of what the user typed into the Hyper-V over LAN
     # credential fields, run BEFORE any WinRM round-trip. Returns
@@ -159,8 +190,10 @@ function Test-DuneHyperVLan {
         return @{ ok = $false; vmFound = $false; reason = "No Hyper-V host administrator credential provided for $HostIp. Enter the host's administrator username and password - in a workgroup that is the host's own computer name followed by the account, e.g. $example - then test again." }
     }
 
+    $session = $null
     try {
-        $vms = @(Get-VM -ComputerName $HostIp -Credential $cred -ErrorAction Stop)
+        $session = New-DuneHyperVCimSession -ComputerName $HostIp -Credential $cred
+        $vms = @(Get-VM -CimSession $session -ErrorAction Stop)
         $dune = $vms | Where-Object { $_.Name -eq 'dune-awakening' } | Select-Object -First 1
         if ($dune) {
             return @{ ok = $true; vmFound = $true; reason = "Connected to $HostIp. Found the 'dune-awakening' VM (state: $($dune.State))." }
@@ -178,5 +211,7 @@ function Test-DuneHyperVLan {
                 "Could not query Hyper-V on ${HostIp}: $msg"
             }
         return @{ ok = $false; vmFound = $false; reason = $reason }
+    } finally {
+        if ($session) { Remove-CimSession -CimSession $session -ErrorAction SilentlyContinue }
     }
 }

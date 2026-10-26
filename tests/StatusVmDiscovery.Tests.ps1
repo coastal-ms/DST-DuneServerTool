@@ -2,6 +2,7 @@
 
 BeforeAll {
     . (Join-Path $PSScriptRoot '_TestHelpers.ps1')
+    function global:ConvertTo-DuneHyperVCimSplat { param($HyperV) return $HyperV }
     Import-DstLib 'Config.ps1'
     Import-DstLib 'HyperVGuestRecovery.ps1'
     Import-DstLib 'Status.ps1'

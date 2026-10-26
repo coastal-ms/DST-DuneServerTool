@@ -1,4 +1,4 @@
-# Changelog
+﻿# Changelog
 
 All notable changes to this project will be documented in this file.
 
@@ -15,6 +15,8 @@ here cover everything those tags shipped.
 
 ## [16.6.2] - 2026-10-25
 
+- Fix Hyper-V over LAN connections to workgroup hosts using saved host credentials.
+- Correct the Mercenary Heavy Chestplate category in item grants.
 - Use the current Tailscale address for remote portal links and QR codes after a device rename.
 - Stop offering obsolete or unrelated Funnel addresses as portal links.
 
