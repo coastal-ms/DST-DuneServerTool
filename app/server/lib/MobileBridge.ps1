@@ -60,7 +60,19 @@ function Test-DuneBridgeHealth {
     }
 }
 
+function Test-DuneBridgeForwardedRequest {
+    param($Request)
+    if (-not $Request) { return $false }
+    try {
+        if (-not [Net.IPAddress]::IsLoopback($Request.RemoteEndPoint.Address)) { return $false }
+        if ([string]$Request.Headers['X-Dune-Bridge-Protocol'] -ne '2') { return $false }
+        # This validates the bridge's secret proof before trusting its marker.
+        return [bool](Get-DunePortalTrustedRequestAuthority -Request $Request)
+    } catch { return $false }
+}
+
 function Get-DuneBridgeStatus {
+    param($Request)
     $port = $script:DuneMobileBridgePort
 
     $elevated = Test-DuneBridgeElevated
@@ -74,7 +86,10 @@ function Get-DuneBridgeStatus {
     $listening = $false
     try { $listening = [bool](Get-NetTCPConnection -State Listen -LocalPort $port -ErrorAction SilentlyContinue) } catch {}
 
-    $healthOk = Test-DuneBridgeHealth
+    # The synchronous proxy is waiting for this request to finish. Calling back
+    # into its listener here would queue behind ourselves until the probe times
+    # out. A verified forwarded request already proves the bridge is responding.
+    $healthOk = if (Test-DuneBridgeForwardedRequest -Request $Request) { $true } else { Test-DuneBridgeHealth }
 
     $issues = New-Object System.Collections.Generic.List[string]
     if (-not $hasTask)      { [void]$issues.Add('The mobile bridge background task is not installed.') }
@@ -103,7 +118,7 @@ function Get-DuneBridgeStatus {
 # loopback only, so NO admin is required (no URL ACL, no firewall rule).
 # Returns @{ ok; error?; status? }.
 function Invoke-DuneBridgeRepair {
-    param([switch]$NoWait)
+    param([switch]$NoWait, $Request)
 
     $installer = Get-DuneBridgeInstallerPath
     if (-not $installer) {
@@ -138,7 +153,7 @@ function Invoke-DuneBridgeRepair {
         return @{ ok = $false; error = "Bridge setup failed: $($_.Exception.Message)" }
     }
     Start-Sleep -Milliseconds 800
-    return @{ ok = $true; status = (Get-DuneBridgeStatus) }
+    return @{ ok = $true; status = (Get-DuneBridgeStatus -Request $Request) }
 }
 
 # Startup auto-heal. Best-effort and non-blocking: only acts when something is

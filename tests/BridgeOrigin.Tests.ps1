@@ -189,11 +189,11 @@ Describe 'Versioned bridge runtime repair' {
             if ($script:healthCalls -eq 1) {
                 return @{ ok=$true; bridgeVersion='1.0.0'; protocolVersion='1' }
             }
-            return @{ ok=$true; bridgeVersion='2.0.0'; protocolVersion='2' }
+            return @{ ok=$true; bridgeVersion='2.0.1'; protocolVersion='2' }
         }
         Mock Start-Sleep {}
         $health = Assert-DuneBridgeHealth -Port 47900 -TimeoutSeconds 2
-        $health.bridgeVersion | Should -Be '2.0.0'
+        $health.bridgeVersion | Should -Be '2.0.1'
         Assert-MockCalled Invoke-RestMethod -Times 2 -Exactly
     }
 }

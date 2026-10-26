@@ -55,7 +55,7 @@ export function BrowserAccessCard() {
     }
   }
 
-  useEffect(() => { void loadBridge(); void load() }, [])
+  useEffect(() => { void load() }, [])
 
   const repairBridge = async () => {
     setRepairing(true)
@@ -136,7 +136,7 @@ export function BrowserAccessCard() {
 
         {/* Local bridge health — the loopback proxy phones reach through the
             tunnel. Binds 127.0.0.1 only, so no admin/firewall is involved. */}
-        {bridge && (
+        {localViewer && bridge && (
           bridge.ready ? (
             <div className="card p-3 border-success/40 bg-success/10 text-success text-sm flex items-center gap-2" style={{ marginBottom: '1rem' }}>
               <Icon name="CheckCircle2" size={16} /> Remote access bridge ready (local port {bridge.port}).
@@ -144,7 +144,7 @@ export function BrowserAccessCard() {
           ) : (
             <div className="card p-3 border-warning/40 bg-warning/10 text-sm" style={{ marginBottom: '1rem' }}>
               <div className="flex items-center gap-2 text-warning" style={{ fontWeight: 600 }}>
-                <Icon name="AlertTriangle" size={16} /> Remote access bridge not running
+                <Icon name="AlertTriangle" size={16} /> {bridge.listening ? 'Remote access bridge not responding' : 'Remote access bridge not running'}
               </div>
               <ul style={{ margin: '0.5rem 0 0', paddingLeft: '1.25rem' }} className="text-text-muted">
                 {bridge.issues.map((it, i) => <li key={i}>{it}</li>)}
@@ -163,6 +163,7 @@ export function BrowserAccessCard() {
         <p className="help-text" style={{ marginBottom: '1rem' }}>
           Set up a remote address above, then scan this code with any phone or
           tablet camera to open the Browser Portal. Account login is optional and configured below.
+          {' '}On iPad, open the scanned page in Safari to keep the Live Map screen awake.
         </p>
 
         {!data && !loading && (

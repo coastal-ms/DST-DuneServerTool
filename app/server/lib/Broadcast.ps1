@@ -90,12 +90,14 @@ function Send-V6GenericBroadcast {
     $ip  = $ctx.vm.ip
     $pod = Find-V6MqGamePod -Ip $ip
 
-    $tEsc = _Escape-V6ErlBinary $Title
-    $bEsc = _Escape-V6ErlBinary $Body
+    # Keep user text out of Erlang source and the process stdin code page.
+    # Mobile smart quotes, emoji and literal quotes must arrive as exact UTF-8.
+    $titleB64 = [Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes($Title))
+    $bodyB64 = [Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes($Body))
 
     $erl = @"
-Title = unicode:characters_to_binary(<<"$tEsc">>, utf8),
-Body = unicode:characters_to_binary(<<"$bEsc">>, utf8),
+Title = base64:decode(<<"$titleB64">>),
+Body = base64:decode(<<"$bodyB64">>),
 Duration = $DurationSec,
 EntryEn = #{<<"Key">> => <<"en">>, <<"Title">> => Title, <<"Body">> => Body},
 EntryEnUs = #{<<"Key">> => <<"en-US">>, <<"Title">> => Title, <<"Body">> => Body},
@@ -220,7 +222,9 @@ function _Invoke-V6BroadcastErl {
 
     # rabbitmqctl eval returns "{ok,enqueued}." or similar on success and
     # an Erlang stack trace on failure.
-    $ok = ($text -match '\{ok,') -or ($text -match '^\s*ok\s*$') -or ($text -match 'enqueued')
+    # CLI failures may echo source containing {ok, ...}; that is not a result.
+    $failed = $text -match '(?im)(?:^\s*Error\b|exception error:|command terminated with exit code\s+[1-9]\d*)'
+    $ok = -not $failed -and (($text -match '\{ok,') -or ($text -match '^\s*ok\s*$') -or ($text -match 'enqueued'))
     $result = @{
         ok      = $ok
         action  = $Action

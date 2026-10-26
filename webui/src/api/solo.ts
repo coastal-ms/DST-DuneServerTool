@@ -341,6 +341,7 @@ export function grantSoloItems(
   destination: string,
   items: SoloGiveItem[],
   expectedProfileToken: string,
+  moddedStorageCapacity = false,
 ): Promise<{
   ok: boolean
   destination: string
@@ -352,6 +353,7 @@ export function grantSoloItems(
     method: 'POST',
     body: JSON.stringify({
       destination,
+      moddedStorageCapacity,
       items,
       expectedProfileToken,
       confirm: 'GIVE SOLO ITEMS',

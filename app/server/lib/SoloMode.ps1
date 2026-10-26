@@ -3,6 +3,7 @@
 . (Join-Path $PSScriptRoot 'SoloXbox.ps1')
 $script:DuneSoloSection = '/Script/DuneSandbox.UserServerCustomSettings'
 $script:DuneSoloSettingKeys = @(
+    'm_NodeValueToSpiceResourceRatio',
     'm_bAreSecurityZonesEnabled',
     'DifficultyLevel',
     'PVPMode',
@@ -682,7 +683,8 @@ function Invoke-DuneSoloGiveItems {
     param(
         [Parameter(Mandatory)][string]$Destination,
         [Parameter(Mandatory)][object[]]$Items,
-        [Parameter(Mandatory)][string]$Confirm
+        [Parameter(Mandatory)][string]$Confirm,
+        [bool]$ModdedStorageCapacity = $false
     )
 
     Assert-DuneSoloSupportedPlatform
@@ -748,6 +750,7 @@ function Invoke-DuneSoloGiveItems {
     $safety = Join-Path $safetyDir "game-before-item-grant-$stamp.db"
     $plan = [ordered]@{
         destination = $Destination.Trim()
+        moddedStorageCapacity = $ModdedStorageCapacity
         items = @($normalized)
     }
     $planPath = Join-Path $env:TEMP "dune-solo-grant-$([guid]::NewGuid().ToString('N')).json"
@@ -1129,6 +1132,18 @@ function Read-DuneSoloSettings {
         })
     }
     $entries = foreach ($key in $script:DuneSoloSettingKeys) {
+        if ($key -eq 'm_NodeValueToSpiceResourceRatio') {
+            $spiceValue = ''
+            $insideSpice = $false
+            if (Test-Path -LiteralPath $gamePath -PathType Leaf) {
+                foreach ($line in [IO.File]::ReadAllLines($gamePath)) {
+                    if ($line -match '^\s*\[(.+)\]\s*$') { $insideSpice = $Matches[1] -eq '/Script/DuneSandbox.SpiceHarvestingSystem' }
+                    elseif ($insideSpice -and $line -match '^\s*m_NodeValueToSpiceResourceRatio\s*=(.*)$') { $spiceValue = $Matches[1].Trim() }
+                }
+            }
+            [pscustomobject]@{ key = $key; value = $spiceValue; present = ($spiceValue -ne ''); needsApply = $false }
+            continue
+        }
         if ($key -eq 'm_bAreSecurityZonesEnabled') {
             $securityValue = ''
             $insideSecurity = $false
@@ -1220,6 +1235,21 @@ function Set-DuneSoloSettings {
         $normalized[$name] = $trimmed
     }
     if ($normalized.Count -eq 0) { throw 'No Solo settings were provided.' }
+    if ($normalized.ContainsKey('m_NodeValueToSpiceResourceRatio')) {
+        $spiceValue = [string]$normalized['m_NodeValueToSpiceResourceRatio']
+        $spiceNumber = [double]::Parse($spiceValue, [Globalization.CultureInfo]::InvariantCulture)
+        if (-not [double]::IsNaN($spiceNumber) -and -not [double]::IsInfinity($spiceNumber) -and $spiceNumber -gt 0) {
+            $spicePath = Join-Path (Split-Path -Parent (@(Get-DuneSoloEnginePaths -Profile $profile)[0])) 'Game.ini'
+            Assert-DuneSoloConfigPath -Path $spicePath
+            $normalized.Remove('m_NodeValueToSpiceResourceRatio')
+            $otherResult = if ($normalized.Count) { Set-DuneSoloSettings -Settings $normalized -Confirm $Confirm } else { $null }
+            $spiceBackup = Set-DuneSoloLandclaimOverride -Path $spicePath -Value $spiceValue -Section '/Script/DuneSandbox.SpiceHarvestingSystem' -Key 'm_NodeValueToSpiceResourceRatio'
+            $settings = Read-DuneSoloSettings
+            if ([string](@($settings.entries | Where-Object key -eq 'm_NodeValueToSpiceResourceRatio')[0].value) -ne $spiceValue) { throw 'Spice yield Game.ini verification failed.' }
+            return @{ ok = $true; settings = $settings; backupPath = $spiceBackup; paths = @($otherResult.paths) + @($spicePath); backupPaths = @($otherResult.backupPaths) + @($spiceBackup | Where-Object { $_ }) }
+        }
+        throw 'Spice harvest ratio must be a finite number greater than zero.'
+    }
     if ($normalized.ContainsKey('m_bAreSecurityZonesEnabled')) {
         $securityValue = [string]$normalized['m_bAreSecurityZonesEnabled']
         $securityPath = Join-Path (Split-Path -Parent (@(Get-DuneSoloEnginePaths -Profile $profile)[0])) 'Game.ini'
@@ -1387,8 +1417,8 @@ function Assert-DuneSoloConfigPath {
 
 function Set-DuneSoloLandclaimOverride {
     param([Parameter(Mandatory)][string]$Path, [Parameter(Mandatory)][string]$Value,
-        [ValidateSet('/Script/DuneSandbox.BuildingSettings','/Script/DuneSandbox.InventorySystemSettings','/Script/DuneSandbox.SecurityZonesSubsystem')][string]$Section = '/Script/DuneSandbox.BuildingSettings',
-        [ValidateSet('m_MaxNumLandclaimSegments','PlayerInventoryStartingSize','m_bAreSecurityZonesEnabled')][string]$Key = 'm_MaxNumLandclaimSegments')
+        [ValidateSet('/Script/DuneSandbox.BuildingSettings','/Script/DuneSandbox.InventorySystemSettings','/Script/DuneSandbox.SecurityZonesSubsystem','/Script/DuneSandbox.SpiceHarvestingSystem')][string]$Section = '/Script/DuneSandbox.BuildingSettings',
+        [ValidateSet('m_MaxNumLandclaimSegments','PlayerInventoryStartingSize','m_bAreSecurityZonesEnabled','m_NodeValueToSpiceResourceRatio')][string]$Key = 'm_MaxNumLandclaimSegments')
     $parent = Split-Path -Parent $Path
     if (-not (Test-Path -LiteralPath $parent)) { New-Item -ItemType Directory -Path $parent -Force | Out-Null }
     $existed = Test-Path -LiteralPath $Path -PathType Leaf

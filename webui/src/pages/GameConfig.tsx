@@ -1122,7 +1122,7 @@ export function GameConfig({ mode = 'standard', embedded = false, section = 'adv
       }
       let out
       try { out = await saveGameConfig(updates) }
-      catch (error) { throw new Error(`${localSaved ? 'The reviewed local changes were saved and backed up; server save failed. ' : ''}${error instanceof Error ? error.message : String(error)}`) }
+      catch (error) { throw new Error(`${localSaved ? 'The reviewed local changes were saved and backed up; server save failed. ' : ''}${error instanceof Error ? error.message : String(error)}`, { cause: error }) }
       const next: GameConfigResponse = { available: true, source: out.source, game: out.game, engine: out.engine }
       setCfg(next)
       const seeded = seedValues(schemaWithLoadedExperimental, next)
@@ -2340,7 +2340,15 @@ export function formatCoriolisCycleStartHour(utcHour: number, timezoneOffsetMinu
   return `${displayHour}:${String(localMinute).padStart(2, '0')} ${suffix} local (${utc} GMT/UTC)`
 }
 
-function FieldRow({ field, value, onChange, disabled, isDirty, isSet, isCustom, defaultValue, managed, fixedHeight = false }: FieldRowProps) {
+export function FieldRow({ field, value, onChange, disabled, isDirty, isSet, isCustom, defaultValue, managed, fixedHeight = false }: FieldRowProps) {
+  const [copyStatus, setCopyStatus] = useState('')
+  const copySetting = async (entry: boolean) => {
+    const iniValue = field.quoted && !/^".*"$/.test(value) ? JSON.stringify(value) : value
+    try {
+      await navigator.clipboard.writeText(entry ? `[${field.section}]\n${field.key}=${iniValue}` : field.key)
+      setCopyStatus(entry ? 'INI entry copied' : 'Command name copied')
+    } catch { setCopyStatus('Copy unavailable. Select and copy the command name.') }
+  }
   if (/[\\/]/.test(`${defaultValue} ${value}`) || /(path|directory|folder|datatable|assetreference)(name)?$/i.test(field.key)) {
     return <div className="space-y-1">
       <label className="text-sm font-medium">{field.label} <span className="text-xs text-text-muted">Read-only path — preserved</span></label>
@@ -2364,13 +2372,16 @@ function FieldRow({ field, value, onChange, disabled, isDirty, isSet, isCustom, 
   const resetToDefault = () => { if (!disabled && hasDefault && !atDefault) onChange(defaultValue) }
 
   return (
-    <div className={fixedHeight ? 'h-32 overflow-hidden' : wide ? 'md:col-span-2' : ''}>
-      <label className="flex items-center justify-between text-sm font-medium mb-1.5 gap-2">
-        <span className="flex items-center gap-2 min-w-0">
-          <span className="truncate">{field.label}</span>
+    <div className={fixedHeight ? 'min-h-32 min-w-0' : wide ? 'md:col-span-2 min-w-0' : 'min-w-0'}>
+      <div className="flex flex-col text-sm font-medium mb-1.5 gap-2">
+        <span className="flex items-start gap-2 min-w-0">
+          <span className="min-w-0 [overflow-wrap:anywhere] select-text">{field.label}</span>
           {isDirty && <span className="w-1.5 h-1.5 rounded-full bg-ibad shrink-0" title="Modified" />}
         </span>
-        <span className="flex items-center gap-1 shrink-0">
+        {field.label !== field.key && <code className="text-[11px] text-text-muted [overflow-wrap:anywhere] select-text">{field.key}</code>}
+        <span className="flex flex-wrap items-center gap-1">
+          <button type="button" onClick={() => void copySetting(false)} aria-label={`Copy command name ${field.key}`} className="btn-secondary text-[10px] px-2 py-1"><Icon name="Copy" size={11} /> Copy name</button>
+          {value.trim() !== '' && !field.structKey && <button type="button" onClick={() => void copySetting(true)} aria-label={`Copy INI entry ${field.key}`} className="btn-secondary text-[10px] px-2 py-1">Copy INI entry</button>}
           <button
             type="button"
             onClick={() => onChange('', true)}
@@ -2434,7 +2445,8 @@ function FieldRow({ field, value, onChange, disabled, isDirty, isSet, isCustom, 
           )}
           <span className="text-[10px] font-mono text-text-dim uppercase tracking-wider">{field.file}</span>
         </span>
-      </label>
+      </div>
+      {copyStatus && <p role="status" className="mb-1 text-xs text-text-muted">{copyStatus}</p>}
       <div className="mb-1.5 text-[10px] text-text-dim">Server · {field.file === 'engine' ? 'UserEngine.ini' : 'UserGame.ini'}{field.consoleVar ? ' · startup command on restart' : ' · deploy on start/restart'}</div>
 
       {/* When this field overrides the default, show the uneditable default beneath the name. */}
@@ -2492,9 +2504,6 @@ function FieldRow({ field, value, onChange, disabled, isDirty, isSet, isCustom, 
 
       <div className="mt-1 flex items-center justify-between gap-2">
         {field.help && <p className={fixedHeight ? 'text-xs text-text-dim line-clamp-2' : 'text-xs text-text-dim'} title={fixedHeight ? field.help : undefined}>{field.help}</p>}
-        {field.label !== field.key && (
-          <span className="text-[10px] font-mono text-text-dim ml-auto truncate" title={`${field.section} / ${field.key}`}>{field.key}</span>
-        )}
       </div>
       {['Dune.GlobalMiningOutputMultiplier', 'Dune.GlobalVehicleMiningOutputMultiplier'].includes(field.key) && (
         <p className="mt-2 text-xs text-text-muted">Server file only. Overlaps Gathering Amount in Official server controls. DST preserves both values separately; their in-game precedence has not been verified. This is not a player-PC setting.</p>

@@ -60,7 +60,7 @@ $script:HopByHop = @(
     'te', 'trailers', 'transfer-encoding', 'upgrade',
     'host', 'content-length'
 )
-$script:BridgeVersion = '2.0.0'
+$script:BridgeVersion = '2.0.1'
 $script:BridgeProtocolVersion = '2'
 $script:BridgeInternalHeaders = @('x-dune-bridge-protocol', 'x-dune-original-authority', 'x-dune-bridge-proof')
 
@@ -281,12 +281,8 @@ function Invoke-WsProxy {
         matching WS to DST on loopback, and bridge frames in both directions
         until either side closes.
 
-        Trade-off: this call blocks the main HttpListener loop for the
-        lifetime of the WS session. The friend helper is single-user and
-        the DST WebUI only opens one WS at a time (from the Terminal page),
-        so this is acceptable for the scaffold scope. Periodic REST polls
-        from other tabs will queue behind the WS — close the Terminal page
-        to free the loop.
+        This occupies one request worker for the lifetime of the session.
+        Other transfers and the separate authentication workers remain usable.
     #>
     param(
         [System.Net.HttpListenerContext]$Context,
@@ -479,6 +475,47 @@ function Invoke-Request {
     }
 }
 
+function New-DuneBridgeRequestPool {
+    param([int]$Maximum = 8)
+    $initial = [Management.Automation.Runspaces.InitialSessionState]::CreateDefault()
+    foreach ($name in @('Write-BridgeLog','Get-CurrentDst','Send-JsonResponse','Get-DuneBridgeOriginSecret',
+        'Set-DuneBridgeForwardingHeaders','Invoke-Proxy','Start-WsPumpAsync','Invoke-WsProxy',
+        'Test-DuneRequestIsLocal','Test-DuneBridgeWebSocketUpgradeAllowed','Invoke-Request')) {
+        $definition = (Get-Item "Function:$name").Definition
+        $initial.Commands.Add([Management.Automation.Runspaces.SessionStateFunctionEntry]::new($name, $definition))
+    }
+    foreach ($entry in @{
+        LastUrlPath=$LastUrlPath; LogPath=$LogPath; HopByHop=$script:HopByHop
+        BridgeVersion=$script:BridgeVersion; BridgeProtocolVersion=$script:BridgeProtocolVersion
+        BridgeInternalHeaders=$script:BridgeInternalHeaders; HttpClient=$script:HttpClient
+    }.GetEnumerator()) {
+        $initial.Variables.Add([Management.Automation.Runspaces.SessionStateVariableEntry]::new($entry.Key, $entry.Value, 'Bridge request context'))
+    }
+    $pool = [runspacefactory]::CreateRunspacePool(1, $Maximum, $initial, $Host)
+    $pool.Open()
+    return $pool
+}
+
+function Start-DuneBridgeRequest {
+    param($Pool, $Context)
+    $worker = [powershell]::Create()
+    $worker.RunspacePool = $Pool
+    [void]$worker.AddScript({ param($context) Invoke-Request -Context $context }).AddArgument($Context)
+    try { return @{ worker=$worker; handle=$worker.BeginInvoke() } }
+    catch { $worker.Dispose(); throw }
+}
+
+function Complete-DuneBridgeRequests {
+    param($Jobs)
+    for ($i=$Jobs.Count-1; $i -ge 0; $i--) {
+        $job = $Jobs[$i]
+        if (-not $job.handle.IsCompleted) { continue }
+        try { [void]$job.worker.EndInvoke($job.handle) }
+        catch { Write-BridgeLog 'A bridge request ended before completion.' }
+        finally { $job.worker.Dispose(); $Jobs.RemoveAt($i) }
+    }
+}
+
 function Start-Bridge {
     $listener = [System.Net.HttpListener]::new()
     # Bind to loopback by default: cloudflared connects locally, so nothing needs
@@ -496,16 +533,38 @@ function Start-Bridge {
     Write-BridgeLog "DST Helper Bridge listening on $effectivePrefix"
     Write-BridgeLog "Watching $LastUrlPath"
 
+    $requests = [Collections.Generic.List[object]]::new()
+    $authRequests = [Collections.Generic.List[object]]::new()
+    $pool = $null; $authPool = $null
     try {
+        $pool = New-DuneBridgeRequestPool -Maximum 8
+        $authPool = New-DuneBridgeRequestPool -Maximum 2
         while ($listener.IsListening) {
             $ctx = $listener.GetContext()
-            # Inline (synchronous) handling. Friend helper = single user;
-            # concurrency isn't worth runspace overhead here.
-            Invoke-Request -Context $ctx
+            Complete-DuneBridgeRequests -Jobs $requests
+            Complete-DuneBridgeRequests -Jobs $authRequests
+            $path = $ctx.Request.Url.AbsolutePath
+            # Health must answer even when all transfer workers are occupied.
+            if ($path -in @('/_dst/health','/_dst/token')) { Invoke-Request -Context $ctx; continue }
+            # Sign-in/out has reserved capacity rather than waiting behind maps,
+            # artwork or a terminal WebSocket. The backend still checks access.
+            $auth = $path.StartsWith('/api/portal-auth/', [StringComparison]::Ordinal)
+            $jobs = if ($auth) { ,$authRequests } else { ,$requests }
+            $selectedPool = if ($auth) { $authPool } else { $pool }
+            $limit = if ($auth) { 4 } else { 16 }
+            if ($jobs.Count -ge $limit) {
+                Send-JsonResponse -Response $ctx.Response -StatusCode 503 -Body @{error='Remote access is busy. Please retry.'}
+                continue
+            }
+            $jobs.Add((Start-DuneBridgeRequest -Pool $selectedPool -Context $ctx))
         }
     } finally {
         try { $listener.Stop(); $listener.Close() } catch { }
         try { $script:HttpClient.Dispose() } catch { }
+        foreach ($job in @($requests.ToArray()) + @($authRequests.ToArray())) {
+            try { $job.worker.Stop(); $job.worker.Dispose() } catch { }
+        }
+        foreach ($requestPool in @($pool,$authPool)) { try { $requestPool.Close(); $requestPool.Dispose() } catch { } }
         Write-BridgeLog "Bridge stopped."
     }
 }

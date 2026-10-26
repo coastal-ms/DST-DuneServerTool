@@ -127,11 +127,17 @@ describe('Solo Mode API contracts', () => {
       method: 'POST',
       body: {
         destination: 'inventory:49',
+        moddedStorageCapacity: false,
         items: [{ templateId: 'CopperBar', quantity: 100, quality: 0 }],
         expectedProfileToken: 'profile-token',
         confirm: 'GIVE SOLO ITEMS',
       },
     })
+  })
+
+  it('sends the explicit modded-storage volume override only when selected', async () => {
+    await solo.grantSoloItems('inventory:49', [{ templateId: 'CopperBar', quantity: 100, quality: 0 }], 'profile-token', true)
+    expect(last().body).toMatchObject({ destination: 'inventory:49', moddedStorageCapacity: true, confirm: 'GIVE SOLO ITEMS' })
   })
 
   it('lists and exports saved Solo blueprints', async () => {

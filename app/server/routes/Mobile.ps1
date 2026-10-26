@@ -29,7 +29,7 @@ Register-DuneRoute -Method GET -Path '/api/mobile/pairing' -Handler {
 
         $bridge = $null
         if (Get-Command Get-DuneBridgeStatus -ErrorAction SilentlyContinue) {
-            try { $bridge = Get-DuneBridgeStatus } catch {}
+            try { $bridge = Get-DuneBridgeStatus -Request $req } catch {}
         }
 
         # Permanent remote identity: the phone stores the stable remoteToken so it
@@ -69,7 +69,7 @@ Register-DuneRoute -Method GET -Path '/api/mobile/bridge-status' -Handler {
             Write-DuneError -Response $res -Status 500 -Message 'Bridge management is unavailable in this build.'
             return
         }
-        Write-DuneJson -Response $res -Body (Get-DuneBridgeStatus)
+        Write-DuneJson -Response $res -Body (Get-DuneBridgeStatus -Request $req)
     } catch {
         Write-DuneError -Response $res -Status 500 -Message $_.Exception.Message
     }
@@ -84,7 +84,7 @@ Register-DuneRoute -Method POST -Path '/api/mobile/bridge-repair' -Handler {
             Write-DuneError -Response $res -Status 500 -Message 'Bridge management is unavailable in this build.'
             return
         }
-        $result = Invoke-DuneBridgeRepair
+        $result = Invoke-DuneBridgeRepair -Request $req
         if ($result.ok) {
             Write-DuneJson -Response $res -Body $result
         } else {

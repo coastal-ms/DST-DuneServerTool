@@ -486,7 +486,7 @@ $script:DuneGameConfigSchema = @(
 
     # --- Spice ---
     @{ Section=$script:DuneGcSecSpice; Key='m_PrimeRateInSeconds'; File='game'; Type='float'; Min=0; Unit='sec'; Default='30.0'; Label='Spice Prime Rate'; Help='Seconds between spice node priming ticks. Also needs client-side apply.'; ClientApply=$true; Category='Spice' }
-    @{ Section=$script:DuneGcSecSpice; Key='m_NodeValueToSpiceResourceRatio'; File='game'; Type='float'; Min=0; Default='10.0'; Label='Node Value to Spice Ratio'; Help='Converts node value into harvestable spice. Also needs client-side apply.'; ClientApply=$true; Category='Spice' }
+    @{ Section=$script:DuneGcSecSpice; Key='m_NodeValueToSpiceResourceRatio'; File='game'; Type='float'; Min=0; Default='10.0'; Label='Spice Harvest Yield: Lower Gives More'; Help='Spice conversion ratio, not a direct yield multiplier. Default 10. Lower values give more spice; higher values give less. Try 5 for increased yield or 20 for reduced yield. Exact yield scaling needs an in-game comparison. Save and apply server settings to restart the battlegroup. Also available for matching client-side apply.'; ClientApply=$true; Category='Spice' }
     @{ Section=$script:DuneGcSecSpiceAddict; Key='m_bIsSpiceAddictionEnabled'; File='game'; Type='bool'; Default='True'; Label='Spice Addiction Enabled'; Help='Whether players develop spice addiction over time. Also needs client-side apply.'; ClientApply=$true; Category='Spice' }
     @{ Section=$script:DuneGcSecSpiceAddict; Key='m_bIsSpiceVisionEnabled'; File='game'; Type='bool'; Default='True'; Label='Spice Vision Enabled'; Help='Whether spice vision effects are active. Also needs client-side apply.'; ClientApply=$true; Category='Spice' }
 

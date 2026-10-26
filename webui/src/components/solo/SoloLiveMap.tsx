@@ -29,7 +29,7 @@ export function SoloLiveMap({ connectionToken }: { connectionToken: string }) {
     finally { setBusy(false) }
   }
   return <div className="mb-4 flex flex-wrap items-center gap-3">
-    <button className="btn btn-primary" disabled={!state.available || busy} onClick={() => void open()}>Open Solo Live Map</button>
+    <button className="btn btn-primary" disabled={!state.available || busy} onClick={() => void open()}>Open Deep Desert Live Map</button>
     {!state.available && <span className="text-sm text-text-dim">{state.status}</span>}
     {error && <span role="alert" className="text-sm text-red-400">{error}</span>}
   </div>
