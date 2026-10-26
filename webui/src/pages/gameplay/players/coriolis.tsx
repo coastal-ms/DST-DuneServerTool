@@ -114,10 +114,9 @@ export function CoriolisAdmin({ flash }: { flash: Flash }) {
   }
 
   return (
-    <div className="card p-4 space-y-3">
+    <div className="space-y-3">
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2 text-xs uppercase tracking-wider text-text-dim">
-          <Icon name="Wind" size={13} /> Coriolis Storm Seeds
           {source === 'demo' && (
             <span className="ml-2 px-1.5 py-0.5 rounded bg-warning/10 text-warning text-[10px] uppercase">demo</span>
           )}

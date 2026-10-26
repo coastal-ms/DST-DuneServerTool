@@ -93,10 +93,10 @@ export function PlayerManagement(props: SectionProps & { initialSection?: Sectio
   </>
   else if (view === 'Snapshot') {
     const Stats = SECTION_COMPONENTS.stats
-    body = <><Stats {...shared} /><div className="player-common-tasks" aria-label="Common player tasks">
+    body = <Stats {...shared} snapshotActions={<div className="player-common-tasks" aria-label="Common player tasks">
       {['give-solari', 'rename', 'give-item', 'repair-gear', 'grant-cosmetic'].filter(id => tools.some(item => item.id === id)).map(id =>
         <button key={id} className="btn-secondary" onClick={() => openTool(id)}>{tools.find(item => item.id === id)?.label}</button>)}
-    </div></>
+    </div>} />
   } else if (view === 'Bank' || view === 'Storage containers') body = <InventorySection key={`${props.player.id}:${view}`} {...shared} embedded initialView={view === 'Storage containers' ? 'storage' : 'bank'} />
   else {
     const section: SectionId | undefined = ({ Specializations: 'specs', Journey: 'journey', Landsraad: 'landsraad', History: 'history', 'Character tags': 'tags' } as Record<string, SectionId>)[view]

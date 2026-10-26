@@ -98,6 +98,12 @@ internal static partial class Program
                     options.TryGetValue("augment-catalog", out var augmentCatalog)
                         ? Path.GetFullPath(augmentCatalog)
                         : null),
+                "delete-item-group" => DeleteInventoryGroup(Require(options, "input"),
+                    Require(options, "safety-backup"), RequireValue(options, "template-id"),
+                    RequireValue(options, "destination"),
+                    ParseItemId(RequireValue(options, "expected-count"), "Expected stack count"),
+                    ParseNonNegativeQuantity(RequireValue(options, "expected-total"), "Expected total"),
+                    Require(options, "catalog")),
                 "delete-item" => DeleteInventoryItem(
                     Require(options, "input"),
                     Require(options, "safety-backup"),
@@ -1664,6 +1670,7 @@ internal static partial class Program
                 throw new InvalidOperationException(
                     "Offline weapon ammo update did not retain, write, and verify the exact item.");
             }
+            TestInventoryGroupDeletion(target, catalogPath, root);
             var partialDeleteSafety = Path.Combine(root, "safety", "before-partial-delete.db");
             DeleteInventoryItem(
                 target,
@@ -2737,6 +2744,7 @@ internal static partial class Program
                     "worn-equipment-display-without-writable-destination-expansion",
                     "invalid-ammo-stats-and-non-weapons-rejected-without-writes",
                     "offline-partial-and-full-item-deletion-with-safety-backups",
+                    "offline-19991-stack-group-deletion-with-scope-stale-guard-and-exact-backup",
                     "retained-backup",
                     "atomic-restore-with-safety-backup",
                     "unsupported-wrapper-rejected",

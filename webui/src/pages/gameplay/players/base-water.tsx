@@ -66,11 +66,7 @@ export function BaseWaterAdmin({
   }
 
   return (
-    <div className="card p-4 space-y-3">
-      <div className="flex items-center gap-2 text-xs uppercase tracking-wider text-text-dim">
-        <Icon name="Droplets" size={13} /> Fill Base Water
-      </div>
-
+    <div className="space-y-3">
       <p className="text-xs text-text-dim">
         Fill every supported cistern on one player's owned bases, or deliberately fill every
         player-owned base in one restart. Small, medium, and large cisterns are set to their exact

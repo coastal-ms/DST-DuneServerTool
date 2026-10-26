@@ -67,6 +67,7 @@ const PLAYER_HIDDEN_ACTIONS = new Set(['regis-tanks', 'spawn-vehicle', 'funcom-s
 type Flash = (msg: string, kind?: 'ok' | 'err' | 'info') => void
 
 export interface SectionProps {
+  snapshotActions?: import('react').ReactNode
   onOpenTool?: (id: string) => void
   onWorking?: (label: string | null) => void
   player: Player
@@ -87,7 +88,7 @@ export interface SectionProps {
 // Stats — per-player snapshot. Shows currency, faction, last seen, account
 // numbers. Read-only here; mutations live in Actions.
 // ---------------------------------------------------------------------------
-export function StatsSection({ player, demo, refreshKey, onOpenTool }: SectionProps) {
+export function StatsSection({ player, demo, refreshKey, onOpenTool, snapshotActions }: SectionProps) {
   const contextual = true
   const [stats, setStats] = useState<PlayerStats | null>(null)
   const [loading, setLoading] = useState(true)
@@ -116,6 +117,7 @@ export function StatsSection({ player, demo, refreshKey, onOpenTool }: SectionPr
       <div><dt>Faction</dt><dd>{stats.faction_name || 'Unaligned'}</dd></div>
       <div><dt>Status</dt><dd>{stats.online_status}</dd></div>
     </dl>
+    {snapshotActions}
     <div className="player-snapshot-columns">
       <section><h4>Identity</h4><dl>
         <div><dt>Character</dt><dd>{stats.character_name || '(unnamed)'}{onOpenTool && <button className="btn-secondary" onClick={() => onOpenTool('rename')}>Rename</button>}</dd></div>
@@ -382,7 +384,7 @@ export function TagsSection({ player, canWrite, demo, refreshKey, flash, onChang
   const [loading, setLoading] = useState(true)
   const [busy, setBusy] = useState(false)
   const [err, setErr] = useState<string | null>(null)
-  const [collapsed, setCollapsed] = useState<Set<string>>(new Set())
+  const [expanded, setExpanded] = useState<Set<string>>(new Set())
 
   useEffect(() => {
     let alive = true
@@ -450,7 +452,7 @@ export function TagsSection({ player, canWrite, demo, refreshKey, flash, onChang
   }, [tags, filter])
 
   const toggleCollapse = (prefix: string) => {
-    setCollapsed(prev => {
+    setExpanded(prev => {
       const next = new Set(prev)
       if (next.has(prefix)) next.delete(prefix)
       else next.add(prefix)
@@ -512,12 +514,13 @@ export function TagsSection({ player, canWrite, demo, refreshKey, flash, onChang
 
           <div className="space-y-1">
             {groupedTags.map(g => {
-              const isCollapsed = collapsed.has(g.prefix)
+              const isCollapsed = !expanded.has(g.prefix)
               return (
                 <div key={g.prefix} className="rounded-lg border border-border/60 overflow-hidden">
                   <button
                     type="button"
                     onClick={() => toggleCollapse(g.prefix)}
+                    aria-expanded={!isCollapsed}
                     className="w-full flex items-center gap-2 px-3 py-2 bg-surface-2/60 hover:bg-surface-2 text-left"
                   >
                     <Icon name={isCollapsed ? 'ChevronRight' : 'ChevronDown'} size={13} className="text-text-dim shrink-0" />
@@ -3046,7 +3049,7 @@ export function InventorySection(props: SectionProps & { initialView?: 'bank' | 
     const params = new URLSearchParams(inventorySearch)
     if (!props.embedded && (params.get('scope_type') === 'storage' || params.get('location_type') === 'storage')) setView('storage')
   }, [inventorySearch, props.embedded])
-  const selectedPlayer = useMemo(() => ({ id: props.player.id, name: props.player.name }), [props.player.id, props.player.name])
+  const selectedPlayer = useMemo(() => ({ id: props.player.id, name: props.player.name, onlineStatus: props.player.online_status }), [props.player.id, props.player.name, props.player.online_status])
   return <div className="space-y-4">
     {!props.embedded && <div role="tablist" aria-label="Player inventory" className="flex flex-wrap gap-2">
       {([['tools', 'Character Inventory'], ['storage', 'Storage containers'], ['bank', 'Bank']] as const).map(([id, label]) =>
@@ -3058,7 +3061,7 @@ export function InventorySection(props: SectionProps & { initialView?: 'bank' | 
           setView(id)
         }}>{label}</button>)}
     </div>}
-    {!props.embedded && view !== 'storage' && props.canWrite && !props.demo && <div className="flex flex-wrap items-center gap-3">
+    {view !== 'storage' && props.canWrite && !props.demo && <div className="flex flex-wrap items-center gap-3">
       <button type="button" className="btn-secondary" disabled={repairing || online}
         title={online ? 'Player must be offline before repairing backpack and equipped gear.' : 'Repairs this player’s backpack, equipped armor and equipped weapons only.'}
         onClick={async () => {
@@ -3073,7 +3076,7 @@ export function InventorySection(props: SectionProps & { initialView?: 'bank' | 
     </div>}
     {view === 'tools' ? <PlayerItemToolsSection key={props.player.id} {...props} refreshKey={props.refreshKey + repairRevision} /> : view === 'bank' ? <PlayerBankSection key={props.player.id} {...props} /> : <SharedInventoryExplorer key={`${props.player.id}:${view}`}
       selectedPlayer={selectedPlayer} demoMode={props.demo} refreshKey={props.refreshKey + repairRevision} entityTypes={['storage']}
-      title="Storage containers" />}
+      title="Storage containers" includeBackpack />}
   </div>
 }
 

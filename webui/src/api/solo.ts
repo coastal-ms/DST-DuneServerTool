@@ -361,6 +361,17 @@ export function grantSoloItems(
   })
 }
 
+export function deleteSoloInventoryGroup(
+  templateId: string, destination: string, expectedCount: number,
+  expectedTotal: number, expectedProfileToken: string,
+): Promise<{ ok: boolean; removed: number; deletedStacks: number; safetyBackup: string }> {
+  return api('/api/solo/items/delete-group', {
+    method: 'POST',
+    body: JSON.stringify({ templateId, destination, expectedCount, expectedTotal,
+      expectedProfileToken, confirm: 'DELETE SOLO ITEM GROUP' }),
+  })
+}
+
 export function deleteSoloInventoryItem(
   itemId: number,
   expectedStackSize: number,
