@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
+import { parseBlueprintFile } from '../../util/blueprintFile'
 import { Icon } from '../../components/Icon'
 import {
   getBlueprints, exportBlueprint, importBlueprint, downloadBlueprintFile, getPlayers,
@@ -172,10 +173,7 @@ function ImportModal({ demo, onClose, onDone }: { demo: boolean; onClose: () => 
     if (!file) return
     try {
       const text = await file.text()
-      const parsed = JSON.parse(text) as BlueprintFile
-      if (!parsed || !Array.isArray(parsed.instances)) {
-        throw new Error('Not a valid blueprint file (missing instances).')
-      }
+      const parsed = parseBlueprintFile(text)
       setBp(parsed); setFileName(file.name)
     } catch (e) {
       setParseErr(e instanceof Error ? e.message : String(e))

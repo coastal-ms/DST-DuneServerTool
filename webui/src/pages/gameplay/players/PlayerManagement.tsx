@@ -1,3 +1,4 @@
+import { BlueprintImport } from './BlueprintImport'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { usePortalAccess } from '../../../auth/portalAccess'
 import { Icon } from '../../../components/Icon'
@@ -50,11 +51,12 @@ export function PlayerManagement(props: SectionProps & { initialSection?: Sectio
   const tools = useMemo(() => getPlayerActionTools(isPlayer), [isPlayer])
   const views: Record<PlayerHome, string[]> = {
     Overview: ['Snapshot', 'Currency & identity'],
-    Items: ['Character Inventory', 'Storage containers', 'Give & repair', 'Appearance', ...(tools.some(item => item.group === 'Vehicle') ? ['Vehicles'] : []), 'Bank'],
+    Items: ['Character Inventory', 'Storage containers', 'Give & repair', 'Appearance', 'Blueprints', ...(tools.some(item => item.group === 'Vehicle') ? ['Vehicles'] : []), 'Bank'],
     Progression: ['Specializations', 'Journey', 'Unlocks & rewards', ...(!isPlayer ? ['Landsraad'] : [])],
     Activity: ['History'], Advanced: ['Character tags', 'Session controls', 'Identity & resets', 'All tools'],
   }
   const destinations = [
+    { label: 'Import Blueprint', home: 'Items' as const, view: 'Blueprints', keywords: 'blueprint import base layout json solido' },
     { label: 'Bank', home: 'Items' as const, view: 'Bank', keywords: 'bank storage' },
     { label: 'Storage containers', home: 'Items' as const, view: 'Storage containers', keywords: 'inventory chests bases' },
     { label: 'Character Inventory', home: 'Items' as const, view: 'Character Inventory', keywords: 'backpack inventory bag equipment reserve recover restore durability stack water ammunition emotes contract items' },
@@ -99,6 +101,7 @@ export function PlayerManagement(props: SectionProps & { initialSection?: Sectio
   else {
     const section: SectionId | undefined = ({ Specializations: 'specs', Journey: 'journey', Landsraad: 'landsraad', History: 'history', 'Character tags': 'tags' } as Record<string, SectionId>)[view]
     if (section) { const Component = SECTION_COMPONENTS[section]; body = <Component {...shared} /> }
+    else if (view === 'Blueprints') body = <BlueprintImport key={props.player.id} player={props.player} canWrite={props.canWrite} onChanged={props.onChanged} />
     else if (view === 'Character Inventory') body = <InventorySection {...shared} key={props.player.id} embedded initialView="tools" />
     else {
       const list = tools.filter(item => {
