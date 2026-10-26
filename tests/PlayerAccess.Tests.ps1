@@ -137,6 +137,16 @@ Describe 'Player ownership enforcement' {
 
 
 Describe 'Bulk building set Player portal ownership' {
+    It 'allows live unlock packages online while preserving linked identity checks' {
+        Mock Get-DunePlayersLive { @{ok=$true;players=@(@{account_id=11;id=21;controller_id=31;online_status='Online'})} }
+        foreach ($action in @('grant-house-swatches','grant-building-sets','grant-skins')) {
+            $f=New-PlayerFixture POST "/api/gameplay/players/$action"
+            Invoke-PlayerCheck $f @{pawn_id=21;account_id=11;kind='armor'} | Should -BeTrue
+            Invoke-PlayerCheck $f @{pawn_id=22;account_id=11;kind='armor'} | Should -BeFalse
+            Invoke-PlayerCheck $f @{pawn_id=21;account_id=12;kind='armor'} | Should -BeFalse
+        }
+    }
+
     It 'allows own character and rejects another account or pawn independently' {
         $f=New-PlayerFixture POST '/api/gameplay/players/grant-building-sets'
         Invoke-PlayerCheck $f @{pawn_id=21;account_id=11} | Should -BeTrue

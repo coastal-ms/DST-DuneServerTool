@@ -44,3 +44,28 @@ Describe 'Reviewed customization Solo write guards' {
         $result | Should -Be 400
     }
 }
+
+Describe 'Self-hosted customization preview serialization' {
+    It 'returns flat JSON entry objects without invoking a grant' {
+        $json = & {
+            function Register-DuneRoute { param($Method,$Path,$Handler); [pscustomobject]@{path=$Path;handler=$Handler} }
+            $route = @(. (Join-Path (Get-DstRepoRoot) 'app/server/routes/PlayersWrites.ps1')) | Where-Object path -eq '/api/gameplay/players/reviewed-customization'
+            function Get-DuneBodyInt { param($Body,$Name); $Body[$Name] }
+            function Get-DuneBodyValue { param($Body,$Name); $Body[$Name] }
+            function Get-DuneReviewedGrantStatusSql { 'fixture read' }
+            function Invoke-DuneSqlQuery { param($Ip,$Sql,$ReadOnly,$MaxRows,$TimeoutSec,[switch]$Bulk); if (-not $ReadOnly) {throw 'Preview attempted a write'}; @{ok=$true} }
+            function ConvertTo-DuneRowMaps { ,@(@{total='2';owned='1';entries_json='[{"id":"SavedSwatch","owned":true},{"id":"MissingSwatch","owned":false}]'}) }
+            function Invoke-DunePlayerReviewedCustomization { throw 'Preview attempted a grant' }
+            function Invoke-DunePlayerWriteRoute { param($Response,$Action); @{ok=$true;result=(& $Action 'fixture')} | ConvertTo-Json -Depth 12 -Compress }
+            function Write-DuneError { param($Response,$Status,$Message); throw $Message }
+            & $route.handler $null $null $null @{pawn_id=21;controller_id=31;account_id=11;customizationId='ObservedCharacterSwatches';checkOnly=$true}
+        }
+        $body = ConvertFrom-Json -InputObject $json
+        @($body.result.entries).Count | Should -Be 2
+        $body.result.entries[0].id | Should -BeExactly 'SavedSwatch'
+        $body.result.entries[1].id | Should -BeExactly 'MissingSwatch'
+        $body.result.entries[0].owned | Should -BeTrue
+        $body.result.entries[1].owned | Should -BeFalse
+        $body.result.remaining | Should -Be 1
+    }
+}

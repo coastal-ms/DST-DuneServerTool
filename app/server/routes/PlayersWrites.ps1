@@ -753,7 +753,10 @@ Register-DuneRoute -Method POST -Path '/api/gameplay/players/reviewed-customizat
                 $result = Invoke-DuneSqlQuery -Ip $ip -Sql $statusSql -ReadOnly $true -MaxRows 1 -TimeoutSec 30 -Bulk
                 $rows = ConvertTo-DuneRowMaps -Result $result
                 if (-not $result.ok -or $rows.Count -ne 1) { return @{ok=$false;error='Character grant counts are unavailable.'} }
-                return @{ok=$true;total=[int]$rows[0]['total'];owned=[int]$rows[0]['owned'];remaining=([int]$rows[0]['total']-[int]$rows[0]['owned']);entries=@(([string]$rows[0]['entries_json']) | ConvertFrom-Json)}
+                # Assign the parsed array before enumerating it. Windows PowerShell
+                # otherwise serializes the pipeline array's ETS wrapper as value/Count.
+                $entries = ConvertFrom-Json -InputObject ([string]$rows[0]['entries_json']) -ErrorAction Stop
+                return @{ok=$true;total=[int]$rows[0]['total'];owned=[int]$rows[0]['owned'];remaining=([int]$rows[0]['total']-[int]$rows[0]['owned']);entries=@($entries)}
             }
             return
         }

@@ -35,7 +35,7 @@ import {
   setFactionTier, setSkillPoints,
   setStarterClass, spawnVehicle, teleportToPlayer, teleportToLocation, setRespawn, getTeleportDestinations, getPlayers, updatePlayerTags, wipeCodex, resetFaction, snapshotBuilds, getFreshStartSnapshots, restoreBuilds, grantAllSkills,
   chatWhisper, isValidTemplateId, getItemCatalog, getCosmeticsCatalog, getPlayerOwnedCosmetics, filterCosmeticsCatalog, getHouseSwatchCosmetics, type CosmeticEntry,
-  grantReviewedCustomization, getReviewedGrantCounts, parseTcnoPackageText, grantHouseSwatches, grantBuildingSets, getBuildingSetCosmetics, grantSkins, getSkinCosmetics, type HouseSwatchKind,
+  grantReviewedCustomization, getReviewedGrantCounts, isReviewedGrantPreview, parseTcnoPackageText, grantHouseSwatches, grantBuildingSets, getBuildingSetCosmetics, grantSkins, getSkinCosmetics, type HouseSwatchKind,
   giveItems, getItemPackages, saveItemPackage, deleteItemPackage,
   getLandsraadOverview, getLandsraadPlayerContributions, setLandsraadContribution,
   getPlayerJourneyNodes, completeJourneyNode, resetJourneyNode,
@@ -1096,8 +1096,8 @@ export function ReviewedGrantReview({ counts, loading, busy, offline, label, onR
   const [query, setQuery] = useState('')
   const [filter, setFilter] = useState('missing')
   const [page, setPage] = useState(0)
-  const entries = counts?.entries ?? []
-  const previewReady = !!counts && entries.length === counts.total && entries.every(entry => typeof entry.id === 'string' && typeof entry.owned === 'boolean')
+  const previewReady = isReviewedGrantPreview(counts)
+  const entries = previewReady ? counts.entries : []
   const matches = entries.filter(entry => (filter === 'all' || (filter === 'owned' ? entry.owned : !entry.owned)) && entry.id.toLowerCase().includes(query.toLowerCase()))
   const maxPage = Math.max(0, Math.ceil(matches.length / 25) - 1), currentPage = Math.min(page, maxPage)
   return <div className="space-y-3" aria-label="Grant preview">
@@ -1192,7 +1192,7 @@ function ActionRow({ def, player, busy, stats, open, danger, onToggle, runAction
             <div className="text-xs text-text-dim italic mb-3 leading-relaxed">{def.rowNote}</div>
           )}
           {selection ? <ReviewedGrantReview counts={grantCounts} loading={grantCountsLoading} busy={busy}
-            offline={player.online_status.toLowerCase() === 'offline'} label={def.label}
+            offline={(player.online_status || '').toLowerCase() === 'offline'} label={def.label}
             onRetry={() => setCountAttempt(value => value + 1)} onGrant={() => { void runAction(def, () => def.run(player, {})) }} /> : def.custom === 'give-item' ? (
             <GiveItemForm busy={busy} submitLabel={def.label}
               playerOnline={['online', 'loggingout'].includes((player.online_status || '').toLowerCase())}

@@ -29,3 +29,17 @@ describe('Reviewed grant preview', () => {
     expect(onGrant).not.toHaveBeenCalled()
   })
 })
+
+it.each([
+  [{value: [{id:'Swatch',owned:false}], Count:1}],
+  [{id:null,owned:false}],
+  [null],
+  {},
+])('shows a retry without crashing on malformed status entries', entries => {
+  const onGrant=vi.fn()
+  render(<ReviewedGrantReview counts={{total:1,owned:0,remaining:1,entries} as unknown as Parameters<typeof ReviewedGrantReview>[0]['counts']}
+    loading={false} busy={false} offline label="Grant swatches" onRetry={vi.fn()} onGrant={onGrant} />)
+  expect(screen.getByRole('button',{name:'Retry preview'})).toBeInTheDocument()
+  expect(screen.getByRole('button',{name:'Grant swatches'})).toBeDisabled()
+  expect(onGrant).not.toHaveBeenCalled()
+})

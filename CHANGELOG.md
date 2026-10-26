@@ -15,6 +15,8 @@ here cover everything those tags shipped.
 
 ## [16.6.2] - 2026-10-25
 
+- Fix player portal unlock packages switching between online and offline requirements, and prevent blank pages when checking saved unlocks.
+
 - Fix Hyper-V over LAN connections to workgroup hosts using saved host credentials.
 - Correct the Mercenary Heavy Chestplate category in item grants.
 - Use the current Tailscale address for remote portal links and QR codes after a device rename.
