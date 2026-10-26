@@ -13,6 +13,11 @@ here cover everything those tags shipped.
 
 ## [Unreleased]
 
+## [16.6.2] - 2026-10-25
+
+- Use the current Tailscale address for remote portal links and QR codes after a device rename.
+- Stop offering obsolete or unrelated Funnel addresses as portal links.
+
 ## [16.6.1] - 2026-10-25
 
 - Keep embedded and popped-out Live Maps eligible for screen keep-awake.

@@ -25,9 +25,28 @@ function Get-DuneTailscaleFunnelUrl {
     $ts = Get-DuneTailscalePath
     if (-not $ts) { return '' }
     try {
-        $out = (& $ts funnel status 2>$null) -join "`n"
-        $m = [regex]::Match($out, 'https://[a-z0-9.-]+\.ts\.net')
-        if ($m.Success) { return $m.Value.TrimEnd('/') }
+        # A rename can leave obsolete hosts in the local Serve configuration.
+        # Only advertise the current node DNS name, never the OS HostName or
+        # the first URL in human-readable output.
+        $statusText = (& $ts status --json 2>$null) -join "`n"
+        if ($LASTEXITCODE -ne 0) { return '' }
+        $status = $statusText | ConvertFrom-Json -ErrorAction Stop
+        $dns = ([string]$status.Self.DNSName).TrimEnd('.').ToLowerInvariant()
+        if ($status.BackendState -ne 'Running' -or $dns -notmatch '^[a-z0-9-]+(?:\.[a-z0-9-]+)+\.ts\.net$') { return '' }
+        $configText = (& $ts funnel status --json 2>$null) -join "`n"
+        if ($LASTEXITCODE -ne 0) { return '' }
+        $config = $configText | ConvertFrom-Json -ErrorAction Stop
+        $bridgePort = if (Get-Command Get-DuneMobileBridgePort -ErrorAction SilentlyContinue) { Get-DuneMobileBridgePort } else { 47900 }
+        foreach ($entry in $config.AllowFunnel.PSObject.Properties | Sort-Object @{Expression={ if ($_.Name -eq "${dns}:443") { 0 } else { 1 } }},Name) {
+            if ($entry.Value -ne $true -or $entry.Name -notmatch ('^' + [regex]::Escape($dns) + ':(\d+)$')) { continue }
+            $port = [int]$Matches[1]
+            if ($port -lt 1 -or $port -gt 65535) { continue }
+            $web = $config.Web.PSObject.Properties[$entry.Name].Value
+            $proxy = [string]$web.Handlers.PSObject.Properties['/'].Value.Proxy
+            $tcp = $config.TCP.PSObject.Properties[[string]$port].Value
+            if ($tcp.HTTPS -ne $true -or $proxy -notin @("http://127.0.0.1:$bridgePort", "http://localhost:$bridgePort")) { continue }
+            return 'https://' + $dns + $(if ($port -eq 443) { '' } else { ':' + $port })
+        }
     } catch {}
     return ''
 }
