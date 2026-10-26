@@ -282,7 +282,7 @@ class ProcessTests(unittest.TestCase):
                 with guard:
                     ends.setdefault(name,[]).append(time.monotonic());counts['active']-=1
             try:
-                for name in ['positions','one','two','three']:
+                for name in ['positions','native','haggaNative','three']:
                     worker=threading.Thread(target=service.collection_worker,args=(name,lambda n=name:observe(n)))
                     worker.start();workers.append(worker)
                 time.sleep(1.1)

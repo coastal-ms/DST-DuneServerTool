@@ -41,6 +41,45 @@ def action(value, path):
 
 
 class LiveIntentTests(unittest.TestCase):
+    def test_selected_map_discovery_runs_before_other_map_on_return(self):
+        with tempfile.TemporaryDirectory() as folder:
+            value=service(Path(folder)/'bundle',Path(folder)/'settings')
+            value.live_enabled=True;value.state['live']=True
+            value.touch_viewer('fixture',{'region':'HaggaBasin','layers':['worms']})
+            starts=[];observed=threading.Event();workers=[]
+            def observe(name):
+                starts.append(name);observed.set()
+            try:
+                for name in ('native','haggaNative'):
+                    worker=threading.Thread(target=value.collection_worker,args=(name,lambda n=name:observe(n)));worker.start();workers.append(worker)
+                self.assertTrue(observed.wait(2))
+                self.assertEqual(starts[0],'haggaNative')
+            finally:
+                value.stop.set()
+                with value.control:value.control.notify_all()
+                for worker in workers:worker.join(3)
+
+    def test_returning_viewer_bypasses_prior_read_cooldown(self):
+        with tempfile.TemporaryDirectory() as folder:
+            value=service(Path(folder)/'bundle',Path(folder)/'settings')
+            value.live_enabled=True;value.state.update(live=True,refreshSeconds=60)
+            first=threading.Event();resumed=threading.Event();calls=[]
+            def observe():
+                calls.append(1)
+                (first if len(calls)==1 else resumed).set()
+            value.touch_viewer('fixture',{'region':'HaggaBasin','layers':['worms']})
+            self.assertEqual(value.waiting_jobs.get('haggaNative'),0)
+            worker=threading.Thread(target=value.collection_worker,args=('haggaPositions',observe));worker.start()
+            try:
+                self.assertTrue(first.wait(2))
+                with value.control:value.viewers.release('fixture')
+                value.touch_viewer('fixture',{'region':'HaggaBasin','layers':['worms']})
+                self.assertTrue(resumed.wait(2),'Re-entry waited for the prior 60-second period')
+            finally:
+                value.stop.set()
+                with value.control:value.control.notify_all()
+                worker.join(3)
+
     def test_settings_status_reports_inflight_work_without_starting_viewer_demand(self):
         with tempfile.TemporaryDirectory() as folder:
             value=service(Path(folder)/'bundle',Path(folder)/'settings')

@@ -104,10 +104,11 @@ describe('Player workspace', () => {
     expect(management.querySelectorAll('.player-tool-choice')).toHaveLength(55)
   })
 
-  it('keeps directory selection and filters while using five task homes in either app experience', async () => {
+  it('keeps directory selection and filters with the dedicated Teleport Locations tab in either app experience', async () => {
     localStorage.setItem(COMMAND_DECK_KEY, '0')
     await selectPlayer()
-    expect(within(screen.getByRole('navigation', {name: 'Character sections'})).getAllByRole('button')).toHaveLength(5)
+    expect(within(screen.getByRole('navigation', {name: 'Character sections'})).getAllByRole('button')).toHaveLength(6)
+    expect(within(screen.getByRole('navigation', {name: 'Character sections'})).getByRole('button', {name: 'Teleport Locations'})).toBeTruthy()
     fireEvent.change(screen.getByRole('searchbox', {name: 'Search players'}), {target: {value: 'DeepDesert'}})
     expect(screen.queryByRole('button', {name: 'Inspect Aster (41)'})).not.toBeInTheDocument()
     expect(screen.getByRole('heading', {name: 'Aster', exact: true})).toBeInTheDocument()

@@ -36,6 +36,43 @@ Describe 'Get-DuneVmStatus batched LAN discovery' {
         Should -Invoke Get-VMNetworkAdapter -Times 0
     }
 
+    It 'reuses the credentialed LAN snapshot for assigned RAM and vCPU facts' {
+        Mock Invoke-Command { @{State='Running';UptimeSeconds=300;IPAddresses=@('10.10.10.42');MemoryAssigned=20GB;MemoryStartup=12GB;ProcessorCount=8} }
+        Get-DuneVmStatus | Out-Null
+        $resources=Get-DuneVmResources
+        $resources.ramGB | Should -Be 20
+        $resources.ramSource | Should -Be assigned
+        $resources.cpuCount | Should -Be 8
+        Should -Invoke Invoke-Command -Times 1
+    }
+
+    It 'reads local allocations and labels startup RAM when no RAM is assigned' {
+        Mock Get-DuneHyperVSplat { @{} }
+        Mock Get-VM { @{MemoryAssigned=0;MemoryStartup=16GB;ProcessorCount=4} }
+        $resources=Get-DuneVmResources
+        $resources.ramGB | Should -Be 16
+        $resources.ramSource | Should -Be startup
+        $resources.cpuCount | Should -Be 4
+        Should -Invoke Invoke-Command -Times 0
+    }
+
+    It 'returns unknown allocations when both LAN discovery paths fail' {
+        Mock Invoke-Command { throw 'host unreachable' }
+        $resources=Get-DuneVmResources
+        $resources.ramGB | Should -BeNullOrEmpty
+        $resources.cpuCount | Should -BeNullOrEmpty
+    }
+
+    It 'includes RAM and CPU facts from the existing credentialed CIM fallback' {
+        Mock Invoke-Command { throw 'no PS session endpoint' }
+        Mock Get-VM { @{State='Running';Uptime=[timespan]::FromMinutes(5);MemoryAssigned=24GB;MemoryStartup=24GB;ProcessorCount=6} }
+        Mock Get-VMNetworkAdapter { @{IPAddresses=@('10.10.10.42')} }
+        $resources=Get-DuneVmResources
+        $resources.ramGB | Should -Be 24
+        $resources.cpuCount | Should -Be 6
+        Should -Invoke Get-VM -Times 1 -ParameterFilter { $Credential -eq $script:fakeCred }
+    }
+
     It 'shares recent discovery and forces an updated observation on demand' {
         Get-DuneVmStatus | Out-Null
         Get-DuneVmStatus | Out-Null

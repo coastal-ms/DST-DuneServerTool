@@ -1334,6 +1334,7 @@ Register-DuneRoute -Method GET -Path '/api/diagnostics/vm-health' -Handler {
             faults   = @($f.faults)
             message  = [string]($f.message)
         }
+        $out.hyperV = Get-DuneVmResources
         if ($f.ok) {
             $out.disk = @{
                 usePct = $f.disk.usePct

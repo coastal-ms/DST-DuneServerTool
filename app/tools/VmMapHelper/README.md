@@ -1,8 +1,11 @@
 # VM-hosted Live Map helper
 
-Live Maps is optional. Enabling it authorizes installing the helper and accepts
-250 MB VM RAM and at least 30 MB disk workspace, plus the Python runtime and
-bundled map assets. Insufficient resources can cause lag or collection failure.
+Live Maps is optional. Enabling it authorizes DST to install the helper
+automatically. Allow 500 MB of free disk space for initial setup, including
+Python, maps, icons and working data. This uses the VM's existing available
+resources; it does not allocate extra VM RAM. The helper's container has a
+250 MB RAM limit, rather than constant usage. Retained helper revisions can
+use additional disk space over time.
 
 A single private collector performs observations, processing and shared caching
 on the VM. Existing DST authenticated map routes display the same embedded map

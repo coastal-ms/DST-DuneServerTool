@@ -1,4 +1,5 @@
 import { BlueprintImport } from './BlueprintImport'
+import { TeleportLocations } from './TeleportLocations'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { usePortalAccess } from '../../../auth/portalAccess'
 import { Icon } from '../../../components/Icon'
@@ -7,15 +8,15 @@ import { ActionsSection, InventorySection, SECTION_COMPONENTS, getPlayerActionTo
 import './playerManagement.css'
 import './playersDesk.css'
 
-export type PlayerHome = 'Overview' | 'Items' | 'Progression' | 'Activity' | 'Advanced'
+export type PlayerHome = 'Overview' | 'Items' | 'Progression' | 'Activity' | 'Advanced' | 'Teleport Locations'
 export function playerToolHome(group: string, id: string): PlayerHome {
   if (group === 'Items' || group === 'Vehicle') return 'Items'
   if (group === 'Progression') return 'Progression'
   if (group === 'Currency' || id === 'rename') return 'Overview'
   return 'Advanced'
 }
-const homes: PlayerHome[] = ['Overview', 'Items', 'Progression', 'Activity', 'Advanced']
-const homeIcons = { Overview: 'User', Items: 'Backpack', Progression: 'Sparkles', Activity: 'History', Advanced: 'SlidersHorizontal' }
+const homes: PlayerHome[] = ['Overview', 'Items', 'Progression', 'Activity', 'Advanced', 'Teleport Locations']
+const homeIcons = { Overview: 'User', Items: 'Backpack', Progression: 'Sparkles', Activity: 'History', Advanced: 'SlidersHorizontal', 'Teleport Locations': 'MapPin' }
 const legacy: Record<SectionId, [PlayerHome, string]> = {
   stats: ['Overview', 'Snapshot'], manage: ['Items', 'Give & repair'], inventory: ['Items', 'Character Inventory'],
   specs: ['Progression', 'Specializations'], journey: ['Progression', 'Journey'], landsraad: ['Progression', 'Landsraad'],
@@ -54,8 +55,10 @@ export function PlayerManagement(props: SectionProps & { initialSection?: Sectio
     Items: ['Character Inventory', 'Storage containers', 'Give & repair', 'Appearance', 'Blueprints', ...(tools.some(item => item.group === 'Vehicle') ? ['Vehicles'] : []), 'Bank'],
     Progression: ['Specializations', 'Journey', 'Unlocks & rewards', ...(!isPlayer ? ['Landsraad'] : [])],
     Activity: ['History'], Advanced: ['Character tags', 'Session controls', 'Identity & resets', 'All tools'],
+    'Teleport Locations': ['Teleport Locations'],
   }
   const destinations = [
+    { label: 'Teleport Locations', home: 'Teleport Locations' as const, view: 'Teleport Locations', keywords: 'teleport tp bookmark private shared location' },
     { label: 'Import Blueprint', home: 'Items' as const, view: 'Blueprints', keywords: 'blueprint import base layout json solido' },
     { label: 'Bank', home: 'Items' as const, view: 'Bank', keywords: 'bank storage' },
     { label: 'Storage containers', home: 'Items' as const, view: 'Storage containers', keywords: 'inventory chests bases' },
@@ -91,6 +94,7 @@ export function PlayerManagement(props: SectionProps & { initialSection?: Sectio
     <div className="player-tool-heading"><h3>{selectedTool.label}</h3><button className="btn-secondary" onClick={() => navigate(home)}>Back to {home.toLowerCase()}</button></div>
     <ActionsSection key={`${props.player.id}:${tool}`} {...shared} actionIds={[tool]} initialAction={tool} />
   </>
+  else if (view === 'Teleport Locations') body = <TeleportLocations key={props.player.id} player={props.player} canWrite={props.canWrite} />
   else if (view === 'Snapshot') {
     const Stats = SECTION_COMPONENTS.stats
     body = <Stats {...shared} snapshotActions={<div className="player-common-tasks" aria-label="Common player tasks">

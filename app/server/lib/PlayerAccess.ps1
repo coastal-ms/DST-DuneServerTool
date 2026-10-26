@@ -3,6 +3,7 @@
 # controller from the live DB for every request; never trust client identities.
 function Get-DunePlayerRoutePolicy {
     param([string]$Method, [string]$Path)
+    if ($Path -eq '/api/player-portal/teleports' -and $Method -in @('GET','POST','DELETE')) { return 'teleports' }
     if ($Method -eq 'GET' -and $Path -in @(
         '/api/portal-auth/status','/api/v1/capabilities','/api/v1/platform/status',
         '/api/player-portal/status','/api/v1/maps/catalog','/api/v1/maps/deep-desert',
@@ -99,6 +100,11 @@ function Test-DunePlayerRequestAccess {
         $linked = Get-DuneLinkedPlayer $principal
         $player = $linked.player
         $RouteParams['linkedPlayer'] = $player
+        if ($policy -eq 'teleports') {
+            $account = if ($Request.HttpMethod -eq 'GET') { Get-DuneQ $Request 'account_id' } else { Get-DuneBodyValue $Body 'account_id' }
+            if ([string]$account -cne [string]$player.account_id) { throw 'Select your linked character.' }
+            return $true
+        }
         if ($policy -eq 'directory') { return $true }
         $isRead = [string]$Request.HttpMethod -eq 'GET'
         if ($policy -eq 'inventory') {

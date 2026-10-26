@@ -134,7 +134,7 @@ export function VmInfoCard() {
           <div className="min-w-0">
             <div className="font-medium">VM info</div>
             <div className="text-sm text-text-muted truncate">
-              Disk, swap, database operations, retained builds and per-map memory limits.
+              Hyper-V RAM and CPUs, disk, swap, database operations and retained builds.
             </div>
           </div>
         </div>
@@ -144,6 +144,17 @@ export function VmInfoCard() {
       {open && (
         <div className="px-5 pb-5 space-y-4">
           {loading && !info && <p className="text-sm text-text-dim italic">Reading the VM…</p>}
+
+          {info && <dl className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-2 text-sm">
+            <div className="flex justify-between gap-3">
+              <dt className="text-text-dim">Hyper-V RAM</dt>
+              <dd className="font-mono">{info.hyperV?.ramGB != null ? `${info.hyperV.ramGB} GB${info.hyperV.ramSource === 'startup' ? ' (startup)' : ''}` : '—'}</dd>
+            </div>
+            <div className="flex justify-between gap-3">
+              <dt className="text-text-dim">Virtual CPUs</dt>
+              <dd className="font-mono">{info.hyperV?.cpuCount ?? '—'}</dd>
+            </div>
+          </dl>}
 
           {info && !info.ok && (
             <p className="text-sm text-text-dim">{info.message || 'The VM could not be read right now.'}</p>

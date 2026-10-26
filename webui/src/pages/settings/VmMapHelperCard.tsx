@@ -30,7 +30,7 @@ export function VmMapHelperCard() {
   }, [progressing])
   if (!local) return null
   const update = async (method: 'POST' | 'DELETE') => {
-    if (method === 'POST' && !state?.enabled && !window.confirm('Live Maps requires 250 MB of RAM and at least 30 MB of disk space on the VM, plus its Python runtime and map assets. Insufficient resources may cause lag spikes or prevent Live Maps from working. Enable Live Maps and install the helper?')) return
+    if (method === 'POST' && !state?.enabled && !window.confirm('Live Maps uses the VM’s existing resources: allow 500 MB of free disk space for initial setup, including Python, maps, icons and working data. The helper has a 250 MB RAM limit; this is not extra VM RAM allocation or constant usage. DST installs the helper automatically. Enable Live Maps and install the helper?')) return
     setBusy(true); setAction(method === 'DELETE' ? 'Removing map helper' : 'Setting up VM-hosted map'); setError('')
     try { setState(await api<State>('/api/v1/maps/vm-helper', { method, body: JSON.stringify({ resourcesAccepted: true }) })) }
     catch (e) { setError(e instanceof Error ? e.message : String(e)) }
@@ -47,7 +47,7 @@ export function VmMapHelperCard() {
   const collectionWorking = !!state?.refreshing || !!state?.stopping || (!state?.live && !!state?.activity?.some(job => job !== 'gathering'))
   const progressLabel = busy ? action : state?.phase === 'removing' ? 'Removing map helper' : state?.phase === 'installing' ? 'Setting up VM-hosted map' : state?.stopping ? 'Stopping live collection' : 'Refreshing snapshot'
   return <CollapsibleCard title="VM-hosted Live Map" icon="Map" id="settings-vm-map-helper">
-    <p>Move Live Map processing to the VM. Requires 250 MB RAM and at least 30 MB disk space, plus the runtime and map assets.</p>
+    <p>Uses existing VM resources: allow 500 MB free disk space for initial setup, including Python, maps, icons and working data. The helper has a 250 MB RAM limit. DST installs it automatically.</p>
     {state?.phase === 'ready' && <p><Link className="btn-primary" to="/map?view=live">Open Live Map</Link></p>}
     {progressing && <p role="status" className="flex items-center gap-2"><LoaderCircle aria-hidden="true" size={16} className="animate-spin motion-reduce:animate-none" />{progressLabel}… {elapsed}s elapsed</p>}
     {state?.live && !progressing && <p role="status">Live collection running. Stop live before refreshing a snapshot.</p>}
