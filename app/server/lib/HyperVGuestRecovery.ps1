@@ -227,7 +227,7 @@ function Remove-DuneHyperVLifecycleState {
 }
 
 function Get-DuneHyperVLifecycleHostSnapshot {
-    $hv = Get-DuneHyperVSplat
+    $hv = ConvertTo-DuneHyperVCimSplat -HyperV (Get-DuneHyperVSplat)
     $vm = Get-VM -Name $script:DuneHyperVLifecycleVmName @hv -ErrorAction Stop
     $services = @(Get-VMIntegrationService -VMName $script:DuneHyperVLifecycleVmName @hv -ErrorAction Stop)
     $shutdown = $services | Where-Object {

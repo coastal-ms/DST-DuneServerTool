@@ -1,5 +1,6 @@
-BeforeAll {
+﻿BeforeAll {
     . (Join-Path $PSScriptRoot '_TestHelpers.ps1')
+    function global:ConvertTo-DuneHyperVCimSplat { param($HyperV) return $HyperV }
     Import-DstLib 'Config.ps1'
     Import-DstLib 'HyperVGuestRecovery.ps1'
     function global:Invoke-V6Ssh {
