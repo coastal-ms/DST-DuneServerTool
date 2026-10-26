@@ -78,25 +78,44 @@ function New-DuneHyperVCimSession {
 }
 
 function ConvertTo-DuneHyperVCimSplat {
-    param([Parameter(Mandatory)][AllowEmptyCollection()][hashtable]$HyperV)
+    param([Parameter(Mandatory)][AllowEmptyCollection()][hashtable]$HyperV, [switch]$NoCache)
     if (-not $HyperV.ComputerName) { return $HyperV }
     # One session per API runspace, never shared across threads. Replace it
     # when credentials/host change or its short reuse window expires.
     $entry = $script:DuneHyperVCimSessionCache
-    $matches = $entry -and $entry.HostName -eq $HyperV.ComputerName -and
+    $matches = -not $NoCache -and $entry -and $entry.HostName -eq $HyperV.ComputerName -and
         $entry.Credential.UserName -ceq $HyperV.Credential.UserName -and
         $entry.Credential.GetNetworkCredential().Password -ceq $HyperV.Credential.GetNetworkCredential().Password -and
         ([datetime]::UtcNow - $entry.Created).TotalSeconds -lt 60
     if (-not $matches) {
-        if ($entry) { Remove-CimSession -CimSession $entry.Session -ErrorAction SilentlyContinue }
-        $script:DuneHyperVCimSessionCache = $null
-        $session = New-DuneHyperVCimSession -ComputerName $HyperV.ComputerName -Credential $HyperV.Credential
-        $script:DuneHyperVCimSessionCache = @{
-            HostName=$HyperV.ComputerName; Credential=$HyperV.Credential
-            Session=$session; Created=[datetime]::UtcNow
+        if (-not $NoCache) {
+            if ($entry.Session) { Remove-CimSession -CimSession $entry.Session -ErrorAction SilentlyContinue }
+            $script:DuneHyperVCimSessionCache = $null
         }
+        # Select a transport using read-only discovery. Never retry a power or
+        # configuration operation: an error does not prove it was not applied.
+        $session = $null
+        try {
+            Get-VM @HyperV -ErrorAction Stop | Out-Null
+            $arguments = $HyperV
+        } catch {
+            $originalError = $_.Exception.Message
+            try {
+                $session = New-DuneHyperVCimSession -ComputerName $HyperV.ComputerName -Credential $HyperV.Credential
+                Get-VM -CimSession $session -ErrorAction Stop | Out-Null
+                $arguments = @{ CimSession = $session }
+            } catch {
+                if ($session) { Remove-CimSession -CimSession $session -ErrorAction SilentlyContinue }
+                throw "Hyper-V connection failed. Credentialed connection: $originalError Explicit Negotiate connection: $($_.Exception.Message)"
+            }
+        }
+        $entry = @{
+            HostName=$HyperV.ComputerName; Credential=$HyperV.Credential
+            Session=$session; Arguments=$arguments; Created=[datetime]::UtcNow
+        }
+        if (-not $NoCache) { $script:DuneHyperVCimSessionCache = $entry }
     }
-    return @{ CimSession = $script:DuneHyperVCimSessionCache.Session }
+    return $entry.Arguments
 }
 
 function Test-DuneHyperVLanCredentialInput {
@@ -192,8 +211,9 @@ function Test-DuneHyperVLan {
 
     $session = $null
     try {
-        $session = New-DuneHyperVCimSession -ComputerName $HostIp -Credential $cred
-        $vms = @(Get-VM -CimSession $session -ErrorAction Stop)
+        $query = ConvertTo-DuneHyperVCimSplat -HyperV @{ComputerName=$HostIp;Credential=$cred} -NoCache
+        $session = $query.CimSession
+        $vms = @(Get-VM @query -ErrorAction Stop)
         $dune = $vms | Where-Object { $_.Name -eq 'dune-awakening' } | Select-Object -First 1
         if ($dune) {
             return @{ ok = $true; vmFound = $true; reason = "Connected to $HostIp. Found the 'dune-awakening' VM (state: $($dune.State))." }
