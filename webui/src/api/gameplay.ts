@@ -2786,12 +2786,21 @@ export function grantReviewedCustomization(pawn_id: number, controller_id: numbe
 }
 export interface ReviewedGrantEntry { id: string; owned: boolean; quality?: number; uses?: number | null; limited?: boolean }
 export interface ReviewedGrantPreview { total: number; owned: number; remaining: number; entries: ReviewedGrantEntry[] }
+export function isReviewedGrantPreview(value: unknown): value is ReviewedGrantPreview {
+  if (!value || typeof value !== 'object') return false
+  const counts = value as ReviewedGrantPreview
+  return [counts.total, counts.owned, counts.remaining].every(n => Number.isSafeInteger(n) && n >= 0)
+    && counts.owned + counts.remaining === counts.total
+    && Array.isArray(counts.entries) && counts.entries.length === counts.total
+    && counts.entries.every(entry => entry && typeof entry.id === 'string' && entry.id.length > 0 && typeof entry.owned === 'boolean')
+    && counts.entries.filter(entry => entry.owned).length === counts.owned
+}
 export function getReviewedGrantCounts(pawn_id: number, controller_id: number, account_id: number, customizationId: string) {
   return api<{result: ReviewedGrantPreview}>('/api/gameplay/players/reviewed-customization', {
     method: 'POST', body: JSON.stringify({pawn_id, controller_id, account_id, customizationId, checkOnly: true}),
   }).then(response => {
     const counts = response.result
-    if (!counts || ![counts.total, counts.owned, counts.remaining].every(Number.isFinite)) throw new Error('Character counts unavailable')
+    if (!isReviewedGrantPreview(counts)) throw new Error('Character counts unavailable')
     return counts
   })
 }

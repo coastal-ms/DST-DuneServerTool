@@ -110,7 +110,7 @@ function Test-DunePlayerRequestAccess {
             }
             return $true
         }
-        $liveActions = @('give-item','give-items','grant-house-swatches','award-char-xp','fill-water',
+        $liveActions = @('give-item','give-items','grant-house-swatches','grant-building-sets','grant-skins','award-char-xp','fill-water',
             'set-skill-points','clean-inventory','reset-progression','set-skill-module','give-item-live','kick','set-weapon-ammo')
         $action = $path -replace '^/api/gameplay/players/', ''
         $grantCountRead = $action -eq 'reviewed-customization' -and (Get-DuneBodyValue $Body 'checkOnly') -eq $true
