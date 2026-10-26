@@ -2,6 +2,8 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { ApiError } from '../../api/client'
 import {
   getInventoryPlayers,
+  getSharedInventory,
+  repairGear,
   deleteInventoryItem,
   deleteStorageItem,
   renameStorage,
@@ -158,22 +160,43 @@ export function SharedInventoryExplorer({
   demoMode,
   refreshKey = 0,
   fixedLocation,
+  includeBackpack = false,
 }: {
   entityTypes: InventoryEntityType[]
   demoMode?: boolean
   refreshKey?: number
-  selectedPlayer?: { id: number; name: string }
+  selectedPlayer?: { id: number; name: string; onlineStatus?: string }
   title?: string
   description?: string
   unavailableReason?: string
   fixedLocation?: { type: InventoryEntityType; id: number }
+  includeBackpack?: boolean
 }) {
   // Parent status updates can pass a new array with the same inventory scope.
   // Keep request dependencies stable unless the scope values actually change.
-  const entityTypesKey = JSON.stringify(requestedEntityTypes)
-  const entityTypes = useMemo(() => JSON.parse(entityTypesKey) as InventoryEntityType[], [entityTypesKey])
   const search = useSearch()
   const params = useMemo(() => new URLSearchParams(search), [search])
+  const [backpack, setBackpack] = useState<SharedInventoryLocationFacet | null>(null)
+  const [storageLocations, setStorageLocations] = useState<SharedInventoryLocationFacet[]>([])
+  const [backpackError, setBackpackError] = useState('')
+  const [backpackAttempt, setBackpackAttempt] = useState(0)
+  const backpackPlayerId = selectedPlayer?.id
+  const backpackSelected = includeBackpack && backpack?.playerId === selectedPlayer?.id
+    && params.get('location_type') === 'player' && params.get('location_id') === String(backpack?.id)
+  const entityTypesKey = JSON.stringify(backpackSelected ? ['player'] : requestedEntityTypes)
+  const entityTypes = useMemo(() => JSON.parse(entityTypesKey) as InventoryEntityType[], [entityTypesKey])
+  useEffect(() => {
+    let alive = true
+    setBackpack(null); setBackpackError('')
+    if (includeBackpack && backpackPlayerId) {
+      getSharedInventory({ types: ['player'], playerId: backpackPlayerId, limit: 1, demo: demoMode })
+        .then(result => { if (alive) setBackpack(result.data.locations.find(location =>
+          location.type === 'player' && location.playerId === backpackPlayerId && location.label === 'Backpack') ?? null) })
+        .catch(reason => { if (alive) setBackpackError(errorMessage(reason)) })
+    }
+    return () => { alive = false }
+  }, [includeBackpack, backpackPlayerId, demoMode, refreshKey, backpackAttempt])
+  useEffect(() => setStorageLocations([]), [backpackPlayerId])
   const requestedScopeType = params.get('scope_type')
   const requestedScopeId = params.get('scope_id')
   const parsedScopeId = parsePositiveId(requestedScopeId)
@@ -244,7 +267,10 @@ export function SharedInventoryExplorer({
     source: demo ? 'demo' : 'live', scopeError, playerError, locationError,
   })
   const current = loadedIdentity === requestIdentity ? response : null
-  const availableLocations = current?.data.locations ?? locationChoicesCache.get(locationCacheKey) ?? []
+  const availableLocations = includeBackpack
+    ? [...(backpack?.playerId === selectedPlayer?.id ? [backpack!] : []),
+      ...(backpackSelected ? storageLocations : current?.data.locations ?? storageLocations).filter(location => location.type === 'storage')]
+    : current?.data.locations ?? locationChoicesCache.get(locationCacheKey) ?? []
   const currentGroups = loadedIdentity === requestIdentity ? groups : []
   const playerOrdinals = useMemo(() => duplicateOrdinals(
     demo ? current?.data.players ?? [] : playerChoices, player => player.name, player => String(player.id),
@@ -284,6 +310,7 @@ export function SharedInventoryExplorer({
       })
       if (version !== requestVersion.current) return
       assertInventoryGroups(result.data.groups)
+      if (includeBackpack && !backpackSelected) setStorageLocations(result.data.locations.filter(location => location.type === 'storage'))
       const cachedLocations = locationChoicesCache.get(locationCacheKey)
       if (JSON.stringify(cachedLocations) === JSON.stringify(result.data.locations)) result.data.locations = cachedLocations!
       else {
@@ -321,7 +348,7 @@ export function SharedInventoryExplorer({
       }
     }
   }, [
-    canReadInventory, demo, entityTypes, needsPlayer, locationError, locationId, locationType, playerError, playerId, query,
+    canReadInventory, demo, entityTypes, needsPlayer, locationError, locationId, locationType, playerError, playerId, query, includeBackpack, backpackSelected,
     requestIdentity, scopeError, scopeId, scopeType, sort, unavailableReason,
     pageSize, readSession, locationCacheKey, setError, setGroups, setLoadedIdentity, setLoading, setLoadingMore, setResponse, setSelected,
   ])
@@ -398,7 +425,7 @@ export function SharedInventoryExplorer({
     return <WorkspaceSection id="shared-inventory" title={title} description={description}><DataState state="unavailable" title="Shared inventory is not included in this backend" message="Install the matching DST backend build to use the inventory explorer." /></WorkspaceSection>
   }
 
-  const storageOnly = entityTypes.length === 1 && entityTypes[0] === 'storage'
+  const storageOnly = requestedEntityTypes.length === 1 && requestedEntityTypes[0] === 'storage'
   const validSelectedLocation = !locationType || current?.data.selectedLocationValid !== false
 
   return (
@@ -406,6 +433,7 @@ export function SharedInventoryExplorer({
       <div className="mb-3 flex flex-wrap items-center gap-2">
         {current && <FreshnessBadge state={current.freshness.state} observedAt={current.freshness.observedAt} label={current.data.mode === 'demo' ? 'Demo inventory' : 'Live database'} />}
       </div>
+      {backpackError && <p className="mb-3 text-sm text-danger">Could not load Backpack: {backpackError} <button type="button" className="btn-secondary" onClick={() => setBackpackAttempt(n => n + 1)}>Retry Backpack</button></p>}
       {scopeType && scopeId && <div className="mb-3 rounded-lg border border-info/35 bg-info/10 px-4 py-3 text-sm text-text" role="status">{selectedPlayer?.name || current?.data.locations.find(location => location.type === scopeType && location.id === scopeId)?.playerName || current?.data.locations.find(location => location.type === scopeType && location.id === scopeId)?.owner || entityTypeLabel(scopeType)}</div>}
       <form className="mb-4 flex min-w-0 flex-wrap items-end gap-3" role="search"
         onSubmit={event => {
@@ -439,6 +467,17 @@ export function SharedInventoryExplorer({
               </option>)}
             </select>
           </label>
+        {backpackSelected && selectedPlayer && !demo && canDeletePlayerItems && (
+          <button type="button" className="btn-primary min-h-11" disabled={selectedPlayer.onlineStatus?.toLowerCase() !== 'offline' || loading || repairLoading || current?.data.mode !== 'live'}
+            title="Player must be offline. Repairs backpack and worn items."
+            onClick={async () => {
+              const version = renameRequestVersion.current
+              setRepairLoading(true); setInventoryMutationError(''); setInventoryMutationMessage('')
+              try { const result = await repairGear(selectedPlayer.id); if (version !== renameRequestVersion.current) return; setInventoryMutationMessage(result.message); await mutationRefresh.current() }
+              catch (reason) { if (version === renameRequestVersion.current) setInventoryMutationError(errorMessage(reason)) }
+              finally { if (version === renameRequestVersion.current) setRepairLoading(false) }
+            }}><Icon name="Wrench" size={14} />Repair backpack &amp; worn items</button>
+        )}
         {canManageBases && entityTypes.includes('storage') && !demo && (
           <button type="button" className="btn-primary min-h-11 max-w-full shrink-0 whitespace-normal text-left" disabled={!renameTarget || current?.data.mode !== 'live' || loading || loadingMore || repairLoading || renameLoading}
             onClick={async () => {
@@ -471,7 +510,7 @@ export function SharedInventoryExplorer({
             <Icon name="PenLine" size={14} />Rename box
           </button>
         )}
-          {storageOnly && !renameTarget && <p className="basis-full text-xs text-text-dim">Choose a container above to repair its items.</p>}
+          {storageOnly && !renameTarget && !backpackSelected && <p className="basis-full text-xs text-text-dim">Choose a container above to repair its items.</p>}
         </div>}
         <label className="min-w-0 flex-[1_1_16rem] text-xs font-medium text-text-muted">
           Search inventory

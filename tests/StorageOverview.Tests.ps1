@@ -3,6 +3,7 @@ BeforeAll {
     Import-DstLib 'Gameplay.ps1'
     Import-DstLib 'GameplayPlayers.ps1'
     Import-DstLib 'GameplayWorld.ps1'
+    Import-DstLib 'Database.ps1'
     function global:Invoke-DuneSqlQuery { throw 'Test must mock Invoke-DuneSqlQuery.' }
     function global:ConvertTo-DuneRowMaps { param($Result) return @($Result.rows) }
 }
@@ -108,6 +109,21 @@ Describe 'Storage overview container coverage' -Tag 'Pure' {
 
         $result.ok | Should -BeFalse
         $result.error | Should -Match 'quantity changed'
+    }
+
+    It 'recognizes a successful storage deletion even though the game function returns void' {
+        Mock Invoke-DuneSqlQuery {
+            param($Sql)
+            $Sql | Should -Match 'SELECT id::text AS item_id, dune.delete_item\(id\) AS result FROM matched'
+            $Sql | Should -Match 'AND stack_size = 10::bigint'
+            ConvertFrom-DunePsqlCsv -Output "item_id,result`n42,`n" -MaxRows 1
+        }
+        Mock ConvertTo-DuneRowMaps {
+            param($Result)
+            return ,@($Result.rows | ForEach-Object { @{item_id = $_[0]; result = $_[1]} })
+        }
+        $result = Invoke-DuneStorageDeleteItem -Ip '1.2.3.4' -ItemId 42 -ExpectedStackSize 10
+        $result.ok | Should -BeTrue
     }
 
     It 'reports a stale storage deletion when no row matched' {

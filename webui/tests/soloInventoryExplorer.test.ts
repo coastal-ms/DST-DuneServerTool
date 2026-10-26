@@ -11,6 +11,25 @@ import {
 afterEach(() => { cleanup(); localStorage.clear() })
 
 describe('Solo inventory explorer', () => {
+  it('deletes the selected type only in the displayed location and bounds a large occurrence list', () => {
+    const group = { inventoryId: 1, destinationKey: 'inventory:1', destinationLabel: 'Backpack',
+      destinationKind: 'backpack' as const, templateId: 'Blood', displayName: 'Extracted blood',
+      totalQuantity: 19991, occurrenceCount: 19991, minQuality: 0, maxQuality: 0,
+      occurrences: Array.from({ length: 19991 }, (_, i) => ({ itemId: i + 1, stackSize: 1, quality: 0, templateId: 'Blood' })) }
+    const bank = { ...group, inventoryId: 35, destinationKey: 'inventory:35', destinationLabel: 'Bank Storage',
+      destinationKind: 'bank' as const, totalQuantity: 7, occurrenceCount: 1,
+      occurrences: [{ itemId: 30000, stackSize: 7, quality: 0, templateId: 'Blood' }] }
+    const onDeleteGroup = vi.fn()
+    render(createElement(SoloInventoryExplorer, { items: [group, bank], inventories: [], connected: true,
+      disabled: false, busyItemId: null, onDelete: vi.fn(), onDeleteGroup }))
+    fireEvent.click(screen.getByText('Extracted blood'))
+    expect(screen.getAllByTitle('Delete item')).toHaveLength(100)
+    fireEvent.click(screen.getByRole('button', { name: 'Delete all 19,991 (19,991 stacks)' }))
+    expect(onDeleteGroup).toHaveBeenLastCalledWith('Blood', 'Extracted blood', 'inventory:1', 'Backpack', 19991, 19991)
+    fireEvent.change(screen.getByLabelText('Inventory location'), { target: { value: '' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Delete all 19,998 (19,992 stacks)' }))
+    expect(onDeleteGroup).toHaveBeenLastCalledWith('Blood', 'Extracted blood', 'all', 'all supported locations', 19992, 19998)
+  })
   it('starts on Backpack, preserves an explicit All locations selection, and remembers a rolled-up card', () => {
     const backpack = { inventoryId: 1, destinationKey: 'inventory:1', destinationLabel: 'Backpack',
       destinationKind: 'backpack', templateId: 'Fiber', displayName: 'Backpack Fiber',

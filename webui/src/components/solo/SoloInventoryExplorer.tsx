@@ -94,6 +94,7 @@ export function SoloInventoryExplorer({
   disabled,
   busyItemId,
   onDelete,
+  onDeleteGroup,
 }: {
   items: SoloInventoryItemGroup[]
   inventories: SoloInventoryDestination[]
@@ -105,6 +106,8 @@ export function SoloInventoryExplorer({
     location: SoloInventoryItemGroup,
     quantity: number,
   ) => void
+  onDeleteGroup?: (templateId: string, displayName: string, destination: string,
+    destinationLabel: string, count: number, total: number) => void
 }) {
   const [loadImages, setLoadImages] = useInventoryImages()
   const [query, setQuery] = useState('')
@@ -113,6 +116,7 @@ export function SoloInventoryExplorer({
   const [visibleCount, setVisibleCount] = useState(100)
   const [selected, setSelected] = useState<SharedInventoryGroup | null>(null)
   const [deleteQuantities, setDeleteQuantities] = useState<Record<number, string>>({})
+  const [occurrenceLimit, setOccurrenceLimit] = useState(100)
   const locations = useMemo(
     () => buildSoloInventoryLocations(items, inventories),
     [inventories, items],
@@ -142,8 +146,15 @@ export function SoloInventoryExplorer({
         : left.displayName.localeCompare(right.displayName))
   }, [destinationKey, items, query, sort])
   const selectedLocations = selected
-    ? items.filter(item => item.templateId.trim().toLowerCase() === selected.groupKey)
+    ? filterSoloInventoryItemsByLocation(items, destinationKey)
+      .filter(item => item.templateId.trim().toLowerCase() === selected.groupKey)
     : []
+  const deletableLocations = selectedLocations.filter(location => location.destinationKind !== 'equipment')
+  const deleteCount = deletableLocations.reduce((sum, location) => sum + location.occurrenceCount, 0)
+  const deleteTotal = deletableLocations.reduce((sum, location) => sum + location.totalQuantity, 0)
+  const occurrenceRows = selectedLocations.flatMap(location =>
+    (location.occurrences ?? []).map(occurrence => ({ location, occurrence })))
+  useEffect(() => setOccurrenceLimit(100), [selected?.groupKey, destinationKey])
   const visibleGroups = groups.slice(0, visibleCount)
 
   useEffect(() => setVisibleCount(100), [destinationKey, items, query, sort])
@@ -240,11 +251,21 @@ export function SoloInventoryExplorer({
             <div>
               <p className="break-all font-mono text-xs text-text-muted">{selected.templateId}</p>
               <p className="mt-2 text-sm text-text">
-                {selected.totalQuantity} total across {selected.locationCount} location{selected.locationCount === 1 ? '' : 's'}.
+                {selected.totalQuantity.toLocaleString()} total across {selected.locationCount} location{selected.locationCount === 1 ? '' : 's'}.
               </p>
             </div>
+            {onDeleteGroup && deleteCount > 0 && (
+              <button type="button" className="btn-secondary min-h-11 text-danger"
+                disabled={disabled || busyItemId !== null}
+                onClick={() => onDeleteGroup(selected.templateId, selected.displayName,
+                  destinationKey || 'all', locations.find(l => l.key === destinationKey)?.label ?? 'all supported locations',
+                  deleteCount, deleteTotal)}>
+                <Icon name="Trash2" size={15} />
+                Delete all {deleteTotal.toLocaleString()} ({deleteCount.toLocaleString()} stack{deleteCount === 1 ? '' : 's'})
+              </button>
+            )}
             <ul className="divide-y divide-border rounded-lg border border-border bg-surface-2 px-3">
-              {selectedLocations.flatMap(location => (location.occurrences ?? []).map(occurrence => {
+              {occurrenceRows.slice(0, occurrenceLimit).map(({ location, occurrence }) => {
                 const rawQuantity = deleteQuantities[occurrence.itemId] ?? String(occurrence.stackSize)
                 const quantity = Number(rawQuantity)
                 const validQuantity = Number.isSafeInteger(quantity)
@@ -253,7 +274,12 @@ export function SoloInventoryExplorer({
                 return (
                   <li key={occurrence.itemId} className="flex items-center justify-between gap-4 py-3 text-sm">
                     <div className="min-w-0">
-                      <p className="truncate font-medium text-text">{location.destinationLabel}</p>
+                      <button type="button" className="max-w-full truncate text-left font-medium text-accent-bright underline decoration-dotted underline-offset-4 hover:decoration-solid"
+                        title={`Open ${location.destinationLabel} inventory`}
+                        disabled={busyItemId !== null}
+                        onClick={() => { setDestinationKey(location.destinationKey); setQuery(''); setSelected(null) }}>
+                        {location.destinationLabel}
+                      </button>
                       <p className="text-xs text-text-muted">Item {occurrence.itemId} · quality {occurrence.quality} · stack x{occurrence.stackSize}</p>
                     </div>
                     {location.destinationKind === 'equipment' ? (
@@ -288,8 +314,13 @@ export function SoloInventoryExplorer({
                     </div>}
                   </li>
                 )
-              }))}
+              })}
             </ul>
+            {occurrenceLimit < occurrenceRows.length && (
+              <button type="button" className="btn-secondary" onClick={() => setOccurrenceLimit(n => n + 100)}>
+                Load 100 more stacks
+              </button>
+            )}
           </div>
         )}
       </DetailPanel>

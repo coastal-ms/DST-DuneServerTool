@@ -179,6 +179,23 @@ afterEach(() => {
 })
 
 describe('Shared Inventory Explorer grouped catalog', () => {
+  it('offers the selected player backpack in storage view and routes bulk deletion through player inventory', async () => {
+    vi.spyOn(window, 'confirm').mockReturnValue(true)
+    const playerItem = { ...occurrence, id: 77, entity: { ...occurrence.entity, type: 'player', id: 20001, label: 'Backpack' } }
+    occurrenceApi.mockResolvedValue({ ...occurrenceFixture, data: { ...occurrenceFixture.data, items: [playerItem, {...playerItem,id:78}] } })
+    render(<BrowserRouter><SharedInventoryExplorer entityTypes={['storage']} includeBackpack selectedPlayer={{id:20001,name:'Coastal',onlineStatus:'Offline'}} /></BrowserRouter>)
+    const select = await screen.findByRole('combobox', {name:'Storage container'})
+    await waitFor(() => expect(within(select).getByRole('option',{name:'Backpack'})).toBeInTheDocument())
+    expect(within(select).queryByRole('option',{name:'Bank Storage'})).not.toBeInTheDocument()
+    fireEvent.change(select,{target:{value:'player:60001'}})
+    await waitFor(() => expect(inventoryApi).toHaveBeenCalledWith(expect.objectContaining({types:['player'],playerId:20001,locationType:'player',locationId:60001})))
+    fireEvent.click(await screen.findByRole('button',{name:/Copper, total quantity/}))
+    fireEvent.click(await screen.findByRole('checkbox',{name:'Select all loaded occurrences'}))
+    fireEvent.click(screen.getByRole('button',{name:'Delete selected (2)'}))
+    await waitFor(() => expect(deleteInventoryItemApi).toHaveBeenCalledWith(77, 10))
+    await waitFor(() => expect(deleteInventoryItemApi).toHaveBeenCalledWith(78, 10))
+    expect(deleteStorageItemApi).not.toHaveBeenCalled()
+  })
   it('shows a clear storage restart notice and separates stack editing from deletion', async () => {
     occurrenceApi.mockResolvedValue({...occurrenceFixture,data:{...occurrenceFixture.data,items:[{...occurrence,quality:0,durability:'N/A',maxDurability:'N/A'}]}})
     renderExplorer()

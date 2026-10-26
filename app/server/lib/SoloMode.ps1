@@ -436,7 +436,7 @@ function Assert-DuneSoloGameClosed {
 
 function Invoke-DuneSoloHelper {
     param(
-        [Parameter(Mandatory)][ValidateSet('inspect','diagnostics','codex','grant-codex','character-xp','faction-progression','set-specialization','reset-specialization-rewards','backup','restore','grant-items','delete-item','import-blueprint','list-blueprints','export-blueprint','set-currencies','fill-water','set-weapon-ammo','repair-equipment','max-augment-attributes','max-specializations','complete-fremen','complete-npe','enable-skills','set-progression-points','unlock-main-quest','unlock-trainer','unlock-testing-stations','grant-legitimate-customization')][string]$Command,
+        [Parameter(Mandatory)][ValidateSet('inspect','diagnostics','codex','grant-codex','character-xp','faction-progression','set-specialization','reset-specialization-rewards','backup','restore','grant-items','delete-item','delete-item-group','import-blueprint','list-blueprints','export-blueprint','set-currencies','fill-water','set-weapon-ammo','repair-equipment','max-augment-attributes','max-specializations','complete-fremen','complete-npe','enable-skills','set-progression-points','unlock-main-quest','unlock-trainer','unlock-testing-stations','grant-legitimate-customization')][string]$Command,
         [Parameter(Mandatory)][hashtable]$Arguments
     )
 
@@ -837,6 +837,32 @@ function Remove-DuneSoloInventoryItem {
         'item-id' = $ItemId
         'expected-stack-size' = $ExpectedStackSize
         quantity = $Quantity
+        catalog = Get-DuneSoloGameplayCatalogPath
+    }
+}
+
+function Remove-DuneSoloInventoryGroup {
+    param([Parameter(Mandatory)][string]$TemplateId,
+          [Parameter(Mandatory)][string]$Destination,
+          [Parameter(Mandatory)][long]$ExpectedCount,
+          [Parameter(Mandatory)][long]$ExpectedTotal,
+          [Parameter(Mandatory)][string]$Confirm)
+    Assert-DuneSoloSupportedPlatform
+    if ($Confirm -ne 'DELETE SOLO ITEM GROUP') { throw 'Confirm the Solo item group deletion.' }
+    Assert-DuneSoloGameClosed
+    if ($ExpectedCount -le 0 -or $ExpectedTotal -lt 0) { throw 'Refresh and review the selected item total.' }
+    $profile = Get-DuneSoloProfile
+    if (-not $profile.dbPath -or -not (Test-Path -LiteralPath $profile.dbPath -PathType Leaf)) {
+        throw 'Connect a valid Solo save before deleting items.'
+    }
+    Assert-DuneSoloAdapterCapability -Profile $profile -Capability 'item-delete' | Out-Null
+    $safetyDir = Join-Path (Get-DuneSoloProfileBackupRoot -DbPath $profile.dbPath) 'pre-item-delete'
+    New-Item -ItemType Directory -Path $safetyDir -Force | Out-Null
+    $safety = Join-Path $safetyDir ('game-before-item-group-delete-' + [guid]::NewGuid().ToString('N') + '.db')
+    Invoke-DuneSoloHelper -Command 'delete-item-group' -Arguments @{
+        input = $profile.dbPath; 'safety-backup' = $safety
+        'template-id' = $TemplateId; destination = $Destination
+        'expected-count' = $ExpectedCount; 'expected-total' = $ExpectedTotal
         catalog = Get-DuneSoloGameplayCatalogPath
     }
 }

@@ -281,6 +281,24 @@ Register-DuneRoute -Method POST -Path '/api/solo/items/grant' -LocalOnly -Handle
     }
 }
 
+Register-DuneRoute -Method POST -Path '/api/solo/items/delete-group' -LocalOnly -Handler {
+    param($req, $res, $routeParams, $body)
+    try {
+        $result = Invoke-WithDuneLock -Name 'solo-profile-data' -Script {
+            Assert-DuneSoloExpectedProfile -ExpectedProfileToken ([string](Get-DuneSoloBodyField $body 'expectedProfileToken' ''))
+            Remove-DuneSoloInventoryGroup -TemplateId ([string](Get-DuneSoloBodyField $body 'templateId' '')) `
+                -Destination ([string](Get-DuneSoloBodyField $body 'destination' '')) `
+                -ExpectedCount ([long](Get-DuneSoloBodyField $body 'expectedCount' 0)) `
+                -ExpectedTotal ([long](Get-DuneSoloBodyField $body 'expectedTotal' -1)) `
+                -Confirm ([string](Get-DuneSoloBodyField $body 'confirm' ''))
+        }
+        Write-DuneJson -Response $res -Body $result
+    } catch {
+        $status = if ($_.Exception.Message -like '*still running*' -or $_.Exception.Message -like '*active Solo save changed*') { 409 } else { 400 }
+        Write-DuneError -Response $res -Status $status -Message $_.Exception.Message
+    }
+}
+
 Register-DuneRoute -Method POST -Path '/api/solo/items/delete' -LocalOnly -Handler {
     param($req, $res, $routeParams, $body)
     try {

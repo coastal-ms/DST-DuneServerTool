@@ -821,6 +821,27 @@ Describe 'Solo Mode write gates and settings backups' {
         }
     }
 
+    It 'keeps bulk deletion scoped, confirmed, offline and backed up' {
+        $layout = New-TestSoloLayout
+        Save-DuneSoloState -DataRoot $layout.root -DbPath $layout.db | Out-Null
+        Mock Get-DuneSoloGameProcesses { @() }
+        Mock Get-DuneSoloGameplayCatalogPath { Join-Path $script:SoloTestRoot 'catalog.json' }
+        Mock Invoke-DuneSoloHelper { @{ ok = $true } }
+        Remove-DuneSoloInventoryGroup -TemplateId 'Blood' -Destination 'inventory:1' `
+            -ExpectedCount 19991 -ExpectedTotal 19991 -Confirm 'DELETE SOLO ITEM GROUP'
+        Assert-MockCalled Invoke-DuneSoloHelper -Times 1 -ParameterFilter {
+            $Command -eq 'delete-item-group' -and $Arguments.input -eq $layout.db -and
+            $Arguments['template-id'] -eq 'Blood' -and $Arguments.destination -eq 'inventory:1' -and
+            $Arguments['expected-count'] -eq 19991 -and $Arguments['expected-total'] -eq 19991 -and
+            $Arguments['safety-backup'] -like '*pre-item-delete*'
+        }
+        { Remove-DuneSoloInventoryGroup -TemplateId 'Blood' -Destination 'all' `
+            -ExpectedCount 1 -ExpectedTotal 1 -Confirm 'yes' } | Should -Throw '*Confirm*'
+        Mock Get-DuneSoloGameProcesses { @([pscustomobject]@{ Id = 42 }) }
+        { Remove-DuneSoloInventoryGroup -TemplateId 'Blood' -Destination 'all' `
+            -ExpectedCount 1 -ExpectedTotal 1 -Confirm 'DELETE SOLO ITEM GROUP' } | Should -Throw '*still running*'
+    }
+
     It 'rejects invalid or unconfirmed Solo item deletion input before invoking the helper' {
         Mock Get-DuneSoloGameProcesses { @() }
         {

@@ -36,6 +36,12 @@ function last(): FetchCall {
 }
 
 describe('Solo Mode API contracts', () => {
+  it('sends the reviewed group scope, total and selected-profile guard for bulk deletion', async () => {
+    await solo.deleteSoloInventoryGroup('Blood', 'inventory:1', 19991, 19991, 'profile-token')
+    expect(last()).toEqual({ url: '/api/solo/items/delete-group', method: 'POST',
+      body: { templateId: 'Blood', destination: 'inventory:1', expectedCount: 19991,
+        expectedTotal: 19991, expectedProfileToken: 'profile-token', confirm: 'DELETE SOLO ITEM GROUP' } })
+  })
   it('sends character XP separately from faction progression with a selected-profile guard', async () => {
     await solo.setSoloCharacterXp('set', 100000, 'profile-token')
     expect(last()).toEqual({ url: '/api/solo/progression/character-xp', method: 'PUT',

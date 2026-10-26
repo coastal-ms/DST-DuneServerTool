@@ -6,6 +6,7 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { useSearch } from '../../router'
 import { Icon } from '../../components/Icon'
+import { CollapsibleCard } from '../../components/CollapsibleCard'
 import {
   getPlayers, getPlayerSummary,
   type Player, type PlayerSummaryResponse, type DataSource,
@@ -366,16 +367,18 @@ export function PlayersTab() {
           ) : (
             <>
               <ServerOverview summary={displaySummary} />
-              <div className="mt-3">
+              <CollapsibleCard id="players-coriolis-seeds" title="Coriolis Storm Seeds" icon="Wind"
+                defaultOpen={false} className="mt-3 mb-0" headerClassName="px-4 py-4" bodyClassName="px-4 pb-4">
                 <CoriolisAdmin flash={(msg, kind = 'ok') => setFlash({ msg, kind })} />
-              </div>
-              <div className="mt-3">
+              </CollapsibleCard>
+              <CollapsibleCard id="players-base-water" title="Fill Base Water" icon="Droplets"
+                defaultOpen={false} className="mt-3 mb-0" headerClassName="px-4 py-4" bodyClassName="px-4 pb-4">
                 <BaseWaterAdmin
                   players={visiblePlayers}
                   canWrite={source === 'live'}
                   flash={(msg, kind = 'ok') => setFlash({ msg, kind })}
                 />
-              </div>
+              </CollapsibleCard>
             </>
           )}
         </section>

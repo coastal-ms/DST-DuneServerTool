@@ -1,4 +1,4 @@
-﻿# Changelog
+# Changelog
 
 All notable changes to this project will be documented in this file.
 
@@ -12,6 +12,17 @@ on GitHub still exist for each individual release; the consolidated entries
 here cover everything those tags shipped.
 
 ## [Unreleased]
+
+## [16.6.3] - 2026-10-26
+
+- Add Delete all for the selected Solo inventory item, with the full quantity and stack count shown before confirmation.
+- Keep large Solo item lists responsive when opening item details.
+- Start Coriolis Storm Seeds and Fill Base Water collapsed, with click-to-expand controls.
+- Start character-tag groups collapsed.
+- Move common player actions beneath the balance summary.
+- Add Backpack to the Storage containers selector for multi-item deletion, and show repair controls on Character Inventory.
+- Open a Solo container's inventory directly from its name in item details.
+- Correct storage item deletions reporting failure after a successful removal.
 
 ## [16.6.2] - 2026-10-25
 

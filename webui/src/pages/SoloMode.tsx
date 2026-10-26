@@ -29,6 +29,7 @@ import {
   deleteSoloBackup,
   deleteSoloBackups,
   deleteSoloInventoryItem,
+  deleteSoloInventoryGroup,
   discoverSolo,
   fillSoloWaterContainer,
   completeSoloFindTheFremen,
@@ -1203,6 +1204,22 @@ export function SoloMode() {
     }
   }
 
+  const deleteInventoryGroup = async (templateId: string, displayName: string,
+    destination: string, destinationLabel: string, count: number, total: number) => {
+    if (!canMutateActiveProfile || gameRunning || busy !== null) return
+    if (!window.confirm(`Delete all ${total.toLocaleString()} x ${displayName} (${count.toLocaleString()} stack${count === 1 ? '' : 's'}) from ${destinationLabel}?\n\n`
+      + 'Equipped items are excluded. A backup of the current save will be retained.')) return
+    setBusy('delete-item:0'); setNotice(null)
+    try {
+      const result = await deleteSoloInventoryGroup(templateId, destination, count, total,
+        statusState.data?.profileToken ?? '')
+      setNotice({ kind: 'ok', text: `${result.removed.toLocaleString()} x ${displayName} removed from ${result.deletedStacks.toLocaleString()} stacks. Previous save retained at ${result.safetyBackup}` })
+      await Promise.all([statusState.refresh(), runtimeState.refresh(), backupsState.refresh()])
+    } catch (error) {
+      setNotice({ kind: 'err', text: error instanceof Error ? error.message : String(error) })
+    } finally { setBusy(null) }
+  }
+
   const [repairContainer, setRepairContainer] = useState('')
   const repairEquipment = async (destination = 'carried') => {
     if (!canMutateActiveProfile || gameRunning || busy !== null) return
@@ -2023,6 +2040,7 @@ export function SoloMode() {
             disabled={!canMutateActiveProfile || gameRunning || busy !== null}
             busyItemId={busy?.startsWith('delete-item:') ? Number(busy.slice('delete-item:'.length)) : null}
             onDelete={(item, location, quantity) => { void deleteInventoryItem(item, location, quantity) }}
+            onDeleteGroup={(...args) => { void deleteInventoryGroup(...args) }}
           />
           <SoloWeaponAmmoEditor
             weapons={inspection?.rangedWeapons ?? []}

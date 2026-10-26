@@ -876,7 +876,7 @@ WITH matched AS (
     WHERE id = $ItemId::bigint$expectedClause
     FOR UPDATE
 )
-SELECT dune.delete_item(id) FROM matched;
+SELECT id::text AS item_id, dune.delete_item(id) AS result FROM matched;
 "@
     $res = Invoke-DuneSqlQuery -Ip $Ip -Sql $sql -ReadOnly $false -MaxRows 1 -TimeoutSec 30
     if (-not $res.ok) { return @{ ok = $false; error = $res.error } }
