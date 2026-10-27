@@ -13,6 +13,10 @@ here cover everything those tags shipped.
 
 ## [Unreleased]
 
+## [16.6.6] - 2026-10-27
+
+- Restore Browser Portal password changes and account actions when an outdated remote bridge is still running.
+
 ## [16.6.5] - 2026-10-26
 
 - Add Teleport Locations to Player Admin and the Player Portal, with shared host destinations and five private locations total per player.

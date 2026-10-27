@@ -57,11 +57,37 @@ try {
     $token = $match.Groups[1].Value
     Assert-Seam ([bool](Get-DunePortalSessionAuth (New-SeamRequest -Cookie $token)).ok) 'Issued session was not valid.'
 
+    $change = @($script:DuneRoutes | Where-Object { $_.Method -eq 'POST' -and $_.Path -eq '/api/portal-auth/change-password' })[0]
+    $request = New-SeamRequest -Cookie $token
+    $request.Headers['Host'] = '127.0.0.1:47823'
+    $request.Headers['X-Dune-Bridge-Protocol'] = '2'
+    $request.Headers['X-Dune-Original-Authority'] = 'portal.example.test'
+    $request.Headers['X-Dune-Bridge-Proof'] = Get-DunePortalBridgeOriginSecret
+    Assert-Seam (Test-DunePortalRequestOrigin $request) 'Authenticated bridge origin was rejected.'
+    $changeResponse = New-SeamResponse
+    & $change.Handler $request $changeResponse @{} @{
+        currentPassword=$created.oneTimePassword
+        newPassword='Changed-owner-password-2026'
+    }
+    Assert-Seam ($changeResponse.StatusCode -eq 200) 'Production password-change handler failed.'
+    Assert-Seam (-not [bool](Get-DunePortalSessionAuth (New-SeamRequest -Cookie $token)).ok) 'Password change did not revoke the original session.'
+    $newCookie = [regex]::Match([string]$changeResponse.Headers['Set-Cookie'], '^dune_portal_session=([^;]+);')
+    Assert-Seam $newCookie.Success 'Password change did not replace the session cookie.'
+    $token = $newCookie.Groups[1].Value
+    $changedAuth = Get-DunePortalSessionAuth (New-SeamRequest -Cookie $token)
+    Assert-Seam ([bool]$changedAuth.ok -and -not [bool]$changedAuth.mustChangePassword) 'Changed password did not unlock the portal session.'
+
     $logoutResponse = New-SeamResponse
     & $logout.Handler (New-SeamRequest -Cookie $token) $logoutResponse @{} $null
     Assert-Seam ($logoutResponse.StatusCode -eq 200) 'Production logout handler did not return 200.'
     Assert-Seam ([string]$logoutResponse.Headers['Set-Cookie'] -match 'Max-Age=0') 'Logout did not clear the cookie.'
     Assert-Seam (-not [bool](Get-DunePortalSessionAuth (New-SeamRequest -Cookie $token)).ok) 'Logout did not revoke the session.'
+    $reloginResponse = New-SeamResponse
+    & $login.Handler (New-SeamRequest) $reloginResponse @{} @{
+        username='PS51-OWNER'
+        password='Changed-owner-password-2026'
+    }
+    Assert-Seam ($reloginResponse.StatusCode -eq 200) 'Login with the changed password failed.'
     'PS51 portal route seam passed.'
 } finally {
     $env:APPDATA = $oldAppData

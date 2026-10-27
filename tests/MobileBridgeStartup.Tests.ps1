@@ -4,7 +4,7 @@ Describe 'Mobile bridge startup' {
     }
 
     It 'takes the health-only fast path when the bridge is already responding' {
-        Mock Invoke-RestMethod { [pscustomobject]@{ ok = $true } }
+        Mock Invoke-RestMethod { [pscustomobject]@{ ok = $true; bridgeVersion = '2.0.1'; protocolVersion = '2' } }
         Mock Get-DuneBridgeStatus { throw 'full status should not run' }
         Mock Invoke-DuneBridgeRepair { throw 'repair should not run' }
 
@@ -13,6 +13,34 @@ Describe 'Mobile bridge startup' {
         Should -Invoke Invoke-RestMethod -Times 1 -ParameterFilter { $TimeoutSec -eq 1 }
         Should -Invoke Get-DuneBridgeStatus -Times 0
         Should -Invoke Invoke-DuneBridgeRepair -Times 0
+    }
+
+    It 'repairs a responding legacy or incompatible bridge rather than accepting its open port' -TestCases @(
+        @{ Health = @{ ok = $true } }
+        @{ Health = @{ ok = $true; bridgeVersion = '1.0.0'; protocolVersion = '1' } }
+        @{ Health = @{ ok = $true; bridgeVersion = '2.0.0'; protocolVersion = '2' } }
+        @{ Health = @{ ok = $true; bridgeVersion = '2.0.1'; protocolVersion = '3' } }
+        @{ Health = @{ ok = $false; bridgeVersion = '2.0.1'; protocolVersion = '2' } }
+        @{ Health = @{ ok = $true; bridgeVersion = 'invalid'; protocolVersion = '2' } }
+    ) {
+        param($Health)
+        Mock Invoke-RestMethod { $Health }.GetNewClosure()
+        Mock Get-DuneBridgeStatus { @{ task=$true; listening=$true } }
+        Mock Invoke-DuneBridgeRepair { @{ ok=$true; started=$true } }
+
+        Initialize-DuneMobileBridge
+
+        Should -Invoke Invoke-DuneBridgeRepair -Times 1 -Exactly -ParameterFilter { $NoWait }
+        Should -Invoke Get-DuneBridgeStatus -Times 0
+    }
+
+    It 'repairs an unreachable bridge without blocking startup on full task inspection' {
+        Mock Invoke-RestMethod { throw 'Connection refused' }
+        Mock Get-DuneBridgeStatus { throw 'Full status should not run' }
+        Mock Invoke-DuneBridgeRepair { @{ ok=$true; started=$true } }
+
+        { Initialize-DuneMobileBridge } | Should -Not -Throw
+        Should -Invoke Invoke-DuneBridgeRepair -Times 1 -Exactly -ParameterFilter { $NoWait }
     }
 }
 
