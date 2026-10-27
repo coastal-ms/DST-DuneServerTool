@@ -72,6 +72,26 @@ afterEach(() => {
 })
 
 describe('VmInfoCard image cleanup', () => {
+  it('loads Hyper-V allocations only when opened, using the existing facts request', async () => {
+    vi.mocked(getVmHealth).mockResolvedValue({ ...vmHealth, hyperV: { ramGB: 20, ramSource: 'assigned', cpuCount: 8 } })
+    const user = userEvent.setup()
+    render(<VmInfoCard />)
+    expect(getVmHealth).not.toHaveBeenCalled()
+    await user.click(screen.getByRole('button', { name: /vm info/i }))
+    expect(await screen.findByText('20 GB')).toBeInTheDocument()
+    expect(screen.getByText('Virtual CPUs').parentElement).toHaveTextContent('8')
+    expect(getVmHealth).toHaveBeenCalledOnce()
+  })
+
+  it('shows startup allocation even when the guest probe is unavailable', async () => {
+    vi.mocked(getVmHealth).mockResolvedValue({ ok: false, faults: [], hyperV: { ramGB: 16, ramSource: 'startup', cpuCount: null } })
+    const user = userEvent.setup()
+    render(<VmInfoCard />)
+    await user.click(screen.getByRole('button', { name: /vm info/i }))
+    expect(await screen.findByText('16 GB (startup)')).toBeInTheDocument()
+    expect(screen.getByText('Virtual CPUs').parentElement).toHaveTextContent('—')
+  })
+
   it('runs cleanup only after explicit confirmation and refreshes facts', async () => {
     const user = userEvent.setup()
     render(<VmInfoCard />)

@@ -12,6 +12,7 @@ import atlas_runtime
 import atlas_assets
 import atlas_lifecycle
 import atlas_history
+import atlas_checkpoint
 
 ROOT=Path(__file__).resolve().parent
 REPO=Path(os.environ['DST_ATLAS_APP_ROOT']).resolve()
@@ -74,6 +75,10 @@ def collect_native_once(region="DeepDesert"):
                     storm_profiles[profile_key].update(capturedAt=value['capturedAt'],source='Observed native storm zone dimensions and root transform')
                     atlas_history.save(SNAPSHOT_ROOT,storm_history,storm_profiles)
         with lock: state.update({native_key:value,error_key:None,"stormProfiles":dict(storm_profiles)})
+        atlas_checkpoint.save(SNAPSHOT_ROOT,ROOT,region,value,native=True)
+        with control:
+            urgent_jobs.add('positions' if region=='DeepDesert' else 'haggaPositions')
+            control.notify_all()
         if previous and (previous.get('pid'),str(previous.get('startTime')))!=(value.get('pid'),str(value.get('startTime'))):
             gathering_queue.reset_world(region)
             with control:
@@ -108,6 +113,7 @@ def collect_worms_once(region="DeepDesert"):
                 storm_history.clear();storm_history.extend(retained)
                 atlas_history.save(SNAPSHOT_ROOT,storm_history,storm_profiles)
         with lock:state.update({feed_key:feed,error_key:None,"stormHistory":list(storm_history)})
+        atlas_checkpoint.save(SNAPSHOT_ROOT,ROOT,region,feed)
     except atlas_process.Cancelled:
         raise
     except Exception as e:
@@ -193,6 +199,7 @@ try:static_pois=json.loads((SNAPSHOT_ROOT/'static-pois-seed.json').read_text(enc
 except (FileNotFoundError,ValueError):static_pois={'items':[],'sources':[]}
 # Carry compatible addresses across installer bundles before starting workers.
 state.update(atlas_runtime.restore_cached_runtime(ROOT))
+state.update(atlas_checkpoint.restore(SNAPSHOT_ROOT,ROOT))
 state.update(stormHistory=list(storm_history),stormProfiles=storm_profiles,preferencesSupported=True,live=False,refreshing=False,stopping=False,frozenAt=state.get('frozenAt') or (state.get('wormFeed') or {}).get('capturedAt') or (state.get('snapshot') or {}).get('observedAt') or datetime.datetime.now(datetime.timezone.utc).isoformat(),activity=[])
 def restore_base_data():
     import importlib.util
@@ -234,7 +241,13 @@ def sync_viewer_demand():
 
 def touch_viewer(viewer='legacy',preferences=None):
     with control:
+        was_watching=viewers.active()
         viewers.touch(viewer,preferences)
+        if not was_watching and live_enabled:
+            # Re-entry must not inherit a cancelled discovery's long cooldown.
+            urgent_jobs.update(('db','positions','haggaPositions','native','haggaNative'))
+            selected='haggaNative' if (preferences or {}).get('region')=='HaggaBasin' else 'native'
+            waiting_jobs[selected]=0
         sync_viewer_demand()
         control.notify_all()
 state['live']=live_enabled
@@ -344,11 +357,12 @@ def collection_worker(name,observe):
             active_jobs.add(name)
             with lock:state['activity']=sorted(active_jobs)
         started=time.monotonic()
+        cancelled=False
         try:
             mode="positions" if name in ("db","positions","haggaPositions") else "optional" if name in ("gathering","pois") else "core"
             with atlas_process.priority(mode,ROOT/"io-budget",name):observe()
         except atlas_process.Cancelled:
-            pass
+            cancelled=True
         except Exception as e:
             with lock:state[name+'Error']=str(e)
         finally:
@@ -356,7 +370,7 @@ def collection_worker(name,observe):
                 active_jobs.discard(name);completed[name]=max(generation,completed.get(name,0));last_finished=time.monotonic()
                 # Expensive reads get at least as much idle time as work time.
                 # A slow SSH read must never become a continuous launch loop.
-                cooldown=min(5,last_finished-started) if name=="gathering" else last_finished-started
+                cooldown=0 if cancelled else min(5,last_finished-started) if name=="gathering" else last_finished-started
                 with lock:
                     state['activity']=sorted(active_jobs)
                     if state['refreshing'] and all(completed.get(k,0)>=refresh_generation for k in refresh_required):

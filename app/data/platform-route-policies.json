@@ -1,6 +1,7 @@
 {
   "schemaVersion": 1,
   "writeLifecycleBySource": {
+    "PlayerTeleports.ps1": "reversible-write",
     "VmMapHelper.ps1": "reversible-write",
     "Atlas.ps1": "reversible-write",
     "SoloDeck.ps1": "transactional-write",
@@ -57,6 +58,7 @@
     "WorldRestart.ps1": "destructive"
   },
   "routeLifecycleOverrides": {
+    "http DELETE /api/player-portal/teleports": "reversible-write",
     "http DELETE /api/v1/maps/vm-helper": "reversible-write",
     "http POST /api/setup/hyperv-lan/install/remove": "destructive",
     "http POST /api/setup/hyperv-lan/install/cancel": "reversible-write",
@@ -159,6 +161,7 @@
     "ws CONNECT /ws/terminal": "host.powershell.execute"
   },
   "groups": [
+    {"source": "PlayerTeleports.ps1", "capabilityId": "operation.commands", "routeCount": 3, "sha256": "eff3d8bd567c9f2d366fbbb4123eb3c64b5faa8d39c89a6b521a76b9e1759c38"},
     {"source":"VmMapHelper.ps1","capabilityId":"map.observer","routeCount":4,"sha256":"54d29115d668c6eedf1f84d9f6bfaf140333072ecac03e906e9952e49075cfb1"},
     {"source": "Atlas.ps1", "capabilityId": "map.observer", "routeCount": 4, "sha256": "e6c5c95b2c67d97cba40e9cc7c4563bf1759221514a8626e6db9906c409045e9"},
     {"source":"RegisTanks.ps1","capabilityId":"settings.game-server","routeCount":4,"sha256":"d4501a5bfba582aa8dabbbf09f6efcbbc2a2ec373e0e3fc9123466fe8323e92d"},

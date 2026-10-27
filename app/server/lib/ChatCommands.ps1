@@ -1338,6 +1338,10 @@ function Invoke-DuneChatCommandTeleport {
     $argv = @($CommandArgs)
     if ($argv.Count -gt 0 -and [string]$argv[0] -ieq 'save') {
         $token = if ($argv.Count -gt 1) { (@($argv[1..($argv.Count - 1)]) -join ' ').Trim() } else { '' }
+        if ($token -cmatch '^P-[a-f0-9]{32}$') {
+            try { return Complete-DunePlayerTeleportCapture -Ip $Ip -FuncomId $FuncomId -Token $token -Location $Message.location }
+            catch { return @{ok=$false;applyCooldown=$false;reply='Private location was not saved. Refresh Teleport Locations in the Player Portal and create a new capture code.'} }
+        }
         try {
             $result = Invoke-DuneChatTeleportFileLock -Script {
                 Complete-DuneChatTeleportCapture -Ip $Ip -FuncomId $FuncomId -Token $token -Location $Message.location
@@ -1375,6 +1379,17 @@ function Invoke-DuneChatCommandTeleport {
         $bookmark = $bookmarks | Where-Object { [string]$_.key -eq $key } | Select-Object -First 1
     }
     if (-not $bookmark) {
+        if (Get-Command Find-DunePlayerTeleportChatDestination -ErrorAction SilentlyContinue) {
+            try {
+                $personal = Find-DunePlayerTeleportChatDestination -Ip $Ip -FuncomId $FuncomId -Name $wanted
+                if ($personal) {
+                    [void](Invoke-DunePlayerTeleport -Ip $Ip -Target $personal.target -Id $personal.bookmark.id -Scope private)
+                    return @{ ok=$true; reply='Teleported to your private location.' }
+                }
+            } catch {
+                return @{ ok=$false; applyCooldown=$false; reply='Private teleport unavailable. Check Teleport Locations in the Player Portal for the current map, location and cooldown.' }
+            }
+        }
         if ($bookmarks.Count -eq 0) {
             return @{ ok = $false; reply = 'No teleport destinations are saved on the DST instance handling chat.' }
         }
@@ -1416,6 +1431,12 @@ function Invoke-DuneChatCommandTeleport {
     # distant stored Z before destination terrain finishes streaming. Shared
     # destination replay is repeat-safe, so publish it twice inside one paced
     # broker call to absorb an intermittent game-side command miss.
+    if (Get-Command Enter-DunePlayerTeleportCooldown -ErrorAction SilentlyContinue) {
+        try {
+            $tpState=Read-DuneChatCommandsState
+            Enter-DunePlayerTeleportCooldown -Ip $Ip -FuncomId $FuncomId -Seconds ([int]$tpState.commands.tp.cooldownSeconds)
+        } catch { return @{ok=$false;applyCooldown=$false;reply='Teleport is unavailable or on cooldown. Please wait and try again.'} }
+    }
     $res = Invoke-DuneRmqTeleportTo -FlsId $fls.flsId `
         -X ([double]$bookmark.x) -Y ([double]$bookmark.y) -Z ([double]$bookmark.z) `
         -RepeatForReliability -TraceId $TraceId

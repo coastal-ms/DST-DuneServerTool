@@ -85,7 +85,8 @@ function Get-DuneLanVmSnapshot {
                 param($name)
                 $vm = Get-VM -Name $name -ErrorAction Stop
                 $addresses = @((Get-VMNetworkAdapter -VMName $name -ErrorAction Stop).IPAddresses)
-                @{ State=[string]$vm.State; UptimeSeconds=[int]$vm.Uptime.TotalSeconds; IPAddresses=$addresses }
+                @{ State=[string]$vm.State; UptimeSeconds=[int]$vm.Uptime.TotalSeconds; IPAddresses=$addresses;
+                    MemoryAssigned=$vm.MemoryAssigned; MemoryStartup=$vm.MemoryStartup; ProcessorCount=$vm.ProcessorCount }
             } -ErrorAction Stop
         } catch {
             # A workgroup host can accept Hyper-V's credentialed CIM calls while
@@ -96,7 +97,8 @@ function Get-DuneLanVmSnapshot {
                 $query = ConvertTo-DuneHyperVCimSplat -HyperV $HyperV
                 $vm = Get-VM -Name $script:DuneVmName @query -ErrorAction Stop
                 $addresses = @((Get-VMNetworkAdapter -VMName $script:DuneVmName @query -ErrorAction Stop).IPAddresses)
-                $snapshot = @{ State=[string]$vm.State; UptimeSeconds=[int]$vm.Uptime.TotalSeconds; IPAddresses=$addresses }
+                $snapshot = @{ State=[string]$vm.State; UptimeSeconds=[int]$vm.Uptime.TotalSeconds; IPAddresses=$addresses;
+                    MemoryAssigned=$vm.MemoryAssigned; MemoryStartup=$vm.MemoryStartup; ProcessorCount=$vm.ProcessorCount }
             } catch {
                 throw "LAN VM discovery failed. PowerShell session: $sessionError. Hyper-V query: $($_.Exception.Message)"
             }
@@ -113,6 +115,20 @@ function Get-DuneLanVmSnapshot {
     }
     [Threading.Monitor]::Enter($table.SyncRoot)
     try { return & $refresh } finally { [Threading.Monitor]::Exit($table.SyncRoot) }
+}
+
+function Get-DuneVmResources {
+    # Requested with the Database info card; no timer or guest-side probe.
+    $out = @{ ramGB=$null; ramSource=''; cpuCount=$null }
+    if ((Get-Command Test-DuneSoloInstallation -ErrorAction SilentlyContinue) -and (Test-DuneSoloInstallation)) { return $out }
+    try {
+        $hv = Get-DuneHyperVSplat
+        $vm = if ($hv.ComputerName) { Get-DuneLanVmSnapshot -HyperV $hv } else { Get-VM -Name $script:DuneVmName @hv -ErrorAction Stop }
+        if ($vm.MemoryAssigned -gt 0) { $out.ramGB=[math]::Round($vm.MemoryAssigned / 1GB, 1); $out.ramSource='assigned' }
+        elseif ($vm.MemoryStartup -gt 0) { $out.ramGB=[math]::Round($vm.MemoryStartup / 1GB, 1); $out.ramSource='startup' }
+        if ($vm.ProcessorCount -gt 0) { $out.cpuCount=[int]$vm.ProcessorCount }
+    } catch { }
+    return $out
 }
 
 function Get-DuneVmStatus {

@@ -63,6 +63,7 @@ export interface VmFault {
 
 export interface VmHealth {
   ok: boolean
+  hyperV?: { ramGB: number | null; ramSource: 'assigned' | 'startup' | ''; cpuCount: number | null }
   faults: VmFault[]
   message?: string
   disk?: { usePct: number | null; availK: number | null; sizeK: number | null; known: boolean }

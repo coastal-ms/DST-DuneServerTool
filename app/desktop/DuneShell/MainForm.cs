@@ -1641,7 +1641,10 @@ internal sealed class MainForm : Form
                 try
                 {
                     if (p.Id == me) continue;
-                    if (!p.HasExited) p.Kill(entireProcessTree: true);
+                    // The Solo launch watcher and game can be descendants of
+                    // the backend. Leave them running so play continues and
+                    // the watcher restores launch files after the game exits.
+                    if (!p.HasExited) p.Kill(entireProcessTree: false);
                 }
                 catch { /* best-effort */ }
             }

@@ -216,3 +216,25 @@ Describe 'Player blueprint imports' {
         Test-DuneRoutePrincipalAccess ([pscustomobject]@{Method='POST';Path='/api/gameplay/blueprints/import';LocalOnly=$false}) @{type='linked-player'} | Should -BeTrue
     }
 }
+Describe 'Player teleport route ownership' {
+ It 'allows the linked player teleport route while online without enabling admin bookmark routes' {
+  Mock Get-DunePlayersLive { @{ok=$true;players=@(@{id=21;controller_id=31;account_id=11;online_status='Online'})} }
+  foreach($method in @('GET','POST','DELETE')) {
+   $f=New-PlayerFixture -Method $method -Path '/api/player-portal/teleports' -Query @{account_id='11'}
+   Invoke-PlayerCheck $f @{account_id=11;action='capture';name='Home'} | Should -BeTrue
+  }
+  Get-DunePlayerRoutePolicy POST '/api/gameplay/chat-commands/teleports' | Should -BeNullOrEmpty
+ }
+ It 'rejects another account before the teleport handler can read or mutate its store' {
+  foreach($method in @('GET','POST','DELETE')) {
+   $f=New-PlayerFixture -Method $method -Path '/api/player-portal/teleports' -Query @{account_id='12'}
+   Invoke-PlayerCheck $f @{account_id=12;action='teleport';id='other'} | Should -BeFalse
+   $f.response.status | Should -Be 403
+  }
+ }
+ It 'fails closed when linked character ownership is unavailable or ambiguous' {
+  Mock Get-DunePlayersLive { @{ok=$true;players=@(@{id=21;controller_id=31;account_id=11},@{id=22;controller_id=32;account_id=11})} }
+  $f=New-PlayerFixture -Method GET -Path '/api/player-portal/teleports' -Query @{account_id='11'}
+  Invoke-PlayerCheck $f @{} | Should -BeFalse
+ }
+}

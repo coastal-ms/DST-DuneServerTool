@@ -12,6 +12,9 @@ describe('VM map resource consent',()=>{
   render(<VmMapHelperCard />)
   fireEvent.click(await screen.findByRole('button',{name:'Set up VM-hosted map'}))
   expect(window.confirm).toHaveBeenCalledWith(expect.stringContaining('250 MB'))
+  expect(window.confirm).toHaveBeenCalledWith(expect.stringContaining('500 MB'))
+  expect(window.confirm).toHaveBeenCalledWith(expect.stringContaining('existing resources'))
+  expect(window.confirm).toHaveBeenCalledWith(expect.stringContaining('automatically'))
   expect(mocks.api).toHaveBeenCalledTimes(1)
  })
  it('installs only after accepting the resource cost',async()=>{

@@ -13,6 +13,16 @@ here cover everything those tags shipped.
 
 ## [Unreleased]
 
+## [16.6.5] - 2026-10-26
+
+- Add Teleport Locations to Player Admin and the Player Portal, with shared host destinations and five private locations total per player.
+- Let players capture, replace, delete and use their private locations, with host visibility for support.
+- Name Worm 20 Vosper on live maps.
+- Show Hyper-V RAM and virtual CPU allocation in the Database VM info card.
+- Clarify the complete VM-hosted Live Map setup allowance and automatic installation.
+- Keep a running Solo game and its launch-file restoration watcher alive when closing DST.
+- Retain successful map position readings across collector restarts and prioritize fresh positions and the selected map when returning to Live Map.
+
 ## [16.6.4] - 2026-10-26
 
 - Preserve the original saved-credential Hyper-V over LAN connection and use explicit Negotiate as a fallback for hosts that need it.

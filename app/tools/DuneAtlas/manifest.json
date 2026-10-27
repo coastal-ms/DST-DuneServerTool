@@ -143,11 +143,12 @@
     "icons/dd-layout-11.webp": "085beb53ab8edf2338452db64effecaf2fa2192eb686535389d315f7c7c084ab",
     "icons/hagga-background-v1.webp": "732e148bab17becbed94e86c530552a4c9a8711f59327671450a7167b3d0f5b7",
     "build-2160922.json": "d1ea13b3416e04494c93d47450e04b91ebe7dc23e822c59299c37a7575a5e69a",
-    "index.html": "968d7e2102a88e7cf007c59500b4229700b237ca9122a415e62cf60555dcfa8e",
-    "server.py": "eaff17a05264f642bbdf9024a17f799359bbbe8f4a1869273bae89420fcd953c",
+    "index.html": "a3b2e720e46593722b641828d08a54a9733f97939f477e6dc527c9c51d1f37ea",
+    "server.py": "2057b506d354b08df35a0c900b5668924615f2a348a11a7b2d6afe86747a9706",
     "atlas_process.py": "d715a06a1884c856305133b3351043c944aea6f7b3af3920dd1980094c719f94",
     "atlas_viewers.py": "ae8b053d88174e843710e0f7702470ebb49b7f6fae0b1eff24573056ff2cf0c3",
-    "hagga/find-dynamic-encounter-pool.py": "6ffb23a60b8305f220d1113b051980a5a1b5155c799df17c69b7f3b4d3ccbc02"
+    "hagga/find-dynamic-encounter-pool.py": "6ffb23a60b8305f220d1113b051980a5a1b5155c799df17c69b7f3b4d3ccbc02",
+    "atlas_checkpoint.py": "7bc88cf70f14f12cd2700a8984281c12704c4c22a30ac05e3857b9b0d4049b7b"
   },
   "bootstrapContexts": {
     "bootstrap-context.json": "runtime-context.json",
