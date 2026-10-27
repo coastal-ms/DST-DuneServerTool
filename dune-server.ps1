@@ -21,7 +21,7 @@ param(
 # Wraps the original battlegroup.ps1 menu and adds extra tools
 # ============================================================
 
-$script:ToolVersion = "16.6.6"
+$script:ToolVersion = "16.6.7"
 
 # Cold-boot readiness budgets (seconds). A fresh battlegroup's FIRST boot can
 # take 10-30 min: k3s + funcom-operators initialize, metrics-server restarts a
@@ -458,6 +458,17 @@ foreach ($candidate in @(
 }
 if ($script:DuneHyperVLanCredLibPath) { . $script:DuneHyperVLanCredLibPath }
 
+# Use the same read-only transport selection as Settings and the backend.
+# Background shutdown jobs load this same installed helper in their own process.
+$script:DuneHyperVLibPath = $null
+foreach ($candidate in @(
+    (Join-Path $scriptDir 'server\lib\HyperV.ps1')
+    (Join-Path $scriptDir 'app\server\lib\HyperV.ps1')
+)) {
+    if (Test-Path -LiteralPath $candidate) { $script:DuneHyperVLibPath = $candidate; break }
+}
+if ($script:DuneHyperVLibPath) { . $script:DuneHyperVLibPath }
+
 $hvSplat = @{}
 if ($hvComputer) {
     $hvCredOk = $false
@@ -697,7 +708,8 @@ function Test-DuneCliVmIp {
 function Resolve-DuneCliVmIp {
     param([AllowEmptyCollection()][string[]]$Addresses)
     if (-not $PSBoundParameters.ContainsKey('Addresses')) {
-        $Addresses = @((Get-VMNetworkAdapter -VMName $vmName @hvSplat).IPAddresses)
+        $arguments = ConvertTo-DuneHyperVCimSplat -HyperV $hvSplat
+        $Addresses = @((Get-VMNetworkAdapter -VMName $vmName @arguments).IPAddresses)
     }
     $ip = $Addresses |
           Where-Object { $_ -match '^\d+\.\d+\.\d+\.\d+$' } |
@@ -726,6 +738,17 @@ function Get-DuneCliLanVmSnapshot {
         throw 'The saved Hyper-V host credential is unavailable. Check Hyper-V over LAN in Settings. The command was not sent.'
     }
     try {
+        $arguments = ConvertTo-DuneHyperVCimSplat -HyperV $HyperV
+        $vm = Get-VM -Name $Name @arguments -ErrorAction Stop
+        $addresses = if ($vm -and $vm.State -eq 'Running') {
+            @((Get-VMNetworkAdapter -VMName $Name @arguments -ErrorAction Stop).IPAddresses)
+        } else { @() }
+        return @{ Exists=[bool]$vm; State=$(if($vm){[string]$vm.State}else{'Missing'}); IPAddresses=$addresses }
+    } catch {
+        $credentialedError = $_.Exception.Message
+    }
+    # Retain the older read-only discovery fallbacks for hosts using them.
+    try {
         $option = New-PSSessionOption -OpenTimeout 8000 -OperationTimeout 8000
         return Invoke-Command -ComputerName $HyperV.ComputerName -Credential $HyperV.Credential -SessionOption $option -ArgumentList $Name -ScriptBlock {
             param($name)
@@ -745,7 +768,7 @@ function Get-DuneCliLanVmSnapshot {
             $addresses = if ($vm.State -eq 'Running') { @((Get-VMNetworkAdapter -VMName $Name -CimSession $session -ErrorAction Stop).IPAddresses) } else { @() }
             return @{ Exists=[bool]$vm; State=[string]$vm.State; IPAddresses=$addresses }
         } catch {
-            throw "Could not discover the VM on the Hyper-V host. PowerShell connection: $remoteError. Hyper-V query: $($_.Exception.Message). The command was not sent."
+            throw "Could not discover the VM on the Hyper-V host. Saved-credential connection: $credentialedError. PowerShell connection: $remoteError. Hyper-V query: $($_.Exception.Message). The command was not sent."
         } finally {
             if ($session) { Remove-CimSession -CimSession $session -ErrorAction SilentlyContinue }
         }
@@ -791,39 +814,46 @@ function Stop-VmWithEscalation {
     # Hyper-V host (empty for local) and the credential lib path in, and rebuild
     # the splat (including -Credential for a LAN host) inside the job.
     $jobs += Start-Job -ScriptBlock {
-        param($n, $cn, $credLibPath)
+        param($n, $cn, $credLibPath, $transportLibPath)
         $sp = @{}
         if ($cn) {
-            $sp = @{ ComputerName = $cn }
-            if ($credLibPath -and (Test-Path -LiteralPath $credLibPath)) {
-                . $credLibPath
-                $c = Get-DuneHyperVLanCredential -HostIp $cn
-                if ($c.ok -and $c.exists -and $c.matchesHost) { $sp['Credential'] = $c.credential }
-            }
+            if (-not $credLibPath -or -not $transportLibPath) { throw 'Hyper-V helper is missing. Reinstall DST.' }
+            . $credLibPath
+            . $transportLibPath
+            $c = Get-DuneHyperVLanCredential -HostIp $cn
+            if (-not $c.ok -or -not $c.exists -or -not $c.matchesHost) { throw 'The saved Hyper-V host credential is unavailable.' }
+            $sp = ConvertTo-DuneHyperVCimSplat -HyperV @{ComputerName=$cn;Credential=$c.credential}
         }
-        Stop-VM -Name $n -Force -ErrorAction SilentlyContinue @sp
-    } -ArgumentList $Name, $hvComputer, $script:DuneHyperVLanCredLibPath
+        Stop-VM -Name $n -Force -ErrorAction Stop @sp
+    } -ArgumentList $Name, $hvComputer, $script:DuneHyperVLanCredLibPath, $script:DuneHyperVLibPath
     $escalated = $false
     try {
         while ($true) {
-            $vm = Get-VM -Name $Name @hvSplat -ErrorAction SilentlyContinue
+            foreach ($job in $jobs) {
+                if ($job.State -eq 'Failed') {
+                    $reason = ($job.ChildJobs | ForEach-Object { $_.JobStateInfo.Reason.Message }) -join '; '
+                    throw "VM shutdown command failed: $reason DST did not retry the power action."
+                }
+            }
+            $arguments = ConvertTo-DuneHyperVCimSplat -HyperV $hvSplat
+            $vm = Get-VM -Name $Name @arguments -ErrorAction Stop
             if (-not $vm -or $vm.State -eq 'Off') { break }
             $elapsed = [int]((Get-Date) - $start).TotalSeconds
             if (-not $GracefulOnly -and -not $escalated -and $elapsed -ge $GracefulSec) {
                 Complete-WaitCounter -Message "Graceful shutdown still running after $(Format-Duration $elapsed) (state: $($vm.State)) - escalating to hard power-off." -Color Yellow
                 $jobs += Start-Job -ScriptBlock {
-                    param($n, $cn, $credLibPath)
+                    param($n, $cn, $credLibPath, $transportLibPath)
                     $sp = @{}
                     if ($cn) {
-                        $sp = @{ ComputerName = $cn }
-                        if ($credLibPath -and (Test-Path -LiteralPath $credLibPath)) {
-                            . $credLibPath
-                            $c = Get-DuneHyperVLanCredential -HostIp $cn
-                            if ($c.ok -and $c.exists -and $c.matchesHost) { $sp['Credential'] = $c.credential }
-                        }
+                        if (-not $credLibPath -or -not $transportLibPath) { throw 'Hyper-V helper is missing. Reinstall DST.' }
+                        . $credLibPath
+                        . $transportLibPath
+                        $c = Get-DuneHyperVLanCredential -HostIp $cn
+                        if (-not $c.ok -or -not $c.exists -or -not $c.matchesHost) { throw 'The saved Hyper-V host credential is unavailable.' }
+                        $sp = ConvertTo-DuneHyperVCimSplat -HyperV @{ComputerName=$cn;Credential=$c.credential}
                     }
-                    Stop-VM -Name $n -TurnOff -Force -ErrorAction SilentlyContinue @sp
-                } -ArgumentList $Name, $hvComputer, $script:DuneHyperVLanCredLibPath
+                    Stop-VM -Name $n -TurnOff -Force -ErrorAction Stop @sp
+                } -ArgumentList $Name, $hvComputer, $script:DuneHyperVLanCredLibPath, $script:DuneHyperVLibPath
                 $escalated = $true
             }
             if ($elapsed -ge $TotalSec) {
@@ -1886,8 +1916,9 @@ while ($true) {
 
     if ($cmdName -eq "start-vm") {
         Write-Host "Starting VM '$vmName'..." -ForegroundColor Cyan
-        Start-VM -Name $vmName @hvSplat | Out-Null
-        do { Start-Sleep -Seconds 2; $vm = Get-VM -Name $vmName @hvSplat } while ($vm.State -ne 'Running')
+        $arguments = ConvertTo-DuneHyperVCimSplat -HyperV $hvSplat
+        Start-VM -Name $vmName @arguments -ErrorAction Stop | Out-Null
+        do { Start-Sleep -Seconds 2; $vm = Get-VM -Name $vmName @arguments -ErrorAction Stop } while ($vm.State -ne 'Running')
         Write-Host "VM started." -ForegroundColor Green
 
         $ip = $null; $timeout = 120; $elapsed = 0; $dots = 0
@@ -1904,7 +1935,8 @@ while ($true) {
     }
 
     if ($cmdName -eq "stop-vm") {
-        $vmNow = Get-VM -Name $vmName @hvSplat -ErrorAction SilentlyContinue
+        $arguments = ConvertTo-DuneHyperVCimSplat -HyperV $hvSplat
+        $vmNow = Get-VM -Name $vmName @arguments -ErrorAction Stop
         if (-not $vmNow) {
             Write-Warning "VM '$vmName' not found - nothing to stop."
             continue
@@ -1951,8 +1983,9 @@ while ($true) {
             $estVm = Format-PhaseEstimate 'vm-start'
             if ($estVm) { Write-Host "  $estVm" -ForegroundColor DarkGray }
             $t_vm = Get-Date
-            Start-VM -Name $vmName @hvSplat | Out-Null
-            do { Start-Sleep -Seconds 2; $vm = Get-VM -Name $vmName @hvSplat } while ($vm.State -ne 'Running')
+            $arguments = ConvertTo-DuneHyperVCimSplat -HyperV $hvSplat
+            Start-VM -Name $vmName @arguments -ErrorAction Stop | Out-Null
+            do { Start-Sleep -Seconds 2; $vm = Get-VM -Name $vmName @arguments -ErrorAction Stop } while ($vm.State -ne 'Running')
             Save-PhaseTiming 'vm-start' ([int]((Get-Date) - $t_vm).TotalSeconds)
             $estIp = Format-PhaseEstimate 'vm-ip'
             $ipHint = if ($estIp) { " $estIp" } else { "" }
@@ -2295,8 +2328,9 @@ while ($true) {
             continue
         }
         $t_vm = Get-Date
-        Start-VM -Name $vmName @hvSplat | Out-Null
-        do { Start-Sleep -Seconds 2; $vm = Get-VM -Name $vmName @hvSplat } while ($vm.State -ne 'Running')
+        $arguments = ConvertTo-DuneHyperVCimSplat -HyperV $hvSplat
+        Start-VM -Name $vmName @arguments -ErrorAction Stop | Out-Null
+        do { Start-Sleep -Seconds 2; $vm = Get-VM -Name $vmName @arguments -ErrorAction Stop } while ($vm.State -ne 'Running')
         Save-PhaseTiming 'vm-start' ([int]((Get-Date) - $t_vm).TotalSeconds)
         $estIp = Format-PhaseEstimate 'vm-ip'
         $ipHint = if ($estIp) { " $estIp" } else { "" }

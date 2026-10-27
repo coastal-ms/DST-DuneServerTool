@@ -13,6 +13,10 @@ here cover everything those tags shipped.
 
 ## [Unreleased]
 
+## [16.6.7] - 2026-10-27
+
+- Restore Commands discovery and VM controls for Hyper-V over LAN connections that already work in Settings.
+
 ## [16.6.6] - 2026-10-27
 
 - Restore Browser Portal password changes and account actions when an outdated remote bridge is still running.
