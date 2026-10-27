@@ -54,7 +54,11 @@ function Test-DuneBridgeHealth {
     param([int]$TimeoutSec = 4)
     try {
         $h = Invoke-RestMethod -Uri "http://127.0.0.1:$script:DuneMobileBridgePort/_dst/health" -TimeoutSec $TimeoutSec -ErrorAction Stop
-        return [bool]$h.ok
+        # An old daemon can answer health while omitting the trusted origin
+        # headers required by account password changes and other session writes.
+        # Do not leave that daemon running merely because the port is alive.
+        return ([bool]$h.ok -and [string]$h.protocolVersion -eq '2' -and
+            [version]([string]$h.bridgeVersion) -ge [version]'2.0.1')
     } catch {
         return $false
     }
@@ -156,19 +160,17 @@ function Invoke-DuneBridgeRepair {
     return @{ ok = $true; status = (Get-DuneBridgeStatus -Request $Request) }
 }
 
-# Startup auto-heal. Best-effort and non-blocking: only acts when something is
-# actually missing (task or listener), and never throws into the startup path.
+# Startup auto-heal. Best-effort and non-blocking: repairs a missing, unresponsive
+# or incompatible bridge, and never throws into the startup path.
 # Repairs in the background so it doesn't delay the app window. No admin needed
 # (loopback bind, user-level scheduled task).
 function Initialize-DuneMobileBridge {
     param([string]$ServerDir)
     try {
         if (Test-DuneBridgeHealth -TimeoutSec 1) { return }
-        $st = Get-DuneBridgeStatus
-        if ($st.task -and $st.listening) { return }  # already healthy
         [void](Invoke-DuneBridgeRepair -NoWait)
         if (Get-Command Write-DuneLog -ErrorAction SilentlyContinue) {
-            Write-DuneLog "MobileBridge: auto-heal triggered (task=$($st.task) listening=$($st.listening))."
+            Write-DuneLog "MobileBridge: repair requested for a missing, unresponsive or outdated bridge."
         }
     } catch {}
 }
