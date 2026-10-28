@@ -13,6 +13,11 @@ here cover everything those tags shipped.
 
 ## [Unreleased]
 
+## [16.6.8] - 2026-10-28
+
+- Allow Solo blueprint import to accept base layouts downloaded from the self-hosted Live Map.
+- Restore self-hosted Tank support after the Dune: Awakening 1.5.15.3 update.
+
 ## [16.6.7] - 2026-10-27
 
 - Restore Commands discovery and VM controls for Hyper-V over LAN connections that already work in Settings.
