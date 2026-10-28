@@ -82,6 +82,17 @@ Describe 'Regis Tank activation and rollback' {
         (Set-DuneRegisTankCompatibility -Ip test -Enabled $false -AcknowledgeStoredTanks).enabled | Should -BeFalse
         $script:Image | Should -Be 'registry.funcom.com/funcom/self-hosting/seabass-server:2156652-0-shipping'
     }
+    It 'restores the latest official image from its saved rollback record' {
+        $script:Image='localhost/dst-regis-tanks:2168446-1'
+        Mock Invoke-DuneRegisTankShell {
+            if ($Script.StartsWith('if [ -f')) { return '{"namespace":"test-bg","battlegroup":"test-world","originalImage":"registry.funcom.com/funcom/self-hosting/seabass-server:2168446-0-shipping"}' }
+            if ($Script -like '*--patch-file*') { $script:Image='registry.funcom.com/funcom/self-hosting/seabass-server:2168446-0-shipping' }
+            ''
+        }
+        (Set-DuneRegisTankCompatibility -Ip test -Enabled $false -AcknowledgeStoredTanks).enabled | Should -BeFalse
+        $script:Image | Should -Be 'registry.funcom.com/funcom/self-hosting/seabass-server:2168446-0-shipping'
+        Should -Invoke New-DuneRegisTankServerImage -Times 0
+    }
     It 'keeps official servers opted out and preserves explicitly enabled support at startup' {
         (Initialize-DuneRegisTanksForStartup -Ip test).enabled | Should -BeFalse
         $script:Annotations['dst.duneservertool.com/tank-opt-in']='v1'
@@ -106,7 +117,7 @@ Describe 'Regis Tank activation and rollback' {
 Describe 'Tank images follow official server upgrades' {
     BeforeEach {
         $script:Image='localhost/dst-regis-tanks:2147284-1'
-        $script:Official='registry.funcom.com/funcom/self-hosting/seabass-server:2162777-0-shipping'
+        $script:Official='registry.funcom.com/funcom/self-hosting/seabass-server:2168446-0-shipping'
         $script:CapturedPatch=$null
         Mock New-DuneRegisTankServerImage { @{verified=$true;tag=('localhost/dst-regis-tanks:'+$Build+'-1')} }
         Mock Get-V6Battlegroup { @{Ns='test-bg';Name='test-world';Bg=@{metadata=@{resourceVersion='17';annotations=@{'dst.duneservertool.com/tank-opt-in'='v1'}};spec=@{stop=$true;serverGroup=@{template=@{spec=@{sets=@(@{map='Survival_1';image=$script:Image},@{map='Overmap';image=$script:Official})}}}}}} }
@@ -154,7 +165,7 @@ Describe 'Tank images follow official server upgrades' {
 Describe 'Server update completion with optional Tank images' {
     BeforeEach {
         $script:Image='localhost/dst-regis-tanks:2156652-1'
-        $script:Official='registry.funcom.com/funcom/self-hosting/seabass-server:2162777-0-shipping'
+        $script:Official='registry.funcom.com/funcom/self-hosting/seabass-server:2168446-0-shipping'
         $script:Stopped=$false; $script:Pods=3; $script:Revision='17'; $script:Actions=@(); $script:CapturedPatch=$null
         Mock New-DuneRegisTankServerImage { @{verified=$true;tag=('localhost/dst-regis-tanks:'+$Build+'-1')} }
         Mock Get-V6Battlegroup { @{Ns='test-bg';Name='test-world';Bg=@{metadata=@{resourceVersion=$script:Revision;annotations=@{'dst.duneservertool.com/tank-opt-in'='v1'}};spec=@{stop=$script:Stopped;serverGroup=@{template=@{spec=@{sets=@(@{map='Survival_1';image=$script:Image},@{map='Overmap';image=$script:Official})}}}}}} }
@@ -172,7 +183,7 @@ Describe 'Server update completion with optional Tank images' {
             }
             ''
         }
-        $script:Completed=@('Finished updating battlegroup to version 2162777-0-shipping',
+        $script:Completed=@('Finished updating battlegroup to version 2168446-0-shipping',
             'ln: /home/dune/.dune/bin/battlegroup: File exists', 'ln: /home/dune/.dune/bin/bg-util: File exists')
     }
     It 'finishes the observed applied update despite existing-link exit failure and restarts every map' {
@@ -205,7 +216,7 @@ Describe 'Server update completion with optional Tank images' {
     }
     It 'does not convert an arbitrary updater error into success' -ForEach @(
         @{Output=@('Steam download failed')},
-        @{Output=@('Finished updating battlegroup to version 2162777-0-shipping','Image import failed')},
+        @{Output=@('Finished updating battlegroup to version 2168446-0-shipping','Image import failed')},
         @{Output=@('Finished updating battlegroup to version 2156652-0-shipping','ln: /home/dune/.dune/bin/bg-util: File exists')},
         @{Output=@('ln: /home/dune/.dune/bin/bg-util: File exists')}
     ) {
@@ -230,7 +241,7 @@ Describe 'Server update completion with optional Tank images' {
 
 Describe 'Unsupported future Tank updates preserve data' {
     It 'does not silently fall back to an unmodified server for opted-in users' {
-        Mock Get-V6Battlegroup { @{Ns='test-bg';Name='test-world';Bg=@{spec=@{serverGroup=@{template=@{spec=@{sets=@(@{map='Survival_1';image='localhost/dst-regis-tanks:2162777-1'},@{map='Overmap';image='registry.funcom.com/funcom/self-hosting/seabass-server:9999999-0-shipping'})}}}}}} }
+        Mock Get-V6Battlegroup { @{Ns='test-bg';Name='test-world';Bg=@{spec=@{serverGroup=@{template=@{spec=@{sets=@(@{map='Survival_1';image='localhost/dst-regis-tanks:2168446-1'},@{map='Overmap';image='registry.funcom.com/funcom/self-hosting/seabass-server:9999999-0-shipping'})}}}}}} }
         Mock Invoke-DuneRegisTankShell { throw 'Must not alter the running server' }
         Mock New-DuneRegisTankServerImage { throw 'Must not prepare an unverified build' }
         { Complete-DuneRegisTankServerUpdate -Ip test -UpdateExitCode 0 } | Should -Throw '*Existing Tank data has not been changed*'

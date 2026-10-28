@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { Icon } from '../components/Icon'
 import { RESPAWN_SETTING_GUIDANCE } from '../util/respawnSettingGuidance'
+import { parseBlueprintFile } from '../util/blueprintFile'
 import { PageHeader } from '../components/PageHeader'
 import { CollapsibleCard } from '../components/CollapsibleCard'
 import { ItemPicker } from '../components/ItemPicker'
@@ -1026,7 +1027,7 @@ export function SoloMode() {
       return
     }
     try {
-      const parsed = JSON.parse(await file.text()) as Partial<BlueprintFile>
+      const parsed = parseBlueprintFile(await file.text())
       const instances = Array.isArray(parsed.instances) ? parsed.instances : null
       const placeables = Array.isArray(parsed.placeables) ? parsed.placeables : null
       const pentashields = Array.isArray(parsed.pentashields) ? parsed.pentashields : []
@@ -2254,7 +2255,7 @@ export function SoloMode() {
                 <Icon name="ExternalLink" size={15} /> Blueprint Designer
               </a>
               <p className="text-xs text-text-muted mb-4">
-                Import a portable DST blueprint into the connected Retail Solo save. DST retains the current save and verifies the result.
+                Import a DST blueprint or downloaded Live Map base layout into the connected Retail Solo save. DST retains the current save and verifies the result.
               </p>
               <label className="block text-[11px] uppercase tracking-wider text-text-dim mb-1">
                 Blueprint file (.json)
@@ -2282,7 +2283,7 @@ export function SoloMode() {
                 </div>
               )}
               <div className="rounded border border-warning/30 bg-warning/5 p-3 mt-4 text-xs text-text-muted">
-                Close Dune: Awakening fully before importing. Use blueprints exported from the released Retail Solo format.
+                Close Dune: Awakening fully before importing. Choose a DST blueprint or a downloaded Live Map base layout.
               </div>
               <button
                 className={`btn-primary w-full mt-4 justify-center ${SOLO_DISABLED_PRIMARY_CLASS}`}
