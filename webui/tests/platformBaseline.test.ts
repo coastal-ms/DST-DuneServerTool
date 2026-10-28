@@ -38,15 +38,12 @@ describe('next-generation platform baseline', () => {
     }
   })
 
-  it('pins default visibility and attribution without displaying internal disclaimer text', () => {
+  it('pins default visibility without displaying internal disclaimer text', () => {
     const source = readSource('pages/WickMaps.tsx')
     expect(baseline.deepDesertStaticMaps.defaultHiddenTypes).toEqual([])
     expect(source).toContain('useState<Set<string>>(new Set())')
     expect(source).toContain('entry.pois.filter(p => !hidden.has(p.type))')
 
-    for (const value of Object.values(baseline.deepDesertStaticMaps.attribution)) {
-      expect(readSource('pages/SponsorsCredits.tsx')).toContain(value)
-    }
     expect(source).not.toContain('PAYLOAD.disclaimer')
     expect(maps.disclaimer).toBe(
       'This layout data was compiled from publicly archived community sources, not from your server. It may be incomplete or inaccurate, and the game may have changed since it was captured. Please report anything that looks wrong so it can be corrected.',

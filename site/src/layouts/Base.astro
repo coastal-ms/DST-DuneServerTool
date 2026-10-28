@@ -8,15 +8,11 @@ const { title, description, ogImage } = Astro.props as {
 };
 const base = import.meta.env.BASE_URL;
 const nav = [
-  { href: "", label: "Home" },
   { href: "features", label: "Features" },
-  { href: "market", label: "Market" },
   { href: "install", label: "Install" },
-  { href: "testing", label: "Latest Releases" },
   { href: "remote", label: "Remote" },
-  { href: "changelog", label: "Changelog" },
+  { href: "testing", label: "Releases" },
   { href: "community", label: "Community" },
-  { href: "about", label: "About" },
 ];
 const url = new URL(Astro.url.pathname, Astro.site);
 const ogDesc =
@@ -53,10 +49,10 @@ const ogImg = new URL(ogImage ?? `${base}og.png`, Astro.site).toString();
   <body class="min-h-screen flex flex-col text-dune-text">
     <a href="#main-content" class="skip-link">Skip to content</a>
     <header
-      class="sticky top-0 z-20 bg-dune-bg border-b border-dune-border"
+      class="site-header"
     >
       <div
-        class="site-width py-3 flex flex-col xl:flex-row items-start xl:items-center justify-between gap-2 xl:gap-6"
+        class="site-width site-header-inner"
       >
         <a
           href={base}
@@ -64,7 +60,8 @@ const ogImg = new URL(ogImage ?? `${base}og.png`, Astro.site).toString();
         >
           DST — Dune Server Tool
         </a>
-        <nav aria-label="Main navigation" class="min-w-0 w-full xl:w-auto flex-1 flex items-center gap-5 text-sm overflow-x-auto whitespace-nowrap py-1">
+        <button class="site-menu-toggle" type="button" aria-expanded="false" aria-controls="site-navigation">Menu <span aria-hidden="true">☰</span></button>
+        <nav id="site-navigation" aria-label="Main navigation" class="site-navigation">
           {
             nav.map((item) => {
               const href = item.href ? `${base}${item.href}` : base;
@@ -90,12 +87,6 @@ const ogImg = new URL(ogImage ?? `${base}og.png`, Astro.site).toString();
             rel="noopener"
             target="_blank">GitHub</a
           >
-          <a
-            href="https://github.com/coastal-ms/DST-DuneServerTool/issues/new?template=bug_report.yml"
-            class="text-dune-muted hover:text-dune-text transition-colors"
-            rel="noopener"
-            target="_blank">Report Issue</a
-          >
         </nav>
       </div>
     </header>
@@ -118,6 +109,9 @@ const ogImg = new URL(ogImage ?? `${base}og.png`, Astro.site).toString();
             rel="noopener">Apache 2.0</a
           > license.
         </div>
+        <nav aria-label="More about DST" class="footer-links">
+          <a href={`${base}about`}>About</a><a href={`${base}market`}>Market Bot</a><a href={`${base}changelog`}>Release notes</a><a href="https://github.com/coastal-ms/DST-DuneServerTool/issues/new?template=bug_report.yml">Report an issue</a>
+        </nav>
         <div class="font-mono text-xs">
           by Coastal ·
           <a
@@ -134,9 +128,18 @@ const ogImg = new URL(ogImage ?? `${base}og.png`, Astro.site).toString();
               target="_blank">Webmail</a
             >
         </div>
-        <p class="site-width pb-8 text-xs leading-relaxed">Independent community software. Not affiliated with or endorsed by Funcom or the Dune rights holders.</p>
       </div>
+      <p class="site-width pb-8 text-xs leading-relaxed">Independent community software. Not affiliated with or endorsed by Funcom or the Dune rights holders.</p>
     </footer>
     <Lightbox />
+    <script>
+      document.documentElement.classList.add('site-nav-ready');
+      const toggle = document.querySelector<HTMLButtonElement>('.site-menu-toggle');
+      const nav = document.querySelector<HTMLElement>('#site-navigation');
+      function closeMenu() { toggle?.setAttribute('aria-expanded', 'false'); nav?.classList.remove('is-open'); }
+      toggle?.addEventListener('click', () => { const open = toggle.getAttribute('aria-expanded') !== 'true'; toggle.setAttribute('aria-expanded', String(open)); nav?.classList.toggle('is-open', open); });
+      document.addEventListener('keydown', event => { if (event.key === 'Escape' && toggle?.getAttribute('aria-expanded') === 'true') { closeMenu(); toggle.focus(); } });
+      nav?.addEventListener('click', event => { if ((event.target as Element).closest('a')) closeMenu(); });
+    </script>
   </body>
 </html>

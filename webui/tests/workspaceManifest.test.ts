@@ -130,7 +130,20 @@ describe('workspace manifest', () => {
     expect(localItems.filter(item => item.label === 'DD Atlas')).toHaveLength(1)
     expect(localItems.some(item => ['Map', 'Players', 'Bases', 'Vehicles', 'Economy'].includes(item.label))).toBe(false)
     expect(new Set(localItems.map(item => item.to)).size).toBe(localItems.length)
-    expect(localItems.length).toBeLessThanOrEqual(15)
+    expect(localItems.length).toBeLessThanOrEqual(17)
+  })
+
+  it('highlights task shortcuts without also highlighting their parent workspace', () => {
+    for (const [label, parent, pathname, search] of [
+      ['Server updates', 'Commands', '/commands', 'task=updates'],
+      ['Backups', 'Database', '/database', 'section=database.maint.Take+Backup'],
+      ['Backups', 'Database', '/database', 'section=database.backupSchedule'],
+    ]) {
+      expect(isNavItemActive(NAV_ITEMS.find(item => item.label === label)!, pathname, search)).toBe(true)
+      expect(isNavItemActive(NAV_ITEMS.find(item => item.label === parent)!, pathname, search)).toBe(false)
+    }
+    const adminItems = getVisibleNavItems({ local: false, windows: false, canAccessOwnerSurfaces: false })
+    expect(adminItems.some(item => ['Backups', 'Server updates'].includes(item.label))).toBe(false)
   })
 
   it('highlights DD Atlas instead of Gameplay Admin on the static atlas view', () => {

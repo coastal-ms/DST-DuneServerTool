@@ -13,6 +13,12 @@ here cover everything those tags shipped.
 
 ## [Unreleased]
 
+## [16.6.9] - 2026-10-28
+
+- Make everyday server tasks easier to find with searchable Operations, direct Backups and Server updates shortcuts, and focused navigation to backup controls.
+- Refresh the website with clearer Self-Hosted and Solo setup paths, an interface tour, and mobile navigation.
+- Framework Adjustments.
+
 ## [16.6.8] - 2026-10-28
 
 - Allow Solo blueprint import to accept base layouts downloaded from the self-hosted Live Map.

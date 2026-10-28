@@ -23,7 +23,7 @@ import { CSS } from '@dnd-kit/utilities'
 import { PageHeader } from '../components/PageHeader'
 import { Icon } from '../components/Icon'
 import { CommandCategoryPages } from './commands/CommandCategoryPages'
-import { getCommandCategory, type CommandCategory } from './commands/categories'
+import { COMMAND_CATEGORIES, getCommandCategory, type CommandCategory } from './commands/categories'
 import { useCommandDeck } from '../hooks/useCommandDeck'
 import { useStatus } from '../hooks/useStatus'
 import { useApi } from '../hooks/useApi'
@@ -33,7 +33,7 @@ import { isLocalViewer } from '../util/viewer'
 import type { Command, CommandsResponse } from '../api/types'
 import { usePortalAuth } from '../auth/PortalAuthGate'
 import { canAccessCommand } from '../auth/commandAccess'
-import { useNavigate } from '../router'
+import { Link, useNavigate, useSearch } from '../router'
 import { getVisibleCommandPageLinks, type CommandPageLink } from '../util/commandPageLinks'
 
 type LaunchResult = {
@@ -358,8 +358,16 @@ function SectionTitle({
 export function Commands() {
   const navigate = useNavigate()
   const commandDeck = useCommandDeck()
+  const search = useSearch()
+  const requestedTask = new URLSearchParams(search).get('task')
+  const updatesOnly = requestedTask === 'updates'
+  const categoryParam = new URLSearchParams(search).get('category')
+  const requestedCategory = categoryParam === 'all' || COMMAND_CATEGORIES.some(category => category.id === categoryParam) ? categoryParam : null
   const [editingLayout, setEditingLayout] = useState(false)
   const [commandCategory, setCommandCategory] = useState('battlegroup')
+  useEffect(() => {
+    if (requestedCategory) setCommandCategory(requestedCategory)
+  }, [requestedCategory])
   const portalAuth = usePortalAuth()
   const portalRole = portalAuth?.status.account?.role ?? null
   const { forceRefresh } = useStatus()
@@ -593,7 +601,7 @@ export function Commands() {
   // reset — is disabled so a remote user can't rearrange the host's layout.
   const readOnly = !isLocalViewer()
   const pageLinks = getVisibleCommandPageLinks(!readOnly)
-  const showWorkbench = commandDeck && (readOnly || !editingLayout)
+  const showWorkbench = updatesOnly || Boolean(requestedCategory) || (commandDeck && (readOnly || !editingLayout))
   const tasks = SECTION_INDICES.flatMap<CommandTask>(idx => [
     ...grouped[idx].map((command): CommandTask => ({
       kind: 'command',
@@ -616,13 +624,14 @@ export function Commands() {
   return (
     <>
       <PageHeader
-        title="Commands"
+        title={updatesOnly ? 'Server updates' : 'Commands'}
         icon="Zap"
-        description={showWorkbench
+        description={updatesOnly ? 'Update the Funcom game server. Review the requirements before running an update.' : showWorkbench
           ? 'Choose a category to see related controls together. Review requirements before running a command.'
           : 'Quick actions for the VM, battlegroup, and supporting tools. Click a section title to rename it. Drag the grip on any card to reorder within a section or move it to another — sections grow and shrink as you go.'}
         actions={
           <div className={commandDeck ? 'flex flex-wrap items-center gap-2' : 'flex items-center gap-2'}>
+            {(updatesOnly || requestedCategory) && <Link to="/commands" className="btn-secondary">All commands</Link>}
             {savingLayout && (
               <span className="text-xs text-text-dim flex items-center gap-1">
                 <Icon name="Loader2" size={12} className="animate-spin" /> Saving layout…
@@ -682,8 +691,8 @@ export function Commands() {
       {showWorkbench ? (
         <>
           <CommandCategoryPages
-            tasks={tasks}
-            category={commandCategory}
+            tasks={updatesOnly ? tasks.filter(task => task.kind === 'command' && ['update', 'update-with-tanks'].includes(task.command.name)) : tasks}
+            category={updatesOnly ? 'battlegroup' : commandCategory}
             onCategory={setCommandCategory}
             busy={running.size > 0}
             renderTask={task => task.kind === 'command' ? (

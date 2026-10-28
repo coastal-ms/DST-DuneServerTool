@@ -27,7 +27,8 @@ assert.ok(homepage.includes('<DownloadButton destination="releases" />'));
 assert.doesNotMatch(homepage, /releases\/tag\/v|releases\/download\/v/);
 assert.ok(installPage.includes("<DownloadButton />"));
 
-assert.match(baseLayout, /\{ href: "testing", label: "Latest Releases" \}/);
+assert.match(baseLayout, /\{ href: "testing", label: "Releases" \}/);
+assert.ok(baseLayout.includes('<a href={`${base}changelog`}>Release notes</a>'));
 assert.match(releasesPage, /title="Latest Releases — DST"/);
 
 console.log("Release navigation checks passed.");

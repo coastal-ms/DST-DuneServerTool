@@ -6,6 +6,13 @@ import Screenshot from "../components/Screenshot.astro";
 const base = import.meta.env.BASE_URL;
 const sections = [
   {
+    id: "operations", title: "Your next task, within reach", img: "operations.png",
+    location: "Server Management → Operations",
+    body: "Search everyday server tasks and go straight to server controls, Backups, Server updates, Live Map, and maintenance tools. Owner and local-only controls follow the same access permissions as their full pages.",
+    alt: "Current Operations workspace with searchable tasks and direct Backups and Server updates shortcuts",
+    caption: "Current interface preview with no server connected. Task links open the existing guarded controls.",
+  },
+  {
     id: "command-deck", title: "Command Deck", img: "command-deck.png",
     location: "Opt in with Try Command Deck",
     body: "An optional World/dashboard view and focused workspaces put the next task within reach. The persistent bottom dock includes the static DD Atlas, Solo Mode, Players, Bases, Economy, Commands, and Database. Find a tool searches the wider collection. Classic remains the default, and the Classic control takes you back.",
@@ -13,10 +20,10 @@ const sections = [
     caption: "Offline World view. The globe organizes navigation and reported status; it is not live game geography.",
   },
   {
-    id: "health", title: "Classic, still at home", img: "server-health.png", height: 960,
+    id: "health", title: "Classic, still at home", img: "server-health.png",
     location: "Classic → Server Overview",
     body: "Keep the familiar sidebar and Server Health dashboard. When connected, inspect VM, battlegroup, database, gateway, game pods, public ports, and restart information. Raw output and log exports help distinguish missing information from a healthy server.",
-    alt: "v15 Classic Server Health dashboard with the updated sidebar and Try Command Deck control, showing a not-configured VM",
+    alt: "Current Classic Server Health dashboard showing a not-configured VM",
     caption: "Classic's default layout with no server connected. This is not a running-server status report.",
   },
   {
@@ -30,7 +37,7 @@ const sections = [
     id: "gameplay", title: "People, not database rows", img: "gameplay-admin.png",
     location: "Players → Player admin",
     body: "Find a character and open Manage Player for focused administration: inventory, currency, progression, identity, and supported gameplay actions. Availability and offline checks remain authoritative. Teleport tracing records diagnostic evidence; it does not guarantee that the game executes a teleport.",
-    alt: "v15 Players workspace with the shipped sample-character directory, faction summary, and explicit demo-data notice",
+    alt: "Current Players workspace with the shipped sample-character directory, faction summary, and explicit demo-data notice",
     caption: "DST's built-in fictional sample roster. No real player or account data is shown.",
   },
   {
@@ -41,18 +48,18 @@ const sections = [
     caption: "Empty offline catalogue. No player buildings, imported designs, or successful writes are simulated.",
   },
   {
-    id: "solo", title: "Your save. Your pace.", img: "solo-v16-overview.png", height: 1393,
+    id: "solo", title: "Your save. Your pace.", img: "solo-overview.png",
     location: "Solo Mode · host-local",
     body: "Choose Solo only in the v16 installer to open local save tools directly, without server setup, VM discovery, port checks, or server background jobs. Self-Hosted + Solo includes the same Solo tools. Manage a supported Retail Solo save with validation, retained backups, settings, inventory, currencies, specialization levels, and Journey unlocks. Older or custom save formats may not be compatible. Save mutations require the game to be closed.",
-    alt: "DST v16 Solo overview with a validated Retail save and the game closed",
-    caption: "v16.0.1 Solo overview from a member-provided screenshot. Shared by Hawk; displayed save status is from that capture.",
+    alt: "Current Solo overview with a fictional example save",
+    caption: "Current Solo interface with a fictional example save. No real save or account data is shown or edited.",
   },
   {
     id: "gameconfig", title: "Deliberate configuration", img: "game-config.png",
-    location: "Server Controls → Game Config",
-    body: "Edit UserGame.ini and UserEngine.ini with typed controls, restore points, and isolated managed blocks. Client Engine.ini management is a separate opt-in. Proven controls stay in Game Config; recovered, unconfirmed controls belong in Experimental Lab.",
-    alt: "Game Config's backup guidance, server-name area, and separate opt-in for local client Engine.ini management",
-    caption: "Offline safety and connection view. Live INI values are not loaded.",
+    location: "Server Controls → Server Settings",
+    body: "Review official server controls, advanced INI settings, gameplay compatibility, and recovery tools in one place. Review changes before applying them. Client Engine.ini management is a separate opt-in, and recovered, unconfirmed controls belong in Experimental Lab.",
+    alt: "Current Server Settings workspace with official and advanced server controls",
+    caption: "Current Server Settings while disconnected. Live configuration values are not loaded.",
   },
   {
     id: "commands", title: "The right controls, together", img: "commands.png",
@@ -72,8 +79,8 @@ const sections = [
     id: "settings", title: "Keep control of access", img: "settings.png",
     location: "System → Settings",
     body: "Choose appearance, updates, host configuration, and remote access in one place. Browser Portal with Tailscale Funnel is the recommended remote path. Legacy Cloudflare configuration is retained but its portal is disabled by default until explicitly re-enabled in local Settings.",
-    alt: "v15 Settings with appearance controls and a disabled, deprecated Legacy Cloudflare custom-domain section",
-    caption: "Unconfigured local settings. No host paths, account credentials, remote URLs, or QR codes are exposed.",
+    alt: "Current Settings workspace focused on appearance and theme choices",
+    caption: "Current appearance controls. No host paths, account credentials, remote URLs, or QR codes are exposed.",
   },
 ];
 ---
@@ -81,7 +88,7 @@ const sections = [
 <Base title="Explore v16 — DST" description="Tour DST v16: dedicated Solo-only installation, local save tools, Self-Hosted administration, Command Deck, and Browser Portal.">
   <PageHeader title="A field guide to your control room." intro="The same DST tools, a clearer view of the work. Classic remains the default; opt into Command Deck when you want the World view and focused workspaces." />
   <section class="site-width pb-16">
-    <p class="surface-note !mt-0 !border-t-0 !pt-0">Solo screenshots show v16.0.1 shared by Hawk. Other screenshots show v15 in offline, built-in demo, or static states. Select an image to inspect it.</p>
+    <p class="surface-note !mt-0 !border-t-0 !pt-0">Screenshots show the current v16.6.9 interface preview. Server tools are disconnected; Solo uses a fictional example save, Players uses DST’s built-in sample roster, and DD Atlas shows static reference data. Select an image to inspect it.</p>
     <nav class="tour-nav" aria-label="Feature tour">
       {sections.map(s => <a href={`#${s.id}`}>{s.id === "command-deck" ? "Command Deck" : s.id === "maps" ? "DD Atlas" : s.location.split(" → ").at(-1)?.split(" · ")[0]}</a>)}
       <a href="#browser-portal">Browser Portal</a>
@@ -92,12 +99,12 @@ const sections = [
           <div><h2>{s.title}</h2><div class="tour-location">{s.location}</div></div>
           <p>{s.body}</p>
         </div>
-        <Screenshot src={`${base}screenshots/${s.img}`} alt={s.alt} caption={s.caption} width={s.id === "solo" ? 2559 : 1600} height={s.height ?? 1000} />
+        <Screenshot src={`${base}screenshots/${s.img}`} alt={s.alt} caption={s.caption} width={1600} height={1000} />
         {s.id === "solo" && (
           <>
             <a href={`${base}install#solo`} class="text-link">Install Solo only →</a>
-            <Screenshot src={`${base}screenshots/solo-v16-settings.png`} alt="DST v16 Solo Settings with Retail Engine settings, world and economy, player balance, survival, building, and Landsraad groups" caption="Solo settings use grouped controls and retain an INI backup when changes are applied. Screenshot shared by Hawk." width={2559} height={1390} />
-            <Screenshot src={`${base}screenshots/solo-v16-progression.png`} alt="DST v16 Solo Progression with read-only diagnostics, main-quest Journey unlocks, and individual specialization level controls" caption="v16 Journey unlocks and specialization controls. The game is closed in this capture; each progression action retains a backup. Screenshot shared by Hawk." width={2558} height={1391} />
+            <Screenshot src={`${base}screenshots/solo-settings.png`} alt="Current Solo Settings with Blueprint building and Retail Engine settings" caption="Current Solo settings with a fictional example save. No settings are applied in this preview." width={1600} height={1000} />
+            <Screenshot src={`${base}screenshots/solo-progression.png`} alt="Current Solo Progression with character levels and skill controls" caption="Current Solo progression controls with fictional example values. No progression action is executed." width={1600} height={1000} />
           </>
         )}
       </section>
