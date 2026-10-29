@@ -10,8 +10,8 @@
 // lets the legend double as a type filter.
 //
 // Named for Wick (@.arturiuss), who brute-forced the 12 layouts. The seed-0
-// spice pool that started the work came from DrkShrk (@drkshrk). Attribution
-// stays in-app only — keep both names out of release notes and Discord embeds.
+// spice pool that started the work came from DrkShrk (@drkshrk). Source
+// provenance is retained with the static map baseline.
 
 import { useEffect, useMemo, useState } from 'react'
 import { PageHeader } from '../components/PageHeader'

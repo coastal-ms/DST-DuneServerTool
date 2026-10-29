@@ -17,6 +17,7 @@ const state = vi.hoisted(() => ({
   refresh: vi.fn(async () => {}),
   forceRefresh: vi.fn(async () => {}),
   navigate: vi.fn(),
+  search: '',
 }))
 vi.mock('../src/hooks/useStatus', () => ({ useStatus: () => ({ forceRefresh: state.forceRefresh }) }))
 vi.mock('../src/hooks/useApi', () => ({ useApi: () => ({
@@ -26,7 +27,11 @@ vi.mock('../src/util/viewer', () => ({ isLocalViewer: () => state.local }))
 vi.mock('../src/auth/PortalAuthGate', () => ({ usePortalAuth: () => ({
   status: { account: state.role ? { role: state.role } : null },
 }) }))
-vi.mock('../src/router', () => ({ useNavigate: () => state.navigate }))
+vi.mock('../src/router', async importOriginal => ({
+  ...await importOriginal<typeof import('../src/router')>(),
+  useNavigate: () => state.navigate,
+  useSearch: () => state.search,
+}))
 vi.mock('../src/api/client', async importOriginal => ({
   ...await importOriginal<typeof import('../src/api/client')>(),
   api: vi.fn(),
@@ -77,6 +82,7 @@ beforeEach(() => {
   localStorage.setItem(COMMAND_DECK_KEY, '1')
   vi.stubGlobal('matchMedia', () => ({ matches: false }))
   state.local = true
+  state.search = ''
   state.role = null
   state.data = fixture()
   state.loading = false
@@ -103,6 +109,34 @@ function selectTask(name: RegExp) {
 }
 
 describe('Contextual Commands workbench', () => {
+  it('opens server updates directly from Classic without running an operation', () => {
+    localStorage.removeItem(COMMAND_DECK_KEY)
+    state.search = 'task=updates'
+    render(<Commands />)
+    expect(screen.getByRole('heading', { name: 'Server updates', exact: true })).toBeInTheDocument()
+    expect(screen.getAllByRole('article').map(article => article.getAttribute('aria-label'))).toEqual(['Update server'])
+    expect(screen.getByRole('link', { name: 'All commands' })).toHaveAttribute('href', '/commands')
+    expect(api).not.toHaveBeenCalled()
+  })
+
+  it('retains delegated Admin command restrictions on the updates shortcut', () => {
+    state.local = false
+    state.role = 'admin'
+    state.search = 'task=updates'
+    render(<Commands />)
+    expect(screen.queryByRole('article')).not.toBeInTheDocument()
+    expect(screen.getByText('No commands available.')).toBeInTheDocument()
+    expect(api).not.toHaveBeenCalled()
+  })
+
+  it('opens a requested command category from Classic without dispatch', () => {
+    localStorage.removeItem(COMMAND_DECK_KEY)
+    state.search = 'category=vm'
+    render(<Commands />)
+    expect(screen.getByRole('button', { name: 'Run Reboot VM' })).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Run Update server' })).not.toBeInTheDocument()
+    expect(api).not.toHaveBeenCalled()
+  })
   it('offers a mobile category picker and clears global search when choosing a category', () => {
     render(<Commands />)
     fireEvent.change(screen.getByRole('searchbox', { name: 'Search all commands' }), { target: { value: 'inspect/logs' } })

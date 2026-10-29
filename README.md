@@ -59,7 +59,7 @@ reported status; it is not live game geography.
 <details>
 <summary><strong>Server Health</strong></summary>
 
-![Classic Server Health with the v15 sidebar and no server connected](docs/img/server-health.png)
+![Current Classic Server Health with no server connected](docs/img/server-health.png)
 
 VM and battlegroup state, database and gateway health, game pods, ports, active
 spice, scheduled restarts, memory warnings, interfaces, and log exports.

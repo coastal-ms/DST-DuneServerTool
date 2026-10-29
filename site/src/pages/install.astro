@@ -27,12 +27,12 @@ const base = import.meta.env.BASE_URL;
         checks, or server background jobs. No Hyper-V or Self-Hosted Server installation is needed.
       </p>
       <ol class="list-decimal pl-6 space-y-3 text-dune-muted leading-relaxed">
-        <li>Install <strong class="text-dune-text">PowerShell 7</strong> first. v16.0.1 checks for it before installing or upgrading either mode.</li>
+        <li>Install <strong class="text-dune-text">PowerShell 7</strong> first. The installer checks for it before installing or upgrading either mode.</li>
         <li>Run DuneServerSetup.exe and select <strong class="text-dune-text">Solo only</strong>.</li>
         <li>Launch Dune: Awakening Solo once to create a save, then close the game.</li>
         <li>Open DST, connect your supported Retail Solo save, and follow its validation guidance. Save edits require the game to be closed and retain backups.</li>
       </ol>
-      <Screenshot src={`${base}screenshots/solo-v16-installer.png`} alt="DST v16 installer Choose your DST setup page with Solo only selected and Self-Hosted + Solo available" caption="The v16 installer lets you choose Solo only. Both installation modes include Solo tools." width={606} height={472} />
+      <Screenshot src={`${base}screenshots/solo-overview.png`} alt="Current DST Solo-only interface with a fictional example save" caption="Solo only opens local save tools directly. Current interface preview with a fictional example save." width={1600} height={1000} />
       <p class="text-dune-muted leading-relaxed mt-4">
         Managing a server too? Choose <strong class="text-dune-text">Self-Hosted + Solo</strong>.
         Both choices include the same Solo tools. Reinstalls and silent updates preserve
@@ -101,7 +101,7 @@ const base = import.meta.env.BASE_URL;
       <li>
         <strong class="text-dune-text">PowerShell 7</strong> (<span
           class="font-mono">pwsh</span
-        >). Install it before running the installer. v16.0.1 stops installation or
+        >). Install it before running the installer. DST stops installation or
         upgrade if it is missing and provides Microsoft Store guidance, preserving an existing installation.
       </li>
       <li>

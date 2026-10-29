@@ -28,6 +28,7 @@ function Fixture({ hideBeta = false }: { hideBeta?: boolean } = {}) {
 
 describe('SectionJumpNav', () => {
   beforeEach(() => {
+    window.history.replaceState({}, '', '/')
     localStorage.clear()
     scrollIntoView.mockClear()
     nestedClick.mockClear()
@@ -39,8 +40,30 @@ describe('SectionJumpNav', () => {
   })
   afterEach(() => {
     cleanup()
+    window.history.replaceState({}, '', '/')
     vi.restoreAllMocks()
     vi.unstubAllGlobals()
+  })
+
+  it.each([false, true])('opens a linked section and focuses its heading in contextual mode %s without closing other cards', async contextual => {
+    if (contextual) localStorage.setItem(COMMAND_DECK_KEY, '1')
+    window.history.replaceState({}, '', '/database?section=test.beta')
+    render(<Fixture />)
+    expect(await screen.findByText('Beta body')).toBeInTheDocument()
+    expect(screen.getByText('Alpha body')).toBeInTheDocument()
+    await waitFor(() => expect(document.querySelector('[data-section-nav-id="test.beta"] button[data-section-nav-toggle]')).toHaveFocus())
+    expect(scrollIntoView).toHaveBeenCalledWith({ behavior: 'auto', block: 'start' })
+    expect(nestedClick).not.toHaveBeenCalled()
+  })
+
+  it('ignores unknown sections without toggling cards or focusing a nested action', async () => {
+    window.history.replaceState({}, '', '/database?section=unknown')
+    render(<Fixture />)
+    await screen.findByRole('combobox', { name: 'Jump to section' })
+    expect(screen.getByText('Alpha body')).toBeInTheDocument()
+    expect(screen.queryByText('Beta body')).not.toBeInTheDocument()
+    expect(scrollIntoView).not.toHaveBeenCalled()
+    expect(nestedClick).not.toHaveBeenCalled()
   })
 
   it('defaults to the first card and opens a collapsed selected card', async () => {

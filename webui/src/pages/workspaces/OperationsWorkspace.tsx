@@ -1,99 +1,64 @@
+import { useState } from 'react'
 import { usePortalAccess } from '../../auth/portalAccess'
 import { Icon } from '../../components/Icon'
-import { WorkspaceLayout, WorkspaceSection } from '../../components/platform/WorkspaceLayout'
+import { WorkspaceLayout } from '../../components/platform/WorkspaceLayout'
 import { getWorkspace } from '../../platform/workspaces'
 import { Link } from '../../router'
 import { isLocalViewer } from '../../util/viewer'
-import { useState } from 'react'
-import { useCommandDeck } from '../../hooks/useCommandDeck'
 import { useStatus } from '../../hooks/useStatus'
 
-type OperationLink = {
-  to: string
-  label: string
-  description: string
-  icon: string
-  ownerOnly?: boolean
-  localOnly?: boolean
-}
-
-const OPERATION_LINKS: readonly OperationLink[] = [
-  { to: '/pods', label: 'Runtime and pods', description: 'Inspect Kubernetes workload health and one-shot operations.', icon: 'Boxes' },
-  { to: '/commands', label: 'Commands', description: 'Run the existing curated lifecycle actions.', icon: 'Zap' },
-  { to: '/map?view=lifecycle', label: 'Map lifecycle', description: 'Manage warm maps, partitions, and map pod restarts.', icon: 'Map' },
-  { to: '/broadcasts', label: 'Communications', description: 'Send existing in-game broadcasts.', icon: 'Megaphone' },
-  { to: '/database', label: 'Data protection', description: 'Use the existing backup, restore, and database operations.', icon: 'Database', ownerOnly: true },
-  { to: '/sietches', label: 'Topology', description: 'Configure existing Hagga shard topology.', icon: 'Network', ownerOnly: true },
-  { to: '/terminal', label: 'Host tools', description: 'Open the host-local PowerShell surface.', icon: 'SquareTerminal', localOnly: true },
-]
+const OPERATION_LINKS = [
+  { to: '/commands?category=battlegroup', label: 'Server controls', description: 'Start, stop and restart your game servers.', icon: 'Power', group: 'everyday' },
+  { to: '/database?section=database.maint.Take+Backup', label: 'Backups', description: 'Create a backup or restore a saved copy.', icon: 'Archive', group: 'everyday', ownerOnly: true },
+  { to: '/commands?task=updates', label: 'Server updates', description: 'Apply an available Funcom server update.', icon: 'Download', group: 'everyday', ownerOnly: true },
+  { to: '/map?view=live', label: 'Live Map', description: 'Open your map and its live layers.', icon: 'Map', group: 'everyday' },
+  { to: '/database?section=database.backupSchedule', label: 'Backup schedule', description: 'Set when backups run and how long to keep them.', icon: 'CalendarClock', group: 'maintenance', ownerOnly: true },
+  { to: '/map?view=lifecycle', label: 'Map management', description: 'Manage map instances and restart a map.', icon: 'Network', group: 'maintenance' },
+  { to: '/pods', label: 'Service health', description: 'Inspect running services and their status.', icon: 'Boxes', group: 'maintenance' },
+  { to: '/broadcasts', label: 'Broadcasts', description: 'Send an in-game message to your players.', icon: 'Megaphone', group: 'maintenance' },
+  { to: '/server-settings', label: 'Server Settings', description: 'Edit your server settings and configuration.', icon: 'ServerCog', group: 'maintenance', ownerOnly: true },
+  { to: '/sietches', label: 'Sietches', description: 'Configure your Hagga server groups.', icon: 'Network', group: 'maintenance', ownerOnly: true },
+  { to: '/database', label: 'Database', description: 'Inspect data, run SQL and open migration tools.', icon: 'Database', group: 'advanced', ownerOnly: true },
+  { to: '/commands', label: 'All commands', description: 'Browse every available server and VM command.', icon: 'Zap', group: 'advanced' },
+  { to: '/terminal', label: 'PowerShell', description: 'Open PowerShell on the host PC.', icon: 'SquareTerminal', group: 'advanced', localOnly: true },
+] as const
 
 export default function OperationsWorkspace() {
   const { canAccessOwnerSurfaces } = usePortalAccess()
   const local = isLocalViewer()
-  const contextual = useCommandDeck()
-  const links = OPERATION_LINKS.filter(item => !item.ownerOnly || canAccessOwnerSurfaces)
-    .filter(item => !item.localOnly || local)
-
-  return (
-    <WorkspaceLayout workspace={getWorkspace('operations')}>
-      {contextual ? <OperationsDesk links={links} /> : <WorkspaceSection
-        id="operations-current-tools"
-        title="Operational tools"
-        description="Existing tools remain at their compatibility URLs while the shared workspace structure settles."
-      >
-        <div className="divide-y divide-border overflow-hidden rounded-xl border border-border bg-surface/80">
-          {links.map(item => (
-            <Link
-              key={item.to}
-              to={item.to}
-              className="flex min-h-16 items-start gap-3 px-4 py-3 text-left transition-colors hover:bg-surface-2 focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ibad"
-            >
-              <Icon name={item.icon} size={18} className="mt-0.5 shrink-0 text-accent-bright" />
-              <span className="min-w-0 flex-1">
-                <span className="block font-medium text-text">{item.label}</span>
-                <span className="mt-0.5 block text-sm text-text-muted">{item.description}</span>
-              </span>
-              <Icon name="ChevronRight" size={16} className="mt-1 shrink-0 text-text-dim" />
-            </Link>
-          ))}
-        </div>
-      </WorkspaceSection>}
-    </WorkspaceLayout>
-  )
-}
-
-function OperationsDesk({ links }: { links: readonly OperationLink[] }) {
   const { status, error, loading, refresh } = useStatus()
   const [query, setQuery] = useState('')
   const [refreshError, setRefreshError] = useState('')
-  const visible = links.filter(link => `${link.label} ${link.description}`.toLowerCase().includes(query.trim().toLowerCase()))
+  const words = query.trim().toLowerCase().split(/\s+/).filter(Boolean)
+  const links = OPERATION_LINKS
+    .filter(item => !('ownerOnly' in item) || canAccessOwnerSurfaces)
+    .filter(item => !('localOnly' in item) || local)
+    .filter(item => words.every(word => (item.label + ' ' + item.description).toLowerCase().includes(word)))
   const observed = status?.ts ? new Date(status.ts) : null
-  const stamp = observed && Number.isFinite(observed.getTime()) ? observed.toLocaleString() : 'Not reported'
-  const groups = [
-    { title: 'Run and communicate', paths: ['/pods', '/commands', '/map?view=lifecycle', '/broadcasts'] },
-    { title: 'Protect and configure', paths: ['/database', '/sietches', '/terminal'] },
-  ]
-  return <div className="operations-desk">
-    <section className="operations-tools" aria-label="Operational tools">
-      <label className="operations-search"><Icon name="Search" size={17} /><input type="search" aria-label="Search operational tools" placeholder="Find a task: backup, maps, broadcasts..." value={query} onChange={event => setQuery(event.target.value)} /></label>
-      {groups.map(group => {
-        const items = visible.filter(link => group.paths.includes(link.to))
-        return items.length > 0 && <section key={group.title}><h2>{group.title}</h2>{items.map(link => <Link key={link.to} to={link.to}>
-          <Icon name={link.icon} size={20} /><span><strong>{link.label}</strong><small>{link.description}</small></span><Icon name="ArrowUpRight" size={17} />
-        </Link>)}</section>
-      })}
-      {!visible.length && <p>No matching tools. Try a different task name.</p>}
+  const stamp = observed && Number.isFinite(observed.getTime()) ? observed.toLocaleString() : null
+  return <WorkspaceLayout workspace={getWorkspace('operations')}>
+    <section className="card mb-5 p-4 sm:p-5" aria-label="Server status">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div><h2 className="text-lg font-semibold">Your server at a glance</h2>{stamp && <p className="mt-1 text-xs text-text-dim">Updated {stamp}</p>}</div>
+        <button className="btn-secondary" disabled={loading} onClick={() => { setRefreshError(''); void refresh().catch(reason => setRefreshError(reason instanceof Error ? reason.message : 'Refresh failed')) }}><Icon name="RefreshCw" size={15} />Refresh</button>
+      </div>
+      <dl className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-3">
+        <div className="rounded-lg border border-border bg-surface-2 p-3"><dt className="text-xs text-text-muted">Virtual machine</dt><dd className="mt-1 font-semibold">{status?.vm?.state || 'Not reported'}</dd></div>
+        <div className="rounded-lg border border-border bg-surface-2 p-3"><dt className="text-xs text-text-muted">Battlegroup</dt><dd className="mt-1 font-semibold">{status?.bg?.state || 'Not reported'}</dd></div>
+        <div className="rounded-lg border border-border bg-surface-2 p-3"><dt className="text-xs text-text-muted">Map instances</dt><dd className="mt-1 font-semibold">{status?.bg?.gameServers?.length ?? 'Not reported'}</dd></div>
+      </dl>
+      {(error || refreshError) && <p role="status" className="mt-3 text-sm text-warning">{refreshError || error}. Last available observation shown; refresh to check again.</p>}
     </section>
-    <aside className="operations-observation" aria-label="Server observation">
-      <h2>Current observation</h2>
-      <p>{stamp}. Reported status only; selecting a tool does not run an action.</p>
-      <dl><div><dt>Virtual machine</dt><dd>{status?.vm?.state || 'Not reported'}</dd></div><div><dt>Battlegroup</dt><dd>{status?.bg?.state || 'Not reported'}</dd></div>
-        <div><dt>Map instances</dt><dd>{status?.bg?.gameServers ? status.bg.gameServers.length : 'Not reported'}</dd></div></dl>
-      {(error || refreshError) && <p role="status">{refreshError || error}. Last available observation shown.</p>}
-      <button disabled={loading} onClick={() => {
-        setRefreshError('')
-        void refresh().catch(reason => setRefreshError(reason instanceof Error ? reason.message : 'Refresh failed'))
-      }}>Refresh observation</button>
-    </aside>
-  </div>
+    <label className="mb-5 flex items-center gap-3 rounded-lg border border-border bg-surface px-4 py-3"><Icon name="Search" size={18} /><input className="min-w-0 flex-1 bg-transparent text-sm outline-none" type="search" aria-label="Find a server task" placeholder="Find a task: backups, updates, maps..." value={query} onChange={event => setQuery(event.target.value)} /></label>
+    {[{ id: 'everyday', title: 'Everyday tasks' }, { id: 'maintenance', title: 'Manage your server' }, { id: 'advanced', title: 'Advanced tools' }].map(group => {
+      const items = links.filter(link => link.group === group.id)
+      return items.length > 0 && <section key={group.id} className="mb-7" aria-label={group.title}>
+        <h2 className="mb-3 text-base font-semibold text-text">{words.length ? group.title + ' · matches' : group.title}</h2>
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">{items.map(link => <Link key={link.to} to={link.to} className="group flex min-h-32 items-start gap-3 rounded-xl border border-border bg-surface p-4 transition-colors hover:border-accent/60 hover:bg-surface-2 focus-visible:ring-2 focus-visible:ring-ibad">
+          <Icon name={link.icon} size={21} className="mt-0.5 shrink-0 text-accent-bright" /><span className="min-w-0 flex-1"><strong className="block font-semibold text-text">{link.label}</strong><span className="mt-2 block text-sm leading-relaxed text-text-muted">{link.description}</span></span><Icon name="ArrowUpRight" size={15} className="shrink-0 text-text-dim group-hover:text-text" />
+        </Link>)}</div>
+      </section>
+    })}
+    {!links.length && <p className="card p-6 text-sm text-text-muted" role="status">No matching tasks. Try another task name.</p>}
+  </WorkspaceLayout>
 }

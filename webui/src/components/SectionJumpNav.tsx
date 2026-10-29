@@ -1,5 +1,5 @@
-import { useEffect, useState, type RefObject } from 'react'
-import { useLocation } from '../router'
+import { useEffect, useRef, useState, type RefObject } from 'react'
+import { useLocation, useSearch } from '../router'
 import { Icon } from './Icon'
 import { useCommandDeck } from '../hooks/useCommandDeck'
 import './platform/workspaceChrome.css'
@@ -19,6 +19,9 @@ function sameSections(left: SectionItem[], right: SectionItem[]) {
 export function SectionJumpNav({ containerRef }: { containerRef: RefObject<HTMLElement | null> }) {
   const contextual = useCommandDeck()
   const { pathname } = useLocation()
+  const search = useSearch()
+  const requestedSection = new URLSearchParams(search).get('section') ?? ''
+  const appliedSection = useRef('')
   const [sections, setSections] = useState<SectionItem[]>([])
   const [selected, setSelected] = useState('')
   const [focused, setFocused] = useState(false)
@@ -59,6 +62,26 @@ export function SectionJumpNav({ containerRef }: { containerRef: RefObject<HTMLE
     hidden.forEach(section => section.element.setAttribute('data-portal-section-inactive', ''))
     return () => hidden.forEach(section => section.element.removeAttribute('data-portal-section-inactive'))
   }, [contextual, focused, sections, selected])
+
+  useEffect(() => {
+    const key = `${pathname}:${requestedSection}`
+    if (!requestedSection) { appliedSection.current = ''; return }
+    const target = sections.find(section => section.id === requestedSection)?.element
+    if (!target || appliedSection.current === key) return
+    appliedSection.current = key
+    setSelected(requestedSection)
+    if (contextual) setFocused(true)
+    const candidateToggle = target.querySelector<HTMLButtonElement>('button[data-section-nav-toggle]')
+    const toggle = candidateToggle?.closest('[data-section-nav-id]') === target ? candidateToggle : null
+    if (toggle?.getAttribute('aria-expanded') === 'false') toggle.click()
+    const focusTarget = toggle ?? target
+    if (focusTarget === target && !target.hasAttribute('tabindex')) target.tabIndex = -1
+    const frame = window.requestAnimationFrame(() => {
+      target.scrollIntoView({ behavior: 'auto', block: 'start' })
+      focusTarget.focus({ preventScroll: true })
+    })
+    return () => window.cancelAnimationFrame(frame)
+  }, [contextual, pathname, requestedSection, sections])
 
   if (sections.length < 2) return null
 
