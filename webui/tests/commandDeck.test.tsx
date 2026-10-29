@@ -50,7 +50,7 @@ describe('Command Deck destinations', () => {
     expect(searchDeck(routes, 'chat commands').map(item => item.to)).toEqual(['/players'])
     expect(searchDeck(routes, 'welcome back').map(item => item.to)).toEqual(['/players'])
     expect(searchDeck(routes, 'shared teleport destinations').map(item => item.to)).toEqual(['/players'])
-    expect(searchDeck(routes, 'backup').map(item => item.to)).toEqual(['/database?section=database.maint.Take+Backup', '/database'])
+    expect(searchDeck(routes, 'backup').map(item => item.to)).toEqual(['/database'])
     expect(searchDeck(routes, 'nonexistent')).toEqual([])
     const settings = searchDeck(routes, 'gameconfig ini')
     expect(settings.map(item => item.to)).toEqual(['/server-settings'])

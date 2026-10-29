@@ -13,6 +13,10 @@ here cover everything those tags shipped.
 
 ## [Unreleased]
 
+## [16.6.10] - 2026-10-29
+
+- Remove the duplicate Backups navigation entry; backup and restore remain available under Database.
+
 ## [16.6.9] - 2026-10-28
 
 - Restore on-demand access to Wreck of the Hieronymus when its event map definition is missing from the self-hosted server package.
