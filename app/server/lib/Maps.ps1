@@ -409,6 +409,10 @@ function _Invoke-DunePartitionAutomationInstaller {
         return @{ ok=$false; status=500; message='Bundled dune-clear-partitions-install.sh not found in install dir.' }
     }
 
+    $eventRepair = $null
+    if (Get-Command Repair-DuneEventMapDefinitions -ErrorAction SilentlyContinue) {
+        $eventRepair = Repair-DuneEventMapDefinitions -Ip $ip
+    }
     $stamp     = [Guid]::NewGuid().ToString('N').Substring(0, 12)
     $remoteTmp = "/tmp/dune-cp-install-$stamp.sh"
 
@@ -435,8 +439,8 @@ function _Invoke-DunePartitionAutomationInstaller {
     $logTail = (($tailRaw -join "`n")).Trim()
 
     return @{
-        ok      = ($output -match 'DUNE_CLEAR_PARTITIONS_OK')
-        output  = $output
+        ok      = (($output -match 'DUNE_CLEAR_PARTITIONS_OK') -and ($null -eq $eventRepair -or $eventRepair.ok))
+        output  = ($output + $(if ($eventRepair) { "`n"+$eventRepair.message }))
         logTail = $logTail
     }
 }
