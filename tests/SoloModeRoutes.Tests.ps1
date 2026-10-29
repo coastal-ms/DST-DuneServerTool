@@ -4,6 +4,24 @@ BeforeAll {
 }
 
 Describe 'Solo Mode route registration' {
+    It 'queues ordinary item grants locally and never calls the offline writer' {
+        $result = & {
+            function Register-DuneRoute { param($Method,$Path,[switch]$LocalOnly,$Handler); [pscustomobject]@{path=$Path;localOnly=[bool]$LocalOnly;handler=$Handler} }
+            $route = @(. $script:RouteFile) | Where-Object path -eq '/api/solo/items/grant'
+            function Invoke-WithDuneLock { param($Name,$Script); & $Script }
+            function Assert-DuneSoloExpectedProfile { param($ExpectedProfileToken); if($ExpectedProfileToken -cne 'selected'){throw 'Wrong profile'} }
+            function Invoke-DuneSoloGiveItems { throw 'Offline writer must not run' }
+            function Invoke-DuneSoloNativeItemGrant { param($Destination,[object[]]$Items,$Confirm,$RequestId); @{ok=$true;requestId=$RequestId;status='queued';count=$Items.Count} }
+            function Write-DuneJson { param($Response,$Body); $Body }
+            function Write-DuneError { param($Response,$Status,$Message); throw $Message }
+            & $route.handler $null $null $null @{destination='inventory:1';items=@(@{templateId='Beta_Plaque_Patent';quantity=1;quality=0});expectedProfileToken='selected';confirm='GIVE SOLO ITEMS';requestId=('b'*32)}
+            $route.localOnly
+        }
+        $result[0].status | Should -Be queued
+        $result[0].requestId | Should -Be ('b'*32)
+        $result[0].count | Should -Be 1
+        $result[1] | Should -BeTrue
+    }
     It 'keeps blueprint settings local-only and blocks stale profiles before writing' {
         $result = & {
             function Register-DuneRoute {

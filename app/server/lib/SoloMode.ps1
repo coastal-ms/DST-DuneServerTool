@@ -1,6 +1,7 @@
 ﻿. (Join-Path $PSScriptRoot 'SoloCosmetics.ps1')
 . (Join-Path $PSScriptRoot 'SoloBlueprintSettings.ps1')
 . (Join-Path $PSScriptRoot 'SoloXbox.ps1')
+. (Join-Path $PSScriptRoot 'SoloNativeGrants.ps1')
 $script:DuneSoloSection = '/Script/DuneSandbox.UserServerCustomSettings'
 $script:DuneSoloSettingKeys = @(
     'm_NodeValueToSpiceResourceRatio',
@@ -436,14 +437,14 @@ function Assert-DuneSoloGameClosed {
 
 function Invoke-DuneSoloHelper {
     param(
-        [Parameter(Mandatory)][ValidateSet('inspect','diagnostics','codex','grant-codex','character-xp','faction-progression','set-specialization','reset-specialization-rewards','backup','restore','grant-items','delete-item','delete-item-group','import-blueprint','list-blueprints','export-blueprint','set-currencies','fill-water','set-weapon-ammo','repair-equipment','max-augment-attributes','max-specializations','complete-fremen','complete-npe','enable-skills','set-progression-points','unlock-main-quest','unlock-trainer','unlock-testing-stations','grant-legitimate-customization')][string]$Command,
+        [Parameter(Mandatory)][ValidateSet('native-grant-identity','inspect','diagnostics','codex','grant-codex','character-xp','faction-progression','set-specialization','reset-specialization-rewards','backup','restore','grant-items','delete-item','delete-item-group','import-blueprint','list-blueprints','export-blueprint','set-currencies','fill-water','set-weapon-ammo','repair-equipment','max-augment-attributes','max-specializations','complete-fremen','complete-npe','enable-skills','set-progression-points','unlock-main-quest','unlock-trainer','unlock-testing-stations','grant-legitimate-customization')][string]$Command,
         [Parameter(Mandatory)][hashtable]$Arguments
     )
 
     $helper = Get-DuneSoloHelperPath
     foreach ($key in @('input','target')) {
         if ($Arguments[$key] -and (Get-DuneSoloXboxBlob -Path ([string]$Arguments[$key]))) {
-            if ($Command -notin @('inspect','diagnostics','codex','backup','list-blueprints','export-blueprint')) {
+            if ($Command -notin @('native-grant-identity','inspect','diagnostics','codex','backup','list-blueprints','export-blueprint')) {
                 $prepared = New-DuneSoloXboxMutation -Command $Command -Arguments $Arguments
                 $committed = Commit-DuneSoloXboxMutation -Prepared $prepared
                 $result = $prepared.result

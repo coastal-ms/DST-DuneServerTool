@@ -58,6 +58,7 @@ internal static partial class Program
             var command = RequireValue(options, "command").ToLowerInvariant();
             object result = command switch
             {
+                "native-grant-identity" => ReadNativeGrantIdentity(Require(options, "input")),
                 "grant-legitimate-customization" => GrantLegitimateCustomization(Require(options, "input"),
                     Require(options, "safety-backup"), Require(options, "adapter"), Require(options, "reviewed-catalog"),
                     RequireValue(options, "customization-id")),
@@ -1414,6 +1415,7 @@ internal static partial class Program
 
             var source = Path.Combine(root, "game.db");
             WrapSqlite(sqlitePath, source);
+            SelfTestNativeGrantIdentity(root, source);
             var inspection = InspectPath(source);
             EnsureWritableInspection(inspection);
             if (inspection.MapSeed != 2)

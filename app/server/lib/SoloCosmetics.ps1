@@ -215,9 +215,9 @@ function Invoke-DunePlayerReviewedCustomization {
 }
 
 function Invoke-DuneSoloGrantUnlocks {
-    param([ValidateSet('building-sets','armor','weapon','vehicle','dyes','house','placeables')][string]$Kind)
+    param([ValidateSet('building-sets','armor','weapon','vehicle','dyes','house','placeables')][string]$Kind, [switch]$Native, [string]$RequestId)
     Assert-DuneSoloSupportedPlatform
-    Assert-DuneSoloGameClosed
+    if (-not $Native) { Assert-DuneSoloGameClosed }
     $status = Get-DuneSoloStatus
     if (-not $status.inspection) { throw 'Connect and validate a Solo save before granting unlocks.' }
     $ownership = Get-DuneSoloCosmeticOwnership -Inspection $status.inspection
@@ -239,6 +239,13 @@ function Invoke-DuneSoloGrantUnlocks {
     if ($slots -eq 0) { throw 'The Solo backpack is full. Free slots in-game, exit, and try again.' }
     $batch = @($missing | Select-Object -First $slots)
     $items = @($batch | ForEach-Object { @{ templateId=[string]$_.template; quantity=1; quality=0 } })
+    if ($Native) {
+        $result = Invoke-DuneSoloNativeItemGrant -Destination $backpack[0].key -Items $items -Confirm 'GIVE SOLO ITEMS' -RequestId $RequestId
+        $result.submitted = $batch.Count
+        $result.remaining = $missing.Count - $batch.Count
+        $result.skipped = $catalog.Count - $missing.Count
+        return $result
+    }
     $result = Invoke-DuneSoloGiveItems -Destination $backpack[0].key -Items $items -Confirm 'GIVE SOLO ITEMS'
     $result | Add-Member -NotePropertyName submitted -NotePropertyValue $batch.Count -Force
     $result | Add-Member -NotePropertyName remaining -NotePropertyValue ($missing.Count-$batch.Count) -Force

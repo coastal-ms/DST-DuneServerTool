@@ -172,7 +172,7 @@ Describe 'Complete route classification' {
     It 'classifies the exact registered HTTP and WebSocket inventory' {
         $records = @(Get-PlatformRouteRecords)
         $manifest = Get-DuneRoutePolicyManifest
-        $records.Count | Should -Be 451
+        $records.Count | Should -Be 452
         $sources = @($records.SourceFile | Sort-Object -Unique)
         @($manifest.groups.source | Sort-Object) | Should -Be $sources
 
@@ -220,6 +220,12 @@ Describe 'Complete route classification' {
         $labLocal.Count | Should -Be 1
         $labLocal[0].Classification.currentAccess | Should -Be 'local-only'
         $labLocal[0].Classification.allowedPrincipalTypes | Should -Be @('local-host')
+        $grantStatus = @($script:DuneRoutes | Where-Object { $_.Method -eq 'POST' -and $_.Path -eq '/api/solo/items/grant-status' })
+        $grantStatus.Count | Should -Be 1
+        $grantStatus[0].Classification.currentAccess | Should -Be 'local-only'
+        $grantStatus[0].Classification.allowedPrincipalTypes | Should -Be @('local-host')
+        $grantStatus[0].Classification.capabilityId | Should -Be 'host.solo'
+        $grantStatus[0].Classification.lifecycle | Should -Be 'reversible-write'
         @($classifications | Where-Object { -not (Test-DuneRouteCapabilityCompatibility $_) }).Count |
             Should -Be 0
         @($classifications | Where-Object { $_.lifecycle -notin @('read','reversible-write','transactional-write','destructive') }).Count |
@@ -350,7 +356,7 @@ $result = @{
         $LASTEXITCODE | Should -Be 0 -Because ($output -join [Environment]::NewLine)
         $resultLine = @($output | Where-Object { [string]$_ -like 'ROUTE_RESULT:*' })[-1]
         $result = ([string]$resultLine).Substring('ROUTE_RESULT:'.Length) | ConvertFrom-Json
-        $result.total | Should -Be 451
+        $result.total | Should -Be 452
         $result.unclassified | Should -Be 0
         $result.incompatible | Should -Be 0
         $result.podsCleanup | Should -Be 1

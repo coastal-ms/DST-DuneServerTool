@@ -13,6 +13,10 @@ here cover everything those tags shipped.
 
 ## [Unreleased]
 
+## [16.6.11] - 2026-10-29
+
+- Add in-game Solo backpack grants with queued delivery and confirmed results.
+
 ## [16.6.10] - 2026-10-29
 
 - Remove the duplicate Backups navigation entry; backup and restore remain available under Database.

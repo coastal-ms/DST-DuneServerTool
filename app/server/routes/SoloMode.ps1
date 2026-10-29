@@ -5,7 +5,7 @@
         $token = [string](Get-DuneSoloBodyField -Body $body -Name 'expectedProfileToken' -Default '')
         $result = Invoke-WithDuneLock -Name 'solo-profile-data' -Script {
             Assert-DuneSoloExpectedProfile -ExpectedProfileToken $token
-            Invoke-DuneSoloGrantUnlocks -Kind $kind
+            Invoke-DuneSoloGrantUnlocks -Kind $kind -Native -RequestId ([string](Get-DuneSoloBodyField $body 'requestId' ([guid]::NewGuid().ToString('N'))))
         }
         Write-DuneJson -Response $res -Body $result
     } catch {
@@ -270,15 +270,40 @@ Register-DuneRoute -Method POST -Path '/api/solo/items/grant' -LocalOnly -Handle
         $moddedStorageCapacity = (Get-DuneSoloBodyField -Body $body -Name 'moddedStorageCapacity' -Default $false) -eq $true
         $rawItems = Get-DuneSoloBodyField -Body $body -Name 'items'
         $items = if ($null -eq $rawItems) { @() } else { @($rawItems) }
+        $delivery = [string](Get-DuneSoloBodyField $body 'delivery' 'native')
+        $requestId = [string](Get-DuneSoloBodyField $body 'requestId' ([guid]::NewGuid().ToString('N')))
         $result = Invoke-WithDuneLock -Name 'solo-profile-data' -Script {
             Assert-DuneSoloExpectedProfile -ExpectedProfileToken $expectedProfileToken
-            Invoke-DuneSoloGiveItems -Destination $destination -Items $items -Confirm $confirm -ModdedStorageCapacity $moddedStorageCapacity
+            if ($delivery -ceq 'native') {
+                Invoke-DuneSoloNativeItemGrant -Destination $destination -Items $items -Confirm $confirm -RequestId $requestId
+            } elseif ($delivery -ceq 'offline') {
+                Invoke-DuneSoloGiveItems -Destination $destination -Items $items -Confirm $confirm -ModdedStorageCapacity $moddedStorageCapacity
+            } else { throw 'Choose a supported Solo grant delivery method.' }
         }
         Write-DuneJson -Response $res -Body $result
     } catch {
         $status = if ($_.Exception.Message -like '*still running*' -or $_.Exception.Message -like '*active Solo save changed*') { 409 } else { 400 }
         Write-DuneError -Response $res -Status $status -Message $_.Exception.Message
     }
+}
+
+Register-DuneRoute -Method POST -Path '/api/solo/items/grant-status' -LocalOnly -Handler {
+    param($req, $res, $routeParams, $body)
+    try {
+        $result = Invoke-WithDuneLock -Name 'solo-profile-data' -Script {
+            $token = [string](Get-DuneSoloBodyField $body 'expectedProfileToken' '')
+            Assert-DuneSoloExpectedProfile -ExpectedProfileToken $token
+            $root = Get-DuneSoloNativeGrantRoot $token
+            $requestId = [string](Get-DuneSoloBodyField $body 'requestId' '')
+            $result = if ($requestId) { Get-DuneSoloNativeGrantResult $root $requestId } else {
+                $requests = @(Get-ChildItem -LiteralPath $root -Filter '*.json' -File | Where-Object BaseName -cmatch '^[a-f0-9]{32}$' | Sort-Object CreationTimeUtc -Descending | Select-Object -First 100 | ForEach-Object { Get-DuneSoloNativeGrantResult $root $_.BaseName })
+                @{ok=$true;requests=$requests;error=(Read-DuneSoloGrantFile (Join-Path $root 'bridge-error.txt') 512)}
+            }
+            Update-DuneSoloNativeGrantDispatch $root
+            $result
+        }
+        Write-DuneJson -Response $res -Body $result
+    } catch { Write-DuneError -Response $res -Status 400 -Message $_.Exception.Message }
 }
 
 Register-DuneRoute -Method POST -Path '/api/solo/items/delete-group' -LocalOnly -Handler {

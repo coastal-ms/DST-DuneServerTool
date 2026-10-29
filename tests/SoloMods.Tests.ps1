@@ -3,6 +3,10 @@
     . "$PSScriptRoot\_TestHelpers.ps1"
     Import-DstLib 'SoloMods.ps1'
     function global:Assert-DuneSoloGameClosed {}
+    function global:Initialize-DuneSoloNativeGrantContext {}
+    if (-not (Get-Command Invoke-WithDuneLock -ErrorAction SilentlyContinue)) {
+        function global:Invoke-WithDuneLock { param($Name,$Script); & $Script }
+    }
     $script:ModTestRoot=Join-Path ([IO.Path]::GetTempPath()) ('dst-mods-'+[guid]::NewGuid().ToString('N'))
     function New-ModZip([string]$Name,[hashtable]$Files){
         $path=Join-Path $script:ModTestRoot ($Name+'.zip')
@@ -166,7 +170,8 @@ Describe 'Solo mod import and dependencies' {
         Start-DuneSoloModGame $WithMods | Out-Null
         $status=Get-DuneSoloMods
         $list=@(Get-Content (Join-Path $status.session.root 'mods.txt'))
-        $list.Count | Should -Be $Expected
+        $list.Count | Should -Be ($Expected + 1)
+        $list | Should -Contain 'dst-solo-grants : 1'
         $list | Should -Contain 'dst-regis-tanks : 1'
         @($status.mods | Where-Object id -eq 'UserMod')[0].enabled | Should -BeTrue
         if (-not $WithMods) { $list | Should -Not -Contain 'UserMod : 1' }
@@ -424,6 +429,7 @@ Describe 'Solo mod import and dependencies' {
         @(Get-DuneSoloLaunchArguments) | Should -Not -Contain '-nosplash'
     }
 BeforeEach {
+    Mock Invoke-WithDuneLock { param($Name,$Script); & $Script }
     Mock Find-DuneSoloSteamInstallation { '' } -ParameterFilter { -not $Libraries }
     Mock Start-Process {}
     $case=Join-Path $script:ModTestRoot ([guid]::NewGuid().ToString('N'))

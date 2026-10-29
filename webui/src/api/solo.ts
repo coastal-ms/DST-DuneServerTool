@@ -127,10 +127,10 @@ export interface SoloCosmeticOwnership {
 }
 
 export function grantSoloUnlocks(kind: SoloUnlockKind, expectedProfileToken: string): Promise<{
-  ok: boolean; submitted: number; remaining: number; skipped: number; safetyBackup?: string
+  ok: boolean; submitted: number; remaining: number; skipped: number; requestId?: string; safetyBackup?: string
 }> {
   return api('/api/solo/grant-unlocks', {
-    method: 'POST', body: JSON.stringify({ kind, expectedProfileToken }),
+    method: 'POST', body: JSON.stringify({ kind, expectedProfileToken, requestId: crypto.randomUUID().replaceAll('-', '') }),
   })
 }
 
@@ -337,12 +337,28 @@ export interface SoloGiveItem {
   augments?: AugmentSelection[]
 }
 
+export interface SoloNativeGrantResult {
+  ok: boolean
+  mode: 'native'
+  requestId: string
+  status: 'queued' | 'processing' | 'delivered' | 'uncertain'
+  completed: number
+  total: number
+  message: string
+}
+
+export function getSoloNativeGrants(expectedProfileToken: string): Promise<{ok: boolean; requests: SoloNativeGrantResult[]; error?: string}> {
+  return api('/api/solo/items/grant-status', {method: 'POST', body: JSON.stringify({expectedProfileToken})})
+}
+
 export function grantSoloItems(
   destination: string,
   items: SoloGiveItem[],
   expectedProfileToken: string,
   moddedStorageCapacity = false,
-): Promise<{
+  delivery: 'native' | 'offline' = 'native',
+  requestId = crypto.randomUUID().replaceAll('-', ''),
+): Promise<SoloNativeGrantResult | {
   ok: boolean
   destination: string
   granted: Array<SoloGiveItem & { insertedRows: number; updatedRows: number }>
@@ -357,6 +373,8 @@ export function grantSoloItems(
       items,
       expectedProfileToken,
       confirm: 'GIVE SOLO ITEMS',
+      delivery,
+      requestId,
     }),
   })
 }

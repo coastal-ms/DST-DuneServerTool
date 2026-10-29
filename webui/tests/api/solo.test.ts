@@ -122,7 +122,7 @@ describe('Solo Mode API contracts', () => {
     })
   })
 
-  it('sends item grants with destination, profile token, and offline confirmation', async () => {
+  it('sends native item grants with destination, profile token, confirmation, and a request ID', async () => {
     await solo.grantSoloItems(
       'inventory:49',
       [{ templateId: 'CopperBar', quantity: 100, quality: 0 }],
@@ -137,13 +137,26 @@ describe('Solo Mode API contracts', () => {
         items: [{ templateId: 'CopperBar', quantity: 100, quality: 0 }],
         expectedProfileToken: 'profile-token',
         confirm: 'GIVE SOLO ITEMS',
+        delivery: 'native',
+        requestId: expect.stringMatching(/^[a-f0-9]{32}$/),
       },
     })
   })
 
   it('sends the explicit modded-storage volume override only when selected', async () => {
-    await solo.grantSoloItems('inventory:49', [{ templateId: 'CopperBar', quantity: 100, quality: 0 }], 'profile-token', true)
-    expect(last().body).toMatchObject({ destination: 'inventory:49', moddedStorageCapacity: true, confirm: 'GIVE SOLO ITEMS' })
+    await solo.grantSoloItems('inventory:49', [{ templateId: 'CopperBar', quantity: 100, quality: 0 }], 'profile-token', true, 'offline')
+    expect(last().body).toMatchObject({ destination: 'inventory:49', moddedStorageCapacity: true, delivery: 'offline', confirm: 'GIVE SOLO ITEMS' })
+  })
+
+  it('preserves the caller request ID when a native grant is retried', async () => {
+    const items = [{templateId: 'CopperBar', quantity: 1, quality: 0}]
+    const requestId = 'a'.repeat(32)
+    await solo.grantSoloItems('inventory:49', items, 'profile-token', false, 'native', requestId)
+    await solo.grantSoloItems('inventory:49', items, 'profile-token', false, 'native', requestId)
+    expect(calls.map(call => call.body)).toEqual([
+      expect.objectContaining({delivery: 'native', requestId}),
+      expect.objectContaining({delivery: 'native', requestId}),
+    ])
   })
 
   it('lists and exports saved Solo blueprints', async () => {

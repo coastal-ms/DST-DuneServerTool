@@ -45,6 +45,16 @@ Describe 'Solo bulk unlock grants' {
         { Invoke-DuneSoloGrantUnlocks -Kind building-sets } | Should -Throw '*still running*'
         Should -Invoke Invoke-DuneSoloGiveItems -Exactly 0
     }
+    It 'queues native unlock tokens while Solo is running without an offline grant' {
+        Import-DstLib 'SoloNativeGrants.ps1'
+        Mock Assert-DuneSoloGameClosed { throw 'Game is still running.' }
+        Mock Invoke-DuneSoloNativeItemGrant { @{ok=$true;mode='native';requestId='native-job';status='queued'} }
+        $result = Invoke-DuneSoloGrantUnlocks -Kind building-sets -Native -RequestId ('a'*32)
+        $result.status | Should -Be queued
+        $result.submitted | Should -Be 1
+        Should -Invoke Invoke-DuneSoloNativeItemGrant -Exactly 1 -ParameterFilter { $Items[0].templateId -eq 'Missing' -and $RequestId -eq ('a'*32) }
+        Should -Invoke Invoke-DuneSoloGiveItems -Exactly 0
+    }
     It 'refuses unknown grant categories' {
         { Invoke-DuneSoloGrantUnlocks -Kind arbitrary } | Should -Throw
         Should -Invoke Invoke-DuneSoloGiveItems -Exactly 0

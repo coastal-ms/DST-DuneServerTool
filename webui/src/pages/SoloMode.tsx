@@ -9,6 +9,7 @@ import { SoloMods } from '../components/solo/SoloMods'
 import { OfficialServerCard } from '../components/solo/OfficialServerCard'
 import { SoloLiveMap } from '../components/solo/SoloLiveMap'
 import { SoloDeck } from '../components/solo/SoloDeck'
+import { SoloGrantDelivery } from '../components/solo/SoloGrantDelivery'
 import { SoloRegisTanks } from '../components/solo/SoloRegisTanks'
 import { SoloFactionProgression } from '../components/solo/SoloFactionProgression'
 import { SoloCharacterXp } from '../components/solo/SoloCharacterXp'
@@ -132,7 +133,12 @@ export const SOLO_ACTION_RULES = [
     detail: 'DST checks Dune processes, retains the prior INI, writes atomically, and verifies only changed settings.',
   },
   {
-    title: 'Items, currencies, and fillables',
+    title: 'Backpack item delivery',
+    state: 'In-game or queued',
+    detail: 'Selected items arrive in your Solo backpack through DST Solo launch. Patents and tokens can then be used in game.',
+  },
+  {
+    title: 'Storage, augments, currencies, and fillables',
     state: 'Game must be closed',
     detail: 'DST retains game.db, performs one verified transaction, and rolls back automatically if replacement verification fails.',
   },
@@ -737,6 +743,8 @@ export function SoloMode() {
     }
   }
 
+  const [grantRevision, setGrantRevision] = useState(0)
+  const nativeGrantAttempt = useRef<{key: string; id: string} | null>(null)
   const gameRunning = runtimeState.data?.gameRunning ?? statusState.data?.gameRunning ?? false
   const selectionMatchesActive = connected
     && normalizeWindowsPath(dataRoot) === normalizeWindowsPath(statusState.data?.dataRoot ?? '')
@@ -942,34 +950,49 @@ export function SoloMode() {
       setNotice({ kind: 'err', text: 'Connect and validate the selected Solo profile before giving items.' })
       return false
     }
-    if (gameRunning) {
-      setNotice({ kind: 'err', text: 'Close Dune: Awakening completely before giving Solo items.' })
-      return false
-    }
     if (!destination) {
       setNotice({ kind: 'err', text: 'Choose a backpack or built storage destination.' })
+      return false
+    }
+
+    const native = inspection?.inventories.some(i => i.key === destination && i.kind === 'backpack')
+      && items.every(item => !item.augments?.length)
+    if (!native && gameRunning) {
+      setNotice({ kind: 'err', text: 'Close Dune before granting to storage or applying augments.' })
       return false
     }
 
     setBusy('give-items')
     setNotice(null)
     try {
+      if (native) {
+        const key = JSON.stringify([statusState.data?.profileToken, destination, items])
+        if (nativeGrantAttempt.current?.key !== key) nativeGrantAttempt.current = {key, id: crypto.randomUUID().replaceAll('-', '')}
+      }
       const result = await grantSoloItems(
         destination,
         items,
         statusState.data?.profileToken ?? '',
         moddedStorageCapacity,
+        native ? 'native' : 'offline',
+        native ? nativeGrantAttempt.current!.id : undefined,
       )
-      setNotice({
-        kind: 'ok',
-        text: `${label} granted to the ${targetLabel} and verified. Previous save retained at ${result.safetyBackup}`,
-      })
-      await Promise.all([statusState.refresh(), runtimeState.refresh(), backupsState.refresh()])
+      if ('mode' in result && result.mode === 'native') {
+        nativeGrantAttempt.current = null
+        setNotice({ kind: result.status === 'uncertain' ? 'err' : 'ok', text: result.status === 'queued'
+          ? `${label} queued for in-game delivery to your Solo backpack. Enter Solo through DST to receive it.`
+          : result.message })
+        if (result.status === 'uncertain') return false
+      } else if ('safetyBackup' in result) {
+        setNotice({ kind: 'ok', text: `${label} granted to the ${targetLabel} and verified. Previous save retained at ${result.safetyBackup}` })
+        await Promise.all([statusState.refresh(), runtimeState.refresh(), backupsState.refresh()])
+      }
       return true
     } catch (error) {
       setNotice({ kind: 'err', text: error instanceof Error ? error.message : String(error) })
       return false
     } finally {
+      if (native) setGrantRevision(value => value + 1)
       setBusy(null)
     }
   }
@@ -2057,11 +2080,11 @@ export function SoloMode() {
                   <Icon name="PackageOpen" size={16} /> Item delivery
                 </h2>
                 <p className="text-sm text-text-muted mt-1">
-                  Deliver to the Backpack, Bank Storage, or supported built storage. The game must be fully closed before every grant.
+                  Backpack items arrive in game when you enter Solo through DST. Storage and pre-augmented grants require the game closed.
                 </p>
               </div>
               <StatusPill ok={!gameRunning}>
-                {gameRunning ? 'Close game to give items' : 'Offline writes available'}
+                {gameRunning ? 'In-game backpack delivery' : 'Queue for next Solo launch'}
               </StatusPill>
             </div>
 
@@ -2118,7 +2141,7 @@ export function SoloMode() {
                 }}
                 label="Item"
                 placeholder="Search name or template id"
-                disabled={!canMutateActiveProfile || gameRunning}
+                disabled={!canMutateActiveProfile}
               />
               <div className="grid grid-cols-2 gap-3 mt-3">
                 <label>
@@ -2130,7 +2153,7 @@ export function SoloMode() {
                     className={`${SOLO_INPUT_CLASS} mt-1`}
                     value={itemQuantity}
                     onChange={event => setItemQuantity(Number(event.target.value))}
-                    disabled={!canMutateActiveProfile || gameRunning}
+                    disabled={!canMutateActiveProfile}
                   />
                 </label>
                 <label>
@@ -2142,7 +2165,7 @@ export function SoloMode() {
                     className={`${SOLO_INPUT_CLASS} mt-1`}
                     value={itemQuality}
                     onChange={event => setItemQuality(Number(event.target.value))}
-                    disabled={!canMutateActiveProfile || gameRunning}
+                    disabled={!canMutateActiveProfile}
                   />
                 </label>
               </div>
@@ -2159,7 +2182,6 @@ export function SoloMode() {
                 className={`btn-primary w-full mt-4 justify-center ${SOLO_DISABLED_PRIMARY_CLASS}`}
                 disabled={
                   !canMutateActiveProfile
-                  || gameRunning
                   || !itemTemplate.trim()
                   || (itemAugments.length > 0 && itemQuantity !== 1)
                 }
@@ -2182,7 +2204,7 @@ export function SoloMode() {
                   style={{ colorScheme: 'inherit' }}
                   value={vehicleKitId}
                   onChange={event => setVehicleKitId(event.target.value)}
-                  disabled={!canMutateActiveProfile || gameRunning}
+                  disabled={!canMutateActiveProfile}
                 >
                   <option value="">Choose a vehicle...</option>
                   {(vehicleKits?.vehicles ?? [])
@@ -2197,7 +2219,7 @@ export function SoloMode() {
               </div>
               <button
                 className={`btn-primary w-full mt-4 justify-center ${SOLO_DISABLED_PRIMARY_CLASS}`}
-                disabled={!canMutateActiveProfile || gameRunning || !vehicleKitId}
+                disabled={!canMutateActiveProfile || !vehicleKitId}
                 onClick={() => void giveVehicleKit()}
               >
                 <Icon name={busy === 'give-items' ? 'LoaderCircle' : 'Truck'} size={14} className={busy === 'give-items' ? 'animate-spin' : ''} />
@@ -2295,6 +2317,8 @@ export function SoloMode() {
               </button>
             </div>
 
+            <SoloGrantDelivery profileToken={statusState.data?.profileToken ?? ''} gameRunning={gameRunning} revision={grantRevision} />
+
             <SoloCosmeticGrantCard
               busy={busy === 'give-items'}
               ownership={statusState.data?.cosmeticOwnership}
@@ -2303,7 +2327,8 @@ export function SoloMode() {
                 setNotice(null)
                 try {
                   const result = await grantSoloUnlocks(kind, statusState.data?.profileToken ?? '')
-                  setNotice({ kind: 'ok', text: `${label}: ${result.submitted} tokens saved for next login; ${result.skipped} already saved or held.${result.remaining ? ` ${result.remaining} remain: log in to process tokens, exit, and grant again after freeing backpack slots.` : ''}${result.safetyBackup ? ` Previous save retained at ${result.safetyBackup}` : ''}` })
+                  setGrantRevision(value => value + 1)
+                  setNotice({ kind: 'ok', text: `${label}: ${result.submitted} tokens queued for in-game delivery; ${result.skipped} already saved or held.${result.remaining ? ` ${result.remaining} remain: log in to process tokens, exit, and grant again after freeing backpack slots.` : ''}${result.safetyBackup ? ` Previous save retained at ${result.safetyBackup}` : ''}` })
                   await Promise.all([statusState.refresh(), runtimeState.refresh(), backupsState.refresh()])
                 } catch (error) {
                   setNotice({ kind: 'err', text: error instanceof Error ? error.message : String(error) })
@@ -2311,11 +2336,11 @@ export function SoloMode() {
               }}
               disabled={
                 !canMutateActiveProfile
-                || gameRunning
                 || !inspection?.inventories.some(inventory => inventory.kind === 'backpack')
               }
               onGrant={async (templateId, label, entry) => {
                 if (entry?.grant_method === 'character') {
+                  if (gameRunning) { setNotice({ kind: 'err', text: 'Close Dune before changing saved character customizations.' }); return }
                   setBusy('give-items'); setNotice(null)
                   try {
                     await grantSoloReviewedCustomization(statusState.data?.profileToken ?? '', entry.customization_id || templateId)
@@ -2386,7 +2411,7 @@ export function SoloMode() {
             </p>
             <GivePackageForm
               busy={busy !== null}
-              giveDisabled={!canMutateActiveProfile || gameRunning}
+              giveDisabled={!canMutateActiveProfile}
               targetLabel="selected Solo inventory"
               showOverflow={false}
               onGive={(items, packageName) => {

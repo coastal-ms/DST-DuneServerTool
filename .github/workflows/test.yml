@@ -274,6 +274,11 @@ jobs:
           python3 -B -m unittest discover -s tools/atlas -p test_elf.py -v
       - name: Verify current game item catalog coverage
         run: python3 -B -m unittest discover -s tests -p test_item_catalog_coverage.py -v
+      - name: Verify Solo native grant bridge
+        run: |
+          python3 -m venv "$RUNNER_TEMP/dst-native-lua"
+          "$RUNNER_TEMP/dst-native-lua/bin/python" -m pip install --disable-pip-version-check lupa==2.8
+          "$RUNNER_TEMP/dst-native-lua/bin/python" -B -m unittest discover -s tests -p test_solo_native_grants.py -v
 
   solo-helper:
     if: ${{ github.event_name != 'pull_request' || github.event.pull_request.draft == false }}

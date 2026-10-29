@@ -1,0 +1,12 @@
+{
+  "id": "dst-solo-grants",
+  "name": "Solo Grants",
+  "version": "1.0.4",
+  "requires": [],
+  "loadBefore": [],
+  "loadAfter": [],
+  "conflicts": [],
+  "warnings": [
+    "Included in DST Solo launches. Delivers selected backpack grants in game."
+  ]
+}
