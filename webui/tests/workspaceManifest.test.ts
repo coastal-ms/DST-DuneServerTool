@@ -136,14 +136,18 @@ describe('workspace manifest', () => {
   it('highlights task shortcuts without also highlighting their parent workspace', () => {
     for (const [label, parent, pathname, search] of [
       ['Server updates', 'Commands', '/commands', 'task=updates'],
-      ['Backups', 'Database', '/database', 'section=database.maint.Take+Backup'],
-      ['Backups', 'Database', '/database', 'section=database.backupSchedule'],
     ]) {
       expect(isNavItemActive(NAV_ITEMS.find(item => item.label === label)!, pathname, search)).toBe(true)
       expect(isNavItemActive(NAV_ITEMS.find(item => item.label === parent)!, pathname, search)).toBe(false)
     }
+    // Backup deep links retain the canonical Database destination in every menu.
+    expect(NAV_ITEMS.some(item => item.label === 'Backups')).toBe(false)
+    for (const search of ['', 'section=database.maint.Take+Backup', 'section=database.backupSchedule']) {
+      const active = NAV_ITEMS.filter(item => isNavItemActive(item, '/database', search))
+      expect(active.map(item => item.label)).toEqual(['Database'])
+    }
     const adminItems = getVisibleNavItems({ local: false, windows: false, canAccessOwnerSurfaces: false })
-    expect(adminItems.some(item => ['Backups', 'Server updates'].includes(item.label))).toBe(false)
+    expect(adminItems.some(item => ['Database', 'Server updates'].includes(item.label))).toBe(false)
   })
 
   it('highlights DD Atlas instead of Gameplay Admin on the static atlas view', () => {
