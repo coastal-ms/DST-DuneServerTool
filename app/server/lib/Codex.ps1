@@ -52,6 +52,17 @@ function Get-DunePlayerCodexLive {
     return ConvertTo-DuneCodexOwnership -Nodes @($journey.nodes)
 }
 
+function Get-DuneSoloActivity {
+    Assert-DuneSoloSupportedPlatform
+    $profile=Get-DuneSoloProfile
+    if(-not $profile.dbPath -or -not (Test-Path -LiteralPath $profile.dbPath -PathType Leaf)) { throw 'Connect a valid Solo save before viewing activity.' }
+    $result=Invoke-DuneSoloHelper -Command activity -Arguments @{input=$profile.dbPath}
+    $events=@($result.events | ForEach-Object {
+        @{id=$_.id;ts=$_.ts;event_type=$_.event_type;meta=(ConvertTo-DuneActivityMeta -Json $_.meta)}
+    })
+    return @{ok=$true;events=$events;unsupported=[bool]$result.unsupported;profileToken=(Get-DuneSoloProfileToken -DbPath $profile.dbPath)}
+}
+
 function Get-DuneCodexSelection {
     param([object[]]$Ids)
     $catalog = Get-Content -LiteralPath (Get-DuneSoloDataFilePath -Name 'codex-catalog.json') -Raw -Encoding UTF8 | ConvertFrom-Json
@@ -140,14 +151,14 @@ function Invoke-DunePlayerCodexGrant {
     $sql = Get-DuneCodexGrantSql -AccountId $AccountId -Ids $Ids
     $status = Invoke-DuneSqlQuery -Ip $Ip -Sql "SELECT online_status::text AS status FROM dune.player_state WHERE account_id=$AccountId::bigint;" -ReadOnly $true -MaxRows 2 -TimeoutSec 10
     if (-not $status.ok) { throw 'Character status could not be verified. No changes made.' }
-    $statusRows = @(ConvertTo-DuneRowMaps -Result $status)
+    $statusRows = ConvertTo-DuneRowMaps -Result $status
     if ($statusRows.Count -ne 1 -or [string]$statusRows[0]['status'] -cne 'Offline') { throw 'The character must be fully Offline.' }
     # This shared battlegroup helper runs only "backup" here, never stop/start.
     $backup = Invoke-DuneBaseWaterBgCommand -Ip $Ip -Command 'backup'
     if (-not $backup.ok -or -not $backup.backupPath) { throw 'The safety backup failed. No codex data was changed.' }
     $result = Invoke-DuneSqlQuery -Ip $Ip -Sql $sql -ReadOnly $false -MaxRows 1 -TimeoutSec 45
     if (-not $result.ok) { return @{ ok = $false; error = $result.error; backup = $backup.backupPath } }
-    $rows = @(ConvertTo-DuneRowMaps -Result $result)
+    $rows = ConvertTo-DuneRowMaps -Result $result
     if ($rows.Count -ne 1) { throw 'Codex write returned an unexpected result. Refresh ownership before retrying.' }
     return @{ ok = $true; granted = [int]$rows[0]['granted']; backup = $backup.backupPath; message = 'Selected codex fragments updated. Safety backup retained.' }
 }

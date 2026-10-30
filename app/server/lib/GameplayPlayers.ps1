@@ -1413,6 +1413,17 @@ function Invoke-DunePlayerUpdateTags {
 # Returns most recent N rows; meta is JSON kept as a string for the client.
 # ---------------------------------------------------------------------------
 $script:DunePlayerEventsSql = @'
+SELECT * FROM (
+SELECT
+    -row_number() OVER (ORDER BY ge.universe_time DESC, ge.event_type, ge.custom_data::text) AS id,
+    to_char(ge.universe_time AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS"Z"') AS ts,
+    'communinet_' || ge.event_type::text AS event_type,
+    (COALESCE(ge.custom_data, '{{}}'::jsonb) || jsonb_build_object('map',ge.map))::text AS meta_json
+FROM dune.game_events ge
+WHERE ge.player_facing_event=true
+  AND ge.actor_id IN (SELECT player_controller_id FROM dune.player_state WHERE account_id={0}::bigint
+                     UNION SELECT player_pawn_id FROM dune.player_state WHERE account_id={0}::bigint)
+UNION ALL
 SELECT
     el.id,
     COALESCE(to_char(el.event_time AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS"Z"'), '') AS ts,
@@ -1421,7 +1432,8 @@ SELECT
 FROM dune.event_log el
 JOIN dune.accounts ac ON ac."user" = el.meta->>'fls_id'
 WHERE ac.id = {0}::bigint
-ORDER BY el.event_time DESC, el.id DESC
+) activity
+ORDER BY ts DESC, id DESC
 LIMIT {1};
 '@
 
@@ -1438,10 +1450,24 @@ function Get-DunePlayerEventsLive {
             id         = (ConvertTo-DuneInt $r['id'])
             ts         = [string]$r['ts']
             event_type = [string]$r['event_type']
-            meta       = [string]$r['meta_json']
+            meta       = ConvertTo-DuneActivityMeta -Json ([string]$r['meta_json'])
         }
     }
     return @{ ok = $true; events = $events }
+}
+
+function ConvertTo-DuneActivityMeta {
+    param([string]$Json)
+    $allowed=@('map','solaris_delta','solaris_balance','m_BaseName','m_BuildableName','m_StateChange','m_TotemShieldState','m_TotemShieldStateChangedReason','m_PowerTimeLeftSeconds','m_OldName','m_NewName','m_OldPermissionRank','m_NewPermissionRank','m_CauserName','m_KillerType','m_DamageType')
+    $safe=@{}
+    try {
+        $value=$Json | ConvertFrom-Json
+        foreach($key in $allowed) {
+            $property=$value.PSObject.Properties[$key]
+            if($property -and ($property.Value -is [string] -or $property.Value -is [ValueType])) { $safe[$key]=$property.Value }
+        }
+    } catch {}
+    return ConvertTo-Json -InputObject $safe -Compress
 }
 
 # Demo data for new sections — used when live DB is unreachable.

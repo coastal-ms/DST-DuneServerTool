@@ -1387,7 +1387,24 @@ function Invoke-DuneChatCommandTeleport {
                     return @{ ok=$true; reply='Teleported to your private location.' }
                 }
             } catch {
-                return @{ ok=$false; applyCooldown=$false; reply='Private teleport unavailable. Check Teleport Locations in the Player Portal for the current map, location and cooldown.' }
+                # Only expose known user-facing failures; internal exceptions
+                # may contain identities, paths or infrastructure details.
+                $reason = [string]$_.Exception.Message
+                $safeReasons = @(
+                    'Travel to the destination map first.',
+                    'Your linked character must be online on a known map.',
+                    'The map layout changed. Delete and save this private location again.',
+                    'The saved map layout could not be verified. Save this private location again.',
+                    'The current map layout could not be verified. Try again after the map has loaded.',
+                    'Teleport is on cooldown. Please wait before trying again.',
+                    'Teleport could not be confirmed. Wait for the cooldown before trying again.',
+                    'The host has disabled !tp. Ask the host to enable it in Community tools.'
+                )
+                $reply = if ($reason -cin $safeReasons) { $reason } else {
+                    'Private teleport unavailable. Check Teleport Locations in the Player Portal for the current map, location and cooldown.'
+                }
+                Write-DuneChatTeleportTrace -TraceId $TraceId -Stage 'private-rejected' -Level 'WARN' -Fields @{ reason=$reply }
+                return @{ ok=$false; applyCooldown=$false; reply=$reply }
             }
         }
         if ($bookmarks.Count -eq 0) {

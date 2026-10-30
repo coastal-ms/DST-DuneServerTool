@@ -1,3 +1,6 @@
+import { CosmeticMultiSelect, type CosmeticGrantSummary } from '../../../components/CosmeticMultiSelect'
+import { CharacterActivityEvent } from '../../../components/CharacterActivityEvent'
+import { JourneyCompletionChoices } from '../../../components/JourneyCompletionChoices'
 import { useSearch } from '../../../router'
 // v11.5.6 — Player section panels. One component per section nav entry
 // (Stats / Specs / Tags / History / Inventory / Actions). All sections take
@@ -20,7 +23,7 @@ import { AugmentPicker } from '../../../components/AugmentPicker'
 import { TagPicker } from '../../../components/TagPicker'
 import {
   applySpecLevel, awardCharXp, awardIntel, setSpecLevel, cheatScript, cleanPlayerInventory,
-  applyProgressionPreset, getProgressionPresets,
+  applyProgressionPreset,
   progressionUnlock, progressionReverse,
   deleteAccount, deleteInventoryItem, deleteTutorials,
   fillWater, getPlayerEvents, getPlayerSpecs,
@@ -30,7 +33,7 @@ import {
   repairOrphanedBuildingPieces,
   getPlayerVehicles,
   setItemDurability, setItemStack, setItemWater, setWeaponAmmo,
-  resetAllKeystones, resetAllSpecs, resetJourney, resetProgressionLive, resetSpec,
+  resetAllKeystones, resetAllSpecs, resetJourney, resetStoryOnly, resetProgressionLive, resetSpec,
   restoreDestroyed,
   setFactionTier, setSkillPoints,
   setStarterClass, spawnVehicle, teleportToPlayer, teleportToLocation, setRespawn, getTeleportDestinations, getPlayers, updatePlayerTags, wipeCodex, resetFaction, snapshotBuilds, getFreshStartSnapshots, restoreBuilds, grantAllSkills,
@@ -40,14 +43,14 @@ import {
   getLandsraadOverview, getLandsraadPlayerContributions, setLandsraadContribution,
   getPlayerJourneyNodes, completeJourneyNode, resetJourneyNode,
   getTrainerCatalog, getTrainerStatus, unlockTrainer, resetTrainerSkills, unlockTestingStations,
-  getMainQuestCatalog, unlockMainQuest,
+  unlockMainQuest,
   getContracts, completeContract,
   getVehicleKitCatalog,
   getReserveRecovery, recoverReserve, rollbackReserve,
-  type Player, type PlayerEvent, type PlayerStats, type ProgressionPreset, type SpecTrackFull,
+  type Player, type PlayerEvent, type PlayerStats, type SpecTrackFull,
   type AugmentSelection, type CatalogItem, type ItemPackage, type GiveItemEntry, type FreshStartSnapshot,
   type LandsraadHouse, type LandsraadIniSetting,
-  type JourneyNode, type TrainerInfo, type TrainerStatus, type MainQuestInfo,
+  type JourneyNode, type TrainerInfo, type TrainerStatus,
   type PlayerVehicleRow, type TeleportDestination,
   type VehicleTemplate, type VehicleKitCatalog,
   type ContractRow,
@@ -600,49 +603,13 @@ export function HistorySection({ player, demo, refreshKey }: SectionProps) {
         <EmptyBox msg="No events recorded for this player." />
       ) : (
         <div className="space-y-1">
-          {events.map(ev => <EventRow key={ev.id} ev={ev} />)}
+          {events.map(ev => <CharacterActivityEvent key={ev.id} ev={ev} />)}
         </div>
       )}
     </div>
   )
 }
 
-function EventRow({ ev }: { ev: PlayerEvent }) {
-  const [open, setOpen] = useState(false)
-  let metadata: Record<string, unknown> = {}
-  try {
-    const parsed: unknown = JSON.parse(ev.meta)
-    if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) metadata = parsed as Record<string, unknown>
-  } catch { /* An event can still be shown without optional details. */ }
-  const number = (key: string) => {
-    const value = metadata[key]
-    return (typeof value === 'number' || (typeof value === 'string' && /^-?\d+(\.\d+)?$/.test(value))) && Number.isFinite(Number(value)) ? Number(value) : undefined
-  }
-  const delta = number('solaris_delta'), balance = number('solaris_balance')
-  const title = ev.event_type === 'update_solaris'
-    ? delta === undefined || delta === 0 ? 'Solari balance updated' : `${fmtNum(Math.abs(delta))} Solari ${delta < 0 ? 'removed' : 'added'}`
-    : ({login:'Logged in',logout:'Logged out'} as Record<string, string>)[ev.event_type] ?? 'Player activity recorded'
-  const details = [
-    ...(balance !== undefined ? [['Balance', fmtSolari(balance)]] : []),
-    ...(typeof metadata.map === 'string' ? [['Location', metadata.map.replace(/([a-z])([A-Z])/g, '$1 $2').replaceAll('_', ' ')]] : []),
-  ]
-  return (
-    <div className="card p-2.5 text-sm">
-      <button type="button" onClick={() => setOpen(o => !o)} className="w-full flex items-center justify-between gap-2 text-left">
-        <span className="flex items-center gap-2 min-w-0">
-          <Icon name={open ? 'ChevronDown' : 'ChevronRight'} size={12} className="text-text-dim shrink-0" />
-          <span className="text-text font-medium truncate">{title}</span>
-        </span>
-        <span className="text-[11px] text-text-dim font-mono shrink-0">{fmtTs(ev.ts)}</span>
-      </button>
-      {open && (
-        <div className="mt-2 p-3 bg-surface-2 rounded-md text-sm">
-          {details.length ? <dl className="space-y-2">{details.map(([label, value]) => <div key={label} className="flex flex-wrap justify-between gap-3"><dt className="text-text-muted">{label}</dt><dd>{value}</dd></div>)}</dl> : <p className="text-text-muted">No additional details were recorded.</p>}
-        </div>
-      )}
-    </div>
-  )
-}
 
 // ---------------------------------------------------------------------------
 // Actions — write surface. v11.5.9: full the reference implementation player toolkit.
@@ -661,12 +628,21 @@ interface ActionDef {
   offlineOnly?: boolean   // requires player to be offline (DB write the game caches in memory)
   experimental?: boolean  // unverified — may not take effect in-game; shown with an EXPERIMENTAL badge
   fields?: ActionField[]
-  custom?: 'codex' | 'regis-tanks' | 'give-item' | 'grant-reward' | 'whisper' | 'spawn-vehicle' | 'funcom-spawn-vehicle' | 'quick-presets' | 'vehicle-kit' | 'give-package' | 'cheat-scripts' | 'dev-scripts' | 'unlock-trainers' | 'unlock-mainquest' | 'complete-contract' | 'progression-unlock' | 'refuel-vehicle' | 'starter-class' | 'teleport-player' | 'teleport-location' | 'set-respawn' | 'reset-faction' | 'grant-cosmetic' | 'grant-house-swatches' | 'grant-buildable-swatches' | 'grant-building-sets' | 'grant-armor-skins' | 'grant-weapon-skins' | 'grant-vehicle-skins' | 'grant-all-dyes' | 'fresh-start'
+  custom?: 'codex' | 'regis-tanks' | 'give-item' | 'grant-reward' | 'whisper' | 'spawn-vehicle' | 'funcom-spawn-vehicle' | 'quick-presets' | 'tutorial-completion' | 'vehicle-kit' | 'give-package' | 'cheat-scripts' | 'dev-scripts' | 'unlock-trainers' | 'complete-contract' | 'progression-unlock' | 'refuel-vehicle' | 'starter-class' | 'teleport-player' | 'teleport-location' | 'set-respawn' | 'reset-faction' | 'grant-cosmetic' | 'grant-house-swatches' | 'grant-buildable-swatches' | 'grant-building-sets' | 'grant-armor-skins' | 'grant-weapon-skins' | 'grant-vehicle-skins' | 'grant-all-dyes' | 'fresh-start'
   balance?: 'solari' | 'scrip' | 'intel'  // show the player's current balance read-only above the form
   confirm?: (p: Player) => string  // confirm message; if returns '' no prompt
   doubleConfirm?: boolean // also requires a typed "i acknowledge" prompt inside run()
   rowNote?: string        // short italic note shown inline on the row heading
   run: (p: Player, v: Record<string, string>) => Promise<{ message: string }>
+}
+
+const storyOnlyResetMessage = (name: string) =>
+  `Reset story, contracts, faction progression, Codex and Find the Fremen rewards for ${name}, keeping learned skills, skill points and tech points? The NPE stays completed so the story restarts at the skipped-tutorial starting point, before crossing from South Hagga to Vermillius. The Base Reconstruction Tool and Fremen quest rewards, including the full Scavenger Stillsuit bundle, both Deathstills and Prescience/third ability-slot unlock, must be earned again. The character returns to Griffin's Reach. Other research, level, inventory, equipment and property are preserved. Take a database backup first. Player must remain offline.\n\nThis is the first of two confirmations.`
+
+function runStoryOnlyReset(player: Player) {
+  const typed = window.prompt(`Reset to post-NPE for ${player.name}. Type  i acknowledge  to proceed:`) || ''
+  if (typed.trim().toLowerCase() !== 'i acknowledge') throw new Error('Post-NPE reset cancelled.')
+  return resetStoryOnly(player.account_id)
 }
 
 const ACTIONS: ActionDef[] = [
@@ -719,14 +695,11 @@ const ACTIONS: ActionDef[] = [
       { key: 'tier',    label: 'Tier (0-20)', type: 'number', placeholder: '10', min: 0, max: 20 },
     ],
     run: (p, v) => setFactionTier(p.controller_id, String(v.faction || 'atreides').trim(), Number(v.tier) || 0) },
-  { id: 'apply-progression-preset', group: 'Progression', label: 'Apply Quick Preset', icon: 'Zap', custom: 'quick-presets', offlineOnly: true,
+  { id: 'apply-progression-preset', group: 'Progression', label: 'Complete Story', icon: 'Zap', custom: 'quick-presets', offlineOnly: true,
     rowNote: 'Completes a story/journey chapter instantly — incl. Find the Fremen (3rd ability slot + prescience). Player must be offline.',
     run: () => Promise.resolve({ message: '' }) },
-  { id: 'progression-unlock', group: 'Progression', label: 'Progression Unlock', icon: 'Milestone', custom: 'progression-unlock',
+  { id: 'progression-unlock', group: 'Progression', label: 'Faction Progression Unlocks', icon: 'Milestone', custom: 'progression-unlock',
     rowNote: 'Completes DA_FQ_ClimbTheRanks journey nodes + writes faction tier tags',
-    run: () => Promise.resolve({ message: '' }) },
-  { id: 'unlock-trainers', group: 'Progression', label: 'Unlock Trainers', icon: 'GraduationCap', custom: 'unlock-trainers',
-    rowNote: 'Complete a skill-trainer quest line + grant its skill tree — separated by trainer',
     run: () => Promise.resolve({ message: '' }) },
   { id: 'unlock-testing-stations', group: 'Progression', label: 'Testing Stations', icon: 'Milestone', offlineOnly: true,
     rowNote: 'Unlock selectable difficulties for one station or all six. Fresh backup; existing higher progress preserved. Faction requirements still apply.',
@@ -741,19 +714,23 @@ const ACTIONS: ActionDef[] = [
     ] }],
     confirm: p => `Unlock the selected Testing Station difficulties for ${p.name}? DST will verify a fresh backup and record completion progress. The character must be fully offline. Choose difficulty in-game; faction requirements still apply.`,
     run: (p, v) => unlockTestingStations(p.id, p.controller_id, p.account_id, v.station || 'all') },
-  { id: 'unlock-main-quest', group: 'Progression', label: 'Unlock Main Quest', icon: 'Flag', custom: 'unlock-mainquest',
-    rowNote: 'Complete an entire main-quest story line',
-    run: () => Promise.resolve({ message: '' }) },
-  { id: 'complete-contract', group: 'Progression', label: 'Complete Contract', icon: 'Check', custom: 'complete-contract', offlineOnly: true,
+  { id: 'complete-tutorials', group: 'Progression', label: 'Complete Tutorials', icon: 'BookOpen', custom: 'tutorial-completion', offlineOnly: true,
+    rowNote: 'Complete a selected tutorial journey.', run: () => Promise.resolve({ message: '' }) },
+  { id: 'complete-contract', group: 'Progression', label: 'Complete Contracts', icon: 'Check', custom: 'complete-contract', offlineOnly: true,
     rowNote: 'Force-complete a stuck / in-flight contract — writes its completion tags and dismisses the active contract item',
     run: () => Promise.resolve({ message: '' }) },
-  { id: 'codex', group: 'Progression', label: 'Codex', icon: 'BookOpen', custom: 'codex',
+  { id: 'codex', group: 'Progression', label: 'Complete Codex', icon: 'BookOpen', custom: 'codex',
     rowNote: 'View owned and missing lore fragments.', run: () => Promise.resolve({ message: '' }) },
   { id: 'reset-progression', group: 'Progression', label: 'Reset Progression (live)', icon: 'RotateCcw', liveOnly: true,
     rowNote: 'Single confirmation required',
     confirm: p => `Reset ALL progression for ${p.name}? Cannot be undone.\n\n` +
       `This single confirmation is required so the action can't run on an accidental click.`,
     run: p => resetProgressionLive({ actor_id: p.id }) },
+  { id: 'reset-story-only', group: 'Progression', label: 'Reset to Post-NPE (keep skills & points)', icon: 'RefreshCw', offlineOnly: true,
+    doubleConfirm: true,
+    rowNote: 'Replay story, faction journeys and Codex after the NPE. Keeps learned skills and both point balances; removes Find the Fremen reward unlocks.',
+    confirm: p => storyOnlyResetMessage(p.name),
+    run: p => runStoryOnlyReset(p) },
   { id: 'reset-journey', group: 'Progression', label: 'Reset Journey', icon: 'RefreshCw', offlineOnly: true,
     doubleConfirm: true,
     rowNote: 'Restart post-tutorial story at Find the Fremen. Preserves faction/research/loadout; resets chosen starter tree and refunds points. Offline.',
@@ -950,7 +927,7 @@ const ACTION_CATEGORIES = [
 ] as const
 const ITEMS_GROUP: ActionGroup = 'Items'
 
-export function ActionsSection({ player, canWrite, demo, flash, onChanged, onFlush, onWorking, actionIds, initialAction }: SectionProps & { actionIds?: readonly string[]; initialAction?: string }) {
+export function ActionsSection({ player, canWrite, demo, flash, onChanged, onFlush, onWorking, actionIds, initialAction, toolsLabel = 'Player tools' }: SectionProps & { actionIds?: readonly string[]; initialAction?: string; toolsLabel?: string }) {
   const { isPlayer } = usePortalAccess()
   const contextual = useCommandDeck()
   const [openId, setOpenId] = useState<string | null>(initialAction ?? null)
@@ -1025,9 +1002,9 @@ export function ActionsSection({ player, canWrite, demo, flash, onChanged, onFlu
     )
   }
 
-  if (actionIds) return <section aria-label="Player tools" className="space-y-3">
-    {Object.values(grouped).flat().map(action => <ActionRow key={action.id} def={action} player={player} busy={busy} stats={stats}
-      open={openId === action.id} danger={action.group === 'Danger'} onToggle={() => openAction(action.id)} runAction={runAction} />)}
+  if (actionIds) return <section aria-label={toolsLabel} className="space-y-3">
+    {Object.values(grouped).flat().sort((a,b) => actionIds.indexOf(a.id) - actionIds.indexOf(b.id)).map(action => <ActionRow key={action.id} def={action} player={player} busy={busy} stats={stats}
+      open={openId === action.id} danger={action.group === 'Danger'} onToggle={() => openAction(action.id)} runAction={runAction} onGrantSummary={summary=>flash(summary.message,summary.incomplete?'err':'info')} />)}
   </section>
 
   if (contextual) return (
@@ -1048,7 +1025,7 @@ export function ActionsSection({ player, canWrite, demo, flash, onChanged, onFlu
       renderTask={action => (
         <ActionRow def={action} player={player} busy={busy} stats={stats}
           open={openId === action.id} danger={action.group === 'Danger'}
-          onToggle={() => openAction(action.id)} runAction={runAction} />
+          onToggle={() => openAction(action.id)} runAction={runAction} onGrantSummary={summary=>flash(summary.message,summary.incomplete?'err':'info')} />
       )}
     />
   )
@@ -1075,7 +1052,7 @@ export function ActionsSection({ player, canWrite, demo, flash, onChanged, onFlu
                 <div key={a.id} data-expanded={openId === a.id ? 'true' : undefined}>
                 <ActionRow def={a} player={player} busy={busy} stats={stats}
                   open={openId === a.id} danger={group === 'Danger'}
-                  onToggle={() => openAction(a.id)} runAction={runAction} />
+                  onToggle={() => openAction(a.id)} runAction={runAction} onGrantSummary={summary=>flash(summary.message,summary.incomplete?'err':'info')} />
                 </div>
               ))}
             </div>
@@ -1123,7 +1100,8 @@ export function ReviewedGrantReview({ counts, loading, busy, offline, label, onR
   </div>
 }
 
-function ActionRow({ def, player, busy, stats, open, danger, onToggle, runAction }: {
+function ActionRow({ def, player, busy, stats, open, danger, onToggle, runAction, onGrantSummary }: {
+  onGrantSummary?: (summary:CosmeticGrantSummary)=>void
   def: ActionDef
   player: Player
   busy: boolean
@@ -1268,32 +1246,26 @@ function ActionRow({ def, player, busy, stats, open, danger, onToggle, runAction
                 return { message: `Sent dev script "${name}" to ${player.name}.` }
               })} />
           ) : def.custom === 'quick-presets' ? (
-            <QuickPresetsForm busy={busy}
-              onSubmit={presetId => runAction(def, () => applyProgressionPreset(player.account_id, presetId))} />
-          ) : def.custom === 'unlock-trainers' ? (
-            <UnlockTrainersForm busy={busy} accountId={player.account_id}
-              onUnlock={(job, name) => runAction(def, async () => {
-                const r = await unlockTrainer(player.account_id, job)
-                return { message: r.message || `Unlocked ${name} trainer for ${player.name}.` }
-              })}
-              onReset={(job, name) => runAction(def, async () => {
-                const r = await resetTrainerSkills(player.account_id, job)
-                return { message: r.message || `Reset ${name} skill tree for ${player.name}.` }
-              })} />
-          ) : def.custom === 'unlock-mainquest' ? (
-            <UnlockMainQuestForm busy={busy}
-              onSubmit={(quest, name) => runAction(def, async () => {
-                const r = await unlockMainQuest(player.account_id, quest)
-                return { message: r.message || `Unlocked main quest "${name}" for ${player.name}.` }
-              })} />
+            <JourneyCompletionChoices category="story" busy={busy}
+              onPreset={presetId => runAction(def, () => applyProgressionPreset(player.account_id, presetId))}
+              onQuest={quest => runAction(def, () => unlockMainQuest(player.account_id, quest))} />
+          ) : def.custom === 'tutorial-completion' ? (
+            <JourneyCompletionChoices category="tutorial" busy={busy}
+              onPreset={presetId => runAction(def, () => applyProgressionPreset(player.account_id, presetId))}
+              onQuest={quest => runAction(def, () => unlockMainQuest(player.account_id, quest))} />
           ) : def.custom === 'complete-contract' ? (
-            <CompleteContractForm busy={busy}
+            <><CompleteContractForm busy={busy}
               onSubmit={(contractId, label) => runAction(def, async () => {
                 const r = await completeContract(player.account_id, contractId)
                 return { message: r.message || `Completed contract "${label}" for ${player.name}.` }
               })} />
+            <UnlockTrainersForm busy={busy} accountId={player.account_id}
+              onUnlock={(job, name) => runAction(def, async () => { const r = await unlockTrainer(player.account_id, job); return { message: r.message || `Completed ${name} training.` } })}
+              onReset={(job, name) => runAction(def, async () => { const r = await resetTrainerSkills(player.account_id, job); return { message: r.message || `Reset ${name} training.` } })} />
+            </>
           ) : def.custom === 'progression-unlock' ? (
             <ProgressionUnlockForm busy={busy}
+              onComplete={faction => runAction(def, () => applyProgressionPreset(player.account_id, `faction_${faction}_complete`))}
               onUnlock={(faction, preset, presetName) => runAction(def, async () => {
                 const r = await progressionUnlock(player.id, faction, preset)
                 return { message: r.message || `Progression unlock (${presetName}) applied for ${player.name}.` }
@@ -1322,16 +1294,18 @@ function ActionRow({ def, player, busy, stats, open, danger, onToggle, runAction
                 return { message: `Package "${pkgName}": ${r.message}` }
               })} />
           ) : def.custom === 'grant-cosmetic' ? (
-            <GrantCosmeticForm busy={busy} playerName={player.name} accountId={player.account_id} playerOnline={(player.online_status || '').toLowerCase() !== 'offline'}
+            <GrantCosmeticForm onGrantSummary={onGrantSummary} busy={busy} playerName={player.name} accountId={player.account_id} playerOnline={(player.online_status || '').toLowerCase() !== 'offline'}
               onGrant={async (tpl, label, entry) => {
                 let succeeded = false
+                let failure:unknown
                 await runAction(def, async () => {
-                  const r = entry?.grant_method === 'character'
-                    ? await grantReviewedCustomization(player.id, player.controller_id, player.account_id, entry.customization_id || tpl)
-                    : await giveItem(player.id, tpl, 1, 0, true)
+                  const r = await (entry?.grant_method === 'character'
+                    ? grantReviewedCustomization(player.id, player.controller_id, player.account_id, entry.customization_id || tpl)
+                    : giveItem(player.id, tpl, 1, 0, true)).catch(error=>{failure=error;throw error})
                   succeeded = true
                   return { message: r.message || `Granted "${label}" to ${player.name}.` }
                 })
+                if(failure)throw failure
                 return succeeded
               }} />
           ) : def.custom === 'grant-house-swatches' || def.custom === 'grant-buildable-swatches' || def.custom === 'grant-building-sets' || def.custom === 'grant-armor-skins' || def.custom === 'grant-weapon-skins' || def.custom === 'grant-vehicle-skins' || def.custom === 'grant-all-dyes' ? (
@@ -1580,7 +1554,8 @@ function DestinationForm({ busy, submitLabel, icon, note, onSubmit }: {
 // swatches, vehicle skins) and delivers the chosen template via the normal
 // give-item path so the player unlocks the appearance. Loads the catalog on
 // mount; filters by name/template; groups results by type.
-export function GrantCosmeticForm({ busy, playerName, accountId, playerOnline, onGrant }: {
+export function GrantCosmeticForm({ busy, playerName, accountId, playerOnline, onGrant, onGrantSummary }: {
+  onGrantSummary?: (summary:CosmeticGrantSummary)=>void
   busy: boolean
   playerName: string
   accountId: number
@@ -1589,13 +1564,9 @@ export function GrantCosmeticForm({ busy, playerName, accountId, playerOnline, o
 }) {
   const [catalog, setCatalog] = useState<CosmeticEntry[] | null>(null)
   const [err, setErr] = useState<string | null>(null)
-  const [filter, setFilter] = useState('')
-  const [sel, setSel] = useState('')
   const [owned, setOwned] = useState<Set<string> | null>(null)
   const [unlocked, setUnlocked] = useState<Set<string>>(new Set())
   const [pending, setPending] = useState<Set<string>>(new Set())
-  const [showOwned, setShowOwned] = useState(true)
-  const [showExcluded, setShowExcluded] = useState(false)
   const [ownershipWarning, setOwnershipWarning] = useState('')
   useEffect(() => {
     let alive = true
@@ -1623,23 +1594,6 @@ export function GrantCosmeticForm({ busy, playerName, accountId, playerOnline, o
       })
     return () => { alive = false }
   }, [accountId])
-  const matches = useMemo(() => {
-    const list = catalog || []
-    const eligible = showExcluded ? list : list.filter(e => !e.bulk_exclusion)
-    const available = showOwned || !owned ? eligible : eligible.filter(e => !owned.has(e.template.toLowerCase()))
-    return filterCosmeticsCatalog(available, filter)
-  }, [catalog, filter, owned, showOwned, showExcluded])
-  const unlockedCatalogCount = useMemo(
-    () => (catalog ? catalog.filter(e => unlocked.has(e.template.toLowerCase())).length : 0),
-    [catalog, unlocked],
-  )
-  const groups = useMemo(() => {
-    const m = new Map<string, CosmeticEntry[]>()
-    for (const e of matches) { const a = m.get(e.group); if (a) a.push(e); else m.set(e.group, [e]) }
-    return Array.from(m.entries()).sort(([a], [b]) => a.localeCompare(b))
-  }, [matches])
-  const chosen = (catalog || []).find(e => e.template === sel)
-  const selectCls = 'w-full px-3 py-2 rounded-lg bg-surface-2 border border-border text-text text-sm focus:outline-none focus:ring-2 focus:ring-ibad focus:border-ibad/50'
 
   if (err) return <ErrorBox msg={err} />
   if (!catalog || !owned) return <div className="text-sm text-text-dim flex items-center gap-2"><Icon name="Loader2" size={13} className="animate-spin" /> Loading catalog and player ownership…</div>
@@ -1654,47 +1608,17 @@ export function GrantCosmeticForm({ busy, playerName, accountId, playerOnline, o
         </p>
       </div>
       {ownershipWarning && <div className="text-xs text-warning">{ownershipWarning}</div>}
-      <label className="flex items-center justify-between gap-3 text-xs text-text-dim">
-        <span className="flex items-center gap-2">
-          <input type="checkbox" checked={showOwned} disabled={busy}
-            onChange={e => {
-              setShowOwned(e.target.checked)
-              if (!e.target.checked && sel && owned.has(sel.toLowerCase())) setSel('')
-            }} />
-          Show saved records and held tokens
-        </span>
-        <span>{unlockedCatalogCount} saved unlock records / {catalog.filter(e => pending.has(e.template.toLowerCase()) && !unlocked.has(e.template.toLowerCase())).length} held tokens</span>
-      </label>
-      <p className="text-xs text-text-dim">This picker includes all customization categories, crafting stations and utilities. Its remaining count is not a count of failed bulk grants.</p>
-      <label className="flex items-center gap-2 text-xs text-text-dim"><input type="checkbox" checked={showExcluded} onChange={e => { setShowExcluded(e.target.checked); setSel('') }} />Show tokens excluded from bulk grants</label>
-      <input type="text" value={filter} disabled={busy} placeholder="Contains search: name, id, or group…"
-        onChange={e => setFilter(e.target.value)} className={selectCls} />
-      <select value={sel} disabled={busy} className={selectCls} onChange={e => setSel(e.target.value)} size={1}>
-        <option value="">Select a cosmetic or building set… ({matches.length})</option>
-        {groups.map(([g, items]) => (
-          <optgroup key={g} label={`${g} (${items.length})`}>
-            {items.map(e => <option key={e.template} value={e.template}>{e.name}{e.bulk_exclusion ? ' — Excluded from bulk' : unlocked.has(e.template.toLowerCase()) ? ' — Unlock record saved' : pending.has(e.template.toLowerCase()) ? ' — Token held' : ''}</option>)}
-          </optgroup>
-        ))}
-      </select>
-      {chosen && <p className="text-[11px] font-mono text-text-dim truncate">{chosen.template}</p>}
-      {chosen?.grant_method === 'character' && <p className="text-xs text-text-dim">Saves this appearance to the character. The player must be fully offline.</p>}
-      {chosen?.bulk_exclusion && <p className="text-xs text-warning">{chosen.bulk_exclusion}</p>}
-      <button className="btn-primary w-full" disabled={busy || !sel || (chosen?.grant_method === 'character' && playerOnline)}
-        onClick={async () => {
-          if (!chosen) return
-          if (await onGrant(chosen.template, chosen.name, chosen)) {
-            try {
-              const ownership = await getPlayerOwnedCosmetics(accountId)
-              setOwned(new Set((ownership.owned || []).map(id => id.toLowerCase())))
-              setUnlocked(new Set((ownership.unlocked || []).map(id => id.toLowerCase())))
-              setPending(new Set((ownership.pending || []).map(id => id.toLowerCase())))
-            } catch { setOwnershipWarning('Request submitted; unlock status could not be refreshed. Check in-game before retrying.') }
-            setSel('')
-          }
-        }}>
-        {busy ? <Icon name="Loader2" size={13} className="animate-spin" /> : <Icon name="Shirt" size={13} />} Grant
-      </button>
+      <CosmeticMultiSelect catalog={catalog} owned={owned} saved={unlocked} pending={pending} disabled={busy} playerOnline={playerOnline}
+        onGrant={entry => onGrant(entry.template, entry.name, entry)}
+        onComplete={async summary => {
+          try {
+            const ownership = await getPlayerOwnedCosmetics(accountId)
+            setOwned(new Set((ownership.owned || []).map(id => id.toLowerCase())))
+            setUnlocked(new Set((ownership.unlocked || []).map(id => id.toLowerCase())))
+            setPending(new Set((ownership.pending || []).map(id => id.toLowerCase())))
+          } catch { setOwnershipWarning('Requests submitted; unlock status could not be refreshed. Check in-game before retrying.') }
+          onGrantSummary?.(summary)
+        }} />
     </div>
   )
 }
@@ -2578,55 +2502,6 @@ function WhisperForm({ busy, onSubmit }: { busy: boolean; onSubmit: (msg: string
 // Self-contained quick-preset form. Fetches the progression preset catalog on
 // mount and applies the chosen preset (completes its journey nodes) by
 // account_id. Renders without a card wrapper — ActionRow provides the container.
-function QuickPresetsForm({ busy, onSubmit }: { busy: boolean; onSubmit: (presetId: string) => void }) {
-  const [presets, setPresets] = useState<ProgressionPreset[]>([])
-  const [sel, setSel] = useState('')
-  const [loading, setLoading] = useState(true)
-  const [err, setErr] = useState('')
-
-  useEffect(() => {
-    let alive = true
-    setLoading(true)
-    getProgressionPresets()
-      .then(r => {
-        if (!alive) return
-        const list = r.presets || []
-        setPresets(list)
-        setSel(list[0]?.id || '')
-      })
-      .catch(e => { if (alive) setErr(e instanceof Error ? e.message : String(e)) })
-      .finally(() => { if (alive) setLoading(false) })
-    return () => { alive = false }
-  }, [])
-
-  const chosen = presets.find(p => p.id === sel)
-  const selectCls = 'w-full px-3 py-2 rounded-lg bg-surface-2 border border-border text-text text-sm focus:outline-none focus:ring-2 focus:ring-ibad focus:border-ibad/50'
-
-  if (loading) return <div className="text-sm text-text-dim flex items-center gap-2"><Icon name="Loader2" size={13} className="animate-spin" /> Loading presets…</div>
-  if (err) return <div className="text-sm text-danger">{err}</div>
-  if (presets.length === 0) return <div className="text-sm text-text-dim">No presets available.</div>
-
-  return (
-    <div className="space-y-3">
-      <div>
-        <label className="block text-[11px] uppercase tracking-wider text-text-dim mb-1">Preset</label>
-        <select value={sel} disabled={busy} className={selectCls} onChange={e => setSel(e.target.value)}>
-          {presets.map(p => (
-            <option key={p.id} value={p.id}>
-              {p.name}{typeof p.node_count === 'number' && p.node_count > 0 ? ` (${p.node_count} nodes)` : ''}
-            </option>
-          ))}
-        </select>
-      </div>
-      {chosen?.description && <div className="text-xs text-text-muted">{chosen.description}</div>}
-      <button className="btn-primary w-full" disabled={busy || !sel}
-        onClick={() => onSubmit(sel)}>
-        {busy ? <Icon name="Loader2" size={13} className="animate-spin" /> : <Icon name="Zap" size={13} />} Apply Preset
-      </button>
-    </div>
-  )
-}
-
 // Self-contained Unlock-Trainers form. Fetches the skill-trainer catalog AND
 // the selected character's current ownership on mount, then renders one card
 // per trainer type (separated by trainer). Each card shows present values —
@@ -2731,59 +2606,6 @@ function UnlockTrainersForm({ busy, accountId, onUnlock, onReset }: {
           )
         })}
       </div>
-    </div>
-  )
-}
-
-// Self-contained Unlock-Main-Quest form. Fetches the main-quest catalog and
-// completes the chosen story line (flips every node in the subtree complete).
-function UnlockMainQuestForm({ busy, onSubmit }: { busy: boolean; onSubmit: (quest: string, name: string) => void }) {
-  const [quests, setQuests] = useState<MainQuestInfo[]>([])
-  const [sel, setSel] = useState('')
-  const [loading, setLoading] = useState(true)
-  const [err, setErr] = useState('')
-
-  useEffect(() => {
-    let alive = true
-    setLoading(true)
-    getMainQuestCatalog()
-      .then(r => {
-        if (!alive) return
-        const list = r.main_quests || []
-        setQuests(list)
-        setSel(list[0]?.id || '')
-      })
-      .catch(e => { if (alive) setErr(e instanceof Error ? e.message : String(e)) })
-      .finally(() => { if (alive) setLoading(false) })
-    return () => { alive = false }
-  }, [])
-
-  const chosen = quests.find(q => q.id === sel)
-  const selectCls = 'w-full px-3 py-2 rounded-lg bg-surface-2 border border-border text-text text-sm focus:outline-none focus:ring-2 focus:ring-ibad focus:border-ibad/50'
-
-  if (loading) return <div className="text-sm text-text-dim flex items-center gap-2"><Icon name="Loader2" size={13} className="animate-spin" /> Loading main quests…</div>
-  if (err) return <div className="text-sm text-danger">{err}</div>
-  if (quests.length === 0) return <div className="text-sm text-text-dim">No main quests available.</div>
-
-  return (
-    <div className="space-y-3">
-      <div>
-        <label className="block text-[11px] uppercase tracking-wider text-text-dim mb-1">Main quest</label>
-        <select value={sel} disabled={busy} className={selectCls} onChange={e => setSel(e.target.value)}>
-          {quests.map(q => (
-            <option key={q.id} value={q.id}>
-              {q.name}{q.node_count > 0 ? ` (${q.node_count} nodes)` : ''}
-            </option>
-          ))}
-        </select>
-      </div>
-      <div className="text-[11px] text-text-muted">
-        Flips every node in this story line complete and applies its reward tags. Takes effect on next login.
-      </div>
-      <button className="btn-primary w-full" disabled={busy || !sel}
-        onClick={() => onSubmit(sel, chosen?.name || sel)}>
-        {busy ? <Icon name="Loader2" size={13} className="animate-spin" /> : <Icon name="Flag" size={13} />} Unlock Main Quest
-      </button>
     </div>
   )
 }
@@ -2909,8 +2731,9 @@ const PROGRESSION_PRESETS: { value: string; label: string }[] = [
   { value: 'ch3_start', label: 'Ch3 Start' },
   { value: 'rank19_eligible', label: 'Rank 19 Eligible' },
 ]
-function ProgressionUnlockForm({ busy, onUnlock, onReverse }: {
+function ProgressionUnlockForm({ busy, onUnlock, onReverse, onComplete }: {
   busy: boolean
+  onComplete: (faction: string) => void
   onUnlock: (faction: string, preset: string, presetName: string) => void
   onReverse: (faction: string, preset: string, presetName: string) => void
 }) {
@@ -2949,6 +2772,8 @@ function ProgressionUnlockForm({ busy, onUnlock, onReverse }: {
           {busy ? <Icon name="Loader2" size={13} className="animate-spin" /> : <Icon name="Undo2" size={13} />} Reverse Unlock
         </button>
       </div>
+      <button className="btn-primary w-full" disabled={busy} onClick={() => onComplete(faction)}>Complete faction journeys</button>
+      <p className="text-xs text-text-muted">Includes the selected faction’s Rank 20 mission. Keeps current reputation and allegiance.</p>
     </div>
   )
 }
@@ -3010,7 +2835,7 @@ function ItemsActionBlock({ player, canWrite, flash, onChanged, onFlush }: {
       {items.map(a => (
         <div key={a.id} data-expanded={openId === a.id ? 'true' : undefined}>
           <ActionRow def={a} player={player} busy={busy} stats={null}
-            open={openId === a.id} onToggle={() => openAction(a.id)} runAction={runAction} />
+            open={openId === a.id} onToggle={() => openAction(a.id)} runAction={runAction} onGrantSummary={summary=>flash(summary.message,summary.incomplete?'err':'info')} />
         </div>
       ))}
         </div>
@@ -4203,6 +4028,13 @@ export function JourneySection({ player, canWrite, demo, refreshKey, flash, onCh
             placeholder="Search node id…"
             className="w-full px-3 py-1.5 rounded-lg bg-surface-2 border border-border text-text text-sm focus:outline-none focus:ring-2 focus:ring-ibad focus:border-ibad/50" />
         </div>
+        {canWrite && (
+          <button type="button" className="btn-secondary shrink-0 text-xs" disabled={busy || isOnline}
+            title={isOnline ? 'Player must be offline' : 'Reset story, faction, Codex and Fremen rewards after NPE; keep skills and point balances'}
+            onClick={() => { if (window.confirm(storyOnlyResetMessage(player.name))) void run(() => runStoryOnlyReset(player)) }}>
+            <Icon name="RefreshCw" size={12} /> Reset to Post-NPE
+          </button>
+        )}
         {canWrite && (
           <button type="button" className="btn-secondary shrink-0 text-xs text-error" disabled={busy || isOnline} onClick={resetAll}
             title={isOnline ? 'Player must be offline' : 'Reset post-NPE story and chosen starter tree; preserve faction, research, and loadout'}>

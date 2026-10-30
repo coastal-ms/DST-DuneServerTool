@@ -66,6 +66,18 @@ Describe 'Player ownership enforcement' {
         Invoke-PlayerCheck $f @{ account_id=12; name='Other'; role='owner' } | Should -BeFalse
         $f.response.status | Should -Be 403
     }
+    It 'limits the post-NPE reset to the linked offline account' {
+        $f=New-PlayerFixture POST '/api/gameplay/players/journey/reset-story'
+        Invoke-PlayerCheck $f @{account_id=11} | Should -BeTrue
+        Invoke-PlayerCheck $f @{account_id=12} | Should -BeFalse
+        $f.response.status | Should -Be 403
+    }
+    It 'rejects player self-reset while the linked character is online' {
+        Mock Get-DunePlayersLive { @{ok=$true;players=@(@{account_id=11;id=21;controller_id=31;online_status='Online'})} }
+        $f=New-PlayerFixture POST '/api/gameplay/players/journey/reset-story'
+        Invoke-PlayerCheck $f @{account_id=11} | Should -BeFalse
+        $f.response.status | Should -Be 403
+    }
     It 'checks query pawn and controller independently' {
         $f=New-PlayerFixture GET '/api/gameplay/players/detail' @{ pawn='21'; controller='32' }
         Invoke-PlayerCheck $f $null | Should -BeFalse

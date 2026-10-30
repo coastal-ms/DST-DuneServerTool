@@ -2878,14 +2878,28 @@ function Get-DuneServerName {
     $shared = Read-DuneServerNameState
     $sharedAge = ([datetime]::UtcNow - $shared.fetchedAt).TotalSeconds
 
+    # Status already observes the authoritative battlegroup title. Prefer that
+    # shared snapshot to the older standalone name cache, without another SSH
+    # read on notification/status polling paths.
+    if (-not $Force -and (Get-Command Get-DuneBattlegroupSnapshotCached -ErrorAction SilentlyContinue)) {
+        $snapshot = Get-DuneBattlegroupSnapshotCached
+        if ($snapshot -and $snapshot.available -and -not [string]::IsNullOrWhiteSpace([string]$snapshot.title)) {
+            $currentName = ([string]$snapshot.title).Trim()
+            if ($shared.name -cne $currentName -or $sharedAge -ge $script:DuneServerNameTtlSecs) {
+                Write-DuneServerNameState -Name $currentName
+            }
+            return $currentName
+        }
+    }
+
     if (-not $Force -and $shared.name -and $sharedAge -lt $script:DuneServerNameTtlSecs) {
         $script:DuneServerNameCache   = $shared.name
         $script:DuneServerNameFetched = [datetime]::UtcNow
         return $shared.name
     }
     if ($CachedOnly) {
-        if ($shared.name) { return $shared.name }
-        if ($script:DuneServerNameCache) { return $script:DuneServerNameCache }
+        # An expired name is not evidence of the currently selected server.
+        # Use the neutral notification fallback until a fresh read is available.
         return ''
     }
 

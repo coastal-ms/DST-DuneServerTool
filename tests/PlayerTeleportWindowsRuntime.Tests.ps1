@@ -13,7 +13,8 @@ $ErrorActionPreference='Stop'
 $script:DuneChatTeleportsFile=Join-Path $StoreRoot 'shared.json'
 $script:target=@{key=('a'*64);account=1;pawn=21;controller=31;funcom='fixture';fls='fixture';status='Online';map='HaggaBasin';partition=1L;dimension=0}
 function Read-DuneChatCommandsState { @{enabled=$true;commands=@{tp=@{enabled=$true;cooldownSeconds=60}};cooldowns=@{}} }
-function Get-DuneCoriolisSeedsLive {param($Ip) @{ok=$true;farm_seed=11;maps=@(@{map='HaggaBasin';seed=11});partitions=@(@{partition_id=1;map='Survival_1';seed=11})} }
+$script:seed=11
+function Get-DuneCoriolisSeedsLive {param($Ip) @{ok=$true;farm_seed=$script:seed;maps=@(@{map='HaggaBasin';seed=$script:seed});partitions=@(@{partition_id=1;map='Survival_1';seed=$script:seed})} }
 function Get-DunePlayerTeleportTarget {param($Ip,$AccountId) $script:target }
 function Invoke-DuneSqlQuery {param($Ip,$Sql,$ReadOnly,$MaxRows,$TimeoutSec) @{ok=$true} }
 function ConvertTo-DuneRowMaps {param($Result) ,@(@{account_id=1}) }
@@ -28,8 +29,10 @@ $result=Complete-DunePlayerTeleportCapture -Ip fixture -FuncomId fixture -Token 
 $view=Get-DunePlayerTeleportView $target
 if(-not $result.ok -or $view.private.Count -ne 1 -or $view.pending){throw 'Saved location reload failed'}
 $id=$view.private[0].id
+$script:seed=0
 $result=Invoke-DuneChatCommandTeleport -Ip fixture -FuncomId fixture -CommandArgs @('home') -Message @{}
-if(-not $result.ok -or $script:dispatches -ne 1){throw 'Private teleport failed'}
+if(-not $result.ok -or $script:dispatches -ne 1){throw 'Private teleport after automatic seed rollover failed'}
+if((Read-DunePlayerTeleports $target.key).bookmarks[0].world -ne '11|11|11'){throw 'Saved destination was rewritten'}
 $blocked=$false
 try {Enter-DunePlayerTeleportCooldown -Ip fixture -FuncomId fixture -Seconds 60} catch {if($_.Exception.Message -notlike '*cooldown*'){throw};$blocked=$true}
 if(-not $blocked){throw 'Persisted cooldown was bypassed'}

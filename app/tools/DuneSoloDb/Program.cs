@@ -10,6 +10,8 @@ namespace DuneSoloDb;
 
 internal static partial class Program
 {
+    private static bool ReuseRecoverySnapshot;
+    private static Action? RestoreVerificationProbe;
     private static readonly JsonSerializerOptions JsonOptions = new()
     {
         PropertyNamingPolicy = JsonNamingPolicy.CamelCase
@@ -56,6 +58,8 @@ internal static partial class Program
         {
             var options = ParseArgs(args);
             var command = RequireValue(options, "command").ToLowerInvariant();
+            ReuseRecoverySnapshot = options.TryGetValue("reuse-recovery-snapshot", out var reuse) && reuse == "true"
+                && command != "restore" && command != "import-blueprint" && !command.StartsWith("reset-") && !command.StartsWith("delete-");
             object result = command switch
             {
                 "grant-legitimate-customization" => GrantLegitimateCustomization(Require(options, "input"),
@@ -66,6 +70,7 @@ internal static partial class Program
                     ParseBalance(RequireValue(options, "amount"), "Character XP")),
                 "diagnostics" => ExportDiagnostics(Require(options, "input")),
                 "codex" => ReadCodex(Require(options, "input")),
+                "activity" => ReadGameActivity(Require(options,"input")),
                 "grant-codex" => GrantCodex(Require(options, "input"), Require(options, "safety-backup"), Require(options, "catalog"), Require(options, "selection")),
                 "faction-progression" => SetFactionProgression(Require(options,"input"), Require(options,"safety-backup"),
                     Require(options,"adapter"), Require(options,"nodes"), RequireValue(options,"faction"),
@@ -162,6 +167,7 @@ internal static partial class Program
                     Require(options, "input"),
                     Require(options, "safety-backup"),
                     Require(options, "adapter")),
+                "reset-post-npe" => ResetPostNpe(Require(options, "input"), Require(options, "safety-backup"), Require(options, "adapter"), Require(options, "reset-catalog")),
                 "complete-npe" => CompleteNpe(
                     Require(options, "input"),
                     Require(options, "safety-backup"),
@@ -177,6 +183,7 @@ internal static partial class Program
                     Require(options, "adapter"),
                     ParseBalance(RequireValue(options, "skill-points"), "Skill points"),
                     ParseBalance(RequireValue(options, "intel"), "Intel points")),
+                "self-test-post-npe" => SelfTest(postNpeOnly: true),
                 "self-test" => SelfTest(options.TryGetValue("adapter", out var selfTestAdapter) ? selfTestAdapter : null),
                 _ => throw new ArgumentException($"Unknown command: {command}")
             };
@@ -418,7 +425,10 @@ internal static partial class Program
             throw new FileNotFoundException("Target Solo save was not found.", target);
         }
 
-        if (File.Exists(safetyBackup))
+        var reuseSnapshot = ReuseRecoverySnapshot && File.Exists(safetyBackup)
+            && DateTime.UtcNow - File.GetLastWriteTimeUtc(safetyBackup) < TimeSpan.FromMinutes(15)
+            && new FileInfo(safetyBackup).Length > 0;
+        if (File.Exists(safetyBackup) && !reuseSnapshot)
         {
             throw new IOException($"Safety backup already exists: {safetyBackup}");
         }
@@ -455,10 +465,14 @@ internal static partial class Program
             }
             File.Replace(temp, target, replaceBackup, ignoreMetadataErrors: true);
             targetReplaced = true;
-            File.Copy(replaceBackup, safetyTemp);
-            File.Move(safetyTemp, safetyBackup);
-            File.Delete(replaceBackup);
+            if (!reuseSnapshot)
+            {
+                File.Copy(replaceBackup, safetyTemp);
+                File.Move(safetyTemp, safetyBackup);
+                File.SetLastWriteTimeUtc(safetyBackup, DateTime.UtcNow);
+            }
 
+            RestoreVerificationProbe?.Invoke();
             var restoredBytes = ReadStable(target);
             if (!CryptographicOperations.FixedTimeEquals(
                     SHA256.HashData(replacementBytes),
@@ -468,6 +482,9 @@ internal static partial class Program
             }
             var restoredInspection = InspectBytes(restoredBytes, target);
             EnsureWritableInspection(restoredInspection);
+            // Keep the immediate previous save until verification succeeds.
+            // A reused session snapshot must never be the rollback source.
+            File.Delete(replaceBackup);
             return new
             {
                 ok = true,
@@ -1071,10 +1088,9 @@ internal static partial class Program
             }
         }
 
-    private static object SelfTest(string? retailAdapterPath = null)
+    private static object SelfTest(string? retailAdapterPath = null, bool postNpeOnly = false)
     {
-        SelfTestCosmeticOwnership();
-        SelfTestLegitimateCustomizations();
+        if (!postNpeOnly) { SelfTestCosmeticOwnership(); SelfTestLegitimateCustomizations(); }
         var root = Path.Combine(Path.GetTempPath(), $"dune-solo-self-test-{Guid.NewGuid():N}");
         Directory.CreateDirectory(root);
         try
@@ -1416,6 +1432,7 @@ internal static partial class Program
             WrapSqlite(sqlitePath, source);
             var inspection = InspectPath(source);
             EnsureWritableInspection(inspection);
+            if (postNpeOnly) return SelfTestPostNpeReset(root, source);
             if (inspection.MapSeed != 2)
             {
                 throw new InvalidOperationException(
@@ -2375,6 +2392,8 @@ internal static partial class Program
                 """.Replace("__SCHEMA_FINGERPRINT__", selfTestFingerprint));
             SelfTestAmmoEquipment(root, target, catalogPath);
             SelfTestCharacterXp(root, target, adapterPath);
+            SelfTestJourneyUnlocks(root, target, adapterPath);
+            SelfTestGameActivity(root,target);
             var beforeNpe = InspectPath(target, adapterPath: adapterPath).Progression;
             if (beforeNpe.NpeNodesTotal != 2 || beforeNpe.NpeNodesComplete != 0)
             {

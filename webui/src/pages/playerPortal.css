@@ -1,0 +1,9 @@
+/* Keep the character workspace tall enough that switching to a short or loading
+   pane cannot clamp the portal's scroll position back to the server header. */
+.player-portal .player-management-content {
+  min-height: 100dvh;
+}
+
+.player-portal {
+  overflow-anchor: none;
+}

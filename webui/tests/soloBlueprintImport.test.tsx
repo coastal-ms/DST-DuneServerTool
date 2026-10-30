@@ -32,7 +32,9 @@ afterEach(() => { cleanup(); vi.clearAllMocks() })
 
 function openInventory() {
   const view = render(<SoloMode />)
-  fireEvent.click(screen.getByRole('button', { name: 'Inventory', exact: true }))
+  fireEvent.click(screen.getByRole('button', { name: 'Character tools', exact: true }))
+  fireEvent.click(screen.getByRole('button', { name: 'Items', exact: true }))
+  fireEvent.click(screen.getByRole('button', { name: 'Blueprints', exact: true }))
   return view
 }
 async function upload(value: unknown) {

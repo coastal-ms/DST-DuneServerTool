@@ -153,8 +153,143 @@ function Get-DuneSoloStatePath {
 }
 
 function Get-DuneSoloBackupRoot {
-    $dir = Join-Path $env:LOCALAPPDATA 'DuneServer'
-    Join-Path $dir 'SoloBackups'
+    Join-Path $env:LOCALAPPDATA 'DuneServer\SoloBackups'
+}
+
+function Get-DuneSoloBackupPolicy {
+    $path=Join-Path $env:APPDATA 'DuneServer\solo-backup-policy.json'
+    $directory='';$managed=$false;$roots=@()
+    if(Test-Path -LiteralPath $path -PathType Leaf){
+        $saved=Get-Content -LiteralPath $path -Raw -Encoding UTF8 | ConvertFrom-Json
+        if($saved.PSObject.Properties.Name -contains 'directory'){$directory=[string]$saved.directory}
+        if($saved.PSObject.Properties.Name -contains 'managed'){$managed=$saved.managed -eq $true}
+        if($saved.PSObject.Properties.Name -contains 'archiveRoots'){$roots=@($saved.archiveRoots | ForEach-Object {[string]$_})}
+    }
+    $archiveRoot=if($directory){Join-Path ([IO.Path]::GetFullPath($directory)) 'DST-SoloBackups'}else{''}
+    if($archiveRoot -and $roots -notcontains $archiveRoot){$roots+=,$archiveRoot}
+    @{managed=$managed;directory=$directory;archiveRoot=$archiveRoot;archiveRoots=@($roots);maximumBackups=50;automaticIntervalMinutes=15;pageSize=25}
+}
+
+function Copy-DuneSoloBackupToArchive {
+    param([Parameter(Mandatory)][string]$Source,[Parameter(Mandatory)][string]$SourceRoot,[Parameter(Mandatory)][string]$ArchiveRoot)
+    $sourceFull=[IO.Path]::GetFullPath($Source);$sourceBase=[IO.Path]::GetFullPath($SourceRoot)
+    if(-not (Test-DuneSoloPathWithinRoot -Path $sourceFull -Root $sourceBase)){throw 'Backup source escaped the local backup folder.'}
+    Assert-DuneSoloNoReparsePath -Path $sourceFull
+    $relative=$sourceFull.Substring($sourceBase.TrimEnd('\').Length+1)
+    $destination=[IO.Path]::GetFullPath((Join-Path $ArchiveRoot $relative))
+    Assert-DuneSoloNoReparsePath -Path $destination -AllowedRoot $ArchiveRoot
+    $hash=(Get-FileHash -LiteralPath $sourceFull -Algorithm SHA256).Hash
+    if(Test-Path -LiteralPath $destination -PathType Leaf){
+        if((Get-FileHash -LiteralPath $destination -Algorithm SHA256).Hash -eq $hash){return $destination}
+        $destination=Join-Path (Split-Path $destination) ([IO.Path]::GetFileNameWithoutExtension($destination)+'-'+$hash.ToLowerInvariant()+[IO.Path]::GetExtension($destination))
+        Assert-DuneSoloNoReparsePath -Path $destination -AllowedRoot $ArchiveRoot
+        if(Test-Path -LiteralPath $destination -PathType Leaf){
+            if((Get-FileHash -LiteralPath $destination -Algorithm SHA256).Hash -eq $hash){return $destination}
+            throw 'An archived filename collision could not be resolved. Local backup retained.'
+        }
+    }
+    New-Item -ItemType Directory -Path (Split-Path $destination) -Force | Out-Null
+    Assert-DuneSoloNoReparsePath -Path $destination -AllowedRoot $ArchiveRoot
+    $temp=$destination+'.'+[guid]::NewGuid().ToString('N')+'.tmp'
+    try{
+        [IO.File]::Copy($sourceFull,$temp,$false)
+        if((Get-FileHash -LiteralPath $temp -Algorithm SHA256).Hash -ne $hash -or (Get-FileHash -LiteralPath $sourceFull -Algorithm SHA256).Hash -ne $hash){throw 'Archive verification failed. Local backup retained.'}
+        [IO.File]::SetLastWriteTimeUtc($temp,(Get-Item -LiteralPath $sourceFull).LastWriteTimeUtc)
+        [IO.File]::Move($temp,$destination)
+    }finally{if(Test-Path -LiteralPath $temp){Remove-Item -LiteralPath $temp -Force}}
+    return $destination
+}
+
+function Invoke-DuneSoloBackupRetention {
+    param([Parameter(Mandatory)][string]$DbPath,[ValidateRange(0,50)][int]$Keep=50,[string[]]$PreservePaths=@())
+    $policy=Get-DuneSoloBackupPolicy
+    if(-not $policy.managed){return}
+    if(-not $policy.archiveRoot){throw 'Choose an archive folder before enabling backup management.'}
+    $root=Get-DuneSoloProfileBackupRoot -DbPath $DbPath
+    if(-not (Test-Path -LiteralPath $root -PathType Container)){return}
+    Assert-DuneSoloNoReparsePath -Path $root
+    $backups=@(Get-ChildItem -LiteralPath $root -Filter '*.db' -File -Recurse | Where-Object {$_.FullName -notlike '*\.delete-staging\*'} | Sort-Object LastWriteTimeUtc -Descending)
+    $removeCount=[Math]::Max(0,$backups.Count-$Keep)
+    $candidates=@($backups | Sort-Object LastWriteTimeUtc | Where-Object { $PreservePaths -notcontains $_.FullName } | Select-Object -First $removeCount)
+    foreach($backup in $candidates){
+        # Never delete an archive. A local copy leaves only after its immutable
+        # archive copy has been verified; an unavailable archive fails closed.
+        Copy-DuneSoloBackupToArchive -Source $backup.FullName -SourceRoot (Get-DuneSoloBackupRoot) -ArchiveRoot $policy.archiveRoot | Out-Null
+        Assert-DuneSoloNoReparsePath -Path $backup.FullName
+        Remove-Item -LiteralPath $backup.FullName -Force -ErrorAction Stop
+    }
+}
+
+function Complete-DuneSoloSettingsBackup {
+    param([Parameter(Mandatory)]$Result)
+    if(-not (Get-DuneSoloBackupPolicy).managed){return $Result}
+    $paths = @($Result.backupPaths | Where-Object { $_ })
+    if (-not $paths.Count -and $Result.backupPath) { $paths = @($Result.backupPath) }
+    $retained = @()
+    foreach ($path in $paths) {
+        if (-not (Test-Path -LiteralPath $path -PathType Leaf)) { continue }
+        $root = Join-Path (Get-DuneSoloBackupRoot) 'settings'
+        if (-not (Test-DuneSoloPathWithinRoot -Path $path -Root $root)) { $retained += $path; continue }
+        Assert-DuneSoloNoReparsePath -Path $path
+        $file = Get-Item -LiteralPath $path
+        $prefix = $file.BaseName -replace '-\d{8}-\d{6}.*$', ''
+        $previous = Get-ChildItem -LiteralPath $root -Filter '*.ini' -File |
+            Where-Object { $_.FullName -ne $file.FullName -and ($_.BaseName -replace '-\d{8}-\d{6}.*$', '') -eq $prefix -and $_.CreationTimeUtc -gt [DateTime]::UtcNow.AddMinutes(-15) } |
+            Sort-Object CreationTimeUtc | Select-Object -First 1
+        if ($previous) { Remove-Item -LiteralPath $file.FullName -Force; $retained += $previous.FullName }
+        else { $retained += $file.FullName }
+    }
+    if ($paths.Count) {
+        if ($Result -is [Collections.IDictionary]) { $Result['backupPaths']=@($retained | Select-Object -Unique); $Result['backupPath']=[string]($retained | Select-Object -First 1) }
+        else { $Result | Add-Member -NotePropertyName backupPaths -NotePropertyValue @($retained | Select-Object -Unique) -Force; $Result | Add-Member -NotePropertyName backupPath -NotePropertyValue ([string]($retained | Select-Object -First 1)) -Force }
+        $root = Join-Path (Get-DuneSoloBackupRoot) 'settings'
+        if (Test-Path -LiteralPath $root) {
+            foreach ($old in @(Get-ChildItem -LiteralPath $root -Filter '*.ini' -File | Sort-Object CreationTimeUtc -Descending | Select-Object -Skip 50)) {
+                Assert-DuneSoloNoReparsePath -Path $old.FullName
+                Copy-DuneSoloBackupToArchive -Source $old.FullName -SourceRoot (Get-DuneSoloBackupRoot) -ArchiveRoot (Get-DuneSoloBackupPolicy).archiveRoot | Out-Null
+                Remove-Item -LiteralPath $old.FullName -Force
+            }
+        }
+    }
+    return $Result
+}
+
+function Set-DuneSoloBackupDirectory {
+    param([Parameter(Mandatory)][AllowEmptyString()][string]$Directory,[bool]$Managed=$false)
+    $profile=Get-DuneSoloProfile
+    if(-not $profile.dbPath){throw 'Connect the intended Solo profile before changing backup management.'}
+    $current=Get-DuneSoloBackupPolicy
+    $directoryValue=if($Managed){$Directory.Trim()}else{[string]$current.directory}
+    $archiveRoot=[string]$current.archiveRoot;$roots=@($current.archiveRoots);$copied=0
+    if($Managed){
+        if(-not $directoryValue -or $directoryValue -notmatch '^(?:[A-Za-z]:[\\/]|\\\\[^\\]+\\[^\\]+)'){throw 'Choose an absolute archive folder path.'}
+        $directoryValue=[IO.Path]::GetFullPath($directoryValue)
+        $archiveRoot=Join-Path $directoryValue 'DST-SoloBackups'
+        $localRoot=Get-DuneSoloBackupRoot
+        if($archiveRoot.Equals($localRoot,[StringComparison]::OrdinalIgnoreCase) -or (Test-DuneSoloPathWithinRoot -Path $archiveRoot -Root $localRoot) -or (Test-DuneSoloPathWithinRoot -Path $localRoot -Root $archiveRoot)){throw 'Choose an archive outside the default backup folder.'}
+        if((Test-DuneSoloPathWithinRoot -Path $profile.dbPath -Root $archiveRoot) -or (Test-DuneSoloPathWithinRoot -Path $archiveRoot -Root (Split-Path $profile.dbPath))){throw 'Choose an archive separate from the live game save.'}
+        Assert-DuneSoloNoReparsePath -Path $archiveRoot -AllowedRoot $archiveRoot
+        $marker=Join-Path $archiveRoot '.dst-solo-backups'
+        if((Test-Path -LiteralPath $archiveRoot) -and -not (Test-Path -LiteralPath $marker) -and @(Get-ChildItem -LiteralPath $archiveRoot -File -Recurse).Count){throw 'Choose an empty archive location or an existing DST archive.'}
+        New-Item -ItemType Directory -Path $archiveRoot -Force | Out-Null
+        if(-not (Test-Path -LiteralPath $marker)){[IO.File]::WriteAllText($marker,'DST Solo backups v1',[Text.UTF8Encoding]::new($false))}
+        if(Test-Path -LiteralPath $localRoot){
+            foreach($backup in @(Get-ChildItem -LiteralPath $localRoot -File -Recurse | Where-Object {$_.Extension -in @('.db','.ini') -and $_.FullName -notlike '*\.delete-staging\*'})){
+                Copy-DuneSoloBackupToArchive -Source $backup.FullName -SourceRoot $localRoot -ArchiveRoot $archiveRoot | Out-Null
+                $copied++
+            }
+        }
+        if($roots -notcontains $archiveRoot){$roots+=,$archiveRoot}
+    }
+    $path=Join-Path $env:APPDATA 'DuneServer\solo-backup-policy.json'
+    New-Item -ItemType Directory -Path (Split-Path $path) -Force | Out-Null
+    $temp=$path+'.'+[guid]::NewGuid().ToString('N')+'.tmp'
+    try{
+        [IO.File]::WriteAllText($temp,(@{managed=$Managed;directory=$directoryValue;archiveRoots=@($roots);schemaVersion=2}|ConvertTo-Json -Depth 4 -Compress),[Text.UTF8Encoding]::new($false))
+        Move-Item -LiteralPath $temp -Destination $path -Force
+    }finally{if(Test-Path -LiteralPath $temp){Remove-Item -LiteralPath $temp -Force}}
+    if($Managed){Invoke-DuneSoloBackupRetention -DbPath $profile.dbPath}
+    @{ok=$true;root=(Get-DuneSoloBackupRoot);policy=(Get-DuneSoloBackupPolicy);copied=$copied}
 }
 
 function Get-DuneSoloDefaultDataRoot {
@@ -436,14 +571,18 @@ function Assert-DuneSoloGameClosed {
 
 function Invoke-DuneSoloHelper {
     param(
-        [Parameter(Mandatory)][ValidateSet('inspect','diagnostics','codex','grant-codex','character-xp','faction-progression','set-specialization','reset-specialization-rewards','backup','restore','grant-items','delete-item','delete-item-group','import-blueprint','list-blueprints','export-blueprint','set-currencies','fill-water','set-weapon-ammo','repair-equipment','max-augment-attributes','max-specializations','complete-fremen','complete-npe','enable-skills','set-progression-points','unlock-main-quest','unlock-trainer','unlock-testing-stations','grant-legitimate-customization')][string]$Command,
+        [Parameter(Mandatory)][ValidateSet('inspect','diagnostics','codex','activity','grant-codex','character-xp','faction-progression','set-specialization','reset-specialization-rewards','backup','restore','grant-items','delete-item','delete-item-group','import-blueprint','list-blueprints','export-blueprint','set-currencies','fill-water','set-weapon-ammo','repair-equipment','max-augment-attributes','max-specializations','complete-fremen','complete-npe','reset-post-npe','enable-skills','set-progression-points','unlock-main-quest','unlock-trainer','unlock-testing-stations','grant-legitimate-customization')][string]$Command,
         [Parameter(Mandatory)][hashtable]$Arguments
     )
 
     $helper = Get-DuneSoloHelperPath
+    if($Arguments['safety-backup'] -or $Command -eq 'backup'){
+        $backupProfile=Get-DuneSoloProfile
+        Invoke-DuneSoloBackupRetention -DbPath $backupProfile.dbPath -Keep 49 -PreservePaths @([string]$Arguments['input'])
+    }
     foreach ($key in @('input','target')) {
         if ($Arguments[$key] -and (Get-DuneSoloXboxBlob -Path ([string]$Arguments[$key]))) {
-            if ($Command -notin @('inspect','diagnostics','codex','backup','list-blueprints','export-blueprint')) {
+            if ($Command -notin @('inspect','diagnostics','codex','activity','backup','list-blueprints','export-blueprint')) {
                 $prepared = New-DuneSoloXboxMutation -Command $Command -Arguments $Arguments
                 $committed = Commit-DuneSoloXboxMutation -Prepared $prepared
                 $result = $prepared.result
@@ -455,6 +594,22 @@ function Invoke-DuneSoloHelper {
     }
     if (-not $helper) {
         throw 'DuneSoloDb.exe is unavailable. Rebuild or reinstall DST with Solo Mode support.'
+    }
+    # Ordinary edits share a recent recovery point. Destructive actions retain
+    # their own exact before-state; atomic replacement still keeps an immediate
+    # rollback file until every write has passed verification.
+    if ((Get-DuneSoloBackupPolicy).managed -and $Arguments['safety-backup'] -and $Command -notmatch '^(restore|reset-|delete-|import-blueprint)') {
+        $profile = Get-DuneSoloProfile
+        $automaticDir = Join-Path (Get-DuneSoloProfileBackupRoot -DbPath $profile.dbPath) 'automatic'
+        New-Item -ItemType Directory -Path $automaticDir -Force | Out-Null
+        Assert-DuneSoloNoReparsePath -Path $automaticDir
+        $latest = Get-ChildItem -LiteralPath $automaticDir -Filter '*.db' -File | Sort-Object LastWriteTimeUtc -Descending | Select-Object -First 1
+        if ($latest -and $latest.LastWriteTimeUtc -gt [DateTime]::UtcNow.AddMinutes(-14) -and $latest.LastWriteTimeUtc -le [DateTime]::UtcNow) {
+            $Arguments['safety-backup'] = $latest.FullName
+            $Arguments['reuse-recovery-snapshot'] = 'true'
+        } else {
+            $Arguments['safety-backup'] = Join-Path $automaticDir ('game-' + [DateTime]::UtcNow.ToString('yyyyMMdd-HHmmssfff') + '-' + [guid]::NewGuid().ToString('N') + '.db')
+        }
     }
     $cli = @('--command', $Command)
     foreach ($key in ($Arguments.Keys | Sort-Object)) {
@@ -475,6 +630,10 @@ function Invoke-DuneSoloHelper {
     if (-not $result -or -not $result.ok) {
         throw 'DuneSoloDb returned an invalid result.'
     }
+    if ($Arguments['safety-backup'] -or $Command -eq 'backup') {
+        try { Invoke-DuneSoloBackupRetention -DbPath (Get-DuneSoloProfile).dbPath }
+        catch { $result | Add-Member -NotePropertyName backupWarning -NotePropertyValue "The change succeeded, but old backups could not be pruned: $($_.Exception.Message)" -Force }
+    }
     return $result
 }
 
@@ -486,7 +645,7 @@ function Assert-DuneSoloProgressionAdapter {
 
 function Invoke-DuneSoloProgressionAction {
     param(
-        [Parameter(Mandatory)][ValidateSet('max-specializations','complete-fremen','complete-npe','enable-skills')][string]$Action,
+        [Parameter(Mandatory)][ValidateSet('max-specializations','complete-fremen','complete-npe','reset-post-npe','enable-skills')][string]$Action,
         [Parameter(Mandatory)][string]$Confirm,
         [Parameter(Mandatory)][string]$ExpectedConfirm
     )
@@ -511,7 +670,9 @@ function Invoke-DuneSoloProgressionAction {
         'safety-backup' = $safety
         adapter = $adapter.manifestPath
     }
-    if ($Action -eq 'max-specializations') {
+    if ($Action -eq 'reset-post-npe') {
+        $arguments['reset-catalog'] = Get-DuneSoloDataFilePath -Name 'post-npe-reset.json'
+    } elseif ($Action -eq 'max-specializations') {
         $arguments['keystones'] = Get-DuneSoloDataFilePath -Name 'dune-keystones.json'
     } elseif ($Action -eq 'enable-skills') {
         $arguments['skills'] = Get-DuneSoloDataFilePath -Name 'dune-skills-catalog.json'
@@ -1814,7 +1975,7 @@ function New-DuneSoloSaveBackup {
 }
 
 function Get-DuneSoloProfileBackupRoot {
-    param([Parameter(Mandatory)][string]$DbPath)
+    param([Parameter(Mandatory)][string]$DbPath,[string]$BackupRoot='')
 
     $fullDb = [IO.Path]::GetFullPath($DbPath)
     $profileDir = Split-Path -Parent $fullDb
@@ -1822,7 +1983,8 @@ function Get-DuneSoloProfileBackupRoot {
     $profileId = ([IO.Path]::GetFileName($profileDir) -replace '[^A-Za-z0-9._-]', '_')
     $channel = ([IO.Path]::GetFileName($channelDir) -replace '[^A-Za-z0-9._-]', '_')
     $token = Get-DuneSoloProfileToken -DbPath $fullDb
-    Join-Path (Get-DuneSoloBackupRoot) "$channel-$profileId-$($token.Substring(0, 12))"
+    if(-not $BackupRoot){$BackupRoot=Get-DuneSoloBackupRoot}
+    Join-Path $BackupRoot "$channel-$profileId-$($token.Substring(0, 12))"
 }
 
 function Get-DuneSoloProfileToken {
@@ -1856,54 +2018,55 @@ function Assert-DuneSoloExpectedProfile {
 
 function Get-DuneSoloBackups {
     Assert-DuneSoloSupportedPlatform
-    $profile = Get-DuneSoloProfile
-    if (-not $profile.dbPath) { return @() }
-    $root = Get-DuneSoloProfileBackupRoot -DbPath $profile.dbPath
-    if (-not (Test-Path -LiteralPath $root -PathType Container)) { return @() }
-    Assert-DuneSoloNoReparsePath -Path $root
-    return @(Get-ChildItem -LiteralPath $root -Filter '*.db' -File -Recurse -ErrorAction SilentlyContinue |
-        Where-Object {
-            try {
-                if ($_.FullName -like '*\.delete-staging\*') { return $false }
-                Assert-DuneSoloNoReparsePath -Path $_.FullName
-                $true
-            } catch { $false }
-        } |
-        Sort-Object LastWriteTimeUtc -Descending |
-        Select-Object -First 100 |
-        ForEach-Object {
-            [pscustomobject]@{
-                name = $_.Name
-                relativePath = $_.FullName.Substring($root.TrimEnd('\').Length + 1)
-                bytes = [long]$_.Length
-                createdAt = $_.CreationTimeUtc.ToString('o')
-                modifiedAt = $_.LastWriteTimeUtc.ToString('o')
-            }
-        })
+    $profile=Get-DuneSoloProfile
+    if(-not $profile.dbPath){return @()}
+    $policy=Get-DuneSoloBackupPolicy
+    $locations=@(@{root=(Get-DuneSoloBackupRoot);prefix='';source='local'})
+    for($index=0;$index -lt $policy.archiveRoots.Count;$index++){$locations+=@{root=[string]$policy.archiveRoots[$index];prefix="archive/$index/";source='archive'}}
+    $backups=@()
+    foreach($location in $locations){
+        $root=Get-DuneSoloProfileBackupRoot -DbPath $profile.dbPath -BackupRoot $location.root
+        if(-not (Test-Path -LiteralPath $root -PathType Container)){continue}
+        Assert-DuneSoloNoReparsePath -Path $root -AllowedRoot $location.root
+        foreach($file in @(Get-ChildItem -LiteralPath $root -Filter '*.db' -File -Recurse -ErrorAction Stop)){
+            if($file.FullName -like '*\.delete-staging\*'){continue}
+            Assert-DuneSoloNoReparsePath -Path $file.FullName -AllowedRoot $location.root
+            $backups+=[pscustomobject]@{name=$file.Name;relativePath=$location.prefix+$file.FullName.Substring($root.TrimEnd('\').Length+1);bytes=[long]$file.Length;createdAt=$file.CreationTimeUtc.ToString('o');modifiedAt=$file.LastWriteTimeUtc.ToString('o');source=$location.source}
+        }
+    }
+    return @($backups | Sort-Object modifiedAt -Descending)
+}
+
+function Resolve-DuneSoloBackupReference {
+    param([Parameter(Mandatory)][string]$RelativePath)
+    $profile=Get-DuneSoloProfile;$root=Get-DuneSoloProfileBackupRoot -DbPath $profile.dbPath
+    $allowed=Get-DuneSoloBackupRoot;$relative=$RelativePath
+    if($RelativePath -match '^archive[\\/]([0-9]+)[\\/](.+)$'){
+        $index=[long]$matches[1];$relative=$matches[2];$policy=Get-DuneSoloBackupPolicy
+        if($index -ge $policy.archiveRoots.Count){throw 'Unknown Solo backup archive.'}
+        $allowed=[string]$policy.archiveRoots[$index]
+        $root=Get-DuneSoloProfileBackupRoot -DbPath $profile.dbPath -BackupRoot $allowed
+    }
+    if([IO.Path]::IsPathRooted($relative) -or [IO.Path]::GetExtension($relative) -ne '.db' -or $relative -match '(^|[\\/])\.delete-staging([\\/]|$)'){throw 'Choose a valid Solo backup file.'}
+    $path=[IO.Path]::GetFullPath((Join-Path $root $relative))
+    if(-not (Test-DuneSoloPathWithinRoot -Path $path -Root $root)){throw 'Backup path is outside the connected Solo profile backup directory.'}
+    if(-not (Test-Path -LiteralPath $path -PathType Leaf)){throw 'Solo backup was not found.'}
+    Assert-DuneSoloNoReparsePath -Path $path -AllowedRoot $allowed
+    return $path
 }
 
 function Assert-DuneSoloNoReparsePath {
-    param([Parameter(Mandatory)][string]$Path)
-
-    $stop = [IO.Path]::GetFullPath((Join-Path $env:LOCALAPPDATA 'DuneServer'))
-    $currentPath = [IO.Path]::GetFullPath($Path)
-    if (-not (Test-DuneSoloPathWithinRoot -Path $currentPath -Root $stop) -and
-        -not $currentPath.Equals($stop, [StringComparison]::OrdinalIgnoreCase)) {
-        throw 'Solo backup path is outside the DST local data directory.'
-    }
-    while ($currentPath -and
-           ($currentPath.Equals($stop, [StringComparison]::OrdinalIgnoreCase) -or
-            (Test-DuneSoloPathWithinRoot -Path $currentPath -Root $stop))) {
-        if (Test-Path -LiteralPath $currentPath) {
-            $item = Get-Item -LiteralPath $currentPath -Force
-            if (($item.Attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0) {
-                throw "Refusing a Solo backup path containing a reparse point: $currentPath"
-            }
-        }
-        if ($currentPath.Equals($stop, [StringComparison]::OrdinalIgnoreCase)) { break }
-        $parent = Split-Path -Parent $currentPath
-        if (-not $parent -or $parent -eq $currentPath) { break }
-        $currentPath = $parent
+    param([Parameter(Mandatory)][string]$Path,[string]$AllowedRoot='')
+    $full=[IO.Path]::GetFullPath($Path)
+    $roots=@([IO.Path]::GetFullPath((Join-Path $env:LOCALAPPDATA 'DuneServer')))
+    if($AllowedRoot){$roots+=,[IO.Path]::GetFullPath($AllowedRoot)}
+    $allowed=$false
+    foreach($root in $roots){if($full.Equals($root,[StringComparison]::OrdinalIgnoreCase) -or (Test-DuneSoloPathWithinRoot -Path $full -Root $root)){$allowed=$true;break}}
+    if(-not $allowed){throw 'Solo backup path is outside the DST backup directories.'}
+    $current=$full
+    while($current){
+        if((Test-Path -LiteralPath $current) -and ((Get-Item -LiteralPath $current -Force).Attributes -band [IO.FileAttributes]::ReparsePoint)){throw 'Refusing a Solo backup path containing a reparse point.'}
+        $parent=Split-Path -Parent $current;if($parent -eq $current){break};$current=$parent
     }
 }
 
@@ -1956,6 +2119,7 @@ function Remove-DuneSoloBackups {
     }
     $targets = New-Object System.Collections.Generic.List[object]
     foreach ($relativePath in $requested) {
+        if($relativePath -match '^archive[\/]'){throw 'Archived backups are preserved; delete actions apply only to local backups.'}
         if ([IO.Path]::IsPathRooted($relativePath)) {
             throw 'Choose valid relative Solo backup paths.'
         }
@@ -2063,14 +2227,7 @@ function Restore-DuneSoloBackup {
     }
     Assert-DuneSoloAdapterCapability -Profile $profile -Capability 'restore' | Out-Null
     $root = Get-DuneSoloProfileBackupRoot -DbPath $profile.dbPath
-    $backup = [IO.Path]::GetFullPath((Join-Path $root $RelativePath))
-    if (-not (Test-DuneSoloPathWithinRoot -Path $backup -Root $root)) {
-        throw 'Backup path is outside the connected Solo profile backup directory.'
-    }
-    if (-not (Test-Path -LiteralPath $backup -PathType Leaf)) {
-        throw "Solo backup was not found: $RelativePath"
-    }
-    Assert-DuneSoloNoReparsePath -Path $backup
+    $backup = Resolve-DuneSoloBackupReference -RelativePath $RelativePath
     $safetyDir = Join-Path $root 'pre-restore'
     New-Item -ItemType Directory -Path $safetyDir -Force | Out-Null
     $stamp = (Get-Date).ToUniversalTime().ToString('yyyyMMdd-HHmmssfff')
@@ -2080,6 +2237,24 @@ function Restore-DuneSoloBackup {
         target = $profile.dbPath
         'safety-backup' = $safety
     }
+}
+
+function Restore-DuneSoloBackupFile {
+    param([Parameter(Mandatory)][string]$Path,[Parameter(Mandatory)][string]$Confirm)
+    Assert-DuneSoloSupportedPlatform
+    if($Confirm -ne 'RESTORE SOLO SAVE'){throw 'Confirm the Solo backup restore.'}
+    Assert-DuneSoloGameClosed
+    $profile=Get-DuneSoloProfile
+    if(-not $profile.dbPath -or -not (Test-Path -LiteralPath $profile.dbPath -PathType Leaf)){throw 'Connect a valid Solo save before restoring.'}
+    Assert-DuneSoloAdapterCapability -Profile $profile -Capability 'restore' | Out-Null
+    if($Path -notmatch '^(?:[A-Za-z]:[\\/]|\\\\[^\\]+\\[^\\]+)' -or [IO.Path]::GetExtension($Path) -ne '.db'){throw 'Choose a Solo .db backup file.'}
+    $source=[IO.Path]::GetFullPath($Path)
+    if(-not (Test-Path -LiteralPath $source -PathType Leaf)){throw 'The selected backup file was not found.'}
+    Assert-DuneSoloNoReparsePath -Path $source -AllowedRoot (Split-Path $source)
+    $dir=Join-Path (Get-DuneSoloProfileBackupRoot -DbPath $profile.dbPath) 'pre-restore'
+    New-Item -ItemType Directory -Path $dir -Force | Out-Null
+    $safety=Join-Path $dir ('game-before-restore-'+[DateTime]::UtcNow.ToString('yyyyMMdd-HHmmssfff')+'-'+[guid]::NewGuid().ToString('N')+'.db')
+    Invoke-DuneSoloHelper -Command restore -Arguments @{input=$source;target=$profile.dbPath;'safety-backup'=$safety}
 }
 function Export-DuneSoloDiagnostics {
     Assert-DuneSoloSupportedPlatform

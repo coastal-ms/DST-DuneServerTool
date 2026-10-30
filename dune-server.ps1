@@ -21,7 +21,7 @@ param(
 # Wraps the original battlegroup.ps1 menu and adds extra tools
 # ============================================================
 
-$script:ToolVersion = "16.6.10"
+$script:ToolVersion = "16.6.11"
 
 # Cold-boot readiness budgets (seconds). A fresh battlegroup's FIRST boot can
 # take 10-30 min: k3s + funcom-operators initialize, metrics-server restarts a
@@ -1281,17 +1281,6 @@ function Invoke-OnDemandPartitionClear {
     )
     Write-Host ""
     Write-Host "[$Phase] Clearing on-demand map partition pins (auto-fix so DeepDesert / Arrakeen / Harko spawn on demand)..." -ForegroundColor Cyan
-    $eventLib = @(
-        (Join-Path $scriptDir 'lib\EventMaps.ps1')
-        (Join-Path $scriptDir 'app\lib\EventMaps.ps1')
-    ) | Where-Object { Test-Path -LiteralPath $_ } | Select-Object -First 1
-    if ($eventLib) {
-        . $eventLib
-        if (-not (Get-Command Invoke-V6Ssh -ErrorAction SilentlyContinue)) { . (Join-Path (Split-Path -Parent $eventLib) 'Db-Postgres.ps1') }
-        $eventRepair = Repair-DuneEventMapDefinitions -Ip $Ip
-        Write-Host ('  '+$eventRepair.message) -ForegroundColor $(if ($eventRepair.ok) { 'Green' } else { 'Yellow' })
-    }
-
     # Fast pre-probe: if no on-demand map igwsss has a non-empty partitions pin
     # (the common case for a clean cold-boot), skip the whole 45s settle + heal
     # step. Saves ~50s on every reboot when no on-demand maps are loaded.

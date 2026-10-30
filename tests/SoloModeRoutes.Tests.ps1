@@ -47,6 +47,27 @@ Describe 'Solo Mode route registration' {
         $result.called | Should -BeFalse
         $result.status | Should -Be 409
     }
+    It 'rejects a stale profile before the destructive post-NPE reset' {
+        $result = & {
+            function Register-DuneRoute {
+                param($Method, $Path, [switch]$LocalOnly, $Handler)
+                [pscustomobject]@{ path=$Path; localOnly=[bool]$LocalOnly; handler=$Handler }
+            }
+            $route = @(. $script:RouteFile) | Where-Object path -eq '/api/solo/progression/reset-post-npe'
+            $script:questCalled = $false
+            $script:questStatus = 0
+            function Invoke-WithDuneLock { param($Name, $Script); & $Script }
+            function Assert-DuneSoloExpectedProfile { throw 'The active Solo save changed since this page loaded.' }
+            function Invoke-DuneSoloProgressionAction { $script:questCalled = $true }
+            function Write-DuneJson {}
+            function Write-DuneError { param($Response, $Status, $Message); $script:questStatus=$Status }
+            & $route.handler $null $null $null @{expectedProfileToken='stale';confirm='RESET SOLO POST NPE'}
+            [pscustomobject]@{localOnly=$route.localOnly;called=$script:questCalled;status=$script:questStatus}
+        }
+        $result.localOnly | Should -BeTrue
+        $result.called | Should -BeFalse
+        $result.status | Should -Be 409
+    }
     It 'keeps bulk grants local-only and rejects a changed profile before writing' {
         $result = & {
             function Register-DuneRoute {

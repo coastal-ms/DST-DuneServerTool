@@ -965,6 +965,7 @@ function Invoke-DuneDiscordStateMonitorTick {
                 $bg = Get-DuneBattlegroupSnapshot
                 if ($bg) {
                     if ($bg.state) { $bgState = $bg.state }
+                    if (-not [string]::IsNullOrWhiteSpace([string]$bg.title)) { $name = ([string]$bg.title).Trim() }
                     $haggaReady = Test-DuneHaggaReady -Snapshot $bg
                 }
             } catch {}

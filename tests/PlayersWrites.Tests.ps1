@@ -7,6 +7,7 @@ BeforeAll {
     Import-DstLib 'AugmentCatalog.ps1'
     Import-DstLib 'GameplayPlayers.ps1'
     Import-DstLib 'PlayersWrites.ps1'
+    Import-DstLib 'PlayersRead.ps1'
     $script:realRowMaps = (Get-Command ConvertTo-DuneRowMaps).ScriptBlock
     $script:realDuneInt = (Get-Command ConvertTo-DuneInt).ScriptBlock
 }
@@ -691,6 +692,97 @@ Describe 'Invoke-DunePlayerWipeJourneyNodes' -Tag 'Pure' {
 
         $r.ok | Should -BeFalse
         $r.error | Should -Match 'wipe incomplete'
+    }
+}
+
+Describe 'Story-only reset preservation' -Tag 'Pure' {
+    BeforeEach {
+        $script:storySql = @()
+        $script:storyOnline = $false
+        $script:storyEmptyCatalog = $false
+        $script:storyOldFactionReset = (Get-Command Invoke-DunePlayerResetFaction).ScriptBlock
+        function global:Invoke-DunePlayerResetFaction {
+            param($Ip,$AccountId,$Faction,[switch]$BuildOnly)
+            if (-not $BuildOnly) { throw 'Faction reset must be composed into one transaction.' }
+            return @{ ok = $true; sql = 'BEGIN; SELECT dune.change_player_faction(99::bigint,3::smallint,3::smallint,NOW()::timestamp); COMMIT;' }
+        }
+        $script:storyOldNpe = (Get-Command Get-DuneNpeCompletionNodes -ErrorAction SilentlyContinue).ScriptBlock
+        Set-Item function:global:ConvertTo-DuneRowMaps $script:realRowMaps
+        function global:Test-DunePlayerOfflineByAccount { return @{ ok = (-not $script:storyOnline); reason = 'Player is online' } }
+        function global:Get-DunePlayerPawnFromAccount { return 3946L }
+        function global:Get-DuneNpeCompletionNodes {
+            if ($script:storyEmptyCatalog) { return @() }
+            return @('DA_MQ_ANewBeginning', 'DA_MQ_NPEAutocompleted')
+        }
+        function global:Invoke-DuneSqlQuery {
+            param($Ip, $Sql, $ReadOnly, $MaxRows, $TimeoutSec, [switch]$Bulk)
+            $script:storySql += $Sql
+            if ($Sql -match 'AS character_id') { return @{ ok = $true; columns = @('character_id'); rows = ,@('8') } }
+            if ($Sql -match 'AS reset_partition') { return @{ ok = $true; columns = @('reset_partition'); rows = ,@('1') } }
+            if ($ReadOnly) { return @{ ok = $true; columns = @('journey_rows','story_tags','contract_items'); rows = ,@('2','1','0') } }
+            return @{ ok = $true }
+        }
+    }
+    AfterEach {
+        foreach ($name in @('Test-DunePlayerOfflineByAccount','Get-DunePlayerPawnFromAccount','Invoke-DuneSqlQuery')) {
+            Remove-Item "function:global:$name" -ErrorAction SilentlyContinue
+        }
+        Set-Item function:global:Invoke-DunePlayerResetFaction $script:storyOldFactionReset
+        if ($script:storyOldNpe) { Set-Item function:global:Get-DuneNpeCompletionNodes $script:storyOldNpe }
+        else { Remove-Item function:global:Get-DuneNpeCompletionNodes -ErrorAction SilentlyContinue }
+        Set-Item function:global:ConvertTo-DuneRowMaps $script:realRowMaps
+    }
+    It 'atomically resets story and contracts while preserving learned skills, point balances and achievements' {
+        $r = Invoke-DunePlayerWipeJourneyNodes -Ip 'test.invalid' -AccountId 605 -KeepNpeCompleted
+        $r.ok | Should -BeTrue -Because ([string]$r.error)
+        $r.skills_preserved | Should -BeTrue
+        $r.point_balances_preserved | Should -BeTrue
+        $r.faction_reset | Should -BeTrue
+        $r.codex_reset | Should -BeTrue
+        $r.fremen_rewards_reset | Should -BeTrue
+        $mutation = @($script:storySql | Where-Object { $_ -match '^BEGIN;' })
+        $mutation.Count | Should -Be 1
+        $mutation[0] | Should -Match 'NPE.HasCompletedNPE'
+        $mutation[0] | Should -Match 'DA_MQ_NPEAutocompleted'
+        $mutation[0] | Should -Match 'DA_\(ACH'
+        $mutation[0] | Should -Match 'm_TrackedContractItemUid'
+        $mutation[0] | Should -Match 'DialogueFlags.Factions'
+        $mutation[0] | Should -Match 'DialogueFlags.AoK'
+        $mutation[0] | Should -Not -Match "tag LIKE 'Character"
+        $mutation[0] | Should -Match 'COMMIT;'
+        $mutation[0] | Should -Not -Match 'FLevelComponent|UnspentSkillPoints|TotalSkillPoints|m_TechKnowledgePoints|building_progression|Customization'
+        $mutation[0] | Should -Not -Match 'delete_all_journey_story_nodes'
+        $mutation[0] | Should -Match 'delete_mnemonic_recall_lesson_all'
+        $mutation[0] | Should -Match 'change_player_faction'
+        $mutation[0] | Should -Match 'RCP_Crysknife_Recipe'
+        $mutation[0] | Should -Match 'RCP_BaseBackupTool_Recipe'
+        $mutation[0] | Should -Match 'RCP_LeakyStillsuit_Boots_Recipe'
+        $mutation[0] | Should -Match 'DA_GRP_CrudeStillsuit'
+        $mutation[0] | Should -Match 'admin_move_offline_player_to_partition'
+        $mutation[0] | Should -Match 'AddictionDisabled'
+    }
+    It 'refuses online characters before querying or writing state' {
+        $script:storyOnline = $true
+        $r = Invoke-DunePlayerWipeJourneyNodes -Ip 'test.invalid' -AccountId 605 -KeepNpeCompleted
+        $r.ok | Should -BeFalse
+        $script:storySql.Count | Should -Be 0
+    }
+    It 'refuses an empty tutorial catalog before changing state' {
+        $script:storyEmptyCatalog = $true
+        $r = Invoke-DunePlayerWipeJourneyNodes -Ip 'test.invalid' -AccountId 605 -KeepNpeCompleted
+        $r.ok | Should -BeFalse
+        $script:storySql.Count | Should -Be 0
+    }
+    It 'stops without writing if the player logs in during preparation' {
+        function global:Invoke-DuneSqlQuery {
+            param($Sql)
+            $script:storyOnline = $true
+            if ($Sql -match 'AS reset_partition') { return @{ ok = $true; columns = @('reset_partition'); rows = ,@('1') } }
+            return @{ ok = $true; columns = @('character_id'); rows = ,@('8') }
+        }
+        $r = Invoke-DunePlayerWipeJourneyNodes -Ip 'test.invalid' -AccountId 605 -KeepNpeCompleted
+        $r.ok | Should -BeFalse
+        $r.error | Should -Match 'before any write'
     }
 }
 

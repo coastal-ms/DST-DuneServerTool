@@ -53,22 +53,22 @@ export function CommandCategoryPages<T extends CategoryTask>({
         <label><Icon name="Search" size={16} /><input type="search" aria-label={searchAriaLabel} placeholder={searchPlaceholder} value={query} disabled={busy} onChange={event => setQuery(event.target.value)} /></label>
         <span role="status">{count} of {tasks.length} {countNoun}</span>
       </header>
-      <div className="command-category-layout">
-        <nav aria-label={categoriesNavLabel}>
+      <div className="command-category-layout" style={groups.length < 2 ? {display:'block'} : undefined}>
+        {groups.length > 1 && <nav aria-label={categoriesNavLabel}>
           {groups.map(group => <button key={group.id} type="button" aria-pressed={!searching && activeCategory === group.id} disabled={busy} onClick={() => chooseCategory(group.id)}>
             <Icon name={group.icon} size={17} /><span>{group.label}</span><small aria-hidden="true">{group.tasks.length}</small>
           </button>)}
           <button type="button" aria-pressed={!searching && activeCategory === 'all'} disabled={busy} onClick={() => chooseCategory('all')}>
             <Icon name="LayoutGrid" size={17} /><span>{allLabel}</span><small aria-hidden="true">{tasks.length}</small>
           </button>
-        </nav>
-        <label className="command-category-mobile">Category
+        </nav>}
+        {groups.length > 1 && <label className="command-category-mobile">Category
           <select value={searching ? 'search' : (activeCategory ?? 'all')} disabled={busy} onChange={event => chooseCategory(event.target.value)}>
             {searching && <option value="search" disabled>Search results</option>}
             {groups.map(group => <option key={group.id} value={group.id}>{group.label} ({group.tasks.length})</option>)}
             <option value="all">{allLabel} ({tasks.length})</option>
           </select>
-        </label>
+        </label>}
         <div className="command-category-content">
           {searching && <h3 className="command-search-heading">Search results</h3>}
           {!count && <div className="command-category-empty" role="status">

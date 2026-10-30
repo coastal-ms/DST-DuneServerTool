@@ -13,6 +13,15 @@ here cover everything those tags shipped.
 
 ## [Unreleased]
 
+## [16.6.11] - 2026-10-30
+
+### Changed
+- Align Solo and player administration, including progression completion and replay controls.
+- Add opt-in Solo backup archiving, folder selection, and restore access to older saves.
+- Clarify map readiness and support Tank compatibility checks with multiple Hagga instances.
+- Improve Codex, cosmetics, portal navigation, and private teleports.
+- Use official event-map definitions and current server names in notifications.
+
 ## [16.6.10] - 2026-10-29
 
 - Remove the duplicate Backups navigation entry; backup and restore remain available under Database.

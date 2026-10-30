@@ -1,13 +1,14 @@
 import { useState } from 'react'
 import { Icon } from '../Icon'
 
-export function SoloJourneyCompletion({ disabled, busy, progression, onRun }: {
+export function SoloJourneyCompletion({ disabled, busy, progression, onRun, category }: {
+  category?: 'story' | 'tutorial'
   disabled: boolean
   busy: boolean
   progression?: { npeNodesComplete: number; npeNodesTotal: number; npeTagPresent: boolean; fremenNodesComplete: number; fremenNodesTotal: number; spiceSystemStatus: string }
   onRun: (quest: string) => void
 }) {
-  const [mainQuest, setMainQuest] = useState('DA_MQ_FindTheFremen')
+  const [mainQuest, setMainQuest] = useState(category === 'tutorial' ? 'npe' : 'DA_MQ_FindTheFremen')
   const SOLO_INPUT_CLASS = 'w-full px-3 py-2 rounded-lg bg-surface-2 border border-border text-text text-sm focus:outline-none focus:ring-2 focus:ring-ibad focus:border-ibad/50 disabled:opacity-50 disabled:cursor-not-allowed'
   const SOLO_DISABLED_PRIMARY_CLASS = 'disabled:bg-surface-2 disabled:text-text-dim disabled:border disabled:border-border disabled:opacity-100'
   return (
@@ -15,20 +16,23 @@ export function SoloJourneyCompletion({ disabled, busy, progression, onRun }: {
       <div className="w-9 h-9 rounded-lg bg-accent/10 border border-accent/25 flex items-center justify-center text-accent-bright mb-3">
         <Icon name="Route" size={17} />
       </div>
-      <h2 className="font-semibold">Journey completion</h2>
+      <h2 className="font-semibold">{category === 'tutorial' ? 'Tutorial completion' : 'Story completion'}</h2>
       <p className="text-sm text-text-muted mt-1">
-        Complete a selected main quest or the full tutorial. Close Dune first; each action retains a backup.
+        Complete a selected journey or the full tutorial. Close Dune first; each action retains a backup.
       </p>
       <label className="mt-4" htmlFor="solo-main-quest">Progression path</label>
       <select id="solo-main-quest" className={`${SOLO_INPUT_CLASS} mt-1`}
         value={mainQuest} onChange={event => setMainQuest(event.target.value)}
         disabled={disabled || busy}>
-        <option value="DA_MQ_FindTheFremen">Find the Fremen</option>
-        <option value="npe">Full tutorial (NPE)</option>
-        <option value="DA_MQ_ANewBeginning">A New Beginning (quest only)</option>
-        <option value="DA_MQ_AssassinsHandbook">Assassin’s Handbook</option>
-        <option value="DA_MQ_TheGreatConvention">The Great Convention</option>
-        <option value="DA_MQ_TheGreatConventionPt2">The Great Convention (Pt. 2)</option>
+        {category !== 'tutorial' && <>
+        <option value="DA_MQ_FindTheFremen">Complete Act 1 — Find the Fremen</option>
+        <option value="act2_complete">Complete Act 2</option>
+        <option value="DA_MQ_TheGreatConventionPt2">Complete Act 3</option>
+        <option value="DA_MQ_TheGreatConventionPt3">Complete Act 4 — The Great Convention, Part III</option>
+        <option value="DA_DLC_LostHarvest">Complete Lost Harvest</option>
+        <option value="scourge_complete">Complete Scourge</option>
+        </>}
+        {category !== 'story' && <option value="npe">Complete Full Tutorial (NPE)</option>}
       </select>
       <p className="text-xs text-text-muted mt-3 flex-1">
         {mainQuest === 'npe'

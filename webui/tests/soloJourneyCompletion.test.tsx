@@ -4,30 +4,21 @@ import { SoloJourneyCompletion } from '../src/components/solo/SoloJourneyComplet
 
 afterEach(cleanup)
 
-it('offers all main quests and the full tutorial in one completion control', () => {
-  const onRun = vi.fn()
-  render(<SoloJourneyCompletion disabled={false} busy={false} onRun={onRun} />)
-  expect(screen.getAllByRole('combobox')).toHaveLength(1)
-  const choices = screen.getAllByRole('option') as HTMLOptionElement[]
-  expect(choices).toHaveLength(6)
-  for (const choice of choices) {
-    fireEvent.change(screen.getByLabelText('Progression path'), { target: { value: choice.value } })
-    fireEvent.click(screen.getByRole('button', { name: 'Complete selected journey' }))
-    expect(onRun).toHaveBeenLastCalledWith(choice.value)
-  }
+it('offers numbered acts, Lost Harvest and Scourge in Story with their exact handlers', () => {
+ const onRun = vi.fn()
+ render(<SoloJourneyCompletion category="story" disabled={false} busy={false} onRun={onRun} />)
+ const expected = ['DA_MQ_FindTheFremen', 'act2_complete', 'DA_MQ_TheGreatConventionPt2', 'DA_MQ_TheGreatConventionPt3', 'DA_DLC_LostHarvest', 'scourge_complete']
+ expect(screen.getAllByRole('option').map(o => (o as HTMLOptionElement).value)).toEqual(expected)
+ for (const value of expected) {
+  fireEvent.change(screen.getByLabelText('Progression path'), {target: {value}})
+  fireEvent.click(screen.getByRole('button', {name:'Complete selected journey'}))
+  expect(onRun).toHaveBeenLastCalledWith(value)
+ }
 })
-
-it('keeps tutorial completion distinct from the A New Beginning quest', () => {
-  render(<SoloJourneyCompletion disabled={false} busy={false} onRun={vi.fn()}
-    progression={{ npeNodesComplete: 10, npeNodesTotal: 140, npeTagPresent: false,
-      fremenNodesComplete: 20, fremenNodesTotal: 59, spiceSystemStatus: 'FullyEnabled' }} />)
-  expect(screen.getByText('20/59 nodes · Prescience enabled')).toBeInTheDocument()
-  fireEvent.change(screen.getByLabelText('Progression path'), { target: { value: 'npe' } })
-  expect(screen.getByText(/mark the full tutorial finished/)).toBeInTheDocument()
-  expect(screen.getByText('10/140 nodes · completion tag missing')).toBeInTheDocument()
-  fireEvent.change(screen.getByLabelText('Progression path'), { target: { value: 'DA_MQ_ANewBeginning' } })
-  expect(screen.queryByText(/mark the full tutorial finished/)).not.toBeInTheDocument()
-  expect(screen.queryByText(/completion tag missing/)).not.toBeInTheDocument()
+it('keeps full tutorial completion in its own category', () => {
+ render(<SoloJourneyCompletion category="tutorial" disabled={false} busy={false} onRun={vi.fn()} />)
+ expect(screen.getAllByRole('option')).toHaveLength(1)
+ expect(screen.getByRole('option', {name:'Complete Full Tutorial (NPE)'})).toHaveValue('npe')
 })
 
 it.each([[true, false], [false, true]])('blocks changes when disabled=%s or busy=%s', (disabled, busy) => {

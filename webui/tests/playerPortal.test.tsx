@@ -1,7 +1,7 @@
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import PlayerPortal from '../src/pages/PlayerPortal'
-import { getPlayers, getPlayerStats, giveSolari, type Player } from '../src/api/gameplay'
+import { getPlayers, getPlayerStats, giveSolari, resetStoryOnly, type Player } from '../src/api/gameplay'
 import { getMapState, startMap } from '../src/api/maps'
 import { COMMAND_DECK_KEY } from '../src/hooks/useCommandDeck'
 
@@ -12,7 +12,7 @@ vi.mock('../src/pages/workspaces/MapLiveState', () => ({ MapLiveState: () => <di
 vi.mock('../src/hooks/usePlatformCapabilities', () => ({ usePlatformCapabilities: () => ({ hasCapability: () => true }) }))
 vi.mock('../src/api/gameplay', async original => ({
   ...await original<typeof import('../src/api/gameplay')>(),
-  getPlayers: vi.fn(), getPlayerStats: vi.fn(), giveSolari: vi.fn(),
+  getPlayers: vi.fn(), getPlayerStats: vi.fn(), giveSolari: vi.fn(), resetStoryOnly: vi.fn(),
 }))
 vi.mock('../src/api/maps', async original => ({
   ...await original<typeof import('../src/api/maps')>(), getMapState: vi.fn(), startMap: vi.fn(),
@@ -26,6 +26,7 @@ beforeEach(() => {
     class: 'Mentat', map: 'Survival_1', online_status: 'Offline', last_seen: '',
     faction_id: 1, faction_name: 'Atreides', solaris: 10, total_currency: 10,
   } })
+  vi.mocked(resetStoryOnly).mockResolvedValue({ ok: true, message: 'Post-NPE reset complete.' })
   vi.mocked(giveSolari).mockResolvedValue({ ok: true, message: 'Granted to own character.' })
   vi.mocked(startMap).mockResolvedValue({ ok: true, key: 'deepdesert', message: 'Warming map.' })
   vi.mocked(getMapState).mockResolvedValue({ ok: true, running: false } as Awaited<ReturnType<typeof getMapState>>)
@@ -52,6 +53,23 @@ describe('Player portal', () => {
     fireEvent.change(screen.getByRole('spinbutton', { name: 'Amount' }), { target: { value: '7' } })
     fireEvent.click(within(actions).getAllByRole('button', { name: 'Give Solari', exact: true }).find(button => !button.hasAttribute('aria-expanded'))!)
     await waitFor(() => expect(giveSolari).toHaveBeenCalledWith(31, 7))
+  })
+  it('lets the linked player reset only their own offline character through the shared control', async () => {
+    vi.spyOn(window, 'confirm').mockReturnValue(true)
+    vi.spyOn(window, 'prompt').mockReturnValue('i acknowledge')
+    render(<PlayerPortal />)
+    await screen.findByRole('heading', { name: /Own character/ })
+    const homes = within(screen.getByRole('navigation', { name: 'Character sections' }))
+    fireEvent.click(homes.getByRole('button', { name: 'Progression', exact: true }))
+    fireEvent.click(screen.getByRole('button', { name: 'Unlocks & rewards', exact: true }))
+    const label = 'Reset to Post-NPE (keep skills & points)'
+    fireEvent.click(screen.getByRole('button', { name: label + 'Offline', exact: true }))
+    expect(resetStoryOnly).not.toHaveBeenCalled()
+    const action = screen.getAllByRole('button', { name: label, exact: true }).find(button => !button.hasAttribute('aria-expanded'))!
+    fireEvent.click(action)
+    await waitFor(() => expect(resetStoryOnly).toHaveBeenCalledWith(11))
+    expect(window.confirm).toHaveBeenCalledWith(expect.stringContaining('Own character'))
+    expect(window.prompt).toHaveBeenCalled()
   })
   it('allows map viewing and warming without stop or restart controls', async () => {
     render(<PlayerPortal />)

@@ -28,13 +28,63 @@
   },
   {
     "id": "act1_complete",
-    "name": "Complete: All of Act 1",
+    "name": "Complete Act 1",
     "node_count": 182,
     "nodes": [
       "DA_MQ_ANewBeginning",
       "DA_MQ_FindTheFremen"
     ],
     "description": "Exact 136-node NPE completion + Find the Fremen. Player starts ready for Act 2 without partial tutorial research state."
+  },
+  {
+    "id": "act2_complete",
+    "name": "Complete Act 2",
+    "nodes": [
+      "DA_MQ_AssassinsHandbook",
+      "DA_MQ_TheGreatConvention"
+    ],
+    "description": "Complete Assassin’s Handbook and The Great Convention. Takes effect on next login."
+  },
+  {
+    "id": "act3_complete",
+    "name": "Complete Act 3",
+    "nodes": [
+      "DA_MQ_TheGreatConventionPt2"
+    ],
+    "description": "Complete The Great Convention, Part II (Chapter 3). Takes effect on next login."
+  },
+  {
+    "id": "act4_complete",
+    "name": "Complete Act 4 — The Great Convention, Part III",
+    "nodes": [
+      "DA_MQ_TheGreatConventionPt3"
+    ],
+    "description": "Complete The Great Convention, Part III, including Dangerous Allies. Takes effect on next login."
+  },
+  {
+    "id": "lost_harvest_complete",
+    "name": "Complete Lost Harvest",
+    "nodes": [
+      "DA_DLC_LostHarvest"
+    ],
+    "description": "Complete the Lost Harvest journey. Takes effect on next login."
+  },
+  {
+    "id": "scourge_complete",
+    "name": "Complete Scourge",
+    "nodes": [],
+    "contracts": [
+      "DA_CT_Halloween_Week1_01",
+      "DA_CT_Halloween_Week1_02",
+      "DA_CT_Halloween_Week1_03",
+      "DA_CT_Halloween_Week2_01",
+      "DA_CT_Halloween_Week2_01_Funnel",
+      "DA_CT_Halloween_Week2_02",
+      "DA_CT_Halloween_Week3_01",
+      "DA_CT_Halloween_Week3_01_Funnel",
+      "DA_CT_Halloween_Week3_02"
+    ],
+    "description": "Complete the Scourge story contract chain through Patient Zero. Repeatable daily contracts remain separate."
   },
   {
     "id": "vermillius_intro",
@@ -84,5 +134,43 @@
       "DA_Dunipedia_WarForArrakis"
     ],
     "description": "Reveals all Dunipedia entries: Known Universe, Landmarks, Manual of the Friendly Desert, War for Arrakis."
+  },
+  {
+    "id": "faction_atreides_complete",
+    "name": "Complete Atreides faction journeys",
+    "nodes": [
+      "DA_FQ_ClimbTheRanks.ATestOfLoyalty",
+      "DA_FQ_ClimbTheRanks.ClimbTheRanksR2",
+      "DA_FQ_ClimbTheRanks.GatheringIntelligence",
+      "DA_FQ_ClimbTheRanks.HuntingSkorda",
+      "DA_FQ_ClimbTheRanks.InvestigateDelphis_Atreides",
+      "DA_FQ_ClimbTheRanks.InvestigateKytheria_Atreides",
+      "DA_FQ_ClimbTheRanks.JoinAHouse",
+      "DA_FQ_ClimbTheRanks.PoisonedSpice_Atreides",
+      "DA_FQ_ClimbTheRanks.Rank5To20",
+      "DA_FQ_ClimbTheRanks.TransitionToCh3_Atre",
+      "DA_SQ_OverlandMap.AtreLandsraadMission",
+      "DA_FQ_ClimbTheRanks.Rank20_Mission_Atreides"
+    ],
+    "description": "Complete the selected faction’s journey lines, including its Rank 20 mission. Reputation and allegiance are unchanged."
+  },
+  {
+    "id": "faction_harkonnen_complete",
+    "name": "Complete Harkonnen faction journeys",
+    "nodes": [
+      "DA_FQ_ClimbTheRanks.ATestOfTreachery",
+      "DA_FQ_ClimbTheRanks.ClimbTheRanksR2",
+      "DA_FQ_ClimbTheRanks.GatheringIntelligence",
+      "DA_FQ_ClimbTheRanks.HuntingSkorda",
+      "DA_FQ_ClimbTheRanks.InvestigateDelphis_Harkonnen",
+      "DA_FQ_ClimbTheRanks.InvestigateKytheria_Harkonnen",
+      "DA_FQ_ClimbTheRanks.JoinAHouse",
+      "DA_FQ_ClimbTheRanks.PoisonedSpice_Harkonnen",
+      "DA_FQ_ClimbTheRanks.Rank5To20",
+      "DA_FQ_ClimbTheRanks.TransitionToCh3_Hark",
+      "DA_SQ_OverlandMap.HarkLandsraadMission",
+      "DA_FQ_ClimbTheRanks.Rank20_Mission_Harkonnen"
+    ],
+    "description": "Complete the selected faction’s journey lines, including its Rank 20 mission. Reputation and allegiance are unchanged."
   }
 ]

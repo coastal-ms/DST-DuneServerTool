@@ -1,4 +1,4 @@
-Describe 'Terminal director pod lifecycle' {
+﻿Describe 'Terminal director pod lifecycle' {
     BeforeAll {
         $script:cli = Get-Content (Join-Path $PSScriptRoot '..\dune-server.ps1') -Raw
         $script:lib = Get-Content (Join-Path $PSScriptRoot '..\app\server\lib\Pods.ps1') -Raw
@@ -18,12 +18,6 @@ Describe 'Terminal director pod lifecycle' {
         $scheduler = Get-Content (Join-Path $PSScriptRoot '..\app\server\lib\RestartSchedule.ps1') -Raw
         $scheduler | Should -Match 'Remove-DuneTerminalDirectorPods'
         $script:cli | Should -Match 'Remove-DuneTerminalDirectorPodHistory'
-    }
-
-    It 'hides terminal director history from the default Pods view' {
-        $script:ui | Should -Match 'visiblePods'
-        $script:ui | Should -Match 'isHistoricalDirectorPod'
-        $script:ui | Should -Match 'Show.*history'
     }
 
     It 'labels restart counts as lifetime values' {

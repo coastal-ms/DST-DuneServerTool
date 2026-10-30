@@ -125,13 +125,45 @@ Describe 'Personal teleport slots' {
   {Enter-DunePlayerTeleportCooldown -Ip fixture -FuncomId Own#1 -Seconds 60} | Should -Throw '*cooldown*'
   Should -Invoke Invoke-DuneRmqTeleportTo -Times 1 -ParameterFilter {$FlsId -eq 'FLS1' -and $X -eq 1}
  }
- It 'rejects private destinations after a layout change without publishing' {
+ It 'keeps a Hagga private location through an automatic seed rollover without rewriting it' {
+  Mock Get-DuneCoriolisSeedsLive { @{ok=$true;farm_seed=11;maps=@(@{map='HaggaBasin';seed=11});partitions=@(@{partition_id=10;map='Survival_1';seed=11})} }
+  $r=Start-DunePlayerTeleportCapture -Ip fixture -Target $target -Name Home
+  Complete-DunePlayerTeleportCapture -Ip fixture -FuncomId Own#1 -Token (($r.command -split ' ')[2]) -Location @{x=12;y=34;z=56} | Out-Null
+  $before=Get-Content (Get-DunePlayerTeleportsPath $target.key) -Raw
+  Mock Get-DuneCoriolisSeedsLive { @{ok=$true;farm_seed=0;maps=@(@{map='HaggaBasin';seed=0});partitions=@(@{partition_id=10;map='Survival_1';seed=0})} }
+  $result=Invoke-DuneChatCommandTeleport -Ip fixture -FuncomId Own#1 -CommandArgs @('Home') -Message @{}
+  $result.ok | Should -BeTrue
+  (Get-Content (Get-DunePlayerTeleportsPath $target.key) -Raw) | Should -BeExactly $before
+  Should -Invoke Invoke-DuneRmqTeleportTo -Times 1 -ParameterFilter {$X -eq 12 -and $Y -eq 34 -and $Z -eq 56 -and $RepeatForReliability}
+  $again=Invoke-DuneChatCommandTeleport -Ip fixture -FuncomId Own#1 -CommandArgs @('Home') -Message @{}
+  $again.ok | Should -BeFalse
+  $again.reply | Should -Match 'cooldown'
+ }
+ It 'rejects a changed Deep Desert layout and explains the rejection in chat' {
+  $target.map='DeepDesert'
+  Mock Get-DuneCoriolisSeedsLive { @{ok=$true;farm_seed=1;maps=@(@{map='DeepDesert';seed=2});partitions=@(@{partition_id=10;map='DeepDesert_1';seed=3})} }
   $r=Start-DunePlayerTeleportCapture -Ip fixture -Target $target -Name Home
   Complete-DunePlayerTeleportCapture -Ip fixture -FuncomId Own#1 -Token (($r.command -split ' ')[2]) -Location @{x=1;y=2;z=3} | Out-Null
-  $id=(Read-DunePlayerTeleports $target.key).bookmarks[0].id
-  Mock Get-DuneCoriolisSeedsLive { @{ok=$true;farm_seed=9;maps=@(@{map='HaggaBasin';seed=2});partitions=@(@{partition_id=10;map='HaggaBasin';seed=3})} }
-  {Invoke-DunePlayerTeleport -Ip fixture -Target $target -Scope private -Id $id} | Should -Throw '*layout changed*'
+  Mock Get-DuneCoriolisSeedsLive { @{ok=$true;farm_seed=9;maps=@(@{map='DeepDesert';seed=0});partitions=@(@{partition_id=10;map='DeepDesert_1';seed=0})} }
+  $result=Invoke-DuneChatCommandTeleport -Ip fixture -FuncomId Own#1 -CommandArgs @('Home') -Message @{}
+  $result.ok | Should -BeFalse
+  $result.reply | Should -Match 'map layout changed'
   Should -Invoke Invoke-DuneRmqTeleportTo -Times 0
+ }
+ It 'does not invalidate a Deep Desert destination for an unrelated farm seed change' {
+  $target.map='DeepDesert'
+  Mock Get-DuneCoriolisSeedsLive { @{ok=$true;farm_seed=1;maps=@(@{map='DeepDesert';seed=2});partitions=@(@{partition_id=10;map='DeepDesert_1';seed=3})} }
+  $r=Start-DunePlayerTeleportCapture -Ip fixture -Target $target -Name Home
+  Complete-DunePlayerTeleportCapture -Ip fixture -FuncomId Own#1 -Token (($r.command -split ' ')[2]) -Location @{x=1;y=2;z=3} | Out-Null
+  Mock Get-DuneCoriolisSeedsLive { @{ok=$true;farm_seed=9;maps=@(@{map='DeepDesert';seed=2});partitions=@(@{partition_id=10;map='DeepDesert_1';seed=3})} }
+  $id=(Read-DunePlayerTeleports $target.key).bookmarks[0].id
+  (Invoke-DunePlayerTeleport -Ip fixture -Target $target -Scope private -Id $id).ok | Should -BeTrue
+ }
+ It 'keeps internal exceptions out of game chat' {
+  Mock Find-DunePlayerTeleportChatDestination { throw 'private infrastructure secret' }
+  $result=Invoke-DuneChatCommandTeleport -Ip fixture -FuncomId Own#1 -CommandArgs @('Home') -Message @{}
+  $result.ok | Should -BeFalse
+  $result.reply | Should -Not -Match 'secret|infrastructure'
  }
  It 'uses the chat senders private destination without broadcasting its name' {
   $r=Start-DunePlayerTeleportCapture -Ip fixture -Target $target -Name SecretHome
