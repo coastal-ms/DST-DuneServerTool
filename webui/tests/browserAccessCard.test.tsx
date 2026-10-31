@@ -23,6 +23,8 @@ describe('Remote Access bridge status', () => {
     render(<BrowserAccessCard />)
     expect(await screen.findByText('Remote access bridge not responding')).toBeInTheDocument()
     expect(api).toHaveBeenCalledTimes(1)
+    expect(screen.getByText('Stable public address configured')).toBeInTheDocument()
+    expect(screen.queryByText('Reachable at a stable public address')).not.toBeInTheDocument()
     expect(screen.queryByText('Remote access bridge not running')).not.toBeInTheDocument()
     fireEvent.click(screen.getByRole('button', { name: 'Re-check' }))
     expect(await screen.findByText('Remote access bridge ready (local port 47900).')).toBeInTheDocument()
@@ -36,7 +38,7 @@ describe('Remote Access bridge status', () => {
       bridge: { ready: false, listening: true, issues: ['Health check timed out.'], port: 47900 },
     })
     render(<BrowserAccessCard />)
-    expect(await screen.findByText('Reachable at a stable public address')).toBeInTheDocument()
+    expect(await screen.findByText('Stable public address configured')).toBeInTheDocument()
     expect(screen.queryByText('Remote access bridge not responding')).not.toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'Repair remote bridge' })).not.toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'Re-check' })).not.toBeInTheDocument()

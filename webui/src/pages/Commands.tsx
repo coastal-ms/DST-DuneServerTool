@@ -455,10 +455,10 @@ export function Commands() {
         .filter((c): c is Command => Boolean(c))
         .filter(c => canAccessCommand(c.name, local, portalRole))
     ) as [Command[], Command[], Command[]]
-    const ownerUpdate = commandsByName.get('update')
+    const serverUpdate = commandsByName.get('update')
     const updatePlaced = sections.some(section => section.some(command => command.name === 'update'))
-    if (!local && portalRole === 'owner' && ownerUpdate && !updatePlaced) {
-      sections[1] = [...sections[1], ownerUpdate]
+    if (!local && canAccessCommand('update', false, portalRole) && serverUpdate && !updatePlaced) {
+      sections[1] = [...sections[1], serverUpdate]
     }
     return sections
   }, [effective.sections, commandsByName, portalRole])

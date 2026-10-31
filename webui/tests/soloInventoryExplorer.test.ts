@@ -1,5 +1,5 @@
 import { createElement } from 'react'
-import { cleanup, fireEvent, render, screen } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
   buildSoloInventoryLocations,
@@ -11,6 +11,33 @@ import {
 afterEach(() => { cleanup(); localStorage.clear() })
 
 describe('Solo inventory explorer', () => {
+  it('uses shared stack, water and durability editors for the selected occurrence', async () => {
+    const item = {itemId:9,templateId:'Literjon',stackSize:2,quality:0,revision:'a'.repeat(64),
+      waterStats:{CurrentAmount:250,MaxAmount:1000},durabilityStats:{CurrentDurability:45,MaxDurability:100,DecayedMaxDurability:80}}
+    const group = {inventoryId:1,destinationKey:'inventory:1',destinationLabel:'Backpack',destinationKind:'backpack' as const,
+      templateId:'Literjon',displayName:'Literjon',totalQuantity:2,occurrenceCount:1,minQuality:0,maxQuality:0,occurrences:[item]}
+    const onEdit=vi.fn().mockResolvedValue(undefined)
+    const props={items:[group],inventories:[],connected:true,disabled:false,busyItemId:null,onDelete:vi.fn(),onEdit}
+    const view=render(createElement(SoloInventoryExplorer,props))
+    fireEvent.click(screen.getByText('Literjon'))
+    fireEvent.click(screen.getByRole('button',{name:'Edit Literjon'}))
+    fireEvent.change(screen.getByLabelText('Stack quantity'),{target:{value:'123'}})
+    fireEvent.click(screen.getAllByRole('button',{name:'Save',exact:true})[0])
+    await waitFor(()=>expect(onEdit).toHaveBeenCalledWith(item,'stack',{quantity:123}))
+    expect(screen.getByLabelText('DecayedMaxDurability')).toHaveValue(80)
+    fireEvent.change(screen.getByLabelText('CurrentDurability'),{target:{value:'75.5'}})
+    fireEvent.click(screen.getAllByRole('button',{name:'Save',exact:true})[1])
+    await waitFor(()=>expect(onEdit).toHaveBeenCalledWith(item,'durability',{maximum:100,current:75.5,decayed:80}))
+    fireEvent.change(screen.getByLabelText('Water amount (mL)'),{target:{value:'1234.5'}})
+    fireEvent.click(screen.getByRole('button',{name:'Save water'}))
+    await waitFor(()=>expect(onEdit).toHaveBeenCalledWith(item,'water',{amount:1234.5}))
+    fireEvent.change(screen.getByLabelText('Water amount (mL)'),{target:{value:''}})
+    expect(screen.getByRole('button',{name:'Save water'})).toBeDisabled()
+    view.rerender(createElement(SoloInventoryExplorer,{...props,disabled:true}))
+    expect(screen.getByLabelText('Stack quantity')).toBeDisabled()
+    expect(screen.getByRole('button',{name:'Save water'})).toBeDisabled()
+    expect(screen.queryByText(/map.*pod.*restarted/)).toBeNull()
+  })
   it('deletes the selected type only in the displayed location and bounds a large occurrence list', () => {
     const group = { inventoryId: 1, destinationKey: 'inventory:1', destinationLabel: 'Backpack',
       destinationKind: 'backpack' as const, templateId: 'Blood', displayName: 'Extracted blood',

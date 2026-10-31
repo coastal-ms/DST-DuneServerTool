@@ -95,6 +95,11 @@ function Get-DuneBridgeStatus {
     # out. A verified forwarded request already proves the bridge is responding.
     $healthOk = if (Test-DuneBridgeForwardedRequest -Request $Request) { $true } else { Test-DuneBridgeHealth }
 
+    # A validated response proves the bridge owns a working listener even when
+    # Windows TCP enumeration omits it (for example a kernel-managed listener).
+    # Do not let an incomplete socket listing contradict a successful probe.
+    if ($healthOk) { $listening = $true }
+
     $issues = New-Object System.Collections.Generic.List[string]
     if (-not $hasTask)      { [void]$issues.Add('The mobile bridge background task is not installed.') }
     if (-not $listening)    { [void]$issues.Add("Nothing is listening on bridge port $port.") }

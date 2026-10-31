@@ -92,7 +92,7 @@ function _Load-DuneProgressionPresetCatalog {
     $p = _Resolve-DuneCatalog 'dune-progression-presets.json'
     if (-not $p) { return }
     try {
-        $json = Get-Content -LiteralPath $p -Raw | ConvertFrom-Json
+        $json = Get-Content -LiteralPath $p -Raw -Encoding UTF8 | ConvertFrom-Json
         $list = @()
         foreach ($entry in $json) {
             $list += @{

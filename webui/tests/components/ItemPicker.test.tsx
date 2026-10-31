@@ -17,14 +17,17 @@ import { ItemPicker } from '../../src/components/ItemPicker'
 
 // Backend (Get-DuneItemCatalog) array shape.
 const CATALOG_RESPONSE = {
-  meta: { total: 2, source: 'item-catalog.json' },
+  meta: { total: 4, source: 'item-catalog.json' },
   items: [
     { templateId: 'AzuriteOre', name: 'Copper Ore', category: 'Resources' },
     { templateId: 'CopperBar', name: 'Copper Ingot', category: 'Resources' },
+    { templateId: 'Combat_Neut_SmugglerDeserterUnique01_Top', name: "Aren's Chestpiece", category: 'Garments - Chest' },
+    { templateId: 'Schematic_UniquePincushionChest', name: "Aren's Chestpiece", category: 'Garments' },
   ],
 }
 
 beforeEach(() => {
+  HTMLElement.prototype.scrollIntoView = vi.fn()
   vi.stubGlobal('fetch', vi.fn(async (input: RequestInfo | URL) => {
     const url = typeof input === 'string' ? input : input.toString()
     if (url.includes('/api/catalog/items')) {
@@ -62,6 +65,18 @@ function Host({ onPick }: { onPick: (tpl: string, name: string) => void }) {
 }
 
 describe('ItemPicker selection (real catalog parser)', () => {
+  it('shows distinct equipment and schematic labels and selects the schematic id', async () => {
+    const user = userEvent.setup()
+    const onPick = vi.fn()
+    render(<Host onPick={onPick} />)
+    const input = screen.getByRole('textbox')
+    await user.click(input)
+    await user.type(input, 'Aren')
+    expect(await screen.findByText("Aren's Chestpiece", { selector: 'span' })).toBeInTheDocument()
+    await user.click(await screen.findByText("Aren's Chestpiece (Schematic)", { selector: 'span' }))
+    expect(onPick).toHaveBeenLastCalledWith('Schematic_UniquePincushionChest', "Aren's Chestpiece (Schematic)")
+    expect(input).toHaveValue("Aren's Chestpiece (Schematic)")
+  })
   it('commits the class-string template_id when a suggestion is clicked', async () => {
     const user = userEvent.setup()
     const onPick = vi.fn()

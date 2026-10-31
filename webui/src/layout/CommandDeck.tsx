@@ -16,15 +16,15 @@ import './commandDeck.css'
 export default function CommandDeck({ collapsed }: { collapsed: boolean }) {
   const { pathname } = useLocation()
   const search = useSearch()
-  const { canAccessOwnerSurfaces } = usePortalAccess()
+  const { canAccessOwnerSurfaces, canAccessServerUpdates } = usePortalAccess()
   const soloOnly = useSoloInstallation()
   const [query, setQuery] = useState('')
   const input = useRef<HTMLInputElement>(null)
   const local = isLocalViewer()
   const windows = isWindowsViewer()
   const destinations = useMemo(
-    () => getDeckDestinations({ local, windows, canAccessOwnerSurfaces, soloOnly }),
-    [local, windows, canAccessOwnerSurfaces, soloOnly],
+    () => getDeckDestinations({ local, windows, canAccessOwnerSurfaces, canAccessServerUpdates, soloOnly }),
+    [local, windows, canAccessOwnerSurfaces, canAccessServerUpdates, soloOnly],
   )
   const results = searchDeck(destinations, query)
 

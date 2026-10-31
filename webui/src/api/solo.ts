@@ -104,6 +104,15 @@ export interface SoloInventoryItemOccurrence {
   stackSize: number
   quality: number
   templateId: string
+  revision?: string
+  durabilityStats?: { CurrentDurability?: number; MaxDurability?: number; DecayedMaxDurability?: number } | null
+  waterStats?: { CurrentAmount?: number; MaxAmount?: number } | null
+}
+
+export function editSoloInventoryItem(item: SoloInventoryItemOccurrence, field: 'stack' | 'water' | 'durability',
+  values: Record<string, number>, expectedProfileToken: string): Promise<{ ok: boolean; inspection: SoloInspection; safetyBackup: string }> {
+  return api('/api/solo/items/edit', { method: 'POST', body: JSON.stringify({ itemId: item.itemId,
+    revision: item.revision, field, values, expectedProfileToken, confirm: 'EDIT SOLO ITEM' }) })
 }
 
 export interface SoloRangedWeapon {

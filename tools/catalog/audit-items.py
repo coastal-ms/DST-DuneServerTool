@@ -1,6 +1,7 @@
 """Compare DST catalogs with a merged CDT_BaseItems export; never modifies game data."""
 import argparse
 import json
+import re
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -16,12 +17,20 @@ def audit(data_root, export=None, vehicle_export=None):
     tech = json.loads((data_root / 'dune-tech-catalog.json').read_text(encoding='utf-8'))
     modules = json.loads((data_root / 'vehicle-module-durability.json').read_text(encoding='utf-8'))
     expected = coverage['items']
+    schematic_ids = set()
     if export is not None:
         source = json.loads(Path(export).read_text(encoding='utf-8-sig'))
         master = next(item for item in source if item.get('Name') == 'CDT_BaseItems')
+        schematic_ids = {key for key, row in master['Rows'].items()
+                         if 'Schematic' in (row.get('ActionsClass') or {}).get('ObjectName', '')}
         expected = {key: {'maxDurability': row['StackAndDurability']['MaxDurability']} for key, row in master['Rows'].items()}
     issues = []
     for key, definition in expected.items():
+        if key in schematic_ids:
+            for name, label in [('picker', picker['items'].get(key, {}).get('name', '')),
+                                ('inventory', rules['names'].get(key, ''))]:
+                if not re.search(r'\bschematic\b', label, re.IGNORECASE):
+                    issues.append({'template': key, 'issue': f'unmarked-{name}-schematic'})
         item = rules['items'].get(key)
         if not item or item.get('durability_known') is not True or item.get('max_durability') != definition['maxDurability']:
             issues.append({'template': key, 'issue': 'missing-or-outdated-game-definition'})

@@ -39,7 +39,7 @@ Describe 'Player route authorization' {
         }
     }
     It 'denies commands, server/world management, global inventory, other identities and every unknown route' {
-        foreach ($path in @('/api/commands/execute','/api/bg/stop','/api/remote/maps/deepdesert/start',
+        foreach ($path in @('/api/commands/execute','/api/commands/run/{name}','/api/commands/run/update','/api/commands/run/update-with-tanks','/api/bg/stop','/api/remote/maps/deepdesert/start',
             '/api/maps/{key}/stop','/api/maps/restart-pods','/api/maps/fix-partitions',
             '/api/map-spinup/{map}','/api/gameplay/players/cheat-script','/api/gameplay/chat/whisper',
             '/api/gameplay/vehicles/spawn','/api/gameplay/players/fresh-start/restore','/api/gameplay/players/unlock-testing-stations',

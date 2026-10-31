@@ -12,6 +12,8 @@ import { InventorySlot } from '../inventory/InventorySlot'
 import { DataState } from '../platform/DataState'
 import { DetailPanel } from '../platform/DetailPanel'
 import { CollapsibleCard } from '../CollapsibleCard'
+import { StackEditor, DurabilityEditor, WaterEditor } from '../../pages/gameplay/players/sections'
+import type { InventoryItem } from '../../api/gameplay'
 
 const emptyMetadata = {
   category: '',
@@ -95,12 +97,14 @@ export function SoloInventoryExplorer({
   busyItemId,
   onDelete,
   onDeleteGroup,
+  onEdit,
 }: {
   items: SoloInventoryItemGroup[]
   inventories: SoloInventoryDestination[]
   connected: boolean
   disabled: boolean
   busyItemId: number | null
+  onEdit?: (item: SoloInventoryItemOccurrence, field: 'stack' | 'water' | 'durability', values: Record<string, number>) => Promise<void>
   onDelete: (
     item: SoloInventoryItemOccurrence,
     location: SoloInventoryItemGroup,
@@ -169,7 +173,7 @@ export function SoloInventoryExplorer({
       id="solo-current-inventory"
       title="Current inventory"
       icon="PackageSearch"
-      subtitle="Browse items in the Backpack, worn equipment, equipped weapons and tools, Bank Storage, and supported built storage. Unequip equipment before deleting it. The game must be fully closed before deletion."
+      subtitle="Browse and edit items in the Backpack, equipment, Bank Storage and supported built storage. Close Dune before editing; unequip equipment before deleting it."
       headerRight={
         <span className="pill border-info/40 bg-info/10 text-info">
           {groups.length} item type{groups.length === 1 ? '' : 's'}
@@ -272,7 +276,7 @@ export function SoloInventoryExplorer({
                   && quantity >= (occurrence.stackSize === 0 ? 0 : 1)
                   && quantity <= occurrence.stackSize
                 return (
-                  <li key={occurrence.itemId} className="flex items-center justify-between gap-4 py-3 text-sm">
+                  <li key={occurrence.itemId} className="flex flex-wrap items-center justify-between gap-4 py-3 text-sm">
                     <div className="min-w-0">
                       <button type="button" className="max-w-full truncate text-left font-medium text-accent-bright underline decoration-dotted underline-offset-4 hover:decoration-solid"
                         title={`Open ${location.destinationLabel} inventory`}
@@ -312,6 +316,8 @@ export function SoloInventoryExplorer({
                         <Icon name={busyItemId === occurrence.itemId ? 'LoaderCircle' : 'Trash2'} size={15} className={busyItemId === occurrence.itemId ? 'animate-spin' : undefined} />
                       </button>
                     </div>}
+                    {onEdit && occurrence.revision && <SoloItemEditors key={`${occurrence.itemId}:${occurrence.revision}`}
+                      item={occurrence} name={location.displayName} disabled={disabled || busyItemId !== null} onEdit={onEdit} />}
                   </li>
                 )
               })}
@@ -326,6 +332,33 @@ export function SoloInventoryExplorer({
       </DetailPanel>
     </CollapsibleCard>
   )
+}
+
+function SoloItemEditors({ item, name, disabled, onEdit }: {
+  item: SoloInventoryItemOccurrence; name: string; disabled: boolean
+  onEdit: (item: SoloInventoryItemOccurrence, field: 'stack' | 'water' | 'durability', values: Record<string, number>) => Promise<void>
+}) {
+  const [open, setOpen] = useState(false)
+  const view: InventoryItem = { id: item.itemId, template_id: item.templateId, name, stack_size: item.stackSize, quality: item.quality,
+    durability: item.durabilityStats ? String(item.durabilityStats.CurrentDurability ?? 0) : 'N/A',
+    max_durability: String(item.durabilityStats?.MaxDurability ?? 0),
+    decayed_max_durability: String(item.durabilityStats?.DecayedMaxDurability ?? item.durabilityStats?.MaxDurability ?? 0),
+    water_amount: String(item.waterStats?.CurrentAmount ?? 0), water_type: 'mL', water_capacity: item.waterStats?.MaxAmount }
+  const run = async (fn: () => Promise<{message: string}>) => { try { await fn(); return true } catch { return false } }
+  const save = (field: 'stack' | 'water' | 'durability', values: Record<string, number>) => async () => {
+    await onEdit(item, field, values); return { message: 'Saved.' }
+  }
+  return <div className="w-full">
+    <button type="button" className="btn-secondary" disabled={disabled} onClick={() => setOpen(value => !value)} aria-expanded={open}>
+      <Icon name="Pencil" size={14} /> Edit {name}
+    </button>
+    {open && <div className="player-item-editors mt-2">
+      <StackEditor item={view} busy={disabled} isOnline={false} run={run} onClose={() => {}} onSave={quantity => save('stack', {quantity})()} />
+      {item.durabilityStats && <DurabilityEditor item={view} busy={disabled} isOnline={false} solo run={run} onClose={() => {}}
+        onSave={(maximum,current,decayed) => save('durability', {maximum,current,decayed})()} />}
+      {item.waterStats && <WaterEditor item={view} busy={disabled} solo run={run} onClose={() => {}} onSave={amount => save('water', {amount})()} />}
+    </div>}
+  </div>
 }
 
 export function SoloWeaponAmmoEditor({

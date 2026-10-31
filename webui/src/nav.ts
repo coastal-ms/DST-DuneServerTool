@@ -31,6 +31,8 @@ export type NavItem = {
   // but are hidden from delegated remote Admin accounts. The API must enforce
   // the same boundary; this is only the navigation half.
   ownerOnly?: boolean
+  // Server updates are available on the host and to remote Owner/Admin accounts.
+  serverUpdatesOnly?: boolean
   windowsOnly?: boolean
   workspaceId?: string
   legacy?: boolean
@@ -43,7 +45,7 @@ export const LEGACY_NAV_ITEMS: readonly NavItem[] = [
   { to: '/pods',        label: 'Pods',          icon: 'Boxes',           group: 'overview', legacy: true },
   { to: '/operations',  label: 'Operations',    icon: 'Activity',        group: 'overview', workspaceId: 'operations' },
   { to: '/commands',    label: 'Commands',     icon: 'Zap',             group: 'terminal', legacy: true, inactivePaths: ['/commands?task=updates'] },
-  { to: '/commands?task=updates', label: 'Server updates', icon: 'Download', group: 'terminal', ownerOnly: true, legacy: true, activePaths: ['/commands?task=updates'] },
+  { to: '/commands?task=updates', label: 'Server updates', icon: 'Download', group: 'terminal', serverUpdatesOnly: true, legacy: true, activePaths: ['/commands?task=updates'] },
   { to: '/map?view=atlas', label: 'DD Atlas', icon: 'Map',              group: 'database', legacy: true, activePaths: ['/map'] },
   { to: '/terminal',    label: 'PowerShell',   icon: 'SquareTerminal',  group: 'terminal', localOnly: true, sidebarHidden: true, legacy: true },
   { to: '/server-settings', label: 'Server Settings', icon: 'ServerCog', group: 'terminal', ownerOnly: true, legacy: true, activePaths: ['/server-settings', '/gameconfig'] },
@@ -91,12 +93,14 @@ export function getVisibleNavItems({
   local,
   windows,
   canAccessOwnerSurfaces,
+  canAccessServerUpdates = local,
   includeSidebarHidden = true,
   soloOnly = false,
 }: {
   local: boolean
   windows: boolean
   canAccessOwnerSurfaces: boolean
+  canAccessServerUpdates?: boolean
   includeSidebarHidden?: boolean
   soloOnly?: boolean
 }) {
@@ -105,6 +109,7 @@ export function getVisibleNavItems({
     .filter(item => includeSidebarHidden || !item.sidebarHidden)
     .filter(item => !item.localOnly || local)
     .filter(item => !item.ownerOnly || canAccessOwnerSurfaces)
+    .filter(item => !item.serverUpdatesOnly || canAccessServerUpdates)
     .filter(item => !item.windowsOnly || windows)
 }
 

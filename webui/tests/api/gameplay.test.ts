@@ -512,6 +512,24 @@ describe('isValidTemplateId — numeric give-item guard', () => {
 })
 
 describe('flattenItemCatalog — catalog shape parsing', () => {
+  it('distinguishes equipment from its schematic without changing grant ids in either payload shape', () => {
+    const entries = {
+      Combat_Neut_SmugglerDeserterUnique01_Top: { name: "Aren's Chestpiece", category: 'Garments - Chest' },
+      Schematic_UniquePincushionChest: { name: "Aren's Chestpiece", category: 'Garments' },
+    }
+    for (const raw of [entries, Object.entries(entries).map(([templateId, entry]) => ({ templateId, ...entry }))]) {
+      const out = gp.flattenItemCatalog(raw)
+      expect(out.find(i => i.template_id === 'Combat_Neut_SmugglerDeserterUnique01_Top')?.name).toBe("Aren's Chestpiece")
+      expect(out.find(i => i.template_id === 'Schematic_UniquePincushionChest')?.name).toBe("Aren's Chestpiece (Schematic)")
+      expect(gp.filterCatalog(out, 'aren').map(i => i.template_id)).toEqual(expect.arrayContaining(Object.keys(entries)))
+      expect(gp.filterCatalog(out, 'schematic').map(i => i.template_id)).toEqual(['Schematic_UniquePincushionChest'])
+    }
+    expect(gp.flattenItemCatalog({ Schematic_AlreadyNamed: { name: 'Named Schematic' } })[0].name).toBe('Named Schematic')
+    expect(gp.flattenItemCatalog({ Combat_Test_06_Schematic: { name: 'Test Armor' } })[0].name).toBe('Test Armor (Schematic)')
+    expect(gp.flattenItemCatalog({ HealthPackSchematic: { name: 'Healkit' } })[0].name).toBe('Healkit (Schematic)')
+    expect(gp.flattenItemCatalog({ FutureRecipe: { name: 'New Recipe', category: 'Schematics' } })[0].name).toBe('New Recipe (Schematic)')
+    expect(gp.flattenItemCatalog({ T6SchematicFragmentQL1: { name: 'Schematic Pattern Grade 1' } })[0].name).toBe('Schematic Pattern Grade 1')
+  })
   // The backend serializes `items` as an ARRAY of { templateId, name, category }.
   // The parser must read templateId, NOT the array index, or every picked item
   // gets a numeric template_id and the give-item guard makes it unselectable.

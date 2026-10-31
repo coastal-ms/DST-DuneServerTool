@@ -158,11 +158,11 @@ describe('Player workspace', () => {
     submit('Give Solari')
     expect(screen.getByText('Give Solari…')).toBeInTheDocument()
     vi.useFakeTimers()
-    await act(async () => finish({ok:true,message:'Solari granted.'}))
-    expect(screen.getByText('Solari granted.')).toBeInTheDocument()
+    await act(async () => finish({ok:true,message:'Solari granted.\nVerified.'}))
+    expect(screen.getByText(/Solari granted/)).toBeInTheDocument()
     expect(screen.getByRole('button',{name:'Dismiss action result'})).toBeInTheDocument()
     act(() => vi.advanceTimersByTime(5000))
-    expect(screen.queryByText('Solari granted.')).not.toBeInTheDocument()
+    expect(screen.queryByText(/Solari granted/)).not.toBeInTheDocument()
   })
   it('keeps failed action feedback until dismissed', async () => {
     let fail!: (reason: Error) => void

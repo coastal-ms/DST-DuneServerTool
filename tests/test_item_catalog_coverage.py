@@ -12,6 +12,24 @@ spec.loader.exec_module(tool)
 
 
 class ItemCoverageTests(unittest.TestCase):
+    def test_schematic_names_follow_game_action_class_instead_of_a_template_prefix(self):
+        with tempfile.TemporaryDirectory() as folder:
+            data = Path(folder) / 'data'
+            shutil.copytree(ROOT / 'app/data', data)
+            export = Path(folder) / 'current.json'
+            export.write_text(json.dumps([{'Name': 'CDT_BaseItems', 'Rows': {
+                'D_AmmoBlueprint': {'StackAndDurability': {'MaxDurability': -1},
+                                    'ActionsClass': {'ObjectName': "BlueprintGeneratedClass'BP_Schematic_ConsumeSchematic_C'"}},
+            }}]), encoding='utf-8')
+            names = json.loads((data / 'gameplay-item-data.json').read_text())
+            picker = json.loads((data / 'item-catalog.json').read_text())
+            names['names']['D_AmmoBlueprint'] = 'Light Darts'
+            picker['items']['D_AmmoBlueprint']['name'] = 'Light Darts'
+            (data / 'gameplay-item-data.json').write_text(json.dumps(names), encoding='utf-8')
+            (data / 'item-catalog.json').write_text(json.dumps(picker), encoding='utf-8')
+            issues = [i['issue'] for i in tool.audit(data, export)['issues']]
+            self.assertIn('unmarked-picker-schematic', issues)
+            self.assertIn('unmarked-inventory-schematic', issues)
     def test_every_current_game_item_has_a_definition_and_an_explicit_workflow(self):
         result = tool.audit(ROOT / 'app/data')
         self.assertTrue(result['ok'], result['issues'][:10])

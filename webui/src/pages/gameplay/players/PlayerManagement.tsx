@@ -47,7 +47,7 @@ export function PlayerManagement(props: SectionProps & { initialSection?: Sectio
     setTool(null); setQuery(''); setFeedback(null); setWorking(null)
   }, [props.player.id])
   useEffect(() => {
-    if (!feedback || feedback.kind === 'err' || working || feedback.message.includes('\n')) return
+    if (!feedback || feedback.kind === 'err' || working) return
     const timer = window.setTimeout(() => setFeedback(null), 5000)
     return () => window.clearTimeout(timer)
   }, [feedback, working])
