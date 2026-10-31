@@ -10,13 +10,13 @@ import '../../layout/commandDeck.css'
 
 export default function CommandDeckHome({ onDetails }: { onDetails: () => void }) {
   const { status, loading, error } = useStatus()
-  const { canAccessOwnerSurfaces } = usePortalAccess()
+  const { canAccessOwnerSurfaces, canAccessServerUpdates } = usePortalAccess()
   const [query, setQuery] = useState('')
   const local = isLocalViewer()
   const windows = isWindowsViewer()
   const destinations = useMemo(
-    () => getDeckDestinations({ local, windows, canAccessOwnerSurfaces }),
-    [local, windows, canAccessOwnerSurfaces],
+    () => getDeckDestinations({ local, windows, canAccessOwnerSurfaces, canAccessServerUpdates }),
+    [local, windows, canAccessOwnerSurfaces, canAccessServerUpdates],
   )
   const tasks = query.trim()
     ? searchDeck(destinations, query)

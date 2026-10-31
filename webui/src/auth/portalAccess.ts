@@ -11,6 +11,7 @@ export function resolvePortalAccess(
   return {
     isPlayer: accountLoginEnabled && role === 'player',
     canAccessOwnerSurfaces: localViewer || !accountLoginEnabled || role === 'owner',
+    canAccessServerUpdates: role !== 'player' && (localViewer || role === 'owner' || role === 'admin'),
     canAccessSetup: localViewer,
   }
 }

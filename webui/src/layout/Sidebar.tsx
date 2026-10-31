@@ -54,7 +54,7 @@ type Props = {
 export function Sidebar({ collapsed, onExpand }: Props) {
   const { pathname } = useLocation()
   const search = useSearch()
-  const { canAccessOwnerSurfaces } = usePortalAccess()
+  const { canAccessOwnerSurfaces, canAccessServerUpdates } = usePortalAccess()
   const soloOnly = useSoloInstallation()
   const { data: upd } = useUpdateCheck()
   const version = upd?.currentVersion ?? ''
@@ -178,9 +178,10 @@ export function Sidebar({ collapsed, onExpand }: Props) {
     local: localViewer,
     windows: windowsViewer,
     canAccessOwnerSurfaces,
+    canAccessServerUpdates,
     includeSidebarHidden: false,
     soloOnly,
-  }), [canAccessOwnerSurfaces, localViewer, windowsViewer, soloOnly])
+  }), [canAccessOwnerSurfaces, canAccessServerUpdates, localViewer, windowsViewer, soloOnly])
   const {
     layoutItems,
     reorder,

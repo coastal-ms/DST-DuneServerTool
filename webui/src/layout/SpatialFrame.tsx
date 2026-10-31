@@ -37,7 +37,7 @@ export default function SpatialFrame({ children, onDetails, tools = false, dashb
   const { status, error, loading } = useStatus()
   const soloOnly = useSoloInstallation()
   const { data: update } = useUpdateCheck()
-  const { canAccessOwnerSurfaces } = usePortalAccess()
+  const { canAccessOwnerSurfaces, canAccessServerUpdates } = usePortalAccess()
   const theme = useTheme()
   const { pathname } = useLocation()
   const search = useSearch()
@@ -49,7 +49,7 @@ export default function SpatialFrame({ children, onDetails, tools = false, dashb
   const toolScroll = useRef<HTMLDivElement>(null)
   const { dockRef, dockAnchorRef } = useFloatingDock({ enabled: !dashboard && !portal })
   const frameRef = useDashboardViewport(dashboard || portal)
-  const destinations = getDeckDestinations({ local: isLocalViewer(), windows: isWindowsViewer(), canAccessOwnerSurfaces, soloOnly })
+  const destinations = getDeckDestinations({ local: isLocalViewer(), windows: isWindowsViewer(), canAccessOwnerSurfaces, canAccessServerUpdates, soloOnly })
   const results = searchDeck(destinations, query)
   const current = destinations.find(item => item.to === pathname)
 

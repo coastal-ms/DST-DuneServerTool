@@ -37,6 +37,7 @@ import {
   deleteSoloBackup,
   deleteSoloBackups,
   deleteSoloInventoryItem,
+  editSoloInventoryItem,
   discoverSolo,
   fillSoloWaterContainer,
   completeSoloFindTheFremen,
@@ -1189,6 +1190,19 @@ export function SoloMode() {
     }
   }
 
+  const editInventoryItem = async (item: SoloInventoryItemOccurrence, field: 'stack' | 'water' | 'durability', values: Record<string, number>) => {
+    if (!canMutateActiveProfile || gameRunning || busy !== null) throw new Error('Close Dune and connect the intended Solo profile before editing inventory.')
+    setBusy(`edit-item:${item.itemId}`); setNotice(null)
+    try {
+      await editSoloInventoryItem(item, field, values, activeProfileToken)
+      setNotice({kind:'ok',text:'Inventory change saved and verified. Recovery snapshot available in Backups.'})
+      await Promise.all([statusState.refresh(), runtimeState.refresh(), backupsState.refresh()])
+    } catch (error) {
+      setNotice({kind:'err',text:error instanceof Error ? error.message : String(error)})
+      throw error
+    } finally { setBusy(null) }
+  }
+
   const deleteInventoryItem = async (
     item: SoloInventoryItemOccurrence,
     location: SoloInventoryItemGroup,
@@ -1751,9 +1765,11 @@ export function SoloMode() {
             connected={connected}
             disabled={!canMutateActiveProfile || gameRunning || busy !== null}
             busyItemId={busy?.startsWith('delete-item:') ? Number(busy.slice('delete-item:'.length))
+              : busy?.startsWith('edit-item:') ? Number(busy.slice('edit-item:'.length))
               : busy?.startsWith('progression:quantity:') ? Number(busy.slice('progression:quantity:'.length))
               : busy?.startsWith('progression:durability:') ? Number(busy.slice('progression:durability:'.length)) : null}
             onDelete={(item, location, quantity) => { void deleteInventoryItem(item, location, quantity) }}
+            onEdit={status?.legacyAdapter ? undefined : editInventoryItem}
           />
 <SoloWeaponAmmoEditor
             weapons={inspection?.rangedWeapons ?? []}
@@ -2321,11 +2337,12 @@ export function SoloMode() {
 </div>
       )}
         </div>
-        {(busy || notice) && <div className="player-operation-feedback" data-kind={busy ? 'info' : notice?.kind === 'err' ? 'err' : notice?.kind === 'warn' ? 'info' : 'ok'} role={notice?.kind === 'err' && !busy ? 'alert' : 'status'}>
-          <Icon name={busy ? 'Loader2' : notice?.kind === 'err' ? 'AlertCircle' : notice?.kind === 'warn' ? 'Info' : 'CheckCircle2'} size={18} className={busy ? 'animate-spin motion-reduce:animate-none' : ''} />
-          <span>{busy ? 'Working…' : notice?.text}</span>
-          {!busy && <button aria-label="Dismiss action result" onClick={() => setNotice(null)}><Icon name="X" size={18} /></button>}
+        {busy && <div className="player-operation-feedback" data-kind="info" role="status">
+          <Icon name="Loader2" size={18} className="animate-spin motion-reduce:animate-none" />
+          <span>Working…</span>
         </div>}
+        {!busy && notice && <ViewportNotice kind={notice.kind} text={notice.text}
+          onDismiss={() => setNotice(null)} />}
       </section>)}
 
 

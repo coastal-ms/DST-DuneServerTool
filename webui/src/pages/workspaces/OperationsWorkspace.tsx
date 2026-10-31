@@ -10,7 +10,7 @@ import { useStatus } from '../../hooks/useStatus'
 const OPERATION_LINKS = [
   { to: '/commands?category=battlegroup', label: 'Server controls', description: 'Start, stop and restart your game servers.', icon: 'Power', group: 'everyday' },
   { to: '/database?section=database.maint.Take+Backup', label: 'Backups', description: 'Create a backup or restore a saved copy.', icon: 'Archive', group: 'everyday', ownerOnly: true },
-  { to: '/commands?task=updates', label: 'Server updates', description: 'Apply an available Funcom server update.', icon: 'Download', group: 'everyday', ownerOnly: true },
+  { to: '/commands?task=updates', label: 'Server updates', description: 'Apply an available Funcom server update.', icon: 'Download', group: 'everyday', serverUpdatesOnly: true },
   { to: '/map?view=live', label: 'Live Map', description: 'Open your map and its live layers.', icon: 'Map', group: 'everyday' },
   { to: '/database?section=database.backupSchedule', label: 'Backup schedule', description: 'Set when backups run and how long to keep them.', icon: 'CalendarClock', group: 'maintenance', ownerOnly: true },
   { to: '/map?view=lifecycle', label: 'Map management', description: 'Manage map instances and restart a map.', icon: 'Network', group: 'maintenance' },
@@ -24,7 +24,7 @@ const OPERATION_LINKS = [
 ] as const
 
 export default function OperationsWorkspace() {
-  const { canAccessOwnerSurfaces } = usePortalAccess()
+  const { canAccessOwnerSurfaces, canAccessServerUpdates } = usePortalAccess()
   const local = isLocalViewer()
   const { status, error, loading, refresh } = useStatus()
   const [query, setQuery] = useState('')
@@ -32,6 +32,7 @@ export default function OperationsWorkspace() {
   const words = query.trim().toLowerCase().split(/\s+/).filter(Boolean)
   const links = OPERATION_LINKS
     .filter(item => !('ownerOnly' in item) || canAccessOwnerSurfaces)
+    .filter(item => !('serverUpdatesOnly' in item) || canAccessServerUpdates)
     .filter(item => !('localOnly' in item) || local)
     .filter(item => words.every(word => (item.label + ' ' + item.description).toLowerCase().includes(word)))
   const observed = status?.ts ? new Date(status.ts) : null

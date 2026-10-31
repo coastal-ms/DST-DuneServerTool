@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { NAV_ITEMS, getVisibleGroupLabel } from '../src/nav'
+import { NAV_ITEMS, getVisibleGroupLabel, getVisibleNavItems } from '../src/nav'
 import { resolvePortalAccess } from '../src/auth/portalAccess'
 import { canAccessCommand } from '../src/auth/commandAccess'
 import { LEGACY_ROUTE_MANIFEST } from '../src/platform/routes'
@@ -9,6 +9,7 @@ describe('Browser Portal role access', () => {
     expect(resolvePortalAccess(false, true, 'owner')).toEqual({
       isPlayer: false,
       canAccessOwnerSurfaces: true,
+      canAccessServerUpdates: true,
       canAccessSetup: false,
     })
   })
@@ -17,6 +18,7 @@ describe('Browser Portal role access', () => {
     expect(resolvePortalAccess(false, true, 'admin')).toEqual({
       isPlayer: false,
       canAccessOwnerSurfaces: false,
+      canAccessServerUpdates: true,
       canAccessSetup: false,
     })
   })
@@ -25,6 +27,7 @@ describe('Browser Portal role access', () => {
     expect(resolvePortalAccess(true, true, 'admin')).toEqual({
       isPlayer: false,
       canAccessOwnerSurfaces: true,
+      canAccessServerUpdates: true,
       canAccessSetup: true,
     })
   })
@@ -55,13 +58,27 @@ describe('Browser Portal role access', () => {
     expect(getVisibleGroupLabel('workspaces')).toBe('Gameplay Administration')
   })
 
-  it('adds Funcom server Update only for authenticated remote Owners', () => {
+  it('adds Funcom server Update only for authenticated remote Owners and Admins', () => {
     expect(canAccessCommand('update', false, 'owner')).toBe(true)
-    expect(canAccessCommand('update', false, 'admin')).toBe(false)
+    expect(canAccessCommand('update', false, 'admin')).toBe(true)
     expect(canAccessCommand('update', false, null)).toBe(false)
     expect(canAccessCommand('update-with-tanks', false, 'owner')).toBe(true)
-    expect(canAccessCommand('update-with-tanks', false, 'admin')).toBe(false)
+    expect(canAccessCommand('update-with-tanks', false, 'admin')).toBe(true)
     expect(canAccessCommand('update-with-tanks', false, null)).toBe(false)
     expect(canAccessCommand('restart', false, 'admin')).toBe(true)
   })
+})
+
+
+describe('Server updates navigation access', () => {
+ it.each(['owner', 'admin', 'player', null] as const)('filters every shared navigation surface for remote role %s', role => {
+  const access = resolvePortalAccess(false, true, role)
+  const visible = getVisibleNavItems({ local: false, windows: false, ...access })
+  expect(visible.some(item => item.to === '/commands?task=updates')).toBe(role === 'owner' || role === 'admin')
+  if (role === 'admin') expect(visible.some(item => item.to === '/server-settings')).toBe(false)
+ })
+ it('retains host access and excludes remote sessions without an account', () => {
+  expect(resolvePortalAccess(true, false, null).canAccessServerUpdates).toBe(true)
+  expect(resolvePortalAccess(false, false, null).canAccessServerUpdates).toBe(false)
+ })
 })

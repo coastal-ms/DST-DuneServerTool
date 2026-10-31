@@ -11,7 +11,7 @@ import { useSearch } from '../../../router'
 // expose action buttons. The parent owns selection + refresh ticks; sections
 // re-fetch when `refreshKey` changes.
 
-import { useCallback, useEffect, useId, useMemo, useState, type ReactElement, type ReactNode } from 'react'
+import { useCallback, useEffect, useId, useMemo, useRef, useState, type ReactElement, type ReactNode } from 'react'
 import { RegisTankControls } from './RegisTankControls'
 import { CodexOwnership } from '../../../components/CodexOwnership'
 import { api } from '../../../api/client'
@@ -19,6 +19,7 @@ import { Icon } from '../../../components/Icon'
 import { COSMETIC_LICENSE_NOTICE } from '../../../util/cosmeticEntitlements'
 import { SharedInventoryExplorer } from '../../../components/inventory/SharedInventoryExplorer'
 import { ItemPicker } from '../../../components/ItemPicker'
+import { downloadItemPackage, parseSharedItemPackage, PACKAGE_FILE_LIMIT } from '../../../util/itemPackageSharing'
 import { AugmentPicker } from '../../../components/AugmentPicker'
 import { TagPicker } from '../../../components/TagPicker'
 import {
@@ -1959,8 +1960,11 @@ export function GivePackageForm({ busy, giveDisabled = false, playerName, target
   onGive: (items: GiveItemEntry[], pkgName: string, allowOverflow: boolean) => void
 }) {
   const { isPlayer } = usePortalAccess()
+  const packageFileInput = useRef<HTMLInputElement>(null)
   const giveLabel = targetLabel ?? playerName ?? 'player'
   const [packages, setPackages] = useState<ItemPackage[]>([])
+  const [packageCatalog, setPackageCatalog] = useState<CatalogItem[]>([])
+  const packageItemNames = useMemo(() => new Map(packageCatalog.map(item => [item.template_id, item.name])), [packageCatalog])
   const [loading, setLoading]   = useState(true)
   const [err, setErr]           = useState<string | null>(null)
   const [selectedId, setSelectedId] = useState('')
@@ -1989,6 +1993,11 @@ export function GivePackageForm({ busy, giveDisabled = false, playerName, target
   }, [])
 
   useEffect(() => { void load() }, [load])
+  useEffect(() => {
+    let cancelled = false
+    getItemCatalog().then(items => { if (!cancelled) setPackageCatalog(items) }).catch(() => {})
+    return () => { cancelled = true }
+  }, [])
 
   const selected = packages.find(p => p.id === selectedId) ?? null
 
@@ -2005,7 +2014,7 @@ export function GivePackageForm({ busy, giveDisabled = false, playerName, target
   const startEdit = () => {
     if (!selected) return
     setDraftId(selected.id); setDraftName(selected.name)
-    setDraftRows(selected.items.map(it => ({ template: it.template, name: it.template, qty: String(it.qty), quality: String(it.quality ?? 0) })))
+    setDraftRows(selected.items.map(it => ({ template: it.template, name: '', qty: String(it.qty), quality: String(it.quality ?? 0) })))
     setErr(null); setMode('edit')
   }
 
@@ -2069,9 +2078,32 @@ export function GivePackageForm({ busy, giveDisabled = false, playerName, target
     }
   }
 
+  const importSharedPackage = async (file: File) => {
+    setSaving(true); setErr(null)
+    try {
+      if (file.size > PACKAGE_FILE_LIMIT) throw new Error('Package files must be 256 KB or smaller.')
+      const parsed = parseSharedItemPackage(await file.text())
+      setDraftId(undefined)
+      setDraftName(parsed.name)
+      setDraftRows(parsed.items.map(item => ({ template: item.template, name: '', qty: String(item.qty), quality: String(item.quality ?? 0) })))
+      setMode('edit')
+    } catch (error) { setErr(error instanceof Error ? error.message : String(error)) }
+    finally { setSaving(false) }
+  }
+
   if (mode === 'import') {
     return (
       <div className="space-y-3">
+        <div className="rounded-lg border border-border bg-surface-2 p-4 space-y-3">
+          <p className="text-sm font-medium text-text">Import a shared DST package</p>
+          <p className="text-xs text-text-muted">Choose a .dst-package.json file exported from DST. Review its contents before saving it as a new package.</p>
+          <button type="button" className="btn-primary" disabled={saving} onClick={() => packageFileInput.current?.click()}>
+            <Icon name="FolderOpen" size={15} /> Choose package file
+          </button>
+          <input ref={packageFileInput} type="file" aria-label="Import a shared DST package" accept=".json,application/json" disabled={saving} className="hidden"
+            onChange={event => { const file = event.target.files?.[0]; event.target.value = ''; if (file) void importSharedPackage(file) }} />
+        </div>
+        <p className="text-xs text-text-muted">Or paste a tcno.co item list below.</p>
         <div>
           <label className="block text-[11px] uppercase tracking-wider text-text-dim mb-1">Package name</label>
           <input type="text" value={draftName} disabled={saving} maxLength={80}
@@ -2125,7 +2157,7 @@ export function GivePackageForm({ busy, giveDisabled = false, playerName, target
                   <Icon name="X" size={14} />
                 </button>
               </div>
-              <ItemPicker value={row.template} displayValue={row.name || row.template}
+              <ItemPicker value={row.template} displayValue={row.name || packageItemNames.get(row.template) || row.template}
                 onChange={(tpl, item) => setDraftRows(rows => rows.map((r, j) => j === i ? { ...r, template: tpl, name: item ? item.name : '' } : r))}
                 disabled={saving} placeholder="type to search by name or template id" />
               <div className="grid grid-cols-2 gap-3">
@@ -2187,7 +2219,7 @@ export function GivePackageForm({ busy, giveDisabled = false, playerName, target
               {selected.items.map((it, i) => (
                 <li key={i} className="flex items-center gap-2">
                   <Icon name="Box" size={11} className="shrink-0 text-text-dim/70" />
-                  <span className="flex-1 min-w-0 truncate font-mono">{it.template}</span>
+                  <span className="flex-1 min-w-0 truncate">{packageItemNames.get(it.template) || it.template}</span>
                   <span className="shrink-0">x{it.qty}{it.quality ? ` · Grade ${it.quality}` : ' · Default grade'}</span>
                 </li>
               ))}
@@ -2204,12 +2236,19 @@ export function GivePackageForm({ busy, giveDisabled = false, playerName, target
           {busy ? <Icon name="Loader2" size={13} className="animate-spin" /> : <Icon name="Check" size={13} />} Give to {giveLabel}
         </button>
       )}
-      {!isPlayer && <div className="grid grid-cols-4 gap-2">
+      {!isPlayer && <div className="grid grid-cols-2 sm:grid-cols-5 gap-2">
         <button className="btn-secondary" disabled={busy || saving} onClick={startNew}>
           <Icon name="Plus" size={13} /> New
         </button>
         <button className="btn-secondary" disabled={busy || saving} onClick={startImport}>
           <Icon name="Upload" size={13} /> Import
+        </button>
+        <button className="btn-secondary" disabled={busy || saving || !selected} onClick={() => {
+          if (!selected) return
+          try { downloadItemPackage(selected); setErr(null) }
+          catch (error) { setErr(error instanceof Error ? error.message : String(error)) }
+        }}>
+          <Icon name="Download" size={13} /> Export
         </button>
         <button className="btn-secondary" disabled={busy || saving || !selected} onClick={startEdit}>
           <Icon name="Pencil" size={13} /> Edit
@@ -3285,16 +3324,17 @@ function ItemList({ title, icon, items, playerId, canWrite, busy, run, collapsed
 // item (all items carry a stack_size). Writes the stack_size column directly.
 // When the player is online the map pod caches inventory in RAM and flushes it
 // on its save tick, so the value won't reflect in-game until the player relogs.
-function StackEditor({ item, busy, run, isOnline, onClose }: {
+export function StackEditor({ item, busy, run, isOnline, onClose, onSave }: {
   item: InventoryItem
   busy: boolean
   run: (fn: () => Promise<{ message: string }>, label: string) => Promise<boolean>
   isOnline: boolean
   onClose: () => void
+  onSave?: (quantity: number) => Promise<{ message: string }>
 }) {
   const [str, setStr] = useState(String(item.stack_size))
-  const n = parseInt(str, 10)
-  const valid = Number.isFinite(n) && n >= 1
+  const n = Number(str)
+  const valid = str.trim() !== '' && Number.isSafeInteger(n) && n >= 1 && n <= 2147483647
   const reserveReduction = Boolean(item.is_reserve && valid && n < item.stack_size)
 
   return (
@@ -3332,7 +3372,7 @@ function StackEditor({ item, busy, run, isOnline, onClose }: {
           disabled={busy || !valid || reserveReduction}
           onClick={() => {
             if (!valid) return
-            void (async () => { if (await run(() => setItemStack(item.id, n, item.stack_size), 'Save')) onClose() })()
+            void (async () => { if (await run(() => onSave ? onSave(n) : setItemStack(item.id, n, item.stack_size), 'Save')) onClose() })()
           }}
         >
           <Icon name="Save" size={12} /> Save
@@ -3347,36 +3387,38 @@ function StackEditor({ item, busy, run, isOnline, onClose }: {
 // FItemStackAndDurabilityStats nodes (it.durability !== 'N/A'), so if a future
 // game patch adds the block to a new item type it picks up the editor
 // automatically — no per-template allowlist.
-function DurabilityEditor({ item, busy, run, isOnline, onClose }: {
+export function DurabilityEditor({ item, busy, run, isOnline, onClose, onSave, solo = false }: {
   item: InventoryItem
   busy: boolean
   run: (fn: () => Promise<{ message: string }>, label: string) => Promise<boolean>
   isOnline: boolean
   onClose: () => void
+  onSave?: (maximum: number, current: number, decayed: number) => Promise<{ message: string }>
+  solo?: boolean
 }) {
   const cur0 = parseFloat(item.durability)
   const max0 = parseFloat(item.max_durability)
   const [maxStr, setMaxStr] = useState(Number.isFinite(max0) ? String(max0) : '0')
   const [curStr, setCurStr] = useState(Number.isFinite(cur0) ? String(cur0) : '0')
-  const [decStr, setDecStr] = useState(Number.isFinite(max0) ? String(max0) : '0')
+  const [decStr, setDecStr] = useState(item.decayed_max_durability ?? (Number.isFinite(max0) ? String(max0) : '0'))
 
   const parse = (s: string) => {
-    const n = parseFloat(s)
-    return Number.isFinite(n) && n >= 0 ? n : null
+    const n = Number(s)
+    return s.trim() !== '' && Number.isFinite(n) && n >= 0 ? n : null
   }
   const mN = parse(maxStr), cN = parse(curStr), dN = parse(decStr)
   const valid = mN !== null && cN !== null && dN !== null
 
   return (
     <div className="player-item-durability border-t border-border/50 px-3 py-3 bg-surface-1/60 rounded-b-lg space-y-3">
-      <div className="text-[11px] text-text-dim italic flex items-start gap-1.5">
+      {!solo && <div className="text-[11px] text-text-dim italic flex items-start gap-1.5">
         <Icon name="Info" size={11} className="mt-0.5 shrink-0" />
         <span>
           Repair uses a best-guess maximum from the bundled game-item catalog. The catalog
           can be out of date or missing values for newer items — if Repair gives the wrong
           numbers, edit the fields below and Save instead.
         </span>
-      </div>
+      </div>}
       {isOnline && (
         <div className="text-[11px] text-warning flex items-start gap-1.5">
           <Icon name="Wifi" size={11} className="mt-0.5 shrink-0" />
@@ -3420,14 +3462,14 @@ function DurabilityEditor({ item, busy, run, isOnline, onClose }: {
         </label>
       </div>
       <div className="flex items-center justify-end gap-2">
-        <button
+        {!solo && <button
           type="button"
           className="btn-secondary text-xs"
           disabled={busy}
           onClick={() => run(() => repairInventoryItem(item.id), 'Repair')}
         >
           <Icon name="Wrench" size={12} /> Repair (catalog max)
-        </button>
+        </button>}
         <button
           type="button"
           className="btn-primary text-xs"
@@ -3435,7 +3477,7 @@ function DurabilityEditor({ item, busy, run, isOnline, onClose }: {
           onClick={() => {
             if (!valid) return
             void (async () => {
-              if (await run(() => setItemDurability(item.id, mN!, cN!, dN!), 'Save')) onClose()
+              if (await run(() => onSave ? onSave(mN!, cN!, dN!) : setItemDurability(item.id, mN!, cN!, dN!), 'Save')) onClose()
             })()
           }}
         >
@@ -3453,20 +3495,22 @@ function DurabilityEditor({ item, busy, run, isOnline, onClose }: {
 // max), so only the current amount is editable. The value will NOT reflect
 // in-game until the map pod / battlegroup is restarted — the pod caches
 // inventory in RAM and flushes it over DB writes on its save tick.
-function WaterEditor({ item, busy, run, onClose }: {
+export function WaterEditor({ item, busy, run, onClose, onSave, solo = false }: {
   item: InventoryItem
   busy: boolean
   run: (fn: () => Promise<{ message: string }>, label: string) => Promise<boolean>
   onClose: () => void
+  onSave?: (amount: number) => Promise<{ message: string }>
+  solo?: boolean
 }) {
   const amt0 = parseFloat(item.water_amount)
   const [amtStr, setAmtStr] = useState(Number.isFinite(amt0) ? String(amt0) : '0')
-  const n = parseFloat(amtStr)
-  const valid = Number.isFinite(n) && n >= 0
+  const n = Number(amtStr)
+  const valid = amtStr.trim() !== '' && Number.isFinite(n) && n >= 0
 
   return (
     <div className="player-item-water border-t border-border/50 px-3 py-3 bg-surface-1/60 rounded-b-lg space-y-3">
-      <div className="text-[11px] text-warning flex items-start gap-1.5">
+      {!solo && <div className="text-[11px] text-warning flex items-start gap-1.5">
         <Icon name="AlertTriangle" size={11} className="mt-0.5 shrink-0" />
         <span>
           Editing the water amount writes to the database immediately, but the map
@@ -3474,7 +3518,7 @@ function WaterEditor({ item, busy, run, onClose }: {
           The new value will <strong>not</strong> appear in-game until that map's
           pod / the battlegroup is restarted.
         </span>
-      </div>
+      </div>}
       <div className="text-[11px] text-warning flex items-start gap-1.5">
         <Icon name="Droplet" size={11} className="mt-0.5 shrink-0" />
         <span>
@@ -3498,7 +3542,7 @@ function WaterEditor({ item, busy, run, onClose }: {
         </label>
         <div className="flex items-center justify-end gap-2">
           {!!item.water_capacity && item.water_capacity > 0 && <button type="button" className="btn-secondary text-xs" disabled={busy}
-            onClick={() => { void (async () => { if (await run(() => setItemWater(item.id, item.water_capacity!), 'Refill')) onClose() })() }}>
+            onClick={() => { void (async () => { if (await run(() => onSave ? onSave(item.water_capacity!) : setItemWater(item.id, item.water_capacity!), 'Refill')) onClose() })() }}>
             <Icon name="Droplet" size={12} /> Refill
           </button>}
           <button
@@ -3507,7 +3551,7 @@ function WaterEditor({ item, busy, run, onClose }: {
             disabled={busy || !valid}
             onClick={() => {
               if (!valid) return
-              void (async () => { if (await run(() => setItemWater(item.id, n), 'Save')) onClose() })()
+              void (async () => { if (await run(() => onSave ? onSave(n) : setItemWater(item.id, n), 'Save')) onClose() })()
             }}
           >
             <Icon name="Save" size={12} /> Save water

@@ -25,7 +25,7 @@ describe('ViewportNotice', () => {
     vi.useFakeTimers()
     const dismiss = vi.fn()
 
-    render(<ViewportNotice kind="ok" text="Settings saved." onDismiss={dismiss} />)
+    render(<ViewportNotice kind="ok" text={'Items granted.\nAll entries submitted.'} onDismiss={dismiss} />)
     vi.advanceTimersByTime(5_999)
     expect(dismiss).not.toHaveBeenCalled()
     vi.advanceTimersByTime(1)

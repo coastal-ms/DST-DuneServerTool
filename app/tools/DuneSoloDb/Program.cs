@@ -91,6 +91,8 @@ internal static partial class Program
                         ? Path.GetFullPath(inspectAdapter)
                         : null),
                 "backup" => Backup(Require(options, "input"), Require(options, "output")),
+                "edit-item" => EditInventoryItem(Require(options,"input"), Require(options,"safety-backup"), Require(options,"catalog"),
+                    long.Parse(RequireValue(options,"item-id")), RequireValue(options,"revision"), RequireValue(options,"field"), File.ReadAllText(Require(options,"values-file"))),
                 "restore" => Restore(
                     Require(options, "input"),
                     Require(options, "target"),
@@ -1650,6 +1652,7 @@ internal static partial class Program
                     "Pre-augmented ranged grant stats did not preserve augments and loaded ammo.");
             }
             TestEquipmentRepair(source, catalogPath, root);
+            SelfTestInventoryEditing(source, catalogPath, root);
             var catalog = ReadCatalog(catalogPath);
             if (catalog["RepairTool5"].Volume != 1d
                 || catalog["TreadwheelHull_6"].Volume != 8d
@@ -2751,6 +2754,7 @@ internal static partial class Program
                 tests = new[]
                 {
                     "wrapper-v1-roundtrip",
+                    "offline-inventory-stack-water-durability-edits-preserve-backups-and-reject-stale-items",
                     "sqlite-integrity-and-foreign-keys",
                     "exactly-one-character",
                     "map-seed-from-coriolis-cycle",
@@ -3535,7 +3539,8 @@ internal static partial class Program
                 SELECT id,
                        template_id,
                        stack_size,
-                       quality_level
+                       quality_level,
+                       json(stats)
                 FROM items
                 WHERE inventory_id = $inventory
                   AND TRIM(template_id) <> ''
@@ -3550,7 +3555,10 @@ internal static partial class Program
                     ItemId: reader.GetInt64(0),
                     StackSize: reader.GetInt64(2),
                     Quality: reader.GetInt32(3),
-                    TemplateId: reader.GetString(1)));
+                    TemplateId: reader.GetString(1),
+                    Revision: InventoryRevision(destination.Id,reader.GetString(1),reader.GetInt64(2),reader.GetInt32(3),reader.GetString(4)),
+                    DurabilityStats: EditableItemBlock(reader.GetString(4),"FItemStackAndDurabilityStats"),
+                    WaterStats: EditableItemBlock(reader.GetString(4),"FFillableItemStats")));
             }
             foreach (var group in occurrences.GroupBy(
                          value => value.TemplateId,
@@ -3562,11 +3570,7 @@ internal static partial class Program
                     ? rule.DisplayName
                     : templateId;
                 var groupedOccurrences = group
-                    .Select(value => new InventoryItemOccurrence(
-                        value.ItemId,
-                        value.StackSize,
-                        value.Quality,
-                        value.TemplateId))
+                    .Select(value => value)
                     .ToArray();
                 results.Add(new InventoryItemGroup(
                     InventoryId: destination.Id,
@@ -3793,7 +3797,10 @@ internal static partial class Program
         long ItemId,
         long StackSize,
         int Quality,
-        string TemplateId);
+        string TemplateId,
+        string? Revision = null,
+        JsonObject? DurabilityStats = null,
+        JsonObject? WaterStats = null);
 
     private sealed record RangedWeapon(
         long ItemId,

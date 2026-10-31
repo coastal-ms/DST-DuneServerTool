@@ -746,6 +746,7 @@ export interface InventoryItem {
   quality: number
   durability: string
   max_durability: string
+  decayed_max_durability?: string
   water_amount: string
   water_type: string
   current_ammo?: string
@@ -1482,6 +1483,13 @@ interface CatalogResponse {
 let _catalogCache: CatalogItem[] | null = null
 let _catalogPromise: Promise<CatalogItem[]> | null = null
 
+function catalogItemName(templateId: string, name?: string, category?: string): string {
+  const label = name || templateId
+  return (/Schematic(?:_|$)/i.test(templateId) || category === 'Schematics') && !/\bschematic\b/i.test(label)
+    ? `${label} (Schematic)`
+    : label
+}
+
 /**
  * Normalize the /api/catalog/items payload into CatalogItem[]. Critically, the
  * template_id MUST be the game class string (e.g. "AzuriteOre"), never an array
@@ -1495,7 +1503,7 @@ export function flattenItemCatalog(raw: CatalogResponse['items'] | undefined | n
     for (const e of raw) {
       const tid = String(e?.templateId ?? e?.template_id ?? '').trim()
       if (!tid) continue
-      flat.push({ template_id: tid, name: e?.name || tid, category: e?.category || '', gradeable: !!e?.gradeable, tier: e?.tier })
+      flat.push({ template_id: tid, name: catalogItemName(tid, e?.name, e?.category), category: e?.category || '', gradeable: !!e?.gradeable, tier: e?.tier })
     }
   } else if (raw && typeof raw === 'object') {
     const dict = raw as Record<string, { name?: string; category?: string; gradeable?: boolean; tier?: number }>
@@ -1503,7 +1511,7 @@ export function flattenItemCatalog(raw: CatalogResponse['items'] | undefined | n
       const key = tid.trim()
       if (!key) continue
       const v = dict[tid]
-      flat.push({ template_id: key, name: v?.name || key, category: v?.category || '', gradeable: !!v?.gradeable, tier: v?.tier })
+      flat.push({ template_id: key, name: catalogItemName(key, v?.name, v?.category), category: v?.category || '', gradeable: !!v?.gradeable, tier: v?.tier })
     }
   }
   flat.sort((a, b) => a.name.localeCompare(b.name))

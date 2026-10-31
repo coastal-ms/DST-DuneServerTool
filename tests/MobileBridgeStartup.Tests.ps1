@@ -77,6 +77,22 @@ Describe 'Bridge status through the remote proxy' {
         $status.issues.Count | Should -Be 0
         Should -Invoke Test-DuneBridgeHealth -Times 0
     }
+    It 'trusts verified health when Windows socket inspection cannot see the listener' {
+        Mock Get-NetTCPConnection { $null }
+        Mock Test-DuneBridgeHealth { $true }
+        $status = Get-DuneBridgeStatus
+        $status.ready | Should -BeTrue
+        $status.listening | Should -BeTrue
+        $status.healthOk | Should -BeTrue
+        $status.issues.Count | Should -Be 0
+    }
+    It 'retains the stopped warning when neither listener inspection nor health succeeds' {
+        Mock Get-NetTCPConnection { $null }
+        $status = Get-DuneBridgeStatus
+        $status.ready | Should -BeFalse
+        $status.listening | Should -BeFalse
+        $status.issues | Should -Contain 'Nothing is listening on bridge port 47900.'
+    }
     It 'still probes the bridge for a direct local status check' {
         $status = Get-DuneBridgeStatus
         $status.ready | Should -BeFalse

@@ -571,7 +571,7 @@ function Assert-DuneSoloGameClosed {
 
 function Invoke-DuneSoloHelper {
     param(
-        [Parameter(Mandatory)][ValidateSet('inspect','diagnostics','codex','activity','grant-codex','character-xp','faction-progression','set-specialization','reset-specialization-rewards','backup','restore','grant-items','delete-item','delete-item-group','import-blueprint','list-blueprints','export-blueprint','set-currencies','fill-water','set-weapon-ammo','repair-equipment','max-augment-attributes','max-specializations','complete-fremen','complete-npe','reset-post-npe','enable-skills','set-progression-points','unlock-main-quest','unlock-trainer','unlock-testing-stations','grant-legitimate-customization')][string]$Command,
+        [Parameter(Mandatory)][ValidateSet('inspect','diagnostics','codex','activity','grant-codex','character-xp','faction-progression','set-specialization','reset-specialization-rewards','backup','restore','grant-items','delete-item','edit-item','delete-item-group','import-blueprint','list-blueprints','export-blueprint','set-currencies','fill-water','set-weapon-ammo','repair-equipment','max-augment-attributes','max-specializations','complete-fremen','complete-npe','reset-post-npe','enable-skills','set-progression-points','unlock-main-quest','unlock-trainer','unlock-testing-stations','grant-legitimate-customization')][string]$Command,
         [Parameter(Mandatory)][hashtable]$Arguments
     )
 
@@ -598,7 +598,7 @@ function Invoke-DuneSoloHelper {
     # Ordinary edits share a recent recovery point. Destructive actions retain
     # their own exact before-state; atomic replacement still keeps an immediate
     # rollback file until every write has passed verification.
-    if ((Get-DuneSoloBackupPolicy).managed -and $Arguments['safety-backup'] -and $Command -notmatch '^(restore|reset-|delete-|import-blueprint)') {
+    if ((Get-DuneSoloBackupPolicy).managed -and $Arguments['safety-backup'] -and $Command -notmatch '^(restore|reset-|delete-|edit-item|import-blueprint)') {
         $profile = Get-DuneSoloProfile
         $automaticDir = Join-Path (Get-DuneSoloProfileBackupRoot -DbPath $profile.dbPath) 'automatic'
         New-Item -ItemType Directory -Path $automaticDir -Force | Out-Null
@@ -962,6 +962,27 @@ function Set-DuneSoloWeaponAmmo {
         ammo = $Ammo
         catalog = Get-DuneSoloGameplayCatalogPath
     }
+}
+
+function Set-DuneSoloInventoryItem {
+    param([long]$ItemId,[string]$Revision,[string]$Field,[string]$Values,[string]$Confirm)
+    Assert-DuneSoloSupportedPlatform
+    if ($Confirm -ne 'EDIT SOLO ITEM') { throw 'Confirm the Solo inventory edit.' }
+    Assert-DuneSoloGameClosed
+    if ($ItemId -le 0 -or $Revision -notmatch '^[a-f0-9]{64}$' -or $Field -notin @('stack','water','durability')) { throw 'Refresh and select a valid inventory item.' }
+    $profile = Get-DuneSoloProfile
+    if (-not $profile.dbPath -or -not (Test-Path -LiteralPath $profile.dbPath -PathType Leaf)) { throw 'Connect a valid Solo save.' }
+    Assert-DuneSoloAdapterCapability -Profile $profile -Capability 'item-edit' | Out-Null
+    $dir = Join-Path (Get-DuneSoloProfileBackupRoot -DbPath $profile.dbPath) 'pre-item-edit'
+    New-Item -ItemType Directory -Path $dir -Force | Out-Null
+    $request = Join-Path $dir ('edit-' + [guid]::NewGuid().ToString('N') + '.json')
+    try {
+        [IO.File]::WriteAllText($request, $Values, [Text.UTF8Encoding]::new($false))
+        Invoke-DuneSoloHelper -Command 'edit-item' -Arguments @{
+            input=$profile.dbPath; 'safety-backup'=(Join-Path $dir ('game-before-edit-' + [guid]::NewGuid().ToString('N') + '.db'))
+            catalog=(Get-DuneSoloGameplayCatalogPath); 'item-id'=$ItemId; revision=$Revision; field=$Field; 'values-file'=$request
+        }
+    } finally { Remove-Item -LiteralPath $request -Force -ErrorAction SilentlyContinue }
 }
 
 function Remove-DuneSoloInventoryItem {

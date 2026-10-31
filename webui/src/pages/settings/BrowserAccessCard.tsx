@@ -115,8 +115,8 @@ export function BrowserAccessCard() {
 
           {data?.url ? (
             <div style={{ marginTop: '0.75rem' }}>
-              <div className="card p-2 border-success/40 bg-success/10 text-success text-sm flex items-center gap-2">
-                <Icon name="CheckCircle2" size={16} /> Reachable at a stable public address
+              <div className="card p-2 text-text-muted text-sm flex items-center gap-2">
+                <Icon name="Globe" size={16} /> Stable public address configured
               </div>
               <div style={{ marginTop: '0.5rem', fontSize: '13px', fontFamily: 'monospace', wordBreak: 'break-all' }}>{data.url}</div>
               <div className="help-text" style={{ marginTop: '0.5rem' }}>

@@ -13,6 +13,17 @@ here cover everything those tags shipped.
 
 ## [Unreleased]
 
+## [16.6.12] - 2026-10-30
+
+### Fixed
+- Add Solo inventory editors for stack quantities, water amounts and durability.
+- Identify schematics clearly and show friendly item names in saved packages.
+- Import and export Give Packages to share them with other DST users.
+- Fix garbled punctuation in story completion labels and descriptions.
+- Correct false remote bridge warnings and distinguish a configured public address from connection health.
+- Show Server updates navigation and update controls to remote owners and admins while keeping player logins excluded.
+- Dismiss successful action notifications automatically.
+
 ## [16.6.11] - 2026-10-30
 
 ### Changed

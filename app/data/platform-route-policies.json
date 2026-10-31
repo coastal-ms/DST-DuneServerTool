@@ -221,7 +221,7 @@
     { "source": "Sietch.ps1", "capabilityId": "operation.topology", "routeCount": 2, "sha256": "c8d97b8e6b93456bbb9eb3eb8a3a77cde95186a15891d5c8e135790e65b73ad6" },
     { "source": "SoloLiveMap.ps1", "capabilityId": "host.solo", "routeCount": 2, "sha256": "8ff718cccd77c1728a4ca377579107c568070c9721313cf857bb393245c22fc3" },
     {"source":"SoloMods.ps1","capabilityId":"host.solo","routeCount":15,"sha256":"6b08e38a84214dd13a3ec2c7e30785e0da9fd6c5ab7281062e467363f484166e"},
-    { "source": "SoloMode.ps1", "capabilityId": "host.solo", "routeCount": 47, "sha256": "a22894ac2354e30bbaf698e3346f9d61b6057a8a492d7d0ff2e7f1f3413191ad" },
+    { "source": "SoloMode.ps1", "capabilityId": "host.solo", "routeCount": 48, "sha256": "d740aab111a56f3a5c4357e296e269a6743c15e5185f18c515b7808789fe0b0d" },
     { "source": "SoloDeck.ps1", "capabilityId": "host.solo", "routeCount": 7, "sha256": "0baf56766dc4aa9ad68fe6e6811fed59b2517fe9a85109e83a5513544de351be" },
     { "source": "Status.ps1", "capabilityId": "platform.status", "routeCount": 3, "sha256": "d6cccf669f2d527afb82558161f0a8219345bd12240ddff6964ef0632d5cd56b" },
     { "source": "System.ps1", "capabilityId": "operation.health", "routeCount": 5, "sha256": "2840b487061a7fedff813099e99340c35828a620a1f7bdd703101a0a3fde5396" },

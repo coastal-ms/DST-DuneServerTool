@@ -3,7 +3,7 @@ BeforeAll {
  Import-DstLib 'Gameplay.ps1'
  Import-DstLib 'PlayersRead.ps1'
  Import-DstLib 'PlayersWrites.ps1'
- $script:completionPresets=Get-Content (Join-Path (Get-DstRepoRoot) 'app/data/dune-progression-presets.json') -Raw | ConvertFrom-Json
+ $script:completionPresets=Get-Content (Join-Path (Get-DstRepoRoot) 'app/data/dune-progression-presets.json') -Raw -Encoding UTF8 | ConvertFrom-Json
 }
 Describe 'Consolidated story completion' {
  BeforeEach {
@@ -45,5 +45,19 @@ Describe 'Consolidated story completion' {
   Mock Invoke-DunePlayerCompleteContracts { @{ok=$false;error='fixture failure'} }
   $r=Invoke-DunePlayerApplyProgressionPreset -Ip fixture -AccountId 42 -PresetId scourge_complete
   $r.ok | Should -BeFalse; $r.completed | Should -Be 0; $r.error | Should -Match 'fixture failure'
+ }
+}
+
+Describe 'Story preset catalog encoding' {
+ It 'preserves UTF-8 story names and descriptions through the actual API catalog loader' {
+  $payload = & {
+   . (Join-Path (Get-DstRepoRoot) 'app/server/lib/PlayersRead.ps1')
+   Get-DuneProgressionPresetsCatalog
+  }
+  $payload.ok | Should -BeTrue
+  $act4 = $payload.presets | Where-Object id -eq 'act4_complete'
+  $act4.name | Should -Be ("Complete Act 4 " + [char]0x2014 + " The Great Convention, Part III")
+  $act2 = $payload.presets | Where-Object id -eq 'act2_complete'
+  $act2.description | Should -Be ("Complete Assassin" + [char]0x2019 + "s Handbook and The Great Convention. Takes effect on next login.")
  }
 }

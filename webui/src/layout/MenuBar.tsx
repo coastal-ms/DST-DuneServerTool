@@ -29,7 +29,7 @@ type Props = {
 // System for cross-cutting commands like "Create Diagnostics Package" and the
 // sidebar collapse toggle.
 export function MenuBar({ sidebarCollapsed, onToggleSidebar, sidebarAvailable = true }: Props) {
-  const { canAccessOwnerSurfaces } = usePortalAccess()
+  const { canAccessOwnerSurfaces, canAccessServerUpdates } = usePortalAccess()
   const soloOnly = useSoloInstallation()
   const navigate = useNavigate()
   const location = useLocation()
@@ -275,6 +275,7 @@ export function MenuBar({ sidebarCollapsed, onToggleSidebar, sidebarAvailable = 
     local: isLocalViewer(),
     windows: isWindowsViewer(),
     canAccessOwnerSurfaces,
+    canAccessServerUpdates,
     soloOnly,
   })
   const mobileGroups = GROUP_ORDER.map(group => ({

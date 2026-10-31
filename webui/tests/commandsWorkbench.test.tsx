@@ -119,13 +119,13 @@ describe('Contextual Commands workbench', () => {
     expect(api).not.toHaveBeenCalled()
   })
 
-  it('retains delegated Admin command restrictions on the updates shortcut', () => {
+  it.each(['owner', 'admin'] as const)('offers only update controls on the updates shortcut for remote %s', role => {
     state.local = false
-    state.role = 'admin'
+    state.role = role
     state.search = 'task=updates'
     render(<Commands />)
-    expect(screen.queryByRole('article')).not.toBeInTheDocument()
-    expect(screen.getByText('No commands available.')).toBeInTheDocument()
+    expect(screen.getAllByRole('article')).toHaveLength(1)
+    expect(screen.getByRole('button', { name: 'Run Update server' })).toBeInTheDocument()
     expect(api).not.toHaveBeenCalled()
   })
 
@@ -266,7 +266,7 @@ describe('Contextual Commands workbench', () => {
   })
 
   it.each<PortalAccountRole>(['admin', 'owner', null])(
-    'preserves the remote allowlist and local-only boundaries for role %s, including an unplaced owner update',
+    'preserves the remote allowlist and local-only boundaries for role %s, including an unplaced owner/admin update',
     role => {
       state.local = false
       state.role = role
@@ -275,11 +275,11 @@ describe('Contextual Commands workbench', () => {
       state.data = data
       render(<Commands />)
       fireEvent.click(choices().getByRole('button', { name: 'All controls' }))
-      expect(screen.getAllByRole('article')).toHaveLength(role === 'owner' ? 7 : 6)
+      expect(screen.getAllByRole('article')).toHaveLength(role === 'owner' || role === 'admin' ? 7 : 6)
       for (const label of ['Start VM', 'Reboot VM', 'Startup', 'Start battlegroup', 'Restart battlegroup', 'Apply INIs']) {
         expect(screen.getByRole('button', { name: `Run ${label}` })).toBeInTheDocument()
       }
-      expect(screen.queryByRole('button', { name: 'Run Update server' }) !== null).toBe(role === 'owner')
+      expect(screen.queryByRole('button', { name: 'Run Update server' }) !== null).toBe(role === 'owner' || role === 'admin')
       expect(screen.queryByRole('button', { name: /Delete VM|Inspect logs|Stop battlegroup|Open PowerShell/ })).not.toBeInTheDocument()
       expect(screen.queryByRole('button', { name: 'Custom layout' })).not.toBeInTheDocument()
       expect(screen.queryByRole('button', { name: 'Reset layout' })).not.toBeInTheDocument()

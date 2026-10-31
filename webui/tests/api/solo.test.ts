@@ -35,6 +35,15 @@ function last(): FetchCall {
   return call
 }
 
+it('targets a specific Solo item revision and preserves decimal inventory edits', async () => {
+  const item = { itemId: 9, templateId: 'Literjon', stackSize: 2, quality: 0, revision: 'a'.repeat(64) }
+  await solo.editSoloInventoryItem(item, 'water', { amount: 1234.5 }, 'connected-profile')
+  expect(last()).toEqual({ url: '/api/solo/items/edit', method: 'POST', body: {
+    itemId: 9, revision: item.revision, field: 'water', values: { amount: 1234.5 },
+    expectedProfileToken: 'connected-profile', confirm: 'EDIT SOLO ITEM',
+  } })
+})
+
 describe('Solo Mode API contracts', () => {
   it('sends the reviewed group scope, total and selected-profile guard for bulk deletion', async () => {
     await solo.deleteSoloInventoryGroup('Blood', 'inventory:1', 19991, 19991, 'profile-token')

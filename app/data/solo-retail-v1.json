@@ -11,6 +11,7 @@
     "restore",
     "item-grant",
     "item-delete",
+    "item-edit",
     "weapon-ammo",
     "equipment-repair",
     "currencies",

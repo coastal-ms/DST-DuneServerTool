@@ -172,7 +172,7 @@ Describe 'Complete route classification' {
     It 'classifies the exact registered HTTP and WebSocket inventory' {
         $records = @(Get-PlatformRouteRecords)
         $manifest = Get-DuneRoutePolicyManifest
-        $records.Count | Should -Be 457
+        $records.Count | Should -Be 458
         $sources = @($records.SourceFile | Sort-Object -Unique)
         @($manifest.groups.source | Sort-Object) | Should -Be $sources
 
@@ -225,6 +225,13 @@ Describe 'Complete route classification' {
         $soloActivity[0].Classification.capabilityId | Should -Be 'host.solo'
         $soloActivity[0].Classification.lifecycle | Should -Be 'read'
         $soloActivity[0].Classification.currentAccess | Should -Be 'local-only'
+        $soloItemEdit = @($script:DuneRoutes | Where-Object { $_.Method -eq 'POST' -and $_.Path -eq '/api/solo/items/edit' })
+        $soloItemEdit.Count | Should -Be 1
+        $soloItemEdit[0].LocalOnly | Should -BeTrue
+        $soloItemEdit[0].Classification.capabilityId | Should -Be 'host.solo'
+        $soloItemEdit[0].Classification.lifecycle | Should -Be 'transactional-write'
+        $soloItemEdit[0].Classification.currentAccess | Should -Be 'local-only'
+        $soloItemEdit[0].Classification.allowedPrincipalTypes | Should -Be @('local-host')
         @($classifications | Where-Object { -not (Test-DuneRouteCapabilityCompatibility $_) }).Count |
             Should -Be 0
         @($classifications | Where-Object { $_.lifecycle -notin @('read','reversible-write','transactional-write','destructive') }).Count |
@@ -355,7 +362,7 @@ $result = @{
         $LASTEXITCODE | Should -Be 0 -Because ($output -join [Environment]::NewLine)
         $resultLine = @($output | Where-Object { [string]$_ -like 'ROUTE_RESULT:*' })[-1]
         $result = ([string]$resultLine).Substring('ROUTE_RESULT:'.Length) | ConvertFrom-Json
-        $result.total | Should -Be 457
+        $result.total | Should -Be 458
         $result.unclassified | Should -Be 0
         $result.incompatible | Should -Be 0
         $result.podsCleanup | Should -Be 1
