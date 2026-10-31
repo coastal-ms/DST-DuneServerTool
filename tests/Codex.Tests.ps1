@@ -11,6 +11,19 @@ BeforeAll {
 }
 
 Describe 'Codex ownership' {
+    It 'accepts Offline and reads the grant result through the real row converter' {
+        Mock Invoke-DuneSqlQuery {
+            if ($ReadOnly) { return @{ok=$true;columns=@('status');rows=@(,@('Offline'))} }
+            return @{ok=$true;columns=@('granted');rows=@(,@('62'))}
+        }
+        Mock Invoke-DuneBaseWaterBgCommand { @{ok=$true;backupPath='/backups/codex.sql.gz'} }
+        $catalog = Get-Content (Get-DuneSoloDataFilePath -Name 'codex-catalog.json') -Raw | ConvertFrom-Json
+        $selection = @($catalog.fragments | Select-Object -First 62 | ForEach-Object { $_.id })
+        $result = Invoke-DunePlayerCodexGrant -Ip fixture -AccountId 3 -Ids $selection -Confirm 'GRANT CODEX FRAGMENTS'
+        $result.ok | Should -BeTrue
+        $result.granted | Should -Be 62
+        Should -Invoke Invoke-DuneBaseWaterBgCommand -Times 1 -Exactly
+    }
     It 'distinguishes owned fragments from revealed but incomplete lore' {
         $result = ConvertTo-DuneCodexOwnership -Nodes @(
             @{ node_id = 'DA_Dunipedia_KnownUniverse.Imperium.ImperiumFragment1Title.ImperiumFragment1Content'; is_complete = $true; is_revealed = $true },
@@ -63,7 +76,7 @@ Describe 'Codex ownership' {
 
     It 'never writes if the self-hosted backup fails' {
         Mock Invoke-DuneSqlQuery { @{ ok = $true } }
-        Mock ConvertTo-DuneRowMaps { @(@{status='Offline'}) }
+        Mock ConvertTo-DuneRowMaps { ,@(@{status='Offline'}) }
         Mock Invoke-DuneBaseWaterBgCommand { @{ok=$false} }
         { Invoke-DunePlayerCodexGrant -Ip '127.0.0.1' -AccountId 3 -Ids @('DA_Dunipedia_KnownUniverse.Imperium.ImperiumFragment2Title.ImperiumFragment2Content') -Confirm 'GRANT CODEX FRAGMENTS' } | Should -Throw '*backup failed*'
         Should -Invoke Invoke-DuneSqlQuery -Times 0 -Exactly -ParameterFilter { -not $ReadOnly }
@@ -87,7 +100,7 @@ Describe 'Codex ownership' {
             if ($ReadOnly) { $script:codexOrder.Add('read'); return @{ok=$true;rows=@(@{status='Offline'})} }
             $script:codexOrder.Add('write'); return @{ok=$true;rows=@(@{granted=1})}
         }
-        Mock ConvertTo-DuneRowMaps { $Result.rows }
+        Mock ConvertTo-DuneRowMaps { ,@($Result.rows) }
         Mock Invoke-DuneBaseWaterBgCommand { $script:codexOrder.Add('backup'); @{ok=$true;backupPath='/backups/codex-test.sql.gz'} }
         $result = Invoke-DunePlayerCodexGrant -Ip '127.0.0.1' -AccountId 3 -Ids @('DA_Dunipedia_KnownUniverse.Imperium.ImperiumFragment2Title.ImperiumFragment2Content') -Confirm 'GRANT CODEX FRAGMENTS'
         $result.granted | Should -Be 1

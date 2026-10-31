@@ -57,3 +57,9 @@ export function mapLabel(map: string | null | undefined): string {
   }
   return s.replace(/_/g, ' ').trim() || raw
 }
+
+/** Resolve only known map IDs from Funcom's lower-case Kubernetes slug. */
+export function mapLabelFromPodSlug(slug: string): string | null {
+  const key = Object.keys(MAP_LABELS).find(k => k.toLowerCase().replace(/_/g, '-') === slug)
+  return key ? MAP_LABELS[key]! : null
+}

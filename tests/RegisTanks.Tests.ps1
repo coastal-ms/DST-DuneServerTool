@@ -26,6 +26,17 @@ Describe 'Native Regis Tank controls' {
         Mock Invoke-V6Ssh { @("240b4bb378a93b70134fa685fc467bc2ae94fd40d81da2feea0f987758bc9126  $script:TankBinary", "240b4bb378a93b70134fa685fc467bc2ae94fd40d81da2feea0f987758bc9126  $script:TankBinary") } -ParameterFilter { $Cmd -like '*sha256sum*' }
         (Get-DuneRegisTankSupport -Ip test -ActorId 544).enabled | Should -BeFalse
     }
+    It 'validates both ready Hagga instances instead of rejecting a second sietch' {
+        Mock Invoke-V6Ssh { '{"items":[{"metadata":{"name":"test-sg-survival-1-pod-1"},"status":{"phase":"Running","conditions":[{"type":"Ready","status":"True"}]}},{"metadata":{"name":"test-sg-survival-1-pod-31"},"status":{"phase":"Running","conditions":[{"type":"Ready","status":"True"}]}}]}' } -ParameterFilter { $Cmd -like '*get pods*' }
+        (Get-DuneRegisTankSupport -Ip test -ActorId 544).enabled | Should -BeTrue
+        Should -Invoke Invoke-V6Ssh -Times 1 -ParameterFilter { $Cmd -like "*exec 'test-sg-survival-1-pod-1' -- sha256sum*" }
+        Should -Invoke Invoke-V6Ssh -Times 1 -ParameterFilter { $Cmd -like "*exec 'test-sg-survival-1-pod-31' -- sha256sum*" }
+    }
+    It 'blocks grants if either of two Hagga instances has missing compatibility files' {
+        Mock Invoke-V6Ssh { '{"items":[{"metadata":{"name":"test-sg-survival-1-pod-1"},"status":{"phase":"Running","conditions":[{"type":"Ready","status":"True"}]}},{"metadata":{"name":"test-sg-survival-1-pod-31"},"status":{"phase":"Running","conditions":[{"type":"Ready","status":"True"}]}}]}' } -ParameterFilter { $Cmd -like '*get pods*' }
+        Mock Invoke-V6Ssh { @() } -ParameterFilter { $Cmd -like "*exec 'test-sg-survival-1-pod-31' -- sha256sum*" }
+        (Get-DuneRegisTankSupport -Ip test -ActorId 544).enabled | Should -BeFalse
+    }
     It 'recognizes patched builds only with the complete unchanged overlay' -ForEach @(
         @{Hash='3e8966850e911826f4e5339dea5b3830a71e037acc9b0ed400bc9f0e21e6e318';Build='2156652'},
         @{Hash='e10c49bd69e3ae8e3eccce3049326d04c4c0e750f767587749429a95ae7f574b';Build='2160922'},

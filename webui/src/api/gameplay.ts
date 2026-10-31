@@ -2427,6 +2427,12 @@ export function resetJourney(accountId: number) {
   })
 }
 
+export function resetStoryOnly(accountId: number) {
+  return api<WriteResult>('/api/gameplay/players/journey/reset-story', {
+    method: 'POST', body: JSON.stringify({ account_id: accountId }),
+  })
+}
+
 export function wipeJourney(accountId: number) {
   return api<WriteResult>('/api/gameplay/players/journey/wipe', {
     method: 'POST', body: JSON.stringify({ account_id: accountId }),

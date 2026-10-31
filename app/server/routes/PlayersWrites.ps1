@@ -465,6 +465,21 @@ Register-DuneRoute -Method POST -Path '/api/gameplay/players/journey/reset' -Han
     }
 }
 
+# POST /api/gameplay/players/journey/reset-story — offline, preserves skills and tech.
+Register-DuneRoute -Method POST -Path '/api/gameplay/players/journey/reset-story' -Handler {
+    param($req, $res, $routeParams, $body)
+    try {
+        $acc = Get-DuneBodyInt -Body $body -Name 'account_id'
+        if ($null -eq $acc -or $acc -le 0) { Write-DuneError -Response $res -Status 400 -Message 'account_id is required.'; return }
+        Invoke-DunePlayerWriteRoute -Response $res -Action {
+            param($ip)
+            Invoke-DunePlayerWipeJourneyNodes -Ip $ip -AccountId $acc -KeepNpeCompleted
+        }
+    } catch {
+        Write-DuneError -Response $res -Status 500 -Message "Story-only reset failed: $($_.Exception.Message)"
+    }
+}
+
 # POST /api/gameplay/players/journey/wipe  { account_id } — offline only
 Register-DuneRoute -Method POST -Path '/api/gameplay/players/journey/wipe' -Handler {
     param($req, $res, $routeParams, $body)

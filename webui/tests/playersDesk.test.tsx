@@ -45,10 +45,32 @@ async function findTool(query: string, label: RegExp) {
   fireEvent.click(within(screen.getByRole('region', {name: 'Player tool search results'})).getByRole('button', {name: label}))
   return screen.getByRole('region', {name: 'Player tools'})
 }
+
+it('finds the shared story destination while retaining the self-host Journey workspace', async () => {
+  await selectPlayer()
+  fireEvent.change(screen.getByRole('searchbox', { name: 'Find a player tool' }), { target: { value: 'lost harvest' } })
+  fireEvent.click(within(screen.getByRole('region', { name: 'Player tool search results' })).getByRole('button', { name: /^Journey/ }))
+  expect(within(screen.getByRole('navigation', { name: 'Character sections' })).getByRole('button', { name: 'Progression', exact: true })).toHaveAttribute('aria-pressed', 'true')
+  expect(within(screen.getByRole('navigation', { name: 'Progression views' })).getByRole('button', { name: 'Journey', exact: true })).toHaveAttribute('aria-pressed', 'true')
+  expect(giveSolari).not.toHaveBeenCalled()
+  expect(unlockTestingStations).not.toHaveBeenCalled()
+})
 function submit(name: string) {
   fireEvent.click(within(screen.getByRole('region', {name: 'Player tools'})).getAllByRole('button', {name, exact: true}).find(button => !button.hasAttribute('aria-expanded'))!)
 }
 describe('Player workspace', () => {
+  it('expands item tools in place and retains sibling cards and item tabs',async()=>{
+    await selectPlayer()
+    fireEvent.click(screen.getByRole('button',{name:'Items',exact:true}))
+    fireEvent.click(screen.getByRole('button',{name:'Appearance',exact:true}))
+    const card=screen.getByRole('button',{name:/Grant All Character Swatches/})
+    expect(card).toHaveAttribute('aria-expanded','false')
+    fireEvent.click(card)
+    expect(card).toHaveAttribute('aria-expanded','true')
+    expect(screen.getByRole('button',{name:/All Armor Skins/})).toBeInTheDocument()
+    expect(screen.getByRole('button',{name:'Appearance',exact:true})).toBeInTheDocument()
+    expect(screen.queryByRole('button',{name:/Back to items/i})).not.toBeInTheDocument()
+  })
   it('keeps the workspace and current category when selecting another character without reloading the roster', async () => {
     await selectPlayer()
     const workspace=screen.getByRole('region',{name:'Player management'})

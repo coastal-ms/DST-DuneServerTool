@@ -100,7 +100,7 @@
     "DA_LDR_Subterfuge_InTheShadows.Retrieve the cargo manifest": [
       "Contract.Target.Interaction.Landsraad.Calypso.SecretCargoAmbush"
     ],
-    "DA_LDR_Subterfuge_PoisoningTheWell.The Saboteur\u2019s Gift.Reach the drop-off location": [
+    "DA_LDR_Subterfuge_PoisoningTheWell.The Saboteur’s Gift.Reach the drop-off location": [
       "Contract.Target.Interaction.Landsraad.PoisoningTheWell.CanReadSaboteurInstructions"
     ],
     "DA_LDR_Syndicate_Assassination_1.DA_LDR_Syndicate_Assassination_1_2": [
@@ -346,6 +346,25 @@
     ],
     "DA_MQ_TheGreatConventionPt2.TheArtOfKanly5.Task4Intro": [
       "Journey.Chapter3.ArtOfKanly.Task4.Progression.Unlocked"
+    ],
+    "DA_MQ_TheGreatConventionPt3": [
+      "Journey.Chapter4.Progression.Completed",
+      "Journey.Chapter4.Progression.Awakened"
+    ],
+    "DA_MQ_TheGreatConventionPt3.DangerousAllies": [
+      "Journey.Chapter4.DangerousAllies.Progression.Completed"
+    ],
+    "DA_MQ_TheGreatConventionPt3.DangerousAllies.StartDangerousAllies.MeetEsmar": [
+      "Journey.Chapter4.DangerousAllies.Progression.Unlocked"
+    ],
+    "DA_MQ_TheGreatConventionPt3.DangerousAllies.SpeakWithStabanTuek.TravelToBase": [
+      "Journey.Chapter4.DangerousAllies.Progression.Part1Complete",
+      "Journey.Chapter4.DangerousAllies.Events.StabanAnnouncement_1",
+      "Journey.Chapter4.DangerousAllies.Events.StabanAnnouncement_2",
+      "Journey.Chapter4.DangerousAllies.Events.StabanAnnouncement_3"
+    ],
+    "DA_MQ_TheGreatConventionPt3.FourtyFears.Awakening.Awaken": [
+      "Journey.Chapter4.Progression.Awakened"
     ]
   },
   "contract_tags": {
@@ -1181,6 +1200,52 @@
     ],
     "DA_CT_Trainer_Trooper2_06": [
       "Contract.Tracking.Completed.KaraValk.Contract6"
+    ],
+    "DA_CT_Halloween_Day01": [
+      "Contract.Tracking.Completed.Halloween_Day01"
+    ],
+    "DA_CT_Halloween_Day02": [
+      "Contract.Tracking.Completed.Halloween_Day02"
+    ],
+    "DA_CT_Halloween_Day03": [
+      "Contract.Tracking.Completed.Halloween_Day03"
+    ],
+    "DA_CT_Halloween_Day06": [
+      "Contract.Tracking.Completed.Halloween_Day06"
+    ],
+    "DA_CT_Halloween_Day07": [
+      "Contract.Tracking.Completed.Halloween_Day07"
+    ],
+    "DA_CT_Halloween_Day08": [
+      "Contract.Tracking.Completed.Halloween_Day08",
+      "Contract.Tracking.Halloween.DailiesCompleted"
+    ],
+    "DA_CT_Halloween_Week1_01": [
+      "Contract.Tracking.Completed.Halloween_Week1_01"
+    ],
+    "DA_CT_Halloween_Week1_02": [
+      "Contract.Tracking.Completed.Halloween_week1_02"
+    ],
+    "DA_CT_Halloween_Week1_03": [
+      "Contract.Tracking.Completed.Halloween_Week1_03"
+    ],
+    "DA_CT_Halloween_Week2_01": [
+      "Contract.Tracking.Completed.Halloween_Week2_01"
+    ],
+    "DA_CT_Halloween_Week2_01_Funnel": [
+      "Contract.Tracking.Completed.Halloween_Week2_01_Funnel"
+    ],
+    "DA_CT_Halloween_Week2_02": [
+      "Contract.Tracking.Completed.Halloween_Week2_02"
+    ],
+    "DA_CT_Halloween_Week3_01": [
+      "Contract.Tracking.Completed.Halloween_Week3_01"
+    ],
+    "DA_CT_Halloween_Week3_01_Funnel": [
+      "Contract.Tracking.Completed.Halloween_Week3_01_Funnel"
+    ],
+    "DA_CT_Halloween_Week3_02": [
+      "Contract.Tracking.Completed.Halloween_Week3_02"
     ]
   },
   "contract_aliases": {
@@ -1438,7 +1503,20 @@
     "Trainer_Trooper2_03": "DA_CT_Trainer_Trooper2_03",
     "Trainer_Trooper2_04": "DA_CT_Trainer_Trooper2_04",
     "Trainer_Trooper2_05": "DA_CT_Trainer_Trooper2_05",
-    "Trainer_Trooper2_06": "DA_CT_Trainer_Trooper2_06"
+    "Trainer_Trooper2_06": "DA_CT_Trainer_Trooper2_06",
+    "Eyes of the Kirab": "DA_CT_Halloween_Day01",
+    "Eyes of the Outlaw": "DA_CT_Halloween_Day02",
+    "Eyes of the Forsaken": "DA_CT_Halloween_Day03",
+    "The Kirab Cortex": "DA_CT_Halloween_Day06",
+    "The Outlaw Cortex": "DA_CT_Halloween_Day07",
+    "The Forsaken Cortex": "DA_CT_Halloween_Day08",
+    "Are You Infected?": "DA_CT_Halloween_Week1_01",
+    "Vital Equipment": "DA_CT_Halloween_Week1_02",
+    "Harkonnen Help": "DA_CT_Halloween_Week2_01",
+    "A New Lead": "DA_CT_Halloween_Week2_01_Funnel",
+    "What the Doctor ordered": "DA_CT_Halloween_Week3_01",
+    "A Troubling Discovery": "DA_CT_Halloween_Week3_01_Funnel",
+    "Patient Zero": "DA_CT_Halloween_Week3_02"
   },
   "contract_skill_grants": {
     "DA_CT_Trainer_Mentat2_06": [
@@ -1478,6 +1556,30 @@
     ],
     "DA_CT_Fac_Hark_Rank04_05_Skorda": [
       "Contract.Tracking.FactionStory.ShowSkorda"
+    ],
+    "DA_CT_Halloween_Day01": [
+      "Contract.Tracking.Halloween.DailiesActive"
+    ],
+    "DA_CT_Halloween_Day02": [
+      "Contract.Tracking.Halloween.DailiesActive"
+    ],
+    "DA_CT_Halloween_Day03": [
+      "Contract.Tracking.Halloween.DailiesActive"
+    ],
+    "DA_CT_Halloween_Day06": [
+      "Contract.Tracking.Halloween.DailiesActive"
+    ],
+    "DA_CT_Halloween_Day07": [
+      "Contract.Tracking.Halloween.DailiesActive"
+    ],
+    "DA_CT_Halloween_Day08": [
+      "Contract.Tracking.Halloween.DailiesActive"
+    ],
+    "DA_CT_Halloween_Week2_01_Funnel": [
+      "Contract.Target.Dialogue.Halloween.Phase2FunnelCompleted"
+    ],
+    "DA_CT_Halloween_Week3_01_Funnel": [
+      "Contract.Target.Dialogue.Halloween.Phase3FunnelCompleted"
     ]
   },
   "job_skill_blocks": {
@@ -1679,6 +1781,36 @@
       "Skills.Perk.SuspensorDash",
       "Skills.Perk.TrooperCooldowns",
       "Skills.Spice.GadgetReload"
+    ]
+  },
+  "completion_plans": {
+    "faction_atreides_complete": [
+      "DA_FQ_ClimbTheRanks.ATestOfLoyalty",
+      "DA_FQ_ClimbTheRanks.ClimbTheRanksR2",
+      "DA_FQ_ClimbTheRanks.GatheringIntelligence",
+      "DA_FQ_ClimbTheRanks.HuntingSkorda",
+      "DA_FQ_ClimbTheRanks.InvestigateDelphis_Atreides",
+      "DA_FQ_ClimbTheRanks.InvestigateKytheria_Atreides",
+      "DA_FQ_ClimbTheRanks.JoinAHouse",
+      "DA_FQ_ClimbTheRanks.PoisonedSpice_Atreides",
+      "DA_FQ_ClimbTheRanks.Rank5To20",
+      "DA_FQ_ClimbTheRanks.TransitionToCh3_Atre",
+      "DA_SQ_OverlandMap.AtreLandsraadMission",
+      "DA_FQ_ClimbTheRanks.Rank20_Mission_Atreides"
+    ],
+    "faction_harkonnen_complete": [
+      "DA_FQ_ClimbTheRanks.ATestOfTreachery",
+      "DA_FQ_ClimbTheRanks.ClimbTheRanksR2",
+      "DA_FQ_ClimbTheRanks.GatheringIntelligence",
+      "DA_FQ_ClimbTheRanks.HuntingSkorda",
+      "DA_FQ_ClimbTheRanks.InvestigateDelphis_Harkonnen",
+      "DA_FQ_ClimbTheRanks.InvestigateKytheria_Harkonnen",
+      "DA_FQ_ClimbTheRanks.JoinAHouse",
+      "DA_FQ_ClimbTheRanks.PoisonedSpice_Harkonnen",
+      "DA_FQ_ClimbTheRanks.Rank5To20",
+      "DA_FQ_ClimbTheRanks.TransitionToCh3_Hark",
+      "DA_SQ_OverlandMap.HarkLandsraadMission",
+      "DA_FQ_ClimbTheRanks.Rank20_Mission_Harkonnen"
     ]
   }
 }

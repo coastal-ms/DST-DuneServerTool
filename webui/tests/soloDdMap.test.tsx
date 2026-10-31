@@ -25,13 +25,13 @@ it('keeps Deck setup in its own tab immediately after the Solo map', () => {
   fireEvent.click(deck)
   expect(screen.getByRole('heading', { name: 'Steam Deck', exact: true })).toBeInTheDocument()
   expect(screen.queryByText('Solo Deep Desert')).not.toBeInTheDocument()
-  fireEvent.click(screen.getByRole('button', { name: 'Overview', exact: true }))
+  fireEvent.click(screen.getByRole('button', { name: 'Solo overview', exact: true }))
   expect(screen.queryByRole('heading', { name: 'Steam Deck', exact: true })).not.toBeInTheDocument()
 })
 
-it('opens the Solo reference map beside Progression without a connected save or self-hosted seed lookup', () => {
+it('opens the Solo reference map beside Character tools without a connected save or self-hosted seed lookup', () => {
   render(<SoloMode />)
-  const progression = screen.getByRole('button', { name: 'Progression', exact: true })
+  const progression = screen.getByRole('button', { name: 'Character tools', exact: true })
   const map = screen.getByRole('button', { name: 'DD Map', exact: true })
   expect(progression.nextElementSibling).toBe(map)
   fireEvent.click(map)

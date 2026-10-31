@@ -48,7 +48,7 @@ function Get-DunePlayerRoutePolicy {
         if ($Path -ne "/api/gameplay/players/$action") { return '' }
         if ($action -in @('rename','tags','update-tags','teleport-to-location','set-respawn',
             'codex/grant',
-            'faction/reset','progression/apply-preset','journey/complete','journey/reset','journey/wipe',
+            'faction/reset','progression/apply-preset','journey/complete','journey/reset','journey/reset-story','journey/wipe',
             'contract/complete','contracts/complete','contracts/reverse','unlock-trainer','unlock-main-quest',
             'grant-job-skills','reset-job-skills','set-starter-class','delete-tutorials','wipe-codex',
             'grant-all-skills','grant-all-tech','delete-account')) { return 'account_id' }

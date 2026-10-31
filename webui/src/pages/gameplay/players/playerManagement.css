@@ -37,3 +37,5 @@
 @media(prefers-reduced-motion:reduce){.player-home-nav button{transition:none}}
 
 @media(max-width:767px){.players-desk .player-dossier-header .player-dossier-identity{flex-basis:calc(100% - 60px)}}
+
+.player-operation-feedback>span { white-space:pre-line; max-height:min(50dvh,420px); overflow-y:auto; }

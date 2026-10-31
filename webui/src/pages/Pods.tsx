@@ -1,324 +1,115 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Link } from '../router'
 import { PageHeader } from '../components/PageHeader'
 import { Icon } from '../components/Icon'
 import { useStatus } from '../hooks/useStatus'
-import { ApiError } from '../api/client'
-import {
-  getPods,
-  getPodEvents,
-  pruneTerminalDirectorPods,
-  type PodSummary,
-  type PodEventsResponse,
-} from '../api/pods'
-import { getBackupOpPodInfo, backupOpKindLabel, isFailedPodStatus, isHistoricalDirectorPod } from '../podClassification'
+import { getPods, getPodEvents, pruneTerminalDirectorPods, type PodSummary, type PodEventsResponse } from '../api/pods'
+import { isHistoricalDirectorPod } from '../podClassification'
+import { podPresentation } from '../podPresentation'
 
-function statusTone(status: string): string {
-  const s = (status || '').toLowerCase()
-  if (/(running|succeeded|completed|ready)/.test(s)) return 'text-success'
-  if (/(pending|containercreating|init|terminating|waiting)/.test(s)) return 'text-warning'
-  if (/(crash|error|failed|backoff|imagepull|evicted|oomkilled)/.test(s)) return 'text-danger'
-  return 'text-text'
-}
-
-function eventTone(type: string): string {
-  const t = (type || '').toLowerCase()
-  if (t === 'warning') return 'text-warning'
-  if (t === 'normal') return 'text-text-dim'
-  return 'text-text'
-}
-
-function fmtTime(t: string): string {
-  if (!t) return '—'
-  const d = new Date(t)
-  if (isNaN(d.getTime())) return t
-  return d.toLocaleString()
-}
+type View = 'active' | 'maps' | 'services' | 'history'
+const views: [View, string][] = [['active', 'All live services'], ['maps', 'Game maps'], ['services', 'Server services'], ['history', 'History']]
+const fmtTime = (value: string) => !value ? '—' : isNaN(Date.parse(value)) ? value : new Date(value).toLocaleString()
 
 export function Pods() {
   const { status } = useStatus()
   const vmRunning = !!status?.vm?.running
-
   const [pods, setPods] = useState<PodSummary[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
-  const [showHistory, setShowHistory] = useState(false)
+  const [view, setView] = useState<View>('active')
+  const [search, setSearch] = useState('')
+  const [attentionOnly, setAttentionOnly] = useState(false)
   const [pruning, setPruning] = useState(false)
-
   const [selected, setSelected] = useState<PodSummary | null>(null)
   const [events, setEvents] = useState<PodEventsResponse | null>(null)
   const [eventsLoading, setEventsLoading] = useState(false)
   const [eventsError, setEventsError] = useState<string | null>(null)
-
+  const [copyMessage, setCopyMessage] = useState('')
+  const eventRequest = useRef(0)
   const loadPods = useCallback(async () => {
-    setLoading(true)
-    setError(null)
+    setLoading(true); setError(null)
     try {
-      const r = await getPods()
-      setPods(r.pods ?? [])
-    } catch (e) {
-      setError(e instanceof ApiError ? e.message : 'Failed to load pods.')
-    } finally {
-      setLoading(false)
-    }
+      const result = await getPods()
+      const next = result.pods ?? []
+      setPods(next)
+      setSelected(previous => previous ? next.find(p => p.namespace === previous.namespace && p.name === previous.name) ?? null : null)
+    } catch (e) { setError(e instanceof Error ? e.message : 'Failed to load pods.') }
+    finally { setLoading(false) }
   }, [])
-
-  useEffect(() => { void loadPods() }, [loadPods])
-
+  useEffect(() => { if (vmRunning) void loadPods() }, [vmRunning, loadPods])
   const openPod = useCallback(async (pod: PodSummary) => {
-    setSelected(pod)
-    setEvents(null)
-    setEventsError(null)
-    setEventsLoading(true)
-    try {
-      const r = await getPodEvents(pod.namespace, pod.name)
-      setEvents(r)
-    } catch (e) {
-      setEventsError(e instanceof ApiError ? e.message : 'Failed to load pod events.')
-    } finally {
-      setEventsLoading(false)
-    }
+    const request = ++eventRequest.current
+    setSelected(pod); setCopyMessage(''); setEvents(null); setEventsError(null); setEventsLoading(true)
+    try { const result = await getPodEvents(pod.namespace, pod.name); if (request === eventRequest.current) setEvents(result) }
+    catch (e) { if (request === eventRequest.current) setEventsError(e instanceof Error ? e.message : 'Failed to load pod events.') }
+    finally { if (request === eventRequest.current) setEventsLoading(false) }
   }, [])
+  const entries = useMemo(() => pods.map(pod => ({ pod, ...podPresentation(pod) })), [pods])
+  const counts = { active: entries.filter(p => !p.terminal).length, maps: entries.filter(p => p.group === 'maps').length, services: entries.filter(p => p.group === 'services').length, history: entries.filter(p => p.group === 'history').length }
+  const attentionCount = entries.filter(p => p.needsAttention).length
+  const visible = useMemo(() => entries.filter(entry => {
+    if (view === 'active' ? entry.terminal : entry.group !== view) return false
+    if (attentionOnly && !entry.needsAttention) return false
+    return [entry.label, entry.description, entry.pod.name, entry.pod.namespace, entry.state, entry.pod.status].join(' ').toLowerCase().includes(search.trim().toLowerCase())
+  }).sort((a, b) => {
+    const order = { maps: 0, services: 1, history: 2 }
+    return order[a.group] - order[b.group] || Number(b.needsAttention) - Number(a.needsAttention) || a.label.localeCompare(b.label) || a.pod.name.localeCompare(b.pod.name)
+  }), [entries, view, attentionOnly, search])
+  const detail = selected ? podPresentation(selected) : null
+  const historicalDirectorCount = pods.filter(p => isHistoricalDirectorPod(p.name, p.phase)).length
+  const copyDetails = async (nameOnly: boolean) => {
+    if (!selected || !detail) return
+    const text = nameOnly ? selected.name : [detail.label, `Pod: ${selected.name}`, `Namespace: ${selected.namespace}`, `Health: ${detail.state}`, `Ready containers: ${selected.ready}`, `Status: ${selected.status}`, `Phase: ${selected.phase}`, `Lifetime restarts: ${selected.restarts}`, `Node: ${selected.node}`, `Started: ${fmtTime(selected.startTime)}`].join('\n')
+    try { await navigator.clipboard.writeText(text); setCopyMessage(nameOnly ? 'Pod name copied.' : 'Support details copied.') }
+    catch { setCopyMessage('Copy is unavailable in this browser. Select the full name or details below to copy them.') }
+  }
+  const pruneDirectorHistory = async () => {
+    setPruning(true); setError(null)
+    try { await pruneTerminalDirectorPods(); await loadPods() }
+    catch (e) { setError(e instanceof Error ? e.message : 'Failed to clean stale director pod history.') }
+    finally { setPruning(false) }
+  }
+  return <>
+    <PageHeader title="Pods" icon="Boxes" description="Find game maps and server services, check readiness, and copy details for support." />
+    {!vmRunning ? <div className="card p-5"><p className="text-sm text-text-dim">The VM must be running to inspect services.</p></div> : <>
+      <div className="flex items-center justify-between gap-3 flex-wrap mb-4">
+        <div className="flex gap-2 flex-wrap" role="group" aria-label="Service groups">{views.map(([key, label]) => <button type="button" key={key} aria-pressed={view === key} className={view === key ? 'btn-primary' : 'btn-secondary'} onClick={() => { setView(key); setAttentionOnly(false) }}>{label} ({counts[key]})</button>)}</div>
+        <button type="button" className="btn-secondary" disabled={loading} onClick={() => void loadPods()}><Icon name="RefreshCw" size={14} className={loading ? 'animate-spin' : ''} /> Refresh services</button>
+      </div>
+      <p className={`text-sm mb-4 ${attentionCount ? 'text-warning' : 'text-text-muted'}`}>{loading && pods.length === 0 ? 'Checking services…' : error ? 'Service readiness could not be refreshed.' : pods.length === 0 ? 'No service readiness reported.' : attentionCount ? `${attentionCount} live service${attentionCount === 1 ? '' : 's'} not ready. Select an entry for its status and recent events.` : 'All reported live services are ready.'}</p>
+      <div className="grid grid-cols-1 xl:grid-cols-[minmax(0,1.15fr)_minmax(0,1fr)] gap-4 items-start">
+        <section className="card p-4 min-w-0" aria-label="Service list">
+          <div className="flex items-center gap-3 flex-wrap mb-4"><input className="flex-1 min-w-0 rounded-lg border border-border bg-surface-2 px-3 py-2 text-text" aria-label="Search services" placeholder="Search Hagga, database, status, or full pod name…" value={search} onChange={e => setSearch(e.target.value)} />{view !== 'history' && <label className="text-xs flex items-center gap-2 text-text-muted"><input type="checkbox" checked={attentionOnly} onChange={e => setAttentionOnly(e.target.checked)} /> Needs attention</label>}</div>
+          {view === 'history' && <div className="text-sm text-text-muted mb-4 space-y-2"><p>Completed and failed jobs are past attempts, not live server health.</p><p><Link to="/database" className="text-accent hover:underline">Manage backup and restore history in Database</Link>.</p>{historicalDirectorCount > 0 && <button type="button" className="btn-secondary" disabled={pruning} onClick={() => void pruneDirectorHistory()}>{pruning ? 'Cleaning…' : `Clean director history (${historicalDirectorCount})`}</button>}</div>}
+          {error && <p role="alert" className="text-sm text-danger break-words mb-3">{error}</p>}
+          {loading && pods.length === 0 ? <p className="text-text-dim text-sm">Loading services…</p> : visible.length === 0 ? <p className="text-text-dim text-sm">{pods.length === 0 ? 'No pods reported.' : 'No services match this view and search.'}</p> : <div className="overflow-x-auto"><table className="w-full text-sm leading-snug">
+            <thead className="text-xs text-text-dim"><tr><th className="text-left pb-2 pr-3">Map / service</th><th className="text-left pb-2 pr-3">Health</th><th className="text-left pb-2">Containers</th></tr></thead>
+            <tbody>{visible.map((entry, index) => <PodRows key={`${entry.pod.namespace}/${entry.pod.name}`} heading={view === 'active' && (index === 0 || visible[index - 1]?.group !== entry.group) ? entry.group === 'maps' ? 'Game maps' : 'Server services' : null} selected={selected?.name === entry.pod.name && selected.namespace === entry.pod.namespace} pod={entry.pod} onSelect={() => void openPod(entry.pod)} />)}</tbody>
+          </table></div>}
+        </section>
+        <section className="card p-4 min-w-0" aria-label="Service details">
+          {!selected || !detail ? <><h2 className="text-lg font-semibold mb-2">Service details</h2><p className="text-sm text-text-dim">Select a map or service to see its full name, health and recent events.</p></> : <>
+            <div className="flex items-start justify-between gap-3 mb-3"><div className="min-w-0"><h2 className="text-lg font-semibold break-words">{detail.label}</h2><p className="text-sm text-text-dim mt-1">{detail.description}</p></div><button type="button" className="btn-secondary shrink-0" disabled={eventsLoading} onClick={() => void openPod(selected)} aria-label="Refresh selected service events"><Icon name="RefreshCw" size={14} /></button></div>
+            <p className={`font-semibold mb-3 ${detail.tone}`}>{detail.state} <span className="text-text-muted text-sm font-normal">· {selected.ready} containers ready</span></p>
+            {detail.terminal && <p className="text-sm text-text-muted mb-3">This is a past attempt, not a live service. Its result does not describe the server’s current health.</p>}
+            <div className="bg-bg-dim border border-border rounded-md p-3 mb-3"><p className="text-xs text-text-dim mb-1">Full pod name</p><code className="block text-xs break-all select-text">{selected.name}</code><div className="flex flex-wrap gap-2 mt-3"><button type="button" className="btn-secondary" onClick={() => void copyDetails(true)}>Copy pod name</button><button type="button" className="btn-secondary" onClick={() => void copyDetails(false)}>Copy support details</button></div>{copyMessage && <p role="status" className="text-xs text-text-muted mt-2">{copyMessage}</p>}</div>
+            <dl className="grid grid-cols-[auto_minmax(0,1fr)] gap-x-3 gap-y-2 text-xs mb-4">{[['Namespace', selected.namespace], ['Status', selected.status || '—'], ['Phase', selected.phase || '—'], ['Node', selected.node || '—'], ['Pod IP', selected.ip || '—'], ['Started', fmtTime(selected.startTime)], ['Lifetime restarts', String(selected.restarts)]].map(([label, value]) => <DetailRow key={label} label={label!} value={value!} />)}</dl>
+            <p className="text-xs text-text-dim mb-4">Lifetime restarts include past incidents and VM reboots. Current readiness is shown above.</p>
+            <h3 className="text-sm font-semibold mb-2">Recent events</h3>
+            {eventsLoading ? <p className="text-sm text-text-dim">Loading events…</p> : eventsError ? <p role="alert" className="text-sm text-danger break-words">{eventsError}</p> : !events?.events.length ? <p className="text-sm text-text-dim">No recent events recorded. See readiness above for current health.</p> : <ul className="space-y-2">{events.events.map((event, index) => <li key={index} className="border border-border rounded-md p-3"><div className="flex gap-2 flex-wrap text-xs"><span className={event.type.toLowerCase() === 'warning' ? 'text-warning' : 'text-text-muted'}>{event.type} · {event.reason}</span><span className="text-text-dim">{fmtTime(event.time)}{event.count > 1 ? ` · ${event.count} occurrences` : ''}</span></div><p className="text-sm break-words mt-1">{event.message}</p></li>)}</ul>}
+            {events?.describe && <details className="mt-4"><summary className="text-sm text-text-muted cursor-pointer">Technical diagnostics</summary><pre className="mt-2 text-xs font-mono bg-bg-dim border border-border rounded p-2 max-h-72 overflow-auto whitespace-pre-wrap break-words">{events.describe}</pre></details>}
+          </>}
+        </section>
+      </div>
+    </>}
+  </>
+}
 
-  const refreshEvents = useCallback(() => {
-    if (selected) void openPod(selected)
-  }, [selected, openPod])
-
-  // Funcom's battlegroup backup/restore jobs leave a terminal, never-GC'd pod
-  // behind on every run (Succeeded, or Failed after a specific attempt's
-  // OOM/eviction). They look identical to a live-service crash here unless
-  // flagged — see the Database page's "Completed backup & restore pods" for
-  // the same identification + cleanup.
-  const opPodCount = useMemo(() => pods.filter(p => getBackupOpPodInfo(p.name)).length, [pods])
-  const historicalDirectorCount = useMemo(
-    () => pods.filter(p => isHistoricalDirectorPod(p.name, p.phase)).length,
-    [pods],
-  )
-  const visiblePods = useMemo(
-    () => showHistory ? pods : pods.filter(p => !isHistoricalDirectorPod(p.name, p.phase)),
-    [pods, showHistory],
-  )
-  const selectedOpInfo = selected ? getBackupOpPodInfo(selected.name) : null
-
-  const pruneDirectorHistory = useCallback(async () => {
-    setPruning(true)
-    setError(null)
-    try {
-      await pruneTerminalDirectorPods()
-      setSelected(null)
-      await loadPods()
-    } catch (e) {
-      setError(e instanceof ApiError ? e.message : 'Failed to clean stale director pod history.')
-    } finally {
-      setPruning(false)
-    }
-  }, [loadPods])
-
-  return (
-    <>
-      <PageHeader
-        title="Pods"
-        icon="Boxes"
-        description="Every Kubernetes pod in the battlegroup cluster. Click a pod to see its recent events."
-      />
-
-      {!vmRunning ? (
-        <div className="card p-5">
-          <p className="text-sm text-text-dim italic">The VM must be running to inspect pods.</p>
-        </div>
-      ) : (
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-          {/* Pod list */}
-          <div className="card p-4">
-            <div className="flex items-center justify-between mb-3 gap-2">
-              <h2 className="text-sm font-semibold uppercase tracking-wider text-text-muted flex items-center gap-2">
-                <Icon name="Boxes" size={14} className="text-accent" /> Pods
-                {visiblePods.length > 0 && <span className="text-[10px] text-text-dim">({visiblePods.length})</span>}
-              </h2>
-              <div className="flex items-center gap-2">
-                {historicalDirectorCount > 0 && (
-                  <>
-                    <button type="button" onClick={() => setShowHistory(v => !v)} className="text-[10px] text-text-muted hover:text-text">
-                      {showHistory ? 'Hide' : 'Show'} history ({historicalDirectorCount})
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => { void pruneDirectorHistory() }}
-                      disabled={pruning}
-                      className="text-[10px] px-2 py-1 rounded border border-border text-text-muted hover:text-text hover:bg-bg-dim disabled:opacity-50"
-                    >
-                      {pruning ? 'Cleaning…' : 'Clean history'}
-                    </button>
-                  </>
-                )}
-                <button
-                  type="button"
-                  onClick={() => { void loadPods() }}
-                  disabled={loading}
-                  className="p-1.5 rounded-md border border-border text-text-muted hover:text-text hover:bg-bg-dim transition-colors disabled:opacity-50"
-                  title="Refresh pod list"
-                >
-                  <Icon name="RefreshCw" size={16} className={loading ? 'animate-spin' : ''} />
-                </button>
-              </div>
-            </div>
-
-            {opPodCount > 0 && (
-              <div className="mb-3 flex items-start gap-2 rounded-md border border-info/30 bg-info/5 px-3 py-2 text-xs text-text-muted">
-                <Icon name="Info" size={14} className="text-info shrink-0 mt-0.5" />
-                <span>
-                  {opPodCount} pod{opPodCount === 1 ? '' : 's'} below {opPodCount === 1 ? 'is' : 'are'} tagged{' '}
-                  <span className="font-mono text-[10px]">Backup</span>/<span className="font-mono text-[10px]">Restore</span> —
-                  one-shot completed jobs from Funcom's <span className="font-mono">battlegroup backup</span>/
-                  <span className="font-mono">import</span> commands, not live services. A red{' '}
-                  <span className="text-danger font-medium">Failed</span> there means that specific backup or restore
-                  attempt didn't finish; it does not indicate a current server problem. Manage retention and cleanup on{' '}
-                  <Link to="/database" className="text-accent hover:underline">Database → Backup &amp; restore operation pods</Link>.
-                </span>
-              </div>
-            )}
-
-            {loading ? (
-              <p className="text-sm text-text-dim italic">Loading…</p>
-            ) : error ? (
-              <p className="text-sm text-danger break-words">{error}</p>
-            ) : visiblePods.length === 0 ? (
-              <p className="text-sm text-text-dim italic">No pods reported.</p>
-            ) : (
-              <div className="overflow-x-auto">
-                <table className="w-full text-sm leading-snug">
-                  <thead className="text-[10px] uppercase tracking-wider text-text-dim">
-                    <tr>
-                      <th className="text-left pb-1 pr-3">Pod</th>
-                      <th className="text-left pb-1 pr-3">Ready</th>
-                      <th className="text-left pb-1 pr-3">Status</th>
-                      <th className="text-left pb-1" title="Lifetime container restarts recorded for this pod">Lifetime restarts</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {visiblePods.map(p => {
-                      const isSel = selected?.namespace === p.namespace && selected?.name === p.name
-                      const opInfo = getBackupOpPodInfo(p.name)
-                      const opFailed = !!opInfo && isFailedPodStatus(p.status)
-                      return (
-                        <tr
-                          key={`${p.namespace}/${p.name}`}
-                          onClick={() => { void openPod(p) }}
-                          className={`border-t border-border/30 cursor-pointer transition-colors ${isSel ? 'bg-bg-dim' : 'hover:bg-bg-dim/60'}`}
-                        >
-                          <td className="py-1.5 pr-3">
-                            <div className="flex items-center gap-1.5 flex-wrap">
-                              <div className="font-medium truncate max-w-[220px]" title={p.name}>{p.name}</div>
-                              {opInfo && (
-                                <span
-                                  className={`shrink-0 text-[9px] uppercase tracking-wider px-1.5 py-0.5 rounded border ${opInfo.kind === 'dump' ? 'border-info/40 text-info' : 'border-accent/40 text-accent'}`}
-                                  title={`${backupOpKindLabel(opInfo.kind)} operation pod from ${opInfo.timestamp.toLocaleString()} — a one-shot job, not a live service.`}
-                                >
-                                  {backupOpKindLabel(opInfo.kind)}
-                                </span>
-                              )}
-                            </div>
-                            <div className="text-[10px] text-text-dim font-mono">{p.namespace}</div>
-                          </td>
-                          <td className="py-1.5 pr-3 font-mono">{p.ready || '—'}</td>
-                          <td className={`py-1.5 pr-3 ${statusTone(p.status)}`}>
-                            {p.status || '—'}
-                            {opFailed && (
-                              <div className="text-[9px] text-text-dim normal-case font-normal">One-time attempt only</div>
-                            )}
-                          </td>
-                          <td className={`py-1.5 font-mono ${p.restarts > 0 ? 'text-warning' : 'text-text-dim'}`}>{p.restarts}</td>
-                        </tr>
-                      )
-                    })}
-                  </tbody>
-                </table>
-              </div>
-            )}
-          </div>
-
-          {/* Pod events / detail */}
-          <div className="card p-4">
-            <div className="flex items-center justify-between mb-3 gap-2">
-              <h2 className="text-sm font-semibold uppercase tracking-wider text-text-muted flex items-center gap-2 min-w-0">
-                <Icon name="Activity" size={14} className="text-accent" />
-                <span className="truncate">{selected ? selected.name : 'Pod events'}</span>
-              </h2>
-              {selected && (
-                <button
-                  type="button"
-                  onClick={refreshEvents}
-                  disabled={eventsLoading}
-                  className="p-1.5 rounded-md border border-border text-text-muted hover:text-text hover:bg-bg-dim transition-colors disabled:opacity-50"
-                  title="Refresh events"
-                >
-                  <Icon name="RefreshCw" size={16} className={eventsLoading ? 'animate-spin' : ''} />
-                </button>
-              )}
-            </div>
-
-            {!selected ? (
-              <p className="text-sm text-text-dim italic">Select a pod to view its events.</p>
-            ) : eventsLoading ? (
-              <p className="text-sm text-text-dim italic">Loading events…</p>
-            ) : eventsError ? (
-              <p className="text-sm text-danger break-words">{eventsError}</p>
-            ) : (
-              <>
-                {selectedOpInfo && (
-                  <div className="mb-3 flex items-start gap-2 rounded-md border border-info/30 bg-info/5 px-3 py-2 text-xs text-text-muted">
-                    <Icon name="Info" size={14} className="text-info shrink-0 mt-0.5" />
-                    <span>
-                      This is a completed {selectedOpInfo.kind === 'dump' ? 'backup' : 'restore'} job pod from{' '}
-                      <span className="font-mono">{selectedOpInfo.timestamp.toLocaleString()}</span>, not a live
-                      service — a failure here reflects only that one attempt, not a current server problem.
-                      {isFailedPodStatus(selected.status) && ' See the events below for why it failed.'} Manage and
-                      prune these on{' '}
-                      <Link to="/database" className="text-accent hover:underline">Database → Backup &amp; restore operation pods</Link>.
-                    </span>
-                  </div>
-                )}
-                <dl className="grid grid-cols-[80px_1fr] gap-x-3 gap-y-0.5 text-xs mb-3">
-                  <dt className="text-text-dim">Namespace</dt>
-                  <dd className="font-mono truncate">{selected.namespace}</dd>
-                  <dt className="text-text-dim">Node</dt>
-                  <dd className="font-mono truncate">{selected.node || '—'}</dd>
-                  <dt className="text-text-dim">Pod IP</dt>
-                  <dd className="font-mono truncate">{selected.ip || '—'}</dd>
-                  <dt className="text-text-dim">Started</dt>
-                  <dd className="font-mono truncate">{fmtTime(selected.startTime)}</dd>
-                </dl>
-
-                {!events || events.events.length === 0 ? (
-                  <p className="text-sm text-text-dim italic">No recent events for this pod.</p>
-                ) : (
-                  <ul className="space-y-2">
-                    {events.events.map((ev, i) => (
-                      <li key={i} className="border border-border/40 rounded-md px-3 py-2">
-                        <div className="flex items-center gap-2 flex-wrap">
-                          <span className={`text-[10px] font-semibold uppercase tracking-wider ${eventTone(ev.type)}`}>{ev.type || '—'}</span>
-                          <span className="text-xs font-medium">{ev.reason || '—'}</span>
-                          {ev.count > 1 && <span className="text-[10px] text-text-dim">×{ev.count}</span>}
-                          <span className="text-[10px] text-text-dim ml-auto">{fmtTime(ev.time)}</span>
-                        </div>
-                        <p className="text-xs text-text-muted mt-1 break-words">{ev.message}</p>
-                        {ev.source && <p className="text-[10px] text-text-dim mt-0.5 font-mono">{ev.source}</p>}
-                      </li>
-                    ))}
-                  </ul>
-                )}
-
-                {events?.describe && (
-                  <details className="mt-3">
-                    <summary className="text-[10px] uppercase tracking-wider text-text-dim cursor-pointer hover:text-text">Describe tail</summary>
-                    <pre className="mt-2 text-[10px] font-mono bg-bg-dim border border-border rounded p-2 max-h-72 overflow-auto whitespace-pre-wrap break-words text-text-dim">{events.describe}</pre>
-                  </details>
-                )}
-              </>
-            )}
-          </div>
-        </div>
-      )}
-    </>
-  )
+function DetailRow({ label, value }: { label: string; value: string }) { return <><dt className="text-text-dim">{label}</dt><dd className="font-mono break-all select-text">{value}</dd></> }
+function PodRows({ heading, pod, selected, onSelect }: { heading: string | null; pod: PodSummary; selected: boolean; onSelect: () => void }) {
+  const info = podPresentation(pod)
+  return <>{heading && <tr><th colSpan={3} className="pt-4 pb-2 text-left text-xs uppercase tracking-wider text-text-muted">{heading}</th></tr>}<tr className={`border-t border-border/40 ${selected ? 'bg-bg-dim' : 'hover:bg-bg-dim/60'}`}>
+    <td className="py-2 pr-3 min-w-0"><button type="button" className="text-left w-full rounded focus-visible:outline focus-visible:outline-2 focus-visible:outline-accent" aria-pressed={selected} aria-label={`${info.label} — ${info.description}`} onClick={onSelect}><span className="block font-semibold break-all">{info.label}</span><span className="block text-xs text-text-dim mt-1">{info.description}</span></button></td><td className={`py-2 pr-3 ${info.tone}`}>{info.state}</td><td className="py-2 text-text-muted font-mono">{pod.ready || '—'}</td>
+  </tr></>
 }

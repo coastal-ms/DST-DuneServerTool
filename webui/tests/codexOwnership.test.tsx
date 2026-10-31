@@ -2,6 +2,7 @@ import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { api } from '../src/api/client'
 import { CodexOwnership } from '../src/components/CodexOwnership'
+import catalog from '../../app/data/codex-catalog.json'
 
 vi.mock('../src/api/client', () => ({ api: vi.fn() }))
 afterEach(() => { cleanup(); localStorage.clear(); vi.resetAllMocks(); vi.restoreAllMocks() })
@@ -11,6 +12,19 @@ const data = { ok: true, owned: 1, missing: 1, total: 2, profileToken: 'one', fr
 ] }
 
 describe('Codex ownership', () => {
+  it.each(['/api/solo/codex','/api/gameplay/players/codex'])('sends the 62 actual missing fragment IDs once from %s', async path => {
+    vi.spyOn(window, 'confirm').mockReturnValue(true)
+    const fragments=catalog.fragments.map((row,index)=>({...row,owned:index<76,revealed:true}))
+    vi.mocked(api).mockImplementation(async (_path,options)=>options?.method==='POST'?{ok:true}:{ok:true,fragments,owned:76,missing:62,total:138})
+    render(<CodexOwnership path={path} grant={{path:`${path}/grant`,body:{},disabled:false,reason:''}} />)
+    await screen.findByText('76/138 fragments owned · 62 missing')
+    fireEvent.click(screen.getByRole('button',{name:'Select missing / hidden'}))
+    fireEvent.click(screen.getByRole('button',{name:'Grant selected (62)'}))
+    const posted=vi.mocked(api).mock.calls.find(([,options])=>options?.method==='POST')
+    const ids=JSON.parse(String(posted?.[1]?.body)).ids
+    expect(ids).toEqual(catalog.fragments.slice(76).map(row=>row.id))
+    expect(new Set(ids).size).toBe(62)
+  })
   it.each([
     ['/api/solo/codex', 'one', 'solo.codex'],
     ['/api/gameplay/players/codex?account_id=1', undefined, 'players.codex'],

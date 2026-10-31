@@ -214,12 +214,19 @@ export interface SoloBackup {
   bytes: number
   createdAt: string
   modifiedAt: string
+  source?: 'local' | 'archive'
 }
 
 export interface SoloBackupsResponse {
   ok: boolean
   backups: SoloBackup[]
   root: string
+  archiveRoot?: string
+  archiveUnavailable?: boolean
+}
+
+export function restoreSoloBackupFile(path: string, expectedProfileToken: string): Promise<{ ok: boolean; path: string; safetyBackup: string; inspection: SoloInspection }> {
+  return api('/api/solo/restore-file', { method: 'POST', body: JSON.stringify({ path, expectedProfileToken, confirm: 'RESTORE SOLO SAVE' }) })
 }
 
 export function getSoloStatus(): Promise<SoloStatus> {
@@ -581,6 +588,13 @@ export function completeSoloFindTheFremen(expectedProfileToken: string): Promise
       expectedProfileToken,
       confirm: 'COMPLETE FIND THE FREMEN',
     }),
+  })
+}
+
+export function resetSoloPostNpe(expectedProfileToken: string): Promise<SoloProgressionResult> {
+  return api('/api/solo/progression/reset-post-npe', {
+    method: 'POST',
+    body: JSON.stringify({ expectedProfileToken, confirm: 'RESET SOLO POST NPE' }),
   })
 }
 

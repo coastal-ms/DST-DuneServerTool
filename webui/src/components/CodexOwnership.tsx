@@ -51,7 +51,7 @@ export function CodexOwnership({ path, profileToken, grant }: {
     }
     return [...found.entries()]
   }, [data, query, filter])
-  const selectedMissing = selected.filter(id => data?.fragments.some(row => row.id === id && (!row.owned || !row.revealed)))
+  const selectedMissing = [...new Set(selected)].filter(id => data?.fragments.some(row => row.id === id && (!row.owned || !row.revealed)))
   async function grantSelected() {
     if (!grant || grant.disabled || granting || !selectedMissing.length) return
     if (!window.confirm(`Grant ${selectedMissing.length} selected codex fragment(s)? An automatic backup will be retained. This reveals lore ahead of normal progression; quest objectives and gameplay tags will not be completed.`)) return
@@ -94,7 +94,7 @@ export function CodexOwnership({ path, profileToken, grant }: {
           <ul className="space-y-2">{rows.map(row => <li key={row.id} className="flex items-start justify-between gap-4 text-sm">
             <label className="flex items-start gap-2">
               {grant && (!row.owned || !row.revealed) && <input type="checkbox" aria-label={`Select ${row.fragment}`} checked={selected.includes(row.id)}
-                disabled={granting || grant.disabled} onChange={event => setSelected(current => event.target.checked ? [...current, row.id] : current.filter(id => id !== row.id))} />}
+                disabled={granting || grant.disabled} onChange={event => setSelected(current => event.target.checked ? [...new Set([...current, row.id])] : current.filter(id => id !== row.id))} />}
               <span>{row.fragment}</span>
             </label>
             <span className={row.owned && row.revealed ? 'text-emerald-400 shrink-0' : 'text-text-muted shrink-0'}>{!row.revealed ? 'Hidden' : row.owned ? 'Owned' : 'Missing'}</span>

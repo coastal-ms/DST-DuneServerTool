@@ -1,3 +1,6 @@
+import { CosmeticMultiSelect, type CosmeticGrantSummary } from '../components/CosmeticMultiSelect'
+import './gameplay/players/playerManagement.css'
+import './gameplay/players/playersDesk.css'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { Icon } from '../components/Icon'
 import { RESPAWN_SETTING_GUIDANCE } from '../util/respawnSettingGuidance'
@@ -6,7 +9,6 @@ import { PageHeader } from '../components/PageHeader'
 import { CollapsibleCard } from '../components/CollapsibleCard'
 import { ItemPicker } from '../components/ItemPicker'
 import { SoloMods } from '../components/solo/SoloMods'
-import { OfficialServerCard } from '../components/solo/OfficialServerCard'
 import { SoloLiveMap } from '../components/solo/SoloLiveMap'
 import { SoloDeck } from '../components/solo/SoloDeck'
 import { SoloRegisTanks } from '../components/solo/SoloRegisTanks'
@@ -14,6 +16,11 @@ import { SoloFactionProgression } from '../components/solo/SoloFactionProgressio
 import { SoloCharacterXp } from '../components/solo/SoloCharacterXp'
 import { CodexOwnership } from '../components/CodexOwnership'
 import { SoloJourneyCompletion } from '../components/solo/SoloJourneyCompletion'
+import { CHARACTER_HOMES, CHARACTER_ITEM_VIEWS, CHARACTER_PROGRESSION_VIEWS, CharacterHomeNavigation, CharacterViewNavigation, type CharacterItemView, type CharacterProgressionView, type CharacterHome } from '../components/CharacterHomeNavigation'
+import { CharacterToolSearch } from '../components/CharacterToolSearch'
+import { SoloBackupSettings } from '../components/solo/SoloBackupSettings'
+import { SoloRecoveryActivity } from '../components/solo/SoloRecoveryActivity'
+import { SoloGameActivity } from '../components/solo/SoloGameActivity'
 import { SoloNumericSettingInput } from '../components/solo/SoloNumericSettingInput'
 import { WickMaps } from './WickMaps'
 import { AugmentPicker } from '../components/AugmentPicker'
@@ -30,11 +37,11 @@ import {
   deleteSoloBackup,
   deleteSoloBackups,
   deleteSoloInventoryItem,
-  deleteSoloInventoryGroup,
   discoverSolo,
   fillSoloWaterContainer,
   completeSoloFindTheFremen,
   completeSoloNpe,
+  resetSoloPostNpe,
   enableSoloAllSkills,
   unlockSoloTrainer,
   unlockSoloTestingStations,
@@ -50,6 +57,7 @@ import {
   importSoloBlueprint,
   maxSoloAugmentAttributes,
   restoreSoloBackup,
+  restoreSoloBackupFile,
   saveSoloConsoleSettings,
   saveSoloBlueprintSettings,
   type SoloBlueprintSettings,
@@ -91,19 +99,40 @@ import {
   type GiveItemEntry,
   type VehicleKitCatalog,
 } from '../api/gameplay'
-import { pickLocalFolder } from '../util/pathPicker'
+import { pickLocalFolder, pickLocalFile } from '../util/pathPicker'
 import { soloSaveFolder } from '../util/soloSaveFolder'
 import { COSMETIC_LICENSE_NOTICE } from '../util/cosmeticEntitlements'
 
-type Tab = 'overview' | 'settings' | 'mods' | 'backups' | 'character' | 'inventory' | 'progression' | 'dd-map' | 'steam-deck'
+const SOLO_ITEM_TOOLS = [
+  { id: 'give-item', label: 'Give Item', icon: 'PackagePlus' },
+  { id: 'give-package', label: 'Give Package', icon: 'Package' },
+  { id: 'repair', label: 'Repair equipment', icon: 'Wrench' },
+  { id: 'water', label: 'Character fillables', icon: 'Droplets' },
+  { id: 'augments', label: 'Max Augment Attributes', icon: 'Sparkles' },
+] as const
+
+const SOLO_UNLOCK_TOOLS = [
+  { id: 'story', label: 'Complete Story', icon: 'Route' },
+  { id: 'trainers', label: 'Complete Contracts', icon: 'GraduationCap' },
+  { id: 'codex', label: 'Complete Codex', icon: 'BookOpen' },
+  { id: 'tutorials', label: 'Complete Tutorials', icon: 'BookOpen' },
+  { id: 'faction', label: 'Faction Progression Unlocks', icon: 'Flag' },
+  { id: 'stations', label: 'Testing Stations', icon: 'FlaskConical' },
+  { id: 'skills', label: 'Enable all skills', icon: 'Sparkles' },
+  { id: 'points', label: 'Progression points', icon: 'Gauge' },
+] as const
+
+const SOLO_OVERVIEW_VIEWS = ['Snapshot', 'Currency & identity'] as const
+const SOLO_ADVANCED_VIEWS = ['Diagnostics'] as const
+
+type Tab = 'overview' | 'settings' | 'mods' | 'backups' | 'character' | 'dd-map' | 'steam-deck'
+const SOLO_PROGRESSION_VIEWS: readonly (CharacterProgressionView | 'Codex')[] = CHARACTER_PROGRESSION_VIEWS.filter(view => view !== 'Journey')
 const TABS: Array<{ id: Tab; label: string; icon: string }> = [
-  { id: 'overview', label: 'Overview', icon: 'LayoutGrid' },
+  { id: 'overview', label: 'Solo overview', icon: 'LayoutGrid' },
   { id: 'settings', label: 'Settings', icon: 'SlidersHorizontal' },
   { id: 'mods', label: 'Solo mods', icon: 'Package' },
   { id: 'backups', label: 'Backups', icon: 'ArchiveRestore' },
-  { id: 'character', label: 'Character', icon: 'UserRound' },
-  { id: 'inventory', label: 'Inventory', icon: 'Package' },
-  { id: 'progression', label: 'Progression', icon: 'ChartNoAxesCombined' },
+  { id: 'character', label: 'Character tools', icon: 'UserRound' },
   { id: 'dd-map', label: 'DD Map', icon: 'Map' },
   { id: 'steam-deck', label: 'Steam Deck', icon: 'Gamepad2' },
 ]
@@ -432,18 +461,18 @@ export function SoloCosmeticGrantCard({
   onGrant,
   onBulkGrant,
   ownership,
+  onGrantSummary,
 }: {
   busy: boolean
   disabled: boolean
   loadCatalog?: () => Promise<CosmeticEntry[]>
-  onGrant: (templateId: string, label: string, entry?: CosmeticEntry) => Promise<void>
+  onGrant: (templateId: string, label: string, entry?: CosmeticEntry) => Promise<boolean | void>
   onBulkGrant?: (kind: SoloUnlockKind, label: string) => Promise<void>
+  onGrantSummary?: (summary:CosmeticGrantSummary)=>void
   ownership?: SoloCosmeticOwnership
 }) {
   const [catalog, setCatalog] = useState<CosmeticEntry[] | null>(null)
   const [catalogError, setCatalogError] = useState('')
-  const [query, setQuery] = useState('')
-  const [selected, setSelected] = useState('')
 
   useEffect(() => {
     let active = true
@@ -457,9 +486,6 @@ export function SoloCosmeticGrantCard({
     return () => { active = false }
   }, [loadCatalog])
 
-  const groups = useMemo(() => groupSoloCosmetics(catalog ?? [], query), [catalog, query])
-  const matches = useMemo(() => groups.flatMap(([, entries]) => entries), [groups])
-  const chosen = matches.find(entry => entry.template === selected)
   const controlsDisabled = disabled || busy
   const owned = new Set((ownership?.owned ?? []).map(id => id.toLowerCase()))
   const pending = new Set((ownership?.pending ?? []).map(id => id.toLowerCase()))
@@ -500,44 +526,8 @@ export function SoloCosmeticGrantCard({
             })}
             {!ownership?.available && <p className="text-xs text-warning sm:col-span-2">{ownership?.error || 'Reconnect and validate the save to check unlock ownership.'}</p>}
           </div>}
-          <input
-            type="text"
-            value={query}
-            disabled={controlsDisabled}
-            placeholder="Search name, template id, or group"
-            onChange={event => setQuery(event.target.value)}
-            className={SOLO_INPUT_CLASS}
-          />
-          <select
-            value={selected}
-            disabled={controlsDisabled}
-            onChange={event => setSelected(event.target.value)}
-            className={`${SOLO_INPUT_CLASS} mt-3`}
-            style={{ colorScheme: 'inherit' }}
-          >
-            <option value="">Choose a cosmetic or building set... ({matches.length})</option>
-            {groups.map(([group, entries]) => (
-              <optgroup key={group} label={`${group} (${entries.length})`}>
-                {entries.map(entry => (
-                  <option key={entry.template} value={entry.template}>{entry.name}</option>
-                ))}
-              </optgroup>
-            ))}
-          </select>
-          {chosen && <p className="text-[11px] font-mono text-text-dim truncate mt-2">{chosen.template}</p>}
-          {chosen?.grant_method === 'character' && <p className="text-xs text-text-muted mt-2">Saves this appearance directly to the Solo character.</p>}
-          {chosen && !chosen.grant_method && pending.has(chosen.template.toLowerCase()) && <p className="text-xs text-text-muted mt-2">Unlock token already held in inventory. You can grant another token.</p>}
-          {chosen && !chosen.grant_method && !pending.has(chosen.template.toLowerCase()) && saved.has(chosen.template.toLowerCase()) && <p className="text-xs text-text-muted mt-2">Unlock record saved. You can grant another token if the game still reports it locked.</p>}
-          <button
-            className={`btn-primary w-full mt-4 justify-center ${SOLO_DISABLED_PRIMARY_CLASS}`}
-            disabled={controlsDisabled || !chosen}
-            onClick={() => {
-              if (chosen) void (chosen.grant_method === 'character' ? onGrant(chosen.template, chosen.name, chosen) : onGrant(chosen.template, chosen.name))
-            }}
-          >
-            <Icon name={busy ? 'LoaderCircle' : 'Shirt'} size={14} className={busy ? 'animate-spin' : ''} />
-            Grant unlock
-          </button>
+          <CosmeticMultiSelect onComplete={async summary=>onGrantSummary?.(summary)} catalog={catalog} owned={owned} saved={saved} pending={pending} disabled={controlsDisabled}
+            onGrant={entry => entry.grant_method === 'character' ? onGrant(entry.template,entry.name,entry) : onGrant(entry.template,entry.name)} />
         </>
       )}
     </div>
@@ -546,6 +536,13 @@ export function SoloCosmeticGrantCard({
 
 export function SoloMode() {
   const [tab, setTab] = useState<Tab>('overview')
+  const [itemTool, setItemTool] = useState<string | null>(null)
+  const [characterHome, setCharacterHome] = useState<CharacterHome>('Overview')
+  const [overviewView, setOverviewView] = useState<typeof SOLO_OVERVIEW_VIEWS[number]>('Snapshot')
+  const [advancedView, setAdvancedView] = useState<typeof SOLO_ADVANCED_VIEWS[number]>('Diagnostics')
+  const [itemView, setItemView] = useState<CharacterItemView>('Character Inventory')
+  const [unlockTool, setUnlockTool] = useState<string | null>(null)
+  const [progressionView, setProgressionView] = useState<CharacterProgressionView | 'Codex'>('Specializations')
   const statusState = useApi<SoloStatus>('/api/solo/status')
   const runtimeState = useApi<SoloRuntime>('/api/solo/runtime', { intervalMs: 3000 })
   const connected = statusState.data?.connected === true
@@ -572,6 +569,20 @@ export function SoloMode() {
   const [draft, setDraft] = useState<Record<string, string>>({})
   const [consoleDraft, setConsoleDraft] = useState<Record<string, string>>({})
   const [busy, setBusy] = useState<string | null>(null)
+  const [backupPage, setBackupPage] = useState(0)
+  const [backupView, setBackupView] = useState<'local' | 'archive'>('local')
+  const [backupSearch, setBackupSearch] = useState('')
+  const [backupSort, setBackupSort] = useState<'newest' | 'oldest'>('newest')
+  const allBackups = backupsState.data?.backups ?? []
+  const localBackups = allBackups.filter(backup => backup.source !== 'archive')
+  const archivedBackups = allBackups.filter(backup => backup.source === 'archive')
+  const viewBackups = (backupView === 'local' ? localBackups : archivedBackups)
+    .filter(backup => `${backup.name} ${backup.relativePath} ${backup.modifiedAt} ${new Date(backup.modifiedAt).toLocaleString()}`.toLowerCase().includes(backupSearch.trim().toLowerCase()))
+    .sort((a, b) => (backupSort === 'newest' ? -1 : 1) * a.modifiedAt.localeCompare(b.modifiedAt))
+  const backupCount = viewBackups.length
+  const backupPageCount = Math.max(1, Math.ceil(backupCount / 25))
+  const currentBackupPage = Math.min(backupPage, backupPageCount - 1)
+  const visibleBackups = viewBackups.slice(currentBackupPage * 25, (currentBackupPage + 1) * 25)
   const [selectedBackupPaths, setSelectedBackupPaths] = useState<Set<string>>(new Set())
   const [notice, setNotice] = useState<{ kind: 'ok' | 'warn' | 'err'; text: string } | null>(null)
   const [itemTemplate, setItemTemplate] = useState('')
@@ -619,6 +630,8 @@ export function SoloMode() {
 
   useEffect(() => {
     setSelectedBackupPaths(new Set())
+    setBackupPage(0)
+    setBackupView('local')
   }, [statusState.data?.profileToken])
 
   useEffect(() => {
@@ -741,6 +754,7 @@ export function SoloMode() {
   const selectionMatchesActive = connected
     && normalizeWindowsPath(dataRoot) === normalizeWindowsPath(statusState.data?.dataRoot ?? '')
     && normalizeWindowsPath(selectedDb) === normalizeWindowsPath(statusState.data?.dbPath ?? '')
+  useEffect(() => { setItemTool(null); setUnlockTool(null) }, [activeProfileToken])
   const canMutateActiveProfile = selectionMatchesActive && busy === null
   const blueprintsMatchActiveProfile = blueprintsState.data?.profileToken === activeProfileToken
   const savedBlueprints = blueprintsMatchActiveProfile ? blueprintsState.data?.blueprints ?? [] : []
@@ -846,7 +860,7 @@ export function SoloMode() {
     }
   }
 
-  const restoreBackup = async (backup: SoloBackup) => {
+  const restoreBackup = async (backup: SoloBackup, filePath?: string) => {
     if (!selectionMatchesActive) {
       setNotice({ kind: 'err', text: 'Connect and validate the selected Solo profile before restoring a backup.' })
       return
@@ -864,8 +878,9 @@ export function SoloMode() {
     setBusy(`restore:${backup.relativePath}`)
     setNotice(null)
     try {
-      const result = await restoreSoloBackup(backup.relativePath, statusState.data?.profileToken ?? '')
-      setNotice({ kind: 'ok', text: `Restore verified. Previous save retained at ${result.safetyBackup}` })
+      if (filePath) await restoreSoloBackupFile(filePath, statusState.data?.profileToken ?? '')
+      else await restoreSoloBackup(backup.relativePath, statusState.data?.profileToken ?? '')
+      setNotice({ kind: 'ok', text: `Restore verified. Recovery snapshot available in Backups.` })
       await Promise.all([statusState.refresh(), runtimeState.refresh(), backupsState.refresh()])
     } catch (error) {
       setNotice({ kind: 'err', text: error instanceof Error ? error.message : String(error) })
@@ -897,6 +912,15 @@ export function SoloMode() {
     } finally {
       setBusy(null)
     }
+  }
+
+  const browseBackupFile = async () => {
+    if (!canMutateActiveProfile || gameRunning || busy) return
+    try {
+      const path = await pickLocalFile({ initialPath: backupsState.data?.archiveRoot || undefined, description: 'Choose an older Solo backup to restore' })
+      if (!path) return
+      await restoreBackup({ name: path.split(/[\\/]/).pop() || 'selected backup', relativePath: '', bytes: 0, createdAt: '', modifiedAt: '' }, path)
+    } catch (error) { setNotice({ kind: 'err', text: error instanceof Error ? error.message : String(error) }) }
   }
 
   const deleteSelectedBackups = async () => {
@@ -937,6 +961,7 @@ export function SoloMode() {
     label: string,
     destination = inventoryDestination,
     targetLabel = 'selected Solo inventory',
+    throwOnFailure = false,
   ): Promise<boolean> => {
     if (!selectionMatchesActive) {
       setNotice({ kind: 'err', text: 'Connect and validate the selected Solo profile before giving items.' })
@@ -954,7 +979,7 @@ export function SoloMode() {
     setBusy('give-items')
     setNotice(null)
     try {
-      const result = await grantSoloItems(
+      await grantSoloItems(
         destination,
         items,
         statusState.data?.profileToken ?? '',
@@ -962,12 +987,13 @@ export function SoloMode() {
       )
       setNotice({
         kind: 'ok',
-        text: `${label} granted to the ${targetLabel} and verified. Previous save retained at ${result.safetyBackup}`,
+        text: `${label} granted to the ${targetLabel} and verified. Recovery snapshot available in Backups.`,
       })
       await Promise.all([statusState.refresh(), runtimeState.refresh(), backupsState.refresh()])
       return true
     } catch (error) {
       setNotice({ kind: 'err', text: error instanceof Error ? error.message : String(error) })
+      if(throwOnFailure)throw error
       return false
     } finally {
       setBusy(null)
@@ -1088,7 +1114,7 @@ export function SoloMode() {
       )
       setNotice({
         kind: 'ok',
-        text: `${result.name || label} imported into the Solo backpack and verified. Previous save retained at ${result.safetyBackup}`,
+        text: `${result.name || label} imported into the Solo backpack and verified. Recovery snapshot available in Backups.`,
       })
       setBlueprint(null)
       setBlueprintFileName('')
@@ -1117,14 +1143,14 @@ export function SoloMode() {
     setBusy('currencies')
     setNotice(null)
     try {
-      const result = await setSoloCurrencies(
+      await setSoloCurrencies(
         solari,
         scrip,
         statusState.data?.profileToken ?? '',
       )
       setNotice({
         kind: 'ok',
-        text: `Currencies set and verified. Previous save retained at ${result.safetyBackup}`,
+        text: `Currencies set and verified. Recovery snapshot available in Backups.`,
       })
       await Promise.all([statusState.refresh(), runtimeState.refresh(), backupsState.refresh()])
     } catch (error) {
@@ -1147,13 +1173,13 @@ export function SoloMode() {
     setBusy(`fill:${itemId}`)
     setNotice(null)
     try {
-      const result = await fillSoloWaterContainer(
+      await fillSoloWaterContainer(
         itemId,
         statusState.data?.profileToken ?? '',
       )
       setNotice({
         kind: 'ok',
-        text: `${label} filled to ${capacity.toLocaleString()} mL and verified. Previous save retained at ${result.safetyBackup}`,
+        text: `${label} filled to ${capacity.toLocaleString()} mL and verified. Recovery snapshot available in Backups.`,
       })
       await Promise.all([statusState.refresh(), runtimeState.refresh(), backupsState.refresh()])
     } catch (error) {
@@ -1195,7 +1221,7 @@ export function SoloMode() {
       )
       setNotice({
         kind: 'ok',
-        text: `${item.stackSize === 0 ? `Empty ${location.displayName} stack deleted` : `${result.removed.toLocaleString()} x ${location.displayName} removed`} and verified. Previous save retained at ${result.safetyBackup}`,
+        text: `${item.stackSize === 0 ? `Empty ${location.displayName} stack deleted` : `${result.removed.toLocaleString()} x ${location.displayName} removed`} and verified. Recovery snapshot available in Backups.`,
       })
       await Promise.all([statusState.refresh(), runtimeState.refresh(), backupsState.refresh()])
     } catch (error) {
@@ -1203,22 +1229,6 @@ export function SoloMode() {
     } finally {
       setBusy(null)
     }
-  }
-
-  const deleteInventoryGroup = async (templateId: string, displayName: string,
-    destination: string, destinationLabel: string, count: number, total: number) => {
-    if (!canMutateActiveProfile || gameRunning || busy !== null) return
-    if (!window.confirm(`Delete all ${total.toLocaleString()} x ${displayName} (${count.toLocaleString()} stack${count === 1 ? '' : 's'}) from ${destinationLabel}?\n\n`
-      + 'Equipped items are excluded. A backup of the current save will be retained.')) return
-    setBusy('delete-item:0'); setNotice(null)
-    try {
-      const result = await deleteSoloInventoryGroup(templateId, destination, count, total,
-        statusState.data?.profileToken ?? '')
-      setNotice({ kind: 'ok', text: `${result.removed.toLocaleString()} x ${displayName} removed from ${result.deletedStacks.toLocaleString()} stacks. Previous save retained at ${result.safetyBackup}` })
-      await Promise.all([statusState.refresh(), runtimeState.refresh(), backupsState.refresh()])
-    } catch (error) {
-      setNotice({ kind: 'err', text: error instanceof Error ? error.message : String(error) })
-    } finally { setBusy(null) }
   }
 
   const [repairContainer, setRepairContainer] = useState('')
@@ -1275,7 +1285,7 @@ export function SoloMode() {
       setNotice(result.updated > 0
         ? {
             kind: 'ok',
-            text: `Maximized attributes on ${result.updated} carried augment(s). Previous save retained at ${result.safetyBackup}`,
+            text: `Maximized attributes on ${result.updated} carried augment(s). Recovery snapshot available in Backups.`,
           }
         : {
             kind: 'warn',
@@ -1309,17 +1319,24 @@ export function SoloMode() {
       `${label}?\n\n`
       + 'This action retains the current game.db, writes one transaction, verifies progression semantics and SQLite integrity, then replaces the save atomically.',
     )) return
+    if (key === 'reset-post-npe') {
+      if (!window.confirm('Reset story, contracts, faction progression, Codex and Find the Fremen rewards to the post-NPE starting point? Learned skills, skill points, tech points, other research, inventory and property are kept. The Base Reconstruction Tool and Fremen quest rewards, including the full Scavenger Stillsuit bundle, both Deathstills and Prescience/third ability-slot unlock, must be earned again. The tutorial remains complete. The character returns to Griffin\'s Reach. A safety backup is retained.')) return
+      const typed = window.prompt('Reset to post-NPE. Type  i acknowledge  to proceed:') || ''
+      if (typed.trim().toLowerCase() !== 'i acknowledge') return
+    }
     setBusy(`progression:${key}`)
     setNotice(null)
     try {
-      const result = await action(statusState.data?.profileToken ?? '')
+      await action(statusState.data?.profileToken ?? '')
       setNotice({
         kind: 'ok',
-        text: `${label} completed and verified. Previous save retained at ${result.safetyBackup}`,
+        text: `${label} completed and verified. Recovery snapshot available in Backups.`,
       })
       await Promise.all([statusState.refresh(), runtimeState.refresh(), backupsState.refresh()])
+      return true
     } catch (error) {
       setNotice({ kind: 'err', text: error instanceof Error ? error.message : String(error) })
+      return false
     } finally {
       setBusy(null)
     }
@@ -1339,14 +1356,14 @@ export function SoloMode() {
     setBusy('progression:points')
     setNotice(null)
     try {
-      const result = await setSoloProgressionPoints(
+      await setSoloProgressionPoints(
         skillPoints,
         intel,
         statusState.data?.profileToken ?? '',
       )
       setNotice({
         kind: 'ok',
-        text: `Progression points set and verified. Previous save retained at ${result.safetyBackup}`,
+        text: `Progression points set and verified. Recovery snapshot available in Backups.`,
       })
       await Promise.all([statusState.refresh(), runtimeState.refresh(), backupsState.refresh()])
     } catch (error) {
@@ -1381,7 +1398,7 @@ export function SoloMode() {
         }
       />
 
-      {notice && (
+      {notice && tab !== 'character' && (
         <ViewportNotice
           kind={notice.kind}
           text={notice.text}
@@ -1456,7 +1473,7 @@ export function SoloMode() {
         <div className="mt-4 rounded border border-warning/30 bg-warning/5 px-3 py-2 text-xs text-text-muted flex items-start gap-2">
           <Icon name="ShieldCheck" size={14} className="text-warning mt-0.5 shrink-0" />
           <span>
-            After applying settings or restoring a save, launch Solo Mode and verify the result in game before removing any retained backup. DST does not automatically prune Solo backups.
+            After applying settings or restoring a save, launch Solo Mode and verify the result in game before removing any retained backup. Optional backup management keeps 50 locally and preserves older backups in your archive.
           </span>
         </div>
       </CollapsibleCard>
@@ -1561,6 +1578,757 @@ export function SoloMode() {
         ))}
       </div>
 
+      {tab === 'character' && (
+      <section className="player-management player-management-focused players-desk" aria-label="Solo character management">
+        <header className="player-character-banner">
+          <span className="player-character-avatar"><Icon name="User" size={28} /></span>
+          <div className="player-character-title"><h2>Solo character</h2><p>{status?.legacyAdapter ? 'Legacy Solo save' : 'Solo save'}</p></div>
+          <span className="player-character-status" data-online={gameRunning}><span />{gameRunning ? 'Game running' : connected ? 'Connected' : 'Not connected'}</span>
+        </header>
+
+        <CharacterToolSearch onSelect={destination => {
+          setCharacterHome(destination.home)
+          setItemTool(null); setUnlockTool(null)
+          if (destination.home === 'Overview') setOverviewView(destination.view === 'Currency & identity' ? 'Currency & identity' : 'Snapshot')
+          if (destination.home === 'Advanced') setAdvancedView('Diagnostics')
+          if (destination.itemView) setItemView(destination.itemView)
+          if (destination.progressionView === 'Journey') { setProgressionView('Unlocks & rewards'); setUnlockTool('story') }
+          else if (destination.progressionView) setProgressionView(destination.progressionView)
+        }} />
+        <CharacterHomeNavigation options={CHARACTER_HOMES} value={characterHome} onChange={value => { setCharacterHome(value); setItemTool(null); setUnlockTool(null) }} ariaLabel="Solo character sections" className="player-home-nav" buttonClassName="" />
+        {characterHome === 'Overview' && <CharacterViewNavigation views={SOLO_OVERVIEW_VIEWS} value={overviewView} onChange={setOverviewView} ariaLabel="Solo Overview views" className="player-view-nav" buttonClassName="" />}
+        {characterHome === 'Items' && <CharacterViewNavigation views={CHARACTER_ITEM_VIEWS} value={itemView} onChange={value => { setItemView(value); setItemTool(null); setUnlockTool(null) }} ariaLabel="Solo Items views" className="player-view-nav" buttonClassName="" />}
+        {characterHome === 'Progression' && <CharacterViewNavigation views={SOLO_PROGRESSION_VIEWS} value={progressionView} onChange={value => { setProgressionView(value); setUnlockTool(null) }} ariaLabel="Solo Progression views" className="player-view-nav" buttonClassName="" />}
+        {characterHome === 'Advanced' && <CharacterViewNavigation views={SOLO_ADVANCED_VIEWS} value={advancedView} onChange={setAdvancedView} ariaLabel="Solo Advanced views" className="player-view-nav" buttonClassName="" />}
+        <div className="player-management-content" key={activeProfileToken}>
+
+        {characterHome === 'Advanced' && (
+            <div className="space-y-4">
+{advancedView === 'Diagnostics' && (<div className="card p-5">
+            <h3 className="font-semibold mb-2">Solo diagnostics</h3>
+            <p className="text-sm text-text-muted mb-3">Export a read-only report of save integrity, specializations, journey conditions and progression unlock flags for support. Account IDs, character names, inventory and local paths are excluded. Close the game first, then review the downloaded report before sharing it.</p>
+            <button className="btn btn-secondary" disabled={!selectionMatchesActive || gameRunning || !!busy} onClick={async () => {
+              setBusy('diagnostics')
+              try {
+                const result = await exportSoloDiagnostics(activeProfileToken)
+                const url = URL.createObjectURL(new Blob([JSON.stringify(result.report, null, 2)], { type: 'application/json' }))
+                const link = document.createElement('a')
+                link.href = url
+                link.download = result.filename
+                link.click()
+                URL.revokeObjectURL(url)
+                setNotice({ kind: 'ok', text: 'Solo diagnostics exported. Your save was not changed.' })
+              } catch (error) {
+                setNotice({ kind: 'err', text: error instanceof Error ? error.message : String(error) })
+              } finally { setBusy(null) }
+            }}>Export Solo diagnostics</button>
+          </div>)}
+</div>
+        )}
+        {characterHome === 'Activity' && <div className="space-y-4"><SoloGameActivity profileToken={activeProfileToken} /><SoloRecoveryActivity backups={selectionMatchesActive ? localBackups : []} onOpenBackups={() => setTab('backups')} /></div>}
+
+{tab === 'character' && characterHome === 'Overview' && (
+        <div className="space-y-4">
+          {overviewView === 'Snapshot' && (<section className="card p-5">
+            <h2 className="font-semibold">Character snapshot</h2>
+            {inspection ? <dl className="mt-4 grid grid-cols-2 gap-3 text-sm">
+              <div><dt className="text-text-muted">Saved characters</dt><dd>{inspection.characterCount}</dd></div>
+              <div><dt className="text-text-muted">Inventory locations</dt><dd>{inspection.inventories.length}</dd></div>
+              <div><dt className="text-text-muted">Item groups</dt><dd>{inspection.inventoryItems.length}</dd></div>
+              <div><dt className="text-text-muted">Map seed</dt><dd>{inspection.mapSeed ?? 'Unavailable'}</dd></div>
+            </dl> : <p className="mt-2 text-sm text-text-muted">Connect and validate a Solo profile to see its saved state.</p>}
+          </section>)}
+          {overviewView === 'Currency & identity' && (<div className="card p-5">
+            <div className="flex items-start justify-between gap-4 mb-4">
+              <div>
+                <h2 className="font-semibold flex items-center gap-2">
+                  <Icon name="Coins" size={16} /> Currencies
+                </h2>
+                <p className="text-sm text-text-muted mt-1">
+                  Exact Solari and Landsraad Scrip balances are supported in Retail Solo.
+                </p>
+              </div>
+              <StatusPill ok={!gameRunning}>
+                {gameRunning ? 'Close game to write' : 'Offline writes available'}
+              </StatusPill>
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <label>
+                <span className="text-xs text-text-muted">Solari</span>
+                <input
+                  type="number"
+                  min={0}
+                  max={2_000_000_000}
+                  className={`${SOLO_INPUT_CLASS} mt-1`}
+                  value={solariDraft}
+                  onChange={event => setSolariDraft(Number(event.target.value))}
+                  disabled={!canMutateActiveProfile || gameRunning}
+                />
+              </label>
+              <label>
+                <span className="text-xs text-text-muted">Landsraad Scrip</span>
+                <input
+                  type="number"
+                  min={0}
+                  max={2_000_000_000}
+                  className={`${SOLO_INPUT_CLASS} mt-1`}
+                  value={scripDraft}
+                  onChange={event => setScripDraft(Number(event.target.value))}
+                  disabled={!canMutateActiveProfile || gameRunning}
+                />
+              </label>
+            </div>
+            <button
+              className={`btn-primary w-full mt-4 justify-center ${SOLO_DISABLED_PRIMARY_CLASS}`}
+              disabled={!canMutateActiveProfile || gameRunning}
+              onClick={() => void saveCurrencies()}
+            >
+              <Icon name={busy === 'currencies' ? 'LoaderCircle' : 'Save'} size={14} className={busy === 'currencies' ? 'animate-spin' : ''} />
+              Set currency balances
+            </button>
+          </div>)}
+
+        </div>
+      )}
+{tab === 'character' && characterHome === 'Items' && (
+        <div className="space-y-4">
+{(['Appearance', 'Vehicles'].includes(itemView) || (itemView === 'Give & repair' && ['give-item', 'give-package'].includes(itemTool ?? ''))) && <><div className="card p-5 sticky top-0 z-20 bg-surface/95 backdrop-blur-sm shadow-lg">
+            <div className="flex items-start justify-between gap-4 mb-4">
+              <div>
+                <h2 className="font-semibold flex items-center gap-2">
+                  <Icon name="PackageOpen" size={16} /> Item delivery
+                </h2>
+                <p className="text-sm text-text-muted mt-1">
+                  Deliver to the Backpack, Bank Storage, or supported built storage. The game must be fully closed before every grant.
+                </p>
+              </div>
+              <StatusPill ok={!gameRunning}>
+                {gameRunning ? 'Close game to give items' : 'Offline writes available'}
+              </StatusPill>
+            </div>
+
+            {(inspection?.inventories.length ?? 0) === 0 ? (
+              <div className="rounded border border-warning/30 bg-warning/5 p-3 text-sm text-text-muted">
+                No supported inventory was found. Enter the Solo world once, let the character load, exit fully, then Refresh.
+              </div>
+            ) : (
+              <label className="block">
+                <span className="text-xs text-text-muted">Destination</span>
+                <select
+                  className={`${SOLO_INPUT_CLASS} mt-1`}
+                  style={{ colorScheme: 'inherit' }}
+                  value={inventoryDestination}
+                  onChange={event => setInventoryDestination(event.target.value)}
+                  onWheel={event => event.currentTarget.blur()}
+                  disabled={busy !== null}
+                >
+                  {inspection!.inventories.map(inventory => (
+                    <option key={inventory.key} value={inventory.key}>
+                      {inventory.label} - {inventory.itemRows}/{inventory.maxItemCount || 'unlimited'} slots
+                      {inventory.maxItemVolume > 0
+                        ? ` - ${inventory.usedVolume.toFixed(2)}/${inventory.maxItemVolume.toFixed(2)} volume`
+                        : ''}
+                    </option>
+                  ))}
+                </select>
+                <p className="text-xs text-text-dim mt-1">
+                  DST checks free slots before every grant. Volume limits are also checked unless you enable modded storage capacity below.
+                </p>
+              </label>
+            )}
+          </div><label className="flex items-start gap-2 text-sm mb-4">
+            <input type="checkbox" checked={moddedStorageCapacity} disabled={busy !== null}
+              onChange={event => setModdedStorageCapacity(event.target.checked)} />
+            <span>Modded storage capacity  -  skip volume limit checks
+              <span className="block text-xs text-text-dim">Use when a mod changes backpack, bank, or storage volume in game. Saved capacities may not reflect the mod. Free-slot checks still apply.</span>
+            </span>
+          </label></>}
+{itemView === "Character Inventory" && <>
+<SoloInventoryExplorer
+            key={activeProfileToken ?? 'disconnected'}
+            items={inspection?.inventoryItems ?? []}
+            inventories={inspection?.inventories ?? []}
+            connected={connected}
+            disabled={!canMutateActiveProfile || gameRunning || busy !== null}
+            busyItemId={busy?.startsWith('delete-item:') ? Number(busy.slice('delete-item:'.length))
+              : busy?.startsWith('progression:quantity:') ? Number(busy.slice('progression:quantity:'.length))
+              : busy?.startsWith('progression:durability:') ? Number(busy.slice('progression:durability:'.length)) : null}
+            onDelete={(item, location, quantity) => { void deleteInventoryItem(item, location, quantity) }}
+          />
+<SoloWeaponAmmoEditor
+            weapons={inspection?.rangedWeapons ?? []}
+            disabled={!canMutateActiveProfile || gameRunning || busy !== null}
+            busy={busy?.startsWith('ammo:') ?? false}
+            onSave={(weapon, ammo) => { void setWeaponAmmo(weapon.itemId, weapon.displayName, ammo) }}
+          />
+</>}
+{itemView === "Give & repair" && <>
+<div className="space-y-3">{SOLO_ITEM_TOOLS.map(choice => <details key={choice.id} className="card" open={itemTool === choice.id}>
+  <summary role="button" aria-label={choice.label} aria-expanded={itemTool === choice.id} className="flex items-center gap-3 cursor-pointer list-none p-4" onClick={event => {event.preventDefault();setItemTool(current => current === choice.id ? null : choice.id)}}>
+    <Icon name={choice.icon} size={20} /><strong className="flex-1">{choice.label}</strong><span className="text-xs text-text-muted">Game closed</span><Icon name={itemTool === choice.id ? 'ChevronDown' : 'ChevronRight'} size={18} />
+  </summary>
+  {itemTool === choice.id && <div className="p-4 border-t border-border space-y-4">
+{itemTool === 'repair' && <div>
+<section className="card p-5 space-y-3"><h3 className="font-semibold">Repair equipment</h3><button className="btn-secondary" disabled={!canMutateActiveProfile || gameRunning || busy !== null} onClick={() => void repairEquipment()}>Repair all carried equipment</button>
+<div className="flex flex-wrap gap-2 items-center">
+            <label htmlFor="solo-repair-container">Repair a storage container</label>
+            <select id="solo-repair-container" value={repairContainer} disabled={!canMutateActiveProfile || gameRunning || busy !== null} onChange={event => setRepairContainer(event.target.value)}>
+              <option value="">Select a container</option>
+              {(inspection?.inventories ?? []).filter(inv => inv.kind === 'storage' || inv.kind === 'developer-storage').map(inv => <option key={inv.key} value={inv.key}>{inv.label} ({inv.itemRows} items)</option>)}
+            </select>
+            <button className="btn-secondary" disabled={!repairContainer || !canMutateActiveProfile || gameRunning || busy !== null} onClick={() => void repairEquipment(repairContainer)}>Repair contents</button>
+          </div></section>
+</div>}
+{itemTool === 'water' && <div>
+<div className="card p-5">
+            <div className="flex items-start justify-between gap-4 mb-4">
+              <div>
+                <h2 className="font-semibold flex items-center gap-2">
+                  <Icon name="Droplets" size={16} /> Character fillables
+                </h2>
+                <p className="text-sm text-text-muted mt-1">
+                  Fill carried water containers to their exact stored or verified capacity.
+                </p>
+              </div>
+              <StatusPill ok={!gameRunning}>
+                {gameRunning ? 'Close game to write' : 'Offline writes available'}
+              </StatusPill>
+            </div>
+            {(inspection?.fillables.length ?? 0) === 0 ? (
+              <p className="text-sm text-text-muted">
+                No refillable water container was found in the connected character inventory. After adding a Literjon, Dewpack, or Decajon, click Refresh.
+              </p>
+            ) : (
+              <div className="space-y-2">
+                {inspection!.fillables.map(item => (
+                  <div key={item.itemId} className="rounded border border-border bg-surface-2/50 px-3 py-3 flex items-center justify-between gap-4">
+                    <div>
+                      <div className="font-medium text-sm">{item.label}</div>
+                      <div className="text-xs text-text-muted">
+                        {item.currentAmount.toLocaleString()} / {item.capacity.toLocaleString()} mL
+                      </div>
+                    </div>
+                    <button
+                      className={`btn-primary shrink-0 ${SOLO_DISABLED_PRIMARY_CLASS}`}
+                      disabled={!canMutateActiveProfile || gameRunning || item.currentAmount >= item.capacity}
+                      onClick={() => void fillWaterContainer(item.itemId, item.label, item.capacity)}
+                    >
+                      <Icon name={busy === `fill:${item.itemId}` ? 'LoaderCircle' : 'Droplet'} size={14} className={busy === `fill:${item.itemId}` ? 'animate-spin' : ''} />
+                      Fill to capacity
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+</div>}
+{itemTool === 'give-item' && <div>
+<div className="card p-5">
+              <h3 className="font-semibold mb-1">Give Item</h3>
+              <p className="text-xs text-text-muted mb-4">Search the same DST item catalog used by Self-Hosted Gameplay Admin.</p>
+              <ItemPicker
+                value={itemTemplate}
+                displayValue={itemDisplay}
+                onChange={(templateId: string, item?: CatalogItem) => {
+                  setItemTemplate(templateId)
+                  setItemDisplay(item?.name)
+                  setItemAugments([])
+                }}
+                label="Item"
+                placeholder="Search name or template id"
+                disabled={!canMutateActiveProfile || gameRunning}
+              />
+
+
+              <div className="grid grid-cols-2 gap-3 mt-3">
+                <label>
+                  <span className="text-xs text-text-muted">Quantity</span>
+                  <input
+                    type="number"
+                    min={1}
+                    max={100000}
+                    className={`${SOLO_INPUT_CLASS} mt-1`}
+                    value={itemQuantity}
+                    onChange={event => setItemQuantity(Number(event.target.value))}
+                    disabled={!canMutateActiveProfile || gameRunning}
+                  />
+                </label>
+                <label>
+                  <span className="text-xs text-text-muted">Quality 0-5</span>
+                  <input
+                    type="number"
+                    min={0}
+                    max={5}
+                    className={`${SOLO_INPUT_CLASS} mt-1`}
+                    value={itemQuality}
+                    onChange={event => setItemQuality(Number(event.target.value))}
+                    disabled={!canMutateActiveProfile || gameRunning}
+                  />
+                </label>
+              </div>
+              <div className="mt-3">
+                <AugmentPicker
+                  templateId={itemTemplate}
+                  displayName={itemDisplay ?? ''}
+                  selected={itemAugments}
+                  disabled={!canMutateActiveProfile || gameRunning}
+                  onSelectedChange={setItemAugments}
+                />
+              </div>
+              <button
+                className={`btn-primary w-full mt-4 justify-center ${SOLO_DISABLED_PRIMARY_CLASS}`}
+                disabled={
+                  !canMutateActiveProfile
+                  || gameRunning
+                  || !itemTemplate.trim()
+                  || (itemAugments.length > 0 && itemQuantity !== 1)
+                }
+                onClick={() => void giveOneItem()}
+              >
+                <Icon name={busy === 'give-items' ? 'LoaderCircle' : 'PackagePlus'} size={14} className={busy === 'give-items' ? 'animate-spin' : ''} />
+                Give item
+              </button>
+            </div>
+</div>}
+{itemTool === 'give-package' && <div>
+<div className="card p-5">
+            <h3 className="font-semibold mb-1">Give Package</h3>
+            <p className="text-xs text-text-muted mb-4">
+              Create, import, edit, delete, and grant the same saved packages used elsewhere in DST. Package management does not require Self-Hosted setup.
+            </p>
+            <GivePackageForm
+              busy={busy !== null}
+              giveDisabled={!canMutateActiveProfile || gameRunning}
+              targetLabel="selected Solo inventory"
+              showOverflow={false}
+              onGive={(items, packageName) => {
+                void giveSoloItems(
+                  buildSoloPackageGrant(items),
+                  `${packageName} package`,
+                )
+              }}
+            />
+          </div>
+</div>}
+{itemTool === 'augments' && <div>
+<div className="card p-5 xl:col-span-2">
+              <h3 className="font-semibold mb-1">Max Augment Attributes</h3>
+              <p className="text-xs text-text-muted">
+                Matches DST’s Self-Hosted action: sets every non-zero numeric roll on carried augments to
+                the confirmed maximum while preserving zero and non-numeric entries. Developer Storage is excluded.
+              </p>
+              <div className="rounded border border-warning/30 bg-warning/5 p-3 mt-4 text-xs text-text-muted">
+                Close the game fully; DST retains the current save before writing. Relog after the action.
+              </div>
+              <button
+                className={`btn-primary w-full mt-4 justify-center ${SOLO_DISABLED_PRIMARY_CLASS}`}
+                disabled={!canMutateActiveProfile || gameRunning}
+                onClick={() => void maxAugmentAttributes()}
+              >
+                <Icon name={busy === 'max-augments' ? 'LoaderCircle' : 'Sparkles'} size={14} className={busy === 'max-augments' ? 'animate-spin' : ''} />
+                Max carried augment attributes
+              </button>
+            </div>
+</div>}
+</div>}
+</details>)}</div>
+</>}
+{itemView === "Appearance" && <>
+<div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
+<SoloCosmeticGrantCard
+              onGrantSummary={summary=>setNotice({kind:summary.incomplete?'err':'ok',text:summary.message})}
+              busy={busy === 'give-items'}
+              ownership={statusState.data?.cosmeticOwnership}
+              onBulkGrant={async (kind, label) => {
+                setBusy('give-items')
+                setNotice(null)
+                try {
+                  const result = await grantSoloUnlocks(kind, statusState.data?.profileToken ?? '')
+                  setNotice({ kind: 'ok', text: `${label}: ${result.submitted} tokens saved for next login; ${result.skipped} already saved or held.${result.remaining ? ` ${result.remaining} remain: log in to process tokens, exit, and grant again after freeing backpack slots.` : ''}${result.safetyBackup ? ` Recovery snapshot available in Backups.` : ''}` })
+                  await Promise.all([statusState.refresh(), runtimeState.refresh(), backupsState.refresh()])
+                } catch (error) {
+                  setNotice({ kind: 'err', text: error instanceof Error ? error.message : String(error) })
+                } finally { setBusy(null) }
+              }}
+              disabled={
+                !canMutateActiveProfile
+                || gameRunning
+                || !inspection?.inventories.some(inventory => inventory.kind === 'backpack')
+              }
+              onGrant={async (templateId, label, entry) => {
+                if (entry?.grant_method === 'character') {
+                  setBusy('give-items'); setNotice(null)
+                  try {
+                    await grantSoloReviewedCustomization(statusState.data?.profileToken ?? '', entry.customization_id || templateId)
+                    setNotice({kind:'ok',text:`${label} saved to this character.`})
+                    await Promise.all([statusState.refresh(), backupsState.refresh()])
+                    return true
+                  } catch (error) { setNotice({kind:'err',text:error instanceof Error ? error.message : String(error)}); throw error }
+                  finally { setBusy(null) }
+                }
+                const grant = buildSoloCosmeticGrant(templateId, inspection?.inventories ?? [])
+                return await giveSoloItems(
+                  grant.items,
+                  label,
+                  grant.destination,
+                  'Solo backpack',
+                  true,
+                )
+              }}
+            />
+<div className="grid grid-cols-1 xl:grid-cols-3 gap-3 xl:col-span-2">
+            {[
+              { id: 'ObservedCharacterSwatches', label: 'Character Swatches (311)' },
+              { id: 'ObservedGearAppearances', label: 'Gear Appearances (401)' },
+              { id: 'ObservedSchematicRecipes', label: 'Schematic Recipes (717)' },
+            ].map(choice => <button key={choice.id} className="btn-primary w-full flex-col gap-1 py-3 justify-center text-center whitespace-normal" disabled={!canMutateActiveProfile || gameRunning || !!busy}
+              onClick={async () => {
+                if (!window.confirm(`Grant the reviewed ${choice.label}? A safety backup will be created.${choice.id === 'ObservedSchematicRecipes' ? ' This saves crafting recipes directly, not inventory items. Existing recipe uses are preserved.' : ''}\n\n${COSMETIC_LICENSE_NOTICE}`)) return
+                setBusy('reviewed-customization')
+                setNotice(null)
+                try {
+                  await grantSoloReviewedCustomization(statusState.data?.profileToken ?? '', choice.id)
+                  setNotice({ kind: 'ok', text: `${choice.label} saved. ${choice.id === 'ObservedSchematicRecipes' ? 'Open the game and check your crafting recipes. Existing recipe uses were preserved.' : 'Open the game and select the appearance or swatch in the customization menu.'}` })
+                  await Promise.all([statusState.refresh(), backupsState.refresh()])
+                } catch (error) { setNotice({ kind: 'err', text: error instanceof Error ? error.message : String(error) }) }
+                finally { setBusy(null) }
+              }}>
+              Grant All {choice.label} (experimental)
+              <span className="block text-xs font-normal">{statusState.data?.cosmeticOwnership?.reviewedCounts?.[choice.id]
+                ? `${statusState.data.cosmeticOwnership.reviewedCounts[choice.id].owned}/${statusState.data.cosmeticOwnership.reviewedCounts[choice.id].total} owned · ${statusState.data.cosmeticOwnership.reviewedCounts[choice.id].remaining} remaining`
+                : 'Character counts unavailable'}</span>
+            </button>)}
+            </div>
+</div>
+</>}
+{itemView === "Blueprints" && <>
+<div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
+<div className="card p-5 xl:col-span-2">
+              <h3 className="font-semibold mb-1 flex items-center gap-2">
+                <Icon name="Download" size={15} /> Export Base Blueprint
+              </h3>
+              <p className="text-xs text-text-muted mb-4">
+                Download a saved Solo solido as portable DST JSON for backup or transfer.
+              </p>
+              {savedBlueprints.length === 0 ? (
+                <div className="rounded border border-border bg-surface-2/50 p-3 text-xs text-text-muted">
+                  {blueprintsState.loading
+                    ? 'Reading saved blueprints…'
+                    : 'No saved base blueprints in this Solo profile.'}
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  {savedBlueprints.map(saved => (
+                    <div key={saved.id} className="flex items-center gap-3 rounded border border-border bg-surface-2/40 px-3 py-2">
+                      <div className="min-w-0 flex-1">
+                        <div className="font-medium text-text truncate">{saved.name || `Blueprint ${saved.id}`}</div>
+                        <div className="text-xs text-text-muted">
+                          {saved.instances} pieces · {saved.placeables} placeables · {saved.pentashields} pentashields
+                        </div>
+                      </div>
+                      <button
+                        className="btn-secondary shrink-0"
+                        disabled={!selectionMatchesActive || !blueprintsMatchActiveProfile || busy === `export-blueprint-${saved.id}`}
+                        onClick={() => void exportSavedBlueprint(saved)}
+                      >
+                        <Icon name={busy === `export-blueprint-${saved.id}` ? 'LoaderCircle' : 'Download'} size={14} className={busy === `export-blueprint-${saved.id}` ? 'animate-spin' : ''} />
+                        Export
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+              {blueprintsState.error && (
+                <div className="rounded border border-danger/30 bg-danger/5 p-3 mt-3 text-xs text-danger">
+                  {blueprintsState.error}
+                </div>
+              )}
+            </div>
+<div className="card p-5 xl:col-span-2">
+              <h3 className="font-semibold mb-1 flex items-center gap-2">
+                <Icon name="ScrollText" size={15} /> Import Base Blueprint
+              </h3>
+              <a className="btn-secondary inline-flex items-center gap-2 mb-3" href="https://dune.layout.tools/" target="_blank" rel="noopener noreferrer">
+                <Icon name="ExternalLink" size={15} /> Blueprint Designer
+              </a>
+              <p className="text-xs text-text-muted mb-4">
+                Import a DST blueprint or downloaded Live Map base layout into the connected Retail Solo save. DST retains the current save and verifies the result.
+              </p>
+              <label className="block text-[11px] uppercase tracking-wider text-text-dim mb-1">
+                Blueprint file (.json)
+              </label>
+              <input
+                key={blueprintInputKey}
+                type="file"
+                accept="application/json,.json"
+                disabled={!canMutateActiveProfile || gameRunning}
+                onChange={event => { void chooseBlueprintFile(event.target.files?.[0]) }}
+                className="w-full text-sm text-text-muted file:mr-3 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:bg-surface-2 file:text-text file:text-sm mb-1 disabled:opacity-50"
+              />
+              {blueprint && (
+                <div className="rounded border border-success/30 bg-success/5 p-3 mt-3 text-xs text-text-muted">
+                  <div className="font-medium text-text">{blueprint.name || 'Unnamed blueprint'}</div>
+                  <div>{blueprintFileName}</div>
+                  <div className="mt-1">
+                    {blueprint.instances.length} pieces · {blueprint.placeables.length} placeables · {blueprint.pentashields.length} pentashields
+                  </div>
+                </div>
+              )}
+              {blueprintError && (
+                <div className="rounded border border-danger/30 bg-danger/5 p-3 mt-3 text-xs text-danger">
+                  {blueprintError}
+                </div>
+              )}
+              <div className="rounded border border-warning/30 bg-warning/5 p-3 mt-4 text-xs text-text-muted">
+                Close Dune: Awakening fully before importing. Choose a DST blueprint or a downloaded Live Map base layout.
+              </div>
+              <button
+                className={`btn-primary w-full mt-4 justify-center ${SOLO_DISABLED_PRIMARY_CLASS}`}
+                disabled={!canMutateActiveProfile || gameRunning || !blueprint}
+                onClick={() => void importBlueprint()}
+              >
+                <Icon name={busy === 'import-blueprint' ? 'LoaderCircle' : 'Upload'} size={14} className={busy === 'import-blueprint' ? 'animate-spin' : ''} />
+                Import blueprint
+              </button>
+            </div>
+</div>
+</>}
+{itemView === "Vehicles" && <>
+<div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
+<div className="card p-5">
+              <h3 className="font-semibold mb-1">Give Vehicle Kit</h3>
+              <p className="text-xs text-text-muted mb-4">
+                Delivers the canonical parts, unique modules, fuel cells, and repair torch for Retail Solo.
+              </p>
+              <label>
+                <span className="text-xs text-text-muted">Vehicle</span>
+                <select
+                  className={`${SOLO_INPUT_CLASS} mt-1`}
+                  style={{ colorScheme: 'inherit' }}
+                  value={vehicleKitId}
+                  onChange={event => setVehicleKitId(event.target.value)}
+                  disabled={!canMutateActiveProfile || gameRunning}
+                >
+                  <option value="">Choose a vehicle...</option>
+                  {(vehicleKits?.vehicles ?? [])
+                    .filter(vehicle => vehicle.kit.length > 0)
+                    .map(vehicle => (
+                      <option key={vehicle.id} value={vehicle.id}>{vehicle.label}</option>
+                    ))}
+                </select>
+              </label>
+              <div className="rounded border border-border bg-surface-2/50 p-3 mt-4 text-xs text-text-muted">
+                Kit contents come from DST's versioned vehicle catalog. Each non-stackable part needs a free slot; DST checks current contents before writing. If the package is not delivered, check the selected destination's free slots and volume.
+              </div>
+              <button
+                className={`btn-primary w-full mt-4 justify-center ${SOLO_DISABLED_PRIMARY_CLASS}`}
+                disabled={!canMutateActiveProfile || gameRunning || !vehicleKitId}
+                onClick={() => void giveVehicleKit()}
+              >
+                <Icon name={busy === 'give-items' ? 'LoaderCircle' : 'Truck'} size={14} className={busy === 'give-items' ? 'animate-spin' : ''} />
+                Give vehicle kit
+              </button>
+            </div>
+<SoloRegisTanks connectionToken={`${activeProfileToken}:${connectionRevision}`} />
+</div>
+</>}
+</div>
+      )}
+{tab === 'character' && characterHome === 'Progression' && (
+        <div className="space-y-4">
+<div className="rounded-lg border border-warning/30 bg-warning/5 px-4 py-3 text-sm flex items-start gap-2">
+            <Icon name="ShieldAlert" size={15} className="text-warning mt-0.5 shrink-0" />
+            <span>
+              Retail Solo progression actions require the game to be fully closed. Recovery snapshots protect changes; optional backup management archives older copies.
+            </span>
+          </div>
+<div className="card p-4 flex items-center justify-between gap-4 flex-wrap">
+  <div className="min-w-0 flex-1"><h2 className="font-semibold">Reset to Post-NPE (keep skills &amp; points)</h2><p className="text-sm text-text-muted mt-1">Replay after the tutorial, keep learned skills and point balances, and return to Griffin’s Reach.</p></div>
+  <button type="button" className="btn-secondary" aria-label="Reset to Post-NPE (keep skills & points)" disabled={!canMutateActiveProfile || gameRunning || !!busy} onClick={() => void runProgressionAction('reset-post-npe', 'Reset to post-NPE', resetSoloPostNpe)}>{busy === 'progression:reset-post-npe' ? 'Resetting…' : 'Reset to Post-NPE'}</button>
+</div>
+{progressionView === "Specializations" && <>
+<div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
+<SoloCharacterXp disabled={!canMutateActiveProfile || gameRunning || !!busy}
+            currentXp={inspection?.progression.characterXp}
+            onRun={(action, amount) => void runProgressionAction('character-xp', 'Solo character XP change', token => setSoloCharacterXp(action, amount, token))} />
+<SoloSpecializationEditor
+            key={`${activeProfileToken}:${inspection?.progression.specializations.map(track => `${track.trackType}:${track.level}`).join(',')}`}
+            tracks={inspection?.progression.specializations ?? []}
+            legacyAdapter={status?.legacyAdapter}
+            disabled={!canMutateActiveProfile || gameRunning || !!busy}
+            onSet={(track, level) => void runProgressionAction('set-specialization', `Set ${track} to level ${level} (existing rewards stay unlocked; journey triggers are not replayed)`, token => setSoloSpecialization(track, level, token))}
+            onResetRewards={track => void runProgressionAction('reset-specialization-rewards', `Reset ${track} reward claims so they can be purchased again in-game. Keep its level and XP. Remove its claimed skill-point bonus from unspent points; respec first if needed. No journey objectives are completed by this action`, token => resetSoloSpecializationRewards(track, token))}
+          />
+<ProgressionActionCard
+              icon="Medal"
+              title="Max specializations"
+              description="Set all five tracks to level 100, grant all 205 rewards, and reconcile the 54 specialization skill points idempotently."
+              status={`${countMaxSoloSpecializations(inspection?.progression.specializations ?? [], status?.legacyAdapter ?? false)}/5 tracks at 100 · ${inspection?.progression.purchasedRewards ?? 0}/205 unlocked rewards`}
+              busy={busy === 'progression:specializations'}
+              disabled={!canMutateActiveProfile || gameRunning}
+              onRun={() => void runProgressionAction(
+                'specializations',
+                'Max all Solo specializations',
+                maxSoloSpecializations,
+              )}
+            />
+</div>
+</>}
+{progressionView === "Unlocks & rewards" && <>
+<div className="space-y-3">{SOLO_UNLOCK_TOOLS.map(tool => <details key={tool.id} open={unlockTool === tool.id} className="card overflow-hidden">
+  <summary onClick={event => { event.preventDefault(); setUnlockTool(current => current === tool.id ? null : tool.id) }} className="cursor-pointer min-h-14 flex items-center gap-3 p-4 font-medium"><Icon name={tool.icon} size={18} />{tool.label}<Icon name={unlockTool === tool.id ? 'ChevronDown' : 'ChevronRight'} size={16} className="ml-auto" /></summary>
+  <div className="p-4 border-t border-border">
+
+{tool.id === 'story' && <><SoloJourneyCompletion category="story" disabled={!canMutateActiveProfile || gameRunning || !!busy}
+              busy={busy === 'progression:journey'} progression={inspection?.progression}
+              onRun={quest => void runProgressionAction('journey',
+                quest === 'npe' ? 'Complete Solo tutorial (NPE)' : 'Complete Solo main quest',
+                quest === 'npe' ? completeSoloNpe
+                  : quest === 'DA_MQ_FindTheFremen' ? completeSoloFindTheFremen
+                    : token => unlockSoloMainQuest(quest, token))} />
+
+</>}
+{tool.id === 'tutorials' && <><SoloJourneyCompletion category="tutorial" disabled={!canMutateActiveProfile || gameRunning || !!busy}
+              busy={busy === 'progression:journey'} progression={inspection?.progression}
+              onRun={quest => void runProgressionAction('journey',
+                quest === 'npe' ? 'Complete Solo tutorial (NPE)' : 'Complete Solo main quest',
+                quest === 'npe' ? completeSoloNpe
+                  : quest === 'DA_MQ_FindTheFremen' ? completeSoloFindTheFremen
+                    : token => unlockSoloMainQuest(quest, token))} />
+</>}
+{tool.id === 'codex' && <>
+{activeProfileToken && selectionMatchesActive && <div>
+            <CodexOwnership key={activeProfileToken} profileToken={activeProfileToken}
+              grant={{ path: '/api/solo/codex/grant', body: { expectedProfileToken: activeProfileToken },
+                disabled: !canMutateActiveProfile || gameRunning, reason: 'Close Dune before granting codex fragments.' }}
+              path={`/api/solo/codex?profile=${encodeURIComponent(activeProfileToken)}`} />
+          </div>}
+{(!activeProfileToken || !selectionMatchesActive) && <p className="text-sm text-text-muted">Connect and validate a Solo profile to inspect its codex.</p>}
+</>}
+{tool.id === 'faction' && <div>
+<SoloFactionProgression disabled={!canMutateActiveProfile || gameRunning || !!busy}
+            onComplete={faction => void runProgressionAction('faction', 'Complete faction journeys', token => unlockSoloMainQuest(`faction_${faction}_complete`, token))}
+            onRun={(faction, action, amount) => void runProgressionAction('faction', 'Solo faction change', token => setSoloFactionProgression(faction, action, amount, token))} />
+</div>}
+{tool.id === 'stations' && <div>
+<div className="card p-5 flex flex-col">
+              <h2 className="font-semibold">Testing Stations</h2>
+              <p className="text-sm text-text-muted mt-1 mb-3">Unlock selectable difficulties by recording completion progress. Choose your difficulty in-game; faction requirements still apply. Existing higher progress is preserved. Close Dune before applying.</p>
+              <label htmlFor="solo-testing-station" className="text-sm">Station</label>
+              <select id="solo-testing-station" className={`${SOLO_INPUT_CLASS} mt-1 mb-3`} value={testingStation} onChange={event => setTestingStation(event.target.value)} disabled={!canMutateActiveProfile || gameRunning || !!busy}>
+                <option value="all">All six stations</option>
+                <option value="DA_Dgn_024_Darkness">Station 24 — Darkness</option>
+                <option value="DA_Dgn_089_Radiation">Station 89 — Radiation</option>
+                <option value="DA_Dgn_136_Fire">Station 136 — Fire</option>
+                <option value="DA_Dgn_152_Electric">Station 152 — Electric</option>
+                <option value="DA_Dgn_195_Poison">Station 195 — Poison</option>
+                <option value="DA_Dgn_Pit">The Quarry</option>
+              </select>
+              <button className={`btn-primary ${SOLO_DISABLED_PRIMARY_CLASS}`} disabled={!canMutateActiveProfile || gameRunning || !!busy} onClick={() => void runProgressionAction('testing-stations', 'Unlock Solo Testing Stations', token => unlockSoloTestingStations(testingStation, token))}>
+                {busy === 'progression:testing-stations' ? 'Applying...' : 'Unlock difficulties'}
+              </button>
+            </div>
+</div>}
+{tool.id === 'trainers' && <div>
+<div className="card p-5 flex flex-col">
+              <h2 className="font-semibold">Unlock Trainers</h2>
+              <p className="text-sm text-text-muted mt-1 mb-3">Complete the selected trainer's contracts and apply their reward tags and skill-tree unlocks. Takes effect next launch.</p>
+              <label htmlFor="solo-trainer" className="text-sm">Trainer</label>
+              <select id="solo-trainer" className={`${SOLO_INPUT_CLASS} mt-1 mb-3`} value={trainerJob} onChange={event => setTrainerJob(event.target.value)} disabled={!canMutateActiveProfile || gameRunning || !!busy}>
+                <option value="Swordmaster">Swordmaster</option><option value="Trooper">Trooper</option><option value="Mentat">Mentat</option><option value="BeneGesserit">Bene Gesserit</option><option value="Planetologist">Planetologist</option>
+              </select>
+              <button className={`btn-primary ${SOLO_DISABLED_PRIMARY_CLASS}`} disabled={!canMutateActiveProfile || gameRunning || !!busy} onClick={() => void runProgressionAction('trainer', 'Unlock Solo trainer', token => unlockSoloTrainer(trainerJob, token))}>
+                {busy === 'progression:trainer' ? 'Applying...' : 'Unlock trainer'}
+              </button>
+            </div>
+</div>}
+{tool.id === 'skills' && <div>
+<ProgressionActionCard
+              icon="Sparkles"
+              title="Enable all skills"
+              description="Unlock all five trainers and raise 143 approved skills to value 7. Leave Bindu Sprint and Voice Ignore learnable, preserve unknown Solo keys, keep at least 20 unspent points, and raise Intel to 100."
+              status={`${inspection?.progression.skillsAtSeven ?? 0}/143 enabled · ${inspection?.progression.unspentSkillPoints ?? 0} unspent · ${inspection?.progression.intel ?? 0} Intel`}
+              busy={busy === 'progression:skills'}
+              disabled={!canMutateActiveProfile || gameRunning}
+              onRun={() => void runProgressionAction(
+                'skills',
+                'Enable all approved Solo skills',
+                enableSoloAllSkills,
+              )}
+            />
+</div>}
+{tool.id === 'points' && <div>
+<div className="card p-5 flex flex-col">
+              <div className="w-9 h-9 rounded-lg bg-accent/10 border border-accent/25 flex items-center justify-center text-accent-bright mb-3">
+                <Icon name="Gauge" size={17} />
+              </div>
+              <h2 className="font-semibold">Progression points</h2>
+              <p className="text-sm text-text-muted mt-1">
+                Read the current balances and set exact unspent skill-point and Intel amounts without changing learned skills.
+              </p>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-4">
+                <label>
+                  <span className="text-xs text-text-muted">Unspent skill points</span>
+                  <input
+                    type="number"
+                    min={0}
+                    max={2_000_000_000}
+                    step={1}
+                    className={`${SOLO_INPUT_CLASS} mt-1`}
+                    value={skillPointsDraft}
+                    onChange={event => setSkillPointsDraft(Number(event.target.value))}
+                    disabled={!canMutateActiveProfile || gameRunning}
+                  />
+                </label>
+                <label>
+                  <span className="text-xs text-text-muted">Intel points</span>
+                  <input
+                    type="number"
+                    min={0}
+                    max={2_000_000_000}
+                    step={1}
+                    className={`${SOLO_INPUT_CLASS} mt-1`}
+                    value={intelDraft}
+                    onChange={event => setIntelDraft(Number(event.target.value))}
+                    disabled={!canMutateActiveProfile || gameRunning}
+                  />
+                </label>
+              </div>
+              <div className="rounded border border-border bg-surface-2/50 px-3 py-2 text-xs text-text-muted mt-4">
+                Current: {(inspection?.progression.unspentSkillPoints ?? 0).toLocaleString()} unspent · {(inspection?.progression.intel ?? 0).toLocaleString()} Intel
+              </div>
+              <button
+                className={`btn-primary w-full justify-center mt-4 ${SOLO_DISABLED_PRIMARY_CLASS}`}
+                disabled={
+                  !canMutateActiveProfile
+                  || gameRunning
+                  || (
+                    skillPointsDraft === (inspection?.progression.unspentSkillPoints ?? 0)
+                    && intelDraft === (inspection?.progression.intel ?? 0)
+                  )
+                }
+                onClick={() => void saveProgressionPoints()}
+              >
+                <Icon name={busy === 'progression:points' ? 'LoaderCircle' : 'Save'} size={14} className={busy === 'progression:points' ? 'animate-spin' : ''} />
+                {busy === 'progression:points' ? 'Saving...' : 'Set progression points'}
+              </button>
+            </div>
+</div>}
+</div></details>)}
+</div>
+</>}
+
+</div>
+      )}
+        </div>
+        {(busy || notice) && <div className="player-operation-feedback" data-kind={busy ? 'info' : notice?.kind === 'err' ? 'err' : notice?.kind === 'warn' ? 'info' : 'ok'} role={notice?.kind === 'err' && !busy ? 'alert' : 'status'}>
+          <Icon name={busy ? 'Loader2' : notice?.kind === 'err' ? 'AlertCircle' : notice?.kind === 'warn' ? 'Info' : 'CheckCircle2'} size={18} className={busy ? 'animate-spin motion-reduce:animate-none' : ''} />
+          <span>{busy ? 'Working…' : notice?.text}</span>
+          {!busy && <button aria-label="Dismiss action result" onClick={() => setNotice(null)}><Icon name="X" size={18} /></button>}
+        </div>}
+      </section>)}
+
+
       {tab === 'mods' && <SoloMods connectionToken={`${activeProfileToken}:${connectionRevision}`} />}
       {tab === 'dd-map' && <><SoloLiveMap connectionToken={`${activeProfileToken}:${connectionRevision}`} /><WickMaps embedded solo /></>}
       {tab === 'steam-deck' && <SoloDeck />}
@@ -1604,7 +2372,6 @@ export function SoloMode() {
               <p className="text-sm text-text-muted">{status?.inspectionError || 'Connect a Solo save to inspect it.'}</p>
             )}
           </div>
-          <OfficialServerCard />
         </div>
       )}
 
@@ -1829,6 +2596,8 @@ export function SoloMode() {
       )}
 
       {tab === 'backups' && (
+        <div className="space-y-4">
+        <SoloBackupSettings profileToken={activeProfileToken} disabled={!selectionMatchesActive || !!busy} onSaved={async () => { await Promise.all([backupsState.refresh(), statusState.refresh()]); setBackupPage(0) }} />
         <div className="card p-5">
           <div className="flex items-start justify-between gap-4 mb-4">
             <div>
@@ -1837,35 +2606,52 @@ export function SoloMode() {
                 Backups validate the wrapper, SQLite integrity, foreign keys, and one-character invariant. Restore always preserves the current save first.
               </p>
             </div>
-            <div className="flex items-center gap-2 shrink-0">
-              <button
+            <div className="flex items-center gap-2 shrink-0 flex-wrap">
+              <button type="button" className="btn-secondary" disabled={!canMutateActiveProfile || gameRunning || !!busy} onClick={() => void browseBackupFile()}><Icon name="FolderOpen" size={14} /> Browse backup file…</button>
+              {backupView === 'local' && <button
                 className="btn-secondary"
                 disabled={!canMutateActiveProfile || selectedBackupPaths.size === 0}
                 onClick={() => void deleteSelectedBackups()}
               >
                 <Icon name={busy === 'delete-selected' ? 'LoaderCircle' : 'Trash2'} size={14} className={busy === 'delete-selected' ? 'animate-spin' : ''} />
                 Delete selected ({selectedBackupPaths.size})
-              </button>
-              <button className={`btn-primary ${SOLO_DISABLED_PRIMARY_CLASS}`} onClick={() => void createBackup()} disabled={!selectionMatchesActive || busy !== null || gameRunning}>
+              </button>}
+              <button className={`btn-primary ${SOLO_DISABLED_PRIMARY_CLASS}`} onClick={() => void createBackup()} disabled={!selectionMatchesActive || busy !== null}>
                 <Icon name={busy === 'backup' ? 'LoaderCircle' : 'Archive'} size={14} className={busy === 'backup' ? 'animate-spin' : ''} />
                 Create backup
               </button>
             </div>
           </div>
-          <div className="text-xs text-text-dim font-mono break-all mb-4">{backupsState.data?.root ?? status?.backupRoot}</div>
-          {(backupsState.data?.backups.length ?? 0) === 0 ? (
-            <p className="text-sm text-text-muted">No Solo backups created by DST yet.</p>
+          <div className="flex gap-2 mb-4" role="group" aria-label="Backup locations">
+            <button type="button" className={backupView === 'local' ? 'btn-primary' : 'btn-secondary'} aria-pressed={backupView === 'local'} onClick={() => { setBackupView('local'); setBackupPage(0); setSelectedBackupPaths(new Set()) }}>Local ({localBackups.length})</button>
+            <button type="button" className={backupView === 'archive' ? 'btn-primary' : 'btn-secondary'} aria-pressed={backupView === 'archive'} onClick={() => { setBackupView('archive'); setBackupPage(0); setSelectedBackupPaths(new Set()) }}>Archive ({archivedBackups.length})</button>
+          </div>
+          <div className="flex gap-3 flex-wrap mb-4">
+            <input aria-label="Search backups" className="min-w-0 flex-1 rounded-lg border border-border bg-surface-2 px-3 py-2" placeholder="Find a backup by date or name…" value={backupSearch} onChange={event => { setBackupSearch(event.target.value); setBackupPage(0) }} />
+            <select aria-label="Backup order" className="rounded-lg border border-border bg-surface-2 px-3 py-2" value={backupSort} onChange={event => { setBackupSort(event.target.value as 'newest' | 'oldest'); setBackupPage(0) }}><option value="newest">Newest first</option><option value="oldest">Oldest first</option></select>
+          </div>
+          {backupsState.data?.archiveUnavailable && <p role="alert" className="text-sm text-warning mb-4">An archive folder is unavailable. Local backups are being preserved.</p>}
+          {backupView === 'archive' && <p className="text-sm text-text-muted mb-4">Archived backups are preserved. Choose Restore to load an older save.</p>}
+
+          {backupCount > 0 && <nav aria-label="Solo backup pages" className="flex items-center gap-3 flex-wrap mb-4 text-sm">
+            <span className="text-text-muted">Showing {currentBackupPage * 25 + 1}–{Math.min((currentBackupPage + 1) * 25, backupCount)} of {backupCount}</span>
+            <button type="button" className="btn-secondary" disabled={currentBackupPage === 0} onClick={() => setBackupPage(currentBackupPage - 1)}>Previous page</button>
+            <span>Page {currentBackupPage + 1} of {backupPageCount}</span>
+            <button type="button" className="btn-secondary" disabled={currentBackupPage + 1 >= backupPageCount} onClick={() => setBackupPage(currentBackupPage + 1)}>Next page</button>
+          </nav>}
+          {backupCount === 0 ? (
+            <p className="text-sm text-text-muted">{backupView === 'archive' ? 'No archived backups are available. You can also browse for an older backup file.' : 'No Solo backups created by DST yet.'}</p>
           ) : (
             <div>
-              <div className="flex items-center gap-3 pb-3 border-b border-border text-xs text-text-muted">
+              {backupView === 'local' && <div className="flex items-center gap-3 pb-3 border-b border-border text-xs text-text-muted">
                 <button
                   className="btn-secondary py-1 px-2"
                   disabled={!canMutateActiveProfile}
                   onClick={() => setSelectedBackupPaths(new Set(
-                    backupsState.data!.backups.map(backup => backup.relativePath),
+                    [...selectedBackupPaths, ...visibleBackups.map(backup => backup.relativePath)],
                   ))}
                 >
-                  Select all
+                  Select this page
                 </button>
                 <button
                   className="btn-secondary py-1 px-2"
@@ -1875,12 +2661,12 @@ export function SoloMode() {
                   Clear
                 </button>
                 <span>{selectedBackupPaths.size} selected</span>
-              </div>
+              </div>}
               <div className="divide-y divide-border">
-              {backupsState.data!.backups.map(backup => (
-                <div key={backup.relativePath} className="py-3 flex items-center justify-between gap-4">
+              {visibleBackups.map(backup => (
+                <div key={backup.relativePath} className="py-3 flex flex-wrap items-center justify-between gap-4">
                   <div className="min-w-0 flex items-start gap-3">
-                    <input
+                    {backupView === 'local' && <input
                       type="checkbox"
                       className="mt-1 accent-ibad"
                       aria-label={`Select ${backup.name}`}
@@ -1892,16 +2678,16 @@ export function SoloMode() {
                         else next.delete(backup.relativePath)
                         return next
                       })}
-                    />
+                    />}
                     <div className="min-w-0">
-                    <div className="font-medium text-sm truncate">{backup.name}</div>
+                    <div className="font-medium text-sm break-all">{backup.name}</div>
                     <div className="text-xs text-text-muted">
                       {formatBytes(backup.bytes)} - {new Date(backup.modifiedAt).toLocaleString()}
                     </div>
                     <div className="text-[11px] text-text-dim font-mono truncate">{backup.relativePath}</div>
                     </div>
                   </div>
-                  <div className="flex items-center gap-2 shrink-0">
+                  <div className="flex flex-wrap items-center gap-2">
                     <button
                       className="btn-secondary"
                       disabled={!canMutateActiveProfile || gameRunning}
@@ -1910,14 +2696,14 @@ export function SoloMode() {
                       <Icon name={busy === `restore:${backup.relativePath}` ? 'LoaderCircle' : 'RotateCcw'} size={14} className={busy === `restore:${backup.relativePath}` ? 'animate-spin' : ''} />
                       Restore
                     </button>
-                    <button
+                    {backupView === 'local' && <button
                       className="btn-danger"
                       disabled={!canMutateActiveProfile}
                       onClick={() => void deleteBackup(backup)}
                     >
                       <Icon name={busy === `delete:${backup.relativePath}` ? 'LoaderCircle' : 'Trash2'} size={14} className={busy === `delete:${backup.relativePath}` ? 'animate-spin' : ''} />
                       Delete
-                    </button>
+                    </button>}
                   </div>
                 </div>
               ))}
@@ -1925,646 +2711,12 @@ export function SoloMode() {
             </div>
           )}
         </div>
-      )}
-
-      {tab === 'character' && (
-        <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
-          <div className="card p-5">
-            <div className="flex items-start justify-between gap-4 mb-4">
-              <div>
-                <h2 className="font-semibold flex items-center gap-2">
-                  <Icon name="Coins" size={16} /> Currencies
-                </h2>
-                <p className="text-sm text-text-muted mt-1">
-                  Exact Solari and Landsraad Scrip balances are supported in Retail Solo.
-                </p>
-              </div>
-              <StatusPill ok={!gameRunning}>
-                {gameRunning ? 'Close game to write' : 'Offline writes available'}
-              </StatusPill>
-            </div>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              <label>
-                <span className="text-xs text-text-muted">Solari</span>
-                <input
-                  type="number"
-                  min={0}
-                  max={2_000_000_000}
-                  className={`${SOLO_INPUT_CLASS} mt-1`}
-                  value={solariDraft}
-                  onChange={event => setSolariDraft(Number(event.target.value))}
-                  disabled={!canMutateActiveProfile || gameRunning}
-                />
-              </label>
-              <label>
-                <span className="text-xs text-text-muted">Landsraad Scrip</span>
-                <input
-                  type="number"
-                  min={0}
-                  max={2_000_000_000}
-                  className={`${SOLO_INPUT_CLASS} mt-1`}
-                  value={scripDraft}
-                  onChange={event => setScripDraft(Number(event.target.value))}
-                  disabled={!canMutateActiveProfile || gameRunning}
-                />
-              </label>
-            </div>
-            <button
-              className={`btn-primary w-full mt-4 justify-center ${SOLO_DISABLED_PRIMARY_CLASS}`}
-              disabled={!canMutateActiveProfile || gameRunning}
-              onClick={() => void saveCurrencies()}
-            >
-              <Icon name={busy === 'currencies' ? 'LoaderCircle' : 'Save'} size={14} className={busy === 'currencies' ? 'animate-spin' : ''} />
-              Set currency balances
-            </button>
-          </div>
-
-          <div className="card p-5">
-            <div className="flex items-start justify-between gap-4 mb-4">
-              <div>
-                <h2 className="font-semibold flex items-center gap-2">
-                  <Icon name="Droplets" size={16} /> Character fillables
-                </h2>
-                <p className="text-sm text-text-muted mt-1">
-                  Fill carried water containers to their exact stored or verified capacity.
-                </p>
-              </div>
-              <StatusPill ok={!gameRunning}>
-                {gameRunning ? 'Close game to write' : 'Offline writes available'}
-              </StatusPill>
-            </div>
-            {(inspection?.fillables.length ?? 0) === 0 ? (
-              <p className="text-sm text-text-muted">
-                No refillable water container was found in the connected character inventory. After adding a Literjon, Dewpack, or Decajon, click Refresh.
-              </p>
-            ) : (
-              <div className="space-y-2">
-                {inspection!.fillables.map(item => (
-                  <div key={item.itemId} className="rounded border border-border bg-surface-2/50 px-3 py-3 flex items-center justify-between gap-4">
-                    <div>
-                      <div className="font-medium text-sm">{item.label}</div>
-                      <div className="text-xs text-text-muted">
-                        {item.currentAmount.toLocaleString()} / {item.capacity.toLocaleString()} mL
-                      </div>
-                    </div>
-                    <button
-                      className={`btn-primary shrink-0 ${SOLO_DISABLED_PRIMARY_CLASS}`}
-                      disabled={!canMutateActiveProfile || gameRunning || item.currentAmount >= item.capacity}
-                      onClick={() => void fillWaterContainer(item.itemId, item.label, item.capacity)}
-                    >
-                      <Icon name={busy === `fill:${item.itemId}` ? 'LoaderCircle' : 'Droplet'} size={14} className={busy === `fill:${item.itemId}` ? 'animate-spin' : ''} />
-                      Fill to capacity
-                    </button>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
         </div>
       )}
-      {tab === 'inventory' && (
-        <div className="space-y-4">
-          <SoloRegisTanks connectionToken={`${activeProfileToken}:${connectionRevision}`} />
-          <button className="btn-secondary" disabled={!canMutateActiveProfile || gameRunning || busy !== null} onClick={() => void repairEquipment()}>Repair all carried equipment</button>
-          <div className="flex flex-wrap gap-2 items-center">
-            <label htmlFor="solo-repair-container">Repair a storage container</label>
-            <select id="solo-repair-container" value={repairContainer} disabled={!canMutateActiveProfile || gameRunning || busy !== null} onChange={event => setRepairContainer(event.target.value)}>
-              <option value="">Select a container</option>
-              {(inspection?.inventories ?? []).filter(inv => inv.kind === 'storage' || inv.kind === 'developer-storage').map(inv => <option key={inv.key} value={inv.key}>{inv.label} ({inv.itemRows} items)</option>)}
-            </select>
-            <button className="btn-secondary" disabled={!repairContainer || !canMutateActiveProfile || gameRunning || busy !== null} onClick={() => void repairEquipment(repairContainer)}>Repair contents</button>
-          </div>
-          <SoloInventoryExplorer
-            items={inspection?.inventoryItems ?? []}
-            inventories={inspection?.inventories ?? []}
-            connected={connected}
-            disabled={!canMutateActiveProfile || gameRunning || busy !== null}
-            busyItemId={busy?.startsWith('delete-item:') ? Number(busy.slice('delete-item:'.length)) : null}
-            onDelete={(item, location, quantity) => { void deleteInventoryItem(item, location, quantity) }}
-            onDeleteGroup={(...args) => { void deleteInventoryGroup(...args) }}
-          />
-          <SoloWeaponAmmoEditor
-            weapons={inspection?.rangedWeapons ?? []}
-            disabled={!canMutateActiveProfile || gameRunning || busy !== null}
-            busy={busy?.startsWith('ammo:') ?? false}
-            onSave={(weapon, ammo) => { void setWeaponAmmo(weapon.itemId, weapon.displayName, ammo) }}
-          />
 
-          <div className="card p-5 sticky top-0 z-20 bg-surface/95 backdrop-blur-sm shadow-lg">
-            <div className="flex items-start justify-between gap-4 mb-4">
-              <div>
-                <h2 className="font-semibold flex items-center gap-2">
-                  <Icon name="PackageOpen" size={16} /> Item delivery
-                </h2>
-                <p className="text-sm text-text-muted mt-1">
-                  Deliver to the Backpack, Bank Storage, or supported built storage. The game must be fully closed before every grant.
-                </p>
-              </div>
-              <StatusPill ok={!gameRunning}>
-                {gameRunning ? 'Close game to give items' : 'Offline writes available'}
-              </StatusPill>
-            </div>
 
-            {(inspection?.inventories.length ?? 0) === 0 ? (
-              <div className="rounded border border-warning/30 bg-warning/5 p-3 text-sm text-text-muted">
-                No supported inventory was found. Enter the Solo world once, let the character load, exit fully, then Refresh.
-              </div>
-            ) : (
-              <label className="block">
-                <span className="text-xs text-text-muted">Destination</span>
-                <select
-                  className={`${SOLO_INPUT_CLASS} mt-1`}
-                  style={{ colorScheme: 'inherit' }}
-                  value={inventoryDestination}
-                  onChange={event => setInventoryDestination(event.target.value)}
-                  onWheel={event => event.currentTarget.blur()}
-                  disabled={busy !== null}
-                >
-                  {inspection!.inventories.map(inventory => (
-                    <option key={inventory.key} value={inventory.key}>
-                      {inventory.label} - {inventory.itemRows}/{inventory.maxItemCount || 'unlimited'} slots
-                      {inventory.maxItemVolume > 0
-                        ? ` - ${inventory.usedVolume.toFixed(2)}/${inventory.maxItemVolume.toFixed(2)} volume`
-                        : ''}
-                    </option>
-                  ))}
-                </select>
-                <p className="text-xs text-text-dim mt-1">
-                  DST checks free slots before every grant. Volume limits are also checked unless you enable modded storage capacity below.
-                </p>
-              </label>
-            )}
-          </div>
 
-          <label className="flex items-start gap-2 text-sm mb-4">
-            <input type="checkbox" checked={moddedStorageCapacity} disabled={busy !== null}
-              onChange={event => setModdedStorageCapacity(event.target.checked)} />
-            <span>Modded storage capacity  -  skip volume limit checks
-              <span className="block text-xs text-text-dim">Use when a mod changes backpack, bank, or storage volume in game. Saved capacities may not reflect the mod. Free-slot checks still apply.</span>
-            </span>
-          </label>
 
-          <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
-            <div className="card p-5">
-              <h3 className="font-semibold mb-1">Give Item</h3>
-              <p className="text-xs text-text-muted mb-4">Search the same DST item catalog used by Self-Hosted Gameplay Admin.</p>
-              <ItemPicker
-                value={itemTemplate}
-                displayValue={itemDisplay}
-                onChange={(templateId: string, item?: CatalogItem) => {
-                  setItemTemplate(templateId)
-                  setItemDisplay(item?.name)
-                  setItemAugments([])
-                }}
-                label="Item"
-                placeholder="Search name or template id"
-                disabled={!canMutateActiveProfile || gameRunning}
-              />
-              <div className="grid grid-cols-2 gap-3 mt-3">
-                <label>
-                  <span className="text-xs text-text-muted">Quantity</span>
-                  <input
-                    type="number"
-                    min={1}
-                    max={100000}
-                    className={`${SOLO_INPUT_CLASS} mt-1`}
-                    value={itemQuantity}
-                    onChange={event => setItemQuantity(Number(event.target.value))}
-                    disabled={!canMutateActiveProfile || gameRunning}
-                  />
-                </label>
-                <label>
-                  <span className="text-xs text-text-muted">Quality 0-5</span>
-                  <input
-                    type="number"
-                    min={0}
-                    max={5}
-                    className={`${SOLO_INPUT_CLASS} mt-1`}
-                    value={itemQuality}
-                    onChange={event => setItemQuality(Number(event.target.value))}
-                    disabled={!canMutateActiveProfile || gameRunning}
-                  />
-                </label>
-              </div>
-              <div className="mt-3">
-                <AugmentPicker
-                  templateId={itemTemplate}
-                  displayName={itemDisplay ?? ''}
-                  selected={itemAugments}
-                  disabled={!canMutateActiveProfile || gameRunning}
-                  onSelectedChange={setItemAugments}
-                />
-              </div>
-              <button
-                className={`btn-primary w-full mt-4 justify-center ${SOLO_DISABLED_PRIMARY_CLASS}`}
-                disabled={
-                  !canMutateActiveProfile
-                  || gameRunning
-                  || !itemTemplate.trim()
-                  || (itemAugments.length > 0 && itemQuantity !== 1)
-                }
-                onClick={() => void giveOneItem()}
-              >
-                <Icon name={busy === 'give-items' ? 'LoaderCircle' : 'PackagePlus'} size={14} className={busy === 'give-items' ? 'animate-spin' : ''} />
-                Give item
-              </button>
-            </div>
-
-            <div className="card p-5">
-              <h3 className="font-semibold mb-1">Give Vehicle Kit</h3>
-              <p className="text-xs text-text-muted mb-4">
-                Delivers the canonical parts, unique modules, fuel cells, and repair torch for Retail Solo.
-              </p>
-              <label>
-                <span className="text-xs text-text-muted">Vehicle</span>
-                <select
-                  className={`${SOLO_INPUT_CLASS} mt-1`}
-                  style={{ colorScheme: 'inherit' }}
-                  value={vehicleKitId}
-                  onChange={event => setVehicleKitId(event.target.value)}
-                  disabled={!canMutateActiveProfile || gameRunning}
-                >
-                  <option value="">Choose a vehicle...</option>
-                  {(vehicleKits?.vehicles ?? [])
-                    .filter(vehicle => vehicle.kit.length > 0)
-                    .map(vehicle => (
-                      <option key={vehicle.id} value={vehicle.id}>{vehicle.label}</option>
-                    ))}
-                </select>
-              </label>
-              <div className="rounded border border-border bg-surface-2/50 p-3 mt-4 text-xs text-text-muted">
-                Kit contents come from DST's versioned vehicle catalog. Each non-stackable part needs a free slot; DST checks current contents before writing. If the package is not delivered, check the selected destination's free slots and volume.
-              </div>
-              <button
-                className={`btn-primary w-full mt-4 justify-center ${SOLO_DISABLED_PRIMARY_CLASS}`}
-                disabled={!canMutateActiveProfile || gameRunning || !vehicleKitId}
-                onClick={() => void giveVehicleKit()}
-              >
-                <Icon name={busy === 'give-items' ? 'LoaderCircle' : 'Truck'} size={14} className={busy === 'give-items' ? 'animate-spin' : ''} />
-                Give vehicle kit
-              </button>
-            </div>
-
-            <div className="card p-5 xl:col-span-2">
-              <h3 className="font-semibold mb-1 flex items-center gap-2">
-                <Icon name="Download" size={15} /> Export Base Blueprint
-              </h3>
-              <p className="text-xs text-text-muted mb-4">
-                Download a saved Solo solido as portable DST JSON for backup or transfer.
-              </p>
-              {savedBlueprints.length === 0 ? (
-                <div className="rounded border border-border bg-surface-2/50 p-3 text-xs text-text-muted">
-                  {blueprintsState.loading
-                    ? 'Reading saved blueprints…'
-                    : 'No saved base blueprints in this Solo profile.'}
-                </div>
-              ) : (
-                <div className="space-y-2">
-                  {savedBlueprints.map(saved => (
-                    <div key={saved.id} className="flex items-center gap-3 rounded border border-border bg-surface-2/40 px-3 py-2">
-                      <div className="min-w-0 flex-1">
-                        <div className="font-medium text-text truncate">{saved.name || `Blueprint ${saved.id}`}</div>
-                        <div className="text-xs text-text-muted">
-                          {saved.instances} pieces · {saved.placeables} placeables · {saved.pentashields} pentashields
-                        </div>
-                      </div>
-                      <button
-                        className="btn-secondary shrink-0"
-                        disabled={!selectionMatchesActive || !blueprintsMatchActiveProfile || busy === `export-blueprint-${saved.id}`}
-                        onClick={() => void exportSavedBlueprint(saved)}
-                      >
-                        <Icon name={busy === `export-blueprint-${saved.id}` ? 'LoaderCircle' : 'Download'} size={14} className={busy === `export-blueprint-${saved.id}` ? 'animate-spin' : ''} />
-                        Export
-                      </button>
-                    </div>
-                  ))}
-                </div>
-              )}
-              {blueprintsState.error && (
-                <div className="rounded border border-danger/30 bg-danger/5 p-3 mt-3 text-xs text-danger">
-                  {blueprintsState.error}
-                </div>
-              )}
-            </div>
-
-            <div className="card p-5 xl:col-span-2">
-              <h3 className="font-semibold mb-1 flex items-center gap-2">
-                <Icon name="ScrollText" size={15} /> Import Base Blueprint
-              </h3>
-              <a className="btn-secondary inline-flex items-center gap-2 mb-3" href="https://dune.layout.tools/" target="_blank" rel="noopener noreferrer">
-                <Icon name="ExternalLink" size={15} /> Blueprint Designer
-              </a>
-              <p className="text-xs text-text-muted mb-4">
-                Import a DST blueprint or downloaded Live Map base layout into the connected Retail Solo save. DST retains the current save and verifies the result.
-              </p>
-              <label className="block text-[11px] uppercase tracking-wider text-text-dim mb-1">
-                Blueprint file (.json)
-              </label>
-              <input
-                key={blueprintInputKey}
-                type="file"
-                accept="application/json,.json"
-                disabled={!canMutateActiveProfile || gameRunning}
-                onChange={event => { void chooseBlueprintFile(event.target.files?.[0]) }}
-                className="w-full text-sm text-text-muted file:mr-3 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:bg-surface-2 file:text-text file:text-sm mb-1 disabled:opacity-50"
-              />
-              {blueprint && (
-                <div className="rounded border border-success/30 bg-success/5 p-3 mt-3 text-xs text-text-muted">
-                  <div className="font-medium text-text">{blueprint.name || 'Unnamed blueprint'}</div>
-                  <div>{blueprintFileName}</div>
-                  <div className="mt-1">
-                    {blueprint.instances.length} pieces · {blueprint.placeables.length} placeables · {blueprint.pentashields.length} pentashields
-                  </div>
-                </div>
-              )}
-              {blueprintError && (
-                <div className="rounded border border-danger/30 bg-danger/5 p-3 mt-3 text-xs text-danger">
-                  {blueprintError}
-                </div>
-              )}
-              <div className="rounded border border-warning/30 bg-warning/5 p-3 mt-4 text-xs text-text-muted">
-                Close Dune: Awakening fully before importing. Choose a DST blueprint or a downloaded Live Map base layout.
-              </div>
-              <button
-                className={`btn-primary w-full mt-4 justify-center ${SOLO_DISABLED_PRIMARY_CLASS}`}
-                disabled={!canMutateActiveProfile || gameRunning || !blueprint}
-                onClick={() => void importBlueprint()}
-              >
-                <Icon name={busy === 'import-blueprint' ? 'LoaderCircle' : 'Upload'} size={14} className={busy === 'import-blueprint' ? 'animate-spin' : ''} />
-                Import blueprint
-              </button>
-            </div>
-
-            <SoloCosmeticGrantCard
-              busy={busy === 'give-items'}
-              ownership={statusState.data?.cosmeticOwnership}
-              onBulkGrant={async (kind, label) => {
-                setBusy('give-items')
-                setNotice(null)
-                try {
-                  const result = await grantSoloUnlocks(kind, statusState.data?.profileToken ?? '')
-                  setNotice({ kind: 'ok', text: `${label}: ${result.submitted} tokens saved for next login; ${result.skipped} already saved or held.${result.remaining ? ` ${result.remaining} remain: log in to process tokens, exit, and grant again after freeing backpack slots.` : ''}${result.safetyBackup ? ` Previous save retained at ${result.safetyBackup}` : ''}` })
-                  await Promise.all([statusState.refresh(), runtimeState.refresh(), backupsState.refresh()])
-                } catch (error) {
-                  setNotice({ kind: 'err', text: error instanceof Error ? error.message : String(error) })
-                } finally { setBusy(null) }
-              }}
-              disabled={
-                !canMutateActiveProfile
-                || gameRunning
-                || !inspection?.inventories.some(inventory => inventory.kind === 'backpack')
-              }
-              onGrant={async (templateId, label, entry) => {
-                if (entry?.grant_method === 'character') {
-                  setBusy('give-items'); setNotice(null)
-                  try {
-                    await grantSoloReviewedCustomization(statusState.data?.profileToken ?? '', entry.customization_id || templateId)
-                    setNotice({kind:'ok',text:`${label} saved to this character.`})
-                    await Promise.all([statusState.refresh(), backupsState.refresh()])
-                  } catch (error) { setNotice({kind:'err',text:error instanceof Error ? error.message : String(error)}) }
-                  finally { setBusy(null) }
-                  return
-                }
-                const grant = buildSoloCosmeticGrant(templateId, inspection?.inventories ?? [])
-                await giveSoloItems(
-                  grant.items,
-                  label,
-                  grant.destination,
-                  'Solo backpack',
-                )
-              }}
-            />
-
-            <div className="grid grid-cols-1 xl:grid-cols-3 gap-3 xl:col-span-2">
-            {[
-              { id: 'ObservedCharacterSwatches', label: 'Character Swatches (311)' },
-              { id: 'ObservedGearAppearances', label: 'Gear Appearances (401)' },
-              { id: 'ObservedSchematicRecipes', label: 'Schematic Recipes (717)' },
-            ].map(choice => <button key={choice.id} className="btn-primary w-full flex-col gap-1 py-3 justify-center text-center whitespace-normal" disabled={!canMutateActiveProfile || gameRunning || !!busy}
-              onClick={async () => {
-                if (!window.confirm(`Grant the reviewed ${choice.label}? A safety backup will be created.${choice.id === 'ObservedSchematicRecipes' ? ' This saves crafting recipes directly, not inventory items. Existing recipe uses are preserved.' : ''}\n\n${COSMETIC_LICENSE_NOTICE}`)) return
-                setBusy('reviewed-customization')
-                setNotice(null)
-                try {
-                  await grantSoloReviewedCustomization(statusState.data?.profileToken ?? '', choice.id)
-                  setNotice({ kind: 'ok', text: `${choice.label} saved. ${choice.id === 'ObservedSchematicRecipes' ? 'Open the game and check your crafting recipes. Existing recipe uses were preserved.' : 'Open the game and select the appearance or swatch in the customization menu.'}` })
-                  await Promise.all([statusState.refresh(), backupsState.refresh()])
-                } catch (error) { setNotice({ kind: 'err', text: error instanceof Error ? error.message : String(error) }) }
-                finally { setBusy(null) }
-              }}>
-              Grant All {choice.label} (experimental)
-              <span className="block text-xs font-normal">{statusState.data?.cosmeticOwnership?.reviewedCounts?.[choice.id]
-                ? `${statusState.data.cosmeticOwnership.reviewedCounts[choice.id].owned}/${statusState.data.cosmeticOwnership.reviewedCounts[choice.id].total} owned · ${statusState.data.cosmeticOwnership.reviewedCounts[choice.id].remaining} remaining`
-                : 'Character counts unavailable'}</span>
-            </button>)}
-            </div>
-
-            <div className="card p-5 xl:col-span-2">
-              <h3 className="font-semibold mb-1">Max Augment Attributes</h3>
-              <p className="text-xs text-text-muted">
-                Matches DST’s Self-Hosted action: sets every non-zero numeric roll on carried augments to
-                the confirmed maximum while preserving zero and non-numeric entries. Developer Storage is excluded.
-              </p>
-              <div className="rounded border border-warning/30 bg-warning/5 p-3 mt-4 text-xs text-text-muted">
-                Close the game fully; DST retains the current save before writing. Relog after the action.
-              </div>
-              <button
-                className={`btn-primary w-full mt-4 justify-center ${SOLO_DISABLED_PRIMARY_CLASS}`}
-                disabled={!canMutateActiveProfile || gameRunning}
-                onClick={() => void maxAugmentAttributes()}
-              >
-                <Icon name={busy === 'max-augments' ? 'LoaderCircle' : 'Sparkles'} size={14} className={busy === 'max-augments' ? 'animate-spin' : ''} />
-                Max carried augment attributes
-              </button>
-            </div>
-          </div>
-
-          <div className="card p-5">
-            <h3 className="font-semibold mb-1">Give Package</h3>
-            <p className="text-xs text-text-muted mb-4">
-              Create, import, edit, delete, and grant the same saved packages used elsewhere in DST. Package management does not require Self-Hosted setup.
-            </p>
-            <GivePackageForm
-              busy={busy !== null}
-              giveDisabled={!canMutateActiveProfile || gameRunning}
-              targetLabel="selected Solo inventory"
-              showOverflow={false}
-              onGive={(items, packageName) => {
-                void giveSoloItems(
-                  buildSoloPackageGrant(items),
-                  `${packageName} package`,
-                )
-              }}
-            />
-          </div>
-        </div>
-      )}
-      {tab === 'progression' && (
-        <div className="space-y-4">
-          {activeProfileToken && selectionMatchesActive && <div>
-            <CodexOwnership key={activeProfileToken} profileToken={activeProfileToken}
-              grant={{ path: '/api/solo/codex/grant', body: { expectedProfileToken: activeProfileToken },
-                disabled: !canMutateActiveProfile || gameRunning, reason: 'Close Dune before granting codex fragments.' }}
-              path={`/api/solo/codex?profile=${encodeURIComponent(activeProfileToken)}`} />
-          </div>}
-          <SoloFactionProgression disabled={!canMutateActiveProfile || gameRunning || !!busy}
-            onRun={(faction, action, amount) => void runProgressionAction('faction', 'Solo faction change', token => setSoloFactionProgression(faction, action, amount, token))} />
-          <SoloCharacterXp disabled={!canMutateActiveProfile || gameRunning || !!busy}
-            currentXp={inspection?.progression.characterXp}
-            onRun={(action, amount) => void runProgressionAction('character-xp', 'Solo character XP change', token => setSoloCharacterXp(action, amount, token))} />
-          <div className="card p-5">
-            <h3 className="font-semibold mb-2">Solo diagnostics</h3>
-            <p className="text-sm text-text-muted mb-3">Export a read-only report of save integrity, specializations, journey conditions and progression unlock flags for support. Account IDs, character names, inventory and local paths are excluded. Close the game first, then review the downloaded report before sharing it.</p>
-            <button className="btn btn-secondary" disabled={!selectionMatchesActive || gameRunning || !!busy} onClick={async () => {
-              setBusy('diagnostics')
-              try {
-                const result = await exportSoloDiagnostics(activeProfileToken)
-                const url = URL.createObjectURL(new Blob([JSON.stringify(result.report, null, 2)], { type: 'application/json' }))
-                const link = document.createElement('a')
-                link.href = url
-                link.download = result.filename
-                link.click()
-                URL.revokeObjectURL(url)
-                setNotice({ kind: 'ok', text: 'Solo diagnostics exported. Your save was not changed.' })
-              } catch (error) {
-                setNotice({ kind: 'err', text: error instanceof Error ? error.message : String(error) })
-              } finally { setBusy(null) }
-            }}>Export Solo diagnostics</button>
-          </div>
-          <SoloSpecializationEditor
-            key={`${activeProfileToken}:${inspection?.progression.specializations.map(track => `${track.trackType}:${track.level}`).join(',')}`}
-            tracks={inspection?.progression.specializations ?? []}
-            legacyAdapter={status?.legacyAdapter}
-            disabled={!canMutateActiveProfile || gameRunning || !!busy}
-            onSet={(track, level) => void runProgressionAction('set-specialization', `Set ${track} to level ${level} (existing rewards stay unlocked; journey triggers are not replayed)`, token => setSoloSpecialization(track, level, token))}
-            onResetRewards={track => void runProgressionAction('reset-specialization-rewards', `Reset ${track} reward claims so they can be purchased again in-game. Keep its level and XP. Remove its claimed skill-point bonus from unspent points; respec first if needed. No journey objectives are completed by this action`, token => resetSoloSpecializationRewards(track, token))}
-          />
-          <div className="rounded-lg border border-warning/30 bg-warning/5 px-4 py-3 text-sm flex items-start gap-2">
-            <Icon name="ShieldAlert" size={15} className="text-warning mt-0.5 shrink-0" />
-            <span>
-              Retail Solo progression actions require the game to be fully closed. Each action creates its own retained pre-progression backup.
-            </span>
-          </div>
-          <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
-            <ProgressionActionCard
-              icon="Medal"
-              title="Max specializations"
-              description="Set all five tracks to level 100, grant all 205 rewards, and reconcile the 54 specialization skill points idempotently."
-              status={`${countMaxSoloSpecializations(inspection?.progression.specializations ?? [], status?.legacyAdapter ?? false)}/5 tracks at 100 · ${inspection?.progression.purchasedRewards ?? 0}/205 unlocked rewards`}
-              busy={busy === 'progression:specializations'}
-              disabled={!canMutateActiveProfile || gameRunning}
-              onRun={() => void runProgressionAction(
-                'specializations',
-                'Max all Solo specializations',
-                maxSoloSpecializations,
-              )}
-            />
-            <SoloJourneyCompletion disabled={!canMutateActiveProfile || gameRunning || !!busy}
-              busy={busy === 'progression:journey'} progression={inspection?.progression}
-              onRun={quest => void runProgressionAction('journey',
-                quest === 'npe' ? 'Complete Solo tutorial (NPE)' : 'Complete Solo main quest',
-                quest === 'npe' ? completeSoloNpe
-                  : quest === 'DA_MQ_FindTheFremen' ? completeSoloFindTheFremen
-                    : token => unlockSoloMainQuest(quest, token))} />
-            <div className="card p-5 flex flex-col">
-              <h2 className="font-semibold">Testing Stations</h2>
-              <p className="text-sm text-text-muted mt-1 mb-3">Unlock selectable difficulties by recording completion progress. Choose your difficulty in-game; faction requirements still apply. Existing higher progress is preserved. Close Dune before applying.</p>
-              <label htmlFor="solo-testing-station" className="text-sm">Station</label>
-              <select id="solo-testing-station" className={`${SOLO_INPUT_CLASS} mt-1 mb-3`} value={testingStation} onChange={event => setTestingStation(event.target.value)} disabled={!canMutateActiveProfile || gameRunning || !!busy}>
-                <option value="all">All six stations</option>
-                <option value="DA_Dgn_024_Darkness">Station 24 — Darkness</option>
-                <option value="DA_Dgn_089_Radiation">Station 89 — Radiation</option>
-                <option value="DA_Dgn_136_Fire">Station 136 — Fire</option>
-                <option value="DA_Dgn_152_Electric">Station 152 — Electric</option>
-                <option value="DA_Dgn_195_Poison">Station 195 — Poison</option>
-                <option value="DA_Dgn_Pit">The Quarry</option>
-              </select>
-              <button className={`btn-primary ${SOLO_DISABLED_PRIMARY_CLASS}`} disabled={!canMutateActiveProfile || gameRunning || !!busy} onClick={() => void runProgressionAction('testing-stations', 'Unlock Solo Testing Stations', token => unlockSoloTestingStations(testingStation, token))}>
-                {busy === 'progression:testing-stations' ? 'Applying...' : 'Unlock difficulties'}
-              </button>
-            </div>
-            <div className="card p-5 flex flex-col">
-              <h2 className="font-semibold">Unlock Trainers</h2>
-              <p className="text-sm text-text-muted mt-1 mb-3">Complete the selected trainer's contracts and apply their reward tags and skill-tree unlocks. Takes effect next launch.</p>
-              <label htmlFor="solo-trainer" className="text-sm">Trainer</label>
-              <select id="solo-trainer" className={`${SOLO_INPUT_CLASS} mt-1 mb-3`} value={trainerJob} onChange={event => setTrainerJob(event.target.value)} disabled={!canMutateActiveProfile || gameRunning || !!busy}>
-                <option value="Swordmaster">Swordmaster</option><option value="Trooper">Trooper</option><option value="Mentat">Mentat</option><option value="BeneGesserit">Bene Gesserit</option><option value="Planetologist">Planetologist</option>
-              </select>
-              <button className={`btn-primary ${SOLO_DISABLED_PRIMARY_CLASS}`} disabled={!canMutateActiveProfile || gameRunning || !!busy} onClick={() => void runProgressionAction('trainer', 'Unlock Solo trainer', token => unlockSoloTrainer(trainerJob, token))}>
-                {busy === 'progression:trainer' ? 'Applying...' : 'Unlock trainer'}
-              </button>
-            </div>
-            <ProgressionActionCard
-              icon="Sparkles"
-              title="Enable all skills"
-              description="Unlock all five trainers and raise 143 approved skills to value 7. Leave Bindu Sprint and Voice Ignore learnable, preserve unknown Solo keys, keep at least 20 unspent points, and raise Intel to 100."
-              status={`${inspection?.progression.skillsAtSeven ?? 0}/143 enabled · ${inspection?.progression.unspentSkillPoints ?? 0} unspent · ${inspection?.progression.intel ?? 0} Intel`}
-              busy={busy === 'progression:skills'}
-              disabled={!canMutateActiveProfile || gameRunning}
-              onRun={() => void runProgressionAction(
-                'skills',
-                'Enable all approved Solo skills',
-                enableSoloAllSkills,
-              )}
-            />
-            <div className="card p-5 flex flex-col">
-              <div className="w-9 h-9 rounded-lg bg-accent/10 border border-accent/25 flex items-center justify-center text-accent-bright mb-3">
-                <Icon name="Gauge" size={17} />
-              </div>
-              <h2 className="font-semibold">Progression points</h2>
-              <p className="text-sm text-text-muted mt-1">
-                Read the current balances and set exact unspent skill-point and Intel amounts without changing learned skills.
-              </p>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-4">
-                <label>
-                  <span className="text-xs text-text-muted">Unspent skill points</span>
-                  <input
-                    type="number"
-                    min={0}
-                    max={2_000_000_000}
-                    step={1}
-                    className={`${SOLO_INPUT_CLASS} mt-1`}
-                    value={skillPointsDraft}
-                    onChange={event => setSkillPointsDraft(Number(event.target.value))}
-                    disabled={!canMutateActiveProfile || gameRunning}
-                  />
-                </label>
-                <label>
-                  <span className="text-xs text-text-muted">Intel points</span>
-                  <input
-                    type="number"
-                    min={0}
-                    max={2_000_000_000}
-                    step={1}
-                    className={`${SOLO_INPUT_CLASS} mt-1`}
-                    value={intelDraft}
-                    onChange={event => setIntelDraft(Number(event.target.value))}
-                    disabled={!canMutateActiveProfile || gameRunning}
-                  />
-                </label>
-              </div>
-              <div className="rounded border border-border bg-surface-2/50 px-3 py-2 text-xs text-text-muted mt-4">
-                Current: {(inspection?.progression.unspentSkillPoints ?? 0).toLocaleString()} unspent · {(inspection?.progression.intel ?? 0).toLocaleString()} Intel
-              </div>
-              <button
-                className={`btn-primary w-full justify-center mt-4 ${SOLO_DISABLED_PRIMARY_CLASS}`}
-                disabled={
-                  !canMutateActiveProfile
-                  || gameRunning
-                  || (
-                    skillPointsDraft === (inspection?.progression.unspentSkillPoints ?? 0)
-                    && intelDraft === (inspection?.progression.intel ?? 0)
-                  )
-                }
-                onClick={() => void saveProgressionPoints()}
-              >
-                <Icon name={busy === 'progression:points' ? 'LoaderCircle' : 'Save'} size={14} className={busy === 'progression:points' ? 'animate-spin' : ''} />
-                {busy === 'progression:points' ? 'Saving...' : 'Set progression points'}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
     </>
   )
 }

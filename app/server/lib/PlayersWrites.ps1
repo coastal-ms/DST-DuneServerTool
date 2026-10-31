@@ -1372,7 +1372,7 @@ COMMIT;
 # for the chosen faction (or both). Offline-only — the game holds this state in
 # RAM while connected. $Faction = 'atreides' | 'harkonnen' | 'both'.
 function Invoke-DunePlayerResetFaction {
-    param([string]$Ip, [long]$AccountId, [string]$Faction, [bool]$Deep = $false)
+    param([string]$Ip, [long]$AccountId, [string]$Faction, [bool]$Deep = $false, [switch]$BuildOnly)
     if ($AccountId -le 0) { return @{ ok = $false; error = 'account_id is required.' } }
     $fl = ([string]$Faction).ToLowerInvariant()
     if ($fl -ne 'atreides' -and $fl -ne 'harkonnen' -and $fl -ne 'both') {
@@ -1443,6 +1443,12 @@ function Invoke-DunePlayerResetFaction {
     [void]$likes.Add("tag = 'DialogueFlags.IntroductionDone.MaasKharet'")
     [void]$likes.Add("tag = 'Contract.Tracking.FactionsKytheriaInvestigationCompleted'")
     $likesJoined = ($likes -join ' OR ')
+    if ($BuildOnly) {
+        # Name wildcards such as %Hark% must not remove Harko POI discoveries
+        # or character bonuses when composing the post-NPE reset.
+        $likesJoined = "($likesJoined) AND tag NOT LIKE 'Character.%' AND tag NOT LIKE 'Skills.%' AND tag NOT LIKE 'Exploration.%' AND tag NOT LIKE 'DialogueFlags.Caste.%' AND tag NOT LIKE 'DialogueFlags.Mentor.%'"
+    }
+
     # Reset ClimbTheRanks journey nodes to incomplete (NOT delete — deleting stops
     # the game re-offering them, so the recruiter quest can't be replayed). Also
     # clear reveal_condition_state — otherwise the STORY tab still renders every
@@ -1523,6 +1529,8 @@ SELECT
     }
     [void]$sb.AppendLine('COMMIT;')
 
+    if ($BuildOnly) { return @{ ok = $true; sql = $sb.ToString() } }
+
     $r = Invoke-DuneSqlQuery -Ip $Ip -Sql $sb.ToString() -ReadOnly $false -MaxRows 1 -TimeoutSec 120
     if (-not $r.ok) {
         Invoke-DuneSqlQuery -Ip $Ip -Sql 'ROLLBACK;' -ReadOnly $false -MaxRows 1 -TimeoutSec 5 | Out-Null
@@ -1584,7 +1592,13 @@ function Invoke-DunePlayerApplyProgressionPreset {
         if ($r.ok) { $completed++; $totalRecipes += [int]$r.recipes }
         else { $errs += "$node : $($r.error)" }
     }
-    $total = @($preset.nodes).Count
+    $contracts = @($preset.contracts | Where-Object { $_ })
+    if ($contracts.Count -gt 0) {
+        $contractResult = Invoke-DunePlayerCompleteContracts -Ip $Ip -AccountId $AccountId -ContractIds $contracts
+        if ($contractResult.ok) { $completed += $contracts.Count }
+        else { $errs += "Contracts: $($contractResult.error)" }
+    }
+    $total = @($preset.nodes).Count + $contracts.Count
     $ok = $errs.Count -eq 0
     $msg = "Applied preset '$PresetId' ($($preset.name)): completed $completed/$total journey node(s), granted $totalRecipes recipe(s)."
     if ($npeNodes -gt 0) { $msg += " Applied the complete $npeNodes-node NPE skip state." }
@@ -1592,6 +1606,7 @@ function Invoke-DunePlayerApplyProgressionPreset {
     return @{
         ok = $ok
         message = $msg
+        error = $(if ($ok) { $null } else { $errs -join '; ' })
         completed = $completed
         total = $total
         recipes = $totalRecipes
@@ -1791,7 +1806,7 @@ LIMIT 1;
 }
 
 function Invoke-DunePlayerWipeJourneyNodes {
-    param([string]$Ip, [long]$AccountId)
+    param([string]$Ip, [long]$AccountId, [switch]$KeepNpeCompleted)
     if ($AccountId -le 0) { return @{ ok = $false; error = 'account_id is required.' } }
 
     $off = Test-DunePlayerOfflineByAccount -Ip $Ip -AccountId $AccountId
@@ -1799,12 +1814,83 @@ function Invoke-DunePlayerWipeJourneyNodes {
     $pawnID = Get-DunePlayerPawnFromAccount -Ip $Ip -AccountId $AccountId
     if ($pawnID -le 0) { return @{ ok = $false; error = "no pawn for account $AccountId." } }
 
+    # Post-NPE mode never calls learned-skill, XP or point setters. Restore
+    # the captured skip-tutorial state in the SAME transaction as the story wipe.
+    $npeSql = ''
+    $factionSql = ''
+    $rewardSql = ''
+    $moveSql = ''
+    $noticeSql = ''
+    $expectedNodes = 0
+    $expectedTags = 0
+    $deleteJourneySql = "SELECT dune.delete_all_journey_story_nodes($AccountId::bigint);"
+    $verifyJourneyFilter = ''
+    $additionalStoryTags = ''
+    if ($KeepNpeCompleted) {
+        $nodes = @(Get-DuneNpeCompletionNodes)
+        if ($nodes.Count -eq 0) { return @{ ok = $false; error = 'NPE completion catalog is empty; story reset was not started.' } }
+        $cr = Invoke-DuneSqlQuery -Ip $Ip -Sql "SELECT id::text AS character_id FROM dune.player_state WHERE account_id=$AccountId::bigint;" -ReadOnly $true -MaxRows 2 -TimeoutSec 10
+        if (-not $cr.ok) { return @{ ok = $false; error = "resolve story reset character: $($cr.error)" } }
+        $characters = ConvertTo-DuneRowMaps -Result $cr
+        if ($characters.Count -ne 1) { return @{ ok = $false; error = 'Story reset requires exactly one active character.' } }
+        $characterId = [int64](ConvertTo-DuneInt $characters[0]['character_id'])
+        if ($characterId -le 0) { return @{ ok = $false; error = 'Story reset character id is invalid.' } }
+        # Faction onboarding/cinematic flags are story state, not allegiance or
+        # reputation. AoK flags drive Act 3/4 scenes. Preserve Character.* bonuses,
+        # background/mentor identity and exploration discoveries.
+        $additionalStoryTags = " OR tag LIKE 'DialogueFlags.Factions.%' OR tag ILIKE 'DialogueFlags.AoK.%'"
+        $deleteJourneySql = "DELETE FROM dune.journey_story_node WHERE character_id=$characterId::bigint AND story_node_id !~ '^DA_(ACH(_|$)|FQ_ClimbTheRanks($|\.))';"
+        $verifyJourneyFilter = " AND story_node_id !~ '^DA_(ACH(_|$)|FQ_ClimbTheRanks($|\.))'"
+        $factionReset = Invoke-DunePlayerResetFaction -Ip $Ip -AccountId $AccountId -Faction 'both' -BuildOnly
+        if (-not $factionReset.ok) { return $factionReset }
+        $factionSql = [regex]::Replace([string]$factionReset.sql, '(?s)^\s*BEGIN;|COMMIT;\s*$', '')
+        $resetCatalogPath = _Resolve-DuneCatalog 'post-npe-reset.json'
+        if (-not $resetCatalogPath) { return @{ ok = $false; error = 'Post-NPE reset catalog is missing; nothing was reset.' } }
+        $resetCatalog = Get-Content -LiteralPath $resetCatalogPath -Raw | ConvertFrom-Json
+        $destination = $resetCatalog.returnLocation
+        if ($destination.map -cne 'HaggaBasin' -or [int]$destination.dimensionIndex -ne 0 -or @($resetCatalog.resetResearchItemKeys).Count -eq 0) { return @{ ok = $false; error = 'Post-NPE return destination or research catalog is invalid.' } }
+        $partRead = Invoke-DuneSqlQuery -Ip $Ip -Sql "SELECT partition_id::text AS reset_partition FROM dune.world_partition WHERE dune.upgrade_map_name(map)='HaggaBasin' AND COALESCE(dimension_index,0)=0 AND NOT COALESCE(blocked,false);" -ReadOnly $true -MaxRows 2 -TimeoutSec 10
+        if (-not $partRead.ok) { return @{ ok = $false; error = "Read Hagga return partition: $($partRead.error)" } }
+        $parts = ConvertTo-DuneRowMaps -Result $partRead
+        if ($parts.Count -ne 1 -or [long]$parts[0]['reset_partition'] -le 0) { return @{ ok = $false; error = 'A unique available main Hagga partition is required before resetting.' } }
+        $part = [long]$parts[0]['reset_partition']
+        $coords = @($destination.x, $destination.y, $destination.z) | ForEach-Object { ([double]$_).ToString('R', [Globalization.CultureInfo]::InvariantCulture) }
+        $noticeSql = 'SET LOCAL client_min_messages = warning;'
+        $moveSql = "SELECT dune.admin_move_offline_player_to_partition((SELECT a.`"user`"::text FROM dune.accounts a WHERE a.id=$AccountId::bigint), $part::bigint, ROW($($coords[0])::float8,$($coords[1])::float8,$($coords[2])::float8)::dune.vector);"
+        $storyRecipes = ConvertTo-DunePgTextArray @($resetCatalog.resetResearchItemKeys)
+        $rewardSql = @"
+SELECT dune.delete_mnemonic_recall_lesson_all($AccountId::bigint);
+UPDATE dune.actors a
+SET properties=jsonb_set(a.properties, '{TechKnowledgePlayerComponent,m_TechKnowledge,m_TechKnowledgeData}',
+    COALESCE((SELECT jsonb_agg(e.value ORDER BY e.ordinality)
+      FROM jsonb_array_elements(a.properties #> '{TechKnowledgePlayerComponent,m_TechKnowledge,m_TechKnowledgeData}') WITH ORDINALITY e(value,ordinality)
+      WHERE NOT (e.value->>'ItemKey' = ANY($storyRecipes))), '[]'::jsonb), false)
+WHERE a.id=$pawnID::bigint AND jsonb_typeof(a.properties #> '{TechKnowledgePlayerComponent,m_TechKnowledge,m_TechKnowledgeData}')='array';
+UPDATE dune.fgl_entities fe
+SET components=jsonb_set(jsonb_set(fe.components,
+    '{FSpiceAddictionComponent,1,SystemStatus}', '"AddictionDisabled"'::jsonb, false),
+    '{FSpiceAddictionComponent,1,SpiceVisionEnabledStatus}', '"Disabled"'::jsonb, false)
+WHERE fe.entity_id IN (SELECT entity_id FROM dune.actor_fgl_entities WHERE actor_id=$pawnID::bigint AND slot_name='DuneCharacter')
+  AND jsonb_typeof(fe.components #> '{FSpiceAddictionComponent,1}')='object';
+"@
+        $nodeArr = ConvertTo-DunePgTextArray $nodes
+        $npeSql = @"
+INSERT INTO dune.player_tags (character_id, tag) VALUES ($characterId::bigint, 'NPE.HasCompletedNPE');
+INSERT INTO dune.journey_story_node (character_id, story_node_id, has_pending_reward, complete_condition_state, reveal_condition_state, fail_condition_state, metadata_state, reset_group)
+SELECT $characterId::bigint, unnest($nodeArr), false, 'true'::jsonb, 'true'::jsonb, '{}'::jsonb, '{}'::jsonb, 'Default'::dune.JourneyStoryResetGroup;
+"@
+        $expectedNodes = $nodes.Count
+        $expectedTags = 1
+    }
+
     # This is a full story restart, not merely a journey-row delete. Contract
     # progress also lives in player tags and ContractItem inventory rows; leaving
     # either behind caused a wiped character to retain completed/active quests.
     $sql = @"
 BEGIN;
-SELECT dune.delete_all_journey_story_nodes($AccountId::bigint);
+$noticeSql
+$factionSql
+$deleteJourneySql
 DELETE FROM dune.player_tags
 WHERE character_id IN (SELECT id FROM dune.player_state WHERE account_id=$AccountId::bigint)
   AND (
@@ -1814,6 +1900,7 @@ WHERE character_id IN (SELECT id FROM dune.player_state WHERE account_id=$Accoun
       OR tag LIKE 'BigMoments.%'
       OR tag LIKE 'DialogueFlags.Contracts.%'
       OR tag LIKE 'NPE.%'
+      $additionalStoryTags
   );
 DELETE FROM dune.items i
 USING dune.inventories inv
@@ -1830,15 +1917,22 @@ SET properties=jsonb_set(
 )
 WHERE id=$pawnID::bigint
   AND properties ? 'ContractsCoordinatorComponent';
+$rewardSql
+$npeSql
+$moveSql
 COMMIT;
 "@
-    $r = Invoke-DuneSqlQuery -Ip $Ip -Sql $sql -ReadOnly $false -MaxRows 1 -TimeoutSec 120
+    if ($KeepNpeCompleted) {
+        $stillOffline = Test-DunePlayerOfflineByAccount -Ip $Ip -AccountId $AccountId
+        if (-not $stillOffline.ok) { return @{ ok = $false; error = "Story reset cancelled before any write: $($stillOffline.reason)" } }
+    }
+    $r = Invoke-DuneSqlQuery -Ip $Ip -Sql $sql -ReadOnly $false -MaxRows 1 -TimeoutSec 120 -Bulk:$KeepNpeCompleted
     if (-not $r.ok) { return @{ ok = $false; error = "wipe journey restart: $($r.error)" } }
 
     $verifySql = @"
 SELECT
   (SELECT COUNT(*) FROM dune.journey_story_node
-   WHERE character_id IN (SELECT id FROM dune.player_state WHERE account_id=$AccountId::bigint)) AS journey_rows,
+   WHERE character_id IN (SELECT id FROM dune.player_state WHERE account_id=$AccountId::bigint)$verifyJourneyFilter) AS journey_rows,
   (SELECT COUNT(*) FROM dune.player_tags
    WHERE character_id IN (SELECT id FROM dune.player_state WHERE account_id=$AccountId::bigint)
      AND (
@@ -1848,6 +1942,7 @@ SELECT
          OR tag LIKE 'BigMoments.%'
          OR tag LIKE 'DialogueFlags.Contracts.%'
          OR tag LIKE 'NPE.%'
+      $additionalStoryTags
      )) AS story_tags,
   (SELECT COUNT(*) FROM dune.items i JOIN dune.inventories inv ON inv.id=i.inventory_id
    WHERE inv.actor_id=$pawnID::bigint AND inv.inventory_type=29 AND i.template_id='ContractItem') AS contract_items;
@@ -1859,10 +1954,23 @@ SELECT
     $journeyRows = [int64](ConvertTo-DuneInt $rows[0]['journey_rows'])
     $storyTags = [int64](ConvertTo-DuneInt $rows[0]['story_tags'])
     $contractItems = [int64](ConvertTo-DuneInt $rows[0]['contract_items'])
-    if ($journeyRows -ne 0 -or $storyTags -ne 0 -or $contractItems -ne 0) {
+    if ($journeyRows -ne $expectedNodes -or $storyTags -ne $expectedTags -or $contractItems -ne 0) {
         return @{
             ok = $false
             error = "Journey wipe incomplete: $journeyRows journey row(s), $storyTags story tag(s), and $contractItems contract item(s) remain."
+        }
+    }
+    if ($KeepNpeCompleted) {
+        return @{
+            ok = $true
+            message = 'Reset story, contracts, faction progression, Codex, Find the Fremen rewards and Base Reconstruction Tool research to the skipped-tutorial starting point. NPE remains completed. Learned skills, skill points, tech points, other research, level, inventory and loadout were preserved. Returned to Griffin''s Reach in South Hagga. Check Across the Gap on login.'
+            npe_marked = $true
+            npe_nodes = $expectedNodes
+            skills_preserved = $true
+            point_balances_preserved = $true
+            faction_reset = $true
+            codex_reset = $true
+            fremen_rewards_reset = $true
         }
     }
     return @{

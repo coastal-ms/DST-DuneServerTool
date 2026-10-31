@@ -1,0 +1,25 @@
+{
+  "schemaVersion": 1,
+  "returnLocation": {
+    "name": "Griffin\u2019s Reach",
+    "map": "HaggaBasin",
+    "dimensionIndex": 0,
+    "x": 22455.206784322574,
+    "y": 229614.55046481028,
+    "z": 8503.635170637295
+  },
+  "resetResearchItemKeys": [
+    "RCP_LeakyStillsuit_Top_Recipe",
+    "RCP_LeakyStillsuit_Boots_Recipe",
+    "RCP_LeakyStillsuit_Gloves_Recipe",
+    "RCP_LeakyStillsuit_Mask_Recipe",
+    "DA_GRP_CrudeStillsuit",
+    "RCP_ChoamStaticCompactorRecipe",
+    "RCP_Crysknife_Recipe",
+    "RCP_T4_Structure_Thumper1_Recipe",
+    "RCP_StilltentRecipe",
+    "RCP_BaseBackupTool_Recipe",
+    "BLD_Deathstill_Patent",
+    "BLD_Fremen_Deathstill_Patent"
+  ]
+}

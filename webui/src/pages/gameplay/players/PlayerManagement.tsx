@@ -3,20 +3,22 @@ import { TeleportLocations } from './TeleportLocations'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { usePortalAccess } from '../../../auth/portalAccess'
 import { Icon } from '../../../components/Icon'
+import { CHARACTER_HOMES, CHARACTER_ITEM_VIEWS, CHARACTER_PROGRESSION_VIEWS, CharacterHomeNavigation, CharacterViewNavigation, type CharacterHome } from '../../../components/CharacterHomeNavigation'
+import { characterToolDestinations } from '../../../components/CharacterToolSearch'
 import { mapLabel } from '../../../util/mapLabel'
 import { ActionsSection, InventorySection, SECTION_COMPONENTS, getPlayerActionTools, type SectionId, type SectionProps } from './sections'
 import './playerManagement.css'
 import './playersDesk.css'
 
-export type PlayerHome = 'Overview' | 'Items' | 'Progression' | 'Activity' | 'Advanced' | 'Teleport Locations'
+export type PlayerHome = CharacterHome | 'Teleport Locations'
 export function playerToolHome(group: string, id: string): PlayerHome {
   if (group === 'Items' || group === 'Vehicle') return 'Items'
   if (group === 'Progression') return 'Progression'
   if (group === 'Currency' || id === 'rename') return 'Overview'
   return 'Advanced'
 }
-const homes: PlayerHome[] = ['Overview', 'Items', 'Progression', 'Activity', 'Advanced', 'Teleport Locations']
-const homeIcons = { Overview: 'User', Items: 'Backpack', Progression: 'Sparkles', Activity: 'History', Advanced: 'SlidersHorizontal', 'Teleport Locations': 'MapPin' }
+const homeOptions = [...CHARACTER_HOMES, { id: 'Teleport Locations' as const, label: 'Teleport Locations', icon: 'MapPin' }]
+const homeIcons = Object.fromEntries(homeOptions.map(item => [item.id, item.icon])) as Record<PlayerHome, string>
 const legacy: Record<SectionId, [PlayerHome, string]> = {
   stats: ['Overview', 'Snapshot'], manage: ['Items', 'Give & repair'], inventory: ['Items', 'Character Inventory'],
   specs: ['Progression', 'Specializations'], journey: ['Progression', 'Journey'], landsraad: ['Progression', 'Landsraad'],
@@ -45,29 +47,24 @@ export function PlayerManagement(props: SectionProps & { initialSection?: Sectio
     setTool(null); setQuery(''); setFeedback(null); setWorking(null)
   }, [props.player.id])
   useEffect(() => {
-    if (!feedback || feedback.kind === 'err' || working) return
+    if (!feedback || feedback.kind === 'err' || working || feedback.message.includes('\n')) return
     const timer = window.setTimeout(() => setFeedback(null), 5000)
     return () => window.clearTimeout(timer)
   }, [feedback, working])
   const tools = useMemo(() => getPlayerActionTools(isPlayer), [isPlayer])
   const views: Record<PlayerHome, string[]> = {
     Overview: ['Snapshot', 'Currency & identity'],
-    Items: ['Character Inventory', 'Storage containers', 'Give & repair', 'Appearance', 'Blueprints', ...(tools.some(item => item.group === 'Vehicle') ? ['Vehicles'] : []), 'Bank'],
-    Progression: ['Specializations', 'Journey', 'Unlocks & rewards', ...(!isPlayer ? ['Landsraad'] : [])],
+    Items: [CHARACTER_ITEM_VIEWS[0], 'Storage containers', ...CHARACTER_ITEM_VIEWS.slice(1, 4), ...(tools.some(item => item.group === 'Vehicle') ? [CHARACTER_ITEM_VIEWS[4]] : []), 'Bank'],
+    Progression: [...CHARACTER_PROGRESSION_VIEWS, ...(!isPlayer ? ['Landsraad'] : [])],
     Activity: ['History'], Advanced: ['Character tags', 'Session controls', 'Identity & resets', 'All tools'],
     'Teleport Locations': ['Teleport Locations'],
   }
   const destinations = [
+    ...characterToolDestinations('self-host').filter(item => item.view !== 'Vehicles' || tools.some(tool => tool.group === 'Vehicle')),
     { label: 'Teleport Locations', home: 'Teleport Locations' as const, view: 'Teleport Locations', keywords: 'teleport tp bookmark private shared location' },
-    { label: 'Import Blueprint', home: 'Items' as const, view: 'Blueprints', keywords: 'blueprint import base layout json solido' },
     { label: 'Bank', home: 'Items' as const, view: 'Bank', keywords: 'bank storage' },
     { label: 'Storage containers', home: 'Items' as const, view: 'Storage containers', keywords: 'inventory chests bases' },
-    { label: 'Character Inventory', home: 'Items' as const, view: 'Character Inventory', keywords: 'backpack inventory bag equipment reserve recover restore durability stack water ammunition emotes contract items' },
-    { label: 'Specializations', home: 'Progression' as const, view: 'Specializations', keywords: 'specs levels skills rewards' },
-    { label: 'Journey', home: 'Progression' as const, view: 'Journey', keywords: 'quests objectives story chapters' },
     ...(!isPlayer ? [{ label: 'Landsraad', home: 'Progression' as const, view: 'Landsraad', keywords: 'house contributions' }] : []),
-    { label: 'Character tags', home: 'Advanced' as const, view: 'Character tags', keywords: 'flags raw tags' },
-    { label: 'History', home: 'Activity' as const, view: 'History', keywords: 'events activity log' },
   ]
   const words = query.trim().toLowerCase().split(/\s+/).filter(Boolean)
   const matches = (text: string) => words.every(word => text.toLowerCase().includes(word))
@@ -83,14 +80,15 @@ export function PlayerManagement(props: SectionProps & { initialSection?: Sectio
   }
   function openTool(id: string) {
     const selected = tools.find(item => item.id === id)
-    if (selected) navigate(playerToolHome(selected.group, selected.id), undefined, id)
+    if (selected) navigate(playerToolHome(selected.group, selected.id), selected.group === 'Progression' ? 'Unlocks & rewards' : appearance.has(id) ? 'Appearance' : selected.group === 'Vehicle' ? 'Vehicles' : selected.group === 'Items' ? 'Give & repair' : undefined, id)
   }
   const selectedTool = tools.find(item => item.id === tool)
+  const inlineTools = view === 'Unlocks & rewards' || (home === 'Items' && ['Give & repair','Appearance','Vehicles'].includes(view))
   const shared = { ...props, onOpenTool: openTool,
     onWorking: (label: string | null) => { if (currentPlayer.current === props.player.id) setWorking(label) },
     flash: (message: string, kind: 'ok' | 'err' | 'info' = 'ok') => { if (currentPlayer.current === props.player.id) setFeedback({ message, kind }) } }
   let body
-  if (tool && selectedTool) body = <>
+  if (tool && selectedTool && !inlineTools) body = <>
     <div className="player-tool-heading"><h3>{selectedTool.label}</h3><button className="btn-secondary" onClick={() => navigate(home)}>Back to {home.toLowerCase()}</button></div>
     <ActionsSection key={`${props.player.id}:${tool}`} {...shared} actionIds={[tool]} initialAction={tool} />
   </>
@@ -118,7 +116,15 @@ export function PlayerManagement(props: SectionProps & { initialSection?: Sectio
         if (view === 'Session controls') return item.group === 'Live'
         return (item.group === 'Identity' && item.id !== 'rename') || item.group === 'Danger'
       })
-      body = <div className="player-tool-list">{list.map(item => <button key={item.id} onClick={() => openTool(item.id)} className="player-tool-choice">
+      const completionOrder = ['apply-progression-preset', 'complete-contract', 'codex', 'complete-tutorials']
+      const factionIds = ['progression-unlock', 'give-faction-rep', 'set-faction-tier', 'reset-faction']
+      body = view === 'Unlocks & rewards' ? <div className="space-y-3">
+        <ActionsSection key={`${props.player.id}:unlocks`} {...shared} actionIds={list.filter(item => !factionIds.includes(item.id) && item.id !== 'unlock-trainers').map(item => item.id).sort((a, b) => (completionOrder.includes(a) ? completionOrder.indexOf(a) : 99) - (completionOrder.includes(b) ? completionOrder.indexOf(b) : 99))} initialAction={tool ?? undefined} />
+        <details className="card p-3" open={tool && factionIds.includes(tool) ? true : undefined}>
+          <summary className="cursor-pointer font-medium min-h-10">Faction Progression Unlocks</summary>
+          <div className="mt-3"><ActionsSection {...shared} toolsLabel="Faction progression tools" actionIds={factionIds} initialAction={tool && factionIds.includes(tool) ? tool : 'progression-unlock'} /></div>
+        </details>
+      </div> : inlineTools ? <ActionsSection key={`${props.player.id}:${view}`} {...shared} actionIds={list.map(item => item.id)} initialAction={tool ?? undefined} /> : <div className="player-tool-list">{list.map(item => <button key={item.id} onClick={() => openTool(item.id)} className="player-tool-choice">
         <Icon name={homeIcons[playerToolHome(item.group, item.id)]} size={20} className="player-tool-icon" />
         <span><strong>{item.label}</strong>{item.note && <small>{item.note}</small>}</span>
         <span className="player-tool-requirement">{item.onlineOnly ? 'Online required' : item.offlineOnly ? 'Offline required' : 'Open'}<Icon name="ChevronRight" size={16} /></span>
@@ -140,8 +146,8 @@ export function PlayerManagement(props: SectionProps & { initialSection?: Sectio
       {destinations.filter(item => matches(`${item.label} ${item.keywords}`)).map(item => <button key={item.label} onClick={() => navigate(item.home, item.view)}><span>{item.label}</span><small>{item.home}</small></button>)}
       {!tools.some(item => matches(`${item.label} ${item.group} ${item.note} ${searches[item.id] ?? ''}`)) && !destinations.some(item => matches(`${item.label} ${item.keywords}`)) && <p>No matching tools.</p>}
     </div>}
-    <nav className="player-home-nav" aria-label="Character sections">{homes.map(item => <button key={item} aria-pressed={home === item} onClick={() => navigate(item)}><Icon name={homeIcons[item]} size={17} />{item}</button>)}</nav>
-    {!tool && views[home].length > 1 && <nav className="player-view-nav" aria-label={`${home} views`}>{views[home].map(item => <button key={item} aria-pressed={view === item} onClick={() => navigate(home, item)}>{item}</button>)}</nav>}
+    <CharacterHomeNavigation options={homeOptions} value={home} onChange={item => navigate(item)} className="player-home-nav" buttonClassName="" />
+    {(!tool || inlineTools) && views[home].length > 1 && <CharacterViewNavigation views={views[home]} value={view} onChange={item => navigate(home, item)} className="player-view-nav" buttonClassName="" ariaLabel={`${home} views`} />}
     <div className="player-management-content" key={props.player.id}>{body}</div>
     {(working || feedback) && <div className="player-operation-feedback" data-kind={working ? 'info' : feedback?.kind} role={feedback?.kind === 'err' && !working ? 'alert' : 'status'}>
       <Icon name={working ? 'Loader2' : feedback?.kind === 'err' ? 'AlertCircle' : feedback?.kind === 'info' ? 'Info' : 'CheckCircle2'} size={18} className={working ? 'animate-spin motion-reduce:animate-none' : ''} />

@@ -1,3 +1,4 @@
+import { PlayerGameServerCard, type PlayerServerStatus } from '../components/PlayerGameServerCard'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { api } from '../api/client'
 import { getPlayers, type Player } from '../api/gameplay'
@@ -7,6 +8,7 @@ import { PlayerManagement } from './gameplay/players/PlayerManagement'
 import { WickMaps } from './WickMaps'
 import { MapLiveState } from './workspaces/MapLiveState'
 import { DataState } from '../components/platform/DataState'
+import './playerPortal.css'
 
 const MAPS = [
   { key: 'deepdesert', label: 'Deep Desert' },
@@ -20,6 +22,7 @@ export default function PlayerPortal() {
   const [mapView, setMapView] = useState<'live' | 'reference'>('live')
   const [player, setPlayer] = useState<Player | null>(null)
   const [loading, setLoading] = useState(true)
+  const [serverStatus, setServerStatus] = useState<PlayerServerStatus | null>(null)
   const [state, setState] = useState('Checking')
   const [error, setError] = useState('')
   const [message, setMessage] = useState('')
@@ -29,10 +32,11 @@ export default function PlayerPortal() {
   const [mapStates, setMapStates] = useState<Record<string, string>>({})
   const load = useCallback(async () => {
     const results = await Promise.allSettled([
-      api<{ state: string; available: boolean }>('/api/player-portal/status'),
+      api<PlayerServerStatus>('/api/player-portal/status'),
       getPlayers(),
     ])
     const status = results[0]
+    setServerStatus(status.status === 'fulfilled' ? status.value : {available:false,state:'unavailable'})
     setState(status.status === 'fulfilled' && status.value.available ? status.value.state : 'Unavailable')
     const character = results[1]
     if (character.status === 'fulfilled') {
@@ -70,7 +74,7 @@ export default function PlayerPortal() {
     catch (e) { setMessage(e instanceof Error ? e.message : 'Map warming failed.') }
     finally { setWarming('') }
   }
-  return <main className="h-dvh min-h-0 min-w-0 overflow-y-auto p-4">
+  return <main className="player-portal h-dvh min-h-0 min-w-0 overflow-y-auto p-4">
     <div className="mx-auto w-full min-w-0 max-w-screen-2xl space-y-4">
     <header className="card p-4 flex flex-wrap items-center gap-3">
       <h1 className="text-xl font-semibold flex-1">Player Portal</h1>
@@ -78,6 +82,7 @@ export default function PlayerPortal() {
       <button className="btn-secondary" onClick={refresh}>Refresh</button>
       <button className="btn-secondary" onClick={() => { void auth?.logout() }}>Sign out</button>
     </header>
+    <PlayerGameServerCard status={serverStatus} />
     <nav className="flex gap-2" aria-label="Player portal">
       <button className="btn-secondary" aria-pressed={view === 'character'} onClick={() => setView('character')}>My character</button>
       <button className="btn-secondary" aria-pressed={view === 'map'} onClick={() => setView('map')}>Map</button>

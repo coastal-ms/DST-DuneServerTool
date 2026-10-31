@@ -15,16 +15,25 @@ const catalog: CosmeticEntry[] = [
 afterEach(cleanup)
 
 describe('SoloCosmeticGrantCard', () => {
+  it('reports the entire Solo selection to the completion popup',async()=>{
+    const user=userEvent.setup(),summary=vi.fn()
+    render(<SoloCosmeticGrantCard busy={false} disabled={false} loadCatalog={async()=>catalog} onGrant={vi.fn().mockResolvedValue(true)} onGrantSummary={summary} />)
+    await user.selectOptions(await screen.findByRole('listbox'),catalog.map(entry=>entry.template))
+    await user.click(screen.getByRole('button',{name:'Grant selected (2)'}))
+    await waitFor(()=>expect(summary).toHaveBeenCalledTimes(1))
+    expect(summary.mock.calls[0][0].message).toContain('2/2 selected grant requests submitted.')
+    for(const entry of catalog)expect(summary.mock.calls[0][0].message).toContain(`${entry.name}: Submitted`)
+  })
   it('finds individual batch appearances by name and forwards their character grant method', async () => {
     const user = userEvent.setup(), onGrant = vi.fn(async () => {})
     const entry: CosmeticEntry = {template:'appearance:B1C3_Shaman_Raider_Top',name:'Habiliments of the Hidden Hand Top',group:'Gear Appearances',grant_method:'character',customization_id:'appearance:B1C3_Shaman_Raider_Top'}
     render(<SoloCosmeticGrantCard busy={false} disabled={false} loadCatalog={async () => [entry,...catalog]} onGrant={onGrant} />)
-    await screen.findByRole('combobox')
+    await screen.findByRole('listbox')
     await user.type(screen.getByRole('textbox'),'hidden hand')
-    await user.selectOptions(screen.getByRole('combobox'),entry.template)
+    await user.selectOptions(screen.getByRole('listbox'),entry.template)
     expect(screen.getByText(/Saves this appearance directly/)).toBeInTheDocument()
     expect(screen.queryByText(/another token/)).not.toBeInTheDocument()
-    await user.click(screen.getByRole('button',{name:'Grant unlock'}))
+    await user.click(screen.getByRole('button',{name:/Grant selected/}))
     expect(onGrant).toHaveBeenCalledWith(entry.template,entry.name,entry)
   })
 
@@ -43,14 +52,14 @@ describe('SoloCosmeticGrantCard', () => {
     await user.click(await screen.findByRole('button', { name: 'All Building Sets (1 missing)' }))
     expect(onBulkGrant).toHaveBeenCalledWith('building-sets', 'All Building Sets')
     expect(screen.getByRole('button', { name: 'All Dyes (0 missing)' })).toBeDisabled()
-    await user.selectOptions(screen.getByRole('combobox'), 'ChoamSet')
-    expect(screen.getByRole('button', { name: 'Grant unlock' })).toBeEnabled()
-    expect(screen.getByText(/Unlock record saved./)).toBeInTheDocument()
-    await user.selectOptions(screen.getByRole('combobox'), 'Dye')
-    expect(screen.getByRole('button', { name: 'Grant unlock' })).toBeEnabled()
+    await user.selectOptions(screen.getByRole('listbox'), 'ChoamSet')
+    expect(screen.getByRole('button', { name: /Grant selected/ })).toBeEnabled()
+    expect(screen.getByText(/Unlock record saved\. You can/)).toBeInTheDocument()
+    await user.selectOptions(screen.getByRole('listbox'), 'Dye')
+    expect(screen.getByRole('button', { name: /Grant selected/ })).toBeEnabled()
     expect(screen.getByText(/Unlock token already held in inventory/)).toBeInTheDocument()
-    await user.selectOptions(screen.getByRole('combobox'), 'Developer_Storage')
-    expect(screen.getByRole('button', { name: 'Grant unlock' })).toBeEnabled()
+    await user.selectOptions(screen.getByRole('listbox'), 'Developer_Storage')
+    expect(screen.getByRole('button', { name: /Grant selected/ })).toBeEnabled()
   })
 
   it('grants a selected token even when the same token is already held', async () => {
@@ -60,8 +69,8 @@ describe('SoloCosmeticGrantCard', () => {
       loadCatalog={async () => catalog}
       ownership={{ available: true, owned: ['DesertSwatch'], unlocked: [], pending: ['DesertSwatch'], error: '' }}
       onGrant={onGrant} />)
-    await user.selectOptions(await screen.findByRole('combobox'), 'DesertSwatch')
-    await user.click(screen.getByRole('button', { name: 'Grant unlock' }))
+    await user.selectOptions(await screen.findByRole('listbox'), 'DesertSwatch')
+    await user.click(screen.getByRole('button', { name: /Grant selected/ }))
     expect(onGrant).toHaveBeenCalledWith('DesertSwatch', 'Desert Dye')
   })
 
@@ -73,8 +82,8 @@ describe('SoloCosmeticGrantCard', () => {
       loadCatalog={async () => [{ template, name: 'Atreides Warship Carving', group: 'Building Sets - Decor' }]}
       ownership={{ available: true, owned: [template], unlocked: [template], pending: [], error: '' }}
       onGrant={onGrant} />)
-    await user.selectOptions(await screen.findByRole('combobox'), template)
-    await user.click(screen.getByRole('button', { name: 'Grant unlock' }))
+    await user.selectOptions(await screen.findByRole('listbox'), template)
+    await user.click(screen.getByRole('button', { name: /Grant selected/ }))
     expect(onGrant).toHaveBeenCalledWith(template, 'Atreides Warship Carving')
   })
 
@@ -96,9 +105,9 @@ describe('SoloCosmeticGrantCard', () => {
       />,
     )
 
-    const picker = await screen.findByRole('combobox')
+    const picker = await screen.findByRole('listbox')
     const search = screen.getByRole('textbox')
-    const grant = screen.getByRole('button', { name: 'Grant unlock' })
+    const grant = screen.getByRole('button', { name: /Grant selected/ })
 
     await user.selectOptions(picker, 'ScoutSetVariant')
     await user.click(grant)

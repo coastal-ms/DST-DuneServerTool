@@ -56,3 +56,10 @@ export async function pickLocalFolder(options: {
   )
   return result.cancelled ? null : result.path
 }
+
+export async function pickLocalFile(options: { initialPath?: string; description: string; filter?: string }): Promise<string | null> {
+  const result = await api<{ ok: boolean; cancelled: boolean; path: string }>('/api/browse-path', {
+    method: 'POST', body: JSON.stringify({ mode: 'file', current: options.initialPath ?? '', title: options.description, filter: options.filter ?? 'Solo backups (*.db)|*.db' }),
+  })
+  return result.cancelled ? null : result.path
+}

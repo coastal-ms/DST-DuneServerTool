@@ -188,7 +188,24 @@ function Invoke-DunePlayerTeleport {
     $b=@($bookmarks | Where-Object { $(if($Scope -eq 'shared'){$_.key}else{$_.id}) -ceq $Id })
     if($b.Count -ne 1){throw 'Location not found.'}; $b=$b[0]
     if($Target.map -ine $b.map -or $Target.partition -ne $b.partition -or $Target.dimension -ne $b.dimension){throw 'Travel to the destination map first.'}
-    if($Scope -eq 'private' -and $b.world -cne (Get-DunePlayerTeleportWorld -Ip $Ip -Target $Target)){throw 'The map layout changed. Delete and save this private location again.'}
+    if ($Scope -eq 'private') {
+        $currentWorld = Get-DunePlayerTeleportWorld -Ip $Ip -Target $Target
+        # Coriolis records are game-written output, not a destination revision.
+        # Hagga's protected locations survive that rollover. Keep their original
+        # coordinates and use the same safe-landing command as shared teleports.
+        # For other maps, compare the local map/partition layout, not the farm
+        # seed, which can change independently when another map loads.
+        $savedSeeds = @(([string]$b.world) -split '\|')
+        $currentSeeds = @($currentWorld -split '\|')
+        if ($savedSeeds.Count -ne 3 -or $currentSeeds.Count -ne 3 -or
+            [string]$b.world -notmatch '^\d+\|\d+\|\d+$') {
+            throw 'The saved map layout could not be verified. Save this private location again.'
+        }
+        if ($Target.map -ine 'HaggaBasin' -and
+            ($savedSeeds[1] -cne $currentSeeds[1] -or $savedSeeds[2] -cne $currentSeeds[2])) {
+            throw 'The map layout changed. Delete and save this private location again.'
+        }
+    }
     $key=Get-DuneChatCooldownKey -FromId $Target.funcom -Verb 'tp'
     $seconds=[math]::Max(1,[int]$settings.commands.tp.cooldownSeconds)
     $cool=Test-DuneChatCooldown -Cooldowns $settings.cooldowns -Key $key -CooldownSeconds $seconds -Now ([datetime]::UtcNow)

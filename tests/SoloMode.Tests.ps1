@@ -1085,6 +1085,8 @@ Describe 'Solo Mode write gates and settings backups' {
             -Confirm 'COMPLETE FIND THE FREMEN' -ExpectedConfirm 'COMPLETE FIND THE FREMEN'
         $npe = Invoke-DuneSoloProgressionAction -Action 'complete-npe' `
             -Confirm 'COMPLETE SOLO NPE' -ExpectedConfirm 'COMPLETE SOLO NPE'
+        $reset = Invoke-DuneSoloProgressionAction -Action 'reset-post-npe' `
+            -Confirm 'RESET SOLO POST NPE' -ExpectedConfirm 'RESET SOLO POST NPE'
         $skills = Invoke-DuneSoloProgressionAction -Action 'enable-skills' `
             -Confirm 'ENABLE SOLO SKILLS' -ExpectedConfirm 'ENABLE SOLO SKILLS'
         $points = Set-DuneSoloProgressionPoints -SkillPoints 321 -Intel 654 `
@@ -1095,7 +1097,8 @@ Describe 'Solo Mode write gates and settings backups' {
         $npe.ok | Should -BeTrue
         $skills.ok | Should -BeTrue
         $points.ok | Should -BeTrue
-        Assert-MockCalled Invoke-DuneSoloHelper -Times 5 -ParameterFilter {
+        $reset.ok | Should -BeTrue
+        Assert-MockCalled Invoke-DuneSoloHelper -Times 6 -ParameterFilter {
             $Arguments.input -eq $layout.db -and
             $Arguments['safety-backup'] -like '*pre-progression*' -and
             $Arguments.adapter -like '*solo-retail-v1.json'

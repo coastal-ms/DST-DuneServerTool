@@ -101,6 +101,7 @@ function _Load-DuneProgressionPresetCatalog {
                 description = [string]$entry.description
                 node_count  = [int]$entry.node_count
                 nodes       = @($entry.nodes)
+                contracts   = @($entry.contracts | Where-Object { $_ })
             }
         }
         $script:DuneProgressionPresetCatalog = $list
@@ -915,21 +916,25 @@ $script:DuneMainQuestOrder = @(
     'DA_MQ_FindTheFremen',
     'DA_MQ_AssassinsHandbook',
     'DA_MQ_TheGreatConvention',
-    'DA_MQ_TheGreatConventionPt2'
+    'DA_MQ_TheGreatConventionPt2',
+    'DA_MQ_TheGreatConventionPt3',
+    'DA_DLC_LostHarvest'
 )
 $script:DuneMainQuestLabels = @{
     DA_MQ_ANewBeginning         = 'A New Beginning'
     DA_MQ_FindTheFremen         = 'Find the Fremen'
     DA_MQ_AssassinsHandbook     = "Assassin's Handbook"
     DA_MQ_TheGreatConvention    = 'The Great Convention'
-    DA_MQ_TheGreatConventionPt2 = 'The Great Convention (Pt. 2)'
+    DA_MQ_TheGreatConventionPt2 = 'Chapter 3 - The Great Convention (Pt. 2)'
+    DA_MQ_TheGreatConventionPt3 = 'The Great Convention — Part III (Act 4)'
+    DA_DLC_LostHarvest = 'Lost Harvest'
 }
 
 function Get-DuneMainQuestRoots {
     $tags = Get-DuneTagsData
     $counts = @{}
     foreach ($k in $tags.journeyNodeTags.Keys) {
-        if ($k -notlike 'DA_MQ_*') { continue }
+        if ($k -notlike 'DA_MQ_*' -and $k -ne 'DA_DLC_LostHarvest' -and $k -notlike 'DA_DLC_LostHarvest.*') { continue }
         $dot = $k.IndexOf('.')
         $root = if ($dot -gt 0) { $k.Substring(0, $dot) } else { $k }
         if ($counts.ContainsKey($root)) { $counts[$root]++ } else { $counts[$root] = 1 }
