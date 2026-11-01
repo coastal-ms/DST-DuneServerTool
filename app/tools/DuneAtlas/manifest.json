@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "files": {
-    "atlas_preferences.py": "768ceaada18f010ca2a4d31c8b51b77b35769694721e238ff7bc0cae538184fa",
+    "atlas_preferences.py": "824d6a8a5682afc30fda7cd669e32861e535df4844a26ae121e38d3c039289c2",
     "atlas_runtime.py": "0efcd3cc05ff5960e612b9b61b40330353bb46ac06cb6551a7524bdddeac910f",
     "ensure-poi-discovery.py": "be6246913e540bae41c6a2979a8444af7574a29b05e9d4c360a07f7b86698b4f",
     "snapshot-native.py": "c629abe51908210b30b04ef6acd54e2440a35ed9ef39536f7fed75bacaf2d1dd",
@@ -9,14 +9,14 @@
     "bounded-memory.py": "41ff9e54f31f0ced60bbf5678039988c69a684aa0dcc52931d43263b0e84051b",
     "resource-field-id.py": "c04b50c3607f65fe5e7a47f768b07da9af92a85ba2eb74c135a9a5c394f02a1f",
     "discover-runtime.py": "346f813ed1c34bb9a49620e248cfcbc3b63c131ea626fc604ab412accf6f9045",
-    "worm-fast.py": "79cda931612c22aa3c6af94e21bdbc42764d4fd50f177d1fbd5b7d12cb50e407",
+    "worm-fast.py": "179ba93fda0f18655b54617564d815ab73f07e92e259b7db9e12cfc9cf6704d6",
     "storm-reader.py": "f27e0d001701b375faf331e137f7f0535906d58e37791382a9f976e3198d36d9",
     "find-event-actors.py": "52de5bfb650a64b7338128a56f2c482436c54d115ce510ac1279a9a4395710ca",
     "vehicle-reader.py": "d3a8ea288323ca6ad3463cd08f34a763ac5123434a75f0c75481bed92f81f351",
     "find-live-vehicles.py": "8dc908c72e0817af180221d53f3817f1b3eacb44300739240f99958f4dba39e2",
     "base-miniatures.py": "15b6d4b41eb00d4973aa53560cc1f8f4d575f9e9415bd72629bc75a2af541715",
     "base-models.sql": "530b63d3fb5c39896280d524d6ff03c8e250f8c55ae0789d5ba778ff33c4d22c",
-    "collect.sql": "29bc8c25c070ce06498e6a78d4c2184682592d57e7515b7598e4df3a7556a301",
+    "collect.sql": "9c7f51e4d5f91972f500a004ba22a39ecd1cae191007adbd652a5e6bde25be76",
     "query.ps1": "90ffe08e6a1988c924203a6343ddb91ff68737ed011c98a453e9d9c118b5a5cc",
     "remote.ps1": "616824c6aa95a30c9213982f4df069978bd56c7091d35791f91579f18b88d7ab",
     "export-native-pois.py": "8d92415395541e618bf195691f83352bb0bced34b93518d4da020dec69512c98",
@@ -143,12 +143,13 @@
     "icons/dd-layout-11.webp": "085beb53ab8edf2338452db64effecaf2fa2192eb686535389d315f7c7c084ab",
     "icons/hagga-background-v1.webp": "732e148bab17becbed94e86c530552a4c9a8711f59327671450a7167b3d0f5b7",
     "build-2160922.json": "d1ea13b3416e04494c93d47450e04b91ebe7dc23e822c59299c37a7575a5e69a",
-    "index.html": "a3b2e720e46593722b641828d08a54a9733f97939f477e6dc527c9c51d1f37ea",
-    "server.py": "2057b506d354b08df35a0c900b5668924615f2a348a11a7b2d6afe86747a9706",
+    "index.html": "3c01df2a08aec8aceb56fac617908298aebce0fd437fe204f65a83b478cb4fce",
+    "server.py": "9895e4323d576edfff5096db27a1ee66a68553f4f55740be03912e414b89c4a8",
     "atlas_process.py": "d715a06a1884c856305133b3351043c944aea6f7b3af3920dd1980094c719f94",
     "atlas_viewers.py": "ae8b053d88174e843710e0f7702470ebb49b7f6fae0b1eff24573056ff2cf0c3",
     "hagga/find-dynamic-encounter-pool.py": "6ffb23a60b8305f220d1113b051980a5a1b5155c799df17c69b7f3b4d3ccbc02",
-    "atlas_checkpoint.py": "7bc88cf70f14f12cd2700a8984281c12704c4c22a30ac05e3857b9b0d4049b7b"
+    "atlas_checkpoint.py": "7bc88cf70f14f12cd2700a8984281c12704c4c22a30ac05e3857b9b0d4049b7b",
+    "atlas_players.py": "9e68c08c81efa3a4a1f94cd162570ea626e7cc0d6ff763b701b510777211ea52"
   },
   "bootstrapContexts": {
     "bootstrap-context.json": "runtime-context.json",

@@ -118,24 +118,7 @@ internal static partial class Program
                 ||RequireComponentObject(c,"FSpiceAddictionComponent")["SpiceVisionEnabledStatus"]?.GetValue<string>()!="Disabled")
                 throw new InvalidOperationException("Post-NPE fixture preservation check failed.");
         }
-        // A shared recovery point is older than the immediate edit rollback.
-        var recovery=Path.Combine(root,"session-recovery.db");File.Copy(backup,recovery);
-        var edited=Path.Combine(root,"session-edited.db");File.Copy(input,edited);
-        var recoveryHash=SHA256.HashData(File.ReadAllBytes(recovery));
-        var editHash=SHA256.HashData(File.ReadAllBytes(edited));
-        try {
-            ReuseRecoverySnapshot=true;
-            Restore(input,edited,recovery);
-            if(!recoveryHash.SequenceEqual(SHA256.HashData(File.ReadAllBytes(recovery))))throw new InvalidOperationException("Session recovery snapshot was overwritten.");
-            RestoreVerificationProbe=()=>throw new InvalidDataException("Self-test verification failure");
-            try { Restore(backup,edited,recovery); throw new InvalidOperationException("Injected verification failure was not rejected."); }
-            catch(InvalidDataException ex) when(ex.Message=="Self-test verification failure") { }
-            finally { RestoreVerificationProbe=null; }
-            if(!editHash.SequenceEqual(SHA256.HashData(File.ReadAllBytes(edited))))throw new InvalidOperationException("Immediate edit rollback used the older recovery point.");
-            File.SetLastWriteTimeUtc(recovery,DateTime.UtcNow.AddMinutes(-16));
-            try { Restore(input,edited,recovery); throw new InvalidOperationException("Expired session snapshot was reused."); }
-            catch(IOException) { }
-        } finally { ReuseRecoverySnapshot=false;RestoreVerificationProbe=null; }
+        SelfTestBackupLifecycle(root, input, backup);
         // Force a failure inside the private transaction; original must stay byte-identical.
         using(var db=OpenWritable(sqlite))ExecuteNonQuery(db,"ALTER TABLE journey_story_node DROP COLUMN metadata_state;");
         var bad=Path.Combine(root,"post-npe-invalid.db");WrapSqlite(sqlite,bad);
@@ -143,6 +126,6 @@ internal static partial class Program
         try{ResetPostNpe(bad,Path.Combine(root,"rejected-post-npe.db"),adapterPath,resetPath,requireGameClosed:false);}
         catch(Exception ex) when(ex is Microsoft.Data.Sqlite.SqliteException or InvalidDataException){rejected=true;}
         if(!rejected||!badBefore.SequenceEqual(SHA256.HashData(File.ReadAllBytes(bad))))throw new InvalidOperationException("Post-NPE failure changed the original fixture.");
-        return new{ok=true,tests=new[]{"post-npe-skills-and-point-balances-preserved","post-npe-story-faction-codex-and-fremen-rewards-reset","post-npe-npe-restored-and-crossing-incomplete","post-npe-discoveries-bonuses-and-other-character-preserved","post-npe-exact-safety-backup","post-npe-failure-leaves-original-unchanged","routine-edits-reuse-recovery-snapshot","verification-failure-restores-immediate-previous-save","expired-recovery-snapshot-rejected"}};
+        return new{ok=true,tests=new[]{"post-npe-skills-and-point-balances-preserved","post-npe-story-faction-codex-and-fremen-rewards-reset","post-npe-npe-restored-and-crossing-incomplete","post-npe-discoveries-bonuses-and-other-character-preserved","post-npe-exact-safety-backup","post-npe-failure-leaves-original-unchanged","routine-edits-retain-exact-recovery-snapshot","verification-failure-restores-immediate-previous-save","existing-recovery-snapshot-rejected"}};
     }
 }

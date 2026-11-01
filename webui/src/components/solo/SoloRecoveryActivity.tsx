@@ -8,7 +8,7 @@ export function SoloRecoveryActivity({ backups, onOpenBackups }: { backups: Solo
     <button type="button" className="btn-secondary mt-3" onClick={onOpenBackups}>Open Backups</button>
     {recent.length === 0 ? <p className="mt-4 text-sm text-text-muted">No retained backups are available for this profile.</p>
       : <ul className="mt-4 divide-y divide-border">{recent.map(backup => <li key={backup.relativePath} className="flex flex-wrap justify-between gap-2 py-3 text-sm">
-        <span className="break-all">{backup.name}</span>
+        <span className="break-all">{backup.name}<span className="block text-xs text-text-muted">{backup.characterName ? `Character: ${backup.characterName}` : 'Character name unavailable for this backup'}</span></span>
         <time className="text-text-muted" dateTime={backup.modifiedAt}>{backup.modifiedAt}</time>
       </li>)}</ul>}
     {backups.length > recent.length && <p className="mt-2 text-xs text-text-muted">Showing the latest 20 of {backups.length} retained backups.</p>}

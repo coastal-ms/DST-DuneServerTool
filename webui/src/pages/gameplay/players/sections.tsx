@@ -629,7 +629,7 @@ interface ActionDef {
   offlineOnly?: boolean   // requires player to be offline (DB write the game caches in memory)
   experimental?: boolean  // unverified — may not take effect in-game; shown with an EXPERIMENTAL badge
   fields?: ActionField[]
-  custom?: 'codex' | 'regis-tanks' | 'give-item' | 'grant-reward' | 'whisper' | 'spawn-vehicle' | 'funcom-spawn-vehicle' | 'quick-presets' | 'tutorial-completion' | 'vehicle-kit' | 'give-package' | 'cheat-scripts' | 'dev-scripts' | 'unlock-trainers' | 'complete-contract' | 'progression-unlock' | 'refuel-vehicle' | 'starter-class' | 'teleport-player' | 'teleport-location' | 'set-respawn' | 'reset-faction' | 'grant-cosmetic' | 'grant-house-swatches' | 'grant-buildable-swatches' | 'grant-building-sets' | 'grant-armor-skins' | 'grant-weapon-skins' | 'grant-vehicle-skins' | 'grant-all-dyes' | 'fresh-start'
+  custom?: 'codex' | 'regis-tanks' | 'give-item' | 'grant-reward' | 'whisper' | 'spawn-vehicle' | 'funcom-spawn-vehicle' | 'quick-presets' | 'tutorial-completion' | 'vehicle-kit' | 'give-package' | 'cheat-scripts' | 'dev-scripts' | 'unlock-trainers' | 'complete-contract' | 'unlock-trainers' | 'progression-unlock' | 'refuel-vehicle' | 'starter-class' | 'teleport-player' | 'teleport-location' | 'set-respawn' | 'reset-faction' | 'grant-cosmetic' | 'grant-house-swatches' | 'grant-buildable-swatches' | 'grant-building-sets' | 'grant-armor-skins' | 'grant-weapon-skins' | 'grant-vehicle-skins' | 'grant-all-dyes' | 'fresh-start'
   balance?: 'solari' | 'scrip' | 'intel'  // show the player's current balance read-only above the form
   confirm?: (p: Player) => string  // confirm message; if returns '' no prompt
   doubleConfirm?: boolean // also requires a typed "i acknowledge" prompt inside run()
@@ -720,6 +720,9 @@ const ACTIONS: ActionDef[] = [
   { id: 'complete-contract', group: 'Progression', label: 'Complete Contracts', icon: 'Check', custom: 'complete-contract', offlineOnly: true,
     rowNote: 'Force-complete a stuck / in-flight contract — writes its completion tags and dismisses the active contract item',
     run: () => Promise.resolve({ message: '' }) },
+  { id: 'unlock-trainers', group: 'Progression', label: 'Trainers and Skills', icon: 'GraduationCap', custom: 'unlock-trainers', offlineOnly: true,
+    rowNote: 'Unlock or reset a trainer, or enable all skills with the 20-point skill buffer and 100 Intel.',
+    run: () => Promise.resolve({ message: '' }) },
   { id: 'codex', group: 'Progression', label: 'Complete Codex', icon: 'BookOpen', custom: 'codex',
     rowNote: 'View owned and missing lore fragments.', run: () => Promise.resolve({ message: '' }) },
   { id: 'reset-progression', group: 'Progression', label: 'Reset Progression (live)', icon: 'RotateCcw', liveOnly: true,
@@ -755,8 +758,8 @@ const ACTIONS: ActionDef[] = [
     rowNote: 'Snapshot cosmetics, delete + recreate character in-game (same name), then restore. Offline to restore.',
     run: () => Promise.resolve({ message: '' }) },
   { id: 'grant-all-skills', group: 'Progression', label: 'Enable All Skills', icon: 'Sparkles', offlineOnly: true,
-    rowNote: 'Only do this AFTER applying "Unlock Trainers" above. Enables approved skills at 7 while leaving Bindu Sprint and Voice Ignore learnable, plus at least 20 skill points and 100 Intel. Offline.',
-    confirm: p => `Enable approved skills for ${p.name}?\n\nOnly do this AFTER applying "Unlock Trainers".\n\nRaises every approved skill to 7 except Bindu Sprint and Voice Ignore. Bindu Sprint stays learnable so "Attitude of the Knife" can complete normally; existing progress is never lowered. Also preserves at least 20 spendable skill points and raises Intel to 100. Player must be offline.`,
+    rowNote: 'Enables approved skills at 7 while leaving Bindu Sprint and Voice Ignore learnable, plus at least 20 skill points and 100 Intel. Offline.',
+    confirm: p => `Enable approved skills for ${p.name}?\n\nRaises every approved skill to 7 except Bindu Sprint and Voice Ignore. Bindu Sprint stays learnable so "Attitude of the Knife" can complete normally; existing progress is never lowered. Also preserves at least 20 spendable skill points and raises Intel to 100. Player must be offline.`,
     run: p => grantAllSkills(p.account_id) },
   // Grant All Tech Recipes — DISABLED pending rework. The DB write marks every
   // recipe UnlockedState="Purchased", but in-game the items stay unclaimed/0-cost
@@ -909,7 +912,7 @@ const ACTIONS: ActionDef[] = [
 ]
 
 export function getPlayerActionTools(isPlayer: boolean) {
-  return ACTIONS.filter(action => !isPlayer || !PLAYER_HIDDEN_ACTIONS.has(action.id)).map(action => ({
+  return ACTIONS.filter(action => action.id !== 'grant-all-skills' && (!isPlayer || !PLAYER_HIDDEN_ACTIONS.has(action.id))).map(action => ({
     id: action.id, label: action.id === 'spawn-vehicle' ? 'Give vehicle assembly parts' : action.label,
     group: action.group, note: action.rowNote ?? '', onlineOnly: !!action.liveOnly, offlineOnly: !!action.offlineOnly,
   }))
@@ -1255,15 +1258,23 @@ function ActionRow({ def, player, busy, stats, open, danger, onToggle, runAction
               onPreset={presetId => runAction(def, () => applyProgressionPreset(player.account_id, presetId))}
               onQuest={quest => runAction(def, () => unlockMainQuest(player.account_id, quest))} />
           ) : def.custom === 'complete-contract' ? (
-            <><CompleteContractForm busy={busy}
+            <CompleteContractForm busy={busy}
               onSubmit={(contractId, label) => runAction(def, async () => {
                 const r = await completeContract(player.account_id, contractId)
                 return { message: r.message || `Completed contract "${label}" for ${player.name}.` }
               })} />
-            <UnlockTrainersForm busy={busy} accountId={player.account_id}
+          ) : def.custom === 'unlock-trainers' ? (
+            <div className="space-y-5"><UnlockTrainersForm busy={busy} accountId={player.account_id}
               onUnlock={(job, name) => runAction(def, async () => { const r = await unlockTrainer(player.account_id, job); return { message: r.message || `Completed ${name} training.` } })}
               onReset={(job, name) => runAction(def, async () => { const r = await resetTrainerSkills(player.account_id, job); return { message: r.message || `Reset ${name} training.` } })} />
-            </>
+            <div className="border-t border-border pt-4 space-y-3">
+              <h4 className="font-semibold">Enable all skills</h4>
+              <p className="text-xs text-text-muted">Enable approved skills, including 20 spendable skill points and at least 100 Intel. Bindu Sprint and Voice Ignore remain learnable. The character must be fully offline.</p>
+              <button type="button" className="btn-primary" disabled={busy || ['online','loggingout'].includes((player.online_status || '').toLowerCase())}
+                onClick={() => { const skills = ACTIONS.find(action => action.id === 'grant-all-skills')!; void runAction(skills, () => skills.run(player, {})) }}>
+                Enable all skills
+              </button>
+            </div></div>
           ) : def.custom === 'progression-unlock' ? (
             <ProgressionUnlockForm busy={busy}
               onComplete={faction => runAction(def, () => applyProgressionPreset(player.account_id, `faction_${faction}_complete`))}

@@ -13,6 +13,7 @@ import atlas_assets
 import atlas_lifecycle
 import atlas_history
 import atlas_checkpoint
+import atlas_players
 
 ROOT=Path(__file__).resolve().parent
 REPO=Path(os.environ['DST_ATLAS_APP_ROOT']).resolve()
@@ -39,6 +40,7 @@ state['stormHistory']=list(storm_history)
 state['stormProfiles']=storm_profiles
 try:state['baseModels']=json.loads((ROOT/'base-models-current.json').read_text())
 except (FileNotFoundError,ValueError):pass
+active_player_regions=set()
 wire_cache={}
 wire_lock=threading.RLock()
 lock=threading.RLock()
@@ -52,7 +54,19 @@ def collect_once():
         value=json.loads((ROOT/'latest-query.json').read_text(encoding='utf-8-sig'))
         snapshot=json.loads(value['rows'][0][0])
         if snapshot['readOnly']!='on': raise RuntimeError('Read-only transaction was not confirmed')
-        with lock: state.update(connected=True,error=None,snapshot=snapshot,queryMs=value['durationMs'])
+        with control:
+            previous=state.get('snapshot')
+            with lock: state.update(connected=True,error=None,snapshot=snapshot,queryMs=value['durationMs'])
+            # A newly online player should not wait for the next native period.
+            # Reuse the existing discovery job, only when the roster changes.
+            for region in active_player_regions:
+                wanted=atlas_players.roster(snapshot,region)
+                before=atlas_players.roster(previous,region)
+                if wanted and {p['entityId'] for p in wanted}!={p['entityId'] for p in (before or [])}:
+                    job='native' if region=='DeepDesert' else 'haggaNative'
+                    if job not in active_jobs:
+                        urgent_jobs.add(job);waiting_jobs[job]=0
+            control.notify_all()
     except atlas_process.Cancelled:
         raise
     except Exception as e:
@@ -67,6 +81,22 @@ def collect_native_once(region="DeepDesert"):
     try:
         with lock:previous=state.get(native_key)
         value=atlas_runtime.collect_native(folder)
+        if region in active_player_regions:
+            with lock:
+                snapshot=state.get('snapshot') or {}
+                old_feed=state.get('wormFeed' if region=='DeepDesert' else 'haggaWormFeed') or {}
+            wanted=atlas_players.roster(snapshot,region)
+            old_players=(previous or {}).get('players',[])
+            same=previous and (previous.get('pid'),str(previous.get('startTime')))==(value.get('pid'),str(value.get('startTime')))
+            if wanted and (not same or {p['entityId'] for p in old_players}!={p['entityId'] for p in wanted} or old_feed.get('playerRefreshNeeded')):
+                try:
+                    (folder/'player-roster.json').write_text(json.dumps(wanted))
+                    if not atlas_runtime.execute(folder,'atlas_players.py',30):raise ValueError('Player discovery unavailable')
+                    cache=atlas_players.load_cache(folder,json.loads((folder/'runtime-context.json').read_text()))
+                    value['players']=cache.get('players',[])
+                except (OSError,ValueError,KeyError):value['players']=[]
+            else:value['players']=old_players if wanted and same else []
+        else:value['players']=[]
         for storm in value.get('storms',[]):
             if storm.get('zones'):
                 profile_key=str(value['pid'])+':'+str(json.loads((folder/'runtime-context.json').read_text())['startTime'])+':'+storm['id']
@@ -104,7 +134,11 @@ def collect_worms_once(region="DeepDesert"):
     try:
         with lock: native=state.get(native_key)
         if not native:raise ValueError('Waiting for native discovery')
-        feed=reader.read(native)
+        with lock:snapshot=state.get('snapshot') or {};previous_feed=state.get(feed_key) or {}
+        player_enabled=region in active_player_regions
+        feed=reader.read(native,player_roster=atlas_players.roster(snapshot,region),player_enabled=player_enabled)
+        if feed.get('playerRefreshNeeded') and not previous_feed.get('playerRefreshNeeded'):
+            with control:urgent_jobs.add('native' if region=='DeepDesert' else 'haggaNative');control.notify_all()
         if feed.get('storms'):
             observed={'map':region,'pid':feed['pid'],'startTime':feed.get('startTime'),'capturedAt':feed['capturedAt'],'storms':feed['storms']}
             with lock:
@@ -234,6 +268,12 @@ live_enabled=atlas_live.load(PREFERENCES_ROOT)
 viewers=atlas_viewers.Leases()
 
 def sync_viewer_demand():
+    global active_player_regions
+    selected=atlas_players.requested_regions(viewers.selections())
+    for region in selected-active_player_regions:
+        job='native' if region=='DeepDesert' else 'haggaNative'
+        urgent_jobs.add(job);waiting_jobs[job]=0
+    active_player_regions=selected
     previous=set(gathering_queue.selected)
     gathering_queue.update_many(viewers.selections())
     if gathering_queue.selected-previous:
@@ -391,6 +431,12 @@ class Handler(BaseHTTPRequestHandler):
         if not re.fullmatch(r'[a-z0-9-]{8,100}',user):raise ValueError('Invalid preference identity')
         return user
 
+    def player_markers_allowed(self):
+        return self.headers.get('X-DST-Atlas-Players')=='allowed'
+
+    def player_preferences(self,value):
+        return atlas_players.viewer_preferences(value,Handler.player_markers_allowed(self))
+
     def preference_viewer(self,user):
         viewer=self.headers.get('X-DST-Atlas-Viewer','legacy')
         if viewer!='legacy' and not re.fullmatch(r'[A-Za-z0-9_-]{16,80}',viewer):raise ValueError('Invalid viewer')
@@ -428,7 +474,7 @@ class Handler(BaseHTTPRequestHandler):
                     if self.headers.get('X-DST-Atlas-Timing')=='remote':
                         payload['refreshSeconds']=state.get('refreshSeconds',3)
                     previous=atlas_preferences.load_user(PREFERENCES_ROOT,user) or {}
-                    preferences=atlas_preferences.save_user(PREFERENCES_ROOT,user,payload)
+                    preferences=atlas_preferences.save_user(PREFERENCES_ROOT,user,Handler.player_preferences(self,payload))
                     if user=='local-host':atlas_preferences.save(PREFERENCES_ROOT,preferences)
                     with lock:state['refreshSeconds']=preferences['refreshSeconds']
                     if self.headers.get('X-DST-Atlas-Viewer'):touch_viewer(viewer,preferences)
@@ -442,7 +488,7 @@ class Handler(BaseHTTPRequestHandler):
             self.send_response(200);self.send_header('Content-Type','application/json');self.send_header('Content-Length',str(len(body)));self.send_header('Cache-Control','no-store');self.end_headers();self.wfile.write(body);return
         if url.path not in ('/live/start','/live/stop','/refresh'):return self.send_error(404)
         if self.headers.get('X-DST-Atlas-Timing')=='remote' and url.path!='/live/start':return self.send_error(403,'Only the local host can stop or refresh map collection')
-        touch_viewer(viewer,atlas_preferences.load_user(PREFERENCES_ROOT,user))
+        touch_viewer(viewer,Handler.player_preferences(self,atlas_preferences.load_user(PREFERENCES_ROOT,user)))
         with control:
             if url.path=='/live/start':
                 if state['stopping'] or (active_jobs-{'gathering'}) and not live_enabled:return self.send_error(409,'Map collection is stopping')
@@ -487,7 +533,7 @@ class Handler(BaseHTTPRequestHandler):
         try:user=Handler.preference_user(self);viewer=Handler.preference_viewer(self,user)
         except ValueError:return self.send_error(400)
         if url.path=='/preferences':
-            preferences=atlas_preferences.load_user(PREFERENCES_ROOT,user)
+            preferences=Handler.player_preferences(self,atlas_preferences.load_user(PREFERENCES_ROOT,user))
             if preferences:preferences={**preferences,'refreshSeconds':state['refreshSeconds']}
             body=json.dumps(preferences).encode();mime='application/json'
         elif url.path=='/marker-icons':
@@ -501,9 +547,9 @@ class Handler(BaseHTTPRequestHandler):
             mime='application/json'
         elif url.path=='/state':
             with control:
-                preferences=None if viewer in viewers.preferences else atlas_preferences.load_user(PREFERENCES_ROOT,user)
-                touch_viewer(viewer,preferences)
-            with lock:body=json.dumps({**state,'preferenceScope':user,'canControlTiming':self.headers.get('X-DST-Atlas-Timing')!='remote','canControlCollection':self.headers.get('X-DST-Atlas-Timing')!='remote','canStartCollection':True}).encode()
+                preferences=viewers.preferences[viewer] if viewer in viewers.preferences else atlas_preferences.load_user(PREFERENCES_ROOT,user)
+                touch_viewer(viewer,Handler.player_preferences(self,preferences))
+            with lock:body=json.dumps(atlas_players.public_state({**state,'canSeePlayers':Handler.player_markers_allowed(self),'preferenceScope':user,'canControlTiming':self.headers.get('X-DST-Atlas-Timing')!='remote','canControlCollection':self.headers.get('X-DST-Atlas-Timing')!='remote','canStartCollection':True},Handler.player_markers_allowed(self))).encode()
             mime='application/json'
         elif url.path in ['/gathering','/gathering/HaggaBasin']:
             try:body=json.dumps(gathering_metadata('HaggaBasin' if url.path.endswith('/HaggaBasin') else 'DeepDesert')).encode()

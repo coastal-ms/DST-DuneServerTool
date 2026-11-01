@@ -218,6 +218,7 @@ export interface SoloConsoleSettingsResponse {
 }
 
 export interface SoloBackup {
+  characterName?: string | null
   name: string
   relativePath: string
   bytes: number

@@ -13,6 +13,17 @@ here cover everything those tags shipped.
 
 ## [Unreleased]
 
+## [16.7.0] - 2026-10-31
+
+### Added
+- Show online players as blue Live Map dots for hosts and administrators.
+
+### Fixed
+- Keep Widget status checks from triggering VM recovery.
+- Preserve separate Solo recovery snapshots across character replacement and show recorded character names in backup history.
+- Restore the DST Official server join card in Solo overview.
+- Separate Complete Contracts from the combined Trainers and Skills controls.
+
 ## [16.6.12] - 2026-10-30
 
 ### Fixed

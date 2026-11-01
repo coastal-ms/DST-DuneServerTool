@@ -23,6 +23,11 @@ it('shows 25 backups per page and makes older pages accessible', () => {
   expect(screen.getByText('Showing 101–101 of 101')).toBeVisible()
   expect(screen.getByRole('button', { name: 'Next page' })).toBeDisabled()
 })
+it('labels older unrecorded characters without assigning them to the connected character', () => {
+  render(<SoloMode />)
+  fireEvent.click(screen.getByRole('button', { name: 'Backups', exact: true }))
+  expect(screen.getAllByText('Character name unavailable for this backup')).toHaveLength(25)
+})
 it('shows the Solo reset directly in Progression without expanding story completion', () => {
   render(<SoloMode />)
   fireEvent.click(screen.getByRole('button', { name: 'Character tools', exact: true }))

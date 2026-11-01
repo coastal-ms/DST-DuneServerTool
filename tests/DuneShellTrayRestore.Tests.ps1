@@ -7,13 +7,15 @@ BeforeAll {
 
 Describe 'DuneShell tray window restoration' {
     It 'captures normal bounds before hiding the form' {
-        $capture = $script:MainForm.IndexOf(
-            '_restoreBounds = WindowState == FormWindowState.Normal ? Bounds : RestoreBounds;'
-        )
-        $hide = $script:MainForm.IndexOf('Hide();', $capture)
-
-        $capture | Should -BeGreaterThan -1
+        $method = $script:MainForm.IndexOf('private void HideToTray()')
+        $method | Should -BeGreaterThan -1
+        $capture = $script:MainForm.IndexOf('_restoreBounds = Bounds;', $method)
+        $capture | Should -BeGreaterThan $method
+        $hide = $script:MainForm.IndexOf('Hide();', $method)
         $hide | Should -BeGreaterThan $capture
+        $beforeHide = $script:MainForm.Substring($method, $hide - $method)
+        $beforeHide | Should -Match 'if\s*\(WindowState == FormWindowState.Normal\)'
+        $beforeHide | Should -Not -Match '_restoreBounds\s*=.*RestoreBounds'
     }
 
     It 'restores clamped bounds before and after native window restoration' {
