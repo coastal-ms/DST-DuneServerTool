@@ -254,6 +254,14 @@ function Get-DuneAtlasPreferenceIdentity {
     finally { $sha.Dispose() }
 }
 
+function Test-DuneAtlasPlayerMarkers {
+    param($Principal)
+    if ([string]$Principal.type -eq 'linked-player') { return $false }
+    return ([string]$Principal.type -in @('local-host','legacy-token') -or
+        ([string]$Principal.type -in @('portal-account','legacy-remote','launch-token') -and
+         [string]$Principal.role -in @('owner','admin')))
+}
+
 function Invoke-DuneAtlasProxy {
     param($Request, $Response, [string]$Path, [string]$Method, $Body, $Principal)
     if (-not (Test-DuneAtlasProxyPath -Method $Method -Path $Path)) {
@@ -280,6 +288,9 @@ function Invoke-DuneAtlasProxy {
         # Derive permission from the authenticated transport, never a browser header.
         $timingAccess = if (Test-DuneLocalOnlyRequest -Request $Request) { 'local' } else { 'remote' }
         [void]$message.Headers.TryAddWithoutValidation('X-DST-Atlas-Timing', $timingAccess)
+        # Always replace browser-supplied capability headers with principal facts.
+        $playerMarkers = if (Test-DuneAtlasPlayerMarkers -Principal $Principal) { 'allowed' } else { 'denied' }
+        [void]$message.Headers.TryAddWithoutValidation('X-DST-Atlas-Players', $playerMarkers)
         # Account identity comes from the dispatch principal, never client headers.
         # The browser cookie is only a preference fallback for legacy token access.
         if ($Path -ne '/') {

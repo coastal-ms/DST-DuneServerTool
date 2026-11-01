@@ -10,13 +10,14 @@
 $script:DuneDbMaxRows = 1000
 
 function Get-DuneDbContext {
+    param([switch]$SkipGuestRecovery)
     if (-not (Get-Command Invoke-V6Ssh -ErrorAction SilentlyContinue)) {
         return @{ ok=$false; status=503; message='SSH helper unavailable (Db-Postgres.ps1 not loaded).' }
     }
     if (-not (Get-Command Get-DuneVmStatus -ErrorAction SilentlyContinue)) {
         return @{ ok=$false; status=503; message='VM status helper unavailable.' }
     }
-    $vm = Get-DuneVmStatus
+    $vm = if ($SkipGuestRecovery) { Get-DuneVmStatus -SkipGuestRecovery } else { Get-DuneVmStatus }
     if (-not $vm.exists)  { return @{ ok=$false; status=503; message='VM does not exist on this host.' } }
     if (-not $vm.running) { return @{ ok=$false; status=503; message='VM is not running. Start the battlegroup first.' } }
     if (-not $vm.ip)      { return @{ ok=$false; status=503; message='VM has no IP yet — wait for it to finish booting.' } }

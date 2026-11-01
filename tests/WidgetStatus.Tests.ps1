@@ -3,13 +3,72 @@ BeforeAll {
     Import-DstLib 'PlatformCache.ps1'
     Import-DstLib 'PublicIp.ps1'
     Import-DstLib 'MapPlatform.ps1'
-    function global:Get-DuneDbContext { @{ ok=$true; ip='fixture' } }
+    function global:Get-DuneDbContext { param([switch]$SkipGuestRecovery) @{ ok=$true; ip='fixture' } }
     function global:Invoke-DuneSqlRaw { param($Ip,$Sql,[switch]$Csv,$TimeoutSec) }
     function global:Test-DunePsqlError { param($Output) $false }
+}
+
+Describe 'Widget discovery does not perform guest recovery' {
+    BeforeAll {
+        Import-DstLib 'Status.ps1'
+        Import-DstLib 'Database.ps1'
+        function global:Invoke-V6Ssh { }
+        function global:Test-DuneSoloInstallation { $false }
+        function global:Get-DuneHyperVSplat { @{ ComputerName='fixture' } }
+        function global:Get-DuneLastKnownVmIp { '192.0.2.10' }
+        function global:Test-DuneKnownVmIp { param($Ip) $true }
+        function global:Invoke-DuneHyperVGuestRecovery { param($Ip,[switch]$ForceKvp) }
+        function global:Get-VM { param($Name,$ErrorAction) }
+        function global:Get-VMNetworkAdapter { param($VMName) }
+    }
+    BeforeEach {
+        $script:DuneApiLockTable = [hashtable]::Synchronized(@{})
+        Mock Get-DuneLanVmSnapshot { @{State='Running'; UptimeSeconds=60; IPAddresses=@('192.0.2.10')} }
+        Mock Invoke-DuneHyperVGuestRecovery { @{ok=$true} }
+        Mock Invoke-DuneSqlRaw { "map,ready,alive,is_current`nSurvival_1,t,t,t" }
+    }
+    It 'reads readiness through the real database and VM helpers without invoking recovery' {
+        $result = Get-DuneWidgetStatus
+        $result.maps[0].ready | Should -BeTrue
+        Should -Invoke Invoke-DuneHyperVGuestRecovery -Times 0 -Exactly
+        Should -Invoke Invoke-DuneSqlRaw -Times 1 -Exactly
+    }
+    It 'retains recovery for existing callers that did not opt out' {
+        (Get-DuneDbContext).ok | Should -BeTrue
+        Should -Invoke Invoke-DuneHyperVGuestRecovery -Times 1 -Exactly
+    }
+    It 'uses a verified last-known IP without forcing KVP recovery from Widget' {
+        Mock Get-DuneLanVmSnapshot { @{State='Running'; UptimeSeconds=60; IPAddresses=@()} }
+        $result = Get-DuneWidgetStatus
+        $result.maps[0].ready | Should -BeTrue
+        Should -Invoke Invoke-DuneHyperVGuestRecovery -Times 0 -Exactly
+        Should -Invoke Invoke-DuneSqlRaw -Times 1 -Exactly -ParameterFilter { $Ip -eq '192.0.2.10' }
+    }
+    It 'preserves forced KVP recovery for ordinary discovery using a last-known IP' {
+        Mock Get-DuneLanVmSnapshot { @{State='Running'; UptimeSeconds=60; IPAddresses=@()} }
+        (Get-DuneDbContext).vm.ipSource | Should -Be 'last-known'
+        Should -Invoke Invoke-DuneHyperVGuestRecovery -Times 1 -Exactly -ParameterFilter { $ForceKvp }
+    }
+    It 'reports failed discovery without recovery or a database read' {
+        Mock Get-DuneLanVmSnapshot { throw 'host unavailable' }
+        { Get-DuneWidgetStatus } | Should -Throw '*VM does not exist*'
+        Should -Invoke Invoke-DuneHyperVGuestRecovery -Times 0 -Exactly
+        Should -Invoke Invoke-DuneSqlRaw -Times 0 -Exactly
+    }
+    It 'also avoids recovery when discovering a VM on the local Hyper-V host' {
+        Mock Get-DuneHyperVSplat { @{} }
+        Mock Get-VM { [pscustomobject]@{State='Running'; Uptime=[timespan]::FromSeconds(60)} }
+        Mock Get-VMNetworkAdapter { [pscustomobject]@{IPAddresses=@('192.0.2.10')} }
+        (Get-DuneWidgetStatus).maps[0].ready | Should -BeTrue
+        Should -Invoke Get-VM -Times 1 -Exactly
+        Should -Invoke Get-DuneLanVmSnapshot -Times 0 -Exactly
+        Should -Invoke Invoke-DuneHyperVGuestRecovery -Times 0 -Exactly
+    }
 }
 Describe 'Demand-driven widget status' {
     BeforeEach {
         $script:DuneApiLockTable = [hashtable]::Synchronized(@{})
+        Mock Get-DuneDbContext { @{ ok=$true; ip='fixture' } }
         Mock Invoke-DuneSqlRaw { "map,ready,alive,is_current`nDeepDesert_1,t,t,t`nSurvival_1,t,f,t" }
     }
     It 'coalesces narrow reads and preserves the P34 alive distinction' {

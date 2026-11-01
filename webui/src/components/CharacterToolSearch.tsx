@@ -24,7 +24,7 @@ export function characterToolDestinations(mode: 'solo' | 'self-host'): Character
     { label: 'Vehicles', home: 'Items', view: 'Vehicles', itemView: 'Vehicles', keywords: 'vehicle kit tank regis' },
     { label: 'Specializations', home: 'Progression', view: 'Specializations', progressionView: 'Specializations', keywords: 'specs levels class experience xp' },
     { label: 'Journey', home: 'Progression', view: 'Journey', progressionView: 'Journey', keywords: 'quests objectives story chapter 3 iii great convention lost harvest dlc journey' },
-    { label: 'Unlocks & rewards', home: 'Progression', view: 'Unlocks & rewards', progressionView: 'Unlocks & rewards', keywords: 'trainer testing station research skill points faction progression reward' },
+    { label: 'Unlocks & rewards', home: 'Progression', view: 'Unlocks & rewards', progressionView: 'Unlocks & rewards', keywords: 'trainer trainers skills testing station research skill points faction progression reward' },
     ...(mode === 'solo' ? [{ label: 'Codex', home: 'Progression' as const, view: 'Codex', progressionView: 'Codex' as const, keywords: 'codex lore discovery ownership' }] : []),
     mode === 'solo'
       ? { label: 'Solo diagnostics', home: 'Advanced', view: 'Diagnostics', keywords: 'diagnostics report support' }

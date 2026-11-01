@@ -73,6 +73,11 @@ internal sealed class MainForm : Form
         BuildTrayIcon();
 
         Resize += OnResizeToTray;
+        Move += (_, _) =>
+        {
+            if (WindowState == FormWindowState.Normal && !_changingWidgetMode)
+                _restoreBounds = Bounds;
+        };
         ResizeEnd += (_, _) => SaveWidgetBounds();
 
         FormClosing += (_, e) =>
@@ -770,6 +775,8 @@ internal sealed class MainForm : Form
                     MinimumSize = new Size(960, 600);
                     Bounds = original;
                     WindowState = _widgetRestoreState;
+                    _restoreBounds = original;
+                    _restoreState = _widgetRestoreState;
                     Text = "Dune Server Tool";
                     SaveWindowState();
                 }
@@ -1223,12 +1230,16 @@ internal sealed class MainForm : Form
         {
             // Remember whether to restore to Normal or Maximized later.
             _restoreState = WindowState;
+            // Capture the visible normal frame before Windows minimizes it.
+            // RestoreBounds can still contain Widget geometry after leaving it.
+            if (WindowState == FormWindowState.Normal && !_changingWidgetMode)
+                _restoreBounds = Bounds;
         }
     }
 
     private void HideToTray()
     {
-        _restoreBounds = WindowState == FormWindowState.Normal ? Bounds : RestoreBounds;
+        if (WindowState == FormWindowState.Normal) _restoreBounds = Bounds;
         ShowInTaskbar = false;
         Hide();
 

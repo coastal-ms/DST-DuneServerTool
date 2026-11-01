@@ -10,7 +10,6 @@ namespace DuneSoloDb;
 
 internal static partial class Program
 {
-    private static bool ReuseRecoverySnapshot;
     private static Action? RestoreVerificationProbe;
     private static readonly JsonSerializerOptions JsonOptions = new()
     {
@@ -58,8 +57,6 @@ internal static partial class Program
         {
             var options = ParseArgs(args);
             var command = RequireValue(options, "command").ToLowerInvariant();
-            ReuseRecoverySnapshot = options.TryGetValue("reuse-recovery-snapshot", out var reuse) && reuse == "true"
-                && command != "restore" && command != "import-blueprint" && !command.StartsWith("reset-") && !command.StartsWith("delete-");
             object result = command switch
             {
                 "grant-legitimate-customization" => GrantLegitimateCustomization(Require(options, "input"),
@@ -91,6 +88,8 @@ internal static partial class Program
                         ? Path.GetFullPath(inspectAdapter)
                         : null),
                 "backup" => Backup(Require(options, "input"), Require(options, "output")),
+                "backup-character" => BackupCharacter(Require(options, "input")),
+                "backup-characters" => BackupCharacters(Require(options, "input")),
                 "edit-item" => EditInventoryItem(Require(options,"input"), Require(options,"safety-backup"), Require(options,"catalog"),
                     long.Parse(RequireValue(options,"item-id")), RequireValue(options,"revision"), RequireValue(options,"field"), File.ReadAllText(Require(options,"values-file"))),
                 "restore" => Restore(
@@ -406,6 +405,7 @@ internal static partial class Program
                 stream.Flush(flushToDisk: true);
             }
             File.Move(temp, output);
+            WriteBackupCharacter(output);
         }
         finally
         {
@@ -427,10 +427,7 @@ internal static partial class Program
             throw new FileNotFoundException("Target Solo save was not found.", target);
         }
 
-        var reuseSnapshot = ReuseRecoverySnapshot && File.Exists(safetyBackup)
-            && DateTime.UtcNow - File.GetLastWriteTimeUtc(safetyBackup) < TimeSpan.FromMinutes(15)
-            && new FileInfo(safetyBackup).Length > 0;
-        if (File.Exists(safetyBackup) && !reuseSnapshot)
+        if (File.Exists(safetyBackup))
         {
             throw new IOException($"Safety backup already exists: {safetyBackup}");
         }
@@ -467,12 +464,9 @@ internal static partial class Program
             }
             File.Replace(temp, target, replaceBackup, ignoreMetadataErrors: true);
             targetReplaced = true;
-            if (!reuseSnapshot)
-            {
-                File.Copy(replaceBackup, safetyTemp);
-                File.Move(safetyTemp, safetyBackup);
-                File.SetLastWriteTimeUtc(safetyBackup, DateTime.UtcNow);
-            }
+            File.Copy(replaceBackup, safetyTemp);
+            File.Move(safetyTemp, safetyBackup);
+            File.SetLastWriteTimeUtc(safetyBackup, DateTime.UtcNow);
 
             RestoreVerificationProbe?.Invoke();
             var restoredBytes = ReadStable(target);
@@ -485,7 +479,7 @@ internal static partial class Program
             var restoredInspection = InspectBytes(restoredBytes, target);
             EnsureWritableInspection(restoredInspection);
             // Keep the immediate previous save until verification succeeds.
-            // A reused session snapshot must never be the rollback source.
+            WriteBackupCharacter(safetyBackup);
             File.Delete(replaceBackup);
             return new
             {
@@ -2397,6 +2391,7 @@ internal static partial class Program
             SelfTestCharacterXp(root, target, adapterPath);
             SelfTestJourneyUnlocks(root, target, adapterPath);
             SelfTestGameActivity(root,target);
+            SelfTestBackupLifecycle(root, target, backup);
             var beforeNpe = InspectPath(target, adapterPath: adapterPath).Progression;
             if (beforeNpe.NpeNodesTotal != 2 || beforeNpe.NpeNodesComplete != 0)
             {

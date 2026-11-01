@@ -167,7 +167,40 @@ function Get-DuneSoloBackupPolicy {
     }
     $archiveRoot=if($directory){Join-Path ([IO.Path]::GetFullPath($directory)) 'DST-SoloBackups'}else{''}
     if($archiveRoot -and $roots -notcontains $archiveRoot){$roots+=,$archiveRoot}
-    @{managed=$managed;directory=$directory;archiveRoot=$archiveRoot;archiveRoots=@($roots);maximumBackups=50;automaticIntervalMinutes=15;pageSize=25}
+    @{managed=$managed;directory=$directory;archiveRoot=$archiveRoot;archiveRoots=@($roots);maximumBackups=50;automaticIntervalMinutes=0;pageSize=25}
+}
+
+function Get-DuneSoloBackupCharacter {
+    param([string]$Path,[string]$AllowedRoot='',[ref]$CacheValid)
+    if($CacheValid){$CacheValid.Value=$false}
+    $metadataPath=$Path+'.character.json'
+    if(-not (Test-Path -LiteralPath $metadataPath -PathType Leaf)){return $null}
+    try {
+        Assert-DuneSoloNoReparsePath -Path $Path -AllowedRoot $AllowedRoot
+        Assert-DuneSoloNoReparsePath -Path $metadataPath -AllowedRoot $AllowedRoot
+        if((Get-Item -LiteralPath $metadataPath).Length -gt 16384){return $null}
+        $metadata=Get-Content -LiteralPath $metadataPath -Raw -Encoding UTF8 | ConvertFrom-Json
+        $file=Get-Item -LiteralPath $Path
+        if($metadata.schema -notin @(1,2) -or $metadata.bytes -ne $file.Length -or
+           $metadata.modifiedTicks -ne $file.LastWriteTimeUtc.Ticks -or
+           $metadata.sha256 -ne (Get-FileHash -LiteralPath $Path -Algorithm SHA256).Hash){return $null}
+        if($metadata.characterCount -eq 1 -and $metadata.characterName -is [string] -and $metadata.characterName.Length -gt 0 -and $metadata.characterName.Length -le 256){
+            if($CacheValid){$CacheValid.Value=$true}
+            return $metadata.characterName
+        }
+        if($CacheValid -and $metadata.schema -eq 2){$CacheValid.Value=$true}
+    } catch { }
+    return $null
+}
+
+function Copy-DuneSoloBackupCharacter {
+    param([string]$Source,[string]$Destination,[string]$ArchiveRoot)
+    if(-not (Get-DuneSoloBackupCharacter -Path $Source)){return}
+    $target=$Destination+'.character.json'
+    Assert-DuneSoloNoReparsePath -Path $target -AllowedRoot $ArchiveRoot
+    if(-not (Test-Path -LiteralPath $target)){
+        [IO.File]::Copy($Source+'.character.json',$target,$false)
+    }
 }
 
 function Copy-DuneSoloBackupToArchive {
@@ -180,11 +213,11 @@ function Copy-DuneSoloBackupToArchive {
     Assert-DuneSoloNoReparsePath -Path $destination -AllowedRoot $ArchiveRoot
     $hash=(Get-FileHash -LiteralPath $sourceFull -Algorithm SHA256).Hash
     if(Test-Path -LiteralPath $destination -PathType Leaf){
-        if((Get-FileHash -LiteralPath $destination -Algorithm SHA256).Hash -eq $hash){return $destination}
+        if((Get-FileHash -LiteralPath $destination -Algorithm SHA256).Hash -eq $hash){Copy-DuneSoloBackupCharacter -Source $sourceFull -Destination $destination -ArchiveRoot $ArchiveRoot;return $destination}
         $destination=Join-Path (Split-Path $destination) ([IO.Path]::GetFileNameWithoutExtension($destination)+'-'+$hash.ToLowerInvariant()+[IO.Path]::GetExtension($destination))
         Assert-DuneSoloNoReparsePath -Path $destination -AllowedRoot $ArchiveRoot
         if(Test-Path -LiteralPath $destination -PathType Leaf){
-            if((Get-FileHash -LiteralPath $destination -Algorithm SHA256).Hash -eq $hash){return $destination}
+            if((Get-FileHash -LiteralPath $destination -Algorithm SHA256).Hash -eq $hash){Copy-DuneSoloBackupCharacter -Source $sourceFull -Destination $destination -ArchiveRoot $ArchiveRoot;return $destination}
             throw 'An archived filename collision could not be resolved. Local backup retained.'
         }
     }
@@ -197,6 +230,7 @@ function Copy-DuneSoloBackupToArchive {
         [IO.File]::SetLastWriteTimeUtc($temp,(Get-Item -LiteralPath $sourceFull).LastWriteTimeUtc)
         [IO.File]::Move($temp,$destination)
     }finally{if(Test-Path -LiteralPath $temp){Remove-Item -LiteralPath $temp -Force}}
+    Copy-DuneSoloBackupCharacter -Source $sourceFull -Destination $destination -ArchiveRoot $ArchiveRoot
     return $destination
 }
 
@@ -571,7 +605,7 @@ function Assert-DuneSoloGameClosed {
 
 function Invoke-DuneSoloHelper {
     param(
-        [Parameter(Mandatory)][ValidateSet('inspect','diagnostics','codex','activity','grant-codex','character-xp','faction-progression','set-specialization','reset-specialization-rewards','backup','restore','grant-items','delete-item','edit-item','delete-item-group','import-blueprint','list-blueprints','export-blueprint','set-currencies','fill-water','set-weapon-ammo','repair-equipment','max-augment-attributes','max-specializations','complete-fremen','complete-npe','reset-post-npe','enable-skills','set-progression-points','unlock-main-quest','unlock-trainer','unlock-testing-stations','grant-legitimate-customization')][string]$Command,
+        [Parameter(Mandatory)][ValidateSet('inspect','diagnostics','codex','activity','grant-codex','character-xp','faction-progression','set-specialization','reset-specialization-rewards','backup','backup-character','backup-characters','restore','grant-items','delete-item','edit-item','delete-item-group','import-blueprint','list-blueprints','export-blueprint','set-currencies','fill-water','set-weapon-ammo','repair-equipment','max-augment-attributes','max-specializations','complete-fremen','complete-npe','reset-post-npe','enable-skills','set-progression-points','unlock-main-quest','unlock-trainer','unlock-testing-stations','grant-legitimate-customization')][string]$Command,
         [Parameter(Mandatory)][hashtable]$Arguments
     )
 
@@ -582,7 +616,7 @@ function Invoke-DuneSoloHelper {
     }
     foreach ($key in @('input','target')) {
         if ($Arguments[$key] -and (Get-DuneSoloXboxBlob -Path ([string]$Arguments[$key]))) {
-            if ($Command -notin @('inspect','diagnostics','codex','activity','backup','list-blueprints','export-blueprint')) {
+            if ($Command -notin @('inspect','diagnostics','codex','activity','backup','backup-character','backup-characters','list-blueprints','export-blueprint')) {
                 $prepared = New-DuneSoloXboxMutation -Command $Command -Arguments $Arguments
                 $committed = Commit-DuneSoloXboxMutation -Prepared $prepared
                 $result = $prepared.result
@@ -595,21 +629,15 @@ function Invoke-DuneSoloHelper {
     if (-not $helper) {
         throw 'DuneSoloDb.exe is unavailable. Rebuild or reinstall DST with Solo Mode support.'
     }
-    # Ordinary edits share a recent recovery point. Destructive actions retain
-    # their own exact before-state; atomic replacement still keeps an immediate
-    # rollback file until every write has passed verification.
+    # Every mutation retains its own exact before-state. A save path and a
+    # recent timestamp do not prove continuity after game activity/recreation.
+    [void]$Arguments.Remove('reuse-recovery-snapshot')
     if ((Get-DuneSoloBackupPolicy).managed -and $Arguments['safety-backup'] -and $Command -notmatch '^(restore|reset-|delete-|edit-item|import-blueprint)') {
         $profile = Get-DuneSoloProfile
         $automaticDir = Join-Path (Get-DuneSoloProfileBackupRoot -DbPath $profile.dbPath) 'automatic'
         New-Item -ItemType Directory -Path $automaticDir -Force | Out-Null
         Assert-DuneSoloNoReparsePath -Path $automaticDir
-        $latest = Get-ChildItem -LiteralPath $automaticDir -Filter '*.db' -File | Sort-Object LastWriteTimeUtc -Descending | Select-Object -First 1
-        if ($latest -and $latest.LastWriteTimeUtc -gt [DateTime]::UtcNow.AddMinutes(-14) -and $latest.LastWriteTimeUtc -le [DateTime]::UtcNow) {
-            $Arguments['safety-backup'] = $latest.FullName
-            $Arguments['reuse-recovery-snapshot'] = 'true'
-        } else {
-            $Arguments['safety-backup'] = Join-Path $automaticDir ('game-' + [DateTime]::UtcNow.ToString('yyyyMMdd-HHmmssfff') + '-' + [guid]::NewGuid().ToString('N') + '.db')
-        }
+        $Arguments['safety-backup'] = Join-Path $automaticDir ('game-' + [DateTime]::UtcNow.ToString('yyyyMMdd-HHmmssfff') + '-' + [guid]::NewGuid().ToString('N') + '.db')
     }
     $cli = @('--command', $Command)
     foreach ($key in ($Arguments.Keys | Sort-Object)) {
@@ -2044,7 +2072,7 @@ function Get-DuneSoloBackups {
     $policy=Get-DuneSoloBackupPolicy
     $locations=@(@{root=(Get-DuneSoloBackupRoot);prefix='';source='local'})
     for($index=0;$index -lt $policy.archiveRoots.Count;$index++){$locations+=@{root=[string]$policy.archiveRoots[$index];prefix="archive/$index/";source='archive'}}
-    $backups=@()
+    $backups=@();$missingLabels=@();$labelSources=@()
     foreach($location in $locations){
         $root=Get-DuneSoloProfileBackupRoot -DbPath $profile.dbPath -BackupRoot $location.root
         if(-not (Test-Path -LiteralPath $root -PathType Container)){continue}
@@ -2052,8 +2080,23 @@ function Get-DuneSoloBackups {
         foreach($file in @(Get-ChildItem -LiteralPath $root -Filter '*.db' -File -Recurse -ErrorAction Stop)){
             if($file.FullName -like '*\.delete-staging\*'){continue}
             Assert-DuneSoloNoReparsePath -Path $file.FullName -AllowedRoot $location.root
-            $backups+=[pscustomobject]@{name=$file.Name;relativePath=$location.prefix+$file.FullName.Substring($root.TrimEnd('\').Length+1);bytes=[long]$file.Length;createdAt=$file.CreationTimeUtc.ToString('o');modifiedAt=$file.LastWriteTimeUtc.ToString('o');source=$location.source}
+            $cacheValid=$false
+            $character = Get-DuneSoloBackupCharacter -Path $file.FullName -AllowedRoot $location.root -CacheValid ([ref]$cacheValid)
+            $labelSources+=@{path=$file.FullName;root=$location.root}
+            if(-not $cacheValid){$missingLabels+=$file.FullName}
+            $backups+=[pscustomobject]@{characterName=$character;name=$file.Name;relativePath=$location.prefix+$file.FullName.Substring($root.TrimEnd('\').Length+1);bytes=[long]$file.Length;createdAt=$file.CreationTimeUtc.ToString('o');modifiedAt=$file.LastWriteTimeUtc.ToString('o');source=$location.source}
         }
+    }
+    if($missingLabels.Count){
+        $manifest=Join-Path ([IO.Path]::GetTempPath()) ('dst-backup-labels-'+[guid]::NewGuid().ToString('N')+'.json')
+        try {
+            # One helper invocation for the history, not one process per file.
+            ConvertTo-Json -InputObject @($missingLabels) -Compress | Set-Content -LiteralPath $manifest -Encoding UTF8
+            Invoke-DuneSoloHelper -Command backup-characters -Arguments @{input=$manifest} | Out-Null
+            for($i=0;$i -lt $backups.Count;$i++){
+                $backups[$i].characterName=Get-DuneSoloBackupCharacter -Path $labelSources[$i].path -AllowedRoot $labelSources[$i].root
+            }
+        } catch { } finally {Remove-Item -LiteralPath $manifest -ErrorAction SilentlyContinue}
     }
     return @($backups | Sort-Object modifiedAt -Descending)
 }

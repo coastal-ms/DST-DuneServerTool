@@ -9,7 +9,7 @@ def validate(value):
  if value.get('region') not in ('DeepDesert','HaggaBasin'):raise ValueError('Invalid map')
  layers=value.get('layers')
  if not isinstance(layers,list) or len(layers)>256:raise ValueError('Invalid selections')
- known={'vehicles','bases','resources','spice-small','spice-medium','spice-large','flour','worms','storms','history','grid'}
+ known={'players','vehicles','bases','resources','spice-small','spice-medium','spice-large','flour','worms','storms','history','grid'}
  for layer in layers:
   if not isinstance(layer,str) or len(layer)>160 or (layer not in known and not re.fullmatch(r'poi:[A-Za-z0-9:._-]+',layer)):
    raise ValueError('Invalid layer')

@@ -61,10 +61,10 @@ class RefreshTests(unittest.TestCase):
   tree=ast.parse((ROOT/'server.py').read_text(encoding='utf-8'))
   nodes=[n for n in tree.body if isinstance(n,ast.FunctionDef) and n.name in ('collect_native_once','collect_worms_once')]
   class Cancelled(Exception):pass
-  def failed(*args):raise ValueError('temporary read failure')
+  def failed(*args,**kwargs):raise ValueError('temporary read failure')
   native={'pid':123,'capturedAt':'2026-10-18T00:00:00Z'}
   feed={'pid':123,'capturedAt':'2026-10-18T00:00:01Z'}
-  scope={'ROOT':ROOT,'time':time,'lock':threading.RLock(),'state':{'native':native,'wormFeed':feed},'atlas_runtime':types.SimpleNamespace(collect_native=failed),'atlas_process':types.SimpleNamespace(Cancelled=Cancelled),'worm_readers':{'DeepDesert':types.SimpleNamespace(read=failed)}}
+  scope={'ROOT':ROOT,'time':time,'active_player_regions':set(),'atlas_players':module('atlas_players'),'lock':threading.RLock(),'state':{'native':native,'wormFeed':feed},'atlas_runtime':types.SimpleNamespace(collect_native=failed),'atlas_process':types.SimpleNamespace(Cancelled=Cancelled),'worm_readers':{'DeepDesert':types.SimpleNamespace(read=failed)}}
   exec(compile(ast.Module(body=nodes,type_ignores=[]),'observers','exec'),scope)
   scope['collect_native_once']();scope['collect_worms_once']()
   self.assertIs(scope['state']['native'],native);self.assertIs(scope['state']['wormFeed'],feed)

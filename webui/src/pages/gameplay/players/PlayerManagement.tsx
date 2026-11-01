@@ -25,6 +25,7 @@ const legacy: Record<SectionId, [PlayerHome, string]> = {
   tags: ['Advanced', 'Character tags'], history: ['Activity', 'History'], actions: ['Advanced', 'All tools'],
 }
 const searches: Record<string, string> = {
+  'unlock-trainers': 'enable all skills trainer training skill points 20 intel 100',
   'give-solari': 'money currency balance', 'give-scrip': 'money currency balance', 'give-intel': 'research knowledge points',
   'grant-cosmetic': 'appearance skins dyes outfits building sets', 'repair-gear': 'fix durability armor weapons backpack',
   'give-vehicle-kit': 'vehicle parts assembly', rename: 'name identity', 'reset-journey': 'quest story restart',
@@ -79,6 +80,7 @@ export function PlayerManagement(props: SectionProps & { initialSection?: Sectio
     setHome(nextHome); setView(nextView ?? views[nextHome][0]); setTool(nextTool); setQuery('')
   }
   function openTool(id: string) {
+    if (id === 'grant-all-skills') id = 'unlock-trainers'
     const selected = tools.find(item => item.id === id)
     if (selected) navigate(playerToolHome(selected.group, selected.id), selected.group === 'Progression' ? 'Unlocks & rewards' : appearance.has(id) ? 'Appearance' : selected.group === 'Vehicle' ? 'Vehicles' : selected.group === 'Items' ? 'Give & repair' : undefined, id)
   }
@@ -116,10 +118,10 @@ export function PlayerManagement(props: SectionProps & { initialSection?: Sectio
         if (view === 'Session controls') return item.group === 'Live'
         return (item.group === 'Identity' && item.id !== 'rename') || item.group === 'Danger'
       })
-      const completionOrder = ['apply-progression-preset', 'complete-contract', 'codex', 'complete-tutorials']
+      const completionOrder = ['apply-progression-preset', 'complete-contract', 'unlock-trainers', 'codex', 'complete-tutorials']
       const factionIds = ['progression-unlock', 'give-faction-rep', 'set-faction-tier', 'reset-faction']
       body = view === 'Unlocks & rewards' ? <div className="space-y-3">
-        <ActionsSection key={`${props.player.id}:unlocks`} {...shared} actionIds={list.filter(item => !factionIds.includes(item.id) && item.id !== 'unlock-trainers').map(item => item.id).sort((a, b) => (completionOrder.includes(a) ? completionOrder.indexOf(a) : 99) - (completionOrder.includes(b) ? completionOrder.indexOf(b) : 99))} initialAction={tool ?? undefined} />
+        <ActionsSection key={`${props.player.id}:unlocks`} {...shared} actionIds={list.filter(item => !factionIds.includes(item.id) && item.id !== 'grant-all-skills').map(item => item.id).sort((a, b) => (completionOrder.includes(a) ? completionOrder.indexOf(a) : 99) - (completionOrder.includes(b) ? completionOrder.indexOf(b) : 99))} initialAction={tool ?? undefined} />
         <details className="card p-3" open={tool && factionIds.includes(tool) ? true : undefined}>
           <summary className="cursor-pointer font-medium min-h-10">Faction Progression Unlocks</summary>
           <div className="mt-3"><ActionsSection {...shared} toolsLabel="Faction progression tools" actionIds={factionIds} initialAction={tool && factionIds.includes(tool) ? tool : 'progression-unlock'} /></div>

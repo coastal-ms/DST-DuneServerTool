@@ -64,7 +64,7 @@ it('organizes character tools into the shared sections and returns recovery to t
   const progressionViews = within(screen.getByRole('navigation', { name: 'Solo Progression views' }))
   expect(progressionViews.getAllByRole('button').map(button => button.textContent)).toEqual(['Specializations', 'Unlocks & rewards'])
   fireEvent.click(progressionViews.getByRole('button', { name: 'Unlocks & rewards', exact: true }))
-  for (const label of ['Complete Story','Complete Contracts','Complete Codex','Complete Tutorials','Faction Progression Unlocks']) expect(screen.getByText(label, {selector:'summary'})).toBeInTheDocument()
+  for (const label of ['Complete Story','Trainers and Skills','Complete Codex','Complete Tutorials','Faction Progression Unlocks']) expect(screen.getByText(label, {selector:'summary'})).toBeInTheDocument()
   fireEvent.click(screen.getByText('Complete Story', {selector:'summary'}))
   expect(screen.getByText('Complete Story', {selector:'summary'}).closest('details')).toHaveAttribute('open')
   expect(screen.getByRole('heading', {name:'Reset to Post-NPE (keep skills & points)'})).toBeInTheDocument()
@@ -101,4 +101,17 @@ it('expands Solo item tools inline while keeping sibling cards accessible', () =
   expect(screen.queryByRole('button', { name: 'Give item', exact: true })).not.toBeInTheDocument()
   expect(screen.getByRole('button', { name: 'Give Item', exact: true })).toBeInTheDocument()
   expect(vi.mocked(api).mock.calls.some(([, options]) => options?.method && options.method !== 'GET')).toBe(false)
+})
+
+it('groups trainer unlock and all skills under one Trainers and Skills card', () => {
+  render(<SoloMode />)
+  fireEvent.click(screen.getByRole('button',{name:'Character tools',exact:true}))
+  fireEvent.click(screen.getByRole('button',{name:'Progression',exact:true}))
+  fireEvent.click(screen.getByRole('button',{name:'Unlocks & rewards',exact:true}))
+  const card=screen.getByText('Trainers and Skills',{selector:'summary'}).closest('details')!
+  fireEvent.click(within(card).getByText('Trainers and Skills',{selector:'summary'}))
+  expect(within(card).getByRole('button',{name:'Unlock trainer',exact:true})).toBeDisabled()
+  expect(within(card).getByRole('heading',{name:'Enable all skills',exact:true})).toBeInTheDocument()
+  expect(within(card).getByText('Connect and inspect a Solo save to read skill totals.')).toBeInTheDocument()
+  expect(screen.queryByText('Enable all skills',{selector:'summary'})).not.toBeInTheDocument()
 })

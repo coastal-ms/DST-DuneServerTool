@@ -9,6 +9,7 @@ import { PageHeader } from '../components/PageHeader'
 import { CollapsibleCard } from '../components/CollapsibleCard'
 import { ItemPicker } from '../components/ItemPicker'
 import { SoloMods } from '../components/solo/SoloMods'
+import { OfficialServerCard } from '../components/solo/OfficialServerCard'
 import { SoloLiveMap } from '../components/solo/SoloLiveMap'
 import { SoloDeck } from '../components/solo/SoloDeck'
 import { SoloRegisTanks } from '../components/solo/SoloRegisTanks'
@@ -114,12 +115,11 @@ const SOLO_ITEM_TOOLS = [
 
 const SOLO_UNLOCK_TOOLS = [
   { id: 'story', label: 'Complete Story', icon: 'Route' },
-  { id: 'trainers', label: 'Complete Contracts', icon: 'GraduationCap' },
+  { id: 'trainers', label: 'Trainers and Skills', icon: 'GraduationCap' },
   { id: 'codex', label: 'Complete Codex', icon: 'BookOpen' },
   { id: 'tutorials', label: 'Complete Tutorials', icon: 'BookOpen' },
   { id: 'faction', label: 'Faction Progression Unlocks', icon: 'Flag' },
   { id: 'stations', label: 'Testing Stations', icon: 'FlaskConical' },
-  { id: 'skills', label: 'Enable all skills', icon: 'Sparkles' },
   { id: 'points', label: 'Progression points', icon: 'Gauge' },
 ] as const
 
@@ -578,7 +578,7 @@ export function SoloMode() {
   const localBackups = allBackups.filter(backup => backup.source !== 'archive')
   const archivedBackups = allBackups.filter(backup => backup.source === 'archive')
   const viewBackups = (backupView === 'local' ? localBackups : archivedBackups)
-    .filter(backup => `${backup.name} ${backup.relativePath} ${backup.modifiedAt} ${new Date(backup.modifiedAt).toLocaleString()}`.toLowerCase().includes(backupSearch.trim().toLowerCase()))
+    .filter(backup => `${backup.characterName ?? ''} ${backup.name} ${backup.relativePath} ${backup.modifiedAt} ${new Date(backup.modifiedAt).toLocaleString()}`.toLowerCase().includes(backupSearch.trim().toLowerCase()))
     .sort((a, b) => (backupSort === 'newest' ? -1 : 1) * a.modifiedAt.localeCompare(b.modifiedAt))
   const backupCount = viewBackups.length
   const backupPageCount = Math.max(1, Math.ceil(backupCount / 25))
@@ -873,6 +873,8 @@ export function SoloMode() {
     }
     if (!window.confirm(
       `Restore ${backup.name}?\n\n`
+      + (backup.characterName ? `Character in backup: ${backup.characterName}.\n\n` : '')
+      + 'This replaces the entire save, including its character.\n\n'
       + 'DST will validate this backup, preserve the current save as a separate pre-restore backup, '
       + 'atomically replace game.db, and verify the restored wrapper and SQLite database.',
     )) return
@@ -2257,13 +2259,11 @@ export function SoloMode() {
                 {busy === 'progression:trainer' ? 'Applying...' : 'Unlock trainer'}
               </button>
             </div>
-</div>}
-{tool.id === 'skills' && <div>
 <ProgressionActionCard
               icon="Sparkles"
               title="Enable all skills"
               description="Unlock all five trainers and raise 143 approved skills to value 7. Leave Bindu Sprint and Voice Ignore learnable, preserve unknown Solo keys, keep at least 20 unspent points, and raise Intel to 100."
-              status={`${inspection?.progression.skillsAtSeven ?? 0}/143 enabled · ${inspection?.progression.unspentSkillPoints ?? 0} unspent · ${inspection?.progression.intel ?? 0} Intel`}
+              status={inspection ? `${Math.max(0, inspection.progression.totalSkillPoints - inspection.progression.unspentSkillPoints)} skill points spent · ${inspection.progression.unspentSkillPoints} unspent · ${inspection.progression.skillsAtSeven}/143 skills at level 7 · ${inspection.progression.intel} Intel` : 'Connect and inspect a Solo save to read skill totals.'}
               busy={busy === 'progression:skills'}
               disabled={!canMutateActiveProfile || gameRunning}
               onRun={() => void runProgressionAction(
@@ -2389,6 +2389,7 @@ export function SoloMode() {
               <p className="text-sm text-text-muted">{status?.inspectionError || 'Connect a Solo save to inspect it.'}</p>
             )}
           </div>
+          <OfficialServerCard />
         </div>
       )}
 
@@ -2622,6 +2623,7 @@ export function SoloMode() {
               <p className="text-sm text-text-muted mt-1">
                 Backups validate the wrapper, SQLite integrity, foreign keys, and one-character invariant. Restore always preserves the current save first.
               </p>
+              {allBackups.some(backup => !backup.characterName) && <p className="mt-1 text-sm text-text-muted">Older or imported backups may have no character name recorded. You can still validate and restore them.</p>}
             </div>
             <div className="flex items-center gap-2 shrink-0 flex-wrap">
               <button type="button" className="btn-secondary" disabled={!canMutateActiveProfile || gameRunning || !!busy} onClick={() => void browseBackupFile()}><Icon name="FolderOpen" size={14} /> Browse backup file…</button>
@@ -2698,6 +2700,7 @@ export function SoloMode() {
                     />}
                     <div className="min-w-0">
                     <div className="font-medium text-sm break-all">{backup.name}</div>
+                    <div className="text-xs text-text-muted">{backup.characterName ? `Character: ${backup.characterName}` : 'Character name unavailable for this backup'}</div>
                     <div className="text-xs text-text-muted">
                       {formatBytes(backup.bytes)} - {new Date(backup.modifiedAt).toLocaleString()}
                     </div>

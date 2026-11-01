@@ -372,7 +372,7 @@ function Get-DuneWidgetStatus {
     # One narrow game-state read shared by all widget viewers. No diagnostics,
     # inventory projection or autonomous refresh worker.
     Invoke-DunePlatformSingleFlight -Key 'widget:status' -ResultReuseSec 15 -TimeoutSec 15 -Script {
-        $ctx = Get-DuneDbContext
+        $ctx = Get-DuneDbContext -SkipGuestRecovery
         if (-not $ctx.ok) { throw $ctx.message }
         $csv = Invoke-DuneSqlRaw -Ip $ctx.ip -Sql 'SELECT map, ready, alive, server_id IN (SELECT * FROM dune.active_server_ids) AS is_current FROM dune.farm_state ORDER BY map;' -Csv -TimeoutSec 10
         if (Test-DunePsqlError -Output $csv) { throw (Get-DunePsqlErrorMessage -Output $csv) }

@@ -6,7 +6,10 @@ const body = html.slice(html.indexOf('function spiceLayer('), html.indexOf('func
 const { spiceLayer, migrateSpiceLayers } = new Function(body + ';return {spiceLayer,migrateSpiceLayers};')()
 describe('separate spice layers', () => {
  it('starts with only large spice selected', () => {
-  expect(html).toContain("new Set(['storms','worms','spice-large','grid','history','bases'])")
+  const defaults = html.match(/\benabled\s*=\s*new Set\((\[[^\]]*\])\)/)
+  expect(defaults).not.toBeNull()
+  const layers: string[] = JSON.parse(defaults![1].replaceAll("'", '"'))
+  expect(layers.filter(layer => layer.startsWith('spice-'))).toEqual(['spice-large'])
   expect(html).toContain('data-layer="spice-large" checked')
   expect(html).toContain('data-layer="spice-medium"><')
   expect(html).toContain('data-layer="spice-small"><')

@@ -1,6 +1,7 @@
 BeforeAll {
     . (Join-Path $PSScriptRoot '_TestHelpers.ps1')
     Register-DstStubs
+    Import-DstLib 'Config.ps1'
     . (Join-Path (Get-DstRepoRoot) 'app/server/HttpServer.ps1')
     Import-DstLib 'PlatformCache.ps1'
     Import-DstLib 'PublicIp.ps1'

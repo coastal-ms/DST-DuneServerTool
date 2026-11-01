@@ -132,7 +132,7 @@ function Get-DuneVmResources {
 }
 
 function Get-DuneVmStatus {
-    param([switch]$Force)
+    param([switch]$Force, [switch]$SkipGuestRecovery)
     if ((Get-Command Test-DuneSoloInstallation -ErrorAction SilentlyContinue) -and (Test-DuneSoloInstallation)) {
         return @{ exists=$false; running=$false; name=''; state='Not applicable'; ip=$null; uptime=0 }
     }
@@ -190,7 +190,7 @@ function Get-DuneVmStatus {
             }
         }
         $guestRecovery = $null
-        if ($ip -and (Get-Command Invoke-DuneHyperVGuestRecovery -ErrorAction SilentlyContinue)) {
+        if (-not $SkipGuestRecovery -and $ip -and (Get-Command Invoke-DuneHyperVGuestRecovery -ErrorAction SilentlyContinue)) {
             try {
                 $guestRecovery = Invoke-DuneHyperVGuestRecovery -Ip $ip `
                     -ForceKvp:($ipSource -eq 'last-known')

@@ -1,7 +1,7 @@
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { PlayersTab } from '../src/pages/gameplay/PlayersTab'
-import { getPlayers, getPlayerSummary, getPlayerStats, giveSolari, deleteAccount, unlockTestingStations, type Player } from '../src/api/gameplay'
+import { getPlayers, getPlayerSummary, getPlayerStats, giveSolari, deleteAccount, unlockTestingStations, grantAllSkills, getTrainerCatalog, getTrainerStatus, type Player } from '../src/api/gameplay'
 import { getPlayerActionTools } from '../src/pages/gameplay/players/sections'
 import { playerToolHome } from '../src/pages/gameplay/players/PlayerManagement'
 import { COMMAND_DECK_KEY } from '../src/hooks/useCommandDeck'
@@ -10,7 +10,7 @@ vi.mock('../src/pages/gameplay/players/coriolis', () => ({ CoriolisAdmin: () => 
 vi.mock('../src/pages/gameplay/players/base-water', () => ({ BaseWaterAdmin: () => <div>Existing water controls</div> }))
 vi.mock('../src/api/gameplay', async importOriginal => ({
   ...await importOriginal<typeof import('../src/api/gameplay')>(),
-  getPlayers: vi.fn(), getPlayerSummary: vi.fn(), getPlayerStats: vi.fn(), giveSolari: vi.fn(), deleteAccount: vi.fn(), unlockTestingStations: vi.fn(),
+  getPlayers: vi.fn(), getPlayerSummary: vi.fn(), getPlayerStats: vi.fn(), giveSolari: vi.fn(), deleteAccount: vi.fn(), unlockTestingStations: vi.fn(), grantAllSkills: vi.fn(), getTrainerCatalog: vi.fn(), getTrainerStatus: vi.fn(),
 }))
 const players: Player[] = [
   { id: 41, account_id: 51, controller_id: 61, name: 'Aster', class: 'Mentat', map: 'Survival_1', faction_id: 1, faction_name: 'Atreides', online_status: 'Offline' },
@@ -225,4 +225,43 @@ describe('Player workspace', () => {
     expect(screen.getByRole('button',{name:'Character Inventory',exact:true})).toHaveAttribute('aria-pressed','true')
     window.history.replaceState(null,'','/players')
   })
+})
+
+it('keeps contracts separate and routes skill search to the combined trainers card without bypassing confirmation', async () => {
+  vi.mocked(getTrainerCatalog).mockResolvedValue({ok:true,source:'live',total:1,trainers:[{job:'Mentat',name:'Mentat',contract_count:1,skill_count:1}]})
+  vi.mocked(getTrainerStatus).mockResolvedValue({ok:true,source:'live',account_id:51,has_pawn:true,jobs:[],total:1})
+  vi.spyOn(window,'confirm').mockReturnValue(false)
+  await selectPlayer()
+  await findTool('Enable All Skills', /Trainers and Skills/)
+  expect(screen.getByRole('button',{name:/Trainers and Skills/})).toHaveAttribute('aria-expanded','true')
+  expect(screen.getByRole('button',{name:/Complete Contracts/})).toHaveAttribute('aria-expanded','false')
+  const contracts=screen.getByRole('button',{name:/Complete Contracts/})
+  const trainers=screen.getByRole('button',{name:/Trainers and Skills/})
+  const codex=screen.getByRole('button',{name:/Complete Codex/})
+  expect(contracts.compareDocumentPosition(trainers) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+  expect(trainers.compareDocumentPosition(codex) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+  await screen.findByText('Mentat',{selector:'span.flex-1'})
+  fireEvent.click(screen.getByRole('button',{name:'Enable all skills',exact:true}))
+  expect(window.confirm).toHaveBeenCalledOnce()
+  expect(grantAllSkills).not.toHaveBeenCalled()
+  expect(window.confirm).toHaveBeenCalledWith(expect.stringContaining('20 spendable skill points'))
+  expect(window.confirm).toHaveBeenCalledWith(expect.stringContaining('Intel to 100'))
+  expect(window.confirm).not.toHaveBeenCalledWith(expect.stringContaining('AFTER'))
+})
+
+it('offers one skill-search destination and runs the original skill grant with no trainer prerequisite', async () => {
+  vi.mocked(getTrainerCatalog).mockResolvedValue({ok:true,source:'live',total:1,trainers:[{job:'Mentat',name:'Mentat',contract_count:1,skill_count:1}]})
+  vi.mocked(getTrainerStatus).mockResolvedValue({ok:true,source:'live',account_id:51,has_pawn:true,jobs:[],total:1})
+  vi.mocked(grantAllSkills).mockResolvedValue({ok:true,message:'Original skill grant applied.'})
+  vi.spyOn(window,'confirm').mockReturnValue(true)
+  expect(getPlayerActionTools(false).some(tool=>tool.id==='grant-all-skills')).toBe(false)
+  await selectPlayer()
+  await findTool('Enable All Skills', /Trainers and Skills/)
+  expect(screen.getByText(/20 spendable skill points and at least 100 Intel/)).toBeVisible()
+  await screen.findByText('Mentat',{selector:'span.flex-1'})
+  fireEvent.click(screen.getByRole('button',{name:'Enable all skills',exact:true}))
+  await waitFor(()=>expect(grantAllSkills).toHaveBeenCalledExactlyOnceWith(51))
+  expect(window.confirm).toHaveBeenCalledOnce()
+  expect(window.confirm).toHaveBeenCalledWith(expect.stringContaining('20 spendable skill points'))
+  expect(window.confirm).not.toHaveBeenCalledWith(expect.stringContaining('Unlock Trainers'))
 })
