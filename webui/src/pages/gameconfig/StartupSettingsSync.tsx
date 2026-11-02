@@ -37,7 +37,7 @@ export function StartupSettingsSync({ onBusyChange }: { onBusyChange?: (busy: bo
       <input type="checkbox" checked={enabled} disabled={loading || saving || !isLocalViewer()} onChange={e => e.target.checked ? void save(true) : setConfirmDisable(true)} />
       Let DST manage server configuration
     </label>
-    <p className="mt-2 text-xs text-text-muted">Applies to the self-hosted battlegroup. Solo profile settings have their own local-file controls in Solo Mode. Turning this off leaves existing INI values untouched and removes DST’s deployment and startup entries from the server configuration. Explicit saves then write files only.</p>
+    <p className="mt-2 text-xs text-text-muted">When off, DST keeps your INI values and saves file edits without managing server startup.</p>
     {!isLocalViewer() && <p className="mt-2 text-xs text-text-muted">Change management mode from DST on the host PC.</p>}
     {!enabled && <p role="note" className="mt-2 text-xs text-warning">You assume responsibility for manual configuration changes and their effects. DST cannot guarantee compatibility or accept responsibility for resulting problems. Configuration-related support may require reproducing the issue with DST management enabled.</p>}
     {cleanupPending && <p role="status" className="mt-2 text-xs text-warning">Server unavailable: YAML cleanup is pending and will run before its next DST start. INIs remain untouched.</p>}

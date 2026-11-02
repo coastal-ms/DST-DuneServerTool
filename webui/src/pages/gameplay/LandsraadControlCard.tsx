@@ -115,12 +115,7 @@ export function LandsraadControlCard() {
         </button>
       </div>
 
-      <p className="text-xs text-text-muted leading-relaxed">
-        Seat the House that <strong>holds the Landsraad</strong> and the <strong>decree</strong> in force for the
-        running term, without waiting for a vote. A decree is held by a House, so both are written together —
-        a decree on its own shows nothing in-game. Changes apply on the <strong>next map-pod start</strong>,
-        so a battlegroup restart is required.
-      </p>
+      <p className="text-xs text-text-muted leading-relaxed">Choose the ruling House and decree for this term. A battlegroup restart is required.</p>
 
       {data && data.term_id > 0 && (
         <div className="mt-2 text-xs text-text-dim">

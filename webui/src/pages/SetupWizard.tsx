@@ -265,11 +265,7 @@ function Step1Preflight({ existing = false, mode }: { existing?: boolean; mode?:
             : 'Verify your machine can host the battlegroup.'}
       />
       {isLan && (
-        <p className="text-sm text-text-dim mb-3">
-          The VM will live on a <strong>separate Hyper-V host</strong> on your network. This PC still needs the
-          Hyper-V PowerShell module (to drive that host remotely) and the OpenSSH client (to reach the VM). The
-          next step points DST at the host's IP and tests the connection.
-        </p>
+        <p className="text-sm text-text-dim mb-3">This PC needs Hyper-V PowerShell tools and OpenSSH to manage the remote host and VM.</p>
       )}
       {existing && !isLan && (
         <p className="text-sm text-text-dim mb-3">
@@ -335,7 +331,7 @@ function Step2Config() {
         <dl className="grid grid-cols-[200px_1fr] gap-y-2 text-sm">
           <dt className="text-text-dim">Windows user</dt>
           <dd className="font-mono">{cfg.windowsUser ?? '(unset)'}</dd>
-          <dt className="text-text-dim">SSH key path</dt>
+          <dt className="text-text-dim">SSH private-key file</dt>
           <dd className="font-mono break-all">
             {cfg.sshKey ?? '(unset)'}
             {cfg.sshKey && !cfg.sshKeyExists && (
@@ -684,12 +680,7 @@ function StepConnectLan() {
                   placeholder="Cannot be blank"
                   className="px-3 py-2 rounded-lg bg-surface-2 border border-border text-text text-sm" />
               </label>
-              <p className="md:col-span-2 text-xs text-text-dim -mt-1">
-                The host's own administrator account. In a workgroup this is routinely a <strong>different</strong>{' '}
-                account than the one DST itself runs as on this PC — use the host's <strong>computer name</strong>, a
-                backslash, then the account: <span className="font-mono">{hostIp.trim() ? `${hostIp.trim()}\\Administrator` : 'MYHOST\\Administrator'}</span>.
-                It must have a password; Windows blocks blank-password accounts from signing in over the network.
-              </p>
+              <p className="md:col-span-2 text-xs text-text-dim -mt-1">Use an administrator account on the host, such as HOSTNAME\Administrator. A password is required.</p>
             </div>
           )}
 

@@ -89,7 +89,7 @@ describe('PortalAccountsManager progressive setup', () => {
     render(<PortalAccountsManager />)
     expect(await screen.findByText('Step 3 — Verify the Owner locally')).toBeInTheDocument()
     expect(screen.getByLabelText('Owner username to verify')).toHaveValue('Coastal')
-    expect(screen.getByText(/does not claim that remote access is working/i)).toBeInTheDocument()
+    expect(screen.getByText(/Verify the Owner password on this PC before enabling login/i)).toBeInTheDocument()
     await user.type(screen.getByLabelText('Paste the one-time password'), 'generated-password-value')
     await user.click(screen.getByRole('button', { name: 'Verify Owner password locally' }))
     expect(await screen.findByText('Step 4 — Enable account login')).toBeInTheDocument()
@@ -111,8 +111,8 @@ describe('PortalAccountsManager progressive setup', () => {
     })
     const user = userEvent.setup()
     render(<PortalAccountsManager />)
-    expect(await screen.findByText(/QR and link become a stable token-free login URL/i)).toBeInTheDocument()
-    expect(screen.getByText(/Disable account login and restore legacy links/i)).toBeInTheDocument()
+    expect(await screen.findByText(/enabling account login disables existing token-based Browser Portal links/i)).toBeInTheDocument()
+    expect(screen.getByText(/Disable account login in local Settings to restore previous links/i)).toBeInTheDocument()
     const enable = screen.getByRole('button', { name: 'Enable account login' })
     expect(enable).toBeDisabled()
     await user.click(screen.getByRole('checkbox'))
@@ -136,7 +136,7 @@ describe('PortalAccountsManager progressive setup', () => {
     expect(screen.getByText(/stable token-free URL/i)).toBeInTheDocument()
     expect(screen.getByText('Create another account')).toBeInTheDocument()
     expect(screen.getByLabelText('Role')).toBeInTheDocument()
-    expect(screen.getAllByText(/Owners have full trusted remote access/i).length).toBeGreaterThan(0)
+    expect(screen.getAllByText(/Owners have full remote access except host-only actions/i).length).toBeGreaterThan(0)
   })
 
   it('promotes an existing Admin to Owner without replacing the login', async () => {

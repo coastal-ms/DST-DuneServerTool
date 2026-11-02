@@ -143,12 +143,7 @@ export function LandsraadTab() {
             <Icon name="RefreshCw" size={14} className={loading ? 'animate-spin' : ''} /> Refresh
           </button>
         </div>
-        <p className="text-xs text-text-muted leading-relaxed">
-          Each Landsraad house (task) has <strong>5 reward tiers</strong> — milestones players unlock by contributing points.
-          <strong> Threshold</strong> is the point target for that tier; <strong>template_id</strong> is the item rewarded; <strong>amount</strong> is how many.
-          Use <em>Bulk Threshold Edit</em> to rescale all thresholds at once (e.g. when you lower the task goal from 15k to 5k),
-          or expand a house and click a tier to change its item/amount individually.
-        </p>
+        <p className="text-xs text-text-muted leading-relaxed">Expand a House to edit its rewards, or use Bulk Threshold Edit to change matching thresholds across all Houses.</p>
         {termId > 0 && (
           <div className="mt-2 text-xs text-text-dim">
             Current term: <span className="font-mono text-text">{termId}</span> • Thresholds in use: <span className="font-mono text-text">{currentThresholds.join(', ') || '—'}</span>

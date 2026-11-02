@@ -173,7 +173,7 @@ export function SoloInventoryExplorer({
       id="solo-current-inventory"
       title="Current inventory"
       icon="PackageSearch"
-      subtitle="Browse and edit items in the Backpack, equipment, Bank Storage and supported built storage. Close Dune before editing; unequip equipment before deleting it."
+      subtitle="Close Dune before editing. Unequip equipment before deleting it."
       headerRight={
         <span className="pill border-info/40 bg-info/10 text-info">
           {groups.length} item type{groups.length === 1 ? '' : 's'}

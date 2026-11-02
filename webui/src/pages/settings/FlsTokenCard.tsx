@@ -154,31 +154,16 @@ export function FlsTokenCard() {
               <Icon name="TriangleAlert" size={16} />
               When to use this
             </div>
-            <p className="text-text-muted">
-              Only if your self-hosted server suddenly disappeared from the in-game server browser and your
-              logs show <span className="font-mono">403002</span> /{' '}
-              <span className="font-mono">ACCESS_DENIED</span> ("Could not find service authorization
-              information for Battlegroup"). This is a Funcom-side authorization issue, not a DST bug.
-            </p>
-            <p className="text-text-muted">
-              First, regenerate your self-hosting token on the{' '}
-              <a
+            <p className="text-text-muted">Use this when the server is missing from the game browser and its log reports 403002 / ACCESS_DENIED.</p>
+            <p className="text-text-muted">Generate a new token on the <a
                 href="https://account.duneawakening.com/"
                 target="_blank"
                 rel="noreferrer"
                 className="text-ibad hover:underline"
               >
                 Dune account page
-              </a>{' '}
-              while signed into the <span className="font-medium">same account</span> this server was created
-              with, then paste the new token below. DST replaces it everywhere on the server and restarts the
-              battlegroup.
-            </p>
-            <p className="text-text-dim text-xs">
-              This is the community-reported recovery, validated by DST on a live server. A full backup of your
-              server config is taken before anything changes, and DST refuses any token from a different account
-              (so your characters can't be orphaned).
-            </p>
+              </a> using the account that created this server, then paste it below. Applying restarts the battlegroup.</p>
+            <p className="text-text-dim text-xs">DST backs up the server configuration and checks that the token belongs to the same account before applying it.</p>
           </div>
 
           <div className="text-sm">

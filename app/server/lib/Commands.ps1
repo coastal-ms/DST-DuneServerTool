@@ -468,7 +468,8 @@ function Start-DuneVisibleElevated {
 # embedded terminal instead; for now everything opens a console window.
 function Invoke-DuneCommandExternal {
     param(
-        [string]$Name
+        [string]$Name,
+        [string]$SshRotationResultPath
     )
     if (-not $script:PwshExe -or -not $script:MainScript) {
         throw "Command execution not configured (pwsh.exe or dune-server.ps1 missing)."
@@ -485,6 +486,10 @@ function Invoke-DuneCommandExternal {
     # This launcher always creates a visible console, regardless of UI mode.
     # Captured/in-app handlers return before reaching it.
     $argList += '-PauseOnExit'
+    if ($SshRotationResultPath) {
+        if ($Name -ne 'rotate-ssh-key') { throw 'A key rotation result is only supported for SSH key rotation.' }
+        $argList += @('-SshRotationResultPath', ('"' + $SshRotationResultPath + '"'))
+    }
     # Launch so the window is VISIBLE to the signed-in user even when this
     # backend runs in Session 0 ("Keep serving while DST is closed" service
     # mode). A plain Start-Process there opens the console on the invisible

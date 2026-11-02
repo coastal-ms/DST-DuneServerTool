@@ -545,11 +545,7 @@ export function ChatCommandsCard() {
         </div>
       </div>
 
-      <p className="mt-4 text-[11px] text-text-dim">
-        DST checks for new commands on a timer, so a reply takes about as long as
-        the interval below. That check is not free — it costs the same whether or
-        not anyone is chatting, and only while this is switched on.
-      </p>
+      <p className="mt-4 text-[11px] text-text-dim">Shorter check intervals use more server resources.</p>
 
       <div className="mt-2 flex flex-wrap items-center gap-2">
         <span className="text-xs text-text-muted">Check for commands every</span>

@@ -55,12 +55,7 @@ export class PageErrorBoundary extends Component<Props, State> {
           </div>
           {moduleLoadFailed ? <p className="text-sm text-text mb-3">
             The browser could not download this page’s code. Reload the page to fetch the current version. This does not indicate that your game server stopped.
-          </p> : <p className="text-sm text-text mb-3">
-            The page hit an unhandled error and was prevented from rendering. The full stack has been
-            written to <span className="font-mono">%APPDATA%\DuneServer\webview2-debug.log</span>; please
-            create a ZIP from <strong>Help → Create Diagnostics Package</strong> and attach it in your
-            DST Discord support thread.
-          </p>}
+          </p> : <p className="text-sm text-text mb-3">This page could not open. Use Help → Create Diagnostics Package and share the ZIP in your DST support thread.</p>}
 
           <div className="mb-3">
             <div className="text-xs font-medium text-text-muted mb-1">Error</div>

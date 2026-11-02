@@ -36,6 +36,10 @@ Register-DuneRoute -Method PUT -Path '/api/config' -Handler {
         foreach ($k in $body.Keys) { $patch[$k] = $body[$k] }
     }
     # Validate the SSH key path if provided
+    if ($patch.SshKey -and (Test-Path -LiteralPath $patch.SshKey -PathType Container)) {
+        Write-DuneError -Response $res -Status 400 -Message 'The SSH key location is a folder. Use SSH private-key file to select the key file itself, including its filename.'
+        return
+    }
     if ($patch.SshKey -and -not (Test-Path -LiteralPath $patch.SshKey)) {
         Write-DuneError -Response $res -Status 400 -Message "SshKey path does not exist: $($patch.SshKey)"
         return
@@ -59,7 +63,7 @@ Register-DuneRoute -Method PUT -Path '/api/config' -Handler {
 
 # POST /api/config/rotate-ssh-key — generate a fresh SSH key and authorize it on
 # the VM. Runs the existing 'rotate-ssh-key' command in an elevated console and
-# WAITS for it to finish (non-interactive).
+# waits for its verified completion result while the console accepts credentials.
 Register-DuneRoute -Method POST -Path '/api/config/rotate-ssh-key' -Handler {
     param($req, $res, $routeParams, $body)
 
@@ -76,23 +80,22 @@ Register-DuneRoute -Method POST -Path '/api/config/rotate-ssh-key' -Handler {
         return
     }
 
+    $resultPath = Join-Path (Split-Path -Parent (Get-DuneConfigPath)) ('ssh-rotation-' + [guid]::NewGuid().ToString('N') + '.json')
     try {
-        $launch = Invoke-DuneCommandExternal -Name 'rotate-ssh-key'
+        $launch = Invoke-DuneCommandExternal -Name 'rotate-ssh-key' -SshRotationResultPath $resultPath
         $procId = $launch.pid
 
-        # Wait for the elevated rotation console to exit (rotation is
-        # non-interactive: it regenerates the key, authorizes it on the VM, and
-        # exits when the elevated rotation console finishes).
-        $rotated = $false
-        if ($procId) {
-            $deadline = (Get-Date).AddSeconds(180)
-            while ((Get-Date) -lt $deadline) {
-                if (-not (Get-Process -Id $procId -ErrorAction SilentlyContinue)) { $rotated = $true; break }
-                Start-Sleep -Milliseconds 500
+        # The console remains open to display its result. Process exit alone
+        # never establishes that authorization or login succeeded.
+        $deadline = (Get-Date).AddSeconds(180)
+        while (-not (Test-Path -LiteralPath $resultPath -PathType Leaf) -and (Get-Date) -lt $deadline) {
+            if ($procId -and -not (Get-Process -Id $procId -ErrorAction SilentlyContinue) -and -not (Test-Path -LiteralPath $resultPath -PathType Leaf)) {
+                throw 'The rotation console closed without confirming a verified key. The operation did not report success.'
             }
+            Start-Sleep -Milliseconds 500
         }
 
-        if (-not $rotated) {
+        if (-not (Test-Path -LiteralPath $resultPath -PathType Leaf)) {
             Write-DuneJson -Response $res -Body @{
                 ok       = $false
                 rotated  = $false
@@ -102,14 +105,34 @@ Register-DuneRoute -Method POST -Path '/api/config/rotate-ssh-key' -Handler {
             return
         }
 
+        $rotation = Get-Content -LiteralPath $resultPath -Raw | ConvertFrom-Json
+        if (-not $rotation.ok) { throw $(if ($rotation.message) { [string]$rotation.message } else { 'Key rotation failed in the console.' }) }
+        $cfg = Read-DuneConfig
+        $keyPath = [string]$rotation.keyPath
+        if (-not $keyPath -or $cfg.SshKey -ne $keyPath -or -not (Test-Path -LiteralPath $keyPath -PathType Leaf)) {
+            throw 'The verified private-key file was not saved in Settings.'
+        }
+        $vm = Get-DuneVmStatus
+        if (-not $vm.running -or -not $vm.ip) { throw 'The VM is unavailable for key login verification.' }
+        $probe = Invoke-DuneSshHidden -Ip $vm.ip -KeyPath $keyPath -TimeoutSec 12 -SshOptions @(
+            '-o','BatchMode=yes','-o','IdentitiesOnly=yes','-o','IdentityAgent=none','-o','PreferredAuthentications=publickey',
+            '-o','StrictHostKeyChecking=no','-o','ConnectTimeout=8','-o','LogLevel=ERROR'
+        ) -RemoteCommand 'echo dst-rotation-ok'
+        if ($probe.Exit -ne 0 -or @($probe.Stdout) -notcontains 'dst-rotation-ok') {
+            throw 'The selected SSH key did not pass login verification from DST. Check the console output.'
+        }
+
         Write-DuneJson -Response $res -Body @{
             ok       = $true
             rotated  = $true
             pid      = $procId
-            message  = 'SSH key rotated and authorized on the VM.'
+            keyPath  = $keyPath
+            message  = 'SSH key login verified and private-key file selected.'
         }
     } catch {
         Write-DuneError -Response $res -Status 500 -Message "SSH key rotation failed: $($_.Exception.Message)"
+    } finally {
+        if (Test-Path -LiteralPath $resultPath -PathType Leaf) { Remove-Item -LiteralPath $resultPath -Force }
     }
 }
 
@@ -125,11 +148,15 @@ Register-DuneRoute -Method POST -Path '/api/config/strip-ssh-passphrase' -Handle
     $cfg     = Read-DuneConfig
     $keyPath = if ($cfg) { [string]$cfg.SshKey } else { '' }
     if (-not $keyPath) {
-        Write-DuneError -Response $res -Status 400 -Message 'No SSH key is configured. Set the SSH key path in Settings first.'
+        Write-DuneError -Response $res -Status 400 -Message 'No SSH key is configured. Select the SSH private-key file in Settings first.'
         return
     }
     if (-not (Test-Path -LiteralPath $keyPath)) {
         Write-DuneError -Response $res -Status 404 -Message "Configured SSH key file not found: $keyPath"
+        return
+    }
+    if (Test-Path -LiteralPath $keyPath -PathType Container) {
+        Write-DuneError -Response $res -Status 400 -Message 'The SSH key location is a folder. In Settings, use SSH private-key file to select the key file itself, including its filename.'
         return
     }
 
@@ -174,7 +201,7 @@ Register-DuneRoute -Method POST -Path '/api/config/strip-ssh-passphrase' -Handle
         $text = ($out | Out-String).Trim()
 
         if ($code -ne 0 -or (Test-DuneSshKeyEncrypted -KeyPath $keyPath) -eq $true) {
-            if ($text -match '(?im)incorrect passphrase|failed to load|invalid format|bad passphrase|unable to load') {
+            if ($text -match '(?im)incorrect passphrase|bad passphrase') {
                 Write-DuneError -Response $res -Status 400 -Message 'That passphrase is incorrect — the key was not changed. Try again with the key''s current passphrase.'
             } else {
                 $detail = if ($text) { $text } else { "ssh-keygen exited $code" }

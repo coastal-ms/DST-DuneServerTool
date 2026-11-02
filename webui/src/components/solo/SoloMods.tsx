@@ -256,8 +256,8 @@ export function SoloMods({ connectionToken = '' }: { connectionToken?: string })
       {createPortal(<DragOverlay>{dragged && <div className="border border-border rounded p-3 bg-surface shadow-lg flex items-center gap-3"><Icon name="GripVertical" size={14} />{state?.mods.find(mod => mod.folder === dragged)?.name}</div>}</DragOverlay>, document.body)}
       </DndContext>
       {state && !state.mods.length && <p className="text-sm text-text-muted">No mods installed.</p>}
-      
-      <p className="text-xs text-text-muted">Solo only. Launch Solo includes built-in Tank support; Launch with Mods also loads enabled mods. DST supports its mod-loading framework only. We make no guarantees that any individual mod will or will not work, and DST does not provide individual mod troubleshooting. Contact the mod author or discuss issues with the community.</p>
+
+      <p className="text-xs text-text-muted">Launch Solo includes built-in Tank support. Launch with Mods also loads your enabled mods. DST supports the mod-loading framework only. For individual mod issues, contact the author or community.</p>
       <a className="text-xs text-accent-bright underline" href="https://discord.com/channels/1517599283757453333/1558246888967245957" target="_blank" rel="noopener noreferrer">Solo mod discussion</a>
       {log && <ConfirmationModal title="UE4SS Log" description={log.available ? 'Current or most recent Solo launch.' : 'No log yet. Launch Solo from DST, then check here.'} confirmLabel="Close" onCancel={() => setLog(null)} onConfirm={() => setLog(null)}>
         {log.available && <><pre className="text-xs whitespace-pre-wrap break-words max-h-96 overflow-auto">{log.content || 'The log is empty.'}</pre><button className="btn-secondary mt-3" onClick={downloadLog}>Download UE4SS.log</button></>}

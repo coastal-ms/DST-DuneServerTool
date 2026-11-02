@@ -39,27 +39,27 @@ const FIELDS: {
     placeholder: 'C:\\Program Files (x86)\\Steam\\steamapps\\common\\Dune Awakening Self-Hosted Server',
     help: 'Where Funcom installed the dedicated server.',
     browse: { mode: 'folder' } },
-  { key: 'SshKey',       label: 'SSH key path',
+  { key: 'SshKey',       label: 'SSH private-key file',
     placeholder: 'C:\\Users\\<you>\\AppData\\Local\\DuneAwakeningServer\\sshKey',
-    help: 'Private key used to SSH into the dune-awakening VM.',
+    help: 'Enter the full file location, including the filename, or use Browse. Select the private key, not its folder or .pub file.',
     browse: { mode: 'file', filter: 'SSH key (sshKey;*.pem;*.key)|sshKey;*.pem;*.key|All files (*.*)|*.*' } },
   { key: 'WindowsUser',  label: 'Windows username',
     placeholder: 'your-windows-username',
     help: 'Used for desktop shortcut creation.' },
   { key: 'PortCheckMode',label: 'Port-check mode', placeholder: 'builtin',
     type: 'select',
-    help: 'builtin = CanYouSeeMe, PortCheckTool, then Check-Host (TCP only) · checkhost = Check-Host only · canyouseeme = CanYouSeeMe only · custom = your own URL · disabled = off' },
+    help: "Built-in checks test TCP ports. Choose Custom to use your own checking service." },
   { key: 'PortCheckUrlTemplate', label: 'Port-check URL template',
     placeholder: 'https://example.com/check?ip={ip}&port={port}&protocol={protocol}',
     help: 'Used when mode is "custom". Tokens: {ip} {port} {protocol}',
     showWhen: v => (v.PortCheckMode ?? '') === 'custom' },
   { key: 'ShowUdpPortStatus', label: 'Show UDP port status', placeholder: '',
     type: 'checkbox',
-    help: 'Show the game-port (UDP 7777–7810) indicators on the dashboard and status bar. UDP can\'t be verified by the built-in/free TCP checkers, so these are hidden by default to avoid confusion — they only appear when Port-check mode is "custom" with a UDP-capable service AND this box is checked.',
+    help: "Requires a custom service that supports UDP checks.",
     showWhen: v => (v.PortCheckMode ?? '') === 'custom' && !!(v.PortCheckUrlTemplate ?? '').trim() },
   { key: 'DbPort', label: 'Database port',
     placeholder: '15432',
-    help: 'In-pod PostgreSQL port DST queries for Players / Bases / Storage. Funcom\'s default is 15432 — change it only if your server\'s database listens elsewhere (e.g. 15433). Use "Test connection" below after changing it.' },
+    help: "Default: 15432. If the database uses another port, enter it and select Test connection." },
 ]
 
 export function Settings() {
@@ -71,8 +71,7 @@ export function Settings() {
   const [error, setError] = useState<string | null>(null)
   const [browsing, setBrowsing] = useState<string | null>(null)
 
-  // "Generate new SSH key" — runs the rotate-ssh-key command, waits for it to
-  // finish, then propagates the fresh key everywhere DST uses it.
+  // Generate selects the private-key file only after verified rotation.
   const [sshRotating, setSshRotating] = useState(false)
   const [sshRotateMsg, setSshRotateMsg] = useState<string | null>(null)
   // "Remove passphrase (keep same key)" — strips the passphrase off the existing
@@ -144,22 +143,27 @@ export function Settings() {
     setDbTestOk(null)
   }
   async function onRotateSshKey() {
-    if (!window.confirm('Generate a NEW SSH key?\n\nThis regenerates the key and authorizes it on the dune-awakening VM. The VM must be running.\n\nA console window will open and ask for the \'dune\' user\'s password — you MUST type it there to authorize the new key on the VM. If you close that prompt without entering the password, DST will be locked out of the server until you re-run this. The console will tell you if authorization succeeded.')) return
+    if (!window.confirm('Generate a new SSH key? The VM must be running.\n\nEnter the dune VM password in the console. Closing it before authorization can leave DST unable to connect. DST will select the private-key file after login is verified.')) return
     setSshRotating(true)
     setSshRotateMsg(null)
     setError(null)
     try {
-      const r = await api<{ ok: boolean; rotated: boolean; message?: string }>(
+      const r = await api<{ ok: boolean; rotated: boolean; keyPath?: string; message?: string }>(
         '/api/config/rotate-ssh-key',
         { method: 'POST' },
       )
-      setSshRotateMsg(r.message ?? (r.ok ? 'SSH key rotated.' : 'Rotation did not complete.'))
-      if (!r.ok && r.message) setError(r.message)
+      if (!r.ok || !r.rotated) {
+        setError(r.message ?? 'Rotation did not complete.')
+        return
+      }
+      setSshRotateMsg(r.message ?? 'SSH key login verified and private-key file selected.')
+      const selectedKey = r.keyPath
+      if (selectedKey) setValues(v => ({ ...v, SshKey: selectedKey }))
       // Reload config so the form reflects any path changes.
       try {
         const cfgOut = await api<ConfigResponse>('/api/config')
         setCfg(cfgOut)
-        setValues({ ...cfgOut.values })
+        setValues(v => ({ ...v, SshKey: cfgOut.values.SshKey ?? r.keyPath ?? v.SshKey }))
       } catch { /* non-fatal */ }
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e))
@@ -463,7 +467,7 @@ export function Settings() {
   if (loading) {
     return (
       <>
-        <PageHeader title="Settings" icon="Settings" description="Tool configuration (dune-server.config)." />
+        <PageHeader title="Settings" icon="Settings" />
         <div className="card p-8 text-text-muted">Loading…</div>
       </>
     )
@@ -474,7 +478,6 @@ export function Settings() {
       <PageHeader
         title="Settings"
         icon="Settings"
-        description="Tool configuration — written to dune-server.config next to dune-server.bat."
         actions={
           cfg && (
             <span className={cfg.complete ? 'pill-success' : 'pill-warning'}>
@@ -551,9 +554,7 @@ export function Settings() {
               </div>
             )}
             <div className="flex items-center justify-between">
-              <p className="text-sm text-text-dim">
-                Checks GitHub releases for newer versions. Settings installs launch the visible installer wizard; your config in <span className="font-mono">%APPDATA%\DuneServer</span> is preserved.
-              </p>
+              <p className="text-sm text-text-dim">Updates open the installer. Your saved configuration is kept.</p>
               <button type="button" onClick={() => void onCheckUpdate()} disabled={updChecking} className="btn-secondary ml-3 shrink-0">
                 <Icon name={updChecking ? 'Loader2' : 'RefreshCw'} size={15} className={updChecking ? 'animate-spin' : ''} />
                 {updChecking ? 'Checking…' : 'Check now'}
@@ -744,13 +745,7 @@ export function Settings() {
       >
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0">
-            <p className="text-sm text-text-dim">
-              DST reads Players, Bases and Storage from the server's PostgreSQL
-              database on port <span className="font-mono">{(values['DbPort'] ?? '').trim() || '15432'}</span>.
-              If those pages are empty, the database may be listening on a
-              different port — set it in <span className="font-medium">Database port</span> below
-              and test it here. The VM must be running.
-            </p>
+            <p className="text-sm text-text-dim">Start the VM, then select Test connection to check the configured database port.</p>
             {dbTestMsg && (
               <p className={`mt-2 text-xs flex items-center gap-1.5 ${dbTestOk === false ? 'text-danger' : dbTestOk === true ? 'text-success' : 'text-text-dim'}`}>
                 <Icon name={dbTestOk === false ? 'AlertCircle' : dbTestOk === true ? 'CheckCircle2' : 'Info'} size={13} />
@@ -866,7 +861,7 @@ export function Settings() {
                     type="button"
                     onClick={() => void onRotateSshKey()}
                     disabled={sshRotating}
-                    title="Generate a new SSH key and copy it everywhere DST uses it"
+                    title="Generate a private key, authorize it on the VM, and verify login"
                     className="btn-secondary shrink-0"
                   >
                     <Icon name={sshRotating ? 'Loader2' : 'KeyRound'} size={15} className={sshRotating ? 'animate-spin' : ''} />
@@ -900,12 +895,7 @@ export function Settings() {
             {f.help && <p className="mt-1 text-xs text-text-dim">{f.help}</p>}
             {f.key === 'SshKey' && sshStripOpen && (
               <div className="mt-2 rounded-lg border border-border bg-surface-2 p-3 space-y-2">
-                <p className="text-xs text-text-dim">
-                  Removes the passphrase from this key <span className="text-text">without rotating it</span> — the key pair
-                  stays the same, so it remains authorized on the VM and nothing needs re-adding. Background checks run
-                  non-interactively and can't answer a passphrase prompt, which is why a passphrase-protected key shows the
-                  dashboard as Unknown. Enter the key's current passphrase:
-                </p>
+                <p className="text-xs text-text-dim">Enter the current passphrase to remove its protection from this SSH key. The key stays authorized on the VM.</p>
                 <div className="flex items-stretch gap-2">
                   <input
                     type="password"

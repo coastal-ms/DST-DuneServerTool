@@ -82,10 +82,23 @@ export function LocalAtlasPreview({ url }: { url: string }) {
       cancelAnimationFrame(scheduled)
       scheduled = requestAnimationFrame(() => {
         if (!frame.current) return
-        const top = Math.max(0, frame.current.getBoundingClientRect().top)
-        setHeight(Math.max(420, Math.floor(window.innerHeight - top - 16)))
+        const bounds = frame.current.getBoundingClientRect()
+        const top = Math.max(0, bounds.top)
+        const scroll = frame.current.closest('[data-app-scroll-container]')
+        const workspace = frame.current.closest('.spatial-workspace')
+        let bottom = window.innerHeight
+        if (scroll) bottom = Math.min(bottom, scroll.getBoundingClientRect().bottom)
+        workspace?.querySelectorAll('.spatial-bottom, .spatial-dock').forEach(element => {
+          const dock = element.getBoundingClientRect()
+          if (dock.height > 0 && dock.top > top && dock.left < bounds.right && dock.right > bounds.left) bottom = Math.min(bottom, dock.top)
+        })
+        setHeight(Math.max(160, Math.floor(bottom - top - 12)))
       })
     }
+    const observer = typeof ResizeObserver === 'function' ? new ResizeObserver(measure) : null
+    const scroll = frame.current?.closest('[data-app-scroll-container]')
+    if (scroll) observer?.observe(scroll)
+    frame.current?.closest('.spatial-workspace')?.querySelectorAll('.spatial-bottom, .spatial-dock').forEach(element => observer?.observe(element))
     measure()
     window.addEventListener('resize', measure)
     window.addEventListener('focus', measure)
@@ -93,6 +106,7 @@ export function LocalAtlasPreview({ url }: { url: string }) {
     window.addEventListener('scroll', measure, { passive: true, capture: true })
     return () => {
       cancelAnimationFrame(scheduled)
+      observer?.disconnect()
       window.removeEventListener('resize', measure)
       window.removeEventListener('focus', measure)
       window.removeEventListener('pageshow', measure)
@@ -101,8 +115,8 @@ export function LocalAtlasPreview({ url }: { url: string }) {
   }, [])
   return (
     <div data-map-expanded={expanded} className={expanded ? 'fixed inset-0 z-[65000] flex flex-col bg-base' : ''}>
-      <div className={expanded ? 'absolute right-2 top-2 z-10 flex flex-col items-end gap-1' : 'mb-1 flex items-center justify-end gap-2'}>
-        <div className="flex items-center gap-2">
+      <div className={expanded ? 'absolute right-2 top-2 z-10 flex flex-col items-end gap-1' : 'mb-1 flex flex-wrap items-center justify-end gap-2'}>
+        <div className="flex flex-wrap items-center justify-end gap-2">
         <span role="status" className="text-xs text-text-muted">{viewerPaused ? 'Live map paused' : awake === 'active' ? 'Screen keep-awake active' : awake === 'unavailable' ? 'Screen keep-awake unavailable' : 'Keeping screen awake…'}</span>
         {!viewerPaused && <button type="button" disabled={awake === 'requesting'} className="btn-secondary text-sm" onClick={() => window.dispatchEvent(new Event('dst-screen-awake-retry'))}>{awake === 'unavailable' ? 'Retry keep-awake' : 'Keep screen awake'}</button>}
         </div>
@@ -115,7 +129,7 @@ export function LocalAtlasPreview({ url }: { url: string }) {
       src={url}
       allow="fullscreen"
       referrerPolicy="no-referrer"
-      className={expanded ? 'block min-h-0 w-full flex-1 border-0' : 'block w-full min-h-[420px] rounded-lg border border-border'}
+      className={expanded ? 'block min-h-0 w-full flex-1 border-0' : 'block w-full min-h-0 rounded-lg border border-border'}
       style={expanded ? {height:'100dvh', minHeight:0} : { height: height === null ? 'calc(100dvh - 280px)' : `${height}px` }}
     />
     </div>

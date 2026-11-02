@@ -241,11 +241,7 @@ export function PortalAccountsManager() {
     <section className="border-t border-border pt-5 space-y-4" aria-labelledby="portal-accounts-title">
       <div>
         <h3 id="portal-accounts-title" className="font-semibold flex items-center gap-2"><Icon name="Users" size={16} /> Browser Portal accounts</h3>
-        <p className="text-xs text-text-dim mt-1">
-          Optional local sign-in for the existing full portal. Owners have full trusted remote access except host-only
-          safeguards. Admins can operate the server and manage players, but cannot access host configuration, files,
-          credentials, Database, Sietches, Experimental, or Settings. Players can view server status and maps, warm maps, and manage only their linked character.
-        </p>
+        <p className="text-xs text-text-dim mt-1">Owners have full remote access except host-only actions. Admins can operate the server and manage players; host configuration, files, credentials, Database, Sietches, Experimental and Settings remain restricted. Players can view status and maps, warm maps and manage only their linked character.</p>
       </div>
       {error && <div role="alert" className="text-sm text-danger bg-danger/10 border border-danger/40 rounded-lg px-3 py-2">{error}</div>}
       {message && <div className="text-sm text-success bg-success/10 border border-success/30 rounded-lg px-3 py-2">{message}</div>}
@@ -273,7 +269,7 @@ export function PortalAccountsManager() {
             </>}
             {setupStep === 3 && <>
               <div className="font-semibold">Step 3 — Verify the Owner locally</div>
-              <p className="text-sm text-text-muted">This checks only that the Owner password works on this host. It does not claim that remote access is working.</p>
+              <p className="text-sm text-text-muted">Verify the Owner password on this PC before enabling login.</p>
               <div className="grid gap-2 sm:grid-cols-2">
                 <label className="text-sm">Owner username
                   <input aria-label="Owner username to verify" value={verifyUsername} onChange={e => setVerifyUsername(e.target.value)} className="mt-1 w-full px-3 py-2 rounded-lg bg-surface-2 border border-border" />
@@ -295,10 +291,7 @@ export function PortalAccountsManager() {
             {setupStep === 4 && <>
               <div className="font-semibold">Step 4 — Enable account login</div>
               {passwordPanel}
-              <p className="text-sm text-text-muted">
-                The Browser Portal QR and link become a stable token-free login URL. Existing magic-link browser sessions stop working.
-                You can always use local Settings to Disable account login and restore legacy links.
-              </p>
+              <p className="text-sm text-text-muted">Existing Browser Portal sessions stop working. Disable account login in local Settings to restore previous links.</p>
               <div className="text-sm text-success">✓ Owner password verified locally on this host: {verifiedOwner?.username}</div>
               <label className="flex items-start gap-2 rounded-lg border border-warning/40 bg-warning/10 p-3 text-xs text-text-muted">
                 <input
@@ -336,7 +329,7 @@ export function PortalAccountsManager() {
           <div className="border border-border rounded-lg p-4 space-y-3">
             <div>
               <div className="font-semibold">Create another account</div>
-              <p className="text-xs text-text-dim">Owner and Admin currently have the same portal capabilities.</p>
+              <p className="text-xs text-text-dim">Choose a role for this account.</p>
             </div>
             {createForm(false)}
           </div>

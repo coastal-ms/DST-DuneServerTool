@@ -154,7 +154,7 @@ describe('Solo mod controls', () => {
     expect(screen.getByRole('button', {name: /Solo mods/})).toHaveAttribute('aria-expanded', 'false')
     fireEvent.click(screen.getByRole('button', {name: /Solo mods/}))
     await screen.findByText('Example')
-    expect(screen.getByText(/We make no guarantees.*does not provide individual mod troubleshooting/)).toBeInTheDocument()
+    expect(screen.getByText(/supports the mod-loading framework only.*contact the author or community/)).toBeInTheDocument()
     expect(screen.queryByText('Declares WPS Launcher')).not.toBeInTheDocument()
     expect(screen.getByText(/Missing or disabled dependency/)).toBeInTheDocument()
     fireEvent.click(screen.getByRole('button', {name: /Solo mods/}))

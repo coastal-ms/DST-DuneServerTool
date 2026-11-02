@@ -48,11 +48,7 @@ export class SectionErrorBoundary extends Component<Props, State> {
         <div className="text-sm font-semibold text-danger mb-1 flex items-center gap-2">
           {this.props.name} couldn’t be displayed
         </div>
-        <p className="text-xs text-text-muted mb-2">
-          This section hit an unexpected error and was skipped so the rest of the page keeps working.
-          If it persists, use <strong>Help → Create Diagnostics Package</strong> and attach the ZIP in your
-          DST Discord support thread.
-        </p>
+        <p className="text-xs text-text-muted mb-2">This section could not load. If it keeps failing, use Help → Create Diagnostics Package and share the ZIP in your DST support thread.</p>
         <pre className="text-[11px] font-mono whitespace-pre-wrap break-words text-text-muted bg-surface-2 border border-border rounded-lg p-2 max-h-32 overflow-auto mb-2">
           {error.message || String(error)}
         </pre>

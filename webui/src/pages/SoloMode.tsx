@@ -1432,17 +1432,7 @@ export function SoloMode() {
       )}
 
       <CollapsibleCard id="solo-setup" title="Solo setup" icon="FolderCog" summary={connected ? 'Connected' : 'Not connected'}>
-      <div className="rounded-lg border border-sky-400/30 bg-sky-400/5 px-4 py-3 mb-5 text-sm">
-        <div className="flex items-start gap-2">
-          <Icon name="FlaskConical" size={16} className="text-sky-400 mt-0.5 shrink-0" />
-          <div>
-            <div className="font-medium text-sky-300">Retail Solo adapter</div>
-            <p className="text-text-muted mt-0.5">
-              DST targets the released Retail Solo wrapper-v1 save with guarded offline writes, retained backups, and post-write verification.
-            </p>
-          </div>
-        </div>
-      </div>
+
 
       <CollapsibleCard
         id="solo-first-use"
@@ -1714,9 +1704,7 @@ export function SoloMode() {
                 <h2 className="font-semibold flex items-center gap-2">
                   <Icon name="PackageOpen" size={16} /> Item delivery
                 </h2>
-                <p className="text-sm text-text-muted mt-1">
-                  Deliver to the Backpack, Bank Storage, or supported built storage. The game must be fully closed before every grant.
-                </p>
+                <p className="text-sm text-text-muted mt-1">Choose a destination. Close Dune before granting items.</p>
               </div>
               <StatusPill ok={!gameRunning}>
                 {gameRunning ? 'Close game to give items' : 'Offline writes available'}
@@ -1931,10 +1919,7 @@ export function SoloMode() {
 {itemTool === 'augments' && <div>
 <div className="card p-5 xl:col-span-2">
               <h3 className="font-semibold mb-1">Max Augment Attributes</h3>
-              <p className="text-xs text-text-muted">
-                Matches DST’s Self-Hosted action: sets every non-zero numeric roll on carried augments to
-                the confirmed maximum while preserving zero and non-numeric entries. Developer Storage is excluded.
-              </p>
+              <p className="text-xs text-text-muted">Maximize rolls on carried augments. Zero rolls are kept. Developer Storage is excluded.</p>
               <div className="rounded border border-warning/30 bg-warning/5 p-3 mt-4 text-xs text-text-muted">
                 Close the game fully; DST retains the current save before writing. Relog after the action.
               </div>
@@ -2180,7 +2165,7 @@ export function SoloMode() {
 <ProgressionActionCard
               icon="Medal"
               title="Max specializations"
-              description="Set all five tracks to level 100, grant all 205 rewards, and reconcile the 54 specialization skill points idempotently."
+              description="Set all five specialization tracks to level 100 and grant their rewards and skill points."
               status={`${countMaxSoloSpecializations(inspection?.progression.specializations ?? [], status?.legacyAdapter ?? false)}/5 tracks at 100 · ${inspection?.progression.purchasedRewards ?? 0}/205 unlocked rewards`}
               busy={busy === 'progression:specializations'}
               disabled={!canMutateActiveProfile || gameRunning}
@@ -2620,9 +2605,7 @@ export function SoloMode() {
           <div className="flex items-start justify-between gap-4 mb-4">
             <div>
               <h2 className="font-semibold flex items-center gap-2"><Icon name="ArchiveRestore" size={16} /> Retained save backups</h2>
-              <p className="text-sm text-text-muted mt-1">
-                Backups validate the wrapper, SQLite integrity, foreign keys, and one-character invariant. Restore always preserves the current save first.
-              </p>
+              <p className="text-sm text-text-muted mt-1">Restore keeps a backup of your current save.</p>
               {allBackups.some(backup => !backup.characterName) && <p className="mt-1 text-sm text-text-muted">Older or imported backups may have no character name recorded. You can still validate and restore them.</p>}
             </div>
             <div className="flex items-center gap-2 shrink-0 flex-wrap">

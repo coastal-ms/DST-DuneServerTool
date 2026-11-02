@@ -626,9 +626,9 @@ export function Commands() {
       <PageHeader
         title={updatesOnly ? 'Server updates' : 'Commands'}
         icon="Zap"
-        description={updatesOnly ? 'Update the Funcom game server. Review the requirements before running an update.' : showWorkbench
-          ? 'Choose a category to see related controls together. Review requirements before running a command.'
-          : 'Quick actions for the VM, battlegroup, and supporting tools. Click a section title to rename it. Drag the grip on any card to reorder within a section or move it to another — sections grow and shrink as you go.'}
+        description={updatesOnly ? 'Update the Funcom game server.' : showWorkbench
+          ? 'Choose a category to see related controls.'
+          : 'VM and battlegroup actions.'}
         actions={
           <div className={commandDeck ? 'flex flex-wrap items-center gap-2' : 'flex items-center gap-2'}>
             {(updatesOnly || requestedCategory) && <Link to="/commands" className="btn-secondary">All commands</Link>}
