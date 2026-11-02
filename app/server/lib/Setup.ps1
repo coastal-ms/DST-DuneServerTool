@@ -134,6 +134,12 @@ function Get-DuneSetupPreflight {
                 detail = "Configured SSH key file not found: $keyPath. Set the correct path on the Settings page, or re-run setup. To make a brand-new key that is also authorized on the VM, use the tool's Rotate SSH Key action (VM menu, key 'g')."
             }) | Out-Null
         }
+        elseif (Test-Path -LiteralPath $keyPath -PathType Container) {
+            $checks.Add(@{
+                key = 'sshkey'; label = 'SSH key authorized on VM'; ok = $false; severity = 'warning'
+                detail = 'The SSH key location is a folder. In Settings, use SSH private-key file to select the key file itself, including its filename.'
+            }) | Out-Null
+        }
         else {
             $vm = Get-DuneVmStatus
             if (-not $vm.running -or -not $vm.ip) {
@@ -217,7 +223,7 @@ function Get-DuneSetupConfigSummary {
     return @{
         windowsUser   = $cfg.WindowsUser
         sshKey        = $cfg.SshKey
-        sshKeyExists  = ($cfg.SshKey -and (Test-Path -LiteralPath $cfg.SshKey))
+        sshKeyExists  = ($cfg.SshKey -and (Test-Path -LiteralPath $cfg.SshKey -PathType Leaf))
         steamPath     = $cfg.SteamPath
         portCheckMode = $cfg.PortCheckMode
         vmName        = 'dune-awakening'

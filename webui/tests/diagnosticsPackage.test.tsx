@@ -121,7 +121,7 @@ describe('error-boundary support guidance', () => {
     expect(screen.queryByRole('button', {name:'Retry render'})).not.toBeInTheDocument()
     expect(screen.getByText(/does not indicate that your game server stopped/)).toBeInTheDocument()
   })
-  it('directs page and section failures to the diagnostics package and Discord', () => {
+  it('directs page and section failures to the diagnostics package and support thread', () => {
     vi.spyOn(console, 'error').mockImplementation(() => undefined)
     const page = render(
       <PageErrorBoundary pageName="Fixture page">
@@ -130,7 +130,7 @@ describe('error-boundary support guidance', () => {
     )
 
     expect(screen.getByText(/Help → Create Diagnostics Package/)).toBeInTheDocument()
-    expect(screen.getByText(/DST Discord support thread/)).toBeInTheDocument()
+    expect(screen.getByText(/DST support thread/)).toBeInTheDocument()
     page.unmount()
 
     render(
@@ -139,6 +139,6 @@ describe('error-boundary support guidance', () => {
       </SectionErrorBoundary>,
     )
     expect(screen.getByText(/Help → Create Diagnostics Package/)).toBeInTheDocument()
-    expect(screen.getByText(/DST Discord support thread/)).toBeInTheDocument()
+    expect(screen.getByText(/DST support thread/)).toBeInTheDocument()
   })
 })

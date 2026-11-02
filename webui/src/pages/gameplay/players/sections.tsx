@@ -1152,7 +1152,7 @@ function ActionRow({ def, player, busy, stats, open, danger, onToggle, runAction
         className={`w-full min-h-14 flex items-center gap-2.5 px-3 py-2 text-left text-sm transition-colors ${disabled ? 'opacity-50 cursor-not-allowed' : 'hover:bg-surface-2'} ${danger ? 'text-error' : 'text-text'}`}
         disabled={disabled}
         onClick={onToggle}
-        title={def.liveOnly ? 'Requires player to be online' : def.offlineOnly ? 'Requires player to be offline — the game caches this value in memory while online and overwrites it on logout' : undefined}>
+        title={def.liveOnly ? 'Requires player to be online' : def.offlineOnly ? 'Requires player to be offline' : undefined}>
         <Icon name={def.icon} size={14} className={`shrink-0 ${danger ? 'text-error' : 'text-text-dim'}`} />
         <span className="flex-1 min-w-0">
           <span className="font-medium break-words">{def.label}</span>
@@ -1615,9 +1615,7 @@ export function GrantCosmeticForm({ busy, playerName, accountId, playerOnline, o
       <p className="text-[11px] text-text-dim">Search character appearances and unlock items for {playerName}. Character appearances are saved while offline; unlock items go to inventory.</p>
       <div className="rounded-lg bg-warning/10 border border-warning/40 p-3 text-warning text-xs leading-relaxed">
         <p>{COSMETIC_LICENSE_NOTICE} Delivering a token or finding a saved unlock record does not confirm in-game usability or grant account ownership.</p>
-        <p className="mt-2">
-          Developer, test, placeholder, and Polar entries are experimental. Some have no working unlock action or are missing from retail game assets, so they may remain ordinary inventory items and do nothing. Some developer unlock items appear to register only when added to the inventory while the player is offline, then processed on next login. PowerTester is a Funcom account permission that private servers cannot grant; enabling <span className="font-mono">dw.PlayerProgressionUnlockEnabled</span> does not provide it.
-        </p>
+        <p className="mt-2">Experimental unlocks may not work in-game. Some remain inventory items without an unlock action. Account permissions such as PowerTester cannot be granted by private servers.</p>
       </div>
       {ownershipWarning && <div className="text-xs text-warning">{ownershipWarning}</div>}
       <CosmeticMultiSelect catalog={catalog} owned={owned} saved={unlocked} pending={pending} disabled={busy} playerOnline={playerOnline}

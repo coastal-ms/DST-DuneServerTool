@@ -1419,10 +1419,7 @@ export function GameConfig({ mode = 'standard', embedded = false, section = 'adv
               </p>
             </>
           )}
-          {contextual && !experimentalPage && <p className="text-xs text-text-muted mt-2">
-            DST moves the changed setting's entire section into its managed block, preserving structure and one clean copy.
-            The original file is backed up on the server before every write.
-          </p>}
+
           <button
             type="button"
             onClick={() => void onBackup()}
@@ -1548,14 +1545,7 @@ export function GameConfig({ mode = 'standard', embedded = false, section = 'adv
               </>
             }
           >
-            <p className="text-xs text-text-muted mb-3">
-              This edits the game-client files on this PC, separately from the selected server&apos;s files.
-              They are shared across this game installation, not saved per server. DST offers a reviewed set of local{' '}
-              <span className="font-mono">Game.ini</span> compatibility values. Managing{' '}
-              <span className="font-mono">Engine.ini</span> is a separate opt-in: some of its settings are evaluated by
-              the client independently and can affect play on your own DST server or other servers. Do not assume a
-              server value always overrides a local Engine.ini value.
-            </p>
+            <p className="text-xs text-text-muted mb-3">These settings affect this PC on every server. Close Dune before applying changes.</p>
             <label className="mb-3 flex items-start gap-3 rounded-lg border border-warning/30 bg-warning/5 p-3 cursor-pointer select-none">
               <input
                 type="checkbox"
@@ -1717,7 +1707,7 @@ export function GameConfig({ mode = 'standard', embedded = false, section = 'adv
           </button>
         </div>
       )}
-      {embedded && <p className="mb-4 text-sm text-text-muted">Advanced server controls apply to the battlegroup. Each control names its file and intended effect. Clear a scalar value to remove its entry from the server file when you apply; zero remains a value. Local player INIs change only through a separately approved local apply. Existing values stay in place until you review changes; gameplay effects can vary with game updates.</p>}
+      {embedded && <p className="mb-4 text-sm text-text-muted">Clear a value to remove its override. Enter 0 to save zero.</p>}
       {embedded && <div className="mb-4 flex flex-wrap items-center gap-2">
         {sourcePill}
         <button type="button" className="btn-secondary" disabled={!vmRunning || saving || loadState === 'loading' || dirtyKeys.length > 0} onClick={() => void loadAll()}>Refresh advanced values</button>
@@ -2284,12 +2274,7 @@ function CategoryCard({
               <div className="mb-1 flex items-center gap-2 font-semibold text-warning">
                 <Icon name="FlaskConical" size={14} /> Test settings
               </div>
-              <p>
-                These CVars are written to the battlegroup&apos;s <span className="font-mono text-text">UserEngine.ini</span> under <span className="font-mono text-text">[ConsoleVariables]</span>. Saving changes nothing on a running server: the values are applied to the game servers when the battlegroup restarts, so use <strong className="text-text">Apply server settings</strong> to put them into effect. The explicit client-config tools remain available for optional local edits.
-              </p>
-              <p className="mt-1.5">
-                Experimental Lab includes additional Dune and Unreal Engine controls. Save your changes, then use Apply server settings.
-              </p>
+              <p>Apply the saved server settings to restart the battlegroup.</p>
             </div>
           )}
           {children}

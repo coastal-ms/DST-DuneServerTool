@@ -88,9 +88,7 @@ export function AppearanceCard() {
       {expanded && (
         <div className="px-6 pb-5 space-y-5">
           <div className="flex items-start justify-between gap-3 border-t border-border pt-4">
-            <p className="text-sm text-text-dim">
-              Pick a preset, tweak any color, or import a theme JSON. Saved locally in your browser; xterm in the Terminal page recolors live.
-            </p>
+
             <button
               type="button"
               onClick={t.resetToDefault}
@@ -104,9 +102,7 @@ export function AppearanceCard() {
 
           <fieldset>
             <legend className="text-xs font-semibold tracking-wider uppercase text-text-dim mb-2">Text size</legend>
-            <p className="text-sm text-text-dim mb-3">
-              Increase interface text in both Classic and Command Deck. Icons and workspace dimensions stay fixed.
-            </p>
+            <p className="text-sm text-text-dim mb-3">Changes text size only.</p>
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
               {FONT_SCALE_OPTIONS.map(option => {
                 const id = `interface-text-size-${option}`

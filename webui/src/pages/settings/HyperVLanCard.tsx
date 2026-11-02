@@ -161,15 +161,7 @@ export function HyperVLanCard() {
 
       {open && (
         <div className="px-6 pb-6 space-y-4">
-          <div className="rounded-lg border border-warning/40 bg-warning/10 p-3 text-sm text-text-dim flex items-start gap-2">
-            <Icon name="AlertTriangle" size={16} className="text-warning mt-0.5 shrink-0" />
-            <span>
-              <span className="font-medium text-warning">Prerequisite:</span> the host's Hyper-V PowerShell Remoting
-              (WinRM) must be reachable from this PC. DST uses an explicit administrator credential for that host
-              below — it does not need to match the Windows account DST itself runs as. The VM must already be
-              installed on that host and named <span className="font-mono">dune-awakening</span>.
-            </span>
-          </div>
+          <div className="rounded-lg border border-warning/40 bg-warning/10 p-3 text-sm text-text-dim flex items-start gap-2">The host needs reachable PowerShell remoting and an existing dune-awakening VM.</div>
 
           {err && (
             <div className="rounded-lg border border-danger/40 bg-danger/10 p-3 text-sm text-danger flex items-start gap-2">
@@ -236,12 +228,7 @@ export function HyperVLanCard() {
                       placeholder="Password (cannot be blank)"
                       className="px-3 py-2 rounded-lg bg-surface-2 border border-border text-text text-sm"
                     />
-                    <p className="md:col-span-2 text-xs text-text-dim">
-                      The host's own administrator account — in a workgroup this is routinely a <strong>different</strong>{' '}
-                      account than the one DST itself runs as. Use the host's <strong>computer name</strong>, a backslash,
-                      then the account: <span className="font-mono">{hostIp.trim() ? `${hostIp.trim()}\\Administrator` : 'MYHOST\\Administrator'}</span>.
-                      The account must have a password — Windows blocks blank-password accounts from signing in over the network.
-                    </p>
+                    <p className="md:col-span-2 text-xs text-text-dim">Use an administrator account on the host, such as HOSTNAME\Administrator. A password is required.</p>
                   </div>
                 )}
               </div>

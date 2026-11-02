@@ -54,10 +54,7 @@ export function InstallLocationCard() {
       headerClassName="px-4 md:px-6 pt-4 md:pt-6 pb-2"
       bodyClassName="px-4 md:px-6 pb-4 md:pb-6 space-y-3"
     >
-      <p className="text-sm text-text-dim">
-        Location of DST itself on this PC. Use this path for antivirus exclusions,
-        manual file checks, or troubleshooting.
-      </p>
+
       {loading ? (
         <div className="text-text-dim text-sm flex items-center gap-2">
           <Icon name="Loader2" size={13} className="animate-spin" /> Loading...

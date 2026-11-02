@@ -1,9 +1,10 @@
 import React from 'react'
 import { cleanup, fireEvent, render, screen } from '@testing-library/react'
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { getAtlasEmbedUrl, getLocalAtlasPreviewUrl, LocalAtlasPreview } from '../src/pages/workspaces/LocalAtlasPreview'
 
-afterEach(cleanup)
+beforeEach(() => { vi.stubGlobal('ResizeObserver', class { observe() {} disconnect() {} }) })
+afterEach(() => { cleanup(); vi.unstubAllGlobals() })
 
 describe('local atlas development bridge', () => {
   it('expands the existing frame, restores it and rejects messages from other pages', () => {

@@ -248,11 +248,7 @@ export function VmInfoCard() {
               {info.mapLimits?.known && info.mapLimits.entries.length > 0 && (
                 <div>
                   <h3 className="text-sm font-medium">Per-map memory limits</h3>
-                  <p className="text-xs text-text-dim mb-2">
-                    The reference column is a snapshot of Funcom's world template taken in May 2026. Funcom changes
-                    these between patches and operators tune them on purpose, so a difference here is not by itself a
-                    problem — it is only here so you can see what your battlegroup is actually set to.
-                  </p>
+                  <p className="text-xs text-text-dim mb-2">Reference: Funcom template, May 2026. Differences may be intentional.</p>
                   <div className="max-h-64 overflow-auto rounded-lg border border-border">
                     <table className="w-full text-xs font-mono">
                       <thead className="text-text-dim">

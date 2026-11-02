@@ -13,6 +13,17 @@ here cover everything those tags shipped.
 
 ## [Unreleased]
 
+## [16.7.1] - 2026-11-01
+
+### Changed
+- Shorten repeated help across settings, Solo tools and setup while keeping useful guidance, warnings and confirmations.
+
+### Fixed
+- Fit the embedded Live Map beside Layers and above the bottom navigation on smaller screens.
+- Identify SSH key folder paths clearly and preserve key-loading errors instead of reporting incorrect passphrases.
+- Keep SSH keys created through DST rotation and initial setup free of unintended passphrases.
+- Select the generated private-key file automatically and verify SSH login before reporting successful rotation.
+
 ## [16.7.0] - 2026-10-31
 
 ### Added

@@ -1720,12 +1720,7 @@ function BackupScheduleCard({ vmRunning, showToast }: BackupScheduleCardProps) {
               : <span className="italic">{vmRunning ? 'Loading…' : 'VM not running.'}</span>}
           </div>
         </div>
-        <p className="text-xs text-text-dim mb-2">
-          Funcom's <span className="font-mono">battlegroup backup</span> and restore (<span className="font-mono">import</span>) jobs each create a one-shot pod per run that finishes
-          Succeeded and is never cleaned up. The scheduled cleanup runs after every backup tick using <strong>Keep last (count)</strong> below;
-          the manual button honors both thresholds. Only terminal <span className="font-mono">*-dump-*-pod</span> / <span className="font-mono">*-import-*-pod</span> objects are touched —
-          live DB, util/mon/pghero, file-browser, and the <span className="font-mono">.backup</span> files are never affected.
-        </p>
+        <p className="text-xs text-text-dim mb-2">Remove finished backup and restore jobs. Running jobs and database backup files are kept.</p>
         <div className="flex flex-wrap items-end gap-3">
           <label className="flex flex-col gap-1 text-xs">
             <span className="text-text-muted font-medium">
@@ -2023,11 +2018,7 @@ function BackupMirrorCard({ vmRunning, showToast }: BackupMirrorCardProps) {
       headerClassName="px-5 pt-5 pb-2"
       bodyClassName="px-5 pb-5 flex flex-col"
     >
-      <p className="text-sm text-text-muted mb-3">
-        Automatically copy every DST-taken database backup into a folder on this PC.
-        Copies are added as new backups appear on the VM — files in the mirror folder are never
-        deleted by DST, even if the VM's auto-purge trims older backups on the server side.
-      </p>
+      <p className="text-sm text-text-muted mb-3">Copy new DST database backups to this PC. Existing local copies are kept.</p>
 
       <label className="flex items-center gap-3 mb-3 select-none cursor-pointer">
         <input

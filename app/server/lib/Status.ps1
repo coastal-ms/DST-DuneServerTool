@@ -18,7 +18,7 @@ $script:DuneBattlegroupSnapshotCacheKey = '__cache:status-bg-snapshot'
 # quotes, so it must receive an actual empty string instead.
 function Test-DuneSshKeyEncrypted {
     param([string]$KeyPath)
-    if (-not $KeyPath -or -not (Test-Path -LiteralPath $KeyPath)) { return $null }
+    if (-not $KeyPath -or -not (Test-Path -LiteralPath $KeyPath -PathType Leaf)) { return $null }
     try {
         # PS 5.1 represents native stderr as error records. Inspect the exit
         # code even when the caller uses Stop; an encrypted key is expected.
@@ -37,6 +37,9 @@ function Test-DuneSshKeyEncrypted {
 # the UI can show. Returns $null when there's nothing useful to say.
 function Get-DuneSshFailureReason {
     param([string]$Stderr, [int]$ExitCode, [string]$KeyPath)
+    if ($KeyPath -and (Test-Path -LiteralPath $KeyPath -PathType Container)) {
+        return 'The SSH key location is a folder. In Settings, use SSH private-key file to select the key file itself, including its filename.'
+    }
     $err = ($Stderr | Out-String).Trim()
 
     # Authentication rejected: either the key isn't authorized on the VM, or it's
@@ -330,6 +333,10 @@ function Get-DuneBattlegroupSnapshotFresh {
     $sshKey = $cfg.SshKey
     if (-not $sshKey -or -not (Test-Path -LiteralPath $sshKey)) {
         $result.reason = "SSH key not configured or missing: $sshKey"
+        return $result
+    }
+    if (Test-Path -LiteralPath $sshKey -PathType Container) {
+        $result.reason = Get-DuneSshFailureReason -KeyPath $sshKey
         return $result
     }
 

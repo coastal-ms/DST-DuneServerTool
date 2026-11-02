@@ -33,9 +33,7 @@ export function FreshStartSnapshotsCard() {
       headerClassName="px-4 md:px-6 pt-4 md:pt-6 pb-2"
       bodyClassName="px-4 md:px-6 pb-4 md:pb-6 space-y-3"
     >
-      <p className="text-sm text-text-dim">
-        Fresh Start saves each character's purchased CHOAM/MTX sets, pieces, and cosmetics to a single JSON file before wiping the account, so purchases can be restored onto the recreated character. Back this folder up if you want durable copies outside the app data dir.
-      </p>
+      <p className="text-sm text-text-dim">Purchased-item snapshots for Fresh Start. Keep a separate copy of this folder for recovery.</p>
       {loading ? (
         <div className="text-text-dim text-sm flex items-center gap-2"><Icon name="Loader2" size={13} className="animate-spin" /> Loading…</div>
       ) : err ? (

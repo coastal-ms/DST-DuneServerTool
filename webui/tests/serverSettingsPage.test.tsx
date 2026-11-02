@@ -76,7 +76,7 @@ describe('Server Settings page', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Management & recovery' }))
 
     expect(screen.getByRole('heading', { name: 'Server Settings' })).toBeInTheDocument()
-    expect(screen.getByText(/ServerCustomSettings\.ini/)).toBeInTheDocument()
+    expect(screen.getByText('Configure the selected server. Review changes before applying.')).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Stop Battlegroup' })).toBeEnabled()
     expect(screen.getByRole('button', { name: 'Start Battlegroup' })).toBeEnabled()
     expect(screen.getAllByText('Console')).toHaveLength(2)

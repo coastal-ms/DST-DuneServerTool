@@ -20,4 +20,15 @@ Describe 'Visible command console completion' {
         }
         Should -Invoke Start-DuneVisibleElevated -Times 13 -Exactly -ParameterFilter { $ArgumentList -contains '-PauseOnExit' }
     }
+    It 'passes the rotation completion filename with spaces as one quoted argument' {
+        $resultPath = Join-Path $TestDrive 'rotation result.json'
+        Invoke-DuneCommandExternal -Name 'rotate-ssh-key' -SshRotationResultPath $resultPath | Out-Null
+        Should -Invoke Start-DuneVisibleElevated -Times 1 -Exactly -ParameterFilter {
+            $ArgumentList -contains '-SshRotationResultPath' -and $ArgumentList -contains ('"' + $resultPath + '"')
+        }
+    }
+    It 'rejects a rotation result argument for another command before launch' {
+        { Invoke-DuneCommandExternal -Name 'start' -SshRotationResultPath (Join-Path $TestDrive 'rotation.json') } | Should -Throw '*only supported for SSH key rotation*'
+        Should -Invoke Start-DuneVisibleElevated -Times 0 -Exactly
+    }
 }

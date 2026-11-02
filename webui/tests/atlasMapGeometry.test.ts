@@ -4,7 +4,7 @@ import { describe, expect, it } from 'vitest'
 
 const html = readFileSync(resolve(process.cwd(), '../app/tools/DuneAtlas/index.html'), 'utf8')
 const source = html.split('// Map interaction geometry:')[1].split('// End map interaction geometry.')[0]
-const geometry = new Function(`// Map interaction geometry:${source}; return {mapCompactBounds,mapZoomPan,mapClampedPan}`)()
+const geometry = new Function(`// Map interaction geometry:${source}; return {mapCompactBounds,mapDockedBounds,mapZoomPan,mapClampedPan}`)()
 
 describe('Live Map viewport and navigation', () => {
   it('uses the measured toolbar instead of reserving a fixed 150 pixels on a tablet', () => {
@@ -12,6 +12,17 @@ describe('Live Map viewport and navigation', () => {
     expect(bounds.top).toBe(88)
     expect(bounds.height).toBe(312)
     expect(Math.min(bounds.width, bounds.height) - 16).toBeGreaterThan(1.4 * (440 - 194 - 48))
+  })
+  it.each([[1830, 820], [1326, 410], [984, 520]])('fits the docked map beside Layers without centering it in the remaining width: %ix%i', (width, height) => {
+    const bounds = geometry.mapDockedBounds(width, height, 70, 28, 276)
+    expect(bounds.left).toBe(284)
+    expect(bounds.top).toBe(82)
+    expect(bounds.width).toBe(bounds.height)
+    expect(bounds.left + bounds.width).toBeLessThanOrEqual(width - 8)
+    expect(bounds.top + bounds.height).toBeLessThanOrEqual(height - 52)
+  })
+  it('uses the freed Layers space when the panel is hidden', () => {
+    expect(geometry.mapDockedBounds(984, 520, 70, 28, 0).left).toBe(8)
   })
   it('keeps the pointed map position stationary through zoom in and back out', () => {
     const viewport = { left: 8, top: 88, width: 804, height: 312 }

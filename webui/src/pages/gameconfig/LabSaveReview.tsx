@@ -57,7 +57,7 @@ export function LabSaveReview({ updates, serverPaths, serverAvailable = true, se
   return <div className="fixed inset-0 z-[100] bg-black/60 flex items-center justify-center p-4">
     <section role="dialog" aria-modal="true" aria-labelledby="lab-save-title" className="card p-5 w-full max-w-2xl max-h-[85vh] overflow-y-auto space-y-4">
       <h2 id="lab-save-title" className="text-lg font-semibold">Review Lab save destinations</h2>
-      <p className="text-sm text-text-muted">Choose where to save these exact changes. Local files affect Solo and this PC’s player. Server files affect the self-hosted server after Apply server settings. A verified file write does not prove an in-game effect.</p>
+      <p className="text-sm text-text-muted">Choose where to save. Local files affect Solo and this PC’s player. Server files take effect after Apply server settings.</p>
       <label className="flex gap-2"><input type="checkbox" checked={local} disabled={serverOnly || !localViewer || busy || localSaved} onChange={e => setLocal(e.target.checked)} />
         Save to this PC’s local Solo/player files {localSaved && '(saved)'}</label>
       {localViewer ? <div className="text-xs text-text-muted break-all">

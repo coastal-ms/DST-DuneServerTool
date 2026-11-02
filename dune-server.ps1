@@ -13,7 +13,8 @@ param(
     # window (Invoke-DuneCommandExternal); without it a quick command like
     # rotate-ssh-key flashes its result/warning and vanishes before it can be
     # read. Never passed for stdout-captured InApp runs.
-    [switch]$PauseOnExit
+    [switch]$PauseOnExit,
+    [string]$SshRotationResultPath
 )
 
 # ============================================================
@@ -21,7 +22,7 @@ param(
 # Wraps the original battlegroup.ps1 menu and adds extra tools
 # ============================================================
 
-$script:ToolVersion = "16.7.0"
+$script:ToolVersion = "16.7.1"
 
 # Cold-boot readiness budgets (seconds). A fresh battlegroup's FIRST boot can
 # take 10-30 min: k3s + funcom-operators initialize, metrics-server restarts a
@@ -373,6 +374,16 @@ function New-DuneDesktopShortcut {
     Write-Host "   (Double-click it - Windows will prompt for elevation.)" -ForegroundColor DarkGray
 }
 
+function Invoke-DuneFuncomKeyUpdate {
+    param([string]$VmUtilitiesPath, [string]$Ip)
+    # Funcom passes -N '""' to ssh-keygen, expecting legacy Windows quoting.
+    # Keep compatibility local to this call; modern mode treats those quotes
+    # as the passphrase itself. Do not modify the Steam-provided scripts.
+    $PSNativeCommandArgumentPassing = 'Legacy'
+    . $VmUtilitiesPath
+    Update-SshKey -Ip $Ip
+}
+
 function Resolve-FreshSshKey {
     # Picks the most recently modified SSH private key out of:
     #   1) %LOCALAPPDATA%\DuneAwakeningServer\sshKey  (rotate-ssh-key writes here)
@@ -382,16 +393,54 @@ function Resolve-FreshSshKey {
     param([string]$ConfiguredPath)
 
     $appDataKey = Join-Path $env:LOCALAPPDATA 'DuneAwakeningServer\sshKey'
-    $candidates = @()
-    if (Test-Path $appDataKey)                          { $candidates += Get-Item $appDataKey }
-    if ($ConfiguredPath -and (Test-Path $ConfiguredPath)) {
-        $resolved = (Resolve-Path $ConfiguredPath).Path
-        if (-not ($candidates | Where-Object { $_.FullName -eq $resolved })) {
-            $candidates += Get-Item $ConfiguredPath
-        }
-    }
+    $candidates = @(Get-DuneSshPrivateKeyFiles -Paths @($appDataKey, $ConfiguredPath))
     if (-not $candidates) { return $null }
     return ($candidates | Sort-Object LastWriteTime -Descending | Select-Object -First 1).FullName
+}
+
+function Get-DuneSshPrivateKeyFiles {
+    param([string[]]$Paths)
+    $seen = @{}
+    foreach ($path in $Paths) {
+        if (-not $path -or -not (Test-Path -LiteralPath $path)) { continue }
+        $files = if (Test-Path -LiteralPath $path -PathType Container) {
+            Get-ChildItem -LiteralPath $path -File | Where-Object { $_.Name -like 'sshKey*' -or $_.Name -like 'newkey-*' }
+        } else { Get-Item -LiteralPath $path }
+        foreach ($file in $files) {
+            if ($file.Extension -eq '.pub' -or $seen.ContainsKey($file.FullName)) { continue }
+            $header = Get-Content -LiteralPath $file.FullName -TotalCount 1 -ErrorAction SilentlyContinue
+            if ($header -match '^-----BEGIN (?:OPENSSH|RSA|EC|DSA|ENCRYPTED) PRIVATE KEY-----$') {
+                $seen[$file.FullName] = $true
+                $file
+            }
+        }
+    }
+}
+
+function Complete-DuneSshKeyRotation {
+    param([string[]]$Paths, [hashtable]$Before, [string]$Ip, [string]$User, [string]$ConfigPath)
+    $selected = $null
+    foreach ($file in (Get-DuneSshPrivateKeyFiles -Paths $Paths | Sort-Object LastWriteTime -Descending)) {
+        $hash = (Get-FileHash -LiteralPath $file.FullName -ErrorAction Stop).Hash
+        if ($Before.ContainsKey($file.FullName) -and $Before[$file.FullName] -eq $hash) { continue }
+        $probe = & ssh -o BatchMode=yes -o IdentitiesOnly=yes -o IdentityAgent=none -o PreferredAuthentications=publickey -o StrictHostKeyChecking=no -o ConnectTimeout=8 -o LogLevel=ERROR -i $file.FullName "$User@$Ip" 'echo dst-rotation-ok' 2>&1
+        if ($LASTEXITCODE -eq 0 -and @($probe) -contains 'dst-rotation-ok') { $selected = $file.FullName; break }
+    }
+    if (-not $selected) { throw 'The new SSH key did not pass login verification. The saved key selection was not changed. Run Generate again and complete the VM password prompt.' }
+    if (-not (Test-Path -LiteralPath $ConfigPath -PathType Leaf)) { throw 'The configuration file is missing; the verified key could not be selected.' }
+    if ($selected -match "[`r`n]") { throw 'The key filename cannot be saved in configuration.' }
+    $text = [IO.File]::ReadAllText($ConfigPath)
+    $pattern = '(?m)^[ \t]*SshKey[ \t]*=[^\r\n]*'
+    if ($text -match $pattern) {
+        $text = [regex]::Replace($text, $pattern, [Text.RegularExpressions.MatchEvaluator]{ param($match) "SshKey=$selected" })
+    } else { $text += "`r`nSshKey=$selected`r`n" }
+    $temp = $ConfigPath + '.' + [guid]::NewGuid().ToString('N') + '.tmp'
+    $backup = $ConfigPath + '.ssh-before-' + [guid]::NewGuid().ToString('N') + '.bak'
+    try {
+        [IO.File]::WriteAllText($temp, $text, [Text.UTF8Encoding]::new($true))
+        [IO.File]::Replace($temp, $ConfigPath, $backup)
+    } finally { if (Test-Path -LiteralPath $temp) { Remove-Item -LiteralPath $temp -Force } }
+    return $selected
 }
 
 function Load-Config {
@@ -1896,6 +1945,7 @@ while ($true) {
         # vm-utilities.ps1, then run initial-setup.ps1 in that same scope.
         $childScript = @"
 `$scriptDir = '$bgEsc'
+`$PSNativeCommandArgumentPassing = 'Legacy'
 . '$bgEsc\vm-utilities.ps1'
 . '$bgEsc\initial-setup.ps1'
 "@
@@ -2622,81 +2672,53 @@ while ($true) {
     }
 
     if ($cmdName -eq "rotate-ssh-key") {
-        $vmUtilsPath = "$bgSetupPath\vm-utilities.ps1"
-        if (Test-Path -LiteralPath $vmUtilsPath) {
-            . $vmUtilsPath
-            Update-SshKey -Ip $ip | Out-Null
-        } else {
-            # LAN mode or missing local Funcom install — generate + authorize
-            # without Funcom's vm-utilities.ps1. Mirrors the bootstrap logic in
-            # HyperVLanInstall.ps1 Initialize-DuneLanGuest.
-            $keyPath = $sshKey
-            if (-not $keyPath) { $keyPath = Join-Path $env:LOCALAPPDATA 'DuneAwakeningServer\sshKey' }
-            # Guard: if $keyPath is a directory (e.g. config stored the parent
-            # folder instead of the file), append the expected filename.
-            if ((Test-Path -LiteralPath $keyPath) -and (Get-Item -LiteralPath $keyPath).PSIsContainer) {
-                $keyPath = Join-Path $keyPath 'sshKey'
+        $outcome = @{ ok = $false; message = 'SSH key rotation did not complete.' }
+        try {
+            $defaultKey = Join-Path $env:LOCALAPPDATA 'DuneAwakeningServer\sshKey'
+            $before = @{}
+            foreach ($file in (Get-DuneSshPrivateKeyFiles -Paths @($defaultKey, $sshKey))) {
+                $before[$file.FullName] = (Get-FileHash -LiteralPath $file.FullName -ErrorAction Stop).Hash
             }
-            $keyDir = Split-Path -Parent $keyPath
-            if ($keyDir -and -not (Test-Path $keyDir)) { New-Item -ItemType Directory -Force -Path $keyDir | Out-Null }
-            if ((Test-Path -LiteralPath $keyPath) -and -not (Get-Item -LiteralPath $keyPath).PSIsContainer) {
-                Remove-Item -LiteralPath $keyPath -Force
+            $vmUtilsPath = "$bgSetupPath\vm-utilities.ps1"
+            if (Test-Path -LiteralPath $vmUtilsPath -PathType Leaf) {
+                $returned = @(Invoke-DuneFuncomKeyUpdate -VmUtilitiesPath $vmUtilsPath -Ip $ip) |
+                    Where-Object { $_ -is [string] -and (Test-Path -LiteralPath $_) } | Select-Object -Last 1
+                if (-not $returned) { throw 'Funcom did not complete key rotation. Check the console output above.' }
+            } else {
+                # Keep the previous key available until the replacement is verified.
+                $keyPath = if ($sshKey) { $sshKey } else { $defaultKey }
+                $keyDir = if (Test-Path -LiteralPath $keyPath -PathType Container) { $keyPath } else { Split-Path -Parent $keyPath }
+                if (-not (Test-Path -LiteralPath $keyDir)) { New-Item -ItemType Directory -Path $keyDir -Force | Out-Null }
+                $keyPath = Join-Path $keyDir ('sshKey-' + [guid]::NewGuid().ToString('N'))
+                Write-Host "Generating new SSH key at $keyPath ..."
+                $emptyPassphrase = if ($PSVersionTable.PSVersion -ge [version]'7.3' -and $PSNativeCommandArgumentPassing -ne 'Legacy') { '' } else { '""' }
+                & ssh-keygen -t ed25519 -f $keyPath -N $emptyPassphrase -q -C "dst@$($env:COMPUTERNAME)" 2>&1 | Out-Null
+                if ($LASTEXITCODE -ne 0 -or -not (Test-Path -LiteralPath $keyPath -PathType Leaf)) { throw 'Could not generate the SSH key.' }
+                $pub = (Get-Content -LiteralPath "$keyPath.pub" -Raw).Trim()
+                $b64Pub = [Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes($pub + [char]10))
+                Write-Host "Enter the '$sshUser' VM password to authorize the new key:"
+                $authorize = 'umask 077; mkdir -p ~/.ssh; echo ' + $b64Pub + ' | base64 -d >> ~/.ssh/authorized_keys && chmod 700 ~/.ssh && chmod 600 ~/.ssh/authorized_keys'
+                & ssh -o StrictHostKeyChecking=no -o PubkeyAuthentication=no -o PreferredAuthentications=password "$sshUser@$ip" $authorize
+                if ($LASTEXITCODE -ne 0) { throw 'The key could not be authorized. The saved key selection was not changed. Run Generate again and complete the VM password prompt.' }
+                $returned = $keyPath
             }
-            if (Test-Path -LiteralPath "$keyPath.pub") { Remove-Item -LiteralPath "$keyPath.pub" -Force }
-            Write-Host "  Generating new SSH key at $keyPath ..." -ForegroundColor Yellow
-            # Preserve an empty passphrase under both legacy and modern native argument passing.
-            $emptyPassphrase = if ($PSVersionTable.PSVersion -ge [version]'7.3' -and $PSNativeCommandArgumentPassing -ne 'Legacy') { '' } else { '""' }
-            & ssh-keygen -t ed25519 -f $keyPath -N $emptyPassphrase -q -C "dst@$($env:COMPUTERNAME)" 2>&1 | Out-Null
-            if (-not (Test-Path -LiteralPath $keyPath)) {
-                Write-Host "  FATAL: Could not generate SSH key." -ForegroundColor Red
-                Write-Host ""; continue
+            $selected = Complete-DuneSshKeyRotation -Paths @($returned, $defaultKey, $sshKey) -Before $before -Ip $ip -User $sshUser -ConfigPath $configFile
+            $sshKey = $selected
+            $cfg.SshKey = $selected
+            $script:V6SshKeyCache = $selected
+            $outcome = @{ ok = $true; keyPath = $selected; message = 'SSH key login verified and private-key file selected.' }
+            Write-Host $outcome.message -ForegroundColor Green
+            Write-Host "Selected file: $selected"
+        } catch {
+            $outcome.message = $_.Exception.Message
+            Write-Host ("SSH key rotation failed: " + $outcome.message) -ForegroundColor Red
+        } finally {
+            if ($SshRotationResultPath) {
+                $resultTemp = $SshRotationResultPath + '.tmp'
+                [IO.File]::WriteAllText($resultTemp, ($outcome | ConvertTo-Json -Compress), [Text.UTF8Encoding]::new($false))
+                Move-Item -LiteralPath $resultTemp -Destination $SshRotationResultPath -Force
             }
-            Write-Host "  Key generated." -ForegroundColor Green
-            # Base64-encode the public key to avoid shell-quoting issues with
-            # the key content (spaces, +, = chars) — same approach as
-            # Initialize-DuneLanGuest.
-            $pub = (Get-Content -Raw -LiteralPath "$keyPath.pub").Trim()
-            $b64Pub = [Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes("$pub`n"))
-            Write-Host ""
-            Write-Host "  Authorizing on $sshUser@$ip ..." -ForegroundColor Yellow
-            Write-Host "  Enter the '$sshUser' password when prompted:" -ForegroundColor Cyan
-            & ssh -o StrictHostKeyChecking=no "$sshUser@$ip" "mkdir -p `$HOME/.ssh && chmod 700 `$HOME/.ssh && echo $b64Pub | base64 -d >> `$HOME/.ssh/authorized_keys && chmod 600 `$HOME/.ssh/authorized_keys"
         }
-
-        # --- Guard: confirm the freshly-rotated key actually authenticates -----
-        # Update-SshKey regenerates the local key, then authorizes it on the VM
-        # by SSHing in with the dune *password*. If that password prompt is
-        # closed or cancelled, the local key is replaced but its public half
-        # never reaches dune@VM:~/.ssh/authorized_keys — leaving DST locked out
-        # of every key-based operation (status, commands, diagnostics all fail
-        # with "Permission denied (publickey)"). Verify non-interactively and,
-        # if it failed, tell the user exactly how to recover instead of silently
-        # stranding them.
-        $verifyKey = Resolve-FreshSshKey -ConfiguredPath $sshKey
-        if (-not $verifyKey) { $verifyKey = $sshKey }
-        $rotateProbe = ''
-        if ($verifyKey -and (Test-Path -LiteralPath $verifyKey)) {
-            $rotateProbe = ssh -o BatchMode=yes -o StrictHostKeyChecking=no -o ConnectTimeout=8 -o LogLevel=QUIET -i "$verifyKey" "$sshUser@$ip" "echo dune-ok" 2>&1
-        }
-        if ($rotateProbe -match 'dune-ok') {
-            Write-Host ""
-            Write-Host "  Verified: the new SSH key authenticates to $sshUser@$ip." -ForegroundColor Green
-        } else {
-            Write-Host ""
-            Write-Host "  WARNING: the new SSH key is NOT authorized on the VM yet." -ForegroundColor Red
-            Write-Host "  The key was regenerated locally, but its public half never reached" -ForegroundColor Yellow
-            Write-Host "  ${sshUser}@${ip}:~/.ssh/authorized_keys - usually because the dune" -ForegroundColor Yellow
-            Write-Host "  password prompt above was closed or cancelled. DST cannot manage the" -ForegroundColor Yellow
-            Write-Host "  server (status, commands, diagnostics) until this is fixed." -ForegroundColor Yellow
-            Write-Host ""
-            Write-Host "  Recover by running this and entering the '$sshUser' password when asked:" -ForegroundColor Yellow
-            Write-Host ""
-            Write-Host "    Get-Content `"$verifyKey.pub`" | ssh $sshUser@$ip `"mkdir -p ~/.ssh && cat >> ~/.ssh/authorized_keys && chmod 600 ~/.ssh/authorized_keys`"" -ForegroundColor Cyan
-            Write-Host ""
-            Write-Host "  ...or simply run 'rotate-ssh-key' again and be sure to type the dune" -ForegroundColor DarkGray
-            Write-Host "  password when the console asks for it." -ForegroundColor DarkGray
-        }
-
         continue
     }
 

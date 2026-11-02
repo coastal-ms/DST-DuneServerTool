@@ -186,19 +186,8 @@ export function ServerBrowserPingCard() {
               <Icon name="Info" size={16} />
               What this does
             </div>
-            <p className="text-text-muted">
-              The in-game server browser only fills the <span className="font-mono">Ping</span> column when
-              your battlegroup advertises a recognised Datacenter ID. The vendor default{' '}
-              <span className="font-mono">dune-testing</span> never registers, so the server shows{' '}
-              <span className="font-mono">0</span> with empty bars. Setting the ID to{' '}
-              <span className="font-mono">dune-awakening</span> (and pinning your public IP) makes the Ping
-              populate — live-verified on a real server.
-            </p>
-            <p className="text-text-dim text-xs">
-              This patches the battlegroup CR — the same object “Edit Director” edits — so it{' '}
-              <strong>persists</strong> across restarts. It only runs when you click Save; nothing is applied
-              automatically. Saving restarts the battlegroup, so anyone online is briefly disconnected.
-            </p>
+            <p className="text-text-muted">Sets the Datacenter ID used by the in-game Ping display.</p>
+            <p className="text-text-dim text-xs">Saving restarts the battlegroup and disconnects players.</p>
           </div>
 
           {err && (

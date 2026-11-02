@@ -96,12 +96,7 @@ export function WelcomeBackCard() {
       {err && <div className="mb-3 px-3 py-2 rounded border border-danger/40 bg-danger/10 text-danger text-xs">{err}</div>}
       {ok && <div className="mb-3 px-3 py-2 rounded border border-success/40 bg-success/10 text-success text-xs">{ok}</div>}
 
-      <p className="text-xs text-text-muted mb-3">
-        When a player logs in after being away, DST gives them one of your item
-        packages. The gap is measured between their previous login and this one, so
-        each player is given the package once per absence — turning this on will not
-        hand anything to your existing players until they next return.
-      </p>
+      <p className="text-xs text-text-muted mb-3">Give a package when a player returns after the selected absence. Each return qualifies once.</p>
       <div className="mb-3 px-3 py-2 rounded border border-warning/35 bg-warning/10 text-xs text-text-muted">
         Still seeing the game&apos;s older returning-player popup? That is separate from
         this DST package feature. Set <b className="text-text">Legacy Returning Player Popup</b> to

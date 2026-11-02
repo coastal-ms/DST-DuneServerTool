@@ -96,11 +96,7 @@ export function HyperVLifecycleCard() {
 
       {open && (
         <div className="px-6 pb-6 space-y-4">
-          <p className="text-sm text-text-dim">
-            Reconcile enables only Hyper-V Operating System Shutdown and sets this VM&apos;s Automatic Stop Action
-            to <span className="font-mono">ShutDown</span>. The Alpine hook stops the battlegroup before k3s,
-            has a fixed timeout, and restarts only a battlegroup that was running before shutdown.
-          </p>
+          <p className="text-sm text-text-dim">Shut down the battlegroup cleanly with Windows and restore it at boot if it was previously running.</p>
 
           {error && (
             <div className="rounded-lg border border-danger/40 bg-danger/10 p-3 text-sm text-danger flex items-start gap-2">

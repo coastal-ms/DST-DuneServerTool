@@ -42,7 +42,7 @@ it('defaults to DST management and shows the responsibility notice after opt-out
   fireEvent.click(screen.getByRole('button', { name: 'Disable management' }))
   await waitFor(() => expect(toggle).not.toBeChecked())
   expect(screen.getByRole('note')).toHaveTextContent('You assume responsibility')
-  expect(screen.getByText(/Applies to the self-hosted battlegroup/)).toBeInTheDocument()
+  expect(screen.getByText(/keeps your INI values and saves file edits without managing server startup/)).toBeInTheDocument()
   expect(request).toHaveBeenLastCalledWith('/api/gameconfig/retail-startup-sync', { method: 'PUT', body: JSON.stringify({ enabled: false }) })
   expect(busy.mock.calls).toEqual([[true], [false]])
   expect(request.mock.calls.every(([path]) => path === '/api/gameconfig/retail-startup-sync')).toBe(true)
