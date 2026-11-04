@@ -287,15 +287,15 @@ Describe 'Public IP Windows host route setting' {
 }
 
 Describe 'Public IP diagnostic target selection' {
-    It 'keeps a saved manual relay IP authoritative over detected WAN addresses' {
+    It 'checks a saved manual IP against the detected current WAN address' {
         $target = Resolve-DunePublicIpDiagnosticTarget -Config @{
             PublicIpMode = 'manual'
             ManualPublicIp = '8.8.8.8'
             LastAppliedPublicIp = '8.8.8.8'
         } -VmDetectedIp '1.1.1.1' -HostDetectedIp '1.1.1.1'
 
-        $target.ip | Should -Be '8.8.8.8'
-        $target.source | Should -Be 'manual'
+        $target.ip | Should -Be '1.1.1.1'
+        $target.source | Should -Be 'vm'
     }
 
     It 'uses detected WAN IP for non-manual configurations' {
@@ -1027,10 +1027,12 @@ Describe 'P34 advertised-address diagnostic' {
         function global:Get-DuneDbContext { }
         function global:Invoke-DuneSqlRaw { param($Ip, $Sql, [switch]$Csv, $TimeoutSec) }
         function global:Invoke-V6Ssh { param($Ip, $Cmd, $TimeoutSec) }
+        function global:Get-DunePublicIp { }
     }
     BeforeEach {
         Mock Get-DuneDbContext { @{ ok = $true; ip = '192.168.23.219' } }
         Mock Read-DuneConfig { @{ PublicIpMode = 'auto' } }
+        Mock Get-DunePublicIp { '' }
         Mock Invoke-V6Ssh {
             if ($Cmd -match 'flowtype=Login') { return 'POD=sh-test-sg-survival-1-pod-1 LOGIN=2 FAIL=2' }
             return 'PUB=50.123.67.198', 'EXT=50.123.67.198', 'DC=50.123.67.198'
@@ -1051,5 +1053,41 @@ Describe 'P34 advertised-address diagnostic' {
         $result = Get-DuneP34Diagnostic
         $result.verdict | Should -Be 'stale-ip'
         $result.staleFarmIp | Should -BeTrue
+    }
+    It 'flags ready maps at the saved manual IP when the internet IP changed (<Detection>)' -ForEach @(
+        @{ Detection = 'vm' }
+        @{ Detection = 'host' }
+    ) {
+        Mock Read-DuneConfig { @{ PublicIpMode = 'manual'; ManualPublicIp = '50.123.67.198'; LastAppliedPublicIp = '50.123.67.198' } }
+        if ($Detection -eq 'vm') {
+            Mock Invoke-V6Ssh { 'PUB=98.36.235.161', 'EXT=50.123.67.198', 'DC=50.123.67.198' }
+        } else {
+            Mock Invoke-V6Ssh { 'EXT=50.123.67.198', 'DC=50.123.67.198' }
+            Mock Get-DunePublicIp { '98.36.235.161' }
+        }
+        $result = Get-DuneP34Diagnostic
+        $result.verdict | Should -Be 'stale-ip'
+        $result.serversReady | Should -BeTrue
+        $result.vmPublicIp | Should -Be '98.36.235.161'
+        $result.publicIpSource | Should -Be $Detection
+        $result.staleFarmIp | Should -BeTrue
+        $result.staleK3sIp | Should -BeTrue
+        $result.datacenterStale | Should -BeTrue
+        $result.summary | Should -Not -Match 'correct public IP|are ready'
+    }
+    It 'keeps matching manual and detected addresses healthy' {
+        Mock Read-DuneConfig { @{ PublicIpMode = 'manual'; ManualPublicIp = '50.123.67.198' } }
+        (Get-DuneP34Diagnostic).verdict | Should -Be 'healthy'
+    }
+    It 'does not certify a saved address when live detection fails' -ForEach @(
+        @{ Mode = 'manual' }
+        @{ Mode = 'ddns' }
+    ) {
+        $script:diagnosticMode = $Mode
+        Mock Read-DuneConfig { @{ PublicIpMode = $script:diagnosticMode; ManualPublicIp = '50.123.67.198'; LastAppliedPublicIp = '50.123.67.198' } }
+        Mock Invoke-V6Ssh { 'EXT=50.123.67.198', 'DC=50.123.67.198' }
+        $result = Get-DuneP34Diagnostic
+        $result.verdict | Should -Be 'unknown'
+        $result.summary | Should -Match 'current internet IP could not be detected'
     }
 }

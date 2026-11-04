@@ -41,6 +41,7 @@ function Get-DuneRegisTankSupport {
             'e10c49bd69e3ae8e3eccce3049326d04c4c0e750f767587749429a95ae7f574b' = '2160922'
             'ec9da025ccb45ce4ec50b3f24efbbe4eeda320ffd028d364f4ebb6eaac54c444' = '2162777'
             '1f08ba91a33dbc05e78027e19b0bff48d01f86aa9252b891c4ec5bffca62b23f' = '2168446'
+            '84d72e22418684530e7a57d8107224e7b7ee5510667957833d7484e2c0e3abaf' = '2173753'
         }
         $build = ''
         foreach ($line in $hashes) {
