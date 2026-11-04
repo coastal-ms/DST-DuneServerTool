@@ -22,7 +22,7 @@ param(
 # Wraps the original battlegroup.ps1 menu and adds extra tools
 # ============================================================
 
-$script:ToolVersion = "16.7.2"
+$script:ToolVersion = "16.7.3"
 
 # Cold-boot readiness budgets (seconds). A fresh battlegroup's FIRST boot can
 # take 10-30 min: k3s + funcom-operators initialize, metrics-server restarts a
@@ -2685,22 +2685,7 @@ while ($true) {
                     Where-Object { $_ -is [string] -and (Test-Path -LiteralPath $_) } | Select-Object -Last 1
                 if (-not $returned) { throw 'Funcom did not complete key rotation. Check the console output above.' }
             } else {
-                # Keep the previous key available until the replacement is verified.
-                $keyPath = if ($sshKey) { $sshKey } else { $defaultKey }
-                $keyDir = if (Test-Path -LiteralPath $keyPath -PathType Container) { $keyPath } else { Split-Path -Parent $keyPath }
-                if (-not (Test-Path -LiteralPath $keyDir)) { New-Item -ItemType Directory -Path $keyDir -Force | Out-Null }
-                $keyPath = Join-Path $keyDir ('sshKey-' + [guid]::NewGuid().ToString('N'))
-                Write-Host "Generating new SSH key at $keyPath ..."
-                $emptyPassphrase = if ($PSVersionTable.PSVersion -ge [version]'7.3' -and $PSNativeCommandArgumentPassing -ne 'Legacy') { '' } else { '""' }
-                & ssh-keygen -t ed25519 -f $keyPath -N $emptyPassphrase -q -C "dst@$($env:COMPUTERNAME)" 2>&1 | Out-Null
-                if ($LASTEXITCODE -ne 0 -or -not (Test-Path -LiteralPath $keyPath -PathType Leaf)) { throw 'Could not generate the SSH key.' }
-                $pub = (Get-Content -LiteralPath "$keyPath.pub" -Raw).Trim()
-                $b64Pub = [Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes($pub + [char]10))
-                Write-Host "Enter the '$sshUser' VM password to authorize the new key:"
-                $authorize = 'umask 077; mkdir -p ~/.ssh; echo ' + $b64Pub + ' | base64 -d >> ~/.ssh/authorized_keys && chmod 700 ~/.ssh && chmod 600 ~/.ssh/authorized_keys'
-                & ssh -o StrictHostKeyChecking=no -o PubkeyAuthentication=no -o PreferredAuthentications=password "$sshUser@$ip" $authorize
-                if ($LASTEXITCODE -ne 0) { throw 'The key could not be authorized. The saved key selection was not changed. Run Generate again and complete the VM password prompt.' }
-                $returned = $keyPath
+                throw "Funcom's SSH key utility was not found at $vmUtilsPath. In Settings, set Steam install path to the latest Funcom Self-Hosted Server package available from this PC. The VM may be on a remote host. No SSH key was generated or changed."
             }
             $selected = Complete-DuneSshKeyRotation -Paths @($returned, $defaultKey, $sshKey) -Before $before -Ip $ip -User $sshUser -ConfigPath $configFile
             $sshKey = $selected

@@ -13,6 +13,13 @@ here cover everything those tags shipped.
 
 ## [Unreleased]
 
+## [16.7.3] - 2026-11-04
+
+### Fixed
+- Map relative augment effect rows to their actual in-game quality grades in the picker and generated item stats.
+- Direct SSH key generation from Settings to Commands and use the current Funcom package utility while preserving verified private-key selection.
+- Framework Changes.
+
 ## [16.7.2] - 2026-11-03
 
 ### Fixed

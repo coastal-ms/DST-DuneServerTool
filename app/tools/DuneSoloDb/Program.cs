@@ -1605,11 +1605,11 @@ internal static partial class Program
                   "augments":{
                     "T6_Augment_Damage2":{
                       "tags":["Items.Holsters.RangedWeapons"],
-                      "gradeEffects":{"5":["Damage +70%"]}
+                      "gradeEffects":{"1":["Damage +70%"]}
                     },
                     "T6_Augment_Acuracy1":{
                       "tags":["Items.Holsters.RangedWeapons"],
-                      "gradeEffects":{"4":["Accuracy +20%"]}
+                      "gradeEffects":{"1":["Accuracy +15%"],"2":["Accuracy +20%"]}
                     }
                   },
                   "methodItems":{},
