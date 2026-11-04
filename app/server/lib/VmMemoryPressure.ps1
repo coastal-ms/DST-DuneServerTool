@@ -310,7 +310,11 @@ function ConvertFrom-DuneMemPressureProbe {
         $result.mem.swapZero   = ($result.mem.swapTotalK -eq 0)
         $result.mem.swapActive = ($result.mem.swapTotalK -gt 0)
     }
-    $result.signals.lowMemory = ($result.mem.lowAvailable -and $result.mem.swapZero)
+    # Intentional swap use can leave little free RAM without exhausting memory.
+    # Only absent or measured-exhausted swap corroborates the RAM threshold;
+    # unknown swap usage must not turn historical restarts into a diagnosis.
+    $swapExhausted = ($result.mem.swapActive -and $null -ne $result.mem.swapFreeK -and $result.mem.swapFreeK -eq 0)
+    $result.signals.lowMemory = ($result.mem.lowAvailable -and ($result.mem.swapZero -or $swapExhausted))
 
     # --- node conditions ---------------------------------------------------
     foreach ($ct in @($result.node.conditions.Keys)) {
@@ -387,10 +391,11 @@ function ConvertFrom-DuneMemPressureProbe {
     $warn = New-Object System.Collections.Generic.List[string]
 
     if ($result.signals.lowMemory) {
-        $warn.Add(("VM low on memory: only {0} available ({1}% of {2}) with Swap: 0. Postgres and the Funcom operators get OOM-killed under load." -f `
-            (Format-DuneMemKiB $result.mem.availK), $result.mem.availPct, (Format-DuneMemKiB $result.mem.totalK)))
-    } elseif ($result.mem.lowAvailable) {
-        $warn.Add(("VM memory is tight: {0} available ({1}% of {2})." -f `
+        $swapState = if ($result.mem.swapZero) { 'swap disabled' } else { 'no free swap remaining' }
+        $warn.Add(("VM low on memory: only {0} RAM available ({1}% of {2}), with {3}." -f `
+            (Format-DuneMemKiB $result.mem.availK), $result.mem.availPct, (Format-DuneMemKiB $result.mem.totalK), $swapState))
+    } elseif ($result.mem.lowAvailable -and -not ($result.mem.swapActive -and $result.mem.swapFreeK -gt 0)) {
+        $warn.Add(("VM RAM is tight: {0} available ({1}% of {2}); free swap capacity is unknown." -f `
             (Format-DuneMemKiB $result.mem.availK), $result.mem.availPct, (Format-DuneMemKiB $result.mem.totalK)))
     }
 
@@ -416,7 +421,7 @@ function ConvertFrom-DuneMemPressureProbe {
 
     # Memory pressure now REQUIRES a real memory signal. Restart counts alone
     # are not evidence - they fired at 94.2% free RAM during a database outage.
-    $result.signals.memoryCorroborated = ($result.mem.lowAvailable -or $result.node.memoryPressure -or $result.signals.oomKills -gt 0)
+    $result.signals.memoryCorroborated = ($result.signals.lowMemory -or $result.node.memoryPressure -or $result.signals.oomKills -gt 0)
     $result.pressure = (
         $result.signals.oomKills -gt 0 -or
         $result.signals.lowMemory -or
@@ -437,7 +442,7 @@ function ConvertFrom-DuneMemPressureProbe {
         if ($result.signals.oomKills -gt 0 -and $killN -gt 0) {
             $result.headline = "VM low on memory - Funcom operators killed ${killN}x; consider raising the VM's RAM"
         } elseif ($result.signals.lowMemory) {
-            $result.headline = "VM low on memory (Swap: 0) - consider raising the VM's RAM or lowering per-map memory limits"
+            $result.headline = if ($result.mem.swapZero) { 'VM low on memory with swap disabled' } else { 'VM low on memory with swap exhausted' }
         } elseif ($result.node.memoryPressure) {
             $result.headline = "Kubernetes reports MemoryPressure on the VM node - pods are being evicted"
         } else {
@@ -445,7 +450,7 @@ function ConvertFrom-DuneMemPressureProbe {
         }
         # Only advise raising RAM when the memory numbers actually support it.
         if ($result.mem.lowAvailable -or $result.node.memoryPressure -or $result.signals.oomKills -gt 0) {
-            $warn.Add("Fix: raise the VM's RAM in Hyper-V, or lower per-map memory limits (Hagga/Deep Desert). See vm-memory-pressure.txt in the diagnostics bundle.")
+            $warn.Add("Review concurrent map workloads, VM RAM and swap capacity before changing memory settings. See vm-memory-pressure.txt in the diagnostics bundle.")
         }
     }
 

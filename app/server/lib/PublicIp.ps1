@@ -969,6 +969,8 @@ LOG=/var/log/dune-dnat-watch.log
 ts() { date "+%Y-%m-%d %H:%M:%S"; }
 log() { echo "[$(ts)] boot: $*" >> "$LOG" 2>/dev/null; }
 
+# Run the delayed boot reconciliation independently of OpenRC's local service.
+(
 sleep 30
 
 # RabbitMQ login: public:31982/tcp -> mq-game pod:5672 (idempotent).
@@ -1043,6 +1045,7 @@ while [ "$_p" -le "$GAME_HI" ]; do
     esac
     _p=$((_p + 1))
 done
+) </dev/null >/dev/null 2>&1 &
 DUNEBOOT
 } > /tmp/dune-iptables.start
 sudo install -m 0755 /tmp/dune-iptables.start /etc/local.d/dune-iptables.start

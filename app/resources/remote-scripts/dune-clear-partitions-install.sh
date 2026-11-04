@@ -383,7 +383,8 @@ mkdir -p /etc/local.d 2>/dev/null
 cat > "$BOOT" <<BOOTEOF
 #!/bin/sh
 # Dune partition self-heal -- boot pass. Installed by DST.
-DUNE_CLEAR_MODE=boot $HEAL
+# Map readiness waits must not hold OpenRC's boot runlevel and block shutdown.
+start-stop-daemon --start --background --exec /bin/sh -- -c 'DUNE_CLEAR_MODE=boot exec $HEAL'
 BOOTEOF
 chmod 0755 "$BOOT" 2>/dev/null
 # Make sure the OpenRC local service is enabled so the boot hook actually fires.

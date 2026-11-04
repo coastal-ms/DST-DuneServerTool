@@ -1327,6 +1327,9 @@ export function SoloMode() {
       setNotice({ kind: 'err', text: 'Close Dune: Awakening completely before changing Solo progression.' })
       return
     }
+    if (key === 'skills' && !window.confirm(
+      'Enable all five trainers and skills? A full save backup is kept in Backups. Undoing this requires restoring that backup, which also rolls back world progress made afterward.',
+    )) return
     if (key === 'testing-stations' && !window.confirm(
       'Unlock the selected Testing Station difficulties? DST will back up the save and record completion progress. Choose your difficulty in-game; faction requirements still apply.',
     )) return

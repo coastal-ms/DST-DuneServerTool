@@ -1,4 +1,4 @@
-﻿#Requires -RunAsAdministrator
+#Requires -RunAsAdministrator
 
 [CmdletBinding()]
 param(
@@ -22,7 +22,7 @@ param(
 # Wraps the original battlegroup.ps1 menu and adds extra tools
 # ============================================================
 
-$script:ToolVersion = "16.7.3"
+$script:ToolVersion = "16.7.4"
 
 # Cold-boot readiness budgets (seconds). A fresh battlegroup's FIRST boot can
 # take 10-30 min: k3s + funcom-operators initialize, metrics-server restarts a
@@ -1521,6 +1521,35 @@ function Invoke-DuneCliSshPayload {
     }
 }
 
+function Invoke-DuneExperimentalSwap {
+    param(
+        [Parameter(Mandatory)][string]$Ip,
+        [Parameter(Mandatory)][ValidateSet('enable','disable')][string]$Mode
+    )
+    $local = @(
+        (Join-Path $scriptDir 'resources/remote-scripts/experimental-swap.sh')
+        (Join-Path $scriptDir 'app/resources/remote-scripts/experimental-swap.sh')
+    ) | Where-Object { Test-Path -LiteralPath $_ } | Select-Object -First 1
+    if (-not $local) { throw 'The bundled swap management script is missing. Reinstall DST.' }
+    Write-Host 'Stop the battlegroup first and keep a current database backup.' -ForegroundColor Yellow
+    Write-Host 'This restarts VM services. The battlegroup will remain stopped; check RAM before starting it again.' -ForegroundColor Yellow
+    if ($Mode -eq 'disable') { Write-Host 'Disable requires settings saved by DST before enabling swap. Without that snapshot, no defaults will be guessed.' -ForegroundColor Yellow }
+    if ((Read-Host "Type yes to $Mode experimental swap").Trim() -ine 'yes') {
+        Write-Host 'Swap settings unchanged.'
+        return
+    }
+    $raw = [IO.File]::ReadAllText($local) -replace "`r", ''
+    $payload = [Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes($raw))
+    Write-Host "Running swap $Mode; allow several minutes for VM services to restart..." -ForegroundColor Cyan
+    $result = Invoke-DuneCliSshPayload -Ip $Ip -RemoteCommand "base64 -d | sudo -n bash -s -- $Mode" -StdinData $payload -TimeoutSec 600
+    if ($result.Stdout) { Write-Host $result.Stdout }
+    if ($result.Stderr) { Write-Host $result.Stderr -ForegroundColor Yellow }
+    $marker = if ($Mode -eq 'enable') { 'DUNE_SWAP_ENABLED:' } else { 'DUNE_SWAP_DISABLED:' }
+    if ($result.Exit -ne 0 -or $result.Stdout -notmatch [regex]::Escape($marker)) {
+        throw 'Swap change was not confirmed. Preserve the saved snapshot and inspect the console result before retrying.'
+    }
+}
+
 function Sync-DuneBattlegroupPhaseReader {
     param([Parameter(Mandatory)][string]$Ip)
     $local = @(
@@ -1683,7 +1712,8 @@ $bgCommands = @(
     [pscustomobject]@{ Key = "6";  SubSection = $null;          Name = "edit";                      Desc = "Edit the battlegroup with the utilities interface" }
     [pscustomobject]@{ Key = "7";  SubSection = $null;          Name = "edit-advanced";             Label = "Edit Director";   Desc = "(Advanced) Manually edit battlegroup directly with YAML" }
     [pscustomobject]@{ Key = "21"; SubSection = $null;          Name = "change-battlegroup-ip";     Label = "Change Player IP"; Desc = "Change the IP that players connect to" }
-    [pscustomobject]@{ Key = "8";  SubSection = $null;          Name = "enable-experimental-swap";  Desc = "(Experimental) Enable experimental swap memory feature" }
+    [pscustomobject]@{ Key = "8";  SubSection = $null; Name = "enable-experimental-swap"; Label = "Enable experimental swap"; Desc = "Save original settings and enable experimental swap (battlegroup must be stopped)" }
+    [pscustomobject]@{ Key = "24"; SubSection = $null; Name = "disable-experimental-swap"; Label = "Disable experimental swap"; Desc = "Restore saved original settings and remove swap (battlegroup must be stopped)" }
     [pscustomobject]@{ Key = "9";  SubSection = "Database";     Name = "backup";                    Desc = "Take a backup of the battlegroup's database" }
     [pscustomobject]@{ Key = "10"; SubSection = "Database";     Name = "import";                    Desc = "Import a database backup into the selected battlegroup" }
     [pscustomobject]@{ Key = "11"; SubSection = "Logs";         Name = "logs-export";               Desc = "Retrieves logs from all pods in the selected battlegroup" }
@@ -2982,6 +3012,13 @@ fi
             if ($LASTEXITCODE -ne 0) { throw 'Battlegroup stop failed. Server Settings were not synchronized.' }
         }
         Sync-DuneRetailSettingsBeforeStart -Ip $ip
+    }
+
+    if ($cmdName -in @('enable-experimental-swap','disable-experimental-swap')) {
+        $swapMode = if ($cmdName -eq 'enable-experimental-swap') { 'enable' } else { 'disable' }
+        Invoke-DuneExperimentalSwap -Ip $ip -Mode $swapMode
+        if ($Cmd) { break }
+        continue
     }
 
     if ($cmdName -in @('start', 'stop', 'restart', 'update')) { Sync-DuneBattlegroupPhaseReader -Ip $ip }
