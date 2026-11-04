@@ -13,6 +13,7 @@ try {
     @'
 function Update-SshKey {
     param([string]$Ip)
+    $env:DST_TEST_FUNCOM_IP = $Ip
     & ssh-keygen -t ed25519 -f $env:DST_TEST_FUNCOM_KEY -N '""' -q
     if ($LASTEXITCODE -ne 0) { throw 'Funcom fixture generation failed' }
 }
@@ -26,9 +27,14 @@ function Update-SshKey {
     $vendorHash = (Get-FileHash -LiteralPath $vendorUtilities).Hash
     $env:DST_TEST_FUNCOM_KEY = Join-Path $scratch 'rotated key'
     Invoke-DuneFuncomKeyUpdate -VmUtilitiesPath $vendorUtilities -Ip '192.0.2.1'
+    if ($env:DST_TEST_FUNCOM_IP -ne '192.0.2.1') { throw 'Funcom did not receive local-host guest address' }
     if ((Test-DuneSshKeyEncrypted $env:DST_TEST_FUNCOM_KEY) -ne $false) { throw 'Funcom rotation created encrypted key' }
     if ($PSNativeCommandArgumentPassing -ne $originalMode) { throw 'Rotation changed caller argument mode' }
     if ((Get-FileHash -LiteralPath $vendorUtilities).Hash -ne $vendorHash) { throw 'Funcom source changed' }
+    $env:DST_TEST_FUNCOM_KEY = Join-Path $scratch 'remote VM key on DST PC'
+    Invoke-DuneFuncomKeyUpdate -VmUtilitiesPath $vendorUtilities -Ip '198.51.100.1'
+    if ($env:DST_TEST_FUNCOM_IP -ne '198.51.100.1' -or (Test-DuneSshKeyEncrypted $env:DST_TEST_FUNCOM_KEY) -ne $false) { throw 'Remote-host VM generation did not retain a usable private key on the DST PC' }
+    if ($PSNativeCommandArgumentPassing -ne $originalMode) { throw 'Remote generation changed caller argument mode' }
     $childAssignment = $entryAst.Find({ param($node) $node -is [Management.Automation.Language.AssignmentStatementAst] -and $node.Left.Extent.Text -eq '$childScript' }, $true)
     $bgEsc = $vendorDirectory.Replace("'", "''")
     . ([scriptblock]::Create($childAssignment.Extent.Text))
@@ -36,7 +42,7 @@ function Update-SshKey {
     & (Get-Process -Id $PID).Path -NoProfile -Command $childScript
     if ($LASTEXITCODE -ne 0 -or (Test-DuneSshKeyEncrypted $env:DST_TEST_FUNCOM_KEY) -ne $false) { throw 'Funcom setup created encrypted key' }
     if ($PSNativeCommandArgumentPassing -ne $originalMode) { throw 'Setup changed caller argument mode' }
-    foreach ($relative in @('dune-server.ps1', 'app/server/lib/HyperVLanInstall.ps1')) {
+    foreach ($relative in @('app/server/lib/HyperVLanInstall.ps1')) {
         $source = Get-Content (Join-Path $RepoRoot $relative) -Raw
         $match = [regex]::Match($source, '(?m)^\s*\$emptyPassphrase = .*\r?\n\s*& ssh-keygen -t ed25519[^\r\n]+')
         if (-not $match.Success) { throw 'Generation block missing' }
@@ -121,6 +127,6 @@ Invoke-FixtureKeygen @('-y', '-P', $env:DST_TEST_PASSPHRASE, '-f', $env:DST_TEST
     }
     'SSH native argument verification passed: ' + $PSVersionTable.PSVersion + '; Legacy=' + $Legacy
 } finally {
-    Remove-Item Env:DST_TEST_KEY, Env:DST_TEST_PASSPHRASE, Env:DST_TEST_FUNCOM_KEY -ErrorAction SilentlyContinue
+    Remove-Item Env:DST_TEST_KEY, Env:DST_TEST_PASSPHRASE, Env:DST_TEST_FUNCOM_KEY, Env:DST_TEST_FUNCOM_IP -ErrorAction SilentlyContinue
     Remove-Item -LiteralPath $scratch -Recurse -Force
 }

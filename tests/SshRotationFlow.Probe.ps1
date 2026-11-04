@@ -89,15 +89,12 @@ try {
     $completion = Get-Content -LiteralPath $SshRotationResultPath -Raw | ConvertFrom-Json
     Assert-Flow (-not $completion.ok -and (Get-FileHash -LiteralPath $configFile).Hash -eq $consoleHash) 'Console reported an unchanged old key as a successful rotation'
     Remove-Item -LiteralPath (Join-Path $bgSetupPath 'vm-utilities.ps1')
-    $script:allowAuthorization = $false
     $oldHash = (Get-FileHash -LiteralPath $consoleKey).Hash
+    $beforeKeys = @(Get-ChildItem -LiteralPath $folder -File -Recurse | Select-Object -ExpandProperty FullName)
     foreach ($attempt in @(1)) { . $rotationScript }
     $completion = Get-Content -LiteralPath $SshRotationResultPath -Raw | ConvertFrom-Json
-    Assert-Flow (-not $completion.ok -and (Get-FileHash -LiteralPath $consoleKey).Hash -eq $oldHash -and (Get-FileHash -LiteralPath $configFile).Hash -eq $consoleHash) 'Fallback authorization failure replaced the old key or selection'
-    $script:allowAuthorization = $true
-    foreach ($attempt in @(1)) { . $rotationScript }
-    $completion = Get-Content -LiteralPath $SshRotationResultPath -Raw | ConvertFrom-Json
-    Assert-Flow ($completion.ok -and (Test-Path -LiteralPath $completion.keyPath -PathType Leaf) -and $completion.keyPath -ne $consoleKey -and $script:probedKey -eq $completion.keyPath -and $cfg.SshKey -eq $completion.keyPath) 'Fallback did not select and verify the replacement private-key file'
+    Assert-Flow (-not $completion.ok -and $completion.message -match 'latest Funcom Self-Hosted Server package' -and (Get-FileHash -LiteralPath $consoleKey).Hash -eq $oldHash -and (Get-FileHash -LiteralPath $configFile).Hash -eq $consoleHash) 'Missing Funcom utility did not preserve the old key and selection'
+    Assert-Flow (@(Compare-Object $beforeKeys @(Get-ChildItem -LiteralPath $folder -File -Recurse | Select-Object -ExpandProperty FullName)).Count -eq 0) 'Missing Funcom utility created unexpected key files'
 
     # Exercise Settings completion handling, never launching a process or SSH.
     $script:handlers = @{}

@@ -25,6 +25,7 @@ import { SectionErrorBoundary } from '../components/SectionErrorBoundary'
 import { CollapsibleCard, useCardCollapse } from '../components/CollapsibleCard'
 import { isShellHost } from '../util/shellBridge'
 import { getTestBuildIdentity } from '../util/testBuildIdentity'
+import { Link } from '../router'
 
 const FIELDS: {
   key: string
@@ -71,9 +72,6 @@ export function Settings() {
   const [error, setError] = useState<string | null>(null)
   const [browsing, setBrowsing] = useState<string | null>(null)
 
-  // Generate selects the private-key file only after verified rotation.
-  const [sshRotating, setSshRotating] = useState(false)
-  const [sshRotateMsg, setSshRotateMsg] = useState<string | null>(null)
   // "Remove passphrase (keep same key)" — strips the passphrase off the existing
   // key in place (no rotation, nothing to re-authorize on the VM), so background
   // checks that run non-interactively can use it.
@@ -142,36 +140,6 @@ export function Settings() {
     setDbTestMsg('Database port updated — click "Save settings" below to persist it, then test again.')
     setDbTestOk(null)
   }
-  async function onRotateSshKey() {
-    if (!window.confirm('Generate a new SSH key? The VM must be running.\n\nEnter the dune VM password in the console. Closing it before authorization can leave DST unable to connect. DST will select the private-key file after login is verified.')) return
-    setSshRotating(true)
-    setSshRotateMsg(null)
-    setError(null)
-    try {
-      const r = await api<{ ok: boolean; rotated: boolean; keyPath?: string; message?: string }>(
-        '/api/config/rotate-ssh-key',
-        { method: 'POST' },
-      )
-      if (!r.ok || !r.rotated) {
-        setError(r.message ?? 'Rotation did not complete.')
-        return
-      }
-      setSshRotateMsg(r.message ?? 'SSH key login verified and private-key file selected.')
-      const selectedKey = r.keyPath
-      if (selectedKey) setValues(v => ({ ...v, SshKey: selectedKey }))
-      // Reload config so the form reflects any path changes.
-      try {
-        const cfgOut = await api<ConfigResponse>('/api/config')
-        setCfg(cfgOut)
-        setValues(v => ({ ...v, SshKey: cfgOut.values.SshKey ?? r.keyPath ?? v.SshKey }))
-      } catch { /* non-fatal */ }
-    } catch (e) {
-      setError(e instanceof Error ? e.message : String(e))
-    } finally {
-      setSshRotating(false)
-    }
-  }
-
   async function onStripSshPassphrase() {
     setSshStripping(true)
     setSshStripMsg(null)
@@ -859,18 +827,6 @@ export function Settings() {
                 {f.key === 'SshKey' && (
                   <button
                     type="button"
-                    onClick={() => void onRotateSshKey()}
-                    disabled={sshRotating}
-                    title="Generate a private key, authorize it on the VM, and verify login"
-                    className="btn-secondary shrink-0"
-                  >
-                    <Icon name={sshRotating ? 'Loader2' : 'KeyRound'} size={15} className={sshRotating ? 'animate-spin' : ''} />
-                    {sshRotating ? 'Rotating…' : 'Generate new'}
-                  </button>
-                )}
-                {f.key === 'SshKey' && (
-                  <button
-                    type="button"
                     onClick={() => { setSshStripOpen(o => !o); setSshStripMsg(null) }}
                     title="Strip the passphrase off this key without rotating it (keeps the same key, no VM changes)"
                     className="btn-secondary shrink-0"
@@ -893,6 +849,11 @@ export function Settings() {
               />
             )}
             {f.help && <p className="mt-1 text-xs text-text-dim">{f.help}</p>}
+            {f.key === 'SshKey' && (
+              <p className="mt-1 text-xs text-text-dim">
+                To create a key, go to <Link to="/commands?category=network" className="text-ibad underline">Server Controls → Commands → Generate SSH key (g)</Link>.
+              </p>
+            )}
             {f.key === 'SshKey' && sshStripOpen && (
               <div className="mt-2 rounded-lg border border-border bg-surface-2 p-3 space-y-2">
                 <p className="text-xs text-text-dim">Enter the current passphrase to remove its protection from this SSH key. The key stays authorized on the VM.</p>
@@ -922,11 +883,6 @@ export function Settings() {
             {f.key === 'SshKey' && sshStripMsg && (
               <p className={`mt-1 text-xs flex items-center gap-1.5 ${sshStripOk ? 'text-success' : 'text-danger'}`}>
                 <Icon name={sshStripOk ? 'CheckCircle2' : 'AlertTriangle'} size={13} /> {sshStripMsg}
-              </p>
-            )}
-            {f.key === 'SshKey' && sshRotateMsg && (
-              <p className="mt-1 text-xs text-success flex items-center gap-1.5">
-                <Icon name="CheckCircle2" size={13} /> {sshRotateMsg}
               </p>
             )}
             {f.key === 'SteamPath' && batMsg && (

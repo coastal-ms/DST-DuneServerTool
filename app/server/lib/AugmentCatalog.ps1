@@ -128,8 +128,15 @@ function New-DuneAugmentedItemStatsJson {
         if (-not (Test-DuneAugmentTagMatch -ItemTags $itemTags -AugmentTags @($entry.tags))) {
             throw "$augmentId is not compatible with $TemplateId."
         }
-        $effects = Get-DuneObjectPropertyValue -Object $entry.gradeEffects -Name ([string]$augmentQuality)
-        $rollCount = @($effects).Count
+        $effectGrades = @($entry.gradeEffects.PSObject.Properties | Sort-Object { [int]$_.Name })
+        $minimumQuality = 6 - $effectGrades.Count
+        $effectIndex = $augmentQuality - $minimumQuality
+        $effects = if ($effectIndex -ge 0 -and $effectIndex -lt $effectGrades.Count) {
+            $effectGrades[$effectIndex].Value
+        } else {
+            $null
+        }
+        $rollCount = if ($null -eq $effects) { 0 } else { @($effects).Count }
         if ($rollCount -lt 1) {
             throw "$augmentId does not support augment grade $augmentQuality."
         }

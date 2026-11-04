@@ -9,7 +9,6 @@ import { PageHeader } from '../components/PageHeader'
 import { CollapsibleCard } from '../components/CollapsibleCard'
 import { ItemPicker } from '../components/ItemPicker'
 import { SoloMods } from '../components/solo/SoloMods'
-import { OfficialServerCard } from '../components/solo/OfficialServerCard'
 import { SoloLiveMap } from '../components/solo/SoloLiveMap'
 import { SoloDeck } from '../components/solo/SoloDeck'
 import { SoloRegisTanks } from '../components/solo/SoloRegisTanks'
@@ -2374,7 +2373,6 @@ export function SoloMode() {
               <p className="text-sm text-text-muted">{status?.inspectionError || 'Connect a Solo save to inspect it.'}</p>
             )}
           </div>
-          <OfficialServerCard />
         </div>
       )}
 

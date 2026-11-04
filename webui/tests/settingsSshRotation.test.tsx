@@ -3,7 +3,11 @@ import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/re
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { Settings } from '../src/pages/Settings'
 
-const state = vi.hoisted(() => ({ api: vi.fn(), result: { ok: true, rotated: true, keyPath: 'C:\\keys\\sshKey\\newkey-generated', message: 'SSH login verified.' }, failReload: false, failRotation: false }))
+const state = vi.hoisted(() => ({
+  api: vi.fn(),
+  browse: { ok: true, cancelled: false, path: 'C:\\keys\\selected-private-key' },
+  stripError: false,
+}))
 vi.mock('../src/api/client', () => ({ api: state.api }))
 vi.mock('../src/hooks/useInstallationMode', () => ({ useSoloInstallation: () => false }))
 vi.mock('../src/api/update', () => ({ checkForUpdate: async () => ({}), installUpdate: vi.fn(), listPreReleases: vi.fn(), setUpdateChannel: vi.fn(), setPreReleaseTag: vi.fn() }))
@@ -25,58 +29,101 @@ vi.mock('../src/pages/settings/InstallLocationCard', () => ({ InstallLocationCar
 vi.mock('../src/pages/settings/ShellPreferencesCard', () => ({ ShellPreferencesCard: () => null }))
 
 beforeEach(() => {
-  state.result = { ok: true, rotated: true, keyPath: 'C:\\keys\\sshKey\\newkey-generated', message: 'SSH login verified.' }
-  state.failReload = false; state.failRotation = false
-  let reads = 0
+  window.history.replaceState(null, '', '/settings')
+  state.browse = { ok: true, cancelled: false, path: 'C:\\keys\\selected-private-key' }
+  state.stripError = false
   state.api.mockReset().mockImplementation(async (path: string) => {
-    if (path === '/api/config/rotate-ssh-key') {
-      if (state.failRotation) throw new Error('Authorization failed.')
-      return state.result
-    }
     if (path === '/api/config') {
-      reads++
-      if (reads > 1 && state.failReload) throw new Error('Reload unavailable')
-      return { path: 'config', exists: true, complete: true, keys: [], values: { SshKey: reads > 1 ? state.result.keyPath : 'C:\\keys\\old-key', WindowsUser: 'saved-user', SteamPath: 'C:\\Steam' } }
+      return { path: 'config', exists: true, complete: true, keys: [], values: { SshKey: 'C:\\keys\\old-key', WindowsUser: 'saved-user', SteamPath: 'C:\\Steam' } }
+    }
+    if (path === '/api/browse-path') return state.browse
+    if (path === '/api/config/strip-ssh-passphrase') {
+      if (state.stripError) throw new Error('Incorrect passphrase.')
+      return { ok: true, stripped: true, message: 'Passphrase removed.' }
     }
     throw new Error(`Unexpected API call: ${path}`)
   })
-  vi.spyOn(window, 'confirm').mockReturnValue(true)
 })
-afterEach(() => { cleanup(); vi.restoreAllMocks() })
 
-async function generate() {
+afterEach(() => { cleanup(); window.history.replaceState(null, '', '/'); vi.restoreAllMocks() })
+
+async function openSettings() {
   render(<Settings />)
   const key = await screen.findByLabelText(/SSH private-key file/)
   fireEvent.change(screen.getByLabelText(/Windows username/), { target: { value: 'unsaved-user' } })
-  fireEvent.click(screen.getByRole('button', { name: 'Generate new' }))
   return key
 }
 
-it('selects the verified private-key filename and preserves unrelated unsaved edits', async () => {
-  const key = await generate()
-  await screen.findByText('SSH login verified.')
-  await waitFor(() => expect(state.api.mock.calls.filter(([path]) => path === '/api/config')).toHaveLength(2))
-  expect(key).toHaveValue(state.result.keyPath)
+function expectNoRotation() {
+  expect(state.api.mock.calls.filter(([path]) => path === '/api/config/rotate-ssh-key')).toHaveLength(0)
+}
+
+it('directs generation to Commands and retains existing-key controls', async () => {
+  const key = await openSettings()
+  expect(screen.queryByRole('button', { name: 'Generate new' })).not.toBeInTheDocument()
+  expect(screen.getByRole('link', { name: 'Server Controls → Commands → Generate SSH key (g)' }))
+    .toHaveAttribute('href', '/commands?category=network')
+  expect(screen.getByTitle('Browse for file…')).toBeEnabled()
+  expect(screen.getByRole('button', { name: 'Remove passphrase' })).toBeEnabled()
+  expect(key).toHaveValue('C:\\keys\\old-key')
+  expectNoRotation()
+})
+
+it('opens the Commands network category without rotating a key or saving drafts', async () => {
+  await openSettings()
+  fireEvent.click(screen.getByRole('link', { name: 'Server Controls → Commands → Generate SSH key (g)' }))
+  expect(window.location.pathname + window.location.search).toBe('/commands?category=network')
+  expect(state.api.mock.calls.every(([path, options]) => path === '/api/config' && !options?.method)).toBe(true)
+})
+
+it('browses for a private-key file without losing unrelated unsaved edits', async () => {
+  const key = await openSettings()
+  fireEvent.click(screen.getByTitle('Browse for file…'))
+  await waitFor(() => expect(key).toHaveValue(state.browse.path))
+  const request = state.api.mock.calls.find(([path]) => path === '/api/browse-path')
+  expect(JSON.parse(request?.[1].body)).toMatchObject({ mode: 'file', current: 'C:\\keys\\old-key' })
   expect(screen.getByLabelText(/Windows username/)).toHaveValue('unsaved-user')
+  expectNoRotation()
 })
-it('retains the verified file selection if the follow-up configuration read fails', async () => {
-  state.failReload = true
-  const key = await generate()
-  await screen.findByText('SSH login verified.')
-  expect(key).toHaveValue(state.result.keyPath)
-})
-it.each([{ ok: false, rotated: false }, { ok: true, rotated: false }])('never shows a success check for an incomplete rotation (%j)', async result => {
-  state.result = { ...state.result, ...result, message: 'Rotation is still pending.' }
-  const key = await generate()
-  const pending = await screen.findByText('Rotation is still pending.')
-  expect(pending.closest('.text-success')).toBeNull()
+
+it.each([{ ok: true, cancelled: true }, { ok: false, cancelled: false }])(
+  'preserves the selected key when browsing returns %j', async result => {
+    state.browse = { ...state.browse, ...result }
+    const key = await openSettings()
+    fireEvent.click(screen.getByTitle('Browse for file…'))
+    await waitFor(() => expect(screen.getByTitle('Browse for file…')).toBeEnabled())
+    expect(key).toHaveValue('C:\\keys\\old-key')
+    expect(screen.getByLabelText(/Windows username/)).toHaveValue('unsaved-user')
+    expectNoRotation()
+  },
+)
+
+async function removePassphrase() {
+  const key = await openSettings()
+  fireEvent.click(screen.getByRole('button', { name: 'Remove passphrase' }))
+  const passphrase = screen.getByPlaceholderText('Current passphrase')
+  fireEvent.change(passphrase, { target: { value: 'test-passphrase' } })
+  fireEvent.keyDown(passphrase, { key: 'Enter' })
+  return key
+}
+
+it('removes the passphrase while retaining the selected key and other drafts', async () => {
+  const key = await removePassphrase()
+  await screen.findByText('Passphrase removed.')
+  const request = state.api.mock.calls.find(([path]) => path === '/api/config/strip-ssh-passphrase')
+  expect(JSON.parse(request?.[1].body)).toEqual({ passphrase: 'test-passphrase' })
+  expect(screen.queryByPlaceholderText('Current passphrase')).not.toBeInTheDocument()
   expect(key).toHaveValue('C:\\keys\\old-key')
-  expect(state.api.mock.calls.filter(([path]) => path === '/api/config')).toHaveLength(1)
+  expect(screen.getByLabelText(/Windows username/)).toHaveValue('unsaved-user')
+  expectNoRotation()
 })
-it('shows authorization failure without changing the key selection', async () => {
-  state.failRotation = true
-  const key = await generate()
-  expect(await screen.findByText('Authorization failed.')).toBeInTheDocument()
+
+it('reports passphrase failure without changing the key selection', async () => {
+  state.stripError = true
+  const key = await removePassphrase()
+  const error = await screen.findByText('Incorrect passphrase.')
+  expect(error.closest('.text-danger')).not.toBeNull()
+  expect(screen.getByPlaceholderText('Current passphrase')).toBeInTheDocument()
   expect(key).toHaveValue('C:\\keys\\old-key')
-  expect(screen.queryByText('SSH login verified.')).not.toBeInTheDocument()
+  expectNoRotation()
 })

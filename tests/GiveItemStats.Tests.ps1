@@ -112,6 +112,22 @@ Describe 'Get-DuneGiveItemStatsJson' -Tag 'Pure' {
         [int]$stats.FWeaponItemStats[1].CurrentAmmo | Should -Be 0
     }
 
+    It 'maps relative augment effect rows to their actual in-game grades' {
+        $json = Get-DuneGiveItemStatsJson `
+            -TemplateId 'B1C4_Unique_HarkAr2' `
+            -Augments @(@{ id='T6_Augment_BR1'; quality=4 })
+        $stats = $json | ConvertFrom-Json
+
+        @($stats.FAugmentedItemStats[1].AppliedAugmentQualities) | Should -Be @(4)
+        @($stats.FAugmentedItemStats[1].AppliedAugmentRollData[0].StatRolls).Count | Should -Be 4
+
+        {
+            Get-DuneGiveItemStatsJson `
+                -TemplateId 'B1C4_Unique_HarkAr2' `
+                -Augments @(@{ id='T6_Augment_BR1'; quality=3 })
+        } | Should -Throw '*does not support augment grade 3*'
+    }
+
     It 'rejects incompatible augments instead of creating invalid gear' {
         {
             Get-DuneGiveItemStatsJson `
