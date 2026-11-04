@@ -72,6 +72,25 @@ describe('PublicIpCard host route option', () => {
   })
 })
 
+it('shows IP mismatch instead of ready for a running map at the old address', async () => {
+  const previous = vi.mocked(api).getMockImplementation()!
+  vi.mocked(api).mockImplementation(async (path, init) => {
+    if (path === '/api/public-ip/p34') return {
+      verdict: 'stale-ip', summary: 'Stale public IP detected.', reachable: true,
+      vmPublicIp: '98.36.235.161', vmPublicIpUsable: true, publicIpSource: 'vm',
+      maps: [{ map: 'Overmap', serverId: 'one', ip: '73.66.56.57', port: 7777, ready: true, alive: true }],
+    }
+    return previous(path, init)
+  })
+  render(<PublicIpCard />)
+  await userEvent.setup().click(screen.getByRole('button', { name: /run check/i }))
+  expect(await screen.findByText('IP mismatch')).toBeInTheDocument()
+  expect(screen.queryByText('ready')).not.toBeInTheDocument()
+  expect(screen.getByText('73.66.56.57:7777')).toHaveClass('text-danger')
+  expect(screen.getByText('Stale public IP detected.').parentElement).toHaveClass('text-danger')
+  expect(screen.getByRole('button', { name: /fix it automatically.*98.36.235.161/i })).toBeInTheDocument()
+})
+
 it('clears displayed maps without API writes and restores them on the next check', async () => {
   const previous = vi.mocked(api).getMockImplementation()!
   vi.mocked(api).mockImplementation(async (path, init) => {

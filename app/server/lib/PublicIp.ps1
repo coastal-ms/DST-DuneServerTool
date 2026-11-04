@@ -341,6 +341,9 @@ function Resolve-DunePublicIpDiagnosticTarget {
         [string]$VmDetectedIp = '',
         [string]$HostDetectedIp = ''
     )
+    # Diagnose against a live observation, not the saved value being checked.
+    if ($VmDetectedIp -and (Test-DunePublicIPv4 -Ip $VmDetectedIp).ok) { return @{ ip = $VmDetectedIp; source = 'vm' } }
+    if ($HostDetectedIp -and (Test-DunePublicIPv4 -Ip $HostDetectedIp).ok) { return @{ ip = $HostDetectedIp; source = 'host' } }
     $manualIp = ''
     try {
         if ($Config.PublicIpMode -eq 'manual') { $manualIp = ([string]$Config.ManualPublicIp).Trim() }
@@ -348,8 +351,6 @@ function Resolve-DunePublicIpDiagnosticTarget {
     if ($manualIp -and (Test-DunePublicIPv4 -Ip $manualIp).ok) {
         return @{ ip = $manualIp; source = 'manual' }
     }
-    if ($VmDetectedIp) { return @{ ip = $VmDetectedIp; source = 'vm' } }
-    if ($HostDetectedIp) { return @{ ip = $HostDetectedIp; source = 'host' } }
     $lastApplied = ''
     try { $lastApplied = ([string]$Config.LastAppliedPublicIp).Trim() } catch {}
     if ($lastApplied) { return @{ ip = $lastApplied; source = 'last-applied' } }
@@ -441,9 +442,8 @@ function Get-DuneP34Diagnostic {
     $cfg = $null
     try { $cfg = Read-DuneConfig } catch {}
 
-    # 1) VM-side egress IP + K3s ExternalIP, one SSH round trip. Manual mode can
-    # intentionally advertise a different address (for example a VPS relay), so
-    # the saved manual target takes precedence over this detected WAN address.
+    # 1) VM-side egress IP + K3s ExternalIP, one SSH round trip. A saved manual
+    # address must not hide a changed internet IP from this diagnostic.
     $probe = @'
 get_ip() {
   for url in https://api.ipify.org https://checkip.amazonaws.com https://ifconfig.me https://icanhazip.com; do
@@ -494,9 +494,7 @@ fi
     }
 
     $hostIp = ''
-    $manualConfigured = $false
-    try { $manualConfigured = ($cfg.PublicIpMode -eq 'manual' -and [bool]$cfg.ManualPublicIp) } catch {}
-    if (-not $manualConfigured -and -not $vmDetectedIp -and (Get-Command Get-DunePublicIp -ErrorAction SilentlyContinue)) {
+    if (-not (Test-DunePublicIPv4 -Ip $vmDetectedIp).ok -and (Get-Command Get-DunePublicIp -ErrorAction SilentlyContinue)) {
         try { $hostIp = [string](Get-DunePublicIp) } catch {}
     }
     $target = Resolve-DunePublicIpDiagnosticTarget -Config $cfg -VmDetectedIp $vmDetectedIp -HostDetectedIp $hostIp
@@ -595,7 +593,7 @@ fi
     # is behind the same router/WAN as the VM so it's a reliable stand-in, but we
     # say so rather than implying we read it from the server itself.
     $srcNote = switch ($result.publicIpSource) {
-        'manual'       { ' (your saved manual public IP; this may intentionally be a VPN or VPS relay address)' }
+        'manual'       { ' (your saved manual public IP; the current internet IP could not be detected)' }
         'host'         { ' (detected from the DST host, since the VM could not reach an IP-check service)' }
         'last-applied' { ' (your last-applied public IP, since neither the VM nor the DST host could detect a current one)' }
         default        { '' }
@@ -654,6 +652,10 @@ fi
             $result.verdict = 'unknown'
             $result.summary = 'Could not determine this server''s public IP from the VM or the DST host, and your maps/K3s agree on one address, so nothing looks stale. If players still get P34, verify the VM has internet access and that UDP 7777-7810 is port-forwarded to this server.'
         }
+    }
+    elseif ($result.publicIpSource -in @('manual', 'last-applied')) {
+        $result.verdict = 'unknown'
+        $result.summary = 'The maps match the saved public IP, but the current internet IP could not be detected. Check the current internet IP and run this check again before retrying the game.'
     }
     else {
         $result.verdict = 'healthy'

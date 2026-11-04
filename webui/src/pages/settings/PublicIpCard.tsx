@@ -493,11 +493,11 @@ export function PublicIpCard() {
                       </span>
                       <span className="flex items-center gap-1 text-xs">
                         <Icon
-                          name={m.ready && m.alive ? 'CheckCircle2' : 'AlertCircle'}
+                          name={m.ready && m.alive && !mismatch ? 'CheckCircle2' : 'AlertCircle'}
                           size={13}
-                          className={m.ready && m.alive ? 'text-success' : 'text-warning'}
+                          className={mismatch ? 'text-danger' : m.ready && m.alive ? 'text-success' : 'text-warning'}
                         />
-                        {m.ready && m.alive ? 'ready' : 'not ready'}
+                        {mismatch ? 'IP mismatch' : m.ready && m.alive ? 'ready' : 'not ready'}
                       </span>
                     </div>
                   )

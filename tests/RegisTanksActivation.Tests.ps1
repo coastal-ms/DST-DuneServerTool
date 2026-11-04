@@ -129,7 +129,11 @@ Describe 'Tank images follow official server upgrades' {
             ''
         }
     }
-    It 'moves only Hagga to the updated compatible image with compare-and-swap guards' {
+    It 'moves only Hagga to the updated compatible image with compare-and-swap guards' -ForEach @(
+        @{Build='2168446'},
+        @{Build='2173753'}
+    ) {
+        $script:Official="registry.funcom.com/funcom/self-hosting/seabass-server:$Build-0-shipping"
         (Sync-DuneRegisTankServerUpdate -Ip test).changed | Should -BeTrue
         $script:Image | Should -Be ('localhost/dst-regis-tanks:'+([regex]::Match($script:Official,':([0-9]+)-').Groups[1].Value)+'-1')
         @($script:CapturedPatch | Where-Object op -eq replace).Count | Should -Be 1

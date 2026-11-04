@@ -13,6 +13,12 @@ here cover everything those tags shipped.
 
 ## [Unreleased]
 
+## [16.7.2] - 2026-11-03
+
+### Fixed
+- Restore optional Tank support for Funcom server build 2173753.
+- Flag stale advertised public IP addresses instead of showing the connection as ready.
+
 ## [16.7.1] - 2026-11-01
 
 ### Changed
