@@ -13,6 +13,9 @@ here cover everything those tags shipped.
 
 ## [Unreleased]
 
+### Fixed
+- Map relative augment effect rows to their actual in-game quality grades in the picker and generated item stats.
+
 ## [16.7.2] - 2026-11-03
 
 ### Fixed

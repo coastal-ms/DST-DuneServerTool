@@ -1,7 +1,10 @@
 import { describe, expect, it } from 'vitest'
 import {
+  augmentEffectsForGrade,
+  augmentGrades,
   augmentSlotLimit,
   maxAugmentGrade,
+  minAugmentGrade,
   resolveAugmentItemTags,
 } from '../src/components/AugmentPicker'
 import type { AugmentCatalog } from '../src/api/gameplay'
@@ -38,8 +41,20 @@ describe('AugmentPicker compatibility', () => {
     expect(resolveAugmentItemTags(catalog, 'ArmorTemplate_Schematic', 'Named Rifle')).toEqual([])
   })
 
-  it('groups augments by their highest available grade', () => {
-    expect(maxAugmentGrade({ 1: ['low'], 4: ['high'] })).toBe(4)
-    expect(maxAugmentGrade({ 1: ['low'], 5: ['high'] })).toBe(5)
+  it('maps relative effect rows to actual grades ending at grade 5', () => {
+    const pressurizer = { 1: ['grade 4 effect'], 2: ['grade 5 effect'] }
+    expect(augmentGrades(pressurizer)).toEqual([
+      { quality: 4, effectKey: '1' },
+      { quality: 5, effectKey: '2' },
+    ])
+    expect(minAugmentGrade(pressurizer)).toBe(4)
+    expect(maxAugmentGrade(pressurizer)).toBe(5)
+    expect(augmentEffectsForGrade(pressurizer, 4)).toEqual(['grade 4 effect'])
+    expect(augmentEffectsForGrade(pressurizer, 5)).toEqual(['grade 5 effect'])
+  })
+
+  it('maps three effect rows to actual grades 3 through 5', () => {
+    expect(augmentGrades({ 1: ['low'], 2: ['mid'], 3: ['high'] })
+      .map(value => value.quality)).toEqual([3, 4, 5])
   })
 })

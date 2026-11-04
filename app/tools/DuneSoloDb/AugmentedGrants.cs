@@ -30,7 +30,7 @@ internal static partial class Program
                 .Select(value => value.GetString() ?? string.Empty)
                 .Where(value => value.Length > 0)
                 .ToArray();
-            var rollCounts = new Dictionary<int, int>();
+            var effectRows = new List<(int Key, int RollCount)>();
             if (property.Value.TryGetProperty("gradeEffects", out var grades))
             {
                 foreach (var grade in grades.EnumerateObject())
@@ -38,10 +38,15 @@ internal static partial class Program
                     if (int.TryParse(grade.Name, out var gradeNumber)
                         && grade.Value.ValueKind == JsonValueKind.Array)
                     {
-                        rollCounts[gradeNumber] = grade.Value.GetArrayLength();
+                        effectRows.Add((gradeNumber, grade.Value.GetArrayLength()));
                     }
                 }
             }
+            effectRows.Sort((left, right) => left.Key.CompareTo(right.Key));
+            var minimumQuality = 6 - effectRows.Count;
+            var rollCounts = effectRows
+                .Select((row, index) => new { Quality = minimumQuality + index, row.RollCount })
+                .ToDictionary(row => row.Quality, row => row.RollCount);
             augments[property.Name] = new GrantAugmentRule(tags, rollCounts);
         }
         return new GrantAugmentCatalog(

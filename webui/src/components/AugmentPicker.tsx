@@ -27,10 +27,37 @@ export function augmentSlotLimit(tags: string[]): number {
   return 0
 }
 
+export type AugmentGrade = {
+  quality: number
+  effectKey: string
+}
+
+export function augmentGrades(gradeEffects: Record<string, string[]>): AugmentGrade[] {
+  const effectKeys = Object.keys(gradeEffects)
+    .map(Number)
+    .filter(Number.isInteger)
+    .sort((left, right) => left - right)
+  const minimumQuality = 6 - effectKeys.length
+  return effectKeys.map((effectKey, index) => ({
+    quality: minimumQuality + index,
+    effectKey: String(effectKey),
+  }))
+}
+
+export function minAugmentGrade(gradeEffects: Record<string, string[]>): number {
+  return augmentGrades(gradeEffects)[0]?.quality ?? 5
+}
+
 export function maxAugmentGrade(gradeEffects: Record<string, string[]>): number {
-  return Math.max(
-    ...Object.keys(gradeEffects).map(Number).filter(Number.isInteger),
-  )
+  return augmentGrades(gradeEffects).at(-1)?.quality ?? 5
+}
+
+export function augmentEffectsForGrade(
+  gradeEffects: Record<string, string[]>,
+  quality: number,
+): string[] {
+  const grade = augmentGrades(gradeEffects).find(value => value.quality === quality)
+  return grade ? gradeEffects[grade.effectKey] : []
 }
 
 export function AugmentPicker({
@@ -66,7 +93,7 @@ export function AugmentPicker({
           itemTag === augmentTag || itemTag.startsWith(`${augmentTag}.`)))
       })
       .sort(([, left], [, right]) =>
-        maxAugmentGrade(right.gradeEffects) - maxAugmentGrade(left.gradeEffects)
+        minAugmentGrade(right.gradeEffects) - minAugmentGrade(left.gradeEffects)
         || left.name.localeCompare(right.name))
   }, [catalog, limit, tags])
 
@@ -86,10 +113,8 @@ export function AugmentPicker({
     if (current) {
       onSelectedChange(selected.filter(value => value.id !== augmentId))
     } else if (selected.length < limit) {
-      const grades = Object.keys(catalog.augments[augmentId].gradeEffects)
-        .map(Number)
-        .filter(Number.isInteger)
-      onSelectedChange([...selected, { id: augmentId, quality: Math.max(...grades) }])
+      const quality = maxAugmentGrade(catalog.augments[augmentId].gradeEffects)
+      onSelectedChange([...selected, { id: augmentId, quality }])
     }
   }
 
@@ -103,20 +128,20 @@ export function AugmentPicker({
       <div className="max-h-72 overflow-y-auto rounded-lg border border-border bg-surface-2/50 p-2 space-y-1">
         {eligible.map(([id, augment], index) => {
           const selection = selected.find(value => value.id === id)
-          const grades = Object.keys(augment.gradeEffects)
-            .map(Number)
-            .filter(Number.isInteger)
-            .sort((left, right) => left - right)
-          const displayGrade = selection?.quality ?? Math.max(...grades)
+          const grades = augmentGrades(augment.gradeEffects)
           const maximumGrade = maxAugmentGrade(augment.gradeEffects)
-          const previousMaximum = index > 0
-            ? maxAugmentGrade(eligible[index - 1][1].gradeEffects)
+          const minimumGrade = minAugmentGrade(augment.gradeEffects)
+          const displayGrade = selection?.quality ?? maximumGrade
+          const previousMinimum = index > 0
+            ? minAugmentGrade(eligible[index - 1][1].gradeEffects)
             : null
           return (
             <Fragment key={id}>
-              {maximumGrade !== previousMaximum && (
+              {minimumGrade !== previousMinimum && (
                 <div className="mt-2 first:mt-0 border-b border-border pb-1 text-[10px] font-semibold uppercase tracking-wider text-text-dim">
-                  Maximum Grade {maximumGrade}
+                  {minimumGrade === maximumGrade
+                    ? `Grade ${maximumGrade}`
+                    : `Grades ${minimumGrade}–${maximumGrade}`}
                 </div>
               )}
               <div className="flex items-start gap-2 rounded px-2 py-1.5 hover:bg-surface-2">
@@ -135,7 +160,7 @@ export function AugmentPicker({
                 >
                   <span className="block text-sm text-text">{augment.name}</span>
                   <span className="block text-[11px] text-text-dim">
-                    {augment.gradeEffects[String(displayGrade)].join(' · ')}
+                    {augmentEffectsForGrade(augment.gradeEffects, displayGrade).join(' · ')}
                   </span>
                 </button>
                 {selection && (
@@ -148,7 +173,9 @@ export function AugmentPicker({
                         value.id === id ? { ...value, quality: Number(event.target.value) } : value))}
                       className="rounded bg-surface-2 border border-border px-1.5 py-1 text-text"
                     >
-                      {grades.map(value => <option key={value} value={value}>{value}</option>)}
+                      {grades.map(({ quality }) => (
+                        <option key={quality} value={quality}>{quality}</option>
+                      ))}
                     </select>
                   </label>
                 )}
