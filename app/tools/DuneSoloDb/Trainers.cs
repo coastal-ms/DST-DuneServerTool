@@ -20,7 +20,7 @@ internal static partial class Program
                 UnlockTrainer(stage,Path.Combine(root,job+"-before.db"),adapterPath,tagsPath,job);
             EnableAllSkillsCore(stage,Path.Combine(root,"skills-before.db"),adapterPath,skillsPath);
             if (!ReadStable(input).SequenceEqual(original)) throw new IOException("Solo save changed while preparing trainer and skill unlocks.");
-            Restore(stage,input,safetyBackup,requireGameClosed:true);
+            Restore(stage,input,safetyBackup,expectedTargetBytes:original,requireGameClosed:true);
             return new { ok=true, action="enable-all-skills", safetyBackup, trainers=5, inspection=InspectPath(input) };
         }
         finally { Directory.Delete(root,true); }
@@ -102,6 +102,15 @@ internal static partial class Program
             throw new InvalidOperationException("Failed combined unlock changed the live target or created a misleading backup.");
         allTags["DA_CT_Trainer_Planetologist1_01"]=["Trainer.Planetologist.Complete"];
         File.WriteAllText(catalog,JsonSerializer.Serialize(new { contract_tags=allTags,job_skill_blocks=allBlocks }));
+        // If the recovery snapshot cannot be persisted, the whole unlock must
+        // roll back to the exact original, not leave an unprotected live save.
+        var blockedBackup=Path.Combine(root,"safety","blocked-trainer-backup.db");
+        Directory.CreateDirectory(blockedBackup);
+        var backupFailed=false;
+        try { EnableAllSkills(target,blockedBackup,adapterPath,skillsPath,catalog); }
+        catch (IOException) { backupFailed=true; }
+        if(!backupFailed || !File.ReadAllBytes(target).SequenceEqual(combinedBefore))
+            throw new InvalidOperationException("An unlock without a retained recovery snapshot changed the live save.");
         EnableAllSkills(target,combinedBackup,adapterPath,skillsPath,catalog);
         if(!File.ReadAllBytes(combinedBackup).SequenceEqual(combinedBefore)) throw new InvalidOperationException("Combined unlock backup was not exact.");
         File.WriteAllBytes(sqlite,Unwrap(File.ReadAllBytes(target)).SqliteBytes);

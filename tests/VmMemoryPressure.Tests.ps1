@@ -149,7 +149,7 @@ probe_done=1
         $r = ConvertFrom-DuneMemPressureProbe -Raw $corroborated
         $r.signals.lowMemory | Should -BeTrue
         $r.pressure          | Should -BeTrue
-        (@($r.warnings) -join ' ') | Should -Match "raise the VM's RAM"
+        (@($r.warnings) -join ' ') | Should -Match 'Review concurrent map workloads'
     }
 
     It 'flags a MemoryPressure node condition even without restarts' {
@@ -179,6 +179,48 @@ probe_done=1
         ($r.db[0].oom)      | Should -BeTrue
         $r.signals.oomKills | Should -Be 1
         $r.pressure         | Should -BeTrue
+    }
+
+    It 'does not mistake intentional swap use and old restarts for pressure' {
+        $raw = @'
+mem_total_k=20971520
+mem_avail_k=200000
+swap_total_k=16777216
+swap_free_k=8000000
+op=x-controller-manager-a~P:Running~PR:~R:9 ~E:1 ~X:Error ~W:
+maplim=Survival_1~LIM:10Gi
+maplim=Overmap~LIM:200Mi
+probe_done=1
+'@
+        $r = ConvertFrom-DuneMemPressureProbe -Raw $raw
+        $r.pressure | Should -BeFalse
+        $r.severity | Should -Be 'none'
+        $r.signals.memoryCorroborated | Should -BeFalse
+        (@($r.warnings) -join ' ') | Should -Not -Match 'VM (low on memory|RAM is tight)|Review concurrent'
+        @($r.mapLimits.entries).Count | Should -Be 2
+    }
+
+    It 'does not assume unknown free swap proves exhaustion' {
+        $raw = "mem_total_k=20971520`nmem_avail_k=200000`nswap_total_k=16777216`nop=x-controller-manager-a~P:Running~PR:~R:9 ~E:1 ~X:Error ~W:`nprobe_done=1"
+        $r = ConvertFrom-DuneMemPressureProbe -Raw $raw
+        $r.pressure | Should -BeFalse
+        (@($r.warnings) -join ' ') | Should -Match 'free swap capacity is unknown'
+    }
+
+    It 'detects exhausted swap with low RAM' {
+        $raw = "mem_total_k=20971520`nmem_avail_k=200000`nswap_total_k=16777216`nswap_free_k=0`nprobe_done=1"
+        $r = ConvertFrom-DuneMemPressureProbe -Raw $raw
+        $r.pressure | Should -BeTrue
+        $r.headline | Should -Match 'swap exhausted'
+        (@($r.warnings) -join ' ') | Should -Match 'no free swap remaining'
+    }
+
+    It 'keeps real node pressure and OOM evidence visible with swap available' {
+        $raw = "mem_total_k=20971520`nmem_avail_k=200000`nswap_total_k=16777216`nswap_free_k=8000000`nnode_cond=MemoryPressure=True`nop=x-controller-manager-a~P:Running~PR:~R:1 ~E:137 ~X:OOMKilled ~W:`nprobe_done=1"
+        $r = ConvertFrom-DuneMemPressureProbe -Raw $raw
+        $r.pressure | Should -BeTrue
+        $r.severity | Should -Be 'critical'
+        $r.signals.oomKills | Should -Be 1
     }
 
     It 'returns ok=false for empty input' {

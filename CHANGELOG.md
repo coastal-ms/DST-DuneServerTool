@@ -11,7 +11,13 @@ Patch releases within a major series are rolled up under the major's entry
 on GitHub still exist for each individual release; the consolidated entries
 here cover everything those tags shipped.
 
-## [Unreleased]
+## [16.7.4] - 2026-11-06
+
+### Fixed
+- Keep VM shutdown and reboot responsive when boot recovery is waiting for a stopped battlegroup.
+- Add paired experimental-swap commands that save and restore the original memory configuration.
+- Account for available swap in VM memory warnings while retaining alerts for exhausted memory and reported failures.
+- Confirm whole-save recovery before enabling all Solo skills and preserve the original save if its recovery backup cannot be retained.
 
 ## [16.7.3] - 2026-11-04
 

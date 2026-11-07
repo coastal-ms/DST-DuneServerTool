@@ -397,7 +397,16 @@ wait_for() {
     _phase="$1"
     shift
     set_state LAST_START_PHASE "$_phase" || return 1
-    while ! "$@"; do sleep 2; done
+    while :; do
+        [ ! -f "$STATE_DIR/start-cancel" ] || return 3
+        if [ "$_phase" = battlegroup-ready ]; then
+            # An explicit stop during boot supersedes the pending recovery.
+            _stopped=$("$K3S" kubectl get battlegroups -A --request-timeout=10s -o jsonpath='{.items[0].spec.stop}' 2>/dev/null)
+            [ "$_stopped" != true ] || return 3
+        fi
+        "$@" && return 0
+        sleep 2
+    done
 }
 
 stop_worker() {
@@ -409,10 +418,10 @@ stop_worker() {
 
 start_worker() {
     if bg_ready; then exit 0; fi
-    wait_for k3s-api k3s_ready || exit 1
-    wait_for database db_ready || exit 1
-    wait_for operators operators_ready || exit 1
-    wait_for webhook webhook_ready || exit 1
+    wait_for k3s-api k3s_ready || return $?
+    wait_for database db_ready || return $?
+    wait_for operators operators_ready || return $?
+    wait_for webhook webhook_ready || return $?
     set_state LAST_START_PHASE battlegroup-start || exit 1
     "$BG_BIN" start >> "$LOG" 2>&1 || exit 2
     wait_for battlegroup-ready bg_ready
@@ -420,6 +429,8 @@ start_worker() {
 
 case "$ACTION" in
     stop)
+        mkdir -p "$STATE_DIR" || exit 1
+        touch "$STATE_DIR/start-cancel" || exit 1
         _active=$(active_bg_count)
         _detect_rc=$?
         if [ "$_detect_rc" -ne 0 ]; then
@@ -456,14 +467,20 @@ case "$ACTION" in
             log "boot reconciliation skipped because battlegroup was intentionally stopped"
             exit 0
         fi
+        rm -f "$STATE_DIR/start-cancel" || exit 1
         set_result START running detect || exit 1
         if "$TIMEOUT" "$START_TIMEOUT" "$0" start-worker; then
             set_result START ok complete || exit 1
             log "boot reconciliation completed; battlegroup healthy"
         else
             _rc=$?
-            set_result START failed "timeout-or-exit-${_rc}" || true
-            log "boot reconciliation failed or timed out (exit $_rc)"
+            if [ "$_rc" = 3 ]; then
+                set_result START skipped intentional-stop || true
+                log "boot reconciliation cancelled because a stop superseded recovery"
+            else
+                set_result START failed "timeout-or-exit-${_rc}" || true
+                log "boot reconciliation failed or timed out (exit $_rc)"
+            fi
         fi
         exit 0
         ;;
@@ -503,7 +520,12 @@ start() {
     if [ -f "$INITIAL_START_SENTINEL" ]; then
         rm -f "$INITIAL_START_SENTINEL"
     else
-        "\$command" start
+        # Never hold OpenRC's default runlevel while maps load. BusyBox init
+        # cannot process shutdown until that synchronous boot runlevel returns.
+        start-stop-daemon --start --background --exec "\$command" -- start
+        _rc=\$?
+        eend "\$_rc"
+        return "\$_rc"
     fi
     eend 0
 }
