@@ -11,6 +11,13 @@ Patch releases within a major series are rolled up under the major's entry
 on GitHub still exist for each individual release; the consolidated entries
 here cover everything those tags shipped.
 
+## [16.7.5] - 2026-11-07
+
+### Fixed
+- Allow self-hosted Testing Station unlocks after a backup recommendation and correctly read the transaction result.
+- Recover and verify missing self-hosted safety backups for operations that require a backup.
+- Redact credentials from nested game-server log payloads in diagnostic exports.
+
 ## [16.7.4] - 2026-11-06
 
 ### Fixed

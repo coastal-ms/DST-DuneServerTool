@@ -1,4 +1,35 @@
-# Shared manual/scheduled verifier. _bk must contain this run's CLI output.
+﻿# Shared manual/scheduled verifier. _bk must contain this run's CLI output.
+function New-DuneSafetyBackupScript {
+    param(
+        [Parameter(Mandatory)][ValidatePattern('^[A-Za-z0-9_-]+$')][string]$World,
+        [Parameter(Mandatory)][ValidatePattern('^[a-z0-9-]+$')][string]$Stem,
+        [Parameter(Mandatory)][ValidatePattern('^[A-Z0-9_]+$')][string]$ProofLabel,
+        [int]$DbPort = 15432
+    )
+    $verification = New-DuneBackupVerifyScript -DbPort $DbPort
+    $header = @'
+set -euo pipefail
+_expected='/funcom/artifacts/database-dumps/__WORLD__/__STEM__.backup'
+# A unique name belongs to this invocation; never accept an older archive.
+if [ -e "$_expected" ] || [ -e "$_expected.yaml" ]; then
+    echo '[dst] safety backup path already exists; no older archive will be reused.' >&2
+    exit 1
+fi
+_bk=$(/home/dune/.dune/bin/battlegroup backup '__STEM__.backup' 2>&1)
+printf '%s\n' "$_bk"
+_reported=$(printf '%s\n' "$_bk" | sed -n 's/^Backup file (on this host): //p' | tr -d '\r' | sort -u)
+[ "$_reported" = "$_expected" ]
+'@
+    $footer = @'
+[ "$_bf" = "$_expected" ]
+bytes=$(stat -c %s -- "$_bf")
+[ "$bytes" -gt 1024 ]
+printf '\n__PROOF__=%s|%s\n' "$_bf" "$bytes"
+'@
+    return (($header + "`n" + $verification + "`n" + $footer).
+        Replace('__WORLD__', $World).Replace('__STEM__', $Stem).Replace('__PROOF__', $ProofLabel) -replace "`r", '')
+}
+
 function New-DuneBackupVerifyScript {
     param([int]$DbPort = 15432)
     if ($DbPort -lt 1 -or $DbPort -gt 65535) { throw 'Invalid database port' }

@@ -150,6 +150,40 @@ Describe 'Invoke-DstRedaction' -Tag 'Pure' {
         $out | Should -Not -Match 'server-secret'
     }
 
+    It 'redacts nested game-service credentials without requiring a connection URI' {
+        $raw = '[gateway] payload={"services":[{"superPassword":"synthetic-admin","rabbit":{"GameRmqSecret":"synthetic-rmq"}}],"state":"Running","port":7777}'
+        $out = Invoke-DstRedaction -Text $raw
+        $out | Should -Not -Match 'synthetic-admin|synthetic-rmq'
+        $payload = $out.Substring($out.IndexOf('{')) | ConvertFrom-Json
+        $payload.services[0].superPassword | Should -Be '<redacted>'
+        $payload.services[0].rabbit.GameRmqSecret | Should -Be '<redacted>'
+        $payload.state | Should -Be 'Running'
+        $payload.port | Should -Be 7777
+    }
+
+    It 'consumes escaped quotes and backslashes in JSON credential values' {
+        $raw = '{"loginPassword":"start\"still-secret\\end","superPassword":"a","GameRmqSecret":"b","name":"Test"}'
+        $out = Invoke-DstRedaction -Text $raw
+        $out | Should -Not -Match 'start|still-secret|end'
+        $payload = $out | ConvertFrom-Json
+        $payload.loginPassword | Should -Be '<redacted>'
+        $payload.superPassword | Should -Be '<redacted>'
+        $payload.GameRmqSecret | Should -Be '<redacted>'
+        $payload.name | Should -Be 'Test'
+    }
+
+    It 'covers mixed-case password and secret suffixes and preserves empty and noncredential fields' {
+        $raw = '{"SUPERPASSWORD":"synthetic-one","gameRmqSECRET":"synthetic-two","db_password":"synthetic-three","secret":"synthetic-four","password":"","secretName":"queue-name","passwordRequired":true}'
+        $payload = Invoke-DstRedaction -Text $raw | ConvertFrom-Json
+        $payload.SUPERPASSWORD | Should -Be '<redacted>'
+        $payload.gameRmqSECRET | Should -Be '<redacted>'
+        $payload.db_password | Should -Be '<redacted>'
+        $payload.secret | Should -Be '<redacted>'
+        $payload.password | Should -Be ''
+        $payload.secretName | Should -Be 'queue-name'
+        $payload.passwordRequired | Should -BeTrue
+    }
+
     It 'redacts private sender and location values from chat teleport traces' {
         $raw = @'
 [2026-09-07T12:00:00.000Z] [INFO] chat command !tp from Funcom-Private-Handle: ok=True trace=msg_abc-123

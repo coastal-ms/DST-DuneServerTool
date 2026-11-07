@@ -6,6 +6,13 @@ BeforeAll {
     $hasBash = $null -ne (Get-Command $bash -ErrorAction SilentlyContinue)
 }
 Describe 'Backup verification behavior' -Tag 'Pure' {
+    It 'recovers only this fresh safety archive and proves readability before emitting write permission' -Skip:(-not (Test-Path 'C:/Program Files/Git/bin/bash.exe') -and -not (Get-Command bash -ErrorAction SilentlyContinue)) {
+        $scriptPath = Join-Path $TestDrive 'safety.sh'
+        [IO.File]::WriteAllText($scriptPath, (New-DuneSafetyBackupScript -World current -Stem dst-testing-stations-fixture -ProofLabel DST_TESTING_STATIONS_BACKUP -DbPort 15433))
+        $output = & $bash (Join-Path $PSScriptRoot 'fixtures/safety-backup-verification.sh') $scriptPath 2>&1
+        $LASTEXITCODE | Should -Be 0 -Because ($output -join "`n")
+        @($output | Where-Object { $_ -match ' passed$' }).Count | Should -Be 13
+    }
     It 'recovers current absent artifacts, rejects stale-only/ambiguous/failing runs and preserves existing archives' -Skip:(-not (Test-Path 'C:/Program Files/Git/bin/bash.exe') -and -not (Get-Command bash -ErrorAction SilentlyContinue)) {
         $scriptPath = Join-Path $TestDrive 'verifier.sh'
         [IO.File]::WriteAllText($scriptPath, (New-DuneBackupVerifyScript))

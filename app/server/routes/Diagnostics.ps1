@@ -59,8 +59,12 @@ function Invoke-DstRedaction {
     # 1f) Generic password / secret fields in JSON ("password":"x") or
     #     key=value (PGPASSWORD=x) form, as a safety net for credentials that
     #     never appear in a URI — e.g. the battlegroup CR's "password" field
-    #     and game-server state messages containing "loginPassword".
-    $out = [regex]::Replace($out, '(?i)("(?:password|loginpassword|passwd|pwd|pgpassword|dbpassword|secret)"\s*:\s*")[^"]+(")', '${1}<redacted>${2}')
+    #     and nested game-service fields such as superPassword / GameRmqSecret.
+    #     Match credential suffixes at any JSON depth, including prefixed log
+    #     lines that cannot be parsed as a standalone JSON document. Consume
+    #     complete JSON escapes so an escaped quote cannot expose the remainder
+    #     of a password or leave malformed JSON behind. Empty values stay empty.
+    $out = [regex]::Replace($out, '(?i)("(?:[a-z0-9_]*(?:password|passwd|secret)|pwd)"\s*:\s*")(?:\\.|[^"\\])+(")', '${1}<redacted>${2}')
     $out = [regex]::Replace($out, '(?im)^(\s*(?:PGPASSWORD|PASSWORD|DB_PASSWORD|DATABASE_PASSWORD)\s*=\s*).+$', '${1}<redacted>')
 
     # 1g) Global scrub of every captured connection-string password, so a copy

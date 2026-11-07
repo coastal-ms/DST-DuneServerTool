@@ -1,4 +1,4 @@
-# Safe vehicle deletion queue. Deletions are only applied inside an explicit
+﻿# Safe vehicle deletion queue. Deletions are only applied inside an explicit
 # backup -> battlegroup stop -> database mutation -> battlegroup start window.
 
 $script:DuneVehicleDeletionStateFile = $null
@@ -223,20 +223,19 @@ function Invoke-DuneVerifiedSafetyBackup {
     )
     $scope = Get-DuneVehicleHostScope -Ip $Ip
     $stem = $StemPrefix + '-' + [guid]::NewGuid().ToString('N')
-    $script = @'
-set -euo pipefail
-/home/dune/.dune/bin/battlegroup backup '__STEM__'
-mapfile -t files < <(find '/funcom/artifacts/database-dumps/__WORLD__' -maxdepth 1 -type f \( -name '__STEM__' -o -name '__STEM__.backup' \))
-[ "${#files[@]}" -eq 1 ]
-bytes=$(stat -c %s -- "${files[0]}")
-[ "$bytes" -gt 1024 ]
-printf '\n__PROOF__=%s|%s\n' "${files[0]}" "$bytes"
-'@.Replace('__STEM__', $stem).Replace('__WORLD__', $scope.world).Replace('__PROOF__', $ProofLabel)
+    if (-not (Get-Command New-DuneSafetyBackupScript -ErrorAction SilentlyContinue)) {
+        . (Join-Path $PSScriptRoot 'BackupVerify.ps1')
+    }
+    $dbPort = 15432
+    if (Get-Command Get-V6DbPort -ErrorAction SilentlyContinue) { $dbPort = Get-V6DbPort }
+    $script = New-DuneSafetyBackupScript -World $scope.world -Stem $stem -ProofLabel $ProofLabel -DbPort $dbPort
+    $expectedPath = "/funcom/artifacts/database-dumps/$($scope.world)/$stem.backup"
     $backup = Invoke-DuneBackupShell -Ip $Ip -Script $script -TimeoutSec 900
     $proof = if ($backup) {
         [regex]::Matches([string]$backup.out, "(?m)^$([regex]::Escape($ProofLabel))=([^\r\n|]+)\|([0-9]+)\r?$")
     } else { @() }
-    if ($null -eq $backup -or $backup.rc -ne 0 -or $proof.Count -ne 1 -or [long]$proof[0].Groups[2].Value -le 1024) {
+    if ($null -eq $backup -or $backup.rc -ne 0 -or $proof.Count -ne 1 -or
+        $proof[0].Groups[1].Value -cne $expectedPath -or [long]$proof[0].Groups[2].Value -le 1024) {
         return @{ ok = $false; error = 'the fresh safety backup was not verified on disk. No database write was attempted.' }
     }
     return @{ ok = $true; path = $proof[0].Groups[1].Value; bytes = [long]$proof[0].Groups[2].Value; database_scope = $scope.key }
