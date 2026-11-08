@@ -7926,6 +7926,1054 @@
       ],
       "acquisition": "Character recipe entries persisted after the combined Wand test on 2026-10-12. This grants known recipes directly, not physical inventory items.",
       "mappingEvidence": "Exact recipe name and quality pairs from the before/after crafting library. New limited-use grants get one use, with exact vehicle locomotion exceptions matching the vehicle-kit module counts: light ornithopter 4, medium 6, transport 8 and sandcrawler 2. Existing recipes and remaining uses are preserved; repeatable entries retain their unlimited flag with zero unused charges (or the existing -1 sentinel), without artificial 100-use counts."
+    },
+    {
+      "id": "MaxAugmentationSchematics",
+      "label": "Augmentation Schematics — Max Level",
+      "acquisition": "Grant one limited use of each mapped augmentation schematic at its maximum supported quality. Each repeat grants another use; unrelated recipes and grades are preserved.",
+      "mappingEvidence": "Exact104 augmentation recipe IDs from ObservedSchematicRecipes; each maps to a gradeable _Schematic template in item-catalog.json. Existing Give Item supports grades0 through5 for those templates. No non-augmentation recipe level is changed.",
+      "recipeEntries": [
+        {
+          "BaseRecipeId": {
+            "Name": "T6_Augment_Melee3_Recipe"
+          },
+          "m_QualityLevel": 5,
+          "m_bIsNew": true,
+          "m_NumberOfRecipeUses": 1,
+          "m_bIsLimitedUseRecipe": true,
+          "m_Source": "SchematicPickup"
+        },
+        {
+          "BaseRecipeId": {
+            "Name": "T6_Augment_MaulaPistol4_Recipe"
+          },
+          "m_QualityLevel": 5,
+          "m_bIsNew": true,
+          "m_NumberOfRecipeUses": 1,
+          "m_bIsLimitedUseRecipe": true,
+          "m_Source": "SchematicPickup"
+        },
+        {
+          "BaseRecipeId": {
+            "Name": "T6_Augment_MaulaPistol3_Recipe"
+          },
+          "m_QualityLevel": 5,
+          "m_bIsNew": true,
+          "m_NumberOfRecipeUses": 1,
+          "m_bIsLimitedUseRecipe": true,
+          "m_Source": "SchematicPickup"
+        },
+        {
+          "BaseRecipeId": {
+            "Name": "T6_Augment_Lasgun4_Recipe"
+          },
+          "m_QualityLevel": 5,
+          "m_bIsNew": true,
+          "m_NumberOfRecipeUses": 1,
+          "m_bIsLimitedUseRecipe": true,
+          "m_Source": "SchematicPickup"
+        },
+        {
+          "BaseRecipeId": {
+            "Name": "T6_Augment_Headshotdamage1_Recipe"
+          },
+          "m_QualityLevel": 5,
+          "m_bIsNew": true,
+          "m_NumberOfRecipeUses": 1,
+          "m_bIsLimitedUseRecipe": true,
+          "m_Source": "SchematicPickup"
+        },
+        {
+          "BaseRecipeId": {
+            "Name": "T6_Augment_Damage1_Recipe"
+          },
+          "m_QualityLevel": 5,
+          "m_bIsNew": true,
+          "m_NumberOfRecipeUses": 1,
+          "m_bIsLimitedUseRecipe": true,
+          "m_Source": "SchematicPickup"
+        },
+        {
+          "BaseRecipeId": {
+            "Name": "T6_Augment_Armor12_Recipe"
+          },
+          "m_QualityLevel": 5,
+          "m_bIsNew": true,
+          "m_NumberOfRecipeUses": 1,
+          "m_bIsLimitedUseRecipe": true,
+          "m_Source": "SchematicPickup"
+        },
+        {
+          "BaseRecipeId": {
+            "Name": "T6_Augment_DeathDurabilityOff_Recipe"
+          },
+          "m_QualityLevel": 5,
+          "m_bIsNew": true,
+          "m_NumberOfRecipeUses": 1,
+          "m_bIsLimitedUseRecipe": true,
+          "m_Source": "SchematicPickup"
+        },
+        {
+          "BaseRecipeId": {
+            "Name": "T6_Augment_Ch5_Spitdart1_Recipe"
+          },
+          "m_QualityLevel": 5,
+          "m_bIsNew": true,
+          "m_NumberOfRecipeUses": 1,
+          "m_bIsLimitedUseRecipe": true,
+          "m_Source": "SchematicPickup"
+        },
+        {
+          "BaseRecipeId": {
+            "Name": "T6_Augment_Ch5_SMG1_Recipe"
+          },
+          "m_QualityLevel": 5,
+          "m_bIsNew": true,
+          "m_NumberOfRecipeUses": 1,
+          "m_bIsLimitedUseRecipe": true,
+          "m_Source": "SchematicPickup"
+        },
+        {
+          "BaseRecipeId": {
+            "Name": "T6_Augment_Ch5_Shotgun1_Recipe"
+          },
+          "m_QualityLevel": 5,
+          "m_bIsNew": true,
+          "m_NumberOfRecipeUses": 1,
+          "m_bIsLimitedUseRecipe": true,
+          "m_Source": "SchematicPickup"
+        },
+        {
+          "BaseRecipeId": {
+            "Name": "T6_Augment_Ch5_Scattergun1_Recipe"
+          },
+          "m_QualityLevel": 5,
+          "m_bIsNew": true,
+          "m_NumberOfRecipeUses": 1,
+          "m_bIsLimitedUseRecipe": true,
+          "m_Source": "SchematicPickup"
+        },
+        {
+          "BaseRecipeId": {
+            "Name": "T6_Augment_Ch5_RocketLauncher1_Recipe"
+          },
+          "m_QualityLevel": 5,
+          "m_bIsNew": true,
+          "m_NumberOfRecipeUses": 1,
+          "m_bIsLimitedUseRecipe": true,
+          "m_Source": "SchematicPickup"
+        },
+        {
+          "BaseRecipeId": {
+            "Name": "T6_Augment_Ch5_Maulapistol1_Recipe"
+          },
+          "m_QualityLevel": 5,
+          "m_bIsNew": true,
+          "m_NumberOfRecipeUses": 1,
+          "m_bIsLimitedUseRecipe": true,
+          "m_Source": "SchematicPickup"
+        },
+        {
+          "BaseRecipeId": {
+            "Name": "T6_Augment_Ch5_LMG1_Recipe"
+          },
+          "m_QualityLevel": 5,
+          "m_bIsNew": true,
+          "m_NumberOfRecipeUses": 1,
+          "m_bIsLimitedUseRecipe": true,
+          "m_Source": "SchematicPickup"
+        },
+        {
+          "BaseRecipeId": {
+            "Name": "T6_Augment_Ch5_Lasgun1_Recipe"
+          },
+          "m_QualityLevel": 5,
+          "m_bIsNew": true,
+          "m_NumberOfRecipeUses": 1,
+          "m_bIsLimitedUseRecipe": true,
+          "m_Source": "SchematicPickup"
+        },
+        {
+          "BaseRecipeId": {
+            "Name": "T6_Augment_Ch5_Heavypistol1_Recipe"
+          },
+          "m_QualityLevel": 5,
+          "m_bIsNew": true,
+          "m_NumberOfRecipeUses": 1,
+          "m_bIsLimitedUseRecipe": true,
+          "m_Source": "SchematicPickup"
+        },
+        {
+          "BaseRecipeId": {
+            "Name": "T6_Augment_Ch5_Flamethrower1_Recipe"
+          },
+          "m_QualityLevel": 5,
+          "m_bIsNew": true,
+          "m_NumberOfRecipeUses": 1,
+          "m_bIsLimitedUseRecipe": true,
+          "m_Source": "SchematicPickup"
+        },
+        {
+          "BaseRecipeId": {
+            "Name": "T6_Augment_Ch5_Fireballer1_Recipe"
+          },
+          "m_QualityLevel": 5,
+          "m_bIsNew": true,
+          "m_NumberOfRecipeUses": 1,
+          "m_bIsLimitedUseRecipe": true,
+          "m_Source": "SchematicPickup"
+        },
+        {
+          "BaseRecipeId": {
+            "Name": "T6_Augment_Ch5_BR1_Recipe"
+          },
+          "m_QualityLevel": 5,
+          "m_bIsNew": true,
+          "m_NumberOfRecipeUses": 1,
+          "m_bIsLimitedUseRecipe": true,
+          "m_Source": "SchematicPickup"
+        },
+        {
+          "BaseRecipeId": {
+            "Name": "T6_Augment_SpitdartRifle8_Recipe"
+          },
+          "m_QualityLevel": 5,
+          "m_bIsNew": true,
+          "m_NumberOfRecipeUses": 1,
+          "m_bIsLimitedUseRecipe": true,
+          "m_Source": "SchematicPickup"
+        },
+        {
+          "BaseRecipeId": {
+            "Name": "T6_Augment_SpitdartRifle7_Recipe"
+          },
+          "m_QualityLevel": 5,
+          "m_bIsNew": true,
+          "m_NumberOfRecipeUses": 1,
+          "m_bIsLimitedUseRecipe": true,
+          "m_Source": "SchematicPickup"
+        },
+        {
+          "BaseRecipeId": {
+            "Name": "T6_Augment_SpitdartRifle6_Recipe"
+          },
+          "m_QualityLevel": 5,
+          "m_bIsNew": true,
+          "m_NumberOfRecipeUses": 1,
+          "m_bIsLimitedUseRecipe": true,
+          "m_Source": "SchematicPickup"
+        },
+        {
+          "BaseRecipeId": {
+            "Name": "T6_Augment_SpitdartRifle5_Recipe"
+          },
+          "m_QualityLevel": 5,
+          "m_bIsNew": true,
+          "m_NumberOfRecipeUses": 1,
+          "m_bIsLimitedUseRecipe": true,
+          "m_Source": "SchematicPickup"
+        },
+        {
+          "BaseRecipeId": {
+            "Name": "T6_Augment_Spitdartrifle3_Recipe"
+          },
+          "m_QualityLevel": 5,
+          "m_bIsNew": true,
+          "m_NumberOfRecipeUses": 1,
+          "m_bIsLimitedUseRecipe": true,
+          "m_Source": "SchematicPickup"
+        },
+        {
+          "BaseRecipeId": {
+            "Name": "T6_Augment_Spitdartrifle2_Recipe"
+          },
+          "m_QualityLevel": 5,
+          "m_bIsNew": true,
+          "m_NumberOfRecipeUses": 1,
+          "m_bIsLimitedUseRecipe": true,
+          "m_Source": "SchematicPickup"
+        },
+        {
+          "BaseRecipeId": {
+            "Name": "T6_Augment_smg7_Recipe"
+          },
+          "m_QualityLevel": 5,
+          "m_bIsNew": true,
+          "m_NumberOfRecipeUses": 1,
+          "m_bIsLimitedUseRecipe": true,
+          "m_Source": "SchematicPickup"
+        },
+        {
+          "BaseRecipeId": {
+            "Name": "T6_Augment_Smg5_Recipe"
+          },
+          "m_QualityLevel": 5,
+          "m_bIsNew": true,
+          "m_NumberOfRecipeUses": 1,
+          "m_bIsLimitedUseRecipe": true,
+          "m_Source": "SchematicPickup"
+        },
+        {
+          "BaseRecipeId": {
+            "Name": "T6_Augment_smg4_Recipe"
+          },
+          "m_QualityLevel": 5,
+          "m_bIsNew": true,
+          "m_NumberOfRecipeUses": 1,
+          "m_bIsLimitedUseRecipe": true,
+          "m_Source": "SchematicPickup"
+        },
+        {
+          "BaseRecipeId": {
+            "Name": "T6_Augment_smg3_Recipe"
+          },
+          "m_QualityLevel": 5,
+          "m_bIsNew": true,
+          "m_NumberOfRecipeUses": 1,
+          "m_bIsLimitedUseRecipe": true,
+          "m_Source": "SchematicPickup"
+        },
+        {
+          "BaseRecipeId": {
+            "Name": "T6_Augment_smg2_Recipe"
+          },
+          "m_QualityLevel": 5,
+          "m_bIsNew": true,
+          "m_NumberOfRecipeUses": 1,
+          "m_bIsLimitedUseRecipe": true,
+          "m_Source": "SchematicPickup"
+        },
+        {
+          "BaseRecipeId": {
+            "Name": "T6_Augment_smg1_Recipe"
+          },
+          "m_QualityLevel": 5,
+          "m_bIsNew": true,
+          "m_NumberOfRecipeUses": 1,
+          "m_bIsLimitedUseRecipe": true,
+          "m_Source": "SchematicPickup"
+        },
+        {
+          "BaseRecipeId": {
+            "Name": "T6_Augment_Shotgun5_Recipe"
+          },
+          "m_QualityLevel": 5,
+          "m_bIsNew": true,
+          "m_NumberOfRecipeUses": 1,
+          "m_bIsLimitedUseRecipe": true,
+          "m_Source": "SchematicPickup"
+        },
+        {
+          "BaseRecipeId": {
+            "Name": "T6_Augment_Shotgun4_Recipe"
+          },
+          "m_QualityLevel": 5,
+          "m_bIsNew": true,
+          "m_NumberOfRecipeUses": 1,
+          "m_bIsLimitedUseRecipe": true,
+          "m_Source": "SchematicPickup"
+        },
+        {
+          "BaseRecipeId": {
+            "Name": "T6_Augment_Shotgun3_Recipe"
+          },
+          "m_QualityLevel": 5,
+          "m_bIsNew": true,
+          "m_NumberOfRecipeUses": 1,
+          "m_bIsLimitedUseRecipe": true,
+          "m_Source": "SchematicPickup"
+        },
+        {
+          "BaseRecipeId": {
+            "Name": "T6_Augment_Shotgun2_Recipe"
+          },
+          "m_QualityLevel": 5,
+          "m_bIsNew": true,
+          "m_NumberOfRecipeUses": 1,
+          "m_bIsLimitedUseRecipe": true,
+          "m_Source": "SchematicPickup"
+        },
+        {
+          "BaseRecipeId": {
+            "Name": "T6_Augment_Shotgun1_Recipe"
+          },
+          "m_QualityLevel": 5,
+          "m_bIsNew": true,
+          "m_NumberOfRecipeUses": 1,
+          "m_bIsLimitedUseRecipe": true,
+          "m_Source": "SchematicPickup"
+        },
+        {
+          "BaseRecipeId": {
+            "Name": "T6_Augment_Shielddamage1_Recipe"
+          },
+          "m_QualityLevel": 5,
+          "m_bIsNew": true,
+          "m_NumberOfRecipeUses": 1,
+          "m_bIsLimitedUseRecipe": true,
+          "m_Source": "SchematicPickup"
+        },
+        {
+          "BaseRecipeId": {
+            "Name": "T6_Augment_Scattergun8_Recipe"
+          },
+          "m_QualityLevel": 5,
+          "m_bIsNew": true,
+          "m_NumberOfRecipeUses": 1,
+          "m_bIsLimitedUseRecipe": true,
+          "m_Source": "SchematicPickup"
+        },
+        {
+          "BaseRecipeId": {
+            "Name": "T6_Augment_Scattergun7_Recipe"
+          },
+          "m_QualityLevel": 5,
+          "m_bIsNew": true,
+          "m_NumberOfRecipeUses": 1,
+          "m_bIsLimitedUseRecipe": true,
+          "m_Source": "SchematicPickup"
+        },
+        {
+          "BaseRecipeId": {
+            "Name": "T6_Augment_Scattergun6_Recipe"
+          },
+          "m_QualityLevel": 5,
+          "m_bIsNew": true,
+          "m_NumberOfRecipeUses": 1,
+          "m_bIsLimitedUseRecipe": true,
+          "m_Source": "SchematicPickup"
+        },
+        {
+          "BaseRecipeId": {
+            "Name": "T6_Augment_Scattergun5_Recipe"
+          },
+          "m_QualityLevel": 5,
+          "m_bIsNew": true,
+          "m_NumberOfRecipeUses": 1,
+          "m_bIsLimitedUseRecipe": true,
+          "m_Source": "SchematicPickup"
+        },
+        {
+          "BaseRecipeId": {
+            "Name": "T6_Augment_Scattergun4_Recipe"
+          },
+          "m_QualityLevel": 5,
+          "m_bIsNew": true,
+          "m_NumberOfRecipeUses": 1,
+          "m_bIsLimitedUseRecipe": true,
+          "m_Source": "SchematicPickup"
+        },
+        {
+          "BaseRecipeId": {
+            "Name": "T6_Augment_Scattergun2_Recipe"
+          },
+          "m_QualityLevel": 5,
+          "m_bIsNew": true,
+          "m_NumberOfRecipeUses": 1,
+          "m_bIsLimitedUseRecipe": true,
+          "m_Source": "SchematicPickup"
+        },
+        {
+          "BaseRecipeId": {
+            "Name": "T6_Augment_RocketLauncher4_Recipe"
+          },
+          "m_QualityLevel": 5,
+          "m_bIsNew": true,
+          "m_NumberOfRecipeUses": 1,
+          "m_bIsLimitedUseRecipe": true,
+          "m_Source": "SchematicPickup"
+        },
+        {
+          "BaseRecipeId": {
+            "Name": "T6_Augment_RocketLauncher3_Recipe"
+          },
+          "m_QualityLevel": 5,
+          "m_bIsNew": true,
+          "m_NumberOfRecipeUses": 1,
+          "m_bIsLimitedUseRecipe": true,
+          "m_Source": "SchematicPickup"
+        },
+        {
+          "BaseRecipeId": {
+            "Name": "T6_Augment_RocketLauncher2_Recipe"
+          },
+          "m_QualityLevel": 5,
+          "m_bIsNew": true,
+          "m_NumberOfRecipeUses": 1,
+          "m_bIsLimitedUseRecipe": true,
+          "m_Source": "SchematicPickup"
+        },
+        {
+          "BaseRecipeId": {
+            "Name": "T6_Augment_RocketLauncher1_Recipe"
+          },
+          "m_QualityLevel": 5,
+          "m_bIsNew": true,
+          "m_NumberOfRecipeUses": 1,
+          "m_bIsLimitedUseRecipe": true,
+          "m_Source": "SchematicPickup"
+        },
+        {
+          "BaseRecipeId": {
+            "Name": "T6_Augment_ReloadSpeed1_Recipe"
+          },
+          "m_QualityLevel": 5,
+          "m_bIsNew": true,
+          "m_NumberOfRecipeUses": 1,
+          "m_bIsLimitedUseRecipe": true,
+          "m_Source": "SchematicPickup"
+        },
+        {
+          "BaseRecipeId": {
+            "Name": "T6_Augment_Recoil1_Recipe"
+          },
+          "m_QualityLevel": 5,
+          "m_bIsNew": true,
+          "m_NumberOfRecipeUses": 1,
+          "m_bIsLimitedUseRecipe": true,
+          "m_Source": "SchematicPickup"
+        },
+        {
+          "BaseRecipeId": {
+            "Name": "T6_Augment_Rateoffire1_Recipe"
+          },
+          "m_QualityLevel": 5,
+          "m_bIsNew": true,
+          "m_NumberOfRecipeUses": 1,
+          "m_bIsLimitedUseRecipe": true,
+          "m_Source": "SchematicPickup"
+        },
+        {
+          "BaseRecipeId": {
+            "Name": "T6_Augment_Range1_Recipe"
+          },
+          "m_QualityLevel": 5,
+          "m_bIsNew": true,
+          "m_NumberOfRecipeUses": 1,
+          "m_bIsLimitedUseRecipe": true,
+          "m_Source": "SchematicPickup"
+        },
+        {
+          "BaseRecipeId": {
+            "Name": "T6_Augment_MaulaPistol5_Recipe"
+          },
+          "m_QualityLevel": 5,
+          "m_bIsNew": true,
+          "m_NumberOfRecipeUses": 1,
+          "m_bIsLimitedUseRecipe": true,
+          "m_Source": "SchematicPickup"
+        },
+        {
+          "BaseRecipeId": {
+            "Name": "T6_Augment_MaulaPistol2_Recipe"
+          },
+          "m_QualityLevel": 5,
+          "m_bIsNew": true,
+          "m_NumberOfRecipeUses": 1,
+          "m_bIsLimitedUseRecipe": true,
+          "m_Source": "SchematicPickup"
+        },
+        {
+          "BaseRecipeId": {
+            "Name": "T6_Augment_MaulaPistol1_Recipe"
+          },
+          "m_QualityLevel": 5,
+          "m_bIsNew": true,
+          "m_NumberOfRecipeUses": 1,
+          "m_bIsLimitedUseRecipe": true,
+          "m_Source": "SchematicPickup"
+        },
+        {
+          "BaseRecipeId": {
+            "Name": "T6_Augment_Magazinecapacity1_Recipe"
+          },
+          "m_QualityLevel": 5,
+          "m_bIsNew": true,
+          "m_NumberOfRecipeUses": 1,
+          "m_bIsLimitedUseRecipe": true,
+          "m_Source": "SchematicPickup"
+        },
+        {
+          "BaseRecipeId": {
+            "Name": "T6_Augment_Lmg6_Recipe"
+          },
+          "m_QualityLevel": 5,
+          "m_bIsNew": true,
+          "m_NumberOfRecipeUses": 1,
+          "m_bIsLimitedUseRecipe": true,
+          "m_Source": "SchematicPickup"
+        },
+        {
+          "BaseRecipeId": {
+            "Name": "T6_Augment_Lmg5_Recipe"
+          },
+          "m_QualityLevel": 5,
+          "m_bIsNew": true,
+          "m_NumberOfRecipeUses": 1,
+          "m_bIsLimitedUseRecipe": true,
+          "m_Source": "SchematicPickup"
+        },
+        {
+          "BaseRecipeId": {
+            "Name": "T6_Augment_Lmg4_Recipe"
+          },
+          "m_QualityLevel": 5,
+          "m_bIsNew": true,
+          "m_NumberOfRecipeUses": 1,
+          "m_bIsLimitedUseRecipe": true,
+          "m_Source": "SchematicPickup"
+        },
+        {
+          "BaseRecipeId": {
+            "Name": "T6_Augment_Lmg1_Recipe"
+          },
+          "m_QualityLevel": 5,
+          "m_bIsNew": true,
+          "m_NumberOfRecipeUses": 1,
+          "m_bIsLimitedUseRecipe": true,
+          "m_Source": "SchematicPickup"
+        },
+        {
+          "BaseRecipeId": {
+            "Name": "T6_Augment_Lasgun3_Recipe"
+          },
+          "m_QualityLevel": 5,
+          "m_bIsNew": true,
+          "m_NumberOfRecipeUses": 1,
+          "m_bIsLimitedUseRecipe": true,
+          "m_Source": "SchematicPickup"
+        },
+        {
+          "BaseRecipeId": {
+            "Name": "T6_Augment_Lasgun2_Recipe"
+          },
+          "m_QualityLevel": 5,
+          "m_bIsNew": true,
+          "m_NumberOfRecipeUses": 1,
+          "m_bIsLimitedUseRecipe": true,
+          "m_Source": "SchematicPickup"
+        },
+        {
+          "BaseRecipeId": {
+            "Name": "T6_Augment_Lasgun1_Recipe"
+          },
+          "m_QualityLevel": 5,
+          "m_bIsNew": true,
+          "m_NumberOfRecipeUses": 1,
+          "m_bIsLimitedUseRecipe": true,
+          "m_Source": "SchematicPickup"
+        },
+        {
+          "BaseRecipeId": {
+            "Name": "T6_Augment_HeavyPistol5_Recipe"
+          },
+          "m_QualityLevel": 5,
+          "m_bIsNew": true,
+          "m_NumberOfRecipeUses": 1,
+          "m_bIsLimitedUseRecipe": true,
+          "m_Source": "SchematicPickup"
+        },
+        {
+          "BaseRecipeId": {
+            "Name": "T6_Augment_HeavyPistol4_Recipe"
+          },
+          "m_QualityLevel": 5,
+          "m_bIsNew": true,
+          "m_NumberOfRecipeUses": 1,
+          "m_bIsLimitedUseRecipe": true,
+          "m_Source": "SchematicPickup"
+        },
+        {
+          "BaseRecipeId": {
+            "Name": "T6_Augment_HeavyPistol3_Recipe"
+          },
+          "m_QualityLevel": 5,
+          "m_bIsNew": true,
+          "m_NumberOfRecipeUses": 1,
+          "m_bIsLimitedUseRecipe": true,
+          "m_Source": "SchematicPickup"
+        },
+        {
+          "BaseRecipeId": {
+            "Name": "T6_Augment_HeavyPistol2_Recipe"
+          },
+          "m_QualityLevel": 5,
+          "m_bIsNew": true,
+          "m_NumberOfRecipeUses": 1,
+          "m_bIsLimitedUseRecipe": true,
+          "m_Source": "SchematicPickup"
+        },
+        {
+          "BaseRecipeId": {
+            "Name": "T6_Augment_HeavyPistol1_Recipe"
+          },
+          "m_QualityLevel": 5,
+          "m_bIsNew": true,
+          "m_NumberOfRecipeUses": 1,
+          "m_bIsLimitedUseRecipe": true,
+          "m_Source": "SchematicPickup"
+        },
+        {
+          "BaseRecipeId": {
+            "Name": "T6_Augment_Flamethrower4_Recipe"
+          },
+          "m_QualityLevel": 5,
+          "m_bIsNew": true,
+          "m_NumberOfRecipeUses": 1,
+          "m_bIsLimitedUseRecipe": true,
+          "m_Source": "SchematicPickup"
+        },
+        {
+          "BaseRecipeId": {
+            "Name": "T6_Augment_Flamethrower3_Recipe"
+          },
+          "m_QualityLevel": 5,
+          "m_bIsNew": true,
+          "m_NumberOfRecipeUses": 1,
+          "m_bIsLimitedUseRecipe": true,
+          "m_Source": "SchematicPickup"
+        },
+        {
+          "BaseRecipeId": {
+            "Name": "T6_Augment_Flamethrower2_Recipe"
+          },
+          "m_QualityLevel": 5,
+          "m_bIsNew": true,
+          "m_NumberOfRecipeUses": 1,
+          "m_bIsLimitedUseRecipe": true,
+          "m_Source": "SchematicPickup"
+        },
+        {
+          "BaseRecipeId": {
+            "Name": "T6_Augment_Flamethrower1_Recipe"
+          },
+          "m_QualityLevel": 5,
+          "m_bIsNew": true,
+          "m_NumberOfRecipeUses": 1,
+          "m_bIsLimitedUseRecipe": true,
+          "m_Source": "SchematicPickup"
+        },
+        {
+          "BaseRecipeId": {
+            "Name": "T6_Augment_Fireballer2_Recipe"
+          },
+          "m_QualityLevel": 5,
+          "m_bIsNew": true,
+          "m_NumberOfRecipeUses": 1,
+          "m_bIsLimitedUseRecipe": true,
+          "m_Source": "SchematicPickup"
+        },
+        {
+          "BaseRecipeId": {
+            "Name": "T6_Augment_Fireballer1_Recipe"
+          },
+          "m_QualityLevel": 5,
+          "m_bIsNew": true,
+          "m_NumberOfRecipeUses": 1,
+          "m_bIsLimitedUseRecipe": true,
+          "m_Source": "SchematicPickup"
+        },
+        {
+          "BaseRecipeId": {
+            "Name": "T6_Augment_BR8_Recipe"
+          },
+          "m_QualityLevel": 5,
+          "m_bIsNew": true,
+          "m_NumberOfRecipeUses": 1,
+          "m_bIsLimitedUseRecipe": true,
+          "m_Source": "SchematicPickup"
+        },
+        {
+          "BaseRecipeId": {
+            "Name": "T6_Augment_BR4_Recipe"
+          },
+          "m_QualityLevel": 5,
+          "m_bIsNew": true,
+          "m_NumberOfRecipeUses": 1,
+          "m_bIsLimitedUseRecipe": true,
+          "m_Source": "SchematicPickup"
+        },
+        {
+          "BaseRecipeId": {
+            "Name": "T6_Augment_BR3_Recipe"
+          },
+          "m_QualityLevel": 5,
+          "m_bIsNew": true,
+          "m_NumberOfRecipeUses": 1,
+          "m_bIsLimitedUseRecipe": true,
+          "m_Source": "SchematicPickup"
+        },
+        {
+          "BaseRecipeId": {
+            "Name": "T6_Augment_BR2_Recipe"
+          },
+          "m_QualityLevel": 5,
+          "m_bIsNew": true,
+          "m_NumberOfRecipeUses": 1,
+          "m_bIsLimitedUseRecipe": true,
+          "m_Source": "SchematicPickup"
+        },
+        {
+          "BaseRecipeId": {
+            "Name": "T6_Augment_BR1_Recipe"
+          },
+          "m_QualityLevel": 5,
+          "m_bIsNew": true,
+          "m_NumberOfRecipeUses": 1,
+          "m_bIsLimitedUseRecipe": true,
+          "m_Source": "SchematicPickup"
+        },
+        {
+          "BaseRecipeId": {
+            "Name": "T6_Augment_Acuracy1_Recipe"
+          },
+          "m_QualityLevel": 5,
+          "m_bIsNew": true,
+          "m_NumberOfRecipeUses": 1,
+          "m_bIsLimitedUseRecipe": true,
+          "m_Source": "SchematicPickup"
+        },
+        {
+          "BaseRecipeId": {
+            "Name": "T6_Augment_Ch5_Melee3_Recipe"
+          },
+          "m_QualityLevel": 5,
+          "m_bIsNew": true,
+          "m_NumberOfRecipeUses": 1,
+          "m_bIsLimitedUseRecipe": true,
+          "m_Source": "SchematicPickup"
+        },
+        {
+          "BaseRecipeId": {
+            "Name": "T6_Augment_Ch5_Melee1_Recipe"
+          },
+          "m_QualityLevel": 5,
+          "m_bIsNew": true,
+          "m_NumberOfRecipeUses": 1,
+          "m_bIsLimitedUseRecipe": true,
+          "m_Source": "SchematicPickup"
+        },
+        {
+          "BaseRecipeId": {
+            "Name": "T6_Augment_Melee9_Recipe"
+          },
+          "m_QualityLevel": 5,
+          "m_bIsNew": true,
+          "m_NumberOfRecipeUses": 1,
+          "m_bIsLimitedUseRecipe": true,
+          "m_Source": "SchematicPickup"
+        },
+        {
+          "BaseRecipeId": {
+            "Name": "T6_Augment_Melee8_Recipe"
+          },
+          "m_QualityLevel": 5,
+          "m_bIsNew": true,
+          "m_NumberOfRecipeUses": 1,
+          "m_bIsLimitedUseRecipe": true,
+          "m_Source": "SchematicPickup"
+        },
+        {
+          "BaseRecipeId": {
+            "Name": "T6_Augment_Melee7_Recipe"
+          },
+          "m_QualityLevel": 5,
+          "m_bIsNew": true,
+          "m_NumberOfRecipeUses": 1,
+          "m_bIsLimitedUseRecipe": true,
+          "m_Source": "SchematicPickup"
+        },
+        {
+          "BaseRecipeId": {
+            "Name": "T6_Augment_Melee6_Recipe"
+          },
+          "m_QualityLevel": 5,
+          "m_bIsNew": true,
+          "m_NumberOfRecipeUses": 1,
+          "m_bIsLimitedUseRecipe": true,
+          "m_Source": "SchematicPickup"
+        },
+        {
+          "BaseRecipeId": {
+            "Name": "T6_Augment_Melee5_Recipe"
+          },
+          "m_QualityLevel": 5,
+          "m_bIsNew": true,
+          "m_NumberOfRecipeUses": 1,
+          "m_bIsLimitedUseRecipe": true,
+          "m_Source": "SchematicPickup"
+        },
+        {
+          "BaseRecipeId": {
+            "Name": "T6_Augment_Melee4_Recipe"
+          },
+          "m_QualityLevel": 5,
+          "m_bIsNew": true,
+          "m_NumberOfRecipeUses": 1,
+          "m_bIsLimitedUseRecipe": true,
+          "m_Source": "SchematicPickup"
+        },
+        {
+          "BaseRecipeId": {
+            "Name": "T6_Augment_Melee2_Recipe"
+          },
+          "m_QualityLevel": 5,
+          "m_bIsNew": true,
+          "m_NumberOfRecipeUses": 1,
+          "m_bIsLimitedUseRecipe": true,
+          "m_Source": "SchematicPickup"
+        },
+        {
+          "BaseRecipeId": {
+            "Name": "T6_Augment_Melee1_Recipe"
+          },
+          "m_QualityLevel": 5,
+          "m_bIsNew": true,
+          "m_NumberOfRecipeUses": 1,
+          "m_bIsLimitedUseRecipe": true,
+          "m_Source": "SchematicPickup"
+        },
+        {
+          "BaseRecipeId": {
+            "Name": "T6_Augment_Armor3_Recipe"
+          },
+          "m_QualityLevel": 5,
+          "m_bIsNew": true,
+          "m_NumberOfRecipeUses": 1,
+          "m_bIsLimitedUseRecipe": true,
+          "m_Source": "SchematicPickup"
+        },
+        {
+          "BaseRecipeId": {
+            "Name": "T6_Augment_Armor17_Recipe"
+          },
+          "m_QualityLevel": 5,
+          "m_bIsNew": true,
+          "m_NumberOfRecipeUses": 1,
+          "m_bIsLimitedUseRecipe": true,
+          "m_Source": "SchematicPickup"
+        },
+        {
+          "BaseRecipeId": {
+            "Name": "T6_Augment_Armor16_Recipe"
+          },
+          "m_QualityLevel": 5,
+          "m_bIsNew": true,
+          "m_NumberOfRecipeUses": 1,
+          "m_bIsLimitedUseRecipe": true,
+          "m_Source": "SchematicPickup"
+        },
+        {
+          "BaseRecipeId": {
+            "Name": "T6_Augment_Armor14_Recipe"
+          },
+          "m_QualityLevel": 5,
+          "m_bIsNew": true,
+          "m_NumberOfRecipeUses": 1,
+          "m_bIsLimitedUseRecipe": true,
+          "m_Source": "SchematicPickup"
+        },
+        {
+          "BaseRecipeId": {
+            "Name": "T6_Augment_Armor13_Recipe"
+          },
+          "m_QualityLevel": 5,
+          "m_bIsNew": true,
+          "m_NumberOfRecipeUses": 1,
+          "m_bIsLimitedUseRecipe": true,
+          "m_Source": "SchematicPickup"
+        },
+        {
+          "BaseRecipeId": {
+            "Name": "T6_Augment_Armor11_Recipe"
+          },
+          "m_QualityLevel": 5,
+          "m_bIsNew": true,
+          "m_NumberOfRecipeUses": 1,
+          "m_bIsLimitedUseRecipe": true,
+          "m_Source": "SchematicPickup"
+        },
+        {
+          "BaseRecipeId": {
+            "Name": "T6_Augment_Armor10_Recipe"
+          },
+          "m_QualityLevel": 5,
+          "m_bIsNew": true,
+          "m_NumberOfRecipeUses": 1,
+          "m_bIsLimitedUseRecipe": true,
+          "m_Source": "SchematicPickup"
+        },
+        {
+          "BaseRecipeId": {
+            "Name": "T6_Augment_Armor9_Recipe"
+          },
+          "m_QualityLevel": 5,
+          "m_bIsNew": true,
+          "m_NumberOfRecipeUses": 1,
+          "m_bIsLimitedUseRecipe": true,
+          "m_Source": "SchematicPickup"
+        },
+        {
+          "BaseRecipeId": {
+            "Name": "T6_Augment_Armor8_Recipe"
+          },
+          "m_QualityLevel": 5,
+          "m_bIsNew": true,
+          "m_NumberOfRecipeUses": 1,
+          "m_bIsLimitedUseRecipe": true,
+          "m_Source": "SchematicPickup"
+        },
+        {
+          "BaseRecipeId": {
+            "Name": "T6_Augment_Armor6_Recipe"
+          },
+          "m_QualityLevel": 5,
+          "m_bIsNew": true,
+          "m_NumberOfRecipeUses": 1,
+          "m_bIsLimitedUseRecipe": true,
+          "m_Source": "SchematicPickup"
+        },
+        {
+          "BaseRecipeId": {
+            "Name": "T6_Augment_Armor5_Recipe"
+          },
+          "m_QualityLevel": 5,
+          "m_bIsNew": true,
+          "m_NumberOfRecipeUses": 1,
+          "m_bIsLimitedUseRecipe": true,
+          "m_Source": "SchematicPickup"
+        },
+        {
+          "BaseRecipeId": {
+            "Name": "T6_Augment_Armor4_Recipe"
+          },
+          "m_QualityLevel": 5,
+          "m_bIsNew": true,
+          "m_NumberOfRecipeUses": 1,
+          "m_bIsLimitedUseRecipe": true,
+          "m_Source": "SchematicPickup"
+        },
+        {
+          "BaseRecipeId": {
+            "Name": "T6_Augment_Armor2_Recipe"
+          },
+          "m_QualityLevel": 5,
+          "m_bIsNew": true,
+          "m_NumberOfRecipeUses": 1,
+          "m_bIsLimitedUseRecipe": true,
+          "m_Source": "SchematicPickup"
+        },
+        {
+          "BaseRecipeId": {
+            "Name": "T6_Augment_Armor1_Recipe"
+          },
+          "m_QualityLevel": 5,
+          "m_bIsNew": true,
+          "m_NumberOfRecipeUses": 1,
+          "m_bIsLimitedUseRecipe": true,
+          "m_Source": "SchematicPickup"
+        }
+      ]
     }
   ]
 }

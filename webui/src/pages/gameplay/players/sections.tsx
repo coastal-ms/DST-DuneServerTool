@@ -650,9 +650,13 @@ const ACTIONS: ActionDef[] = [
   { id: 'regis-tanks', group: 'Vehicle', label: 'Regis Tanks', icon: 'Truck', liveOnly: true, custom: 'regis-tanks',
     run: () => Promise.resolve({ message: '' }) },
   { id: 'observed-schematic-recipes', group: 'Items', label: 'Grant All Schematic Recipes (717)', icon: 'BookOpen', offlineOnly: true, experimental: true,
-    rowNote: 'Grant observed crafting recipe entries directly. Existing recipes and remaining uses are preserved; this does not deliver inventory items.',
-    confirm: p => `Grant 717 observed schematic recipe entries to ${p.name}? Existing recipe uses will be preserved. A backup is recommended before granting. Check crafting in-game after login.\n\n${COSMETIC_LICENSE_NOTICE}`,
+    rowNote: 'Grant missing or exhausted crafting recipes directly. Recipes with uses remaining and unlimited unlocks are preserved; this does not deliver inventory items.',
+    confirm: p => `Grant missing or exhausted schematic recipes to ${p.name}? Recipes with uses remaining and unlimited unlocks will be preserved. A backup is recommended before granting. Check crafting in-game after login.\n\n${COSMETIC_LICENSE_NOTICE}`,
     run: p => grantReviewedCustomization(p.id, p.controller_id, p.account_id, 'ObservedSchematicRecipes') },
+  { id: 'max-augmentation-schematics', group: 'Items', label: 'Grant All Augmentation Schematics — Max Level', icon: 'BookOpen', offlineOnly: true, experimental: true,
+    rowNote: 'Each press grants another use of every mapped augmentation schematic at its highest supported level. Other recipe levels stay unchanged.',
+    confirm: p => `Grant another use of every maximum-level augmentation schematic to ${p.name}? A backup is recommended before granting.\n\n${COSMETIC_LICENSE_NOTICE}`,
+    run: p => grantReviewedCustomization(p.id, p.controller_id, p.account_id, 'MaxAugmentationSchematics') },
   { id: 'observed-character-swatches', group: 'Items', label: 'Grant All Character Swatches (311)', icon: 'Palette', offlineOnly: true, experimental: true,
     rowNote: 'Save the observed swatch IDs directly to this character. Existing unlocks are preserved; individual in-game availability varies.',
     confirm: p => `Grant 311 character swatch IDs to ${p.name}? A backup is recommended before granting.\n\n${COSMETIC_LICENSE_NOTICE}`,
@@ -1073,34 +1077,36 @@ export function ActionsSection({ player, canWrite, demo, flash, onChanged, onFlu
 // directly beneath it. Replaces the older wrap-of-buttons layout so the panel
 // reads as a vertical list rather than a wall of buttons.
 // ---------------------------------------------------------------------------
-export function ReviewedGrantReview({ counts, loading, busy, offline, label, onRetry, onGrant }: {
+export function ReviewedGrantReview({ counts, loading, busy, offline, label, reissueAll = false, onRetry, onGrant }: {
   counts: ReviewedGrantPreview | null; loading: boolean; busy: boolean; offline: boolean; label: string
-  onRetry: () => void; onGrant: () => void
+  reissueAll?: boolean; onRetry: () => void; onGrant: () => void
 }) {
   const [query, setQuery] = useState('')
   const [filter, setFilter] = useState('missing')
   const [page, setPage] = useState(0)
   const previewReady = isReviewedGrantPreview(counts)
   const entries = previewReady ? counts.entries : []
-  const matches = entries.filter(entry => (filter === 'all' || (filter === 'owned' ? entry.owned : !entry.owned)) && entry.id.toLowerCase().includes(query.toLowerCase()))
+  const grantable = (entry: ReviewedGrantPreview['entries'][number]) => entry.grantable ?? !entry.owned
+  const recipes = entries.some(entry => typeof entry.limited === 'boolean')
+  const matches = entries.filter(entry => (filter === 'all' || (filter === 'owned' ? entry.owned : grantable(entry))) && entry.id.toLowerCase().includes(query.toLowerCase()))
   const maxPage = Math.max(0, Math.ceil(matches.length / 25) - 1), currentPage = Math.min(page, maxPage)
   return <div className="space-y-3" aria-label="Grant preview">
     {loading ? <p role="status">Checking saved unlocks…</p> : !previewReady ? <p role="status">Could not load the grant preview. <button className="btn-secondary" disabled={busy} onClick={onRetry}>Retry preview</button></p> : <>
-      <p>{counts.owned} already owned · <strong>{counts.remaining} missing</strong> · {counts.total} total</p>
-      <p className="text-sm text-text-muted">Only missing entries will be added. Existing entries and their remaining uses are preserved.</p>
+      <p>{counts.owned} already owned · <strong>{counts.remaining} missing{counts.reissuable ? ` · ${counts.reissuable} to reissue` : ''}</strong> · {counts.total} total</p>
+      <p className="text-sm text-text-muted">{reissueAll ? 'Each press grants another use at the highest supported augmentation level. Other recipe levels and unlimited unlocks are preserved.' : recipes ? 'Only missing or exhausted recipes will be granted. Recipes with uses remaining and unlimited unlocks are preserved.' : 'Only missing entries will be added. Existing entries and their remaining uses are preserved.'}</p>
       <div className="flex flex-wrap gap-2">
         <input className="input min-w-0 flex-1" aria-label="Search grant entries" placeholder="Find an entry…" value={query} onChange={event => { setQuery(event.target.value); setPage(0) }} />
         <select className="input" aria-label="Grant entry filter" value={filter} onChange={event => { setFilter(event.target.value); setPage(0) }}>
-          <option value="missing">Missing</option><option value="owned">Already owned</option><option value="all">All entries</option>
+          <option value="missing">{recipes ? 'Available to grant' : 'Missing'}</option><option value="owned">Already owned</option><option value="all">All entries</option>
         </select>
       </div>
       <div className="space-y-2">{matches.slice(currentPage * 25, currentPage * 25 + 25).map(entry => <div key={`${entry.id}:${entry.quality ?? ''}`} className="border-b border-border py-2 break-words text-sm">
-        <span>{entry.id}</span><small className="block text-text-muted">{entry.owned ? 'Already owned — preserved' : 'Will be added'}{entry.quality !== undefined ? ` · Quality ${entry.quality}` : ''}{Number.isFinite(entry.uses) && typeof entry.limited === 'boolean' ? entry.limited ? ` · ${entry.uses} uses` : ' · No use limit' : ''}</small>
+        <span>{entry.id}</span><small className="block text-text-muted">{entry.owned ? grantable(entry) ? 'Will be reissued' : 'Already owned — preserved' : 'Will be added'}{entry.quality !== undefined ? ` · Quality ${entry.quality}` : ''}{Number.isFinite(entry.uses) && typeof entry.limited === 'boolean' ? entry.limited ? ` · ${entry.uses} uses` : ' · No use limit' : ''}</small>
       </div>)}{!matches.length && <p className="text-sm text-text-muted">No entries match this filter.</p>}</div>
       {matches.length > 25 && <div className="flex flex-wrap items-center gap-3"><button className="btn-secondary" disabled={currentPage === 0} onClick={() => setPage(currentPage - 1)}>Previous</button><span>Page {currentPage + 1} of {maxPage + 1}</span><button className="btn-secondary" disabled={currentPage === maxPage} onClick={() => setPage(currentPage + 1)}>Next</button></div>}
     </>}
     {!offline && <p className="text-sm text-text-muted">Log out of the game and wait for your character to be Offline before granting.</p>}
-    <button className="btn-primary" disabled={busy || loading || !previewReady || !offline || !counts?.remaining} onClick={onGrant}>{busy ? 'Granting…' : label}</button>
+    <button className="btn-primary" disabled={busy || loading || !previewReady || !offline || !((counts?.remaining ?? 0) + (counts?.reissuable ?? 0))} onClick={onGrant}>{busy ? 'Granting…' : label}</button>
   </div>
 }
 
@@ -1119,9 +1125,10 @@ function ActionRow({ def, player, busy, stats, open, danger, onToggle, runAction
   const [grantCounts, setGrantCounts] = useState<ReviewedGrantPreview | null>(null)
   const [grantCountsLoading, setGrantCountsLoading] = useState(false)
   const [countAttempt, setCountAttempt] = useState(0)
-  const selection = ({'observed-character-swatches':'ObservedCharacterSwatches','observed-gear-appearances':'ObservedGearAppearances','observed-schematic-recipes':'ObservedSchematicRecipes'} as Record<string,string>)[def.id]
+  const selection = ({'observed-character-swatches':'ObservedCharacterSwatches','observed-gear-appearances':'ObservedGearAppearances','observed-schematic-recipes':'ObservedSchematicRecipes','max-augmentation-schematics':'MaxAugmentationSchematics'} as Record<string,string>)[def.id]
+  const countActive = selection !== 'MaxAugmentationSchematics' || open
   useEffect(() => {
-    if (!selection || busy) return
+    if (!selection || busy || !countActive) return
     let current = true
     setGrantCounts(null)
     setGrantCountsLoading(true)
@@ -1130,7 +1137,7 @@ function ActionRow({ def, player, busy, stats, open, danger, onToggle, runAction
       .catch(() => { if (current) setGrantCounts(null) })
       .finally(() => { if (current) setGrantCountsLoading(false) })
     return () => { current = false }
-  }, [selection, player.id, player.controller_id, player.account_id, busy, countAttempt])
+  }, [selection, player.id, player.controller_id, player.account_id, busy, countAttempt, countActive])
   // Read-only "current balance" note shown above currency actions.
   const balanceNote = (() => {
     if (!def.balance || !stats) return null
@@ -1156,7 +1163,7 @@ function ActionRow({ def, player, busy, stats, open, danger, onToggle, runAction
         <Icon name={def.icon} size={14} className={`shrink-0 ${danger ? 'text-error' : 'text-text-dim'}`} />
         <span className="flex-1 min-w-0">
           <span className="font-medium break-words">{def.label}</span>
-          {selection && <span className="block text-xs text-text-muted">{grantCounts ? `${grantCounts.owned}/${grantCounts.total} owned · ${grantCounts.remaining} remaining` : grantCountsLoading ? 'Checking character unlocks…' : 'Character counts unavailable'}</span>}
+          {selection && <span className="block text-xs text-text-muted">{grantCounts ? `${grantCounts.owned}/${grantCounts.total} owned · ${grantCounts.remaining} missing${grantCounts.reissuable ? ` · ${grantCounts.reissuable} to reissue` : ''}` : grantCountsLoading ? 'Checking character unlocks…' : !countActive ? 'Open to review augmentation grants' : 'Character counts unavailable'}</span>}
         </span>
           <span className="inline-flex shrink-0 items-center gap-2 text-[10px] font-medium text-text-muted">
         {def.experimental && (
@@ -1176,7 +1183,7 @@ function ActionRow({ def, player, busy, stats, open, danger, onToggle, runAction
           {def.rowNote && (
             <div className="text-xs text-text-dim italic mb-3 leading-relaxed">{def.rowNote}</div>
           )}
-          {selection ? <ReviewedGrantReview counts={grantCounts} loading={grantCountsLoading} busy={busy}
+          {selection ? <ReviewedGrantReview counts={grantCounts} loading={grantCountsLoading} busy={busy} reissueAll={selection === 'MaxAugmentationSchematics'}
             offline={(player.online_status || '').toLowerCase() === 'offline'} label={def.label}
             onRetry={() => setCountAttempt(value => value + 1)} onGrant={() => { void runAction(def, () => def.run(player, {})) }} /> : def.custom === 'give-item' ? (
             <GiveItemForm busy={busy} submitLabel={def.label}

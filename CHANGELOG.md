@@ -11,6 +11,14 @@ Patch releases within a major series are rolled up under the major's entry
 on GitHub still exist for each individual release; the consolidated entries
 here cover everything those tags shipped.
 
+## [16.7.6] - 2026-11-08
+
+### Fixed
+- Reissue exhausted limited-use schematic recipes while preserving remaining uses and unlimited unlocks.
+
+### Added
+- Grant all augmentation schematics at their highest supported level, adding one use with each grant.
+
 ## [16.7.5] - 2026-11-07
 
 ### Fixed

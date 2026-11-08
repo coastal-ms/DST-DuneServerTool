@@ -127,7 +127,7 @@ export interface SoloRangedWeapon {
 
 export type SoloUnlockKind = 'building-sets' | 'armor' | 'weapon' | 'vehicle' | 'dyes' | 'house' | 'placeables'
 export interface SoloCosmeticOwnership {
-  reviewedCounts?: Record<string, {total: number; owned: number; remaining: number}>
+  reviewedCounts?: Record<string, {total: number; owned: number; remaining: number; reissuable?: number}>
   available: boolean
   owned: string[]
   unlocked: string[]

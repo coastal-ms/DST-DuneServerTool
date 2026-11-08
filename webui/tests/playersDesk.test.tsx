@@ -115,15 +115,16 @@ describe('Player workspace', () => {
   })
   it('retains every existing action in the searchable catalog and all-tools view', async () => {
     const tools=getPlayerActionTools(false)
-    expect(tools).toHaveLength(55)
-    expect(new Set(tools.map(tool=>tool.id)).size).toBe(55)
+    expect(tools).toHaveLength(56)
+    expect(new Set(tools.map(tool=>tool.id)).size).toBe(56)
+    expect(tools).toContainEqual(expect.objectContaining({id:'max-augmentation-schematics',label:'Grant All Augmentation Schematics — Max Level'}))
     expect(tools.every(tool=>['Overview','Items','Progression','Activity','Advanced'].includes(playerToolHome(tool.group,tool.id)))).toBe(true)
     await selectPlayer()
     fireEvent.click(screen.getByRole('button',{name:'Advanced',exact:true}))
     fireEvent.click(screen.getByRole('button',{name:'All tools',exact:true}))
     const management=screen.getByRole('region',{name:'Player management'})
     for(const tool of tools) expect(within(management).getByText(tool.label,{exact:true})).toBeInTheDocument()
-    expect(management.querySelectorAll('.player-tool-choice')).toHaveLength(55)
+    expect(management.querySelectorAll('.player-tool-choice')).toHaveLength(56)
   })
 
   it('keeps directory selection and filters with the dedicated Teleport Locations tab in either app experience', async () => {

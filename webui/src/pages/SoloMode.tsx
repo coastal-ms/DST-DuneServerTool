@@ -1986,21 +1986,22 @@ export function SoloMode() {
               { id: 'ObservedCharacterSwatches', label: 'Character Swatches (311)' },
               { id: 'ObservedGearAppearances', label: 'Gear Appearances (401)' },
               { id: 'ObservedSchematicRecipes', label: 'Schematic Recipes (717)' },
+              { id: 'MaxAugmentationSchematics', label: 'Augmentation Schematics — Max Level' },
             ].map(choice => <button key={choice.id} className="btn-primary w-full flex-col gap-1 py-3 justify-center text-center whitespace-normal" disabled={!canMutateActiveProfile || gameRunning || !!busy}
               onClick={async () => {
-                if (!window.confirm(`Grant the reviewed ${choice.label}? A safety backup will be created.${choice.id === 'ObservedSchematicRecipes' ? ' This saves crafting recipes directly, not inventory items. Existing recipe uses are preserved.' : ''}\n\n${COSMETIC_LICENSE_NOTICE}`)) return
+                if (!window.confirm(`Grant the reviewed ${choice.label}? A safety backup will be created.${choice.id === 'ObservedSchematicRecipes' ? ' Only missing or exhausted recipes are granted; recipes with uses remaining and unlimited unlocks are preserved.' : choice.id === 'MaxAugmentationSchematics' ? ' This grants another use of every mapped augmentation at its highest supported level.' : ''}\n\n${COSMETIC_LICENSE_NOTICE}`)) return
                 setBusy('reviewed-customization')
                 setNotice(null)
                 try {
                   await grantSoloReviewedCustomization(statusState.data?.profileToken ?? '', choice.id)
-                  setNotice({ kind: 'ok', text: `${choice.label} saved. ${choice.id === 'ObservedSchematicRecipes' ? 'Open the game and check your crafting recipes. Existing recipe uses were preserved.' : 'Open the game and select the appearance or swatch in the customization menu.'}` })
+                  setNotice({ kind: 'ok', text: `${choice.label} saved. ${choice.id === 'ObservedSchematicRecipes' || choice.id === 'MaxAugmentationSchematics' ? 'Open the game and check your crafting recipes.' : 'Open the game and select the appearance or swatch in the customization menu.'}` })
                   await Promise.all([statusState.refresh(), backupsState.refresh()])
                 } catch (error) { setNotice({ kind: 'err', text: error instanceof Error ? error.message : String(error) }) }
                 finally { setBusy(null) }
               }}>
               Grant All {choice.label} (experimental)
               <span className="block text-xs font-normal">{statusState.data?.cosmeticOwnership?.reviewedCounts?.[choice.id]
-                ? `${statusState.data.cosmeticOwnership.reviewedCounts[choice.id].owned}/${statusState.data.cosmeticOwnership.reviewedCounts[choice.id].total} owned · ${statusState.data.cosmeticOwnership.reviewedCounts[choice.id].remaining} remaining`
+                ? `${statusState.data.cosmeticOwnership.reviewedCounts[choice.id].owned}/${statusState.data.cosmeticOwnership.reviewedCounts[choice.id].total} owned · ${statusState.data.cosmeticOwnership.reviewedCounts[choice.id].remaining} missing · ${statusState.data.cosmeticOwnership.reviewedCounts[choice.id].reissuable ?? 0} to reissue`
                 : 'Character counts unavailable'}</span>
             </button>)}
             </div>

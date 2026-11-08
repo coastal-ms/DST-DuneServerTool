@@ -1,4 +1,4 @@
-﻿function Get-DuneSoloCosmeticOwnership {
+function Get-DuneSoloCosmeticOwnership {
     param($Inspection)
     $raw = $Inspection.cosmetics
     if (-not $raw -or -not $raw.available) {
@@ -10,12 +10,21 @@
     $owned = [Collections.Generic.HashSet[string]]::new($unlocked, [StringComparer]::OrdinalIgnoreCase)
     foreach ($id in @($raw.pending)) { if ($id) { [void]$owned.Add([string]$id) } }
     $counts = @{}
-    foreach ($selection in @('ObservedCharacterSwatches','ObservedGearAppearances','ObservedSchematicRecipes')) {
+    foreach ($selection in @('ObservedCharacterSwatches','ObservedGearAppearances','ObservedSchematicRecipes','MaxAugmentationSchematics')) {
         $entry = Get-DuneReviewedCustomization $selection
-        $keys = if ($selection -eq 'ObservedSchematicRecipes') { @($entry.recipeEntries | ForEach-Object { "$($_.BaseRecipeId.Name)|$($_.m_QualityLevel)" }) } else { @($entry.customizationIds) }
-        $existing = if ($selection -eq 'ObservedSchematicRecipes') { @($raw.recipeKeys) } else { @($raw.customizations) }
+        $recipes = $entry.PSObject.Properties.Name -contains 'recipeEntries'
+        $keys = if ($recipes) { @($entry.recipeEntries | ForEach-Object { "$($_.BaseRecipeId.Name)|$($_.m_QualityLevel)" }) } else { @($entry.customizationIds) }
+        $existing = if ($recipes) { @($raw.recipeKeys) } else { @($raw.customizations) }
         $present = @($keys | Where-Object { $existing -ccontains $_ }).Count
-        if ($selection -ne 'ObservedSchematicRecipes' -or $null -ne $raw.recipeKeys) { $counts[$selection] = @{total=$keys.Count;owned=$present;remaining=$keys.Count-$present} }
+        $reissuable = 0
+        if ($recipes) {
+            foreach ($key in $keys) {
+                $states = @($raw.recipeStates | Where-Object { $_.key -ceq $key })
+                if ($states.Count -eq 0 -or @($states | Where-Object { -not $_.limited -or $null -eq $_.uses -or $_.uses -lt 0 }).Count) { continue }
+                if ($selection -ceq 'MaxAugmentationSchematics' -or @($states | Where-Object { $_.uses -ne 0 }).Count -eq 0) { $reissuable++ }
+            }
+        }
+        if (-not $recipes -or $null -ne $raw.recipeKeys) { $counts[$selection] = @{total=$keys.Count;owned=$present;remaining=$keys.Count-$present;reissuable=$reissuable} }
     }
     return @{ available=$true; owned=@($owned | Sort-Object); unlocked=@($unlocked | Sort-Object); pending=@($raw.pending); reviewedCounts=$counts; error='' }
 }
@@ -59,7 +68,7 @@ function Get-DuneReviewedCustomizationSql {
     $entry = Get-DuneReviewedCustomization -CustomizationId $CustomizationId
     if ($PawnId -le 0 -or $ControllerId -le 0 -or $AccountId -le 0) { throw 'A current character identity is required.' }
     if ($entry.PSObject.Properties.Name -contains 'recipeEntries') {
-        return Get-DuneReviewedRecipeSql -PawnId $PawnId -ControllerId $ControllerId -AccountId $AccountId -Entries @($entry.recipeEntries)
+        return Get-DuneReviewedRecipeSql -PawnId $PawnId -ControllerId $ControllerId -AccountId $AccountId -Entries @($entry.recipeEntries) -ReissueAll:($CustomizationId -ceq 'MaxAugmentationSchematics')
     }
     $ids = if ($entry.PSObject.Properties.Name -contains 'customizationIds') { @($entry.customizationIds) } else { @([string]$entry.id) }
     if ($ids.Count -eq 0 -or @($ids | Where-Object { $_ -isnot [string] -or [string]::IsNullOrWhiteSpace($_) }).Count -or @($ids | Select-Object -Unique).Count -ne $ids.Count) { throw 'Invalid reviewed customization mapping.' }
@@ -109,7 +118,7 @@ COMMIT;
 }
 
 function Get-DuneReviewedRecipeSql {
-    param([long]$PawnId, [long]$ControllerId, [long]$AccountId, [object[]]$Entries)
+    param([long]$PawnId, [long]$ControllerId, [long]$AccountId, [object[]]$Entries, [switch]$ReissueAll)
     $keys = [Collections.Generic.HashSet[string]]::new([StringComparer]::Ordinal)
     if (-not $Entries.Count) { throw 'Empty reviewed recipe selection.' }
     foreach ($entry in $Entries) {
@@ -130,7 +139,7 @@ SET LOCAL lock_timeout='5s';
 SET LOCAL statement_timeout='30s';
 CREATE TEMP TABLE dst_customization_result(added integer) ON COMMIT DROP;
 DO $dst$
-DECLARE props jsonb; known jsonb; selected jsonb; changed integer := 0;
+DECLARE props jsonb; known jsonb; selected jsonb; existing jsonb; existing_index integer; changed integer := 0;
 BEGIN
     PERFORM pg_advisory_xact_lock(__CONTROLLER__::bigint);
     PERFORM 1 FROM dune.encrypted_player_state WHERE player_pawn_id=__PAWN__::bigint
@@ -144,10 +153,24 @@ BEGIN
         OR jsonb_typeof(e #> '{BaseRecipeId,Name}') IS DISTINCT FROM 'string'
         OR jsonb_typeof(e->'m_QualityLevel') IS DISTINCT FROM 'number') THEN RAISE EXCEPTION 'Unsupported existing recipe entry.'; END IF;
     FOR selected IN SELECT value FROM jsonb_array_elements('__RECIPES__'::jsonb) LOOP
-        IF NOT EXISTS (SELECT 1 FROM jsonb_array_elements(known) e
-            WHERE e #>> '{BaseRecipeId,Name}'=selected #>> '{BaseRecipeId,Name}'
-              AND e->'m_QualityLevel'=selected->'m_QualityLevel') THEN
+        SELECT e.value,(e.ordinality-1)::integer INTO existing,existing_index
+        FROM jsonb_array_elements(known) WITH ORDINALITY e(value,ordinality)
+        WHERE e.value #>> '{BaseRecipeId,Name}'=selected #>> '{BaseRecipeId,Name}'
+          AND e.value->'m_QualityLevel'=selected->'m_QualityLevel'
+        ORDER BY CASE WHEN e.value->'m_bIsLimitedUseRecipe'='false'::jsonb THEN 0
+                      WHEN e.value->'m_NumberOfRecipeUses' IS DISTINCT FROM '0'::jsonb THEN 1 ELSE 2 END,e.ordinality
+        LIMIT 1;
+        IF existing IS NULL THEN
             known := known || jsonb_build_array(selected);
+            changed := changed + 1;
+        ELSIF selected->'m_bIsLimitedUseRecipe'='true'::jsonb
+          AND existing->'m_bIsLimitedUseRecipe'='true'::jsonb
+          AND ((__REISSUE_ALL__ AND jsonb_typeof(existing->'m_NumberOfRecipeUses')='number' AND (existing->>'m_NumberOfRecipeUses')::integer>=0)
+               OR existing->'m_NumberOfRecipeUses'='0'::jsonb) THEN
+            known := jsonb_set(known,ARRAY[existing_index::text],
+                jsonb_set(jsonb_set(existing,'{m_NumberOfRecipeUses}',
+                    CASE WHEN __REISSUE_ALL__ THEN to_jsonb((existing->>'m_NumberOfRecipeUses')::integer+1)
+                         ELSE selected->'m_NumberOfRecipeUses' END),'{m_bIsNew}','true'::jsonb));
             changed := changed + 1;
         END IF;
     END LOOP;
@@ -161,7 +184,7 @@ END
 $dst$;
 SELECT added::text AS added FROM dst_customization_result;
 COMMIT;
-'@.Replace('__PAWN__',[string]$PawnId).Replace('__CONTROLLER__',[string]$ControllerId).Replace('__ACCOUNT__',[string]$AccountId).Replace('__RECIPES__',$json)
+'@.Replace('__PAWN__',[string]$PawnId).Replace('__CONTROLLER__',[string]$ControllerId).Replace('__ACCOUNT__',[string]$AccountId).Replace('__RECIPES__',$json).Replace('__REISSUE_ALL__',$(if($ReissueAll){'true'}else{'false'}))
 }
 
 function Get-DuneReviewedGrantStatusSql {
@@ -171,6 +194,9 @@ function Get-DuneReviewedGrantStatusSql {
         $selected = ConvertTo-DuneSqlString (ConvertTo-Json -InputObject @($entry.recipeEntries) -Depth 8 -Compress)
         $owned = "a.properties #> '{CraftingRecipesLibraryActorComponent,m_KnownItemRecipes}'"
         $match = "o #>> '{BaseRecipeId,Name}'=s #>> '{BaseRecipeId,Name}' AND o->'m_QualityLevel'=s->'m_QualityLevel'"
+        $usesCondition = if ($CustomizationId -ceq 'MaxAugmentationSchematics') { "jsonb_typeof(present_recipe.entry->'m_NumberOfRecipeUses')='number' AND (present_recipe.entry->>'m_NumberOfRecipeUses')::integer>=0" } else { "present_recipe.entry->'m_NumberOfRecipeUses'='0'::jsonb" }
+        $eligible = "(present_recipe.entry IS NULL OR (s->'m_bIsLimitedUseRecipe'='true'::jsonb AND present_recipe.entry->'m_bIsLimitedUseRecipe'='true'::jsonb AND $usesCondition))"
+        return "SELECT count(*)::text AS total, count(*) FILTER (WHERE present_recipe.entry IS NOT NULL)::text AS owned, count(*) FILTER (WHERE $eligible)::text AS grantable, jsonb_agg(jsonb_build_object('id',s #>> '{BaseRecipeId,Name}','quality',s->'m_QualityLevel','uses',COALESCE(present_recipe.entry->'m_NumberOfRecipeUses',s->'m_NumberOfRecipeUses'),'limited',COALESCE(present_recipe.entry->'m_bIsLimitedUseRecipe',s->'m_bIsLimitedUseRecipe'),'owned',present_recipe.entry IS NOT NULL,'grantable',$eligible))::text AS entries_json FROM dune.actors a JOIN dune.encrypted_player_state p ON p.player_pawn_id=a.id CROSS JOIN jsonb_array_elements('$selected'::jsonb) s LEFT JOIN LATERAL (SELECT o AS entry FROM jsonb_array_elements($owned) o WHERE $match ORDER BY CASE WHEN o->'m_bIsLimitedUseRecipe'='false'::jsonb THEN 0 WHEN o->'m_NumberOfRecipeUses' IS DISTINCT FROM '0'::jsonb THEN 1 ELSE 2 END LIMIT 1) present_recipe ON true WHERE a.id=$PawnId AND p.player_controller_id=$ControllerId AND p.account_id=$AccountId GROUP BY a.id;"
         $detail = "jsonb_build_object('id',s #>> '{BaseRecipeId,Name}','quality',s->'m_QualityLevel','uses',CASE WHEN EXISTS (SELECT 1 FROM jsonb_array_elements(`$owned) o WHERE `$match) THEN (SELECT o->'m_NumberOfRecipeUses' FROM jsonb_array_elements(`$owned) o WHERE `$match LIMIT 1) ELSE s->'m_NumberOfRecipeUses' END,'limited',CASE WHEN EXISTS (SELECT 1 FROM jsonb_array_elements(`$owned) o WHERE `$match) THEN (SELECT o->'m_bIsLimitedUseRecipe' FROM jsonb_array_elements(`$owned) o WHERE `$match LIMIT 1) ELSE s->'m_bIsLimitedUseRecipe' END,'owned',EXISTS (SELECT 1 FROM jsonb_array_elements(`$owned) o WHERE `$match))"
     } else {
         $ids = if ($entry.PSObject.Properties.Name -contains 'customizationIds') { @($entry.customizationIds) } else { @([string]$entry.id) }
@@ -207,6 +233,15 @@ function Invoke-DunePlayerReviewedCustomization {
     $added = 0
     $hasAddedCount = $rows.Count -eq 1 -and $rows[0].ContainsKey('added') -and
         [int]::TryParse([string]$rows[0]['added'], [ref]$added) -and $added -ge 0 -and $added -le $total
+    if ($CustomizationId -in @('ObservedSchematicRecipes','MaxAugmentationSchematics')) {
+        if (-not $hasAddedCount) {
+            return @{ok=$false;error='Recipe grant outcome could not be confirmed. Refresh and check remaining uses before granting again.'}
+        }
+        $message = if ($CustomizationId -ceq 'MaxAugmentationSchematics') {
+            "$added augmentation schematics granted at max level. Verified $owned of $total saved."
+        } else { "$added missing or exhausted recipes granted; $($total-$added) preserved. Verified $owned of $total saved." }
+        return @{ok=$true;total=$total;owned=$owned;message=$message}
+    }
     $message = if ($hasAddedCount) {
         if ($added -eq 0) { "All $total entries were already unlocked. Verified $owned of $total saved." }
         else { "$added added; $($total-$added) already unlocked. Verified $owned of $total saved." }

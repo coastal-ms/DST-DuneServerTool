@@ -8,6 +8,28 @@ const counts = { total: 2, owned: 1, remaining: 1, entries: [
   {id:'MissingRecipe',owned:false,quality:2,uses:4,limited:true},
 ] }
 describe('Reviewed grant preview', () => {
+  it('allows only exhausted owned recipes to be reissued without marking usable recipes as missing', () => {
+    const onGrant=vi.fn()
+    render(<ReviewedGrantReview counts={{total:3,owned:3,remaining:0,reissuable:1,entries:[
+      {id:'ExhaustedRecipe',owned:true,quality:0,uses:0,limited:true,grantable:true},
+      {id:'UsableRecipe',owned:true,quality:0,uses:1,limited:true,grantable:false},
+      {id:'UnlimitedRecipe',owned:true,quality:0,uses:0,limited:false,grantable:false},
+    ]}} loading={false} busy={false} offline label="Grant recipes" onRetry={vi.fn()} onGrant={onGrant} />)
+    expect(screen.getByText('ExhaustedRecipe')).toBeInTheDocument()
+    expect(screen.queryByText('UsableRecipe')).not.toBeInTheDocument()
+    expect(screen.queryByText('UnlimitedRecipe')).not.toBeInTheDocument()
+    expect(screen.getByText(/1 to reissue/)).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button',{name:'Grant recipes'}))
+    expect(onGrant).toHaveBeenCalledOnce()
+  })
+  it('keeps the maximum augmentation grant available when recipes still have uses', () => {
+    render(<ReviewedGrantReview counts={{total:1,owned:1,remaining:0,reissuable:1,entries:[
+      {id:'AugmentationRecipe',owned:true,quality:5,uses:4,limited:true,grantable:true},
+    ]}} loading={false} busy={false} offline reissueAll label="Grant augmentations" onRetry={vi.fn()} onGrant={vi.fn()} />)
+    expect(screen.getByText(/Each press grants another use/)).toBeInTheDocument()
+    expect(screen.getByRole('button',{name:'Grant augmentations'})).toBeEnabled()
+    expect(screen.queryByRole('spinbutton')).not.toBeInTheDocument()
+  })
   it('shows exact missing entries and uses, allows inspecting owned entries and never grants on navigation', () => {
     const onGrant=vi.fn()
     render(<ReviewedGrantReview counts={counts} loading={false} busy={false} offline label="Grant recipes" onRetry={vi.fn()} onGrant={onGrant} />)

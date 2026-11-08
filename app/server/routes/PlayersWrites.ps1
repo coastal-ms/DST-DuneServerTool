@@ -771,7 +771,9 @@ Register-DuneRoute -Method POST -Path '/api/gameplay/players/reviewed-customizat
                 # Assign the parsed array before enumerating it. Windows PowerShell
                 # otherwise serializes the pipeline array's ETS wrapper as value/Count.
                 $entries = ConvertFrom-Json -InputObject ([string]$rows[0]['entries_json']) -ErrorAction Stop
-                return @{ok=$true;total=[int]$rows[0]['total'];owned=[int]$rows[0]['owned'];remaining=([int]$rows[0]['total']-[int]$rows[0]['owned']);entries=@($entries)}
+                $remaining = [int]$rows[0]['total']-[int]$rows[0]['owned']
+                $reissuable = if ($rows[0].ContainsKey('grantable')) { [int]$rows[0]['grantable']-$remaining } else { 0 }
+                return @{ok=$true;total=[int]$rows[0]['total'];owned=[int]$rows[0]['owned'];remaining=$remaining;reissuable=$reissuable;entries=@($entries)}
             }
             return
         }
