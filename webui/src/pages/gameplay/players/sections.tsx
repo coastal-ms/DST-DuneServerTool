@@ -703,7 +703,7 @@ const ACTIONS: ActionDef[] = [
     rowNote: 'Completes DA_FQ_ClimbTheRanks journey nodes + writes faction tier tags',
     run: () => Promise.resolve({ message: '' }) },
   { id: 'unlock-testing-stations', group: 'Progression', label: 'Testing Stations', icon: 'Milestone', offlineOnly: true,
-    rowNote: 'Unlock selectable difficulties for one station or all six. Fresh backup; existing higher progress preserved. Faction requirements still apply.',
+    rowNote: 'Unlock selectable difficulties for one station or all six. A database backup is recommended; existing higher progress is preserved. Faction requirements still apply.',
     fields: [{ key: 'station', label: 'Station', type: 'select', options: [
       { value: 'all', label: 'All six stations' },
       { value: 'DA_Dgn_024_Darkness', label: 'Station 24 — Darkness' },
@@ -713,7 +713,7 @@ const ACTIONS: ActionDef[] = [
       { value: 'DA_Dgn_195_Poison', label: 'Station 195 — Poison' },
       { value: 'DA_Dgn_Pit', label: 'The Quarry' },
     ] }],
-    confirm: p => `Unlock the selected Testing Station difficulties for ${p.name}? DST will verify a fresh backup and record completion progress. The character must be fully offline. Choose difficulty in-game; faction requirements still apply.`,
+    confirm: p => `Unlock the selected Testing Station difficulties for ${p.name}? A database backup is recommended before making this change. You can take one from Database → Take Backup, or continue now. The character must be fully offline. Existing higher progress is preserved; faction requirements still apply.`,
     run: (p, v) => unlockTestingStations(p.id, p.controller_id, p.account_id, v.station || 'all') },
   { id: 'complete-tutorials', group: 'Progression', label: 'Complete Tutorials', icon: 'BookOpen', custom: 'tutorial-completion', offlineOnly: true,
     rowNote: 'Complete a selected tutorial journey.', run: () => Promise.resolve({ message: '' }) },

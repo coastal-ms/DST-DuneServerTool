@@ -13,6 +13,7 @@ function Get-DuneTestingStationUnlockSql {
     $selected = @(Get-DuneTestingStationSelection -Station $Station)
     $stationArray = ConvertTo-DunePgTextArray -Values $selected
     return @'
+\set QUIET on
 BEGIN;
 SET LOCAL lock_timeout = '5s';
 SET LOCAL statement_timeout = '30s';
@@ -74,15 +75,13 @@ WHERE player_pawn_id=$PawnId::bigint AND player_controller_id=$ControllerId::big
     if ($players.Count -ne 1 -or [string]$players[0]['status'] -cne 'Offline') {
         return @{ ok=$false; error='The selected character must be fully Offline before unlocking Testing Stations.' }
     }
-    $backup = Invoke-DuneVerifiedSafetyBackup -Ip $Ip -StemPrefix 'dst-testing-stations' -ProofLabel 'DST_TESTING_STATIONS_BACKUP'
-    if (-not $backup.ok) { return @{ ok=$false; error="Testing Station unlock stopped because $($backup.error)" } }
     $current = Get-DuneVehicleHostScope -Ip $Ip
-    if ($backup.database_scope -cne $scope.key -or $current.key -cne $scope.key) {
-        return @{ ok=$false; error='The database changed during the backup. No unlock was attempted.' }
+    if ($current.key -cne $scope.key) {
+        return @{ ok=$false; error='The selected database changed. No unlock was attempted.' }
     }
     $write = Invoke-DuneSqlQuery -Ip $Ip -Sql $sql -ReadOnly $false -MaxRows 1 -TimeoutSec 45
     if (-not $write.ok) { return @{ ok=$false; error="Testing Station transaction failed. $($write.error)" } }
     $rows = ConvertTo-DuneRowMaps -Result $write
     if ($rows.Count -ne 1) { return @{ ok=$false; error='The write result could not be read. Refresh the character before retrying.' } }
-    return @{ ok=$true; message='Testing Station difficulties unlocked for this character. Log in and select a difficulty; faction requirements still apply.'; added=[int]$rows[0]['added']; selected=[int]$rows[0]['selected']; safetyBackup=$backup.path }
+    return @{ ok=$true; message='Testing Station difficulties unlocked for this character. Log in and select a difficulty; faction requirements still apply.'; added=[int]$rows[0]['added']; selected=[int]$rows[0]['selected'] }
 }

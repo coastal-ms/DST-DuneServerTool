@@ -75,6 +75,37 @@ INSERT INTO dune.dungeon_completion_players VALUES(43,1),(43,2),(44,3);
         $result.selected | Should -Be 1
         Get-StationFixtureCount | Should -Be 4
     }
+    It 'parses the real non-quiet psql transaction response and safely repeats an already committed unlock' {
+        $sql=Get-DuneTestingStationUnlockSql 42 43 99 all
+        $path=Join-Path $TestDrive 'actual-transport.sql'
+        function Invoke-StationNonQuietTransport {
+            param([string]$Text)
+            [IO.File]::WriteAllText($path,$Text)
+            $start=New-TestPostgresStartInfo -SqlPath $path
+            [void]$start.ArgumentList.Remove('-q')
+            $process=[Diagnostics.Process]::Start($start)
+            try {
+                $stdout=$process.StandardOutput.ReadToEndAsync()
+                $stderr=$process.StandardError.ReadToEndAsync()
+                $process.WaitForExit(15000) | Should -BeTrue
+                $process.ExitCode | Should -Be 0 -Because $stderr.GetAwaiter().GetResult()
+                ConvertFrom-DunePsqlCsv -Output $stdout.GetAwaiter().GetResult() -MaxRows 1
+            } finally {$process.Dispose()}
+        }
+        # Reproduce the original failure with actual psql command tags, even
+        # though PostgreSQL has already committed the intended completion rows.
+        $beforeFix=Invoke-StationNonQuietTransport ($sql -replace '(?m)^\\set QUIET on\r?\n','')
+        $beforeFix.ok | Should -BeFalse
+        $beforeFix.message | Should -Match 'row has 2 fields but the header has 1'
+        Get-StationFixtureCount | Should -Be 8
+        $fixed=Invoke-StationNonQuietTransport $sql
+        $fixed.ok | Should -BeTrue -Because $fixed.message
+        ($fixed.columns -join '|') | Should -Be 'added|selected'
+        $row=(ConvertTo-DuneRowMaps -Result $fixed)[0]
+        $row.added | Should -Be '0'
+        $row.selected | Should -Be '6'
+        Get-StationFixtureCount | Should -Be 8
+    }
     It 'rejects <Status> before creating a backup' -TestCases @(@{Status='Online'},@{Status='LoggingOut'}) {
         param($Status)
         (Invoke-StationFixtureSql "UPDATE dune.encrypted_player_state SET online_status='$Status';").ok | Should -BeTrue
@@ -82,25 +113,32 @@ INSERT INTO dune.dungeon_completion_players VALUES(43,1),(43,2),(44,3);
         Should -Invoke Invoke-DuneVerifiedSafetyBackup -Times 0
         Get-StationFixtureCount | Should -Be 3
     }
-    It 'rolls back when the player logs in during the backup' {
-        Mock Invoke-DuneVerifiedSafetyBackup {
-            (Invoke-StationFixtureSql "UPDATE dune.encrypted_player_state SET online_status='Online';").ok | Should -BeTrue
-            @{ok=$true;path='synthetic';database_scope='fixture'}
+    It 'rolls back when the player logs in after the initial offline check' {
+        $script:scopeChecks=0
+        Mock Get-DuneVehicleHostScope {
+            $script:scopeChecks++
+            if($script:scopeChecks -eq 2){
+                (Invoke-StationFixtureSql "UPDATE dune.encrypted_player_state SET online_status='Online';").ok | Should -BeTrue
+            }
+            @{key='fixture'}
         }
         (Invoke-DunePlayerUnlockTestingStations fixture 42 43 99 all).ok | Should -BeFalse
         Get-StationFixtureCount | Should -Be 3
     }
-    It 'stops on backup failure without a write' {
-        Mock Invoke-DuneVerifiedSafetyBackup { @{ok=$false;error='backup failed'} }
-        (Invoke-DunePlayerUnlockTestingStations fixture 42 43 99 all).ok | Should -BeFalse
-        Should -Invoke Invoke-DuneSqlQuery -Times 0 -ParameterFilter { -not $ReadOnly }
-        Should -Invoke Invoke-DuneVerifiedSafetyBackup -Times 1
+    It 'allows an offline unlock without attempting or requiring an automatic backup' {
+        Mock Invoke-DuneVerifiedSafetyBackup { throw 'Backup is unavailable and must not be attempted' }
+        $result=Invoke-DunePlayerUnlockTestingStations fixture 42 43 99 all
+        $result.ok | Should -BeTrue -Because $result.error
+        $result.ContainsKey('safetyBackup') | Should -BeFalse
+        Should -Invoke Invoke-DuneVerifiedSafetyBackup -Times 0
+        Get-StationFixtureCount | Should -Be 8
     }
-    It 'stops when the backup belongs to another database' {
-        Mock Invoke-DuneVerifiedSafetyBackup { @{ok=$true;database_scope='other'} }
+    It 'stops when the selected database changes before the write' {
+        $script:scopeChecks=0
+        Mock Get-DuneVehicleHostScope {$script:scopeChecks++;@{key=$(if($script:scopeChecks -eq 1){'fixture'}else{'other'})}}
         (Invoke-DunePlayerUnlockTestingStations fixture 42 43 99 all).ok | Should -BeFalse
         Get-StationFixtureCount | Should -Be 3
-        Should -Invoke Invoke-DuneVerifiedSafetyBackup -Times 1
+        Should -Invoke Invoke-DuneSqlQuery -Times 0 -ParameterFilter { -not $ReadOnly }
     }
     It 'rejects a stale account identity without creating a backup' {
         (Invoke-DunePlayerUnlockTestingStations fixture 42 43 100 all).ok | Should -BeFalse

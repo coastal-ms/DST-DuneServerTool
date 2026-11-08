@@ -44,12 +44,16 @@ Describe 'Vehicle lifecycle host safety' {
         Mock Get-DuneVehicleHostScope { @{ key = $script:scopeKey; world = 'sh-test' } }
         Mock Invoke-DuneBackupShell { @{ rc = 0; out = 'backup claimed success' } }
         (Invoke-DuneVehicleSafetyBackup -Ip 'fixture').ok | Should -BeFalse
+        Mock Invoke-DuneBackupShell { @{ rc = 0; out = 'DST_VEHICLE_BACKUP=/fixture/backup|2048' } }
+        (Invoke-DuneVehicleSafetyBackup -Ip 'fixture').ok | Should -BeFalse
         Mock Invoke-DuneBackupShell {
             param($Script)
             $Script | Should -Match 'stat -c %s'
             $Script | Should -Match '-gt 1024'
             $Script | Should -Match 'database-dumps/sh-test'
-            @{ rc = 0; out = 'DST_VEHICLE_BACKUP=/fixture/backup|2048' }
+            $expectedPath = [regex]::Match($Script, "_expected='([^']+)'").Groups[1].Value
+            $expectedPath | Should -Match '^/funcom/artifacts/database-dumps/sh-test/dst-vehicle-delete-[a-f0-9]{32}\.backup$'
+            @{ rc = 0; out = "DST_VEHICLE_BACKUP=$expectedPath|2048" }
         }
         (Invoke-DuneVehicleSafetyBackup -Ip 'fixture').ok | Should -BeTrue
     }
