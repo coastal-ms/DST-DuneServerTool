@@ -59,6 +59,34 @@ WHERE NOT (r->>'m_bIsLimitedUseRecipe')::boolean;
         $repeatable.ExitCode | Should -Be 0 -Because $repeatable.Error
         $repeatable.Output.Trim() | Should -Be '236|0'
     }
+    It 'reissues only the two exhausted recipes and preserves every usable or unlimited entry' {
+        (Invoke-ReviewedFixture "UPDATE dune.actors SET properties=jsonb_set(properties,'{CraftingRecipesLibraryActorComponent}','{`"m_KnownItemRecipes`":[]}'::jsonb);").ExitCode | Should -Be 0
+        $sql = Get-DuneReviewedCustomizationSql 1 2 3 ObservedSchematicRecipes
+        (Invoke-ReviewedFixture $sql).ExitCode | Should -Be 0
+        $recipes = (Get-DuneReviewedCustomization ObservedSchematicRecipes).recipeEntries
+        $names = @($recipes | Where-Object m_bIsLimitedUseRecipe | Select-Object -First 2 | ForEach-Object { "'$(ConvertTo-DuneSqlString $_.BaseRecipeId.Name)'" }) -join ','
+        (Invoke-ReviewedFixture "UPDATE dune.actors SET properties=jsonb_set(properties,'{CraftingRecipesLibraryActorComponent,m_KnownItemRecipes}',(SELECT jsonb_agg(CASE WHEN r #>> '{BaseRecipeId,Name}' IN ($names) THEN jsonb_set(r,'{m_NumberOfRecipeUses}','0'::jsonb)||'{`"customMetadata`":42}'::jsonb ELSE r END ORDER BY n) FROM jsonb_array_elements(properties #> '{CraftingRecipesLibraryActorComponent,m_KnownItemRecipes}') WITH ORDINALITY x(r,n))); ").ExitCode | Should -Be 0
+        $preview = (Get-DuneReviewedGrantStatusSql 1 2 3 ObservedSchematicRecipes).TrimEnd(';')
+        (Invoke-ReviewedFixture "WITH preview AS ($preview) SELECT total,owned,grantable FROM preview;").Output.Trim() | Should -Be '717|717|2'
+        (Invoke-ReviewedFixture $sql).Output.Trim() | Should -Be '2'
+        (Invoke-ReviewedFixture $sql).Output.Trim() | Should -Be '0'
+        (Invoke-ReviewedFixture "SELECT count(*),min((r->>'m_NumberOfRecipeUses')::integer),min((r->>'customMetadata')::integer) FROM dune.actors a CROSS JOIN jsonb_array_elements(a.properties #> '{CraftingRecipesLibraryActorComponent,m_KnownItemRecipes}') r WHERE r #>> '{BaseRecipeId,Name}' IN ($names);").Output.Trim() | Should -Be '2|1|42'
+        (Invoke-ReviewedFixture "SELECT count(*) FROM dune.actors a CROSS JOIN jsonb_array_elements(a.properties #> '{CraftingRecipesLibraryActorComponent,m_KnownItemRecipes}') r WHERE r->'m_bIsLimitedUseRecipe'='false'::jsonb AND r->'m_NumberOfRecipeUses' IN ('0'::jsonb,'-1'::jsonb);").Output.Trim() | Should -Be '236'
+        (Invoke-ReviewedFixture "SELECT properties->'Other' FROM dune.actors WHERE id=1;").Output.Trim() | Should -Be '{"keep": 7}'
+    }
+    It 'grants maximum-level augmentation uses again on each press without changing other levels' {
+        (Invoke-ReviewedFixture "UPDATE dune.actors SET properties=jsonb_set(properties,'{CraftingRecipesLibraryActorComponent}','{`"m_KnownItemRecipes`":[]}'::jsonb);").ExitCode | Should -Be 0
+        $normal = Get-DuneReviewedCustomizationSql 1 2 3 ObservedSchematicRecipes
+        (Invoke-ReviewedFixture $normal).ExitCode | Should -Be 0
+        $sql = Get-DuneReviewedCustomizationSql 1 2 3 MaxAugmentationSchematics
+        (Invoke-ReviewedFixture $sql).Output.Trim() | Should -Be '104'
+        $preview = (Get-DuneReviewedGrantStatusSql 1 2 3 MaxAugmentationSchematics).TrimEnd(';')
+        (Invoke-ReviewedFixture "WITH preview AS ($preview) SELECT total,owned,grantable FROM preview;").Output.Trim() | Should -Be '104|104|104'
+        (Invoke-ReviewedFixture $sql).Output.Trim() | Should -Be '104'
+        (Invoke-ReviewedFixture "SELECT count(*),min((r->>'m_NumberOfRecipeUses')::integer),max((r->>'m_NumberOfRecipeUses')::integer) FROM dune.actors a CROSS JOIN jsonb_array_elements(a.properties #> '{CraftingRecipesLibraryActorComponent,m_KnownItemRecipes}') r WHERE r->'m_QualityLevel'='5'::jsonb;").Output.Trim() | Should -Be '104|2|2'
+        (Invoke-ReviewedFixture $normal).Output.Trim() | Should -Be '0'
+        (Invoke-ReviewedFixture "SELECT jsonb_array_length(properties #> '{CraftingRecipesLibraryActorComponent,m_KnownItemRecipes}'),properties->'Other' FROM dune.actors;").Output.Trim() | Should -Be '821|{"keep": 7}'
+    }
     It 'applies both observed bulk selections atomically and preserves existing entries' {
         foreach ($selection in @('ObservedCharacterSwatches','ObservedGearAppearances')) {
             $entry = Get-DuneReviewedCustomization $selection

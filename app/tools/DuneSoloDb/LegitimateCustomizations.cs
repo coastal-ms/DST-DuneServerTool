@@ -35,9 +35,44 @@ internal static partial class Program
             AppendLegitimateCustomization(new JsonObject(), "Reviewed");
             throw new Exception("Absent library was accepted.");
         } catch (InvalidDataException) { }
+        var recipe = JsonNode.Parse("""{"BaseRecipeId":{"Name":"FixtureRecipe"},"m_QualityLevel":5,"m_NumberOfRecipeUses":1,"m_bIsLimitedUseRecipe":true,"m_bIsNew":true,"m_Source":"SchematicPickup"}""")!.AsObject();
+        var exhausted = recipe.DeepClone().AsObject();exhausted["m_NumberOfRecipeUses"] = 0;exhausted["customMetadata"] = 42;
+        var otherGrade = recipe.DeepClone().AsObject();otherGrade["m_QualityLevel"] = 1;otherGrade["m_NumberOfRecipeUses"] = 7;
+        var known = new JsonArray(exhausted, otherGrade);
+        if (!GrantReviewedRecipe(known, recipe, false) || GrantReviewedRecipe(known, recipe, false)
+            || exhausted["m_NumberOfRecipeUses"]!.GetValue<int>() != 1 || exhausted["customMetadata"]!.GetValue<int>() != 42
+            || otherGrade["m_NumberOfRecipeUses"]!.GetValue<int>() != 7)
+            throw new InvalidDataException("Exhausted recipe reissue changed usable recipes or metadata.");
+        if (!GrantReviewedRecipe(known, recipe, true) || !GrantReviewedRecipe(known, recipe, true)
+            || exhausted["m_NumberOfRecipeUses"]!.GetValue<int>() != 3 || known.Count != 2)
+            throw new InvalidDataException("Repeated augmentation grant must add one use without duplicate entries.");
+        exhausted["m_bIsLimitedUseRecipe"] = false;exhausted["m_NumberOfRecipeUses"] = -1;
+        if (GrantReviewedRecipe(known, recipe, false) || GrantReviewedRecipe(known, recipe, true)
+            || exhausted["m_NumberOfRecipeUses"]!.GetValue<int>() != -1)
+            throw new InvalidDataException("Unlimited recipe was changed by reissue.");
     }
 
-    private static (string[] Ids, JsonArray? Recipes) RequireLegitimateCustomization(string catalogPath, string id)
+    private static bool GrantReviewedRecipe(JsonArray known, JsonObject recipe, bool reissueAll)
+    {
+        var name = recipe["BaseRecipeId"]!["Name"]!.GetValue<string>();
+        var quality = recipe["m_QualityLevel"]!.GetValue<int>();
+        var existing = known.OfType<JsonObject>()
+            .Where(node => node["BaseRecipeId"]!["Name"]!.GetValue<string>() == name
+                && node["m_QualityLevel"]!.GetValue<int>() == quality)
+            .OrderBy(node => node["m_bIsLimitedUseRecipe"]?.GetValue<bool>() != true ? 0
+                : node["m_NumberOfRecipeUses"]?.GetValue<int>() != 0 ? 1 : 2).FirstOrDefault();
+        if (existing is null) { known.Add(recipe.DeepClone()); return true; }
+        if (!recipe["m_bIsLimitedUseRecipe"]!.GetValue<bool>() || existing["m_bIsLimitedUseRecipe"]?.GetValue<bool>() != true
+            || !(existing["m_NumberOfRecipeUses"]?.GetValue<int>() == 0
+                || (reissueAll && existing["m_NumberOfRecipeUses"]?.GetValue<int>() >= 0))) return false;
+        existing["m_NumberOfRecipeUses"] = reissueAll
+            ? JsonValue.Create(checked(existing["m_NumberOfRecipeUses"]!.GetValue<int>() + 1))
+            : recipe["m_NumberOfRecipeUses"]!.DeepClone();
+        existing["m_bIsNew"] = true;
+        return true;
+    }
+
+    private static (string[] Ids, JsonArray? Recipes, bool ReissueAll) RequireLegitimateCustomization(string catalogPath, string id)
     {
         var catalog = JsonNode.Parse(File.ReadAllText(catalogPath)) as JsonObject
             ?? throw new InvalidDataException("Invalid reviewed customization catalog.");
@@ -52,7 +87,7 @@ internal static partial class Program
             if (parents.Length != 1 || string.IsNullOrWhiteSpace(parents[0]["acquisition"]?.GetValue<string>())
                 || string.IsNullOrWhiteSpace(parents[0]["mappingEvidence"]?.GetValue<string>()))
                 throw new ArgumentException("Choose an exact supported character appearance.");
-            return ([raw], null);
+            return ([raw], null, false);
         }
         var matches = entries.OfType<JsonObject>().Where(e =>
             string.Equals(e["id"]?.GetValue<string>(), id, StringComparison.Ordinal)).ToArray();
@@ -76,14 +111,14 @@ internal static partial class Program
                 if (uses == -1 && recipe["m_bIsLimitedUseRecipe"]!.GetValue<bool>())
                     throw new InvalidDataException("Unlimited recipe sentinel conflicts with limited-use flag.");
             }
-            return ([], recipes);
+            return ([], recipes, id == "MaxAugmentationSchematics");
         }
         var ids = matches[0]["customizationIds"] is JsonArray mapped
             ? mapped.Select(e => e!.GetValue<string>()).ToArray() : [id];
         if (ids.Length == 0 || ids.Any(string.IsNullOrWhiteSpace)
             || ids.Distinct(StringComparer.Ordinal).Count() != ids.Length)
             throw new InvalidDataException("Invalid reviewed customization mapping.");
-        return (ids, null);
+        return (ids, null, false);
     }
 
     private static bool AppendLegitimateCustomization(JsonObject properties, string id)
@@ -123,12 +158,7 @@ internal static partial class Program
                         throw new InvalidDataException("Unsupported existing recipe entry.");
                     foreach (var recipe in selection.Recipes)
                     {
-                        var name = recipe!["BaseRecipeId"]!["Name"]!.GetValue<string>();
-                        var quality = recipe["m_QualityLevel"]!.GetValue<int>();
-                        if (known.Any(node => node!["BaseRecipeId"]!["Name"]!.GetValue<string>() == name
-                            && node["m_QualityLevel"]!.GetValue<int>() == quality)) continue;
-                        known.Add(recipe.DeepClone());
-                        added++;
+                        if (GrantReviewedRecipe(known, recipe!.AsObject(), selection.ReissueAll)) added++;
                     }
                 }
                 if (added > 0) WriteActorProperties(db, player.PawnId, properties);
@@ -139,7 +169,9 @@ internal static partial class Program
                 return new { ok = true, added, customizationId = id,
                     message = selection.Recipes is null
                         ? "Character customization IDs saved. Open the game and check the customization menu."
-                        : "Schematic recipe entries saved. Open the game and check crafting; existing recipe uses were preserved." };
+                        : selection.ReissueAll
+                            ? "Maximum-level augmentation schematic uses granted. Other recipe levels were preserved."
+                            : "Missing and exhausted schematic recipes granted. Recipes with uses remaining and unlimited unlocks were preserved." };
             } catch { ExecuteNonQuery(db, "ROLLBACK;"); throw; }
         }, requireGameClosed: true);
     }

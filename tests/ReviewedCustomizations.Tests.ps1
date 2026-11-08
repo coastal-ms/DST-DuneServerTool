@@ -15,6 +15,19 @@ AfterAll {
     Remove-Item function:global:Invoke-DuneVerifiedSafetyBackup -ErrorAction SilentlyContinue
 }
 Describe 'Reviewed ordinary customizations' {
+    It 'maps max augmentation grants only to gradeable augmentation schematics' {
+        $recipes = @(Get-DuneReviewedCustomization MaxAugmentationSchematics).recipeEntries
+        $recipes.Count | Should -Be 104
+        $items = Get-Content (Join-Path (Get-DstRepoRoot) 'app/data/item-catalog.json') -Raw | ConvertFrom-Json -AsHashtable
+        foreach ($recipe in $recipes) {
+            $recipe.BaseRecipeId.Name | Should -Match '^T6_Augment_.*_Recipe$'
+            $template = $recipe.BaseRecipeId.Name -replace '_Recipe$','_Schematic'
+            $items.items[$template].gradeable | Should -BeTrue -Because $template
+            $recipe.m_QualityLevel | Should -Be 5
+            $recipe.m_NumberOfRecipeUses | Should -Be 1
+            $recipe.m_bIsLimitedUseRecipe | Should -BeTrue
+        }
+    }
     It 'does not attach finite charge counts to repeatable recipe unlocks' {
         $recipes = (Get-DuneReviewedCustomization ObservedSchematicRecipes).recipeEntries
         $repeatable = @($recipes | Where-Object { -not $_.m_bIsLimitedUseRecipe })
@@ -151,6 +164,23 @@ Describe 'Reviewed ordinary customizations' {
         $result = Invoke-DunePlayerReviewedCustomization fixture 1 2 3 ObservedCharacterSwatches
         $result.ok | Should -BeFalse
         $result.error | Should -Match '301 remain'
+    }
+    It 'does not mistake existing recipe ownership for a confirmed reissue after a lost response' {
+        Mock Invoke-DuneSqlQuery { if ($ReadOnly) { @{ok=$true} } else { @{ok=$false;error='timeout'} } }
+        Mock ConvertTo-DuneRowMaps { ,@(@{total='104';owned='104'}) }
+        $result = Invoke-DunePlayerReviewedCustomization fixture 1 2 3 MaxAugmentationSchematics
+        $result.ok | Should -BeFalse
+        $result.error | Should -Match 'check remaining uses before granting again'
+        Should -Invoke Invoke-DuneSqlQuery -Times 1 -ParameterFilter { -not $ReadOnly }
+    }
+    It 'reports exhausted recipe grants separately from preserved recipes' {
+        Mock Invoke-DuneSqlQuery {
+            if ($ReadOnly) { @{ok=$true;columns=@('total','owned');rows=,@('717','717')} }
+            else { ConvertFrom-DunePsqlCsv -Output "added`n2`n" -MaxRows 1 }
+        }
+        $result = Invoke-DunePlayerReviewedCustomization fixture 1 2 3 ObservedSchematicRecipes
+        $result.ok | Should -BeTrue
+        $result.message | Should -Match '2 missing or exhausted recipes granted; 715 preserved'
     }
 }
 
