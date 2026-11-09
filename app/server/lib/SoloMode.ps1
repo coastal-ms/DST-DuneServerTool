@@ -1338,11 +1338,26 @@ function Get-DuneSoloRuntime {
     }
 }
 
+function Get-DuneSoloNativeSettingsPath {
+    param([Parameter(Mandatory)]$Profile)
+
+    if ($Profile.channel -eq 'FLS_retail' -and $Profile.dbPath) {
+        # 1.5.20 loads this storage file before the machine-local INI, and
+        # migrates the local INI only when the storage file is absent.
+        $cloudPath = Join-Path (Split-Path -Parent ([string]$Profile.dbPath)) 'SOLO\ServerCustomSettings.ini'
+        Assert-DuneSoloConfigPath -Path $cloudPath
+        if (Test-Path -LiteralPath $cloudPath -PathType Leaf) { return $cloudPath }
+    }
+    return [string]$Profile.settingsPath
+}
+
 function Read-DuneSoloSettings {
     param([string]$Path = '', [switch]$NativeValues)
 
     Assert-DuneSoloSupportedPlatform
-    if (-not $Path) { $Path = [string](Get-DuneSoloProfile).settingsPath }
+    $settingsProfile = Get-DuneSoloProfile
+    $explicitPath = [bool]$Path
+    if (-not $Path) { $Path = Get-DuneSoloNativeSettingsPath -Profile $settingsProfile }
     $values = @{}
     if (Test-Path -LiteralPath $Path -PathType Leaf) {
         $inside = $false
@@ -1356,9 +1371,11 @@ function Read-DuneSoloSettings {
             }
         }
     }
-    $gamePath = Join-Path (Split-Path -Parent $Path) 'Game.ini'
+    $configPath = $Path
+    if (-not $explicitPath -or ($settingsProfile.settingsPath -and $Path -ne [string]$settingsProfile.settingsPath -and
+        $Path -eq (Get-DuneSoloNativeSettingsPath -Profile $settingsProfile))) { $configPath = [string]$settingsProfile.settingsPath }
+    $gamePath = Join-Path (Split-Path -Parent $configPath) 'Game.ini'
     $landclaimOverrides = @()
-    $settingsProfile = Get-DuneSoloProfile
     $retailOverrides = $settingsProfile.dbPath -and (Get-DuneSoloAdapterDescriptor -DbPath $settingsProfile.dbPath).channel -in @('FLS_retail','Xbox')
     if (Test-Path -LiteralPath $gamePath -PathType Leaf) {
         $inside = $false
@@ -1520,12 +1537,13 @@ function Set-DuneSoloSettings {
         $gamePath = Join-Path (Split-Path -Parent $enginePath) 'Game.ini'
         Assert-DuneSoloConfigPath -Path $gamePath
     }
-    $path = [string]$profile.settingsPath
+    $path = Get-DuneSoloNativeSettingsPath -Profile $profile
     Assert-DuneSoloConfigPath -Path $path
     $dir = Split-Path -Parent $path
     if (-not (Test-Path -LiteralPath $dir)) {
         New-Item -ItemType Directory -Path $dir -Force | Out-Null
     }
+    $sourceHash = if (Test-Path -LiteralPath $path -PathType Leaf) { (Get-FileHash -LiteralPath $path -Algorithm SHA256 -ErrorAction Stop).Hash } else { '' }
     $lines = if (Test-Path -LiteralPath $path -PathType Leaf) { [IO.File]::ReadAllLines($path) } else { @() }
     $result = New-Object System.Collections.Generic.List[string]
     $inside = $false
@@ -1577,7 +1595,9 @@ function Set-DuneSoloSettings {
     $backupRoot = Join-Path (Get-DuneSoloBackupRoot) 'settings'
     New-Item -ItemType Directory -Path $backupRoot -Force | Out-Null
     $stamp = (Get-Date).ToUniversalTime().ToString('yyyyMMdd-HHmmssfff')
-    $backupPath = Join-Path $backupRoot "ServerCustomSettings-$stamp.ini"
+    $settingsOwner = (Get-DuneSoloProfileToken -DbPath $profile.dbPath).Substring(0, 12)
+    $settingsStore = if ($path -eq [string]$profile.settingsPath) { 'local' } else { 'cloud' }
+    $backupPath = Join-Path $backupRoot "ServerCustomSettings-$settingsOwner-$settingsStore-$stamp.ini"
     if (Test-Path -LiteralPath $path -PathType Leaf) {
         Copy-Item -LiteralPath $path -Destination $backupPath -ErrorAction Stop
     }
@@ -1586,6 +1606,7 @@ function Set-DuneSoloSettings {
     $replaceBackup = Join-Path $dir ".ServerCustomSettings.$([guid]::NewGuid().ToString('N')).previous"
     $targetExisted = Test-Path -LiteralPath $path -PathType Leaf
     $replaced = $false
+    $created = $false
     try {
         $hasBom = $false
         if (Test-Path -LiteralPath $path -PathType Leaf) {
@@ -1593,11 +1614,16 @@ function Set-DuneSoloSettings {
             $hasBom = ($bytes.Length -ge 3 -and $bytes[0] -eq 0xEF -and $bytes[1] -eq 0xBB -and $bytes[2] -eq 0xBF)
         }
         [IO.File]::WriteAllLines($temp, $result.ToArray(), (New-Object System.Text.UTF8Encoding($hasBom)))
+        $writtenHash = (Get-FileHash -LiteralPath $temp -Algorithm SHA256 -ErrorAction Stop).Hash
+        $currentPath = Get-DuneSoloNativeSettingsPath -Profile (Get-DuneSoloProfile)
+        $currentHash = if (Test-Path -LiteralPath $path -PathType Leaf) { (Get-FileHash -LiteralPath $path -Algorithm SHA256 -ErrorAction Stop).Hash } else { '' }
+        if ($currentPath -cne $path -or $currentHash -cne $sourceHash) { throw 'The Solo settings or selected save changed during this request. Finish cloud sync, refresh settings and retry.' }
         if ($targetExisted) {
             [IO.File]::Replace($temp, $path, $replaceBackup, $true)
             $replaced = $true
         } else {
             Move-Item -LiteralPath $temp -Destination $path
+            $created = $true
         }
         $verified = Read-DuneSoloSettings -Path $path -NativeValues
         foreach ($entry in $verified.entries) {
@@ -1624,6 +1650,10 @@ function Set-DuneSoloSettings {
             backupPaths = @($backupPath, $gameBackup | Where-Object { $_ -and (Test-Path -LiteralPath $_) })
         }
     } catch {
+        if (($replaced -or $created) -and (Test-Path -LiteralPath $path -PathType Leaf) -and
+            (Get-FileHash -LiteralPath $path -Algorithm SHA256 -ErrorAction Stop).Hash -cne $writtenHash) {
+            throw "Solo settings changed again after the write. Newer settings were preserved; review the settings and retained backup before retrying: $backupPath"
+        }
         if ($replaced -and (Test-Path -LiteralPath $replaceBackup -PathType Leaf)) {
             $failedCopy = Join-Path $dir ".ServerCustomSettings.$([guid]::NewGuid().ToString('N')).failed"
             try {
@@ -1631,7 +1661,7 @@ function Set-DuneSoloSettings {
             } finally {
                 Remove-Item -LiteralPath $failedCopy -Force -ErrorAction SilentlyContinue
             }
-        } elseif (-not $targetExisted -and (Test-Path -LiteralPath $path -PathType Leaf)) {
+        } elseif ($created -and (Test-Path -LiteralPath $path -PathType Leaf)) {
             Remove-Item -LiteralPath $path -Force -ErrorAction SilentlyContinue
         }
         throw

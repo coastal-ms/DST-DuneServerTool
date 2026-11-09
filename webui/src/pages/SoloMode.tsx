@@ -873,7 +873,7 @@ export function SoloMode() {
     if (!window.confirm(
       `Restore ${backup.name}?\n\n`
       + (backup.characterName ? `Character in backup: ${backup.characterName}.\n\n` : '')
-      + 'This replaces the entire save, including its character.\n\n'
+      + 'This replaces the save database, including its character. Current cloud custom settings and device overrides are kept.\n\n'
       + 'DST will validate this backup, preserve the current save as a separate pre-restore backup, '
       + 'atomically replace game.db, and verify the restored wrapper and SQLite database.',
     )) return
@@ -2608,6 +2608,7 @@ export function SoloMode() {
             <div>
               <h2 className="font-semibold flex items-center gap-2"><Icon name="ArchiveRestore" size={16} /> Retained save backups</h2>
               <p className="text-sm text-text-muted mt-1">Restore keeps a backup of your current save.</p>
+              <p className="text-sm text-text-muted mt-1">These backups contain the save database. Restoring one keeps your current cloud custom settings and device overrides.</p>
               {allBackups.some(backup => !backup.characterName) && <p className="mt-1 text-sm text-text-muted">Older or imported backups may have no character name recorded. You can still validate and restore them.</p>}
             </div>
             <div className="flex items-center gap-2 shrink-0 flex-wrap">

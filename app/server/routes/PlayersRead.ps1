@@ -97,10 +97,19 @@ Register-DuneRoute -Method GET -Path '/api/gameplay/players/export' -Handler {
         $aid = 0L
         [void][Int64]::TryParse((Get-DuneQ $req 'account_id'), [ref]$aid)
         if ($aid -le 0) { Write-DuneError -Response $res -Status 400 -Message 'account_id is required.'; return }
-        Invoke-DunePlayerReadRoute -Response $res -Request $req `
-            -LiveBlock { param($ip) Get-DunePlayerExportLive -Ip $ip -AccountId $aid } `
-            -DemoBlock { @{ ok = $true; export_json = '{}'; account_id = $aid; funcom_id = '' } } `
-            -PayloadKey 'export'
+        if (Test-DuneDemoRequested $req) {
+            Write-DuneJson -Response $res -Body @{ source='demo'; export_json='{}'; account_id=$aid; funcom_id='' }
+            return
+        }
+        $ctx = Get-DuneDbContext
+        if (-not $ctx.ok) { Write-DuneError -Response $res -Status 503 -Message $ctx.message; return }
+        $live = Get-DunePlayerExportLive -Ip $ctx.ip -AccountId $aid
+        if (-not $live.ok) {
+            $status = if ($live.error -match 'player_online|must be Offline') { 409 } else { 502 }
+            Write-DuneError -Response $res -Status $status -Message $live.error
+            return
+        }
+        Write-DuneJson -Response $res -Body @{ source='live'; export_json=$live.export_json; account_id=$live.account_id; funcom_id=$live.funcom_id }
     } catch {
         Write-DuneError -Response $res -Status 500 -Message "Export failed: $($_.Exception.Message)"
     }

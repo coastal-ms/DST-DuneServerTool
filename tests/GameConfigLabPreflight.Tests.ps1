@@ -42,7 +42,7 @@ rmdir "$testroot"
 '@
         $engine = if ($MissingEngine) { ':' } else { 'printf ''%s\n'' ''[Engine]'' ''Keep=8'' > "$7/home/dune/server/DuneSandbox/Config/DefaultEngine.ini"' }
         $info = [Diagnostics.ProcessStartInfo]::new($bash)
-        $info.ArgumentList.Add('-s')
+        $info.Arguments = '-s'
         $info.UseShellExecute = $false
         $info.RedirectStandardInput = $true
         $info.RedirectStandardOutput = $true

@@ -2,7 +2,7 @@
   "_meta": {
     "source": "DefaultGameplayTags.ini (player-relevant subset)",
     "dropped": "engine-internal (GameplayCue, DamageSystem, Camera, StatusEffect, Abilities, Weapons, Melee, XP, Loot, Interaction, etc.)",
-    "total": 3629
+    "total": 3630
   },
   "tags": [
     "BigMoments.Base.Complete",
@@ -2329,6 +2329,7 @@
     "Journey.Act2.MeetTheSpider4",
     "Journey.Act2.MeetTheSpider5",
     "Journey.Act2.SecondKillAccepted",
+    "Journey.Act2.ShowZantara",
     "Journey.Act2.ZantaraInterrogationComplete",
     "Journey.ArtOfKanly.DuelingRing.Event.Cinematic.FightArenIntro",
     "Journey.ArtOfKanly.DuelingRing.Event.Cinematic.FightArenOutroLose",

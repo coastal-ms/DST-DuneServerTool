@@ -48922,7 +48922,7 @@
   {
     "key": "Vehicle.WreckedStateDespawnDuration",
     "label": "Vehicle.WreckedStateDespawnDuration",
-    "help": "The duration in seconds until a vehicle is despawned when in wrecked state.",
+    "help": "The duration in seconds until a vehicle is despawned when in wrecked state.\nSet any number >= 0, default is 2h",
     "group": "Dune gameplay",
     "risk": "experimental",
     "source": "Dune",
@@ -50705,6 +50705,226 @@
     "help": "Enables Zones Debug drawing.",
     "group": "Other engine",
     "risk": "diagnostic",
+    "source": "Engine",
+    "scope": "Unknown",
+    "status": "Unconfirmed"
+  },
+  {
+    "key": "ClientGpmSystem.MaxTimeAsyncLoadingDrainBeforeBootTravel",
+    "label": "ClientGpmSystem.MaxTimeAsyncLoadingDrainBeforeBootTravel",
+    "help": "How much time (in seconds) the initial travel out of the boot-time dummy world waits for in-flight async loading\nto finish before travelling anyway. 0 or less disables the wait.",
+    "group": "Dune gameplay",
+    "risk": "high",
+    "source": "Dune",
+    "scope": "Unknown",
+    "status": "Unconfirmed"
+  },
+  {
+    "key": "Dialogue.SetModuleLevel.ForceSave",
+    "label": "Dialogue.SetModuleLevel.ForceSave",
+    "help": "When enabled, SetModuleLevelEvent requests an immediate player save after changing a module level, so the module level reaches the database right after the other database operations of the same dialogue node.  When disabled, the module level is only persisted by the next regular player save.",
+    "group": "Dune gameplay",
+    "risk": "critical",
+    "source": "Dune",
+    "scope": "Unknown",
+    "status": "Unconfirmed"
+  },
+  {
+    "key": "DuneAnimation.SprintingAlphaInterpSpeed",
+    "label": "DuneAnimation.SprintingAlphaInterpSpeed",
+    "help": "How fast to interpolate to new values of m_SprintingAlpha (changes when starting/stopping sprinting and cases like jumping).",
+    "group": "Dune gameplay",
+    "risk": "experimental",
+    "source": "Dune",
+    "scope": "Unknown",
+    "status": "Unconfirmed"
+  },
+  {
+    "key": "Harvesting.HarvestableProcessorsTickRate",
+    "label": "Harvesting.HarvestableProcessorsTickRate",
+    "help": "[float] Interval in seconds between ticks of the instanced harvestable processors. Applied when the FGL processors are (re)configured, i.e. on world start. (default=0.25)",
+    "group": "Dune gameplay",
+    "risk": "high",
+    "source": "Dune",
+    "scope": "Unknown",
+    "status": "Unconfirmed"
+  },
+  {
+    "key": "Persistence.ExitOnStartupConnectionFailure",
+    "label": "Persistence.ExitOnStartupConnectionFailure",
+    "help": "When true, a dedicated server that fails to connect to the database at startup exits immediately instead of continuing and crashing on the first DB query.",
+    "group": "Dune gameplay",
+    "risk": "critical",
+    "source": "Dune",
+    "scope": "Unknown",
+    "status": "Unconfirmed"
+  },
+  {
+    "key": "PlatformEntitlements.ReloadTimeoutSeconds",
+    "label": "PlatformEntitlements.ReloadTimeoutSeconds",
+    "help": "Maximum time in seconds to wait for entitlement reload.",
+    "group": "Dune gameplay",
+    "risk": "experimental",
+    "source": "Dune",
+    "scope": "Unknown",
+    "status": "Unconfirmed"
+  },
+  {
+    "key": "Sandstorm.Treasure.LocationLoadedCheckIntervalSeconds",
+    "label": "Sandstorm.Treasure.LocationLoadedCheckIntervalSeconds",
+    "help": "Single player: seconds between checks whether the location of a treasure that is not on the landscape yet has loaded. Applies to treasure that begins play after the change.",
+    "group": "Dune gameplay",
+    "risk": "experimental",
+    "source": "Dune",
+    "scope": "Unknown",
+    "status": "Unconfirmed"
+  },
+  {
+    "key": "SoloPlay.AllowInvalidFlsIdLogin",
+    "label": "SoloPlay.AllowInvalidFlsIdLogin",
+    "help": "Allow singleplayer/listen host login and travel without a valid FLS account id. The local save's account is picked by select_local_account.",
+    "group": "Dune gameplay",
+    "risk": "critical",
+    "source": "Dune",
+    "scope": "Unknown",
+    "status": "Unconfirmed"
+  },
+  {
+    "key": "TravelSlot.DebugDraw",
+    "label": "TravelSlot.DebugDraw",
+    "help": "Draw travel slot boxes. 1: enabled; 0: disabled (default). Declared by the self-hosted server; not found in the scanned 1.5.20.0 Windows client.",
+    "group": "Dune gameplay",
+    "risk": "diagnostic",
+    "source": "Dune",
+    "scope": "Unknown",
+    "status": "Unconfirmed"
+  },
+  {
+    "key": "Vehicle.CancelTravelOnHarnessDetach",
+    "label": "Vehicle.CancelTravelOnHarnessDetach",
+    "help": "Cancel travel if a harnessed vehicle is detached while its parent has pending travel.",
+    "group": "Dune gameplay",
+    "risk": "experimental",
+    "source": "Dune",
+    "scope": "Unknown",
+    "status": "Unconfirmed"
+  },
+  {
+    "key": "dune.SpawnOrder.PollInterval",
+    "label": "dune.SpawnOrder.PollInterval",
+    "help": "Seconds between checks while a spawner waits for the spawners from its lists.",
+    "group": "Dune gameplay",
+    "risk": "experimental",
+    "source": "Dune",
+    "scope": "Unknown",
+    "status": "Unconfirmed"
+  },
+  {
+    "key": "dune.SpawnOrder.SpawnAfterTimeout",
+    "label": "dune.SpawnOrder.SpawnAfterTimeout",
+    "help": "Max time in seconds to wait for the spawners from Spawn After and Ignore Spawned Actors Of. Negative means no limit.",
+    "group": "Dune gameplay",
+    "risk": "experimental",
+    "source": "Dune",
+    "scope": "Unknown",
+    "status": "Unconfirmed"
+  },
+  {
+    "key": "dw.LogBuildingLoss",
+    "label": "dw.LogBuildingLoss",
+    "help": "Logs building pieces lost on the server (deleted, not loaded or not saved) to LogBuildingLoss",
+    "group": "Dune gameplay",
+    "risk": "diagnostic",
+    "source": "Dune",
+    "scope": "Unknown",
+    "status": "Unconfirmed"
+  },
+  {
+    "key": "dw.Persistence.ActorSaveBatchFatalOnDuplicateSave",
+    "label": "dw.Persistence.ActorSaveBatchFatalOnDuplicateSave",
+    "help": "Set to true to fatal-error when the same actor is saved twice into the same save batch, instead of replacing the older data. Declared by the self-hosted server; not found in the scanned 1.5.20.0 Windows client.",
+    "group": "Dune gameplay",
+    "risk": "critical",
+    "source": "Dune",
+    "scope": "Unknown",
+    "status": "Unconfirmed"
+  },
+  {
+    "key": "dw.Persistence.Sqlite.StatsUpdateIntervalSeconds",
+    "label": "dw.Persistence.Sqlite.StatsUpdateIntervalSeconds",
+    "help": "Minimum time in seconds between processing thread stats updates. 0 updates them every loop iteration.",
+    "group": "Dune gameplay",
+    "risk": "critical",
+    "source": "Dune",
+    "scope": "Unknown",
+    "status": "Unconfirmed"
+  },
+  {
+    "key": "fgl.SpatialQueryParallelFor",
+    "label": "fgl.SpatialQueryParallelFor",
+    "help": "",
+    "group": "Dune gameplay",
+    "risk": "high",
+    "source": "Dune",
+    "scope": "Unknown",
+    "status": "Unconfirmed"
+  },
+  {
+    "key": "gui.debug.TextScale",
+    "label": "gui.debug.TextScale",
+    "help": "Scale applied to 'showdebug' text drawn through FDisplayDebugManager (default 1 = native size).",
+    "group": "UI & client",
+    "risk": "diagnostic",
+    "source": "Engine",
+    "scope": "Unknown",
+    "status": "Unconfirmed"
+  },
+  {
+    "key": "gui.debug.enhancedinput.ContextOffset",
+    "label": "gui.debug.enhancedinput.ContextOffset",
+    "help": "Rotates which applied input mapping context 'showdebug enhancedinput' lists first.\nWraps around the applied-context list, so each context can be brought to the top in turn.",
+    "group": "UI & client",
+    "risk": "diagnostic",
+    "source": "Engine",
+    "scope": "Unknown",
+    "status": "Unconfirmed"
+  },
+  {
+    "key": "gui.debug.enhancedinput.ReverseOrder",
+    "label": "gui.debug.enhancedinput.ReverseOrder",
+    "help": "Order 'showdebug enhancedinput' lists applied contexts in.\n 0: descending priority (default)\n 1: ascending priority",
+    "group": "UI & client",
+    "risk": "diagnostic",
+    "source": "Engine",
+    "scope": "Unknown",
+    "status": "Unconfirmed"
+  },
+  {
+    "key": "net.dune.PlayerUnstuckMinHeadroom",
+    "label": "net.dune.PlayerUnstuckMinHeadroom",
+    "help": "Headroom (in cm) a character needs above its capsule for unstuck to accept a spot, default 1cm. Without it a character pinned between floor and ceiling counts as not stuck.",
+    "group": "Dune gameplay",
+    "risk": "high",
+    "source": "Dune",
+    "scope": "Unknown",
+    "status": "Unconfirmed"
+  },
+  {
+    "key": "r.ShaderCompiler.WorkerHeartbeat",
+    "label": "r.ShaderCompiler.WorkerHeartbeat",
+    "help": "Number of seconds until an unchanged state of compile workers will trigger a heartbeat failure.This will dump the worker states to diagnose hung shader jobs and transfers all jobs of the remote compiler to local workers.This effectively shuts down distributed shader compilation. Default is 15 * 60 seconds.",
+    "group": "Rendering & graphics",
+    "risk": "diagnostic",
+    "source": "Engine",
+    "scope": "Unknown",
+    "status": "Unconfirmed"
+  },
+  {
+    "key": "p.Chaos.AsyncPhysicsStateTask.TimeBudgetMS",
+    "label": "p.Chaos.AsyncPhysicsStateTask.TimeBudgetMS",
+    "help": "Maximum time budget in milliseconds for the async physics state task (0 = no time limit) Funcom self-hosted configuration: 5 ms.",
+    "group": "Physics",
+    "risk": "high",
     "source": "Engine",
     "scope": "Unknown",
     "status": "Unconfirmed"
