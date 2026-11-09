@@ -131,7 +131,8 @@ Describe 'Tank images follow official server upgrades' {
     }
     It 'moves only Hagga to the updated compatible image with compare-and-swap guards' -ForEach @(
         @{Build='2168446'},
-        @{Build='2173753'}
+        @{Build='2173753'},
+        @{Build='2177228'}
     ) {
         $script:Official="registry.funcom.com/funcom/self-hosting/seabass-server:$Build-0-shipping"
         (Sync-DuneRegisTankServerUpdate -Ip test).changed | Should -BeTrue

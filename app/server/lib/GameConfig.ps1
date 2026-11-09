@@ -616,7 +616,7 @@ $script:DuneGameConfigSchema = @(
     # Vehicles.
     @{ Section=$script:DuneGcSecConsole; Key='Vehicle.RecoveryEnabled'; File='engine'; Type='bool01'; Label='Vehicle Recovery'; Help='Funcom: "Enables vehicle recovery. If enabled, vehicles will not be deleted but kept in database for recovery via backup tool".'; Category='Experimental' }
     @{ Section=$script:DuneGcSecConsole; Key='Vehicle.BackupTool.Enabled'; File='engine'; Type='bool01'; Default='1'; Label='Vehicle Backup Tool'; Help='Funcom: "If false player wont be able to backup or restore vehicles and an onscreen notification will be shown if they try."'; Category='Experimental' }
-    @{ Section=$script:DuneGcSecConsole; Key='Vehicle.WreckedStateDespawnDuration'; File='engine'; Type='float'; Min=0; Unit='sec'; Label='Vehicle Wreck Despawn Time'; Help='Funcom: "The duration in seconds until a vehicle is despawned when in wrecked state".'; Category='Experimental' }
+    @{ Section=$script:DuneGcSecConsole; Key='Vehicle.WreckedStateDespawnDuration'; File='engine'; Type='float'; Min=0; Unit='sec'; Label='Vehicle Wreck Despawn Time'; Help='Funcom: "The duration in seconds until a vehicle is despawned when in wrecked state. Set any number >= 0, default is 2h".'; Category='Experimental' }
     @{ Section=$script:DuneGcSecConsole; Key='Vehicle.AmmoBlocksBackup'; File='engine'; Type='bool01'; Default='0'; Label='Ammo Blocks Vehicle Backup'; Help='Funcom: "Set whether ammo can remain in the vehicle ammo inventory when backing it up". 0 makes players empty ammo first.'; Category='Experimental' }
 
     # Server instance. Bgd.* is deliberately server-only: it is not mirrored to a

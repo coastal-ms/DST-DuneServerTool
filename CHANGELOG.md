@@ -11,6 +11,17 @@ Patch releases within a major series are rolled up under the major's entry
 on GitHub still exist for each individual release; the consolidated entries
 here cover everything those tags shipped.
 
+## [16.7.7] - 2026-11-09
+
+### Fixed
+- Update optional self-hosted Tank support for Funcom 1.5.20.0.
+- Return real character exports and report export failures clearly.
+- Follow cloud-saved Solo custom settings and protect Steam Deck transfers from stale save changes.
+- Keep settings recovery copies separate by save and clarify what a database restore preserves.
+
+### Added
+- Add newly available advanced settings and the Zantara journey tag, and update vehicle-wreck duration guidance.
+
 ## [16.7.6] - 2026-11-08
 
 ### Fixed

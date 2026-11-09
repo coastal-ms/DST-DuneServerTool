@@ -11,13 +11,16 @@ def batch_plan(report, request):
         raise ValueError('Expected one to three settings files')
     planned, seen_files = [], set()
     for entry in files:
-        if set(entry) != {'file', 'expected_sha256', 'values'}:
+        if set(entry) not in ({'file', 'expected_sha256', 'values'}, {'file', 'expected_sha256', 'values', 'expected_storage'}):
             raise ValueError('Unsupported file request')
         name = entry['file']
         if name not in WRITE_SCHEMA or name in seen_files:
             raise ValueError('Unsupported or duplicate settings file')
         seen_files.add(name)
-        path = engine.parent / name
+        path = managed_settings_path(engine.parent.parent.parent, name)
+        storage = 'local' if path.parent == engine.parent else 'cloud'
+        if (storage == 'cloud' or 'expected_storage' in entry) and entry.get('expected_storage') != storage:
+            raise ValueError('Solo settings storage changed; update the PC app and prepare a fresh preview')
         if path.is_symlink():
             raise ValueError('Settings file is a symbolic link')
         raw = original_bytes(path)
@@ -101,7 +104,8 @@ def handle_batch(request, discover_fn=None, backup_root=None, replace_fn=None):
             for path, raw, new in changes:
                 # Check all originals not written yet and game status before each replacement.
                 current = discover_fn()
-                if checked_path(current).parent != path.parent or original_bytes(path) != raw:
+                local = checked_path(current)
+                if managed_settings_path(local.parent.parent.parent, path.name) != path or original_bytes(path) != raw:
                     raise ValueError('Game or settings changed during transfer')
                 written.append((path, raw, new))
                 replace_fn(path, new)

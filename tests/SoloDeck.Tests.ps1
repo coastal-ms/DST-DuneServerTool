@@ -83,13 +83,17 @@ Describe 'Read-only Steam Deck connection' {
 
 Describe 'Deck settings transfer preparation' {
     BeforeEach {
-        $script:transferRoot = Join-Path $TestDrive 'deck-pair'
+        $script:transferRoot = Join-Path $TestDrive ('deck-pair-' + [guid]::NewGuid().ToString('N'))
         New-Item -ItemType Directory -Path $script:transferRoot -Force | Out-Null
         '{"host":"192.0.2.1","user":"deck"}' | Set-Content (Join-Path $script:transferRoot 'connection.json')
         Mock Get-DuneSoloDeckConnectionRoot { $script:transferRoot }
         function global:Assert-DuneSoloGameClosed {}
         $script:transferState = @{ connected=$true;report=@{game_processes=@();errors=@();settings_write_capabilities=@('managed-ini-v1');saves=@(@{path='/fixture/game.db';sha256='unchanged'});settings_candidates=@(@{files=@(@{file='Engine.ini';sha256='original'})})};comparison=@{available=$true;differences=@(@{file='Engine.ini';section='ConsoleVariables';key='Dune.DisableShieldOnShooting';pcValue='1';deckValue='0';action='Would copy to Deck'})} }
         Mock Get-DuneSoloDeckStatus { $script:transferState }
+        $script:sourceSave = Join-Path $script:transferRoot 'pc-game.db'
+        [IO.File]::WriteAllText($script:sourceSave, 'original PC save')
+        function global:Get-DuneSoloProfile {}
+        Mock Get-DuneSoloProfile { @{dbPath=$script:sourceSave;channel='FLS_retail'} }
         Mock Invoke-DuneSoloDeckReader { [pscustomobject]@{applied=$false;files=@()} }
     }
     It 'prepares only explicit settings with server-generated identity and original hashes' {
@@ -125,6 +129,58 @@ Describe 'Deck settings transfer preparation' {
         $script:transferState.comparison.differences[0].pcValue='1'
         '{"different":true}' | Set-Content (Join-Path $script:transferRoot 'connection.json')
         {Invoke-DuneSoloDeckSettingsApply -Token $preview.token -Confirmed $true -CloudConfirmed $true} | Should -Throw '*pairing changed*'
+        Should -Invoke Invoke-DuneSoloDeckReader -Times 0 -ParameterFilter { $Request.action -eq 'apply-settings' }
+    }
+    It 'rejects a cloud replacement of the PC save at the same path' {
+        $preview = Invoke-DuneSoloDeckSettingsPreview
+        [IO.File]::WriteAllText($script:sourceSave, 'cloud replacement')
+        { Invoke-DuneSoloDeckSettingsApply -Token $preview.token -Confirmed $true -CloudConfirmed $true } | Should -Throw '*PC Solo save changed*'
+        Should -Invoke Invoke-DuneSoloDeckReader -Times 0 -ParameterFilter { $Request.action -eq 'apply-settings' }
+    }
+    It 'rejects a different PC profile even when its save bytes and settings match' {
+        $preview = Invoke-DuneSoloDeckSettingsPreview
+        $copy = Join-Path $TestDrive 'other-game.db'
+        Copy-Item -LiteralPath $script:sourceSave -Destination $copy
+        $script:sourceSave = $copy
+        { Invoke-DuneSoloDeckSettingsApply -Token $preview.token -Confirmed $true -CloudConfirmed $true } | Should -Throw '*PC Solo save changed*'
+        Should -Invoke Invoke-DuneSoloDeckReader -Times 0 -ParameterFilter { $Request.action -eq 'apply-settings' }
+    }
+    It 'rejects a new PC write-ahead log after preview' {
+        $preview = Invoke-DuneSoloDeckSettingsPreview
+        [IO.File]::WriteAllText(($script:sourceSave + '-wal'), 'new pending save pages')
+        { Invoke-DuneSoloDeckSettingsApply -Token $preview.token -Confirmed $true -CloudConfirmed $true } | Should -Throw '*PC Solo save changed*'
+        Should -Invoke Invoke-DuneSoloDeckReader -Times 0 -ParameterFilter { $Request.action -eq 'apply-settings' }
+    }
+    It 'rejects cloud settings created after preview without changing the database' {
+        $preview = Invoke-DuneSoloDeckSettingsPreview
+        $cloud = Join-Path (Split-Path -Parent $script:sourceSave) 'SOLO\ServerCustomSettings.ini'
+        New-Item -ItemType Directory -Path (Split-Path -Parent $cloud) -Force | Out-Null
+        [IO.File]::WriteAllText($cloud, 'new cloud settings')
+        { Invoke-DuneSoloDeckSettingsApply -Token $preview.token -Confirmed $true -CloudConfirmed $true } | Should -Throw '*PC Solo save changed*'
+        Should -Invoke Invoke-DuneSoloDeckReader -Times 0 -ParameterFilter { $Request.action -eq 'apply-settings' }
+    }
+    It 'requires cloud-aware helper capability before planning native settings writes' {
+        $script:transferState.comparison.differences=@(@{file='ServerCustomSettings.ini';section='native';key='GatheringAmount';pcValue='2';action='Would copy to Deck'})
+        $script:transferState.report.settings_candidates[0].files=@(@{file='ServerCustomSettings.ini';sha256='old';storage='cloud'})
+        { New-DuneSoloDeckSettingsPlan $script:transferState } | Should -Throw '*Update the Deck Companion*'
+        $script:transferState.report.settings_write_capabilities += 'cloud-native-ini-v1'
+        (New-DuneSoloDeckSettingsPlan $script:transferState).request.files[0].expected_storage | Should -Be 'cloud'
+    }
+    It 'does not issue a preview token if cloud sync replaces the PC save during preview' {
+        Mock Invoke-DuneSoloDeckReader {
+            [IO.File]::WriteAllText($script:sourceSave, 'changed during remote preview')
+            [pscustomobject]@{applied=$false}
+        }
+        { Invoke-DuneSoloDeckSettingsPreview } | Should -Throw '*changed during preview*'
+        Test-Path (Join-Path $script:transferRoot 'settings-preview.json') | Should -BeFalse
+    }
+    It 'rejects old preview records that did not bind the PC save' {
+        $preview = Invoke-DuneSoloDeckSettingsPreview
+        $path = Join-Path $script:transferRoot 'settings-preview.json'
+        $record = Get-Content -LiteralPath $path -Raw | ConvertFrom-Json
+        $record.PSObject.Properties.Remove('sourceFingerprint')
+        $record | ConvertTo-Json -Depth 15 | Set-Content -LiteralPath $path
+        { Invoke-DuneSoloDeckSettingsApply -Token $preview.token -Confirmed $true -CloudConfirmed $true } | Should -Throw '*fresh settings preview*'
         Should -Invoke Invoke-DuneSoloDeckReader -Times 0 -ParameterFilter { $Request.action -eq 'apply-settings' }
     }
     It 'blocks a running game or a helper without transfer capability' {

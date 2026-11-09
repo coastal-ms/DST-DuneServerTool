@@ -10,6 +10,21 @@ APP_ID = "1172710"
 SETTINGS_SCHEMA = {}  # injected from existing DST setting definitions
 
 
+def managed_settings_path(saved, filename):
+    path = saved / 'Config/Windows' / filename
+    if filename == 'ServerCustomSettings.ini':
+        profiles = list(saved.glob('Cloud/PlayerClientStorage/FLS_retail/*/game.db'))
+        cloud_files = list(saved.glob('Cloud/PlayerClientStorage/FLS_retail/*/SOLO/ServerCustomSettings.ini'))
+        if cloud_files:
+            if len(profiles) != 1 or len(cloud_files) != 1 or cloud_files[0].parent.parent != profiles[0].parent:
+                raise ValueError('Choose one matching Solo save before reading cloud settings')
+            path = cloud_files[0]
+    for item in (path, *path.parents):
+        if item.is_symlink():
+            raise ValueError('A settings path is a symbolic link')
+    return path
+
+
 def settings_snapshot(saved, schema=None):
     schema = SETTINGS_SCHEMA if schema is None else schema
     result = []
@@ -17,8 +32,9 @@ def settings_snapshot(saved, schema=None):
     for filename, sections in schema.items():
         if filename not in {"Game.ini", "Engine.ini", "ServerCustomSettings.ini"}:
             raise ValueError("Unsupported settings filename")
-        path = saved / "Config/Windows" / filename
-        entry = {"file": filename, "path": str(path), "exists": path.is_file(), "values": [], "duplicates": []}
+        path = managed_settings_path(saved, filename)
+        entry = {"file": filename, "path": str(path), "storage": 'local' if path.parent == saved / 'Config/Windows' else 'cloud',
+                 "exists": path.is_file(), "values": [], "duplicates": []}
         if path.is_file():
             before = path.stat()
             if before.st_size > 1024 * 1024:

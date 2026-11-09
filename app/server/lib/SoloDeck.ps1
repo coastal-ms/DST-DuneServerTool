@@ -271,9 +271,14 @@ function New-DuneSoloDeckSettingsPlan {
     $files = @(foreach ($group in @($rows | Group-Object { $_.file } | Sort-Object Name)) {
         $target = @($report.settings_candidates[0].files | Where-Object file -eq $group.Name)
         if ($target.Count -ne 1) { throw 'Deck settings target changed; refresh the preview.' }
-        [ordered]@{file=$group.Name;expected_sha256=$target[0].sha256;values=@($group.Group | Sort-Object { $_.section },{ $_.key } | ForEach-Object {
+        if ($group.Name -eq 'ServerCustomSettings.ini' -and 'cloud-native-ini-v1' -notin @($report.settings_write_capabilities)) {
+            throw 'Update the Deck Companion before transferring custom server settings so cloud-saved settings can be checked.'
+        }
+        $filePlan = [ordered]@{file=$group.Name;expected_sha256=$target[0].sha256;values=@($group.Group | Sort-Object { $_.section },{ $_.key } | ForEach-Object {
             [ordered]@{section=[string]$_.section;key=[string]$_.key;value=[string]$_.pcValue}
         })}
+        if ($target[0].storage) { $filePlan['expected_storage'] = [string]$target[0].storage }
+        $filePlan
     })
     return @{request=[ordered]@{action='preview-settings';files=$files};rows=$rows}
 }
@@ -285,8 +290,25 @@ function Get-DuneSoloDeckSaveFingerprints {
     }) -Compress
 }
 
+function Get-DuneSoloDeckSourceFingerprint {
+    $profile = Get-DuneSoloProfile
+    if (-not $profile.dbPath -or -not (Test-Path -LiteralPath $profile.dbPath -PathType Leaf)) {
+        throw 'Connect the intended PC Solo save before preparing a settings transfer.'
+    }
+    $path = [IO.Path]::GetFullPath([string]$profile.dbPath)
+    $paths = @($path, ($path + '-wal'))
+    if ($profile.channel -eq 'FLS_retail') { $paths += Join-Path (Split-Path -Parent $path) 'SOLO\ServerCustomSettings.ini' }
+    $files = @(foreach ($file in $paths) {
+        $exists = Test-Path -LiteralPath $file -PathType Leaf
+        [ordered]@{path=$file;sha256=$(if ($exists) { (Get-FileHash -LiteralPath $file -Algorithm SHA256 -ErrorAction Stop).Hash } else { $null })}
+    })
+    # The path alone cannot identify a save replaced in place by cloud sync.
+    return ConvertTo-Json -InputObject $files -Compress
+}
+
 function Invoke-DuneSoloDeckSettingsPreview {
     Assert-DuneSoloGameClosed
+    $sourceFingerprint = Get-DuneSoloDeckSourceFingerprint
     $state = Get-DuneSoloDeckStatus
     $plan = New-DuneSoloDeckSettingsPlan -State $state
     if (-not $plan.rows.Count) { return @{ok=$true;complete=$true;rows=@()} }
@@ -295,9 +317,11 @@ function Invoke-DuneSoloDeckSettingsPreview {
     $connection = Get-Content -LiteralPath $connectionPath -Raw | ConvertFrom-Json
     $preview = Invoke-DuneSoloDeckReader -Root $root -Connection $connection -Command 'dst-settings-v1' -Request $plan.request
     if ($preview.PSObject.Properties.Name -notcontains 'applied' -or $preview.applied -ne $false) { throw 'The Deck helper did not confirm a settings-only preview.' }
+    if ((Get-DuneSoloDeckSourceFingerprint) -cne $sourceFingerprint) { throw 'The PC Solo save changed during preview. Finish cloud sync and prepare a fresh settings preview.' }
     $token = [guid]::NewGuid().ToString('N') + [guid]::NewGuid().ToString('N')
     $record = [ordered]@{token=$token;expires=[DateTime]::UtcNow.AddMinutes(10).ToString('o');request=$plan.request
         connectionHash=(Get-FileHash -LiteralPath $connectionPath -Algorithm SHA256).Hash
+        sourceFingerprint=$sourceFingerprint
         saveFingerprints=(Get-DuneSoloDeckSaveFingerprints $state.report)}
     [IO.File]::WriteAllText((Join-Path $root 'settings-preview.json'), ($record | ConvertTo-Json -Depth 15 -Compress), (New-Object Text.UTF8Encoding($false)))
     return @{ok=$true;token=$token;rows=$plan.rows;preview=$preview}
@@ -314,11 +338,13 @@ function Invoke-DuneSoloDeckSettingsApply {
     $connectionPath = Join-Path $root 'connection.json'
     if ($Token -cne [string]$record.token -or [DateTime]::Parse($record.expires).ToUniversalTime() -lt [DateTime]::UtcNow -or
         (Get-FileHash -LiteralPath $connectionPath -Algorithm SHA256).Hash -cne [string]$record.connectionHash) { throw 'The preview expired or pairing changed. Prepare a fresh preview.' }
+    if (-not $record.sourceFingerprint -or (Get-DuneSoloDeckSourceFingerprint) -cne [string]$record.sourceFingerprint) { throw 'The PC Solo save changed. Finish cloud sync and prepare a fresh settings preview.' }
     $state = Get-DuneSoloDeckStatus
     $plan = New-DuneSoloDeckSettingsPlan -State $state
     $currentJson = ConvertTo-Json -InputObject $plan.request -Depth 15 -Compress
     $expectedJson = ConvertTo-Json -InputObject $record.request -Depth 15 -Compress
     if ($currentJson -cne $expectedJson -or (Get-DuneSoloDeckSaveFingerprints $state.report) -cne [string]$record.saveFingerprints) { throw 'PC settings or the Deck save changed. Prepare a fresh preview.' }
+    if ((Get-DuneSoloDeckSourceFingerprint) -cne [string]$record.sourceFingerprint) { throw 'The PC Solo save changed while checking the Deck. Finish cloud sync and prepare a fresh settings preview.' }
     $request = [ordered]@{action='apply-settings';files=$plan.request.files;confirmed=$true;cloud_confirmed=$true}
     # Consume once before dispatch. A lost reply must never cause an automatic retry.
     Remove-Item -LiteralPath $pending -Force

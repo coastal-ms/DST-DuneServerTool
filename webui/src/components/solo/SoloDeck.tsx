@@ -118,7 +118,7 @@ export function SoloDeck() {
     <PageHeader title="Steam Deck" icon="Gamepad2" description="Experimental Solo connection for stock SteamOS. Limited support."
       actions={<button className="btn-secondary" disabled={state.loading} onClick={() => void state.refresh()}>Refresh Deck</button>} />
     <div className="mb-4 rounded-lg border border-warning/30 bg-warning/5 p-4 text-sm">
-      Make grants and save changes in PC DST, then finish Steam Cloud sync on the same Steam account before playing on the Deck. Settings sync is one way: this PC → Steam Deck.
+      Solo custom server settings now follow the same cloud save between devices. Finish Steam Cloud sync on the same Steam account before switching devices. DST’s manual settings transfer copies selected PC overrides to the Deck.
     </div>
     {state.loading && <p role="status">Reading the Steam Deck…</p>}
     {connectionMessage && <p role={deckUnavailable ? 'status' : 'alert'} className={deckUnavailable ? 'text-text-muted mb-4' : 'text-danger'}>{connectionMessage}</p>}
@@ -127,7 +127,7 @@ export function SoloDeck() {
       {report.mod_capabilities?.includes('mods-sync-v1') && <DeckModSync gameRunning={!!report.game_processes.length}/>}
       {report.settings_write_capabilities?.includes('managed-ini-v1') && <section className="card p-5 mb-4">
         <h2 className="font-semibold mb-2">Sync settings to Deck</h2>
-        <p className="text-sm text-text-muted mb-3">Copies explicit DST overrides in Engine.ini, Game.ini and ServerCustomSettings.ini. Other Deck settings are preserved. Original files are backed up on the Deck.</p>
+        <p className="text-sm text-text-muted mb-3">Review the PC overrides before copying them. Custom server settings use the save’s cloud copy when present; Engine.ini and Game.ini overrides stay local to the Deck. Replacing custom server settings can carry those choices back to your other device through cloud sync. Original files are backed up on the Deck.</p>
         <button className="btn-secondary" disabled={busy || !!report.game_processes.length} onClick={()=>void transfer()}>Preview settings sync</button>
         {busy && <p role="status" className="mt-3">Checking the Deck…</p>}
         {error && <p role="alert" className="text-danger mt-3">{error}</p>}

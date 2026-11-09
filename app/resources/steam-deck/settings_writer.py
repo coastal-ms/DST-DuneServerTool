@@ -88,7 +88,7 @@ def reader_dispatch():
             result = handler(json.loads(payload))
         else:
             result = discover()
-            result["settings_write_capabilities"] = ["managed-ini-v1"]
+            result["settings_write_capabilities"] = ["managed-ini-v1", "cloud-native-ini-v1"]
             result['mod_capabilities'] = ['mods-sync-v1', 'isolated-launch-v1']
             result['mod_environment'] = mod_environment(result)
         print(json.dumps(result))

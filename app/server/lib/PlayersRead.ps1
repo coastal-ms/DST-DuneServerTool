@@ -570,12 +570,20 @@ function Get-DunePlayerExportLive {
     $resolve = Get-DuneRawFuncomId -Ip $Ip -AccountId $AccountId
     if (-not $resolve.ok) { return @{ ok = $false; error = $resolve.error } }
     $funcom = ConvertTo-DuneSqlString $resolve.funcom_id
-    $sql = "SELECT dune.character_transfer_export('$funcom')::text AS export_json;"
-    $r = Invoke-DuneSqlQuery -Ip $Ip -Sql $sql -ReadOnly $true -MaxRows 1 -TimeoutSec 60
+    # Funcom's exporter creates session-local scratch tables. Keep one stable
+    # snapshot and roll the entire transaction back after returning the JSON.
+    $sql = "BEGIN ISOLATION LEVEL REPEATABLE READ;`nSET LOCAL statement_timeout='50s';`nSET LOCAL lock_timeout='3s';`nSET LOCAL client_min_messages=warning;`nSELECT dune.character_transfer_export('$funcom')::text AS export_json;`nROLLBACK;"
+    $r = Invoke-DuneSqlQuery -Ip $Ip -Sql $sql -ReadOnly $false -MaxRows 1 -TimeoutSec 60
     if (-not $r.ok) { return @{ ok = $false; error = $r.error } }
     $rows = ConvertTo-DuneRowMaps -Result $r
     if ($rows.Count -eq 0) { return @{ ok = $false; error = "No export returned for account $AccountId." } }
-    return @{ ok = $true; export_json = [string]$rows[0]['export_json']; account_id = $AccountId; funcom_id = $resolve.funcom_id }
+    $exportJson = [string]$rows[0]['export_json']
+    try { $export = $exportJson | ConvertFrom-Json -ErrorAction Stop }
+    catch { return @{ ok = $false; error = 'The server returned invalid character export data.' } }
+    if (-not $export -or -not $export.PSObject.Properties['entries'] -or @($export.entries).Count -eq 0) {
+        return @{ ok = $false; error = 'The server returned an empty character export.' }
+    }
+    return @{ ok = $true; export_json = $exportJson; account_id = $AccountId; funcom_id = $resolve.funcom_id }
 }
 
 # ----- §1.6 GET /players/{id}/keystones -----------------------------------
