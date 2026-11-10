@@ -586,10 +586,75 @@ function Invoke-DuneScheduledRestart {
     }
 }
 
+function ConvertTo-DuneRestartPosixOffset {
+    param([timespan]$Offset)
+    # POSIX TZ offsets have the opposite sign to Windows UTC offsets.
+    $seconds = -[int]$Offset.TotalSeconds
+    $sign = if ($seconds -lt 0) { '-' } else { '' }
+    $seconds = [Math]::Abs($seconds)
+    return ('{0}{1}:{2:00}:{3:00}' -f $sign, [int][Math]::Floor($seconds / 3600), [int][Math]::Floor(($seconds % 3600) / 60), ($seconds % 60))
+}
+
+function ConvertTo-DuneRestartPosixTransition {
+    param([TimeZoneInfo+TransitionTime]$Transition, [bool]$LeapYear)
+    if ($Transition.IsFixedDateRule) {
+        # Numeric POSIX days include February 29; generate both calendar forms.
+        $year = if ($LeapYear) { 2000 } else { 2001 }
+        $day = [Math]::Min($Transition.Day, [datetime]::DaysInMonth($year, $Transition.Month))
+        $rule = ([datetime]::new($year, $Transition.Month, $day).DayOfYear - 1).ToString([cultureinfo]::InvariantCulture)
+    } else {
+        $rule = 'M{0}.{1}.{2}' -f $Transition.Month, $Transition.Week, [int]$Transition.DayOfWeek
+    }
+    $at = $Transition.TimeOfDay
+    return ('{0}/{1}:{2:00}:{3:00}' -f $rule, $at.Hour, $at.Minute, $at.Second)
+}
+
+function New-DuneRestartVmClock {
+    param([TimeZoneInfo]$TimeZone = [TimeZoneInfo]::Local)
+    # Embed Windows rules as POSIX TZ strings. BusyBox/musl and GNU date can
+    # evaluate them without installing tzdata or contacting the Windows host.
+    $baseZone = 'DSTSTD' + (ConvertTo-DuneRestartPosixOffset $TimeZone.BaseUtcOffset)
+    $rules = foreach ($rule in $TimeZone.GetAdjustmentRules() | Where-Object { $_.DateEnd -ge [datetime]::Today.AddYears(-1) }) {
+        $baseOffset = $TimeZone.BaseUtcOffset
+        if ($rule.PSObject.Properties['BaseUtcOffsetDelta']) { $baseOffset += $rule.BaseUtcOffsetDelta }
+        $standard = 'DSTSTD' + (ConvertTo-DuneRestartPosixOffset $baseOffset)
+        $variants = foreach ($leap in @($false, $true)) {
+            if ($rule.DaylightDelta -eq [timespan]::Zero) { $standard }
+            else {
+                $daylight = 'DSTSUM' + (ConvertTo-DuneRestartPosixOffset ($baseOffset + $rule.DaylightDelta))
+                $start = ConvertTo-DuneRestartPosixTransition $rule.DaylightTransitionStart $leap
+                $end = ConvertTo-DuneRestartPosixTransition $rule.DaylightTransitionEnd $leap
+                "$standard$daylight,$start,$end"
+            }
+        }
+        '{0}|{1}|{2}|{3}' -f $rule.DateStart.ToString('yyyy-MM-dd'), $rule.DateEnd.ToString('yyyy-MM-dd'), $variants[0], $variants[1]
+    }
+    $table = $rules -join "`n"
+    return @"
+ZONE_DAY=`$(TZ='$baseZone' date +%Y-%m-%d)
+YEAR=`${ZONE_DAY%%-*}
+LEAP=0
+if [ `$((YEAR % 4)) -eq 0 ] && { [ `$((YEAR % 100)) -ne 0 ] || [ `$((YEAR % 400)) -eq 0 ]; }; then LEAP=1; fi
+HOST_TZ='$baseZone'
+while IFS='|' read -r FIRST LAST NORMAL LEAP_ZONE; do
+  [ -n "`$FIRST" ] || continue
+  if [[ "`$ZONE_DAY" < "`$FIRST" || "`$ZONE_DAY" > "`$LAST" ]]; then continue; fi
+  if [ "`$LEAP" = 1 ]; then HOST_TZ="`$LEAP_ZONE"; else HOST_TZ="`$NORMAL"; fi
+  break
+done <<'DST_TIMEZONE_RULES'
+$table
+DST_TIMEZONE_RULES
+NOW_EPOCH=`$(date +%s)
+LOCAL_NOW=`$(TZ="`$HOST_TZ" date -d "@`$NOW_EPOCH" +%Y-%m-%dT%H:%M)
+LOCAL_PREVIOUS=`$(TZ="`$HOST_TZ" date -d "@`$((NOW_EPOCH - 60))" +%Y-%m-%dT%H:%M)
+"@
+}
+
 function New-DuneVmDailyMaintenanceScript {
-    param([bool]$ApplyFuncomUpdates)
+    param([bool]$ApplyFuncomUpdates, [string]$Time = '', [TimeZoneInfo]$TimeZone = [TimeZoneInfo]::Local)
     $apply = if ($ApplyFuncomUpdates) { '1' } else { '0' }
     $appId = $script:DuneServerSteamAppIdFallback
+    $clock = if ($Time) { New-DuneRestartVmClock -TimeZone $TimeZone } else { '' }
     $body = @"
 #!/bin/bash
 set -u
@@ -599,6 +664,15 @@ LOCK=/tmp/dst-daily-maintenance.lock
 LOG=$script:DuneRestartVmLogPath
 RESULT=$script:DuneRestartVmResultPath
 mkdir -p /var/lib/dune-server
+if [ "`${1:-}" = '--scheduled' ]; then
+$clock
+  DUE=0
+  [ "`${LOCAL_NOW#*T}" != '$Time' ] || DUE=1
+  # If spring moves over the selected minute, run at the first valid minute.
+  if [ "`${LOCAL_PREVIOUS%T*}" = "`${LOCAL_NOW%T*}" ] &&
+     [[ "`${LOCAL_PREVIOUS#*T}" < '$Time' && "`${LOCAL_NOW#*T}" > '$Time' ]]; then DUE=1; fi
+  [ "`$DUE" = 1 ] || exit 0
+fi
 if ! mkdir "`$LOCK" 2>/dev/null; then
   exit 0
 fi
@@ -607,6 +681,14 @@ exec >>"`$LOG" 2>&1
 if [ -f /var/lib/dune-server/dst-world-restart-recovery-required ] || find /tmp/dst-world-restart-active -mmin -120 2>/dev/null | grep -q .; then
   echo "=== `$(date -u +%Y-%m-%dT%H:%M:%SZ) scheduled maintenance skipped: World Restart active ==="
   exit 0
+fi
+if [ "`${1:-}" = '--scheduled' ]; then
+  # A repeated autumn hour must not run the same daily slot twice. A newly
+  # selected time on the same day is a different slot and remains runnable.
+  SLOT="`${LOCAL_NOW%T*}T$Time"
+  LAST_SLOT=/var/lib/dune-server/daily-maintenance-slot
+  [ "`$(cat "`$LAST_SLOT" 2>/dev/null || true)" != "`$SLOT" ] || exit 0
+  printf '%s\n' "`$SLOT" > "`$LAST_SLOT"
 fi
 echo "=== `$(date -u +%Y-%m-%dT%H:%M:%SZ) scheduled maintenance ==="
 MANIFEST=`$(ls /home/dune/.dune/download/steamapps/appmanifest_*.acf 2>/dev/null | head -1 || true)
@@ -677,12 +759,12 @@ function Sync-DuneRestartScheduleAutomation {
     $ctx = Get-DuneBackupContext
     if (-not $ctx.ok) { return @{ ok = $false; message = $ctx.message } }
     try {
-        $offsetResult = Invoke-DuneBackupShell -Ip $ctx.ip -Script 'date +%z' -TimeoutSec 15
-        if ($offsetResult.rc -ne 0) { return @{ ok = $false; message = 'Could not read VM timezone offset.' } }
-        $cronTime = ConvertTo-DuneVmCronTime -Time $state.time -VmOffset ([string]$offsetResult.out).Trim()
-        $vmScript = New-DuneVmDailyMaintenanceScript -ApplyFuncomUpdates ([bool]$state.applyFuncomUpdates)
+        [TimeZoneInfo]::ClearCachedData()
+        $vmScript = New-DuneVmDailyMaintenanceScript -ApplyFuncomUpdates ([bool]$state.applyFuncomUpdates) -Time $state.time -TimeZone ([TimeZoneInfo]::Local)
         $scriptB64 = [Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes($vmScript))
-        $cronLine = "$($cronTime.minute) $($cronTime.hour) * * * $script:DuneRestartVmScriptPath"
+        # The VM evaluates the host wall clock each minute, including DST
+        # transitions while the Windows application is closed.
+        $cronLine = "* * * * * $script:DuneRestartVmScriptPath --scheduled"
         $enabled = if ($state.enabled) { '1' } else { '0' }
         $install = @"
 set -eu
@@ -716,7 +798,7 @@ crontab -l 2>/dev/null || true
         $hasBlock = ([string]$r.out -match [regex]::Escape($script:DuneRestartCronBeginMarker))
         if ($state.enabled -and -not $hasBlock) { return @{ ok = $false; message = 'VM cron verification failed.' } }
         if (-not $state.enabled -and $hasBlock) { return @{ ok = $false; message = 'VM cron remained after disabling schedule.' } }
-        return @{ ok = $true; message = if ($state.enabled) { "VM cron ensured at $cronLine (VM offset $($cronTime.offset))." } else { 'VM cron disabled.' } }
+        return @{ ok = $true; message = if ($state.enabled) { "VM daily maintenance follows $($state.time) in $([TimeZoneInfo]::Local.Id), including daylight saving changes." } else { 'VM cron disabled.' } }
     } catch {
         return @{ ok = $false; message = "VM cron reconciliation failed: $($_.Exception.Message)" }
     }

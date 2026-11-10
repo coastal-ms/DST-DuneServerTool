@@ -114,6 +114,51 @@ Describe 'Scheduled Funcom updates' -Tag 'RestartSchedule' {
         $body | Should -Match '/bin/bash -n'
         $body | Should -Match '/sbin/rc-update add crond default'
         $body | Should -Match '/sbin/rc-service crond start'
+        $body | Should -Match '\* \* \* \* \* .+ --scheduled'
+        $body | Should -Match 'ClearCachedData'
+    }
+
+    It 'keeps Windows wall-clock maintenance correct across seasonal transitions with DST closed' {
+        $folder = Join-Path $TestDrive 'timezone-scripts'
+        New-Item -ItemType Directory -Path $folder | Out-Null
+        foreach ($case in @(
+            @{name='central';zone='Central Standard Time';time='14:00'},
+            @{name='repeated';zone='Central Standard Time';time='01:30'},
+            @{name='skipped';zone='Central Standard Time';time='02:30'},
+            @{name='lordhowe';zone='Lord Howe Standard Time';time='14:00'},
+            @{name='india';zone='India Standard Time';time='14:00'},
+            @{name='midnight';zone='India Standard Time';time='00:00'},
+            @{name='utc';zone='UTC';time='14:00'}
+        )) {
+            $zone = [TimeZoneInfo]::FindSystemTimeZoneById($case.zone)
+            $text = New-DuneVmDailyMaintenanceScript -ApplyFuncomUpdates $false -Time $case.time -TimeZone $zone
+            [IO.File]::WriteAllText((Join-Path $folder ($case.name + '.sh')), $text)
+        }
+        # Fixed-date rules need separate leap/non-leap POSIX day numbers.
+        $start = [TimeZoneInfo+TransitionTime]::CreateFixedDateRule([datetime]::new(1,1,1,2,0,0), 2, 29)
+        $end = [TimeZoneInfo+TransitionTime]::CreateFixedDateRule([datetime]::new(1,1,1,2,0,0), 10, 15)
+        $rule = [TimeZoneInfo+AdjustmentRule]::CreateAdjustmentRule([datetime]::new(2020,1,1), [datetime]::new(9999,12,31), [timespan]::FromMinutes(30), $start, $end)
+        $zone = [TimeZoneInfo]::CreateCustomTimeZone('Fixed leap fixture', [timespan]::FromHours(2), 'Fixture', 'Standard', 'Daylight', @($rule))
+        [IO.File]::WriteAllText((Join-Path $folder 'fixed.sh'), (New-DuneVmDailyMaintenanceScript -ApplyFuncomUpdates $false -Time '14:00' -TimeZone $zone))
+        $bash = if (Test-Path 'C:/Program Files/Git/bin/bash.exe') { 'C:/Program Files/Git/bin/bash.exe' } else { 'bash' }
+        $output = & $bash (Join-Path $PSScriptRoot 'fixtures/daily-maintenance-timezone.sh') $folder 2>&1
+        $LASTEXITCODE | Should -Be 0 -Because ($output -join "`n")
+        @($output | Where-Object { $_ -match ' passed$' }).Count | Should -Be 24
+    }
+
+    It 'installs the wall-clock guard without depending on the VM timezone' {
+        Mock Get-DuneRestartSchedule { @{enabled=$true;time='14:00';applyFuncomUpdates=$false} }
+        Mock Get-DuneBackupContext { @{ok=$true;ip='fixture-only'} }
+        Mock Invoke-DuneBackupShell {
+            param($Ip, $Script, $TimeoutSec)
+            $script:installedMaintenance = $Script
+            return @{rc=0;out='# DST-DAILY-MAINTENANCE BEGIN'}
+        }
+        $result = Sync-DuneRestartScheduleAutomation
+        $result.ok | Should -BeTrue
+        $result.message | Should -Match 'follows 14:00'
+        $script:installedMaintenance | Should -Match '\* \* \* \* \* /usr/local/bin/dst-daily-maintenance.sh --scheduled'
+        Should -Invoke Invoke-DuneBackupShell -Times 1 -Exactly
     }
 
     It 'executes maintenance success, download failure, failed restart and recovery guards' {
