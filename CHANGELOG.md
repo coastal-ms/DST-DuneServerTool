@@ -11,6 +11,13 @@ Patch releases within a major series are rolled up under the major's entry
 on GitHub still exist for each individual release; the consolidated entries
 here cover everything those tags shipped.
 
+## [Unreleased]
+
+## [16.7.9] - 2026-11-10
+
+### Fixed
+- Keep daily server maintenance at the selected local time across daylight saving changes, including while DST is closed.
+
 ## [16.7.8.1] - 2026-11-10
 
 ### Fixed
