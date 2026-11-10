@@ -3,6 +3,7 @@
 . (Join-Path $PSScriptRoot 'SoloXbox.ps1')
 $script:DuneSoloSection = '/Script/DuneSandbox.UserServerCustomSettings'
 $script:DuneSoloSettingKeys = @(
+    'm_DayLengthMinutes',
     'm_NodeValueToSpiceResourceRatio',
     'm_bAreSecurityZonesEnabled',
     'DifficultyLevel',
@@ -1385,6 +1386,19 @@ function Read-DuneSoloSettings {
         })
     }
     $entries = foreach ($key in $script:DuneSoloSettingKeys) {
+        if ($key -eq 'm_DayLengthMinutes') {
+            $dayLength = ''
+            $dayLengthPresent = $false
+            $insideTimeOfDay = $false
+            if (Test-Path -LiteralPath $gamePath -PathType Leaf) {
+                foreach ($line in [IO.File]::ReadAllLines($gamePath)) {
+                    if ($line -match '^\s*\[(.+)\]\s*$') { $insideTimeOfDay = $Matches[1] -eq '/Script/DuneSandbox.TimeOfDaySettings' }
+                    elseif ($insideTimeOfDay -and $line -match '^\s*m_DayLengthMinutes\s*=(.*)$') { $dayLength = $Matches[1].Trim(); $dayLengthPresent = $true }
+                }
+            }
+            [pscustomobject]@{ key = $key; value = $dayLength; present = $dayLengthPresent; needsApply = $false }
+            continue
+        }
         if ($key -eq 'm_NodeValueToSpiceResourceRatio') {
             $spiceValue = ''
             $insideSpice = $false
@@ -1467,6 +1481,10 @@ function Set-DuneSoloSettings {
             throw "Invalid value for Solo setting $name."
         }
         $trimmed = $value.Trim()
+        if ($name -eq 'm_DayLengthMinutes' -and $trimmed -eq '') {
+            $normalized[$name] = ''
+            continue
+        }
         if ($script:DuneSoloReadOnlySettingKeys -contains $name) {
             throw "Solo setting $name is controlled by the game and cannot be written by DST."
         }
@@ -1485,9 +1503,27 @@ function Set-DuneSoloSettings {
         } elseif ($trimmed -notmatch '^-?(?:\d+(?:\.\d*)?|\.\d+)$') {
             throw "Solo setting $name must be a number."
         }
+        if ($name -eq 'm_DayLengthMinutes') {
+            $minutes = [double]::Parse($trimmed, [Globalization.CultureInfo]::InvariantCulture)
+            if ([double]::IsNaN($minutes) -or [double]::IsInfinity($minutes) -or $minutes -le 0) {
+                throw 'Day length must be a finite number greater than zero.'
+            }
+        }
         $normalized[$name] = $trimmed
     }
     if ($normalized.Count -eq 0) { throw 'No Solo settings were provided.' }
+    if ($normalized.ContainsKey('m_DayLengthMinutes')) {
+        $dayLength = [string]$normalized['m_DayLengthMinutes']
+        $dayPath = Join-Path (Split-Path -Parent (@(Get-DuneSoloEnginePaths -Profile $profile)[0])) 'Game.ini'
+        Assert-DuneSoloConfigPath -Path $dayPath
+        $normalized.Remove('m_DayLengthMinutes')
+        $otherResult = if ($normalized.Count) { Set-DuneSoloSettings -Settings $normalized -Confirm $Confirm } else { $null }
+        $dayBackup = Set-DuneSoloLandclaimOverride -Path $dayPath -Value $dayLength -Section '/Script/DuneSandbox.TimeOfDaySettings' -Key 'm_DayLengthMinutes' -Remove:($dayLength -eq '')
+        $settings = Read-DuneSoloSettings
+        $dayEntry = @($settings.entries | Where-Object key -eq 'm_DayLengthMinutes')[0]
+        if ([string]$dayEntry.value -ne $dayLength -or ($dayLength -eq '' -and $dayEntry.present)) { throw 'Day length Game.ini verification failed.' }
+        return @{ ok = $true; settings = $settings; backupPath = $dayBackup; paths = @($otherResult.paths) + @($dayPath); backupPaths = @($otherResult.backupPaths) + @($dayBackup | Where-Object { $_ }) }
+    }
     if ($normalized.ContainsKey('m_NodeValueToSpiceResourceRatio')) {
         $spiceValue = [string]$normalized['m_NodeValueToSpiceResourceRatio']
         $spiceNumber = [double]::Parse($spiceValue, [Globalization.CultureInfo]::InvariantCulture)
@@ -1682,9 +1718,11 @@ function Assert-DuneSoloConfigPath {
 }
 
 function Set-DuneSoloLandclaimOverride {
-    param([Parameter(Mandatory)][string]$Path, [Parameter(Mandatory)][string]$Value,
-        [ValidateSet('/Script/DuneSandbox.BuildingSettings','/Script/DuneSandbox.InventorySystemSettings','/Script/DuneSandbox.SecurityZonesSubsystem','/Script/DuneSandbox.SpiceHarvestingSystem')][string]$Section = '/Script/DuneSandbox.BuildingSettings',
-        [ValidateSet('m_MaxNumLandclaimSegments','PlayerInventoryStartingSize','m_bAreSecurityZonesEnabled','m_NodeValueToSpiceResourceRatio')][string]$Key = 'm_MaxNumLandclaimSegments')
+    param([Parameter(Mandatory)][string]$Path, [Parameter(Mandatory)][AllowEmptyString()][string]$Value,
+        [ValidateSet('/Script/DuneSandbox.TimeOfDaySettings','/Script/DuneSandbox.BuildingSettings','/Script/DuneSandbox.InventorySystemSettings','/Script/DuneSandbox.SecurityZonesSubsystem','/Script/DuneSandbox.SpiceHarvestingSystem')][string]$Section = '/Script/DuneSandbox.BuildingSettings',
+        [ValidateSet('m_DayLengthMinutes','m_MaxNumLandclaimSegments','PlayerInventoryStartingSize','m_bAreSecurityZonesEnabled','m_NodeValueToSpiceResourceRatio')][string]$Key = 'm_MaxNumLandclaimSegments',
+        [switch]$Remove)
+    if ($Remove -and -not (Test-Path -LiteralPath $Path -PathType Leaf)) { return '' }
     $parent = Split-Path -Parent $Path
     if (-not (Test-Path -LiteralPath $parent)) { New-Item -ItemType Directory -Path $parent -Force | Out-Null }
     $existed = Test-Path -LiteralPath $Path -PathType Leaf
@@ -1697,22 +1735,31 @@ function Set-DuneSoloLandclaimOverride {
         }
         $text = (New-Object Text.UTF8Encoding($false, $true)).GetString($bytes).TrimStart([char]0xFEFF)
         $bom = $bytes.Length -ge 3 -and $bytes[0] -eq 0xEF -and $bytes[1] -eq 0xBB -and $bytes[2] -eq 0xBF
-        $lines = $text -split '\r\n|\n|\r'
+        $lines = @($text -split '\r\n|\n|\r')
+        # A terminal line break is a terminator, not another blank record.
+        # The writer adds it below; retaining the split sentinel grows the INI
+        # on every save. Keep all genuine blank lines chosen by the operator.
+        if ($lines.Count -gt 0 -and $lines[-1] -eq '') {
+            $lines = @($lines | Select-Object -SkipLast 1)
+        }
     }
     $result = New-Object System.Collections.Generic.List[string]
     $inside = $false
     $written = $false
+    $removed = $false
     foreach ($line in $lines) {
         if ($line -match '^\s*\[(.+)\]\s*$') {
-            if ($inside -and -not $written) { $result.Add("$key=$Value"); $written = $true }
+            if ($inside -and -not $written -and -not $Remove) { $result.Add("$key=$Value"); $written = $true }
             $inside = ($Matches[1] -eq $section)
         } elseif ($inside -and $line -match ('^\s*' + [regex]::Escape($key) + '\s*=')) {
-            if (-not $written) { $result.Add("$key=$Value"); $written = $true }
+            $removed = $true
+            if (-not $written -and -not $Remove) { $result.Add("$key=$Value"); $written = $true }
             continue
         }
         $result.Add($line)
     }
-    if (-not $written) {
+    if ($Remove -and -not $removed) { return '' }
+    if (-not $written -and -not $Remove) {
         if (-not $inside) { $result.Add(''); $result.Add("[$section]") }
         $result.Add("$key=$Value")
     }

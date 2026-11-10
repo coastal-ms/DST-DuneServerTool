@@ -3,6 +3,15 @@ BeforeAll {
 }
 
 Describe 'Installer legacy autostart preservation' -Tag 'Pure' {
+    It 'retires only the installed Deck helpers without deleting user data' {
+        $installer = Get-Content -LiteralPath (Join-Path (Get-DstRepoRoot) 'app\installer\DuneServer.iss') -Raw
+        $delete = ($installer -split '\[InstallDelete\]')[1] -split '\[Icons\]' | Select-Object -First 1
+        $delete | Should -Match ([regex]::Escape('Name: "{app}\resources\steam-deck"'))
+        $delete | Should -Match ([regex]::Escape('Name: "{app}\server"'))
+        $delete | Should -Not -Match '(?i)appdata|\\Mods|\\Saved|\\backups'
+        $files = ($installer -split '\[Files\]')[1] -split '\[InstallDelete\]' | Select-Object -First 1
+        $files | Should -Not -Match '(?i)steam-deck'
+    }
     It 'exports v12-v14 autostart definitions before their uninstaller removes them' {
         $installer = Get-Content -LiteralPath (Join-Path (Get-DstRepoRoot) 'app\installer\DuneServer.iss') -Raw
         $prepare = $installer.Substring(

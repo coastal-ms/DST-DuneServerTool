@@ -7,6 +7,19 @@ import {
 } from '../src/pages/SoloMode'
 
 describe('Solo Mode setting controls', () => {
+  it('accepts positive decimal day lengths without inventing an absent default', () => {
+    expect(getSoloSettingControl('m_DayLengthMinutes')).toEqual({ type: 'number', step: 'any' })
+    expect(validateSoloSettingChanges({ m_DayLengthMinutes: '45.5' })).toBeNull()
+    expect(validateSoloSettingChanges({ m_DayLengthMinutes: '' })).toBeNull()
+    for (const value of ['0', '-1', 'NaN', 'Infinity', '1e309']) {
+      expect(validateSoloSettingChanges({ m_DayLengthMinutes: value })).not.toBeNull()
+    }
+    const entries = [{ key: 'm_DayLengthMinutes', value: '', present: false, needsApply: false }]
+    expect(getPendingSoloSettingChanges(entries, {})).toEqual({})
+    expect(getPendingSoloSettingChanges(entries, { m_DayLengthMinutes: '90' })).toEqual({ m_DayLengthMinutes: '90' })
+    expect(getPendingSoloSettingChanges([{ ...entries[0], present: true }], {})).toEqual({ m_DayLengthMinutes: '' })
+    expect(getPendingSoloSettingChanges([{ ...entries[0], value: '5', present: true }], { m_DayLengthMinutes: '' })).toEqual({ m_DayLengthMinutes: '' })
+  })
   it('allows repairing a missing required override without changing the saved value', () => {
     const entries = [{ key: 'MaxLandclaimSegments', value: '20', present: true, needsApply: true }]
     expect(getPendingSoloSettingChanges(entries, { MaxLandclaimSegments: '20' })).toEqual({ MaxLandclaimSegments: '20' })

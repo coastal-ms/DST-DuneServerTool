@@ -342,11 +342,147 @@ Describe 'Solo Mode profile discovery and persistence' {
 Describe 'Solo Mode write gates and settings backups' {
     BeforeEach { Reset-TestSoloState }
 
-    It 'reports all 51 settings even when the INI is absent' {
+    It 'reads day length from Game.ini even when native settings follow the cloud save' {
+        $layout = New-TestSoloLayout
+        Save-DuneSoloState -DataRoot $layout.root -DbPath $layout.db | Out-Null
+        $cloud = Join-Path (Split-Path -Parent $layout.db) 'SOLO'
+        New-Item -ItemType Directory -Path $cloud -Force | Out-Null
+        [IO.File]::WriteAllText((Join-Path $cloud 'ServerCustomSettings.ini'), "[/Script/DuneSandbox.UserServerCustomSettings]`nGatheringAmount=3`nm_DayLengthMinutes=99`n")
+        [IO.File]::WriteAllText((Join-Path $layout.config 'Game.ini'), "[Other]`nm_DayLengthMinutes=120`n[/Script/DuneSandbox.TimeOfDaySettings]`nm_DayLengthMinutes=45.5`n")
+        $settings = Read-DuneSoloSettings
+        ($settings.entries | Where-Object key -eq 'm_DayLengthMinutes').value | Should -Be '45.5'
+        ($settings.entries | Where-Object key -eq 'GatheringAmount').value | Should -Be '3'
+    }
+
+    It 'backs up and verifies day length in its own section while preserving unrelated content' {
+        $layout = New-TestSoloLayout
+        Save-DuneSoloState -DataRoot $layout.root -DbPath $layout.db | Out-Null
+        Mock Get-DuneSoloGameProcesses { @() }
+        $game = Join-Path $layout.config 'Game.ini'
+        $original = "[Other]`nm_DayLengthMinutes=99`n[/Script/DuneSandbox.TimeOfDaySettings]`n; Keep comment`nm_DayLengthMinutes=30`nKeep=Yes`n[/Script/DuneSandbox.TimeOfDaySettings]`nm_DayLengthMinutes=60`n"
+        [IO.File]::WriteAllText($game, $original, (New-Object Text.UTF8Encoding($true)))
+        $result = Set-DuneSoloSettings -Settings @{ m_DayLengthMinutes = '45.50' } -Confirm 'APPLY SOLO SETTINGS'
+        [IO.File]::ReadAllText($result.backupPath) | Should -BeExactly $original
+        $text = [IO.File]::ReadAllText($game)
+        ([regex]::Matches($text, '(?m)^m_DayLengthMinutes=45.50')).Count | Should -Be 1
+        $text | Should -Match 'm_DayLengthMinutes=99'
+        $text | Should -Match '; Keep comment'
+        $text | Should -Match 'Keep=Yes'
+        [IO.File]::ReadAllBytes($game)[0] | Should -Be 239
+        ($result.settings.entries | Where-Object key -eq 'm_DayLengthMinutes').value | Should -Be '45.50'
+        Test-Path (Join-Path $layout.config 'ServerCustomSettings.ini') | Should -BeFalse
+    }
+
+    It 'creates a day-length section on first apply and accepts other Solo settings together' {
+        $layout = New-TestSoloLayout
+        Save-DuneSoloState -DataRoot $layout.root -DbPath $layout.db | Out-Null
+        Mock Get-DuneSoloGameProcesses { @() }
+        $result = Set-DuneSoloSettings -Settings @{ m_DayLengthMinutes = '90'; GatheringAmount = '2' } -Confirm 'APPLY SOLO SETTINGS'
+        [IO.File]::ReadAllText((Join-Path $layout.config 'Game.ini')) | Should -Match '\[/Script/DuneSandbox.TimeOfDaySettings\]\s+m_DayLengthMinutes=90'
+        ($result.settings.entries | Where-Object key -eq 'GatheringAmount').value | Should -Be '2'
+        ($result.settings.entries | Where-Object key -eq 'm_DayLengthMinutes').value | Should -Be '90'
+    }
+
+    It 'reports failed day-length read-back and retains the original backup' {
+        $layout = New-TestSoloLayout
+        Save-DuneSoloState -DataRoot $layout.root -DbPath $layout.db | Out-Null
+        Mock Get-DuneSoloGameProcesses { @() }
+        $game = Join-Path $layout.config 'Game.ini'
+        $original = "[/Script/DuneSandbox.TimeOfDaySettings]`nm_DayLengthMinutes=30`n"
+        [IO.File]::WriteAllText($game, $original)
+        Mock Write-DuneSoloBlueprintFile { }
+        { Set-DuneSoloSettings -Settings @{ m_DayLengthMinutes = '60' } -Confirm 'APPLY SOLO SETTINGS' } | Should -Throw '*Day length Game.ini verification failed*'
+        $backup = @(Get-ChildItem (Join-Path (Get-DuneSoloBackupRoot) 'settings') -Filter 'Game-*.ini')
+        $backup.Count | Should -Be 1
+        [IO.File]::ReadAllText($backup[0].FullName) | Should -BeExactly $original
+    }
+
+    It 'removes all day-length assignments when blank without changing other sections or writing a default' {
+        $layout = New-TestSoloLayout
+        Save-DuneSoloState -DataRoot $layout.root -DbPath $layout.db | Out-Null
+        Mock Get-DuneSoloGameProcesses { @() }
+        $game = Join-Path $layout.config 'Game.ini'
+        $original = "[Other]`nm_DayLengthMinutes=99`n[/Script/DuneSandbox.TimeOfDaySettings]`n; Keep comment`nm_DayLengthMinutes=5`nKeep=Yes`n[/Script/DuneSandbox.TimeOfDaySettings]`nm_DayLengthMinutes=`n"
+        [IO.File]::WriteAllText($game, $original)
+        $entry = (Read-DuneSoloSettings).entries | Where-Object key -eq 'm_DayLengthMinutes'
+        $entry.present | Should -BeTrue
+        $entry.value | Should -Be ''
+        $result = Set-DuneSoloSettings -Settings @{ m_DayLengthMinutes = '' } -Confirm 'APPLY SOLO SETTINGS'
+        [IO.File]::ReadAllText($result.backupPath) | Should -BeExactly $original
+        $text = [IO.File]::ReadAllText($game)
+        ([regex]::Matches($text, '(?m)^m_DayLengthMinutes=')).Count | Should -Be 1
+        $text | Should -Match 'm_DayLengthMinutes=99'
+        $text | Should -Not -Match 'm_DayLengthMinutes=30'
+        $text | Should -Match 'Keep=Yes'
+        $text | Should -Match '; Keep comment'
+        ($result.settings.entries | Where-Object key -eq 'm_DayLengthMinutes').present | Should -BeFalse
+        ($result.settings.entries | Where-Object key -eq 'm_DayLengthMinutes').value | Should -Be ''
+        Test-Path (Join-Path $layout.config 'ServerCustomSettings.ini') | Should -BeFalse
+    }
+
+    It 'accepts null day length without creating a missing local Game.ini and saves other settings' {
+        $layout = New-TestSoloLayout
+        Save-DuneSoloState -DataRoot $layout.root -DbPath $layout.db | Out-Null
+        Mock Get-DuneSoloGameProcesses { @() }
+        $result = Set-DuneSoloSettings -Settings @{ m_DayLengthMinutes = $null; GatheringAmount = '2' } -Confirm 'APPLY SOLO SETTINGS'
+        Test-Path (Join-Path $layout.config 'Game.ini') | Should -BeFalse
+        ($result.settings.entries | Where-Object key -eq 'GatheringAmount').value | Should -Be '2'
+        ($result.settings.entries | Where-Object key -eq 'm_DayLengthMinutes').present | Should -BeFalse
+    }
+
+    It 'does not grow blank lines through repeated day-length set clear and reapply cycles' {
+        $layout = New-TestSoloLayout
+        Save-DuneSoloState -DataRoot $layout.root -DbPath $layout.db | Out-Null
+        Mock Get-DuneSoloGameProcesses { @() }
+        $game = Join-Path $layout.config 'Game.ini'
+        $original = "[Other]`r`nKeep=Yes`r`n`r`n[/Script/DuneSandbox.TimeOfDaySettings]`r`n; Keep comment`r`n"
+        [IO.File]::WriteAllText($game, $original)
+        for ($i = 0; $i -lt 4; $i++) {
+            Set-DuneSoloSettings -Settings @{ m_DayLengthMinutes = '60' } -Confirm 'APPLY SOLO SETTINGS' | Out-Null
+            $written = [IO.File]::ReadAllText($game)
+            Set-DuneSoloSettings -Settings @{ m_DayLengthMinutes = '60' } -Confirm 'APPLY SOLO SETTINGS' | Out-Null
+            [IO.File]::ReadAllText($game) | Should -BeExactly $written
+            Set-DuneSoloSettings -Settings @{ m_DayLengthMinutes = '' } -Confirm 'APPLY SOLO SETTINGS' | Out-Null
+            [IO.File]::ReadAllText($game) | Should -BeExactly $original
+        }
+    }
+
+    It 'preserves manually chosen blank lines while repeated shared Game.ini writes stay stable' {
+        $layout = New-TestSoloLayout
+        Save-DuneSoloState -DataRoot $layout.root -DbPath $layout.db | Out-Null
+        Mock Get-DuneSoloGameProcesses { @() }
+        $game = Join-Path $layout.config 'Game.ini'
+        $original = "[Other]`r`nKeep=Yes`r`n`r`n`r`n[/Script/DuneSandbox.TimeOfDaySettings]`r`n`r`n`r`n"
+        [IO.File]::WriteAllText($game, $original)
+        Set-DuneSoloSettings -Settings @{ m_DayLengthMinutes = '60'; m_NodeValueToSpiceResourceRatio = '5' } -Confirm 'APPLY SOLO SETTINGS' | Out-Null
+        $written = [IO.File]::ReadAllText($game)
+        for ($i = 0; $i -lt 3; $i++) {
+            Set-DuneSoloSettings -Settings @{ m_DayLengthMinutes = '60'; m_NodeValueToSpiceResourceRatio = '5' } -Confirm 'APPLY SOLO SETTINGS' | Out-Null
+            [IO.File]::ReadAllText($game) | Should -BeExactly $written
+        }
+        # The operator's deletion of both the assignment and blank lines is authoritative.
+        $manual = "[Other]`r`nKeep=Yes`r`n[/Script/DuneSandbox.TimeOfDaySettings]`r`n"
+        [IO.File]::WriteAllText($game, $manual)
+        Set-DuneSoloSettings -Settings @{ m_DayLengthMinutes = '' } -Confirm 'APPLY SOLO SETTINGS' | Out-Null
+        [IO.File]::ReadAllText($game) | Should -BeExactly $manual
+    }
+
+    It 'rejects invalid day lengths before writing any requested settings' {
+        $layout = New-TestSoloLayout
+        Save-DuneSoloState -DataRoot $layout.root -DbPath $layout.db | Out-Null
+        Mock Get-DuneSoloGameProcesses { @() }
+        foreach ($value in @('0', '-1', 'NaN', 'Infinity', '1e309', ('9' * 129))) {
+            { Set-DuneSoloSettings -Settings @{ m_DayLengthMinutes = $value; GatheringAmount = '2' } -Confirm 'APPLY SOLO SETTINGS' } | Should -Throw
+        }
+        Test-Path (Join-Path $layout.config 'Game.ini') | Should -BeFalse
+        Test-Path (Join-Path $layout.config 'ServerCustomSettings.ini') | Should -BeFalse
+    }
+
+    It 'reports all 52 settings even when the INI is absent' {
         $layout = New-TestSoloLayout
         Save-DuneSoloState -DataRoot $layout.root -DbPath $layout.db | Out-Null
         $settings = Read-DuneSoloSettings
-        $settings.entries.Count | Should -Be 51
+        $settings.entries.Count | Should -Be 52
         @($settings.entries | Where-Object present).Count | Should -Be 0
     }
 

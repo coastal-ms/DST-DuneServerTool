@@ -11,6 +11,14 @@ Patch releases within a major series are rolled up under the major's entry
 on GitHub still exist for each individual release; the consolidated entries
 here cover everything those tags shipped.
 
+## [16.7.8] - 2026-11-09
+
+### Added
+- Adjust the length of a Solo day in minutes from World and economy settings.
+
+### Removed
+- Retire the experimental Steam Deck integration, pairing and transfer tools. Existing saves, mods and recovery copies are preserved.
+
 ## [16.7.7] - 2026-11-09
 
 ### Fixed
