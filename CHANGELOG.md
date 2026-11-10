@@ -11,6 +11,11 @@ Patch releases within a major series are rolled up under the major's entry
 on GitHub still exist for each individual release; the consolidated entries
 here cover everything those tags shipped.
 
+## [16.7.8.1] - 2026-11-10
+
+### Fixed
+- Update optional self-hosted Tank support for Funcom 1.5.20.1.
+
 ## [16.7.8] - 2026-11-09
 
 ### Added
