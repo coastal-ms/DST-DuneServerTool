@@ -10,7 +10,6 @@ import { CollapsibleCard } from '../components/CollapsibleCard'
 import { ItemPicker } from '../components/ItemPicker'
 import { SoloMods } from '../components/solo/SoloMods'
 import { SoloLiveMap } from '../components/solo/SoloLiveMap'
-import { SoloDeck } from '../components/solo/SoloDeck'
 import { SoloRegisTanks } from '../components/solo/SoloRegisTanks'
 import { SoloFactionProgression } from '../components/solo/SoloFactionProgression'
 import { SoloCharacterXp } from '../components/solo/SoloCharacterXp'
@@ -125,7 +124,7 @@ const SOLO_UNLOCK_TOOLS = [
 const SOLO_OVERVIEW_VIEWS = ['Snapshot', 'Currency & identity'] as const
 const SOLO_ADVANCED_VIEWS = ['Diagnostics'] as const
 
-type Tab = 'overview' | 'settings' | 'mods' | 'backups' | 'character' | 'dd-map' | 'steam-deck'
+type Tab = 'overview' | 'settings' | 'mods' | 'backups' | 'character' | 'dd-map'
 const SOLO_PROGRESSION_VIEWS: readonly (CharacterProgressionView | 'Codex')[] = CHARACTER_PROGRESSION_VIEWS.filter(view => view !== 'Journey')
 const TABS: Array<{ id: Tab; label: string; icon: string }> = [
   { id: 'overview', label: 'Solo overview', icon: 'LayoutGrid' },
@@ -134,7 +133,6 @@ const TABS: Array<{ id: Tab; label: string; icon: string }> = [
   { id: 'backups', label: 'Backups', icon: 'ArchiveRestore' },
   { id: 'character', label: 'Character tools', icon: 'UserRound' },
   { id: 'dd-map', label: 'DD Map', icon: 'Map' },
-  { id: 'steam-deck', label: 'Steam Deck', icon: 'Gamepad2' },
 ]
 
 export const SOLO_FIRST_USE_STEPS = [
@@ -240,7 +238,7 @@ export function getPendingSoloSettingChanges(entries: SoloSetting[], draft: Reco
   for (const entry of entries) {
     if (SOLO_READ_ONLY_SETTINGS.has(entry.key) || SOLO_HIDDEN_SETTINGS.has(entry.key)) continue
     const next = draft[entry.key] ?? ''
-    if (next !== entry.value || (entry.needsApply && next !== '')) changed[entry.key] = next
+    if (next !== entry.value || (entry.needsApply && next !== '') || (entry.key === 'm_DayLengthMinutes' && entry.present && next === '')) changed[entry.key] = next
   }
   return changed
 }
@@ -256,6 +254,7 @@ export function getSoloSettingControl(key: string): SoloSettingControl {
 export function validateSoloSettingChanges(settings: Record<string, string>): string | null {
   for (const [key, rawValue] of Object.entries(settings)) {
     const value = rawValue.trim()
+    if (key === 'm_DayLengthMinutes' && value === '') continue
     const control = getSoloSettingControl(key)
     if (control.type === 'boolean' && value !== 'True' && value !== 'False') {
       return `${key} must be enabled or disabled.`
@@ -267,6 +266,7 @@ export function validateSoloSettingChanges(settings: Record<string, string>): st
       const valid = control.step === 1
         ? /^-?\d+$/.test(value)
         : /^-?(?:\d+(?:\.\d*)?|\.\d+)$/.test(value)
+      if (key === 'm_DayLengthMinutes' && (!Number.isFinite(Number(value)) || Number(value) <= 0)) return 'Day length must be a finite number greater than zero.'
       if (key === 'm_NodeValueToSpiceResourceRatio' && (!Number.isFinite(Number(value)) || Number(value) <= 0)) return 'Spice harvest ratio must be greater than zero.'
       if (!valid) return `${key} must be ${control.step === 1 ? 'a whole number' : 'a number'}.`
     }
@@ -323,7 +323,7 @@ const SETTING_GROUPS: Array<{ title: string; keys: string[] }> = [
   {
     title: 'World and economy',
     keys: [
-      'DifficultyLevel', 'GatheringAmount', 'm_NodeValueToSpiceResourceRatio', 'CraftingCost',
+      'DifficultyLevel', 'm_DayLengthMinutes', 'GatheringAmount', 'm_NodeValueToSpiceResourceRatio', 'CraftingCost',
       'WaterExtractionRate', 'CraftingTimeMultiplier', 'BuildingCostMultiplier',
       'ResourceRespawnSpeed', 'LootRespawnSpeed', 'FuelBurnTimeMultiplier',
       'InventoryVolumeMultiplier', 'PlayerInventoryStartingSize',
@@ -2336,7 +2336,6 @@ export function SoloMode() {
 
       {tab === 'mods' && <SoloMods connectionToken={`${activeProfileToken}:${connectionRevision}`} />}
       {tab === 'dd-map' && <><SoloLiveMap connectionToken={`${activeProfileToken}:${connectionRevision}`} /><WickMaps embedded solo /></>}
-      {tab === 'steam-deck' && <SoloDeck />}
       {tab === 'overview' && (
         <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
           <div className="card p-5">
@@ -2514,7 +2513,9 @@ export function SoloMode() {
                       const control = getSoloSettingControl(key)
                       const disabled = SOLO_READ_ONLY_SETTINGS.has(key)
                       const inputId = `solo-setting-${key}`
-                      const guidance = key === 'm_NodeValueToSpiceResourceRatio'
+                      const guidance = key === 'm_DayLengthMinutes'
+                        ? { label: 'Day length (minutes)', effect: 'Default: 30 minutes. Leave blank to remove the override and use the game default. Apply with the game closed, then relaunch.' }
+                        : key === 'm_NodeValueToSpiceResourceRatio'
                         ? { label: 'Spice harvest yield: lower gives more', effect: 'Default ratio: 10. Lower values give more spice; higher values give less. Try 5 for increased yield or 20 for reduced yield. This is a conversion ratio, not a direct multiplier; exact scaling needs an in-game comparison. Saved to Game.ini. Apply with the game closed, then relaunch.' }
                         : key === 'm_bAreSecurityZonesEnabled'
                         ? { label: 'Enable security zones', effect: 'Disable to remove Kanly security-zone restrictions in Solo, including tool restrictions in cities. Saved to this profile’s Game.ini. Re-enable to restore security zones.' }

@@ -15,18 +15,13 @@ vi.mock('../src/api/maps', () => ({ getMapState: vi.fn() }))
 
 afterEach(() => { cleanup(); vi.clearAllMocks() })
 
-it('keeps Deck setup in its own tab immediately after the Solo map', () => {
+it('keeps PC Solo navigation available without the retired Deck tab', () => {
   render(<SoloMode />)
-  const map = screen.getByRole('button', { name: 'DD Map', exact: true })
-  const deck = screen.getByRole('button', { name: 'Steam Deck', exact: true })
-  expect(map.nextElementSibling).toBe(deck)
-  expect(screen.queryByText('Solo device')).not.toBeInTheDocument()
-  expect(screen.queryByRole('heading', { name: 'Steam Deck', exact: true })).not.toBeInTheDocument()
-  fireEvent.click(deck)
-  expect(screen.getByRole('heading', { name: 'Steam Deck', exact: true })).toBeInTheDocument()
-  expect(screen.queryByText('Solo Deep Desert')).not.toBeInTheDocument()
+  expect(screen.queryByRole('button', { name: 'Steam Deck', exact: true })).not.toBeInTheDocument()
+  fireEvent.click(screen.getByRole('button', { name: 'DD Map', exact: true }))
+  expect(screen.getByText('Solo Deep Desert')).toBeInTheDocument()
   fireEvent.click(screen.getByRole('button', { name: 'Solo overview', exact: true }))
-  expect(screen.queryByRole('heading', { name: 'Steam Deck', exact: true })).not.toBeInTheDocument()
+  expect(screen.queryByText('Solo Deep Desert')).not.toBeInTheDocument()
 })
 
 it('opens the Solo reference map beside Character tools without a connected save or self-hosted seed lookup', () => {

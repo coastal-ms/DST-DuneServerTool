@@ -16,7 +16,7 @@
 ;                 -> NOT touched by install or uninstall (preserves user config)
 
 #define MyAppName        "Dune Server Tool"
-#define MyAppVersion "16.7.7"
+#define MyAppVersion "16.7.8"
 #ifndef MyAppNumericVersion
 #define MyAppCoreVersion Copy(MyAppVersion, 1, Pos("-", MyAppVersion + "-") - 1)
 #define MyAppNumericVersion MyAppCoreVersion + (Len(MyAppCoreVersion) - Len(StringChange(MyAppCoreVersion, ".", "")) == 2 ? ".0" : "")
@@ -128,8 +128,6 @@ Source: "..\resources\solo-mod-runtime\*"; DestDir: "{app}\resources\solo-mod-ru
 Source: "..\resources\solo-mods\*"; DestDir: "{app}\resources\solo-mods"; Excludes: "__pycache__\*,*.pyc,dst-live-map-context.txt,dst-native-build.txt"; Flags: ignoreversion recursesubdirs
 ; Discovered by Solo Mods as disabled on first install; existing selection is preserved.
 Source: "..\resources\solo-mods\dst-solo-live-map\*"; DestDir: "{app}\Mods\dst-solo-live-map"; Excludes: "__pycache__\*,*.pyc,dst-live-map-context.txt,dst-native-build.txt"; Flags: ignoreversion recursesubdirs
-Source: "..\resources\steam-deck\DST-Deck-Companion.sh"; DestDir: "{app}\resources\steam-deck"; Flags: ignoreversion
-Source: "..\resources\steam-deck\PairingBridge.ps1"; DestDir: "{app}\resources\steam-deck"; Flags: ignoreversion
 
 ; v6.1.24: Drop-in preflight checker users can run when something goes wrong.
 ; DunePreflight.bat is the entry point (right-click -> Run as administrator),
@@ -140,6 +138,8 @@ Source: "..\..\tools\preflight\*"; DestDir: "{app}\tools\preflight"; Flags: igno
 Source: "..\..\helper\bridge\*"; DestDir: "{app}\helper\bridge"; Flags: ignoreversion recursesubdirs
 
 [InstallDelete]
+; Retired installer-managed companion files only; user data and remote Deck files remain.
+Type: filesandordirs; Name: "{app}\resources\steam-deck"
 ; v15.0.0-phase2-test5: Modern upgrades update in place so scheduled tasks
 ; survive. Clear only installer-managed directory trees before copying to
 ; prevent removed scripts and hashed web assets from lingering.
