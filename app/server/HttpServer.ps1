@@ -129,6 +129,8 @@ function Test-DunePortalOwnerOnlyPath {
 
     foreach ($prefix in @(
         '/api/gameconfig',
+        '/api/map-settings',
+        '/api/vm-storage',
         '/api/db',
         '/api/sietches',
         '/api/config',

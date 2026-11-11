@@ -572,7 +572,7 @@ function Invoke-DuneScheduledRestart {
         return @{ ok = $false; status = $ctx.status; message = $ctx.message }
     }
     try {
-        $r = Invoke-DuneBackupShell -Ip $ctx.ip -Script "touch $script:DuneRestartMarkerPath 2>/dev/null; /home/dune/.dune/bin/battlegroup restart" -TimeoutSec 180
+        $r = Invoke-DuneBackupShell -Ip $ctx.ip -Script "if [ -x /usr/local/lib/dune-server/map-settings-apply.sh ]; then /bin/sh /usr/local/lib/dune-server/map-settings-apply.sh --maintenance || exit 1; fi; touch $script:DuneRestartMarkerPath 2>/dev/null; /home/dune/.dune/bin/battlegroup restart" -TimeoutSec 180
     } catch {
         return @{ ok = $false; status = 502; message = "Restart command failed: $($_.Exception.Message)" }
     }
@@ -704,6 +704,9 @@ fi
 ACTION=restart
 if [ "`$APPLY_UPDATES" = "1" ] && [ -n "`$INSTALLED" ] && [ -n "`$LATEST" ] && [ "`$LATEST" -gt "`$INSTALLED" ]; then
   ACTION=update
+fi
+if [ -x /usr/local/lib/dune-server/map-settings-apply.sh ]; then
+  /bin/sh /usr/local/lib/dune-server/map-settings-apply.sh --maintenance || { echo '[dst] Saved map settings conflict; maintenance held.'; exit 1; }
 fi
 touch $script:DuneRestartMarkerPath 2>/dev/null || true
 if [ "`$ACTION" = "update" ]; then

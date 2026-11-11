@@ -13,6 +13,12 @@ here cover everything those tags shipped.
 
 ## [Unreleased]
 
+## [16.8.0-preview1] - 2026-11-11
+
+### Added
+- Set separate server settings for individual sietches and Deep Desert partitions.
+- Expand supported guest storage from VM info after enlarging a Hyper-V virtual disk.
+
 ## [16.7.9] - 2026-11-10
 
 ### Fixed
