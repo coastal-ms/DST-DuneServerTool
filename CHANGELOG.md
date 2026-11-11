@@ -13,6 +13,12 @@ here cover everything those tags shipped.
 
 ## [Unreleased]
 
+## [16.8.0-preview2] - 2026-11-11
+
+### Fixed
+- Update optional Tank support for Funcom 1.5.20.2.
+- Clear the server Update badge after updates, including when the battlegroup stays running.
+
 ## [16.8.0-preview1] - 2026-11-11
 
 ### Added
