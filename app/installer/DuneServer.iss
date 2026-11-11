@@ -16,7 +16,7 @@
 ;                 -> NOT touched by install or uninstall (preserves user config)
 
 #define MyAppName        "Dune Server Tool"
-#define MyAppVersion "16.7.9"
+#define MyAppVersion "16.8.0-preview1"
 #ifndef MyAppNumericVersion
 #define MyAppCoreVersion Copy(MyAppVersion, 1, Pos("-", MyAppVersion + "-") - 1)
 #define MyAppNumericVersion MyAppCoreVersion + (Len(MyAppCoreVersion) - Len(StringChange(MyAppCoreVersion, ".", "")) == 2 ? ".0" : "")
@@ -110,6 +110,8 @@ Source: "..\data\*"; DestDir: "{app}\data"; Flags: ignoreversion recursesubdirs
 
 ; Read-only Atlas source host; session data stays in the user's local app data.
 Source: "..\tools\DuneAtlas\*"; DestDir: "{app}\tools\DuneAtlas"; Excludes: "__pycache__\*,*.pyc"; Flags: ignoreversion recursesubdirs
+Source: "..\tools\VmMapSettings\apply.sh"; DestDir: "{app}\tools\VmMapSettings"; Flags: ignoreversion
+Source: "..\tools\VmStorage\storage.py"; DestDir: "{app}\tools\VmStorage"; Flags: ignoreversion
 Source: "..\tools\VmMapHelper\*"; DestDir: "{app}\tools\VmMapHelper"; Excludes: "__pycache__\*,*.pyc,test_*.py"; Flags: ignoreversion recursesubdirs
 
 ; v6.1 React SPA: Vite-built static assets (HTML, hashed JS/CSS, fonts)

@@ -51,6 +51,9 @@ Describe 'HTTP local-only request enforcement' {
     It 'classifies host configuration and filesystem APIs as Owner-only' {
         foreach ($path in @(
             '/api/gameconfig',
+            '/api/map-settings',
+            '/api/vm-storage',
+            '/api/vm-storage/tools',
             '/api/gameconfig/experimental/categories',
             '/api/db/info',
             '/api/sietches/config',

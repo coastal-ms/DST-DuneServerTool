@@ -53,6 +53,12 @@ Describe 'Scheduled Funcom updates' -Tag 'RestartSchedule' {
         $scriptText | Should -Match '/var/lib/dune-server/dst-world-restart-recovery-required'
     }
 
+    It 'applies saved map files only at requested maintenance and holds on conflict' {
+        $text=New-DuneVmDailyMaintenanceScript -ApplyFuncomUpdates $false
+        $text|Should -Match 'map-settings-apply.sh --maintenance \|\| \{.*maintenance held.*exit 1'
+        $text.IndexOf('map-settings-apply.sh --maintenance')|Should -BeLessThan $text.IndexOf('if [ "$ACTION" = "update" ]')
+    }
+
     It 'renders the explicit unattended-update opt-in into the VM script' {
         (New-DuneVmDailyMaintenanceScript -ApplyFuncomUpdates $true) |
             Should -Match 'APPLY_UPDATES=1'
