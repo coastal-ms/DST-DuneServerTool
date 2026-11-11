@@ -11,7 +11,7 @@ Describe 'CLI update and stopped-start orchestration' {
         $script:scriptDir=Join-Path $TestDrive 'app'
         $script:sshKey='fixture-key'
         New-Item -ItemType Directory -Path (Join-Path $scriptDir 'lib'),(Join-Path $scriptDir 'server/lib') -Force | Out-Null
-        foreach ($file in @('lib/Db-Postgres.ps1','lib/K8s.ps1','server/lib/RegisTanksBuild.ps1','server/lib/GameConfig.ps1','server/lib/MapSettings.ps1')) { Set-Content -LiteralPath (Join-Path $scriptDir $file) -Value '' }
+        foreach ($file in @('lib/Db-Postgres.ps1','lib/K8s.ps1','server/lib/RegisTanksBuild.ps1','server/lib/GameConfig.ps1')) { Set-Content -LiteralPath (Join-Path $scriptDir $file) -Value '' }
         $retail=@(
             'function Resolve-DuneRetailServerSettingsTarget { param($Ip); $global:DstLifecycleReads++; @{available=$true;stopped=$true;serverPodCount=$(if($global:DstLifecycleReads -lt 2){1}else{0})} }',
             'function Get-DuneRetailStartupSyncPreference { @{enabled=$false;cleanupPending=$false} }',
@@ -44,13 +44,6 @@ Describe 'CLI update and stopped-start orchestration' {
         $global:DstLifecycleReads | Should -Be 2
         $global:DstLifecycleSynced | Should -BeTrue
         Should -Invoke Start-Sleep -Times 1
-    }
-    It 'applies pending map settings after stopped global synchronization' {
-        Add-Content (Join-Path $scriptDir 'server/lib/RetailServerSettings.ps1') -Value @('function Test-DuneConfigurationInjectionEnabled { $true }','function Sync-DuneRetailServerSettingsForStartup { param($Ip); $global:DstLifecycleOrder="global" }')
-        Set-Content (Join-Path $scriptDir 'server/lib/MapSettings.ps1') -Value 'function Sync-DuneSavedMapSettingsForStartup { param($Ip); if($global:DstLifecycleReads -lt 2 -or $global:DstLifecycleOrder -ne "global"){throw "Wrong apply order"}; $global:DstLifecycleOrder="maps" }'
-        Sync-DuneRetailSettingsBeforeStart -Ip '192.0.2.10'
-        $global:DstLifecycleOrder|Should -Be maps
-        Remove-Variable DstLifecycleOrder -Scope Global
     }
     AfterEach { Remove-Variable DstLifecycleReads,DstLifecycleSynced,DstLifecycleCompletion,DstLifecyclePreflight -Scope Global -ErrorAction SilentlyContinue }
 }

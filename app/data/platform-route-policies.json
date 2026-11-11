@@ -54,9 +54,7 @@
     "Update.ps1": "transactional-write",
     "WelcomeBack.ps1": "reversible-write",
     "VehicleDeletion.ps1": "destructive",
-    "WorldRestart.ps1": "destructive",
-    "MapSettings.ps1": "transactional-write",
-    "VmStorage.ps1": "transactional-write"
+    "WorldRestart.ps1": "destructive"
   },
   "routeLifecycleOverrides": {
     "http DELETE /api/player-portal/teleports": "reversible-write",
@@ -229,8 +227,6 @@
     { "source": "Update.ps1", "capabilityId": "operation.update", "routeCount": 5, "sha256": "f36f04a90e402b7d61b641af83055a0bb311cff4430d53db2fed83b2fafa403d" },
     { "source": "WelcomeBack.ps1", "capabilityId": "player.view", "routeCount": 2, "sha256": "11fa0ecec93f3c7fc5cc14a31ff4a30d52784cc298907fdfd30137ef918c05d1" },
     { "source": "VehicleDeletion.ps1", "capabilityId": "player.manage", "routeCount": 8, "sha256": "c08d41440af91f471d052018a4242b02d013a90c892183209c5e0bf459e6256d" },
-    { "source": "WorldRestart.ps1", "capabilityId": "operation.world-restart", "routeCount": 6, "sha256": "75ad55755646bd8b462c030ca712d02734e9a779d101c41b4eba8a4c00849200" },
-    {"source":"MapSettings.ps1","capabilityId":"settings.game-server","routeCount":2,"sha256":"03f4de7e3d799658174a33fe73ad857fa0973ab02451544d5ea8e5608ae655a3"},
-    {"source":"VmStorage.ps1","capabilityId":"settings.setup","routeCount":4,"sha256":"646f4a0cfe591c09d780d9434b52905482853c1b14a20ac909419c7e0aaa9b85"}
+    { "source": "WorldRestart.ps1", "capabilityId": "operation.world-restart", "routeCount": 6, "sha256": "75ad55755646bd8b462c030ca712d02734e9a779d101c41b4eba8a4c00849200" }
   ]
 }

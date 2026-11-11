@@ -21,7 +21,6 @@
 // Collapsed by default: nothing here interrupts anyone who has not asked.
 import { useCallback, useEffect, useState } from 'react'
 import { Icon } from '../../components/Icon'
-import { VmStorageCard } from './VmStorageCard'
 import { useCardCollapse } from '../../components/CollapsibleCard'
 import {
   cleanupFailedDatabaseOperations,
@@ -144,7 +143,6 @@ export function VmInfoCard() {
 
       {open && (
         <div className="px-5 pb-5 space-y-4">
-          <VmStorageCard onExpanded={() => void load()} />
           {loading && !info && <p className="text-sm text-text-dim italic">Reading the VM…</p>}
 
           {info && <dl className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-2 text-sm">

@@ -244,10 +244,10 @@ FiefdomLimit=99
         $updated | Should -Match '\[Other\]\r\nDifficultyLevel=Hard'
         (ConvertTo-DuneRetailServerSettingsUpdatedRaw -Raw $raw -Updates @{ CraftingCost = '0.000000' }) |
             Should -Match 'DifficultyLevel=Medium ; preset'
-        (ConvertTo-DuneRetailServerSettingsUpdatedRaw -Raw $raw -Updates @{ PVPMode = 'Limited' }) |
-            Should -Match 'PVPMode=Limited'
-        (ConvertTo-DuneRetailServerSettingsUpdatedRaw -Raw '' -Updates @{ PVPMode = 'Full' }) |
-            Should -Match 'PVPMode=Full'
+        { ConvertTo-DuneRetailServerSettingsUpdatedRaw -Raw $raw -Updates @{ PVPMode = 'Limited' } } |
+            Should -Throw '*not editable*'
+        { ConvertTo-DuneRetailServerSettingsUpdatedRaw -Raw '' -Updates @{ PVPMode = 'Full' } } |
+            Should -Throw '*not editable*'
     }
 
     It 'updates only requested values while preserving comments, order, and unknown keys' {

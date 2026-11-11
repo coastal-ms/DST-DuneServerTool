@@ -336,7 +336,7 @@ export function Dashboard() {
               {status?.funcomUpdate?.available && (
                 <span
                   className="inline-flex items-center gap-1 text-[10px] font-semibold uppercase tracking-wider text-warning border border-warning/40 bg-warning/10 rounded px-1.5 py-0.5 shrink-0"
-                  title={`Funcom has released a server update (installed build ${status.funcomUpdate.installedBuild || '?'}, latest ${status.funcomUpdate.latestBuild || '?'}). It is applied automatically on the next scheduled restart.`}
+                  title={`Funcom server update available (installed build ${status.funcomUpdate.installedBuild || '?'}, latest ${status.funcomUpdate.latestBuild || '?'}). Apply it from Server updates.`}
                 >
                   <Icon name="ArrowUpCircle" size={11} /> Update
                 </span>

@@ -1,4 +1,4 @@
-﻿BeforeAll {
+BeforeAll {
     . (Join-Path $PSScriptRoot '_TestHelpers.ps1')
     Import-DstLib 'RegisTanksActivation.ps1'
     function global:Get-V6Battlegroup { param($Ip) }
@@ -133,7 +133,8 @@ Describe 'Tank images follow official server upgrades' {
         @{Build='2168446'},
         @{Build='2173753'},
         @{Build='2177228'},
-        @{Build='2180427'}
+        @{Build='2180427'},
+        @{Build='2181988'}
     ) {
         $script:Official="registry.funcom.com/funcom/self-hosting/seabass-server:$Build-0-shipping"
         (Sync-DuneRegisTankServerUpdate -Ip test).changed | Should -BeTrue
