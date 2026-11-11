@@ -4,7 +4,6 @@ import { Icon } from '../components/Icon'
 import { PageHeader } from '../components/PageHeader'
 import { useStatus } from '../hooks/useStatus'
 import { OfficialRetailServerSettingsCard } from './gameconfig/OfficialRetailServerSettingsCard'
-import { WindowsPerMapSettings } from './gameconfig/WindowsPerMapSettings'
 import { ServerIniBackups } from './gameconfig/ServerIniBackups'
 import { RegisTankSetup } from './gameconfig/RegisTankSetup'
 import { GameConfig } from './GameConfig'
@@ -39,8 +38,6 @@ export function ServerSettings({ initialSection = 'official' }: { initialSection
   const [localStopError, setStopError] = useState<string | null>(null)
   const [localStopMessage, setStopMessage] = useState<string | null>(null)
   const [section, setSection] = useState<'official' | 'advanced' | 'client' | 'tools' | 'maintenance'>(initialSection)
-  const [mapTarget, setMapTarget] = useState('global')
-  const [globalFile, setGlobalFile] = useState<'server' | 'game' | 'engine'>(initialSection === 'advanced' ? 'game' : 'server')
   const drafts = useRef(new Map<string, SettingsDraft>())
   const [summary, setSummary] = useState<{ changes: SettingsDraft['changes']; ready: boolean }>({ changes: [], ready: false })
   const [reviewOpen, setReviewOpen] = useState(false)
@@ -286,13 +283,10 @@ export function ServerSettings({ initialSection = 'official' }: { initialSection
         icon="ServerCog"
         description="Configure the selected server. Review changes before applying."
       />
-      <WindowsPerMapSettings target={mapTarget} onTargetChange={setMapTarget} globalFile={globalFile}
-        onGlobalFileChange={file => { setGlobalFile(file); setSection(file === 'server' ? 'official' : 'advanced') }} disabled={applying || reviewOpen} />
-      <div hidden={mapTarget !== 'global'}>
       <div className="card mb-4 p-4">
 
         <div className="flex flex-wrap gap-2" aria-label="Settings sections">
-          {(['official', 'client', 'tools', 'maintenance'] as const).map(key => <button key={key} type="button" aria-pressed={section === key} disabled={applying || reviewOpen} className={section === key ? 'btn-primary' : 'btn-secondary'} onClick={() => { setSection(key); if (key === 'official') setGlobalFile('server') }}>{({ official: 'Official server controls', advanced: 'Advanced server controls', client: 'Player compatibility', tools: 'Specialized controls', maintenance: 'Management & recovery' })[key]}</button>)}
+          {(['official', 'advanced', 'client', 'tools', 'maintenance'] as const).map(key => <button key={key} type="button" aria-pressed={section === key} disabled={applying || reviewOpen} className={section === key ? 'btn-primary' : 'btn-secondary'} onClick={() => setSection(key)}>{({ official: 'Official server controls', advanced: 'Advanced server controls', client: 'Player compatibility', tools: 'Specialized controls', maintenance: 'Management & recovery' })[key]}</button>)}
         </div>
       </div>
       <div className="mb-4 rounded-lg border border-border bg-surface p-3 text-sm" role="note">
@@ -396,10 +390,9 @@ export function ServerSettings({ initialSection = 'official' }: { initialSection
         onActionStateChange={handleSettingsActionStateChange}
       />
       </div>
-      <div hidden={!['client', 'advanced', 'tools'].includes(section)}><GameConfig embedded section={section === 'client' ? 'client' : section === 'tools' ? 'tools' : 'advanced'} fileFilter={section === 'advanced' && globalFile !== 'server' ? globalFile : undefined} /></div>
+      <div hidden={!['client', 'advanced', 'tools'].includes(section)}><GameConfig embedded section={section === 'client' ? 'client' : section === 'tools' ? 'tools' : 'advanced'} /></div>
       </fieldset>
       </SettingsApplyContext.Provider>
-      </div>
       {reviewOpen && <ConfirmationModal title={summary.changes.length ? 'Review server settings' : 'Apply saved server settings'} description={managed ? 'DST will stop every map, save only the reviewed changes, and prepare the required server configuration. Connected players will disconnect.' : 'DST management is off. This saves files only, after stopping the battlegroup; it does not restore deployment or startup injections.'} confirmLabel={managed && startAfterApply ? (summary.changes.length ? 'Save & start battlegroup' : 'Apply saved settings & start battlegroup') : 'Save files; leave stopped'} onCancel={() => setReviewOpen(false)} onConfirm={() => void applyReviewed()}>
         <div className="space-y-3 text-sm">
           {summary.changes.length === 0 && <p>{managed ? 'The server files are already saved. This applies that saved configuration, including changes saved by specialized controls such as the land-claim timer.' : 'There are no new field edits to save. Existing server files remain in place; deployment is under your manual control.'}</p>}

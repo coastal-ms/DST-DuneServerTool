@@ -427,10 +427,34 @@ function Send-DuneDiscordEmbed {
     }
 }
 
-# Non-destructive Funcom server-update check: compare the installed build id
-# (from the local appmanifest) against the latest public build id reported by
-# steamcmd's app_info_print. Read-only; takes ~20-30s because steamcmd self-
-# updates. Pass -Persist to fold the result into the schedule state file.
+# Reconcile the installed build observed by status against the last known
+# public build without another SSH request or external version lookup.
+function Sync-DuneFuncomInstalledBuild {
+    param([string]$InstalledBuild)
+    if ($InstalledBuild -notmatch '^\d+$') { return $false }
+    $sync = {
+        $state = Get-DuneRestartSchedule
+        $available = [bool]$state.updateAvailable
+        if ([string]$state.latestBuild -match '^\d+$') {
+            $available = ([int64]$state.latestBuild -gt [int64]$InstalledBuild)
+        }
+        if ([string]$state.installedBuild -eq $InstalledBuild -and $state.updateAvailable -eq $available) { return $false }
+        $state.installedBuild = $InstalledBuild
+        $state.updateAvailable = $available
+        # Prevent an older maintenance result or in-flight check from restoring
+        # the pre-update build after this newer installed-build observation.
+        $state.updateCheckedAt = (Get-Date).ToString('o')
+        Save-DuneRestartSchedule -State $state
+        return $true
+    }
+    if (Get-Command Invoke-WithDuneLock -ErrorAction SilentlyContinue) {
+        return Invoke-WithDuneLock -Name 'funcom-update-state' -TimeoutSec 5 -Script $sync
+    }
+    return & $sync
+}
+
+# Compare the installed Steam build to the latest public build. Persist only
+# when no newer installed-build observation arrived while the lookup ran.
 function Get-DuneFuncomServerUpdateStatus {
     param([switch]$Persist)
 
@@ -527,12 +551,20 @@ echo "SRC=$SRC"
 
     if ($Persist -and $ok) {
         try {
-            $state = Get-DuneRestartSchedule
-            $state.updateAvailable = $available
-            $state.installedBuild  = $installed
-            $state.latestBuild     = $latest
-            $state.updateCheckedAt = $checkedAt
-            Save-DuneRestartSchedule -State $state
+            $persistResult = {
+                $state = Get-DuneRestartSchedule
+                $previousCheck = [datetimeoffset]::MinValue
+                if ([datetimeoffset]::TryParse([string]$state.updateCheckedAt, [ref]$previousCheck) -and
+                    $previousCheck -gt [datetimeoffset]::Parse($checkedAt)) { return }
+                $state.updateAvailable = $available
+                $state.installedBuild  = $installed
+                $state.latestBuild     = $latest
+                $state.updateCheckedAt = $checkedAt
+                Save-DuneRestartSchedule -State $state
+            }
+            if (Get-Command Invoke-WithDuneLock -ErrorAction SilentlyContinue) {
+                Invoke-WithDuneLock -Name 'funcom-update-state' -TimeoutSec 5 -Script $persistResult | Out-Null
+            } else { & $persistResult }
         } catch {
             if (Get-Command Write-DuneLog -ErrorAction SilentlyContinue) {
                 Write-DuneLog "restart schedule update-check persist failed: $($_.Exception.Message)" 'WARN'
@@ -572,7 +604,7 @@ function Invoke-DuneScheduledRestart {
         return @{ ok = $false; status = $ctx.status; message = $ctx.message }
     }
     try {
-        $r = Invoke-DuneBackupShell -Ip $ctx.ip -Script "if [ -x /usr/local/lib/dune-server/map-settings-apply.sh ]; then /bin/sh /usr/local/lib/dune-server/map-settings-apply.sh --maintenance || exit 1; fi; touch $script:DuneRestartMarkerPath 2>/dev/null; /home/dune/.dune/bin/battlegroup restart" -TimeoutSec 180
+        $r = Invoke-DuneBackupShell -Ip $ctx.ip -Script "touch $script:DuneRestartMarkerPath 2>/dev/null; /home/dune/.dune/bin/battlegroup restart" -TimeoutSec 180
     } catch {
         return @{ ok = $false; status = 502; message = "Restart command failed: $($_.Exception.Message)" }
     }
@@ -704,9 +736,6 @@ fi
 ACTION=restart
 if [ "`$APPLY_UPDATES" = "1" ] && [ -n "`$INSTALLED" ] && [ -n "`$LATEST" ] && [ "`$LATEST" -gt "`$INSTALLED" ]; then
   ACTION=update
-fi
-if [ -x /usr/local/lib/dune-server/map-settings-apply.sh ]; then
-  /bin/sh /usr/local/lib/dune-server/map-settings-apply.sh --maintenance || { echo '[dst] Saved map settings conflict; maintenance held.'; exit 1; }
 fi
 touch $script:DuneRestartMarkerPath 2>/dev/null || true
 if [ "`$ACTION" = "update" ]; then

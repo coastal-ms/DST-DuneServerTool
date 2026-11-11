@@ -1,4 +1,4 @@
-﻿BeforeAll {
+BeforeAll {
     . (Join-Path $PSScriptRoot '_TestHelpers.ps1')
     Import-DstLib 'RegisTanks.ps1'
     Import-DstLib 'Gameplay.ps1'
@@ -44,7 +44,8 @@ Describe 'Native Regis Tank controls' {
         @{Hash='1f08ba91a33dbc05e78027e19b0bff48d01f86aa9252b891c4ec5bffca62b23f';Build='2168446'},
         @{Hash='84d72e22418684530e7a57d8107224e7b7ee5510667957833d7484e2c0e3abaf';Build='2173753'},
         @{Hash='67bc7bf984ad40b74ede13223ca582112c377ccbcbacd0fee9ca92db78127aa6';Build='2177228'},
-        @{Hash='6c2d241843333f075fec911bb37549c9adfacd439ea12aef63b5b5d1f466811f';Build='2180427'}
+        @{Hash='6c2d241843333f075fec911bb37549c9adfacd439ea12aef63b5b5d1f466811f';Build='2180427'},
+        @{Hash='bda17be1121f79e97eeafcaad1b92f77ec25224c6457b18b187491554853d42a';Build='2181988'}
     ) {
         Mock Invoke-V6Ssh {
             @("$Hash  $script:TankBinary", "75e7144577253917f6da7312ef5e585b12fb728226a22b0938323751a6b555cd  $script:TankOverlay.pak", "13011a68170df5a9320782691768b0b0bd568610bc682ec1979e979de534c01e  $script:TankOverlay.ucas", "12781c923dcace79204bfecaf0ff4ea49c41ec6a07e68fe81fd3feb96767ced5  $script:TankOverlay.utoc")

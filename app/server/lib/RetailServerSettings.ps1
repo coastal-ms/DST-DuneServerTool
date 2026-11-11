@@ -1,4 +1,4 @@
-﻿$script:DuneRetailServerSettingsSection = '/Script/DuneSandbox.UserServerCustomSettings'
+$script:DuneRetailServerSettingsSection = '/Script/DuneSandbox.UserServerCustomSettings'
 $script:DuneRetailServerSettingsFileBrowserPath = '/srv/UserSettings/UserServerCustomSettings.ini'
 $script:DuneRetailServerSettingsGamePath = '/home/dune/server/DuneSandbox/Saved/Config/LinuxServer/ServerCustomSettings.ini'
 
@@ -105,9 +105,8 @@ $script:DuneRetailServerBooleanKeys = @(
     'bLandsraadDisableDecreeRerollLimit'
 )
 $script:DuneRetailServerIntegerKeys = @('FiefdomLimit')
-$script:DuneRetailServerTextKeys = @('DifficultyLevel')
+$script:DuneRetailServerTextKeys = @('DifficultyLevel', 'PVPMode')
 $script:DuneRetailServerSelectOptions = @{
-    PVPMode = @('NoPVP', 'Limited', 'Full')
     DropEquipmentOnDeath = @('Default', 'None', 'Backpack', 'All')
     SandwormConsequences = @('Default', 'None', 'Backpack', 'All')
     PlayerDeathLootRule = @('DependsOnSecurityZone', 'NeverAllowOtherPlayers', 'AlwaysAllowOtherPlayers')
@@ -476,20 +475,6 @@ function Get-DuneRetailServerSettingsTextSha256 {
 
 function Get-DuneRetailServerSettingsSnapshot {
     param([Parameter(Mandatory)][string]$Ip, $TargetOverride)
-    for($attempt=0;$attempt -lt 2;$attempt++){
-        try { return Get-DuneRetailServerSettingsSnapshotOnce -Ip $Ip -TargetOverride $TargetOverride }
-        catch {
-            # File Browser pods and SSH streams can disappear during a read.
-            # Retry only the read, resolving the current pod again each time.
-            $retryable=$_.Exception.Message -match 'incomplete runtime-file response|file changed during read|not valid base64/UTF-8'
-            if(-not $retryable){throw}
-            if($attempt -eq 1){throw 'Could not read the server settings file completely after two attempts. Check the VM connection and File Browser pod, then Refresh. No settings were changed.'}
-        }
-    }
-}
-
-function Get-DuneRetailServerSettingsSnapshotOnce {
-    param([Parameter(Mandatory)][string]$Ip, $TargetOverride)
 
     $target = if ($TargetOverride) { $TargetOverride } else { Resolve-DuneRetailServerSettingsTarget -Ip $Ip }
     if (-not $target.available) {
@@ -502,7 +487,7 @@ function Get-DuneRetailServerSettingsSnapshotOnce {
     }
     Assert-DuneRetailKubernetesName -Value ([string]$target.pod) -Label 'pod name'
     $cmd = @"
-sudo kubectl exec -n '$($target.namespace)' '$($target.pod)' -c filebrowser -- sh -ec '
+sudo kubectl exec -n '$($target.namespace)' '$($target.pod)' -- sh -lc '
 f="$($target.path)"
 if [ "`$(cat /srv/UserSettings/.dst-server-settings-file-authority-v1 2>/dev/null)" = file-authority-v1 ]; then echo __DST_FILE_AUTHORITY__; fi
 if [ ! -f "`$f" ]; then echo __DST_MISSING__; exit 0; fi

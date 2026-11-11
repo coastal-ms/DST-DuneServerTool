@@ -39,7 +39,6 @@ beforeEach(() => {
   clearSettingsApplyResult()
   state.managed = true; state.stopped = false; state.outsideEdit = false; state.fail = ''; state.events = []
   state.api.mockReset().mockImplementation(async (path: string, options?: RequestInit) => {
-    if (path === '/api/map-settings') return { targets: [] }
     if (path === '/api/gameconfig/retail-startup-sync') return { enabled: state.managed }
     if (path === '/api/status/refresh') return { vm: { running: true }, bg: { state: state.stopped ? 'stopped' : 'running', gameServers: state.stopped ? [] : [{}] } }
     if (path.startsWith('/api/commands/run/stop')) { state.events.push('stop'); state.stopped = true; return { ok: true } }
@@ -51,7 +50,7 @@ afterEach(() => { cleanup(); vi.useRealTimers() })
 
 async function editBothAndReview() {
   fireEvent.change(screen.getByLabelText('official value'), { target: { value: 'official draft' } })
-  fireEvent.change(screen.getByLabelText('Global settings file'), { target: { value: 'game' } })
+  fireEvent.click(screen.getByRole('button', { name: 'Advanced server controls' }))
   fireEvent.change(screen.getByLabelText('advanced value'), { target: { value: 'advanced draft' } })
   fireEvent.click(screen.getByRole('button', { name: /Review & Apply/ }))
   return await screen.findByRole('alertdialog')
