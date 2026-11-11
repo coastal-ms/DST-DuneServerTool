@@ -290,6 +290,10 @@ function Get-DuneBattlegroupSnapshot {
         $previousEntry = Get-DuneBattlegroupSnapshotCacheEntry
         $previous = if ($previousEntry) { $previousEntry.Snapshot } else { $null }
         $snapshot = Get-DuneBattlegroupSnapshotFresh -VmStatus $VmStatus
+        if ($snapshot.available -and $snapshot.installedBuild -and
+            (Get-Command Sync-DuneFuncomInstalledBuild -ErrorAction SilentlyContinue)) {
+            try { [void](Sync-DuneFuncomInstalledBuild -InstalledBuild $snapshot.installedBuild) } catch {}
+        }
         Set-DuneBattlegroupSnapshotCacheEntry -Snapshot $snapshot
         # The shared snapshot lock makes this one check per observed start,
         # including a BG started outside DST. Status stays responsive while the
@@ -366,6 +370,9 @@ function Get-DuneBattlegroupSnapshotFresh {
         # `.status.utilities.serverGateway.phase`, etc.) is immune to that.
         # Sentinels split the two payloads inside a single SSH round-trip.
         $remoteCmd = 'echo __DST_BG_STATUS_BEGIN__; /home/dune/.dune/bin/battlegroup status 2>&1; echo __DST_BG_STATUS_END__; echo __DST_BG_JSON_BEGIN__; NS=$(sudo /usr/local/bin/kubectl get ns --no-headers -o custom-columns=N:.metadata.name 2>/dev/null | grep -m1 ^funcom-seabass-); if [ -n "$NS" ]; then sudo /usr/local/bin/kubectl get battlegroups -n $NS -o json 2>/dev/null; fi; echo __DST_BG_JSON_END__'
+        # Read the installed Steam build in the existing SSH poll. Updates can
+        # replace game pods without changing the BG's Running state.
+        $remoteCmd += '; BUILD=$(sed -n ''s/.*"buildid"[[:space:]]*"\([0-9][0-9]*\)".*/\1/p'' /home/dune/.dune/download/steamapps/appmanifest_4754530.acf 2>/dev/null | head -1); printf "__DST_INSTALLED_BUILD__=%s\n" "$BUILD"'
         $r = Invoke-DuneSshHidden -Ip $vm.ip -KeyPath $sshKey -TimeoutSec 15 -SshOptions @(
             '-o','StrictHostKeyChecking=no'
             '-o','LogLevel=ERROR'
@@ -403,6 +410,7 @@ function Get-DuneBattlegroupSnapshotFresh {
         }
 
         $result.available = $true
+        $result.installedBuild = $split.InstalledBuild
         $result.output    = $text
         $result.state     = Get-BgStateFromStatusText -Text $text
         if ($result.state -eq 'stopped' -and $text -match '(?im)No resources found in .* namespace') {
@@ -476,13 +484,15 @@ function Get-DuneBattlegroupSnapshotFresh {
 # Returns @{ StatusLines = string[]; JsonText = string }.
 function Split-DuneBgCompoundOutput {
     param([string[]]$Lines)
-    $out = @{ StatusLines = @(); JsonText = '' }
+    $out = @{ StatusLines = @(); JsonText = ''; InstalledBuild = '' }
     if (-not $Lines) { return $out }
     $statusBuf = New-Object System.Collections.Generic.List[string]
     $jsonBuf   = New-Object System.Collections.Generic.List[string]
     $mode = 'none'
     foreach ($line in $Lines) {
         switch -Regex ($line) {
+            '^__DST_INSTALLED_BUILD__=(\d+)\s*$' { $out.InstalledBuild = $Matches[1]; continue }
+            '^__DST_INSTALLED_BUILD__=' { continue }
             '^__DST_BG_STATUS_BEGIN__\s*$' { $mode = 'status'; continue }
             '^__DST_BG_STATUS_END__\s*$'   { $mode = 'none';   continue }
             '^__DST_BG_JSON_BEGIN__\s*$'   { $mode = 'json';   continue }
