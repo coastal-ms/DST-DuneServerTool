@@ -444,7 +444,7 @@ function groupExperimental(cats: GameConfigCategory[]): GameConfigCategory[] {
     .map(([category, fields]) => ({ category, fields }))
 }
 
-export function GameConfig({ mode = 'standard', embedded = false, section = 'advanced', fileFilter }: { fileFilter?: 'game' | 'engine'; mode?: 'standard' | 'experimental'; embedded?: boolean; section?: 'advanced' | 'client' | 'tools' } = {}) {
+export function GameConfig({ mode = 'standard', embedded = false, section = 'advanced' }: { mode?: 'standard' | 'experimental'; embedded?: boolean; section?: 'advanced' | 'client' | 'tools' } = {}) {
   const contextual = useCommandDeck()
   const Guidance = contextual ? 'details' : 'div'
   const experimentalPage = mode === 'experimental'
@@ -918,9 +918,9 @@ export function GameConfig({ mode = 'standard', embedded = false, section = 'adv
   // recovered console variables regrouped by what they affect.
   const visibleSchema = useMemo(() => {
     if (!schema) return null
-    const mine = schema.filter(c => isExperimentalCategory(c.category) === experimentalPage).map(c => ({ ...c, fields: c.fields.filter(f => !fileFilter || f.file === fileFilter) })).filter(c => c.fields.length > 0)
+    const mine = schema.filter(c => isExperimentalCategory(c.category) === experimentalPage)
     return experimentalPage ? groupExperimental(mine) : mine
-  }, [schema, experimentalPage, fileFilter])
+  }, [schema, experimentalPage])
 
   const experimentalGroups = useMemo(() => {
     if (!experimentalPage) return []

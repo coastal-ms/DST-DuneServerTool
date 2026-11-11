@@ -89,3 +89,62 @@ Describe 'Server update badge persistence' {
         Should -Invoke Save-DuneRestartSchedule -Times 0
     }
 }
+
+Describe 'Installed build reconciliation during normal status polling' {
+    BeforeEach {
+        $script:AppDir = $TestDrive
+        $script:DuneApiLockTable = [hashtable]::Synchronized(@{})
+        $script:observed = Get-DuneRestartScheduleDefault
+        $script:observed.installedBuild = '100'
+        $script:observed.latestBuild = '200'
+        $script:observed.updateAvailable = $true
+        Mock Get-DuneRestartSchedule { $script:observed }
+        Mock Save-DuneRestartSchedule { param($State) $script:observed=$State }
+        Mock Get-DuneBattlegroupSnapshotFresh { @{available=$true;state='running';installedBuild='200'} }
+        Mock Start-DuneFuncomUpdateCheckAsync { $true }
+    }
+
+    It 'clears the badge after an update even when the BG was running throughout' {
+        Set-DuneBattlegroupSnapshotCacheEntry @{available=$true;state='running';installedBuild='100'}
+        Get-DuneBattlegroupSnapshot -Force | Out-Null
+        $script:observed.installedBuild | Should -Be '200'
+        $script:observed.updateAvailable | Should -BeFalse
+        Should -Invoke Start-DuneFuncomUpdateCheckAsync -Times 0
+        Get-DuneBattlegroupSnapshot -Force | Out-Null
+        Should -Invoke Save-DuneRestartSchedule -Times 1 -Exactly
+    }
+
+    It 'retains the badge when the installed build is still behind' {
+        Sync-DuneFuncomInstalledBuild -InstalledBuild '150' | Out-Null
+        $script:observed.installedBuild | Should -Be '150'
+        $script:observed.updateAvailable | Should -BeTrue
+    }
+
+    It 'does not clear the badge on a failed or malformed manifest read' -ForEach @(
+        @{Build=''}, @{Build='unknown'}, @{Build='200;echo unsafe'}
+    ) {
+        Sync-DuneFuncomInstalledBuild -InstalledBuild $Build | Should -BeFalse
+        $script:observed.updateAvailable | Should -BeTrue
+        Should -Invoke Save-DuneRestartSchedule -Times 0
+    }
+
+    It 'does not overwrite a newer observation with an older in-flight lookup' {
+        Mock Invoke-DuneBackupShell {
+            Sync-DuneFuncomInstalledBuild -InstalledBuild '200' | Out-Null
+            @{rc=0;out="INSTALLED=100`nLATEST=200`nSRC=api"}
+        }
+        Get-DuneFuncomServerUpdateStatus -Persist | Out-Null
+        $script:observed.installedBuild | Should -Be '200'
+        $script:observed.updateAvailable | Should -BeFalse
+        Should -Invoke Save-DuneRestartSchedule -Times 1 -Exactly
+    }
+
+    It 'reads the installed marker separately from the raw status and JSON' {
+        $split = Split-DuneBgCompoundOutput @('__DST_BG_STATUS_BEGIN__','Battlegroup: world',
+            '__DST_BG_STATUS_END__','__DST_BG_JSON_BEGIN__','{"items":[]}',
+            '__DST_BG_JSON_END__','__DST_INSTALLED_BUILD__=200')
+        $split.InstalledBuild | Should -Be '200'
+        $split.StatusLines | Should -Be @('Battlegroup: world')
+        $split.JsonText | Should -Be '{"items":[]}'
+    }
+}

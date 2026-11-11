@@ -22,7 +22,7 @@ param(
 # Wraps the original battlegroup.ps1 menu and adds extra tools
 # ============================================================
 
-$script:ToolVersion = "16.8.0-preview1"
+$script:ToolVersion = "16.7.9.1"
 
 # Cold-boot readiness budgets (seconds). A fresh battlegroup's FIRST boot can
 # take 10-30 min: k3s + funcom-operators initialize, metrics-server restarts a
@@ -1415,7 +1415,6 @@ function Sync-DuneRetailSettingsBeforeStart {
         . (Join-Path $Root 'lib\K8s.ps1')
         . (Join-Path $Root 'server\lib\RetailServerSettings.ps1')
         . (Join-Path $Root 'server\lib\GameConfig.ps1')
-        . (Join-Path $Root 'server\lib\MapSettings.ps1')
         . (Join-Path $Root 'server\lib\RegisTanksBuild.ps1')
         . (Join-Path $Root 'server\lib\RegisTanksActivation.ps1')
         $script:AppDir = $Root
@@ -1430,13 +1429,11 @@ function Sync-DuneRetailSettingsBeforeStart {
         $null = Sync-DuneRegisTankServerUpdate -Ip $VmIp
         $management = Get-DuneRetailStartupSyncPreference
         if (-not $management.enabled -and $management.cleanupPending) {
-            Set-DuneSavedMapSettingsEnabled -Ip $VmIp -Enabled $false
             $null = Remove-DuneManagedSettingsYamlInjections -Ip $VmIp
             $null = Set-DuneRetailStartupSyncPreference -Enabled $false
         }
         if (Test-DuneConfigurationInjectionEnabled) {
             $null = Sync-DuneRetailServerSettingsForStartup -Ip $VmIp
-            $null = Sync-DuneSavedMapSettingsForStartup -Ip $VmIp
         }
     } $retailRoot $Ip $sshKey
 }

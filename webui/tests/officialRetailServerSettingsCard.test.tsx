@@ -66,14 +66,14 @@ describe('Official Retail Server Settings card', () => {
     type: /^(True|False)$/.test(guidance.defaultValue) ? 'bool'
       : key === 'FiefdomLimit' ? 'int'
         : guidance.defaultValue.includes('.') ? 'float'
-          : key === 'DifficultyLevel' ? 'string' : 'select',
-    options: key === 'PVPMode' ? ['NoPVP', 'Limited', 'Full'] : [guidance.defaultValue],
+          : ['DifficultyLevel', 'PVPMode'].includes(key) ? 'string' : 'select',
+    options: [guidance.defaultValue],
     inverted: key === 'bBuildingInfiniteStability',
     supported: true,
     valid: true,
     validationError: '',
-    editable: key !== 'DifficultyLevel',
-    readOnly: key === 'DifficultyLevel',
+    editable: !['DifficultyLevel', 'PVPMode'].includes(key),
+    readOnly: ['DifficultyLevel', 'PVPMode'].includes(key),
   }))
 
   it('drafts and saves all 47 defaults including Custom from an empty source without writing on click', async () => {

@@ -265,6 +265,15 @@ export function OfficialRetailServerSettingsCard({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [vmRunning, automaticRefreshKey])
 
+  const groups = useMemo(() => {
+    const grouped = new Map<string, RetailServerSetting[]>()
+    for (const setting of state?.settings ?? []) {
+      const values = grouped.get(setting.group) ?? []
+      values.push(setting)
+      grouped.set(setting.group, values)
+    }
+    return [...grouped.entries()]
+  }, [state])
   const updates = useMemo(() => Object.fromEntries(
     (state?.settings ?? [])
       .map(setting => ({
@@ -303,7 +312,7 @@ export function OfficialRetailServerSettingsCard({
       for (const setting of state.settings) {
         const guidance = RETAIL_SETTING_GUIDANCE[setting.key]
         if (setting.supported && guidance
-          && ((setting.editable && setting.key !== 'PVPMode') || isDefaultSettingUpdate(setting, guidance.defaultValue))) {
+          && (setting.editable || isDefaultSettingUpdate(setting, guidance.defaultValue))) {
           next[setting.key] = normalizeSettingValue(setting, guidance.defaultValue)
         }
       }
@@ -522,24 +531,7 @@ export function OfficialRetailServerSettingsCard({
             </div>
           )}
 
-          <RetailServerSettingsRows settings={state.settings} values={values} draftValidationErrors={draftValidationErrors}
-            disabled={(!coordinated && (!state.target.stopped || state.target.serverPodCount !== 0)) || saving}
-            onChange={(key, value) => setValues(previous => ({ ...previous, [key]: value }))} />
-        </>
-      )}
-    </CollapsibleCard>
-  )
-}
-
-// Shared by Global and every partition so controls, guidance and alignment stay identical.
-export function RetailServerSettingsRows({ settings, values, disabled, onChange, draftValidationErrors = {} }: {
-  settings: RetailServerSetting[]; values: Record<string, string>; disabled: boolean;
-  onChange: (key: string, value: string) => void; draftValidationErrors?: Record<string, string | null>
-}) {
-  const grouped = new Map<string, RetailServerSetting[]>()
-  for (const setting of settings) grouped.set(setting.group, [...(grouped.get(setting.group) ?? []), setting])
-  const groups = [...grouped.entries()]
-  return (<div className="space-y-3">
+          <div className="space-y-3">
             {groups.map(([group, settings]) => (
               <section key={group}>
                 <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-text-muted">{group}</h3>
@@ -588,8 +580,8 @@ export function RetailServerSettingsRows({ settings, values, disabled, onChange,
                           <select
                             aria-label={setting.label}
                             value={values[setting.key] ?? setting.value}
-                            onChange={event => onChange(setting.key, event.target.value)}
-                            disabled={disabled}
+                            onChange={event => setValues(previous => ({ ...previous, [setting.key]: event.target.value }))}
+                            disabled={(!coordinated && (!state.target.stopped || state.target.serverPodCount !== 0)) || saving}
                             className="min-w-28 border border-border bg-surface px-2 py-1 text-xs font-semibold text-text disabled:cursor-not-allowed disabled:opacity-60"
                           >
                             {setting.present === false && <option value="">Not configured</option>}
@@ -600,8 +592,8 @@ export function RetailServerSettingsRows({ settings, values, disabled, onChange,
                           <select
                             aria-label={setting.label}
                             value={values[setting.key] ?? setting.value}
-                            onChange={event => onChange(setting.key, event.target.value)}
-                            disabled={disabled}
+                            onChange={event => setValues(previous => ({ ...previous, [setting.key]: event.target.value }))}
+                            disabled={(!coordinated && (!state.target.stopped || state.target.serverPodCount !== 0)) || saving}
                             className="min-w-36 border border-border bg-surface px-2 py-1 text-xs text-text disabled:cursor-not-allowed disabled:opacity-60"
                           >
                             {setting.present === false && <option value="">Not configured</option>}
@@ -611,9 +603,12 @@ export function RetailServerSettingsRows({ settings, values, disabled, onChange,
                           <NumericSettingControl
                             setting={setting}
                             value={values[setting.key] ?? setting.value}
-                            disabled={disabled}
-                            onChange={value => onChange(setting.key, value)}
-                            onCommit={() => onChange(setting.key, normalizeSettingValue(setting, values[setting.key] ?? setting.value))}
+                            disabled={(!coordinated && (!state.target.stopped || state.target.serverPodCount !== 0)) || saving}
+                            onChange={value => setValues(previous => ({ ...previous, [setting.key]: value }))}
+                            onCommit={() => setValues(previous => ({
+                              ...previous,
+                              [setting.key]: normalizeSettingValue(setting, previous[setting.key] ?? setting.value),
+                            }))}
                           />
                         ) : (
                           <span className="min-w-20 border border-border bg-surface px-2 py-1 text-center text-xs font-semibold text-text">
@@ -627,5 +622,9 @@ export function RetailServerSettingsRows({ settings, values, disabled, onChange,
                 </div>
               </section>
             ))}
-          </div>)
+          </div>
+        </>
+      )}
+    </CollapsibleCard>
+  )
 }

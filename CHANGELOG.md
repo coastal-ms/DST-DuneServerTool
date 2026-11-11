@@ -13,11 +13,11 @@ here cover everything those tags shipped.
 
 ## [Unreleased]
 
-## [16.8.0-preview1] - 2026-11-11
+## [16.7.9.1] - 2026-11-11
 
-### Added
-- Set separate server settings for individual sietches and Deep Desert partitions.
-- Expand supported guest storage from VM info after enlarging a Hyper-V virtual disk.
+### Fixed
+- Update optional self-hosted Tank support for Funcom 1.5.20.2.
+- Clear the server Update badge after an update, including when the battlegroup stays running.
 
 ## [16.7.9] - 2026-11-10
 

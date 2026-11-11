@@ -9,7 +9,6 @@ import {
 import { ServerSettings } from '../src/pages/ServerSettings'
 
 const state = vi.hoisted(() => ({
-  scopeUI: false,
   status: {
     vm: { running: true },
     bg: { state: 'running', gameServers: [{ map: 'Arrakeen' }] },
@@ -17,11 +16,7 @@ const state = vi.hoisted(() => ({
   forceRefresh: vi.fn(async () => {}),
 }))
 
-vi.mock('../src/pages/gameconfig/WindowsPerMapSettings', async importOriginal => {
-  const actual = await importOriginal<typeof import('../src/pages/gameconfig/WindowsPerMapSettings')>()
-  return { WindowsPerMapSettings: (props: Parameters<typeof actual.WindowsPerMapSettings>[0]) => state.scopeUI ? <actual.WindowsPerMapSettings {...props} /> : null }
-})
-vi.mock('../src/pages/GameConfig', () => ({ GameConfig: ({ fileFilter }: { fileFilter?: string }) => <div data-testid="global-ini-file">{fileFilter}</div> }))
+vi.mock('../src/pages/GameConfig', () => ({ GameConfig: () => null }))
 vi.mock('../src/pages/gameconfig/StartupSettingsSync', () => ({ StartupSettingsSync: () => null }))
 vi.mock('../src/pages/gameconfig/RegisTankSetup', () => ({ RegisTankSetup: () => null }))
 vi.mock('../src/pages/gameconfig/ServerIniBackups', () => ({ ServerIniBackups: () => null }))
@@ -36,7 +31,6 @@ vi.mock('../src/api/client', async importOriginal => ({
 }))
 
 vi.mock('../src/pages/gameconfig/OfficialRetailServerSettingsCard', () => ({
-  RetailServerSettingsRows: () => null,
   OfficialRetailServerSettingsCard: ({
     vmRunning,
     statusRefreshKey,
@@ -61,7 +55,6 @@ vi.mock('../src/pages/gameconfig/OfficialRetailServerSettingsCard', () => ({
 let unregisterGuard: (() => void) | undefined
 
 beforeEach(() => {
-  state.scopeUI = false
   vi.clearAllMocks()
   vi.mocked(api).mockResolvedValue({ ok: true, name: 'stop', mode: 'Console', pid: null, started: '' })
   state.status = {
@@ -253,21 +246,4 @@ describe('Server Settings page', () => {
     expect(screen.getByRole('button', { name: 'Start Battlegroup' })).toBeDisabled()
     expect(screen.getByRole('button', { name: 'Stop Battlegroup' })).toBeEnabled()
   })
-})
-
-it('keeps Global as default, routes Game and Engine to the existing global editor, and hides it for partitions', async () => {
-  state.scopeUI = true
-  vi.mocked(api).mockImplementation(async path => path === '/api/map-settings' ? { targets: [{id:'world:0:1',label:'Hagga - partition 1'}] } : path.startsWith('/api/map-settings?') ? { target:'world:0:1',file:'server',fields:[],revision:'a'.repeat(64),raw:'',canSave:false,overridden:false } : {ok:true})
-  render(<ServerSettings />)
-  expect(screen.getByLabelText('Map settings target')).toHaveValue('global')
-  fireEvent.change(screen.getByLabelText('Global settings file'), {target:{value:'engine'}})
-  expect(screen.getByTestId('global-ini-file')).toHaveTextContent('engine')
-  fireEvent.change(screen.getByLabelText('Global settings file'), {target:{value:'game'}})
-  expect(screen.getByTestId('global-ini-file')).toHaveTextContent('game')
-  await screen.findByRole('option',{name:'Hagga - partition 1'})
-  fireEvent.change(screen.getByLabelText('Map settings target'), {target:{value:'world:0:1'}})
-  expect(screen.queryByLabelText('Global settings file')).not.toBeInTheDocument()
-  expect(screen.getByTestId('global-ini-file')).not.toBeVisible()
-  expect(screen.getByTestId('retail-settings-card')).not.toBeVisible()
-  expect(screen.getByRole('region', {name:'Settings actions',hidden:true})).not.toBeVisible()
 })

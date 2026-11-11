@@ -35,13 +35,12 @@ Register-DuneRoute -Method PUT -Path '/api/gameconfig/retail-startup-sync' -Loca
                 $null = Set-DuneRetailStartupSyncPreference -Enabled $false -CleanupPending
                 $ctx = Get-DuneGameConfigContext
                 if ($ctx.ok) {
-                    try { Set-DuneSavedMapSettingsEnabled -Ip $ctx.ip -Enabled $false; $null = Remove-DuneManagedSettingsYamlInjections -Ip $ctx.ip }
+                    try { $null = Remove-DuneManagedSettingsYamlInjections -Ip $ctx.ip }
                     catch { $pending=$true; $cleanupError=$_.Exception.Message }
                 }
                 else { $pending = $true }
             }
             $saved = Set-DuneRetailStartupSyncPreference -Enabled $body.enabled -CleanupPending:$pending
-            if($body.enabled){$ctx=Get-DuneGameConfigContext;if($ctx.ok){Set-DuneSavedMapSettingsEnabled -Ip $ctx.ip -Enabled $true}}
             if ($cleanupError) { $saved.cleanupError = $cleanupError }
             $saved
         }
