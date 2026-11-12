@@ -83,6 +83,7 @@ function Get-DuneRestartScheduleDefault {
         latestBuild          = ''
         updateCheckedAt      = ''
         lastResult           = ''
+        updateFailure        = $null
     }
 }
 
@@ -117,6 +118,7 @@ function Get-DuneRestartSchedule {
     $state.discordNotifyUpdate  = [bool]$state.discordNotifyUpdate
     $state.discordWebhookUrl    = [string]$state.discordWebhookUrl
     $state.discordMentionId     = [string]$state.discordMentionId
+    if ($state.updateFailure -and (Test-DuneUpdateFailureResolved -State $state)) { $state.updateFailure = $null }
     try { $state.broadcastLeadMinutes = [int]$state.broadcastLeadMinutes } catch { $state.broadcastLeadMinutes = 10 }
     return $state
 }
@@ -687,6 +689,7 @@ function New-DuneVmDailyMaintenanceScript {
     $apply = if ($ApplyFuncomUpdates) { '1' } else { '0' }
     $appId = $script:DuneServerSteamAppIdFallback
     $clock = if ($Time) { New-DuneRestartVmClock -TimeZone $TimeZone } else { '' }
+    $failureHelpers = Get-Content -LiteralPath (Join-Path $PSScriptRoot '../../resources/remote-scripts/daily-update-failure.sh') -Raw
     $body = @"
 #!/bin/bash
 set -u
@@ -695,6 +698,7 @@ APPID=$appId
 LOCK=/tmp/dst-daily-maintenance.lock
 LOG=$script:DuneRestartVmLogPath
 RESULT=$script:DuneRestartVmResultPath
+$failureHelpers
 mkdir -p /var/lib/dune-server
 if [ "`${1:-}" = '--scheduled' ]; then
 $clock
@@ -749,8 +753,20 @@ if [ "`$ACTION" = "update" ]; then
     echo '[dst] Cleaning SteamCMD orphan workdir before scheduled update...'
     rm -rf /home/dune/.dune/download/steamapps/downloading/`$APPID /home/dune/.dune/download/steamapps/temp
   fi
-  /home/dune/.dune/bin/battlegroup update
-  RC=`$?
+  UPDATE_ATTEMPT=1
+  UPDATE_LOG=`$(mktemp /var/lib/dune-server/update-attempt.XXXXXX) || {
+    echo '[dst] Cannot capture update output; update was not started.'
+    RC=1
+    record_update_failure
+    printf '%s|%s|%s|%s|%s\n' "`$(date -u +%Y-%m-%dT%H:%M:%SZ)" "`$ACTION" "`$RC" "`$INSTALLED" "`$LATEST" > "`$RESULT"
+    exit "`$RC"
+  }
+  /home/dune/.dune/bin/battlegroup update 2>&1 | tee "`$UPDATE_LOG"
+  RC=`${PIPESTATUS[0]}
+  # Only attribute SteamCMD when this attempt explicitly reports this app's error.
+  UPDATE_CODE=`$(sed -n "s/.*Error! App '4754530' state is \(0x[0-9A-Fa-f]*\) after update job.*/\1/p" "`$UPDATE_LOG" | tail -1)
+  if [ -n "`$UPDATE_CODE" ]; then UPDATE_SOURCE=steamcmd; fi
+  rm -f "`$UPDATE_LOG"
   if [ "`$RC" -ne 0 ]; then
     echo "[dst] Scheduled update failed (rc=`$RC)."
     AFTER=""
@@ -772,6 +788,7 @@ else
   RC=`$?
 fi
 printf '%s|%s|%s|%s|%s\n' "`$(date -u +%Y-%m-%dT%H:%M:%SZ)" "`$ACTION" "`$RC" "`$INSTALLED" "`$LATEST" > "`$RESULT"
+record_update_failure
 exit "`$RC"
 "@
     return (($body -replace "`r",'').TrimEnd("`n") + "`n")
@@ -789,6 +806,41 @@ function ConvertTo-DuneVmCronTime {
     return @{ hour = $vm.Hour; minute = $vm.Minute; offset = $VmOffset }
 }
 
+function Test-DuneUpdateFailureResolved {
+    param($State)
+    $f = $State.updateFailure
+    if (-not $f -or [string]$State.installedBuild -notmatch '^\d+$' -or [string]$f.latestBuild -notmatch '^\d+$' -or [string]$f.installedBuild -notmatch '^\d+$') { return $false }
+    $checked = [datetimeoffset]::MinValue
+    $failed = [datetimeoffset]::MinValue
+    return ([datetimeoffset]::TryParse([string]$State.updateCheckedAt, [ref]$checked) -and
+        [datetimeoffset]::TryParse([string]$f.occurredAt, [ref]$failed) -and $checked -gt $failed -and
+        [int64]$State.installedBuild -ge [int64]$f.latestBuild -and [int64]$State.installedBuild -gt [int64]$f.installedBuild)
+}
+
+function ConvertFrom-DuneUpdateFailureLine {
+    param([string]$Line)
+    $p = @($Line.Trim() -split '\|')
+    if ($p.Count -ne 7 -or $p[1] -notin @('steamcmd','server-update') -or
+        $p[2] -notmatch '^(0x[0-9a-fA-F]+)?$' -or $p[3] -notmatch '^\d*$' -or $p[4] -notmatch '^\d*$' -or
+        $p[5] -notin @('update','update-failed-restart-ok','update-failed-restart-failed') -or $p[6] -notmatch '^[1-9]\d*$') { return $null }
+    $stamp = [datetimeoffset]::MinValue
+    if (-not [datetimeoffset]::TryParse($p[0], [ref]$stamp) -or ($p[1] -eq 'steamcmd' -and -not $p[2])) { return $null }
+    return @{ occurredAt=$p[0]; source=$p[1]; code=$p[2]; installedBuild=$p[3]; latestBuild=$p[4]; action=$p[5]; exitCode=[int]$p[6] }
+}
+
+function New-DuneUpdateFailureNoticeConfig {
+    param($State)
+    if (-not $State.discordNotifyUpdate -or -not (Test-DuneDiscordWebhookUrl ([string]$State.discordWebhookUrl))) { return '' }
+    $mention = Get-DuneDiscordMentionPayload -Mention ([string]$State.discordMentionId)
+    $lines = @([string]$State.discordWebhookUrl)
+    foreach ($title in @('Server update failed - SteamCMD reported error __CODE__.','Server update failed - the updater did not complete; cause not identified.')) {
+        $payload = @{ content=($mention.content + "`n" + $title + "`n__RECOVERY__`nAttempt: __TIME__`nInstalled build __INSTALLED__; available build __LATEST__.`nHelp: <https://discord.com/channels/1517599283757453333/1563393833197117510/1563393833197117510>").Trim(); allowed_mentions=$mention.allowed }
+        $json = ConvertTo-Json -InputObject $payload -Depth 6 -Compress
+        $lines += [Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes($json))
+    }
+    return ($lines -join "`n") + "`n"
+}
+
 function Sync-DuneRestartScheduleAutomation {
     $state = Get-DuneRestartSchedule
     $ctx = Get-DuneBackupContext
@@ -797,12 +849,21 @@ function Sync-DuneRestartScheduleAutomation {
         [TimeZoneInfo]::ClearCachedData()
         $vmScript = New-DuneVmDailyMaintenanceScript -ApplyFuncomUpdates ([bool]$state.applyFuncomUpdates) -Time $state.time -TimeZone ([TimeZoneInfo]::Local)
         $scriptB64 = [Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes($vmScript))
+        $noticeB64 = [Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes((New-DuneUpdateFailureNoticeConfig -State $state)))
         # The VM evaluates the host wall clock each minute, including DST
         # transitions while the Windows application is closed.
         $cronLine = "* * * * * $script:DuneRestartVmScriptPath --scheduled"
         $enabled = if ($state.enabled) { '1' } else { '0' }
         $install = @"
 set -eu
+mkdir -p /var/lib/dune-server
+# Write the webhook secret only to a private root-owned file, never the script/log.
+NOTICE_CONFIG=/var/lib/dune-server/update-failure-webhook
+[ ! -L "`$NOTICE_CONFIG" ] || exit 1
+NOTICE_TEMP=`$(umask 077; mktemp /var/lib/dune-server/update-failure-webhook.XXXXXX)
+printf '%s' '$noticeB64' | base64 -d > "`$NOTICE_TEMP"
+chmod 600 "`$NOTICE_TEMP"
+mv -f "`$NOTICE_TEMP" "`$NOTICE_CONFIG"
 printf '%s' '$scriptB64' | base64 -d > $script:DuneRestartVmScriptPath
 chmod 755 $script:DuneRestartVmScriptPath
 /bin/bash -n $script:DuneRestartVmScriptPath
@@ -853,10 +914,13 @@ function Sync-DuneVmDailyMaintenanceResult {
 if [ -f $script:DuneRestartVmResultPath ]; then
   cat $script:DuneRestartVmResultPath
 fi
+printf '\n__DST_UPDATE_FAILURE__\n'
+if [ -f /var/lib/dune-server/daily-update-failure ]; then cat /var/lib/dune-server/daily-update-failure; fi
 "@
         $r = Invoke-DuneBackupShell -Ip $ctx.ip -Script $script -TimeoutSec 15
         if ($r.rc -ne 0) { return @{ ok = $false; message = "VM result read exited $($r.rc)." } }
-        $line = ([string]$r.out).Trim()
+        $sections = @(([string]$r.out) -split '\r?\n__DST_UPDATE_FAILURE__(?:\r?\n|$)', 2)
+        $line = $sections[0].Trim()
         if (-not $line) { return @{ ok = $true; changed = $false; message = 'No VM maintenance result yet.' } }
         $parts = @($line -split '\|', 5)
         if ($parts.Count -ne 5) { return @{ ok = $false; message = 'VM maintenance result was malformed.' } }
@@ -867,6 +931,21 @@ fi
         $resultText = if ($rc -eq 0) { "$action ok @ $stamp" } else { "$action error (rc=$rc) @ $stamp" }
         $changed = ($state.lastResult -ne $resultText)
         $state.lastResult = $resultText
+        if ($sections.Count -eq 2) {
+            $failureLine = $sections[1].Trim()
+            if (-not $failureLine) {
+                $state.updateFailure = if ($rc -ne 0 -and $action -like 'update*') {
+                    ConvertFrom-DuneUpdateFailureLine -Line "$stamp|server-update||$installed|$latest|$action|$rc"
+                } else { $null }
+            }
+            else {
+                $failure = ConvertFrom-DuneUpdateFailureLine -Line $failureLine
+                if ($failure) { $state.updateFailure = $failure }
+            }
+        } elseif ($rc -ne 0 -and $action -like 'update*') {
+            # Older VM scripts did not retain SteamCMD output: keep attribution generic.
+            $state.updateFailure = ConvertFrom-DuneUpdateFailureLine -Line "$stamp|server-update||$installed|$latest|$action|$rc"
+        }
         # The result describes the builds at maintenance time, not the current
         # installation. Never replay it over a newer live update check, or
         # reapply an already-imported result after a manual server update.
@@ -880,6 +959,7 @@ fi
             $state.updateAvailable = (($installed -match '^\d+$') -and ($latest -match '^\d+$') -and ([int64]$latest -gt [int64]$installed) -and -not ($action -eq 'update' -and $rc -eq 0))
             $state.updateCheckedAt = $stamp
         }
+        if (Test-DuneUpdateFailureResolved -State $state) { $state.updateFailure = $null }
         Save-DuneRestartSchedule -State $state
         return @{ ok = $true; changed = $changed; action = $action; rc = $rc; message = $resultText }
     } catch {

@@ -13,6 +13,16 @@ here cover everything those tags shipped.
 
 ## [Unreleased]
 
+## [16.8.0-preview3] - 2026-11-13
+
+### Added
+- Show scheduled server-update failures on admin dashboards and through the configured update notification, with FAQ guidance.
+- Warn when Solo preset-controlled settings are edited without Custom difficulty selected.
+- Add a searchable Emotes multi-select card for self-hosted admins to choose which emote items to grant.
+
+### Changed
+- Clarify water extraction and mining settings descriptions.
+
 ## [16.8.0-preview2] - 2026-11-11
 
 ### Fixed

@@ -27,10 +27,11 @@ const legacy: Record<SectionId, [PlayerHome, string]> = {
 const searches: Record<string, string> = {
   'unlock-trainers': 'enable all skills trainer training skill points 20 intel 100',
   'give-solari': 'money currency balance', 'give-scrip': 'money currency balance', 'give-intel': 'research knowledge points',
+  'grant-emotes': 'emote gesture salute wave grant',
   'grant-cosmetic': 'appearance skins dyes outfits building sets', 'repair-gear': 'fix durability armor weapons backpack',
   'give-vehicle-kit': 'vehicle parts assembly', rename: 'name identity', 'reset-journey': 'quest story restart',
 }
-const appearance = new Set(['grant-cosmetic', 'grant-building-sets', 'grant-armor-skins', 'grant-weapon-skins', 'grant-vehicle-skins',
+const appearance = new Set(['grant-emotes', 'grant-cosmetic', 'grant-building-sets', 'grant-armor-skins', 'grant-weapon-skins', 'grant-vehicle-skins',
   'grant-all-dyes', 'grant-house-swatches', 'grant-buildable-swatches', 'observed-character-swatches', 'observed-gear-appearances'])
 
 export function PlayerManagement(props: SectionProps & { initialSection?: SectionId; focused?: boolean }) {

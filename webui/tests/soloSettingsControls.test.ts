@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import { needsSoloCustomPresetNotice } from '../src/util/soloPresetGuidance'
 import {
   getSoloSettingControl,
   getPendingSoloSettingChanges,
@@ -7,6 +8,23 @@ import {
 } from '../src/pages/SoloMode'
 
 describe('Solo Mode setting controls', () => {
+  it('derives the warning from actual pending edits while excluding the game-controlled preset from the save', () => {
+    const entries = [
+      { key: 'DifficultyLevel', value: 'Survival', present: true },
+      { key: 'GatheringAmount', value: '1', present: true },
+      { key: 'm_DayLengthMinutes', value: '30', present: true },
+    ]
+    const unchanged = { DifficultyLevel: 'Survival', GatheringAmount: '1', m_DayLengthMinutes: '30' }
+    const noOp = getPendingSoloSettingChanges(entries, unchanged)
+    expect(noOp).toEqual({})
+    expect(needsSoloCustomPresetNotice('Survival', noOp)).toBe(false)
+    const nativeEdit = getPendingSoloSettingChanges(entries, { ...unchanged, DifficultyLevel: 'Custom', GatheringAmount: '2' })
+    expect(nativeEdit).toEqual({ GatheringAmount: '2' })
+    expect(needsSoloCustomPresetNotice('Survival', nativeEdit)).toBe(true)
+    const independent = getPendingSoloSettingChanges(entries, { ...unchanged, m_DayLengthMinutes: '60' })
+    expect(needsSoloCustomPresetNotice('Survival', independent)).toBe(false)
+    expect(entries[0].value).toBe('Survival')
+  })
   it('accepts positive decimal day lengths without inventing an absent default', () => {
     expect(getSoloSettingControl('m_DayLengthMinutes')).toEqual({ type: 'number', step: 'any' })
     expect(validateSoloSettingChanges({ m_DayLengthMinutes: '45.5' })).toBeNull()
