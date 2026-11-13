@@ -21,6 +21,7 @@ import { SoloBackupSettings } from '../components/solo/SoloBackupSettings'
 import { SoloRecoveryActivity } from '../components/solo/SoloRecoveryActivity'
 import { SoloGameActivity } from '../components/solo/SoloGameActivity'
 import { SoloNumericSettingInput } from '../components/solo/SoloNumericSettingInput'
+import { SoloPresetNotice } from '../components/solo/SoloPresetNotice'
 import { WickMaps } from './WickMaps'
 import { AugmentPicker } from '../components/AugmentPicker'
 import {
@@ -2581,20 +2582,23 @@ export function SoloMode() {
                   </div>
                 </CollapsibleCard>
               ))}
-              <div className="sticky bottom-0 card p-3 flex items-center justify-between gap-3 bg-surface/95 backdrop-blur">
-                <div className="text-xs text-text-muted">
-                  {gameRunning
-                    ? 'Close Dune: Awakening before applying settings.'
-                    : `${Object.keys(changedSettings).length} setting(s) need applying. Apply retains INI backups and verifies the required writes.`}
+              <div className="sticky bottom-0">
+                <SoloPresetNotice preset={settingsByKey.get('DifficultyLevel')?.value} changes={changedSettings} />
+                <div className="card p-3 flex items-center justify-between gap-3 bg-surface/95 backdrop-blur">
+                  <div className="text-xs text-text-muted">
+                    {gameRunning
+                      ? 'Close Dune: Awakening before applying settings.'
+                      : `${Object.keys(changedSettings).length} setting(s) need applying. Apply retains INI backups and verifies the required writes.`}
+                  </div>
+                  <button
+                    className={`btn-primary shrink-0 ${SOLO_DISABLED_PRIMARY_CLASS}`}
+                    onClick={() => void saveSettings()}
+                    disabled={!canMutateActiveProfile || gameRunning || Object.keys(changedSettings).length === 0}
+                  >
+                    <Icon name={busy === 'settings' ? 'LoaderCircle' : 'Save'} size={14} className={busy === 'settings' ? 'animate-spin' : ''} />
+                    Apply Solo settings
+                  </button>
                 </div>
-                <button
-                  className={`btn-primary shrink-0 ${SOLO_DISABLED_PRIMARY_CLASS}`}
-                  onClick={() => void saveSettings()}
-                  disabled={!canMutateActiveProfile || gameRunning || Object.keys(changedSettings).length === 0}
-                >
-                  <Icon name={busy === 'settings' ? 'LoaderCircle' : 'Save'} size={14} className={busy === 'settings' ? 'animate-spin' : ''} />
-                  Apply Solo settings
-                </button>
               </div>
             </>
           )}

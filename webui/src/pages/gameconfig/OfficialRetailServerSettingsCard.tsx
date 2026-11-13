@@ -22,9 +22,9 @@ type RetailSettingGuidance = {
 export const RETAIL_SETTING_GUIDANCE: Record<string, RetailSettingGuidance> = {
   DifficultyLevel: { defaultValue: 'Custom', effect: 'DST supports only Custom mode for managed server settings. Difficulty Level is not adjustable here. Other presets can override these values and must be configured manually outside DST.' },
   PVPMode: { defaultValue: 'Limited', effect: 'Controls where and under which rules player-versus-player combat is allowed.' },
-  GatheringAmount: { defaultValue: '1.000000', effect: 'Higher values yield more resources per gathering action; lower values yield less. The server template identifies this as overlapping the Advanced hand-mining and vehicle-mining multipliers. These are all server settings; different values are not reconciled automatically, and their in-game precedence has not been verified.' },
+  GatheringAmount: { defaultValue: '1.000000', effect: 'Higher values yield more resources per gathering action; lower values yield less. Also affects gathering alongside the Advanced hand-mining and vehicle-mining multipliers. DST saves these server settings separately.' },
   CraftingCost: { defaultValue: '1.000000', effect: 'Higher values require more crafting materials; lower values require fewer materials.' },
-  WaterExtractionRate: { defaultValue: '1.000000', effect: 'Scales water extraction. Current AMP guidance says higher values extract faster; older Funcom configuration comments say the opposite. Direction has not been verified in-game.' },
+  WaterExtractionRate: { defaultValue: '1.000000', effect: 'Controls water extraction speed. Higher values shorten Deathstill extraction time; a value of 2 takes half as long as 1.' },
   CraftingTimeMultiplier: { defaultValue: '1.000000', effect: 'Higher values make crafting take longer; lower values make it faster.' },
   BuildingCostMultiplier: { defaultValue: '1.000000', effect: 'Higher values require more building materials; lower values require fewer materials.' },
   ResourceRespawnSpeed: { defaultValue: '1.000000', effect: RESPAWN_SETTING_GUIDANCE.ResourceRespawnSpeed.effect },

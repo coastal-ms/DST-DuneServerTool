@@ -30,6 +30,62 @@ Describe 'Scheduled Funcom updates' -Tag 'RestartSchedule' {
         (Get-DuneRestartScheduleDefault).applyFuncomUpdates | Should -BeFalse
     }
 
+    It 'parses only bounded failure fields and never attributes a generic updater failure to SteamCMD' {
+        $failure = ConvertFrom-DuneUpdateFailureLine '2026-11-12T10:00:00Z|steamcmd|0x6|100|200|update-failed-restart-ok|7'
+        $failure.source | Should -Be 'steamcmd'
+        $failure.code | Should -Be '0x6'
+        (ConvertFrom-DuneUpdateFailureLine '2026-11-12T10:00:00Z|server-update||100|200|update|7').source | Should -Be 'server-update'
+        ConvertFrom-DuneUpdateFailureLine '2026-11-12T10:00:00Z|steamcmd||100|200|update|7' | Should -BeNullOrEmpty
+        ConvertFrom-DuneUpdateFailureLine '2026-11-12T10:00:00Z|steamcmd|unexpected text|100|200|update|7' | Should -BeNullOrEmpty
+    }
+
+    It 'clears a historical warning only after a newer verified build reaches its failed target' {
+        $state = Get-DuneRestartScheduleDefault
+        $state.updateFailure = ConvertFrom-DuneUpdateFailureLine '2026-11-12T10:00:00Z|steamcmd|0x6|100|200|update-failed-restart-ok|7'
+        $state.installedBuild='100'; $state.updateCheckedAt='2026-11-12T11:00:00Z'
+        Test-DuneUpdateFailureResolved $state | Should -BeFalse
+        $state.installedBuild='200'; $state.updateCheckedAt='2026-11-12T09:00:00Z'
+        Test-DuneUpdateFailureResolved $state | Should -BeFalse
+        $state.updateCheckedAt='2026-11-12T11:00:00Z'
+        Test-DuneUpdateFailureResolved $state | Should -BeTrue
+    }
+
+    It 'captures failed attempt attribution and sends one bounded VM webhook with DST closed' {
+        $bash = if (Test-Path 'C:/Program Files/Git/bin/bash.exe') { 'C:/Program Files/Git/bin/bash.exe' } else { 'bash' }
+        $scriptPath = Join-Path $TestDrive 'failure-maintenance.sh'
+        [IO.File]::WriteAllText($scriptPath, (New-DuneVmDailyMaintenanceScript -ApplyFuncomUpdates $true))
+        $state=Get-DuneRestartScheduleDefault
+        $state.discordNotifyUpdate=$true
+        $state.discordWebhookUrl='https://discord.com/api/webhooks/12345678901234567/fixture-only-not-a-real-token'
+        $configPath=Join-Path $TestDrive 'failure-notice'
+        [IO.File]::WriteAllText($configPath,(New-DuneUpdateFailureNoticeConfig $state))
+        $output = & $bash (Join-Path $PSScriptRoot 'fixtures/update-failure-reporting.sh') $scriptPath $configPath 2>&1
+        $LASTEXITCODE | Should -Be 0 -Because ($output -join "`n")
+        @($output | Where-Object { $_ -match ' passed$' }).Count | Should -Be 6
+    }
+
+    It 'does not prepare webhook delivery when update notifications are disabled' {
+        $state=Get-DuneRestartScheduleDefault
+        $state.discordWebhookUrl='https://discord.com/api/webhooks/12345678901234567/fixture-only-not-a-real-token'
+        New-DuneUpdateFailureNoticeConfig $state | Should -BeNullOrEmpty
+    }
+
+    It 'imports the durable failure independently of a later ordinary restart result' {
+        Mock Get-DuneBackupContext { @{ok=$true;ip='fixture-only'} }
+        Mock Invoke-DuneBackupShell { @{rc=0;out="2026-11-12T11:00:00Z|restart|0|100|200`n`n__DST_UPDATE_FAILURE__`n2026-11-12T10:00:00Z|steamcmd|0x6|100|200|update-failed-restart-ok|7"} }
+        (Sync-DuneVmDailyMaintenanceResult -Force).ok | Should -BeTrue
+        $script:savedSchedule.updateFailure.source | Should -Be 'steamcmd'
+        $script:savedSchedule.updateFailure.occurredAt | Should -Be '2026-11-12T10:00:00Z'
+        $script:savedSchedule.lastResult | Should -Match 'restart ok'
+    }
+
+    It 'accepts the empty failure sentinel after a successful update without a trailing newline' {
+        Mock Get-DuneBackupContext { @{ok=$true;ip='fixture-only'} }
+        Mock Invoke-DuneBackupShell { @{rc=0;out="2026-11-12T11:00:00Z|update|0|100|200`n`n__DST_UPDATE_FAILURE__"} }
+        (Sync-DuneVmDailyMaintenanceResult -Force).ok | Should -BeTrue
+        $script:savedSchedule.updateFailure | Should -BeNullOrEmpty
+    }
+
     It 'persists the opt-in setting' {
         $result = Set-DuneRestartSchedule -Enabled $true -Time '04:00' -BroadcastLeadMinutes 10 `
             -ApplyFuncomUpdates $true -DiscordEnabled $false -DiscordNotifyOnline $false `
@@ -221,5 +277,21 @@ Describe 'Scheduled Funcom updates' -Tag 'RestartSchedule' {
         $script:maintenanceLine = '2026-10-03T11:00:19Z|update|0|100|200'
         Sync-DuneVmDailyMaintenanceResult -Force | Out-Null
         $script:savedSchedule.updateAvailable | Should -BeFalse
+    }
+}
+
+Describe 'Persistent update failure state' {
+    It 'retains the warning across a state reload and clears it after a newer successful build check' {
+        Mock Get-DuneRestartStatePath { Join-Path $TestDrive 'failure-state.json' }
+        $state = Get-DuneRestartScheduleDefault
+        $state.installedBuild = '100'
+        $state.updateCheckedAt = '2026-11-12T10:00:00Z'
+        $state.updateFailure = ConvertFrom-DuneUpdateFailureLine '2026-11-12T10:00:00Z|steamcmd|0x6|100|200|update-failed-restart-ok|7'
+        Save-DuneRestartSchedule $state
+        (Get-DuneRestartSchedule).updateFailure.code | Should -Be '0x6'
+        $state.installedBuild = '200'
+        $state.updateCheckedAt = '2026-11-12T11:00:00Z'
+        Save-DuneRestartSchedule $state
+        (Get-DuneRestartSchedule).updateFailure | Should -BeNullOrEmpty
     }
 }

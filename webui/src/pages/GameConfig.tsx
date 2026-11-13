@@ -2491,7 +2491,7 @@ export function FieldRow({ field, value, onChange, disabled, isDirty, isSet, isC
         {field.help && <p className={fixedHeight ? 'text-xs text-text-dim line-clamp-2' : 'text-xs text-text-dim'} title={fixedHeight ? field.help : undefined}>{field.help}</p>}
       </div>
       {['Dune.GlobalMiningOutputMultiplier', 'Dune.GlobalVehicleMiningOutputMultiplier'].includes(field.key) && (
-        <p className="mt-2 text-xs text-text-muted">Server file only. Overlaps Gathering Amount in Official server controls. DST preserves both values separately; their in-game precedence has not been verified. This is not a player-PC setting.</p>
+        <p className="mt-2 text-xs text-text-muted">Server file only. Also affects gathering alongside Gathering Amount in Official server controls. DST saves these values separately. This is not a player-PC setting.</p>
       )}
     </div>
   )

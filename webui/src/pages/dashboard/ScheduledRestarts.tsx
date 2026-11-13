@@ -93,6 +93,14 @@ export function ScheduledRestarts() {
 
   useEffect(() => { void load() }, [load])
 
+  // Refresh outcomes without resetting unsaved schedule or webhook edits.
+  useEffect(() => {
+    const timer = window.setInterval(() => {
+      void getRestartSchedule().then(setSched).catch(() => { /* retain last known result */ })
+    }, 30_000)
+    return () => window.clearInterval(timer)
+  }, [])
+
   useEffect(() => {
     try { localStorage.setItem('dst.schedRestarts.expanded', expanded ? '1' : '0') } catch { /* ignore */ }
   }, [expanded])
@@ -193,6 +201,35 @@ export function ScheduledRestarts() {
           )}
         </div>
       </button>
+
+      {sched?.updateFailure && (
+        <div role="alert" className="mt-3 rounded-md border border-danger/40 bg-danger/10 p-3 text-sm">
+          <p className="font-semibold text-danger">
+            {sched.updateFailure.source === 'steamcmd'
+              ? `Server update failed — SteamCMD reported error ${sched.updateFailure.code}`
+              : 'Server update failed — updater cause not identified'}
+          </p>
+          <p className="mt-1">
+            {sched.updateFailure.action === 'update-failed-restart-ok'
+              ? 'Server restarted on the previous build. The update did not complete.'
+              : sched.updateFailure.action === 'update-failed-restart-failed'
+                ? 'The fallback server restart also failed. Check the current server status.'
+                : 'The update did not complete. Check the current server status.'}
+          </p>
+          <details className="mt-2">
+            <summary className="cursor-pointer">Review update error</summary>
+            <p className="mt-1 text-xs">
+              Attempt: {new Date(sched.updateFailure.occurredAt).toLocaleString()}.
+              {' '}Installed build {sched.updateFailure.installedBuild || 'unknown'}; available build {sched.updateFailure.latestBuild || 'unknown'}.
+              {' '}Updater exit code: {sched.updateFailure.exitCode}.
+              {sched.updateFailure.source === 'steamcmd' && ' SteamCMD, which downloads the Funcom server package, reported this error. The code alone does not identify its underlying cause.'}
+              {' '}Use Server updates to retry. If it fails again, retain the diagnostics for that attempt.
+            </p>
+            <a className="btn-secondary mt-2 inline-flex" href="/commands?task=updates">Server updates</a>
+          </details>
+          <a className="btn-secondary mt-2 inline-flex" href="https://discord.com/channels/1517599283757453333/1563393833197117510/1563393833197117510" target="_blank" rel="noreferrer">SteamCMD update FAQ (Discord)</a>
+        </div>
+      )}
 
       {expanded && (
         <div className="mt-4">
@@ -390,8 +427,8 @@ export function ScheduledRestarts() {
                       className="h-4 w-4 accent-accent mt-0.5"
                     />
                     <div>
-                      <span className="text-sm font-medium block leading-none">Update Available</span>
-                      <span className="text-[11px] text-text-dim mt-1 block">When the scheduled-restart update check finds a new Funcom build.</span>
+                      <span className="text-sm font-medium block leading-none">Update Available / Failed</span>
+                      <span className="text-[11px] text-text-dim mt-1 block">New Funcom builds and failed scheduled updates. Failure alerts run from the VM even while DST is closed.</span>
                     </div>
                   </label>
                   <div className="flex items-start gap-2 mt-1 pt-2 border-t border-border/50 text-[11px] text-text-dim">

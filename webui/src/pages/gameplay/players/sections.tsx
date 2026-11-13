@@ -1,3 +1,4 @@
+import { EmoteGrantForm } from '../../../components/EmoteGrantForm'
 import { CosmeticMultiSelect, type CosmeticGrantSummary } from '../../../components/CosmeticMultiSelect'
 import { CharacterActivityEvent } from '../../../components/CharacterActivityEvent'
 import { JourneyCompletionChoices } from '../../../components/JourneyCompletionChoices'
@@ -63,9 +64,9 @@ import { useCommandDeck } from '../../../hooks/useCommandDeck'
 import { CommandCategoryPages } from '../../commands/CommandCategoryPages'
 import { usePortalAccess } from '../../../auth/portalAccess'
 
-// These controls administer the server/world or other identities, rather than
-// the linked character. The backend independently denies their endpoints.
-const PLAYER_HIDDEN_ACTIONS = new Set(['regis-tanks', 'spawn-vehicle', 'funcom-spawn-vehicle', 'refuel-vehicle',
+// Controls kept out of the linked-player portal. Server/world routes also
+// enforce their backend permissions; Emotes is an admin-selected card.
+const PLAYER_HIDDEN_ACTIONS = new Set(['grant-emotes', 'regis-tanks', 'spawn-vehicle', 'funcom-spawn-vehicle', 'refuel-vehicle',
   'teleport', 'whisper', 'cheat-script', 'dev-scripts', 'fresh-start', 'unlock-testing-stations'])
 
 type Flash = (msg: string, kind?: 'ok' | 'err' | 'info') => void
@@ -629,7 +630,7 @@ interface ActionDef {
   offlineOnly?: boolean   // requires player to be offline (DB write the game caches in memory)
   experimental?: boolean  // unverified — may not take effect in-game; shown with an EXPERIMENTAL badge
   fields?: ActionField[]
-  custom?: 'codex' | 'regis-tanks' | 'give-item' | 'grant-reward' | 'whisper' | 'spawn-vehicle' | 'funcom-spawn-vehicle' | 'quick-presets' | 'tutorial-completion' | 'vehicle-kit' | 'give-package' | 'cheat-scripts' | 'dev-scripts' | 'unlock-trainers' | 'complete-contract' | 'unlock-trainers' | 'progression-unlock' | 'refuel-vehicle' | 'starter-class' | 'teleport-player' | 'teleport-location' | 'set-respawn' | 'reset-faction' | 'grant-cosmetic' | 'grant-house-swatches' | 'grant-buildable-swatches' | 'grant-building-sets' | 'grant-armor-skins' | 'grant-weapon-skins' | 'grant-vehicle-skins' | 'grant-all-dyes' | 'fresh-start'
+  custom?: 'grant-emotes' | 'codex' | 'regis-tanks' | 'give-item' | 'grant-reward' | 'whisper' | 'spawn-vehicle' | 'funcom-spawn-vehicle' | 'quick-presets' | 'tutorial-completion' | 'vehicle-kit' | 'give-package' | 'cheat-scripts' | 'dev-scripts' | 'unlock-trainers' | 'complete-contract' | 'unlock-trainers' | 'progression-unlock' | 'refuel-vehicle' | 'starter-class' | 'teleport-player' | 'teleport-location' | 'set-respawn' | 'reset-faction' | 'grant-cosmetic' | 'grant-house-swatches' | 'grant-buildable-swatches' | 'grant-building-sets' | 'grant-armor-skins' | 'grant-weapon-skins' | 'grant-vehicle-skins' | 'grant-all-dyes' | 'fresh-start'
   balance?: 'solari' | 'scrip' | 'intel'  // show the player's current balance read-only above the form
   confirm?: (p: Player) => string  // confirm message; if returns '' no prompt
   doubleConfirm?: boolean // also requires a typed "i acknowledge" prompt inside run()
@@ -779,6 +780,8 @@ const ACTIONS: ActionDef[] = [
   // ----- Items -----
   { id: 'give-item',      group: 'Items', label: 'Give Item', icon: 'PackagePlus', custom: 'give-item',
     rowNote: 'Works online or offline — delivered instantly when online, on next login when offline. Grade above 0 requires the player to be offline',
+    run: () => Promise.resolve({ message: '' }) },
+  { id: 'grant-emotes', group: 'Items', label: 'Emotes', icon: 'Smile', custom: 'grant-emotes',
     run: () => Promise.resolve({ message: '' }) },
   { id: 'give-vehicle-kit', group: 'Items', label: 'Give Vehicle Kit', icon: 'Truck', custom: 'vehicle-kit',
     rowNote: 'Parts + fuel cell + welding torch Mk5 — works online or offline, needs inventory space',
@@ -972,7 +975,7 @@ export function ActionsSection({ player, canWrite, demo, flash, onChanged, onFlu
     onWorking?.(def.label)
     try {
       const r = await exec()
-      const requestOnly = ['grant-cosmetic', 'grant-house-swatches', 'grant-buildable-swatches', 'grant-building-sets', 'grant-armor-skins', 'grant-weapon-skins', 'grant-vehicle-skins', 'grant-all-dyes'].includes(def.custom || '')
+      const requestOnly = ['grant-emotes', 'grant-cosmetic', 'grant-house-swatches', 'grant-buildable-swatches', 'grant-building-sets', 'grant-armor-skins', 'grant-weapon-skins', 'grant-vehicle-skins', 'grant-all-dyes'].includes(def.custom || '')
       flash(r.message || (requestOnly ? `${def.label} request submitted.` : `${def.label} done.`), requestOnly ? 'info' : 'ok')
       // Mark a deferred refresh; custom forms decide whether successful input resets.
       onChanged()
@@ -1199,6 +1202,12 @@ function ActionRow({ def, player, busy, stats, open, danger, onToggle, runAction
                 for (let q = 0; q <= 5; q++) await giveItem(player.id, tpl, qty, q, overflow)
                 return { message: `Gave ${tpl} Grade 0–5 (x${qty} each) to ${player.name}.` }
               })} />
+          ) : def.custom === 'grant-emotes' ? (
+            <EmoteGrantForm busy={busy} onGrant={template => runAction(def, async () => {
+              const result = await giveItem(player.id, template, 1, 0, false)
+              if (result.ok === false) throw new Error(result.message || 'Emote request failed.')
+              return { message: `Emote item request submitted: ${template}. Check the player’s inventory and emote list in game.` }
+            })} />
           ) : def.custom === 'whisper' ? (
             <WhisperForm busy={busy}
               onSubmit={msg => runAction(def, () => chatWhisper(String(player.id), msg))} />
@@ -2845,7 +2854,7 @@ function ItemsActionBlock({ player, canWrite, flash, onChanged, onFlush }: {
   const [busy, setBusy] = useState(false)
 
   const acts = useMemo(() => {
-    const first = ['give-item', 'give-vehicle-kit', 'give-package', 'grant-cosmetic', 'repair-gear', 'max-augment-attributes']
+    const first = ['give-item', 'grant-emotes', 'give-vehicle-kit', 'give-package', 'grant-cosmetic', 'repair-gear', 'max-augment-attributes']
     const rank = (action: ActionDef) => {
       const priority = first.indexOf(action.id)
       if (priority >= 0) return priority
@@ -2870,7 +2879,7 @@ function ItemsActionBlock({ player, canWrite, flash, onChanged, onFlush }: {
     setBusy(true)
     try {
       const r = await exec()
-      const requestOnly = ['grant-cosmetic', 'grant-house-swatches', 'grant-buildable-swatches', 'grant-building-sets', 'grant-armor-skins', 'grant-weapon-skins', 'grant-vehicle-skins', 'grant-all-dyes'].includes(def.custom || '')
+      const requestOnly = ['grant-emotes', 'grant-cosmetic', 'grant-house-swatches', 'grant-buildable-swatches', 'grant-building-sets', 'grant-armor-skins', 'grant-weapon-skins', 'grant-vehicle-skins', 'grant-all-dyes'].includes(def.custom || '')
       flash(r.message || (requestOnly ? `${def.label} request submitted.` : `${def.label} done.`), requestOnly ? 'info' : 'ok')
       onChanged()
       return true
