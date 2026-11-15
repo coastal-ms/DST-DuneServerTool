@@ -54,8 +54,8 @@ function Sync-DuneSavedMapSettingsForStartup {
     if(-not (Test-DuneConfigurationInjectionEnabled)){return @{skipped=$true}}
     $bg=Get-V6Battlegroup -Ip $Ip;$store=Get-DuneSavedMapSettings -Ip $Ip -Bg $bg
     if(-not $store.exists){return @{skipped=$true}}
-    $target=Resolve-DuneRetailServerSettingsTarget -Ip $Ip
-    if(-not $target.available -or -not $target.stopped -or [int]$target.serverPodCount -ne 0){throw 'Saved map settings are applied only after all game pods have stopped.'}
+    # The VM helper compares saved and active files before enforcing the stopped
+    # guard for a real write. An unchanged record must not abort an already-live BG.
     Set-DuneSavedMapSettingsEnabled -Ip $Ip -Enabled $true
     Install-DuneMapSettingsApplyHook -Ip $Ip
     $reply=(Invoke-V6Ssh -Ip $Ip -Cmd 'sudo /bin/sh /usr/local/lib/dune-server/map-settings-apply.sh --stopped 2>&1' -TimeoutSec 60)-join "`n"
