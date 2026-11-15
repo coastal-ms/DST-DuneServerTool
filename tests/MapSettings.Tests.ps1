@@ -186,9 +186,15 @@ Describe 'Saved map storage and start guards' {
     It 'blocks applying pending files while a game pod remains' {
         Mock Get-DuneSavedMapSettings {@{exists=$true;data=@{enabled='true'}}}
         Mock Resolve-DuneRetailServerSettingsTarget {@{available=$true;stopped=$true;serverPodCount=1}}
-        Mock Invoke-V6Ssh {throw 'must not run'}
-        {Sync-DuneSavedMapSettingsForStartup -Ip test}|Should -Throw '*all game pods*'
-        Should -Invoke Invoke-V6Ssh -Times 0
+        Mock Invoke-V6Ssh {'Wait for all game pods to stop.'}
+        {Sync-DuneSavedMapSettingsForStartup -Ip test}|Should -Throw '*not applied*'
+        Should -Invoke Invoke-V6Ssh -Times 1 -ParameterFilter {$Cmd -match 'map-settings-apply.sh --stopped'}
+    }
+    It 'does not abort a live battlegroup when its saved map files are already applied' {
+        Mock Get-DuneSavedMapSettings {@{exists=$true;data=@{enabled='true'}}}
+        Mock Resolve-DuneRetailServerSettingsTarget {@{available=$true;stopped=$false;serverPodCount=3}}
+        Mock Invoke-V6Ssh {'DST_MAP_SETTINGS_UNCHANGED=0'}
+        (Sync-DuneSavedMapSettingsForStartup -Ip test).ok | Should -BeTrue
     }
     It 'applies pending files only in an explicit stopped start context' {
         Mock Get-DuneSavedMapSettings {@{exists=$true;data=@{enabled='true'}}}

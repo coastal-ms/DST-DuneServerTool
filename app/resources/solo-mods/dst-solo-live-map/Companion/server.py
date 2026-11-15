@@ -3,6 +3,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import urlparse, parse_qs
 import argparse
+import errno
 import hmac
 import hashlib
 import json
@@ -367,7 +368,15 @@ def create_server(args):
             self.end_headers()
             self.wfile.write(body)
 
-    return ThreadingHTTPServer(('127.0.0.1', port), Handler), key
+    try:
+        return ThreadingHTTPServer(('127.0.0.1', port), Handler), key
+    except OSError as error:
+        # A saved port can become reserved by Windows or occupied after a restart.
+        # Keep the session key, but let the OS choose a usable loopback port.
+        if not port or (error.errno not in (errno.EACCES, errno.EADDRINUSE)
+                        and getattr(error, 'winerror', None) not in (10013, 10048)):
+            raise
+        return ThreadingHTTPServer(('127.0.0.1', 0), Handler), key
 
 
 def serve(args):

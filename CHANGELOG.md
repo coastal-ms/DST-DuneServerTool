@@ -13,6 +13,13 @@ here cover everything those tags shipped.
 
 ## [Unreleased]
 
+## [16.8.0-preview4] - 2026-11-14
+
+### Fixed
+- Fix Launch with mods when the Solo Live Map companion’s saved port is unavailable.
+- Allow an already-running battlegroup to start without a false saved-map-settings error when its settings are unchanged.
+
+
 ## [16.8.0-preview3] - 2026-11-13
 
 ### Added
