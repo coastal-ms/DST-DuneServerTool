@@ -26,6 +26,7 @@ Register-DuneRoute -Method GET -Path '/api/restart-schedule' -Handler {
             discordMentionId     = [string]$state.discordMentionId
             lastRestartDate      = [string]$state.lastRestartDate
             lastResult           = [string]$state.lastResult
+            updateFailure        = $state.updateFailure
             updateAvailable      = [bool]$state.updateAvailable
             installedBuild       = [string]$state.installedBuild
             latestBuild          = [string]$state.latestBuild
@@ -106,6 +107,7 @@ Register-DuneRoute -Method PUT -Path '/api/restart-schedule' -Handler {
             discordMentionId     = [string]$state.discordMentionId
             lastRestartDate      = [string]$state.lastRestartDate
             lastResult           = [string]$state.lastResult
+            updateFailure        = $state.updateFailure
             updateAvailable      = [bool]$state.updateAvailable
             installedBuild       = [string]$state.installedBuild
             latestBuild          = [string]$state.latestBuild
@@ -159,6 +161,15 @@ Register-DuneRoute -Method POST -Path '/api/restart-schedule/test-discord' -Hand
             $r = Send-DuneDiscordEmbed -Url $url -Embed $embed -MentionId $state.discordMentionId
             if ($r.ok) { $sent.Add($n.label) } else { $failed.Add("$($n.label) ($($r.message))") }
             Start-Sleep -Milliseconds 400   # gentle pacing to avoid Discord rate limits
+        }
+        if ($state.discordNotifyUpdate) {
+            $failureSample = @{
+                title = 'Server update failed - SteamCMD error 0x6 (test)'
+                description = "Example only: the server restarted on the previous build. SteamCMD reported the download error; its underlying cause is not identified by the code alone.`n[SteamCMD update FAQ](https://discord.com/channels/1517599283757453333/1563393833197117510/1563393833197117510)"
+                color = 15158332
+            }
+            $r = Send-DuneDiscordEmbed -Url $url -Embed $failureSample -MentionId $state.discordMentionId
+            if ($r.ok) { $sent.Add('update failed') } else { $failed.Add("update failed ($($r.message))") }
         }
 
         # The pre-restart maintenance broadcast (master Discord restart toggle),

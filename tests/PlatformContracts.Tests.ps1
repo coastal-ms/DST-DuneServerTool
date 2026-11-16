@@ -172,7 +172,7 @@ Describe 'Complete route classification' {
     It 'classifies the exact registered HTTP and WebSocket inventory' {
         $records = @(Get-PlatformRouteRecords)
         $manifest = Get-DuneRoutePolicyManifest
-        $records.Count | Should -Be 451
+        $records.Count | Should -Be 457
         $sources = @($records.SourceFile | Sort-Object -Unique)
         @($manifest.groups.source | Sort-Object) | Should -Be $sources
 
@@ -218,6 +218,17 @@ Describe 'Complete route classification' {
         @($classifications | Where-Object { -not $_.capabilityId }).Count | Should -Be 0
         $labLocal = @($script:DuneRoutes | Where-Object Path -eq '/api/gameconfig/client/lab')
         $labLocal.Count | Should -Be 1
+        $mapSettings = @($script:DuneRoutes | Where-Object Path -eq '/api/map-settings')
+        $mapSettings.Count | Should -Be 2
+        foreach ($route in $mapSettings) { $route.Classification.capabilityId | Should -Be 'settings.game-server' }
+        ($mapSettings | Where-Object Method -eq 'PUT').Classification.lifecycle | Should -Be 'transactional-write'
+        $storage = @($script:DuneRoutes | Where-Object Path -like '/api/vm-storage*')
+        $storage.Count | Should -Be 4
+        foreach ($route in $storage) {
+            $route.Classification.capabilityId | Should -Be 'settings.setup'
+            $route.Classification.currentAccess | Should -Be 'local-only'
+            $route.Classification.allowedPrincipalTypes | Should -Be @('local-host')
+        }
         $labLocal[0].Classification.currentAccess | Should -Be 'local-only'
         $labLocal[0].Classification.allowedPrincipalTypes | Should -Be @('local-host')
         $soloActivity=@($script:DuneRoutes | Where-Object Path -eq '/api/solo/activity')
@@ -362,7 +373,7 @@ $result = @{
         $LASTEXITCODE | Should -Be 0 -Because ($output -join [Environment]::NewLine)
         $resultLine = @($output | Where-Object { [string]$_ -like 'ROUTE_RESULT:*' })[-1]
         $result = ([string]$resultLine).Substring('ROUTE_RESULT:'.Length) | ConvertFrom-Json
-        $result.total | Should -Be 451
+        $result.total | Should -Be 457
         $result.unclassified | Should -Be 0
         $result.incompatible | Should -Be 0
         $result.podsCleanup | Should -Be 1

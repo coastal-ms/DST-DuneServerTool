@@ -1,3 +1,13 @@
 Options -Indexes
 # Preserve the generated reporting credential for PHP on CGI/FastCGI hosts.
 SetEnvIfNoCase Authorization "(.+)" HTTP_AUTHORIZATION=$1
+
+# Suppress access logging for installation-count requests on LiteSpeed.
+<IfModule LiteSpeed>
+    SetEnvIf Request_URI "^/api/usage\.php(?:/|$)" dontlog=1
+    <FilesMatch "^usage\.php$">
+        SetEnv dontlog 1
+    </FilesMatch>
+    RewriteEngine On
+    RewriteRule ^usage\.php(?:/.*)?$ - [E=dontlog:1]
+</IfModule>

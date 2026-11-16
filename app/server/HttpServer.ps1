@@ -129,6 +129,8 @@ function Test-DunePortalOwnerOnlyPath {
 
     foreach ($prefix in @(
         '/api/gameconfig',
+        '/api/map-settings',
+        '/api/vm-storage',
         '/api/db',
         '/api/sietches',
         '/api/config',
@@ -987,6 +989,9 @@ function Start-DuneHttpServer {
     }
 
     $httpReady = [Threading.ManualResetEventSlim]::new($false)
+    if (Get-Command Start-DuneUsageCountReporter -ErrorAction SilentlyContinue) {
+        try { Start-DuneUsageCountReporter -ServerDir $script:DuneServerDir -HttpReady $httpReady } catch {}
+    }
     if (-not ((Get-Command Test-DuneSoloInstallation -ErrorAction SilentlyContinue) -and (Test-DuneSoloInstallation)) -and (Get-Command Start-DunePlatformCacheStartup -ErrorAction SilentlyContinue)) {
         try {
             [void](Start-DunePlatformCacheStartup -ServerDir $script:DuneServerDir -HttpReady $httpReady)
@@ -1063,6 +1068,9 @@ function Start-DuneHttpServer {
                 $backgroundStopped = $false
                 Write-DuneLog "Restart scheduler shutdown failed: $($_.Exception.Message)" 'WARN'
             }
+        }
+        if (Get-Command Stop-DuneUsageCountReporter -ErrorAction SilentlyContinue) {
+            try { Stop-DuneUsageCountReporter } catch {}
         }
         if ($backgroundStopped) { $httpReady.Dispose() }
         # Wait briefly for in-flight handlers to finish, then reap + tear down.

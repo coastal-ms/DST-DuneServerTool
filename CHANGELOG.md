@@ -13,11 +13,53 @@ here cover everything those tags shipped.
 
 ## [Unreleased]
 
-## [16.7.9.1] - 2026-11-11
+## [16.8.0] - 2026-11-15
+
+### Added
+- Set separate server settings for individual sietches and Deep Desert partitions.
+- Expand supported guest storage from VM info after enlarging a Hyper-V virtual disk.
+- Choose whether to share an installation count during Windows setup, and change the choice later in Settings.
+- View Game.ini and Engine.ini together from the Settings file menu and review changes to both files before applying.
+- Show scheduled server-update failures on admin dashboards and through configured update notifications.
+- Choose emote items to grant from a searchable Emotes list.
 
 ### Fixed
-- Update optional self-hosted Tank support for Funcom 1.5.20.2.
-- Clear the server Update badge after an update, including when the battlegroup stays running.
+- Restore modded Solo launches when the saved Live Map companion port is unavailable.
+- Allow an already-running battlegroup to start when its saved map settings are unchanged.
+- Update optional Tank support and clear stale server-update badges after updates.
+
+### Changed
+- Clarify server settings guidance and warn when Solo preset-controlled settings need Custom difficulty.
+- Keep Community installation totals hidden while reports accumulate.
+
+## [16.8.0-preview4] - 2026-11-14
+
+### Fixed
+- Fix Launch with mods when the Solo Live Map companion’s saved port is unavailable.
+- Allow an already-running battlegroup to start without a false saved-map-settings error when its settings are unchanged.
+
+
+## [16.8.0-preview3] - 2026-11-13
+
+### Added
+- Show scheduled server-update failures on admin dashboards and through the configured update notification, with FAQ guidance.
+- Warn when Solo preset-controlled settings are edited without Custom difficulty selected.
+- Add a searchable Emotes multi-select card for self-hosted admins to choose which emote items to grant.
+
+### Changed
+- Clarify water extraction and mining settings descriptions.
+
+## [16.8.0-preview2] - 2026-11-11
+
+### Fixed
+- Update optional Tank support for Funcom 1.5.20.2.
+- Clear the server Update badge after updates, including when the battlegroup stays running.
+
+## [16.8.0-preview1] - 2026-11-11
+
+### Added
+- Set separate server settings for individual sietches and Deep Desert partitions.
+- Expand supported guest storage from VM info after enlarging a Hyper-V virtual disk.
 
 ## [16.7.9] - 2026-11-10
 
