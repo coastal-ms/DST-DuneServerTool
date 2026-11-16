@@ -1,0 +1,3 @@
+Options -Indexes
+# Preserve the generated reporting credential for PHP on CGI/FastCGI hosts.
+SetEnvIfNoCase Authorization "(.+)" HTTP_AUTHORIZATION=$1

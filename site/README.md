@@ -143,6 +143,17 @@ site/
         └── global.css    Tailwind v4 entry + design tokens
 ```
 
+
+## Installation counts
+
+The Community page shows **DST for Windows / Solo** and **DST Docker** totals for reporting installations seen in the last 24 hours. Only builds that include reporting contribute. Clients report every six hours. The public snapshot and page refresh automatically every six hours. There is no public manual refresh button, browser event or force-refresh parameter. Reloading the page reads the existing snapshot. An authenticated operator may rebuild it through SSH using `php "$WEBSITE_ROOT/api/usage.php" --refresh`; this does not make installations report early. Unavailable or invalid responses show a dash, never a made-up count.
+
+`public/api/usage.php` requires PHP 8.1+ and PDO SQLite. The count database is created outside the public document root under `.dst-usage-count`, with private permissions; `DST_USAGE_DATA_DIR` may select another private directory. It stores only hashes of the random installation ID and reporting credential, edition, app version and last-seen timestamp. The private snapshot file contains only aggregate totals and their update time. It rejects additional fields, including addresses. POST refreshes one installation, authenticated DELETE removes it, and records older than 24 hours expire on the next request. Public totals reflect these changes at the next six-hour snapshot update or an SSH-only operator refresh.
+
+This is an installation count, not a fully anonymous service: the stable ID links repeat reports, and the hosting provider's separate access logs record source IPs. Confirmed November 15, 2026 against this domain's archived HTTP and HTTPS logs, without copying visitor addresses. cPanel archive controls do not disable upstream web-server logging. The privacy page explains this distinction and refers to the checkbox's current released label so users can find it.
+
+Run `python3 site/tests/test_usage.py` with PHP/PDO SQLite to test the actual collector using an isolated loopback server and temporary private database. The deployment script verifies PHP support before uploading and validates the public GET response afterward. A live smoke test must remove its own generated installation record afterward. Never seed fake users or derive installation totals from access logs.
+
 ## Deployment
 
 `.github/workflows/deploy-hosting.yml` rebuilds the website on relevant main

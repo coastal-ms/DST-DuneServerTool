@@ -1,6 +1,7 @@
 ---
 import Base from "../layouts/Base.astro";
 import PageHeader from "../components/PageHeader.astro";
+import UsageCount from "../components/UsageCount.astro";
 
 const invite = "https://discord.gg/tj2x7cywSC";
 
@@ -44,6 +45,7 @@ const helpTopics = [
     intro="A Discord server for everyone running a self-hosted Dune: Awakening dedicated server with DST — the place to go for help, tips, and release news."
   />
 
+  <UsageCount />
   <section class="mx-auto max-w-6xl px-6 pb-10">
     <div
       class="rounded-xl border border-dune-accent/40 bg-dune-accent/5 p-8 sm:p-10 sm:flex sm:items-center sm:justify-between gap-8"

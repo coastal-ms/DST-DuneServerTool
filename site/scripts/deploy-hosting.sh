@@ -15,9 +15,17 @@ cat > "$key_dir/ssh" <<'SSH'
 exec ssh -i "$WEBSITE_DEPLOY_KEY" -p "$WEBSITE_PORT" -o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$WEBSITE_DEPLOY_HOSTS" "$@"
 SSH
 chmod 700 "$key_dir/ssh"
+# Verify the receiver runtime before uploading the public PHP endpoint.
+"$key_dir/ssh" "$WEBSITE_USER@$WEBSITE_HOST" \
+  'php -r '\''if (PHP_VERSION_ID < 80100 || !extension_loaded("pdo_sqlite")) { fwrite(STDERR, "Usage counter requires PHP 8.1+ and pdo_sqlite.\n"); exit(1); }'\'''
 # Assets first; preserve older assets for visitors with cached HTML. No remote deletion.
 rsync -rlt --delay-updates --exclude='*.html' -e "$key_dir/ssh" site/dist/ "$WEBSITE_USER@$WEBSITE_HOST:$WEBSITE_ROOT/"
 rsync -rlt --delay-updates --include='*/' --include='*.html' --exclude='*' -e "$key_dir/ssh" site/dist/ "$WEBSITE_USER@$WEBSITE_HOST:$WEBSITE_ROOT/"
+# Rebuild once through authenticated SSH; HTTP has no force-refresh action.
+printf -v usage_refresh_command 'php %q --refresh' "$WEBSITE_ROOT/api/usage.php"
+"$key_dir/ssh" "$WEBSITE_USER@$WEBSITE_HOST" "$usage_refresh_command" > "$key_dir/usage-initial.json"
+curl --fail --silent --show-error --retry 3 https://duneservertool.com/api/usage.php > "$key_dir/usage.json"
+node -e 'const fs=require("node:fs");const s=JSON.parse(fs.readFileSync(process.argv[1],"utf8"));if(s.protocol!==1||s.windowHours!==24||s.refreshHours!==6||!Number.isSafeInteger(s.updatedAt)||![s.windows,s.docker,s.total].every(v=>Number.isSafeInteger(v)&&v>=0)||s.total!==s.windows+s.docker)throw Error("Live installation count endpoint did not return a valid snapshot")' "$key_dir/usage.json"
 curl --fail --location --silent --show-error --retry 3 https://duneservertool.com/install/ > "$key_dir/install.html"
 if [[ -n "${EXPECTED_RELEASE:-}" ]]; then
   grep -F "https://github.com/coastal-ms/DST-DuneServerTool/releases/download/$EXPECTED_RELEASE/DuneServerSetup.exe" "$key_dir/install.html" > /dev/null || { echo 'Live installer link does not match the release'; exit 1; }
