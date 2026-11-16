@@ -16,7 +16,7 @@
 ;                 -> NOT touched by install or uninstall (preserves user config)
 
 #define MyAppName        "Dune Server Tool"
-#define MyAppVersion "16.7.9.1"
+#define MyAppVersion "16.8.0"
 #ifndef MyAppNumericVersion
 #define MyAppCoreVersion Copy(MyAppVersion, 1, Pos("-", MyAppVersion + "-") - 1)
 #define MyAppNumericVersion MyAppCoreVersion + (Len(MyAppCoreVersion) - Len(StringChange(MyAppCoreVersion, ".", "")) == 2 ? ".0" : "")
@@ -110,6 +110,8 @@ Source: "..\data\*"; DestDir: "{app}\data"; Flags: ignoreversion recursesubdirs
 
 ; Read-only Atlas source host; session data stays in the user's local app data.
 Source: "..\tools\DuneAtlas\*"; DestDir: "{app}\tools\DuneAtlas"; Excludes: "__pycache__\*,*.pyc"; Flags: ignoreversion recursesubdirs
+Source: "..\tools\VmMapSettings\apply.sh"; DestDir: "{app}\tools\VmMapSettings"; Flags: ignoreversion
+Source: "..\tools\VmStorage\storage.py"; DestDir: "{app}\tools\VmStorage"; Flags: ignoreversion
 Source: "..\tools\VmMapHelper\*"; DestDir: "{app}\tools\VmMapHelper"; Excludes: "__pycache__\*,*.pyc,test_*.py"; Flags: ignoreversion recursesubdirs
 
 ; v6.1 React SPA: Vite-built static assets (HTML, hashed JS/CSS, fonts)
@@ -261,6 +263,7 @@ Filename: "powershell.exe"; Parameters: "-NoProfile -ExecutionPolicy Bypass -Fil
 
 var
   InstallationModePage: TInputOptionWizardPage;
+  UsageCountPage: TInputOptionWizardPage;
   ServerDirPage:   TInputDirWizardPage;
   SshKeyPage:      TInputFileWizardPage;
   UserPage:        TInputQueryWizardPage;
@@ -491,6 +494,7 @@ begin
 end;
 
 // ---------- wizard wiring ----------
+#include "UsageCount.iss"
 
 procedure InitializeWizard();
 var
@@ -554,8 +558,21 @@ begin
   if CompareText(ReadCfgKey(appdataCfg, 'InstallationMode'), 'solo') = 0 then
     InstallationModePage.SelectedValueIndex := 1;
 
+  UsageCountPage := CreateInputOptionPage(InstallationModePage.ID,
+    'Installation count sharing',
+    'Choose whether this installation contributes to the DST community count.',
+    'Help show how many DST installations are in use. Every six hours while DST is open, ' +
+    'it shares only a random installation ID, its edition, and app version. ' +
+    'Your server details, players, accounts, settings, and logs are not shared.' + #13#10 + #13#10 +
+    'The count database does not store your IP address, and count requests are ' +
+    'configured to stay out of website access logs.' + #13#10 + #13#10 +
+    'Sharing is optional. You can turn it off at any time in Settings.', False, False);
+  UsageCountPage.Add('Share installation count');
+  UsageCountPage.Values[0] := UsageCountDefaultChoice(
+    ReadCfgKey(appdataCfg, 'AnonymousUsageEnabled'), WizardSilent);
+
   // Page 1: Server install folder (DirPage with Browse)
-  ServerDirPage := CreateInputDirPage(InstallationModePage.ID,
+  ServerDirPage := CreateInputDirPage(UsageCountPage.ID,
     'Dune Awakening Server Folder',
     'Where is the dedicated server installed?',
     'Pick the folder that contains the "battlegroup-management" subfolder. ' +
@@ -604,6 +621,11 @@ function ShouldSkipPage(PageID: Integer): Boolean;
 begin
   Result := False;
   if (PageID = InstallationModePage.ID) then
+  begin
+    Result := WizardSilent;
+    Exit;
+  end;
+  if PageID = UsageCountPage.ID then
   begin
     Result := WizardSilent;
     Exit;
@@ -702,6 +724,8 @@ begin
           RaiseException('Could not save the dedicated-server setup.');
       end;
     end;
+    SaveUsageCountChoice(ExpandConstant('{userappdata}\DuneServer\dune-server.config'),
+      UsageCountPage.Values[0]);
   end;
 end;
 

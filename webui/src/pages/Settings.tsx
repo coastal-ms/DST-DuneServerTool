@@ -9,6 +9,7 @@ import { checkForUpdate, installUpdate, listPreReleases, setUpdateChannel, setPr
 import { publishUpdateCheck } from '../hooks/useUpdateCheck'
 import { fmtToolVersion } from '../format'
 import { AppearanceCard } from './settings/AppearanceCard'
+import { UsageCountCard } from './settings/UsageCountCard'
 import { DashboardAlertsCard } from './settings/DashboardAlertsCard'
 import { PublicIpCard } from './settings/PublicIpCard'
 import { ServerBrowserPingCard } from './settings/ServerBrowserPingCard'
@@ -419,7 +420,7 @@ export function Settings() {
     try {
       const out = await api<{ ok: boolean; complete: boolean; values: Record<string, string> }>(
         '/api/config',
-        { method: 'PUT', body: JSON.stringify({ values }) },
+        { method: 'PUT', body: JSON.stringify({ values: Object.fromEntries(Object.entries(values).filter(([key]) => key !== 'AnonymousUsageEnabled')) }) },
       )
       setValues(out.values)
       setCfg(c => c ? { ...c, complete: out.complete, values: out.values, exists: true } : c)
@@ -682,6 +683,7 @@ export function Settings() {
       <SectionErrorBoundary name="INI backups"><IniBackupsCard /></SectionErrorBoundary>
 
       <SectionErrorBoundary name="Appearance"><AppearanceCard /></SectionErrorBoundary>
+      <SectionErrorBoundary name="Anonymous usage count"><UsageCountCard /></SectionErrorBoundary>
 
       {isShellHost() && (
         <SectionErrorBoundary name="Desktop shell"><ShellPreferencesCard /></SectionErrorBoundary>

@@ -16,6 +16,15 @@ export interface RestartSchedule {
   discordMentionId: string     // role id or 'everyone'/'here' to ping; '' = no ping
   lastRestartDate: string
   lastResult: string
+  updateFailure?: {
+    occurredAt: string
+    source: 'steamcmd' | 'server-update'
+    code: string
+    installedBuild: string
+    latestBuild: string
+    action: string
+    exitCode: number
+  } | null
   updateAvailable: boolean
   installedBuild: string
   latestBuild: string

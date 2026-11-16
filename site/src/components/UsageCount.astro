@@ -1,6 +1,6 @@
 <section class="usage-count site-width" aria-labelledby="usage-count-heading" data-usage-count>
-  <div><p class="eyebrow">The DST community</p><h2 id="usage-count-heading">Active DST installations</h2>
-    <p>Reporting installations seen in the 24 hours before the latest count update. Refreshes automatically every six hours. <a href="/privacy">What is shared</a></p>
+  <div><h2 id="usage-count-heading">Active DST installations</h2>
+    <p>Last 24 hours · Every six hours · <a href="/privacy">What is shared</a></p>
   </div>
   <div class="usage-totals" aria-live="polite" aria-atomic="true">
     <div><strong data-usage-windows>—</strong><span>DST for Windows / Solo</span></div>
@@ -10,11 +10,11 @@
   <noscript>The live count needs JavaScript. Installation reports do not include server names, players, or settings.</noscript>
 </section>
 <style>
-  .usage-count{display:flex;align-items:center;justify-content:space-between;gap:2rem;padding-block:2.5rem;border-block:1px solid var(--line, #34343c)}
-  .usage-count h2{font-size:clamp(1.4rem,3vw,2rem);margin:.3rem 0 .7rem}.usage-count p{max-width:38rem;font-size:.95rem;line-height:1.6}
-  .usage-totals{display:grid;grid-template-columns:repeat(2,minmax(8rem,1fr));text-align:center;gap:1.25rem}
-  .usage-totals strong{display:block;font-size:clamp(1.8rem,4vw,2.5rem);font-variant-numeric:tabular-nums}.usage-totals span{font-size:.85rem}
-  .usage-totals small{grid-column:1/-1;font-size:.75rem;opacity:.7}
+  .usage-count{display:flex;align-items:center;justify-content:space-between;gap:1.5rem;padding-block:1rem;border-block:1px solid var(--color-dune-border)}
+  .usage-count h2{font-size:1.05rem;margin:0 0 .25rem;font-weight:600}.usage-count p{font-size:.75rem;line-height:1.4;color:var(--color-dune-muted)}
+  .usage-totals{display:grid;grid-template-columns:repeat(2,minmax(8rem,1fr));text-align:center;gap:.35rem 1.25rem}
+  .usage-totals strong{display:block;font-size:1.35rem;line-height:1.2;font-variant-numeric:tabular-nums}.usage-totals span{font-size:.75rem}
+  .usage-totals small{grid-column:1/-1;font-size:.65rem;opacity:.7}
   @media(max-width:700px){.usage-count{align-items:flex-start;flex-direction:column}.usage-totals{width:100%}}
 </style>
 <script>

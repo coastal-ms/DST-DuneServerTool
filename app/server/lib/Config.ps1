@@ -4,6 +4,7 @@
 # $script:AppDir (the app/ directory).
 
 $script:DuneConfigKeys = @(
+    'AnonymousUsageEnabled',
     'InstallationMode',
     'SteamPath',
     'SshKey',

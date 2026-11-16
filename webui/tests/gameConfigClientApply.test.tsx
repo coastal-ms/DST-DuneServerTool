@@ -351,6 +351,31 @@ describe('Game Config advanced client compatibility action', () => {
     expect(saveGameConfig).toHaveBeenCalledExactlyOnceWith({ PlayerInventoryStartingSize: '' })
     expect(applyGameConfigClient).not.toHaveBeenCalled()
   })
+  it('reviews and saves both files together and retains both drafts when switching file views', async () => {
+    const user = userEvent.setup()
+    const drafts = new Map<string, SettingsDraft>()
+    const controller = { register: (id: string, draft: SettingsDraft | null) => { if (draft) drafts.set(id, draft); else drafts.delete(id) }, review: vi.fn(), locked: false }
+    vi.mocked(saveGameConfig).mockResolvedValue({ ok: true, applied: 2, source: 'installed', game: config.game, engine: config.engine })
+    const view = (fileFilter?: 'game' | 'engine') => <SettingsApplyContext.Provider value={controller}><GameConfig embedded fileFilter={fileFilter} /></SettingsApplyContext.Provider>
+    const { rerender } = render(view())
+    const game = await screen.findByDisplayValue('70')
+    await user.clear(game); await user.type(game, '85')
+    const engine = await screen.findByDisplayValue('100')
+    await user.clear(engine); await user.type(engine, '125')
+    rerender(view('game'))
+    expect(screen.queryByDisplayValue('125')).not.toBeInTheDocument()
+    expect(screen.getByDisplayValue('85')).toBeInTheDocument()
+    rerender(view())
+    expect(await screen.findByDisplayValue('125')).toBeInTheDocument()
+    const draft = drafts.get('advanced')!
+    expect(draft.changes).toEqual(expect.arrayContaining([
+      expect.objectContaining({ after: '85', target: expect.stringContaining('UserGame.ini') }),
+      expect.objectContaining({ after: '125', target: expect.stringContaining('UserEngine.ini') }),
+    ]))
+    await act(async () => { await draft.validate(); await draft.apply() })
+    expect(saveGameConfig).toHaveBeenCalledExactlyOnceWith({ PlayerInventoryStartingSize: '85', 'Vehicle.MaxVehiclesPerPlayer': '125' })
+    expect(applyGameConfigClient).not.toHaveBeenCalled()
+  })
   it('registers a server draft for shared review and saves only its changed key without touching player files', async () => {
     const user = userEvent.setup()
     const drafts = new Map<string, SettingsDraft>()

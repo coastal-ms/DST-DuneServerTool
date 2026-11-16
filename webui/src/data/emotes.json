@@ -1,0 +1,143 @@
+{
+  "sourceTable": "DT_BaseItems_Emotes",
+  "gameBuild": "2156652-0-shipping",
+  "sourceSha256": "74b70b5dea730e83b1b5d69e5becab9a0d5c0055212d0936b8f337f5193f8057",
+  "entries": [
+    {
+      "template": "Emote_BetaReward",
+      "name": "A Tray A Deez Salute"
+    },
+    {
+      "template": "Emote_AdjustStillsuit",
+      "name": "Adjust Stillsuit"
+    },
+    {
+      "template": "Emote_AtreSalute_01",
+      "name": "Atreides Salute"
+    },
+    {
+      "template": "Emote_Bow_01",
+      "name": "Bow"
+    },
+    {
+      "template": "Emote_Cheer_01",
+      "name": "Cheer"
+    },
+    {
+      "template": "Emote_ChusukMusic_01",
+      "name": "Chusuk Music"
+    },
+    {
+      "template": "Emote_Clap_01",
+      "name": "Clap"
+    },
+    {
+      "template": "Emote_ExamineGround",
+      "name": "Examine Ground"
+    },
+    {
+      "template": "Emote_Follow_01",
+      "name": "Follow"
+    },
+    {
+      "template": "Emote_WatershipperFreeze",
+      "name": "Freeze"
+    },
+    {
+      "template": "Emote_HarkCurse_01",
+      "name": "Harkonnen Curse"
+    },
+    {
+      "template": "Emote_Chestpump",
+      "name": "Heartbeat of War"
+    },
+    {
+      "template": "Emote_Infected",
+      "name": "Infection Takes Hold"
+    },
+    {
+      "template": "Emote_IxianSecret_01",
+      "name": "Ixian Secret"
+    },
+    {
+      "template": "Emote_KaitanBow_01",
+      "name": "Kaitain Bow"
+    },
+    {
+      "template": "Emote_No_01",
+      "name": "No"
+    },
+    {
+      "template": "Emote_Point_01",
+      "name": "Point"
+    },
+    {
+      "template": "Emote_Sardaukar_BloodWipe",
+      "name": "Sardaukar Blood Wipe"
+    },
+    {
+      "template": "Emote_Sardaukar_Kneel",
+      "name": "Sardaukar Kneel"
+    },
+    {
+      "template": "Emote_ScanHorizon",
+      "name": "Scan Horizon"
+    },
+    {
+      "template": "Emote_ShakeOffSand_01",
+      "name": "Shake Off Sand"
+    },
+    {
+      "template": "Emote_Sit_01",
+      "name": "Sit"
+    },
+    {
+      "template": "Emote_SlaveWarning",
+      "name": "Slave Warning"
+    },
+    {
+      "template": "Emote_SunAllergy",
+      "name": "Sun-Sick"
+    },
+    {
+      "template": "Emote_Surrender_01",
+      "name": "Surrender"
+    },
+    {
+      "template": "Emote_Threaten_01",
+      "name": "Threaten"
+    },
+    {
+      "template": "Emote_ThumperForward",
+      "name": "Thumper Ahead"
+    },
+    {
+      "template": "Emote_ThumperBack",
+      "name": "Thumper Behind"
+    },
+    {
+      "template": "Emote_ThumperLeft",
+      "name": "Thumper Left"
+    },
+    {
+      "template": "Emote_ThumperRight",
+      "name": "Thumper Right"
+    },
+    {
+      "template": "Emote_WatershipperSalute",
+      "name": "Water Shipper Salute"
+    },
+    {
+      "template": "Emote_Wave_01",
+      "name": "Wave"
+    },
+    {
+      "template": "Emote_WormSign",
+      "name": "Worm Sign"
+    },
+    {
+      "template": "Emote_Yes_01",
+      "name": "Yes"
+    }
+  ]
+}

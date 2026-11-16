@@ -1,5 +1,6 @@
 """Companion acceptance checks with isolated local feeds and copied saves."""
 import http.client
+import errno
 import importlib.util
 import json
 from pathlib import Path
@@ -19,6 +20,59 @@ spec.loader.exec_module(server)
 
 
 class SoloMapTests(unittest.TestCase):
+    def test_unavailable_saved_port_uses_a_working_authenticated_listener(self):
+        for error in (PermissionError(errno.EACCES, 'Reserved port'),
+                      OSError(errno.EADDRINUSE, 'Port in use')):
+            with self.subTest(error=error), tempfile.TemporaryDirectory() as folder:
+                root = Path(folder)
+                key = 'saved-session-key-abcdefghijklmnopqrstuvwxyz'
+                ready = {'url': f'http://127.0.0.1:50832/?key={key}'}
+                (root / 'ready.json').write_text(json.dumps(ready), encoding='utf-8')
+                preferences = {'schema': 1, 'layers': ['vehicle']}
+                (root / 'preferences.json').write_text(json.dumps(preferences), encoding='utf-8')
+                args = SimpleNamespace(data=root, launch='new-launch', assets=root,
+                                       terrain=root / 'terrain.webp')
+                listener = server.ThreadingHTTPServer
+                def bind(address, handler):
+                    if address[1] == 50832:
+                        raise error
+                    return listener(address, handler)
+                with patch.object(server.atlas_assets, 'marker_icons', return_value={}), \
+                        patch.object(server, 'ThreadingHTTPServer', side_effect=bind):
+                    httpd, actual_key = server.create_server(args)
+                thread = threading.Thread(target=httpd.serve_forever,
+                                          kwargs={'poll_interval': .01}, daemon=True)
+                thread.start()
+                connection = http.client.HTTPConnection('127.0.0.1', httpd.server_port, timeout=5)
+                try:
+                    self.assertNotEqual(httpd.server_port, 50832)
+                    self.assertEqual(actual_key, key)
+                    connection.request('GET', '/health?key=' + key)
+                    response = connection.getresponse()
+                    self.assertEqual(response.status, 200)
+                    self.assertEqual(json.loads(response.read())['launchId'], 'new-launch')
+                    self.assertEqual(server.MapPreferences(root).load(), preferences)
+                    self.assertEqual(json.loads((root / 'ready.json').read_text()), ready)
+                finally:
+                    connection.close()
+                    httpd.shutdown()
+                    thread.join(timeout=5)
+                    httpd.server_close()
+
+    def test_unexpected_listener_errors_are_not_hidden_by_port_fallback(self):
+        with tempfile.TemporaryDirectory() as folder:
+            root = Path(folder)
+            (root / 'ready.json').write_text(json.dumps({
+                'url': 'http://127.0.0.1:50832/?key=abcdefghijklmnopqrstuvwxyz123456'}))
+            args = SimpleNamespace(data=root, launch='fixture', assets=root,
+                                   terrain=root / 'terrain.webp')
+            with patch.object(server.atlas_assets, 'marker_icons', return_value={}), \
+                    patch.object(server, 'ThreadingHTTPServer',
+                                 side_effect=OSError(errno.ENOBUFS, 'No buffers')) as listener:
+                with self.assertRaisesRegex(OSError, 'No buffers'):
+                    server.create_server(args)
+                listener.assert_called_once()
+
     def test_clean_solo_terrain_uses_permanent_layout_and_preserves_override(self):
         with tempfile.TemporaryDirectory() as folder:
             root = Path(folder)
