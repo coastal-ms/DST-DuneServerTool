@@ -1,0 +1,56 @@
+<section class="usage-count site-width" aria-labelledby="usage-count-heading" data-usage-count>
+  <div><p class="eyebrow">The DST community</p><h2 id="usage-count-heading">Active DST installations</h2>
+    <p>Reporting installations seen in the 24 hours before the latest count update. Refreshes automatically every six hours. <a href="/privacy">What is shared</a></p>
+  </div>
+  <div class="usage-totals" aria-live="polite" aria-atomic="true">
+    <div><strong data-usage-windows>—</strong><span>DST for Windows / Solo</span></div>
+    <div><strong data-usage-docker>—</strong><span>DST Docker</span></div>
+    <small data-usage-status>Loading the latest count…</small>
+  </div>
+  <noscript>The live count needs JavaScript. Installation reports do not include server names, players, or settings.</noscript>
+</section>
+<style>
+  .usage-count{display:flex;align-items:center;justify-content:space-between;gap:2rem;padding-block:2.5rem;border-block:1px solid var(--line, #34343c)}
+  .usage-count h2{font-size:clamp(1.4rem,3vw,2rem);margin:.3rem 0 .7rem}.usage-count p{max-width:38rem;font-size:.95rem;line-height:1.6}
+  .usage-totals{display:grid;grid-template-columns:repeat(2,minmax(8rem,1fr));text-align:center;gap:1.25rem}
+  .usage-totals strong{display:block;font-size:clamp(1.8rem,4vw,2.5rem);font-variant-numeric:tabular-nums}.usage-totals span{font-size:.85rem}
+  .usage-totals small{grid-column:1/-1;font-size:.75rem;opacity:.7}
+  @media(max-width:700px){.usage-count{align-items:flex-start;flex-direction:column}.usage-totals{width:100%}}
+</style>
+<script>
+  const root = document.querySelector('[data-usage-count]')
+  if (root) {
+    let refreshing = false
+    const sixHours = 6 * 60 * 60 * 1000
+    const refresh = () => {
+      if (refreshing) return
+      refreshing = true
+      let nextRefresh = sixHours
+      const controller = new AbortController()
+      const timer = setTimeout(() => controller.abort(), 5000)
+      void fetch('/api/usage.php', { signal: controller.signal, credentials: 'omit', cache: 'no-store' })
+      .then(async response => { if (!response.ok) throw new Error('Unavailable'); return response.json() })
+      .then(counts => {
+        if (counts.protocol !== 1 || counts.windowHours !== 24 || counts.refreshHours !== 6 ||
+          !Number.isSafeInteger(counts.updatedAt) || counts.updatedAt <= 0 ||
+          !['total','windows','docker'].every(key => Number.isSafeInteger(counts[key]) && counts[key] >= 0) ||
+          counts.total !== counts.windows + counts.docker) throw new Error('Invalid count')
+        for (const key of ['windows','docker']) {
+          const element = root.querySelector(`[data-usage-${key}]`)
+          if (element) element.textContent = counts[key].toLocaleString()
+        }
+        const status = root.querySelector('[data-usage-status]')
+        if (status) status.textContent = `Updated ${new Date(counts.updatedAt * 1000).toLocaleString([], { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })} · Refreshes every six hours`
+        nextRefresh = Math.max(1000, Math.min(sixHours, (counts.updatedAt * 1000 + sixHours) - Date.now()))
+      }).catch(() => {
+        for (const element of root.querySelectorAll('[data-usage-windows], [data-usage-docker]')) element.textContent = '—'
+        const status = root.querySelector('[data-usage-status]')
+        if (status) status.textContent = 'Count temporarily unavailable'
+      }).finally(() => {
+        clearTimeout(timer); refreshing = false
+        setTimeout(refresh, nextRefresh)
+      })
+    }
+    refresh()
+  }
+</script>
