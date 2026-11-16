@@ -30,7 +30,6 @@ here cover everything those tags shipped.
 
 ### Changed
 - Clarify server settings guidance and warn when Solo preset-controlled settings need Custom difficulty.
-- Keep Community installation totals hidden while reports accumulate.
 
 ## [16.8.0-preview4] - 2026-11-14
 
