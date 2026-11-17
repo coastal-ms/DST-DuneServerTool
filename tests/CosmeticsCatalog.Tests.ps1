@@ -149,6 +149,54 @@ Describe 'Get-DuneCosmeticsCatalog includes the full building-set universe' -Tag
 }
 
 
+Describe 'Cosmetic tokens without naming suffixes' {
+    BeforeAll {
+        $script:expandedCatalog = Get-DuneCosmeticsCatalog
+        $script:missingCosmeticIds = @(
+            'Halloween2026_PlagueDoctorMask_Hood','Halloween2026_PlagueDoctorMask_NoHood',
+            'B1C3_GSuit','B1C3_Shaman_Raider','B1C3_LaborerLight','B1C3_Hark_Karpov_Rifle',
+            'B1C3_AtreidesRusher','B1C3_HarkonnenAssault','WaterShipperWarmsuit',
+            'WaterShipperHeavy','WaterShipperLight','Polarcap_Legendary_Heavy',
+            'Polarcap_Legendary_Light','ThePit_Cosmetic_Armor_Light','Taligari_Pistol',
+            'AgentX_Stillsuit','Maas_Kharet_Heavy','Jackal_Blindfold','SardaukarCaptain_Sword','Sietch_Dyepack'
+        )
+    }
+    It 'includes every current customization workflow rather than only name-pattern matches' {
+        $coverage = Get-Content (Join-Path $PSScriptRoot '../app/data/game-item-coverage.json') -Raw -Encoding UTF8 | ConvertFrom-Json
+        $missing = @($coverage.items.PSObject.Properties | Where-Object {
+            $_.Value.workflow -eq 'customizations' -and $_.Name -cnotin $script:expandedCatalog.templates.template
+        })
+        $missing.Name | Should -BeNullOrEmpty
+    }
+    It 'exposes all twenty missing tokens once with the original game names and normal token grant method' {
+        foreach ($id in $script:missingCosmeticIds) {
+            $entry = @($script:expandedCatalog.templates | Where-Object template -CEQ $id)
+            $entry.Count | Should -Be 1
+            $entry[0].name | Should -BeExactly $script:DuneGameplayItemNames[$id]
+            $entry[0].grant_method | Should -Not -Be 'character'
+            $entry[0].bulk_building_set | Should -BeFalse
+        }
+    }
+    It 'routes the new tokens into the existing armor, weapon and dye grant groups' {
+        $weapons = @('B1C3_Hark_Karpov_Rifle','Taligari_Pistol','SardaukarCaptain_Sword')
+        foreach ($id in $script:missingCosmeticIds) {
+            $expected = if ($id -eq 'Sietch_Dyepack') { 'Swatches (Dyes)' }
+                        elseif ($id -in $weapons) { 'Weapon Skins' } else { 'Armor & Suit Sets' }
+            ($script:expandedCatalog.templates | Where-Object template -CEQ $id).group | Should -BeExactly $expected
+            $kind = if ($id -eq 'Sietch_Dyepack') { 'dyes' } elseif ($id -in $weapons) { 'weapon' } else { 'armor' }
+            (Get-DuneSkinGrantCatalog -Kind $kind).template | Should -Contain $id
+        }
+    }
+    It 'does not infer cosmetic grantability from ordinary armor and weapon names' {
+        $script:expandedCatalog.templates.template | Should -Not -Contain 'D_AdvancedStillsuit'
+        $script:expandedCatalog.templates.template | Should -Not -Contain 'RepairTool5'
+        $coverage = Get-Content (Join-Path $PSScriptRoot '../app/data/game-item-coverage.json') -Raw -Encoding UTF8 | ConvertFrom-Json
+        foreach ($entry in (Get-DuneCosmeticGrantMetadata).catalog_groups.PSObject.Properties) {
+            $coverage.items.PSObject.Properties[$entry.Name].Value.workflow | Should -Be 'customizations'
+        }
+    }
+}
+
 Describe 'Bulk building set catalog' {
     It 'omits every tech buildable from individual and bulk grants' {
         $tech = Get-Content (Join-Path $PSScriptRoot '../app/data/dune-tech-catalog.json') -Raw | ConvertFrom-Json

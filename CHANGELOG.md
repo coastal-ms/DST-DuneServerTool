@@ -13,6 +13,11 @@ here cover everything those tags shipped.
 
 ## [Unreleased]
 
+## [16.8.1] - 2026-11-17
+
+### Fixed
+- Restore missing cosmetic entries in Solo and self-hosted grant lists, including the Contagion Cowl and Contagion Visor.
+
 ## [16.8.0] - 2026-11-15
 
 ### Added

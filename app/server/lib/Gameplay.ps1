@@ -201,12 +201,22 @@ function Get-DuneCharacterAppearanceCatalog {
 function Get-DuneCosmeticsCatalog {
     Initialize-DuneGameplayItemData
     Initialize-DuneBuildingSets
+    # Exact cosmetic tokens whose game IDs lack the historical naming suffixes.
+    # Keep their group explicit; do not infer grantability from every armor/weapon name.
+    $catalogGroups = (Get-DuneCosmeticGrantMetadata).catalog_groups
     $out = @()
     foreach ($k in $script:DuneGameplayItemNames.Keys) {
         $name = [string]$script:DuneGameplayItemNames[$k]
         if (-not $name) { $name = [string]$k }
         $group = $null
-        if     ($k -match 'SetVariant')        { $group = 'Armor & Suit Sets' }
+        $explicitGroup = if ($catalogGroups) { $catalogGroups.PSObject.Properties[[string]$k] } else { $null }
+        if ($explicitGroup) {
+            if ([string]$explicitGroup.Value -notin @('Armor & Suit Sets','Weapon Skins','Swatches (Dyes)','Vehicle Skins','Other Customization')) {
+                throw 'Unsupported cosmetic catalog group.'
+            }
+            $group = [string]$explicitGroup.Value
+        }
+        elseif ($k -match 'SetVariant')        { $group = 'Armor & Suit Sets' }
         elseif ($k -match 'Swatch')            { $group = 'Swatches (Dyes)' }
         elseif ($k -match 'MeshCustomization') { $group = 'Vehicle Skins' }
         elseif ($k -match 'Variant$' -or $name -match '\bVariant$') {
