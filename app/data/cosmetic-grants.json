@@ -1,4 +1,26 @@
 {
+  "catalog_groups": {
+    "Halloween2026_PlagueDoctorMask_Hood": "Armor & Suit Sets",
+    "Halloween2026_PlagueDoctorMask_NoHood": "Armor & Suit Sets",
+    "B1C3_GSuit": "Armor & Suit Sets",
+    "B1C3_Shaman_Raider": "Armor & Suit Sets",
+    "B1C3_LaborerLight": "Armor & Suit Sets",
+    "B1C3_Hark_Karpov_Rifle": "Weapon Skins",
+    "B1C3_AtreidesRusher": "Armor & Suit Sets",
+    "B1C3_HarkonnenAssault": "Armor & Suit Sets",
+    "WaterShipperWarmsuit": "Armor & Suit Sets",
+    "WaterShipperHeavy": "Armor & Suit Sets",
+    "WaterShipperLight": "Armor & Suit Sets",
+    "Polarcap_Legendary_Heavy": "Armor & Suit Sets",
+    "Polarcap_Legendary_Light": "Armor & Suit Sets",
+    "ThePit_Cosmetic_Armor_Light": "Armor & Suit Sets",
+    "Taligari_Pistol": "Weapon Skins",
+    "AgentX_Stillsuit": "Armor & Suit Sets",
+    "Maas_Kharet_Heavy": "Armor & Suit Sets",
+    "Jackal_Blindfold": "Armor & Suit Sets",
+    "SardaukarCaptain_Sword": "Weapon Skins",
+    "Sietch_Dyepack": "Swatches (Dyes)"
+  },
   "unsupported_tokens": [
     "D_Choam_Assault_SetVariant",
     "D_Choam_HeavyArmor_SetVariant",

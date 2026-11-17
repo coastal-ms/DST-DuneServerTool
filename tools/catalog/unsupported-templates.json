@@ -1,0 +1,46 @@
+{
+  "schemaVersion": 1,
+  "entries": [
+    {
+      "template": "D_TestEmote",
+      "workflow": "emotes",
+      "gameName": "Test Emote",
+      "actionClass": "Class'GameActions_Emote'",
+      "issue": "missing-emote-grant-entry",
+      "reason": "Game-defined test emote; excluded from the released emote grant list."
+    },
+    {
+      "template": "D_Emote_Challenge_01",
+      "workflow": "emotes",
+      "gameName": "OLD_DONOTUSE_Challenge",
+      "actionClass": "Class'GameActions_Emote'",
+      "issue": "missing-emote-grant-entry",
+      "reason": "Game display name explicitly marks this emote OLD_DONOTUSE."
+    },
+    {
+      "template": "D_Emote_Signal_01",
+      "workflow": "emotes",
+      "gameName": "OLD_DONOTUSE_Signal",
+      "actionClass": "Class'GameActions_Emote'",
+      "issue": "missing-emote-grant-entry",
+      "reason": "Game display name explicitly marks this emote OLD_DONOTUSE."
+    },
+    {
+      "template": "Emote_SillySalute",
+      "workflow": "emotes",
+      "gameName": "XX_Silly Salute",
+      "actionClass": "Class'GameActions_Emote'",
+      "issue": "missing-emote-grant-entry",
+      "reason": "Game-defined XX placeholder emote; excluded from the released emote grant list."
+    },
+    {
+      "template": "SmugglersReputation",
+      "workflow": "faction-progression",
+      "gameName": "SmugglersReputation",
+      "actionClass": "Class'GameItemActionAddFactionReputation'",
+      "issue": "missing-faction-progression-entry",
+      "modes": ["self-hosted", "solo"],
+      "reason": "Released faction reputation controls and backend guards support only Atreides and Harkonnen. No Smuggler reputation grant is supported."
+    }
+  ]
+}

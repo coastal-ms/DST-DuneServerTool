@@ -272,6 +272,8 @@ jobs:
           python3 -B -m unittest discover -s tools/atlas -p test_elf.py -v
       - name: Verify current game item catalog coverage
         run: python3 -B -m unittest discover -s tests -p test_item_catalog_coverage.py -v
+      - name: Audit actual catalog availability
+        run: python3 -B tools/catalog/audit-items.py
 
   solo-helper:
     if: ${{ github.event_name != 'pull_request' || github.event.pull_request.draft == false }}
