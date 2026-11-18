@@ -88,11 +88,17 @@ class UsageCollectorTests(unittest.TestCase):
         self.assertEqual(self.snapshot()['total'], 0)
         self.assertEqual(self.request('DELETE', {'id': self.identity}, self.token)[0], 200)
 
-    def test_expired_records_are_removed_and_no_longer_counted(self):
+    def test_confirmed_installations_remain_counted_after_24_hours(self):
         self.report()
         with closing(sqlite3.connect(str(self.data / 'presence.sqlite'))) as db, db: db.execute('UPDATE presence SET seen_at=?', (int(time.time())-86401,))
-        self.assertEqual(self.snapshot()['total'], 0)
-        with closing(sqlite3.connect(str(self.data / 'presence.sqlite'))) as db: self.assertEqual(db.execute('SELECT count(*) FROM presence').fetchone()[0], 0)
+        legacy_snapshot = {'protocol': 1, 'windowHours': 24, 'refreshHours': 6,
+                           'updatedAt': int(time.time()), 'total': 0, 'windows': 0, 'docker': 0}
+        (self.data / 'snapshot.json').write_text(json.dumps(legacy_snapshot), encoding='utf-8')
+        self.assertEqual(self.request()[1]['windows'], 1)
+        self.assertEqual(self.request('POST', {'id': str(uuid.uuid4()), 'edition': 'docker', 'version': '1.0.7'}, secrets.token_hex(32))[0], 200)
+        self.assertEqual(self.snapshot()['total'], 2)
+        with closing(sqlite3.connect(str(self.data / 'presence.sqlite'))) as db:
+            self.assertEqual(db.execute('SELECT count(*) FROM presence').fetchone()[0], 2)
 
     def test_unknown_or_private_fields_are_rejected(self):
         for key in ['serverName', 'ip', 'players', 'config', 'account', 'logs']:
@@ -130,7 +136,7 @@ class UsageCollectorTests(unittest.TestCase):
         with urllib.request.urlopen(self.url, timeout=5) as reply:
             self.assertEqual(reply.headers['Cache-Control'], 'no-store')
             value = json.load(reply)
-        self.assertEqual(set(value), {'protocol','windowHours','refreshHours','updatedAt','total','windows','docker'})
+        self.assertEqual(set(value), {'protocol','basis','refreshHours','updatedAt','total','windows','docker'})
         self.assertNotIn(self.identity, json.dumps(value)); self.assertNotIn(self.token, json.dumps(value))
 
     def test_rejects_unsupported_methods_and_oversized_reports(self):

@@ -1,6 +1,6 @@
 <section class="usage-count site-width" aria-labelledby="usage-count-heading" data-usage-count>
-  <div><h2 id="usage-count-heading">Active DST installations</h2>
-    <p>Last 24 hours · Every six hours · <a href="/privacy">What is shared</a></p>
+  <div><h2 id="usage-count-heading">Confirmed DST installations</h2>
+    <p>Updates every six hours · <a href="/privacy">What is shared</a></p>
   </div>
   <div class="usage-totals" aria-live="polite" aria-atomic="true">
     <div><strong data-usage-windows>—</strong><span>DST for Windows / Solo</span></div>
@@ -31,7 +31,7 @@
       void fetch('/api/usage.php', { signal: controller.signal, credentials: 'omit', cache: 'no-store' })
       .then(async response => { if (!response.ok) throw new Error('Unavailable'); return response.json() })
       .then(counts => {
-        if (counts.protocol !== 1 || counts.windowHours !== 24 || counts.refreshHours !== 6 ||
+        if (counts.protocol !== 1 || counts.basis !== 'confirmed-installations' || counts.refreshHours !== 6 ||
           !Number.isSafeInteger(counts.updatedAt) || counts.updatedAt <= 0 ||
           !['total','windows','docker'].every(key => Number.isSafeInteger(counts[key]) && counts[key] >= 0) ||
           counts.total !== counts.windows + counts.docker) throw new Error('Invalid count')

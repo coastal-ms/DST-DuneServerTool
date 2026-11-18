@@ -42,27 +42,23 @@ try {
     $db = new PDO('sqlite:' . $database, null, null, [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION, PDO::ATTR_TIMEOUT => 3]);
     $db->exec('PRAGMA journal_mode=WAL');
     $db->exec('CREATE TABLE IF NOT EXISTS presence (id_hash TEXT PRIMARY KEY, token_hash TEXT NOT NULL, edition TEXT NOT NULL, version TEXT NOT NULL, seen_at INTEGER NOT NULL)');
-    $db->exec('CREATE INDEX IF NOT EXISTS presence_seen ON presence(seen_at)');
     $now = time();
-    $cutoff = $now - 86400;
-    $expire = $db->prepare('DELETE FROM presence WHERE seen_at < ?');
-    $expire->execute([$cutoff]);
     if ($method === 'GET') {
         $snapshotPath = $directory . '/snapshot.json';
         $lock = fopen($directory . '/snapshot.lock', 'c');
         if ($lock === false || !flock($lock, LOCK_EX)) { throw new RuntimeException('Snapshot unavailable.'); }
         $snapshot = is_file($snapshotPath) ? json_decode((string)file_get_contents($snapshotPath), true) : null;
         if (!$forceSnapshot && is_array($snapshot) && ($snapshot['protocol'] ?? null) === 1 &&
+            ($snapshot['basis'] ?? null) === 'confirmed-installations' &&
             is_int($snapshot['updatedAt'] ?? null) && $snapshot['updatedAt'] <= $now &&
             $snapshot['updatedAt'] > $now - 21600) {
             flock($lock, LOCK_UN); fclose($lock);
             reply(200, $snapshot);
         }
-        $query = $db->prepare('SELECT edition, count(*) AS total FROM presence WHERE seen_at >= ? GROUP BY edition');
-        $query->execute([$cutoff]);
+        $query = $db->query('SELECT edition, count(*) AS total FROM presence GROUP BY edition');
         $counts = ['windows' => 0, 'docker' => 0];
         foreach ($query as $row) { $counts[$row['edition']] = (int)$row['total']; }
-        $snapshot = ['protocol' => 1, 'windowHours' => 24, 'refreshHours' => 6, 'updatedAt' => $now,
+        $snapshot = ['protocol' => 1, 'basis' => 'confirmed-installations', 'refreshHours' => 6, 'updatedAt' => $now,
                      'total' => array_sum($counts), 'windows' => $counts['windows'], 'docker' => $counts['docker']];
         $temporary = $snapshotPath . '.' . bin2hex(random_bytes(8)) . '.tmp';
         if (file_put_contents($temporary, json_encode($snapshot), LOCK_EX) === false || !rename($temporary, $snapshotPath)) {
@@ -113,7 +109,6 @@ try {
                 $insert->execute([$idHash, $tokenHash, $body['edition'], $body['version'], $now]);
             }
         }
-        $prune = $db->prepare('DELETE FROM presence WHERE seen_at < ?'); $prune->execute([$cutoff]);
         $db->exec('COMMIT');
     } catch (Throwable $error) {
         try { $db->exec('ROLLBACK'); } catch (Throwable $ignored) {}
