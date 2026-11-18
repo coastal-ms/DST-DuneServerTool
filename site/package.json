@@ -25,12 +25,14 @@
     "@tailwindcss/vite": "^4.3.3",
     "astro": "7.4.7",
     "marked": "^18.0.9",
+    "picomatch": "file:../tools/glob-matcher",
     "sharp": "^0.35.4",
     "tailwindcss": "^4.0.0",
     "typescript": "~5.7.2"
   },
   "overrides": {
     "nanoid": "3.3.18",
+    "picomatch": "$picomatch",
     "postcss-selector-parser": "7.1.6",
     "vite": "8.2.4"
   },

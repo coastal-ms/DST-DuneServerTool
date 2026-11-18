@@ -56,6 +56,15 @@
     ]
   },
   {
+    "name": "@isaacs/nonrecursive-glob-match",
+    "version": "1.1.0",
+    "license": "BlueOak-1.0.0",
+    "packageSource": "https://registry.npmjs.org/@isaacs/nonrecursive-glob-match/-/nonrecursive-glob-match-1.1.0.tgz",
+    "notices": [
+      "LICENSE.md"
+    ]
+  },
+  {
     "name": "@jridgewell/gen-mapping",
     "version": "0.3.13",
     "license": "MIT",
@@ -278,6 +287,32 @@
     ]
   },
   {
+    "name": "balanced-match",
+    "version": "4.0.4",
+    "license": "MIT",
+    "packageSource": "https://registry.npmjs.org/balanced-match/-/balanced-match-4.0.4.tgz",
+    "repository": {
+      "type": "git",
+      "url": "git://github.com/juliangruber/balanced-match.git"
+    },
+    "notices": [
+      "LICENSE.md"
+    ]
+  },
+  {
+    "name": "brace-expansion",
+    "version": "5.0.12",
+    "license": "MIT",
+    "packageSource": "https://registry.npmjs.org/brace-expansion/-/brace-expansion-5.0.12.tgz",
+    "repository": {
+      "type": "git",
+      "url": "git+https://github.com/juliangruber/brace-expansion.git"
+    },
+    "notices": [
+      "LICENSE"
+    ]
+  },
+  {
     "name": "detect-libc",
     "version": "2.1.2",
     "license": "Apache-2.0",
@@ -304,6 +339,19 @@
     ]
   },
   {
+    "name": "minimatch",
+    "version": "11.0.9",
+    "license": "BlueOak-1.0.0",
+    "packageSource": "https://registry.npmjs.org/minimatch/-/minimatch-11.0.9.tgz",
+    "repository": {
+      "type": "git",
+      "url": "git+ssh://git@github.com/isaacs/minimatch.git"
+    },
+    "notices": [
+      "LICENSE.md"
+    ]
+  },
+  {
     "name": "enhanced-resolve",
     "version": "5.24.5",
     "license": "MIT",
@@ -327,6 +375,19 @@
     },
     "notices": [
       "LICENSE"
+    ]
+  },
+  {
+    "name": "globrex",
+    "version": "0.1.2",
+    "license": "MIT",
+    "packageSource": "https://registry.npmjs.org/globrex/-/globrex-0.1.2.tgz",
+    "repository": {
+      "type": "git",
+      "url": "https://github.com/terkelg/globrex"
+    },
+    "notices": [
+      "license"
     ]
   },
   {
@@ -460,14 +521,10 @@
     ]
   },
   {
-    "name": "picomatch",
-    "version": "4.0.5",
-    "license": "MIT",
-    "packageSource": "https://registry.npmjs.org/picomatch/-/picomatch-4.0.5.tgz",
-    "repository": "micromatch/picomatch",
-    "notices": [
-      "LICENSE"
-    ]
+    "name": "dst-glob-matcher",
+    "version": "1.0.0",
+    "packageSource": "file:../tools/glob-matcher",
+    "notices": []
   },
   {
     "name": "postcss",

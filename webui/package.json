@@ -45,6 +45,7 @@
     "eslint-plugin-react-refresh": "^0.5.4",
     "globals": "^17.11.0",
     "jsdom": "^30.0.1",
+    "picomatch": "file:../tools/glob-matcher",
     "typescript": "~6.0.2",
     "typescript-eslint": "^8.67.0",
     "vite": "8.2.4",
@@ -55,6 +56,7 @@
     "esbuild": "0.28.1",
     "minimatch": "11.0.1",
     "nanoid": "3.3.18",
+    "picomatch": "$picomatch",
     "postcss": "8.5.23"
   }
 }
