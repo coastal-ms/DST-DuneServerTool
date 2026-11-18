@@ -1,0 +1,11 @@
+{
+  "name": "dst-glob-matcher",
+  "version": "1.0.0",
+  "private": true,
+  "main": "index.cjs",
+  "files": ["index.cjs"],
+  "dependencies": {
+    "dst-glob-engine": "npm:minimatch@11.0.9",
+    "globrex": "0.1.2"
+  }
+}
