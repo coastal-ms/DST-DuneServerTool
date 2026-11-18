@@ -25,7 +25,7 @@ rsync -rlt --delay-updates --include='*/' --include='*.html' --exclude='*' -e "$
 printf -v usage_refresh_command 'php %q --refresh' "$WEBSITE_ROOT/api/usage.php"
 "$key_dir/ssh" "$WEBSITE_USER@$WEBSITE_HOST" "$usage_refresh_command" > "$key_dir/usage-initial.json"
 curl --fail --silent --show-error --retry 3 https://duneservertool.com/api/usage.php > "$key_dir/usage.json"
-node -e 'const fs=require("node:fs");const s=JSON.parse(fs.readFileSync(process.argv[1],"utf8"));if(s.protocol!==1||s.windowHours!==24||s.refreshHours!==6||!Number.isSafeInteger(s.updatedAt)||![s.windows,s.docker,s.total].every(v=>Number.isSafeInteger(v)&&v>=0)||s.total!==s.windows+s.docker)throw Error("Live installation count endpoint did not return a valid snapshot")' "$key_dir/usage.json"
+node -e 'const fs=require("node:fs");const s=JSON.parse(fs.readFileSync(process.argv[1],"utf8"));if(s.protocol!==1||s.basis!=="confirmed-installations"||s.refreshHours!==6||!Number.isSafeInteger(s.updatedAt)||![s.windows,s.docker,s.total].every(v=>Number.isSafeInteger(v)&&v>=0)||s.total!==s.windows+s.docker)throw Error("Live installation count endpoint did not return a valid snapshot")' "$key_dir/usage.json"
 curl --fail --location --silent --show-error --retry 3 https://duneservertool.com/install/ > "$key_dir/install.html"
 if [[ -n "${EXPECTED_RELEASE:-}" ]]; then
   grep -F "https://github.com/coastal-ms/DST-DuneServerTool/releases/download/$EXPECTED_RELEASE/DuneServerSetup.exe" "$key_dir/install.html" > /dev/null || { echo 'Live installer link does not match the release'; exit 1; }
