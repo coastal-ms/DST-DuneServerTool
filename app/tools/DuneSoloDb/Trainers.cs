@@ -134,7 +134,8 @@ internal static partial class Program
         var contracts = catalog.GetProperty("contract_tags").EnumerateObject()
             .Where(p => p.Name.StartsWith("DA_CT_Trainer_" + job, StringComparison.Ordinal)
                 && p.Name.Length > ("DA_CT_Trainer_" + job).Length
-                && char.IsDigit(p.Name[("DA_CT_Trainer_" + job).Length]))
+                && char.IsDigit(p.Name[("DA_CT_Trainer_" + job).Length])
+                && !p.Name.Contains("_Funnel_", StringComparison.Ordinal))
             .Select(p => p.Name).ToArray();
         if (contracts.Length == 0) throw new InvalidDataException("Trainer contracts are missing from the catalog.");
         string[] Values(string group, string key) => catalog.TryGetProperty(group, out var section)

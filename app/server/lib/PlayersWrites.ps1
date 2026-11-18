@@ -196,7 +196,7 @@ function Get-DuneAllJourneyTags {
 }
 
 function Resolve-DuneContractTagsForId {
-    param([string]$ContractId)
+    param([string]$ContractId, [switch]$AllowRemovalOnly)
     _Load-DuneTagsData
     $name = $ContractId
     if ($script:DuneTagsData.contractAliases.ContainsKey($ContractId)) {
@@ -206,7 +206,7 @@ function Resolve-DuneContractTagsForId {
         return @{ ok = $false; error = "unknown contract '$ContractId' (check dune-tags.json)" }
     }
     $tags = @($script:DuneTagsData.contractTags[$name] | ForEach-Object { [string]$_ })
-    if ($tags.Count -eq 0) {
+    if ($tags.Count -eq 0 -and -not ($AllowRemovalOnly -and $script:DuneTagsData.contractRemoveTags[$name])) {
         return @{ ok = $false; error = "contract '$name' has no AddedFlagsOnCompletion" }
     }
     return @{ ok = $true; name = $name; tags = $tags }
@@ -2580,7 +2580,7 @@ function Invoke-DunePlayerCompleteContracts {
     $resolved = New-Object System.Collections.Generic.List[string]
 
     foreach ($id in $ContractIds) {
-        $r = Resolve-DuneContractTagsForId -ContractId $id
+        $r = Resolve-DuneContractTagsForId -ContractId $id -AllowRemovalOnly
         if (-not $r.ok) { return @{ ok = $false; error = $r.error } }
         [void]$resolved.Add($r.name)
         foreach ($t in $r.tags) {

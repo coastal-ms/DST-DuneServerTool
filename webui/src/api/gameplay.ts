@@ -2259,7 +2259,7 @@ export function getPartitions() {
   return api<{ ok: boolean; partitions: PartitionRow[]; source: DataSource }>('/api/gameplay/players/partitions')
 }
 
-export interface ContractRow { id: string; alias?: string; tag_count?: number }
+export interface ContractRow { id: string; alias?: string; name?: string; chains?: string[]; tag_count?: number }
 export function getContracts() {
   return api<{ ok: boolean; contracts: ContractRow[]; source: DataSource }>('/api/gameplay/contracts')
 }

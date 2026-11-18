@@ -1246,6 +1246,43 @@
     ],
     "DA_CT_Halloween_Week3_02": [
       "Contract.Tracking.Completed.Halloween_Week3_02"
+    ],
+    "DA_CT_Chapter3_DeliverSpiceToElara": [
+      "Contract.Tracking.Completed.Elara.DeliveredSpiceBribe"
+    ],
+    "DA_CT_Halloween_Week3_03": [],
+    "DA_CT_Survival1_Kirab1_05": [
+      "Contract.Tracking.Completed.Kirab1_Contract5"
+    ],
+    "DA_CT_Trainer_BeneGesserit1_Funnel_01": [
+      "Contract.Tracking.Completed.BeneGesseritFunnel1"
+    ],
+    "DA_CT_Trainer_Mentat1_Funnel_01": [
+      "Contract.Tracking.Completed.MentatFunnel1"
+    ],
+    "DA_CT_Trainer_Planetologist2_Funnel_01": [
+      "Contract.Tracking.Completed.PlanetologistFunnel2_01"
+    ],
+    "DA_CT_Trainer_Planetologist2_Funnel_02": [
+      "Contract.Tracking.Completed.PlanetologistFunnel2_02"
+    ],
+    "DA_CT_Trainer_Planetologist2_Funnel_03": [
+      "Contract.Tracking.Completed.PlanetologistFunnel2_03"
+    ],
+    "DA_CT_Trainer_Planetologist2_Funnel_04": [
+      "Contract.Tracking.Completed.PlanetologistFunnel2_04"
+    ],
+    "DA_CT_Trainer_Planetologist2_Funnel_05": [
+      "Contract.Tracking.Completed.PlanetologistFunnel2_05"
+    ],
+    "DA_CT_Trainer_Swordmaster1_Funnel_01": [
+      "Contract.Tracking.Completed.SwordmasterFunnel1"
+    ],
+    "DA_CT_Trainer_Trooper1_Funnel_01": [
+      "Contract.Tracking.Completed.TrooperFunnel1"
+    ],
+    "DA_CT_Trainer_Planetologist1_Funnel_01": [
+      "Contract.Tracking.Completed.PlanetologistFunnel1"
     ]
   },
   "contract_aliases": {
@@ -1516,7 +1553,20 @@
     "A New Lead": "DA_CT_Halloween_Week2_01_Funnel",
     "What the Doctor ordered": "DA_CT_Halloween_Week3_01",
     "A Troubling Discovery": "DA_CT_Halloween_Week3_01_Funnel",
-    "Patient Zero": "DA_CT_Halloween_Week3_02"
+    "Patient Zero": "DA_CT_Halloween_Week3_02",
+    "Chapter3_DeliverSpiceToElara": "DA_CT_Chapter3_DeliverSpiceToElara",
+    "Halloween_Week3_03": "DA_CT_Halloween_Week3_03",
+    "Survival1_Kirab1_05": "DA_CT_Survival1_Kirab1_05",
+    "Trainer_BeneGesserit1_Funnel_01": "DA_CT_Trainer_BeneGesserit1_Funnel_01",
+    "Trainer_Mentat1_Funnel_01": "DA_CT_Trainer_Mentat1_Funnel_01",
+    "Trainer_Planetologist2_Funnel_01": "DA_CT_Trainer_Planetologist2_Funnel_01",
+    "Trainer_Planetologist2_Funnel_02": "DA_CT_Trainer_Planetologist2_Funnel_02",
+    "Trainer_Planetologist2_Funnel_03": "DA_CT_Trainer_Planetologist2_Funnel_03",
+    "Trainer_Planetologist2_Funnel_04": "DA_CT_Trainer_Planetologist2_Funnel_04",
+    "Trainer_Planetologist2_Funnel_05": "DA_CT_Trainer_Planetologist2_Funnel_05",
+    "Trainer_Swordmaster1_Funnel_01": "DA_CT_Trainer_Swordmaster1_Funnel_01",
+    "Trainer_Trooper1_Funnel_01": "DA_CT_Trainer_Trooper1_Funnel_01",
+    "Trainer_Planetologist1_Funnel_01": "DA_CT_Trainer_Planetologist1_Funnel_01"
   },
   "contract_skill_grants": {
     "DA_CT_Trainer_Mentat2_06": [
@@ -1580,6 +1630,24 @@
     ],
     "DA_CT_Halloween_Week3_01_Funnel": [
       "Contract.Target.Dialogue.Halloween.Phase3FunnelCompleted"
+    ],
+    "DA_CT_Halloween_Week3_03": [
+      "Contract.Target.Dialogue.Halloween.Complete303"
+    ],
+    "DA_CT_Trainer_BeneGesserit1_Funnel_01": [
+      "Contract.Tracking.MetSisterMesa"
+    ],
+    "DA_CT_Trainer_Mentat1_Funnel_01": [
+      "Contract.Tracking.MetSaminMoro"
+    ],
+    "DA_CT_Trainer_Swordmaster1_Funnel_01": [
+      "Contract.Tracking.MetArno"
+    ],
+    "DA_CT_Trainer_Trooper1_Funnel_01": [
+      "Contract.Tracking.MetGhavouri"
+    ],
+    "DA_CT_Trainer_Planetologist1_Funnel_01": [
+      "Contract.Tracking.MetDerek"
     ]
   },
   "job_skill_blocks": {
@@ -1811,6 +1879,967 @@
       "DA_FQ_ClimbTheRanks.TransitionToCh3_Hark",
       "DA_SQ_OverlandMap.HarkLandsraadMission",
       "DA_FQ_ClimbTheRanks.Rank20_Mission_Harkonnen"
+    ]
+  },
+  "contract_names": {
+    "DA_CT_Arrakeen_Banquet_01": "Inventory Check",
+    "DA_CT_Arrakeen_Banquet_02": "The Missing Dress",
+    "DA_CT_Arrakeen_Banquet_02_delivery_contract": "Acquire Materials",
+    "DA_CT_Arrakeen_Banquet_03": "The Center Piece",
+    "DA_CT_Arrakeen_Banquet_Container_01": "Help Needed at House Athar",
+    "DA_CT_Arrakeen_BouncerDuty_01": "Bouncer Duty",
+    "DA_CT_Arrakeen_Recustomizer_01": "Help Needed at the Clinic",
+    "DA_CT_Arrakeen_Recustomizer_02": "Acquire Import Permit",
+    "DA_CT_Arrakeen_SocialHub_Scandal_01": "Investigator Required",
+    "DA_CT_Chapter3_DeliverSpiceToElara": "Cross My Palm With Spice",
+    "DA_CT_DLC_B1C2_Journey4_EcolabA": "Secrets of the Past",
+    "DA_CT_DLC_B1C2_Journey4_EcolabB": "Once Upon a Time",
+    "DA_CT_Fac_Atre_Rank00_02_FacFunnel": "Recruits Wanted!",
+    "DA_CT_Fac_Atre_Rank00_02_SpyReport": "The Missing Spy",
+    "DA_CT_Fac_Atre_Rank01_01_DeliverSteel": "Test of Resourcefulness",
+    "DA_CT_Fac_Atre_Rank01_02_Lanov": "Test of Cunning",
+    "DA_CT_Fac_Atre_Rank01_03_KillSlavers": "Test of Prowess",
+    "DA_CT_Fac_Atre_Rank01_04_TestLoyalty": "Test of Loyalty",
+    "DA_CT_Fac_Atre_Rank02_01_DeepExtraction": "Deep Extraction",
+    "DA_CT_Fac_Atre_Rank02_01_DeliverErythrite": "Deep Extraction",
+    "DA_CT_Fac_Atre_Rank02_02_IDTags": "Recovered Honor",
+    "DA_CT_Fac_Atre_Rank02_03_KillDeserters": "The Price of Betrayal",
+    "DA_CT_Fac_Atre_Rank02_04_HarkIntelligence": "Den of the Deserter",
+    "DA_CT_Fac_Atre_Rank02_05_Kytheria": "Track down Skorda",
+    "DA_CT_Fac_Atre_Rank02_06_Katrina": "Track down Skorda",
+    "DA_CT_Fac_Atre_Rank02_BetrayalMaxim": "Restoring Lt. Tolliver's Honor",
+    "DA_CT_Fac_Atre_Rank02_BetrayalPiter": "A Betrayal Within a Betrayal",
+    "DA_CT_Fac_Atre_Rank02_BetrayalSimone": "A Spy Among Spies",
+    "DA_CT_Fac_Atre_Rank03_01_SandFlies": "Investigate the Sandflies",
+    "DA_CT_Fac_Atre_Rank03_02_TrippYates": "Interrogate Tripp Yates",
+    "DA_CT_Fac_Atre_Rank03_03_RedScorpion": "The Trail of the Red Scorpion",
+    "DA_CT_Fac_Atre_Rank03_04_StoneSentinel": "Secrets of the Stone Sentinel",
+    "DA_CT_Fac_Atre_Rank03_07_Ambrose_P1": "The War Profiteer",
+    "DA_CT_Fac_Atre_Rank03_08_Ambrose_P2_DidNotUsePoison": "The War Profiteer",
+    "DA_CT_Fac_Atre_Rank03_09_Ambrose_P2_UsedPoison": "The War Profiteer",
+    "DA_CT_Fac_Atre_Rank03_10_MeetThufir": "The Master of Assassins",
+    "DA_CT_Fac_Atre_Rank04_01_Oslow": "On the Tainted Trail",
+    "DA_CT_Fac_Atre_Rank04_02_MaasKharetRecruiter": "A New Cultist",
+    "DA_CT_Fac_Atre_Rank04_03_MysaTarril": "A Center of Learning",
+    "DA_CT_Fac_Atre_Rank04_04_Jorba": "The Hunt for Skorda",
+    "DA_CT_Fac_Atre_Rank04_05_Skorda": "Skorda\u2019s Last Stand",
+    "DA_CT_Fac_Atre_Rank04_06_TaintedSpice": "The Tainted Spice",
+    "DA_CT_Fac_Atre_Rank20": "The Last Beacon",
+    "DA_CT_Fac_Hark_Rank00_02_FacFunnel": "Do you have what it takes?",
+    "DA_CT_Fac_Hark_Rank00_02_SpyReport": "The Missing Spy",
+    "DA_CT_Fac_Hark_Rank01_01_PlantEvidence": "Planting Evidence",
+    "DA_CT_Fac_Hark_Rank01_02_Bohannon": "Test of Ruthlessness",
+    "DA_CT_Fac_Hark_Rank01_03_KillSlavers": "Test of Might",
+    "DA_CT_Fac_Hark_Rank01_04_TestTreachery": "Test of Treachery",
+    "DA_CT_Fac_Hark_Rank02_01_FruitsOfYourLabor": "Fruits of Your Labor",
+    "DA_CT_Fac_Hark_Rank02_02_DeliverHoltzman": "Seeking Guidance",
+    "DA_CT_Fac_Hark_Rank02_03_KillDeserters": "The Price of Betrayal",
+    "DA_CT_Fac_Hark_Rank02_04_HarkIntelligence": "The Trouble with Traitors",
+    "DA_CT_Fac_Hark_Rank02_05_Kytheria": "Track down Skorda",
+    "DA_CT_Fac_Hark_Rank02_05_KytheriaP2": "The Vipers' Nest",
+    "DA_CT_Fac_Hark_Rank02_06_Katrina": "Track down Skorda",
+    "DA_CT_Fac_Hark_Rank02_BetrayalAnton": "Betray the Atreides",
+    "DA_CT_Fac_Hark_Rank03_01_SandFlies": "Investigate the Sandflies",
+    "DA_CT_Fac_Hark_Rank03_02_TrippYates": "Interrogate Tripp Yates",
+    "DA_CT_Fac_Hark_Rank03_03_RedScorpion": "The Trail of the Red Scorpion",
+    "DA_CT_Fac_Hark_Rank03_04_StoneSentinel": "Secrets of the Stone Sentinel",
+    "DA_CT_Fac_Hark_Rank03_07_SurviveAmbush": "A Secret Delivery",
+    "DA_CT_Fac_Hark_Rank03_08_KillPiter": "The Coup",
+    "DA_CT_Fac_Hark_Rank03_08_KillPiterP2": "The Coup",
+    "DA_CT_Fac_Hark_Rank03_10_MeetPiter": "The Master of Assassins",
+    "DA_CT_Fac_Hark_Rank03_BetrayalAndrea": "Betray the Atreides",
+    "DA_CT_Fac_Hark_Rank04_01_Oslow": "On the Tainted Trail",
+    "DA_CT_Fac_Hark_Rank04_02_MaasKharetRecruiter": "A New Cultist",
+    "DA_CT_Fac_Hark_Rank04_03_MysaTarril": "A Center of Learning",
+    "DA_CT_Fac_Hark_Rank04_04_Jorba": "The Hunt for Skorda",
+    "DA_CT_Fac_Hark_Rank04_05_Skorda": "Skorda\u2019s Last Stand",
+    "DA_CT_Fac_Hark_Rank04_06_TaintedSpice": "The Tainted Spice",
+    "DA_CT_Fac_Hark_Rank04_BetrayalThufir": "Betray the Atreides",
+    "DA_CT_Fac_Hark_Rank20": "Rabban\u2019s Revenge",
+    "DA_CT_Halloween_Day01": "Eyes of the Kirab",
+    "DA_CT_Halloween_Day02": "Eyes of the Outlaw",
+    "DA_CT_Halloween_Day03": "Eyes of the Forsaken",
+    "DA_CT_Halloween_Day06": "The Kirab Cortex",
+    "DA_CT_Halloween_Day07": "The Outlaw Cortex",
+    "DA_CT_Halloween_Day08": "The Forsaken Cortex",
+    "DA_CT_Halloween_Week1_01": "\"Are You Infected?\"",
+    "DA_CT_Halloween_Week1_02": "Vital Equipment",
+    "DA_CT_Halloween_Week2_01": "Harkonnen Help",
+    "DA_CT_Halloween_Week2_01_Funnel": "A New Lead",
+    "DA_CT_Halloween_Week3_01": "What the Doctor ordered",
+    "DA_CT_Halloween_Week3_01_Funnel": "A Troubling Discovery",
+    "DA_CT_Halloween_Week3_02": "Patient Zero",
+    "DA_CT_Halloween_Week3_03": "Loop Zero",
+    "DA_CT_HarkoVillage_Misc1_01": "No Chaumas",
+    "DA_CT_HarkoVillage_Recustomizer_01": "Urgent Request",
+    "DA_CT_Harko_Intrigue_01": "Investigator Wanted",
+    "DA_CT_Harko_Intrigue_03": "PH_Frame Job",
+    "DA_CT_Harko_MarketManipulation_01": "Sending a Message",
+    "DA_CT_MTXEvent_ChoamWreckage_Deliver_ChoamCargo": "Retrieve CHOAM Cargo",
+    "DA_CT_MTXEvent_ChoamWreckage_Kill_Kirab_01": "Make Them Pay",
+    "DA_CT_MTXEvent_ChoamWreckage_Sabotage_Emplacements": "Sabotage Kirab Emplacements",
+    "DA_CT_MTX_Ch1_Journey1_CommsRepair1": "Radio Silenced",
+    "DA_CT_MTX_Ch1_Journey1_CommsRepair2": "Boosting the Signal",
+    "DA_CT_MTX_Ch1_Journey1_CommsRepair3": "XX_Lost Signal 3",
+    "DA_CT_MTX_Ch1_Journey1_GunsAmmo": "A Fighting Chance",
+    "DA_CT_MTX_Ch1_Journey1_KirabHunt": "No Trespassing!",
+    "DA_CT_MTX_Ch1_Journey1_MedSupplies": "A Healing Hand",
+    "DA_CT_MTX_Ch1_Journey1_MissingDunemen": "Search and Retrieval",
+    "DA_CT_MTX_Ch1_Journey1_SavingDunemen": "Lost Within",
+    "DA_CT_MTX_Ch1_Journey1_StrandedDunemenFinal": "Following Up",
+    "DA_CT_MTX_Ch1_Journey2_ScavengingLead": "Villari\u2019s Prize",
+    "DA_CT_MTX_Ch1_Journey3_LostLab": "Digging Deeper",
+    "DA_CT_Survival1_Deserters1_01": "Seeking Intent",
+    "DA_CT_Survival1_Deserters1_02": "Trail of Regrets",
+    "DA_CT_Survival1_Deserters1_03": "Into Darkness",
+    "DA_CT_Survival1_Deserters1_04": "A Soldier's End",
+    "DA_CT_Survival1_Deserters2_01": "Assessment Report",
+    "DA_CT_Survival1_Deserters2_02": "Trail of Blood",
+    "DA_CT_Survival1_Deserters2_03": "Shooting Gallery",
+    "DA_CT_Survival1_Deserters2_04": "The Specialists",
+    "DA_CT_Survival1_DynEnc_AssassinJabalE_01": "Darkwood Depot Target",
+    "DA_CT_Survival1_DynEnc_AssassinJabalE_02": "Another Darkwood Depot Target",
+    "DA_CT_Survival1_DynEnc_AssassinJabalW_01": "Eastern Jumble Target",
+    "DA_CT_Survival1_DynEnc_AssassinJabalW_02": "Another Eastern Jumble Target",
+    "DA_CT_Survival1_DynEnc_AssassinMysa_01": "Mysa Tarill Target",
+    "DA_CT_Survival1_DynEnc_AssassinMysa_02": "Another Mysa Tarill Target",
+    "DA_CT_Survival1_DynEnc_AssassinOodham_01": "Rockwarren Village Target",
+    "DA_CT_Survival1_DynEnc_AssassinOodham_02": "Another Rockwarren Village Target",
+    "DA_CT_Survival1_DynEnc_AssassinRiftL_01": "Abernath's Descent Target",
+    "DA_CT_Survival1_DynEnc_AssassinRiftL_02": "Another Abernath's Descent Target",
+    "DA_CT_Survival1_DynEnc_AssassinRiftU_01": "Northern Bunker Target",
+    "DA_CT_Survival1_DynEnc_AssassinRiftU_02": "Another Northern Bunker Target",
+    "DA_CT_Survival1_DynEnc_AssassinVermilliusE_01": "Eastview Target",
+    "DA_CT_Survival1_DynEnc_AssassinVermilliusE_02": "Another Eastview Target",
+    "DA_CT_Survival1_DynEnc_AssassinVermilliusW_01": "Flatrock Outpost Target",
+    "DA_CT_Survival1_DynEnc_AssassinVermilliusW_02": "Another Flatrock Outpost Target",
+    "DA_CT_Survival1_DynEnc_AssassinWallE_01": "Ironwatch Target",
+    "DA_CT_Survival1_DynEnc_AssassinWallE_02": "Another Ironwatch Target",
+    "DA_CT_Survival1_DynEnc_AssassinWallW_01": "Sentinel City Target",
+    "DA_CT_Survival1_DynEnc_AssassinWallW_02": "Another Sentinel City Target",
+    "DA_CT_Survival1_DynEnc_Pilgrim_01": "Dalvia\u2019s Totem",
+    "DA_CT_Survival1_DynEnc_Pilgrim_02": "Mirrabon\u2019s Totem",
+    "DA_CT_Survival1_DynEnc_Pilgrim_03": "Milya\u2019s Totem",
+    "DA_CT_Survival1_DynEnc_Pilgrim_04": "Dyrban\u2019s Totem",
+    "DA_CT_Survival1_DynEnc_Pilgrim_05": "Khrysmal\u2019s Totem",
+    "DA_CT_Survival1_DynEnc_Pilgrim_06": "Bedghar\u2019s Totem",
+    "DA_CT_Survival1_DynEnc_StrandedJunk_01": "Scraps for the Anvil",
+    "DA_CT_Survival1_DynEnc_StrandedJunk_02": "Pieces for Pinnacle Station",
+    "DA_CT_Survival1_DynEnc_StrandedJunk_03": "Crossroads of the Junkyard",
+    "DA_CT_Survival1_DynEnc_StrandedJunk_04": "Unknown Shipment",
+    "DA_CT_Survival1_DynEnc_StrandedJunk_05": "One Man's Trash",
+    "DA_CT_Survival1_DynEnc_StrandedOre_01": "Erythrite Delivery",
+    "DA_CT_Survival1_DynEnc_StrandedOre_02": "Erythrite Delivery",
+    "DA_CT_Survival1_DynEnc_StrandedOre_03": "Iron Ore Shipment",
+    "DA_CT_Survival1_DynEnc_StrandedOre_04": "Flyswatting",
+    "DA_CT_Survival1_DynEnc_StrandedOre_05": "The Culling",
+    "DA_CT_Survival1_DynEnc_StrandedOre_06": "The Cleansing",
+    "DA_CT_Survival1_DynEnc_StrandedOre_07": "Justice for a Bike",
+    "DA_CT_Survival1_DynEnc_StrandedSheol_01": "The Anvil Crate",
+    "DA_CT_Survival1_DynEnc_StrandedSheol_02": "Crossroads Crate",
+    "DA_CT_Survival1_DynEnc_StrandedSheol_03": "Radiation Report",
+    "DA_CT_Survival1_DynEnc_StrandedSheol_04": "Pinnacle Station Crate",
+    "DA_CT_Survival1_DynEnc_StrandedSheol_05": "Jasmium Delivery",
+    "DA_CT_Survival1_Funnel_01_Griffin": "Salvage Junket",
+    "DA_CT_Survival1_Funnel_02_Griffin": "Granite Delivery",
+    "DA_CT_Survival1_Funnel_03_Anvil": "Pistol Delivery",
+    "DA_CT_Survival1_Funnel_04_AtreFortressPinnacle": "Fight for the Duke!",
+    "DA_CT_Survival1_Funnel_05_AtreFortressAnvil": "Fight for the Duke!",
+    "DA_CT_Survival1_Funnel_06_HarkFortress": "Work Notice",
+    "DA_CT_Survival1_Funnel_07_Crossroads": "Help Needed at Crossroads!",
+    "DA_CT_Survival1_Funnel_08_Anvil": "Courier Run",
+    "DA_CT_Survival1_Funnel_08_Pinnacle": "Great Opportunities Await!",
+    "DA_CT_Survival1_Kirab1_01": "Stealing From Thieves",
+    "DA_CT_Survival1_Kirab1_02": "A Thirst for Vengeance",
+    "DA_CT_Survival1_Kirab1_03": "Looking for Leaders",
+    "DA_CT_Survival1_Kirab1_04": "Dropping Drot",
+    "DA_CT_Survival1_Kirab1_05": "Revenge Never Ends",
+    "DA_CT_Survival1_Kirab2_01": "Likely Suspects",
+    "DA_CT_Survival1_Kirab2_02": "Search & Recover",
+    "DA_CT_Survival1_Kirab2_03": "Second Half Action",
+    "DA_CT_Survival1_Kirab2_04": "The Hand-Off",
+    "DA_CT_Survival1_Kirab2_05": "The Man in the Shadows",
+    "DA_CT_Survival1_MaasKharet1_01": "Mystery at Mysa Tarill",
+    "DA_CT_Survival1_MaasKharet1_02": "Motive & Madness",
+    "DA_CT_Survival1_MaasKharet1_03": "Gauging Strength",
+    "DA_CT_Survival1_MaasKharet1_04": "Crysknife Bounty",
+    "DA_CT_Survival1_MaasKharet2_01": "The Missing Pyon",
+    "DA_CT_Survival1_MaasKharet2_02": "The Learning Center",
+    "DA_CT_Survival1_MaasKharet2_03": "Hitting the Hit Squad",
+    "DA_CT_Survival1_MaasKharet2_04": "Making a Martyr",
+    "DA_CT_Survival1_MaasKharet3_01": "Equipment Needed",
+    "DA_CT_Survival1_MaasKharet3_02": "Boosting Power",
+    "DA_CT_Survival1_MaasKharet3_03": "Finding Focus",
+    "DA_CT_Survival1_MaasKharet3_04": "Proper Thanks",
+    "DA_CT_Survival1_Misc_01_HotIce": "Execution Order",
+    "DA_CT_Survival1_Misc_02_InnaHiller": "Hostile Takeover",
+    "DA_CT_Survival1_Misc_03_Blight": "Clear and Present Danger",
+    "DA_CT_Survival1_Misc_04_Vials": "Do Not Open",
+    "DA_CT_Survival1_Misc_05_CHOAMEquipment": "Lost and Found",
+    "DA_CT_Survival1_Misc_06_Olmen": "Find Olmen",
+    "DA_CT_Survival1_Misc_07_ZantaraBounty": "Zantara's Head",
+    "DA_CT_Survival1_SandFlies1_01": "Scout the Enemy",
+    "DA_CT_Survival1_SandFlies1_02": "Engage the Enemy",
+    "DA_CT_Survival1_SandFlies1_03": "Gather Intelligence",
+    "DA_CT_Survival1_SandFlies1_04": "Breaking Training",
+    "DA_CT_Survival1_SandFlies1_05": "Target the Top",
+    "DA_CT_Survival1_SandFlies2A_01": "Wreck & Ruin",
+    "DA_CT_Survival1_SandFlies2A_02": "Finding Reason",
+    "DA_CT_Survival1_SandFlies2A_03": "Atomic Variable",
+    "DA_CT_Survival1_SandFlies2A_04": "The Price of Failure",
+    "DA_CT_Survival1_SandFlies2_01": "Find the Alecto",
+    "DA_CT_Survival1_SandFlies2_02": "Sensitive Cargo",
+    "DA_CT_Survival1_SandFlies2_03": "Eyes on the Prize",
+    "DA_CT_Survival1_SandFlies2_04": "Smokescreen",
+    "DA_CT_Survival1_Scavengers1_01": "Belated Delivery",
+    "DA_CT_Survival1_Scavengers1_01A": "Copper Required",
+    "DA_CT_Survival1_Scavengers1_03": "Wrecking Crew",
+    "DA_CT_Survival1_Scavengers1_04": "Testing Limits",
+    "DA_CT_Survival1_Scavengers1_05": "Bike Building",
+    "DA_CT_Survival1_Slavers1_01": "Missing Sister",
+    "DA_CT_Survival1_Slavers1_02_FirstSlaverContract": "Offload Equipment",
+    "DA_CT_Survival1_Slavers1_03": "Slavemaster Supplies",
+    "DA_CT_Survival1_Slavers1_04": "Growing Pain",
+    "DA_CT_Survival1_Slavers1_05": "Dealing with Devils",
+    "DA_CT_Survival1_Slavers1_06": "Paper Trail",
+    "DA_CT_Survival1_Slavers2_01": "Long Overdue",
+    "DA_CT_Survival1_Slavers2_02": "Identity Check",
+    "DA_CT_Survival1_Slavers2_03": "The Missing Crew",
+    "DA_CT_Survival1_Slavers2_04": "New Evidence",
+    "DA_CT_Survival1_Slavers3_01": "Put Out the Eyes",
+    "DA_CT_Survival1_Slavers3_02": "Take Out the Legs",
+    "DA_CT_Survival1_Slavers3_03": "Clip the Wings",
+    "DA_CT_Survival1_Slavers3_04": "Strike at the Heart",
+    "DA_CT_Trainer_BeneGesserit1_01": "The Missing Pieces",
+    "DA_CT_Trainer_BeneGesserit1_Funnel_01": "Skills of the Sisterhood",
+    "DA_CT_Trainer_BeneGesserit2_01": "Sacred Records",
+    "DA_CT_Trainer_BeneGesserit2_02": "The Missionaria Protectiva",
+    "DA_CT_Trainer_BeneGesserit2_03": "The Impact of Ecology",
+    "DA_CT_Trainer_BeneGesserit2_04": "Secrets of the Syndicate",
+    "DA_CT_Trainer_BeneGesserit2_05": "The Rogue Bene Gesserit",
+    "DA_CT_Trainer_Mentat1_01": "First Blood",
+    "DA_CT_Trainer_Mentat1_Funnel_01": "Secrets of the Mentat",
+    "DA_CT_Trainer_Mentat2_01": "Calculated Calamity",
+    "DA_CT_Trainer_Mentat2_02": "An Olive Branch",
+    "DA_CT_Trainer_Mentat2_02_Hark": "Underhanded Hand-Over",
+    "DA_CT_Trainer_Mentat2_03": "Cataloging Defectors",
+    "DA_CT_Trainer_Mentat2_04": "Bloody Results",
+    "DA_CT_Trainer_Mentat2_04_Hark": "A Bloody Development",
+    "DA_CT_Trainer_Mentat2_05": "The Price of Rejection",
+    "DA_CT_Trainer_Mentat2_06": "Untwisted Questions",
+    "DA_CT_Trainer_Planetologist1_01": "Minimic Film Recovery",
+    "DA_CT_Trainer_Planetologist1_01A": "Assistance Required",
+    "DA_CT_Trainer_Planetologist2_01": "Buried Archives",
+    "DA_CT_Trainer_Planetologist2_02A": "Adhering to Hierarchy",
+    "DA_CT_Trainer_Planetologist2_03A": "Science Unlocked",
+    "DA_CT_Trainer_Planetologist2_04_Atre": "The Search for Kynes",
+    "DA_CT_Trainer_Planetologist2_04_Hark": "The Search for Kynes",
+    "DA_CT_Trainer_Planetologist2_05A": "A Reasonable Routine",
+    "DA_CT_Trainer_Planetologist2_06": "Clues from the Past",
+    "DA_CT_Trainer_Planetologist2_07": "The Planetologist Report",
+    "DA_CT_Trainer_Planetologist2_08": "The Final Piece",
+    "DA_CT_Trainer_Planetologist2_Funnel_01": "Planetology Aid: Testing Station 197",
+    "DA_CT_Trainer_Planetologist2_Funnel_02": "Planetology Aid: Testing Station 76",
+    "DA_CT_Trainer_Planetologist2_Funnel_03": "Planetology Aid: Testing Station 29",
+    "DA_CT_Trainer_Planetologist2_Funnel_04": "Planetology Aid: Testing Station 71",
+    "DA_CT_Trainer_Planetologist2_Funnel_05": "Planetology Aid: Testing Station 163",
+    "DA_CT_Trainer_Swordmaster1_01": "Checking the Post",
+    "DA_CT_Trainer_Swordmaster1_Funnel_01": "Swordmaster: Training: Honing of the Blade",
+    "DA_CT_Trainer_Swordmaster2_01": "A Tormented Soul",
+    "DA_CT_Trainer_Swordmaster2_03": "Piercing Eyes",
+    "DA_CT_Trainer_Swordmaster2_03_TleilaxuContract": "Lab Cleanup",
+    "DA_CT_Trainer_Swordmaster2_04": "Art of the Sword",
+    "DA_CT_Trainer_Swordmaster2_05_pt1": "Forged in Dishonor",
+    "DA_CT_Trainer_Swordmaster2_06": "The Last Stand of Seron Varlin",
+    "DA_CT_Trainer_Swordmaster2_06_dummy": "The Last Stand of Seron Varlin",
+    "DA_CT_Trainer_Trooper1_01": "Proving Grounds",
+    "DA_CT_Trainer_Trooper1_01A": "Proving Grounds",
+    "DA_CT_Trainer_Trooper1_Funnel_01": "Discipline of the Soldier",
+    "DA_CT_Trainer_Trooper2_01": "Seeking Control",
+    "DA_CT_Trainer_Trooper2_02": "Regaining Control",
+    "DA_CT_Trainer_Trooper2_03": "A Shot at Improving",
+    "DA_CT_Trainer_Trooper2_04": "Master of Weapons",
+    "DA_CT_Trainer_Trooper2_05": "Surgical Strike",
+    "DA_CT_Trainer_Trooper2_06": "The Cleansing of Kara Valk",
+    "DA_CT_Trainer_Planetologist1_Funnel_01": "I Spy a Planetologist"
+  },
+  "contract_chains": {
+    "DA_CT_Arrakeen_Recustomizer_01": [
+      "Dr. Shaffat"
+    ],
+    "DA_CT_Arrakeen_Recustomizer_02": [
+      "Dr. Shaffat"
+    ],
+    "DA_CT_Chapter3_DeliverSpiceToElara": [
+      "Prelude to a Journey \u2014 Elara Tuek"
+    ],
+    "DA_CT_Fac_Atre_Rank00_02_FacFunnel": [
+      "Factions: Called To War"
+    ],
+    "DA_CT_Fac_Atre_Rank00_02_SpyReport": [
+      "Factions: Joining Ranks"
+    ],
+    "DA_CT_Fac_Atre_Rank01_01_DeliverSteel": [
+      "Factions: Asset Recruitment"
+    ],
+    "DA_CT_Fac_Atre_Rank01_02_Lanov": [
+      "Factions: Asset Recruitment"
+    ],
+    "DA_CT_Fac_Atre_Rank01_03_KillSlavers": [
+      "Factions: Asset Recruitment"
+    ],
+    "DA_CT_Fac_Atre_Rank01_04_TestLoyalty": [
+      "Factions: Asset Recruitment"
+    ],
+    "DA_CT_Fac_Atre_Rank02_01_DeepExtraction": [
+      "Factions: Asset Recruitment"
+    ],
+    "DA_CT_Fac_Atre_Rank02_02_IDTags": [
+      "Factions: Asset Recruitment"
+    ],
+    "DA_CT_Fac_Atre_Rank02_03_KillDeserters": [
+      "Factions: Asset Recruitment"
+    ],
+    "DA_CT_Fac_Atre_Rank02_04_HarkIntelligence": [
+      "Factions: Asset Recruitment"
+    ],
+    "DA_CT_Fac_Atre_Rank02_05_Kytheria": [
+      "Factions: Asset Recruitment"
+    ],
+    "DA_CT_Fac_Atre_Rank02_06_Katrina": [
+      "Factions: Asset Recruitment"
+    ],
+    "DA_CT_Fac_Atre_Rank03_01_SandFlies": [
+      "Factions: Contractual Obligations"
+    ],
+    "DA_CT_Fac_Atre_Rank03_02_TrippYates": [
+      "Factions: Contractual Obligations"
+    ],
+    "DA_CT_Fac_Atre_Rank03_03_RedScorpion": [
+      "Factions: Contractual Obligations"
+    ],
+    "DA_CT_Fac_Atre_Rank03_04_StoneSentinel": [
+      "Factions: Contractual Obligations"
+    ],
+    "DA_CT_Fac_Atre_Rank03_07_Ambrose_P1": [
+      "Factions: Contractual Obligations"
+    ],
+    "DA_CT_Fac_Atre_Rank03_08_Ambrose_P2_DidNotUsePoison": [
+      "Factions: Contractual Obligations"
+    ],
+    "DA_CT_Fac_Atre_Rank03_09_Ambrose_P2_UsedPoison": [
+      "Factions: Contractual Obligations"
+    ],
+    "DA_CT_Fac_Atre_Rank03_10_MeetThufir": [
+      "Factions: Contractual Obligations"
+    ],
+    "DA_CT_Fac_Atre_Rank04_01_Oslow": [
+      "Factions: Agent Mastery"
+    ],
+    "DA_CT_Fac_Atre_Rank04_02_MaasKharetRecruiter": [
+      "Factions: Agent Mastery"
+    ],
+    "DA_CT_Fac_Atre_Rank04_03_MysaTarril": [
+      "Factions: Agent Mastery"
+    ],
+    "DA_CT_Fac_Atre_Rank04_04_Jorba": [
+      "Factions: Agent Mastery"
+    ],
+    "DA_CT_Fac_Atre_Rank04_05_Skorda": [
+      "Factions: Agent Mastery"
+    ],
+    "DA_CT_Fac_Atre_Rank04_06_TaintedSpice": [
+      "Factions: Agent Mastery"
+    ],
+    "DA_CT_Fac_Hark_Rank00_02_FacFunnel": [
+      "Factions: Called To War"
+    ],
+    "DA_CT_Fac_Hark_Rank00_02_SpyReport": [
+      "Factions: Joining Ranks"
+    ],
+    "DA_CT_Fac_Hark_Rank01_01_PlantEvidence": [
+      "Factions: Asset Recruitment"
+    ],
+    "DA_CT_Fac_Hark_Rank01_02_Bohannon": [
+      "Factions: Asset Recruitment"
+    ],
+    "DA_CT_Fac_Hark_Rank01_03_KillSlavers": [
+      "Factions: Asset Recruitment"
+    ],
+    "DA_CT_Fac_Hark_Rank01_04_TestTreachery": [
+      "Factions: Asset Recruitment"
+    ],
+    "DA_CT_Fac_Hark_Rank02_01_FruitsOfYourLabor": [
+      "Factions: Asset Recruitment"
+    ],
+    "DA_CT_Fac_Hark_Rank02_02_DeliverHoltzman": [
+      "Factions: Asset Recruitment"
+    ],
+    "DA_CT_Fac_Hark_Rank02_03_KillDeserters": [
+      "Factions: Asset Recruitment"
+    ],
+    "DA_CT_Fac_Hark_Rank02_04_HarkIntelligence": [
+      "Factions: Asset Recruitment"
+    ],
+    "DA_CT_Fac_Hark_Rank02_05_Kytheria": [
+      "Factions: Asset Recruitment"
+    ],
+    "DA_CT_Fac_Hark_Rank02_05_KytheriaP2": [
+      "Factions: Contractual Obligations"
+    ],
+    "DA_CT_Fac_Hark_Rank02_06_Katrina": [
+      "Factions: Asset Recruitment"
+    ],
+    "DA_CT_Fac_Hark_Rank03_01_SandFlies": [
+      "Factions: Contractual Obligations"
+    ],
+    "DA_CT_Fac_Hark_Rank03_02_TrippYates": [
+      "Factions: Contractual Obligations"
+    ],
+    "DA_CT_Fac_Hark_Rank03_03_RedScorpion": [
+      "Factions: Contractual Obligations"
+    ],
+    "DA_CT_Fac_Hark_Rank03_04_StoneSentinel": [
+      "Factions: Contractual Obligations"
+    ],
+    "DA_CT_Fac_Hark_Rank03_07_SurviveAmbush": [
+      "Factions: Contractual Obligations"
+    ],
+    "DA_CT_Fac_Hark_Rank03_08_KillPiterP2": [
+      "Factions: Agent Mastery"
+    ],
+    "DA_CT_Fac_Hark_Rank03_10_MeetPiter": [
+      "Factions: Contractual Obligations"
+    ],
+    "DA_CT_Fac_Hark_Rank03_BetrayalAndrea": [
+      "Betrayal"
+    ],
+    "DA_CT_Fac_Hark_Rank04_01_Oslow": [
+      "Factions: Agent Mastery"
+    ],
+    "DA_CT_Fac_Hark_Rank04_02_MaasKharetRecruiter": [
+      "Factions: Agent Mastery"
+    ],
+    "DA_CT_Fac_Hark_Rank04_03_MysaTarril": [
+      "Factions: Agent Mastery"
+    ],
+    "DA_CT_Fac_Hark_Rank04_04_Jorba": [
+      "Factions: Agent Mastery"
+    ],
+    "DA_CT_Fac_Hark_Rank04_05_Skorda": [
+      "Factions: Agent Mastery"
+    ],
+    "DA_CT_Fac_Hark_Rank04_06_TaintedSpice": [
+      "Factions: Agent Mastery"
+    ],
+    "DA_CT_HarkoVillage_Misc1_01": [
+      "Merchandise Retrieval"
+    ],
+    "DA_CT_HarkoVillage_Recustomizer_01": [
+      "Phrakk"
+    ],
+    "DA_CT_Survival1_Deserters1_01": [
+      "The Absent Colonel"
+    ],
+    "DA_CT_Survival1_Deserters1_02": [
+      "The Absent Colonel"
+    ],
+    "DA_CT_Survival1_Deserters1_03": [
+      "The Absent Colonel"
+    ],
+    "DA_CT_Survival1_Deserters1_04": [
+      "The Absent Colonel"
+    ],
+    "DA_CT_Survival1_Deserters2_01": [
+      "Cleanup Detail"
+    ],
+    "DA_CT_Survival1_Deserters2_02": [
+      "Cleanup Detail"
+    ],
+    "DA_CT_Survival1_Deserters2_03": [
+      "Cleanup Detail"
+    ],
+    "DA_CT_Survival1_Deserters2_04": [
+      "Cleanup Detail"
+    ],
+    "DA_CT_Survival1_DynEnc_AssassinJabalE_01": [
+      "Ghoul Eifrit East"
+    ],
+    "DA_CT_Survival1_DynEnc_AssassinJabalE_02": [
+      "More Ghoul Kills"
+    ],
+    "DA_CT_Survival1_DynEnc_AssassinJabalW_01": [
+      "Ghoul Kills",
+      "Ghoul at Mysa Tarill",
+      "Ghoul on Rift's Edge"
+    ],
+    "DA_CT_Survival1_DynEnc_AssassinJabalW_02": [
+      "More Ghoul Kills"
+    ],
+    "DA_CT_Survival1_DynEnc_AssassinMysa_01": [
+      "Ghoul Kills"
+    ],
+    "DA_CT_Survival1_DynEnc_AssassinMysa_02": [
+      "More Ghoul Kills"
+    ],
+    "DA_CT_Survival1_DynEnc_AssassinOodham_01": [
+      "Ghoul Kills"
+    ],
+    "DA_CT_Survival1_DynEnc_AssassinOodham_02": [
+      "More Ghoul Kills"
+    ],
+    "DA_CT_Survival1_DynEnc_AssassinRiftL_01": [
+      "Ghoul Kills"
+    ],
+    "DA_CT_Survival1_DynEnc_AssassinRiftL_02": [
+      "More Ghoul Kills"
+    ],
+    "DA_CT_Survival1_DynEnc_AssassinRiftU_01": [
+      "Ghoul Kills"
+    ],
+    "DA_CT_Survival1_DynEnc_AssassinRiftU_02": [
+      "More Ghoul Kills"
+    ],
+    "DA_CT_Survival1_DynEnc_AssassinVermilliusE_01": [
+      "Ghoul Kills"
+    ],
+    "DA_CT_Survival1_DynEnc_AssassinVermilliusE_02": [
+      "More Ghoul Kills"
+    ],
+    "DA_CT_Survival1_DynEnc_AssassinVermilliusW_01": [
+      "Ghoul Kills"
+    ],
+    "DA_CT_Survival1_DynEnc_AssassinVermilliusW_02": [
+      "More Ghoul Kills"
+    ],
+    "DA_CT_Survival1_DynEnc_AssassinWallE_01": [
+      "Ghoul Kills"
+    ],
+    "DA_CT_Survival1_DynEnc_AssassinWallE_02": [
+      "More Ghoul Kills"
+    ],
+    "DA_CT_Survival1_DynEnc_AssassinWallW_01": [
+      "Ghoul Kills"
+    ],
+    "DA_CT_Survival1_DynEnc_AssassinWallW_02": [
+      "More Ghoul Kills"
+    ],
+    "DA_CT_Survival1_DynEnc_Pilgrim_01": [
+      "Pilgrims in the Gap"
+    ],
+    "DA_CT_Survival1_DynEnc_Pilgrim_02": [
+      "Pilgrims in the Rift"
+    ],
+    "DA_CT_Survival1_DynEnc_Pilgrim_03": [
+      "Pilgrims among the Saguaro"
+    ],
+    "DA_CT_Survival1_DynEnc_Pilgrim_04": [
+      "Pilgrims on the Wall"
+    ],
+    "DA_CT_Survival1_DynEnc_Pilgrim_05": [
+      "Pilgrims in the Sheol"
+    ],
+    "DA_CT_Survival1_DynEnc_Pilgrim_06": [
+      "Pilgrims in the O'odham"
+    ],
+    "DA_CT_Survival1_DynEnc_StrandedJunk_01": [
+      "Stranded Junk Merchant"
+    ],
+    "DA_CT_Survival1_DynEnc_StrandedJunk_02": [
+      "Stranded Junk Merchant"
+    ],
+    "DA_CT_Survival1_DynEnc_StrandedJunk_03": [
+      "Stranded Junk Merchant"
+    ],
+    "DA_CT_Survival1_DynEnc_StrandedJunk_04": [
+      "Stranded Junk Merchant"
+    ],
+    "DA_CT_Survival1_DynEnc_StrandedJunk_05": [
+      "Stranded Junk Merchant"
+    ],
+    "DA_CT_Survival1_DynEnc_StrandedOre_01": [
+      "Stranded Ore Merchant"
+    ],
+    "DA_CT_Survival1_DynEnc_StrandedOre_02": [
+      "Stranded Ore Merchant"
+    ],
+    "DA_CT_Survival1_DynEnc_StrandedOre_03": [
+      "Stranded Ore Merchant"
+    ],
+    "DA_CT_Survival1_DynEnc_StrandedOre_04": [
+      "Stranded Ore Merchant"
+    ],
+    "DA_CT_Survival1_DynEnc_StrandedOre_05": [
+      "Stranded Ore Merchant"
+    ],
+    "DA_CT_Survival1_DynEnc_StrandedOre_06": [
+      "Stranded Ore Merchant"
+    ],
+    "DA_CT_Survival1_DynEnc_StrandedOre_07": [
+      "Stranded Ore Merchant"
+    ],
+    "DA_CT_Survival1_DynEnc_StrandedSheol_01": [
+      "Stranded Sheol Merchant"
+    ],
+    "DA_CT_Survival1_DynEnc_StrandedSheol_02": [
+      "Stranded Sheol Merchant"
+    ],
+    "DA_CT_Survival1_DynEnc_StrandedSheol_03": [
+      "Stranded Sheol Merchant"
+    ],
+    "DA_CT_Survival1_DynEnc_StrandedSheol_04": [
+      "Stranded Sheol Merchant"
+    ],
+    "DA_CT_Survival1_DynEnc_StrandedSheol_05": [
+      "Stranded Sheol Merchant"
+    ],
+    "DA_CT_Survival1_Funnel_01_Griffin": [
+      "Salvage Junket"
+    ],
+    "DA_CT_Survival1_Funnel_02_Griffin": [
+      "Granite Delivery"
+    ],
+    "DA_CT_Survival1_Funnel_03_Anvil": [
+      "Pistol Delivery"
+    ],
+    "DA_CT_Survival1_Funnel_07_Crossroads": [
+      "Crossroads"
+    ],
+    "DA_CT_Survival1_Funnel_08_Anvil": [
+      "The Anvil"
+    ],
+    "DA_CT_Survival1_Funnel_08_Pinnacle": [
+      "Pinnacle Station"
+    ],
+    "DA_CT_Survival1_Kirab1_01": [
+      "Payback"
+    ],
+    "DA_CT_Survival1_Kirab1_02": [
+      "Payback"
+    ],
+    "DA_CT_Survival1_Kirab1_03": [
+      "Payback"
+    ],
+    "DA_CT_Survival1_Kirab1_04": [
+      "Payback"
+    ],
+    "DA_CT_Survival1_Kirab1_05": [
+      "Payback"
+    ],
+    "DA_CT_Survival1_Kirab2_01": [
+      "Pinching Spice"
+    ],
+    "DA_CT_Survival1_Kirab2_02": [
+      "Pinching Spice"
+    ],
+    "DA_CT_Survival1_Kirab2_03": [
+      "Pinching Spice"
+    ],
+    "DA_CT_Survival1_Kirab2_04": [
+      "Pinching Spice"
+    ],
+    "DA_CT_Survival1_Kirab2_05": [
+      "Pinching Spice"
+    ],
+    "DA_CT_Survival1_MaasKharet1_01": [
+      "The Cult"
+    ],
+    "DA_CT_Survival1_MaasKharet1_02": [
+      "The Cult"
+    ],
+    "DA_CT_Survival1_MaasKharet1_04": [
+      "The Cult"
+    ],
+    "DA_CT_Survival1_MaasKharet2_01": [
+      "Dangerous Dealing"
+    ],
+    "DA_CT_Survival1_MaasKharet2_02": [
+      "Dangerous Dealing"
+    ],
+    "DA_CT_Survival1_MaasKharet2_03": [
+      "Dangerous Dealing"
+    ],
+    "DA_CT_Survival1_MaasKharet2_04": [
+      "Dangerous Dealing"
+    ],
+    "DA_CT_Survival1_MaasKharet3_01": [
+      "Cutting Edge"
+    ],
+    "DA_CT_Survival1_MaasKharet3_02": [
+      "Cutting Edge"
+    ],
+    "DA_CT_Survival1_MaasKharet3_03": [
+      "Cutting Edge"
+    ],
+    "DA_CT_Survival1_MaasKharet3_04": [
+      "Cutting Edge"
+    ],
+    "DA_CT_Survival1_Misc_01_HotIce": [
+      "Execution Order"
+    ],
+    "DA_CT_Survival1_Misc_02_InnaHiller": [
+      "Hostile Takeover"
+    ],
+    "DA_CT_Survival1_Misc_03_Blight": [
+      "Present Danger"
+    ],
+    "DA_CT_Survival1_Misc_04_Vials": [
+      "Vial Retrieval"
+    ],
+    "DA_CT_Survival1_Misc_05_CHOAMEquipment": [
+      "Lost & Found"
+    ],
+    "DA_CT_Survival1_Misc_06_Olmen": [
+      "Find Olmen"
+    ],
+    "DA_CT_Survival1_Misc_07_ZantaraBounty": [
+      "Bounty"
+    ],
+    "DA_CT_Survival1_SandFlies1_01": [
+      "Counter-Insurgency"
+    ],
+    "DA_CT_Survival1_SandFlies1_02": [
+      "Counter-Insurgency"
+    ],
+    "DA_CT_Survival1_SandFlies1_03": [
+      "Counter-Insurgency"
+    ],
+    "DA_CT_Survival1_SandFlies1_04": [
+      "Counter-Insurgency"
+    ],
+    "DA_CT_Survival1_SandFlies1_05": [
+      "Counter-Insurgency"
+    ],
+    "DA_CT_Survival1_SandFlies2A_01": [
+      "Counter Agent"
+    ],
+    "DA_CT_Survival1_SandFlies2A_02": [
+      "Counter Agent"
+    ],
+    "DA_CT_Survival1_SandFlies2A_03": [
+      "Counter Agent"
+    ],
+    "DA_CT_Survival1_SandFlies2A_04": [
+      "Counter Agent"
+    ],
+    "DA_CT_Survival1_SandFlies2_01": [
+      "Payload"
+    ],
+    "DA_CT_Survival1_SandFlies2_02": [
+      "Payload"
+    ],
+    "DA_CT_Survival1_SandFlies2_03": [
+      "Payload"
+    ],
+    "DA_CT_Survival1_SandFlies2_04": [
+      "Payload"
+    ],
+    "DA_CT_Survival1_Scavengers1_01": [
+      "Scrap Mettle"
+    ],
+    "DA_CT_Survival1_Scavengers1_01A": [
+      "Scrap Mettle"
+    ],
+    "DA_CT_Survival1_Scavengers1_03": [
+      "Scrap Mettle"
+    ],
+    "DA_CT_Survival1_Scavengers1_04": [
+      "Scrap Mettle"
+    ],
+    "DA_CT_Survival1_Scavengers1_05": [
+      "Scrap Mettle"
+    ],
+    "DA_CT_Survival1_Slavers1_01": [
+      "Finding Sehmo"
+    ],
+    "DA_CT_Survival1_Slavers1_02_FirstSlaverContract": [
+      "Slaver Jobs"
+    ],
+    "DA_CT_Survival1_Slavers1_03": [
+      "Slaver Jobs"
+    ],
+    "DA_CT_Survival1_Slavers1_04": [
+      "Slaver Jobs"
+    ],
+    "DA_CT_Survival1_Slavers1_05": [
+      "Finding Sehmo"
+    ],
+    "DA_CT_Survival1_Slavers1_06": [
+      "Finding Sehmo"
+    ],
+    "DA_CT_Survival1_Slavers2_01": [
+      "The Tisiphone"
+    ],
+    "DA_CT_Survival1_Slavers2_02": [
+      "The Tisiphone"
+    ],
+    "DA_CT_Survival1_Slavers2_03": [
+      "The Tisiphone"
+    ],
+    "DA_CT_Survival1_Slavers2_04": [
+      "The Tisiphone"
+    ],
+    "DA_CT_Survival1_Slavers3_01": [
+      "Monster Slaying"
+    ],
+    "DA_CT_Survival1_Slavers3_02": [
+      "Monster Slaying"
+    ],
+    "DA_CT_Survival1_Slavers3_03": [
+      "Monster Slaying"
+    ],
+    "DA_CT_Survival1_Slavers3_04": [
+      "Monster Slaying"
+    ],
+    "DA_CT_Trainer_BeneGesserit1_01": [
+      "Bene Gesserit: Basics"
+    ],
+    "DA_CT_Trainer_BeneGesserit1_Funnel_01": [
+      "Bene Gesserit: Training"
+    ],
+    "DA_CT_Trainer_BeneGesserit2_01": [
+      "Bene Gesserit: Advanced"
+    ],
+    "DA_CT_Trainer_BeneGesserit2_02": [
+      "Bene Gesserit: Advanced"
+    ],
+    "DA_CT_Trainer_BeneGesserit2_03": [
+      "Bene Gesserit: Advanced"
+    ],
+    "DA_CT_Trainer_BeneGesserit2_04": [
+      "Bene Gesserit: Advanced"
+    ],
+    "DA_CT_Trainer_BeneGesserit2_05": [
+      "Bene Gesserit: Advanced"
+    ],
+    "DA_CT_Trainer_Mentat1_01": [
+      "Mentat: Basics"
+    ],
+    "DA_CT_Trainer_Mentat1_Funnel_01": [
+      "Mentat: Training"
+    ],
+    "DA_CT_Trainer_Mentat2_01": [
+      "Mentat: Advanced"
+    ],
+    "DA_CT_Trainer_Mentat2_02": [
+      "Mentat: Advanced"
+    ],
+    "DA_CT_Trainer_Mentat2_02_Hark": [
+      "Mentat: Advanced"
+    ],
+    "DA_CT_Trainer_Mentat2_03": [
+      "Mentat: Advanced"
+    ],
+    "DA_CT_Trainer_Mentat2_04": [
+      "Mentat: Advanced"
+    ],
+    "DA_CT_Trainer_Mentat2_04_Hark": [
+      "Mentat: Advanced"
+    ],
+    "DA_CT_Trainer_Mentat2_05": [
+      "Mentat: Advanced"
+    ],
+    "DA_CT_Trainer_Mentat2_06": [
+      "Mentat: Advanced"
+    ],
+    "DA_CT_Trainer_Planetologist1_01": [
+      "Planetologist: Basics"
+    ],
+    "DA_CT_Trainer_Planetologist1_Funnel_01": [
+      "Planetologist: Training"
+    ],
+    "DA_CT_Trainer_Planetologist2_01": [
+      "Planetologist: Advanced"
+    ],
+    "DA_CT_Trainer_Planetologist2_02A": [
+      "Planetologist: Advanced"
+    ],
+    "DA_CT_Trainer_Planetologist2_03A": [
+      "Planetologist: Advanced"
+    ],
+    "DA_CT_Trainer_Planetologist2_04_Atre": [
+      "Planetologist: Advanced"
+    ],
+    "DA_CT_Trainer_Planetologist2_04_Hark": [
+      "Planetologist: Advanced"
+    ],
+    "DA_CT_Trainer_Planetologist2_05A": [
+      "Planetologist: Advanced"
+    ],
+    "DA_CT_Trainer_Planetologist2_06": [
+      "Planetologist: Advanced"
+    ],
+    "DA_CT_Trainer_Planetologist2_07": [
+      "Planetologist: Advanced"
+    ],
+    "DA_CT_Trainer_Planetologist2_08": [
+      "Planetologist: Advanced"
+    ],
+    "DA_CT_Trainer_Planetologist2_Funnel_01": [
+      "Planetologist: Training"
+    ],
+    "DA_CT_Trainer_Planetologist2_Funnel_02": [
+      "Planetologist: Training"
+    ],
+    "DA_CT_Trainer_Planetologist2_Funnel_03": [
+      "Planetologist: Training"
+    ],
+    "DA_CT_Trainer_Planetologist2_Funnel_04": [
+      "Planetologist: Training"
+    ],
+    "DA_CT_Trainer_Planetologist2_Funnel_05": [
+      "Planetologist: Training"
+    ],
+    "DA_CT_Trainer_Swordmaster1_01": [
+      "Swordmaster: Basics"
+    ],
+    "DA_CT_Trainer_Swordmaster2_01": [
+      "Swordmaster: Advanced"
+    ],
+    "DA_CT_Trainer_Swordmaster2_03": [
+      "Swordmaster: Advanced"
+    ],
+    "DA_CT_Trainer_Swordmaster2_03_TleilaxuContract": [
+      "Lab Cleanup"
+    ],
+    "DA_CT_Trainer_Swordmaster2_04": [
+      "Swordmaster: Advanced"
+    ],
+    "DA_CT_Trainer_Swordmaster2_05_pt1": [
+      "Swordmaster: Advanced"
+    ],
+    "DA_CT_Trainer_Swordmaster2_06": [
+      "Swordmaster: Advanced"
+    ],
+    "DA_CT_Trainer_Swordmaster2_06_dummy": [
+      "Swordmaster: Advanced"
+    ],
+    "DA_CT_Trainer_Trooper1_01": [
+      "Trooper: Basics"
+    ],
+    "DA_CT_Trainer_Trooper1_01A": [
+      "Trooper: Basics"
+    ],
+    "DA_CT_Trainer_Trooper1_Funnel_01": [
+      "Trooper: Training"
+    ],
+    "DA_CT_Trainer_Trooper2_01": [
+      "Trooper: Advanced"
+    ],
+    "DA_CT_Trainer_Trooper2_02": [
+      "Trooper: Advanced"
+    ],
+    "DA_CT_Trainer_Trooper2_03": [
+      "Trooper: Advanced"
+    ],
+    "DA_CT_Trainer_Trooper2_04": [
+      "Trooper: Advanced"
+    ],
+    "DA_CT_Trainer_Trooper2_05": [
+      "Trooper: Advanced"
+    ],
+    "DA_CT_Trainer_Trooper2_06": [
+      "Trooper: Advanced"
     ]
   }
 }
