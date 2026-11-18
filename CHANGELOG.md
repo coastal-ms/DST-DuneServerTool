@@ -13,6 +13,12 @@ here cover everything those tags shipped.
 
 ## [Unreleased]
 
+## [16.8.2] - 2026-11-17
+
+### Fixed
+- Show the one-time sharing prompt during silent Windows upgrades when a choice is needed.
+- Show and search in-game contract and chain names in Complete Contracts and add 13 supported contracts.
+
 ## [16.8.1] - 2026-11-17
 
 ### Fixed

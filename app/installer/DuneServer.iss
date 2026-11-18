@@ -16,7 +16,7 @@
 ;                 -> NOT touched by install or uninstall (preserves user config)
 
 #define MyAppName        "Dune Server Tool"
-#define MyAppVersion "16.8.1"
+#define MyAppVersion "16.8.2"
 #ifndef MyAppNumericVersion
 #define MyAppCoreVersion Copy(MyAppVersion, 1, Pos("-", MyAppVersion + "-") - 1)
 #define MyAppNumericVersion MyAppCoreVersion + (Len(MyAppCoreVersion) - Len(StringChange(MyAppCoreVersion, ".", "")) == 2 ? ".0" : "")
@@ -264,6 +264,8 @@ Filename: "powershell.exe"; Parameters: "-NoProfile -ExecutionPolicy Bypass -Fil
 var
   InstallationModePage: TInputOptionWizardPage;
   UsageCountPage: TInputOptionWizardPage;
+  UsageCountPrompted: Boolean;
+  UsageCountSilentChoice: Boolean;
   ServerDirPage:   TInputDirWizardPage;
   SshKeyPage:      TInputFileWizardPage;
   UserPage:        TInputQueryWizardPage;
@@ -496,6 +498,22 @@ end;
 // ---------- wizard wiring ----------
 #include "UsageCount.iss"
 
+function InitializeSetup(): Boolean;
+var
+  configPath: string;
+begin
+  Result := True;
+  UsageCountPrompted := False;
+  configPath := ExpandConstant('{userappdata}\DuneServer\dune-server.config');
+  if WizardSilent and UsageCountNeedsChoice(ReadCfgKey(configPath, 'UsageCountChoiceVersion')) then
+  begin
+    UsageCountSilentChoice := UsageCountDefaultChoice(
+      ReadCfgKey(configPath, 'AnonymousUsageEnabled'));
+    Result := ConfirmUsageCountChoice(UsageCountSilentChoice);
+    UsageCountPrompted := Result;
+  end;
+end;
+
 procedure InitializeWizard();
 var
   legacy: string;
@@ -569,7 +587,8 @@ begin
     'Sharing is optional. You can turn it off at any time in Settings.', False, False);
   UsageCountPage.Add('Share installation count');
   UsageCountPage.Values[0] := UsageCountDefaultChoice(
-    ReadCfgKey(appdataCfg, 'AnonymousUsageEnabled'), WizardSilent);
+    ReadCfgKey(appdataCfg, 'AnonymousUsageEnabled'));
+  if UsageCountPrompted then UsageCountPage.Values[0] := UsageCountSilentChoice;
 
   // Page 1: Server install folder (DirPage with Browse)
   ServerDirPage := CreateInputDirPage(UsageCountPage.ID,

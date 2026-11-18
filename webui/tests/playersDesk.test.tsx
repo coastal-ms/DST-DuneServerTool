@@ -1,7 +1,7 @@
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { PlayersTab } from '../src/pages/gameplay/PlayersTab'
-import { getPlayers, getPlayerSummary, getPlayerStats, giveSolari, deleteAccount, unlockTestingStations, grantAllSkills, getTrainerCatalog, getTrainerStatus, type Player } from '../src/api/gameplay'
+import { getPlayers, getPlayerSummary, getPlayerStats, giveSolari, deleteAccount, unlockTestingStations, grantAllSkills, getTrainerCatalog, getTrainerStatus, getContracts, completeContract, type Player } from '../src/api/gameplay'
 import { getPlayerActionTools } from '../src/pages/gameplay/players/sections'
 import { playerToolHome } from '../src/pages/gameplay/players/PlayerManagement'
 import { COMMAND_DECK_KEY } from '../src/hooks/useCommandDeck'
@@ -11,6 +11,7 @@ vi.mock('../src/pages/gameplay/players/base-water', () => ({ BaseWaterAdmin: () 
 vi.mock('../src/api/gameplay', async importOriginal => ({
   ...await importOriginal<typeof import('../src/api/gameplay')>(),
   getPlayers: vi.fn(), getPlayerSummary: vi.fn(), getPlayerStats: vi.fn(), giveSolari: vi.fn(), deleteAccount: vi.fn(), unlockTestingStations: vi.fn(), grantAllSkills: vi.fn(), getTrainerCatalog: vi.fn(), getTrainerStatus: vi.fn(),
+  getContracts: vi.fn(), completeContract: vi.fn(),
 }))
 const players: Player[] = [
   { id: 41, account_id: 51, controller_id: 61, name: 'Aster', class: 'Mentat', map: 'Survival_1', faction_id: 1, faction_name: 'Atreides', online_status: 'Offline' },
@@ -249,6 +250,33 @@ it('keeps contracts separate and routes skill search to the combined trainers ca
   expect(window.confirm).toHaveBeenCalledWith(expect.stringContaining('20 spendable skill points'))
   expect(window.confirm).toHaveBeenCalledWith(expect.stringContaining('Intel to 100'))
   expect(window.confirm).not.toHaveBeenCalledWith(expect.stringContaining('AFTER'))
+})
+
+it('finds contracts by game name and completes the selected internal ID', async () => {
+  const id = 'DA_CT_Survival1_DynEnc_AssassinJabalE_01'
+  vi.mocked(getContracts).mockResolvedValue({ ok: true, total: 4, contracts: [
+    { id, name: 'Darkwood Depot Target', alias: 'Survival1_DynEnc_AssassinJabalE_01' },
+    { id: 'DA_CT_Fac_Atre_Rank00_02_SpyReport', name: 'The Missing Spy' },
+    { id: 'DA_CT_Fac_Hark_Rank00_02_SpyReport', name: 'The Missing Spy' },
+    { id: 'DA_CT_Survival1_SandFlies1_01', name: 'Scout the Enemy', chains: ['Counter-Insurgency'] },
+  ] })
+  vi.mocked(completeContract).mockResolvedValue({ ok: true, message: 'Completed.' })
+  vi.spyOn(window, 'confirm').mockReturnValue(true)
+  await selectPlayer()
+  await findTool('Complete Contracts', /Complete Contracts/)
+  const picker = await screen.findByRole('listbox', { name: 'Contract' })
+  expect(within(picker).getAllByRole('option', { name: /The Missing Spy — DA_CT_/ })).toHaveLength(2)
+  const search = screen.getByRole('textbox', { name: 'Search contracts' })
+  fireEvent.change(search, { target: { value: 'counter' } })
+  expect(within(picker).getAllByRole('option')).toHaveLength(1)
+  expect(within(picker).getByRole('option', { name: 'Scout the Enemy — Counter-Insurgency' })).toHaveValue('DA_CT_Survival1_SandFlies1_01')
+  for (const query of ['darkwood', 'AssassinJabalE_01']) {
+    fireEvent.change(search, { target: { value: query } })
+    expect(within(picker).getAllByRole('option')).toHaveLength(1)
+    expect(within(picker).getByRole('option', { name: 'Darkwood Depot Target' })).toHaveValue(id)
+  }
+  submit('Complete Contract')
+  await waitFor(() => expect(completeContract).toHaveBeenCalledExactlyOnceWith(51, id))
 })
 
 it('offers one skill-search destination and runs the original skill grant with no trainer prerequisite', async () => {

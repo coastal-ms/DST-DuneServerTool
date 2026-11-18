@@ -2679,6 +2679,8 @@ function UnlockTrainersForm({ busy, accountId, onUnlock, onReset }: {
 // via the existing completeContract API. Offline-only (tags are RAM-authoritative
 // while the player is connected). Catalog is large, so the picker is searchable —
 // e.g. type "Skorda" or "Atre" to narrow it down.
+const contractName = (contract: ContractRow) => contract.name || contract.alias || contract.id
+
 function CompleteContractForm({ busy, onSubmit }: { busy: boolean; onSubmit: (contractId: string, label: string) => void }) {
   const [contracts, setContracts] = useState<ContractRow[]>([])
   const [search, setSearch] = useState('')
@@ -2697,12 +2699,19 @@ function CompleteContractForm({ busy, onSubmit }: { busy: boolean; onSubmit: (co
   }, [])
 
   const q = search.trim().toLowerCase()
-  const filtered = useMemo(() => {
-    const list = q
-      ? contracts.filter(c => c.id.toLowerCase().includes(q) || (c.alias || '').toLowerCase().includes(q))
-      : contracts
-    return list.slice(0, 300)
-  }, [contracts, q])
+  const { sorted, nameCounts } = useMemo(() => {
+    const nameCounts = new Map<string, number>()
+    for (const contract of contracts) {
+      const name = contractName(contract)
+      nameCounts.set(name, (nameCounts.get(name) ?? 0) + 1)
+    }
+    const sorted = [...contracts].sort((a, b) => contractName(a).localeCompare(contractName(b)) || a.id.localeCompare(b.id))
+    return { sorted, nameCounts }
+  }, [contracts])
+  const matches = useMemo(() => q
+    ? sorted.filter(c => [c.id, c.alias, c.name, ...(c.chains ?? [])].some(value => value?.toLowerCase().includes(q)))
+    : sorted, [sorted, q])
+  const filtered = useMemo(() => matches.slice(0, 300), [matches])
 
   // Keep the selection valid as the filter changes.
   useEffect(() => {
@@ -2711,7 +2720,11 @@ function CompleteContractForm({ busy, onSubmit }: { busy: boolean; onSubmit: (co
   }, [filtered, sel])
 
   const chosen = contracts.find(c => c.id === sel)
-  const label = (c: ContractRow) => (c.alias && c.alias !== c.id) ? `${c.alias} — ${c.id}` : c.id
+  const label = (c: ContractRow) => {
+    const name = contractName(c)
+    const title = [name, ...(c.chains ?? []).filter(chain => chain !== name)].join(' — ')
+    return (nameCounts.get(name) ?? 0) > 1 ? `${title} — ${c.id}` : title
+  }
   const selectCls = 'w-full px-3 py-2 rounded-lg bg-surface-2 border border-border text-text text-sm focus:outline-none focus:ring-2 focus:ring-ibad focus:border-ibad/50'
   const inputCls = selectCls
 
@@ -2719,22 +2732,20 @@ function CompleteContractForm({ busy, onSubmit }: { busy: boolean; onSubmit: (co
   if (err) return <div className="text-sm text-danger">{err}</div>
   if (contracts.length === 0) return <div className="text-sm text-text-dim">No contracts available.</div>
 
-  const total = q
-    ? contracts.filter(c => c.id.toLowerCase().includes(q) || (c.alias || '').toLowerCase().includes(q)).length
-    : contracts.length
+  const total = matches.length
 
   return (
     <div className="space-y-3">
       <div>
         <label className="block text-[11px] uppercase tracking-wider text-text-dim mb-1">Search</label>
-        <input type="text" value={search} disabled={busy} className={inputCls}
-          placeholder="e.g. Skorda, Atre, Hawat…" onChange={e => setSearch(e.target.value)} />
+        <input type="text" aria-label="Search contracts" value={search} disabled={busy} className={inputCls}
+          placeholder="Search by contract name, chain, or ID" onChange={e => setSearch(e.target.value)} />
       </div>
       <div>
         <label className="block text-[11px] uppercase tracking-wider text-text-dim mb-1">
           Contract{total > 0 ? ` (${total} match${total === 1 ? '' : 'es'}${total > filtered.length ? `, showing ${filtered.length}` : ''})` : ''}
         </label>
-        <select value={sel} disabled={busy} size={8} className={`${selectCls} font-mono`} onChange={e => setSel(e.target.value)}>
+        <select aria-label="Contract" value={sel} disabled={busy} size={8} className={selectCls} onChange={e => setSel(e.target.value)}>
           {filtered.map(c => (
             <option key={c.id} value={c.id}>{label(c)}</option>
           ))}
@@ -2742,7 +2753,7 @@ function CompleteContractForm({ busy, onSubmit }: { busy: boolean; onSubmit: (co
         {filtered.length === 0 && <div className="text-[11px] text-text-muted mt-1">No contracts match “{search}”.</div>}
       </div>
       <div className="text-[11px] text-text-muted">
-        Force-completes the selected contract: writes its completion tags and dismisses the active
+        Force-completes the selected contract: applies its completion flag changes and dismisses the active
         contract item. Use this to clear a contract left stuck after a faction one-click. Takes effect on next login.
       </div>
       <button className="btn-primary w-full" disabled={busy || !sel}

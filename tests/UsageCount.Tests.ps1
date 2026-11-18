@@ -19,6 +19,14 @@ Describe 'Optional anonymous installation presence' {
         Save-DuneConfig @{ DbPort = '15432' } | Out-Null
         Test-DuneUsageCountEnabled $configPath | Should -BeFalse
     }
+    It 'preserves the completed installer choice receipt through config saves' {
+        Set-Content $configPath "AnonymousUsageEnabled=false`nUsageCountChoiceVersion=1"
+        $script:DuneConfigFile = $configPath
+        Save-DuneConfig @{ DbPort = '15432' } | Out-Null
+        $saved = Get-Content $configPath -Raw
+        $saved | Should -Match '(?m)^UsageCountChoiceVersion=1\s*$'
+        Test-DuneUsageCountEnabled $configPath | Should -BeFalse
+    }
     It 'does not create an identity or send anything when disabled from the start' {
         Set-Content $configPath 'AnonymousUsageEnabled=false'
         Invoke-DuneUsageCountTick -ConfigPath $configPath -DataRoot $dataRoot -Edition windows -Version 16.7.9 -Now 100

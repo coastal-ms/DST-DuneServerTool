@@ -51,6 +51,8 @@ function _Load-DuneTagsData {
     $script:DuneTagsData = @{
         contractTags         = @{}
         contractAliases      = @{}
+        contractNames        = @{}
+        contractChains       = @{}
         contractSkillGrants  = @{}
         contractRemoveTags   = @{}
         jobSkillBlocks       = @{}
@@ -60,10 +62,12 @@ function _Load-DuneTagsData {
     $p = _Resolve-DuneCatalog 'dune-tags.json'
     if (-not $p) { return }
     try {
-        $json = Get-Content -LiteralPath $p -Raw | ConvertFrom-Json
+        $json = Get-Content -LiteralPath $p -Raw -Encoding UTF8 | ConvertFrom-Json
         $map = @{
             'contract_tags'         = 'contractTags'
             'contract_aliases'      = 'contractAliases'
+            'contract_names'        = 'contractNames'
+            'contract_chains'       = 'contractChains'
             'contract_skill_grants' = 'contractSkillGrants'
             'contract_remove_tags'  = 'contractRemoveTags'
             'job_skill_blocks'      = 'jobSkillBlocks'
@@ -771,9 +775,12 @@ function Get-DuneContractCatalog {
     $ids = @($tags.contractTags.Keys | Sort-Object)
     foreach ($id in $ids) {
         $alias = if ($aliasReverse.ContainsKey($id)) { $aliasReverse[$id] } else { $id }
+        $name = if ($tags.contractNames.ContainsKey($id)) { $tags.contractNames[$id] } else { $alias }
         $list += @{
             id        = [string]$id
             alias     = [string]$alias
+            name      = [string]$name
+            chains    = @($tags.contractChains[$id] | Where-Object { $_ })
             tag_count = @($tags.contractTags[$id]).Count
         }
     }
@@ -803,7 +810,8 @@ function Get-DuneTrainerContractIds {
     param([string]$Job)
     $tags = Get-DuneTagsData
     $esc = [regex]::Escape($Job)
-    $ids = @($tags.contractTags.Keys | Where-Object { $_ -match "^DA_CT_Trainer_$esc\d" } | Sort-Object)
+    # Funnel contracts lead players to trainers and are separate from trainer progression.
+    $ids = @($tags.contractTags.Keys | Where-Object { $_ -match "^DA_CT_Trainer_$esc\d" -and $_ -notmatch '_Funnel_' } | Sort-Object)
     return $ids
 }
 

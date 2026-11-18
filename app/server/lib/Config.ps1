@@ -5,6 +5,7 @@
 
 $script:DuneConfigKeys = @(
     'AnonymousUsageEnabled',
+    'UsageCountChoiceVersion',
     'InstallationMode',
     'SteamPath',
     'SshKey',
