@@ -1,6 +1,6 @@
 <section class="usage-count site-width" aria-labelledby="usage-count-heading" data-usage-count>
   <div><h2 id="usage-count-heading">Confirmed DST installations</h2>
-    <p>Updates every six hours · <a href="/privacy">What is shared</a></p>
+    <p><a href="/privacy">What is shared</a></p>
   </div>
   <div class="usage-totals" aria-live="polite" aria-atomic="true">
     <div><strong data-usage-windows>—</strong><span>DST for Windows / Solo</span></div>
@@ -21,17 +21,19 @@
   const root = document.querySelector('[data-usage-count]')
   if (root) {
     let refreshing = false
-    const sixHours = 6 * 60 * 60 * 1000
+    const hourMs = 60 * 60 * 1000
+    let refreshInterval = hourMs
     const refresh = () => {
       if (refreshing) return
       refreshing = true
-      let nextRefresh = sixHours
+      let nextRefresh = refreshInterval
       const controller = new AbortController()
       const timer = setTimeout(() => controller.abort(), 5000)
       void fetch('/api/usage.php', { signal: controller.signal, credentials: 'omit', cache: 'no-store' })
       .then(async response => { if (!response.ok) throw new Error('Unavailable'); return response.json() })
       .then(counts => {
-        if (counts.protocol !== 1 || counts.basis !== 'confirmed-installations' || counts.refreshHours !== 6 ||
+        if (counts.protocol !== 1 || counts.basis !== 'confirmed-installations' ||
+          !Number.isSafeInteger(counts.refreshHours) || counts.refreshHours < 1 ||
           !Number.isSafeInteger(counts.updatedAt) || counts.updatedAt <= 0 ||
           !['total','windows','docker'].every(key => Number.isSafeInteger(counts[key]) && counts[key] >= 0) ||
           counts.total !== counts.windows + counts.docker) throw new Error('Invalid count')
@@ -40,8 +42,10 @@
           if (element) element.textContent = counts[key].toLocaleString()
         }
         const status = root.querySelector('[data-usage-status]')
-        if (status) status.textContent = `Updated ${new Date(counts.updatedAt * 1000).toLocaleString([], { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })} · Refreshes every six hours`
-        nextRefresh = Math.max(1000, Math.min(sixHours, (counts.updatedAt * 1000 + sixHours) - Date.now()))
+        const cadence = counts.refreshHours === 1 ? 'Updates hourly' : `Updates every ${counts.refreshHours} hours`
+        if (status) status.textContent = `Updated ${new Date(counts.updatedAt * 1000).toLocaleString([], { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })} · ${cadence}`
+        refreshInterval = counts.refreshHours * hourMs
+        nextRefresh = Math.max(1000, Math.min(refreshInterval, (counts.updatedAt * 1000 + refreshInterval) - Date.now()))
       }).catch(() => {
         for (const element of root.querySelectorAll('[data-usage-windows], [data-usage-docker]')) element.textContent = '—'
         const status = root.querySelector('[data-usage-status]')

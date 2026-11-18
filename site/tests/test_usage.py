@@ -78,7 +78,7 @@ class UsageCollectorTests(unittest.TestCase):
         self.assertEqual(self.request('POST', {'id': str(uuid.uuid4()), 'edition': 'docker', 'version': '1.0.7'}, secrets.token_hex(32))[0], 200)
         snapshot = self.snapshot()
         self.assertEqual((snapshot['total'],snapshot['windows'],snapshot['docker']), (2,1,1))
-        self.assertEqual(snapshot['refreshHours'],6)
+        self.assertEqual(snapshot['refreshHours'], 1)
 
     def test_opt_out_removes_only_the_authenticated_installation(self):
         self.report()
@@ -152,14 +152,25 @@ class UsageCollectorTests(unittest.TestCase):
         self.assertEqual(self.refresh_snapshot()['total'], 1)
         self.assertEqual(self.request()[1]['total'], 1)
 
-    def test_public_snapshot_updates_automatically_after_six_hours(self):
+    def test_public_snapshot_updates_automatically_after_one_hour(self):
         before = self.request()[1]
         self.report()
         self.assertEqual(self.request()[1], before)
         path = self.data / 'snapshot.json'
-        old = json.loads(path.read_text()); old['updatedAt'] = int(time.time()) - 21601
+        old = {**before, 'updatedAt': int(time.time()) - 3590}
+        path.write_text(json.dumps(old))
+        self.assertEqual(self.request()[1], old)
+        old['updatedAt'] = int(time.time()) - 3600
         path.write_text(json.dumps(old))
         self.assertEqual(self.request()[1]['total'], 1)
+
+    def test_public_snapshot_refreshes_when_the_configured_interval_changes(self):
+        before = self.request()[1]
+        self.report()
+        path = self.data / 'snapshot.json'
+        path.write_text(json.dumps({**before, 'refreshHours': 6}))
+        snapshot = self.request()[1]
+        self.assertEqual((snapshot['refreshHours'], snapshot['total']), (1, 1))
 
 
 if __name__ == '__main__': unittest.main(verbosity=2)
