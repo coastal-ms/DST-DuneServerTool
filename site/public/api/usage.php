@@ -1,5 +1,6 @@
 <?php
 declare(strict_types=1);
+const SNAPSHOT_REFRESH_HOURS = 1;
 // Optional presence count. Persist no request IP, headers, names, or game data.
 ini_set('display_errors', '0');
 umask(0077);
@@ -50,15 +51,16 @@ try {
         $snapshot = is_file($snapshotPath) ? json_decode((string)file_get_contents($snapshotPath), true) : null;
         if (!$forceSnapshot && is_array($snapshot) && ($snapshot['protocol'] ?? null) === 1 &&
             ($snapshot['basis'] ?? null) === 'confirmed-installations' &&
+            ($snapshot['refreshHours'] ?? null) === SNAPSHOT_REFRESH_HOURS &&
             is_int($snapshot['updatedAt'] ?? null) && $snapshot['updatedAt'] <= $now &&
-            $snapshot['updatedAt'] > $now - 21600) {
+            $snapshot['updatedAt'] > $now - SNAPSHOT_REFRESH_HOURS * 3600) {
             flock($lock, LOCK_UN); fclose($lock);
             reply(200, $snapshot);
         }
         $query = $db->query('SELECT edition, count(*) AS total FROM presence GROUP BY edition');
         $counts = ['windows' => 0, 'docker' => 0];
         foreach ($query as $row) { $counts[$row['edition']] = (int)$row['total']; }
-        $snapshot = ['protocol' => 1, 'basis' => 'confirmed-installations', 'refreshHours' => 6, 'updatedAt' => $now,
+        $snapshot = ['protocol' => 1, 'basis' => 'confirmed-installations', 'refreshHours' => SNAPSHOT_REFRESH_HOURS, 'updatedAt' => $now,
                      'total' => array_sum($counts), 'windows' => $counts['windows'], 'docker' => $counts['docker']];
         $temporary = $snapshotPath . '.' . bin2hex(random_bytes(8)) . '.tmp';
         if (file_put_contents($temporary, json_encode($snapshot), LOCK_EX) === false || !rename($temporary, $snapshotPath)) {
