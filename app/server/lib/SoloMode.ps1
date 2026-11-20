@@ -1642,6 +1642,7 @@ function Set-DuneSoloSettings {
     $replaceBackup = Join-Path $dir ".ServerCustomSettings.$([guid]::NewGuid().ToString('N')).previous"
     $targetExisted = Test-Path -LiteralPath $path -PathType Leaf
     $replaced = $false
+    $usedRetainedBackup = $false
     $created = $false
     try {
         $hasBom = $false
@@ -1655,7 +1656,32 @@ function Set-DuneSoloSettings {
         $currentHash = if (Test-Path -LiteralPath $path -PathType Leaf) { (Get-FileHash -LiteralPath $path -Algorithm SHA256 -ErrorAction Stop).Hash } else { '' }
         if ($currentPath -cne $path -or $currentHash -cne $sourceHash) { throw 'The Solo settings or selected save changed during this request. Finish cloud sync, refresh settings and retry.' }
         if ($targetExisted) {
-            [IO.File]::Replace($temp, $path, $replaceBackup, $true)
+            try {
+                Invoke-DuneSoloFileReplace -Source $temp -Destination $path -Backup $replaceBackup
+            } catch {
+                $replaceError = $_.Exception.GetBaseException()
+                # The existing copy allows an atomic retry without asking Windows
+                # to create a second backup beside the live settings file.
+                # ERROR_ACCESS_DENIED or ERROR_UNABLE_TO_REMOVE_REPLACED.
+                if ($replaceError.HResult -notin @(0x80070005, 0x80070497) -or
+                    (Test-Path -LiteralPath $replaceBackup) -or
+                    -not (Test-Path -LiteralPath $temp -PathType Leaf) -or
+                    -not (Test-Path -LiteralPath $path -PathType Leaf) -or
+                    -not (Test-Path -LiteralPath $backupPath -PathType Leaf) -or
+                    (Get-DuneSoloNativeSettingsPath -Profile (Get-DuneSoloProfile)) -cne $path -or
+                    (Get-FileHash -LiteralPath $backupPath -Algorithm SHA256 -ErrorAction Stop).Hash -cne $sourceHash -or
+                    (Get-FileHash -LiteralPath $temp -Algorithm SHA256 -ErrorAction Stop).Hash -cne $writtenHash -or
+                    (Get-FileHash -LiteralPath $path -Algorithm SHA256 -ErrorAction Stop).Hash -cne $sourceHash) {
+                    throw
+                }
+                try {
+                    Invoke-DuneSoloFileReplace -Source $temp -Destination $path
+                } catch {
+                    $retryError = $_.Exception.GetBaseException()
+                    throw "Could not replace Solo settings at '$path'. Windows error $('{0:X8}' -f $retryError.HResult): $($retryError.Message) Original backup: $backupPath"
+                }
+                $usedRetainedBackup = $true
+            }
             $replaced = $true
         } else {
             Move-Item -LiteralPath $temp -Destination $path
@@ -1690,7 +1716,22 @@ function Set-DuneSoloSettings {
             (Get-FileHash -LiteralPath $path -Algorithm SHA256 -ErrorAction Stop).Hash -cne $writtenHash) {
             throw "Solo settings changed again after the write. Newer settings were preserved; review the settings and retained backup before retrying: $backupPath"
         }
-        if ($replaced -and (Test-Path -LiteralPath $replaceBackup -PathType Leaf)) {
+        if ($replaced -and $usedRetainedBackup) {
+            try {
+                [IO.File]::Copy($backupPath, $replaceBackup)
+                if ((Get-FileHash -LiteralPath $replaceBackup -Algorithm SHA256 -ErrorAction Stop).Hash -cne $sourceHash) {
+                    throw 'The retained backup no longer matches the original settings.'
+                }
+                if ((Get-FileHash -LiteralPath $path -Algorithm SHA256 -ErrorAction Stop).Hash -cne $writtenHash) {
+                    throw 'The settings changed during recovery and the newer file was preserved.'
+                }
+                Invoke-DuneSoloFileReplace -Source $replaceBackup -Destination $path
+            } catch {
+                throw "Solo settings recovery failed: $($_.Exception.Message) Original backup: $backupPath"
+            } finally {
+                Remove-Item -LiteralPath $replaceBackup -Force -ErrorAction SilentlyContinue
+            }
+        } elseif ($replaced -and (Test-Path -LiteralPath $replaceBackup -PathType Leaf)) {
             $failedCopy = Join-Path $dir ".ServerCustomSettings.$([guid]::NewGuid().ToString('N')).failed"
             try {
                 [IO.File]::Replace($replaceBackup, $path, $failedCopy, $true)
@@ -1790,9 +1831,13 @@ function Invoke-DuneSoloFileReplace {
     param(
         [Parameter(Mandatory)][string]$Source,
         [Parameter(Mandatory)][string]$Destination,
-        [Parameter(Mandatory)][string]$Backup
+        [string]$Backup
     )
-    [IO.File]::Replace($Source, $Destination, $Backup, $true)
+    if ($Backup) {
+        [IO.File]::Replace($Source, $Destination, $Backup, $true)
+    } else {
+        [IO.File]::Replace($Source, $Destination, [NullString]::Value, $true)
+    }
 }
 
 function Read-DuneSoloConsoleSettings {

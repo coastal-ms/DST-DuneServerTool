@@ -13,6 +13,11 @@ here cover everything those tags shipped.
 
 ## [Unreleased]
 
+## [16.8.3] - 2026-11-20
+
+### Fixed
+- Recover from some access-denied errors when applying Solo settings. If Windows still blocks the save, DST shows the affected file and retained backup.
+
 ## [16.8.2] - 2026-11-17
 
 ### Fixed

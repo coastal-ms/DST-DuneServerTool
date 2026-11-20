@@ -83,4 +83,59 @@ Describe 'Cloud-backed native Solo settings' {
         [IO.File]::ReadAllText($script:cloudIni) | Should -BeExactly 'newer cloud value after the DST write'
         @(Get-ChildItem (Join-Path $script:cloudRoot 'DuneServer\backups\settings') -Filter '*.ini').Count | Should -Be 1
     }
+
+    Context 'when Windows rejects the replacement with a sibling backup' {
+        BeforeEach {
+            $script:originalIni = "[/Script/DuneSandbox.UserServerCustomSettings]`nGatheringAmount=2.5`nFutureValue=Keep`n"
+            [IO.File]::WriteAllText($script:cloudIni, $script:originalIni)
+            Mock Invoke-DuneSoloFileReplace {
+                if ($Backup) { throw [UnauthorizedAccessException]::new('Access to the path is denied.') }
+                [IO.File]::Replace($Source, $Destination, [NullString]::Value, $true)
+            }
+        }
+
+        It 'replaces the settings atomically using the verified retained backup' {
+            $result = Set-DuneSoloSettings -Settings @{GatheringAmount='3.5'} -Confirm 'APPLY SOLO SETTINGS'
+            $result.settings.path | Should -Be $script:cloudIni
+            [IO.File]::ReadAllText($script:cloudIni) | Should -Match 'GatheringAmount=3.5'
+            [IO.File]::ReadAllText($script:cloudIni) | Should -Match 'FutureValue=Keep'
+            [IO.File]::ReadAllText($result.backupPath) | Should -BeExactly $script:originalIni
+            Should -Invoke Invoke-DuneSoloFileReplace -Exactly -Times 1 -ParameterFilter { -not $Backup }
+        }
+
+        It 'restores the retained backup if verification fails after the retry' {
+            Mock Read-DuneSoloSettings { throw 'simulated verification failure' }
+            { Set-DuneSoloSettings -Settings @{GatheringAmount='3.5'} -Confirm 'APPLY SOLO SETTINGS' } |
+                Should -Throw '*simulated verification failure*'
+            [IO.File]::ReadAllText($script:cloudIni) | Should -BeExactly $script:originalIni
+            Should -Invoke Invoke-DuneSoloFileReplace -Exactly -Times 2 -ParameterFilter { -not $Backup }
+        }
+
+        It 'preserves a concurrent edit after the initial replacement fails' {
+            Mock Invoke-DuneSoloFileReplace {
+                [IO.File]::WriteAllText($Destination, 'newer cloud contents')
+                throw [UnauthorizedAccessException]::new('Access to the path is denied.')
+            } -ParameterFilter { $Backup }
+            { Set-DuneSoloSettings -Settings @{GatheringAmount='3.5'} -Confirm 'APPLY SOLO SETTINGS' } |
+                Should -Throw '*Access to the path is denied*'
+            [IO.File]::ReadAllText($script:cloudIni) | Should -BeExactly 'newer cloud contents'
+            Should -Invoke Invoke-DuneSoloFileReplace -Exactly -Times 0 -ParameterFilter { -not $Backup }
+        }
+    }
+
+    It 'leaves a read-only settings file and its permissions intact when replacement fails' -Skip:(-not $IsWindows) {
+        $original = "[/Script/DuneSandbox.UserServerCustomSettings]`nGatheringAmount=2.5`n"
+        [IO.File]::WriteAllText($script:cloudIni, $original)
+        $attributes = [IO.File]::GetAttributes($script:cloudIni)
+        [IO.File]::SetAttributes($script:cloudIni, $attributes -bor [IO.FileAttributes]::ReadOnly)
+        try {
+            { Set-DuneSoloSettings -Settings @{GatheringAmount='3.5'} -Confirm 'APPLY SOLO SETTINGS' } |
+                Should -Throw '*Windows error 80070005*Original backup:*'
+            [IO.File]::ReadAllText($script:cloudIni) | Should -BeExactly $original
+            [IO.File]::GetAttributes($script:cloudIni) | Should -Be ($attributes -bor [IO.FileAttributes]::ReadOnly)
+            @(Get-ChildItem -LiteralPath (Split-Path -Parent $script:cloudIni) -Force).Count | Should -Be 1
+        } finally {
+            [IO.File]::SetAttributes($script:cloudIni, $attributes)
+        }
+    }
 }
