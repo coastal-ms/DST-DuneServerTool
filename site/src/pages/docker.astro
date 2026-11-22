@@ -1,0 +1,110 @@
+---
+import Base from "../layouts/Base.astro";
+import Screenshot from "../components/Screenshot.astro";
+
+const base = import.meta.env.BASE_URL;
+const repo = "https://github.com/coastal-ms/DST-Docker";
+const install = "sudo apt update\nsudo apt install -y ca-certificates curl\ncurl -fsSL https://raw.githubusercontent.com/coastal-ms/DST-Docker/main/bootstrap.sh | bash";
+---
+
+<Base
+  title="DST Docker — Host Dune: Awakening on Linux or WSL"
+  description="Install DST Docker to host a Dune: Awakening dedicated server on Linux or Windows WSL. Manage maps, resources, and backups in your browser."
+>
+  <section class="docker-hero" aria-labelledby="docker-title">
+    <div class="site-width pt-16 pb-10">
+      <h1 id="docker-title" class="text-5xl sm:text-6xl font-semibold tracking-tight text-dune-text">DST Docker</h1>
+      <p class="mt-4 max-w-2xl text-lg text-dune-muted leading-relaxed">
+        Host a Dune: Awakening dedicated server on Linux or Windows WSL. Check your battlegroup, manage map resources, and back up your world from the browser.
+      </p>
+      <div class="mt-6 flex flex-wrap items-center gap-x-6 gap-y-3">
+        <a href="#install-docker" class="action-link">Install DST Docker</a>
+        <a href={`${repo}/releases/latest`} class="text-dune-accent underline underline-offset-4">Latest release</a>
+        <a href={`${repo}#readme`} class="text-dune-accent underline underline-offset-4">GitHub README</a>
+      </div>
+      <Screenshot
+        src={`${base}screenshots/docker-server-overview.png`}
+        alt="DST Docker Server Overview showing a healthy battlegroup and four ready maps"
+        caption="Server Overview shows battlegroup health, open game ports, and map readiness."
+        width={1440}
+        height={600}
+        eager
+      />
+    </div>
+  </section>
+
+  <section id="install-docker" class="site-width docker-install py-12 sm:py-16 scroll-mt-24" aria-labelledby="docker-install-title">
+    <div>
+      <h2 id="docker-install-title" class="text-3xl font-semibold tracking-tight">Install on Linux or WSL</h2>
+      <p class="mt-4 text-dune-muted leading-relaxed">
+        Use an x86-64 Linux host and a Funcom self-host service token. The installer sets up missing prerequisites on supported Ubuntu and Debian systems. Docker Engine runs inside Linux or WSL without Docker Desktop.
+      </p>
+    </div>
+    <div class="rounded-xl border border-dune-border bg-dune-surface p-5 sm:p-7 space-y-6">
+      <div>
+        <h3 class="text-xl font-semibold">Windows PowerShell</h3>
+        <p class="mt-2 text-dune-muted">If you need Ubuntu, open PowerShell as Administrator and install it. Then open Ubuntu and finish creating your Linux account.</p>
+        <pre class="mt-3"><code>wsl --install -d Ubuntu</code></pre>
+      </div>
+      <div>
+        <h3 class="text-xl font-semibold">Ubuntu or Debian terminal</h3>
+        <p class="mt-2 text-dune-muted">Run the bootstrap in your Linux terminal. It installs the latest stable release.</p>
+        <pre class="mt-3"><code>{install}</code></pre>
+      </div>
+      <p class="text-dune-muted">Open the browser link printed by the installer, create an Owner account, and follow the setup wizard. For updates, reuse your existing installation path.</p>
+    </div>
+  </section>
+
+  <section class="docker-tour py-12 sm:py-16" aria-labelledby="docker-tour-title">
+    <div class="site-width">
+      <h2 id="docker-tour-title" class="text-3xl font-semibold tracking-tight">Explore the portal</h2>
+      <div class="docker-features mt-7">
+        <article>
+          <h3 class="text-2xl font-semibold">Maps &amp; memory</h3>
+          <p class="mt-3 text-dune-muted leading-relaxed">See which maps are ready and how much RAM they use. Set per-map resource limits and choose when optional maps run.</p>
+          <Screenshot
+            src={`${base}screenshots/docker-maps-memory.png`}
+            alt="Maps and memory view with host RAM, map status, and per-map resource limits"
+            width={1203}
+            height={900}
+          />
+        </article>
+        <article>
+          <h3 class="text-2xl font-semibold">Deep Desert Atlas</h3>
+          <p class="mt-3 text-dune-muted leading-relaxed">Pick a world seed and browse reference locations for caves, wrecks, testing stations, and spice fields.</p>
+          <Screenshot
+            src={`${base}screenshots/docker-deep-desert-atlas.png`}
+            alt="Deep Desert Atlas with a selected world seed, map markers, and a point-of-interest legend"
+            width={1203}
+            height={835}
+          />
+        </article>
+      </div>
+    </div>
+  </section>
+</Base>
+
+<style>
+  .docker-hero {
+    background: radial-gradient(ellipse at top right, color-mix(in srgb, var(--color-dune-accent) 12%, transparent), transparent 60%);
+  }
+  .docker-install, .docker-features {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 2rem;
+  }
+  .docker-install pre {
+    background: var(--color-dune-bg);
+    border: 1px solid var(--color-dune-border);
+    border-radius: .5rem;
+    padding: .875rem;
+    overflow-x: auto;
+  }
+  .docker-tour {
+    border-block: 1px solid var(--color-dune-border);
+  }
+  @media (min-width: 800px) {
+    .docker-install { grid-template-columns: minmax(0, 1fr) minmax(0, 1.5fr); }
+    .docker-features { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  }
+</style>
