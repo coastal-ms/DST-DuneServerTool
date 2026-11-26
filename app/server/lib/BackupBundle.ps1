@@ -1,7 +1,7 @@
 # A portable backup keeps the database archive and its matching Funcom settings
 # together. Read only the two fixed entries when opening an imported bundle.
 function Export-DuneBackupBundle {
-    param([string]$Ip, [string]$KeyPath, [string]$VmPath, [string]$LocalPath)
+    param([string]$Ip, [string]$KeyPath, [string]$VmPath, [string]$LocalPath, [int]$TimeoutSec = 300)
 
     Assert-DuneBackupBundlePath -VmPath $VmPath
     $destination = [IO.Path]::GetFullPath($LocalPath)
@@ -11,13 +11,27 @@ function Export-DuneBackupBundle {
     [void][IO.Directory]::CreateDirectory($stage)
     try {
         $sources = [ordered]@{'database.backup' = $VmPath; 'battlegroup.yaml' = "$VmPath.yaml"}
+        $stampCommand = "sudo stat -c '%i|%s|%y' '$VmPath' '$VmPath.yaml'"
+        $before = Invoke-DuneBackupShell -Ip $Ip -Script $stampCommand
+        if ($before.rc -ne 0 -or -not $before.out) {
+            throw 'This backup has no readable matching settings YAML. You can still download its database archive.'
+        }
         foreach ($name in $sources.Keys) {
             $local = Join-Path $stage $name
-            $copied = Copy-DuneVmFileToLocal -Ip $Ip -KeyPath $KeyPath -VmPath $sources[$name] -LocalPath $local -TimeoutSec 300
+            $copied = Copy-DuneVmFileToLocal -Ip $Ip -KeyPath $KeyPath -VmPath $sources[$name] -LocalPath $local -TimeoutSec $TimeoutSec
             if (-not $copied.ok -or -not [IO.File]::Exists($local) -or [IO.FileInfo]::new($local).Length -eq 0) {
                 if ($name -eq 'battlegroup.yaml') { throw 'This backup has no readable matching settings YAML. You can still download its database archive.' }
                 throw 'The database archive could not be downloaded.'
             }
+        }
+        $after = Invoke-DuneBackupShell -Ip $Ip -Script $stampCommand
+        if ($after.rc -ne 0 -or $after.out -cne $before.out) {
+            throw 'The database or its matching settings changed while copying. Retry once the backup finishes.'
+        }
+        $database = [IO.File]::OpenRead((Join-Path $stage 'database.backup'))
+        try { Assert-DuneBackupDatabaseHeader -Stream $database } finally { $database.Dispose() }
+        if ([IO.FileInfo]::new((Join-Path $stage 'battlegroup.yaml')).Length -gt 4MB) {
+            throw 'The saved battlegroup settings exceed the backup bundle limit.'
         }
 
         Add-Type -AssemblyName System.IO.Compression, System.IO.Compression.FileSystem -ErrorAction Stop
@@ -47,6 +61,20 @@ function Assert-DuneBackupBundlePath {
     }
 }
 
+function Assert-DuneBackupDatabaseHeader {
+    param([System.IO.Stream]$Stream)
+    $magic = [byte[]]::new(5)
+    $count = 0
+    while ($count -lt $magic.Length) {
+        $read = $Stream.Read($magic, $count, $magic.Length - $count)
+        if ($read -eq 0) { break }
+        $count += $read
+    }
+    if ($count -ne 5 -or [Text.Encoding]::ASCII.GetString($magic) -cne 'PGDMP') {
+        throw 'The bundle does not contain a PostgreSQL custom-format backup.'
+    }
+}
+
 function Expand-DuneBackupBundle {
     param([string]$LocalPath, [string]$Stage)
 
@@ -69,18 +97,7 @@ function Expand-DuneBackupBundle {
             throw 'There is not enough free space to open this backup bundle.'
         }
         $stream = $database[0].Open()
-        try {
-            $magic = [byte[]]::new(5)
-            $count = 0
-            while ($count -lt $magic.Length) {
-                $read = $stream.Read($magic, $count, $magic.Length - $count)
-                if ($read -eq 0) { break }
-                $count += $read
-            }
-            if ($count -ne 5 -or [Text.Encoding]::ASCII.GetString($magic) -cne 'PGDMP') {
-                throw 'The bundle does not contain a PostgreSQL custom-format backup.'
-            }
-        } finally { $stream.Dispose() }
+        try { Assert-DuneBackupDatabaseHeader -Stream $stream } finally { $stream.Dispose() }
 
         foreach ($entry in @($database[0], $settings[0])) {
             [IO.Compression.ZipFileExtensions]::ExtractToFile($entry, (Join-Path $Stage $entry.FullName))

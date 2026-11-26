@@ -3,6 +3,7 @@ BeforeAll {
     . (Join-Path $repo 'app/server/lib/BackupBundle.ps1')
     . (Join-Path $repo 'app/lib/K8s.ps1')
     . (Join-Path $repo 'app/server/lib/BackupSchedule.ps1')
+    . (Join-Path $repo 'app/server/lib/BackupMirror.ps1')
     . (Join-Path $repo 'app/server/lib/VmFileTransfer.ps1')
 
     function New-BundleFixture {
@@ -51,6 +52,7 @@ BeforeAll {
 
 Describe 'Portable database and settings backup' -Tag 'Pure' {
     It 'round trips the exact database and matching YAML through a portable bundle' {
+        Mock Invoke-DuneBackupShell { @{ rc = 0; out = 'unchanged pair' } }
         Mock Copy-DuneVmFileToLocal {
             $content = if ($VmPath.EndsWith('.yaml')) { 'saved settings' } else { 'PGDMP-test archive' }
             [IO.File]::WriteAllText($LocalPath, $content)
@@ -67,6 +69,7 @@ Describe 'Portable database and settings backup' -Tag 'Pure' {
     }
 
     It 'leaves no bundle behind when the settings sidecar is missing' {
+        Mock Invoke-DuneBackupShell { @{ rc = 0; out = 'unchanged pair' } }
         Mock Copy-DuneVmFileToLocal {
             if ($VmPath.EndsWith('.yaml')) { return @{ ok = $false } }
             [IO.File]::WriteAllText($LocalPath, 'PGDMP-test archive')
@@ -76,6 +79,46 @@ Describe 'Portable database and settings backup' -Tag 'Pure' {
         { Export-DuneBackupBundle -Ip localhost -KeyPath mock -VmPath '/funcom/artifacts/database-dumps/sh-example/world.backup' -LocalPath $zip } |
             Should -Throw '*no readable matching settings*'
         Test-Path -LiteralPath $zip | Should -BeFalse
+    }
+
+    It 'does not publish a bundle when the VM pair changes during the copy' {
+        $script:bundleStatCalls = 0
+        Mock Invoke-DuneBackupShell {
+            $script:bundleStatCalls++
+            @{ rc = 0; out = [string]$script:bundleStatCalls }
+        }
+        Mock Copy-DuneVmFileToLocal {
+            [IO.File]::WriteAllText($LocalPath, 'PGDMP-test archive')
+            @{ ok = $true }
+        }
+        $zip = Join-Path $TestDrive 'changed.zip'
+        { Export-DuneBackupBundle -Ip localhost -KeyPath mock -VmPath '/funcom/artifacts/database-dumps/sh-example/world.backup' -LocalPath $zip } |
+            Should -Throw '*changed while copying*'
+        Test-Path -LiteralPath $zip | Should -BeFalse
+    }
+
+    It 'automatically mirrors a complete ZIP even if a database-only copy exists' {
+        Mock Get-DuneBackupMirrorVmFiles { ,@(@{ path = '/funcom/artifacts/database-dumps/sh-example/world.backup' }) }
+        Mock Invoke-DuneBackupShell { @{ rc = 0; out = 'unchanged pair' } }
+        Mock Copy-DuneVmFileToLocal {
+            $content = if ($VmPath.EndsWith('.yaml')) { 'saved settings' } else { 'PGDMP-test archive' }
+            [IO.File]::WriteAllText($LocalPath, $content)
+            @{ ok = $true }
+        }
+        $mirror = Join-Path $TestDrive 'mirror'
+        $world = (New-Item -ItemType Directory (Join-Path $mirror 'sh-example') -Force).FullName
+        $legacy = Join-Path $world 'world.backup'
+        [IO.File]::WriteAllText($legacy, 'previous database-only copy')
+        $tick = Invoke-DuneBackupMirrorTick -Ip localhost -KeyPath mock -LocalFolder $mirror
+        $tick.ok | Should -BeTrue
+        $tick.copied | Should -Be @('world-with-settings.zip')
+        $stage = (New-Item -ItemType Directory (Join-Path $TestDrive 'mirrored-expanded')).FullName
+        Expand-DuneBackupBundle -LocalPath (Join-Path $world $tick.copied[0]) -Stage $stage
+        [IO.File]::ReadAllText((Join-Path $stage 'database.backup')) | Should -BeExactly 'PGDMP-test archive'
+        [IO.File]::ReadAllText((Join-Path $stage 'battlegroup.yaml')) | Should -BeExactly 'saved settings'
+        [IO.File]::ReadAllText($legacy) | Should -BeExactly 'previous database-only copy'
+        (Invoke-DuneBackupMirrorTick -Ip localhost -KeyPath mock -LocalFolder $mirror).copied | Should -BeNullOrEmpty
+        Should -Invoke Copy-DuneVmFileToLocal -Times 2 -Exactly
     }
 
     It 'rejects traversal or shell syntax in the source path before copying' {

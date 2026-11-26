@@ -749,7 +749,7 @@ export function Database() {
         {isLocalViewer() && !!getWebView2() && (
           <p className="mt-3 text-xs text-text-muted">
             To move the saved battlegroup settings with the database, use <strong>Download bundle</strong> on the old VM
-            and <strong>Import backup bundle</strong> on the new VM. With the new battlegroup stopped, use
+            and <strong>Import backup</strong> on the new VM. With the new battlegroup stopped, use
             {' '}<strong>Restore saved names</strong> on the uploaded backup and then <strong>Restore Backup</strong> for the database.
             The settings action restores the server and Hagga sietch display names when the Hagga partition IDs match.
           </p>
@@ -1285,11 +1285,16 @@ function BackupScheduleCard({ vmRunning, battlegroupStopped, showToast }: Backup
   }
 
   async function handleUpload() {
-    const localPath = await pickFileFromShell('pick-open-file', { id: 'backup-upload' })
+    const localPath = await pickFileFromShell('pick-open-file', {
+      id: 'backup-upload',
+      filter: 'Funcom backups and DST bundles (*.backup;*.zip)|*.backup;*.zip',
+    })
     if (!localPath) return  // cancelled
     setTransferring('upload')
     try {
-      const r = await uploadBackup({ localPath })
+      const r = /\.zip$/i.test(localPath)
+        ? await uploadBackupBundle({ localPath })
+        : await uploadBackup({ localPath })
       showToast('ok', r.message ?? 'Upload complete.')
       // Refresh history so the new file appears
       void getBackupHistory({ recent: 200, logLines: 50 }).then(setHistory).catch(() => {})
@@ -1300,24 +1305,18 @@ function BackupScheduleCard({ vmRunning, battlegroupStopped, showToast }: Backup
     }
   }
 
-  async function handleBackupBundle(vmPath?: string) {
-    const name = vmPath?.split('/').pop()?.replace(/\.backup$/, '')
-    const localPath = await pickFileFromShell(vmPath ? 'pick-save-file' : 'pick-open-file', {
-      id: vmPath ? 'backup-bundle-download' : 'backup-bundle-upload',
+  async function handleBackupBundle(vmPath: string) {
+    const name = vmPath.split('/').pop()?.replace(/\.backup$/, '')
+    const localPath = await pickFileFromShell('pick-save-file', {
+      id: 'backup-bundle-download',
       defaultName: name ? name + '-with-settings.zip' : undefined,
       filter: 'DST backup bundle (*.zip)|*.zip',
     })
     if (!localPath) return
-    setTransferring(vmPath ?? 'bundle-upload')
+    setTransferring(vmPath)
     try {
-      if (vmPath) {
-        const result = await downloadBackupBundle({ vmPath, localPath })
-        showToast('ok', result.message ?? 'Backup bundle downloaded.')
-      } else {
-        const result = await uploadBackupBundle({ localPath })
-        showToast('ok', result.message ?? 'Backup bundle imported.')
-        void loadAll()
-      }
+      const result = await downloadBackupBundle({ vmPath, localPath })
+      showToast('ok', result.message ?? 'Backup bundle downloaded.')
     } catch (error) {
       showToast('err', error instanceof Error ? error.message : String(error))
     } finally {
@@ -1688,22 +1687,11 @@ function BackupScheduleCard({ vmRunning, battlegroupStopped, showToast }: Backup
               onClick={() => void handleUpload()}
               disabled={!vmRunning || !!transferring}
               className="btn-secondary text-xs py-1 px-2"
-              title="Upload a .backup file from your PC to the VM's dump directory"
+              title="Import a Funcom .backup or a DST .zip bundle"
             >
               <Icon name={transferring === 'upload' ? 'Loader2' : 'Upload'} size={12} className={transferring === 'upload' ? 'animate-spin' : ''} />
               {transferring === 'upload' ? 'Uploading…' : 'Import backup'}
             </button>
-            {canUseBackupBundles && (
-              <button
-                type="button"
-                onClick={() => void handleBackupBundle()}
-                disabled={!vmRunning || !!transferring || deleting}
-                className="btn-secondary text-xs py-1 px-2"
-                title="Upload a database and settings bundle from your PC"
-              >
-                {transferring === 'bundle-upload' ? 'Uploading…' : 'Import backup bundle'}
-              </button>
-            )}
             <span className="text-xs text-text-dim">
               {history?.dumpDirSize ? <>Dump dir: <span className="font-mono">{history.dumpDirSize}</span></> : null}
             </span>
@@ -2143,7 +2131,7 @@ function BackupMirrorCard({ vmRunning, showToast }: BackupMirrorCardProps) {
       headerClassName="px-5 pt-5 pb-2"
       bodyClassName="px-5 pb-5 flex flex-col"
     >
-      <p className="text-sm text-text-muted mb-3">Copy new DST database backups to this PC. Existing local copies are kept.</p>
+      <p className="text-sm text-text-muted mb-3">Save complete VM backups as ZIP bundles with the database and matching settings.</p>
 
       <label className="flex items-center gap-3 mb-3 select-none cursor-pointer">
         <input
@@ -2152,14 +2140,13 @@ function BackupMirrorCard({ vmRunning, showToast }: BackupMirrorCardProps) {
           disabled={loading || saving}
           onChange={e => void toggleEnabled(e.target.checked)}
         />
-        <span className="text-sm">Mirror new backups to a local folder</span>
+        <span className="text-sm">Automatically mirror backup bundles to a local folder</span>
       </label>
 
       {enabled && (
         <div className="flex flex-col gap-3">
           <div className="text-xs text-warning">
-            ⚠ Copies every backup that appears in backup history (scheduled, manual, and Funcom's auto-backups).
-            Files are never deleted from your local folder — VM auto-purge only trims the server side.
+            Copies backups that have matching settings. Local copies are kept when the VM prunes its backups.
           </div>
 
           <div className="flex items-center gap-2">
