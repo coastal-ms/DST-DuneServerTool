@@ -648,7 +648,8 @@ internal sealed class MainForm : Form
             // Show a native Save As dialog and return the chosen path to the frontend.
             string? id = GetStringProperty(message, "id");
             string? defaultName = GetStringProperty(message, "defaultName");
-            BeginInvoke(new Action(() => ShowSaveDialog(id, defaultName)));
+            string? filter = GetStringProperty(message, "filter");
+            BeginInvoke(new Action(() => ShowSaveDialog(id, defaultName, filter)));
         }
         else if (string.Equals(action, "pick-open-file", StringComparison.OrdinalIgnoreCase))
         {
@@ -923,11 +924,11 @@ internal sealed class MainForm : Form
     // optional filter/defaultName. We show the native WinForms dialog and post
     // the result back so the React app can call the backend with a local path.
 
-    private void ShowSaveDialog(string? id, string? defaultName)
+    private void ShowSaveDialog(string? id, string? defaultName, string? filter)
     {
         using var dlg = new SaveFileDialog();
         dlg.Title = "Save backup as…";
-        dlg.Filter = "Database backups (*.backup)|*.backup|All files (*.*)|*.*";
+        dlg.Filter = filter ?? "Database backups (*.backup)|*.backup|All files (*.*)|*.*";
         if (!string.IsNullOrWhiteSpace(defaultName)) dlg.FileName = defaultName;
         string? chosen = dlg.ShowDialog(this) == DialogResult.OK ? dlg.FileName : null;
         PostFilePickResult(id, chosen);

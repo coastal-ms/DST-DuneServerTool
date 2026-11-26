@@ -1,26 +1,6 @@
-﻿# BackupMirror.ps1 — copy new VM database backups to a locally-chosen folder.
-#
-# The user turns this on from the Database page. When enabled, every time the
-# webui refreshes backup history, the frontend also POSTs to the mirror /sync
-# endpoint. This library does the actual work: enumerate DST-shape backups
-# on the VM (same set that appears in Get-DuneBackupHistory, i.e. `*.backup`
-# files AND `dst-scheduled-<utc-ts>` extension-less files), diff against
-# what's already in the local folder, and SCP any missing files down.
-#
-# Files are mirrored into a per-battlegroup subfolder (`<LocalFolder>\<bg>\`)
-# that mirrors the VM's own /funcom/artifacts/database-dumps/<bg>/ layout, so a
-# host that runs multiple VMs/battlegroups can always tell which battlegroup a
-# mirrored file belongs to — including legacy `dst-scheduled-<ts>` files whose
-# own name carries no battlegroup identity. Filenames are preserved verbatim
-# (no rename) so downloaded files are drop-in compatible with the existing
-# Restore / upload paths.
-#
-# COPY-ONLY BY DESIGN. This mirror NEVER deletes from the local folder. The
-# VM's auto-retention prune (BackupSchedule.ps1 / New-DuneBackupFilePruneSnippet)
-# keeps the VM-side dump dir bounded, but any file that ever made it into the
-# local mirror folder stays there forever unless the user removes it manually.
-# Do NOT add a "prune local mirror" branch here — that's a deliberate product
-# decision.
+﻿# BackupMirror.ps1 - mirror complete VM backups as DST ZIP bundles.
+# The local scheduler and manual sync use the same export as Download bundle.
+# Keep each battlegroup in its own folder and leave existing local files in place.
 #
 # State (last mirrored time + last error message) lives in a sidecar JSON so
 # the INI-style dune-server.config stays a pure settings file.
@@ -92,9 +72,10 @@ function Get-DuneBackupMirrorVmFiles {
     if ($Max -gt 5000) { $Max = 5000 }
     $script = @"
 sudo find $script:DuneBackupDumpDir -maxdepth 3 -type f \( -name '*.backup' -o -name '$script:DuneBackupScheduledFindGlob' \) 2>/dev/null \
-  | head -$Max \
-  | xargs -r -I{} sudo stat -c '%Y|%s|%n' '{}' 2>/dev/null \
-  | sort -rn
+  | while IFS= read -r f; do
+      if sudo test -s "`$f" && sudo test -s "`$f.yaml"; then sudo stat -c '%Y|%s|%n' "`$f" 2>/dev/null; fi
+    done \
+  | sort -rn | head -$Max
 "@
     $r = Invoke-DuneBackupShell -Ip $Ip -Script $script -TimeoutSec 30
     if ($r.rc -lt 0) { throw 'SSH to VM failed (no exit code returned).' }
@@ -116,38 +97,7 @@ sudo find $script:DuneBackupDumpDir -maxdepth 3 -type f \( -name '*.backup' -o -
     return ,$out
 }
 
-# Pull a single file from the VM to the local mirror folder. Files are placed in
-# a per-battlegroup subfolder (`<LocalFolder>\<bg>\<file>`) that mirrors the VM's
-# own /funcom/artifacts/database-dumps/<bg>/ layout, so a host running multiple
-# VMs/battlegroups can always tell which battlegroup a mirrored file belongs to
-# — even legacy `dst-scheduled-<ts>` files whose own name carries no bg identity.
-# The filename itself is preserved verbatim so mirrored files stay drop-in
-# compatible with the Restore / upload paths. Wraps the shared
-# Copy-DuneVmFileToLocal helper (streams via `ssh + sudo cat` because Alpine
-# minimal has no scp/sftp — see lib/VmFileTransfer.ps1; it creates the parent
-# subfolder). Returns @{ ok; localPath?; error? }.
-function Invoke-DuneBackupMirrorFilePull {
-    param(
-        [Parameter(Mandatory)][string]$Ip,
-        [Parameter(Mandatory)][string]$KeyPath,
-        [Parameter(Mandatory)][string]$VmPath,
-        [Parameter(Mandatory)][string]$LocalFolder,
-        [int]$TimeoutSec = 300
-    )
-    $fileName  = Split-Path -Leaf $VmPath
-    $subdir    = Get-DuneBackupMirrorSubdir -VmPath $VmPath
-    $targetDir = if ($subdir) { Join-Path $LocalFolder $subdir } else { $LocalFolder }
-    $localPath = Join-Path $targetDir $fileName
-    $r = Copy-DuneVmFileToLocal -Ip $Ip -KeyPath $KeyPath -VmPath $VmPath -LocalPath $localPath -TimeoutSec $TimeoutSec
-    if (-not $r.ok) {
-        return @{ ok = $false; error = "$($r.error) ($fileName)" }
-    }
-    return @{ ok = $true; localPath = $localPath }
-}
-
-# Run one mirror pass. Fetches the VM file list, diffs against the local
-# folder (by filename), and SCPs anything missing. Returns a summary the
-# route handler can shape into JSON.
+# Run one mirror pass. A completed ZIP marks a pair as mirrored.
 function Invoke-DuneBackupMirrorTick {
     param(
         [Parameter(Mandatory)][string]$Ip,
@@ -200,53 +150,25 @@ function Invoke-DuneBackupMirrorTick {
     }
     $result.vmFileCount = $vmFiles.Count
 
-    # Build local index by filename. Recurse so files already mirrored into a
-    # per-battlegroup subfolder (`<bg>\<file>`) are recognized, and ALSO index
-    # bare filenames so legacy files that were mirrored FLAT (before per-bg
-    # subfolders existed) aren't needlessly re-copied into a subfolder.
-    $localRel   = @{}   # "<bg>/<file>" (and "<file>") relative keys that exist
-    $localFlat  = @{}   # bare filenames present anywhere in the tree
-    try {
-        $rootFull = (Resolve-Path -LiteralPath $LocalFolder).Path.TrimEnd('\')
-        Get-ChildItem -LiteralPath $LocalFolder -File -Recurse -ErrorAction SilentlyContinue | ForEach-Object {
-            $rel = $_.FullName.Substring($rootFull.Length).TrimStart('\') -replace '\\','/'
-            $localRel[$rel]   = $true
-            $localFlat[$_.Name] = $true
-        }
-    } catch {}
-
-    # Copy any missing files (newest-first is already the sort order from
-    # Get-DuneBackupMirrorVmFiles). Cap per-tick to keep the request fast;
-    # subsequent ticks will pick up the rest.
-    $copied = 0
+    # The VM listing is newest first. A raw mirror from an older DST version
+    # does not satisfy the bundle copy.
     foreach ($vm in $vmFiles) {
-        $name   = Split-Path -Leaf $vm.path
-        $subdir = Get-DuneBackupMirrorSubdir -VmPath $vm.path
-        $relKey = if ($subdir) { "$subdir/$name" } else { $name }
-        # Present if the exact <bg>/<file> is already mirrored. Additionally, a
-        # bare flat copy counts ONLY when the filename itself embeds the bg
-        # (Funcom's `sh-<hostid>-<suffix>-<ts>.backup`), so a pre-per-bg flat
-        # copy of that file isn't needlessly duplicated. A legacy
-        # `dst-scheduled-<ts>` name does NOT embed the bg, so it must match the
-        # exact <bg>/<file> — otherwise a second battlegroup's identically-named
-        # scheduled file would be wrongly skipped (the very multi-VM ambiguity
-        # this per-bg layout fixes).
-        $nameEmbedsBg = $subdir -and $name.StartsWith("$subdir-")
-        $present = $localRel.ContainsKey($relKey) -or ($nameEmbedsBg -and $localFlat.ContainsKey($name))
-        if ($present) {
-            $result.skipped++
-            continue
-        }
-        if ($copied -ge $MaxCopyPerTick) {
-            $result.skipped++
-            continue
-        }
-        $r = Invoke-DuneBackupMirrorFilePull -Ip $Ip -KeyPath $KeyPath -VmPath $vm.path -LocalFolder $LocalFolder
-        if ($r.ok) {
-            $result.copied += $name
-            $copied++
-        } else {
-            $result.failed += @{ name = $name; error = $r.error }
+        $name = Split-Path -Leaf $vm.path
+        try {
+            Assert-DuneBackupBundlePath -VmPath $vm.path
+            $subdir = Get-DuneBackupMirrorSubdir -VmPath $vm.path
+            $target = if ($subdir) { Join-Path $LocalFolder $subdir } else { $LocalFolder }
+            $bundleName = ($name -replace '\.backup$', '') + '-with-settings.zip'
+            $destination = Join-Path $target $bundleName
+            if ([IO.File]::Exists($destination) -or ($result.copied.Count + $result.failed.Count) -ge $MaxCopyPerTick) {
+                $result.skipped++
+                continue
+            }
+            [void][IO.Directory]::CreateDirectory($target)
+            $null = Export-DuneBackupBundle -Ip $Ip -KeyPath $KeyPath -VmPath $vm.path -LocalPath $destination
+            $result.copied += $bundleName
+        } catch {
+            $result.failed += @{ name = $name; error = $_.Exception.Message }
         }
     }
 
