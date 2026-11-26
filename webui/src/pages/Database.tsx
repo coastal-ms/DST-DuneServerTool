@@ -2030,6 +2030,7 @@ function BackupMirrorCard({ vmRunning, showToast }: BackupMirrorCardProps) {
   // enabled and the VM is running. This is how new backups get pulled down
   // without any user action.
   const enabled = state?.enabled === true
+  const includeSettings = state?.includeSettings === true
   useEffect(() => {
     if (!enabled || !vmRunning) return
     let cancelled = false
@@ -2049,19 +2050,13 @@ function BackupMirrorCard({ vmRunning, showToast }: BackupMirrorCardProps) {
     void tick()
     const h = window.setInterval(() => { void tick() }, 30_000)
     return () => { cancelled = true; window.clearInterval(h) }
-  }, [enabled, vmRunning])
+  }, [enabled, includeSettings, vmRunning])
 
   const toggleEnabled = useCallback(async (next: boolean) => {
     setSaving(true)
     try {
       const r = await setBackupMirror({ enabled: next })
-      setState({
-        enabled: r.enabled,
-        folder: r.folder,
-        lastMirroredAt: r.lastMirroredAt,
-        lastError: r.lastError,
-        lastCopiedCount: r.lastCopiedCount,
-      })
+      setState(r)
       if (next && !r.folder) {
         showRoutineSuccess(showToast, 'Mirror enabled — pick a folder to start copying backups.')
       } else {
@@ -2074,17 +2069,22 @@ function BackupMirrorCard({ vmRunning, showToast }: BackupMirrorCardProps) {
     }
   }, [showToast])
 
+  const toggleIncludeSettings = useCallback(async (next: boolean) => {
+    setSaving(true)
+    try {
+      setState(await setBackupMirror({ includeSettings: next }))
+    } catch (error) {
+      showToast('err', error instanceof Error ? error.message : String(error))
+    } finally {
+      setSaving(false)
+    }
+  }, [showToast])
+
   const saveFolder = useCallback(async (folder: string) => {
     setSaving(true)
     try {
       const r = await setBackupMirror({ folder })
-      setState({
-        enabled: r.enabled,
-        folder: r.folder,
-        lastMirroredAt: r.lastMirroredAt,
-        lastError: r.lastError,
-        lastCopiedCount: r.lastCopiedCount,
-      })
+      setState(r)
       showRoutineSuccess(showToast, 'Mirror folder saved.')
     } catch (e) {
       showToast('err', e instanceof Error ? e.message : String(e))
@@ -2131,8 +2131,6 @@ function BackupMirrorCard({ vmRunning, showToast }: BackupMirrorCardProps) {
       headerClassName="px-5 pt-5 pb-2"
       bodyClassName="px-5 pb-5 flex flex-col"
     >
-      <p className="text-sm text-text-muted mb-3">Save complete VM backups as ZIP bundles with the database and matching settings.</p>
-
       <label className="flex items-center gap-3 mb-3 select-none cursor-pointer">
         <input
           type="checkbox"
@@ -2140,14 +2138,24 @@ function BackupMirrorCard({ vmRunning, showToast }: BackupMirrorCardProps) {
           disabled={loading || saving}
           onChange={e => void toggleEnabled(e.target.checked)}
         />
-        <span className="text-sm">Automatically mirror backup bundles to a local folder</span>
+        <span className="text-sm">Mirror backups to a local folder</span>
       </label>
 
       {enabled && (
         <div className="flex flex-col gap-3">
-          <div className="text-xs text-warning">
-            Copies backups that have matching settings. Local copies are kept when the VM prunes its backups.
-          </div>
+          <label className="flex items-start gap-3 select-none cursor-pointer">
+            <input
+              type="checkbox"
+              className="mt-1"
+              checked={includeSettings}
+              disabled={loading || saving}
+              onChange={event => void toggleIncludeSettings(event.target.checked)}
+            />
+            <span>
+              <span className="block text-sm">Include battlegroup settings</span>
+              <span className="block text-xs text-text-muted">Save a DST ZIP with the database and matching settings.</span>
+            </span>
+          </label>
 
           <div className="flex items-center gap-2">
             <input

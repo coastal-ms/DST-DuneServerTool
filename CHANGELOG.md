@@ -16,7 +16,7 @@ here cover everything those tags shipped.
 ## [16.8.4] - 2026-11-25
 
 ### Added
-- Automatically mirror complete self-hosted backups as ZIP bundles with the database and matching battlegroup settings. Import a DST ZIP or Funcom backup from the same control, and restore saved server and Hagga sietch names when partition IDs match.
+- Optionally include matching battlegroup settings in automatic self-hosted backup ZIPs. Import a DST ZIP or Funcom backup from the same control, and restore saved server and Hagga sietch names when partition IDs match.
 
 ### Fixed
 - Count the active roster consistently in the Player Admin total and faction and map breakdowns, including when Hide GM is enabled.

@@ -5,7 +5,7 @@
 # for the actual copy logic. Copy-only: this route never deletes local files.
 #
 # GET  /api/db/backup-mirror         → current settings + last sync state
-# POST /api/db/backup-mirror         body { enabled?, folder? }  save settings
+# POST /api/db/backup-mirror         body { enabled?, folder?, includeSettings? }
 # POST /api/db/backup-mirror/open    body { folder? }            open in Explorer
 # POST /api/db/backup-mirror/sync                                run one mirror pass
 
@@ -15,6 +15,7 @@ Register-DuneRoute -Method GET -Path '/api/db/backup-mirror' -Handler {
     Write-DuneJson -Response $res -Body @{
         enabled         = (Get-DuneLocalBackupMirrorEnabled)
         folder          = (Get-DuneLocalBackupMirrorFolder)
+        includeSettings = (Get-DuneLocalBackupMirrorIncludeSettings)
         lastMirroredAt  = $state.lastMirroredAt
         lastError       = $state.lastError
         lastCopiedCount = $state.lastCopiedCount
@@ -28,17 +29,24 @@ Register-DuneRoute -Method POST -Path '/api/db/backup-mirror' -Handler {
     $folderSpecified  = $false
     $enabled = $false
     $folder  = ''
+    $includeSettings = $null
 
     if ($body -is [hashtable] -or $body -is [System.Collections.IDictionary]) {
         if ($body.ContainsKey('enabled')) { $enabledSpecified = $true; $enabled = [bool]$body['enabled'] }
         if ($body.ContainsKey('folder'))  { $folderSpecified  = $true; $folder  = [string]$body['folder'] }
+        if ($body.ContainsKey('includeSettings')) { $includeSettings = $body['includeSettings'] }
     } elseif ($body) {
         if ($null -ne $body.enabled) { $enabledSpecified = $true; $enabled = [bool]$body.enabled }
         if ($null -ne $body.folder)  { $folderSpecified  = $true; $folder  = [string]$body.folder }
+        $includeSettings = $body.includeSettings
     }
 
-    if (-not $enabledSpecified -and -not $folderSpecified) {
-        Write-DuneError -Response $res -Status 400 -Message 'Body must include enabled and/or folder.'
+    if ($null -ne $includeSettings -and $includeSettings -isnot [bool]) {
+        Write-DuneError -Response $res -Status 400 -Message 'includeSettings must be a boolean.'
+        return
+    }
+    if (-not $enabledSpecified -and -not $folderSpecified -and $null -eq $includeSettings) {
+        Write-DuneError -Response $res -Status 400 -Message 'Supply enabled, folder, or includeSettings.'
         return
     }
 
@@ -49,6 +57,9 @@ Register-DuneRoute -Method POST -Path '/api/db/backup-mirror' -Handler {
     if ($folderSpecified) {
         $updates['LocalBackupMirrorFolder'] = ($folder.Trim())
     }
+    if ($null -ne $includeSettings) {
+        $updates['LocalBackupMirrorIncludeSettings'] = if ($includeSettings) { 'true' } else { 'false' }
+    }
     Save-DuneConfig -Config $updates | Out-Null
 
     $state = Read-DuneBackupMirrorState
@@ -56,6 +67,7 @@ Register-DuneRoute -Method POST -Path '/api/db/backup-mirror' -Handler {
         ok              = $true
         enabled         = (Get-DuneLocalBackupMirrorEnabled)
         folder          = (Get-DuneLocalBackupMirrorFolder)
+        includeSettings = (Get-DuneLocalBackupMirrorIncludeSettings)
         lastMirroredAt  = $state.lastMirroredAt
         lastError       = $state.lastError
         lastCopiedCount = $state.lastCopiedCount
@@ -166,7 +178,7 @@ Register-DuneRoute -Method POST -Path '/api/db/backup-mirror/sync' -Handler {
         return
     }
 
-    $tick = Invoke-DuneBackupMirrorTick -Ip $ctx.ip -KeyPath $keyPath -LocalFolder $folder
+    $tick = Invoke-DuneBackupMirrorTick -Ip $ctx.ip -KeyPath $keyPath -LocalFolder $folder -IncludeSettings:(Get-DuneLocalBackupMirrorIncludeSettings)
 
     # Surface per-file failures in lastError so the UI can flag them. Without
     # this the sidecar only ever recorded $tick.error (top-level "VM listing
