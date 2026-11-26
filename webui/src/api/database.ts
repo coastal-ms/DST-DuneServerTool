@@ -134,13 +134,14 @@ export function pruneBackupDumpPods(opts: { keepLast: number; keepDays: number }
 // to the VM only).
 export type BackupMirrorState = {
   enabled: boolean
+  includeSettings: boolean
   folder: string
   lastMirroredAt: string
   lastError: string
   lastCopiedCount: number
 }
 
-export type BackupMirrorSyncResult = BackupMirrorState & {
+export type BackupMirrorSyncResult = Omit<BackupMirrorState, 'includeSettings'> & {
   ok: boolean
   skipped?: boolean
   reason?: string
@@ -155,7 +156,7 @@ export function getBackupMirror() {
   return api<BackupMirrorState>('/api/db/backup-mirror')
 }
 
-export function setBackupMirror(opts: { enabled?: boolean; folder?: string }) {
+export function setBackupMirror(opts: { enabled?: boolean; folder?: string; includeSettings?: boolean }) {
   return api<BackupMirrorState & { ok: boolean }>('/api/db/backup-mirror', {
     method: 'POST',
     body: JSON.stringify(opts),

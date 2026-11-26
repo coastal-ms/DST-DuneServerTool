@@ -4,6 +4,7 @@ BeforeAll {
     . (Join-Path $repo 'app/lib/K8s.ps1')
     . (Join-Path $repo 'app/server/lib/BackupSchedule.ps1')
     . (Join-Path $repo 'app/server/lib/BackupMirror.ps1')
+    . (Join-Path $repo 'app/server/lib/Config.ps1')
     . (Join-Path $repo 'app/server/lib/VmFileTransfer.ps1')
 
     function New-BundleFixture {
@@ -109,7 +110,7 @@ Describe 'Portable database and settings backup' -Tag 'Pure' {
         $world = (New-Item -ItemType Directory (Join-Path $mirror 'sh-example') -Force).FullName
         $legacy = Join-Path $world 'world.backup'
         [IO.File]::WriteAllText($legacy, 'previous database-only copy')
-        $tick = Invoke-DuneBackupMirrorTick -Ip localhost -KeyPath mock -LocalFolder $mirror
+        $tick = Invoke-DuneBackupMirrorTick -Ip localhost -KeyPath mock -LocalFolder $mirror -IncludeSettings
         $tick.ok | Should -BeTrue
         $tick.copied | Should -Be @('world-with-settings.zip')
         $stage = (New-Item -ItemType Directory (Join-Path $TestDrive 'mirrored-expanded')).FullName
@@ -117,8 +118,34 @@ Describe 'Portable database and settings backup' -Tag 'Pure' {
         [IO.File]::ReadAllText((Join-Path $stage 'database.backup')) | Should -BeExactly 'PGDMP-test archive'
         [IO.File]::ReadAllText((Join-Path $stage 'battlegroup.yaml')) | Should -BeExactly 'saved settings'
         [IO.File]::ReadAllText($legacy) | Should -BeExactly 'previous database-only copy'
-        (Invoke-DuneBackupMirrorTick -Ip localhost -KeyPath mock -LocalFolder $mirror).copied | Should -BeNullOrEmpty
+        (Invoke-DuneBackupMirrorTick -Ip localhost -KeyPath mock -LocalFolder $mirror -IncludeSettings).copied | Should -BeNullOrEmpty
         Should -Invoke Copy-DuneVmFileToLocal -Times 2 -Exactly
+    }
+
+    It 'defaults to a database-only mirror when no setting is saved' {
+        Mock Read-DuneConfigRaw { [ordered]@{ LocalBackupMirrorEnabled = 'true' } }
+        Mock Get-DuneBackupMirrorVmFiles { ,@(@{ path = '/funcom/artifacts/database-dumps/sh-default/world.backup' }) }
+        Mock Export-DuneBackupBundle { throw 'Bundle export must be opt-in' }
+        Mock Copy-DuneVmFileToLocal {
+            [IO.File]::WriteAllText($LocalPath, 'PGDMP-test archive')
+            @{ ok = $true }
+        }
+        Get-DuneLocalBackupMirrorIncludeSettings | Should -BeFalse
+        $mirror = Join-Path $TestDrive 'default-mirror'
+        $tick = Invoke-DuneBackupMirrorTick -Ip localhost -KeyPath mock -LocalFolder $mirror
+        $tick.ok | Should -BeTrue
+        $tick.copied | Should -Be @('world.backup')
+        [IO.File]::ReadAllText((Join-Path $mirror 'sh-default/world.backup')) | Should -BeExactly 'PGDMP-test archive'
+        Should -Invoke Get-DuneBackupMirrorVmFiles -ParameterFilter { -not $IncludeSettings } -Times 1 -Exactly
+        Should -Invoke Export-DuneBackupBundle -Times 0 -Exactly
+    }
+
+    It 'requires a matching YAML only in bundle mode' {
+        Mock Invoke-DuneBackupShell { @{ rc = 0; out = '' } }
+        $null = Get-DuneBackupMirrorVmFiles -Ip localhost
+        $null = Get-DuneBackupMirrorVmFiles -Ip localhost -IncludeSettings
+        Should -Invoke Invoke-DuneBackupShell -ParameterFilter { $Script -notmatch '\$f\.yaml' } -Times 1 -Exactly
+        Should -Invoke Invoke-DuneBackupShell -ParameterFilter { $Script -match '\$f\.yaml' } -Times 1 -Exactly
     }
 
     It 'rejects traversal or shell syntax in the source path before copying' {

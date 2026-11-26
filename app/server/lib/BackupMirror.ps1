@@ -1,5 +1,5 @@
 ﻿# BackupMirror.ps1 - mirror complete VM backups as DST ZIP bundles.
-# The local scheduler and manual sync use the same export as Download bundle.
+# The default mirrors the native database archive. Hosts can opt into ZIPs.
 # Keep each battlegroup in its own folder and leave existing local files in place.
 #
 # State (last mirrored time + last error message) lives in a sidecar JSON so
@@ -66,14 +66,16 @@ function Get-DuneBackupMirrorSubdir {
 function Get-DuneBackupMirrorVmFiles {
     param(
         [Parameter(Mandatory)][string]$Ip,
-        [int]$Max = 5000
+        [int]$Max = 5000,
+        [switch]$IncludeSettings
     )
     if ($Max -lt 1)    { $Max = 1 }
     if ($Max -gt 5000) { $Max = 5000 }
+    $filter = if ($IncludeSettings) { 'sudo test -s "$f" && sudo test -s "$f.yaml" && ' } else { '' }
     $script = @"
 sudo find $script:DuneBackupDumpDir -maxdepth 3 -type f \( -name '*.backup' -o -name '$script:DuneBackupScheduledFindGlob' \) 2>/dev/null \
   | while IFS= read -r f; do
-      if sudo test -s "`$f" && sudo test -s "`$f.yaml"; then sudo stat -c '%Y|%s|%n' "`$f" 2>/dev/null; fi
+      ${filter}sudo stat -c '%Y|%s|%n' "`$f" 2>/dev/null
     done \
   | sort -rn | head -$Max
 "@
@@ -97,13 +99,14 @@ sudo find $script:DuneBackupDumpDir -maxdepth 3 -type f \( -name '*.backup' -o -
     return ,$out
 }
 
-# Run one mirror pass. A completed ZIP marks a pair as mirrored.
+# Run one mirror pass. Existing copies remain available when changing modes.
 function Invoke-DuneBackupMirrorTick {
     param(
         [Parameter(Mandatory)][string]$Ip,
         [Parameter(Mandatory)][string]$KeyPath,
         [Parameter(Mandatory)][string]$LocalFolder,
-        [int]$MaxCopyPerTick = 20
+        [int]$MaxCopyPerTick = 20,
+        [switch]$IncludeSettings
     )
     $result = @{
         ok          = $false
@@ -143,30 +146,42 @@ function Invoke-DuneBackupMirrorTick {
     # Enumerate VM files
     $vmFiles = @()
     try {
-        $vmFiles = Get-DuneBackupMirrorVmFiles -Ip $Ip
+        $vmFiles = Get-DuneBackupMirrorVmFiles -Ip $Ip -IncludeSettings:$IncludeSettings
     } catch {
         $result.error = "VM listing failed: $($_.Exception.Message)"
         return $result
     }
     $result.vmFileCount = $vmFiles.Count
 
-    # The VM listing is newest first. A raw mirror from an older DST version
-    # does not satisfy the bundle copy.
+    # The VM listing is newest first. A database-only copy does not satisfy a ZIP copy.
     foreach ($vm in $vmFiles) {
         $name = Split-Path -Leaf $vm.path
         try {
             Assert-DuneBackupBundlePath -VmPath $vm.path
             $subdir = Get-DuneBackupMirrorSubdir -VmPath $vm.path
             $target = if ($subdir) { Join-Path $LocalFolder $subdir } else { $LocalFolder }
-            $bundleName = ($name -replace '\.backup$', '') + '-with-settings.zip'
-            $destination = Join-Path $target $bundleName
-            if ([IO.File]::Exists($destination) -or ($result.copied.Count + $result.failed.Count) -ge $MaxCopyPerTick) {
+            $mirrorName = if ($IncludeSettings) { ($name -replace '\.backup$', '') + '-with-settings.zip' } else { $name }
+            $destination = Join-Path $target $mirrorName
+            $legacyFlatCopy = -not $IncludeSettings -and $subdir -and $name.StartsWith("$subdir-") -and
+                [IO.File]::Exists((Join-Path $LocalFolder $name))
+            if ([IO.File]::Exists($destination) -or $legacyFlatCopy -or ($result.copied.Count + $result.failed.Count) -ge $MaxCopyPerTick) {
                 $result.skipped++
                 continue
             }
             [void][IO.Directory]::CreateDirectory($target)
-            $null = Export-DuneBackupBundle -Ip $Ip -KeyPath $KeyPath -VmPath $vm.path -LocalPath $destination
-            $result.copied += $bundleName
+            if ($IncludeSettings) {
+                $null = Export-DuneBackupBundle -Ip $Ip -KeyPath $KeyPath -VmPath $vm.path -LocalPath $destination
+            } else {
+                $staged = Join-Path $target ('.dst-backup-' + [guid]::NewGuid().ToString('N') + '.part')
+                try {
+                    $copy = Copy-DuneVmFileToLocal -Ip $Ip -KeyPath $KeyPath -VmPath $vm.path -LocalPath $staged
+                    if (-not $copy.ok) { throw $copy.error }
+                    [IO.File]::Move($staged, $destination)
+                } finally {
+                    [IO.File]::Delete($staged)
+                }
+            }
+            $result.copied += $mirrorName
         } catch {
             $result.failed += @{ name = $name; error = $_.Exception.Message }
         }
@@ -225,7 +240,7 @@ function Invoke-DuneBackupMirrorSchedulerTick {
 
     $tick = $null
     try {
-        $tick = Invoke-DuneBackupMirrorTick -Ip $ctx.ip -KeyPath $keyPath -LocalFolder $folder
+        $tick = Invoke-DuneBackupMirrorTick -Ip $ctx.ip -KeyPath $keyPath -LocalFolder $folder -IncludeSettings:(Get-DuneLocalBackupMirrorIncludeSettings)
     } catch {
         # Persist the failure so the UI can surface it next time the page
         # renders, even without the user forcing a /sync.

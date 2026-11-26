@@ -34,6 +34,7 @@ $script:DuneConfigKeys = @(
     'UpdateInstalledTag',
     'LocalBackupMirrorEnabled',
     'LocalBackupMirrorFolder',
+    'LocalBackupMirrorIncludeSettings',
     'VmHostMode',
     'HyperVHostIp',
     'LastKnownVmIp',
@@ -253,6 +254,11 @@ function Get-DuneLocalBackupMirrorFolder {
     $raw = Read-DuneConfigRaw
     $v = if ($raw.Contains('LocalBackupMirrorFolder')) { [string]$raw['LocalBackupMirrorFolder'] } else { '' }
     return $v.Trim()
+}
+
+function Get-DuneLocalBackupMirrorIncludeSettings {
+    $raw = Read-DuneConfigRaw
+    return ([string]$raw['LocalBackupMirrorIncludeSettings'] -match '^(?i:true|1|yes|on)$')
 }
 
 # Windows host route used only for same-PC public-IP loopback. Default on keeps
