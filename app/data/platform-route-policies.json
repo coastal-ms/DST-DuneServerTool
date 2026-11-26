@@ -179,7 +179,7 @@
     { "source": "Autostart.ps1", "capabilityId": "host.autostart", "routeCount": 2, "sha256": "e77701cf6bd2dec5c71b06145ec9e4bbe99c5ae1008ec887e636939ad0fc2f0c" },
     { "source": "BackupMirror.ps1", "capabilityId": "operation.data-protection", "routeCount": 4, "sha256": "f62b29ee7598d65958bfb93fdcf5e1b9978d05ca1f7c722a0ba817a319f31694" },
     { "source": "BackupSchedule.ps1", "capabilityId": "operation.data-protection", "routeCount": 5, "sha256": "110e6e76669508aab614fa4a95ab04229a9cc2bf0faa164dbd21e657c05671e9" },
-    { "source": "BackupTransfer.ps1", "capabilityId": "operation.data-protection", "routeCount": 3, "sha256": "ffd0ac70e2385d0f86e99a72b31eb8958e7ce68792b607bf2b60078c2d7ca0b1" },
+    { "source": "BackupTransfer.ps1", "capabilityId": "operation.data-protection", "routeCount": 6, "sha256": "4d36cb648ccfdbfb541808990aa00e270100a9ca976556b4b79db40a011480be" },
     { "source": "BaseBackupGuard.ps1", "capabilityId": "settings.game-server", "routeCount": 2, "sha256": "64d801cc1b704e630cee6c19a68a09b3e7de08e0d5154926d888f4db6d494c86" },
     { "source": "Broadcasts.ps1", "capabilityId": "operation.communications", "routeCount": 2, "sha256": "6c109154ff084cf74bfcf7dd61395b8c1e117848a1cbe2dfe6ea5ddae9e0fa34" },
     { "source": "Browse.ps1", "capabilityId": "host.filesystem", "routeCount": 1, "sha256": "b6dcc567d072a8983bbc86047ca174fff2f96fa10981776a53400bd7185f29b6" },

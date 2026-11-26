@@ -116,6 +116,21 @@ describe('schedule + transfer + destructive payloads', () => {
     expect(last().body).toEqual({ localPath: 'C:/dst/a.backup' })
   })
 
+  it('uses separate endpoints for portable backup export, import, and name restore', async () => {
+    const vmPath = '/funcom/artifacts/database-dumps/sh-world/example.backup'
+    const localPath = 'C:/dst/example-settings.zip'
+    await db.downloadBackupBundle({ vmPath, localPath })
+    expect(last()).toEqual({ url: '/api/db/backup-bundle/download', method: 'POST', body: { vmPath, localPath } })
+
+    await db.uploadBackupBundle({ localPath })
+    expect(last()).toEqual({ url: '/api/db/backup-bundle/upload', method: 'POST', body: { localPath } })
+
+    await db.restoreBackupNames(vmPath)
+    expect(last()).toEqual({
+      url: '/api/db/backup-bundle/restore-names', method: 'POST', body: { vmPath, confirm: 'RESTORE NAMES' },
+    })
+  })
+
   it('deleteBackups forwards the exact paths array (destructive — no mutation)', async () => {
     const paths = ['/funcom/artifacts/a.backup', '/funcom/artifacts/dst-scheduled-20260717-120000']
     await db.deleteBackups({ paths })
