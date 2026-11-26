@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, useCallback, useRef } from 'react'
+import { useState, useEffect, useMemo, useCallback, useId, useRef } from 'react'
 import { PageHeader } from '../components/PageHeader'
 import { Icon } from '../components/Icon'
 import { CollapsibleCard } from '../components/CollapsibleCard'
@@ -14,7 +14,10 @@ import {
   putBackupSchedule,
   getBackupHistory,
   downloadBackup,
+  downloadBackupBundle,
   uploadBackup,
+  uploadBackupBundle,
+  restoreBackupNames,
   deleteBackups,
   getBackupDumpPods,
   pruneBackupDumpPods,
@@ -743,13 +746,22 @@ export function Database() {
           <li>Run <strong className="text-text">Commands → Reboot All</strong> again, then log in and verify characters, inventories, progression, and bases.</li>
         </ol>
 
+        {isLocalViewer() && !!getWebView2() && (
+          <p className="mt-3 text-xs text-text-muted">
+            To move the saved battlegroup settings with the database, use <strong>Download bundle</strong> on the old VM
+            and <strong>Import backup bundle</strong> on the new VM. With the new battlegroup stopped, use
+            {' '}<strong>Restore saved names</strong> on the uploaded backup and then <strong>Restore Backup</strong> for the database.
+            The settings action restores the server and Hagga sietch display names when the Hagga partition IDs match.
+          </p>
+        )}
+
         <div className="mt-4 rounded border border-warning/30 bg-warning/5 px-3 py-2 text-xs text-text-muted">
           <strong className="text-warning">Do not skip the two full restarts.</strong> The first clears stale pods after the database replacement. The second forces a clean operator reconciliation after the IP change settles. Do not delete the old VM or backup until every character has been verified.
         </div>
       </CollapsibleCard>
 
       {/* Configurable backup schedule (writes the VM's root crontab) */}
-      <BackupScheduleCard vmRunning={vmRunning} showToast={showToast} />
+      <BackupScheduleCard vmRunning={vmRunning} battlegroupStopped={bgState === 'stopped'} showToast={showToast} />
 
       {/* Local backup mirror — copies each new VM backup into a user-chosen folder. */}
       <BackupMirrorCard vmRunning={vmRunning} showToast={showToast} />
@@ -1095,12 +1107,64 @@ function ResultsPanel({ result, onExportCsv }: { result: SqlResult | null; onExp
 // -----------------------------------------------------------------------------
 // Backup schedule card — read/edit the managed crontab block on the VM.
 // -----------------------------------------------------------------------------
+function BackupBundleActions({ download, restore, disabled, battlegroupStopped }: {
+  download: () => void
+  restore: () => void
+  disabled: boolean
+  battlegroupStopped: boolean
+}) {
+  const id = useId()
+  const popover = useRef<HTMLDivElement>(null)
+
+  return (
+    <>
+      <button
+        type="button"
+        popoverTarget={id}
+        aria-label="More actions"
+        title="More actions"
+        className="text-text-muted hover:text-text shrink-0"
+      >
+        <Icon name="Ellipsis" size={14} />
+      </button>
+      <div
+        ref={popover}
+        id={id}
+        popover="auto"
+        role="group"
+        aria-label="Backup actions"
+        className="inset-auto m-0 w-max rounded border border-border bg-surface p-1 text-left font-sans text-xs text-text shadow-lg [position-area:bottom_span-left] [position-try-fallbacks:flip-block]"
+      >
+        <button
+          type="button"
+          disabled={disabled}
+          onClick={() => { popover.current?.hidePopover(); download() }}
+          className="block w-full rounded px-3 py-2 text-left hover:bg-surface-2 disabled:opacity-40"
+        >
+          Download bundle
+        </button>
+        <button
+          type="button"
+          disabled={disabled || !battlegroupStopped}
+          title={battlegroupStopped ? undefined : 'Stop the battlegroup before restoring names'}
+          onClick={() => { popover.current?.hidePopover(); restore() }}
+          className="block w-full rounded px-3 py-2 text-left hover:bg-surface-2 disabled:opacity-40"
+        >
+          Restore saved names
+        </button>
+      </div>
+    </>
+  )
+}
+
 type BackupScheduleCardProps = {
   vmRunning: boolean
+  battlegroupStopped: boolean
   showToast: (kind: 'ok' | 'err', msg: string) => void
 }
 
-function BackupScheduleCard({ vmRunning, showToast }: BackupScheduleCardProps) {
+function BackupScheduleCard({ vmRunning, battlegroupStopped, showToast }: BackupScheduleCardProps) {
+  const canUseBackupBundles = isLocalViewer() && !!getWebView2()
   const [schedule, setSchedule] = useState<BackupSchedule | null>(null)
   const [history, setHistory]   = useState<BackupHistory  | null>(null)
   const [dumpPods, setDumpPods] = useState<BackupDumpPodList | null>(null)
@@ -1231,6 +1295,48 @@ function BackupScheduleCard({ vmRunning, showToast }: BackupScheduleCardProps) {
       void getBackupHistory({ recent: 200, logLines: 50 }).then(setHistory).catch(() => {})
     } catch (e) {
       showToast('err', `Upload failed: ${e instanceof Error ? e.message : String(e)}`)
+    } finally {
+      setTransferring(null)
+    }
+  }
+
+  async function handleBackupBundle(vmPath?: string) {
+    const name = vmPath?.split('/').pop()?.replace(/\.backup$/, '')
+    const localPath = await pickFileFromShell(vmPath ? 'pick-save-file' : 'pick-open-file', {
+      id: vmPath ? 'backup-bundle-download' : 'backup-bundle-upload',
+      defaultName: name ? name + '-with-settings.zip' : undefined,
+      filter: 'DST backup bundle (*.zip)|*.zip',
+    })
+    if (!localPath) return
+    setTransferring(vmPath ?? 'bundle-upload')
+    try {
+      if (vmPath) {
+        const result = await downloadBackupBundle({ vmPath, localPath })
+        showToast('ok', result.message ?? 'Backup bundle downloaded.')
+      } else {
+        const result = await uploadBackupBundle({ localPath })
+        showToast('ok', result.message ?? 'Backup bundle imported.')
+        void loadAll()
+      }
+    } catch (error) {
+      showToast('err', error instanceof Error ? error.message : String(error))
+    } finally {
+      setTransferring(null)
+    }
+  }
+
+  async function handleRestoreBackupNames(vmPath: string) {
+    if (!window.confirm([
+      'Restore the saved server and Hagga sietch names from this backup?',
+      backupRelName(vmPath),
+      'This replaces the current names. Restore the database separately with Restore Backup.',
+    ].join('\n\n'))) return
+    setTransferring(vmPath)
+    try {
+      const result = await restoreBackupNames(vmPath)
+      showToast('ok', result.message ?? 'Saved names restored.')
+    } catch (error) {
+      showToast('err', error instanceof Error ? error.message : String(error))
     } finally {
       setTransferring(null)
     }
@@ -1587,6 +1693,17 @@ function BackupScheduleCard({ vmRunning, showToast }: BackupScheduleCardProps) {
               <Icon name={transferring === 'upload' ? 'Loader2' : 'Upload'} size={12} className={transferring === 'upload' ? 'animate-spin' : ''} />
               {transferring === 'upload' ? 'Uploading…' : 'Import backup'}
             </button>
+            {canUseBackupBundles && (
+              <button
+                type="button"
+                onClick={() => void handleBackupBundle()}
+                disabled={!vmRunning || !!transferring || deleting}
+                className="btn-secondary text-xs py-1 px-2"
+                title="Upload a database and settings bundle from your PC"
+              >
+                {transferring === 'bundle-upload' ? 'Uploading…' : 'Import backup bundle'}
+              </button>
+            )}
             <span className="text-xs text-text-dim">
               {history?.dumpDirSize ? <>Dump dir: <span className="font-mono">{history.dumpDirSize}</span></> : null}
             </span>
@@ -1637,8 +1754,8 @@ function BackupScheduleCard({ vmRunning, showToast }: BackupScheduleCardProps) {
         ) : visibleBackups.length === 0 ? (
           <p className="text-xs text-text-dim italic">No backups match “{search}”.</p>
         ) : (
-          <div className="border border-border rounded max-h-72 overflow-y-auto">
-            <table className="w-full text-xs font-mono">
+          <div className="border border-border rounded max-h-72 overflow-auto">
+            <table className="w-full min-w-[32rem] table-fixed text-xs font-mono">
               <thead className="sticky top-0 bg-surface-2 text-text-muted">
                 <tr>
                   <th className="w-8 py-1 px-2 text-left">
@@ -1649,10 +1766,10 @@ function BackupScheduleCard({ vmRunning, showToast }: BackupScheduleCardProps) {
                       title="Select all shown"
                     />
                   </th>
-                  <th className="py-1 px-2 text-left font-semibold">Date</th>
-                  <th className="py-1 px-2 text-right font-semibold">Size</th>
+                  <th className="w-48 py-1 px-2 text-left font-semibold">Date</th>
+                  <th className="w-20 py-1 px-2 text-right font-semibold">Size</th>
                   <th className="py-1 px-2 text-left font-semibold">File</th>
-                  <th className="w-16 py-1 px-2 text-right font-semibold">Actions</th>
+                  <th className="w-24 py-1 px-2 text-right font-semibold">Actions</th>
                 </tr>
               </thead>
               <tbody>
@@ -1667,7 +1784,7 @@ function BackupScheduleCard({ vmRunning, showToast }: BackupScheduleCardProps) {
                     </td>
                     <td className="py-1 px-2 text-text whitespace-nowrap">{f.mtimeIso}</td>
                     <td className="py-1 px-2 text-text-muted text-right whitespace-nowrap">{(f.sizeBytes / (1024 * 1024)).toFixed(1)} MB</td>
-                    <td className="py-1 px-2 text-text-dim truncate max-w-[16rem]" title={f.path}>{backupRelName(f.path)}</td>
+                    <td className="py-1 px-2 text-text-dim truncate" title={f.path}>{backupRelName(f.path)}</td>
                     <td className="py-1 px-2">
                       <div className="flex items-center gap-2 justify-end">
                         <button
@@ -1679,6 +1796,14 @@ function BackupScheduleCard({ vmRunning, showToast }: BackupScheduleCardProps) {
                         >
                           <Icon name={transferring === f.path ? 'Loader2' : 'Download'} size={12} className={transferring === f.path ? 'animate-spin' : ''} />
                         </button>
+                        {canUseBackupBundles && (
+                          <BackupBundleActions
+                            download={() => void handleBackupBundle(f.path)}
+                            restore={() => void handleRestoreBackupNames(f.path)}
+                            disabled={!vmRunning || !!transferring || deleting}
+                            battlegroupStopped={battlegroupStopped}
+                          />
+                        )}
                         <button
                           type="button"
                           onClick={() => handleDeleteOne(f.path)}

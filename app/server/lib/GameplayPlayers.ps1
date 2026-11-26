@@ -31,7 +31,7 @@ function Get-DuneShortClass {
 # ----------------------------------------------------------------------------
 # SQL — Players (ported from the reference implementation db.go). All read-only.
 # ----------------------------------------------------------------------------
-$script:DunePlayersListSql = @'
+$script:DunePlayerRosterSql = @'
 SELECT ps.player_pawn_id                                AS id,
        COALESCE(ps.account_id, 0)                       AS account_id,
        COALESCE(ps.player_controller_id, 0)             AS controller_id,
@@ -45,8 +45,8 @@ FROM dune.player_state ps
 LEFT JOIN dune.actors a           ON a.id = ps.player_pawn_id
 LEFT JOIN dune.player_faction pf  ON pf.actor_id = ps.player_controller_id
 LEFT JOIN dune.factions f         ON f.id = pf.faction_id
-ORDER BY ps.account_id
 '@
+$script:DunePlayersListSql = "$script:DunePlayerRosterSql`nORDER BY account_id"
 
 # Inventory for one pawn actor id ($1).
 $script:DunePlayerInventorySql = @'
@@ -1023,39 +1023,34 @@ function Invoke-DuneSqlSoft {
 }
 
 # ---------------------------------------------------------------------------
-# Server-wide summary — total players, online count, by-faction, by-map,
-# currency totals, average character level. Single round trip via a SQL
-# script that returns several labelled result sets stitched together.
-# Each metric tolerates a missing table by returning 0/empty.
+# Count the same active character rows used by the Players directory. Pawn
+# actors can remain after they stop belonging to the active roster.
 # ---------------------------------------------------------------------------
-$script:DunePlayerSummarySql = @'
+$script:DunePlayerSummarySql = @"
+WITH roster AS (
+$script:DunePlayerRosterSql
+)
 SELECT 'totals' AS bucket, NULL AS k,
-       (SELECT COUNT(*) FROM dune.actors WHERE class ILIKE '%PlayerCharacter%')::bigint AS v
+       COUNT(*) AS v
+FROM roster
 UNION ALL
 SELECT 'online_now', NULL,
-       (SELECT COUNT(*) FROM dune.player_state WHERE online_status::text ILIKE 'Online')::bigint
+       COUNT(*) FILTER (WHERE online_status ILIKE 'Online')
+FROM roster
 UNION ALL
 SELECT 'distinct_factions', NULL,
-       (SELECT COUNT(DISTINCT pf.faction_id)
-        FROM dune.player_faction pf
-        WHERE pf.faction_id > 0)::bigint
+       COUNT(DISTINCT faction_id) FILTER (WHERE faction_id > 0)
+FROM roster
 UNION ALL
-SELECT 'by_faction', COALESCE(f.name, 'Unaligned'),
-       COUNT(*)::bigint
-  FROM dune.actors a
-  LEFT JOIN dune.player_state   ps ON ps.account_id = a.owner_account_id
-  LEFT JOIN dune.player_faction pf ON pf.actor_id   = ps.player_controller_id
-  LEFT JOIN dune.factions f ON f.id = pf.faction_id
-  WHERE a.class ILIKE '%PlayerCharacter%'
-  GROUP BY 2
+SELECT 'by_faction', COALESCE(NULLIF(faction_name, ''), 'Unaligned'), COUNT(*)
+FROM roster
+GROUP BY 2
 UNION ALL
-SELECT 'by_map', COALESCE(a.map, '(none)'),
-       COUNT(*)::bigint
-  FROM dune.actors a
-  WHERE a.class ILIKE '%PlayerCharacter%'
-  GROUP BY 2
+SELECT 'by_map', COALESCE(NULLIF(map, ''), '(none)'), COUNT(*)
+FROM roster
+GROUP BY 2
 ORDER BY 1, 2;
-'@
+"@
 
 function Get-DunePlayerSummaryLive {
     param([string]$Ip)

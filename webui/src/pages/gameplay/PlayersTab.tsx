@@ -1,16 +1,12 @@
 // v11.5.6 — Players tab. Two-column layout: left rail with player list +
 // section selector, right pane with active section content.
 //
-// Reads /api/gameplay/players for the list + /api/gameplay/players/summary
-// for the server overview. Each section component owns its own data fetch.
+// The directory and overview counts use the same player roster.
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { useSearch } from '../../router'
 import { Icon } from '../../components/Icon'
 import { CollapsibleCard } from '../../components/CollapsibleCard'
-import {
-  getPlayers, getPlayerSummary,
-  type Player, type PlayerSummaryResponse, type DataSource,
-} from '../../api/gameplay'
+import { getPlayers, type Player, type PlayerSummaryBucket, type DataSource } from '../../api/gameplay'
 import { fmtNum, SourceBadge, StatCard, DemoNotice } from './shared'
 import {
   SECTION_COMPONENTS, type SectionId,
@@ -24,6 +20,15 @@ import './players/playersDesk.css'
 type OnlineFilter = '' | 'online' | 'offline'
 
 const isOnline = (s: string) => s.toLowerCase().includes('online')
+
+function countPlayersBy(players: Player[], key: 'faction_name' | 'map', fallback: string): PlayerSummaryBucket[] {
+  const counts = new Map<string, number>()
+  for (const player of players) {
+    const name = player[key] || fallback
+    counts.set(name, (counts.get(name) ?? 0) + 1)
+  }
+  return Array.from(counts, ([name, count]) => ({ name, count }))
+}
 
 function setPlayerLocation(id: number | null) {
   const url = new URL(window.location.href)
@@ -74,7 +79,6 @@ export function PlayersTab() {
   const [directoryOpen, setDirectoryOpen] = useState(false)
   const [flash, setFlash]       = useState<{ msg: string; kind: 'ok' | 'err' | 'info' } | null>(null)
   const [refreshKey, setRefresh] = useState(0)
-  const [summary, setSummary]   = useState<PlayerSummaryResponse | null>(null)
 
   useEffect(() => {
     const params = new URLSearchParams(routeSearch)
@@ -95,16 +99,7 @@ export function PlayersTab() {
     }
   }, [])
 
-  const loadSummary = useCallback(async () => {
-    try {
-      const r = await getPlayerSummary()
-      setSummary(r)
-    } catch {
-      // summary is best-effort
-    }
-  }, [])
-
-  useEffect(() => { void loadList(); void loadSummary() }, [loadList, loadSummary])
+  useEffect(() => { void loadList() }, [loadList])
 
   // Auto-dismiss flash after 4s.
   useEffect(() => {
@@ -157,42 +152,17 @@ export function PlayersTab() {
 
   const onlineCount = useMemo(() => visiblePlayers.filter(p => isOnline(p.online_status)).length, [visiblePlayers])
 
-  // When hiding GM, rebuild the by_faction / by_map / totals locally from
-  // visiblePlayers so the Server Overview buckets and the Factions stat card
-  // do not count the bot. Otherwise pass the API summary through unchanged.
-  const displaySummary = useMemo<PlayerSummaryResponse | null>(() => {
-    if (!hideGm) return summary
-    const buckets = (key: 'faction_name' | 'map') => {
-      const m = new Map<string, number>()
-      for (const p of visiblePlayers) {
-        const name = (p[key] as string) || ''
-        if (!name) continue
-        m.set(name, (m.get(name) || 0) + 1)
-      }
-      return Array.from(m, ([name, count]) => ({ name, count })).sort((a, b) => b.count - a.count)
-    }
-    const by_faction = buckets('faction_name')
-    const by_map = buckets('map')
-    return {
-      ...(summary ?? {}),
-      by_faction,
-      by_map,
-      totals: {
-        ...(summary?.totals ?? {}),
-        players: visiblePlayers.length,
-        online: visiblePlayers.filter(p => isOnline(p.online_status)).length,
-        factions: by_faction.length,
-      },
-    } as PlayerSummaryResponse
-  }, [summary, hideGm, visiblePlayers])
+  const buckets = useMemo(() => ({
+    factions: countPlayersBy(visiblePlayers, 'faction_name', 'Unaligned'),
+    maps: countPlayersBy(visiblePlayers, 'map', '(none)'),
+  }), [visiblePlayers])
 
   const selected = useMemo(() => players.find(p => p.id === selectedId) ?? null, [players, selectedId])
 
   const refresh = useCallback(() => {
     setRefresh(k => k + 1)
     void loadList()
-    void loadSummary()
-  }, [loadList, loadSummary])
+  }, [loadList])
 
   // Deferred-refresh model: grants/adds call onChanged (markChanged) which only
   // FLAGS a pending change + the green flash fires — it does NOT run the
@@ -241,7 +211,7 @@ export function PlayersTab() {
       {!contextual && <section className="grid grid-cols-2 md:grid-cols-3 gap-3 mb-4">
         <StatCard label="Players"    value={fmtNum(visiblePlayers.length)}                                                icon="Users" />
         <StatCard label="Online now" value={fmtNum(onlineCount)}                                                          icon="Wifi" />
-        <StatCard label="Factions"   value={fmtNum(displaySummary?.totals.factions ?? new Set(visiblePlayers.map(p => p.faction_name).filter(Boolean)).size)} icon="Flag" />
+        <StatCard label="Factions"   value={fmtNum(new Set(visiblePlayers.map(p => p.faction_id).filter(id => id > 0)).size)} icon="Flag" />
       </section>}
 
       {!contextual && rosterControls}
@@ -366,7 +336,7 @@ export function PlayersTab() {
             </div>
           ) : (
             <>
-              <ServerOverview summary={displaySummary} />
+              <ServerOverview buckets={players.length || (!loading && !error) ? buckets : null} />
               <CollapsibleCard id="players-coriolis-seeds" title="Coriolis Storm Seeds" icon="Wind"
                 defaultOpen={false} className="mt-3 mb-0" headerClassName="px-4 py-4" bodyClassName="px-4 pb-4">
                 <CoriolisAdmin flash={(msg, kind = 'ok') => setFlash({ msg, kind })} />
@@ -428,7 +398,7 @@ function PlayerHeader({ player, onClose, onChoosePlayer, contextual = false }: {
   )
 }
 
-function ServerOverview({ summary }: { summary: PlayerSummaryResponse | null }) {
+function ServerOverview({ buckets }: { buckets: { factions: PlayerSummaryBucket[]; maps: PlayerSummaryBucket[] } | null }) {
   return (
     <div className="space-y-3">
       <div className="card p-4">
@@ -438,20 +408,18 @@ function ServerOverview({ summary }: { summary: PlayerSummaryResponse | null }) 
         <p className="text-sm text-text-dim">Pick a player from the list to inspect or edit their data.</p>
       </div>
 
-      {summary && (
-        <>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-            <Bucket title="By faction" data={summary.by_faction} icon="Flag" />
-            <Bucket title="By map"     data={summary.by_map}     icon="MapPin" />
-          </div>
-        </>
+      {buckets && (
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+          <Bucket title="By faction" data={buckets.factions} icon="Flag" />
+          <Bucket title="By map" data={buckets.maps} icon="MapPin" />
+        </div>
       )}
     </div>
   )
 }
 
 function Bucket({ title, data, icon }: {
-  title: string; data: { name: string; count: number }[]; icon: string
+  title: string; data: PlayerSummaryBucket[]; icon: string
 }) {
   const total = data.reduce((acc, r) => acc + (r.count || 0), 0)
   const sorted = [...data].sort((a, b) => b.count - a.count)

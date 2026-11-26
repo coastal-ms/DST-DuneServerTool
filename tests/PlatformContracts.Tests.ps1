@@ -172,7 +172,7 @@ Describe 'Complete route classification' {
     It 'classifies the exact registered HTTP and WebSocket inventory' {
         $records = @(Get-PlatformRouteRecords)
         $manifest = Get-DuneRoutePolicyManifest
-        $records.Count | Should -Be 457
+        $records.Count | Should -Be 460
         $sources = @($records.SourceFile | Sort-Object -Unique)
         @($manifest.groups.source | Sort-Object) | Should -Be $sources
 
@@ -216,6 +216,18 @@ Describe 'Complete route classification' {
         })
         @($classifications | Where-Object { -not $_.classified }).Count | Should -Be 0
         @($classifications | Where-Object { -not $_.capabilityId }).Count | Should -Be 0
+        $bundleRoutes = @($script:DuneRoutes | Where-Object Path -like '/api/db/backup-bundle/*')
+        @($bundleRoutes.Path | Sort-Object) | Should -Be @(
+            '/api/db/backup-bundle/download'
+            '/api/db/backup-bundle/restore-names'
+            '/api/db/backup-bundle/upload'
+        )
+        foreach ($route in $bundleRoutes) {
+            $route.Classification.capabilityId | Should -Be 'operation.data-protection'
+            $route.Classification.lifecycle | Should -Be 'transactional-write'
+            $route.Classification.currentAccess | Should -Be 'local-only'
+            $route.Classification.allowedPrincipalTypes | Should -Be @('local-host')
+        }
         $labLocal = @($script:DuneRoutes | Where-Object Path -eq '/api/gameconfig/client/lab')
         $labLocal.Count | Should -Be 1
         $mapSettings = @($script:DuneRoutes | Where-Object Path -eq '/api/map-settings')
@@ -373,7 +385,7 @@ $result = @{
         $LASTEXITCODE | Should -Be 0 -Because ($output -join [Environment]::NewLine)
         $resultLine = @($output | Where-Object { [string]$_ -like 'ROUTE_RESULT:*' })[-1]
         $result = ([string]$resultLine).Substring('ROUTE_RESULT:'.Length) | ConvertFrom-Json
-        $result.total | Should -Be 457
+        $result.total | Should -Be 460
         $result.unclassified | Should -Be 0
         $result.incompatible | Should -Be 0
         $result.podsCleanup | Should -Be 1

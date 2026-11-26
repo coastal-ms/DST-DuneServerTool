@@ -60,6 +60,33 @@ function submit(name: string) {
   fireEvent.click(within(screen.getByRole('region', {name: 'Player tools'})).getAllByRole('button', {name, exact: true}).find(button => !button.hasAttribute('aria-expanded'))!)
 }
 describe('Player workspace', () => {
+  it('uses the displayed roster for faction and map totals even when the old summary disagrees', async () => {
+    window.history.replaceState(null, '', window.location.pathname)
+    vi.mocked(getPlayers).mockResolvedValue({
+      source: 'live',
+      players: [...players, { ...players[0], id: 43, account_id: 53, controller_id: 63, name: 'GM', faction_id: 0, faction_name: '', map: '' }],
+    })
+    vi.mocked(getPlayerSummary).mockResolvedValue({
+      source: 'live', totals: { players: 17, online: 1, factions: 2 },
+      by_faction: [{ name: 'Obsolete faction', count: 17 }], by_map: [{ name: 'Obsolete map', count: 17 }],
+    })
+    render(<PlayersTab />)
+    await screen.findByRole('button', { name: 'Inspect GM (43)' })
+    const factionTotal = () => screen.getByRole('heading', { name: 'By faction' }).parentElement
+    const mapTotal = () => screen.getByRole('heading', { name: 'By map' }).parentElement
+    expect(factionTotal()).toHaveTextContent('3')
+    expect(mapTotal()).toHaveTextContent('3')
+    expect(within(factionTotal()!.parentElement!).getByText('Unaligned', { exact: true })).toBeInTheDocument()
+    expect(within(mapTotal()!.parentElement!).getByText('(none)', { exact: true })).toBeInTheDocument()
+    expect(screen.queryByText('Obsolete faction')).not.toBeInTheDocument()
+    expect(getPlayerSummary).not.toHaveBeenCalled()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Hide GM' }))
+    expect(factionTotal()).toHaveTextContent('2')
+    expect(mapTotal()).toHaveTextContent('2')
+    expect(screen.queryByRole('button', { name: 'Inspect GM (43)' })).not.toBeInTheDocument()
+  })
+
   it('expands item tools in place and retains sibling cards and item tabs',async()=>{
     await selectPlayer()
     fireEvent.click(screen.getByRole('button',{name:'Items',exact:true}))

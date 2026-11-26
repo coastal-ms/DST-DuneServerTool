@@ -82,6 +82,27 @@ export function uploadBackup(opts: { localPath: string }) {
   })
 }
 
+export function downloadBackupBundle(opts: { vmPath: string; localPath: string }) {
+  return api<BackupTransferResult>('/api/db/backup-bundle/download', {
+    method: 'POST',
+    body: JSON.stringify(opts),
+  })
+}
+
+export function uploadBackupBundle(opts: { localPath: string }) {
+  return api<BackupTransferResult>('/api/db/backup-bundle/upload', {
+    method: 'POST',
+    body: JSON.stringify(opts),
+  })
+}
+
+export function restoreBackupNames(vmPath: string) {
+  return api<BackupTransferResult>('/api/db/backup-bundle/restore-names', {
+    method: 'POST',
+    body: JSON.stringify({ vmPath, confirm: 'RESTORE NAMES' }),
+  })
+}
+
 export type BackupDeleteResult = {
   ok: boolean
   deleted: string[]

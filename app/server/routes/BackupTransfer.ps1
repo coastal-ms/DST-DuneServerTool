@@ -186,3 +186,50 @@ Register-DuneRoute -Method POST -Path '/api/db/backup-delete' -Handler {
         Write-DuneError -Response $res -Status 502 -Message "$($_.Exception.Message)"
     }
 }
+
+function Invoke-DuneBackupBundleTransferRoute {
+    param($Response, $Body, [switch]$Download)
+
+    $ctx = Get-DuneBackupContext
+    if (-not $ctx.ok) { Write-DuneError -Response $Response -Status $ctx.status -Message $ctx.message; return }
+    $key = Get-V6SshKeyPath
+    if (-not $key) { Write-DuneError -Response $Response -Status 503 -Message 'SSH key not configured.'; return }
+    if (-not $Body.localPath) { Write-DuneError -Response $Response -Status 400 -Message 'Choose a local backup bundle path.'; return }
+
+    try {
+        $result = Invoke-WithDuneLock -Name 'backup-bundle' -Script {
+            if ($Download) {
+                Export-DuneBackupBundle -Ip $ctx.ip -KeyPath $key -VmPath $Body.vmPath -LocalPath $Body.localPath
+            } else {
+                Import-DuneBackupBundle -Ip $ctx.ip -KeyPath $key -LocalPath $Body.localPath
+            }
+        }
+        Write-DuneJson -Response $Response -Body $result
+    } catch { Write-DuneError -Response $Response -Status 400 -Message $_.Exception.Message }
+}
+
+Register-DuneRoute -Method POST -Path '/api/db/backup-bundle/download' -LocalOnly -Handler {
+    param($req, $res, $routeParams, $body)
+    Invoke-DuneBackupBundleTransferRoute -Response $res -Body $body -Download
+}
+
+Register-DuneRoute -Method POST -Path '/api/db/backup-bundle/upload' -LocalOnly -Handler {
+    param($req, $res, $routeParams, $body)
+    Invoke-DuneBackupBundleTransferRoute -Response $res -Body $body
+}
+
+Register-DuneRoute -Method POST -Path '/api/db/backup-bundle/restore-names' -LocalOnly -Handler {
+    param($req, $res, $routeParams, $body)
+    $ctx = Get-DuneBackupContext
+    if (-not $ctx.ok) { Write-DuneError -Response $res -Status $ctx.status -Message $ctx.message; return }
+    if ($body.confirm -cne 'RESTORE NAMES') {
+        Write-DuneError -Response $res -Status 400 -Message 'Confirm restoration of the saved names.'
+        return
+    }
+    try {
+        $result = Invoke-WithDuneLock -Name 'backup-bundle' -Script {
+            Restore-DuneBackupSettings -Ip $ctx.ip -VmPath $body.vmPath
+        }
+        Write-DuneJson -Response $res -Body $result
+    } catch { Write-DuneError -Response $res -Status 409 -Message $_.Exception.Message }
+}

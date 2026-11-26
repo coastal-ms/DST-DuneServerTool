@@ -13,6 +13,14 @@ here cover everything those tags shipped.
 
 ## [Unreleased]
 
+## [16.8.4] - 2026-11-25
+
+### Added
+- Export and import portable self-hosted backup bundles with the database and matching battlegroup settings. Restore the saved server and Hagga sietch names when partition IDs match.
+
+### Fixed
+- Count the active roster consistently in the Player Admin total and faction and map breakdowns, including when Hide GM is enabled.
+
 ## [16.8.3] - 2026-11-20
 
 ### Fixed
